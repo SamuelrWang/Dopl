@@ -122,7 +122,7 @@ test("the taxonomy is EMPTY where CURSOR supervises, and that is a claim rather 
 
 test("AXIS A CAN NEVER AUTO-APPROVE A MESSAGE OP — at any mode, on this runtime", () => {
   for (const toolMode of capability.toolModes(D)) {
-    const v = decide({ toolName: CHANNEL, input: { op: "post", body: "hi" }, toolMode });
+    const v = decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, toolMode });
     assert.equal(v, "gate", `${toolMode}: a tool posture sent a message`);
   }
 });
@@ -135,9 +135,9 @@ test("AXIS B CAN NEVER AUTO-APPROVE A WORK TOOL — at any message posture", () 
 });
 
 test("…and the Axis-B lanes still work in this runtime's session", () => {
-  assert.equal(decide({ toolName: CHANNEL, input: { op: "post", body: "hi" }, messageMode: "auto_outbound" }), "allow");
+  assert.equal(decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, messageMode: "auto_outbound" }), "allow");
   assert.equal(decide({ toolName: CHANNEL, input: { op: "read" }, messageMode: "auto_inbound" }), "allow");
-  assert.equal(decide({ toolName: CHANNEL, input: { op: "post", channel: "other", body: "x" }, messageMode: "auto_outbound" }), "gate",
+  assert.equal(decide({ toolName: CHANNEL, input: { op: "send", channel: "other", body: "x" }, messageMode: "auto_outbound" }), "gate",
     "a cross-channel post is the exfil shape and gates in every posture");
 });
 
@@ -177,7 +177,7 @@ test("`dopl_channel` is in NEITHER list on EVERY profile — it must reach the g
     const cfg = RT.toolConfigFor(profile);
     assert.ok(!cfg.disallowedTools.includes(CHANNEL), `${profile} denies the delivery path`);
     assert.ok(!cfg.preApproved.includes(CHANNEL), `${profile} SHADOWS the delivery path past the gate`);
-    assert.equal(decide({ profile, toolName: CHANNEL, input: { op: "post", body: "x" } }), "gate");
+    assert.equal(decide({ profile, toolName: CHANNEL, input: { op: "send", body: "x" } }), "gate");
   }
 });
 
@@ -242,14 +242,14 @@ test("a verdict becomes a TOOL RESULT, because there is no approval channel to a
 });
 
 test("the thread tag is applied NATIVELY, and a tag that does not apply leaves the input alone", () => {
-  const tagged = approval.stampOutbound({ op: "post", body: "hi" },
-    { action: "inject", input: { op: "post", body: "hi", thread: "task-9" } });
+  const tagged = approval.stampOutbound({ op: "send", body: "hi" },
+    { action: "inject", input: { op: "send", body: "hi", thread: "task-9" } });
   assert.equal(tagged.updatedInput.thread, "task-9");
   // ⚠ `null` IS NOT A LEGAL RETURN: an un-stamped post is a fan-out/echo failure, so a tag that
   // does not apply answers the input UNCHANGED rather than nothing.
   for (const tag of [null, undefined, { action: "none" }, { action: "conflict" }]) {
-    const out = approval.stampOutbound({ op: "post", body: "hi" }, tag);
-    assert.deepEqual(out.updatedInput, { op: "post", body: "hi" }, JSON.stringify(tag));
+    const out = approval.stampOutbound({ op: "send", body: "hi" }, tag);
+    assert.deepEqual(out.updatedInput, { op: "send", body: "hi" }, JSON.stringify(tag));
   }
 });
 

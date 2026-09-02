@@ -1,4 +1,4 @@
-// THE OWN-MACHINE LAUNCH LANE — `dopl_channel(op="launch_agent")` addressed at THIS session's
+// THE OWN-MACHINE LAUNCH LANE — `dopl_channel(op="manage", action="launch")` addressed at THIS session's
 // own channel, and the RECURSION BOUND that comes with it.
 //
 // ⚠ SAMUEL'S RULING, 2026-08-25: **an agent session MUST be able to launch other agents.**
@@ -137,10 +137,19 @@
 // (REFACTOR-FINDINGS F-378) rather than guessed at — it is a wire change across the DTO, the
 // create route, the narrowing and this machine's stamp, exactly as the paragraph above says.
 
-// THE OP, NAMED EXPLICITLY. ⚠ A LIST OF ONE, DELIBERATELY: this is an ALLOW list, never a
-// default-widening of unknown ops. An op named nowhere resolves to `gate` in every posture,
-// which is the safe direction, so a new op joins a lane by being written down or not at all.
-const OWN_MACHINE_LAUNCH_OPS = ['launch_agent'];
+// THE CALL, NAMED EXPLICITLY. ⚠ A LIST OF ONE, DELIBERATELY: this is an ALLOW list, never a
+// default-widening of unknown calls. A call named nowhere resolves to `gate` in every posture,
+// which is the safe direction, so a new one joins a lane by being written down or not at all.
+//
+// ⚠ **`<op>.<action>`, NOT AN OP (2026-09-02, F-578).** `launch_agent` folded into
+// `manage(action="launch")`, and `manage` also carries `end`, `rename`, `posture` and `direct` —
+// three of which this lane must NOT admit and one of which has a lane of its own
+// (`session-own-direct.js`). Keying on the bare op would hand a windowless session the whole
+// dispatcher under a launch ruling. The key is `channel-op-key.js › channelOpKey`, the same
+// grain the server's own write gate reads (`gating.ts › isWriteOp`).
+const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the ONE spelling (F-578)
+
+const OWN_MACHINE_LAUNCH_OPS = ['manage.launch'];
 
 // The Axis-A posture that may buy local compute. ⚠ COMPARED AS A LITERAL, and a value outside
 // the enum is simply not it — `session-io.js › grantArgs` has already normalized and floored the
@@ -179,7 +188,7 @@ function launchChainEnabled(flag) {
 }
 
 /**
- * A `launch_agent` aimed at THIS session's own channel.
+ * A `manage(action="launch")` aimed at THIS session's own channel.
  *
  * ⚠ SAME SCOPE RULE AND SAME SAFE FAILURE AS EVERY OTHER OWN-CHANNEL PREDICATE
  * (`session-own-outbound.js › scopedToOwnChannel`, `session-profiles.js › isOwnChannelPost`):
@@ -188,7 +197,7 @@ function launchChainEnabled(flag) {
  */
 function isOwnMachineLaunch(input, sessionChannelId) {
   const i = input || {};
-  if (OWN_MACHINE_LAUNCH_OPS.indexOf(i.op) === -1) return false;
+  if (OWN_MACHINE_LAUNCH_OPS.indexOf(channelOpKey(i)) === -1) return false;
   const target = i.channel;
   if (target == null || target === '') return true; // no explicit target -> own channel
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);

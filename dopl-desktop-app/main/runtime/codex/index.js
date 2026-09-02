@@ -190,7 +190,7 @@ const descriptor = {
   // ⚠ `'unverified'` (§5 item C13), AND IT IS NOT COSMETIC: it changes what the MCP server TEACHES.
   // `packages/mcp-server` teaches arm-and-re-arm only where a long-pending call really is
   // backgrounded and delivered as a wake, and says plainly that there is no wake where it is not.
-  // Until a tester holds `op="await"` for ~4 minutes against a live app-server, this runtime
+  // Until a tester holds `op="read"` with `wait_ms` for ~4 minutes against a live app-server, this runtime
   // promises nothing — and `thresholdMs` is null rather than the other runtime's number, because
   // a budget sized against an unmeasured behaviour is a number nobody measured.
   wake: { backgroundsPendingCall: 'unverified', thresholdMs: null },

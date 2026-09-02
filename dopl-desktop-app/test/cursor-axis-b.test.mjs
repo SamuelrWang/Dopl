@@ -150,7 +150,7 @@ test("⚠ A CHANNEL POST CANNOT COMPLETE WITHOUT A CONSENT DECISION", async () =
   // leaves the card on screen: the promise must stay unresolved and NOTHING may reach the server.
   const { byName, sent, cards } = await surface({ answer: "never" });
   let settled = false;
-  byName("dopl_channel").execute({ op: "post", body: "hi" }).then(() => { settled = true; });
+  byName("dopl_channel").execute({ op: "send", body: "hi" }).then(() => { settled = true; });
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(settled, false, "the call completed with no decision — the gate is not holding it");
   assert.deepEqual(sent, [], "…and nothing may reach the server while a card is pending");
@@ -165,7 +165,7 @@ test("⚠ AND AN ALLOWED POST CARRIES THE FORCED THREAD TAG, applied NATIVELY be
   // On this runtime the rewrite has no platform mechanism to travel through: Dopl WRITES the tool,
   // so the stamp is applied to the arguments before the call leaves this process.
   const { byName, sent, s } = await surface({ answer: "allow" });
-  const out = await byName("dopl_channel").execute({ op: "post", body: "hi" });
+  const out = await byName("dopl_channel").execute({ op: "send", body: "hi" });
   assert.equal(sent.length, 1);
   assert.equal(sent[0].name, "dopl_channel");
   assert.equal(sent[0].args.thread, "task-9", "the session's own task id, never off the wire");
@@ -180,7 +180,7 @@ test("⚠ AND AN ALLOWED POST CARRIES THE FORCED THREAD TAG, applied NATIVELY be
 
 test("a DENIED post reaches the server not at all, and the model is told so", async () => {
   const { byName, sent } = await surface({ answer: "deny" });
-  const out = await byName("dopl_channel").execute({ op: "post", body: "hi" });
+  const out = await byName("dopl_channel").execute({ op: "send", body: "hi" });
   assert.deepEqual(sent, [], "a refused call must not be sent");
   // ⚠ `isError`, NOT SILENCE. The model has to be able to tell "refused" from "empty result", or
   // it retries the post it was refused — which is the fan-out shape, not a cosmetic one.
@@ -190,7 +190,7 @@ test("a DENIED post reaches the server not at all, and the model is told so", as
 
 test("a CROSS-channel post is the exfil shape: it gates, and it is never rewritten by us", async () => {
   const { byName, sent, cards } = await surface({ answer: "allow" });
-  await byName("dopl_channel").execute({ op: "post", channel: "other", body: "x" });
+  await byName("dopl_channel").execute({ op: "send", channel: "other", body: "x" });
   assert.equal(cards.length, 1, "it does not auto-allow at any posture");
   assert.equal(sent[0].args.thread, undefined, "a post to another channel is not ours to thread");
   assert.equal(sent[0].args.channel, "other", "…and the call the operator approved is what is sent");
@@ -220,7 +220,7 @@ test("⚠ F-382: the gate answers CORE's `{behavior}` shape, and only then is it
   // reading "awaiting your approval" forever. Driven here on the raw gate rather than inferred.
   const s = session({ state: { toolMode: "allowlist", messageMode: "auto_outbound", allowForTask: [] } });
   const gate = axisB.makeGate(s, () => {}, () => {});
-  const verdict = await gate("mcp__dopl__dopl_channel", { op: "post", body: "hi" }, { toolUseID: "tc_1" });
+  const verdict = await gate("mcp__dopl__dopl_channel", { op: "send", body: "hi" }, { toolUseID: "tc_1" });
   assert.equal(verdict.behavior, "allow", "the gate must answer core's vocabulary, not Cursor's");
   assert.ok(!("content" in verdict), "a tool result at this seam is a translation that happened too early");
   // The tag rides that allow as `updatedInput`, which is how core expresses a rewrite on a verdict.
@@ -235,7 +235,7 @@ test("a gate with NO DISPATCH denies, because a question nobody can be asked is 
   // without one has no surface to ask on, and allowing here would make an unwired harness the
   // widest posture in the tree.
   const gate = axisB.makeGate(session(), null, () => {});
-  const verdict = await gate("mcp__dopl__dopl_channel", { op: "post", body: "hi" }, {});
+  const verdict = await gate("mcp__dopl__dopl_channel", { op: "send", body: "hi" }, {});
   assert.equal(verdict.behavior, "deny");
   assert.match(verdict.message, /no surface/);
 });
@@ -247,7 +247,7 @@ test("after close(), every Dopl tool refuses — and it is a mitigation, not an 
   // Stop control is refused rather than this being treated as an answer to X0.
   const { s, byName, sent } = await surface({ answer: "allow" });
   axisB.closeSession(s);
-  const out = await byName("dopl_channel").execute({ op: "post", body: "hi" });
+  const out = await byName("dopl_channel").execute({ op: "send", body: "hi" });
   assert.equal(out.isError, true);
   assert.match(text(out), /ended/);
   assert.deepEqual(sent, [], "a closed session reaches the server not at all");
@@ -263,7 +263,7 @@ test("a forward that FAILS is reported as a refusal, not as a delivery", async (
     list: async () => SERVER_TOOLS,
     call: async () => ({ ok: false, text: "Dopl MCP answered HTTP 503" }),
   });
-  const out = await tools.find((t) => t.name === "dopl_channel").execute({ op: "post", body: "hi" });
+  const out = await tools.find((t) => t.name === "dopl_channel").execute({ op: "send", body: "hi" });
   assert.equal(out.isError, true);
   assert.match(text(out), /503/);
 });

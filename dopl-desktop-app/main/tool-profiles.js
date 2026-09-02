@@ -84,7 +84,7 @@ const DOPL_SAFE_TOOLS = [
   // by the same rule `dopl_kb` and `dopl_skill` sit here under: it authors rows in
   // the workspace, which a restricted spawn may already do, and it POSTS NOTHING —
   // the exfil surface is `dopl_channel`, which stays out (and denied). Authoring a
-  // template starts no agent either: that is `dopl_channel(op="launch_agent")`.
+  // template starts no agent either: that is `dopl_channel(op="manage", action="launch")`.
   'mcp__dopl__dopl_agent',
   // HOME CHANNELS (2026-08-28, wave B). ⚠ SAFE-LIST placement by the same rule
   // as `dopl_kb`: it authors rows the caller could author anyway and POSTS

@@ -134,7 +134,13 @@ test("DEGRADE: an ordinary post with no key wakes nobody — the door is the onl
   assert.equal(h.calls.feedInbound.length, 0);
 });
 
-// ── THE OUTBOUND LANE FOR `escalate` ITSELF ──────────────────────────────────
+// ── THE OUTBOUND LANE FOR THE DECISION CARD ITSELF ───────────────────────────
+//
+// ⚠ `escalate` IS `send(kind="decision")` SINCE 2026-09-02 (F-578). The lane, its argument and
+// its own gate-diag ALLOW code are unchanged; only the spelling moved.
+const ESCALATE = { op: "send", kind: "decision" };
+
+// ── (the original section header) ────────────────────────────────────────────
 //
 // ⚠ SEPARATE FROM THE ANSWER DOOR ABOVE, and the two are opposite directions of one feature: the
 // door lets an ANSWER reach the asking agent, and this lets the QUESTION leave the machine at all.
@@ -157,16 +163,20 @@ const { DOPL_CHANNEL_TOOL } = req(M("tool-profiles.js"));
 const CH = "ch1";
 
 test("LANE: an own-channel escalate is on the OUTBOUND half", () => {
-  assert.deepEqual(profiles.OWN_CHANNEL_ESCALATE_OPS, ["escalate"]);
-  assert.ok(profiles.isOwnChannelEscalate({ op: "escalate" }, CH));
-  assert.ok(profiles.isOwnChannelOutbound({ op: "escalate" }, CH));
-  assert.ok(profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("escalate"));
+  // ⚠ A SHAPE OF `send`, NOT AN OP (2026-09-02, F-578): the collapse folded `escalate` into
+  // `send(kind="decision")`, and the constant is the KIND that tells it from a milestone.
+  assert.equal(profiles.OWN_CHANNEL_ESCALATE_KIND, "decision");
+  assert.ok(profiles.isOwnChannelEscalate(ESCALATE, CH));
+  assert.ok(profiles.isOwnChannelOutbound(ESCALATE, CH));
+  assert.ok(profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("send"));
+  // …and an ordinary message is NOT one: the kind is half the predicate.
+  assert.ok(!profiles.isOwnChannelEscalate({ op: "send" }, CH));
 });
 
 test("LANE: it is admitted under auto_outbound and GATES under ask", () => {
   const decide = (messageMode) => profiles.grantDecision({
     profile: "full", channelId: CH, toolName: DOPL_CHANNEL_TOOL,
-    input: { op: "escalate", channel: CH }, messageMode,
+    input: { ...ESCALATE, channel: CH }, messageMode,
   });
   assert.equal(decide("auto_both"), "allow");
   assert.equal(decide("auto_outbound"), "allow");
@@ -175,11 +185,11 @@ test("LANE: it is admitted under auto_outbound and GATES under ask", () => {
 });
 
 test("FENCE: a SLUG is another channel and gates, like every own-channel predicate", () => {
-  assert.equal(profiles.isOwnChannelEscalate({ op: "escalate", channel: "general" }, CH), false);
+  assert.equal(profiles.isOwnChannelEscalate({ ...ESCALATE, channel: "general" }, CH), false);
   assert.equal(
     profiles.grantDecision({
       profile: "full", channelId: CH, toolName: DOPL_CHANNEL_TOOL,
-      input: { op: "escalate", channel: "general" }, messageMode: "auto_both",
+      input: { ...ESCALATE, channel: "general" }, messageMode: "auto_both",
     }),
     "gate"
   );
@@ -188,15 +198,15 @@ test("FENCE: a SLUG is another channel and gates, like every own-channel predica
 test("BRIDGE: a gated escalate takes the OUTBOUND payload, not the dock's request", () => {
   // ⚠ On a windowless session this IS the difference between the operator being shown the
   // question and the agent being told there is no surface to show one on.
-  assert.ok(outboundTag.outboundConsentShape(DOPL_CHANNEL_TOOL, { op: "escalate" }, CH));
-  assert.ok(!outboundTag.outboundConsentShape(DOPL_CHANNEL_TOOL, { op: "escalate", channel: "general" }, CH));
-  assert.ok(!outboundTag.outboundConsentShape("Bash", { op: "escalate" }, CH));
+  assert.ok(outboundTag.outboundConsentShape(DOPL_CHANNEL_TOOL, ESCALATE, CH));
+  assert.ok(!outboundTag.outboundConsentShape(DOPL_CHANNEL_TOOL, { ...ESCALATE, channel: "general" }, CH));
+  assert.ok(!outboundTag.outboundConsentShape("Bash", ESCALATE, CH));
 });
 
 test("ALLOW CODE: it says which allow this was, not just that it was one", () => {
   const d = profiles.grantDecisionDetail({
     profile: "full", channelId: CH, toolName: DOPL_CHANNEL_TOOL,
-    input: { op: "escalate", channel: CH }, messageMode: "auto_both",
+    input: { ...ESCALATE, channel: CH }, messageMode: "auto_both",
   });
   assert.equal(d.reason, "auto-outbound-escalate");
 });

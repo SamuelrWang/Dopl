@@ -45,7 +45,7 @@ const AXIS_B = M("runtime/claude/axis-b.js");
 const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const UUID = "cccccccc-3333-4ddd-8eee-ffffffffffff";
 const LEGACY = `task-${CH}-42`;
-const post = (extra) => Object.assign({ op: "post", body: "here is the answer" }, extra || {});
+const post = (extra) => Object.assign({ op: "send", body: "here is the answer" }, extra || {});
 
 // ── threadTagFor: the decision ───────────────────────────────────────────────────
 

@@ -236,7 +236,7 @@ test("WRITERS: each of the four stamps has exactly one producer, at the site tha
 
 const bridge = require(join(MAIN, "session-gate-bridge.js"));
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
-const A_POST = { op: "post", body: "Shipping the invoice import tonight." };
+const A_POST = { op: "send", body: "Shipping the invoice import tonight." };
 
 function gateSession(over = {}) {
   return {

@@ -55,14 +55,14 @@ const { isOutboundPost } = new Function(
 
 test("isOutboundPost: an op=post into the OWN channel is the outbound message (TRUE)", () => {
   // Implicit own channel (no target) and explicit own channelId both count.
-  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "post", body: "hi" }, "ch1"), true);
-  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "post", channel: "ch1", body: "hi" }, "ch1"), true);
-  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "post", channel: "" }, "ch1"), true);
+  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "send", body: "hi" }, "ch1"), true);
+  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "send", channel: "ch1", body: "hi" }, "ch1"), true);
+  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "send", channel: "" }, "ch1"), true);
 });
 
 test("isOutboundPost: a cross-channel or slug-addressed post is NOT own-channel (FALSE)", () => {
-  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "post", channel: "ch2" }, "ch1"), false);
-  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "post", channel: "some-slug" }, "ch1"), false);
+  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "send", channel: "ch2" }, "ch1"), false);
+  assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op: "send", channel: "some-slug" }, "ch1"), false);
 });
 
 test("isOutboundPost: any non-post dopl_channel op gates and is NOT outbound (FALSE)", () => {
@@ -72,9 +72,9 @@ test("isOutboundPost: any non-post dopl_channel op gates and is NOT outbound (FA
 });
 
 test("isOutboundPost: only the dopl_channel tool qualifies — any other tool name is FALSE", () => {
-  assert.equal(isOutboundPost("Bash", { op: "post" }, "ch1"), false);
-  assert.equal(isOutboundPost("mcp__dopl__dopl_kb", { op: "post" }, "ch1"), false);
-  assert.equal(isOutboundPost("Write", { op: "post", channel: "ch1" }, "ch1"), false);
+  assert.equal(isOutboundPost("Bash", { op: "send" }, "ch1"), false);
+  assert.equal(isOutboundPost("mcp__dopl__dopl_kb", { op: "send" }, "ch1"), false);
+  assert.equal(isOutboundPost("Write", { op: "send", channel: "ch1" }, "ch1"), false);
 });
 
 // ── sdkRenderEvents: outbound emission + tool-card suppression (item 2) ─────────
@@ -95,7 +95,7 @@ const assistantMsg = (blocks) => ({ type: "assistant", message: { content: block
 const toolUse = (id, name, input) => ({ type: "tool_use", id, name, input });
 
 test("sdkRenderEvents: an own-channel post -> a single outbound_post, NO tool card", () => {
-  const msg = assistantMsg([toolUse("t1", DOPL_CHANNEL_TOOL, { op: "post", body: "on it, shipping now" })]);
+  const msg = assistantMsg([toolUse("t1", DOPL_CHANNEL_TOOL, { op: "send", body: "on it, shipping now" })]);
   const evs = renderEvents(msg, "ch1", "Bob");
   assert.equal(evs.length, 1, "exactly one event — the tool card is suppressed");
   assert.equal(evs[0].type, "outbound_post");
@@ -109,7 +109,7 @@ test("sdkRenderEvents: an own-channel post -> a single outbound_post, NO tool ca
 });
 
 test("sdkRenderEvents: a non-post dopl_channel op still renders as a generic tool card", () => {
-  const msg = assistantMsg([toolUse("t2", DOPL_CHANNEL_TOOL, { op: "open", target: "someone" })]);
+  const msg = assistantMsg([toolUse("t2", DOPL_CHANNEL_TOOL, { op: "rooms", action: "open", target: "someone" })]);
   const evs = renderEvents(msg, "ch1", "Bob");
   assert.equal(evs.length, 1);
   assert.equal(evs[0].type, "tool_use");
@@ -125,7 +125,7 @@ test("sdkRenderEvents: a plain work tool stays a tool card (not an outbound post
 test("sdkRenderEvents: narration + a post in one message emit a turn THEN the outbound", () => {
   const msg = assistantMsg([
     { type: "text", text: "Let me reply to Bob." },
-    toolUse("t4", DOPL_CHANNEL_TOOL, { op: "post", body: "done" }),
+    toolUse("t4", DOPL_CHANNEL_TOOL, { op: "send", body: "done" }),
   ]);
   const evs = renderEvents(msg, "ch1", "Bob");
   assert.deepEqual(evs.map((e) => e.type), ["assistant", "outbound_post"]);
@@ -134,14 +134,14 @@ test("sdkRenderEvents: narration + a post in one message emit a turn THEN the ou
 });
 
 test("sdkRenderEvents: a missing peer name -> to:null; a missing body -> text:''", () => {
-  const msg = assistantMsg([toolUse("t5", DOPL_CHANNEL_TOOL, { op: "post" })]);
+  const msg = assistantMsg([toolUse("t5", DOPL_CHANNEL_TOOL, { op: "send" })]);
   const evs = renderEvents(msg, "ch1"); // peerName omitted
   assert.equal(evs[0].payload.to, null);
   assert.equal(evs[0].payload.text, "");
 });
 
 test("sdkRenderEvents: a cross-channel post is NOT suppressed (gated op keeps its card)", () => {
-  const msg = assistantMsg([toolUse("t6", DOPL_CHANNEL_TOOL, { op: "post", channel: "other", body: "leak?" })]);
+  const msg = assistantMsg([toolUse("t6", DOPL_CHANNEL_TOOL, { op: "send", channel: "other", body: "leak?" })]);
   const evs = renderEvents(msg, "ch1", "Bob");
   assert.equal(evs[0].type, "tool_use", "a cross-channel post gates and renders as a tool card, not outbound");
 });

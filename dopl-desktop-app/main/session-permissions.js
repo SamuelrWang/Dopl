@@ -103,7 +103,7 @@ const LAUNCH_DEPTH_DENY_MESSAGE =
 // ── THE FIFTH SENTENCE — A CALL THAT COULD NOT HAVE HELPED (2026-09-01, T85) ────────────────
 //
 // ⚠ IT IS THE SHORTEST ON PURPOSE, AND THAT IS THE WHOLE POINT OF THE TICKET. `dopl_channel(
-// op="await")` on a session THIS MACHINE RUNS is a long-poll for something that already arrives
+// op="read", wait_ms=…)` on a session THIS MACHINE RUNS is a long-poll for something that already arrives
 // as a TURN (`session-dispatch.js › feedLiveSession`), so every character spent explaining it is
 // spent twice — once here and once in the turn the agent burns reading it. The other four
 // sentences in this file are long because each names a REMEDY an operator can act on; this one

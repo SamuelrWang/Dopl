@@ -91,7 +91,7 @@ test("F-139: AXIS B governs the channel tool under ANY server name, not just our
     "mcp__6a12c8bd-4187-40eb-9b21-eb230264f726__", ""];
   for (const server of SERVERS) {
     const tool = server + "dopl_channel";
-    const own = { op: "post", body: "hi" };
+    const own = { op: "send", body: "hi" };
     // Axis B sends an own-channel post; this is the line that gated forever on Anthony's machine.
     assert.equal(decide({ toolName: tool, input: own, messageMode: "auto_both" }), "allow", `${tool} post @ auto_both`);
     assert.equal(decide({ toolName: tool, input: own, messageMode: "auto_outbound" }), "allow", `${tool} post @ auto_outbound`);

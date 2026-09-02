@@ -118,7 +118,7 @@ test("bypass: a preapproved read is allowed exactly as before (the mode does not
 // like any other write, carrying the drafted body so the dock can render it.
 
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
-const POST = { op: "post", body: "Shipping the invoice import tonight." };
+const POST = { op: "send", body: "Shipping the invoice import tonight." };
 
 // RE-PINNED for v2.7 L3: the post's DECISION SURFACE moved from the bottom dock to its own
 // inline stream card, so the renderer payload is now `outbound_gate` (requestId +
@@ -164,7 +164,7 @@ test("D2/L3: an own-channel post DISPATCHES a permission_request, rendered as it
 test("THREAD OPEN: a gated own-channel create_thread raises the OUTBOUND payload, not the dock", async () => {
   const s = mkSession(); // messageMode `ask` — the posture that holds it for the operator
   const rec = recorder();
-  const open = { op: "create_thread", title: "Wire the listener", body: "the request", to: "bob@x.com" };
+  const open = { op: "send", thread: "new", title: "Wire the listener", body: "the request", to: "bob@x.com" };
   const p = axisB.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, open, { requestId: "r40", toolUseID: "t40" });
   assert.equal(rec.events.length, 1, "the thread open reaches the gate");
   assert.equal(rec.events[0].type, "permission_request", "the POLICY path is the same reducer event");
@@ -186,7 +186,7 @@ test("THREAD OPEN: a gated own-channel create_thread raises the OUTBOUND payload
 test("THREAD OPEN: auto_outbound sends it with NO dispatch; a SLUG falls back to the dock", async () => {
   const auto = mkSession({ messageMode: "auto_outbound" });
   const recA = recorder();
-  const open = { op: "create_thread", title: "T", body: "x", to: "bob@x.com" };
+  const open = { op: "send", thread: "new", title: "T", body: "x", to: "bob@x.com" };
   assert.deepEqual(await axisB.makeCanUseTool(auto, recA.dispatch)(CHANNEL_TOOL, open, { requestId: "r41" }),
     { behavior: "allow" }, "the operator's auto-send posture honors a thread open");
   assert.equal(recA.events.length, 0, "…with no card, exactly like a post");
@@ -210,15 +210,15 @@ test("THREAD OPEN: it is NOT given the forced thread tag — there is no thread 
   s.taskId = "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
   const rec = recorder();
   const verdict = await axisB.makeCanUseTool(s, rec.dispatch)(
-    CHANNEL_TOOL, { op: "create_thread", title: "T", body: "x", to: "bob@x.com" }, { requestId: "r43" });
+    CHANNEL_TOOL, { op: "send", thread: "new", title: "T", body: "x", to: "bob@x.com" }, { requestId: "r43" });
   assert.deepEqual(verdict, { behavior: "allow" }, "no updatedInput rides a thread open");
-  assert.equal(io.isOutboundPost(CHANNEL_TOOL, { op: "create_thread" }, s.channelId), false);
+  assert.equal(io.isOutboundPost(CHANNEL_TOOL, { op: "send", thread: "new" }, s.channelId), false);
 });
 
 test("D2/L3: a CROSS-channel post still uses the DOCK payload (the exfil shape FIX #9 marks)", async () => {
   const s = mkSession();
   const rec = recorder();
-  const cross = { op: "post", channel: "other-channel", body: "the file contents" };
+  const cross = { op: "send", channel: "other-channel", body: "the file contents" };
   const p = axisB.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, cross, { requestId: "r16", toolUseID: "t16" });
   assert.equal(rec.events[0].payload.type, "permission_request", "not an inline outbound card");
   assert.equal(rec.events[0].payload.name, CHANNEL_TOOL, "the dock shows the real tool name");
@@ -255,7 +255,7 @@ test("D2: the allow-for-task grant recorded for a post is the SCOPED post key", 
   const canUse2 = axisB.makeCanUseTool(s, rec2.dispatch);
   assert.deepEqual(await canUse2(CHANNEL_TOOL, POST, { requestId: "r12" }), { behavior: "allow" });
   assert.equal(rec2.events.length, 0, "no second prompt for the granted shape");
-  canUse2(CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" }, { requestId: "r13" });
+  canUse2(CHANNEL_TOOL, { op: "rooms", action: "open", direct: true, member: "evil@x" }, { requestId: "r13" });
   assert.equal(rec2.events.length, 1, "a DM open still needs its own decision");
   s.pendingPermissions.get("r13")({ behavior: "deny" });
 });
@@ -287,7 +287,7 @@ test("FIX F2: a grant taken on op=read does NOT let a later post or DM open thro
   const rec2 = recorder();
   const canUse2 = axisB.makeCanUseTool(s, rec2.dispatch);
   canUse2(CHANNEL_TOOL, POST, { requestId: "r21" });
-  canUse2(CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" }, { requestId: "r22" });
+  canUse2(CHANNEL_TOOL, { op: "rooms", action: "open", direct: true, member: "evil@x" }, { requestId: "r22" });
   assert.equal(rec2.events.length, 2, "the post AND the DM open each still need their own decision");
   assert.ok(rec2.events[0].name.startsWith(CHANNEL_TOOL + "#post#body:"));
   assert.equal(rec2.events[1].name, CHANNEL_TOOL + "#op:open");
@@ -312,7 +312,7 @@ test("INVARIANT: AXIS B auto_outbound sends the post with no dispatch, and NOTHI
   assert.equal(rec.events.length, 1, "Axis B can never run a work tool");
   s.pendingPermissions.get("r15b")({ behavior: "deny" });
   // ...and neither can it open a DM with another member (the v1.9 FIX H1 exfil path).
-  canUse(CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" }, { requestId: "r15c" });
+  canUse(CHANNEL_TOOL, { op: "rooms", action: "open", direct: true, member: "evil@x" }, { requestId: "r15c" });
   assert.equal(rec.events.length, 2, "auto_outbound covers own-channel POSTS only");
   s.pendingPermissions.get("r15c")({ behavior: "deny" });
 });
@@ -334,7 +334,7 @@ test("M3: auto_inbound reads the OWN channel with no dispatch, and opens nothing
   // half that matters for the token budget — it dispatches NOTHING, so a windowless session pops
   // no notification and holds no resolver for a call that could not have helped it.
   assert.deepEqual(
-    await canUse(CHANNEL_TOOL, { op: "await" }, { requestId: "m-await" }),
+    await canUse(CHANNEL_TOOL, { op: "read", wait_ms: 30000 }, { requestId: "m-await" }),
     { behavior: "deny", message: permissions.AWAIT_DENY_MESSAGE }
   );
   assert.equal(rec.events.length, 0, "the operator opted into receiving; asking again is the bug");

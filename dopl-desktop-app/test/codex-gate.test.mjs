@@ -107,7 +107,7 @@ test("AXIS A CAN NEVER AUTO-APPROVE A MESSAGE OP — at any mode, on this runtim
   // `grantDecision` branches a channel tool to Axis B BEFORE Axis A is consulted, on every
   // runtime. Driven here rather than asserted, over the widest mode this runtime offers.
   for (const toolMode of capability.toolModes(D)) {
-    const v = decide({ toolName: CHANNEL, input: { op: "post", body: "hi" }, toolMode });
+    const v = decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, toolMode });
     assert.equal(v, "gate", `${toolMode}: a tool posture sent a message`);
   }
 });
@@ -121,9 +121,9 @@ test("AXIS B CAN NEVER AUTO-APPROVE A WORK TOOL — at any message posture", () 
 
 test("…and the Axis-B lanes still work in this runtime's session", () => {
   // The lanes are core's and identical everywhere; this proves the Codex branch reaches them.
-  assert.equal(decide({ toolName: CHANNEL, input: { op: "post", body: "hi" }, messageMode: "auto_outbound" }), "allow");
+  assert.equal(decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, messageMode: "auto_outbound" }), "allow");
   assert.equal(decide({ toolName: CHANNEL, input: { op: "read" }, messageMode: "auto_inbound" }), "allow");
-  assert.equal(decide({ toolName: CHANNEL, input: { op: "post", channel: "other", body: "x" }, messageMode: "auto_outbound" }), "gate",
+  assert.equal(decide({ toolName: CHANNEL, input: { op: "send", channel: "other", body: "x" }, messageMode: "auto_outbound" }), "gate",
     "a cross-channel post is the exfil shape and gates in every posture");
 });
 
@@ -155,7 +155,7 @@ test("`dopl_channel` is in NEITHER list on EVERY profile — it must reach the g
     const cfg = RT.toolConfigFor(profile);
     assert.ok(!cfg.disallowedTools.includes(CHANNEL), `${profile} denies the delivery path`);
     assert.ok(!cfg.preApproved.includes(CHANNEL), `${profile} SHADOWS the delivery path past the gate`);
-    assert.equal(decide({ profile, toolName: CHANNEL, input: { op: "post", body: "x" } }), "gate");
+    assert.equal(decide({ profile, toolName: CHANNEL, input: { op: "send", body: "x" } }), "gate");
   }
 });
 
@@ -192,8 +192,8 @@ test("a Dopl allow answers `accept`, and NOTHING ever answers `acceptForSession`
     assert.equal(answer.decision, "decline", JSON.stringify(verdict));
   }
   // …and a standing Dopl grant still answers `accept`, never the native session word.
-  const key = profiles.grantKeyFor(CHANNEL, { op: "post", body: "hi" }, "chan-1");
-  assert.equal(decide({ toolName: CHANNEL, input: { op: "post", body: "hi" }, allowForTask: [key] }), "allow");
+  const key = profiles.grantKeyFor(CHANNEL, { op: "send", body: "hi" }, "chan-1");
+  assert.equal(decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, allowForTask: [key] }), "allow");
   assert.deepEqual(approval.answerApproval({}, "allow"), { decision: "accept" });
   // The source itself: every mention of the word is an argument in a comment, never a value.
   const src = readFileSync(join(CODEX, "approval.js"), "utf8");
@@ -221,7 +221,7 @@ test("the PreToolUse stamp injects the thread tag and NEVER carries a decision",
   // put the gate in two places, which is the hole each review misses — the F-228 / 1.7.10 lesson.
   const s = { channelId: "chan-1", taskId: "task-9", agentId: "abcd1234" };
   const out = axisB.preToolUseStamp(
-    { tool_name: "dopl_channel", tool_input: { op: "post", body: "hi" } }, s
+    { tool_name: "dopl_channel", tool_input: { op: "send", body: "hi" } }, s
   );
   assert.equal(out.updatedInput.thread, "task-9");
   assert.equal(out.updatedInput.client_msg_id, "agent-abcd1234-1");
@@ -233,12 +233,12 @@ test("…and it rewrites NOTHING it is not entitled to rewrite", () => {
   const base = { channelId: "chan-1", taskId: "task-9", agentId: "abcd1234" };
   // A CROSS-channel post is the exfiltration shape and is not ours to rewrite.
   const cross = axisB.preToolUseStamp(
-    { tool_name: "dopl_channel", tool_input: { op: "post", channel: "other", body: "x" } }, { ...base }
+    { tool_name: "dopl_channel", tool_input: { op: "send", channel: "other", body: "x" } }, { ...base }
   );
   assert.equal(cross.updatedInput.thread, undefined);
   // A conflict — the agent deliberately named ANOTHER thread — leaves the WHOLE call as written.
   const conflict = axisB.preToolUseStamp(
-    { tool_name: "dopl_channel", tool_input: { op: "post", thread: "task-other", body: "x" } }, { ...base }
+    { tool_name: "dopl_channel", tool_input: { op: "send", thread: "task-other", body: "x" } }, { ...base }
   );
   assert.equal(conflict.updatedInput.thread, "task-other");
   assert.ok(!("client_msg_id" in conflict.updatedInput), "half a rewrite is worse than none");
@@ -249,7 +249,7 @@ test("…and it rewrites NOTHING it is not entitled to rewrite", () => {
   // ring, so spending ids on calls that never post would blunt the fan-out self-filter's lookback.
   const s = { channelId: "chan-1", taskId: "task-9", agentId: "abcd1234" };
   axisB.preToolUseStamp({ tool_name: "commandExecution", tool_input: {} }, s);
-  axisB.preToolUseStamp({ tool_name: "dopl_channel", tool_input: { op: "post", body: "a" } }, s);
+  axisB.preToolUseStamp({ tool_name: "dopl_channel", tool_input: { op: "send", body: "a" } }, s);
   assert.ok(s.ownPostIds.has("agent-abcd1234-1"), "the first STAMPED post is #1");
 });
 

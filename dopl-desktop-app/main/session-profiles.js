@@ -50,9 +50,10 @@ const { isKnowledgeReadCall } = require('./knowledge-ops');
 // and could no longer carry the ruling's argument beside the list it admits to). Re-exported
 // below, and injected into the extracted table by the two harness tests like the two above.
 const {
-  OWN_CHANNEL_MARKER_OPS, OWN_CHANNEL_THREAD_OPS, OWN_CHANNEL_ESCALATE_OPS, OWN_CHANNEL_OUTBOUND_OPS,
+  OWN_CHANNEL_MARKER_KIND, OWN_CHANNEL_THREAD_NEW, OWN_CHANNEL_ESCALATE_KIND, OWN_CHANNEL_OUTBOUND_OPS,
   isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
 } = require('./session-own-outbound');
+const { channelOpKey } = require('./channel-op-key'); // <op>.<action>, the ONE spelling every classifier here asks (F-578)
 const { isOwnMachineLaunch, launchLaneVerdict } = require('./session-own-launch'); // THE OWN-MACHINE LAUNCH LANE (Samuel's ruling, 2026-08-25; F-320) — its own §2 file, on F-301's precedent
 const { isOwnMachineDirect, directLaneVerdict } = require('./session-own-direct'); // THE OWN-MACHINE DIRECT LANE (Samuel's ruling, 2026-08-31) — same conjunction, its own §2 file, and DELIBERATELY not a member of the launch list: that one carries the depth bound and folding this in would make private directions depend on the agent-chaining setting
 // DOPL'S OWN SURFACE, §2-SPLIT 2026-08-31 so BOTH sides of the runtime seam can read it without a
@@ -152,62 +153,67 @@ function isChannelTool(toolName) {
   return short === CHANNEL_SHORT_NAME || short.indexOf(CHANNEL_SHORT_NAME + '_') === 0;
 }
 
-// Plain delivery post into the session's OWN channel? `op==='post'` AND target channel unset or
+// Plain delivery post into the session's OWN channel? `op==='send'` AND target channel unset or
 // exactly the session's channelId. (`channel` may be a slug or id; compared against the id
 // only, so a slug-addressed post classifies as cross-channel — the safe failure.) Does NOT
 // auto-allow: it only decides which grant KEY a post belongs to.
 function isOwnChannelPost(input, sessionChannelId) {
   const i = input || {};
-  if (i.op !== 'post') return false;
+  if (i.op !== 'send') return false;
   const target = i.channel;
   if (target == null || target === '') return true; // no explicit target -> own channel
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
 }
 
-// READ HALF OF THE OWN CHANNEL (Axis B inbound). Read-only ops scoped to the channel this
+// READ HALF OF THE OWN CHANNEL (Axis B inbound). Read-only calls scoped to the channel this
 // session is already bound to: nothing writes, addresses anyone, or reaches an unopened channel.
-// `await` is the same read long-polled — gating it gates waiting itself. `members` is a roster
-// the session's prompt framing already carries.
-// ⚠ `list` is read-only but is NOT here: it enumerates EVERY channel and DM this account can
-// reach, so it is not own-channel-scoped. `open`, `invite`, `create_thread`, `set_thread_mode`
-// and every post stay gated in every posture. (`close_thread` was named here too and left the
-// tool's enum with thread closing — wiring plan Phase 4, 2026-08-18.)
+// `members` is a roster the session's prompt framing already carries.
 //
-// `read_sessions` JOINED ON 2026-08-22 (Samuel's ruling 7, investigation A4). Its absence was
-// an OMISSION, not a rule: it is strictly weaker than the `read` already on this list, because
-// it returns THIS OPERATOR'S OWN sessions — handle, state, thread — and never a peer's, so it
-// carries no counterparty content at all (packages/mcp-server channel-description.ts: "This is
-// YOUR side only — it never shows a PEER's sessions"). It may be moot under the windowless
-// message floor, which auto-allows the inbound half anyway; the list should be correct.
-// ⚠ IT IS THE ONE READ WHOSE `channel` IS AN OPTIONAL FILTER rather than a required argument
-// (channel-schema.ts), so an unfiltered call spans the WORKSPACE — which is exactly the shape
-// that keeps `list` off this list, and it still qualifies for the reason `list` does not:
-// `list` enumerates OTHER PEOPLE'S channels and DMs, this enumerates only our own runtimes.
-// ⚠ `read_directions` JOINED ON 2026-08-31 (Samuel's same-owner directions ruling) ON EXACTLY
-// `read_sessions`'s ARGUMENT: this operator's own runtimes, never a peer's, `channel` an optional
-// filter. Its WRITE twin `direct_agent` is NOT here — that one buys a TURN and takes the two-axis
-// conjunction (`session-own-direct.js`, which carries the whole ruling).
-// ⚠ `get_thread` IS RETIRED ON THE MCP SURFACE (2026-09-02, C15 — folded into
-// `read(thread=)`) AND STAYS IN THIS LIST DELIBERATELY. This set is a MEMBERSHIP
-// TEST OVER OPS THAT ARRIVE, so a name nobody can send grants nothing; what
-// removing it would do is turn an older desktop's in-flight `get_thread` — or a
-// session against a server that predates the fold — from an own-channel read
-// into an UNCLASSIFIED op, which gates. The teaching copy is where the fold had
-// to land (F-444), and it has.
-const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members',
-  'read_sessions', 'read_directions'];
+// ⚠ **KEYED `<op>.<action>` SINCE THE FIVE-OP COLLAPSE (2026-09-02, F-578)**, through
+// `channel-op-key.js › channelOpKey`. The seven names this list used to hold — `read`, `await`,
+// `list_threads`, `get_thread`, `members`, `read_sessions`, `read_directions` — are gone from the
+// tool's enum, and a desktop that still matched on them classified EVERY new spelling as
+// unclassified, which gates: a notification a human must answer for the call the old name would
+// have allowed. The mapping is one-to-one and adds nothing: `read` absorbed `await` (a hold is
+// `wait_ms`) and `get_thread` (a scoped read is `thread=`); `status` is `read_sessions` +
+// `read_directions`; `rooms.threads` is `list_threads` and `rooms.members` is `members`.
+//
+// ⚠ **`rooms` IS ON THIS LIST ONLY BY ACTION, AND THAT IS THE WHOLE REASON THE KEY IS DOTTED.**
+// Four of its eight actions WRITE (`open`, `invite`, `thread_mode`, `update`) — the same four
+// `gating.ts › WRITE_OPS` names — so a bare `rooms` entry would hand the inbound half of the axis
+// a lane that opens channels and invites people into them. It is the widening F-578 warns about,
+// and it is refused here by construction.
+//
+// ⚠ `rooms.list` IS READ-ONLY AND IS STILL NOT HERE, for the reason its predecessor `list` was
+// not: it enumerates EVERY channel and DM this account can reach, so it is not own-channel-scoped.
+// `rooms.help` is not here either — `help` was never on this list, and the collapse is not the
+// place to widen it. Every `send` and every `manage` stays gated in every posture.
+//
+// ⚠ THE OLD NAMES ARE GONE FROM THE LIST AND THAT LOSES NOTHING. A name no client can send
+// grants nothing, and an in-flight call from an older desktop falls to the unclassified arm,
+// which GATES — the safe direction. Only the ALLOW side shrinks; nothing leaks.
+const OWN_CHANNEL_READ_OPS = ['read', 'status', 'rooms.threads', 'rooms.members'];
 
-// ── ⚠ `await` IS REFUSED ON A DESKTOP-RUN SESSION (2026-09-01, T85) ────────────────
+// The membership half of `isOwnChannelRead`, without the channel scope — the one question the
+// gate REASON also has to ask, so the explainer cannot grow a second copy of the key rule.
+function isOwnChannelReadCall(input) {
+  return OWN_CHANNEL_READ_OPS.indexOf(channelOpKey(input)) !== -1;
+}
+
+// ── ⚠ A HELD READ IS REFUSED ON A DESKTOP-RUN SESSION (2026-09-01, T85) ────────────────
 //
-// It stays a MEMBER of the read set above — it IS an own-channel read, and the classifier is
-// what `session-gate-reason.js › channelReason` uses to say "another channel" rather than
-// "unknown op" — but `grantDecision` denies it before the read allow can ever be reached. The
-// two statements are not in tension: membership answers "what KIND of call is this", the deny
-// answers "may THIS session make it", and collapsing them would make the diag line lie about a
-// cross-channel await.
+// The `await` OP is gone (2026-09-02): a hold is `op="read"` carrying `wait_ms`, one lane
+// instead of two. The refusal did not move with it — what is denied is the HOLD, not a spelling.
+//
+// An unheld `read` stays a member of the read set above — it IS an own-channel read, and the
+// classifier is what `session-gate-reason.js › channelReason` uses to say "another channel"
+// rather than "unknown op" — and `grantDecision` denies the held one before that allow can be
+// reached. The two statements are not in tension: membership answers "what KIND of call is
+// this", the deny answers "may THIS session make it", and collapsing them would make the diag
+// line lie about a cross-channel hold.
 //
 // ⚠ WHY A DENY AND NOT A GATE. A desktop-run session is woken by the MESSAGE ITSELF — the
-// listener's fan-out (`session-dispatch.js › feedLiveSession`) delivers an addressed post as a
+// listener's delivery (`session-dispatch.js › feedLiveSession`) delivers an addressed post as a
 // TURN — so a hold adds nothing an ended turn does not already get, and it costs a long-poll
 // plus every token the held context is re-read with. A GATE would be worse than either: on a
 // windowless session it becomes a notification a human must answer for a call that could not
@@ -217,16 +223,20 @@ const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'me
 // operator click can open it. That is deliberate: this is not a permission question. There is
 // nothing on this machine that makes the call useful, so an "allow" would be a mistake a
 // surface let somebody make.
-const AWAIT_OP = 'await';
+//
+// ⚠ `wait_ms != null` IS THE TEST, NOT `> 0`. The schema coerces and floors the value; what this
+// asks is whether the caller ASKED to be held, and an argument the server may clamp to zero is
+// still that request. Absent (or explicitly null) is an ordinary read.
+const AWAIT_OP = 'read';
 function isAwaitOp(input) {
-  return !!input && input.op === AWAIT_OP;
+  return !!input && input.op === AWAIT_OP && input.wait_ms != null;
 }
 
 // Read twin of isOwnChannelPost, SAME scoping rule and safe failure: a `channel` naming
 // anything but this session's id (slug included) is ANOTHER channel and gates.
 function isOwnChannelRead(input, sessionChannelId) {
   const i = input || {};
-  if (OWN_CHANNEL_READ_OPS.indexOf(i.op) === -1) return false;
+  if (!isOwnChannelReadCall(i)) return false;
   const target = i.channel;
   if (target == null || target === '') return true;
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
@@ -369,7 +379,7 @@ function grantDecision(args) {
     // Fail-closed: a post whose `to` or `kind` is not a string is malformed — neither the key
     // nor the card can honestly describe it.
     if (!postFieldsOk(a.input)) return 'gate';
-    // ⚠ `await` STOPS HERE, BEFORE EVERY GRANT AND BOTH AXES (2026-09-01, T85). See `isAwaitOp`
+    // ⚠ A HELD READ STOPS HERE, BEFORE EVERY GRANT AND BOTH AXES (2026-09-01, T85). See `isAwaitOp`
     // for why it is a deny rather than a gate, and why it is not a permission question.
     if (isAwaitOp(a.input)) return 'deny';
     // ⚠ ONLY a standing grant for THIS EXACT shape allows without a button. No bare-tool-name
@@ -425,7 +435,7 @@ function grantDecision(args) {
 // asked, or a Codex session's `unclassified-tool` would be narrated against Claude's lists.
 const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
-  OWN_CHANNEL_READ_OPS, normalizeToolMode, isAwaitOp, // 2026-09-01 (T85): the await refusal
+  OWN_CHANNEL_READ_OPS, isOwnChannelReadCall, normalizeToolMode, isAwaitOp, // 2026-09-01 (T85): the await refusal
   canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
   OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, isOwnMachineDirect, // 2026-08-25 (F-320): the own-machine launch lane; 2026-08-31: its direct twin
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
@@ -442,11 +452,15 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
 module.exports = {
   buildSessionToolConfig, grantDecision, isOwnChannelPost,
   isOwnChannelRead, OWN_CHANNEL_READ_OPS, // own-channel READ set, Axis B inbound half
+  isOwnChannelReadCall, // 2026-09-02 (F-578): its membership half, keyed <op>.<action>
+  channelOpKey, // re-exported from channel-op-key.js — the key every channel classifier reads
   isAwaitOp, // 2026-09-01 (T85): the one op a desktop-run session is refused outright
   // Axis B's OUTBOUND half — re-exported from session-own-outbound.js (§2 SPLIT, 2026-08-24), which
   // carries the ARGUMENT each of the three was admitted on and why each keeps its own constant.
-  isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS, isOwnChannelThreadOpen, OWN_CHANNEL_THREAD_OPS,
-  isOwnChannelEscalate, OWN_CHANNEL_ESCALATE_OPS,
+  // ⚠ 2026-09-02 (F-578): the three are SHAPES of `send` now, so the constants are the `kind` /
+  // `thread` literals that tell them apart rather than three retired op names.
+  isOwnChannelMarker, OWN_CHANNEL_MARKER_KIND, isOwnChannelThreadOpen, OWN_CHANNEL_THREAD_NEW,
+  isOwnChannelEscalate, OWN_CHANNEL_ESCALATE_KIND,
   isOwnChannelOutbound, OWN_CHANNEL_OUTBOUND_OPS, // the union grantDecision's Axis-B branch asks
   isKnowledgeReadCall, // 2026-08-22 (OQ-1): re-exported from knowledge-ops, the op-scoped kb read
   DOPL_READ_REFERENCE, // the member the knowledge branch asks "where does a Dopl read resolve?"

@@ -162,7 +162,7 @@ test("FIX F7: a responder that knows its thread is ordered to READ it before it 
   assert.match(out, /filtered to this one thread/, "says the read is scoped, not the whole channel");
   assert.match(out, /none of its earlier messages/, "and why a fresh spawn needs it at all");
   assert.equal(out.split('op "read"').length - 1, 1, "one read instruction");
-  assert.ok(out.indexOf('op "read"') < out.indexOf('op "post", channel "'), "read first, then deliver");
+  assert.ok(out.indexOf('op "read"') < out.indexOf('op "send", channel "'), "read first, then deliver");
   // A LEGACY `task-<channel>-<seq>` id threads posts, so it filters a read the same way.
   const legacy = framing.buildFencedTurn({
     side: "responder", message: "x", nonce: "f7", context: ctx({ taskId: `task-${CH}-42` }),

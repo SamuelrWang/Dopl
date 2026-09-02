@@ -44,9 +44,9 @@ test("T85: await is DENIED in every posture, on both axes, own channel or not", 
     for (const toolMode of profiles.TOOL_MODES) {
       for (const channel of [undefined, "", CH, "other-id", "my-slug"]) {
         assert.equal(
-          decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "await", channel }, messageMode, toolMode }),
+          decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "read", wait_ms: 30000, channel }, messageMode, toolMode }),
           "deny",
-          `await @ msg=${messageMode} tool=${toolMode} channel=${String(channel)}`
+          `held read @ msg=${messageMode} tool=${toolMode} channel=${String(channel)}`
         );
       }
     }
@@ -54,22 +54,23 @@ test("T85: await is DENIED in every posture, on both axes, own channel or not", 
 });
 
 test("T85: no standing grant can open it — the widest grant key is still a deny", () => {
-  const key = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, { op: "await" }, CH);
+  const HELD = { op: "read", wait_ms: 30000 };
+  const key = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, HELD, CH);
   assert.equal(
-    decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "await" }, messageMode: "auto_both", allowForTask: [key] }),
+    decide({ toolName: DOPL_CHANNEL_TOOL, input: HELD, messageMode: "auto_both", allowForTask: [key] }),
     "deny",
     "an operator's 'allow for this task' click must not resurrect it"
   );
   // ...and the tool-name-shaped key that a coarser grant would carry does not either.
   assert.equal(
-    decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "await" }, messageMode: "auto_both", allowForTask: [DOPL_CHANNEL_TOOL] }),
+    decide({ toolName: DOPL_CHANNEL_TOOL, input: HELD, messageMode: "auto_both", allowForTask: [DOPL_CHANNEL_TOOL] }),
     "deny"
   );
 });
 
 test("T85: the deny carries its OWN reason code and its own sentence", () => {
   assert.deepEqual(
-    detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "await" }, messageMode: "auto_both", toolMode: "bypass" }),
+    detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "read", wait_ms: 30000 }, messageMode: "auto_both", toolMode: "bypass" }),
     { decision: "deny", reason: "await-desktop-session" },
     "never `hard-denied` — dopl_channel is on no profile's deny list, and no setting opens this"
   );
@@ -86,10 +87,18 @@ test("T85: the deny carries its OWN reason code and its own sentence", () => {
 });
 
 test("T85: the classifier still calls it a read — the deny is policy, not a classification hole", () => {
-  assert.ok(READS.includes("await"), "membership is what makes a cross-channel await legible");
-  assert.equal(profiles.isOwnChannelRead({ op: "await" }, CH), true);
-  assert.equal(profiles.isAwaitOp({ op: "await" }), true);
-  assert.equal(profiles.isAwaitOp({ op: "read" }), false);
+  // ⚠ THE OP IS GONE, THE REFUSAL IS NOT (2026-09-02, F-578). A hold is `read` carrying
+  // `wait_ms`, so what is denied is a SHAPE of a member of the read set — which is exactly the
+  // separation this case has always pinned: membership answers "what KIND of call is this", the
+  // deny answers "may THIS session make it".
+  assert.ok(READS.includes("read"), "membership is what makes a cross-channel hold legible");
+  assert.equal(profiles.isOwnChannelRead({ op: "read", wait_ms: 30000 }, CH), true);
+  assert.equal(profiles.isAwaitOp({ op: "read", wait_ms: 30000 }), true);
+  assert.equal(profiles.isAwaitOp({ op: "read", wait_ms: 0 }), true,
+    "the caller ASKED to be held; a value the server may clamp is still that request");
+  assert.equal(profiles.isAwaitOp({ op: "read" }), false, "an unheld read is an ordinary read");
+  assert.equal(profiles.isAwaitOp({ op: "read", wait_ms: null }), false);
+  assert.equal(profiles.isAwaitOp({ op: "status", wait_ms: 30000 }), false, "no other op holds");
   assert.equal(profiles.isAwaitOp({}), false);
   assert.equal(profiles.isAwaitOp(undefined), false);
   assert.equal(profiles.isAwaitOp(null), false);
@@ -104,7 +113,12 @@ test("T85: the framing does not teach a call the gate refuses", () => {
   const src = readFileSync(M("prompt-framing.js"), "utf8");
   const code = src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
   assert.ok(!/may also hold op "await"/.test(code), "the old invitation must not survive in the prompt");
-  assert.ok(/op "await" is refused in/.test(code), "and the replacement says so plainly");
+  // ⚠ AND THE OP ITSELF IS GONE (2026-09-02, F-578): a hold is `read` carrying `wait_ms`, so
+  // the copy names the SHAPE. Teaching `op "await"` would now be a doubly-wrong call — refused
+  // by this gate AND rejected by the tool's own enum.
+  assert.ok(!/op "await"/.test(code), "the retired op name is not in the prompt at all");
+  assert.ok(/a HELD read \(op "read" with/.test(code) && /wait_ms\) is refused/.test(code),
+    "and the replacement says so plainly");
   assert.ok(/delivered to you as a new TURN/.test(code),
     "…and names what happens instead, or the agent invents a poll loop");
 });

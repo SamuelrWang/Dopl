@@ -123,7 +123,7 @@ async function readBody(res) {
 /**
  * One JSON-RPC request against the Dopl endpoint.
  *
- * ⚠ BOUNDED BY THE SERVER'S OWN AWAIT BUDGET. `dopl_channel(op="await")` HOLDS for up to ~215s by
+ * ⚠ BOUNDED BY THE SERVER'S OWN AWAIT BUDGET. a HELD `dopl_channel(op="read", wait_ms=…)` HOLDS for up to ~215s by
  * design, so a short timeout here would turn every await into a transport error and lose the
  * re-arm teaching the result carries. The number is `mcp-config.js`'s and is read, never restated.
  * ⚠ AN ERROR IS RETURNED, NEVER THROWN PAST THE TOOL. `execute()` has to answer the model

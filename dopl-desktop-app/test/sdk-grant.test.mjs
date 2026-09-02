@@ -98,7 +98,7 @@ const { grantDecision, grantKeyFor } = new Function(
   RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(null)));
 
 const PROFILES = ["read_only", "dopl_only", "full"];
-const ownPost = (channel) => ({ op: "post", channel });
+const ownPost = (channel) => ({ op: "send", channel });
 
 // ── The shadow invariant (the whole point of this file) ────────────────────────
 
@@ -157,7 +157,7 @@ test("FIX H1 + D2: read_only / dopl_only gate NOTHING in their profile universe;
     }
     // D2: the own-channel post (the delivery message) gates too — it used to auto-allow.
     assert.equal(grantDecision({ profile, toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: ownPost("c1") }), "gate");
-    assert.equal(grantDecision({ profile, toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "open", direct: true } }), "gate");
+    assert.equal(grantDecision({ profile, toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "rooms", action: "open", direct: true } }), "gate");
   }
 });
 

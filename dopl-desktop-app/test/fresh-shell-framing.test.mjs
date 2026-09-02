@@ -73,18 +73,18 @@ test("v2.x: that first turn also carries the CONCRETE channel + workspace ids", 
   // The recreated-shell path is the one that frames LAZILY, so it is the easiest one to
   // leave id-less: session-park rebuilds the context, io.takeFraming reads it.
   const turn = io.withSeed(freshShell({ pendingHistory: THREAD() }), "what next?");
-  assert.ok(turn.includes(`op "post", channel "${CH}", workspace "${WS}"`), "the exact call to make");
-  assert.match(turn, /discovery call\nlike op "list" is unnecessary here/, "and no id hunting");
+  assert.ok(turn.includes(`op "send", channel "${CH}", workspace "${WS}"`), "the exact call to make");
+  assert.match(turn, /discovery call\nlike op "rooms", action "list" is unnecessary here/, "and no id hunting");
   assert.match(turn, /IS this session's own channel/);
   // A REQUESTER-side shell addresses the same channel the same way.
   const req = io.withSeed(freshShell({ side: "requester" }), "keep going");
-  assert.ok(req.includes(`op "post", channel "${CH}", workspace "${WS}"`));
+  assert.ok(req.includes(`op "send", channel "${CH}", workspace "${WS}"`));
 });
 
 test("v2.x: a record with NO ids still frames (an older durable record)", () => {
   const s = freshShell({ context: { channelName: "Ops", authorName: "David" } });
   const turn = io.withSeed(s, "hello");
-  assert.match(turn, /post your reply into this channel with the mcp__dopl__dopl_channel MCP tool\s\(op "post",/);
+  assert.match(turn, /post your reply into this channel with the mcp__dopl__dopl_channel MCP tool\s\(op "send",/);
   assert.ok(!/undefined/.test(turn), "no placeholder reaches the agent");
   assert.match(turn, /SECURITY RULES/);
 });

@@ -1,4 +1,4 @@
-// SESSION STATE -> THE SERVER. The writer behind `dopl_channel(op="read_sessions")` -> GET /api/channels/sessions -> `channel_sessions`.
+// SESSION STATE -> THE SERVER. The writer behind `dopl_channel(op="status")` -> GET /api/channels/sessions -> `channel_sessions`.
 //
 // ⚠ A PUSH ON STATE CHANGE, NOT A HEARTBEAT. presence.js beats every 30s per listener per workspace unconditionally
 // (~120 writes/hour/machine, forever); this writes when a session's DERIVED state actually moves — launch, first

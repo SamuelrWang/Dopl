@@ -55,7 +55,7 @@ const axisB = require(join(HERE, "..", "main", "runtime", "claude", "axis-b.js")
 const profiles = require(join(HERE, "..", "main", "session-profiles.js"));
 
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
-const POST = { op: "post", body: "Shipping the invoice import tonight." };
+const POST = { op: "send", body: "Shipping the invoice import tonight." };
 
 // ── (a) ONE artifact per post attempt ─────────────────────────────────────────────
 //

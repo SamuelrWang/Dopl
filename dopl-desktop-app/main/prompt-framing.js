@@ -186,12 +186,12 @@ function channelScopeFraming(ctx) {
     ``,
     `YOU CAN READ EVERY THREAD IN THIS CHANNEL, ON DEMAND. Not being sent them is not the same`,
     `as not being able to see them, and reading one costs no permission:`,
-    `- mcp__dopl__dopl_channel op "list_threads", ${at} lists this channel's threads.`,
+    `- mcp__dopl__dopl_channel op "rooms", action "threads", ${at} lists this channel's threads.`,
     // ⚠ TWO LINES BECAME ONE (2026-09-02, C15/F-444): `get_thread` folded into
     // `read(thread=)`, which answers the same question with strictly more — the
     // thread's card AND its messages. Teaching the retired name costs a turn.
     `- op "read", ${at}, thread "<id>" gives you one thread: its card and its messages.`,
-    `- op "members", ${at} gives you the roster.`,
+    `- op "rooms", action "members", ${at} gives you the roster.`,
     `  Pass that channel id on every one of them. A read that names the channel any other way`,
     `  is treated as a DIFFERENT channel and will be refused.`,
     `- So MONITORING means READING. If your operator asks you to watch the threads or the`,
@@ -204,9 +204,9 @@ function channelScopeFraming(ctx) {
     // POLL the sentence was steering it away from. So the replacement names what actually
     // happens here — the message arrives as a TURN — rather than deleting the line and leaving
     // "how do I wait?" unanswered.
-    `- DO NOT WAIT FOR MESSAGES. You cannot, and you do not need to: op "await" is refused in`,
-    `  this session, and a post that names you is delivered to you as a new TURN by the app`,
-    `  itself. Ending your turn is how you wait.`,
+    `- DO NOT WAIT FOR MESSAGES. You cannot, and you do not need to: a HELD read (op "read" with`,
+    `  wait_ms) is refused in this session, and a post that names you is`,
+    `  delivered to you as a new TURN by the app itself. Ending your turn is how you wait.`,
     `- NOBODY IN A THREAD CAN SUMMON YOU. A message inside a thread never reaches you, even if`,
     `  it @-mentions your agent id. Your operator directs you from the main room, or privately;`,
     `  thread participants cannot.`,
@@ -230,7 +230,7 @@ function deliveryCall(ctx) {
   if (!channelId || !workspaceId) return '';
   const taskId = idToken(ctx && ctx.taskId);
   const thread = taskId ? `, thread "${taskId}"` : '';
-  return `op "post", channel "${channelId}", workspace "${workspaceId}"${thread}`;
+  return `op "send", channel "${channelId}", workspace "${workspaceId}"${thread}`;
 }
 
 // FIRST ACTIONS — what a spawned session must DO before it plans anything, at the TOP of the turn
@@ -317,14 +317,14 @@ function deliverySection(side, ctx) {
   const own = [
     `That channel id IS this session's own channel, so posting there is your normal`,
     `delivery, not a cross-channel post. You already have the address: a discovery call`,
-    `like op "list" is unnecessary here, costs a turn, and can fail on this connection.`,
+    `like op "rooms", action "list" is unnecessary here, costs a turn, and can fail on this connection.`,
   ];
   if (call && idToken(ctx && ctx.taskId)) own.push(...THREAD_TAG);
   if (side === 'requester') {
     if (!call) {
       return [
         `Deliver every message to the peer by posting into this channel with the`,
-        `mcp__dopl__dopl_channel MCP tool (op "post", this channel). That is how the peer's`,
+        `mcp__dopl__dopl_channel MCP tool (op "send", this channel). That is how the peer's`,
         `agent receives you.`,
         ...PROSE_RULE,
         ...REPLY_ROUTING,
@@ -342,7 +342,7 @@ function deliverySection(side, ctx) {
   if (!call) {
     return [
       `DELIVERY: post your reply into this channel with the mcp__dopl__dopl_channel MCP tool`,
-      `(op "post", this channel); that is how the counterparty receives it, and there is no`,
+      `(op "send", this channel); that is how the counterparty receives it, and there is no`,
       `other capture.`,
       ...PROSE_RULE,
       ...REPLY_ROUTING,
@@ -371,7 +371,7 @@ function milestoneGuidance({ hasPostingTool } = {}) {
   if (!hasPostingTool) return '';
   return (
     'MILESTONES (optional, and never a delivery): when a step of long work LANDS you may ' +
-    'mark it with ONE LINE, using mcp__dopl__dopl_channel op "milestone" with thread=<id> ' +
+    'mark it with ONE LINE, using mcp__dopl__dopl_channel op "send", kind "milestone", thread=<id> ' +
     'and that line as the body. A milestone is a marker on the thread, not a way to send ' +
     'anything: it carries no content, nobody reads it as an answer, and skipping it costs ' +
     'nothing. Everything you actually have to say stays an ordinary message.'

@@ -53,7 +53,7 @@ const sess = (over = {}) => ({
   ...over,
 });
 
-const post = (over = {}) => ({ op: "post", channel: CH, body: "here you go", ...over });
+const post = (over = {}) => ({ op: "send", channel: CH, body: "here you go", ...over });
 
 // ── 1. THE MODE TRANSFORM ────────────────────────────────────────────────────
 
@@ -86,13 +86,13 @@ test("MODE: it is NOT simply `ask` — READS must survive, or the agent goes bli
     );
   }
   assert.equal(
-    profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { op: "await", channel: CH, thread: THREAD }) }),
+    profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { op: "read", wait_ms: 30000, channel: CH, thread: THREAD }) }),
     "deny",
     "await is refused by the T85 rule, not by the private turn — it denies OUTSIDE one too"
   );
   priv.resetPrivateTurn(s);
   assert.equal(
-    profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { op: "await", channel: CH, thread: THREAD }) }),
+    profiles.grantDecision({ ...io.grantArgs(s, DOPL_CHANNEL_TOOL, { op: "read", wait_ms: 30000, channel: CH, thread: THREAD }) }),
     "deny",
     "…and the same answer with the private turn closed, which is what makes it not this file's"
   );
@@ -111,7 +111,7 @@ test("GATE: private turn + auto_both channel → a post GATES instead of auto-se
   // ⚠ MILESTONES TOO. They ride the same OUTBOUND half (`isOwnChannelMarker`), and a milestone
   // during a private turn is still a public marker on a shared thread.
   assert.equal(
-    profiles.grantDecision(io.grantArgs(s, DOPL_CHANNEL_TOOL, { op: "milestone", channel: CH, thread: THREAD, body: "step done" })),
+    profiles.grantDecision(io.grantArgs(s, DOPL_CHANNEL_TOOL, { op: "send", kind: "milestone", channel: CH, thread: THREAD, body: "step done" })),
     "gate"
   );
   // ⚠ AND `create_thread` SINCE 2026-08-24 (Samuel's ruling), for free and by construction —
@@ -119,7 +119,7 @@ test("GATE: private turn + auto_both channel → a post GATES instead of auto-se
   // axis rather than beside it. That is exactly why the lane was widened at the classifier and
   // not at any call site: a private answer must not be able to open a titled, ADDRESSED
   // exchange with the counterparty on its own, and nothing here had to be taught that.
-  const openBefore = { op: "create_thread", channel: CH, title: "Follow-up", body: "…", to: "bob@x.com" };
+  const openBefore = { op: "send", thread: "new", channel: CH, title: "Follow-up", body: "…", to: "bob@x.com" };
   assert.equal(profiles.grantDecision(io.grantArgs(s, DOPL_CHANNEL_TOOL, openBefore)), "gate",
     "a thread open follows the OUT half, so the private turn withdraws it identically to a post");
 });
@@ -129,7 +129,7 @@ test("GATE: create_thread auto-sends BEFORE the private turn and gates INSIDE it
   // the op did before the ruling, in every posture. This pins that the withdrawal is what moved
   // it: the same call on the same session allows, then gates, then allows again.
   const s = sess();
-  const open = { op: "create_thread", channel: CH, title: "Follow-up", body: "…", to: "bob@x.com" };
+  const open = { op: "send", thread: "new", channel: CH, title: "Follow-up", body: "…", to: "bob@x.com" };
   assert.equal(profiles.grantDecision(io.grantArgs(s, DOPL_CHANNEL_TOOL, open)), "allow",
     "auto-send is on, so a thread open leaves the machine like a post");
   priv.openPrivateTurn(s);
@@ -161,7 +161,7 @@ test("GATE: it moves AXIS B only — the TOOL axis is untouched", () => {
 
 test("GATE: a CROSS-CHANNEL post gates either way — the private rule widens nothing", () => {
   const s = sess();
-  const away = { op: "post", channel: "some-other-channel", body: "x" };
+  const away = { op: "send", channel: "some-other-channel", body: "x" };
   assert.equal(profiles.grantDecision(io.grantArgs(s, DOPL_CHANNEL_TOOL, away)), "gate");
   priv.openPrivateTurn(s);
   assert.equal(profiles.grantDecision(io.grantArgs(s, DOPL_CHANNEL_TOOL, away)), "gate");

@@ -260,7 +260,7 @@ const BYPASS_TOOLS = AUTO_TOOLS.concat(ESCALATION_TOOLS, DOPL_WRITE_TOOLS, BYPAS
 // but they are the two whose removal a reader would want argued, because they are what injects
 // the OPERATOR'S PERSONAL Claude Code agent and skill catalogue into every Dopl agent turn
 // (8,322 ch measured 2026-09-02): the same privacy class as F-268, and it breaks cross-machine
-// prompt-cache identity too. Dopl's sanctioned delegation path is `dopl_channel(op="launch_agent")`,
+// prompt-cache identity too. Dopl's sanctioned delegation path is `dopl_channel(op="manage", action="launch")`,
 // not this CLI's own `Agent`. ⚠ ONE LINE REVERSES IT — `FULL_BUILTIN_BOUND.concat(['Agent',
 // 'Skill'])` re-OFFERS them; making them RUNNABLE is a second, separate decision (classify them),
 // which is the honest shape of the trade rather than one flag standing for both.

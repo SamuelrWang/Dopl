@@ -43,7 +43,7 @@ const budget = require(M("launch-budget.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
 const CH = "ch1";
-const LAUNCH = { op: "launch_agent", goal: "staff this channel" };
+const LAUNCH = { op: "manage", action: "launch", goal: "staff this channel" };
 const decide = (over) => profiles.grantDecision({ profile: "full", channelId: CH, ...over });
 const args = (over) => ({ toolName: DOPL_CHANNEL_TOOL, input: LAUNCH, ...over });
 
@@ -131,7 +131,7 @@ test("ON: cross-channel is still refused — a room's setting arms that room onl
   // ⚠ THE SCOPE RULE IS UNTOUCHED BY THE SETTING. A chained session in an armed channel must not
   // be able to staff a DIFFERENT room, or one flipped switch would arm the whole workspace.
   for (const channel of ["ch2", "my-slug"]) {
-    assert.equal(decide(args({ input: { op: "launch_agent", channel }, launchChain: true,
+    assert.equal(decide(args({ input: { op: "manage", action: "launch", channel }, launchChain: true,
       launchDepth: 1, toolMode: "bypass", messageMode: "auto_both" })), "gate");
   }
 });

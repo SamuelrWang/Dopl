@@ -14,6 +14,7 @@
 // exactly the two-place gate that F-228 / 1.7.10 bought, and the reason the outbound card and the
 // dock card are two PAYLOADS of one decision rather than two decisions.
 
+const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the classifiers' own key (F-578)
 const crypto = require('crypto');
 const { grantDecisionDetail, grantKeyFor, isOwnChannelPost, isChannelTool, mcpShortName } = require('./session-profiles');
 const outboundTag = require('./session-outbound-tag');
@@ -46,11 +47,21 @@ function shortToolLabel(name) {
 // archaeology to find. THE OP NAME ONLY (a closed vocabulary from the server's enum), sanitized
 // because it arrives from model input; never a body, recipient or channel. Non-channel tools get
 // no `op=` segment, so every line this file already produced is byte-unchanged.
+//
+// ⚠ **AND THE ACTION SINCE 2026-09-02 (F-578), BECAUSE `op=rooms` ALONE IS THE 2026-08-05 DEFECT
+// AGAIN.** Under the five-op surface, `rooms` is four reads and four writes and `manage` is five
+// verbs, so a line naming the bare op reads identically for a roster read and an invite —
+// exactly the archaeology this segment exists to prevent. The label is
+// `channel-op-key.js › channelOpKey`'s output, the same key the CLASSIFIERS match on, so the
+// audit line and the decision can never name different calls.
 function channelOpLabel(toolName, callInput) {
   if (!isChannelTool(toolName)) return '';
   const raw = callInput && callInput.op;
   if (typeof raw !== 'string') return raw == null ? 'none' : 'invalid';
-  return raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, DIAG_OP_CAP) || 'invalid';
+  // ⚠ SANITIZED AFTER the key is built, and the dot is in the kept set: both halves arrive from
+  // model input, and `slice` bounds the pair rather than each half.
+  const key = channelOpKey(callInput);
+  return key.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, DIAG_OP_CAP) || 'invalid';
 }
 function logGateVerdict(log, s, toolName, verdict, op) {
   if (typeof log !== 'function') return;

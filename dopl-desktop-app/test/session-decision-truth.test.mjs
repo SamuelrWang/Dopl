@@ -58,7 +58,7 @@ const io = require(M("session-io.js"));
 const axisB = require(M("runtime/claude/axis-b.js"));
 
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
-const POST = { op: "post", body: "Shipping the invoice import tonight." };
+const POST = { op: "send", body: "Shipping the invoice import tonight." };
 
 // ── the REAL reducer + the REAL engine plumbing, sliced out of the shipped source ────
 // session-engine.js is electron-bound, so (like every other main-process test here) the two
@@ -281,7 +281,7 @@ test("F4: main sends the AUTHORIZED bytes, and `to` is the peer NAME (never an i
   });
   // A bodiless post still gates, with an empty body rather than an undefined one.
   const events2 = [];
-  axisB.makeCanUseTool(s, (_s, ev) => events2.push(ev))(CHANNEL_TOOL, { op: "post" }, { requestId: "r2", toolUseID: "t2" });
+  axisB.makeCanUseTool(s, (_s, ev) => events2.push(ev))(CHANNEL_TOOL, { op: "send" }, { requestId: "r2", toolUseID: "t2" });
   assert.equal(events2[0].payload.text, "");
 });
 
