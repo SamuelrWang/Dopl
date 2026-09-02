@@ -168,7 +168,7 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   dopl_kb: 3359,
   dopl_members: 1535,
   dopl_ontology: 2321,
-  dopl_skill: 1586,
+  dopl_skill: 1580,
 };
 
 /**
@@ -198,13 +198,21 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // tools, and a ceiling over a tool nobody serves is what the ratchet's DEAD
   // half exists to refuse.
   current_workspace: 594,
-  dopl_agent: 3912,
+  // ⚠ **+17 ON 2026-09-02 (review fixes).** `dopl_agent`'s `visibility` describe
+  // gained "(create default)" — the wire now SENDS that default rather than
+  // leaving it to a credential-dependent server branch, and a param whose
+  // default is on the wire has to state it.
+  dopl_agent: 3929,
   // ⚠ **21,778 → 11,371, THE SINGLE LARGEST FALL IN THE WAVE**, and it came from
   // deleting ops and params rather than from rewording: `kind`, `intent` and
   // `direct` are gone with their error codes, `get_thread` folded into
   // `read(thread=)`, the three ping forms collapsed to one `recipient`, and
   // `chain` became a three-value enum (A6 + A6b, C11–C15).
-  dopl_channel: 11371,
+  // ⚠ **11,371 → 11,333 ON 2026-09-02 (review fixes).** `client_msg_id`'s
+  // description collapsed to ONE sentence when `channel_tasks` took the author
+  // scope (C14): the param had to teach the WEAKER of two keys while the two
+  // routes deduped differently, and there is one key now.
+  dopl_channel: 11333,
   dopl_chats: 3519,
   dopl_home: 457,
   dopl_kb: 4819,
@@ -212,7 +220,17 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   dopl_members: 604,
   dopl_ontology: 2538,
   dopl_search: 802,
-  dopl_skill: 2800,
+  // ⚠ **+259 ON 2026-09-02, AND IT IS A FENCE RATHER THAN PROSE (review fixes,
+  // G16).** `dopl_skill` gained `confirm_token`: publishing a skill into a
+  // container a peer is standing in previews first, which is the precondition
+  // A11 shipped for the other two resource types and left off this one. The
+  // ratchet's own guidance — "move standing doctrine into an MCP resource rather
+  // than raising the number" — is about DOCTRINE; a required argument cannot go
+  // into a pulled document, and trimming its description into uselessness would
+  // buy the number by making the fence unusable. Licensed in writing, on
+  // `DOCTRINE_CEILING`'s precedent, and the description ceiling FELL in the same
+  // change so the tool's total moved by less than this line.
+  dopl_skill: 3059,
   dopl_status: 508,
   list_workspaces: 114,
 };
@@ -237,7 +255,13 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * true also forces the headline number to be re-measured on every slice that
  * claims a win.
  */
-const SERVED_TOTAL_CEILING = 54_702;
+// ⚠ **RE-MEASURED 2026-09-02 AFTER THE WAVE-A REVIEW FIXES: 54,934 (+232).** The
+// whole of the rise is `dopl_skill`'s `confirm_token` and `dopl_agent`'s one
+// clarified default — G16's third caller, and the create lane that could not
+// preview correctly. Against it the description half FELL and the pulled doctrine
+// fell 177. **A fence costs served characters and is worth them; prose is what
+// this ceiling exists to refuse.**
+const SERVED_TOTAL_CEILING = 54_934;
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -275,7 +299,11 @@ const INSTRUCTIONS_CEILING = 1_849;
  * being served, every figure here would read 0 and go green while the doctrine
  * reached no agent.
  */
-const DOCTRINE_CEILING = 32_728;
+// ⚠ **32,728 → 32,551 ON 2026-09-02 (review fixes).** `client_msg_id`'s two-key
+// paragraph collapsed to one sentence when `channel_tasks` took the author scope
+// (C14), and the protocol section stopped naming the deleted `kind` param. Banked
+// here rather than left as headroom, which is what this ratchet is for.
+const DOCTRINE_CEILING = 32_551;
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",
