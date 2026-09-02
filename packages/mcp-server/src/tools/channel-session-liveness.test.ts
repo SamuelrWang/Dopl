@@ -32,13 +32,8 @@
 
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import type {
-  ChannelSessionStateOwn,
-  DoplClient,
-} from "@dopl/client";
-import type { WorkspaceDirectory } from "../workspace-directory.js";
+import type { ChannelSessionStateOwn, DoplClient } from "@dopl/client";
 import { opReadSessions } from "./channel-ops-read";
-import { opReadSessionsAccount } from "./channel-ops-account";
 import {
   formatSessionLine,
   sessionLegend,
@@ -67,7 +62,9 @@ const quietFor = (ms: number) => new Date(NOW - ms).toISOString();
  * join or a truncation behaves differently once the fuller set is present, so a
  * sparse fixture would have proved nothing.
  */
-function rich(over: Partial<ChannelSessionStateOwn> = {}): ChannelSessionStateOwn {
+function rich(
+  over: Partial<ChannelSessionStateOwn> = {},
+): ChannelSessionStateOwn {
   return {
     channelId: "chan-1",
     threadId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
@@ -143,55 +140,35 @@ afterEach(() => {
 });
 
 // ── THE DIFF: ONE DTO, BOTH PATHS ────────────────────────────────────
-
-/**
- * ⚠ **THE THIRD SURFACE (2026-09-02).** `op="read_sessions"` with NO `channel`
- * renders the same sessions grouped by room, and until this date it rendered
- * `formatSessionLine` — the PRE-TERSE prose form — while its per-channel sibling
- * rendered the table. Two shapes for one session is exactly the drift this file
- * exists to catch, so the account path is driven here too.
- */
-const UNLOCKED: WorkspaceDirectory = {
-  lockedWorkspaceId: () => null,
-} as unknown as WorkspaceDirectory;
-
-function accountStubClient(sessions: ChannelSessionStateOwn[]): DoplClient {
-  return {
-    getAccountStatus: vi.fn(async () => ({
-      channels: [
-        {
-          channelId: "chan-1",
-          channelName: "General",
-          channelSlug: "general",
-          workspaceId: "ws-1",
-          lastSeq: null,
-          lastMessageAt: null,
-          unread: null,
-          sessions,
-          waiting: [],
-        },
-      ],
-      operatorOnline: undefined,
-      since: null,
-      truncated: { channels: false, unread: false, waiting: false },
-    })),
-  } as unknown as DoplClient;
-}
+//
+// ⚠ **A THIRD SURFACE JOINED THE DIFF ON 2026-09-02 AND LIVES NEXT DOOR** —
+// `op="read_sessions"` with NO `channel` (T22), which had been rendering the
+// PRE-TERSE prose line while these two rendered the table.
+// `channel-session-liveness-account.test.ts` holds it: this file was at 520 of
+// the §1 cap of 500 with it inline, and the seam is the surface rather than the
+// arithmetic. ⚠ **A FOURTH RENDERER OF A SESSION IS A CASE IN ONE OF THESE TWO
+// FILES**, never a third opinion left untested.
 
 describe("read_sessions and the await session block render IDENTICALLY", () => {
   const cases: Array<[string, ChannelSessionStateOwn]> = [
     ["the full rich row", rich()],
-    ["no template, suffixed model — the observed shape", rich({ model: "claude-opus-5[1m]" })],
+    [
+      "no template, suffixed model — the observed shape",
+      rich({ model: "claude-opus-5[1m]" }),
+    ],
     ["a template AND a model", rich({ templateName: "Code Auditor" })],
-    ["every telemetry field absent — an older desktop", rich({
-      model: null,
-      toolLabel: null,
-      contextUsed: null,
-      contextWindow: null,
-      tokensSpent: null,
-      startedAt: null,
-      lastActivityAt: null,
-    })],
+    [
+      "every telemetry field absent — an older desktop",
+      rich({
+        model: null,
+        toolLabel: null,
+        contextUsed: null,
+        contextWindow: null,
+        tokensSpent: null,
+        startedAt: null,
+        lastActivityAt: null,
+      }),
+    ],
     ["a quiet row", rich({ updatedAt: quietFor(10 * 60_000) })],
   ];
 
@@ -209,31 +186,7 @@ describe("read_sessions and the await session block render IDENTICALLY", () => {
       // survives as a "row" on one side and not the other.
       expect(fromAwait).toEqual(fromRead);
     });
-
-    it(`${label} — and the ACCOUNT-WIDE read matches them too`, async () => {
-      // ⚠ MUTATION CHECK. Render `formatSessionLine` in
-      // `channel-ops-account.ts` again and `sessionLines` finds nothing on this
-      // side, so the length assertion fails before the equality can pass on two
-      // empty arrays.
-      const res = await opReadSessionsAccount(
-        accountStubClient([session]),
-        UNLOCKED,
-      );
-      const fromAccount = sessionLines(res.content[0].text);
-      expect(fromAccount).toHaveLength(1);
-      const fromRead = sessionLines(
-        (await opReadSessions(stubClient([session]))).content[0].text,
-      );
-      expect(fromAccount).toEqual(fromRead);
-    });
   }
-
-  it("the account-wide page ships the SHARED header, not a hand-rolled one", async () => {
-    const res = await opReadSessionsAccount(accountStubClient([rich()]), UNLOCKED);
-    for (const line of SESSION_TABLE_HEAD) {
-      expect(res.content[0].text).toContain(line);
-    }
-  });
 
   /**
    * ⚠ The presence fact must reach BOTH paths or the surface contradicts itself
@@ -247,8 +200,9 @@ describe("read_sessions and the await session block render IDENTICALLY", () => {
     // ⚠ Same reason as above: without this the equality can be satisfied by two
     // empty filters, which is precisely how this case went quiet under T13.
     expect(fromRead).toHaveLength(1);
-    expect(sessionLines(sessionBlockLines([session], undefined, true).join("\n")))
-      .toEqual(fromRead);
+    expect(
+      sessionLines(sessionBlockLines([session], undefined, true).join("\n")),
+    ).toEqual(fromRead);
   });
 });
 
@@ -343,11 +297,16 @@ describe("F-293 — a model id can never split into two bare names", () => {
     expect(body, "neutralizeInline moved or was renamed").not.toBe("");
     // Every character class `neutralizeInline` REPLACES WITH A SPACE, as source.
     const blanked = body.match(/\.replace\(\/\[[^\n]*?\/g[u]?, " "\)/g) ?? [];
-    expect(blanked.length, "the blanking replaces moved").toBeGreaterThanOrEqual(1);
+    expect(
+      blanked.length,
+      "the blanking replaces moved",
+    ).toBeGreaterThanOrEqual(1);
     const source = blanked.join("");
     // ⚠ BEHAVIOUR, not just source: each character must come back JOINED here.
     for (const ch of ["`", "*", "_", "#", ">", "[", "]", "{", "}", "|"]) {
-      expect(source, `${ch} left neutralizeInline's blanking class`).toContain(ch);
+      expect(source, `${ch} left neutralizeInline's blanking class`).toContain(
+        ch,
+      );
       expect(shortModelLabel(`a${ch}b`), ch).toBe("a-b");
     }
   });
@@ -356,7 +315,11 @@ describe("F-293 — a model id can never split into two bare names", () => {
 // ── F-294: A QUIET ROW UNDER A LIVE MACHINE ──────────────────────────
 
 describe("F-294 — an idle-but-alive agent is no longer reported as maybe-gone", () => {
-  const quiet = rich({ state: "idle", detail: null, updatedAt: quietFor(4 * 60_000) });
+  const quiet = rich({
+    state: "idle",
+    detail: null,
+    updatedAt: quietFor(4 * 60_000),
+  });
 
   /**
    * ⚠ THE LIVE REPRODUCTION: ~2 minutes of an idle agent doing nothing wrong,
@@ -504,7 +467,8 @@ describe("read_sessions carries the presence fact end to end", () => {
 
   it("a live heartbeat changes the ROW AND the legend together", async () => {
     const session = rich({ updatedAt: quietFor(10 * 60_000) });
-    const text = (await opReadSessions(stubClient([session], true))).content[0].text;
+    const text = (await opReadSessions(stubClient([session], true))).content[0]
+      .text;
     // ⚠ `quiet 10m` SPLIT INTO TWO CELLS (T13) and both halves are still
     // asserted: the state cell carries the READING and the `idle` column
     // carries the NUMBER. Dropping either would let a page say "alive" with no
