@@ -58,11 +58,18 @@ function narrowTo<T extends string>(
   ceiling: T | null | undefined,
   order: readonly T[]
 ): T | null {
-  if (!requested) return null;
-  // ⚠ NO CEILING ⇒ NO CLAMP. `null` here is "not recorded", and inventing a
-  // narrowing from an absence is how a server starts refusing what it was never
-  // told to refuse.
-  if (!ceiling) return requested;
+  // ⚠ **AN AXIS NOBODY ASKED FOR RESOLVES TO THE CEILING** (2026-09-02, review
+  // D4), and this is PARITY rather than a new opinion: the desktop's
+  // `resolvePosture` spells it `narrowTo(...) || max.tools`, so the machine has
+  // always substituted its ceiling for an unasked axis. The server answering
+  // `null` here made `resolved_*` say "the server permitted nothing in
+  // particular" about a launch it had a recorded ceiling for — which is what made
+  // G6's "the applied value is non-null" false, and what left an orchestrator
+  // unable to tell "no ceiling exists" from "no request was made".
+  // ⚠ IT CAN ONLY EVER NARROW. The machine's own clamp still runs afterwards, so
+  // the launch lands at min(channel ceiling, operator's own posture).
+  if (!ceiling) return requested ?? null;
+  if (!requested) return ceiling;
   if (order.indexOf(requested) === -1) return ceiling;
   return order.indexOf(requested) > order.indexOf(ceiling) ? ceiling : requested;
 }
@@ -75,11 +82,15 @@ function narrowTo<T extends string>(
  * of what was asked for was legal, and would leave the caller with a launch it
  * did not get. `clamped` is what lets the result SAY SO rather than move
  * silently.
- * ⚠ **`null` OUT MEANS "DID NOT ASK", AND IT SURVIVES THE CLAMP.** A request that
- * named no posture must stay unnamed all the way to the machine, which then
- * applies the operator's own stored pair — the pre-T24 behaviour, byte for byte.
- * Substituting the ceiling here would silently turn "whatever the operator
- * chose" into "whatever this channel allows".
+ * ⚠ **`null` OUT MEANS "THIS SERVER HAS NO CEILING TO STATE", AND NOTHING ELSE**
+ * (2026-09-02, review D4). It used to also mean "did not ask", so the two were
+ * indistinguishable on the stored row and G6's claim that `resolved_*` is
+ * non-null was false. An axis nobody asked for now resolves to the CEILING where
+ * one is recorded — which is what the machine's own `resolvePosture` has always
+ * done with its pair, so this is parity, and it only ever narrows. `null`
+ * survives only where the channel records no ceiling at all (F-449: today, every
+ * channel), and there the machine's stored pair is still the only answer,
+ * pre-T24 behaviour byte for byte.
  */
 export function clampPosture(
   requested: { tools?: LaunchToolMode | null; messages?: LaunchMessageMode | null },
@@ -138,5 +149,10 @@ export function resolveChain(
 ): boolean | null {
   if (requested === false) return false;
   if (requested === true) return true; // `chainRefused` already ruled on it
-  return ceiling.chain === false ? false : null;
+  // ⚠ NOT ASKED ⇒ THE CEILING, WHICHEVER WAY IT POINTS (review D4). This used to
+  // answer `null` for a ceiling of `true`, so "the channel allows chaining and
+  // nobody asked" and "no ceiling is recorded" were the same stored value. The
+  // desktop's `resolveChain` already returns `allowed === true` for this case, so
+  // the two now agree on all three states.
+  return ceiling.chain ?? null;
 }

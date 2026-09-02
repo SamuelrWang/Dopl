@@ -40,6 +40,12 @@
 -- "non-null applied posture" G6 asks for is non-null BY CONSTRUCTION (the
 -- service always writes it, `service-launch.test.ts` pins it) rather than by a
 -- constraint that would 500 every insert from a rolled-back build.
+-- ⚠ AND A `NOT NULL` ON `resolved_*` WAS RECONSIDERED ON 2026-09-02 (review D4)
+-- AND REFUSED, for a second reason on top of that one: `NULL` there means "this
+-- channel records no ceiling on that axis", which is EVERY channel today —
+-- `channels.agent_*` has no editing surface (F-449). A NOT NULL would 500 every
+-- launch rather than record anything. The honest non-null is the one the service
+-- writes where a ceiling exists, and the ledger says exactly that.
 
 -- ═══ 1. `channel_messages` — WHO IT WAS FOR, AND WHAT HAPPENED ═════════════
 
@@ -176,9 +182,17 @@ COMMENT ON COLUMN public.channels.agent_chain_allowed IS
 --                              no writer; `20260910120000` says so and it is
 --                              still true.
 --   `resolved_*` (here)        THE SERVER'S ANSWER — the request clamped to the
---                              channel ceiling above, decided at CREATION.
---                              Written on EVERY create, so it is non-null by
---                              construction on every row this build files.
+--                              channel ceiling above, decided at CREATION and
+--                              written on EVERY create. ⚠ NULL HAS EXACTLY ONE
+--                              MEANING HERE (corrected 2026-09-02, review D4):
+--                              **no ceiling is recorded on that axis of this
+--                              channel**, so the server has nothing to state and
+--                              the machine's own stored pair is the only answer.
+--                              It does NOT mean "the caller did not ask" — an
+--                              unasked axis takes the ceiling
+--                              (`lib/agent-posture.ts › narrowTo`), which is what
+--                              `main/launch-posture.js › resolvePosture` has
+--                              always done with its own pair.
 --
 -- ⚠ **`resolved_*` IS NOT A PROMISE ABOUT THE RUN.** The server starts nothing
 -- (`service-launch.ts`'s header). It is the answer to "what did the SERVER

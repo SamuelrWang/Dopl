@@ -136,6 +136,44 @@ describe("the clamp answers identically on every pair", () => {
   });
 });
 
+describe("an axis NOBODY asked for resolves to the ceiling on both sides", () => {
+  // 🔒 REVIEW D4 (2026-09-02). The desktop has always done this — `resolvePosture`
+  // is `narrowTo(...) || max.tools`, so an unasked axis takes its ceiling — and
+  // the server answered `null`, which made `resolved_*` unable to tell "no
+  // ceiling recorded" from "no request made" and made G6's non-null claim false.
+  // Bringing the server into line is parity, and it only ever NARROWS: the
+  // machine's clamp still runs on top.
+  it.each(LAUNCH_TOOL_MODES)("tools: no request against ceiling %s", (ceil) => {
+    expect(clampPosture({}, { ...EMPTY_AGENT_POSTURE, tools: ceil }).tools).toBe(
+      main.resolvePosture({}, { tools: ceil, messages: "ask" },
+        LAUNCH_TOOL_MODES, LAUNCH_MESSAGE_MODES).tools
+    );
+  });
+
+  it.each(LAUNCH_MESSAGE_MODES)("messages: no request against ceiling %s", (ceil) => {
+    expect(clampPosture({}, { ...EMPTY_AGENT_POSTURE, messages: ceil }).messages).toBe(
+      main.resolvePosture({}, { tools: "manual", messages: ceil },
+        LAUNCH_TOOL_MODES, LAUNCH_MESSAGE_MODES).messages
+    );
+  });
+
+  it("chain: not asking takes the ceiling, both ways", () => {
+    expect(resolveChain(null, { ...EMPTY_AGENT_POSTURE, chain: true })).toBe(
+      main.resolveChain(null, true).chain
+    );
+    expect(resolveChain(null, { ...EMPTY_AGENT_POSTURE, chain: false })).toBe(
+      main.resolveChain(null, false).chain
+    );
+  });
+
+  it("`clamped` stays FALSE — nothing the caller asked for was narrowed", () => {
+    // ⚠ The flag reports what the CALLER lost, and a caller that named no posture
+    // lost nothing. Reporting a clamp here would teach an orchestrator to go
+    // looking for a request it never made.
+    expect(clampPosture({}, { ...EMPTY_AGENT_POSTURE, tools: "manual" }).clamped).toBe(false);
+  });
+});
+
 describe("the one place the two DELIBERATELY differ, and why", () => {
   it("NO CEILING: this tree passes the request through; the desktop always has one", () => {
     // ⚠ **NOT A DRIFT — A DIFFERENT QUESTION.** The desktop's ceiling is the
@@ -173,7 +211,11 @@ describe("the chain rule matches, all three states", () => {
     }
   );
 
-  it("an UNRECORDED chain ceiling refuses nothing", () => {
+  it("an UNRECORDED chain ceiling refuses nothing, and resolves to nothing", () => {
+    // ⚠ `null` NOW HAS ONE MEANING ON THIS AXIS TOO: "no ceiling is recorded", so
+    // the machine's `channelAgentChain` toggle is the only answer. It is the one
+    // case D4's non-null preference cannot reach, which is why it is a stored
+    // value and not a constraint.
     expect(chainRefused(true, EMPTY_AGENT_POSTURE)).toBe(false);
     expect(resolveChain(null, EMPTY_AGENT_POSTURE)).toBeNull();
   });

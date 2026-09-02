@@ -111,10 +111,29 @@ describe("G6 — the posture is clamped at creation, and the resolution is store
     expect(inserted().resolved_tool_mode).toBe("manual");
   });
 
-  it("a request that named NO posture stays unnamed — the machine's own pair applies", async () => {
-    // ⚠ Substituting the ceiling here would silently turn "whatever the OPERATOR
-    // chose" into "whatever this channel allows", which is a different launch.
+  it("a request that named NO posture resolves to the CEILING — G6's non-null half", async () => {
+    // 🔒 REVIEW D4 (2026-09-02). This used to assert `null`, which made `resolved_*`
+    // say "the server permitted nothing in particular" about a launch it had a
+    // recorded ceiling for — so the guardrails ledger's "resolved* non-null" was
+    // false, and an orchestrator could not tell "no ceiling exists" from "nobody
+    // asked". ⚠ It is PARITY, not a new opinion: `main/launch-posture.js ›
+    // resolvePosture` spells it `narrowTo(...) || max.tools`, so the machine has
+    // always substituted its own ceiling for an unasked axis. And it only ever
+    // NARROWS — the machine's clamp still runs, so the launch lands at
+    // min(channel ceiling, operator's own posture).
     withCeiling({ agent_tool_ceiling: "manual", agent_message_ceiling: "ask" });
+    await createLaunchDirective(ctx, { channel: CHAN });
+    expect(inserted()).toMatchObject({
+      resolved_tool_mode: "manual",
+      resolved_message_mode: "ask",
+    });
+  });
+
+  it("…and stays NULL where the channel records no ceiling at all", async () => {
+    // ⚠ THE OTHER HALF, AND IT IS WHY "never null" CANNOT BE A CONSTRAINT. `null`
+    // means "this server has no ceiling to state" — F-449: every channel today,
+    // because the columns have no editing surface. A NOT NULL here would 500 every
+    // insert rather than record anything.
     await createLaunchDirective(ctx, { channel: CHAN });
     expect(inserted()).toMatchObject({
       resolved_tool_mode: null,
@@ -166,10 +185,12 @@ describe("G7 — `chain` is REFUSED, never clamped", () => {
     expect(inserted().resolved_chain).toBe(false);
   });
 
-  it("not asking inherits silently where the channel allows it", async () => {
+  it("not asking resolves to the ceiling where the channel allows it", async () => {
+    // ⚠ REVIEW D4, the chain axis. `null` used to cover both "the channel allows
+    // it and nobody asked" and "no ceiling recorded", which are different facts.
     withCeiling({ agent_chain_allowed: true });
     await createLaunchDirective(ctx, { channel: CHAN });
-    expect(inserted().resolved_chain).toBeNull();
+    expect(inserted().resolved_chain).toBe(true);
   });
 
   it("not asking resolves to FALSE where the channel forbids it — never a refusal", async () => {
