@@ -71,17 +71,17 @@ visibility="public" when the user explicitly says to share it with the
 workspace.`;
 
 const CHATS_DESCRIPTION = `The user's chat archive — exported conversation records this and future sessions can recall. Set \`op\` to one of:
-- "export" — save the current (or a finished) conversation into the archive. Requires: title, messages (array of {role: "user"|"agent", summary, verbatim?}). Strongly recommended: client_session_id (stable session id — makes re-export update instead of duplicate), overview, deliverables, learnings, session_date, source, project, folder. Read op="guide" before your first export: summarize per message, verbatim only on explicit request.
-- "append" — add messages to an already-exported chat (mid-session incremental export). Requires: chat_id, messages.
-- "update" — update a chat's header (title, overview, project, session_date, deliverables, learnings, folder, pinned) or share/unshare it (visibility). Owner-only. Requires: chat_id plus the fields to change. NOTE: a chat filed in a folder inherits the folder's sharing — moving it into a folder re-scopes it, and setting visibility on a filed chat is rejected (unfile first or use op="update_folder").
-- "list" — chats the user can read (their own, workspace-shared ones, and team-shared ones granted to a team they are on), newest first, with id/title/date/source/visibility/owner. On the FREE PLAN a 90-day history window hides older chats from this listing — nothing is deleted, and the result says so whenever any are hidden. Optional: scope ("private" = the user's unshared chats | "shared" = workspace-public ones | "all", default "all"), query (case-insensitive filter on TITLE and OVERVIEW only — transcripts are not searched, and neither is the archive by dopl_search).
-- "get" — read one chat in full: header, deliverables, learnings, and the summarized transcript. Requires: chat_id. Use this to pull past-session context the user references.
-- "folders" — list the user's chat folders with their sharing scope.
-- "create_folder" — create a chat folder (private by default). Requires: name.
-- "update_folder" — rename a folder and/or change its sharing (visibility "private"|"public" = whole workspace). Changing sharing re-scopes EVERY chat in the folder — confirm with the user first. Team-scoped folder sharing is web-UI only. Requires: folder_id plus name and/or visibility.
-- "guide" — the export etiquette guide (message style, header discipline, idempotency, privacy). Read before your first export of a session.
+- "export" — save a conversation. Requires: title, messages ({role: "user"|"agent", summary, verbatim?}). Recommended: client_session_id (stable session id, so a re-export updates instead of duplicating), overview, deliverables, learnings, session_date, source, project, folder. Read op="guide" first.
+- "append" — add messages to an exported chat. Requires: chat_id, messages.
+- "update" — a chat's header fields, or share/unshare via visibility. Owner-only. Requires: chat_id plus the fields to change. A filed chat INHERITS its folder's sharing, so filing re-scopes it and visibility on a filed chat is rejected.
+- "list" — chats the user can read, newest first. On the FREE PLAN a 90-day history window hides older chats — nothing is deleted, and the result says so whenever any are hidden. Optional: scope ("private" | "shared" | "all", default "all"), query (filters TITLE and OVERVIEW only — transcripts are not searched, and neither is the archive by dopl_search).
+- "get" — one chat in full: header, deliverables, learnings, summarized transcript. Requires: chat_id.
+- "folders" — the user's chat folders with their sharing scope.
+- "create_folder" — private by default. Requires: name.
+- "update_folder" — rename and/or re-scope. Requires: folder_id plus name and/or visibility. ⚠ Changing sharing re-scopes EVERY chat in the folder — confirm with the user first.
+- "guide" — export etiquette: message style, header discipline, idempotency, privacy.
 
-Deleting is APP-ONLY and permanent — there is no trash and nothing to restore. \`dopl_chats_admin\` lists its delete ops only to refuse them; ask the user to delete an archived chat in the Dopl app.`;
+Deleting is APP-ONLY and permanent — no trash, nothing to restore. \`dopl_chats_admin\` lists its delete ops only to refuse them.`;
 
 const CHATS_ADMIN_DESCRIPTION = deleteAdminDescription(
   [

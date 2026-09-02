@@ -2681,7 +2681,7 @@ an agent reads at decision time steers the next call.
 
 ## F-302 — the zero-tag diagnostic proposed the WRONG REPAIR for the one cause both agents hit (2026-08-24, RESOLVED)
 
-- Location: `packages/mcp-server/src/tools/channel-post-guidance.ts › tagOutcomeNote` (the count-0 branch).
+- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › CHANNEL_DOCTRINE`, the "WHY A TAG RESOLVES TO NOBODY" causes. ⚠ This was `channel-post-guidance.ts`'s `tagOutcomeNote` (the count-0 branch) until 2026-09-02, when T12 moved the five causes out of the per-post result and left the verdict behind as `tags=<resolved>/<attempted>`.
 - Found during: the same run. **Both agents hit it independently**, which is what makes it a defect in the
   copy rather than a mistake by one model.
 - Severity: **major as a teaching defect** (the F-274 / F-291 class).

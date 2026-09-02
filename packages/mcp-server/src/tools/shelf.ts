@@ -70,7 +70,7 @@ export const SHELF_ABSENT_RULE =
  * `shelf="personal"` when the caller meant `workspace=<home channel container>`.
  */
 export const SHELF_ARG_DESCRIPTION =
-  `Which SHELF to target: "personal" = your own /home shelf (the private rows inside your DEFAULT workspace), "workspace" = the workspace's shared shelf. ${SHELF_ABSENT_RULE} This is NOT how you reach a home CHANNEL — a home channel is a workspace, addressed with \`workspace=<container id>\`.`;
+  `Which SHELF to target: "personal" = your own PERSONAL shelf (the private rows inside your DEFAULT workspace), "workspace" = the workspace's shared shelf. ${SHELF_ABSENT_RULE} This is NOT how you reach a home CHANNEL — a home channel is a separate container, addressed with \`workspace=<container id>\`, and it has no personal shelf at all.`;
 
 /**
  * 🔒 THE HOME-SHELF FENCE, SURFACED. Both features answer 403 with their own

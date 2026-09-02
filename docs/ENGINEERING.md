@@ -5836,3 +5836,47 @@ assertions in `channel-ops-agent.test.ts`.
 The other copy rule this wave bought: `no-session` on an end is usually GOOD NEWS. An agent that
 finished is the ordinary cause, and that is the outcome the caller wanted, reached without them. A
 result that read as a failure would send an orchestrator to re-launch the very work it was stopping.
+
+## 2026-09-02 — The doctrine that was true, and shipped three times: inverting the "say it in the result" rule
+
+On 2026-08-18 (wiring plan Phase 11) this surface adopted a rule that was correct about how models
+read: a tool RESULT is read at the moment the model picks its next action, and therefore OUTVOTES a
+description read once at connection time. So the two capabilities an agent has to be told it has —
+the sparse main-room post and the @-tag — were written into the `post` RESULT as well as the
+description. The rule generalised, honestly, one sentence at a time. Every addition was a real
+lesson somebody had been bitten by.
+
+What nobody was measuring was the bill. An orchestration run across four home channels spent ~55
+tool calls for about 8 calls of real work, and the transcript said where it went: ~25 write results
+at ~2.5–3.5k characters each ≈ 70k characters, almost all of it the same paragraphs — the addressing
+note, the thread-linkage note, the five reasons an @-tag resolves to nobody, the main-room
+sparseness bar, the await lecture and its stop rule. `dopl_channel`'s description was 34,904
+characters, more than half the entire 17-tool surface, pushed to every client on every connection
+including the ones that never open a channel. `read_sessions` — an op an orchestrator polls in a
+loop — closed with ~1.9k of standing paragraphs on every call.
+
+**The correction is a distinction, not a deletion.** A RESULT carries what THIS call did; a rule
+that is true before the call and after it is DOCTRINE. Doctrine is now one constant, published as
+the MCP resource `dopl://doctrine/channels` and by `dopl_channel(op="help")` — pulled when an agent
+wants it instead of pushed at every agent forever. Write results became one line of `key=value`
+facts under 300 characters.
+
+**The teaching-strength argument survives intact, and it is what decided which tokens stayed.** The
+things a caller cannot derive are still in the result, as fields: `tags=0/1` is the server's own
+mention resolution and remains the only thing in the product that catches a misspelled handle — the
+five CAUSES moved, the VERDICT did not. `landed=dropped` is still the silent thread-tag drop.
+`filed=no` still separates "nothing was written" from a pending row that must not be re-issued.
+`idle=no` still separates an agent working its goal from one parked and running nothing, which is
+the difference an orchestrator waits forever on.
+
+Two things fell out that were not the point. Splitting `wake=` from `tags=` fixed a real
+mis-narration: agent handles are resolved on the operator's desktop and never stamped by the server,
+so counting them in the tag fraction reported `0/1` for a token nobody was ever going to stamp — the
+reading a live orchestrator acted on in the 2026-08-31 repro. And a `post` is now ONE round trip:
+the old thread-linkage note called `listChannelThreads` per post to offer threads the caller might
+have meant, and a paragraph that costs a request is a paragraph twice over.
+
+⚠ The honest remainder: six descriptions still do not fit the 1,200-character budget, and each is at
+its smallest honest size — a headline, one line per op, the tenancy wording the P3 tier owns, and
+security sentences other suites pin by phrase. They sit under a ratchet that only moves down, with a
+second test that fails a stale ceiling. Adding a name to that list is not a fix.
