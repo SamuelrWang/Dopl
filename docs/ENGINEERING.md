@@ -35,6 +35,9 @@ setup-intelligence-engine/
 ├── docs/                          # This file, ADRs, runbooks
 ├── packages/                      # Internal workspace libs (not published to npm)
 │   ├── chrome-extension/          # Browser extension (webpack build)
+│   ├── contracts/                 # @dopl/contracts — the ONE declaration of every closed set that
+│   │                              # crosses a tree boundary. TYPE-ONLY: no build, no dist/, and it
+│   │                              # must stay that way (INVARIANTS §1)
 │   ├── dopl-client/               # @dopl/client — shared HTTP client + types
 │   └── mcp-server/                # In-process MCP engine; booted by /api/mcp via @dopl/mcp-server/factory
 ├── public/                        # Static assets
@@ -5930,3 +5933,43 @@ had been in CI since 2026-08-31 and in no doc — the same failure `check-role-d
 month earlier. §14 had told everyone to re-derive rather than quote; nobody ran the command until an
 integration needed the real list. **A doc that says "re-derive this" is not a substitute for
 re-deriving it, and the wave that adds a gate is the one that will not think to.**
+
+---
+
+### `@dopl/contracts` — why a fourth package, and why it has no build (2026-09-02)
+
+**The measurement that bought it.** 47 duplicated tenancy/channel types across
+`src/features/**/types*.ts` and `packages/dopl-client/src/*`, 15% of them gated, over **1,038 lines
+of drift script** — and four live drifts sitting in the tree while those scripts were green
+(`WorkspaceSummary.iconUrl` F-335, `ChannelMessage.authorName`/`authorAvatarUrl`,
+`HomePendingLink.grantedRole`, `HomeChannelsPayload.pendingLinks`). Three of the four gates parsed
+the committed `dist/` as a SEPARATE mirror, because that is what `@dopl/mcp-server` and `main`
+actually import. `check-session-health-drift.ts` shipped on the morning of 2026-09-02 naming **four
+hand-mirrors of one seven-field type**; the package landed the same afternoon and took it to two.
+
+**Why the mirrors existed at all** — and it was never laziness: `packages/dopl-client` and
+`packages/mcp-server` are separate `tsc` programs with their own `rootDir`, reached through
+`node_modules`, so `import "@/features/channels/types"` is not a thing either can write. A shared
+WORKSPACE PACKAGE is the only shape that both trees and `src/` can all name.
+
+**The one design decision worth keeping: it is TYPE-ONLY, and that is what makes it free.**
+`package.json` sets `types: "./src/index.ts"` and nothing else. There is no `tsc` step, no `dist/`,
+no `build:packages` line, no CI step, and nothing to rebuild before committing — because every
+import of it is an `import type` and all four toolchains erase it. The alternative was considered
+and rejected on cost: a package with runtime exports needs a build, and then either a committed
+`dist/` (the exact 1.6 MB of diff surface this work exists to shrink) or a new build step in two CI
+jobs plus a fresh clone that cannot typecheck until somebody runs it. ⚠ **The rule this buys has to
+be defended, because the first `const` looks harmless:** a single runtime export makes
+`@dopl/contracts` a build input for Next/webpack, the SPA's Vite and two NodeNext programs at once.
+`isStandardWorkspace` is the thing that WANTED to move and could not — which is why
+`check-role-drift.ts › checkWorkspaceKind` survives as a predicate check with its set comparison
+deleted out from under it.
+
+**What the gates became, and why the deletions were deletions.** A re-export cannot disagree with
+what it re-exports, so the SDK sites in three scripts were not merely redundant — `extractUnion` and
+`typeFields` THROW on one, i.e. a gate left pointing at a retired mirror fails on the CORRECT state.
+Repointing them at the package would have been worse: two readers of one file, reporting one fact
+twice. What replaced them is a different assertion, and it had to be: those gates caught two copies
+DISAGREEING, and the failure mode now is a second copy APPEARING — which compiles, ships, and
+shadows the package for one tree's consumers. `src/shared/contracts/canonical-sets.test.ts` is that
+census.
