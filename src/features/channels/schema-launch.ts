@@ -116,12 +116,25 @@ export const LaunchCreateSchema = z.object({
   /**
    * MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS?
    *
-   * ⚠ **OPTIONAL, AND THE ABSENT CASE IS NOT `false`.** Omitted means "I did not
-   * ask", which inherits the channel's own setting; `false` is a deliberate
-   * request for it off. Collapsing the two would turn every ordinary launch into
-   * a request — and a request the channel denies is REFUSED, not clamped
-   * (`launch-posture.js › resolveChain`), so the collapse would start refusing
-   * launches that asked for nothing.
+   * ⚠ **OPTIONAL, AND OMITTING IT IS NOT THE SAME AS `false`.** Omitted means "I
+   * did not ask", which inherits the channel's own setting. Collapsing that into
+   * a request would turn every ordinary launch into one — and a request the
+   * channel denies is REFUSED, not clamped (`launch-posture.js › resolveChain`),
+   * so the collapse would start refusing launches that asked for nothing.
+   *
+   * ⚠ **MEASURED MISMATCH (2026-09-01): `false` IS STORABLE HERE AND IS NOT
+   * DISTINGUISHABLE ON THE DESKTOP.** `main/launch-directive-wire.js ›
+   * directiveFrom` narrows this field as `r.chain === true || r.chain === 'true'
+   * ? true : null`, so a stored `false` arrives as `null` — "did not ask" — and
+   * the session inherits the channel setting, which may be ON. **So `false` is
+   * NOT a way to turn chaining off**, and no copy on this lane may say it is;
+   * `channel-schema.ts › chain` states that to callers.
+   * ⚠ **THE COLUMN STAYS A NULLABLE BOOLEAN RATHER THAN A `z.literal(true)`, AND
+   * THAT IS THE CHEAP DIRECTION.** Narrowing here would make the day the desktop
+   * learns to honour `false` a schema change in three trees; admitting it costs
+   * one row value that currently resolves the same way `null` does. What is NOT
+   * acceptable is prose that promises the behaviour, which is why this note
+   * exists rather than a narrower type.
    */
   chain: z.boolean().optional(),
 });

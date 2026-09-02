@@ -168,9 +168,12 @@ export interface LaunchDirective {
    */
   startToolMode: LaunchToolMode | null;
   startMessageMode: LaunchMessageMode | null;
-  /** MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? ⚠ A TRI-STATE: `true` asked,
-   *  `false` asked for it off, `null` did not ask. ⚠ REFUSED rather than clamped
-   *  when the channel forbids it — the one asymmetry with the two axes. */
+  /** MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? `true` asked; `null` did not
+   *  ask and inherits the channel setting. ⚠ REFUSED rather than clamped when the
+   *  channel forbids it — the one asymmetry with the two axes.
+   *  ⚠ **`false` IS STORABLE AND THE DESKTOP CANNOT TELL IT FROM `null`** — its
+   *  narrower reads only `true`/`"true"` as a request — so `false` is NOT a way
+   *  to turn chaining off, and nothing may render it as one. */
   chain: boolean | null;
   /** THE POSTURE A `set_agent_mode` ASKED A **RUNNING** AGENT TO MOVE TO. `null`
    *  on an axis means it was not requested, which is ordinary; at least one is
@@ -224,7 +227,10 @@ export interface LaunchDirectiveCreateInput {
    * operator's own stored channel posture and REFUSES a chain the channel
    * forbids. Omitting all three is the pre-T24 behaviour exactly: the operator's
    * own stored pair, and the channel's own chain setting.
-   * ⚠ `chain: false` IS A REAL REQUEST and is not the same as omitting it.
+   * ⚠ **`chain: false` IS NOT A WAY TO TURN CHAINING OFF** (measured 2026-09-01).
+   * The desktop's narrower reads only `true` as a request, so `false` reaches it
+   * as "did not ask" and the session inherits the channel setting — which may be
+   * ON. Send `true` or send nothing.
    */
   tools?: LaunchToolMode;
   messages?: LaunchMessageMode;

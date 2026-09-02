@@ -332,7 +332,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .boolean()
     .optional()
     .describe(
-      'op="launch_agent" (optional): ask that the new agent be allowed to launch further agents of its own. ⚠ UNLIKE `tools` and `messages`, THIS ONE IS REFUSED RATHER THAN QUIETLY NARROWED when your operator\'s channel does not allow it — you get an answer instead of an agent that hits a wall mid-run after you have already handed it work that assumes workers. ⚠ OMITTING IT IS NOT `false`: omitted means "I did not ask" and inherits the channel\'s own setting, while `false` asks for it off. Ask for it only when the work genuinely needs sub-agents.',
+      'op="launch_agent" (optional): pass true to ask that the new agent be allowed to launch further agents of its own. ⚠ UNLIKE `tools` and `messages`, THIS ONE IS REFUSED RATHER THAN QUIETLY NARROWED when your operator\'s channel does not allow it — you get an answer instead of an agent that hits a wall mid-run after you have already handed it work that assumes workers. ⚠ **`false` IS NOT A WAY TO TURN CHAINING OFF.** Today the machine reads only `true` as a request; anything else, `false` included, means "I did not ask" and the agent inherits whatever the channel is already set to — which may be ON. There is no way from here to make an agent LESS able to launch workers, so do not pass false expecting one. Ask for it only when the work genuinely needs sub-agents.',
     ),
   wait_ms: z.coerce
     .number()

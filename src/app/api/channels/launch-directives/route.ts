@@ -63,8 +63,10 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       // nothing here tries, and why no operator carve-out may be added.
       tools: input.tools,
       messages: input.messages,
-      // ⚠ NOT COLLAPSED WITH `||`: `false` is a real request ("chaining off"),
-      // and turning it into "did not ask" inherits the channel setting instead.
+      // ⚠ NOT COLLAPSED WITH `||` — the row is a faithful record of what was
+      // sent. ⚠ It is NOT a promise that `false` does anything: the desktop's
+      // narrower reads only `true`, so a `false` resolves there exactly as an
+      // omission does (`schema-launch.ts › chain` carries the measurement).
       chain: input.chain,
     });
     // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS. Nothing failed: the

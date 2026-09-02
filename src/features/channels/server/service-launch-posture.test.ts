@@ -130,9 +130,11 @@ describe("createLaunchDirective persists the T24 request", () => {
     expect(ins.chain).toBe(true);
   });
 
-  it("⚠ `chain: false` IS WRITTEN AS false, never as null", async () => {
-    // `|| null` here would turn "run it with chaining off" into "did not ask",
-    // which inherits the channel's setting and can be the opposite.
+  it("⚠ `chain: false` IS WRITTEN AS false, never rewritten to null", async () => {
+    // ⚠ A RECORD-KEEPING PROPERTY. `|| null` here would rewrite what the caller
+    // sent, in the one place that exists to record it faithfully. It is NOT a
+    // claim that `false` does anything: `main/launch-directive-wire.js ›
+    // directiveFrom` reads only `true`, so it resolves there as an omission does.
     await createLaunchDirective(ctx, { channel: "general", chain: false });
     expect(inserted().chain).toBe(false);
   });

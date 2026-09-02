@@ -136,14 +136,23 @@ ALTER TABLE public.channel_launch_directives
 ALTER TABLE public.channel_launch_directives
   ADD COLUMN IF NOT EXISTS start_message_mode TEXT;
 
--- ⚠ A THREE-STATE BOOLEAN, AND THE THIRD STATE IS LOAD-BEARING. `true` is "this
--- agent needs to be able to launch workers"; NULL is "I did not ask", which
--- inherits the channel's own setting silently as every launch did before T24.
--- ⚠ `false` IS ADMITTED AND MEANS "ASKED FOR IT TO BE OFF" — a distinct, honest
--- request rather than a spelling of NULL. Collapsing the three would turn every
--- ordinary launch into a request, and a request the channel denies is a REFUSAL
--- (`launch-posture.js › resolveChain`), so the collapse would refuse launches
--- that asked for nothing.
+-- ⚠ NULLABLE, AND THE NULL IS LOAD-BEARING. `true` is "this agent needs to be
+-- able to launch workers"; NULL is "I did not ask", which inherits the channel's
+-- own setting silently as every launch did before T24. Collapsing the two would
+-- turn every ordinary launch into a request, and a request the channel denies is
+-- a REFUSAL (`launch-posture.js › resolveChain`), so the collapse would refuse
+-- launches that asked for nothing.
+-- ⚠ **MEASURED MISMATCH, RECORDED HERE RATHER THAN DESIGNED AROUND (2026-09-01):
+-- `false` IS STORABLE AND THE DESKTOP CANNOT TELL IT FROM NULL.**
+-- `main/launch-directive-wire.js › directiveFrom` narrows this column as
+-- `r.chain === true || r.chain === 'true' ? true : null`, so a stored `false`
+-- arrives as "did not ask" and the session inherits the channel setting — which
+-- may be ON. **`false` is therefore NOT a way to turn chaining off**, and no copy
+-- on this lane may say it is (`packages/mcp-server/src/tools/channel-schema.ts ›
+-- chain` states that to callers). The column stays BOOLEAN rather than a
+-- CHECK-forced `true`-or-NULL because the day the desktop learns to honour
+-- `false` should not be a migration in three trees; admitting a value that
+-- currently resolves the way NULL does costs nothing at rest.
 ALTER TABLE public.channel_launch_directives
   ADD COLUMN IF NOT EXISTS chain BOOLEAN;
 
@@ -296,7 +305,7 @@ COMMENT ON COLUMN public.channel_launch_directives.start_message_mode IS
   'T24: the MESSAGE posture a LAUNCH asks its new session to start on. NULL means not asked. Clamped to the operator''s ceiling and then FLOORED by the windowless message rule, in that order — flooring first would let a clamped ask come back out looking as though the ceiling had allowed it. NULL on every kind but launch.';
 
 COMMENT ON COLUMN public.channel_launch_directives.chain IS
-  'T24: may the launched agent launch further agents? TRUE asks for it, FALSE asks for it off, NULL did not ask (and inherits the channel setting). ⚠ Unlike the two posture axes this is REFUSED rather than clamped when the channel forbids it — a clamped chain produces an agent that hits a bound it was told it did not have, mid-run, after workers were already promised. NULL on every kind but launch.';
+  'T24: may the launched agent launch further agents? TRUE asks for it; NULL did not ask (and inherits the channel setting). ⚠ Unlike the two posture axes this is REFUSED rather than clamped when the channel forbids it — a clamped chain produces an agent that hits a bound it was told it did not have, mid-run, after workers were already promised. ⚠ FALSE is storable and the desktop cannot tell it from NULL (its narrower reads only true), so FALSE is NOT a way to turn chaining off. NULL on every kind but launch.';
 
 COMMENT ON COLUMN public.channel_launch_directives.target_tool_mode IS
   'The TOOL posture a set_agent_mode asks a RUNNING agent to move to. NULL means that axis was not requested, which is ordinary — a directive may move one axis and leave the other. NOT NULL on set_agent_mode unless target_message_mode is; NULL on every other kind. Clamped, never widened.';

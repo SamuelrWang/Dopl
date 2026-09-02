@@ -82,9 +82,12 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
     expect(parsed.chain).toBeUndefined();
   });
 
-  it("⚠ `chain: false` SURVIVES as false, never collapsing to absent", () => {
-    // A `false` turned into `undefined` inherits the channel's own setting, which
-    // may be ON — i.e. the opposite of what was asked for, reported as success.
+  it("⚠ `chain: false` PARSES as false — the row records what was sent", () => {
+    // ⚠ THIS IS A RECORD-KEEPING PROPERTY, NOT A BEHAVIOURAL ONE, and the
+    // distinction is the finding: `main/launch-directive-wire.js › directiveFrom`
+    // reads only `true`/`"true"`, so a stored `false` resolves on the desktop
+    // exactly as an omission does. The schema keeps the value; no copy promises
+    // it does anything.
     expect(LaunchCreateSchema.parse({ channel: "general", chain: false }).chain)
       .toBe(false);
   });

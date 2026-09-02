@@ -285,9 +285,13 @@ export async function createLaunchDirective(
     // opinion that matters is the OPERATOR'S CEILING and it lives on their
     // machine. ⚠ `?? null` maps "not asked" onto the column's own spelling for it,
     // which the desktop then resolves to that ceiling — the pre-T24 behaviour.
-    // ⚠ `chain` USES `?? null` RATHER THAN `|| null`: `false` is a real request
-    // ("run it with chaining off"), and `||` would silently turn it into "did not
-    // ask", which inherits the channel setting and can be the opposite.
+    // ⚠ `chain` USES `?? null` RATHER THAN `|| null` SO THE ROW RECORDS WHAT THE
+    // CALLER ACTUALLY SENT. `||` would rewrite a `false` into "did not ask" here,
+    // in the one place that is supposed to be a faithful record of the request.
+    // ⚠ **THAT IS NOT A CLAIM THAT `false` DOES ANYTHING**: the desktop's narrower
+    // reads only `true`, so a stored `false` resolves there exactly as `null` does
+    // (see `types-launch.ts › LaunchDirective.chain`). The distinction is kept at
+    // rest and promised to nobody.
     start_tool_mode: input.tools ?? null,
     start_message_mode: input.messages ?? null,
     chain: input.chain ?? null,

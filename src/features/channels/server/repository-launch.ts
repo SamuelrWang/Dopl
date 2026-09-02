@@ -153,8 +153,9 @@ export type LaunchDirectiveInsert = {
    */
   start_tool_mode?: string | null;
   start_message_mode?: string | null;
-  /** ⚠ TRI-STATE: `true` asks, `false` asks for it off, ABSENT/`null` did not ask
-   *  and inherits the channel setting. */
+  /** ⚠ `true` asks; ABSENT/`null` did not ask and inherits the channel setting.
+   *  ⚠ `false` is storable and the DESKTOP CANNOT TELL IT FROM `null` (its
+   *  narrower reads only `true`), so it is recorded, never relied on. */
   chain?: boolean | null;
   /**
    * THE POSTURE A `set_agent_mode` ASKS A **RUNNING** AGENT TO MOVE TO.

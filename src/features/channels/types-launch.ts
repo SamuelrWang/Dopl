@@ -238,9 +238,16 @@ export type LaunchDirective = {
   startToolMode: LaunchToolMode | null;
   startMessageMode: LaunchMessageMode | null;
   /**
-   * MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? **A TRI-STATE, and the third
-   * value is load-bearing**: `true` asks for it, `false` asks for it off, `null`
-   * did not ask and inherits the channel setting silently.
+   * MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? `true` asks for it; `null` did
+   * not ask and inherits the channel setting silently, which is what every launch
+   * did before T24.
+   *
+   * ⚠ **MEASURED MISMATCH (2026-09-01): `false` IS STORABLE AND IS NOT
+   * DISTINGUISHABLE FROM `null` ON THE DESKTOP.** `main/launch-directive-wire.js
+   * › directiveFrom` narrows the column as `r.chain === true || r.chain ===
+   * 'true' ? true : null`, so a `false` arrives there as "did not ask" and
+   * inherits the channel setting — **which may be ON**. `false` is therefore NOT
+   * a way to turn chaining off, and no render may say it is.
    *
    * ⚠ **REFUSED RATHER THAN CLAMPED WHEN THE CHANNEL FORBIDS IT**, which is the
    * one asymmetry with the posture pair above (`launch-posture.js ›
