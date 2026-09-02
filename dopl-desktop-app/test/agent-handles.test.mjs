@@ -102,7 +102,7 @@ test("FAIL CLOSED: a contested NAME does not cost the agent its ID door", () => 
 
 test("FAIL CLOSED: a name lookup that THROWS resolves fewer handles, never breaks the route", () => {
   // ⚠ `agent-names.js` IS ELECTRON-STORE BACKED. An unreadable store must cost recognition, not
-  // routing — the same rule `session-triage.js › personaFor` follows.
+  // routing.
   const index = handles.handleIndexFor([A1, A2], (id) => {
     if (id === A1) throw new Error("store unreadable");
     return "Scout";

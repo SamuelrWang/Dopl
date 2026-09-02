@@ -5180,7 +5180,7 @@ in ENGINEERING 2026-08-31). A directive landed `launched` with a **1 111-char go
 `@x2sz1ztt` and one `@agent-x2sz1ztt`, none carrying `to`. None woke anything.
 
 **The class, and it is not "the fence was wrong".** The 2026-08-28 loop fence
-(`session-wake-tiers.js › wakeEligibility`, then a boolean) refused every agent-authored message; the 2026-08-22
+(the loop fence, then a boolean in the since-deleted wake-tiers module) refused every agent-authored message; the 2026-08-22
 `launch_agent` copy told its reader to direct the agent by writing `@<id>` in a post body. Each
 was correct when written. **The fence moved and the surface that hands out the key did not** —
 and because an inert post is not a refused post, the caller repeated itself four more times with
@@ -5648,7 +5648,7 @@ are real and neither is caught by that scan**, because a built-in's NAME is not 
 **And one design claim did not survive contact with the tree, recorded so the next wave does not
 re-derive it:** the port's design specifies a core-vocabulary scan forbidding the bare word
 `cursor`. Four CODE lines in core use it for the LISTENER's pagination cursor
-(`main/listener-io.js`, `main/listener-messages.js` × 2, `main/session-triage.js`) — a core domain
+(`main/listener-io.js`, `main/listener-messages.js` × 2, and one in the since-deleted triage module) — a core domain
 term with nothing to do with Anysphere. The scan forbids the VENDOR SPELLINGS instead
 (`@cursor/`, `cursor-agent`, `cursor://`, and the id as a quoted literal), which collide with
 nothing. Forbidding the bare word would have failed four correct lines and taught the next reader
@@ -6989,7 +6989,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-427 — two authorities disagree about what `options.tools = []` means, and the tree believes the older one (2026-09-02)
 
-- Location: `docs/INVARIANTS.md` §11 (the triage FENCE bullet) and `dopl-desktop-app/test/wake-triage-call.test.mjs` (*"`tools: []` would mean NO BOUND — it must not be set"*), against the bundled `@anthropic-ai/claude-agent-sdk` type declarations — the `tools` option's own docblock, SDK 0.3.220 / claude 2.1.220.
+- Location: `docs/INVARIANTS.md` §11 (the triage FENCE bullet) and the triage-call suite (*"`tools: []` would mean NO BOUND — it must not be set"*) — ⚠ **BOTH DELETED 2026-09-02 with the triage tier (B6); the SDK question survives and now bears only on the session launch**, against the bundled `@anthropic-ai/claude-agent-sdk` type declarations — the `tools` option's own docblock, SDK 0.3.220 / claude 2.1.220.
 - Found during: A5, reading the SDK's option contract before setting `options.tools` for the first time on the `full` profile.
 - Severity: conflict — a documented contract vs. a tree-wide belief. **Nothing depends on the difference today**, which is why this is a finding and not a fix.
 - **The shape.** The bundled SDK's own type declarations document the option as: *"`[]` (empty array) — Disable all built-in tools"*. This tree states the opposite in two places and reasons from it: the triage lane deliberately leaves `tools` ABSENT and fences with a denying `canUseTool` *because* the positive bound *"cannot express"* an empty offer. If the declaration is right, `tools: []` expresses it exactly, and the fence's own comment is teaching the next reader something false.

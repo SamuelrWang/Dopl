@@ -24,7 +24,6 @@ const approval = require('./approval');
 const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
-const triage = require('./triage');
 const { packaging } = require('./packaging');
 
 const platform = () => require('./loader');
@@ -184,7 +183,6 @@ const descriptor = {
   // Length 1 renders no picker at all.
   execution: { locations: ['local'], remoteCapable: false },
 
-  triage: triage.descriptor,
   packaging,
 };
 
@@ -241,7 +239,6 @@ const runtime = {
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },
   signIn() { return credential.signIn(); },
-  triageSpec(request) { return triage.triageSpec(request); },
 };
 
 module.exports = { descriptor, runtime };

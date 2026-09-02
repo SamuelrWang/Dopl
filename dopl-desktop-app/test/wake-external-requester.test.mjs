@@ -53,7 +53,6 @@ const LEGACY_SRC = M("legacy-threads.js");
 
 const require = createRequire(import.meta.url);
 const targeting = require("../main/targeting.js"); // dependency-free; the REAL gate
-const wakeTiers = require("../main/session-wake-tiers.js"); // pure; the REAL tier rule
 const agentHandles = require("../main/agent-handles.js"); // pure; the REAL slug rule
 
 // ── STATIC PIN 1: the listener's dispatch ORDER ──────────────────────────────────
@@ -67,12 +66,13 @@ test("the listener runs THE route, and classify still runs LAST", () => {
     assert.notEqual(i, -1, `dispatch site missing from listener-messages.js: ${needle}`);
     return i;
   };
-  // ⚠ AWAITED SINCE 2026-08-28 (Samuel's TIERED WAKE ruling): TIER 3's claim/pass pass makes the
-  // route asynchronous, and the pin moves with it. The ORDER property this file exists for is
-  // unchanged — the route still runs first and classify still runs LAST — but an `await` that
-  // went missing here would make `feedLiveSession` return a Promise, which is always truthy, and
-  // EVERY message would short-circuit classify. That is why the pin names the exact call.
-  const feed = at("if (await sessionDispatch.feedLiveSession(entry, m, myUserId)) return;");
+  // ⚠ **SYNCHRONOUS AGAIN SINCE 2026-09-02 (ruling B6), AND THE PIN NAMES THE EXACT CALL FOR THE
+  // REASON IT ALWAYS DID.** It was awaited for one wave, because TIER 3's claim/pass MODEL CALL
+  // made the route asynchronous; that tier is deleted and the route decides from the verdict
+  // stored on the row. A stray `await` here would be harmless, but a MISSING one while the route
+  // was async made `feedLiveSession` return a Promise — always truthy — and EVERY message
+  // short-circuited classify. Naming the call verbatim is what caught that class.
+  const feed = at("if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;");
   const classify = at("const verdict = targeting.classify(m, entry, myUserId);");
   assert.ok(feed < classify, "feedLiveSession runs first, and classify LAST");
   // ⚠ THIS PIN USED TO COMPARE FIVE POSITIONS — three routes plus the chat guard between
@@ -220,9 +220,9 @@ function harness(over = {}) {
     // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
     // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
     // the buffer.
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag",
     `${BLOCK}\n return { feedLiveSession };`
-  )(targeting, sessionEngine, io, wakeTiers, { claim: async () => "" }, agentHandles, { note: () => true, verdictFor: () => '' }, () => {});
+  )(targeting, sessionEngine, io, agentHandles, { note: () => true, verdictFor: () => '' }, () => {});
 
   // listener-messages.dispatchMessage verbatim in SHAPE (pinned by STATIC PIN 1 above).
   //

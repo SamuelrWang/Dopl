@@ -18,9 +18,10 @@
 //
 // SECURITY: this module never widens a grant. It decides only WHETHER a counterparty
 // turn is fed, never which tools may run — the canUseTool path (session-io /
-// session-profiles) is untouched. Counterparty binding is still enforced upstream
-// (session-dispatch feeds only the task's other party), an unknown decision string
-// FAILS CLOSED to a decline, and nothing here is ever written to disk.
+// session-profiles) is untouched. WHO a message is for is decided upstream and, since
+// 2026-09-02, on the SERVER (`session-dispatch.js` executes the stored verdict and feeds
+// only the sessions it names), an unknown decision string FAILS CLOSED to a decline, and
+// nothing here is ever written to disk.
 
 const crypto = require('crypto');
 const io = require('./session-io');
@@ -155,14 +156,15 @@ function enqueue(s, a) {
 // message and THIS agent by `session-dispatch.js › feedLiveSession`; re-deriving it here would be
 // a second spelling of the wake rule, which is how two readers come to disagree about one message.
 //
-// ⚠ THE VERDICT REPLACED `a.addressing` ON 2026-08-28 (Samuel's TIERED WAKE ruling), and that is a
-// TIGHTENING as well as a rewiring. This line used to read the @-mention verdict directly, which
-// was correct while an @-mention was the ONLY thing that could wake a dormant agent. There are
-// three wake tiers now — @-mention, a solo-agent room, and a triage claim — and two of them carry
-// NO addressing at all, so an `addressing`-shaped belt would have refused exactly the wakes the
-// ruling adds. Reading the boolean instead means the belt tracks the rule automatically, and it
-// closes the one door that was open before: an @-mention from an AGENT no longer passes here,
-// because the loop fence (`session-wake-tiers.js › wakeEligible`) already answered `wake: false`.
+// ⚠ THE VERDICT REPLACED `a.addressing` ON 2026-08-28, and that is a TIGHTENING as well as a
+// rewiring. This line used to read the @-mention verdict directly, which was correct while an
+// @-mention was the ONLY thing that could wake a dormant agent. It is not: since 2026-09-02 the
+// SERVER may REPAIR an address a human forgot (RR3 — INVARIANTS §5), and a message repaired that
+// way carries no `@` in its body at all, so an `addressing`-shaped belt would refuse exactly the
+// wakes the resilience arms exist to deliver. Reading the boolean instead means the belt tracks
+// the rule automatically, and it closes the one door that was open before: an address written by
+// a PEER'S AGENT no longer passes here, because `session-dispatch.js › mayWake` already answered
+// `wake: false`.
 //
 // ⚠ IT STILL FENCES ONLY `awaitingDirective`, NOT EVERY DORMANT SESSION. The PARKED half of the
 // tier gate lives in `session-dispatch.js › mayFeed` alone, deliberately: this function is the

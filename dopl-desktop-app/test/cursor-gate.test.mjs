@@ -347,11 +347,6 @@ test("resume is REFUSED with a readable reason, and a cold launch is unaffected"
     "the adapter refuses at its own door rather than declaring a block nothing enforces");
 });
 
-test("triage is DECLARED absent rather than shipped with two fences missing", () => {
-  assert.equal(D.triage, null);
-  assert.equal(RT.triageSpec({}), null);
-});
-
 test("the cost cap is SHOWN here and HIDDEN on the other native runtime — the field earns its keep", () => {
   // ⚠ THIS IS THE ONLY RUNTIME THAT REPORTS A REAL BILLED COST (`agent.getUsage()` ->
   // `{rawCostCents, chargedCents}`), so the cap is a control that can actually fire.

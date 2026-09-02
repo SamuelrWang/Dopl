@@ -129,23 +129,28 @@ test("ARGUMENT OMITTED is not a verdict: `undefined` still prints nothing", () =
     "pushInbound must keep normalizing to null, or the `undefined` branch swallows a real verdict");
 });
 
-test("UNADDRESSED (`null`, the fan-out's real verdict) now SPEAKS, and does not say 'yours'", () => {
-  for (const verdict of [null, { ids: [] }, { me: false, ids: [] }, { me: true, ids: [] }, {}]) {
-    const lines = seed.addressingLines(verdict);
-    const out = flat(lines);
-    assert.ok(lines.length, `${JSON.stringify(verdict)}: the branch must not be silent`);
-    assert.match(out, /NOBODY IS NAMED IN THIS MESSAGE, so it is NOT automatically yours/);
-    assert.match(out, /Every agent working this thread was handed it, not just you/);
-    assert.match(out, /Read the thread before you answer/);
-    assert.match(out, /stand down and stay quiet/);
-    assert.match(out, /claim it in one short line first, then do the work/);
-    assert.ok(!/It is addressed to you: act on it/.test(out), "the addressed verdict must not leak here");
+test("UNADDRESSED: the 330-character stand-down is DELETED, and the standing rule carries it", () => {
+  // ⚠ **THIS CASE ASSERTED THE OPPOSITE UNTIL 2026-09-02 (ruling B1)**, and the reversal is the
+  // fan-out's. The branch existed because a message naming nobody was handed to EVERY live agent
+  // on the thread, so each had to be talked out of answering it — 330 characters per reader per
+  // turn, worst case on the busiest thread. Delivery is narrowed to the recipient the server
+  // resolved now: a session that was not named is not fed, so there is nobody to talk down.
+  // ⚠ THE DEFECT THIS BRANCH FIXED IS STILL FIXED, and by the half that belonged in a STANDING
+  // rule rather than a per-turn one: `agentIdentityFraming` says "a message that names NO agent
+  // id is NOT automatically yours" once per session, and the case above pins it.
+  for (const verdict of [undefined, null, { ids: [] }, { me: false, ids: [] }, { me: true, ids: [] }, {}]) {
+    assert.deepEqual(seed.addressingLines(verdict), [], JSON.stringify(verdict));
   }
 });
 
-test("ADDRESSED TO ME, and to me alone: act on it", () => {
+test("ADDRESSED TO ME, and to me alone: act on it — WITHOUT naming a mechanism", () => {
+  // ⚠ IT MAY NOT SAY "@-MENTIONS YOU" (2026-09-02). The recipient may have been WRITTEN (`@agent-`,
+  // `to=`) or REPAIRED server-side when a human forgot the `@` (RR3), and the repaired case
+  // carries no `@` in the body at all — so the old wording described a message the reader can see
+  // does not exist. The FACT is the same either way and the fact is what is stated.
   const out = flat(seed.addressingLines({ me: true, ids: [ME] }));
-  assert.equal(out, "This message @-mentions YOUR agent id. It is addressed to you: act on it.");
+  assert.equal(out, "This message is addressed to YOU. Act on it.");
+  assert.ok(!/@-mention/i.test(out), "the mechanism is not the message");
 });
 
 test("ADDRESSED TO SOMEONE ELSE: named, and a stand-down that keeps the message as context", () => {
@@ -159,14 +164,16 @@ test("ADDRESSED TO SOMEONE ELSE: named, and a stand-down that keeps the message 
   assert.ok(!/WHO ACTS IS DECIDED BY ORDER/.test(out), out);
 });
 
-// ⚠ THE TIE-BREAK IS A RULE, NOT A SUGGESTION. `session-dispatch.js › mentionedAgentIds` pushes
-// ids in the order they appear in the BODY, intersected with `liveOnThread` order (registry
-// insertion == spawn order), and hands the SAME array to every reader. So "the first id named in
+// ⚠ THE TIE-BREAK IS A RULE, NOT A SUGGESTION, and it survives the narrowing because a BODY may
+// name two live agents even though `to=` may name only one. `session-dispatch.js › planFor`
+// preserves the order the server (or the body parse) resolved and hands the SAME array to every
+// reader. So "the first id named in
 // this list" is applicable alone, from the list the agent is looking at, with no round trip.
 test("MULTI-ADDRESSEE: the co-addressees are named and the FIRST id in the list acts", () => {
   const ordered = [SIB1, ME, SIB2];
   const lines = seed.addressingLines({ me: true, ids: ordered });
   const out = flat(lines);
+  assert.ok(out.startsWith("This message is addressed to YOU,"), out);
   assert.ok(out.includes(`names more than one agent: ${SIB1}, ${ME}, ${SIB2}`),
     `the co-addressees, in the order they arrived: ${out}`);
   assert.match(out, /WHO ACTS IS DECIDED BY ORDER/, "the rule is stated as a rule");
@@ -210,8 +217,7 @@ const preambleOf = (out) => out.split("\n").slice(0, out.split("\n").indexOf(`BE
 
 test("frameContinuation puts EVERY branch above the fence, and none of it inside", () => {
   const cases = [
-    ["unaddressed", null, /NOBODY IS NAMED IN THIS MESSAGE/],
-    ["to me", { me: true, ids: [ME] }, /It is addressed to you: act on it/],
+    ["to me", { me: true, ids: [ME] }, /This message is addressed to YOU\. Act on it\./],
     ["multi", { me: true, ids: [SIB1, ME] }, /WHO ACTS IS DECIDED BY ORDER/],
     ["to another", { me: false, ids: [SIB1] }, /It is NOT addressed to you/],
   ];
@@ -227,12 +233,14 @@ test("frameContinuation puts EVERY branch above the fence, and none of it inside
   }
 });
 
-test("frameContinuation with NO verdict argument is byte-identical to the pre-ruling turn", () => {
-  // The 3-arg callers (and any caller that never ran the fan-out) are untouched, which is what
-  // keeps `session-seed-name.test.mjs`'s two-line preamble true.
+test("frameContinuation with NO addressee is byte-identical to the pre-ruling turn", () => {
+  // The 3-arg callers are untouched, which is what keeps `session-seed-name.test.mjs`'s two-line
+  // preamble true. ⚠ SINCE 2026-09-02 a COMPUTED "nobody" (`null`) reaches the same two lines —
+  // the unaddressed paragraph is deleted — so the three spellings are asserted together.
   const out = seed.frameContinuation(NONCE, "hi", "Dave");
   assert.equal(preambleOf(out).length, 2, "exactly the two authored lines");
   assert.equal(out, seed.frameContinuation(NONCE, "hi", "Dave", undefined));
+  assert.equal(out, seed.frameContinuation(NONCE, "hi", "Dave", null));
 });
 
 // ── 4. THE WOKEN LANE READS THE THREAD IT IS JOINING ─────────────────────────
