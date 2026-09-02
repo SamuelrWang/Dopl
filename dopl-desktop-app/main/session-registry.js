@@ -18,7 +18,7 @@
 // ⚠ EVERY FUNCTION HERE IS A PURE READ. If one ever needs to mutate a session, it belongs in the
 // engine: the value of this seam is that a caller can reason about it without knowing what a
 // dispatch does. `noteSiblings` is the single exception and it writes only DISPLAY CONTEXT (the
-// framing's sibling list) onto `s.context`, never reducer state.
+// framing's agent id) onto `s.context`, never reducer state.
 
 const store = require('./session-store');
 
@@ -108,18 +108,22 @@ function sessionOn(a) {
 }
 
 /**
- * Stamp this session's context with WHO ELSE is live in its channel, for the framing.
+ * Stamp this session's context with its own agent id, for the framing.
  *
  * ⚠ IT WRITES ONTO `s.context` rather than being read at framing time because `session-seed.js`
  * assembles the turn and holds no registry handle (it is required BY the engine, never back into
- * it). The engine refreshes it at every push, so the list is current at the moment the agent
- * reads it rather than a snapshot of who happened to be running at spawn.
+ * it).
+ *
+ * ⚠ **THE SIBLING ROSTER IS GONE (2026-09-02, G13).** This also stamped
+ * `context.siblingAgentIds` — every other agent live in the channel — and
+ * `prompt-framing.js › agentIdentityFraming` was its only reader, for the voluntary claim
+ * protocol that narrowed delivery deleted. Nothing else ever read it, so the field went with the
+ * paragraph rather than staying as a value nobody consumes. ⚠ The NAME survives because what it
+ * stamps now — the id — was always half of what it did.
  */
 function noteSiblings(s) {
   if (!s || !s.context) return;
-  const mine = String(s.agentId || '');
-  s.context.agentId = mine;
-  s.context.siblingAgentIds = agentIdsInChannel(s.channelId).filter((id) => id !== mine);
+  s.context.agentId = String(s.agentId || '');
 }
 
 // ─── END SESSION-REGISTRY-PURE ────────────────────────────────────────────────────

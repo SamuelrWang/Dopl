@@ -69,61 +69,39 @@ function counterpartyFraming({ authorName, authorKind, channelName } = {}) {
   ];
 }
 
-// ── WHO THIS AGENT IS, AND WHO ELSE IS IN THE ROOM (2026-08-21, Samuel's ruling 6) ─────────
+// ── THIS AGENT'S OWN ID (2026-08-21; the claim protocol deleted 2026-09-02) ────────────────
 //
-// Two facts a multiplayer agent cannot work without, and neither of which it can discover:
+// One line. It is the id the agent signs with and the id a peer addresses it by, and there is
+// nothing else a session needs told about who else is in the room.
 //
-//   (a) ITS OWN ADDRESS. Several of one operator's agents run on one thread now, and the way a
-//       human picks one out is `@<agentId>` in the message body. An agent that does not know
-//       its own id cannot tell a message meant for it from one meant for its sibling, so it
-//       answers everything. `session-seed.js › addressingLines` states the per-message verdict;
-//       this states the standing rule that makes the verdict legible.
-//   (b) THAT IT IS NOT ALONE. Every sibling receives every message on this thread (the fan-out,
-//       `main/session-dispatch.js`), so without this paragraph two agents do the same work
-//       twice and post two answers to one question. The instruction is to COORDINATE IN THE
-//       THREAD, in one line, because the thread is the only channel they share: there is no
-//       agent-to-agent side channel and there must not be one.
+// ⚠ **THE ~870-CHARACTER VOLUNTARY CLAIM PROTOCOL IS DELETED, AND THE FAN-OUT PAID FOR IT**
+// (v2 wave B, G13's other half). It read: a message naming no agent id is not automatically
+// yours · check whether a sibling has already claimed it · CLAIM IT IN ONE SHORT LINE first ·
+// COORDINATE IN THE OPEN · other sessions may be active as the same person. Every sentence of it
+// answers ONE question — "is this message mine?" — which the agent had to answer by hand because
+// an unaddressed message was handed to EVERY live agent on the thread.
 //
-// ⚠ EVERY VALUE INTERPOLATED HERE IS OURS AND CHARSET-BOUND. Agent ids come from
-// `main/agent-id.js` (`^[a-z][a-z0-9]{7}$`), are minted on this machine, and are re-checked
-// against that regex below — so unlike a display name they need no `sanitizeName` pass, and a
-// value that fails the check is simply dropped rather than printed. Nothing counterparty
-// controlled reaches these lines.
+// **That question is now answered before the message is sent.** The server resolves the recipient
+// at write time and stores the verdict on the row (`service-wake-verdict.ts`, RR1/RR2/RR3), and
+// the desktop feeds only that recipient (`session-dispatch.js`). A session that was not named is
+// not fed; a message that resolves to nobody wakes nobody. So the protocol asked a live session
+// to re-derive, in prose, a fact the row already carried — and it is the same defect the deleted
+// per-turn stand-down preamble was (`session-seed.js › addressingLines`), one scope up.
 //
-// ⚠ THE SIBLING LIST IS A SNAPSHOT AND THE COPY ADMITS IT. It is read from the live registry at
-// the moment the turn is built (`session-engine.js › noteSiblings`), and an agent may spawn a
-// second later. Saying "possibly others" when the list is empty is the honest version; claiming
-// "you are the only one" would be a fact this process cannot promise.
+// ⚠ **IT WAS ALSO MEASURED NOT TO WORK.** The 2026-08-22 note recorded the reason the default was
+// flipped in the first place: across 40 real messages in live testing the claim protocol fired
+// ZERO times and every sibling answered everything. A rule no agent ever executed is not a fence;
+// deleting it removes prose, not enforcement — and what enforcement there is has moved into the
+// server, where it does not depend on a model's discipline.
 //
-// ⚠ THE UNADDRESSED DEFAULT WAS FLIPPED ON 2026-08-22 (Samuel's ruling). The deleted sentence,
-// "So is a message that mentions no agent id at all, unless a sibling has already claimed it",
-// defaults to ACT with the check hung off a subordinate clause, and no agent ran the check:
-// across 40 real messages in live testing the protocol fired ZERO times and every sibling
-// answered everything. The default is STAND AND LOOK now, and the claim is an ACT to post BEFORE
-// working. COORDINATE IN THE OPEN survives beneath it as the mechanism, not as the protocol.
+// ⚠ WHAT MUST NOT COME BACK: a sentence here that tells an agent to decide whether a message is
+// for it. If addressing is ever wrong, the fix is the verdict, not a paragraph asking the reader
+// to double-check the delivery it just received.
 function agentIdentityFraming(ctx) {
   const c = ctx || {};
   const mine = AGENT_ID_RE.test(String(c.agentId || '')) ? String(c.agentId) : '';
   if (!mine) return [];
-  const siblings = (Array.isArray(c.siblingAgentIds) ? c.siblingAgentIds : [])
-    .map((id) => String(id || ''))
-    .filter((id) => AGENT_ID_RE.test(id) && id !== mine);
-  const who = siblings.length
-    ? `Other agent sessions with these ids may be active in this channel acting as the same person: ${siblings.join(', ')}.`
-    : 'Other agent sessions may be active in this channel acting as the same person: possibly others, spawned at any time.';
-  return [
-    `YOUR AGENT ID IS ${mine}.`,
-    `- Messages @-mentioning another agent id are not addressed to you. Do not act on them.`,
-    `  You may use them as context for what is happening around you.`,
-    `- A message @-mentioning ${mine} is for you.`,
-    `- A message that names NO agent id is NOT automatically yours. Read the thread and check`,
-    `  whether a sibling has already answered it or claimed it; if one has, stand down. If you`,
-    `  ARE going to act on it, CLAIM IT IN ONE SHORT LINE first, then do the work.`,
-    `- ${who} Some of them work individual threads and some watch the channel's main room; you`,
-    `  do not see everything they see.`,
-    `- COORDINATE IN THE OPEN: briefly agree who acts. If a task is already claimed by a`,
-    `  sibling, stand down. Keep coordination messages to one short line.`,
-  ];
+  return [`YOUR AGENT ID IS ${mine}.`];
 }
 
 // ── THE CHANNEL-LEVEL AGENT (2026-08-21, Samuel's channel-agent ruling) ────────────────────

@@ -80,10 +80,10 @@ function frameContinuation(nonce, message, authorName, addressing) {
 // and it existed because a message that named nobody was handed to every live agent on the
 // thread, so each had to be talked out of answering it. Delivery is narrowed to the recipient the
 // server resolved now: a session that was not named is not fed, so there is nobody left to talk
-// down. ⚠ **AND THE STANDING RULE DID NOT GO WITH IT** — `prompt-framing.js ›
-// agentIdentityFraming` states "a message that names NO agent id is NOT automatically yours" ONCE
-// PER SESSION, which is where a standing rule belongs; this branch was the same sentence re-paid
-// per turn.
+// down. ⚠ **AND THE STANDING COPY WENT THE SAME WAY, LATER THE SAME DAY** (G13's other half):
+// `prompt-framing.js › agentIdentityFraming` carried the whole ~870-character claim protocol once
+// per session, and it answered the SAME question this branch did. When the server resolves the
+// recipient, no reader has that question. What is left there is the identity LINE.
 //
 // ⚠ IT SAYS "ADDRESSED TO YOU", NEVER "@-MENTIONS YOU" (2026-09-02). A recipient may have been
 // written (`@agent-<id>`, `to=`) or REPAIRED by the server when a human forgot the `@` (RR3,

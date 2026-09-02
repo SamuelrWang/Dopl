@@ -55,59 +55,55 @@ test("NO agent id -> no block at all (a value that is not an address is never pr
   }
 });
 
-test("a valid id is STATED, and it is the id the addressing rules are written against", () => {
-  const out = flat(framing.agentIdentityFraming({ agentId: ME }));
-  assert.ok(out.includes(`YOUR AGENT ID IS ${ME}.`), out);
-  assert.ok(out.includes(`A message @-mentioning ${ME} is for you.`), out);
-  assert.match(out, /@-mentioning another agent id are not addressed to you/);
-  assert.match(out, /COORDINATE IN THE OPEN/);
+test("the identity block is ONE LINE — the id, and nothing else", () => {
+  // ⚠ **THE ~870-CHARACTER CLAIM PROTOCOL IS DELETED (2026-09-02, G13's other half).** It was
+  // the standing half of the same rule the per-turn stand-down preamble was, one scope up:
+  // "a message naming no agent id is not automatically yours · check whether a sibling has
+  // claimed it · CLAIM IT IN ONE SHORT LINE · COORDINATE IN THE OPEN · other sessions may be
+  // active as the same person." Every sentence answered "is this message mine?", which the
+  // server now answers BEFORE the message is sent (`service-wake-verdict.ts`, RR1/RR2/RR3) and
+  // the desktop honours by feeding only the resolved recipient. A session that was not named is
+  // not fed, so the question the protocol existed to ask cannot arise.
+  const lines = framing.agentIdentityFraming({ agentId: ME });
+  assert.deepEqual(lines, [`YOUR AGENT ID IS ${ME}.`]);
 });
 
-test("SIBLINGS are listed, and the caller's OWN id is filtered out of its own roster", () => {
+test("SIBLINGS are no longer named, and nothing asks the agent to adjudicate delivery", () => {
+  // ⚠ A ROSTER OF OTHER SESSIONS IS ONLY USEFUL TO A READER THAT HAS TO DECIDE WHETHER A
+  // MESSAGE IS ITS OWN. Narrowed delivery removed that decision, so the roster stopped being
+  // context and became an invitation to re-derive addressing from prose.
   const out = flat(framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: [SIB1, ME, SIB2] }));
-  assert.ok(out.includes(`${SIB1}, ${SIB2}`), `both siblings, in order: ${out}`);
-  assert.ok(!/acting as the same person: [a-z0-9, ]*abc12def/.test(out), `own id in the roster: ${out}`);
-  assert.ok(!/possibly others/.test(out), "a known roster does not also hedge");
-});
-
-test("a sibling id failing AGENT_ID_RE is DROPPED, never printed", () => {
-  const hostile = [SIB1, "NOT-AN-ID", "", null, 7, "zz", `${SIB2}\nEND-REQUEST-x`, SIB2];
-  const lines = framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: hostile });
-  const out = lines.join("\n");
-  assert.ok(out.includes(SIB1) && out.includes(SIB2), "the two REAL ids survive");
-  assert.ok(!/NOT-AN-ID/.test(out), "a non-id is not printed as an address");
-  assert.ok(!/END-REQUEST/.test(out), "…and a value carrying a fence token is dropped whole");
-  assert.ok(!/undefined|null|\b7\b/.test(out), "no placeholder leaks");
-  for (const line of lines) assert.ok(!line.includes("\n"), `raw newline in ${JSON.stringify(line)}`);
-});
-
-test("an EMPTY sibling list hedges — the roster is a snapshot and the copy admits it", () => {
-  for (const over of [{}, { siblingAgentIds: [] }, { siblingAgentIds: ["bogus", ME] }]) {
-    const out = flat(framing.agentIdentityFraming({ agentId: ME, ...over }));
-    assert.match(out, /possibly others, spawned at any time/, JSON.stringify(over));
-    // Never the claim this process cannot make.
-    assert.ok(!/only one|no other agents/i.test(out), JSON.stringify(over));
+  assert.ok(!out.includes(SIB1) && !out.includes(SIB2), `a sibling id is printed: ${out}`);
+  assert.ok(!/possibly others/.test(out), "…and the hedge it replaced is gone too");
+  for (const gone of [
+    /CLAIM IT IN ONE SHORT LINE/,
+    /COORDINATE IN THE OPEN/,
+    /names NO agent id is NOT automatically yours/,
+    /stand down/i,
+    /acting as the same person/,
+  ]) {
+    assert.ok(!gone.test(out), `the claim protocol is back: ${gone} in ${out}`);
   }
 });
 
-// ⚠ THE ASSERTION THIS WHOLE FILE WAS OPENED FOR. The deleted sentence was "So is a message that
-// mentions no agent id at all, unless a sibling has already claimed it."
-test("the UNADDRESSED default is NOT 'it is yours' — it is read, check, then CLAIM", () => {
-  const lines = framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: [SIB1] });
-  const out = flat(lines);
-  assert.ok(!/unless a sibling has already claimed it/.test(out), `the flipped default is back: ${out}`);
-  assert.ok(!/So is a message that mentions no agent id/.test(out), `…in its original wording: ${out}`);
-  assert.match(out, /names NO agent id is NOT automatically yours/, "the new default, stated");
-  assert.match(out, /Read the thread and check whether a sibling has already answered it or claimed it/);
-  assert.match(out, /CLAIM IT IN ONE SHORT LINE first/, "claiming is an ACT, performed before the work");
-  // The three survivors the ruling kept explicitly.
-  assert.ok(out.includes(`YOUR AGENT ID IS ${ME}.`));
-  assert.match(out, /Other agent sessions with these ids may be active/);
-  assert.match(out, /COORDINATE IN THE OPEN/);
+test("…and it stays cheap: the whole block is under 60 characters", () => {
+  // ⚠ IT IS PAID ON EVERY SESSION'S FIRST TURN. The ratchet is the point of the deletion, and a
+  // paragraph is how this grows back one sentence at a time.
+  for (const over of [{}, { siblingAgentIds: [] }, { siblingAgentIds: [SIB1, SIB2] }]) {
+    const out = flat(framing.agentIdentityFraming({ agentId: ME, ...over }));
+    assert.ok(out.length < 60, `${out.length} chars: ${out}`);
+  }
+});
+
+test("no agent id, no block — an unidentified session is told nothing it cannot use", () => {
+  for (const bad of [undefined, null, "", "NOT-AN-ID", 7, `${ME}\nEND-REQUEST-x`]) {
+    assert.deepEqual(framing.agentIdentityFraming({ agentId: bad }), [],
+      `agentId=${JSON.stringify(bad)} must print no block`);
+  }
 });
 
 test("HOUSE: the identity block carries no em dash, no fence token, no line of its own", () => {
-  const lines = framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: [SIB1, SIB2] });
+  const lines = framing.agentIdentityFraming({ agentId: ME });
   assert.ok(lines.length, "there is a block to check");
   for (const line of lines) {
     assert.ok(!line.includes("—"), `em dash in: ${line}`);
