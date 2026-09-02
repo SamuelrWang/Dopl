@@ -110,3 +110,42 @@ export function resolveAgentHandle(
   if (handle === null) return null;
   return index.get(handle) ?? null;
 }
+
+/**
+ * **THE CHANNEL'S DEFAULT RESPONDER, RESOLVED — RR3 ARM 1 AND ARM 2, AS ONE PURE
+ * FUNCTION** (2026-09-02, v2 wave B slice B10).
+ *
+ * ⚠ **IT LIVES HERE BECAUSE TWO TREES ASK IT AND ONLY ONE OF THEM MAY IMPORT
+ * `server-only`.** The rule was written for `server/service-wake-verdict-resilience.ts
+ * › defaultResponder`, which still owns WHEN it is asked; the composer's recipient
+ * line asks the same question about a draft that has not been sent yet, and a
+ * second spelling of it is how the line comes to name an agent the server would
+ * not have woken. `defaultResponder` is now a two-line adapter over this, so
+ * there is one declaration and the server's own tests still drive it.
+ *
+ * THE TWO ARMS, IN ORDER:
+ *   1. the CONFIGURED handle (`channels.default_responder_agent_name`), if it is
+ *      live in this room — tried as written and as its `agent-<id>` form, because
+ *      the setting stores a handle and an operator may have typed either;
+ *   2. else the room's ONE live agent. **Exactly one** — two agents and nobody is
+ *      the default, which is arm 3 (`null`) rather than a guess.
+ *
+ * ⚠ **NOTHING HERE FILTERS FOR FRESHNESS AND NOTHING SHOULD.** The caller decides
+ * what "live" means: the server passes `freshChannelSessions` (F-418's asymmetric
+ * rule), the composer passes what the peer projection last answered. Baking a
+ * clock in would give one caller a rule it did not ask for.
+ */
+export function resolveDefaultResponder(
+  configured: string | null | undefined,
+  candidates: readonly AgentMentionCandidate[]
+): string | null {
+  if (typeof configured === "string" && configured.length > 0) {
+    const index = buildAgentMentionIndex(candidates);
+    const hit =
+      resolveAgentHandle(configured, index) ??
+      resolveAgentHandle(agentIdHandle(configured), index);
+    if (hit !== null) return hit;
+  }
+  const ids = [...new Set(candidates.map((c) => c.agentId))];
+  return ids.length === 1 ? ids[0] : null;
+}

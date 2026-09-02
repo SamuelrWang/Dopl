@@ -7560,6 +7560,23 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Resolution taken: a RATCHET, in `src/features/knowledge/schema-sql.test.ts › "no TWO migrations share a version, except the one already applied"`. The live collision is allow-listed by version and every other one fails; the case says in its own body that the fix is to rename the UNAPPLIED file and never to bless a second entry. Mutation-verified red by copying a file to a colliding name. ⚠ It sits beside F-468's gate deliberately: both are assertions about the MERGED directory, which is the only place either defect exists.
 - Status: **NAMED and FENCED** — the pair stands, a second one cannot ship.
 
+### F-550 — the composer offers agent handles the transcript cannot tint, and the two ends are now deliberately different widths (2026-09-02)
+
+- Location: `src/features/channels/components/channels-v2/composer-mentions.tsx › mentionSuggestions` (the offer) vs `src/features/channels/lib/agent-mentions.ts › buildAgentMentionIndex` as the TRANSCRIPT builds it (the tint), fed by `components/channels-v2/view-model.ts › AuthorIndex.agents`.
+- Found during: v2 wave B slice B10, widening the @-picker from this machine's own agents to the channel's live ones.
+- **THE SHAPE.** The picker now offers every agent live in the room (the peer projection, which is the set `server/service-writes-metadata-recipient.ts › liveAgentHandles` resolves a person's `to=` against). The TINT is still machine-local by construction: a peer's agent ids are minted on their machine, `AuthorIndex.agents` is the desktop bridge's own feed, and `agent-mentions.ts` says in its header that a peer's agent "has no entry, cannot be tinted". So a handle the picker inserts for a PEER's agent routes correctly and renders as plain text.
+- ⚠ **THE DIRECTION IS THE SAFE ONE, AND THAT IS WHY IT WAS TAKEN.** INVARIANTS §5 states both failure modes for this pair: an unstamped TINT lies to the author (it looks addressed and is not), a tintless STAMP lies to nobody — it reaches the recipient and merely looks plain. This is the second. The alternative on offer was to keep the web offering NO agent at all, which is the surface Samuel's ruling is about.
+- ⚠ **THE FIX IS NOT IN THE PICKER.** Widening the tint means giving the web transcript a peer-agent index, which is a change to `view-model.ts` / `message-markdown.tsx` — B9's tree, not this slice's. Recorded rather than taken.
+- Status: **OPEN**, and behaviourally harmless today. Pinned in the sense that `composer-recipients.test.tsx` asserts the peer handle is offered and round-trips through the server's own index; nothing asserts it tints, because it does not.
+
+### F-551 — the thread's "other party" is derived in two places, from two different sources (2026-09-02)
+
+- Location: `src/features/channels/lib/draft-recipients.ts › threadOtherPartyOf` (new, for the composer's recipient line) and `src/features/channels/components/channels-v2/use-agents-panel.ts › launchAgent` (the launch's `counterpartyId`). The SERVER's third copy — `server/service-wake-verdict-resilience.ts › threadOtherParty` — reads the metadata fold's stamps rather than the thread row and is deliberately separate.
+- Found during: v2 wave B slice B10, wiring RR1 into the composer's recipient line.
+- **THE SHAPE.** Both client copies answer "given this thread and me, who is the other member", and both spell it as a two-arm conditional over `createdBy` / `targetUserId`. They agree today. They are one edit apart from disagreeing, and the disagreement would be silent in exactly the way F-266's parser split was: the LINE would name one person and the LAUNCH would hand the agent another counterparty.
+- ⚠ **NOT FOLDED HERE.** `use-agents-panel.ts` is not in this slice's `Owns` column, and its copy carries an extra arm this one does not need (a channel-level launch has no thread at all, which is a legitimate `null` rather than a non-participant's). Folding them is a small change to a file this slice may not touch.
+- Status: **OPEN.** The remedy is one import: `use-agents-panel.ts` calls `threadOtherPartyOf` and reads `.userId`.
+
 ### F-560 — the personal container's revert has an ORDER, and the cascade makes the wrong one destructive (2026-09-02)
 
 - Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql` (header, "ROLLBACK"); the cascade is `supabase/migrations/20260501000000_knowledge_bases.sql` and `20260822200000_agent_templates.sql` (`workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE`).

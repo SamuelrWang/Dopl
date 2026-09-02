@@ -306,6 +306,12 @@ export function ChannelSurface({
           })
         }
         gate={gate}
+        // THE @-PICKER'S AND THE RECIPIENT LINE'S FACTS (2026-09-02, slice B10): every member's
+        // live sessions in this room, off the poll the Agents tab already makes, plus the
+        // channel's nominated responder. Both handed down for `newAgent`'s reason — a second
+        // mount of that hook is a second poll of an unpublished table.
+        liveAgents={agentsPanel.peerSessions}
+        defaultResponderAgentName={channel.defaultResponderAgentName}
         // The composer's New Agent icon (2026-08-21) — handed down whole,
         // never re-mounted: a second `useAgentsPanel` is a second peer poll.
         newAgent={agentsPanel}

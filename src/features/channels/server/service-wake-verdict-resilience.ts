@@ -1,11 +1,7 @@
 import "server-only";
 import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
 import type { ChannelMessageCreateInput } from "../schema";
-import {
-  agentIdHandle,
-  buildAgentMentionIndex,
-  resolveAgentHandle,
-} from "../lib/agent-mentions";
+import { resolveDefaultResponder } from "../lib/agent-mentions";
 import { parseAgentPostStamp } from "../lib/agent-post-stamp";
 import type { SessionStateRow } from "./collab-dto";
 import type { ChannelRow } from "./dto";
@@ -181,20 +177,20 @@ export async function reciprocalParty(
  * ⚠ TWO LIVE AGENTS AND NO SETTING IS DELIBERATELY ARM 3, not a pick. Choosing
  * between them is the guess the whole slice exists to delete.
  */
+/**
+ * ⚠ **THE RULE ITSELF MOVED TO `lib/agent-mentions.ts › resolveDefaultResponder`
+ * ON 2026-09-02 (slice B10)**, and this is the row-shaped adapter over it. The
+ * composer's recipient line has to predict THIS answer for an unsent draft, and
+ * a client cannot import a `server-only` module — so the arms live where both
+ * trees can read them and WHEN they are asked stays here. Nothing about the
+ * behaviour changed; this function's own tests still drive it.
+ */
 export function defaultResponder(
   channel: ChannelRow,
   sessions: readonly SessionStateRow[]
 ): string | null {
-  const configured = channel.default_responder_agent_name;
-  if (typeof configured === "string" && configured.length > 0) {
-    const index = buildAgentMentionIndex(
-      sessions.map((row) => ({ agentId: row.name, displayName: row.display_name }))
-    );
-    const hit =
-      resolveAgentHandle(configured, index) ??
-      resolveAgentHandle(agentIdHandle(configured), index);
-    if (hit !== null) return hit;
-  }
-  const ids = [...new Set(sessions.map((row) => row.name))];
-  return ids.length === 1 ? ids[0] : null;
+  return resolveDefaultResponder(
+    channel.default_responder_agent_name,
+    sessions.map((row) => ({ agentId: row.name, displayName: row.display_name }))
+  );
 }
