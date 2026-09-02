@@ -26,20 +26,23 @@ import {
 } from "./channel-doctrine.js";
 
 /**
- * ⚠ **THE WHOLE-DOCUMENT NUMBER WENT UP ON THE DAY IT WAS FIRST MEASURED HERE,
- * AND THAT IS RECORDED RATHER THAN HIDDEN: 32,085 → 32,728.** The +643 is
- * `op="help", section=` — an index line naming the sections, and the SECURITY
- * sentence repeated at the head of each one, because a caller that pulls a
- * single section skipped the header it used to live in. What it buys is the
- * number below it: a typical pull is now ONE section, and the largest section
- * is under a fifth of the document.
+ * ⚠ **32,728 → 8,997 ON 2026-09-02 (slice B8), AND IT IS A REWRITE RATHER THAN
+ * A TRIM.** The document had become the destination for every paragraph evicted
+ * from a PUSHED string — `REFUSALS` alone was 5,765 characters, `CHANNEL_OWN_AGENTS`
+ * 4,873, `AWAITING` 3,914 on a hold that is now a knob on `read` — and an
+ * unmeasured destination is not a diet, it is a relocation. It is re-sectioned
+ * to the five ops and cut to CONTRACTS: what the nouns mean, what each op
+ * promises, and the rule behind an argument whose `.describe()` may only carry
+ * its contract. Fourteen sections became seven.
  *
- * ⚠ **SO {@link DOCTRINE_SECTION_MAX_CHARS} IS THE ONE THAT GOVERNS COST**, and
- * both are ratchets in both directions — growing past a number fails, and
- * shrinking below one without lowering it fails too.
+ * ⚠ **{@link DOCTRINE_SECTION_MAX_CHARS} IS STILL THE ONE THAT GOVERNS COST**,
+ * because a typical pull is ONE section; both are ratchets in both directions —
+ * growing past a number fails, and shrinking below one without lowering it
+ * fails too. ⚠ The largest section is now the LAW, which is the one section
+ * whose size is capped for a second reason in `channel-law.test.ts`.
  */
-const DOCTRINE_MAX_CHARS = 32_728;
-const DOCTRINE_SECTION_MAX_CHARS = 6_252;
+const DOCTRINE_MAX_CHARS = 8_960;
+const DOCTRINE_SECTION_MAX_CHARS = 2_870;
 
 describe("the pulled doctrine is budgeted too, and by section", () => {
   it(`the whole document is at most ${DOCTRINE_MAX_CHARS} chars`, () => {

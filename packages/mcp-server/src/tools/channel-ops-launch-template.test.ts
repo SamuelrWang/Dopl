@@ -1,5 +1,5 @@
 /**
- * `op="launch_agent"` — **THE TEMPLATE REF, AND THE FOUR THINGS A MISS CAN MEAN.**
+ * `op="manage" action="launch"` — **THE TEMPLATE REF, AND THE FOUR THINGS A MISS CAN MEAN.**
  *
  * ⚠ SPLIT OUT OF `channel-ops-launch.test.ts` ON 2026-09-01, AT THE 500-LINE CAP
  * AND ON A REAL SEAM. That file drives the op's FOUR TERMINAL SHAPES (offline,

@@ -1,6 +1,6 @@
 import type { ChannelEscalationInput } from "@dopl/client";
 /**
- * THE HUMAN-READABLE RENDER OF AN ESCALATION — the `body` an `op="escalate"`
+ * THE HUMAN-READABLE RENDER OF AN ESCALATION — the `body` an `op="send" with kind="decision"`
  * post carries.
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan

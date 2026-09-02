@@ -233,6 +233,18 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
      * (or, in a 2-member channel, the implicit other member).
      */
     toUserId?: string;
+    /**
+     * **THE ONE RECIPIENT, IN EITHER NAMESPACE** (2026-09-02, B4/B8) — a member
+     * (email or user id) **or an agent** (`@agent-<id>` / `@<handle>`). The route
+     * resolves it once at the door (`service-writes-metadata-recipient.ts ›
+     * resolveToRecipient`): a member BECOMES {@link toUserId} before any fence
+     * runs, an agent rides `recipient_agent_ids`, and a name that resolves to
+     * NOBODY is a 400 `CHANNEL_RECIPIENT_UNRESOLVED` listing the live handles.
+     * ⚠ Mutually exclusive with {@link toUserId} — sending both is
+     * `CHANNEL_CHAT_ADDRESSED`, because two addressee fields on one message is
+     * two answers to one question.
+     */
+    to?: string;
     /** One-line intent (<=200 chars) surfaced in the receiver's notification. */
     summary?: string;
     /**

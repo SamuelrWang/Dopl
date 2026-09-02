@@ -125,7 +125,7 @@ export declare function formatThreadLine(t: ChannelThread, view?: MemberView): s
  */
 export declare function formatThreadDetail(t: ChannelThread, view?: MemberView): string;
 /**
- * One rendered roster line for `op="members"`.
+ * One rendered roster line for `op="rooms" action="members"`.
  *
  * ⚠ NOT {@link memberRef}: that collapses the caller to "you". The roster is
  * where the caller needs its own NAME and ID beside everyone else's, so the id
@@ -135,7 +135,7 @@ export declare function formatThreadDetail(t: ChannelThread, view?: MemberView):
  * both neutralized, same rule as {@link formatAuthor}.
  *
  * ⚠ EMAIL IS ENTITLEMENT-SCOPED. An agent can list every PUBLIC channel
- * (`repository.ts` ORs `visibility.eq.public`) and `op="members"` each, so
+ * (`repository.ts` ORs `visibility.eq.public`) and `op="rooms" action="members"` each, so
  * email renders only for a workspace admin or the caller's own row. Otherwise
  * the email fallback is dropped and a name-less member renders by id alone.
  */

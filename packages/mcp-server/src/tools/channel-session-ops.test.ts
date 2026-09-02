@@ -1,11 +1,11 @@
 /**
- * SESSION CAPABILITIES at the MCP layer: `read_sessions` (shape returned, and
+ * SESSION CAPABILITIES at the MCP layer: `op="status"` (shape returned, and
  * the empty answer's honesty about the delivery gap) and spawn-with-handoff
- * (`create_thread handoff=true` rides through to the client AND flips the
+ * (`opCreateThread` with handoff=true rides through to the client AND flips the
  * result from "arm await here" to "the operator's window took it").
  *
  * Messaging a PEER's session is not a new op — it is a plain request into the
- * thread that session is working, covered by the post/create_thread suites.
+ * thread that session is working, covered by the `op="send"` suites.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -20,7 +20,7 @@ import { SESSION_TABLE_HEAD } from "./channel-session-table";
 // ⚠ BOTH STANDING NOTES ARE DELETED (T10/T13) — `SESSION_TELEMETRY_NOTE` from
 // `channel-session-render.ts`, `SESSION_HANDLE_NOTE` from
 // `channel-session-handle.ts`, each leaving a tombstone docblock. Their text is
-// in `CHANNEL_DOCTRINE`, behind op="help" and the MCP resource. The
+// in `CHANNEL_DOCTRINE`, behind rooms action="help" and the MCP resource. The
 // guard below therefore pins the SENTENCES rather than importing two constants
 // — a constant that stops being rendered makes `not.toContain(CONST)` pass for
 // the wrong reason the day someone re-inlines a paraphrase of it.
@@ -32,25 +32,32 @@ import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
  *
  * ⚠ **THEY ARE ASSERTED IN BOTH DIRECTIONS AND THAT IS THE WHOLE POINT.** The
  * handle note (~1.1k chars on how a handle is spent) and the telemetry note
- * (~800 on whose telemetry this is) closed EVERY `read_sessions` page, to a
+ * (~800 on whose telemetry this is) closed EVERY `op="status"` page, to a
  * reader that calls this op in a loop. The tersening is only a win if the text
  * still EXISTS somewhere a reader can reach in one call, so each phrase is
  * required in the doctrine and forbidden in the result.
  */
+/**
+ * ⚠ **RE-SPELLED BY THE FIVE-OP COLLAPSE (B8, 2026-09-02), CLAUSE FOR CLAUSE.**
+ * Every phrase below is the sentence that now CARRIES the rule the deleted note
+ * used to state; the same re-pointing is done, for the same clauses, in
+ * `channel-session-handle.test.ts`, which is where the argument for each one is
+ * written out. Nothing was dropped from this list.
+ */
 const NOTE_PHRASES = [
-  // …the handle, and the three limits on spending it (was SESSION_HANDLE_NOTE).
-  "form is the only one",
+  // …the handle, and the limits on spending it (was SESSION_HANDLE_NOTE).
+  'to="@agent-<id>" or `@agent-<id>` in a body wakes THAT agent',
   "reaches no server",
-  "WAKES THAT AGENT",
-  "never by the server's mention resolver",
-  "ALREADY WORKING on it",
-  "waking is for agents you need to REDIRECT",
-  "an unaddressed post of yours starts nobody",
-  "only for YOUR OWN operator's agents",
-  "delivery is not observable from here",
-  "rather than assuming it woke",
+  "wakes THAT agent",
+  "Tagging is not addressing and starts no agent",
+  "its `body` is the FIRST INSTRUCTION it runs",
+  'op="manage" action="launch" starts one, and thereafter',
+  "an AGENT-authored UNADDRESSED message starts nobody",
+  "YOUR OWN OPERATOR'S AGENTS, AND ONLY THEIR MACHINE",
+  "`delivery=` IS THE ACK AND THE ONLY ONE",
+  "`idle` resolved but nothing running, filed until that machine reconciles",
   // …and the column promise (was SESSION_TELEMETRY_NOTE).
-  "ONE unbroken token",
+  "Template, model, context, tokens, current tool and start time are YOUR OWN sessions only",
 ] as const;
 
 const CHANNEL = {
@@ -112,7 +119,7 @@ const PAGE = (
 /**
  * ONE SESSION'S CELLS, by the handle its row is keyed on.
  *
- * ⚠ **THE COLUMN, NOT THE PAGE** (T13). `read_sessions` renders a TABLE, and a
+ * ⚠ **THE COLUMN, NOT THE PAGE** (T13). `op="status"` renders a TABLE, and a
  * bare `toContain("idle")` over the whole result now passes on the `idle`
  * COLUMN HEADING no matter what any row says — so every per-session fact below
  * is asserted against the cell that is supposed to carry it. The header and its
@@ -148,7 +155,7 @@ const COL = {
   idle: 7,
 } as const;
 
-describe("read_sessions — the summary shape (rollback §3.5)", () => {
+describe('op="status" — the summary shape (rollback §3.5)', () => {
   it("returns each session's name, state and thread", async () => {
     const listChannelSessions = vi.fn(async () => PAGE([
       SESSION(),
@@ -190,7 +197,7 @@ describe("read_sessions — the summary shape (rollback §3.5)", () => {
    * handle note (~1.1k chars on how a handle is spent) and the telemetry note
    * (~800 on whose telemetry this is) — to a reader that calls this op in a
    * loop. Both are doctrine about the SURFACE rather than a report on these
-   * rows, and both moved to `dopl://doctrine/channels` and op="help", where a
+   * rows, and both moved to `dopl://doctrine/channels` and rooms action="help", where a
    * reader who needs them spends one call instead of every reader paying on
    * every call. ⚠ Pasting either back is a REGRESSION, not a kindness — which
    * is why this is a guard and not a deleted assertion.
@@ -205,7 +212,7 @@ describe("read_sessions — the summary shape (rollback §3.5)", () => {
     // the result side, which is how doctrine quietly disappears.
     for (const phrase of NOTE_PHRASES) {
       expect(CHANNEL_DOCTRINE, `${phrase} left the doctrine`).toContain(phrase);
-      expect(text, `${phrase} is back in the read_sessions result`).not.toContain(
+      expect(text, `${phrase} is back in the status result`).not.toContain(
         phrase,
       );
     }
@@ -240,8 +247,10 @@ describe("read_sessions — the summary shape (rollback §3.5)", () => {
     // doctrine, not a report on this call, so the result now carries the one-line
     // pointer and the doctrine carries the rule.
     expect(text).toContain(DOCTRINE_URI);
-    expect(text).toContain('op="help"');
-    expect(CHANNEL_DOCTRINE).toContain("To learn what a PEER is doing");
+    expect(text).toContain('op="rooms", action="help"');
+    // ⚠ RE-POINTED (B8): the peer rule is now stated in the MODEL section — you
+    // read a peer through the messages they post, never through their session.
+    expect(CHANNEL_DOCTRINE).toContain("never their session");
   });
 
   it("a channel arg resolves the ref and filters the read to that channel id", async () => {
@@ -324,7 +333,7 @@ const CREATED = {
   openingSeq: 41,
 };
 
-describe("create_thread handoff (rollback §3.5)", () => {
+describe('send thread="new" handoff (rollback §3.5)', () => {
   it("passes handoff=true through to the client", async () => {
     const createChannelThread = vi.fn<CreateSpy>().mockResolvedValue(CREATED);
     await opCreateThread(
@@ -380,13 +389,16 @@ describe("create_thread handoff (rollback §3.5)", () => {
     // A hedge over a certainty is a lie with better manners.
 
     // ⚠ THE OPERATIVE FIX, AND IT SURVIVED THE TERSENING. The old copy said
-    // `do NOT arm op="await" yet`, and an external session obeyed it: nothing
+    // `do NOT arm op="await" yet` (the hold is `read` + `wait_ms` now), and an
+    // external session obeyed it: nothing
     // opened, nobody watched the thread, and the peer's reply was read by no
     // one. `await=since:41` is that instruction AND the cursor in one token — a
     // stronger form than the sentences it replaces ("you must arm the wait
     // yourself", "NOBODY is watching this thread"), which said the same thing in
     // words and charged every caller for them.
-    expect(text).not.toContain('do NOT arm op="await"');
+    // ⚠ PINNED ON THE INSTRUCTION, NOT ON THE OP NAME (B8): the hold moved onto
+    // `read`, so the copy that would re-break this would spell it differently.
+    expect(text).not.toContain("do NOT arm");
     expect(text).toContain("await=since:41");
     // ⚠ Nothing may tell the agent the desktop has it, in any wording.
     expect(text).not.toContain("A full session is opening");
@@ -412,7 +424,7 @@ describe("create_thread handoff (rollback §3.5)", () => {
     // where something else picks the thread up, so "how to notice that nothing
     // did" is not a branch any more — the await is simply what happens next, and
     // it is stated first rather than as a contingency.
-    // ⚠ It is the `await=` FIELD rather than the words `op="await"` since T10:
+    // ⚠ It is the `await=` FIELD rather than the words of a re-arm since T10:
     // one token carries the instruction AND the REAL cursor, so taking it still
     // cannot start past the peer's reply.
     expect(text).toContain("await=since:41");
@@ -423,7 +435,7 @@ describe("create_thread handoff (rollback §3.5)", () => {
     // ⚠ …AND IT IS NAMED IN THE DOCTRINE, not on every create. Stating it per
     // call charged every caller for a pointer; dropping it entirely would close
     // a door and open none, which is how an agent invents a workaround.
-    expect(CHANNEL_DOCTRINE).toContain('op="launch_agent"');
+    expect(CHANNEL_DOCTRINE).toContain('op="manage" action="launch"');
   });
 
   it("a handoff create with NO opening seq asks for the cursor instead of inventing one", async () => {

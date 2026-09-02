@@ -3,7 +3,7 @@
  *
  * ⚠ **THE DEFECT THIS SUITE PINS: A CRASHED DESKTOP USED TO READ AS `working`
  * FOREVER.** `updatedAt` already crossed the wire and was dropped at render, so
- * `read_sessions` reported the last thing a machine said as if it were the
+ * `op="status"` reported the last thing a machine said as if it were the
  * present tense — with no upper bound on how long ago that was. An orchestrator
  * waiting on such an agent has no signal that it should stop.
  *
@@ -206,7 +206,11 @@ describe("the operator-only telemetry, compactly", () => {
     // used to state it under every page and is deleted; the doctrine states it
     // once, so the words are pinned there and the RENDER is pinned here.
     expect(line).toContain("`Code Auditor` · `opus-5`");
-    expect(CHANNEL_DOCTRINE).toContain("ONE unbroken token");
+    // ⚠ THE PROMISE MOVED, NOT THE RULE — and the doctrine's clause now says
+    // what this ORDER is for: a two-token span is a template beside a model.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "ONE unbroken token, so a name with a space in it is a template",
+    );
   });
 
   it("an ABSENT template renders nothing at all — a blank launch is the common case", () => {

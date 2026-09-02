@@ -137,7 +137,7 @@ describe("dopl_map names the domains it could not read", () => {
         // costs no read, and sits BELOW the scope note because that note's
         // "every section above was read" speaks only for fanned-out domains.
         // Its presence in this byte pin stops it growing into a fetched section.
-        '**Reaching a member or their agent: dopl_channel.** Channels are this workspace\'s live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="list") for the channels and DMs this account can post into.',
+        '**Reaching a member or their agent: dopl_channel.** Channels are this workspace\'s live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.',
       ].join("\n"),
     );
     // ⚠ Said twice on purpose — the substring check fails loudly if the byte

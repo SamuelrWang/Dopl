@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="launch_agent" — ASK THE OPERATOR'S OWN DESKTOP TO START AN
+ * `dopl_channel` op="manage" action="launch" — ASK THE OPERATOR'S OWN DESKTOP TO START AN
  * AGENT (Samuel's ruling, 2026-08-22: launch-over-MCP approved, with a LOCAL
  * DESKTOP TOGGLE as the consent).
  *
@@ -330,7 +330,7 @@ export async function opLaunchAgent(
     // nothing pending and nothing to cancel — the opposite of the PENDING shape
     // below, where re-issuing starts a second agent. ⚠ PRESENCE IS A HINT, NOT A
     // VERDICT: the check is a per-(user, workspace) heartbeat, so it cannot say
-    // WHICH machine is up or whether launching is enabled there. `op="help"`
+    // WHICH machine is up or whether launching is enabled there. `op="rooms" action="help"`
     // carries that; the fact is that no listener has checked in.
     return ok(factsLine("not launched", { reason: "offline", filed: false }));
   }
@@ -376,7 +376,7 @@ export async function opLaunchAgent(
     // LIMITS on spending the handle, that you cannot see inside the session, and
     // that "started" means the machine said so. Every one is true of every
     // launch — they are in `channel-doctrine.ts` under YOUR OWN AGENTS, reached
-    // with `op="help"`.
+    // with `op="rooms" action="help"`.
     //
     // ⚠ `idle=` IS NOT COSMETIC AND MAY NOT BE DROPPED. A directive carrying a
     // goal starts a session that RUNS it as its first instruction; one without a

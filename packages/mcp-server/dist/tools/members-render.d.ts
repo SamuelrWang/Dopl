@@ -28,7 +28,7 @@ export declare const UNNAMED_MEMBER = "`(unnamed member)`";
  * reads the same route. ROUTING pointer only: cost, permissions and addressing
  * are `dopl_channel`'s to state.
  */
-export declare const CONTACT_POINTER = "To contact a member or their agent: dopl_channel (op=\"list\" for your channels, op=\"open\" for a DM). It is deferred in some clients, so load it with ToolSearch if it is not in your tool list.";
+export declare const CONTACT_POINTER = "To contact a member or their agent: dopl_channel (op=\"rooms\" for your channels and for opening a DM, op=\"send\" to say something). It is deferred in some clients, so load it with ToolSearch if it is not in your tool list.";
 export declare function sortByRole(members: WorkspaceMember[]): WorkspaceMember[];
 /**
  * How a member is NAMED in this tool's output: a neutralized label, then ⚠ the

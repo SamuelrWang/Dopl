@@ -80,7 +80,7 @@ const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-sc
  * queries must not inherit it. Routes and nothing more; cost and permissions
  * are `dopl_channel`'s to state.
  */
-const CHANNELS_ROUTING = `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="list") for the channels and DMs this account can post into.`;
+const CHANNELS_ROUTING = `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.`;
 function registerMapTool(register, client) {
     register("dopl_map", MAP_DESCRIPTION, {}, async () => {
         // ⚠ Fail-soft — one broken domain must not fail the manifest — but record

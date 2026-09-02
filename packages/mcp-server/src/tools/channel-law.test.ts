@@ -93,10 +93,12 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
     // AND THAT STOPPED BEING TRUE ON THE SAME DAY. Samuel's same-account carve
     // made `@agent-<id>` in a BODY a real address for the caller's own agents,
     // and the very next bullet states it — so a flat denial two lines above the
-    // exception was a remnant teaching the retired rule. What is still absolute
-    // is the `to` PARAMETER: it names a MEMBER, and there is no agent-shaped
-    // value for it. The sentence is scoped to that rather than softened.
-    expect(CHANNEL_LAW).toContain("`to` cannot name an agent");
+    // exception was a remnant teaching the retired rule.
+    // ⚠ **AND THE NARROWED CLAIM — "`to` cannot name an agent" — STOPPED BEING
+    // TRUE ON 2026-09-02 (B4's union resolver).** What is absolute is WHOSE agent.
+    expect(CHANNEL_LAW).toContain(
+      "`to` never names another member's agent, and one of your own only by the next bullet",
+    );
     // ⚠ THE DENIAL IS PINNED ACROSS EVERY SHIPPED WORD, not just the law: the
     // retired sentence coming back anywhere teaches the retired rule.
     expect(SHIPPED_PROSE).not.toContain(
@@ -260,7 +262,9 @@ describe("the DESCRIPTION is a pointer, and has to stay one", () => {
   it("names BOTH doors to the doctrine", () => {
     // ⚠ TWO, on purpose: a client that cannot read resources still has the op,
     // and a pointer naming only the door it cannot open is no pointer at all.
-    expect(DESCRIPTION).toContain('op="help"');
+    // ⚠ `op="help"` BECAME `action="help"` (B8): `rooms` already answers *what
+    // is this place*, and the law of the place is the same question.
+    expect(DESCRIPTION).toContain('action="help"');
     expect(DESCRIPTION).toContain(DOCTRINE_URI);
   });
 
@@ -458,8 +462,10 @@ describe("the removed ops are absent from the published op set", () => {
    * list, and the MEANING moved to the `name` argument's `.describe()` and to
    * the doctrine's own-agents section.
    */
-  it("the revived rename_agent teaches a LABEL, never an ADDRESS", () => {
-    expect(DESCRIPTION).toContain('"rename_agent"');
+  it("the revived rename teaches a LABEL, never an ADDRESS", () => {
+    // ⚠ **THE OP IS NOW AN ACTION** (B8): the description names the DISPATCHER
+    // and `action`'s describe carries the verbs. The MEANING did not move.
+    expect(DESCRIPTION).toContain('"manage"');
     expect(ARG_PROSE).toContain("DISPLAY ONLY");
     // The handle is unchanged and is still the only thing that addresses an agent.
     expect(ARG_PROSE).toContain(
@@ -482,16 +488,9 @@ describe("the removed ops are absent from the published op set", () => {
     // slimmed description must still carry in full — a model PICKS an op from it,
     // and an op it cannot see is one it will not call. `parity.test.ts` greps the
     // same quoted form against the schema's enum.
-    for (const op of [
-      "post",
-      "milestone",
-      "read",
-      "await",
-      "members",
-      "list_threads",
-      "create_thread",
-      "set_thread_mode",
-    ]) {
+    // ⚠ **FIVE NAMES, NOT EIGHT, SINCE B8** — six are now `kind=`, `thread="new"`
+    // or an `action=`, and the list is the PUBLISHED enum.
+    for (const op of ["send", "read", "status", "manage", "rooms"]) {
       expect(DESCRIPTION, `op="${op}" lost its documentation`).toContain(
         `"${op}"`,
       );

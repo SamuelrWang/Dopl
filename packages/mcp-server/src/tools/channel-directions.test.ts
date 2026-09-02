@@ -1,5 +1,6 @@
 /**
- * `dopl_channel(op="direct_agent")` / `op="read_directions"` — THE PRIVATE DIRECT LANE.
+ * `dopl_channel(op="manage", action="direct")` / `op="status"` — THE PRIVATE
+ * DIRECT LANE.
  *
  * ⚠ **THE HEADLINE ASSERTION IS AN ABSENCE.** There is no argument on this surface that names
  * an operator, and there never may be: the server stamps the authenticated caller, and that
@@ -13,7 +14,7 @@
  *    facts and an orchestrator that reads one as the other concludes its agent is broken.
  *  - **THE FIVE REFUSAL WORDS EACH END IN A NEXT ACTION**, because a reason with no next action
  *    gets an agent to retry the same call.
- *  - **`agent_id` ACCEPTS THE HANDLE `read_sessions` PRINTS.** That op renders `@agent-<id>`, so
+ *  - **`to` ACCEPTS THE HANDLE `op="status"` PRINTS.** That op renders `@agent-<id>`, so
  *    that is what a model copies; refusing it would be a 400 for doing what the neighbouring op
  *    taught.
  */
@@ -24,10 +25,10 @@ import type { DirectionRefusalReason, DoplClient } from "@dopl/client";
 import { registerChannelTool } from "./channel";
 import { callTool, stub } from "./narration-fixtures";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
-// ⚠ WHERE THE FIVE SENTENCES WENT (T10, 2026-09-02). A `direct_agent` result is
-// ONE line of `key=value` facts now; the paragraph per refusal word, the
-// privacy framing and the "final text of one turn" bound are standing doctrine
-// and are re-pinned on CHANNEL_DOCTRINE below — moved, never dropped.
+// ⚠ WHERE THE FIVE SENTENCES WENT (T10, 2026-09-02). A `manage action="direct"`
+// result is ONE line of `key=value` facts now; the paragraph per refusal word,
+// the privacy framing and the "final text of one turn" bound are standing
+// doctrine and are re-pinned on CHANNEL_DOCTRINE below — moved, never dropped.
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { WRITE_RESULT_MAX_CHARS } from "./channel-facts";
 
@@ -67,6 +68,9 @@ const directionStub = (over: Record<string, unknown> = {}) =>
     createAgentDirection: vi.fn(async () => ({ offline: false, direction: DIRECTION })),
     getAgentDirection: vi.fn(async () => DIRECTION),
     listAgentDirections: vi.fn(async () => []),
+    // ⚠ THE SESSIONS HALF OF `op="status"`. The mailbox is APPENDED to the
+    // session table, so a stub that cannot answer this one renders neither.
+    listChannelSessions: vi.fn(async () => ({ sessions: [], operatorOnline: true })),
     ...over,
   });
 
@@ -74,12 +78,16 @@ const run = (client: DoplClient, args: Record<string, unknown>) =>
   callTool(registerChannelTool, client, "dopl_channel", args);
 
 const ASK = {
-  op: "direct_agent",
+  op: "manage",
+  action: "direct",
   channel: "with-dana",
-  agent_id: "k3wpf7c5",
+  to: "k3wpf7c5",
   body: "check the deploy and report back",
   wait_ms: 0,
 };
+
+/** The read half, scoped to the one room these cases file directions into. */
+const STATUS = { op: "status", channel: "with-dana" };
 
 describe("🔒 the lane reaches the caller's OWN operator and nobody else", () => {
   it("publishes NO argument that names an OPERATOR, on either op", () => {
@@ -94,16 +102,29 @@ describe("🔒 the lane reaches the caller's OWN operator and nobody else", () =
   });
 
   it("routes NO member-shaped argument into a direction, even when one is passed", async () => {
-    // ⚠ THE SHARPER HALF: `member` exists on the shape for other ops, so the question is not
-    // whether it is declarable but whether this op can be made to READ it.
+    // ⚠ THE SHARPER HALF: the question is not whether an operator is declarable
+    // but whether this op can be made to READ a member-shaped value as one.
+    // ⚠ `member` LEFT THE SHAPE IN THE FIVE-OP COLLAPSE and `to` is what replaced
+    // every recipient spelling — so the member-shaped value is fed through `to`,
+    // the ONE param that could carry it. It reaches the wire as `agentId` (the
+    // one field this op addresses) and as NOTHING ELSE: no operator field, no
+    // second copy, no member column. `member` is still passed beside it, because
+    // an undeclared key must not be readable either.
     const create = vi.fn(async () => ({ offline: false, direction: DIRECTION }));
     await run(directionStub({ createAgentDirection: create }), {
       ...ASK,
       member: "someone-else@example.com",
       to: "someone-else@example.com",
     });
-    const sent = JSON.stringify(create.mock.calls[0][0]);
-    expect(sent).not.toContain("someone-else");
+    const sent = create.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(sent).sort()).toEqual(
+      ["agentId", "body", "channel", "clientMsgId", "threadId"].sort(),
+    );
+    expect(sent.agentId).toBe("someone-else@example.com");
+    for (const [key, value] of Object.entries(sent)) {
+      if (key === "agentId") continue;
+      expect(JSON.stringify(value ?? null), key).not.toContain("someone-else");
+    }
   });
 
   it("sends no operator field to the server either", async () => {
@@ -119,19 +140,22 @@ describe("🔒 the lane reaches the caller's OWN operator and nobody else", () =
 });
 
 describe("the agent id it accepts", () => {
-  it("takes the `@agent-<id>` handle `read_sessions` prints, and the bare id", async () => {
+  it('takes the `@agent-<id>` handle op="status" prints, and the bare id', async () => {
     for (const form of ["k3wpf7c5", "agent-k3wpf7c5", "@agent-k3wpf7c5", "@k3wpf7c5"]) {
       const create = vi.fn(async () => ({ offline: false, direction: DIRECTION }));
-      await run(directionStub({ createAgentDirection: create }), { ...ASK, agent_id: form });
+      await run(directionStub({ createAgentDirection: create }), { ...ASK, to: form });
       expect(create.mock.calls[0][0].agentId, form).toBe("k3wpf7c5");
     }
   });
 
-  it("is `agent_id` and NOT `agent` — the banned named-agent param", () => {
+  it("is `to` and NOT `agent` — the banned named-agent param", () => {
     // ⚠ `channel-addressing-rule.test.ts` bans a param literally named `agent`: it was the
-    // retired named-agent ADDRESSING surface. This one names an INSTANCE ID on the caller's own
-    // machine and addresses nobody in the channel, which is the distinction that guard keeps.
-    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("agent_id");
+    // retired named-agent ADDRESSING surface. ⚠ `agent_id` was the spelling this case pinned
+    // until the five-op collapse folded every recipient param into `to`, so the pin moved with
+    // it: `to` names an INSTANCE ID on the caller's own machine here and addresses nobody in
+    // the channel, which is the distinction that guard keeps.
+    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("to");
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("agent_id");
     expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("agent");
   });
 });
@@ -189,8 +213,13 @@ describe("the terminal shapes", () => {
     // in the product, or an orchestrator reads a turn's final text as the
     // agent's running commentary.
     expect(text).not.toContain("FINAL TEXT OF ONE TURN");
-    expect(CHANNEL_DOCTRINE).toContain("FINAL TEXT OF ONE TURN");
-    expect(CHANNEL_DOCTRINE).toContain('op="read_sessions"');
+    // ⚠ RE-POINTED BY THE FIVE-OP COLLAPSE. The doctrine states the same bound in
+    // the `manage` section's one line for this action, and the surface an
+    // orchestrator goes to for what an agent is DOING is `op="status"` now.
+    expect(CHANNEL_DOCTRINE).toContain(
+      '"direct" sends it a private message and reads that turn\'s final text back',
+    );
+    expect(CHANNEL_DOCTRINE).toContain('op="status"');
   });
 
   it("DELIVERED with no reply says NOT REPORTED, never 'it said nothing'", async () => {
@@ -226,10 +255,11 @@ describe("the terminal shapes", () => {
     expect(text).not.toContain("NO SUCH AGENT RUNNING");
     // ⚠ MOVED, NOT DELETED: the word's own sentence, and that a refusal is a
     // normal answer rather than an error.
-    expect(CHANNEL_DOCTRINE).toContain(
-      "no LIVE session of your operator's carries that agent id",
-    );
-    expect(CHANNEL_DOCTRINE).toContain("normal answer from a machine its owner controls");
+    // ⚠ RE-POINTED: the paragraph per word became one entry per word in the
+    // `manage` section's refusal table, and the "a refusal is normal" headline
+    // became that table's opening sentence.
+    expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
+    expect(CHANNEL_DOCTRINE).toContain("A REFUSAL IS A NORMAL ANSWER");
   });
 
   it("PENDING forbids re-issuing, and names the one place the answer lands", async () => {
@@ -241,22 +271,31 @@ describe("the terminal shapes", () => {
     expect(text).toContain("pending");
     expect(text).toContain("retry=no");
     expect(text).toContain("direction=d-1");
-    // ⚠ `read_directions` is the ONLY surface a timed-out direction's answer can
-    // be picked up from — `read`/`await` never show one — so the token naming it
-    // is load-bearing and must be on the line.
+    // ⚠ `op="status"` IS THE ONLY SURFACE a timed-out direction's answer can be
+    // picked up from — `read` never shows one — so the token naming it is
+    // load-bearing and must be on the line. ⚠ IT WAS `read_directions` until the
+    // five-op collapse; the op it names moved, the claim did not.
     expect(text).toContain("poll=");
     // ⚠ THE OP NAME MUST RENDER WHOLE, AND THIS ONCE DID NOT. `renderValue` put
     // every string through `neutralizeInline`, which blanks `_` as markdown
     // emphasis, so this server's OWN constant reached the line as
-    // `poll="read directions"` — an op no schema accepts, on the one surface a
+    // `poll="read directions"` — an op no schema accepted, on the one surface a
     // timed-out direction's answer can be reached from. Fixed 2026-09-02 by
-    // passing an already-inert token through unchanged; asserted here as the
-    // exact string a caller copies, so the mangling cannot come back.
-    expect(text).toContain("poll=read_directions");
+    // passing an already-inert token through unchanged; still asserted as the
+    // exact string a caller copies, so the mangling cannot come back on the next
+    // token that carries one.
+    expect(text).toContain("poll=status");
     expect(text).not.toContain("read directions");
     expect(text).not.toContain("DO NOT ISSUE THIS CALL AGAIN");
+    // ⚠ RE-POINTED, AND DELIBERATELY WIDER THAN IT WAS. The direction-specific
+    // sentence became ONE timeout rule covering all five `manage` actions, which
+    // is the collapse's own design — one text, five mailboxes. It still forbids
+    // the bare re-issue and still names the cost.
     expect(CHANNEL_DOCTRINE).toContain(
-      "a second direction says the same thing to a live agent twice",
+      "A TIMEOUT IS NOT A FAILURE: the request stays PENDING",
+    );
+    expect(CHANNEL_DOCTRINE).toContain(
+      "re-issuing without the SAME `client_msg_id` starts a SECOND agent",
     );
   });
 });
@@ -295,7 +334,7 @@ describe("every refusal word renders its verdict, and the doctrine explains it",
     ).toEqual([["busy", "once"]]);
   });
 
-  it("REPORTED GAP: the doctrine expands four of the five words, not `blocked`", () => {
+  it("every one of the five words has an entry, `blocked` included", () => {
     // ⚠ EVERY WORD THIS LANE CAN RENDER MUST HAVE A PARAGRAPH BEHIND IT. The
     // result names the word and points at the doctrine, so a word with no entry
     // sends a caller somewhere that has nothing for it. `blocked` — the one
@@ -305,19 +344,26 @@ describe("every refusal word renders its verdict, and the doctrine explains it",
     const expanded = (Object.keys(RETRY_BY_REASON) as DirectionRefusalReason[]).filter(
       (word) => CHANNEL_DOCTRINE.includes(`\`${word}\``),
     );
+    // ⚠ **AND THE FIVE-OP COLLAPSE RE-OPENED IT FOR A DAY**, which is the second
+    // time this list caught the same thing: the refusal table went to nine words
+    // and `blocked` — the DIRECTION word the launch enum never had — fell out
+    // with the paragraphs, while the result went on rendering `reason=blocked`
+    // and pointing at a document with nothing for it. Restored 2026-09-02.
     expect(
       expanded.sort(),
-      "a refusal word this lane can render has no paragraph in the doctrine",
+      "a refusal word this lane can render has no entry in the doctrine: " +
+        "add it to channel-doctrine.ts › MANAGE's refusal table",
     ).toEqual(
       (Object.keys(RETRY_BY_REASON) as DirectionRefusalReason[]).sort(),
     );
   });
 
   it("...and each expanded word still ends in a next action", () => {
-    expect(CHANNEL_DOCTRINE).toContain("no LIVE session of your operator's carries"); // no-session
-    expect(CHANNEL_DOCTRINE).toContain("Tell your operator"); // auth-hold
-    expect(CHANNEL_DOCTRINE).toContain("a minute or two"); // busy
-    expect(CHANNEL_DOCTRINE).toContain("ASK THEM"); // no-bridge
+    // ⚠ RE-POINTED WORD BY WORD onto the refusal table the paragraphs became.
+    expect(CHANNEL_DOCTRINE).toContain("`no-session` no such agent");
+    expect(CHANNEL_DOCTRINE).toContain("`auth-hold` the operator must sign in");
+    expect(CHANNEL_DOCTRINE).toContain("`busy` mid-turn");
+    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
   });
 
   it("the CONSENT refusal never reads as a fault or suggests a workaround", async () => {
@@ -328,14 +374,21 @@ describe("every refusal word renders its verdict, and the doctrine explains it",
     expect(text).toContain("reason=no-bridge");
     expect(text).toContain("retry=no");
     expect(text).not.toMatch(/error|failure|failed|broken/i);
-    expect(CHANNEL_DOCTRINE).toContain("deliberate setting, not a failure");
-    expect(CHANNEL_DOCTRINE).toContain("do not look for another route");
+    // ⚠ RE-POINTED: the table's own entry names WHOSE setting it is, which is the
+    // half that stops the word reading as a fault. ⚠ "do not look for another
+    // route" was RETIRED BY RULING (contracts only, wave B spec §4) — `retry=no`
+    // already says asking again changes nothing — and is pinned ABSENT once, in
+    // `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
+    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
   });
 });
 
-describe("op=read_directions", () => {
+describe('op="status" — the direction mailbox half', () => {
   it("says the listing is own-scoped and that it could not be otherwise", async () => {
-    const text = await run(directionStub(), { op: "read_directions" });
+    // ⚠ `op="status"` RENDERS THE SESSION TABLE AND THE MAILBOX, joined by a
+    // blank line, so the stub answers `listChannelSessions` too — the directions
+    // half is APPENDED to that page rather than replacing it.
+    const text = await run(directionStub(), STATUS);
     expect(text).toContain("YOUR OWN SIDE ONLY");
     expect(text).toContain("no way to ask about one");
   });
@@ -348,7 +401,7 @@ describe("op=read_directions", () => {
           { ...DIRECTION, id: "d-2", status: "pending" },
         ]),
       }),
-      { op: "read_directions" },
+      STATUS,
     );
     expect(text).toContain("all green");
     expect(text).toContain("has not been answered YET");
@@ -358,9 +411,14 @@ describe("op=read_directions", () => {
   it("narrows by agent, accepting the printed handle", async () => {
     const list = vi.fn(async () => []);
     await run(directionStub({ listAgentDirections: list }), {
-      op: "read_directions",
-      agent_id: "@agent-k3wpf7c5",
+      ...STATUS,
+      to: "@agent-k3wpf7c5",
     });
-    expect(list.mock.calls[0][0]).toEqual({ channel: undefined, agent: "k3wpf7c5" });
+    // ⚠ `channel` IS NO LONGER `undefined` HERE, and that is the op's own doing:
+    // `read_directions` took no channel, while `op="status"` filters by the one
+    // it was given (omitting it WIDENS the whole page, sessions included). What
+    // this case pins is unchanged — the PRINTED handle is accepted and reaches
+    // the server as the bare id.
+    expect(list.mock.calls[0][0]).toEqual({ channel: "ch-1", agent: "k3wpf7c5" });
   });
 });

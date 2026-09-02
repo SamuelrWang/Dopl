@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="launch_agent" — ASK THE OPERATOR'S OWN DESKTOP TO START AN
+ * `dopl_channel` op="manage" action="launch" — ASK THE OPERATOR'S OWN DESKTOP TO START AN
  * AGENT (Samuel's ruling, 2026-08-22: launch-over-MCP approved, with a LOCAL
  * DESKTOP TOGGLE as the consent).
  *

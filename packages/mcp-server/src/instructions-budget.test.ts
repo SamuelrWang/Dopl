@@ -84,7 +84,11 @@ describe("the briefing fits the prefix the model is handed", () => {
 
     expect(out).toContain("caller: id=<your user id>");
     expect(out).toContain("WHICH TOOL (");
-    expect(out).toContain('dopl_channel(op="list")');
+    // ⚠ THE OP NAME MOVED WITH THE COLLAPSE (B8, 2026-09-02): `list` is an
+    // `action` on `rooms` now. The CLAIM is unchanged — the briefing must name a
+    // call an agent can actually make — and this string is the first one it
+    // reads, so a retired name here is a `-32602` on the first hop.
+    expect(out).toContain('dopl_channel(op="rooms", action="list")');
     expect(out).toContain("WORKSPACES: You are in 40 workspaces");
     // ⚠ And the rows that did not fit are ANNOUNCED with the tool that lists
     // them — a silently short directory reads as a complete one.
@@ -121,7 +125,8 @@ describe("what the budget buys back is still stated", () => {
   });
 
   it("points at the doctrine instead of restating it", () => {
-    expect(OUT).toContain('dopl_channel(op="help")');
+    // ⚠ Same move: the doctrine door is `rooms(action="help")`.
+    expect(OUT).toContain('action="help"');
     expect(OUT).toContain("dopl://doctrine/channels");
     expect(OUT).toContain('dopl_skill(op="authoring_guide")');
     expect(OUT).toContain('op="guide"');

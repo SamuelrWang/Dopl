@@ -27,6 +27,7 @@ import { createServer } from "../server.js";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine.js";
 import {
   CHANNEL_INPUT_SHAPE,
+  CHANNEL_OPS,
   PARAM_DESCRIPTION_MAX_CHARS,
   SCHEMA_MAX_CHARS,
 } from "./channel-schema.js";
@@ -136,9 +137,14 @@ describe("the served input schema fits its budget", () => {
     // answer to "does this op want this argument". `op` itself is the
     // discriminator and names none.
     // ⚠ ANY QUOTED OP NAME COUNTS, not just the `op="x"` form — `channel` is
-    // taken by all but three ops and lists the exceptions instead, which is
+    // taken by all but three actions and lists the exceptions instead, which is
     // shorter AND the thing a caller needs.
-    const ops = CHANNEL_INPUT_SHAPE.op.options;
+    // ⚠ **THE FIVE PUBLISHED OPS, NOT `op.options`** (B8, 2026-09-02). The zod
+    // enum accepts twenty-two retired names so their redirects can run, and a
+    // `.describe()` naming one of those would be teaching a call the client
+    // cannot see in the enum — which this assertion would have waved through if
+    // it read the runtime union.
+    const ops: readonly string[] = CHANNEL_OPS;
     const anonymous = Object.entries(served)
       .filter(([name]) => name !== "op")
       .filter(([, schema]) => {
@@ -156,16 +162,23 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
     // `.describe()` on 2026-09-02. If a future trim deletes one instead of
     // relocating it, this fails — which a size cap on its own never could.
     expect(CHANNEL_DOCTRINE).toContain("THE ARGUMENTS THAT CARRY A RULE:");
+    // ⚠ **THREE OF THESE NINE LINES ARE GONE AND THE FIELDS THEY WERE ABOUT ARE
+    // GONE WITH THEM** (B8): `recipient`, `handoff` and the standalone `chain`
+    // left the shape, so a doctrine line about any of them would teach a phantom
+    // — which is exactly what the pair test below exists to catch.
+    // ⚠ **AND `to`, `model`, `info_card` AND `recommendation` HAVE NO LINE HERE,
+    // DELIBERATELY.** This
+    // section is for a rule that had NOWHERE ELSE TO LIVE once the `.describe()`
+    // could only carry a contract — and both of those rules fit in their own
+    // describe (`to`: one party, two namespaces; `model`: an unrecognised id
+    // FALLS BACK silently). `to`'s refusal is additionally stated in the doctrine's
+    // `send` section. A third copy in FIELDS is the repetition this budget exists
+    // to stop, not a relocation.
     for (const rule of [
       "OMITTING `channel` IS A WIDER READ",
       "ONE CURSOR SPACE, ONE `since`",
       "`client_msg_id` IS WHAT MAKES A RETRY SAFE",
-      "A PING'S `recipient` IS NOT A POST'S `to`",
-      "`handoff`=true ON \"create_thread\" HANDS THE EXCHANGE OVER",
-      "`model` IS VALIDATED NOWHERE",
-      "`chain` NAMES ITS THREE STATES",
-      "`info_card` REPLACES THE WHOLE CARD",
-      "`recommendation.index` MUST BE INSIDE `options`",
+      "`posture.chain` NAMES ITS THREE STATES",
     ])
       expect(CHANNEL_DOCTRINE, rule).toContain(rule);
   });
@@ -177,13 +190,7 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
       "channel",
       "since",
       "client_msg_id",
-      "recipient",
-      "to",
-      "handoff",
-      "model",
-      "chain",
-      "info_card",
-      "recommendation",
+      "posture",
     ])
       expect(CHANNEL_INPUT_SHAPE, field).toHaveProperty(field);
   });

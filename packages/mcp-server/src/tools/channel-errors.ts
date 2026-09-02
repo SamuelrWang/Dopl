@@ -2,7 +2,7 @@
  * `dopl_channel` API-ERROR CLASSIFICATION — ⚠ what a 4xx MEANS is read off the
  * error CODE, never guessed from the status. A bare `status === 400` branch
  * blames whichever param happened to be set, so an over-length title comes back
- * as "invite them first" and `op="invite"` then answers "already a member".
+ * as "invite them first" and `op="rooms" action="invite"` then answers "already a member".
  *
  * `DoplApiError` parses `{ error: { code, message } }` into `.code` /
  * `.apiMessage` (packages/dopl-client/src/errors.ts) and every channels-route
@@ -33,6 +33,10 @@ export function isForbidden(e: unknown): boolean {
  * What a 400 from a channels route MEANS, as far as the caller can act on it.
  *
  *   - `addressee_not_member`  — the `to` member is not in the channel.
+ *   - `recipient_unresolved`  — `to` named nobody this server can see, in
+ *     either namespace. ⚠ NOT a delivery failure and NOT a membership problem:
+ *     nothing was written at all, and the server's own message lists the live
+ *     handles and the roster.
  *   - `thread_not_in_channel` — a first-class `thread` id not of this channel.
  *   - `self_target`           — `create_thread` addressed to the CALLER: only
  *     creator and target may post, so it has one party and can never be
@@ -52,6 +56,7 @@ export function isForbidden(e: unknown): boolean {
  */
 export type BadRequestKind =
   | "addressee_not_member"
+  | "recipient_unresolved"
   | "thread_not_in_channel"
   | "self_target"
   | "invalid_request"
@@ -69,6 +74,13 @@ export function classifyBadRequest(e: unknown): BadRequestKind {
   switch (apiErrorCode(e)) {
     case "CHANNEL_ADDRESSEE_NOT_MEMBER":
       return "addressee_not_member";
+    // ⚠ **THE UNION RESOLVER'S OWN REFUSAL** (2026-09-02, B4/B8). `to` names one
+    // party in either namespace, and a name that resolves to NOBODY is a 400
+    // rather than a silent `delivery=none` — the server's own message lists the
+    // live agent handles and the channel's members, so `serverDetail` carries
+    // the remedy and this arm only has to say nothing was sent.
+    case "CHANNEL_RECIPIENT_UNRESOLVED":
+      return "recipient_unresolved";
     case "CHANNEL_TASK_NOT_IN_CHANNEL":
       return "thread_not_in_channel";
     case "CHANNEL_TASK_SELF_TARGET":
@@ -145,4 +157,4 @@ export function serverDetail(e: unknown): string {
  * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
  */
 export const FIELD_CAPS_NOTE =
-  "Field caps: title <=200 characters, body <=16000, a post's summary <=200, client_msg_id <=200.";
+  "Field caps: summary <=200 characters, body <=16000, client_msg_id <=200.";

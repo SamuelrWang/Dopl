@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="end_agent" / op="rename_agent" — **MANAGE THE OPERATOR'S OWN
+ * `dopl_channel` op="manage" action="end" / op="manage" action="rename" — **MANAGE THE OPERATOR'S OWN
  * RUNNING AGENTS** (2026-09-01, Samuel: *"I need you to build out dopl mcp being
  * able to end agents. Dopl MCP need to be able to do all that stuff"*).
  *
@@ -11,7 +11,7 @@
  *
  * **THESE OPS ASK. THEY DO NOT DO ANYTHING THEMSELVES.** Agents live in a desktop
  * main process no server can reach; what crosses the wire is a row in the SAME
- * mailbox `op="launch_agent"` writes, which the operator's machine polls, claims
+ * mailbox `op="manage" action="launch"` writes, which the operator's machine polls, claims
  * and answers. `channel-ops-launch.ts` states the three consequences at length
  * and all three hold here — a refusal is a normal outcome, a timeout is not a
  * failure, and "ended" means A MACHINE SAID SO.
@@ -27,7 +27,7 @@
  *     not running any more, and an agent that finished is the ordinary cause. For
  *     an END that is the outcome the caller wanted, reached by another route, and
  *     the sentence says so rather than reading as a fault.
- *  3. **THERE IS NOTHING TO POLL AFTERWARDS EXCEPT `read_sessions`**, which is
+ *  3. **THERE IS NOTHING TO POLL AFTERWARDS EXCEPT `status`**, which is
  *     also where the caller got the id — so every terminal sentence points back
  *     at it.
  */

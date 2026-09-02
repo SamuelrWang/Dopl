@@ -21,7 +21,7 @@
  * caller's OWN presence separates the two.
  *
  * ⚠ **AND THE FIRST TEST HERE IS THE ONE THAT SETTLED THE ARGUMENT.** The two
- * render paths — `read_sessions`' page and the `await` hold's session block —
+ * render paths — `op="status"`'s page and the holding read's session block —
  * were SUSPECTED of diverging, because the same session looked different from
  * each. They do not: driven with one identical DTO they are byte-identical, and
  * that is pinned below so the suspicion never has to be re-litigated. What
@@ -47,7 +47,7 @@ import {
 // case still compares two renders of ONE definition.
 import { SESSION_TABLE_HEAD, sessionBlockLines } from "./channel-session-table";
 // ⚠ `SESSION_TELEMETRY_NOTE` IS DELETED (T13). Its ~800 standing chars rode on
-// every `read_sessions` page; the promises it made are in `CHANNEL_DOCTRINE`,
+// every `op="status"` page; the promises it made are in `CHANNEL_DOCTRINE`,
 // served once by op="help" and the MCP resource. The F-293 pin below reads the
 // promise there rather than dropping it with the constant.
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
@@ -142,14 +142,14 @@ afterEach(() => {
 // ── THE DIFF: ONE DTO, BOTH PATHS ────────────────────────────────────
 //
 // ⚠ **A THIRD SURFACE JOINED THE DIFF ON 2026-09-02 AND LIVES NEXT DOOR** —
-// `op="read_sessions"` with NO `channel` (T22), which had been rendering the
+// `op="status"` with NO `channel` (T22), which had been rendering the
 // PRE-TERSE prose line while these two rendered the table.
 // `channel-session-liveness-account.test.ts` holds it: this file was at 520 of
 // the §1 cap of 500 with it inline, and the seam is the surface rather than the
 // arithmetic. ⚠ **A FOURTH RENDERER OF A SESSION IS A CASE IN ONE OF THESE TWO
 // FILES**, never a third opinion left untested.
 
-describe("read_sessions and the await session block render IDENTICALLY", () => {
+describe('op="status" and the holding read\'s session block render IDENTICALLY', () => {
   const cases: Array<[string, ChannelSessionStateOwn]> = [
     ["the full rich row", rich()],
     [
@@ -246,7 +246,7 @@ describe("F-293 — a model id can never split into two bare names", () => {
   /**
    * ⚠ THE PROMISE IS ONLY WORTH ANYTHING IF IT IS CHECKABLE. With no template,
    * a two-token model span reads as `template · model` to exactly the skimming
-   * orchestrator the doctrine's READING "read_sessions" section is written for.
+   * orchestrator the doctrine's op="status" column sentence is written for.
    */
   it("with NO template the line carries exactly ONE bare name", () => {
     const line = formatSessionLine(rich({ model: "claude-opus-5[1m]" }), {
@@ -261,7 +261,11 @@ describe("F-293 — a model id can never split into two bare names", () => {
     // ⚠ RE-POINTED, NOT DROPPED (T13). The promise this render keeps used to be
     // a constant printed under every page; it is doctrine now, so the words are
     // asserted where a reader is actually served them.
-    expect(CHANNEL_DOCTRINE).toContain("ONE unbroken token");
+    // ⚠ THE CLAUSE ITSELF, RESTORED AFTER B8 CUT IT — and it now carries the
+    // COROLLARY the render depends on, which the old wording left implicit.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "The MODEL is always ONE unbroken token, so a name with a space in it is a template.",
+    );
   });
 
   it("still never invents a name, and still renders an unknown id as itself", () => {
@@ -451,7 +455,7 @@ describe("F-294 — the legend explains the reading the page actually contains",
 
 // ── THE WIRE CONTRACT THE RENDER LEANS ON ────────────────────────────
 
-describe("read_sessions carries the presence fact end to end", () => {
+describe('op="status" carries the presence fact end to end', () => {
   it("an older server (no key) renders exactly the pre-F-294 page", async () => {
     const session = rich({ updatedAt: quietFor(10 * 60_000) });
     const text = (await opReadSessions(stubClient([session]))).content[0].text;

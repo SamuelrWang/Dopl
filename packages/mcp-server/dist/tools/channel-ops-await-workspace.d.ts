@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="await" WITH NO `channel` — the WORKSPACE-WIDE hold.
+ * `dopl_channel` op="read" with wait_ms WITH NO `channel` — the WORKSPACE-WIDE hold.
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan
  * (parity.test.ts).

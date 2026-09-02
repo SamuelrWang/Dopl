@@ -76,7 +76,7 @@ function isErr(x) {
  * 404 to this same copy.
  */
 function channelNotFound(ref) {
-    return (0, respond_1.err)(`Channel not found: "${ref}". Use dopl_channel(op="list") to see channels you can access (pass a slug or id from there).`);
+    return (0, respond_1.err)(`Channel not found: "${ref}". Use dopl_channel(op="rooms", action="list") to see channels you can access (pass a slug or id from there).`);
 }
 /**
  * Resolve a channel reference (slug or UUID) to a `Channel` row, or a not-found
@@ -132,7 +132,7 @@ async function resolveMemberOr(client, ref) {
     }
     const match = byId ?? (byEmail.length === 1 ? byEmail[0] : undefined);
     if (!match) {
-        return (0, respond_1.err)(`No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (see dopl_members(op="list")).`);
+        return (0, respond_1.err)(`No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (see dopl_members(op="rooms" action="list")).`);
     }
     if (match.status !== "active") {
         const state = match.status === "pending"

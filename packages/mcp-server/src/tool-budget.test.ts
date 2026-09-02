@@ -166,7 +166,9 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // doctrine, because the agent that has not read the doctrine is exactly the
   // one that needs it. Both descriptions FELL by hundreds in the same change.
   dopl_agent: 1948,
-  dopl_channel: 1591,
+  // ⚠ 1,591 → 1,596 (B8): barely moved while the string changed completely — 23
+  // op names fell to 5, and a generated `Limits:` block took it back.
+  dopl_channel: 1596,
   dopl_chats: 1699,
   dopl_kb: 1947,
   dopl_members: 1453,
@@ -211,17 +213,20 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // message on every `read`. One connection's worth of characters against an
   // orchestrator loop's.
   current_workspace: 720,
-  dopl_agent: 3929,
-  dopl_channel: 11609,
+  dopl_agent: 3930,
+  // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
+  dopl_channel: 8678,
   dopl_chats: 3554,
   dopl_home: 440,
-  dopl_kb: 5353,
+  dopl_kb: 5347,
   dopl_map: 251,
   dopl_members: 604,
   dopl_ontology: 2538,
-  dopl_search: 1088,
+  dopl_search: 1081,
   dopl_skill: 3059,
-  dopl_status: 794,
+  // ⚠ THESE THREE EACH FELL BY 7 AND ROSE BY 1, BOTH EDITS IN OTHER FILES —
+  // `response-size.ts › RESPONSE_FORMAT_FIELD` and `shelf.ts › SHELF_ARG_DESCRIPTION`.
+  dopl_status: 787,
   list_workspaces: 114,
 };
 
@@ -265,7 +270,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 //     run. See `instructions.ts › ConnectionIdentity`.
 // ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** Every figure a doc has carried
 // about this surface has gone stale inside a day (F-422).
-const SERVED_TOTAL_CEILING = 51_996;
+const SERVED_TOTAL_CEILING = 49_057; // ⚠ 51,996 → 49,057 (B8), almost all schema
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -281,7 +286,9 @@ const SERVED_TOTAL_CEILING = 51_996;
  * inside a consuming runtime is not observable from here and must not be
  * asserted here.
  */
-const INSTRUCTIONS_CEILING = 1_851;
+// ⚠ **1,851 → 1,857 (B8): A RISE, RECORDED.** Both op names the briefing spells
+// moved — six characters, against the FIRST string an agent reads being wrong.
+const INSTRUCTIONS_CEILING = 1_857;
 
 /**
  * ⚠ THE PULLED SIDE, AND IT IS BUDGETED SEPARATELY ON PURPOSE (principle 7).
@@ -307,7 +314,10 @@ const INSTRUCTIONS_CEILING = 1_851;
 // paragraph collapsed to one sentence when `channel_tasks` took the author scope
 // (C14), and the protocol section stopped naming the deleted `kind` param. Banked
 // here rather than left as headroom, which is what this ratchet is for.
-const DOCTRINE_CEILING = 32_551;
+// ⚠ **32,551 → 8,960 (B8), THE LARGEST SINGLE FALL HERE.** The doctrine was
+// where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
+// narrative, 3,914 on a hold that is now a knob on `read`.
+const DOCTRINE_CEILING = 8_960;
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -463,7 +473,7 @@ describe("the pushed surface fits its budget, as served", () => {
     // and a paragraph per op. Those are the `dopl://doctrine/channels` resource
     // now, pulled on demand, and this is the assertion that keeps them there.
     const description = listed.tools.find((t) => t.name === "dopl_channel")?.description ?? "";
-    expect(description).toContain('op="help"');
+    expect(description).toContain('action="help"');
     expect(description).toContain("dopl://doctrine/channels");
     // ⚠ THE LAW IS NOT INLINED ANY MORE. This is the assertion that stops 35k of
     // prose growing back one honest sentence at a time.

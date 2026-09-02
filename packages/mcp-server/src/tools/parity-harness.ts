@@ -19,6 +19,7 @@ import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
 
 import type { RegisterTool } from "./respond.js";
+import { CHANNEL_ACTIONS } from "./channel-schema.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerSkillTools } from "./skills.js";
 import { registerChatTools } from "./chats.js";
@@ -117,10 +118,48 @@ export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 // slips past the guard. `toolGroupSource` is that scan.
 export const SRC_DIR = path.resolve(process.cwd(), "src");
 
+/**
+ * The op enum **AS PUBLISHED**, or null for a tool that dispatches on none.
+ *
+ * ⚠ **THE PUBLISHED SET, NOT `ZodEnum.options`, SINCE 2026-09-02 (B8).**
+ * `dopl_channel` accepts twenty-two retired names at RUNTIME so their one-line
+ * redirects can run, and publishes five — `z.enum([...]).meta({ enum: [...] })`,
+ * which overrides the `enum` keyword `z.toJSONSchema` emits, and that conversion
+ * is the one `@modelcontextprotocol/sdk › toJsonSchemaCompat` runs for
+ * `tools/list`. Reading `.options` here would make every suite below classify,
+ * document and gate twenty-two names no agent can see — the opposite of what
+ * they are for. ⚠ It also makes the harness read what a CLIENT reads, which is
+ * the same discipline `tool-budget.test.ts` applies to descriptions.
+ */
 export function opEnum(t: CapturedTool): string[] | null {
   const op = t.schema.op;
-  if (op instanceof z.ZodEnum) return op.options as string[];
-  return null;
+  if (!(op instanceof z.ZodEnum)) return null;
+  const published = (
+    z.toJSONSchema(z.object({ op }), { io: "input" }) as {
+      properties?: { op?: { enum?: unknown } };
+    }
+  ).properties?.op?.enum;
+  return Array.isArray(published)
+    ? (published as string[])
+    : (op.options as string[]);
+}
+
+/**
+ * The `action` sub-verb enum a dispatching tool publishes, or null.
+ *
+ * ⚠ It exists so the gate tables can name ONE action of a mixed op
+ * (`rooms.open`) and still be checked against something the tool really
+ * declares — an entry naming an action nobody serves is the same dead law a
+ * stale op name is.
+ */
+export function actionEnum(t: CapturedTool): string[] | null {
+  // ⚠ It is `.optional()` — three of the five ops take none — so the enum sits
+  // one wrapper down. Reading the wrapper would answer `null` for a tool that
+  // declares one, which is a guard that passes by finding nothing.
+  const declared = t.schema.action;
+  const action =
+    declared instanceof z.ZodOptional ? declared.unwrap() : declared;
+  return action instanceof z.ZodEnum ? (action.options as string[]) : null;
 }
 
 export function isAdmin(name: string): boolean {
@@ -201,3 +240,58 @@ export const DELETE_BLOCKED_OPS = parseOpTable(
  * ships a "hidden" tool every parity assertion treats as live.
  */
 export const VISIBLE_TOOLS = TOOLS.filter((t) => !HIDDEN_TOOLS.has(t.name));
+
+// ── THE GATE KEY A CALL IS CLASSIFIED ON ─────────────────────────────
+
+/**
+ * ⚠ **THE OPS THAT DISPATCH AGAIN, ON A SECOND WORD** (2026-09-02, slice B8).
+ * `dopl_channel(op="rooms")` READS on four actions and WRITES on four, so the
+ * gate key is `<op>.<action>` and the classification below is per PAIR. Anything
+ * else would be a hole: gating `rooms` wholesale as a write refuses a
+ * `dopl.read` token the four calls it exists to make, and gating it as a read
+ * hands one the four that change the room.
+ *
+ * ⚠ THE MAP IS IMPORTED FROM THE PRODUCTION CONSTANT, never restated — and the
+ * case below asserts the published `action` enum is exactly the union of its
+ * values, so a verb added to one and not the other fails here rather than
+ * arriving unclassified.
+ */
+export const ACTIONS_BY_OP: Record<string, Readonly<Record<string, readonly string[]>>> = {
+  dopl_channel: CHANNEL_ACTIONS,
+};
+
+/** Every key a call on `tool` can be gated on — `op`, or `op.action` per pair. */
+export function gateKeys(tool: { name: string }, enumOps: readonly string[]): string[] {
+  const actions = ACTIONS_BY_OP[tool.name];
+  if (!actions) return [...enumOps];
+  return enumOps.flatMap((op) =>
+    actions[op] ? actions[op].map((a) => `${op}.${a}`) : [op],
+  );
+}
+
+/**
+ * Is `key` — plain `op` or dotted `op.action` — something `tool` really serves?
+ * ⚠ ONE resolver for both gate lists, because "this entry names nothing" is the
+ * same failure whichever list it sits in, and two copies is how one of them
+ * quietly stops asking.
+ */
+export function servesKey(toolName: string, enumOps: readonly string[], key: string): boolean {
+  const [op, action, ...rest] = key.split(".");
+  if (rest.length > 0) return false;
+  if (!enumOps.includes(op)) return false;
+  // ⚠ A BARE OP IS A LEGAL ENTRY EVEN WHERE ACTIONS EXIST — it classifies the
+  // whole op, which `gating.ts › isWriteOp` honours the same way. What must NOT
+  // be legal is an action nobody serves.
+  if (action === undefined) return true;
+  return (ACTIONS_BY_OP[toolName]?.[op] ?? []).includes(action);
+}
+
+/**
+ * Is `key` classified by `set`? ⚠ A bare entry for the op covers every action of
+ * it, exactly as the gate reads it — a test that resolved this differently from
+ * `gating.ts › isWriteOp` would be measuring a table nothing enforces.
+ */
+export function classifies(set: ReadonlySet<string>, key: string): boolean {
+  const dot = key.indexOf(".");
+  return set.has(key) || (dot > 0 && set.has(key.slice(0, dot)));
+}

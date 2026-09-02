@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="await" — the assembled LONG-HOLD, and every string that
+ * `dopl_channel` op="read" with wait_ms — the assembled LONG-HOLD, and every string that
  * describes it. The only op here that LOOPS, the only one with a budget, and
  * the only one whose result text reasons about the caller's client.
  *

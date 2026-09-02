@@ -1,27 +1,26 @@
 /**
- * `dopl_channel(op="ping")` / `op="pings"` — THE "NEEDS YOU" SIGNAL.
+ * **THE PING LANE, RETIRED** — `op="ping"` / `op="pings"` (Samuel's ruling B8,
+ * 2026-09-02).
  *
- * ⚠ **THE HEADLINE ASSERTION IS AN ABSENCE.** There is no argument on this
- * surface that names an operator, and there never may be: the two self-scoped
- * recipient forms resolve to the authenticated caller's own operator server-side,
- * and that absence IS the loop brake. You cannot ping another member's agent
- * because there is nothing to say it with.
+ * ⚠ **PINGS FOLD INTO A DIRECTED `send`, AND THE ARGUMENT IS THAT THE MAILBOX
+ * ROW WAS ALWAYS A SECOND COPY OF A DELIVERY.** A directed send IS the delivery
+ * record: it names one recipient, the server resolves it, and the result's
+ * `delivery=` is the acknowledgement the ping row existed to be. The table
+ * behind these two handlers — `20260907130000_channel_pings.sql` — was DELETED
+ * UNAPPLIED in the same wave, so the lane has no storage either.
  *
- * The other properties that fail quietly:
- *  - **EXACTLY ONE RECIPIENT, AND THE REFUSAL NAMES THE COUNT IT SAW.** Zero is a
- *    signal with nowhere to go; two would make the server pick, and a caller that
- *    sent two cannot otherwise tell which one would have won.
- *  - **THE RESULT MUST SAY A PING IS NOT A MESSAGE.** A tool result is read at
- *    the moment the model picks its next action, so it outvotes the description
- *    (INVARIANTS §10) — and the failure it prevents is an agent pinging again and
- *    again because it is waiting for a reply that can never come.
- *  - **THE TWO CURSOR SPACES MUST BE NAMED AS SEPARATE** in both results. Crossing
- *    them reads a plausible WRONG page rather than erroring, which is the failure
- *    mode nothing else can catch.
- *  - **THE BODY CAP IS REFUSED BEFORE ANY ROUND TRIP**, so "nothing was sent" is
- *    trivially true rather than confusable with a delivery failure.
- *  - **`agent_id` ACCEPTS THE HANDLE `read_sessions` PRINTS**, via the ONE shared
- *    stripper — a second copy drifts and sends `@agent-` at a column CHECK.
+ * ⚠ **THIS SUITE USED TO DRIVE THE LANE AND NOW GUARDS ITS ABSENCE, WHICH IS
+ * THE SAME CLAIM FROM THE OTHER SIDE.** Its headline assertion was always an
+ * ABSENCE — there is no argument on this surface that names an operator, and
+ * there never may be — and the three params that carried the risk (`ping_kind`,
+ * `recipient`, and the `to_desktop` that preceded them) are now pinned as
+ * absences from the published shape rather than exercised. A retired lane whose
+ * suite is simply deleted is a lane nothing stops from growing back.
+ *
+ * ⚠ **THE MODULE ITSELF IS SLICE B16's TO DELETE**, with `channel-ops-await*.ts`
+ * — one release after the desktop version floor stops calling either name. Until
+ * then the two names still PARSE, so their redirect can run instead of an opaque
+ * `-32602 invalid enum value`, and that is exactly what is driven below.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -29,322 +28,143 @@ import type { DoplClient } from "@dopl/client";
 
 import { registerChannelTool } from "./channel";
 import { callTool, stub } from "./narration-fixtures";
-import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { CHANNEL_DESCRIPTION } from "./channel-description";
+import { CHANNEL_INPUT_SHAPE, CHANNEL_OPS } from "./channel-schema";
+import { RETIRED_OPS } from "./channel-retired-ops";
 
-const CHANNEL = {
-  id: "ch-1",
-  workspaceId: "ws-1",
-  slug: "build",
-  name: "Build",
-  topic: "",
-  visibility: "private" as const,
-  createdBy: "u1",
-  archivedAt: null,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
+const DIRECTORY = {
+  getWorkspaceList: async () => [],
+  resolveWorkspaceRef: async () => null,
+  noWorkspaceError: async () => ({ content: [], isError: true }),
+  lockedWorkspaceId: () => null,
 };
 
-const PING = {
-  id: "p-1",
-  seq: 12,
-  channelId: "ch-1",
-  channelSlug: "build",
-  threadId: null,
-  senderUserId: "u1",
-  senderAgentId: "k3wpf7c5",
-  recipientKind: "desktop" as const,
-  recipientUserId: "u1",
-  recipientAgentId: null,
-  kind: "done" as const,
-  body: "migration written and tests are green",
-  createdAt: "2026-09-01T10:00:00Z",
-};
-
-function pingStub(over: Record<string, unknown> = {}): DoplClient {
-  return stub({
-    listChannels: vi.fn(async () => [CHANNEL]),
-    createPing: vi.fn(async () => PING),
-    listPings: vi.fn(async () => [PING]),
-    ...over,
-  });
+/** ⚠ EVERY method throws: a redirect that reached the network is not a redirect. */
+function tripwireClient(): DoplClient {
+  return new Proxy(
+    {},
+    {
+      get: () => () => {
+        throw new Error("the retired ping lane reached the network");
+      },
+    },
+  ) as unknown as DoplClient;
 }
 
-const run = (client: DoplClient, args: Record<string, unknown>) =>
-  callTool(registerChannelTool, client, "dopl_channel", args);
+async function run(args: Record<string, unknown>): Promise<string> {
+  return callTool(
+    (r, c) => registerChannelTool(r, c, undefined, false, DIRECTORY),
+    tripwireClient(),
+    "dopl_channel",
+    args,
+  );
+}
 
-const SEND = Object.freeze({
-  op: "ping",
-  channel: "build",
-  ping_kind: "done",
-  body: "migration written and tests are green",
+describe("both names still PARSE, and answer one line that reaches nothing", () => {
+  it('op="ping" names the send that replaced it', async () => {
+    const out = await run({ op: "ping", channel: "build", body: "done" });
+    expect(out).toBe(`dopl_channel op="ping" ${RETIRED_OPS.ping}`);
+    // ⚠ THE WHOLE POINT OF THE FOLD, IN THE LINE ITSELF: the caller is not told
+    // "that op is gone", it is told which field carries the recipient now and
+    // that the ack it wanted is on the send's own result.
+    expect(out).toContain("send(to=…)");
+    expect(out).toContain("delivery=");
+  });
+
+  it('op="pings" names the read that replaced it', async () => {
+    const out = await run({ op: "pings" });
+    expect(out).toBe(`dopl_channel op="pings" ${RETIRED_OPS.pings}`);
+    expect(out).toContain("read");
+  });
+
+  it("neither is an ERROR — a migration notice is not a failure to retry", async () => {
+    // ⚠ `retiredRedirect` returns `ok()`, deliberately: an `isError` response is
+    // a failure a model retries, and this call did not fail — it was answered.
+    // Driven through the real registrar so the claim is about what ships.
+    for (const args of [{ op: "ping" }, { op: "pings" }]) {
+      const res = await new Promise<{ isError?: boolean }>((resolve) => {
+        registerChannelTool(
+          ((name, _d, _s, h) => {
+            if (name === "dopl_channel")
+              void (h as (a: unknown) => Promise<{ isError?: boolean }>)(
+                args,
+              ).then(resolve);
+          }) as never,
+          tripwireClient(),
+          undefined,
+          false,
+          DIRECTORY,
+        );
+      });
+      expect(res.isError, JSON.stringify(args)).toBeFalsy();
+    }
+  });
 });
 
-describe("🔒 there is no argument for WHOSE machine, and none may appear", () => {
-  it("declares no operator, sender or user field on the published shape", () => {
-    // ⚠ Not "declared and ignored" — a param an MCP client can see is a param a
-    // model will try, and a silently-dropped address is the invisible-delivery
-    // failure the addressing contract exists to prevent.
-    for (const key of [
-      "operator",
-      "operator_id",
-      "user_id",
-      "sender",
-      "sender_agent_id",
-    ]) {
-      expect(CHANNEL_INPUT_SHAPE, key).not.toHaveProperty(key);
+describe("🔒 the params that carried the risk are gone, and may not come back", () => {
+  it("neither name is in the enum a model can SEE", () => {
+    // ⚠ THE PUBLISHED FIVE, which is what an MCP client lists. The runtime enum
+    // is wider on purpose (see the redirects above); `parity.test.ts` asserts the
+    // published half separately, and this is the ping-shaped case of it.
+    expect(CHANNEL_OPS).not.toContain("ping");
+    expect(CHANNEL_OPS).not.toContain("pings");
+  });
+
+  it("declares no ping-only recipient or kind param", () => {
+    // ⚠ **`recipient` WAS THE ONE-FIELD FIX FOR THREE MUTUALLY EXCLUSIVE
+    // SPELLINGS, AND IT IS NOW `to`.** One recipient field for the whole surface
+    // is the same guarantee that shape bought, applied once instead of per op:
+    // a shape that can only carry one recipient cannot be sent two.
+    for (const gone of ["recipient", "ping_kind", "to_desktop", "to_agent"]) {
+      expect(CHANNEL_INPUT_SHAPE, gone).not.toHaveProperty(gone);
+    }
+    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("to");
+  });
+
+  it("🔒 declares no operator, sender or user field — the loop brake as a shape", () => {
+    // ⚠ THE HEADLINE ABSENCE, UNCHANGED BY THE FOLD. There is no argument on
+    // this surface that names WHOSE machine; the server stamps the authenticated
+    // caller, so a peer's agent is unreachable because there is nothing to say
+    // it with. ⚠ Scanned over the whole published shape, not over one op's
+    // params, because that is the level the guarantee holds at.
+    for (const key of Object.keys(CHANNEL_INPUT_SHAPE)) {
+      expect(key, `\`${key}\` names a party this surface may not name`).not.toMatch(
+        /operator|sender|user|desktop|machine/i,
+      );
     }
   });
 
-  /**
-   * ⚠ **`recipient` WAS ON THE LIST ABOVE UNTIL 2026-09-02, AND THE GUARD WAS
-   * RIGHT TO BAN IT THEN** (F-429). The reason it gave — *"a param an MCP client
-   * can see is a param a model will try, and a silently-dropped address is the
-   * invisible-delivery failure the addressing contract exists to prevent"* — was
-   * about a FOURTH spelling landing beside `to`, `to_desktop` and `agent_id`
-   * while all three stayed declared. C5 landed it as a DELETION instead: three
-   * spellings out, one in, in the same change.
-   *
-   * ⚠ **SO THE BAN BECAME THE PROPERTY IT WAS STANDING IN FOR** — exactly one
-   * recipient param on this op, and nothing on the shape that could name another
-   * member's machine. The three names below may never come back.
-   */
-  it("takes EXACTLY ONE recipient param, and the three it replaced are gone", () => {
-    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("recipient");
-    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("to_desktop");
-    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("ping_to");
-    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("ping_agent_id");
-  });
-
-  it("still declares no `to_agent`, which is what this lane could have re-introduced", () => {
-    // ⚠ The banned named-agent param. This op needed "reach one of my own
-    // agents" and took the EXISTING `agent_id` rather than resurrecting the
-    // spelling the rollback removed.
-    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("to_agent");
-    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("agent_id");
-  });
-
-  it("passes ONLY the wire keys — an extra arg cannot smuggle an address", async () => {
-    const client = pingStub();
-    await run(client, {
-      ...SEND,
-      recipient: "desktop",
-      // Everything a caller might try to point this at someone else's machine.
-      operator: "u2",
-      user_id: "u2",
-      sender_agent_id: "k3wpf7c5",
-    });
-    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
-    expect(Object.keys(create.mock.calls[0][0]).sort()).toEqual([
-      "body",
-      "channel",
-      "kind",
-      "toDesktop",
-    ]);
+  it("the shipped description offers neither name", () => {
+    // ⚠ A retired op glossed in a PUSHED string is 400 characters teaching a
+    // call the enum rejects. The redirect is the notice, addressed to the caller
+    // that needs it (`channel-description.ts` states that trade).
+    expect(CHANNEL_DESCRIPTION).not.toContain('"ping"');
+    expect(CHANNEL_DESCRIPTION).not.toContain('"pings"');
   });
 });
 
-describe("EXACTLY ONE RECIPIENT — now a shape rather than a count", () => {
-  /**
-   * ⚠ **THE RUNTIME COUNT IS DELETED, NOT RELAXED.** `recipientOr` counted three
-   * mutually exclusive params and wrote two refusals — one naming all three
-   * spellings, one naming the count it saw. Neither case is expressible now, so
-   * the zero case is `missingParams` like every other required argument and the
-   * two case does not exist.
-   */
-  it("names `recipient` when it is missing, like any other required param", async () => {
-    const client = pingStub();
-    const out = await run(client, SEND);
-    expect(out).toContain("recipient");
-    expect(client.createPing).not.toHaveBeenCalled();
+describe("the fold is stated where a caller will read it", () => {
+  it("the ping redirect explains the DELIVERY record, not just the spelling", () => {
+    // ⚠ **THE ONE THING A RENAME WOULD NOT HAVE TAUGHT.** An agent that used
+    // `ping` was asking "how do I know it landed"; the answer is no longer a
+    // second call to an inbox, it is a field on the result of the send it
+    // already made. A redirect that only said `use send` would leave that agent
+    // looking for the inbox.
+    expect(RETIRED_OPS.ping).toContain("delivery=");
+    expect(RETIRED_OPS.pings).toContain("no second inbox");
   });
 
-  it("cannot be sent two destinations at all", async () => {
-    // The old two-recipient call, as a caller would still write it: the extra
-    // keys are not on the shape, so nothing reaches the wire but `recipient`.
-    const client = pingStub();
-    await run(client, { ...SEND, recipient: "desktop", to: "u2" });
-    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
-    expect(create.mock.calls[0][0]).toMatchObject({ toDesktop: true });
-    expect(create.mock.calls[0][0]).not.toHaveProperty("to");
-  });
-});
-
-describe("one string, the wire's own three keys", () => {
-  it('recipient="desktop"', async () => {
-    const client = pingStub();
-    await run(client, { ...SEND, recipient: "desktop" });
-    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
-    expect(create.mock.calls[0][0]).toMatchObject({ toDesktop: true });
-  });
-
-  it("a member ref — anything that is neither of the other two", async () => {
-    const client = pingStub();
-    await run(client, { ...SEND, recipient: "dana@example.com" });
-    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
-    expect(create.mock.calls[0][0]).toMatchObject({ to: "dana@example.com" });
-  });
-
-  it("the printed `@agent-<id>` handle, STRIPPED rather than refused", async () => {
-    // ⚠ `read_sessions` prints `@agent-<id>`, so that is what a model copies.
-    const client = pingStub();
-    await run(client, { ...SEND, recipient: "@agent-k3wpf7c5" });
-    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
-    expect(create.mock.calls[0][0]).toMatchObject({ agentId: "k3wpf7c5" });
-  });
-
-  it("the bare eight-character instance id, which is the same agent", async () => {
-    const client = pingStub();
-    await run(client, { ...SEND, recipient: "k3wpf7c5" });
-    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
-    expect(create.mock.calls[0][0]).toMatchObject({ agentId: "k3wpf7c5" });
-  });
-
-  /**
-   * ⚠ THE THREE FORMS CANNOT OVERLAP, WHICH IS WHY THERE IS NO PRECEDENCE RULE.
-   * A user id is a 36-character uuid and an email carries an `@` that is never
-   * in first position — neither can match the anchored agent-id shape.
-   */
-  it("a user id is a MEMBER, never an agent instance", async () => {
-    const client = pingStub();
-    await run(client, {
-      ...SEND,
-      recipient: "9f1d0f0a-1111-2222-3333-444455556666",
-    });
-    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
-    expect(create.mock.calls[0][0]).toMatchObject({
-      to: "9f1d0f0a-1111-2222-3333-444455556666",
-    });
-  });
-
-  it("carries the thread through when one is named", async () => {
-    const client = pingStub();
-    await run(client, { ...SEND, recipient: "desktop", thread: "t-1" });
-    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
-    expect(create.mock.calls[0][0]).toMatchObject({ threadId: "t-1" });
-  });
-});
-
-describe("the body cap is refused BEFORE any round trip", () => {
-  it("names both numbers and points at op=\"post\" for the detail", async () => {
-    const client = pingStub();
-    const out = await run(client, {
-      ...SEND,
-      recipient: "desktop",
-      body: "x".repeat(601),
-    });
-    expect(out).toContain("600");
-    expect(out).toContain("601");
-    expect(out).toMatch(/op="post"/);
-    // ⚠ Nothing resolved and nothing sent, so "nothing was sent" is trivially
-    // true rather than confusable with a delivery failure.
-    expect(client.listChannels).not.toHaveBeenCalled();
-    expect(client.createPing).not.toHaveBeenCalled();
-  });
-});
-
-describe("the result teaches what a ping IS NOT", () => {
-  it("says it is in no transcript and that nothing replies", async () => {
-    const out = await run(pingStub(), { ...SEND, recipient: "desktop" });
-    expect(out).toMatch(/not a message/i);
-    expect(out).toMatch(/await/);
-  });
-
-  it("warns that the ping seq is not a message seq", async () => {
-    const out = await run(pingStub(), { ...SEND, recipient: "desktop" });
-    expect(out).toMatch(/not a message seq/i);
-  });
-
-  it("says what happens NEXT, per recipient form", async () => {
-    const desktop = await run(pingStub(), { ...SEND, recipient: "desktop" });
-    expect(desktop).toMatch(/external session/i);
-
-    const agentPing = { ...PING, recipientKind: "agent" as const, recipientAgentId: "k3wpf7c5" };
-    const woke = await run(
-      pingStub({ createPing: vi.fn(async () => agentPing) }),
-      { ...SEND, recipient: "k3wpf7c5" },
+  it("and no ping-shaped stub is ever consulted", async () => {
+    // ⚠ The belt for the tripwire client above: a redirect that made a client
+    // call would be a retired lane still running.
+    const listPings = vi.fn();
+    const out = await callTool(
+      (r, c) => registerChannelTool(r, c, undefined, false, DIRECTORY),
+      stub({ listPings }),
+      "dopl_channel",
+      { op: "pings", limit: 5 },
     );
-    // ⚠ It must not PROMISE a wake — the machine decides, and a dead session is
-    // an honest outcome rather than a failure.
-    expect(woke).toMatch(/if that agent is live/i);
-
-    const memberPing = { ...PING, recipientKind: "member" as const, recipientUserId: "u2" };
-    const filed = await run(
-      pingStub({ createPing: vi.fn(async () => memberPing) }),
-      { ...SEND, recipient: "u2" },
-    );
-    expect(filed).toMatch(/did NOT trigger their machine/);
-  });
-});
-
-describe('op="pings" — the inbox', () => {
-  it("puts the untrusted framing BEFORE any body", async () => {
-    const out = await run(pingStub(), { op: "pings" });
-    const framing = out.indexOf("SECURITY:");
-    const body = out.indexOf("migration written");
-    expect(framing).toBeGreaterThanOrEqual(0);
-    expect(body).toBeGreaterThan(framing);
-  });
-
-  it("renders kind, seq, channel, sender handle and body", async () => {
-    const out = await run(pingStub(), { op: "pings" });
-    expect(out).toContain("[done]");
-    expect(out).toContain("seq 12");
-    expect(out).toContain("#`build`");
-    expect(out).toContain("@agent-k3wpf7c5");
-  });
-
-  /**
-   * ⚠ **THE INBOX HAS NO CURSOR, AND THAT IS C13's FIX** (2026-09-02). A ping seq
-   * was a SECOND cursor space behind the one `since` param that also carries the
-   * message cursor, and crossing them read a plausible WRONG page instead of
-   * erroring. The remedy is one space, not a prefix: `since` is the message seq
-   * and nothing else, and this op hands back the newest page.
-   */
-  it("REFUSES a `since` rather than dropping it, and reads nothing", async () => {
-    // ⚠ **DROPPING IT WAS THE WHOLE DEFECT WEARING A SMALLER HAT** (fixed
-    // 2026-09-02). The arm accepted `since` and threw it away, so a caller
-    // paging its inbox got the NEWEST page back with no sign its cursor had been
-    // ignored — the plausible-wrong-page failure C13 removed the cursor to
-    // prevent, arriving through the door C13 left open. The house rule is that
-    // an unknown argument is refused rather than stripped; a KNOWN argument on
-    // an op that cannot honour it is the same shape.
-    const client = pingStub();
-    const out = await run(client, { op: "pings", since: 4, limit: 5 });
-    expect(out).toMatch(/Refused before sending/);
-    expect(out).toMatch(/no `since`/);
-    // …and it names the ops where the cursor is real, so the caller has a move.
-    expect(out).toMatch(/op="await"/);
-    expect(client.listPings as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
-  });
-
-  it("without one, the limit still reaches the lane untouched", async () => {
-    const client = pingStub();
-    await run(client, { op: "pings", limit: 5 });
-    const list = client.listPings as unknown as ReturnType<typeof vi.fn>;
-    expect(list.mock.calls[0][0]).toEqual({ limit: 5 });
-  });
-
-  it("says the page is the newest one and that a seq is how you dedupe", async () => {
-    const out = await run(pingStub(), { op: "pings" });
-    expect(out).toMatch(/newest page/i);
-    expect(out).not.toMatch(/since=/);
-  });
-
-  it("still says a ping is in no transcript, which is the other half", async () => {
-    const out = await run(pingStub(), { op: "pings" });
-    expect(out).toMatch(/in NO transcript/i);
-  });
-});
-
-describe("required params are named before anything runs", () => {
-  it.each([
-    ["channel", { op: "ping", ping_kind: "done", body: "b", recipient: "desktop" }],
-    ["ping_kind", { op: "ping", channel: "build", body: "b", recipient: "desktop" }],
-    ["body", { op: "ping", channel: "build", ping_kind: "done", recipient: "desktop" }],
-  ])("missing %s", async (name, args) => {
-    const client = pingStub();
-    const out = await run(client, args);
-    expect(out).toContain(name);
-    expect(client.createPing).not.toHaveBeenCalled();
+    expect(listPings).not.toHaveBeenCalled();
+    expect(out).toContain("retired");
   });
 });

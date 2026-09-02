@@ -1,9 +1,9 @@
 /**
- * THE DEADLINE CHAIN around `dopl_channel(op="await")` — the numbers in
+ * THE DEADLINE CHAIN around `dopl_channel(op="read", wait_ms=…)` — the numbers in
  * `channel-await-budget.ts`, pinned against the layers they must fit under:
  *   - the DEFAULT hold clears the /api/mcp function ceiling with margin (Q9);
  *   - the mirrored route ceiling still matches the route's own maxDuration;
- *   - the env lever is a real ceiling, so `timeout_ms` cannot route around it,
+ *   - the env lever is a real ceiling, so `wait_ms` cannot route around it,
  *     while an explicit ask can still reach the cap;
  *   - the CAP clears the route ceiling by the same margin the default does
  *     (FIX M3 — it did not, and only the default was ever asserted);
@@ -25,9 +25,15 @@ import {
 // ⚠ The tool's file set is DISCOVERED (shared with parity.test.ts), never typed
 // out here.
 import { sourceOf, toolGroupFiles } from "./tool-group-files.js";
-// ⚠ THE CAP'S AGENT-FACING HOME SINCE T82 (2026-09-02) — the description became
-// a POINTER, so the prose that advertises the cap is the doctrine's.
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+// ⚠ THE CAP'S AGENT-FACING HOME SINCE B8 (2026-09-02) — it is the PUBLISHED
+// SCHEMA's `maximum` keyword on `wait_ms`. T82 moved the prose out of the
+// description into the doctrine; B8 took it out of the doctrine too, because
+// `channel-schema.ts`'s header now forbids any `.describe()` or rule text from
+// hand-typing a bound the schema itself publishes. So the assertion follows the
+// number to the surface that still carries it, and is still computed off the
+// constant.
+import { z } from "zod";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 
 
 // ── The env-tunable hold (incident lever) ───────────────────────────────
@@ -69,7 +75,7 @@ describe("await hold margin", () => {
 
   it("FIX M3: the margin covers the CAP too, not only the default", () => {
     // ⚠ Assert against the CAP, not just the default: the cap is reachable via
-    // an explicit `timeout_ms`, and the reachable maximum is what has to fit.
+    // an explicit `wait_ms`, and the reachable maximum is what has to fit.
     expect(AWAIT_HOLD_CAP_MS).toBe(230_000);
     expect(AWAIT_HOLD_CAP_MS).toBeLessThanOrEqual(
       MCP_ROUTE_MAX_DURATION_MS - AWAIT_HOLD_MARGIN_MS,
@@ -80,7 +86,7 @@ describe("await hold margin", () => {
     expect(AWAIT_HOLD_DEFAULT_MS).toBeLessThanOrEqual(AWAIT_HOLD_CAP_MS);
   });
 
-  it("FIX M3: the tool schema and the doctrine advertise the same cap", () => {
+  it("FIX M3: the tool schema PUBLISHES the cap, and no file retypes it", () => {
     // ⚠ A cap the schema accepts but the deadline chain does not cover is the
     // bug this pins shut, so no file may retype the literal.
     //
@@ -110,15 +116,20 @@ describe("await hold margin", () => {
     // what actually publishes the number, the literal ban below it is
     // unchanged, and the doctrine assertion at the end is computed off the
     // constant — all three still fail the moment the cap is retuned.
-    // ⚠ THE PROSE HALF MOVED, SO THE ASSERTION FOLLOWED IT (T82, 2026-09-02).
-    // `CHANNEL_DESCRIPTION` used to spell the cap as `<=${AWAIT_HOLD_CAP_MS}`
-    // and is now a POINTER at `dopl://doctrine/channels`; the doctrine states
-    // the cap instead. Pinned on the RENDERED text and computed off the
-    // constant, which is strictly stronger than the old source regex: a
-    // hardcoded number in the doctrine fails here the moment the cap is retuned.
-    expect(CHANNEL_DOCTRINE).toContain(
-      `cap ${Math.round(AWAIT_HOLD_CAP_MS / 1000)}s`,
-    );
+    // ⚠ THE ADVERTISED HALF MOVED AGAIN, SO THE ASSERTION FOLLOWED IT (B8,
+    // 2026-09-02). T82 moved the cap's prose from `CHANNEL_DESCRIPTION` into the
+    // doctrine, where this pinned `cap ${seconds}s`. B8 deleted that sentence
+    // rather than re-spelling it: `channel-schema.ts` now forbids prose from
+    // hand-typing a bound the schema publishes, and `wait_ms` (which absorbed
+    // `timeout_ms`) carries `.max(AWAIT_HOLD_CAP_MS)`, so the number reaches
+    // every client as the JSON Schema `maximum` keyword. Pinned on the PUBLISHED
+    // schema — the exact conversion `tools/list` renders — and still computed
+    // off the constant, so a hand-typed number fails the moment the cap is
+    // retuned.
+    const published = z.toJSONSchema(z.object(CHANNEL_INPUT_SHAPE), {
+      io: "input",
+    }) as { properties: Record<string, { maximum?: number }> };
+    expect(published.properties.wait_ms.maximum).toBe(AWAIT_HOLD_CAP_MS);
   });
 
   it("pins the mirrored route ceiling against the route's own maxDuration", () => {
@@ -139,7 +150,7 @@ describe("await hold margin", () => {
     expect(resolveAwaitHoldCeilingMs(undefined)).toBe(AWAIT_HOLD_CAP_MS);
     expect(resolveAwaitHoldCeilingMs("  ")).toBe(AWAIT_HOLD_CAP_MS);
     // ⚠ ...but the incident lever IS a real ceiling, or an explicit
-    // `timeout_ms` routes straight around the thing shortening holds.
+    // `wait_ms` routes straight around the thing shortening holds.
     expect(resolveAwaitHoldCeilingMs("55000")).toBe(55_000);
     expect(resolveAwaitHoldCeilingMs("600000")).toBe(AWAIT_HOLD_CAP_MS);
   });

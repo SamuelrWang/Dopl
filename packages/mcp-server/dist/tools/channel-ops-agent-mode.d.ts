@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="set_agent_mode" — **ASK THAT A RUNNING AGENT BE GIVEN MORE
+ * `dopl_channel` op="manage" action="posture" — **ASK THAT A RUNNING AGENT BE GIVEN MORE
  * (OR LESS) ROOM** (2026-09-01, the agent-efficiency wave).
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan

@@ -4,27 +4,33 @@
  *
  * A CHANNEL (or DM) holds many THREADS. A THREAD is one shared exchange
  * between two members; a SESSION is one member's agent run working it. Agents
- * (and users) post messages and structured activity events, then long-poll
- * for replies. Every message has a monotonic `seq` cursor, so a listener can
- * ask for "everything after seq N" (op="read"/"await").
+ * (and users) send messages and structured activity events, then read for
+ * replies. Every message has a monotonic `seq` cursor, so a listener can ask
+ * for "everything after seq N" (`op="read"`, `since=`).
+ *
+ * ⚠ **FIVE OPS SINCE 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9)** —
+ * `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three. The
+ * other twenty-two names still PARSE for one release and answer ONE line naming
+ * their replacement (`channel-retired-ops.ts`); they are absent from the
+ * published enum, so nothing a model can SEE names a retired op.
  *
  * Thin registrar: owns the single tool schema + op routing, delegating to
- *   - `channel-shared.ts`     — ref resolution + the ONE neutralizer every
- *                               peer-authored string must pass through
- *   - `channel-ops-read.ts`   — list / read (a thread-scoped read carries the
- *                               thread's own metadata header) / list_threads /
- *                               members / read_sessions
- *   - `channel-ops-await.ts`  — await (the only looping op)
- *   - `channel-ops-open.ts`   — open / invite
- *   - `channel-ops-write.ts`  — post (+ `channel-post-linkage.ts` and
- *                               `channel-facts.ts` for its result line)
- *   - `channel-ops-threads.ts`— create_thread / set_thread_mode
- *   - `channel-render.ts`     — read renderers + untrusted-content headers,
- *                               shared with the write side
+ *   - `channel-shared.ts`        — ref resolution + the ONE neutralizer every
+ *                                  peer-authored string must pass through
+ *   - `channel-ops-write.ts`     — the send lane (+ `channel-post-linkage.ts`
+ *                                  and `channel-facts.ts` for its result line)
+ *   - `channel-ops-threads.ts`   — thread="new"
+ *   - `channel-ops-escalate.ts`  — kind="decision"
+ *   - `channel-ops-read.ts` / `channel-ops-account.ts` / `channel-ops-await*.ts`
+ *                                — the page, the account-wide page, the hold
+ *   - `channel-ops-status.ts`    — sessions + the direction mailbox
+ *   - `channel-dispatch-agents.ts` — op="manage"
+ *   - `channel-dispatch-rooms.ts`  — op="rooms"
+ *   - `channel-render.ts`        — read renderers + untrusted-content headers
  *
- * ⚠ A channel reaches PEOPLE. There is no agent-handle addressing, and the only
- * distinction a post makes is whether it carries `to`: with one it is a REQUEST
- * that reaches that member's machine, without one it is chat and reaches nobody.
+ * ⚠ A channel reaches PEOPLE. `to` names ONE party — a member, or one of the
+ * caller's OWN agents — and the server resolves it; with one the message is a
+ * REQUEST, without one it is chat and reaches nobody.
  *
  * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
  * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
@@ -36,63 +42,56 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerChannelTool = registerChannelTool;
 const respond_1 = require("./respond");
-// The tool's two declared halves: PROSE (what a channel is, THE LAW, what each
-// op does) and published input SHAPE. This file is mechanism only.
+// The tool's two declared halves: PROSE (what a channel is, which ops exist)
+// and published input SHAPE. This file is mechanism only.
 const channel_description_1 = require("./channel-description");
-// THE STANDING RULES, stated ONCE. `op="help"` and the MCP resource
-// `dopl://doctrine/channels` (`resources.ts`) return this same constant; the
-// description summarises and points, and no result repeats it.
-// ⚠ THE SIX AGENT-LIFECYCLE OPS, in a sibling — see that module's header for
-// why they are one lane and why its parameter list is two arguments wide.
-const channel_dispatch_agents_1 = require("./channel-dispatch-agents");
-const channel_doctrine_1 = require("./channel-doctrine");
 const channel_schema_1 = require("./channel-schema");
+// THE ONE-LINE MIGRATION WINDOW — every retired op name, and the line it
+// answers with. Deleted whole by slice B16.
+const channel_retired_ops_1 = require("./channel-retired-ops");
+// ⚠ THE TWO DISPATCHERS, in siblings — see each module's header for why its
+// group is one lane and why its parameter list is as narrow as it is.
+const channel_dispatch_agents_1 = require("./channel-dispatch-agents");
+const channel_dispatch_rooms_1 = require("./channel-dispatch-rooms");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_await_1 = require("./channel-ops-await");
-// ⚠ WORKSPACE-WIDE await is a SIBLING op, not a branch inside `opAwait`: the
-// per-channel result vocabulary splices `ref` into every sentence, and threading
-// an absent ref through it would produce guidance with a hole in it.
+// ⚠ WORKSPACE-WIDE hold is a SIBLING handler, not a branch inside `opAwait`:
+// the per-channel result vocabulary splices `ref` into every sentence, and
+// threading an absent ref through it would produce guidance with a hole in it.
 const channel_ops_await_workspace_1 = require("./channel-ops-await-workspace");
-const channel_ops_open_1 = require("./channel-ops-open");
-// ⚠ G14's cap travels WITH the op it bounds — the seam enforces it, the
-// post lane owns the number and the sentence.
+// ⚠ G14's cap travels WITH the lane it bounds — the seam enforces it, the
+// send lane owns the number and the sentence.
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
-// AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER three kinds, over
-// the same lane and own-operator only. ⚠ THE POSTURE VERB IS A SEPARATE MODULE
-// (500-line cap): shared plumbing, opposite consent story — its header has why.
-const channel_ops_update_1 = require("./channel-ops-update");
-// ⚠ A structured POST, not a second delivery path — it delegates to `opPost`.
+// ⚠ A structured SEND, not a second delivery path — it delegates to `opPost`.
 const channel_ops_escalate_1 = require("./channel-ops-escalate");
-// THE PRIVATE DIRECT LANE (2026-08-31) — a mailbox the operator's OWN machine
-// claims, never a message and never another member's machine.
-// THE ACCOUNT-WIDE READS (2026-09-01) — `read` and `read_sessions` with no
-// `channel`. ⚠ A SIBLING MODULE, not a branch inside the per-channel handlers:
-// their whole result vocabulary splices one `ref`, and their scope is one room.
+// THE ACCOUNT-WIDE READ (2026-09-01, T22) — `read` with no `channel`. ⚠ A
+// SIBLING MODULE, not a branch inside the per-channel handler: its whole result
+// vocabulary splices one `ref`, and its scope is one room.
 const channel_ops_account_1 = require("./channel-ops-account");
-const channel_ops_ping_1 = require("./channel-ops-ping");
+const channel_ops_status_1 = require("./channel-ops-status");
 const identity_1 = require("./identity");
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
  * at boot:
  *   - `userId` renders "· to you" instead of a uuid the agent cannot match
- *     against itself, and filters the caller's own posts out of its `await`.
+ *     against itself, and filters the caller's own messages out of its hold.
  *   - `runtime` decides what the wake teaching may CLAIM (from
  *     `X-Dopl-Runtime`). ⚠ An OBSERVATION that gates nothing — without it the
- *     tool promises every caller that a pending `await` outlives the turn,
- *     which is measurably false for an external session.
+ *     tool promises every caller that a pending hold outlives the turn, which
+ *     is measurably false for an external session.
  *
- * ⚠ Resolved at boot, never per call: `await` runs a poll loop, so an identity
+ * ⚠ Resolved at boot, never per call: a hold runs a poll loop, so an identity
  * lookup per read is a round-trip on the hottest path. Defaults to
  * {@link UNKNOWN_CALLER} — ids render as ids, no line claims to know "you", no
  * line claims a wake.
  *
  * `isAdmin` — workspace-admin flag from the boot status ping. ⚠ Used ONLY by
- * `op="members"` to gate member EMAIL, and defaults false (fail-closed): a test
- * registrar or a failed ping never leaks email.
+ * `op="rooms" action="members"` to gate member EMAIL, and defaults false
+ * (fail-closed): a test registrar or a failed ping never leaks email.
  */
 function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLER, isAdmin = false, 
-// 🔒 THE CONTAINER LOCK, for the two ACCOUNT-WIDE reads alone. Their routes are
+// 🔒 THE CONTAINER LOCK, for the ACCOUNT-WIDE reads alone. Their routes are
 // `withUserAuth` and answer for the whole account, so the narrowing cannot live
 // there; `tools/account-scope.ts` applies it, through the one reader of the lock
 // (`home-scopes.ts › narrowToLock`).
@@ -106,61 +105,93 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
 directory) {
     const selfUserId = caller.userId;
     const runtime = caller.runtime;
-    // ⚠ WHICH SESSION, for the await self-echo filter ONLY (F-405). Never a gate:
+    // ⚠ WHICH SESSION, for the hold's self-echo filter ONLY (F-405). Never a gate:
     // a session id is an attribution hint any token holder can send
     // (`shared/auth/session-header.ts`), so it may decide what to SHOW and nothing
     // else. Null for every caller that sent no stamp.
     const selfSessionId = caller.sessionId;
     register("dopl_channel", channel_description_1.CHANNEL_DESCRIPTION, channel_schema_1.CHANNEL_INPUT_SHAPE, async (args) => {
         switch (args.op) {
-            // ⚠ THE SECOND DOOR TO THE DOCTRINE, and it reaches nothing. The same
-            // text is the MCP resource `dopl://doctrine/channels`; this op exists
-            // for clients that never read resources, so the rules can never be
-            // unreachable. It takes no arguments and makes no request.
-            case "help":
-                // ⚠ `section` NARROWS, it never changes what is true: an unknown name
-                // cannot reach here (the schema's enum is built from the same table),
-                // so there is no not-found arm to write and none to get wrong.
-                return (0, respond_1.ok)(args.section === undefined
-                    ? channel_doctrine_1.CHANNEL_DOCTRINE
-                    : (0, channel_doctrine_1.doctrineSection)(args.section));
-            case "list":
-                return (0, channel_ops_read_1.opList)(client);
-            // ⚠ WHICH ROOM IS READ OFF THE SHAPE, NOT OFF A FLAG (C12,
-            // 2026-09-02). `direct: true` was a third thing to get right beside the
-            // two arguments that already said everything: a 1:1 has a `member` and
-            // no `name`, a named channel has a `name` and no `member`, and the flag
-            // could contradict either. Both together is the one ambiguous call, and
-            // it is REFUSED rather than resolved by precedence — a caller that meant
-            // one of them cannot tell which it got.
-            case "open": {
-                if (args.member !== undefined && args.name !== undefined) {
-                    return (0, respond_1.err)('op="open" takes `name` (a named channel) or `member` (a direct 1:1), never both — nothing was opened. Drop `member` to open a channel, or drop `name` to open the DM.');
+            // ── THE ONE WRITE ────────────────────────────────────────────────
+            //
+            // ⚠ THREE LANES, ONE OP, AND THE `kind` IS FIXED AT THIS SEAM rather
+            // than left to the caller's spelling. `milestone` stores
+            // `task_progress`; `decision` MUST stay `kind='message'` or
+            // `dopl-desktop-app/main/targeting.js › classify` drops the card and the
+            // human it asks is never notified. Both delegate to `opPost` rather than
+            // growing a second delivery path.
+            case "send": {
+                const miss = (0, respond_1.missingParams)("send", args, ["channel", "body"]);
+                if (miss)
+                    return miss;
+                const channel = args.channel;
+                const body = args.body;
+                // ⚠ `thread="new"` OPENS THE EXCHANGE, and it is checked FIRST because
+                // it decides which ROUTE the send goes to. `summary` is the title —
+                // one field, one meaning, and the create route's own `.min(1)` is what
+                // refuses a whitespace-only one after trimming.
+                if (args.thread === "new") {
+                    const missNew = (0, respond_1.missingParams)('send thread="new"', args, [
+                        "to",
+                        "summary",
+                    ]);
+                    if (missNew)
+                        return missNew;
+                    return (0, channel_ops_threads_1.opCreateThread)(client, channel, args.summary, body, args.to, undefined, args.client_msg_id, runtime);
                 }
-                if (args.member !== undefined) {
-                    return (0, channel_ops_open_1.opOpen)(client, { direct: true, member: args.member });
+                // ⚠ `thread` is REQUIRED here where a plain send leaves it optional —
+                // an untagged milestone groups into nothing, the one shape of this
+                // call that is always a mistake. ⚠ `to` is NOT routed through: a
+                // milestone marks the thread and addresses nobody.
+                if (args.kind === "milestone") {
+                    const missM = (0, respond_1.missingParams)('send kind="milestone"', args, [
+                        "thread",
+                    ]);
+                    if (missM)
+                        return missM;
+                    const oversize = (0, channel_ops_write_1.milestoneRefusal)(body);
+                    if (oversize)
+                        return oversize;
+                    return (0, channel_ops_write_1.opPost)(client, channel, body, {
+                        kind: "task_progress",
+                        thread: args.thread,
+                        summary: args.summary,
+                        runtime,
+                        // ⚠ ITS OWN VERB. A milestone result opening `posted` would report
+                        // the wrong act on the one lane whose whole point is that it is
+                        // NOT a delivery — see `PostOptions.resultHead`.
+                        resultHead: "milestone",
+                    });
                 }
-                const miss = (0, respond_1.missingParams)("open", args, ["name"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_open_1.opOpen)(client, {
-                    name: args.name,
-                    topic: args.topic,
-                    visibility: args.visibility,
-                });
-            }
-            case "invite": {
-                const miss = (0, respond_1.missingParams)("invite", args, ["channel", "member"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_open_1.opInvite)(client, args.channel, args.member);
-            }
-            case "post": {
-                const miss = (0, respond_1.missingParams)("post", args, ["channel", "body"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_write_1.opPost)(client, args.channel, args.body, {
-                    metadata: args.metadata,
+                // ⚠ `summary` IS THE ISSUE AND `body` IS THE CONTEXT (B8). The card
+                // used to take four dedicated params; two of them were the two fields
+                // every send already has, under other names. ⚠ `to` is deliberately
+                // NOT routed through: addressing a member starts THEIR agent
+                // (INVARIANTS §5), and a decision exists precisely because a PERSON
+                // has to decide — the @-tag in the body is the inbox mechanism and it
+                // starts nobody.
+                if (args.kind === "decision") {
+                    const missD = (0, respond_1.missingParams)('send kind="decision"', args, [
+                        "summary",
+                        "options",
+                    ]);
+                    if (missD)
+                        return missD;
+                    const oversize = (0, channel_ops_write_1.decisionRefusal)(body);
+                    if (oversize)
+                        return oversize;
+                    return (0, channel_ops_escalate_1.opEscalate)(client, channel, {
+                        issue: args.summary,
+                        context: body,
+                        options: args.options,
+                        recommendation: args.recommendation ?? null,
+                    }, {
+                        thread: args.thread,
+                        clientMsgId: args.client_msg_id,
+                        runtime,
+                    });
+                }
+                return (0, channel_ops_write_1.opPost)(client, channel, body, {
                     clientMsgId: args.client_msg_id,
                     to: args.to,
                     summary: args.summary,
@@ -168,44 +199,34 @@ directory) {
                     runtime,
                 });
             }
-            // ⚠ The `kind` is fixed HERE, at the routing seam, so the agent never
-            // picks between enum values one apart. `thread` is REQUIRED where
-            // `post` leaves it optional — an untagged milestone groups into
-            // nothing, the one shape of this call that is always a mistake.
-            // Delegates to `opPost` rather than growing a second delivery path.
-            // ⚠ `to` is NOT routed through: a milestone marks the thread and
-            // addresses nobody.
-            case "milestone": {
-                const miss = (0, respond_1.missingParams)("milestone", args, [
-                    "channel",
-                    "body",
-                    "thread",
-                ]);
-                if (miss)
-                    return miss;
-                const oversize = (0, channel_ops_write_1.milestoneRefusal)(args.body);
-                if (oversize)
-                    return oversize;
-                return (0, channel_ops_write_1.opPost)(client, args.channel, args.body, {
-                    kind: "task_progress",
-                    thread: args.thread,
-                    summary: args.summary,
-                    runtime,
-                    // ⚠ ITS OWN VERB. A milestone result opening `posted` would report
-                    // the wrong act on the one lane whose whole point is that it is NOT
-                    // a delivery — see `PostOptions.resultHead`.
-                    resultHead: "milestone",
-                });
-            }
-            // ⚠ `channel` IS OPTIONAL, and omitting it here is a DIFFERENT scope
-            // from omitting it on `await` — account-wide vs workspace-wide (T21).
-            // The argument is stated ONCE, in `channel-ops-account.ts`'s header; a
-            // third copy beside the two that already carry it is what drifts.
+            // ── THE ONE READ, AND THE HOLD THAT USED TO BE AN OP ──────────────
+            //
+            // ⚠ THREE SCOPES, AND THEY ARE NOT THE SAME — do not "unify" them: a
+            // read WITH a channel is ONE ROOM, a channel-less HOLD is ONE WORKSPACE,
+            // and a channel-less PAGE is THE WHOLE ACCOUNT. The asymmetry is
+            // deliberate: a hold re-proves its membership set per tick and that
+            // proof is workspace-scoped, while a page proves once. Both scopes are
+            // stated on the `channel` param.
+            //
+            // ⚠ `wait_ms` IS WHAT MAKES IT A HOLD, and `since` is required with it:
+            // `seq` is workspace-global so one cursor is legal across every channel,
+            // but a hold with no cursor is a firehose either way.
             case "read": {
-                if (args.channel === undefined || args.channel.trim() === "") {
-                    const miss = (0, respond_1.missingParams)("read", args, ["since"]);
-                    if (miss)
-                        return miss;
+                const scoped = args.channel !== undefined && args.channel.trim() !== "";
+                if (args.wait_ms !== undefined) {
+                    const missHold = (0, respond_1.missingParams)("read (holding)", args, ["since"]);
+                    if (missHold)
+                        return missHold;
+                    return scoped
+                        ? (0, channel_ops_await_1.opAwait)(client, args.channel, args.since, args.wait_ms, selfUserId, runtime, selfSessionId)
+                        : (0, channel_ops_await_workspace_1.opAwaitWorkspace)(client, args.since, args.wait_ms, selfUserId, runtime, selfSessionId);
+                }
+                if (!scoped) {
+                    const missAcct = (0, respond_1.missingParams)("read (every channel)", args, [
+                        "since",
+                    ]);
+                    if (missAcct)
+                        return missAcct;
                     return (0, channel_ops_account_1.opReadAccount)(client, directory, args.since, args.limit, selfUserId);
                 }
                 return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId, 
@@ -213,196 +234,56 @@ directory) {
                 // ids are real `metadata.taskId` values and must stay filterable.
                 args.thread, args.response_format);
             }
-            // ⚠ `channel` IS OPTIONAL HERE AND ONLY HERE AMONG THE HOLDS. Omitting
-            // it holds across EVERY channel the caller is a MEMBER of — a different
-            // service, a different fence (a re-proved membership set rather than one
-            // resolved channel id) and a different re-arm stop rule, which is why it
-            // is a different handler rather than a flag. `since` stays required on
-            // BOTH: `seq` is workspace-global, so one cursor is legal across every
-            // channel, but a hold with no cursor is a firehose either way.
-            case "await": {
-                const miss = (0, respond_1.missingParams)("await", args, ["since"]);
-                if (miss)
-                    return miss;
-                if (args.channel === undefined || args.channel.trim() === "") {
-                    return (0, channel_ops_await_workspace_1.opAwaitWorkspace)(client, args.since, args.timeout_ms, selfUserId, runtime, selfSessionId);
-                }
-                return (0, channel_ops_await_1.opAwait)(client, args.channel, args.since, args.timeout_ms, selfUserId, runtime, selfSessionId);
-            }
-            case "members": {
-                const miss = (0, respond_1.missingParams)("members", args, ["channel"]);
-                if (miss)
-                    return miss;
-                // ⚠ Admin flag gates member EMAIL in the roster render.
-                return (0, channel_ops_read_1.opMembers)(client, args.channel, selfUserId, isAdmin);
-            }
-            case "list_threads": {
-                const miss = (0, respond_1.missingParams)("list_threads", args, ["channel"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_read_1.opListThreads)(client, args.channel, selfUserId);
-            }
-            // ⚠ `channel` is an OPTIONAL filter here, hence no missingParams check.
-            // Own-scoped in the service; the transport credential IS the caller, so
-            // no identity is passed.
-            // ⚠ **OMITTING IT NOW MEANS EVERYWHERE, NOT "THIS WORKSPACE" (T22,
-            // 2026-09-01).** That is a WIDENING of a read whose fence was already
-            // `user_id`, server-side, and it is what makes the op usable from a home
-            // channel at all — a container is never the active workspace unless it
-            // was explicitly addressed, so the old scope hid exactly the sessions an
-            // operator working in /home most wanted to see. Every row still names
-            // its room and its `workspace=` handle.
-            case "read_sessions":
-                if (args.channel === undefined || args.channel.trim() === "") {
-                    return (0, channel_ops_account_1.opReadSessionsAccount)(client, directory);
-                }
-                return (0, channel_ops_read_1.opReadSessions)(client, args.channel, args.response_format);
-            case "create_thread": {
-                const miss = (0, respond_1.missingParams)("create_thread", args, [
-                    "channel",
-                    "title",
-                    "body",
-                    "to",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_threads_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id, runtime, 
-                // SPAWN-WITH-HANDOFF — declares the driving session opens on the
-                // operator's own machine.
-                args.handoff);
-            }
-            // ⚠ TWO CASES ENDED HERE with thread closing (wiring plan Phase 4,
-            // 2026-08-18): "propose_close" (the agent's terminal act, confirmed by
-            // its operator) and "close_thread" (answered with a teaching refusal
-            // rather than dropped from the enum, so an older agent got a sentence
-            // instead of a zod error). Both left the enum in `channel-schema.ts`,
-            // so a stale caller now gets an invalid-enum -32602 — the accepted cost
-            // of the words not surviving anywhere in the shipped surface.
-            case "set_thread_mode": {
-                const miss = (0, respond_1.missingParams)("set_thread_mode", args, [
-                    "channel",
-                    "thread",
-                    "mode",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_threads_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
-            }
-            // ⚠ DIRECT ONE OF THE OPERATOR'S OWN RUNNING AGENTS, PRIVATELY. The op
-            // NEVER names an operator — the server stamps the authenticated caller,
-            // because the only machine an agent may direct is its own operator's and
-            // there is no argument here that could say otherwise. `agent` is REQUIRED
-            // and has no fallback: this lane reaches a PRIVATE TURN, and resolving to
-            // "the oldest agent on the thread" would steer one the caller did not
-            // address with nothing reporting the swap.
-            // ── THE SIX AGENT-LIFECYCLE OPS, DISPATCHED IN A SIBLING ───────────
-            //
-            // ⚠ GROUPED AND DELEGATED ON 2026-09-01, when integrating four tiers
-            // pushed this file to 551 over the §1 cap of 500. `set_agent_mode`
-            // (T24) arrived from the orchestrator-surface tier and `ping`/`pings`
-            // (T70) from another, and the six agent verbs had become most of this
-            // switch. ⚠ THE SEAM IS REAL AND NOT MERELY ARITHMETIC: these six are
-            // the ops that ask the OPERATOR'S OWN MACHINE to do something, they
-            // all file a directive and hold, and they share a refusal vocabulary
-            // no other op on this tool reads.
-            //
-            // ⚠ ONE GROUPED CASE RATHER THAN SIX ONE-LINERS, DELIBERATELY: this
-            // switch has no `default`, so its EXHAUSTIVENESS over the op union is
-            // what proves the handler always returns. Six separate delegating
-            // cases would keep that property too, but a group states the claim the
-            // split is making — that these six are one lane — where six lines
-            // would leave it to be re-derived.
-            //
-            // ⚠ IT TAKES `args` AND `client` AND NOTHING ELSE. None of the six
-            // reads the caller identity, the runtime stamp, the admin flag or the
-            // container lock — an agent verb reaches the caller's OWN operator by
-            // construction, because the server stamps the authenticated caller and
-            // no argument on this lane can name anybody else. Widening that
-            // parameter list is how that stops being true.
-            case "direct_agent":
-            case "read_directions":
-            case "launch_agent":
-            case "end_agent":
-            case "rename_agent":
-            case "set_agent_mode":
-                return (0, channel_dispatch_agents_1.dispatchAgentOp)(args.op, args, client);
-            // ⚠ THE OUT-OF-BAND SIGNAL, AND ALL FOUR OF ITS REQUIREMENTS ARE NOW
-            // UNCONDITIONAL — which is the whole of what folding three recipient
-            // params into one bought (C5/F-429). The choose-exactly-one that
-            // `missingParams` could not express is now the shape.
-            case "ping": {
-                const miss = (0, respond_1.missingParams)("ping", args, [
-                    "channel",
-                    "ping_kind",
-                    "body",
-                    "recipient",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_ping_1.opPing)(client, args.channel, args.ping_kind, args.body, args.recipient, args.thread);
-            }
-            // ⚠ NO REQUIRED PARAMS, hence no missingParams check, and NO recipient
-            // argument either: the inbox is the caller's own, fenced at the server.
-            // The transport credential IS the caller, so no identity is passed here
-            // and none could be.
-            // ⚠ **AND NO `since` (C13, 2026-09-02).** A ping seq is a second cursor
-            // space, and one `since` over two of them reads a plausible WRONG page
-            // instead of erroring. The inbox is a bounded list of signals rather
-            // than a transcript, so the newest page answers it; that leaves exactly
-            // one cursor space on this tool and nothing to cross into.
-            case "pings": {
-                // ⚠ **REFUSED, NOT DROPPED (2026-09-02).** `since` is a real param on
-                // this tool and the comment above says why it is not one HERE — but
-                // the arm accepted it and threw it away, so a caller paging its inbox
-                // got the newest page back with no sign its cursor had been ignored,
-                // which is the silent-wrong-page failure the exclusion exists to
-                // prevent. The house rule is that an unknown argument is REFUSED
-                // rather than stripped (`registrar.ts › strictInput`); a known
-                // argument on an op that cannot honour it is the same shape.
-                if (args.since !== undefined) {
-                    return (0, respond_1.err)(`Refused before sending: op="pings" takes no \`since\` — the ping inbox is a bounded list of signals, not a transcript, and its seqs are a SECOND cursor space that one \`since\` cannot address without reading a plausible WRONG page. Re-issue with \`limit\` alone for the newest page; use \`since\` on op="read" / op="await", where the channel's own seqs live.`);
-                }
-                return (0, channel_ops_ping_1.opReadPings)(client, { limit: args.limit });
-            }
-            // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by
-            // the same route and are deliberately NOT routed here (Samuel's ruling
-            // Q12 (b); F-346 holds the rename hole open). ⚠ `info_card` OMITTED is
-            // the READ — the card is replaced whole, so a blind write clobbers.
-            case "update": {
-                const miss = (0, respond_1.missingParams)("update", args, ["channel"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_update_1.opUpdate)(client, args.channel, args.info_card);
-            }
-            // ⚠ A STRUCTURED POST, AND THE `kind` IS FIXED AT THIS SEAM — the same
-            // move `op="milestone"` makes, for a sharper reason: an escalation MUST
-            // stay `kind='message'` or `dopl-desktop-app/main/targeting.js ›
-            // classify` drops it and the human it is asking is never notified.
-            // ⚠ `to` is deliberately NOT routed through. Addressing a member starts
-            // THEIR agent (INVARIANTS §5), and an escalation exists precisely
-            // because a PERSON has to decide — the @-tag in the body is the inbox
-            // mechanism and it starts nobody.
-            case "escalate": {
-                const miss = (0, respond_1.missingParams)("escalate", args, [
-                    "channel",
-                    "issue",
-                    "options",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_escalate_1.opEscalate)(client, args.channel, {
-                    issue: args.issue,
-                    // ⚠ `?? ""` rather than leaving it undefined: the payload's
-                    // `context` is a required string server-side (empty is legal,
-                    // absent is not), and the render branches on emptiness.
-                    context: args.context ?? "",
-                    options: args.options,
-                    recommendation: args.recommendation ?? null,
-                }, {
-                    thread: args.thread,
-                    clientMsgId: args.client_msg_id,
-                    runtime,
+            // ⚠ `channel` is an OPTIONAL filter; own-scoped in the service, and the
+            // transport credential IS the caller, so no identity is passed.
+            case "status":
+                return (0, channel_ops_status_1.opStatus)(client, directory, {
+                    channel: args.channel,
+                    agent: args.to,
+                    format: args.response_format,
                 });
+            // ── THE TWO DISPATCHERS ───────────────────────────────────────────
+            //
+            // ⚠ `action` IS REQUIRED AND THE PAIRING IS CHECKED, because it is ONE
+            // flat enum over two disjoint vocabularies: the schema cannot express
+            // "this word belongs to that op", so `manage(action="open")` has to be
+            // refused HERE rather than dispatched into a switch that has no arm for
+            // it. The refusal names the op that does take the word, which is the one
+            // thing the caller cannot read off the schema.
+            case "manage": {
+                const missA = (0, respond_1.missingParams)("manage", args, ["action"]);
+                if (missA)
+                    return missA;
+                const action = args.action;
+                if (!(0, channel_dispatch_agents_1.isManageAction)(action)) {
+                    return (0, respond_1.err)(`op="manage" has no action "${action}" — that word belongs to op="rooms". Nothing was done. op="manage" takes "launch", "end", "rename", "posture" or "direct".`);
+                }
+                return (0, channel_dispatch_agents_1.dispatchManageAction)(action, args, client);
+            }
+            case "rooms": {
+                const missA = (0, respond_1.missingParams)("rooms", args, ["action"]);
+                if (missA)
+                    return missA;
+                const action = args.action;
+                if (!(0, channel_dispatch_rooms_1.isRoomsAction)(action)) {
+                    return (0, respond_1.err)(`op="rooms" has no action "${action}" — that word belongs to op="manage". Nothing was done. op="rooms" takes "list", "open", "invite", "members", "threads", "thread_mode", "update" or "help".`);
+                }
+                return (0, channel_dispatch_rooms_1.dispatchRoomsAction)(action, args, client, selfUserId, isAdmin);
+            }
+            // ── THE ONE-RELEASE MIGRATION WINDOW ──────────────────────────────
+            //
+            // ⚠ **THE `default` IS EXHAUSTIVE, NOT A FALLBACK.** `args.op` is the
+            // union of the five published names and the twenty-two retired ones, and
+            // the five are handled above — so TypeScript narrows this arm to exactly
+            // `RetiredOp`. The `isRetiredOp` guard is what proves that to the
+            // compiler after the narrowing, and it is also the belt for a bypassed
+            // build: an op that is neither published nor retired cannot be
+            // constructed, and if one ever is, it must not fall through as a success.
+            default: {
+                const op = args.op;
+                if ((0, channel_retired_ops_1.isRetiredOp)(op))
+                    return (0, channel_retired_ops_1.retiredRedirect)(op);
+                return (0, respond_1.err)(`dopl_channel has no op "${op}".`);
             }
         }
     });

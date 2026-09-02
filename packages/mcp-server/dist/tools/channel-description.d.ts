@@ -8,7 +8,7 @@
  * protocol, @-tag grammar, and a paragraph per op — PUSHED to every client on
  * every connection, including the many that never open a channel. The text it
  * used to carry lives in `channel-doctrine.ts`, PULLED on demand through
- * `dopl_channel(op="help")` and the MCP resource `dopl://doctrine/channels`.
+ * `dopl_channel(op="rooms", action="help")` and the MCP resource `dopl://doctrine/channels`.
  * Nothing was deleted; it stopped being re-transmitted.
  *
  * ⚠ **IT IS RENDERED RATHER THAN WRITTEN SINCE A14 (2026-09-02)** —
@@ -45,13 +45,13 @@
  * `tool-scope-claims.test.ts`'s filtered-op ledger, which is the only guard that
  * reads a per-op bullet.
  *
- * ⚠ NO `limits:` BLOCK, AND THAT IS RULE 4 AGAIN. Every bound in
- * `channel-schema.ts` is already hand-typed into the argument's own `.describe()`
- * (`body` "<=16000 chars", `limit` "1-200, default 100", `timeout_ms`, and a
- * `summary` whose describe deliberately states the ROUTE's 200 where the schema
- * declares 2000). Rendering those numbers here would push each of them twice per
- * connection — and the `summary` one would push two different numbers for one
- * field. The bound stays where the caller reads it.
+ * ⚠ **THERE IS A `limits:` BLOCK NOW, AND THE REASON THERE WAS NOT IS GONE**
+ * (B8, 2026-09-02). It was omitted because every bound was hand-typed into its
+ * own argument's `.describe()`, and rendering them here would have pushed each
+ * number twice per connection — worse, `summary` published 2000 while the route
+ * enforced 200, so the two copies said different things. Samuel's ruling made
+ * `summary` one number, the describes stopped carrying bounds, and
+ * `renderLimits` now reads the zod shape that enforces them. One source.
  */
 /**
  * THE DISPATCH-TOOL BUDGET. ⚠ **DECLARED IN `tool-style.ts` SINCE 2026-09-02
@@ -94,7 +94,7 @@ export { DESCRIPTION_MAX_CHARS } from "./tool-style";
  *     `workspace=` beside the channel id". The call is named and it prints both
  *     ids — that is the fact — and the rest re-stated the ADDRESSING sentence
  *     directly above it.
- *   • the closing clause warned that `op="open"` with a `member` opens a
+ *   • the closing clause warned that `action="open"` with a member ref opens a
  *     workspace DM rather than a home channel. `member`'s own `.describe()` in
  *     `channel-schema.ts` already says that op takes `member` "for a direct
  *     1:1", and an argument description is pushed on the same connection as this
@@ -103,5 +103,5 @@ export { DESCRIPTION_MAX_CHARS } from "./tool-style";
  * ⚠ It is ~250 characters shorter and teaches the same three things. A FOURTH
  * fact arriving here is the drift to watch for; the wording is not.
  */
-export declare const HOME_CHANNEL_ADDRESSING = "A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs `workspace=<container id>` ALONGSIDE `channel=` \u2014 a bare `channel=` finds none, and they are absent from \"list\". That container is ALSO the tenancy every other tool reads, so a template or base you use there has to LIVE there.";
+export declare const HOME_CHANNEL_ADDRESSING = "A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs `workspace=<container id>` ALONGSIDE `channel=` \u2014 a bare `channel=` finds none, and they are absent from the room list. That container is ALSO the tenancy every other tool reads, so a template or base you use there must LIVE there.";
 export declare const CHANNEL_DESCRIPTION: string;

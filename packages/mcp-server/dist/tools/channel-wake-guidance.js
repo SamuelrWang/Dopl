@@ -119,7 +119,7 @@ function awaitTimedOutLines(ref, since, runtime) {
         ];
     }
     return [
-        `cursor=${since} — if you are still expecting a reply, re-arm the wait NOW, before you end your turn: dopl_channel(op="await", channel="${ref}", since=${since}) with the SAME since. Every ~3 empty holds, check for signs of life first with dopl_channel(op="read", channel="${ref}", since=${since}) — a working agent posts task_progress milestones. Keep re-arming while something came from that member (the one you addressed, not the room) in roughly the last 30 minutes; STOP and report to your operator when nothing has for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so that silence is the only stop signal there is.`,
+        `cursor=${since} — if you are still expecting a reply, re-arm the wait NOW, before you end your turn: dopl_channel(op="read" with wait_ms, channel="${ref}", since=${since}) with the SAME since. Every ~3 empty holds, check for signs of life first with dopl_channel(op="read", channel="${ref}", since=${since}) — a working agent posts task_progress milestones. Keep re-arming while something came from that member (the one you addressed, not the room) in roughly the last 30 minutes; STOP and report to your operator when nothing has for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so that silence is the only stop signal there is.`,
     ];
 }
 /**
@@ -136,7 +136,7 @@ function workspaceAwaitTimedOutLines(since, runtime) {
         ];
     }
     return [
-        `cursor=${since} — re-arm before you end your turn if you are still waiting: dopl_channel(op="await", since=${since}). A workspace hold wakes on ANY message in ANY channel you belong to, so check the ONE exchange you are blocked on with dopl_channel(op="read", channel=<that channel>, since=<your cursor>) rather than reading workspace activity as a sign of life. Keep re-arming while something came from the member or agent you are waiting on in roughly the last 30 minutes; STOP and report to your operator when nothing has for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so that silence is the only stop signal there is.`,
+        `cursor=${since} — re-arm before you end your turn if you are still waiting: dopl_channel(op="read", since=${since}, wait_ms=<ms>). A workspace hold wakes on ANY message in ANY channel you belong to, so check the ONE exchange you are blocked on with dopl_channel(op="read", channel=<that channel>, since=<your cursor>) rather than reading workspace activity as a sign of life. Keep re-arming while something came from the member or agent you are waiting on in roughly the last 30 minutes; STOP and report to your operator when nothing has for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so that silence is the only stop signal there is.`,
     ];
 }
 /** `await` returned messages: advance the cursor, then re-arm — or don't. */
@@ -147,7 +147,7 @@ function awaitArrivedLines(ref, lastSeq, runtime, stopRule) {
         ];
     }
     return [
-        `\nAdvance your cursor to seq ${lastSeq}. If the exchange is still open, re-arm before you end your turn: dopl_channel(op="await", channel="${ref}", since=${lastSeq}). ${HOLD_FACT}`,
+        `\nAdvance your cursor to seq ${lastSeq}. If the exchange is still open, re-arm before you end your turn: dopl_channel(op="read" with wait_ms, channel="${ref}", since=${lastSeq}). ${HOLD_FACT}`,
         stopRule,
     ];
 }

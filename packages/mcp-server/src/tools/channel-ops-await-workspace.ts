@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="await" WITH NO `channel` — the WORKSPACE-WIDE hold.
+ * `dopl_channel` op="read" with wait_ms WITH NO `channel` — the WORKSPACE-WIDE hold.
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan
  * (parity.test.ts).
@@ -100,9 +100,9 @@ export function workspaceRearmStopRule(): string {
  *  an agent that sees traffic will otherwise assume it is seeing ALL traffic. */
 function scopeNote(channelCount: number): string {
   if (channelCount === 0) {
-    return `⚠ THIS HOLD WATCHED NOTHING: you are not a member of any channel in this workspace, so no message can ever end it. Do not re-arm — join or open a channel first (dopl_channel(op="list") to see what exists, op="open" to create one).`;
+    return `⚠ THIS HOLD WATCHED NOTHING: you are not a member of any channel in this workspace, so no message can ever end it. Do not re-arm — join or open a channel first (dopl_channel(op="rooms", action="list") to see what exists, op="rooms", action="open" to create one).`;
   }
-  return `Scope: every channel you are a MEMBER of (${channelCount}). ⚠ A PUBLIC channel you have not joined is NOT watched by this hold, so silence here is not evidence the workspace is quiet — it is evidence YOUR rooms are. Join a channel to watch it, or hold on it by name with dopl_channel(op="await", channel=<slug>, since=…).`;
+  return `Scope: every channel you are a MEMBER of (${channelCount}). ⚠ A PUBLIC channel you have not joined is NOT watched by this hold, so silence here is not evidence the workspace is quiet — it is evidence YOUR rooms are. Join a channel to watch it, or hold on it by name with dopl_channel(op="read", channel=<slug>, since=…, wait_ms=<ms>).`;
 }
 
 /**
@@ -204,7 +204,7 @@ export async function opAwaitWorkspace(
       return ok(
         [
           `The workspace wait ended early, after about ${Math.round(elapsedMs / 1000)}s: an inner poll failed — ${describeFailure(pollError)}.`,
-          `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="await", since=${cursor}).`,
+          `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="read", since=${cursor}, wait_ms=<ms>).`,
           `If the very next hold fails the same way, stop re-arming and report it to your operator.`,
           workspaceRearmStopRule(),
           ...sessionBlockLines(sessions, undefined, operatorOnline),
@@ -262,7 +262,7 @@ export async function opAwaitWorkspace(
   const lastSeq = messages.reduce((max, m) => (m.seq > max ? m.seq : max), messages[0].seq);
   lines.push(``, scopeNote(channelCount));
   lines.push(
-    `Highest seq shown: ${lastSeq}. Re-arm with dopl_channel(op="await", since=${lastSeq}) — and read the "· to ..." and "· thread ..." tags on each line first: a workspace hold is even less targeted than a channel one, so most of what wakes you is context, not a request.`,
+    `Highest seq shown: ${lastSeq}. Re-arm with dopl_channel(op="read", since=${lastSeq}, wait_ms=<ms>) — and read the "· to ..." and "· thread ..." tags on each line first: a workspace hold is even less targeted than a channel one, so most of what wakes you is context, not a request.`,
   );
   lines.push(workspaceRearmStopRule());
   lines.push(...sessionBlockLines(sessions, undefined, operatorOnline));

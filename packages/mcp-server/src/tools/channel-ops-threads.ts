@@ -75,12 +75,12 @@ export async function opCreateThread(
   } catch (e) {
     // ⚠ Read the CODE. `to` is required here, so a bare `isBadRequest` branch
     // answers every 400 with the addressee message — an over-length title then
-    // reads as "invite them first" and op="invite" answers "already a member".
+    // reads as "invite them first" and op="rooms" action="invite" answers "already a member".
     if (isBadRequest(e)) {
       switch (classifyBadRequest(e)) {
         case "addressee_not_member":
           return err(
-            `Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (op="invite"), then open the thread.`,
+            `Couldn't address the thread to ${member.label} — they aren't a member of **${chName}**. Invite them first (op="rooms" action="invite"), then open the thread.`,
           );
         // A thread is postable only by its creator and target, so a
         // self-addressed thread has nobody who can answer it and sits live and
@@ -88,7 +88,7 @@ export async function opCreateThread(
         // who else is in the channel.
         case "self_target":
           return err(
-            `A thread can't be addressed to yourself — you and the member you address it to are the only two who may post into it, so a self-addressed thread has nobody who can answer it. No thread was opened. List the channel's other members (op="members", channel="${ch.id}"), then open the thread addressed to one of them.`,
+            `A thread can't be addressed to yourself — you and the member you address it to are the only two who may post into it, so a self-addressed thread has nobody who can answer it. No thread was opened. List the channel's other members (op="rooms", action="members", channel="${ch.id}"), then open the thread addressed to one of them.`,
           );
         case "invalid_request":
           return err(
@@ -134,7 +134,7 @@ export async function opCreateThread(
   // await mechanics, the ~30-minute stop rule, and — on the handoff branch — a
   // three-paragraph account of a flag that does nothing. Every one of them is
   // standing doctrine and is stated once in `channel-doctrine.ts`, behind
-  // `op="help"`. What survives is what only this call knows.
+  // `op="rooms" action="help"`. What survives is what only this call knows.
   //
   // ⚠ `handoff=ignored` IS THE WHOLE OF THE HANDOFF WARNING, AND IT IS ENOUGH.
   // The lane opens nothing today (F-274): the flag is still accepted and still

@@ -91,8 +91,8 @@ describe("opPost — thread threading (Feature 2a)", () => {
 // silent, so `thread=` / `landed=` answer it in two tokens, read off the STORED
 // message rather than the request — the only way `dropped` is tellable from
 // `thread`. The offer of other threads went with the SECOND API call it needed
-// (`listChannelThreads`), so a post is one round trip; `op="list_threads"` is
-// where a reader that wants an id goes.
+// (`listChannelThreads`), so a post is one round trip; rooms(action="threads")
+// is where a reader that wants an id goes.
 
 const THREAD_A = "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaa1";
 
@@ -179,8 +179,8 @@ describe("opPost — threading self-verification (Q7)", () => {
 });
 
 describe("opPost — bad thread mapping (Gap 4)", () => {
-  // ⚠ Mapping keys on the error CODE, never on which params happened to be set
-  // — every channels-route 400 carries one (HttpError.toResponseBody).
+  // ⚠ Keyed on the error CODE, never on which params were set — every 400 carries
+  // one. ⚠ B8 re-spelled both remedy sentences; neither claim moved.
   it("maps a 400 on an unresolvable `thread` (no `to`) to a clear message", async () => {
     const postChannelMessage = vi.fn(async () => {
       throw { status: 400, code: "CHANNEL_TASK_NOT_IN_CHANNEL" };
@@ -194,7 +194,7 @@ describe("opPost — bad thread mapping (Gap 4)", () => {
 
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("not in this channel");
-    expect(res.content[0].text).toContain("post without `thread`");
+    expect(res.content[0].text).toContain("send without `thread`");
   });
 
   it("still maps a 400 addressee error when `to` is set", async () => {
@@ -210,7 +210,7 @@ describe("opPost — bad thread mapping (Gap 4)", () => {
     const res = await opPost(client, "general", "hi", { to: "p@x.com" });
 
     expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain("aren't a member");
+    expect(res.content[0].text).toContain("that member isn't in");
   });
 });
 
@@ -318,7 +318,7 @@ describe("opListThreads / read(thread=) — thread reads (Gap 1)", () => {
     expect(text.indexOf("CLIPPED")).toBeLessThan(text.indexOf("Ship it"));
     // ⚠ It may not offer another read as the remedy — there is no page
     // argument on this op, so no read on this connection fills the gap.
-    expect(text).not.toContain('op="list_threads", page');
+    expect(text).not.toContain('action="threads", page');
   });
 
   it("says nothing about clipping on an exhausted listing", async () => {
@@ -372,7 +372,7 @@ describe("opListThreads / read(thread=) — thread reads (Gap 1)", () => {
     expect(res.isError).toBeFalsy();
     const t = res.content[0].text;
     expect(t).not.toContain("## Thread");
-    expect(t).toContain('op="list_threads"');
+    expect(t).toContain('op="rooms", action="threads"');
   });
 });
 
@@ -439,7 +439,7 @@ describe("read render — counterparty identity (Feature 1b)", () => {
     expect(text).toContain("· no thread");
     expect(text).toContain("`3f2a91c4-dead-beef-0000-000000000001`");
     expect(text).toContain("Ship it");
-    expect(text).toContain('op="post"');
+    expect(text).toContain('op="send"');
   });
 
   it("stays quiet about threads in a channel that uses none", async () => {

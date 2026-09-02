@@ -110,8 +110,11 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
     // ⚠ No "continue" instruction on an ad-hoc-only page — there is no shared
     // exchange to continue.
     expect(text).not.toContain("Threads above:");
-    expect(text).not.toContain('dopl_channel(op="post"');
-    expect(text).toContain('dopl_channel(op="create_thread"');
+    // ⚠ RE-POINTED (B8): BOTH instructions are `op="send"` now — "continue"
+    // carries the full id, "open one" carries thread="new" — so the absent half
+    // is named by its own sentence rather than by an op name it no longer owns.
+    expect(text).not.toContain('Continue one with dopl_channel(op="send"');
+    expect(text).toContain('dopl_channel(op="send", channel="general", thread="new"');
     // ⚠ …and must not order the reader to DROP the tag: the desktop prompt
     // (main/prompt-framing.js THREAD_TAG) tells a session to keep its `thread`
     // argument on every post, and for a legacy exchange that argument IS this
@@ -133,7 +136,7 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
     const threadsLine = text
       .split("\n")
       .find((l) => l.startsWith("Threads above:")) as string;
-    expect(threadsLine).toContain('dopl_channel(op="post"');
+    expect(threadsLine).toContain('dopl_channel(op="send"');
     expect(threadsLine).not.toContain(SYNTHETIC);
   });
 
@@ -215,7 +218,7 @@ describe("F4 — the POST result says the same thing the read render does", () =
     expect(passed).toContain("landed=adhoc");
     expect(passed).not.toContain("KEEP passing thread=");
     expect(passed).not.toContain("You passed no thread");
-    expect(inherited).not.toContain('dopl_channel(op="create_thread"');
+    expect(inherited).not.toContain('thread="new"');
   });
 
   it("…and the ad-hoc advice itself is still SHIPPED, on the read legend", async () => {
@@ -225,7 +228,7 @@ describe("F4 — the POST result says the same thing the read render does", () =
     const text = await readText([msg({ metadata: { taskId: SYNTHETIC } })]);
     expect(text).toContain("keeps a reply grouped with its request");
     expect(text).toContain("does not open a shared exchange");
-    expect(text).toContain('dopl_channel(op="create_thread"');
+    expect(text).toContain('dopl_channel(op="send", channel="general", thread="new"');
   });
 
   it("echoes the id that RESOLVED when a DIFFERENT one was asked for", async () => {

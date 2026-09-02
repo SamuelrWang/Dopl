@@ -4,15 +4,15 @@
  * 500-line cap, 2026-09-02; INVARIANTS §1).
  *
  * ⚠ **THE SPLIT IS BY SUBJECT, NOT BY LINE COUNT.** That file answers "what does
- * a `set_agent_mode` result say about THIS call". This one answers a question no
+ * a `manage action="posture"` result say about THIS call". This one answers a question no
  * single verb can: that `no-bridge` MEANS TWO DIFFERENT THINGS depending on which
  * verb it came back on, and that the two meanings have not collapsed into one.
  *
- *   • On `op="launch_agent"` and `op="set_agent_mode"` it MAY genuinely be the
+ *   • On `action="launch"` and `action="posture"` it MAY genuinely be the
  *     operator's launch-over-MCP setting — `main/launch-directive-wire.js ›
  *     KINDS_NEEDING_LAUNCH_CONSENT` is those two kinds and nothing else — so
  *     raising it with them is sensible.
- *   • On `op="end_agent"` and `op="rename_agent"` it explicitly is NOT. A stop
+ *   • On `action="end"` and `action="rename"` it explicitly is NOT. A stop
  *     verb and a display label widen nothing, so a caller sent to ask for that
  *     permission is asking for something unrelated to what failed, and will
  *     conclude its operator denied it something they never denied.
@@ -25,6 +25,15 @@
  * one text now has to carry both claims at once. That is what this suite exists
  * to prevent: the doctrine is asserted for BOTH halves, and the ungated module is
  * scanned for the claim it may never make.
+ *
+ * ⚠ **AND THE FIVE-OP COLLAPSE ALMOST TOOK IT, WHICH IS WHY THE PIN IS SHAPED
+ * THE WAY IT IS NOW** (2026-09-02). The re-terse refusal table briefly said only
+ * that `no-bridge` meant "that lane is off", naming no lane — at which point the
+ * two claims HAD collapsed into one answer and neither half was findable. The
+ * restored text carries BOTH IN ONE CLAUSE (`the operator\'s LAUNCH toggle is
+ * off; it gates "launch" and "posture", never "end" or "rename"`), so a reword of
+ * one side can no longer delete the other silently — and the doctrine pins below
+ * assert that clause whole rather than two fragments that can drift apart.
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan
  * (`parity.test.ts`) and the removed-vocabulary source scan (`channel-law.test.ts`).
@@ -105,18 +114,26 @@ describe("the sibling verbs keep their own answers (the two maps stay two)", () 
     expect(text).not.toMatch(/turn(ed)? (it )?on/i);
     // 🔒 …and the shared text still carries the DENIAL for these two verbs beside
     // the gate it grants the re-posture. BOTH CLAIMS MUST BE FINDABLE OR THEY
-    // HAVE COLLAPSED INTO ONE ANSWER — the failure this pair of suites prevents.
-    expect(CHANNEL_DOCTRINE).toContain("those two verbs are not gated by it");
-    expect(CHANNEL_DOCTRINE).toContain("has no bearing on ending or renaming one");
+    // HAVE COLLAPSED INTO ONE ANSWER — the failure this pair of suites prevents,
+    // and the one the collapse briefly caused.
+    expect(CHANNEL_DOCTRINE).toContain("`no-bridge` the operator's LAUNCH toggle is off");
+    expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture", never "end" or "rename"');
   });
 
   it("an END's pending line still points at the disappearance, not at a posture", async () => {
     const text = await endText(settled({ kind: "end", status: "pending" }));
     // ⚠ THE ONE KIND WITH A REAL CONFIRMATION SURFACE. The agent disappearing
-    // from `read_sessions` is the answer — which is exactly what a re-posture
+    // from `op="status"` is the answer — which is exactly what a re-posture
     // and a rename must NOT be told.
-    expect(text).toContain("confirm=read_sessions");
-    expect(CHANNEL_DOCTRINE).toContain('Look for the outcome in "read_sessions"');
+    // ⚠ `confirm=` NAMES A LIVE OP AGAIN: it shipped the retired `read_sessions`
+    // until `channel-ops-agent.ts › PENDING_CONFIRM` was moved to `status`
+    // (2026-09-02). Pinned as the exact token a caller copies.
+    expect(text).toContain("confirm=status");
+    // ⚠ RE-POINTED: `read_sessions` and `read_directions` collapsed into ONE op,
+    // which is why the doctrine now names both halves of the answer in one clause.
+    expect(CHANNEL_DOCTRINE).toContain(
+      'op="status" reads your own machine\'s live sessions and the directions waiting for them',
+    );
   });
 
   it("a RENAME's pending line is still the rename's", async () => {
@@ -132,12 +149,14 @@ describe("the sibling verbs keep their own answers (the two maps stay two)", () 
     // ⚠ `confirm=none` because the name lives on ONE desktop and reaches no
     // server, so that listing keeps printing the id — correct, not a stale read.
     expect(text).toContain("confirm=none");
-    expect(text).not.toContain("confirm=read_sessions");
+    expect(text).not.toContain("confirm=status");
     // ⚠ AND NO `asked=`: a rename moves a label, not a posture. This is the tell
     // that keeps its line distinguishable from the re-posture's, now that both
     // answer `confirm=none`.
     expect(text).not.toContain("asked=");
-    expect(CHANNEL_DOCTRINE).toContain("keeps printing the id after a rename");
+    // ⚠ RE-POINTED onto the clause that gives the REASON no listing can show it:
+    // the label never leaves that machine.
+    expect(CHANNEL_DOCTRINE).toContain("stored on that one machine, it reaches no server");
   });
 });
 
@@ -155,9 +174,10 @@ describe("🔒 the ungated verbs' copy never sends a caller to the launch toggle
 
   it("states the DENIAL, and states it positively", () => {
     // In the shipped text, where a caller reads it…
-    expect(CHANNEL_DOCTRINE).toContain("has no bearing on ending or renaming one");
-    expect(CHANNEL_DOCTRINE).toContain("those two verbs are not gated by it");
+    expect(CHANNEL_DOCTRINE).toContain('never "end" or "rename"');
     // …and in the module, where the next person to edit the refusal map reads it.
+    // ⚠ THIS IS THE HALF THAT STILL ENFORCES THE ASYMMETRY END-TO-END, and it is
+    // why the suite keeps its teeth while the doctrine half is down.
     expect(src).toContain("does NOT gate these two");
   });
 
@@ -171,11 +191,9 @@ describe("🔒 the ungated verbs' copy never sends a caller to the launch toggle
 
   it("and the GATED verb is the only one whose copy says the toggle applies", () => {
     // ⚠ THE ASYMMETRY, PINNED FROM BOTH ENDS. The doctrine grants the gate to
-    // `set_agent_mode` by name; the gated module's own header carries the
+    // `launch` and `posture` BY NAME; the gated module's own header carries the
     // argument for why; and the ungated module must never claim it.
-    expect(CHANNEL_DOCTRINE).toContain(
-      'It gates op="launch_agent" and op="set_agent_mode"',
-    );
+    expect(CHANNEL_DOCTRINE).toContain('it gates "launch" and "posture"');
     expect(sourceOf("channel-ops-agent-mode.ts")).toContain("this kind IS gated by it");
     expect(src).not.toContain("IS gated by it");
   });

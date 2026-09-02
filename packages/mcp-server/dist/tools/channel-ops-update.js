@@ -1,6 +1,6 @@
 "use strict";
 /**
- * `dopl_channel` op="update" — THE CHANNEL'S CURATED INFO CARD, and nothing else.
+ * `dopl_channel` op="rooms" action="update" — THE CHANNEL'S CURATED INFO CARD, and nothing else.
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan.
  *
@@ -118,7 +118,7 @@ async function opUpdate(client, ref, card) {
             `Info card for **${label}** — READ ONLY, nothing was changed.`,
             ...renderCard(channel.infoCard ?? EMPTY_CARD),
             "",
-            `⚠ The card is REPLACED WHOLE on a write. To add a row, re-issue op="update" with \`info_card\` carrying EVERY row above plus the new one — a write that omits a row deletes it. Send \`info_card={}\` to clear the card deliberately.`,
+            `⚠ The card is REPLACED WHOLE on a write. To add a row, re-issue op="rooms" action="update" with \`info_card\` carrying EVERY row above plus the new one — a write that omits a row deletes it. Send \`info_card={}\` to clear the card deliberately.`,
         ].join("\n"));
     }
     const built = toCard(card);

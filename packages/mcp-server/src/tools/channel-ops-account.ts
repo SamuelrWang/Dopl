@@ -1,6 +1,6 @@
 /**
  * `dopl_channel` — THE TWO ACCOUNT-WIDE READS: `op="read"` with no `channel`
- * (T21) and `op="read_sessions"` with no `channel` (T22).
+ * (T21) and `op="status"` with no `channel` (T22).
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan
  * (parity.test.ts) — a handler in an unprefixed file is invisible to the
@@ -11,7 +11,7 @@
  * ⚠ **THREE SCOPES EXIST ON THIS TOOL AND THEY ARE NOT THE SAME. Do not
  * "unify" them:**
  *   - `op="read"`  with a `channel`  → ONE room.
- *   - `op="await"` with no `channel` → ONE WORKSPACE (the one this call
+ *   - `op="read" with wait_ms` with no `channel` → ONE WORKSPACE (the one this call
  *     resolved). The hold re-proves a membership set per tick and that proof is
  *     workspace-scoped; widening it is a different change with a different
  *     fence.
@@ -20,7 +20,7 @@
  *     per-tick access invariant to preserve — it reads once, against a
  *     membership set proved once.
  *
- * ⚠ **THE SESSION READ MOVED WITH IT.** `op="read_sessions"` with no `channel`
+ * ⚠ **THE SESSION READ MOVED WITH IT.** `op="status"` with no `channel`
  * used to mean "every session of mine in the ACTIVE WORKSPACE" and now means
  * "every session of mine, anywhere". That is a widening of a read that was
  * already own-scoped (`user_id` is the fence, server-side), and it is what makes
@@ -61,7 +61,7 @@ const NO_NAME = "(unnamed channel)";
  */
 function accountScopeNote(channelCount: number): string {
   if (channelCount === 0) {
-    return `⚠ THIS READ COVERED NOTHING: you are not a member of any channel in any workspace and you have no home channels, so no cursor can ever advance. Open a room with dopl_channel(op="open", …) or dopl_home(op="create_channel", name="…") first.`;
+    return `⚠ THIS READ COVERED NOTHING: you are not a member of any channel in any workspace and you have no home channels, so no cursor can ever advance. Open a room with dopl_channel(op="rooms", action="open", …) or dopl_home(op="create_channel", name="…") first.`;
   }
   return `Scope: every channel you are a MEMBER of, in every workspace AND every home channel (${channelCount}). ⚠ A PUBLIC channel you never joined is NOT included, so silence here is evidence YOUR rooms are quiet and not that the product is.`;
 }
@@ -87,7 +87,7 @@ export async function opReadAccount(
       [
         `No new messages anywhere since seq ${since}.`,
         accountScopeNote(page.channelCount),
-        `Check again with dopl_channel(op="read", since=${since}) — or, to be WOKEN rather than to poll, hold with dopl_channel(op="await", since=${since}), which watches one workspace at a time.`,
+        `Check again with dopl_channel(op="read", since=${since}) — or, to be WOKEN rather than to poll, hold with dopl_channel(op="read", since=${since}, wait_ms=<ms>), which watches one workspace at a time.`,
       ].join("\n"),
     );
   }
@@ -129,7 +129,7 @@ export async function opReadAccount(
 }
 
 /**
- * `op="read_sessions"` WITH NO `channel` — every session of the caller's,
+ * `op="status"` WITH NO `channel` — every session of the caller's,
  * grouped by the room it is working in.
  *
  * ⚠ **IT RENDERS `SESSION_TABLE_HEAD` + `sessionRow`, THE SAME TABLE THE
@@ -146,7 +146,7 @@ export async function opReadAccount(
  *
  * ⚠ **NO BANNER AND NO STANDING NOTES** — T11/T13. `SESSION_HANDLE_NOTE` and
  * `SESSION_TELEMETRY_NOTE` are deleted from every result on this surface; they
- * are doctrine at `dopl://doctrine/channels` and `op="help"`. What stays is the
+ * are doctrine at `dopl://doctrine/channels` and `op="rooms" action="help"`. What stays is the
  * LEGEND, which decodes the cells THIS page contains and is conditional on the
  * page containing a hedged row.
  */

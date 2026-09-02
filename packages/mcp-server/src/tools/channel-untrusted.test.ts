@@ -207,7 +207,7 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     expect(text.split("\n").filter((l) => l.includes("SYSTEM"))).toHaveLength(1);
     expect(text).not.toContain("`attacker-thread`");
     expect(line).toContain(`\`${THREAD_ID}\``);
-    expect(line).toContain('op="post"');
+    expect(line).toContain('op="send"');
   });
 
   it("a title made only of markup renders as NO title — the L3 tell, not a broken span", async () => {
@@ -221,6 +221,6 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     const span = titleSpan(line)!;
     expect(span.length).toBeLessThanOrEqual(160);
     expect(span.endsWith("...")).toBe(true);
-    expect(line).toContain('op="post"');
+    expect(line).toContain('op="send"');
   });
 });

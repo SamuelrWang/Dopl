@@ -8,7 +8,7 @@
  * and `postGuidanceLines` spliced up to three of them under EVERY successful
  * post. Every one of them was true before the call and true after it, so every
  * one of them is now stated ONCE in `channel-doctrine.ts` and reachable with
- * `dopl_channel(op="help")`.
+ * `dopl_channel(op="rooms", action="help")`.
  *
  * ⚠ WHAT DID **NOT** MOVE, AND MUST NOT. The server's own mention RESOLUTION is
  * a fact about THIS write that the caller cannot derive: an exact-match resolver

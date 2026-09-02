@@ -191,17 +191,17 @@ exports.AGENT_ERRORS = [
 exports.CHANNEL_ERRORS = [
     {
         reason: "CHANNEL_FORBIDDEN",
-        meaning: "you are not a member of that channel",
-        retry: 'op="list"',
+        meaning: "not a member of that channel",
+        retry: 'rooms action="list"',
     },
     {
-        reason: "CHANNEL_ADDRESSEE_NOT_MEMBER",
-        meaning: "the member you addressed is not in that channel",
-        retry: 'op="members"',
+        reason: "CHANNEL_RECIPIENT_UNRESOLVED",
+        meaning: "`to` named nobody; nothing was sent",
+        retry: 'rooms action="members"',
     },
     {
         reason: "VALIDATION_FAILED",
-        meaning: "a field is over its cap — NOT a membership problem",
+        meaning: "a field is over its cap, NOT a membership problem",
         retry: "no",
     },
 ];

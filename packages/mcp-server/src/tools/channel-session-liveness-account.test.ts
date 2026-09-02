@@ -1,9 +1,9 @@
 /**
- * THE THIRD SURFACE THAT RENDERS A SESSION — `op="read_sessions"` WITH NO
+ * THE THIRD SURFACE THAT RENDERS A SESSION — `op="status"` WITH NO
  * `channel` (T22) — HELD AGAINST THE PER-CHANNEL ONE.
  *
  * ⚠ **SPLIT OUT OF `channel-session-liveness.test.ts` ON 2026-09-02, AT THE §1
- * CAP.** That file diffs the two ORIGINAL paths (the `read_sessions` page and
+ * CAP.** That file diffs the two ORIGINAL paths (the `op="status"` page and
  * the `await` hold's session block) and adding a third pushed it to 520 of 500.
  * The seam is the surface, not the arithmetic: this file's subject is the
  * ACCOUNT-WIDE render and its own grouping, and it drives the per-channel op
@@ -129,7 +129,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("the ACCOUNT-WIDE read_sessions renders the same rows as the per-channel one", () => {
+describe("the ACCOUNT-WIDE status renders the same rows as the per-channel one", () => {
   const cases: Array<[string, ChannelSessionStateOwn]> = [
     ["the full rich row", rich()],
     [

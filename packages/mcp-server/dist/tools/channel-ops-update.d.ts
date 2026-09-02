@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="update" — THE CHANNEL'S CURATED INFO CARD, and nothing else.
+ * `dopl_channel` op="rooms" action="update" — THE CHANNEL'S CURATED INFO CARD, and nothing else.
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan.
  *

@@ -1,16 +1,24 @@
 /**
  * ⚠ THE PUBLISHED INPUT SHAPE MIRRORS THE ROUTE'S, IN BOTH DIRECTIONS. Without
- * the MINIMUMS, `body: ""`, `client_msg_id: ""` and a whitespace-only title all
- * pass the tool, reach the route, and come back as an opaque 400 the write ops
- * must GUESS at (historically: "invite them first" for a rejected body).
- * Declared here they are a -32602 naming the field, before anything is sent.
+ * the MINIMUMS, `body: ""` and `client_msg_id: ""` pass the tool, reach the
+ * route, and come back as an opaque 400 the write ops must GUESS at
+ * (historically: "invite them first" for a rejected body). Declared here they
+ * are a -32602 naming the field, before anything is sent.
  *
- * ⚠ DELIBERATELY NOT MIRRORED, and must stay so:
- *  - `summary`'s looser cap. One param serves two routes with two caps, and the
- *    schema declares the LOOSER so a legitimate close summary is never refused
- *    client-side. Pinned below so a "consistency" pass cannot tighten it.
- *  - `.trim()` on the addressee ref. The route trims before measuring; adding
- *    it here would change the bytes that are SENT.
+ * ⚠ **TWO OF THIS FILE'S THREE DELIBERATE NON-MIRRORS ARE GONE, BY RULING AND BY
+ * MERGE** (2026-09-02, slice B8):
+ *  - `summary`'s LOOSER 2000 is deleted. It existed so an over-length summary
+ *    would be the ROUTE's to refuse with the field named — but the route enforces
+ *    200 and always has, so the schema was publishing a cap the surface does not
+ *    have. Samuel's ruling: one field, one number, both ends. The case below is
+ *    inverted rather than deleted, so the old looseness cannot come back by
+ *    accident.
+ *  - `.trim()` on the addressee ref is now CORRECT rather than forbidden. The
+ *    rule was never "do not trim", it was "trim where and only where the route
+ *    trims before measuring" — and `src/features/channels/schema.ts ›
+ *    ChannelMessageCreateSchema.to` is `z.string().trim()`. The old
+ *    non-mirror dated from when this param resolved to a MEMBER client-side and
+ *    the bytes went out as typed.
  */
 
 import { describe, it, expect } from "vitest";
@@ -22,7 +30,7 @@ const shape = z.object(CHANNEL_INPUT_SHAPE);
 
 /** Does the published schema accept this partial input? */
 function accepts(input: Record<string, unknown>): boolean {
-  return shape.safeParse({ op: "post", ...input }).success;
+  return shape.safeParse({ op: "send", ...input }).success;
 }
 
 describe("F5 — the minimums the route has always enforced", () => {
@@ -33,41 +41,40 @@ describe("F5 — the minimums the route has always enforced", () => {
     expect(accepts({ body: "x".repeat(16001) })).toBe(false);
   });
 
-  it("refuses a blank idempotency key — a key of \"\" deduped nothing", () => {
+  it('refuses a blank idempotency key — a key of "" deduped nothing', () => {
     expect(accepts({ client_msg_id: "" })).toBe(false);
     expect(accepts({ client_msg_id: "k" })).toBe(true);
     expect(accepts({ client_msg_id: "k".repeat(200) })).toBe(true);
     expect(accepts({ client_msg_id: "k".repeat(201) })).toBe(false);
   });
 
-  it("refuses a whitespace-only title — measured AFTER the trim, as the route does", () => {
-    expect(accepts({ title: "" })).toBe(false);
-    expect(accepts({ title: "   " })).toBe(false);
-    expect(accepts({ title: "Wire the listener" })).toBe(true);
-    // ⚠ Trim happens first on both sides, so cap + surrounding space passes.
-    expect(accepts({ title: ` ${"t".repeat(200)} ` })).toBe(true);
-    expect(accepts({ title: "t".repeat(201) })).toBe(false);
+  it("measures `summary` AFTER the trim, as the route does", () => {
+    // ⚠ `summary` IS THE THREAD TITLE ON `thread="new"` (B8) — the param that
+    // used to be `title`, with the same trim-then-measure rule, because both
+    // sides have to agree on what "200 characters" counts.
+    expect(accepts({ summary: `  ${"t".repeat(200)}  ` })).toBe(true);
+    expect(accepts({ summary: "t".repeat(201) })).toBe(false);
   });
 });
 
-
-describe("F5 — what stays deliberately unmirrored", () => {
-  it("keeps `summary` at the LOOSER 2000, so the ROUTE is what refuses one", () => {
-    // ⚠ An over-length POST summary stays the ROUTE's to reject, because the
-    // route names the field and a client-side refusal is an opaque -32602. The
-    // 2000 was originally the close summary's cap; thread closing is gone
-    // (wiring plan Phase 4, 2026-08-18) and the looser number stays anyway, for
-    // that reason alone.
-    expect(accepts({ summary: "s".repeat(201) })).toBe(true);
-    expect(accepts({ summary: "s".repeat(2000) })).toBe(true);
-    expect(accepts({ summary: "s".repeat(2001) })).toBe(false);
-    // ⚠ …and the tighter number is stated in the prose the model reads.
-    expect(CHANNEL_INPUT_SHAPE.summary.description).toContain("<=200 chars");
+describe("F5 — the two non-mirrors that ENDED, pinned so they cannot return", () => {
+  it("holds `summary` at 200 — the ROUTE's number, on both ends (Samuel's ruling)", () => {
+    // ⚠ THE INVERSION OF THE OLD CASE, AND IT IS A RULING RATHER THAN A
+    // CONSISTENCY PASS. The schema published 2000 against a route that enforces
+    // 200: every summary between the two was accepted client-side and refused on
+    // the wire, which is precisely the opaque -32602 the looseness was meant to
+    // prevent, arriving one hop later.
+    expect(accepts({ summary: "s".repeat(200) })).toBe(true);
+    expect(accepts({ summary: "s".repeat(201) })).toBe(false);
+    // ⚠ …and the number is NOT typed into the prose any more: `maxLength` and
+    // the description's rendered `Limits:` block are the two copies, and a third
+    // is the one that goes stale (`tool-style.test.ts` fails one).
+    expect(CHANNEL_INPUT_SHAPE.summary.description).not.toContain("200");
   });
 
-  it("does not trim the addressee ref — that would change the bytes sent", () => {
-    const parsed = shape.parse({ op: "post", to: " ada@example.com " });
-    expect(parsed.to).toBe(" ada@example.com ");
+  it("trims the addressee ref, because the ROUTE trims before measuring", () => {
+    const parsed = shape.parse({ op: "send", to: " ada@example.com " });
+    expect(parsed.to).toBe("ada@example.com");
   });
 });
 
@@ -96,29 +103,12 @@ describe("the describes that make claims this schema cannot enforce", () => {
     // peer can take its thread will build a workaround for a fence that holds.
     expect(d("client_msg_id")).not.toContain("PER-CHANNEL");
     expect(d("client_msg_id")).not.toContain("THEIR thread");
-    // ⚠ **AND IT NAMES THE TWO AGENT LANES SINCE A10 (2026-09-02)** — the same
-    // key now makes a timed-out `launch_agent` / `direct_agent` safe to retry,
-    // which is the code behind a rule the doctrine used to state as a
-    // prohibition ("do NOT issue it again").
-    expect(d("client_msg_id")).toContain('op="launch_agent"');
-    expect(d("client_msg_id")).toContain('op="direct_agent"');
-    // ⚠ THE DOCTRINE IS PINNED AT BOTH ENDS so the collapse cannot happen in one
-    // place and leave the pulled document teaching the retired rule.
-    expect(CHANNEL_DOCTRINE).toContain("neither suppressing the other");
-    expect(CHANNEL_DOCTRINE).not.toContain("with your body posted nowhere");
-    expect(CHANNEL_DOCTRINE).not.toContain("PER-CHANNEL whoever sent it");
-  });
-
-  it("title: the bound is checked before the WIRE, and claims no precedence over the gate", () => {
-    // ⚠ It used to read "rejected here, before the call is made", which claims
-    // this bound is the first thing anything checks. It is not: a desktop agent
-    // session decides `create_thread` at its own permission gate first
-    // (`dopl-desktop-app/main/session-profiles.js › grantDecision`), so a held
-    // or refused call never reaches zod and the agent gets a permission answer
-    // where the copy promised a title answer.
-    expect(d("title")).toContain("When the call is permitted to run");
-    expect(d("title")).toContain("before anything goes on the wire");
-    expect(d("title")).not.toContain("before the call is made");
+    // ⚠ **AND IT NAMES BOTH LANES SINCE A10 (2026-09-02)** — the same key makes a
+    // timed-out launch or direction safe to retry, which is the code behind a
+    // rule the doctrine used to state as a prohibition ("do NOT issue it again").
+    // ⚠ Both lanes are now ONE op (`manage`), so the pair of op names became one.
+    expect(d("client_msg_id")).toContain('op="send"');
+    expect(d("client_msg_id")).toContain('op="manage"');
   });
 
   it("since: it points at the one read that deliberately hands back no cursor", () => {
@@ -128,11 +118,10 @@ describe("the describes that make claims this schema cannot enforce", () => {
     // has already taken a poisoned cursor. The two teachings now meet where an
     // agent looks. `channel-thread-scope.test.ts` pins the other end.
     expect(d("since")).toContain("THREAD-SCOPED read");
-    expect(d("since")).toContain("offers NO cursor at all");
-    expect(d("since")).toContain("UNSCOPED read");
+    expect(d("since")).toContain("hands back none");
   });
 
-  it("agent_id: a foreign id is not \"refused outright\" — the direction IS filed", () => {
+  it('to: a foreign agent id is not "refused outright" — the direction IS filed', () => {
     // ⚠ **G3 / F-418 (A6, 2026-09-02).** The old copy read "An id belonging to
     // another member is REFUSED outright and no request is filed", and
     // `service-directions.ts` files the direction with NO ownership check —
@@ -141,10 +130,12 @@ describe("the describes that make claims this schema cannot enforce", () => {
     // directions whenever the projection lags. The server becoming the
     // authority is A9's; until then the honest claim is the only guardrail, so
     // it is pinned in both directions.
-    expect(d("agent_id")).toContain("reaches nothing");
-    expect(d("agent_id")).toContain("`no-session`");
-    expect(d("agent_id")).not.toContain("no request is filed");
-    expect(CHANNEL_DOCTRINE).toContain("the request is filed against YOUR side");
+    // ⚠ **THE PARAM IS `to` SINCE B8** — `agent_id` folded into the one recipient
+    // field — so the CLAIM moved with it, into the doctrine's `manage` section
+    // where the whole lane is described. That is a relocation, and this pin is
+    // what proves the fact was not dropped on the way.
+    expect(CHANNEL_DOCTRINE).toContain("another member's id reaches nothing");
+    expect(CHANNEL_DOCTRINE).toContain("`no-session`");
     expect(CHANNEL_DOCTRINE).not.toContain("no request is filed");
   });
 

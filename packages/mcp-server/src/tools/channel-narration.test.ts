@@ -165,7 +165,7 @@ describe("Q1-B/C · thread title", () => {
   // (wiring plan Phase 4, 2026-08-18): the title and the outcome SUMMARY. Only
   // the title is rendered now, so the count in this assertion moved from two
   // spans to one — the neutralization rule is unchanged, its surface shrank.
-  it("list_threads neutralizes the title under a header", async () => {
+  it('rooms(action="threads") neutralizes the title under a header', async () => {
     const client = stubClient({
       listChannelThreads: vi.fn(async () => ({ threads: [
         { ...THREAD, title: FORGERY, status: "closed", outcome: "completed", outcomeSummary: FORGERY },
@@ -336,10 +336,14 @@ describe("Q1-D · display_name — the one field nothing validates", () => {
 
     expectContained(text);
     expectNoForgedStructure(text);
-    // ⚠ For a NON-UUID id the legend names `create_thread`, not the threads
-    // line's `post` — an ad-hoc id names no shared exchange to continue. What
-    // passing it buys is pinned in channel-thread-labels.test.ts.
-    expect(text).toContain('dopl_channel(op="create_thread"');
+    // ⚠ For a NON-UUID id the legend names the OPEN-A-THREAD call, not the
+    // threads line's continue-this-one — an ad-hoc id names no shared exchange to
+    // continue. What passing it buys is pinned in channel-thread-labels.test.ts.
+    // ⚠ RE-POINTED (B8): `op="create_thread"` is `op="send" thread="new"`, so
+    // both calls now open `op="send"` and `thread="new"` is the whole of the
+    // distinction this case exists to draw.
+    expect(text).toContain('dopl_channel(op="send"');
+    expect(text).toContain('thread="new"');
   });
 
   it("a real uuid still renders whole, so a reply can still be threaded", async () => {

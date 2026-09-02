@@ -16,7 +16,7 @@
  * readers the mention resolver stamped, what the machine answered. A RULE is
  * true of every call and belongs in the doctrine. **A fact whose paragraph moved
  * to the doctrine keeps its VERDICT here, as a token** — `tags=0/2` is the whole
- * of "your tag reached nobody", and the five causes are one `op="help"` away.
+ * of "your tag reached nobody", and the five causes are one `op="rooms" action="help"` away.
  * Dropping the verdict with the paragraph would delete the only signal that
  * catches a silent delivery failure (INVARIANTS §10).
  *
@@ -92,7 +92,7 @@ export declare function factsLine(head: string, fields: Record<string, FactValue
  * HOW A TAG LANDED, as a token. ⚠ `resolved/attempted` and nothing else: the
  * five reasons a member handle resolves to nobody are standing doctrine and this
  * server can distinguish none of them, so a paragraph here would be five guesses
- * on every post. `0/2` is the verdict; `op="help"` is the explanation.
+ * on every post. `0/2` is the verdict; `op="rooms" action="help"` is the explanation.
  *
  * ⚠ AGENT HANDLES ARE NOT COUNTED HERE and must never be: they are resolved on
  * the operator's own machine, never by the server's mention resolver, so a

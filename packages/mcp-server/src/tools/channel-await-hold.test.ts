@@ -126,7 +126,7 @@ describe("opAwait — how long the hold is, and for whom (T03)", () => {
     expect(text).toContain("since=7");
   });
 
-  it("an EXPLICIT timeout_ms is honoured exactly, on either side of the stamp", async () => {
+  it("an EXPLICIT wait_ms is honoured exactly, on either side of the stamp", async () => {
     // ⚠ The external default is a DEFAULT, never a ceiling: a caller that knows
     // its own client outlasts it says so, and is not re-shortened.
     for (const runtime of [null, DESKTOP_SESSION_RUNTIME]) {
