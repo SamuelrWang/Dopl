@@ -55,6 +55,10 @@ import { Transcript } from "./transcript";
 import { ChannelsV2Composer } from "./composer";
 import { ThreadSendBox } from "./thread-consent";
 import type { AgentLaunchControls } from "./use-agents-panel";
+import {
+  threadOtherPartyOf,
+  type LiveAgentSession,
+} from "../../lib/draft-recipients";
 import type { AuthorIndex } from "./view-model";
 import type { TranscriptRow } from "./view-model-rows";
 import type {
@@ -121,6 +125,8 @@ export function ChannelsV2MessagePane({
   infoOpen = false,
   favorited = false,
   gate,
+  liveAgents,
+  defaultResponderAgentName = null,
   newAgent,
   popOut,
   agentActivity,
@@ -163,6 +169,16 @@ export function ChannelsV2MessagePane({
   favorited?: boolean;
   /** The page's refetch coordinator, handed straight to the composer's writes. */
   gate: MutationGate;
+  /**
+   * **THE CHANNEL'S LIVE AGENT SESSIONS — every member's** (2026-09-02, slice B10), for the
+   * composer's @-picker and its recipient line. ⚠ HANDED DOWN, never read here, for the reason
+   * `newAgent` is: a second mount of `use-channel-agent-sessions.ts` is a second poll of an
+   * unpublished table. A host with no such read hands none and the picker offers members only.
+   */
+  liveAgents?: readonly LiveAgentSession[];
+  /** `channels.default_responder_agent_name` — who answers an untagged message (RR3 arm 1).
+   *  ⚠ Absent is not "nobody": the composer's line still falls to the room's one live agent. */
+  defaultResponderAgentName?: string | null;
   /**
    * The page's launch controls (`use-agents-panel.ts › AgentLaunchControls`),
    * for the composer's New Agent icon. ⚠ PASSED DOWN, never mounted here: a
@@ -413,9 +429,12 @@ export function ChannelsV2MessagePane({
         workspaceId={workspaceId}
         members={members}
         currentUserId={index.currentUserId}
-        // ⚠ THE SAME MAP THE TRANSCRIPT TINTS FROM — one derivation, so the picker
-        // cannot offer an agent handle the rendered body would not highlight.
-        agents={index.agents}
+        liveAgents={liveAgents}
+        defaultResponderAgentName={defaultResponderAgentName}
+        // ⚠ RR1's ANSWER, COMPUTED FROM THE THREAD ROW THIS PANE IS ALREADY RENDERING — an
+        // unaddressed reply in a thread goes to the exchange's OTHER party, and the composer must
+        // not re-derive that pair. `null` in channel view, where there is no exchange.
+        threadOtherParty={threadOtherPartyOf(thread, members, index.currentUserId)}
         gate={gate}
         newAgent={newAgent}
         // ⚠ THE OPEN THREAD IS THE TARGET, and `null` is a real answer rather
