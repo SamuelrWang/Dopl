@@ -1,4 +1,29 @@
-export type Role = "owner" | "admin" | "member" | "viewer" | "guest";
+/**
+ * WORKSPACE DOMAIN TYPES.
+ *
+ * ⚠ **THE ROLE SET, THE MEMBERSHIP LIFECYCLE AND THE CONTAINER KIND ARE
+ * DECLARED IN `@dopl/contracts › workspaces.ts` AND RE-EXPORTED HERE UNDER THE
+ * NAMES THEY HAVE ALWAYS HAD** (2026-09-02, v2 slice A13) — `Role` is the
+ * package's `WorkspaceRole`, aliased back on the way through, so no consumer
+ * import changes. Each had a twin in `packages/dopl-client/src` and
+ * `scripts/check-role-drift.ts` grew to 422 lines holding them apart.
+ *
+ * ⚠ **`isStandardWorkspace` BELOW IS DELIBERATELY NOT IN THE PACKAGE.** It is a
+ * runtime predicate and `@dopl/contracts` is type-only, so the SDK's copy is
+ * still a copy — and the POSITIVE-form assertion over both (INVARIANTS §4A,
+ * F-295) is still the only thing stopping a coordinated flip to `!== "link"`,
+ * which would silently admit every kind added to the union later. That check
+ * stays in `check-role-drift.ts › checkWorkspaceKind`.
+ *
+ * ⚠ **`InvitedRole` STAYS HERE**: it has no SDK twin, so it was never a mirror.
+ */
+import type {
+  WorkspaceRole as Role,
+  MembershipStatus,
+  WorkspaceKind,
+} from "@dopl/contracts";
+
+export type { Role, MembershipStatus, WorkspaceKind };
 
 /**
  * ⚠ `guest` is a LINK-granted role, never an invitation role — a workspace admin
@@ -7,8 +32,6 @@ export type Role = "owner" | "admin" | "member" | "viewer" | "guest";
  * `InvitedRole` deliberately excludes it.
  */
 export type InvitedRole = "admin" | "member" | "viewer";
-
-export type MembershipStatus = "pending" | "active" | "revoked";
 
 export interface Invitation {
   id: string;
@@ -42,16 +65,6 @@ export interface InvitationStatus {
   revoked: boolean;
   alreadyAccepted: boolean;
 }
-
-/**
- * "standard" = a real user-facing workspace. "link" = a hidden home-channel
- * container holding ONE or TWO members and exactly one channel — never shown in
- * the rail/switcher, never a default-resolution candidate, and **bills to the
- * CONTAINER OWNER's plan whoever makes the call** (Samuel, 2026-08-26 —
- * `billing/server/credits-service.ts › resolveBillingTarget`; it billed each
- * side's own plan until then).
- */
-export type WorkspaceKind = "standard" | "link";
 
 /**
  * THE shared kind predicate — every UI list, navigation menu, membership count

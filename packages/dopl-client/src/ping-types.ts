@@ -13,19 +13,14 @@
  */
 
 /**
- * WHAT AN AGENT IS SAYING — a closed set of exactly three words. `done` (the
- * work finished), `question` (it needs an answer to continue), `blocked` (it
- * cannot continue and is not asking a question).
+ * ⚠ **BOTH CLOSED SETS ARE DECLARED IN `@dopl/contracts › pings.ts` AND
+ * RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — they were hand mirrors of
+ * `src/features/channels/types-ping.ts`. No consumer import changed.
  */
-export type PingKind = "done" | "question" | "blocked";
+import type { PingKind, PingRecipientKind } from "@dopl/contracts";
 
-/**
- * WHOSE INBOX — stamped by the SERVICE from which argument the caller used,
- * never sent by a caller. `member` is the one form that names somebody else;
- * `desktop` and `agent` are the sender's own operator, stamped from the
- * authenticated caller.
- */
-export type PingRecipientKind = "member" | "agent" | "desktop";
+export type { PingKind, PingRecipientKind };
+
 
 /**
  * ONE PING, as the server reports it.

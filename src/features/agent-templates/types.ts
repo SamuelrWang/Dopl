@@ -14,15 +14,18 @@
  * there.
  */
 
-import type { Role } from "@/features/workspaces/types";
-
 /**
- * Three-way sharing scope.
- *   private   → the creator (and workspace admins) only
- *   team      → members of any team linked through `agent_template_teams`
- *   workspace → every active workspace member
+ * ⚠ **{@link TemplateVisibility} IS DECLARED IN `@dopl/contracts ›
+ * workspaces.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it had a
+ * twin in `packages/dopl-client/src/agent-template-types.ts` with no script
+ * between them. No import path changed.
  */
-export type TemplateVisibility = "private" | "team" | "workspace";
+import type { TemplateVisibility } from "@dopl/contracts";
+
+export type { TemplateVisibility };
+
+
+import type { Role } from "@/features/workspaces/types";
 
 export const TEMPLATE_VISIBILITIES: readonly TemplateVisibility[] = [
   "private",

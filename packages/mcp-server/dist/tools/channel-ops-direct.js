@@ -112,6 +112,7 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
             agentId: agent,
             threadId: opts.thread,
             body,
+            clientMsgId: opts.clientMsgId,
         });
     }
     catch (e) {
@@ -134,6 +135,12 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
         }));
     }
     let direction = created.direction;
+    // **THE CONVERGED-RETRY FACT** (2026-09-02, A10/G10) — the launch lane's, in
+    // the same shape and for the same reasons (`channel-ops-launch.ts` carries the
+    // argument): added ONLY when the row was already there, so a caller that sent
+    // no key sees a byte-identical result, and spread LAST so `existing` wins any
+    // `retry` verdict already printed.
+    const converged = created.existing ? { retry: "existing" } : {};
     const waitMs = Math.min(opts.waitMs ?? WAIT_DEFAULT_MS, WAIT_CAP_MS);
     const deadline = Date.now() + waitMs;
     // ⚠ POLLS THE ROW, never an `await`: a direction is not a message, has no `seq`,
@@ -172,6 +179,7 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
             // agent is broken. Either the turn's final text was empty, or that desktop
             // predates the answer-reporting build — and this cannot tell which.
             reply: direction.reply ? "below" : "none-reported",
+            ...converged,
         });
         return (0, respond_1.ok)(direction.reply
             ? [head, "", "Its answer:", "", direction.reply].join("\n")
@@ -186,6 +194,7 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
                 ? RETRY_ADVICE[direction.refusalReason]
                 : undefined,
             filed: true,
+            ...converged,
         }));
     }
     if (direction.status === "expired") {
@@ -196,6 +205,7 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
             agent: `@agent-${direction.agentId}`,
             direction: direction.id,
             filed: true,
+            ...converged,
         }));
     }
     // PENDING and CLAIMED both end here — the next action is identical.
@@ -212,6 +222,7 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
         expires: direction.expiresAt,
         retry: false,
         poll: "read_directions",
+        ...converged,
     }));
 }
 /** One rendered row of the directions listing. */

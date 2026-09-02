@@ -7,9 +7,17 @@
  * unknown kind, not reject it.
  */
 
-import type { WorkspaceRole, WorkspaceSummary } from "./types.js";
+/**
+ * ⚠ **{@link MembershipStatus} IS DECLARED IN `@dopl/contracts › workspaces.ts`
+ * AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it was a hand mirror of
+ * `src/features/workspaces/types.ts`. No consumer import changed.
+ */
+import type { MembershipStatus } from "@dopl/contracts";
 
-export type MembershipStatus = "pending" | "active" | "revoked";
+export type { MembershipStatus };
+
+
+import type { WorkspaceRole, WorkspaceSummary } from "./types.js";
 
 export type MemberAccessLevel = "read" | "edit";
 

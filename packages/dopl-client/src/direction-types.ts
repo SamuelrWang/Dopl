@@ -11,23 +11,15 @@
  */
 
 /**
- * WHY A DESKTOP SAID NO TO A DIRECTION — exactly five words, the wire contract.
- *
- *  - `no-session` — no live agent with that id on that machine. The one that
- *                   actually happens, and the only authoritative answer: whether
- *                   an agent is alive is knowable only where it runs.
- *  - `auth-hold`  — the desktop is signed out; the session has no query to feed.
- *  - `busy`       — declined for now. Genuinely temporary.
- *  - `blocked`    — the desktop is below the version floor.
- *  - `no-bridge`  — the operator's direct-over-MCP toggle is OFF. A CHOICE, not a
- *                   fault; the render must not read as one.
+ * ⚠ **{@link DirectionRefusalReason} IS DECLARED IN `@dopl/contracts ›
+ * directives.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it was a
+ * hand mirror of `src/features/channels/types-direction.ts` and nothing compared
+ * the two. No consumer import changed.
  */
-export type DirectionRefusalReason =
-  | "no-session"
-  | "auth-hold"
-  | "busy"
-  | "blocked"
-  | "no-bridge";
+import type { DirectionRefusalReason } from "@dopl/contracts";
+
+export type { DirectionRefusalReason };
+
 
 /** One private direction, as the server reports it. `status` already has lazy
  *  expiry applied and may differ from the stored column. */

@@ -22,6 +22,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@dopl/contracts": "^0.1.0",
     "debug": "^4.4.3"
   },
   "repository": {

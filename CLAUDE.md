@@ -95,22 +95,29 @@ second typecheck):
    (`globalIgnores` excludes `scripts/**`).
 3. the `size-check` CI job — the 500-line cap over `packages/`, an inline `find`/`awk` in ci.yml.
 4. `npx tsx scripts/check-knowledge-type-drift.ts` — knowledge types, server vs SDK.
-5. `npx tsx scripts/check-role-drift.ts` — the workspace ROLE SET across server, SDK and MCP.
+5. `npx tsx scripts/check-role-drift.ts` — the workspace ROLE SET, the `GET /api/workspaces` row
+   shape, and `isStandardWorkspace`'s positive form. ⚠ **THE TYPE HALVES OF (A) AND (C) LEFT ON
+   2026-09-02** when `@dopl/contracts` took them (INVARIANTS §1): what is checked is the role-keyed
+   decision MAPS, the SQL rank `CASE`, the two DTO interfaces and the three copies of the
+   PREDICATE — a type-only package cannot hold a function.
    ⚠ **This list said "four" and omitted it until 2026-08-26**, though it has been the second step
    of CI's `type-drift` job since guest-role M0 (`080b7b48`) — i.e. the wave that introduced the
    `guest` role shipped the gate that guards the role set and told no doc about it.
 6. `npx tsx scripts/check-session-health-drift.ts` — the SEVEN session-health
-   fields, across FOUR hand-mirrors (`types-sessions.ts`, the zod block in
-   `schema-sessions.ts`, the SDK's `session-health-types.ts`, and its committed
-   `dist/`) plus the migration's own columns. ⚠ **ADDED 2026-09-02 WITH ITS DOC
+   fields, across the zod block in `schema-sessions.ts` and the migration's own
+   columns, against `@dopl/contracts › sessions.ts`. ⚠ **ADDED 2026-09-02 WITH ITS DOC
    ROW IN THE SAME CHANGE**, which is the whole point of the warning below it —
-   the previous two gates each shipped without one. Every field on this set is
-   `optional` AND `nullable` by design (an older desktop must not 400 its whole
-   push), so drift here fails no build and no test: the field just never arrives.
+   the previous two gates each shipped without one. ⚠ **AND REDUCED FROM FOUR
+   HAND-MIRRORS TO TWO SITES THE SAME DAY**, when the shared package took the
+   type: the SDK's copy and its committed `dist/` re-export it now, so neither can
+   disagree. Every field on this set is `optional` AND `nullable` by design (an
+   older desktop must not 400 its whole push), so drift here fails no build and no
+   test: the field just never arrives.
 7. `npx tsx scripts/check-message-kind-drift.ts` — the `channel_messages` **kind** and
-   **author_kind** SETS across the server union, the SDK's copy, its committed `dist/` and the
-   column `CHECK`. The zod half needs no step: `closedEnum` over an `Exclude`d type makes that pair
-   a compile error. ⚠ **ADDED 2026-09-02 WITH ITS DOC ROW**, the second gate that day to do so.
+   **author_kind** SETS across `@dopl/contracts › channels.ts` and the column `CHECK`. The zod half
+   needs no step: `closedEnum` over an `Exclude`d type makes that pair a compile error, and the SDK
+   halves stopped being steps the same day for the same reason (a re-export cannot disagree).
+   ⚠ **ADDED 2026-09-02 WITH ITS DOC ROW**, the second gate that day to do so.
    Both drift directions are silent — a kind the `CHECK` lacks throws `23514` only on a real
    INSERT, and a kind the union lacks is cast into it and takes every default branch.
 8. `npx tsx scripts/check-css-token-drift.ts` — the DESIGN TOKENS, `src/app/globals.css` vs the
