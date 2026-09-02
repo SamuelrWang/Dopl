@@ -65,10 +65,16 @@ export declare const HIDDEN_TOOLS: Set<string>;
  *      itself. Nothing may be GRANTED on this value. Same discipline as
  *      `src/shared/auth/runtime-header.ts`.
  */
-export declare const TOOL_PROFILE_TOOLS: Record<string, ReadonlySet<string>>;
+export declare const TOOL_PROFILE_TOOLS: Map<string, ReadonlySet<string>>;
 /**
  * The tools a role is offered, or `null` for "no narrowing". ⚠ The ONE place a
  * profile name becomes a set, so the fail-open direction is written once.
+ *
+ * ⚠ A `Map`, NOT AN OBJECT LITERAL — unlike every other table in this file, the
+ * KEY here is caller-supplied. `TOOL_PROFILE_TOOLS["constructor"]` on a literal
+ * answers `Object.prototype.constructor`: truthy, and then `.has` is not a
+ * function. A Map has no inherited keys, so a role name off the wire can only
+ * hit a row somebody wrote.
  */
 export declare function offeredToolsFor(toolProfile: string | null | undefined): ReadonlySet<string> | null;
 /**

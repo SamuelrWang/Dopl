@@ -206,6 +206,10 @@ function assembled(s) {
       buildMcpServers: () => ({}),
       buildScrubbedEnv: () => ({}),
       withSessionStamp: () => {},
+      // The per-run ROLE stamp (2026-09-02). Inert here like the session stamp beside it —
+      // this file is about the MODEL — but the assembly calls it, and a fake missing a
+      // function the one assembly point invokes fails every test in the file at once.
+      withToolProfileStamp: () => {},
       resolveClaudeExecutable: () => null,
     },
     { withStoredCredential: (e) => e },

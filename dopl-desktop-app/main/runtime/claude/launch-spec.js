@@ -92,6 +92,13 @@ function buildOptions(s, dispatch, emitQuiet) {
   // app offer", the same answer for every spawn. A LABEL, not a lock: nothing here limits how many
   // run, and a missing slot stamps nothing.
   loader.withSessionStamp(options.mcpServers, store.slotKey(s));
+  // THIS SESSION'S ROLE onto the same entry (X-Dopl-Tool-Profile), so the server can offer a
+  // narrower tool set than the whole surface. Same seam and the same rules as the stamp above:
+  // applied here rather than inside `buildMcpServers`, because that builder answers "what MCP
+  // server does this app offer" and this is a per-run fact. ⚠ NARROWING-ONLY AND IT GRANTS
+  // NOTHING — `s.profile` is the profile this spawn is already contained at, normalized through
+  // the same fail-closed read, and a value the server does not recognize is served everything.
+  loader.withToolProfileStamp(options.mcpServers, s.profile);
   // AGENT-DRIVEN AGENT MANAGEMENT (2026-08-31): the in-process rename/end server, mounted
   // BESIDE the dopl entry (never inside it — the dopl entry is the pinned literal above).
   // Null (SDK namespace not cached yet, or a harness) mounts nothing and the launch proceeds:

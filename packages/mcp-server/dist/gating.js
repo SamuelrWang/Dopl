@@ -70,13 +70,19 @@ exports.HIDDEN_TOOLS = new Set([]);
  *      itself. Nothing may be GRANTED on this value. Same discipline as
  *      `src/shared/auth/runtime-header.ts`.
  */
-exports.TOOL_PROFILE_TOOLS = {};
+exports.TOOL_PROFILE_TOOLS = new Map();
 /**
  * The tools a role is offered, or `null` for "no narrowing". ⚠ The ONE place a
  * profile name becomes a set, so the fail-open direction is written once.
+ *
+ * ⚠ A `Map`, NOT AN OBJECT LITERAL — unlike every other table in this file, the
+ * KEY here is caller-supplied. `TOOL_PROFILE_TOOLS["constructor"]` on a literal
+ * answers `Object.prototype.constructor`: truthy, and then `.has` is not a
+ * function. A Map has no inherited keys, so a role name off the wire can only
+ * hit a row somebody wrote.
  */
 function offeredToolsFor(toolProfile) {
-    return (toolProfile && exports.TOOL_PROFILE_TOOLS[toolProfile]) || null;
+    return (toolProfile && exports.TOOL_PROFILE_TOOLS.get(toolProfile)) || null;
 }
 /**
  * Per-op write gating for MIXED read+write tools — they stay registered for

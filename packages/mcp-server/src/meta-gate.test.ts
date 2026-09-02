@@ -145,7 +145,7 @@ describe("registerMetaTool runs isSuppressedTool (registrar.ts:299)", () => {
     // `HIDDEN_TOOLS`, or `TOOL_PROFILE_TOOLS` gains a row (wave B), this fails,
     // and that is the prompt to add a suppression leg driving the real table.
     expect([...HIDDEN_TOOLS]).toEqual([]);
-    expect(Object.keys(TOOL_PROFILE_TOOLS)).toEqual([]);
+    expect([...TOOL_PROFILE_TOOLS.keys()]).toEqual([]);
   });
 
   it("a tool INSIDE the offer still registers — it narrows, it does not empty", async () => {
