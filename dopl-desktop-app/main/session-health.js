@@ -11,8 +11,12 @@
 // read from where it already lives on the session object; four writers stamp them and each is at
 // the one site that knows the fact:
 //   `s.turns`             `session-io.js › applyCoreEvents` (the `result` event IS a turn)
-//   `s.tokensAtLastPost`  `session-outbound-tag.js › nextOwnPostId` (the one place a post is
-//   `s.lastOwnPostAt`      stamped, so "since it last spoke" cannot drift from "it spoke")
+//   `s.tokensAtLastPost`  `session-outbound-tag.js › markOwnPost`, called from
+//   `s.lastOwnPostAt`      `session-gate-bridge.js › gateCall` ON THE ALLOW BRANCHES ONLY
+//                          ⚠ It lived inside `nextOwnPostId` until 2026-09-02, and the minter
+//                          runs BEFORE the verdict — so every REFUSED post reset this clock and
+//                          a session wedged against a tool it is denied read as freshly
+//                          talkative, one denial per tick. Never stamp it beside the id again.
 //   `s.deniedCalls`       `session-windowless.js › noteDenied`
 //   `s.lastDeniedTool`
 //   `s.lastWakeSeq`       `session-gate.js › enqueue`, beside `lastInboundSeq`, on a WAKE only

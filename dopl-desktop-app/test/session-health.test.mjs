@@ -206,14 +206,93 @@ test("WRITERS: each of the four stamps has exactly one producer, at the site tha
   const src = (f) => readFileSync(join(MAIN, f), "utf8");
   // A `result` IS a completed turn — the normalizer's own vocabulary.
   assert.match(src("session-io.js"), /s\.turns = \(Number\(s\.turns\) \|\| 0\) \+ 1;/);
-  // The ONE place a post is minted, so "it spoke" and "when it spoke" cannot drift apart.
+  // ⚠ THE STAMP IS ITS OWN FUNCTION AND IT IS CALLED ON THE VERDICT (2026-09-02). It used to
+  // sit at the bottom of `nextOwnPostId`, which the gate runs BEFORE it knows the verdict — so
+  // a DENIED post reset this clock and a session wedged against a tool it is refused looked
+  // freshly talkative. Both halves are pinned: the writer, and the fact the minter is not it.
   const tag = src("session-outbound-tag.js");
-  assert.match(tag, /s\.lastOwnPostAt = Date\.now\(\);/);
+  assert.match(tag, /function markOwnPost\(s\) \{[\s\S]*?s\.lastOwnPostAt = Date\.now\(\);/);
   assert.match(tag, /s\.tokensAtLastPost = Number\(s\.tokensSpent\) \|\| 0;/);
+  assert.match(src("session-gate-bridge.js"), /if \(outbound\) outboundTag\.markOwnPost\(s\);/);
   // The denial ledger, beside the deny it counts.
   assert.match(src("session-windowless.js"), /s\.deniedCalls = \(Number\(s\.deniedCalls\) \|\| 0\) \+ 1;/);
   // The wake ACK, at delivery and on the VERDICT — never re-derived from the body.
   const gate = src("session-gate.js");
   assert.match(gate, /a\.wake === true && typeof a\.seq === 'number'/);
   assert.match(gate, /s\.lastWakeSeq = a\.seq;/);
+});
+
+// ── 7. 🔒 THE STALENESS CLOCK MOVES ON SPEECH, AND ON NOTHING ELSE ───────────────────────
+//
+// ⚠ **THE DEFECT (2026-09-02).** `lastOwnPostAt` / `tokensAtLastPost` were stamped at the bottom
+// of `session-outbound-tag.js › nextOwnPostId`, and `session-gate-bridge.js › gateCall` mints
+// that id BEFORE it knows the verdict — it has to, because the tag rides a verdict it cannot
+// make. So a REFUSED post reset the clock: a session wedged against a tool it is denied read as
+// freshly talkative, once per denial, forever. That is exactly the class T51 exists to surface,
+// handed the strongest immunity to it.
+//
+// ⚠ These cases drive the SHIPPED gate rather than scanning it, so they fail on the revert
+// whatever the comments say.
+
+const bridge = require(join(MAIN, "session-gate-bridge.js"));
+const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
+const A_POST = { op: "post", body: "Shipping the invoice import tonight." };
+
+function gateSession(over = {}) {
+  return {
+    agentId: "a1b2c3d4",
+    profile: "full",
+    channelId: "ch1",
+    taskId: "",
+    tokensSpent: 9_000,
+    lastOwnPostAt: 1_000,
+    tokensAtLastPost: 111,
+    pendingPermissions: new Map(),
+    pendingNames: new Map(),
+    state: { allowForTask: [], messageMode: "ask", toolMode: "manual" },
+    ...over,
+  };
+}
+
+test("STALENESS: an ALLOWED own-channel post moves the clock and the token baseline", () => {
+  const s = gateSession({ state: { allowForTask: [], messageMode: "auto_outbound" } });
+  const out = bridge.gateCall(s, CHANNEL_TOOL, A_POST, {}, () => {}, () => {});
+  assert.equal(out.verdict, "allow");
+  assert.ok(s.lastOwnPostAt > 1_000, "it spoke, so the quiet window restarts");
+  assert.equal(s.tokensAtLastPost, 9_000, "and the delta is measured from here");
+});
+
+test("STALENESS: a post still ON THE CARD moves NEITHER — a draft is not speech", () => {
+  // ⚠ MUTATION CHECK, AND THE STRONGEST ONE HERE. Put the two lines back at the bottom of
+  // `nextOwnPostId` and this fails outright: the id is minted BEFORE the verdict, so merely
+  // ASKING would restart the clock — which is how a session wedged against a gate it never
+  // passes reported itself as freshly talkative.
+  const s = gateSession();
+  const out = bridge.gateCall(s, CHANNEL_TOOL, A_POST, { requestId: "r0" }, () => {}, () => {});
+  assert.equal(out.settled, false, "an `ask` posture really does park rather than answer");
+  assert.equal(s.lastOwnPostAt, 1_000, "nothing has been said yet");
+  assert.equal(s.tokensAtLastPost, 111);
+});
+
+test("STALENESS: a PARKED post stamps on the operator's ALLOW and never on their DENY", () => {
+  const denied = gateSession();
+  const parkDeny = bridge.gateCall(denied, CHANNEL_TOOL, A_POST, { requestId: "r1" }, () => {}, () => {});
+  assert.equal(parkDeny.settled, false, "an `ask` posture really does park");
+  parkDeny.park(() => {});
+  denied.pendingPermissions.get("r1")({ behavior: "deny" });
+  assert.equal(denied.lastOwnPostAt, 1_000, "a card the operator refused is not speech");
+
+  const allowed = gateSession();
+  const parkAllow = bridge.gateCall(allowed, CHANNEL_TOOL, A_POST, { requestId: "r2" }, () => {}, () => {});
+  parkAllow.park(() => {});
+  allowed.pendingPermissions.get("r2")({ behavior: "allow" });
+  assert.ok(allowed.lastOwnPostAt > 1_000, "…and one they sent is");
+  assert.equal(allowed.tokensAtLastPost, 9_000);
+});
+
+test("STALENESS: a non-post tool call never touches it, allowed or not", () => {
+  const s = gateSession({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } });
+  bridge.gateCall(s, "Bash", { command: "ls" }, {}, () => {}, () => {});
+  assert.equal(s.lastOwnPostAt, 1_000, "a Bash call is not this session speaking");
+  assert.equal(s.tokensAtLastPost, 111);
 });

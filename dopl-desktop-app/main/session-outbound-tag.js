@@ -145,18 +145,32 @@ function nextOwnPostId(s) {
     const oldest = s.ownPostIds.values().next();
     if (!oldest.done) s.ownPostIds.delete(oldest.value);
   }
-  // ── ⚠ THE "IT LAST SPOKE" STAMP (2026-09-01, T51/T83) ────────────────────────────────
-  // `session-health.js` measures both the QUIET WINDOW and the token DELTA from the last thing
-  // this session said, and this is the one place a post is stamped — so putting the clock
-  // anywhere else would let "it spoke" and "when it spoke" drift apart by exactly the paths that
-  // mint a stamp without minting an id.
-  // ⚠ IT IS STAMPED WHEN THE POST IS MINTED, WHICH IS AT THE GATE AND NOT AT DELIVERY. That is
-  // the honest bound for what it is used for: the session has DECIDED to speak, and treating a
-  // post that is waiting on an operator's Send as silence would flag the agent that is doing
-  // exactly what it should. It rides beside `ownPostSeq`, whose lifetime it shares.
+  return id;
+}
+
+// ── ⚠ THE "IT LAST SPOKE" STAMP (2026-09-01, T51/T83) ──────────────────────────────────
+//
+// `session-health.js` measures both the QUIET WINDOW and the token DELTA from the last thing
+// this session said, and this is the one place a post is stamped — so putting the clock
+// anywhere else would let "it spoke" and "when it spoke" drift apart.
+//
+// ⚠ **IT IS A SEPARATE FUNCTION FROM {@link nextOwnPostId}, AND THAT SEPARATION IS THE WHOLE
+// FIX (2026-09-02).** The two lines used to sit at the bottom of the id minter — and the minter
+// runs BEFORE the verdict (`session-gate-bridge.js › gateCall` computes the tag first, because
+// the tag has to ride the verdict it cannot make). So EVERY REFUSED POST RESET THE STALENESS
+// CLOCK: a wedged agent hammering a tool it is denied looked freshly talkative, one denial per
+// tick, forever — which is precisely the class T51 exists to surface and precisely the class
+// that got the strongest immunity.
+//
+// ⚠ CALLED ON THE ALLOW BRANCHES ONLY, and "allow" INCLUDES the operator's own click on a
+// parked card: the session has DECIDED to speak and a human said yes, so treating the wait for
+// delivery as silence would flag the agent that is doing exactly what it should. What it must
+// NOT include is a verdict of `deny` — nothing was said, and nothing is what the clock should
+// report. It rides beside `ownPostSeq`, whose lifetime it shares.
+function markOwnPost(s) {
+  if (!s || !s.agentId) return;
   s.lastOwnPostAt = Date.now();
   s.tokensAtLastPost = Number(s.tokensSpent) || 0;
-  return id;
 }
 
 // WHAT to do with this call's arguments. Three outcomes, and only one of them rewrites:
@@ -206,10 +220,16 @@ function allowResult(tag) {
 // The GATED path's resolver, wrapped. The operator's decision still decides: a deny (or a
 // park's fail-closed deny, or any non-allow shape) passes through untouched and carries no
 // updatedInput. Only an allow gains the corrected arguments.
-function wrapAllow(resolve, tag) {
-  if (!tag || tag.action !== 'inject') return resolve;
+// ⚠ `onAllow` IS THE STALENESS STAMP'S HOOK (2026-09-02) and it fires on the OPERATOR's allow,
+// never on their deny — see {@link markOwnPost}. It is a callback rather than a session argument
+// so this module keeps knowing nothing about how a verdict is reached.
+function wrapAllow(resolve, tag, onAllow) {
+  const inject = !!(tag && tag.action === 'inject');
+  if (!inject && typeof onAllow !== 'function') return resolve;
   return function resolveWithThreadTag(result) {
-    if (result && result.behavior === 'allow') {
+    const allowed = !!(result && result.behavior === 'allow');
+    if (allowed && typeof onAllow === 'function') onAllow();
+    if (allowed && inject) {
       resolve(Object.assign({}, result, { updatedInput: tag.input }));
       return;
     }
@@ -223,6 +243,7 @@ module.exports = {
   suppliedThreadId,
   threadTagFor,
   nextOwnPostId, // 2026-08-21: the per-instance stamp the fan-out self-filter reads
+  markOwnPost, // 2026-09-02: T51's staleness clock — ALLOW branches only
   MAX_OWN_POST_IDS,
   CLIENT_MSG_ID_ARG,
   allowResult,

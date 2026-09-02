@@ -131,7 +131,14 @@ function gateCall(s, name, input, opts, dispatch, log) {
     log('session: outbound post names thread', String(tag.supplied).slice(0, 24),
       'but this session drives', String(tag.wanted).slice(0, 24), '— leaving the call as written');
   }
-  if (decision === 'preapproved' || decision === 'allow') return { settled: true, verdict: 'allow', tag };
+  if (decision === 'preapproved' || decision === 'allow') {
+    // ⚠ THE STALENESS CLOCK IS STAMPED HERE, ON THE VERDICT, NOT UP THERE WITH THE ID
+    // (2026-09-02). The tag is minted BEFORE the verdict because it has to ride one it cannot
+    // make; stamping `lastOwnPostAt` there meant every DENIED post reset T51's clock, so a
+    // session wedged against a tool it is refused looked freshly talkative once per denial.
+    if (outbound) outboundTag.markOwnPost(s);
+    return { settled: true, verdict: 'allow', tag };
+  }
   // F-320: a deny has two causes now, and the LAUNCH BOUND is not "blocked by the profile"
   if (decision === 'deny') return { settled: true, verdict: 'deny', tag: null, message: denyMessageFor(verdict.reason) };
 
@@ -146,7 +153,12 @@ function gateCall(s, name, input, opts, dispatch, log) {
     tag,
     park: function park(resolve) {
       // The tag rides the OPERATOR's allow here; a deny (park included) carries nothing.
-      s.pendingPermissions.set(requestId, outboundTag.wrapAllow(resolve, tag));
+      // ⚠ AND ON THE OPERATOR'S OWN ALLOW TOO — a parked post a human says yes to IS speech;
+      // their deny is not, and `wrapAllow` fires the hook on neither but the first.
+      s.pendingPermissions.set(
+        requestId,
+        outboundTag.wrapAllow(resolve, tag, outbound ? function () { outboundTag.markOwnPost(s); } : null),
+      );
       s.pendingNames.set(requestId, grantName);
       dispatch(s, { type: 'permission_request', requestId, name: grantName, payload });
     },

@@ -165,12 +165,22 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
   // the tag back; the adapter writes them in the platform's own reply vocabulary
   // (`runtime/claude/approval.js › answerApproval` -> `outboundTag.allowResult(tag)`), which is
   // the half that is not portable. Both ends are pinned.
-  assert.match(fn, /if \(decision === 'preapproved' \|\| decision === 'allow'\) return \{ settled: true, verdict: 'allow', tag \};/,
+  assert.match(fn, /if \(decision === 'preapproved' \|\| decision === 'allow'\) \{[\s\S]*?return \{ settled: true, verdict: 'allow', tag \};/,
     "the auto-allowed path");
+  // ⚠ 🔒 T51's STALENESS CLOCK IS STAMPED ON THE VERDICT, NOT WITH THE ID (2026-09-02). The
+  // mint above runs BEFORE the verdict — it has to, the tag rides a verdict it cannot make — so
+  // while `lastOwnPostAt` lived inside `nextOwnPostId` EVERY DENIED POST RESET IT, and a session
+  // wedged against a tool it is refused looked freshly talkative once per denial. That is the
+  // exact class T51 exists to surface, given the strongest immunity.
+  assert.match(fn, /if \(outbound\) outboundTag\.markOwnPost\(s\);/, "stamped on the allow");
+  assert.ok(!/markOwnPost/.test(fnOf(M("session-outbound-tag.js"), "nextOwnPostId")),
+    "and the minter itself stamps nothing");
   assert.match(fnOf(M("runtime/claude/approval.js"), "answerApproval"),
     /if \(verdict === 'allow'\) return outboundTag\(\)\.allowResult\(req\.tag \|\| null\);/,
     "…and the tag is what an allow carries");
-  assert.match(fn, /s\.pendingPermissions\.set\(requestId, outboundTag\.wrapAllow\(resolve, tag\)\);/,
+  // ⚠ AND THE GATED ONE, whose allow is the OPERATOR's click — that is speech too, so the hook
+  // rides `wrapAllow` and fires on their allow and on neither of their denies.
+  assert.match(fn, /outboundTag\.wrapAllow\(\s*resolve,\s*tag,\s*outbound \? function \(\) \{ outboundTag\.markOwnPost\(s\); \} : null,?\s*\)/,
     "and the gated one");
   // THE DENY BRANCH CARRIES NO TAG — that is what this pin is for, and it still holds.
   // ⚠ THE MESSAGE MOVED ON 2026-08-25 (F-320) and this line was the literal `'Blocked for this
