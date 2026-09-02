@@ -6297,12 +6297,32 @@ rejects one). And `getBaseTree` lives in `src/features/knowledge/server/service-
 
 ---
 
-## The 2026-09-01 ORCHESTRATOR-SURFACE wave — F-404 through F-405
+## The 2026-09-01 ORCHESTRATOR-SURFACE wave — F-407 through F-408
+
+⚠ **THESE WERE FILED IN THE 404-406 BLOCK AND RENUMBERED THE SAME DAY, BECAUSE THREE TIERS OF ONE
+WAVE CLAIMED IT AT ONCE.** Master's highest id was 403 — re-derive with
+`git show master:docs/REFACTOR-FINDINGS.md | grep -oE 'F-[0-9]{3}' | sort -u | tail -1` — and three
+branches then allocated 404 onward independently: the P0 tier (three ids), the DESKTOP tier (three
+different findings under the SAME three ids), and this tier (two). Only one set can survive a merge.
+
+⚠ **THE FIX IS A RULE, NOT THIS PARAGRAPH: ALLOCATE FROM THE HIGHEST ID CLAIMED ON ANY LIVE BRANCH,
+NEVER FROM MASTER'S.** A findings file is an append-only shared counter, and parallel branches make
+"the next number" a question master cannot answer. Re-derive across every live branch before filing:
+`for b in <branches>; do git show $b:docs/REFACTOR-FINDINGS.md | grep -oE 'F-[0-9]{3}'; done | sort -u
+| tail -1`.
+
+⚠ **`scripts/check-doc-refs.mjs` IS WHY THIS NOTE NAMES NO COLLIDING ID IN ITS OWN NOTATION.** The
+gate resolves every `F-NNN` reference to a heading in these docs, and an id that lives only on
+another branch is a DANGLING ref here — so the collision is described by number-block rather than
+cited. That is the gate working: a doc may not point at a finding this tree does not hold.
+
+These two moved to the next free block above every claim. **The other two tiers' ids are still to be
+resolved at merge**, and whichever set moves, this heading does not.
 
 Opened while building T20/T21/T22/T40/T41/T81 of `docs/specs/` — the MCP agent-efficiency spec's P2
 tier. Both are things the wave MEASURED and deliberately did not fix inside it.
 
-### F-404 — `set_agent_mode` over MCP cannot be made safe from the server side, because the bound it needs lives only on the desktop (2026-09-01)
+### F-407 — `set_agent_mode` over MCP could not be made safe from the server side, because the bound it needs lives only on the desktop (2026-09-01) — ✅ DISCHARGED the same day by the desktop tier
 
 **The ask** was a `dopl_channel(op="set_agent_mode", agent_id=…, tool_mode=…, message_mode=…)` — a
 fourth KIND on the launch mailbox, letting an orchestrator re-posture one of its operator's RUNNING
@@ -6341,9 +6361,28 @@ producer ships, and the producer lands with the consumer it unblocks):
    blind);
 4. only then the server schema/service, the `@dopl/client` union arm, and the MCP op.
 
-- Status: open. ⚠ Do not implement step 4 before step 2 exists.
+✅ **STEP 2 LANDED THE SAME DAY** (desktop branch `p2/desktop-lifecycle`, commit `219304e5`
+*"dispatch set_agent_mode directives, clamped to the operator's posture"*), so the premise of this
+finding is discharged and the op is buildable. **What discharged it is worth keeping**: the desktop's
+two mode vocabularies are ORDERED arrays and the clamp is an INDEX COMPARISON against the operator's
+own stored channel posture — so "never wider" is enforced where the posture actually lives, and the
+MCP op ASKS rather than sets. ⚠ **`set_agent_mode` is also the only non-launch kind still behind the
+machine-wide launch-consent toggle**, because a posture at `bypass` pre-approves work tools on
+hardware the operator pays for, where `end` and `rename` widen nothing.
 
-### F-405 — INVARIANTS called `channel_messages.seq` "workspace-global", and it is TABLE-global (2026-09-01) — ✅ RESOLVED in this change
+⚠ **THE DESKTOP SYMBOLS ARE DELIBERATELY NOT CITED BY ANCHOR HERE.** They live on a branch this tree
+has not merged, and `scripts/check-doc-refs.mjs` correctly rejects a `path › symbol` anchor at a
+symbol this checkout does not hold — the same reason the block note above names no colliding id.
+Re-anchor them at merge, when the files exist.
+
+⚠ **THE ORDER IN THIS FINDING IS THE REUSABLE PART, NOT THE VERDICT.** A capability whose only bound
+lives in another process must ship its FENCE first and its SURFACE second; shipping the op while step
+2 was hypothetical would have been a posture-widening primitive with a docblock.
+
+- Status: ✅ discharged 2026-09-01. Step 3 (the mode columns on `channel_sessions`, so an
+  orchestrator can SEE the posture it is about to change) is the wave's session-health half.
+
+### F-408 — INVARIANTS called `channel_messages.seq` "workspace-global", and it is TABLE-global (2026-09-01) — ✅ RESOLVED in this change
 
 §10's workspace-await bullet and `repository-await-workspace.ts › listWorkspaceMessagesAfter` both say
 *"`seq` is WORKSPACE-GLOBAL and gappy"*. Measured against the DDL: `20260725120000_channels.sql`
