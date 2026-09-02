@@ -30,6 +30,6 @@ export async function opDelete(
   // the ref existed — which is an existence oracle behind a refusal that is
   // supposed to be unconditional.
   return err(
-    `Nothing was deleted. Deleting an agent template is app-only: it is permanent (no trash, no restore), it destroys an identity a whole team may be launching from, and an MCP call has no confirmation dialog at the moment the row goes. Ask the user to delete ${inlineOr(ref, NO_NAME)} in the Dopl app. Do not retry with different parameters — no role, scope or argument changes this. To take a template out of use without destroying it, dopl_agent(op="update", visibility="private") removes everyone else's access to it.`,
+    `Nothing was deleted. Deleting an agent template is app-only: it is permanent (no trash, no restore), it destroys an identity the whole workspace may be launching from, and an MCP call has no confirmation dialog at the moment the row goes. Ask the user to delete ${inlineOr(ref, NO_NAME)} in the Dopl app. Do not retry with different parameters — no role, scope or argument changes this. To take a template out of use without destroying it, dopl_agent(op="update", visibility="private") removes everyone else's access to it.`,
   );
 }

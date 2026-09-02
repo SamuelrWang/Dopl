@@ -12,6 +12,16 @@ const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
 const shelf_js_1 = require("./shelf.js");
 const agent_shared_js_1 = require("./agent-shared.js");
+/** One heading per OFFERED visibility, in the order `op="list"` prints them. */
+const VISIBILITY_HEADINGS = {
+    private: "Private to you",
+    workspace: "Shared with the whole workspace",
+};
+const OFFERED_VISIBILITIES = new Set(agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES);
+/** The heading for every OTHER stored visibility. ⚠ It names no axis on
+ *  purpose: it exists so a row SHOWS, not so a retired sharing model gets taught
+ *  back to the reader one heading at a time. */
+const OTHER_HEADING = "Shared";
 /**
  * ⚠ FRAMING FOR SOMEBODY ELSE'S INSTRUCTIONS, and it is the reason `op="get"`
  * takes a caller id at all. A template's `instructions` block is a SYSTEM PROMPT
@@ -46,16 +56,24 @@ async function opList(client, shelf) {
         return (0, respond_js_1.ok)(`No agent templates visible to you${where}. ${agent_shared_js_1.TEMPLATES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`);
     }
     // ⚠ GROUPED BY VISIBILITY because that is the axis a caller acts on ("the
-    // private one is mine, the workspace one is the team's") — and it is what
+    // private one is mine, the workspace one is everyone's") — and it is what
     // makes an ambiguity refusal actionable when two rows share a name.
+    //
+    // ⚠ A ROW IS NEVER DROPPED FOR HAVING A VISIBILITY THIS SURFACE NO LONGER
+    // OFFERS. The write enum lost `team` (`agent-shared.ts ›
+    // TEMPLATE_VISIBILITY_VALUES`) while the column kept it, so grouping by a
+    // fixed table of the OFFERED values would have made any surviving row
+    // invisible with no error anywhere — the silent-drop shape, not a retirement.
+    // Unoffered values fall through to one trailing bucket that names no axis.
     const groups = [
-        ["private", "Private to you"],
-        ["team", "Shared with a team"],
-        ["workspace", "Shared with the whole workspace"],
+        ...agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES.map((v) => [
+            VISIBILITY_HEADINGS[v],
+            templates.filter((t) => t.visibility === v),
+        ]),
+        [OTHER_HEADING, templates.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility))],
     ];
     const lines = [`## Agent templates${where}\n`];
-    for (const [visibility, heading] of groups) {
-        const rows = templates.filter((t) => t.visibility === visibility);
+    for (const [heading, rows] of groups) {
         if (rows.length === 0)
             continue;
         lines.push(`### ${heading}`);

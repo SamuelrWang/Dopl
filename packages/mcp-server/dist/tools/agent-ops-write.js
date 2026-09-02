@@ -120,11 +120,12 @@ async function opCreate(client, callerUserId, input) {
     const where = personal
         ? "on your personal shelf"
         : "on this workspace's shelf";
+    // ⚠ TWO ARMS, because `create` sends the two-arm enum and nothing else: the
+    // server's own default for an omitted `visibility` is `private`, so this
+    // response cannot describe a row at a visibility this surface never offered.
     const audience = template.visibility === "private"
         ? "Private to you — only you and your own agents can see it."
-        : template.visibility === "team"
-            ? "Shared with the teams you linked."
-            : "Shared with everyone in this workspace — every member can list it and launch it.";
+        : "Shared with everyone in this workspace — every member can list it and launch it.";
     return (0, respond_js_1.ok)([
         `Created agent template ${(0, narration_js_1.inlineOr)(template.name, agent_shared_js_1.NO_NAME)} ${where} (id: \`${template.id}\`). ${audience}`,
         `Launch it into a channel with dopl_channel(op="launch_agent", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,

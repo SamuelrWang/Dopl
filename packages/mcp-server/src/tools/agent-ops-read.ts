@@ -4,7 +4,7 @@
  * `agent.ts`.
  */
 
-import type { DoplClient } from "@dopl/client";
+import type { AgentTemplate, DoplClient } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration.js";
 import { ok, type ToolResponse } from "./respond.js";
 import { toWireShelfOrUndefined, type ShelfArg } from "./shelf.js";
@@ -12,9 +12,24 @@ import {
   isErr,
   NO_NAME,
   resolveTemplateOr,
+  TEMPLATE_VISIBILITY_VALUES,
+  type OfferedTemplateVisibility,
   TEMPLATES_SCOPE_NOTE,
   templateRow,
 } from "./agent-shared.js";
+
+/** One heading per OFFERED visibility, in the order `op="list"` prints them. */
+const VISIBILITY_HEADINGS: Record<OfferedTemplateVisibility, string> = {
+  private: "Private to you",
+  workspace: "Shared with the whole workspace",
+};
+
+const OFFERED_VISIBILITIES = new Set<string>(TEMPLATE_VISIBILITY_VALUES);
+
+/** The heading for every OTHER stored visibility. ⚠ It names no axis on
+ *  purpose: it exists so a row SHOWS, not so a retired sharing model gets taught
+ *  back to the reader one heading at a time. */
+const OTHER_HEADING = "Shared";
 
 /**
  * ⚠ FRAMING FOR SOMEBODY ELSE'S INSTRUCTIONS, and it is the reason `op="get"`
@@ -57,16 +72,27 @@ export async function opList(
     );
   }
   // ⚠ GROUPED BY VISIBILITY because that is the axis a caller acts on ("the
-  // private one is mine, the workspace one is the team's") — and it is what
+  // private one is mine, the workspace one is everyone's") — and it is what
   // makes an ambiguity refusal actionable when two rows share a name.
-  const groups: Array<["private" | "team" | "workspace", string]> = [
-    ["private", "Private to you"],
-    ["team", "Shared with a team"],
-    ["workspace", "Shared with the whole workspace"],
+  //
+  // ⚠ A ROW IS NEVER DROPPED FOR HAVING A VISIBILITY THIS SURFACE NO LONGER
+  // OFFERS. The write enum lost `team` (`agent-shared.ts ›
+  // TEMPLATE_VISIBILITY_VALUES`) while the column kept it, so grouping by a
+  // fixed table of the OFFERED values would have made any surviving row
+  // invisible with no error anywhere — the silent-drop shape, not a retirement.
+  // Unoffered values fall through to one trailing bucket that names no axis.
+  const groups: Array<readonly [string, AgentTemplate[]]> = [
+    ...TEMPLATE_VISIBILITY_VALUES.map(
+      (v) =>
+        [
+          VISIBILITY_HEADINGS[v],
+          templates.filter((t) => t.visibility === v),
+        ] as const,
+    ),
+    [OTHER_HEADING, templates.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility))],
   ];
   const lines = [`## Agent templates${where}\n`];
-  for (const [visibility, heading] of groups) {
-    const rows = templates.filter((t) => t.visibility === visibility);
+  for (const [heading, rows] of groups) {
     if (rows.length === 0) continue;
     lines.push(`### ${heading}`);
     for (const t of rows) lines.push(templateRow(t, personal.has(t.id)));
