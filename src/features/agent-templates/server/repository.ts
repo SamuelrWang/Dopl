@@ -1,5 +1,9 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import {
+  personalWriteWorkspaceId,
+  resolveShelfScope,
+} from "@/shared/tenancy/personal-container";
 import type {
   AgentTemplate,
   TemplateField,
@@ -34,21 +38,31 @@ import {
  * ⚠ `home_scoped` IS FILTERED ON BUT NEVER SELECTED — it is absent from
  * `AGENT_TEMPLATE_COLS` on purpose (`../types.ts › TemplateShelf` holds the
  * argument). Postgres does not require a column to be projected to filter on it.
+ *
+ * ⚠ WHICH CONTAINER `shelf="home"` MEANS IS NO LONGER `workspaceId` — it is the
+ * caller's PERSONAL CONTAINER once one exists
+ * (`shared/tenancy/personal-container.ts`, wave B B11), decided there in one
+ * 2x2 and merely applied here. The sibling of
+ * `knowledge/server/repository-bases.ts › listBasesForWorkspace`, and the two
+ * must not drift.
  */
 export async function listTemplatesForWorkspace(
   workspaceId: string,
   shelf?: TemplateShelf
 ): Promise<AgentTemplate[]> {
   const db = supabaseAdmin();
+  const scope = await resolveShelfScope(workspaceId, shelf);
   let query = db
     .from("agent_templates")
     .select(AGENT_TEMPLATE_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", scope.workspaceIds)
     // Matches `agent_templates_workspace_name_idx`. Name order, not created
     // order: the client groups by visibility and renders alphabetically inside
     // each group, so the server hands back the order it will display in.
     .order("name", { ascending: true });
-  if (shelf !== undefined) query = query.eq("home_scoped", shelf === "home");
+  if (scope.homeScoped !== undefined) {
+    query = query.eq("home_scoped", scope.homeScoped);
+  }
   const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as unknown as AgentTemplateRow[]).map((r) =>
@@ -78,13 +92,19 @@ export async function listHomeScopedTemplateIds(
 ): Promise<string[]> {
   if (templateIds.length === 0) return [];
   const db = supabaseAdmin();
-  const { data, error } = await db
+  // ⚠ THE SAME QUESTION `listTemplatesForWorkspace(_, "home")` ASKS, THROUGH THE
+  // SAME RESOLVER — a second spelling of "is this row personal" is how a label
+  // comes to disagree with the list it labels.
+  const scope = await resolveShelfScope(workspaceId, "home");
+  let query = db
     .from("agent_templates")
     .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("home_scoped", true)
+    .in("workspace_id", scope.workspaceIds)
     .in("id", templateIds);
-  if (error) throw error;
+  if (scope.homeScoped !== undefined) {
+    query = query.eq("home_scoped", scope.homeScoped);
+  }
+  const { data, error } = await query;
   return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
 }
 
@@ -123,14 +143,24 @@ export interface InsertTemplateArgs {
   createdBy: string | null;
 }
 
+/**
+ * ⚠ THE DUAL-WRITE (wave B B11), the sibling of
+ * `knowledge/server/repository-bases.ts › insertBase`. A personal template keeps
+ * `home_scoped = true` AND is filed in the author's personal container once the
+ * flag is on, so flipping the flag back cannot strand it.
+ */
 export async function insertTemplate(
   args: InsertTemplateArgs
 ): Promise<AgentTemplate> {
   const db = supabaseAdmin();
+  // ⚠ RESOLVED BEFORE THE CHAIN, never inline in the insert literal: an `await`
+  // between `.from()` and `.insert()` interleaves a second query into the
+  // builder, which is a real hazard and not only a testing one.
+  const workspaceId = await personalWriteWorkspaceId(args);
   const { data, error } = await db
     .from("agent_templates")
     .insert({
-      workspace_id: args.workspaceId,
+      workspace_id: workspaceId,
       name: args.name,
       description: args.description,
       instructions: args.instructions,
