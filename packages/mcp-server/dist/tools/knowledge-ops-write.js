@@ -170,7 +170,7 @@ async function opUpdateBase(client, ref, name, description, slug, shelf) {
 }
 async function opSetVisibility(client, ref, visibility) {
     if (visibility !== "public") {
-        return (0, respond_1.err)(`set_visibility only publishes (visibility="public") a base you created. Un-publishing and team scope are human-only — use the Dopl web UI.`);
+        return (0, respond_1.err)(`set_visibility only publishes (visibility="public") a base you created. Un-publishing is human-only — use the Dopl web UI.`);
     }
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))

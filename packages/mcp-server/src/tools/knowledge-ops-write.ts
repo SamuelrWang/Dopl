@@ -189,7 +189,7 @@ export async function opUpdateBase(client: DoplClient, ref: string, name?: strin
 export async function opSetVisibility(client: DoplClient, ref: string, visibility: string): Promise<ToolResponse> {
   if (visibility !== "public") {
     return err(
-      `set_visibility only publishes (visibility="public") a base you created. Un-publishing and team scope are human-only — use the Dopl web UI.`,
+      `set_visibility only publishes (visibility="public") a base you created. Un-publishing is human-only — use the Dopl web UI.`,
     );
   }
   const base = await resolveBaseOr(client, ref);
