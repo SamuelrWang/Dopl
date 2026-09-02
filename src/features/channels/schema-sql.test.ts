@@ -148,16 +148,18 @@ const CHANNEL_TRANSPARENT_SELECT_POLICIES = [
 
 /**
  * EVERY policy that reads a channel child, transparent or not. ⚠ The tombstone
- * census is WIDER than transparency: `channel_pings_party_select` is
- * member-and-party scoped and never public, so it is not on the list above — but
- * a `channel_members` row OUTLIVES a soft-delete tombstone, so `is_channel_member`
- * alone keeps answering true for a room that no longer exists. C-15 is about the
- * TOMBSTONE, not about who else can see the row.
+ * census is WIDER than transparency, because a `channel_members` row OUTLIVES a
+ * soft-delete tombstone: `is_channel_member` alone keeps answering true for a
+ * room that no longer exists. C-15 is about the TOMBSTONE, not about who else
+ * can see the row.
+ *
+ * ⚠ **IT CARRIED A SIXTH, `channel_pings_party_select`, UNTIL 2026-09-02** —
+ * member-and-party scoped and never public, which is why it was on this list and
+ * not the one above. Ruling B8 folds pings into a directed `send`, and its
+ * migration was DELETED UNAPPLIED at the Wave B batch-1 integration, so there is
+ * no such policy to census. The remaining TS ping lane retires with B16.
  */
-const CHANNEL_SCOPED_SELECT_POLICIES = [
-  ...CHANNEL_TRANSPARENT_SELECT_POLICIES,
-  "channel_pings_party_select",
-];
+const CHANNEL_SCOPED_SELECT_POLICIES = [...CHANNEL_TRANSPARENT_SELECT_POLICIES];
 
 describe("channel-scoped RLS hides tombstoned channels (C-15)", () => {
   it.each(CHANNEL_SCOPED_SELECT_POLICIES)(
@@ -186,15 +188,6 @@ describe("channel-scoped RLS hides tombstoned channels (C-15)", () => {
       const calls = [...sql.matchAll(/\b(is_[a-z_]+)\s*\(/g)].map((m) => m[1]);
       for (const fn of calls) expect(KNOWN.has(fn), `${policy} calls ${fn}`).toBe(true);
     }
-  });
-
-  it("channel_pings_party_select narrows to the two PARTIES, never the room", () => {
-    // ⚠ MUTATION CHECK. Membership alone would publish every ping to the whole
-    // channel — the one property `channel_pings` exists NOT to have — and would
-    // make the table a worse `channel_messages`.
-    const sql = finalPolicy("channel_pings_party_select");
-    expect(sql).toMatch(/recipient_user_id\s*=\s*\(\s*SELECT\s+auth\.uid\(\)/i);
-    expect(sql).toMatch(/sender_user_id\s*=\s*\(\s*SELECT\s+auth\.uid\(\)/i);
   });
 
   it("channel_task_participants inherits the guard through channel_tasks", () => {
@@ -258,11 +251,10 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
     ),
   ];
 
-  // ELEVEN since 2026-09-01: `channel_pings.channel_id` (migration
-  // `20260907120000`, the "Needs you" signal) is the newest child — and it
-  // CASCADES for the direction mailbox's reason: a ping is a signal ABOUT work in
-  // that channel, addressed to somebody by virtue of that room, so it is
-  // meaningless without it and must not outlive it. TEN since 2026-08-31:
+  // ⚠ BACK TO TEN ON 2026-09-02: it was ELEVEN for one day, when
+  // `channel_pings.channel_id` (the "Needs you" signal) joined — that migration
+  // was DELETED UNAPPLIED under ruling B8 at the Wave B batch-1 integration, so
+  // its child FK went with it. TEN since 2026-08-31:
   // `channel_agent_directions.channel_id` (migration
   // `20260903120000`, the PRIVATE DIRECT LANE's mailbox) is the newest child —
   // and it CASCADES for the launch mailbox's reason, which is the one that
@@ -277,8 +269,8 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // one statement (INVARIANTS §5). A new child that does not cascade fails the
   // next case, not this one. ⚠ A grant is deliberately NOT kept when its channel
   // goes: it is a share INTO that channel, meaningless without it.
-  it("finds all eleven child FKs", () => {
-    expect(refs.length).toBe(11);
+  it("finds all ten child FKs", () => {
+    expect(refs.length).toBe(10);
   });
 
   it("each one cascades — none is SET NULL or RESTRICT", () => {

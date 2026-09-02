@@ -96,8 +96,9 @@ these are claims.
 They order correctly after master's latest (`20260907120000_channel_launch_directives_kind`).
 
 ⚠ **`channel_pings` ONCE SHARED A VERSION PREFIX WITH THAT MIGRATION** — both were
-`20260907120000`. **Renamed to `20260907130000_channel_pings.sql` on 2026-09-02, while still
-unapplied.** Filename order had resolved it locally, but the `supabase_migrations.schema_migrations`
+`20260907120000`. **Renamed to version `20260907130000` on 2026-09-02, while still
+unapplied — and DELETED unapplied on 2026-09-02 under Samuel's ruling B8, so that file no longer
+exists in this tree.** Filename order had resolved it locally, but the `supabase_migrations.schema_migrations`
 history is upserted `ON CONFLICT (version) DO UPDATE`: one row would have survived and `…_kind`
 would have vanished from `migration list` entirely. `supabase migration list` prints VERSIONS while
 every doc cites FILENAMES (§12, F-304), so still join on the name:
@@ -146,7 +147,7 @@ UNPUSHED, so CI still has not run**; every figure below is a local measurement.
 
 | Finding | Commit |
 |---|---|
-| **BLOCKER** the pings migration's `20260907120000` version collision (renamed to `20260907130000_channel_pings.sql`) | `9af6f6fc` |
+| **BLOCKER** the pings migration's `20260907120000` version collision (renamed to version `20260907130000`; the file was later deleted unapplied under ruling B8) | `9af6f6fc` |
 | **R1** the ping read lane's membership fence (+ the C-15 tombstone guard, the census, and both migrations' missing `DROP … IF EXISTS`) | `0a61455f` |
 | **R3** `ctx.apiKeyWorkspaceId` on the two account routes | `93ced677` |
 | `service-account.ts` / `repository-account.ts` had no tests in `src/` (the second was cited by name and did not exist) | `72970840` |

@@ -448,6 +448,37 @@ describe("the retired tables are gone, and the one left behind is unchanged", ()
     expect(offenders).toEqual([]);
   });
 
+  /**
+   * 🔒 THE OTHER MERGE HAZARD ON THIS DIRECTORY, AND IT HAS FIRED BEFORE.
+   * A migration's VERSION is its filename prefix, and two files sharing one is a
+   * merged-directory defect exactly like the case above: each branch picks the
+   * next free slot in the directory IT can see. It happened on 2026-09-02, when
+   * two files landed at `20260907120000` and the collision was found by hand and
+   * recorded as a BLOCKER (`docs/MCP-EFFICIENCY-WAVE-2026-09-01.md`) — and it is
+   * live in the tree AGAIN at `20260901120000`, where two APPLIED migrations
+   * share a prefix (F-526).
+   *
+   * ⚠ SO THIS IS A RATCHET, NOT A CLEAN ASSERTION. The one live collision is
+   * named and allowed, because both of its files are already applied and
+   * renaming an applied migration is how a replay diverges from production. What
+   * the case forbids is a SECOND one — which is the only half a gate can still
+   * protect, and the half that was going to be found by hand again.
+   */
+  it("🔒 no TWO migrations share a version, except the one already applied (F-526)", () => {
+    const APPLIED_COLLISION = ["20260901120000"];
+    const byVersion = new Map<string, string[]>();
+    for (const { name } of FILES) {
+      const v = name.slice(0, 14);
+      byVersion.set(v, [...(byVersion.get(v) ?? []), name]);
+    }
+    const collisions = [...byVersion.entries()]
+      .filter(([v, names]) => names.length > 1 && !APPLIED_COLLISION.includes(v))
+      .map(([v, names]) => `${v}: ${names.join(" + ")}`);
+    // The fix is to RENAME the UNAPPLIED file to the next free version — never to
+    // rename an applied one, and never to bless the collision by adding it above.
+    expect(collisions).toEqual([]);
+  });
+
   it("the mirror is one trigger and one function — not a second write path", () => {
     const mirror = liveFunctionBody("mirror_channel_resource_grant");
     expect(mirror).not.toBeNull();

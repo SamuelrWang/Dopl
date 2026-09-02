@@ -127,15 +127,17 @@ test("every profile this app can stamp is one the SERVER can place", () => {
   }
 });
 
-test("and the server knows no profile this app cannot spawn, except the one still landing", () => {
-  // ⚠ THE OTHER DIRECTION, bounded rather than dropped. The two lists are EQUAL after
-  // `channel_agent` lands on this side (MCP v2 wave B slice B6, `full` minus Bash); until then
-  // it is the only permitted difference, and anything else means a name entered the product
-  // vocabulary through the server. Delete this allowance with that slice — a stale one would
-  // let a second name in behind it.
-  const extra = SERVER_PROFILES.filter((p) => !KNOWN_PROFILES.includes(p));
-  assert.deepEqual(extra, extra.filter((p) => p === "channel_agent"),
-    `gating.ts names ${extra.join(", ")}, which this app never spawns`);
+test("and the server knows no profile this app cannot spawn — the lists are EQUAL", () => {
+  // ⚠ THE OTHER DIRECTION, and the allowance is GONE (2026-09-02, Wave B batch-1 integration).
+  // This case carried one permitted difference, `channel_agent`, while B5 was on the server and
+  // B6 had not yet landed on this side. Both are in now, so the exception has done its work —
+  // and its own comment said to delete it with that slice, because a stale allowance is a hole
+  // a SECOND name walks through behind the first.
+  assert.deepEqual(
+    SERVER_PROFILES.filter((p) => !KNOWN_PROFILES.includes(p)),
+    [],
+    "gating.ts names a profile this app never spawns"
+  );
 });
 
 // ── it may only narrow, and it grants nothing ────────────────────────────────
