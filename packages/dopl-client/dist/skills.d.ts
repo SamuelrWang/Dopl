@@ -23,6 +23,12 @@ export interface CreateSkillInput {
     /** Organizing folder label. Empty/omitted = unfiled. */
     folder?: string | null;
     body?: string;
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     * The server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it and IGNORES
+     * it everywhere outside that narrow predicate (G16).
+     */
+    acknowledgeShared?: boolean;
 }
 export declare function createSkill(t: DoplTransport, input: CreateSkillInput): Promise<{
     skill: Skill;
@@ -41,6 +47,12 @@ export interface UpdateSkillPatch {
     /** Owner or workspace admin only. Team-mode scoping (accessMode 'teams' +
      *  teamIds) is web-UI-managed. */
     visibility?: "public" | "private";
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     * The server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it and IGNORES
+     * it everywhere outside that narrow predicate (G16).
+     */
+    acknowledgeShared?: boolean;
 }
 export declare function updateSkill(t: DoplTransport, slug: string, patch: UpdateSkillPatch): Promise<Skill>;
 export declare function deleteSkill(t: DoplTransport, slug: string): Promise<void>;

@@ -3,12 +3,20 @@
  * `docs/specs/mcp-v2-architecture.md`; findings §6 row 12, which recorded the
  * enforcement as **NONE**).
  *
- * ⚠ **THIS SUITE DRIVES BOTH FEATURE SERVICES, NOT THE HELPER ALONE**, and that
- * is the point of putting it here rather than beside either of them. The gap it
- * closes was one rule stated in one client; the repair is one predicate called
- * from two features, and a unit test of the predicate would pass just as well if
- * `createTemplate` never called it. Each `it` below reaches the real service and
- * asserts on the REPOSITORY — what was written, or that nothing was.
+ * ⚠ **THIS SUITE DRIVES ALL THREE FEATURE SERVICES, NOT THE HELPER ALONE**, and
+ * that is the point of putting it here rather than beside any of them. The gap
+ * it closes was one rule stated in one client; the repair is one predicate
+ * called from three features, and a unit test of the predicate would pass just
+ * as well if `createTemplate` never called it. Each `it` below reaches the real
+ * service and asserts on the REPOSITORY — what was written, or that nothing was.
+ *
+ * ⚠ **SKILLS WERE THE THIRD CALLER AND THEY WERE MISSING UNTIL 2026-09-02.** A11
+ * shipped the helper into knowledge bases and agent templates and left
+ * `dopl_skill(op="set_visibility")` publishing into a peer's container with
+ * nothing in front of it and nothing behind it — a row closed on two of three
+ * types reads, from the ledger, as a row closed. That is why the arms below are
+ * written per FEATURE rather than per axis: a fourth resource type that forgets
+ * the call shows up here as a missing test, not as a passing one.
  *
  * FOUR REFUSAL-ADJACENT AXES, one arm each:
  *   1. the refusal itself (link + 2 members + shared visibility, no flag);
@@ -70,6 +78,31 @@ vi.mock("@/features/knowledge/server/service-bases", () => ({
   getBaseById: vi.fn(),
 }));
 
+vi.mock("@/features/skills/server/repository", () => ({
+  insertSkill: vi.fn(),
+  updateSkillRow: vi.fn(),
+  listSlugsForWorkspace: vi.fn(),
+  readSkillBody: vi.fn(),
+  pgErrorCode: () => undefined,
+}));
+vi.mock("@/features/skills/server/service-reads", () => ({
+  getSkillBySlug: vi.fn(),
+}));
+vi.mock("@/features/skills/server/service-shared", () => ({
+  assertAgentWriteAllowed: vi.fn().mockResolvedValue(undefined),
+  stripNullBytes: (v: unknown) => v,
+}));
+vi.mock("@/features/skills/server/history", () => ({
+  recordVersion: vi.fn().mockResolvedValue(undefined),
+  recordEvent: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/features/teams/server/repository", () => ({
+  deleteGrantsForResource: vi.fn().mockResolvedValue(undefined),
+  insertReadGrantsIfMissing: vi.fn().mockResolvedValue(undefined),
+  listGrantsForResources: vi.fn().mockResolvedValue([]),
+  listTeamIdsForUser: vi.fn().mockResolvedValue([]),
+}));
+
 import { findWorkspaceById } from "./repository";
 import { countActiveMembers } from "./repository-overview";
 import { ContainerPublishUnacknowledgedError } from "./shared-publish";
@@ -94,6 +127,13 @@ import {
   updateBase,
 } from "@/features/knowledge/server/service-base-writes";
 import type { KnowledgeContext } from "@/features/knowledge/types";
+import * as skillRepo from "@/features/skills/server/repository";
+import {
+  createSkill,
+  updateSkill,
+} from "@/features/skills/server/service-writes";
+import { getSkillBySlug } from "@/features/skills/server/service-reads";
+import type { SkillContext } from "@/features/skills/types";
 
 const CONTAINER = "ws-link";
 const USER = OWNER;
@@ -103,6 +143,8 @@ const mockCount = vi.mocked(countActiveMembers);
 const mockTemplates = vi.mocked(templateRepo);
 const mockBases = vi.mocked(baseRepo);
 const mockGetBase = vi.mocked(getBaseById);
+const mockSkills = vi.mocked(skillRepo);
+const mockGetSkill = vi.mocked(getSkillBySlug);
 
 /** The operator, at the keyboard, inside their own link container. */
 function templateCtx() {
@@ -118,6 +160,17 @@ function knowledgeCtx(): KnowledgeContext {
     apiKeyWorkspaceId: null,
     apiKeyWorkspaceLockKind: null,
   } as KnowledgeContext;
+}
+
+function skillCtx(): SkillContext {
+  return {
+    workspaceId: CONTAINER,
+    userId: USER,
+    source: "user",
+    role: "owner",
+    apiKeyWorkspaceId: null,
+    apiKeyWorkspaceLockKind: null,
+  } as SkillContext;
 }
 
 /** What the room is, as the two DB facts the predicate reads. */
@@ -138,6 +191,18 @@ beforeEach(() => {
   mockBases.insertBase.mockResolvedValue({ id: "kb-1", slug: "notes" } as never);
   mockBases.updateBaseRow.mockResolvedValue({ id: "kb-1" } as never);
   mockBases.listBaseSlugsForWorkspace.mockResolvedValue([]);
+  mockSkills.listSlugsForWorkspace.mockResolvedValue([]);
+  mockSkills.insertSkill.mockResolvedValue({ id: "skill-1", slug: "ship-it" } as never);
+  mockSkills.updateSkillRow.mockResolvedValue({ id: "skill-1", slug: "ship-it" } as never);
+  mockSkills.readSkillBody.mockResolvedValue({ body: "" } as never);
+  mockGetSkill.mockResolvedValue({
+    id: "skill-1",
+    slug: "ship-it",
+    visibility: "private",
+    accessMode: "workspace",
+    createdBy: USER,
+    updatedAt: "2026-09-02T00:00:00Z",
+  } as never);
   mockGetBase.mockResolvedValue({
     id: "kb-1",
     slug: "notes",
@@ -166,6 +231,18 @@ describe("a publish into a shared link container without the flag", () => {
       createBase(knowledgeCtx(), { name: "Notes", visibility: "public" })
     ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
     expect(mockBases.insertBase).not.toHaveBeenCalled();
+  });
+
+  it("refuses a skill create, before the slug is taken", async () => {
+    await expect(
+      createSkill(skillCtx(), {
+        name: "Ship it",
+        description: "d",
+        whenToUse: "w",
+        visibility: "public",
+      })
+    ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
+    expect(mockSkills.insertSkill).not.toHaveBeenCalled();
   });
 
   it("carries the code the route maps to a 400", async () => {
@@ -207,6 +284,22 @@ describe("acknowledgeShared: true", () => {
     });
     expect(mockBases.insertBase).toHaveBeenCalledWith(
       expect.objectContaining({ visibility: "public" })
+    );
+  });
+
+  it("lets the skill create through", async () => {
+    await createSkill(skillCtx(), {
+      name: "Ship it",
+      description: "d",
+      whenToUse: "w",
+      visibility: "public",
+      acknowledgeShared: true,
+    });
+    expect(mockSkills.insertSkill).toHaveBeenCalledWith(
+      expect.objectContaining({ visibility: "public" })
+    );
+    expect(mockSkills.insertSkill.mock.calls[0][0]).not.toHaveProperty(
+      "acknowledgeShared"
     );
   });
 
@@ -299,6 +392,36 @@ describe("the UPDATE path is fenced too", () => {
     await updateBase(knowledgeCtx(), "kb-1", { name: "Renamed" });
     expect(mockBases.updateBaseRow).toHaveBeenCalled();
     expect(mockWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("refuses the skill patch `dopl_skill(op=\"set_visibility\")` sends, and writes no row", async () => {
+    // 🔒 THE ROW G16 WAS RECORDED AS CLOSED WHILE THIS DOOR STOOD OPEN. It is the
+    // publish lane for the one resource type A11 did not reach.
+    await expect(
+      updateSkill(skillCtx(), "ship-it", { visibility: "public" })
+    ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
+    expect(mockSkills.updateSkillRow).not.toHaveBeenCalled();
+  });
+
+  it("lets a skill NARROW to private with no flag — that direction has no audience to warn", async () => {
+    mockGetSkill.mockResolvedValue({
+      id: "skill-1",
+      slug: "ship-it",
+      visibility: "public",
+      accessMode: "workspace",
+      createdBy: USER,
+      updatedAt: "2026-09-02T00:00:00Z",
+    } as never);
+    await updateSkill(skillCtx(), "ship-it", { visibility: "private" });
+    expect(mockSkills.updateSkillRow).toHaveBeenCalled();
+  });
+
+  it("accepts the acknowledged skill patch", async () => {
+    await updateSkill(skillCtx(), "ship-it", {
+      visibility: "public",
+      acknowledgeShared: true,
+    });
+    expect(mockSkills.updateSkillRow).toHaveBeenCalled();
   });
 
   it("accepts the acknowledged patch", async () => {

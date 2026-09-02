@@ -8,6 +8,7 @@ import type { DoplClient } from "@dopl/client";
 import { inlineOr } from "./narration";
 import { ok, err, isConflict, type ToolResponse } from "./respond";
 import { agentWriteDenied, failureDetail, NO_NAME } from "./skills-shared";
+import { confirmGate, containerPublishUnacknowledged } from "./confirm-token";
 
 export async function opWrite(
   client: DoplClient,
@@ -134,22 +135,65 @@ export async function opUpdate(
   }
 }
 
+/**
+ * 🔒 **THE PUBLISH DOOR FOR SKILLS (G16, closed 2026-09-02).** `dopl_kb` and
+ * `dopl_agent` have previewed this act since A11/F-441 and this op did not, so
+ * a skill was the one resource an agent could publish into a peer's container
+ * with nothing in front of it and nothing on the server behind it.
+ *
+ * ⚠ **UN-PUBLISHING IS NOT GATED AND MUST NOT BE.** `visibility="private"` only
+ * ever narrows an audience; a preview there would ask the operator to confirm
+ * the safe direction, which is how a confirm step stops being read.
+ */
 export async function opSetVisibility(
   client: DoplClient,
+  callerUserId: string | null,
   slug: string,
   visibility: string,
+  confirmToken?: string,
 ): Promise<ToolResponse> {
   if (visibility !== "public" && visibility !== "private") {
     return err(`set_visibility takes visibility="public" or "private".`);
   }
+  // ⚠ PREVIEW, THEN PUBLISH — and the gate refuses a stray token on the
+  // un-publishing arm for us, so `publishes` carries the whole distinction.
+  const verdict = await confirmGate(
+    client,
+    {
+      tool: "dopl_skill",
+      op: "set_visibility",
+      callerUserId,
+      what: `the skill \`${slug}\`, published workspace-wide`,
+      audience: `everyone in that home channel — the peer standing in it can list it and read its whole SKILL.md, including what was written while it was private`,
+      payload: { skill: slug, visibility: "public" },
+    },
+    { publishes: visibility === "public", token: confirmToken },
+  );
+  if (verdict.kind === "halt") return verdict.response;
+
   try {
-    const skill = await client.updateSkill(slug, { visibility });
+    const skill = await client.updateSkill(slug, {
+      visibility,
+      // 🔒 The token, SPENT, becomes the server's precondition — the same
+      // mapping `dopl_kb(op="set_visibility")` makes.
+      acknowledgeShared: verdict.acknowledgedShared || undefined,
+    });
     return ok(
       visibility === "public"
         ? `Published skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) — now visible workspace-wide.`
         : `Skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`) is now private — only its owner can see it, and it drops out of every other member's dopl_skill(op="list").`,
     );
   } catch (e) {
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
+    // 🔒 G16 — reaching this after a spent token means the room gained a member
+    // in between, so a fresh preview would answer the same. The remedy is a
+    // human, which is `dopl_kb(op="set_visibility")`'s wording for its own race.
+    const unacknowledged = containerPublishUnacknowledged(
+      e,
+      `This call already previewed and confirmed, so the server is refusing on a fact this process cannot see — re-previewing would answer the same. Ask your operator to publish the skill from the Dopl app, where the audience change is stated before they press.`,
+    );
+    if (unacknowledged) return unacknowledged;
     return err(`Couldn't change sharing on \`${slug}\`: ${failureDetail(e)}`);
   }
 }

@@ -52,6 +52,17 @@ export const SkillCreateSchema = z.object({
   /** Omitted → `createSkill` defaults to `'private'`. Full enum accepted so
    *  a "New public skill" affordance needs no schema change. */
   visibility: z.enum(["public", "private"]).optional(),
+  /**
+   * 🔒 "I know this publishes into a room somebody else is standing in."
+   *
+   * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+   * PREDICATE — `kind='link'` container, two or more active members, and the
+   * skill landing at `visibility: 'public'`. Everywhere else it is IGNORED,
+   * never refused. `features/workspaces/server/shared-publish.ts` is the one
+   * statement of both the predicate and the 400, shared with knowledge bases
+   * and agent templates so the three lanes cannot answer differently.
+   */
+  acknowledgeShared: z.boolean().optional(),
 });
 export type SkillCreateInput = z.infer<typeof SkillCreateSchema>;
 
@@ -73,6 +84,17 @@ export const SkillUpdateSchema = z
     accessMode: z.enum(["workspace", "teams"]).optional(),
     /** Teams granted read access; only meaningful with accessMode 'teams'. */
     teamIds: z.array(z.string().uuid()).max(50).optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * skill landing at `visibility: 'public'`. Everywhere else it is IGNORED,
+     * never refused. `features/workspaces/server/shared-publish.ts` is the one
+     * statement of both the predicate and the 400, shared with knowledge bases
+     * and agent templates so the three lanes cannot answer differently.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
   .refine(
     (patch) =>

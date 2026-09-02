@@ -34,7 +34,7 @@ const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-
 - "write" — replace the whole SKILL.md body. Requires: slug, body. \`expected_version\` from a prior read is REQUIRED when a body exists — 412 without it, only \`force=true\` skips it.
 - "create" — Requires: name, description, when_to_use. Optional: when_not_to_use, slug, status, folder, body. Call op="authoring_guide" first.
 - "update" — skill metadata. Requires: slug. \`agent_write_enabled\` is human-only; an agent passing it here is rejected.
-- "set_visibility" — "public" (workspace-visible) or "private" (owner-only); owner or workspace-admin only. Requires: slug, visibility.
+- "set_visibility" — "public" (workspace-visible) or "private" (owner-only). Requires: slug, visibility. Optional: confirm_token.
 - "authoring_guide" — the canonical skill-authoring framework. Call before every op="create".
 
 No delete op — deletion is app-only.`;
@@ -43,8 +43,9 @@ No delete op — deletion is app-only.`;
 export function registerSkillTools(
   register: RegisterTool,
   client: DoplClient,
-  // ⚠ Read for exactly ONE thing: whether a SKILL.md is somebody else's, which
-  // decides `UNTRUSTED_SKILL_BODY_HEADER`.
+  // ⚠ Read for TWO things: whether a SKILL.md is somebody else's (which decides
+  // `UNTRUSTED_SKILL_BODY_HEADER`), and who the confirm preview belongs to on
+  // `set_visibility` (G16).
   caller: CallerIdentity = UNKNOWN_CALLER,
 ): void {
   register(
@@ -80,6 +81,12 @@ export function registerSkillTools(
       force: z.boolean().optional().describe("op=write: overwrite even if the body changed since you read it. Discards the other edit — use only when intentional."),
       visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
       detail: z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + body length WITHOUT the body (cheap orientation); 'full' (default) includes the SKILL.md body."),
+      confirm_token: z
+        .string()
+        .optional()
+        .describe(
+          "op=set_visibility: the one-time token from this call's own preview, echoed back to publish. Needed only when publishing into a home channel somebody else is in; refused on any other call, and never guessable.",
+        ),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
@@ -119,7 +126,13 @@ export function registerSkillTools(
         case "set_visibility": {
           const miss = missingParams("set_visibility", args, ["slug", "visibility"]);
           if (miss) return miss;
-          return opSetVisibility(client, args.slug as string, args.visibility as string);
+          return opSetVisibility(
+            client,
+            caller.userId,
+            args.slug as string,
+            args.visibility as string,
+            args.confirm_token,
+          );
         }
         case "authoring_guide":
           return ok(SKILL_AUTHORING_GUIDE);

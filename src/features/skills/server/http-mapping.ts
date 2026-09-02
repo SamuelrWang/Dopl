@@ -1,5 +1,6 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
+import { ContainerPublishUnacknowledgedError } from "@/features/workspaces/server/shared-publish";
 import {
   SkillAgentWriteDisabledError,
   SkillFileNotFoundError,
@@ -32,6 +33,13 @@ export function mapSkillError(err: unknown): HttpError | null {
   }
   if (err instanceof WorkspaceKeyPrivateSkillError) {
     return new HttpError(403, "WORKSPACE_KEY_PRIVATE_VISIBILITY", err.message);
+  }
+  // 🔒 G16 — 400, not 403: the caller is ALLOWED to publish, the REQUEST is
+  // incomplete. Same mapping as `knowledge/server/http-mapping.ts` and
+  // `agent-templates/server/http-mapping.ts`, because one error class answering
+  // three different statuses is how a remedy stops being actionable.
+  if (err instanceof ContainerPublishUnacknowledgedError) {
+    return new HttpError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED", err.message);
   }
   return null;
 }
