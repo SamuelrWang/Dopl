@@ -47,7 +47,7 @@ const zod_1 = require("zod");
 exports.RESPONSE_FORMAT_FIELD = zod_1.z
     .enum(["concise", "detailed"])
     .optional()
-    .describe('op="read" / "read_sessions" / "read_file" / "search": "concise" drops METADATA — timestamps, ids, scope notes, legends — never a body or a count. Default "detailed"; set it as low as you can.');
+    .describe('op="read" / "status" / "read_file" / "search": "concise" drops METADATA — timestamps, ids, scope notes, legends — never a body or a count. Default "detailed"; set it as low as you can.');
 /** True when this call asked for the smaller render. */
 function isConcise(format) {
     return format === "concise";

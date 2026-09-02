@@ -117,10 +117,48 @@ export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 // slips past the guard. `toolGroupSource` is that scan.
 export const SRC_DIR = path.resolve(process.cwd(), "src");
 
+/**
+ * The op enum **AS PUBLISHED**, or null for a tool that dispatches on none.
+ *
+ * ⚠ **THE PUBLISHED SET, NOT `ZodEnum.options`, SINCE 2026-09-02 (B8).**
+ * `dopl_channel` accepts twenty-two retired names at RUNTIME so their one-line
+ * redirects can run, and publishes five — `z.enum([...]).meta({ enum: [...] })`,
+ * which overrides the `enum` keyword `z.toJSONSchema` emits, and that conversion
+ * is the one `@modelcontextprotocol/sdk › toJsonSchemaCompat` runs for
+ * `tools/list`. Reading `.options` here would make every suite below classify,
+ * document and gate twenty-two names no agent can see — the opposite of what
+ * they are for. ⚠ It also makes the harness read what a CLIENT reads, which is
+ * the same discipline `tool-budget.test.ts` applies to descriptions.
+ */
 export function opEnum(t: CapturedTool): string[] | null {
   const op = t.schema.op;
-  if (op instanceof z.ZodEnum) return op.options as string[];
-  return null;
+  if (!(op instanceof z.ZodEnum)) return null;
+  const published = (
+    z.toJSONSchema(z.object({ op }), { io: "input" }) as {
+      properties?: { op?: { enum?: unknown } };
+    }
+  ).properties?.op?.enum;
+  return Array.isArray(published)
+    ? (published as string[])
+    : (op.options as string[]);
+}
+
+/**
+ * The `action` sub-verb enum a dispatching tool publishes, or null.
+ *
+ * ⚠ It exists so the gate tables can name ONE action of a mixed op
+ * (`rooms.open`) and still be checked against something the tool really
+ * declares — an entry naming an action nobody serves is the same dead law a
+ * stale op name is.
+ */
+export function actionEnum(t: CapturedTool): string[] | null {
+  // ⚠ It is `.optional()` — three of the five ops take none — so the enum sits
+  // one wrapper down. Reading the wrapper would answer `null` for a tool that
+  // declares one, which is a guard that passes by finding nothing.
+  const declared = t.schema.action;
+  const action =
+    declared instanceof z.ZodOptional ? declared.unwrap() : declared;
+  return action instanceof z.ZodEnum ? (action.options as string[]) : null;
 }
 
 export function isAdmin(name: string): boolean {

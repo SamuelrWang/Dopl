@@ -45,13 +45,13 @@
  * `tool-scope-claims.test.ts`'s filtered-op ledger, which is the only guard that
  * reads a per-op bullet.
  *
- * ⚠ NO `limits:` BLOCK, AND THAT IS RULE 4 AGAIN. Every bound in
- * `channel-schema.ts` is already hand-typed into the argument's own `.describe()`
- * (`body` "<=16000 chars", `limit` "1-200, default 100", `timeout_ms`, and a
- * `summary` whose describe deliberately states the ROUTE's 200 where the schema
- * declares 2000). Rendering those numbers here would push each of them twice per
- * connection — and the `summary` one would push two different numbers for one
- * field. The bound stays where the caller reads it.
+ * ⚠ **THERE IS A `limits:` BLOCK NOW, AND THE REASON THERE WAS NOT IS GONE**
+ * (B8, 2026-09-02). It was omitted because every bound was hand-typed into its
+ * own argument's `.describe()`, and rendering them here would have pushed each
+ * number twice per connection — worse, `summary` published 2000 while the route
+ * enforced 200, so the two copies said different things. Samuel's ruling made
+ * `summary` one number, the describes stopped carrying bounds, and
+ * `renderLimits` now reads the zod shape that enforces them. One source.
  */
 /**
  * THE DISPATCH-TOOL BUDGET. ⚠ **DECLARED IN `tool-style.ts` SINCE 2026-09-02

@@ -20,6 +20,10 @@ export declare function isForbidden(e: unknown): boolean;
  * What a 400 from a channels route MEANS, as far as the caller can act on it.
  *
  *   - `addressee_not_member`  — the `to` member is not in the channel.
+ *   - `recipient_unresolved`  — `to` named nobody this server can see, in
+ *     either namespace. ⚠ NOT a delivery failure and NOT a membership problem:
+ *     nothing was written at all, and the server's own message lists the live
+ *     handles and the roster.
  *   - `thread_not_in_channel` — a first-class `thread` id not of this channel.
  *   - `self_target`           — `create_thread` addressed to the CALLER: only
  *     creator and target may post, so it has one party and can never be
@@ -37,7 +41,7 @@ export declare function isForbidden(e: unknown): boolean;
  *   - `unknown`               — a 400 with no recognized code (or none at all,
  *     e.g. an edge/proxy error page). ⚠ Say so; never invent a cause.
  */
-export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
+export type BadRequestKind = "addressee_not_member" | "recipient_unresolved" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
 /**
  * What a 403 from a channels route MEANS. Same doctrine as
@@ -74,4 +78,4 @@ export declare function serverDetail(e: unknown): string;
  * number to act on. ⚠ HAND-COPIED from `src/features/channels/schema.ts`, and
  * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
  */
-export declare const FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, client_msg_id <=200.";
+export declare const FIELD_CAPS_NOTE = "Field caps: summary <=200 characters, body <=16000, client_msg_id <=200.";

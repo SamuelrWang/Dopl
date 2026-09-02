@@ -47,7 +47,7 @@ export const RESPONSE_FORMAT_FIELD = z
   .enum(["concise", "detailed"])
   .optional()
   .describe(
-    'op="read" / "read_sessions" / "read_file" / "search": "concise" drops METADATA — timestamps, ids, scope notes, legends — never a body or a count. Default "detailed"; set it as low as you can.',
+    'op="read" / "status" / "read_file" / "search": "concise" drops METADATA — timestamps, ids, scope notes, legends — never a body or a count. Default "detailed"; set it as low as you can.',
   );
 
 /** True when this call asked for the smaller render. */

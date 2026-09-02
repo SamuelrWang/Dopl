@@ -1,12 +1,22 @@
 /**
  * THE PUBLISHED INPUT SHAPE for `dopl_channel` — one flat schema of optional
- * params, plus the `op` discriminator, with the per-op requirements enforced at
- * runtime by `missingParams` in the registrar.
+ * params, plus the `op` discriminator and the `action` sub-verb the two
+ * dispatching ops take, with the per-op requirements enforced at runtime by
+ * `missingParams` in the registrar.
  *
  * This is the DECLARED SURFACE an MCP client introspects (names, types, caps,
  * per-param teaching); the registrar is routing. ⚠ The parity suite reads both:
  * every declared param must be referenced by some handler in the `channel-*`
  * group, and no handler may read an arg not declared here.
+ *
+ * ⚠ **FIVE OPS SINCE 2026-09-02 (MCP v2 wave B slice B8, Samuel's ruling B9).**
+ * `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three. The
+ * other twenty-two names still PARSE for one release and answer one line naming
+ * their replacement (`channel-retired-ops.ts`) — and they are **absent from the
+ * published enum**, because a retired name a model can see is a name a model
+ * will call. The runtime enum is the union; `.meta({ enum: CHANNEL_OPS })`
+ * overrides what `z.toJSONSchema` publishes, which is the exact conversion the
+ * MCP SDK renders for `tools/list`.
  *
  * ⚠ **EVERY `.describe()` HERE IS PUSHED ON EVERY CONNECTION, EXACTLY LIKE THE
  * TOOL DESCRIPTION, AND IS BUDGETED LIKE ONE** (A6, 2026-09-02). It was 20,844
@@ -16,21 +26,83 @@
  * it; a `.describe()` carries the CONTRACT of one field and stops. One sentence
  * each, and `channel-schema-budget.test.ts` is what keeps it there.
  *
- * ⚠ Caps and minimums HAND-MIRROR the routes' zod schemas
- * (src/features/channels/schema.ts): title 200, body 16000, summary 2000 (a
- * post's summary is 200), client_msg_id 200, `.min(1)` on body /
- * client_msg_id / title. Declared here they publish as maxLength and are
- * enforced before the call; omit one and the route rejects it as an opaque 400
- * the write ops mis-narrate. `.trim()` where — and ONLY where — the route trims
- * before measuring, so the two agree on what "200 characters" counts.
+ * ⚠ **NO `.describe()` HAND-TYPES A BOUND THE SCHEMA PUBLISHES.** A cap reaches
+ * the client as a `maxLength` / `maximum` keyword and once more in the
+ * description's rendered `Limits:` block (`tool-style.ts › renderLimits`); a
+ * third copy in the prose is the copy that goes stale, and `tool-style.test.ts`
+ * fails one.
  *
- * ⚠ `summary` declares the LOOSER of the two caps it has served (2000, not the
- * post route's 200) so a legitimate summary is never refused client-side as an
- * opaque -32602: the route enforces 200, names the field, and is the authority.
+ * ⚠ Caps and minimums HAND-MIRROR the routes' zod schemas
+ * (src/features/channels/schema.ts): body 16000, summary 200, client_msg_id
+ * 200, `.min(1)` on body / client_msg_id. Declared here they publish as
+ * maxLength and are enforced before the call; omit one and the route rejects it
+ * as an opaque 400 the write ops mis-narrate. `.trim()` where — and ONLY where —
+ * the route trims before measuring, so the two agree on what a character count
+ * counts.
+ *
+ * ⚠ **`summary` IS ONE NUMBER NOW (200), AND THAT IS A RULING** (Samuel, wave B).
+ * It declared the LOOSER 2000 so an over-length summary would be the route's to
+ * refuse with the field named; the route enforces 200, so the schema published a
+ * cap the surface does not have. One field, one bound, both ends.
  */
 
 import { z } from "zod";
 import { RESPONSE_FORMAT_FIELD } from "./response-size";
+import { RETIRED_OP_NAMES } from "./channel-retired-ops";
+import { DOCTRINE_SECTION_NAMES } from "./channel-doctrine";
+import { AWAIT_HOLD_CAP_MS } from "./channel-await-budget";
+
+/**
+ * THE FIVE OPS AN AGENT SEES, and the only five it may pick from.
+ *
+ * ⚠ THE ORDER IS THE READING ORDER a model skims: the one write it makes most,
+ * the two reads, then the two dispatchers.
+ */
+export const CHANNEL_OPS = [
+  "send",
+  "read",
+  "status",
+  "manage",
+  "rooms",
+] as const;
+export type ChannelOp = (typeof CHANNEL_OPS)[number];
+
+/**
+ * THE SUB-VERBS, per dispatching op.
+ *
+ * ⚠ **THE TWO VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts
+ * it: one flat `action` enum is what a client introspects, so an overlapping
+ * word would make the same string mean two things one op apart. Disjointness is
+ * also what lets `gating.ts › WRITE_OPS` name a single write action
+ * (`rooms.open`) without the pair ever being ambiguous.
+ *
+ * ⚠ **`rooms` CARRIES BOTH READS AND WRITES, AND THAT IS WHY THE WRITE GATE IS
+ * PER-ACTION.** Classifying the whole op as a write would refuse a read-only
+ * token the very calls it exists to make — `list`, `members`, `help` — and
+ * classifying it as a read would open `open` / `invite` / `update` to one.
+ */
+export const CHANNEL_ACTIONS = {
+  manage: ["launch", "end", "rename", "posture", "direct"],
+  rooms: [
+    "list",
+    "open",
+    "invite",
+    "members",
+    "threads",
+    "thread_mode",
+    "update",
+    "help",
+  ],
+} as const;
+
+/** Every action name, as the published enum. ⚠ Derived, never restated. */
+export const CHANNEL_ACTION_NAMES = [
+  ...CHANNEL_ACTIONS.manage,
+  ...CHANNEL_ACTIONS.rooms,
+] as [string, ...string[]];
+
+export type ManageAction = (typeof CHANNEL_ACTIONS.manage)[number];
+export type RoomsAction = (typeof CHANNEL_ACTIONS.rooms)[number];
 
 /**
  * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's
@@ -46,23 +118,15 @@ import { RESPONSE_FORMAT_FIELD } from "./response-size";
  * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
  * growing past it, and shrinking below it without lowering the number.
  */
-// ⚠ 12,371 → 11,103 ON 2026-09-02 (A6b), and every character of it came from
-// DELETING params rather than from shortening prose: `kind`, `intent`, `direct`
-// and `to_desktop` are gone (C12/C5), `get_thread` left the `op` enum (C15),
-// and ping's three recipient forms became one. A cut a re-worded sentence
-// cannot make twice.
-// ⚠ **11,103 → 11,341 ON 2026-09-02 (A14), AND THE 238 IS A KNOB RATHER THAN
-// PROSE.** `response_format` joined the shape: `op="read"` and
-// `op="read_sessions"` can now be asked for the smaller render, which drops the
-// per-message timestamp and session tag and the thread-id legend from a page an
-// orchestrator reads in a loop — and never a body. **That is a PARAMETER, on
-// `dopl_skill`'s `confirm_token` precedent** (`tool-budget.test.ts ›
-// SCHEMA_CEILINGS`): an argument cannot move into a pulled document, and
-// trimming its description into uselessness would buy this number by making the
-// knob unusable. ⚠ It is also the one rise on this surface that pays for itself
-// PER CALL rather than per connection — 238 chars once, against a legend and two
-// metadata fields on every message of every read.
-export const SCHEMA_MAX_CHARS = 11_341;
+// ⚠ 11,341 → 8,303 ON 2026-09-02 (B8), AND EVERY CHARACTER OF IT CAME FROM
+// DELETING PARAMS AND OPS RATHER THAN FROM SHORTENING PROSE. Thirteen params
+// left the shape — `topic`, `member`, `title`, `handoff`, `agent_id`,
+// `ping_kind`, `recipient`, `metadata`, `goal`, `issue`, `context`,
+// `timeout_ms`, and the three posture axes, which became one `posture` object —
+// because the concept each named already had a field: a recipient is `to`, an
+// intent is `summary`, a goal is `body`, a hold is `wait_ms`. Eighteen op names
+// left the published enum. A cut a re-worded sentence cannot make twice.
+export const SCHEMA_MAX_CHARS = 8_303;
 
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
@@ -72,231 +136,163 @@ export const SCHEMA_MAX_CHARS = 11_341;
  * `channel-doctrine.ts › FIELDS`, which is PULLED by the agent that asks.
  */
 export const PARAM_DESCRIPTION_MAX_CHARS = 400;
-import { DOCTRINE_SECTION_NAMES } from "./channel-doctrine";
-import {
-  AWAIT_HOLD_CAP_MS,
-  AWAIT_HOLD_DEFAULT_MS,
-  AWAIT_HOLD_EXTERNAL_DEFAULT_MS,
-} from "./channel-await-budget";
 
 export const CHANNEL_INPUT_SHAPE = {
-  // ⚠ ONE FIELD, TWO READ OPS ("read" and "read_sessions"), and its wording is
+  // ⚠ ONE FIELD, TWO READ OPS ("read" and "status"), and its wording is
   // `response-size.ts`'s so the five tools that take this knob cannot promise
   // five different things about what `concise` drops. It is INERT on every
   // other op rather than refused: a knob that 400s where it is meaningless
   // teaches an agent to stop passing it where it is not.
   response_format: RESPONSE_FORMAT_FIELD,
 
+  // ⚠ **THE RUNTIME ENUM IS THE UNION; THE PUBLISHED ONE IS FIVE.** The retired
+  // names have to PARSE or their redirect can never run — zod would answer a
+  // `-32602 invalid enum value` before any handler sees the call, which is the
+  // opaque failure the one-release window exists to prevent. They must not be
+  // LISTED, or the collapse buys nothing: a model picks from what it is shown.
+  // `.meta()` overrides the `enum` keyword `z.toJSONSchema` emits, and that is
+  // the exact conversion `@modelcontextprotocol/sdk › toJsonSchemaCompat` runs
+  // for `tools/list`; `channel-retired-ops.test.ts` asserts both halves.
   op: z
-    .enum([
-      // ⚠ THE DOCTRINE DOOR (T10, 2026-09-02). Returns the standing rules for
-      // this surface — the same text as the MCP resource
-      // `dopl://doctrine/channels`, for a client that lists tools and nothing
-      // else. Takes no arguments, reads nothing, and is NOT in
-      // `gating.ts › WRITE_OPS`.
-      "help",
-      "list",
-      "open",
-      "invite",
-      "post",
-      // ⚠ MILESTONE is its own op rather than a `kind` an agent picks on
-      // `post` — see the `kind` field below.
-      "milestone",
-      "read",
-      "await",
-      "members",
-      "list_threads",
-      "read_sessions",
-      "create_thread",
-      // ⚠ TWO OPS LEFT THIS ENUM with thread closing (wiring plan Phase 4,
-      // 2026-08-18): "propose_close" (the agent's terminal act) and
-      // "close_thread" (kept as a teaching refusal naming its replacement).
-      // Neither may come back as a WORD either — `channel-law.test.ts ›
-      // REMOVED_VOCABULARY` scans every string literal in this file.
-      "set_thread_mode",
-      "direct_agent",
-      "read_directions",
-      "launch_agent",
-      // ⚠ `end_agent` and `rename_agent` are NOT GATED BY THE LAUNCH TOGGLE and
-      // no result may suggest otherwise: that setting governs STARTING agents.
-      // `set_agent_mode` IS gated by it — a posture can cause compute to be
-      // spent on the operator's hardware, which a stop verb and a label cannot.
-      "end_agent",
-      "rename_agent",
-      "set_agent_mode",
-      // ⚠ THE INFO CARD, AND ONLY THE INFO CARD (Samuel's ruling Q12 (b),
-      // 2026-08-28). The same route accepts name / topic / archived, and this op
-      // deliberately does not — see `channel-ops-update.ts`.
-      "update",
-      "escalate",
-      "ping",
-      "pings",
-    ])
+    .enum([...CHANNEL_OPS, ...RETIRED_OP_NAMES])
+    .meta({ enum: [...CHANNEL_OPS] })
     .describe("Operation to perform."),
-  // ⚠ **THE DOCTRINE IS PULLED, SO IT MUST BE PULLABLE IN PIECES** (2026-09-02).
-  // `op="help"` returned the whole ~30k document or nothing, which makes the one
-  // surface designed to be read on demand too expensive to read on demand — an
-  // agent that wants the refusal vocabulary pays for the @-tag grammar as well.
-  // The names come from `channel-doctrine.ts › DOCTRINE_SECTIONS`, so an unknown
-  // one is a -32602 naming this field rather than a silently empty answer.
-  section: z
-    .enum(DOCTRINE_SECTION_NAMES)
+
+  // ⚠ ONE SUB-VERB PARAM FOR BOTH DISPATCHERS, not two. The vocabularies are
+  // disjoint, so one field can never be ambiguous — and two spellings for "which
+  // act" is how a caller learns to guess which one an op wants.
+  action: z
+    .enum(CHANNEL_ACTION_NAMES)
     .optional()
     .describe(
-      'op="help" (optional): return ONE section instead of the whole document. Omit it for everything, including the index of section names.',
+      'op="manage" (required): "launch", "end", "rename", "posture" or "direct" — all on YOUR OWN operator\'s machine. op="rooms" (required): "list", "open", "invite", "members", "threads", "thread_mode", "update" or "help".',
     ),
+
   channel: z
     .string()
     .optional()
     .describe(
-      'Channel slug or id. Required except for "list", "open" and "pings"; on "read", "await" and "read_sessions" omitting it WIDENS the call to every channel you are in, across every workspace and home container.',
+      'Channel slug or id. Required everywhere except op="rooms" action="list" / "open" / "help"; on op="read" and op="status" omitting it WIDENS the call to every channel you are in, across every workspace and home container.',
     ),
-  name: z
+
+  // ⚠ **ONE RECIPIENT PARAM FOR THE WHOLE SURFACE** (B8). It replaced `to`,
+  // `member`, `recipient` and `agent_id` — four spellings of "the one party this
+  // call is about", each with its own resolution story. The server resolves the
+  // union once, at the door (`service-writes-metadata-recipient.ts ›
+  // resolveToRecipient`), and an `@name` that resolves to NOBODY is a 400
+  // listing the live handles rather than a silent `delivery=none`.
+  to: z
     .string()
+    .trim()
+    .min(1)
     .optional()
     .describe(
-      'op="open" (required for a NAMED channel; omit it and pass `member` instead to open a direct 1:1): the channel name, 1-120 chars. op="rename_agent" (required): a DISPLAY ONLY label for that agent — 1-60 visible characters on ONE line, or "" to clear it back to "Agent #<id>". `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server.',
+      'The ONE party this call is about — a member (email or user id) or an agent (`@agent-<id>` or its handle). op="send": who it is FOR, which triggers their side; op="manage": which of your own operator\'s agents; op="rooms": the member to "invite", or the one to open a 1:1 with.',
     ),
-  topic: z
-    .string()
-    .optional()
-    .describe('op="open": optional one-line topic / purpose for the channel.'),
-  visibility: z
-    .enum(["private", "public"])
-    .optional()
-    .describe(
-      'op="open": "private" (default, invite-only) or "public" (any workspace member can see and join).',
-    ),
-  member: z
-    .string()
-    .optional()
-    .describe(
-      'op="invite" (required) / op="open" (required for a direct 1:1, and only with `name` omitted): the member — an email or user id of an ACTIVE workspace member.',
-    ),
+
   body: z
     .string()
-    // ⚠ `.min(1)` mirrors the route on BOTH the post and create_thread schemas.
     .min(1)
     .max(16000)
     .optional()
     .describe(
-      'op="post" / op="create_thread" / op="milestone" (required): the message text. op="milestone": ONE LINE, <=240 chars and no line breaks, naming the step that just landed. op="ping" (required): ONE LINE, <=600 chars.',
+      'op="send" (required): the message text — ONE LINE on kind="milestone", the context a person needs on kind="decision". op="manage" (required on "launch" and "direct"): the agent\'s opening instruction, or the private message.',
     ),
-  to: z
-    .string()
+
+  // ⚠ THREE VALUES, EACH WITH A FENCE (spec §2.1). `milestone` stores
+  // `task_progress` and keeps G14's one-line cap; `decision` stores `message`
+  // plus the validated escalation payload, and it MUST stay `message` or
+  // `targeting.js › classify` drops the card and the human it asks is never
+  // notified. ⚠ `question` / `blocked` / `done` are NOT adopted: a value with no
+  // distinct behaviour is prose wearing a schema.
+  kind: z
+    .enum(["message", "milestone", "decision"])
     .optional()
     .describe(
-      'op="post" (optional) / op="create_thread" (required): the ONE channel MEMBER this is for — an email or user id. On a post it TRIGGERS that member\'s listener; omit it and the post is chat, which addresses nobody and starts nobody.',
+      'op="send" (optional, default "message"): "milestone" marks a step on a thread and addresses nobody; "decision" posts a card a person answers with one press, and needs `summary`, `options` and — almost always — `recommendation`.',
     ),
-  // ⚠ One param, one route now. The declared 2000 is deliberately LOOSER than
-  // the post route's 200 so an over-length summary is the route's to reject,
-  // with the field named, rather than an opaque client-side -32602.
-  summary: z
-    .string()
-    .trim()
-    .max(2000)
-    .optional()
-    .describe(
-      'op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees.',
-    ),
-  metadata: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe(
-      'op="post": optional JSON object of structured fields carried with the message (e.g. {durationMs, refs}). Use `thread` for the thread id.',
-    ),
-  // ⚠ ONE SENTENCE, BECAUSE THERE IS NOW ONE RULE (2026-09-02, C14). Both routes
-  // dedupe PER-AUTHOR: `channel_messages` on
-  // `(channel_id, client_msg_id, author_user_id)`
-  // (`20260822120000_channel_messages_author_scoped_idempotency.sql`) and
-  // `channel_tasks` on `(channel_id, client_msg_id, created_by)`
-  // (`20260913120000_channel_tasks_author_scoped_idempotency.sql`). Until the
-  // second landed this description had to teach the WEAKER of two keys — that a
-  // peer's key hands you back THEIR thread — which is a documented way to be
-  // silently redirected into somebody else's exchange.
-  client_msg_id: z
-    .string()
-    // ⚠ `.min(1)` mirrors the route — a blank idempotency key is not a key, and
-    // a client-side refusal keeps the caller from believing it deduped anything.
-    .min(1)
-    .max(200)
-    .optional()
-    .describe(
-      'op="post" / op="create_thread" / op="launch_agent" / op="direct_agent" (optional): an idempotency key. Send one BEFORE you might need to retry — because a retried call with NO key starts a SECOND agent or writes a second row, while a re-sent key hands back YOUR first call\'s. The dedupe is PER-AUTHOR on every op: a key another member used is not yours and does not collide with it.',
-    ),
-  title: z
-    .string()
-    .trim()
-    // ⚠ `.min(1)` mirrors the route and is measured AFTER the trim on both
-    // sides, so a whitespace-only title is refused here rather than 400ing.
-    .min(1)
-    .max(200)
-    .optional()
-    .describe(
-      'op="create_thread" (required): the thread title, measured after trimming — a short header for the exchange, not a description. When the call is permitted to run, the bound is checked before anything goes on the wire.',
-    ),
-  mode: z
-    .enum(["interactive", "autonomous"])
-    .optional()
-    .describe(
-      'op="create_thread" (optional, default "interactive") / op="set_thread_mode" (required): the thread execution mode.',
-    ),
-  handoff: z
-    .boolean()
-    .optional()
-    .describe(
-      'op="create_thread" (optional, default false): true asks your operator\'s Dopl app to DRIVE this thread — a full session opens there and carries the conversation instead of this external one. Honoured only for a thread you created as yourself.',
-    ),
+
   thread: z
     .string()
     .optional()
     .describe(
-      'The thread id create_thread returned. Required for op="set_thread_mode" and op="milestone". Optional on op="post" (thread it there), op="launch_agent" (start the agent on it), op="read" (its metadata header plus only that exchange) and op="ping" (point the signal at it).',
+      'A thread id, or the legacy `task-<channel>-<seq>` label. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; optional on op="read" and op="manage".',
     ),
-  // ⚠ `agent_id`, NOT `agent`. `channel-addressing-rule.test.ts` bans a param
-  // literally named `agent` — it was the retired named-agent ADDRESSING surface,
-  // and "a param an MCP client can see is a param a model will try". This one
-  // names an INSTANCE ID on the caller's own machine and addresses nobody in the
-  // channel, which is exactly the distinction that guard exists to keep.
-  // ⚠ A FOREIGN ID IS NOT REFUSED OUTRIGHT, AND THE SENTENCE NO LONGER SAYS SO
-  // (G3 / F-418, 2026-09-02). `service-directions.ts` files the direction with
-  // no ownership check; what answers is the CALLER'S OWN desktop, with
-  // `no-session`. The honest claim is that nothing reaches the other machine.
-  agent_id: z
-    .string()
-    .optional()
-    .describe(
-      'op="direct_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (required) / "read_directions" (optional): WHICH of YOUR OWN operator\'s agents — the 8-character instance id, or the `@agent-<id>` handle read_sessions prints. There is no oldest-agent fallback. An id belonging to another member reaches nothing: the request goes to your own machine, which answers `no-session`.',
-    ),
-  // ── op="ping" ────────────────────────────────────────────────────────────
-  // 🔒 **ONE RECIPIENT PARAM, AND THAT IS THE LOOP BRAKE RESTATED AS A SHAPE**
-  // (C5/F-429, 2026-09-02). It replaced THREE mutually exclusive spellings —
-  // `to`, `to_desktop`, `agent_id` — which the handler had to COUNT at runtime
-  // and refuse when it saw zero or two. A shape that can only carry one
-  // recipient cannot be sent two, so the count and its two refusal sentences
-  // are gone rather than reworded.
-  // ⚠ **AND IT STILL NAMES NOBODY ELSE'S MACHINE.** `channel-ops-ping.ts ›
-  // classifyRecipient` resolves this ONE string into the wire's own three keys,
-  // and the only two self-scoped forms it can produce ("desktop", an agent
-  // instance) resolve to the AUTHENTICATED CALLER server-side. There is still
-  // no argument for whose machine, which is what `channel-ping.test.ts` pins.
-  ping_kind: z
-    .enum(["done", "question", "blocked"])
-    .optional()
-    .describe(
-      'op="ping" (required): WHAT you are signalling — the work is "done", you have a "question" you need answered to continue, or you are "blocked" and not asking one.',
-    ),
-  recipient: z
+
+  summary: z
     .string()
     .trim()
-    .min(1)
+    .max(200)
     .optional()
     .describe(
-      'op="ping" (required): WHO has to act, in ONE field — "desktop" for your own operator\'s external session, `@agent-<id>` for one of your own operator\'s running agents, or an email / user id for another member of this channel.',
+      'The one-line intent. ALWAYS set it on op="send" — it becomes the notification the receiving member sees; on thread="new" it is the thread TITLE, on kind="decision" it is the QUESTION the card asks, and on op="rooms" action="open" it is the channel topic.',
     ),
-  // ⚠ `outcome` ("completed" | "failed") was a param here, required by
-  // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
-  // 2026-08-18); nothing in this surface has an outcome any more.
+
+  // ⚠ ONE SENTENCE, BECAUSE THERE IS NOW ONE RULE (2026-09-02, C14). Both routes
+  // dedupe PER-AUTHOR: `channel_messages` on
+  // `(channel_id, client_msg_id, author_user_id)` and `channel_tasks` on
+  // `(channel_id, client_msg_id, created_by)`. Until the second landed this
+  // description had to teach the WEAKER of two keys — that a peer's key hands
+  // you back THEIR thread — which is a documented way to be silently redirected
+  // into somebody else's exchange.
+  client_msg_id: z
+    .string()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      'op="send" / op="manage" (optional): an idempotency key. Send one BEFORE you might need to retry — a retried call with NO key starts a SECOND agent or writes a second row, while a re-sent key hands back YOUR first call\'s.',
+    ),
+
+  // ── kind="decision" ──────────────────────────────────────────────────────
+  // ⚠ TWO SEPARATE PARAMS RATHER THAN ONE `escalation` OBJECT, deliberately.
+  // The whole point of the kind is that an agent has to SAY these things; a
+  // nested object lets a model fill one key with a paragraph and satisfy the
+  // schema. The other two fields it used to need are gone because the surface
+  // already had them: the ISSUE is `summary`, the CONTEXT is `body`. Caps mirror
+  // `src/features/channels/escalation.ts` — sync all three (that file, this one,
+  // `channel-errors.ts › FIELD_CAPS_NOTE`).
+  options: z
+    .array(
+      z.object({
+        label: z
+          .string()
+          .trim()
+          .min(1)
+          .max(80)
+          .describe("The button's face — one short imperative."),
+        consequence: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .describe(
+            "ONE line saying what happens if they press it. Required on every option.",
+          ),
+      }),
+    )
+    .min(2)
+    .max(6)
+    .optional()
+    .describe(
+      'op="send" with kind="decision" (required): 2-6 things a person could decide, each with the consequence of choosing it. One option is not a question.',
+    ),
+
+  recommendation: z
+    .object({
+      index: z
+        .number()
+        .int()
+        .min(0)
+        .describe("0-based index into `options` — the one you would take."),
+      why: z.string().trim().min(1).max(200).describe("ONE line for why."),
+    })
+    .optional()
+    .describe(
+      'op="send" with kind="decision" (optional but almost always right): which option you would take and why. `index` MUST be inside `options` — an out-of-range one refuses the whole call.',
+    ),
+
+  // ── op="read" ────────────────────────────────────────────────────────────
   // ⚠ coerce: MCP clients sometimes send numbers as strings, and strict
   // z.number() rejects those with an opaque -32602.
   since: z.coerce
@@ -305,81 +301,61 @@ export const CHANNEL_INPUT_SHAPE = {
     .min(0)
     .optional()
     .describe(
-      'op="read" (optional) / op="await" (always required): the last MESSAGE seq you have processed; only higher ones come back. A seq is TABLE-WIDE, which is what lets one cursor cover every channel. ⚠ A THREAD-SCOPED read offers NO cursor at all — take yours from an UNSCOPED read (drop `thread`).',
+      'op="read" (optional, and REQUIRED with `wait_ms`): the last MESSAGE seq you have processed; only higher ones come back. A seq is TABLE-WIDE, so one cursor covers every channel — but a THREAD-SCOPED read hands back none.',
     ),
-  goal: z
-    .string()
-    .trim()
+
+  limit: z.coerce
+    .number()
+    .int()
     .min(1)
-    .max(2000)
+    .max(200)
     .optional()
     .describe(
-      'op="launch_agent" (optional, but you almost always want it): what the agent should DO — it becomes that agent\'s opening instruction. Without one the agent starts with nothing to do and waits.',
+      'op="read" (optional): max messages to return — with no `since` that is the NEWEST page, and older ones are absent rather than reported.',
     ),
-  model: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .optional()
-    .describe(
-      'op="launch_agent" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel. An id that machine does not recognize is NOT refused — it silently FALLS BACK, and nothing tells you.',
-    ),
-  // ⚠ ID **OR** EXACT NAME, in ONE param — `dopl_kb`'s `base` already works this
-  // way (`knowledge-shared.ts`), so this reuses the tree's idiom rather than
-  // inventing a second convention. Bounded at 120, `agent_templates.name`'s own
-  // cap, so a legal name is never refused client-side as an opaque -32602.
-  template: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .optional()
-    .describe(
-      'op="launch_agent" (optional): the AGENT TEMPLATE the new agent runs as — its id, or its exact name. It resolves in THIS CHANNEL\'S container under THE OPERATOR\'S visibility, and a name matching more than one is refused with every id listed. Omit it to start a blank agent.',
-    ),
-  // ── ⚠ THE TWO PERMISSION AXES (2026-09-01, T24 + the re-posture verb) ───────
-  //
-  // ⚠ **THE ENUM MEMBERS ARE ORDERED NARROWEST FIRST AND THAT ORDER IS THE
-  // CONTRACT.** The operator's machine clamps by INDEXING into a copy of these
-  // sequences, so re-ordering either one silently inverts the bound.
-  // ⚠ **ONE PARAM SERVES BOTH THE LAUNCH AND THE RE-POSTURE**, deliberately: it
-  // is the same axis with the same four values and the same clamp, and two names
-  // for one thing is how a caller learns to guess which one an op wants.
-  tools: z
-    .enum(["manual", "accept_edits", "auto", "bypass"])
-    .optional()
-    .describe(
-      'op="launch_agent" / op="set_agent_mode" (optional): how much TOOL freedom to ASK FOR — the values are ordered narrowest first. Your operator\'s machine narrows whatever you ask for to their own ceiling and never widens past it; omit it to run at that setting.',
-    ),
-  messages: z
-    .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
-    .optional()
-    .describe(
-      'op="launch_agent" / op="set_agent_mode" (optional): how much MESSAGE freedom to ASK FOR — the values are ordered narrowest first. Clamped to your operator\'s ceiling exactly as `tools` is, and held to a floor for a session with no window.',
-    ),
-  // ⚠ **THREE VALUES BECAUSE THERE ARE THREE STATES** (C11, 2026-09-02). It was
-  // an optional boolean whose `.describe()` had to spend a paragraph saying that
-  // omitting it was NOT `false` — and that exact confusion was a live wire bug
-  // (GAP C: `directiveFrom` flattened `false` to `null`). `inherit` is now a
-  // VALUE a caller can send, so "absent" and "off" can never be conflated again
-  // by anything downstream. `channel-dispatch-agents.ts` maps the word back to
-  // the wire's `boolean | undefined`, which did not move.
-  chain: z
-    .enum(["inherit", "on", "off"])
-    .optional()
-    .describe(
-      'op="launch_agent" (optional, default "inherit"): may the new agent launch further agents? "inherit" takes your operator\'s channel setting, which may be ON; "off" always narrows; "on" is REFUSED rather than quietly narrowed when the channel forbids it.',
-    ),
+
+  // ⚠ **ONE HOLD PARAM, TWO LANES, AND THEY ARE THE SAME QUESTION.** `wait_ms`
+  // asked the operator's desktop to answer a directive; `timeout_ms` asked the
+  // server to hold for a message. Both are "how long may this call take before
+  // it comes back with nothing", both cap server-side, and two names for one
+  // knob is how a caller learns to guess. ⚠ The published cap is the HOLD's
+  // (`AWAIT_HOLD_CAP_MS`); the directive lane clamps to its own, which it has
+  // always done in code (`channel-ops-launch.ts › WAIT_CAP_MS`).
   wait_ms: z.coerce
     .number()
     .int()
     .min(0)
-    .max(30_000)
+    .max(AWAIT_HOLD_CAP_MS)
     .optional()
     .describe(
-      'op="launch_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (optional, default 15000): how long to hold for the operator\'s desktop to accept or refuse. A timeout is NOT a failure — the request stays PENDING, and a re-issue is safe only when it carries the same `client_msg_id`.',
+      'Optional HOLD. op="read": long-poll for messages after `since` instead of returning a page. op="manage": how long to hold for your operator\'s desktop to accept or refuse — a timeout is NOT a failure, the request stays PENDING.',
     ),
+
+  // ── op="rooms" ───────────────────────────────────────────────────────────
+  // ⚠ `name` SERVES TWO ACTIONS AND THEY ARE BOTH LABELS, which is why one field
+  // can carry them: a channel's name and an agent's display label are the same
+  // kind of thing — a string people read. Neither addresses anything.
+  name: z
+    .string()
+    .optional()
+    .describe(
+      'op="rooms" action="open" (required for a NAMED channel; omit it and pass `to` for a 1:1): the channel name. op="manage" action="rename" (required): a DISPLAY ONLY label for that agent, or "" to clear it — `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server.',
+    ),
+
+  visibility: z
+    .enum(["private", "public"])
+    .optional()
+    .describe(
+      'op="rooms" action="open" (optional): "private" (default, invite-only) or "public" (any workspace member can see and join).',
+    ),
+
+  mode: z
+    .enum(["interactive", "autonomous"])
+    .optional()
+    .describe(
+      'op="rooms" action="thread_mode" (required): the thread execution mode.',
+    ),
+
   info_card: z
     .object({
       hidden: z
@@ -399,100 +375,99 @@ export const CHANNEL_INPUT_SHAPE = {
               .describe(
                 "Omit on a NEW row (one is minted for you); pass it to EDIT the row that already has it. Unique within a card.",
               ),
-            label: z.string().min(1).max(40).describe("The left column — one short line."),
-            value: z.string().max(200).optional().describe("The right column. May be empty."),
+            label: z
+              .string()
+              .min(1)
+              .max(40)
+              .describe("The left column — one short line."),
+            value: z
+              .string()
+              .max(200)
+              .optional()
+              .describe("The right column. May be empty."),
           }),
         )
         .max(12)
         .optional()
-        .describe("The card's CUSTOM rows, at most 12."),
+        .describe("The card's CUSTOM rows."),
     })
     .optional()
     .describe(
-      'op="update": the channel\'s whole info card, REPLACED — an omitted row is DELETED and `info_card={}` clears the card. Omit the argument entirely to READ the card unchanged. Everyone in the channel sees it.',
+      'op="rooms" action="update": the channel\'s whole info card, REPLACED — an omitted row is DELETED and `info_card={}` clears the card. Omit the argument entirely to READ the card unchanged. Everyone in the channel sees it.',
     ),
-  // ── op="escalate" ────────────────────────────────────────────────────────
-  // ⚠ FOUR SEPARATE PARAMS RATHER THAN ONE `escalation` OBJECT, deliberately.
-  // The whole point of the op is that an agent has to SAY the four things; a
-  // nested object lets a model fill one key with a paragraph and satisfy the
-  // schema. Caps mirror `src/features/channels/escalation.ts` — sync all three
-  // (that file, this one, `channel-errors.ts › FIELD_CAPS_NOTE`).
-  issue: z
+
+  // ⚠ **THE DOCTRINE IS PULLED, SO IT MUST BE PULLABLE IN PIECES** (2026-09-02).
+  // Help returned the whole document or nothing, which makes the one surface
+  // designed to be read on demand too expensive to read on demand. The names
+  // come from `channel-doctrine.ts › DOCTRINE_SECTIONS`, so an unknown one is a
+  // -32602 naming this field rather than a silently empty answer.
+  section: z
+    .enum(DOCTRINE_SECTION_NAMES)
+    .optional()
+    .describe(
+      'op="rooms" action="help" (optional): return ONE section instead of the whole document. Omit it for everything, including the index of section names.',
+    ),
+
+  // ── op="manage" action="launch" ──────────────────────────────────────────
+  model: z
     .string()
     .trim()
     .min(1)
-    .max(200)
+    .max(120)
     .optional()
     .describe(
-      'op="escalate" (required): the decision you cannot make, in ONE line. It becomes the card\'s title.',
+      'op="manage" action="launch" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel. An id that machine does not recognize is NOT refused — it silently FALLS BACK, and nothing tells you.',
     ),
-  context: z
+
+  // ⚠ ID **OR** EXACT NAME, in ONE param — `dopl_kb`'s `base` already works this
+  // way (`knowledge-shared.ts`), so this reuses the tree's idiom rather than
+  // inventing a second convention.
+  template: z
     .string()
     .trim()
-    .max(2000)
+    .min(1)
+    .max(120)
     .optional()
     .describe(
-      'op="escalate" (optional): what a person needs to know to choose, and nothing else. Do not restate the options — they carry their own consequences.',
+      'op="manage" action="launch" (optional): the AGENT TEMPLATE the new agent runs as — its id, or its exact name. It resolves in THIS CHANNEL\'S container under THE OPERATOR\'S visibility, and a name matching more than one is refused with every id listed. Omit it to start a blank agent.',
     ),
-  options: z
-    .array(
-      z.object({
-        label: z
-          .string()
-          .trim()
-          .min(1)
-          .max(80)
-          .describe("The button's face — one short imperative, <=80 chars."),
-        consequence: z
-          .string()
-          .trim()
-          .min(1)
-          .max(200)
-          .describe(
-            "ONE line saying what happens if they press it (<=200 chars). Required on every option.",
-          ),
-      }),
-    )
-    .min(2)
-    .max(6)
-    .optional()
-    .describe(
-      'op="escalate" (required): 2-6 things a person could decide. BOTH BOUNDS ARE REAL — one option is not a question, and more than six is a wall of prose with numbers on it.',
-    ),
-  recommendation: z
+
+  // ── ⚠ THE PERMISSION AXES, IN ONE OBJECT (B8; 2026-09-01's T24 axes) ───────
+  //
+  // ⚠ **ONE PARAM BECAUSE THE CODE ALREADY TREATS THEM AS ONE THING** —
+  // `channel-facts.ts › postureFacts` renders the trio together, the desktop
+  // clamps them together, and `action="posture"` exists to set them together.
+  // Three top-level params for one concept is what made this shape 35 fields.
+  // ⚠ **THE ENUM MEMBERS ARE ORDERED NARROWEST FIRST AND THAT ORDER IS THE
+  // CONTRACT.** The operator's machine clamps by INDEXING into a copy of these
+  // sequences, so re-ordering either one silently inverts the bound.
+  // ⚠ **`chain` HAS THREE VALUES BECAUSE THERE ARE THREE STATES** (C11): it was
+  // an optional boolean whose describe had to spend a paragraph saying that
+  // omitting it was NOT `false`, and that exact confusion was a live wire bug
+  // (GAP C: `directiveFrom` flattened `false` to `null`).
+  posture: z
     .object({
-      index: z
-        .number()
-        .int()
-        .min(0)
-        .describe("0-based index into `options` — the one you would take."),
-      why: z
-        .string()
-        .trim()
-        .min(1)
-        .max(200)
-        .describe("ONE line for why (<=200 chars)."),
+      tools: z
+        .enum(["manual", "accept_edits", "auto", "bypass"])
+        .optional()
+        .describe(
+          "How much TOOL freedom to ask for — values ordered narrowest first.",
+        ),
+      messages: z
+        .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
+        .optional()
+        .describe(
+          "How much MESSAGE freedom to ask for — narrowest first, floored for a windowless session.",
+        ),
+      chain: z
+        .enum(["inherit", "on", "off"])
+        .optional()
+        .describe(
+          'Launch only: may the new agent launch further agents? "on" is REFUSED rather than quietly narrowed when the channel forbids it.',
+        ),
     })
     .optional()
     .describe(
-      'op="escalate" (optional but almost always right): which option you would take and why. `index` MUST be inside `options` — an out-of-range one refuses the whole call.',
-    ),
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(200)
-    .optional()
-    .describe(
-      'op="read": max messages to return (default 100) — with no `since` that is the NEWEST 100, and older ones are absent rather than reported. op="pings": max pings (1-100, default 20) — the newest first.',
-    ),
-  timeout_ms: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(AWAIT_HOLD_CAP_MS)
-    .optional()
-    .describe(
-      `op="await" (optional): TOTAL time to hold before returning with no messages, in ms. Omitted, the default fits your client: ${AWAIT_HOLD_EXTERNAL_DEFAULT_MS} external, ${AWAIT_HOLD_DEFAULT_MS} for a session run by the Dopl desktop.`,
+      'op="manage" action="launch" / action="posture" (optional): how much freedom to ASK FOR. Your operator\'s machine narrows whatever you ask for to their own ceiling and never widens past it; omit an axis to run at that setting.',
     ),
 };

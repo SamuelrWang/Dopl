@@ -9,19 +9,26 @@
  * names; only the agent-facing surface says `thread`.
  *
  * ⚠ PEER-CONTROLLED TEXT. Every string below is server NARRATION with no
- * untrusted framing, and two peer-authored values splice into it:
- *   - `ch.name` — `resolveChannelOr` lists PUBLIC channels the caller was never
- *     invited to, so the name can come from someone the agent never contacted.
- *   - `toLabel` (`profiles.display_name`) — already render-safe:
- *     `resolveMemberOr` neutralizes at the source. ⚠ Do NOT neutralize twice.
+ * untrusted framing, and one peer-authored value splices into it: `ch.name` —
+ * `resolveChannelOr` lists PUBLIC channels the caller was never invited to, so
+ * the name can come from someone the agent never contacted. ⚠ A SECOND ONE LEFT
+ * WITH THE CLIENT-SIDE MEMBER LOOKUP (B8): the addressee's display name was
+ * spliced into two refusals, and the server now owns that resolution — so the
+ * name never reaches this module and `serverDetail` carries the one place it
+ * still appears, neutralized there.
  *
- * ⚠ A post addresses a PERSON or nobody, and `to` is the whole of it: with one
- * the message reaches that member's machine, without one it is chat and reaches
- * nobody. There is no agent-addressing param and no second way to say which.
+ * ⚠ A send addresses ONE party or nobody, and `to` is the whole of it: with one
+ * the message reaches that member's machine — or, for an agent handle, that
+ * agent — and without one it is chat and reaches nobody. ⚠ **THE REF GOES OUT
+ * AS GIVEN AND THE SERVER RESOLVES IT** (2026-09-02, B8): `to` is a union over
+ * two namespaces, so resolving the member half here would mean two resolvers
+ * disagreeing about one field, and a `@handle` this side cannot see would come
+ * back as "not a member" instead of the 400 that lists the live handles.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MILESTONE_MAX_CHARS = void 0;
+exports.DECISION_CONTEXT_MAX_CHARS = exports.MILESTONE_MAX_CHARS = void 0;
 exports.milestoneRefusal = milestoneRefusal;
+exports.decisionRefusal = decisionRefusal;
 exports.opPost = opPost;
 const respond_1 = require("./respond");
 // ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
@@ -60,24 +67,29 @@ function milestoneRefusal(body) {
     const multiline = /[\r\n]/.test(body);
     if (!over && !multiline)
         return null;
-    return (0, respond_1.err)(`Nothing was posted: a milestone is ONE LINE marking a step that just landed, and yours ${over ? `is ${body.length} characters (the cap is ${exports.MILESTONE_MAX_CHARS})` : "spans more than one line"}. The bound is the point of the op — a milestone carries no content, so a requester watching several agents can read a page of them at a glance. Post the substance with dopl_channel(op="post", thread="<the same id>", body=…), then mark it with one short line here.`);
+    return (0, respond_1.err)(`Nothing was posted: a milestone is ONE LINE marking a step that just landed, and yours ${over ? `is ${body.length} characters (the cap is ${exports.MILESTONE_MAX_CHARS})` : "spans more than one line"}. The bound is the point of the op — a milestone carries no content, so a requester watching several agents can read a page of them at a glance. Send the substance with dopl_channel(op="send", thread="<the same id>", body=…), then mark it with one short line here.`);
+}
+/**
+ * **THE `kind="decision"` BODY CAP, AND IT IS THE ROUTE'S** (2026-09-02, B8).
+ * A decision's CONTEXT is the send's `body`, which folds two params into one —
+ * and the two had different bounds: a message may be 16,000 characters, an
+ * escalation's context 2,000 (`src/features/channels/escalation.ts ›
+ * ESCALATION_CONTEXT_MAX`). Publishing the looser cap and letting the route
+ * refuse would send back an opaque VALIDATION_FAILED about a field the caller
+ * never named, so the tighter bound is checked here, before the wire, and the
+ * refusal says which lane the extra prose belongs in.
+ */
+exports.DECISION_CONTEXT_MAX_CHARS = 2000;
+function decisionRefusal(body) {
+    if (body.length <= exports.DECISION_CONTEXT_MAX_CHARS)
+        return null;
+    return (0, respond_1.err)(`Nothing was posted: on kind="decision" the \`body\` is the CONTEXT on the card, and a card is read at a glance — yours is ${body.length} characters against a cap of ${exports.DECISION_CONTEXT_MAX_CHARS}. Say what a person needs to know to CHOOSE and nothing else; the options carry their own consequences. Send the working detail as an ordinary message on the same thread first, then ask.`);
 }
 async function opPost(client, channelRef, body, opts = {}) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
     const chName = (0, channel_shared_1.inlineOr)(ch.name, NO_NAME);
-    // Resolve addressee (email or user id) to a workspace member, like invite
-    // does; the route then enforces channel membership.
-    let toUserId;
-    let toLabel;
-    if (opts.to) {
-        const member = await (0, channel_shared_1.resolveMemberOr)(client, opts.to);
-        if ((0, channel_shared_1.isErr)(member))
-            return member;
-        toUserId = member.userId;
-        toLabel = member.label;
-    }
     // Fold `thread` into the STORAGE key `metadata.taskId`; explicit param wins
     // over any metadata copy. Route validates it resolves in this channel.
     const metadata = opts.thread
@@ -90,7 +102,9 @@ async function opPost(client, channelRef, body, opts = {}) {
             kind: opts.kind,
             metadata,
             clientMsgId: opts.clientMsgId,
-            toUserId,
+            // ⚠ THE UNION FIELD, NOT `toUserId`. One recipient, one resolver, one
+            // refusal — see this module's header.
+            to: opts.to,
             summary: opts.summary,
             // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
             escalation: opts.escalation,
@@ -103,11 +117,16 @@ async function opPost(client, channelRef, body, opts = {}) {
         if ((0, channel_errors_1.isBadRequest)(e)) {
             switch ((0, channel_errors_1.classifyBadRequest)(e)) {
                 case "addressee_not_member":
-                    return (0, respond_1.err)(`Couldn't address the message to ${toLabel ?? "that member"} — they aren't a member of **${chName}**. Invite them first (op="invite"), or post without \`to\`.`);
+                    return (0, respond_1.err)(`Couldn't address the message — that member isn't in **${chName}**. Add them with dopl_channel(op="rooms", action="invite"), or send without \`to\`.`);
+                // ⚠ NOTHING WAS WRITTEN, and the server's own message lists the live
+                // handles and the roster — which is the whole remedy, so this arm adds
+                // the one fact that message cannot carry: no row exists to retract.
+                case "recipient_unresolved":
+                    return (0, respond_1.err)(`Nothing was sent to **${chName}**: \`to\` named nobody this workspace can see.${(0, channel_errors_1.serverDetail)(e)} Fix the name and send again — a send is never delivered to a recipient that does not resolve.`);
                 case "thread_not_in_channel":
-                    return (0, respond_1.err)(`That thread is not in this channel — check the thread id, or post without \`thread\`.`);
+                    return (0, respond_1.err)(`That thread is not in this channel — check the thread id, or send without \`thread\`.`);
                 case "invalid_request":
-                    return (0, respond_1.err)(`That post was rejected as INVALID before it reached **${chName}** — nothing was sent, and this is NOT a membership or thread problem, so do not invite anyone or change \`thread\` over it.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Shorten the field that is over and post again.`);
+                    return (0, respond_1.err)(`That message was rejected as INVALID before it reached **${chName}** — nothing was sent, and this is NOT a membership or thread problem, so do not invite anyone or change \`thread\` over it.${(0, channel_errors_1.serverDetail)(e)} ${channel_errors_1.FIELD_CAPS_NOTE} Shorten the field that is over and post again.`);
                 case "workspace":
                     return (0, respond_1.err)(`The post was rejected because the call carried no usable workspace.${(0, channel_errors_1.serverDetail)(e)} This is a connection-level problem, not a channel one — report it to your operator.`);
                 // `self_target` is create_thread-only (`post to=self` is deliberately
@@ -128,7 +147,7 @@ async function opPost(client, channelRef, body, opts = {}) {
             // a membership arm, because the one thing it must never read as is "you
             // left the channel".
             if (kind === "lifecycle_kind") {
-                return (0, respond_1.err)('Nothing was sent: that message carried a LIFECYCLE kind ("task_started" / "task_finished" / "task_failed"), which the runtime that starts and stops a session writes and an agent credential may not. Post the same text as an ordinary message — everything substantive you send, your FINAL ANSWER included, is one — and mark a step that LANDED with op="milestone".');
+                return (0, respond_1.err)('Nothing was sent: that message carried a LIFECYCLE kind ("task_started" / "task_finished" / "task_failed"), which the runtime that starts and stops a session writes and an agent credential may not. Send the same text as an ordinary message — everything substantive you send, your FINAL ANSWER included, is one — and mark a step that LANDED with kind="milestone".');
             }
             if (opts.thread && kind !== "not_a_member") {
                 // A thread belongs to its CREATOR and its addressee; that pair is the
@@ -137,7 +156,7 @@ async function opPost(client, channelRef, body, opts = {}) {
                 // ⚠ The thread id is NOT echoed here. It round-trips (an agent copies
                 // it from a `read` legend = `metadata.taskId`, peer-set verbatim for
                 // non-UUID values), and "the id you just passed" needs no escaping.
-                return (0, respond_1.err)(`You can't post into that thread — nothing was posted. A thread is between the member who OPENED it and the member it is addressed TO, and you are neither: check it with dopl_channel(op="read", channel="${ch.id}", thread=<the id you just passed>). Post into the channel instead, or ask one of those two to open a thread with you. Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`);
+                return (0, respond_1.err)(`You can't post into that thread — nothing was posted. A thread is between the member who OPENED it and the member it is addressed TO, and you are neither: check it with dopl_channel(op="read", channel="${ch.id}", thread=<the id you just passed>). Send into the channel instead, or ask one of those two to open a thread with you. Do NOT open your own thread for the same work; that is a duplicate room, not a way in.`);
             }
             if (kind === "not_a_member") {
                 return (0, respond_1.err)(`You can't post to **${chName}** — you are not a member of that channel. Nothing was posted.`);
@@ -187,9 +206,13 @@ async function opPost(client, channelRef, body, opts = {}) {
         msg: message.id,
         thread: landing.thread,
         landed: landing.landed,
-        // ⚠ Read off `toUserId`, which is what the server was given — never off
-        // `toLabel`, which is only ever the render of it.
-        addressed: !!toUserId,
+        // ⚠ **READ OFF THE STORED ROW, NOT OFF THE ARGUMENT** (2026-09-02, B8).
+        // `to` is now resolved server-side over two namespaces, so the only honest
+        // answer to "was an agent put in front of this" is the recipient set the
+        // server wrote. ⚠ `null`/absent is NOT "nobody": it is a server that
+        // computed no recipients, and `[]` is the resolved-to-nobody case.
+        addressed: (message.recipientUserIds?.length ?? 0) > 0 ||
+            (message.recipientAgentIds?.length ?? 0) > 0,
         tags: mentions.tags,
         wake: mentions.wake,
         // ⚠ WHAT BECAME OF IT — A9's keystone contract, rendered where the caller

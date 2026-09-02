@@ -40,6 +40,13 @@ function classifyBadRequest(e) {
     switch (apiErrorCode(e)) {
         case "CHANNEL_ADDRESSEE_NOT_MEMBER":
             return "addressee_not_member";
+        // ⚠ **THE UNION RESOLVER'S OWN REFUSAL** (2026-09-02, B4/B8). `to` names one
+        // party in either namespace, and a name that resolves to NOBODY is a 400
+        // rather than a silent `delivery=none` — the server's own message lists the
+        // live agent handles and the channel's members, so `serverDetail` carries
+        // the remedy and this arm only has to say nothing was sent.
+        case "CHANNEL_RECIPIENT_UNRESOLVED":
+            return "recipient_unresolved";
         case "CHANNEL_TASK_NOT_IN_CHANNEL":
             return "thread_not_in_channel";
         case "CHANNEL_TASK_SELF_TARGET":
@@ -87,4 +94,4 @@ function serverDetail(e) {
  * number to act on. ⚠ HAND-COPIED from `src/features/channels/schema.ts`, and
  * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
  */
-exports.FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, client_msg_id <=200.";
+exports.FIELD_CAPS_NOTE = "Field caps: summary <=200 characters, body <=16000, client_msg_id <=200.";

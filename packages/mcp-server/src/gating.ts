@@ -256,76 +256,66 @@ export const WRITE_OPS: Record<string, Set<string>> = {
   // token lists home channels and creates none.
   dopl_home: new Set(["create_channel"]),
   dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder"]),
+  // ⚠ **SIX ENTRIES OVER FIVE OPS, AND TWO OF THE FIVE ARE ABSENT** (v2 wave B
+  // slice B8, 2026-09-02). `read` and `status` only read. `send` and `manage`
+  // only write. `rooms` does BOTH, so it is gated PER ACTION — see
+  // {@link isWriteOp} for the dotted key and for why a bare `rooms` fails
+  // CLOSED. Classifying the whole op as a write would refuse a `dopl.read`
+  // token the four calls it exists to make (list, members, threads, help);
+  // classifying it as a read would hand one the four that change the room.
+  // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: `tools/parity-harness.ts` parses this set
+  // out of the SOURCE TEXT, so a quoted phrase in a comment is read as an op
+  // name and fails the WRITE_OPS-subset-of-enum check.
   dopl_channel: new Set([
-    "open",
-    "invite",
-    "post",
-    // `milestone` writes a message.
-    // ⚠ `propose_close` and `close_thread` were here until thread closing was
-    // removed (wiring plan Phase 4, 2026-08-18). `close_thread` was listed even
-    // though the registrar answered it with a refusal, and the reason still
-    // applies to any future teaching-refusal op: a read-only token must be
-    // refused for the SCOPE reason FIRST, or the shape of the two errors tells a
-    // read-only caller which threads exist.
-    "milestone",
-    "create_thread",
-    "set_thread_mode",
-    // ⚠ `escalate` WRITES. It is a post under the hood — a real message row in a
-    // room every member reads — and a read-only token must be refused it for the
-    // SCOPE reason like any other post, not merely because the payload is
+    // ⚠ `send` IS EVERY WRITE THAT REACHES A ROOM — an ordinary message, a
+    // milestone marker, a decision card, and the thread a message opens. Each
+    // was its own op and its own entry here; each wrote a real message row in a
+    // room every member reads, which is the SCOPE reason a read-only token is
+    // refused it, and none of them ever depended on the payload being
     // structured.
-    "escalate",
-    // ⚠ `direct_agent` WRITES. It files a `channel_agent_directions` row and asks
-    // a machine to start a TURN on a running agent — not merely a read that
-    // happens to wait, and a read-only token must be refused it.
-    // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out of
-    // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
-    "direct_agent",
-    // ⚠ `launch_agent` WRITES. It files a `channel_launch_directives` row and
-    // asks a machine to start a process — it is not merely a read that happens
-    // to wait, and a read-only token must be refused it or a `dopl.read` session
-    // can spawn agents through a non-admin tool.
-    // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: `tools/parity-harness.ts` parses this
-    // set out of the SOURCE TEXT, so a quoted phrase in a comment is read as an
-    // op name and fails the WRITE_OPS-subset-of-enum check.
-    "launch_agent",
-    // ⚠ `end_agent` AND `rename_agent` WRITE (2026-09-01). Each files a
-    // `channel_launch_directives` row of a non-launch KIND and asks a machine to
-    // act on a running agent; a read-only token must be refused both, or a
-    // `dopl.read` session can STOP its operator agents through a non-admin tool.
-    // ⚠ CLASSIFIED AS WRITES EVEN THOUGH NEITHER CHANGES ANY ROW A READ COULD
-    // SEE — an end mutates a live process and a rename mutates a local store, and
-    // neither is a read that happens to wait. `direct_agent` above carries the
-    // same argument.
-    // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out of
-    // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
-    "end_agent",
-    "rename_agent",
-    // ⚠ `set_agent_mode` WRITES, AND IT IS THE WIDEST OF THE THREE (2026-09-01).
-    // It files a directive row and asks a machine to RE-PERMISSION a running
-    // agent; a read-only token must be refused it, or a dopl.read session can
-    // widen its own agents through a non-admin tool.
-    // ⚠ IT IS ALSO THE ONE NON-LAUNCH VERB THE MACHINE'S OWN LAUNCH-CONSENT
-    // TOGGLE GATES, for the same reason it is classified here: more room can mean
-    // more compute spent on the operator's hardware, which a stop verb and a
-    // display label cannot cause.
-    // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out of
-    // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
-    "set_agent_mode",
-    // ⚠ WRITES THE CHANNEL INFO CARD (Q12, 2026-08-28). It also READS when
-    // `info_card` is omitted, and it is classified as a WRITE anyway: an op that
-    // can write must be refused wholesale for a read-only token, or the read arm
+    "send",
+    // ⚠ `manage` ASKS A MACHINE TO ACT. It files a `channel_launch_directives`
+    // or `channel_agent_directions` row and asks the operator's own machine to
+    // start, stop, relabel, re-permission or interrupt a process. ⚠ CLASSIFIED
+    // AS A WRITE EVEN THOUGH RENAME CHANGES NO ROW A READ COULD SEE — an end
+    // mutates a live process and a rename mutates a local store, and neither is
+    // a read that happens to wait. A read-only session must not stop, widen or
+    // steer its operator's agents through a non-admin tool.
+    "manage",
+    // ⚠ THE FOUR ROOM WRITES, EACH NAMED. `update` is the one easiest to wave
+    // through: it also READS when `info_card` is omitted, and it is gated anyway
+    // — an action that can write must be refused wholesale, or the read arm
     // becomes the door the write arm walks through.
-    "update",
-    // ⚠ `ping` WRITES. It files a `channel_pings` row addressed at a person or a
-    // machine, and on the agent form it can WAKE a running session — a read-only
-    // token must be refused it for the SCOPE reason like any other write, or a
-    // dopl.read session can nudge agents through a non-admin tool.
-    // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out
-    // of the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
-    "ping",
+    "rooms.open",
+    "rooms.invite",
+    "rooms.thread_mode",
+    "rooms.update",
   ]),
 };
+
+/**
+ * Does `op` — the key {@link Gates.requestedOp} produced — write?
+ *
+ * ⚠ **THE BARE-OP ARM FAILS CLOSED, AND THAT IS THE WHOLE REASON THIS IS A
+ * FUNCTION.** A sub-actioned call arrives as `rooms.open`; a call that named NO
+ * action arrives as bare `rooms`, and it must not read as "no matching write
+ * entry, therefore a read". The handler refuses a missing `action` before any
+ * write happens, so nothing is lost by refusing it here too — and refusing it
+ * here is what keeps the gate's answer independent of a handler's discipline.
+ *
+ * ⚠ The scan is over ONE tool's set, at most a dozen short strings, on a path
+ * that already does a `Set.has`. It is not worth an index.
+ */
+export function isWriteOp(name: string, op: string): boolean {
+  const writes = WRITE_OPS[name];
+  if (!writes) return false;
+  if (writes.has(op)) return true;
+  if (op.includes(".")) return false;
+  for (const entry of writes) {
+    if (entry.startsWith(`${op}.`)) return true;
+  }
+  return false;
+}
 
 /** The four gates, bound to one session's write capability. */
 export interface Gates {
@@ -365,20 +355,35 @@ export function createGates(
     return offeredTools !== null && !offeredTools.has(name);
   }
 
+  /**
+   * The key a call is gated on: `<op>` for a plain dispatch tool, `<op>.<action>`
+   * for one whose op carries a sub-verb.
+   *
+   * ⚠ **GENERIC, NOT `dopl_channel`-SPECIFIC**, and that is deliberate: this
+   * function is the ONE place a call becomes a gate key, and a per-tool branch
+   * here is a table nobody would find. No other tool declares an `action`, so
+   * the composite arm is inert everywhere else — and if one grows the param, its
+   * gate becomes finer rather than silently coarser.
+   */
   function requestedOp(args: unknown): string | undefined {
-    const op = (args as { op?: unknown } | null)?.op;
-    return typeof op === "string" ? op : undefined;
+    const bag = args as { op?: unknown; action?: unknown } | null;
+    const op = bag?.op;
+    if (typeof op !== "string") return undefined;
+    const action = bag?.action;
+    return typeof action === "string" ? `${op}.${action}` : op;
   }
 
   function opRefusal(name: string, op: string | undefined): ToolResponse | null {
     if (op === undefined) return null;
-    if (isBlockedDeleteOp(name, op)) {
+    // ⚠ THE BASE OP, because {@link DELETE_BLOCKED_OPS} names ops that may never
+    // appear in an op ENUM — a claim about the enum, which carries no action.
+    if (isBlockedDeleteOp(name, op.split(".")[0])) {
       return {
         isError: true,
         content: [{ type: "text" as const, text: DELETE_REFUSAL }],
       };
     }
-    if (!canWrite && WRITE_OPS[name]?.has(op)) {
+    if (!canWrite && isWriteOp(name, op)) {
       return {
         isError: true,
         content: [

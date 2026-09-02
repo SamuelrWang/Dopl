@@ -192,12 +192,12 @@ exports.CHANNEL_ERRORS = [
     {
         reason: "CHANNEL_FORBIDDEN",
         meaning: "you are not a member of that channel",
-        retry: 'op="list"',
+        retry: 'op="rooms" action="list"',
     },
     {
-        reason: "CHANNEL_ADDRESSEE_NOT_MEMBER",
-        meaning: "the member you addressed is not in that channel",
-        retry: 'op="members"',
+        reason: "CHANNEL_RECIPIENT_UNRESOLVED",
+        meaning: "`to` named nobody here; nothing was sent",
+        retry: 'op="rooms" action="members"',
     },
     {
         reason: "VALIDATION_FAILED",
