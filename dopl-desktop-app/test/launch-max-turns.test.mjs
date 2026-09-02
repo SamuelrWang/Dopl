@@ -17,7 +17,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
@@ -103,8 +103,36 @@ test("it is a RUNAWAY BACKSTOP: far above the cap the reducer actually enforces"
   );
 });
 
-test("the module exports the constant, so nothing has to re-read the source to know it", () => {
-  // ⚠ SOURCE-READ HERE ONLY BECAUSE REQUIRING THE MODULE PULLS IN ELECTRON. The export exists so
-  // a future reader (a settings surface, a diag line) has one place to ask.
-  assert.match(SPEC, /module\.exports = \{[^}]*SESSION_MAX_TURNS/);
+test("ONE ASSEMBLY POINT: nothing else in main/ sets a maxTurns", () => {
+  // ⚠ **THIS USED TO ASSERT THE EXPORT LINE WITH A REGEX** and that was a test of a line of
+  // SOURCE, not of a behaviour — the export has no consumer in `main/`, so it could be deleted
+  // and nothing would break except the case pinning it. What the header actually CLAIMS is that
+  // `buildOptions` is the one assembly point, which is what makes "a park cannot shed the brake"
+  // true, and nothing checked it.
+  //
+  // ⚠ A SECOND PRODUCER IS THE REGRESSION, and it is silent: a resume path or a recreated shell
+  // assembling its own options with a different ceiling would pass every case above (they all
+  // drive `buildOptions`) while shipping a session with no brake, or with somebody else's.
+  const producers = [];
+  for (const file of readdirSync(join(HERE, "..", "main", "runtime", "claude"))) {
+    if (!file.endsWith(".js")) continue;
+    const src = M(join("runtime", "claude", file));
+    // Comments discuss the field; only an object KEY assembles it.
+    for (const line of src.split("\n")) {
+      if (line.trimStart().startsWith("//")) continue;
+      if (/\bmaxTurns\s*:/.test(line)) producers.push(`${file}: ${line.trim()}`);
+    }
+  }
+  // ⚠ **TWO ENTRIES, AND THE SECOND IS DELIBERATE.** `triage.js` runs the wake ROUTER — one
+  // assistant turn, no retry even after a denied tool call — which is a different kind of query
+  // with a bound of its own, not a session that could ever loop. It is listed rather than
+  // excluded so that adding a third producer is a decision somebody makes here.
+  assert.deepEqual(
+    producers,
+    [
+      "launch-spec.js: maxTurns: SESSION_MAX_TURNS,",
+      "triage.js: maxTurns: 1,",
+    ],
+    "a new maxTurns producer, or the session one stopped naming the constant"
+  );
 });

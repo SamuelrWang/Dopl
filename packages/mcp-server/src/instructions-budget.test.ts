@@ -60,6 +60,15 @@ const SHAPES: Array<[string, string]> = [
 ];
 
 describe("the briefing fits the prefix the model is handed", () => {
+  // ⚠ WRITTEN IS DELIVERED, and the LENGTH is the whole of that claim: the CLI
+  // hands the model the first `INSTRUCTIONS_MAX_CHARS` characters and drops the
+  // rest, so a shape within the cut is a shape delivered whole. The defect this
+  // file closes was a block whose last 15,017 characters were written, served
+  // and truncated away unread.
+  // ⚠ A `text.slice(0, MAX) === text` case STOOD HERE AND IS DELETED
+  // (2026-09-02): it is the identity `text.length <= MAX` restated, so it could
+  // only ever fail alongside the loop below and never instead of it. A second
+  // spelling of one assertion reads as a second guarantee.
   for (const [shape, text] of SHAPES) {
     it(`${shape}: ${text.length} chars`, () => {
       expect(text.length, `${shape} is ${text.length} chars`).toBeLessThanOrEqual(
@@ -67,14 +76,6 @@ describe("the briefing fits the prefix the model is handed", () => {
       );
     });
   }
-
-  it("written IS delivered: no shape relies on text past the cut", () => {
-    // ⚠ The whole defect this file closes was a block whose last 15,017
-    // characters were written, served, and truncated away unread.
-    for (const [shape, text] of SHAPES) {
-      expect(text.slice(0, INSTRUCTIONS_MAX_CHARS), shape).toBe(text);
-    }
-  });
 
   it("a caller with MANY workspaces loses directory ROWS, never the contract", () => {
     // ⚠ Order is the design: the directory is variable-length DATA and sits
