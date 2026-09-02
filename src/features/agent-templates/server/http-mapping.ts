@@ -7,6 +7,7 @@ import {
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
   TemplateHomeScopeForbiddenError,
+  TemplateTeamScopeAgentForbiddenError,
   WorkspaceKeyPrivateTemplateError,
 } from "./errors";
 
@@ -43,6 +44,9 @@ export function mapAgentTemplateError(err: unknown): HttpError | null {
   }
   if (err instanceof TemplateHomeScopeForbiddenError) {
     return new HttpError(403, "TEMPLATE_HOME_SCOPE_FORBIDDEN", err.message);
+  }
+  if (err instanceof TemplateTeamScopeAgentForbiddenError) {
+    return new HttpError(403, "TEMPLATE_TEAM_SCOPE_AGENT_FORBIDDEN", err.message);
   }
   // 🔒 G16 — 400, not 403: the caller is allowed to do this, the REQUEST is
   // incomplete. Shared with the knowledge lane (`knowledge/server/

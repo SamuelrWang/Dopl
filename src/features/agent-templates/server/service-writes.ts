@@ -17,6 +17,7 @@ import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/reposi
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
   TemplateHomeScopeForbiddenError,
+  TemplateTeamScopeAgentForbiddenError,
   TemplateKnowledgeBaseNotFoundError,
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
@@ -122,6 +123,7 @@ export async function createTemplate(
   // exists with the wrong sharing (or with attachments silently dropped) is
   // worse than one that was never created — there is no transaction across
   // these three statements, so the order IS the atomicity story.
+  assertTeamScopeIsHuman(ctx, visibility);
   const teamIds =
     visibility === "team"
       ? await assertGrantableTeams(ctx, input.teamIds ?? [], [])
@@ -238,6 +240,11 @@ export async function updateTemplate(
   // the person removing it is the person who granted it.
   let teamIds: string[] | null = null;
   if (patch.visibility !== undefined || patch.teamIds !== undefined) {
+    // 🔒 A8's SERVER HALF, on the update path too — a create fence with no update
+    // twin is a fence defeated in two calls (F-289's own argument).
+    // ⚠ `nextVisibility`, so a `teamIds`-only patch on a row that is ALREADY
+    // `team` is refused as well: it MOVES the audience, which is the act.
+    assertTeamScopeIsHuman(ctx, nextVisibility);
     teamIds =
       nextVisibility === "team"
         ? await assertGrantableTeams(
@@ -342,6 +349,29 @@ function assertMayWrite(
  *     silently revoke the parts the owner cannot re-add).
  * Both rules are lifted verbatim from `updateSkill`'s sharing branch.
  */
+/**
+ * 🔒 **THE TEAM AXIS NEEDS A HUMAN** — A8's server half (2026-09-02).
+ *
+ * A8 took `team` off `dopl_agent`'s enum, so the MCP surface refuses it in zod.
+ * The REST route's schema still accepts it and an agent credential reaches that
+ * route directly, so the rule held on one road only — the prompt-only shape this
+ * wave exists to remove. See {@link TemplateTeamScopeAgentForbiddenError} for why
+ * it refuses the CREDENTIAL rather than the value, and why `team` stays legal for
+ * a human until B4 is ruled.
+ *
+ * ⚠ `ctx.source === "agent"` is the same discriminator `updateSkill` and
+ * `createBase` use for their own human-only settings — the CREDENTIAL a call
+ * arrived on, never a claim in the body.
+ */
+function assertTeamScopeIsHuman(
+  ctx: AgentTemplateContext,
+  landing: TemplateVisibility
+): void {
+  if (landing === "team" && ctx.source === "agent") {
+    throw new TemplateTeamScopeAgentForbiddenError();
+  }
+}
+
 async function assertGrantableTeams(
   ctx: AgentTemplateContext,
   requested: string[],

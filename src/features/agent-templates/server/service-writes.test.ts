@@ -46,6 +46,7 @@ import { createTemplate, deleteTemplate, updateTemplate } from "./service";
 import {
   TemplateKnowledgeBaseNotFoundError,
   TemplateTeamNotGrantableError,
+  TemplateTeamScopeAgentForbiddenError,
   TemplateWriteForbiddenError,
   WorkspaceKeyPrivateTemplateError,
 } from "./errors";
@@ -281,6 +282,60 @@ describe("team sharing — grantability", () => {
     // The junction's workspace-guard trigger would also catch this, as an
     // opaque 500. Catching it here is what makes the error sayable.
     expect(err.message).toMatch(/Not a team in this workspace/);
+  });
+
+  it("SECURITY: an AGENT credential cannot create into `team`, on either path", async () => {
+    // 🔒 A8's SERVER HALF (2026-09-02). A8 took `team` off `dopl_agent`'s enum,
+    // so the MCP surface refuses it in zod — but the REST route's schema still
+    // accepts it and an agent credential reaches that route directly, so the rule
+    // held on one road only. It refuses the CREDENTIAL, not the value: `team`
+    // stays legal for a human until B4 is ruled, and every stored row keeps
+    // working.
+    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
+    await expect(
+      createTemplate(ctx({ source: "agent" }), {
+        name: "R",
+        visibility: "team",
+        teamIds: [TEAM_A],
+      })
+    ).rejects.toBeInstanceOf(TemplateTeamScopeAgentForbiddenError);
+    // ⚠ REFUSED BEFORE THE ROW, not after: a template that exists with the wrong
+    // sharing is worse than one that was never created.
+    expect(mockRepo.insertTemplate).not.toHaveBeenCalled();
+  });
+
+  it("SECURITY: …and cannot MOVE a row into `team` in a second call", async () => {
+    // ⚠ A create fence with no update twin is a fence defeated in two calls —
+    // F-289's own argument on this very service.
+    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "private" }));
+    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
+    await expect(
+      updateTemplate(ctx({ source: "agent" }), "tpl-1", {
+        visibility: "team",
+        teamIds: [TEAM_A],
+      })
+    ).rejects.toBeInstanceOf(TemplateTeamScopeAgentForbiddenError);
+    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
+  });
+
+  it("SECURITY: a teamIds-only patch on an ALREADY-team row is the same act", async () => {
+    // ⚠ It moves the audience without naming a visibility, which is why the fence
+    // reads the LANDING value rather than `patch.visibility`.
+    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "team" }));
+    mockRepo.listTeamLinksForTemplates.mockResolvedValue([
+      { templateId: "tpl-1", teamId: TEAM_A },
+    ]);
+    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A, TEAM_B]);
+    await expect(
+      updateTemplate(ctx({ source: "agent" }), "tpl-1", { teamIds: [TEAM_B] })
+    ).rejects.toBeInstanceOf(TemplateTeamScopeAgentForbiddenError);
+  });
+
+  it("a HUMAN is untouched — the fence is the credential, not the value", async () => {
+    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
+    await expect(
+      createTemplate(ctx(), { name: "R", visibility: "team", teamIds: [TEAM_A] })
+    ).resolves.toBeTruthy();
   });
 
   it("an owner may KEEP a team an admin granted, even outside their own teams", async () => {

@@ -123,6 +123,16 @@ export const TemplateFieldsSchema = z
 
 // ─── Visibility ─────────────────────────────────────────────────────────
 
+/**
+ * ⚠ **`team` IS STILL ACCEPTED HERE AND IS REFUSED FOR AN AGENT ONE LAYER DOWN**
+ * (2026-09-02). A8 took the value off `dopl_agent`'s enum, so the MCP surface
+ * refuses it in zod before any round trip — but this schema is the REST route's,
+ * an agent credential reaches that route directly, and a rule enforced only where
+ * the caller happens to enter is not enforced. `server/service-writes.ts ›
+ * assertTeamScopeIsHuman` is the fence, on the create AND the update path.
+ * ⚠ It stays in the enum because the value is still legal for a HUMAN: taking it
+ * out of the DB is B4, and B4 has not been ruled.
+ */
 export const TemplateVisibilitySchema = z.enum([
   "private",
   "team",

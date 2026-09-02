@@ -106,3 +106,37 @@ export class WorkspaceKeyPrivateTemplateError extends Error {
     this.name = "WorkspaceKeyPrivateTemplateError";
   }
 }
+
+/**
+ * 🔒 **THE TEAM AXIS IS HUMAN-ONLY ON THE WRITE PATH** (2026-09-02, A8's server
+ * half).
+ *
+ * A8 took `team` off the MCP enum, so `dopl_agent` refuses it in zod before any
+ * round trip (`agent-shared.ts › VISIBILITY_ENUM_MESSAGE`). That is a fence on
+ * ONE surface: the REST route's schema still accepts `visibility: "team"` and
+ * `teamIds`, and an agent credential reaches that route directly. A rule enforced
+ * only where the caller happens to enter is the prompt-only shape this wave
+ * exists to remove.
+ *
+ * ⚠ **IT REFUSES THE CREDENTIAL, NOT THE VALUE.** `team` stays a legal
+ * visibility for a human — B4 is the ruling that would take it out of the DB, and
+ * it has not been taken. So the web UI's sharing panel is untouched and every
+ * stored `team` row keeps working; what an agent may no longer do is CREATE or
+ * MOVE a row into it. `knowledge/server/service-base-writes.ts` states the same
+ * rule in one sentence for its own teams mode, and this is that sentence applied
+ * to the second resource type that has the axis.
+ *
+ * ⚠ 403, not 400: the request is well-formed and the value is real. What is
+ * missing is a human.
+ */
+export class TemplateTeamScopeAgentForbiddenError extends Error {
+  readonly code = "TEMPLATE_TEAM_SCOPE_AGENT_FORBIDDEN";
+  constructor() {
+    super(
+      "Team-scoped sharing is a human-only setting — an agent cannot create or " +
+        "move an agent template into `visibility: \"team\"`. Use \"private\" or " +
+        "\"workspace\", or ask your operator to set the team scope in the Dopl app."
+    );
+    this.name = "TemplateTeamScopeAgentForbiddenError";
+  }
+}
