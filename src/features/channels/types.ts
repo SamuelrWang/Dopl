@@ -227,6 +227,18 @@ export type Channel = {
   /** **THE POSTURE CEILING THE SERVER CAN SEE** (A9 — G6/G7). ⚠ `null` on any
    *  axis is "NOT RECORDED", never "unrestricted"; see `types-delivery.ts`. */
   agentPosture: ChannelAgentPosture;
+  /**
+   * **WHO ANSWERS WHEN NOBODY IS NAMED** (2026-09-02, B4 — Samuel's ruling B6):
+   * the agent handle RR3 hands an unaddressed HUMAN message to when more than
+   * one agent is live in the room. `null` = not configured, which is not "nobody
+   * answers": one live agent still answers by itself, and two or more answer not
+   * at all.
+   *
+   * ⚠ A HANDLE, never a template id — the migration records why (an FK to
+   * `agent_templates` would be a cross-visibility reference from a row members
+   * can read), and it is why this degrades quietly instead of dangling.
+   */
+  defaultResponderAgentName: string | null;
 };
 
 export type ChannelMessage = {

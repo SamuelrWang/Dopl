@@ -30,6 +30,7 @@ import * as repoMessages from "./repository-messages";
 import { getChannel } from "./service-reads";
 import { createDirectChannel } from "./service-writes-direct";
 import { resolvePostMetadata } from "./service-writes-metadata";
+import { resolveToRecipient } from "./service-writes-metadata-recipient";
 import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   canManageChannel,
@@ -64,6 +65,24 @@ import {
 function assertChatIsUnaddressed(input: ChannelMessageCreateInput): void {
   if (input.intent !== "chat") return;
   if (input.toUserId) throw new ChannelChatAddressedError("toUserId");
+  // ⚠ THE SECOND DOOR INTO THE SAME CONTRADICTION (2026-09-02, B4). `to` is the
+  // union form of the same field, so a `chat` carrying one says the same two
+  // opposite things — and leaving it out here would make "chat + addressed"
+  // refusable through one spelling and silent through the other.
+  if (input.to) throw new ChannelChatAddressedError("to");
+}
+
+/**
+ * **ONE RECIPIENT, SO ONE FIELD** (2026-09-02, B4). `to` and `toUserId` are the
+ * loose and the uuid form of the same thing; a post carrying both is a caller
+ * that does not know which one it means, and picking either would be a guess
+ * about who a message is for. 400, on `assertChatIsUnaddressed`'s terms and in
+ * the same place, so it also refuses on the retry.
+ */
+function assertOneRecipientField(input: ChannelMessageCreateInput): void {
+  if (input.to && input.toUserId) {
+    throw new ChannelChatAddressedError("to + toUserId");
+  }
 }
 
 // ─── Channel lifecycle ──────────────────────────────────────────────
@@ -138,6 +157,13 @@ const MANAGED_CHANNEL_FIELDS = [
   // below because the default this list produces — MANAGED — is the one it
   // wants, and stating it is what keeps that from looking accidental.
   "agentPosture",
+  // ⚠ **MANAGED FOR `agentPosture`'s REASON, ONE STEP SHARPER (2026-09-02, B4 —
+  // ruling B6).** The ceiling decides how much room somebody else's agent gets
+  // here; this decides WHOSE agent the room's unaddressed work lands on, which
+  // is a statement about a machine the setter does not own. ⚠ **THE SERVER IS
+  // THE GATE.** The Settings control is an affordance — a UI that hid the row
+  // would change nothing about who may write the field.
+  "defaultResponderAgentName",
 ] as const satisfies ReadonlyArray<keyof ChannelUpdateInput>;
 
 export async function updateChannel(
@@ -208,6 +234,11 @@ export async function updateChannel(
     if (p.messages !== undefined) dbPatch.agent_message_ceiling = p.messages;
     if (p.chain !== undefined) dbPatch.agent_chain_allowed = p.chain;
   }
+  // ⚠ **`null` IS A VALUE HERE TOO** — see the posture note above. `undefined`
+  // leaves the nomination alone; `null` withdraws it.
+  if (patch.defaultResponderAgentName !== undefined) {
+    dbPatch.default_responder_agent_name = patch.defaultResponderAgentName;
+  }
 
   await repo.updateChannel(ctx.workspaceId, channel.id, dbPatch);
   return getChannel(ctx, channel.id);
@@ -271,7 +302,7 @@ export async function postMessage(
   rawInput: ChannelMessageCreateInput,
   opts: PostMessageOptions = {}
 ): Promise<ChannelMessagePosted> {
-  const input = stripNulDeep(rawInput);
+  const raw = stripNulDeep(rawInput);
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
     throw new ChannelForbiddenError("post to this channel");
@@ -279,7 +310,27 @@ export async function postMessage(
 
   // ⚠ Beside the membership check because both must precede the idempotency
   // short-circuit — a contradictory post has to fail on the retry too.
-  assertChatIsUnaddressed(input);
+  assertChatIsUnaddressed(raw);
+  assertOneRecipientField(raw);
+
+  // **`to=` RESOLVED ONCE, HERE** (2026-09-02, B4 — ruling B1). A MEMBER becomes
+  // the `toUserId` every fence below already knows how to check, so there is one
+  // addressee path and not two; an AGENT rides `toAgentId` into the verdict and
+  // stamps no metadata key (see `service-writes-metadata-recipient.ts`).
+  //
+  // ⚠ IT RUNS BEFORE THE IDEMPOTENCY SHORT-CIRCUIT for the same reason the two
+  // asserts above do: `to` naming nobody is a REFUSAL (ruling B1), and a refusal
+  // that a retry can replay out of storage is not one.
+  let toAgentId: string | null = null;
+  let input = raw;
+  if (raw.to) {
+    const recipient = await resolveToRecipient(ctx, channel, raw.to);
+    if (recipient.kind === "member") {
+      input = { ...raw, toUserId: recipient.userId };
+    } else {
+      toAgentId = recipient.agentId;
+    }
+  }
   // ⚠ Same placement rule, same reason. Takes no `opts` since 2026-08-20 — the
   // `internalLifecycle` exemption it used to read is deleted, so the credential
   // is the whole question.
@@ -343,12 +394,22 @@ export async function postMessage(
   // ⚠ It comes AFTER the idempotency short-circuit too: a converged retry
   // returns the FIRST request's stored verdict, which is the whole point of the
   // key — a retry must not re-resolve against a world that has moved on.
-  const wake = await resolveWakeVerdict(ctx, channel.id, input, metadata);
-
   // `system` is server-reserved and rejected by the route schema, so a posted
   // message always ties to the acting user (agent posts included).
+  //
+  // ⚠ **IT IS RESOLVED BEFORE THE VERDICT NOW (2026-09-02, B4), BECAUSE THE
+  // VERDICT BRANCHES ON IT.** RR2 and RR3 are the same situation — an
+  // unaddressed post in the main room — split by whether an agent or a person
+  // wrote it, and the credential is what answers that. Reading it after would
+  // mean the resolver guessing from the body, which is the whole class of defect
+  // this file's A9 note is about.
   const authorKind =
     input.authorKind ?? (ctx.source === "agent" ? "agent" : "user");
+
+  const wake = await resolveWakeVerdict(ctx, channel, input, metadata, {
+    authorKind,
+    toAgentId,
+  });
 
   let row;
   try {

@@ -46,6 +46,16 @@ export type ChannelRow = {
   agent_tool_ceiling?: string | null;
   agent_message_ceiling?: string | null;
   agent_chain_allowed?: boolean | null;
+  /**
+   * **RR3's DEFAULT RESPONDER** (`20260918120000`, B4 — Samuel's ruling B6): the
+   * agent HANDLE that answers an unaddressed human message in this room.
+   *
+   * ⚠ OPTIONAL ON THE TYPE for the three ceilings' reason — a server reading a
+   * database whose migration has not landed sees no such key. `undefined` and
+   * `null` are one answer here ("not configured"), and neither is "nobody
+   * answers": one live agent still answers by itself (RR3 arm 2).
+   */
+  default_responder_agent_name?: string | null;
   archived_at: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -274,6 +284,10 @@ export function mapChannelRow(
     // still there and a channel that cannot render is the worse answer.
     infoCard: parseInfoCard(row.info_card),
     agentPosture: mapAgentPosture(row),
+    // ⚠ `?? null` IS THE STALE-CACHE FALLBACK THE INVARIANT ASKS FOR: a payload
+    // cached before this field existed reads `undefined`, and every consumer is
+    // written against `null` meaning "not configured".
+    defaultResponderAgentName: row.default_responder_agent_name ?? null,
   };
 }
 

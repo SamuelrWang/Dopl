@@ -434,6 +434,50 @@ export async function deleteMessagesByThread(
 }
 
 /** Per-channel latest message (seq + created_at) via the bounded RPC. */
+/**
+ * **RR2's ONE READ** (2026-09-02, v2 wave B slice B4 — ruling B1): the newest
+ * MAIN-ROOM message in this channel, inside the resilience window, whose STORED
+ * recipient set names this agent. `null` when nobody has addressed it there
+ * lately.
+ *
+ * ⚠ **IT READS THE STORED RESOLUTION, NEVER THE BODY.** `recipient_agent_ids` is
+ * what `service-wake-verdict.ts` wrote at the time, so this asks "who addressed
+ * this agent" in exactly the vocabulary the server itself used — a body re-parse
+ * here would be a fifth spelling of the addressing rule and would disagree with
+ * the row it is reading.
+ *
+ * ⚠ **`seq` IS THE ORDER AND `seq` IS UNIQUE PER CHANNEL**
+ * (`channel_messages_channel_seq_idx`, and the advisory-locked insert RPC makes
+ * commit order monotonic). So "the highest one" is TOTAL: no tie is
+ * representable and there is no tie-break to get wrong. Ordering by `created_at`
+ * instead would reintroduce one, because two rows can share a timestamp.
+ *
+ * ⚠ **`thread IS NULL` IS SPELLED `metadata->>taskId IS NULL`** — the same
+ * expression `listMessages`' `threadId` filter uses, and the thread tag has no
+ * column of its own. A row tagged into a thread is RR1's business, never RR2's.
+ *
+ * ⚠ NO INDEX ON `recipient_agent_ids`, deliberately — the migration's section 3
+ * records why, and the measurement to record if that ever changes.
+ */
+export async function findLastRoomAddressToAgent(
+  channelId: string,
+  agentId: string,
+  sinceIso: string
+): Promise<ChannelMessageRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("*")
+    .eq("channel_id", channelId)
+    .is("metadata->>taskId", null)
+    .gt("created_at", sinceIso)
+    .contains("recipient_agent_ids", [agentId])
+    .order("seq", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return ((data ?? [])[0] as ChannelMessageRow | undefined) ?? null;
+}
+
 export async function lastMessages(
   channelIds: string[]
 ): Promise<Map<string, string>> {
