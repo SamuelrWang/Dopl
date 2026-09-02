@@ -122,19 +122,24 @@ export const LaunchCreateSchema = z.object({
    * channel denies is REFUSED, not clamped (`launch-posture.js › resolveChain`),
    * so the collapse would start refusing launches that asked for nothing.
    *
-   * ⚠ **MEASURED MISMATCH (2026-09-01): `false` IS STORABLE HERE AND IS NOT
-   * DISTINGUISHABLE ON THE DESKTOP.** `main/launch-directive-wire.js ›
-   * directiveFrom` narrows this field as `r.chain === true || r.chain === 'true'
-   * ? true : null`, so a stored `false` arrives as `null` — "did not ask" — and
-   * the session inherits the channel setting, which may be ON. **So `false` is
-   * NOT a way to turn chaining off**, and no copy on this lane may say it is;
-   * `channel-schema.ts › chain` states that to callers.
-   * ⚠ **THE COLUMN STAYS A NULLABLE BOOLEAN RATHER THAN A `z.literal(true)`, AND
-   * THAT IS THE CHEAP DIRECTION.** Narrowing here would make the day the desktop
-   * learns to honour `false` a schema change in three trees; admitting it costs
-   * one row value that currently resolves the same way `null` does. What is NOT
-   * acceptable is prose that promises the behaviour, which is why this note
-   * exists rather than a narrower type.
+   * ⚠ **`false` DOES TURN CHAINING OFF, AND IT WINS OVER A CHANNEL SET TO ON**
+   * (fixed 2026-09-01). It is strictly narrower than anything the operator's
+   * setting would have granted, so there is nothing for that setting to protect
+   * and `main/launch-posture.js › resolveChain` grants it unconditionally —
+   * never a refusal, because NARROWING IS NEVER REFUSED.
+   * ⚠ **THIS DOCBLOCK SAID THE OPPOSITE UNTIL 2026-09-01 AND THE PROSE WAS
+   * HONEST AT THE TIME.** `main/launch-directive-wire.js › directiveFrom` read
+   * `r.chain === true || r.chain === 'true' ? true : null`, so a stored `false`
+   * fell down the `null` arm, arrived as "did not ask", and INHERITED the channel
+   * setting — which may be ON. `launch-posture.js › resolveChain` had the
+   * matching defect (its `false` arm fell through to `allowed === true`), and the
+   * two hid each other precisely because each half was tested alone. Both are
+   * fixed; `dopl-desktop-app/test/launch-chain.test.mjs` now drives the wire and
+   * the resolver TOGETHER across all three states, which is the only shape of
+   * test that could have caught it.
+   * ⚠ **THE COLUMN STAYS A NULLABLE BOOLEAN AND THAT IS NOW LOAD-BEARING RATHER
+   * THAN MERELY CHEAP.** All three values are distinct requests with distinct
+   * outcomes; a `z.literal(true)` here would delete one of them.
    */
   chain: z.boolean().optional(),
 });
@@ -317,6 +322,39 @@ export const LaunchDecideSchema = z.discriminatedUnion("status", [
      *  bad value must be a 400 that NAMES the field rather than a constraint
      *  violation surfacing as an opaque 500. */
     agentId: z.string().regex(/^[a-z][a-z0-9]{7}$/, "Invalid agent id"),
+    /**
+     * **THE ECHO TRIO — WHAT THE MACHINE SAYS IT ACTUALLY APPLIED** (2026-09-01,
+     * T24's second half). The columns landed with the posture request and
+     * nothing wrote them; these three fields are the writer.
+     *
+     * ⚠ **OPTIONAL, AND THE OPTIONALITY IS THE OLDER-DESKTOP CONTRACT**
+     * (INVARIANTS §13 — an older peer is supported). A desktop that predates
+     * this wave reports nothing, its decide body carries none of these keys, and
+     * the columns stay `null` — which `channel-ops-launch.ts › postureFacts`
+     * renders as `not reported`. Making any of them REQUIRED would 400 every
+     * decide such a machine posts, i.e. it would turn "I cannot tell you what I
+     * applied" into "I could not report at all", and the row would then expire
+     * with a running agent behind it.
+     * ⚠ **`null` MUST KEEP MEANING "NOT REPORTED".** Absent stays absent all the
+     * way to the column (`service-launch.ts › decideLaunchDirective` maps an
+     * undefined field to `null`) — it is NEVER filled in from the REQUEST
+     * columns, which would be right whenever nothing was clamped and confidently
+     * wrong exactly when it mattered.
+     * ⚠ THE SAME FROZEN ENUMS THE REQUEST PAIR USES, and deliberately the same
+     * declarations: a second literal here is the drift {@link LAUNCH_TOOL_MODES}
+     * exists to prevent, and the column CHECK holds the echo columns to the same
+     * members at rest.
+     * ⚠ NOT ON THE `done` ARM. Only a LAUNCH resolves a start posture; an `end`
+     * or a `rename` applies none, and a machine that reported one would be
+     * asserting a fact about a session it did not start.
+     */
+    appliedTools: ToolModeSchema.optional(),
+    appliedMessages: MessageModeSchema.optional(),
+    /** ⚠ A REAL `false` — "this session may NOT launch workers" — and it is a
+     *  DIFFERENT fact from an absent field. Absent is "not reported"; `false` is
+     *  the machine saying it settled the chain OFF, which is what an orchestrator
+     *  needs in order to stop planning for workers. */
+    appliedChain: z.boolean().optional(),
   }),
   // ⚠ THE NON-LAUNCH KINDS' SUCCESS, 2026-09-01. It carries NO agent id: an end
   // and a rename both NAME their target in the row already (`target_agent_id`),

@@ -32,7 +32,10 @@ const launchPosture = require('./launch-posture');
 const { diag } = require('./diag');
 
 /**
- * SPAWN, THROUGH THE ORDINARY FUNNEL. Returns `{ agentId }` or `{ refused: <word> }`.
+ * SPAWN, THROUGH THE ORDINARY FUNNEL. Returns `{ refused: <word> }`, or — on success —
+ * `{ agentId, appliedTools, appliedMessages, appliedChain }`, the ECHO the decide reports back
+ * (2026-09-01). The three `applied*` values are the RESOLVED ones, never the requested ones; the
+ * block at the return statement carries why.
  *
  * ⚠ EVERY CONTAINMENT INPUT COMES FROM THIS MACHINE, NOT FROM THE DIRECTIVE. Stated field by
  * field because this is the whole safety argument:
@@ -142,6 +145,15 @@ async function spawn(d, deps) {
     return { refused: 'no-template' };
   }
 
+  // ── THE PINNED STARTUP CONTEXT, UNDER THIS OPERATOR'S CREDENTIAL (T81) ────────────────
+  // ⚠ AFTER the template, and for the SAME ordering reason: the tool profile and the identity are
+  // both already decided by the time any workspace prose exists here.
+  // ⚠ **AND IT IS THE ONE FETCH ON THIS LANE THAT CANNOT REFUSE THE LAUNCH.** `fetchStartupContext`
+  // answers `null` on every failure — timeout, network, 5xx, an older server's 404 — because a
+  // startup context is ENRICHMENT and a template is an IDENTITY. Its docblock carries the whole
+  // argument; the shape of the difference is right here, in the missing `if (!…) return { refused }`.
+  const startupContext = await fetchStartupContext(d.workspaceId);
+
   const res = await deps.launch({
     channelId: d.channelId,
     taskId: d.taskId,
@@ -175,6 +187,15 @@ async function spawn(d, deps) {
       // ⚠ `null` when none was named — `templateRoleFraming` returns `[]` and the turn is
       // byte-identical to what this lane produced before templates existed.
       template,
+      // ── ⚠ THE PINNED WORKSPACE CONTEXT, CAPTURED AT SPAWN AND NEVER RE-READ (T81) ─────
+      // Same key discipline as `template` above — `session-launch.js › launch` forwards `context`
+      // and `session-engine.js` spreads it onto the session, so this costs zero funnel changes and
+      // has ONE consumer (`prompt-framing-startup.js › startupContextFraming`).
+      // ⚠ `null` WHEN NOTHING IS PINNED **AND** WHEN THE FETCH FAILED, and those two are one state
+      // deliberately: the framer returns `[]` for either, so the turn is byte-identical to what
+      // this lane produced before T81. `fetchStartupContext` carries why a failure is not reported
+      // into the prompt.
+      startupContext,
     },
     toolProfile: targeting.resolveToolProfile(channel),
     mode: 'interactive',
@@ -201,8 +222,87 @@ async function spawn(d, deps) {
     launchChain: plan.chain, idle: !d.goal, // ⚠ `launchChain` (2026-08-31, Samuel's agent-chaining ruling): THIS lane is the ONLY caller that passes it, read PER DIRECTIVE and never cached (the operator may flip the channel setting between two of them), so a session started here may launch further agents exactly when the room says so — every other lane passes nothing, reads false, and keeps the one-generation bound. ⚠ `idle`: docblock; `directiveFrom` trimmed the goal, so '' is the only spelling of "none"
     operatorArmed: true, // ⚠ both branches: FIX-4 reads it only for a shell, but it is true either way
   });
-  if (res && res.agentId) return { agentId: res.agentId };
+  // ── ⚠ THE ECHO, RETURNED BESIDE THE ADDRESS (2026-09-01, T24's second half) ───────────────
+  // `decideBody` puts these three on the LAUNCHED body and the server stores them in
+  // `applied_tool_mode` / `applied_message_mode` / `applied_chain`, where
+  // `channel-ops-launch.ts › postureFacts` renders them.
+  // ⚠ **THEY ARE `plan`'s VALUES, NEVER `d`'s.** `d.startToolMode` / `d.startMessageMode` /
+  // `d.chain` are what the ORCHESTRATOR ASKED FOR; `plan.modes` / `plan.chain` are what this
+  // machine SETTLED ON after the clamp, the windowless floor and the chain rule — and they are the
+  // same objects handed to `deps.launch` above, so the report cannot drift from the session.
+  // Echoing the request instead would be right whenever nothing was clamped and confidently wrong
+  // exactly when it mattered, which is the one claim this lane must never make.
+  // ⚠ REPORTED ON EVERY LAUNCH, NOT ONLY A CLAMPED ONE. "Not reported" has to keep meaning "this
+  // machine said nothing" (an older desktop), so a machine that CAN report and stays silent
+  // whenever it agrees would make silence ambiguous.
+  if (res && res.agentId) {
+    return {
+      agentId: res.agentId,
+      appliedTools: plan.modes.tools,
+      appliedMessages: plan.modes.messages,
+      appliedChain: plan.chain,
+    };
+  }
   return { refused: wire.refusalFor(res && res.skipped) };
+}
+
+// ⚠ SHORTER THAN `launch-directive-calls.js`'s `HTTP_TIMEOUT_MS` (15 s), and the reason is the
+// difference between a REFUSAL and an ENRICHMENT: a claim that times out costs the orchestrator a
+// wait, while this one costs a launch that is otherwise ready to go. Five seconds is the same
+// budget `template-resolve.js` spends for the same "do not hold a spawn open" reason.
+const STARTUP_CONTEXT_TIMEOUT_MS = 5000;
+
+/**
+ * THE PINNED STARTUP CONTEXT (T81) — `GET /api/knowledge/startup-context`, at spawn, under THIS
+ * OPERATOR's credential. Returns the payload, or `null`. **NEVER THROWS AND NEVER REFUSES.**
+ *
+ * ⚠ **THE ERROR DISCIPLINE IS THE TEMPLATE RESOLVE'S SHAPE WITH THE OPPOSITE VERDICT, AND THE
+ * DIFFERENCE IS THE WHOLE REASON THIS COMMENT EXISTS.** `template-resolve.js` returns a REFUSAL
+ * word and this file's `spawn` turns it into `no-template`, because a template is an IDENTITY the
+ * caller deliberately chose: an agent silently wearing none is not noticed for several turns, so
+ * "refuse, never degrade" is right there.
+ * ⚠ A STARTUP CONTEXT IS **ENRICHMENT**, so the same failure must NOT refuse. It is standing
+ * reference material the workspace pinned for every session, not something this directive asked
+ * for; refusing the launch would mean an unreachable knowledge route, a slow one, or a server too
+ * old to have the endpoint takes down agent launching altogether — a hard failure bought for a
+ * soft benefit. It degrades to ABSENT (the pre-T81 turn, byte for byte) and says so via `diag`.
+ * ⚠ **AND ABSENT IS INDISTINGUISHABLE FROM "NOTHING IS PINNED", DELIBERATELY.** There is no
+ * prompt line saying "your workspace may have pinned something I could not fetch": that sentence
+ * is unactionable by the agent, and a session that has it would report a machine-local blocker
+ * into a shared channel, which is exactly what `prompt-framing.js › counterpartyFraming` exists
+ * to stop. The operator sees it in `diag`; the agent sees the pre-T81 turn.
+ */
+async function fetchStartupContext(workspaceId) {
+  try {
+    const res = await require('./api').apiFetch('/api/knowledge/startup-context', {
+      method: 'GET',
+      // ⚠ THE CHANNEL'S CONTAINER, not "the operator's active workspace". `apiFetch` sends this as
+      // `X-Workspace-Id`, and a launch into a home channel's own container must read THAT
+      // container's pins — the same scoping the template resolve on this lane takes.
+      workspaceId: typeof workspaceId === 'string' && workspaceId ? workspaceId : undefined,
+      timeoutMs: STARTUP_CONTEXT_TIMEOUT_MS,
+      noStore: true,
+    });
+    // ⚠ A 404 IS THE OLDER-DEPLOYMENT CASE AND IS NOT AN ERROR (INVARIANTS §13 — an older peer is
+    // supported), which is the same reading `launch-directive-wire.js`'s `pollWorkspace` note
+    // gives its own 404. It lands on the identical degrade as every other failure.
+    if (!res || !res.ok) {
+      diag('startup-context: not fetched —', res ? `HTTP ${res.status}` : 'no response',
+        '— launching without pinned context');
+      return null;
+    }
+    const body = await res.json();
+    if (!body || typeof body !== 'object' || !Array.isArray(body.items)) return null;
+    // ⚠ NARROWED, NOT SPREAD, for `template-resolve.js › narrow`'s reason: a key the server adds
+    // later must not arrive on a session object and start being depended on by accident. The
+    // per-field BOUNDS are the render's (`prompt-framing-startup.js`), where the neutralizers are.
+    return { items: body.items, omitted: Array.isArray(body.omitted) ? body.omitted : [] };
+  } catch (err) {
+    // An abort (the timeout) and a dead socket land here identically, and so they should.
+    diag('startup-context: network —', (err && err.message) || 'error',
+      '— launching without pinned context');
+    return null;
+  }
 }
 
 /** The goal a directive with none falls back to — the same sentence the New Agent button

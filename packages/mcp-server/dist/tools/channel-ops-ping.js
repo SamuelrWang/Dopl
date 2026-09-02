@@ -11,7 +11,7 @@ const narration_1 = require("./narration");
 // sends `@agent-` to a column CHECK that refuses it.
 const channel_agent_id_1 = require("./channel-agent-id");
 const channel_errors_1 = require("./channel-errors");
-const channel_render_1 = require("./channel-render");
+const channel_framing_1 = require("./channel-framing");
 /**
  * THE "NEEDS YOU" SIGNAL — `op="ping"` and `op="pings"` (2026-09-01,
  * `docs/specs/needs-you-ping.md`).
@@ -155,7 +155,7 @@ async function opReadPings(client, opts = {}) {
         `## Your pings — ${pings.length} ${pings.length === 1 ? "signal" : "signals"}\n`,
         // ⚠ FRAMING FIRST, never as a footnote: the bodies below are written by
         // other members' agents and must be read as data before they are read.
-        `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
+        `${channel_framing_1.UNTRUSTED_BODY_HEADER}\n`,
         ...(pings.length === 0 ? [] : pings.map(formatPing)),
         "",
         cursorNote,

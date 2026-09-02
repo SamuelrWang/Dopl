@@ -168,12 +168,14 @@ export interface LaunchDirective {
    */
   startToolMode: LaunchToolMode | null;
   startMessageMode: LaunchMessageMode | null;
-  /** MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? `true` asked; `null` did not
-   *  ask and inherits the channel setting. ⚠ REFUSED rather than clamped when the
-   *  channel forbids it — the one asymmetry with the two axes.
-   *  ⚠ **`false` IS STORABLE AND THE DESKTOP CANNOT TELL IT FROM `null`** — its
-   *  narrower reads only `true`/`"true"` as a request — so `false` is NOT a way
-   *  to turn chaining off, and nothing may render it as one. */
+  /** MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? **A TRUE TRI-STATE** (fixed
+   *  2026-09-01): `true` ASKED IT ON, `false` ASKED IT OFF, `null` did not ask and
+   *  inherits the channel setting. ⚠ `true` is REFUSED rather than clamped when
+   *  the channel forbids it — the one asymmetry with the two axes. ⚠ `false` is
+   *  ALWAYS granted and WINS over a channel set to ON: it only ever narrows, so
+   *  there is nothing for the operator setting to protect.
+   *  ⚠ This said `false` was indistinguishable from `null`, which was true while
+   *  the desktop's narrower read only `true`/`"true"`. It no longer does. */
   chain: boolean | null;
   /** THE POSTURE A `set_agent_mode` ASKED A **RUNNING** AGENT TO MOVE TO. `null`
    *  on an axis means it was not requested, which is ordinary; at least one is
@@ -184,9 +186,12 @@ export interface LaunchDirective {
    * **THE ECHO — what the machine says it actually applied, after its clamp.**
    *
    * ⚠ **`null` MEANS "NOT REPORTED". NOT "unclamped", and NEVER the requested
-   * value echoed back.** No writer exists yet, so all three are `null` on every
-   * live row; a reader that treats `null` as agreement tells its caller the
-   * posture landed on the strength of a field nobody filled in.
+   * value echoed back.** The writer is the DECIDE and it landed on 2026-09-01,
+   * but `null` is still the live value on every row written before that wave and
+   * on every row decided by a desktop older than it — the decide's echo fields
+   * are optional so such a machine can still report. A reader that treats `null`
+   * as agreement tells its caller the posture landed on the strength of a field
+   * nobody filled in.
    * ⚠ `appliedChain: null` IS NOT `false` — reading it as "no chaining" is wrong
    * in the direction that makes an orchestrator do the work itself for no reason.
    */
@@ -227,10 +232,12 @@ export interface LaunchDirectiveCreateInput {
    * operator's own stored channel posture and REFUSES a chain the channel
    * forbids. Omitting all three is the pre-T24 behaviour exactly: the operator's
    * own stored pair, and the channel's own chain setting.
-   * ⚠ **`chain: false` IS NOT A WAY TO TURN CHAINING OFF** (measured 2026-09-01).
-   * The desktop's narrower reads only `true` as a request, so `false` reaches it
-   * as "did not ask" and the session inherits the channel setting — which may be
-   * ON. Send `true` or send nothing.
+   * ⚠ **`chain` IS A TRI-STATE AND `false` DOES TURN CHAINING OFF** (fixed
+   * 2026-09-01). `true` asks it on and is REFUSED where the channel forbids it;
+   * `false` asks it off, is always granted, and WINS over a channel set to ON;
+   * OMITTING it inherits the channel setting. ⚠ This said `false` did nothing,
+   * which was true while the desktop's narrower read only `true` — it no longer
+   * does, and omitting is still not the same as sending `false`.
    */
   tools?: LaunchToolMode;
   messages?: LaunchMessageMode;

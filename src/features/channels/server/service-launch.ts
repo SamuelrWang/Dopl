@@ -296,10 +296,12 @@ export async function createLaunchDirective(
     // ⚠ `chain` USES `?? null` RATHER THAN `|| null` SO THE ROW RECORDS WHAT THE
     // CALLER ACTUALLY SENT. `||` would rewrite a `false` into "did not ask" here,
     // in the one place that is supposed to be a faithful record of the request.
-    // ⚠ **THAT IS NOT A CLAIM THAT `false` DOES ANYTHING**: the desktop's narrower
-    // reads only `true`, so a stored `false` resolves there exactly as `null` does
-    // (see `types-launch.ts › LaunchDirective.chain`). The distinction is kept at
-    // rest and promised to nobody.
+    // ⚠ **AND SINCE 2026-09-01 THE `false` IS HONOURED, NOT MERELY RECORDED**:
+    // `main/launch-directive-wire.js › directiveFrom` carries all three states and
+    // `main/launch-posture.js › resolveChain` grants `false` unconditionally — it
+    // only ever NARROWS, so it wins even over a channel set to ON. This comment
+    // said the opposite ("promised to nobody") while the desktop flattened `false`
+    // into `null`; see `types-launch.ts › LaunchDirective.chain` for the fix.
     start_tool_mode: input.tools ?? null,
     start_message_mode: input.messages ?? null,
     chain: input.chain ?? null,
@@ -394,9 +396,23 @@ export async function claimLaunchDirective(
 }
 
 export type DecideLaunchInput =
-  /** ⚠ THE LAUNCH KIND'S SUCCESS ONLY — the column CHECK pairs `launched` with
-   *  `kind = 'launch'`, so this arm on an `end` row is refused AT REST. */
-  | { status: "launched"; agentId: string }
+  /**
+   * ⚠ THE LAUNCH KIND'S SUCCESS ONLY — the column CHECK pairs `launched` with
+   * `kind = 'launch'`, so this arm on an `end` row is refused AT REST.
+   *
+   * ⚠ **THE THREE `applied*` FIELDS ARE THE ECHO, AND THEY ARE OPTIONAL FOREVER**
+   * (2026-09-01). A desktop older than this wave reports nothing and must keep
+   * being able to decide (INVARIANTS §13), so absent is a first-class input —
+   * it maps to `null`, which every reader is required to render as "not
+   * reported" rather than as agreement.
+   */
+  | {
+      status: "launched";
+      agentId: string;
+      appliedTools?: LaunchToolMode;
+      appliedMessages?: LaunchMessageMode;
+      appliedChain?: boolean;
+    }
   /** ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). No agent id: the row already
    *  NAMES its target, so a second id on the decide would be a field the machine
    *  could get wrong about a row it did not write. */
@@ -418,6 +434,22 @@ export type DecideLaunchInput =
  * that no directive accounts for — the worst of the available outcomes. Expiry
  * governs whether a NEW claim may begin, not whether a completed one may be
  * reported.
+ *
+ * ⚠ **THE DECIDE IS THE ECHO TRIO'S ONLY WRITER, AND THAT IS THE WHOLE POINT OF
+ * PUTTING IT HERE** (2026-09-01, T24's second half). `repository-launch.ts ›
+ * LaunchDirectiveInsert` deliberately has no field for `applied_*`: a CREATE that
+ * could stamp them would let the REQUESTER write its own confirmation, which is
+ * the one value on this row that must not come from the asking side. The machine
+ * that did the clamping is the only honest reporter of it.
+ * ⚠ **ABSENT MAPS TO `null`, AND `null` IS "NOT REPORTED".** Never a value
+ * echoed from the REQUEST columns (`start_tool_mode` / `start_message_mode` /
+ * `chain`). Echoing those back would produce a value that is right whenever
+ * nothing was clamped and confidently wrong precisely when it mattered, and the
+ * orchestrator would size its next instruction for room the agent does not have.
+ * ⚠ `?? null` RATHER THAN `|| null` ON THE CHAIN, for the reason
+ * `createLaunchDirective` states about the REQUEST column: `||` would rewrite a
+ * reported `false` — "I settled the chain OFF" — into "I said nothing", which is
+ * the exact collapse this wave exists to remove from the other half of the lane.
  */
 export async function decideLaunchDirective(
   ctx: ChannelContext,
@@ -434,6 +466,15 @@ export async function decideLaunchDirective(
       agent_id: input.status === "launched" ? input.agentId : null,
       refusal_reason:
         input.status === "refused" ? input.refusalReason : null,
+      // ⚠ ONLY THE `launched` ARM CAN CARRY THESE. On `done` and `refused` they
+      // are written as `null` rather than left off, so a retried decide cannot
+      // leave a stale echo standing beside a refusal.
+      applied_tool_mode:
+        input.status === "launched" ? input.appliedTools ?? null : null,
+      applied_message_mode:
+        input.status === "launched" ? input.appliedMessages ?? null : null,
+      applied_chain:
+        input.status === "launched" ? input.appliedChain ?? null : null,
       decided_at: new Date(now).toISOString(),
     }
   );

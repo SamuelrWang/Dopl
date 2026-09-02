@@ -51,16 +51,25 @@
 -- the caller it was clamped.* `launch-posture.js › resolveLaunch` already computes
 -- `clamped`; nothing carries it back.
 --
--- ⚠ **THIS FILE ADDS THE COLUMNS AND NOTHING WRITES THEM YET.** The desktop's
--- decide body (`main/launch-directive-wire.js › decideBody`) has no field for
--- them, so on EVERY LIVE ROW all three are NULL.
+-- ⚠ **THE WRITER IS THE DECIDE, AND IT LANDED IN THE SAME WAVE AS THESE COLUMNS
+-- (2026-09-01).** `main/launch-directive-wire.js › decideBody` puts the three
+-- values on the `launched` body and
+-- `src/features/channels/server/service-launch.ts › decideLaunchDirective` maps
+-- them onto these columns. THE CREATE STILL CANNOT
+-- (`server/repository-launch.ts › LaunchDirectiveInsert` has no field for them):
+-- a requester that could stamp its own confirmation is the one write this row
+-- must never accept from the asking side.
 -- ⚠ **NULL MEANS "NOT REPORTED". IT DOES NOT MEAN "UNCLAMPED", AND IT IS NEVER
 -- THE REQUESTED VALUE ECHOED BACK.** Rendering it as either would tell an
 -- orchestrator that the posture it asked for is the posture it got, on the
 -- strength of a column no machine has filled in — and it would then hand the
--- agent work sized for room it may not have. Every render site says "not
--- reported" in as many words; `packages/mcp-server/src/tools/channel-ops-launch.ts
--- › postureLine` is the one statement of that, and its suite drives it.
+-- agent work sized for room it may not have. ⚠ **AND NULL IS STILL A LIVE VALUE**:
+-- every row written before this wave has it, and so does every row decided by a
+-- DESKTOP older than it — the decide fields are OPTIONAL precisely so such a
+-- machine can still report (INVARIANTS §13, an older peer is supported). Every
+-- render site says "not reported" in as many words;
+-- `packages/mcp-server/src/tools/channel-ops-launch.ts › postureFacts` is the one
+-- statement of that, and its suite drives it.
 --
 -- ── ROLLBACK ───────────────────────────────────────────────────────────────
 -- Written as PROSE rather than as commented-out SQL, because
@@ -136,23 +145,34 @@ ALTER TABLE public.channel_launch_directives
 ALTER TABLE public.channel_launch_directives
   ADD COLUMN IF NOT EXISTS start_message_mode TEXT;
 
--- ⚠ NULLABLE, AND THE NULL IS LOAD-BEARING. `true` is "this agent needs to be
--- able to launch workers"; NULL is "I did not ask", which inherits the channel's
--- own setting silently as every launch did before T24. Collapsing the two would
--- turn every ordinary launch into a request, and a request the channel denies is
--- a REFUSAL (`launch-posture.js › resolveChain`), so the collapse would refuse
--- launches that asked for nothing.
--- ⚠ **MEASURED MISMATCH, RECORDED HERE RATHER THAN DESIGNED AROUND (2026-09-01):
--- `false` IS STORABLE AND THE DESKTOP CANNOT TELL IT FROM NULL.**
--- `main/launch-directive-wire.js › directiveFrom` narrows this column as
--- `r.chain === true || r.chain === 'true' ? true : null`, so a stored `false`
--- arrives as "did not ask" and the session inherits the channel setting — which
--- may be ON. **`false` is therefore NOT a way to turn chaining off**, and no copy
--- on this lane may say it is (`packages/mcp-server/src/tools/channel-schema.ts ›
--- chain` states that to callers). The column stays BOOLEAN rather than a
--- CHECK-forced `true`-or-NULL because the day the desktop learns to honour
--- `false` should not be a migration in three trees; admitting a value that
--- currently resolves the way NULL does costs nothing at rest.
+-- ⚠ NULLABLE, AND THE NULL IS LOAD-BEARING. **A TRUE TRI-STATE: TRUE, FALSE AND
+-- NULL ARE THREE DIFFERENT REQUESTS WITH THREE DIFFERENT OUTCOMES.**
+--   TRUE  — "this agent needs to be able to launch workers". Granted only where
+--           the channel allows it; denied is a REFUSAL, not a clamp
+--           (`launch-posture.js › resolveChain`).
+--   FALSE — "run it with chaining OFF, whatever the channel allows". ALWAYS
+--           granted, and it WINS over a channel set to ON: it is strictly
+--           narrower than anything that setting would have given, so there is
+--           nothing for the operator's setting to protect, and NARROWING IS NEVER
+--           REFUSED.
+--   NULL  — "I did not ask", which inherits the channel's own setting silently as
+--           every launch did before T24.
+-- Collapsing NULL into a request would turn every ordinary launch into one, and a
+-- request the channel denies is a REFUSAL, so the collapse would refuse launches
+-- that asked for nothing.
+-- ⚠ **THIS BLOCK RECORDED THE OPPOSITE OF THE FALSE ROW UNTIL 2026-09-01, AND IT
+-- WAS AN HONEST MEASUREMENT WHEN WRITTEN.** `main/launch-directive-wire.js ›
+-- directiveFrom` narrowed this column as `r.chain === true || r.chain === 'true'
+-- ? true : null`, so a stored FALSE arrived as "did not ask" and the session
+-- inherited the channel setting — which may be ON; `launch-posture.js ›
+-- resolveChain` had the matching defect on the other side, and the two hid each
+-- other because each half was tested alone. Both are fixed, every copy on the lane
+-- is corrected in the same change (`packages/mcp-server/src/tools/channel-schema.ts
+-- › chain` is the agent-facing one), and
+-- `dopl-desktop-app/test/launch-chain.test.mjs` drives the two halves TOGETHER.
+-- ⚠ **THE COLUMN TYPE DOES NOT MOVE.** It was already BOOLEAN rather than a
+-- CHECK-forced TRUE-or-NULL, which is exactly why honouring FALSE was a desktop
+-- change and not a migration in three trees. Nothing here needs re-applying.
 ALTER TABLE public.channel_launch_directives
   ADD COLUMN IF NOT EXISTS chain BOOLEAN;
 
@@ -168,10 +188,11 @@ ALTER TABLE public.channel_launch_directives
   ADD COLUMN IF NOT EXISTS target_message_mode TEXT;
 
 -- ── 2c. THE ECHO TRIO — what the machine SAYS it applied. ───────────────────
--- ⚠ **NOTHING WRITES THESE YET. NULL ON EVERY LIVE ROW MEANS "NOT REPORTED",
--- NEVER "UNCLAMPED" AND NEVER THE REQUESTED VALUE.** The header carries the whole
+-- ⚠ **ONLY THE DECIDE WRITES THESE, AND NULL STILL MEANS "NOT REPORTED" — NEVER
+-- "UNCLAMPED" AND NEVER THE REQUESTED VALUE.** The header carries the whole
 -- argument; it is restated here because this is the column a reader is looking at
--- when they decide what a NULL means.
+-- when they decide what a NULL means. A row written before 2026-09-01, and any
+-- row decided by an older desktop, carries NULL on all three.
 -- ⚠ THEY ARE NOT KIND-SCOPED BY §4. A clamp can happen on a launch (the `start_*`
 -- pair, plus the chain) and on a `set_agent_mode` (the `target_*` pair), so the
 -- echo is legal on both and a clause restricting it to one would have to be
@@ -305,7 +326,7 @@ COMMENT ON COLUMN public.channel_launch_directives.start_message_mode IS
   'T24: the MESSAGE posture a LAUNCH asks its new session to start on. NULL means not asked. Clamped to the operator''s ceiling and then FLOORED by the windowless message rule, in that order — flooring first would let a clamped ask come back out looking as though the ceiling had allowed it. NULL on every kind but launch.';
 
 COMMENT ON COLUMN public.channel_launch_directives.chain IS
-  'T24: may the launched agent launch further agents? TRUE asks for it; NULL did not ask (and inherits the channel setting). ⚠ Unlike the two posture axes this is REFUSED rather than clamped when the channel forbids it — a clamped chain produces an agent that hits a bound it was told it did not have, mid-run, after workers were already promised. ⚠ FALSE is storable and the desktop cannot tell it from NULL (its narrower reads only true), so FALSE is NOT a way to turn chaining off. NULL on every kind but launch.';
+  'T24: may the launched agent launch further agents? A TRUE TRI-STATE — TRUE asks it ON, FALSE asks it OFF, NULL did not ask (and inherits the channel setting). ⚠ Unlike the two posture axes, TRUE is REFUSED rather than clamped when the channel forbids it — a clamped chain produces an agent that hits a bound it was told it did not have, mid-run, after workers were already promised. ⚠ FALSE is ALWAYS granted and WINS over a channel set to ON: it only ever narrows, so there is nothing for the operator setting to protect, and narrowing is never refused. NULL on every kind but launch.';
 
 COMMENT ON COLUMN public.channel_launch_directives.target_tool_mode IS
   'The TOOL posture a set_agent_mode asks a RUNNING agent to move to. NULL means that axis was not requested, which is ordinary — a directive may move one axis and leave the other. NOT NULL on set_agent_mode unless target_message_mode is; NULL on every other kind. Clamped, never widened.';

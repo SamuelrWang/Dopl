@@ -224,3 +224,124 @@ test("the backstop is HONEST about what it is not: there is no generation bound 
   assert.match(src, /THERE IS NO GENERATION BOUND LEFT/,
     "the module says so in as many words — an implied bound is the failure this file exists to avoid");
 });
+
+// ── PIN 5. THE TRI-STATE, DRIVEN THROUGH **BOTH** HALVES AT ONCE ─────────────────
+//
+// ⚠ **THE TWO BUGS HID EACH OTHER, AND A TEST THAT DRIVES ONE HALF CANNOT CLOSE THAT** (fixed
+// 2026-09-01). `launch-directive-wire.js › directiveFrom` narrowed the column as
+// `r.chain === true || r.chain === 'true' ? true : null`, so a stored `false` arrived as "did not
+// ask"; `launch-posture.js › resolveChain`'s `false` arm fell through to `allowed === true`, so a
+// `false` that DID arrive was granted a chain anyway wherever the channel allowed one. Either
+// defect alone made `chain: false` unhonourable, and each made the other unobservable — a
+// `resolveChain` suite passing `false` directly never saw the wire flatten it, and a `directiveFrom`
+// suite reading `.chain` never saw the resolver ignore it.
+//
+// So every case below starts at a RAW SERVER ROW and ends at `{ chain, refused }`, through the two
+// real functions, composed the way `spawn` composes them.
+
+const wire = require(M("launch-directive-wire.js"));
+const posture = require(M("launch-posture.js"));
+
+const RAW = {
+  id: "66666666-6666-4666-8666-666666666666",
+  channel_id: "22222222-2222-4222-8222-222222222222",
+  status: "pending",
+};
+
+/** A raw row -> the wire's narrowing -> the resolver, i.e. what `spawn` really does. */
+const overTheWire = (rawChain, channelAllows) => {
+  const d = wire.directiveFrom({ ...RAW, chain: rawChain }, "ws");
+  return { asked: d.chain, ...posture.resolveChain(d.chain, channelAllows) };
+};
+
+test("TRI-STATE: `true` is a REQUEST — granted where the channel allows, REFUSED where it does not", () => {
+  // ⚠ THE ONE ARM THAT REFUSES. A clamped chain produces an agent that hits a bound it was told it
+  // did not have, mid-run, after the orchestrator already handed it work assuming workers.
+  for (const raw of [true, "true"]) {
+    assert.deepEqual(overTheWire(raw, true), { asked: true, chain: true, refused: false },
+      `raw ${JSON.stringify(raw)} + channel ON`);
+    assert.deepEqual(overTheWire(raw, false), { asked: true, chain: false, refused: true },
+      `raw ${JSON.stringify(raw)} + channel OFF is a REFUSAL, not a silent no`);
+  }
+});
+
+test("TRI-STATE: `false` TURNS CHAINING OFF, and WINS over a channel set to ON", () => {
+  // ⚠ **THE REGRESSION, AND IT NEEDS BOTH HALVES TO FAIL.** With the old `directiveFrom` the
+  // `asked` value here was `null`; with the old `resolveChain` the `chain` value was `true`. This
+  // assertion is red under EITHER revert, which is the whole reason it drives the pair.
+  for (const raw of [false, "false"]) {
+    assert.deepEqual(overTheWire(raw, true), { asked: false, chain: false, refused: false },
+      `raw ${JSON.stringify(raw)}: an explicit OFF beats a channel that allows chaining`);
+    assert.deepEqual(overTheWire(raw, false), { asked: false, chain: false, refused: false },
+      `raw ${JSON.stringify(raw)} + channel OFF agrees, and still refuses nothing`);
+  }
+});
+
+test("TRI-STATE: `false` IS NEVER A REFUSAL — narrowing is always granted", () => {
+  // ⚠ THE ASYMMETRY WITH `true`, STATED AS ITS OWN CASE. `false` is strictly narrower than
+  // anything the operator's setting would have given, so there is nothing for that setting to
+  // protect; refusing it would refuse a request that asked for LESS than it was already allowed.
+  for (const allowed of [true, false, undefined, null]) {
+    assert.equal(overTheWire(false, allowed).refused, false, `channel=${String(allowed)}`);
+    assert.equal(overTheWire(false, allowed).chain, false, `channel=${String(allowed)}`);
+  }
+});
+
+test("TRI-STATE: absent is `null` — 'I did not ask' still INHERITS the channel, as before T24", () => {
+  // ⚠ THE PRE-T24 BEHAVIOUR, BYTE FOR BYTE, AND IT MUST NOT BECOME A REQUEST. Collapsing `null`
+  // into one would turn every ordinary launch into an ask — and an ask the channel denies REFUSES,
+  // so the collapse would start refusing launches that asked for nothing at all.
+  for (const raw of [undefined, null, 0, "", "yes", 1, {}]) {
+    assert.equal(overTheWire(raw, true).asked, null, `raw ${JSON.stringify(raw)} is not a request`);
+    assert.deepEqual(overTheWire(raw, true), { asked: null, chain: true, refused: false });
+    assert.deepEqual(overTheWire(raw, false), { asked: null, chain: false, refused: false });
+  }
+});
+
+test("TRI-STATE: the wire keeps three values and the resolver reads three — neither half flattens", () => {
+  // ⚠ TWO ONE-SIDED ASSERTIONS BESIDE THE COMPOSED ONES, so a failure says WHICH half moved. The
+  // composed cases above are the ones that could not be green under the shipped bug; these two say
+  // where to look when one goes red.
+  assert.equal(wire.directiveFrom({ ...RAW, chain: false }, "ws").chain, false, "the WIRE half");
+  assert.deepEqual(posture.resolveChain(false, true), { chain: false, refused: false },
+    "the RESOLVER half");
+});
+
+// ── PIN 6. …AND THE SPAWN REALLY COMPOSES THEM THAT WAY ──────────────────────────
+//
+// ⚠ **PIN 5 PROVES THE TWO FUNCTIONS AGREE; IT DOES NOT PROVE THE LANE CALLS THEM.** That is the
+// same gap INVARIANTS §14 records for the direction lane's framing pin — "asserting that the two
+// framers differ is not the same assertion as the caller reaching for the right one". So these
+// cases drive the REAL watcher over a REAL server row and read `launchChain` off the spec that
+// crosses into the session funnel, which is the value the gate actually reads.
+
+const { boot, row: chainRow, CH: CHAIN_CH, WS: CHAIN_WS, decidePosts: chainDecides } =
+  await import("./_launch-directive-harness.mjs");
+
+/** One directive through the real lane; answers the spec `session-launch.js › launch` received. */
+async function spawnedWith(rawChain, channelAllows) {
+  const h = boot({ chain: channelAllows });
+  await h.api.handle(chainRow({ chain: rawChain, channel_id: CHAIN_CH }), CHAIN_WS);
+  return { spec: h.cfg.lastSpec, decided: chainDecides(h)[0] };
+}
+
+test("SPAWN: a row carrying `chain: false` starts a session that may NOT launch workers", async () => {
+  // ⚠ THE FIELD REPRO, AT THE BOUNDARY IT CROSSES. The channel is set ON, so under the shipped bug
+  // this spec came back `launchChain: true` — an orchestrator that deliberately asked for a
+  // contained worker got a chaining one, silently, and the decide reported a launch either way.
+  const { spec, decided } = await spawnedWith(false, true);
+  assert.equal(spec.launchChain, false, "the spec crossing into the funnel carries the OFF");
+  assert.equal(decided.body.status, "launched", "…and it is a launch, not a refusal");
+});
+
+test("SPAWN: `chain: true` into a channel that forbids it REFUSES, and starts nothing", async () => {
+  const h = boot({ chain: false });
+  await h.api.handle(chainRow({ chain: true, channel_id: CHAIN_CH }), CHAIN_WS);
+  assert.equal(h.cfg.lastSpec, undefined, "no spec ever reached the funnel");
+  assert.equal(chainDecides(h)[0].body.refusalReason, "no-bridge");
+});
+
+test("SPAWN: an absent `chain` still inherits the room — both directions", async () => {
+  assert.equal((await spawnedWith(undefined, true)).spec.launchChain, true, "channel ON");
+  assert.equal((await spawnedWith(undefined, false)).spec.launchChain, false, "channel OFF");
+});

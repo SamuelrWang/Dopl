@@ -83,11 +83,13 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
   });
 
   it("⚠ `chain: false` PARSES as false — the row records what was sent", () => {
-    // ⚠ THIS IS A RECORD-KEEPING PROPERTY, NOT A BEHAVIOURAL ONE, and the
-    // distinction is the finding: `main/launch-directive-wire.js › directiveFrom`
-    // reads only `true`/`"true"`, so a stored `false` resolves on the desktop
-    // exactly as an omission does. The schema keeps the value; no copy promises
-    // it does anything.
+    // ⚠ AND IT IS A BEHAVIOURAL PROPERTY SINCE 2026-09-01, NOT MERELY A
+    // RECORD-KEEPING ONE. `main/launch-directive-wire.js › directiveFrom` used to
+    // read only `true`/`"true"`, so a stored `false` resolved on the desktop
+    // exactly as an omission did; it now carries all three states and
+    // `main/launch-posture.js › resolveChain` grants `false` unconditionally —
+    // it wins even over a channel set to ON. A schema that dropped the value
+    // would now delete a real request, not just a record.
     expect(LaunchCreateSchema.parse({ channel: "general", chain: false }).chain)
       .toBe(false);
   });

@@ -22,6 +22,7 @@ exports.opMembers = opMembers;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
+const channel_framing_1 = require("./channel-framing");
 // ⚠ The clipped-list wording lives with the other thread-render prose, stated
 // once — see INVARIANTS §9.
 const channel_render_threads_1 = require("./channel-render-threads");
@@ -262,7 +263,7 @@ async function opListThreads(client, ref, selfUserId = null) {
         // ⚠ Framing FIRST — titles/outcome summaries are peer-typed and
         // `listChannelTasks` is channel-transparent: every member receives every
         // thread's text, not just their own.
-        `${channel_render_1.UNTRUSTED_THREAD_HEADER}\n`,
+        `${channel_framing_1.UNTRUSTED_THREAD_HEADER}\n`,
     ];
     // ⚠ The clip is stated ABOVE the rows, beside what it clipped — a reader who
     // skims to the first line must not read a bounded page as the whole list.
@@ -301,7 +302,7 @@ async function opGetThread(client, ref, threadId, selfUserId = null) {
     // told to call this op every ~3 empty holds, so it re-reads a peer-typed
     // title on a timer.
     const view = { selfUserId, names: await (0, channel_shared_1.memberNames)(client, ref) };
-    return (0, respond_1.ok)([channel_render_1.UNTRUSTED_THREAD_HEADER, ``, (0, channel_render_1.formatThreadDetail)(thread, view)].join("\n"));
+    return (0, respond_1.ok)([channel_framing_1.UNTRUSTED_THREAD_HEADER, ``, (0, channel_render_1.formatThreadDetail)(thread, view)].join("\n"));
 }
 /**
  * The channel ROSTER. Read-only; the private per-member preference (agent tool
@@ -326,7 +327,7 @@ async function opMembers(client, ref, selfUserId = null, callerIsAdmin = false) 
     }
     const lines = [
         `## ${ref} — ${members.length} member${members.length === 1 ? "" : "s"}\n`,
-        `${channel_render_1.UNTRUSTED_ROSTER_HEADER}\n`,
+        `${channel_framing_1.UNTRUSTED_ROSTER_HEADER}\n`,
     ];
     for (const m of members)
         lines.push((0, channel_render_1.formatMemberLine)(m, selfUserId, callerIsAdmin));

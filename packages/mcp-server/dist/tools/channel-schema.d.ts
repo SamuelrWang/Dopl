@@ -43,12 +43,12 @@ export declare const CHANNEL_INPUT_SHAPE: {
         rename_agent: "rename_agent";
         set_agent_mode: "set_agent_mode";
         ping: "ping";
+        read_directions: "read_directions";
+        read_sessions: "read_sessions";
         help: "help";
         await: "await";
         list_threads: "list_threads";
         get_thread: "get_thread";
-        read_sessions: "read_sessions";
-        read_directions: "read_directions";
         pings: "pings";
     }>;
     channel: z.ZodOptional<z.ZodString>;
@@ -86,8 +86,8 @@ export declare const CHANNEL_INPUT_SHAPE: {
     agent_id: z.ZodOptional<z.ZodString>;
     ping_kind: z.ZodOptional<z.ZodEnum<{
         done: "done";
-        question: "question";
         blocked: "blocked";
+        question: "question";
     }>>;
     to_desktop: z.ZodOptional<z.ZodBoolean>;
     since: z.ZodOptional<z.ZodCoercedNumber<unknown>>;

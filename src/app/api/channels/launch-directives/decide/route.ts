@@ -61,7 +61,20 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       ctx,
       input.directiveId,
       input.status === "launched"
-        ? { status: "launched", agentId: input.agentId }
+        ? {
+            status: "launched",
+            agentId: input.agentId,
+            // ⚠ **THE ECHO, CARRIED THROUGH UNTOUCHED AND NEVER DEFAULTED**
+            // (2026-09-01, T24's second half). An older desktop sends none of
+            // these three; `undefined` must reach the service as `undefined` so
+            // it maps to `null` = "not reported". Substituting anything here —
+            // in particular the row's own REQUEST columns — would make the row
+            // assert that the machine applied exactly what was asked, which is
+            // the single claim this lane cannot make about a value it clamps.
+            appliedTools: input.appliedTools,
+            appliedMessages: input.appliedMessages,
+            appliedChain: input.appliedChain,
+          }
         : input.status === "done"
           ? { status: "done" }
           : { status: "refused", refusalReason: input.refusalReason }

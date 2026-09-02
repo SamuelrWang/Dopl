@@ -81,12 +81,16 @@ export type LaunchDirectiveRow = {
   /**
    * **THE ECHO TRIO — what the machine SAYS it applied, after its clamp.**
    *
-   * ⚠ **NO WRITER EXISTS YET, SO ALL THREE ARE NULL ON EVERY LIVE ROW, AND NULL
-   * MEANS "NOT REPORTED".** Not "unclamped", and never the requested value echoed
-   * back. The decide body has no field for them
-   * (`main/launch-directive-wire.js › decideBody`); the columns are here so the
-   * reporting half can land without a second migration and so the render can
-   * already tell the truth about their absence.
+   * ⚠ **THE WRITER IS THE DECIDE AND NOTHING ELSE** (2026-09-01, T24's second
+   * half): `main/launch-directive-wire.js › decideBody` puts the three values on
+   * the `launched` body and `service-launch.ts › decideLaunchDirective` maps them
+   * onto these columns. {@link LaunchDirectiveInsert} still has no field for
+   * them, deliberately — see there.
+   * ⚠ **NULL MEANS "NOT REPORTED".** Not "unclamped", and never the requested
+   * value echoed back. It is the live value on every row written before this wave
+   * AND on every row decided by a desktop older than it (INVARIANTS §13 — an
+   * older peer is supported), which is why the render must keep saying `not
+   * reported` rather than guessing (`channel-ops-launch.ts › postureFacts`).
    */
   applied_tool_mode?: string | null;
   applied_message_mode?: string | null;
@@ -153,9 +157,15 @@ export type LaunchDirectiveInsert = {
    */
   start_tool_mode?: string | null;
   start_message_mode?: string | null;
-  /** ⚠ `true` asks; ABSENT/`null` did not ask and inherits the channel setting.
-   *  ⚠ `false` is storable and the DESKTOP CANNOT TELL IT FROM `null` (its
-   *  narrower reads only `true`), so it is recorded, never relied on. */
+  /**
+   * ⚠ **A TRUE TRI-STATE, AND ALL THREE VALUES ARE HONOURED** (fixed
+   * 2026-09-01). `true` ASKS IT ON and is REFUSED where the channel forbids it;
+   * `false` ASKS IT OFF, is always granted, and WINS over a channel set to ON;
+   * ABSENT/`null` did not ask and inherits the channel setting.
+   * ⚠ This said `false` was indistinguishable from `null` on the desktop, which
+   * was true while `main/launch-directive-wire.js › directiveFrom` flattened it.
+   * It no longer does — see `types-launch.ts › LaunchDirective.chain`.
+   */
   chain?: boolean | null;
   /**
    * THE POSTURE A `set_agent_mode` ASKS A **RUNNING** AGENT TO MOVE TO.
@@ -172,10 +182,10 @@ export type LaunchDirectiveInsert = {
   /**
    * ⚠ **THE ECHO TRIO IS DELIBERATELY NOT WRITABLE FROM HERE.** It is the
    * MACHINE's report of what it applied, so its writer is the DECIDE, not the
-   * CREATE — and the decide has no field for it yet
-   * (`main/launch-directive-wire.js › decideBody`). A create that could stamp
-   * `applied_*` would let the requester write its own confirmation, which is the
-   * one value on this row that must not come from the asking side.
+   * CREATE ({@link LaunchDecision} carries the three fields as of 2026-09-01). A
+   * create that could stamp `applied_*` would let the requester write its own
+   * confirmation, which is the one value on this row that must not come from the
+   * asking side.
    */
 };
 
@@ -275,6 +285,22 @@ export type LaunchDecision = {
   status: "launched" | "done" | "refused";
   agent_id: string | null;
   refusal_reason: string | null;
+  /**
+   * **THE ECHO TRIO, AND THE DECIDE IS ITS ONLY WRITER** (2026-09-01).
+   *
+   * ⚠ **DELIBERATELY ABSENT FROM {@link LaunchDirectiveInsert} AND IT MUST STAY
+   * SO.** These are the MACHINE's report of what it applied after its clamp, so
+   * the writer is the DECIDE. A create that could stamp them would let the
+   * requester write its own confirmation — the one value on this row that must
+   * not come from the asking side.
+   * ⚠ **`null` IS "NOT REPORTED", NOT "UNCLAMPED", AND NEVER THE REQUESTED VALUE
+   * ECHOED BACK.** An older desktop sends no such fields
+   * (`main/launch-directive-wire.js › decideBody` omits them), the service maps
+   * absent to `null`, and the render says `not reported`.
+   */
+  applied_tool_mode: string | null;
+  applied_message_mode: string | null;
+  applied_chain: boolean | null;
   decided_at: string;
 };
 

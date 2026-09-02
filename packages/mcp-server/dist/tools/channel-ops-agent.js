@@ -243,7 +243,14 @@ input, waitMs) {
             // nothing pending and nothing to cancel, the opposite of the PENDING
             // shape. ⚠ PRESENCE IS A HINT, NOT A VERDICT: a per-(user, workspace)
             // heartbeat cannot say WHICH machine is up. The doctrine says so.
-            response: (0, respond_1.ok)((0, channel_facts_1.factsLine)(input.kind === "end" ? "not ended" : "not renamed", {
+            response: (0, respond_1.ok)(
+            // ⚠ **THE VERB COMES FROM {@link VERB_PAST}, NOT FROM A TERNARY.** This
+            // line read `input.kind === "end" ? "not ended" : "not renamed"` — the
+            // exact shape `VERB_PAST` and `PENDING_CONFIRM` were both made into
+            // `Record<AgentDirectiveKind, …>` maps to avoid, and their docblocks say
+            // so in as many words. It was correct for two kinds and silently told a
+            // `set_agent_mode` caller its POSTURE request was a RENAME. F-413.
+            (0, channel_facts_1.factsLine)(`not ${VERB_PAST[input.kind]}`, {
                 agent: `@agent-${input.agentId}`,
                 reason: "offline",
                 filed: false,

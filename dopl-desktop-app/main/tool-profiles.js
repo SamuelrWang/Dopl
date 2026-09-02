@@ -72,6 +72,14 @@ const DOPL_SAFE_TOOLS = [
   // invite anybody, because minting the link that reaches a person is
   // `sessionOnly` and unreachable over MCP for every role and token.
   'mcp__dopl__dopl_home',
+  // THE ORCHESTRATOR'S CHECK-IN (2026-09-01, agent-efficiency wave T20). ⚠ SAFE-LIST
+  // placement, and the rule it sits under is the strictest one on this list: it is a
+  // READ that POSTS NOTHING. It answers with the caller's OWN memberships, their OWN
+  // sessions and the messages addressed to THEM — a projection of rows the caller can
+  // already reach one call at a time, which is the whole point of the op (it replaces
+  // ~10 calls per check-in). It starts no agent, writes no row, and reaches no other
+  // member's side. The exfil surface is still `dopl_channel`, which stays out and denied.
+  'mcp__dopl__dopl_status',
   'mcp__dopl__current_workspace',
   'mcp__dopl__list_workspaces',
 ];

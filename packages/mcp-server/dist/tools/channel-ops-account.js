@@ -40,6 +40,7 @@ const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const account_scope_1 = require("./account-scope");
 const channel_render_1 = require("./channel-render");
+const channel_framing_1 = require("./channel-framing");
 const channel_session_render_1 = require("./channel-session-render");
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed channel)";
@@ -81,7 +82,7 @@ async function opReadAccount(client, directory, since, limit, selfUserId = null)
         `## Everywhere — ${page.messages.length} new message${page.messages.length === 1 ? "" : "s"} since seq ${since}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
         // ⚠ Framing FIRST — counterparty-written bodies below, so the caveat must be
         // read BEFORE them and not as a footnote underneath.
-        `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
+        `${channel_framing_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
     for (const g of groups) {
         // ⚠ The heading names the room AND gives the ref the per-message remedies

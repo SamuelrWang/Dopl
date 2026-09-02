@@ -18,6 +18,7 @@ exports.opAwait = opAwait;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_render_1 = require("./channel-render");
+const channel_framing_1 = require("./channel-framing");
 const channel_await_budget_1 = require("./channel-await-budget");
 // ⚠ Addressing rule has ONE statement, in channel-addressing.ts.
 const channel_addressing_1 = require("./channel-addressing");
@@ -261,7 +262,7 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         // TOOL DESCRIPTION, and removing it on that belief is exactly how it was
         // lost once (2026-09-02): a description is read at connect time, a body is
         // read now, and only the second one can carry an injected line.
-        `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
+        `${channel_framing_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
     lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
     const lastSeq = messages[messages.length - 1].seq;

@@ -33,7 +33,7 @@ Integration commits on top: `f5c045b9` (chain honesty, committed onto tier 5 bef
 | T04 unreadable-create refusal | **done** | `21a34a2b` |
 | T10–T13 terse results | **done** | `072df4f0`, `02fe86a4`, `242d730d`, `32a0745f` — one `key=value` line; doctrine at `dopl://doctrine/channels` and `op="help"` |
 | T20–T23 `dopl_status`, cross-channel read, all-sessions, end_session | **done** | `60f873ed`, `8e0f52b5` |
-| T24 launch posture | **done** (echo writer closed in integration) | `12b8ebd4`, `8688f333`, + GAP A |
+| T24 launch posture | **done** — echo writer closed in integration (GAP A), closing **F-410** | `12b8ebd4`, `8688f333` + the integration commits |
 | T25 silent denial visible | **done** | `808281b0` |
 | T30–T37 tenancy naming | **done** | `9ecec274`, `75896738`, `8cb1b344`, `1966e5d4`, `2648cdf1`, `f9c82af2`, `fdf961b2` |
 | T40 `copy` / `copy_base` | **done** | `10554ae8` |
@@ -63,9 +63,21 @@ Integration commits on top: `f5c045b9` (chain honesty, committed onto tier 5 bef
   `F-408`/`F-409`/`F-410`; orchestrator-surface → `F-411`/`F-412`. The rule that prevents it —
   *allocate from the highest id claimed on any live branch* — is now in the findings log header
   and `CLAUDE.md`. ⚠ `check-doc-refs` catches a DANGLING id, never a COLLIDING one.
-- **Three files were split back under the 500-line cap**, all pushed over by the merge:
+- **Four files were split back under the 500-line cap**, all pushed over by the merge:
   `channel.ts` → `channel-dispatch-agents.ts`, `channel-render.ts` → `channel-framing.ts`,
-  `schema-sql.test.ts` → `schema-sql-sessions.test.ts`.
+  `schema-sql.test.ts` → `schema-sql-sessions.test.ts`, `channel-ops-launch.test.ts` →
+  `channel-ops-launch-body.test.ts`.
+- **Three defects existed only in the merged tree** and are filed and fixed: **F-413** (an offline
+  `set_agent_mode` answered `not renamed`, from a two-armed ternary over a set that grew to three),
+  **F-414** (`dopl_status` had NO security framing — a banner was moved into a DIFFERENT tool's
+  description, and "said once" is only true relative to a reader who reads the place it is said),
+  and a stale desktop tool list that omitted `dopl_status` (`main/tool-profiles.js`, caught by
+  `test/tool-profiles.test.mjs`'s drive against the server's own registrations).
+- **GAP C was a real wire defect, not a copy fix.** `directiveFrom` flattened a stored `chain:false`
+  to `null`, so it inherited a channel setting that may be ON; `resolveChain`'s `false` arm fell
+  through to the same place. **The two hid each other** — the wire never delivered a `false` for the
+  resolver to get wrong — which is why the suite now drives both halves composed. Mutation-verified:
+  3 reverts, 4 failures each, 0 vacuous.
 
 ## Migrations — ALL FOUR WRITTEN, NONE APPLIED
 
@@ -96,9 +108,13 @@ supabase migration list
 1. **Apply the four migrations** — locally with Docker running (`supabase db reset` → exit 0),
    then to the remote. Verify the `20260907120000` prefix pair landed as two rows.
 2. **Push the branch so CI can run.** Every gate below was measured locally; CI is the gate.
-3. **Rule on T82** — which sentence comes out of the seven over-cap descriptions, or that the
-   ratchet is the answer.
-4. **Ship, or don't.** Nothing here has been shipped and nothing will be without your word.
+3. **Rule on T82** — which sentence comes out of the over-cap descriptions, or that the ratchet is
+   the answer. Two were TRIMMED under the cap during integration (`current_workspace`,
+   `dopl_status`); three were ratcheted because they grew on NEW OPS that `parity.test.ts` requires
+   by name. Seven remain over.
+4. **`main/launch-directive-wire.js` is at 495 of 500 (F-415)** — the next correction to the module
+   that owns the wire vocabulary is a split, not a doc fix. Deliberately not done here.
+5. **Ship, or don't.** Nothing here has been shipped and nothing will be without your word.
 
 ## Gates, measured locally on the integrated branch
 

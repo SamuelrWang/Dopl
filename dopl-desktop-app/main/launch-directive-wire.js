@@ -189,7 +189,15 @@ const REFUSAL_REASONS = ['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-
 // The keys this desktop puts on the wire, and the ones it reads back. Stated as data so the
 // suite can assert them without a live route, and so a route that lands with different names
 // fails in ONE place.
-const REQUEST_KEYS = { claim: ['directiveId'], decide: ['directiveId', 'status', 'agentId', 'refusalReason'] };
+// ⚠ THE THREE `applied*` KEYS JOINED THE DECIDE ON 2026-09-01 (T24's echo) and are the LAUNCHED
+// branch's only. They do not GATE the body — `decideBody` builds it — but this list is the
+// module's stated answer to "what crosses", and one that omits a field that really does is worse
+// than none.
+const REQUEST_KEYS = {
+  claim: ['directiveId'],
+  decide: ['directiveId', 'status', 'agentId', 'refusalReason',
+    'appliedTools', 'appliedMessages', 'appliedChain'],
+};
 
 // ⚠ `agent-names.js › MAX_NAME`, RESTATED AS A WIRE BOUND. It is the SAME number
 // and it is checked TWICE on purpose: here because an unbounded string from a
@@ -405,12 +413,36 @@ function claimBody(directiveId) {
  * The decision body — LAUNCHED with an address, or REFUSED with a word. Never both, and never
  * neither: a directive this machine claimed and then said nothing about is the one outcome the
  * orchestrator cannot act on, which is why `decide` has no third shape.
+ *
+ * ── ⚠ THE ECHO TRIO, ON THE LAUNCHED BRANCH ONLY (2026-09-01, T24's echo) ────────────────
+ *
+ * The posture columns landed as a REQUEST with nothing to answer it: an orchestrator could ask
+ * for `bypass/auto_both` and never learn this machine's ceiling clamped it to `auto/auto_inbound`,
+ * so it sized its next instruction for room the agent does not have. `launch-directive-spawn.js ›
+ * spawn` now hands back what `launch-posture.js › resolveLaunch` settled on; these keys carry it.
+ *
+ * ⚠ **EMITTED ONLY WHEN THIS MACHINE REALLY HAS A VALUE, AND OMITTED IS "NOT REPORTED".** The
+ * server maps an absent key to a NULL column and `channel-ops-launch.ts › postureFacts` renders
+ * NULL as the words `not reported` — which is also what a desktop OLDER than this wave produces,
+ * and why the route's schema keeps all three OPTIONAL (INVARIANTS §13: an older peer must still
+ * be able to decide). Sending `''` would be this machine claiming to report and reporting nothing.
+ * ⚠ **NARROWED TO THE FROZEN ENUMS HERE**, as `directiveFrom` narrows the request pair: a mode
+ * outside the list would pass zod and hit the column CHECK — a decide refused AT REST for a
+ * launch that really happened.
+ * ⚠ `appliedChain` IS A BOOLEAN AND `false` IS A REPORT, NOT A SILENCE, hence `typeof` rather than
+ * truthiness: "this session may NOT launch workers" is the fact that stops an orchestrator
+ * planning for them, and a `||` would delete it — the collapse that made `chain: false`
+ * unhonourable on the way IN.
  */
 function decideBody(directiveId, outcome) {
   const o = outcome || {};
   const agentId = String(o.agentId || '');
   if (agentId) {
-    return { directiveId: String(directiveId || ''), status: STATUS_LAUNCHED, agentId: agentId };
+    const body = { directiveId: String(directiveId || ''), status: STATUS_LAUNCHED, agentId: agentId };
+    if (TOOL_MODES.indexOf(o.appliedTools) !== -1) body.appliedTools = o.appliedTools;
+    if (MESSAGE_MODES.indexOf(o.appliedMessages) !== -1) body.appliedMessages = o.appliedMessages;
+    if (typeof o.appliedChain === 'boolean') body.appliedChain = o.appliedChain;
+    return body;
   }
   // ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). ORDER MATTERS AND IS THE WHOLE
   // CORRECTNESS OF THIS FUNCTION: `agentId` is checked FIRST, so a launch can

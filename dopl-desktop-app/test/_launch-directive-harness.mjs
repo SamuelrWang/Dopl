@@ -111,6 +111,18 @@ export function boot(over = {}) {
         apiFetch: async (path, opts) => {
           if ((opts.method || "GET") === "GET") {
             gets.push({ path, opts });
+            // ⚠ THE PINNED STARTUP CONTEXT (2026-09-01, T81) — a SECOND GET on this lane, and it
+            // is answered separately because it is ENRICHMENT rather than a decision: the spawn
+            // degrades to absent on any failure, so a stub that answered every GET with the
+            // backstop's `{ directives }` envelope would leave that whole branch untestable while
+            // looking like it worked. ⚠ THE DEFAULT IS A FAILURE-SHAPED ANSWER, deliberately, so
+            // every case in every OTHER suite keeps producing the pre-T81 spawn spec byte for
+            // byte; `cfg.startupContext` is how `launch-startup-context.test.mjs` opts in.
+            if (path === "/api/knowledge/startup-context") {
+              const a = cfg.startupContext || { ok: true, body: {} };
+              if (a.throws) throw new Error(a.throws);
+              return { ok: a.ok !== false, status: a.status || 200, json: async () => a.body || {} };
+            }
             return { ok: true, status: 200, json: async () => ({ directives: cfg.pending || [] }) };
           }
           posts.push({ path, workspaceId: opts.workspaceId, body: opts.body });

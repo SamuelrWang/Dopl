@@ -59,8 +59,6 @@ const channel_ops_agent_1 = require("./channel-ops-agent");
 const channel_ops_launch_1 = require("./channel-ops-launch");
 // ⚠ ONE write-result renderer, shared with every other op on this tool (T10).
 const channel_facts_1 = require("./channel-facts");
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed)";
 /**
  * THE REFUSAL CONTRACT FOR **THIS** VERB — a THIRD map over the same nine-word
  * enum, and the third one is not duplication.
@@ -122,10 +120,14 @@ function asked(tools, messages) {
  * column CHECK a third, at rest.
  */
 async function opSetAgentMode(client, ref, agentId, modes, opts = {}) {
+    // ⚠ RESOLVED FOR THE FENCE, NOT FOR THE PROSE. The channel lookup still has to
+    // happen — it is what turns a slug into an id the caller is a member of — but
+    // its NAME no longer reaches the result: a fact line names the AGENT and the
+    // posture, and the room the caller just addressed by ref is not news to it
+    // (T10). Every sibling verb on this tool renders the same way.
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
-    const label = (0, channel_shared_1.inlineOr)(channel.name, NO_NAME);
     // ⚠ STRIPPED, NOT VALIDATED — the shared helper `end_agent` and `direct_agent`
     // both use. `read_sessions` prints `@agent-<id>`, so that is what a model
     // copies, and refusing the pasted form would 400 a caller for doing exactly

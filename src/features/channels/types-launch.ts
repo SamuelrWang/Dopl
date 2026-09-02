@@ -238,16 +238,25 @@ export type LaunchDirective = {
   startToolMode: LaunchToolMode | null;
   startMessageMode: LaunchMessageMode | null;
   /**
-   * MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? `true` asks for it; `null` did
-   * not ask and inherits the channel setting silently, which is what every launch
-   * did before T24.
+   * MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? **A TRUE TRI-STATE, AND ALL
+   * THREE VALUES ARE LOAD-BEARING** (fixed 2026-09-01):
+   *   `true`  — ASK IT ON. Granted only if the channel allows it; denied is a
+   *             REFUSAL, not a clamp (below).
+   *   `false` — ASK IT OFF. **Always granted, and it WINS over a channel set to
+   *             ON.** It is strictly narrower than anything that setting would
+   *             have given, so there is nothing for the operator's setting to
+   *             protect, and NARROWING IS NEVER REFUSED.
+   *   `null`  — DID NOT ASK. Inherits the channel setting silently, which is what
+   *             every launch did before T24.
    *
-   * ⚠ **MEASURED MISMATCH (2026-09-01): `false` IS STORABLE AND IS NOT
-   * DISTINGUISHABLE FROM `null` ON THE DESKTOP.** `main/launch-directive-wire.js
-   * › directiveFrom` narrows the column as `r.chain === true || r.chain ===
-   * 'true' ? true : null`, so a `false` arrives there as "did not ask" and
-   * inherits the channel setting — **which may be ON**. `false` is therefore NOT
-   * a way to turn chaining off, and no render may say it is.
+   * ⚠ **THIS DOCBLOCK SAID `false` WAS INDISTINGUISHABLE FROM `null` UNTIL
+   * 2026-09-01, AND IT WAS TRUE WHEN WRITTEN.** `main/launch-directive-wire.js ›
+   * directiveFrom` narrowed the column as `r.chain === true || r.chain === 'true'
+   * ? true : null` — a `false` arrived as "did not ask" and inherited a channel
+   * setting that may be ON — and `main/launch-posture.js › resolveChain` had the
+   * matching defect on the other side. Both are fixed and
+   * `dopl-desktop-app/test/launch-chain.test.mjs` drives the two halves TOGETHER,
+   * because testing them separately is what let each hide the other.
    *
    * ⚠ **REFUSED RATHER THAN CLAMPED WHEN THE CHANNEL FORBIDS IT**, which is the
    * one asymmetry with the posture pair above (`launch-posture.js ›
@@ -269,12 +278,16 @@ export type LaunchDirective = {
    * **THE ECHO — WHAT THE MACHINE SAYS IT ACTUALLY APPLIED, after its clamp.**
    *
    * ⚠ **`null` MEANS "NOT REPORTED". IT DOES NOT MEAN "UNCLAMPED" AND IT IS NEVER
-   * THE REQUESTED VALUE ECHOED BACK.** No writer exists yet — the desktop's
-   * `decideBody` has no field for these — so all three are `null` on every live
-   * row, and a render that read `null` as agreement would tell an orchestrator
-   * its posture landed on the strength of a column nobody filled in. It would
+   * THE REQUESTED VALUE ECHOED BACK.** The writer landed on 2026-09-01 — the
+   * desktop's `decideBody` puts the three on the `launched` body and
+   * `service-launch.ts › decideLaunchDirective` maps them onto the columns — but
+   * `null` is still the live value on every row written before that wave AND on
+   * every row decided by a desktop older than it (INVARIANTS §13: an older peer
+   * is supported, so a machine that reports nothing must still be able to
+   * decide). A render that read `null` as agreement would tell an orchestrator
+   * its posture landed on the strength of a column nobody filled in, and it would
    * then size the work for room the agent may not have. The one statement of that
-   * render is `packages/mcp-server/src/tools/channel-ops-launch.ts › postureLine`.
+   * render is `packages/mcp-server/src/tools/channel-ops-launch.ts › postureFacts`.
    * ⚠ `appliedChain: null` IS NOT `false` either — reading it as "no chaining"
    * is wrong in the direction that makes an orchestrator do the work itself for
    * no reason.

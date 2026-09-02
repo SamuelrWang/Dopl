@@ -1,4 +1,11 @@
+# ⚠ BOTH SPELLINGS, AND THE SECOND ONE IS NOT REDUNDANT (2026-09-01, F-416).
+# A trailing slash matches DIRECTORIES ONLY, so a `node_modules` SYMLINK is a
+# file to git and slips past it — which is exactly how a self-referential
+# `node_modules -> node_modules` link was committed here as a mode-120000 blob.
+# It then shadowed every real install on checkout, and `npm test` in this tree
+# died with "Cannot find module 'electron-store'" for 72 cases.
 node_modules/
+node_modules
 dist/
 .DS_Store
 *.dmg

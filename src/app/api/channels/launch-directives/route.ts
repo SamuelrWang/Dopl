@@ -64,9 +64,12 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       tools: input.tools,
       messages: input.messages,
       // ⚠ NOT COLLAPSED WITH `||` — the row is a faithful record of what was
-      // sent. ⚠ It is NOT a promise that `false` does anything: the desktop's
-      // narrower reads only `true`, so a `false` resolves there exactly as an
-      // omission does (`schema-launch.ts › chain` carries the measurement).
+      // sent, and since 2026-09-01 all three states are also HONOURED: `true`
+      // asks chaining on (refused where the channel forbids it), `false` asks it
+      // OFF and wins even over a channel set to ON (narrowing is never refused),
+      // and an omission inherits the channel setting. `schema-launch.ts › chain`
+      // carries the fix, which removed the flattening in
+      // `main/launch-directive-wire.js › directiveFrom`.
       chain: input.chain,
     });
     // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS. Nothing failed: the

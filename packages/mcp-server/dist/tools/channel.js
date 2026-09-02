@@ -40,6 +40,9 @@ const channel_description_1 = require("./channel-description");
 // THE STANDING RULES, stated ONCE. `op="help"` and the MCP resource
 // `dopl://doctrine/channels` (`resources.ts`) return this same constant; the
 // description summarises and points, and no result repeats it.
+// ⚠ THE SIX AGENT-LIFECYCLE OPS, in a sibling — see that module's header for
+// why they are one lane and why its parameter list is two arguments wide.
+const channel_dispatch_agents_1 = require("./channel-dispatch-agents");
 const channel_doctrine_1 = require("./channel-doctrine");
 const channel_schema_1 = require("./channel-schema");
 const channel_ops_read_1 = require("./channel-ops-read");
@@ -51,18 +54,14 @@ const channel_ops_await_workspace_1 = require("./channel-ops-await-workspace");
 const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_write_1 = require("./channel-ops-write");
 const channel_ops_threads_1 = require("./channel-ops-threads");
-const channel_ops_launch_1 = require("./channel-ops-launch");
 // AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER three kinds, over
 // the same lane and own-operator only. ⚠ THE POSTURE VERB IS A SEPARATE MODULE
 // (500-line cap): shared plumbing, opposite consent story — its header has why.
-const channel_ops_agent_1 = require("./channel-ops-agent");
-const channel_ops_agent_mode_1 = require("./channel-ops-agent-mode");
 const channel_ops_update_1 = require("./channel-ops-update");
 // ⚠ A structured POST, not a second delivery path — it delegates to `opPost`.
 const channel_ops_escalate_1 = require("./channel-ops-escalate");
 // THE PRIVATE DIRECT LANE (2026-08-31) — a mailbox the operator's OWN machine
 // claims, never a message and never another member's machine.
-const channel_ops_direct_1 = require("./channel-ops-direct");
 // THE ACCOUNT-WIDE READS (2026-09-01) — `read` and `read_sessions` with no
 // `channel`. ⚠ A SIBLING MODULE, not a branch inside the per-channel handlers:
 // their whole result vocabulary splices one `ref`, and their scope is one room.
@@ -285,16 +284,37 @@ directory) {
             // and has no fallback: this lane reaches a PRIVATE TURN, and resolving to
             // "the oldest agent on the thread" would steer one the caller did not
             // address with nothing reporting the swap.
-            case "direct_agent": {
-                const miss = (0, respond_1.missingParams)("direct_agent", args, [
-                    "channel",
-                    "agent_id",
-                    "body",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_direct_1.opDirectAgent)(client, args.channel, args.agent_id, args.body, { thread: args.thread, waitMs: args.wait_ms });
-            }
+            // ── THE SIX AGENT-LIFECYCLE OPS, DISPATCHED IN A SIBLING ───────────
+            //
+            // ⚠ GROUPED AND DELEGATED ON 2026-09-01, when integrating four tiers
+            // pushed this file to 551 over the §1 cap of 500. `set_agent_mode`
+            // (T24) arrived from the orchestrator-surface tier and `ping`/`pings`
+            // (T70) from another, and the six agent verbs had become most of this
+            // switch. ⚠ THE SEAM IS REAL AND NOT MERELY ARITHMETIC: these six are
+            // the ops that ask the OPERATOR'S OWN MACHINE to do something, they
+            // all file a directive and hold, and they share a refusal vocabulary
+            // no other op on this tool reads.
+            //
+            // ⚠ ONE GROUPED CASE RATHER THAN SIX ONE-LINERS, DELIBERATELY: this
+            // switch has no `default`, so its EXHAUSTIVENESS over the op union is
+            // what proves the handler always returns. Six separate delegating
+            // cases would keep that property too, but a group states the claim the
+            // split is making — that these six are one lane — where six lines
+            // would leave it to be re-derived.
+            //
+            // ⚠ IT TAKES `args` AND `client` AND NOTHING ELSE. None of the six
+            // reads the caller identity, the runtime stamp, the admin flag or the
+            // container lock — an agent verb reaches the caller's OWN operator by
+            // construction, because the server stamps the authenticated caller and
+            // no argument on this lane can name anybody else. Widening that
+            // parameter list is how that stops being true.
+            case "direct_agent":
+            case "read_directions":
+            case "launch_agent":
+            case "end_agent":
+            case "rename_agent":
+            case "set_agent_mode":
+                return (0, channel_dispatch_agents_1.dispatchAgentOp)(args.op, args, client);
             // ⚠ BOTH FILTERS ARE OPTIONAL, hence no missingParams check. Own-scoped in
             // the service; the transport credential IS the caller, so no identity is
             // passed and none could be.
@@ -327,102 +347,6 @@ directory) {
                     since: args.since,
                     limit: args.limit,
                 });
-            case "read_directions":
-                return (0, channel_ops_direct_1.opReadDirections)(client, {
-                    channel: args.channel,
-                    agent: args.agent_id,
-                });
-            // ⚠ ASKS THE OPERATOR'S OWN MACHINE TO START AN AGENT. `goal`, `model`,
-            // `thread` and `wait_ms` are all optional; only `channel` is required.
-            // The op NEVER names an operator — the server stamps the authenticated
-            // caller, because the only machine an agent may ask is its own
-            // operator's, and there is no argument here that could say otherwise.
-            case "launch_agent": {
-                const miss = (0, respond_1.missingParams)("launch_agent", args, ["channel"]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_launch_1.opLaunchAgent)(client, args.channel, {
-                    thread: args.thread,
-                    goal: args.goal,
-                    model: args.model,
-                    // ⚠ PASSED THROUGH AS A STRING, NEVER PARSED HERE. Whether it is an
-                    // id or a name — and whether a name is ambiguous — is decided
-                    // SERVER-SIDE, against the caller's own template visibility, which
-                    // this process cannot evaluate.
-                    template: args.template,
-                    waitMs: args.wait_ms,
-                });
-            }
-            // ⚠ END ONE OF THE OPERATOR'S OWN RUNNING AGENTS. The SAME mailbox
-            // `launch_agent` writes, with `kind: "end"` — so the machine decides, a
-            // refusal is normal and a timeout is PENDING rather than failed. The op
-            // NEVER names an operator: the server stamps the authenticated caller,
-            // and a target belonging to another member is refused before any row
-            // exists. ⚠ `channel` IS REQUIRED even though `agent_id` addresses the
-            // target on its own — the create proves a MEMBERSHIP ROW there, which is
-            // what stops this being a bare "end agent <id>" primitive.
-            case "end_agent": {
-                const miss = (0, respond_1.missingParams)("end_agent", args, [
-                    "channel",
-                    "agent_id",
-                ]);
-                if (miss)
-                    return miss;
-                return (0, channel_ops_agent_1.opEndAgent)(client, args.channel, args.agent_id, {
-                    waitMs: args.wait_ms,
-                });
-            }
-            // ⚠ RELABEL ONE OF THE OPERATOR'S OWN AGENTS — DISPLAY ONLY, on that one
-            // machine. `name` is REQUIRED and the EMPTY STRING is a legal value that
-            // CLEARS the name, which is why it is checked for presence rather than
-            // for truthiness: `missingParams` would reject "" as absent and delete
-            // the one gesture that undoes a rename.
-            case "rename_agent": {
-                const miss = (0, respond_1.missingParams)("rename_agent", args, [
-                    "channel",
-                    "agent_id",
-                ]);
-                if (miss)
-                    return miss;
-                // ⚠ NOT `missingParams`, AND THAT IS THE WHOLE REASON THIS BRANCH IS
-                // HAND-WRITTEN. That helper counts the EMPTY STRING as absent, which is
-                // right for every other param on this tool and wrong for exactly this
-                // one: `name: ""` is the legal, deliberate gesture that CLEARS a
-                // display name. Routing it through the helper would delete the only way
-                // to undo a rename and report it as a missing argument.
-                if (typeof args.name !== "string") {
-                    return (0, respond_1.err)('op="rename_agent" is missing required param: name. Pass the display name you want (1-60 visible characters on one line), or the EMPTY STRING to clear the name back to "Agent #<id>".');
-                }
-                return (0, channel_ops_agent_1.opRenameAgent)(client, args.channel, args.agent_id, args.name, { waitMs: args.wait_ms });
-            }
-            // ⚠ RE-POSTURE ONE OF THE OPERATOR'S OWN RUNNING AGENTS — the SAME mailbox
-            // again, `kind: "set_agent_mode"`. ⚠ IT ASKS AND NEVER WIDENS: that machine
-            // clamps each axis to the operator's own stored ceiling, so nothing here
-            // may narrate a posture as granted. ⚠ UNLIKE THE TWO ABOVE IT **IS** GATED
-            // BY THAT MACHINE'S LAUNCH TOGGLE — a posture can cause compute to be spent.
-            case "set_agent_mode": {
-                const miss = (0, respond_1.missingParams)("set_agent_mode", args, ["channel", "agent_id"]);
-                if (miss)
-                    return miss;
-                // ⚠ **NOT `missingParams`, AND THAT IS THE WHOLE REASON THIS CHECK IS
-                // HAND-WRITTEN** — the same move `rename_agent`'s `name` check above
-                // makes, for the neighbouring reason. That helper answers ONE question
-                // per param ("is this one present?") and cannot express "at least one of
-                // these two": listing both would demand BOTH and delete the ordinary
-                // case (move one axis, leave the other alone), and listing neither would
-                // let an empty ask reach a row whose only possible answer is a refusal
-                // for a request that was never expressible. ⚠ The route's zod refuses it
-                // again and the column CHECK a third time at rest; this is the only one
-                // of the three that costs the caller nothing — no row, no claim, no
-                // two-minute round trip.
-                if (args.tools === undefined && args.messages === undefined) {
-                    return (0, respond_1.err)('op="set_agent_mode" is missing required params: pass at least one of tools (manual | accept_edits | auto | bypass) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator\'s machine narrows it to the ceiling they set by hand and never widens past it.');
-                }
-                // ⚠ THE TWO AXES GO THROUGH UNTOUCHED. The schema's enum is the only
-                // shape check this process has; the CEILING lives on the operator's
-                // machine, so nothing here may predict the outcome.
-                return (0, channel_ops_agent_mode_1.opSetAgentMode)(client, args.channel, args.agent_id, { tools: args.tools, messages: args.messages }, { waitMs: args.wait_ms });
-            }
             // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by
             // the same route and are deliberately NOT routed here (Samuel's ruling
             // Q12 (b); F-346 holds the rename hole open). ⚠ `info_card` OMITTED is

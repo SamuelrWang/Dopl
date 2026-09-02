@@ -456,10 +456,11 @@ test("the desktop's Dopl tool lists match the MCP server's live surface", () => 
     .map(shortName).sort();
   assert.deepEqual(desktop, live,
     `main/tool-profiles.js has drifted from packages/mcp-server/src (HIDDEN_TOOLS read from ${hiddenDecls[0].file})`);
-  // The number ENGINEERING.md §7 states in prose, asserted once.
-  // 14 → 16 on 2026-08-28 (`dopl_agent` + `dopl_agent_admin`, wave A), then
-  // 16 → 17 the same day (`dopl_home`, wave B).
-  assert.equal(live.length, 17, "the agent surface is documented as 17 tools");
+  // The number INVARIANTS §10 states in prose, asserted once. 14 → 16 → 17 on
+  // 2026-08-28 (waves A and B), 17 → 18 on 2026-09-01 (`dopl_status`, T20).
+  // ⚠ The assertion ABOVE is the one that catches a new tool, by construction;
+  // this one exists so adding one costs a doc edit too.
+  assert.equal(live.length, 18, "the agent surface is documented as 18 tools");
 });
 
 // RETIRED_DOPL_TOOLS is a SUPERSET of HIDDEN_TOOLS, never an equality.

@@ -9,8 +9,10 @@
  * rows, and does nothing. Every one of the eight is named individually below
  * rather than compared as an object, so the failure says WHICH.
  *
- * ⚠ **AND THE ECHO TRIO'S NULL IS ASSERTED AS NULL.** No machine writes those
- * columns yet, so `null` is the live value and it means "NOT REPORTED". The one
+ * ⚠ **AND THE ECHO TRIO'S NULL IS ASSERTED AS NULL.** Its writer is the DECIDE
+ * (2026-09-01; the last two describes below drive it), never the CREATE and never
+ * the mapper: `null` is the live value on every row written before that wave and
+ * on every row decided by an OLDER DESKTOP, and it means "NOT REPORTED". The one
  * thing the mapper must never do is default them from the REQUEST — that would
  * make the row assert the machine applied exactly what was asked, which is the
  * single claim this lane cannot make about a value it clamps.
@@ -22,7 +24,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./repository-launch", () => ({ insertLaunchDirective: vi.fn() }));
+// ⚠ `decideLaunchDirective` JOINED THE MOCK ON 2026-09-01 — the echo trio's writer is the
+// DECIDE, so the second half of this file drives it.
+vi.mock("./repository-launch", () => ({
+  insertLaunchDirective: vi.fn(),
+  decideLaunchDirective: vi.fn(),
+}));
 vi.mock("./repository-agent-owner", () => ({ agentInstanceOwner: vi.fn() }));
 vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
 vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
@@ -41,10 +48,11 @@ import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
 import { agentInstanceOwner } from "./repository-agent-owner";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
-import { createLaunchDirective } from "./service-launch";
+import { createLaunchDirective, decideLaunchDirective } from "./service-launch";
 import { createAgentDirective } from "./service-launch-agent";
 import { toDirective } from "./service-launch-dto";
 import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
+import { LaunchDecideSchema } from "../schema-launch";
 
 const WS = "22222222-2222-2222-2222-222222222222";
 const ME = "33333333-3333-3333-3333-333333333333";
@@ -131,10 +139,12 @@ describe("createLaunchDirective persists the T24 request", () => {
   });
 
   it("⚠ `chain: false` IS WRITTEN AS false, never rewritten to null", async () => {
-    // ⚠ A RECORD-KEEPING PROPERTY. `|| null` here would rewrite what the caller
-    // sent, in the one place that exists to record it faithfully. It is NOT a
-    // claim that `false` does anything: `main/launch-directive-wire.js ›
-    // directiveFrom` reads only `true`, so it resolves there as an omission does.
+    // ⚠ `|| null` here would rewrite what the caller sent, in the one place that
+    // exists to record it faithfully — and since 2026-09-01 it would also DELETE
+    // A REAL REQUEST: `main/launch-directive-wire.js › directiveFrom` carries all
+    // three states and `main/launch-posture.js › resolveChain` grants `false`
+    // unconditionally, so `false` turns chaining off even where the channel
+    // allows it. This comment said the opposite while the desktop flattened it.
     await createLaunchDirective(ctx, { channel: "general", chain: false });
     expect(inserted().chain).toBe(false);
   });
@@ -287,5 +297,172 @@ describe("toDirective hands back all eight columns", () => {
     ]) {
       expect(v).toBeNull();
     }
+  });
+});
+
+/**
+ * **THE ECHO'S WRITER** (2026-09-01, T24's second half — F-410 closed).
+ *
+ * ⚠ **THE PROPERTY IS THAT THE DECIDE, AND ONLY THE DECIDE, CAN FILL THESE IN.** The columns
+ * landed with the request pair and nothing wrote them, so a clamped launch was reported as a bare
+ * `launched` and the orchestrator sized its next instruction for room the agent did not have.
+ * Every case below asserts the object handed to `repository-launch.ts › decideLaunchDirective`,
+ * which is what reaches the row.
+ *
+ * ⚠ **AND THAT ABSENT STAYS `null`.** A desktop older than this wave sends none of the three
+ * fields (INVARIANTS §13 — an older peer is supported) and must still be able to decide; `null`
+ * is what `channel-ops-launch.ts › postureFacts` renders as `not reported`. The one thing this
+ * path must never do is fill the gap from the REQUEST columns, which would be right whenever
+ * nothing was clamped and confidently wrong exactly when it mattered.
+ */
+describe("decideLaunchDirective writes the applied echo", () => {
+  const decided = () => {
+    const call = vi.mocked(launchRepo.decideLaunchDirective).mock.calls[0];
+    return call[3] as unknown as Record<string, unknown>;
+  };
+
+  beforeEach(() => {
+    vi.mocked(launchRepo.decideLaunchDirective).mockResolvedValue(
+      row({ status: "launched", agent_id: AGENT }) as never,
+    );
+  });
+
+  it("maps the three `applied*` fields onto their column names", async () => {
+    await decideLaunchDirective(ctx, DIR, {
+      status: "launched",
+      agentId: AGENT,
+      appliedTools: "auto",
+      appliedMessages: "auto_inbound",
+      appliedChain: true,
+    });
+    const d = decided();
+    expect(d.applied_tool_mode).toBe("auto");
+    expect(d.applied_message_mode).toBe("auto_inbound");
+    expect(d.applied_chain).toBe(true);
+  });
+
+  it("🔒 `appliedChain: false` is written as false, NOT collapsed to null", async () => {
+    // ⚠ `|| null` here would delete the one fact that stops an orchestrator planning for workers.
+    // `false` is a REPORT ("this session may not launch further agents"); `null` is a SILENCE.
+    await decideLaunchDirective(ctx, DIR, {
+      status: "launched",
+      agentId: AGENT,
+      appliedChain: false,
+    });
+    expect(decided().applied_chain).toBe(false);
+  });
+
+  it("🔒 an OLDER DESKTOP reports nothing, and all three land as null — never as the request", async () => {
+    // ⚠ THE OLDER-PEER CASE, WHICH IS ALSO THE ONLY REASON THE SCHEMA FIELDS ARE OPTIONAL. Such a
+    // machine posts `{ directiveId, status, agentId }` and nothing else. Filling the columns from
+    // `start_tool_mode` / `chain` here would make the row assert that the machine applied exactly
+    // what was asked — the single claim this lane cannot make about a value it clamps.
+    await decideLaunchDirective(ctx, DIR, { status: "launched", agentId: AGENT });
+    const d = decided();
+    expect(d.applied_tool_mode).toBeNull();
+    expect(d.applied_message_mode).toBeNull();
+    expect(d.applied_chain).toBeNull();
+  });
+
+  it("a REFUSAL writes null on all three — nothing was applied, so nothing is reported", async () => {
+    vi.mocked(launchRepo.decideLaunchDirective).mockResolvedValue(
+      row({ status: "refused", refusal_reason: "no-bridge" }) as never,
+    );
+    await decideLaunchDirective(ctx, DIR, {
+      status: "refused",
+      refusalReason: "no-bridge",
+    });
+    const d = decided();
+    expect(d.applied_tool_mode).toBeNull();
+    expect(d.applied_chain).toBeNull();
+    expect(d.agent_id).toBeNull();
+  });
+
+  it("a non-launch kind's `done` writes null on all three too", async () => {
+    vi.mocked(launchRepo.decideLaunchDirective).mockResolvedValue(
+      row({ kind: "rename", status: "done" }) as never,
+    );
+    await decideLaunchDirective(ctx, DIR, { status: "done" });
+    const d = decided();
+    expect(d.applied_tool_mode).toBeNull();
+    expect(d.applied_message_mode).toBeNull();
+    expect(d.applied_chain).toBeNull();
+  });
+
+  it("toDirective hands the echo back under its camelCase names", async () => {
+    // ⚠ THE OTHER END OF THE ROUND TRIP. `postureFacts` reads exactly these three spellings, so a
+    // single missing key is an echo that is written and never rendered — the same silent-drop the
+    // top of this file exists to catch on the request half.
+    const d = toDirective(
+      row({
+        status: "launched",
+        agent_id: AGENT,
+        applied_tool_mode: "accept_edits",
+        applied_message_mode: "auto_both",
+        applied_chain: false,
+      }) as never,
+      Date.now(),
+    );
+    expect(d.appliedToolMode).toBe("accept_edits");
+    expect(d.appliedMessageMode).toBe("auto_both");
+    expect(d.appliedChain).toBe(false);
+  });
+});
+
+/**
+ * **THE DECIDE SCHEMA'S ECHO FIELDS** — the shape the route will actually accept.
+ *
+ * ⚠ ASSERTED HERE RATHER THAN LEFT TO THE SERVICE, because zod is what stands between a machine's
+ * report and the column CHECK: a mode outside the frozen enum must be a 400 that NAMES the field,
+ * never a constraint violation surfacing as an opaque 500.
+ */
+describe("LaunchDecideSchema carries the echo, optionally", () => {
+  // ⚠ NOT `DIR`. That constant is a plausible-looking uuid the REPOSITORY mock never validates;
+  // this schema really does (`z.string().uuid()`), and zod refuses it on the variant nibble. A
+  // fixture that fails the field under test for a reason unrelated to the test is a case that can
+  // only ever be red, so this one spells a v4 uuid.
+  const DECIDE_ID = "55555555-5555-4555-8555-555555555555";
+  const launched = { directiveId: DECIDE_ID, status: "launched" as const, agentId: AGENT };
+
+  it("parses a full echo", () => {
+    const parsed = LaunchDecideSchema.parse({
+      ...launched,
+      appliedTools: "auto",
+      appliedMessages: "ask",
+      appliedChain: false,
+    });
+    expect(parsed).toMatchObject({
+      appliedTools: "auto",
+      appliedMessages: "ask",
+      appliedChain: false,
+    });
+  });
+
+  it("🔒 parses a decide with NO echo at all — the older desktop must still be able to report", () => {
+    // ⚠ MAKING ANY OF THE THREE REQUIRED WOULD 400 EVERY DECIDE SUCH A MACHINE POSTS, turning
+    // "I cannot tell you what I applied" into "I could not report at all" — and the row would then
+    // expire with a running agent behind it. INVARIANTS §13: an older peer is supported.
+    const parsed = LaunchDecideSchema.parse(launched);
+    expect(parsed).toEqual(launched);
+  });
+
+  it("refuses a mode outside the enum rather than passing it to the column CHECK", () => {
+    expect(
+      LaunchDecideSchema.safeParse({ ...launched, appliedTools: "yolo" }).success,
+    ).toBe(false);
+    expect(
+      LaunchDecideSchema.safeParse({ ...launched, appliedMessages: "telepathy" }).success,
+    ).toBe(false);
+  });
+
+  it("⚠ the echo is the LAUNCHED arm's alone — `done` resolves no posture", () => {
+    // A `done` is an `end` or a `rename`; neither starts a session, so a machine reporting an
+    // applied posture on one would be asserting a fact about a session it did not start.
+    const parsed = LaunchDecideSchema.parse({
+      directiveId: DECIDE_ID,
+      status: "done",
+      appliedTools: "bypass",
+    });
+    expect(parsed).toEqual({ directiveId: DECIDE_ID, status: "done" });
   });
 });

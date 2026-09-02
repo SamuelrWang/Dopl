@@ -6523,7 +6523,7 @@ is getting on, and `collab-dto.ts`'s two parallel arrays plus
 
 - Status: open
 
-### F-410 — a CLAMPED posture directive has no way to tell the caller it was clamped (2026-09-01, T24)
+### F-410 — ✅ RESOLVED 2026-09-01 — a CLAMPED posture directive had no way to tell the caller it was clamped (T24)
 
 `launch-posture.js › resolvePosture` answers a `clamped` flag and both callers log it
 (`launch-directive-spawn.js › spawn`, `directive-agent-ops.js › setAgentMode`). The DIAG is the
@@ -6540,7 +6540,42 @@ T24's own acceptance names the fix: the launch RESULT should echo the resolved p
 (`launched @agent-x posture=bypass/auto_both chain=on`). That needs applied-posture columns, the
 DTO field and the result line, all of which are the orchestrator-surface tier's.
 
-- Status: open
+**RESOLVED — the round trip is closed end to end.** The surface tier had landed three of the four
+pieces and the fourth is what made the other three inert: the columns
+(`20260910120000_channel_launch_directives_posture.sql`), the DTO fields
+(`service-launch-dto.ts › toDirective`) and the render (`channel-ops-launch.ts › postureFacts`)
+all existed with **no writer**, so every live row read `null` and every result said
+`posture=not reported`. The writer is now:
+
+- `main/launch-directive-spawn.js › spawn` returns `plan.modes.tools` / `plan.modes.messages` /
+  `plan.chain` beside `{ agentId }` — the RESOLVED values, and the same objects handed to
+  `deps.launch`, so the report cannot drift from the session it describes;
+- `main/launch-directive-wire.js › decideBody` emits `appliedTools` / `appliedMessages` /
+  `appliedChain` on the LAUNCHED branch only, narrowed to the frozen enums;
+- `schema-launch.ts › LaunchDecideSchema` accepts all three as **optional**, and
+  `service-launch.ts › decideLaunchDirective` maps absent onto `null`.
+
+⚠ **`null` DID NOT STOP MEANING "NOT REPORTED", AND THE OPTIONALITY IS WHY.** A desktop older than
+this wave sends no echo and must still be able to decide (§13: an older peer is supported) — making
+any field required would turn "I cannot tell you what I applied" into "I could not report at all",
+and the row would expire with a running agent behind it. So the render keeps the word, and
+`packages/mcp-server/src/tools/channel-ops-launch-posture.test.ts` pins the null case as hard as the
+reported one.
+
+⚠ **THE ECHO IS SENT ON EVERY LAUNCH, NOT ONLY A CLAMPED ONE.** Reporting only when something was
+narrowed would make silence mean two different things at once — "an older desktop said nothing" and
+"a current desktop agreed with you" — and the render has one word for both.
+
+⚠ **THE CREATE STILL CANNOT WRITE THEM.** `repository-launch.ts › LaunchDirectiveInsert` has no
+field for `applied_*`, deliberately: a requester able to stamp its own confirmation is the one write
+this row must never accept from the asking side.
+
+Suites: `dopl-desktop-app/test/launch-directive-echo.test.mjs` (the decide BODY, which is the object
+that crosses the boundary), `src/features/channels/server/service-launch-posture.test.ts` (the
+schema's optionality and the service's `?? null`), `packages/mcp-server/src/tools/channel-ops-launch-posture.test.ts`
+(the render's truth table).
+
+- Status: ✅ resolved 2026-09-01
 ---
 
 ## The 2026-09-01 ORCHESTRATOR-SURFACE wave — F-411 through F-412
@@ -6699,3 +6734,47 @@ to `status-render.ts` during the integration, that reasoning was **false**.
 - **Resolved** by stating the rule in `status.ts › STATUS_DESCRIPTION`, this tool's own. ⚠ It was
   TRIMMED back under the 1,200-char budget rather than ratcheted: the clauses that gave way were
   ones restating the tool's own `since` argument description.
+
+### F-415 — `main/launch-directive-wire.js` is at 495 of 500, and the next correction to it is a split
+
+Measured 2026-09-01 on `integration/mcp-efficiency`:
+`awk 'END{print NR}' dopl-desktop-app/main/launch-directive-wire.js`.
+
+It absorbed two blocks in one day — the `chain` tri-state fix's argument and the T24 applied-posture
+echo in `decideBody` — and both were comment-heavy because both were correcting a claim the file had
+made and got wrong.
+
+- ⚠ **THE COST IS NOT THE FIVE LINES, IT IS WHAT A FILE AT THE CAP STOPS BEING ABLE TO DO** (§1): a
+  file at 500 cannot absorb a COMMENT, so correcting a stale docblock in it becomes a split rather
+  than a doc fix. **This file is where the wire vocabulary's claims are written down** — the closed
+  refusal enum, the tri-state narrowings, `decideBody`'s ordering argument — so it is precisely the
+  file whose comments must stay correctable. It has already been wrong twice about `chain` alone.
+- The seam, if somebody takes it: `directiveFrom` (server row → narrowed record, all the enum and
+  tri-state coercion) is a different job from `decideBody` + `refusalFor` (this machine's answer →
+  the wire). One reads, one writes, and they share only the frozen vocabularies at the top.
+- ⚠ **NOT SPLIT IN THE INTEGRATION, DELIBERATELY.** It is under the cap, the desktop lint is green,
+  and a structural split of the module that owns a security vocabulary is not a thing to do in the
+  same change as six merges. It needs its own review.
+- Status: open. Debt, not breakage.
+
+### F-416 — ✅ RESOLVED 2026-09-01 — a self-referential `node_modules` SYMLINK was committed into the desktop tree, and `.gitignore` could not see it
+
+`dopl-desktop-app/node_modules` existed at HEAD as a **`mode 120000` blob** — a symlink pointing at
+its own path — introduced by `7dc82283` on `p2/needs-you-ping`. It is not in `master`; the
+integration merge brought it in.
+
+- What it does on a fresh checkout: the link resolves to itself, so every `require` out of
+  `dopl-desktop-app/main` fails. Measured on this branch before the fix: `npm test` in that tree
+  reported **72 failures, all `Cannot find module 'electron-store' / 'electron-updater'`**, and
+  `ls node_modules/` answers `Too many levels of symbolic links`. **The desktop CI job would have
+  gone red on this branch** — it runs `npm ci --ignore-scripts` then `npm test` there, and a
+  committed symlink survives the install.
+- ⚠ **IT LOOKS LIKE AN ENVIRONMENT PROBLEM AND IS NOT ONE**, which is the part worth keeping. The
+  failure mode reads as "somebody's machine has no dependencies installed", so the reflex is to
+  re-run `npm ci` — which succeeds, changes nothing, and leaves the tree just as broken.
+- ⚠ **WHY `.gitignore` DID NOT CATCH IT: `node_modules/` MATCHES DIRECTORIES ONLY.** A symlink is a
+  FILE to git, so the trailing slash let it through. Both `.gitignore`s carried only the slashed
+  form. The desktop one now carries both spellings, with this reason written beside it.
+- **Resolved** by deleting the tracked link and restoring the tree with `npm ci --ignore-scripts`
+  (`package-lock.json` unchanged). Desktop suite then measured 2948 pass / 0 fail.
+

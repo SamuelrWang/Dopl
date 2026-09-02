@@ -38,6 +38,7 @@ const channel_shared_1 = require("./channel-shared");
 // would be a second opinion about which channel ref a per-message remedy points
 // at. See that function's docblock.
 const channel_render_1 = require("./channel-render");
+const channel_framing_1 = require("./channel-framing");
 const channel_await_budget_1 = require("./channel-await-budget");
 // ⚠ The re-arm text branches on the caller's runtime here too, for the same
 // reason it does per-channel: an unstamped caller may not be promised a wake.
@@ -216,7 +217,7 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, run
         // TOOL DESCRIPTION, and removing it on that belief is exactly how it was
         // lost once (2026-09-02): a description is read at connect time, a body is
         // read now, and only the second one can carry an injected line.
-        `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
+        `${channel_framing_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
     for (const g of groups) {
         // ⚠ The channel heading names the room AND gives the `ref` to use in a

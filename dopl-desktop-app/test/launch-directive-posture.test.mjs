@@ -97,7 +97,15 @@ test("LANE: a directive naming NO posture launches exactly as it did before T24"
   const h = boot({ ceiling: { tools: "bypass", messages: "auto_both" } });
   return h.api.handle(launchRow(), WS).then(() => {
     assert.deepEqual(handed(h), { tools: "bypass", messages: "auto_both" });
-    assert.deepEqual(decided(h), [{ directiveId: DID, status: "launched", agentId: "a1b2c3d4" }]);
+    // ⚠ "EXACTLY AS BEFORE T24" IS A CLAIM ABOUT THE **SESSION**, NOT ABOUT THE DECIDE BODY. The
+    // echo trio joined that body on 2026-09-01 (T24's second half, F-410) and it is reported on
+    // EVERY launch, not only a clamped one — otherwise silence would mean two things at once
+    // ("an older desktop said nothing" and "a current one agreed with you") and `postureFacts` has
+    // one word for it. What must not move is `handed()` above: the posture the session runs at.
+    assert.deepEqual(decided(h), [{
+      directiveId: DID, status: "launched", agentId: "a1b2c3d4",
+      appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
+    }]);
   });
 });
 
@@ -111,7 +119,15 @@ test("LANE: a WIDER request is CLAMPED to the operator's stored pair, and still 
   const h = boot({ ceiling: { tools: "accept_edits", messages: "auto_inbound" } });
   await h.api.handle(launchRow({ start_tool_mode: "bypass", start_message_mode: "auto_both" }), WS);
   assert.deepEqual(handed(h), { tools: "accept_edits", messages: "auto_inbound" });
-  assert.deepEqual(decided(h), [{ directiveId: DID, status: "launched", agentId: "a1b2c3d4" }]);
+  // ⚠ **AND THE CLAMP IS NOW REPORTED TO THE CALLER, WHICH IS F-410 CLOSED.** The decide echoes
+  // the APPLIED pair — `accept_edits`/`auto_inbound` — never the `bypass`/`auto_both` that was
+  // asked for. Before 2026-09-01 the clamp existed only in the `diag` line below, so an
+  // orchestrator was told `launched` and sized its next instruction for room the agent did not
+  // have. Both halves are asserted here: the operator's log AND the caller's answer.
+  assert.deepEqual(decided(h), [{
+    directiveId: DID, status: "launched", agentId: "a1b2c3d4",
+    appliedTools: "accept_edits", appliedMessages: "auto_inbound", appliedChain: false,
+  }]);
   assert.ok(h.logged.some((l) => l.includes("CLAMPED")), "and the clamp is recorded, not hidden");
 });
 
@@ -166,9 +182,22 @@ test("CHAIN: NOT asking inherits the channel setting, in both directions", async
   assert.equal(off.cfg.lastSpec.launchChain, false);
 });
 
-test("CHAIN: the request is a TRI-STATE — only a literal true is an ask", () => {
-  for (const v of [false, 0, "", null, undefined, {}, "yes"]) {
+test("CHAIN: the request is a TRI-STATE — and `false` is an ASK, not a silence", () => {
+  // ⚠ **THIS CASE SAID "only a literal true is an ask" AND ASSERTED `false -> null`, WHICH WAS
+  // THE BUG WRITTEN DOWN AS A RULE (fixed 2026-09-01).** `directiveFrom` flattened a stored
+  // `false` into "did not ask", so `chain: false` inherited the channel setting — which may be ON
+  // — and could not turn chaining off. Only the values that name NOTHING collapse to `null`.
+  // ⚠ THE OTHER HALF OF THE FIX IS `launch-posture.js › resolveChain`, and the two are driven
+  // TOGETHER in `test/launch-chain.test.mjs`: each defect made the other unobservable, so a case
+  // on one side of the pair — like this one was — cannot close it.
+  for (const v of [0, "", null, undefined, {}, "yes"]) {
     assert.equal(wire.directiveFrom(launchRow({ chain: v }), WS).chain, null, String(v));
   }
   assert.equal(wire.directiveFrom(launchRow({ chain: true }), WS).chain, true);
+  assert.equal(wire.directiveFrom(launchRow({ chain: false }), WS).chain, false);
+  // ⚠ BOTH STRING SPELLINGS, for the same reason `'true'` is accepted: this row may arrive over a
+  // transport that stringifies booleans, and a one-sided coercion is how the two halves of a
+  // tri-state stop being symmetric.
+  assert.equal(wire.directiveFrom(launchRow({ chain: "true" }), WS).chain, true);
+  assert.equal(wire.directiveFrom(launchRow({ chain: "false" }), WS).chain, false);
 });
