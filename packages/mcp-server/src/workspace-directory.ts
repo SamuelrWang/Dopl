@@ -13,6 +13,7 @@
 import { isStandardWorkspace } from "@dopl/client";
 import type { DoplClient, WorkspaceListItem, WorkspaceRole } from "@dopl/client";
 import type { ToolResponse } from "./tools/respond.js";
+import { WORKSPACE_REQUIRED, refusal } from "./tools/tool-errors.js";
 import { inlineOr } from "./tools/narration.js";
 import { UNNAMED_WORKSPACE, UNTRUSTED_DIRECTORY_NOTE } from "./instructions.js";
 
@@ -215,7 +216,14 @@ export function createWorkspaceDirectory(
       };
     }
     const lines = [
-      `This connection has no default workspace because you belong to ${list.length} workspaces. Pass \`workspace=<slug_or_id>\` on this call — pick one:`,
+      // ⚠ THE SENTENCE IS UNCHANGED AND THE `reason=` PREFIX IS ADDITIVE
+      // (A14). `narration.test.ts` and `workspace-kind.test.ts` both pin this
+      // copy by phrase; what the code buys is a literal an agent can match,
+      // which prose alone never gave it.
+      refusal(
+        WORKSPACE_REQUIRED,
+        `This connection has no default workspace because you belong to ${list.length} workspaces. Pass \`workspace=<slug_or_id>\` on this call — pick one:`,
+      ),
       "",
       // ⚠ The count and the list are STANDARD memberships only (`getWorkspaceList`
       // filters through `isStandardWorkspace`). An agent that meant to act in a

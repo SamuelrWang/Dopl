@@ -33,6 +33,7 @@
 
 import { DELETE_REFUSAL, isBlockedDeleteOp } from "./delete-policy.js";
 import type { ToolResponse } from "./tools/respond.js";
+import { READ_ONLY_SESSION, refusal } from "./tools/tool-errors.js";
 
 /**
  * THE HIDE-BEFORE-DELETE SEAM — a registered tool an agent no longer sees.
@@ -283,7 +284,13 @@ export function createGates(
         content: [
           {
             type: "text" as const,
-            text: `This session is read-only — its token lacks the \`dopl.write\` scope. \`${name}\` op="${op}" is a write operation. Reconnect with write access to perform it.`,
+            // ⚠ Same shape as every other refusal on this surface: the code
+            // first, so an agent has a literal to match, then the sentence that
+            // says which call was refused. `meta-gate.test.ts` pins "read-only".
+            text: refusal(
+              READ_ONLY_SESSION,
+              `\`${name}\` op="${op}" is a write operation. Reconnect with write access to perform it.`,
+            ),
           },
         ],
       };
