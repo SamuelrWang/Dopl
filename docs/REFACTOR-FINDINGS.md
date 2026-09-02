@@ -6940,6 +6940,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **The pins are not wrong** — each records a real misread (a poisoned thread cursor, a rename read as a re-address) and INVARIANTS §10 is explicit that a capability taught only in the description is taught weakly. The defect is that the assertion lives with the CONSUMER rather than with the prose, so the owning slice cannot restate a rule without editing another slice's file.
 - Proposed resolution: when Wave B cuts this tool to 620/3,000, move every `ARG_PROSE`/`.description` assertion into the owning module's own suite (here `channel-schema-caps.test.ts` / `channel-schema-budget.test.ts`) and leave the consumer asserting its own RESULT copy. `channel-law.test.ts` is at 499 of its 500-line cap, so that move is also what unblocks the next pin anyone needs to add there.
 - Status: open.
+
 ### F-438 — `op="launch_agent"` publishes `tools`, `messages` and `chain`, and the dispatcher never passes them: a posture request is accepted, described at length, and silently dropped (2026-09-02)
 
 - Location: `packages/mcp-server/src/tools/channel-dispatch-agents.ts › dispatchAgentOp`, the `case "launch_agent"` arm — it builds `{ thread, goal, model, template, waitMs }` and reads none of `args.tools` / `args.messages` / `args.chain`. Every other layer of the lane implements them: `channel-schema.ts › tools|messages|chain` publishes them (~2,000 chars of description across the three), `channel-ops-launch.ts › opLaunchAgent` accepts them, `schema-launch.ts › LaunchCreateSchema` validates them, `service-launch.ts › createLaunchDirective` stores them, and `20260910120000_channel_launch_directives_posture.sql` gives them columns and CHECKs.
@@ -6949,7 +6950,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE DIRECTION OF THE BUG IS SAFE AND THAT IS WHY IT SURVIVED.** A dropped posture request can only NARROW: the operator's ceiling applies either way, and `main/launch-posture.js › resolveChain` refuses a chain the channel forbids. So nothing is over-granted — what is lost is the caller's ability to ask for LESS (`tools: "manual"`, `chain: false`), which T24 shipped precisely so an orchestrator could hand a worker a narrower posture than its own.
 - ⚠ **NOT FIXED IN A10, DELIBERATELY.** The fix is three lines at a call site A10 already edits, but the slice's ownership is the idempotency key and `maxTurns`; widening it to complete another wave's plumbing would put a posture behaviour change inside a commit nobody reviewed for one. `channel-dispatch-agents.ts` is unowned in the Wave A table — see F-439's note on the ownership list.
 - Proposed resolution: add `tools: args.tools, messages: args.messages, chain: args.chain` to the `launch_agent` arm, and extend `channel-ops-launch-body.test.ts`'s whole-body assertion — which enumerates every key and is exactly the guard that should have caught this, but which is driven through `opLaunchAgent` DIRECTLY and therefore never sees the dispatcher. **The durable fix is a case driven through `registerChannelTool`**, so the arm and the op are proved together; `channel-agent-idempotency.test.ts` is that shape.
-- Status: open.
+- Status: **FIXED (A6b, `v2/a6b-channel-seam`).** The three reads are on the `launch_agent` arm, and the new cases are in `channel-launch-posture-wire.test.ts` — driven through `registerChannelTool`, exactly as the resolution asked, because a guard that skips the seam cannot see a seam defect. ⚠ `chain` went through the same commit as a THREE-VALUE ENUM (C11), so the arm passes `CHAIN_ON_WIRE[args.chain ?? "inherit"]` rather than `args.chain`; `inherit` maps to `undefined`, never to `false`, which is the GAP C bug class stated as a table.
 
 ### F-439 — the v2 spec's A10 cell asks for G9 work that shipped on 2026-08-23, and its file list points at the wrong tree (2026-09-02)
 
@@ -6961,3 +6962,45 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE FILE LIST IS ALSO WRONG IN A WAY THAT COSTS A BUILDER TIME.** The A10 row names `repository-launch.ts`, `service-directions.ts`, `main/launch-posture.js` and `main/template-resolve.js`; the change actually needs `service-launch*.ts`, `schema-launch.ts`, `schema-direction.ts`, both repositories, the two create ROUTES, `packages/dopl-client` (both create types), and `channel-dispatch-agents.ts` — the last of which is assigned to no slice in §4's ownership table while being the only place a new `dopl_channel` param can be plumbed. See F-438 for what that gap already cost.
 - Proposed resolution: (a) mark G9's verdict ENFORCED with the two anchors above, and reduce the A10 cell to `client_msg_id` + `maxTurns`; (b) add `channel-dispatch-agents.ts` to the contested-file list beside `channel-schema.ts`. This log is the record; the spec is read-only from here.
 - Status: open (spec-side).
+
+### F-444 — `get_thread` is folded out of the MCP surface, and three desktop files still teach it (2026-09-02)
+
+- Location: `dopl-desktop-app/main/session-profiles.js › OWN_CHANNEL_READ_OPS`, `main/prompt-framing.js` (*"op \"get_thread\", …, thread \"<id>\" gives you one thread"*) and `main/session-launch-op.js` / `main/launch-directive-spawn.js` (the spawn prompt: *"read it with dopl_channel (op \"get_thread\")"*), against `packages/mcp-server/src/tools/channel-schema.ts › CHANNEL_INPUT_SHAPE.op` after slice A6b.
+- Found during: A6b, landing C15 (`get_thread` → `read(thread=)`).
+- Severity: **stale teaching, not a broken fence** — and the direction matters. The gating list holding a dead op name grants nothing (`OWN_CHANNEL_READ_OPS` is a membership test over ops that ARRIVE); the PROMPTS are the live half, because they hand a launching agent an op the server now answers with a `-32602`.
+- **Why it was not fixed in the same change.** `dopl-desktop-app/main/**` is in no Wave A slice's Owns column, and the MCP-side fold is a two-file edit in this slice's own files. Widening a schema slice into the desktop's prompt copy is how a wave stops being reviewable.
+- ⚠ **THE FAILURE IS ONE TURN, NOT A LOOP.** A spawned agent that calls `get_thread` gets an invalid-enum error naming the field, and `read(thread=)` is the op that answers the same question with strictly MORE (the card AND the transcript). So the cost is one wasted call and a confused first turn, not an unrecoverable session.
+- Proposed resolution: (a) replace the op name with `read` + `thread=<id>` in the two prompt builders and drop it from `OWN_CHANNEL_READ_OPS` — one edit, four sites, in a slice that owns `main/`; (b) add `get_thread` to `dopl-desktop-app/test/removed-vocabulary.test.mjs`, which is the desktop's own regrowth guard and the thing that would have caught this had the MCP side and the desktop side ever shared one.
+- Status: open.
+
+### F-445 — `op="pings"` lost its cursor to close C13, and the trade is a re-read rather than a skip (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel-ops-ping.ts › opReadPings` and `channel.ts`'s `case "pings"`, against `src/app/api/pings/await/route.ts`, which still carries one.
+- Found during: A6b, landing C13 (*"one cursor"*).
+- Severity: **a deliberate capability trade, recorded so it is not re-litigated as a bug.**
+- **What was wrong.** One `since` param served TWO cursor spaces — a message seq on `read`/`await`, a ping seq on `pings` — and the spec's own words for the defect are *"crossing reads a plausible WRONG page instead of erroring"*. The failure is SILENT and the wrong direction: a message seq is routinely hundreds larger than a ping seq, so crossing them skips the inbox rather than repeating it.
+- **What shipped, and why not the spec's prefix.** C13 proposed an opaque `msg:861` / `ping:12` cursor rejected on prefix mismatch. That keeps two spaces and adds a parser, two error arms and a new syntax to every result that prints a cursor. **The slice deleted the second space instead**: `pings` takes no cursor and returns the newest page (still bounded by `limit`). One space cannot be crossed, and there is nothing to reject.
+- ⚠ **THE COST IS REAL AND IS NAMED IN THE RESULT.** A reader that acted on a ping can be handed it again; the row's `seq` is how it tells. That is the safe direction — a repeat is visible, a skip is not — and an inbox of at most 100 bounded signals is not a transcript to replay. ⚠ **THE HELD LANE IS UNTOUCHED**: `GET /api/pings/await?since=` still takes a ping cursor, is not an MCP op, and is where an external session gets exactly-once behaviour.
+- Proposed resolution: none needed unless a caller is measured re-processing pings. If one is, the answer is a `pings` ack (a column and a filter), not a second cursor space on `since`.
+- Status: closed by decision — recorded, not open.
+
+### F-446 — a `.describe()` is pinned by tests in FIVE other modules, and F-430 undercounted by two (2026-09-02)
+
+- Location: the same `ARG_PROSE`/`.description` joins F-430 names, plus `channel-lifecycle-kinds.test.ts` (the `kind` describe, six phrases) and `channel-post-guidance.test.ts` (the `intent` enum, three values) — both of which pinned a param this slice DELETED.
+- Found during: A6b. F-430 measured the cost of SHORTENING a describe; this is the cost of deleting one, and it is higher.
+- Severity: friction, and it is the same defect F-430 records with a second data point rather than a new one.
+- **The shape.** A param's prose is owned by `channel-schema.ts`, and five suites in five other files assert on it. Deleting the param therefore edits five files that have nothing to do with the deletion — and the edits are not mechanical: `channel-lifecycle-kinds.test.ts` had to be rewritten from *"the refusal names the kind you passed"* to *"the value is not sayable"*, which is a DIFFERENT and stronger guard, and the change had to be reasoned about rather than applied.
+- ⚠ **THE REWRITES ARE THE GOOD OUTCOME AND SHOULD NOT BE READ AS AN ARGUMENT FOR LOOSER PINS.** Each one forced the question *"what is the guard now that the param is gone"*, and in two cases the answer was stronger than the assertion it replaced. The cost is that the question was asked in somebody else's file.
+- Proposed resolution: as F-430's — when Wave B cuts this tool to 620/3,000, move every `ARG_PROSE`/`.description` assertion into `channel-schema-caps.test.ts` / `channel-schema-budget.test.ts`, and leave each consumer asserting its own RESULT copy. ⚠ Add the two files above to that move.
+- Status: open (folded into F-430's remedy; recorded separately because the measurement is different).
+
+### F-447 — the doctrine document GREW while every pushed surface shrank, and only a per-section budget makes that legible (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › CHANNEL_DOCTRINE` and the new `channel-doctrine-budget.test.ts`.
+- Found during: A6b, adding `op="help", section=`.
+- Severity: measurement hazard, not a defect — filed because the NUMBER moved the wrong way and a future reader comparing waves will otherwise read it as a regression.
+- **The measurement.** Across A6 + A6b the two PUSHED surfaces fell — served input schema 21,778 → 11,103 (−49%), description 1,775 → 1,703 — while the PULLED doctrine rose 28,870 → 32,085 → **32,728**. The last +643 is `section=` itself: an index line naming the sections, and the SECURITY sentence repeated at the head of each one, because a caller that pulls a single section skipped the header that rule used to live in.
+- ⚠ **THE TOTAL IS THE WRONG NUMBER AND THAT IS THE FINDING.** Nobody is served the whole document unless they ask for it; what an agent now pays is ONE SECTION, and the largest is 6,252 characters — under a fifth of the text, and comparable to a single tool description. `channel-doctrine-budget.test.ts` gates BOTH, in both directions, so the per-section figure is the one that ratchets.
+- ⚠ **AND A PULLED SURFACE STILL NEEDS A GATE.** Prose evicted from a pushed surface lands here by design (T10/T12/T82), so an unmeasured doctrine turns a diet into a relocation. That is the whole argument for the third budget; the growth above is the first thing it caught.
+- Proposed resolution: when Wave B re-measures this tool, quote the SECTION figure beside the total, and treat a rise in the total that lowers the section maximum as a win rather than a regression.
+- Status: closed by decision — recorded so the numbers are comparable.
