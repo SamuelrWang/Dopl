@@ -193,6 +193,63 @@ const SessionStateEntrySchema = z.object({
    */
   templateName: safeLabel("Template name", 120).nullable().optional(),
 
+  // ── HEALTH (2026-09-01, migration 20260909120000) ────────────────────────
+  //
+  // ⚠ THE SAME TWO-HALF RULE THE TELEMETRY BLOCK STATES, AND IT IS THE REASON
+  // THIS BLOCK IS SAFE TO SHIP AHEAD OF ANY DESKTOP. `optional` is the rollout
+  // contract — an older desktop sends none of these keys, and a required field
+  // would 400 its WHOLE push, unretryably, leaving `read_sessions` answering
+  // `[]` for that machine forever (INVARIANTS §11, §13). `nullable` is the
+  // semantic half — `main/session-health.js` sends an explicit `null` for a
+  // count nothing has measured, and that must survive as `null` to the render.
+  // ⚠ **ABSENT MUST STAY ABSENT.** There is no `.default()` below and there must
+  // not be: a `.default(0)` on `deniedCalls` would turn an older desktop's
+  // silence into "nothing has been refused to this agent", which is the exact
+  // claim these columns were added to stop the surface making.
+  /** Turns taken. ⚠ `.int().nonnegative()` and NOT quantized by the desktop —
+   *  the difference between 1 turn and 4 IS the signal
+   *  (`main/session-telemetry.js`'s own note). */
+  turns: z.number().int().nonnegative().nullable().optional(),
+  /** Tokens burned SINCE THIS SESSION LAST POSTED — not per turn, and not since
+   *  the last row push (`main/session-health.js › tokensSinceLastPost`). Same
+   *  `.int().nonnegative()` bound as `tokensSpent`, whose bucket it shares. */
+  tokensDelta: z.number().int().nonnegative().nullable().optional(),
+  /**
+   * THE MACHINE'S OWN WEDGED FLAG — `working` AND silent past ten minutes AND
+   * still spending (`main/session-health.js › isStale`).
+   *
+   * ⚠ 🔒 **NOT THE SERVER'S `sessionIsStale`, WHICH IS ABOUT THE ROW.** That one
+   * is derived here from `updated_at` and means "nobody has said anything";
+   * this one is derived THERE and means "this live session is getting nowhere".
+   * The wire name is the desktop's and is deliberately not renamed on the way
+   * in — a server that renamed a reported field would make the two trees stop
+   * agreeing about what was reported. The RENDER keeps them apart
+   * (`packages/mcp-server/src/tools/channel-session-health.ts`).
+   * ⚠ `z.boolean()`, never `z.coerce.boolean()`: `Boolean("false")` is `true`,
+   * so a coercion here would read a stringified `false` as an assertion that
+   * somebody's agent is wedged.
+   */
+  stale: z.boolean().nullable().optional(),
+  /** Tool calls REFUSED to this session, and the last tool that was
+   *  (`main/session-windowless.js › noteDenied`). ⚠ A `null` count is "nothing
+   *  counted", NEVER "nothing was denied". */
+  deniedCalls: z.number().int().nonnegative().nullable().optional(),
+  /** ⚠ Bound is `safeLabel` at **80** — character for character `toolLabel`'s,
+   *  which is character for character the desktop's own `TOOL_LABEL_MAX`. A tool
+   *  name can come from the operator's OWN MCP servers, so the charset is not
+   *  ours to assume, and it is spliced into narration in the operator's own
+   *  result — where a forged line is still a forged line. */
+  lastDeniedTool: safeLabel("Last denied tool", 80).nullable().optional(),
+  /** The `seq` the last ENQUEUED wake was carrying, and when
+   *  (`main/session-gate.js › enqueue`). ⚠ A report of what the machine DID —
+   *  never a delivery guarantee, and the render says so in those words.
+   *  ⚠ `.int().nonnegative()` because it is a `channel_messages.seq`, which is a
+   *  monotonic positive counter; `.datetime({ offset: true })` on the stamp for
+   *  the reason `startedAt` carries it — it lands in a TIMESTAMPTZ column and an
+   *  unparseable string reaches Postgres as a cast error, i.e. an opaque 500. */
+  lastWakeSeq: z.number().int().nonnegative().nullable().optional(),
+  lastWakeAt: z.string().datetime({ offset: true }).nullable().optional(),
+
   // ── THE OPERATOR-GIVEN AGENT NAME (2026-08-31, migration 20260905120000) ──
   /**
    * WHAT THE OPERATOR CALLS THIS AGENT ("Bug Reviewer"), snapshotted from the

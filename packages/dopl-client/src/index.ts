@@ -136,6 +136,11 @@ export type {
   WorkspaceChannelMessage,
   ThreadStatus,
 } from "./channel-types.js";
+// ⚠ The HEALTH half of an own-scoped session — its own module because
+// `channel-types.ts` is at the 500-line cap, and a HAND MIRROR of
+// `src/features/channels/types-sessions.ts › ChannelSessionHealth` with no drift
+// gate: both halves move in ONE change.
+export type { ChannelSessionHealth } from "./session-health-types.js";
 export type {
   AccountChannelMessage,
   AccountChannelStatus,
@@ -182,6 +187,10 @@ export type {
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
   LaunchDirectiveKind,
+  // ⚠ THE TWO POSTURE AXES (2026-09-01, T24). ORDERED unions — the clamp on the
+  // machine indexes into them, so their order is contract, not presentation.
+  LaunchToolMode,
+  LaunchMessageMode,
   LaunchRefusalReason,
 } from "./launch-types.js";
 

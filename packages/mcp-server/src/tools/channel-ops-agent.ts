@@ -32,10 +32,41 @@
  *     at it.
  */
 
-import type { DoplClient, LaunchDirective, LaunchRefusalReason } from "@dopl/client";
+import type {
+  DoplClient,
+  LaunchDirective,
+  LaunchMessageMode,
+  LaunchRefusalReason,
+  LaunchToolMode,
+} from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
 import { bareAgentId } from "./channel-agent-id";
+
+/**
+ * THE THREE AGENT-MANAGEMENT KINDS AND WHAT EACH CARRIES — **one declaration,
+ * shared with `channel-ops-agent-mode.ts`.**
+ *
+ * ⚠ IT MIRRORS `@dopl/client › AgentDirectiveCreateInput` rather than being it:
+ * this is the shape {@link fileAndHold} takes, and stating it once is what lets
+ * the third verb live in its own module without a second copy of the union
+ * drifting from this one.
+ * ⚠ **BOTH AXES ON THE `set_agent_mode` ARM ARE OPTIONAL HERE, DELIBERATELY.**
+ * "At least one of them" is a REGISTRAR check (`channel.ts`) and a route check; a
+ * type expressing it would be a union of three shapes for one verb, and the
+ * caller-facing message would become a parse error instead of a sentence.
+ */
+export type AgentDirectiveKind = "end" | "rename" | "set_agent_mode";
+export type AgentDirectiveInput =
+  | { kind: "end"; channel: string; agentId: string }
+  | { kind: "rename"; channel: string; agentId: string; name: string }
+  | {
+      kind: "set_agent_mode";
+      channel: string;
+      agentId: string;
+      tools?: LaunchToolMode;
+      messages?: LaunchMessageMode;
+    };
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
@@ -140,14 +171,50 @@ function foreignAgent(agentId: string, verb: string): ToolResponse {
   );
 }
 
+/**
+ * THE PAST-TENSE WORD FOR EACH KIND, IN ONE PLACE.
+ *
+ * ⚠ A MAP RATHER THAN A TERNARY, and it stopped being cosmetic at the third
+ * verb: `kind === "end" ? "ended" : "renamed"` is CORRECT for two kinds and
+ * silently reports a RE-POSTURE as a RENAME for three. A conditional over a
+ * closed set is the shape that goes wrong the day the set grows, failing nothing
+ * on the way.
+ */
+export const VERB_PAST: Record<AgentDirectiveKind, string> = {
+  end: "ended",
+  rename: "renamed",
+  set_agent_mode: "re-postured",
+};
+
+/** ⚠ **WHAT `read_sessions` CAN AND CANNOT CONFIRM, PER VERB** — which is the
+ *  whole value of the line it goes in. An END is visible there; a RENAME and a
+ *  POSTURE are not (both live on the operator's machine and reach no server), and
+ *  a caller told to "check" something that listing can never show re-issues
+ *  forever. */
+const PENDING_CHECK: Record<AgentDirectiveKind, string> = {
+  end: "The agent disappearing from that list is the answer.",
+  rename:
+    "The rename is DISPLAY-ONLY and lives on your operator's machine, so read_sessions will NOT show it — the handle is unchanged either way. Nothing here can confirm a rename landed.",
+  set_agent_mode:
+    "A posture lives on your operator's machine, so read_sessions will NOT show it and nothing here can confirm it moved. The agent is still running and still addressable either way; treat its permissions as UNCHANGED until you see it behave otherwise.",
+};
+
 /** The line a PENDING (or expired) agent directive ends on. ⚠ Says the id,
  *  because the id is the only handle the caller has left, and says NOT to
- *  re-issue. */
-function pendingLines(d: LaunchDirective, verb: string): string[] {
+ *  re-issue.
+ *  ⚠ Exported for the same one caller and the same reason as
+ *  {@link fileAndHold} — the pending-vs-failed rule must have ONE statement.
+ *  ⚠ IT TAKES THE **KIND**, NOT A DISPLAY WORD: the sentence it picks is a claim
+ *  about what a later read can prove, and keying that off prose is how a third
+ *  verb inherits the second one's answer. */
+export function pendingLines(
+  d: LaunchDirective,
+  kind: AgentDirectiveKind,
+): string[] {
   return [
     `The request is still PENDING — id \`${d.id}\`, and it stays answerable until ${d.expiresAt}.`,
     `⚠ A TIMEOUT IS NOT A REFUSAL. Your operator's machine may still take it; nothing has been cancelled. **DO NOT ISSUE THIS CALL AGAIN** — a second directive is a second request for the same change, and on an end you would have no way to tell which one acted.`,
-    `To find out what happened: dopl_channel(op="read_sessions"). ${verb === "ended" ? "The agent disappearing from that list is the answer." : "The rename is DISPLAY-ONLY and lives on your operator's machine, so read_sessions will NOT show it — the handle is unchanged either way. Nothing here can confirm a rename landed."}`,
+    `To find out what happened: dopl_channel(op="read_sessions"). ${PENDING_CHECK[kind]}`,
   ];
 }
 
@@ -184,12 +251,25 @@ async function holdFor(
  * CHANNEL (unknown, or one the caller never joined) and nothing else, so it
  * renders as a channel error rather than as anything about the agent.
  */
-async function fileAndHold(
+/**
+ * ⚠ EXPORTED FOR `channel-ops-agent-mode.ts` (2026-09-01), and for that ONE
+ * caller. It is the whole hold protocol — file the row, poll it, give up — and a
+ * second copy would be a second answer to "how long do we wait", which is the
+ * drift the shared `WAIT_*` constants above exist to prevent. ⚠ What is shared
+ * is the PLUMBING; every sentence a caller reads is written in its own module,
+ * because the three verbs' consent stories differ.
+ */
+export async function fileAndHold(
   client: DoplClient,
   ref: string,
-  input:
-    | { kind: "end"; channel: string; agentId: string }
-    | { kind: "rename"; channel: string; agentId: string; name: string },
+  // ⚠ THE UNION IS {@link AgentDirectiveInput}, DECLARED ABOVE AND NOT INLINED.
+  // The THIRD kind rides this same hold and shares nothing else with the other
+  // two (2026-09-01): its sentences, its refusal map and its consent story live
+  // in `channel-ops-agent-mode.ts`, because it is the one agent verb still gated
+  // by the operator's launch toggle. "Both axes optional, at least one required"
+  // is enforced at the tool boundary and again by the column CHECK, never here —
+  // this function files a row, it does not judge one.
+  input: AgentDirectiveInput,
   waitMs: number | undefined,
 ): Promise<
   | { done: true; response: ToolResponse }
@@ -203,10 +283,7 @@ async function fileAndHold(
     if (apiErrorCode(e) === "CHANNEL_AGENT_FOREIGN") {
       return {
         done: true,
-        response: foreignAgent(
-          input.agentId,
-          input.kind === "end" ? "ended" : "renamed",
-        ),
+        response: foreignAgent(input.agentId, VERB_PAST[input.kind]),
       };
     }
     if (isNotFound(e)) return { done: true, response: channelNotFound(ref) };
@@ -218,7 +295,7 @@ async function fileAndHold(
       offline: true,
       response: ok(
         [
-          `Nothing was ${input.kind === "end" ? "ended" : "renamed"} — your operator's machine is not reporting in, so there is nothing listening. **No request was filed**, so there is nothing pending and nothing to cancel.`,
+          `Nothing was ${VERB_PAST[input.kind]} — your operator's machine is not reporting in, so there is nothing listening. **No request was filed**, so there is nothing pending and nothing to cancel.`,
           `⚠ THIS IS A HINT, NOT A VERDICT ON A PARTICULAR MACHINE. What was checked is a per-(user, workspace) presence heartbeat: it says no listener of your operator's has checked in recently. It cannot tell you WHICH of their machines is up.`,
           `Most likely the machine is asleep, closed, or signed out. ⚠ NOTE FOR AN END: an agent on a machine that is not running is not running either — there may be nothing left to stop. Ask your operator, or check dopl_channel(op="read_sessions") when they are back.`,
         ].join("\n"),
@@ -298,7 +375,7 @@ export async function opEndAgent(
   return ok(
     [
       `No answer yet from your operator's machine about ending agent \`${agent}\` in **${label}**.${claimed}`,
-      ...pendingLines(d, "ended"),
+      ...pendingLines(d, "end"),
     ].join("\n"),
   );
 }
@@ -371,7 +448,7 @@ export async function opRenameAgent(
   return ok(
     [
       `No answer yet from your operator's machine about renaming agent \`${agent}\` in **${label}**.${claimed}`,
-      ...pendingLines(d, "renamed"),
+      ...pendingLines(d, "rename"),
     ].join("\n"),
   );
 }

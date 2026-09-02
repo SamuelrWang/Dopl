@@ -21,8 +21,10 @@ export type ChannelMemberRole = "owner" | "member";
 // ⚠ THE ESCALATION FIELDS ARE AN EXTENDED INTERFACE, NOT TWO KEYS DECLARED HERE
 // (2026-08-31). `escalation-types.ts` is their own module for `launch-types.ts`'s
 // reason — this file is at the 500-line cap — and `extends` is what keeps the
-// rule, the caps and the docblock stated ONCE, over there.
+// rule, the caps and the docblock stated ONCE, over there. ⚠ THE SESSION HEALTH
+// half is a THIRD on the same grounds (2026-09-01); see its own header.
 import type { ChannelEscalationFields } from "./escalation-types.js";
+import type { ChannelSessionHealth } from "./session-health-types.js";
 
 export type ThreadMode = "interactive" | "autonomous";
 
@@ -280,9 +282,9 @@ export interface ChannelSessionTelemetry {
   templateName: string | null;
 }
 
-/** The caller's OWN session — coarse projection plus the operator-only half. */
+/** The caller's OWN session — coarse projection plus the operator-only halves. */
 export type ChannelSessionStateOwn = ChannelSessionState &
-  ChannelSessionTelemetry;
+  ChannelSessionTelemetry & ChannelSessionHealth;
 
 /**
  * `listChannelSessions`' whole answer — the rows AND whether the machine that

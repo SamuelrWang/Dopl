@@ -164,6 +164,17 @@ exports.WRITE_OPS = {
         // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
         "end_agent",
         "rename_agent",
+        // ⚠ `set_agent_mode` WRITES, AND IT IS THE WIDEST OF THE THREE (2026-09-01).
+        // It files a directive row and asks a machine to RE-PERMISSION a running
+        // agent; a read-only token must be refused it, or a dopl.read session can
+        // widen its own agents through a non-admin tool.
+        // ⚠ IT IS ALSO THE ONE NON-LAUNCH VERB THE MACHINE'S OWN LAUNCH-CONSENT
+        // TOGGLE GATES, for the same reason it is classified here: more room can mean
+        // more compute spent on the operator's hardware, which a stop verb and a
+        // display label cannot cause.
+        // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out of
+        // the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
+        "set_agent_mode",
         // ⚠ WRITES THE CHANNEL INFO CARD (Q12, 2026-08-28). It also READS when
         // `info_card` is omitted, and it is classified as a WRITE anyway: an op that
         // can write must be refused wholesale for a read-only token, or the read arm

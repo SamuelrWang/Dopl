@@ -49,8 +49,29 @@ export type LaunchRefusalReason = "cap" | "busy" | "no-sdk" | "auth-hold" | "no-
  * not gated at all — they are the stop verb and the display verb and widen
  * nothing. Do not tell a caller that turning the launch toggle on is what makes
  * an end work.
+ * ⚠ **`set_agent_mode` IS THE FOURTH AND IT DOES **NOT** JOIN THE UNGATED PAIR**
+ * (2026-09-01). It is the ONE non-launch kind still behind that toggle, because a
+ * POSTURE is the only one of the three that can cause LOCAL COMPUTE TO BE SPENT
+ * (`bypass` on the tool axis pre-approves work tools on the operator's own
+ * hardware). Reading the three non-launch kinds as one class is the mistake this
+ * sentence exists to stop.
  */
-export type LaunchDirectiveKind = "launch" | "end" | "rename";
+export type LaunchDirectiveKind = "launch" | "end" | "rename" | "set_agent_mode";
+/**
+ * THE TWO PERMISSION AXES A DIRECTIVE MAY **ASK** FOR — **ORDERED NARROWEST
+ * FIRST** (2026-09-01, T24).
+ *
+ * ⚠ **THE ORDER IS PART OF THE CONTRACT AND NO COMPILER CHECKS IT.** The clamp on
+ * the machine is an INDEX COMPARISON over these sequences, so re-ordering either
+ * union silently inverts the bound with everything still type-checking.
+ *
+ * ⚠ **ASKS. NEVER WIDENS, AND THERE IS NO OPERATOR CARVE-OUT.** The operator's
+ * machine narrows whatever is asked for to that operator's own stored channel
+ * posture. A caller that reads these as "set" will report a posture it does not
+ * have, and then size its work for room the agent was never given.
+ */
+export type LaunchToolMode = "manual" | "accept_edits" | "auto" | "bypass";
+export type LaunchMessageMode = "ask" | "auto_inbound" | "auto_outbound" | "auto_both";
 /**
  * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
  * desktop.
@@ -108,6 +129,37 @@ export interface LaunchDirective {
      *  is legal and means CLEAR (back to `Agent #<id>`). ⚠ Display only, on one
      *  machine — nothing resolves an agent by it. */
     targetName: string | null;
+    /**
+     * THE POSTURE A **LAUNCH** ASKED ITS NEW SESSION TO START ON (T24). `null` on
+     * an axis is "not asked", which resolves to the operator's own stored channel
+     * value. `null` on every kind but `launch`.
+     * ⚠ SEPARATE FROM {@link LaunchDirective.targetToolMode} — one is the posture a
+     * NEW session starts on, the other the posture a RUNNING one moves to.
+     */
+    startToolMode: LaunchToolMode | null;
+    startMessageMode: LaunchMessageMode | null;
+    /** MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? ⚠ A TRI-STATE: `true` asked,
+     *  `false` asked for it off, `null` did not ask. ⚠ REFUSED rather than clamped
+     *  when the channel forbids it — the one asymmetry with the two axes. */
+    chain: boolean | null;
+    /** THE POSTURE A `set_agent_mode` ASKED A **RUNNING** AGENT TO MOVE TO. `null`
+     *  on an axis means it was not requested, which is ordinary; at least one is
+     *  non-null on that kind and both are `null` on every other. */
+    targetToolMode: LaunchToolMode | null;
+    targetMessageMode: LaunchMessageMode | null;
+    /**
+     * **THE ECHO — what the machine says it actually applied, after its clamp.**
+     *
+     * ⚠ **`null` MEANS "NOT REPORTED". NOT "unclamped", and NEVER the requested
+     * value echoed back.** No writer exists yet, so all three are `null` on every
+     * live row; a reader that treats `null` as agreement tells its caller the
+     * posture landed on the strength of a field nobody filled in.
+     * ⚠ `appliedChain: null` IS NOT `false` — reading it as "no chaining" is wrong
+     * in the direction that makes an orchestrator do the work itself for no reason.
+     */
+    appliedToolMode: LaunchToolMode | null;
+    appliedMessageMode: LaunchMessageMode | null;
+    appliedChain: boolean | null;
     /** The agent instance started. Set iff `status` is `launched` — it is what a
      *  requester types as `@<agentId>` to direct it. */
     agentId: string | null;
@@ -133,6 +185,19 @@ export interface LaunchDirectiveCreateInput {
      * list (409 `AGENT_TEMPLATE_AMBIGUOUS`, `details.matches`) — never picked.
      */
     template?: string;
+    /**
+     * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it
+     * may launch workers (T24, 2026-09-01).
+     *
+     * ⚠ **ASKS, NEVER WIDENS.** The operator's machine clamps both axes to that
+     * operator's own stored channel posture and REFUSES a chain the channel
+     * forbids. Omitting all three is the pre-T24 behaviour exactly: the operator's
+     * own stored pair, and the channel's own chain setting.
+     * ⚠ `chain: false` IS A REAL REQUEST and is not the same as omitting it.
+     */
+    tools?: LaunchToolMode;
+    messages?: LaunchMessageMode;
+    chain?: boolean;
 }
 /**
  * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR. The operator's machine is not
@@ -172,6 +237,27 @@ export type AgentDirectiveCreateInput = {
     channel: string;
     agentId: string;
     name: string;
+}
+/**
+ * **RE-POSTURE A RUNNING AGENT** (2026-09-01).
+ *
+ * ⚠ **BOTH AXES OPTIONAL, AT LEAST ONE REQUIRED** — the route's schema refuses
+ * the empty ask with a 400 rather than filing a row nothing could answer.
+ * ⚠ **ASKS, NEVER WIDENS.** The machine clamps each axis to the operator's own
+ * stored channel posture; there is no operator carve-out, because every caller
+ * on this lane already IS the operator's own account.
+ * ⚠ **NO MODEL FIELD, AND THERE MUST NEVER BE ONE** — the desktop's narrower
+ * has no column for one, so it would be accepted and silently dropped.
+ * ⚠ **THIS ONE IS BEHIND THE MACHINE'S LAUNCH TOGGLE** while `end` and `rename`
+ * are not, so `no-bridge` here CAN mean the toggle is off — the opposite of what
+ * that word means on the other two kinds.
+ */
+ | {
+    kind: "set_agent_mode";
+    channel: string;
+    agentId: string;
+    tools?: LaunchToolMode;
+    messages?: LaunchMessageMode;
 };
 /**
  * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR — the launch create's rule

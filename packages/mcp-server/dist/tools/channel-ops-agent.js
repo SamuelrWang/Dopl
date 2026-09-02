@@ -33,6 +33,9 @@
  *     at it.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.VERB_PAST = void 0;
+exports.pendingLines = pendingLines;
+exports.fileAndHold = fileAndHold;
 exports.opEndAgent = opEndAgent;
 exports.opRenameAgent = opRenameAgent;
 const respond_1 = require("./respond");
@@ -124,14 +127,43 @@ function foreignAgent(agentId, verb) {
         `dopl_channel(op="read_sessions") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
     ].join("\n"));
 }
+/**
+ * THE PAST-TENSE WORD FOR EACH KIND, IN ONE PLACE.
+ *
+ * ⚠ A MAP RATHER THAN A TERNARY, and it stopped being cosmetic at the third
+ * verb: `kind === "end" ? "ended" : "renamed"` is CORRECT for two kinds and
+ * silently reports a RE-POSTURE as a RENAME for three. A conditional over a
+ * closed set is the shape that goes wrong the day the set grows, failing nothing
+ * on the way.
+ */
+exports.VERB_PAST = {
+    end: "ended",
+    rename: "renamed",
+    set_agent_mode: "re-postured",
+};
+/** ⚠ **WHAT `read_sessions` CAN AND CANNOT CONFIRM, PER VERB** — which is the
+ *  whole value of the line it goes in. An END is visible there; a RENAME and a
+ *  POSTURE are not (both live on the operator's machine and reach no server), and
+ *  a caller told to "check" something that listing can never show re-issues
+ *  forever. */
+const PENDING_CHECK = {
+    end: "The agent disappearing from that list is the answer.",
+    rename: "The rename is DISPLAY-ONLY and lives on your operator's machine, so read_sessions will NOT show it — the handle is unchanged either way. Nothing here can confirm a rename landed.",
+    set_agent_mode: "A posture lives on your operator's machine, so read_sessions will NOT show it and nothing here can confirm it moved. The agent is still running and still addressable either way; treat its permissions as UNCHANGED until you see it behave otherwise.",
+};
 /** The line a PENDING (or expired) agent directive ends on. ⚠ Says the id,
  *  because the id is the only handle the caller has left, and says NOT to
- *  re-issue. */
-function pendingLines(d, verb) {
+ *  re-issue.
+ *  ⚠ Exported for the same one caller and the same reason as
+ *  {@link fileAndHold} — the pending-vs-failed rule must have ONE statement.
+ *  ⚠ IT TAKES THE **KIND**, NOT A DISPLAY WORD: the sentence it picks is a claim
+ *  about what a later read can prove, and keying that off prose is how a third
+ *  verb inherits the second one's answer. */
+function pendingLines(d, kind) {
     return [
         `The request is still PENDING — id \`${d.id}\`, and it stays answerable until ${d.expiresAt}.`,
         `⚠ A TIMEOUT IS NOT A REFUSAL. Your operator's machine may still take it; nothing has been cancelled. **DO NOT ISSUE THIS CALL AGAIN** — a second directive is a second request for the same change, and on an end you would have no way to tell which one acted.`,
-        `To find out what happened: dopl_channel(op="read_sessions"). ${verb === "ended" ? "The agent disappearing from that list is the answer." : "The rename is DISPLAY-ONLY and lives on your operator's machine, so read_sessions will NOT show it — the handle is unchanged either way. Nothing here can confirm a rename landed."}`,
+        `To find out what happened: dopl_channel(op="read_sessions"). ${PENDING_CHECK[kind]}`,
     ];
 }
 /** Shared hold: poll the directive row until it settles or the deadline passes.
@@ -163,7 +195,23 @@ async function holdFor(client, directive, waitMs) {
  * CHANNEL (unknown, or one the caller never joined) and nothing else, so it
  * renders as a channel error rather than as anything about the agent.
  */
-async function fileAndHold(client, ref, input, waitMs) {
+/**
+ * ⚠ EXPORTED FOR `channel-ops-agent-mode.ts` (2026-09-01), and for that ONE
+ * caller. It is the whole hold protocol — file the row, poll it, give up — and a
+ * second copy would be a second answer to "how long do we wait", which is the
+ * drift the shared `WAIT_*` constants above exist to prevent. ⚠ What is shared
+ * is the PLUMBING; every sentence a caller reads is written in its own module,
+ * because the three verbs' consent stories differ.
+ */
+async function fileAndHold(client, ref, 
+// ⚠ THE UNION IS {@link AgentDirectiveInput}, DECLARED ABOVE AND NOT INLINED.
+// The THIRD kind rides this same hold and shares nothing else with the other
+// two (2026-09-01): its sentences, its refusal map and its consent story live
+// in `channel-ops-agent-mode.ts`, because it is the one agent verb still gated
+// by the operator's launch toggle. "Both axes optional, at least one required"
+// is enforced at the tool boundary and again by the column CHECK, never here —
+// this function files a row, it does not judge one.
+input, waitMs) {
     let created;
     try {
         created = await client.createAgentDirective(input);
@@ -172,7 +220,7 @@ async function fileAndHold(client, ref, input, waitMs) {
         if (apiErrorCode(e) === "CHANNEL_AGENT_FOREIGN") {
             return {
                 done: true,
-                response: foreignAgent(input.agentId, input.kind === "end" ? "ended" : "renamed"),
+                response: foreignAgent(input.agentId, exports.VERB_PAST[input.kind]),
             };
         }
         if ((0, respond_1.isNotFound)(e))
@@ -184,7 +232,7 @@ async function fileAndHold(client, ref, input, waitMs) {
             done: true,
             offline: true,
             response: (0, respond_1.ok)([
-                `Nothing was ${input.kind === "end" ? "ended" : "renamed"} — your operator's machine is not reporting in, so there is nothing listening. **No request was filed**, so there is nothing pending and nothing to cancel.`,
+                `Nothing was ${exports.VERB_PAST[input.kind]} — your operator's machine is not reporting in, so there is nothing listening. **No request was filed**, so there is nothing pending and nothing to cancel.`,
                 `⚠ THIS IS A HINT, NOT A VERDICT ON A PARTICULAR MACHINE. What was checked is a per-(user, workspace) presence heartbeat: it says no listener of your operator's has checked in recently. It cannot tell you WHICH of their machines is up.`,
                 `Most likely the machine is asleep, closed, or signed out. ⚠ NOTE FOR AN END: an agent on a machine that is not running is not running either — there may be nothing left to stop. Ask your operator, or check dopl_channel(op="read_sessions") when they are back.`,
             ].join("\n")),
@@ -242,7 +290,7 @@ async function opEndAgent(client, ref, agentId, opts = {}) {
     const claimed = d.status === "claimed" ? ` A machine has TAKEN it, so it is likely to land shortly.` : "";
     return (0, respond_1.ok)([
         `No answer yet from your operator's machine about ending agent \`${agent}\` in **${label}**.${claimed}`,
-        ...pendingLines(d, "ended"),
+        ...pendingLines(d, "end"),
     ].join("\n"));
 }
 /**
@@ -292,6 +340,6 @@ async function opRenameAgent(client, ref, agentId, name, opts = {}) {
     const claimed = d.status === "claimed" ? ` A machine has TAKEN it, so it is likely to land shortly.` : "";
     return (0, respond_1.ok)([
         `No answer yet from your operator's machine about renaming agent \`${agent}\` in **${label}**.${claimed}`,
-        ...pendingLines(d, "renamed"),
+        ...pendingLines(d, "rename"),
     ].join("\n"));
 }

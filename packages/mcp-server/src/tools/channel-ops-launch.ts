@@ -26,7 +26,13 @@
  * to arm a wait.
  */
 
-import type { DoplClient, LaunchDirective, LaunchRefusalReason } from "@dopl/client";
+import type {
+  DoplClient,
+  LaunchDirective,
+  LaunchMessageMode,
+  LaunchRefusalReason,
+  LaunchToolMode,
+} from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
 
@@ -204,6 +210,38 @@ function refusalSentence(reason: LaunchRefusalReason | null): string {
   );
 }
 
+/**
+ * **THE RESOLVED POSTURE, AS ONE LINE — AND THE NULL CASE IS THE WHOLE POINT.**
+ *
+ * ⚠ **THE ECHO COLUMNS ARE `null` ON EVERY LIVE ROW TODAY** (no machine writes
+ * them yet), and `null` MEANS "NOT REPORTED". It does not mean "unclamped" and it
+ * is never the requested value echoed back. The desktop CLAMPS a requested
+ * posture to the operator's own stored ceiling without being obliged to say so,
+ * so an orchestrator told "you got what you asked for" on the strength of an
+ * empty column would size its next instruction for room the agent does not have —
+ * which is exactly the reading this function exists to refuse.
+ * ⚠ **SO THE FALLBACK IS A SENTENCE, NOT A GUESS.** Echoing `startToolMode` back
+ * would produce a line that is right whenever nothing was clamped and confidently
+ * wrong precisely when it mattered.
+ * ⚠ THE SHAPE IS FIXED (`posture=<tools>/<messages> chain=on|off`) because it is
+ * read by a model choosing its next action; a line that changes shape between
+ * calls gets parsed by guesswork.
+ */
+export function postureLine(d: LaunchDirective): string {
+  const tools = d.appliedToolMode;
+  const messages = d.appliedMessageMode;
+  const chain = d.appliedChain;
+  if (tools === null && messages === null && chain === null) {
+    return `⚠ POSTURE: **not reported.** That machine did not say what it settled on, so you do not know whether what you asked for was narrowed. ⚠ DO NOT ASSUME YOU GOT IT — it clamps whatever is asked for down to your operator's own ceiling and is under no obligation to mention it. Plan for the NARROWER reading, and if the work needs more room, ask your operator rather than this call.`;
+  }
+  // ⚠ `-` FOR AN AXIS THAT WAS NOT REPORTED, EVEN WHEN THE OTHER ONE WAS. Partial
+  // is a real shape (a machine may settle one axis and say nothing about the
+  // other) and filling the gap from the REQUEST would put an unconfirmed value
+  // beside a confirmed one in the same line, indistinguishable.
+  const chainWord = chain === null ? "not reported" : chain ? "on" : "off";
+  return `POSTURE (as that machine reported it): posture=${tools ?? "-"}/${messages ?? "-"} chain=${chainWord}. ⚠ A \`-\` is an axis it did not report, NOT an axis that was left wide. Anything here that is narrower than what you asked for was CLAMPED to your operator's own ceiling — that is the design, not a fault, and re-issuing will not widen it.`;
+}
+
 /** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
  *  id is the only handle the agent has left, and says NOT to re-issue. */
 function pendingLines(d: LaunchDirective, channelRef: string): string[] {
@@ -231,6 +269,15 @@ export async function opLaunchAgent(
     /** Template id OR exact name. ⚠ Passed through untouched — the id/name
      *  disambiguation and the visibility check both happen server-side. */
     template?: string;
+    /** ⚠ **ASKED FOR, NEVER SET.** The operator's machine clamps each axis to
+     *  that operator's own stored ceiling; omitting both is the pre-T24
+     *  behaviour. Passed through untouched — this process cannot see the
+     *  ceiling and must not pretend to. */
+    tools?: LaunchToolMode;
+    messages?: LaunchMessageMode;
+    /** ⚠ REFUSED rather than clamped when the channel forbids it, which is why
+     *  it is a separate field and not a third axis. Omitted is NOT `false`. */
+    chain?: boolean;
     waitMs?: number;
   } = {},
 ): Promise<ToolResponse> {
@@ -250,6 +297,14 @@ export async function opLaunchAgent(
       goal: opts.goal,
       model: opts.model,
       template: opts.template,
+      // ⚠ PASSED THROUGH UNTOUCHED, exactly like `template` above and for a
+      // sharper reason: the ceiling these are clamped against lives on the
+      // OPERATOR'S MACHINE, so this process cannot evaluate the request, cannot
+      // predict the outcome, and must not narrate one. What it can do is print
+      // what came back — see `postureLine`.
+      tools: opts.tools,
+      messages: opts.messages,
+      chain: opts.chain,
     });
   } catch (e) {
     // ⚠ THE TEMPLATE ARMS COME FIRST, AND THE DISCRIMINATOR IS THE **CODE**, NOT
@@ -332,6 +387,11 @@ export async function opLaunchAgent(
         `ITS HANDLE IS \`@agent-${directive.agentId}\` — that exact form, prefixed, which is what the Dopl app writes and tints. A friendly NAME your operator may give it lives on their machine alone and is never addressable from here.`,
         `TO REDIRECT IT LATER, write \`@agent-${directive.agentId}\` in the BODY of a post into this channel (thread it with the same thread id if it has one). That is the ONE case where a handle addresses an agent rather than a person: the token is parsed on your operator's machine, not by the server's mention resolver, so it stamps nobody and lands in no Tags inbox. ⚠ THREE LIMITS, AND THEY ARE THE FENCE RATHER THAN A KNACK: it must NAME the agent (an unaddressed post of yours starts nobody, whatever it says); it works only for YOUR OWN operator's agents, because you post under their account and no post of yours can start anything on another member's machine; and the wake happens on a desktop this server cannot see, so nothing here confirms it landed.`,
         `⚠ IT IS NOT YOUR SESSION AND YOU CANNOT SEE INSIDE IT. What comes back to you are its POSTS and its milestones, in this channel — arm dopl_channel(op="await", channel="${ref}", since=<your cursor>) to receive them, or omit \`channel\` to watch every channel you are in at once. Its live state shows up in dopl_channel(op="read_sessions"), which also prints each session's addressable handle.`,
+        // ⚠ ALWAYS PRINTED, INCLUDING WHEN NOTHING WAS ASKED FOR. A caller that
+        // sent no posture still ran at SOME posture, and the line that says "not
+        // reported" is the only thing standing between an orchestrator and the
+        // assumption that silence means whatever it hoped.
+        postureLine(directive),
         `⚠ "Started" means THE MACHINE SAID SO. There is no second source to confirm it against — if nothing appears in read_sessions and nothing is posted, say that rather than assuming it is working.`,
       ].join("\n"),
     );

@@ -45,7 +45,15 @@ import {
  * abused call is an agent that stops or a card that reads differently, on the
  * machine of the operator whose agents they all are. The toggle gates LOCAL
  * COMPUTE BEING SPENT; these spend none.
- * ⚠ **THE SERVER NEITHER ENFORCES NOR OBSERVES THAT** — the toggle is an
+ * ⚠ **`set_agent_mode` IS THE EXCEPTION AND IT ARRIVES ON THIS SAME ROUTE**
+ * (2026-09-01, the agent-efficiency wave). It IS behind the toggle
+ * (`main/launch-directive-wire.js › KINDS_NEEDING_LAUNCH_CONSENT` lists it beside
+ * `launch`), because a POSTURE is the one verb of the three that can cause LOCAL
+ * COMPUTE TO BE SPENT: `bypass` on Axis A pre-approves work tools on hardware the
+ * operator pays for. **Do not read the three non-launch kinds as one class** —
+ * that reading hands an un-armed machine the widest half of the launch lane
+ * without the launch.
+ * ⚠ **THE SERVER NEITHER ENFORCES NOR OBSERVES ANY OF THAT** — the toggle is an
  * `electron-store` boolean no server can see. `main/launch-directives.js ›
  * handle` is where the distinction lives, and this route is stating the ruling,
  * not implementing it.
@@ -77,7 +85,23 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
             agentId: input.agentId,
             name: input.name,
           }
-        : { kind: "end", channel: input.channel, agentId: input.agentId }
+        : input.kind === "set_agent_mode"
+          ? {
+              // ⚠ THE POSTURE ARM (2026-09-01). Both axes optional and AT LEAST
+              // ONE required — the schema refuses the empty ask before a row
+              // exists, and the column CHECK refuses it again at rest.
+              // ⚠ **A REQUEST, NEVER A GRANT**: the machine CLAMPS each axis to
+              // the operator's own stored channel posture and never widens.
+              // ⚠ THIS IS THE ONE NON-LAUNCH KIND STILL BEHIND THAT MACHINE'S
+              // LAUNCH-CONSENT TOGGLE — see the ruling above, which covers `end`
+              // and `rename` and deliberately does NOT cover this one.
+              kind: "set_agent_mode",
+              channel: input.channel,
+              agentId: input.agentId,
+              tools: input.tools,
+              messages: input.messages,
+            }
+          : { kind: "end", channel: input.channel, agentId: input.agentId }
     );
     // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS — the launch create's rule
     // verbatim. Nothing failed: the operator's machine is not listening and NO

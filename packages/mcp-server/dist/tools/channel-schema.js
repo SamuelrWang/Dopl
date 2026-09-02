@@ -74,6 +74,16 @@ exports.CHANNEL_INPUT_SHAPE = {
         // own-operator-only by construction.
         "end_agent",
         "rename_agent",
+        // ⚠ RE-POSTURE A RUNNING AGENT — the two permission axes, on ONE agent
+        // (2026-09-01). Same mailbox again, a fourth KIND.
+        // ⚠ **IT ASKS, IT NEVER WIDENS**, and this is the one op in the family
+        // where that has to be said: the operator's machine narrows whatever is
+        // asked for to that operator's own stored channel posture, so a caller
+        // that reads it as "set" reports room it does not have.
+        // ⚠ AND IT IS THE ONE NON-LAUNCH OP THAT **IS** GATED BY THE LAUNCH
+        // TOGGLE, unlike the two above — a posture can cause compute to be spent
+        // on the operator's hardware, which a stop verb and a label cannot.
+        "set_agent_mode",
         // ⚠ THE INFO CARD, AND ONLY THE INFO CARD (Samuel's ruling Q12 (b),
         // 2026-08-28). The same route accepts name / topic / archived, and this op
         // deliberately does not — see `channel-ops-update.ts`. Omitting
@@ -215,7 +225,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     agent_id: zod_1.z
         .string()
         .optional()
-        .describe('op="direct_agent" / op="end_agent" / op="rename_agent" (required): WHICH of your operator\'s agents to act on — the 8-character instance id. dopl_channel(op="read_sessions") prints it as `@agent-<id>`; you may paste either that whole handle or the bare id, both are accepted. op="read_directions" (optional): narrow the listing to that one agent. ⚠ There is NO oldest-agent fallback on ANY of these lanes, deliberately: guessing which agent you meant would direct, end or relabel one you did not address, with nothing reporting the swap — and on an end that is unrecoverable. ⚠ YOUR OWN OPERATOR\'S AGENTS ONLY. An id belonging to another member is REFUSED outright and no request is filed; a peer\'s agent is a handle you can read about and nothing you can reach.'),
+        .describe('op="direct_agent" / op="end_agent" / op="rename_agent" / op="set_agent_mode" (required): WHICH of your operator\'s agents to act on — the 8-character instance id. dopl_channel(op="read_sessions") prints it as `@agent-<id>`; you may paste either that whole handle or the bare id, both are accepted. op="read_directions" (optional): narrow the listing to that one agent. ⚠ There is NO oldest-agent fallback on ANY of these lanes, deliberately: guessing which agent you meant would direct, end or relabel one you did not address, with nothing reporting the swap — and on an end that is unrecoverable. ⚠ YOUR OWN OPERATOR\'S AGENTS ONLY. An id belonging to another member is REFUSED outright and no request is filed; a peer\'s agent is a handle you can read about and nothing you can reach.'),
     // ⚠ `outcome` ("completed" | "failed") was a param here, required by
     // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
     // 2026-08-18); nothing in this surface has an outcome any more.
@@ -252,13 +262,35 @@ exports.CHANNEL_INPUT_SHAPE = {
         .max(120)
         .optional()
         .describe('op="launch_agent" (optional): the AGENT TEMPLATE the new agent should run as — its id, or its exact name. A template is a saved identity (instructions, a default model, custom fields, attached knowledge bases) that your operator wrote; omitting this starts a blank agent, which is the right default unless you were told to use one. ⚠ IT IS RESOLVED UNDER **YOUR** VISIBILITY WHEN YOU ASK AND UNDER **THE OPERATOR\'S** WHEN THEIR MACHINE STARTS IT — two different people — so a private or team template of yours can be refused there with "could not resolve the TEMPLATE you named". ⚠ IF A NAME MATCHES MORE THAN ONE TEMPLATE YOU CAN SEE, THE CALL IS REFUSED AND EVERY MATCH IS LISTED WITH ITS ID: pick one and re-issue with the ID. Names are deliberately not unique, so nothing here guesses for you.'),
+    // ── ⚠ THE TWO PERMISSION AXES (2026-09-01, T24 + the re-posture verb) ───────
+    //
+    // ⚠ **THE ENUM MEMBERS ARE ORDERED NARROWEST FIRST AND THAT ORDER IS THE
+    // CONTRACT.** The operator's machine clamps by INDEXING into a copy of these
+    // sequences, so re-ordering either one silently inverts the bound. It is also
+    // the order a reader of the published schema will assume is a ranking, which is
+    // the one assumption here that happens to be true.
+    // ⚠ **ONE PARAM SERVES BOTH THE LAUNCH AND THE RE-POSTURE**, deliberately: it
+    // is the same axis with the same four values and the same clamp, and two names
+    // for one thing is how a caller learns to guess which one an op wants.
+    tools: zod_1.z
+        .enum(["manual", "accept_edits", "auto", "bypass"])
+        .optional()
+        .describe('op="launch_agent" / op="set_agent_mode" (optional): HOW MUCH TOOL FREEDOM to ask for, narrowest first — "manual" (every tool call waits for your operator), "accept_edits" (file edits go through, the rest waits), "auto" (work tools go through), "bypass" (widest). ⚠ YOU ARE ASKING, NOT SETTING. Your operator\'s machine narrows whatever you ask for down to the ceiling THEY chose by hand in their own settings, and it never widens past it — so asking for "bypass" does not give you bypass, and there is no argument, account or wording that changes that. Omit it to run at their stored setting, which is what almost every call should do. ⚠ Whether you were narrowed is reported back only if that machine says so; when it says nothing, the result prints "not reported" and you must not assume you got what you asked for.'),
+    messages: zod_1.z
+        .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
+        .optional()
+        .describe('op="launch_agent" / op="set_agent_mode" (optional): HOW MUCH MESSAGE FREEDOM to ask for, narrowest first — "ask" (your operator sees every message first), "auto_inbound" (incoming flows), "auto_outbound" (its posts flow), "auto_both" (widest). ⚠ ASKED FOR, NOT SET — clamped to your operator\'s own ceiling exactly as `tools` is, and additionally held to a floor for a session with no window of its own. Omit it to run at their stored setting.'),
+    chain: zod_1.z
+        .boolean()
+        .optional()
+        .describe('op="launch_agent" (optional): ask that the new agent be allowed to launch further agents of its own. ⚠ UNLIKE `tools` and `messages`, THIS ONE IS REFUSED RATHER THAN QUIETLY NARROWED when your operator\'s channel does not allow it — you get an answer instead of an agent that hits a wall mid-run after you have already handed it work that assumes workers. ⚠ OMITTING IT IS NOT `false`: omitted means "I did not ask" and inherits the channel\'s own setting, while `false` asks for it off. Ask for it only when the work genuinely needs sub-agents.'),
     wait_ms: zod_1.z.coerce
         .number()
         .int()
         .min(0)
         .max(30_000)
         .optional()
-        .describe('op="launch_agent" / op="end_agent" / op="rename_agent" (optional, default 15000, max 30000): how long to hold waiting for the operator\'s desktop to accept or refuse. ⚠ A TIMEOUT IS NOT A FAILURE — the request stays PENDING and the desktop may still take it; the result tells you the directive id and says to check read_sessions. Do not re-issue on a timeout: on a launch you would queue a SECOND agent, and on an end you would have no way to tell which request acted.'),
+        .describe('op="launch_agent" / op="end_agent" / op="rename_agent" / op="set_agent_mode" (optional, default 15000, max 30000): how long to hold waiting for the operator\'s desktop to accept or refuse. ⚠ A TIMEOUT IS NOT A FAILURE — the request stays PENDING and the desktop may still take it; the result tells you the directive id and says to check read_sessions. Do not re-issue on a timeout: on a launch you would queue a SECOND agent, and on an end or a re-posture you would have no way to tell which request acted.'),
     info_card: zod_1.z
         .object({
         hidden: zod_1.z

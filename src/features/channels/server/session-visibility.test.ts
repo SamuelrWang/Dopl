@@ -70,6 +70,35 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     // name is PEER-VISIBLE BY DESIGN (Samuel's ruling), so the property test
     // below must see it SURVIVE the peer mapper rather than be scrubbed.
     display_name: "Bug Reviewer",
+    // ── THE HEALTH SEVEN, POPULATED (2026-09-01, 20260909120000) ───────────
+    // ⚠ **AND POPULATING THEM IS AGAIN THE ENTIRE TEST CHANGE.** Registering the
+    // seven in `OPERATOR_ONLY_SESSION_COLUMNS` + `…_FIELDS` and giving them
+    // values here is what makes every property below cover them — no new case
+    // was written, which is what this suite is for. A row of NULLS would let a
+    // peer mapper that PASSED a field through look identical to one that never
+    // names it, so the property would have gone green over exactly the seven
+    // columns it was extended to cover.
+    //
+    // ⚠ **EVERY VALUE IS CHOSEN SO IT CANNOT OCCUR INSIDE THE PEER PROJECTION,
+    // AND THAT IS A REAL CONSTRAINT RATHER THAN A FLOURISH.** The value-property
+    // test does a SUBSTRING search over the peer JSON, and the peer JSON carries
+    // `name: "abcd1234"` and an ISO stamp — so `turns: 3`, `tokens_delta: 1234`
+    // and `denied_calls: 26` would all match a fragment of a legitimately
+    // peer-visible field and fail the suite over a leak nobody made. Small
+    // integers are the trap; these are picked to have no such fragment.
+    turns: 47,
+    tokens_delta: 8_675_309,
+    // ⚠ `true` rather than `false`: the peer JSON contains neither word, but
+    // this is the MACHINE's wedged flag and the adversarial value for a leak
+    // test is the one that says something.
+    stale: true,
+    denied_calls: 419,
+    // ⚠ Deliberately NOT the same string as `tool_label` above — if the two
+    // matched, a peer mapper that leaked the CURRENT tool would satisfy the
+    // "last denied tool did not leak" assertion by accident.
+    last_denied_tool: "Terraform",
+    last_wake_seq: 90_210,
+    last_wake_at: "2026-08-22T09:59:00.000Z",
     ...over,
   };
 }
@@ -155,6 +184,14 @@ describe("the OWN mapper carries everything — the split has two directions", (
     expect(own.startedAt).toBe("2026-08-22T09:40:00.000Z");
     expect(own.lastActivityAt).toBe("2026-08-22T10:04:59.000Z");
     expect(own.templateName).toBe("Acme Contract Auditor");
+    // ── THE HEALTH SEVEN (2026-09-01) ──────────────────────────────────────
+    expect(own.turns).toBe(47);
+    expect(own.tokensDelta).toBe(8_675_309);
+    expect(own.stale).toBe(true);
+    expect(own.deniedCalls).toBe(419);
+    expect(own.lastDeniedTool).toBe("Terraform");
+    expect(own.lastWakeSeq).toBe(90_210);
+    expect(own.lastWakeAt).toBe("2026-08-22T09:59:00.000Z");
   });
 
   it("is a strict superset of the peer projection", () => {
@@ -190,6 +227,66 @@ describe("the OWN mapper carries everything — the split has two directions", (
     expect(own.lastActivityAt).toBeNull();
     expect(own.model).toBeNull();
     expect(own.toolLabel).toBeNull();
+  });
+
+  /**
+   * ⚠ THE SAME RULE OVER THE HEALTH SEVEN, AND IT IS SHARPER THERE BECAUSE SIX
+   * OF THEM ARE COUNTS. `deniedCalls: 0` would report that nothing has been
+   * refused to an agent whose every shell call may be being refused silently —
+   * the exact defect `20260909120000` was written to make visible — and
+   * `stale: false` would state a health verdict on behalf of a machine that
+   * never ran the check.
+   */
+  it("an UNREPORTED health field stays null — never 0, and never false", () => {
+    const own = mapOwnSessionStateRow(
+      fullRow({
+        turns: null,
+        tokens_delta: null,
+        stale: null,
+        denied_calls: null,
+        last_denied_tool: null,
+        last_wake_seq: null,
+        last_wake_at: null,
+      })
+    );
+    expect(own.turns).toBeNull();
+    expect(own.tokensDelta).toBeNull();
+    expect(own.stale).toBeNull();
+    expect(own.deniedCalls).toBeNull();
+    expect(own.lastDeniedTool).toBeNull();
+    expect(own.lastWakeSeq).toBeNull();
+    expect(own.lastWakeAt).toBeNull();
+  });
+
+  /**
+   * ⚠ A MEASURED ZERO IS NOT AN ABSENCE, AND THE MAPPER MUST KEEP THEM APART.
+   * `0` here means "counted, and it is none"; `null` means "nothing counted".
+   * A mapper that collapsed either into the other would destroy the distinction
+   * every layer above it is built on — and a falsy-test (`row.turns || null`)
+   * is exactly how that collapse gets written.
+   */
+  it("a measured 0 survives as 0, and a measured `false` as false", () => {
+    const own = mapOwnSessionStateRow(
+      fullRow({ turns: 0, tokens_delta: 0, denied_calls: 0, stale: false })
+    );
+    expect(own.turns).toBe(0);
+    expect(own.tokensDelta).toBe(0);
+    expect(own.deniedCalls).toBe(0);
+    expect(own.stale).toBe(false);
+  });
+
+  /**
+   * ⚠ THE TWO BIGINT-BACKED HEALTH COLUMNS TAKE THE SAME CROSSING AS
+   * `tokens_spent`: PostgREST hands an INT8 back as a STRING when it will not fit
+   * a JS number. An unreadable one is UNKNOWN rather than 0, for the same reason
+   * a missing one is.
+   */
+  it("a health BIGINT arriving as a string becomes a number, unparseable becomes null", () => {
+    const own = mapOwnSessionStateRow(
+      fullRow({ tokens_delta: "8675309", last_wake_seq: "not-a-number" })
+    );
+    expect(own.tokensDelta).toBe(8_675_309);
+    expect(own.lastWakeSeq).toBeNull();
   });
 
   /**

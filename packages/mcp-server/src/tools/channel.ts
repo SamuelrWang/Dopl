@@ -54,9 +54,11 @@ import { opInvite, opOpen } from "./channel-ops-open";
 import { opPost } from "./channel-ops-write";
 import { opCreateThread, opSetThreadMode } from "./channel-ops-threads";
 import { opLaunchAgent } from "./channel-ops-launch";
-// AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER two kinds. A stop
-// verb and a display verb over the same lane, own-operator only.
+// AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER three kinds, over
+// the same lane and own-operator only. ⚠ THE POSTURE VERB IS A SEPARATE MODULE
+// (500-line cap): shared plumbing, opposite consent story — its header has why.
 import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
+import { opSetAgentMode } from "./channel-ops-agent-mode";
 import { opUpdate } from "./channel-ops-update";
 // ⚠ A structured POST, not a second delivery path — it delegates to `opPost`.
 import { opEscalate } from "./channel-ops-escalate";
@@ -174,14 +176,10 @@ export function registerChannelTool(
             runtime,
           });
         }
-        // ⚠ `channel` IS OPTIONAL HERE, AND OMITTING IT IS A DIFFERENT SCOPE
-        // FROM OMITTING IT ON `await` (T21, 2026-09-01). No channel = the whole
-        // ACCOUNT — every workspace AND every home channel — because `seq` is a
-        // TABLE-WIDE identity, so one cursor really does cover them all. The
-        // channel-less `await` is workspace-wide instead, and that asymmetry is
-        // deliberate: a hold re-proves its membership set per tick and that
-        // proof is workspace-scoped, while a PAGE proves once. Both scopes are
-        // stated on the `channel` param.
+        // ⚠ `channel` IS OPTIONAL, and omitting it here is a DIFFERENT scope
+        // from omitting it on `await` — account-wide vs workspace-wide (T21).
+        // The argument is stated ONCE, in `channel-ops-account.ts`'s header; a
+        // third copy beside the two that already carry it is what drifts.
         case "read": {
           if (args.channel === undefined || args.channel.trim() === "") {
             const miss = missingParams("read", args, ["since"]);
@@ -406,6 +404,41 @@ export function registerChannelTool(
             args.channel as string,
             args.agent_id as string,
             args.name,
+            { waitMs: args.wait_ms },
+          );
+        }
+        // ⚠ RE-POSTURE ONE OF THE OPERATOR'S OWN RUNNING AGENTS — the SAME mailbox
+        // again, `kind: "set_agent_mode"`. ⚠ IT ASKS AND NEVER WIDENS: that machine
+        // clamps each axis to the operator's own stored ceiling, so nothing here
+        // may narrate a posture as granted. ⚠ UNLIKE THE TWO ABOVE IT **IS** GATED
+        // BY THAT MACHINE'S LAUNCH TOGGLE — a posture can cause compute to be spent.
+        case "set_agent_mode": {
+          const miss = missingParams("set_agent_mode", args, ["channel", "agent_id"]);
+          if (miss) return miss;
+          // ⚠ **NOT `missingParams`, AND THAT IS THE WHOLE REASON THIS CHECK IS
+          // HAND-WRITTEN** — the same move `rename_agent`'s `name` check above
+          // makes, for the neighbouring reason. That helper answers ONE question
+          // per param ("is this one present?") and cannot express "at least one of
+          // these two": listing both would demand BOTH and delete the ordinary
+          // case (move one axis, leave the other alone), and listing neither would
+          // let an empty ask reach a row whose only possible answer is a refusal
+          // for a request that was never expressible. ⚠ The route's zod refuses it
+          // again and the column CHECK a third time at rest; this is the only one
+          // of the three that costs the caller nothing — no row, no claim, no
+          // two-minute round trip.
+          if (args.tools === undefined && args.messages === undefined) {
+            return err(
+              'op="set_agent_mode" is missing required params: pass at least one of tools (manual | accept_edits | auto | bypass) or messages (ask | auto_inbound | auto_outbound | auto_both). Passing one and omitting the other is normal — the omitted axis is left alone. ⚠ Whatever you pass is a REQUEST: your operator\'s machine narrows it to the ceiling they set by hand and never widens past it.',
+            );
+          }
+          // ⚠ THE TWO AXES GO THROUGH UNTOUCHED. The schema's enum is the only
+          // shape check this process has; the CEILING lives on the operator's
+          // machine, so nothing here may predict the outcome.
+          return opSetAgentMode(
+            client,
+            args.channel as string,
+            args.agent_id as string,
+            { tools: args.tools, messages: args.messages },
             { waitMs: args.wait_ms },
           );
         }

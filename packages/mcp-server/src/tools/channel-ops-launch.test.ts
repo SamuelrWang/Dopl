@@ -346,6 +346,17 @@ describe("the call itself", () => {
       "goal",
       "model",
       "template",
+      // THE POSTURE REQUEST (2026-09-01, T24). Three keys added by a CONSCIOUS
+      // edit here, which is this assertion working rather than being worked
+      // around: it enumerates the whole body precisely so a field nobody
+      // reviewed cannot appear in it.
+      // ⚠ WHAT IT GUARDS IS UNCHANGED — none of the three names an OPERATOR.
+      // They say how much freedom to ASK FOR on the caller own machine, and the
+      // machine clamps them to its owner ceiling; there is still no argument on
+      // this path that could name somebody else computer.
+      "tools",
+      "messages",
+      "chain",
     ]);
   });
 

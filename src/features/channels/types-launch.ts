@@ -94,8 +94,42 @@ export type LaunchRefusalReason =
  * NOT: they are the STOP verb and the DISPLAY verb, they widen nothing, and
  * `main/agent-self-ops.js`'s header carries the whole argument for why the
  * in-process twins of these two verbs already ride ungated on the same subjects.
+ *
+ * ⚠ **`set_agent_mode` IS THE FOURTH (2026-09-01, T24's sibling) AND IT DOES NOT
+ * JOIN THE UNGATED PAIR.** It is the ONE non-launch kind still behind the
+ * machine's launch-consent toggle, and the desktop states that as data rather
+ * than as a condition (`main/launch-directive-wire.js ›
+ * KINDS_NEEDING_LAUNCH_CONSENT`). The reason is the same one that let the other
+ * two out: the toggle gates LOCAL COMPUTE BEING SPENT, and a posture is the only
+ * one of the three that spends any — Axis A at `bypass` pre-approves work tools
+ * on hardware the operator pays for. Reading the three non-launch kinds as one
+ * class hands an un-armed machine the widest half of the launch lane.
  */
-export type LaunchDirectiveKind = "launch" | "end" | "rename";
+export type LaunchDirectiveKind = "launch" | "end" | "rename" | "set_agent_mode";
+
+/**
+ * THE TWO PERMISSION AXES, **ORDERED NARROWEST FIRST** — and the ORDER IS PART OF
+ * THE CONTRACT, not presentation (2026-09-01, T24).
+ *
+ * ⚠ **THE CLAMP IS AN INDEX COMPARISON OVER THESE SEQUENCES**
+ * (`dopl-desktop-app/main/launch-posture.js › narrowTo`, over
+ * `main/launch-directive-wire.js › TOOL_MODES` / `MESSAGE_MODES`). Re-ordering
+ * either union — or the array in `schema-launch.ts` that mirrors it — silently
+ * INVERTS the bound, and nothing type-checks that: a union is a set to the
+ * compiler and a sequence to that function.
+ *
+ * ⚠ **A DIRECTIVE CARRYING ONE OF THESE ASKS. IT NEVER WIDENS.** The value is
+ * clamped to the operator's own stored channel posture before it reaches a spawn
+ * or a live session. Nothing in this feature enforces that and nothing can — the
+ * ceiling is an `electron-store` record no server sees — so every sentence built
+ * from these values must say "asked for", never "set".
+ */
+export type LaunchToolMode = "manual" | "accept_edits" | "auto" | "bypass";
+export type LaunchMessageMode =
+  | "ask"
+  | "auto_inbound"
+  | "auto_outbound"
+  | "auto_both";
 
 /**
  * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
@@ -188,6 +222,59 @@ export type LaunchDirective = {
    * re-point a running instruction.
    */
   targetName: string | null;
+  /**
+   * THE POSTURE A **LAUNCH** ASKED ITS NEW SESSION TO START ON (T24). `null` on
+   * either axis is "not asked", which resolves to the operator's own stored
+   * channel value — the pre-T24 behaviour byte for byte. `null` on every kind but
+   * `launch`.
+   *
+   * ⚠ **SEPARATE FROM {@link LaunchDirective.targetToolMode} AND THEY MUST STAY
+   * SO.** One names the posture a NEW session starts on, the other the posture a
+   * RUNNING one moves to; merging them would let a `set_agent_mode` be answered
+   * by a launch's fields on a row that carried both.
+   * ⚠ **A REQUEST, NEVER A GRANT.** `main/launch-posture.js › resolveLaunch`
+   * clamps both to the operator's ceiling before a spawn sees them.
+   */
+  startToolMode: LaunchToolMode | null;
+  startMessageMode: LaunchMessageMode | null;
+  /**
+   * MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? **A TRI-STATE, and the third
+   * value is load-bearing**: `true` asks for it, `false` asks for it off, `null`
+   * did not ask and inherits the channel setting silently.
+   *
+   * ⚠ **REFUSED RATHER THAN CLAMPED WHEN THE CHANNEL FORBIDS IT**, which is the
+   * one asymmetry with the posture pair above (`launch-posture.js ›
+   * resolveChain`). A clamped posture still does the asked-for work under more
+   * supervision; a clamped chain produces an agent that hits a bound it was told
+   * it did not have, mid-run, after workers were already promised.
+   */
+  chain: boolean | null;
+  /**
+   * THE POSTURE A `set_agent_mode` ASKED A **RUNNING** AGENT TO MOVE TO. `null`
+   * on either axis means that axis was not requested, which is ordinary — a
+   * directive may move one and leave the other. At least one is non-null on a
+   * `set_agent_mode` row (the column CHECK), and both are `null` on every other
+   * kind.
+   */
+  targetToolMode: LaunchToolMode | null;
+  targetMessageMode: LaunchMessageMode | null;
+  /**
+   * **THE ECHO — WHAT THE MACHINE SAYS IT ACTUALLY APPLIED, after its clamp.**
+   *
+   * ⚠ **`null` MEANS "NOT REPORTED". IT DOES NOT MEAN "UNCLAMPED" AND IT IS NEVER
+   * THE REQUESTED VALUE ECHOED BACK.** No writer exists yet — the desktop's
+   * `decideBody` has no field for these — so all three are `null` on every live
+   * row, and a render that read `null` as agreement would tell an orchestrator
+   * its posture landed on the strength of a column nobody filled in. It would
+   * then size the work for room the agent may not have. The one statement of that
+   * render is `packages/mcp-server/src/tools/channel-ops-launch.ts › postureLine`.
+   * ⚠ `appliedChain: null` IS NOT `false` either — reading it as "no chaining"
+   * is wrong in the direction that makes an orchestrator do the work itself for
+   * no reason.
+   */
+  appliedToolMode: LaunchToolMode | null;
+  appliedMessageMode: LaunchMessageMode | null;
+  appliedChain: boolean | null;
   /** The agent instance the desktop started. Set iff `status` is `launched` —
    *  it is what the requester types as `@<agentId>` to direct it. */
   agentId: string | null;

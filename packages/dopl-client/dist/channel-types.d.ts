@@ -16,6 +16,7 @@
 export type ChannelVisibility = "public" | "private";
 export type ChannelMemberRole = "owner" | "member";
 import type { ChannelEscalationFields } from "./escalation-types.js";
+import type { ChannelSessionHealth } from "./session-health-types.js";
 export type ThreadMode = "interactive" | "autonomous";
 export type ThreadStatus = "open" | "closed";
 export type ThreadOutcome = "completed" | "failed";
@@ -235,8 +236,8 @@ export interface ChannelSessionTelemetry {
      */
     templateName: string | null;
 }
-/** The caller's OWN session — coarse projection plus the operator-only half. */
-export type ChannelSessionStateOwn = ChannelSessionState & ChannelSessionTelemetry;
+/** The caller's OWN session — coarse projection plus the operator-only halves. */
+export type ChannelSessionStateOwn = ChannelSessionState & ChannelSessionTelemetry & ChannelSessionHealth;
 /**
  * `listChannelSessions`' whole answer — the rows AND whether the machine that
  * would have written them is still heartbeating (2026-08-23, F-294).

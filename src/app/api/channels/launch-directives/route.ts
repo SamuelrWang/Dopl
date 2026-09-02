@@ -54,6 +54,18 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       // unresolvable one is a 404 `AGENT_TEMPLATE_NOT_FOUND`, the same code and
       // the same shape `/api/agent-templates/[id]/resolve` answers.
       template: input.template,
+      // ⚠ **THE POSTURE IS PASSED THROUGH AND IS NOT A GRANT** (T24, 2026-09-01).
+      // The two axes and the chain are a REQUEST: the operator's machine clamps
+      // each axis to that operator's own stored channel posture and REFUSES a
+      // chain the channel forbids (`main/launch-posture.js › resolveLaunch`).
+      // ⚠ THE SERVER CANNOT VERIFY THAT ANY MORE THAN IT CAN VERIFY THE TOGGLE
+      // ABOVE — the ceiling is an `electron-store` record — which is exactly why
+      // nothing here tries, and why no operator carve-out may be added.
+      tools: input.tools,
+      messages: input.messages,
+      // ⚠ NOT COLLAPSED WITH `||`: `false` is a real request ("chaining off"),
+      // and turning it into "did not ask" inherits the channel setting instead.
+      chain: input.chain,
     });
     // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS. Nothing failed: the
     // server looked, the operator's machine is not listening, and NO ROW WAS
