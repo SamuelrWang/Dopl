@@ -35,10 +35,27 @@ import type { Channel, ChannelMember, ChannelMessage, ChannelThread } from "@dop
  * through it. Deleting a banner is a verbosity change; deleting a neutralizer is
  * a security regression, and they are not the same edit.
  *
- * ⚠ THE SURVIVING HEADERS ARE THE NARROW ONES, on purpose. A thread listing, a
- * roster, and any body another member AUTHORED still carry their own framing:
- * those are the surfaces where a peer's text is the payload rather than a label,
- * and they are not on the hot path.
+ * ⚠ THE SURVIVING HEADERS ARE THE NARROW ONES, on purpose: a thread listing
+ * ({@link UNTRUSTED_THREAD_HEADER}) and a roster ({@link
+ * UNTRUSTED_ROSTER_HEADER}) — surfaces where a peer's text is the payload rather
+ * than a label, and not on the hot path.
+ *
+ * ⚠ **THIS COMMENT CLAIMED "and any body another member AUTHORED still carry
+ * their own framing" AND THAT WAS NOT TRUE OF THIS BRANCH** (corrected
+ * 2026-09-02). `op="read"` renders peer BODIES with no header at all. What
+ * actually holds the §10 body rule there is the INDENT: {@link clipBody} prefixes
+ * every body line with two spaces, so a body cannot begin a line, which is the
+ * rule's own stated alternative to framing. Neutralization — the half that
+ * actually defangs a hostile string — is untouched on every path.
+ *
+ * ⚠ **AND `await` IS ASYMMETRIC WITH `read` TODAY. See F-407.** The P0 bug
+ * branch restored `UNTRUSTED_BODY_HEADER` on both await lanes and pinned its
+ * POSITION, on the argument that a description is read at connect time while a
+ * body is read now. That argument is sound and applies just as well to `read`,
+ * which does not have the header — so the two ops disagree about the same class
+ * of content. **Do not "resolve" it by deleting the await header**: that is the
+ * cheap direction, and the expensive one (a caveat read only after the injected
+ * line has been read is not a caveat) is the one nobody has ruled on.
  */
 /**
  * Same framing, scoped to THREAD METADATA. Agents are instructed to call

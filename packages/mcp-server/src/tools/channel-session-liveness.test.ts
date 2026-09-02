@@ -6,8 +6,9 @@
  * `` `opus-5` `` from one call and `` `opus-5 1m` `` from another. `1m` is
  * byte-for-byte what `coarseAge` emits between 30s and 90s, it sat one clause
  * away from `started 12m ago`, and the session had NO TEMPLATE — so under
- * `SESSION_TELEMETRY_NOTE`'s "two bare names" rule an operator reads a WINDOW
- * SUFFIX as a template or a model. The leak is not in either call path: it is the
+ * the doctrine's "two bare names" rule (once `SESSION_TELEMETRY_NOTE`'s, now
+ * `CHANNEL_DOCTRINE`'s) an operator reads a WINDOW SUFFIX as a template or a
+ * model. The leak is not in either call path: it is the
  * model id itself. The bundled CLI ships `claude-opus-5[1m]` for the explicit
  * long-context variant (`main/session-model.js › contextWindowFor` reads exactly
  * that suffix), and `narration.ts › neutralizeInline` blanks `[` and `]` to
@@ -37,12 +38,22 @@ import type {
 } from "@dopl/client";
 import { opReadSessions } from "./channel-ops-read";
 import {
-  SESSION_TELEMETRY_NOTE,
   formatSessionLine,
-  sessionBlockLines,
   sessionLegend,
   shortModelLabel,
 } from "./channel-session-render";
+// ⚠ THE TABLE MOVED OUT OF THE RENDERER (T13, 2026-09-02) at the 500-line cap,
+// along the seam that was already there: `channel-session-render.ts` answers
+// "what STATE is this row in" and still owns every predicate above, and
+// `channel-session-table.ts` answers "how does a PAGE of them render". Both
+// surfaces this file diffs are built from the constants below, so the identity
+// case still compares two renders of ONE definition.
+import { SESSION_TABLE_HEAD, sessionBlockLines } from "./channel-session-table";
+// ⚠ `SESSION_TELEMETRY_NOTE` IS DELETED (T13). Its ~800 standing chars rode on
+// every `read_sessions` page; the promises it made are in `CHANNEL_DOCTRINE`,
+// served once by op="help" and the MCP resource. The F-293 pin below reads the
+// promise there rather than dropping it with the constant.
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 
 const NOW = Date.parse("2026-08-23T12:00:00.000Z");
 const fresh = new Date(NOW - 5_000).toISOString();
@@ -97,9 +108,23 @@ function stubClient(
   } as unknown as DoplClient;
 }
 
-/** The session LINES out of whatever a path rendered — the only part both share. */
+/**
+ * The session ROWS out of whatever a path rendered — the only part both share.
+ *
+ * ⚠ **TABLE ROWS SINCE T13, NOT `- **` LINES.** Both surfaces stopped rendering
+ * the prose line and now emit `SESSION_TABLE_HEAD` + one `sessionRow` per
+ * session, so the shape this diff reads changed and the diff itself did not: the
+ * header and its alignment row are dropped (they are literals, held by identity
+ * against the exported constant rather than by a `---` sniff, so a future column
+ * cannot slip past this filter) and what is left is exactly one row per session.
+ * ⚠ The old filter would now match NOTHING and every case below would pass
+ * vacuously by comparing two empty arrays — which is why the emptiness is
+ * asserted at the call sites.
+ */
 function sessionLines(text: string): string[] {
-  return text.split("\n").filter((l) => l.startsWith("- **"));
+  return text
+    .split("\n")
+    .filter((l) => l.startsWith("| ") && !SESSION_TABLE_HEAD.includes(l));
 }
 
 beforeEach(() => {
@@ -139,7 +164,13 @@ describe("read_sessions and the await session block render IDENTICALLY", () => {
       const res = await opReadSessions(stubClient([session]));
       const fromRead = sessionLines(res.content[0].text);
       const fromAwait = sessionLines(sessionBlockLines([session]).join("\n"));
+      // ⚠ THE LENGTH IS THE GUARD THAT THE DIFF IS REAL. `sessionLines` filters,
+      // so a surface that renamed or dropped its rows would hand this an empty
+      // array from BOTH sides and the equality below would pass on nothing.
       expect(fromRead).toHaveLength(1);
+      // ⚠ AND A SURFACE THAT SHIPPED ITS OWN HEADER WOULD FAIL HERE TOO — the
+      // filter drops only `SESSION_TABLE_HEAD` verbatim, so a hand-rolled one
+      // survives as a "row" on one side and not the other.
       expect(fromAwait).toEqual(fromRead);
     });
   }
@@ -152,8 +183,12 @@ describe("read_sessions and the await session block render IDENTICALLY", () => {
   it("and identically again once presence is in play", async () => {
     const session = rich({ updatedAt: quietFor(10 * 60_000) });
     const res = await opReadSessions(stubClient([session], true));
+    const fromRead = sessionLines(res.content[0].text);
+    // ⚠ Same reason as above: without this the equality can be satisfied by two
+    // empty filters, which is precisely how this case went quiet under T13.
+    expect(fromRead).toHaveLength(1);
     expect(sessionLines(sessionBlockLines([session], undefined, true).join("\n")))
-      .toEqual(sessionLines(res.content[0].text));
+      .toEqual(fromRead);
   });
 });
 
@@ -197,7 +232,7 @@ describe("F-293 — a model id can never split into two bare names", () => {
   /**
    * ⚠ THE PROMISE IS ONLY WORTH ANYTHING IF IT IS CHECKABLE. With no template,
    * a two-token model span reads as `template · model` to exactly the skimming
-   * orchestrator `SESSION_TELEMETRY_NOTE` is written for.
+   * orchestrator the doctrine's READING "read_sessions" section is written for.
    */
   it("with NO template the line carries exactly ONE bare name", () => {
     const line = formatSessionLine(rich({ model: "claude-opus-5[1m]" }), {
@@ -209,7 +244,10 @@ describe("F-293 — a model id can never split into two bare names", () => {
     const clauses = line.split(" · ");
     const bareNames = clauses.filter((c) => /^`[^`]+`$/.test(c));
     expect(bareNames).toEqual(["`opus-5-1m`"]);
-    expect(SESSION_TELEMETRY_NOTE).toContain("ONE unbroken token");
+    // ⚠ RE-POINTED, NOT DROPPED (T13). The promise this render keeps used to be
+    // a constant printed under every page; it is doctrine now, so the words are
+    // asserted where a reader is actually served them.
+    expect(CHANNEL_DOCTRINE).toContain("ONE unbroken token");
   });
 
   it("still never invents a name, and still renders an unknown id as itself", () => {
@@ -340,10 +378,16 @@ describe("F-294 — an idle-but-alive agent is no longer reported as maybe-gone"
 });
 
 describe("F-294 — the legend explains the reading the page actually contains", () => {
+  /**
+   * ⚠ **THE CAVEAT MOVED WORDS, NOT MEANING** (T13). The quiet reading is
+   * spelled `(unchanged)` in a state CELL now — the age it used to carry
+   * inline is read off the `idle` column — so the legend teaches THAT form.
+   * The assertion is still "the alive branch is taught and the offline one is
+   * not"; only the string the branch is named by changed.
+   */
   it("a page of quiet rows under a live machine teaches the QUIET caveat", () => {
     const legend = sessionLegend(true, true);
-    expect(legend).toContain("quiet Xm");
-    expect(legend).toContain("ALIVE");
+    expect(legend).toContain("**(unchanged)** is ALIVE");
     expect(legend).not.toContain("desktop may be asleep");
     // ⚠ The one row that can still take the other branch is named, so a mixed
     // page is not left with an unexplained form.
@@ -354,23 +398,31 @@ describe("F-294 — the legend explains the reading the page actually contains",
     for (const operatorOnline of [false, undefined]) {
       const legend = sessionLegend(true, operatorOnline);
       expect(legend).toContain("Treat it as UNKNOWN");
-      expect(legend).not.toContain("quiet Xm");
+      // ⚠ `(unchanged)` for `quiet Xm`: a page whose cells all read "last
+      // reported <state>" must not be handed the alive-branch caveat, which is
+      // the wrong lesson and worse than none.
+      expect(legend).not.toContain("(unchanged)");
     }
   });
 
   it("no quiet row, no caveat at all", () => {
-    expect(sessionLegend(false, true)).not.toContain("quiet Xm");
-    expect(sessionLegend(false, false)).not.toContain("last reported");
+    expect(sessionLegend(false, true)).not.toContain("(unchanged)");
+    expect(sessionLegend(false, false)).not.toContain("last reported <state>");
   });
 
-  it("the await block branches the same way its lines did", () => {
+  it("the await block branches the same way its ROWS did", () => {
     const stale = rich({ updatedAt: quietFor(10 * 60_000) });
     const alive = sessionBlockLines([stale], NOW, true).join("\n");
     const gone = sessionBlockLines([stale], NOW, false).join("\n");
-    expect(alive).toContain("quiet Xm");
+    // ⚠ THE ROW AND THE CAVEAT MOVE TOGETHER, and both are checked on each
+    // branch — a block whose cells say one thing and whose closing line says
+    // the other is the exact failure this case was written for.
+    expect(alive).toContain("| working (unchanged) ·");
+    expect(alive).toContain("**(unchanged)** is ALIVE");
     expect(alive).not.toContain("desktop may be gone");
+    expect(gone).toContain("| last reported working ·");
     expect(gone).toContain("desktop may be gone");
-    expect(gone).not.toContain("quiet Xm");
+    expect(gone).not.toContain("(unchanged)");
   });
 });
 
@@ -380,15 +432,29 @@ describe("read_sessions carries the presence fact end to end", () => {
   it("an older server (no key) renders exactly the pre-F-294 page", async () => {
     const session = rich({ updatedAt: quietFor(10 * 60_000) });
     const text = (await opReadSessions(stubClient([session]))).content[0].text;
-    expect(text).toContain("its desktop may be offline");
+    // ⚠ THE HEDGE IS IN THE CELL NOW, AND IT IS STILL FIRST. `its desktop may
+    // be offline` was the prose line's trailing clause; the row states the
+    // tense and the LEGEND carries the "may be asleep, signed out, or gone"
+    // half exactly once for the page instead of once per row.
+    expect(text).toContain("| last reported working ·");
+    expect(text).not.toContain("(unchanged)");
+    expect(text).toContain("its desktop may be asleep");
     expect(text).toContain("Treat it as UNKNOWN");
   });
 
-  it("a live heartbeat changes the line AND the legend together", async () => {
+  it("a live heartbeat changes the ROW AND the legend together", async () => {
     const session = rich({ updatedAt: quietFor(10 * 60_000) });
     const text = (await opReadSessions(stubClient([session], true))).content[0].text;
-    expect(text).toContain("quiet 10m");
-    expect(text).toContain("quiet Xm");
-    expect(text).not.toContain("may be offline");
+    // ⚠ `quiet 10m` SPLIT INTO TWO CELLS (T13) and both halves are still
+    // asserted: the state cell carries the READING and the `idle` column
+    // carries the NUMBER. Dropping either would let a page say "alive" with no
+    // age, or print an age with no reading of it.
+    expect(text).toContain("| working (unchanged) ·");
+    expect(text).toContain("| 10m |");
+    expect(text).toContain("**(unchanged)** is ALIVE");
+    // ⚠ Neither the row nor the legend may still hedge — this is the "together"
+    // the case is named for, and the offline half must be gone from BOTH.
+    expect(text).not.toContain("last reported working");
+    expect(text).not.toContain("its desktop may be asleep");
   });
 });

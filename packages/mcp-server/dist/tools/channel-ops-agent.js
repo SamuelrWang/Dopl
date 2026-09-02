@@ -38,8 +38,9 @@ exports.opRenameAgent = opRenameAgent;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const channel_agent_id_1 = require("./channel-agent-id");
+// ⚠ ONE write-result renderer, shared with post / create_thread / launch / direct.
+const channel_facts_1 = require("./channel-facts");
 /** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed)";
 /** ⚠ MIRRORS `channel-ops-launch.ts`. The schema is what an MCP client sees;
  *  these are what run. Deliberately the same numbers: three ops holding on one
  *  mailbox that disagreed about how long to wait would be three answers to one
@@ -71,41 +72,33 @@ function apiErrorCode(e) {
  * ⚠ EACH SENTENCE ENDS IN WHAT TO DO, because a reason with no next action gets
  * an agent to retry the same call.
  */
-const REFUSAL_SENTENCES = {
-    // ⚠ THE ONE THAT IS NOT A FAULT, AND THE ONE THAT WILL BE SEEN MOST. On an END
-    // this is very often the outcome the caller wanted, reached by the agent simply
-    // finishing. The sentence must not send anyone to debug it.
-    "no-session": "no live session of yours carries that agent id on that machine. The ordinary cause is that the agent ALREADY FINISHED — for an end, that is the outcome you wanted, reached without you. Check with dopl_channel(op=\"read_sessions\"): if it is not listed, there is nothing left to end and nothing is wrong. If it IS listed, the id may be one of your operator's OTHER machines' — those are not reachable from the one that answered.",
-    // ⚠ RENAME-ONLY, and the sentence says exactly what would be accepted, because
-    // the caller can fix this one on its own in a single retry.
-    "bad-name": "that machine's sanitizer refused the NAME. It takes 1-60 visible characters on ONE line; control, zero-width and bidi characters are refused rather than stripped, and an EMPTY name is legal and clears back to \"Agent #<id>\". Nothing else about the agent changed. Re-issue with a plain one-line name.",
-    busy: "the machine is under load and declined FOR NOW. This one is genuinely temporary — it is reasonable to ask again in a minute or two, once, and to stop if it refuses the same way twice.",
-    // ⚠ THE THREE WORDS BELOW ARE LAUNCH-SHAPED AND ARRIVE HERE ONLY AS THE
-    // MACHINE'S CATCH-ALL. Their launch sentences would be actively wrong here
-    // ("wait for an agent to finish" before ending one), so each says what it can
-    // honestly say and stops.
-    cap: "the machine answered with its concurrency word, which is not a state an end or a rename can be blocked by — treat it as the machine declining rather than as a slot problem. Check dopl_channel(op=\"read_sessions\") and ask your operator if it repeats.",
-    "no-sdk": "that machine has NO AGENT RUNTIME available. Re-issuing will not change that. Tell your operator; it is a setup problem on their side.",
-    "auth-hold": "the desktop is SIGNED OUT or its credential is being held, so it will act on nothing until a human signs in. Tell your operator — this needs them, not another call.",
-    // ⚠ **THE COPY THAT MUST NOT BE COPIED FROM THE LAUNCH MAP.** There, `no-bridge`
-    // is the operator's launch toggle being off and the advice is "ask them to turn
-    // it on". THAT TOGGLE DOES NOT GATE THESE TWO VERBS, so repeating the advice
-    // here would send an orchestrator to request a permission unrelated to what
-    // failed — and, worse, to conclude the operator had denied it something they
-    // never denied.
-    "no-bridge": "the machine could not take the request — most often it is not watching that channel, so it has no context for the agent you named. It is NOT a permission setting: your operator's launch-over-MCP toggle governs STARTING agents and has no bearing on ending or renaming one, so do not ask for it to be turned on. Check dopl_channel(op=\"read_sessions\") for which channel that agent is actually in and name that channel instead.",
-    "no-counterparty": "the machine answered with a word that belongs to starting an agent, not to managing one. Nothing was changed. Check dopl_channel(op=\"read_sessions\") and report it to your operator if it repeats.",
-    "no-template": "the machine answered with a word that belongs to starting an agent, not to managing one. Nothing was changed. Check dopl_channel(op=\"read_sessions\") and report it to your operator if it repeats.",
+/**
+ * MAY THE CALLER ASK AGAIN? — ⚠ the ONE thing a refusal is read for, kept as a
+ * field where the sentence became doctrine (T10, 2026-09-02).
+ *
+ * ⚠ THE NINE WORDS ARE STILL THE WIRE CONTRACT and the result still renders the
+ * one it got. The paragraph per word is in `channel-doctrine.ts`'s WHY A LAUNCH,
+ * END, DIRECTION OR RENAME IS REFUSED section, which covers all three mailboxes
+ * with ONE text — this lane, the launch lane and the direction lane overlap on
+ * most of the vocabulary, and three copies of one explanation is how they drift.
+ *
+ * ⚠ `no-session` ON AN END IS USUALLY GOOD NEWS and the doctrine says so: the
+ * agent already finished and there was nothing left to stop. That is why it is
+ * `no` here rather than `once` — there is nothing to retry, not because a retry
+ * would fail. ⚠ `no-bridge` is the LAUNCH toggle and does NOT gate these two
+ * verbs, so arriving here on it means the machines disagree; still `no`.
+ */
+const RETRY_ADVICE = {
+    cap: "no",
+    busy: "once",
+    "no-sdk": "no",
+    "auth-hold": "no",
+    "no-bridge": "no",
+    "no-counterparty": "no",
+    "no-template": "no",
+    "no-session": "no",
+    "bad-name": "no",
 };
-function refusalSentence(reason) {
-    if (reason === null) {
-        // ⚠ Reachable only if a machine wrote a refusal with no reason, which the
-        // column's own CHECK forbids. Said honestly rather than guessed at.
-        return "the machine refused and gave no reason. That should not happen; report it to your operator.";
-    }
-    return (REFUSAL_SENTENCES[reason] ??
-        "the machine refused for a reason this build does not recognize. Report it to your operator rather than re-issuing.");
-}
 /**
  * ⚠ **THE FOREIGN-AGENT REFUSAL IS THE ONE THIS SURFACE ANSWERS ITSELF**, before
  * any row exists — a 403 `CHANNEL_AGENT_FOREIGN` out of the create. Every other
@@ -116,6 +109,12 @@ function refusalSentence(reason) {
  * membership of the channel, inside which `op="members"` and `op="read_sessions"`
  * are readable anyway. A 404 here would tell an orchestrator its OWN agent had
  * vanished and send it to re-launch — the expensive wrong answer.
+ *
+ * ⚠ IT STAYS PROSE WHERE THE SUCCESS PATHS BECAME FACT LINES (T10, 2026-09-02),
+ * and the distinction is the tier's own: a REFUSAL is not narration under a write
+ * that happened, it is the answer to a call that was never made. It also has to
+ * close a door — "do not look for another route" — which is an instruction, not
+ * a fact about a row.
  */
 function foreignAgent(agentId, verb) {
     return (0, respond_1.err)([
@@ -124,15 +123,27 @@ function foreignAgent(agentId, verb) {
         `dopl_channel(op="read_sessions") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
     ].join("\n"));
 }
-/** The line a PENDING (or expired) agent directive ends on. ⚠ Says the id,
- *  because the id is the only handle the caller has left, and says NOT to
- *  re-issue. */
-function pendingLines(d, verb) {
-    return [
-        `The request is still PENDING — id \`${d.id}\`, and it stays answerable until ${d.expiresAt}.`,
-        `⚠ A TIMEOUT IS NOT A REFUSAL. Your operator's machine may still take it; nothing has been cancelled. **DO NOT ISSUE THIS CALL AGAIN** — a second directive is a second request for the same change, and on an end you would have no way to tell which one acted.`,
-        `To find out what happened: dopl_channel(op="read_sessions"). ${verb === "ended" ? "The agent disappearing from that list is the answer." : "The rename is DISPLAY-ONLY and lives on your operator's machine, so read_sessions will NOT show it — the handle is unchanged either way. Nothing here can confirm a rename landed."}`,
-    ];
+/**
+ * THE PENDING FACTS. ⚠ **`retry=no` IS THE ONE INSTRUCTION THAT COULD NOT BECOME
+ * A BARE FACT AND DID NOT**: a second directive is a second request for the same
+ * change, and on an END nothing could tell you afterwards which one acted.
+ *
+ * ⚠ `confirm=` NAMES THE SURFACE THAT ANSWERS, and the two verbs have DIFFERENT
+ * answers, which is why it is a field rather than one sentence. An END is
+ * confirmable — the agent disappearing from `read_sessions` is the answer. A
+ * RENAME is NOT: it is display-only and lives on the operator's machine, so
+ * `read_sessions` keeps printing the id and nothing here can confirm it landed.
+ * Collapsing those into one line would promise a confirmation for the rename
+ * that does not exist.
+ */
+function pendingFacts(d, kind) {
+    return {
+        directive: d.id,
+        claimed: d.status === "claimed",
+        expires: d.expiresAt,
+        retry: false,
+        confirm: kind === "end" ? "read_sessions" : "none",
+    };
 }
 /** Shared hold: poll the directive row until it settles or the deadline passes.
  *  ⚠ POLLS THE ROW, never an `await` — a directive is not a message, has no
@@ -183,11 +194,15 @@ async function fileAndHold(client, ref, input, waitMs) {
         return {
             done: true,
             offline: true,
-            response: (0, respond_1.ok)([
-                `Nothing was ${input.kind === "end" ? "ended" : "renamed"} — your operator's machine is not reporting in, so there is nothing listening. **No request was filed**, so there is nothing pending and nothing to cancel.`,
-                `⚠ THIS IS A HINT, NOT A VERDICT ON A PARTICULAR MACHINE. What was checked is a per-(user, workspace) presence heartbeat: it says no listener of your operator's has checked in recently. It cannot tell you WHICH of their machines is up.`,
-                `Most likely the machine is asleep, closed, or signed out. ⚠ NOTE FOR AN END: an agent on a machine that is not running is not running either — there may be nothing left to stop. Ask your operator, or check dopl_channel(op="read_sessions") when they are back.`,
-            ].join("\n")),
+            // ⚠ `filed=no` IS THE LOAD-BEARING HALF — nothing was written, so there is
+            // nothing pending and nothing to cancel, the opposite of the PENDING
+            // shape. ⚠ PRESENCE IS A HINT, NOT A VERDICT: a per-(user, workspace)
+            // heartbeat cannot say WHICH machine is up. The doctrine says so.
+            response: (0, respond_1.ok)((0, channel_facts_1.factsLine)(input.kind === "end" ? "not ended" : "not renamed", {
+                agent: `@agent-${input.agentId}`,
+                reason: "offline",
+                filed: false,
+            })),
         };
     }
     return { done: false, directive: await holdFor(client, created.directive, waitMs ?? WAIT_DEFAULT_MS) };
@@ -208,7 +223,9 @@ async function opEndAgent(client, ref, agentId, opts = {}) {
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
-    const label = (0, channel_shared_1.inlineOr)(channel.name, NO_NAME);
+    // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result on this lane is a
+    // fact line keyed on the AGENT, which is what the caller acts on; the channel
+    // is the caller's own argument from this call and echoing it bought nothing.
     // ⚠ STRIPPED, NOT VALIDATED, and the shared helper is the one `direct_agent`
     // uses: `read_sessions` prints `@agent-<id>`, so that is what a model copies,
     // and refusing the pasted form would 400 a caller for doing exactly what the
@@ -219,31 +236,41 @@ async function opEndAgent(client, ref, agentId, opts = {}) {
     if (filed.done)
         return filed.response;
     const d = filed.directive;
+    // ── THE RESULT: ONE LINE OF FACTS (T10, 2026-09-02) ──────────────────────
+    //
+    // ⚠ WHAT LEFT. Four paragraphs rode on every successful end: that nothing else
+    // changed, that the handle is spent, that ids are never reused, and that
+    // "ended" means the machine said so. All four are true of EVERY end and are in
+    // `channel-doctrine.ts` under YOUR OWN AGENTS.
+    //
+    // ⚠ `handle=spent` IS THE ONE THAT HAD TO SURVIVE AS A FACT. Instance ids are
+    // never reused, so `@agent-<id>` now addresses nothing and there is no undo and
+    // no resume — an orchestrator that keeps writing that handle is talking to
+    // nobody, silently, which is the failure this lane exists inside.
     if (d.status === "done") {
-        return (0, respond_1.ok)([
-            `Agent \`${agent}\` was ENDED in **${label}**. Terminal for that session — it will not answer, post or resume.`,
-            `⚠ NOTHING ELSE CHANGED. The thread it was working (if any) is untouched, and every message it posted stays in the channel attributed exactly as before. An end stops a RUNNER; it removes no history.`,
-            `⚠ ITS HANDLE IS SPENT. \`@agent-${agent}\` now addresses nothing, and instance ids are not reused — if you need that work continued, launch a new agent with dopl_channel(op="launch_agent", channel="${ref}", goal=...) and carry the context over yourself.`,
-            `⚠ "Ended" means THE MACHINE SAID SO. There is no second source; dopl_channel(op="read_sessions") is where you confirm it is gone.`,
-        ].join("\n"));
+        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("ended", { agent: `@agent-${agent}`, handle: "spent", filed: true }));
     }
     if (d.status === "refused") {
-        return (0, respond_1.ok)([
-            `Agent \`${agent}\` was NOT ended in **${label}** — your operator's machine REFUSED, and ${refusalSentence(d.refusalReason)}`,
-            `⚠ A refusal is a normal answer from a machine its owner controls, not an error and not a bug in your request. Nothing is pending; there is nothing to cancel.`,
-        ].join("\n"));
+        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not ended", {
+            agent: `@agent-${agent}`,
+            reason: d.refusalReason ?? undefined,
+            // ⚠ `-` WHEN THE MACHINE NAMED NO REASON, never a guessed verdict.
+            retry: d.refusalReason ? RETRY_ADVICE[d.refusalReason] : undefined,
+            filed: true,
+        }));
     }
     if (d.status === "expired") {
-        return (0, respond_1.ok)([
-            `Agent \`${agent}\` was NOT ended in **${label}** — the request LAPSED before any machine answered it (id \`${d.id}\`). Most often that means the desktop went to sleep.`,
-            `Nothing is pending now. dopl_channel(op="read_sessions") will show you whether that agent is still running; ask once more only if it is.`,
-        ].join("\n"));
+        // ⚠ LAPSED IS NOT REFUSED: no machine ever answered, so nothing is
+        // outstanding — but check `read_sessions` before asking again, because an
+        // agent that has since finished needs no end at all.
+        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not ended", {
+            agent: `@agent-${agent}`,
+            directive: d.id,
+            reason: "expired",
+            filed: true,
+        }));
     }
-    const claimed = d.status === "claimed" ? ` A machine has TAKEN it, so it is likely to land shortly.` : "";
-    return (0, respond_1.ok)([
-        `No answer yet from your operator's machine about ending agent \`${agent}\` in **${label}**.${claimed}`,
-        ...pendingLines(d, "ended"),
-    ].join("\n"));
+    return (0, respond_1.ok)((0, channel_facts_1.factsLine)("pending", { agent: `@agent-${agent}`, ...pendingFacts(d, "end") }));
 }
 /**
  * RENAME ONE OF THE OPERATOR'S OWN AGENTS.
@@ -260,38 +287,57 @@ async function opRenameAgent(client, ref, agentId, name, opts = {}) {
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
-    const label = (0, channel_shared_1.inlineOr)(channel.name, NO_NAME);
+    // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result on this lane is a
+    // fact line keyed on the AGENT, which is what the caller acts on; the channel
+    // is the caller's own argument from this call and echoing it bought nothing.
     const agent = (0, channel_agent_id_1.bareAgentId)(agentId);
     const clearing = name.trim() === "";
     const filed = await fileAndHold(client, ref, { kind: "rename", channel: channel.id, agentId: agent, name }, opts.waitMs);
     if (filed.done)
         return filed.response;
     const d = filed.directive;
+    // ── THE RESULT: ONE LINE OF FACTS (T10, 2026-09-02) ──────────────────────
+    //
+    // ⚠ THE TWO PARAGRAPHS THAT LEFT ARE THE SAME TWO ON EVERY RENAME — that the
+    // name is display-only on one machine, and that `read_sessions` keeps printing
+    // the id. They are in `channel-doctrine.ts`; what stays is the pair of fields
+    // that carry the SAME warning without the prose.
+    //
+    // ⚠ `handle=unchanged` IS NOT DECORATION. `@agent-<id>` stays the ONLY address
+    // — nothing resolves an agent by its name, which is exactly what stops a
+    // rename silently re-pointing a running instruction — and an orchestrator that
+    // believes otherwise starts addressing a name that reaches nobody.
+    // ⚠ `confirm=none` IS THE HONEST ANSWER and must not become `read_sessions`:
+    // the name lives on the operator's desktop and reaches no server, so that
+    // listing keeps printing the id. That is correct rather than a stale read, and
+    // there is no surface here that can confirm a rename landed.
     if (d.status === "done") {
-        const head = clearing
-            ? `Agent \`${agent}\`'s display name was CLEARED in **${label}** — your operator sees it as "Agent #${agent}" again.`
-            : `Agent \`${agent}\` is now displayed as "${(0, channel_shared_1.inlineOr)(name, NO_NAME)}" in **${label}**.`;
-        return (0, respond_1.ok)([
-            head,
-            `⚠ DISPLAY ONLY, AND ON ONE MACHINE. \`@agent-${agent}\` is unchanged and remains the ONLY address — nothing resolves an agent by its name, which is what stops a rename silently re-pointing a running instruction.`,
-            `⚠ YOU WILL NOT SEE IT FROM HERE. The name is stored on your operator's desktop and reaches no server, so dopl_channel(op="read_sessions") keeps printing the id. That is correct, not a stale read — do not re-issue expecting the listing to change.`,
-        ].join("\n"));
+        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("renamed", {
+            agent: `@agent-${agent}`,
+            // ⚠ CLEARED IS ITS OWN OUTCOME, not an empty name: the display falls
+            // back to `Agent #<id>`, which is a different thing from "unnamed".
+            name: clearing ? "cleared" : name,
+            handle: "unchanged",
+            confirm: "none",
+        }));
     }
     if (d.status === "refused") {
-        return (0, respond_1.ok)([
-            `Agent \`${agent}\` was NOT renamed in **${label}** — your operator's machine REFUSED, and ${refusalSentence(d.refusalReason)}`,
-            `⚠ Nothing about the agent changed: it is still running, still addressed as \`@agent-${agent}\`, and still carries whatever name it had.`,
-        ].join("\n"));
+        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not renamed", {
+            agent: `@agent-${agent}`,
+            reason: d.refusalReason ?? undefined,
+            retry: d.refusalReason ? RETRY_ADVICE[d.refusalReason] : undefined,
+            // ⚠ NOTHING ABOUT THE AGENT CHANGED — it is still running and still
+            // addressed the same way. A refused rename is cosmetic, not a fault.
+            agentChanged: false,
+        }));
     }
     if (d.status === "expired") {
-        return (0, respond_1.ok)([
-            `Agent \`${agent}\` was NOT renamed in **${label}** — the request LAPSED before any machine answered it (id \`${d.id}\`). Most often that means the desktop went to sleep.`,
-            `Nothing is pending. A rename is cosmetic and costs nothing to skip — re-issue only if the label matters to your operator.`,
-        ].join("\n"));
+        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not renamed", {
+            agent: `@agent-${agent}`,
+            directive: d.id,
+            reason: "expired",
+            agentChanged: false,
+        }));
     }
-    const claimed = d.status === "claimed" ? ` A machine has TAKEN it, so it is likely to land shortly.` : "";
-    return (0, respond_1.ok)([
-        `No answer yet from your operator's machine about renaming agent \`${agent}\` in **${label}**.${claimed}`,
-        ...pendingLines(d, "renamed"),
-    ].join("\n"));
+    return (0, respond_1.ok)((0, channel_facts_1.factsLine)("pending", { agent: `@agent-${agent}`, ...pendingFacts(d, "rename") }));
 }
