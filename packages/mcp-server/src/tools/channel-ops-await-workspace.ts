@@ -34,7 +34,7 @@ import type {
   WorkspaceChannelMessage,
 } from "@dopl/client";
 import { ok, type ToolResponse } from "./respond";
-import { inlineOr, neutralizeInline } from "./channel-shared";
+import { neutralizeInline } from "./channel-shared";
 // ⚠ `groupByChannel` MOVED to `channel-render.ts` on 2026-09-01, when the
 // ACCOUNT-wide read needed the same grouping. It was private here; a second copy
 // would be a second opinion about which channel ref a per-message remedy points
@@ -66,9 +66,6 @@ const AWAIT_MAX_POLLS = Math.ceil(AWAIT_HOLD_CEILING_MS / AWAIT_POLL_MS) + 2;
 
 /** A hold ending this far under the ASK did not hold — see the per-channel op. */
 const AWAIT_SHORT_HOLD_MS = 60_000;
-
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed channel)";
 
 /**
  * A thrown inner-poll failure reduced to one short NEUTRALIZED line.

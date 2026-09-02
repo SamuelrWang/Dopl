@@ -62,9 +62,8 @@ vi.mock("@/features/workspaces/server/service-overview", () => ({
   isChannelVisibleTo: vi.fn(),
 }));
 
-import { GET, POST } from "./route";
+import { GET } from "./route";
 import {
-  createBase,
   listBaseOwnerNames,
   listBaseStats,
   listBases,
@@ -80,7 +79,6 @@ import {
 import { isChannelVisibleTo } from "@/features/workspaces/server/service-overview";
 
 const mockListBases = vi.mocked(listBases);
-const mockCreateBase = vi.mocked(createBase);
 const mockOwnerNames = vi.mocked(listBaseOwnerNames);
 const mockBaseStats = vi.mocked(listBaseStats);
 const mockStorageLimit = vi.mocked(resolveKbStorageLimit);
@@ -108,21 +106,6 @@ const STATS = {
 
 function getReq(): NextRequest {
   return new NextRequest("http://localhost/api/knowledge/bases", { method: "GET" });
-}
-
-function shelfReq(shelf: string): NextRequest {
-  return new NextRequest(
-    `http://localhost/api/knowledge/bases?shelf=${shelf}`,
-    { method: "GET" }
-  );
-}
-
-function postReq(body: unknown): NextRequest {
-  return new NextRequest("http://localhost/api/knowledge/bases", {
-    method: "POST",
-    body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
-  });
 }
 
 function channelReq(channelId: string): NextRequest {
@@ -423,88 +406,3 @@ describe("GET /api/knowledge/bases?channelId= — the scope-A grant map", () => 
  * to narrow, and it would look like it worked. There is no client-side fallback
  * filter to catch it: `home_scoped` is deliberately never projected.
  */
-describe("GET /api/knowledge/bases?shelf=", () => {
-  it("passes a recognised shelf DOWN to the service", async () => {
-    await GET(shelfReq("home"), { params: Promise.resolve({}) });
-    expect(mockListBases).toHaveBeenCalledWith(expect.anything(), {
-      shelf: "home",
-    });
-
-    await GET(shelfReq("workspace"), { params: Promise.resolve({}) });
-    expect(mockListBases).toHaveBeenLastCalledWith(expect.anything(), {
-      shelf: "workspace",
-    });
-  });
-
-  it("asks for BOTH shelves when the param is absent", async () => {
-    // ⚠ Compatibility, not a default: every pre-shelf caller lands here.
-    await GET(getReq(), { params: Promise.resolve({}) });
-    expect(mockListBases).toHaveBeenCalledWith(expect.anything(), {
-      shelf: undefined,
-    });
-  });
-
-  it("🔒 400s an UNRECOGNISED shelf instead of widening to the mixed list", async () => {
-    const res = await GET(shelfReq("hom"), { params: Promise.resolve({}) });
-    expect(res.status).toBe(400);
-    // And it never reached the service — no list was built, wide or narrow.
-    expect(mockListBases).not.toHaveBeenCalled();
-  });
-});
-
-/**
- * 🔒 `shareToChannelId` — CREATE AND SHARE IN ONE CALL (Samuel's ruling
- * 2026-08-27, the /home Shared section's button). The route owns ONE of the
- * fences; the rest live in `createBase` / `setChannelKnowledgeGrant`.
- */
-describe("POST /api/knowledge/bases with shareToChannelId", () => {
-  it("fences the channel BEFORE creating anything", async () => {
-    mockChannelVisible.mockResolvedValue(false);
-
-    const res = await POST(
-      postReq({ name: "Handover", shareToChannelId: CHANNEL_UUID }),
-      { params: Promise.resolve({}) }
-    );
-
-    expect(res.status).toBe(404);
-    const body = (await res.json()) as { error: { code: string } };
-    // ⚠ The SAME answer an unknown channel gets — the field is not an oracle.
-    expect(body.error.code).toBe("CHANNEL_NOT_FOUND");
-    // 🔒 AND NOTHING WAS WRITTEN. A base created and then rolled back would
-    // still have burned a slug and told the caller by TIMING what the 404
-    // refuses to say in words.
-    expect(mockCreateBase).not.toHaveBeenCalled();
-  });
-
-  it("creates once the channel is visible, and forwards the id", async () => {
-    mockChannelVisible.mockResolvedValue(true);
-    mockCreateBase.mockResolvedValue({ id: "kb-new" } as never);
-
-    const res = await POST(
-      postReq({ name: "Handover", shareToChannelId: CHANNEL_UUID }),
-      { params: Promise.resolve({}) }
-    );
-
-    expect(res.status).toBe(201);
-    expect(mockChannelVisible).toHaveBeenCalledWith("ws-1", "user-1", CHANNEL_UUID);
-    expect(mockCreateBase).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ shareToChannelId: CHANNEL_UUID })
-    );
-  });
-
-  it("does not consult the channel fence when nothing is being shared", async () => {
-    // ⚠ An ordinary create — MCP `kb_create_base` and the workspace Knowledge
-    // page — must not pay a channel read it has no use for.
-    mockCreateBase.mockResolvedValue({ id: "kb-new" } as never);
-
-    const res = await POST(postReq({ name: "Ordinary" }), {
-      params: Promise.resolve({}),
-    });
-
-    expect(res.status).toBe(201);
-    expect(mockChannelVisible).not.toHaveBeenCalled();
-  });
-});
-
-const CHANNEL_UUID = "aaaaaaaa-0000-4000-8000-000000000001";

@@ -50,8 +50,6 @@ const AWAIT_MIN_POLL_MS = 1_000;
 const AWAIT_MAX_POLLS = Math.ceil(AWAIT_HOLD_CEILING_MS / channel_await_budget_1.AWAIT_POLL_MS) + 2;
 /** A hold ending this far under the ASK did not hold — see the per-channel op. */
 const AWAIT_SHORT_HOLD_MS = 60_000;
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed channel)";
 /**
  * A thrown inner-poll failure reduced to one short NEUTRALIZED line.
  * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: this rides
