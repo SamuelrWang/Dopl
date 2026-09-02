@@ -16,6 +16,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { opPost } from "./channel-ops-write";
 import { registerChannelTool } from "./channel";
 import type { RegisterTool, ToolResponse } from "./respond";
@@ -186,9 +187,29 @@ describe("the published surface says whose each kind is", () => {
     registerChannelTool(register, stubClient());
 
     const described = (schema.kind as unknown as { description?: string }).description ?? "";
-    expect(described).toContain("LEAVE THIS UNSET");
+    expect(described).toContain("leave it unset");
     expect(described).toContain("FINAL ANSWER");
-    expect(described).toContain("LIFECYCLE MARKERS");
+    expect(described).toContain("lifecycle markers");
     expect(described).toContain('op="milestone"');
+    // ⚠ **G2 (A6, 2026-09-02) — THE FENCE IS THE CREDENTIAL, NOT THE CALLER.**
+    // This read "this tool REFUSES them from you", and the hotfix investigation
+    // proved the sentence wrong rather than the code: the refusal keys on
+    // `ctx.source === "agent"` (`service-writes-lifecycle.ts`), by pinned
+    // invariant, because cookie-session posts are the desktop's own lane and
+    // must keep writing lifecycle rows. Keying it on the CLAIMED author instead
+    // would break that lane, so the SENTENCE is what moved.
+    expect(described).toContain("REFUSED from an agent credential");
+    expect(described).not.toContain("REFUSES them from you");
+  });
+
+  it("the doctrine says the same thing, and neither half says \"from you\"", () => {
+    // ⚠ BOTH ENDS, because both are read: the field at the moment a caller
+    // fills it in, the doctrine by the agent that asked for the rules. A
+    // correction applied to one is a contradiction, not a fix.
+    expect(CHANNEL_DOCTRINE).toContain("REFUSED FROM AN AGENT CREDENTIAL");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "the fence is the credential a call arrives on, not the author it claims",
+    );
+    expect(CHANNEL_DOCTRINE).not.toContain("they are REFUSED from you");
   });
 });

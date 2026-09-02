@@ -9,6 +9,14 @@
  * every declared param must be referenced by some handler in the `channel-*`
  * group, and no handler may read an arg not declared here.
  *
+ * ⚠ **EVERY `.describe()` HERE IS PUSHED ON EVERY CONNECTION, EXACTLY LIKE THE
+ * TOOL DESCRIPTION, AND IS BUDGETED LIKE ONE** (A6, 2026-09-02). It was 20,844
+ * characters over 46 blocks — 11.7× the description the T82 cap governs — because
+ * each block carried the RULE behind its field as well as its contract. A rule
+ * belongs in `channel-doctrine.ts`, which is PULLED by the agent that asks for
+ * it; a `.describe()` carries the CONTRACT of one field and stops. One sentence
+ * each, and `channel-schema-budget.test.ts` is what keeps it there.
+ *
  * ⚠ Caps and minimums HAND-MIRROR the routes' zod schemas
  * (src/features/channels/schema.ts): title 200, body 16000, summary 2000 (a
  * post's summary is 200), client_msg_id 200, `.min(1)` on body /
@@ -17,16 +25,36 @@
  * the write ops mis-narrate. `.trim()` where — and ONLY where — the route trims
  * before measuring, so the two agree on what "200 characters" counts.
  *
- * ⚠ `summary` used to serve two routes with two caps (post 200, close 2000) and
- * declared the LOOSER so a legitimate close summary was never refused
- * client-side. The close is gone (wiring plan Phase 4, 2026-08-18) and the
- * declared max stays at 2000 anyway: the route enforces 200 and is the
- * authority, and tightening it here would turn a route 400 that names the field
- * into an opaque client-side -32602. The tighter number is in its `.describe()`.
+ * ⚠ `summary` declares the LOOSER of the two caps it has served (2000, not the
+ * post route's 200) so a legitimate summary is never refused client-side as an
+ * opaque -32602: the route enforces 200, names the field, and is the authority.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CHANNEL_INPUT_SHAPE = void 0;
+exports.CHANNEL_INPUT_SHAPE = exports.PARAM_DESCRIPTION_MAX_CHARS = exports.SCHEMA_MAX_CHARS = void 0;
 const zod_1 = require("zod");
+/**
+ * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's
+ * (A6, 2026-09-02). A tool's `inputSchema` is PUSHED on every connection
+ * exactly as its description is, and `dopl_channel`'s was **21,778 chars
+ * served — 11.7× the 1,775 the T82 cap governs** — because 46 `.describe()`
+ * blocks carried the RULE behind each field as well as its contract.
+ *
+ * ⚠ MEASURED AS **SERVED**, over a real `Client.listTools()`, and with the
+ * registrar-injected `workspace` argument EXCLUDED: that one belongs to
+ * `registrar.ts › WORKSPACE_ARG_SHAPE` and is a different slice's to shrink,
+ * so counting it here would let this ratchet move on somebody else's edit.
+ * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
+ * growing past it, and shrinking below it without lowering the number.
+ */
+exports.SCHEMA_MAX_CHARS = 11_475;
+/**
+ * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
+ * can absorb one 900-character paragraph by trimming nine short fields; this
+ * cannot. A `.describe()` states the CONTRACT of one field — which ops take it,
+ * what it is, its bound — in one sentence. The rule behind it belongs in
+ * `channel-doctrine.ts › FIELDS`, which is PULLED by the agent that asks.
+ */
+exports.PARAM_DESCRIPTION_MAX_CHARS = 400;
 const channel_await_budget_1 = require("./channel-await-budget");
 exports.CHANNEL_INPUT_SHAPE = {
     op: zod_1.z
@@ -49,8 +77,6 @@ exports.CHANNEL_INPUT_SHAPE = {
         "members",
         "list_threads",
         "get_thread",
-        // The CALLER'S OWN live sessions: handle, state (working/idle/ended) and
-        // thread. Read-only and own-scoped; `channel` narrows to one channel.
         "read_sessions",
         "create_thread",
         // ⚠ TWO OPS LEFT THIS ENUM with thread closing (wiring plan Phase 4,
@@ -59,71 +85,37 @@ exports.CHANNEL_INPUT_SHAPE = {
         // Neither may come back as a WORD either — `channel-law.test.ts ›
         // REMOVED_VOCABULARY` scans every string literal in this file.
         "set_thread_mode",
-        // ⚠ DIRECT one of the operator's OWN running agents, PRIVATELY. A
-        // mailbox row the operator's own machine claims and delivers into that
-        // agent's private turn — it reaches no other member and no other machine.
         "direct_agent",
-        // What I have asked my own agents, and what came back.
         "read_directions",
-        // ASK THE OPERATOR'S DESKTOP TO START AN AGENT on a channel. ⚠ A REQUEST,
-        // never a command: the desktop may refuse, and the refusal is one of seven
-        // reasons. `channel` required; the hold is bounded and a timeout is a
-        // PENDING directive, not a failure.
         "launch_agent",
-        // ⚠ MANAGE AN AGENT THE OPERATOR IS ALREADY RUNNING (2026-09-01, Samuel's
-        // ruling). The SAME mailbox `launch_agent` writes, with a different KIND —
-        // so the same "a machine decides, and may refuse" contract applies, and a
-        // timeout is a PENDING request rather than a failure.
-        // ⚠ NEITHER IS GATED BY THE LAUNCH TOGGLE, and no result may suggest
-        // otherwise: that setting governs STARTING agents. `end_agent` is a stop
-        // verb, `rename_agent` is display-only on one machine, and both are
-        // own-operator-only by construction.
+        // ⚠ `end_agent` and `rename_agent` are NOT GATED BY THE LAUNCH TOGGLE and
+        // no result may suggest otherwise: that setting governs STARTING agents.
+        // `set_agent_mode` IS gated by it — a posture can cause compute to be
+        // spent on the operator's hardware, which a stop verb and a label cannot.
         "end_agent",
         "rename_agent",
-        // ⚠ RE-POSTURE A RUNNING AGENT — the two permission axes, on ONE agent
-        // (2026-09-01). Same mailbox again, a fourth KIND.
-        // ⚠ **IT ASKS, IT NEVER WIDENS**, and this is the one op in the family
-        // where that has to be said: the operator's machine narrows whatever is
-        // asked for to that operator's own stored channel posture, so a caller
-        // that reads it as "set" reports room it does not have.
-        // ⚠ AND IT IS THE ONE NON-LAUNCH OP THAT **IS** GATED BY THE LAUNCH
-        // TOGGLE, unlike the two above — a posture can cause compute to be spent
-        // on the operator's hardware, which a stop verb and a label cannot.
         "set_agent_mode",
         // ⚠ THE INFO CARD, AND ONLY THE INFO CARD (Samuel's ruling Q12 (b),
         // 2026-08-28). The same route accepts name / topic / archived, and this op
-        // deliberately does not — see `channel-ops-update.ts`. Omitting
-        // `info_card` READS the current card and changes nothing, which the
-        // replace-whole contract requires.
+        // deliberately does not — see `channel-ops-update.ts`.
         "update",
-        // ASK A HUMAN A STRUCTURED QUESTION. ⚠ A `post` under the hood — it goes
-        // to the channel like any other message and is read by everyone in it —
-        // but the four fields are validated and stamped, so the surface renders
-        // them as a CARD WITH BUTTONS and the choice comes back to you as a reply.
         "escalate",
-        // ⚠ THE OUT-OF-BAND SIGNAL, AND IT IS NOT A POST. One recipient, three
-        // words, no room: it does not fan out, it cannot end an `await`, and its
-        // `seq` is its own cursor space. It exists because an agent that FINISHES
-        // had no instrument at all — an unaddressed post starts nobody, and an
-        // addressed one shouts at a whole channel and triggers a machine.
         "ping",
-        // The inbox behind it. Read-only and recipient-scoped: what was sent TO
-        // ME, never what was sent to anybody else.
         "pings",
     ])
         .describe("Operation to perform."),
     channel: zod_1.z
         .string()
         .optional()
-        .describe('Channel slug or id. Required for every op except six, and on three of those OMITTING it is a WIDER read, not a missing argument: "read" (omit it, with `since`, for new messages across every channel you are in, in EVERY workspace and home container at once), "read_sessions" (omit it to see every session of yours EVERYWHERE, not just this workspace), "await" (omit it to hold across every channel you are a member of at once, instead of one). The other three never take it: "open" creates a channel, "list" lists them all, and "pings" is your own inbox, which spans every channel already.'),
+        .describe('Channel slug or id. Required except for "list", "open" and "pings"; on "read", "await" and "read_sessions" omitting it WIDENS the call to every channel you are in, across every workspace and home container.'),
     direct: zod_1.z
         .boolean()
         .optional()
-        .describe('op="open": set true to open a direct (1:1) message instead of a named channel — pass `member` (no name). Reuses the existing DM if one already exists.'),
+        .describe('op="open": true opens a direct (1:1) message with `member` instead of a named channel, reusing an existing DM.'),
     name: zod_1.z
         .string()
         .optional()
-        .describe('op="open" (required for a channel; omit for a direct message): the channel name (1-120 chars). op="rename_agent" (required): the DISPLAY NAME to give that agent on your operator\'s machine — 1-60 visible characters on ONE line, or the EMPTY STRING to clear it back to "Agent #<id>". ⚠ DISPLAY ONLY: `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the name is stored on that one desktop and reaches no server — so read_sessions will keep printing the id and that is correct, not a stale read.'),
+        .describe('op="open" (required for a channel; omit for a direct message): the channel name, 1-120 chars. op="rename_agent" (required): a DISPLAY ONLY label for that agent — 1-60 visible characters on ONE line, or "" to clear it back to "Agent #<id>". `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server.'),
     topic: zod_1.z
         .string()
         .optional()
@@ -139,18 +131,18 @@ exports.CHANNEL_INPUT_SHAPE = {
     intent: zod_1.z
         .enum(["chat", "request"])
         .optional()
-        .describe('op="post" (optional, default "request"): what this message IS. "request" is the working message: it may address a PERSON with `to`, and `to` is the ONLY thing that puts a post in front of somebody\'s side — nothing is addressed for you, a DIRECT (1:1) channel included. "chat" is PEOPLE TALKING: it addresses nobody and starts nobody, and it SAYS SO on the wire, so the receiving side can tell a deliberate aside from a request that forgot to name anyone. "chat" together with `to` is a contradiction and is REFUSED (nothing is sent) rather than resolved one way — drop the address, or post as a "request".'),
+        .describe('op="post" (optional, default "request"): "chat" is people talking — it addresses nobody, starts nobody, and is REFUSED together with `to`. "request" is the working message.'),
     body: zod_1.z
         .string()
         // ⚠ `.min(1)` mirrors the route on BOTH the post and create_thread schemas.
         .min(1)
         .max(16000)
         .optional()
-        .describe('op="post" / op="create_thread" / op="milestone" (required): the message text, <=16000 characters. For op="post" this is what you are actually saying, and it is a normal message whatever it contains — a half-sentence, a status line, or the finished deliverable. For op="milestone" it is ONE LINE naming the step that just landed, nothing more (content does not travel in a milestone; nobody reads one as an answer). For create_thread, it is the requester\'s initial request. op="ping" (required): ONE LINE, <=600 characters — what you are signalling, not the report. The thread you point at is where the report lives, and a ping long enough to be read as one is a ping nobody reads.'),
+        .describe('op="post" / op="create_thread" / op="milestone" (required): the message text, <=16000 chars. A milestone is ONE LINE naming the step that just landed and carries no content. op="ping" (required): ONE LINE, <=600 chars.'),
     to: zod_1.z
         .string()
         .optional()
-        .describe('op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post it makes the message a REQUEST that triggers that member\'s listener and can start their agent, so name someone only when you are asking for their machine. Omit it for talk nobody must act on — and say so outright with `intent`="chat", which addresses nobody even in a direct channel. A channel reaches PEOPLE: there is no way to address an agent by name. For create_thread, it is the member the thread is for. op="ping" (one of three recipient forms): file the signal in that PERSON\'S inbox. ⚠ Unlike a post it does NOT trigger their machine — it waits to be read, which is the point.'),
+        .describe('op="post" (optional) / op="create_thread" (required) / op="ping" (one of three recipient forms): the ONE channel MEMBER this is for — an email or user id. On a post it makes the message a REQUEST that triggers that member\'s listener; a ping only files in their inbox and triggers nothing.'),
     // ⚠ One param, one route now. The declared 2000 is deliberately LOOSER than
     // the post route's 200 so an over-length summary is the route's to reject,
     // with the field named, rather than an opaque client-side -32602.
@@ -160,19 +152,13 @@ exports.CHANNEL_INPUT_SHAPE = {
         .max(2000)
         .optional()
         .describe('op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees.'),
-    // ⚠ The kinds are NOT a vocabulary to pick from — the describe must say whose
-    // each one is. Listing five names with no rule gets a finished responder to
-    // post its ANSWER as `task_finished`, whose BODY appears nowhere: the web
-    // reader renders a terminal lifecycle row as a slim flag-derived RECEIPT LINE
-    // ("Finished", "Declined") and never as the text that was posted
-    // (`channels-v2/view-model.ts › toReceiptRow`, over
-    // `channels/lib/message-receipt.ts › lifecycleReceiptStatus`, 2026-08-18);
-    // `task_started` is dropped outright. Before wiring plan Phase 5 the reason
-    // was a session card folding the marker into its `endEvent`; the card is gone
-    // and the outcome for an answer posted this way is the same — it vanishes.
-    //
-    // ⚠ The enum keeps all five ON PURPOSE — narrowing turns the mistake into an
+    // ⚠ THE ENUM KEEPS ALL FIVE ON PURPOSE — narrowing turns the mistake into an
     // opaque zod -32602 exactly when the agent needs telling what to do instead.
+    // ⚠ THE REFUSAL IS KEYED ON THE CREDENTIAL, NOT ON THE AUTHOR (G2, 2026-09-02).
+    // `service-writes-lifecycle.ts` reads `ctx.source === "agent"`, which is a
+    // pinned invariant: cookie-session posts are the desktop's own lane and must
+    // keep writing lifecycle rows. So the sentence says "from an agent
+    // credential" — "from you" claimed a fence on the caller that does not exist.
     kind: zod_1.z
         .enum([
         "message",
@@ -182,13 +168,13 @@ exports.CHANNEL_INPUT_SHAPE = {
         "task_failed",
     ])
         .optional()
-        .describe('op="post": LEAVE THIS UNSET. The default, "message", is what every substantive thing you send is — including your FINAL ANSWER. The other four keep the older `task_` storage names and are NOT interchangeable with it: "task_started" / "task_finished" / "task_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session, and this tool REFUSES them from you (a body written into one is not rendered on the other member\'s thread card at all, so an answer sent as one is delivered nowhere). "task_progress" is the milestone lane and is yours, but you do not need this field for it either: op="milestone" posts one with no kind to pick.'),
+        .describe('op="post" (optional, default "message"): leave it unset. "message" covers everything you send, your FINAL ANSWER included; "task_progress" is what op="milestone" posts for you. "task_started" / "task_finished" / "task_failed" are runtime lifecycle markers and are REFUSED from an agent credential.'),
     metadata: zod_1.z
         .record(zod_1.z.string(), zod_1.z.unknown())
         .optional()
         .describe('op="post": optional JSON object of structured fields for task_* events (e.g. {taskId, durationMs, refs}).'),
-    // ⚠ THE TWO ROUTES DEDUPE OVER DIFFERENT KEYS, AND THE DESCRIBE SAYS SO —
-    // `channel_messages` is unique on `(channel_id, client_msg_id, author_user_id)`
+    // ⚠ THE TWO ROUTES DEDUPE OVER DIFFERENT KEYS — `channel_messages` is unique on
+    // `(channel_id, client_msg_id, author_user_id)`
     // (`20260822120000_channel_messages_author_scoped_idempotency.sql`) while
     // `channel_tasks` is unique on `(channel_id, client_msg_id)`
     // (`20260729032037_channel_tasks_client_msg_id.sql`, still the live index).
@@ -201,16 +187,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="post" / op="create_thread": optional idempotency key. For op="post" the dedupe is PER-AUTHOR: re-sending the same op with the same id FROM THE SAME ACCOUNT will not create a duplicate, and two different members may use the same id — both messages post, and neither suppresses the other. For op="create_thread" it is wider: the id is unique per CHANNEL whoever sent it, so a repeat returns the already-created thread instead of opening a second, and a key another member already used in this channel hands you back THEIR thread with your body posted nowhere. Use it whenever a retry is possible; any stable string of your own is fine, and one you namespaced to yourself is safest.'),
-    // ⚠ THE PROMISE IS ABOUT ORDER *WITHIN* THE CALL, NOT ABOUT PRECEDENCE OVER
-    // EVERYTHING ELSE (softened 2026-08-24). It read "rejected here, before the
-    // call is made", which claimed this bound is the FIRST thing anything checks.
-    // It is not: a desktop agent session runs `create_thread` through its own
-    // permission gate first (`dopl-desktop-app/main/session-profiles.js ›
-    // grantDecision`), so a held or refused call never reaches zod at all and the
-    // agent gets a permission answer where the copy promised a title answer. What
-    // IS true, and is all this can honestly say, is that once the call is allowed
-    // to run the bound is enforced client-side before anything crosses the wire.
+        .describe('op="post" / op="create_thread" (optional): an idempotency key, 1-200 chars. On a post the dedupe is PER-AUTHOR, so two members may reuse one id and both messages post; on create_thread it is PER-CHANNEL whoever sent it, so a key another member used hands you back THEIR thread.'),
     title: zod_1.z
         .string()
         .trim()
@@ -219,7 +196,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="create_thread" (required): the thread title (1-200 chars) — a short header for the exchange, not a description. When the call is permitted to run, the bound is checked before anything goes on the wire, so an over-length title costs nothing and nothing is sent — shorten it rather than resending it unchanged.'),
+        .describe('op="create_thread" (required): the thread title, 1-200 chars after trimming — a short header for the exchange, not a description. When the call is permitted to run, the bound is checked before anything goes on the wire.'),
     mode: zod_1.z
         .enum(["interactive", "autonomous"])
         .optional()
@@ -227,36 +204,36 @@ exports.CHANNEL_INPUT_SHAPE = {
     handoff: zod_1.z
         .boolean()
         .optional()
-        .describe('op="create_thread" (optional, default false): SPAWN-WITH-HANDOFF. Set true when YOU are an external agent (this Claude Desktop / Claude Code) opening a thread that your operator\'s Dopl app should then DRIVE — a full session opens on their machine and carries the conversation, instead of this external session keeping it. Default (omitted/false) is unchanged: the thread is created and THIS session keeps the reply, nothing opens on their machine. Only meaningful on YOUR OWN operator\'s create — the desktop honors it only for a thread you created as yourself, so it can never open a window on anyone else\'s machine. Use it when the operator asked you to "spin up an agent on Dopl to talk to <someone> about X"; leave it off when you are the one who will handle the replies here.'),
+        .describe('op="create_thread" (optional, default false): true asks your operator\'s Dopl app to DRIVE this thread — a full session opens there and carries the conversation instead of this external one. Honoured only for a thread you created as yourself.'),
     thread: zod_1.z
         .string()
         .optional()
-        .describe('op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). ⚠ For get_thread this returns the thread\'s METADATA ONLY — title, mode, the two parties, timestamps — and NO message bodies; to read what was said, use op="read" with thread=<id>. op="post" (optional): thread this post under that thread. op="launch_agent" (optional): start the agent ON that thread, so its posts land in that exchange. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is never thread-scoped, with or without a channel). op="ping" (optional): point the signal at that exchange, so whoever reads it can open the work in one click.'),
+        .describe('The thread id create_thread returned. Required for op="get_thread" (METADATA ONLY — title, mode, parties, timestamps, and NO message bodies; use op="read" with thread=<id> for what was said), op="set_thread_mode" and op="milestone". Optional on op="post" (thread it there), op="launch_agent" (start the agent on it), op="read" (filter to that exchange) and op="ping" (point the signal at it).'),
     // ⚠ `agent_id`, NOT `agent`. `channel-addressing-rule.test.ts` bans a param
     // literally named `agent` — it was the retired named-agent ADDRESSING surface,
     // and "a param an MCP client can see is a param a model will try". This one
     // names an INSTANCE ID on the caller's own machine and addresses nobody in the
     // channel, which is exactly the distinction that guard exists to keep.
+    // ⚠ A FOREIGN ID IS NOT REFUSED OUTRIGHT, AND THE SENTENCE NO LONGER SAYS SO
+    // (G3 / F-418, 2026-09-02). `service-directions.ts` files the direction with
+    // no ownership check; what answers is the CALLER'S OWN desktop, with
+    // `no-session`. The honest claim is that nothing reaches the other machine.
     agent_id: zod_1.z
         .string()
         .optional()
-        .describe('op="direct_agent" / op="end_agent" / op="rename_agent" / op="set_agent_mode" (required): WHICH of your operator\'s agents to act on — the 8-character instance id. dopl_channel(op="read_sessions") prints it as `@agent-<id>`; you may paste either that whole handle or the bare id, both are accepted. op="read_directions" (optional): narrow the listing to that one agent. ⚠ There is NO oldest-agent fallback on ANY of these lanes, deliberately: guessing which agent you meant would direct, end or relabel one you did not address, with nothing reporting the swap — and on an end that is unrecoverable. ⚠ YOUR OWN OPERATOR\'S AGENTS ONLY. An id belonging to another member is REFUSED outright and no request is filed; a peer\'s agent is a handle you can read about and nothing you can reach.'),
-    // ⚠ TWO PARAMS FOR ONE OP, and neither could be folded into an existing one.
-    // `kind` is a CLOSED enum of message kinds and widening it would let a post
-    // claim it was "done"; `to`/`agent_id` already carry the other two recipient
-    // forms, so only "my own operator's external session" had no spelling.
-    // ⚠ THERE IS NO PARAM FOR *WHOSE* MACHINE, ON PURPOSE. Both self-scoped forms
-    // resolve to the authenticated caller's own operator, server-side, and that
-    // absence is the whole of the loop brake: you cannot ping another member's
-    // agent because there is no argument with which to name one.
+        .describe('op="direct_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (required) / "read_directions" (optional): WHICH of YOUR OWN operator\'s agents — the 8-character instance id, or the `@agent-<id>` handle read_sessions prints. There is no oldest-agent fallback. An id belonging to another member reaches nothing: the request goes to your own machine, which answers `no-session`.'),
+    // ⚠ THERE IS NO PARAM FOR *WHOSE* MACHINE, ON PURPOSE. Both self-scoped ping
+    // forms resolve to the authenticated caller's own operator, server-side, and
+    // that absence is the whole of the loop brake: you cannot ping another
+    // member's agent because there is no argument with which to name one.
     ping_kind: zod_1.z
         .enum(["done", "question", "blocked"])
         .optional()
-        .describe('op="ping" (required): WHAT you are signalling. "done" — the work is finished; this is the one nothing else could say, and an agent that ends without it ends invisibly. "question" — you need an answer to continue (this is NOT op="escalate", which offers a human buttons to press; a question ping says "come look" and the thread holds the question). "blocked" — you cannot continue and are not asking a question: a credential, a dependency, a decision elsewhere.'),
+        .describe('op="ping" (required): WHAT you are signalling — the work is "done", you have a "question" you need answered to continue, or you are "blocked" and not asking one.'),
     to_desktop: zod_1.z
         .boolean()
         .optional()
-        .describe('op="ping" (one of three recipient forms): set true to signal YOUR OWN operator\'s external session — the one holding the ping inbox open. This is what an agent uses to say "I have finished, come and look" to the human\'s own assistant, and it is the reason this op exists: nothing else could reach that session without the operator asking first.'),
+        .describe('op="ping" (one of three recipient forms): true signals YOUR OWN operator\'s external session — the one holding the ping inbox open.'),
     // ⚠ `outcome` ("completed" | "failed") was a param here, required by
     // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
     // 2026-08-18); nothing in this surface has an outcome any more.
@@ -267,21 +244,21 @@ exports.CHANNEL_INPUT_SHAPE = {
         .int()
         .min(0)
         .optional()
-        .describe('op="read": return only messages with seq greater than this. op="await" (ALWAYS required, with or without `channel`): the last seq you have processed. `seq` is TABLE-WIDE (one sequence, every workspace and home container), which is what lets ONE cursor cover every channel at once when you omit `channel`. ⚠ WHERE TO GET ONE, because there is a page that deliberately will not give you one: a THREAD-SCOPED read (op="read" with `thread`) offers NO cursor at all and says so — it filtered other exchanges out, and `await` is channel-wide with a strict "greater than", so a seq taken off that page would permanently skip every message the filter hid. Establish the cursor from an UNSCOPED read (drop `thread`) and carry that page\'s highest seq. op="pings" (optional): return only pings with a higher ping seq than this. ⚠ **A PING SEQ IS NOT A MESSAGE SEQ.** They are separate cursor spaces, so crossing them reads a plausible WRONG page instead of erroring — carry the one op="pings" itself printed.'),
+        .describe('op="read" (optional) / op="await" (always required): the last seq you have processed; only higher ones come back. A seq is TABLE-WIDE, which is what lets one cursor cover every channel. ⚠ A THREAD-SCOPED read offers NO cursor at all — take yours from an UNSCOPED read (drop `thread`). op="pings" (optional): a PING seq, a separate cursor space from a message seq.'),
     goal: zod_1.z
         .string()
         .trim()
         .min(1)
         .max(2000)
         .optional()
-        .describe('op="launch_agent" (optional, but you almost always want it): what the agent should DO, in your own words (<=2000 chars). It becomes that agent\'s opening instruction. Say what "done" looks like, and ask it to post a milestone (op="milestone") when each work item starts and finishes — those milestones are what come back to you on your next await, attributed to the agent that posted them. With no goal, an agent starts with nothing to do and waits.'),
+        .describe('op="launch_agent" (optional, but you almost always want it): what the agent should DO, <=2000 chars — it becomes that agent\'s opening instruction. Without one the agent starts with nothing to do and waits.'),
     model: zod_1.z
         .string()
         .trim()
         .min(1)
         .max(120)
         .optional()
-        .describe('op="launch_agent" (optional): the model to run the agent on. Omit it to use whatever the operator has set for that channel — which is the right default and what you should do unless you were told otherwise. An id that machine does not recognize is NOT refused — it silently FALLS BACK to whatever the channel is set to, and nothing tells you it did, so pass a model only when you were told which one.'),
+        .describe('op="launch_agent" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel. An id that machine does not recognize is NOT refused — it silently FALLS BACK, and nothing tells you.'),
     // ⚠ ID **OR** EXACT NAME, in ONE param — `dopl_kb`'s `base` already works this
     // way (`knowledge-shared.ts`), so this reuses the tree's idiom rather than
     // inventing a second convention. Bounded at 120, `agent_templates.name`'s own
@@ -292,50 +269,48 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(120)
         .optional()
-        .describe('op="launch_agent" (optional): the AGENT TEMPLATE the new agent should run as — its id, or its exact name. A template is a saved identity (instructions, a default model, custom fields, attached knowledge bases) that your operator wrote; omitting this starts a blank agent, which is the right default unless you were told to use one. ⚠ IT IS RESOLVED UNDER **YOUR** VISIBILITY WHEN YOU ASK AND UNDER **THE OPERATOR\'S** WHEN THEIR MACHINE STARTS IT — two different people — so a private or team template of yours can be refused there with "could not resolve the TEMPLATE you named". ⚠ IF A NAME MATCHES MORE THAN ONE TEMPLATE YOU CAN SEE, THE CALL IS REFUSED AND EVERY MATCH IS LISTED WITH ITS ID: pick one and re-issue with the ID. Names are deliberately not unique, so nothing here guesses for you.'),
+        .describe('op="launch_agent" (optional): the AGENT TEMPLATE the new agent runs as — its id, or its exact name. It resolves in THIS CHANNEL\'S container under THE OPERATOR\'S visibility, and a name matching more than one is refused with every id listed. Omit it to start a blank agent.'),
     // ── ⚠ THE TWO PERMISSION AXES (2026-09-01, T24 + the re-posture verb) ───────
     //
     // ⚠ **THE ENUM MEMBERS ARE ORDERED NARROWEST FIRST AND THAT ORDER IS THE
     // CONTRACT.** The operator's machine clamps by INDEXING into a copy of these
-    // sequences, so re-ordering either one silently inverts the bound. It is also
-    // the order a reader of the published schema will assume is a ranking, which is
-    // the one assumption here that happens to be true.
+    // sequences, so re-ordering either one silently inverts the bound.
     // ⚠ **ONE PARAM SERVES BOTH THE LAUNCH AND THE RE-POSTURE**, deliberately: it
     // is the same axis with the same four values and the same clamp, and two names
     // for one thing is how a caller learns to guess which one an op wants.
     tools: zod_1.z
         .enum(["manual", "accept_edits", "auto", "bypass"])
         .optional()
-        .describe('op="launch_agent" / op="set_agent_mode" (optional): HOW MUCH TOOL FREEDOM to ask for, narrowest first — "manual" (every tool call waits for your operator), "accept_edits" (file edits go through, the rest waits), "auto" (work tools go through), "bypass" (widest). ⚠ YOU ARE ASKING, NOT SETTING. Your operator\'s machine narrows whatever you ask for down to the ceiling THEY chose by hand in their own settings, and it never widens past it — so asking for "bypass" does not give you bypass, and there is no argument, account or wording that changes that. Omit it to run at their stored setting, which is what almost every call should do. ⚠ Whether you were narrowed is reported back only if that machine says so; when it says nothing, the result prints "not reported" and you must not assume you got what you asked for.'),
+        .describe('op="launch_agent" / op="set_agent_mode" (optional): how much TOOL freedom to ASK FOR — the values are ordered narrowest first. Your operator\'s machine narrows whatever you ask for to their own ceiling and never widens past it; omit it to run at that setting.'),
     messages: zod_1.z
         .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
         .optional()
-        .describe('op="launch_agent" / op="set_agent_mode" (optional): HOW MUCH MESSAGE FREEDOM to ask for, narrowest first — "ask" (your operator sees every message first), "auto_inbound" (incoming flows), "auto_outbound" (its posts flow), "auto_both" (widest). ⚠ ASKED FOR, NOT SET — clamped to your operator\'s own ceiling exactly as `tools` is, and additionally held to a floor for a session with no window of its own. Omit it to run at their stored setting.'),
+        .describe('op="launch_agent" / op="set_agent_mode" (optional): how much MESSAGE freedom to ASK FOR — the values are ordered narrowest first. Clamped to your operator\'s ceiling exactly as `tools` is, and held to a floor for a session with no window.'),
     chain: zod_1.z
         .boolean()
         .optional()
-        .describe('op="launch_agent" (optional): may the new agent launch further agents of its own? ⚠ THREE STATES, AND OMITTING IT IS NOT THE SAME AS false. Pass true to ASK FOR chaining; pass false to ask that chaining be OFF for this agent; omit it to say nothing, in which case the agent inherits whatever your operator\'s channel is already set to — which may be ON. ⚠ true IS REFUSED RATHER THAN QUIETLY NARROWED when the channel does not allow it (unlike `tools` and `messages`) — you get an answer instead of an agent that hits a wall mid-run after you have already handed it work that assumes workers. ⚠ false IS ALWAYS GRANTED and WINS over a channel set to ON: it only ever narrows, so there is nothing for your operator\'s setting to protect. Ask for true only when the work genuinely needs sub-agents; pass false when you want a worker that cannot spawn more.'),
+        .describe('op="launch_agent" (optional): may the new agent launch further agents? THREE STATES — true asks, false forbids, and OMITTING IT INHERITS your operator\'s channel setting, which may be ON. true is REFUSED rather than quietly narrowed.'),
     wait_ms: zod_1.z.coerce
         .number()
         .int()
         .min(0)
         .max(30_000)
         .optional()
-        .describe('op="launch_agent" / op="end_agent" / op="rename_agent" / op="set_agent_mode" (optional, default 15000, max 30000): how long to hold waiting for the operator\'s desktop to accept or refuse. ⚠ A TIMEOUT IS NOT A FAILURE — the request stays PENDING and the desktop may still take it; the result tells you the directive id and says to check read_sessions. Do not re-issue on a timeout: on a launch you would queue a SECOND agent, and on an end or a re-posture you would have no way to tell which request acted.'),
+        .describe('op="launch_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (optional, default 15000, max 30000): how long to hold for the operator\'s desktop to accept or refuse. A timeout is NOT a failure — the request stays PENDING, so do not re-issue it.'),
     info_card: zod_1.z
         .object({
         hidden: zod_1.z
             .array(zod_1.z.string())
             .max(3)
             .optional()
-            .describe('Built-in rows to HIDE, by key: "email", "created", "lastActivity". Hiding a row changes what this CARD shows and nothing else — it does not clear anybody\'s email.'),
+            .describe('Built-in rows to HIDE, by key: "email", "created", "lastActivity".'),
         rows: zod_1.z
             .array(zod_1.z.object({
             id: zod_1.z
                 .string()
                 .max(64)
                 .optional()
-                .describe("Omit on a NEW row (one is minted for you); pass it to EDIT the row that already has it. Ids must be unique within a card."),
+                .describe("Omit on a NEW row (one is minted for you); pass it to EDIT the row that already has it. Unique within a card."),
             label: zod_1.z.string().min(1).max(40).describe("The left column — one short line."),
             value: zod_1.z.string().max(200).optional().describe("The right column. May be empty."),
         }))
@@ -344,7 +319,7 @@ exports.CHANNEL_INPUT_SHAPE = {
             .describe("The card's CUSTOM rows, at most 12."),
     })
         .optional()
-        .describe('op="update": the channel\'s whole info card. ⚠ REPLACES IT — a write that omits a row DELETES that row, and `info_card={}` clears the card. OMIT this argument entirely to READ the current card without changing it, which is how you get the rows to send back. Everyone in the channel sees this card.'),
+        .describe('op="update": the channel\'s whole info card, REPLACED — an omitted row is DELETED and `info_card={}` clears the card. Omit the argument entirely to READ the card unchanged. Everyone in the channel sees it.'),
     // ── op="escalate" ────────────────────────────────────────────────────────
     // ⚠ FOUR SEPARATE PARAMS RATHER THAN ONE `escalation` OBJECT, deliberately.
     // The whole point of the op is that an agent has to SAY the four things; a
@@ -357,13 +332,13 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="escalate" (required): the question, in ONE line (<=200 chars). Not a summary of your work — the decision you cannot make. It becomes the card\'s title, so write it as the thing a person has to answer.'),
+        .describe('op="escalate" (required): the decision you cannot make, in ONE line (<=200 chars). It becomes the card\'s title.'),
     context: zod_1.z
         .string()
         .trim()
         .max(2000)
         .optional()
-        .describe('op="escalate" (optional, <=2000 chars): what a person needs to know to choose, and nothing else. Do not restate the options here and do not narrate what you tried — the options carry their own consequences, and a card that has to be read twice is the prose wall this op replaces.'),
+        .describe('op="escalate" (optional, <=2000 chars): what a person needs to know to choose, and nothing else. Do not restate the options — they carry their own consequences.'),
     options: zod_1.z
         .array(zod_1.z.object({
         label: zod_1.z
@@ -377,12 +352,12 @@ exports.CHANNEL_INPUT_SHAPE = {
             .trim()
             .min(1)
             .max(200)
-            .describe("ONE line saying what happens if they press it (<=200 chars). Required on every option: an option with no stated consequence makes the reader do your analysis."),
+            .describe("ONE line saying what happens if they press it (<=200 chars). Required on every option."),
     }))
         .min(2)
         .max(6)
         .optional()
-        .describe('op="escalate" (required): 2-6 things a person could decide. ⚠ BOTH BOUNDS ARE REAL. ONE option is not a question — if there is only one way forward, take it and report with op="milestone". More than six is the wall of prose again with numbers on it; collapse the near-duplicates first.'),
+        .describe('op="escalate" (required): 2-6 things a person could decide. BOTH BOUNDS ARE REAL — one option is not a question, and more than six is a wall of prose with numbers on it.'),
     recommendation: zod_1.z
         .object({
         index: zod_1.z
@@ -398,19 +373,19 @@ exports.CHANNEL_INPUT_SHAPE = {
             .describe("ONE line for why (<=200 chars)."),
     })
         .optional()
-        .describe('op="escalate" (optional but almost always right): which option you would take and why. You did the work; a card that offers four choices and no opinion pushes the whole analysis back onto the person you interrupted. ⚠ `index` MUST be inside `options` — an out-of-range one refuses the whole call rather than posting a card that recommends nothing.'),
+        .describe('op="escalate" (optional but almost always right): which option you would take and why. `index` MUST be inside `options` — an out-of-range one refuses the whole call.'),
     limit: zod_1.z.coerce
         .number()
         .int()
         .min(1)
         .max(200)
         .optional()
-        .describe('op="read": max messages to return (1-200, DEFAULT 100). Omitted with no `since`, that is the NEWEST 100 — older messages are absent, not reported as absent. op="pings": max pings to return (1-100, DEFAULT 20).'),
+        .describe('op="read": max messages to return (1-200, default 100) — with no `since` that is the NEWEST 100, and older ones are absent rather than reported. op="pings": max pings (1-100, default 20).'),
     timeout_ms: zod_1.z.coerce
         .number()
         .int()
         .min(0)
         .max(channel_await_budget_1.AWAIT_HOLD_CAP_MS)
         .optional()
-        .describe(`op="await": TOTAL time to hold before returning with no messages (milliseconds, max ${channel_await_budget_1.AWAIT_HOLD_CAP_MS}). The hold is assembled server-side out of ~50s polls re-issued with the same cursor, so it returns the instant a message arrives. OMITTED, the default fits YOUR client: ${channel_await_budget_1.AWAIT_HOLD_EXTERNAL_DEFAULT_MS} for an external one (most MCP clients abort a call around 60s, and an aborted call returns no cursor and no re-arm instruction at all), ${channel_await_budget_1.AWAIT_HOLD_DEFAULT_MS} for a session run by the Dopl desktop. Pass it only when you know your own client outlasts the default — an explicit value is honoured exactly, up to the max — or when you deliberately want a short check. If a hold still comes back as a raw transport timeout instead of a result, your client is capping calls below ${channel_await_budget_1.AWAIT_HOLD_EXTERNAL_DEFAULT_MS}: report that to your operator and poll with a smaller timeout_ms plus repeated op="read".`),
+        .describe(`op="await" (optional): TOTAL time to hold before returning with no messages (ms, max ${channel_await_budget_1.AWAIT_HOLD_CAP_MS}). Omitted, the default fits your client: ${channel_await_budget_1.AWAIT_HOLD_EXTERNAL_DEFAULT_MS} external, ${channel_await_budget_1.AWAIT_HOLD_DEFAULT_MS} for a session run by the Dopl desktop.`),
 };
