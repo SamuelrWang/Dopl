@@ -67,6 +67,34 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
   });
 });
 
+// ── THE RECEIPT — WHICH SESSION EARNED THE VERDICT ───────────────────────────
+//
+// 🔒 THE ACK'S SESSION KEY IS THE SERVER'S FENCE (2026-09-02, review D3), not a label.
+// `service-writes-delivery.ts` skips a receipt whose key is not in this machine's own live set,
+// because channel membership alone let any member of a room stamp a PERMANENT `woken` on any
+// message in it — the write only moves up the rank, so the false claim can never be corrected.
+// A dispatch that filed an unkeyed receipt would look fine here and land nothing.
+
+test("receipt: names the session that EARNED the verdict, carried never composed", async () => {
+  const h = harness({ agents: [agent(A1), agent(A2)] });
+  await h.feedLiveSession(entry, peerMsg({ body: `@${A2} take this one` }), ME);
+  assert.equal(h.calls.acks.length, 1, "one receipt per message, whatever the fan-out touched");
+  const [ws, channelId, seq, verdict, userId, sessionKey] = h.calls.acks[0];
+  assert.deepEqual([ws, channelId, seq, verdict, userId], ["w1", "c1", 7, "delivered", ME]);
+  // ⚠ A2's key, because A2 is the addressee that took the turn — the `delivered` arm. And it is
+  // `s.key` verbatim: `session-store.js › sessionKey` owns the format, and composing one here
+  // would make this module a second authority on it.
+  assert.equal(sessionKey, `c1:${TASK}:${A2}`);
+});
+
+test("receipt: an ordinary fan-out reports `idle`, keyed to a session it actually fed", async () => {
+  const h = harness({ agents: [agent(A1)] });
+  await h.feedLiveSession(entry, peerMsg(), ME);
+  const [, , , verdict, , sessionKey] = h.calls.acks[0];
+  assert.equal(verdict, "idle");
+  assert.equal(sessionKey, `c1:${TASK}:${A1}`);
+});
+
 // ⚠ THIS REPLACES "a THIRD party in the same channel never injects a turn (FIX L1)". That
 // fence read `author === counterpartyFor(...)`; the fan-out ruling replaced it with the
 // THREAD, so a third member posting INTO the thread does reach my live agents. The fences that

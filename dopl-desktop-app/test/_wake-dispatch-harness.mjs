@@ -70,7 +70,13 @@ export const peerMsg = (over = {}) => ({ kind: "message", authorUserId: PEER, bo
 // `agents` is the LIVE ROSTER on the thread — the multiplayer shape. Each entry is a session
 // object as the engine's registry holds one: an `agentId` and the `ownPostIds` Set that lets it
 // recognise its own words coming back off the wire.
-export const agent = (id, ownPostIds = []) => ({ agentId: id, ownPostIds: new Set(ownPostIds) });
+// ⚠ `key` IS ON THE FIXTURE BECAUSE THE RECEIPT NAMES IT (2026-09-02, review D3). The dispatch
+// carries `s.key` onto every ack — it never composes one — and the server skips an ack whose
+// key is not in this machine's own live set, so a fixture without it would drive a route that
+// files nothing.
+export const agent = (id, ownPostIds = []) => ({
+  agentId: id, key: `c1:${TASK}:${id}`, ownPostIds: new Set(ownPostIds),
+});
 
 export function harness(over = {}) {
   const calls = { feedInbound: [], triage: [], acks: [] };

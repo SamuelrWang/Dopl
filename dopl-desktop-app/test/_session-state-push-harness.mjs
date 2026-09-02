@@ -135,6 +135,8 @@ export const TASK_A = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
 export const CHAN_B = "cccccccc-3333-4333-8333-cccccccccccc";
 export const TASK_B = "dddddddd-4444-4444-8444-dddddddddddd";
 export const ADHOC_TASK_ID = `task-${CHAN_A}-42`;
+/** `entry()`'s own key — every receipt names a session, so the ack cases need this one. */
+export const KEY_A = `${CHAN_A}:${TASK_A}:a1b2c3d4`;
 
 /** One report entry, as `session-summary.reportList()` builds them. */
 export function entry(over = {}) {

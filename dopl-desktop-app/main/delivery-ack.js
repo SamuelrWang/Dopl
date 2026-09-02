@@ -63,11 +63,26 @@ const DELIVERY_RANK = ['refused', 'idle', 'delivered', 'woken'];
 // a convenience beside it and loses the tie.
 const MAX_PENDING = 32;
 
-// workspaceId -> Map<`${channelId}:${seq}`, { channelId, seq, delivery, userId }>
-// ⚠ KEYED SO ONE MESSAGE HOLDS ONE RECEIPT. Without the key a busy thread would queue one
-// entry per session it touched, all about the same message, and the bound would evict real
-// news to make room for repetitions of one fact.
+// workspaceId -> Map<bufferKey, { channelId, seq, delivery, userId, sessionKey }>
+// ⚠ KEYED SO ONE MESSAGE HOLDS ONE RECEIPT PER OPERATOR. Without the message part a busy
+// thread would queue one entry per session it touched, all about the same message, and the
+// bound would evict real news to make room for repetitions of one fact.
+//
+// ⚠ THE OPERATOR IS IN THE KEY, AND IT IS WHAT MAKES "ONLY EVER STRENGTHENS" TRUE (fixed
+// 2026-09-02). It used to be `${channelId}:${seq}` alone, with the strengthen check
+// conditioned on `held.userId === who` — so a receipt filed by a DIFFERENT operator fell
+// through the check and was overwritten by a WEAKER one, silently destroying a claim only that
+// identity may ever make. Signing out does not end engine sessions, so two operators' receipts
+// really can share a machine and a message. They are different claims by different identities
+// and they get different slots; the rank rule then holds unconditionally, exactly as the
+// header says.
 const pending = new Map();
+
+function bufferKey(userId, channelId, seq) {
+  // ⚠ NUL, not ':', as the separator — every other segment here is caller-derived and a
+  // separator that can appear inside one is a collision waiting for a slug with a colon in it.
+  return userId + '\u0000' + channelId + ':' + seq;
+}
 
 function rankOf(delivery) {
   return DELIVERY_RANK.indexOf(delivery);
@@ -76,32 +91,41 @@ function rankOf(delivery) {
 /**
  * RECORD WHAT THIS MACHINE DID WITH ONE MESSAGE.
  *
- * ⚠ IT ONLY EVER STRENGTHENS. `session-dispatch.js` reports once per message, but this module
- * is the entry point and a second caller must not be able to downgrade a wake to a refusal by
- * speaking later. Same rule as the server's `WHERE`, stated on both sides because neither can
- * see the other's ordering.
+ * ⚠ IT ONLY EVER STRENGTHENS, UNCONDITIONALLY. `session-dispatch.js` reports once per message,
+ * but this module is the entry point and a second caller must not be able to downgrade a wake
+ * to a refusal by speaking later. Same rule as the server's `WHERE`, stated on both sides
+ * because neither can see the other's ordering. The operator is part of the slot
+ * ({@link bufferKey}), so this comparison never has to ask whose receipt it is looking at.
+ *
+ * ⚠ A RECEIPT NAMES THE SESSION THAT EARNED IT, and one without a session key is DROPPED. The
+ * server's fence is that the key belongs to a session in this machine's own live set
+ * (`server/service-writes-delivery.ts`), so an unkeyed receipt is one the server will skip —
+ * buffering it would spend the eviction bound on something that can never land.
  *
  * ⚠ AN UNKNOWN WORD IS DROPPED, NOT PASSED THROUGH. It would 400 the whole push, and a
  * receipt is never worth the projection.
  */
-function note(workspaceId, channelId, seq, delivery, userId) {
+function note(workspaceId, channelId, seq, delivery, userId, sessionKey) {
   const ws = String(workspaceId || '');
   const chan = String(channelId || '');
   const who = String(userId || '');
+  const key = String(sessionKey || '');
   // ⚠ AN UNIDENTIFIED RECEIPT IS DROPPED. `take` fences on identity, so one filed without it
   // could never be handed back — and a buffer that silently keeps what it can never emit is
   // the eviction bound spent on nothing.
-  if (!ws || !chan || !who) return false;
+  if (!ws || !chan || !who || !key) return false;
   if (!Number.isFinite(Number(seq)) || Number(seq) <= 0) return false;
   if (rankOf(delivery) === -1) return false;
 
   let box = pending.get(ws);
   if (!box) { box = new Map(); pending.set(ws, box); }
-  const key = chan + ':' + Number(seq);
-  const held = box.get(key);
-  if (held && held.userId === who && rankOf(held.delivery) >= rankOf(delivery)) return false;
-  box.delete(key); // re-insert so the eviction below drops the OLDEST news, not the newest
-  box.set(key, { channelId: chan, seq: Number(seq), delivery: delivery, userId: who });
+  const slot = bufferKey(who, chan, Number(seq));
+  const held = box.get(slot);
+  if (held && rankOf(held.delivery) >= rankOf(delivery)) return false;
+  box.delete(slot); // re-insert so the eviction below drops the OLDEST news, not the newest
+  box.set(slot, {
+    channelId: chan, seq: Number(seq), delivery: delivery, userId: who, sessionKey: key,
+  });
   // ⚠ EVICT THE OLDEST. A Map preserves insertion order, and the receipts an orchestrator is
   // waiting on are the ones that just happened — a bound that dropped the NEWEST would make
   // this module quietest exactly when the machine is busiest.
@@ -162,10 +186,14 @@ function take(workspaceId, userId) {
   const box = pending.get(ws);
   if (!who || !box || box.size === 0) return [];
   const out = [];
-  for (const [key, a] of [...box]) {
+  for (const [slot, a] of [...box]) {
     if (a.userId !== who) continue;
-    out.push({ channelId: a.channelId, seq: a.seq, delivery: a.delivery });
-    box.delete(key);
+    // ⚠ `sessionKey` IS ON THE WIRE BECAUSE IT IS THE SERVER'S FENCE, not a label — see
+    // {@link note}. `schema-sessions.ts › DeliveryAckSchema` requires it.
+    out.push({
+      sessionKey: a.sessionKey, channelId: a.channelId, seq: a.seq, delivery: a.delivery,
+    });
+    box.delete(slot);
   }
   if (box.size === 0) pending.delete(ws);
   return out;
@@ -174,7 +202,9 @@ function take(workspaceId, userId) {
 /** Put receipts back after a failed send, without clobbering anything stronger that arrived
  *  while the POST was in flight — which is why this goes through {@link note}. */
 function restore(workspaceId, acks, userId) {
-  for (const a of acks || []) note(workspaceId, a.channelId, a.seq, a.delivery, userId);
+  for (const a of acks || []) {
+    note(workspaceId, a.channelId, a.seq, a.delivery, userId, a.sessionKey);
+  }
 }
 
 /** Drop everything. ⚠ FOR A SUITE, which is the only caller: this is module state, and a case

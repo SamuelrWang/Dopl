@@ -209,7 +209,7 @@ describe("POST — the wake ack rides this lane (2026-09-02, A9)", () => {
     vi.mocked(recordDeliveryAcks).mockResolvedValue({ stamped: 1 });
     const res = await post({
       sessions: [entry()],
-      acks: [{ channelId: CHAN, seq: 7, delivery: "woken" }],
+      acks: [{ sessionKey: `${CHAN}::a1b2c3d4`, channelId: CHAN, seq: 7, delivery: "woken" }],
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
@@ -218,9 +218,13 @@ describe("POST — the wake ack rides this lane (2026-09-02, A9)", () => {
       removed: 0,
       stamped: 1,
     });
-    expect(recordDeliveryAcks).toHaveBeenCalledWith(expect.anything(), [
-      { channelId: CHAN, seq: 7, delivery: "woken" },
-    ]);
+    // ⚠ THE SESSION SET IS THE THIRD ARGUMENT, and it is the ack's FENCE (review D3): a
+    // receipt may only name a session this same push just reconciled.
+    expect(recordDeliveryAcks).toHaveBeenCalledWith(
+      expect.anything(),
+      [{ sessionKey: `${CHAN}::a1b2c3d4`, channelId: CHAN, seq: 7, delivery: "woken" }],
+      [entry()]
+    );
   });
 
   it("a body with NO `acks` key is the installed desktop, and still works", async () => {
@@ -229,7 +233,7 @@ describe("POST — the wake ack rides this lane (2026-09-02, A9)", () => {
     // unretryably, leaving `read_sessions` answering [] for live sessions.
     const res = await post({ sessions: [entry()] });
     expect(res.status).toBe(200);
-    expect(recordDeliveryAcks).toHaveBeenCalledWith(expect.anything(), []);
+    expect(recordDeliveryAcks).toHaveBeenCalledWith(expect.anything(), [], [entry()]);
   });
 
   it("400s a receipt naming an outcome only the SERVER can reach", async () => {
@@ -237,7 +241,7 @@ describe("POST — the wake ack rides this lane (2026-09-02, A9)", () => {
     // resolved; a delivery attempt does not observe them.
     const res = await post({
       sessions: [],
-      acks: [{ channelId: CHAN, seq: 7, delivery: "unreachable" }],
+      acks: [{ sessionKey: `${CHAN}::a1b2c3d4`, channelId: CHAN, seq: 7, delivery: "unreachable" }],
     });
     expect(res.status).toBe(400);
   });
@@ -245,7 +249,18 @@ describe("POST — the wake ack rides this lane (2026-09-02, A9)", () => {
   it("400s a receipt with a non-uuid channel before it can reach a query", async () => {
     const res = await post({
       sessions: [],
-      acks: [{ channelId: "not-a-uuid", seq: 7, delivery: "woken" }],
+      acks: [{ sessionKey: `${CHAN}::a1b2c3d4`, channelId: "not-a-uuid", seq: 7, delivery: "woken" }],
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a receipt that names NO session — the fence is a required field", async () => {
+    // 🔒 REVIEW D3. `sessionKey` is required rather than optional, which is only safe because
+    // `acks` is new in this wave: nothing installed sends the key at all, so there is no older
+    // payload for a required field to break. A LATER field here must be optional again.
+    const res = await post({
+      sessions: [],
+      acks: [{ channelId: CHAN, seq: 7, delivery: "woken" }],
     });
     expect(res.status).toBe(400);
   });

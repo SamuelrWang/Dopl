@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  armed, deliveryAck, drained, entry, CHAN_A,
+  armed, deliveryAck, drained, entry, CHAN_A, KEY_A,
 } from "./_session-state-push-harness.mjs";
 
 const acksOf = (m) => m.posts.map((p) => p.options.body.acks);
@@ -22,12 +22,12 @@ test.beforeEach(() => deliveryAck.reset());
 
 test("ACK: receipts ride the payload beside the session set", async () => {
   const { m, summary } = armed();
-  deliveryAck.note("ws-1", CHAN_A, 7, "woken", "user-a");
+  deliveryAck.note("ws-1", CHAN_A, 7, "woken", "user-a", KEY_A);
   summary.emit([entry()]);
   await drained();
   assert.equal(m.posts.length, 1);
   assert.deepEqual(m.posts[0].options.body.acks, [
-    { channelId: CHAN_A, seq: 7, delivery: "woken" },
+    { sessionKey: KEY_A, channelId: CHAN_A, seq: 7, delivery: "woken" },
   ]);
   // …and the projection is unaffected: the ack is a passenger, never a substitute.
   assert.equal(m.posts[0].options.body.sessions.length, 1);
@@ -55,12 +55,12 @@ test("ACK: a pending receipt FORCES a push the digest gate would have skipped", 
 
   // ⚠ A receipt is NEWS, and a field an orchestrator polls must not sit behind a gate built to
   // swallow churn.
-  deliveryAck.note("ws-1", CHAN_A, 9, "idle", "user-a");
+  deliveryAck.note("ws-1", CHAN_A, 9, "idle", "user-a", KEY_A);
   summary.emit([entry()]);
   await drained();
   assert.equal(m.posts.length, 2);
   assert.deepEqual(m.posts[1].options.body.acks, [
-    { channelId: CHAN_A, seq: 9, delivery: "idle" },
+    { sessionKey: KEY_A, channelId: CHAN_A, seq: 9, delivery: "idle" },
   ]);
 });
 
@@ -69,13 +69,13 @@ test("ACK: a workspace with receipts and NO live sessions is still pushed", asyn
   // machine really has no sessions in that workspace — so the receipt does not need a session
   // to travel with.
   const { m, summary } = armed();
-  deliveryAck.note("ws-1", CHAN_A, 4, "refused", "user-a");
+  deliveryAck.note("ws-1", CHAN_A, 4, "refused", "user-a", KEY_A);
   summary.emit([]);
   await drained();
   assert.equal(m.posts.length, 1);
   assert.deepEqual(m.posts[0].options.body.sessions, []);
   assert.deepEqual(m.posts[0].options.body.acks, [
-    { channelId: CHAN_A, seq: 4, delivery: "refused" },
+    { sessionKey: KEY_A, channelId: CHAN_A, seq: 4, delivery: "refused" },
   ]);
 });
 
@@ -83,7 +83,7 @@ test("ACK: a failed send PUTS THEM BACK, and the next push carries them", async 
   // ⚠ A receipt taken and dropped is one this machine forgot it owed, and nothing ever asks
   // again. Same bargain the digest makes: not recorded, so the next real change retries.
   const { m, summary } = armed({ answers: [{ ok: false, status: 400 }] });
-  deliveryAck.note("ws-1", CHAN_A, 7, "woken", "user-a");
+  deliveryAck.note("ws-1", CHAN_A, 7, "woken", "user-a", KEY_A);
   summary.emit([entry()]);
   await drained();
   assert.equal(m.posts.length, 1);
@@ -94,7 +94,7 @@ test("ACK: a failed send PUTS THEM BACK, and the next push carries them", async 
   await drained();
   const last = m.posts[m.posts.length - 1];
   assert.deepEqual(last.options.body.acks, [
-    { channelId: CHAN_A, seq: 7, delivery: "woken" },
+    { sessionKey: KEY_A, channelId: CHAN_A, seq: 7, delivery: "woken" },
   ]);
   assert.deepEqual(deliveryAck.pendingWorkspaces("user-a"), []);
 });
@@ -105,7 +105,7 @@ test("ACK: a NEW operator's push never carries the previous one's receipts", asy
   // credential is the same defect. The fence is the identity STAMP on each receipt
   // (`delivery-ack.js`), so it holds even on a handover this writer never observed.
   const { m, summary, who } = armed();
-  deliveryAck.note("ws-1", CHAN_A, 7, "woken", "user-a");
+  deliveryAck.note("ws-1", CHAN_A, 7, "woken", "user-a", KEY_A);
   who.id = "user-b";
   summary.emit([entry()]);
   await drained();

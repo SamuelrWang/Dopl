@@ -73,7 +73,10 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
     // lose the projection to a failure in the lesser half.
     // ⚠ `acks` is OPTIONAL on the body: every installed desktop posts without it.
     const result = await reportSessionStates(ctx, input.sessions);
-    const acks = await recordDeliveryAcks(ctx, input.acks ?? []);
+    // 🔒 THE SESSION SET IS THE ACK'S FENCE, WHICH IS THE OTHER REASON THIS
+    // ORDER IS FIXED (review D3): a receipt may only name a session this push
+    // just reconciled, so the projection has to have landed first.
+    const acks = await recordDeliveryAcks(ctx, input.acks ?? [], input.sessions);
     return NextResponse.json({ ...result, ...acks });
   } catch (err) {
     return toChannelErrorResponse(err);

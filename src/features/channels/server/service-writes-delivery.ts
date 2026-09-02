@@ -66,15 +66,28 @@ export function weakerOrEqual(delivery: ChannelDelivery): ChannelDelivery[] {
 /**
  * Record every receipt in one push. Returns how many actually moved a row.
  *
- * ⚠ **THE FENCE IS CHANNEL MEMBERSHIP, ASKED ONCE PER CHANNEL.** A receipt is a
- * claim about a room, so the claimant has to be in it; `(channel_id, seq)` in
- * the statement then makes a mismatched pair update nothing rather than reach a
- * room the caller cannot see. ⚠ It is deliberately NOT "you must be the author"
- * and NOT "you must not be the author": an operator's own agents are fed that
- * operator's own posts (the fan-out ruling of 2026-08-21), so the author's
- * machine is a legitimate reporter.
+ * 🔒 **TWO FENCES, AND THE SECOND ONE IS THE POINT.**
  *
- * ⚠ **A RECEIPT FOR A ROOM THE CALLER IS NOT IN IS SKIPPED, NOT REFUSED.** Zod
+ * **(1) THE CLAIMANT HOLDS THE SESSION IT IS REPORTING FOR.** `ack.sessionKey`
+ * must name a session in `reported` — the live set this same push just
+ * reconciled into `channel_sessions` under `ctx.userId` — and that session must
+ * be in the channel the receipt names. ⚠ **WITHOUT THIS, MEMBERSHIP ALONE WAS
+ * THE FENCE**, so any member of a room could stamp `delivery: "woken"` on any
+ * `seq` in it. The write is MONOTONIC and `woken` is the top rank, so that stamp
+ * is PERMANENT: the machine that actually handled the message cannot correct it,
+ * and an orchestrator reading `delivery=woken` acts on a wake that never
+ * happened. The rank ordering makes the false claim durable, which is why this
+ * has to be closed at the door rather than resolved afterwards.
+ *
+ * **(2) CHANNEL MEMBERSHIP, ASKED ONCE PER CHANNEL.** Still asked, and not
+ * redundant: `reportSessionStates` writes the session set with no membership
+ * check of its own, so fence (1) alone would let a machine declare a session in
+ * a room it is not in and then report on it. ⚠ It is deliberately NOT "you must
+ * be the author" and NOT "you must not be the author": an operator's own agents
+ * are fed that operator's own posts (the fan-out ruling of 2026-08-21), so the
+ * author's machine is a legitimate reporter.
+ *
+ * ⚠ **A RECEIPT THAT FAILS EITHER FENCE IS SKIPPED, NOT REFUSED.** Zod
  * validates the ARRAY on this endpoint, and throwing here would take the whole
  * session push down with it — the unretryable 400 that leaves `read_sessions`
  * answering `[]` for a machine's LIVE sessions. The session set is the
@@ -83,9 +96,17 @@ export function weakerOrEqual(delivery: ChannelDelivery): ChannelDelivery[] {
  */
 export async function recordDeliveryAcks(
   ctx: ChannelContext,
-  acks: readonly DeliveryAckInput[]
+  acks: readonly DeliveryAckInput[],
+  // ⚠ THE SAME PUSH'S SESSION SET, ALREADY WRITTEN. Passed rather than re-read:
+  // the route reconciles it immediately before calling this, own-scoped to
+  // `ctx.userId` + `ctx.workspaceId`, so it IS "this caller's fresh
+  // `channel_sessions`" and asking the database again would answer the same
+  // rows one round trip later.
+  reported: readonly { sessionKey: string; channelId: string }[]
 ): Promise<{ stamped: number }> {
   if (acks.length === 0) return { stamped: 0 };
+
+  const ownSessions = new Map(reported.map((s) => [s.sessionKey, s.channelId]));
 
   // ⚠ ONE membership read per DISTINCT channel, memoized on the promise — a
   // machine reporting eight receipts for one room must not pay for eight.
@@ -102,8 +123,13 @@ export async function recordDeliveryAcks(
 
   let stamped = 0;
   for (const ack of acks) {
+    // ⚠ THE CHANNEL MUST MATCH THE SESSION'S OWN, not merely be a room the
+    // caller is in — a live session in room A does not license a receipt in
+    // room B.
+    if (ownSessions.get(ack.sessionKey) !== ack.channelId) continue;
     if (!(await isMember(ack.channelId))) continue;
     const moved = await repoMessages.stampDelivery(
+      ctx.workspaceId,
       ack.channelId,
       ack.seq,
       ack.delivery,

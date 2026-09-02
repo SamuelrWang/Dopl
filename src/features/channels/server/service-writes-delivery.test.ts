@@ -12,8 +12,15 @@ import * as repoMessages from "./repository-messages";
 
 /**
  * **THE WAKE ACK** (2026-09-02, A9) — what a machine did with a message, and the
- * two rules that make it safe to write from a desktop: MEMBERSHIP, and
- * MONOTONICITY.
+ * three rules that make it safe to write from a desktop: the SESSION BINDING,
+ * MEMBERSHIP, and MONOTONICITY.
+ *
+ * ⚠ **THE SESSION BINDING WAS MISSING AND MONOTONICITY IS WHAT MADE THAT
+ * SERIOUS** (closed 2026-09-02, review D3). With membership as the only fence,
+ * any member of a room could stamp `delivery: "woken"` on any `seq` in it — and
+ * because the write only ever moves UP the rank, `woken` is the top, and the
+ * machine that really handled the message can never correct it. A false receipt
+ * was permanent by design.
  */
 
 const CTX: ChannelContext = {
@@ -23,6 +30,22 @@ const CTX: ChannelContext = {
 
 const CHAN = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
+
+/** A session key as the desktop mints it — `<channelId>:<taskId>:<agentId>`. */
+const KEY = `${CHAN}::a1b2c3d4`;
+const OTHER_KEY = `${OTHER}::e5f6a7b8`;
+
+/** The live set this same push reconciled, as the route hands it over. */
+const reported = (...keys: string[]) =>
+  keys.map((k) => ({ sessionKey: k, channelId: k.split(":")[0] }));
+
+const ack = (over: Partial<{ sessionKey: string; channelId: string; seq: number; delivery: "woken" | "idle" | "refused" | "delivered" }> = {}) => ({
+  sessionKey: KEY,
+  channelId: CHAN,
+  seq: 42,
+  delivery: "woken" as const,
+  ...over,
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -55,16 +78,42 @@ describe("weakerOrEqual — the one ranking of the outcome vocabulary", () => {
 });
 
 describe("recordDeliveryAcks", () => {
-  it("stamps a receipt for a channel the caller is in", async () => {
-    const out = await recordDeliveryAcks(CTX, [
-      { channelId: CHAN, seq: 42, delivery: "woken" },
-    ]);
+  it("stamps a receipt for a session this push reported, in a channel the caller is in", async () => {
+    const out = await recordDeliveryAcks(CTX, [ack()], reported(KEY));
     expect(out).toEqual({ stamped: 1 });
-    expect(vi.mocked(repoMessages.stampDelivery).mock.calls[0].slice(0, 3)).toEqual([
+    // ⚠ THE WHOLE ARGUMENT LIST, NOT A PREFIX. A `.slice(0, 3)` here would drop
+    // the monotonic filter AND the workspace fence — the two arguments that make
+    // the write safe — so the case would stay green over a stamp that clobbered
+    // a stronger receipt in another tenant's row.
+    expect(vi.mocked(repoMessages.stampDelivery).mock.calls[0]).toEqual([
+      "ws-1",
       CHAN,
       42,
       "woken",
+      weakerOrEqual("woken"),
     ]);
+  });
+
+  it("SKIPS a receipt naming NO session of this machine's — the D3 fence", async () => {
+    // 🔒 THE ATTACK. Membership alone let any member of the room stamp a
+    // permanent `woken` on any seq. The claimant must hold the session it is
+    // reporting for, and the live set is the one this same push just reconciled.
+    await expect(
+      recordDeliveryAcks(CTX, [ack()], reported(OTHER_KEY))
+    ).resolves.toEqual({ stamped: 0 });
+    expect(vi.mocked(repoMessages.stampDelivery)).not.toHaveBeenCalled();
+    // ⚠ AND IT DOES NOT EVEN ASK ABOUT MEMBERSHIP — a receipt bound to nothing
+    // is refused before it costs a read.
+    expect(vi.mocked(repo.findMembership)).not.toHaveBeenCalled();
+  });
+
+  it("SKIPS a receipt whose session is in a DIFFERENT room than the one it names", async () => {
+    // ⚠ A live session in room A does not license a receipt in room B, even
+    // though the caller is a member of both.
+    await expect(
+      recordDeliveryAcks(CTX, [ack({ channelId: OTHER })], reported(KEY))
+    ).resolves.toEqual({ stamped: 0 });
+    expect(vi.mocked(repoMessages.stampDelivery)).not.toHaveBeenCalled();
   });
 
   it("SKIPS a receipt for a channel the caller is not in — it does not throw", async () => {
@@ -72,19 +121,26 @@ describe("recordDeliveryAcks", () => {
     // whole session push down with it: an unretryable 400 that leaves
     // `read_sessions` answering [] for the machine's LIVE sessions. The
     // projection is what a whole tool reads; the receipt loses the tie.
+    // ⚠ AND THE MEMBERSHIP READ IS NOT REDUNDANT BEHIND THE BINDING:
+    // `reportSessionStates` writes the session set with no membership check of
+    // its own, so a machine can declare a session in a room it is not in.
     vi.mocked(repo.findMembership).mockResolvedValue(null);
     await expect(
-      recordDeliveryAcks(CTX, [{ channelId: CHAN, seq: 1, delivery: "woken" }])
+      recordDeliveryAcks(CTX, [ack({ seq: 1 })], reported(KEY))
     ).resolves.toEqual({ stamped: 0 });
     expect(vi.mocked(repoMessages.stampDelivery)).not.toHaveBeenCalled();
   });
 
   it("asks for membership ONCE per distinct channel", async () => {
-    await recordDeliveryAcks(CTX, [
-      { channelId: CHAN, seq: 1, delivery: "idle" },
-      { channelId: CHAN, seq: 2, delivery: "woken" },
-      { channelId: OTHER, seq: 3, delivery: "refused" },
-    ]);
+    await recordDeliveryAcks(
+      CTX,
+      [
+        ack({ seq: 1, delivery: "idle" }),
+        ack({ seq: 2 }),
+        ack({ sessionKey: OTHER_KEY, channelId: OTHER, seq: 3, delivery: "refused" }),
+      ],
+      reported(KEY, OTHER_KEY)
+    );
     expect(vi.mocked(repo.findMembership).mock.calls.map((c) => c[0])).toEqual([
       CHAN,
       OTHER,
@@ -98,15 +154,16 @@ describe("recordDeliveryAcks", () => {
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
     expect(
-      await recordDeliveryAcks(CTX, [
-        { channelId: CHAN, seq: 1, delivery: "woken" },
-        { channelId: CHAN, seq: 2, delivery: "refused" },
-      ])
+      await recordDeliveryAcks(
+        CTX,
+        [ack({ seq: 1 }), ack({ seq: 2, delivery: "refused" })],
+        reported(KEY)
+      )
     ).toEqual({ stamped: 1 });
   });
 
   it("writes nothing at all for an empty list", async () => {
-    expect(await recordDeliveryAcks(CTX, [])).toEqual({ stamped: 0 });
+    expect(await recordDeliveryAcks(CTX, [], reported(KEY))).toEqual({ stamped: 0 });
     expect(vi.mocked(repo.findMembership)).not.toHaveBeenCalled();
   });
 });

@@ -65,7 +65,7 @@ interface Machine {
 /** One desktop, with a live roster and a recorder for what it fed and what it acked. */
 function machine(live: Session[]) {
   const fed: Array<{ agentId: string; wake: boolean }> = [];
-  const acked: Array<[string, string, number, string, string]> = [];
+  const acked: Array<[string, string, number, string, string, string]> = [];
   const api = new Function(
     "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles",
     "deliveryAck", "diag",
@@ -88,7 +88,7 @@ function machine(live: Session[]) {
       verdictFor: deliveryAck.verdictFor,
       // ⚠ The BUFFER is a recorder: it holds module state keyed by workspace, so a real one
       // would leak one case's receipts into the next. `delivery-ack.test.mjs` drives it.
-      note: (...a: [string, string, number, string, string]) => { acked.push(a); return true; },
+      note: (...a: [string, string, number, string, string, string]) => { acked.push(a); return true; },
     },
     () => {}
   ) as Machine;
@@ -120,11 +120,15 @@ function sessionRow(name: string, displayName: string | null = null): SessionSta
   } as SessionStateRow;
 }
 
+// ⚠ `key` IS PART OF THE FIXTURE BECAUSE THE RECEIPT NAMES IT (2026-09-02, review D3) and the
+// server's ack fence checks it against this machine's own live set. `session-store.js ›
+// sessionKey`'s three-part shape, carried — not composed inside the dispatch.
 const agent = (id: string, over: Partial<Session> = {}): Session => ({
   agentId: id,
+  key: `${CHAN}::${id}`,
   ownPostIds: new Set<string>(),
   ...over,
-});
+} as Session);
 
 /**
  * ONE POST, END TO END: the server resolves it, the row is written as the server would write
@@ -233,7 +237,10 @@ describe("the receipt says what the machine actually did", () => {
     const { desktop } = await post(`@agent-${A1} go`, [
       agent(A1, { awaitingDirective: true }),
     ]);
-    expect(desktop.acked).toEqual([["ws-1", CHAN, 42, "woken", ME]]);
+    // ⚠ THE SIXTH ELEMENT IS THE FENCE, not decoration: `service-writes-delivery.ts` skips a
+    // receipt whose session key is not in this machine's own live set, so a dispatch that filed
+    // an unkeyed one would look right here and land nothing.
+    expect(desktop.acked).toEqual([["ws-1", CHAN, 42, "woken", ME, `${CHAN}::${A1}`]]);
   });
 
   it("reports `delivered` when the named agent was ALREADY running", async () => {

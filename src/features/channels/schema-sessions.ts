@@ -364,6 +364,31 @@ const SESSION_REPORT_MAX = 32;
  * carrying an id the dispatch path has no reason to keep.
  */
 export const DeliveryAckSchema = z.object({
+  /**
+   * 🔒 **WHICH OF THIS MACHINE'S SESSIONS IS REPORTING** — the fence, not a
+   * label (2026-09-02, review D3).
+   *
+   * ⚠ **WITHOUT IT THE ONLY FENCE WAS CHANNEL MEMBERSHIP**, so any member of a
+   * room could post `delivery: "woken"` for any `seq` in it, and the write is
+   * MONOTONIC — `woken` is the top rank, so the lie is permanent and no later
+   * receipt from the machine that actually handled the message can correct it.
+   * A receipt is a claim about what a MACHINE did; the claimant must therefore
+   * hold a live session on that machine, in that room.
+   *
+   * ⚠ **CHECKED AGAINST THE SESSION SET IN THIS SAME PUSH**, which
+   * `reportSessionStates` has already reconciled into `channel_sessions` under
+   * this caller's own id — so the binding costs no read and cannot name a
+   * session belonging to somebody else. `service-writes-delivery.ts` states the
+   * arms.
+   *
+   * ⚠ **REQUIRED, NOT OPTIONAL, AND THAT IS ONLY SAFE BECAUSE `acks` IS NEW.**
+   * The compatibility rule everywhere else on this body is that a required
+   * field 400s the whole push from an installed desktop; nothing in the field
+   * sends `acks` at all (A9 ships the first writer, `main/delivery-ack.js`), so
+   * there is no older payload to break. A LATER field on this object must be
+   * optional again.
+   */
+  sessionKey: z.string().regex(SESSION_KEY_RE, "Invalid session key"),
   channelId: z.string().uuid(),
   seq: z.number().int().positive(),
   delivery: closedEnum<MachineDelivery>()([

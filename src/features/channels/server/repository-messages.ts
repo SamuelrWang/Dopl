@@ -316,6 +316,11 @@ export async function findMessageById(
  * Returns whether a row moved, so the service can report what it actually wrote.
  */
 export async function stampDelivery(
+  // ⚠ THE TENANT TERM IS IN THE STATEMENT, not merely in the caller's context.
+  // `channel_messages.workspace_id` is denormalized for exactly this
+  // (`20260725120000`), every other write on this table carries it, and a fence
+  // that lives only in the service is one refactor away from being nowhere.
+  workspaceId: string,
   channelId: string,
   seq: number,
   delivery: string,
@@ -325,6 +330,7 @@ export async function stampDelivery(
   const { data, error } = await db
     .from("channel_messages")
     .update({ delivery, delivery_at: new Date().toISOString() })
+    .eq("workspace_id", workspaceId)
     .eq("channel_id", channelId)
     .eq("seq", seq)
     .or(`delivery.is.null,delivery.in.(${weakerOrEqual.join(",")})`)

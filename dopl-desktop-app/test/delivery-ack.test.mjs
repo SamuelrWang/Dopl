@@ -11,6 +11,11 @@
 //      400s the WHOLE push, sessions included, unretryably.
 //   3. RESTORE after a failed send — a receipt taken and dropped is one this machine forgot
 //      it owed, and nothing ever asks again.
+//   4. EVERY RECEIPT NAMES A SESSION, and the operator is part of the slot (2026-09-02, review
+//      D3): the server skips an ack whose `sessionKey` is not in this machine's own live set,
+//      and the strengthen-only rule now holds unconditionally rather than only within one
+//      identity — two operators' receipts for one message are two claims, not one contested
+//      slot, and the weaker one could previously overwrite the stronger.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -26,6 +31,9 @@ const acks = require(join(HERE, "..", "main", "delivery-ack.js"));
 const WS = "ws-1";
 const CH = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 const ME = "user-a";
+// A session key as `main/session-store.js › sessionKey` mints it, carried onto every receipt
+// since the server made it the fence (review D3).
+const KEY = CH + ":" + ":" + "a1b2c3d4";
 
 test.beforeEach(() => acks.reset());
 
@@ -44,30 +52,30 @@ test("VOCABULARY: exactly the four words a MACHINE may report", () => {
   // ⚠ The server's set has two more — `none` and `unreachable` — and they are ITS answers
   // about a message it resolved. Sending one 400s the whole push.
   assert.deepEqual(acks.DELIVERY_RANK, ["refused", "idle", "delivered", "woken"]);
-  assert.equal(acks.note(WS, CH, 1, "none", ME), false);
-  assert.equal(acks.note(WS, CH, 1, "unreachable", ME), false);
-  assert.equal(acks.note(WS, CH, 1, "nonsense", ME), false);
+  assert.equal(acks.note(WS, CH, 1, "none", ME, KEY), false);
+  assert.equal(acks.note(WS, CH, 1, "unreachable", ME, KEY), false);
+  assert.equal(acks.note(WS, CH, 1, "nonsense", ME, KEY), false);
   assert.deepEqual(acks.take(WS, ME), []);
 });
 
 test("ONE RECEIPT PER MESSAGE, and it only ever strengthens", () => {
-  assert.equal(acks.note(WS, CH, 7, "idle", ME), true);
-  assert.equal(acks.note(WS, CH, 7, "woken", ME), true);
+  assert.equal(acks.note(WS, CH, 7, "idle", ME, KEY), true);
+  assert.equal(acks.note(WS, CH, 7, "woken", ME, KEY), true);
   // ⚠ THE CASE THE RANK EXISTS FOR: a later, weaker report must not undo a wake.
-  assert.equal(acks.note(WS, CH, 7, "refused", ME), false);
-  assert.deepEqual(acks.take(WS, ME), [{ channelId: CH, seq: 7, delivery: "woken" }]);
+  assert.equal(acks.note(WS, CH, 7, "refused", ME, KEY), false);
+  assert.deepEqual(acks.take(WS, ME), [{ sessionKey: KEY, channelId: CH, seq: 7, delivery: "woken" }]);
 });
 
 test("a different seq, and a different channel, are different messages", () => {
-  acks.note(WS, CH, 1, "idle", ME);
-  acks.note(WS, "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb", 1, "woken", ME);
-  acks.note(WS, CH, 2, "refused", ME);
+  acks.note(WS, CH, 1, "idle", ME, KEY);
+  acks.note(WS, "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb", 1, "woken", ME, KEY);
+  acks.note(WS, CH, 2, "refused", ME, KEY);
   assert.equal(acks.take(WS, ME).length, 3);
 });
 
 test("SCOPE: receipts are per workspace, and `take` empties only that one", () => {
-  acks.note(WS, CH, 1, "woken", ME);
-  acks.note("ws-2", CH, 2, "idle", ME);
+  acks.note(WS, CH, 1, "woken", ME, KEY);
+  acks.note("ws-2", CH, 2, "idle", ME, KEY);
   assert.deepEqual(acks.pendingWorkspaces(ME).sort(), ["ws-1", "ws-2"]);
   assert.equal(acks.take(WS, ME).length, 1);
   assert.deepEqual(acks.pendingWorkspaces(ME), ["ws-2"]);
@@ -76,7 +84,7 @@ test("SCOPE: receipts are per workspace, and `take` empties only that one", () =
 test("BOUND: the oldest news is evicted, never the newest", () => {
   // ⚠ A bound that dropped the NEWEST would make this module quietest exactly when the machine
   // is busiest — i.e. when an orchestrator is most likely to be waiting on a receipt.
-  for (let seq = 1; seq <= acks.MAX_PENDING + 3; seq += 1) acks.note(WS, CH, seq, "idle", ME);
+  for (let seq = 1; seq <= acks.MAX_PENDING + 3; seq += 1) acks.note(WS, CH, seq, "idle", ME, KEY);
   const out = acks.take(WS, ME);
   assert.equal(out.length, acks.MAX_PENDING);
   assert.equal(out[0].seq, 4);
@@ -84,9 +92,9 @@ test("BOUND: the oldest news is evicted, never the newest", () => {
 });
 
 test("BOUND: re-noting an old message makes it NEW, so it is not evicted next", () => {
-  for (let seq = 1; seq <= acks.MAX_PENDING; seq += 1) acks.note(WS, CH, seq, "idle", ME);
-  acks.note(WS, CH, 1, "woken", ME); // strengthened, and therefore re-inserted at the end
-  acks.note(WS, CH, 999, "idle", ME); // pushes the bound over by one
+  for (let seq = 1; seq <= acks.MAX_PENDING; seq += 1) acks.note(WS, CH, seq, "idle", ME, KEY);
+  acks.note(WS, CH, 1, "woken", ME, KEY); // strengthened, and therefore re-inserted at the end
+  acks.note(WS, CH, 999, "idle", ME, KEY); // pushes the bound over by one
   const out = acks.take(WS, ME);
   assert.equal(out.length, acks.MAX_PENDING);
   assert.ok(out.some((a) => a.seq === 1 && a.delivery === "woken"), "seq 1 survived as woken");
@@ -94,14 +102,14 @@ test("BOUND: re-noting an old message makes it NEW, so it is not evicted next", 
 });
 
 test("RESTORE: a failed send puts them back, without clobbering newer news", () => {
-  acks.note(WS, CH, 7, "idle", ME);
+  acks.note(WS, CH, 7, "idle", ME, KEY);
   const taken = acks.take(WS, ME);
   assert.deepEqual(acks.pendingWorkspaces(ME), []);
   // …the agent woke while the POST was in flight…
-  acks.note(WS, CH, 7, "woken", ME);
+  acks.note(WS, CH, 7, "woken", ME, KEY);
   acks.restore(WS, taken, ME);
   // ⚠ RESTORE GOES THROUGH `note`, so the in-flight loss cannot walk a stronger answer back.
-  assert.deepEqual(acks.take(WS, ME), [{ channelId: CH, seq: 7, delivery: "woken" }]);
+  assert.deepEqual(acks.take(WS, ME), [{ sessionKey: KEY, channelId: CH, seq: 7, delivery: "woken" }]);
 });
 
 test("IDENTITY: another operator's receipts are invisible, and are not destroyed either", () => {
@@ -109,7 +117,7 @@ test("IDENTITY: another operator's receipts are invisible, and are not destroyed
   // dispatch can file a receipt that is still buffered when B signs in on the same Mac —
   // posting it under B's credential would attribute A's delivery to B. The stamp holds whether
   // or not anything NOTICED the handover, which is why it is a stamp and not a clear.
-  acks.note(WS, CH, 1, "woken", ME);
+  acks.note(WS, CH, 1, "woken", ME, KEY);
   assert.deepEqual(acks.pendingWorkspaces("user-b"), []);
   assert.deepEqual(acks.take(WS, "user-b"), []);
   // ⚠ …AND A's IS STILL THERE. Signing back in as A must not have cost them a receipt.
@@ -117,20 +125,44 @@ test("IDENTITY: another operator's receipts are invisible, and are not destroyed
 });
 
 test("IDENTITY: a receipt with no operator is refused rather than buffered unreachably", () => {
-  assert.equal(acks.note(WS, CH, 1, "woken", ""), false);
+  assert.equal(acks.note(WS, CH, 1, "woken", "", KEY), false);
   assert.deepEqual(acks.pendingWorkspaces(ME), []);
 });
 
+test("SESSION: a receipt naming no session is dropped — the server would skip it anyway", () => {
+  // 🔒 THE D3 FENCE'S CLIENT HALF. `service-writes-delivery.ts` requires the key to name a
+  // session in this machine's own live set, so an unkeyed receipt can never land; buffering it
+  // spends the eviction bound on something that is already lost.
+  assert.equal(acks.note(WS, CH, 1, "woken", ME, ""), false);
+  assert.deepEqual(acks.pendingWorkspaces(ME), []);
+});
+
+test("IDENTITY: strengthen-only holds ACROSS operators, not just within one", () => {
+  // ⚠ THE DEFECT THIS CLOSES (2026-09-02). The slot used to be `${channel}:${seq}` with the
+  // rank check conditioned on `held.userId === who`, so B's `refused` fell through the check
+  // and overwrote A's `woken` — destroying a claim only A may ever make, in the one situation
+  // the identity stamp exists for. The operator is part of the slot now, so both survive and
+  // each is handed back to its own owner.
+  acks.note(WS, CH, 9, "woken", ME, KEY);
+  acks.note(WS, CH, 9, "refused", "user-b", KEY);
+  assert.deepEqual(acks.take(WS, ME), [
+    { sessionKey: KEY, channelId: CH, seq: 9, delivery: "woken" },
+  ]);
+  assert.deepEqual(acks.take(WS, "user-b"), [
+    { sessionKey: KEY, channelId: CH, seq: 9, delivery: "refused" },
+  ]);
+});
+
 test("RESET: the suite hook clears module state so cases cannot leak into each other", () => {
-  acks.note(WS, CH, 1, "woken", ME);
+  acks.note(WS, CH, 1, "woken", ME, KEY);
   acks.reset();
   assert.deepEqual(acks.pendingWorkspaces(ME), []);
 });
 
 test("a malformed receipt is dropped rather than queued for a 400", () => {
-  assert.equal(acks.note("", CH, 1, "woken", ME), false);
-  assert.equal(acks.note(WS, "", 1, "woken", ME), false);
-  assert.equal(acks.note(WS, CH, 0, "woken", ME), false);
-  assert.equal(acks.note(WS, CH, "seven", "woken", ME), false);
+  assert.equal(acks.note("", CH, 1, "woken", ME, KEY), false);
+  assert.equal(acks.note(WS, "", 1, "woken", ME, KEY), false);
+  assert.equal(acks.note(WS, CH, 0, "woken", ME, KEY), false);
+  assert.equal(acks.note(WS, CH, "seven", "woken", ME, KEY), false);
   assert.deepEqual(acks.pendingWorkspaces(ME), []);
 });
