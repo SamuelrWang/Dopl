@@ -6856,4 +6856,34 @@ integration merge brought it in.
   form. The desktop one now carries both spellings, with this reason written beside it.
 - **Resolved** by deleting the tracked link and restoring the tree with `npm ci --ignore-scripts`
   (`package-lock.json` unchanged). Desktop suite then measured 2948 pass / 0 fail.
+### F-417 — THE FOUR REVIEW RULINGS OF 2026-09-02 (R1–R4), taken as Desktop Agent DEFAULTS
+
+An independent review of `integration/mcp-efficiency` produced 34 findings; four of them could not
+be fixed without deciding a product question first. **The Desktop Agent took each as the STRICT
+default and shipped it. ⚠ EVERY ONE IS SAMUEL'S TO LOOSEN — none is settled, and each is recorded
+here with the exact edit that reverses it**, so loosening is a one-line change and not an
+archaeology exercise.
+
+The shared reasoning, stated once: **all four move in the NARROWING direction, and all four are
+cheap to reverse and expensive to have got wrong.** Three of them close a gap where an agent token
+reached further than the surface it belongs to claims; the fourth tightens an op to the wording its
+own spec uses. A narrowing that turns out to be wrong produces a refusal somebody reports on day
+one; a widening that turns out to be wrong produces nothing anybody sees.
+
+| # | Ruling | Where it lives | To loosen |
+|---|---|---|---|
+| **R1** | The pings READ lane enforces channel MEMBERSHIP **and** party, matching `channel_pings_party_select`, instead of party alone. | `channels/server/service-pings.ts › listPings`, `service-pings-await.ts › awaitPings`, `repository-pings.ts` | Drop the `channelIds` argument from the two repository reads and the proof from the two services. ⚠ Then the REST lane is WIDER than the client lane for a removed member, and `service-pings-await.ts`'s old docblock (that delivery past a departure is designed) becomes true again — say so in `docs/specs/needs-you-ping.md`, which now says the opposite. |
+| **R2** | The copy ops take operator-**OWNED** sources, not "anything the caller can read". | `mcp-server/src/tools/copy-target.ts › notOwnedRefusal`, called from both `opCopy` and `opCopyBase` | Delete the two call sites. ⚠ Then a teammate's `workspace`-visible template or shared base copies into a container that teammate may not be in, landing PRIVATE to the copier — and INVARIANTS §10 says "an operator's OWN template or knowledge base", so that wording moves with it. |
+| **R3** | The two account routes honour `ctx.apiKeyWorkspaceId`, narrowing to the locked workspace. | `app/api/channels/account/{status,messages}/route.ts` → `service-account.ts` → `repository-account.ts › listAccountChannelRefs` | Stop passing `lockedWorkspaceId`. ⚠ Then a container-locked credential reads channel names, operator-only session telemetry and message previews out of every workspace its operator belongs to — B1's ceiling is enforced by `withWorkspaceAuth` everywhere else and these two routes deliberately do not use it. |
+| **R4** | The pin/unpin routes are `sessionOnly`, on the channel-grants precedent. | `app/api/knowledge/bases/[baseId]/pin/route.ts`, `app/api/knowledge/entries/[entryId]/pin/route.ts` | Remove the flag from both, and from the census in `shared/auth/write-gate-coverage.test.ts`. ⚠ Then an agent token decides what every agent session launched in the workspace afterwards is handed at startup. **The MCP ops `dopl_kb(op="pin"|"unpin")` still work today for a human's session; what R4 refuses is the agent token.** |
+
+- ⚠ **THE REVIEW ALSO CONTESTED ONE FINDING, AND THE CODE WAS LEFT ALONE.** It read
+  `agent-templates/server/repository-tenancy.ts`'s `workspaces!inner` embed as violating the tree's
+  "`!inner` 500s on this schema" rule. That note (`app/api/user/delete/route.ts`) is about joining
+  OUT of `workspaces` after the May 2026 denormalizations; this is a child embedding its PARENT by
+  FK, the shape `workspaces/server/repository.ts › listWorkspacesForUser` and
+  `home/server/repository-containers.ts › listLinkContainers` run on every workspace list.
+  `grep -rn '!inner' src --include='*.ts'` measures it. The half of that finding that WAS right —
+  no coverage over the real query — is `repository-tenancy.test.ts`.
+- Status: **decisions recorded, code shipped.** Not debt; a standing question.
 

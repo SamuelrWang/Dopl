@@ -135,3 +135,67 @@ the number.
 Two known flakes rerun green in isolation and are **not** integration breakage:
 `src/app/api/mcp/credits/consume/route-guest-floor.test.ts` (worker teardown race) and
 `src/shared/version/latest-release.test.ts` (real clock).
+
+## Review fixes 2026-09-02
+
+An independent Opus review of this branch produced **34 findings** — 1 BLOCKER, 17 MAJOR, 14 MINOR,
+2 NIT — plus four rulings the Desktop Agent took as strict defaults. All are landed. ⚠ **STILL
+UNPUSHED, so CI still has not run**; every figure below is a local measurement.
+
+### Finding → commit
+
+| Finding | Commit |
+|---|---|
+| **BLOCKER** the pings migration's `20260907120000` version collision (renamed to `20260907130000_channel_pings.sql`) | `9af6f6fc` |
+| **R1** the ping read lane's membership fence (+ the C-15 tombstone guard, the census, and both migrations' missing `DROP … IF EXISTS`) | `0a61455f` |
+| **R3** `ctx.apiKeyWorkspaceId` on the two account routes | `93ced677` |
+| `service-account.ts` / `repository-account.ts` had no tests in `src/` (the second was cited by name and did not exist) | `72970840` |
+| `channel-schema.ts` `channel`.describe(); `tool-budget.test.ts`'s downward ratchet | `c633622f` |
+| `opReadSessionsAccount` rendering the pre-terse line; `TENANCY_FIX`'s "once that op exists" | `c1765cab` |
+| **R2** copy = OWNED, and `createKbBase`'s unmapped 403 outside the try/catch | `95f355fa` |
+| `repository-tenancy.ts` untested (the `!inner` half **CONTESTED** — see below) | `e38bf300` |
+| the chain refusal's own word `no-chain`; the clamped `set_agent_mode` echo | `a6b0af31` |
+| T51's staleness clock stamped before the verdict | `ff7ea3d5` |
+| `service-base-writes.ts` at 498/500, and `launch-directive-wire.js` pushed to 512 (**F-415**) | `9ae8f49a` |
+| **F-409** open on a branch that closes it; T23 credited to this wave | `37e4f0b9` |
+| **R4** the pin routes; the framing docblock's "two await lanes" and its duplicated paragraph (**F-407** extended) | `a153d761` |
+| the nine remaining MINORs + the last NIT, and a new drift gate | `bfe5c546` |
+
+### The four rulings — Desktop Agent defaults, Samuel may loosen
+
+Recorded in full, with the exact edit that reverses each, as **F-417** in the findings log.
+
+1. **R1** — the pings READ lane enforces channel membership AND party, matching the RLS policy,
+   rather than party alone. The hold gained the `AWAIT_REVALIDATE_EVERY_TICKS` cadence its two
+   siblings run, and `service-pings-await.ts` / `docs/specs/needs-you-ping.md` are corrected: both
+   argued that delivery past a departure was designed.
+2. **R2** — `dopl_agent(op="copy")` and `dopl_kb(op="copy_base")` copy what the operator OWNS, per
+   the spec's own wording, and fail CLOSED on an unprovable owner.
+3. **R3** — the two account routes narrow to `ctx.apiKeyWorkspaceId`. They use `withUserAuth`
+   deliberately, so nothing upstream applied B1's ceiling.
+4. **R4** — the pin/unpin routes are `sessionOnly`, on the channel-grants precedent.
+
+### CONTESTED — one finding, code unchanged
+
+**`agent-templates/server/repository-tenancy.ts` and the `workspaces!inner` embed.** The reviewer
+read it as violating the tree's "`!inner` embeds 500 on this schema" rule. That note lives in
+`app/api/user/delete/route.ts` and is about joining OUT of `workspaces` after the May 2026
+denormalizations; this is a child embedding its PARENT by FK — the identical shape
+`workspaces/server/repository.ts › listWorkspacesForUser` and
+`home/server/repository-containers.ts › listLinkContainers` run on every workspace list in the
+product. `grep -rn '!inner' src --include='*.ts'` answers eight production sites. The half that was
+right — no coverage over the real query — is `repository-tenancy.test.ts`.
+
+### What the review changed about the gates themselves
+
+- **`scripts/check-session-health-drift.ts` is new** and is the SIXTH non-suite gate. ⚠ It shipped
+  **with its row in CLAUDE.md and INVARIANTS §14 in the same change** — which is precisely the
+  remedy the three warnings in both docs have been asking for after `check-role-drift` and
+  `check-css-token-drift` each landed without one.
+- **The description ratchet's downward half was asserting nothing** (`Math.min(ceiling, cap)`
+  collapsed to the cap for every entry). Repaired, it immediately caught two real shrinks in this
+  same pass — `dopl_kb` 3,400 → 3,399 and `dopl_channel` 1,781 → 1,775 — which is the class of
+  regression it exists for.
+- **The refusal vocabulary is TEN words** and `channel_launch_directives_refusal_reason_check` is
+  re-created WHOLE in `20260910120000_…_posture.sql` §3A, asserting every earlier word survived and
+  that `template-approval` still cannot be stored.
