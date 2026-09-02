@@ -70,10 +70,16 @@ version `20260901120000` — pre-existing, named in F-526, and now fenced so a s
 
 ## Gates — all green at `a950e733`
 
-Five suites (root **5,556**; mcp-server **1,445**; client **58**; desktop-ui **433**; desktop
-**3,048**), both lints (root `--max-warnings 0`), both typechecks incl. `-w @dopl/desktop-ui`, and
-**nine** non-suite gates re-derived from `grep -n 'run:' .github/workflows/ci.yml` — `check-doc-refs`,
-`size-check`, five drift scripts, the RLS pair gate, and the committed-`dist` check (clean without a
-rebuild commit: no merge after B5's `chore(dist)` moved package `src/`).
+Five suites — root **5,557** (373 files, 7 skipped), mcp-server **1,445**, client **58**, desktop-ui
+**433**, desktop **3,048** — both lints (root `--max-warnings 0`), both typechecks incl.
+`-w @dopl/desktop-ui`, and **nine** non-suite gates re-derived from
+`grep -n 'run:' .github/workflows/ci.yml`: `check-doc-refs`, `size-check`, five drift scripts, the
+RLS pair gate, and the committed-`dist` check — the last clean with no rebuild commit, because no
+merge after B5's `chore(dist)` moved package `src/`.
 
-⚠ One known flake hit on the full root run — `shared/version/latest-release`, green in isolation.
+⚠ **TWO KNOWN FLAKES, BOTH ON THE LIST, NEITHER A TEST FAILURE.** `shared/version/latest-release`
+failed once on an early full run and is green in isolation. `billing/credits-link-reroute` raises an
+`EnvironmentTeardownError` (a worker closing its rpc with a console log pending) that makes vitest
+EXIT NON-ZERO while every test passes — ⚠ **and it does so identically at `v2/wave-a` `523bfc92`,
+verified in a scratch worktree, so it is inherited rather than introduced.** It is the reason a
+`npm test` exit code cannot be read as the suite's verdict today; read the file/test counts.
