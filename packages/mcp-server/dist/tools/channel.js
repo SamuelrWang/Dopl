@@ -350,8 +350,20 @@ directory) {
             // instead of erroring. The inbox is a bounded list of signals rather
             // than a transcript, so the newest page answers it; that leaves exactly
             // one cursor space on this tool and nothing to cross into.
-            case "pings":
+            case "pings": {
+                // ⚠ **REFUSED, NOT DROPPED (2026-09-02).** `since` is a real param on
+                // this tool and the comment above says why it is not one HERE — but
+                // the arm accepted it and threw it away, so a caller paging its inbox
+                // got the newest page back with no sign its cursor had been ignored,
+                // which is the silent-wrong-page failure the exclusion exists to
+                // prevent. The house rule is that an unknown argument is REFUSED
+                // rather than stripped (`registrar.ts › strictInput`); a known
+                // argument on an op that cannot honour it is the same shape.
+                if (args.since !== undefined) {
+                    return (0, respond_1.err)(`Refused before sending: op="pings" takes no \`since\` — the ping inbox is a bounded list of signals, not a transcript, and its seqs are a SECOND cursor space that one \`since\` cannot address without reading a plausible WRONG page. Re-issue with \`limit\` alone for the newest page; use \`since\` on op="read" / op="await", where the channel's own seqs live.`);
+                }
                 return (0, channel_ops_ping_1.opReadPings)(client, { limit: args.limit });
+            }
             // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by
             // the same route and are deliberately NOT routed here (Samuel's ruling
             // Q12 (b); F-346 holds the rename hole open). ⚠ `info_card` OMITTED is

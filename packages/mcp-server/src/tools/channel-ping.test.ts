@@ -300,9 +300,26 @@ describe('op="pings" — the inbox', () => {
    * erroring. The remedy is one space, not a prefix: `since` is the message seq
    * and nothing else, and this op hands back the newest page.
    */
-  it("takes NO cursor — `since` never reaches the ping lane", async () => {
+  it("REFUSES a `since` rather than dropping it, and reads nothing", async () => {
+    // ⚠ **DROPPING IT WAS THE WHOLE DEFECT WEARING A SMALLER HAT** (fixed
+    // 2026-09-02). The arm accepted `since` and threw it away, so a caller
+    // paging its inbox got the NEWEST page back with no sign its cursor had been
+    // ignored — the plausible-wrong-page failure C13 removed the cursor to
+    // prevent, arriving through the door C13 left open. The house rule is that
+    // an unknown argument is refused rather than stripped; a KNOWN argument on
+    // an op that cannot honour it is the same shape.
     const client = pingStub();
-    await run(client, { op: "pings", since: 4, limit: 5 });
+    const out = await run(client, { op: "pings", since: 4, limit: 5 });
+    expect(out).toMatch(/Refused before sending/);
+    expect(out).toMatch(/no `since`/);
+    // …and it names the ops where the cursor is real, so the caller has a move.
+    expect(out).toMatch(/op="await"/);
+    expect(client.listPings as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+  });
+
+  it("without one, the limit still reaches the lane untouched", async () => {
+    const client = pingStub();
+    await run(client, { op: "pings", limit: 5 });
     const list = client.listPings as unknown as ReturnType<typeof vi.fn>;
     expect(list.mock.calls[0][0]).toEqual({ limit: 5 });
   });
