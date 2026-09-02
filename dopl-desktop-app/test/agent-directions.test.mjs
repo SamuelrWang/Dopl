@@ -157,8 +157,13 @@ test("CONSENT: a disarm really drops the handler, so a stale frame reaches nothi
   const calls = [];
   const chan = { on: (...a) => { calls.push(a); return chan; } };
   mailboxes.applyBindings(chan, WS);
-  assert.equal(calls.length, 1, "armed: one extra binding is chained on");
-  assert.equal(calls[0][1].table, "channel_agent_directions");
+  // ⚠ TWO SINCE 2026-09-01, and the second one is not a consent: `channel_pings` is bound
+  // UNCONDITIONALLY (`realtime-mailboxes.js › applyBindings` states why — a ping buys an
+  // external agent no compute and opens no private turn, so it has no toggle and therefore
+  // never has to be flipped). What this case is about is the DIRECTIONS table, so it asserts
+  // on that table by name rather than on the count of everything riding the socket.
+  const armedTables = calls.map((c) => c[1].table);
+  assert.deepEqual(armedTables, ["channel_agent_directions", "channel_pings"]);
   calls[0][2]({ new: row() });
   assert.equal(seen.length, 1, "and the handler receives the raw row");
 
@@ -166,7 +171,11 @@ test("CONSENT: a disarm really drops the handler, so a stale frame reaches nothi
   const off = [];
   const chanOff = { on: (...a) => { off.push(a); return chanOff; } };
   mailboxes.applyBindings(chanOff, WS);
-  assert.equal(off.length, 0, "disarmed: the table is never named on the wire at all");
+  assert.equal(
+    off.filter((c) => c[1].table === "channel_agent_directions").length,
+    0,
+    "disarmed: the table is never named on the wire at all"
+  );
   assert.equal(rejoins, 2, "every flip rejoins — bindings are fixed at JOIN time");
   mailboxes.reset();
 });
