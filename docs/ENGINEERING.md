@@ -5880,3 +5880,53 @@ have meant, and a paragraph that costs a request is a paragraph twice over.
 its smallest honest size — a headline, one line per op, the tenancy wording the P3 tier owns, and
 security sentences other suites pin by phrase. They sit under a ratchet that only moves down, with a
 second test that fails a stale ceiling. Adding a name to that list is not a fix.
+
+## 2026-09-01 — Six branches, one file: what an integration actually decides
+
+Six tiers of the MCP agent-efficiency wave were built in parallel, each green in isolation, and
+merged onto `integration/mcp-efficiency` in one sitting. Every branch passed its own gates. The
+integration still had to make five decisions no tier could have made alone, and the shape of those
+decisions is the thing worth keeping.
+
+**A merge order is a set of rulings, not a sequence.** The order was P0 → P3 → P1 → desktop →
+surface → ping, and each position bought something. P0 first because a BUG FIX is the one change
+that must not be re-litigated by a later tier's restyling. P1 third because it owned every tool
+description and every write-result renderer, so it had to land after the two tiers whose sentences
+it was shrinking — and its ownership was declared BEFORE the merge, which is why the contested
+files resolved in minutes instead of by argument.
+
+**The tiers that never touched each other's files still collided.** P1 rewrote the `no-template`
+refusal into a facts line and moved its paragraphs to a doctrine module. P3 had, on a different
+branch, added a THIRD cause to that same paragraph — the tenancy one, the only cause a caller can
+act on alone. Neither branch's tests failed. The merged tree compiled, passed, and quietly told
+orchestrators two of the three reasons a launch can fail. **Nothing automated catches that class:
+both sides are green, and the loss is a sentence.** It was found by reading both diffs against the
+ticket, which is the only method there is.
+
+**A constant can be byte-identical and still be in the wrong file.** P3 wrote `TENANCY_RULE` and
+`TENANCY_FIX` into `channel-description.ts` so P1's character-counting could not trim them. P1 then
+made that file import `DOCTRINE_URI` from `channel-doctrine.ts`. The doctrine needed the tenancy
+sentences; taking them from the description would have closed a module cycle whose loser is a **TDZ
+throw at connect time** — not a lint warning, not a test failure, a dead MCP server for whichever
+module loaded second. The constants moved to the leaf side, byte-identical, and the docblock now
+says never to give that module an import of the description.
+
+**Three branches allocated finding ids from `master` and produced six entries under three numbers.**
+`check-doc-refs.mjs` passed on that state: two headings under one id both RESOLVE, so the gate that
+exists to keep references honest is blind to the exact failure. The rule — *allocate from the
+highest id claimed on any live branch* — is now in the findings log header and CLAUDE.md, with the
+re-derive command. ⚠ And writing that rule as an `##` heading briefly turned 1,011 legitimate
+references dangling, because the gate treats everything above the first `##` as the header block
+that records deleted ids. The note is bold text now, and says why.
+
+**Four files went over the 500-line cap without any tier adding a line to a file it did not own.**
+`channel.ts` took `set_agent_mode` from one branch and `ping`/`pings` from another; each was small,
+and together they were 51 lines over. The cap is doing its job here: it forced the seam that was
+already true (the six ops that ask the operator's own machine to do something) into a module that
+states it, rather than leaving it to be re-derived from a switch.
+
+**And re-deriving the gate list found a third undocumented gate.** `scripts/check-css-token-drift.ts`
+had been in CI since 2026-08-31 and in no doc — the same failure `check-role-drift.ts` produced a
+month earlier. §14 had told everyone to re-derive rather than quote; nobody ran the command until an
+integration needed the real list. **A doc that says "re-derive this" is not a substitute for
+re-deriving it, and the wave that adds a gate is the one that will not think to.**
