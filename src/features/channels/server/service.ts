@@ -159,6 +159,21 @@ export {
   LAUNCH_REFUSAL_REASONS,
 } from "./service-launch";
 
+// AGENT MANAGEMENT OVER MCP (Samuel, 2026-09-01) — the SAME mailbox, two more
+// KINDS. ⚠ A separate module and NOT a separate lane: `end` and `rename` are
+// `channel_launch_directives` rows with `kind <> 'launch'`, so every fence, the
+// claim CAS, lazy expiry and the refusal vocabulary are the launch lane's,
+// unchanged. What the split buys is that the CONSENT DIFFERENCE — the launch
+// toggle gates `launch` and gates neither of these — is argued in one place
+// instead of as a branch inside a function about starting processes.
+export {
+  createAgentDirective,
+} from "./service-launch-agent";
+export type {
+  CreateAgentDirectiveInput,
+  CreateAgentDirectiveResult,
+} from "./service-launch-agent";
+
 // THE PRIVATE DIRECT LANE (2026-08-31) — the launch mailbox's sibling, and off
 // `channel_messages` for the same two reasons plus a third: the lane is PRIVATE BY
 // DEFINITION, so the shared transcript is not a trade-off but the feature's

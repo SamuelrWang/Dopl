@@ -22,6 +22,10 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 /** One directive row. Column names, because this is what the database stores. */
 export type LaunchDirectiveRow = {
   id: string;
+  /** ⚠ `launch` on every row written before 2026-09-01 and on every row that
+   *  names no kind — the column's DEFAULT, which is what made the widening a
+   *  no-backfill change. */
+  kind: string;
   workspace_id: string;
   channel_id: string;
   task_id: string | null;
@@ -43,6 +47,18 @@ export type LaunchDirectiveRow = {
   /** The template's name, SNAPSHOTTED AT CREATE. ⚠ Never joined, never
    *  refreshed — it is the only signal that survives the FK's SET NULL. */
   template_name: string | null;
+  /**
+   * WHICH AGENT an `end` / `rename` acts on — an INPUT (2026-09-01).
+   *
+   * ⚠ **NOT `agent_id`, WHICH IS THE OUTPUT A LAUNCH PRODUCED.** They are two
+   * columns because they answer two questions — what this row aimed at, and what
+   * it created — and a table that exists to be read back as a record of what was
+   * asked cannot afford to lose the difference.
+   */
+  target_agent_id: string | null;
+  /** The rename's new display name. ⚠ Non-null iff `kind = 'rename'`, and `''`
+   *  is LEGAL there: it means CLEAR, back to `Agent #<id>`. */
+  target_name: string | null;
   status: string;
   refusal_reason: string | null;
   agent_id: string | null;
@@ -56,6 +72,9 @@ export type LaunchDirectiveRow = {
  *  separate argument so no caller can pass one inside an object it built from a
  *  request body. Same discipline as `SessionStateUpsert`. */
 export type LaunchDirectiveInsert = {
+  /** ⚠ OMITTED MEANS `launch`, by the column's DEFAULT — so the launch path did
+   *  not have to learn a new field when the agent-management kinds landed. */
+  kind?: "launch" | "end" | "rename";
   workspace_id: string;
   channel_id: string;
   task_id: string | null;
@@ -75,6 +94,19 @@ export type LaunchDirectiveInsert = {
    *  `template_id` or not at all — the pair is what makes a later deletion
    *  legible (E-4). */
   template_name: string | null;
+  /**
+   * ⚠ CALLER-SUPPLIED, LIKE `template_id` AND FOR THE SAME REASON THAT IS SAFE:
+   * it names WHAT the verb acts on, never WHOSE MACHINE acts. The authorization
+   * story is `operator_user_id`, which is a separate ARGUMENT precisely so no
+   * caller can pass one inside an object built from a request body.
+   * ⚠ Absent on a launch. The column CHECK requires it on every other kind, so
+   * an end filed without one is refused AT REST rather than claimed and left
+   * unanswerable.
+   */
+  target_agent_id?: string | null;
+  /** The rename's new display name. ⚠ `''` is legal and means CLEAR; absent on
+   *  every kind but `rename`, which the column CHECK enforces both ways. */
+  target_name?: string | null;
   expires_at: string;
 };
 
@@ -168,7 +200,10 @@ export async function claimLaunchDirective(
 
 /** What a terminal decision writes. */
 export type LaunchDecision = {
-  status: "launched" | "refused";
+  /** ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS (2026-09-01) and carries no agent
+   *  id: an end and a rename already NAME their target in the row. See
+   *  `types-launch.ts › LaunchDirective.status` for why it is not `launched`. */
+  status: "launched" | "done" | "refused";
   agent_id: string | null;
   refusal_reason: string | null;
   decided_at: string;

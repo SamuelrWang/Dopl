@@ -20,10 +20,15 @@ import {
   LaunchTemplateNotFoundError,
 } from "./errors";
 import * as launchRepo from "./repository-launch";
-import type { LaunchDirectiveRow } from "./repository-launch";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+// ⚠ THE MAPPER AND THE REFUSAL VOCABULARY LEFT THIS FILE ON 2026-09-01 (§1 cap,
+// and a second service now reads both — `service-launch-agent.ts`). RE-EXPORTED
+// below so no import path outside this feature changed and there is still no
+// second path to either symbol.
+import { isTerminal, toDirective } from "./service-launch-dto";
+export { LAUNCH_REFUSAL_REASONS, toDirective } from "./service-launch-dto";
 
 /**
  * LAUNCH-OVER-MCP — an operator's external agent asking that operator's OWN
@@ -44,77 +49,6 @@ import { loadVisibleChannel, type ChannelContext } from "./service-shared";
  * argument. The type signatures below are the enforcement, not a convention.
  */
 
-/** The refusal contract, as a value. ⚠ ONE DECLARATION — the column's CHECK, the
- *  route schema and the MCP render all point at this.
- *  ⚠ SEVEN SINCE 2026-08-22: `no-template` is the agent-templates word — a directive
- *  named a template the OPERATOR's machine could not resolve (deleted, or invisible
- *  to them though visible to the orchestrator). ⚠ THE COLUMN CHECK CAUGHT UP ON
- *  2026-08-23 (`20260823140000_channel_launch_directives_template.sql`, WRITTEN —
- *  applied is a measurement, §12), in the same wave as the producer that makes the
- *  word reachable: `main/launch-directives.js › spawn` resolves the directive's
- *  template at CLAIM time. This list and that CHECK are back in agreement. */
-export const LAUNCH_REFUSAL_REASONS = [
-  "cap",
-  "busy",
-  "no-sdk",
-  "auth-hold",
-  "no-bridge",
-  "no-counterparty",
-  "no-template",
-] as const;
-
-function isTerminal(status: string): boolean {
-  return status === "launched" || status === "refused" || status === "expired";
-}
-
-/**
- * ROW → DTO, **with lazy expiry applied**.
- *
- * ⚠ **THE STORED `status` AND THE REPORTED ONE MAY DISAGREE, ON PURPOSE.** There
- * is no cron sweeping this table (INVARIANTS §12's standing lesson: a scheduled
- * job is an environment fact nothing in the repo can observe, and this one would
- * exist purely to make a column cosmetically accurate). So a non-terminal row
- * past its TTL is REPORTED as `expired` at read time. Every reader goes through
- * this function, so there is one answer to "is it still live".
- * ⚠ The direction is fail-safe: expiry can only ever make a directive look LESS
- * live. It never resurrects one, and it never turns a decided row into anything.
- */
-function toDirective(row: LaunchDirectiveRow, now: number): LaunchDirective {
-  const expired = !isTerminal(row.status) && now > Date.parse(row.expires_at);
-  return {
-    id: row.id,
-    // ⚠ ON THE DTO ON PURPOSE, AND IT DISCLOSES NOTHING (F-284, 2026-08-23).
-    // Every read that reaches this mapper is already fenced on
-    // `operator_user_id = ctx.userId` (`repository-launch.ts`), so this can only
-    // ever be the caller's own id. It is here because the DESKTOP re-checks
-    // ownership locally before acting — `main/launch-directive-wire.js ›
-    // directiveFrom` reads it and `main/launch-directives.js › handle` drops any
-    // row that is not the signed-in operator's. Omitting it made every row the
-    // breaker-open backstop polled compare against `''` and be discarded, i.e.
-    // the F-273 recovery read returned rows nothing could ever action.
-    operatorUserId: row.operator_user_id,
-    channelId: row.channel_id,
-    threadId: row.task_id,
-    goal: row.goal,
-    model: row.model,
-    // ⚠ BOTH, ALWAYS, AND NEVER ONE. `template_id` is `ON DELETE SET NULL`, so a
-    // null id ALONE cannot say whether no template was named or the named one was
-    // deleted — and the desktop's answer to those two is opposite (launch blank
-    // vs refuse `no-template`, spec E-4). Mapping only the id would make the DTO
-    // the place the signal was lost, one layer above the wire narrowing that gets
-    // blamed for it.
-    templateId: row.template_id,
-    templateName: row.template_name,
-    status: expired ? "expired" : (row.status as LaunchDirective["status"]),
-    refusalReason: row.refusal_reason as LaunchRefusalReason | null,
-    agentId: row.agent_id,
-    claimedAt: row.claimed_at,
-    decidedAt: row.decided_at,
-    expiresAt: row.expires_at,
-    createdAt: row.created_at,
-  };
-}
-
 /**
  * IS THE OPERATOR'S MACHINE EVEN THERE?
  *
@@ -133,7 +67,12 @@ function toDirective(row: LaunchDirectiveRow, now: number): LaunchDirective {
  * liveness number would let the roster call a member offline while this path
  * happily filed a directive for them.
  */
-async function operatorIsOnline(ctx: ChannelContext): Promise<boolean> {
+// ⚠ EXPORTED SINCE 2026-09-01 for `service-launch-agent.ts` — the SAME question,
+// the SAME window, and a second copy would let one lane call a machine online
+// while the other filed nothing for it.
+export async function operatorIsOnline(
+  ctx: ChannelContext
+): Promise<boolean> {
   const presence = await collab.presenceForWorkspace(ctx.workspaceId);
   const mine = presence.get(ctx.userId);
   // ⚠ NO ROW AND NO STAMP BOTH READ AS OFFLINE — the fail-safe direction. A
@@ -408,7 +347,13 @@ export async function claimLaunchDirective(
 }
 
 export type DecideLaunchInput =
+  /** ⚠ THE LAUNCH KIND'S SUCCESS ONLY — the column CHECK pairs `launched` with
+   *  `kind = 'launch'`, so this arm on an `end` row is refused AT REST. */
   | { status: "launched"; agentId: string }
+  /** ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). No agent id: the row already
+   *  NAMES its target, so a second id on the decide would be a field the machine
+   *  could get wrong about a row it did not write. */
+  | { status: "done" }
   | { status: "refused"; refusalReason: LaunchRefusalReason };
 
 /**

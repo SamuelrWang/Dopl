@@ -310,6 +310,31 @@ export class DirectionNotClaimableError extends ChannelError {
  * this a probe primitive for every directive in the deployment — the same rule
  * `ChannelNotFoundError` follows for a private channel, and the same reason.
  */
+/**
+ * **THE TARGET AGENT BELONGS TO ANOTHER MEMBER** — the agent-management kinds'
+ * cross-member refusal (2026-09-01, `end` / `rename` over MCP).
+ *
+ * ⚠ **403-SHAPED, AND IT IS THE ONE PLACE ON THIS LANE THAT IS.** Everywhere
+ * else here a foreign id answers 404 so existence cannot be probed
+ * ({@link LaunchDirectiveNotFoundError}), and that rule is not being relaxed —
+ * it does not APPLY. To reach this error the caller has already proved
+ * membership of the channel, and inside a channel `dopl_channel(op="members")`
+ * and `op="read_sessions"` disclose the roster and the live agents anyway. So
+ * "that instance is another member's" reveals nothing new, while a 404 here
+ * would tell an orchestrator its OWN agent had vanished and send it to re-launch.
+ *
+ * ⚠ **IT IS NOT THE FENCE.** `operator_user_id` is: a directive is stamped with
+ * the authenticated caller and only that caller's machines ever claim one. This
+ * turns a two-minute round trip ending in `no-session` into an immediate,
+ * actionable sentence. `server/repository-agent-owner.ts` states exactly what the
+ * underlying read can and cannot prove.
+ */
+export class AgentDirectiveForeignError extends ChannelError {
+  constructor(public readonly agentId: string) {
+    super(`Agent ${agentId} belongs to another member`);
+  }
+}
+
 export class LaunchDirectiveNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`Launch directive not found: ${ref}`);

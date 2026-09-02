@@ -60,7 +60,42 @@ export type LaunchRefusalReason =
   | "auth-hold"
   | "no-bridge"
   | "no-counterparty"
-  | "no-template";
+  | "no-template"
+  // ⚠ THE EIGHTH AND NINTH, 2026-09-01 (external end / rename — Samuel's "Dopl
+  // MCP need to be able to do all that stuff"). Both belong to the NON-LAUNCH
+  // kinds and neither can be produced by a launch, which is why the sentences in
+  // `channel-ops-launch.ts` may name a target agent without hedging.
+  //  - `no-session` — no LIVE session of this operator's carries that agent id on
+  //    the machine that claimed the row. ⚠ NOT AN ERROR: an agent that finished
+  //    is the ordinary cause, and it is the same spelling
+  //    `service-directions.ts › DIRECTION_REFUSAL_REASONS` already uses for the
+  //    same fact, deliberately — two vocabularies disagreeing about how to say
+  //    "that agent is not here" is how a render learns to guess.
+  //  - `bad-name`   — the rename's string was refused by the machine's own
+  //    sanitizer (`main/agent-names.js › sanitizeName`). The column CHECK admits
+  //    only names that sanitizer would take, so this is reachable mainly when the
+  //    two builds disagree — and it exists BECAUSE the alternative is arriving as
+  //    `no-bridge`, which reads to an orchestrator as the operator having turned
+  //    the lane off.
+  | "no-session"
+  | "bad-name";
+
+/**
+ * WHICH VERB A DIRECTIVE ASKS FOR (2026-09-01).
+ *
+ * ⚠ **THE MAILBOX WAS ALWAYS A MAILBOX; ONLY THE LETTER WAS FIXED.** `launch`
+ * is the default and every pre-2026-09-01 row is one, so widening the table cost
+ * a `DEFAULT` and no backfill (`20260907120000_channel_launch_directives_kind
+ * .sql`).
+ *
+ * ⚠ **THE KINDS DO NOT SHARE A CONSENT GATE, AND THAT IS THE ONE THING TO CARRY
+ * AWAY.** `launch` is gated by the per-machine `orchestratorLaunchEnabled`
+ * toggle ("THE TOGGLE IS THE CONSENT", INVARIANTS §6). `end` and `rename` are
+ * NOT: they are the STOP verb and the DISPLAY verb, they widen nothing, and
+ * `main/agent-self-ops.js`'s header carries the whole argument for why the
+ * in-process twins of these two verbs already ride ungated on the same subjects.
+ */
+export type LaunchDirectiveKind = "launch" | "end" | "rename";
 
 /**
  * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
@@ -80,6 +115,9 @@ export type LaunchRefusalReason =
  */
 export type LaunchDirective = {
   id: string;
+  /** Which verb this asks for. ⚠ `launch` on every row written before
+   *  2026-09-01 and on every row that names no kind — the column's DEFAULT. */
+  kind: LaunchDirectiveKind;
   /**
    * The operator whose machine this asks to launch — **always the reader's own
    * id, never anyone else's** (2026-08-23, F-284).
@@ -117,9 +155,39 @@ export type LaunchDirective = {
    *  join: it is the only thing that survives the FK's SET NULL, which is what
    *  makes a deletion distinguishable from "no template was asked for". */
   templateName: string | null;
-  status: "pending" | "claimed" | "launched" | "refused" | "expired";
+  /**
+   * ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS AND `launched` IS THE LAUNCH'S,
+   * and the split is not fussiness (2026-09-01). This row is read back by the
+   * orchestrator that filed it and rendered into an agent-facing sentence;
+   * putting the word "launched" on the record of an agent being STOPPED is the
+   * one kind of wrong nothing downstream can detect. The column CHECK enforces
+   * the pairing, so no reader has to ask which meaning it is looking at.
+   */
+  status: "pending" | "claimed" | "launched" | "done" | "refused" | "expired";
   /** Set iff `status` is `refused`. */
   refusalReason: LaunchRefusalReason | null;
+  /**
+   * WHICH AGENT AN `end` / `rename` ACTS ON — an INPUT, named by the caller at
+   * create (2026-09-01). `null` on a launch.
+   *
+   * ⚠ **NEVER CONFLATE IT WITH {@link LaunchDirective.agentId}, WHICH IS THE
+   * OUTPUT.** One says what this row aimed at, the other says what it produced;
+   * a single field carrying both would make a table whose whole purpose is to be
+   * read back as a record of what was asked unable to answer that question.
+   */
+  targetAgentId: string | null;
+  /**
+   * THE RENAME'S NEW DISPLAY NAME. Non-null iff `kind` is `rename`.
+   *
+   * ⚠ **`""` IS LEGAL AND MEANS "CLEAR IT"** — back to `Agent #<id>`, the same
+   * gesture `sessions:rename` and the in-process `rename_agent` already take. So
+   * `null` here is "this is not a rename", never "clear the name": a second
+   * spelling for the clear would be a second way to say one thing.
+   * ⚠ DISPLAY ONLY, ON ONE MACHINE. `main/agent-names.js` holds it in a local
+   * `electron-store`; nothing resolves an agent by it, so a rename can never
+   * re-point a running instruction.
+   */
+  targetName: string | null;
   /** The agent instance the desktop started. Set iff `status` is `launched` —
    *  it is what the requester types as `@<agentId>` to direct it. */
   agentId: string | null;

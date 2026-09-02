@@ -87,6 +87,13 @@ export type LaunchClaimInput = z.infer<typeof LaunchClaimSchema>;
 // `20260823140000_channel_launch_directives_template.sql` widens the CHECK and lands in the same
 // wave as the producer (`main/launch-directives.js › spawn`, resolve-at-claim). The two lists
 // agree again. ⚠ An EIGHTH word is still a schema change in both trees.
+// ⚠ NINE SINCE 2026-09-01 (external end / rename). `no-session` and `bad-name`
+// are the two words the in-process `dopl_agents` server already answers for these
+// exact verbs, lifted onto the wire so the same fact reads the same way from
+// outside. ⚠ THE COLUMN CHECK LANDS IN THE SAME WAVE this time
+// (`20260907120000_channel_launch_directives_kind.sql`) — the 2026-08-22 window,
+// where this list ran one word ahead of the CHECK and four files carried a
+// standing "do not ship a producer yet", is exactly what that sequencing avoids.
 export const LaunchRefusalReasonSchema = closedEnum<LaunchRefusalReason>()([
   "cap",
   "busy",
@@ -95,7 +102,81 @@ export const LaunchRefusalReasonSchema = closedEnum<LaunchRefusalReason>()([
   "no-bridge",
   "no-counterparty",
   "no-template",
+  "no-session",
+  "bad-name",
 ]);
+
+/**
+ * THE AGENT INSTANCE ID, AS A PARAM.
+ *
+ * ⚠ **BARE, ANCHORED, AND IDENTICAL TO {@link LaunchDecideSchema}'s `agentId`**
+ * — `main/agent-id.js › AGENT_ID_RE` and the column CHECK, character for
+ * character. The `@agent-<id>` form a caller pastes is stripped BEFORE it gets
+ * here (`packages/mcp-server/src/tools/channel-ops-direct.ts › bareAgentId`, the
+ * one this lane reuses), because that is what `read_sessions` prints and
+ * refusing it would 400 a caller for doing exactly what the neighbouring op
+ * taught.
+ */
+const AgentInstanceIdSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9]{7}$/, "Invalid agent id");
+
+/**
+ * FILE AN `end` OR `rename` DIRECTIVE — the AGENT-MANAGEMENT half of the lane
+ * (2026-09-01, Samuel: "dopl mcp being able to end agents").
+ *
+ * ⚠ **A DISCRIMINATED UNION ON `kind`, NOT ONE OBJECT WITH AN OPTIONAL `name`.**
+ * A rename REQUIRES a name and an end must not carry one — the column CHECK says
+ * the same at rest — and an object shape would let a rename with no name reach a
+ * machine whose only honest answer is a refusal for a request that was never
+ * expressible.
+ *
+ * ⚠ **NO `operatorUserId`, HERE OR ANYWHERE IN THIS FILE.** The whole point is
+ * that the only machine an agent may reach is its own operator's, and the way
+ * that stays true is that no schema on this path has a field for naming another.
+ *
+ * ⚠ `channel` IS REQUIRED even though an agent id alone would address the
+ * target, and that is the FENCE rather than ergonomics: the create path proves a
+ * MEMBERSHIP ROW in that channel (`service-launch.ts › createLaunchDirective`'s
+ * gate 1), which is what stops this op being a bare "end agent `abcdefgh`"
+ * primitive over the whole deployment. ⚠ It also means a caller must have got
+ * the id from somewhere it could see — `read_sessions` — rather than by guessing.
+ */
+export const AgentDirectiveCreateSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("end"),
+    channel: z.string().min(1).max(200),
+    agentId: AgentInstanceIdSchema,
+  }),
+  z.object({
+    kind: z.literal("rename"),
+    channel: z.string().min(1).max(200),
+    agentId: AgentInstanceIdSchema,
+    /**
+     * ⚠ **60, AND THE EMPTY STRING IS LEGAL.** 60 is `main/agent-names.js ›
+     * MAX_NAME` — the store that will actually hold it — not
+     * `agent_templates.name`'s 120: a name legal here that the desktop then
+     * refuses is a 200 followed by a refusal the orchestrator cannot explain.
+     * Empty CLEARS, back to `Agent #<id>`; a separate `unname` verb would be a
+     * second way to say one thing.
+     * ⚠ NOT `safeLabel`, which has a `min(1)` — this is the one display string
+     * in the feature whose empty value is meaningful. The charset rule it would
+     * have applied is applied here instead, and the desktop's own `sanitizeName`
+     * is the authority either way.
+     */
+    name: z
+      .string()
+      .trim()
+      .max(60)
+      .refine(
+        (v) => !/[\u0000-\u001f\u007f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/.test(v),
+        "Control, zero-width and bidi characters are refused, not stripped",
+      ),
+  }),
+]);
+export type AgentDirectiveCreateInput = z.infer<
+  typeof AgentDirectiveCreateSchema
+>;
 
 /**
  * The desktop's terminal decision. ⚠ A DISCRIMINATED UNION, not an object with
@@ -113,6 +194,16 @@ export const LaunchDecideSchema = z.discriminatedUnion("status", [
      *  bad value must be a 400 that NAMES the field rather than a constraint
      *  violation surfacing as an opaque 500. */
     agentId: z.string().regex(/^[a-z][a-z0-9]{7}$/, "Invalid agent id"),
+  }),
+  // ⚠ THE NON-LAUNCH KINDS' SUCCESS, 2026-09-01. It carries NO agent id: an end
+  // and a rename both NAME their target in the row already (`target_agent_id`),
+  // so a second id on the decide would be a field the machine could get wrong
+  // about a row it did not write. The column CHECK pairs `done` with the
+  // non-launch kinds and `launched` with `launch`, so the two successes can never
+  // be confused for one another at rest.
+  z.object({
+    directiveId: z.string().uuid(),
+    status: z.literal("done"),
   }),
   z.object({
     directiveId: z.string().uuid(),

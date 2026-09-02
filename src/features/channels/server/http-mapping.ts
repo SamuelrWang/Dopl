@@ -14,6 +14,7 @@ import {
   ChannelSlugConflictError,
   ChannelTaskNotInChannelError,
   ConsentAlreadyDecidedError,
+  AgentDirectiveForeignError,
   ConsentNotFoundError,
   DirectChannelImmutableError,
   DirectionNotClaimableError,
@@ -86,6 +87,14 @@ function mapChannelError(err: unknown): HttpError | null {
   // ⚠ 409, and the desktop lane reads it as "stand down", NOT as a fault.
   if (err instanceof DirectionNotClaimableError) {
     return new HttpError(409, "CHANNEL_DIRECTION_NOT_CLAIMABLE", err.message);
+  }
+  // ⚠ 403, AND IT IS THE ONE 403 ON THIS LANE — the error's own docblock argues
+  // why the 404-never-403 rule does not apply to it: the caller has already
+  // proved channel membership, inside which the roster and the live agent set are
+  // readable anyway, so nothing is disclosed. A 404 here would tell an
+  // orchestrator its own agent had vanished and send it to re-launch.
+  if (err instanceof AgentDirectiveForeignError) {
+    return new HttpError(403, "CHANNEL_AGENT_FOREIGN", err.message);
   }
   // ⚠ 404 FOR "not yours", not 403 — see the error's own docblock. A 403 would
   // confirm the id exists, which is exactly the probe the single error prevents.

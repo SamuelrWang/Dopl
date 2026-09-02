@@ -442,12 +442,16 @@ export type {
  * — the same arrangement `schema-sessions.ts` and `schema-collab.ts` have.
  */
 export {
+  // ⚠ THE AGENT-MANAGEMENT HALF (2026-09-01) rides the SAME file and the same
+  // barrel: `end` / `rename` are kinds of directive, not a second lane.
+  AgentDirectiveCreateSchema,
   LaunchClaimSchema,
   LaunchCreateSchema,
   LaunchDecideSchema,
   LaunchRefusalReasonSchema,
 } from "./schema-launch";
 export type {
+  AgentDirectiveCreateInput,
   LaunchClaimInput,
   LaunchCreateInput,
   LaunchDecideInput,

@@ -42,10 +42,17 @@ const SESSION_ROWS_LIMIT = 500;
  * PostgREST's code for "that relation is not in the schema cache". See
  * {@link listSessionStates} for why it is not an error here.
  * ⚠ Matched on the CODE, never the message, which is prose.
+ * ⚠ EXPORTED SINCE 2026-09-01 for `repository-agent-owner.ts`, which needs the
+ * SAME narrow predicate and would otherwise carry a second copy — and a second
+ * copy of a rule whose whole value is being NARROW is the copy that gets widened.
+ * ⚠ THE PREDICATE IS SHARED; WHAT IT DEGRADES **TO** IS NOT, and each caller
+ * states its own direction: `[]` here ("no live sessions are reported"), `null`
+ * there ("the projection cannot say who owns this"). Those are different claims
+ * and neither may be inferred from the other.
  */
 const PGRST_MISSING_RELATION = "PGRST205";
 
-function isMissingRelation(error: unknown): boolean {
+export function isMissingRelation(error: unknown): boolean {
   return (
     typeof error === "object" &&
     error !== null &&

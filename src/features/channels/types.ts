@@ -431,6 +431,10 @@ export type {
   ChannelSessionStateOwn,
 } from "./types-sessions";
 
-export type { LaunchRefusalReason, LaunchDirective } from "./types-launch";
+export type {
+  LaunchRefusalReason,
+  LaunchDirectiveKind,
+  LaunchDirective,
+} from "./types-launch";
 
 export type { DirectionRefusalReason, AgentDirection } from "./types-direction";
