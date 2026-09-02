@@ -56,4 +56,4 @@ export declare function workspaceRearmStopRule(): string;
  * ⚠ NO not-found branch, because there is no ref to resolve: a caller with no
  * memberships gets a page with `channelCount: 0` and a result that says so.
  */
-export declare function opAwaitWorkspace(client: DoplClient, since: number, timeoutMs?: number, selfUserId?: string | null): Promise<ToolResponse>;
+export declare function opAwaitWorkspace(client: DoplClient, since: number, timeoutMs?: number, selfUserId?: string | null, selfSessionId?: string | null): Promise<ToolResponse>;
