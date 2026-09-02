@@ -1,6 +1,10 @@
 import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole } from "@/features/workspaces/types";
+// 🔒 G16 — the ONE statement of the publish-into-a-peer's-room precondition,
+// shared with `agent-templates/server/service-writes.ts`. Two copies of a
+// tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
+import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
   deleteGrantRow,
   deleteGrantsForResource,
@@ -116,6 +120,19 @@ export async function createBase(
     resolvedVisibility,
     fromWorkspaceKey,
   );
+
+  // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
+  // visibility, after the teams branch has had its say: `accessMode: "teams"`
+  // rewrites it to `public`, and reading `input.visibility` would let that
+  // rewrite publish unacknowledged. Same reason `resolveHomeScope` takes the
+  // resolved value rather than the raw input.
+  // ⚠ BEFORE THE SLUG LOOP, so a refusal costs no slug and cannot half-land.
+  await assertSharedPublishAcknowledged({
+    workspaceId: ctx.workspaceId,
+    publishes: resolvedVisibility === "public",
+    acknowledged: input.acknowledgeShared,
+    noun: "knowledge base",
+  });
 
   let attempt = 0;
   let baseSlug =
@@ -253,6 +270,20 @@ export async function updateBase(
     if (agentPurePublish ? !isCreator : !isCreator && !isAdmin) {
       throw new ScopeChangeForbiddenError();
     }
+
+    // 🔒 G16 — the same precondition on the UPDATE path, which is the door
+    // `dopl_kb(op="set_visibility")` and the sharing settings both come through.
+    // ⚠ `patch.visibility`, NOT `targetVisibility`: a grant-only or accessMode
+    // edit on a base that is ALREADY public changes no audience, and gating it
+    // would be a gate on the wrong verb.
+    // ⚠ AFTER the creator/admin check above and BEFORE any grant upsert, so a
+    // refusal leaves neither a row nor a grant behind.
+    await assertSharedPublishAcknowledged({
+      workspaceId: ctx.workspaceId,
+      publishes: patch.visibility === "public",
+      acknowledged: patch.acknowledgeShared,
+      noun: "knowledge base",
+    });
 
     const targetVisibility = patch.visibility ?? base.visibility;
     const targetMode =

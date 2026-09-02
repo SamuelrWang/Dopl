@@ -98,6 +98,10 @@ async function opCreateBase(client, callerUserId, input) {
             name: input.name,
             description: input.description,
             visibility,
+            // 🔒 G16 — THE TOKEN, SPENT, BECOMES THE SERVER'S PRECONDITION. Only ever
+            // `true`, and only from a token this call actually consumed. See
+            // `confirm-token.ts › ConfirmVerdict`.
+            acknowledgeShared: verdict.acknowledgedShared || undefined,
             // ⚠ Only ever `true` — an explicit `false` and an omission mean the same
             // thing to `resolveHomeScope` ("the default is false and silent").
             homeScoped: personal ? true : undefined,
@@ -117,6 +121,11 @@ async function opCreateBase(client, callerUserId, input) {
         const ceiling = agentCreateForbidden(e);
         if (ceiling)
             return (0, respond_1.err)(ceiling);
+        // 🔒 G16 — only ever a RACE here: the gate above already previewed and spent
+        // a token, so reaching this means the room gained a member in between.
+        const unacknowledged = (0, confirm_token_1.containerPublishUnacknowledged)(e, confirm_token_1.RECONFIRM_REMEDY);
+        if (unacknowledged)
+            return unacknowledged;
         throw e;
     }
     const visNote = base.visibility === "private"
@@ -168,6 +177,27 @@ async function opUpdateBase(client, ref, name, description, slug, shelf) {
     }
     return (0, respond_1.ok)(`Updated ${(0, narration_1.inlineOr)(updated.name, NO_NAME)} (slug: \`${updated.slug}\`).`);
 }
+/**
+ * ⚠ **THE OTHER PUBLISHING DOOR, AND IT IS NOT PREVIEWED HERE — DELIBERATELY,
+ * AND ONLY FOR NOW.** This file used to argue that gating `create_base` and not
+ * `set_visibility` "would be theatre". Since G16 the SERVER gates both
+ * (`src/features/knowledge/server/service-base-writes.ts › updateBase` →
+ * `features/workspaces/server/shared-publish.ts`), so the asymmetry moved: an
+ * agent publishing into a shared home channel is now REFUSED here rather than
+ * silently allowed, and {@link containerPublishUnacknowledged} is what makes
+ * that refusal legible.
+ *
+ * ⚠ **THE PREVIEW CANNOT BE ADDED FROM THIS FILE.** `confirmGate` needs the
+ * caller's user id and the call's `confirm_token`, and this op's registrar arm
+ * (`tools/knowledge.ts`) passes neither — that file is owned by another slice of
+ * this wave, so the plumbing is a CROSS-SLICE REQUEST, not an edit made here.
+ * Until it lands, a shared-container publish through this op is a refusal with a
+ * remedy the operator can act on, which is strictly better than the silent
+ * publish it replaces.
+ *
+ * ⚠ NOTHING CHANGES IN A STANDARD WORKSPACE — the server's predicate is
+ * `kind='link'` ∧ ≥2 members, and publishing to colleagues costs no extra call.
+ */
 async function opSetVisibility(client, ref, visibility) {
     if (visibility !== "public") {
         return (0, respond_1.err)(`set_visibility only publishes (visibility="public") a base you created. Un-publishing is human-only — use the Dopl web UI.`);
@@ -184,6 +214,11 @@ async function opSetVisibility(client, ref, visibility) {
         const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
         if (denied)
             return denied;
+        // 🔒 G16 — the server's publish precondition. See the docblock above for
+        // why this op answers with a REMEDY rather than a preview.
+        const unacknowledged = (0, confirm_token_1.containerPublishUnacknowledged)(e, `This op has no preview step, so it cannot make that acknowledgement for you: ask your operator to publish the base from the Dopl app, where the audience change is stated before they press.`);
+        if (unacknowledged)
+            return unacknowledged;
         throw e;
     }
     return (0, respond_1.ok)(`Published knowledge base ${(0, narration_1.inlineOr)(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide.`);

@@ -11,6 +11,10 @@ import type {
   AgentTemplateUpdateInput,
 } from "../schema";
 import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
+// 🔒 G16 — the ONE statement of the publish-into-a-peer's-room precondition,
+// shared with `knowledge/server/service-base-writes.ts`. Two copies of a
+// tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
+import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
   TemplateHomeScopeForbiddenError,
   TemplateKnowledgeBaseNotFoundError,
@@ -131,6 +135,17 @@ export async function createTemplate(
   // on it. Throws rather than returning false.
   const homeScoped = await resolveTemplateHomeScope(ctx, input, visibility);
 
+  // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
+  // visibility, for the same reason the shelf fence reads it: the row's landing
+  // value is the audience, and `input.visibility` is not it for a caller that
+  // named nothing.
+  await assertSharedPublishAcknowledged({
+    workspaceId: ctx.workspaceId,
+    publishes: visibility === "workspace",
+    acknowledged: input.acknowledgeShared,
+    noun: "agent",
+  });
+
   const template = await repo.insertTemplate({
     workspaceId: ctx.workspaceId,
     name: stripNullBytes(input.name),
@@ -200,6 +215,22 @@ export async function updateTemplate(
   if (nextVisibility === "private" && isSharedCredential(ctx)) {
     throw new WorkspaceKeyPrivateTemplateError();
   }
+
+  // 🔒 G16 — the same precondition on the UPDATE path, which is the OTHER way a
+  // row reaches the shared visibility (F-289's argument, on a different axis:
+  // a create fence with no update twin is a fence defeated in two calls).
+  // ⚠ `patch.visibility`, NOT `nextVisibility`, AND THAT IS THE OPPOSITE CHOICE
+  // FROM THE PRIVATE FENCE ABOVE — deliberately. That one asks where the row
+  // LANDS, because a shared credential must not own a private row however it
+  // got there. This one asks what the caller CHANGED: a row already shared is
+  // already seen by the room, and making a rename acknowledge an audience it
+  // did not touch would be a gate on the wrong verb.
+  await assertSharedPublishAcknowledged({
+    workspaceId: ctx.workspaceId,
+    publishes: patch.visibility === "workspace",
+    acknowledged: patch.acknowledgeShared,
+    noun: "agent",
+  });
 
   // VISIBILITY TRANSITIONS ARE FREE FOR THE OWNER, in any direction —
   // `private → workspace → team → private`. Nothing here guards narrowing (the

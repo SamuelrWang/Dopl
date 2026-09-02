@@ -19,8 +19,14 @@
  *    operator's personal shelf is the credential's workspace lock answering 403
  *    first. Nothing in this file lets it reach that shelf, and nothing should.
  *
- * 3. ⚠ **THE CONFIRM GATE IS A TRIPWIRE.** See `confirm-token.ts`'s header. It
- *    fires only for a row landing at `visibility: "workspace"` inside a SHARED
+ * 3. ⚠ **THE CONFIRM GATE IS A TRIPWIRE, AND SINCE G16 IT FEEDS A FENCE.** See
+ *    `confirm-token.ts`'s header for the tripwire half — nothing here stops an
+ *    agent previewing and echoing the token back without showing a human. What
+ *    is new is that a SPENT token now sets `acknowledgeShared: true` on the
+ *    write body, and `src/features/workspaces/server/shared-publish.ts` 400s
+ *    the write WITHOUT it: an agent that skips the preview no longer skips the
+ *    refusal, because the refusal belongs to the server that owns the rows.
+ *    It fires only for a row landing at `visibility: "workspace"` inside a SHARED
  *    link container — publishing the operator's agent identity into the room a
  *    peer is standing in, which is precisely the argument
  *    `lib/template-draft.ts › containerCopyDraft` was reversed over on
@@ -41,7 +47,11 @@ import type {
 } from "@dopl/client";
 import { inlineOr } from "./narration.js";
 import { ok, err, type ToolResponse } from "./respond.js";
-import { confirmGate } from "./confirm-token.js";
+import {
+  confirmGate,
+  containerPublishUnacknowledged,
+  RECONFIRM_REMEDY,
+} from "./confirm-token.js";
 import { homeShelfForbidden, type ShelfArg } from "./shelf.js";
 import {
   isErr,
@@ -87,6 +97,11 @@ function shelfVisibilityContradiction(
 function mapWriteError(e: unknown): ToolResponse | null {
   const home = homeShelfForbidden(e);
   if (home) return err(home);
+  // 🔒 G16 — only ever a RACE on these two verbs: `confirmGate` already
+  // previewed and spent a token, so reaching this means the room gained a
+  // member in between.
+  const unacknowledged = containerPublishUnacknowledged(e, RECONFIRM_REMEDY);
+  if (unacknowledged) return unacknowledged;
   return (
     sharedCredentialPrivateDenied(e) ??
     knowledgeBaseNotAttachable(e) ??
@@ -140,6 +155,12 @@ export async function opCreate(
     fields: input.fields,
     visibility,
     knowledgeBaseIds: input.knowledge_bases,
+    // 🔒 G16 — THE TOKEN, SPENT, BECOMES THE SERVER'S PRECONDITION. Only ever
+    // `true`, and only from a token this call actually consumed: the server
+    // ignores the flag outside its predicate, and sending it on a proceed that
+    // showed nobody anything would re-create the client-side confirm this
+    // replaces. See `confirm-token.ts › ConfirmVerdict`.
+    acknowledgeShared: verdict.acknowledgedShared || undefined,
     // ⚠ Only ever `true` — an explicit `false` and an omission mean the same
     // thing to `resolveTemplateHomeScope` ("the default is false and silent"),
     // and sending `false` would suggest to a reader that it is examined.
@@ -232,7 +253,13 @@ export async function opUpdate(
 
   let updated;
   try {
-    updated = await client.updateAgentTemplate(template.id, patch);
+    // 🔒 G16 — the spent token, as the server's precondition. ⚠ SET AFTER the
+    // "changed nothing" check above, which counts only fields that move a
+    // column: an acknowledgement is an assertion ABOUT a change, never one.
+    updated = await client.updateAgentTemplate(template.id, {
+      ...patch,
+      acknowledgeShared: verdict.acknowledgedShared || undefined,
+    });
   } catch (e) {
     const mapped = mapWriteError(e);
     if (mapped) return mapped;

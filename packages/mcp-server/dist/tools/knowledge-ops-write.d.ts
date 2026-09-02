@@ -52,6 +52,27 @@ export declare function opCreateBase(client: DoplClient, callerUserId: string | 
  * carried out. The reads ignore it exactly as `dopl_agent(op="get")` does.
  */
 export declare function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string, shelf?: ShelfArg): Promise<ToolResponse>;
+/**
+ * ⚠ **THE OTHER PUBLISHING DOOR, AND IT IS NOT PREVIEWED HERE — DELIBERATELY,
+ * AND ONLY FOR NOW.** This file used to argue that gating `create_base` and not
+ * `set_visibility` "would be theatre". Since G16 the SERVER gates both
+ * (`src/features/knowledge/server/service-base-writes.ts › updateBase` →
+ * `features/workspaces/server/shared-publish.ts`), so the asymmetry moved: an
+ * agent publishing into a shared home channel is now REFUSED here rather than
+ * silently allowed, and {@link containerPublishUnacknowledged} is what makes
+ * that refusal legible.
+ *
+ * ⚠ **THE PREVIEW CANNOT BE ADDED FROM THIS FILE.** `confirmGate` needs the
+ * caller's user id and the call's `confirm_token`, and this op's registrar arm
+ * (`tools/knowledge.ts`) passes neither — that file is owned by another slice of
+ * this wave, so the plumbing is a CROSS-SLICE REQUEST, not an edit made here.
+ * Until it lands, a shared-container publish through this op is a refusal with a
+ * remedy the operator can act on, which is strictly better than the silent
+ * publish it replaces.
+ *
+ * ⚠ NOTHING CHANGES IN A STANDARD WORKSPACE — the server's predicate is
+ * `kind='link'` ∧ ≥2 members, and publishing to colleagues costs no extra call.
+ */
 export declare function opSetVisibility(client: DoplClient, ref: string, visibility: string): Promise<ToolResponse>;
 /**
  * PINNED STARTUP CONTEXT (T81) — put a base (or one entry of it) into what every

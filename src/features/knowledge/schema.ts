@@ -188,6 +188,22 @@ export const KnowledgeBaseCreateSchema = z
      * rest; the base is rolled back if the grant fails, so this never half-lands.
      */
     shareToChannelId: z.string().uuid().optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * base landing at `visibility: 'public'`. Everywhere else it is IGNORED,
+     * never refused. `features/workspaces/server/shared-publish.ts` is the one
+     * statement of both the predicate and the 400, shared with agent templates
+     * so the two lanes cannot answer differently.
+     *
+     * ⚠ NOT THE SAME QUESTION AS `shareToChannelId`. That one asks for a
+     * `channel_resource_grants` row — a base reaching ONE channel while staying
+     * private. This one is about the WORKSPACE axis, which inside a container
+     * means every member of it at once.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
   .superRefine(refineScope(true));
 export type KnowledgeBaseCreateInput = z.infer<typeof KnowledgeBaseCreateSchema>;
@@ -211,6 +227,22 @@ export const KnowledgeBaseUpdateSchema = z
      * removes missing).
      */
     teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * base landing at `visibility: 'public'`. Everywhere else it is IGNORED,
+     * never refused. `features/workspaces/server/shared-publish.ts` is the one
+     * statement of both the predicate and the 400, shared with agent templates
+     * so the two lanes cannot answer differently.
+     *
+     * ⚠ NOT THE SAME QUESTION AS `shareToChannelId`. That one asks for a
+     * `channel_resource_grants` row — a base reaching ONE channel while staying
+     * private. This one is about the WORKSPACE axis, which inside a container
+     * means every member of it at once.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
   .superRefine(refineScope(false));
 export type KnowledgeBaseUpdateInput = z.infer<typeof KnowledgeBaseUpdateSchema>;
