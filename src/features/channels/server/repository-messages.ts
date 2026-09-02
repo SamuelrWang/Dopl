@@ -312,6 +312,46 @@ export async function findMessageById(
   return (data as ChannelMessageRow | null) ?? null;
 }
 
+/**
+ * **STAMP ONE MACHINE'S DELIVERY RECEIPT ON ONE MESSAGE** (2026-09-02, A9).
+ *
+ * ⚠ **THE `weakerOrEqual` FENCE IS THE WHOLE STATEMENT AND IT IS IN THE SQL, NOT
+ * IN A READ-THEN-WRITE.** Several machines may legitimately observe one message —
+ * two operators, each with agents on the thread — and a plain last-write-wins
+ * would let a machine that fed nothing overwrite another's `woken` with
+ * `refused`. Ranking in the `WHERE` makes the update MONOTONIC without a
+ * round-trip and without a lock: a receipt lands only over a weaker one.
+ *
+ * ⚠ **`delivery IS NULL` IS EXPLICITLY UNIONED IN BECAUSE `IN` DOES NOT MATCH
+ * NULL.** A row written before `20260912120000` carries NULL, and that is the
+ * weakest state of all — it must accept any receipt.
+ *
+ * ⚠ SCOPED BY `(channel_id, seq)`, never by seq alone. `seq` is a TABLE-wide
+ * identity (INVARIANTS §5), so it is globally unique and the channel term buys no
+ * correctness — it buys the FENCE: the caller proved membership of THAT channel,
+ * and a mismatched pair must update nothing rather than reach a room the caller
+ * is not in.
+ *
+ * Returns whether a row moved, so the service can report what it actually wrote.
+ */
+export async function stampDelivery(
+  channelId: string,
+  seq: number,
+  delivery: string,
+  weakerOrEqual: readonly string[]
+): Promise<boolean> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .update({ delivery, delivery_at: new Date().toISOString() })
+    .eq("channel_id", channelId)
+    .eq("seq", seq)
+    .or(`delivery.is.null,delivery.in.(${weakerOrEqual.join(",")})`)
+    .select("id");
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 type MessageInsert = {
   channel_id: string;
   workspace_id: string;
@@ -321,6 +361,14 @@ type MessageInsert = {
   body: string;
   metadata: Record<string, unknown>;
   client_msg_id: string | null;
+  // ── THE DELIVERY KEYSTONE (20260912120000) ──────────────────────────────
+  // ⚠ WRITTEN THROUGH THE RPC, not by a second statement afterwards. The RPC
+  // holds the per-channel advisory lock, so a follow-up UPDATE would open a
+  // window in which a realtime subscriber sees the row without its verdict.
+  wake_verdict: string | null;
+  recipient_user_ids: string[] | null;
+  recipient_agent_ids: string[] | null;
+  delivery: string | null;
 };
 
 /**
@@ -343,6 +391,10 @@ export async function insertMessage(
     p_body: row.body,
     p_metadata: row.metadata,
     p_client_msg_id: row.client_msg_id,
+    p_wake_verdict: row.wake_verdict,
+    p_recipient_user_ids: row.recipient_user_ids,
+    p_recipient_agent_ids: row.recipient_agent_ids,
+    p_delivery: row.delivery,
   });
   if (error) throw error;
   // ⚠ A single-composite RETURNS comes back as an object — normalize.

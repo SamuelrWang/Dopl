@@ -11,10 +11,8 @@ import {
   ChannelChatAddressedError,
   ChannelForbiddenError,
   ChannelInfoCardTooLargeError,
-  ChannelInviteeNotMemberError,
   ChannelSlugConflictError,
   DirectChannelImmutableError,
-  DirectSelfTargetError,
   EscalationAlreadyAnsweredError,
 } from "./errors";
 import {
@@ -30,7 +28,9 @@ import { mapMessageRow, type ChannelMessageRow } from "./dto";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import { getChannel } from "./service-reads";
+import { createDirectChannel } from "./service-writes-direct";
 import { resolvePostMetadata } from "./service-writes-metadata";
+import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   canManageChannel,
   loadVisibleChannel,
@@ -108,130 +108,13 @@ export async function createChannel(
 }
 
 /**
- * Open (or dedup-return) a direct channel. `direct_key` is the two user-ids
- * sorted and joined ':'; lookup by (workspace, direct_key) makes repeat opens
- * idempotent. Peer must be an active workspace member, self-DM refused, exactly
- * two members inserted — ⚠ membership-of-2 lives here because a CHECK can't
- * count.
+ * ⚠ **THE DM LIFECYCLE — open, dedup, revive, self-heal — LIVES IN
+ * `service-writes-direct.ts`** (§1 split, 2026-09-02, at the cap). The seam is
+ * real: that file changes when the two-member DM contract changes (the
+ * `direct_key` dedup, the soft-delete revive, the torn-roster self-heal), and
+ * this one when a channel WRITE does. `createChannel` above still dispatches to
+ * it, so there is no second door.
  */
-async function createDirectChannel(
-  ctx: ChannelContext,
-  memberUserId: string
-): Promise<Channel> {
-  if (memberUserId === ctx.userId) {
-    throw new DirectSelfTargetError();
-  }
-  if (!(await repo.isActiveWorkspaceMember(ctx.workspaceId, memberUserId))) {
-    throw new ChannelInviteeNotMemberError(memberUserId);
-  }
-
-  const directKey = [ctx.userId, memberUserId].sort().join(":");
-  // ⚠ Look up INCLUDING soft-deleted rows — the partial unique index counts a
-  // soft-deleted DM, so a fresh insert for a deleted pair 23505s. Live row
-  // returned as-is; soft-deleted row REVIVED with its member rows, so the same
-  // conversation and history reopen. A DM delete is "hide until reopened".
-  const existing = await repo.findDirectChannelAnyStatus(
-    ctx.workspaceId,
-    directKey
-  );
-  if (existing) return reopenDirectChannel(ctx, existing, memberUserId);
-
-  const taken = await repo.existingSlugs(ctx.workspaceId);
-  const slug = slugify("direct-message", "dm", taken);
-
-  let channel;
-  try {
-    channel = await repo.insertChannel({
-      workspace_id: ctx.workspaceId,
-      created_by: ctx.userId,
-      slug,
-      // Ignored by the DM UI (it renders the peer), but NOT NULL / CHECK still
-      // require a non-empty name.
-      name: "Direct message",
-      topic: "",
-      visibility: "private",
-      is_direct: true,
-      direct_key: directKey,
-    });
-  } catch (err) {
-    // 23505 = the direct_key index (concurrent open of the SAME pair) or the
-    // workspace slug index (concurrent create took the slug). ⚠ Look the pair up
-    // INCLUDING soft-deleted rows and converge; a slug race resolves to nothing
-    // and surfaces as a clean 409 instead of a generic 500.
-    if (repo.pgErrorCode(err) === UNIQUE_VIOLATION) {
-      const raced = await repo.findDirectChannelAnyStatus(
-        ctx.workspaceId,
-        directKey
-      );
-      if (raced) return reopenDirectChannel(ctx, raced, memberUserId);
-      throw new ChannelSlugConflictError(slug);
-    }
-    throw err;
-  }
-
-  await repo.insertMember({
-    channel_id: channel.id,
-    user_id: ctx.userId,
-    workspace_id: ctx.workspaceId,
-    role: "owner",
-    added_by: ctx.userId,
-  });
-  await repo.insertMember({
-    channel_id: channel.id,
-    user_id: memberUserId,
-    workspace_id: ctx.workspaceId,
-    role: "member",
-    added_by: ctx.userId,
-  });
-
-  return getChannel(ctx, channel.id);
-}
-
-/**
- * Return an existing direct channel, reviving it first when soft-deleted so the
- * same conversation and history reopen. A live row is returned as-is.
- *
- * ⚠ Both member rows are re-asserted on EVERY open, not only the revive branch.
- * A live DM with a torn roster is otherwise a dead end: the missing side reads
- * the channel as not-found, and the partial unique index on `direct_key` keeps
- * the live row reserving the pair, so no fresh DM can be created either. A
- * WORKSPACE departure legitimately removes the leaver's row
- * (`service-workspace-departure.ts`), so re-asserting here is the only self-heal
- * — from EITHER side, a rejoined leaver included.
- */
-async function reopenDirectChannel(
-  ctx: ChannelContext,
-  existing: { id: string; deleted_at: string | null },
-  memberUserId: string
-): Promise<Channel> {
-  if (existing.deleted_at) {
-    await repo.reviveChannel(ctx.workspaceId, existing.id);
-  }
-  await ensureDirectMember(ctx, existing.id, ctx.userId, "owner");
-  await ensureDirectMember(ctx, existing.id, memberUserId, "member");
-  return getChannel(ctx, existing.id);
-}
-
-/**
- * Restore one member of a reopened direct channel — normally a no-op, since a
- * soft-delete leaves `channel_members` in place. Caller takes `owner`, peer
- * `member`, so a pair healed from the evicted side still has a manager.
- */
-async function ensureDirectMember(
-  ctx: ChannelContext,
-  channelId: string,
-  userId: string,
-  role: "owner" | "member"
-): Promise<void> {
-  if (await repo.findMembership(channelId, userId)) return;
-  await repo.insertMember({
-    channel_id: channelId,
-    user_id: userId,
-    workspace_id: ctx.workspaceId,
-    role,
-    added_by: ctx.userId,
-  });
-}
 
 /**
  * THE FOUR HEADER FIELDS `updateChannel` REQUIRES `canManageChannel` FOR.
@@ -247,6 +130,14 @@ const MANAGED_CHANNEL_FIELDS = [
   "topic",
   "visibility",
   "archived",
+  // ⚠ **THE POSTURE CEILING IS MANAGED, NOT MEMBER-GATED (2026-09-02, A9 —
+  // G6/G7)**, which is the OPPOSITE call from `infoCard` one field along. The
+  // card is a shared scratch surface about a relationship; this decides how much
+  // room somebody else's agent gets in this room, and widening it is a
+  // permission change. It is listed here rather than left to the subtraction
+  // below because the default this list produces — MANAGED — is the one it
+  // wants, and stating it is what keeps that from looking accidental.
+  "agentPosture",
 ] as const satisfies ReadonlyArray<keyof ChannelUpdateInput>;
 
 export async function updateChannel(
@@ -306,6 +197,16 @@ export async function updateChannel(
       throw new ChannelInfoCardTooLargeError(bytes, INFO_CARD_MAX_BYTES);
     }
     dbPatch.info_card = patch.infoCard;
+  }
+  // ⚠ **PER AXIS, AND `null` IS A VALUE.** Absent means "no opinion, leave it";
+  // `null` means "this channel records no ceiling on that axis any more", which
+  // is the only way a recorded ceiling can be removed. Collapsing the two —
+  // `patch.agentPosture.tools ?? undefined` — would make a ceiling permanent.
+  if (patch.agentPosture) {
+    const p = patch.agentPosture;
+    if (p.tools !== undefined) dbPatch.agent_tool_ceiling = p.tools;
+    if (p.messages !== undefined) dbPatch.agent_message_ceiling = p.messages;
+    if (p.chain !== undefined) dbPatch.agent_chain_allowed = p.chain;
   }
 
   await repo.updateChannel(ctx.workspaceId, channel.id, dbPatch);
@@ -435,6 +336,15 @@ export async function postMessage(
     fanoutGroupId: opts.fanoutGroupId,
   });
 
+  // ⚠ **WHO THIS IS FOR AND WHAT IT DID — DECIDED HERE, ONCE** (2026-09-02, A9).
+  // It runs AFTER the metadata fold and reads that fold's output rather than the
+  // caller's input, because `to_user_id` and `taskId` are only trustworthy once
+  // the anti-spoof strip has re-stamped them from validated values.
+  // ⚠ It comes AFTER the idempotency short-circuit too: a converged retry
+  // returns the FIRST request's stored verdict, which is the whole point of the
+  // key — a retry must not re-resolve against a world that has moved on.
+  const wake = await resolveWakeVerdict(ctx, channel.id, input, metadata);
+
   // `system` is server-reserved and rejected by the route schema, so a posted
   // message always ties to the acting user (agent posts included).
   const authorKind =
@@ -451,6 +361,14 @@ export async function postMessage(
       body: input.body,
       metadata,
       client_msg_id: input.clientMsgId ?? null,
+      wake_verdict: wake.verdict,
+      recipient_user_ids: wake.recipientUserIds,
+      recipient_agent_ids: wake.recipientAgentIds,
+      // ⚠ THE SERVER'S PREDICTION, WHICH THE MACHINE'S ACK OVERWRITES
+      // (`service-writes-delivery.ts`). Stored rather than derived on read so a
+      // later reader sees what was true AT THE TIME, not what the projection
+      // says now.
+      delivery: wake.delivery,
     });
   } catch (err) {
     // ⚠ Lost an idempotency race — the short-circuit reached a second way, so

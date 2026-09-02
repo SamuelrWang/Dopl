@@ -1,13 +1,18 @@
 import type {
   AgentToolProfile,
   Channel,
+  ChannelDelivery,
   ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
   ChannelMessageKind,
   ChannelRole,
   ChannelThread,
+  ChannelAgentPosture,
   ChannelVisibility,
+  ChannelWakeVerdict,
+  LaunchMessageMode,
+  LaunchToolMode,
   MessageAuthorKind,
   NotifyScope,
   ThreadMode,
@@ -33,6 +38,14 @@ export type ChannelRow = {
   visibility: string;
   is_direct: boolean;
   direct_key: string | null;
+  // ── THE POSTURE CEILING (20260912120000, A9 — G6/G7) ────────────────────
+  // ⚠ OPTIONAL ON THE TYPE for `info_card`'s reason: these row shapes are CAST
+  // from PostgREST results, so a server reading a database whose migration has
+  // not landed sees no such key at all. `undefined` and `null` are one answer
+  // here — "no ceiling is recorded" — and neither is "unrestricted".
+  agent_tool_ceiling?: string | null;
+  agent_message_ceiling?: string | null;
+  agent_chain_allowed?: boolean | null;
   archived_at: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -125,6 +138,18 @@ export type ChannelMessageRow = {
   metadata: unknown;
   client_msg_id: string | null;
   created_at: string;
+  // ── THE DELIVERY KEYSTONE (20260912120000) ──────────────────────────────
+  // ⚠ NULL IS "NOT ANSWERED HERE", NEVER "NOBODY" AND NEVER "NO". A row written
+  // before the resolver carries NULL on all five, and `mapMessageRow` passes
+  // that through rather than inventing a verdict — the desktop's fallback and
+  // the MCP result line both key on it. Optional on the TYPE as well, because a
+  // deployment whose migration has not landed reads back a row without the
+  // columns at all.
+  wake_verdict?: string | null;
+  recipient_user_ids?: string[] | null;
+  recipient_agent_ids?: string[] | null;
+  delivery?: string | null;
+  delivery_at?: string | null;
 };
 
 export type ProfileRef = {
@@ -185,6 +210,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * **THE CHANNEL'S POSTURE CEILING, READ OFF THE ROW** (2026-09-02, A9 — G6/G7).
+ *
+ * ⚠ ALWAYS AN OBJECT, NEVER `undefined` — `infoCard`'s discipline, for
+ * `infoCard`'s reason: a reader must not have to ask whether the field loaded.
+ * The three axes inside it are independently nullable, and `null` there is "no
+ * ceiling recorded", never "unrestricted".
+ *
+ * ⚠ **EXPORTED FOR `service-launch.ts`, WHICH HAS THE ROW AND NOT THE DTO.** The
+ * create already loaded the channel through `loadVisibleChannel`; building a
+ * whole `Channel` (which needs a membership STATE the clamp has no use for) to
+ * read three columns would be a second read of a fact already in hand. One
+ * reader of the columns, two callers.
+ */
+export function mapAgentPosture(row: ChannelRow): ChannelAgentPosture {
+  return {
+    tools: (row.agent_tool_ceiling ?? null) as LaunchToolMode | null,
+    messages: (row.agent_message_ceiling ?? null) as LaunchMessageMode | null,
+    chain: row.agent_chain_allowed ?? null,
+  };
+}
+
 export function mapChannelRow(
   row: ChannelRow,
   state: ChannelViewerState
@@ -226,6 +273,7 @@ export function mapChannelRow(
     // degrade to the card as shipped, because the facts under the card are
     // still there and a channel that cannot render is the worse answer.
     infoCard: parseInfoCard(row.info_card),
+    agentPosture: mapAgentPosture(row),
   };
 }
 
@@ -246,6 +294,16 @@ export function mapMessageRow(
     createdAt: row.created_at,
     authorName: profile?.display_name || profile?.email || null,
     authorAvatarUrl: profile?.avatar_url ?? null,
+    // ⚠ PASSED THROUGH, NEVER RE-DERIVED. The verdict was computed ONCE, on the
+    // write, by `service-wake-verdict.ts`; a mapper that recomputed it would be
+    // the second reader this whole slice exists to delete. `?? null` normalizes
+    // an ABSENT column (migration not applied) onto the same "not answered"
+    // value as a NULL one, which is the same answer to the caller.
+    wakeVerdict: (row.wake_verdict ?? null) as ChannelWakeVerdict | null,
+    recipientUserIds: row.recipient_user_ids ?? null,
+    recipientAgentIds: row.recipient_agent_ids ?? null,
+    delivery: (row.delivery ?? null) as ChannelDelivery | null,
+    deliveryAt: row.delivery_at ?? null,
   };
 }
 

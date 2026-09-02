@@ -57,6 +57,27 @@ export const LAUNCH_MESSAGE_MODES = [
 const ToolModeSchema = closedEnum<LaunchToolMode>()(LAUNCH_TOOL_MODES);
 const MessageModeSchema = closedEnum<LaunchMessageMode>()(LAUNCH_MESSAGE_MODES);
 
+/**
+ * **THE CHANNEL'S POSTURE CEILING** (2026-09-02, A9 — G6/G7), edited through the
+ * ordinary channel PATCH and manage-gated there like the rest of the header.
+ *
+ * ⚠ **`null` IS A VALUE AND MEANS "CLEAR THE CEILING", which is why every axis
+ * is `.nullable()` as well as `.optional()`.** Absent means "no opinion, leave
+ * it"; `null` means "this channel records no ceiling any more". Collapsing the
+ * two would make a recorded ceiling impossible to remove — the same
+ * absent-vs-null distinction `mapChannelRow` reads back out.
+ *
+ * ⚠ IT REUSES THE TWO ORDERED ENUMS ABOVE rather than restating them. The
+ * ceiling and the request must agree about what "wider" means, and `narrowTo`'s
+ * comparison is an INDEX into those arrays.
+ */
+export const ChannelAgentPostureSchema = z.object({
+  tools: ToolModeSchema.nullable().optional(),
+  messages: MessageModeSchema.nullable().optional(),
+  chain: z.boolean().nullable().optional(),
+});
+export type ChannelAgentPostureInput = z.infer<typeof ChannelAgentPostureSchema>;
+
 export const LaunchCreateSchema = z.object({
   /** Channel slug or id. ⚠ Not `.uuid()` — a slug is a legal ref everywhere else
    *  in this feature and the service resolves both. */

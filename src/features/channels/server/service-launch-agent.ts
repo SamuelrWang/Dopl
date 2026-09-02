@@ -10,7 +10,7 @@ import {
   LaunchDirectiveNotFoundError,
 } from "./errors";
 import * as launchRepo from "./repository-launch";
-import { agentInstanceOwner } from "./repository-agent-owner";
+import { agentIsAnotherMembers } from "./repository-agent-owner";
 import { toDirective } from "./service-launch-dto";
 import { operatorIsOnline } from "./service-launch";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
@@ -136,8 +136,12 @@ async function refuseForeignTarget(
   ctx: ChannelContext,
   agentId: string
 ): Promise<void> {
-  const owner = await agentInstanceOwner(ctx.workspaceId, agentId);
-  if (owner !== null && owner !== ctx.userId) {
+  // ⚠ **THE READ GAINED A FRESHNESS BOUND ON 2026-09-02 (A9 / F-418) AND THAT IS
+  // A WEAKENING, DELIBERATELY.** A projection row is evidence only while it is
+  // recent; an old one says the agent WAS seen, and by then the id may have been
+  // recycled onto another machine. Refusing less is the safe direction for a
+  // check whose own docblock above says it is not the fence.
+  if (await agentIsAnotherMembers(ctx.workspaceId, agentId, ctx.userId)) {
     throw new AgentDirectiveForeignError(agentId);
   }
 }

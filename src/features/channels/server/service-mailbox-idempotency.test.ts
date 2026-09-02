@@ -38,6 +38,12 @@ vi.mock("./repository-launch", () => ({
   claimLaunchDirective: vi.fn(),
   decideLaunchDirective: vi.fn(),
 }));
+// ⚠ THE FOREIGN-AGENT READ (2026-09-02, A9 / F-418). `createAgentDirection` now
+// asks whether a FRESH projection row says the target belongs to another member —
+// the only case a server can answer — so this suite has to say "no" or it reaches
+// a live Supabase client. `false` is the ordinary answer: unknown, stale and quiet
+// all still FILE, which is the whole of F-418's warning.
+vi.mock("./repository-agent-owner", () => ({ agentIsAnotherMembers: vi.fn(async () => false) }));
 vi.mock("./repository-directions");
 vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
 vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));

@@ -243,6 +243,17 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     appliedToolMode: null,
     appliedMessageMode: null,
     appliedChain: null,
+    // ⚠ THE SERVER'S RESOLVED GROUP (2026-09-02, A9 — G6/G7/G8), the THIRD posture group and
+    // not a spelling of either neighbour: `start*` is what was asked, `applied*` is what this
+    // machine says it did, and this is what the SERVER permitted. `directiveFrom` PREFERS these
+    // over `start*`, so a fixture lacking them would test a precedence the server does not send.
+    // ⚠ ALL NULL HERE, WHICH IS THE ORDINARY LAUNCH into a channel that records no ceiling: the
+    // request was empty, so the resolution is too, and `resolvedModel` is null on a model this
+    // SERVER build does not recognise — never a refusal.
+    resolvedToolMode: null,
+    resolvedMessageMode: null,
+    resolvedChain: null,
+    resolvedModel: null,
     status: "pending",
     refusalReason: null,
     agentId: null,

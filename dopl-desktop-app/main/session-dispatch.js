@@ -130,6 +130,9 @@ const sessionEngine = require('./session-engine');
 const wakeTiers = require('./session-wake-tiers');
 const sessionTriage = require('./session-triage');
 const agentHandles = require('./agent-handles');
+// THE RECEIPT BUFFER (2026-09-02, A9). Above the sentinel like every other dep, so the
+// extracted block reaches it as a free var and the truth tables can inject a fake.
+const deliveryAck = require('./delivery-ack');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-DISPATCH-PURE (routing; unit-tested via source extraction) ──
@@ -145,6 +148,31 @@ function authorLabel(m) {
   const person = String((io.displayNameFor(m && m.authorUserId)) || '').trim();
   if (!(m && m.authorKind === 'agent')) return person;
   return person ? person + "'s agent" : 'an agent';
+}
+
+// ── THE SERVER'S OWN ANSWER, PREFERRED WHEN IT HAS ONE (2026-09-02, A9) ────────────────────
+//
+// ⚠ THE RULE USED TO LIVE ONLY HERE, AND THAT WAS THE DEFECT: every desktop parsed the body
+// for itself, so the doctrine had to be written against the weakest build in the field and no
+// two readers could be held to one answer. It is resolved ONCE now, server-side, at write time
+// (`src/features/channels/server/service-wake-verdict.ts`), and this machine EXECUTES it.
+//
+// ⚠ **ADDITIVE, AND THE FALLBACK IS THE WHOLE COMPATIBILITY STORY.** An ARRAY — EMPTY INCLUDED
+// — is the server's authoritative answer and the parse below is not run at all; ABSENT is "not
+// resolved there" (an older row, a PEER's agent whose id no server knows, a projection not yet
+// pushed) and falls through, which is today's behaviour exactly.
+// ⚠ **STILL INTERSECTED WITH `liveIds`**: the server resolves the author's own sessions
+// CHANNEL-wide and this feed is THREAD-scoped — which is also what stops the server naming a
+// session this machine does not have.
+function serverAddressed(m, liveIds) {
+  const ids = m && m.recipientAgentIds;
+  if (!Array.isArray(ids)) return null;
+  const out = [];
+  for (const raw of ids) {
+    const id = String(raw || '');
+    if (liveIds.indexOf(id) !== -1 && out.indexOf(id) === -1) out.push(id);
+  }
+  return out;
 }
 
 // THE @AGENT-ID PARSER, AND WHY IT LIVES ON THIS MACHINE (2026-08-21, ruling 5).
@@ -336,7 +364,11 @@ async function feedLiveSession(entry, m, myUserId) {
   // `handleIndexFor` reads `agent-names.js` — this machine owns every rename, so it is the only
   // authority there could be — and swallows a store failure into FEWER resolvable handles rather
   // than into a broken route (`agent-handles.js` states both).
-  const addressed = mentionedAgentIds(m.body, liveIds, agentHandles.handleIndexFor(liveIds));
+  // ⚠ `??` AND NOT `||` (A9): an EMPTY array is the server saying "this body names no agent",
+  // and `||` would fall through to the parse on it — re-deriving an answer already given.
+  const addressed =
+    serverAddressed(m, liveIds) ??
+    mentionedAgentIds(m.body, liveIds, agentHandles.handleIndexFor(liveIds));
   // ⚠ THE ESCALATION-ANSWER DOOR IS UNIONED AFTER THE TWO BODY DOORS, never merged into them:
   // those read text and this reads a server-stamped key, and keeping them separate is what lets
   // the body parser stay the one statement of what an @-mention is. Order is preserved — an
@@ -391,6 +423,11 @@ async function feedLiveSession(entry, m, myUserId) {
 
   let fed = 0;
   let held = 0; // dormant agents this message did not wake — see TIERED WAKE above
+  // ── THE RECEIPT'S THREE INPUTS (2026-09-02, A9). ⚠ COUNTED FROM WHAT HAPPENED, never
+  // re-derived from the body afterwards — that would be a third reader of the addressing rule.
+  let woke = 0;        // a DORMANT agent was started on this message
+  let toAddressee = 0; // a RUNNING session this message NAMED took the turn
+  let refused = 0;     // `feedInbound` declined — a full queue, or the entry-point belt
   for (const s of live) {
     if (wroteIt(s, m)) continue; // never feed a session its own post back
     // ruling 5: parsed here, consumed by `session-seed.frameContinuation`. FRAMING ONLY since
@@ -402,6 +439,7 @@ async function feedLiveSession(entry, m, myUserId) {
       (addressing && addressing.me === true) || (claimed !== '' && String(s.agentId || '') === claimed)
     );
     if (!mayFeed(s, wake)) { held += 1; continue; }
+    const wasDormant = dormant(s);
     const ok = sessionEngine.feedInbound({
       channelId: entry.channel.id,
       taskId: taskId,
@@ -415,7 +453,14 @@ async function feedLiveSession(entry, m, myUserId) {
       // becoming a second spelling of the tier table.
       wake: wake === true,
     });
-    if (ok) fed += 1;
+    if (!ok) { refused += 1; continue; }
+    fed += 1;
+    // ⚠ `wake` ALONE DOES NOT MEAN "STARTED": an ADDRESSED session already running carries
+    // `wake: true` too (it is what `session-gate.js` stamps `lastWakeSeq` on). Different news,
+    // different next action, so the receipt tells them apart — and `wasDormant` is read BEFORE
+    // the feed, because feeding is what stops it being true.
+    if (wake === true && wasDormant) woke += 1;
+    else if (addressing && addressing.me === true) toAddressee += 1;
   }
   // ⚠ THE RING IS FED AFTER THE DECISION, NEVER BEFORE IT. It is the "last few messages" a later
   // triage prompt reads, and a message that included ITSELF in its own context would be asking
@@ -440,9 +485,16 @@ async function feedLiveSession(entry, m, myUserId) {
       // an operator which fence answered.
       'elig', eligibility, 'tier', tier, claimed ? `woke:${claimed}` : '');
   }
+  // ⚠ **THE RECEIPT — THE OTHER HALF OF `delivery=`** (A9). The server stamped a PREDICTION at
+  // write time; this is what the machine did. `delivery-ack.js` owns the WORD (`verdictFor`, so
+  // the rank is stated once) and why it cannot post on its own. ⚠ Stamped with `myUserId`, the
+  // only identity that may claim it: the ack fences its drain on that, so operator A's receipt
+  // can never go out under B's credential (`session-state-push.js › trackOrigin`'s rule).
+  const verdict = deliveryAck.verdictFor({ woke, toAddressee, fed, held, refused });
+  if (verdict) deliveryAck.note(entry.workspaceId, entry.channel.id, m.seq, verdict, myUserId);
   return fed > 0;
 }
 
 // ─── END SESSION-DISPATCH-PURE ─────────────────────────────────────────────────
 
-module.exports = { feedLiveSession, mentionedAgentIds, addressingFor, mayFeed, dormant, wakeCandidates };
+module.exports = { feedLiveSession, mentionedAgentIds, serverAddressed, addressingFor, mayFeed, dormant, wakeCandidates };

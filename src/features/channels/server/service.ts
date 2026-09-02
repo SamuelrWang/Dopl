@@ -144,6 +144,12 @@ export {
   reportSessionStates,
 } from "./session-state-service";
 
+// THE WAKE ACK (2026-09-02, A9) — what a machine DID with a message, riding the
+// session-health push beside the projection it already sends. Its own module
+// because it writes `channel_messages`, which the session projection never
+// touches: one file, one reason to change.
+export { recordDeliveryAcks } from "./service-writes-delivery";
+
 // LAUNCH-OVER-MCP (Samuel, 2026-08-22) — an operator's external agent asking
 // that operator's OWN desktop to start an agent. ⚠ Its own module because it is
 // the one channel write that produces NO MESSAGE: a directive stays off

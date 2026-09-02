@@ -23,6 +23,14 @@
 // DTO and the SPA all need the same answer; re-declaring the type here would be
 // the second copy that drifts.
 import type { ChannelInfoCard } from "./info-card";
+// ⚠ THE DELIVERY CONTRACT AND THE CEILING LIVE IN `types-delivery.ts` (§1 split,
+// 2026-09-02) and are re-exported at the foot of this file with the other four
+// type modules — this file is the barrel.
+import type {
+  ChannelAgentPosture,
+  ChannelDelivery,
+  ChannelWakeVerdict,
+} from "./types-delivery";
 import type { Role } from "@/features/workspaces/types";
 
 /**
@@ -155,49 +163,6 @@ export type NotifyScope = "all" | "addressed" | "none";
 export type AgentToolProfile = "full" | "dopl_only" | "read_only";
 
 /**
- * Consent request kind. `outbound` = the operator's own agent drafted a reply
- * awaiting Send / Cancel, and it is the ONLY kind anything writes.
- *
- * ⚠ `inbound` IS A READ-ONLY HISTORICAL VALUE (2026-08-22, Samuel). It meant "a
- * teammate's agent addressed the operator; Allow or Deny before this machine
- * spawns", and that lane is retired: a peer's ask notifies, and the operator
- * launches a session or does not. The value stays in this union because DECIDED
- * inbound rows are KEPT for audit and `mapConsentRow` casts the column onto this
- * type — deleting it would not delete the rows, it would make them fail to type.
- * ⚠ `schema-collab.ts › ConsentCreateSchema` no longer ACCEPTS it, so a create
- * naming it is a 400. That asymmetry is the point: readable, unwritable.
- */
-export type ConsentKind = "inbound" | "outbound";
-
-/**
- * Consent request lifecycle. `pending` awaits a decision; `allowed` / `denied`
- * are human decisions; `expired` elapsed unanswered.
- *
- * ⚠ `auto_allowed` IS READ-ONLY HISTORY, on `inbound`'s terms: it was written
- * only by the standing-trust birth in `createConsentRequest`, and
- * `agent_trust_rules` is dropped (2026-08-22), so nothing can produce one. Kept
- * so a stored row still types and still lists in the audit view.
- */
-export type ConsentStatus =
-  | "pending"
-  | "allowed"
-  | "denied"
-  | "expired"
-  | "auto_allowed";
-
-/**
- * Which surface recorded a HUMAN decision, persisted into `decided_by`. Desktop
- * dialog and web card are equal peers, so audit must distinguish them.
- *
- * ⚠ `decided_by` can also hold `'trust'`, which is NOT in this union and never
- * was — it was server-written at CREATE time for a standing-rule auto-allow, and
- * deliberately unacceptable from a caller. That writer is deleted (2026-08-22),
- * so the value is stored history only; the DTO types the column as
- * `string | null` for exactly this reason.
- */
-export type ConsentDecisionSurface = "web" | "desktop";
-
-/**
  * Listener state a heartbeat reports. Closed set (schema + DB CHECK).
  * `listening` is the desktop's steady state; rest reserved so richer states
  * need no migration.
@@ -259,6 +224,9 @@ export type Channel = {
    * card loaded.
    */
   infoCard: ChannelInfoCard;
+  /** **THE POSTURE CEILING THE SERVER CAN SEE** (A9 — G6/G7). ⚠ `null` on any
+   *  axis is "NOT RECORDED", never "unrestricted"; see `types-delivery.ts`. */
+  agentPosture: ChannelAgentPosture;
 };
 
 export type ChannelMessage = {
@@ -276,6 +244,23 @@ export type ChannelMessage = {
   /** Hydrated author display (UI convenience); null for system rows. */
   authorName: string | null;
   authorAvatarUrl: string | null;
+  // ── THE DELIVERY KEYSTONE (2026-09-02, A9; `types-delivery.ts`) ─────────
+  // ⚠ **OPTIONAL *AND* NULLABLE, AND BOTH MEAN "NOT ANSWERED HERE".** `undefined`
+  // is what a message this tree BUILDS rather than READS carries (an optimistic
+  // row, a fixture, the marketing demo); `null` is what `server/dto.ts ›
+  // mapMessageRow` writes for a stored row the resolver could not answer for.
+  // **Neither is "nobody" — that is `"none"`** — and `[]` on either array IS
+  // "resolved to nobody" where absent is not. `main/session-dispatch.js` falls
+  // back to its own body parse ONLY on absent, which is what keeps an installed
+  // desktop working unchanged; collapsing any two of the three breaks it.
+  // ⚠ The optionality also keeps this type BYTE-IDENTICAL to the SDK's
+  // hand-maintained mirror, which is the only reason that mirror stays honest.
+  wakeVerdict?: ChannelWakeVerdict | null;
+  recipientUserIds?: string[] | null;
+  recipientAgentIds?: string[] | null;
+  /** ⚠ Without {@link deliveryAt} this is the server's write-time PREDICTION. */
+  delivery?: ChannelDelivery | null;
+  deliveryAt?: string | null;
 };
 
 /**
@@ -357,55 +342,6 @@ export type ChannelMember = {
 };
 
 /**
- * A human-in-the-loop consent request: `outbound` — Send / Cancel before the
- * operator's own agent's reply leaves the machine. A server-side row so either
- * surface (web or desktop) can answer it, first answer wins.
- *
- * ⚠ A STORED ROW MAY STILL BE `inbound` (Allow / Deny before the operator's
- * machine spawned). That lane is retired (2026-08-22) and nothing raises one any
- * more, but decided rows are kept for audit and this type is what the audit read
- * returns — see {@link ConsentKind}.
- */
-export type ChannelConsentRequest = {
-  id: string;
-  channelId: string;
-  workspaceId: string;
-  /** Who must decide (the recipient / operator). */
-  operatorUserId: string;
-  /** Inbound: who asked. Null for outbound. */
-  requesterUserId: string | null;
-  kind: ConsentKind;
-  /** Inbound: seq of the triggering message. */
-  messageSeq: number | null;
-  summary: string;
-  bodyPreview: string;
-  /** Outbound: drafted reply awaiting Send. */
-  proposedReply: string | null;
-  status: ConsentStatus;
-  /** 'web' | 'desktop' | 'trust'. */
-  decidedBy: string | null;
-  decidedAt: string | null;
-  createdAt: string;
-  expiresAt: string | null;
-  /** Inbound only; null for outbound. */
-  requesterName: string | null;
-  requesterAvatarUrl: string | null;
-};
-
-// ⚠ `AgentTrustRule` STOOD HERE AND IS DELETED (2026-08-22, Samuel). It was the
-// per-teammate standing-consent rule ("always allow Alice's agent"), and it only
-// ever auto-allowed an INBOUND consent request — the lane that is retired. The
-// `agent_trust_rules` table goes with it
-// (`20260822140000_retire_inbound_consent_and_trust.sql`), so nothing this type
-// described exists: not the routes, not the service, not the repository reads,
-// not the relation. It never fired in production either — the rule was on hold
-// by Samuel's own ruling (INVARIANTS §6) and the settings surface that would
-// have written one was never wired.
-
-// `AwaitResult` (long-poll) is an MCP/SDK shape and lives in
-// `packages/dopl-client/src/channel-types.ts`, where its only callers are.
-
-/**
  * SESSION and LAUNCH types live in `types-sessions.ts` / `types-launch.ts`
  * (split 2026-08-22 at the 500-line cap). ⚠ Re-exported here so every existing
  * `@/features/channels/types` import is unchanged — **this file is the barrel,
@@ -433,9 +369,26 @@ export type {
   LaunchMessageMode,
 } from "./types-launch";
 
+// THE DELIVERY KEYSTONE (2026-09-02, A9) — the `delivery=` verdict, the recipient
+// resolution behind it, and the channel posture CEILING a launch is clamped to.
+export type {
+  ChannelAgentPosture,
+  ChannelDelivery,
+  ChannelWakeVerdict,
+  MachineDelivery,
+} from "./types-delivery";
+
 export type { DirectionRefusalReason, AgentDirection } from "./types-direction";
 
 // THE "NEEDS YOU" SIGNAL (2026-09-01) — the direct lane's sibling, and off
 // `channel_messages` for the same reasons plus a third: it needs its OWN cursor,
 // because the session holding it is not reading the channel.
 export type { PingKind, PingRecipientKind, ChannelPing } from "./types-ping";
+
+// OUTBOUND CONSENT (§6) — same arrangement, same reason (§1 split, 2026-09-02).
+export type {
+  ConsentKind,
+  ConsentStatus,
+  ConsentDecisionSurface,
+  ChannelConsentRequest,
+} from "./types-consent";

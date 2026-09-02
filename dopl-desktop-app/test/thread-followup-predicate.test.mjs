@@ -106,10 +106,13 @@ function harness(over = {}) {
   // shipped one; only the model call is faked, and the fixtures below are all RUNNING sessions,
   // which no tier governs.
   const routes = new Function(
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
+    // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
+    // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
+    // the buffer.
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
     `${DISPATCH_BLOCK}\n return { feedLiveSession };`
   )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` },
-    wakeTiers, { claim: async () => "" }, agentHandles, () => {});
+    wakeTiers, { claim: async () => "" }, agentHandles, { note: () => true, verdictFor: () => '' }, () => {});
 
   const api = new Function(
     "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",

@@ -24,6 +24,7 @@ import {
   type UseApiMutationConfig,
 } from "@/shared/hooks/use-api-mutation";
 import { EMPTY_INFO_CARD } from "../info-card";
+import { EMPTY_AGENT_POSTURE } from "../lib/agent-posture";
 import type { ChannelsCache } from "../lib/optimistic-cache";
 import type { Channel } from "../types";
 import {
@@ -83,6 +84,7 @@ function channel(over: Partial<Channel> = {}): Channel {
     myFavoritedAt: null,
     onlineMemberCount: 0,
     infoCard: EMPTY_INFO_CARD,
+    agentPosture: EMPTY_AGENT_POSTURE,
     ...over,
   };
 }

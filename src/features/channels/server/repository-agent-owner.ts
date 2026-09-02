@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { SESSION_PROJECTION_FRESH_MS } from "../constants";
 import { isMissingRelation } from "./repository-sessions";
 
 /**
@@ -72,14 +73,30 @@ import { isMissingRelation } from "./repository-sessions";
  * the operator's DISPLAY name, which lives on one machine in
  * `main/agent-names.js` and reaches no server.
  */
+/**
+ * WHO REPORTED AN AGENT ID, AND WHEN. ⚠ The stamp is not decoration: no caller
+ * may refuse on this row without bounding its age (see
+ * {@link agentIsAnotherMembers}).
+ */
+export type AgentInstanceOwner = {
+  userId: string;
+  /** `null` on a row a PostgREST projection returned without the column. */
+  updatedAt: string | null;
+};
+
 export async function agentInstanceOwner(
   workspaceId: string,
   agentId: string
-): Promise<string | null> {
+): Promise<AgentInstanceOwner | null> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("channel_sessions")
-    .select("user_id")
+    // ⚠ `updated_at` JOINED THE SELECT ON 2026-09-02 (A9 / F-418). A projection
+    // row is only evidence while it is RECENT: the desktop pushes on state
+    // change and never on a timer, so an old row says an agent was seen, not
+    // that it is there. Every caller applies a freshness bound to this stamp
+    // before refusing anything — see {@link AgentInstanceOwner.updatedAt}.
+    .select("user_id, updated_at")
     .eq("workspace_id", workspaceId)
     .eq("name", agentId)
     // ⚠ ORDERED AND LIMITED rather than `maybeSingle()`: one agent id can hold
@@ -93,6 +110,42 @@ export async function agentInstanceOwner(
     if (isMissingRelation(error)) return null;
     throw error;
   }
-  const row = (data ?? [])[0] as { user_id?: string } | undefined;
-  return row?.user_id ?? null;
+  const row = (data ?? [])[0] as
+    | { user_id?: string; updated_at?: string }
+    | undefined;
+  if (!row?.user_id) return null;
+  return { userId: row.user_id, updatedAt: row.updated_at ?? null };
+}
+
+/**
+ * **IS THIS AGENT SOMEBODY ELSE'S, ON EVIDENCE RECENT ENOUGH TO SAY SO?**
+ * (2026-09-02, A9 — guardrail G3, finding F-418.)
+ *
+ * ⚠ **IT REFUSES ONLY ON A POSITIVE, FRESH FACT, AND BOTH WORDS ARE
+ * LOAD-BEARING.** Absence proves nothing — `channel_sessions` is a projection,
+ * so silence means nobody reported — and F-418 states the trap in as many words:
+ * intersecting an agent id with this table converts a benign `no-session` answer
+ * into a hard 400 for every legitimate call sent while the push is behind, which
+ * is the ORDINARY state in the seconds after a launch. A STALE row is the same
+ * kind of nothing: it says an agent was seen, not that it is there, and by then
+ * an id may have been recycled onto another machine.
+ *
+ * ⚠ **SO IT IS AN ERROR-MESSAGE IMPROVEMENT, NOT A FENCE**, exactly as
+ * `service-launch-agent.ts › refuseForeignTarget` says of the same read: the
+ * fence is `operator_user_id`, and only the caller's own machines ever claim a
+ * row. Deleting this degrades a sentence; it opens nothing.
+ */
+export async function agentIsAnotherMembers(
+  workspaceId: string,
+  agentId: string,
+  userId: string,
+  now = Date.now()
+): Promise<boolean> {
+  const owner = await agentInstanceOwner(workspaceId, agentId);
+  if (owner === null || owner.userId === userId) return false;
+  const at = owner.updatedAt ? Date.parse(owner.updatedAt) : NaN;
+  // ⚠ AN UNPARSEABLE OR ABSENT STAMP IS STALE, never fresh — the direction that
+  // refuses LESS, which is the safe one for a check that is not the fence.
+  if (Number.isNaN(at)) return false;
+  return now - at < SESSION_PROJECTION_FRESH_MS;
 }

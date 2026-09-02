@@ -10,6 +10,11 @@ import {
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
 } from "./errors";
+// ⚠ THE CEILING IS THE CREATE'S FIFTH GATE AND ITS OWN MODULE (§1 cap, and the
+// `service-launch-template.ts` precedent one line up): it is a SECOND COPY of the
+// desktop's clamp across a tree boundary the two cannot import over, so it lives
+// in one place with a parity test rather than inline in a service.
+import { resolveDirectivePosture } from "./service-launch-posture";
 import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
@@ -235,6 +240,18 @@ export async function createLaunchDirective(
 
   const template = await resolveTemplateForDirective(ctx, input.template);
 
+  // ── 5. **THE POSTURE CEILING** (2026-09-02, A9 — G6, G7, G8) ──────────────
+  //
+  // ⚠ **ABOVE PRESENCE, ON THE TEMPLATE GATE'S ARGUMENT.** `offline` is a 200
+  // saying "nothing was asked", and answering a chain the channel forbids with
+  // "your machine is asleep" makes the caller fix the wrong thing and ask again a
+  // minute later for the real refusal — a ceiling needs nobody's machine.
+  // ⚠ **AND BELOW THE IDEMPOTENCY PROBE**: a stored row is this request's answer
+  // and must not be re-decided against a ceiling that has moved since.
+  // The rule itself, and why it refuses on one axis and clamps on two, is
+  // `service-launch-posture.ts`.
+  const posture = resolveDirectivePosture(channel, input);
+
   if (!(await operatorIsOnline(ctx))) {
     return { offline: true, directive: null };
   }
@@ -279,6 +296,17 @@ export async function createLaunchDirective(
       start_tool_mode: input.tools ?? null,
       start_message_mode: input.messages ?? null,
       chain: input.chain ?? null,
+      // ⚠ **THE THIRD POSTURE GROUP, AND THE CREATE IS ITS ONLY WRITER**
+      // (2026-09-02, A9). `start_*` records what was ASKED and is never
+      // rewritten; `applied_*` is the MACHINE's echo and is written by the
+      // DECIDE; this is what the SERVER permitted. G6 asks for the applied value
+      // to be non-null, and it is — by CONSTRUCTION, on every row this build
+      // files, rather than by a constraint that would 500 an insert from a
+      // rolled-back one.
+      resolved_tool_mode: posture.tools,
+      resolved_message_mode: posture.messages,
+      resolved_chain: posture.chain,
+      resolved_model: posture.model,
       expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
       client_msg_id: input.clientMsgId ?? null,
     }),

@@ -112,6 +112,43 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * turns (spec E-4, F-1). The NAME is what survives the SET NULL and makes the difference legible,
  * so narrowing it away would re-create exactly the ambiguity the server added a column to close.
  */
+/**
+ * THE FIRST OF SEVERAL SPELLINGS OF ONE MODE THAT THIS BUILD RECOGNISES, else `''`.
+ *
+ * ⚠ IT IS A NARROWING, NOT A MERGE: the candidates are ONE fact spelled several ways — the
+ * server's resolved value, then its snake/camel pair, then the raw request's — and the ORDER
+ * is the precedence (2026-09-02, A9). A mode this build has never heard of collapses to `''`
+ * rather than travelling toward a reducer that would coerce it to the most restrictive member
+ * without anybody saying so, which is `templateId`'s rule one field along.
+ *
+ * ⚠ IT EXISTS BECAUSE THE PRECEDENCE IS NOW FOUR-DEEP AND WAS WRITTEN TWICE. Two copies of a
+ * fallback chain is how the tool axis and the message axis come to disagree about which value
+ * wins — the `chain: false` defect of 2026-09-01 in a different costume.
+ */
+function pickMode(order, ...candidates) {
+  for (const c of candidates) {
+    const v = String(c == null ? '' : c);
+    if (v && order.indexOf(v) !== -1) return v;
+  }
+  return '';
+}
+
+/**
+ * A TRI-STATE OFF THE WIRE: `true`, `false`, or `null` for "did not ask".
+ *
+ * ⚠ `'false'` IS ACCEPTED BESIDE `false` for the same reason `'true'` is: a row may arrive over
+ * a transport that stringifies booleans, and a one-sided coercion is how the two halves of a
+ * tri-state stop being symmetric. **That asymmetry WAS the 2026-09-01 bug**: a stored `false`
+ * fell down the `null` arm, arrived as "did not ask", and INHERITED a channel setting that may
+ * be ON — so `chain: false` could not turn chaining off while every doc on the lane said it
+ * could. Extracted here so the rule has one statement rather than one per reader.
+ */
+function triState(v) {
+  if (v === true || v === 'true') return true;
+  if (v === false || v === 'false') return false;
+  return null;
+}
+
 function directiveFrom(raw, workspaceId) {
   const r = raw || {};
   const id = String(r.id || '');
@@ -203,10 +240,20 @@ function directiveFrom(raw, workspaceId) {
     // operator's own durable channel pair before they reach a spawn — the lane's standing
     // invariant, which T24 does not get to relax. That module's header carries the argument,
     // including why the ticket's "unless the caller is the operator" carve-out is the whole set.
-    startToolMode: TOOL_MODES.indexOf(String(r.start_tool_mode || r.startToolMode || '')) === -1
-      ? '' : String(r.start_tool_mode || r.startToolMode),
-    startMessageMode: MESSAGE_MODES.indexOf(String(r.start_message_mode || r.startMessageMode || '')) === -1
-      ? '' : String(r.start_message_mode || r.startMessageMode),
+    // ⚠ **THE SERVER'S RESOLVED VALUE IS PREFERRED OVER THE RAW REQUEST SINCE 2026-09-02
+    // (A9 — G6).** The server now clamps the request to the CHANNEL'S stored ceiling at
+    // creation and writes `resolved_*`; reading `start_*` here instead would leave that clamp
+    // cosmetic, because this machine's own ceiling is a different record and may be wider.
+    // ⚠ **IT CAN ONLY EVER NARROW**, which is why preferring it needs no new argument: the
+    // server's value IS the request, clamped. `launch-posture.js › resolvePosture` still runs
+    // over the result and still clamps to the OPERATOR's own stored pair — two fences on one
+    // rule, and the machine's is the finer one (it also holds the windowless message floor).
+    // ⚠ **AN OLDER SERVER SENDS NO `resolved_*` AND THE `||` CHAIN FALLS THROUGH TO
+    // `start_*`**, which is exactly today's behaviour. Same shape as every other field here.
+    startToolMode: pickMode(TOOL_MODES, r.resolved_tool_mode, r.resolvedToolMode,
+      r.start_tool_mode, r.startToolMode),
+    startMessageMode: pickMode(MESSAGE_MODES, r.resolved_message_mode, r.resolvedMessageMode,
+      r.start_message_mode, r.startMessageMode),
     // ⚠ A TRI-STATE, NOT A BOOLEAN, AND **ALL THREE VALUES ARE LOAD-BEARING**. `true` is "I need
     // this agent to be able to launch workers"; `false` is "run it with chaining OFF, whatever
     // the channel allows"; `null` is "I did not ask", which inherits the channel's setting
@@ -223,11 +270,12 @@ function directiveFrom(raw, workspaceId) {
     // ⚠ `'false'` IS ACCEPTED BESIDE `false` for the same reason `'true'` is: this row may arrive
     // over a transport that stringifies booleans, and a one-sided coercion is how the two halves
     // of a tri-state stop being symmetric.
-    chain: r.chain === true || r.chain === 'true'
-      ? true
-      : r.chain === false || r.chain === 'false'
-        ? false
-        : null,
+    // ⚠ **THE SERVER'S RESOLVED CHAIN FIRST, ON `startToolMode`'S ARGUMENT** — it can only
+    // narrow (a `chain: true` the channel forbids is REFUSED at creation, never silently
+    // turned off), and an older server sends none, which falls through to the raw request.
+    chain: triState(r.resolved_chain !== undefined && r.resolved_chain !== null
+      ? r.resolved_chain
+      : r.resolvedChain !== undefined && r.resolvedChain !== null ? r.resolvedChain : r.chain),
     status: STATUSES.indexOf(status) === -1 ? '' : status,
     agentId: String(r.agent_id || r.agentId || ''),
   };

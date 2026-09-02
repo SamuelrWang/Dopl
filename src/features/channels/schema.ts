@@ -6,7 +6,6 @@ import {
   MAX_METADATA_SERIALIZED_BYTES,
 } from "./constants";
 import type {
-  AgentToolProfile,
   ChannelVisibility,
   MessageIntent,
   PostableAuthorKind,
@@ -16,6 +15,9 @@ import type {
 // ⚠ THE RETIRED PARAMETERS LIVE IN THEIR OWN MODULE (§1 split, 2026-08-25) —
 // they are the one block here scheduled to STOP existing, and that file carries
 // the delete-me clock. Nothing about their behaviour moved.
+// ⚠ FROM THE LAUNCH SCHEMA, not a second declaration: the ceiling and the request
+// it clamps must be the same two ORDERED enums (the comparison is an index).
+import { ChannelAgentPostureSchema } from "./schema-launch";
 import {
   REMOVED_PARTICIPANTS,
   REMOVED_THREAD_CLOSE,
@@ -123,6 +125,12 @@ export const ChannelUpdateSchema = z
     visibility: VisibilitySchema.optional(),
     archived: z.boolean().optional(),
     infoCard: ChannelInfoCardSchema.optional(),
+    /** **THE POSTURE CEILING A LAUNCH IS CLAMPED TO** (A9 — G6/G7). ⚠ MANAGE-gated
+     *  (`service-writes.ts › MANAGED_CHANNEL_FIELDS`), the OPPOSITE call from
+     *  `infoCard` one field up: a card is a shared scratch surface, and this is
+     *  how much room somebody else's agent gets here. Widening is a permission
+     *  change. */
+    agentPosture: ChannelAgentPostureSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
 export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
@@ -354,55 +362,22 @@ export type TaskUpdateInput = Extract<
 export const TaskUpdateSchema =
   TaskUpdateUnion as unknown as z.ZodType<TaskUpdateInput>;
 
-/** Per-member responding-agent tool scope (self-service preference). */
-/** ⚠ Annotated so TS-side drift breaks the build — see `VisibilitySchema`. This
- *  is a CONTAINMENT vocabulary: a value the web offers that main does not know
- *  resolves to `read_only` through `normalizeProfile` (INVARIANTS §11). */
-const AgentToolProfileSchema = closedEnum<AgentToolProfile>()([
-  "full",
-  "dopl_only",
-  "read_only",
-]);
-
 /**
- * PATCH /members: member updates their OWN per-channel settings — the agent
- * tool profile, and whether this channel is one of their favourites.
- * Self-only — service always targets the caller's row. Empty patch rejected.
- *
- * ⚠ NO MEMBER IDENTIFIER, BY CONSTRUCTION, AND THAT IS THE SECOND HALF OF THE
- * SELF-ONLY GUARANTEE. Zod STRIPS unknown keys, so a body naming `userId` (or
- * `user_id`, or `memberId`) parses to a patch that names nobody, and the service
- * writes `ctx.userId`'s row. Adding a member field here would turn one write
- * into two decisions.
- *
- * `notifyScope` is now an unknown key (F-170 removed it) and zod STRIPS it: a
- * stale client sending it alone hits the empty-patch refusal. Intended.
- *
- * `favorite` is a BOOLEAN on the wire and a nullable timestamp in storage
- * (`channel_members.favorited_at`, `20260819120000`): the client asks for a
- * state, the server stamps the clock.
+ * The MEMBER schemas — the self-service PATCH, add and remove — live in
+ * `schema-members.ts` (§1 split, 2026-09-02, at the cap). Re-exported here for
+ * the same reason every block below is: **this file is the barrel.** The seam is
+ * the one the write layer already draws (`server/service-writes-members.ts`).
  */
-export const ChannelMemberSelfUpdateSchema = z
-  .object({
-    agentToolProfile: AgentToolProfileSchema.optional(),
-    favorite: z.boolean().optional(),
-  })
-  .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
-export type ChannelMemberSelfUpdateInput = z.infer<
-  typeof ChannelMemberSelfUpdateSchema
->;
-
-export const ChannelMemberAddSchema = z.object({
-  userId: z.string().uuid(),
-});
-export type ChannelMemberAddInput = z.infer<typeof ChannelMemberAddSchema>;
-
-export const ChannelMemberRemoveSchema = z.object({
-  userId: z.string().uuid(),
-});
-export type ChannelMemberRemoveInput = z.infer<
-  typeof ChannelMemberRemoveSchema
->;
+export {
+  ChannelMemberAddSchema,
+  ChannelMemberRemoveSchema,
+  ChannelMemberSelfUpdateSchema,
+} from "./schema-members";
+export type {
+  ChannelMemberAddInput,
+  ChannelMemberRemoveInput,
+  ChannelMemberSelfUpdateInput,
+} from "./schema-members";
 
 /**
  * The READ-QUERY schemas — `MessageReadQuerySchema` (the transcript's paged read,
@@ -464,6 +439,7 @@ export {
   // ⚠ THE AGENT-MANAGEMENT HALF (2026-09-01) rides the SAME file and the same
   // barrel: `end` / `rename` are kinds of directive, not a second lane.
   AgentDirectiveCreateSchema,
+  ChannelAgentPostureSchema,
   LaunchClaimSchema,
   LaunchCreateSchema,
   LaunchDecideSchema,
@@ -471,6 +447,7 @@ export {
 } from "./schema-launch";
 export type {
   AgentDirectiveCreateInput,
+  ChannelAgentPostureInput,
   LaunchClaimInput,
   LaunchCreateInput,
   LaunchDecideInput,

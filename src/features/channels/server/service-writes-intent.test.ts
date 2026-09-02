@@ -19,10 +19,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
+// ⚠ **THE VERDICT RESOLVER READS `channel_sessions` (A9)** and this suite is
+// about the METADATA fold, not about who a post wakes. Mocked to the empty
+// projection so the agent half of `service-wake-verdict.ts` resolves nothing:
+// unmocked it reaches `supabaseAdmin()` and every case with an `@` in its body
+// hangs on a real client. `service-wake-verdict.test.ts` is where that
+// resolution is driven.
+vi.mock("./repository-sessions");
+
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
+import * as repoSessions from "./repository-sessions";
 import { ChannelChatAddressedError } from "./errors";
 import { postMessage } from "./service-writes";
 import type {
@@ -145,6 +154,7 @@ beforeEach(() => {
   ]);
   vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
@@ -295,6 +305,13 @@ describe("postMessage — chat + a HUMAN addressee is still a contradiction", ()
         body: "hi",
         metadata: {},
         client_msg_id: "k1",
+        // ⚠ The stored row's own verdict (A9). Not this case's subject — it is
+        // here because the insert states a verdict on every path, and a fixture
+        // that could omit it would let a real omission compile.
+        wake_verdict: "none",
+        recipient_user_ids: [],
+        recipient_agent_ids: null,
+        delivery: "none",
       })
     );
 
