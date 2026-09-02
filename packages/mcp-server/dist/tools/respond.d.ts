@@ -73,7 +73,7 @@ export declare function isAlreadyExists(e: unknown): boolean;
  * surfaces: the registrar's up-front refusal (reading `allowed: false` off the
  * consume response, not an error) and `entitlementDenied` below.
  */
-export declare const CREDITS_EXHAUSTED_CODE = "credits_exhausted";
+export declare const CREDITS_EXHAUSTED_CODE: string;
 /**
  * Credits refusal rendered exactly like an entitlement denial (message +
  * upgrade link) so an agent reads ONE shape for every plan gate. ⚠ URL comes

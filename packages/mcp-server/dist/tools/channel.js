@@ -211,7 +211,7 @@ directory) {
                 return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId, 
                 // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
                 // ids are real `metadata.taskId` values and must stay filterable.
-                args.thread);
+                args.thread, args.response_format);
             }
             // ⚠ `channel` IS OPTIONAL HERE AND ONLY HERE AMONG THE HOLDS. Omitting
             // it holds across EVERY channel the caller is a MEMBER of — a different
@@ -256,7 +256,7 @@ directory) {
                 if (args.channel === undefined || args.channel.trim() === "") {
                     return (0, channel_ops_account_1.opReadSessionsAccount)(client, directory);
                 }
-                return (0, channel_ops_read_1.opReadSessions)(client, args.channel);
+                return (0, channel_ops_read_1.opReadSessions)(client, args.channel, args.response_format);
             case "create_thread": {
                 const miss = (0, respond_1.missingParams)("create_thread", args, [
                     "channel",

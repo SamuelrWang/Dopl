@@ -20,6 +20,7 @@ exports.isDesktopRuntime = isDesktopRuntime;
 exports.callerStatusLine = callerStatusLine;
 exports.sessionLines = sessionLines;
 exports.identityLine = identityLine;
+exports.boundChannelId = boundChannelId;
 const narration_1 = require("./narration");
 /**
  * Recognized `X-Dopl-Runtime` value. ⚠ HAND-COPIED from
@@ -143,3 +144,21 @@ function identityLine(identity, self) {
     }
     return `- You are: UNKNOWN — this connection could not resolve your user id, so nothing below identifies you. Reconnect before acting on identity.`;
 }
+/**
+ * ⚠ THE ROOM THIS SESSION IS STANDING IN, from `X-Dopl-Session-Id`'s
+ * `<channelId>:<tail>` head — the SAME split
+ * `src/features/knowledge/server/service-audience.ts › narrowToSessionChannel`
+ * makes, and the same uuid guard, because a client that is not the desktop can
+ * send an opaque handle carrying a colon that names no channel at all.
+ *
+ * ⚠ IT ESTABLISHES NOTHING AND GATES NOTHING. The header is a documented
+ * NON-authorization signal (§10) and this only tells an agent which room it was
+ * spawned into — a fact it would otherwise spend a call discovering. Null
+ * whenever the header was absent, unshaped, or not uuid-headed.
+ */
+function boundChannelId(identity) {
+    const head = identity.sessionId?.split(":")[0];
+    return head && UUID_RE.test(head) ? head : null;
+}
+/** ⚠ Shape only — a uuid here is a ROUTING hint, never a proven channel. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

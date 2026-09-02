@@ -32,12 +32,52 @@ const zod_1 = require("zod");
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
 const home_scopes_js_1 = require("./home-scopes.js");
+const tool_errors_js_1 = require("./tool-errors.js");
+const tool_style_js_1 = require("./tool-style.js");
 const NO_NAME = "`(unnamed)`";
-const HOME_DESCRIPTION = `Your HOME CHANNELS — the one-to-one and small-group rooms on your account, outside any workspace. Each is backed by a hidden container whose id is what every other tool takes as \`workspace=\`, so this is how you reach a home channel's knowledge, agents and messages at all. Set \`op\` to one of:
-- "list_channels" — the home channels YOU are a member of: the name, the CONTAINER ID to pass as \`workspace=\`, the channel id for dopl_channel, who else is in it, and whether you are alone. Rows come from your own membership, so this is your account's view and never a directory of anybody else's rooms.
-- "create_channel" — make a new home channel. You land in it ALONE; that is a finished state, not a half-built one. Requires: name.
-
-⚠ It cannot INVITE anyone: minting the invitation link needs an interactive Dopl session and is refused over MCP for every role and token — ask the user to add someone from the Dopl app. These are NOT workspaces and must not be reported as such — \`list_workspaces\` deliberately does not show them.`;
+/**
+ * ⚠ THE ONE SHAPE OBJECT — passed to `composeDescription` for its bounds AND to
+ * the registrar for enforcement, so the limit an agent reads is the limit the
+ * schema applies. Two objects is how a description comes to promise 80 while
+ * the schema takes 200.
+ */
+const HOME_SHAPE = {
+    op: zod_1.z
+        .enum(["list_channels", "create_channel"])
+        .describe("Operation to perform."),
+    name: zod_1.z
+        .string()
+        .trim()
+        .min(1)
+        .max(80)
+        .optional()
+        .describe('op="create_channel" (required): the channel\'s name. It names the room and its hidden container both — there is no second name to set.'),
+};
+/**
+ * ⚠ **RENDERED, NOT WRITTEN** (A14) — `tool-style.ts › composeDescription`.
+ *
+ * ⚠ THE INVITE REFUSAL LEFT THE PROSE AND BECAME AN ERROR ROW. It was a
+ * 230-char paragraph pushed on every connection to describe something a caller
+ * can only discover by trying; it is `HOME_ERRORS`'s `invite_is_app_only` now,
+ * rendered in the same shape as every other named refusal on this surface, and
+ * an agent that hits it matches the code rather than re-reading the paragraph.
+ * The `1-80` character bound left too — the schema publishes it, and
+ * `renderLimits` states the consequence from that one source.
+ */
+const HOME_DESCRIPTION = (0, tool_style_js_1.composeDescription)({
+    headline: "Your HOME CHANNELS — the 1:1 and small-group rooms on your account, outside any workspace. NOT workspaces, and list_workspaces deliberately omits them.",
+    policy: 'op="create_channel" writes; nothing here deletes, and nothing here invites.',
+    routing: ["Use dopl_channel with `workspace=<container id>` to read or post in one."],
+    body: [
+        "Each room has a hidden CONTAINER; its id is what every other tool takes as `workspace=`, and it is how you reach the room's knowledge, agents and messages at all.",
+        '- "list_channels" — the rooms YOU are in: name, container id, dopl_channel\'s `channel=` id, and who else is in it. Your own membership, never a directory of anybody else\'s rooms.',
+        '- "create_channel" — Requires: name. You land in it ALONE; a finished state, not a half-built one.',
+    ],
+    limits: { shape: HOME_SHAPE, only: ["name"] },
+    errors: tool_errors_js_1.HOME_ERRORS,
+    examples: [{ op: "list_channels" }, { op: "create_channel", name: "Ops" }],
+    cap: tool_style_js_1.DESCRIPTION_MAX_CHARS,
+});
 /**
  * ⚠ WHOSE VIEW THIS IS, on the RESULT. The list is the caller's own membership
  * rows, and under a container lock it is narrowed to ONE — so a short list is
@@ -90,18 +130,7 @@ async function opCreateChannel(client, name) {
     ].join("\n"));
 }
 function registerHomeTool(registerMetaTool, client, directory) {
-    registerMetaTool("dopl_home", HOME_DESCRIPTION, {
-        op: zod_1.z
-            .enum(["list_channels", "create_channel"])
-            .describe("Operation to perform."),
-        name: zod_1.z
-            .string()
-            .trim()
-            .min(1)
-            .max(80)
-            .optional()
-            .describe('op="create_channel" (required): the channel\'s name, 1-80 characters. It names the room and its hidden container both — there is no second name to set.'),
-    }, async (args) => {
+    registerMetaTool("dopl_home", HOME_DESCRIPTION, HOME_SHAPE, async (args) => {
         switch (args.op) {
             case "list_channels":
                 return opListChannels(client, directory);

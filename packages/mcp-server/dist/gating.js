@@ -36,6 +36,7 @@ exports.WRITE_OPS = exports.TOOL_PROFILE_TOOLS = exports.HIDDEN_TOOLS = void 0;
 exports.offeredToolsFor = offeredToolsFor;
 exports.createGates = createGates;
 const delete_policy_js_1 = require("./delete-policy.js");
+const tool_errors_js_1 = require("./tools/tool-errors.js");
 /**
  * THE HIDE-BEFORE-DELETE SEAM — a registered tool an agent no longer sees.
  * Empty is the current state, not a dead mechanism: retirement is two steps
@@ -257,7 +258,10 @@ function createGates(canWrite, offeredTools = null) {
                 content: [
                     {
                         type: "text",
-                        text: `This session is read-only — its token lacks the \`dopl.write\` scope. \`${name}\` op="${op}" is a write operation. Reconnect with write access to perform it.`,
+                        // ⚠ Same shape as every other refusal on this surface: the code
+                        // first, so an agent has a literal to match, then the sentence that
+                        // says which call was refused. `meta-gate.test.ts` pins "read-only".
+                        text: (0, tool_errors_js_1.refusal)(tool_errors_js_1.READ_ONLY_SESSION, `\`${name}\` op="${op}" is a write operation. Reconnect with write access to perform it.`),
                     },
                 ],
             };

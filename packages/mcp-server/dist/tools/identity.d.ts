@@ -133,3 +133,16 @@ export declare const LOCUS_NOTE = "LOCUS \u2014 what this establishes, and what 
  * the answer dropping to a role with nobody attached.
  */
 export declare function identityLine(identity: CallerIdentity, self: string | null): string;
+/**
+ * ⚠ THE ROOM THIS SESSION IS STANDING IN, from `X-Dopl-Session-Id`'s
+ * `<channelId>:<tail>` head — the SAME split
+ * `src/features/knowledge/server/service-audience.ts › narrowToSessionChannel`
+ * makes, and the same uuid guard, because a client that is not the desktop can
+ * send an opaque handle carrying a colon that names no channel at all.
+ *
+ * ⚠ IT ESTABLISHES NOTHING AND GATES NOTHING. The header is a documented
+ * NON-authorization signal (§10) and this only tells an agent which room it was
+ * spawned into — a fact it would otherwise spend a call discovering. Null
+ * whenever the header was absent, unshaped, or not uuid-headed.
+ */
+export declare function boundChannelId(identity: CallerIdentity): string | null;

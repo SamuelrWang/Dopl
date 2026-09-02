@@ -28,6 +28,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.statusLines = statusLines;
 const narration_js_1 = require("./narration.js");
 const channel_session_render_js_1 = require("./channel-session-render.js");
+const response_size_js_1 = require("./response-size.js");
 /** Peer-influenced display text that neutralized to nothing. */
 const NO_NAME = "(unnamed)";
 const NO_ONE = "(unresolved author)";
@@ -91,7 +92,15 @@ function clipLine(status) {
  * window and render in different tenses, which reads as a fact about them —
  * `channel-ops-read.ts › opReadSessions` states the same rule.
  */
-function statusLines(status, now = Date.now()) {
+function statusLines(status, now = Date.now(), format) {
+    // ⚠ WHAT `concise` DROPS HERE, AND IT IS ONLY EVER METADATA: the two-line
+    // LEGEND (standing teaching, identical on every check-in, and the single
+    // most-repeated string on this surface because this is the call an
+    // orchestrator makes most) and each session line's TELEMETRY. Every channel
+    // row, every unread count, every waiting item and every preview is
+    // untouched — see `response-size.ts`, which is where that guarantee is
+    // argued and why an agent can reach for the knob without hedging.
+    const terse = (0, response_size_js_1.isConcise)(format);
     const channels = status.channels;
     if (channels.length === 0) {
         return [
@@ -124,8 +133,8 @@ function statusLines(status, now = Date.now()) {
         // the half that actually defangs a hostile string. The two `await` lanes
         // keep their banner for a POSITION argument that does not apply here
         // (F-407); this table is not a body render.
-        ...STATUS_LEGEND,
-        "",
+        ...(terse ? [] : STATUS_LEGEND),
+        ...(terse ? [] : [""]),
     ];
     for (const channel of channels) {
         lines.push(channelLine(channel));
@@ -136,7 +145,7 @@ function statusLines(status, now = Date.now()) {
             // AUDIENCE decision and is safe here because the server read is
             // own-scoped; `telemetry: true` for the same reason.
             lines.push(`  ${(0, channel_session_render_js_1.formatSessionLine)(session, {
-                telemetry: true,
+                telemetry: !terse,
                 handle: true,
                 // ⚠ INDENTED UNDER ITS CHANNEL, NOT A LIST ITEM — so the bullet is
                 // asked for and not stripped. This was `.replace(/^- /, "")` until

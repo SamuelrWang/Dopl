@@ -20,6 +20,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.causeOf = causeOf;
 exports.partialRead = partialRead;
 const narration_1 = require("./narration");
+const tool_errors_1 = require("./tool-errors");
+/** ⚠ The row `dopl_map` and `dopl_search` both teach — one declaration, one wire. */
+const PARTIAL_READ = tool_errors_1.SEARCH_ERRORS[0];
 /**
  * A short, safe cause. ⚠ Small CLOSED vocabulary: an HTTP status (the detail
  * separating "you may not" from "it is broken") or the transport failure mode.
@@ -58,9 +61,17 @@ function partialRead() {
             const named = failed
                 .map((f) => `${f.domain} (${(0, narration_1.inlineOr)(f.cause, "`read failed`")})`)
                 .join(", ");
-            return (`PARTIAL READ — ${failed.length} of ${total} ${noun} could NOT be read and contributed nothing here, ` +
+            // ⚠ IT LEADS WITH THE LITERAL `reason=` CODE (A14). `dopl_map` and
+            // `dopl_search` both TEACH `reason=partial_read` in their descriptions,
+            // and the whole mechanism is that an agent matches what came back
+            // against what it was told — a notice that only says "PARTIAL READ" is a
+            // remedy the reader was promised and cannot find.
+            // ⚠ It is NOT an `isError` result: the rest of the read is good and
+            // failing the call would throw away what did answer. A named code on a
+            // successful result is exactly the case `tool-errors.ts` covers.
+            return (`reason=${PARTIAL_READ.reason} — ${failed.length} of ${total} ${noun} could NOT be read and contributed nothing here, ` +
                 `so what they hold is missing from this result, not absent from the workspace: ${named}. ` +
-                `Re-run to get a complete picture. `);
+                `retry=${PARTIAL_READ.retry}. `);
         },
     };
 }

@@ -13,6 +13,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createWorkspaceDirectory = createWorkspaceDirectory;
 const client_1 = require("@dopl/client");
+const tool_errors_js_1 = require("./tools/tool-errors.js");
 const narration_js_1 = require("./tools/narration.js");
 const instructions_js_1 = require("./instructions.js");
 /** Membership cache TTL (slug→id). Seeded at boot, refreshed on demand. */
@@ -103,7 +104,11 @@ function createWorkspaceDirectory(client, options = {}) {
             };
         }
         const lines = [
-            `This connection has no default workspace because you belong to ${list.length} workspaces. Pass \`workspace=<slug_or_id>\` on this call — pick one:`,
+            // ⚠ THE SENTENCE IS UNCHANGED AND THE `reason=` PREFIX IS ADDITIVE
+            // (A14). `narration.test.ts` and `workspace-kind.test.ts` both pin this
+            // copy by phrase; what the code buys is a literal an agent can match,
+            // which prose alone never gave it.
+            (0, tool_errors_js_1.refusal)(tool_errors_js_1.WORKSPACE_REQUIRED, `This connection has no default workspace because you belong to ${list.length} workspaces. Pass \`workspace=<slug_or_id>\` on this call — pick one:`),
             "",
             // ⚠ The count and the list are STANDARD memberships only (`getWorkspaceList`
             // filters through `isStandardWorkspace`). An agent that meant to act in a

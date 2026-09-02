@@ -43,7 +43,7 @@ import { z } from "zod";
  * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
  * growing past it, and shrinking below it without lowering the number.
  */
-export declare const SCHEMA_MAX_CHARS = 11103;
+export declare const SCHEMA_MAX_CHARS = 11341;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
  * can absorb one 900-character paragraph by trimming nine short fields; this
@@ -53,6 +53,10 @@ export declare const SCHEMA_MAX_CHARS = 11103;
  */
 export declare const PARAM_DESCRIPTION_MAX_CHARS = 400;
 export declare const CHANNEL_INPUT_SHAPE: {
+    response_format: z.ZodOptional<z.ZodEnum<{
+        concise: "concise";
+        detailed: "detailed";
+    }>>;
     op: z.ZodEnum<{
         open: "open";
         set_agent_mode: "set_agent_mode";

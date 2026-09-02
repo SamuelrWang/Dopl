@@ -99,4 +99,19 @@ export declare function createServer(client: DoplClient, options?: {
      * `disallowedTools` + `grantDecision` and the credential itself.
      */
     toolProfile?: string | null;
+    /**
+     * The caller's own LIVE AGENT HANDLES, when the transport already knows
+     * them — the desktop spawned them, so it does. ⚠ ADVISORY AND OPTIONAL: the
+     * server cannot learn them at boot without a loopback `bootServer` forbids,
+     * and an ABSENT list renders as a pointer to `dopl_status` rather than as a
+     * claim of none. See `instructions.ts › ConnectionIdentity.liveAgents`.
+     */
+    liveAgents?: readonly string[];
+    /**
+     * The posture this session was spawned under (`<tools>/<messages> chain=…`),
+     * when the transport stamped one. ⚠ Same terms as {@link liveAgents}: the
+     * desktop CLAMPS a requested posture and is the only layer that knows the
+     * resolved value, so absent means unreported and renders as nothing.
+     */
+    posture?: string | null;
 }): McpServer;

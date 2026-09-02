@@ -30,6 +30,7 @@ const channel_render_1 = require("./channel-render");
 const channel_framing_1 = require("./channel-framing");
 // ⚠ The clipped-list wording lives with the other thread-render prose, stated
 // once — see INVARIANTS §9.
+const response_size_1 = require("./response-size");
 const channel_render_threads_1 = require("./channel-render-threads");
 // ⚠ Addressing rule has ONE statement, in channel-addressing.ts.
 const channel_addressing_1 = require("./channel-addressing");
@@ -119,7 +120,7 @@ async function threadHeader(client, ref, threadId, selfUserId) {
     };
     return [(0, channel_render_1.formatThreadDetail)(thread, view), ``];
 }
-async function opRead(client, ref, since, limit, selfUserId = null, thread) {
+async function opRead(client, ref, since, limit, selfUserId = null, thread, format) {
     const scope = thread?.trim() ? thread.trim() : undefined;
     // ⚠ Id ROUND TRIPS: agent copies it from a `read` legend, and a legend id is
     // `metadata.taskId`, stored verbatim by a peer for any non-UUID value. A
@@ -168,7 +169,7 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread) {
     // arrived too late. `memberNames` is fail-soft and is read only on this branch.
     lines.push(...card);
     // ⚠ No roster read here — hot path, the whole reason `read` skips `resolveChannelOr`.
-    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
+    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId, format));
     const lastSeq = messages[messages.length - 1].seq;
     if (!scope) {
         // A channel-wide read already IS the channel-wide cursor.
@@ -220,7 +221,7 @@ const NO_NAME = "(unnamed)";
  * `collab-dto.ts › mapOwnSessionStateRow`. A peer's session reaches no surface
  * in this file.
  */
-async function opReadSessions(client, ref) {
+async function opReadSessions(client, ref, format) {
     // ⚠ Resolve filter to id — a slug would not match the stored channel_id.
     let channelId;
     let channelLabel = "";
@@ -272,14 +273,27 @@ async function opReadSessions(client, ref) {
         // a PEER's sessions"), which is the audience question
         // {@link SessionRenderOpts.handle} asks. See it for why an agent id is not
         // published on a peer row.
-        lines.push((0, channel_session_table_1.sessionRow)(s, { telemetry: true, handle: true, now, operatorOnline }));
+        // ⚠ `concise` drops the TELEMETRY columns and nothing else. What a session
+        // IS — its handle, its channel, what it is doing, whether it is stale — is
+        // the answer; token spend and turn counts are metadata about it.
+        lines.push((0, channel_session_table_1.sessionRow)(s, {
+            telemetry: !(0, response_size_1.isConcise)(format),
+            handle: true,
+            now,
+            operatorOnline,
+        }));
     }
     // ⚠ THE LEGEND STAYS AND THE POINTER IS ONE LINE. The legend decodes THIS
     // page's own cells and is conditional on the page actually containing a hedged
     // row; the standing description of the columns (which are operator-only, what
     // a `—` means, why a row is a REPORT and not an observation) is doctrine and
     // is read once, not on every call of an op an orchestrator polls in a loop.
-    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} ${channel_doctrine_1.DOCTRINE_POINTER}`);
+    // ⚠ The legend decodes THIS page's own hedged cells, so it survives `concise`
+    // whenever the page actually has one; the DOCTRINE_POINTER is standing
+    // teaching and does not.
+    lines.push((0, response_size_1.isConcise)(format)
+        ? `\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)}`
+        : `\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} ${channel_doctrine_1.DOCTRINE_POINTER}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opListThreads(client, ref, selfUserId = null) {

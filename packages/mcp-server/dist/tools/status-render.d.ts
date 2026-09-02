@@ -24,6 +24,7 @@
  * The asymmetry with the wake surfaces that DO carry one is F-407.
  */
 import type { AccountStatus } from "@dopl/client";
+import { type ResponseFormat } from "./response-size.js";
 /**
  * THE WHOLE ANSWER, as lines.
  *
@@ -32,4 +33,4 @@ import type { AccountStatus } from "@dopl/client";
  * window and render in different tenses, which reads as a fact about them —
  * `channel-ops-read.ts › opReadSessions` states the same rule.
  */
-export declare function statusLines(status: AccountStatus, now?: number): string[];
+export declare function statusLines(status: AccountStatus, now?: number, format?: ResponseFormat): string[];
