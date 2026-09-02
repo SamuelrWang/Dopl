@@ -52,6 +52,9 @@ function assembled(s) {
       buildMcpServers: () => ({}),
       buildScrubbedEnv: () => ({}),
       withSessionStamp: () => {},
+      // ⚠ A3's `X-Dopl-Tool-Profile` stamp (2026-09-02), stubbed: this suite is
+      // about the turn brake. `session-tool-profile.test.mjs` owns the header.
+      withToolProfileStamp: () => {},
       resolveClaudeExecutable: () => null,
     },
     { withStoredCredential: (e) => e },

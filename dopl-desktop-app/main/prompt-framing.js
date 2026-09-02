@@ -147,7 +147,7 @@ function agentIdentityFraming(ctx) {
 // can READ any thread in the channel ON DEMAND, because a thread-scoped `dopl_channel` read is
 // an OWN-CHANNEL read and auto-allows under the windowless message floor
 // (`session-profiles.js › isOwnChannelRead` scopes by CHANNEL only — the `thread` argument is
-// deliberately not scoped, so `get_thread` costs no consent). That asymmetry is the SUPERVISOR
+// deliberately not scoped, so a `read(thread=)` costs no consent). That asymmetry is the SUPERVISOR
 // shape: "monitor the threads and the agents working in them" is answered by reading, on a
 // cadence its operator sets, not by being fed.
 // ⚠ WITHOUT THIS PARAGRAPH THE SUPERVISOR CASE FAILS SILENTLY AND LOOKS LIKE A PERMISSION BUG:
@@ -187,8 +187,10 @@ function channelScopeFraming(ctx) {
     `YOU CAN READ EVERY THREAD IN THIS CHANNEL, ON DEMAND. Not being sent them is not the same`,
     `as not being able to see them, and reading one costs no permission:`,
     `- mcp__dopl__dopl_channel op "list_threads", ${at} lists this channel's threads.`,
-    `- op "get_thread", ${at}, thread "<id>" gives you one thread.`,
-    `- op "read", ${at}, thread "<id>" gives you that thread's messages.`,
+    // ⚠ TWO LINES BECAME ONE (2026-09-02, C15/F-444): `get_thread` folded into
+    // `read(thread=)`, which answers the same question with strictly more — the
+    // thread's card AND its messages. Teaching the retired name costs a turn.
+    `- op "read", ${at}, thread "<id>" gives you one thread: its card and its messages.`,
     `- op "members", ${at} gives you the roster.`,
     `  Pass that channel id on every one of them. A read that names the channel any other way`,
     `  is treated as a DIFFERENT channel and will be refused.`,

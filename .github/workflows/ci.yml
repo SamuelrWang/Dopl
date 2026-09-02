@@ -251,3 +251,24 @@ jobs:
       # twice in one wave, which is why this is a gate and not a comment.
       - name: Diff design tokens between globals.css and the SPA's tokens.css
         run: npx tsx scripts/check-css-token-drift.ts
+
+      # 🔒 THE COMMITTED `dist/` IS THE BUILD OF `src/`, AND THIS IS THE ONLY
+      # THING THAT SAYS SO (2026-09-02, F-452). Both packages ship a TRACKED
+      # `dist/` and `next.config.ts › serverExternalPackages` keeps them
+      # external, so the committed output is what the app LOADS. A slice that
+      # edits `src/` and forgets the rebuild ships a change that exists in the
+      # repo and in no running process — which is exactly what the A10 branch
+      # did, and nothing caught it: the suites import `src/`, both typechecks
+      # read `src/`, and `build-test` rebuilds into a throwaway checkout, so it
+      # proves the build SUCCEEDS and never that the committed output matches.
+      - name: Build the packages
+        run: npm run build:packages
+
+      - name: Fail if the committed dist/ is not the build of src/
+        run: |
+          if [ -n "$(git status --porcelain packages)" ]; then
+            echo "::error::packages/*/dist is stale — run 'npm run build:packages' and commit the result."
+            git status --porcelain packages
+            git diff --stat -- packages
+            exit 1
+          fi

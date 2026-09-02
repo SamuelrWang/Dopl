@@ -97,12 +97,19 @@ test("PUSH: it states outright that a thread cannot summon it, @-mention include
 
 // ── 3. THE PULL HALF: the four ops, and the id that keeps them auto-allowed ────
 
-test("PULL: it names the four own-channel READ ops a supervisor needs", () => {
+// ⚠ THREE OPS SINCE 2026-09-02, NOT FOUR (C15/F-444). `get_thread` folded into
+// `read(thread=)`, which answers the same question with strictly more — the
+// thread's card AND its messages — so the line that taught it is gone rather
+// than re-worded, and the count moved with it.
+test("PULL: it names the own-channel READ ops a supervisor needs", () => {
   const out = text(channelCtx());
-  for (const op of ["list_threads", "get_thread", "read", "members"]) {
+  for (const op of ["list_threads", "read", "members"]) {
     assert.match(out, new RegExp(`op "${op}"`), op);
   }
   assert.match(out, /MONITORING means READING/);
+  // 🔒 THE RETIRED NAME MAY NOT COME BACK. An agent taught `get_thread` spends a
+  // turn on an invalid-enum refusal before it finds `read`.
+  assert.ok(!/get_thread/.test(out), "the retired op name is not taught");
   // The cheap wait, so a supervisor polls the room instead of spinning.
   assert.match(out, /op "await"/);
 });
@@ -113,8 +120,8 @@ test("PULL: every read call carries the channel UUID — that is a GATING fact, 
   // and in a windowless session a gate is a DENY, because there is no surface to answer it on.
   // Teaching the concrete id is what keeps the pull lane working at all.
   const out = text(channelCtx());
-  const calls = out.split("\n").filter((l) => /op "(list_threads|get_thread|read|members)"/.test(l));
-  assert.equal(calls.length, 4, "one line per read op");
+  const calls = out.split("\n").filter((l) => /op "(list_threads|read|members)"/.test(l));
+  assert.equal(calls.length, 3, "one line per read op");
   for (const line of calls) {
     assert.ok(line.includes(`channel "${CHAN}"`), line);
     assert.ok(line.includes(`workspace "${WS}"`), line);
@@ -131,7 +138,7 @@ test("PULL: it DEGRADES to generic wording rather than printing a half-built cal
     channelCtx({ channelId: undefined, workspaceId: undefined }),
   ]) {
     const out = text(ctx);
-    assert.match(out, /op "get_thread", this channel/, "degraded wording");
+    assert.match(out, /op "read", this channel/, "degraded wording");
     assert.ok(!/channel ""/.test(out), "never an empty id in a printed call");
     assert.ok(!/workspace ""/.test(out), "…nor an empty workspace");
     // The scope statement and the pull statement both survive the degrade.

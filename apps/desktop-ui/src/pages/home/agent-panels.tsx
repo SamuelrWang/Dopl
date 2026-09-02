@@ -327,10 +327,13 @@ interface EditorTarget {
  * copy; plan §4.4).
  *
  * ⚠ IT NAMES A CONTROL, AND THAT CONTROL EXISTS — "Use in this channel" on
- * every Personal card (`agent-copy.tsx`). A home-shelf template CANNOT launch
- * into a container: `getTemplateById` is workspace-filtered and resolve passes
- * the LAUNCH workspace, so the id 404s (plan §0.3). Copying is the answer, and
- * this line is what says so.
+ * every Personal card (`agent-copy.tsx`). ⚠ **THE JUSTIFICATION UNDER IT MOVED
+ * ON 2026-09-02 (A12) AND THE CAPTION DID NOT.** It used to read: a home-shelf
+ * template CANNOT launch into a container, because the read was workspace-
+ * filtered and the id 404'd. Ids resolve their own container now
+ * (`src/shared/tenancy/resolve-resource.ts`), so such a template DOES launch.
+ * The caption still holds because it promises a SHARED COPY — a row the peer
+ * can see and launch themselves — which launching still does not produce.
  */
 const PERSONAL_CAPTION =
   "Yours alone. Use one here to make a shared copy in this channel.";

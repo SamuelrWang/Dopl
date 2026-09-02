@@ -14,13 +14,21 @@ import {
  * a link container (Samuel's ruling Q2, 2026-08-26;
  * `docs/specs/home-agents-tab.plan.md` §3, M4).
  *
- * ⚠ IT IS A COPY, AND IT HAD TO BE. A scope-C template CANNOT LAUNCH INTO A
- * CONTAINER: `getTemplateById` is workspace-filtered and `/resolve` passes the
- * LAUNCH workspace, so the id 404s (INVARIANTS §5A). That is a same-workspace
- * trigger, not a permission anyone lacks, so no grant table and no flag could
- * fix it — a NEW ROW in the container is the answer, and this is where the
- * scope-C caption's promise ("Use one here to make a copy in this channel")
- * becomes true.
+ * ⚠ **IT IS A COPY, AND THE REASON CHANGED ON 2026-09-02 (A12).** This block
+ * used to say a scope-C template CANNOT LAUNCH INTO A CONTAINER — `getTemplateById`
+ * was workspace-filtered and `/resolve` passed the LAUNCH workspace, so the id
+ * 404'd. **That is no longer true**: `src/shared/tenancy/resolve-resource.ts`
+ * resolves an id in the container the id names, so a personal-shelf template
+ * launches into a container without any copy at all.
+ *
+ * ⚠ **WHICH MAKES THIS A COPY FOR THE AUDIENCE, NOT FOR THE PLUMBING** — and
+ * that is a better reason than the one it replaces. Launching runs YOUR template
+ * in this channel; nobody else can see it, edit it, or launch it again. This
+ * control puts a ROW in the channel, which is what "use one here" promises: the
+ * peer gets a template of their own. The two are different acts and both are
+ * offered. ⚠ **DO NOT DELETE THIS CONTROL ON THE STRENGTH OF THE NEW LAUNCH
+ * PATH** — whether the shelf-launch behaviour stands at all is a ruling Samuel
+ * owes (A12), and a copy is still the only way to share the definition.
  *
  * ⚠ CLIENT-COMPOSED OVER THE EXISTING POST — no new route, no new service, no
  * server change. `lib/template-draft.ts › containerCopyDraft` is the whole

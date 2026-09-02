@@ -107,5 +107,22 @@ export async function resolveTemplateForDirective(
   if (resolution.kind === "elsewhere") {
     throw new LaunchTemplateNotFoundError(ref, resolution.template);
   }
+  // ⚠ **THE TWO LANES OF ONE LAUNCH DISAGREE ABOUT WHAT AN ID MAY NAME, AND
+  // THAT IS A RULING SAMUEL OWES — NOT A BUG TO CLOSE HERE** (2026-09-02, A12 ×
+  // A6b/A9, verified at integration).
+  //
+  // This function is the REF DISAMBIGUATION door: a name-or-id resolved to an
+  // id, workspace-keyed through `repo.findTemplateById(ctx.workspaceId, …)`, so
+  // an id naming a template on the operator's PERSONAL shelf 404s here.
+  // The desktop's spawn-time door is `GET /api/agent-templates/{id}/resolve` →
+  // `agent-templates/server/service-reads.ts › resolveTemplateForLaunch` →
+  // `readTemplateById`, which since A12 follows an id into the container the id
+  // names — so the SAME template resolves there.
+  //
+  // ⚠ THERE IS STILL EXACTLY ONE READ DOOR FOR LAUNCH CONTENT (`readTemplateById`)
+  // and no duplicate resolver: this lane resolves a REF and never reads the
+  // template's content. So the asymmetry is a scope question, not a second
+  // fence — and it fails CLOSED on this side, which is why it is left alone.
+  // Deciding it either way is a one-line change; see the Wave A doc.
   return { id: resolution.id, name: resolution.name };
 }

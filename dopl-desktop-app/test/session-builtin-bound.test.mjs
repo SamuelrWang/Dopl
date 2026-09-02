@@ -144,6 +144,10 @@ const DEPS = {
     buildMcpServers: () => ({ dopl: {} }),
     buildScrubbedEnv: () => ({}),
     withSessionStamp: () => {},
+    // ⚠ A3's `X-Dopl-Tool-Profile` stamp (2026-09-02) — a no-op here on purpose:
+    // `session-tool-profile.test.mjs` owns what the header carries, and this
+    // harness is about the built-in BOUND. The stub exists so the assembly runs.
+    withToolProfileStamp: () => {},
     resolveClaudeExecutable: () => "",
   },
   axisB: { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },
@@ -155,6 +159,17 @@ const DEPS = {
   sessionModel: { modelArg: () => "" },
   sessionCredential: { sessionBearer: () => "" },
   diag: () => {},
+  // ⚠ A MODULE-LEVEL CONSTANT THE SLICED FUNCTION CANNOT SEE. `buildOptions` is
+  // extracted from source and driven with injected deps, so anything it closes
+  // over at module scope has to be injected too — A10's `SESSION_MAX_TURNS`
+  // (G19's loop brake) landed after this harness was written. READ OFF THE
+  // SHIPPING SOURCE, never a literal: `launch-max-turns.test.mjs` owns the value
+  // and a second copy here would be the hand-mirror class this repo gates.
+  SESSION_MAX_TURNS: (() => {
+    const m = /const SESSION_MAX_TURNS = (\d+);/.exec(SPEC);
+    if (!m) throw new Error("SESSION_MAX_TURNS is no longer declared in launch-spec.js");
+    return Number(m[1]);
+  })(),
 };
 const buildOptions = new Function(
   ...Object.keys(DEPS),

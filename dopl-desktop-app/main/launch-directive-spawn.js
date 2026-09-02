@@ -315,7 +315,7 @@ async function fetchStartupContext(workspaceId) {
 function defaultGoal(channelLevel) {
   return channelLevel
     ? 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.'
-    : 'Join this thread as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.';
+    : 'Join this thread as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.';
 }
 
 module.exports = { spawn, defaultGoal };

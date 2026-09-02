@@ -187,6 +187,13 @@ function isOwnChannelPost(input, sessionChannelId) {
 // `read_sessions`'s ARGUMENT: this operator's own runtimes, never a peer's, `channel` an optional
 // filter. Its WRITE twin `direct_agent` is NOT here — that one buys a TURN and takes the two-axis
 // conjunction (`session-own-direct.js`, which carries the whole ruling).
+// ⚠ `get_thread` IS RETIRED ON THE MCP SURFACE (2026-09-02, C15 — folded into
+// `read(thread=)`) AND STAYS IN THIS LIST DELIBERATELY. This set is a MEMBERSHIP
+// TEST OVER OPS THAT ARRIVE, so a name nobody can send grants nothing; what
+// removing it would do is turn an older desktop's in-flight `get_thread` — or a
+// session against a server that predates the fold — from an own-channel read
+// into an UNCLASSIFIED op, which gates. The teaching copy is where the fold had
+// to land (F-444), and it has.
 const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members',
   'read_sessions', 'read_directions'];
 

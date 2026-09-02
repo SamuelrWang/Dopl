@@ -142,7 +142,12 @@ function buildOptions(s, dispatch, emitQuiet) {
   // argument and the self-end refusal all live in agent-self-ops.js's header.
   const agentOpsServer = axisB.makeAgentOpsServer(s);
   if (agentOpsServer) options.mcpServers[agentOps.SERVER_KEY] = agentOpsServer;
-  if (cfg.builtinTools.length) options.tools = cfg.builtinTools; // positive bound; [] => full offers all, gated
+  // ⚠ THE COMMENT USED TO SAY `[] => full offers all`, AND SINCE A5 (2026-09-02)
+  // `full` CARRIES A POSITIVE BOUND LIKE EVERY OTHER PROFILE — an empty array is
+  // now only ever a profile that offers no built-ins at all. What `[]` means to
+  // the SDK is separately disputed (F-427), which is the second reason not to
+  // send one: this line omits `tools` rather than asserting an interpretation.
+  if (cfg.builtinTools.length) options.tools = cfg.builtinTools;
   const bin = loader.resolveClaudeExecutable();
   if (bin) options.pathToClaudeCodeExecutable = bin;
   // THE PER-SESSION MODEL. `s.model` survives park/resume and the post-sign-in relaunch for

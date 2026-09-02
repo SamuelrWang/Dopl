@@ -154,7 +154,7 @@ test("SPAWN IDLE survives the id (ruling 3): register, prepare context, send NO 
   // description leaking into it would be the renderer writing prompt text.
   assert.equal(
     spec.goal,
-    "Join this thread as my agent: read it with dopl_channel (op \"get_thread\") and carry the work forward."
+    "Join this thread as my agent: read it with dopl_channel (op \"read\", thread=<id>) and carry the work forward."
   );
   assert.equal(spec.firstMessage, undefined, "the ENGINE arg — a turn is not sent from here");
 });

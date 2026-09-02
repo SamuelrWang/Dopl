@@ -155,8 +155,8 @@ async function launchFromButton(payload) {
   const goal = channelLevel
     ? 'Stand by in this channel as my agent: watch the main room and answer what is addressed to you.'
     : title
-      ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.`
-      : 'Join this thread as my agent: read it with dopl_channel (op "get_thread") and carry the work forward.';
+      ? `Join the thread "${title}" as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.`
+      : 'Join this thread as my agent: read it with dopl_channel (op "read", thread=<id>) and carry the work forward.';
 
   const res = await engine.launchRequesterSession({
     channelId: p.channelId,
