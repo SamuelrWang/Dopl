@@ -26,11 +26,12 @@
 import { z } from "zod";
 export declare const CHANNEL_INPUT_SHAPE: {
     op: z.ZodEnum<{
+        open: "open";
+        set_agent_mode: "set_agent_mode";
         read: "read";
         list: "list";
         update: "update";
         members: "members";
-        open: "open";
         invite: "invite";
         post: "post";
         milestone: "milestone";
@@ -41,7 +42,6 @@ export declare const CHANNEL_INPUT_SHAPE: {
         launch_agent: "launch_agent";
         end_agent: "end_agent";
         rename_agent: "rename_agent";
-        set_agent_mode: "set_agent_mode";
         ping: "ping";
         read_directions: "read_directions";
         read_sessions: "read_sessions";
@@ -85,8 +85,8 @@ export declare const CHANNEL_INPUT_SHAPE: {
     thread: z.ZodOptional<z.ZodString>;
     agent_id: z.ZodOptional<z.ZodString>;
     ping_kind: z.ZodOptional<z.ZodEnum<{
-        done: "done";
         blocked: "blocked";
+        done: "done";
         question: "question";
     }>>;
     to_desktop: z.ZodOptional<z.ZodBoolean>;
