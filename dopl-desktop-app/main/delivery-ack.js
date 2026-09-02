@@ -109,6 +109,32 @@ function note(workspaceId, channelId, seq, delivery, userId) {
   return true;
 }
 
+/**
+ * **WHAT ONE MESSAGE'S DISPATCH AMOUNTS TO**, from the counts the fan-out kept.
+ * `''` = nothing happened and nothing is reported.
+ *
+ * ⚠ **STRONGEST FIRST, IN {@link DELIVERY_RANK}'S ORDER**, and each word is a
+ * different next action for an orchestrator:
+ *   woken     a DORMANT agent was started on it — the thing a redirect is FOR.
+ *   delivered a session the message NAMED was already running and took the turn.
+ *   idle      it reached the room; no agent it named took it.
+ *   refused   nothing took it: every candidate was held, or the gate declined.
+ * ⚠ **IT LIVES HERE, NOT IN `session-dispatch.js`, BECAUSE IT IS THE VOCABULARY'S
+ * OWN RULE** — the rank above is the only thing that orders these four, and a
+ * mapping written beside the loop that produced the counts would be a second
+ * place the order is stated.
+ * ⚠ **NOTHING IS REPORTED WHEN NOTHING HAPPENED** (the author's own session, and
+ * only that, on the thread). A `refused` there would report a decision the
+ * machine never made.
+ */
+function verdictFor(counts) {
+  const c = counts || {};
+  if (c.woke) return 'woken';
+  if (c.toAddressee) return 'delivered';
+  if (c.fed) return 'idle';
+  return c.held || c.refused ? 'refused' : '';
+}
+
 /** Every workspace holding receipts THIS operator filed — so the writer pushes for a workspace
  *  whose session set did not move at all. */
 function pendingWorkspaces(userId) {
@@ -161,4 +187,6 @@ function reset() {
 
 // ─── END DELIVERY-ACK-PURE ────────────────────────────────────────────────────────────────
 
-module.exports = { note, pendingWorkspaces, take, restore, reset, MAX_PENDING, DELIVERY_RANK };
+module.exports = {
+  note, verdictFor, pendingWorkspaces, take, restore, reset, MAX_PENDING, DELIVERY_RANK,
+};

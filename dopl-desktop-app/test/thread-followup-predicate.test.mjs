@@ -112,7 +112,7 @@ function harness(over = {}) {
     "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
     `${DISPATCH_BLOCK}\n return { feedLiveSession };`
   )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` },
-    wakeTiers, { claim: async () => "" }, agentHandles, { note: () => true }, () => {});
+    wakeTiers, { claim: async () => "" }, agentHandles, { note: () => true, verdictFor: () => '' }, () => {});
 
   const api = new Function(
     "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",

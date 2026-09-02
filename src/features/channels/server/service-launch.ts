@@ -7,20 +7,14 @@ import type {
   LaunchToolMode,
 } from "../types";
 import {
-  ChannelAgentChainForbiddenError,
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
 } from "./errors";
-// ⚠ THE CLAMP IS A SHARED LIB, NOT A BRANCH HERE — it is a second copy of the
-// desktop's rule across a tree boundary the two cannot import over, so it lives
+// ⚠ THE CEILING IS THE CREATE'S FIFTH GATE AND ITS OWN MODULE (§1 cap, and the
+// `service-launch-template.ts` precedent one line up): it is a SECOND COPY of the
+// desktop's clamp across a tree boundary the two cannot import over, so it lives
 // in one place with a parity test rather than inline in a service.
-import {
-  chainRefused,
-  clampPosture,
-  resolveChain,
-} from "../lib/agent-posture";
-import { resolveAgentModelId } from "../lib/agent-models";
-import { mapAgentPosture } from "./dto";
+import { resolveDirectivePosture } from "./service-launch-posture";
 import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
@@ -250,24 +244,13 @@ export async function createLaunchDirective(
   //
   // ⚠ **ABOVE PRESENCE, ON THE TEMPLATE GATE'S ARGUMENT.** `offline` is a 200
   // saying "nothing was asked", and answering a chain the channel forbids with
-  // "your machine is asleep" makes the caller fix the wrong thing and ask again
-  // a minute later for the real refusal. A ceiling is answerable without anyone's
-  // machine.
-  // ⚠ **AND BELOW THE IDEMPOTENCY PROBE**, with the two gates above it: a stored
-  // row is this request's answer and must not be re-decided against a ceiling
-  // that has moved since.
-  // ⚠ **THE CEILING IS A CHANNEL COLUMN, AND `null` ON AN AXIS REFUSES AND
-  // CLAMPS NOTHING.** Until this wave the ceiling was an `electron-store` record
-  // no server could read, so an offline or older desktop enforced nothing at all
-  // — which is what G6 and G7 record. A channel that has never had one written
-  // therefore behaves exactly as it does today, and the desktop's own clamp
-  // (`main/launch-posture.js`) stays the belt on every path.
-  const ceiling = mapAgentPosture(channel);
-  // ⚠ REFUSED, NOT CLAMPED, AND THE ASYMMETRY IS THE DESKTOP'S OWN — see
-  // `ChannelAgentChainForbiddenError`. It is checked BEFORE the clamp so a
-  // refusal is never reported as a narrowing.
-  if (chainRefused(input.chain, ceiling)) throw new ChannelAgentChainForbiddenError();
-  const posture = clampPosture(input, ceiling);
+  // "your machine is asleep" makes the caller fix the wrong thing and ask again a
+  // minute later for the real refusal — a ceiling needs nobody's machine.
+  // ⚠ **AND BELOW THE IDEMPOTENCY PROBE**: a stored row is this request's answer
+  // and must not be re-decided against a ceiling that has moved since.
+  // The rule itself, and why it refuses on one axis and clamps on two, is
+  // `service-launch-posture.ts`.
+  const posture = resolveDirectivePosture(channel, input);
 
   if (!(await operatorIsOnline(ctx))) {
     return { offline: true, directive: null };
@@ -322,12 +305,8 @@ export async function createLaunchDirective(
       // rolled-back one.
       resolved_tool_mode: posture.tools,
       resolved_message_mode: posture.messages,
-      resolved_chain: resolveChain(input.chain, ceiling),
-      // ⚠ AN ECHO, NEVER A GATE (G8). `null` is "this server does not recognise
-      // it", not "refused": the raw `model` above still reaches the machine, and
-      // a newer desktop may run a model this build predates. What changes is that
-      // the caller is now TOLD, which is the whole of G8's complaint.
-      resolved_model: resolveAgentModelId(input.model),
+      resolved_chain: posture.chain,
+      resolved_model: posture.model,
       expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
       client_msg_id: input.clientMsgId ?? null,
     }),

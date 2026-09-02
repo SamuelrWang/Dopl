@@ -78,5 +78,10 @@ export declare function opLaunchAgent(client: DoplClient, ref: string, opts?: {
     /** ⚠ REFUSED rather than clamped when the channel forbids it, which is why
      *  it is a separate field and not a third axis. Omitted is NOT `false`. */
     chain?: boolean;
+    /** ⚠ **THE IDEMPOTENCY KEY, AND IT IS WHAT MAKES A TIMED-OUT LAUNCH SAFE TO
+     *  RETRY** (2026-09-02, A10/G10). Passed through untouched: the server
+     *  probes it against `(channel, this operator)` and returns the stored
+     *  directive rather than filing a second one. */
+    clientMsgId?: string;
     waitMs?: number;
 }): Promise<ToolResponse>;

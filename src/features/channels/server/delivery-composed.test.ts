@@ -47,6 +47,10 @@ function dispatchBlock(): string {
  *  suite agree with itself about a rule the app does not run. Only the model call is faked. */
 const wakeTiers = require_(path.join(MAIN, "session-wake-tiers.js"));
 const agentHandles = require_(path.join(MAIN, "agent-handles.js"));
+// ⚠ THE REAL RECEIPT VOCABULARY. `delivery-ack.js › verdictFor` is pure and is the ONE place
+// the four outcome words are ordered — a stub would let this suite assert a word the machine
+// does not produce, which is the whole thing a composed drive exists to prevent.
+const deliveryAck = require_(path.join(MAIN, "delivery-ack.js"));
 
 type Session = { agentId: string; ownPostIds: Set<string>; awaitingDirective?: boolean };
 
@@ -80,7 +84,12 @@ function machine(live: Session[]) {
     wakeTiers,
     { claim: async () => "" },
     agentHandles,
-    { note: (...a: [string, string, number, string, string]) => { acked.push(a); return true; } },
+    {
+      verdictFor: deliveryAck.verdictFor,
+      // ⚠ The BUFFER is a recorder: it holds module state keyed by workspace, so a real one
+      // would leak one case's receipts into the next. `delivery-ack.test.mjs` drives it.
+      note: (...a: [string, string, number, string, string]) => { acked.push(a); return true; },
+    },
     () => {}
   ) as Machine;
   wakeTiers.resetForTests();

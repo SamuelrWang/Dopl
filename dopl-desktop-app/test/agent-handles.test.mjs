@@ -127,7 +127,7 @@ function sliceDispatch() {
     // the buffer.
     "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
     `${block}\n return { mentionedAgentIds };`
-  )({}, {}, {}, {}, {}, handles, { note: () => true }, () => {});
+  )({}, {}, {}, {}, {}, handles, { note: () => true, verdictFor: () => '' }, () => {});
 }
 
 /**

@@ -16,7 +16,6 @@
 export type ChannelVisibility = "public" | "private";
 export type ChannelMemberRole = "owner" | "member";
 import type { ChannelEscalationFields } from "./escalation-types.js";
-import type { ChannelSessionHealth } from "./session-health-types.js";
 export type ThreadMode = "interactive" | "autonomous";
 export type ThreadStatus = "open" | "closed";
 export type ThreadOutcome = "completed" | "failed";
@@ -60,18 +59,8 @@ export interface Channel {
      */
     infoCard?: ChannelInfoCard;
 }
-/**
- * WHO the server resolved a message for, decided once at write time.
- * ⚠ Mirror of `src/features/channels/types.ts › ChannelWakeVerdict`.
- */
-export type ChannelWakeVerdict = "none" | "member" | "agent" | "thread";
-/**
- * WHAT HAPPENED to a message — the `delivery=` verdict that IS the
- * acknowledgement. The server stamps its write-time answer; the operator's
- * machine overwrites it with what it did.
- * ⚠ Mirror of `src/features/channels/types.ts › ChannelDelivery`.
- */
-export type ChannelDelivery = "none" | "unreachable" | "idle" | "delivered" | "woken" | "refused";
+import type { ChannelDelivery, ChannelWakeVerdict } from "./delivery-types.js";
+export type { ChannelDelivery, ChannelWakeVerdict };
 export interface ChannelMessage {
     id: string;
     /** Monotonic cursor — `read`/`await` return messages with a higher seq. */
@@ -91,16 +80,11 @@ export interface ChannelMessage {
      */
     authorName?: string | null;
     authorAvatarUrl?: string | null;
-    /** Who the server resolved this message for: none | member | agent | thread. */
     wakeVerdict?: ChannelWakeVerdict | null;
-    /** The member ids it resolved to. ⚠ `[]` = nobody; absent/null = not resolved. */
     recipientUserIds?: string[] | null;
-    /** The live agent ids it resolved to. ⚠ `[]` vs absent/null as above. */
     recipientAgentIds?: string[] | null;
-    /** What happened — the `delivery=` verdict. ⚠ Without `deliveryAt` it is the
-     *  server's write-time prediction, not a machine's receipt. */
+    /** ⚠ Without `deliveryAt` this is the server's write-time PREDICTION. */
     delivery?: ChannelDelivery | null;
-    /** When the operator's machine acknowledged delivery; absent/null = never. */
     deliveryAt?: string | null;
 }
 /**
@@ -178,110 +162,8 @@ export interface ChannelThreadPage {
     threads: ChannelThread[];
     truncated: boolean;
 }
-/**
- * States a session's pill (and read-session-state) reports. NO `thinking` — it
- * needs streaming, which is off. Mirrors `SessionPillState` in the app.
- */
-export type SessionPillState = "working" | "idle" | "ended";
-/**
- * ONE of a member's live (or just-ended) sessions, from
- * `dopl_channel(op="read_sessions")`. Server-visible projection of the
- * desktop's `session-summary.list()`.
- */
-/**
- * WHICH OF SIX SITUATIONS a live session is in — one step finer than
- * {@link SessionPillState} and the only refinement that crosses machines.
- *
- * ⚠ **A CLOSED KEY VOCABULARY, NOT PROSE, AND THAT IS WHY IT MAY BE SEEN BY A
- * PEER.** Six fixed words, each coarse enough to show a counterparty: they say
- * what CLASS of work is happening and never which tool, which model, or what it
- * cost. Anything free-form belongs on the operator-only side
- * ({@link ChannelSessionTelemetry}).
- *
- * ⚠ A DELIBERATE COPY of `src/features/channels/types.ts › SessionDetailKey`
- * (itself derived from the desktop's own `DesktopSessionSummary["detail"]`) —
- * this package cannot import across the tree boundary. `channel-session-
- * staleness.test.ts` pins the two against that file's text.
- * ⚠ AN UNKNOWN KEY NEVER ARRIVES: the server narrows anything outside this set
- * to `null` before it reaches the wire, so a newer desktop's seventh key reads
- * as "no refinement" rather than as raw text in a rendered result.
- */
-export type SessionDetailKey = "thinking" | "tool" | "posting" | "permission" | "awaiting_peer" | "awaiting_inbound";
-export interface ChannelSessionState {
-    channelId: string;
-    /** Thread (task) this session is on, or null. */
-    threadId: string | null;
-    /** Friendly handle the pills show (flint / onyx / …). */
-    name: string;
-    state: SessionPillState;
-    /**
-     * WHICH OF SIX SITUATIONS this session is in — see {@link SessionDetailKey}.
-     * ⚠ OPTIONAL **and** nullable: ABSENT means this projection does not carry the
-     * field (an older server), `null` means the machine reported no refinement.
-     * Neither means "doing nothing". ⚠ It only ever REFINES `working`.
-     */
-    detail?: SessionDetailKey | null;
-    channelName: string | null;
-    threadTitle: string | null;
-    updatedAt: string;
-}
-/**
- * OPERATOR-ONLY session telemetry (server ruling, 2026-08-22). Rides only on
- * OWN-scoped reads — `listChannelSessions` (`GET /api/channels/sessions`) and
- * the `sessions` block on an await result. A PEER's session never carries these
- * fields: the server's channel-scoped mapper cannot emit them.
- *
- * ⚠ **EVERY MEASURED `null` MEANS UNKNOWN, NEVER ZERO.** Render "unknown" or
- * render nothing; never render `0` for an absent count, and never divide by an
- * absent `contextWindow`.
- *
- * ⚠ **THE NAME IS ABOUT THE AUDIENCE, NOT THE SUBJECT** (2026-08-23):
- * `templateName` is an identity snapshot rather than a measurement and rides
- * here because it reaches the same single reader.
- */
-export interface ChannelSessionTelemetry {
-    model: string | null;
-    /** The tool running right now ("Bash", "Edit"). */
-    toolLabel: string | null;
-    contextUsed: number | null;
-    contextWindow: number | null;
-    tokensSpent: number | null;
-    startedAt: string | null;
-    lastActivityAt: string | null;
-    /**
-     * The agent TEMPLATE this session was launched from, by name, AS OF SPAWN.
-     *
-     * ⚠ **A SNAPSHOT, NOT A POINTER** — a session reports what it RAN AS, so this
-     * may name a template that has since been renamed or deleted. That is correct,
-     * not stale. ⚠ OPERATOR-ONLY like the rest of this interface: a private
-     * template's name reaching a peer is an existence oracle. `null` = no
-     * template, or a desktop older than the field.
-     */
-    templateName: string | null;
-}
-/** The caller's OWN session — coarse projection plus the operator-only halves. */
-export type ChannelSessionStateOwn = ChannelSessionState & ChannelSessionTelemetry & ChannelSessionHealth;
-/**
- * `listChannelSessions`' whole answer — the rows AND whether the machine that
- * would have written them is still heartbeating (2026-08-23, F-294).
- *
- * ⚠ **THE SECOND FIELD IS NOT ABOUT ANY ONE SESSION AND MUST NOT BE FOLDED INTO
- * ONE.** `agent_presence` is per-(user, workspace): it says a listener of this
- * operator's heartbeat recently, which is why it lives on the ENVELOPE rather
- * than repeated onto every row as if each machine had answered separately.
- * ⚠ **OPTIONAL, AND IT STAYS OPTIONAL** — INVARIANTS §13, an older deployment is
- * a supported peer. Absent = NOT REPORTED, and a render must treat that exactly
- * as it treats `false`: a fact nobody reported is not evidence of life.
- * ⚠ It is a BOOLEAN and never a stamp, deliberately: the freshness window is the
- * server's (`PRESENCE_ONLINE_WINDOW_MS`), and a stamp on the wire invites a
- * client to re-derive it against a second number.
- * ⚠ Precedent for the envelope shape is `ChannelThreadPage`, for the same reason
- * — one fact about the PAGE that is not a fact about any row on it.
- */
-export interface ChannelSessionsPage {
-    sessions: ChannelSessionStateOwn[];
-    operatorOnline?: boolean;
-}
+import type { ChannelSessionStateOwn } from "./session-types.js";
+export type { ChannelSessionState, ChannelSessionStateOwn, ChannelSessionTelemetry, ChannelSessionsPage, SessionDetailKey, SessionPillState, } from "./session-types.js";
 export interface ChannelThreadCreateInput {
     title: string;
     mode?: ThreadMode;

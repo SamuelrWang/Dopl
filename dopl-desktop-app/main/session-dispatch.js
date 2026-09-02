@@ -152,24 +152,18 @@ function authorLabel(m) {
 
 // ── THE SERVER'S OWN ANSWER, PREFERRED WHEN IT HAS ONE (2026-09-02, A9) ────────────────────
 //
-// ⚠ THE RULE USED TO LIVE ONLY HERE, AND THAT WAS THE DEFECT. Every desktop parsed the body
-// for itself, so the addressing doctrine had to be written against the weakest build in the
-// field and no two readers could be held to one answer. `channel_messages.recipientAgentIds`
-// is now resolved ONCE, server-side, at write time
+// ⚠ THE RULE USED TO LIVE ONLY HERE, AND THAT WAS THE DEFECT: every desktop parsed the body
+// for itself, so the doctrine had to be written against the weakest build in the field and no
+// two readers could be held to one answer. It is resolved ONCE now, server-side, at write time
 // (`src/features/channels/server/service-wake-verdict.ts`), and this machine EXECUTES it.
 //
-// ⚠ **ADDITIVE, AND THE FALLBACK IS THE WHOLE COMPATIBILITY STORY.** Three answers, and they
-// are three different things:
-//   • an ARRAY (even an empty one) — the server resolved it. Authoritative; the parse below
-//     is not run at all. `[]` means "this body names no agent", which is a complete answer.
-//   • ABSENT / null — the server did not resolve it: an older row, a message whose handles
-//     named a PEER's agent (ids are minted per machine and known to no server), or a session
-//     projection that had not been pushed yet. Fall through to the local parse, i.e. exactly
-//     today's behaviour.
-// ⚠ **IT IS STILL INTERSECTED WITH `liveIds`.** The server resolves the author's own sessions
-// CHANNEL-wide; this feed is THREAD-scoped, and an id that is not on this thread must not be
-// treated as addressed here. That intersection is also what keeps the server from being able
-// to name a session this machine does not have.
+// ⚠ **ADDITIVE, AND THE FALLBACK IS THE WHOLE COMPATIBILITY STORY.** An ARRAY — EMPTY INCLUDED
+// — is the server's authoritative answer and the parse below is not run at all; ABSENT is "not
+// resolved there" (an older row, a PEER's agent whose id no server knows, a projection not yet
+// pushed) and falls through, which is today's behaviour exactly.
+// ⚠ **STILL INTERSECTED WITH `liveIds`**: the server resolves the author's own sessions
+// CHANNEL-wide and this feed is THREAD-scoped — which is also what stops the server naming a
+// session this machine does not have.
 function serverAddressed(m, liveIds) {
   const ids = m && m.recipientAgentIds;
   if (!Array.isArray(ids)) return null;
@@ -370,9 +364,8 @@ async function feedLiveSession(entry, m, myUserId) {
   // `handleIndexFor` reads `agent-names.js` — this machine owns every rename, so it is the only
   // authority there could be — and swallows a store failure into FEWER resolvable handles rather
   // than into a broken route (`agent-handles.js` states both).
-  // ⚠ THE SERVER'S ANSWER FIRST, THE LOCAL PARSE ONLY WHEN IT HAS NONE (2026-09-02, A9).
-  // `??` and not `||`: an EMPTY array is the server saying "this body names no agent", and
-  // `||` would fall through to the parse on it — re-deriving an answer that was already given.
+  // ⚠ `??` AND NOT `||` (A9): an EMPTY array is the server saying "this body names no agent",
+  // and `||` would fall through to the parse on it — re-deriving an answer already given.
   const addressed =
     serverAddressed(m, liveIds) ??
     mentionedAgentIds(m.body, liveIds, agentHandles.handleIndexFor(liveIds));
@@ -430,13 +423,11 @@ async function feedLiveSession(entry, m, myUserId) {
 
   let fed = 0;
   let held = 0; // dormant agents this message did not wake — see TIERED WAKE above
-  // ── THE RECEIPT'S THREE INPUTS (2026-09-02, A9) ─────────────────────────────────────────
-  // ⚠ COUNTED FROM WHAT ACTUALLY HAPPENED, never re-derived from the message afterwards. A
-  // receipt assembled from the body would be a third reader of the addressing rule, which is
-  // the defect this whole slice removes.
-  let woke = 0;      // a dormant agent was started on this message
-  let toAddressee = 0; // a RUNNING session this message actually named took the turn
-  let refused = 0;   // `feedInbound` declined — a full queue, or the entry-point belt
+  // ── THE RECEIPT'S THREE INPUTS (2026-09-02, A9). ⚠ COUNTED FROM WHAT HAPPENED, never
+  // re-derived from the body afterwards — that would be a third reader of the addressing rule.
+  let woke = 0;        // a DORMANT agent was started on this message
+  let toAddressee = 0; // a RUNNING session this message NAMED took the turn
+  let refused = 0;     // `feedInbound` declined — a full queue, or the entry-point belt
   for (const s of live) {
     if (wroteIt(s, m)) continue; // never feed a session its own post back
     // ruling 5: parsed here, consumed by `session-seed.frameContinuation`. FRAMING ONLY since
@@ -464,11 +455,9 @@ async function feedLiveSession(entry, m, myUserId) {
     });
     if (!ok) { refused += 1; continue; }
     fed += 1;
-    // ⚠ `woken` MEANS A DORMANT AGENT WAS STARTED, and `wake` alone does not say that: an
-    // ADDRESSED session that is already running carries `wake: true` too (it is what
-    // `session-gate.js` stamps `lastWakeSeq` on). The two are different news — nothing was
-    // started, the turn is queued behind whatever that agent is doing — and an orchestrator
-    // acts on them differently, so the receipt tells them apart. `wasDormant` is read BEFORE
+    // ⚠ `wake` ALONE DOES NOT MEAN "STARTED": an ADDRESSED session already running carries
+    // `wake: true` too (it is what `session-gate.js` stamps `lastWakeSeq` on). Different news,
+    // different next action, so the receipt tells them apart — and `wasDormant` is read BEFORE
     // the feed, because feeding is what stops it being true.
     if (wake === true && wasDormant) woke += 1;
     else if (addressing && addressing.me === true) toAddressee += 1;
@@ -496,24 +485,12 @@ async function feedLiveSession(entry, m, myUserId) {
       // an operator which fence answered.
       'elig', eligibility, 'tier', tier, claimed ? `woke:${claimed}` : '');
   }
-  // ⚠ **THE RECEIPT — THE OTHER HALF OF `delivery=`** (2026-09-02, A9). The server stamped
-  // its PREDICTION on the row at write time; this is what a machine actually did, and it
-  // rides the next session-state push (`delivery-ack.js` says why it cannot post on its own).
-  //
-  // ⚠ THE ORDER IS THE SERVER'S RANK, STRONGEST FIRST, and every word means something an
-  // orchestrator would act on differently:
-  //   woken     a dormant agent was started on it — the thing a redirect is FOR.
-  //   delivered a session this message NAMED was already running and took the turn.
-  //   idle      it reached the room; no agent it named took it.
-  //   refused   nothing took it: every candidate was held, or the gate declined.
-  // ⚠ NOTHING IS REPORTED WHEN NOTHING HAPPENED (the author's own session, and only that, on
-  // the thread). A receipt of "refused" there would report a decision this machine never made.
-  const verdict =
-    woke ? 'woken' : toAddressee ? 'delivered' : fed ? 'idle' : (held || refused) ? 'refused' : '';
-  // ⚠ STAMPED WITH `myUserId`, which is this machine's signed-in operator and the only identity
-  // that may claim this delivery. `delivery-ack.js` fences its drain on it, so a receipt filed
-  // by operator A can never be posted under operator B's credential — the cross-account rule
-  // `session-state-push.js › trackOrigin` already applies to the session ROWS.
+  // ⚠ **THE RECEIPT — THE OTHER HALF OF `delivery=`** (A9). The server stamped a PREDICTION at
+  // write time; this is what the machine did. `delivery-ack.js` owns the WORD (`verdictFor`, so
+  // the rank is stated once) and why it cannot post on its own. ⚠ Stamped with `myUserId`, the
+  // only identity that may claim it: the ack fences its drain on that, so operator A's receipt
+  // can never go out under B's credential (`session-state-push.js › trackOrigin`'s rule).
+  const verdict = deliveryAck.verdictFor({ woke, toAddressee, fed, held, refused });
   if (verdict) deliveryAck.note(entry.workspaceId, entry.channel.id, m.seq, verdict, myUserId);
   return fed > 0;
 }

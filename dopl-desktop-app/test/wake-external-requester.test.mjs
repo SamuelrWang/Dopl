@@ -222,7 +222,7 @@ function harness(over = {}) {
     // the buffer.
     "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
     `${BLOCK}\n return { feedLiveSession };`
-  )(targeting, sessionEngine, io, wakeTiers, { claim: async () => "" }, agentHandles, { note: () => true }, () => {});
+  )(targeting, sessionEngine, io, wakeTiers, { claim: async () => "" }, agentHandles, { note: () => true, verdictFor: () => '' }, () => {});
 
   // listener-messages.dispatchMessage verbatim in SHAPE (pinned by STATIC PIN 1 above).
   //

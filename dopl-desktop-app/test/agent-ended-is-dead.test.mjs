@@ -111,7 +111,7 @@ function dispatch(agents) {
     wakeTiers,
     { claim: async () => "" },
     agentHandles,
-    { note: () => true },
+    { note: () => true, verdictFor: () => '' },
     () => {}
   );
   return { ...api, fed };

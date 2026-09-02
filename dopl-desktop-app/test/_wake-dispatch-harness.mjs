@@ -27,6 +27,9 @@ const wakeTiers = require(join(HERE, "..", "main", "session-wake-tiers.js"));
 // would still pass. `handleIndexFor` takes its name resolver by argument, so the real module
 // needs no electron and no disk.
 const agentHandles = require(join(HERE, "..", "main", "agent-handles.js"));
+// ⚠ THE REAL RECEIPT VOCABULARY (2026-09-02, A9) — `delivery-ack.js` is pure above its buffer,
+// and `verdictFor` is the one place the four outcome words are ordered.
+const realDeliveryAck = require(join(HERE, "..", "main", "delivery-ack.js"));
 
 const BEGIN = "// \u2500\u2500\u2500 BEGIN SESSION-DISPATCH-PURE";
 const END = "// \u2500\u2500\u2500 END SESSION-DISPATCH-PURE";
@@ -102,12 +105,15 @@ export function harness(over = {}) {
   // resolver is `authorLabel`, INSIDE the sliced block, so it is the real one here rather
   // than a fake; only the account-name lookup under it is injected.
   const io = { displayNameFor: (id) => cfg.displayName(id) };
-  // ⚠ THE RECEIPT BUFFER IS FAKED, NOT REAL (2026-09-02, A9), and that is the one place these
-  // tables differ from `session-wake-tiers.js`'s treatment. `delivery-ack.js` holds MODULE
-  // state keyed by workspace, so a real one would leak one case's receipts into the next —
-  // and what these tables assert is the VERDICT this route computed, which a recorder states
-  // more directly than a buffer's contents. `delivery-ack.test.mjs` drives the real module.
-  const deliveryAck = { note: (...a) => { calls.acks.push(a); return true; } };
+  // ⚠ HALF REAL, HALF RECORDER (2026-09-02, A9), and the split is the module's own seam.
+  // `verdictFor` is PURE and is the ONE statement of how the four outcome words are ordered —
+  // faking it would let these tables assert a word the app does not produce. `note` is a
+  // RECORDER because the buffer holds MODULE state keyed by workspace, so a real one would
+  // leak one case's receipts into the next. `delivery-ack.test.mjs` drives the buffer itself.
+  const deliveryAck = {
+    verdictFor: realDeliveryAck.verdictFor,
+    note: (...a) => { calls.acks.push(a); return true; },
+  };
   const api = new Function(
     "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
     `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, serverAddressed, escalationAnswerAgentIds, addressingFor, mayFeed, unwoken, dormant, wakeCandidates };`
