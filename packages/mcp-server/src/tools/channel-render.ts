@@ -22,6 +22,7 @@ import type {
   ChannelThread,
 } from "@dopl/client";
 import { inlineOr, metaString, neutralizeInline } from "./channel-shared";
+import { isConcise, type ResponseFormat } from "./response-size";
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
 import {
@@ -255,6 +256,7 @@ function formatMessage(
   view: MemberView,
   ref: string,
   clip: boolean,
+  terse: boolean,
 ): string {
   const author = formatAuthor(m);
   const ended = sessionEnded(m);
@@ -270,13 +272,20 @@ function formatMessage(
   // ⚠ NOT `shortRef` — that is the THREAD helper and renders a legacy pair-slot
   // tail as `seq 345`, borrowing thread vocabulary for a session identity that
   // does not exist.
-  const session = sessionIdOf(m);
+  // ⚠ `concise` DROPS THE SESSION TAG AND THE TIMESTAMP AND NOTHING ELSE, and
+  // the line is drawn where it is on purpose: those two answer "which of my
+  // workers wrote this, and when", which a reader scanning a transcript for
+  // CONTENT is not asking. The seq, the author, the kind, the thread, the
+  // addressee and the BODY are what the page is for and none of them moves —
+  // see `response-size.ts`, where that guarantee is the reason the knob is
+  // usable at all.
+  const session = terse ? null : sessionIdOf(m);
   const sessionTag = session
     ? ` · session ${inlineOr(sessionSlotRef(sessionTail(session)), UNREADABLE_ID)}`
     : "";
   const to = addresseeOf(m);
   const memberTag = to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
-  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag} · ${m.createdAt}`;
+  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${terse ? "" : ` · ${m.createdAt}`}`;
   return `- ${head}${clipBody(m, ref, clip)}`;
 }
 
@@ -294,14 +303,19 @@ export function formatMessages(
   messages: ChannelMessage[],
   ref: string,
   selfUserId: string | null = null,
+  format?: ResponseFormat,
 ): string[] {
   const view: MemberView = { selfUserId, names: namesFromMessages(messages) };
   const anyThreaded = messages.some((m) => threadIdOf(m) !== undefined);
   const clip = messages.length > 1;
+  const terse = isConcise(format);
   const lines = messages.map((m) =>
-    formatMessage(m, anyThreaded, view, ref, clip),
+    formatMessage(m, anyThreaded, view, ref, clip, terse),
   );
-  const legend = threadLegend(messages, ref);
+  // ⚠ The LEGEND is standing teaching about the id shapes, identical on every
+  // page — metadata by the definition `response-size.ts` sets, so `concise`
+  // drops it. A body never does.
+  const legend = terse ? null : threadLegend(messages, ref);
   if (legend) lines.push(`\n${legend}`);
   return lines;
 }

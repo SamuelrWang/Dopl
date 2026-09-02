@@ -6,6 +6,7 @@
  */
 import type { DoplClient, KbShelf } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import { type ResponseFormat } from "./response-size";
 /**
  * ⚠ `shelf` ABSENT LISTS BOTH SHELVES, and that is the RIGHT answer rather than
  * an oversight (F-342 rules the unfiltered MCP read right and says it "must stay
@@ -16,5 +17,5 @@ import { type ToolResponse } from "./respond";
 export declare function opListBases(client: DoplClient, shelf?: KbShelf): Promise<ToolResponse>;
 export declare function opGetTree(client: DoplClient, ref: string, entryLimit?: number, entryCursor?: string): Promise<ToolResponse>;
 export declare function opListDir(client: DoplClient, ref: string, path?: string): Promise<ToolResponse>;
-export declare function opReadFile(client: DoplClient, ref: string, path: string, callerUserId?: string | null): Promise<ToolResponse>;
+export declare function opReadFile(client: DoplClient, ref: string, path: string, callerUserId?: string | null, format?: ResponseFormat, maxChars?: number): Promise<ToolResponse>;
 export declare function opSearch(client: DoplClient, query: string, base?: string, limit?: number): Promise<ToolResponse>;

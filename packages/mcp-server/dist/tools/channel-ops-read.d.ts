@@ -19,8 +19,9 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import { type ResponseFormat } from "./response-size";
 export declare function opList(client: DoplClient): Promise<ToolResponse>;
-export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string): Promise<ToolResponse>;
+export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string, format?: ResponseFormat): Promise<ToolResponse>;
 /**
  * READ-SESSION-STATE — the caller's OWN live sessions: handle, reduced state
  * (working / idle / ended — desktop `session-summary.js` vocabulary;
@@ -51,7 +52,7 @@ export declare function opRead(client: DoplClient, ref: string, since?: number, 
  * `collab-dto.ts › mapOwnSessionStateRow`. A peer's session reaches no surface
  * in this file.
  */
-export declare function opReadSessions(client: DoplClient, ref?: string): Promise<ToolResponse>;
+export declare function opReadSessions(client: DoplClient, ref?: string, format?: ResponseFormat): Promise<ToolResponse>;
 export declare function opListThreads(client: DoplClient, ref: string, selfUserId?: string | null): Promise<ToolResponse>;
 /**
  * The channel ROSTER. Read-only; the private per-member preference (agent tool

@@ -6,6 +6,7 @@
  */
 
 import { z, type ZodRawShape } from "zod";
+import { CREDITS_EXHAUSTED, MISSING_PARAMS, refusal } from "./tool-errors";
 
 /** A tool result: text blocks, plus the error flag. */
 export type ToolResponse = {
@@ -127,10 +128,16 @@ export function isAlreadyExists(e: unknown): boolean {
  * surfaces: the registrar's up-front refusal (reading `allowed: false` off the
  * consume response, not an error) and `entitlementDenied` below.
  */
-export const CREDITS_EXHAUSTED_CODE = "credits_exhausted";
+export const CREDITS_EXHAUSTED_CODE = CREDITS_EXHAUSTED.reason;
 
-const CREDITS_EXHAUSTED_MESSAGE =
-  "This workspace is out of MCP credits for the current billing period. Nothing was deleted — credits reset at the start of the next period, and upgrading raises the monthly allowance.";
+// ⚠ THE `reason=` PREFIX IS ADDITIVE AND THE SENTENCE IS NOT REPEATED (A14).
+// `credits.test.ts` pins "out of MCP credits", which the CODE's own meaning now
+// carries — so the detail adds only what the meaning does not say, rather than
+// restating it a second time on the same line.
+const CREDITS_EXHAUSTED_MESSAGE = refusal(
+  CREDITS_EXHAUSTED,
+  "Nothing was deleted — credits reset at the start of the next period, and upgrading raises the monthly allowance.",
+);
 
 /**
  * Plan-gate denial codes returned as a flat
@@ -203,5 +210,10 @@ export function missingParams(
   });
   if (missing.length === 0) return null;
   const plural = missing.length === 1 ? "param" : "params";
-  return err(`op="${op}" is missing required ${plural}: ${missing.join(", ")}.`);
+  // ⚠ THE `reason=` LITERAL IS THE POINT. `tool-errors.ts` declares it once,
+  // every tool's description teaches it, and this is the wire. Wording the
+  // refusal by hand here is how the two spellings drift apart.
+  return err(
+    refusal(MISSING_PARAMS, `op="${op}" is missing required ${plural}: ${missing.join(", ")}.`),
+  );
 }

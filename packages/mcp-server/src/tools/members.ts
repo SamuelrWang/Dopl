@@ -36,15 +36,45 @@ import {
   UNTRUSTED_ROSTER_HEADER,
 } from "./members-render";
 import { err, ok, isNotFound, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { MEMBERS_ERRORS } from "./tool-errors";
+import { composeDescription, DESCRIPTION_MAX_CHARS } from "./tool-style";
 
-const DESCRIPTION = `READ-ONLY view of workspace membership, teams, and access; roles, teams and grants are edited by humans in the Dopl web UI. Roles rank guest < viewer < member < admin < owner (defaults none / read / edit / edit / edit); a guest reaches ONE channel. Set \`op\` to one of:
-- "whoami" — your immutable user id, name, role, teams, default level, and the runtime and credential this session acts through. Start here whenever identity is in question — a display name never settles it.
-- "list" — the member roster: name, email, role, status, last active, team chips. INVITED AND DEACTIVATED rows included, so read the status before you count "members".
-- "get" — one member's profile, teams and effective access per resource. Requires: member (id, email, or display name). Effective access for OTHERS is admin-only.
-- "teams" — each team's members and its resource grants with levels. A grant can name a resource you cannot otherwise see.
-- "get_team" — one team in depth. Requires: team (id or name).
-- "access_matrix" — THE INVENTORY, for when two members' listings disagree. Covers KNOWLEDGE BASES and SKILLS only. For an ADMIN OR OWNER it enumerates those whatever their status or visibility, drafts and others' private items included; a NON-ADMIN sees only what they can reach, so their matrix is a view like everything else.
-- "my_access" — the caller's effective level on the teams-mode resources they can reach. ADMINS AND OWNERS GET NO PER-RESOURCE ROWS AT ALL: they hold edit on everything. Workspace-mode resources are never listed.`;
+/**
+ * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
+ * order for every tool on this surface and refuses, at import, a headline over
+ * its window or prose over its cap.
+ *
+ * ⚠ WHAT LEFT: every "Requires: …" clause, because each param's own
+ * `.describe()` already names the ops that require it, and a description and
+ * its arg descriptions are BOTH pushed on every connection.
+ */
+const DESCRIPTION = composeDescription({
+  headline:
+    "Workspace membership, teams and effective access as your role sees them — chats and ontology objects are not in this model.",
+  policy:
+    "Read-only: roles, teams and grants are edited by humans in the web UI.",
+  routing: [
+    "Use dopl_channel to reach a member; this only describes them.",
+  ],
+  body: [
+    `Set \`op\` to one of:
+- "whoami" — your user id, role, teams, default level, and the runtime and credential this session acts through.
+- "list" — the roster: role, status, last active, teams. INVITED and DEACTIVATED rows are included — read the status before counting.
+- "get" — one member's profile, teams and effective access; for OTHERS, admin-only.
+- "teams" — each team's members and grants; a grant can name a resource you cannot otherwise see.
+- "get_team" — one team in depth.
+- "access_matrix" — KNOWLEDGE BASES and SKILLS only. For an ADMIN OR OWNER it enumerates those at any status or visibility; a NON-ADMIN sees only what they can reach, so it is a view like the rest.
+- "my_access" — your level on the teams-mode resources you can reach. ADMINS AND OWNERS GET NO PER-RESOURCE ROWS — they hold edit on everything.`,
+  ],
+  errors: MEMBERS_ERRORS,
+  examples: [
+    { op: "whoami" },
+    { op: "list" },
+    { op: "get", member: "dana@acme.io" },
+    { op: "access_matrix" },
+  ],
+  cap: DESCRIPTION_MAX_CHARS,
+});
 
 export function registerMembersTool(
   register: RegisterTool,

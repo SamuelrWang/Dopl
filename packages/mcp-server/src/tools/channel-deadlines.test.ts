@@ -98,7 +98,18 @@ describe("await hold margin", () => {
     const toolSrc = surface.map(sourceOf).join("\n");
     expect(toolSrc).toMatch(/\.max\(AWAIT_HOLD_CAP_MS\)/);
     expect(toolSrc).not.toMatch(/240_000|240000/);
-    expect(toolSrc).toMatch(/max \$\{AWAIT_HOLD_CAP_MS\}/);
+    // ⚠ **THE `.describe()` HALF LEFT ON 2026-09-02 (A14), AND THIS IS WHERE
+    // THAT DECISION IS RECORDED.** It asserted `max ${AWAIT_HOLD_CAP_MS}` in
+    // `timeout_ms`'s own describe text. Interpolated, so it never drifted — but
+    // the number ALSO reaches the client as the schema's `maximum` keyword and,
+    // where it is worth stating, once more in the rendered `Limits:` line, and
+    // `tool-style.ts › renderLimits` is now the ONE place a bound becomes prose.
+    // Three copies of one fact on every connection is what that rule exists to
+    // refuse, so the describe carries none.
+    // ⚠ NOTHING IS UNPINNED BY THE REMOVAL. `.max(AWAIT_HOLD_CAP_MS)` above is
+    // what actually publishes the number, the literal ban below it is
+    // unchanged, and the doctrine assertion at the end is computed off the
+    // constant — all three still fail the moment the cap is retuned.
     // ⚠ THE PROSE HALF MOVED, SO THE ASSERTION FOLLOWED IT (T82, 2026-09-02).
     // `CHANNEL_DESCRIPTION` used to spell the cap as `<=${AWAIT_HOLD_CAP_MS}`
     // and is now a POINTER at `dopl://doctrine/channels`; the doctrine states

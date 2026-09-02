@@ -66,6 +66,16 @@ export interface BootOptions {
    * can be read or written, which is the pre-pin behaviour verbatim.
    */
   sessionKey?: string;
+  /**
+   * The caller's own live agent handles and the posture this session runs at,
+   * when the TRANSPORT knows them. ⚠ Threaded verbatim into the `instructions`
+   * briefing (`instructions.ts › ConnectionIdentity`) so an orchestrator does
+   * not spend a `dopl_status` call finding its own agents. Absent renders as a
+   * pointer to that tool, never as "you have none" — and nothing here costs a
+   * loopback, which this function's own docblock forbids.
+   */
+  liveAgents?: readonly string[];
+  posture?: string | null;
 }
 
 function errText(err: unknown): string {
@@ -238,6 +248,8 @@ export async function bootServer(
     sessionKey: opts.sessionKey,
     scopes: opts.scopes,
     toolProfile: opts.toolProfile,
+    liveAgents: opts.liveAgents,
+    posture: opts.posture,
   });
 
   const activeWorkspace = active

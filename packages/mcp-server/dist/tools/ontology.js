@@ -17,31 +17,71 @@ exports.registerOntologyTool = registerOntologyTool;
 const zod_1 = require("zod");
 const identity_1 = require("./identity");
 const ontology_ops_write_1 = require("./ontology-ops-write");
-const ONTOLOGY_DESCRIPTION = `The workspace ontology — objects organized in clusters of columns, with attributes, relationships, and actions. An object IS whatever its column is named (a "Sales Rep" column holds sales reps). Objects are referenced by id (preferred) or exact name; clusters by slug/id/name.
-
-READ — set \`op\` to:
-- "map" — the clusters and their COLUMNS, each column's direct members named. TWO LEVELS ONLY: objects nested deeper, and objects in no column at all, never appear, and trashed rows appear in no read. It routes, it does not inventory. Call first.
-- "anchor" — the object representing the CALLER. Start here for any "my/me" request; at most one is returned.
-- "resolve" — objects whose NAME or SUBTITLE contains the query (substring, case-insensitive), capped at 20 matches, and the result says when it truncated. Requires: query.
-- "get" — one object: attributes, outbound relationships plus inbound backlinks, nested objects, actions, and a Version token. Requires: object.
-
-WRITE — set \`op\` to:
-- "create_cluster" — Requires: name. Optional: purpose (agents read it to route).
-- "update_cluster" — Requires: cluster. Optional: name, purpose.
-- "create_column" — a container whose name says what its objects ARE. Requires: cluster, name.
-- "create_object" — inherits the parent's template as empty fields, plus its relationships and actions. Requires: parent, name.
-- "update_object" — Requires: object. Optional: name, subtitle.
-- "set_template_field" — a DEFAULT field on a container; objects created inside are born with it, empty. Requires: object, label.
-- "remove_template_field" — Requires: object, label.
-- "set_attribute" — Requires: object, label. kind "text"/"pill" need \`value\`; "ref"/"knowledge"/"skill" need \`values\`.
-- "remove_attribute" — Requires: object, label.
-- "set_relationship" — replace one labeled edge. Requires: object, label, targets (never the object itself).
-- "remove_relationship" — Requires: object, label.
-- "set_action" — something the OBJECT does day to day, performed by an agent on its behalf. Requires: object, name. Optional: description, outcome, tools.
-- "remove_action" — Requires: object, name.
-- "claim_anchor" — link the CALLING user to an object as their anchor. Requires: object.
-
-Object-mutating ops take an optional \`expected_version\`. No delete op — deletion is app-only.`;
+const tool_errors_1 = require("./tool-errors");
+const tool_style_1 = require("./tool-style");
+/**
+ * ⚠ THE ONE PROSE BUDGET ON THIS SURFACE THAT IS NOT
+ * {@link DESCRIPTION_MAX_CHARS}, AND IT IS A DECISION RECORDED IN CODE RATHER
+ * THAN A CAP QUIETLY ABSORBED. EIGHTEEN ops, and `parity.test.ts` requires
+ * every one of them to appear as a quoted `"op_name"`, on top of the two
+ * disclosures `tool-scope-claims.test.ts` pins by phrase (op="map"'s TWO LEVELS
+ * ONLY, op="resolve"'s cap). That floor does not fit 1,200.
+ *
+ * ⚠ 1,508 IS THE MEASURED PROSE, NOT A ROUND NUMBER WITH ROOM IN IT: it is a
+ * ratchet, so the next sentence added here fails at import instead of being
+ * absorbed. The whole SERVED string still answers to
+ * {@link HARD_DESCRIPTION_CEILING}, which no constant may raise — that is what
+ * grouped the inverse write ops onto one line below.
+ *
+ * ⚠ THE HONEST NEXT MOVE IS NOT A HIGHER NUMBER — it is the one `dopl_channel`
+ * already made for its law: pull the write-op glosses into an MCP resource, so
+ * they stop being pushed to every client that only ever reads the graph.
+ */
+const ONTOLOGY_PROSE_BUDGET = 1_508;
+/**
+ * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
+ * order for every tool on this surface.
+ *
+ * ⚠ WHAT LEFT: every "Requires:" / "Optional:" clause, the `expected_version`
+ * sentence, the ref-syntax sentence (id preferred, exact name, cluster by
+ * slug/id/name) and the attribute `kind` → `value`/`values` mapping. Each is
+ * stated by the param's own `.describe()` below, and a description and its arg
+ * descriptions are BOTH pushed on every connection.
+ */
+const ONTOLOGY_DESCRIPTION = (0, tool_style_1.composeDescription)({
+    headline: "The workspace object graph — objects in clusters of columns, with attributes, relationships and actions; it routes rather than inventories.",
+    policy: "Reads plus writes that edit ONE thing at a time. No delete op — a `remove_*` op strips a field, never the object.",
+    routing: ["Use dopl_map for the workspace-wide routing view."],
+    body: [
+        `READ — set \`op\` to:
+- "map" — clusters and their COLUMNS, with each column's direct members. TWO LEVELS ONLY: objects nested deeper, and objects in no column, never appear. Call first.
+- "anchor" — the CALLER's own object; start here for any "my/me" request, at most one.
+- "resolve" — objects whose NAME or SUBTITLE contains the query (case-insensitive substring), capped at 20 matches; the result says so.
+- "get" — one object: attributes, relationships, backlinks, nested objects, actions, a Version token.`,
+        // ⚠ GROUPED, NOT ONE LINE PER OP, AND THAT IS THE HARD CEILING TALKING.
+        // `parity.test.ts` needs every enum op to appear as a quoted `"op_name"`,
+        // not to own a line; eight of these lines were the op name said twice
+        // (`"remove_attribute" — drop one.`), and the whole served string has to
+        // fit {@link HARD_DESCRIPTION_CEILING}, which no constant may raise.
+        // ⚠ The two ops `tool-scope-claims.test.ts` reads as BULLETS — "map" and
+        // "resolve" — keep their own lines and must keep them.
+        `WRITE — set \`op\` to:
+- "create_cluster" / "update_cluster" — a cluster's name and \`purpose\`.
+- "create_column" — a container; its name says what its objects ARE.
+- "create_object" / "update_object" — born with the parent's template, relationships and actions.
+- "set_template_field" — a DEFAULT field; objects made inside inherit it, empty.
+- "set_attribute" / "set_relationship" / "set_action" — one attribute, one labeled edge (never onto the object itself), or one thing the OBJECT does day to day.
+- "remove_template_field" / "remove_attribute" / "remove_relationship" / "remove_action" — drop one, by label or name.
+- "claim_anchor" — link the CALLING user to an object as their anchor.`,
+    ],
+    errors: tool_errors_1.ONTOLOGY_ERRORS,
+    examples: [
+        { op: "map" },
+        { op: "resolve", query: "acme" },
+        { op: "set_attribute", object: "o-12", label: "Stage", value: "Won" },
+    ],
+    cap: ONTOLOGY_PROSE_BUDGET,
+});
 function registerOntologyTool(register, client, 
 /** The session identity record — `op="anchor"` states it before the object. */
 caller = identity_1.UNKNOWN_CALLER) {

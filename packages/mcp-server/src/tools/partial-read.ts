@@ -17,6 +17,10 @@
  */
 
 import { inlineOr } from "./narration";
+import { SEARCH_ERRORS } from "./tool-errors";
+
+/** ⚠ The row `dopl_map` and `dopl_search` both teach — one declaration, one wire. */
+const PARTIAL_READ = SEARCH_ERRORS[0];
 
 /** A domain read that failed, as it will be reported. */
 interface FailedRead {
@@ -74,10 +78,18 @@ export function partialRead(): PartialRead {
       const named = failed
         .map((f) => `${f.domain} (${inlineOr(f.cause, "`read failed`")})`)
         .join(", ");
+      // ⚠ IT LEADS WITH THE LITERAL `reason=` CODE (A14). `dopl_map` and
+      // `dopl_search` both TEACH `reason=partial_read` in their descriptions,
+      // and the whole mechanism is that an agent matches what came back
+      // against what it was told — a notice that only says "PARTIAL READ" is a
+      // remedy the reader was promised and cannot find.
+      // ⚠ It is NOT an `isError` result: the rest of the read is good and
+      // failing the call would throw away what did answer. A named code on a
+      // successful result is exactly the case `tool-errors.ts` covers.
       return (
-        `PARTIAL READ — ${failed.length} of ${total} ${noun} could NOT be read and contributed nothing here, ` +
+        `reason=${PARTIAL_READ.reason} — ${failed.length} of ${total} ${noun} could NOT be read and contributed nothing here, ` +
         `so what they hold is missing from this result, not absent from the workspace: ${named}. ` +
-        `Re-run to get a complete picture. `
+        `retry=${PARTIAL_READ.retry}. `
       );
     },
   };

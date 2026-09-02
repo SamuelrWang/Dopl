@@ -8,11 +8,13 @@
 import type { DoplClient, KbShelf } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration";
 import { ok, type ToolResponse } from "./respond";
+import { isErr, resolveBaseOr } from "./knowledge-shared";
 import {
-  isErr,
-  resolveBaseOr,
-  UNTRUSTED_ENTRY_BODY_HEADER,
-} from "./knowledge-shared";
+  clipToMaxChars,
+  isConcise,
+  type ResponseFormat,
+} from "./response-size";
+import { fenceBody } from "./untrusted-fence";
 
 /**
  * ⚠ WHAT IS AND ISN'T NEUTRALIZED IN A KNOWLEDGE READ. A published base is
@@ -199,25 +201,39 @@ export async function opReadFile(
   path: string,
   // ⚠ Only the FRAMING reads this — readability is the server's decision and
   // it already ran.
-  callerUserId: string | null = null
+  callerUserId: string | null = null,
+  format?: ResponseFormat,
+  maxChars?: number,
 ): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   const entry = await client.readKbFileByPath(base.id, path);
+  const { body, notice } = clipToMaxChars(entry.body, maxChars);
+  const terse = isConcise(format);
   const lines = [
-    // ⚠ FRAMING FIRST, and only for a document this caller did not write — a
-    // header after the body is read after the injected instruction.
-    ...(isForeignAuthored(entry, callerUserId)
-      ? [UNTRUSTED_ENTRY_BODY_HEADER, ""]
-      : []),
-    // ⚠ BODY below the `---` is the document itself — deliberately untouched.
+    // ⚠ `concise` KEEPS THE VERSION TOKEN AND DROPS THE REST OF THE METADATA.
+    // That split is not arbitrary: `write_file` REFUSES without an
+    // `expected_version`, so dropping it would make the smaller read unable to
+    // feed the write it exists to precede — a knob that quietly costs a round
+    // trip is a knob nobody uses twice.
     `# ${inlineOr(entry.title, NO_NAME)}`,
-    `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
-    `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
+    ...(terse
+      ? [`Version: \`${entry.updatedAt}\` (pass as expected_version to write_file)`]
+      : [
+          `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
+          `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
+        ]),
+    ...(notice ? ["", notice] : []),
     "",
     "---",
     "",
-    entry.body,
+    // ⚠ FENCED, and only for a document this caller did not write. The fence's
+    // own header goes first — a caveat read after the injected line has already
+    // been read is not a caveat — and the close tag carries a per-response
+    // random suffix so the body cannot end its own fence (`untrusted-fence.ts`).
+    ...(isForeignAuthored(entry, callerUserId)
+      ? fenceBody(body, "knowledge entry by another member")
+      : [body]),
   ];
   return ok(lines.join("\n"));
 }

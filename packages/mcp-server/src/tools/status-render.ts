@@ -27,6 +27,7 @@
 import type { AccountChannelStatus, AccountStatus } from "@dopl/client";
 import { inlineOr } from "./narration.js";
 import { formatSessionLine } from "./channel-session-render.js";
+import { isConcise, type ResponseFormat } from "./response-size.js";
 
 /** Peer-influenced display text that neutralized to nothing. */
 const NO_NAME = "(unnamed)";
@@ -96,7 +97,16 @@ function clipLine(status: AccountStatus): string | null {
 export function statusLines(
   status: AccountStatus,
   now: number = Date.now(),
+  format?: ResponseFormat,
 ): string[] {
+  // ⚠ WHAT `concise` DROPS HERE, AND IT IS ONLY EVER METADATA: the two-line
+  // LEGEND (standing teaching, identical on every check-in, and the single
+  // most-repeated string on this surface because this is the call an
+  // orchestrator makes most) and each session line's TELEMETRY. Every channel
+  // row, every unread count, every waiting item and every preview is
+  // untouched — see `response-size.ts`, which is where that guarantee is
+  // argued and why an agent can reach for the knob without hedging.
+  const terse = isConcise(format);
   const channels = status.channels;
   if (channels.length === 0) {
     return [
@@ -131,8 +141,8 @@ export function statusLines(
     // the half that actually defangs a hostile string. The two `await` lanes
     // keep their banner for a POSITION argument that does not apply here
     // (F-407); this table is not a body render.
-    ...STATUS_LEGEND,
-    "",
+    ...(terse ? [] : STATUS_LEGEND),
+    ...(terse ? [] : [""]),
   ];
   for (const channel of channels) {
     lines.push(channelLine(channel));
@@ -144,7 +154,7 @@ export function statusLines(
       // own-scoped; `telemetry: true` for the same reason.
       lines.push(
         `  ${formatSessionLine(session, {
-          telemetry: true,
+          telemetry: !terse,
           handle: true,
           // ⚠ INDENTED UNDER ITS CHANNEL, NOT A LIST ITEM — so the bullet is
           // asked for and not stripped. This was `.replace(/^- /, "")` until

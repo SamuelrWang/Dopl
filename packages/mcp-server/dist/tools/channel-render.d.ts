@@ -15,6 +15,7 @@
  * immutable `authorUserId` — the one half the author does not control.
  */
 import type { Channel, ChannelMember, ChannelMessage, ChannelThread } from "@dopl/client";
+import { type ResponseFormat } from "./response-size";
 /**
  * Author label for a message line. `agent` row renders "agent for <name>",
  * never bare name — reader treats counterparty as another member's agent.
@@ -84,7 +85,7 @@ export declare function memberRef(userId: string, view: MemberView): string;
  * not an optimization: never clip a single-message page, or the remedy the
  * marker names stops working and there is no other way to read a long body.
  */
-export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null): string[];
+export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null, format?: ResponseFormat): string[];
 /**
  * One rendered channel line for `list`. ⚠ `name` (120 chars) and `topic` (2000
  * chars, interior newlines allowed) are creator-typed and public channels list

@@ -152,23 +152,26 @@ function expectRatchet(
  * the op glosses stop being pushed to clients that never call them.
  */
 const OVER_BUDGET_CEILINGS: Record<string, number> = {
-  // ⚠ **RE-MEASURED WHOLE ON 2026-09-02 AT WAVE A's INTEGRATION.** Each figure
-  // is the merged tree's, not any one slice's: A8 took the team axis off
-  // `dopl_agent` and `dopl_kb`, A3 took the `_admin` routing line off four
-  // descriptions, and A6b deleted ops from `dopl_channel`. The falls compound
-  // and only the integrated boot measures the result.
+  // ⚠ **RE-MEASURED WHOLE ON 2026-09-02 AT SLICE A14**, through the real
+  // `listTools()` over the integrated tree. Every figure FELL, and four names
+  // that were here are GONE rather than lowered — `dopl_members` and the two
+  // meta tools now fit the cap, so the cap enforces itself for them and an
+  // entry would be headroom for whatever is added next.
   //
-  // ⚠ A RISE IS A DECISION AND IT IS RECORDED HERE, NOT ABSORBED. The honest
-  // move for anything over `DESCRIPTION_MAX_CHARS` is the one `dopl_channel`
-  // already made for its LAW: a pulled doctrine resource, so the op glosses stop
-  // being pushed to clients that never call them.
-  dopl_agent: 2437,
-  dopl_channel: 1703,
-  dopl_chats: 1654,
-  dopl_kb: 3359,
-  dopl_members: 1535,
-  dopl_ontology: 2321,
-  dopl_skill: 1580,
+  // ⚠ **A RISE IS A DECISION AND IT IS RECORDED WHERE IT IS TAKEN.** Two prose
+  // budgets sit above `DESCRIPTION_MAX_CHARS` in their own files —
+  // `knowledge.ts › KB_PROSE_BUDGET` and `agent.ts › AGENT_PROSE_BUDGET` — and
+  // both docblocks say the same thing: the excess is the UNTRUSTED-CONTENT
+  // FENCE (`untrusted-fence.ts`), not prose. A fence cannot move into a pulled
+  // doctrine, because the agent that has not read the doctrine is exactly the
+  // one that needs it. Both descriptions FELL by hundreds in the same change.
+  dopl_agent: 1948,
+  dopl_channel: 1591,
+  dopl_chats: 1699,
+  dopl_kb: 1947,
+  dopl_members: 1453,
+  dopl_ontology: 1924,
+  dopl_skill: 1593,
 };
 
 /**
@@ -188,50 +191,37 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
  * moved rather than being redistributed.
  */
 const SCHEMA_CEILINGS: Record<string, number> = {
-  // ⚠ **RE-MEASURED WHOLE ON 2026-09-02 AT WAVE A's INTEGRATION**, through the
-  // real `listTools()` over the merged tree — not by carrying each slice's
-  // number forward. Slices compound: `dopl_kb` fell on A8 (team axis), on A3
-  // (the `_admin` routing line) and again on A4 (the `workspace` arg), and no
-  // slice could see the other two. Only the integrated boot knows the total.
+  // ⚠ **RE-MEASURED WHOLE ON 2026-09-02 AT SLICE A14**, through the real
+  // `listTools()` over the integrated tree.
   //
-  // ⚠ **THE FIVE `*_admin` CEILINGS ARE GONE, NOT ZEROED** — A3 deleted the
-  // tools, and a ceiling over a tool nobody serves is what the ratchet's DEAD
-  // half exists to refuse.
-  current_workspace: 594,
-  // ⚠ **+17 ON 2026-09-02 (review fixes).** `dopl_agent`'s `visibility` describe
-  // gained "(create default)" — the wire now SENDS that default rather than
-  // leaving it to a credential-dependent server branch, and a param whose
-  // default is on the wire has to state it.
+  // ⚠ **FOUR OF THESE ROSE, AND EVERY CHARACTER OF THE RISE IS A RESPONSE-SIZE
+  // KNOB** (`response-size.ts`): `response_format` on `dopl_status`,
+  // `dopl_search`, `dopl_channel` and `dopl_kb`, plus `max_chars` on the one op
+  // that returns a whole document. **That is a PARAMETER, not prose, and it is
+  // licensed on `dopl_skill`'s `confirm_token` precedent** — a required or
+  // published argument cannot move into a pulled document, and trimming its
+  // description into uselessness would buy the number by making the knob
+  // unusable.
+  //
+  // ⚠ **AND IT IS THE ONE RISE ON THIS SURFACE THAT PAYS FOR ITSELF PER CALL.**
+  // Every other figure here is a fixed cost per CONNECTION; these four buy a
+  // recurring saving per RESULT — `concise` drops ~750 chars of scope note from
+  // every `dopl_search`, a two-line legend from every `dopl_status` (the call an
+  // orchestrator makes most), and the timestamp and session tag from every
+  // message on every `read`. One connection's worth of characters against an
+  // orchestrator loop's.
+  current_workspace: 720,
   dopl_agent: 3929,
-  // ⚠ **21,778 → 11,371, THE SINGLE LARGEST FALL IN THE WAVE**, and it came from
-  // deleting ops and params rather than from rewording: `kind`, `intent` and
-  // `direct` are gone with their error codes, `get_thread` folded into
-  // `read(thread=)`, the three ping forms collapsed to one `recipient`, and
-  // `chain` became a three-value enum (A6 + A6b, C11–C15).
-  // ⚠ **11,371 → 11,333 ON 2026-09-02 (review fixes).** `client_msg_id`'s
-  // description collapsed to ONE sentence when `channel_tasks` took the author
-  // scope (C14): the param had to teach the WEAKER of two keys while the two
-  // routes deduped differently, and there is one key now.
-  dopl_channel: 11333,
-  dopl_chats: 3519,
-  dopl_home: 457,
-  dopl_kb: 4819,
+  dopl_channel: 11609,
+  dopl_chats: 3554,
+  dopl_home: 440,
+  dopl_kb: 5353,
   dopl_map: 251,
   dopl_members: 604,
   dopl_ontology: 2538,
-  dopl_search: 802,
-  // ⚠ **+259 ON 2026-09-02, AND IT IS A FENCE RATHER THAN PROSE (review fixes,
-  // G16).** `dopl_skill` gained `confirm_token`: publishing a skill into a
-  // container a peer is standing in previews first, which is the precondition
-  // A11 shipped for the other two resource types and left off this one. The
-  // ratchet's own guidance — "move standing doctrine into an MCP resource rather
-  // than raising the number" — is about DOCTRINE; a required argument cannot go
-  // into a pulled document, and trimming its description into uselessness would
-  // buy the number by making the fence unusable. Licensed in writing, on
-  // `DOCTRINE_CEILING`'s precedent, and the description ceiling FELL in the same
-  // change so the tool's total moved by less than this line.
+  dopl_search: 1088,
   dopl_skill: 3059,
-  dopl_status: 508,
+  dopl_status: 794,
   list_workspaces: 114,
 };
 
@@ -255,13 +245,27 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * true also forces the headline number to be re-measured on every slice that
  * claims a win.
  */
-// ⚠ **RE-MEASURED 2026-09-02 AFTER THE WAVE-A REVIEW FIXES: 54,934 (+232).** The
-// whole of the rise is `dopl_skill`'s `confirm_token` and `dopl_agent`'s one
-// clarified default — G16's third caller, and the create lane that could not
-// preview correctly. Against it the description half FELL and the pulled doctrine
-// fell 177. **A fence costs served characters and is worth them; prose is what
-// this ceiling exists to refuse.**
-const SERVED_TOTAL_CEILING = 54_934;
+// ⚠ **54,934 → 51,996 ON 2026-09-02 (SLICE A14), A FALL OF 2,938.** Re-derived
+// whole through the real `listTools()`. Where it came from, and it is two moves
+// pulling opposite ways:
+//   • DESCRIPTIONS −4,466 (20,558 → 16,092, −22%). Every one of the thirteen is
+//     RENDERED now (`tool-style.ts › composeDescription`) rather than written,
+//     and most of the fall is one rule: a description carries nothing its own
+//     arg descriptions already say. `dopl_kb` −1,412, `dopl_agent` −489,
+//     `dopl_ontology` −397, `dopl_status` −583, `list_workspaces` −375.
+//   • SCHEMAS +1,526, and ALL of it is the response-size knobs — see
+//     {@link SCHEMA_CEILINGS}, which argues why that rise is the one on this
+//     surface that pays for itself per call rather than per connection.
+//   • The briefing +2, and that number is worth reading twice: the contract LOST
+//     the 230-char paragraph explaining where to find the caller's id, and the
+//     per-connection IDENTITY block that replaced it gives the id itself. This
+//     boot supplies no transport identity, so it measures the FALLBACK; a real
+//     desktop connection renders ~130 more and deletes a `current_workspace` /
+//     `whoami` / `dopl_home` / `dopl_status` round trip from the start of every
+//     run. See `instructions.ts › ConnectionIdentity`.
+// ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** Every figure a doc has carried
+// about this surface has gone stale inside a day (F-422).
+const SERVED_TOTAL_CEILING = 51_996;
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -277,7 +281,7 @@ const SERVED_TOTAL_CEILING = 54_934;
  * inside a consuming runtime is not observable from here and must not be
  * asserted here.
  */
-const INSTRUCTIONS_CEILING = 1_849;
+const INSTRUCTIONS_CEILING = 1_851;
 
 /**
  * ⚠ THE PULLED SIDE, AND IT IS BUDGETED SEPARATELY ON PURPOSE (principle 7).
@@ -431,8 +435,25 @@ describe("the pushed surface fits its budget, as served", () => {
     // carries the briefing whole, so a shrink at the source is a shrink on the
     // wire and this file may measure either. `workspaceSource` is not a header
     // pin above, so the boot passes `pin: null`.
+    // ⚠ **AND THE `identity` ARGUMENT IS PART OF THE CONTRACT NOW (A14).**
+    // `createServer` always supplies one; this boot hands it no caller, no
+    // containers and no transport-reported agents, so it renders the honest
+    // UNRESOLVED form — which is what an external client with no `X-Dopl-*`
+    // headers actually receives. Reproducing the call EXACTLY is the point:
+    // an equality that quietly ignored a new argument would stop being the
+    // written-equals-delivered claim it is here for.
     expect(instructions).toBe(
-      buildInstructions([WS], { pin: null, directoryLoadFailed: false }),
+      buildInstructions([WS], {
+        pin: null,
+        directoryLoadFailed: false,
+        identity: {
+          userId: null,
+          homeChannels: 0,
+          boundChannelId: null,
+          liveAgents: undefined,
+          posture: null,
+        },
+      }),
     );
   });
 

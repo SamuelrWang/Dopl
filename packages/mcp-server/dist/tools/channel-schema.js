@@ -32,6 +32,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHANNEL_INPUT_SHAPE = exports.PARAM_DESCRIPTION_MAX_CHARS = exports.SCHEMA_MAX_CHARS = void 0;
 const zod_1 = require("zod");
+const response_size_1 = require("./response-size");
 /**
  * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's
  * (A6, 2026-09-02). A tool's `inputSchema` is PUSHED on every connection
@@ -51,7 +52,18 @@ const zod_1 = require("zod");
 // and `to_desktop` are gone (C12/C5), `get_thread` left the `op` enum (C15),
 // and ping's three recipient forms became one. A cut a re-worded sentence
 // cannot make twice.
-exports.SCHEMA_MAX_CHARS = 11_103;
+// ⚠ **11,103 → 11,341 ON 2026-09-02 (A14), AND THE 238 IS A KNOB RATHER THAN
+// PROSE.** `response_format` joined the shape: `op="read"` and
+// `op="read_sessions"` can now be asked for the smaller render, which drops the
+// per-message timestamp and session tag and the thread-id legend from a page an
+// orchestrator reads in a loop — and never a body. **That is a PARAMETER, on
+// `dopl_skill`'s `confirm_token` precedent** (`tool-budget.test.ts ›
+// SCHEMA_CEILINGS`): an argument cannot move into a pulled document, and
+// trimming its description into uselessness would buy this number by making the
+// knob unusable. ⚠ It is also the one rise on this surface that pays for itself
+// PER CALL rather than per connection — 238 chars once, against a legend and two
+// metadata fields on every message of every read.
+exports.SCHEMA_MAX_CHARS = 11_341;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
  * can absorb one 900-character paragraph by trimming nine short fields; this
@@ -63,6 +75,12 @@ exports.PARAM_DESCRIPTION_MAX_CHARS = 400;
 const channel_doctrine_1 = require("./channel-doctrine");
 const channel_await_budget_1 = require("./channel-await-budget");
 exports.CHANNEL_INPUT_SHAPE = {
+    // ⚠ ONE FIELD, TWO READ OPS ("read" and "read_sessions"), and its wording is
+    // `response-size.ts`'s so the five tools that take this knob cannot promise
+    // five different things about what `concise` drops. It is INERT on every
+    // other op rather than refused: a knob that 400s where it is meaningless
+    // teaches an agent to stop passing it where it is not.
+    response_format: response_size_1.RESPONSE_FORMAT_FIELD,
     op: zod_1.z
         .enum([
         // ⚠ THE DOCTRINE DOOR (T10, 2026-09-02). Returns the standing rules for
@@ -145,7 +163,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(16000)
         .optional()
-        .describe('op="post" / op="create_thread" / op="milestone" (required): the message text, <=16000 chars. op="milestone": ONE LINE, <=240 chars and no line breaks, naming the step that just landed. op="ping" (required): ONE LINE, <=600 chars.'),
+        .describe('op="post" / op="create_thread" / op="milestone" (required): the message text. op="milestone": ONE LINE, <=240 chars and no line breaks, naming the step that just landed. op="ping" (required): ONE LINE, <=600 chars.'),
     to: zod_1.z
         .string()
         .optional()
@@ -179,7 +197,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="post" / op="create_thread" / op="launch_agent" / op="direct_agent" (optional): an idempotency key, 1-200 chars — re-send the same one and you get YOUR first call\'s row back instead of a second. The dedupe is PER-AUTHOR on every op: a key another member used is not yours and does not collide with it.'),
+        .describe('op="post" / op="create_thread" / op="launch_agent" / op="direct_agent" (optional): an idempotency key. Send one BEFORE you might need to retry — because a retried call with NO key starts a SECOND agent or writes a second row, while a re-sent key hands back YOUR first call\'s. The dedupe is PER-AUTHOR on every op: a key another member used is not yours and does not collide with it.'),
     title: zod_1.z
         .string()
         .trim()
@@ -188,7 +206,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="create_thread" (required): the thread title, 1-200 chars after trimming — a short header for the exchange, not a description. When the call is permitted to run, the bound is checked before anything goes on the wire.'),
+        .describe('op="create_thread" (required): the thread title, measured after trimming — a short header for the exchange, not a description. When the call is permitted to run, the bound is checked before anything goes on the wire.'),
     mode: zod_1.z
         .enum(["interactive", "autonomous"])
         .optional()
@@ -253,7 +271,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(2000)
         .optional()
-        .describe('op="launch_agent" (optional, but you almost always want it): what the agent should DO, <=2000 chars — it becomes that agent\'s opening instruction. Without one the agent starts with nothing to do and waits.'),
+        .describe('op="launch_agent" (optional, but you almost always want it): what the agent should DO — it becomes that agent\'s opening instruction. Without one the agent starts with nothing to do and waits.'),
     model: zod_1.z
         .string()
         .trim()
@@ -305,7 +323,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(0)
         .max(30_000)
         .optional()
-        .describe('op="launch_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (optional, default 15000, max 30000): how long to hold for the operator\'s desktop to accept or refuse. A timeout is NOT a failure — the request stays PENDING, and a re-issue is safe only when it carries the same `client_msg_id`.'),
+        .describe('op="launch_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (optional, default 15000): how long to hold for the operator\'s desktop to accept or refuse. A timeout is NOT a failure — the request stays PENDING, and a re-issue is safe only when it carries the same `client_msg_id`.'),
     info_card: zod_1.z
         .object({
         hidden: zod_1.z
@@ -341,13 +359,13 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="escalate" (required): the decision you cannot make, in ONE line (<=200 chars). It becomes the card\'s title.'),
+        .describe('op="escalate" (required): the decision you cannot make, in ONE line. It becomes the card\'s title.'),
     context: zod_1.z
         .string()
         .trim()
         .max(2000)
         .optional()
-        .describe('op="escalate" (optional, <=2000 chars): what a person needs to know to choose, and nothing else. Do not restate the options — they carry their own consequences.'),
+        .describe('op="escalate" (optional): what a person needs to know to choose, and nothing else. Do not restate the options — they carry their own consequences.'),
     options: zod_1.z
         .array(zod_1.z.object({
         label: zod_1.z
@@ -389,12 +407,12 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="read": max messages to return (1-200, default 100) — with no `since` that is the NEWEST 100, and older ones are absent rather than reported. op="pings": max pings (1-100, default 20) — the newest first.'),
+        .describe('op="read": max messages to return (default 100) — with no `since` that is the NEWEST 100, and older ones are absent rather than reported. op="pings": max pings (1-100, default 20) — the newest first.'),
     timeout_ms: zod_1.z.coerce
         .number()
         .int()
         .min(0)
         .max(channel_await_budget_1.AWAIT_HOLD_CAP_MS)
         .optional()
-        .describe(`op="await" (optional): TOTAL time to hold before returning with no messages (ms, max ${channel_await_budget_1.AWAIT_HOLD_CAP_MS}). Omitted, the default fits your client: ${channel_await_budget_1.AWAIT_HOLD_EXTERNAL_DEFAULT_MS} external, ${channel_await_budget_1.AWAIT_HOLD_DEFAULT_MS} for a session run by the Dopl desktop.`),
+        .describe(`op="await" (optional): TOTAL time to hold before returning with no messages, in ms. Omitted, the default fits your client: ${channel_await_budget_1.AWAIT_HOLD_EXTERNAL_DEFAULT_MS} external, ${channel_await_budget_1.AWAIT_HOLD_DEFAULT_MS} for a session run by the Dopl desktop.`),
 };

@@ -1,3 +1,5 @@
+import { DELETE_IS_APP_ONLY, refusal } from "./tools/tool-errors.js";
+
 /**
  * ⚠ DELETION IS APP-ONLY. Agents cannot delete anything over MCP: deleting in
  * the app is PERMANENT behind an "are you sure", and an MCP delete has no
@@ -68,5 +70,12 @@ export function isBlockedDeleteOp(tool: string, op: string): boolean {
  * it, and closes the retry loop — an agent told only "no" tries
  * op="delete_file" after op="delete_base".
  */
-export const DELETE_REFUSAL =
-  `Deletion is app-only. Ask the user to delete this in the Dopl app. Agents cannot delete over MCP — no role, scope or argument changes that, so do not retry this with different parameters. Editing and rewriting are still available to you (dopl_kb op="write_file", dopl_skill op="write", dopl_ontology's update ops).`;
+export const DELETE_REFUSAL = refusal(
+  DELETE_IS_APP_ONLY,
+  // ⚠ THE FIRST SENTENCE IS PINNED VERBATIM by `retirement.test.ts` and quoted
+  // by `src/shared/auth/app-only-delete-gate.test.ts`'s header, so a reword
+  // cannot turn "ask the user" into an unactionable "denied". The A14 `reason=`
+  // prefix is ADDITIVE — it gives the agent a literal to match — and the
+  // sentence it is required to carry is unchanged.
+  `Deletion is app-only. Ask the user to delete this in the Dopl app. No role, scope or argument changes that, so do not retry with different parameters. Editing and rewriting are still available to you (dopl_kb op="write_file", dopl_skill op="write", dopl_ontology's update ops).`,
+);

@@ -106,6 +106,22 @@ function createServer(client, options = {}) {
                 ? { name: options.workspace.name, slug: options.workspace.slug }
                 : null,
             directoryLoadFailed: options.directoryLoadFailed ?? false,
+            // ⚠ PER-CONNECTION IDENTITY (A14). Every field is already in hand here
+            // — no loopback is added, which `factory.ts › bootServer` forbids.
+            identity: {
+                userId: caller.userId,
+                // 🔒 ZERO UNDER A LOCK, AND THAT IS THE POINT rather than a rounding.
+                // A locked session must not learn that its operator holds other
+                // rooms, which is the enumeration oracle B3 exists to deny; the count
+                // renders only when it is > 0, so the line simply omits it.
+                homeChannels: options.lockedTo
+                    ? 0
+                    : (options.directory ?? []).filter((w) => !(0, client_1.isStandardWorkspace)(w))
+                        .length,
+                boundChannelId: (0, identity_js_1.boundChannelId)(caller),
+                liveAgents: options.liveAgents,
+                posture: options.posture ?? null,
+            },
         }),
     });
     // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and

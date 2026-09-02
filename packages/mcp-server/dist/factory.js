@@ -150,6 +150,8 @@ async function bootServer(client, opts = {}) {
         sessionKey: opts.sessionKey,
         scopes: opts.scopes,
         toolProfile: opts.toolProfile,
+        liveAgents: opts.liveAgents,
+        posture: opts.posture,
     });
     const activeWorkspace = active
         ? {

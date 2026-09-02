@@ -18,6 +18,8 @@ import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import { ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { SKILL_ERRORS } from "./tool-errors";
+import { composeDescription, DESCRIPTION_MAX_CHARS } from "./tool-style";
 import { SKILL_AUTHORING_GUIDE } from "../prompts/skill-authoring-guide.js";
 import { opGet, opList, opRead } from "./skills-ops-read";
 import {
@@ -27,17 +29,88 @@ import {
   opWrite,
 } from "./skills-ops-write";
 
-const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-FILE: one tight, self-contained procedure (its SKILL.md) plus metadata; long reference material belongs in a knowledge base, linked as \`[label](dopl://kb/<slug>)\`. Set \`op\` to one of:
-- "list" — the ACTIVE skills visible to you, with trigger metadata, grouped by folder. Two silent filters: drafts are absent (your own included), and skills private to another member or scoped to a team you have no grant on are already dropped. A view, not the skill inventory — dopl_members(op="access_matrix") is that. Call at every task boundary. Optional: folder.
-- "get" — a skill's resolved detail: SKILL.md body, reference availability, metadata. Requires: slug. Optional: detail ("summary" = metadata + body length; "full" (default) adds the body).
-- "read" — the SKILL.md body plus the Version token write wants. Requires: slug.
-- "write" — replace the whole SKILL.md body. Requires: slug, body. \`expected_version\` from a prior read is REQUIRED when a body exists — 412 without it, only \`force=true\` skips it.
-- "create" — Requires: name, description, when_to_use. Optional: when_not_to_use, slug, status, folder, body. Call op="authoring_guide" first.
-- "update" — skill metadata. Requires: slug. \`agent_write_enabled\` is human-only; an agent passing it here is rejected.
-- "set_visibility" — "public" (workspace-visible) or "private" (owner-only). Requires: slug, visibility. Optional: confirm_token.
-- "authoring_guide" — the canonical skill-authoring framework. Call before every op="create".
+/**
+ * ⚠ ONE OBJECT, REGISTERED AND DESCRIBED. `renderLimits` reads THIS shape, so
+ * the description cannot state a cap the schema does not enforce.
+ */
+const SKILL_SHAPE = {
+  op: z
+    .enum([
+      "list",
+      "get",
+      "read",
+      "write",
+      "create",
+      "update",
+      "set_visibility",
+      "authoring_guide",
+    ])
+    .describe("Operation to perform."),
+  slug: z
+    .string()
+    .optional()
+    .describe("Skill slug OR stable id (the uuid from list/get output — survives renames, prefer it for held references). Required for get, read, write, update, set_visibility."),
+  name: z.string().min(1).max(120).optional().describe("op=create (required) / op=update: skill name."),
+  description: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: skill description."),
+  when_to_use: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: when_to_use trigger."),
+  when_not_to_use: z.string().max(2000).nullable().optional().describe("op=create / op=update: when_not_to_use trigger."),
+  new_slug: z.string().min(1).max(80).optional().describe("op=update: rename the skill's slug."),
+  status: z.enum(["active", "draft"]).optional().describe("op=create / op=update: skill status (create defaults to active)."),
+  agent_write_enabled: z.boolean().optional().describe("op=create: initial agent-write toggle. On op=update an agent passing this is rejected — it's a human-only protection setting (change it from the Dopl web UI)."),
+  folder: z.string().max(80).nullable().optional().describe("op=create / op=update: organizing folder label (empty or null = unfiled). op=list: filter to skills in this folder."),
+  body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=write (required): the new full SKILL.md body."),
+  expected_version: z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check."),
+  force: z.boolean().optional().describe("op=write: overwrite even if the body changed since you read it. Discards the other edit — use only when intentional."),
+  visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
+  detail: z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + body length WITHOUT the body (cheap orientation); 'full' (default) includes the SKILL.md body."),
+  confirm_token: z
+    .string()
+    .optional()
+    .describe(
+      "op=set_visibility: the one-time token from this call's own preview, echoed back to publish. Needed only when publishing into a home channel somebody else is in; refused on any other call, and never guessable.",
+    ),
+};
 
-No delete op — deletion is app-only.`;
+/**
+ * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
+ * order for every tool on this surface and refuses, at import, a headline over
+ * its window or prose over its cap.
+ *
+ * ⚠ WHAT LEFT: the "Requires:" / "Optional:" clauses, the `expected_version`
+ * 412 rule, the `agent_write_enabled` rejection and the two visibility values.
+ * Every one of them is stated by the param's own `.describe()` below, and a
+ * description and its arg descriptions are BOTH pushed on every connection —
+ * so that was one fact bought twice.
+ */
+const SKILL_DESCRIPTION = composeDescription({
+  headline:
+    "The user's skills — one single-file procedure (SKILL.md) plus metadata each, as visible to you; not the skill inventory.",
+  policy:
+    "Reads plus non-destructive writes, gated per skill by the human-only `agent_write_enabled` toggle. No delete op — deletion is app-only.",
+  routing: [
+    "Use dopl_kb for long reference material, linked as `[label](dopl://kb/<slug>)`.",
+  ],
+  body: [
+    `Set \`op\` to one of:
+- "list" — ACTIVE skills visible to you, with triggers, grouped by folder. Two silent filters: drafts are absent (your own included), and skills private to another member or scoped to a team you have no grant on are dropped. A view — dopl_members(op="access_matrix") is the inventory. Call at every task boundary.
+- "get" — resolved detail: SKILL.md body, reference availability, metadata.
+- "read" — the SKILL.md body plus the Version token op="write" wants.
+- "write" — replace the SKILL.md body.
+- "create" — a new skill. Call op="authoring_guide" first.
+- "update" — skill metadata.
+- "set_visibility" — share workspace-wide, or make it owner-only.
+- "authoring_guide" — the canonical skill-authoring framework.`,
+  ],
+  limits: { shape: SKILL_SHAPE, only: ["name"] },
+  errors: SKILL_ERRORS,
+  examples: [
+    { op: "list" },
+    { op: "list", folder: "Sales" },
+    { op: "get", slug: "outreach" },
+    { op: "write", slug: "outreach", body: "# …", expected_version: "3" },
+  ],
+  cap: DESCRIPTION_MAX_CHARS,
+});
 
 
 export function registerSkillTools(
@@ -51,43 +124,7 @@ export function registerSkillTools(
   register(
     "dopl_skill",
     SKILL_DESCRIPTION,
-    {
-      op: z
-        .enum([
-          "list",
-          "get",
-          "read",
-          "write",
-          "create",
-          "update",
-          "set_visibility",
-          "authoring_guide",
-        ])
-        .describe("Operation to perform."),
-      slug: z
-        .string()
-        .optional()
-        .describe("Skill slug OR stable id (the uuid from list/get output — survives renames, prefer it for held references). Required for get, read, write, update, set_visibility."),
-      name: z.string().min(1).max(120).optional().describe("op=create (required) / op=update: skill name."),
-      description: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: skill description."),
-      when_to_use: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: when_to_use trigger."),
-      when_not_to_use: z.string().max(2000).nullable().optional().describe("op=create / op=update: when_not_to_use trigger."),
-      new_slug: z.string().min(1).max(80).optional().describe("op=update: rename the skill's slug."),
-      status: z.enum(["active", "draft"]).optional().describe("op=create / op=update: skill status (create defaults to active)."),
-      agent_write_enabled: z.boolean().optional().describe("op=create: initial agent-write toggle. On op=update an agent passing this is rejected — it's a human-only protection setting (change it from the Dopl web UI)."),
-      folder: z.string().max(80).nullable().optional().describe("op=create / op=update: organizing folder label (empty or null = unfiled). op=list: filter to skills in this folder."),
-      body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=write (required): the new full SKILL.md body."),
-      expected_version: z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check."),
-      force: z.boolean().optional().describe("op=write: overwrite even if the body changed since you read it. Discards the other edit — use only when intentional."),
-      visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
-      detail: z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + body length WITHOUT the body (cheap orientation); 'full' (default) includes the SKILL.md body."),
-      confirm_token: z
-        .string()
-        .optional()
-        .describe(
-          "op=set_visibility: the one-time token from this call's own preview, echoed back to publish. Needed only when publishing into a home channel somebody else is in; refused on any other call, and never guessable.",
-        ),
-    },
+    SKILL_SHAPE,
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
         case "list":

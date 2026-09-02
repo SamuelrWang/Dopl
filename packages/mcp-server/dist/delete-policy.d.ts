@@ -55,4 +55,4 @@ export declare function isBlockedDeleteOp(tool: string, op: string): boolean;
  * it, and closes the retry loop — an agent told only "no" tries
  * op="delete_file" after op="delete_base".
  */
-export declare const DELETE_REFUSAL = "Deletion is app-only. Ask the user to delete this in the Dopl app. Agents cannot delete over MCP \u2014 no role, scope or argument changes that, so do not retry this with different parameters. Editing and rewriting are still available to you (dopl_kb op=\"write_file\", dopl_skill op=\"write\", dopl_ontology's update ops).";
+export declare const DELETE_REFUSAL: string;

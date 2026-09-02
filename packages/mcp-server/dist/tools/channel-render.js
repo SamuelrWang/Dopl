@@ -28,6 +28,7 @@ exports.formatThreadDetail = formatThreadDetail;
 exports.formatMemberLine = formatMemberLine;
 exports.groupByChannel = groupByChannel;
 const channel_shared_1 = require("./channel-shared");
+const response_size_1 = require("./response-size");
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
 const channel_render_threads_1 = require("./channel-render-threads");
@@ -226,7 +227,7 @@ function clipBody(m, ref, clip) {
  * slot. ⚠ SHOUTED, and it is the only tag here that is: every other clause is a
  * label, this one is the reason a waiting agent should stop waiting.
  */
-function formatMessage(m, anyThreaded, view, ref, clip) {
+function formatMessage(m, anyThreaded, view, ref, clip, terse) {
     const author = formatAuthor(m);
     const ended = sessionEnded(m);
     const kindTag = ended
@@ -241,13 +242,20 @@ function formatMessage(m, anyThreaded, view, ref, clip) {
     // ⚠ NOT `shortRef` — that is the THREAD helper and renders a legacy pair-slot
     // tail as `seq 345`, borrowing thread vocabulary for a session identity that
     // does not exist.
-    const session = sessionIdOf(m);
+    // ⚠ `concise` DROPS THE SESSION TAG AND THE TIMESTAMP AND NOTHING ELSE, and
+    // the line is drawn where it is on purpose: those two answer "which of my
+    // workers wrote this, and when", which a reader scanning a transcript for
+    // CONTENT is not asking. The seq, the author, the kind, the thread, the
+    // addressee and the BODY are what the page is for and none of them moves —
+    // see `response-size.ts`, where that guarantee is the reason the knob is
+    // usable at all.
+    const session = terse ? null : sessionIdOf(m);
     const sessionTag = session
         ? ` · session ${(0, channel_shared_1.inlineOr)((0, channel_render_threads_1.sessionSlotRef)(sessionTail(session)), channel_render_threads_1.UNREADABLE_ID)}`
         : "";
     const to = addresseeOf(m);
     const memberTag = to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
-    const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag} · ${m.createdAt}`;
+    const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${terse ? "" : ` · ${m.createdAt}`}`;
     return `- ${head}${clipBody(m, ref, clip)}`;
 }
 /**
@@ -260,12 +268,16 @@ function formatMessage(m, anyThreaded, view, ref, clip) {
  * not an optimization: never clip a single-message page, or the remedy the
  * marker names stops working and there is no other way to read a long body.
  */
-function formatMessages(messages, ref, selfUserId = null) {
+function formatMessages(messages, ref, selfUserId = null, format) {
     const view = { selfUserId, names: namesFromMessages(messages) };
     const anyThreaded = messages.some((m) => (0, channel_render_threads_1.threadIdOf)(m) !== undefined);
     const clip = messages.length > 1;
-    const lines = messages.map((m) => formatMessage(m, anyThreaded, view, ref, clip));
-    const legend = (0, channel_render_threads_1.threadLegend)(messages, ref);
+    const terse = (0, response_size_1.isConcise)(format);
+    const lines = messages.map((m) => formatMessage(m, anyThreaded, view, ref, clip, terse));
+    // ⚠ The LEGEND is standing teaching about the id shapes, identical on every
+    // page — metadata by the definition `response-size.ts` sets, so `concise`
+    // drops it. A body never does.
+    const legend = terse ? null : (0, channel_render_threads_1.threadLegend)(messages, ref);
     if (legend)
         lines.push(`\n${legend}`);
     return lines;

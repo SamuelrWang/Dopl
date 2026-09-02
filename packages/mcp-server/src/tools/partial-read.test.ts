@@ -77,7 +77,7 @@ describe("dopl_map names the domains it could not read", () => {
       {},
     );
 
-    expect(text).toContain("PARTIAL READ");
+    expect(text).toContain("reason=partial_read");
     expect(text).toContain("Knowledge bases (`HTTP 500`)");
     expect(text).toContain("1 of 3 domains could NOT be read");
     // ⚠ The reader must not come away believing the workspace has none.
@@ -131,7 +131,7 @@ describe("dopl_map names the domains it could not read", () => {
         "## Ontology (0 clusters) — dopl_ontology",
         "_None._",
         "",
-        '_Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named in a PARTIAL READ notice opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix")._',
+        '_Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix")._',
         "",
         // ⚠ STATIC routing line (`CHANNELS_ROUTING` in map.ts): not a domain,
         // costs no read, and sits BELOW the scope note because that note's
@@ -142,7 +142,7 @@ describe("dopl_map names the domains it could not read", () => {
     );
     // ⚠ Said twice on purpose — the substring check fails loudly if the byte
     // pin above is ever "fixed" by pasting in whatever the code now emits.
-    expect(text).not.toContain("PARTIAL READ —");
+    expect(text).not.toContain("reason=partial_read —");
   });
 
   it("an empty-but-healthy workspace still says nothing failed", async () => {
@@ -155,7 +155,7 @@ describe("dopl_map names the domains it could not read", () => {
     // ⚠ Genuinely empty must stay distinguishable from the failing case in the
     // OTHER direction too.
     expect(text).toContain("## Knowledge bases (0)");
-    expect(text).not.toContain("PARTIAL READ —");
+    expect(text).not.toContain("reason=partial_read —");
   });
 });
 
@@ -170,7 +170,7 @@ describe("dopl_search names the groups it could not read", () => {
       { query: "ship" },
     );
 
-    expect(text).toContain("PARTIAL READ");
+    expect(text).toContain("reason=partial_read");
     expect(text).toContain("Knowledge entries (`HTTP 500`)");
     expect(text).toContain("1 of 4 groups could NOT be read");
     expect(text).toContain("not absent from the workspace");
@@ -202,10 +202,10 @@ describe("dopl_search names the groups it could not read", () => {
         "## Agent templates",
         "_No matches._",
         "",
-        '_Scope: max 8 per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates on names and short metadata only, so a term living inside a SKILL.md or inside a template\'s instructions is not findable here. Drafts are excluded from Skills. Agent templates are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named in a PARTIAL READ notice opening this line; no group here is proof of absence._',
+        '_Scope: max 8 per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates on names and short metadata only, so a term living inside a SKILL.md or inside a template\'s instructions is not findable here. Drafts are excluded from Skills. Agent templates are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._',
       ].join("\n"),
     );
-    expect(text).not.toContain("PARTIAL READ —");
+    expect(text).not.toContain("reason=partial_read —");
   });
 });
 
@@ -249,9 +249,9 @@ describe("causeOf says enough to act on and nothing about our internals", () => 
       "dopl_map",
       {},
     );
-    const hits = text.split("\n").filter((l) => l.includes("PARTIAL READ"));
+    const hits = text.split("\n").filter((l) => l.includes("reason=partial_read —"));
     expect(hits).toHaveLength(1);
-    expect(hits[0].startsWith("_PARTIAL READ")).toBe(true);
+    expect(hits[0].startsWith("_reason=partial_read")).toBe(true);
     expect(hits[0].endsWith("_")).toBe(true);
   });
 });

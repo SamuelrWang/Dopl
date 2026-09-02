@@ -224,7 +224,15 @@ describe("what this surface will not do", () => {
       }) as never,
       stub({}),
     );
+    // ⚠ BOTH ROUTES, not both spellings (A14, 2026-09-02). The house style
+    // renders routing as ONE `Use <tool>(op=…)` sentence that may name a second
+    // op on the same tool without repeating the tool — *"Use
+    // dopl_channel(op=\"read_sessions\") for agents RUNNING in a channel, and
+    // op=\"launch_agent\" to start one"*. What Samuel's ruling Q7 requires is
+    // that BOTH destinations are named and that the tool carrying them is
+    // `dopl_channel`; a second `dopl_channel(` prefix is characters pushed on
+    // every connection to repeat a word one clause away.
     expect(description).toContain('dopl_channel(op="read_sessions")');
-    expect(description).toContain('dopl_channel(op="launch_agent")');
+    expect(description).toContain('op="launch_agent"');
   });
 });

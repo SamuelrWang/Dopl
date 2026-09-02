@@ -129,7 +129,7 @@ describe("dopl_map carries its own scope", () => {
     // ⚠ A domain whose read THREW renders as `_None._`, identical to a
     // genuinely empty one — so it is named (`partial-read.test.ts`), and this
     // pins the healthy half: no notice means every section was really read.
-    expect(text).toContain("a domain that could not be read is named in a PARTIAL READ notice");
+    expect(text).toContain("a domain that could not be read is named with reason=partial_read");
     expect(text).toContain("with no such notice every section above was read");
   });
 });
@@ -255,7 +255,7 @@ describe("dopl_search carries its own scope", () => {
     // one dead domain is worse), but it must be NAMED — that is what lets the
     // footer say a group not named there was really searched.
     expect(text).toContain('A group whose read failed still shows "No matches"');
-    expect(text).toContain("named in a PARTIAL READ notice opening this line");
+    expect(text).toContain("named with reason=partial_read opening this line");
   });
 
   it("does not mark a group that did not hit the cap", async () => {
