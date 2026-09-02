@@ -36,7 +36,9 @@ import type {
   ChannelSessionStateOwn,
   DoplClient,
 } from "@dopl/client";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 import { opReadSessions } from "./channel-ops-read";
+import { opReadSessionsAccount } from "./channel-ops-account";
 import {
   formatSessionLine,
   sessionLegend,
@@ -142,6 +144,40 @@ afterEach(() => {
 
 // ── THE DIFF: ONE DTO, BOTH PATHS ────────────────────────────────────
 
+/**
+ * ⚠ **THE THIRD SURFACE (2026-09-02).** `op="read_sessions"` with NO `channel`
+ * renders the same sessions grouped by room, and until this date it rendered
+ * `formatSessionLine` — the PRE-TERSE prose form — while its per-channel sibling
+ * rendered the table. Two shapes for one session is exactly the drift this file
+ * exists to catch, so the account path is driven here too.
+ */
+const UNLOCKED: WorkspaceDirectory = {
+  lockedWorkspaceId: () => null,
+} as unknown as WorkspaceDirectory;
+
+function accountStubClient(sessions: ChannelSessionStateOwn[]): DoplClient {
+  return {
+    getAccountStatus: vi.fn(async () => ({
+      channels: [
+        {
+          channelId: "chan-1",
+          channelName: "General",
+          channelSlug: "general",
+          workspaceId: "ws-1",
+          lastSeq: null,
+          lastMessageAt: null,
+          unread: null,
+          sessions,
+          waiting: [],
+        },
+      ],
+      operatorOnline: undefined,
+      since: null,
+      truncated: { channels: false, unread: false, waiting: false },
+    })),
+  } as unknown as DoplClient;
+}
+
 describe("read_sessions and the await session block render IDENTICALLY", () => {
   const cases: Array<[string, ChannelSessionStateOwn]> = [
     ["the full rich row", rich()],
@@ -173,7 +209,31 @@ describe("read_sessions and the await session block render IDENTICALLY", () => {
       // survives as a "row" on one side and not the other.
       expect(fromAwait).toEqual(fromRead);
     });
+
+    it(`${label} — and the ACCOUNT-WIDE read matches them too`, async () => {
+      // ⚠ MUTATION CHECK. Render `formatSessionLine` in
+      // `channel-ops-account.ts` again and `sessionLines` finds nothing on this
+      // side, so the length assertion fails before the equality can pass on two
+      // empty arrays.
+      const res = await opReadSessionsAccount(
+        accountStubClient([session]),
+        UNLOCKED,
+      );
+      const fromAccount = sessionLines(res.content[0].text);
+      expect(fromAccount).toHaveLength(1);
+      const fromRead = sessionLines(
+        (await opReadSessions(stubClient([session]))).content[0].text,
+      );
+      expect(fromAccount).toEqual(fromRead);
+    });
   }
+
+  it("the account-wide page ships the SHARED header, not a hand-rolled one", async () => {
+    const res = await opReadSessionsAccount(accountStubClient([rich()]), UNLOCKED);
+    for (const line of SESSION_TABLE_HEAD) {
+      expect(res.content[0].text).toContain(line);
+    }
+  });
 
   /**
    * ⚠ The presence fact must reach BOTH paths or the surface contradicts itself

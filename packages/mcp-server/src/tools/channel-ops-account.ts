@@ -43,11 +43,8 @@ import {
   groupByChannel,
 } from "./channel-render";
 import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
-import {
-  formatSessionLine,
-  sessionIsStale,
-  sessionLegend,
-} from "./channel-session-render";
+import { sessionIsStale, sessionLegend } from "./channel-session-render";
+import { SESSION_TABLE_HEAD, sessionRow } from "./channel-session-table";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed channel)";
@@ -135,10 +132,23 @@ export async function opReadAccount(
  * `op="read_sessions"` WITH NO `channel` — every session of the caller's,
  * grouped by the room it is working in.
  *
- * ⚠ **IT REUSES THE PROJECTION RENDERER VERBATIM** (`formatSessionLine`,
- * `sessionLegend`, and both notes). A second session line would be a second
- * opinion about what "stale" means and about which fields a peer may read — see
- * `channel-session-render.ts`'s header.
+ * ⚠ **IT RENDERS `SESSION_TABLE_HEAD` + `sessionRow`, THE SAME TABLE THE
+ * PER-CHANNEL `read_sessions` AND THE `await` SESSION BLOCK RENDER** (T13).
+ * Until 2026-09-02 it rendered `formatSessionLine`, the PRE-TERSE prose form —
+ * so the account-wide read described the same session in a different shape from
+ * the per-channel one, which is the drift `channel-session-liveness.test.ts`
+ * exists to catch. One renderer is also one opinion about what "stale" means and
+ * about which fields an audience may read; see `channel-session-render.ts`.
+ *
+ * ⚠ **THE GROUPING IS WHAT THIS PAGE ADDS, AND IT IS NOT THE `channel` COLUMN.**
+ * Each `###` heading carries the room's `workspace=` handle, which is the value
+ * every other tool takes to reach it and which no cell in the table can carry.
+ *
+ * ⚠ **NO BANNER AND NO STANDING NOTES** — T11/T13. `SESSION_HANDLE_NOTE` and
+ * `SESSION_TELEMETRY_NOTE` are deleted from every result on this surface; they
+ * are doctrine at `dopl://doctrine/channels` and `op="help"`. What stays is the
+ * LEGEND, which decodes the cells THIS page contains and is conditional on the
+ * page containing a hedged row.
  */
 export async function opReadSessionsAccount(
   client: DoplClient,
@@ -159,26 +169,23 @@ export async function opReadSessionsAccount(
   const anyStale = rooms.some((room) =>
     room.sessions.some((s) => sessionIsStale(s, now)),
   );
+  // ⚠ Neutralization is untouched: every channel name still goes through
+  // `inlineOr`, and no cell in a row can forge a column
+  // (`channel-session-table.ts` states why nothing needs a second escape).
   const lines = [
-    `## Your sessions — ${total} across ${rooms.length} channel${rooms.length === 1 ? "" : "s"}\n`,
-    // ⚠ NO BANNER AND NO STANDING NOTES — T11/T13. This is a TABLE of the
-    // caller's OWN sessions, read on a loop; the security rule is stated once in
-    // `channel-description.ts` at connection, and the column descriptions are
-    // standing doctrine at `op="help"`. What stays is the LEGEND below, which
-    // decodes the cells THIS page actually contains and is conditional on the
-    // page containing a hedged row. ⚠ Neutralization is untouched: every
-    // channel name still goes through `inlineOr`.
+    `## Your sessions — ${total} across ${rooms.length} channel${rooms.length === 1 ? "" : "s"}`,
   ];
   for (const room of sortedByName(rooms)) {
     lines.push(
       `\n### ${inlineOr(room.channelName, NO_NAME)} — \`${room.channelSlug}\` · workspace=\`${room.workspaceId}\``,
+      ...SESSION_TABLE_HEAD,
     );
     for (const s of room.sessions) {
       // ⚠ `handle: true` + `telemetry: true` — this read is own-scoped by
       // construction (the server fences on `user_id`), which is the AUDIENCE
       // question `SessionRenderOpts.handle` asks.
       lines.push(
-        formatSessionLine(s, {
+        sessionRow(s, {
           telemetry: true,
           handle: true,
           now,
