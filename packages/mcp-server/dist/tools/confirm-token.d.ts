@@ -12,6 +12,17 @@
  * having, and is not the same as a person having approved it. Do not describe
  * this module as containment, and do not let a caller's copy imply it.
  *
+ * ⚠ **ONE THING DID BECOME A FENCE, AND ONLY ONE (G16, A11).** A SPENT token
+ * now yields `acknowledgedShared: true`, which the caller puts on the write body
+ * as `acknowledgeShared` — and `src/features/workspaces/server/
+ * shared-publish.ts` answers **400 `CONTAINER_PUBLISH_UNACKNOWLEDGED`** to a
+ * publish into a shared `kind='link'` container that arrives without it. That
+ * refusal is the SERVER'S, so skipping this module does not skip it. It still
+ * does not mean a human approved anything — an agent can set the flag by
+ * previewing and confirming alone — so every sentence above stands. What
+ * changed is only that the act can no longer happen with NOTHING said about the
+ * audience, anywhere in the stack.
+ *
  * ⚠ SCOPED TO THE AUDIENCE-CHANGING WRITE CLASS AND NOTHING ELSE. A confirm on
  * every write trains the agent to skip it — the identical argument INVARIANTS
  * §10 makes for untrusted-content headers ("a header on every result trains
@@ -69,8 +80,23 @@ export interface ConfirmAct {
      *  is a field the agent can change between the preview and the act. */
     payload: Record<string, unknown>;
 }
+/**
+ * ⚠ `acknowledgedShared` IS THE SERVER'S PRECONDITION, CARRIED OUT OF HERE
+ * (G16, A11). The write body sends it as `acknowledgeShared: true`, and
+ * `src/features/workspaces/server/shared-publish.ts` 400s
+ * `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it — so the token stops being a
+ * pure tripwire on this one axis: an agent that skips the preview does not
+ * skip the refusal, because the refusal is the server's.
+ *
+ * ⚠ IT IS TRUE ONLY WHEN A TOKEN WAS ACTUALLY SPENT ON THIS ACT. The two
+ * "nothing to confirm" proceeds — not publishing, and publishing into a room
+ * with nobody else in it — carry FALSE, because nobody was shown anything.
+ * Setting it there would make the flag mean "the client felt like it", which is
+ * the client-side confirm this slice exists to replace.
+ */
 export type ConfirmVerdict = {
     kind: "proceed";
+    acknowledgedShared: boolean;
 } | {
     kind: "halt";
     response: ToolResponse;
@@ -84,6 +110,26 @@ export type ConfirmVerdict = {
  */
 export declare function refuseStrayToken(tool: string, op: string): ToolResponse;
 /**
+ * 🔒 **THE SERVER'S OWN REFUSAL, MADE LEGIBLE — 400
+ * `CONTAINER_PUBLISH_UNACKNOWLEDGED`** (G16;
+ * `src/features/workspaces/server/shared-publish.ts`).
+ *
+ * ⚠ DUCK-TYPED ON THE STATUS AND THE CODE, never on an error class: no server
+ * error type crosses this package boundary, which is the shape
+ * `shelf.ts › homeShelfForbidden` established and `knowledge-ops-write.ts ›
+ * agentCreateForbidden` repeated.
+ *
+ * ⚠ **THE REMEDY IS THE CALLER'S TO SUPPLY, BECAUSE IT DIFFERS BY OP.** On a
+ * previewed op this refusal can only be a RACE — the room gained a member
+ * between the preview and the act — and the fix is a fresh preview. On an op
+ * with no preview step it is the ordinary answer, and the fix is a human. One
+ * message for both would be wrong for both.
+ */
+export declare function containerPublishUnacknowledged(e: unknown, remedy: string): ToolResponse | null;
+/** The remedy for an op that HAS a preview step: this refusal means the room
+ *  changed under the token, so the answer is to look again. */
+export declare const RECONFIRM_REMEDY = "Re-issue the SAME call WITHOUT `confirm_token` to get a fresh preview of who would see it, then confirm THAT one.";
+/**
  * THE GATE. Call it after the local contradiction refusals and before the
  * client write.
  *
@@ -92,6 +138,8 @@ export declare function refuseStrayToken(tool: string, op: string): ToolResponse
  *   - publishing, not a shared container → proceed (nobody else is in the room)
  *   - publishing into a shared container, no token → PREVIEW + a fresh token
  *   - publishing into a shared container, token    → verify, then proceed
+ *     WITH `acknowledgedShared: true` — which the caller must put on the write
+ *     body as `acknowledgeShared`, or the server refuses it (G16).
  */
 export declare function confirmGate(client: DoplClient, act: ConfirmAct, opts: {
     publishes: boolean;
