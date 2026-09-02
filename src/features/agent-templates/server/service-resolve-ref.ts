@@ -1,11 +1,15 @@
 import "server-only";
 import { isUuid } from "@/shared/lib/id/uuid";
+import { readResourceById } from "@/shared/tenancy/read-resource";
 import {
-  resolveResource,
   resolveResourcesByName,
   type ResolvedResource,
 } from "@/shared/tenancy/resolve-resource";
-import type { AgentTemplateContext, TemplateVisibility } from "../types";
+import type {
+  AgentTemplate,
+  AgentTemplateContext,
+  TemplateVisibility,
+} from "../types";
 import * as repo from "./repository";
 import { canSeeTemplate, shareCtxForTemplates } from "./service-shared";
 
@@ -101,8 +105,9 @@ export interface TemplateElsewhere {
  * Resolve `ref` — a template ID or an exact NAME — against what THIS caller may
  * see.
  *
- *   1. `ref` parses as a UUID → treat it as an id, exact match. ⚠ Never falls
- *      back to a name lookup on a miss: a UUID-shaped name is not a thing this
+ *   1. `ref` parses as a UUID → treat it as an id, exact match, **in whichever
+ *      container of the caller's it lives in** (ruling #18). ⚠ Never falls back
+ *      to a name lookup on a miss: a UUID-shaped name is not a thing this
  *      product makes, and a fallback would make "no such id" and "no such name"
  *      answer through each other.
  *   2. Otherwise → CASE-INSENSITIVE EXACT match on `name`. Not a prefix and not
@@ -124,7 +129,25 @@ export async function resolveTemplateRef(
 ): Promise<TemplateRefResolution> {
   const needle = ref.trim();
   if (needle === "") return { kind: "not-found" };
-  const here = await resolveInThisTenancy(ctx, needle);
+  // 🔒 **AN ID FOLLOWS ITS OWN TENANCY — RULING #18, AND IT IS WHAT RECONCILES
+  // THE TWO LAUNCH LANES** (B2, 2026-09-02). This door and the desktop's
+  // spawn-time one (`service-reads.ts › readTemplateById`) now give the SAME
+  // answer for the same id: a personal template launches anywhere its owner is.
+  // Until B2 this side was workspace-keyed and 404'd an id the other side
+  // followed — an asymmetry that was recorded rather than fixed, because
+  // deciding it was Samuel's to decide.
+  if (isUuid(needle)) {
+    const hit = await readResourceById(
+      ctx,
+      "agent_template",
+      needle,
+      loadVisibleTemplateRow
+    );
+    return hit
+      ? { kind: "found", id: hit.value.id, name: hit.value.name }
+      : { kind: "not-found" };
+  }
+  const here = await resolveNameInThisTenancy(ctx, needle);
   if (here.kind !== "not-found") return here;
   // ⚠ ONE EXTRA READ, AND ONLY ON A MISS. The hit path is untouched; a launch
   // that resolves pays nothing for this, and a launch that does not is already
@@ -133,21 +156,26 @@ export async function resolveTemplateRef(
   return template ? { kind: "elsewhere", template } : { kind: "not-found" };
 }
 
-/** {@link resolveTemplateRef}'s steps 1-4, inside `ctx.workspaceId` and nowhere
+/** One template, in ONE named container, through the matrix. ⚠ UNDECORATED on
+ *  purpose — this lane resolves a REF and never reads the template's CONTENT,
+ *  which is `service-reads.ts`'s single door and stays that way. */
+async function loadVisibleTemplateRow(
+  ctx: AgentTemplateContext,
+  id: string
+): Promise<AgentTemplate | null> {
+  const template = await repo.findTemplateById(ctx.workspaceId, id);
+  if (!template) return null;
+  const share = await shareCtxForTemplates(ctx, [template]);
+  return canSeeTemplate(ctx, template, share) ? template : null;
+}
+
+/** {@link resolveTemplateRef}'s NAME steps, inside `ctx.workspaceId` and nowhere
  *  else. ⚠ Split out so there is exactly ONE place that decides "not here", and
  *  therefore exactly one place the cross-tenancy classifier hangs off. */
-async function resolveInThisTenancy(
+async function resolveNameInThisTenancy(
   ctx: AgentTemplateContext,
   needle: string
 ): Promise<TemplateRefResolution> {
-  if (isUuid(needle)) {
-    const template = await repo.findTemplateById(ctx.workspaceId, needle);
-    if (!template) return { kind: "not-found" };
-    const share = await shareCtxForTemplates(ctx, [template]);
-    if (!canSeeTemplate(ctx, template, share)) return { kind: "not-found" };
-    return { kind: "found", id: template.id, name: template.name };
-  }
-
   const all = await repo.listTemplatesForWorkspace(ctx.workspaceId);
   if (all.length === 0) return { kind: "not-found" };
   const share = await shareCtxForTemplates(ctx, all);
@@ -201,26 +229,25 @@ async function resolveInThisTenancy(
  * ⚠ IT NAMES A TENANCY, NEVER A ROSTER. One name and one place — never how many
  * matched, never who else is in that workspace, never the other candidates.
  *
- * ⚠ **ONE DOOR SINCE A12, WHERE IT USED TO HAVE TWO.** `resolveTemplateForLaunch`
- * no longer needs it: an id resolves its own container there, so the miss it
- * used to explain does not happen. NAME refs, which cannot resolve a tenancy
- * (`agent_templates` has no name uniqueness), are what is left — and B2 deletes
- * this function when `workspace=` comes off the read ops.
+ * ⚠ **NAMES ONLY SINCE B2, AND THE NARROWING IS THE POINT.** Both launch lanes
+ * FOLLOW an id now (ruling #18), so an id that resolves elsewhere SUCCEEDS
+ * rather than earning a label — there is no id-shaped miss left to explain. A
+ * NAME still cannot resolve a tenancy on its own (`agent_templates` has no name
+ * uniqueness, so several containers may each hold one and picking would launch
+ * an identity nobody chose), which is what is left of T35: one place, one
+ * sentence, no second id lane to keep in step.
  */
 export async function classifyMissingTemplateRef(
   ctx: AgentTemplateContext,
   needle: string
 ): Promise<TemplateElsewhere | null> {
-  const matches = isUuid(needle)
-    ? [await resolveResource(ctx, "agent_template", needle)]
-    : await resolveResourcesByName(ctx, "agent_template", needle);
+  const matches = await resolveResourcesByName(ctx, "agent_template", needle);
   // ⚠ "ELSEWHERE" IS THE WHOLE POINT — a match in the tenancy this call already
   // resolves in is not a miss to explain. The resolver is asked about the
   // caller's WHOLE reach and this is the one line that makes it a difference.
   const labelled = matches
     .filter(
-      (row): row is ResolvedResource =>
-        row !== null && row.containerId !== ctx.workspaceId
+      (row): row is ResolvedResource => row.containerId !== ctx.workspaceId
     )
     .map((row) => ({ name: row.name, label: tenancyLabel(row) }))
     // ⚠ ONE ANSWER, DETERMINISTICALLY CHOSEN. A name can legitimately match
