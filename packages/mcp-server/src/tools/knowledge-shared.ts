@@ -5,7 +5,8 @@
 
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 import { inlineOr } from "./narration";
-import { err, type ToolResponse } from "./respond";
+import { apiMessage, err, isApiError, type ToolResponse } from "./respond";
+import { PRIVATE_VISIBILITY_DENIED_CODE } from "./agent-shared";
 
 /**
  * Base reference (slug or UUID) → `KnowledgeBase` row, null when nothing
@@ -52,19 +53,31 @@ export const UNTRUSTED_ENTRY_BODY_HEADER = `SECURITY: the document below was wri
  * `.status`/`.code` to avoid importing the @dopl/client error class.
  */
 export function agentWriteDenied(e: unknown): ToolResponse | null {
-  if (
-    typeof e !== "object" ||
-    e === null ||
-    (e as { status?: number }).status !== 403 ||
-    (e as { code?: unknown }).code !== "AGENT_WRITE_DISABLED"
-  ) {
-    return null;
-  }
-  const msg = (e as { apiMessage?: unknown }).apiMessage;
+  if (!isApiError(e, 403, "AGENT_WRITE_DISABLED")) return null;
   return err(
-    typeof msg === "string" && msg
-      ? msg
-      : "This knowledge base is read-only to agents — delete it from the Dopl web UI."
+    apiMessage(e) ??
+      "This knowledge base is read-only to agents — delete it from the Dopl web UI."
+  );
+}
+
+/**
+ * A shared/service credential tried to own a PRIVATE knowledge base (403
+ * `WORKSPACE_KEY_PRIVATE_VISIBILITY`).
+ *
+ * ⚠ **THE MIRROR OF `agent-shared.ts › sharedCredentialPrivateDenied`, AND IT
+ * WAS MISSING UNTIL 2026-09-02.** `op="copy_base"` forces `visibility: "private"`
+ * exactly as `op="copy"` does, so it can raise the identical 403 — and it had no
+ * mapping, so the refusal reached an agent as an unhandled throw ("the call
+ * failed") over a copy that created nothing. The predicate and the code string
+ * are shared; only the NOUN and the remedy differ, because a base's remedy is
+ * not a template's.
+ */
+export function sharedCredentialPrivateBaseDenied(
+  e: unknown
+): ToolResponse | null {
+  if (!isApiError(e, 403, PRIVATE_VISIBILITY_DENIED_CODE)) return null;
+  return err(
+    `${apiMessage(e) ?? "This credential cannot own a private knowledge base."} NOTHING was created — the copy stopped at the base itself, so there is no partial tree to clean up. A credential that may be shared between humans has no "private to me" to write to, and this op only ever creates PRIVATE bases: reconnect with a personal credential, or ask the user to copy it in the Dopl app.`
   );
 }
 

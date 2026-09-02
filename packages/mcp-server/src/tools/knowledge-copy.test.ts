@@ -12,7 +12,9 @@
  *   2. the CAP refuses BEFORE the first write, so an oversized base leaves
  *      nothing behind;
  *   3. a failure AFTER the base lands reports PARTIAL — a suite that only
- *      asserted `isError` would pass over a result narrating a clean success.
+ *      asserted `isError` would pass over a result narrating a clean success;
+ *   4. 🔒 R2 (2026-09-02): the source must be one the CALLER CREATED, and the
+ *      refusal costs no tree read at all.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -30,8 +32,13 @@ import {
   type WorkspaceDirectory,
 } from "../workspace-directory.js";
 import { registerKnowledgeTools } from "./knowledge.js";
+import { UNKNOWN_CALLER, type CallerIdentity } from "./identity.js";
 import { MAX_COPY_ENTRIES } from "./knowledge-ops-copy.js";
 import type { RegisterTool, ToolResponse } from "./respond.js";
+
+/** The fixtures' `createdBy`. 🔒 R2: a copy is of a base the caller CREATED. */
+const OWNER = "user-1";
+const OWNER_CALLER: CallerIdentity = { ...UNKNOWN_CALLER, userId: OWNER };
 
 const SOURCE_WS = "ws-source";
 const TARGET_WS = "ws-target";
@@ -196,12 +203,16 @@ function stubDirectory(rows: WorkspaceListItem[]): WorkspaceDirectory {
 type Handler = (args: Record<string, unknown>) => Promise<ToolResponse>;
 
 /** The REAL `dopl_kb` handler, captured off the real registrar. */
-function doplKb(c: DoplClient, directory: WorkspaceDirectory): Handler {
+function doplKb(
+  c: DoplClient,
+  directory: WorkspaceDirectory,
+  caller: CallerIdentity = OWNER_CALLER,
+): Handler {
   const handlers = new Map<string, Handler>();
   const capture: RegisterTool = (name, _description, _schema, handler) => {
     handlers.set(name, handler as unknown as Handler);
   };
-  registerKnowledgeTools(capture, c, undefined, directory);
+  registerKnowledgeTools(capture, c, caller, directory);
   const tool = handlers.get("dopl_kb");
   if (!tool) throw new Error("dopl_kb was not registered");
   return tool;
@@ -355,5 +366,80 @@ describe("dopl_kb(op=copy_base)", () => {
     expect(body).toContain("storage limit reached");
     // ⚠ And it must NOT read as a clean copy.
     expect(body).not.toContain("Copied the knowledge base");
+  });
+
+  describe("🔒 R2 — the source must be one the CALLER created", () => {
+    it("refuses a base created by somebody else, and reads no tree at all", async () => {
+      // ⚠ MUTATION CHECK. Delete `notOwnedRefusal` from `opCopyBase` and this
+      // copy succeeds: the base is READABLE (`visibility: "public"`), which is
+      // exactly the thing readability is not evidence of.
+      const trace: Trace = { calls: [], created: [] };
+      const c = client(trace);
+      vi.mocked(c.listKbBases).mockResolvedValue([
+        base({ createdBy: "somebody-else" }),
+      ]);
+      const res = await doplKb(c, stubDirectory([SOURCE, TARGET]))({
+        op: "copy_base",
+        base: "handbook",
+        to_workspace: "target",
+      });
+
+      expect(res.isError).toBe(true);
+      expect(text(res)).toContain("YOU created");
+      // ⚠ BEFORE the tree read, so a refusal costs no loopback traffic.
+      expect(of(trace, "getKbTree")).toEqual([]);
+      expect(trace.created).toEqual([]);
+    });
+
+    it("FAILS CLOSED when the row has no owner recorded", async () => {
+      const trace: Trace = { calls: [], created: [] };
+      const c = client(trace);
+      vi.mocked(c.listKbBases).mockResolvedValue([base({ createdBy: null })]);
+      const res = await doplKb(c, stubDirectory([SOURCE, TARGET]))({
+        op: "copy_base",
+        base: "handbook",
+        to_workspace: "target",
+      });
+      expect(res.isError).toBe(true);
+      expect(trace.created).toEqual([]);
+    });
+
+    it("FAILS CLOSED when the session could not resolve who the caller is", async () => {
+      const trace: Trace = { calls: [], created: [] };
+      const res = await doplKb(
+        client(trace),
+        stubDirectory([SOURCE, TARGET]),
+        UNKNOWN_CALLER,
+      )({ op: "copy_base", base: "handbook", to_workspace: "target" });
+      expect(res.isError).toBe(true);
+      expect(text(res)).toContain("could not resolve who you are");
+      expect(trace.created).toEqual([]);
+    });
+  });
+
+  it("maps the shared-credential PRIVATE refusal, and calls it NOTHING created", async () => {
+    // ⚠ The create sat OUTSIDE `writeCopy`'s try/catch until 2026-09-02, so this
+    // 403 reached the agent as an unhandled throw over a copy that made nothing.
+    // ⚠ MUTATION CHECK: it must NOT be re-framed as a PARTIAL copy — there is no
+    // tree to finish.
+    const trace: Trace = { calls: [], created: [] };
+    const c = client(trace);
+    vi.mocked(c.createKbBase).mockRejectedValue(
+      Object.assign(new Error("denied"), {
+        status: 403,
+        code: "WORKSPACE_KEY_PRIVATE_VISIBILITY",
+        apiMessage: "This credential cannot own a private knowledge base.",
+      }),
+    );
+    const res = await doplKb(c, stubDirectory([SOURCE, TARGET]))({
+      op: "copy_base",
+      base: "handbook",
+      to_workspace: "target",
+    });
+
+    expect(res.isError).toBe(true);
+    expect(text(res)).toContain("NOTHING was created");
+    expect(text(res)).not.toContain("PARTIAL COPY");
+    expect(of(trace, "writeKbFileByPath")).toEqual([]);
   });
 });

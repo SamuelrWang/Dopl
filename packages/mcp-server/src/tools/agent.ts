@@ -41,7 +41,7 @@ Set \`op\` to one of:
 - "get" — one template in full, INSTRUCTIONS block included. Requires: template.
 - "create" — Requires: name. Optional: description, instructions, model, fields, visibility, knowledge_bases, shelf, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on op="list": omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts it on your own personal shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel or a second workspace. You cannot attach a knowledge base you cannot read.
 - "update" — Requires: template. Optional: name, description, instructions, model, fields, visibility, knowledge_bases, confirm_token. \`fields\` and \`knowledge_bases\` REPLACE the whole set — [] empties it. No shelf move.
-- "copy" — re-create a template you can SEE as a NEW template in ANOTHER workspace or home channel. Requires: template, to_workspace (see its own description for the target rules). Carries name, description, instructions, model and custom fields; NOT attached knowledge bases (a base id means nothing in another tenancy — the result says how many were dropped) and never visibility.
+- "copy" — re-create a template YOU CREATED as a NEW template in ANOTHER workspace or home channel. Requires: template, to_workspace (see its own description for the target rules). Carries name, description, instructions, model and custom fields; NOT attached knowledge bases (a base id means nothing in another tenancy — the result says how many were dropped) and never visibility.
 
 Deleting is app-only — \`dopl_agent_admin\` refuses the op it lists. ⚠ Publishing a template into a home channel somebody ELSE is in previews first, returning what would be created, who would see it, and a one-time \`confirm_token\` to re-issue with.`;
 
@@ -214,6 +214,7 @@ export function registerAgentTools(
           return opCopy(
             client,
             directory,
+            caller.userId,
             args.template as string,
             args.to_workspace as string,
           );

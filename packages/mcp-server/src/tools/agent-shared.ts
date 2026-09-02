@@ -27,7 +27,16 @@
 
 import type { AgentTemplate, DoplClient } from "@dopl/client";
 import { inlineOr } from "./narration.js";
-import { err, type ToolResponse } from "./respond.js";
+import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
+
+/**
+ * The server's 403 code for "a credential that may be shared between humans
+ * cannot own a PRIVATE row". ⚠ ONE SPELLING, shared with the knowledge surface
+ * (`knowledge-shared.ts › sharedCredentialPrivateBaseDenied`) — both copy ops
+ * force `visibility: "private"`, so both can raise it and neither may guess at
+ * the string.
+ */
+export const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 
 /** A template with nothing nameable left after neutralization. */
 export const NO_NAME = "`(unnamed)`";
@@ -175,14 +184,7 @@ export function templateWriteDenied(e: unknown): ToolResponse | null {
  * The refusal here must not soften that into a "forbidden".
  */
 export function knowledgeBaseNotAttachable(e: unknown): ToolResponse | null {
-  if (
-    typeof e !== "object" ||
-    e === null ||
-    (e as { status?: number }).status !== 404 ||
-    (e as { code?: unknown }).code !== "KNOWLEDGE_BASE_NOT_FOUND"
-  ) {
-    return null;
-  }
+  if (!isApiError(e, 404, "KNOWLEDGE_BASE_NOT_FOUND")) return null;
   return err(
     `At least one knowledge base id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops a template laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. Check ids with dopl_kb(op="list_bases").`,
   );
@@ -195,17 +197,9 @@ export function knowledgeBaseNotAttachable(e: unknown): ToolResponse | null {
  * credential is in play.
  */
 export function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null {
-  if (
-    typeof e !== "object" ||
-    e === null ||
-    (e as { status?: number }).status !== 403 ||
-    (e as { code?: unknown }).code !== "WORKSPACE_KEY_PRIVATE_VISIBILITY"
-  ) {
-    return null;
-  }
-  const msg = (e as { apiMessage?: unknown }).apiMessage;
+  if (!isApiError(e, 403, PRIVATE_VISIBILITY_DENIED_CODE)) return null;
   return err(
-    `${typeof msg === "string" && msg ? msg : "This credential cannot own a private agent template."} Nothing was created. A credential that may be shared between humans has no "private to me" to write to — create it with visibility="workspace", or reconnect with a personal credential.`,
+    `${apiMessage(e) ?? "This credential cannot own a private agent template."} Nothing was created. A credential that may be shared between humans has no "private to me" to write to — create it with visibility="workspace", or reconnect with a personal credential.`,
   );
 }
 

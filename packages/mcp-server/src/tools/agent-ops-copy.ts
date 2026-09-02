@@ -22,6 +22,12 @@
  * and a template whose instructions reference documents it cannot see is worse
  * than one that never claimed them.
  *
+ * 🔒 **THE SOURCE MUST BE THE CALLER'S OWN (R2, 2026-09-02).** Readable is not
+ * owned: a copy lands PRIVATE to the copier in the target, so copying a
+ * teammate's `workspace`-visible template would move their work into a room they
+ * may not be in. `copy-target.ts › notOwnedRefusal` is the fence, and it fails
+ * closed on an unprovable owner.
+ *
  * 🔒 **VISIBILITY IS FORCED TO `private`, NEVER CARRIED.** The op creates "a
  * private copy in the target tenancy" by definition — and that also keeps it out
  * of THE CONFIRM CLASS (INVARIANTS §10) BY CONSTRUCTION, since the class is a
@@ -44,6 +50,7 @@ import {
 } from "./agent-shared.js";
 import {
   isCopyRefusal,
+  notOwnedRefusal,
   resolveCopyTarget,
   sameWorkspaceRefusal,
   workspaceHandle,
@@ -53,6 +60,7 @@ import {
 export async function opCopy(
   client: DoplClient,
   directory: WorkspaceDirectory,
+  selfUserId: string | null,
   ref: string,
   toWorkspace: string,
 ): Promise<ToolResponse> {
@@ -81,6 +89,17 @@ export async function opCopy(
   const source = await workspaceContext.run(found.workspaceId, () =>
     client.getAgentTemplate(found.id),
   );
+
+  // 🔒 R2 — OWNED, not merely readable. It runs on the DETAIL read rather than
+  // on the resolver's row, because `createdBy` is what proves it and the detail
+  // is the read that carries it. See `copy-target.ts › notOwnedRefusal`.
+  const notOwned = notOwnedRefusal(
+    source.createdBy,
+    selfUserId,
+    "agent template",
+    source.name,
+  );
+  if (notOwned) return notOwned;
 
   // Leg 2: an ORDINARY create, fenced by `withWorkspaceAuth` in the target.
   let created;

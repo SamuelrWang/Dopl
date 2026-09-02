@@ -13,6 +13,9 @@
  *
  * ⚠ TRIPWIRE, NOT CONTAINMENT — the container-lock case pins that the TOOL will
  * not aim a copy at another room, not that the server would accept one.
+ *
+ * 🔒 **AND THE SOURCE MUST BE THE CALLER'S OWN (R2, 2026-09-02)** — readable is
+ * not owned, and the fence fails closed on an unprovable owner.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -25,7 +28,12 @@ import type {
 } from "@dopl/client";
 import { createWorkspaceDirectory, type WorkspaceDirectory } from "../workspace-directory.js";
 import { registerAgentTools } from "./agent.js";
+import { UNKNOWN_CALLER, type CallerIdentity } from "./identity.js";
 import type { RegisterTool, ToolResponse } from "./respond.js";
+
+/** The fixtures' `createdBy`. 🔒 R2: a copy is of a template the caller CREATED. */
+const OWNER = "user-1";
+const OWNER_CALLER: CallerIdentity = { ...UNKNOWN_CALLER, userId: OWNER };
 
 const SOURCE_WS = "ws-source";
 const TARGET_WS = "ws-target";
@@ -119,12 +127,16 @@ function stubDirectory(rows: WorkspaceListItem[]): WorkspaceDirectory {
 type Handler = (args: Record<string, unknown>) => Promise<ToolResponse>;
 
 /** The REAL `dopl_agent` handler, captured off the real registrar. */
-function doplAgent(c: DoplClient, directory: WorkspaceDirectory): Handler {
+function doplAgent(
+  c: DoplClient,
+  directory: WorkspaceDirectory,
+  caller: CallerIdentity = OWNER_CALLER,
+): Handler {
   const handlers = new Map<string, Handler>();
   const capture: RegisterTool = (name, _description, _schema, handler) => {
     handlers.set(name, handler as unknown as Handler);
   };
-  registerAgentTools(capture, c, undefined, directory);
+  registerAgentTools(capture, c, caller, directory);
   const tool = handlers.get("dopl_agent");
   if (!tool) throw new Error("dopl_agent was not registered");
   return tool;
@@ -261,6 +273,46 @@ describe("dopl_agent(op=copy)", () => {
     // ⚠ A container is addressed by ID; §4A keeps its slug off this surface.
     expect(text(own)).toContain(`workspace="${CONTAINER.id}"`);
     expect(text(own)).not.toContain(CONTAINER.slug);
+  });
+
+  describe("🔒 R2 — the source must be one the CALLER created", () => {
+    it("refuses a template created by somebody else, and creates nothing", async () => {
+      // ⚠ MUTATION CHECK. Delete `notOwnedRefusal` from `opCopy` and a
+      // teammate's workspace-visible template copies into a room they may not
+      // be in, landing PRIVATE to the copier.
+      const trace: Trace = { calls: [], created: [] };
+      const res = await doplAgent(
+        client(template({ createdBy: "somebody-else" }), trace),
+        stubDirectory([SOURCE, TARGET]),
+      )({ op: "copy", template: TEMPLATE_ID, to_workspace: "target" });
+
+      expect(res.isError).toBe(true);
+      expect(text(res)).toContain("YOU created");
+      expect(trace.created).toEqual([]);
+    });
+
+    it("FAILS CLOSED on a row with no owner, and on an unresolved caller", async () => {
+      const noOwner: Trace = { calls: [], created: [] };
+      expect(
+        (
+          await doplAgent(
+            client(template({ createdBy: null }), noOwner),
+            stubDirectory([SOURCE, TARGET]),
+          )({ op: "copy", template: TEMPLATE_ID, to_workspace: "target" })
+        ).isError,
+      ).toBe(true);
+      expect(noOwner.created).toEqual([]);
+
+      const anon: Trace = { calls: [], created: [] };
+      const res = await doplAgent(
+        client(template(), anon),
+        stubDirectory([SOURCE, TARGET]),
+        UNKNOWN_CALLER,
+      )({ op: "copy", template: TEMPLATE_ID, to_workspace: "target" });
+      expect(res.isError).toBe(true);
+      expect(text(res)).toContain("could not resolve who you are");
+      expect(anon.created).toEqual([]);
+    });
   });
 
   it("refuses by NAME when to_workspace is missing", async () => {

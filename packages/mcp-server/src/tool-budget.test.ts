@@ -86,7 +86,10 @@ import { opEscalate } from "./tools/channel-ops-escalate.js";
 const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ⚠ +931 ON 2026-09-02 for three new ops — "copy_base", "pin", "unpin" — after
   // the copy/pin bullets gave back what `to_workspace` and `path` already say.
-  dopl_kb: 3400,
+  // ⚠ 3,400 → 3,399 ON 2026-09-02: R2 reworded the `copy_base` bullet from "a
+  // base you can READ" to "a base YOU CREATED", one character shorter. Caught by
+  // the downward half of the ratchet the same day it was repaired.
+  dopl_kb: 3399,
   // ⚠ 1,197 OF THIS IS THE P1 SUMMARY AND THE REST IS **ONE PARAGRAPH THE P3
   // TENANCY TIER ASKED TO KEEP WORD FOR WORD** — `channel-description.ts ›
   // HOME_CHANNEL_ADDRESSING`, ~650 chars on how a home channel is addressed,

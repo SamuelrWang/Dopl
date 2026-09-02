@@ -45,7 +45,44 @@ const NO_NAME = "`(unnamed)`";
  * that publishes their ids.
  */
 export const TO_WORKSPACE_ARG_DESCRIPTION =
-  `Where the COPY is created: a workspace slug or UUID, or a home-channel CONTAINER id from dopl_home(op="list_channels"). Required for the copy ops. It must be somewhere you are a member — an id that does not resolve for you refuses and creates nothing, and there is no fallback to the current workspace. The copy always lands PRIVATE to you, and it is a STRANGER to the original: editing one never touches the other.`;
+  `Where the COPY is created: a workspace slug or UUID, or a home-channel CONTAINER id from dopl_home(op="list_channels"). Required for the copy ops, and the SOURCE must be one you created. It must be somewhere you are a member — an id that does not resolve for you refuses and creates nothing, and there is no fallback to the current workspace. The copy always lands PRIVATE to you, and it is a STRANGER to the original: editing one never touches the other.`;
+
+/**
+ * 🔒 **R2 — A COPY IS OF SOMETHING THE OPERATOR OWNS, NOT OF ANYTHING THEY CAN
+ * READ** (Desktop Agent default 2026-09-02; Samuel may loosen).
+ *
+ * Both ops resolved their source through the ordinary READ resolvers, so until
+ * this fence they would copy any template or base the caller could SEE — a
+ * teammate's `workspace`-visible template, a shared base — into a container that
+ * teammate may not be in, landing it `private` to the copier. That is not what
+ * the spec says the op is (INVARIANTS §10: *"An operator's OWN template or
+ * knowledge base"*), and it is the one direction a copy can widen an audience.
+ *
+ * ⚠ **AND IT FAILS CLOSED ON AN UNKNOWN.** `createdBy` is nullable (rows older
+ * than the column) and `CallerIdentity.userId` is nullable (auth did not
+ * resolve). Neither is evidence of ownership, so neither passes — an unprovable
+ * owner refuses and creates nothing, which is recoverable, where a wrong guess
+ * is a copy nobody can delete from this surface (§10).
+ *
+ * ⚠ It is a NARROWING of a read that was already fenced, never a new authz path:
+ * the source read still answers only what the caller may see, and this drops
+ * rows from inside that answer.
+ */
+export function notOwnedRefusal(
+  createdBy: string | null | undefined,
+  selfUserId: string | null,
+  noun: string,
+  ref: string,
+): ToolResponse | null {
+  if (selfUserId && createdBy && createdBy === selfUserId) return null;
+  return err(
+    `Refused: op="copy" copies ${noun}s YOU created, and ${inlineOr(ref, NO_NAME)} is not one of them. NOTHING was created. Being able to read it is not the same as owning it — a copy lands PRIVATE to you in the target, so copying somebody else's would move their work into a room they may not be in. ${
+      selfUserId
+        ? `Ask its owner to copy it, or create your own there.`
+        : `(This session could not resolve who you are, so ownership cannot be proved at all — reconnect with a credential that carries your user id.)`
+    }`,
+  );
+}
 
 /** Narrow the `resolve → row | refusal` union the copy ops branch on. */
 export function isCopyRefusal(
