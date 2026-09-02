@@ -44,6 +44,38 @@ const sessionModel = require('../../session-model');
 const sessionCredential = require('../../session-credential');
 const { diag } = require('../../diag');
 
+// ── THE LOOP BRAKE — ⚠ ONE CONSTANT, EVERY PROFILE, EVERY SPAWN SHAPE ────────
+//
+// G19 ("respond and loop until the goal is met, then STOP") was prompt-only:
+// every turn framing said it and nothing in the turn path bounded anything. The
+// SDK has exposed `maxTurns` all along and this runtime set it NOWHERE, so a
+// session that stopped producing `result` events had no ceiling at all.
+//
+// ⚠ **IT IS A RUNAWAY BACKSTOP, NOT THE OPERATOR-VISIBLE CAP, AND READING IT AS
+// THE LATTER IS THE MISTAKE TO AVOID.** Dopl's own bound is
+// `main/session-state.js › DEFAULT_TURN_CAP` (24, operator-settable via
+// `settings.js › getTurnCap`), enforced by the reducer at every `result` event,
+// which ENDS the session with `turn_cap` and tells the operator so. That one
+// stays the real limit and fires first. This one exists for the case the reducer
+// cannot see: a query that never reaches another `result`.
+//
+// ⚠ **THE NUMBER IS DELIBERATELY ~40× THAT CAP, SO IT CANNOT FIRE IN AN ORDINARY
+// SESSION**, and the reason is that the SDK's own type carries TWO definitions of
+// a "turn" — `Options.maxTurns` says "a user message and assistant response"
+// while `AgentDefinition.maxTurns` says "agentic turns (API round-trips)". Under
+// the first reading the reducer's 24 ends everything long before this; under the
+// second this allows ~40 round-trips per Dopl turn at the default cap. A tighter
+// value would be a guess that KILLS LONG SESSIONS under whichever reading turned
+// out to be right, and the SDK's answer when it fires is `error_max_turns` — a
+// dead session, not a paused one.
+//
+// ⚠ **NOT PER PROFILE, AND THAT IS AN ARGUMENT RATHER THAN A SHORTCUT.** A tool
+// profile bounds what a session may DO; it says nothing about how long it may
+// loop, and a second table keyed on profile would be a permission axis wearing a
+// budget's clothes — a `read_only` session that hit a lower ceiling would end
+// with a message about turns for a reason that was really about tools.
+const SESSION_MAX_TURNS = 1000;
+
 function buildOptions(s, dispatch, emitQuiet) {
   const cfg = tools.buildSessionToolConfig(s.profile);
   const options = {
@@ -82,6 +114,10 @@ function buildOptions(s, dispatch, emitQuiet) {
     canUseTool: sessionOutbound.wrapGate(s, axisB.makeCanUseTool(s, dispatch, diag), emitQuiet), // diag: the forced-thread-tag conflict log (the bridge stays electron-free)
     abortController: s.abortController,
     includePartialMessages: false, // LOAD-BEARING for v2.7 L3 (FIX F4) — see the header
+    // THE LOOP BRAKE (G19). ⚠ UNCONDITIONAL: every profile, and every spawn
+    // shape, because a resume re-enters this same assembly point and a bound that
+    // a park could shed would not be one. See SESSION_MAX_TURNS above.
+    maxTurns: SESSION_MAX_TURNS,
   };
   // F2 — THIS RUN'S SLOT KEY onto the dopl entry (X-Dopl-Session-Id), which the server turns into
   // the reserved `metadata.session_id`. `store.slotKey` is the ONE definition of a slot — (channel,
@@ -158,4 +194,4 @@ function resume(spec, _priorHandle) {
   return start(spec);
 }
 
-module.exports = { buildLaunchSpec, buildOptions, start, resume };
+module.exports = { buildLaunchSpec, buildOptions, start, resume, SESSION_MAX_TURNS };

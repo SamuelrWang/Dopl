@@ -71,6 +71,12 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       // carries the fix, which removed the flattening in
       // `main/launch-directive-wire.js › directiveFrom`.
       chain: input.chain,
+      // ⚠ **THE IDEMPOTENCY KEY, AND IT IS THE ONLY REASON A TIMED-OUT LAUNCH IS
+      // RETRYABLE** (2026-09-02, A10/G10). Re-sending it returns the stored
+      // directive — `result.existing` — instead of filing a second row and
+      // starting a second agent on the same work. Absent is the ordinary case and
+      // is the pre-A10 behaviour byte for byte.
+      clientMsgId: input.clientMsgId,
     });
     // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS. Nothing failed: the
     // server looked, the operator's machine is not listening, and NO ROW WAS
