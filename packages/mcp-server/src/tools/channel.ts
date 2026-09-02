@@ -10,18 +10,20 @@
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`     — ref resolution + the ONE neutralizer every
  *                               peer-authored string must pass through
- *   - `channel-ops-read.ts`   — list / read / list_threads / get_thread /
+ *   - `channel-ops-read.ts`   — list / read (a thread-scoped read carries the
+ *                               thread's own metadata header) / list_threads /
  *                               members / read_sessions
  *   - `channel-ops-await.ts`  — await (the only looping op)
  *   - `channel-ops-open.ts`   — open / invite
- *   - `channel-ops-write.ts`  — post (+ `channel-post-notes.ts` /
- *                               `channel-post-linkage.ts` for its result lines)
+ *   - `channel-ops-write.ts`  — post (+ `channel-post-linkage.ts` and
+ *                               `channel-facts.ts` for its result line)
  *   - `channel-ops-threads.ts`— create_thread / set_thread_mode
  *   - `channel-render.ts`     — read renderers + untrusted-content headers,
  *                               shared with the write side
  *
- * ⚠ A channel reaches PEOPLE. There is no agent-handle addressing; the only
- * distinction a post makes is `intent` chat vs. request.
+ * ⚠ A channel reaches PEOPLE. There is no agent-handle addressing, and the only
+ * distinction a post makes is whether it carries `to`: with one it is a REQUEST
+ * that reaches that member's machine, without one it is chat and reaches nobody.
  *
  * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
  * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
@@ -32,7 +34,7 @@
  */
 
 import type { DoplClient } from "@dopl/client";
-import { ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { ok, err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 // The tool's two declared halves: PROSE (what a channel is, THE LAW, what each
 // op does) and published input SHAPE. This file is mechanism only.
 import { CHANNEL_DESCRIPTION } from "./channel-description";
@@ -42,10 +44,9 @@ import { CHANNEL_DESCRIPTION } from "./channel-description";
 // ⚠ THE SIX AGENT-LIFECYCLE OPS, in a sibling — see that module's header for
 // why they are one lane and why its parameter list is two arguments wide.
 import { dispatchAgentOp } from "./channel-dispatch-agents";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { CHANNEL_DOCTRINE, doctrineSection } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import {
-  opGetThread,
   opList,
   opListThreads,
   opMembers,
@@ -58,7 +59,9 @@ import { opAwait } from "./channel-ops-await";
 // an absent ref through it would produce guidance with a hole in it.
 import { opAwaitWorkspace } from "./channel-ops-await-workspace";
 import { opInvite, opOpen } from "./channel-ops-open";
-import { opPost } from "./channel-ops-write";
+// ⚠ G14's cap travels WITH the op it bounds — the seam enforces it, the
+// post lane owns the number and the sentence.
+import { milestoneRefusal, opPost } from "./channel-ops-write";
 import { opCreateThread, opSetThreadMode } from "./channel-ops-threads";
 // AGENT MANAGEMENT (2026-09-01) — the launch mailbox's OTHER three kinds, over
 // the same lane and own-operator only. ⚠ THE POSTURE VERB IS A SEPARATE MODULE
@@ -134,13 +137,30 @@ export function registerChannelTool(
         // for clients that never read resources, so the rules can never be
         // unreachable. It takes no arguments and makes no request.
         case "help":
-          return ok(CHANNEL_DOCTRINE);
+          // ⚠ `section` NARROWS, it never changes what is true: an unknown name
+          // cannot reach here (the schema's enum is built from the same table),
+          // so there is no not-found arm to write and none to get wrong.
+          return ok(
+            args.section === undefined
+              ? CHANNEL_DOCTRINE
+              : doctrineSection(args.section),
+          );
         case "list":
           return opList(client);
+        // ⚠ WHICH ROOM IS READ OFF THE SHAPE, NOT OFF A FLAG (C12,
+        // 2026-09-02). `direct: true` was a third thing to get right beside the
+        // two arguments that already said everything: a 1:1 has a `member` and
+        // no `name`, a named channel has a `name` and no `member`, and the flag
+        // could contradict either. Both together is the one ambiguous call, and
+        // it is REFUSED rather than resolved by precedence — a caller that meant
+        // one of them cannot tell which it got.
         case "open": {
-          if (args.direct) {
-            const miss = missingParams("open", args, ["member"]);
-            if (miss) return miss;
+          if (args.member !== undefined && args.name !== undefined) {
+            return err(
+              'op="open" takes `name` (a named channel) or `member` (a direct 1:1), never both — nothing was opened. Drop `member` to open a channel, or drop `name` to open the DM.',
+            );
+          }
+          if (args.member !== undefined) {
             return opOpen(client, { direct: true, member: args.member });
           }
           const miss = missingParams("open", args, ["name"]);
@@ -160,13 +180,11 @@ export function registerChannelTool(
           const miss = missingParams("post", args, ["channel", "body"]);
           if (miss) return miss;
           return opPost(client, args.channel as string, args.body as string, {
-            kind: args.kind,
             metadata: args.metadata,
             clientMsgId: args.client_msg_id,
             to: args.to,
             summary: args.summary,
             thread: args.thread,
-            intent: args.intent,
             runtime,
           });
         }
@@ -184,6 +202,8 @@ export function registerChannelTool(
             "thread",
           ]);
           if (miss) return miss;
+          const oversize = milestoneRefusal(args.body as string);
+          if (oversize) return oversize;
           return opPost(client, args.channel as string, args.body as string, {
             kind: "task_progress",
             thread: args.thread as string,
@@ -262,16 +282,6 @@ export function registerChannelTool(
           const miss = missingParams("list_threads", args, ["channel"]);
           if (miss) return miss;
           return opListThreads(client, args.channel as string, selfUserId);
-        }
-        case "get_thread": {
-          const miss = missingParams("get_thread", args, ["channel", "thread"]);
-          if (miss) return miss;
-          return opGetThread(
-            client,
-            args.channel as string,
-            args.thread as string,
-            selfUserId,
-          );
         }
         // ⚠ `channel` is an OPTIONAL filter here, hence no missingParams check.
         // Own-scoped in the service; the transport credential IS the caller, so
@@ -369,19 +379,16 @@ export function registerChannelTool(
         case "rename_agent":
         case "set_agent_mode":
           return dispatchAgentOp(args.op, args, client);
-        // ⚠ BOTH FILTERS ARE OPTIONAL, hence no missingParams check. Own-scoped in
-        // the service; the transport credential IS the caller, so no identity is
-        // passed and none could be.
-        // ⚠ THE OUT-OF-BAND SIGNAL. `missingParams` covers only the three that
-        // are unconditional; the RECIPIENT is a choose-exactly-one over three
-        // params, which a required-list cannot express — `opPing` counts them
-        // and names the count it saw, because a caller that sent two cannot
-        // otherwise tell which one would have won.
+        // ⚠ THE OUT-OF-BAND SIGNAL, AND ALL FOUR OF ITS REQUIREMENTS ARE NOW
+        // UNCONDITIONAL — which is the whole of what folding three recipient
+        // params into one bought (C5/F-429). The choose-exactly-one that
+        // `missingParams` could not express is now the shape.
         case "ping": {
           const miss = missingParams("ping", args, [
             "channel",
             "ping_kind",
             "body",
+            "recipient",
           ]);
           if (miss) return miss;
           return opPing(
@@ -389,23 +396,21 @@ export function registerChannelTool(
             args.channel as string,
             args.ping_kind as "done" | "question" | "blocked",
             args.body as string,
-            {
-              to: args.to,
-              toDesktop: args.to_desktop,
-              agentId: args.agent_id,
-              thread: args.thread,
-            },
+            args.recipient as string,
+            args.thread,
           );
         }
         // ⚠ NO REQUIRED PARAMS, hence no missingParams check, and NO recipient
         // argument either: the inbox is the caller's own, fenced at the server.
         // The transport credential IS the caller, so no identity is passed here
         // and none could be.
+        // ⚠ **AND NO `since` (C13, 2026-09-02).** A ping seq is a second cursor
+        // space, and one `since` over two of them reads a plausible WRONG page
+        // instead of erroring. The inbox is a bounded list of signals rather
+        // than a transcript, so the newest page answers it; that leaves exactly
+        // one cursor space on this tool and nothing to cross into.
         case "pings":
-          return opReadPings(client, {
-            since: args.since,
-            limit: args.limit,
-          });
+          return opReadPings(client, { limit: args.limit });
         // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by
         // the same route and are deliberately NOT routed here (Samuel's ruling
         // Q12 (b); F-346 holds the rename hole open). ⚠ `info_card` OMITTED is

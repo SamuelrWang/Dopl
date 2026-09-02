@@ -92,7 +92,13 @@ describe("the describes that make claims this schema cannot enforce", () => {
     // is "its own" will collide with another member's on a thread open; one
     // told it is channel-wide will pointlessly avoid a key that is safe.
     expect(d("client_msg_id")).toContain("PER-AUTHOR");
-    expect(d("client_msg_id")).toContain("both messages post");
+    expect(d("client_msg_id")).toContain("PER-AUTHOR");
+    // ⚠ **AND IT NAMES THE TWO AGENT LANES SINCE A10 (2026-09-02)** — the same
+    // key now makes a timed-out `launch_agent` / `direct_agent` safe to retry,
+    // which is the code behind a rule the doctrine used to state as a
+    // prohibition ("do NOT issue it again").
+    expect(d("client_msg_id")).toContain('op="launch_agent"');
+    expect(d("client_msg_id")).toContain('op="direct_agent"');
     // …and the create_thread half, which is the one that can hand you somebody
     // else's thread (`service-tasks.ts › convergeOnThread` posts NOTHING for a
     // non-creator, so the body silently goes nowhere).
@@ -144,11 +150,14 @@ describe("the describes that make claims this schema cannot enforce", () => {
     expect(CHANNEL_DOCTRINE).not.toContain("no request is filed");
   });
 
-  it("thread: get_thread's own param says metadata, not transcript", () => {
-    // Stated in BOTH places on purpose (INVARIANTS §10 — a capability taught
-    // only in the description is taught weakly): the op bullet is read once at
-    // connection, the param prose is beside the argument the agent is filling in.
-    expect(d("thread")).toContain("METADATA ONLY");
-    expect(d("thread")).toContain('use op="read" with thread=<id>');
+  it("thread: one op answers the noun, so the param has no split to explain", () => {
+    // ⚠ **C15 (2026-09-02).** This param used to spend its longest clause
+    // telling a caller that `op="get_thread"` returned METADATA ONLY and that
+    // the transcript was a DIFFERENT op — 200 characters existing only because
+    // two ops answered "what is this exchange". `read(thread=)` renders the card
+    // and the messages, so the disambiguation is deleted rather than reworded.
+    expect(d("thread")).toContain("its metadata header plus only that exchange");
+    expect(d("thread")).not.toContain("get_thread");
+    expect(d("thread")).not.toContain("METADATA ONLY");
   });
 });

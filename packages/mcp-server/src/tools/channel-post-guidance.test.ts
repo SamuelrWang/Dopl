@@ -26,6 +26,7 @@ import { opPost } from "./channel-ops-write";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { opCreateThread } from "./channel-ops-threads";
 import { registerChannelTool } from "./channel";
+import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import type { RegisterTool } from "./respond";
 
 const CHANNEL = { id: "chan-1", slug: "eng", name: "eng", visibility: "private" };
@@ -171,14 +172,15 @@ describe("Q9 · the MCP schema mirrors the routes' caps", () => {
   });
 
 
-  it("`intent` publishes exactly the two the route's union has", () => {
-    const s = channelSchema();
-    const post = { op: "post", channel: "eng", body: "b" };
-    expect(s.safeParse({ ...post, intent: "chat" }).success).toBe(true);
-    expect(s.safeParse({ ...post, intent: "request" }).success).toBe(true);
-    // ⚠ Not free text — a third value is a caller believing in a mode that does
-    // not exist, cheaper to refuse here than as an opaque VALIDATION_FAILED.
-    expect(s.safeParse({ ...post, intent: "notify" }).success).toBe(false);
+  /**
+   * ⚠ **`intent` PUBLISHED THE ROUTE'S TWO-VALUE UNION UNTIL 2026-09-02 (C12);
+   * THE PARAM IS NOW GONE.** It said what `to` already said, and the one call
+   * that distinguished them — `intent="chat"` beside a `to` — was a refused
+   * CONTRADICTION whose own error comment called the arm unreachable. Chat is
+   * exactly "no `to`", so the shape carries the whole of addressing.
+   */
+  it("`intent` is not a param, so the contradiction is not expressible", () => {
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("intent");
   });
 });
 
@@ -302,11 +304,11 @@ describe("Q13 · the not-threaded note, and the round-trip it cost", () => {
 /**
  * A post that landed WHERE `taskId` says, with `mentions` as the SERVER stamped
  * them — the point of `tags=` is that it reads the server's resolution, not the
- * request. ⚠ ONE helper for both blocks below (`intent` is all the chat cases
- * vary): two copies of a stub is how two blocks stop testing the same op.
+ * request. ⚠ ONE helper for both blocks below: two copies of a stub is how two
+ * blocks stop testing the same op.
  */
 async function resultOf(
-  body: string, taskId?: string, mentions?: unknown, intent?: "chat",
+  body: string, taskId?: string, mentions?: unknown,
 ): Promise<string> {
   const client = stubClient({
     postChannelMessage: vi.fn(async () => ({
@@ -319,7 +321,6 @@ async function resultOf(
   });
   const res = await opPost(client, "eng", body, {
     ...(taskId ? { thread: taskId } : {}),
-    ...(intent ? { intent } : {}),
   });
   expect(res.isError).toBeFalsy();
   return res.content[0].text;
@@ -429,39 +430,40 @@ describe("P11 · what a post's result teaches about what to do NEXT", () => {
 /**
  * WHAT A CHAT POST'S RESULT CLAIMS ABOUT WHO GOT IT (2026-08-22).
  *
- * ⚠ The `intent:"chat"` branch of `channel-post-notes.ts` returned EARLY and
- * never read `landedThread`, so a chat post threaded into a live exchange was
+ * ⚠ The `intent:"chat"` branch of the since-deleted `channel-post-notes` module
+ * returned EARLY and never read `landedThread`, so a threaded chat post was
  * told "no agent was put in front of it" — while `channel-addressing.ts` fact 3
  * says a uuid thread tag is handed straight into the counterparty's running turn,
- * addressing unread. `intent` governs ADDRESSING only.
+ * addressing unread.
+ *
+ * ⚠ **A CHAT POST IS NOW SIMPLY A POST WITH NO `to` (C12, 2026-09-02)**, and
+ * `intent=` left the result line with the param — it could only restate
+ * `addressed=no`, and two fields for one fact is what let them disagree.
  */
 describe("chat + a thread tag — the branch that never read landedThread", () => {
   const THREAD = "44444444-4444-4444-4444-444444444444";
   const LEGACY = "task-dba90694-de4f-4950-83a9-f2d890c9ff3f-345";
 
-  const chatResult = (taskId?: string) =>
-    resultOf("thinking out loud", taskId, undefined, "chat");
+  const chatResult = (taskId?: string) => resultOf("thinking out loud", taskId);
 
   it("an UNTHREADED chat post reports BOTH halves — chat, and room", async () => {
     // CONTROL: the original claim is right for the case it was written for and
-    // must not be talked into becoming a request. Two orthogonal tokens say it,
-    // which is what stops them being fused again — and `intent=chat` beside
-    // `addressed=no` is what keeps a deliberate chat from reading as a forgotten
-    // `to`.
+    // must not be talked into becoming a request. ⚠ `addressed=no` is now the
+    // whole of it — with `intent` deleted, "chat" IS "no `to`", so a deliberate
+    // chat and a forgotten `to` are the same call and the surface no longer
+    // offers a second field to claim otherwise.
     const text = await chatResult();
-    expect(text).toContain("intent=chat");
     expect(text).toContain("landed=room");
     expect(text).toContain("addressed=no");
     expect(text).not.toContain("no agent was put in front of it");
-    expect(CHANNEL_DOCTRINE).toContain("it addresses nobody and starts nobody");
+    expect(CHANNEL_DOCTRINE).toContain("addressing nobody and starting nobody");
   });
 
   it("a THREADED chat post is NOT reported as having reached nobody", async () => {
-    // ⚠ `intent` governs ADDRESSING only and `landed` is read off the STORED
-    // message, so the two cannot collapse into one verdict the way the
+    // ⚠ `landed` is read off the STORED message and `addressed` off what the
+    // server was given, so the two cannot collapse into one verdict the way the
     // early-returning `intent:"chat"` branch did.
     const text = await chatResult(THREAD);
-    expect(text).toContain("intent=chat");
     expect(text).toContain("landed=thread");
     expect(text).not.toContain("no agent was put in front of it");
     expect(text).not.toContain("CHAT, BUT THREADED");
@@ -483,7 +485,6 @@ describe("chat + a thread tag — the branch that never read landedThread", () =
     // uuid id reaches a session. A `task-…` label routes nothing, and `adhoc`
     // says so without guessing at the remedy.
     const text = await chatResult(LEGACY);
-    expect(text).toContain("intent=chat");
     expect(text).toContain("landed=adhoc");
     expect(text).not.toContain("landed=thread");
   });

@@ -6,7 +6,7 @@ import { neutralizeInline } from "./narration";
 // ⚠ THE SHARED STRIPPER — it moved to its own leaf module on 2026-09-01 when a
 // fourth op needed it. ONE definition: a copy drifts, and the lane that drifts
 // sends `@agent-` to a column CHECK that refuses it.
-import { bareAgentId } from "./channel-agent-id";
+import { bareAgentId, isAgentId } from "./channel-agent-id";
 import { classifyBadRequest, isBadRequest, serverDetail } from "./channel-errors";
 import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 
@@ -20,10 +20,18 @@ import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
  * instrument at all — an unaddressed post starts nobody (the loop brake), and an
  * addressed one shouts at a whole channel and triggers a machine.
  *
- * 🔒 **THERE IS NO ARGUMENT FOR WHOSE MACHINE.** The two self-scoped recipient
- * forms resolve to the authenticated caller's own operator, server-side, and that
+ * 🔒 **THERE IS NO ARGUMENT FOR WHOSE MACHINE.** The two self-scoped destinations
+ * resolve to the authenticated caller's own operator, server-side, and that
  * absence is the whole loop brake on this lane: you cannot ping another member's
  * agent because there is nothing to say it with. Asserted in `channel-ping.test.ts`.
+ *
+ * ⚠ **ONE `recipient` PARAM SINCE 2026-09-02 (C5/F-429).** It was three mutually
+ * exclusive ones — `to`, `to_desktop`, `agent_id` — which this module had to
+ * COUNT at runtime and refuse on zero or two, with a sentence naming the count
+ * it saw. A field that can carry one destination cannot be sent two, so both
+ * refusals are gone rather than reworded, and `missingParams` at the seam covers
+ * the zero case with every other required argument. What replaces them is
+ * {@link classifyRecipient}, which is a total function over one string.
  */
 
 /** ⚠ MIRRORS `MAX_PING_BODY` in `src/features/channels/constants.ts` and the
@@ -47,36 +55,33 @@ const NEXT_STEP: Record<string, string> = {
     'It is in that person\'s "Needs you" inbox. ⚠ Unlike an addressed post it did NOT trigger their machine and started no agent — it waits to be read, which is the point of sending one.',
 };
 
-/** ⚠ THE ONE PLACE THE THREE RECIPIENT FORMS ARE COUNTED. Zero is a signal with
- *  nowhere to go and two would make the server pick — and a silently-dropped
- *  address is the invisible-delivery failure this surface refuses everywhere.
- *  The count is IN the sentence: a caller that sent two cannot otherwise tell
- *  which one would have been honoured. */
-function recipientOr(opts: {
-  to?: string;
-  toDesktop?: boolean;
-  agentId?: string;
-}): { to?: string; toDesktop?: true; agentId?: string } | ToolResponse {
-  const given = [
-    opts.to !== undefined && opts.to !== "",
-    opts.toDesktop === true,
-    opts.agentId !== undefined && opts.agentId !== "",
-  ].filter(Boolean).length;
-  if (given === 0) {
-    return err(
-      'op="ping" needs exactly one recipient and got none. Pick the one that matches who has to act: to_desktop=true reaches YOUR OWN operator\'s external session, agent_id="<handle>" reaches one of your own operator\'s running agents, to="<member>" reaches another person on this channel.',
-    );
-  }
-  if (given > 1) {
-    return err(
-      `op="ping" takes exactly one recipient and got ${given}. Send to_desktop, agent_id or to — never more than one, because there is no rule for which of them would win.`,
-    );
-  }
-  if (opts.toDesktop === true) return { toDesktop: true };
-  if (opts.agentId !== undefined && opts.agentId !== "") {
-    return { agentId: bareAgentId(opts.agentId) };
-  }
-  return { to: opts.to };
+/** The literal that means "my own operator's external session" — the one
+ *  destination that is a WORD rather than an identifier, because there is no id
+ *  for it: the server resolves it to the authenticated caller. */
+const DESKTOP = "desktop";
+
+/**
+ * ONE STRING → THE WIRE'S OWN THREE KEYS. ⚠ **TOTAL, AND UNAMBIGUOUS BY
+ * CONSTRUCTION** — the three forms cannot overlap, so this needs no precedence
+ * rule and has no refusal arm:
+ *   - the exact word `desktop`;
+ *   - `@agent-<id>`, or the bare id `bareAgentId` leaves behind;
+ *   - anything else, which is a member ref — an email or a user id — and is
+ *     resolved by the SERVER against the channel roster, so a value that names
+ *     nobody comes back as `addressee_not_member` rather than as a guess.
+ *
+ * ⚠ THE HANDLE IS STRIPPED BEFORE IT IS TESTED, because `read_sessions` prints
+ * `@agent-<id>` and that is what a model copies — `channel-agent-id.ts` owns
+ * both halves, and its header carries why the three forms cannot collide.
+ */
+function classifyRecipient(
+  raw: string,
+): { to?: string; toDesktop?: true; agentId?: string } {
+  const value = raw.trim();
+  if (value.toLowerCase() === DESKTOP) return { toDesktop: true };
+  const bare = bareAgentId(value);
+  if (isAgentId(bare)) return { agentId: bare };
+  return { to: value };
 }
 
 /**
@@ -91,15 +96,16 @@ export async function opPing(
   channelRef: string,
   kind: PingKind,
   body: string,
-  opts: { to?: string; toDesktop?: boolean; agentId?: string; thread?: string },
+  /** WHO has to act — `"desktop"`, `@agent-<id>`, or a member ref. */
+  recipientRef: string,
+  thread?: string,
 ): Promise<ToolResponse> {
   if (body.length > MAX_PING_BODY) {
     return err(
       `A ping body is capped at ${MAX_PING_BODY} characters and yours is ${body.length}. That bound is the point of the op: a ping is a SIGNAL, and the thread you point at is where the report goes. Post the detail with op="post" (thread=<id>), then ping one line pointing at it.`,
     );
   }
-  const recipient = recipientOr(opts);
-  if ("content" in recipient) return recipient;
+  const recipient = classifyRecipient(recipientRef);
 
   // ⚠ PRE-RESOLVED, like the direct and launch ops and unlike the hot read
   // paths: this op is cold — one call, no hold — and the result names the
@@ -114,7 +120,7 @@ export async function opPing(
       channel: channel.id,
       kind,
       body,
-      ...(opts.thread === undefined ? {} : { threadId: opts.thread }),
+      ...(thread === undefined ? {} : { threadId: thread }),
       ...recipient,
     });
   } catch (e) {
@@ -125,7 +131,7 @@ export async function opPing(
       // server's own neutralized detail rather than to a confident wrong reason.
       if (classifyBadRequest(e) === "addressee_not_member") {
         return err(
-          `Nobody by that reference is on ${label}. A ping's to= names a MEMBER of the channel — check dopl_channel(op="members", channel="${channelRef}") — or, if you meant your own operator's side, send to_desktop=true instead.`,
+          `Nobody by that reference is on ${label}. A ping's to= names a MEMBER of the channel — check dopl_channel(op="members", channel="${channelRef}") — or, if you meant your own operator's side, send recipient="desktop" instead.`,
         );
       }
       return err(`That ping was refused${serverDetail(e)}`);
@@ -171,19 +177,17 @@ function formatPing(p: ChannelPing): string {
  */
 export async function opReadPings(
   client: DoplClient,
-  opts: { since?: number; limit?: number } = {},
+  opts: { limit?: number } = {},
 ): Promise<ToolResponse> {
+  // ⚠ **NO CURSOR, AND THAT IS C13's FIX RATHER THAN A MISSING FEATURE**
+  // (2026-09-02). A ping seq was a SECOND space behind the one `since` param
+  // that also carries the message cursor, and crossing them read a plausible
+  // WRONG page instead of erroring. An inbox is a bounded list of signals, not a
+  // transcript to replay, so the newest page answers it — and one cursor space
+  // on the tool means there is nothing left to cross into.
   const pings = await client.listPings({
-    ...(opts.since === undefined ? {} : { since: opts.since }),
     ...(opts.limit === undefined ? {} : { limit: opts.limit }),
   });
-
-  const cursorNote =
-    pings.length === 0
-      ? // ⚠ AN EMPTY PAGE MUST NOT MOVE THE CURSOR. Re-arming on a fabricated
-        // seq is how a reader silently skips the next arrival.
-        `Nothing new${opts.since === undefined ? "" : ` after ping seq ${opts.since}`}. Re-read with the SAME since.`
-      : `Next: read again with since=${pings[pings.length - 1].seq}.`;
 
   return ok(
     [
@@ -193,8 +197,7 @@ export async function opReadPings(
       `${UNTRUSTED_BODY_HEADER}\n`,
       ...(pings.length === 0 ? [] : pings.map(formatPing)),
       "",
-      cursorNote,
-      '⚠ These seqs are a PING cursor, separate from message seqs. A ping is in no transcript, so op="read" and op="await" will never show you one — this op is the only place they exist.',
+      '⚠ A ping is in NO transcript: op="read" and op="await" will never show you one, and this op is the only place they exist. It hands back the newest page every time and takes no cursor, so a signal you have already acted on can appear again — the seq is how you tell.',
     ].join("\n"),
   );
 }

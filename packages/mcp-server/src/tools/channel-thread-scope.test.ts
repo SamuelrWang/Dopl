@@ -24,9 +24,25 @@ const CHANNEL = {
   visibility: "private",
 };
 
+/** The thread row a scoped read now renders above the exchange (C15). */
+const THREAD = {
+  id: "thread-1",
+  channelId: "chan-1",
+  title: "Ship the migration",
+  mode: "interactive",
+  createdBy: "u-peer",
+  targetUserId: "u-me",
+  createdAt: "2026-07-31T00:00:00Z",
+  updatedAt: "2026-07-31T00:00:00Z",
+};
+
 function stubClient(overrides: Record<string, unknown>): DoplClient {
   return {
     listChannels: vi.fn(async () => [CHANNEL]),
+    // ⚠ `op="get_thread"` folded into this op on 2026-09-02 (C15), so a
+    // thread-scoped read fetches the card as well as the transcript.
+    getChannelThread: vi.fn(async () => THREAD),
+    listChannelMembers: vi.fn(async () => []),
     ...overrides,
   } as unknown as DoplClient;
 }
@@ -180,8 +196,11 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     expect(since).toContain("drop `thread`");
   });
 
-  it("costs no extra round-trip — the channel head is never fetched", async () => {
-    // With no number to offer there is no extra read: one call, one query.
+  it("never re-reads the CHANNEL HEAD — there is still no number to offer", async () => {
+    // ⚠ The extra call a scoped read now makes is the THREAD CARD (C15), not a
+    // second transcript read to find the channel's own highest seq. That second
+    // read is what produced the cursor this op deliberately does not print, and
+    // it must not come back through the fold.
     const readChannelMessages = vi.fn<ReadSpy>();
     readChannelMessages.mockResolvedValue([msg(41, "thread-1"), msg(44, "thread-1")]);
     const client = stubClient({ readChannelMessages });
@@ -189,6 +208,55 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     await opRead(client, "general", undefined, undefined, null, "thread-1");
 
     expect(readChannelMessages).toHaveBeenCalledTimes(1);
+    expect(client.getChannelThread).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * ⚠ **THE FOLD (C15), AND ITS FAIL-SOFT HALF.** `op="get_thread"` rendered a
+   * metadata card and no bodies; `read(thread=)` rendered bodies and no card.
+   * Two ops for one noun, with 200 characters of published prose keeping them
+   * apart. One op renders both — and a tag with no thread ROW behind it (a
+   * legacy `task-<channel>-<seq>` id) still gets its transcript, because
+   * "this names no thread row" is a fact about ad-hoc exchanges rather than an
+   * error.
+   */
+  it("renders the thread's own card ABOVE the bodies it describes", async () => {
+    const client = stubClient({
+      readChannelMessages: vi.fn(async () => [msg(41, "thread-1")]),
+    });
+
+    const text = (await opRead(client, "general", undefined, undefined, null, "thread-1"))
+      .content[0].text;
+
+    expect(text).toContain("Ship the migration");
+    expect(text).toContain("- mode: interactive");
+    expect(text.indexOf("Ship the migration")).toBeLessThan(text.indexOf("body 41"));
+  });
+
+  it("an AD-HOC tag with no thread row still returns the exchange", async () => {
+    const client = stubClient({
+      readChannelMessages: vi.fn(async () => [msg(41, "task-chan-1-7")]),
+      getChannelThread: vi.fn(async () => {
+        throw Object.assign(new Error("not found"), { status: 404 });
+      }),
+    });
+
+    const text = (
+      await opRead(client, "general", undefined, undefined, null, "task-chan-1-7")
+    ).content[0].text;
+
+    expect(text).toContain("body 41");
+    expect(text).toContain("ONE exchange, not the whole channel");
+  });
+
+  it("an UNSCOPED read fetches no card at all — that is the poll-loop path", async () => {
+    const client = stubClient({
+      readChannelMessages: vi.fn(async () => [msg(44)]),
+    });
+
+    await opRead(client, "general");
+
+    expect(client.getChannelThread).not.toHaveBeenCalled();
   });
 
   it("a CHANNEL-wide read pays for no second round-trip", async () => {

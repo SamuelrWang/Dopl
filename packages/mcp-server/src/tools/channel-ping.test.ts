@@ -90,10 +90,29 @@ describe("🔒 there is no argument for WHOSE machine, and none may appear", () 
       "user_id",
       "sender",
       "sender_agent_id",
-      "recipient",
     ]) {
       expect(CHANNEL_INPUT_SHAPE, key).not.toHaveProperty(key);
     }
+  });
+
+  /**
+   * ⚠ **`recipient` WAS ON THE LIST ABOVE UNTIL 2026-09-02, AND THE GUARD WAS
+   * RIGHT TO BAN IT THEN** (F-429). The reason it gave — *"a param an MCP client
+   * can see is a param a model will try, and a silently-dropped address is the
+   * invisible-delivery failure the addressing contract exists to prevent"* — was
+   * about a FOURTH spelling landing beside `to`, `to_desktop` and `agent_id`
+   * while all three stayed declared. C5 landed it as a DELETION instead: three
+   * spellings out, one in, in the same change.
+   *
+   * ⚠ **SO THE BAN BECAME THE PROPERTY IT WAS STANDING IN FOR** — exactly one
+   * recipient param on this op, and nothing on the shape that could name another
+   * member's machine. The three names below may never come back.
+   */
+  it("takes EXACTLY ONE recipient param, and the three it replaced are gone", () => {
+    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("recipient");
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("to_desktop");
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("ping_to");
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("ping_agent_id");
   });
 
   it("still declares no `to_agent`, which is what this lane could have re-introduced", () => {
@@ -108,11 +127,11 @@ describe("🔒 there is no argument for WHOSE machine, and none may appear", () 
     const client = pingStub();
     await run(client, {
       ...SEND,
-      to_desktop: true,
+      recipient: "desktop",
       // Everything a caller might try to point this at someone else's machine.
       operator: "u2",
       user_id: "u2",
-      recipient: "u2",
+      sender_agent_id: "k3wpf7c5",
     });
     const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
     expect(Object.keys(create.mock.calls[0][0]).sort()).toEqual([
@@ -124,61 +143,82 @@ describe("🔒 there is no argument for WHOSE machine, and none may appear", () 
   });
 });
 
-describe("EXACTLY ONE RECIPIENT", () => {
-  it("refuses zero and names all three spellings", async () => {
+describe("EXACTLY ONE RECIPIENT — now a shape rather than a count", () => {
+  /**
+   * ⚠ **THE RUNTIME COUNT IS DELETED, NOT RELAXED.** `recipientOr` counted three
+   * mutually exclusive params and wrote two refusals — one naming all three
+   * spellings, one naming the count it saw. Neither case is expressible now, so
+   * the zero case is `missingParams` like every other required argument and the
+   * two case does not exist.
+   */
+  it("names `recipient` when it is missing, like any other required param", async () => {
     const client = pingStub();
     const out = await run(client, SEND);
-    expect(out).toMatch(/exactly one recipient and got none/);
-    expect(out).toContain("to_desktop");
-    expect(out).toContain("agent_id");
+    expect(out).toContain("recipient");
     expect(client.createPing).not.toHaveBeenCalled();
   });
 
-  it("refuses two and NAMES THE COUNT IT SAW", async () => {
+  it("cannot be sent two destinations at all", async () => {
+    // The old two-recipient call, as a caller would still write it: the extra
+    // keys are not on the shape, so nothing reaches the wire but `recipient`.
     const client = pingStub();
-    const out = await run(client, { ...SEND, to_desktop: true, to: "u2" });
-    expect(out).toMatch(/got 2\b/);
-    expect(client.createPing).not.toHaveBeenCalled();
-  });
-
-  it("refuses three", async () => {
-    const client = pingStub();
-    const out = await run(client, {
-      ...SEND,
-      to_desktop: true,
-      to: "u2",
-      agent_id: "k3wpf7c5",
-    });
-    expect(out).toMatch(/got 3\b/);
+    await run(client, { ...SEND, recipient: "desktop", to: "u2" });
+    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
+    expect(create.mock.calls[0][0]).toMatchObject({ toDesktop: true });
+    expect(create.mock.calls[0][0]).not.toHaveProperty("to");
   });
 });
 
-describe("the three recipient forms reach the wire", () => {
-  it("to_desktop", async () => {
+describe("one string, the wire's own three keys", () => {
+  it('recipient="desktop"', async () => {
     const client = pingStub();
-    await run(client, { ...SEND, to_desktop: true });
+    await run(client, { ...SEND, recipient: "desktop" });
     const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
     expect(create.mock.calls[0][0]).toMatchObject({ toDesktop: true });
   });
 
-  it("to=<member>", async () => {
+  it("a member ref — anything that is neither of the other two", async () => {
     const client = pingStub();
-    await run(client, { ...SEND, to: "dana@example.com" });
+    await run(client, { ...SEND, recipient: "dana@example.com" });
     const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
     expect(create.mock.calls[0][0]).toMatchObject({ to: "dana@example.com" });
   });
 
-  it("agent_id, and it STRIPS the printed handle rather than refusing it", async () => {
+  it("the printed `@agent-<id>` handle, STRIPPED rather than refused", async () => {
     // ⚠ `read_sessions` prints `@agent-<id>`, so that is what a model copies.
     const client = pingStub();
-    await run(client, { ...SEND, agent_id: "@agent-k3wpf7c5" });
+    await run(client, { ...SEND, recipient: "@agent-k3wpf7c5" });
     const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
     expect(create.mock.calls[0][0]).toMatchObject({ agentId: "k3wpf7c5" });
   });
 
+  it("the bare eight-character instance id, which is the same agent", async () => {
+    const client = pingStub();
+    await run(client, { ...SEND, recipient: "k3wpf7c5" });
+    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
+    expect(create.mock.calls[0][0]).toMatchObject({ agentId: "k3wpf7c5" });
+  });
+
+  /**
+   * ⚠ THE THREE FORMS CANNOT OVERLAP, WHICH IS WHY THERE IS NO PRECEDENCE RULE.
+   * A user id is a 36-character uuid and an email carries an `@` that is never
+   * in first position — neither can match the anchored agent-id shape.
+   */
+  it("a user id is a MEMBER, never an agent instance", async () => {
+    const client = pingStub();
+    await run(client, {
+      ...SEND,
+      recipient: "9f1d0f0a-1111-2222-3333-444455556666",
+    });
+    const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
+    expect(create.mock.calls[0][0]).toMatchObject({
+      to: "9f1d0f0a-1111-2222-3333-444455556666",
+    });
+  });
+
   it("carries the thread through when one is named", async () => {
     const client = pingStub();
-    await run(client, { ...SEND, to_desktop: true, thread: "t-1" });
+    await run(client, { ...SEND, recipient: "desktop", thread: "t-1" });
     const create = client.createPing as unknown as ReturnType<typeof vi.fn>;
     expect(create.mock.calls[0][0]).toMatchObject({ threadId: "t-1" });
   });
@@ -189,7 +229,7 @@ describe("the body cap is refused BEFORE any round trip", () => {
     const client = pingStub();
     const out = await run(client, {
       ...SEND,
-      to_desktop: true,
+      recipient: "desktop",
       body: "x".repeat(601),
     });
     expect(out).toContain("600");
@@ -204,24 +244,24 @@ describe("the body cap is refused BEFORE any round trip", () => {
 
 describe("the result teaches what a ping IS NOT", () => {
   it("says it is in no transcript and that nothing replies", async () => {
-    const out = await run(pingStub(), { ...SEND, to_desktop: true });
+    const out = await run(pingStub(), { ...SEND, recipient: "desktop" });
     expect(out).toMatch(/not a message/i);
     expect(out).toMatch(/await/);
   });
 
   it("warns that the ping seq is not a message seq", async () => {
-    const out = await run(pingStub(), { ...SEND, to_desktop: true });
+    const out = await run(pingStub(), { ...SEND, recipient: "desktop" });
     expect(out).toMatch(/not a message seq/i);
   });
 
   it("says what happens NEXT, per recipient form", async () => {
-    const desktop = await run(pingStub(), { ...SEND, to_desktop: true });
+    const desktop = await run(pingStub(), { ...SEND, recipient: "desktop" });
     expect(desktop).toMatch(/external session/i);
 
     const agentPing = { ...PING, recipientKind: "agent" as const, recipientAgentId: "k3wpf7c5" };
     const woke = await run(
       pingStub({ createPing: vi.fn(async () => agentPing) }),
-      { ...SEND, agent_id: "k3wpf7c5" },
+      { ...SEND, recipient: "k3wpf7c5" },
     );
     // ⚠ It must not PROMISE a wake — the machine decides, and a dead session is
     // an honest outcome rather than a failure.
@@ -230,7 +270,7 @@ describe("the result teaches what a ping IS NOT", () => {
     const memberPing = { ...PING, recipientKind: "member" as const, recipientUserId: "u2" };
     const filed = await run(
       pingStub({ createPing: vi.fn(async () => memberPing) }),
-      { ...SEND, to: "u2" },
+      { ...SEND, recipient: "u2" },
     );
     expect(filed).toMatch(/did NOT trigger their machine/);
   });
@@ -253,40 +293,37 @@ describe('op="pings" — the inbox', () => {
     expect(out).toContain("@agent-k3wpf7c5");
   });
 
-  it("hands back the cursor to re-arm on", async () => {
-    const out = await run(pingStub(), { op: "pings" });
-    expect(out).toContain("since=12");
-  });
-
-  it("does NOT move the cursor on an empty page", async () => {
-    // ⚠ Re-arming on a fabricated seq is how a reader silently skips the next
-    // arrival — the one failure an inbox must never have.
-    const out = await run(pingStub({ listPings: vi.fn(async () => []) }), {
-      op: "pings",
-      since: 7,
-    });
-    expect(out).toMatch(/SAME since/);
-    expect(out).not.toContain("since=");
-  });
-
-  it("passes the caller's filters and NO identity — there is none to pass", async () => {
+  /**
+   * ⚠ **THE INBOX HAS NO CURSOR, AND THAT IS C13's FIX** (2026-09-02). A ping seq
+   * was a SECOND cursor space behind the one `since` param that also carries the
+   * message cursor, and crossing them read a plausible WRONG page instead of
+   * erroring. The remedy is one space, not a prefix: `since` is the message seq
+   * and nothing else, and this op hands back the newest page.
+   */
+  it("takes NO cursor — `since` never reaches the ping lane", async () => {
     const client = pingStub();
     await run(client, { op: "pings", since: 4, limit: 5 });
     const list = client.listPings as unknown as ReturnType<typeof vi.fn>;
-    expect(list.mock.calls[0][0]).toEqual({ since: 4, limit: 5 });
+    expect(list.mock.calls[0][0]).toEqual({ limit: 5 });
   });
 
-  it("names the two cursor spaces as separate", async () => {
+  it("says the page is the newest one and that a seq is how you dedupe", async () => {
     const out = await run(pingStub(), { op: "pings" });
-    expect(out).toMatch(/separate from message seqs/i);
+    expect(out).toMatch(/newest page/i);
+    expect(out).not.toMatch(/since=/);
+  });
+
+  it("still says a ping is in no transcript, which is the other half", async () => {
+    const out = await run(pingStub(), { op: "pings" });
+    expect(out).toMatch(/in NO transcript/i);
   });
 });
 
 describe("required params are named before anything runs", () => {
   it.each([
-    ["channel", { op: "ping", ping_kind: "done", body: "b", to_desktop: true }],
-    ["ping_kind", { op: "ping", channel: "build", body: "b", to_desktop: true }],
-    ["body", { op: "ping", channel: "build", ping_kind: "done", to_desktop: true }],
+    ["channel", { op: "ping", ping_kind: "done", body: "b", recipient: "desktop" }],
+    ["ping_kind", { op: "ping", channel: "build", body: "b", recipient: "desktop" }],
+    ["body", { op: "ping", channel: "build", ping_kind: "done", recipient: "desktop" }],
   ])("missing %s", async (name, args) => {
     const client = pingStub();
     const out = await run(client, args);

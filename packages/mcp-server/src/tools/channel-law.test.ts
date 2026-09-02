@@ -31,7 +31,7 @@ import { CHANNEL_DESCRIPTION, DESCRIPTION_MAX_CHARS, HOME_CHANNEL_ADDRESSING } f
 // silently widen the slice until the caps stopped biting.
 import { CHANNEL_DOCTRINE, CHANNEL_LAW, DOCTRINE_URI } from "./channel-doctrine";
 // ⚠ SOME OP PROSE LANDED ON THE ARGUMENT THAT CARRIES IT rather than in the
-// doctrine — `thread` for what get_thread returns, `name` for what a rename is.
+// doctrine — `thread` for what a scoped read returns, `name` for a rename.
 // Still SHIPPED text a client reads, so those pins re-point here.
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 // ⚠ THE BANNED SET AND THE SOURCE-WIDE SCAN THAT WALKS FOR IT LEFT THIS FILE ON
@@ -105,11 +105,11 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
   });
 
   it("says a message is CHAT or REQUEST, and that chat addresses nobody", () => {
-    // `intent` (src/features/channels/schema.ts): `chat` skips the DM
-    // auto-address, so humans can talk in a DM without poking the other machine.
+    // ⚠ C12 (2026-09-02): `intent` is deleted, so chat is exactly "no `to`" —
+    // one field carries the whole of addressing and the two cannot contradict.
     expect(CHANNEL_LAW).toContain("A MESSAGE IS CHAT OR REQUEST");
     expect(CHANNEL_LAW).toContain(
-      'intent="chat" is people talking: it addresses nobody and starts nobody',
+      "No `to` is CHAT: people talking, addressing nobody and starting nobody",
     );
   });
 
@@ -397,18 +397,16 @@ describe("what the law and the ops around it may NOT say", () => {
     );
   });
 
-  it("says what `get_thread` RETURNS, and that it is not a transcript", () => {
-    // ⚠ 2026-08-24. The bullet listed the fields it renders and then spent its
-    // remaining sentence on the lifecycle state it does NOT report — so an agent
-    // scanning for "how do I look at this thread" read an op that names the
-    // thread it wants and called it. It answers metadata; the messages are
-    // op="read" with `thread`. ⚠ **RE-POINTED TO THE ARGUMENT THAT CARRIES IT**
-    // (T82): the op bullet is gone from the description and the same two halves
-    // are on `thread`'s own `.describe()`, which a client reads at the moment it
-    // decides what to pass — closer to the decision than the bullet ever was.
-    expect(ARG_PROSE).toContain("METADATA ONLY");
-    expect(ARG_PROSE).toContain("NO message bodies");
-    expect(ARG_PROSE).toContain('use op="read" with thread=<id>');
+  it("says what a THREAD-SCOPED read returns — the card AND the exchange", () => {
+    // ⚠ C15 (2026-09-02): `get_thread` is FOLDED INTO `read(thread=)`. Two ops
+    // answered one noun, and 200 characters of published prose existed only to
+    // say the first returned no bodies — the exact sentence an agent scanning
+    // for "how do I look at this thread" had to read to avoid the wrong call.
+    // One op renders both halves, so the disambiguation is deleted rather than
+    // reworded, and the op name may never come back (`REMOVED_VOCABULARY`).
+    expect(ARG_PROSE).toContain("its metadata header plus only that exchange");
+    expect(ARG_PROSE).not.toContain("METADATA ONLY");
+    expect(ARG_PROSE).not.toContain("get_thread");
     // The older half must survive the addition: a thread has no lifecycle state,
     // so this is not a way to learn whether an exchange is over either. ⚠ That
     // half is doctrine now — it is a fact about THREADS, not about one op.
@@ -487,7 +485,6 @@ describe("the removed ops are absent from the published op set", () => {
       "await",
       "members",
       "list_threads",
-      "get_thread",
       "create_thread",
       "set_thread_mode",
     ]) {

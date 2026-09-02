@@ -45,7 +45,12 @@ import { z } from "zod";
  * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
  * growing past it, and shrinking below it without lowering the number.
  */
-export const SCHEMA_MAX_CHARS = 11_475;
+// ⚠ 12,371 → 11,103 ON 2026-09-02 (A6b), and every character of it came from
+// DELETING params rather than from shortening prose: `kind`, `intent`, `direct`
+// and `to_desktop` are gone (C12/C5), `get_thread` left the `op` enum (C15),
+// and ping's three recipient forms became one. A cut a re-worded sentence
+// cannot make twice.
+export const SCHEMA_MAX_CHARS = 11_103;
 
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
@@ -55,6 +60,7 @@ export const SCHEMA_MAX_CHARS = 11_475;
  * `channel-doctrine.ts › FIELDS`, which is PULLED by the agent that asks.
  */
 export const PARAM_DESCRIPTION_MAX_CHARS = 400;
+import { DOCTRINE_SECTION_NAMES } from "./channel-doctrine";
 import {
   AWAIT_HOLD_CAP_MS,
   AWAIT_HOLD_DEFAULT_MS,
@@ -81,7 +87,6 @@ export const CHANNEL_INPUT_SHAPE = {
       "await",
       "members",
       "list_threads",
-      "get_thread",
       "read_sessions",
       "create_thread",
       // ⚠ TWO OPS LEFT THIS ENUM with thread closing (wiring plan Phase 4,
@@ -109,23 +114,29 @@ export const CHANNEL_INPUT_SHAPE = {
       "pings",
     ])
     .describe("Operation to perform."),
+  // ⚠ **THE DOCTRINE IS PULLED, SO IT MUST BE PULLABLE IN PIECES** (2026-09-02).
+  // `op="help"` returned the whole ~30k document or nothing, which makes the one
+  // surface designed to be read on demand too expensive to read on demand — an
+  // agent that wants the refusal vocabulary pays for the @-tag grammar as well.
+  // The names come from `channel-doctrine.ts › DOCTRINE_SECTIONS`, so an unknown
+  // one is a -32602 naming this field rather than a silently empty answer.
+  section: z
+    .enum(DOCTRINE_SECTION_NAMES)
+    .optional()
+    .describe(
+      'op="help" (optional): return ONE section instead of the whole document. Omit it for everything, including the index of section names.',
+    ),
   channel: z
     .string()
     .optional()
     .describe(
       'Channel slug or id. Required except for "list", "open" and "pings"; on "read", "await" and "read_sessions" omitting it WIDENS the call to every channel you are in, across every workspace and home container.',
     ),
-  direct: z
-    .boolean()
-    .optional()
-    .describe(
-      'op="open": true opens a direct (1:1) message with `member` instead of a named channel, reusing an existing DM.',
-    ),
   name: z
     .string()
     .optional()
     .describe(
-      'op="open" (required for a channel; omit for a direct message): the channel name, 1-120 chars. op="rename_agent" (required): a DISPLAY ONLY label for that agent — 1-60 visible characters on ONE line, or "" to clear it back to "Agent #<id>". `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server.',
+      'op="open" (required for a NAMED channel; omit it and pass `member` instead to open a direct 1:1): the channel name, 1-120 chars. op="rename_agent" (required): a DISPLAY ONLY label for that agent — 1-60 visible characters on ONE line, or "" to clear it back to "Agent #<id>". `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server.',
     ),
   topic: z
     .string()
@@ -141,13 +152,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="invite" (required) / op="open" with direct=true (required): the member — an email or user id of an ACTIVE workspace member.',
-    ),
-  intent: z
-    .enum(["chat", "request"])
-    .optional()
-    .describe(
-      'op="post" (optional, default "request"): "chat" is people talking — it addresses nobody, starts nobody, and is REFUSED together with `to`. "request" is the working message.',
+      'op="invite" (required) / op="open" (required for a direct 1:1, and only with `name` omitted): the member — an email or user id of an ACTIVE workspace member.',
     ),
   body: z
     .string()
@@ -156,13 +161,13 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(16000)
     .optional()
     .describe(
-      'op="post" / op="create_thread" / op="milestone" (required): the message text, <=16000 chars. A milestone is ONE LINE naming the step that just landed and carries no content. op="ping" (required): ONE LINE, <=600 chars.',
+      'op="post" / op="create_thread" / op="milestone" (required): the message text, <=16000 chars. op="milestone": ONE LINE, <=240 chars and no line breaks, naming the step that just landed. op="ping" (required): ONE LINE, <=600 chars.',
     ),
   to: z
     .string()
     .optional()
     .describe(
-      'op="post" (optional) / op="create_thread" (required) / op="ping" (one of three recipient forms): the ONE channel MEMBER this is for — an email or user id. On a post it makes the message a REQUEST that triggers that member\'s listener; a ping only files in their inbox and triggers nothing.',
+      'op="post" (optional) / op="create_thread" (required): the ONE channel MEMBER this is for — an email or user id. On a post it TRIGGERS that member\'s listener; omit it and the post is chat, which addresses nobody and starts nobody.',
     ),
   // ⚠ One param, one route now. The declared 2000 is deliberately LOOSER than
   // the post route's 200 so an over-length summary is the route's to reject,
@@ -175,30 +180,11 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees.',
     ),
-  // ⚠ THE ENUM KEEPS ALL FIVE ON PURPOSE — narrowing turns the mistake into an
-  // opaque zod -32602 exactly when the agent needs telling what to do instead.
-  // ⚠ THE REFUSAL IS KEYED ON THE CREDENTIAL, NOT ON THE AUTHOR (G2, 2026-09-02).
-  // `service-writes-lifecycle.ts` reads `ctx.source === "agent"`, which is a
-  // pinned invariant: cookie-session posts are the desktop's own lane and must
-  // keep writing lifecycle rows. So the sentence says "from an agent
-  // credential" — "from you" claimed a fence on the caller that does not exist.
-  kind: z
-    .enum([
-      "message",
-      "task_started",
-      "task_progress",
-      "task_finished",
-      "task_failed",
-    ])
-    .optional()
-    .describe(
-      'op="post" (optional, default "message"): leave it unset. "message" covers everything you send, your FINAL ANSWER included; "task_progress" is what op="milestone" posts for you. "task_started" / "task_finished" / "task_failed" are runtime lifecycle markers and are REFUSED from an agent credential.',
-    ),
   metadata: z
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      'op="post": optional JSON object of structured fields for task_* events (e.g. {taskId, durationMs, refs}).',
+      'op="post": optional JSON object of structured fields carried with the message (e.g. {durationMs, refs}). Use `thread` for the thread id.',
     ),
   // ⚠ THE TWO ROUTES DEDUPE OVER DIFFERENT KEYS — `channel_messages` is unique on
   // `(channel_id, client_msg_id, author_user_id)`
@@ -215,7 +201,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(200)
     .optional()
     .describe(
-      'op="post" / op="create_thread" (optional): an idempotency key, 1-200 chars. On a post the dedupe is PER-AUTHOR, so two members may reuse one id and both messages post; on create_thread it is PER-CHANNEL whoever sent it, so a key another member used hands you back THEIR thread.',
+      'op="post" / op="create_thread" / op="launch_agent" / op="direct_agent" (optional): an idempotency key, 1-200 chars — re-send the same one and you get the FIRST call\'s row back instead of a second. On a post the dedupe is PER-AUTHOR; on create_thread it is PER-CHANNEL whoever sent it, so a key another member used hands you back THEIR thread.',
     ),
   title: z
     .string()
@@ -244,7 +230,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'The thread id create_thread returned. Required for op="get_thread" (METADATA ONLY — title, mode, parties, timestamps, and NO message bodies; use op="read" with thread=<id> for what was said), op="set_thread_mode" and op="milestone". Optional on op="post" (thread it there), op="launch_agent" (start the agent on it), op="read" (filter to that exchange) and op="ping" (point the signal at it).',
+      'The thread id create_thread returned. Required for op="set_thread_mode" and op="milestone". Optional on op="post" (thread it there), op="launch_agent" (start the agent on it), op="read" (its metadata header plus only that exchange) and op="ping" (point the signal at it).',
     ),
   // ⚠ `agent_id`, NOT `agent`. `channel-addressing-rule.test.ts` bans a param
   // literally named `agent` — it was the retired named-agent ADDRESSING surface,
@@ -261,21 +247,31 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="direct_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (required) / "read_directions" (optional): WHICH of YOUR OWN operator\'s agents — the 8-character instance id, or the `@agent-<id>` handle read_sessions prints. There is no oldest-agent fallback. An id belonging to another member reaches nothing: the request goes to your own machine, which answers `no-session`.',
     ),
-  // ⚠ THERE IS NO PARAM FOR *WHOSE* MACHINE, ON PURPOSE. Both self-scoped ping
-  // forms resolve to the authenticated caller's own operator, server-side, and
-  // that absence is the whole of the loop brake: you cannot ping another
-  // member's agent because there is no argument with which to name one.
+  // ── op="ping" ────────────────────────────────────────────────────────────
+  // 🔒 **ONE RECIPIENT PARAM, AND THAT IS THE LOOP BRAKE RESTATED AS A SHAPE**
+  // (C5/F-429, 2026-09-02). It replaced THREE mutually exclusive spellings —
+  // `to`, `to_desktop`, `agent_id` — which the handler had to COUNT at runtime
+  // and refuse when it saw zero or two. A shape that can only carry one
+  // recipient cannot be sent two, so the count and its two refusal sentences
+  // are gone rather than reworded.
+  // ⚠ **AND IT STILL NAMES NOBODY ELSE'S MACHINE.** `channel-ops-ping.ts ›
+  // classifyRecipient` resolves this ONE string into the wire's own three keys,
+  // and the only two self-scoped forms it can produce ("desktop", an agent
+  // instance) resolve to the AUTHENTICATED CALLER server-side. There is still
+  // no argument for whose machine, which is what `channel-ping.test.ts` pins.
   ping_kind: z
     .enum(["done", "question", "blocked"])
     .optional()
     .describe(
       'op="ping" (required): WHAT you are signalling — the work is "done", you have a "question" you need answered to continue, or you are "blocked" and not asking one.',
     ),
-  to_desktop: z
-    .boolean()
+  recipient: z
+    .string()
+    .trim()
+    .min(1)
     .optional()
     .describe(
-      'op="ping" (one of three recipient forms): true signals YOUR OWN operator\'s external session — the one holding the ping inbox open.',
+      'op="ping" (required): WHO has to act, in ONE field — "desktop" for your own operator\'s external session, `@agent-<id>` for one of your own operator\'s running agents, or an email / user id for another member of this channel.',
     ),
   // ⚠ `outcome` ("completed" | "failed") was a param here, required by
   // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
@@ -288,7 +284,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .min(0)
     .optional()
     .describe(
-      'op="read" (optional) / op="await" (always required): the last seq you have processed; only higher ones come back. A seq is TABLE-WIDE, which is what lets one cursor cover every channel. ⚠ A THREAD-SCOPED read offers NO cursor at all — take yours from an UNSCOPED read (drop `thread`). op="pings" (optional): a PING seq, a separate cursor space from a message seq.',
+      'op="read" (optional) / op="await" (always required): the last MESSAGE seq you have processed; only higher ones come back. A seq is TABLE-WIDE, which is what lets one cursor cover every channel. ⚠ A THREAD-SCOPED read offers NO cursor at all — take yours from an UNSCOPED read (drop `thread`).',
     ),
   goal: z
     .string()
@@ -341,11 +337,18 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="launch_agent" / op="set_agent_mode" (optional): how much MESSAGE freedom to ASK FOR — the values are ordered narrowest first. Clamped to your operator\'s ceiling exactly as `tools` is, and held to a floor for a session with no window.',
     ),
+  // ⚠ **THREE VALUES BECAUSE THERE ARE THREE STATES** (C11, 2026-09-02). It was
+  // an optional boolean whose `.describe()` had to spend a paragraph saying that
+  // omitting it was NOT `false` — and that exact confusion was a live wire bug
+  // (GAP C: `directiveFrom` flattened `false` to `null`). `inherit` is now a
+  // VALUE a caller can send, so "absent" and "off" can never be conflated again
+  // by anything downstream. `channel-dispatch-agents.ts` maps the word back to
+  // the wire's `boolean | undefined`, which did not move.
   chain: z
-    .boolean()
+    .enum(["inherit", "on", "off"])
     .optional()
     .describe(
-      'op="launch_agent" (optional): may the new agent launch further agents? THREE STATES — true asks, false forbids, and OMITTING IT INHERITS your operator\'s channel setting, which may be ON. true is REFUSED rather than quietly narrowed.',
+      'op="launch_agent" (optional, default "inherit"): may the new agent launch further agents? "inherit" takes your operator\'s channel setting, which may be ON; "off" always narrows; "on" is REFUSED rather than quietly narrowed when the channel forbids it.',
     ),
   wait_ms: z.coerce
     .number()
@@ -354,7 +357,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(30_000)
     .optional()
     .describe(
-      'op="launch_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (optional, default 15000, max 30000): how long to hold for the operator\'s desktop to accept or refuse. A timeout is NOT a failure — the request stays PENDING, so do not re-issue it.',
+      'op="launch_agent" / "end_agent" / "rename_agent" / "set_agent_mode" (optional, default 15000, max 30000): how long to hold for the operator\'s desktop to accept or refuse. A timeout is NOT a failure — the request stays PENDING, and a re-issue is safe only when it carries the same `client_msg_id`.',
     ),
   info_card: z
     .object({
@@ -460,7 +463,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(200)
     .optional()
     .describe(
-      'op="read": max messages to return (1-200, default 100) — with no `since` that is the NEWEST 100, and older ones are absent rather than reported. op="pings": max pings (1-100, default 20).',
+      'op="read": max messages to return (1-200, default 100) — with no `since` that is the NEWEST 100, and older ones are absent rather than reported. op="pings": max pings (1-100, default 20) — the newest first.',
     ),
   timeout_ms: z.coerce
     .number()

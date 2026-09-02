@@ -130,9 +130,12 @@ const MOVED_DOCTRINE = [
   // …a rename is display-only on ONE machine, so nothing here confirms it.
   "is invisible to every other member",
   "keeps printing the id after a rename",
-  // …and a timed-out request is still filed, so it is never re-issued.
+  // …and a timed-out request is still filed. ⚠ **BACKED BY CODE SINCE A10/G10
+  // (2026-09-02), AND THE SENTENCE MOVED WITH IT**: "do NOT issue it again" was
+  // the only answer available while this lane had no idempotency key.
   "IF A WAIT TIMES OUT THE REQUEST IS STILL PENDING",
-  "do NOT issue it again",
+  "Re-issue it ONLY with the same `client_msg_id`",
+  "WITHOUT one, do not re-issue at all",
 ] as const;
 
 describe("the doctrine still carries every paragraph these results dropped", () => {

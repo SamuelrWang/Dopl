@@ -104,7 +104,15 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // where `design/status.ts` and INVARIANTS §5 (F-412) say TABLE-WIDE, and the
   // correct word is six characters shorter. Caught by the downward half of the
   // ratchet, which is what that half is for.
-  dopl_channel: 1775,
+  // ⚠ **1,775 → 1,703 ON 2026-09-02 (A6b), AND IT IS THE FIRST DROP THAT CAME
+  // FROM DELETING OPS AND PARAMS RATHER THAN FROM REWORDING.** `"get_thread"`
+  // left the ops line (C15, folded into `read(thread=)`) and the whole `seq`
+  // sentence left under `channel-description.ts`'s own rule 4 — it restated
+  // what `since`'s `.describe()` already says, which is the same duplicate
+  // `current_workspace` and `dopl_status` gave back above. What it bought back
+  // is spent on `section=`, the one clause that makes the doctrine pullable in
+  // pieces.
+  dopl_channel: 1703,
   dopl_ontology: 2321,
   // ⚠ +383 ON 2026-09-02 for op="copy", after its bullet gave back the sentences
   // `copy-target.ts › TO_WORKSPACE_ARG_DESCRIPTION` already carries.

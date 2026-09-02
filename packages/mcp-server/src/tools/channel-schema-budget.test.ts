@@ -158,12 +158,12 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
     expect(CHANNEL_DOCTRINE).toContain("THE ARGUMENTS THAT CARRY A RULE:");
     for (const rule of [
       "OMITTING `channel` IS A WIDER READ",
-      "TWO CURSOR SPACES, ONE `since`",
-      "`client_msg_id` DEDUPES OVER A DIFFERENT KEY ON EACH ROUTE",
-      "`to` ON A PING IS NOT `to` ON A POST",
+      "ONE CURSOR SPACE, ONE `since`",
+      "`client_msg_id` IS WHAT MAKES A RETRY SAFE",
+      "A PING'S `recipient` IS NOT A POST'S `to`",
       "`handoff`=true ON \"create_thread\" HANDS THE EXCHANGE OVER",
       "`model` IS VALIDATED NOWHERE",
-      "`chain` HAS THREE STATES, AND OMITTING IT IS NOT false",
+      "`chain` NAMES ITS THREE STATES",
       "`info_card` REPLACES THE WHOLE CARD",
       "`recommendation.index` MUST BE INSIDE `options`",
     ])
@@ -177,6 +177,7 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
       "channel",
       "since",
       "client_msg_id",
+      "recipient",
       "to",
       "handoff",
       "model",

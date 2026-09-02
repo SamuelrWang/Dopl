@@ -166,8 +166,11 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
       "await",
       "members",
       "list_threads",
-      "get_thread",
       "create_thread",
+      // ⚠ `get_thread` left this list on 2026-09-02 (C15) — folded into
+      // `read(thread=)`, which now renders the card as well as the transcript,
+      // so ONE op answers the noun and 200 characters of prose keeping the two
+      // apart went with it.
       // ⚠ `propose_close` and `close_thread` were on this list until thread
       // closing was removed (wiring plan Phase 4, 2026-08-18). `close_thread`
       // was kept in the enum ON PURPOSE so an older agent got a teaching

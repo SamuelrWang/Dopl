@@ -18,7 +18,7 @@ import type { DoplClient } from "@dopl/client";
 // of the result, and the rule it stated is still shipped, from one place.
 import { CHANNEL_DOCTRINE, DOCTRINE_POINTER } from "./channel-doctrine";
 import { opAwait } from "./channel-ops-await";
-import { opGetThread, opListThreads, opMembers, opRead } from "./channel-ops-read";
+import { opListThreads, opMembers, opRead } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
 
 const ME = "u-me";
@@ -462,14 +462,19 @@ describe("thread reads — both parties (N-party)", () => {
     expect(text).toContain("unaddressed");
   });
 
-  it("get_thread names both parties", async () => {
+  it("a thread-scoped read names both parties on the card it folds in", async () => {
+    // ⚠ `op="get_thread"` rendered this card until C15 folded it into
+    // `read(thread=)` (2026-09-02). The naming rule is unchanged; the op it
+    // arrives on is not.
     const client = stubClient({
       getChannelThread: vi.fn(async () => THREAD),
+      readChannelMessages: vi.fn(async () => []),
       listChannelMembers: roster,
     });
 
-    const text = (await opGetThread(client, "general", "thread-1", ME))
-      .content[0].text;
+    const text = (
+      await opRead(client, "general", undefined, undefined, ME, "thread-1")
+    ).content[0].text;
 
     expect(text).toContain("- created by: `Peer` (`u-peer`)");
     expect(text).toContain("- addressed to: you");
