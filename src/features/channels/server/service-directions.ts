@@ -12,6 +12,9 @@ import type { AgentDirectionRow } from "./repository-directions";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+// ⚠ THE RACE HALF OF G10, SHARED WITH THE LAUNCH LANE — see that module for why
+// the PROBE is not in it and this file states its own gate ordering instead.
+import { insertOrConverge } from "./service-mailbox-idempotency";
 
 /**
  * THE PRIVATE DIRECT LANE — an operator's external agent steering that operator's
@@ -153,9 +156,18 @@ async function operatorIsOnline(ctx: ChannelContext): Promise<boolean> {
   return Date.now() - seenAt < PRESENCE_ONLINE_WINDOW_MS;
 }
 
+/**
+ * ⚠ **`existing: true` MEANS THE ROW WAS ALREADY THERE — this call filed
+ * NOTHING** (2026-09-02, A10/G10). The caller re-sent a `clientMsgId` it had used
+ * before and got the FIRST request's direction back, `reply` included if the
+ * machine has answered by now. That is what makes a timed-out direction
+ * RETRYABLE: without the key, asking again says the same thing to a live agent
+ * twice and it answers twice, with no way for either side to tell which answer
+ * belonged to which.
+ */
 export type CreateDirectionResult =
   | { offline: true; direction: null }
-  | { offline: false; direction: AgentDirection };
+  | { offline: false; direction: AgentDirection; existing: boolean };
 
 /**
  * FILE A DIRECTION.
@@ -182,6 +194,26 @@ export async function createAgentDirection(
   const { channel, membership } = await loadVisibleChannel(ctx, input.channel);
   if (membership === null) throw new DirectionNotFoundError(input.channel);
 
+  // ⚠ **THE IDEMPOTENCY PROBE SITS ABOVE THE THREAD AND PRESENCE GATES, AND THE
+  // POSITION IS THE CONTRACT** (2026-09-02, A10/G10) — the launch lane's ordering
+  // for the launch lane's reasons, plus the one that is this lane's own: the
+  // stored row may already carry the REPLY, so a converged retry is how a caller
+  // whose hold timed out collects the answer it was waiting for. Running the
+  // presence gate first would answer `offline` — "nothing was filed" — about a
+  // direction that IS filed and may already have been delivered.
+  // ⚠ BELOW membership, always: converging on a stored row is still a read of a
+  // channel the caller must be in.
+  if (input.clientMsgId) {
+    const stored = await directionRepo.findAgentDirectionByClientMsgId(
+      ctx.userId,
+      channel.id,
+      input.clientMsgId
+    );
+    if (stored) {
+      return { offline: false, direction: toDirection(stored, Date.now()), existing: true };
+    }
+  }
+
   if (input.threadId) {
     const task = await repoTasks.findTaskByChannelAndId(
       channel.id,
@@ -195,18 +227,27 @@ export async function createAgentDirection(
   if (!(await operatorIsOnline(ctx))) return { offline: true, direction: null };
 
   const now = Date.now();
-  const row = await directionRepo.insertAgentDirection(ctx.userId, {
-    workspace_id: ctx.workspaceId,
-    channel_id: channel.id,
-    task_id: input.threadId ?? null,
-    agent_id: input.agentId,
-    // ⚠ STAMPED FROM THE TRANSPORT, NEVER FROM THE PAYLOAD (F-376a). See
-    // `senderAgentIdFrom` for what it is worth and what it must never be used for.
-    sender_agent_id: senderAgentIdFrom(ctx.sessionId),
-    body: input.body,
-    expires_at: new Date(now + AGENT_DIRECTION_TTL_MS).toISOString(),
+  // ⚠ THE RACE HALF OF G10 — two retries arriving together, where both probes
+  // missed and the partial unique index refuses the second insert.
+  const { row, existing } = await insertOrConverge({
+    clientMsgId: input.clientMsgId,
+    find: (key) =>
+      directionRepo.findAgentDirectionByClientMsgId(ctx.userId, channel.id, key),
+    insert: () => directionRepo.insertAgentDirection(ctx.userId, {
+      workspace_id: ctx.workspaceId,
+      channel_id: channel.id,
+      task_id: input.threadId ?? null,
+      agent_id: input.agentId,
+      // ⚠ STAMPED FROM THE TRANSPORT, NEVER FROM THE PAYLOAD (F-376a). See
+      // `senderAgentIdFrom` for what it is worth and what it must never be used
+      // for.
+      sender_agent_id: senderAgentIdFrom(ctx.sessionId),
+      body: input.body,
+      expires_at: new Date(now + AGENT_DIRECTION_TTL_MS).toISOString(),
+      client_msg_id: input.clientMsgId ?? null,
+    }),
   });
-  return { offline: false, direction: toDirection(row, now) };
+  return { offline: false, direction: toDirection(row, now), existing };
 }
 
 /** THE DESKTOP'S BACKSTOP READ. ⚠ Expired rows are dropped HERE, in TS, not in

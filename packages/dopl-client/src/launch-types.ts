@@ -248,16 +248,41 @@ export interface LaunchDirectiveCreateInput {
   tools?: LaunchToolMode;
   messages?: LaunchMessageMode;
   chain?: boolean;
+  /**
+   * **AN IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"** (2026-09-02,
+   * A10/G10).
+   *
+   * ⚠ **SEND ONE WHENEVER A RETRY IS POSSIBLE, WHICH ON THIS OP IS ALWAYS.** The
+   * create holds for the operator's machine and then returns PENDING; a timeout
+   * is indistinguishable from a lost response, so without a key the caller has to
+   * choose between an unknown outcome and a second agent on the same work.
+   * Re-sending the same key returns the FIRST request's directive
+   * ({@link LaunchDirectiveCreated}'s `existing`).
+   * ⚠ Any stable string of the caller's own, 1-200 chars. Uniqueness is scoped to
+   * `(channel, this operator)` server-side, so another member's key cannot
+   * collide with yours.
+   */
+  clientMsgId?: string;
 }
 
 /**
  * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR. The operator's machine is not
  * listening, **no row was created**, and nothing was asked. Render the caveat;
  * do not retry, and do not classify it as a failure.
+ *
+ * ⚠ **`existing: true` MEANS THIS CALL FILED NOTHING** (2026-09-02, A10/G10) —
+ * the `clientMsgId` had been used before and this is the FIRST request's
+ * directive. Render it as a converged retry, never as a fresh launch: the two are
+ * the same shape and only this flag separates "your retry was absorbed" from "a
+ * second agent was requested".
+ * ⚠ **OPTIONAL, BECAUSE A SERVER OLDER THAN THIS WAVE SENDS NO SUCH KEY** and
+ * this client is deployed against both (INVARIANTS §13). Absent reads as `false`
+ * — "a row was filed" — which is the safe direction against an old server,
+ * because an old server also stored no key and every call there really was fresh.
  */
 export type LaunchDirectiveCreated =
   | { offline: true; directive: null }
-  | { offline: false; directive: LaunchDirective };
+  | { offline: false; directive: LaunchDirective; existing?: boolean };
 
 /**
  * WHAT `createAgentDirective` ASKS FOR — END or RENAME one of the operator's own

@@ -104,7 +104,18 @@ describe("🔒 the operator is ctx.userId and can never be a parameter", () => {
     // ⚠ THE ABSENCE IS THE FENCE. Asserted rather than left to review, because a
     // field added here would be silently honoured by everything downstream.
     const create = Object.keys(DirectionCreateSchema.shape);
-    expect(create.sort()).toEqual(["agentId", "body", "channel", "threadId"]);
+    // ⚠ `clientMsgId` JOINED THE SET ON 2026-09-02 (A10/G10) AND IS NOT AN
+    // IDENTITY. It names WHICH GESTURE this row is, never whose machine hears it
+    // — the uniqueness it buys is scoped BY `operator_user_id`, which is still a
+    // separate argument no payload can reach. The census is a whitelist, so a
+    // field is added to it deliberately or not at all.
+    expect(create.sort()).toEqual([
+      "agentId",
+      "body",
+      "channel",
+      "clientMsgId",
+      "threadId",
+    ]);
     for (const key of ["operator", "operatorUserId", "userId", "operator_user_id"]) {
       expect(create, key).not.toContain(key);
       for (const option of DirectionDecideSchema.options) {

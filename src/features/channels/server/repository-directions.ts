@@ -47,6 +47,15 @@ export type AgentDirectionRow = {
   decided_at: string | null;
   expires_at: string;
   created_at: string;
+  /**
+   * THE CALLER'S IDEMPOTENCY KEY (2026-09-02, A10/G10).
+   *
+   * ⚠ `?` LIKE `sender_agent_id` ABOVE, and for the same reason: a deployment
+   * where `20260911120000_launch_direction_client_msg_id.sql` has not replayed
+   * yet returns rows with no such key at all.
+   * ⚠ NOT ON THE DTO — it is the caller's own string, echoed back to nobody.
+   */
+  client_msg_id?: string | null;
 };
 
 /** What a create supplies. ⚠ `operator_user_id` is ABSENT ON PURPOSE — it is a
@@ -70,6 +79,17 @@ export type AgentDirectionInsert = {
   sender_agent_id: string | null;
   body: string;
   expires_at: string;
+  /**
+   * THE CALLER'S IDEMPOTENCY KEY, VERBATIM (2026-09-02, A10/G10).
+   *
+   * ⚠ CALLER-SUPPLIED, and safe for `agent_id`'s reason: it names WHICH GESTURE
+   * this row is, never WHOSE MACHINE hears it. The authorization story stays
+   * `operator_user_id`, which is also the SCOPE of the unique index — so one
+   * member's key cannot pre-claim another's
+   * (`20260911120000_launch_direction_client_msg_id.sql`).
+   * ⚠ ABSENT IS THE ORDINARY CASE and dedupes nothing: the index is partial.
+   */
+  client_msg_id?: string | null;
 };
 
 const TABLE = "channel_agent_directions";
@@ -111,6 +131,38 @@ export async function findAgentDirection(
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .eq("operator_user_id", operatorUserId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as AgentDirectionRow | null) ?? null;
+}
+
+/**
+ * **THE IDEMPOTENCY PROBE** — the direction this operator already filed in this
+ * channel under this key, or `null` (2026-09-02, A10/G10).
+ *
+ * ⚠ **THE PREDICATE SET IS THE INDEX**, `(channel_id, operator_user_id,
+ * client_msg_id)`, and the three stay together for the launch mailbox's reasons
+ * (`repository-launch.ts › findLaunchDirectiveByClientMsgId`) plus one that is
+ * sharper here: this row carries a PRIVATE TURN'S ANSWER, so a probe that
+ * dropped the operator predicate would hand somebody else's `reply` to anyone
+ * who could guess a key.
+ *
+ * ⚠ NO `status` FILTER. A retry converges on the stored row whatever became of
+ * it; filtering to live rows would let a retry say the same thing to a live
+ * agent a second time the moment the first row lapsed.
+ */
+export async function findAgentDirectionByClientMsgId(
+  operatorUserId: string,
+  channelId: string,
+  clientMsgId: string
+): Promise<AgentDirectionRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from(TABLE)
+    .select("*")
+    .eq("channel_id", channelId)
+    .eq("operator_user_id", operatorUserId)
+    .eq("client_msg_id", clientMsgId)
     .maybeSingle();
   if (error) throw error;
   return (data as AgentDirectionRow | null) ?? null;

@@ -34,6 +34,18 @@ export const DirectionCreateSchema = z.object({
   agentId: z.string().regex(AGENT_ID_RE, "Invalid agent id"),
   threadId: z.string().uuid().optional(),
   body: z.string().trim().min(1).max(4000),
+  /**
+   * **THE IDEMPOTENCY KEY — "a retry may not say this twice"** (2026-09-02,
+   * A10/G10).
+   *
+   * ⚠ `LaunchCreateSchema.clientMsgId`'s bounds, character for character, and
+   * that file carries the argument: one key shape for the whole feature. A
+   * direction's hazard is the launch lane's mirror image — a second direction
+   * reaches a LIVE agent, which answers twice, and neither side can tell which
+   * answer belonged to which request.
+   * ⚠ OPTIONAL; omitting it is today's behaviour exactly.
+   */
+  clientMsgId: z.string().min(1).max(200).optional(),
 });
 export type DirectionCreateInput = z.infer<typeof DirectionCreateSchema>;
 

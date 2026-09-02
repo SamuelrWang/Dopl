@@ -193,11 +193,21 @@ test("modelArg is the argv gate: null for 'default', the bare alias otherwise, j
 // shape, which is the property this section is about, and the model coercion it performs is
 // unchanged. The fakes moved with it: the platform-facing helpers now arrive as one `loader`
 // object and the gate as `axisB`.
+// ⚠ 2026-09-02 (A10/G19): `buildOptions` now reads ONE module-scope constant,
+// `SESSION_MAX_TURNS`, and a sliced function cannot see its module. It is
+// injected like every other module-scope reference here, and the VALUE is read
+// out of the shipped SOURCE rather than restated — the discipline
+// `sdk-mcp-token.test.mjs` follows for mcp-config's timeout, so this harness can
+// never drift from the number that ships.
+const MAX_TURNS_SRC = /const SESSION_MAX_TURNS = (\d+);/.exec(SPEC);
+assert.ok(MAX_TURNS_SRC, "launch-spec.js no longer declares SESSION_MAX_TURNS");
+const SHIPPED_MAX_TURNS = Number(MAX_TURNS_SRC[1]);
+
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   const fake = new Function(
     "tools", "channelDirs", "loader", "sessionAuth", "sessionOutbound", "axisB", "diag",
-    "store", "sessionModel", "sessionCredential", "agentOps", src
+    "store", "sessionModel", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
   )(
     { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
     { sessionSpawnDir: () => "/tmp" },
@@ -220,7 +230,8 @@ function assembled(s) {
     // in this file is about. The assembly passes this bearer to `buildMcpServers` as a third
     // argument; '' means "use the device token", i.e. the pre-ceiling behaviour.
     { sessionBearer: () => "" },
-    { AGENT_OPS_TOOL_NAMES: [], SERVER_KEY: "dopl_agents" }
+    { AGENT_OPS_TOOL_NAMES: [], SERVER_KEY: "dopl_agents" },
+    SHIPPED_MAX_TURNS
   );
   return fake(s);
 }

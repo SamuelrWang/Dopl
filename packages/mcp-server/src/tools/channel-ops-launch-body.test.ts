@@ -117,6 +117,12 @@ describe("the call itself", () => {
       "tools",
       "messages",
       "chain",
+      // THE IDEMPOTENCY KEY (2026-09-02, A10/G10) — a fourth CONSCIOUS edit, and
+      // the guard is still intact: it names WHICH GESTURE this is, never whose
+      // machine runs it. The uniqueness it buys is scoped BY the operator id the
+      // server stamps, so the field cannot widen who a launch reaches; what it
+      // removes is the SECOND agent a re-issue after a timeout used to queue.
+      "clientMsgId",
     ]);
   });
 
