@@ -89,6 +89,16 @@ export interface TemplateTenancyRow {
  * ⚠ NAME MATCHING IS CASE-INSENSITIVE EXACT, never a prefix or a pattern:
  * `ilike` is passed an escaped literal so a `%` in a caller-supplied name
  * matches a `%` and not "anything".
+ *
+ * ⚠ **THE `workspaces!inner` EMBED IS THE CHILD→PARENT DIRECTION AND IS NOT THE
+ * ONE `app/api/user/delete/route.ts` WARNS ABOUT** (asked and answered
+ * 2026-09-02). That note is about joining OUT of `workspaces` after the May 2026
+ * denormalizations; this embeds a row's own parent by FK, which is the identical
+ * shape `workspaces/server/repository.ts › listWorkspacesForUser` and
+ * `home/server/repository-containers.ts › listLinkContainers` run on every
+ * workspace list in the product. Query shape pinned in
+ * `repository-tenancy.test.ts` — the two `service-resolve*` suites mock this
+ * module, so until that file existed nothing asserted a filter here at all.
  */
 export async function findTemplateTenancyRows(
   userId: string,
