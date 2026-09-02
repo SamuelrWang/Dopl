@@ -30,7 +30,7 @@
 
 const {
   READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS,
-  UNIVERSAL_HARD_DENY, RETIRED_DOPL_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile,
+  UNIVERSAL_HARD_DENY, RETIRED_DOPL_TOOLS, DOPL_CHANNEL_TOOL, SHELL_BUILTINS, normalizeProfile,
 } = require('../../tool-profiles');
 // ⚠ DOPL'S OWN SURFACE, IMPORTED — see the header. `mcp__dopl__*` names are runtime-independent.
 const doplTools = require('../../session-dopl-tools');
@@ -134,6 +134,34 @@ function buildSessionToolConfig(profile) {
     };
   }
 
+  // ⚠ THE FOURTH PROFILE (2026-09-02, Samuel's ruling B7) — `full`, MINUS THE SHELL, DERIVED
+  // FROM IT RATHER THAN RESTATED. Every field below is `full`'s expression with `SHELL_BUILTINS`
+  // subtracted from the offer and added to the floor; nothing else about the profile differs, and
+  // a change to `full` therefore moves this one in the same edit.
+  //
+  // ⚠ WHY BOTH HALVES AND NOT JUST THE DENY. `builtinTools` (L0) is what the model is OFFERED —
+  // a name absent from it is never in context — and `disallowedTools` is what `grantDecision`
+  // step 1 REFUSES, the one verdict no task grant and no `bypass` mode can open. Removing the
+  // shell from the offer alone would leave it openable by a future bound; denying it alone would
+  // leave three tool schemas in every turn's context that can only ever be refused. Both.
+  //
+  // ⚠ WHAT IT BUYS, STATED PRECISELY. A `full` session holds its own `dopl_at_` bearer, and the
+  // MCP server reaches the app over LOOPBACK HTTP — so with a shell an agent can `curl` the REST
+  // API directly and every fence that lives at the MCP layer is beside the point. This is that
+  // one path, closed, for a session launched into a container with somebody else in it.
+  //
+  // ⚠ WHAT IT DOES NOT BUY, RECORDED RATHER THAN GLOSSED (G18). `WebFetch` / `WebSearch` remain —
+  // the ruling is "full minus Bash" and web reads are a separate per-profile group — so ONE
+  // outbound path that does not cross the approve-out gate survives. It is narrowed, not closed.
+  if (p === 'channel_agent') {
+    return {
+      builtinTools: CHANNEL_AGENT_BUILTIN_BOUND.slice(),
+      preApproved: READ_BUILTINS.concat(AGENT_OPS_TOOL_NAMES), // identical to `full`'s
+      disallowedTools: CHANNEL_AGENT_HARD_DENY.slice(),
+      doplToolsPolicy: null, // the Dopl surface is `full`'s; the ruling removes the SHELL only
+    };
+  }
+
   // full: pre-approve local reads only; hard-deny ONLY the universal floor; OFFER the built-ins
   // Axis A classifies and no others (`FULL_BUILTIN_BOUND`, argued where it is derived). Every
   // work tool, escalation and the op-scoped dopl_channel still reaches canUseTool — what changed
@@ -178,7 +206,11 @@ const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
 // counterparty's message text steers what the agent proposes. `bypass` covers them; NOTHING
 // covers the hard-deny set. BashOutput/KillShell sit here with Bash — the read half of a shell
 // is still the shell.
-const ESCALATION_TOOLS = ['Bash', 'BashOutput', 'KillShell', 'WebFetch', 'WebSearch'];
+// ⚠ COMPOSED FROM THE TWO GROUPS `tool-profiles.js` ALREADY SPELLS (2026-09-02), not restated.
+// It was a five-name literal, and `SHELL_BUILTINS` — the fourth profile's whole delta — is
+// exactly its first three. A second spelling of "which names are the shell" is how the profile
+// that removes the shell comes to disagree with the mode that escalates it.
+const ESCALATION_TOOLS = SHELL_BUILTINS.concat(WEB_TOOLS);
 
 // ⚠ `auto` and `bypass` are POSITIVE ALLOW-LISTS, never negative. A negative mode auto-allows
 // every UNRECOGNIZED name ('', null, undefined, a renamed channel tool, a delegation/exfil
@@ -233,6 +265,18 @@ const BYPASS_TOOLS = AUTO_TOOLS.concat(ESCALATION_TOOLS, DOPL_WRITE_TOOLS, BYPAS
 // 'Skill'])` re-OFFERS them; making them RUNNABLE is a second, separate decision (classify them),
 // which is the honest shape of the trade rather than one flag standing for both.
 const FULL_BUILTIN_BOUND = BYPASS_TOOLS.filter((name) => !isDoplToolName(name));
+
+// ⚠ THE FOURTH PROFILE'S BOUND AND FLOOR — `full`'S TWO, WITH THE SHELL MOVED FROM ONE TO THE
+// OTHER (2026-09-02, ruling B7). Both are DERIVED, and that is the whole design: the offer is
+// `FULL_BUILTIN_BOUND` minus the shell group and the floor is `SESSION_HARD_DENY` plus it, so a
+// name added to any Axis-A list reaches this profile in the SAME edit it reaches `full`, and the
+// only assertion anyone has to make about the pair is "the delta is exactly the shell".
+// ⚠ THE NAMES ARE ASSERTED ON THE WIRE, NEVER BY READING THESE CONSTANTS
+// (`test/channel-agent-profile.test.mjs`, C7's precedent): a derivation that quietly stopped
+// subtracting would still read correctly here.
+const CHANNEL_AGENT_BUILTIN_BOUND = FULL_BUILTIN_BOUND
+  .filter((name) => SHELL_BUILTINS.indexOf(name) === -1);
+const CHANNEL_AGENT_HARD_DENY = SESSION_HARD_DENY.concat(SHELL_BUILTINS);
 
 function normalizeToolMode(mode) {
   return TOOL_MODES.indexOf(mode) === -1 ? 'manual' : mode; // fail-closed
@@ -300,6 +344,7 @@ module.exports = {
   buildSessionToolConfig,
   TOOL_MODES, EDIT_TOOLS, ESCALATION_TOOLS, BYPASS_READS, AUTO_TOOLS, BYPASS_TOOLS,
   FULL_BUILTIN_BOUND,
+  CHANNEL_AGENT_BUILTIN_BOUND, CHANNEL_AGENT_HARD_DENY, // B7: `full` ∓ the shell, both derived
   normalizeToolMode, toolModeAllows, floorWindowlessTool,
   SESSION_HARD_DENY,
 };

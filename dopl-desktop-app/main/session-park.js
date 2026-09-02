@@ -45,7 +45,13 @@ function bind(d) {
 
 // ⚠ Profiles a persisted record may legitimately carry. Anything else (missing, corrupt, from a
 // future version) recreates as read_only — fail restrictive.
-const KNOWN_PROFILES = new Set(['full', 'dopl_only', 'read_only']);
+// ⚠ A SECOND COPY OF `tool-profiles.js › KNOWN_PROFILES`, KEPT BECAUSE THE PURE BLOCK MAY NOT
+// `require` (see this section's own sentinel note) AND HELD EQUAL BY A TEST rather than by
+// discipline — `test/channel-agent-profile.test.mjs`. It is not cosmetic drift: a profile missing
+// here does not fail closed loudly, it silently RECREATES every parked session carrying it at
+// `read_only`, which reads as an agent that has quietly lost its tools.
+// ⚠ `channel_agent` joined on 2026-09-02 (ruling B7).
+const KNOWN_PROFILES = new Set(['full', 'dopl_only', 'channel_agent', 'read_only']);
 
 function knownProfile(p) {
   return KNOWN_PROFILES.has(p) ? p : 'read_only';
