@@ -6009,3 +6009,60 @@ twice. What replaced them is a different assertion, and it had to be: those gate
 DISAGREEING, and the failure mode now is a second copy APPEARING — which compiles, ships, and
 shadows the package for one tree's consumers. `src/shared/contracts/canonical-sets.test.ts` is that
 census.
+
+---
+
+## 2026-09-02 — Two axes, one field: the fix that fixed a symptom, and the fix that fixed the shape
+
+Wave B slice B3. `mcp_tokens` carried a container lock — `workspace_id` — and every M-10 visibility
+predicate read it as `if (apiKeyWorkspaceId) return false`. That is F-336/F-333, and the August
+remedy was `workspace_lock_kind`: a discriminator saying `'container_session'` for a credential the
+desktop minted for one operator's session, with a three-arm predicate over the PAIR. It worked, it
+shipped, and it left the shape wrong.
+
+**A KIND is not a PERSON, and inferring one from the other is the same defect in a smaller place.**
+The predicate's real question was *"is there a single human behind this credential?"*, and the answer
+lived nowhere on the row — it was reconstructed from a lock plus an enum on every call. That is
+survivable while exactly one producer exists, which is why the August version was correct in
+practice; it stops being survivable the moment a second kind of credential is minted, because
+whoever adds it has to know that naming a string in `credential-audience.ts` is what grants a
+credential somebody's private rows.
+
+**So the row states both facts.** `container_id` = WHICH container, `subject_user_id` = WHOSE reach.
+They are independent, and the reason to insist on that is not tidiness: all four combinations are
+meaningful, and one of them — fenced AND anonymous — is precisely the case M-10 was written for and
+the case the single field could not represent. `isSharedCredential` becomes one null check;
+`CHECK (subject_user_id IS NULL OR subject_user_id = user_id)` makes "acts as somebody else"
+unstorable rather than merely un-minted.
+
+**The backfill was the identity, and that is why it was allowed to exist.** `20260829120000`
+deliberately refused to backfill, because writing `'container_session'` onto live rows would have
+WIDENED them as a side effect of a schema change. This file writes `subject_user_id = user_id` for
+exactly the two arms the live predicate already calls a person, so no row's answer moves — and the
+verification block asserts that equivalence in both directions rather than asserting the absence of
+a backfill. The same mapping is the code's fallback, stated once (`legacyAxes`), so the migration
+and the dual-read cannot drift apart.
+
+**The field is REQUIRED, and that is the half that will outlast the rename.** The old context field
+was optional, and `buildChannelContext` carried a docblock about the container field being "the one
+field on this context whose ABSENCE widens". An optional security axis has to pick a default, and
+both defaults are wrong: "the caller" widens, "nobody" silently 404s an operator on their own rows.
+Making it required moved the question to the typechecker, which found all 88 construction sites in
+one pass — 54 of them mechanical, and every one of the rest a fixture that had been expressing "a
+shared credential" as *a container id with no subject stated*, i.e. the conflation, re-entered by
+hand in the tests that were supposed to guard against it.
+
+**What the tests had to change to.** Every case is now stated at BOTH container values, so a
+predicate that starts consulting the fence again fails in `credential-audience.test.ts` rather than
+in whichever feature suite happens to notice first. The pre-existing suites asserted "a lock refuses
+a private row", which is true of the old predicate and true of a predicate that reads the fence —
+i.e. they could not tell the fix from the defect. Pinning the pair, not the arm, is what makes them
+mutation tests.
+
+**The one asymmetry, stated rather than smoothed.** The READ path tolerates a database this
+migration has not reached (`42703`, caught once per process, legacy column list thereafter) because
+`mcp_tokens` is the one table where an unapplied column 401s **every** credential instead of 500ing
+one feature. The MINT path does not: it INSERTs the new columns and 42703s if they are missing,
+which fails open to a device token and is logged. That is deliberate — a degraded ceiling is
+recoverable, a total auth outage is not — and it is the `20260829120000` precedent applied in the
+direction each path can afford.
