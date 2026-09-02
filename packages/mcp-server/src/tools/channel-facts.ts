@@ -54,12 +54,32 @@ import { neutralizeInline } from "./channel-shared";
 export const WRITE_RESULT_MAX_CHARS = 300;
 
 /**
- * The longest a single value may render. ⚠ Chosen so that even a result carrying
- * eight maximal fields stays inside {@link WRITE_RESULT_MAX_CHARS}; a UUID (36)
- * and an `@agent-<id>` handle (14) both fit whole, which is the point — the
- * values a caller has to COPY are never the ones that get clipped.
+ * The longest a single value may render. ⚠ THE VALUES A CALLER HAS TO COPY MUST
+ * FIT WHOLE — that is the whole constraint, and the number is derived from the
+ * LONGEST of them rather than guessed:
+ *   - a UUID thread or message id — 36
+ *   - an `@agent-<id>` handle — 14
+ *   - **a LEGACY ad-hoc thread id, `task-<channel uuid>-<seq>` — 45**
+ *
+ * ⚠ **IT WAS 40 AND THAT WAS A DATA-LOSS BUG** (found 2026-09-02 by the suite
+ * that pins this file). A legacy id clipped at 40 keeps `task-` plus the channel
+ * uuid — the part EVERY ad-hoc id in one channel shares — and drops the trailing
+ * seq, which is the only half that distinguishes them. Two different exchanges
+ * rendered byte-identical lines. It is also precisely the id a caller must echo
+ * back on every post to keep an inherited exchange from forking, and a caller
+ * that INHERITED it has no other copy. (`channel-render-threads.ts › shortRef`
+ * exists for the same reason and abbreviates from the OTHER end.)
  */
-export const FACT_VALUE_MAX = 40;
+export const FACT_VALUE_MAX = 48;
+
+/**
+ * A token that is already inert in a `key=value` line — see {@link renderValue}.
+ * ⚠ DELIBERATELY NARROW: every character here is one `neutralizeInline` leaves
+ * alone, except `_`, which is the only reason this exists. Widening it is how a
+ * bypass becomes a hole, so add a character only with the argument for why it
+ * cannot forge a pair, a span, or a row.
+ */
+const SAFE_BARE_TOKEN = /^[A-Za-z0-9_.:@/-]+$/;
 
 /** A value nobody reported, or that does not apply to this call. ⚠ NEVER zero. */
 export const NOT_APPLICABLE = "-";
@@ -87,6 +107,27 @@ function renderValue(value: FactValue): string {
   if (value === null || value === undefined) return NOT_APPLICABLE;
   if (typeof value === "boolean") return value ? "yes" : "no";
   if (typeof value === "number") return String(value);
+  // ⚠ AN ALREADY-INERT TOKEN IS PASSED THROUGH, and this is the ONE carve-out.
+  // `neutralizeInline` blanks `_` because in MARKDOWN it is emphasis — correct
+  // for prose, wrong here, and it corrupted this server's OWN closed-set
+  // literals: `poll=read_directions` rendered `poll="read directions"` and
+  // `confirm=read_sessions` rendered `confirm="read sessions"`, naming ops that
+  // do not exist on the one surface a caller goes to next (found 2026-09-02).
+  //
+  // ⚠ IT IS NOT A SECOND NEUTRALIZER AND NOT A PER-SITE JUDGEMENT ABOUT WHO
+  // WROTE THE VALUE — INVARIANTS §10 forbids both. It is one rule about the
+  // SHAPE of the value, applied to every value identically: the charset below
+  // admits nothing `neutralizeInline` would change EXCEPT `_`. No whitespace (so
+  // it cannot split the `key=value` pairs), no quote, and none of
+  // `` ` * # > [ ] { } | `` or control characters. A `_` in an otherwise-inert
+  // token cannot forge a field, a code span, or a table cell — it can at most
+  // italicize itself. Anything not matching goes through the neutralizer
+  // untouched, which is every peer-authored name, title and body.
+  if (SAFE_BARE_TOKEN.test(value)) {
+    return value.length > FACT_VALUE_MAX
+      ? `${value.slice(0, FACT_VALUE_MAX - 1)}…`
+      : value;
+  }
   // ⚠ `neutralizeInline` answers null for text that flattened to nothing — the
   // same "not reported" this line already has a spelling for.
   const safe = neutralizeInline(value);

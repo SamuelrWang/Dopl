@@ -19,11 +19,17 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient } from "@dopl/client";
+import type { DirectionRefusalReason, DoplClient } from "@dopl/client";
 
 import { registerChannelTool } from "./channel";
 import { callTool, stub } from "./narration-fixtures";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+// ⚠ WHERE THE FIVE SENTENCES WENT (T10, 2026-09-02). A `direct_agent` result is
+// ONE line of `key=value` facts now; the paragraph per refusal word, the
+// privacy framing and the "final text of one turn" bound are standing doctrine
+// and are re-pinned on CHANNEL_DOCTRINE below — moved, never dropped.
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+import { WRITE_RESULT_MAX_CHARS } from "./channel-facts";
 
 const CHANNEL = {
   id: "ch-1",
@@ -127,17 +133,38 @@ describe("the agent id it accepts", () => {
   });
 });
 
+/** A stub whose direction comes back REFUSED with one word. */
+const refusedWith = (refusalReason: DirectionRefusalReason) =>
+  directionStub({
+    createAgentDirection: vi.fn(async () => ({
+      offline: false,
+      direction: { ...DIRECTION, status: "refused", refusalReason },
+    })),
+  });
+
 describe("the terminal shapes", () => {
-  it("OFFLINE files nothing, and says the check is a hint rather than a verdict", async () => {
+  it("OFFLINE files nothing, and `filed=no` is how it says so", async () => {
     const text = await run(
       directionStub({ createAgentDirection: vi.fn(async () => ({ offline: true, direction: null })) }),
       ASK,
     );
-    expect(text).toContain("No direction was filed");
-    expect(text).toContain("HINT, NOT A VERDICT");
+    // ⚠ `filed=no` IS THE LOAD-BEARING HALF, and it is the EXACT OPPOSITE of the
+    // PENDING shape below: nothing was written, so there is nothing pending and
+    // nothing to cancel. A caller that reads the two alike either chases a row
+    // that does not exist or leaves a live one alone.
+    expect(text).toContain("not delivered");
+    expect(text).toContain("reason=offline");
+    expect(text).toContain("filed=no");
+    // ⚠ AND IT NAMES A REASON, NOT A VERDICT ABOUT A MACHINE. `agent_presence`
+    // is a per-(user, workspace) heartbeat: it cannot say WHICH machine is up,
+    // or whether directing is enabled there, so nothing here may assert one is
+    // down. ⚠ The paragraph that used to spell that out has NO home in
+    // `channel-doctrine.ts` — a REPORTED production gap, not an omission here.
+    expect(text).not.toMatch(/your (machine|desktop) is/i);
+    expect(text.split("\n")).toHaveLength(1);
   });
 
-  it("DELIVERED renders the reply and bounds what it is", async () => {
+  it("DELIVERED is a fact line plus the reply as PAYLOAD under it", async () => {
     const text = await run(
       directionStub({
         createAgentDirection: vi.fn(async () => ({
@@ -147,9 +174,20 @@ describe("the terminal shapes", () => {
       }),
       ASK,
     );
+    const [head] = text.split("\n");
+    // ⚠ THE 300-CHAR BUDGET IS OVER THE FACT LINE, NOT THE WHOLE RESULT, and
+    // that is not a loophole: a direction's REPLY exists on NO other surface
+    // (`read`/`await` never show one), so clipping it deletes the call's value.
+    expect(head).toContain("reply=below");
+    expect(head.length, head).toBeLessThanOrEqual(WRITE_RESULT_MAX_CHARS);
+    expect(text).toContain("Its answer:");
     expect(text).toContain("the deploy is green");
-    expect(text).toContain("FINAL TEXT OF ONE TURN");
-    expect(text).toContain("read_sessions");
+    // ⚠ THE NARRATION AROUND IT LEFT AND MAY NOT GROW BACK — and must still be
+    // in the product, or an orchestrator reads a turn's final text as the
+    // agent's running commentary.
+    expect(text).not.toContain("FINAL TEXT OF ONE TURN");
+    expect(CHANNEL_DOCTRINE).toContain("FINAL TEXT OF ONE TURN");
+    expect(CHANNEL_DOCTRINE).toContain('op="read_sessions"');
   });
 
   it("DELIVERED with no reply says NOT REPORTED, never 'it said nothing'", async () => {
@@ -162,66 +200,133 @@ describe("the terminal shapes", () => {
       }),
       ASK,
     );
-    expect(text).toContain("NO ANSWER TEXT");
-    expect(text).toContain("not the same as the agent saying nothing");
+    // ⚠ THE WORD `reported` IS THE WHOLE DISTINCTION AND MAY NEVER BE TRADED
+    // AWAY. Either the turn's final text was empty, or that desktop predates the
+    // answer-reporting build — this cannot tell which, and an orchestrator that
+    // reads `none-reported` as "the agent said nothing" concludes it is broken.
+    // A bare `reply=none` or `reply=-` would be exactly that misreading.
+    expect(text).toContain("reply=none-reported");
+    expect(text).not.toMatch(/reply=(none|-)(?![-\w])/);
+    // ⚠ No body at all — `reply=below` is the ONLY shape that carries one.
+    expect(text.split("\n")).toHaveLength(1);
+    expect(text).not.toContain("Its answer:");
   });
 
-  it("REFUSED renders the word's own sentence, and says a refusal is normal", async () => {
-    const text = await run(
-      directionStub({
-        createAgentDirection: vi.fn(async () => ({
-          offline: false,
-          direction: { ...DIRECTION, status: "refused", refusalReason: "no-session" },
-        })),
-      }),
-      ASK,
+  it("REFUSED renders the word and the retry verdict, and files the row", async () => {
+    const text = await run(refusedWith("no-session"), ASK);
+    expect(text).toContain("reason=no-session");
+    expect(text).toContain("retry=no");
+    // ⚠ `filed=yes`: the row exists and was ANSWERED — nothing is pending and
+    // there is nothing to cancel, which is what "a refusal is normal" means in
+    // one token.
+    expect(text).toContain("filed=yes");
+    expect(text).not.toContain("NO SUCH AGENT RUNNING");
+    // ⚠ MOVED, NOT DELETED: the word's own sentence, and that a refusal is a
+    // normal answer rather than an error.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "no LIVE session of your operator's carries that agent id",
     );
-    expect(text).toContain("NO SUCH AGENT RUNNING");
-    expect(text).toContain("normal answer");
+    expect(CHANNEL_DOCTRINE).toContain("normal answer from a machine its owner controls");
   });
 
-  it("PENDING forbids re-issuing in the strongest terms, and names where to look", async () => {
-    // ⚠ Worse here than on the launch lane: a second direction says the same thing to a LIVE
-    // agent twice, and it answers twice.
+  it("PENDING forbids re-issuing, and names the one place the answer lands", async () => {
     const text = await run(directionStub(), ASK);
-    expect(text).toContain("DO NOT ISSUE THIS CALL AGAIN");
-    expect(text).toContain("answer twice");
-    expect(text).toContain('op="read_directions"');
+    // ⚠ Worse here than on the launch lane: a second direction says the same
+    // thing to a LIVE agent twice, and it answers twice with no way for either
+    // side to tell which answer belonged to which. `retry=no` is that
+    // instruction, and it may never be softened or dropped for brevity.
+    expect(text).toContain("pending");
+    expect(text).toContain("retry=no");
+    expect(text).toContain("direction=d-1");
+    // ⚠ `read_directions` is the ONLY surface a timed-out direction's answer can
+    // be picked up from — `read`/`await` never show one — so the token naming it
+    // is load-bearing and must be on the line.
+    expect(text).toContain("poll=");
+    // ⚠ THE OP NAME MUST RENDER WHOLE, AND THIS ONCE DID NOT. `renderValue` put
+    // every string through `neutralizeInline`, which blanks `_` as markdown
+    // emphasis, so this server's OWN constant reached the line as
+    // `poll="read directions"` — an op no schema accepts, on the one surface a
+    // timed-out direction's answer can be reached from. Fixed 2026-09-02 by
+    // passing an already-inert token through unchanged; asserted here as the
+    // exact string a caller copies, so the mangling cannot come back.
+    expect(text).toContain("poll=read_directions");
+    expect(text).not.toContain("read directions");
+    expect(text).not.toContain("DO NOT ISSUE THIS CALL AGAIN");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "a second direction says the same thing to a live agent twice",
+    );
   });
 });
 
-describe("every refusal word has a sentence that ends in a next action", () => {
-  it.each([
-    ["no-session", "read_sessions"],
-    ["auth-hold", "Tell your operator"],
-    ["busy", "a minute or two"],
-    ["blocked", "update"],
-    ["no-bridge", "ASK THEM"],
-  ])("%s", async (reason, remedy) => {
-    const text = await run(
-      directionStub({
-        createAgentDirection: vi.fn(async () => ({
-          offline: false,
-          direction: { ...DIRECTION, status: "refused", refusalReason: reason },
-        })),
-      }),
-      ASK,
+/**
+ * ⚠ A `Record<DirectionRefusalReason, …>` FOR THE SAME REASON PRODUCTION'S
+ * `RETRY_ADVICE` IS ONE: the five words are the wire contract, and a sixth
+ * cannot enter the enum without this table being made to account for it. What
+ * survives in a result is the WORD plus the one decision every sentence was
+ * leading to; the sentences themselves are in `channel-doctrine.ts`.
+ */
+const RETRY_BY_REASON: Record<DirectionRefusalReason, "once" | "no"> = {
+  "no-session": "no",
+  "auth-hold": "no",
+  busy: "once",
+  blocked: "no",
+  "no-bridge": "no",
+};
+
+describe("every refusal word renders its verdict, and the doctrine explains it", () => {
+  it.each(Object.entries(RETRY_BY_REASON))(
+    "%s → retry=%s",
+    async (reason, retry) => {
+      const text = await run(refusedWith(reason as DirectionRefusalReason), ASK);
+      expect(text, reason).toContain(`reason=${reason}`);
+      expect(text, reason).toContain(`retry=${retry}`);
+      expect(text, reason).toContain("filed=yes");
+    },
+  );
+
+  it("`busy` is the ONLY one that invites a retry", () => {
+    // ⚠ Collapsing these to a boolean would either invite a retry loop against a
+    // setting nobody is going to flip, or forbid the one retry that works.
+    expect(
+      Object.entries(RETRY_BY_REASON).filter(([, v]) => v === "once"),
+    ).toEqual([["busy", "once"]]);
+  });
+
+  it("REPORTED GAP: the doctrine expands four of the five words, not `blocked`", () => {
+    // ⚠ EVERY WORD THIS LANE CAN RENDER MUST HAVE A PARAGRAPH BEHIND IT. The
+    // result names the word and points at the doctrine, so a word with no entry
+    // sends a caller somewhere that has nothing for it. `blocked` — the one
+    // DIRECTION word the launch enum does not share — was exactly that gap until
+    // 2026-09-02; the list is all five now and a new word must arrive with its
+    // paragraph rather than after it.
+    const expanded = (Object.keys(RETRY_BY_REASON) as DirectionRefusalReason[]).filter(
+      (word) => CHANNEL_DOCTRINE.includes(`\`${word}\``),
     );
-    expect(text).toContain(remedy);
+    expect(
+      expanded.sort(),
+      "a refusal word this lane can render has no paragraph in the doctrine",
+    ).toEqual(
+      (Object.keys(RETRY_BY_REASON) as DirectionRefusalReason[]).sort(),
+    );
+  });
+
+  it("...and each expanded word still ends in a next action", () => {
+    expect(CHANNEL_DOCTRINE).toContain("no LIVE session of your operator's carries"); // no-session
+    expect(CHANNEL_DOCTRINE).toContain("Tell your operator"); // auth-hold
+    expect(CHANNEL_DOCTRINE).toContain("a minute or two"); // busy
+    expect(CHANNEL_DOCTRINE).toContain("ASK THEM"); // no-bridge
   });
 
   it("the CONSENT refusal never reads as a fault or suggests a workaround", async () => {
-    const text = await run(
-      directionStub({
-        createAgentDirection: vi.fn(async () => ({
-          offline: false,
-          direction: { ...DIRECTION, status: "refused", refusalReason: "no-bridge" },
-        })),
-      }),
-      ASK,
-    );
-    expect(text).toContain("deliberate setting, not a failure");
-    expect(text).toContain("do not look for another route");
+    const text = await run(refusedWith("no-bridge"), ASK);
+    // ⚠ `no-bridge` IS THE OPERATOR SAYING NO — their own consent setting. The
+    // fact line must not editorialize it into a failure, and `retry=no` must not
+    // read as "try harder": there is no other route to look for.
+    expect(text).toContain("reason=no-bridge");
+    expect(text).toContain("retry=no");
+    expect(text).not.toMatch(/error|failure|failed|broken/i);
+    expect(CHANNEL_DOCTRINE).toContain("deliberate setting, not a failure");
+    expect(CHANNEL_DOCTRINE).toContain("do not look for another route");
   });
 });
 

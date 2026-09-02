@@ -173,18 +173,62 @@ describe("the option bounds refuse in the direction that says what to do", () =>
   });
 });
 
-describe("the result says where the answer arrives", () => {
-  it("names the channel await and states it is NOT private", async () => {
-    // Without this an agent taught by `launch_agent`'s bullet polls a surface
-    // that has nothing to give it, forever.
+/**
+ * ⚠ THE THREE APPENDED PARAGRAPHS ARE GONE (T10, 2026-09-02) — what a card is,
+ * where the answer arrives, and that the first answer wins. `opEscalate` no
+ * longer wraps `opPost`'s result; it rides the shared fact line with its own
+ * verb and two extra fields.
+ *
+ * ⚠ AND THIS IS A HALF-GUARD, DELIBERATELY, BECAUSE THE OTHER HALF IS MISSING.
+ * The rule for every "moved, not deleted" case in this tier is: assert the
+ * paragraph is out of the RESULT **and** the sentence is still in
+ * `channel-doctrine.ts`. `channel-ops-escalate.ts`'s own comment says all three
+ * moved there — measured 2026-09-02, the doctrine contains no escalation section
+ * at all (no "escalat", no "first one wins", no "card ... buttons"). So the
+ * terseness half is pinned below and the doctrine half is REPORTED rather than
+ * softened into something weaker that would pass. Add the section and this block
+ * gets its second assertion.
+ */
+describe("the result reports the card it filed, not what a card is", () => {
+  it("opens on its OWN verb and counts the options it validated", async () => {
+    // ⚠ `milestone` and `escalate` both delegate to `opPost` rather than growing
+    // a second delivery path, so a result that opened `posted` for all three
+    // would report the wrong ACT — the one kind of wrong nothing downstream can
+    // detect. The two extra fields are things only THIS call knows: how many
+    // options were filed, and whether a recommendation went with them.
     const text = await run(channelStub(), ASK);
-    expect(text).toContain("NOT PRIVATELY");
-    expect(text).toContain('op="await"');
+    expect(text.startsWith("escalated ")).toBe(true);
+    expect(text).toContain("options=2");
+    expect(text).toContain("recommended=0");
   });
 
-  it("forbids a second card for the same question", async () => {
+  it("⚠ REPORTS THE TAG, which is what decides whether the card is SEEN", async () => {
+    // ⚠ A CARD NOBODY IS TAGGED IN IS A CARD NOBODY SEES — the @-tag is what puts
+    // it in a person's inbox, and an exact-match resolver posts a mistyped tag
+    // successfully and reaches nobody. `tags=0/1` says so in four characters and
+    // is the field on this result that matters most.
+    const text = await run(channelStub(), {
+      ...ASK,
+      context: "@samue the rollback window closes at 02:00.",
+    });
+    expect(text).toContain("tags=0/1");
+  });
+
+  it("does not re-teach where the answer arrives, or that the first one wins", async () => {
+    // ⚠ TERSENESS GUARD. Both claims are true of EVERY escalation — standing
+    // doctrine, not a report on this one — so neither may grow back onto a result
+    // an orchestrator reads in a loop. Without this the prose returns one honest
+    // sentence at a time.
     const text = await run(channelStub(), ASK);
-    expect(text).toContain("ONE ANSWER, FIRST ONE WINS");
+    expect(text.split("\n")).toHaveLength(1);
+    expect(text).not.toContain("NOT PRIVATELY");
+    expect(text).not.toContain("ONE ANSWER, FIRST ONE WINS");
+    expect(text).not.toContain("ESCALATION CARD");
+    // ⚠ What the result DOES hand back is the cursor to watch on, which is the
+    // operative half of "where the answer arrives" and costs eight characters.
+    // Without it an agent taught by `launch_agent`'s bullet polls a surface that
+    // has nothing to give it, forever.
+    expect(text).toContain("await=since:42");
   });
 });
 

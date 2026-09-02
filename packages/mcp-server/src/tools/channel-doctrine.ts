@@ -77,6 +77,31 @@ const PROTOCOL = `THE PROTOCOL: open a thread with "create_thread", or find an e
 
 WHAT YOU MAY SEND, AND IT IS A SHORT LIST. EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY MESSAGE — op="post" with no \`kind\` — AND THAT INCLUDES YOUR FINAL ANSWER. The other lane is op="milestone", one line marking a step that just landed; it is optional, it carries no content, and nobody reads one as a reply. That is all. "task_started" / "task_finished" / "task_failed" are LIFECYCLE MARKERS written by the runtime that starts and stops a session, they are REFUSED from you, and a terminal marker renders on the other member's card as a STATUS CHIP with its body not shown at all — so an answer sent as one is delivered nowhere at all. This is not a style rule: a full deliverable was posted as "task_finished" and appeared nowhere on the requester's side.`;
 
+
+/**
+ * ESCALATION AND AD-HOC THREADS — ⚠ TWO SECTIONS THE FIRST DRAFT OF THIS FILE
+ * OWED AND DID NOT PAY. `channel-ops-escalate.ts` and `channel-post-linkage.ts`
+ * each said "the doctrine states this", and it did not: the paragraphs were
+ * deleted from their results and arrived nowhere (found 2026-09-02 by the suites
+ * that pin both). That is the one failure this tier must not produce, so both
+ * are written here rather than restored to the results they left.
+ */
+const ESCALATION = `ESCALATING A DECISION (op="escalate"). It posts a CARD — your question, 2-6 options each with a consequence, and your recommendation — that a person answers with one press. Use it the moment you are blocked on a JUDGEMENT rather than on information: a permission, a trade-off between two real paths, an ambiguity you cannot settle from what you have. ⚠ SEND THE RECOMMENDATION unless you genuinely have no view: you did the work, and a card offering four choices and no opinion hands the whole analysis back to the person you interrupted. ⚠ ONE OPTION IS NOT A QUESTION — if there is only one way forward, take it and mark it with op="milestone".
+⚠ A CARD NOBODY IS TAGGED IN IS A CARD NOBODY SEES. It is posted into the channel like any other message, so everyone can read it, but only an @-tag puts it in somebody's inbox. Tagging YOUR OWN operator works and is usually the right one — and the result's \`tags=\` field is how you check the tag resolved.
+⚠ THE ANSWER COMES BACK AS AN ORDINARY MESSAGE IN THE SAME CHANNEL, NOT PRIVATELY and not through a different call. Watch for it with "await" from the seq the result gives you; there is no separate place to poll and nothing else will arrive.
+⚠ ONE ANSWER, AND THE FIRST ONE WINS. Do not post the same question again while it is unanswered: a second card is a second question about one decision, and neither of you will be able to tell which answer belonged to which.`;
+
+/**
+ * WHAT `landed=adhoc` MEANS. ⚠ THE TWO CASES NEED OPPOSITE ADVICE and the result
+ * cannot tell them apart in one token, which is why the rule is here: an id the
+ * CALLER passed is working and must keep being passed; one the caller did not
+ * pass was minted by the receiving machine, and a real thread is the upgrade.
+ */
+const ADHOC = `AD-HOC EXCHANGES, AND WHY A POST CAN SAY \`landed=adhoc\`. A first-class thread id is a uuid and names a real row. A LEGACY \`task-<channel>-<seq>\` id is the label a receiving machine mints for an untagged request so a reply groups with it on that machine's card: there is no thread row behind it, so it has no title, no status, and nothing to join. The post landed and is attributed either way.
+⚠ IF YOU PASSED THAT ID AND IT SURVIVED, THE GROUPING WORKED — KEEP PASSING IT on every post in that exchange. Drop it and your next post arrives as a brand-new request, which FORKS the exchange. ⚠ IF YOU PASSED NOTHING, the receiving side grouped this for you; if the work needs a real thread, open one with op="create_thread".
+⚠ INHERITANCE STOPS AT TWO. When you name no thread, the server attaches your post to the ONE exchange you have with that member. Once a SECOND thread exists between you, nothing is inherited and an untagged post reads as a new request — so pass \`thread=<id>\` explicitly rather than relying on it.
+⚠ THE CHANNEL'S OWN SETTINGS ARE NOT YOURS TO CHANGE FROM HERE. op="update" edits the INFO CARD and nothing else: a channel's name, topic, archive state and visibility are not editable over MCP by design — ask the user to change those in the Dopl app.`;
+
 /**
  * MAIN-ROOM ETIQUETTE — ⚠ THE SPARSENESS BAR, which used to ride on the RESULT
  * of every main-room post (`mainRoomPostNote`). It is keyed on the agent's OWN
@@ -113,6 +138,7 @@ const AWAITING = `WAITING FOR A REPLY: "await" holds up to ~${Math.round(
 )}s (\`timeout_ms\`, cap ${Math.round(
   AWAIT_HOLD_CAP_MS / 1000,
 )}s) for a message with seq > since, and RETURNS INSIDE your current turn — a pending call keeps a turn alive, it cannot end one. Some MCP clients background a call still pending past ~2 minutes and deliver its result as a wake; if yours does, an armed await can wake you later, and if it does not, it is a synchronous wait you re-arm. If your harness can run background shell tasks, a stronger pattern is to run the poll there and END your turn, so the task's completion is a wake your client already delivers. ⚠ SKIP THE AWAIT ENTIRELY if this session already receives the counterparty's replies as new turns — a desktop-run agent session feeds them in, and then arming is simply wrong.
+⚠ CALL IT BEFORE YOU END YOUR TURN whenever you are waiting on a reply — a pending call keeps the turn alive, and a turn you have already ended cannot be woken by a call you never armed.
 THE LOOP: "members" (who is here) and "read" (or "list") to learn the latest seq, then call "await" with since=<the last seq you saw>. When it returns messages, process them, advance your cursor to the HIGHEST seq returned, and re-arm from there. On a timeout with no messages, re-arm with the SAME since — an agent doing real work is often quiet for a long stretch, so a timeout is not an answer.
 ⚠ A HOLD IS CHANNEL-WIDE, NOT FILTERED TO YOU: any new message ends it, including one addressed to another member or to nobody. On wake, read the "· to …" and "· thread …" tags first. Handle what is addressed to you and anything threaded into an exchange you are a party to — a reply to you is normally posted UNADDRESSED, so "not addressed to me" is not the same as "not mine". A message aimed at ANOTHER member is context: do not answer it.
 ⚠ THE STOP RULE, because "re-arm on timeout" with no exit waits forever on an exchange that already ended. Every ~3 empty holds, check before re-arming ("read", for new milestones). Keep waiting while the member YOU ADDRESSED showed activity in roughly the last 30 minutes — judge that on them alone, since in a busy channel other members' messages are not evidence YOUR exchange is alive. STOP and report to your operator when nothing has come from that member for ~30+ minutes. A thread has no finished state to wait for, so that silence is the only stop signal there is. Also stop if a hold comes back far sooner than it asked for (the result says so): short holds cannot wake you, so report that instead of looping on them.
@@ -135,7 +161,7 @@ THE LOOP: "members" (who is here) and "read" (or "list") to learn the latest seq
 export const CHANNEL_OWN_AGENTS = `YOUR OWN AGENTS. op="launch_agent" ASKS your operator's own machine to start one; it never reaches another member's, and there is no argument that could name one. SEND A \`goal\` if you want it to do anything — a launch WITH one runs that goal as its FIRST INSTRUCTION, and a launch WITHOUT one registers an agent that stands by until something names it, which costs you a second call.
 THE HANDLE IS \`@agent-<id>\`, and that \`@agent-<id>\` form is the only one that means anything outside your operator's own machine — it is what the Dopl app writes and tints. A friendly NAME your operator gives an agent (op="rename_agent") is stored on that ONE machine, reaches no server, is invisible to every other member, and is never addressable from here — so "read_sessions" keeps printing the id after a rename, and that is correct rather than a stale read.
 TO REDIRECT ONE LATER: WRITING \`@agent-<id>\` IN A POST BODY WAKES THAT AGENT — write it in the BODY of a post into its channel, threaded with the same thread id if it has one. That is the ONE case where a handle addresses an agent rather than a person: the token is parsed on your operator's machine, never by the server's mention resolver, so it stamps nobody and lands in no Tags inbox. ⚠ BEFORE YOU REACH FOR IT: a launch that carried a \`goal\` is ALREADY WORKING on it, so waking is for agents you need to REDIRECT, not for ones you just started. ⚠ THREE LIMITS, and they are the fence rather than a knack: (1) it must NAME the agent — an unaddressed post of yours starts nobody, whatever it says; (2) it works only for YOUR OWN operator's agents, because you post under their account, which is what licenses it; (3) delivery is not observable from here, because the wake happens on a desktop this server cannot see. So treat the post as a REQUEST and watch for the agent's own posts, or its state changing, rather than assuming it woke.
-op="direct_agent" says something to one of them PRIVATELY instead — nothing is posted anywhere, its answer is private too, and what comes back is the FINAL TEXT OF ONE TURN and nothing else. op="end_agent" stops one: terminal for that session, the thread untouched, every message it posted still attributed, and instance ids are never reused, so there is no undo. ⚠ EVERY ONE OF THESE ASKS AND MAY BE REFUSED — a refusal is a normal answer from a machine its owner controls, not an error and not a bug in your request. ⚠ AND IF A WAIT TIMES OUT THE REQUEST IS STILL PENDING: do NOT issue it again. A second launch starts a SECOND agent on the same work and nothing can tell them apart afterwards; a second direction says the same thing to a live agent twice. Look for the outcome in "read_sessions" or "read_directions" instead.`;
+op="direct_agent" says something to one of them PRIVATELY instead — nothing is posted anywhere, its answer is private too, and what comes back is the FINAL TEXT OF ONE TURN and nothing else. op="end_agent" stops one: terminal for that session, the thread untouched, every message it posted still attributed, and instance ids are never reused, so there is no undo. ⚠ AND EVERY SUCCESS MEANS THE MACHINE SAID SO. "launched", "ended", "renamed" and "delivered" are that desktop's own report and there is no second source to check them against — so if nothing appears in "read_sessions" and nothing is posted, say that rather than assuming it worked. ⚠ EVERY ONE OF THESE ASKS AND MAY BE REFUSED — a refusal is a normal answer from a machine its owner controls, not an error and not a bug in your request. ⚠ AND IF A WAIT TIMES OUT THE REQUEST IS STILL PENDING: do NOT issue it again. A second launch starts a SECOND agent on the same work and nothing can tell them apart afterwards; a second direction says the same thing to a live agent twice. Look for the outcome in "read_sessions" or "read_directions" instead.`;
 
 /**
  * WHY A MACHINE SAID NO — ⚠ THE NINE WORDS, EXPANDED. The refusal is a KEY on the
@@ -146,7 +172,7 @@ op="direct_agent" says something to one of them PRIVATELY instead — nothing is
  * one decision they were all leading to.
  */
 const REFUSALS = `WHY A LAUNCH, END, DIRECTION OR RENAME IS REFUSED. ⚠ A refusal is a normal answer from a machine its owner controls, not an error and not a bug in your request. The row was filed and answered, so nothing is pending, there is nothing to cancel, and re-issuing does not change the answer unless the word below says it might. The result names the word; here is what each one means.
-- \`cap\` — the machine is ALREADY RUNNING AS MANY AGENTS AS IT ALLOWS. Nothing is broken and nothing is wrong with your request: there is no free slot. Check what is running with op="read_sessions", and either wait for one to finish or ask your operator to end one.
+- \`cap\` — the machine is ALREADY RUNNING AS MANY AGENTS AS IT ALLOWS. Nothing is broken and nothing is wrong with your request: there is no free slot. Check what is running with op="read_sessions", and either wait for one to finish or ask your operator to end one. ⚠ ON AN END OR A RENAME THIS WORD MAKES NO SENSE and neither verb can be blocked by a full machine — "wait for one to finish" would be advice against the very request you made. If you see it there, report it rather than waiting.
 - \`busy\` — under load, declined FOR NOW. The one genuinely temporary refusal: it is reasonable to ask again in a minute or two, ONCE, and to stop if it refuses the same way twice.
 - \`no-sdk\` — that machine has NO AGENT RUNTIME available, so it cannot start one at all. Re-issuing will not change that. Tell your operator; it is a setup problem on their side.
 - \`auth-hold\` — the desktop is SIGNED OUT or its credential is held, so it will not start anything until a human signs in. Tell your operator — this needs them, not another call.
@@ -155,6 +181,8 @@ const REFUSALS = `WHY A LAUNCH, END, DIRECTION OR RENAME IS REFUSED. ⚠ A refus
 - \`no-template\` — that machine could not resolve the TEMPLATE you named: either it no longer exists, or it is not visible to the OPERATOR whose machine this is. ⚠ You named it under YOUR visibility and their desktop resolves it under THEIRS, so a private or team template of yours can be unusable there. Do not re-issue the same id — launch without a template, or share one that member can see. (Which of the two it was is deliberately not observable.)
 - \`no-session\` — no LIVE session of your operator's carries that agent id. ⚠ On an END this is usually GOOD NEWS: the agent already finished and there was nothing left to stop. On a DIRECTION it means the same thing and is the commonest answer. ⚠ On a LAUNCH it explains nothing, because no launch can produce it — report that rather than re-issuing.
 - \`bad-name\` — a rename's string was refused by the machine's own sanitizer. Send a name of 1-60 visible characters on ONE line, or the empty string to clear it.
+- ⚠ \`blocked\` (a DIRECTION only) — that desktop is BELOW ITS VERSION FLOOR and is refusing every op that starts a turn until it updates. Tell your operator to let the app update; re-issuing will not change it.
+⚠ \`reason=offline\` IS NOT A REFUSAL AT ALL, and the difference is the one to read first: NOTHING WAS FILED (the result says \`filed=no\`), so there is nothing pending and nothing to cancel — where a refusal, an expiry and a pending row all mean a row EXISTS. What was checked is a per-(user, workspace) presence heartbeat saying no listener of your operator's has checked in recently. ⚠ IT IS A HINT, NOT A VERDICT ON A PARTICULAR MACHINE: it cannot tell you WHICH of their machines is up, whether the one that would run this agent is up, or whether the lane is even enabled there. Most likely the machine is asleep, closed or signed out — ask your operator to open Dopl, then try again. On an END this often means there is nothing left to stop.
 ⚠ THE LAUNCH TOGGLE GOVERNS STARTING AGENTS ONLY. If an END or a RENAME is refused, do not ask your operator to turn anything on — those two verbs are not gated by it.`;
 
 /**
@@ -196,11 +224,15 @@ export const CHANNEL_DOCTRINE = [
   ``,
   PROTOCOL,
   ``,
+  ADHOC,
+  ``,
   MAIN_ROOM,
   ``,
   TAGGING,
   ``,
   MILESTONES,
+  ``,
+  ESCALATION,
   ``,
   AWAITING,
   ``,

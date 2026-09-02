@@ -25,6 +25,9 @@ import {
 // ⚠ The tool's file set is DISCOVERED (shared with parity.test.ts), never typed
 // out here.
 import { sourceOf, toolGroupFiles } from "./tool-group-files.js";
+// ⚠ THE CAP'S AGENT-FACING HOME SINCE T82 (2026-09-02) — the description became
+// a POINTER, so the prose that advertises the cap is the doctrine's.
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 
 
 // ── The env-tunable hold (incident lever) ───────────────────────────────
@@ -77,7 +80,7 @@ describe("await hold margin", () => {
     expect(AWAIT_HOLD_DEFAULT_MS).toBeLessThanOrEqual(AWAIT_HOLD_CAP_MS);
   });
 
-  it("FIX M3: the tool schema and its description advertise the same cap", () => {
+  it("FIX M3: the tool schema and the doctrine advertise the same cap", () => {
     // ⚠ A cap the schema accepts but the deadline chain does not cover is the
     // bug this pins shut, so no file may retype the literal.
     //
@@ -96,7 +99,15 @@ describe("await hold margin", () => {
     expect(toolSrc).toMatch(/\.max\(AWAIT_HOLD_CAP_MS\)/);
     expect(toolSrc).not.toMatch(/240_000|240000/);
     expect(toolSrc).toMatch(/max \$\{AWAIT_HOLD_CAP_MS\}/);
-    expect(toolSrc).toMatch(/<=\$\{AWAIT_HOLD_CAP_MS\}/);
+    // ⚠ THE PROSE HALF MOVED, SO THE ASSERTION FOLLOWED IT (T82, 2026-09-02).
+    // `CHANNEL_DESCRIPTION` used to spell the cap as `<=${AWAIT_HOLD_CAP_MS}`
+    // and is now a POINTER at `dopl://doctrine/channels`; the doctrine states
+    // the cap instead. Pinned on the RENDERED text and computed off the
+    // constant, which is strictly stronger than the old source regex: a
+    // hardcoded number in the doctrine fails here the moment the cap is retuned.
+    expect(CHANNEL_DOCTRINE).toContain(
+      `cap ${Math.round(AWAIT_HOLD_CAP_MS / 1000)}s`,
+    );
   });
 
   it("pins the mirrored route ceiling against the route's own maxDuration", () => {

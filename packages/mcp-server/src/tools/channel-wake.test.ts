@@ -19,6 +19,10 @@ import type { DoplClient } from "@dopl/client";
 import { AWAIT_HOLD_CAP_MS } from "./channel-await-budget";
 import { opCreateThread } from "./channel-ops-threads";
 import { CHANNEL_DESCRIPTION } from "./channel-description";
+// ⚠ WHERE THE AWAIT PROTOCOL LIVES SINCE T10/T12 (2026-09-02). `create_thread`
+// closed with four paragraphs of it; the result is one fact line now, so the
+// paragraphs are re-pinned HERE — moved, never dropped.
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { opAwait } from "./channel-ops-await";
 
 const CHANNEL = {
@@ -430,20 +434,31 @@ describe("opCreateThread — the await cursor rides back (WAKE-V1)", () => {
       )
     ).content[0].text;
 
-    expect(text).toContain('since=41');
+    // ⚠ THE CURSOR IS NOW A TOKEN, AND IT IS THE SAME CURSOR. `await=since:41`
+    // is what `since=41` was — pre-computed off the seq this write produced, so
+    // the next call needs no read to find it.
+    expect(text).toContain("await=since:41");
+    expect(text).toContain("seq=41");
+    expect(text).toContain("thread=thread-1");
     // ⚠ Teaching a follow-up read costs a round-trip AND races the peer: a
     // reply landing first becomes "the newest message", so the await starts
     // past the request and never returns the reply it was armed for.
     expect(text).not.toContain("limit=1");
-    expect(text).toContain('op="await"');
-    expect(text).toContain("STOP and report");
-    expect(text).toContain('thread="thread-1"');
-    expect(text).toContain("30+ minutes");
+    // ⚠ THE FOUR PARAGRAPHS LEFT AND MAY NOT GROW BACK — but they must also
+    // still exist in the product, so each is pinned on the doctrine that now
+    // carries it. Deleting either half of this pair is the regression.
+    expect(text).not.toContain('op="await"');
+    expect(text).not.toContain("STOP and report");
+    expect(CHANNEL_DOCTRINE).toContain('call "await" with since=<the last seq you saw>');
+    expect(CHANNEL_DOCTRINE).toContain("STOP and report to your operator");
+    expect(CHANNEL_DOCTRINE).toContain("30+ minutes");
   });
 
-  it("falls back to the cursor lookup when the route reports no seq", async () => {
-    // ⚠ Null seq (older deployment, or the idempotent short-circuit) → teach
-    // the lookup rather than a bogus cursor.
+  it("reports NO cursor rather than a fabricated one when the route gives no seq", async () => {
+    // ⚠ Null seq (older deployment, or the idempotent short-circuit) → say so,
+    // never invent a cursor. `since=0` REPLAYS THE CHANNEL and `since=null`
+    // is a 400, so a fabricated value is worse than an absent one; the lookup
+    // that finds the real seq is standing doctrine and is pinned below.
     const text = (
       await opCreateThread(
         threadClient(null),
@@ -454,8 +469,14 @@ describe("opCreateThread — the await cursor rides back (WAKE-V1)", () => {
       )
     ).content[0].text;
 
-    expect(text).toContain("limit=1");
+    // ⚠ BOTH ABSENCES ARE RENDERED, and as `-` rather than as a missing key: a
+    // dash says the server looked and there was nothing.
+    expect(text).toContain("seq=-");
+    expect(text).toContain("await=-");
+    expect(text).not.toContain("since:");
     expect(text).not.toContain("since=null");
     expect(text).not.toContain("since=undefined");
+    // ⚠ MOVED, NOT DELETED: how to find the seq yourself is in the doctrine.
+    expect(CHANNEL_DOCTRINE).toContain('"read" (or "list") to learn the latest seq');
   });
 });

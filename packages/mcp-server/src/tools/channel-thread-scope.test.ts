@@ -142,8 +142,15 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     // carries its own `**#44**`, and hiding those would hide the transcript.
     const trailer = text.slice(text.lastIndexOf("\n\n"));
     expect(trailer).not.toMatch(/\d/);
-    expect(text).toContain("NO CURSOR FROM THIS READ");
-    expect(text).toContain("drop `thread`");
+    // ⚠ THE HEADLINE SHRANK TO A TOKEN AND THE REASON DID NOT (T10/T82). Four
+    // sentences became one, but `cursor=none` alone would read as "this page has
+    // no cursor YET" and send the agent to the highest `**#seq**` on a message
+    // row — the exact footgun. WHY there is no cursor is the whole content, so
+    // the clause and the remedy stay on the same line.
+    expect(text).toContain("cursor=none");
+    expect(text).not.toContain("NO CURSOR FROM THIS READ");
+    expect(text).toContain("permanently skip what the filter hid");
+    expect(text).toContain("read unscoped to establish one");
     // ⚠ Nothing may suggest passing a thread INTO an await.
     expect(text).not.toMatch(/op="await"[^)]*thread/);
   });
@@ -164,10 +171,12 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     const text = (
       await opRead(twoLaneClient([41, 44], 91), "general", undefined, undefined, null, "thread-1")
     ).content[0].text;
-    expect(text).toContain("NO CURSOR FROM THIS READ");
+    expect(text).toContain("cursor=none");
     // ⚠ …and the param must not invent a REMEDY the result does not offer. Both
-    // ends say the same thing: drop the filter and read the channel unscoped.
-    expect(text).toContain("drop `thread`");
+    // ends still say the same thing — read the channel unscoped — though the
+    // RESULT now says it in three words and the PARAM, which is read before the
+    // mistake rather than after it, keeps the spelled-out version.
+    expect(text).toContain("read unscoped to establish one");
     expect(since).toContain("drop `thread`");
   });
 
