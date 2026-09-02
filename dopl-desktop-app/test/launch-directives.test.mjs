@@ -67,17 +67,37 @@ test("TOGGLE: off does not even write a refusal — the row is left to expire", 
   assert.deepEqual(decidePosts(h), []);
 });
 
-test("TOGGLE: off means realtime binds nothing — the table is never named on the wire", () => {
+// ── ⚠ THE BINDING IS NO LONGER THE TOGGLE, AND THAT IS THE 2026-09-01 CHANGE ─────────────
+//
+// It WAS `armed && enabled()`, and while the mailbox carried one verb those were the same
+// condition. The mailbox carries three now and two of them — `end` and `rename` — need no
+// consent (`directive-agent-ops.js`'s header carries the argument). A machine that bound nothing
+// with the launch toggle off would make those two reachable ONLY on machines that had granted
+// the consent they do not need, which is the exact inversion the ruling removes.
+//
+// ⚠ WHAT WIDENED IS A **READ**, AND ONLY OF THIS OPERATOR'S OWN ROWS: one more `postgres_changes`
+// binding on a subscription this process already holds, over rows whose RLS SELECT is
+// `operator_user_id = auth.uid()`. WHAT DID NOT WIDEN IS ANYTHING THIS MACHINE **DOES** — the two
+// cases above still pass unchanged: with the toggle off a LAUNCH is claimed by nobody, decided by
+// nobody and spawns nothing. Those are the cases that carry the §6 argument, and they are why
+// this one can be flipped without weakening it.
+test("TOGGLE: off still BINDS — the two consent-free kinds have to be seen (2026-09-01)", () => {
   const h = boot({ enabled: false });
-  assert.deepEqual(h.arms, [{ on: false, handler: "function" }]);
+  assert.deepEqual(h.arms, [{ on: true, handler: "function" }]);
 });
 
-test("TOGGLE: on arms the binding, and `refresh` re-arms after a flip", () => {
+test("TOGGLE: `refresh` re-arms and the binding tracks ARMED, not the toggle", () => {
   const h = boot({ enabled: true });
   assert.deepEqual(h.arms[0], { on: true, handler: "function" });
   h.cfg.enabled = false;
   h.api.refresh();
-  assert.deepEqual(h.arms[h.arms.length - 1], { on: false, handler: "function" });
+  // ⚠ STILL BOUND. The flip changes what this machine will ACT on, never what it can SEE.
+  assert.deepEqual(h.arms[h.arms.length - 1], { on: true, handler: "function" });
+  // …and the §6 half is unchanged: a launch arriving now is still claimed by nobody.
+  const before = claimPosts(h).length;
+  return h.api.handle(row(), WS).then(() => {
+    assert.equal(claimPosts(h).length, before, "the toggle still gates every LAUNCH");
+  });
 });
 
 // ⚠ READ AT DECISION TIME, NEVER CACHED. The operator may turn the lane off while a directive is

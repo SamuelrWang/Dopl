@@ -411,14 +411,14 @@ function register(opts = {}) {
     const p = payload || {};
     const agentId = asAgentId(p.agentId);
     if (!agentId) return { ok: false };
-    const names = require('./agent-names');
-    if (typeof p.name === 'string' && p.name.trim() === '') {
-      names.clear(agentId);
-      return { ok: true, displayName: null };
-    }
-    const stored = names.rename(agentId, p.name);
-    if (stored === null) return { ok: false, reason: 'bad-name' };
-    return { ok: true, displayName: stored };
+    // ⚠ THE WRITE IS `agent-self-ops.js › applyRenameTo` SINCE 2026-09-01 — the
+    // ONE statement of "empty CLEARS, else sanitize, and a sanitizer refusal is a
+    // refusal rather than a silent strip", now shared with the in-process tool and
+    // the external rename directive. What stays here is the IPC ANSWER SHAPE.
+    const res = require('./agent-self-ops')
+      .applyRenameTo(require('./agent-names'), agentId, p.name);
+    if (!res.ok) return { ok: false, reason: res.reason };
+    return { ok: true, displayName: res.name };
   }));
 
   // ⚠ WHAT AN AGENT IS FOR, beside what it is CALLED (2026-08-27, Samuel's launch-panel ruling).

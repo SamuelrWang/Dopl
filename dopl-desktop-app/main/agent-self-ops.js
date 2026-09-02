@@ -85,6 +85,46 @@ function endVerdict(selfId, requested, rows) {
   return { ok: true, row: row };
 }
 
+/**
+ * APPLY A RENAME — **the one write, shared by every caller that has one**
+ * (extracted 2026-09-01 for the external `rename_agent` directive kind).
+ *
+ * ⚠ WHAT IT SHARES IS THE THREE-LINE RULE, WHICH IS EXACTLY THE PART THAT WAS
+ * ABOUT TO BE COPIED: *empty CLEARS, anything else goes through the sanitizer,
+ * and a sanitizer refusal is a REFUSAL rather than a silent strip*. Three callers
+ * now — the in-process tool (`runtime/claude/axis-b.js › applyRename`), the
+ * renderer's `sessions:rename`, and the directive lane
+ * (`directive-agent-ops.js`) — and a third statement of "empty means clear" is
+ * how one surface quietly loses the only gesture that undoes a rename.
+ *
+ * ⚠ **IT ANSWERS A VERDICT, NOT A SENTENCE AND NOT A `CallToolResult`.** Each
+ * caller renders its own: MCP text for the in-process tool, `{ok:false,
+ * reason:'bad-name'}` for the IPC handler, a wire word for the directive lane.
+ * Putting prose here would put agent-facing copy in the module that is hardest to
+ * reword and hand it to a caller that has to neutralize it.
+ *
+ * ⚠ `names` IS INJECTED rather than required, so this stays inside the PURE block
+ * — `agent-names.js` opens an electron-store on require, and the suite slices this
+ * block and evaluates it with no module system at all.
+ *
+ * ⚠ IT NAMES, IT NEVER ADDRESSES. `agent-names.js`'s own rule, restated because
+ * this is the function every rename now goes through: nothing resolves an agent
+ * by this string, so a rename cannot re-point a running instruction.
+ */
+function applyRenameTo(names, target, value) {
+  if (typeof value === 'string' && value.trim() === '') {
+    names.clear(target);
+    return { ok: true, name: null };
+  }
+  const stored = names.rename(target, value);
+  // ⚠ `null` FROM `rename` IS THE SANITIZER SAYING NO (too long, control,
+  // zero-width or bidi characters), never a storage failure. It is REFUSED, not
+  // stripped: stripping stores something other than what was asked for, and a
+  // bidi override in an agent name renders a card that reads backwards.
+  if (stored === null) return { ok: false, reason: 'bad-name' };
+  return { ok: true, name: stored };
+}
+
 // CallToolResult helpers — the MCP shapes, spelled once.
 function txt(text) {
   return { content: [{ type: 'text', text: String(text) }] };
@@ -102,6 +142,7 @@ module.exports = {
   AGENT_OPS_TOOL_NAMES, // ridden on allowedTools by buildSdkOptions — SHADOWED, see header
   // pure core (unit-tested directly; electron-free)
   renameTargetFor,
+  applyRenameTo,
   endVerdict,
   txt,
   refuse,

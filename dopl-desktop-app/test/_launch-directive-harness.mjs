@@ -40,6 +40,15 @@ export const SRC = readFileSync(join(MAIN, "launch-directives.js"), "utf8");
 // `wire.directiveFrom`. A stubbed pair would have moved all of that out of the suite's reach in a
 // change whose whole point was that nothing moved.
 export const CALLS_SRC = readFileSync(join(MAIN, "launch-directive-calls.js"), "utf8");
+// ⚠ 2026-09-01 (the agent-management kinds): the REAL `directive-agent-ops.js`, evaluated with
+// stubbed leaves, exactly as `launch-directive-calls.js` above and for the same reason. It is
+// where the two new verbs are DECIDED — the end verdict, the rename write, and which wire word
+// each failure becomes — so faking it would move the whole feature out of the suite's reach.
+// ⚠ ITS TWO REAL DEPENDENCIES ARE NOT STUBBED: `agent-self-ops.js` (the verdict table and the
+// rename primitive, both electron-free and both shared with the in-process tool) and
+// `launch-directive-wire.js`. What IS stubbed is `session-engine.js` (the live registry) and
+// `agent-names.js` (an electron-store), which is the same seam `./targeting` is stubbed at.
+export const AGENT_OPS_SRC = readFileSync(join(MAIN, "directive-agent-ops.js"), "utf8");
 export const wire = require_(join(MAIN, "launch-directive-wire.js"));
 
 export const WS = "11111111-1111-4111-8111-111111111111";
@@ -74,6 +83,13 @@ export function boot(over = {}) {
     user: ME,
     watched: { id: CH, name: "General", toolProfile: "full" },
     launch: async () => ({ agentId: "a1b2c3d4", sessionId: "s1" }),
+    // ⚠ THE LIVE REGISTRY, as `session-engine.js › listLiveSessions` projects it. Empty by
+    // default, so the ordinary `no-session` answer is what a case gets unless it says otherwise.
+    live: [],
+    // What `controlByTask` answers. `{ok:true}` unless a case makes the session settle mid-flight.
+    control: { ok: true },
+    // What `agent-names.js › rename` answers: the STORED string, or null for a sanitizer refusal.
+    renameAnswer: undefined,
     claimAnswer: { ok: true, status: 200, json: { ok: true, directive: null } },
     ...over,
   };
@@ -81,6 +97,8 @@ export function boot(over = {}) {
   const gets = [];
   const arms = [];
   const logged = [];
+  const controls = []; // every `session-engine.controlByTask` call the lane made
+  const names = [];    // every `agent-names` write the lane made
   const resolves = [];
   const stub = (id) => {
     if (id === "./api") {
@@ -162,6 +180,32 @@ export function boot(over = {}) {
     // hand-written copy here would make the two lanes' model chains agree only in this file —
     // which is the drift the shared helper exists to prevent.
     if (id === "./session-launch-op") return launchOp;
+    // ── ⚠ THE AGENT-MANAGEMENT KINDS (2026-09-01) ───────────────────────────────────────────
+    if (id === "./directive-agent-ops") {
+      const m = { exports: {} };
+      new Function("require", "module", "exports", AGENT_OPS_SRC)(stub, m, m.exports);
+      return m.exports;
+    }
+    if (id === "./agent-self-ops") return require_(join(MAIN, "agent-self-ops.js"));
+    if (id === "./session-engine") {
+      return {
+        listLiveSessions: () => cfg.live,
+        controlByTask: (a) => { controls.push(a); return cfg.control; },
+      };
+    }
+    if (id === "./agent-names") {
+      return {
+        // ⚠ THE STORE'S OWN CONTRACT, not a sanitizer: `rename` answers the STORED string or
+        // `null` when it refuses, and `clear` answers nothing. The real sanitizer is driven for
+        // real in `agent-self-ops.test.mjs`; what THIS harness controls is which answer comes
+        // back, so a case can ask what the DIRECTIVE lane does with each.
+        rename: (agentId, name) => {
+          names.push({ op: "rename", agentId, name });
+          return cfg.renameAnswer !== undefined ? cfg.renameAnswer : String(name);
+        },
+        clear: (agentId) => { names.push({ op: "clear", agentId }); },
+      };
+    }
     if (id === "./diag") return { diag: (...p) => logged.push(p.join(" ")) };
     throw new Error(`unexpected require: ${id}`);
   };
@@ -177,7 +221,7 @@ export function boot(over = {}) {
   // ⚠ THE FRAME IS RECORDED BEFORE IT IS HANDED IN, so the claim stub above can grant the row it
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
-  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves };
+  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names };
 }
 
 /**

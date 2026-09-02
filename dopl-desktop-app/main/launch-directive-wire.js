@@ -79,9 +79,46 @@ const ROUTES = {
 const STATUS_PENDING = 'pending';
 const STATUS_CLAIMED = 'claimed';
 const STATUS_LAUNCHED = 'launched';
+// ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). `launched` is NOT reused for an
+// end: this row is read back by the orchestrator that filed it and rendered into
+// an agent-facing sentence, and the word "launched" on the record of an agent
+// being STOPPED is the one kind of wrong nothing downstream can detect. The
+// column CHECK pairs each with its kind, so the two can never be confused at rest.
+const STATUS_DONE = 'done';
 const STATUS_REFUSED = 'refused';
 const STATUS_EXPIRED = 'expired';
-const STATUSES = [STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_REFUSED, STATUS_EXPIRED];
+const STATUSES = [STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_DONE,
+  STATUS_REFUSED, STATUS_EXPIRED];
+
+// ── THE DIRECTIVE KINDS (2026-09-01, Samuel's external end/rename ruling) ──────
+//
+// ⚠ **ONE MAILBOX, THREE VERBS.** `end_agent` and `rename_agent` existed only
+// INSIDE a desktop-spawned session (`agent-self-ops.js`); an EXTERNAL agent
+// holding the operator's own credential could START agents and never stop or
+// label them, because no server can reach this process. The launch mailbox is the
+// only mechanism that crosses that gap, so the verbs became KINDS of directive.
+//
+// ⚠ **THE KINDS DO NOT SHARE A CONSENT GATE, AND THAT IS THE LOAD-BEARING FACT
+// FOR EVERY READER OF THIS MODULE.** `launch` is gated by
+// `channel-prefs.js › getOrchestratorLaunch` ("THE TOGGLE IS THE CONSENT",
+// INVARIANTS §6). `end` and `rename` are NOT — `agent-self-ops.js`'s header
+// carries the whole argument for the in-process twins of these two verbs, on the
+// same subjects: a STOP verb and a DISPLAY verb widen nothing, so the failure
+// direction of an abused call is an agent that stops or a card that reads
+// differently, on the machine of the operator whose agents they all are. The
+// toggle gates LOCAL COMPUTE BEING SPENT; these spend none.
+//
+// ⚠ AN UNKNOWN KIND COLLAPSES TO `launch` IN `directiveFrom`, WHICH IS THE SAFE
+// DIRECTION AND NOT AN OVERSIGHT: the column DEFAULTs to `launch`, every row
+// written before 2026-09-01 is one, and a launch is the branch that is FULLY
+// GATED. A future fourth kind reaching an older build is therefore gated rather
+// than silently dispatched — and the launch branch will refuse it anyway, because
+// a directive with no goal and no template starts a stand-by agent rather than
+// doing something nobody asked for.
+const KIND_LAUNCH = 'launch';
+const KIND_END = 'end';
+const KIND_RENAME = 'rename';
+const KINDS = [KIND_LAUNCH, KIND_END, KIND_RENAME];
 
 // ⚠ THE WORDS, VERBATIM AND CLOSED. Not a guess — see the header.
 // ⚠ SEVEN SINCE 2026-08-22 (agent templates). `no-template` is what this machine answers when a
@@ -103,16 +140,44 @@ const STATUSES = [STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_REFUSE
 // lane — the launch-over-MCP toggle IS the standing consent there (Samuel, OQ-3) — so it can never
 // be produced here, the column cannot store it, and `refusalFor` would map it to `no-bridge`
 // anyway, which would read to an orchestrator as the operator having turned the lane off.
+// ⚠ NINE SINCE 2026-09-01 (external end / rename). Both new words are ones this
+// tree ALREADY answers for these exact verbs in-process — `agent-self-ops.js ›
+// endVerdict` returns `no-session`, and `agent-names.js › sanitizeName`'s refusal
+// is what `bad-name` reports — lifted onto the wire so the same fact reads the
+// same way from outside. ⚠ `no-session` is deliberately the DIRECTION lane's
+// spelling too (`agent-direction-wire.js`): two vocabularies disagreeing about
+// how to say "that agent is not here" is how a render learns to guess.
+// ⚠ AND THE COLUMN CHECK LANDS IN THE SAME WAVE THIS TIME
+// (`20260907120000_channel_launch_directives_kind.sql`) — the 2026-08-22 window,
+// where this list ran one word ahead of the CHECK, is exactly what that
+// sequencing avoids: a `decide` carrying a word the CHECK lacks passes zod, passes
+// the route, and is refused AT REST.
 const REFUSAL_REASONS = ['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-counterparty',
-  'no-template'];
+  'no-template', 'no-session', 'bad-name'];
 
 // The keys this desktop puts on the wire, and the ones it reads back. Stated as data so the
 // suite can assert them without a live route, and so a route that lands with different names
 // fails in ONE place.
 const REQUEST_KEYS = { claim: ['directiveId'], decide: ['directiveId', 'status', 'agentId', 'refusalReason'] };
+
+// ⚠ `agent-names.js › MAX_NAME`, RESTATED AS A WIRE BOUND. It is the SAME number
+// and it is checked TWICE on purpose: here because an unbounded string from a
+// server row has no business travelling into main at all, and there because that
+// store is the authority on what it will hold. ⚠ A name this narrowing TRUNCATED
+// rather than refused would be stored silently altered, so `directiveFrom` keeps
+// the raw value's length and lets `sanitizeName` refuse it — see its note.
+const TARGET_NAME_MAX = 60;
 const RESPONSE_KEYS = { claim: ['ok', 'directive', 'reason'] };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ⚠ THE INSTANCE-ID SHAPE, and it is the SAME anchored pattern as `agent-id.js ›
+// AGENT_ID_RE`, `schema-launch.ts`'s zod and both column CHECKs. Restated here
+// rather than required, because this block is PURE — its suite slices it and
+// evaluates it with no module system — and `agent-id.js` is not reachable from
+// inside the sentinel. ⚠ The suite drives this constant against `agent-id.js`'s
+// own source, so the two cannot drift.
+const AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
 
 /** Bounded, whitespace-collapsed display text, or ''. */
 function text(value, max) {
@@ -179,8 +244,19 @@ function directiveFrom(raw, workspaceId) {
   // having to.
   const taskId = String(r.task_id || r.threadId || r.taskId || '');
   const status = String(r.status || '');
+  // ⚠ THE TARGET OF AN END / RENAME — an INPUT, never `agent_id`, which is the
+  // OUTPUT a launch produced. Both spellings for `templateId`'s reason: a REALTIME
+  // frame is the raw row and the CLAIM's answer is the server DTO.
+  const targetAgentId = String(r.target_agent_id || r.targetAgentId || '');
   return {
     id: id,
+    // ⚠ UNKNOWN COLLAPSES TO `launch`, WHICH IS THE **GATED** BRANCH — see the
+    // KINDS block above. A fourth kind minted by a newer server reaching this
+    // build must not be dispatched by a machine that has no branch for it, and
+    // must not be silently dropped either (the row would be claimed and never
+    // answered); routing it to the fully-consented branch is the only reading
+    // that is both safe and honest.
+    kind: KINDS.indexOf(String(r.kind || '')) === -1 ? KIND_LAUNCH : String(r.kind),
     workspaceId: String(r.workspace_id || r.workspaceId || workspaceId || ''),
     channelId: channelId,
     // ⚠ '' IS A REAL VALUE AND MEANS CHANNEL-LEVEL, exactly as it does on `sessions:launch`. A
@@ -199,6 +275,26 @@ function directiveFrom(raw, workspaceId) {
     // narrowing that dropped the name whenever the id was missing would throw away the only
     // evidence a template was ever named.
     templateName: text(r.template_name || r.templateName, TEMPLATE_NAME_MAX),
+    // ⚠ SHAPE-CHECKED HERE, not merely carried: it is about to be handed to
+    // `session-engine.js › controlByTask` as an address and printed into a diag.
+    // `''` is "no target", which the caller treats as a refusal on any kind that
+    // needs one rather than as "act on whatever is oldest" — there is no
+    // oldest-agent fallback on this lane and an end that guessed is unrecoverable.
+    targetAgentId: AGENT_ID_RE.test(targetAgentId) ? targetAgentId : '',
+    // ⚠ **`null` AND `''` ARE DIFFERENT AND BOTH ARE REAL, WHICH IS WHY THIS IS
+    // NOT `text()`.** `''` is the RENAME'S CLEAR gesture (back to `Agent #<id>`);
+    // `null` is "this directive is not a rename". Collapsing them — which every
+    // other string field here does, correctly, because none of them has a
+    // meaningful empty value — would turn "no rename requested" into "clear the
+    // name" on a kind that never asked for one.
+    // ⚠ AND IT IS NOT TRUNCATED. `text()` would silently store an altered name;
+    // `agent-names.js › sanitizeName` is the authority and REFUSES rather than
+    // strips, which is what produces the honest `bad-name`. What this does is
+    // refuse to carry an absurd length into main at all.
+    targetName: typeof r.target_name === 'string' || typeof r.targetName === 'string'
+      ? String(r.target_name !== undefined && r.target_name !== null
+        ? r.target_name : r.targetName).slice(0, TARGET_NAME_MAX + 1)
+      : null,
     status: STATUSES.indexOf(status) === -1 ? '' : status,
     agentId: String(r.agent_id || r.agentId || ''),
   };
@@ -236,6 +332,16 @@ function decideBody(directiveId, outcome) {
   if (agentId) {
     return { directiveId: String(directiveId || ''), status: STATUS_LAUNCHED, agentId: agentId };
   }
+  // ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). ORDER MATTERS AND IS THE WHOLE
+  // CORRECTNESS OF THIS FUNCTION: `agentId` is checked FIRST, so a launch can
+  // never fall into this branch, and `done` is checked before the refusal
+  // fallthrough, so an end that succeeded is never reported as `no-bridge`.
+  // ⚠ IT CARRIES NO ID, deliberately — the row already NAMES its target, and a
+  // second id here would be a field this machine could get wrong about a row it
+  // did not write. The route's schema has no field for one.
+  if (o.done === true) {
+    return { directiveId: String(directiveId || ''), status: STATUS_DONE };
+  }
   return {
     directiveId: String(directiveId || ''),
     status: STATUS_REFUSED,
@@ -252,13 +358,20 @@ module.exports = {
   STATUS_PENDING,
   STATUS_CLAIMED,
   STATUS_LAUNCHED,
+  STATUS_DONE,
   STATUS_REFUSED,
   STATUS_EXPIRED,
+  KINDS,
+  KIND_LAUNCH,
+  KIND_END,
+  KIND_RENAME,
+  AGENT_ID_RE,
   REFUSAL_REASONS,
   REQUEST_KEYS,
   RESPONSE_KEYS,
   GOAL_MAX,
   TEMPLATE_NAME_MAX,
+  TARGET_NAME_MAX,
   directiveFrom,
   refusalFor,
   claimBody,

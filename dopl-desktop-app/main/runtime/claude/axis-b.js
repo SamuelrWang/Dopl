@@ -91,15 +91,19 @@ function axisBTools(_session) {
 // VALUE, never an echo — `sessions:rename`'s rule, kept here for the same reason.
 function applyRename(target, value) {
   const names = require('../../agent-names'); // lazy: opens an electron-store on require
-  if (typeof value === 'string' && value.trim() === '') {
-    names.clear(target);
-    return agentOps.txt('Display name for agent ' + target + ' cleared — it reads as "Agent #' + target + '" again.');
-  }
-  const stored = names.rename(target, value);
-  if (stored === null) {
+  // ⚠ THE WRITE ITSELF MOVED TO `agent-self-ops.js › applyRenameTo` ON 2026-09-01,
+  // when the external `rename_agent` DIRECTIVE became its third caller. What
+  // stayed here is the SENTENCE — the split every wire value on this lane takes,
+  // and for the same reason: prose belongs to the reader, and a rule shared by
+  // three surfaces belongs to one function.
+  const res = agentOps.applyRenameTo(names, target, value);
+  if (!res.ok) {
     return agentOps.refuse('Name refused: 1-60 visible characters on one line; control, zero-width and bidi characters are rejected, not stripped.');
   }
-  return agentOps.txt('Display name for agent ' + target + ' is now "' + stored + '". Display only — @agent-' + target + ' is unchanged and remains the only address.');
+  if (res.name === null) {
+    return agentOps.txt('Display name for agent ' + target + ' cleared — it reads as "Agent #' + target + '" again.');
+  }
+  return agentOps.txt('Display name for agent ' + target + ' is now "' + res.name + '". Display only — @agent-' + target + ' is unchanged and remains the only address.');
 }
 
 // Build THIS session's server instance. `s` is the engine's session object; only `agentId`

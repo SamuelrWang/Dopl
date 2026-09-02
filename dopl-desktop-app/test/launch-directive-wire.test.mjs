@@ -41,6 +41,16 @@ const TH = "33333333-3333-4333-8333-333333333333";
 const ME = "44444444-4444-4444-8444-444444444444";
 const DID = "66666666-6666-4666-8666-666666666666";
 
+/**
+ * ⚠ **THE MAPPER MOVED ON 2026-09-01** — `service-launch.ts` hit the §1 cap when the
+ * agent-management kinds gave `toDirective` a second service (`service-launch-agent.ts`), so the
+ * row → DTO half lives in `service-launch-dto.ts` now. Named once here rather than at four call
+ * sites, because a suite that pins the OTHER TREE'S SOURCE has to be repointed as one thing when
+ * that source moves — four independent path literals is four chances to leave one asserting
+ * against a file that no longer contains what it is asserting about.
+ */
+const DTO_FILE = "service-launch-dto.ts";
+
 /** A pending directive row, as the server would write it (snake_case, like a realtime frame). */
 const row = (over = {}) => ({
   id: DID,
@@ -63,8 +73,13 @@ test("CONTRACT: the refusal words are this tree's existing vocabulary, verbatim"
   // ⚠ SEVEN SINCE 2026-08-22 (agent templates): `no-template`. It is the one member with NO
   // producer in `session-launch.js` — the funnel cannot fail to resolve a template, because the
   // resolve happens above it — so the loop below is a subset check in that direction only.
+  // ⚠ NINE SINCE 2026-09-01 (external end / rename). `no-session` and `bad-name` also have no
+  // producer in `session-launch.js` — they belong to the AGENT-MANAGEMENT kinds, whose producer
+  // is `directive-agent-ops.js` — so the subset loop below stays one-directional and the two are
+  // pinned against THAT file instead, in section 4.
   assert.deepEqual(wire.REFUSAL_REASONS,
-    ["cap", "busy", "no-sdk", "auth-hold", "no-bridge", "no-counterparty", "no-template"]);
+    ["cap", "busy", "no-sdk", "auth-hold", "no-bridge", "no-counterparty", "no-template",
+      "no-session", "bad-name"]);
   const launchSrc = readFileSync(join(MAIN, "session-launch.js"), "utf8");
   const produced = [...launchSrc.matchAll(/skipped: '([a-z-]+)'/g)].map((m) => m[1]);
   for (const word of produced) {
@@ -167,7 +182,7 @@ test("the 404 stand-down survives for OLDER servers, and still names the gap", (
 /** `toDirective`'s output shape, read out of the server's own source. */
 const dtoKeys = () => {
   const service = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "server", "service-launch.ts"), "utf8"
+    join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
   const body = service.slice(service.indexOf("function toDirective"));
   return [...body.slice(0, body.indexOf("\n}")).matchAll(/^\s{4}([A-Za-z]+):/gm)].map((m) => m[1]);
@@ -177,7 +192,7 @@ test("CONTRACT: the pending-read DTO carries `operatorUserId` (F-284)", () => {
   assert.ok(dtoKeys().includes("operatorUserId"),
     "without it every POLLED row fails handle's owner re-check and the backstop recovers nothing");
   const service = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "server", "service-launch.ts"), "utf8"
+    join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
   assert.match(service, /operatorUserId: row\.operator_user_id/);
   // …and the TYPE mirrors carry it too, or the mapper does not compile / the SDK cannot read it.
@@ -195,6 +210,10 @@ test("CONTRACT: the pending-read DTO carries `operatorUserId` (F-284)", () => {
 test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner check (F-284)", async () => {
   const dto = {
     id: DID,
+    // ⚠ THE AGENT-MANAGEMENT FIELDS (2026-09-01). A LAUNCH carries `kind: "launch"` and NULL on
+    // both targets — which is what makes them a fair part of this fixture: the DTO emits them on
+    // every row, so a `handle` that choked on their presence would break the launch lane too.
+    kind: "launch",
     operatorUserId: ME,
     channelId: CH,
     threadId: TH,
@@ -202,6 +221,8 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     model: "claude-opus-5",
     templateId: null,
     templateName: null,
+    targetAgentId: null,
+    targetName: null,
     status: "pending",
     refusalReason: null,
     agentId: null,
@@ -230,16 +251,26 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
 // looks like a success.
 test("CONTRACT: the claimed row's `threadId` is read, not just the raw row's `task_id`", () => {
   const service = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "server", "service-launch.ts"), "utf8"
+    join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
   assert.match(service, /threadId: row\.task_id/, "the DTO really does rename it");
   assert.equal(wire.directiveFrom({ id: DID, channel_id: CH, threadId: TH }, WS).taskId, TH);
   assert.equal(wire.directiveFrom({ id: DID, channel_id: CH, task_id: TH }, WS).taskId, TH);
 });
 
-test("CONTRACT: `decideBody` has exactly two shapes and never a third", () => {
+test("CONTRACT: `decideBody` has exactly three shapes and never a fourth", () => {
   assert.deepEqual(wire.decideBody(DID, { agentId: "a1b2c3d4" }),
     { directiveId: DID, status: "launched", agentId: "a1b2c3d4" });
+  // ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). It carries NO agent id — the row already NAMES
+  // its target — and `launched` is deliberately not reused: this row is rendered into an
+  // agent-facing sentence, and "launched" on the record of an agent being STOPPED is the one kind
+  // of wrong nothing downstream can detect.
+  assert.deepEqual(wire.decideBody(DID, { done: true }),
+    { directiveId: DID, status: "done" });
+  // ⚠ ORDER IS THE CORRECTNESS: an outcome carrying BOTH is a launch, and a `done` must never
+  // fall through to the refusal tail and report a successful end as `no-bridge`.
+  assert.equal(wire.decideBody(DID, { agentId: "a1b2c3d4", done: true }).status, "launched");
+  assert.equal(wire.decideBody(DID, { done: false, refused: "no-session" }).status, "refused");
   assert.deepEqual(wire.decideBody(DID, { refused: "cap" }),
     { directiveId: DID, status: "refused", refusalReason: "cap" });
   // ⚠ AN EMPTY OUTCOME IS A REFUSAL, NOT A SILENCE. A claimed directive with no decision is the
@@ -250,9 +281,14 @@ test("CONTRACT: `decideBody` has exactly two shapes and never a third", () => {
 
 test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing this machine", () => {
   const d = wire.directiveFrom(row({ shell_command: "rm -rf /", start_modes: { tools: "bypass" } }), WS);
+  // ⚠ THREE KEYS JOINED ON 2026-09-01 (the agent-management kinds) and the LIST IS THE TEST:
+  // `directiveFrom` is a literal whitelist, so this assertion is simultaneously "the new fields
+  // arrive" and "nothing else does". A column the server adds and the whitelist does not name is
+  // dropped without a word — which is the point of the narrowing, and also the one way to ship a
+  // feature over this lane and have it do exactly nothing.
   assert.deepEqual(Object.keys(d).sort(),
-    ["agentId", "channelId", "goal", "id", "model", "operatorUserId", "status", "taskId",
-      "templateId", "templateName", "workspaceId"]);
+    ["agentId", "channelId", "goal", "id", "kind", "model", "operatorUserId", "status",
+      "targetAgentId", "targetName", "taskId", "templateId", "templateName", "workspaceId"]);
   assert.equal(d.shell_command, undefined);
   assert.equal(d.startModes, undefined);
 });
@@ -274,7 +310,7 @@ test("TEMPLATE: `template_id` survives the narrowing, in BOTH spellings", () => 
   assert.equal(wire.directiveFrom(row({ template_id: TPL }), WS).templateId, TPL);
   assert.equal(wire.directiveFrom(row({ templateId: TPL }), WS).templateId, TPL);
   const service = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "server", "service-launch.ts"), "utf8"
+    join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
   assert.match(service, /templateId: row\.template_id/, "the DTO really does rename it");
   assert.match(service, /templateName: row\.template_name/, "…and the name half with it");

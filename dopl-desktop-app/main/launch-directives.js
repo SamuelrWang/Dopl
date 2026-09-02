@@ -9,12 +9,25 @@
 // writes back what happened. It is the only path by which anything other than a human click
 // starts a session on this Mac.
 //
-// ⚠ AND IT IS OFF UNLESS THE OPERATOR TURNED IT ON, PER MACHINE. `channel-prefs.js ›
+// ⚠ AND **LAUNCHING** IS OFF UNLESS THE OPERATOR TURNED IT ON, PER MACHINE. `channel-prefs.js ›
 // getOrchestratorLaunch` defaults FALSE and is reachable from exactly one `appWindowOnly` IPC
 // pair — no route, no MCP op, no column. **THE TOGGLE IS THE CONSENT**, and Samuel ruled it as
 // the replacement for "the click IS that human" on this lane: there is no click at directive
 // time, so the operator's standing local decision has to be the human, and a consent a program
 // can grant itself is not one.
+//
+// ── ⚠ THE MAILBOX CARRIES THREE VERBS SINCE 2026-09-01, AND ONLY ONE IS BEHIND THAT TOGGLE ──
+// Samuel's external end/rename ruling. `end_agent` / `rename_agent` existed only INSIDE a spawned
+// session (`agent-self-ops.js`), so an EXTERNAL agent holding this operator's credential could
+// start agents and never stop or label them. They now ride this lane as `kind = 'end' | 'rename'`
+// and dispatch to `directive-agent-ops.js`, which routes to the SAME paths the in-process verbs
+// use. **NEITHER IS GATED BY THE LAUNCH TOGGLE** — that module's header carries the argument in
+// full (a STOP verb and a DISPLAY verb widen nothing; the toggle gates LOCAL COMPUTE BEING SPENT)
+// and names it as the assumption most worth overruling. TWO LINES HERE implement it: the
+// `d.kind === KIND_LAUNCH` test in `handle`, and `refresh` binding realtime on `armed`.
+// ⚠ THE §6 THREAT MODEL BELOW IS UNCHANGED AND STILL GOVERNS THE LAUNCH BRANCH — the other two
+// kinds cannot spawn, cannot widen a profile and cannot reach a credential, which is precisely
+// why they sit outside it.
 //
 // ── ⚠ THE §6 THREAT THIS SHAPE IS BUILT AROUND ───────────────────────────────────────────
 //
@@ -117,9 +130,24 @@ function remember(id) {
   decided.add(id);
 }
 
-/** THE STANDING CONSENT, read at DECISION TIME and never cached. The operator may turn the lane
- *  off while a directive is in flight, and the next one must see that immediately. */
-function enabled() {
+/**
+ * THE STANDING CONSENT **FOR THE LAUNCH KIND**, read at DECISION TIME and never cached. The
+ * operator may turn the lane off while a directive is in flight, and the next one must see that
+ * immediately.
+ *
+ * ⚠ **IT GATES `kind = 'launch'` AND NOTHING ELSE SINCE 2026-09-01** (Samuel's external
+ * end/rename ruling). It used to gate the whole watcher, which was correct while the mailbox
+ * carried one verb. It now carries three, and the other two are a STOP verb and a DISPLAY verb
+ * that widen nothing — `directive-agent-ops.js`'s header carries the argument in full, including
+ * why gating them here would leave an operator able to have agents started for them and unable
+ * to stop them from where their orchestrator lives.
+ * ⚠ **THE TOGGLE-OFF PATH IS THEREFORE NO LONGER "THE WATCHER IS ASLEEP".** `refresh` binds
+ * realtime whenever the watcher is armed, so an unarmed-for-launch machine still SEES directives
+ * and still answers `no-bridge` to a launch. That is a widening of what this process READS (its
+ * own operator's own rows, over an authenticated subscription it already holds for
+ * `channel_messages`) and of nothing it DOES: `handle` refuses every launch just as before.
+ */
+function launchEnabled() {
   try { return channelPrefs.getOrchestratorLaunch() === true; } catch (_err) { return false; }
 }
 
@@ -296,9 +324,15 @@ function defaultGoal(channelLevel) {
  * never entitled to answer.
  */
 async function handle(raw, workspaceId) {
-  if (!armed || !enabled()) return;
+  if (!armed) return;
   const d = wire.directiveFrom(raw, workspaceId);
   if (!d || d.status !== wire.STATUS_PENDING) return;
+  // ⚠ **THE CONSENT GATE IS PER-KIND SINCE 2026-09-01, AND IT IS THIS LINE.** A LAUNCH spends
+  // this operator's compute on their hardware and stays behind the toggle, silently, exactly as
+  // before — the row expires and the orchestrator reads that. An `end` / `rename` does not:
+  // `directive-agent-ops.js`'s header carries the whole argument, and IT IS THE ASSUMPTION MOST
+  // WORTH OVERRULING IF SAMUEL DISAGREES — reverting is deleting the `d.kind` test here.
+  if (d.kind === wire.KIND_LAUNCH && !launchEnabled()) return;
   const me = (deps.getUserId && deps.getUserId()) || null;
   // ⚠ THE LOCAL OWNER RE-CHECK. The realtime filter is workspace-wide — see the header.
   if (!me || d.operatorUserId !== me) return;
@@ -312,7 +346,15 @@ async function handle(raw, workspaceId) {
     // would find the row `claimed` rather than `pending` and stop, but only if the server got
     // there first. This does not depend on that.
     remember(claimed.id);
-    const outcome = await spawn(claimed);
+    // ⚠ DISPATCH ON THE **CLAIMED** ROW'S KIND, NEVER THE FRAME'S. `claim` re-narrows from the
+    // CAS's own answer, which is the authenticated one; if the two disagree, the granted row is
+    // what this machine was actually given. Same rule the goal, the model and the template
+    // already follow.
+    // ⚠ EVERY BRANCH ANSWERS. A claimed directive nobody decides is the one outcome the
+    // orchestrator cannot act on — see `apply`'s fallthrough.
+    const outcome = claimed.kind === wire.KIND_LAUNCH
+      ? await spawn(claimed)
+      : require('./directive-agent-ops').apply(claimed);
     await decide(claimed, outcome);
   } catch (err) {
     diag('launch-directive: handler threw —', (err && err.message) || String(err));
@@ -363,7 +405,11 @@ async function pollWorkspace(wsId) {
 }
 
 async function poll() {
-  if (!armed || !enabled() || pollUnavailable) return;
+  // ⚠ NO LONGER GATED ON THE LAUNCH TOGGLE (2026-09-01). The backstop's job is to deliver rows
+  // the breaker made realtime miss, and two of the three kinds are answerable with the toggle
+  // off — a poll that stood down would make the recovery path the one place an end silently
+  // expires. `handle` still refuses every launch, per kind.
+  if (!armed || pollUnavailable) return;
   const list = (deps.workspaces && deps.workspaces()) || [];
   for (const wsId of list) {
     // ⚠ ONLY WHILE PUSH IS DOWN FOR **THIS** WORKSPACE. A healthy sub already delivers these,
@@ -408,7 +454,8 @@ function start(opts) {
     pollTimer = setInterval(() => { void poll(); }, POLL_MS);
     if (typeof pollTimer.unref === 'function') pollTimer.unref();
   }
-  diag('launch-directives: armed —', enabled() ? 'lane ENABLED by this operator' : 'lane off (default)');
+  diag('launch-directives: armed — LAUNCH lane',
+    launchEnabled() ? 'ENABLED by this operator' : 'off (default; end/rename still answer)');
 }
 
 /**
@@ -418,7 +465,17 @@ function start(opts) {
  * whenever it likes.
  */
 function refresh() {
-  try { realtime.setDirectives(armed && enabled(), deliver); }
+  // ⚠ **BOUND WHENEVER ARMED, NOT WHENEVER THE LAUNCH TOGGLE IS ON (2026-09-01).** It read
+  // `armed && enabled()` while the mailbox carried one verb, and that was the same condition.
+  // It is not any more: with the toggle off this machine must still SEE `end` / `rename` rows,
+  // or the two verbs that need no consent would be reachable only on machines that had granted
+  // the consent they do not need — the exact inversion the ruling exists to remove.
+  // ⚠ WHAT THIS WIDENS IS A **READ**, AND ONLY OF THIS OPERATOR'S OWN ROWS: one more
+  // `postgres_changes` binding on a subscription this process already holds for
+  // `channel_messages`, filtered to a workspace it is already signed into, over rows whose RLS
+  // SELECT is `operator_user_id = auth.uid()`. It widens nothing this machine DOES — `handle`
+  // refuses every launch exactly as before.
+  try { realtime.setDirectives(armed, deliver); }
   catch (err) { diag('launch-directives: realtime arm failed —', err && err.message); }
 }
 
