@@ -58,6 +58,10 @@ export type {
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
   KnowledgeWriteSource,
+  // PINNED STARTUP CONTEXT (T81) — the payload `getKbStartupContext` returns.
+  StartupContext,
+  StartupContextItem,
+  StartupContextPointer,
 } from "./knowledge-types.js";
 export type {
   ResolvedSkill,
@@ -132,6 +136,17 @@ export type {
   WorkspaceChannelMessage,
   ThreadStatus,
 } from "./channel-types.js";
+export type {
+  AccountChannelMessage,
+  AccountChannelStatus,
+  AccountMessagesOptions,
+  AccountMessagesPage,
+  AccountStatus,
+  AccountStatusClips,
+  AccountStatusOptions,
+  AccountStatusView,
+  AccountWaitingItem,
+} from "./account-types.js";
 export type {
   ChannelInfoCard,
   ChannelInfoCardBuiltInKey,

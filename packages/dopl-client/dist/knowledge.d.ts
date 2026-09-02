@@ -3,7 +3,7 @@
  * `DoplTransport`; the class-side method group is `client-knowledge.ts`.
  */
 import type { DoplTransport } from "./transport.js";
-import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
+import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult, StartupContext } from "./knowledge-types.js";
 /**
  * The bases this caller may READ, optionally narrowed to one shelf.
  *
@@ -33,6 +33,34 @@ export declare function getKbTree(t: DoplTransport, baseId: string, opts?: {
 export declare function createKbBase(t: DoplTransport, input: KnowledgeBaseCreateInput): Promise<KnowledgeBase>;
 export declare function updateKbBase(t: DoplTransport, baseId: string, patch: KnowledgeBaseUpdateInput): Promise<KnowledgeBase>;
 export declare function deleteKbBase(t: DoplTransport, baseId: string): Promise<void>;
+/**
+ * Pin or unpin a whole base — whether its entries are handed to every agent
+ * session launched in this workspace.
+ *
+ * ⚠ TWO IDEMPOTENT VERBS BEHIND ONE BOOLEAN, NEVER A TOGGLE. `pinned` picks the
+ * HTTP verb (`PUT` / `DELETE`); the request states the END STATE, so a retry
+ * after a timeout that actually landed re-asserts it instead of flipping it
+ * back. On workspace-wide state a silent un-do would change what every session
+ * launched afterwards starts with.
+ *
+ * ⚠ A WORKSPACE FACT, NOT A FAVOURITE — the star methods write the caller's own
+ * row and this writes the base. Hence a `member` floor server-side where a star
+ * takes the viewer default.
+ */
+export declare function setKbBasePinned(t: DoplTransport, baseId: string, pinned: boolean): Promise<void>;
+/** The single-entry half of {@link setKbBasePinned} — one document joins the
+ *  startup context without its whole base. Same two-verb contract. */
+export declare function setKbEntryPinned(t: DoplTransport, entryId: string, pinned: boolean): Promise<void>;
+/**
+ * The pinned reading list a session starts with — every entry of a pinned base
+ * plus every individually pinned entry, capped.
+ *
+ * ⚠ READ `truncated` AND `omitted`. A payload that renders as the whole of what
+ * is pinned when it is not is the bug this shape exists to prevent
+ * (INVARIANTS §9); `omitted` carries addresses to fetch the rest with
+ * `readKbFileByPath`.
+ */
+export declare function getKbStartupContext(t: DoplTransport): Promise<StartupContext>;
 export declare function readKbFileByPath(t: DoplTransport, baseId: string, path: string): Promise<KnowledgeEntry>;
 export declare function writeKbFileByPath(t: DoplTransport, baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
 export declare function listKbDirByPath(t: DoplTransport, baseId: string, path?: string): Promise<KnowledgeDirListing>;

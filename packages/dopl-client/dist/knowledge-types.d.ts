@@ -114,6 +114,64 @@ export interface KnowledgeBaseListPayload {
     /** Ids of the listed bases that live on the caller's PERSONAL (/home) shelf.
      *  ⚠ Only ever ids that are in `bases` — never a wider set. */
     homeScopedBaseIds?: string[];
+    /**
+     * Ids of the listed bases that are PINNED — their entries are handed to every
+     * agent session launched in this workspace ({@link StartupContext}).
+     *
+     * ⚠ A WORKSPACE FACT, NOT THE CALLER'S OWN, which is the difference from the
+     * star list: two members reading this response get the same array.
+     *
+     * ⚠ SAME `?? []` RULE as `homeScopedBaseIds` (INVARIANTS §8) — an older
+     * server sends no such key and this response is cached. Absent reads as "no
+     * card is marked", which is what the surface showed before the key existed.
+     */
+    pinnedBaseIds?: string[];
+}
+/**
+ * PINNED STARTUP CONTEXT (T81) — what an agent session is handed the moment it
+ * starts, so nobody re-pastes the same three documents by hand.
+ *
+ * `GET /api/knowledge/startup-context` returns every entry of a PINNED base plus
+ * every individually pinned entry, de-duped on entry id and capped so a launch
+ * prompt cannot be made unbounded by curating one large base.
+ *
+ * ⚠ Mirrors `src/features/knowledge/server/service-startup-context.ts`. It is
+ * deliberately NOT in `src/features/knowledge/types.ts`, so
+ * `scripts/check-knowledge-type-drift.ts` (which pins the four row types) has
+ * nothing new to compare and this shape can move with its one endpoint.
+ */
+export interface StartupContextItem {
+    baseId: string;
+    baseName: string;
+    baseSlug: string;
+    entryId: string;
+    path: string;
+    title: string;
+    body: string;
+}
+/** ⚠ AN ADDRESS, NEVER A BODY — enough to fetch the entry
+ *  (`dopl_kb(op="read_file", base, path)`) and nothing of its content. */
+export interface StartupContextPointer {
+    baseId: string;
+    baseSlug: string;
+    entryId: string;
+    path: string;
+    title: string;
+}
+export interface StartupContext {
+    items: StartupContextItem[];
+    /** Pinned content that did NOT fit under the cap — an address, never a body. */
+    omitted: StartupContextPointer[];
+    /** Body characters actually included, i.e. the sum over `items`. */
+    chars: number;
+    /**
+     * ⚠ LOAD-BEARING (INVARIANTS §9): a clipped read that renders like an
+     * exhausted one is the bug. `true` means there IS pinned content this payload
+     * does not carry — say so, rather than presenting `items` as the whole of what
+     * the workspace pinned. `omitted` names what was measured and dropped; a row
+     * ceiling can additionally hide content it does not name.
+     */
+    truncated: boolean;
 }
 export interface KnowledgeBaseCreateInput {
     name: string;

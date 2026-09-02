@@ -6,7 +6,7 @@
  * resolves to folder/entry rows.
  */
 import { WorkspaceMethods } from "./client-workspaces.js";
-import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
+import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult, StartupContext } from "./knowledge-types.js";
 export declare class KnowledgeMethods extends WorkspaceMethods {
     listKbBases(opts?: {
         shelf?: KbShelf;
@@ -24,6 +24,14 @@ export declare class KnowledgeMethods extends WorkspaceMethods {
     createKbBase(input: KnowledgeBaseCreateInput): Promise<KnowledgeBase>;
     updateKbBase(baseId: string, patch: KnowledgeBaseUpdateInput): Promise<KnowledgeBase>;
     deleteKbBase(baseId: string): Promise<void>;
+    /** Pin/unpin a base for the WORKSPACE's agent launches (T81). ⚠ `pinned`
+     *  picks the verb — two idempotent verbs, never a toggle. */
+    setKbBasePinned(baseId: string, pinned: boolean): Promise<void>;
+    /** The single-entry half of {@link setKbBasePinned}. */
+    setKbEntryPinned(entryId: string, pinned: boolean): Promise<void>;
+    /** The pinned reading list a session starts with. ⚠ Read `truncated` /
+     *  `omitted` — see {@link StartupContext}. */
+    getKbStartupContext(): Promise<StartupContext>;
     readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry>;
     writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
     listKbDirByPath(baseId: string, path?: string): Promise<KnowledgeDirListing>;
