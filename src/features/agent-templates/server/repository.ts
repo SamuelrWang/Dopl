@@ -209,9 +209,13 @@ export async function updateTemplateRow(
 
 /**
  * ⚠ PERMANENT delete — no trash, no restore (Samuel's standing ruling).
- * Workspace-scoped as defense-in-depth. Both junctions go via
- * `ON DELETE CASCADE`; there is no grant-cleanup trigger to remember because
- * the team linkage is a real FK rather than a polymorphic id.
+ * Workspace-scoped as defense-in-depth. The knowledge-base junction goes via
+ * `ON DELETE CASCADE`.
+ * ⚠ THE TEAM LINKAGE NO LONGER DOES, AND THAT IS WHY THE TRIGGER EXISTS. Since
+ * `20260914120000` the team link is a `resource_grants` row whose `resource_id`
+ * is POLYMORPHIC and carries no foreign key, so nothing cascades — the
+ * `resource_grants_cleanup` AFTER DELETE trigger on `agent_templates` is what
+ * purges it, exactly as every other grantable type has had for its own rows.
  */
 export async function hardDeleteTemplate(
   workspaceId: string,
@@ -226,7 +230,26 @@ export async function hardDeleteTemplate(
   if (error) throw error;
 }
 
-// ─── Team links (agent_template_teams) ──────────────────────────────────
+// ─── Team links (resource_grants, scope_type='team') ────────────────────
+
+/**
+ * The TEAM-VISIBILITY slice of `resource_grants` this feature owns, as an
+ * equality filter set for `.match()`. ⚠ STATED ONCE AND SPREAD INTO EVERY
+ * STATEMENT: one grant table now carries channel, container and team scopes over
+ * five resource types, so a statement missing either half reads — or worse,
+ * DELETES — another lane's rows.
+ *
+ * ⚠ `20260915120000_drop_agent_template_teams.sql` retired the dedicated
+ * junction. **Team visibility on a template did not change**: `visibility='team'`
+ * still means "members of a linked team", the links are still a replace-set, and
+ * writes are still creator-or-workspace-admin. `20260822200000` §2 split the
+ * junction off the polymorphic table because its `level` would always be
+ * `'read'` (F-277) — it still is, and now a CHECK says so.
+ */
+const TEMPLATE_TEAM_GRANT = {
+  scope_type: "team",
+  resource_type: "agent_template",
+} as const;
 
 /** Team links for many templates in ONE query — fixed query count per request
  *  regardless of how many templates are team-scoped. */
@@ -237,14 +260,14 @@ export async function listTeamLinksForTemplates(
   if (templateIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("agent_template_teams")
-    .select("template_id, team_id")
-    .eq("workspace_id", workspaceId)
-    .in("template_id", templateIds);
+    .from("resource_grants")
+    .select("resource_id, scope_id")
+    .match({ workspace_id: workspaceId, ...TEMPLATE_TEAM_GRANT })
+    .in("resource_id", templateIds);
   if (error) throw error;
-  return ((data ?? []) as Array<{ template_id: string; team_id: string }>).map(
-    (r) => ({ templateId: r.template_id, teamId: r.team_id })
-  );
+  return (
+    (data ?? []) as Array<{ resource_id: string; scope_id: string }>
+  ).map((r) => ({ templateId: r.resource_id, teamId: r.scope_id }));
 }
 
 /** REPLACE-SET: clear, then insert. ⚠ Not a diff — two clients editing the
@@ -259,18 +282,28 @@ export async function replaceTeamLinks(
 ): Promise<void> {
   const db = supabaseAdmin();
   const del = await db
-    .from("agent_template_teams")
+    .from("resource_grants")
     .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("template_id", templateId);
+    .match({
+      workspace_id: workspaceId,
+      resource_id: templateId,
+      ...TEMPLATE_TEAM_GRANT,
+    });
   if (del.error) throw del.error;
   if (teamIds.length === 0) return;
-  const { error } = await db.from("agent_template_teams").insert(
+  const { error } = await db.from("resource_grants").insert(
     [...new Set(teamIds)].map((teamId) => ({
-      template_id: templateId,
-      team_id: teamId,
+      ...TEMPLATE_TEAM_GRANT,
+      scope_id: teamId,
+      resource_id: templateId,
       workspace_id: workspaceId,
-      granted_by: grantedBy,
+      // A template team link has no edit concept; the CHECK admits read|edit on
+      // a team scope and the write path stays creator-or-admin.
+      level: "read",
+      // 🔒 The GRANTOR `enforce_resource_grant()` judges, carried over verbatim
+      // from the junction's `granted_by`. NULL falls back to the old
+      // same-container equality, which is what a team link has always been.
+      created_by: grantedBy,
     }))
   );
   if (error) throw error;
@@ -409,11 +442,15 @@ export async function listKnowledgeBaseAccessRows(
 }
 
 /**
- * Teams granted on a set of knowledge bases. ⚠ THIS ONE READS
- * `team_resource_access` — the polymorphic grant table the KB feature uses —
- * because mirroring the knowledge access predicate means reading the rows that
- * predicate reads. It is a READ of a fixed `resource_type`; agent-template
- * team links live in their own junction and this file never writes here.
+ * Teams granted on a set of knowledge bases. ⚠ THIS ONE READS ANOTHER FEATURE'S
+ * SLICE of `resource_grants`, because mirroring the knowledge access predicate
+ * means reading the rows that predicate reads. It is a READ of a fixed
+ * `resource_type`, and this file never writes there.
+ *
+ * ⚠ The two lanes now share ONE TABLE (`20260914120000`) where they used to
+ * share only a shape, so the `resource_type` term stopped being a narrowing and
+ * became the fence: without it this would answer "which teams reach this KB"
+ * with the template links three functions above.
  */
 export async function listKnowledgeBaseTeamGrants(
   workspaceId: string,
@@ -422,13 +459,16 @@ export async function listKnowledgeBaseTeamGrants(
   if (knowledgeBaseIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("team_resource_access")
-    .select("resource_id, team_id")
-    .eq("workspace_id", workspaceId)
-    .eq("resource_type", "knowledge_base")
+    .from("resource_grants")
+    .select("resource_id, scope_id")
+    .match({
+      workspace_id: workspaceId,
+      scope_type: "team",
+      resource_type: "knowledge_base",
+    })
     .in("resource_id", knowledgeBaseIds);
   if (error) throw error;
   return (
-    (data ?? []) as Array<{ resource_id: string; team_id: string }>
-  ).map((r) => ({ knowledgeBaseId: r.resource_id, teamId: r.team_id }));
+    (data ?? []) as Array<{ resource_id: string; scope_id: string }>
+  ).map((r) => ({ knowledgeBaseId: r.resource_id, teamId: r.scope_id }));
 }
