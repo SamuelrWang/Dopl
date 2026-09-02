@@ -85,7 +85,12 @@ export async function dispatchAgentOp(
         args.channel as string,
         args.agent_id as string,
         args.body as string,
-        { thread: args.thread, waitMs: args.wait_ms },
+        // ⚠ `client_msg_id` IS THE SHARED PARAM, NOT A SECOND ONE (A10/G10,
+        // 2026-09-02). The same field `post` and `create_thread` already take,
+        // carrying the same promise on a third lane: re-sending one returns the
+        // stored row instead of filing a second. A per-op spelling would be a
+        // second idempotency vocabulary on one tool.
+        { thread: args.thread, clientMsgId: args.client_msg_id, waitMs: args.wait_ms },
       );
     }
     case "read_directions":
@@ -110,6 +115,12 @@ export async function dispatchAgentOp(
         // SERVER-SIDE, against the caller's own template visibility, which
         // this process cannot evaluate.
         template: args.template,
+        // ⚠ THE ONE THING THAT MAKES THE DOCTRINE'S "do NOT issue it again"
+        // TRUE IN CODE (A10/G10). Without a key a re-issue after a timeout files
+        // a SECOND directive and starts a SECOND agent on the same work; with
+        // one, the server hands back the first request's directive and the
+        // result says `retry=existing`.
+        clientMsgId: args.client_msg_id,
         waitMs: args.wait_ms,
       });
     }

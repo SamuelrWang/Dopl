@@ -105,7 +105,16 @@ export async function opDirectAgent(
   ref: string,
   agentId: string,
   body: string,
-  opts: { thread?: string; waitMs?: number } = {},
+  opts: {
+    thread?: string;
+    /** ⚠ **THE IDEMPOTENCY KEY, AND IT IS WHAT MAKES A TIMED-OUT DIRECTION SAFE
+     *  TO RETRY** (2026-09-02, A10/G10). Passed through untouched: the server
+     *  probes it against `(channel, this operator)` and returns the stored
+     *  direction — `reply` included, if the machine has answered by now — rather
+     *  than saying the same thing to a live agent twice. */
+    clientMsgId?: string;
+    waitMs?: number;
+  } = {},
 ): Promise<ToolResponse> {
   // ⚠ PRE-RESOLVED, like the launch op and unlike the hot read paths: this op is
   // cold (one call, then a hold), and the result names the channel repeatedly.
@@ -123,6 +132,7 @@ export async function opDirectAgent(
       agentId: agent,
       threadId: opts.thread,
       body,
+      clientMsgId: opts.clientMsgId,
     });
   } catch (e) {
     if (isNotFound(e)) return channelNotFound(ref);
@@ -147,6 +157,12 @@ export async function opDirectAgent(
   }
 
   let direction = created.direction;
+  // **THE CONVERGED-RETRY FACT** (2026-09-02, A10/G10) — the launch lane's, in
+  // the same shape and for the same reasons (`channel-ops-launch.ts` carries the
+  // argument): added ONLY when the row was already there, so a caller that sent
+  // no key sees a byte-identical result, and spread LAST so `existing` wins any
+  // `retry` verdict already printed.
+  const converged = created.existing ? { retry: "existing" } : {};
   const waitMs = Math.min(opts.waitMs ?? WAIT_DEFAULT_MS, WAIT_CAP_MS);
   const deadline = Date.now() + waitMs;
 
@@ -188,6 +204,7 @@ export async function opDirectAgent(
       // agent is broken. Either the turn's final text was empty, or that desktop
       // predates the answer-reporting build — and this cannot tell which.
       reply: direction.reply ? "below" : "none-reported",
+      ...converged,
     });
     return ok(
       direction.reply
@@ -206,6 +223,7 @@ export async function opDirectAgent(
           ? RETRY_ADVICE[direction.refusalReason]
           : undefined,
         filed: true,
+        ...converged,
       }),
     );
   }
@@ -219,6 +237,7 @@ export async function opDirectAgent(
         agent: `@agent-${direction.agentId}`,
         direction: direction.id,
         filed: true,
+        ...converged,
       }),
     );
   }
@@ -238,6 +257,7 @@ export async function opDirectAgent(
       expires: direction.expiresAt,
       retry: false,
       poll: "read_directions",
+      ...converged,
     }),
   );
 }

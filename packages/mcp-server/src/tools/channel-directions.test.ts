@@ -109,8 +109,11 @@ describe("🔒 the lane reaches the caller's OWN operator and nobody else", () =
   it("sends no operator field to the server either", async () => {
     const create = vi.fn(async () => ({ offline: false, direction: DIRECTION }));
     await run(directionStub({ createAgentDirection: create }), ASK);
+    // ⚠ `clientMsgId` JOINED THE BODY ON 2026-09-02 (A10/G10) AND NAMES NO
+    // OPERATOR. It says which GESTURE this row is; the operator is still stamped
+    // server-side from the credential and is still absent from every payload.
     expect(Object.keys(create.mock.calls[0][0]).sort()).toEqual(
-      ["agentId", "body", "channel", "threadId"].sort(),
+      ["agentId", "body", "channel", "clientMsgId", "threadId"].sort(),
     );
   });
 });

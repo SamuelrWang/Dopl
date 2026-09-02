@@ -142,6 +142,25 @@ export const LaunchCreateSchema = z.object({
    * outcomes; a `z.literal(true)` here would delete one of them.
    */
   chain: z.boolean().optional(),
+  /**
+   * **THE IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"**
+   * (2026-09-02, A10/G10).
+   *
+   * ⚠ **THE BOUNDS ARE `schema.ts › PostSchema.client_msg_id`'s, DELIBERATELY.**
+   * One idempotency key shape across the whole feature: `.min(1)` because a blank
+   * is not a key (and a caller that sent one would believe it deduped something),
+   * 200 because that is what every `client_msg_id` column in this tree stores.
+   * A second spelling here is how one lane silently accepts a key the other
+   * refuses.
+   * ⚠ OPTIONAL, AND OMITTING IT IS TODAY'S BEHAVIOUR EXACTLY — one row per call,
+   * no probe, no convergence. The partial unique index dedupes nothing on NULL.
+   * ⚠ IT IS NOT `.uuid()`: any stable string the caller owns is a key, and the
+   * one worth minting is namespaced to the caller
+   * (`20260911120000_launch_direction_client_msg_id.sql` scopes uniqueness to
+   * `(channel_id, operator_user_id)`, so a collision with another member is not
+   * expressible in the first place).
+   */
+  clientMsgId: z.string().min(1).max(200).optional(),
 });
 export type LaunchCreateInput = z.infer<typeof LaunchCreateSchema>;
 

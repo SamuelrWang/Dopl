@@ -75,8 +75,28 @@ export interface AgentDirectionCreateInput {
   agentId: string;
   threadId?: string;
   body: string;
+  /**
+   * **AN IDEMPOTENCY KEY — "a retry may not say this twice"** (2026-09-02,
+   * A10/G10).
+   *
+   * ⚠ `LaunchDirectiveCreateInput.clientMsgId`'s contract exactly, and that type
+   * carries the argument. The hazard here is the mirror image: a second direction
+   * reaches a LIVE agent, which answers twice, and neither side can tell which
+   * answer belonged to which request.
+   * ⚠ A converged retry returns the stored row `reply` INCLUDED, so a caller
+   * whose hold timed out collects the answer instead of asking again.
+   */
+  clientMsgId?: string;
 }
 
+/**
+ * ⚠ **`existing: true` MEANS THIS CALL FILED NOTHING** (2026-09-02, A10/G10) —
+ * the `clientMsgId` had been used before and this is the FIRST request's
+ * direction, whatever became of it.
+ * ⚠ OPTIONAL, because a server older than this wave sends no such key
+ * (INVARIANTS §13); absent reads as `false`, which is right there — that server
+ * stored no key and every call really was fresh.
+ */
 export type AgentDirectionCreated =
   | { offline: true; direction: null }
-  | { offline: false; direction: AgentDirection };
+  | { offline: false; direction: AgentDirection; existing?: boolean };
