@@ -64,6 +64,26 @@ export interface CallerIdentity {
   credentialKind: CallerCredentialKind | null;
   /** The credential's label, UNTRUSTED — neutralized on the way out, never before. */
   credentialLabel: string | null;
+  /**
+   * WHICH SESSION this connection is, from `X-Dopl-Session-Id` — the same value
+   * the loopback stamps onto every post this session makes
+   * (`service-writes-metadata.ts` fold 6b), so it is what lets an await tell its
+   * OWN lines apart from a SIBLING session's.
+   *
+   * ⚠ THIS IS THE ONLY FIELD THAT CAN DO THAT, and the reason is F-341: one
+   * account runs many concurrent agents and every post is authored by the
+   * ACCOUNT, so `userId` cannot distinguish "my own echo" from "the other
+   * worker answering me". Excluding on `userId` made a same-account
+   * counterparty permanently invisible to `op="await"`.
+   *
+   * ⚠ A LABEL, NOT A LOCK (`shared/auth/session-header.ts`) — nothing may GATE
+   * on it. Suppressing one's own echo is presentation, not authorization, which
+   * is the only reason it is allowed to read an attribution hint.
+   *
+   * Null when the caller sent no recognized header — every external client, and
+   * an older desktop build.
+   */
+  sessionId: string | null;
 }
 
 /** No identity at all — the shape every test-constructed server gets by default. */
@@ -73,6 +93,7 @@ export const UNKNOWN_CALLER: CallerIdentity = {
   vendor: null,
   credentialKind: null,
   credentialLabel: null,
+  sessionId: null,
 };
 
 /**

@@ -110,7 +110,7 @@ function rearmStopRule(ref) {
  * `runtime` = caller's OBSERVED runtime stamp, threaded from the registrar.
  * Changes nothing this op DOES — only what it may claim about the hold.
  */
-async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime = null) {
+async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime = null, selfSessionId = null) {
     // Default = AWAIT_HOLD_MS; an EXPLICIT ask may reach the ceiling.
     const holdMs = Math.min(timeoutMs ?? AWAIT_HOLD_MS, AWAIT_HOLD_CEILING_MS);
     // ⚠ Loop bound is ELAPSED time, never a call count — an inner poll returning
@@ -137,6 +137,9 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
     // the result can NAME it: "the wait timed out" after a socket reset is not
     // actionable.
     let pollError = null;
+    // ⚠ THE CURSOR THE CALLER SHOULD RESUME FROM, which is `since` for the whole
+    // hold EXCEPT when own-session rows were dropped — see `dropOwnSession`.
+    let cursor = since;
     for (let poll = 0; poll < AWAIT_MAX_POLLS; poll++) {
         const remaining = deadline - Date.now();
         // ⚠ Always make the first call — a `timeout_ms=0` caller wants one
@@ -148,16 +151,35 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         let result;
         try {
             result = await client.awaitChannelMessages(ref, {
-                since,
+                since: cursor,
                 // ⚠ Floored at 1ms, not 0 — the route's query schema requires a POSITIVE
                 // timeout, so a `timeout_ms=0` caller would 400 instead of getting its check.
                 timeoutMs: Math.max(1, Math.min(channel_await_budget_1.AWAIT_POLL_MS, remaining)),
-                // ⚠ An await waits for a COUNTERPARTY, so the caller's own account is
-                // always excluded — otherwise posting a `task_progress` milestone after
-                // arming pops the agent's own hold on its own echo. Also drops a SIBLING
-                // session on this account (intended: "own" from the channel's view).
-                // Null id (boot handshake could not name the caller) => no filter.
-                ...(selfUserId !== null ? { excludeAuthor: selfUserId } : {}),
+                // 🔒 **THE SELF-ECHO FILTER IS SESSION-SCOPED NOW, NOT ACCOUNT-SCOPED**
+                // (F-341). An await waits for a COUNTERPARTY: posting a `task_progress`
+                // milestone after arming must not pop the agent's own hold on its own
+                // echo. `excludeAuthor` did that by ACCOUNT — and every post, human or
+                // agent, is authored by the account (`service-writes.ts:448`), while one
+                // operator runs many concurrent sessions. So an orchestrator and its
+                // worker, both agents of the same person, could never see each other
+                // here: the row was filtered out of BOTH the page and the existence
+                // probe (`repository-messages.ts:98,143`), so the hold did not even
+                // spin — it held silently to the deadline while the answer sat in the
+                // table. `op="read"` never applied the filter, which is why a read
+                // showed exactly what the await swore was not there.
+                //
+                // When this session can NAME ITSELF we send no author filter at all and
+                // drop only our own lines below, keyed on `metadata.session_id`. That is
+                // strictly narrower: a sibling session, and the operator's own typing,
+                // both become visible again.
+                //
+                // ⚠ THE OLD BEHAVIOUR IS THE FALLBACK, on purpose. With no session
+                // stamp (every external client, and an older desktop build) there is
+                // nothing finer than the account to key on, so excluding it is still the
+                // best available answer and this population sees no change.
+                ...(selfSessionId === null && selfUserId !== null
+                    ? { excludeAuthor: selfUserId }
+                    : {}),
             });
         }
         catch (e) {
@@ -177,23 +199,46 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
             operatorOnline = result.operatorOnline;
         }
         if (result.messages.length > 0) {
-            messages = result.messages;
-            break;
+            // ⚠ OUR OWN LINES, DROPPED HERE RATHER THAN IN SQL — the page is already
+            // in hand and `session_id` is on it, so this needs no new query param and
+            // no new predicate interpolated into PostgREST's `or` grammar (a session
+            // id is not a uuid; it may carry `.` and `:`, which are that grammar's
+            // separators). With no session stamp nothing is dropped, because the
+            // account filter above already did it server-side.
+            const fresh = selfSessionId === null
+                ? result.messages
+                : result.messages.filter((m) => (0, channel_render_1.sessionIdOf)(m) !== selfSessionId);
+            if (fresh.length > 0) {
+                messages = fresh;
+                break;
+            }
+            // ⚠ EVERY ROW WAS OUR OWN ECHO, so keep holding — but ADVANCE PAST THEM
+            // first. Re-issuing on the same cursor would re-fetch the same rows on
+            // every tick and burn the whole budget in milliseconds (the spin
+            // `repository-messages.ts:140-142` warns about), which then trips the CUT
+            // SHORT branch and tells the agent the platform is broken.
+            //
+            // ⚠ SAFE BECAUSE OF WHAT IT SKIPS: only rows THIS SESSION WROTE, which
+            // the caller already knows about by definition. Every counterparty row is
+            // returned above before the cursor ever moves, so nothing anyone else said
+            // can be stepped over. This is the ONE thing that may advance a cursor
+            // mid-hold, and it is why `cursor` exists separately from `since`.
+            cursor = result.messages[result.messages.length - 1].seq;
         }
     }
     if (messages.length === 0) {
         const elapsedMs = Date.now() - startedAt;
         // ⚠ Elapsed, not the requested budget — a spin-brake exit would otherwise
         // misreport how long anyone actually waited.
-        const timedOut = `No new messages in **${ref}** since seq ${since} — the wait timed out after about ${Math.round(elapsedMs / 1000)}s with nothing arriving.`;
+        const timedOut = `No new messages in **${ref}** since seq ${cursor} — the wait timed out after about ${Math.round(elapsedMs / 1000)}s with nothing arriving.`;
         // ⚠ Inner poll FAILED mid-hold — say what broke BEFORE the CUT SHORT check,
         // or a transient blip is misdiagnosed as a platform clamp and the agent is
         // told to stop waiting on a live exchange.
         if (pollError !== null) {
             return (0, respond_1.ok)([
                 `The wait on **${ref}** ended early, after about ${Math.round(elapsedMs / 1000)}s: an inner poll failed — ${describeFailure(pollError)}.`,
-                `Nothing was missed: the cursor never advanced, so re-arm NOW, before you end your turn, with the SAME since — dopl_channel(op="await", channel="${ref}", since=${since}).`,
-                `If the very next hold fails the same way, stop re-arming and report it to your operator; read the channel with dopl_channel(op="read", channel="${ref}", since=${since}) instead.`,
+                `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="await", channel="${ref}", since=${cursor}).`,
+                `If the very next hold fails the same way, stop re-arming and report it to your operator; read the channel with dopl_channel(op="read", channel="${ref}", since=${cursor}) instead.`,
                 rearmStopRule(ref),
             ].join("\n"));
         }
@@ -208,7 +253,7 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         }
         return (0, respond_1.ok)([
             timedOut,
-            ...(0, channel_wake_guidance_1.awaitTimedOutLines)(ref, since, runtime, rearmStopRule(ref)),
+            ...(0, channel_wake_guidance_1.awaitTimedOutLines)(ref, cursor, runtime, rearmStopRule(ref)),
             // ⚠ RENDERED ON A TIMEOUT TOO, and that is the case it earns most: a
             // hold that came back empty is exactly when an orchestrator has to
             // decide whether the agent it is waiting on is still alive. Answering
@@ -217,7 +262,7 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         ].join("\n"));
     }
     const lines = [
-        `## ${ref} — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${since}\n`,
+        `## ${ref} — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}\n`,
         // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read
         // BEFORE them, not as a footnote underneath.
         `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,

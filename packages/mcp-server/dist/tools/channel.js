@@ -80,6 +80,11 @@ const identity_1 = require("./identity");
 function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLER, isAdmin = false) {
     const selfUserId = caller.userId;
     const runtime = caller.runtime;
+    // ⚠ WHICH SESSION, for the await self-echo filter ONLY (F-341). Never a gate:
+    // a session id is an attribution hint any token holder can send
+    // (`shared/auth/session-header.ts`), so it may decide what to SHOW and nothing
+    // else. Null for every caller that sent no stamp.
+    const selfSessionId = caller.sessionId;
     register("dopl_channel", channel_description_1.CHANNEL_DESCRIPTION, channel_schema_1.CHANNEL_INPUT_SHAPE, async (args) => {
         switch (args.op) {
             case "list":
@@ -164,9 +169,9 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 if (miss)
                     return miss;
                 if (args.channel === undefined || args.channel.trim() === "") {
-                    return (0, channel_ops_await_workspace_1.opAwaitWorkspace)(client, args.since, args.timeout_ms, selfUserId);
+                    return (0, channel_ops_await_workspace_1.opAwaitWorkspace)(client, args.since, args.timeout_ms, selfUserId, selfSessionId);
                 }
-                return (0, channel_ops_await_1.opAwait)(client, args.channel, args.since, args.timeout_ms, selfUserId, runtime);
+                return (0, channel_ops_await_1.opAwait)(client, args.channel, args.since, args.timeout_ms, selfUserId, runtime, selfSessionId);
             }
             case "members": {
                 const miss = (0, respond_1.missingParams)("members", args, ["channel"]);

@@ -50,6 +50,7 @@ exports.UNKNOWN_CALLER = {
     vendor: null,
     credentialKind: null,
     credentialLabel: null,
+    sessionId: null,
 };
 /**
  * ⚠ What the server SAW in the runtime header, never what it concluded.

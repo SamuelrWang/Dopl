@@ -138,7 +138,7 @@ function groupByChannel(messages) {
  * ⚠ NO not-found branch, because there is no ref to resolve: a caller with no
  * memberships gets a page with `channelCount: 0` and a result that says so.
  */
-async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null) {
+async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, selfSessionId = null) {
     const holdMs = Math.min(timeoutMs ?? AWAIT_HOLD_MS, AWAIT_HOLD_CEILING_MS);
     const startedAt = Date.now();
     const deadline = startedAt + holdMs;
@@ -152,6 +152,8 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null) {
     // carried over from an earlier poll is the one way to make it lie.
     let operatorOnline;
     let pollError = null;
+    // ⚠ Advances ONLY past this session's own rows — see the per-channel op.
+    let cursor = since;
     for (let poll = 0; poll < AWAIT_MAX_POLLS; poll++) {
         const remaining = deadline - Date.now();
         if (poll > 0 && remaining < AWAIT_MIN_POLL_MS)
@@ -159,16 +161,21 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null) {
         let result;
         try {
             result = await client.awaitWorkspaceMessages({
-                since,
+                since: cursor,
                 // ⚠ Floored at 1ms, not 0 — the route's query schema requires a POSITIVE
                 // timeout, so a `timeout_ms=0` caller would 400 instead of getting its check.
                 timeoutMs: Math.max(1, Math.min(channel_await_budget_1.AWAIT_POLL_MS, remaining)),
-                // ⚠ The caller's own account is always excluded, and across a WHOLE
-                // WORKSPACE this matters more than it does per channel: an orchestrator
-                // posts into many rooms, and every one of those echoes would otherwise
-                // pop its own hold. Null id (boot handshake could not name the caller)
-                // => no filter.
-                ...(selfUserId !== null ? { excludeAuthor: selfUserId } : {}),
+                // 🔒 SESSION-SCOPED, NOT ACCOUNT-SCOPED (F-341) — the same correction the
+                // per-channel op carries, and the argument for it is there in full. An
+                // orchestrator posting into many rooms must not pop its own hold on its
+                // own echoes; that is real, and it is why the suppression stays. What it
+                // may NOT do is hide a SIBLING SESSION on the same account, which across
+                // a whole workspace is most of what an orchestrator is waiting for.
+                // ⚠ Account exclusion remains the fallback when this session cannot name
+                // itself, so an unstamped caller behaves exactly as before.
+                ...(selfSessionId === null && selfUserId !== null
+                    ? { excludeAuthor: selfUserId }
+                    : {}),
             });
         }
         catch (e) {
@@ -185,19 +192,31 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null) {
             operatorOnline = result.operatorOnline;
         }
         if (result.messages.length > 0) {
-            messages = result.messages;
-            break;
+            // ⚠ Our own lines dropped from the page in hand — see the per-channel op
+            // for why this is not a SQL predicate.
+            const fresh = selfSessionId === null
+                ? result.messages
+                : result.messages.filter((m) => (0, channel_render_1.sessionIdOf)(m) !== selfSessionId);
+            if (fresh.length > 0) {
+                messages = fresh;
+                break;
+            }
+            // ⚠ Own echoes only: advance past them rather than re-fetching them every
+            // tick, which would spin the budget away and trip the CUT SHORT branch.
+            // Skips nothing anyone else wrote — every foreign row returns above first.
+            cursor = result.messages[result.messages.length - 1].seq;
+            continue;
         }
     }
     if (messages.length === 0) {
         const elapsedMs = Date.now() - startedAt;
-        const timedOut = `No new messages in ANY channel you belong to since seq ${since} — the wait timed out after about ${Math.round(elapsedMs / 1000)}s with nothing arriving.`;
+        const timedOut = `No new messages in ANY channel you belong to since seq ${cursor} — the wait timed out after about ${Math.round(elapsedMs / 1000)}s with nothing arriving.`;
         // ⚠ Say what BROKE before diagnosing a platform clamp, or a transient blip is
         // misread as "the wait is not holding" and a live exchange is abandoned.
         if (pollError !== null) {
             return (0, respond_1.ok)([
                 `The workspace wait ended early, after about ${Math.round(elapsedMs / 1000)}s: an inner poll failed — ${describeFailure(pollError)}.`,
-                `Nothing was missed: the cursor never advanced, so re-arm NOW, before you end your turn, with the SAME since — dopl_channel(op="await", since=${since}).`,
+                `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="await", since=${cursor}).`,
                 `If the very next hold fails the same way, stop re-arming and report it to your operator.`,
                 workspaceRearmStopRule(),
                 ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
@@ -213,17 +232,15 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null) {
         return (0, respond_1.ok)([
             timedOut,
             scopeNote(channelCount),
-            `Re-arm with the SAME since — dopl_channel(op="await", since=${since}) — before you end your turn if you are still waiting on something.`,
+            `Re-arm — dopl_channel(op="await", since=${cursor}) — before you end your turn if you are still waiting on something.`,
             workspaceRearmStopRule(),
             ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
         ].join("\n"));
     }
     const groups = groupByChannel(messages);
+    // ⚠ Banner moved to CHANNEL_DESCRIPTION's SECURITY paragraph (T11).
     const lines = [
-        `## Workspace — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${since}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
-        // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read
-        // BEFORE them, not as a footnote underneath.
-        `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
+        `## Workspace — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
     ];
     for (const g of groups) {
         // ⚠ The channel heading names the room AND gives the `ref` to use in a

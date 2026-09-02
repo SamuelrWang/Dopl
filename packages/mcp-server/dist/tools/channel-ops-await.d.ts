@@ -46,4 +46,4 @@ export declare function rearmStopRule(ref: string): string;
  * `runtime` = caller's OBSERVED runtime stamp, threaded from the registrar.
  * Changes nothing this op DOES — only what it may claim about the hold.
  */
-export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number, selfUserId?: string | null, runtime?: string | null): Promise<ToolResponse>;
+export declare function opAwait(client: DoplClient, ref: string, since: number, timeoutMs?: number, selfUserId?: string | null, runtime?: string | null, selfSessionId?: string | null): Promise<ToolResponse>;
