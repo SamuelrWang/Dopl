@@ -24,20 +24,20 @@
  * (`rearmStopRule` and siblings), dropped only where nobody is told to re-arm.
  */
 
-import { AWAIT_HOLD_DEFAULT_MS } from "./channel-await-budget";
-import { DESKTOP_SESSION_RUNTIME } from "./identity";
-
-/** The default hold in whole seconds, so the sentences below can't drift. */
-const HOLD_SECONDS = Math.round(AWAIT_HOLD_DEFAULT_MS / 1000);
+import { AWAIT_HOLD_EXTERNAL_DEFAULT_MS } from "./channel-await-budget";
+// ⚠ ONE statement of the runtime comparison, in `identity.ts` — the hold's
+// LENGTH branches on the same answer this file's CLAIMS do.
+import { isDesktopRuntime } from "./identity";
 
 /**
- * Did the request carry the desktop's runtime stamp? ⚠ An observation, and the
- * only thing branching the text below — it gates nothing
- * (`src/shared/auth/runtime-header.ts` grants nothing). Module-private.
+ * The default hold in whole seconds, so the sentences below can't drift.
+ *
+ * ⚠ THE **EXTERNAL** DEFAULT, and only because every sentence quoting it is on
+ * an UNSTAMPED branch (T03). A desktop-stamped caller is told not to arm at all,
+ * so no line here ever states the desktop hold — quoting the desktop's 215s to
+ * the one population that cannot get it is how this number was wrong before.
  */
-function isDesktopRuntime(runtime: string | null | undefined): boolean {
-  return runtime === DESKTOP_SESSION_RUNTIME;
-}
+const HOLD_SECONDS = Math.round(AWAIT_HOLD_EXTERNAL_DEFAULT_MS / 1000);
 
 /** The observation, said as an observation. Reused so it reads identically. */
 const DESKTOP_OBSERVED = `This request carried the Dopl desktop's runtime stamp: a desktop-run session, which is fed the counterparty's replies as new turns.`;
@@ -110,12 +110,33 @@ export function createThreadReplyLines(
   ];
 }
 
-/** `await` came back empty: re-arm, or stop, depending on who is asking. */
+/**
+ * `await` CAME BACK EMPTY — ⚠ ONE LINE, cursor-first (T03).
+ *
+ * ⚠ **THE TIMEOUT IS THE HOTTEST RESULT ON THIS SURFACE AND CARRIES THE LEAST
+ * NEWS.** An external orchestrator polling a quiet exchange reads this text
+ * every ~45s and it is the same text every time, so the ~1.4k of re-arm
+ * doctrine it used to carry ({@link HOLD_FACT} plus the full stop rule) was
+ * paid per empty hold, forever, to say "nothing happened". The one thing the
+ * caller actually needs back is the CURSOR — stated as a bare `cursor=<seq>`
+ * token as well as inside the call, so it can be lifted without parsing prose.
+ *
+ * ⚠ **NOTHING SEMANTIC WAS DROPPED, ONLY ITS LENGTH.** Every clause INVARIANTS
+ * §10 requires of a re-arm instruction is still here: the re-arm call with the
+ * SAME cursor, the ~3-empty-holds checkpoint, the addressee-scoped liveness
+ * test, the 30-minute exit, and the ABSENCE of a finished state to wait for —
+ * an agent trained on a surface that had one waits for it forever. What is gone
+ * is the restatement of what a pending call does, which does not change between
+ * two consecutive empty holds. The FULL rule is still taught where it is new
+ * information: on the hold that RETURNS messages, and on the one that FAILS.
+ *
+ * ⚠ Desktop branch UNCHANGED — it is already one line, and it says the opposite
+ * thing (do not re-arm at all).
+ */
 export function awaitTimedOutLines(
   ref: string,
   since: number,
   runtime: string | null,
-  stopRule: string,
 ): string[] {
   if (isDesktopRuntime(runtime)) {
     return [
@@ -123,8 +144,28 @@ export function awaitTimedOutLines(
     ];
   }
   return [
-    `If you are still expecting a reply, re-arm the wait NOW, before you end your turn: dopl_channel(op="await", channel="${ref}", since=${since}) with the SAME since. ${HOLD_FACT}`,
-    stopRule,
+    `cursor=${since} — if you are still expecting a reply, re-arm the wait NOW, before you end your turn: dopl_channel(op="await", channel="${ref}", since=${since}) with the SAME since. Every ~3 empty holds, check for signs of life first with dopl_channel(op="read", channel="${ref}", since=${since}) — a working agent posts task_progress milestones. Keep re-arming while something came from that member (the one you addressed, not the room) in roughly the last 30 minutes; STOP and report to your operator when nothing has for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so that silence is the only stop signal there is.`,
+  ];
+}
+
+/**
+ * The same compression for the WORKSPACE hold's timeout. ⚠ A sibling line, not
+ * a shared one, for the reason `channel-ops-await-workspace.ts` gives in full:
+ * the workspace stop rule is a DIFFERENT rule (any channel's traffic wakes you,
+ * so a wake is not news), and collapsing the two would restate the per-channel
+ * trap where the worse one applies.
+ */
+export function workspaceAwaitTimedOutLines(
+  since: number,
+  runtime: string | null,
+): string[] {
+  if (isDesktopRuntime(runtime)) {
+    return [
+      `${DESKTOP_OBSERVED} Do NOT re-arm — end your reply here and the next message will be fed to you. If nothing ever arrives, report that to your operator rather than waiting again.`,
+    ];
+  }
+  return [
+    `cursor=${since} — re-arm before you end your turn if you are still waiting: dopl_channel(op="await", since=${since}). A workspace hold wakes on ANY message in ANY channel you belong to, so check the ONE exchange you are blocked on with dopl_channel(op="read", channel=<that channel>, since=<your cursor>) rather than reading workspace activity as a sign of life. Keep re-arming while something came from the member or agent you are waiting on in roughly the last 30 minutes; STOP and report to your operator when nothing has for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so that silence is the only stop signal there is.`,
   ];
 }
 

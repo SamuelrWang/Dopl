@@ -228,20 +228,33 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     expect(text).toContain("STOP and report to your operator");
   });
 
-  it("a timed-out await re-arms, with the hold described and nothing promised", async () => {
+  /**
+   * ⚠ THE TIMEOUT IS THE COMPRESSED RESULT SINCE T03, and this is the one place
+   * the difference is worth stating: a polling orchestrator reads this text
+   * every ~45s, unchanged, so restating what a pending call does is paid per
+   * empty hold to say nothing new. What survives is everything that is a FACT
+   * about this hold rather than about the mechanism — the cursor, the re-arm
+   * call, and the stop rule INVARIANTS §10 requires of any re-arm instruction.
+   */
+  it("a timed-out await re-arms compactly, cursor first, nothing promised", async () => {
     const text = (await opAwait(quietClient(), "general", 7, undefined, "u-me"))
       .content[0].text;
 
     expectNoFalsePromise(text);
+    expect(text).toContain("cursor=7");
     expect(text).toContain("re-arm the wait NOW");
     expect(text).toContain("since=7");
-    expect(text).toContain("RETURNS INSIDE your current turn");
-    expect(text).toContain("Some MCP clients background a call still pending");
     // ⚠ Stop rule rides with EVERY re-arm instruction — and since thread
     // closing was removed (wiring plan Phase 4, 2026-08-18) it is the
     // addressee's silence, said out loud as the ONLY signal there is.
     expect(text).toContain("Keep re-arming while something came from that member");
     expect(text).toContain("no finished STATE to wait for");
+    expect(text).toContain("STOP and report to your operator");
+    // ⚠ Pinned as ABSENCES: the mechanism lecture is taught where it is NEW
+    // (post, create_thread, and the hold that returned), not re-read on every
+    // empty hold of a poll loop.
+    expect(text).not.toContain("RETURNS INSIDE your current turn");
+    expect(text).not.toContain("Some MCP clients background a call still pending");
   });
 
   it("an await that RETURNED messages re-arms on the new cursor", async () => {
@@ -268,7 +281,9 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
       (
         await opCreateThread(stubClient(), "general", "Ship it", "please do X", "bob@x.com")
       ).content[0].text,
-      (await opAwait(quietClient(), "general", 7, undefined, "u-me")).content[0].text,
+      // ⚠ The TIMED-OUT hold is deliberately absent — it is the one surface a
+      // caller reads over and over, so the hint is offered on the three that
+      // are read once (T03).
       (await opAwait(arrivingClient(), "general", 7, undefined, "u-me")).content[0].text,
     ];
 

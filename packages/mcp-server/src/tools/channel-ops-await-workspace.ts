@@ -42,27 +42,16 @@ import {
   sessionIdOf,
 } from "./channel-render";
 import {
+  AWAIT_MAX_POLLS,
+  AWAIT_MIN_POLL_MS,
   AWAIT_POLL_MS,
-  resolveAwaitHoldCeilingMs,
-  resolveAwaitHoldMs,
+  AWAIT_SHORT_HOLD_MS,
+  awaitHoldMs,
 } from "./channel-await-budget";
+// ⚠ The re-arm text branches on the caller's runtime here too, for the same
+// reason it does per-channel: an unstamped caller may not be promised a wake.
+import { workspaceAwaitTimedOutLines } from "./channel-wake-guidance";
 import { sessionBlockLines } from "./channel-session-render";
-
-/** Read once at module load — one value per server process, no per-call env read. */
-const AWAIT_HOLD_MS = resolveAwaitHoldMs(process.env.DOPL_AWAIT_HOLD_MS);
-const AWAIT_HOLD_CEILING_MS = resolveAwaitHoldCeilingMs(
-  process.env.DOPL_AWAIT_HOLD_MS,
-);
-
-/** Don't re-issue an inner poll for a sliver of the remaining budget. */
-const AWAIT_MIN_POLL_MS = 1_000;
-
-/** ⚠ Spin brake, NOT the bound — elapsed wall-clock ends the hold. Same shape and
- *  same reason as the per-channel op's. */
-const AWAIT_MAX_POLLS = Math.ceil(AWAIT_HOLD_CEILING_MS / AWAIT_POLL_MS) + 2;
-
-/** A hold ending this far under the ASK did not hold — see the per-channel op. */
-const AWAIT_SHORT_HOLD_MS = 60_000;
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed channel)";
@@ -153,9 +142,8 @@ function groupByChannel(
 }
 
 /**
- * LONG-HOLD workspace await. One call holds up to `timeoutMs` (capped at
- * {@link AWAIT_HOLD_MS}) by re-issuing the ~50s inner long-poll on the same
- * `since` cursor.
+ * LONG-HOLD workspace await. One call holds for `awaitHoldMs(timeoutMs,
+ * runtime)` by re-issuing the ~50s inner long-poll on the same `since` cursor.
  *
  * ⚠ Four results, never a thrown error once the hold is underway: messages,
  * timed-out, FAILED-MID-HOLD, CUT SHORT — the same four the per-channel op has,
@@ -168,9 +156,16 @@ export async function opAwaitWorkspace(
   since: number,
   timeoutMs?: number,
   selfUserId: string | null = null,
+  runtime: string | null = null,
   selfSessionId: string | null = null,
 ): Promise<ToolResponse> {
-  const holdMs = Math.min(timeoutMs ?? AWAIT_HOLD_MS, AWAIT_HOLD_CEILING_MS);
+  // ⚠ Same two rules as the per-channel lane: explicit ask honoured exactly,
+  // default sized to the caller's runtime (`channel-await-budget.ts ›
+  // awaitHoldMs`). ⚠ `runtime` REACHES THIS OP AT ALL ONLY SINCE T03 — it was
+  // never threaded from `channel.ts`, so the workspace hold both ran the
+  // desktop-length default for external callers AND wrote external-flavoured
+  // re-arm guidance to desktop sessions.
+  const holdMs = awaitHoldMs(timeoutMs, runtime);
   const startedAt = Date.now();
   const deadline = startedAt + holdMs;
   let messages: WorkspaceChannelMessage[] = [];
@@ -261,12 +256,17 @@ export async function opAwaitWorkspace(
         ].join("\n"),
       );
     }
+    // ⚠ The TIMEOUT is the compressed result (T03) — see
+    // `channel-wake-guidance.ts › workspaceAwaitTimedOutLines`. `scopeNote`
+    // STAYS: it is a fact about what was watched, not doctrine, and "no
+    // messages" versus "that room was never being watched" are different
+    // answers. The full `workspaceRearmStopRule` is still taught where it is
+    // new information — on the holds that RETURN and that FAIL.
     return ok(
       [
         timedOut,
         scopeNote(channelCount),
-        `Re-arm — dopl_channel(op="await", since=${cursor}) — before you end your turn if you are still waiting on something.`,
-        workspaceRearmStopRule(),
+        ...workspaceAwaitTimedOutLines(cursor, runtime),
         ...sessionBlockLines(sessions, undefined, operatorOnline),
       ].join("\n"),
     );

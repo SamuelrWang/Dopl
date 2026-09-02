@@ -28,6 +28,7 @@ import { z } from "zod";
 import {
   AWAIT_HOLD_CAP_MS,
   AWAIT_HOLD_DEFAULT_MS,
+  AWAIT_HOLD_EXTERNAL_DEFAULT_MS,
 } from "./channel-await-budget";
 
 export const CHANNEL_INPUT_SHAPE = {
@@ -418,6 +419,6 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(AWAIT_HOLD_CAP_MS)
     .optional()
     .describe(
-      `op="await": TOTAL time to hold before returning with no messages (milliseconds, max ${AWAIT_HOLD_CAP_MS}; defaults to ${AWAIT_HOLD_DEFAULT_MS} when omitted). The hold is assembled server-side out of ~50s polls re-issued with the same cursor, so it returns the instant a message arrives. Leave it unset unless you deliberately want a short check — the long default is what keeps the call pending past the ~2-minute mark where a client that backgrounds pending calls can turn the result into a wake. If a long hold comes back as a raw transport timeout instead of a result, your own MCP client is capping the call: report that to your operator and fall back to timeout_ms=50000 plus repeated op="read".`,
+      `op="await": TOTAL time to hold before returning with no messages (milliseconds, max ${AWAIT_HOLD_CAP_MS}). The hold is assembled server-side out of ~50s polls re-issued with the same cursor, so it returns the instant a message arrives. OMITTED, the default fits YOUR client: ${AWAIT_HOLD_EXTERNAL_DEFAULT_MS} for an external one (most MCP clients abort a call around 60s, and an aborted call returns no cursor and no re-arm instruction at all), ${AWAIT_HOLD_DEFAULT_MS} for a session run by the Dopl desktop. Pass it only when you know your own client outlasts the default — an explicit value is honoured exactly, up to the max — or when you deliberately want a short check. If a hold still comes back as a raw transport timeout instead of a result, your client is capping calls below ${AWAIT_HOLD_EXTERNAL_DEFAULT_MS}: report that to your operator and poll with a smaller timeout_ms plus repeated op="read".`,
     ),
 };

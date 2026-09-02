@@ -169,7 +169,7 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                 if (miss)
                     return miss;
                 if (args.channel === undefined || args.channel.trim() === "") {
-                    return (0, channel_ops_await_workspace_1.opAwaitWorkspace)(client, args.since, args.timeout_ms, selfUserId, selfSessionId);
+                    return (0, channel_ops_await_workspace_1.opAwaitWorkspace)(client, args.since, args.timeout_ms, selfUserId, runtime, selfSessionId);
                 }
                 return (0, channel_ops_await_1.opAwait)(client, args.channel, args.since, args.timeout_ms, selfUserId, runtime, selfSessionId);
             }

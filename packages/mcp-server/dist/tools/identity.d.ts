@@ -82,6 +82,17 @@ export interface CallerIdentity {
 /** No identity at all — the shape every test-constructed server gets by default. */
 export declare const UNKNOWN_CALLER: CallerIdentity;
 /**
+ * DID THE REQUEST CARRY THE DESKTOP'S RUNTIME STAMP? ⚠ The ONE statement of that
+ * comparison — `channel-wake-guidance.ts` (what the hold may CLAIM) and
+ * `channel-await-budget.ts` (how long the hold may BE) both branch on it, and a
+ * second copy is how the two answers drift into disagreeing about one request.
+ *
+ * ⚠ An OBSERVATION, and it gates nothing (`src/shared/auth/runtime-header.ts`
+ * grants nothing). False means UNSTAMPED — usually an external client, but also
+ * how a desktop spawn on an older build looks. Never read it as "external".
+ */
+export declare function isDesktopRuntime(runtime: string | null | undefined): boolean;
+/**
  * The `_dopl_status` caller line — ⚠ terse on purpose: this rides EVERY
  * successful response.
  *

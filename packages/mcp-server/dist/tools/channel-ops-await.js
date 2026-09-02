@@ -28,27 +28,6 @@ const channel_wake_guidance_1 = require("./channel-wake-guidance");
 // operator-only telemetry, `undefined` vs `[]`) have ONE statement, shared with
 // `read_sessions` — see channel-session-render.ts.
 const channel_session_render_1 = require("./channel-session-render");
-/** Read once at module load — one value per server process, no per-call env read. */
-const AWAIT_HOLD_MS = (0, channel_await_budget_1.resolveAwaitHoldMs)(process.env.DOPL_AWAIT_HOLD_MS);
-const AWAIT_HOLD_CEILING_MS = (0, channel_await_budget_1.resolveAwaitHoldCeilingMs)(process.env.DOPL_AWAIT_HOLD_MS);
-/** Don't re-issue an inner poll for a sliver of the remaining budget. */
-const AWAIT_MIN_POLL_MS = 1_000;
-/**
- * ⚠ Spin brake, NOT the bound — elapsed wall-clock ends the hold. Bites only
- * when the server answers instantly (route error path, clamped timeout), where
- * the elapsed check alone lets the loop hammer it. Tripping returns the
- * ordinary timed-out result.
- */
-const AWAIT_MAX_POLLS = Math.ceil(AWAIT_HOLD_CEILING_MS / channel_await_budget_1.AWAIT_POLL_MS) + 2;
-/**
- * A hold ending this far under the ASK did not hold — something cut it short
- * (platform function clamp, route answering instantly, inner failure). ⚠
- * Re-arming into that is a spin: each attempt returns in seconds, so the call
- * never stays pending past the ~2 min backgrounding mark and never becomes a
- * wake. Half the ask, capped at 60s, so a deliberately SHORT hold is not warned
- * about getting one.
- */
-const AWAIT_SHORT_HOLD_MS = 60_000;
 /**
  * A thrown inner-poll failure reduced to one short line — this rides inside a
  * result a model reads, and a full API body buries the re-arm instruction.
@@ -93,11 +72,12 @@ function rearmStopRule(ref) {
     return `Keep waiting while the exchange is alive — an agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (a working agent posts task_progress milestones). Judge that ONLY on the member you are waiting on — the one you addressed. In a channel with other members, traffic between THEM is not evidence your exchange is alive. Keep re-arming while something came from that member in roughly the last 30 minutes. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`;
 }
 /**
- * LONG-HOLD await. One call holds up to `timeoutMs` (capped at
- * {@link AWAIT_HOLD_MS}) by re-issuing the ~50s inner long-poll on the same
- * `since` cursor. Returning the instant anything arrives keeps a reply fast;
- * holding past ~2 minutes when nothing does is what makes the pending call a
- * wake primitive.
+ * LONG-HOLD await. One call holds for `awaitHoldMs(timeoutMs, runtime)` by
+ * re-issuing the ~50s inner long-poll on the same `since` cursor. Returning the
+ * instant anything arrives keeps a reply fast; holding past ~2 minutes when
+ * nothing does is what makes the pending call a wake primitive — ⚠ and that is
+ * reachable only for a DESKTOP-stamped caller or an explicit `timeout_ms`, not
+ * at an unstamped caller's default, whose own client aborts first (T03).
  *
  * ⚠ Four results, never a thrown error once the hold is underway: messages,
  * timed-out (re-arm, with stop condition), FAILED-MID-HOLD (names what broke,
@@ -108,11 +88,15 @@ function rearmStopRule(ref) {
  * an agent needs to follow.
  *
  * `runtime` = caller's OBSERVED runtime stamp, threaded from the registrar.
- * Changes nothing this op DOES — only what it may claim about the hold.
+ * ⚠ IT NOW SIZES THE DEFAULT HOLD AS WELL AS WORDING THE RESULT (T03) — still
+ * an observation that grants nothing, but no longer cosmetic: read wrong it
+ * costs hold length one way and a transport error the other.
  */
 async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime = null, selfSessionId = null) {
-    // Default = AWAIT_HOLD_MS; an EXPLICIT ask may reach the ceiling.
-    const holdMs = Math.min(timeoutMs ?? AWAIT_HOLD_MS, AWAIT_HOLD_CEILING_MS);
+    // ⚠ AN EXPLICIT ASK IS HONOURED EXACTLY; the DEFAULT depends on the caller's
+    // runtime — see `channel-await-budget.ts › awaitHoldMs` for both rules and
+    // why one default could not serve both populations (T03).
+    const holdMs = (0, channel_await_budget_1.awaitHoldMs)(timeoutMs, runtime);
     // ⚠ Loop bound is ELAPSED time, never a call count — an inner poll returning
     // early (or clamped by the route) shortens that iteration, not the hold.
     const startedAt = Date.now();
@@ -140,11 +124,11 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
     // ⚠ THE CURSOR THE CALLER SHOULD RESUME FROM, which is `since` for the whole
     // hold EXCEPT when own-session rows were dropped — see `dropOwnSession`.
     let cursor = since;
-    for (let poll = 0; poll < AWAIT_MAX_POLLS; poll++) {
+    for (let poll = 0; poll < channel_await_budget_1.AWAIT_MAX_POLLS; poll++) {
         const remaining = deadline - Date.now();
         // ⚠ Always make the first call — a `timeout_ms=0` caller wants one
         // immediate check. Stop re-issuing once the leftover budget is a sliver.
-        if (poll > 0 && remaining < AWAIT_MIN_POLL_MS)
+        if (poll > 0 && remaining < channel_await_budget_1.AWAIT_MIN_POLL_MS)
             break;
         // Hot path (inside a listener's poll loop, so the saved round-trip compounds
         // per cycle): ref straight through, route 404 → clean not-found.
@@ -250,7 +234,7 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         }
         // Hold came back far under the ask, so re-arming would spin — see
         // AWAIT_SHORT_HOLD_MS. Half the ask, capped at 60s.
-        if (elapsedMs < Math.min(AWAIT_SHORT_HOLD_MS, holdMs / 2)) {
+        if (elapsedMs < Math.min(channel_await_budget_1.AWAIT_SHORT_HOLD_MS, holdMs / 2)) {
             return (0, respond_1.ok)([
                 timedOut,
                 `That hold was CUT SHORT — it asked for about ${Math.round(holdMs / 1000)}s and returned in ${Math.round(elapsedMs / 1000)}s, which usually means the platform is clamping the call (or the server is erroring instantly). A hold this short can never stay pending long enough to wake you.`,
@@ -259,7 +243,7 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
         }
         return (0, respond_1.ok)([
             timedOut,
-            ...(0, channel_wake_guidance_1.awaitTimedOutLines)(ref, cursor, runtime, rearmStopRule(ref)),
+            ...(0, channel_wake_guidance_1.awaitTimedOutLines)(ref, cursor, runtime),
             // ⚠ RENDERED ON A TIMEOUT TOO, and that is the case it earns most: a
             // hold that came back empty is exactly when an orchestrator has to
             // decide whether the agent it is waiting on is still alive. Answering

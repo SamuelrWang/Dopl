@@ -97,14 +97,26 @@ export const UNKNOWN_CALLER: CallerIdentity = {
 };
 
 /**
+ * DID THE REQUEST CARRY THE DESKTOP'S RUNTIME STAMP? ⚠ The ONE statement of that
+ * comparison — `channel-wake-guidance.ts` (what the hold may CLAIM) and
+ * `channel-await-budget.ts` (how long the hold may BE) both branch on it, and a
+ * second copy is how the two answers drift into disagreeing about one request.
+ *
+ * ⚠ An OBSERVATION, and it gates nothing (`src/shared/auth/runtime-header.ts`
+ * grants nothing). False means UNSTAMPED — usually an external client, but also
+ * how a desktop spawn on an older build looks. Never read it as "external".
+ */
+export function isDesktopRuntime(runtime: string | null | undefined): boolean {
+  return runtime === DESKTOP_SESSION_RUNTIME;
+}
+
+/**
  * ⚠ What the server SAW in the runtime header, never what it concluded.
  * `unstamped` means the stamp was absent — usually an external client, but also
  * how a desktop spawn on an older build looks.
  */
 function runtimeWord(identity: CallerIdentity): string {
-  return identity.runtime === DESKTOP_SESSION_RUNTIME
-    ? DESKTOP_SESSION_RUNTIME
-    : "unstamped";
+  return isDesktopRuntime(identity.runtime) ? DESKTOP_SESSION_RUNTIME : "unstamped";
 }
 
 /**

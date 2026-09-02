@@ -189,6 +189,7 @@ export function registerChannelTool(
               args.since as number,
               args.timeout_ms,
               selfUserId,
+              runtime,
               selfSessionId,
             );
           }

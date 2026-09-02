@@ -137,10 +137,32 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
     expect(out).toContain("workspace activity as a sign of life");
   });
 
+  /**
+   * ⚠ ON A PAGE, NOT ON THE TIMEOUT. Since T03 the timed-out result is the
+   * COMPRESSED one — an external orchestrator reads it every ~45s and it says
+   * the same thing every time — so the full rule is taught where it is new
+   * information: the hold that RETURNED. The compressed line still carries the
+   * same exit (checked below).
+   */
   it("says the TIMEOUT stops being the 'nothing is happening' signal", async () => {
-    expect(await text(wsClient({}), 5, HOLD_MS)).toContain(
-      "the timeout can no longer be your"
+    const out = await text(
+      wsClient({ messages: [message()], timedOut: false })
     );
+    expect(out).toContain("almost never time out");
+  });
+
+  it("the COMPRESSED timeout still carries the cursor and the 30-minute exit", async () => {
+    // ⚠ HOLD_MS, not the default — see POLL_DELAY_MS above: an instant mock on a
+    // long ask lands in the CUT SHORT branch, not the timeout one.
+    const out = await text(wsClient({}), 5, HOLD_MS);
+    expect(out).toContain("cursor=5");
+    expect(out).toContain("STOP and report to your operator");
+    expect(out).toContain("30+ minutes");
+    expect(out).toContain("no finished STATE to wait for");
+    // ⚠ …and it still states the SCOPE, which is a fact about what was watched
+    // rather than doctrine: "no messages" and "that room was never watched" are
+    // different answers.
+    expect(out).toContain("Scope: every channel you are a MEMBER of");
   });
 
   it("states the ABSENCE of a finished state (INVARIANTS §10)", async () => {
@@ -199,7 +221,7 @@ describe("the caller's own posts never end its own workspace hold", () => {
       timedOut: false,
     });
 
-    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, "chan-9:mine"))
+    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, null, "chan-9:mine"))
       .content[0].text as string;
 
     expect(out).toContain("the parser is done");
@@ -211,7 +233,7 @@ describe("the caller's own posts never end its own workspace hold", () => {
       timedOut: false,
     });
 
-    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, "chan-9:mine"))
+    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, null, "chan-9:mine"))
       .content[0].text as string;
 
     expect(out).not.toContain("the parser is done");

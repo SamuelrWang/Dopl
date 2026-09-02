@@ -28,7 +28,16 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
+import { AWAIT_HOLD_DEFAULT_MS } from "./channel-await-budget";
 import { opAwait } from "./channel-ops-await";
+
+/**
+ * ⚠ THE CASES BELOW ASK FOR THE HOLD EXPLICITLY where they assert more than one
+ * inner poll. An unstamped caller's DEFAULT is one poll long since T03, and a
+ * "for every poll" assertion over a single call proves much less than it reads
+ * as.
+ */
+const HOLD = AWAIT_HOLD_DEFAULT_MS;
 
 const ME = "user-me";
 const MY_SESSION = "chan-1:aaaa1111";
@@ -105,7 +114,7 @@ describe("a SIBLING session on the same account is visible (F-405)", () => {
       stubClient({ awaitChannelMessages }),
       "general",
       7,
-      undefined,
+      HOLD,
       ME,
       null,
       MY_SESSION,
@@ -168,7 +177,7 @@ describe("a SIBLING session on the same account is visible (F-405)", () => {
       stubClient({ awaitChannelMessages }),
       "general",
       899,
-      undefined,
+      HOLD,
       ME,
       null,
       MY_SESSION,
@@ -194,7 +203,7 @@ describe("a SIBLING session on the same account is visible (F-405)", () => {
       stubClient({ awaitChannelMessages }),
       "general",
       899,
-      undefined,
+      HOLD,
       ME,
       null,
       MY_SESSION,
@@ -249,7 +258,7 @@ describe("an unstamped caller sees its own account's agents", () => {
   it("sends NO author filter, on every poll", async () => {
     const awaitChannelMessages = quietHold();
 
-    await opAwait(stubClient({ awaitChannelMessages }), "general", 7, undefined, ME);
+    await opAwait(stubClient({ awaitChannelMessages }), "general", 7, HOLD, ME);
 
     expect(awaitChannelMessages.mock.calls.length).toBeGreaterThan(1);
     for (const [, opts] of awaitChannelMessages.mock.calls) {
