@@ -34,6 +34,8 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk t
 - "move_file" — move + rename an entry; parents mkdir-p'd, leaf becomes the new title.
 - "search" — hybrid keyword + semantic search over the entry BODIES of the bases you can read. Returns ranked entries with snippet + path for op=read_file. A RANKED SAMPLE, not an exhaustive scan: the backend considers a bounded candidate set per leg before fusing, drops semantically distant entries, caps at \`limit\` (default 20), and removes hits in bases you cannot read AFTER ranking — so fewer hits than \`limit\` is normal and never means "there are no others". Zero hits is not proof of absence; try op="get_tree" or a different phrasing. Optional \`base\` narrows to one base.
 - "set_visibility" — publish a base you created (\`visibility="public"\`: readable by every member of the workspace). One-way — un-publishing and team scope are human-only (Dopl web UI).
+- "pin" — add to the STARTUP CONTEXT: what every agent session launched in this workspace is handed the moment it starts, so nobody re-pastes the same documents. \`base\` alone pins the WHOLE base (all its entries); add \`path\` to pin ONE entry and leave the rest of the base out. A workspace-wide curation flag — it changes no visibility and no audience, and everyone here gets the same startup context. The payload is capped, so pinning far more than a few pages means the rest arrives as a pointer to fetch with op=read_file rather than as content.
+- "unpin" — the exact inverse, same arguments. \`base\` alone unpins the base; with \`path\` it unpins that one entry, which still arrives with the base if the BASE is pinned.
 
 Deleting is not available to you over MCP: \`dopl_kb_admin\` refuses every op it lists and removes nothing, and there is no trash to restore from. Ask the user to delete in the Dopl app.`;
 const KB_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
@@ -54,11 +56,11 @@ caller = identity_1.UNKNOWN_CALLER) {
             .enum([
             "list_bases", "get_tree", "list_dir", "create_base", "update_base",
             "create_folder", "move_folder", "read_file", "write_file",
-            "move_file", "search", "set_visibility",
+            "move_file", "search", "set_visibility", "pin", "unpin",
         ])
             .describe("Operation to perform."),
-        base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/create_folder/move_folder/read_file/write_file/move_file; optional scope for search."),
-        path: zod_1.z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). There is no delete op — deletion is app-only."),
+        base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/create_folder/move_folder/read_file/write_file/move_file/pin/unpin; optional scope for search."),
+        path: zod_1.z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). pin/unpin: OPTIONAL, and it picks the target — with a path you pin that ONE entry, without one you pin the whole base. There is no delete op — deletion is app-only."),
         from_path: zod_1.z.string().optional().describe("move_folder/move_file: source path."),
         to_path: zod_1.z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),
         name: zod_1.z.string().optional().describe("create_base: required base name (1-120 chars). update_base: optional new name."),
@@ -172,6 +174,16 @@ caller = identity_1.UNKNOWN_CALLER) {
                 if (miss)
                     return miss;
                 return (0, knowledge_ops_write_1.opSetVisibility)(client, args.base, args.visibility);
+            }
+            // ⚠ TWO CASES, ONE HANDLER, AND THE BOOLEAN IS THE WHOLE DIFFERENCE —
+            // see `knowledge-ops-write.ts › opPin` for why they are two ops rather
+            // than one op carrying a flag. `path` is OPTIONAL and picks the target.
+            case "pin":
+            case "unpin": {
+                const miss = (0, respond_1.missingParams)(args.op, args, ["base"]);
+                if (miss)
+                    return miss;
+                return (0, knowledge_ops_write_1.opPin)(client, args.base, args.path, args.op === "pin");
             }
         }
     });

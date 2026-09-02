@@ -53,6 +53,29 @@ export declare function opCreateBase(client: DoplClient, callerUserId: string | 
  */
 export declare function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string, shelf?: ShelfArg): Promise<ToolResponse>;
 export declare function opSetVisibility(client: DoplClient, ref: string, visibility: string): Promise<ToolResponse>;
+/**
+ * PINNED STARTUP CONTEXT (T81) — put a base (or one entry of it) into what every
+ * agent session launched in this workspace is handed at startup, or take it out.
+ *
+ * ⚠ ONE HANDLER, TWO OPS, AND THE BOOLEAN IS THE ONLY DIFFERENCE. `pin` and
+ * `unpin` are separate ops rather than one op with a flag for the reason the
+ * REST routes are two verbs: a request that states the END STATE is safe to
+ * retry after an ambiguous failure, where a toggle silently un-does a write that
+ * landed. On workspace-wide state that un-do changes what every session started
+ * afterwards begins with.
+ *
+ * ⚠ `path` IS WHAT PICKS THE TARGET, and the two are different objects: with a
+ * path this pins ONE ENTRY, without it the WHOLE BASE. The result says which,
+ * because an agent that believes it pinned a base when it pinned one document
+ * will not pin the rest.
+ *
+ * ⚠ THE ENTRY LOOKUP IS A READ THROUGH THE ORDINARY PATH RESOLVER, so an
+ * unreadable base or a path that names a FOLDER refuses before anything is
+ * written — the server's own gates (`service-pins.ts › pinEntry` chases the
+ * entry up to its base) are what actually refuse; this only makes the refusal
+ * legible.
+ */
+export declare function opPin(client: DoplClient, ref: string, path: string | undefined, pinned: boolean): Promise<ToolResponse>;
 export declare function opCreateFolder(client: DoplClient, ref: string, path: string, description?: string): Promise<ToolResponse>;
 export declare function opMoveFolder(client: DoplClient, ref: string, from_path: string, to_path: string): Promise<ToolResponse>;
 export declare function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string): Promise<ToolResponse>;
