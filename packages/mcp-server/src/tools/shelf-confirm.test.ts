@@ -163,7 +163,13 @@ describe("dopl_kb — the shelf argument", () => {
     expect(create).toHaveBeenCalledWith({
       name: "Notes",
       description: undefined,
-      visibility: undefined,
+      // 🔒 **SENT, NOT OMITTED** (2026-09-02). The server's default is
+      // credential-dependent and this process cannot see which credential it
+      // holds — an omitted value let a SHARED one resolve to `public`, trip G16
+      // and answer a 400 whose remedy was "preview again", which is what the
+      // caller had just done. `"private"` is what this tool's own description
+      // promises as the default, so the wire now says it.
+      visibility: "private",
       homeScoped: undefined,
     });
   });

@@ -140,7 +140,7 @@ directory) {
         visibility: zod_1.z
             .enum(agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES, { error: agent_shared_js_1.VISIBILITY_ENUM_MESSAGE })
             .optional()
-            .describe('op=create / op=update: who may use this identity — "private" = you and workspace admins, "workspace" = every member. ⚠ Inside a home channel someone else is in, "workspace" publishes your agent into their room and previews first.'),
+            .describe('op=create / op=update: who may use this identity — "private" (create default) = you and workspace admins, "workspace" = every member. ⚠ Inside a home channel someone else is in, "workspace" publishes your agent into their room and previews first.'),
         knowledge_bases: zod_1.z
             .array(zod_1.z.string().uuid())
             .max(MAX_KNOWLEDGE_BASE_IDS)

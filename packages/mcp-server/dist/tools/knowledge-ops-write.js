@@ -76,7 +76,14 @@ async function opCreateBase(client, callerUserId, input) {
     if (personal && input.visibility !== undefined && input.visibility !== "private") {
         return (0, respond_1.err)(`Refused before sending: shelf="personal" and visibility="${input.visibility}" contradict each other, so nothing was created. Your personal shelf holds PRIVATE bases only — a public base on it would be readable by every member on a surface no member navigates to. Either drop \`visibility\` (personal implies private) or drop \`shelf\`.`);
     }
-    const visibility = personal ? "private" : input.visibility;
+    // 🔒 **ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT** (2026-09-02) — the same
+    // rule and the same reason as `agent-ops-write.ts › opCreate`, which states it
+    // in full: the server's default is credential-dependent, this process cannot
+    // see which credential it holds, and an omitted value let a SHARED credential
+    // resolve to `public`, trip G16 and answer a 400 whose remedy was "preview
+    // again" — the thing the caller had just done. `"private"` is what this tool's
+    // `visibility` description already promises as the default.
+    const visibility = personal ? "private" : (input.visibility ?? "private");
     const verdict = await (0, confirm_token_1.confirmGate)(client, {
         tool: "dopl_kb",
         op: "create_base",
@@ -86,7 +93,7 @@ async function opCreateBase(client, callerUserId, input) {
         payload: {
             name: input.name,
             description: input.description ?? null,
-            visibility: visibility ?? null,
+            visibility,
             shelf: input.shelf ?? null,
         },
     }, { publishes: visibility === "public", token: input.confirm_token });

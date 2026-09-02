@@ -243,6 +243,57 @@ describe("a proceed that showed nobody anything sends NO flag", () => {
   });
 });
 
+// ── The create lanes never leave the landing value to the server ─────
+
+/**
+ * 🔒 **AN OMITTED `visibility` WAS AN UNESCAPABLE LOOP** (closed 2026-09-02).
+ * The server's create default is CREDENTIAL-DEPENDENT — `createTemplate` /
+ * `createBase` give a SHARED credential `workspace`/`public` and everyone else
+ * `private` — and this process cannot see which credential it holds. So the gate
+ * computed `publishes: false`, minted no token, the server resolved a SHARED
+ * visibility, tripped its own G16 precondition and answered 400 — whose remedy is
+ * "re-issue WITHOUT `confirm_token` to get a fresh preview", which is exactly what
+ * the caller had just done. Nothing the agent could change would break the cycle.
+ *
+ * ⚠ THE FIX IS THE WIRE, NOT THE REMEDY STRING. Both lanes now send the default
+ * their own tool description promises, so the gate's prediction and the server's
+ * resolution cannot disagree at all.
+ */
+describe("an omitted visibility is SENT as the documented default", () => {
+  it("dopl_agent op=create sends `private` rather than leaving it open", async () => {
+    const create = vi.fn(async () => ({ ...TEMPLATE, visibility: "private" as const }));
+    await opCreate(
+      stub({ ...sharedContainer(), createAgentTemplate: create }) as DoplClient,
+      ME,
+      { name: "Researcher" }
+    );
+    expect(create.mock.calls[0][0]).toMatchObject({ visibility: "private" });
+    // …and therefore no preview and no flag: the row lands where the gate said.
+    expect(create.mock.calls[0][0].acknowledgeShared).toBeUndefined();
+  });
+
+  it("dopl_kb op=create_base sends `private` rather than leaving it open", async () => {
+    const create = vi.fn(async () => ({ ...BASE, visibility: "private" as const }));
+    await opCreateBase(
+      stub({ ...sharedContainer(), createKbBase: create }) as DoplClient,
+      ME,
+      { name: "Notes" }
+    );
+    expect(create.mock.calls[0][0]).toMatchObject({ visibility: "private" });
+    expect(create.mock.calls[0][0].acknowledgeShared).toBeUndefined();
+  });
+
+  it("an EXPLICIT visibility is still the caller's, on both lanes", async () => {
+    const create = vi.fn(async () => TEMPLATE);
+    const client = stub({
+      ...workspaceStub("standard", 9),
+      createAgentTemplate: create,
+    }) as DoplClient;
+    await opCreate(client, ME, { name: "Researcher", visibility: "workspace" });
+    expect(create.mock.calls[0][0]).toMatchObject({ visibility: "workspace" });
+  });
+});
+
 // ── The server's own refusal, made legible ───────────────────────────
 
 describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next action", () => {

@@ -163,7 +163,7 @@ export function registerAgentTools(
         .enum(TEMPLATE_VISIBILITY_VALUES, { error: VISIBILITY_ENUM_MESSAGE })
         .optional()
         .describe(
-          'op=create / op=update: who may use this identity — "private" = you and workspace admins, "workspace" = every member. ⚠ Inside a home channel someone else is in, "workspace" publishes your agent into their room and previews first.',
+          'op=create / op=update: who may use this identity — "private" (create default) = you and workspace admins, "workspace" = every member. ⚠ Inside a home channel someone else is in, "workspace" publishes your agent into their room and previews first.',
         ),
       knowledge_bases: z
         .array(z.string().uuid())

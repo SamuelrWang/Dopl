@@ -118,11 +118,24 @@ export async function opCreate(
   if (contradiction) return contradiction;
 
   const personal = input.shelf === "personal";
-  // ⚠ `shelf:"personal"` must SEND `visibility: "private"` explicitly, or the
-  // server's condition 2 refuses on a default the agent never chose.
-  const visibility: OfferedTemplateVisibility | undefined = personal
+  // 🔒 **VISIBILITY IS ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT** — for
+  // `shelf:"personal"` (or condition 2 refuses on a default the agent never
+  // chose) AND, since 2026-09-02, for the ordinary case too.
+  //
+  // ⚠ **AN OMITTED VISIBILITY WAS AN UNESCAPABLE LOOP.** The server's default is
+  // credential-dependent (`service-writes.ts › createTemplate`: a SHARED
+  // credential defaults to `workspace`, everyone else to `private`), and this
+  // process cannot see which it holds. So the gate below computed
+  // `publishes: false`, minted no token, and the server then resolved
+  // `workspace`, hit its own G16 precondition and answered 400 — whose remedy is
+  // "re-issue WITHOUT `confirm_token` for a fresh preview", which is what the
+  // caller had just done. Round and round, with nothing the agent could change.
+  // ⚠ Sending it makes the wire match what the tool's own description promises
+  // ("default 'private'"), so the branch cannot fire at all; a shared credential
+  // then gets its clean, named 403 instead of an unanswerable 400.
+  const visibility: OfferedTemplateVisibility = personal
     ? "private"
-    : input.visibility;
+    : (input.visibility ?? "private");
 
   const verdict = await confirmGate(
     client,
@@ -137,7 +150,7 @@ export async function opCreate(
         description: input.description ?? null,
         instructions: input.instructions ?? null,
         model: input.model ?? null,
-        visibility: visibility ?? null,
+        visibility,
         shelf: input.shelf ?? null,
         knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
         fields: (input.fields ?? []).map((f) => [f.key, f.value]),
