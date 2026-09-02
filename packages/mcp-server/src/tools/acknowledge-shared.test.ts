@@ -24,6 +24,10 @@ import { opCreate, opUpdate } from "./agent-ops-write";
 import { opCreateBase, opSetVisibility } from "./knowledge-ops-write";
 import { stub } from "./narration-fixtures";
 import { __resetConfirmTokensForTest } from "./confirm-token";
+import { registerKnowledgeTools } from "./knowledge";
+import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
+import type { RegisterTool, ToolResponse } from "./respond";
+import type { WorkspaceDirectory } from "../workspace-directory";
 
 const ME = "user-1";
 
@@ -160,6 +164,46 @@ describe("dopl_kb — a spent token acknowledges the audience", () => {
       expect.objectContaining({ visibility: "public", acknowledgeShared: true })
     );
   });
+
+  // 🔒 F-441, closed at integration (A3 × A11): this op used to be handed
+  // neither the caller id nor the token, so it could not preview and answered a
+  // shared-container publish with a refusal. It now behaves exactly as
+  // `create_base` does — one mechanism for one act.
+  it("op=set_visibility previews first, then sends the flag on the confirmed write", async () => {
+    const update = vi.fn(async () => BASE);
+    const client = stub({
+      ...sharedContainer(),
+      listKbBases: vi.fn(async () => [{ ...BASE, visibility: "private" as const }]),
+      updateKbBase: update,
+    }) as DoplClient;
+
+    const preview = await opSetVisibility(client, ME, BASE.id, "public");
+    expect(update).not.toHaveBeenCalled();
+
+    await opSetVisibility(
+      client,
+      ME,
+      BASE.id,
+      "public",
+      tokenIn(textOf(preview)),
+    );
+    expect(update).toHaveBeenCalledWith(
+      BASE.id,
+      expect.objectContaining({ visibility: "public", acknowledgeShared: true })
+    );
+  });
+
+  it("op=set_visibility in a STANDARD workspace publishes with NO flag and no preview", async () => {
+    const update = vi.fn(async () => BASE);
+    const client = stub({
+      ...workspaceStub("standard", 9),
+      listKbBases: vi.fn(async () => [{ ...BASE, visibility: "private" as const }]),
+      updateKbBase: update,
+    }) as DoplClient;
+
+    await opSetVisibility(client, ME, BASE.id, "public");
+    expect(update.mock.calls[0][1].acknowledgeShared).toBeUndefined();
+  });
 });
 
 // ── Every OTHER proceed sends nothing ────────────────────────────────
@@ -219,14 +263,14 @@ describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next actio
     expect(text).toContain("WITHOUT `confirm_token`");
   });
 
-  it("on set_visibility it names the HUMAN as the remedy — that op has no preview", async () => {
-    // ⚠ THE ASYMMETRY IS RECORDED, NOT HIDDEN. `tools/knowledge.ts` passes this
-    // op neither the caller id nor `confirm_token`, and that file belongs to
-    // another slice of this wave — so the preview is a cross-slice request and
-    // this refusal is what the agent gets until it lands. A remedy an agent
-    // cannot perform ("re-issue with a flag you have no argument for") would be
-    // worse than the silent publish it replaces; a remedy a person can perform
-    // is not.
+  it("on set_visibility it still lands legibly — a 400 AFTER a spent token is a race", async () => {
+    // ⚠ **THIS ARM IS NOT DEAD CODE NOW THAT THE OP PREVIEWS (F-441).**
+    // `confirmGate` fires on the shape THIS PROCESS can see — a `kind='link'`
+    // container with a peer — and the server's predicate is the authority over
+    // facts this process cannot check. So a spent token can still meet a 400,
+    // and the mapper is what keeps that answer legible rather than a raw
+    // transport error. Driven through a REAL token so the gate is genuinely
+    // passed and it is the server's refusal being rendered.
     const client = stub({
       ...sharedContainer(),
       listKbBases: vi.fn(async () => [{ ...BASE, visibility: "private" as const }]),
@@ -234,12 +278,19 @@ describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next actio
         throw apiError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED");
       }),
     }) as DoplClient;
-    const res = await opSetVisibility(client, BASE.id, "public");
+    const preview = await opSetVisibility(client, ME, BASE.id, "public");
+    const res = await opSetVisibility(
+      client,
+      ME,
+      BASE.id,
+      "public",
+      tokenIn(textOf(preview)),
+    );
     expect(res.isError).toBe(true);
     const text = textOf(res);
     expect(text).toContain("Nothing was written");
-    expect(text).toContain("ask your operator");
-    expect(text).not.toContain("confirm_token");
+    expect(text).toContain("Ask your operator");
+    expect(text).toContain("already previewed and confirmed");
   });
 
   it("leaves every OTHER 400 alone — the mapper is keyed on the code", async () => {
@@ -252,5 +303,96 @@ describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next actio
     await expect(
       opCreate(client, ME, { name: "Researcher", visibility: "workspace" })
     ).rejects.toThrow("HTTP 400");
+  });
+});
+
+// ── The registrar arm, driven for real (F-441) ───────────────────────
+
+/**
+ * ⚠ **THE OP FUNCTION IS NOT THE FENCE — THE `case` IS**, and F-441 was a
+ * defect of the `case` alone: `opSetVisibility` was correct and the arm handed
+ * it neither the caller id nor `confirm_token`, so the preview could not fire.
+ * Every assertion above calls the op DIRECTLY and would have stayed green
+ * through exactly that bug, which is why this block drives the real `dopl_kb`
+ * handler off the real registrar instead.
+ */
+function doplKb(client: DoplClient, caller: CallerIdentity): (
+  args: Record<string, unknown>,
+) => Promise<ToolResponse> {
+  const handlers = new Map<string, unknown>();
+  const capture: RegisterTool = (name, _d, _s, handler) => {
+    handlers.set(name, handler);
+  };
+  const directory: WorkspaceDirectory = {
+    getWorkspaceList: async () => [],
+    resolveWorkspaceRef: async () => null,
+    noWorkspaceError: async () => ({ content: [], isError: true }),
+    lockedWorkspaceId: () => null,
+  };
+  registerKnowledgeTools(capture, client, caller, directory);
+  const tool = handlers.get("dopl_kb");
+  if (!tool) throw new Error("dopl_kb was not registered");
+  return tool as (a: Record<string, unknown>) => Promise<ToolResponse>;
+}
+
+describe("dopl_kb(op=\"set_visibility\") — the registrar arm carries both halves", () => {
+  it("previews on the first call and spends the token on the second", async () => {
+    const update = vi.fn(async () => BASE);
+    const client = stub({
+      ...sharedContainer(),
+      listKbBases: vi.fn(async () => [{ ...BASE, visibility: "private" as const }]),
+      updateKbBase: update,
+    }) as DoplClient;
+    const kb = doplKb(client, { ...UNKNOWN_CALLER, userId: ME });
+
+    // 🔒 THE CALLER ID: without it `confirmGate` cannot bind the token to an
+    // identity, so this call would publish instead of previewing.
+    const preview = await kb({ op: "set_visibility", base: BASE.id, visibility: "public" });
+    expect(update).not.toHaveBeenCalled();
+
+    // 🔒 THE TOKEN: without it the arm re-previews forever and the op is
+    // unreachable through the tool it is published on.
+    await kb({
+      op: "set_visibility",
+      base: BASE.id,
+      visibility: "public",
+      confirm_token: tokenIn(textOf(preview)),
+    });
+    expect(update).toHaveBeenCalledWith(
+      BASE.id,
+      expect.objectContaining({ visibility: "public", acknowledgeShared: true }),
+    );
+  });
+
+  // 🔒 THE CALLER ID IS LOAD-BEARING AND ONLY TWO CALLERS CAN SHOW IT. A single
+  // caller's preview and spend agree on whatever id the arm passed — including
+  // `null` — so dropping it stays green on the case above. What it actually buys
+  // is that one caller's preview cannot be spent by ANOTHER (`confirm-token.ts`,
+  // 2026-08-28), and that is only visible with a second identity.
+  it("a token minted for one caller is refused to another", async () => {
+    const update = vi.fn(async () => BASE);
+    const client = stub({
+      ...sharedContainer(),
+      listKbBases: vi.fn(async () => [{ ...BASE, visibility: "private" as const }]),
+      updateKbBase: update,
+    }) as DoplClient;
+
+    const mine = doplKb(client, { ...UNKNOWN_CALLER, userId: ME });
+    const theirs = doplKb(client, { ...UNKNOWN_CALLER, userId: "user-2" });
+
+    const preview = await mine({
+      op: "set_visibility",
+      base: BASE.id,
+      visibility: "public",
+    });
+    const stolen = await theirs({
+      op: "set_visibility",
+      base: BASE.id,
+      visibility: "public",
+      confirm_token: tokenIn(textOf(preview)),
+    });
+
+    expect(stolen.isError).toBe(true);
+    expect(update).not.toHaveBeenCalled();
   });
 });

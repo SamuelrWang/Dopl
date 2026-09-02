@@ -62,18 +62,24 @@ export declare function opUpdateBase(client: DoplClient, ref: string, name?: str
  * silently allowed, and {@link containerPublishUnacknowledged} is what makes
  * that refusal legible.
  *
- * ⚠ **THE PREVIEW CANNOT BE ADDED FROM THIS FILE.** `confirmGate` needs the
- * caller's user id and the call's `confirm_token`, and this op's registrar arm
- * (`tools/knowledge.ts`) passes neither — that file is owned by another slice of
- * this wave, so the plumbing is a CROSS-SLICE REQUEST, not an edit made here.
- * Until it lands, a shared-container publish through this op is a refusal with a
- * remedy the operator can act on, which is strictly better than the silent
- * publish it replaces.
+ * ⚠ **THE PREVIEW IS HERE SINCE 2026-09-02 (F-441, integration of A3 × A11).**
+ * It was a cross-slice request while `tools/knowledge.ts` belonged to another
+ * slice: `confirmGate` needs the caller's user id and the call's
+ * `confirm_token`, and that arm passed neither, so a shared-container publish
+ * answered with a refusal-plus-remedy instead of a preview. Both are plumbed
+ * now, and this op previews and confirms exactly as `create_base` does — one
+ * mechanism for one act, which is the whole of G16.
+ *
+ * ⚠ **THE REFUSAL PATH BELOW STAYS AND IS NOT DEAD CODE.** `confirmGate` fires
+ * on the SHAPE this process can see (a shared link container); the server's own
+ * predicate is the authority and includes facts this process cannot check. A
+ * 400 from it still has to be legible, and {@link containerPublishUnacknowledged}
+ * is what makes it so. Removing either half leaves one door unguarded.
  *
  * ⚠ NOTHING CHANGES IN A STANDARD WORKSPACE — the server's predicate is
  * `kind='link'` ∧ ≥2 members, and publishing to colleagues costs no extra call.
  */
-export declare function opSetVisibility(client: DoplClient, ref: string, visibility: string): Promise<ToolResponse>;
+export declare function opSetVisibility(client: DoplClient, callerUserId: string | null, ref: string, visibility: string, confirmToken?: string): Promise<ToolResponse>;
 /**
  * PINNED STARTUP CONTEXT (T81) — put a base (or one entry of it) into what every
  * agent session launched in this workspace is handed at startup, or take it out.

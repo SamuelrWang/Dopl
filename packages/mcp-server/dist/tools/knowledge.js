@@ -39,7 +39,7 @@ Set \`op\` to one of:
 - "write_file" — upsert an entry. Requires: base, body, path (or \`title\`, which becomes the path). Overwriting REQUIRES \`expected_version\` from a read_file — 412 without it, only \`force=true\` skips it.
 - "move_file" — Requires: base, from_path, to_path.
 - "search" — keyword + semantic over the entry BODIES of the bases you can read. A ranked sample, not an exhaustive scan: capped at \`limit\` (default 20) and stripped of unreadable bases after ranking, so zero hits is not proof of absence. Requires: query.
-- "set_visibility" — publish a base you created ("public", one-way). Requires: base, visibility.
+- "set_visibility" — publish a base you created ("public", one-way). Requires: base, visibility. Optional: confirm_token. Publishing into a home channel somebody else is in previews first, returning a one-time confirm_token.
 - "pin" — add to the STARTUP CONTEXT: what every agent session launched in this workspace is handed the moment it starts, so nobody re-pastes the same documents. Requires: base; \`path\` picks base-or-entry (see its own description). A workspace-wide curation flag — it changes no visibility and no audience. The payload is capped, so anything past a few pages arrives as a pointer to fetch with op="read_file" rather than as content.
 - "unpin" — the exact inverse, same arguments. An entry unpinned on its own still arrives with the base if the BASE is pinned.
 
@@ -100,7 +100,7 @@ directory) {
         confirm_token: zod_1.z
             .string()
             .optional()
-            .describe("op=create_base: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable."),
+            .describe("op=create_base/set_visibility: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable."),
     }, async (args) => {
         switch (args.op) {
             case "list_bases":
@@ -197,7 +197,10 @@ directory) {
                 const miss = (0, respond_1.missingParams)("set_visibility", args, ["base", "visibility"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opSetVisibility)(client, args.base, args.visibility);
+                // 🔒 F-441 — the caller id and the confirm token, which this arm used
+                // to drop. Without them `opSetVisibility` could not preview and a
+                // shared-container publish answered with a refusal instead.
+                return (0, knowledge_ops_write_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
             }
             // ⚠ TWO CASES, ONE HANDLER, AND THE BOOLEAN IS THE WHOLE DIFFERENCE —
             // see `knowledge-ops-write.ts › opPin` for why they are two ops rather

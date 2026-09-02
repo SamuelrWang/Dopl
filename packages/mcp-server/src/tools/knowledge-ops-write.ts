@@ -208,18 +208,30 @@ export async function opUpdateBase(client: DoplClient, ref: string, name?: strin
  * silently allowed, and {@link containerPublishUnacknowledged} is what makes
  * that refusal legible.
  *
- * ⚠ **THE PREVIEW CANNOT BE ADDED FROM THIS FILE.** `confirmGate` needs the
- * caller's user id and the call's `confirm_token`, and this op's registrar arm
- * (`tools/knowledge.ts`) passes neither — that file is owned by another slice of
- * this wave, so the plumbing is a CROSS-SLICE REQUEST, not an edit made here.
- * Until it lands, a shared-container publish through this op is a refusal with a
- * remedy the operator can act on, which is strictly better than the silent
- * publish it replaces.
+ * ⚠ **THE PREVIEW IS HERE SINCE 2026-09-02 (F-441, integration of A3 × A11).**
+ * It was a cross-slice request while `tools/knowledge.ts` belonged to another
+ * slice: `confirmGate` needs the caller's user id and the call's
+ * `confirm_token`, and that arm passed neither, so a shared-container publish
+ * answered with a refusal-plus-remedy instead of a preview. Both are plumbed
+ * now, and this op previews and confirms exactly as `create_base` does — one
+ * mechanism for one act, which is the whole of G16.
+ *
+ * ⚠ **THE REFUSAL PATH BELOW STAYS AND IS NOT DEAD CODE.** `confirmGate` fires
+ * on the SHAPE this process can see (a shared link container); the server's own
+ * predicate is the authority and includes facts this process cannot check. A
+ * 400 from it still has to be legible, and {@link containerPublishUnacknowledged}
+ * is what makes it so. Removing either half leaves one door unguarded.
  *
  * ⚠ NOTHING CHANGES IN A STANDARD WORKSPACE — the server's predicate is
  * `kind='link'` ∧ ≥2 members, and publishing to colleagues costs no extra call.
  */
-export async function opSetVisibility(client: DoplClient, ref: string, visibility: string): Promise<ToolResponse> {
+export async function opSetVisibility(
+  client: DoplClient,
+  callerUserId: string | null,
+  ref: string,
+  visibility: string,
+  confirmToken?: string,
+): Promise<ToolResponse> {
   if (visibility !== "public") {
     return err(
       `set_visibility only publishes (visibility="public") a base you created. Un-publishing is human-only — use the Dopl web UI.`,
@@ -227,9 +239,32 @@ export async function opSetVisibility(client: DoplClient, ref: string, visibilit
   }
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
+
+  // 🔒 G16 — PREVIEW, THEN PUBLISH. Resolved AFTER the base, deliberately: the
+  // name the preview shows the operator has to be the base this call is about,
+  // and a token minted over a base that does not resolve confirms nothing.
+  const verdict = await confirmGate(
+    client,
+    {
+      tool: "dopl_kb",
+      op: "set_visibility",
+      callerUserId,
+      what: `the knowledge base ${inlineOr(base.name, NO_NAME)} (slug: \`${base.slug}\`), published workspace-wide`,
+      audience: `everyone in that home channel — the peer standing in it can read everything in it, including what was written while it was private`,
+      payload: { base: base.id, visibility: "public" },
+    },
+    { publishes: true, token: confirmToken },
+  );
+  if (verdict.kind === "halt") return verdict.response;
+
   let updated;
   try {
-    updated = await client.updateKbBase(base.id, { visibility: "public" });
+    updated = await client.updateKbBase(base.id, {
+      visibility: "public",
+      // 🔒 The token, SPENT, becomes the server's precondition — the same
+      // mapping `create_base` makes, one op over.
+      acknowledgeShared: verdict.acknowledgedShared || undefined,
+    });
   } catch (e) {
     // Read-only-to-agents base — the clean message, not a raw dump.
     const denied = agentWriteDenied(e);
@@ -238,7 +273,7 @@ export async function opSetVisibility(client: DoplClient, ref: string, visibilit
     // why this op answers with a REMEDY rather than a preview.
     const unacknowledged = containerPublishUnacknowledged(
       e,
-      `This op has no preview step, so it cannot make that acknowledgement for you: ask your operator to publish the base from the Dopl app, where the audience change is stated before they press.`,
+      `This call already previewed and confirmed, so the server is refusing on a fact this process cannot see — re-previewing would answer the same. Ask your operator to publish the base from the Dopl app, where the audience change is stated before they press.`,
     );
     if (unacknowledged) return unacknowledged;
     throw e;
