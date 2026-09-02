@@ -59,6 +59,11 @@ const BASE = "https://api.example.test";
  *        `*Payload` readers each DELEGATE to nothing new on the wire: they are
  *        the same request their array sibling makes, so the surface grew by two
  *        names and by zero round trips.
+ *   78 — PLUS THREE with THE "NEEDS YOU" SIGNAL (2026-09-01): `createPing`,
+ *        `listPings`, `awaitPings`. ⚠ THREE, and the omission is the shape both
+ *        agent lanes already take — there is no ACK, DISMISS or DELETE binding,
+ *        because v1 has no write on a ping beyond its insert (spec §6.1). A
+ *        fourth name here would be a capability the routes do not have.
  */
 const PUBLIC_SURFACE = [
   "appendChatMessages",
@@ -112,6 +117,13 @@ const PUBLIC_SURFACE = [
   "createAgentDirection",
   "getAgentDirection",
   "listAgentDirections",
+  // THE "NEEDS YOU" SIGNAL (2026-09-01): send one, catch up, hold for the next.
+  // ⚠ NO ACK / DISMISS / DELETE binding, because v1 has no write on a ping past
+  // its insert — a name here for a route arm that does not exist would publish a
+  // capability an agent would then plan around.
+  "createPing",
+  "listPings",
+  "awaitPings",
   "getChannelThread",
   "getChat",
   "getHomeChannels",

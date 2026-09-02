@@ -62,8 +62,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * ⚠ IT STRIPS, IT DOES NOT VALIDATE. A value that is not an agent id after this
  * is refused by the create schema and, failing that, reaches a machine that
  * answers `no-session` — both honest, and neither is this function's job.
+ *
+ * ⚠ EXPORTED for `channel-ops-ping.ts` (2026-09-01), which takes the same
+ * pasted-handle argument on `agent_id` and must strip it the same way. ONE
+ * definition — a copy drifts, and the lane that drifts sends `@agent-` to a
+ * column CHECK that refuses it.
  */
-function bareAgentId(raw: string): string {
+export function bareAgentId(raw: string): string {
   return String(raw || "").trim().replace(/^@/, "").replace(/^agent-/, "");
 }
 
