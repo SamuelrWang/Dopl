@@ -234,7 +234,8 @@ async function findResources(
     .select(selectList(spec))
     .in("workspace_id", [...containers.keys()])
     .or(
-      `${spec.ownerColumn}.eq.${caller.userId},visibility.eq.${spec.sharedVisibility}`
+      `${spec.ownerColumn}.eq.${orLiteral(caller.userId)},` +
+        `visibility.eq.${spec.sharedVisibility}`
     );
   query =
     "id" in ref
@@ -302,4 +303,24 @@ function toResolved(
  *  turns an exact match into "anything". */
 function escapeLikeLiteral(value: string): string {
   return value.replace(/[%_\\]/g, "\\$&");
+}
+
+/**
+ * A value going into a RAW `.or()` filter string, quoted.
+ *
+ * ⚠ **THE NAME PATH ESCAPED AND THE ID PATH DID NOT, WHICH IS THE ASYMMETRY THIS
+ * REMOVES** (2026-09-02). `.or()` takes a filter STRING that PostgREST parses:
+ * `,` splits the arms, `.` splits column-operator-value, and `)` closes a group,
+ * so a value carrying any of them changes the query's SHAPE rather than its
+ * subject. `caller.userId` is a `auth.users` UUID today and cannot carry one —
+ * which is a fact about the CALLER, not about this function, and it is the kind
+ * of fact that changes when an id type does. The clause it sits in is the
+ * tenancy fence, so it is escaped where it is written and not where it is
+ * proved.
+ *
+ * ⚠ DOUBLE-QUOTED, not stripped: PostgREST reads a quoted value literally, and
+ * dropping characters would silently resolve a DIFFERENT row.
+ */
+function orLiteral(value: string): string {
+  return `"${value.replace(/["\\]/g, "\\$&")}"`;
 }

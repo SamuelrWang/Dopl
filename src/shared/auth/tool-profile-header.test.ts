@@ -53,11 +53,27 @@ describe("readToolProfileHeader", () => {
       "dopl-only",
       "_private",
       "9lives",
-      "dopl_only,full",
       "a".repeat(33),
     ]) {
       expect(readToolProfileHeader(req(bad)), bad).toBeUndefined();
     }
+  });
+
+  it("SECURITY: a DUPLICATED header narrows on the first value, never un-narrows", () => {
+    // 🔒 THE DEFECT (2026-09-02). `Headers.get` folds repeated fields into
+    // `"a, b"`, the joined string fails the shape test, and `undefined` here
+    // means NO NARROWING — the widest answer. So a second copy of this header
+    // silently removed the narrowing instead of being refused by it, which is the
+    // one direction a fence may never fail.
+    // ⚠ Header order is insertion order, so an APPENDED copy is second and has
+    // no effect; a proxy re-sending the same value keeps the narrowing it asked
+    // for. A comma-joined value and two real headers are indistinguishable here
+    // and are the same thing on the wire, so they get the same answer.
+    expect(readToolProfileHeader(req("courier, full"))).toBe("courier");
+    expect(readToolProfileHeader(req("dopl_only,full"))).toBe("dopl_only");
+    // …and a first segment that is not a role name still drops to "no header".
+    expect(readToolProfileHeader(req("DOPL_ONLY,full"))).toBeUndefined();
+    expect(readToolProfileHeader(req(",full"))).toBeUndefined();
   });
 
   it("SECURITY: an inherited object key never survives the read", () => {

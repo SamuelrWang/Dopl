@@ -35,10 +35,32 @@ export const TOOL_PROFILE_HEADER = "x-dopl-tool-profile";
  */
 const TOOL_PROFILE_RE = /^[a-z][a-z0-9_]{0,31}$/;
 
-/** The role this request's HEADER claims, or undefined. */
+/**
+ * The role this request's HEADER claims, or undefined.
+ *
+ * ⚠ **DUPLICATE HEADERS FOLD TO `"a, b"` AND THAT USED TO UN-NARROW THE
+ * REQUEST** (2026-09-02). `Headers.get` joins repeated fields with `", "`, the
+ * joined string fails {@link TOOL_PROFILE_RE}, and `undefined` here means "no
+ * narrowing" — the WIDEST answer. So a second copy of this header, from a proxy
+ * that appends rather than replaces or from anything that can add one, silently
+ * removed the narrowing instead of being refused by it.
+ *
+ * ⚠ **THE FIRST VALUE WINS, WHICH IS THE ONLY ONE THAT CAN BE THE CALLER'S.**
+ * Header order is insertion order, so an appended copy is second; taking the
+ * first preserves the narrowing a legitimate duplicate (a proxy re-sending the
+ * same value) asked for, and gives an appended one no effect at all. The
+ * narrowest-profile alternative is not available here — this module deliberately
+ * knows no role names (`gating.ts › TOOL_PROFILE_TOOLS` is the one declaration),
+ * and inventing a floor would be a second one.
+ *
+ * ⚠ Still no trimming and no case folding on the value itself: `.split(",", 1)`
+ * takes the segment BEFORE the joiner, which carries no leading space.
+ */
 export function readToolProfileHeader(request: {
   headers: Headers;
 }): string | undefined {
   const raw = request.headers.get(TOOL_PROFILE_HEADER);
-  return raw && TOOL_PROFILE_RE.test(raw) ? raw : undefined;
+  if (raw === null) return undefined;
+  const first = raw.split(",", 1)[0];
+  return TOOL_PROFILE_RE.test(first) ? first : undefined;
 }

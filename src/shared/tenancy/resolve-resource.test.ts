@@ -208,8 +208,31 @@ describe("🔒 only rows the caller could already list for themselves", () => {
     // another member's private row lives in, which is the existence oracle the
     // 404-never-403 surface closes.
     expect(calls.find((c) => c.op === "or")?.args).toEqual([
-      `created_by.eq.${ME},visibility.eq.workspace`,
+      `created_by.eq."${ME}",visibility.eq.workspace`,
     ]);
+  });
+
+  it("QUOTES the caller id into the filter string — the name path always did", async () => {
+    // ⚠ MUTATION CHECK, and the asymmetry it removes. `.or()` takes a filter
+    // STRING PostgREST parses: `,` splits the arms and `.` splits
+    // column-operator-value, so a value carrying either changes the query's
+    // SHAPE. The `ilike` path escapes its caller-supplied value and this one
+    // interpolated raw — safe only because `auth.users` ids are UUIDs, which is a
+    // fact about the caller and not about the fence.
+    const calls = makeAdmin({
+      workspace_members: [member(WS_A)],
+      agent_templates: [],
+    });
+    await resolveResource(
+      { ...caller, userId: 'x",visibility.eq.private,name.eq."y' },
+      "agent_template",
+      T1
+    );
+    const filter = String(calls.find((c) => c.op === "or")?.args[0]);
+    // Every injected quote is backslash-escaped, so the value stays ONE value.
+    expect(filter).toBe(
+      'created_by.eq."x\\",visibility.eq.private,name.eq.\\"y",visibility.eq.workspace'
+    );
   });
 });
 
