@@ -24,7 +24,7 @@ import { ok, err, type ToolResponse } from "./respond";
 // ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
 // FIELDS, not prose; the standing rules they used to restate live once in
 // `channel-doctrine.ts`, behind `op="help"`.
-import { factsLine, type FactValue } from "./channel-facts";
+import { deliveryFact, factsLine, type FactValue } from "./channel-facts";
 // "Did it thread?" — the question a sender cannot otherwise settle.
 import { threadFacts } from "./channel-post-linkage";
 // "What became of the `@…` tokens?" — the server's own resolution, read back.
@@ -283,6 +283,12 @@ export async function opPost(
       addressed: !!toUserId,
       tags: mentions.tags,
       wake: mentions.wake,
+      // ⚠ WHAT BECAME OF IT — A9's keystone contract, rendered where the caller
+      // already reads the rest of the write's outcome. `woken?` is the server's
+      // write-time prediction (no `deliveryAt` yet); `woken` is the operator's
+      // machine reporting what it did. Absent = this server computes no verdict,
+      // which is NOT `none`. See `channel-facts.ts › deliveryFact`.
+      delivery: deliveryFact(message.delivery, message.deliveryAt),
       await: awaitFact(opts.runtime ?? null, message.seq),
       ...(opts.resultFacts ?? {}),
     }),

@@ -31,7 +31,7 @@
  * ⚠ **AND THE CLAMP IS NOT REPORTED TODAY.** `LaunchDirective.appliedToolMode` and
  * its two siblings are `null` on every live row because no machine writes them
  * yet, and `null` MEANS "NOT REPORTED" — never "unclamped", never the request
- * echoed back. `channel-ops-launch.ts › postureFacts` is the ONE statement of
+ * echoed back. `channel-facts.ts › postureFacts` is the ONE statement of
  * that distinction and this op renders the same two facts from it.
  *
  * ── ⚠ WHERE THIS DIFFERS FROM ITS TWO SIBLINGS, AND IT IS THE OPPOSITE ──────

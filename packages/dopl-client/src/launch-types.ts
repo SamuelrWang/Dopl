@@ -126,6 +126,27 @@ export interface LaunchDirective {
   appliedToolMode: LaunchToolMode | null;
   appliedMessageMode: LaunchMessageMode | null;
   appliedChain: boolean | null;
+  /**
+   * **WHAT THE SERVER PERMITTED** (2026-09-02, A9 — G6/G7/G8), decided at
+   * creation from the request and the channel's own ceiling.
+   *
+   * ⚠ **A THIRD GROUP, NOT A SPELLING OF EITHER OTHER ONE.** `startToolMode` is
+   * what was ASKED, `applied*` is what the MACHINE says it did, and this is what
+   * the SERVER allowed to be asked — the half that happens whether or not a
+   * machine is listening. ⚠ `null` STILL MEANS "DID NOT ASK" and survives the
+   * clamp: a request that named no posture stays unnamed all the way to the
+   * machine, which then applies the OPERATOR's own stored pair.
+   * ⚠ **`resolvedModel` IS AN ECHO, NOT A GATE** — the canonical id a recognised
+   * request resolved to, `null` for one this server does not know. Read it beside
+   * `model`: both null = nothing asked; `model` set and this null = asked and
+   * unrecognised, so the machine will use its own default (G8).
+   * ⚠ Hand mirror of `src/features/channels/types-launch.ts › LaunchDirective`,
+   * which carries the full argument.
+   */
+  resolvedToolMode?: LaunchToolMode | null;
+  resolvedMessageMode?: LaunchMessageMode | null;
+  resolvedChain?: boolean | null;
+  resolvedModel?: string | null;
   /** The agent instance started. Set iff `status` is `launched` — it is what a
    *  requester types as `@<agentId>` to direct it. */
   agentId: string | null;

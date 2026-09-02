@@ -192,6 +192,12 @@ async function opPost(client, channelRef, body, opts = {}) {
         addressed: !!toUserId,
         tags: mentions.tags,
         wake: mentions.wake,
+        // ⚠ WHAT BECAME OF IT — A9's keystone contract, rendered where the caller
+        // already reads the rest of the write's outcome. `woken?` is the server's
+        // write-time prediction (no `deliveryAt` yet); `woken` is the operator's
+        // machine reporting what it did. Absent = this server computes no verdict,
+        // which is NOT `none`. See `channel-facts.ts › deliveryFact`.
+        delivery: (0, channel_facts_1.deliveryFact)(message.delivery, message.deliveryAt),
         await: (0, channel_wake_guidance_1.awaitFact)(opts.runtime ?? null, message.seq),
         ...(opts.resultFacts ?? {}),
     }));

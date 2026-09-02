@@ -31,7 +31,7 @@
  * ⚠ **AND THE CLAMP IS NOT REPORTED TODAY.** `LaunchDirective.appliedToolMode` and
  * its two siblings are `null` on every live row because no machine writes them
  * yet, and `null` MEANS "NOT REPORTED" — never "unclamped", never the request
- * echoed back. `channel-ops-launch.ts › postureFacts` is the ONE statement of
+ * echoed back. `channel-facts.ts › postureFacts` is the ONE statement of
  * that distinction and this op renders the same two facts from it.
  *
  * ── ⚠ WHERE THIS DIFFERS FROM ITS TWO SIBLINGS, AND IT IS THE OPPOSITE ──────
@@ -60,7 +60,7 @@ import { fileAndHold, pendingFacts } from "./channel-ops-agent";
 // must say "not reported" in the same word; two statements of that distinction
 // is how one of them quietly starts echoing the request back as if it were the
 // answer.
-import { postureFacts } from "./channel-ops-launch";
+import { postureFacts } from "./channel-facts";
 // ⚠ ONE write-result renderer, shared with every other op on this tool (T10).
 import { factsLine } from "./channel-facts";
 

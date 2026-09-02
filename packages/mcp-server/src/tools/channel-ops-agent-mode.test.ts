@@ -48,7 +48,7 @@ import { opSetAgentMode } from "./channel-ops-agent-mode";
 // distinction it exists to hold — a null echo is "not reported", never the
 // request — did not move, so the cases below drive the new function and render
 // its answer through the one write-result renderer, which is what a caller sees.
-import { postureFacts } from "./channel-ops-launch";
+import { postureFacts } from "./channel-facts";
 import { factsLine } from "./channel-facts";
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 

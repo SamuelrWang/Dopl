@@ -44,6 +44,8 @@
  * (`channel-law.test.ts`).
  */
 
+import type { LaunchDirective } from "@dopl/client";
+
 import { neutralizeInline } from "./channel-shared";
 
 /**
@@ -183,4 +185,104 @@ export function factsLine(
  */
 export function tagFact(resolved: number, attempted: number): string | undefined {
   return attempted === 0 ? undefined : `${resolved}/${attempted}`;
+}
+
+/**
+ * THE DELIVERY VERDICT, as a token — what the server did with a message, which
+ * IS the acknowledgement (2026-09-02, A9's keystone contract).
+ *
+ * ⚠ **TWO FIELDS, ONE FACT, AND THE SECOND ONE IS THE TENSE.** `delivery` alone
+ * is the server's write-time PREDICTION over the sessions it could see; once the
+ * operator's machine reports back, `deliveryAt` carries the stamp and the same
+ * word becomes what actually HAPPENED. A caller that reads only the word cannot
+ * tell a forecast from a receipt, and the forecast is the one it must not act on
+ * as if a machine had answered — so the prediction is rendered `woken?` and the
+ * receipt `woken`, one character carrying the whole distinction.
+ *
+ * ⚠ `undefined` (the field never printed) means THIS SERVER DOES NOT COMPUTE ONE
+ * — a deployment older than `20260912120000_channel_delivery_verdict`. That is
+ * not `none`: `none` is a verdict, an absent field is the absence of one, and
+ * collapsing them tells a caller nobody was reachable when nobody was asked.
+ */
+export function deliveryFact(
+  delivery: string | null | undefined,
+  deliveryAt: string | null | undefined,
+): string | undefined {
+  if (!delivery) return undefined;
+  return deliveryAt ? delivery : `${delivery}?`;
+}
+
+/**
+ * **THE RESOLVED POSTURE, AS FACTS — AND THE NULL CASE IS THE WHOLE POINT.**
+ *
+ * ⚠ `null` MEANS "NOT REPORTED". It does not mean "unclamped" and it is never
+ * the requested value echoed back. The desktop CLAMPS a requested posture to the
+ * operator's own stored ceiling without being obliged to say so, so an
+ * orchestrator told "you got what you asked for" on the strength of an empty
+ * column would size its next instruction for room the agent does not have —
+ * exactly the reading this function exists to refuse. ⚠ SO THE FALLBACK IS THE
+ * WORD `not reported`, NOT A GUESS: echoing `startToolMode` back would produce a
+ * value that is right whenever nothing was clamped and confidently wrong
+ * precisely when it mattered.
+ *
+ * ⚠ THE SHAPE IS FIXED — `posture=<tools>/<messages> chain=on|off` — because it
+ * is read by a model choosing its next action, and a line that changes shape
+ * between calls gets parsed by guesswork. ⚠ `-` FOR AN AXIS THAT WAS NOT
+ * REPORTED EVEN WHEN THE OTHER ONE WAS: partial is a real shape, and filling the
+ * gap from the REQUEST would put an unconfirmed value beside a confirmed one,
+ * indistinguishable.
+ *
+ * ⚠ **RENDERED AS TWO FACTS RATHER THAN A PARAGRAPH** (T10 ∩ T24). The reason a
+ * caller must not read silence as success is standing doctrine and lives in
+ * `channel-doctrine.ts`; what only THIS call can say is the two values.
+ */
+export function postureFacts(d: LaunchDirective): Record<string, FactValue> {
+  const tools = d.appliedToolMode;
+  const messages = d.appliedMessageMode;
+  const chain = d.appliedChain;
+  const reported =
+    tools === null && messages === null && chain === null
+      ? { posture: "not reported", chain: "not reported" }
+      : {
+          posture: `${tools ?? "-"}/${messages ?? "-"}`,
+          chain: chain === null ? "not reported" : chain ? "on" : "off",
+        };
+  return { ...reported, ...allowedFacts(d) };
+}
+
+/**
+ * **WHAT THE SERVER PERMITTED** — A9's G6/G7/G8 half of the same question, and
+ * the reason it is SEPARATE fields rather than a better `posture=` (2026-09-02).
+ *
+ * ⚠ **THREE GROUPS, NOT TWO SPELLINGS OF ONE.** `start*` is what was ASKED,
+ * `applied*` is what the MACHINE reported, and `resolved*` is what the SERVER
+ * allowed to be asked. G6's rule — *"your operator's machine narrows what you
+ * ask; it never widens"* — was enforced on the desktop alone, so an offline or
+ * older machine narrowed nothing and reported nothing: `posture=not reported`
+ * was the whole answer, and it was indistinguishable from "nothing was clamped".
+ * The server's clamp happens either way, which is exactly why it is worth a
+ * field of its own rather than being folded into the machine's echo.
+ *
+ * ⚠ **SILENT WHEN THE SERVER RECORDED NO CEILING**, which is every channel today
+ * (F-449: the columns have no editing surface yet). An `allowed=-/-` on every
+ * launch would be a line of noise claiming a decision nobody made.
+ *
+ * ⚠ **`model=` IS AN ECHO AND NEVER A REFUSAL** (G8). It prints only when the
+ * server resolved the request to a DIFFERENT canonical id than the caller typed
+ * — the case the caller cannot otherwise see. A model this build does not
+ * recognise resolves to `null` and still reaches the machine; the silence there
+ * is the honest answer, and `directive.model` above already says what was asked.
+ */
+export function allowedFacts(d: LaunchDirective): Record<string, FactValue> {
+  const tools = d.resolvedToolMode ?? null;
+  const messages = d.resolvedMessageMode ?? null;
+  const chain = d.resolvedChain ?? null;
+  const model = d.resolvedModel ?? null;
+  const facts: Record<string, FactValue> = {};
+  if (tools !== null || messages !== null) {
+    facts.allowed = `${tools ?? "-"}/${messages ?? "-"}`;
+  }
+  if (chain !== null) facts.allowedChain = chain ? "on" : "off";
+  if (model !== null && model !== d.model) facts.resolvedModel = model;
+  return facts;
 }

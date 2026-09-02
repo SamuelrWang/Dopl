@@ -27,7 +27,6 @@
  * to arm a wait.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.postureFacts = postureFacts;
 exports.opLaunchAgent = opLaunchAgent;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
@@ -215,42 +214,6 @@ const RETRY_ADVICE = {
     // off `no-bridge` exists to make avoidable rather than to invite.
     "no-chain": "no",
 };
-/**
- * **THE RESOLVED POSTURE, AS FACTS — AND THE NULL CASE IS THE WHOLE POINT.**
- *
- * ⚠ `null` MEANS "NOT REPORTED". It does not mean "unclamped" and it is never
- * the requested value echoed back. The desktop CLAMPS a requested posture to the
- * operator's own stored ceiling without being obliged to say so, so an
- * orchestrator told "you got what you asked for" on the strength of an empty
- * column would size its next instruction for room the agent does not have —
- * exactly the reading this function exists to refuse. ⚠ SO THE FALLBACK IS THE
- * WORD `not reported`, NOT A GUESS: echoing `startToolMode` back would produce a
- * value that is right whenever nothing was clamped and confidently wrong
- * precisely when it mattered.
- *
- * ⚠ THE SHAPE IS FIXED — `posture=<tools>/<messages> chain=on|off` — because it
- * is read by a model choosing its next action, and a line that changes shape
- * between calls gets parsed by guesswork. ⚠ `-` FOR AN AXIS THAT WAS NOT
- * REPORTED EVEN WHEN THE OTHER ONE WAS: partial is a real shape, and filling the
- * gap from the REQUEST would put an unconfirmed value beside a confirmed one,
- * indistinguishable.
- *
- * ⚠ **RENDERED AS TWO FACTS RATHER THAN A PARAGRAPH** (T10 ∩ T24). The reason a
- * caller must not read silence as success is standing doctrine and lives in
- * `channel-doctrine.ts`; what only THIS call can say is the two values.
- */
-function postureFacts(d) {
-    const tools = d.appliedToolMode;
-    const messages = d.appliedMessageMode;
-    const chain = d.appliedChain;
-    if (tools === null && messages === null && chain === null) {
-        return { posture: "not reported", chain: "not reported" };
-    }
-    return {
-        posture: `${tools ?? "-"}/${messages ?? "-"}`,
-        chain: chain === null ? "not reported" : chain ? "on" : "off",
-    };
-}
 /** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
  *  id is the only handle the agent has left, and says NOT to re-issue. */
 /**
@@ -382,7 +345,7 @@ async function opLaunchAgent(client, ref, opts = {}) {
             // that sent no posture still ran at SOME posture, and `not reported` is
             // the only thing standing between an orchestrator and the assumption
             // that silence means whatever it hoped.
-            ...postureFacts(directive),
+            ...(0, channel_facts_1.postureFacts)(directive),
             ...converged,
         }));
     }

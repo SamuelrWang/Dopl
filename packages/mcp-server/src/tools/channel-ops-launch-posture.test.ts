@@ -25,7 +25,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { LaunchDirective } from "@dopl/client";
-import { postureFacts } from "./channel-ops-launch";
+import { postureFacts } from "./channel-facts";
 
 /** A decided directive. ⚠ The three echo fields default to `null`, which is what `toDirective`
  *  really hands back — `undefined` is not a shape this render ever sees. */

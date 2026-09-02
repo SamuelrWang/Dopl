@@ -32,7 +32,7 @@
  * ⚠ **AND THE CLAMP IS NOT REPORTED TODAY.** `LaunchDirective.appliedToolMode` and
  * its two siblings are `null` on every live row because no machine writes them
  * yet, and `null` MEANS "NOT REPORTED" — never "unclamped", never the request
- * echoed back. `channel-ops-launch.ts › postureFacts` is the ONE statement of
+ * echoed back. `channel-facts.ts › postureFacts` is the ONE statement of
  * that distinction and this op renders the same two facts from it.
  *
  * ── ⚠ WHERE THIS DIFFERS FROM ITS TWO SIBLINGS, AND IT IS THE OPPOSITE ──────
@@ -56,9 +56,9 @@ const channel_ops_agent_1 = require("./channel-ops-agent");
 // must say "not reported" in the same word; two statements of that distinction
 // is how one of them quietly starts echoing the request back as if it were the
 // answer.
-const channel_ops_launch_1 = require("./channel-ops-launch");
-// ⚠ ONE write-result renderer, shared with every other op on this tool (T10).
 const channel_facts_1 = require("./channel-facts");
+// ⚠ ONE write-result renderer, shared with every other op on this tool (T10).
+const channel_facts_2 = require("./channel-facts");
 /**
  * THE REFUSAL CONTRACT FOR **THIS** VERB — a THIRD map over the same nine-word
  * enum, and the third one is not duplication.
@@ -163,15 +163,15 @@ async function opSetAgentMode(client, ref, agentId, modes, opts = {}) {
     // it applied what was asked. `asked=` beside `posture=` is what lets a reader
     // see the gap without a paragraph explaining that one may exist.
     if (d.status === "done") {
-        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("taken", {
+        return (0, respond_1.ok)((0, channel_facts_2.factsLine)("taken", {
             agent: `@agent-${agent}`,
             asked: want,
-            ...(0, channel_ops_launch_1.postureFacts)(d),
+            ...(0, channel_facts_1.postureFacts)(d),
             filed: true,
         }));
     }
     if (d.status === "refused") {
-        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not re-postured", {
+        return (0, respond_1.ok)((0, channel_facts_2.factsLine)("not re-postured", {
             agent: `@agent-${agent}`,
             asked: want,
             reason: d.refusalReason ?? undefined,
@@ -183,7 +183,7 @@ async function opSetAgentMode(client, ref, agentId, modes, opts = {}) {
     if (d.status === "expired") {
         // ⚠ LAPSED IS NOT REFUSED: no machine ever answered, so nothing is
         // outstanding and the agent keeps the posture it already had.
-        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("not re-postured", {
+        return (0, respond_1.ok)((0, channel_facts_2.factsLine)("not re-postured", {
             agent: `@agent-${agent}`,
             asked: want,
             directive: d.id,
@@ -191,7 +191,7 @@ async function opSetAgentMode(client, ref, agentId, modes, opts = {}) {
             filed: true,
         }));
     }
-    return (0, respond_1.ok)((0, channel_facts_1.factsLine)("pending", {
+    return (0, respond_1.ok)((0, channel_facts_2.factsLine)("pending", {
         agent: `@agent-${agent}`,
         asked: want,
         ...(0, channel_ops_agent_1.pendingFacts)(d, "set_agent_mode"),
