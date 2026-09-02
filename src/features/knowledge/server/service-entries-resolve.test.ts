@@ -44,6 +44,7 @@ function ctx(): KnowledgeContext {
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: ME,
   };
 }
 

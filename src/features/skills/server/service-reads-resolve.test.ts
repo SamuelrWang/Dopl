@@ -37,7 +37,7 @@ function ctx(over: Partial<SkillContext> = {}): SkillContext {
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+    credentialSubjectUserId: ME,
     ...over,
   };
 }

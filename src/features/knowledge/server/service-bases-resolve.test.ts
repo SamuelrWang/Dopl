@@ -46,6 +46,7 @@ function ctx(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: ME,
     ...over,
   };
 }

@@ -28,7 +28,13 @@ interface Ctx extends ContainerScopedCaller {
   source: "user" | "agent";
 }
 
-const ctx: Ctx = { userId: ME, workspaceId: WS_A, role: "member", source: "user" };
+const ctx: Ctx = {
+  userId: ME,
+  workspaceId: WS_A,
+  role: "member",
+  source: "user",
+  credentialSubjectUserId: ME,
+};
 
 /** A row that exists in `WS_B` and nowhere else. */
 function elsewhere(over: Partial<ResolvedResource> = {}): ResolvedResource {

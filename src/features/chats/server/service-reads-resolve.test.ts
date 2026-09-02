@@ -43,7 +43,7 @@ const ctx: ChatContext = {
   source: "user",
   role: "member",
   apiKeyWorkspaceId: null,
-  apiKeyWorkspaceLockKind: null,
+  credentialSubjectUserId: ME,
 };
 
 function ent(chatsWindowDays: number | null): WorkspaceEntitlements {

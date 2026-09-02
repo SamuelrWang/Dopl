@@ -64,6 +64,7 @@ function ctx(over: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: ME,
     ...over,
   };
 }
