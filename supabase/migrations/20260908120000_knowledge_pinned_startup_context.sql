@@ -217,10 +217,23 @@ BEGIN
     END IF;
 
     -- Untouched: the policy SET, the replica identity, and the client grants.
+    --
+    -- ⚠ **THE MEMBER-SELECT POLICY IS ASSERTED BY NAME, NOT BY A HEAD COUNT
+    -- (2026-09-02).** This block used to RAISE on `policy_count <> 4`, which is
+    -- an exact-count assertion about a table this file writes no policy on — so
+    -- ANY later migration adding a legitimate fifth policy would abort THIS one
+    -- on replay, with a message about a "second authorization story" that was
+    -- never true. The claim this file actually depends on is that the
+    -- `*_member_select` policy exists and still reads `visibility` — both
+    -- asserted above, by name — and that a NEW policy has not taken over the
+    -- SELECT command, which is the only shape that could govern the new column
+    -- differently. So the count is gone and the SELECT set is asserted instead:
+    -- exactly one SELECT policy, and it is the one named above.
     SELECT count(*) INTO policy_count
-      FROM pg_policies WHERE schemaname = 'public' AND tablename = tbl;
-    IF policy_count <> 4 THEN
-      RAISE EXCEPTION 'knowledge_pinned_startup_context: % carries % policies, expected the 4 it had (select/insert/update/delete) — this migration writes none, so a different number means somebody added a second authorization story for this column', tbl, policy_count;
+      FROM pg_policies
+     WHERE schemaname = 'public' AND tablename = tbl AND cmd = 'SELECT';
+    IF policy_count <> 1 THEN
+      RAISE EXCEPTION 'knowledge_pinned_startup_context: % carries % SELECT policies, expected exactly the one (%_member_select) this file relies on — a second one would govern the new column by a rule nothing here has read', tbl, policy_count, tbl;
     END IF;
 
     SELECT relreplident INTO identity FROM pg_class
