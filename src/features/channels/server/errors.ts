@@ -372,9 +372,21 @@ export class LaunchDirectiveNotClaimableError extends ChannelError {
  * `agent-templates/server › resolveTemplateRef` answers with a union and throws
  * nothing, so this feature's error mapper does not have to import another
  * feature's error classes to know what a 404 means.
+ *
+ * ⚠ `elsewhere` IS THE ONE THING IT MAY ADD, AND IT IS NOT A CRACK IN THE RULE
+ * ABOVE (T35). It is present only when the ref names a template the caller
+ * COULD ALREADY LIST FOR THEMSELVES — their own row, or a `workspace`-visible
+ * one, in a workspace they are an active member of — sitting in a DIFFERENT
+ * tenancy than the channel's (`agent-templates/server/service-resolve-ref.ts ›
+ * classifyMissingTemplateRef` holds the whole argument). It therefore says
+ * nothing a list call would not, and `null` covers BOTH "no such template" and
+ * "somebody else's, and not yours to see" — the two that must stay one answer.
  */
 export class LaunchTemplateNotFoundError extends ChannelError {
-  constructor(public readonly ref: string) {
+  constructor(
+    public readonly ref: string,
+    public readonly elsewhere: { name: string; label: string } | null = null
+  ) {
     super(`Agent template not found: ${ref}`);
   }
 }

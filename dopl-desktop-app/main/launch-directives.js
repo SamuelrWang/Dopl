@@ -228,10 +228,11 @@ async function spawn(d) {
   let template = null;
   if (d.templateId) {
     const resolved = await require('./template-resolve').resolveTemplate(d.templateId, d.workspaceId);
-    // ⚠ `resolved.reason` IS ALREADY ONE OF THE WIRE WORDS — `no-template` for a 404 (deleted, or
-    // invisible to THIS operator; 404-never-403 makes those one answer and this machine must not
-    // try to tell them apart), `busy` for a timeout, a network failure or a 5xx. Passed through
-    // rather than re-mapped: `decideBody › refusalFor` is the closed-vocabulary gate.
+    // ⚠ `resolved.reason` IS ALREADY ONE OF THE WIRE WORDS — `no-template` for a 404 (deleted, invisible to THIS
+    // operator, or IN ANOTHER TENANCY: `d.workspaceId` is the CHANNEL's container, so a template this operator
+    // owns elsewhere is ABSENT from that read, not hidden), `busy` for a timeout/network/5xx. Passed through,
+    // not re-mapped: `decideBody › refusalFor` is the closed-vocabulary gate — which is also why the T35 tenancy
+    // note `template-resolve.js` logs cannot travel (`channel-ops-launch.ts › REFUSAL_SENTENCES` gives the RULE).
     if (!resolved.ok) return { refused: resolved.reason };
     template = resolved.template;
   } else if (d.templateName) {

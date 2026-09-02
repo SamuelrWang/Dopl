@@ -189,6 +189,28 @@ describe("bootServer — when the directory LOCKS", () => {
     expect(text).not.toContain("beta");
   });
 
+  it("🔒 the locked row is a HOME CHANNEL, with no slug and no ★ (T37)", async () => {
+    // The row `getWorkspaceList` is FORCED to answer with under the lock is a
+    // `kind='link'` container. Rendering it in the workspace shape told the
+    // agent three false things: that it is a workspace, that its slug addresses
+    // it, and — via the ★ legend — that it is "the workspace a no-arg call
+    // auto-targets". Same rule as `tools/home-scopes.ts › searchLegs`.
+    const booted = await bootDirectory(
+      [STANDARD, OTHER_STANDARD, SHARED_CONTAINER],
+      "id-shared",
+    );
+    const text = await booted.listWorkspaces();
+
+    expect(text).toContain("home channel");
+    // The id is the ONLY handle that addresses a container, so it stays.
+    expect(text).toContain("id-shared");
+    // ⚠ Asserted as the RENDERED slug field, not the bare string: the fixture's
+    // name is `shared-c workspace`, so the slug substring is in the row either
+    // way and a bare `not.toContain("shared-c")` could never fail.
+    expect(text).not.toContain("slug: `shared-c`");
+    expect(text).not.toContain("★");
+  });
+
   it("does NOT lock on a SOLO container — today's behaviour, untouched", async () => {
     const booted = await bootDirectory(
       [STANDARD, OTHER_STANDARD, SOLO_CONTAINER],

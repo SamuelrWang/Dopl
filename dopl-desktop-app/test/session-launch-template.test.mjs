@@ -137,6 +137,16 @@ test("F-1 / F-2: a 404 REFUSES with `no-template` — deleted and invisible are 
   assert.equal(m.launches.length, 0, "REFUSE, never degrade to a blank agent");
 });
 
+// ⚠ T35 — THE WORD DOES NOT MOVE (one `reason` for all three causes); only the SERVER's own classification
+// travels; anything that is not TWO NON-EMPTY STRINGS falls to the plain 404. `main/template-resolve.js ›
+// resolveTemplate` carries why that is not an oracle; `undefined` below is a non-envelope body (an older server).
+test("T35: a classified 404 carries the place; every other 404 is byte-identical to before", async () => {
+  const shelf = { name: "Code Auditor", label: "your personal shelf" }, at = (el) => boot({ status: 404, body: el === undefined ? undefined : { error: { details: { elsewhere: el } } } });
+  assert.deepEqual(await at(shelf).resolve.resolveTemplate(TPL, WS), { ok: false, reason: "no-template", elsewhere: shelf });
+  for (const el of [undefined, {}, { name: "x" }, { label: "y" }, { name: "", label: "y" }, "shelf", 7, null])
+    assert.deepEqual(await at(el).resolve.resolveTemplate(TPL, WS), { ok: false, reason: "no-template" }, JSON.stringify(el ?? null));
+});
+
 test("F-3: a timeout / dead socket REFUSES with the EXISTING word `busy`", async () => {
   const m = boot({ throws: () => Object.assign(new Error("aborted"), { name: "AbortError" }) });
   assert.deepEqual(await m.launchFromButton(payload({ templateId: TPL })), {

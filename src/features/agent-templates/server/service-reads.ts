@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import { AgentTemplateNotFoundError } from "./errors";
 import * as repo from "./repository";
+import { classifyMissingTemplateRef } from "./service-resolve-ref";
 import {
   canSeeTemplate,
   resolveVisibleKnowledgeBases,
@@ -137,12 +138,28 @@ export async function getTemplateById(
  * ⚠ AND THE DESKTOP FAILS FOREIGN INDEPENDENTLY: `template-resolve.js › narrow`
  * treats anything that is not an explicit `true` as somebody else's, so an older
  * server that does not send this field cannot silently downgrade a header.
+ *
+ * ── ⚠ THE MISS CARRIES A TENANCY, WHEN THERE IS AN HONEST ONE TO CARRY (T35) ──
+ *
+ * This is the DESKTOP's door onto the same fact the MCP create fence answers, so
+ * it makes the same distinction with the same helper rather than a second one:
+ * a ref that resolves for this operator in a workspace they belong to but NOT in
+ * the one asked in gets `details.elsewhere`. ⚠ THE STATUS DOES NOT MOVE — still
+ * 404, still never 403 — and the classification is the one non-leaky arm
+ * (`service-resolve-ref.ts › classifyMissingTemplateRef`); anything else stays
+ * the bare 404 it has always been.
+ * ⚠ IT COSTS TWO READS **ONLY ON A MISS**. The resolve path that finds a
+ * template is byte-identical to before.
  */
 export async function resolveTemplateForLaunch(
   ctx: AgentTemplateContext,
   id: string
 ): Promise<ResolvedAgentTemplate> {
-  const template = await getTemplateById(ctx, id);
+  const template = await getTemplateById(ctx, id).catch(async (e: unknown) => {
+    if (!(e instanceof AgentTemplateNotFoundError)) throw e;
+    const elsewhere = await classifyMissingTemplateRef(ctx, id);
+    throw elsewhere ? new AgentTemplateNotFoundError(id, elsewhere) : e;
+  });
   return {
     name: template.name,
     instructions: template.instructions,

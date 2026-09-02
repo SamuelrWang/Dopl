@@ -3,9 +3,24 @@ import "server-only";
 /** Agent-template domain errors, mapped to `HttpError` at the route boundary
  *  via `mapAgentTemplateError`. Same shape as `skills/server/errors.ts`. */
 
+/**
+ * ⚠ ONE ERROR FOR "no such row" AND "not visible to you" — the 404-never-403
+ * rule, so an id cannot be probed.
+ *
+ * ⚠ `elsewhere` IS THE ONE OPTIONAL FACT, AND IT DOES NOT REOPEN THAT (T35).
+ * It is set only where the ref names a template the CALLER could already list
+ * for themselves — their own row, or a `workspace`-visible one, in a workspace
+ * they are an active member of — that lives in a DIFFERENT tenancy than the one
+ * asked in. `null` therefore still covers both original meanings, and a
+ * stranger's private template produces `null` in every workspace.
+ * `service-resolve-ref.ts › classifyMissingTemplateRef` is the only producer.
+ */
 export class AgentTemplateNotFoundError extends Error {
   readonly code = "AGENT_TEMPLATE_NOT_FOUND";
-  constructor(identifier: string) {
+  constructor(
+    identifier: string,
+    readonly elsewhere: { name: string; label: string } | null = null
+  ) {
     super(`Agent template not found: ${identifier}`);
     this.name = "AgentTemplateNotFoundError";
   }

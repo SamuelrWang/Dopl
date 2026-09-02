@@ -111,7 +111,15 @@ function mapChannelError(err: unknown): HttpError | null {
   // branches on the CODE to tell a missing TEMPLATE from a missing CHANNEL — both of
   // which arrive here as a 404 from the same call.
   if (err instanceof LaunchTemplateNotFoundError) {
-    return new HttpError(404, "AGENT_TEMPLATE_NOT_FOUND", err.message);
+    // ⚠ `details` ONLY WHEN THERE IS SOMETHING NON-LEAKY TO SAY (T35) — the key
+    // is absent, not null, for an ordinary miss, so a client cannot read its
+    // PRESENCE as a signal about a row it may not see.
+    return new HttpError(
+      404,
+      "AGENT_TEMPLATE_NOT_FOUND",
+      err.message,
+      err.elsewhere ? { elsewhere: err.elsewhere } : undefined
+    );
   }
   // ⚠ 409 WITH `details.matches`, because the REFUSAL IS ONLY USEFUL WITH THE LIST.
   // "That name is ambiguous" with nothing else forces the caller to guess or to go

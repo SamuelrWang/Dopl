@@ -95,7 +95,7 @@ export async function opCreateBase(
       tool: "dopl_kb",
       op: "create_base",
       callerUserId,
-      what: `a knowledge base named ${inlineOr(input.name, NO_NAME)}, readable by the whole container`,
+      what: `a knowledge base named ${inlineOr(input.name, NO_NAME)}, readable by the whole home channel`,
       audience: `everyone in that home channel — the peer standing in it can list it and read everything you put in it`,
       payload: {
         name: input.name,

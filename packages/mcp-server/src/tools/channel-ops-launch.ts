@@ -29,6 +29,12 @@
 import type { DoplClient, LaunchDirective, LaunchRefusalReason } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
+// ⚠ THE SENTENCES LIVE WITH THE OTHER PROSE, and the import direction is
+// ops → description because the description imports nothing from here. Four
+// surfaces state the tenancy rule — this file's two refusals, the `launch_agent`
+// op line and the home-channel paragraph — and four hand-written copies is how
+// two of them end up describing a system the other two do not.
+import { TENANCY_FIX, TENANCY_RULE } from "./channel-description";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
@@ -96,6 +102,21 @@ function ambiguousTemplate(ref: string, matches: TemplateMatch[]): ToolResponse 
   );
 }
 
+/** A template the caller holds in another tenancy of their own, as the server's
+ *  `details.elsewhere` carries it. ⚠ Duck-typed across the @dopl/client
+ *  boundary, the same discipline `templateMatches` and `apiErrorCode` follow. */
+type TemplateElsewhere = { name: string; label: string };
+
+function templateElsewhere(e: unknown): TemplateElsewhere | null {
+  const details = (e as { details?: unknown } | null)?.details;
+  const raw = (details as { elsewhere?: unknown } | null)?.elsewhere;
+  if (!raw || typeof raw !== "object") return null;
+  const { name, label } = raw as { name?: unknown; label?: unknown };
+  if (typeof name !== "string" || typeof label !== "string") return null;
+  if (name === "" || label === "") return null;
+  return { name, label };
+}
+
 /**
  * THE UNRESOLVABLE-TEMPLATE REFUSAL, at CREATE time.
  *
@@ -107,11 +128,46 @@ function ambiguousTemplate(ref: string, matches: TemplateMatch[]): ToolResponse 
  * ⚠ IT DOES NOT SAY WHETHER THE TEMPLATE EXISTS. The whole read surface is
  * 404-never-403 so an id cannot be probed, and a sentence that guessed would
  * rebuild that oracle.
+ *
+ * ⚠ BUT IT NAMES THE TENANCY RULE, WHICH IS NOT AN ORACLE (T35). The server
+ * resolves the ref against THE CHANNEL'S workspace — `ctx.workspaceId` is the
+ * container (`channels/server/service-shared.ts`), and every template read is
+ * keyed `(workspace_id, id)` (`agent-templates/server/repository.ts`), so
+ * `canSeeTemplate` is never even reached: the row is filtered by tenancy BEFORE
+ * visibility runs. That is a STANDING RULE OF THE SYSTEM, true before this call
+ * and answerable from the caller's own knowledge — withholding it is what made
+ * this the most-misread refusal on the surface, since an agent re-checks the
+ * spelling forever for a name that was never wrong.
+ *
+ * ⚠ AND WHEN THE SERVER SAYS WHERE, IT SAYS WHERE. `details.elsewhere` arrives
+ * ONLY for a template the caller could already list for themselves — their own
+ * row, or a `workspace`-visible one, in a workspace they are a member of
+ * (`agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef`
+ * is the fence and holds the argument). A stranger's private template produces
+ * no `elsewhere` in any workspace, so the arm below cannot name one and the
+ * bare arm still answers "no such template" and "not shared with you"
+ * identically.
  */
-function templateNotFound(ref: string): ToolResponse {
-  const label = inlineOr(ref, NO_NAME);
+function templateNotFound(
+  ref: string,
+  elsewhere: TemplateElsewhere | null,
+): ToolResponse {
+  if (elsewhere) {
+    return err(
+      [
+        // ⚠ `inlineOr` ALREADY RETURNS A CODE SPAN — no backticks of our own
+        // around it. Both halves are peer-authored in principle (a template
+        // name, a workspace name) and neither may pose as structure.
+        `No agent was requested, and **nothing was filed** — template ${inlineOr(elsewhere.name, NO_NAME)} lives in ${inlineOr(elsewhere.label, "another tenancy of yours")}, not in this channel's own container.`,
+        `⚠ ${TENANCY_RULE} Owning it is not enough; it has to live here. ${TENANCY_FIX}`,
+      ].join("\n"),
+    );
+  }
   return err(
-    `No agent was requested — no agent template \`${label}\` resolves for you, and **nothing was filed**. Either there is no such template, or it is not shared with you; those are ONE answer here on purpose, so ids cannot be probed. Check the exact name (matching is exact, not fuzzy) or launch without a template.`,
+    [
+      `No agent was requested — no agent template ${inlineOr(ref, NO_NAME)} resolves in THIS CHANNEL'S container, and **nothing was filed**. Either there is no such template, or it is not shared with you; those are ONE answer here on purpose, so ids cannot be probed.`,
+      `⚠ CHECK THE TENANCY BEFORE THE SPELLING. ${TENANCY_RULE} If it really should resolve here, the NAME is the other suspect — matching is exact, not fuzzy. ${TENANCY_FIX}`,
+    ].join("\n"),
   );
 }
 
@@ -169,11 +225,16 @@ const REFUSAL_SENTENCES: Record<LaunchRefusalReason, string> = {
   // OPERATOR's at spawn. A private template of yours is simply unusable over this lane
   // unless you ARE the operator, and an orchestrator that does not know that will
   // re-issue forever.
-  // ⚠ IT DOES NOT SAY WHICH of deleted / invisible it was, and must not: the resolve
-  // endpoint is 404-never-403 precisely so that difference is not observable, and a
-  // sentence that guessed would rebuild the oracle the whole design closes.
-  "no-template":
-    "that machine could not resolve the TEMPLATE you named. Either it no longer exists, or it is not visible to the OPERATOR whose machine this is — you named it under YOUR visibility, and their desktop resolves it under THEIRS, so a private or team template of yours can be unusable there. Do not re-issue the same id: launch without a template, or share one that member can see.",
+  // ⚠ IT DOES NOT SAY WHICH of the three it was, and must not: the desktop's own
+  // resolve is 404-never-403 precisely so deleted / invisible / wrong-tenancy are
+  // not observable apart, the wire word carries no detail field to say it in, and
+  // a sentence that guessed would rebuild the oracle the whole design closes.
+  // ⚠ SO IT NAMES THE RULE INSTEAD OF THE ROW (T35). `TENANCY_RULE` is answerable
+  // from the caller's own knowledge and reveals nothing about which rows exist —
+  // which is what makes it sayable HERE, where `templateNotFound`'s
+  // `details.elsewhere` (a server-side, caller-scoped classification) has no
+  // equivalent: this refusal comes back from a DESKTOP, over a closed vocabulary.
+  "no-template": `that machine could not resolve the TEMPLATE you named, and it asked in THIS CHANNEL'S container because that is the tenancy a launch runs in. THREE THINGS PRODUCE THIS ONE WORD and the wire cannot tell you which: the template lives in a DIFFERENT container (${TENANCY_RULE}), or it is not visible to the OPERATOR whose machine this is (you named it under YOUR visibility and their desktop resolves it under THEIRS, so a private or team template of yours can be unusable there), or it no longer exists. ⚠ CHECK THE TENANCY FIRST — it is the commonest of the three and the only one you can fix alone. Do not re-issue the same id: ${TENANCY_FIX} Or share one that member can see.`,
   // ── ⚠ THE TWO WORDS THAT ARE NOT THIS LANE'S (2026-09-01) ──────────────────
   // `no-session` and `bad-name` belong to the AGENT-MANAGEMENT kinds — `end` and
   // `rename` — which ride the same mailbox and therefore share the enum. The
@@ -261,7 +322,7 @@ export async function opLaunchAgent(
       return ambiguousTemplate(opts.template ?? "", templateMatches(e));
     }
     if (apiErrorCode(e) === "AGENT_TEMPLATE_NOT_FOUND") {
-      return templateNotFound(opts.template ?? "");
+      return templateNotFound(opts.template ?? "", templateElsewhere(e));
     }
     if (isNotFound(e)) return channelNotFound(ref);
     throw e;
