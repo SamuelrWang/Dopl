@@ -102,6 +102,17 @@ export type LaunchDirectiveRow = {
   decided_at: string | null;
   expires_at: string;
   created_at: string;
+  /**
+   * THE CALLER'S IDEMPOTENCY KEY (2026-09-02, A10/G10).
+   *
+   * ⚠ `?` LIKE THE POSTURE COLUMNS ABOVE — a payload cached against an older
+   * PostgREST schema arrives without the key at all, so every reader defaults
+   * rather than reads (INVARIANTS: the stale-cache field rule).
+   * ⚠ NOT ON THE DTO. It is the CALLER'S OWN string, echoed back to nobody: the
+   * result reports WHETHER the row was already there (`existing`), which is the
+   * fact a retry needs, not the key it just sent.
+   */
+  client_msg_id?: string | null;
 };
 
 /** What a create supplies. ⚠ `operator_user_id` is ABSENT ON PURPOSE — it is a
@@ -180,6 +191,18 @@ export type LaunchDirectiveInsert = {
   target_message_mode?: string | null;
   expires_at: string;
   /**
+   * THE CALLER'S IDEMPOTENCY KEY, VERBATIM (2026-09-02, A10/G10).
+   *
+   * ⚠ CALLER-SUPPLIED, like `template_id`, and safe for the same reason: it names
+   * WHICH GESTURE this row is, never WHOSE MACHINE runs it. The authorization
+   * story is `operator_user_id`, a separate ARGUMENT precisely so no caller can
+   * pass one inside an object built from a request body — and that column is also
+   * the SCOPE of the unique index, so one member's key cannot pre-claim another's
+   * (`20260911120000_launch_direction_client_msg_id.sql`).
+   * ⚠ ABSENT IS THE ORDINARY CASE and dedupes nothing: the index is partial.
+   */
+  client_msg_id?: string | null;
+  /**
    * ⚠ **THE ECHO TRIO IS DELIBERATELY NOT WRITABLE FROM HERE.** It is the
    * MACHINE's report of what it applied, so its writer is the DECIDE, not the
    * CREATE ({@link LaunchDecision} carries the three fields as of 2026-09-01). A
@@ -228,6 +251,39 @@ export async function findLaunchDirective(
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .eq("operator_user_id", operatorUserId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as LaunchDirectiveRow | null) ?? null;
+}
+
+/**
+ * **THE IDEMPOTENCY PROBE** — the directive this operator already filed in this
+ * channel under this key, or `null` (2026-09-02, A10/G10).
+ *
+ * ⚠ **THE PREDICATE SET IS THE INDEX**, `(channel_id, operator_user_id,
+ * client_msg_id)`, and the three must stay together. Dropping
+ * `operator_user_id` would answer with another member's row — the
+ * `20260822120000` attack, where a guessable key let one member pre-claim
+ * another's write; dropping `channel_id` would let a key minted for one room
+ * converge onto a directive filed in a different one.
+ *
+ * ⚠ NO `status` FILTER, DELIBERATELY. A retry must converge on the stored row
+ * whatever became of it — pending, launched, refused or long expired. Filtering
+ * to live rows would let a retry file a SECOND directive the moment the first
+ * one lapsed, which is the exact outcome the key exists to make impossible.
+ */
+export async function findLaunchDirectiveByClientMsgId(
+  operatorUserId: string,
+  channelId: string,
+  clientMsgId: string
+): Promise<LaunchDirectiveRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from(TABLE)
+    .select("*")
+    .eq("channel_id", channelId)
+    .eq("operator_user_id", operatorUserId)
+    .eq("client_msg_id", clientMsgId)
     .maybeSingle();
   if (error) throw error;
   return (data as LaunchDirectiveRow | null) ?? null;

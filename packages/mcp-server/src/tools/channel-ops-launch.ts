@@ -311,6 +311,11 @@ export async function opLaunchAgent(
     /** ⚠ REFUSED rather than clamped when the channel forbids it, which is why
      *  it is a separate field and not a third axis. Omitted is NOT `false`. */
     chain?: boolean;
+    /** ⚠ **THE IDEMPOTENCY KEY, AND IT IS WHAT MAKES A TIMED-OUT LAUNCH SAFE TO
+     *  RETRY** (2026-09-02, A10/G10). Passed through untouched: the server
+     *  probes it against `(channel, this operator)` and returns the stored
+     *  directive rather than filing a second one. */
+    clientMsgId?: string;
     waitMs?: number;
   } = {},
 ): Promise<ToolResponse> {
@@ -337,6 +342,7 @@ export async function opLaunchAgent(
       tools: opts.tools,
       messages: opts.messages,
       chain: opts.chain,
+      clientMsgId: opts.clientMsgId,
     });
   } catch (e) {
     // ⚠ THE TEMPLATE ARMS COME FIRST, AND THE DISCRIMINATOR IS THE **CODE**, NOT
@@ -367,6 +373,17 @@ export async function opLaunchAgent(
   }
 
   let directive = created.directive;
+  // **THE CONVERGED-RETRY FACT** (2026-09-02, A10/G10).
+  //
+  // ⚠ **ADDED ONLY WHEN THE ROW WAS ALREADY THERE**, by spread, so a caller that
+  // sent no key sees a byte-identical result and no op grows a `retry=-` field it
+  // never had. ⚠ SPREAD **LAST** on every shape below: where a `retry` verdict is
+  // already printed, `existing` must win it, because "this call filed nothing" is
+  // the stronger and more actionable statement — it says the id below is the
+  // FIRST request's, not a second agent's.
+  // ⚠ `created.existing` IS OPTIONAL ON THE WIRE: a server older than this wave
+  // sends no such key, and absent correctly reads as "a row was filed".
+  const converged = created.existing ? { retry: "existing" } : {};
   const waitMs = Math.min(opts.waitMs ?? WAIT_DEFAULT_MS, WAIT_CAP_MS);
   const deadline = Date.now() + waitMs;
 
@@ -428,6 +445,7 @@ export async function opLaunchAgent(
         // the only thing standing between an orchestrator and the assumption
         // that silence means whatever it hoped.
         ...postureFacts(directive),
+        ...converged,
       }),
     );
   }
@@ -448,6 +466,7 @@ export async function opLaunchAgent(
           ? RETRY_ADVICE[directive.refusalReason]
           : undefined,
         filed: true,
+        ...converged,
       }),
     );
   }
@@ -456,7 +475,9 @@ export async function opLaunchAgent(
     // ⚠ LAPSED IS NOT REFUSED AND NOT PENDING: no machine ever answered, so
     // nothing is outstanding and asking once more is legitimate — which is the
     // opposite of the branch below.
-    return ok(factsLine("expired", { directive: directive.id, filed: true }));
+    return ok(
+      factsLine("expired", { directive: directive.id, filed: true, ...converged }),
+    );
   }
 
   // PENDING and CLAIMED (taken but not yet answered) both end here: the next
@@ -472,6 +493,7 @@ export async function opLaunchAgent(
       claimed: directive.status === "claimed",
       expires: directive.expiresAt,
       retry: false,
+      ...converged,
     }),
   );
 }
