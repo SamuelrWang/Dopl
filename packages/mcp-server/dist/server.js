@@ -146,7 +146,10 @@ function createServer(client, options = {}) {
     // HIDDEN_TOOLS`. Each registrar exposes one `dopl_<domain>` action-tool (plus
     // a `dopl_<domain>_admin` companion where the domain has destructive ops)
     // dispatching on an `op` arg.
-    (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client, caller); // dopl_kb + dopl_kb_admin (user bases)
+    // 🔒 `directory` is the FOURTH argument and it is the ONLY thing that resolves
+    // `to_workspace` on op="copy_base" — a container id (§4A) resolves, and a
+    // locked session resolves nothing but its own container.
+    (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client, caller, directory); // dopl_kb + dopl_kb_admin (user bases)
     (0, skills_js_1.registerSkillTools)(registerTool, client, caller); // dopl_skill + dopl_skill_admin
     (0, chats_js_1.registerChatTools)(registerTool, client); // dopl_chats + dopl_chats_admin (archive)
     (0, members_js_1.registerMembersTool)(registerTool, client, caller); // dopl_members — membership/teams/access (read-only)
@@ -165,6 +168,8 @@ function createServer(client, options = {}) {
     (0, channel_js_1.registerChannelTool)(registerTool, client, caller, options.isAdmin ?? false, directory); // dopl_channel — cross-user collaboration channels
     // ⚠ `caller` for TWO reasons here: framing another member's INSTRUCTIONS block
     // as untrusted, and binding a confirm token to the identity that previewed.
-    (0, agent_js_1.registerAgentTools)(registerTool, client, caller); // dopl_agent + dopl_agent_admin — persistent agent identities
+    // 🔒 `directory` resolves `to_workspace` on op="copy", the same way it does for
+    // `dopl_kb(op="copy_base")` above.
+    (0, agent_js_1.registerAgentTools)(registerTool, client, caller, directory); // dopl_agent + dopl_agent_admin — persistent agent identities
     return server;
 }

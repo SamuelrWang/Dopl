@@ -8,6 +8,7 @@
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
  *   - `knowledge-ops-write.ts` — create/update/move/write ops
+ *   - `knowledge-ops-copy.ts`  — copy_base into another tenancy (two fenced legs)
  *   - `knowledge-ops-admin.ts` — the (refused) delete ops
  */
 
@@ -39,6 +40,9 @@ import {
   opWriteFile,
 } from "./knowledge-ops-write";
 import { opDeleteBase, opDeleteFile, opDeleteFolder } from "./knowledge-ops-admin";
+import { opCopyBase } from "./knowledge-ops-copy";
+import { TO_WORKSPACE_ARG_DESCRIPTION } from "./copy-target";
+import type { WorkspaceDirectory } from "../workspace-directory";
 
 const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk to these like a filesystem. Bases are addressed by slug or id; folders/entries by \`/\`-separated path. Set \`op\` to one of:
 - "list_bases" — the bases the caller can READ in the active workspace. Returns slugs to address with subsequent ops. Bases another member keeps private and bases scoped to a team you have no grant on are absent, so this is your view and not the workspace's base count. Rows carry NO shelf label — the column is deliberately not projected onto the row — so pass \`shelf\` to find out which shelf a base is on. Optional: shelf ("personal" = your own /home shelf, "workspace" = the shared shelf; omit for BOTH).
@@ -46,6 +50,7 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk t
 - "list_dir" — immediate folders + entries at a path. Empty/omitted path = base root. Metadata only.
 - "create_base" — create a new base. New bases are private to the creator by default. Optional: shelf, visibility, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on list_bases: omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts the base on your own /home shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel container or a second workspace you belong to. Creating a PUBLIC base inside a home channel somebody else is in previews first and hands back a one-time confirm_token.
 - "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here. There is no shelf move: a base's shelf is fixed at creation, and passing \`shelf\` here is refused rather than dropped.
+- "copy_base" — re-create a base you can read as a NEW, PRIVATE base in ANOTHER workspace or home channel, with its folders and entries. Requires: base, to_workspace. The copy and the original are STRANGERS: writing to one never touches the other. Capped at 100 entries — a bigger base is refused whole rather than copied halfway, because you cannot tell which half landed and nothing here can delete the remains. An unresolvable to_workspace refuses and creates nothing; there is no fallback to the workspace you called from.
 - "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders. Pass \`description\` to set the folder's short agent-facing summary (shown in get_tree/list_dir); re-calling with a \`description\` on an existing folder UPDATES it (the way to edit a folder summary without touching its contents).
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
 - "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
@@ -76,6 +81,17 @@ export function registerKnowledgeTools(
   // spent by another. Nothing about visibility is decided from it — the server
   // already filtered.
   caller: CallerIdentity = UNKNOWN_CALLER,
+  // 🔒 THE TARGET RESOLVER FOR op="copy_base", AND NOTHING ELSE READS IT HERE.
+  // `workspace-directory.ts › resolveWorkspaceRef` is the ONE resolver that
+  // takes a home-channel CONTAINER id (§4A: it deliberately does not filter)
+  // and that answers `null` for every ref but the locked one under a CONTAINER
+  // LOCK.
+  // ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — even though it follows a
+  // defaulted parameter. A default would silently un-narrow the copy target for
+  // any caller that forgot it, which is the enumeration B3 exists to deny;
+  // `channel.ts` and `home.ts` take the same argument the same way, and
+  // `parity-harness.ts` passes a stub because capture never runs a handler.
+  directory: WorkspaceDirectory,
 ): void {
   // ── dopl_kb — read + non-destructive writes ──────────────────────
   register(
@@ -85,11 +101,11 @@ export function registerKnowledgeTools(
       op: z
         .enum([
           "list_bases", "get_tree", "list_dir", "create_base", "update_base",
-          "create_folder", "move_folder", "read_file", "write_file",
-          "move_file", "search", "set_visibility", "pin", "unpin",
+          "copy_base", "create_folder", "move_folder", "read_file",
+          "write_file", "move_file", "search", "set_visibility", "pin", "unpin",
         ])
         .describe("Operation to perform."),
-      base: z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/create_folder/move_folder/read_file/write_file/move_file/pin/unpin; optional scope for search."),
+      base: z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/copy_base/create_folder/move_folder/read_file/write_file/move_file/pin/unpin; optional scope for search."),
       path: z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). pin/unpin: OPTIONAL, and it picks the target — with a path you pin that ONE entry, without one you pin the whole base. There is no delete op — deletion is app-only."),
       from_path: z.string().optional().describe("move_folder/move_file: source path."),
       to_path: z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),
@@ -109,6 +125,10 @@ export function registerKnowledgeTools(
       entry_cursor: z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
       visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it readable by every member of the workspace). One-way — 'private' is rejected. op=create_base: initial visibility (defaults to 'private'); 'public' beside shelf='personal' is refused as a contradiction."),
       shelf: z.enum(SHELF_VALUES).optional().describe(SHELF_ARG_DESCRIPTION),
+      to_workspace: z
+        .string()
+        .optional()
+        .describe(`op=copy_base (required): ${TO_WORKSPACE_ARG_DESCRIPTION}`),
       confirm_token: z
         .string()
         .optional()
@@ -145,6 +165,16 @@ export function registerKnowledgeTools(
           const miss = missingParams("update_base", args, ["base"]);
           if (miss) return miss;
           return opUpdateBase(client, args.base as string, args.name, args.description, args.slug, args.shelf);
+        }
+        case "copy_base": {
+          const miss = missingParams("copy_base", args, ["base", "to_workspace"]);
+          if (miss) return miss;
+          return opCopyBase(
+            client,
+            directory,
+            args.base as string,
+            args.to_workspace as string,
+          );
         }
         case "create_folder": {
           const miss = missingParams("create_folder", args, ["base", "path"]);

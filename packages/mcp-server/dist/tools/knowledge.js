@@ -9,6 +9,7 @@
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
  *   - `knowledge-ops-write.ts` — create/update/move/write ops
+ *   - `knowledge-ops-copy.ts`  — copy_base into another tenancy (two fenced legs)
  *   - `knowledge-ops-admin.ts` — the (refused) delete ops
  */
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -21,12 +22,15 @@ const shelf_1 = require("./shelf");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
 const knowledge_ops_admin_1 = require("./knowledge-ops-admin");
+const knowledge_ops_copy_1 = require("./knowledge-ops-copy");
+const copy_target_1 = require("./copy-target");
 const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk to these like a filesystem. Bases are addressed by slug or id; folders/entries by \`/\`-separated path. Set \`op\` to one of:
 - "list_bases" — the bases the caller can READ in the active workspace. Returns slugs to address with subsequent ops. Bases another member keeps private and bases scoped to a team you have no grant on are absent, so this is your view and not the workspace's base count. Rows carry NO shelf label — the column is deliberately not projected onto the row — so pass \`shelf\` to find out which shelf a base is on. Optional: shelf ("personal" = your own /home shelf, "workspace" = the shared shelf; omit for BOTH).
 - "get_tree" — folder/entry tree for a base (metadata only, bodies stripped). FOLDERS ship in full; ENTRIES are paged, 400 per call by default, and the result says so and hands back an entry_cursor when there are more. First call when exploring a base; for a body follow up with op=read_file.
 - "list_dir" — immediate folders + entries at a path. Empty/omitted path = base root. Metadata only.
 - "create_base" — create a new base. New bases are private to the creator by default. Optional: shelf, visibility, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on list_bases: omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts the base on your own /home shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel container or a second workspace you belong to. Creating a PUBLIC base inside a home channel somebody else is in previews first and hands back a one-time confirm_token.
 - "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here. There is no shelf move: a base's shelf is fixed at creation, and passing \`shelf\` here is refused rather than dropped.
+- "copy_base" — re-create a base you can read as a NEW, PRIVATE base in ANOTHER workspace or home channel, with its folders and entries. Requires: base, to_workspace. The copy and the original are STRANGERS: writing to one never touches the other. Capped at 100 entries — a bigger base is refused whole rather than copied halfway, because you cannot tell which half landed and nothing here can delete the remains. An unresolvable to_workspace refuses and creates nothing; there is no fallback to the workspace you called from.
 - "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders. Pass \`description\` to set the folder's short agent-facing summary (shown in get_tree/list_dir); re-calling with a \`description\` on an existing folder UPDATES it (the way to edit a folder summary without touching its contents).
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
 - "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
@@ -49,17 +53,28 @@ function registerKnowledgeTools(register, client,
 // the identity that previewed (2026-08-28), so one caller's preview cannot be
 // spent by another. Nothing about visibility is decided from it — the server
 // already filtered.
-caller = identity_1.UNKNOWN_CALLER) {
+caller = identity_1.UNKNOWN_CALLER, 
+// 🔒 THE TARGET RESOLVER FOR op="copy_base", AND NOTHING ELSE READS IT HERE.
+// `workspace-directory.ts › resolveWorkspaceRef` is the ONE resolver that
+// takes a home-channel CONTAINER id (§4A: it deliberately does not filter)
+// and that answers `null` for every ref but the locked one under a CONTAINER
+// LOCK.
+// ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — even though it follows a
+// defaulted parameter. A default would silently un-narrow the copy target for
+// any caller that forgot it, which is the enumeration B3 exists to deny;
+// `channel.ts` and `home.ts` take the same argument the same way, and
+// `parity-harness.ts` passes a stub because capture never runs a handler.
+directory) {
     // ── dopl_kb — read + non-destructive writes ──────────────────────
     register("dopl_kb", KB_DESCRIPTION, {
         op: zod_1.z
             .enum([
             "list_bases", "get_tree", "list_dir", "create_base", "update_base",
-            "create_folder", "move_folder", "read_file", "write_file",
-            "move_file", "search", "set_visibility", "pin", "unpin",
+            "copy_base", "create_folder", "move_folder", "read_file",
+            "write_file", "move_file", "search", "set_visibility", "pin", "unpin",
         ])
             .describe("Operation to perform."),
-        base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/create_folder/move_folder/read_file/write_file/move_file/pin/unpin; optional scope for search."),
+        base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/copy_base/create_folder/move_folder/read_file/write_file/move_file/pin/unpin; optional scope for search."),
         path: zod_1.z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). pin/unpin: OPTIONAL, and it picks the target — with a path you pin that ONE entry, without one you pin the whole base. There is no delete op — deletion is app-only."),
         from_path: zod_1.z.string().optional().describe("move_folder/move_file: source path."),
         to_path: zod_1.z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),
@@ -79,6 +94,10 @@ caller = identity_1.UNKNOWN_CALLER) {
         entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
         visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it readable by every member of the workspace). One-way — 'private' is rejected. op=create_base: initial visibility (defaults to 'private'); 'public' beside shelf='personal' is refused as a contradiction."),
         shelf: zod_1.z.enum(shelf_1.SHELF_VALUES).optional().describe(shelf_1.SHELF_ARG_DESCRIPTION),
+        to_workspace: zod_1.z
+            .string()
+            .optional()
+            .describe(`op=copy_base (required): ${copy_target_1.TO_WORKSPACE_ARG_DESCRIPTION}`),
         confirm_token: zod_1.z
             .string()
             .optional()
@@ -116,6 +135,12 @@ caller = identity_1.UNKNOWN_CALLER) {
                 if (miss)
                     return miss;
                 return (0, knowledge_ops_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug, args.shelf);
+            }
+            case "copy_base": {
+                const miss = (0, respond_1.missingParams)("copy_base", args, ["base", "to_workspace"]);
+                if (miss)
+                    return miss;
+                return (0, knowledge_ops_copy_1.opCopyBase)(client, directory, args.base, args.to_workspace);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);

@@ -91,6 +91,11 @@ exports.WRITE_OPS = {
         // of the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
         "pin",
         "unpin",
+        // ⚠ copy_base CREATES A BASE (plus its folders and entries) IN ANOTHER
+        // TENANCY, so it is the widest write on this tool and a read-only token
+        // must be refused it. ⚠ The refusal is the ONE that costs nothing: the
+        // gate runs before the target resolves and before any tree is read.
+        "copy_base",
     ]),
     dopl_skill: new Set([
         "create",
@@ -104,7 +109,10 @@ exports.WRITE_OPS = {
     // ⚠ BOTH verbs write, and update is the one easiest to miss: it can raise a
     // template to workspace visibility, which is the SHARE act itself (a template
     // has no grant table). A read-only token must be refused it.
-    dopl_agent: new Set(["create", "update"]),
+    // ⚠ copy CREATES A TEMPLATE IN ANOTHER TENANCY. It lands private, which keeps
+    // it out of the confirm class, and that is a statement about AUDIENCE and not
+    // about whether it writes.
+    dopl_agent: new Set(["create", "update", "copy"]),
     // ⚠ `dopl_home` REGISTERS ON THE META PATH AND IS STILL GATED HERE, because
     // `opRefusal` is called explicitly on BOTH registration paths — which is the
     // whole reason the gates were hoisted out of the domain wrapper. A read-only
