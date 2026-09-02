@@ -44,6 +44,7 @@ import {
 import { UNTRUSTED_ROSTER_HEADER, UNTRUSTED_THREAD_HEADER } from "./channel-framing";
 // ⚠ The clipped-list wording lives with the other thread-render prose, stated
 // once — see INVARIANTS §9.
+import { isConcise, type ResponseFormat } from "./response-size";
 import { threadsClippedNote } from "./channel-render-threads";
 // ⚠ Addressing rule has ONE statement, in channel-addressing.ts.
 import { rosterAddressingRule } from "./channel-addressing";
@@ -151,6 +152,7 @@ export async function opRead(
   limit?: number,
   selfUserId: string | null = null,
   thread?: string,
+  format?: ResponseFormat,
 ): Promise<ToolResponse> {
   const scope = thread?.trim() ? thread.trim() : undefined;
   // ⚠ Id ROUND TRIPS: agent copies it from a `read` legend, and a legend id is
@@ -202,7 +204,7 @@ export async function opRead(
   // arrived too late. `memberNames` is fail-soft and is read only on this branch.
   lines.push(...card);
   // ⚠ No roster read here — hot path, the whole reason `read` skips `resolveChannelOr`.
-  lines.push(...formatMessages(messages, ref, selfUserId));
+  lines.push(...formatMessages(messages, ref, selfUserId, format));
   const lastSeq = messages[messages.length - 1].seq;
   if (!scope) {
     // A channel-wide read already IS the channel-wide cursor.
@@ -263,6 +265,7 @@ const NO_NAME = "(unnamed)";
 export async function opReadSessions(
   client: DoplClient,
   ref?: string,
+  format?: ResponseFormat,
 ): Promise<ToolResponse> {
   // ⚠ Resolve filter to id — a slug would not match the stored channel_id.
   let channelId: string | undefined;
@@ -320,8 +323,16 @@ export async function opReadSessions(
     // a PEER's sessions"), which is the audience question
     // {@link SessionRenderOpts.handle} asks. See it for why an agent id is not
     // published on a peer row.
+    // ⚠ `concise` drops the TELEMETRY columns and nothing else. What a session
+    // IS — its handle, its channel, what it is doing, whether it is stale — is
+    // the answer; token spend and turn counts are metadata about it.
     lines.push(
-      sessionRow(s, { telemetry: true, handle: true, now, operatorOnline }),
+      sessionRow(s, {
+        telemetry: !isConcise(format),
+        handle: true,
+        now,
+        operatorOnline,
+      }),
     );
   }
   // ⚠ THE LEGEND STAYS AND THE POINTER IS ONE LINE. The legend decodes THIS
@@ -329,7 +340,14 @@ export async function opReadSessions(
   // row; the standing description of the columns (which are operator-only, what
   // a `—` means, why a row is a REPORT and not an observation) is doctrine and
   // is read once, not on every call of an op an orchestrator polls in a loop.
-  lines.push(`\n${sessionLegend(anyStale, operatorOnline)} ${DOCTRINE_POINTER}`);
+  // ⚠ The legend decodes THIS page's own hedged cells, so it survives `concise`
+  // whenever the page actually has one; the DOCTRINE_POINTER is standing
+  // teaching and does not.
+  lines.push(
+    isConcise(format)
+      ? `\n${sessionLegend(anyStale, operatorOnline)}`
+      : `\n${sessionLegend(anyStale, operatorOnline)} ${DOCTRINE_POINTER}`,
+  );
   return ok(lines.join("\n"));
 }
 

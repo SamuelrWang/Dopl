@@ -240,6 +240,7 @@ export function registerChannelTool(
             // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
             // ids are real `metadata.taskId` values and must stay filterable.
             args.thread,
+            args.response_format,
           );
         }
         // ⚠ `channel` IS OPTIONAL HERE AND ONLY HERE AMONG THE HOLDS. Omitting
@@ -297,7 +298,7 @@ export function registerChannelTool(
           if (args.channel === undefined || args.channel.trim() === "") {
             return opReadSessionsAccount(client, directory);
           }
-          return opReadSessions(client, args.channel);
+          return opReadSessions(client, args.channel, args.response_format);
         case "create_thread": {
           const miss = missingParams("create_thread", args, [
             "channel",
