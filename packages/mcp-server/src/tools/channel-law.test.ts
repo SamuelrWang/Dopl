@@ -116,9 +116,15 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
   });
 
   it("keeps THE LOOP BRAKE absolute — agents do not wake each other by talking", () => {
-    // ⚠ `classify` (dopl-desktop-app/main/targeting.js) refuses every
-    // unaddressed AGENT author first, at any member count, and
-    // `session-wake-tiers.js › wakeEligibility` refuses one at the tier gate.
+    // ⚠ WHERE THE BRAKE IS NOW (2026-09-02, B8 × B9). The tier gate it used to
+    // name — `session-wake-tiers.js › wakeEligibility` — is DELETED with the
+    // whole triage module. The rule moved to the server and is decided once, at
+    // write time: `src/features/channels/server/service-wake-verdict.ts`
+    // resolves an unaddressed AGENT-authored post through RR2 alone, which
+    // answers nobody unless a party addressed this agent inside the window, and
+    // never through RR3's responder arm. `classify`
+    // (dopl-desktop-app/main/targeting.js) keeps the same refusal on the
+    // desktop side, so a stored verdict and a fallback agree.
     // Pinned as an absolute over the UNADDRESSED case — that half must never
     // acquire a qualifier, because it is the one with no bound.
     expect(CHANNEL_LAW).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");

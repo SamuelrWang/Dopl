@@ -164,7 +164,7 @@ floor no longer calls it.
 | `escalate` | `send(kind="decision", options, recommendation)` | `ESCALATION_METADATA_KEY`, answer pairing, the `20260902120000` first-answer-wins index |
 | `create_thread` | `send(thread="new", to, summary=<title>)` | per-author idempotency |
 | `ping` / `pings` | `send(to=…)` / `read` | **`20260907130000` is deleted unapplied** (B8) |
-| `direct_agent` | `send(to=@agent)` landing `delivery=idle` | `channel_agent_directions` kept as STORAGE; the op goes |
+| `direct_agent` | **`manage(action="direct")`** — ⚠ **CORRECTED AT INTEGRATION, 2026-09-02 (F-576).** This row read `send(to=@agent)` landing `delivery=idle`, and nothing in the tree files a direction for an IDLE recipient: `service-wake-verdict.ts › DELIVERY_FOR` maps an agent recipient to `woken`, `freshChannelSessions` resolves only LIVE sessions, and no write path calls `createAgentDirection`. Retiring the op on the strength of the row would have DELETED the private lane rather than moving it — a directed `send` posts a message every member reads, which is the one thing a direction is not. The op folded to the dispatcher that owns every other "ask the operator's own machine" verb instead | `channel_agent_directions` kept as STORAGE, and it is still the lane's own; `read_directions` DID fold, into `op="status"` |
 | `read` / `await` | `read(since=)` | `await` is already denied for desktop sessions (T85). AWAITING (3,914 ch) + both handlers + the budget module delete |
 | `read_sessions` / `read_directions` | `status` | |
 | `launch_agent` / `end_agent` / `rename_agent` / `set_agent_mode` | `manage(op="launch\|end\|rename\|posture")` | A9's server clamp, A10's `client_msg_id` + resolved template id |
