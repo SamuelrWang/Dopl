@@ -1,6 +1,6 @@
 /**
- * Shared resolvers + error mappers for `dopl_kb` / `dopl_kb_admin`, leaned on by
- * the read, write and admin op modules. The registrar (knowledge.ts) routes.
+ * Shared resolvers + error mappers for `dopl_kb`, leaned on by the read, write
+ * and copy op modules. The registrar (knowledge.ts) routes.
  */
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 import { type ToolResponse } from "./respond";
