@@ -20,9 +20,17 @@
  *      check runs over the replayed final state, not over one file.
  *
  * ⚠ IT DOES NOT CLAIM THE TWO AGREE. Equality of MEANING is what the redteam
- * suites prove, per table, one table at a time
- * (`knowledge/server/rls-redteam.test.ts`). This gate proves only that nothing
- * is unpaired. Say it that way in any doc that cites it.
+ * suites prove, per table, one table at a time (`{knowledge,skills,chats,
+ * agent-templates}/server/rls-redteam.test.ts` and
+ * `shared/supabase/rls-redteam-resource-grants.test.ts`). This gate proves only
+ * that nothing is unpaired. Say it that way in any doc that cites it.
+ *
+ * ⚠ AND A COVERED TABLE NEED NOT HAVE A PREDICATE TO HAVE A ROW. Six of the ten
+ * tables phases 1–2 cover are fenced by a PARENT's rule (`knowledge_folders`,
+ * `knowledge_entries`, `skill_files`, `chat_messages`,
+ * `agent_template_knowledge_bases`) or by no TS predicate at all
+ * (`resource_grants`), so `TWINS` alone would leave them unwatched — see
+ * `POLICY_ONLY`.
  *
  * Run: `npx tsx scripts/check-rls-pair-gate.ts`
  */
@@ -61,6 +69,26 @@ const TWINS: Record<string, { table: string; policies: string[] }> = {
     table: "agent_templates",
     policies: ["agent_templates_member_select"],
   },
+};
+
+/**
+ * COVERED TABLE -> its SELECT policies, for the tables no `canSee*` names.
+ *
+ * ⚠ THE SECOND DIRECTION OF THE CHECK IS WHAT THESE ARE FOR. A child table
+ * fenced by its parent's rule has no predicate of its own, so nothing in
+ * `TWINS` would notice its policy being dropped — and a child policy is exactly
+ * where the 2026-08-26 entry-body leak lived (INVARIANTS §4). `resource_grants`
+ * has no TS twin for a different reason: it is the GRANT table every other
+ * policy resolves the teams axis through, and its own read rule was written as
+ * a policy first.
+ */
+const POLICY_ONLY: Record<string, string[]> = {
+  knowledge_folders: ["knowledge_folders_member_select"],
+  knowledge_entries: ["knowledge_entries_member_select"],
+  skill_files: ["skill_files_member_select"],
+  chat_messages: ["chat_messages_select"],
+  agent_template_knowledge_bases: ["agent_template_knowledge_bases_member_select"],
+  resource_grants: ["resource_grants_member_select"],
 };
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -140,12 +168,24 @@ for (const name of declared) {
 }
 
 const live = livePolicies();
+const NEVER_DROP =
+  "A policy is the record of a leak that was once possible — correct it, never drop it (tenancy risk 1).";
+
 for (const [name, twin] of Object.entries(TWINS)) {
   if (!predicates.has(name)) continue;
   for (const policy of twin.policies) {
     if (!live.has(`${twin.table}.${policy}`)) {
       problems.push(
-        `${name}'s twin ${twin.table}.${policy} is not alive after replaying supabase/migrations. A policy is the record of a leak that was once possible — correct it, never drop it (tenancy risk 1).`
+        `${name}'s twin ${twin.table}.${policy} is not alive after replaying supabase/migrations. ${NEVER_DROP}`
+      );
+    }
+  }
+}
+for (const [table, policies] of Object.entries(POLICY_ONLY)) {
+  for (const policy of policies) {
+    if (!live.has(`${table}.${policy}`)) {
+      problems.push(
+        `${table}.${policy} — an RLS-covered table's SELECT policy — is not alive after replaying supabase/migrations. ${NEVER_DROP}`
       );
     }
   }
@@ -157,6 +197,11 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
+const coveredTables = new Set([
+  ...Object.values(TWINS).map((t) => t.table),
+  ...Object.keys(POLICY_ONLY),
+]);
 console.log(
-  `RLS pair gate OK — ${predicates.size} canSee* predicates, each paired with a live SELECT policy.`
+  `RLS pair gate OK — ${predicates.size} canSee* predicates, each paired with a live SELECT policy, ` +
+    `over ${coveredTables.size} covered tables.`
 );
