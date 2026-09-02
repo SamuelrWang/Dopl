@@ -6911,3 +6911,22 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Proposed resolution: (a) add an optional provenance field to `AgentTemplateCreateInput` / `KnowledgeBaseCreateInput` (zod + types, both trees), have the MCP copy ops SEND it, and refuse server-side unless `source.createdBy === ctx.userId` — failing closed when either side is null, mirroring `notOwnedRefusal`'s own rule; KEEP the MCP refusal; (b) accept the gap and say so in `copy-target.ts`, since the read was already fenced and the widening is bounded to content the caller could see.
 - Proposed resolution: defer — (a) is right but it is a contract change across two trees, not a hotfix.
 - Status: open.
+
+### F-436 — the `team` axis is off `dopl_agent`/`dopl_kb` but three OTHER MCP tools still teach it, so "an agent is never told about teams" is not true of the surface (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/skills-ops-read.ts › accessMode === "teams"` (two arms, rendering a team label on every skill row), `› chats-render.ts › folderScopeLabel` (`"team-shared"`), `› skills.ts` (the `visibility` arg's *"Team-scoped sharing is web-UI-managed"*), and `› search.ts` (two notes naming teams among the unsearched domains). `dopl_members` is NOT in this list — teams are its subject.
+- Found during: A8, taking the axis off `dopl_agent` / `dopl_kb`. The four tools A8 owns are clean and `tools/agent-team-axis.test.ts` holds them that way; the scan is deliberately scoped to those four, because widening it today fails on files A8 may not touch.
+- Severity: friction, not a defect — every sentence above is TRUE of the storage as it stands. The cost is the wave's own goal: an axis with **0 live rows** (0 teams-mode KBs, 0 team-visibility templates, 0 `agent_template_teams` rows, 5 inert `team_resource_access` rows, measured in production 2026-09-02) is still pushed to every connected client on every connection, and a model that reads "team-shared" on a chats folder can still reach for a sharing model nothing implements.
+- ⚠ **THIS IS NOT A REASON TO WIDEN `agent-team-axis.test.ts` NOW.** The scan's own header records the scope and why; a test that fails on work its slice is forbidden to do is a broken gate, not a strict one.
+- Proposed resolution: fold it into the DB/app retirement of the axis — when `access_mode` goes, these labels have nothing left to render and come out with it, and the scan widens to every tool but `dopl_members` in the same change.
+- Status: open.
+
+### F-437 — the scope footers now promise "any you have no grant on", and the only grant mechanism behind that phrase is a table with 5 inert rows (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/agent-shared.ts › TEMPLATES_SCOPE_NOTE`, `› knowledge-ops-read.ts › BASES_SCOPE_NOTE`, and the `"list_bases"` bullet in `› knowledge.ts`. The ledger row that REQUIRES the phrase is `› tool-scope-claims.test.ts › LEDGER` (`dopl_kb` / `list_bases`, `discloses: [… "no grant on"]`).
+- Found during: A8. The clause used to name the team axis (*"bases scoped to a team you have no grant on"*); A8 removed the axis and kept the disclosure, because the server-side filters (`filterTeamVisibleBases`, `canSeeTemplate`) still run and a footer that claimed a full census would be the exact lie that ledger exists to catch.
+- Severity: latent staleness, correct today. Grants exist only through `team_resource_access` — 5 rows, all inert, measured in production 2026-09-02.
+- **The shape.** When the axis is retired in the database, the phrase stops describing anything: nothing will be able to drop a row for want of a grant, and the footer will be spending characters on every read to disclose a filter that no longer exists. It will NOT fail any test — the ledger only checks the phrase is PRESENT, never that the filter still bites — so nothing catches it.
+- ⚠ **DO NOT PRE-EMPTIVELY DELETE THE PHRASE.** The filters run today. Removing the disclosure before the filter is what turns an honest footer into a false census claim, which is the direction that ledger was built to prevent.
+- Proposed resolution: in the same change that drops the axis from the database, delete the clause from all three strings AND the `"no grant on"` entry from the ledger row — one commit, or the ledger fails and invites somebody to put the prose back.
+- Status: open.
