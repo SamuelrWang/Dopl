@@ -103,6 +103,16 @@ export interface AgentTemplateCreateInput {
      * rather than downgrading. Omitted/false = the workspace shelf.
      */
     homeScoped?: boolean;
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ REQUIRED ONLY ON THE NARROW PREDICATE — a `kind='link'` container with
+     * two or more active members, and the row landing at the SHARED visibility.
+     * The server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it and IGNORES
+     * it everywhere else (`src/features/workspaces/server/shared-publish.ts`).
+     * The MCP surface sets it from a spent `confirm_token`, never on its own.
+     */
+    acknowledgeShared?: boolean;
 }
 /**
  * All fields optional. ⚠ `null` and ABSENT differ and both are meaningful:
@@ -122,4 +132,14 @@ export interface AgentTemplateUpdateInput {
     visibility?: TemplateVisibility;
     teamIds?: string[];
     knowledgeBaseIds?: string[];
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ REQUIRED ONLY ON THE NARROW PREDICATE — a `kind='link'` container with
+     * two or more active members, and the row landing at the SHARED visibility.
+     * The server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it and IGNORES
+     * it everywhere else (`src/features/workspaces/server/shared-publish.ts`).
+     * The MCP surface sets it from a spent `confirm_token`, never on its own.
+     */
+    acknowledgeShared?: boolean;
 }

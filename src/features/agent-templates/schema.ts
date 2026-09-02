@@ -173,6 +173,16 @@ export const AgentTemplateCreateSchema = z
      * caller.
      */
     homeScoped: z.boolean().optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * row landing at `visibility: 'workspace'`. Everywhere else it is IGNORED,
+     * never refused: see `features/workspaces/server/shared-publish.ts`, which
+     * is the one statement of both the predicate and the 400.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
   .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
 export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>;
@@ -184,6 +194,23 @@ export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>
  * `[]` = empty it) — there is no add/remove verb, because a partial mutation
  * over a set that two clients can edit is how sets silently diverge.
  */
+/**
+ * The columns and junctions `updateTemplate` can actually move. ⚠ NAMED so the
+ * "changes at least one field" refine cannot silently count a field that
+ * changes nothing — `acknowledgeShared` is the first such field and will not be
+ * the last.
+ */
+const MUTABLE_UPDATE_KEYS = [
+  "name",
+  "description",
+  "instructions",
+  "model",
+  "fields",
+  "visibility",
+  "teamIds",
+  "knowledgeBaseIds",
+] as const;
+
 export const AgentTemplateUpdateSchema = z
   .object({
     name: NameSchema.optional(),
@@ -194,9 +221,25 @@ export const AgentTemplateUpdateSchema = z
     visibility: TemplateVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * row landing at `visibility: 'workspace'`. Everywhere else it is IGNORED,
+     * never refused: see `features/workspaces/server/shared-publish.ts`, which
+     * is the one statement of both the predicate and the 400.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
-  .refine((patch) => Object.keys(patch).length > 0, {
-    message: "Patch must change at least one field",
-  })
+  .refine(
+    // ⚠ `acknowledgeShared` IS NOT A FIELD THIS PATCH CHANGES, so it may not
+    // satisfy the "at least one" rule on its own. It is an assertion ABOUT the
+    // change, and a PATCH carrying nothing but an acknowledgement changes no
+    // column — which is exactly the empty-body 500 class `service-writes.ts`
+    // guards (F-404), reached one layer earlier.
+    (patch) => MUTABLE_UPDATE_KEYS.some((key) => patch[key] !== undefined),
+    { message: "Patch must change at least one field" }
+  )
   .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
 export type AgentTemplateUpdateInput = z.infer<typeof AgentTemplateUpdateSchema>;
