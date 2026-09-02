@@ -38,6 +38,17 @@ export interface BootOptions {
      * against a second code path that fails on its own.
      */
     caller?: Partial<CallerIdentity>;
+    /**
+     * 🔒 OPAQUE SESSION KEY for the workspace pin an agent can set
+     * (`session-pin.ts`). Supplied by the TRANSPORT, which is the only layer that
+     * can identify one MCP connection across the stateless per-request boots.
+     *
+     * ⚠ IT IS A MAP KEY AND NOTHING ELSE. Never rendered, never logged, never
+     * compared to anything but itself, and it grants nothing — a pin only ever
+     * picks among memberships the boot directory already proved. Absent ⇒ no pin
+     * can be read or written, which is the pre-pin behaviour verbatim.
+     */
+    sessionKey?: string;
 }
 export interface BootResult {
     server: DoplMcpServer;

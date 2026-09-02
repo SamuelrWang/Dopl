@@ -51,7 +51,14 @@ export const REGISTRARS: Array<{
   { file: "map.ts", register: registerMapTool },
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
-  { file: "channel.ts", register: registerChannelTool },
+  // ⚠ It takes a `directory` its registrar REQUIRES (the container lock for the
+  // two account-wide reads); the harness passes the same stub `home.ts` gets,
+  // because capture never runs a handler.
+  {
+    file: "channel.ts",
+    register: (r, c) =>
+      registerChannelTool(r, c, undefined, false, STUB_DIRECTORY),
+  },
   { file: "agent.ts", register: registerAgentTools },
   // ⚠ **THE ONE META TOOL IN THIS CAPTURE, AND IT EARNS ITS PLACE** (2026-08-28).
   // `current_workspace` / `list_workspaces` are deliberately absent: they carry

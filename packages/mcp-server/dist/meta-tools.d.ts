@@ -8,12 +8,19 @@
  * identically; see `registrar.ts`.
  */
 import { type CallerIdentity } from "./tools/identity.js";
-import type { RegisterTool } from "./tools/respond.js";
+import { type RegisterTool } from "./tools/respond.js";
 import type { ActiveWorkspaceState, WorkspaceDirectory } from "./workspace-directory.js";
 export interface MetaToolDeps {
     directory: WorkspaceDirectory;
     /** Session default workspace resolved at boot, or null (0/2+ memberships). */
     activeWorkspace: ActiveWorkspaceState | null;
     caller: CallerIdentity;
+    /**
+     * 🔒 The workspace pin's opaque store key (`session-pin.ts`). ⚠ ABSENT IS A
+     * REFUSAL, NOT A NO-OP: a transport that cannot identify its session has
+     * nowhere to store a default, and reporting one anyway would stop an agent
+     * passing `workspace=` on the strength of a pin that does not exist.
+     */
+    sessionKey?: string;
 }
-export declare function registerWorkspaceMetaTools(registerMetaTool: RegisterTool, { directory, activeWorkspace, caller }: MetaToolDeps): void;
+export declare function registerWorkspaceMetaTools(registerMetaTool: RegisterTool, { directory, activeWorkspace, caller, sessionKey }: MetaToolDeps): void;

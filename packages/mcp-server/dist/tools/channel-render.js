@@ -26,6 +26,7 @@ exports.formatChannelLine = formatChannelLine;
 exports.formatThreadLine = formatThreadLine;
 exports.formatThreadDetail = formatThreadDetail;
 exports.formatMemberLine = formatMemberLine;
+exports.groupByChannel = groupByChannel;
 const channel_shared_1 = require("./channel-shared");
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
@@ -386,4 +387,42 @@ function formatMemberLine(m, selfUserId, callerIsAdmin = false) {
     const label = (0, channel_shared_1.inlineOr)(nameOrEmail, "(unnamed member)");
     const you = isSelf ? " · you" : "";
     return `- ${label} (\`${m.userId}\`) · ${m.role}${you}`;
+}
+/**
+ * GROUP A MIXED PAGE BY CHANNEL, preserving first-appearance (= seq) order.
+ *
+ * ⚠ **GROUPED RATHER THAN INTERLEAVED, AND IT IS NOT COSMETIC:**
+ * {@link formatMessages} renders each line's REMEDY hints against a channel ref
+ * — the one-message re-read that un-clips a long body, the thread legend. One
+ * ref for a mixed page would point every remedy at the wrong channel, i.e. at a
+ * call the agent would make and get nothing from. One group, one ref, correct
+ * hints.
+ * ⚠ Ordering INSIDE a group is untouched, and the groups come out in the order
+ * their first message arrived, so the page still reads chronologically at the
+ * channel level.
+ *
+ * ⚠ **IT LIVES HERE BECAUSE TWO PAGES NEED IT** (2026-09-01). It was private to
+ * the workspace-wide `await`, and the ACCOUNT-wide `read` renders the same mixed
+ * page; a second copy would be a second opinion about which ref a remedy points
+ * at, which is the failure the paragraph above describes. Generic over the row,
+ * so the account page's extra `workspaceId` rides through untouched.
+ */
+function groupByChannel(messages) {
+    const groups = new Map();
+    for (const m of messages) {
+        let g = groups.get(m.channelId);
+        if (!g) {
+            // ⚠ The SLUG is the ref an agent can re-use in a follow-up call, and it is
+            // `^[a-z0-9-]+$` by construction so it cannot escape its own span. The id
+            // is the fallback — never the NAME, which is member-typed.
+            g = {
+                ref: m.channelSlug ?? m.channelId,
+                label: (0, channel_shared_1.inlineOr)(m.channelName ?? m.channelSlug ?? m.channelId, "(unnamed channel)"),
+                messages: [],
+            };
+            groups.set(m.channelId, g);
+        }
+        g.messages.push(m);
+    }
+    return [...groups.values()];
 }

@@ -33,6 +33,7 @@
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";
 import { type CallerIdentity } from "./identity";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
  * at boot:
@@ -52,4 +53,4 @@ import { type CallerIdentity } from "./identity";
  * `op="members"` to gate member EMAIL, and defaults false (fail-closed): a test
  * registrar or a failed ping never leaks email.
  */
-export declare function registerChannelTool(register: RegisterTool, client: DoplClient, caller?: CallerIdentity, isAdmin?: boolean): void;
+export declare function registerChannelTool(register: RegisterTool, client: DoplClient, caller: CallerIdentity | undefined, isAdmin: boolean | undefined, directory: WorkspaceDirectory): void;

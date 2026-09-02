@@ -32,8 +32,17 @@ export interface ActiveWorkspaceState {
 /**
  * How the workspace a call hit was chosen — surfaced verbatim in the
  * `_dopl_status` footer so the agent can confirm targeting.
+ *
+ * ⚠ `session pin` is the one an AGENT sets (`current_workspace(op="set")`,
+ * `session-pin.ts`) and it is deliberately a DIFFERENT label from `header pin`,
+ * which the transport sets: an agent debugging where its call landed must be
+ * able to tell "the default I chose" from "the default my client chose".
  */
-export type WorkspaceSource = "per-call arg" | "sole membership" | "header pin";
+export type WorkspaceSource =
+  | "per-call arg"
+  | "sole membership"
+  | "header pin"
+  | "session pin";
 
 export interface EffectiveWorkspace extends ActiveWorkspaceState {
   source: WorkspaceSource;
