@@ -5722,3 +5722,117 @@ not depend on how the reader's git is configured.**
 CHECKOUT and not of the code. This is the same shape as the lockfile that recorded only
 darwin-arm64 native binaries and the node-20 `--test` glob. **`gh run list` before believing a
 local green.**
+
+---
+
+## 2026-09-01 — The verb that existed on the wrong side of the wall: end/rename over the external MCP
+
+**Samuel, verbatim:** *"yeah I need you to build out dopl mcp being able to end agents. Dopl MCP
+need to be able to do all that stuff."*
+
+### The shape of the gap
+
+`end_agent` and `rename_agent` had existed since 2026-08-31 — as `mcp__dopl_agents__*`, the
+in-process MCP server mounted into every desktop-spawned session (`main/agent-self-ops.js`). So an
+agent running INSIDE Dopl could stop a sibling. **The operator's own external agent — the Claude
+Desktop / Claude Code session holding their credential, the thing that had been LAUNCHING the
+workers — could not.** It could create agents and never stop them.
+
+The gap is structural, not an oversight: **the server cannot reach a desktop main process.**
+Exactly one mechanism in this tree crosses that wall, and `launch_agent` already is it — MCP writes
+a `channel_launch_directives` row, the operator's machine claims it over realtime, acts, and writes
+back a verdict.
+
+### Why the verbs became a `kind` column and not a second table
+
+The DIRECTION lane (`channel_agent_directions`, 2026-08-31) was the tempting precedent — a sibling
+mailbox already cloned from this one. It was the wrong precedent, and the reason it was right THERE
+is the reason it is wrong here: a direction carries a `reply`, its TTL measures a TURN rather than a
+claim, and its rows hold a private answer. An end and a rename carry none of that. What they need is
+precisely what the launch mailbox already has — a workspace/channel fence, `operator_user_id`, the
+pending → claimed → terminal lifecycle, the claim CAS, lazy expiry, a closed refusal vocabulary, a
+realtime binding, a replica identity, a breaker-open backstop. **A sibling table would have cloned
+four mechanisms so that one discriminator could be a table name instead.**
+
+⚠ **A `payload JSONB` was the obvious column and it was wrong, for a reason that lives on the other
+side of the wire.** `main/launch-directive-wire.js › directiveFrom` is a LITERAL WHITELIST, and that
+whitelist is the only thing that stops a widened table from starting to influence the desktop by
+accident. A JSON blob passes the whitelist as one opaque key and then carries whatever it likes into
+main — the exact property the narrowing exists to deny. Typed `target_agent_id` + `target_name`
+columns are refusable AT REST; a JSON field is refusable only by whoever remembers to look.
+
+### `launched` was free and would have been a lie
+
+Reusing `launched` as the terminal success for an end would have cost no columns and no code. It
+would also have put the word "launched" on the row that RECORDS AN AGENT BEING STOPPED — and this
+row is read back by the orchestrator that filed it and rendered into an agent-facing sentence. That
+is the one class of wrong nothing downstream can detect, so `done` was added and the column CHECK
+pairs each word with its kind.
+
+### The ruling that needed writing down: no toggle on the two new verbs
+
+`launch` is gated per-machine by `getOrchestratorLaunch` — **"THE TOGGLE IS THE CONSENT"** (Samuel,
+2026-08-22). The obvious move was to gate all three the same way. It is wrong, and the argument was
+already in the tree: `agent-self-ops.js`'s header spends a paragraph explaining why these same two
+verbs, on these same subjects, ride PRE-APPROVED past the Axis-A gate inside every spawned session.
+**A stop verb and a display verb widen nothing** — neither can start a query, wake a shell, grant a
+tool or post — so the failure direction of an abused call is an agent that stops or a card that
+reads differently, on the machine of the operator whose agents they all are. **The toggle exists to
+gate LOCAL COMPUTE BEING SPENT**, and neither spends any.
+
+Gating them would also have produced a genuinely bad state: an operator who has not armed
+launch-over-MCP can still have agents started for them by the button, and would then be unable to
+stop them from where their orchestrator lives.
+
+⚠ **The consequence is the part worth flagging.** `refresh` bound realtime on `armed && enabled()`,
+which was the same condition while the mailbox carried one verb. It is not any more, so it now binds
+on `armed` alone. **That widened a READ** — one more `postgres_changes` binding on a subscription
+this process already holds, over rows whose RLS SELECT is `operator_user_id = auth.uid()` — **and
+nothing this machine DOES.** A launch with the toggle off is still claimed by nobody and spawns
+nothing, and that case sits beside the new one in `test/launch-directive-agent-ops.test.mjs` on
+purpose: the asymmetry is only defensible while the §6 gate is provably untouched.
+
+### The banned word that came back
+
+`rename_agent` was one of SEVEN ops of the retired named-agent surface (channels rollback §1,
+2026-08-05), banned by literal string in three separate guards. In that model an agent was a named
+channel participant and a rename changed its **ADDRESS**.
+
+Six of the seven stay banned. This one came back as a different verb — and the tree had already been
+using the word for that verb for a month, in `mcp__dopl_agents__rename_agent`: a LOCAL DISPLAY LABEL
+in `main/agent-names.js`, on one machine, reaching no server, addressing nobody. **Keeping the ban
+would have forced two names for one verb depending on whether the caller was inside a session or
+outside it**, which is a worse teaching failure than the one the ban was written to prevent.
+
+⚠ **The guard did not weaken; it moved from the SPELLING to the MEANING, and got stronger doing so.**
+A banned string can only say "this word is absent" — it could never have caught the retired
+surface's actual danger, which was never the spelling. `channel-law.test.ts` now drives the shipped
+copy for *a LABEL, never an ADDRESS*, and `channel-addressing-rule.test.ts` asserts the revival
+brought back no addressing param.
+
+### The check that is not the fence
+
+The brief asked for a server-side own-operator check on the target agent id. `service-directions.ts`
+had already refused to write one, at length and correctly: `channel_sessions` is a PROJECTION the
+desktop pushes, so **an absent row means nobody reported, never that no such agent exists** — and an
+agent launched seconds ago is routinely in exactly that state.
+
+So `repository-agent-owner.ts` refuses only on a POSITIVE fact (a row this workspace holds whose
+`user_id` is somebody else's) and passes on silence. It buys a SENTENCE — *"that agent belongs to
+another member"* instead of a two-minute round trip ending in `no-session` — and it is documented
+three times over as **not the fence**, because the fence is `operator_user_id` and a future reader
+"hardening" this into a refusal-on-absence would break every end of an unreported agent.
+
+### What a result must not say
+
+The two new ops got their own refusal-sentence map over the shared nine-word enum, and the
+duplication is the point. The wire word is shared; **what it means to do next is not.** `cap` on a
+launch says "wait for a running agent to finish", which contradicts a request to END one. And
+`no-bridge` on a launch says the operator's toggle is off and to ask for it to be turned on —
+copying that here would send an orchestrator to request a permission that does not gate these verbs,
+and to conclude its operator had denied it something they never denied. Both are pinned as NEGATIVE
+assertions in `channel-ops-agent.test.ts`.
+
+The other copy rule this wave bought: `no-session` on an end is usually GOOD NEWS. An agent that
+finished is the ordinary cause, and that is the outcome the caller wanted, reached without them. A
+result that read as a failure would send an orchestrator to re-launch the very work it was stopping.
