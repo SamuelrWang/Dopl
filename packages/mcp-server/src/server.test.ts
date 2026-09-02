@@ -50,6 +50,7 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 }));
 
 import { createServer, buildInstructions } from "./server.js";
+import { WORKSPACE_ARG_DESCRIPTION } from "./registrar.js";
 
 function wsItem(
   id: string,
@@ -386,5 +387,81 @@ describe("buildInstructions — identity is taught before the first tool call", 
     const text = buildInstructions([WS1]);
     expect(text).toContain("a different user id is a different ACCOUNT");
     expect(text).toContain("do not assert it either way");
+  });
+});
+
+// ── The injected `workspace` arg — one short contract, not fourteen copies ───
+//
+// ⚠ THIS ONE DESCRIPTION IS MULTIPLIED BY THE DOMAIN-TOOL COUNT ON EVERY
+// CONNECTION, before an agent has called anything. It was a 717-char paragraph
+// across 14 tools — ~10,000 served chars, measured 2026-09-02 — restating the
+// rule `instructions.ts` states once. That is the cost this pair of cases
+// exists to keep from growing back (C9).
+
+/**
+ * ⚠ A CEILING THAT ONLY EVER MOVES DOWN, exactly like `tool-budget.test.ts`'s
+ * description ratchet. Raising it is how a budget stops being a budget: the
+ * rule belongs in the instructions, which are pushed ONCE.
+ */
+const WORKSPACE_ARG_MAX_CHARS = 96;
+
+/**
+ * The meta tools. ⚠ `registerMetaTool` injects NO `workspace` arg — a
+ * membership lookup is user-scoped — so they are the complement of the set that
+ * must carry the injected string, and deriving the expectation that way keeps
+ * this case honest as domain tools are added or deleted.
+ */
+const META_TOOLS = ["current_workspace", "list_workspaces", "dopl_home", "dopl_status"];
+
+/** The `workspace` arg's served description, read off the registered schema. */
+function workspaceArgOf(schema: unknown): string | undefined {
+  const shape = (schema as { shape?: Record<string, { description?: string }> })?.shape;
+  return shape?.workspace?.description;
+}
+
+describe("the injected `workspace` arg (C9)", () => {
+  beforeEach(() => {
+    build({
+      directory: [WS1],
+      workspace: WS1,
+      role: "owner",
+      workspaceSource: "sole membership",
+    });
+  });
+
+  it(`is a contract, not a paragraph — ≤ ${WORKSPACE_ARG_MAX_CHARS} chars`, () => {
+    expect(WORKSPACE_ARG_DESCRIPTION.length).toBeLessThanOrEqual(WORKSPACE_ARG_MAX_CHARS);
+    // Both container kinds are addressable through this one arg, and a trim
+    // that deletes either half makes the shorter string a wrong string.
+    expect(WORKSPACE_ARG_DESCRIPTION).toContain("home-channel container");
+    expect(WORKSPACE_ARG_DESCRIPTION).toContain("omit");
+  });
+
+  it("does not restate what `instructions.ts` states once", () => {
+    // ⚠ Discovery (`list_workspaces` / `dopl_home(op="list_channels")`) and the
+    // 0/2+-membership requirement are the instructions' job. Naming them here
+    // pays for them once per domain tool, which is the defect C9 names.
+    expect(WORKSPACE_ARG_DESCRIPTION).not.toMatch(/list_workspaces|list_channels|REQUIRED/);
+  });
+
+  it("is the byte-identical string on every domain tool — 14 of them today", () => {
+    const carrying = [...registry.schemas]
+      .filter(([, schema]) => workspaceArgOf(schema) === WORKSPACE_ARG_DESCRIPTION)
+      .map(([name]) => name);
+    // A scan over nothing is not a guard.
+    expect(carrying.length).toBeGreaterThan(5);
+    expect(carrying.sort()).toEqual(
+      [...registry.schemas.keys()].filter((n) => !META_TOOLS.includes(n)).sort(),
+    );
+  });
+
+  it("is NOT injected onto the meta path, whose own `workspace` arg differs", () => {
+    // `current_workspace` declares its own; the two must not converge silently,
+    // or the meta path has quietly grown the domain path's routing contract.
+    expect(workspaceArgOf(registry.schemas.get("current_workspace"))).toBeDefined();
+    expect(workspaceArgOf(registry.schemas.get("current_workspace"))).not.toBe(
+      WORKSPACE_ARG_DESCRIPTION,
+    );
+    expect(workspaceArgOf(registry.schemas.get("list_workspaces"))).toBeUndefined();
   });
 });
