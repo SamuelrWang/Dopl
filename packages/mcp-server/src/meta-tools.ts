@@ -8,6 +8,7 @@
  * identically; see `registrar.ts`.
  */
 
+import { isStandardWorkspace } from "@dopl/client";
 import { callerStatusLine, sessionLines, type CallerIdentity } from "./tools/identity.js";
 import { inlineOr } from "./tools/narration.js";
 import type { RegisterTool } from "./tools/respond.js";
@@ -63,18 +64,45 @@ export function registerWorkspaceMetaTools(
         UNTRUSTED_DIRECTORY_NOTE,
         "",
       ];
+      // 🔒 THE ONE ROW THAT IS NOT A WORKSPACE. This listing is
+      // `isStandardWorkspace`-filtered by construction — EXCEPT under the
+      // container lock, where `getWorkspaceList` answers `[lockedTo]` so a
+      // locked session has a name to target (`workspace-directory.ts:143-151`,
+      // deliberate). That one row is a `kind='link'` home channel, and rendering
+      // it in the workspace shape said three false things at once: that it is a
+      // workspace, that its slug is an address, and (via ★) that it is "the
+      // workspace a no-arg call auto-targets".
+      // ⚠ KIND IS RENDERED, NOT INFERRED BY THE READER, and the slug is withheld
+      // — the same rule and the same shape as `tools/home-scopes.ts › searchLegs`
+      // (a container's slug "is not advertised"). Ask the predicate rather than
+      // assuming the source.
+      let starred = false;
       for (const w of list) {
+        if (!isStandardWorkspace(w)) {
+          lines.push(
+            `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — home channel (id: \`${w.id}\`, role: ${w.role})`,
+          );
+          continue;
+        }
         const star = w.id === activeWorkspace?.id ? " ★" : "";
+        if (star) starred = true;
         lines.push(
           `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} (slug: \`${w.slug}\` · id: \`${w.id}\`, role: ${w.role})${star}`,
         );
       }
       lines.push("");
-      if (activeWorkspace) {
+      if (starred) {
         lines.push("★ = the workspace a no-arg call auto-targets.");
+      } else if (activeWorkspace) {
+        // ⚠ NO ★ AND NO LEGEND: the auto-target is a home channel, not a
+        // workspace, so the legend's own noun would be wrong. Said plainly
+        // instead, with the id — which is the only handle that addresses it.
+        lines.push(
+          `A no-\`workspace=\` call targets the home channel above. It is addressed by id (\`workspace=${activeWorkspace.id}\`), never by slug.`,
+        );
       } else {
         lines.push(
-          "You belong to 2+ workspaces, so there is no auto-target — pass `workspace=<slug_or_id>` on every tool call.",
+          "There is no auto-target — pass `workspace=<slug_or_id>` on every tool call. Home-channel containers are not listed here; reach one with `dopl_home(op=\"list_channels\")` and pass its container id as `workspace=`.",
         );
       }
       return {
