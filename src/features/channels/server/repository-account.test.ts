@@ -300,12 +300,10 @@ describe("the session read reuses the shared builder, with both fences", () => {
         return q;
       },
     };
-    vi.mocked(sessionRowsWhere).mockImplementation(
-      async (fn: (b: unknown) => unknown) => {
-        fn(q);
-        return [] as never;
-      }
-    );
+    vi.mocked(sessionRowsWhere).mockImplementation(async (fence) => {
+      (fence as unknown as (b: unknown) => unknown)(q);
+      return [] as never;
+    });
     await listAccountSessionStates(ME, [CH_A]);
     expect(applied).toEqual([
       { op: "eq", args: ["user_id", ME] },

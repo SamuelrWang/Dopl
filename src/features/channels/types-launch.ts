@@ -78,6 +78,16 @@ export type LaunchRefusalReason =
   //    `no-bridge`, which reads to an orchestrator as the operator having turned
   //    the lane off.
   | "no-session"
+  // ⚠ THE TENTH, 2026-09-02, and it is a LAUNCH word — the only new one that is.
+  // A directive that asked to CHAIN in a channel where the operator has not
+  // enabled it used to answer `no-bridge`, which is what this machine says when
+  // it is not watching that channel at all: opposite instructions, one word. This
+  // one means the channel is right and ONE NAMED SETTING is off
+  // (`main/launch-posture.js › CHAIN_SETTING` = `channelAgentChain`), so a caller
+  // can re-issue without `chain` or ask for one toggle instead of hunting for
+  // another route. ⚠ Its CHECK lands in the SAME wave
+  // (`20260910120000_channel_launch_directives_posture.sql` §3A).
+  | "no-chain"
   | "bad-name";
 
 /**

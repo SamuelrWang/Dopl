@@ -6735,7 +6735,34 @@ to `status-render.ts` during the integration, that reasoning was **false**.
   TRIMMED back under the 1,200-char budget rather than ratcheted: the clauses that gave way were
   ones restating the tool's own `since` argument description.
 
-### F-415 — `main/launch-directive-wire.js` is at 495 of 500, and the next correction to it is a split
+### F-415 — FILES AT THE §1 CAP, where the next correction becomes a split rather than a doc fix
+
+⚠ **WIDENED 2026-09-02 from one file to the class.** The review of this branch found four more at or
+within eight lines of 500, and one over. The rule they share is the one below: **a file at the cap
+cannot absorb a COMMENT**, so correcting a stale claim in it stops being a doc fix. Re-derive rather
+than trusting these numbers:
+
+```
+find src packages dopl-desktop-app/main -name '*.ts' -o -name '*.js' | xargs awk 'END{}' 2>/dev/null
+awk 'END{print FILENAME, NR}' <file>
+```
+
+Measured 2026-09-02 on `integration/mcp-efficiency`:
+
+| File | Lines | Note |
+|---|---|---|
+| `src/features/knowledge/server/service-base-writes.ts` | 498 → 394 | ✅ **SPLIT 2026-09-02** — the two PRE-WRITE gates moved to `service-base-gates.ts` (135). Seam: a refusal that answers a question about the CALLER, versus composing and persisting a row. |
+| `packages/dopl-client/src/channel-types.ts` | 500 | ⚠ **EXACTLY AT IT.** A wire-type module, so every new field is also a comment explaining what `null` means there. |
+| `packages/mcp-server/src/tools/channel-schema.ts` | 497 | The `.describe()` strings ARE the product surface; a correction to one is a line change, not a line add — but a NEW op is both. |
+| `packages/mcp-server/src/tools/channel-ops-agent.ts` | 495 | |
+| `dopl-desktop-app/main/launch-directive-wire.js` | 495 → 512 → 351 | ✅ **SPLIT 2026-09-02** — the tenth refusal word (`no-chain`) and its argument put it 12 OVER, which is the entry's own prediction arriving. Every frozen list, bound and pattern moved to `launch-directive-vocab.js` (239), a LEAF that requires nothing; the wire re-exports all of them verbatim, so no caller and no test changed. ⚠ `UUID_RE` deliberately did NOT move — `test/uuid-rule-parity.test.mjs` holds a census of which files carry their own copy and why, and relocating it would have edited that census silently. |
+
+- ⚠ **THE THREE REMAINING ARE NOT SPLIT HERE, DELIBERATELY** — same argument as the original: they
+  are under the cap, both lints are green, and a structural split of modules that own a wire
+  vocabulary is not a thing to do inside a review-fix pass. Each needs its own review, and the seam
+  for the desktop one is named below.
+
+#### The original entry — `main/launch-directive-wire.js` is at 495 of 500 (RESOLVED above)
 
 Measured 2026-09-01 on `integration/mcp-efficiency`:
 `awk 'END{print NR}' dopl-desktop-app/main/launch-directive-wire.js`.
@@ -6755,7 +6782,9 @@ made and got wrong.
 - ⚠ **NOT SPLIT IN THE INTEGRATION, DELIBERATELY.** It is under the cap, the desktop lint is green,
   and a structural split of the module that owns a security vocabulary is not a thing to do in the
   same change as six merges. It needs its own review.
-- Status: open. Debt, not breakage.
+- Status: **PARTIALLY RESOLVED 2026-09-02** — this file and `service-base-writes.ts` are split;
+  three files remain within eight lines of the cap and are named in the table above. Debt, not
+  breakage.
 
 ### F-416 — ✅ RESOLVED 2026-09-01 — a self-referential `node_modules` SYMLINK was committed into the desktop tree, and `.gitignore` could not see it
 
