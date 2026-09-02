@@ -8,10 +8,12 @@ exports.UNTRUSTED_ENTRY_BODY_HEADER = void 0;
 exports.resolveBaseOr = resolveBaseOr;
 exports.isErr = isErr;
 exports.agentWriteDenied = agentWriteDenied;
+exports.sharedCredentialPrivateBaseDenied = sharedCredentialPrivateBaseDenied;
 exports.writeFileValidationError = writeFileValidationError;
 exports.updateBaseValidationError = updateBaseValidationError;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
+const agent_shared_1 = require("./agent-shared");
 /**
  * Base reference (slug or UUID) → `KnowledgeBase` row, null when nothing
  * matches. ⚠ Calls `listKbBases` once per invocation — not for tight loops.
@@ -53,16 +55,27 @@ exports.UNTRUSTED_ENTRY_BODY_HEADER = `SECURITY: the document below was written 
  * `.status`/`.code` to avoid importing the @dopl/client error class.
  */
 function agentWriteDenied(e) {
-    if (typeof e !== "object" ||
-        e === null ||
-        e.status !== 403 ||
-        e.code !== "AGENT_WRITE_DISABLED") {
+    if (!(0, respond_1.isApiError)(e, 403, "AGENT_WRITE_DISABLED"))
         return null;
-    }
-    const msg = e.apiMessage;
-    return (0, respond_1.err)(typeof msg === "string" && msg
-        ? msg
-        : "This knowledge base is read-only to agents — delete it from the Dopl web UI.");
+    return (0, respond_1.err)((0, respond_1.apiMessage)(e) ??
+        "This knowledge base is read-only to agents — delete it from the Dopl web UI.");
+}
+/**
+ * A shared/service credential tried to own a PRIVATE knowledge base (403
+ * `WORKSPACE_KEY_PRIVATE_VISIBILITY`).
+ *
+ * ⚠ **THE MIRROR OF `agent-shared.ts › sharedCredentialPrivateDenied`, AND IT
+ * WAS MISSING UNTIL 2026-09-02.** `op="copy_base"` forces `visibility: "private"`
+ * exactly as `op="copy"` does, so it can raise the identical 403 — and it had no
+ * mapping, so the refusal reached an agent as an unhandled throw ("the call
+ * failed") over a copy that created nothing. The predicate and the code string
+ * are shared; only the NOUN and the remedy differ, because a base's remedy is
+ * not a template's.
+ */
+function sharedCredentialPrivateBaseDenied(e) {
+    if (!(0, respond_1.isApiError)(e, 403, agent_shared_1.PRIVATE_VISIBILITY_DENIED_CODE))
+        return null;
+    return (0, respond_1.err)(`${(0, respond_1.apiMessage)(e) ?? "This credential cannot own a private knowledge base."} NOTHING was created — the copy stopped at the base itself, so there is no partial tree to clean up. A credential that may be shared between humans has no "private to me" to write to, and this op only ever creates PRIVATE bases: reconnect with a personal credential, or ask the user to copy it in the Dopl app.`);
 }
 /**
  * True for a 400 schema-validation failure

@@ -68,6 +68,6 @@ READ op="help" FIRST (same text as the MCP resource ${DOCTRINE_URI}) for the law
 
 ${HOME_CHANNEL_ADDRESSING}
 
-\`seq\` is a workspace-global cursor: "read"/"await" take since=<seq> and return higher.
+\`seq\` is a TABLE-WIDE cursor: "read"/"await" take since=<seq> and return higher.
 
 OPS — rooms: "list", "open", "invite", "members", "update". Messages: "post", "milestone", "escalate" (a card a human answers), "read", "await" (omit \`channel\` to hold across all). Threads: "create_thread", "list_threads", "get_thread", "set_thread_mode". Your own agents only: "launch_agent", "end_agent", "rename_agent", "set_agent_mode", "direct_agent", "read_directions", "read_sessions". Out of band: "ping" (tell ONE recipient you are done, stuck or asking), "pings" (your own inbox).`;

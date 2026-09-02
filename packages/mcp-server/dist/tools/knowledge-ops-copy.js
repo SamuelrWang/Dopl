@@ -10,6 +10,13 @@
  * path, which is why this ticket ships no migration and no route — the full
  * argument lives in `copy-target.ts`'s header and is not restated here.
  *
+ * 🔒 **THE SOURCE MUST BE THE CALLER'S OWN (R2, 2026-09-02).** Readable is not
+ * owned: the copy lands PRIVATE to the copier in the target, so copying a
+ * teammate's shared base would move their documents into a room they may not be
+ * in. `copy-target.ts › notOwnedRefusal` is the fence, it runs BEFORE the tree
+ * read so a refusal costs no loopback traffic, and it fails closed on an
+ * unprovable owner.
+ *
  * ── THE THREE THINGS THIS OP REFUSES TO GUESS ─────────────────────────────
  *
  * 1. ⚠ **IT REFUSES ABOVE {@link MAX_COPY_ENTRIES} AND CREATES NOTHING**, and
@@ -87,7 +94,10 @@ function folderPaths(folders) {
  */
 function folderPlan(folders, paths) {
     return folders
-        .map((f) => ({ path: paths.get(f.id) ?? f.name, description: f.description }))
+        .map((f) => ({
+        path: paths.get(f.id) ?? f.name,
+        description: f.description,
+    }))
         .filter((f) => f.path !== "")
         .sort((a, b) => a.path.split("/").length - b.path.split("/").length ||
         a.path.localeCompare(b.path));
@@ -141,15 +151,32 @@ function readSource(client, base) {
  * TARGET. ⚠ A failure AFTER the base lands is CAUGHT and returned, not thrown: a
  * throw here would reach the caller as "the call failed" over a base that
  * exists.
+ *
+ * ⚠ **THE CREATE ITSELF IS THE OTHER CASE, AND IT IS A REFUSAL, NOT A PARTIAL**
+ * (2026-09-02). It sat OUTSIDE the `try` and so threw raw — including the
+ * mapped-everywhere-else 403 `WORKSPACE_KEY_PRIVATE_VISIBILITY` a shared
+ * credential gets for a `private` write, which
+ * `agent-ops-copy.ts` has always caught for the identical create. It is caught
+ * here now and returned as `null`, which the caller renders as "nothing was
+ * created" — the honest answer, since a create that failed left no tree behind.
  */
 function writeCopy(client, targetId, source, folders, entries) {
     return client_1.workspaceContext.run(targetId, async () => {
-        const base = await client.createKbBase({
-            name: source.name,
-            description: source.description ?? undefined,
-            // 🔒 PRIVATE, ALWAYS, and NO `homeScoped` — see this module's header.
-            visibility: "private",
-        });
+        let base;
+        try {
+            base = await client.createKbBase({
+                name: source.name,
+                description: source.description ?? undefined,
+                // 🔒 PRIVATE, ALWAYS, and NO `homeScoped` — see this module's header.
+                visibility: "private",
+            });
+        }
+        catch (e) {
+            const mapped = (0, knowledge_shared_js_1.sharedCredentialPrivateBaseDenied)(e);
+            if (mapped)
+                return mapped;
+            throw e;
+        }
         let madeFolders = 0;
         let madeEntries = 0;
         try {
@@ -182,10 +209,15 @@ function writeCopy(client, targetId, source, folders, entries) {
                 },
             };
         }
-        return { base, folders: madeFolders, entries: madeEntries, failure: null };
+        return {
+            base,
+            folders: madeFolders,
+            entries: madeEntries,
+            failure: null,
+        };
     });
 }
-async function opCopyBase(client, directory, ref, toWorkspace) {
+async function opCopyBase(client, directory, selfUserId, ref, toWorkspace) {
     // ⚠ THE TARGET RESOLVES FIRST, so an unaddressable `to_workspace` costs one
     // cached directory read and not a whole tree.
     const target = await (0, copy_target_js_1.resolveCopyTarget)(directory, toWorkspace);
@@ -197,11 +229,22 @@ async function opCopyBase(client, directory, ref, toWorkspace) {
     const onto = (0, copy_target_js_1.sameWorkspaceRefusal)(target, base.workspaceId, "knowledge base", `dopl_kb(op="create_base")`);
     if (onto)
         return onto;
+    // 🔒 R2 — OWNED, not merely readable, and BEFORE the tree read: a refusal must
+    // not cost N loopback reads. See `copy-target.ts › notOwnedRefusal`.
+    const notOwned = (0, copy_target_js_1.notOwnedRefusal)(base.createdBy, selfUserId, "knowledge base", base.name);
+    if (notOwned)
+        return notOwned;
     const source = await readSource(client, base);
     if (source.kind === "too-big") {
         return (0, respond_js_1.err)(`Refused before writing: ${(0, narration_js_1.inlineOr)(base.name, NO_NAME)} holds ${source.total} entries and this op copies at most ${exports.MAX_COPY_ENTRIES}. NOTHING was created. One copy is a read AND a write per entry on a single tool call, and a base copied halfway is worse than one not copied at all — you cannot tell which half landed, and nothing on this surface can delete the remains. Split the base, or ask the user to copy it in the Dopl app.`);
     }
-    const out = await writeCopy(client, target.id, base, source.folders, source.entries);
+    const written = await writeCopy(client, target.id, base, source.folders, source.entries);
+    // ⚠ A REFUSAL FROM THE CREATE ITSELF, which is not a partial copy — nothing
+    // exists to finish or clean up, so it is returned verbatim rather than
+    // re-framed as one.
+    if ("content" in written)
+        return written;
+    const out = written;
     const handle = (0, copy_target_js_1.workspaceHandle)(target);
     const where = (0, copy_target_js_1.workspaceLabel)(target);
     const named = `${(0, narration_js_1.inlineOr)(out.base.name, NO_NAME)} (slug: \`${out.base.slug}\`, id: \`${out.base.id}\`)`;

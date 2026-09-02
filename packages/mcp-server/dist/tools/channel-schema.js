@@ -115,7 +115,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     channel: zod_1.z
         .string()
         .optional()
-        .describe('Channel slug or id. Required for every op except five: "open" (which creates a channel), "list" (which lists them all), "read_sessions" (where it is an OPTIONAL filter — omit it to see every session of yours in the workspace), "await" (where OMITTING it holds across EVERY channel you are a member of at once, instead of one), and "pings" (your inbox spans every channel, so there is nothing to narrow).'),
+        .describe('Channel slug or id. Required for every op except six, and on three of those OMITTING it is a WIDER read, not a missing argument: "read" (omit it, with `since`, for new messages across every channel you are in, in EVERY workspace and home container at once), "read_sessions" (omit it to see every session of yours EVERYWHERE, not just this workspace), "await" (omit it to hold across every channel you are a member of at once, instead of one). The other three never take it: "open" creates a channel, "list" lists them all, and "pings" is your own inbox, which spans every channel already.'),
     direct: zod_1.z
         .boolean()
         .optional()
@@ -267,7 +267,7 @@ exports.CHANNEL_INPUT_SHAPE = {
         .int()
         .min(0)
         .optional()
-        .describe('op="read": return only messages with seq greater than this. op="await" (ALWAYS required, with or without `channel`): the last seq you have processed. `seq` is workspace-global, which is what lets ONE cursor cover every channel at once when you omit `channel`. ⚠ WHERE TO GET ONE, because there is a page that deliberately will not give you one: a THREAD-SCOPED read (op="read" with `thread`) offers NO cursor at all and says so — it filtered other exchanges out, and `await` is channel-wide with a strict "greater than", so a seq taken off that page would permanently skip every message the filter hid. Establish the cursor from an UNSCOPED read (drop `thread`) and carry that page\'s highest seq. op="pings" (optional): return only pings with a higher ping seq than this. ⚠ **A PING SEQ IS NOT A MESSAGE SEQ.** They are separate cursor spaces, so crossing them reads a plausible WRONG page instead of erroring — carry the one op="pings" itself printed.'),
+        .describe('op="read": return only messages with seq greater than this. op="await" (ALWAYS required, with or without `channel`): the last seq you have processed. `seq` is TABLE-WIDE (one sequence, every workspace and home container), which is what lets ONE cursor cover every channel at once when you omit `channel`. ⚠ WHERE TO GET ONE, because there is a page that deliberately will not give you one: a THREAD-SCOPED read (op="read" with `thread`) offers NO cursor at all and says so — it filtered other exchanges out, and `await` is channel-wide with a strict "greater than", so a seq taken off that page would permanently skip every message the filter hid. Establish the cursor from an UNSCOPED read (drop `thread`) and carry that page\'s highest seq. op="pings" (optional): return only pings with a higher ping seq than this. ⚠ **A PING SEQ IS NOT A MESSAGE SEQ.** They are separate cursor spaces, so crossing them reads a plausible WRONG page instead of erroring — carry the one op="pings" itself printed.'),
     goal: zod_1.z
         .string()
         .trim()

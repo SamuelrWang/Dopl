@@ -100,6 +100,11 @@ const RETRY_ADVICE = {
     "no-counterparty": "no",
     "no-template": "no",
     "bad-name": "no",
+    // ⚠ NO PRODUCER ON THIS KIND — `no-chain` is the LAUNCH lane's word for a
+    // channel whose `channelAgentChain` toggle is off, and a re-posture starts
+    // nothing. Arriving here IS the anomaly, so `no`: re-issuing over a word
+    // nothing could have produced re-issues forever.
+    "no-chain": "no",
 };
 /** What was ASKED FOR, rendered for the result. ⚠ `-` for an axis left alone —
  *  which is a legitimate and common request, not an omission. */

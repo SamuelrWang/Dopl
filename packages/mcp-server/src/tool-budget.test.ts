@@ -100,7 +100,11 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ⚠ +116 ON 2026-09-02: three op NAMES in the ops line — "set_agent_mode",
   // "ping", "pings" — with two five-word glosses. Nothing here duplicated
   // anything, so nothing was traded for them.
-  dopl_channel: 1781,
+  // ⚠ 1,781 → 1,775 ON 2026-09-02: the `seq` sentence said "workspace-global"
+  // where `design/status.ts` and INVARIANTS §5 (F-412) say TABLE-WIDE, and the
+  // correct word is six characters shorter. Caught by the downward half of the
+  // ratchet, which is what that half is for.
+  dopl_channel: 1775,
   dopl_ontology: 2321,
   // ⚠ +383 ON 2026-09-02 for op="copy", after its bullet gave back the sentences
   // `copy-target.ts › TO_WORKSPACE_ARG_DESCRIPTION` already carries.

@@ -106,8 +106,12 @@ const KINDS_NEEDING_LAUNCH_CONSENT = [KIND_LAUNCH, KIND_SET_MODE];
 //
 // ⚠ **NARROWEST FIRST, AND THE ORDER IS LOAD-BEARING HERE TOO.** The bound this
 // lane applies is "never wider than the operator's own stored channel posture", and
-// `directive-agent-ops.js › narrowTo` implements that as an INDEX COMPARISON over
-// these arrays. Re-ordering either one silently inverts the bound.
+// `launch-posture.js › narrowTo` implements that as an INDEX COMPARISON over these
+// arrays. Re-ordering either one silently inverts the bound. ⚠ This comment said
+// `directive-agent-ops.js` until 2026-09-02 — that module CALLS `narrowTo`, along
+// with `launch-directive-spawn.js`, and neither owns it. Both lanes take the ONE
+// implementation, which is the whole reason a posture cannot be widened on one of
+// them and not the other.
 const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
 const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 

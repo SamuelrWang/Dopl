@@ -41,7 +41,11 @@
  * system the other one does not.
  *
  * ⚠ AUTHORED BY THE P3 TENANCY TIER (`p3/mcp-tenancy-naming`) AND CARRIED HERE
- * VERBATIM — the two strings are byte-identical to that tier's. They lived in
+ * ALL BUT VERBATIM. The one edit is 2026-09-02's: {@link TENANCY_FIX} hedged the
+ * remedy as *"dopl_agent op=\"copy\", once that op exists"*, and T40 shipped it
+ * (`agent.ts`'s enum, `agent-ops-copy.ts › opCopy`). A fix that tells three
+ * agent-facing surfaces the only remedy is unavailable is worse than no fix, so
+ * the clause is gone and the argument the copy needs is named instead. They lived in
  * `channel-description.ts` until the P1 verbosity tier made that file import
  * {@link DOCTRINE_URI} from this one: this file reaching back for them would
  * close a module cycle, and the cycle's loser is whichever const is read during
@@ -50,7 +54,7 @@
  * do not give it an import of `channel-description.ts`.
  */
 export declare const TENANCY_RULE = "A template resolves ONLY in the container the channel lives in \u2014 and a home channel IS its own container, so one on your personal shelf or in a standard workspace does not resolve there however visible it is to you.";
-export declare const TENANCY_FIX = "Copy it into this channel's container (dopl_agent op=\"copy\", once that op exists) or create it there \u2014 or launch without a template.";
+export declare const TENANCY_FIX = "Copy it into this channel's container (dopl_agent op=\"copy\", passing to_workspace) or create it there \u2014 or launch without a template.";
 /** The MCP resource URI this text is published at. ⚠ One spelling, imported. */
 export declare const DOCTRINE_URI = "dopl://doctrine/channels";
 /**

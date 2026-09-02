@@ -22,6 +22,12 @@
  * and a template whose instructions reference documents it cannot see is worse
  * than one that never claimed them.
  *
+ * 🔒 **THE SOURCE MUST BE THE CALLER'S OWN (R2, 2026-09-02).** Readable is not
+ * owned: a copy lands PRIVATE to the copier in the target, so copying a
+ * teammate's `workspace`-visible template would move their work into a room they
+ * may not be in. `copy-target.ts › notOwnedRefusal` is the fence, and it fails
+ * closed on an unprovable owner.
+ *
  * 🔒 **VISIBILITY IS FORCED TO `private`, NEVER CARRIED.** The op creates "a
  * private copy in the target tenancy" by definition — and that also keeps it out
  * of THE CONFIRM CLASS (INVARIANTS §10) BY CONSTRUCTION, since the class is a
@@ -33,4 +39,4 @@
 import type { DoplClient } from "@dopl/client";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
 import { type ToolResponse } from "./respond.js";
-export declare function opCopy(client: DoplClient, directory: WorkspaceDirectory, ref: string, toWorkspace: string): Promise<ToolResponse>;
+export declare function opCopy(client: DoplClient, directory: WorkspaceDirectory, selfUserId: string | null, ref: string, toWorkspace: string): Promise<ToolResponse>;

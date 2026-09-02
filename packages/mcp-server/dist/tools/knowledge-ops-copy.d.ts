@@ -9,6 +9,13 @@
  * path, which is why this ticket ships no migration and no route — the full
  * argument lives in `copy-target.ts`'s header and is not restated here.
  *
+ * 🔒 **THE SOURCE MUST BE THE CALLER'S OWN (R2, 2026-09-02).** Readable is not
+ * owned: the copy lands PRIVATE to the copier in the target, so copying a
+ * teammate's shared base would move their documents into a room they may not be
+ * in. `copy-target.ts › notOwnedRefusal` is the fence, it runs BEFORE the tree
+ * read so a refusal costs no loopback traffic, and it fails closed on an
+ * unprovable owner.
+ *
  * ── THE THREE THINGS THIS OP REFUSES TO GUESS ─────────────────────────────
  *
  * 1. ⚠ **IT REFUSES ABOVE {@link MAX_COPY_ENTRIES} AND CREATES NOTHING**, and
@@ -49,4 +56,4 @@ export declare const MAX_COPY_ENTRIES = 100;
  * hold, and unbounded points 100 concurrent loopback requests at one process.
  */
 export declare const COPY_READ_BATCH = 8;
-export declare function opCopyBase(client: DoplClient, directory: WorkspaceDirectory, ref: string, toWorkspace: string): Promise<ToolResponse>;
+export declare function opCopyBase(client: DoplClient, directory: WorkspaceDirectory, selfUserId: string | null, ref: string, toWorkspace: string): Promise<ToolResponse>;

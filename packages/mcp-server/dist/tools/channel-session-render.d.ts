@@ -136,6 +136,18 @@ export interface SessionRenderOpts {
      * production call sites are own-scoped and pass it explicitly.
      */
     handle?: boolean;
+    /**
+     * Emit the leading `- ` markdown bullet. Default TRUE — the shape every
+     * existing caller already gets.
+     *
+     * ⚠ **IT EXISTS BECAUSE ONE CALLER WAS DOING STRING SURGERY ON THE RESULT**
+     * (2026-09-02). `status-render.ts` renders these rows INDENTED under a channel
+     * line rather than as a list, and it was stripping the prefix with
+     * `.replace(/^- /, "")` — a reader of this function's OUTPUT FORMAT rather than
+     * of its contract, which breaks silently the day the prefix changes and leaves
+     * a stray `- ` mid-line rather than an error. An option is the contract.
+     */
+    bullet?: boolean;
 }
 /**
  * IS A QUIET ROW MERELY QUIET?

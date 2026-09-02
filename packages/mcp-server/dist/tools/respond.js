@@ -11,6 +11,8 @@ exports.ok = ok;
 exports.err = err;
 exports.isConflict = isConflict;
 exports.isNotFound = isNotFound;
+exports.isApiError = isApiError;
+exports.apiMessage = apiMessage;
 exports.isAlreadyExists = isAlreadyExists;
 exports.creditsExhausted = creditsExhausted;
 exports.entitlementDenied = entitlementDenied;
@@ -36,6 +38,35 @@ function isNotFound(e) {
     return (typeof e === "object" &&
         e !== null &&
         e.status === 404);
+}
+/**
+ * Duck-typed match on a `@dopl/client` HTTP error's STATUS **and** its `code`.
+ *
+ * ⚠ **ONE COPY OF THE DUCK-TYPE, MANY SENTENCES.** Four mappers across the agent
+ * and knowledge surfaces were each re-typing this five-line shape
+ * (`typeof e === "object" && e !== null && e.status === … && e.code === …`), and
+ * a fifth was written for the KB copy on 2026-09-02. The PREDICATE is one fact
+ * about the wire; the MESSAGE is domain prose and stays with its domain, which
+ * is why this exports the test rather than a message builder.
+ * ⚠ Duck-typed on purpose — this package must not import the client's error
+ * class to ask a question about a status code.
+ */
+function isApiError(e, status, code) {
+    return (typeof e === "object" &&
+        e !== null &&
+        e.status === status &&
+        e.code === code);
+}
+/**
+ * The SERVER's own human sentence off an api error, or null when it sent none.
+ * ⚠ Prefer it over a hand-written one wherever it exists: the server knows which
+ * credential class or gate refused, and this layer does not.
+ */
+function apiMessage(e) {
+    if (typeof e !== "object" || e === null)
+        return null;
+    const msg = e.apiMessage;
+    return typeof msg === "string" && msg ? msg : null;
 }
 /** True for a 409 (name/title/slug already-exists collision). */
 function isAlreadyExists(e) {

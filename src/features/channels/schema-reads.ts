@@ -89,10 +89,25 @@ export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
  * nothing may get a thinner answer than it asked for, and an unrecognised value
  * is a 400 rather than a silent fall-through to `full`.
  */
-export const AccountStatusQuerySchema = z.object({
-  since: z.coerce.number().int().nonnegative().optional(),
-  view: z.enum(["full", "sessions"]).optional().default("full"),
-});
+export const AccountStatusQuerySchema = z
+  .object({
+    since: z.coerce.number().int().nonnegative().optional(),
+    view: z.enum(["full", "sessions"]).optional().default("full"),
+  })
+  // ⚠ **`view="sessions"` WITH A `since` IS REFUSED, NOT IGNORED (2026-09-02).**
+  // That view skips the cursor arithmetic entirely — `unread` is `null` on every
+  // row by construction — so the answer ECHOED a cursor back beside a column that
+  // could never be a count, which reads as "0 new everywhere" to anything that
+  // does not know the view's shape. Silently dropping the argument is the other
+  // wrong answer: a caller that asked a question and got no error believes it was
+  // answered. ⚠ It is a REFUSAL rather than an upgrade to `full` for §9's reason
+  // in reverse: nothing may get a WIDER answer than it asked for either, and a
+  // status read that quietly ran the expensive view is a cost nobody chose.
+  .refine((q) => !(q.view === "sessions" && q.since !== undefined), {
+    path: ["since"],
+    message:
+      'since= is not answerable with view="sessions": that view reports no unread counts, so a cursor there would be echoed back beside a column that is always null. Drop since=, or ask for view="full".',
+  });
 export type AccountStatusQuery = z.infer<typeof AccountStatusQuerySchema>;
 
 /**

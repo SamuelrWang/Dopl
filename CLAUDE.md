@@ -71,7 +71,7 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and FIVE non-suite gates** — the full table is
+**Five suites, TWO lints, TWO typechecks, and SIX non-suite gates** (six since 2026-09-02) — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
 ⚠ **THE COUNT HAS BEEN WRONG THREE TIMES AND THE TWO ERRORS ARE OPPOSITE ONES — read both before
@@ -80,11 +80,14 @@ it counted included the desktop-ui typecheck, **which is one of the TWO typechec
 count. (2) It then said FOUR until 2026-09-01, and that was an UNDERCOUNT: two real gates
 (`check-role-drift`, then `check-css-token-drift`) had shipped in CI with no doc row. It is FIVE
 today for a different reason than it was FIVE in August, and both times the fix was the same
-command. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
+command. ⚠ **AND IT IS SIX SINCE 2026-09-02**, when `check-session-health-drift` landed — that one
+shipped WITH its doc row, in the same change, which is the whole remedy this warning has been
+asking for. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
 many non-suite gates there are"** — the first item is on it precisely because it is a typecheck
 nobody remembers to run, and it is NOT one of the five.
 
-The six things that are routinely forgotten (five non-suite gates, plus the second typecheck):
+The seven things that are routinely forgotten (SIX non-suite gates since 2026-09-02, plus the
+second typecheck):
 
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
    vitest run does not typecheck. `npm run typecheck` alone does not cover it.
@@ -96,7 +99,15 @@ The six things that are routinely forgotten (five non-suite gates, plus the seco
    ⚠ **This list said "four" and omitted it until 2026-08-26**, though it has been the second step
    of CI's `type-drift` job since guest-role M0 (`080b7b48`) — i.e. the wave that introduced the
    `guest` role shipped the gate that guards the role set and told no doc about it.
-6. `npx tsx scripts/check-css-token-drift.ts` — the DESIGN TOKENS, `src/app/globals.css` vs the
+6. `npx tsx scripts/check-session-health-drift.ts` — the SEVEN session-health
+   fields, across FOUR hand-mirrors (`types-sessions.ts`, the zod block in
+   `schema-sessions.ts`, the SDK's `session-health-types.ts`, and its committed
+   `dist/`) plus the migration's own columns. ⚠ **ADDED 2026-09-02 WITH ITS DOC
+   ROW IN THE SAME CHANGE**, which is the whole point of the warning below it —
+   the previous two gates each shipped without one. Every field on this set is
+   `optional` AND `nullable` by design (an older desktop must not 400 its whole
+   push), so drift here fails no build and no test: the field just never arrives.
+7. `npx tsx scripts/check-css-token-drift.ts` — the DESIGN TOKENS, `src/app/globals.css` vs the
    SPA's `apps/desktop-ui/src/styles/tokens.css`, which is a second copy with no shared module.
    ⚠ **And this list said "five" and omitted THIS one until 2026-09-01**, though it has been the
    `type-drift` job's THIRD step since `522f53df` (2026-08-31). **The same failure, a second time,

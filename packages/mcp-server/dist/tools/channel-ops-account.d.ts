@@ -48,9 +48,22 @@ export declare function opReadAccount(client: DoplClient, directory: WorkspaceDi
  * `op="read_sessions"` WITH NO `channel` — every session of the caller's,
  * grouped by the room it is working in.
  *
- * ⚠ **IT REUSES THE PROJECTION RENDERER VERBATIM** (`formatSessionLine`,
- * `sessionLegend`, and both notes). A second session line would be a second
- * opinion about what "stale" means and about which fields a peer may read — see
- * `channel-session-render.ts`'s header.
+ * ⚠ **IT RENDERS `SESSION_TABLE_HEAD` + `sessionRow`, THE SAME TABLE THE
+ * PER-CHANNEL `read_sessions` AND THE `await` SESSION BLOCK RENDER** (T13).
+ * Until 2026-09-02 it rendered `formatSessionLine`, the PRE-TERSE prose form —
+ * so the account-wide read described the same session in a different shape from
+ * the per-channel one, which is the drift `channel-session-liveness.test.ts`
+ * exists to catch. One renderer is also one opinion about what "stale" means and
+ * about which fields an audience may read; see `channel-session-render.ts`.
+ *
+ * ⚠ **THE GROUPING IS WHAT THIS PAGE ADDS, AND IT IS NOT THE `channel` COLUMN.**
+ * Each `###` heading carries the room's `workspace=` handle, which is the value
+ * every other tool takes to reach it and which no cell in the table can carry.
+ *
+ * ⚠ **NO BANNER AND NO STANDING NOTES** — T11/T13. `SESSION_HANDLE_NOTE` and
+ * `SESSION_TELEMETRY_NOTE` are deleted from every result on this surface; they
+ * are doctrine at `dopl://doctrine/channels` and `op="help"`. What stays is the
+ * LEGEND, which decodes the cells THIS page contains and is conditional on the
+ * page containing a hedged row.
  */
 export declare function opReadSessionsAccount(client: DoplClient, directory: WorkspaceDirectory): Promise<ToolResponse>;

@@ -100,6 +100,9 @@ const RETRY_ADVICE = {
     "no-template": "no",
     "no-session": "no",
     "bad-name": "no",
+    // ⚠ NO PRODUCER ON AN END OR A RENAME — `no-chain` belongs to a launch that
+    // asked to chain. Arriving here means the machines disagree; still `no`.
+    "no-chain": "no",
 };
 /**
  * ⚠ **THE FOREIGN-AGENT REFUSAL IS THE ONE THIS SURFACE ANSWERS ITSELF**, before

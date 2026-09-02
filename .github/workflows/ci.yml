@@ -231,6 +231,13 @@ jobs:
       - name: Diff workspace role set across server, SDK and MCP
         run: npx tsx scripts/check-role-drift.ts
 
+      # The SEVEN session-health fields, across FOUR hand-mirrors plus the
+      # migration's columns (2026-09-02). Every one of them is optional AND
+      # nullable by design, so drift there fails no build and no test — the
+      # field simply never arrives.
+      - name: Diff the session-health field set across its four mirrors
+        run: npx tsx scripts/check-session-health-drift.ts
+
       # The SPA's `tokens.css` is a hand copy of `globals.css`'s token layer
       # (F-074). The prose "edit both together" instruction it carries failed
       # twice in one wave, which is why this is a gate and not a comment.

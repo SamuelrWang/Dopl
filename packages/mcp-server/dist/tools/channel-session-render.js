@@ -330,7 +330,9 @@ function formatSessionLine(s, opts = {}) {
     // extra rather than a plausible-looking handle — see {@link addressableHandle}.
     const at = opts.handle ? (0, channel_session_handle_1.addressableHandle)(s.name) : null;
     const address = at ? ` (\`${at}\`)` : "";
-    return `- **${(0, channel_shared_1.inlineOr)(s.name, exports.NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
+    // ⚠ `bullet` DEFAULTS TO TRUE, so every existing caller's bytes are unchanged.
+    const lead = opts.bullet === false ? "" : "- ";
+    return `${lead}**${(0, channel_shared_1.inlineOr)(s.name, exports.NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
 }
 /**
  * THE LEGEND under a set of session lines. One sentence per thing a reader

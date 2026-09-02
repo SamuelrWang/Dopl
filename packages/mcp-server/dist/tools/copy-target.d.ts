@@ -37,7 +37,29 @@ import { type ToolResponse } from "./respond.js";
  * out of every listing, and `dopl_home(op="list_channels")` is the only surface
  * that publishes their ids.
  */
-export declare const TO_WORKSPACE_ARG_DESCRIPTION = "Where the COPY is created: a workspace slug or UUID, or a home-channel CONTAINER id from dopl_home(op=\"list_channels\"). Required for the copy ops. It must be somewhere you are a member \u2014 an id that does not resolve for you refuses and creates nothing, and there is no fallback to the current workspace. The copy always lands PRIVATE to you, and it is a STRANGER to the original: editing one never touches the other.";
+export declare const TO_WORKSPACE_ARG_DESCRIPTION = "Where the COPY is created: a workspace slug or UUID, or a home-channel CONTAINER id from dopl_home(op=\"list_channels\"). Required for the copy ops, and the SOURCE must be one you created. It must be somewhere you are a member \u2014 an id that does not resolve for you refuses and creates nothing, and there is no fallback to the current workspace. The copy always lands PRIVATE to you, and it is a STRANGER to the original: editing one never touches the other.";
+/**
+ * 🔒 **R2 — A COPY IS OF SOMETHING THE OPERATOR OWNS, NOT OF ANYTHING THEY CAN
+ * READ** (Desktop Agent default 2026-09-02; Samuel may loosen).
+ *
+ * Both ops resolved their source through the ordinary READ resolvers, so until
+ * this fence they would copy any template or base the caller could SEE — a
+ * teammate's `workspace`-visible template, a shared base — into a container that
+ * teammate may not be in, landing it `private` to the copier. That is not what
+ * the spec says the op is (INVARIANTS §10: *"An operator's OWN template or
+ * knowledge base"*), and it is the one direction a copy can widen an audience.
+ *
+ * ⚠ **AND IT FAILS CLOSED ON AN UNKNOWN.** `createdBy` is nullable (rows older
+ * than the column) and `CallerIdentity.userId` is nullable (auth did not
+ * resolve). Neither is evidence of ownership, so neither passes — an unprovable
+ * owner refuses and creates nothing, which is recoverable, where a wrong guess
+ * is a copy nobody can delete from this surface (§10).
+ *
+ * ⚠ It is a NARROWING of a read that was already fenced, never a new authz path:
+ * the source read still answers only what the caller may see, and this drops
+ * rows from inside that answer.
+ */
+export declare function notOwnedRefusal(createdBy: string | null | undefined, selfUserId: string | null, noun: string, ref: string): ToolResponse | null;
 /** Narrow the `resolve → row | refusal` union the copy ops branch on. */
 export declare function isCopyRefusal(x: WorkspaceListItem | ToolResponse): x is ToolResponse;
 /**

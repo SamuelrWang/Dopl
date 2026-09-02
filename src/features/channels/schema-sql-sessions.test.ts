@@ -280,7 +280,26 @@ describe("channel_sessions column privileges (operator-only stays operator-only)
     }
     // ⚠ ITS NARROWING IS AN ABSENCE — it issues no GRANT — so the migration has
     // to assert the absence rather than leave it to this scan alone.
-    expect(file!.sql).toMatch(/has_column_privilege\('authenticated'/);
-    expect(file!.sql).toMatch(/RAISE\s+EXCEPTION/i);
+    //
+    // ⚠ **ASSERTED AS THE NEGATION, NOT AS THE PRESENCE OF A PHRASE (2026-09-02).**
+    // These two lines used to be `toMatch(/has_column_privilege\('authenticated'/)`
+    // and `toMatch(/RAISE\s+EXCEPTION/i)`, which every migration in this directory
+    // satisfies and which a file that MENTIONED the check in a comment would pass
+    // just as well. What matters is the shape: the file must GRANT nothing on this
+    // table, and its privilege check must RAISE on the anon/authenticated arm.
+    expect(
+      file!.sql,
+      "the file must GRANT nothing on channel_sessions — its narrowing IS the absence"
+    ).not.toMatch(/\bGRANT\b[^;]*\bON\b[^;]*channel_sessions/i);
+    // The anon arm, the authenticated arm and the RAISE that follows them, as ONE
+    // statement — so a file that dropped either role still fails.
+    expect(file!.sql).toMatch(
+      /has_column_privilege\('authenticated',[^;]*OR\s+has_column_privilege\('anon',[\s\S]*?RAISE\s+EXCEPTION/i
+    );
+    // ⚠ AND THE POSITIVE HALF: service_role must KEEP the privilege, or every
+    // `select('*')` in the repositories 42501s.
+    expect(file!.sql).toMatch(
+      /NOT\s+has_column_privilege\('service_role',[\s\S]*?RAISE\s+EXCEPTION/i
+    );
   });
 });

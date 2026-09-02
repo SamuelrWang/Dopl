@@ -26,6 +26,14 @@
  */
 import type { AgentTemplate, DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond.js";
+/**
+ * The server's 403 code for "a credential that may be shared between humans
+ * cannot own a PRIVATE row". ⚠ ONE SPELLING, shared with the knowledge surface
+ * (`knowledge-shared.ts › sharedCredentialPrivateBaseDenied`) — both copy ops
+ * force `visibility: "private"`, so both can raise it and neither may guess at
+ * the string.
+ */
+export declare const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 /** A template with nothing nameable left after neutralization. */
 export declare const NO_NAME = "`(unnamed)`";
 export type TemplateRefResolution = {

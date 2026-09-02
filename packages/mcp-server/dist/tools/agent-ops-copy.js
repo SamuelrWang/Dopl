@@ -23,6 +23,12 @@
  * and a template whose instructions reference documents it cannot see is worse
  * than one that never claimed them.
  *
+ * 🔒 **THE SOURCE MUST BE THE CALLER'S OWN (R2, 2026-09-02).** Readable is not
+ * owned: a copy lands PRIVATE to the copier in the target, so copying a
+ * teammate's `workspace`-visible template would move their work into a room they
+ * may not be in. `copy-target.ts › notOwnedRefusal` is the fence, and it fails
+ * closed on an unprovable owner.
+ *
  * 🔒 **VISIBILITY IS FORCED TO `private`, NEVER CARRIED.** The op creates "a
  * private copy in the target tenancy" by definition — and that also keeps it out
  * of THE CONFIRM CLASS (INVARIANTS §10) BY CONSTRUCTION, since the class is a
@@ -38,7 +44,7 @@ const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 const copy_target_js_1 = require("./copy-target.js");
-async function opCopy(client, directory, ref, toWorkspace) {
+async function opCopy(client, directory, selfUserId, ref, toWorkspace) {
     // ⚠ THE TARGET RESOLVES FIRST, so an unaddressable `to_workspace` costs one
     // cached directory read and no template read at all.
     const target = await (0, copy_target_js_1.resolveCopyTarget)(directory, toWorkspace);
@@ -57,6 +63,12 @@ async function opCopy(client, directory, ref, toWorkspace) {
     // than ambient so the two legs read as the pair they are, and so moving either
     // one cannot silently change which tenancy it runs against.
     const source = await client_1.workspaceContext.run(found.workspaceId, () => client.getAgentTemplate(found.id));
+    // 🔒 R2 — OWNED, not merely readable. It runs on the DETAIL read rather than
+    // on the resolver's row, because `createdBy` is what proves it and the detail
+    // is the read that carries it. See `copy-target.ts › notOwnedRefusal`.
+    const notOwned = (0, copy_target_js_1.notOwnedRefusal)(source.createdBy, selfUserId, "agent template", source.name);
+    if (notOwned)
+        return notOwned;
     // Leg 2: an ORDINARY create, fenced by `withWorkspaceAuth` in the target.
     let created;
     try {

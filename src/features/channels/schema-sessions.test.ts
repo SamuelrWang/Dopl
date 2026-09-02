@@ -316,3 +316,29 @@ describe("SessionStateReportSchema — the bounds on the report itself", () => {
     expect(parse(many(33)).success).toBe(false);
   });
 });
+
+describe("the two INT4 health counts are bounded at the COLUMN's ceiling", () => {
+  it("refuses a turns / deniedCalls past 2147483647, and takes the ceiling itself", () => {
+    // ⚠ MUTATION CHECK. Without `.max`, a value past INT4 passes zod, passes the
+    // route and 22003s AT REST — and a rejected push blanks that machine's whole
+    // session set rather than dropping one field.
+    for (const field of ["turns", "deniedCalls"]) {
+      expect(
+        parse([entry({ [field]: 2_147_483_647 })]).success,
+        `${field} at the ceiling`
+      ).toBe(true);
+      expect(
+        parse([entry({ [field]: 2_147_483_648 })]).success,
+        `${field} past the ceiling`
+      ).toBe(false);
+    }
+  });
+
+  it("leaves the two BIGINT counts uncapped — a bound tighter than the column is the other footgun", () => {
+    for (const field of ["tokensDelta", "lastWakeSeq"]) {
+      expect(parse([entry({ [field]: 9_000_000_000 })]).success, field).toBe(
+        true
+      );
+    }
+  });
+});

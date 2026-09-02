@@ -16,7 +16,12 @@
  * ⚠ **EVERY MEMBER-TYPED STRING GOES THROUGH THE ONE NEUTRALIZER.** Channel
  * names, author names and message previews are all VALUES spliced into lines WE
  * wrote (INVARIANTS §10), and the preview is a fragment of somebody's message
- * body. The framing header is emitted FIRST, above the content it frames.
+ * body.
+ * ⚠ **THERE IS NO FRAMING HEADER ON THIS BLOCK, and this header claimed one
+ * until 2026-09-02** ("emitted FIRST, above the content it frames" — of a banner
+ * T11 had already removed). What holds §10's rule here is that a preview is a
+ * VALUE inside a line we wrote, neutralized, never a body rendered as itself.
+ * The asymmetry with the wake surfaces that DO carry one is F-407.
  */
 
 import type { AccountChannelStatus, AccountStatus } from "@dopl/client";
@@ -141,9 +146,15 @@ export function statusLines(
         `  ${formatSessionLine(session, {
           telemetry: true,
           handle: true,
+          // ⚠ INDENTED UNDER ITS CHANNEL, NOT A LIST ITEM — so the bullet is
+          // asked for and not stripped. This was `.replace(/^- /, "")` until
+          // 2026-09-02: string surgery on another module's output format, which
+          // breaks silently the day that format changes and leaves a stray `- `
+          // mid-line rather than an error.
+          bullet: false,
           now,
           operatorOnline: status.operatorOnline,
-        }).replace(/^- /, "")}`,
+        })}`,
       );
     }
     for (const item of channel.waiting) lines.push(waitingLine(item));

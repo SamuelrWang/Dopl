@@ -31,6 +31,19 @@ export declare const UNTRUSTED_ENTRY_BODY_HEADER = "SECURITY: the document below
  */
 export declare function agentWriteDenied(e: unknown): ToolResponse | null;
 /**
+ * A shared/service credential tried to own a PRIVATE knowledge base (403
+ * `WORKSPACE_KEY_PRIVATE_VISIBILITY`).
+ *
+ * ⚠ **THE MIRROR OF `agent-shared.ts › sharedCredentialPrivateDenied`, AND IT
+ * WAS MISSING UNTIL 2026-09-02.** `op="copy_base"` forces `visibility: "private"`
+ * exactly as `op="copy"` does, so it can raise the identical 403 — and it had no
+ * mapping, so the refusal reached an agent as an unhandled throw ("the call
+ * failed") over a copy that created nothing. The predicate and the code string
+ * are shared; only the NOUN and the remedy differ, because a base's remedy is
+ * not a template's.
+ */
+export declare function sharedCredentialPrivateBaseDenied(e: unknown): ToolResponse | null;
+/**
  * `write_file` validation failure → a message naming field + rule + recovery.
  * Null when unrecognized, so the caller rethrows.
  */

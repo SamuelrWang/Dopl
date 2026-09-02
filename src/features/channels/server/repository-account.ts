@@ -133,9 +133,14 @@ export async function listAccountChannelRefs(
   if (lockedWorkspaceId) {
     memberQuery = memberQuery.eq("workspace_id", lockedWorkspaceId);
   }
-  const { data: memberships, error: memberError } = await memberQuery.limit(
-    ACCOUNT_CHANNEL_LIMIT
-  );
+  // ⚠ **ORDERED, BECAUSE IT IS LIMITED (2026-09-02).** An un-ordered `.limit` takes
+  // an ARBITRARY page: at the ceiling two identical calls could return different
+  // channels, so a clipped account would show a different set of rooms on every
+  // check-in with nothing saying why. `channel_id` is the stable key — the page is
+  // reported as clipped either way, and this makes the reported page repeatable.
+  const { data: memberships, error: memberError } = await memberQuery
+    .order("channel_id", { ascending: true })
+    .limit(ACCOUNT_CHANNEL_LIMIT);
   if (memberError) throw memberError;
   const rows = (memberships ?? []) as Array<{
     channel_id: string;
@@ -151,6 +156,10 @@ export async function listAccountChannelRefs(
     .select("id, name, slug")
     .is("deleted_at", null)
     .in("id", [...workspaceByChannel.keys()])
+    // ⚠ NO `.order` HERE, DELIBERATELY: this read is BOUNDED BY THE ID SET the
+    // membership read just handed it, so its `.limit` cannot bite and there is no
+    // arbitrary page to make repeatable. The comment below says the same thing
+    // about `truncated`.
     .limit(ACCOUNT_CHANNEL_LIMIT);
   if (error) throw error;
   const channels = ((data ?? []) as Array<{

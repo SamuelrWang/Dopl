@@ -56,8 +56,8 @@ export declare const CHANNEL_INPUT_SHAPE: {
     name: z.ZodOptional<z.ZodString>;
     topic: z.ZodOptional<z.ZodString>;
     visibility: z.ZodOptional<z.ZodEnum<{
-        public: "public";
         private: "private";
+        public: "public";
     }>>;
     member: z.ZodOptional<z.ZodString>;
     intent: z.ZodOptional<z.ZodEnum<{

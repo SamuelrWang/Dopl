@@ -26,7 +26,7 @@
  * §5A), and this surface must not rebuild on a new door what the route closed.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TEMPLATES_SCOPE_NOTE = exports.NO_NAME = void 0;
+exports.TEMPLATES_SCOPE_NOTE = exports.NO_NAME = exports.PRIVATE_VISIBILITY_DENIED_CODE = void 0;
 exports.resolveTemplateRef = resolveTemplateRef;
 exports.resolveTemplateOr = resolveTemplateOr;
 exports.isErr = isErr;
@@ -38,6 +38,14 @@ exports.sharedCredentialPrivateDenied = sharedCredentialPrivateDenied;
 exports.templateRow = templateRow;
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
+/**
+ * The server's 403 code for "a credential that may be shared between humans
+ * cannot own a PRIVATE row". ⚠ ONE SPELLING, shared with the knowledge surface
+ * (`knowledge-shared.ts › sharedCredentialPrivateBaseDenied`) — both copy ops
+ * force `visibility: "private"`, so both can raise it and neither may guess at
+ * the string.
+ */
+exports.PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 /** A template with nothing nameable left after neutralization. */
 exports.NO_NAME = "`(unnamed)`";
 /** ⚠ Local, like `channel-addressing.ts` and `ontology-ops-write.ts` — three
@@ -153,12 +161,8 @@ function templateWriteDenied(e) {
  * The refusal here must not soften that into a "forbidden".
  */
 function knowledgeBaseNotAttachable(e) {
-    if (typeof e !== "object" ||
-        e === null ||
-        e.status !== 404 ||
-        e.code !== "KNOWLEDGE_BASE_NOT_FOUND") {
+    if (!(0, respond_js_1.isApiError)(e, 404, "KNOWLEDGE_BASE_NOT_FOUND"))
         return null;
-    }
     return (0, respond_js_1.err)(`At least one knowledge base id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops a template laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. Check ids with dopl_kb(op="list_bases").`);
 }
 /**
@@ -168,14 +172,9 @@ function knowledgeBaseNotAttachable(e) {
  * credential is in play.
  */
 function sharedCredentialPrivateDenied(e) {
-    if (typeof e !== "object" ||
-        e === null ||
-        e.status !== 403 ||
-        e.code !== "WORKSPACE_KEY_PRIVATE_VISIBILITY") {
+    if (!(0, respond_js_1.isApiError)(e, 403, exports.PRIVATE_VISIBILITY_DENIED_CODE))
         return null;
-    }
-    const msg = e.apiMessage;
-    return (0, respond_js_1.err)(`${typeof msg === "string" && msg ? msg : "This credential cannot own a private agent template."} Nothing was created. A credential that may be shared between humans has no "private to me" to write to — create it with visibility="workspace", or reconnect with a personal credential.`);
+    return (0, respond_js_1.err)(`${(0, respond_js_1.apiMessage)(e) ?? "This credential cannot own a private agent template."} Nothing was created. A credential that may be shared between humans has no "private to me" to write to — create it with visibility="workspace", or reconnect with a personal credential.`);
 }
 /** One template rendered as a list row. ⚠ Every displayed field is a VALUE
  *  spliced into a line we wrote — name and description are length-bounded only,

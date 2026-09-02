@@ -45,7 +45,11 @@ const channel_await_budget_1 = require("./channel-await-budget");
  * system the other one does not.
  *
  * ⚠ AUTHORED BY THE P3 TENANCY TIER (`p3/mcp-tenancy-naming`) AND CARRIED HERE
- * VERBATIM — the two strings are byte-identical to that tier's. They lived in
+ * ALL BUT VERBATIM. The one edit is 2026-09-02's: {@link TENANCY_FIX} hedged the
+ * remedy as *"dopl_agent op=\"copy\", once that op exists"*, and T40 shipped it
+ * (`agent.ts`'s enum, `agent-ops-copy.ts › opCopy`). A fix that tells three
+ * agent-facing surfaces the only remedy is unavailable is worse than no fix, so
+ * the clause is gone and the argument the copy needs is named instead. They lived in
  * `channel-description.ts` until the P1 verbosity tier made that file import
  * {@link DOCTRINE_URI} from this one: this file reaching back for them would
  * close a module cycle, and the cycle's loser is whichever const is read during
@@ -54,7 +58,7 @@ const channel_await_budget_1 = require("./channel-await-budget");
  * do not give it an import of `channel-description.ts`.
  */
 exports.TENANCY_RULE = "A template resolves ONLY in the container the channel lives in — and a home channel IS its own container, so one on your personal shelf or in a standard workspace does not resolve there however visible it is to you.";
-exports.TENANCY_FIX = 'Copy it into this channel\'s container (dopl_agent op="copy", once that op exists) or create it there — or launch without a template.';
+exports.TENANCY_FIX = 'Copy it into this channel\'s container (dopl_agent op="copy", passing to_workspace) or create it there — or launch without a template.';
 /** The MCP resource URI this text is published at. ⚠ One spelling, imported. */
 exports.DOCTRINE_URI = "dopl://doctrine/channels";
 /**
@@ -180,6 +184,7 @@ const REFUSALS = `WHY A LAUNCH, END, DIRECTION OR RENAME IS REFUSED. ⚠ A refus
 - \`no-sdk\` — that machine has NO AGENT RUNTIME available, so it cannot start one at all. Re-issuing will not change that. Tell your operator; it is a setup problem on their side.
 - \`auth-hold\` — the desktop is SIGNED OUT or its credential is held, so it will not start anything until a human signs in. Tell your operator — this needs them, not another call.
 - \`no-bridge\` — your operator has LAUNCHING (or DIRECTING) OVER MCP TURNED OFF on that machine. ⚠ That is a deliberate setting, not a failure and not something to work around — it is how they consented, or did not, to this capability. If you believe they want it on, ASK THEM; do not re-issue, and do not look for another route.
+- \`no-chain\` — the launch itself is fine and the channel is right: you asked the new agent to be allowed to LAUNCH FURTHER AGENTS, and your operator has not enabled that in this channel. The setting is \`channelAgentChain\`, per channel, in the channel's Settings tab. ⚠ It is a SEPARATE toggle from the launch one, so a channel that launches happily can still refuse this. Re-issue WITHOUT \`chain\` if the agent does not need it — that call will land — or ask your operator to turn that one setting on. Do not read it as \`no-bridge\`: nothing about this machine is unavailable.
 - \`no-counterparty\` — there is nothing for an agent to work with in that channel. Check op="members" and op="list_threads" before asking again.
 - \`no-template\` — that machine could not resolve the TEMPLATE you named, and it asked in THIS CHANNEL'S container because that is the tenancy a launch runs in. THREE THINGS PRODUCE THIS ONE WORD and the wire cannot tell you which: the template lives in a DIFFERENT container (${exports.TENANCY_RULE}), or it is not visible to the OPERATOR whose machine this is (you named it under YOUR visibility and their desktop resolves it under THEIRS, so a private or team template of yours can be unusable there), or it no longer exists. ⚠ CHECK THE TENANCY FIRST — it is the commonest of the three and the only one you can fix alone. Do not re-issue the same id: ${exports.TENANCY_FIX} Or share one that member can see. (Which of the last two it was is deliberately not observable.)
 - \`no-session\` — no LIVE session of your operator's carries that agent id. ⚠ On an END this is usually GOOD NEWS: the agent already finished and there was nothing left to stop. On a DIRECTION it means the same thing and is the commonest answer. ⚠ On a LAUNCH it explains nothing, because no launch can produce it — report that rather than re-issuing.
@@ -199,7 +204,7 @@ const SESSIONS = `READING "read_sessions": one ROW per agent session on your own
 ⚠ IT IS YOUR SIDE ONLY. To learn what a PEER is doing, read the thread you share with them ("read" / "await"), never this.`;
 /** The things that cost calls, approvals or a wrong conclusion. */
 const CONVENTIONS = `CONVENTIONS:
-SEQ NUMBERS are workspace-global, not per-channel. Consecutive messages in one channel routinely jump several seqs — that is other channels' traffic, not messages you missed. Never read a seq range as a message count.
+SEQ NUMBERS are TABLE-WIDE — one sequence across every channel of every workspace and every home container — not per-channel. Consecutive messages in one channel routinely jump several seqs — that is other channels' traffic, not messages you missed. Never read a seq range as a message count.
 LARGE DELIVERABLES: a body is capped at 16000 characters. Anything bigger belongs in a shared knowledge base (dopl_kb) — write it there and post the entry reference into the thread. Do not chunk one artifact across many messages.
 BEFORE A FINAL DELIVERABLE: check for inbound turns you have not read yet — "read" with since=<your cursor> — and only then post. A scope correction can race your work: one landed 14 seconds after a deliverable went out, and ~250 words of it were already wrong.
 

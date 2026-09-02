@@ -106,6 +106,12 @@ describe("🔒 listAccountChannelRefs — the proof behind every other read", ()
       "deleted_at",
       null,
     ]);
+    // ⚠ ORDERED, BECAUSE IT IS LIMITED. An un-ordered `.limit` takes an ARBITRARY
+    // page, so a clipped account would show a different set of rooms per call.
+    expect(calls.find((c) => c.op === "order")?.args).toEqual([
+      "channel_id",
+      { ascending: true },
+    ]);
     // The tenancy comes off the MEMBERSHIP row, denormalised — no second join.
     expect(out.rows).toEqual([
       { id: CH_A, name: "Build", slug: "build", workspaceId: WS_A },

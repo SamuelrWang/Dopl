@@ -4,6 +4,20 @@ import { closedEnum } from "@/shared/lib/closed-enum";
 import type { SessionPillState } from "./types";
 
 /**
+ * ⚠ **THE `INT4` CEILING, AND IT EXISTS BECAUSE TWO OF THE HEALTH COLUMNS ARE
+ * `INTEGER` WHERE EVERY OTHER COUNT ON THIS ROW IS `BIGINT`** (2026-09-02).
+ * `20260909120000_channel_sessions_health.sql` declares `turns` and
+ * `denied_calls` as `INTEGER`; a value past this bound passes `.nonnegative()`,
+ * passes the route, and 22003s AT REST — which on this lane is the failure the
+ * whole two-half rule exists to avoid, because a rejected push blanks a
+ * machine's entire session set rather than dropping one field.
+ * ⚠ It bounds only the two `INT4` columns. `tokensDelta` and `lastWakeSeq` are
+ * `BIGINT` and are deliberately NOT capped here — a bound tighter than the
+ * column is `20260909120000`'s own footgun in the other direction.
+ */
+const INT4_MAX = 2_147_483_647;
+
+/**
  * READ-SESSION-STATE's two schemas — the `?channelId=` of the READ and the body
  * of the WRITE. `schema.ts` re-exports both names, so every existing import path
  * is unchanged.
@@ -208,8 +222,10 @@ const SessionStateEntrySchema = z.object({
   // claim these columns were added to stop the surface making.
   /** Turns taken. ⚠ `.int().nonnegative()` and NOT quantized by the desktop —
    *  the difference between 1 turn and 4 IS the signal
-   *  (`main/session-telemetry.js`'s own note). */
-  turns: z.number().int().nonnegative().nullable().optional(),
+   *  (`main/session-telemetry.js`'s own note).
+   *  ⚠ **`.max(INT4_MAX)`, BECAUSE THE COLUMN IS `INTEGER` AND NOT `BIGINT`.**
+   *  See {@link INT4_MAX}. */
+  turns: z.number().int().nonnegative().max(INT4_MAX).nullable().optional(),
   /** Tokens burned SINCE THIS SESSION LAST POSTED — not per turn, and not since
    *  the last row push (`main/session-health.js › tokensSinceLastPost`). Same
    *  `.int().nonnegative()` bound as `tokensSpent`, whose bucket it shares. */
@@ -233,7 +249,14 @@ const SessionStateEntrySchema = z.object({
   /** Tool calls REFUSED to this session, and the last tool that was
    *  (`main/session-windowless.js › noteDenied`). ⚠ A `null` count is "nothing
    *  counted", NEVER "nothing was denied". */
-  deniedCalls: z.number().int().nonnegative().nullable().optional(),
+  deniedCalls: z
+    .number()
+    .int()
+    .nonnegative()
+    // ⚠ `INTEGER`, like `turns` — see {@link INT4_MAX}.
+    .max(INT4_MAX)
+    .nullable()
+    .optional(),
   /** ⚠ Bound is `safeLabel` at **80** — character for character `toolLabel`'s,
    *  which is character for character the desktop's own `TOOL_LABEL_MAX`. A tool
    *  name can come from the operator's OWN MCP servers, so the charset is not

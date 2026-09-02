@@ -34,7 +34,7 @@ Set \`op\` to one of:
 - "list_dir" — folders + entries at one path (omitted = root). Requires: base.
 - "create_base" — Requires: name. Optional: shelf, visibility, confirm_token. ⚠ \`shelf\` behaves DIFFERENTLY here than on list_bases: omitting it writes to the WORKSPACE shelf (it does not mean "both"). \`shelf="personal"\` puts the base on your own personal shelf and implies visibility="private" — it needs your OWN default workspace as the target, so it is refused inside a home channel or a second workspace you belong to. A PUBLIC base inside a home channel somebody else is in previews first, returning a one-time confirm_token.
 - "update_base" — name, description or slug. Requires: base. Shelf is fixed at creation; \`shelf\` is refused.
-- "copy_base" — re-create a base you can READ as a NEW base in ANOTHER workspace or home channel, with its folders and entries. Requires: base, to_workspace (see its own description for the target rules). Capped at 100 entries — a bigger base is refused WHOLE rather than copied halfway, because you cannot tell which half landed and nothing here can delete the remains.
+- "copy_base" — re-create a base YOU CREATED as a NEW base in ANOTHER workspace or home channel, with its folders and entries. Requires: base, to_workspace (see its own description for the target rules). Capped at 100 entries — a bigger base is refused WHOLE rather than copied halfway, because you cannot tell which half landed and nothing here can delete the remains.
 - "create_folder" — mkdir -p, idempotent. Requires: base, path. \`description\` sets/updates the folder summary.
 - "move_folder" — Requires: base, from_path, to_path.
 - "read_file" — an entry's body plus the Version token write_file wants. Requires: base, path.
@@ -52,10 +52,12 @@ const KB_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
     { op: "delete_file", effect: "would have deleted the entry at a path" },
 ], `Reach for instead: \`dopl_kb\` op=write_file to replace an entry's contents, op=move_file / op=move_folder to reorganize. If something genuinely has to go, say so and ask the user to delete it in the Dopl app.`);
 function registerKnowledgeTools(register, client, 
-// ⚠ Read for exactly TWO things: whether an entry BODY is somebody else's,
-// which decides `UNTRUSTED_ENTRY_BODY_HEADER`; and binding a confirm token to
-// the identity that previewed (2026-08-28), so one caller's preview cannot be
-// spent by another. Nothing about visibility is decided from it — the server
+// ⚠ Read for exactly THREE things: whether an entry BODY is somebody else's,
+// which decides `UNTRUSTED_ENTRY_BODY_HEADER`; binding a confirm token to the
+// identity that previewed (2026-08-28), so one caller's preview cannot be
+// spent by another; and 🔒 R2's OWNERSHIP fence on `op="copy_base"`
+// (2026-09-02), which copies bases the caller CREATED rather than any base
+// they can read. Nothing about visibility is decided from it — the server
 // already filtered.
 caller = identity_1.UNKNOWN_CALLER, 
 // 🔒 THE TARGET RESOLVER FOR op="copy_base", AND NOTHING ELSE READS IT HERE.
@@ -144,7 +146,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("copy_base", args, ["base", "to_workspace"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_copy_1.opCopyBase)(client, directory, args.base, args.to_workspace);
+                return (0, knowledge_ops_copy_1.opCopyBase)(client, directory, caller.userId, args.base, args.to_workspace);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);

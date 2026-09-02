@@ -228,7 +228,7 @@ const SESSIONS = `READING "read_sessions": one ROW per agent session on your own
 
 /** The things that cost calls, approvals or a wrong conclusion. */
 const CONVENTIONS = `CONVENTIONS:
-SEQ NUMBERS are workspace-global, not per-channel. Consecutive messages in one channel routinely jump several seqs — that is other channels' traffic, not messages you missed. Never read a seq range as a message count.
+SEQ NUMBERS are TABLE-WIDE — one sequence across every channel of every workspace and every home container — not per-channel. Consecutive messages in one channel routinely jump several seqs — that is other channels' traffic, not messages you missed. Never read a seq range as a message count.
 LARGE DELIVERABLES: a body is capped at 16000 characters. Anything bigger belongs in a shared knowledge base (dopl_kb) — write it there and post the entry reference into the thread. Do not chunk one artifact across many messages.
 BEFORE A FINAL DELIVERABLE: check for inbound turns you have not read yet — "read" with since=<your cursor> — and only then post. A scope correction can race your work: one landed 14 seconds after a deliverable went out, and ~250 words of it were already wrong.
 
