@@ -8,7 +8,7 @@ import { neutralizeInline } from "./narration";
 // sends `@agent-` to a column CHECK that refuses it.
 import { bareAgentId } from "./channel-agent-id";
 import { classifyBadRequest, isBadRequest, serverDetail } from "./channel-errors";
-import { UNTRUSTED_BODY_HEADER } from "./channel-render";
+import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 
 /**
  * THE "NEEDS YOU" SIGNAL — `op="ping"` and `op="pings"` (2026-09-01,

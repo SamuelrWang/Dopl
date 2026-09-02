@@ -53,7 +53,7 @@ import type {
   LaunchToolMode,
 } from "@dopl/client";
 import { ok, type ToolResponse } from "./respond";
-import { inlineOr, isErr, resolveChannelOr } from "./channel-shared";
+import { isErr, resolveChannelOr } from "./channel-shared";
 import { bareAgentId } from "./channel-agent-id";
 import { fileAndHold, pendingFacts } from "./channel-ops-agent";
 // ⚠ SHARED WITH THE LAUNCH OP, NOT COPIED. Both lanes can be clamped and both
@@ -63,9 +63,6 @@ import { fileAndHold, pendingFacts } from "./channel-ops-agent";
 import { postureFacts } from "./channel-ops-launch";
 // ⚠ ONE write-result renderer, shared with every other op on this tool (T10).
 import { factsLine } from "./channel-facts";
-
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed)";
 
 /**
  * THE REFUSAL CONTRACT FOR **THIS** VERB — a THIRD map over the same nine-word
@@ -137,9 +134,13 @@ export async function opSetAgentMode(
   modes: { tools?: LaunchToolMode; messages?: LaunchMessageMode },
   opts: { waitMs?: number } = {},
 ): Promise<ToolResponse> {
+  // ⚠ RESOLVED FOR THE FENCE, NOT FOR THE PROSE. The channel lookup still has to
+  // happen — it is what turns a slug into an id the caller is a member of — but
+  // its NAME no longer reaches the result: a fact line names the AGENT and the
+  // posture, and the room the caller just addressed by ref is not news to it
+  // (T10). Every sibling verb on this tool renders the same way.
   const channel = await resolveChannelOr(client, ref);
   if (isErr(channel)) return channel;
-  const label = inlineOr(channel.name, NO_NAME);
   // ⚠ STRIPPED, NOT VALIDATED — the shared helper `end_agent` and `direct_agent`
   // both use. `read_sessions` prints `@agent-<id>`, so that is what a model
   // copies, and refusing the pasted form would 400 a caller for doing exactly

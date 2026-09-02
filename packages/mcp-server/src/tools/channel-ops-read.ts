@@ -28,14 +28,13 @@ import {
   resolveChannelOr,
 } from "./channel-shared";
 import {
-  UNTRUSTED_ROSTER_HEADER,
-  UNTRUSTED_THREAD_HEADER,
   formatChannelLine,
   formatMemberLine,
   formatMessages,
   formatThreadDetail,
   formatThreadLine,
 } from "./channel-render";
+import { UNTRUSTED_ROSTER_HEADER, UNTRUSTED_THREAD_HEADER } from "./channel-framing";
 // ⚠ The clipped-list wording lives with the other thread-render prose, stated
 // once — see INVARIANTS §9.
 import { threadsClippedNote } from "./channel-render-threads";

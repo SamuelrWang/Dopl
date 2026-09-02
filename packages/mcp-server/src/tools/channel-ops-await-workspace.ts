@@ -40,12 +40,12 @@ import { neutralizeInline } from "./channel-shared";
 // would be a second opinion about which channel ref a per-message remedy points
 // at. See that function's docblock.
 import {
-  UNTRUSTED_BODY_HEADER,
   formatMessages,
   groupByChannel,
   // ⚠ F-405 — the only wire field naming the PROCESS rather than the account.
   sessionIdOf,
 } from "./channel-render";
+import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 import {
   AWAIT_MAX_POLLS,
   AWAIT_MIN_POLL_MS,

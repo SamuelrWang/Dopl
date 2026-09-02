@@ -38,7 +38,11 @@ import { ok, type ToolResponse } from "./respond";
 import { inlineOr } from "./channel-shared";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
 import { accountMessages, accountStatus } from "./account-scope";
-import { UNTRUSTED_BODY_HEADER, formatMessages, groupByChannel } from "./channel-render";
+import {
+  formatMessages,
+  groupByChannel,
+} from "./channel-render";
+import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 import {
   formatSessionLine,
   sessionIsStale,

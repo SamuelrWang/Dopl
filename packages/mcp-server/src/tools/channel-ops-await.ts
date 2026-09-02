@@ -17,12 +17,12 @@ import { ok, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, neutralizeInline } from "./channel-shared";
 import {
   addresseeOf,
-  UNTRUSTED_BODY_HEADER,
   formatMessages,
   // ⚠ WHICH SESSION wrote a line — the only field on the wire that names the
   // process rather than the account. F-405's self-echo filter keys on it.
   sessionIdOf,
 } from "./channel-render";
+import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 import {
   AWAIT_MAX_POLLS,
   AWAIT_MIN_POLL_MS,
