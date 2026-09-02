@@ -6911,3 +6911,30 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Proposed resolution: (a) add an optional provenance field to `AgentTemplateCreateInput` / `KnowledgeBaseCreateInput` (zod + types, both trees), have the MCP copy ops SEND it, and refuse server-side unless `source.createdBy === ctx.userId` — failing closed when either side is null, mirroring `notOwnedRefusal`'s own rule; KEEP the MCP refusal; (b) accept the gap and say so in `copy-target.ts`, since the read was already fenced and the widening is bounded to content the caller could see.
 - Proposed resolution: defer — (a) is right but it is a contract change across two trees, not a hotfix.
 - Status: open.
+
+## The 2026-09-02 MCP/ARCHITECTURE v2 WAVE A — slice A1 (instructions budget) — F-420, F-421, F-425
+
+### F-420 — the neutralizer's coverage of the `instructions` surface is now CONTINGENT ON THE BUDGET, and nothing says so at the fixture (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/narration.test.ts › "the MCP instructions block — a workspace name from whoever invited you"`, against `packages/mcp-server/src/instructions.ts › directoryBlock`.
+- Found during: A1, cutting the briefing to the 2,048-char prefix the CLI actually delivers.
+- Severity: test-coverage contingency, not a live hole — the RENDER is safe either way.
+- **The shape.** The directory is now elastic: rows that do not fit are dropped whole (descriptions first), with the count and `list_workspaces` in their place. Nothing is ever truncated mid-span, so an escaped name cannot be cut open — the safety property holds. But those two cases assert containment over a ~215-char hostile fixture, and they only assert anything **while that row still fits**: measured 2026-09-02 the two-workspace hostile shape renders at 2,044 of 2,048. A future sentence added to the contract drops the row, and the assertion goes red saying "0 hits" rather than "your framing broke" — the right colour for the wrong reason.
+- ⚠ **The guard is NOT lost when that happens**: the same neutralizer is asserted on the `_dopl_status` footer and on both meta-tool renders in the same file, and those are not budgeted.
+- Proposed resolution: (a) have the instructions cases assert on a directory sized to fit, and keep one case asserting the DROP is a whole row (never a partial span); or (b) move the hostile-name case to `directoryRow` directly, where no budget can make it vacuous. Either is ~10 lines and belongs with whoever next edits that file.
+- Status: open.
+
+### F-421 — `current_workspace` and `list_workspaces` still restate the home-channel rule in their RESULTS, once per call (2026-09-02)
+
+- Location: `packages/mcp-server/src/meta-tools.ts` — the no-auto-target result line and the 2+-workspaces choices line both carry *"home channels are not counted or listed here … ask `dopl_home(op=\"list_channels\")`"*.
+- Found during: A1, resolving F-425 (the same rule stated twice on the PUSHED surface — the tool description and its own `workspace` arg).
+- Severity: repetition on a pulled surface; C19's class (standing doctrine riding a per-call result), not a correctness defect.
+- **Why it was left.** F-425 was scoped to the pushed half, which every connection pays for whether or not it ever calls the tool. These two are paid only by the caller who hit the exact branch that needs the rule, which is the cheap end of the trade — but the rule is now stated in `instructions.ts` for every session, so a per-call restatement is a third copy.
+- Proposed resolution: cut both to the pointer (`dopl_home(op="list_channels")`) and let the briefing carry the rule; ~120 chars per hit, and it belongs with the C20 footer work rather than as a standalone change.
+- Status: open.
+
+### F-425 — ✅ RESOLVED 2026-09-02 — `current_workspace` stated the home-channel rule twice on the surface every connection pays for
+
+- ⚠ **Id allocated by the wave coordinator alongside slice A4**, which found it; A1 owns `meta-tools.ts` for the fix. If A4's branch files the same id, the two entries describe ONE finding and integration keeps one.
+- Location: `packages/mcp-server/src/meta-tools.ts` — the `current_workspace` description's ⚠ paragraph and the `workspace` argument's own `.describe()`, ~700 chars between them saying the same thing: a home-channel container is a legal `workspace=` target, is counted by nothing, and is listed only by `dopl_home(op="list_channels")`.
+- Resolution: stated ONCE in the tool description, pointing at the server instructions, which now carry the `workspace=` contract for the whole surface (A1/A4, C9). The argument keeps the one clause that is about the ARGUMENT — a container id is a legal ref, an unresolvable one is refused and pins nothing.
