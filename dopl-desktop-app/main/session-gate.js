@@ -99,6 +99,29 @@ function enqueue(s, a) {
   // was invisible in the window and to the agent forever. Nothing was gated here, so nothing
   // is recorded; the passive notice is the only trace, exactly as intended.
   if (disp === 'full') return false;
+  // ── ⚠ THE WAKE ACKNOWLEDGEMENT (2026-09-01, T50) ──────────────────────────────────────
+  // An `@agent-<id>` in a post body is a wake the SERVER cannot confirm: the token is parsed on
+  // this machine, by `session-dispatch.js › feedLiveSession`, and nothing crosses back. So an
+  // orchestrator that redirected an agent had no way to tell "it landed and the agent is on it"
+  // from "it landed on nobody" — and the two need opposite next actions.
+  // ⚠ STAMPED HERE, PAST THE OVERFLOW RETURN, BECAUSE THIS IS DELIVERY. A wake recorded above
+  // that line would claim a turn for a message the queue rejected, which is precisely the class
+  // of false confirmation this stamp exists to remove.
+  // ⚠ IT READS THE VERDICT, NEVER THE BODY. `a.wake` is the tier decision already made for THIS
+  // message and THIS agent; re-deriving it here would be a second spelling of the wake rule.
+  // ⚠ NO CHANNEL POST GOES WITH IT, by ruling: the acknowledgement is a FIELD an orchestrator
+  // reads on its next `read_sessions`, not a row in a transcript both members pay for.
+  // ⚠ `typeof` FIRST, WHERE `lastInboundSeq` ABOVE COERCES, AND THE ASYMMETRY IS DELIBERATE.
+  // `Number(null)` is 0 and `Number([])` is 0, so the coercion-only guard beside it stamps a
+  // seq of ZERO for an absent one — harmless there (the value is a de-dupe hint for a consent
+  // row) and a LIE here, because this field is rendered as `woke on #0`. The seq really is a
+  // number on the wire (`server/dto.ts › seq: Number(row.seq)`), so nothing legitimate is lost;
+  // an unexpected shape costs the acknowledgement rather than inventing one, which is the
+  // fail-safe direction for a field an orchestrator acts on.
+  if (a.wake === true && typeof a.seq === 'number' && Number.isFinite(a.seq)) {
+    s.lastWakeSeq = a.seq;
+    s.lastWakeAt = Date.now();
+  }
   // FIX F1: record the body BEFORE anything else can consume it. A recreated shell loads
   // the channel history in parallel with this hold, and the listener already advanced its
   // cursor past this message, so the fetched window contains it. Recording it here keeps

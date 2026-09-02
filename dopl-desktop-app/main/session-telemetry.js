@@ -248,6 +248,30 @@ function telemetryFields(e) {
     tokensSpent: quantizeTokens(x.tokensSpent),
     startedAt: isoOrNull(x.startedAt),
     lastActivityAt: isoOrNull(x.lastActivityAt),
+    // ── ⚠ THE HEALTH HALF, 2026-09-01 (T25 / T50 / T51 / T83) ──────────────────────────────
+    // `session-health.js` derives all seven; this decides how coarse each may be on the wire.
+    //
+    // ⚠ `turns`, `deniedCalls` AND `lastWakeSeq` ARE NOT QUANTIZED, AND THE REASON IS THE SAME
+    // FOR ALL THREE: they are SMALL INTEGERS THAT MOVE RARELY. A turn count moves once per turn,
+    // a denial count only when something is refused, and a wake seq only when a wake lands —
+    // orders of magnitude below `lastActivityAt`'s per-dispatch churn, which is the rate the
+    // quantizer exists for. Bucketing `turns` to 10 would also destroy the field: the difference
+    // between 1 turn and 4 IS the signal.
+    // ⚠ `tokensDelta` TAKES `tokensSpent`'S OWN BUCKET, so the two move together. A delta
+    // quantized more finely than the total it is derived from would move on drift the total
+    // cannot show, which is a digest that ticks for a number no reader can see change.
+    // ⚠ `stale` IS A BOOLEAN AND IS DELIBERATELY IN THE CHURN HALF (`STATE_FIELDS` below does
+    // NOT list it). It is derived from a WALL CLOCK, so putting it in the state half would let it
+    // flip a set past the cadence floor on a timer — the exact "digest gate stops gating" defect
+    // this whole module exists to prevent. Floored, it lands on the session's next real move,
+    // which is at most ten seconds late for a fact that took ten minutes to become true.
+    turns: numberOrNull(x.turns),
+    tokensDelta: quantizeTokens(x.tokensDelta),
+    stale: x.stale === true,
+    deniedCalls: numberOrNull(x.deniedCalls),
+    lastDeniedTool: labelOrNull(x.lastDeniedTool, TOOL_LABEL_MAX),
+    lastWakeSeq: numberOrNull(x.lastWakeSeq),
+    lastWakeAt: isoOrNull(x.lastWakeAt),
   };
 }
 

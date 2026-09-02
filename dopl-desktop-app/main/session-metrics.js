@@ -16,9 +16,19 @@
 // injects the real thing, so one program is under test rather than a slice plus a stub.
 
 const { contextWindowFor } = require('./session-model');
+// ⚠ THE HEALTH HALF IS ITS OWN MODULE (2026-09-01, `session-health.js`) AND IS SPREAD IN BELOW.
+// It is required HERE rather than in `session-summary.js` for a reason that is a measurement, not
+// a preference: that file stands at exactly 500 lines, which is the §1 cap with NO exemptions, so
+// a require line and a spread line there would be a lint error and the projection would have to
+// be split to carry a field. Spreading through `metrics` costs it nothing — this bundle is
+// ALREADY spread into `liveSummary`, so the numbers arrive with no new line, no new traversal and
+// no second reader of the session object.
+// ⚠ AND THE SEAM SURVIVES THE SHORTCUT: "what did it cost" and "is it getting anywhere" are still
+// two files with two reasons to change. What this file does with the second one is CARRY it.
+const sessionHealth = require('./session-health');
 
 // ─── BEGIN SESSION-METRICS-PURE (injectable; unit-tested via source extraction) ──────
-// `contextWindowFor` is a free var from here down.
+// `contextWindowFor` and `sessionHealth` are free vars from here down.
 
 /**
  * A NUMBER OR NOTHING. `null` is the honest answer for "this build cannot say" and for "nothing
@@ -62,13 +72,21 @@ function metricOrNull(value) {
  * bucketed, because `lastActivityAt` moves on every dispatch and an unquantized wire would turn
  * the state-change writer into a per-event one.
  */
-function metrics(s) {
+function metrics(s, now) {
   return {
     contextUsed: metricOrNull(s && s.promptTokens),
     contextWindow: metricOrNull(contextWindowFor(s && s.liveModel)),
     tokensSpent: metricOrNull(s && s.tokensSpent),
     startedAt: metricOrNull(s && s.startedAt),
     lastActivityAt: metricOrNull(s && s.lastActivityAt),
+    // ⚠ THE HEALTH HALF (2026-09-01): `turns`, `tokensDelta`, `stale`, `deniedCalls`,
+    // `lastDeniedTool`, `lastWakeSeq`, `lastWakeAt`. Its own module, spread here — see the
+    // require above for why this file carries it and `session-summary.js` does not.
+    // ⚠ `now` IS A PARAMETER WITH A DEFAULT so a test can drive the staleness clock; every
+    // production caller passes nothing and gets the real one. `stale` is the ONLY field that
+    // reads it, and it is a derivation rather than a measurement, which is why a clock may
+    // appear in a bundle whose standing rule is "nothing here starts a counter".
+    ...sessionHealth.health(s, typeof now === 'number' ? now : Date.now()),
   };
 }
 // ─── END SESSION-METRICS-PURE ────────────────────────────────────────────────────────

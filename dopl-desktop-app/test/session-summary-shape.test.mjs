@@ -130,6 +130,34 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       tokensSpent: 1200000,
       startedAt: 1700000000000,
       lastActivityAt: 1700000600000,
+      // ⚠ WIDENED AGAIN 2026-09-01 BY THE HEALTH HALF (T25 / T50 / T51 / T83). The pin failed on
+      // the ADD, which is the review this comment records:
+      //   • IT ANSWERS A DIFFERENT QUESTION FROM THE METRICS BESIDE IT. Those say what the run
+      //     has COST; these say whether it is GETTING ANYWHERE and what has been refused to it.
+      //     Its own module (`main/session-health.js`), carried here through `metrics` because
+      //     `session-summary.js` stands at exactly the 500-line cap and cannot take a line.
+      //   • EVERY COUNT IS NULL UNTIL SOMETHING MEASURES IT, and this fixture has measured none
+      //     of them: it has run no turn, been denied nothing and been woken by nothing.
+      //     `deniedCalls: 0` would be a claim ("nothing was refused") that no machine made.
+      //   • `tokensDelta` IS NOT NULL HERE and that is correct rather than an exception: the
+      //     fixture HAS measured a spend (`tokensSpent: 1200000`) and has never posted, so
+      //     everything it cost has bought its reader nothing yet — which is the whole number.
+      //   • `stale` IS THE ONE DERIVATION and here it is `true`, which is the fixture telling
+      //     the truth rather than a case being tuned: this session is WORKING, has spent 1.2M
+      //     tokens, has never posted, and its `startedAt` is a 2023 stamp — so all three
+      //     conditions hold against a real clock. The `false` branches (idle, quiet but not
+      //     spending, spending but recently spoken) are driven in `session-health.test.mjs`,
+      //     where the clock is injected and the three conditions can be separated.
+      //   • ⚠ UNLIKE most of the fields reviewed above, all seven DO reach the server —
+      //     deliberately, onto OPERATOR-ONLY columns, because each is a fact about how the
+      //     reader's OWN machine is getting on and none of them is a peer's business.
+      turns: null,
+      tokensDelta: 1200000,
+      stale: true,
+      deniedCalls: null,
+      lastDeniedTool: null,
+      lastWakeSeq: null,
+      lastWakeAt: null,
     },
   ]);
 });

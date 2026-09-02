@@ -190,6 +190,31 @@ function isOwnChannelPost(input, sessionChannelId) {
 const OWN_CHANNEL_READ_OPS = ['read', 'await', 'list_threads', 'get_thread', 'members',
   'read_sessions', 'read_directions'];
 
+// ── ⚠ `await` IS REFUSED ON A DESKTOP-RUN SESSION (2026-09-01, T85) ────────────────
+//
+// It stays a MEMBER of the read set above — it IS an own-channel read, and the classifier is
+// what `session-gate-reason.js › channelReason` uses to say "another channel" rather than
+// "unknown op" — but `grantDecision` denies it before the read allow can ever be reached. The
+// two statements are not in tension: membership answers "what KIND of call is this", the deny
+// answers "may THIS session make it", and collapsing them would make the diag line lie about a
+// cross-channel await.
+//
+// ⚠ WHY A DENY AND NOT A GATE. A desktop-run session is woken by the MESSAGE ITSELF — the
+// listener's fan-out (`session-dispatch.js › feedLiveSession`) delivers an addressed post as a
+// TURN — so a hold adds nothing an ended turn does not already get, and it costs a long-poll
+// plus every token the held context is re-read with. A GATE would be worse than either: on a
+// windowless session it becomes a notification a human must answer for a call that could not
+// have helped.
+//
+// ⚠ IT IS DENIED AHEAD OF EVERY GRANT AND BOTH AXES, so no standing grant, no posture and no
+// operator click can open it. That is deliberate: this is not a permission question. There is
+// nothing on this machine that makes the call useful, so an "allow" would be a mistake a
+// surface let somebody make.
+const AWAIT_OP = 'await';
+function isAwaitOp(input) {
+  return !!input && input.op === AWAIT_OP;
+}
+
 // Read twin of isOwnChannelPost, SAME scoping rule and safe failure: a `channel` naming
 // anything but this session's id (slug included) is ANOTHER channel and gates.
 function isOwnChannelRead(input, sessionChannelId) {
@@ -337,6 +362,9 @@ function grantDecision(args) {
     // Fail-closed: a post whose `to` or `kind` is not a string is malformed — neither the key
     // nor the card can honestly describe it.
     if (!postFieldsOk(a.input)) return 'gate';
+    // ⚠ `await` STOPS HERE, BEFORE EVERY GRANT AND BOTH AXES (2026-09-01, T85). See `isAwaitOp`
+    // for why it is a deny rather than a gate, and why it is not a permission question.
+    if (isAwaitOp(a.input)) return 'deny';
     // ⚠ ONLY a standing grant for THIS EXACT shape allows without a button. No bare-tool-name
     // fallback: that turns one channel grant (even on op=read) into a grant for op=open.
     if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1) return 'allow';
@@ -390,7 +418,7 @@ function grantDecision(args) {
 // asked, or a Codex session's `unclassified-tool` would be narrated against Claude's lists.
 const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
-  OWN_CHANNEL_READ_OPS, normalizeToolMode,
+  OWN_CHANNEL_READ_OPS, normalizeToolMode, isAwaitOp, // 2026-09-01 (T85): the await refusal
   canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
   OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, isOwnMachineDirect, // 2026-08-25 (F-320): the own-machine launch lane; 2026-08-31: its direct twin
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
@@ -407,6 +435,7 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
 module.exports = {
   buildSessionToolConfig, grantDecision, isOwnChannelPost,
   isOwnChannelRead, OWN_CHANNEL_READ_OPS, // own-channel READ set, Axis B inbound half
+  isAwaitOp, // 2026-09-01 (T85): the one op a desktop-run session is refused outright
   // Axis B's OUTBOUND half — re-exported from session-own-outbound.js (§2 SPLIT, 2026-08-24), which
   // carries the ARGUMENT each of the three was admitted on and why each keeps its own constant.
   isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS, isOwnChannelThreadOpen, OWN_CHANNEL_THREAD_OPS,

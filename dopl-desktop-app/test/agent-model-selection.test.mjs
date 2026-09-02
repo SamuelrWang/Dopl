@@ -193,7 +193,8 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
     "an unrecognised model falls THROUGH to the next link, it does not end the chain");
   assert.match(OPS, /return sessionModel\.chainModel\(/,
     "the button lane must not restate the rule — it delegates");
-  assert.match(read("launch-directives.js"), /model: sessionModel\.chainModel\(d\.model\)/,
+  // ⚠ THE CHAIN MOVED WITH `spawn` ON 2026-09-01 (the §1 split); the precedence is unchanged.
+  assert.match(read("launch-directive-spawn.js"), /model: sessionModel\.chainModel\(d\.model\)/,
     "…and so does the directive lane's own link, which used to be a ternary on aliasForModelId");
   assert.match(read("trigger.js"),
     /aliasForModelId\(channelPrefs\.getLaunchModel\(entry\.channel\.id\)\)/, "the peer-triggered lane");

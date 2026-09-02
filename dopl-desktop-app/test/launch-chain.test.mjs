@@ -142,13 +142,15 @@ test("exactly ONE lane in main/ reads the channel's chaining setting", () => {
   // ⚠ THE SILENCE IS LOAD-BEARING, exactly as it is for `launchDepth`. If the peer-triggered
   // responder, a resume or a recreate ever read this setting, a peer's message or a crash would
   // start a chain-capable agent — the re-arming shape `channel-prefs.js`'s H2 block refuses.
-  const readers = ["launch-directives.js", "trigger.js", "session-park.js", "session-launch.js",
+  const readers = ["launch-directive-spawn.js", "trigger.js", "session-park.js", "session-launch.js",
     "session-engine.js", "session-reopen.js", "session-ipc-ops.js", "session-launch-op.js"]
     // ⚠ A CALL, NOT A MENTION. `session-launch.js` NAMES this function in the comment that says
     // it must never read it here — a bare `/getAgentChain/` would fail on the very sentence
     // that documents the rule.
     .filter((f) => /channelPrefs\.getAgentChain\(/.test(read(f)));
-  assert.deepEqual(readers, ["launch-directives.js"],
+  // ⚠ THE ONE LANE MOVED FILE ON 2026-09-01 (the §1 split took `spawn` out of the watcher);
+  // it is still exactly one, which is the whole claim.
+  assert.deepEqual(readers, ["launch-directive-spawn.js"],
     "only the directive lane may stamp a chain — every other spawn shape keeps the bound");
 });
 

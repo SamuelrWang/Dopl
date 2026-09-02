@@ -34,6 +34,14 @@ const CH = "ch1";
 const decide = (over) => profiles.grantDecision({ profile: "full", channelId: CH, ...over });
 const detail = (over) => profiles.grantDecisionDetail({ profile: "full", channelId: CH, ...over });
 const READS = profiles.OWN_CHANNEL_READ_OPS;
+// ⚠ `await` IS STILL A CLASSIFIED READ AND IS NO LONGER AN ALLOWABLE ONE (2026-09-01, T85).
+// `grantDecision` denies it inside the channel branch, ahead of every grant and both axes, so it
+// can never reach the inbound allow the rest of this set takes. The two facts are separated here
+// rather than merged because BOTH are pinned: the membership case below still walks `READS` (the
+// classifier is what makes a cross-channel await say "another channel" instead of "unknown op"),
+// while every DECISION case walks this list. Collapsing them would delete the only evidence that
+// the deny is a policy on top of the classification rather than a hole in it.
+const READ_ALLOWS = READS.filter((op) => op !== "await");
 
 // WHAT DELIBERATELY STAYS GATED IN EVERY POSTURE. Each one writes, addresses somebody, changes
 // who is in the room, or reaches past the session's own channel — the v1.9 FIX H1 exfil surface,
@@ -127,7 +135,7 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
 });
 
 test("M3: an own-channel read is ALLOWED under auto_inbound / auto_both and GATES under ask", () => {
-  for (const op of READS) {
+  for (const op of READ_ALLOWS) {
     assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op }, messageMode: "auto_both" }), "allow", op);
     assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op }, messageMode: "auto_inbound" }), "allow", op);
     assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op }, messageMode: "ask" }), "gate", op);
@@ -137,7 +145,7 @@ test("M3: an own-channel read is ALLOWED under auto_inbound / auto_both and GATE
 });
 
 test("M3: own-channel means BY ID — absent, empty and the session's own id, exactly like a post", () => {
-  for (const op of READS) {
+  for (const op of READ_ALLOWS) {
     for (const channel of [undefined, null, "", CH]) {
       assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op, channel }, messageMode: "auto_both" }),
         "allow", `${op} @ channel=${String(channel)}`);
@@ -332,7 +340,7 @@ test("THREAD OPEN: isOwnChannelThreadOpen scopes by channel exactly as isOwnChan
 
 test("M3: THE INVARIANT holds in both directions — no tool posture reads, no read runs a tool", () => {
   for (const toolMode of profiles.TOOL_MODES) {
-    for (const op of READS) {
+    for (const op of READ_ALLOWS) {
       assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op }, toolMode }), "gate",
         `toolMode=${toolMode} must not answer ${op}`);
     }

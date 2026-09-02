@@ -100,6 +100,21 @@ const LAUNCH_DEPTH_DENY_MESSAGE =
   + "in one line that you needed to launch an agent: your operator can turn on this channel's "
   + 'agent-chaining setting (Settings tab, on their Mac) and start the chain again from there.';
 
+// ── THE FIFTH SENTENCE — A CALL THAT COULD NOT HAVE HELPED (2026-09-01, T85) ────────────────
+//
+// ⚠ IT IS THE SHORTEST ON PURPOSE, AND THAT IS THE WHOLE POINT OF THE TICKET. `dopl_channel(
+// op="await")` on a session THIS MACHINE RUNS is a long-poll for something that already arrives
+// as a TURN (`session-dispatch.js › feedLiveSession`), so every character spent explaining it is
+// spent twice — once here and once in the turn the agent burns reading it. The other four
+// sentences in this file are long because each names a REMEDY an operator can act on; this one
+// has no remedy to name, because nothing is withheld. The next action is simply "stop".
+//
+// ⚠ IT SAYS WHAT REPLACES IT, IN THE SAME BREATH. A refusal with no successor is what makes an
+// agent try the next shape it can think of (a poll loop on `read`, which costs strictly more),
+// so the sentence names the mechanism that already works.
+const AWAIT_DENY_MESSAGE =
+  'await is not available in a desktop-run session: end your turn; you are woken when addressed.';
+
 // The plain deny an unrecognised verdict carries — the wording the canUseTool bridge has always
 // answered a profile-level refusal with.
 const BLOCKED_MESSAGE = 'Blocked for this session';
@@ -110,8 +125,22 @@ const BLOCKED_MESSAGE = 'Blocked for this session';
  * copy of the classification. ⚠ FAILS TOWARD THE GENERIC WORDING: an unknown code means we do not
  * know that a bound was the cause, and asserting one falsely is what this file exists to remove.
  */
+// ⚠ A TABLE RATHER THAN A TERNARY SINCE 2026-09-01 (T85). Two coded sentences is where a chain
+// of `? :` stops reading as a lookup, and the next code added to it would be a third reader of
+// the same fact. `GATE_REASONS` is the closed set these keys come from
+// (`main/session-gate-reason.js`); a code missing here falls through to the generic wording,
+// which is this function's standing fail-toward.
+// ⚠ A `Map`, NOT AN OBJECT LITERAL. `reason` reaches this function as a plain string, and an
+// object lookup answers `Object.prototype`'s own members — `constructor`, `toString` — with a
+// FUNCTION, which is truthy and would be returned to the agent as its refusal message. A Map has
+// no inherited keys, so an unknown code takes the fail-toward branch by construction.
+const DENY_MESSAGES = new Map([
+  ['launch-depth-capped', LAUNCH_DEPTH_DENY_MESSAGE],
+  ['await-desktop-session', AWAIT_DENY_MESSAGE],
+]);
+
 function denyMessageFor(reason) {
-  return reason === 'launch-depth-capped' ? LAUNCH_DEPTH_DENY_MESSAGE : BLOCKED_MESSAGE;
+  return DENY_MESSAGES.get(reason) || BLOCKED_MESSAGE;
 }
 
 // Record that THIS request was refused for want of a surface. Called by the engine at the one
@@ -183,6 +212,7 @@ module.exports = {
   OPERATOR_DENY_MESSAGE,
   GATE_TIMEOUT_MESSAGE,
   LAUNCH_DEPTH_DENY_MESSAGE,
+  AWAIT_DENY_MESSAGE, // 2026-09-01 (T85): the fifth sentence — a call that could not have helped
   BLOCKED_MESSAGE,
   MAX_AUTO_DENIED,
 };

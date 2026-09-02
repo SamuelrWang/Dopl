@@ -153,9 +153,13 @@ test("NULL: `numberOrNull` agrees with `session-metrics.js › metricOrNull` val
   }
 });
 
-// ── 4. THE ROW'S EIGHT FIELDS ────────────────────────────────────────────────────────────
+// ── 4. THE ROW'S FIFTEEN FIELDS ──────────────────────────────────────────────────────────
+//
+// ⚠ EIGHT UNTIL 2026-09-01. The HEALTH half joined in the agent-efficiency wave (T25 / T50 /
+// T51 / T83) — `turns`, `tokensDelta`, `stale`, `deniedCalls`, `lastDeniedTool`, `lastWakeSeq`,
+// `lastWakeAt` — derived by `main/session-health.js` and quantized (or deliberately not) here.
 
-test("FIELDS: the eight are read off the summary's OWN names, quantized where the rule says", () => {
+test("FIELDS: the fifteen are read off the summary's OWN names, quantized where the rule says", () => {
   const row = t.telemetryFields({
     detail: "tool",
     toolLabel: "Bash",
@@ -165,6 +169,13 @@ test("FIELDS: the eight are read off the summary's OWN names, quantized where th
     tokensSpent: 1_234_567,
     startedAt: 1_700_000_000_000,
     lastActivityAt: 1_700_000_600_000,
+    turns: 7,
+    tokensDelta: 44_444,
+    stale: true,
+    deniedCalls: 3,
+    lastDeniedTool: "WebFetch",
+    lastWakeSeq: 861,
+    lastWakeAt: 1_700_000_500_000,
   });
   assert.deepEqual(row, {
     detail: "tool",
@@ -176,7 +187,28 @@ test("FIELDS: the eight are read off the summary's OWN names, quantized where th
     // ⚠ ISO-8601, NOT EPOCH MS — the columns are TIMESTAMPTZ. See §4b.
     startedAt: "2023-11-14T22:13:20.000Z",
     lastActivityAt: "2023-11-14T22:23:20.000Z",
+    // ⚠ SMALL INTEGERS THAT MOVE RARELY ARE NOT QUANTIZED, and `turns` is the clearest case:
+    // the difference between 1 turn and 4 IS the signal, so a bucket of 10 would delete it.
+    turns: 7,
+    // ⚠ …AND THE DELTA TAKES `tokensSpent`'S OWN BUCKET, so the two cannot move independently.
+    tokensDelta: 40_000,
+    stale: true,
+    deniedCalls: 3,
+    lastDeniedTool: "WebFetch",
+    lastWakeSeq: 861,
+    lastWakeAt: "2023-11-14T22:21:40.000Z",
   });
+});
+
+// ⚠ `stale` IS THE ONE BOOLEAN ON THE ROW AND IT IS ALWAYS PRESENT. It is a DERIVATION, not a
+// measurement, so it has no "unmeasured" state to be in — the honest answer with nothing to go
+// on is "I am not asserting this session is stuck", which is `false`. A `null` here would make
+// every reader write a three-way branch over a two-valued fact.
+test("FIELDS: `stale` is a boolean, never a null, and only a literal `true` is true", () => {
+  for (const v of [undefined, null, false, 0, "", "true", 1, {}]) {
+    assert.equal(t.telemetryFields({ stale: v }).stale, false, String(v));
+  }
+  assert.equal(t.telemetryFields({ stale: true }).stale, true);
 });
 
 // ── 4b. ⚠ THE UNITS DO NOT SURVIVE THE CROSSING ──────────────────────────────────────────
@@ -250,9 +282,15 @@ test("LABELS: structure-forging characters are STRIPPED here, where the server w
   assert.ok(re.test(row.toolLabel), "what we send passes the rule the server enforces");
 });
 
-test("FIELDS: a session that has measured nothing yet reports eight nulls, not eight zeroes", () => {
+test("FIELDS: a session that has measured nothing yet reports nulls, not zeroes", () => {
   const row = t.telemetryFields({ state: "idle" });
-  assert.deepEqual(Object.values(row), [null, null, null, null, null, null, null, null]);
+  // ⚠ EVERY MEASURED FIELD IS NULL — fourteen of the fifteen. A confident `0` from a build that
+  // counted nothing is the same lie as a context meter reading 0/0, and `deniedCalls: 0` would
+  // be the worst of them: it says "nothing was refused", which is a claim nobody made.
+  const { stale, ...measured } = row;
+  assert.deepEqual(Object.values(measured), new Array(14).fill(null));
+  // ⚠ …AND THE ONE DERIVATION IS `false`, not null. See the `stale` case above.
+  assert.equal(stale, false);
 });
 
 // ⚠ `toolLabel` IS A TOOL NAME, AND A TOOL NAME CAN COME FROM THE OPERATOR'S OWN MCP SERVERS —

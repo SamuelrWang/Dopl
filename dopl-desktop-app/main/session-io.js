@@ -295,6 +295,14 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       const tokenTotal = Number(ev.sessionTokens) || 0;
       s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
       s.lastTotalTokens = tokenTotal;
+      // ⚠ THE TURN COUNT (2026-09-01, T83). A `result` IS one completed turn on every runtime —
+      // the normalizer's own vocabulary says so — so this is the ONE honest place to count them
+      // and it costs an increment beside arithmetic that was already here. It rides the
+      // projection out through `session-health.js › health`. ⚠ IT SURVIVES A PARK/RESUME for the
+      // same reason `tokensSpent` does: both accumulate on the session object rather than
+      // reading a per-run cumulative total back, so a resumed run adds to the count instead of
+      // restarting it. That is what makes "12 turns and nothing posted" a readable sentence.
+      s.turns = (Number(s.turns) || 0) + 1;
       dispatch(s, { type: 'result', turnCostUsd: turnCost, model: ev.model });
       // ⚠ AFTER the result, and only when something was measured: say nothing rather than paint a
       // zero (`session-model.js › contextEvent`).

@@ -27,6 +27,8 @@ const io = require(join(HERE, "..", "main", "session-io.js"));
 // platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
 // callback, so they take it from there.
 const axisB = require(join(HERE, "..", "main", "runtime", "claude", "axis-b.js"));
+// 2026-09-01 (T85): the sentence a refused `await` carries, read from its one definition.
+const permissions = require(join(HERE, "..", "main", "session-permissions.js"));
 
 // A minimal live-session stub — just the fields makeCanUseTool reads. Both axes live on
 // state exactly as the reducer models them, and default to the most restrictive value.
@@ -324,9 +326,17 @@ test("M3: auto_inbound reads the OWN channel with no dispatch, and opens nothing
   const s = mkSession({ messageMode: "auto_inbound" });
   const rec = recorder();
   const canUse = axisB.makeCanUseTool(s, rec.dispatch);
-  for (const op of ["read", "await", "list_threads", "get_thread", "members"]) {
+  for (const op of ["read", "list_threads", "get_thread", "members"]) {
     assert.deepEqual(await canUse(CHANNEL_TOOL, { op }, { requestId: "m-" + op }), { behavior: "allow" }, op);
   }
+  // ⚠ `await` LEFT THAT LIST ON 2026-09-01 (T85) AND IS ASSERTED HERE INSTEAD, through the SAME
+  // end-to-end path: it is answered SYNCHRONOUSLY with a deny and its own sentence, and — the
+  // half that matters for the token budget — it dispatches NOTHING, so a windowless session pops
+  // no notification and holds no resolver for a call that could not have helped it.
+  assert.deepEqual(
+    await canUse(CHANNEL_TOOL, { op: "await" }, { requestId: "m-await" }),
+    { behavior: "deny", message: permissions.AWAIT_DENY_MESSAGE }
+  );
   assert.equal(rec.events.length, 0, "the operator opted into receiving; asking again is the bug");
   // The exfil surface is untouched: each of these still earns its own card at auto_inbound.
   // `propose_close` was on this list until thread closing (wiring plan Phase 4,

@@ -39,8 +39,11 @@ const decided = (h) => decidePosts(h).map((p) => p.body);
 
 // ── 1. THE WIRE: THE KINDS AND THE TARGET FIELDS ─────────────────────────────────────────
 
-test("KIND: exactly three, and the launch DEFAULT is the one an unknown collapses to", () => {
-  assert.deepEqual(wire.KINDS, ["launch", "end", "rename"]);
+test("KIND: exactly four, and the launch DEFAULT is the one an unknown collapses to", () => {
+  // ⚠ FOUR SINCE 2026-09-01. `set_agent_mode` joined in the agent-efficiency wave and is the ONE
+  // non-launch kind that stays behind the consent toggle — a posture GRANTS where an end stops
+  // and a rename relabels. `test/directive-set-mode.test.mjs` owns that half.
+  assert.deepEqual(wire.KINDS, ["launch", "end", "rename", "set_agent_mode"]);
   assert.equal(wire.KIND_LAUNCH, "launch");
   // ⚠ THE SAFE DIRECTION, AND IT IS NOT AN OVERSIGHT. A fourth kind minted by a newer server
   // reaching this build must not be dispatched by a machine with no branch for it; `launch` is

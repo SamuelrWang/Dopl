@@ -45,6 +45,13 @@ const GATE_REASONS = [
   //                             `dopl_channel` is hard-denied on no profile at all — reporting
   //                             the bound as a profile deny would send an operator to a deny
   //                             list that does not contain it.
+  'await-desktop-session', //    2026-09-01 (T85): `dopl_channel(op="await")` from a session this
+  //                             machine RUNS. Its own code for the reason `launch-depth-capped`
+  //                             has one — `dopl_channel` is hard-denied on no profile, so
+  //                             `hard-denied` would send an operator to a deny list that does not
+  //                             contain it — and because the fix is NOT a setting: the call is
+  //                             refused because a wake already arrives as a TURN here
+  //                             (`session-profiles.js › isAwaitOp`).
   'container-audience', //       2026-08-26 (plan §4.4 B2): this session runs in a SHARED link
   //                             container and the call named a DIFFERENT workspace. Its own code
   //                             for the same reason `launch-depth-capped` has one — the tool is
@@ -166,6 +173,12 @@ function makeGateReason(deps) {
       if (!hardDenied && d.containerOnlyDenies && d.containerOnlyDenies(a, d.isDoplTool)) {
         return 'container-audience';
       }
+      // ⚠ 2026-09-01: `deny` HAS FOUR CAUSES NOW, AND THE ORDER STILL MIRRORS `grantDecision`'S.
+      // `await` is refused inside the channel branch, ahead of the launch lane, so it is asked
+      // ahead of the depth cap here. The two are disjoint ops, so the order buys nothing today —
+      // it is kept because "mirror the gate" is the only rule that has ever kept this function
+      // honest, and a branch ordered by coincidence is one nobody can check.
+      if (channel && !hardDenied && d.isAwaitOp && d.isAwaitOp(a.input)) return 'await-desktop-session';
       return channel && d.isOwnMachineLaunch(a.input, a.channelId) ? 'launch-depth-capped' : 'hard-denied';
     }
     if (decision === 'preapproved') return 'profile-preapproved';
