@@ -14,6 +14,30 @@ import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
 import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } from "./workspace-directory.js";
 /**
+ * THE PER-CALL `workspace` ARG'S DESCRIPTION — ONE SHORT CONTRACT, PUSHED ONCE
+ * PER DOMAIN TOOL (C9, 2026-09-02).
+ *
+ * ⚠ EVERY CHARACTER HERE IS PAID FOR FOURTEEN TIMES, ON EVERY CONNECTION.
+ * `registerTool` injects this arg into all 14 domain schemas, so the 717-char
+ * paragraph this replaced spent ~10,000 served chars stating one rule fourteen
+ * times — thirteen of them pure repetition, and the same rule the instructions
+ * already owe the agent before its first tool call.
+ *
+ * ⚠ THE FULL RULE IS STATED ONCE, IN `instructions.ts` (slice A1, which this
+ * one lands after): which callers MUST pass it (0 / 2+ standard memberships),
+ * that the membership count IGNORES home-channel containers, and how to
+ * discover each kind of id — `list_workspaces` for workspace slugs,
+ * `dopl_home(op="list_channels")` for home-channel container ids, and the first
+ * does not list the second. ⚠ DO NOT RESTATE ANY OF IT HERE. A rule an agent
+ * needs before it calls anything belongs in the instructions, which are pushed
+ * once; the refusals in `registerTool` below name the discovery surfaces again
+ * at the only moment an agent is actually stuck.
+ *
+ * Pinned by `server.test.ts` — the length, and that every domain tool carries
+ * this exact string rather than a per-tool copy.
+ */
+export declare const WORKSPACE_ARG_DESCRIPTION = "Workspace or home-channel container id/slug for this call; omit to use the session default.";
+/**
  * THE BILLING SEAM FOR ONE TOOL CALL — charge, then run. ⚠ Must stay ONE helper
  * called at exactly the two terminal paths of `registerTool`'s wrapper; that is
  * what makes the per-tool-call charge exactly-once. A separate charge helper

@@ -14,10 +14,16 @@
  */
 import type { ChannelSessionHealth } from "./session-health-types.js";
 /**
- * States a session's pill (and read-session-state) reports. NO `thinking` — it
- * needs streaming, which is off. Mirrors `SessionPillState` in the app.
+ * ⚠ **`SessionPillState` AND `ChannelSessionTelemetry` ARE DECLARED IN
+ * `@dopl/contracts` AND RE-EXPORTED HERE** (2026-09-02, A13 × A9). A9 split this
+ * projection out of `channel-types.ts` under §1's 500-line cap; A13 had already
+ * moved the closed set and the operator-only telemetry shape to the one
+ * type-only package both trees can name. Re-typing either here would put back
+ * exactly the hand-mirror A13 deleted — `canonical-sets.test.ts` is the gate
+ * that says so, and the docblocks that argued for each field now live there.
  */
-export type SessionPillState = "working" | "idle" | "ended";
+import type { SessionPillState, ChannelSessionTelemetry } from "@dopl/contracts";
+export type { SessionPillState, ChannelSessionTelemetry };
 /**
  * ONE of a member's live (or just-ended) sessions, from
  * `dopl_channel(op="read_sessions")`. Server-visible projection of the
@@ -59,40 +65,6 @@ export interface ChannelSessionState {
     channelName: string | null;
     threadTitle: string | null;
     updatedAt: string;
-}
-/**
- * OPERATOR-ONLY session telemetry (server ruling, 2026-08-22). Rides only on
- * OWN-scoped reads — `listChannelSessions` (`GET /api/channels/sessions`) and
- * the `sessions` block on an await result. A PEER's session never carries these
- * fields: the server's channel-scoped mapper cannot emit them.
- *
- * ⚠ **EVERY MEASURED `null` MEANS UNKNOWN, NEVER ZERO.** Render "unknown" or
- * render nothing; never render `0` for an absent count, and never divide by an
- * absent `contextWindow`.
- *
- * ⚠ **THE NAME IS ABOUT THE AUDIENCE, NOT THE SUBJECT** (2026-08-23):
- * `templateName` is an identity snapshot rather than a measurement and rides
- * here because it reaches the same single reader.
- */
-export interface ChannelSessionTelemetry {
-    model: string | null;
-    /** The tool running right now ("Bash", "Edit"). */
-    toolLabel: string | null;
-    contextUsed: number | null;
-    contextWindow: number | null;
-    tokensSpent: number | null;
-    startedAt: string | null;
-    lastActivityAt: string | null;
-    /**
-     * The agent TEMPLATE this session was launched from, by name, AS OF SPAWN.
-     *
-     * ⚠ **A SNAPSHOT, NOT A POINTER** — a session reports what it RAN AS, so this
-     * may name a template that has since been renamed or deleted. That is correct,
-     * not stale. ⚠ OPERATOR-ONLY like the rest of this interface: a private
-     * template's name reaching a peer is an existence oracle. `null` = no
-     * template, or a desktop older than the field.
-     */
-    templateName: string | null;
 }
 /** The caller's OWN session — coarse projection plus the operator-only halves. */
 export type ChannelSessionStateOwn = ChannelSessionState & ChannelSessionTelemetry & ChannelSessionHealth;

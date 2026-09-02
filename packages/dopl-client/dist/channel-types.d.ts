@@ -13,19 +13,30 @@
  * `task`) are storage names, deliberately unchanged; mapping happens here and
  * in `channel.ts`.
  */
-export type ChannelVisibility = "public" | "private";
-export type ChannelMemberRole = "owner" | "member";
 import type { ChannelEscalationFields } from "./escalation-types.js";
-export type ThreadMode = "interactive" | "autonomous";
-export type ThreadStatus = "open" | "closed";
-export type ThreadOutcome = "completed" | "failed";
-export type ChannelAuthorKind = "user" | "agent" | "system";
 /**
- * `message` = chat; `task_*` = structured activity events (machine payload in
- * `metadata`, human render in `body`); `system` = server-emitted joins / topic
- * changes (agents don't post these).
+ * ⚠ **THE TEN CLOSED SETS AND THE TELEMETRY SHAPE BELOW ARE DECLARED IN
+ * `@dopl/contracts` AND RE-EXPORTED HERE UNDER THIS PACKAGE'S OWN NAMES**
+ * (2026-09-02, v2 slice A13). `ChannelMemberRole` is the package's
+ * `ChannelRole` and `ChannelAuthorKind` is its `MessageAuthorKind`, aliased on
+ * the way through, so **NO CONSUMER IMPORT CHANGES**: `@dopl/client` publishes
+ * exactly the names it always has.
+ *
+ * ⚠ **THIS IS WHAT THE "HAND MIRROR" HEADERS IN THIS PACKAGE WERE ASKING FOR.**
+ * Every one of these was re-typed here because this package cannot import
+ * `src/` — separate `tsc` programs, resolved through `node_modules`.
+ * `@dopl/contracts` is the shared module that removes the reason: it is TYPE-ONLY
+ * and has no build, so importing it costs this package nothing at runtime and
+ * adds nothing to its `dist/`.
+ *
+ * ⚠ **THE `dist/` COPIES OF THESE UNIONS ARE GONE, NOT STALE.** Three drift
+ * gates used to parse `packages/dopl-client/dist/*.d.ts` as a separate mirror
+ * because it is what `@dopl/mcp-server` actually imports. A re-export emits a
+ * re-export, so there is no literal union in `dist/` left to disagree — the
+ * gates dropped those sites rather than being pointed at them.
  */
-export type ChannelMessageKind = "message" | "task_started" | "task_progress" | "task_finished" | "task_failed" | "system";
+import type { ChannelVisibility, ChannelRole as ChannelMemberRole, ThreadMode, ThreadStatus, ThreadOutcome, MessageAuthorKind as ChannelAuthorKind, ChannelMessageKind, MessageIntent, SessionPillState, ChannelSessionTelemetry } from "@dopl/contracts";
+export type { ChannelVisibility, ChannelMemberRole, ThreadMode, ThreadStatus, ThreadOutcome, ChannelAuthorKind, ChannelMessageKind, MessageIntent, SessionPillState, ChannelSessionTelemetry, };
 import type { ChannelInfoCard } from "./info-card-types.js";
 export type { ChannelInfoCard, ChannelInfoCardBuiltInKey, ChannelInfoCardRow, ChannelUpdateInput, } from "./info-card-types.js";
 export interface Channel {
@@ -163,7 +174,7 @@ export interface ChannelThreadPage {
     truncated: boolean;
 }
 import type { ChannelSessionStateOwn } from "./session-types.js";
-export type { ChannelSessionState, ChannelSessionStateOwn, ChannelSessionTelemetry, ChannelSessionsPage, SessionDetailKey, SessionPillState, } from "./session-types.js";
+export type { ChannelSessionState, ChannelSessionStateOwn, ChannelSessionsPage, SessionDetailKey, } from "./session-types.js";
 export interface ChannelThreadCreateInput {
     title: string;
     mode?: ThreadMode;
@@ -241,11 +252,6 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
      */
     intent?: MessageIntent;
 }
-/**
- * `request` (default) reaches an agent; `chat` reaches only the humans in the
- * room. See `ChannelMessageInput.intent`.
- */
-export type MessageIntent = "chat" | "request";
 export interface ReadMessagesOptions {
     /** Only messages with seq greater than this. */
     since?: number;
