@@ -6,7 +6,7 @@
 
 import type { AgentTemplate, DoplClient } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration.js";
-import { FENCE_HEADER, fenceBody } from "./untrusted-fence";
+import { fenceBody } from "./untrusted-fence";
 import { ok, type ToolResponse } from "./respond.js";
 import { toWireShelfOrUndefined, type ShelfArg } from "./shelf.js";
 import {
@@ -31,21 +31,6 @@ const OFFERED_VISIBILITIES = new Set<string>(TEMPLATE_VISIBILITY_VALUES);
  *  purpose: it exists so a row SHOWS, not so a retired sharing model gets taught
  *  back to the reader one heading at a time. */
 const OTHER_HEADING = "Shared";
-
-/**
- * ⚠ **THE FENCE'S HEADER, NOT A SECOND PARAGRAPH OF ITS OWN** (A14,
- * 2026-09-02). A template's `instructions` block is a SYSTEM PROMPT another
- * member wrote, and it is the reason `op="get"` takes a caller id at all. It
- * used to carry its own 340-char banner; it now carries `untrusted-fence.ts`'s
- * one wording, and — the part the banner could never do — a close tag with a
- * per-response random suffix, so the prompt cannot end its own fence and claim
- * the text after it.
- *
- * ⚠ STILL CONDITIONAL: the caller's OWN templates render bare, because framing
- * every one of them is noise on the common path and noise is how a security
- * header stops being read.
- */
-export const UNTRUSTED_INSTRUCTIONS_HEADER = FENCE_HEADER;
 
 export async function opList(
   client: DoplClient,
@@ -151,6 +136,14 @@ export async function opGet(
   // the top of the result: it wraps the instructions block alone, so the header
   // rows above it are visibly this server's and the system prompt cannot be
   // read as continuing into them.
+  // ⚠ **STILL CONDITIONAL, AND NO LONGER A BANNER** (A14). This block is a
+  // SYSTEM PROMPT another member wrote, which is the reason `op="get"` takes a
+  // caller id at all; it used to carry its own 340-char banner and now carries
+  // `untrusted-fence.ts`'s one wording plus the part a banner could never do —
+  // a close tag with a per-response random suffix, so the prompt cannot end its
+  // own fence and claim the text after it. The caller's OWN templates render
+  // bare: framing every one of them is noise on the common path, and noise is
+  // how a security header stops being read.
   const instructions = template.instructions ?? "_No instructions set._";
   lines.push(
     ...(foreign && template.instructions
