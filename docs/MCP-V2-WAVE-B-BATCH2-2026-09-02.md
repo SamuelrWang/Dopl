@@ -120,7 +120,7 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
 | **B16** old ops + TS fences off | the 18 one-line redirects, the `await` lane (AWAITING 3,914 + two handlers + the budget module), the ping lane, the five `canSee*` predicates one at a time behind green redteam tests |
 | **B9/B10 residue** | `channel_resource_grants` + the in-txn mirror, after `repository-audience.ts › listGrantedBaseIdsForChannels` moves (F-460); `agentIdsInChannel` and its two re-exports (F-579); `use-agents-panel.ts`'s duplicate thread-other-party derivation (F-551) |
 
-## Gates — all green at `b45b0171`
+## Gates — all green at `430007e4`
 
 Five suites — root **5,645** (381 files, 26 skipped), mcp-server **1,474** (99 files), client **58**,
 desktop-ui **433** (46 files), desktop **3,007** — both lints (root `--max-warnings 0`), both
@@ -129,9 +129,16 @@ typechecks incl. `-w @dopl/desktop-ui`, and **nine** non-suite gates: `check-doc
 check, which is clean with no rebuild commit because no merge after B8's `chore(dist)` moved
 package `src/`.
 
-⚠ **NO FLAKE FIRED THIS RUN**, including `billing/credits-link-reroute` — the
-`EnvironmentTeardownError` that makes a `npm test` exit code unreadable at batch 1. The full root
-run exited **0**. Read the counts anyway.
+⚠ **THE ROOT SUITE'S EXIT CODE IS STILL UNREADABLE, AND FOR THE SAME REASON AS AT BATCH 1.**
+`src/app/api/mcp/credits/consume/route-guest-floor.test.ts` raises an `EnvironmentTeardownError`
+(*"Closing rpc while `onUserConsoleLog` was pending"*) that vitest counts as an unhandled error and
+exits 1 on, with **0 test failures and 381/381 files passing**. It is inherited, not introduced —
+verified at `v2/wave-a` `523bfc92` during batch 1. **Read the counts.** No other listed flake fired.
+
+⚠ **AND A SECOND, ENVIRONMENTAL ONE WORTH RECORDING:** `apps/desktop-ui` reported 8 failures across
+6 files when run CONCURRENTLY with the full root suite on this machine, and 433/433 when run alone
+seconds later. It is resource contention between two vitest pools, not a code fault — but a CI
+matrix that parallelises these two jobs on one runner would see it.
 
 ⚠ **Desktop is 3,007, DOWN from 3,048 at batch 1, and that is the deletion.** B9 removed four test
 files with the triage tier (`wake-tiers`, `wake-tier-routing`, `wake-triage-call`, plus the
