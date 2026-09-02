@@ -6897,7 +6897,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **DO NOT "FIX" THIS BY INTERSECTING `input.agentId` WITH `channel_sessions`.** The docblock explains why the validation cannot live here and it is not a stylistic claim: `channel_sessions` is a PROJECTION the desktop pushes, so *"a quiet row means nobody said anything, not that nothing is running"*. Gating on it converts a benign `no-session` answer into a hard 400 for every legitimate direction sent while the projection is stale — a windowless session that has not pushed yet, or a push that failed. That trades a wording defect for a liveness bug.
 - Proposed resolution, in preference order: (a) correct the PROSE to describe the real bound — your own operator's queue, answered `no-session`, reaches nobody — which is both true and the more useful thing for a model to know; (b) if "no row at all" is genuinely wanted, it is a DESKTOP-side decision (the machine already knows its own agents) and belongs in the claim path, not in a server predicate over a projection.
 - Proposed resolution: prose fix, and it belongs to the MCP-description tier rather than to a server change.
-- Status: open.
+- Status: **prose fixed (A6, `v2/a6-channel-schema-diet`).** `agent_id`'s `.describe()` and `channel-doctrine.ts › CHANNEL_OWN_AGENTS` now say the request is filed against the caller's OWN side and answered `no-session`; `channel-schema-caps.test.ts` pins both ends and the retired sentence's absence. Resolution (a) as written — the projection gate is still explicitly NOT taken. The SERVER becoming the authority remains A9's.
 
 ### F-419 — the copy-ownership fence lives ONLY in the MCP package; the REST create routes it composes over have no equivalent (2026-09-02)
 
@@ -6910,4 +6910,33 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **AND `notOwnedRefusal` MUST NOT BE DELETED IF THAT LANDS.** INVARIANTS §9 already settles the pattern for a two-layer fence: *"the route refuses the CREDENTIAL at the door, this refuses the ACT; removing either is a widening."* The MCP refusal is also the TEACHING half — it names the owner and closes the retry loop — and its mutation checks are `knowledge-copy.test.ts` / `agent-copy.test.ts`.
 - Proposed resolution: (a) add an optional provenance field to `AgentTemplateCreateInput` / `KnowledgeBaseCreateInput` (zod + types, both trees), have the MCP copy ops SEND it, and refuse server-side unless `source.createdBy === ctx.userId` — failing closed when either side is null, mirroring `notOwnedRefusal`'s own rule; KEEP the MCP refusal; (b) accept the gap and say so in `copy-target.ts`, since the read was already fenced and the widening is bounded to content the caller could see.
 - Proposed resolution: defer — (a) is right but it is a contract change across two trees, not a hotfix.
+- Status: open.
+
+### F-428 — every `dopl_channel` param deletion in Wave A is blocked on `channel.ts`, which no slice owns (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel.ts` (the routing seam) against the MCP/architecture v2 spec, Wave A slice **A6** (branch `v2/architecture`; not in this tree).
+- Found during: building A6, the `dopl_channel` schema diet.
+- Severity: **process/ownership**, and it costs a measured third of the slice's stated win.
+- **The shape.** The spec assigns three contested files by name — `channel-schema.ts` to A6, `tool-budget.test.ts` to A2, `instructions.ts` to A1 — and A6's own scope then requires deleting `kind`, `intent`, `direct`, folding ping's three recipient forms into one, turning `chain` into a three-value enum, prefixing the cursor, retiring `get_thread` for `read(thread=)`, and capping a milestone. **Every one of those is a two-file change**: the schema DECLARES the arg and `channel.ts` READS it (`args.intent` :169, `args.ping_kind` :383, `args.to_desktop` :394, `args.chain`, `args.direct`, the `op` dispatch). `channel.ts` is in no slice's Owns column, and `parity.test.ts` — owned by A3 — fails the moment the declared shape and the handlers disagree, in either direction.
+- **Measured consequence.** A6 shipped the half it owns: served input schema 21,778 → 12,371 (−43%), doctrine 28,870 → 32,085. The spec's `−~14,000 ch` and its 8,000-char Wave A budget for this tool are **not reachable** from inside A6's ownership: what remains is ~4,200 chars of JSON structure (the 24-value `op` enum at 322, `info_card` at 716, `options` at 427, `recommendation` at 317) plus the `.describe()` floor, and only op/param DELETION moves those.
+- Proposed resolution: assign `channel.ts` and the unowned `channel-ops-*.ts` handlers to ONE slice (A6 is the natural owner — it already owns the shape they must agree with), or schedule a follow-on slice that owns the seam and lands C11–C15 + G14 as one change with `parity.test.ts` green.
+- Status: open — **the ownership question, not the code, is what is blocked.**
+
+### F-429 — C5's `recipient` param is a name an existing guard bans, and the guard is right (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel-ping.test.ts` (*"declares no `operator` / `operator_id` / `user_id` / `sender` / `sender_agent_id` / `recipient`"*) against the MCP/architecture v2 spec, collision **C5** (*"one `recipient` field on `ping`"*; branch `v2/architecture`, not in this tree).
+- Found during: A6, scoping C5.
+- Severity: conflict — a spec instruction that fails a shipped test on the name alone.
+- **The guard's reason still holds and is not a naming quibble:** *"a param an MCP client can see is a param a model will try, and a silently-dropped address is the invisible-delivery failure the addressing contract exists to prevent."* `recipient` was banned as one of the shapes that could re-introduce an address the server does not resolve.
+- **So the fold is only safe as a DELETION.** Adding `recipient` while `to`, `agent_id` and `to_desktop` remain declared makes four spellings of one concept where C5 counts six as the defect. Whoever lands C5 must delete the three in the same change and move the guard from "no param named `recipient`" to "exactly one recipient param, server-resolved" — the property the ban was standing in for.
+- Proposed resolution: land C5 with A9's `delivery=` verdict (the server-side resolution is what makes one field answerable), not before it.
+- Status: open.
+
+### F-430 — a tool's `.describe()` prose is pinned by tests three other modules own, so a schema diet is never a one-file edit (2026-09-02)
+
+- Location: `channel-thread-scope.test.ts:165` (four phrases of `since`), `channel-ops-agent.test.ts:371,386` (two phrases of `name`), `channel-law.test.ts:409-411,461-469` (six phrases of `thread` and `name`, via an `ARG_PROSE` join over the whole shape).
+- Found during: A6 — three of the longest `.describe()` blocks could not be cut to a contract sentence because their exact wording is asserted from files outside the slice that owns the prose.
+- Severity: friction, and it is the reason a "just shorten the descriptions" slice is not self-contained.
+- **The pins are not wrong** — each records a real misread (a poisoned thread cursor, a rename read as a re-address) and INVARIANTS §10 is explicit that a capability taught only in the description is taught weakly. The defect is that the assertion lives with the CONSUMER rather than with the prose, so the owning slice cannot restate a rule without editing another slice's file.
+- Proposed resolution: when Wave B cuts this tool to 620/3,000, move every `ARG_PROSE`/`.description` assertion into the owning module's own suite (here `channel-schema-caps.test.ts` / `channel-schema-budget.test.ts`) and leave the consumer asserting its own RESULT copy. `channel-law.test.ts` is at 499 of its 500-line cap, so that move is also what unblocks the next pin anyone needs to add there.
 - Status: open.

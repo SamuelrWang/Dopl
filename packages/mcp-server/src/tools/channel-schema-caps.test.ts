@@ -15,6 +15,7 @@
 
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 
 const shape = z.object(CHANNEL_INPUT_SHAPE);
@@ -91,13 +92,17 @@ describe("the describes that make claims this schema cannot enforce", () => {
     // is "its own" will collide with another member's on a thread open; one
     // told it is channel-wide will pointlessly avoid a key that is safe.
     expect(d("client_msg_id")).toContain("PER-AUTHOR");
-    expect(d("client_msg_id")).toContain("FROM THE SAME ACCOUNT");
     expect(d("client_msg_id")).toContain("both messages post");
     // …and the create_thread half, which is the one that can hand you somebody
     // else's thread (`service-tasks.ts › convergeOnThread` posts NOTHING for a
     // non-creator, so the body silently goes nowhere).
-    expect(d("client_msg_id")).toContain("unique per CHANNEL whoever sent it");
-    expect(d("client_msg_id")).toContain("with your body posted nowhere");
+    expect(d("client_msg_id")).toContain("PER-CHANNEL whoever sent it");
+    expect(d("client_msg_id")).toContain("hands you back THEIR thread");
+    // ⚠ THE SPELLED-OUT CONSEQUENCE IS DOCTRINE NOW (A6, 2026-09-02) — the
+    // field carries the contract, the pulled document carries the rule. Pinned
+    // at BOTH ends so the move cannot become a deletion.
+    expect(CHANNEL_DOCTRINE).toContain("with your body posted nowhere");
+    expect(CHANNEL_DOCTRINE).toContain("neither suppressing the other");
   });
 
   it("title: the bound is checked before the WIRE, and claims no precedence over the gate", () => {
@@ -121,6 +126,22 @@ describe("the describes that make claims this schema cannot enforce", () => {
     expect(d("since")).toContain("THREAD-SCOPED read");
     expect(d("since")).toContain("offers NO cursor at all");
     expect(d("since")).toContain("UNSCOPED read");
+  });
+
+  it("agent_id: a foreign id is not \"refused outright\" — the direction IS filed", () => {
+    // ⚠ **G3 / F-418 (A6, 2026-09-02).** The old copy read "An id belonging to
+    // another member is REFUSED outright and no request is filed", and
+    // `service-directions.ts` files the direction with NO ownership check —
+    // what answers is the CALLER'S OWN desktop, with `no-session`. Gating on
+    // `channel_sessions` is deliberately NOT the fix: it 400s legitimate
+    // directions whenever the projection lags. The server becoming the
+    // authority is A9's; until then the honest claim is the only guardrail, so
+    // it is pinned in both directions.
+    expect(d("agent_id")).toContain("reaches nothing");
+    expect(d("agent_id")).toContain("`no-session`");
+    expect(d("agent_id")).not.toContain("no request is filed");
+    expect(CHANNEL_DOCTRINE).toContain("the request is filed against YOUR side");
+    expect(CHANNEL_DOCTRINE).not.toContain("no request is filed");
   });
 
   it("thread: get_thread's own param says metadata, not transcript", () => {

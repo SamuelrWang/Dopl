@@ -8,6 +8,14 @@
  * every declared param must be referenced by some handler in the `channel-*`
  * group, and no handler may read an arg not declared here.
  *
+ * ⚠ **EVERY `.describe()` HERE IS PUSHED ON EVERY CONNECTION, EXACTLY LIKE THE
+ * TOOL DESCRIPTION, AND IS BUDGETED LIKE ONE** (A6, 2026-09-02). It was 20,844
+ * characters over 46 blocks — 11.7× the description the T82 cap governs — because
+ * each block carried the RULE behind its field as well as its contract. A rule
+ * belongs in `channel-doctrine.ts`, which is PULLED by the agent that asks for
+ * it; a `.describe()` carries the CONTRACT of one field and stops. One sentence
+ * each, and `channel-schema-budget.test.ts` is what keeps it there.
+ *
  * ⚠ Caps and minimums HAND-MIRROR the routes' zod schemas
  * (src/features/channels/schema.ts): title 200, body 16000, summary 2000 (a
  * post's summary is 200), client_msg_id 200, `.min(1)` on body /
@@ -16,14 +24,34 @@
  * the write ops mis-narrate. `.trim()` where — and ONLY where — the route trims
  * before measuring, so the two agree on what "200 characters" counts.
  *
- * ⚠ `summary` used to serve two routes with two caps (post 200, close 2000) and
- * declared the LOOSER so a legitimate close summary was never refused
- * client-side. The close is gone (wiring plan Phase 4, 2026-08-18) and the
- * declared max stays at 2000 anyway: the route enforces 200 and is the
- * authority, and tightening it here would turn a route 400 that names the field
- * into an opaque client-side -32602. The tighter number is in its `.describe()`.
+ * ⚠ `summary` declares the LOOSER of the two caps it has served (2000, not the
+ * post route's 200) so a legitimate summary is never refused client-side as an
+ * opaque -32602: the route enforces 200, names the field, and is the authority.
  */
 import { z } from "zod";
+/**
+ * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's
+ * (A6, 2026-09-02). A tool's `inputSchema` is PUSHED on every connection
+ * exactly as its description is, and `dopl_channel`'s was **21,778 chars
+ * served — 11.7× the 1,775 the T82 cap governs** — because 46 `.describe()`
+ * blocks carried the RULE behind each field as well as its contract.
+ *
+ * ⚠ MEASURED AS **SERVED**, over a real `Client.listTools()`, and with the
+ * registrar-injected `workspace` argument EXCLUDED: that one belongs to
+ * `registrar.ts › WORKSPACE_ARG_SHAPE` and is a different slice's to shrink,
+ * so counting it here would let this ratchet move on somebody else's edit.
+ * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
+ * growing past it, and shrinking below it without lowering the number.
+ */
+export declare const SCHEMA_MAX_CHARS = 11475;
+/**
+ * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
+ * can absorb one 900-character paragraph by trimming nine short fields; this
+ * cannot. A `.describe()` states the CONTRACT of one field — which ops take it,
+ * what it is, its bound — in one sentence. The rule behind it belongs in
+ * `channel-doctrine.ts › FIELDS`, which is PULLED by the agent that asks.
+ */
+export declare const PARAM_DESCRIPTION_MAX_CHARS = 400;
 export declare const CHANNEL_INPUT_SHAPE: {
     op: z.ZodEnum<{
         read: "read";
