@@ -38,7 +38,7 @@ import type { ChannelThread } from "../types";
  * ONE request against N addressees — the "New agent thread" panel's send.
  *
  * ⚠ `clientMsgId` is the BASE, not a per-row key. The server derives
- * `${base}:${toUserId}` per addressee (`server/service-tasks-fanout.ts ›
+ * `${base}:${toUserId}` per addressee (`server/service-tasks-broadcast.ts ›
  * addresseeClientMsgId`) and the group id from the base plus the caller, so a
  * retry of the whole send converges thread-by-thread onto the same card. Minting
  * it HERE is what makes that possible: a server-minted key could not survive the
@@ -68,7 +68,7 @@ export interface FanOutThreadsResponse {
  * only.
  *
  * ⚠ NOT the wire key. The server derives its own from the base it was sent
- * (`service-tasks-fanout.ts › addresseeClientMsgId`) and the two are never
+ * (`service-tasks-broadcast.ts › addresseeClientMsgId`) and the two are never
  * compared — this one exists so the N pending rows of one send have N distinct
  * cache identities instead of overwriting each other, which is the same bug the
  * server-side key prevents one layer down. A drift between them costs nothing.

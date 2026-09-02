@@ -11,11 +11,24 @@ import { createTask, type TaskCreateResult } from "./service-tasks";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 
 /**
- * THE REQUEST FAN-OUT — N addressees, N threads, ONE card.
+ * THE REQUEST BROADCAST — N addressees, N threads, ONE card.
+ *
+ * ⚠ **RENAMED FROM `service-tasks-fanout.ts` ON 2026-09-02 (v2 wave B slice B4,
+ * finding C16), AND ONLY THE NAME MOVED.** "Fan-out" named THREE unrelated
+ * mechanisms with no shared code — this module, the desktop's
+ * `session-dispatch.js` feeding live sessions, and a room-wide read — so a
+ * reader who found one had no way to know which one a sentence meant. The
+ * messaging collapse is the point at which two of the three are renamed.
+ *
+ * ⚠ **"BROADCAST" HERE IS THE SEND SHAPE, NOT A MESSAGE KIND, AND INVARIANTS §5
+ * IS UNCHANGED.** That rule — *"broadcast is not a shape this product has"* —
+ * is about ADDRESSING: there is no way to reach a room without naming who you
+ * mean, and this module does not add one. Every one of the N addressees is an
+ * explicit pill the sender typed; what is broadcast is the REQUEST, into N
+ * separately-addressed threads. A `to`-less send still reaches nobody.
  *
  * The "New agent thread" panel is the only surface that raises an agent
- * request, and each of its pills is an EXPLICIT addressee (INVARIANTS §5:
- * "broadcast" is not a shape this product has). Storage keeps a thread as ONE
+ * request, and each of its pills is an EXPLICIT addressee. Storage keeps a thread as ONE
  * requester + ONE target, so a three-pill send is three `channel_tasks` rows —
  * this module is the CALLER that makes those three calls, and
  * `service-tasks.ts › createTask` is unchanged by it.
@@ -28,7 +41,7 @@ import { loadVisibleChannel, type ChannelContext } from "./service-shared";
  *    across N addressees makes rows 2..N converge on row 1 through
  *    `createTask`'s short-circuit — the caller is told all N succeeded and the
  *    request silently reached one person. {@link addresseeClientMsgId} is what
- *    keeps the keys distinct, and `service-tasks-fanout.test.ts` pins the count.
+ *    keeps the keys distinct, and `service-tasks-broadcast.test.ts` pins the count.
  * 2. **The group id is DERIVED, never minted per attempt.** A `randomUUID()` per
  *    call would split a retried fan-out across two cards: the threads that
  *    landed on attempt 1 keep the old group (their opening messages dedup on

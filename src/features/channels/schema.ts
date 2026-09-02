@@ -322,7 +322,7 @@ export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
  *
  * ⚠ `clientMsgId` is REQUIRED here where `TaskCreateSchema` leaves it optional.
  * It is the BASE the per-addressee keys are derived from
- * (`server/service-tasks-fanout.ts › addresseeClientMsgId`) AND the seed of the
+ * (`server/service-tasks-broadcast.ts › addresseeClientMsgId`) AND the seed of the
  * group id the N threads share, so a fan-out without one has no way to converge
  * on retry and no stable card. Bounded well under `clientMsgId`'s own 200 so
  * the derived `${base}:${uuid}` keys stay inside it.

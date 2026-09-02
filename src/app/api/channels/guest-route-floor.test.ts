@@ -446,7 +446,7 @@ describe("the floors guard a real gate, not just a list", () => {
     // that the refusal still lives where §2B says it does.
     const featureRoot = join(import.meta.dirname, "..", "..", "..", "features", "channels", "server");
     const writes = readFileSync(join(featureRoot, "service-writes.ts"), "utf8");
-    const fanout = readFileSync(join(featureRoot, "service-tasks-fanout.ts"), "utf8");
+    const fanout = readFileSync(join(featureRoot, "service-tasks-broadcast.ts"), "utf8");
     expect(writes).toMatch(/loadVisibleChannel/);
     expect(writes).toMatch(/ChannelForbiddenError\("post to this channel"\)/);
     expect(fanout).toMatch(/loadVisibleChannel/);

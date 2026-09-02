@@ -211,7 +211,7 @@ export const CHANNEL_MENTION_MARK_MAX = CHANNEL_MENTION_LIST_LIMIT;
 
 /**
  * Hard cap on the addressees of ONE request fan-out
- * (`server/service-tasks-fanout.ts › createTaskFanOut`).
+ * (`server/service-tasks-broadcast.ts › createTaskFanOut`).
  *
  * ⚠ A BOUND ON WORK, not a product rule. The fan-out is N sequential
  * `createTask` calls, each of which posts through the channel's advisory lock —

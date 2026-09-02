@@ -161,7 +161,7 @@ export interface PostMetadataOptions {
   handoff?: boolean;
   /**
    * Stamp reserved `metadata.fanoutGroup` with this id. Only caller:
-   * `service-tasks-fanout.ts › createTaskFanOut` (through
+   * `service-tasks-broadcast.ts › createTaskFanOut` (through
    * `service-tasks.ts › createTask`), which derives it server-side from the
    * channel, the creator and the validated base idempotency key.
    *

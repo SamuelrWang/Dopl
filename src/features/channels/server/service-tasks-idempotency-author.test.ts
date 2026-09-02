@@ -12,7 +12,7 @@
  * member had used was handed back THEIR thread — and the served MCP schema
  * taught it as behaviour ("a key another member used hands you back THEIR
  * thread"), which makes it a documented redirect rather than a discovered one.
- * The keys are derived: `service-tasks-fanout.ts › addresseeClientMsgId` mints
+ * The keys are derived: `service-tasks-broadcast.ts › addresseeClientMsgId` mints
  * `${base}:${toUserId}` over ids every channel member can read.
  *
  * ── WHY THE INDEX IS ASSERTED HERE TOO ───────────────────────────────────────

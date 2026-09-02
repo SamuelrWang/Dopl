@@ -31,7 +31,7 @@ import type { ChannelContext } from "./service-shared";
  * ⚠ SPLIT OUT OF `service-tasks.ts` rather than added to it: that file is CREATE
  * plus set-mode, and this is a cascade over five tables with an ordering
  * argument. Two reasons to change, two files (INVARIANTS §1) — the same seam
- * `service-tasks-fanout.ts` sits on.
+ * `service-tasks-broadcast.ts` sits on.
  */
 
 /**

@@ -3662,7 +3662,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 
 - Location: `src/features/channels/server/service-mentions.ts` — both `listMyChannelMentions` and
   `markMentionsRead` destructure `{ channel }` out of `loadVisibleChannel` and never look at
-  `membership`. Contrast `service-writes.ts › postMessage` and `service-tasks-fanout.ts ›
+  `membership`. Contrast `service-writes.ts › postMessage` and `service-tasks-broadcast.ts ›
   createTaskFanOut`, which both `throw new ChannelForbiddenError(...)` on `!membership`.
 - Found during: **the guest-role review wave, 2026-08-26**, while tracing which of the fourteen
   guest-floored routes compose the public-channel arm.
@@ -3673,7 +3673,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   and mark-read their own mentions in it without joining. Own-scoped by `ctx.userId` throughout, so
   nothing crosses between users.
 - ⚠ **What it really costs is a TEST GAP:** `app/api/channels/guest-route-floor.test.ts`'s closing
-  assertion pins the membership fence on `service-writes.ts` and `service-tasks-fanout.ts` and does
+  assertion pins the membership fence on `service-writes.ts` and `service-tasks-broadcast.ts` and does
   not cover `service-mentions.ts` — so if the mentions route's own scoping ever loosened, the floor
   would silently become the gate.
 - Proposed resolution: decide whether reading your own mentions in a public room you never joined

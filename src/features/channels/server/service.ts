@@ -113,7 +113,7 @@ export { createTask, setTaskMode } from "./service-tasks";
 // Its own module because it is a CALLER of `createTask` and nothing else — the
 // per-addressee idempotency key and the derived group id are the whole content,
 // and both are the kind of rule that gets "simplified" out of a create.
-export { createTaskFanOut } from "./service-tasks-fanout";
+export { createTaskFanOut } from "./service-tasks-broadcast";
 
 // THREAD DELETION (Samuel, 2026-08-21) — HARD, cascading, creator-or-manager,
 // and NOT a finished state: a thread that exists is still live, this is how one
