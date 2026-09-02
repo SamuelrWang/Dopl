@@ -86,17 +86,26 @@ Measured through `listTools()` on 2026-09-02. **Served** is the whole descriptio
   be a parameter an agent reads on every connection and can never usefully set.
 - **n/a⁵** — `dopl_channel` deliberately renders NO `Limits:` block. Every bound
   in `channel-schema.ts` is already spelled into its own `.describe()`, and
-  `summary` states the route's 200 where the schema declares 2,000 — rendering
-  would push two different numbers for one field. **This is the one place the
-  one-source rule is not yet true, and it is the honest next move:** reconcile
-  `summary`, then delete the hand-typed bounds and let the renderer publish them.
+  `summary` states the route's 200 where the schema publishes `maxLength: 2000`
+  — rendering would push two different numbers for one field. **This is the one
+  place the one-source rule is not yet true**, and reconciling it is a RULING
+  rather than an edit: the looser cap is pinned by
+  `packages/mcp-server/src/tools/channel-schema-caps.test.ts` (*"Pinned below so a 'consistency' pass
+  cannot tighten it"*) and `packages/mcp-server/src/tools/channel-post-guidance.test.ts`, on the
+  argument that the ROUTE should be what refuses an over-length summary, by
+  name, instead of an opaque client-side `-32602`. See
+  `docs/MCP-V2-WAVE-A-2026-09-02.md` §9.
 
 ### Open fixes
 
 - **FIX A — `dopl_members` has no `fields=`.** Its roster row is the widest on
   the surface (name, email, role, status, last active, team chips) and an agent
   looking up one person's role pays for all six on every row. `fieldFilter` is
-  written and tested (`response-size.ts`); it is not wired here.
+  written and tested (`response-size.ts`); it is not wired here. ⚠ **Wiring it
+  takes a ruling first:** `docs/INVARIANTS.md`'s framing rule says *never a
+  member-typed name without an immutable id beside it*, so the filter must not
+  be able to drop the id — which is a decision about the field vocabulary, not a
+  parameter to thread through.
 - **FIX B — `dopl_ontology` has no `response_format`.** `op="map"` and
   `op="get"` both render metadata an agent routing through the graph does not
   read.
