@@ -152,7 +152,6 @@ beforeEach(() => {
     memberRow(USER),
     memberRow(PEER),
   ]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
@@ -295,7 +294,7 @@ describe("postMessage — chat + a HUMAN addressee is still a contradiction", ()
   /** ⚠ Guard sits BEFORE the idempotency short-circuit: a contradictory request
    *  must fail on the retry too, not be answered with a stored message. */
   it("400s even when the clientMsgId already has a stored message", async () => {
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+    vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(
       insertedRow({
         channel_id: "chan-1",
         workspace_id: WS,

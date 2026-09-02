@@ -186,13 +186,15 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       'op="post": optional JSON object of structured fields carried with the message (e.g. {durationMs, refs}). Use `thread` for the thread id.',
     ),
-  // ⚠ THE TWO ROUTES DEDUPE OVER DIFFERENT KEYS — `channel_messages` is unique on
+  // ⚠ ONE SENTENCE, BECAUSE THERE IS NOW ONE RULE (2026-09-02, C14). Both routes
+  // dedupe PER-AUTHOR: `channel_messages` on
   // `(channel_id, client_msg_id, author_user_id)`
-  // (`20260822120000_channel_messages_author_scoped_idempotency.sql`) while
-  // `channel_tasks` is unique on `(channel_id, client_msg_id)`
-  // (`20260729032037_channel_tasks_client_msg_id.sql`, still the live index).
-  // One sentence covering both would have to be the WEAKER of the two, and the
-  // weaker one is wrong in the direction that costs a duplicate.
+  // (`20260822120000_channel_messages_author_scoped_idempotency.sql`) and
+  // `channel_tasks` on `(channel_id, client_msg_id, created_by)`
+  // (`20260913120000_channel_tasks_author_scoped_idempotency.sql`). Until the
+  // second landed this description had to teach the WEAKER of two keys — that a
+  // peer's key hands you back THEIR thread — which is a documented way to be
+  // silently redirected into somebody else's exchange.
   client_msg_id: z
     .string()
     // ⚠ `.min(1)` mirrors the route — a blank idempotency key is not a key, and
@@ -201,7 +203,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(200)
     .optional()
     .describe(
-      'op="post" / op="create_thread" / op="launch_agent" / op="direct_agent" (optional): an idempotency key, 1-200 chars — re-send the same one and you get the FIRST call\'s row back instead of a second. On a post the dedupe is PER-AUTHOR; on create_thread it is PER-CHANNEL whoever sent it, so a key another member used hands you back THEIR thread.',
+      'op="post" / op="create_thread" / op="launch_agent" / op="direct_agent" (optional): an idempotency key, 1-200 chars — re-send the same one and you get YOUR first call\'s row back instead of a second. The dedupe is PER-AUTHOR on every op: a key another member used is not yours and does not collide with it.',
     ),
   title: z
     .string()

@@ -168,35 +168,15 @@ export async function hasMessagesAfter(
  * real message — the same trap `excludeAuthorFilter` documents above.
  */
 
-/**
- * ⚠ TWO READS OF (channel, client_msg_id), AND THE AUTHOR SCOPE IS THE WHOLE
- * DIFFERENCE — 2026-08-22. They are deliberately NOT merged and neither may be
- * substituted for the other.
- *
- * THIS one is CHANNEL-SCOPED and is a plain READ of a DERIVED key. Its only
- * caller is `service-tasks.ts › storedOpeningSeq`, where reading ACROSS authors
- * is the documented behaviour: a create that converged on somebody else's thread
- * posts nothing and reads the WINNER's opening seq
- * (`service-tasks.ts › convergeOnThread`). Author-scoping it would answer `null`
- * for exactly the case it exists to serve.
- *
- * ⚠ IT IS NOT AN IDEMPOTENCY PROBE, AND USING IT AS ONE IS THE SECURITY BUG THIS
- * SPLIT FIXES. See {@link findOwnMessageByClientId}.
- */
-export async function findMessageByClientId(
-  channelId: string,
-  clientMsgId: string
-): Promise<ChannelMessageRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_messages")
-    .select("*")
-    .eq("channel_id", channelId)
-    .eq("client_msg_id", clientMsgId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as ChannelMessageRow | null) ?? null;
-}
+// ⚠ `findMessageByClientId` — the CHANNEL-SCOPED read of (channel,
+// client_msg_id) — STOOD HERE AND IS DELETED (2026-09-02). Its one caller was
+// `service-tasks.ts › storedOpeningSeq`, the arm a create took when it converged
+// on SOMEBODY ELSE's thread. Author-scoping the thread probe
+// (`repository-tasks.ts › findOwnTaskByClientId`) removed that arm: a colliding
+// key from another member yields a separate thread instead of converging, so
+// nothing reads across authors any more. Deleted with its caller rather than
+// left exported — an orphan repository helper is invisible to the orphan check
+// and reads as a live door.
 
 /**
  * THE IDEMPOTENCY PROBE — (channel, AUTHOR, client_msg_id). `postMessage`'s
@@ -222,8 +202,9 @@ export async function findMessageByClientId(
  * a 500. Change one, change both.
  *
  * ⚠ COLUMN ORDER IN THAT INDEX IS `(channel_id, client_msg_id, author_user_id)`,
- * not the argument order here — the leading pair is what keeps
- * {@link findMessageByClientId} above index-served.
+ * not the argument order here. When it was chosen, the leading pair kept a
+ * CROSS-author read index-served; that read is gone (see the note above) and the
+ * order is kept because re-creating an index is a data question, not a cleanup.
  */
 export async function findOwnMessageByClientId(
   channelId: string,

@@ -139,7 +139,6 @@ beforeEach(() => {
     profile(PEER, "Diana Taylor", "diana@example.com"),
     profile(THIRD, "Daniel Anderson", "dan@example.com"),
   ]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>

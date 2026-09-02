@@ -136,15 +136,19 @@ beforeEach(() => {
     memberRow(C),
   ]);
   // ⚠ THE MOCK SIMULATES THE PARTIAL UNIQUE INDEX on
-  // `(channel_id, client_msg_id)`. Without it a shared key would still "insert"
-  // N rows here and the count assertion would pass on a broken fan-out — the
-  // convergence IS the failure mode, so the fake table has to converge too.
+  // `(channel_id, client_msg_id, created_by)`
+  // (`20260913120000_channel_tasks_author_scoped_idempotency.sql`). Without it a
+  // shared key would still "insert" N rows here and the count assertion would
+  // pass on a broken fan-out — the convergence IS the failure mode, so the fake
+  // table has to converge too. The creator is part of the key on both halves,
+  // exactly as the index and `findOwnTaskByClientId` state it.
   const stored = new Map<string, ChannelTaskRow>();
-  vi.mocked(repoTasks.findTaskByClientId).mockImplementation(
-    async (_c, key) => stored.get(key) ?? null
+  const dedupeKey = (createdBy: string, key: string) => `${createdBy}\u0000${key}`;
+  vi.mocked(repoTasks.findOwnTaskByClientId).mockImplementation(
+    async (_c, createdBy, key) => stored.get(dedupeKey(createdBy, key)) ?? null
   );
   vi.mocked(repoTasks.insertTask).mockImplementation(async (row) => {
-    const key = row.client_msg_id;
+    const key = row.client_msg_id ? dedupeKey(row.created_by, row.client_msg_id) : null;
     if (key && stored.has(key)) return stored.get(key)!;
     const created = insertedTask(row);
     if (key) stored.set(key, created);
@@ -166,7 +170,6 @@ beforeEach(() => {
         id,
       }) as ChannelTaskRow
   );
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => ({
     id: `msg-${row.client_msg_id}`,
     seq: 1,

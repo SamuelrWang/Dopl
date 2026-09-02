@@ -134,7 +134,6 @@ beforeEach(() => {
   vi.mocked(repo.listMembers).mockResolvedValue([memberRow(USER), memberRow(PEER)]);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => insertedRow(row));
   vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
   vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
@@ -173,9 +172,9 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
 
   it("refuses BEFORE the idempotency short-circuit, so a retry cannot replay it", async () => {
     // ⚠ If the guard sat AFTER, a refused caller could re-send the same
-    // client_msg_id, hit `findMessageByClientId`, and be handed a stored message
+    // client_msg_id, hit `findOwnMessageByClientId`, and be handed a stored message
     // back as if the post succeeded.
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+    vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(
       insertedRow({
         channel_id: "chan-1",
         workspace_id: WS,
@@ -201,7 +200,7 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
         clientMsgId: "k1",
       })
     ).rejects.toBeInstanceOf(ChannelLifecycleKindForbiddenError);
-    expect(repoMessages.findMessageByClientId).not.toHaveBeenCalled();
+    expect(repoMessages.findOwnMessageByClientId).not.toHaveBeenCalled();
   });
 });
 

@@ -170,7 +170,6 @@ beforeEach(() => {
     profile(PEER, "Diana Taylor", "diana@example.com"),
     profile(THIRD, "Daniel Anderson", "dan@example.com"),
   ]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repoMessages.findMessageById).mockResolvedValue(
     storedEscalation()
   );

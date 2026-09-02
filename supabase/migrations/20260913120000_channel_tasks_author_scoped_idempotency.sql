@@ -1,0 +1,82 @@
+-- IDEMPOTENCY IS A SAME-AUTHOR RETRY CONTRACT, NOT A ROOM-WIDE ONE — the SECOND
+-- half of a rule that shipped for `channel_messages` on 2026-08-22 and was left
+-- unstated for `channel_tasks`. Read
+-- `20260822120000_channel_messages_author_scoped_idempotency.sql` first: this
+-- file is the same rule, the same shape, on the other table, and every argument
+-- it makes applies here unchanged.
+--
+-- ── WHAT WAS STILL CHANNEL-SCOPED ──────────────────────────────────────────────
+-- `20260729032037_channel_tasks_client_msg_id.sql` created:
+--   CREATE UNIQUE INDEX channel_tasks_client_msg_key
+--     ON channel_tasks (channel_id, client_msg_id)
+--     WHERE client_msg_id IS NOT NULL;
+-- and `service-tasks.ts › createTask` short-circuited on the matching read. So
+-- "I already sent this, give me back what you stored" was, for THREADS, a
+-- contract with everyone in the room: a member who used a key another member was
+-- about to use got handed back THEIR thread. The served MCP schema said so out
+-- loud (`packages/mcp-server/src/tools/channel-schema.ts`, `client_msg_id`),
+-- which made it a documented behaviour rather than a discovered one — and a
+-- documented room-wide dedupe is a documented way to be silently redirected into
+-- somebody else's exchange.
+--
+-- ⚠ THE KEYS ARE DERIVED AND THEREFORE GUESSABLE, exactly as they are for
+-- messages. `service-tasks-fanout.ts › addresseeClientMsgId` mints
+-- `${base}:${toUserId}` and `toUserId` is readable by every channel member, so a
+-- peer who learns one base key can pre-claim every addressee of a fan-out.
+--
+-- ── BOTH HALVES LAND TOGETHER ─────────────────────────────────────────────────
+-- `repository-tasks.ts › findOwnTaskByClientId` is author-scoped in the same
+-- change. Scoping only the READ converts the silent redirect into a `23505` the
+-- caller sees as a 500 (the probe misses, the INSERT hits the still
+-- channel-scoped index, the author-scoped race repair finds nothing and
+-- rethrows). Louder, still a denial. Change one, change both.
+--
+-- ── COLUMN ORDER: (channel_id, client_msg_id, created_by) ─────────────────────
+-- `created_by` is `channel_tasks`' author column (`20260727150000`); there is no
+-- `author_user_id` here. The leading `(channel_id, client_msg_id)` pair is kept
+-- first on the messages precedent — no CROSS-author read of this key survives in
+-- the tree (`storedOpeningSeq` went with this change), but a prefix that answers
+-- the pair question costs nothing and keeps the two tables' indexes readable as
+-- one rule.
+--
+-- ── NULL AUTHORS CANNOT ARISE HERE ────────────────────────────────────────────
+-- Unlike `channel_messages.author_user_id`, `channel_tasks.created_by` is
+-- `NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE` — a deleted account
+-- takes its rows with it. So the "unique indexes treat NULLs as DISTINCT"
+-- caveat that file had to state does not apply: no row can have a NULL here.
+--
+-- ── ORDER OF STATEMENTS ───────────────────────────────────────────────────────
+-- CREATE first, DROP second, so the table is never without an idempotency guard.
+-- Both non-CONCURRENTLY: CONCURRENTLY cannot run inside a transaction.
+--
+-- ⚠ WIDENING CANNOT FAIL ON EXISTING DATA. Every (channel_id, client_msg_id)
+-- pair unique today is unique with a third column appended, by construction.
+-- ⚠ REVERTING CAN. Re-creating the pair index can fail on rows written in the
+-- meantime — two members who each opened a thread under one key are legal now
+-- and are not legal there. That is a data question, not a DDL question.
+--
+-- ⚠ WRITTEN, NOT APPLIED. Docker is unavailable in the environment this was
+-- authored in, so no local replay was possible. Re-derive with
+-- `supabase migration list --linked` and a look at `pg_index`; do not read the
+-- absence of an error as evidence that it ran.
+--
+-- Verify after applying:
+--   -- One partial unique index on this table's client key, naming three columns.
+--   SELECT i.relname,
+--          (SELECT string_agg(a.attname, ',' ORDER BY k.ord)
+--             FROM unnest(ix.indkey) WITH ORDINALITY k(attnum, ord)
+--             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum)
+--   FROM pg_index ix
+--   JOIN pg_class c ON c.oid = ix.indrelid
+--   JOIN pg_class i ON i.oid = ix.indexrelid
+--   WHERE c.relname = 'channel_tasks' AND ix.indisunique;
+--
+--   -- THE ACTUAL BEHAVIOUR: two members create a thread under the same
+--   -- client_msg_id in one channel and get TWO distinct thread ids; one member
+--   -- re-sending it gets the SAME id back both times.
+
+CREATE UNIQUE INDEX IF NOT EXISTS channel_tasks_client_msg_author_key
+  ON public.channel_tasks (channel_id, client_msg_id, created_by)
+  WHERE client_msg_id IS NOT NULL;
+
+DROP INDEX IF EXISTS public.channel_tasks_client_msg_key;

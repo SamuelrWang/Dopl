@@ -108,7 +108,6 @@ beforeEach(() => {
   // createTask also asserts the addressee is an ACTIVE workspace member.
   // Defaulted true; the departed-member test flips it.
   vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => ({
@@ -268,7 +267,7 @@ describe("createTask — self-target guard", () => {
     // ⚠ ORDERING, not idempotency: the guard sits IN FRONT of the
     // client_msg_id short-circuit, so a retry errors identically instead of
     // being handed the stored dead thread as a success.
-    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(
+    vi.mocked(repoTasks.findOwnTaskByClientId).mockResolvedValue(
       taskRow({ created_by: USER, target_user_id: USER })
     );
 
@@ -282,7 +281,7 @@ describe("createTask — self-target guard", () => {
     ).rejects.toBeInstanceOf(TaskSelfTargetError);
 
     // Short-circuit never reached — no lookup, no re-driven post.
-    expect(repoTasks.findTaskByClientId).not.toHaveBeenCalled();
+    expect(repoTasks.findOwnTaskByClientId).not.toHaveBeenCalled();
     expect(repoTasks.insertTask).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });

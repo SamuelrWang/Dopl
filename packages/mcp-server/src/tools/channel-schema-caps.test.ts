@@ -82,33 +82,31 @@ describe("the describes that make claims this schema cannot enforce", () => {
   const d = (k: keyof typeof CHANNEL_INPUT_SHAPE): string =>
     CHANNEL_INPUT_SHAPE[k].description ?? "";
 
-  it("client_msg_id: the dedupe is PER-AUTHOR for post and PER-CHANNEL for create_thread", () => {
-    // ⚠ ONE PARAM, TWO ROUTES, TWO DIFFERENT UNIQUE INDEXES, and the old copy
-    // stated the weaker of them for both: `channel_messages` is unique on
-    // `(channel_id, client_msg_id, author_user_id)`
-    // (`20260822120000_channel_messages_author_scoped_idempotency.sql`), while
-    // `channel_tasks` is still `(channel_id, client_msg_id)`
-    // (`20260729032037_channel_tasks_client_msg_id.sql`). An agent told the key
-    // is "its own" will collide with another member's on a thread open; one
-    // told it is channel-wide will pointlessly avoid a key that is safe.
-    expect(d("client_msg_id")).toContain("PER-AUTHOR");
-    expect(d("client_msg_id")).toContain("PER-AUTHOR");
+  it("client_msg_id: ONE key rule — PER-AUTHOR on every op", () => {
+    // ⚠ ONE PARAM, ONE RULE, SINCE 2026-09-02 (C14). It used to be two: while
+    // `channel_tasks` was unique on `(channel_id, client_msg_id)`, this copy had
+    // to teach that a peer's key handed you back THEIR thread — a documented
+    // redirect into somebody else's exchange. `20260913120000` widened it to
+    // `(channel_id, client_msg_id, created_by)`, matching
+    // `20260822120000`'s shape for `channel_messages`, so the description states
+    // the SAME contract on both routes and neither half is the weaker claim.
+    expect(d("client_msg_id")).toContain("PER-AUTHOR on every op");
+    // ⚠ AND THE OLD, NOW-FALSE TEACHING MUST NOT COME BACK. An agent told a key
+    // is channel-wide will pointlessly avoid one that is safe, and one told a
+    // peer can take its thread will build a workaround for a fence that holds.
+    expect(d("client_msg_id")).not.toContain("PER-CHANNEL");
+    expect(d("client_msg_id")).not.toContain("THEIR thread");
     // ⚠ **AND IT NAMES THE TWO AGENT LANES SINCE A10 (2026-09-02)** — the same
     // key now makes a timed-out `launch_agent` / `direct_agent` safe to retry,
     // which is the code behind a rule the doctrine used to state as a
     // prohibition ("do NOT issue it again").
     expect(d("client_msg_id")).toContain('op="launch_agent"');
     expect(d("client_msg_id")).toContain('op="direct_agent"');
-    // …and the create_thread half, which is the one that can hand you somebody
-    // else's thread (`service-tasks.ts › convergeOnThread` posts NOTHING for a
-    // non-creator, so the body silently goes nowhere).
-    expect(d("client_msg_id")).toContain("PER-CHANNEL whoever sent it");
-    expect(d("client_msg_id")).toContain("hands you back THEIR thread");
-    // ⚠ THE SPELLED-OUT CONSEQUENCE IS DOCTRINE NOW (A6, 2026-09-02) — the
-    // field carries the contract, the pulled document carries the rule. Pinned
-    // at BOTH ends so the move cannot become a deletion.
-    expect(CHANNEL_DOCTRINE).toContain("with your body posted nowhere");
+    // ⚠ THE DOCTRINE IS PINNED AT BOTH ENDS so the collapse cannot happen in one
+    // place and leave the pulled document teaching the retired rule.
     expect(CHANNEL_DOCTRINE).toContain("neither suppressing the other");
+    expect(CHANNEL_DOCTRINE).not.toContain("with your body posted nowhere");
+    expect(CHANNEL_DOCTRINE).not.toContain("PER-CHANNEL whoever sent it");
   });
 
   it("title: the bound is checked before the WIRE, and claims no precedence over the gate", () => {
