@@ -6294,3 +6294,70 @@ rejects one). And `getBaseTree` lives in `src/features/knowledge/server/service-
 `repository.ts` — that file is a re-export barrel with no queries in it.
 
 - Status: open
+
+### F-404 — the `stale` flag is derived at projection time, so a session that stops dispatching ENTIRELY can never report it (2026-09-01, T51)
+
+`dopl-desktop-app/main/session-health.js › isStale` answers "working, quiet past ten minutes, and
+still spending". It is computed inside `session-summary.js › reportList`, which runs on `touch()`
+— an ENGINE DISPATCH — and the server write behind it is change-driven by design
+(`session-state-push.js`'s header refuses a keepalive in capitals, and F-294 argued the refusal).
+
+So the flag becomes TRUE the moment the bound passes and REACHES THE SERVER on the session's next
+dispatch. For the class the ticket was written about — an agent that runs turns, spends tokens and
+posts nothing, whose tool calls keep the dispatch loop alive — that is immediate. For a process
+wedged so completely that nothing moves at all, it is never, and the only honest reading stays the
+server's own: a row whose `updatedAt` has gone quiet under a live `agent_presence` heartbeat
+(`packages/mcp-server/src/tools/channel-session-render.ts › sessionIsStale`).
+
+**Not fixed here, and not papered over.** Closing it needs the keepalive `session-state-push.js`
+refuses, and that module requires the reason to be argued IN ITS OWN HEADER. This ticket did not
+have one: it can say what the gap is, not that a heartbeat is worth its cost. A future wave that
+wants it should start from F-294's own two objections rather than from this paragraph.
+
+- Status: open
+
+### F-405 — the desktop reports seven health fields the server has no columns for, so `read_sessions` cannot render them yet (2026-09-01, T25 / T50 / T51 / T83)
+
+```
+grep -n "tokensDelta\|deniedCalls\|lastWakeSeq" dopl-desktop-app/main/session-telemetry.js
+grep -c "denied_calls" src/features/channels/server/collab-dto.ts
+```
+
+`session-telemetry.js › telemetryFields` now puts `turns`, `tokensDelta`, `stale`, `deniedCalls`,
+`lastDeniedTool`, `lastWakeSeq` and `lastWakeAt` on the wire row, quantized (or deliberately not —
+that file states which and why). **The server side of the chain is not written**: no migration on
+`channel_sessions`, no fields on `schema-sessions.ts › SessionStateEntrySchema`, no entries in
+`collab-dto.ts › OPERATOR_ONLY_SESSION_COLUMNS` / `SessionStateUpsert` / `mapOwnSessionStateRow`,
+no `ChannelSessionTelemetry` members in either `src/features/channels/types-sessions.ts` or
+`packages/dopl-client/src/channel-types.ts`, and no render.
+
+**The direction of the gap is safe and that is why it shipped this way.** `zod` strips unknown
+keys, so the extra fields are DROPPED at the route rather than 400-ing the whole push — which is
+the failure mode `session-state-push.js` is built around, where one bad row blanks a machine's
+entire session set for the run. Nothing regresses; the fields simply do not arrive yet.
+
+**All seven are OPERATOR-ONLY when they land** — each is a fact about how one member's own machine
+is getting on, and `collab-dto.ts`'s two parallel arrays plus
+`src/features/channels/schema-sql.test.ts`'s grant census are where that is enforced. The render is
+`channel-session-render.ts`, owned by the terse-results tier.
+
+- Status: open
+
+### F-406 — a CLAMPED posture directive has no way to tell the caller it was clamped (2026-09-01, T24)
+
+`launch-posture.js › resolvePosture` answers a `clamped` flag and both callers log it
+(`launch-directive-spawn.js › spawn`, `directive-agent-ops.js › setAgentMode`). The DIAG is the
+only surface: `channel_launch_directives` has no column for an applied posture, so the row's
+terminal `launched` / `done` status says nothing about what actually landed.
+
+That is the "surface showing a posture main is not enforcing" lie this tree has paid for twice
+(`session-reopen.js › setModeByTask` carries the argument for why a reply must be main's
+post-dispatch truth). It is bounded here — the clamp only ever NARROWS, so the caller's agent is
+more supervised than it asked for, never less — but an orchestrator that asked for `bypass` and got
+`auto` will read its agent's later refusals as a bug.
+
+T24's own acceptance names the fix: the launch RESULT should echo the resolved posture
+(`launched @agent-x posture=bypass/auto_both chain=on`). That needs applied-posture columns, the
+DTO field and the result line, all of which are the orchestrator-surface tier's.
+
+- Status: open
