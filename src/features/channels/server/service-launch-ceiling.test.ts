@@ -73,10 +73,11 @@ beforeEach(() => {
   vi.mocked(launchRepo.insertLaunchDirective).mockImplementation(
     async (_op, input) =>
       ({
+        // ⚠ THE INSERT'S OWN FIELDS WIN — this is the row the database would hand
+        // back, so the spread comes LAST and the defaults below it are only what
+        // the insert does not carry.
         id: "55555555-5555-4555-8555-555555555555",
         kind: "launch",
-        workspace_id: WS,
-        channel_id: CHAN,
         operator_user_id: ME,
         status: "pending",
         refusal_reason: null,
@@ -84,7 +85,6 @@ beforeEach(() => {
         claimed_at: null,
         decided_at: null,
         created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
         ...input,
       }) as never
   );

@@ -24,6 +24,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// ⚠ THE FOREIGN-AGENT READ (2026-09-02, A9 / F-418). `createAgentDirection` now
+// asks whether a FRESH projection row says the target belongs to another member —
+// the only case a server can answer — so this suite has to say "no" or it reaches
+// a live Supabase client. `false` is the ordinary answer: unknown, stale and quiet
+// all still FILE, which is the whole of F-418's warning.
+vi.mock("./repository-agent-owner", () => ({ agentIsAnotherMembers: vi.fn(async () => false) }));
 vi.mock("./repository-directions");
 vi.mock("./repository-collab");
 vi.mock("./repository-tasks");
@@ -35,6 +41,8 @@ vi.mock("./service-shared", async (importOriginal) => {
 import * as directionRepo from "./repository-directions";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
+import { agentIsAnotherMembers } from "./repository-agent-owner";
+import { AgentDirectiveForeignError } from "./errors";
 import { loadVisibleChannel } from "./service-shared";
 import {
   claimAgentDirection,
@@ -276,5 +284,49 @@ describe("the recent listing keeps what the backstop drops", () => {
     const out = await listRecentAgentDirections(ctx);
     expect(out.map((d) => d.status)).toEqual(["delivered", "refused"]);
     expect(out[0].reply).toBe("all green");
+  });
+});
+
+describe("createAgentDirection — the FOREIGN agent refusal (2026-09-02, A9 / G3, F-418)", () => {
+  it("refuses a fresh, positively-foreign id, and files NOTHING", async () => {
+    // ⚠ The surface has always promised this ("an id belonging to another member
+    // is REFUSED outright and no request is filed"); until now the row was filed
+    // and the caller's own machine answered `no-session` two minutes later.
+    vi.mocked(agentIsAnotherMembers).mockResolvedValue(true);
+    await expect(
+      createAgentDirection(ctx, { channel: CH, agentId: AGENT, body: "hi" })
+    ).rejects.toBeInstanceOf(AgentDirectiveForeignError);
+    expect(vi.mocked(directionRepo.insertAgentDirection)).not.toHaveBeenCalled();
+  });
+
+  it("FILES for an unknown or stale id — the predicate refuses on nothing else", async () => {
+    // ⚠ F-418's warning, enforced: gating on the projection's SILENCE would 400
+    // every direction sent while the push is behind, which is the ordinary state
+    // in the seconds after a launch. The desktop answers `no-session`, as before.
+    vi.mocked(agentIsAnotherMembers).mockResolvedValue(false);
+    const out = await createAgentDirection(ctx, {
+      channel: CH,
+      agentId: "zzzzzzzz",
+      body: "hi",
+    });
+    expect(out.offline).toBe(false);
+    expect(vi.mocked(directionRepo.insertAgentDirection)).toHaveBeenCalledTimes(1);
+  });
+
+  it("is asked with the CALLER'S OWN identity, never one off the request", async () => {
+    vi.mocked(agentIsAnotherMembers).mockResolvedValue(false);
+    await createAgentDirection(ctx, { channel: CH, agentId: AGENT, body: "hi" });
+    expect(vi.mocked(agentIsAnotherMembers)).toHaveBeenCalledWith(WS, AGENT, ME);
+  });
+
+  it("refuses even when the operator is OFFLINE — it is answerable without a machine", async () => {
+    // ⚠ `offline` is a 200 saying "nothing was filed". Answering a foreign id with
+    // "your machine is asleep" makes the caller fix the wrong thing and ask again
+    // a minute later for the real refusal.
+    vi.mocked(agentIsAnotherMembers).mockResolvedValue(true);
+    vi.mocked(collab.presenceForWorkspace).mockResolvedValue(new Map() as never);
+    await expect(
+      createAgentDirection(ctx, { channel: CH, agentId: AGENT, body: "hi" })
+    ).rejects.toBeInstanceOf(AgentDirectiveForeignError);
   });
 });

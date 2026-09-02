@@ -23,7 +23,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository-launch", () => ({ insertLaunchDirective: vi.fn() }));
-vi.mock("./repository-agent-owner", () => ({ agentInstanceOwner: vi.fn() }));
+// ⚠ THE MOCK MOVED TO THE PREDICATE ON 2026-09-02 (A9 / F-418). `refuseForeignTarget`
+// now asks `agentIsAnotherMembers`, which bounds the projection row's AGE before it will
+// say anything — the raw owner read is its detail, and mocking that would let this suite
+// assert a refusal the freshness rule may no longer make.
+vi.mock("./repository-agent-owner", () => ({ agentIsAnotherMembers: vi.fn() }));
 vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
 vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
 vi.mock("./service-shared", async (importOriginal) => {
@@ -40,7 +44,7 @@ vi.mock("@/features/agent-templates/server/service", () => ({
 
 import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
-import { agentInstanceOwner } from "./repository-agent-owner";
+import { agentIsAnotherMembers } from "./repository-agent-owner";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 import {
   AgentDirectiveForeignError,
@@ -104,7 +108,7 @@ beforeEach(() => {
     channel: CHANNEL_ROW,
     membership: MEMBERSHIP,
   } as never);
-  vi.mocked(agentInstanceOwner).mockResolvedValue(null);
+  vi.mocked(agentIsAnotherMembers).mockResolvedValue(false);
   vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(row() as never);
   online();
 });
@@ -181,7 +185,7 @@ describe("createAgentDirective — the cross-member refusal", () => {
     // channel membership, inside which the roster and the live agent set are
     // readable anyway, so nothing is disclosed — while a 404 would tell an
     // orchestrator its OWN agent had vanished and send it to re-launch.
-    vi.mocked(agentInstanceOwner).mockResolvedValue(OTHER);
+    vi.mocked(agentIsAnotherMembers).mockResolvedValue(true);
     await expect(
       createAgentDirective(ctx, { kind: "end", channel: "general", agentId: AGENT })
     ).rejects.toBeInstanceOf(AgentDirectiveForeignError);
@@ -189,7 +193,7 @@ describe("createAgentDirective — the cross-member refusal", () => {
   });
 
   it("refuses a foreign target on RENAME too — same fence, both verbs", async () => {
-    vi.mocked(agentInstanceOwner).mockResolvedValue(OTHER);
+    vi.mocked(agentIsAnotherMembers).mockResolvedValue(true);
     await expect(
       createAgentDirective(ctx, {
         kind: "rename", channel: "general", agentId: AGENT, name: "Research",
@@ -200,11 +204,11 @@ describe("createAgentDirective — the cross-member refusal", () => {
 
   it("scopes the ownership read to THIS workspace — it is not a deployment-wide oracle", async () => {
     await createAgentDirective(ctx, { kind: "end", channel: "general", agentId: AGENT });
-    expect(agentInstanceOwner).toHaveBeenCalledWith(WS, AGENT);
+    expect(agentIsAnotherMembers).toHaveBeenCalledWith(WS, AGENT, ME);
   });
 
   it("PASSES a target the caller owns", async () => {
-    vi.mocked(agentInstanceOwner).mockResolvedValue(ME);
+    vi.mocked(agentIsAnotherMembers).mockResolvedValue(false);
     const res = await createAgentDirective(ctx, {
       kind: "end", channel: "general", agentId: AGENT,
     });
@@ -222,7 +226,7 @@ describe("createAgentDirective — the cross-member refusal", () => {
       // fence is `operator_user_id`, and the machine that claims the row holds only
       // its own operator's sessions, so an unknown id is answered `no-session` by
       // the one party that actually knows.
-      vi.mocked(agentInstanceOwner).mockResolvedValue(null);
+      vi.mocked(agentIsAnotherMembers).mockResolvedValue(false);
       const res = await createAgentDirective(ctx, {
         kind: "end", channel: "general", agentId: AGENT,
       });
@@ -238,7 +242,7 @@ describe("createAgentDirective — the cross-member refusal", () => {
       // with "your machine is asleep" sends the caller to fix the wrong thing and
       // get the real refusal a minute later.
       vi.mocked(collab.presenceForWorkspace).mockResolvedValue(new Map() as never);
-      vi.mocked(agentInstanceOwner).mockResolvedValue(OTHER);
+      vi.mocked(agentIsAnotherMembers).mockResolvedValue(true);
       await expect(
         createAgentDirective(ctx, { kind: "end", channel: "general", agentId: AGENT })
       ).rejects.toBeInstanceOf(AgentDirectiveForeignError);

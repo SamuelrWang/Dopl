@@ -30,7 +30,7 @@ vi.mock("./repository-launch", () => ({
   insertLaunchDirective: vi.fn(),
   decideLaunchDirective: vi.fn(),
 }));
-vi.mock("./repository-agent-owner", () => ({ agentInstanceOwner: vi.fn() }));
+vi.mock("./repository-agent-owner", () => ({ agentIsAnotherMembers: vi.fn() }));
 vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
 vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
 vi.mock("./service-shared", async (importOriginal) => {
@@ -46,7 +46,7 @@ vi.mock("@/features/agent-templates/server/service", () => ({
 
 import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
-import { agentInstanceOwner } from "./repository-agent-owner";
+import { agentIsAnotherMembers } from "./repository-agent-owner";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 import { createLaunchDirective, decideLaunchDirective } from "./service-launch";
 import { createAgentDirective } from "./service-launch-agent";
@@ -120,7 +120,7 @@ beforeEach(() => {
   vi.mocked(collab.presenceForWorkspace).mockResolvedValue(
     new Map([[ME, { lastSeenAt: new Date().toISOString() }]]) as never,
   );
-  vi.mocked(agentInstanceOwner).mockResolvedValue(null);
+  vi.mocked(agentIsAnotherMembers).mockResolvedValue(false);
   vi.mocked(launchRepo.insertLaunchDirective).mockResolvedValue(row() as never);
 });
 
