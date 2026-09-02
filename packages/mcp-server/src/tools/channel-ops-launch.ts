@@ -26,9 +26,11 @@
  * to arm a wait.
  */
 
-import type { DoplClient, LaunchDirective, LaunchRefusalReason } from "@dopl/client";
+import type { DoplClient, LaunchRefusalReason } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
+// ⚠ ONE write-result renderer, shared with `post` / `create_thread`.
+import { factsLine } from "./channel-facts";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
@@ -145,75 +147,40 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * differently from the three that are not — retrying `cap` in a minute is
  * sensible, retrying `no-bridge` is asking a machine to change its owner's mind.
  */
-const REFUSAL_SENTENCES: Record<LaunchRefusalReason, string> = {
-  // ⚠ THE CAP WORDING, and it is the one an orchestrator most needs to read
-  // correctly: nothing is broken, the machine is FULL. The next action is to
-  // wait for one of the running agents to finish — which `read_sessions` and the
-  // session block on every await now show — not to re-issue.
-  cap: "the machine is ALREADY RUNNING AS MANY AGENTS AS IT ALLOWS. Nothing is broken and nothing is wrong with your request — there is no free slot. Do not re-issue: check what is running with dopl_channel(op=\"read_sessions\"), and either wait for one of those to finish or ask your operator to end one.",
-  busy: "the machine is under load and declined FOR NOW. This one is genuinely temporary — it is reasonable to ask again in a minute or two, once, and to stop if it refuses the same way twice.",
-  "no-sdk":
-    "that machine has NO AGENT RUNTIME available, so it cannot start one at all. Re-issuing will not change that. Tell your operator; it is a setup problem on their side.",
-  "auth-hold":
-    "the desktop is SIGNED OUT or its credential is being held, so it will not start anything until a human signs in. Tell your operator — this needs them, not another call.",
-  // ⚠ THE CONSENT REFUSAL. It must not read as a fault, and it must not suggest
-  // a workaround: the toggle is the operator's decision and the whole reason
-  // this op was allowed to exist.
-  "no-bridge":
-    "your operator has LAUNCHING OVER MCP TURNED OFF on that machine. That is a deliberate setting, not a failure and not something to work around — it is how they consented (or did not) to this capability. If you believe they want it on, ASK THEM; do not re-issue, and do not look for another route to start an agent.",
-  "no-counterparty":
-    "there is nothing for an agent to work with in that channel. Check the channel with dopl_channel(op=\"members\") and op=\"list_threads\" before asking again.",
-  // ⚠ THE AGENT-TEMPLATES WORD (2026-08-22). It says WHOSE VISIBILITY FAILED, because
-  // the two fences on this lane belong to DIFFERENT PEOPLE: you named the template
-  // under YOUR visibility at create time, and the desktop resolved it under the
-  // OPERATOR's at spawn. A private template of yours is simply unusable over this lane
-  // unless you ARE the operator, and an orchestrator that does not know that will
-  // re-issue forever.
-  // ⚠ IT DOES NOT SAY WHICH of deleted / invisible it was, and must not: the resolve
-  // endpoint is 404-never-403 precisely so that difference is not observable, and a
-  // sentence that guessed would rebuild the oracle the whole design closes.
-  "no-template":
-    "that machine could not resolve the TEMPLATE you named. Either it no longer exists, or it is not visible to the OPERATOR whose machine this is — you named it under YOUR visibility, and their desktop resolves it under THEIRS, so a private or team template of yours can be unusable there. Do not re-issue the same id: launch without a template, or share one that member can see.",
-  // ── ⚠ THE TWO WORDS THAT ARE NOT THIS LANE'S (2026-09-01) ──────────────────
-  // `no-session` and `bad-name` belong to the AGENT-MANAGEMENT kinds — `end` and
-  // `rename` — which ride the same mailbox and therefore share the enum. The
-  // column CHECK pairs `launched` with `kind='launch'` and neither of these words
-  // has a producer on a launch, so ARRIVING HERE IS ITSELF THE ANOMALY.
-  // ⚠ THEY ARE PRESENT BECAUSE THE MAP IS `Record<LaunchRefusalReason, string>`
-  // AND THE COMPILER SAYS SO — which is the whole value of `closedEnum`: a ninth
-  // word could not be added to the vocabulary without every render being made to
-  // account for it. ⚠ WHAT THEY MUST NOT DO IS GUESS. Borrowing the
-  // agent-management sentences here would tell a caller its LAUNCH failed because
-  // an agent was not running, which is not a sentence about anything that
-  // happened.
-  "no-session":
-    "the machine answered with a word that belongs to ENDING or RENAMING an agent, not to starting one — so nothing here explains why your launch did not happen. Nothing was started. Check dopl_channel(op=\"read_sessions\") and report it to your operator rather than re-issuing.",
-  "bad-name":
-    "the machine answered with a word that belongs to RENAMING an agent, not to starting one — so nothing here explains why your launch did not happen. Nothing was started. Check dopl_channel(op=\"read_sessions\") and report it to your operator rather than re-issuing.",
+/**
+ * MAY THE CALLER ASK AGAIN? — ⚠ the ONE thing a refusal is read for, kept as a
+ * field where the sentence became doctrine (T10, 2026-09-02).
+ *
+ * ⚠ THE NINE WORDS ARE STILL THE WIRE CONTRACT and the result still names the
+ * one it got (`reason=<key>`); what left is the paragraph per key, now in
+ * `channel-doctrine.ts`'s WHY A LAUNCH … IS REFUSED section. `busy` is the ONLY
+ * temporary refusal on the list — every other word means the answer will not
+ * change — so collapsing them into a boolean would either invite a retry loop
+ * against a setting nobody is going to flip, or forbid the one retry that works.
+ *
+ * ⚠ IT IS A `Record<LaunchRefusalReason, …>` DELIBERATELY, which is the whole
+ * value of the closed enum: a tenth word cannot enter the vocabulary without
+ * this map being made to account for it.
+ */
+const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
+  cap: "no",
+  busy: "once",
+  "no-sdk": "no",
+  "auth-hold": "no",
+  "no-bridge": "no",
+  "no-counterparty": "no",
+  "no-template": "no",
+  // ⚠ NEITHER OF THESE HAS A PRODUCER ON A LAUNCH — they belong to the `end` /
+  // `rename` kinds that ride the same mailbox and therefore share the enum, and
+  // the column CHECK pairs `launched` with `kind='launch'`. Arriving here IS the
+  // anomaly, so the answer is `no`: a caller that re-issues over a word nothing
+  // could have produced re-issues forever.
+  "no-session": "no",
+  "bad-name": "no",
 };
-
-function refusalSentence(reason: LaunchRefusalReason | null): string {
-  if (reason === null) {
-    // ⚠ Reachable only if a machine wrote a refusal with no reason, which the
-    // column's own CHECK forbids. Said honestly rather than guessed at.
-    return "the machine refused and gave no reason. That should not happen; report it to your operator.";
-  }
-  return (
-    REFUSAL_SENTENCES[reason] ??
-    "the machine refused for a reason this build does not recognize. Report it to your operator rather than re-issuing."
-  );
-}
 
 /** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
  *  id is the only handle the agent has left, and says NOT to re-issue. */
-function pendingLines(d: LaunchDirective, channelRef: string): string[] {
-  return [
-    `The request is still PENDING — id \`${d.id}\`, and it stays answerable until ${d.expiresAt}.`,
-    `⚠ A TIMEOUT IS NOT A REFUSAL. Your operator's machine may still take it; nothing has been cancelled. **DO NOT ISSUE THIS CALL AGAIN** — a second directive starts a SECOND agent on the same work, and you would have no way to tell them apart.`,
-    `To find out what happened: dopl_channel(op="read_sessions", channel="${channelRef}"). A new agent appearing there is yours. If nothing shows up within a couple of minutes, the request lapsed and the machine never took it — tell your operator rather than retrying.`,
-  ];
-}
-
 /**
  * ASK FOR AN AGENT, then hold briefly for the answer.
  *
@@ -240,7 +207,6 @@ export async function opLaunchAgent(
   // out of the create.
   const channel = await resolveChannelOr(client, ref);
   if (isErr(channel)) return channel;
-  const label = inlineOr(channel.name, NO_NAME);
 
   let created;
   try {
@@ -270,13 +236,13 @@ export async function opLaunchAgent(
   // ── OFFLINE: nothing was filed, and the caveat is HONEST about what presence
   //    can and cannot tell us. ────────────────────────────────────────────────
   if (created.offline) {
-    return ok(
-      [
-        `No agent was requested in **${label}** — your operator's machine is not reporting in, so there is nothing listening for a launch. **No request was filed**, so there is nothing pending and nothing to cancel.`,
-        `⚠ THIS IS A HINT, NOT A VERDICT ON A PARTICULAR MACHINE. What was checked is a per-(user, workspace) presence heartbeat: it says no listener of your operator's has checked in recently. It cannot tell you WHICH of their machines is up, whether the one that would run this agent is up, or whether launching over MCP is even enabled there.`,
-        `Most likely the machine is asleep, closed, or signed out. Ask your operator to open Dopl, then try again — or do the work yourself and post the result with dopl_channel(op="post", channel="${ref}", ...).`,
-      ].join("\n"),
-    );
+    // ⚠ `filed=no` IS THE LOAD-BEARING HALF. Nothing was written, so there is
+    // nothing pending and nothing to cancel — the opposite of the PENDING shape
+    // below, where re-issuing starts a second agent. ⚠ PRESENCE IS A HINT, NOT A
+    // VERDICT: the check is a per-(user, workspace) heartbeat, so it cannot say
+    // WHICH machine is up or whether launching is enabled there. `op="help"`
+    // carries that; the fact is that no listener has checked in.
+    return ok(factsLine("not launched", { reason: "offline", filed: false }));
   }
 
   let directive = created.directive;
@@ -302,70 +268,84 @@ export async function opLaunchAgent(
   }
 
   if (directive.status === "launched" && directive.agentId) {
-    const on = directive.threadId
-      ? ` on thread \`${directive.threadId}\``
-      : ` in the main room`;
-    // ⚠ THE GOAL CLAUSE BRANCHES, AND THAT IS THE 2026-08-31 CORRECTION. A
-    // directive carrying a goal now starts a session that RUNS it as its first
-    // instruction (`main/launch-directives.js › spawn`, `idle: !goal`); a
-    // directive with NO goal registers a stand-by agent that runs nothing until a
-    // PERSON talks to it. Those are different outcomes and the caller acts on the
-    // difference — "it is on it" vs "it is parked and you cannot start it" — so
-    // one sentence covering both would have to be the weaker claim, and the
-    // weaker one is wrong in the direction that leaves an orchestrator waiting.
-    const goalGiven = typeof opts.goal === "string" && opts.goal.trim() !== "";
-    const started = goalGiven
-      ? `Its FIRST INSTRUCTION is the \`goal\` you sent — that machine is working on it now, so there is nothing further to send to get it going.`
-      : `⚠ YOU SENT NO \`goal\`, SO IT IS STANDING BY AND IS RUNNING NOTHING. It starts on the first message that names it; see the handle below. If you meant it to work now, a launch WITH a goal is one call instead of two.`;
+    // ── THE RESULT: ONE LINE OF FACTS (T10, 2026-09-02) ────────────────────
+    //
+    // ⚠ WHAT LEFT. Five paragraphs rode on every successful launch: the handle
+    // and why the friendly name is not one, how to redirect it later, THE THREE
+    // LIMITS on spending the handle, that you cannot see inside the session, and
+    // that "started" means the machine said so. Every one is true of every
+    // launch — they are in `channel-doctrine.ts` under YOUR OWN AGENTS, reached
+    // with `op="help"`.
+    //
+    // ⚠ `idle=` IS NOT COSMETIC AND MAY NOT BE DROPPED. A directive carrying a
+    // goal starts a session that RUNS it as its first instruction; one without a
+    // goal registers a stand-by agent that runs nothing until a message names it
+    // (`main/launch-directives.js › spawn`, `idle: !goal`). Those are different
+    // outcomes and an orchestrator acts on the difference — "it is on it" vs "it
+    // is parked" — so a single field covering both would have to be the weaker
+    // claim, and the weaker one leaves a caller waiting on an agent that never
+    // started.
+    //
+    // ⚠ THE HANDLE IS PUBLISHED IN THE PREFIXED FORM, always. The desktop parser
+    // takes both `@<id>` and `@agent-<id>`, so this is a convention question —
+    // and publishing the bare form while the app tints the prefixed one is how a
+    // caller writes a token the reader does not highlight.
+    //
+    // ⚠ A FUTURE TIER ADDS FIELDS HERE, NOT PARAGRAPHS: the resolved posture and
+    // chain state the desktop applied (T24) are facts about this launch and
+    // belong in this record the moment the wire carries them.
     return ok(
-      [
-        `Agent **${directive.agentId}** was started in **${label}**${on}. ${started}`,
-        // ── ⚠ THE ADDRESS, AND THE THREE LIMITS THAT USED TO BE MISSING ──────
-        // This line said: "DIRECT IT WITH `@<id>` — write that token in the BODY
-        // of a post into this channel, and that specific agent picks it up." The
-        // sentence was RIGHT and the surface underneath it was not: the loop
-        // fence refused every agent-authored message, so the only caller that
-        // held the id could not spend it, and a live orchestrator followed this
-        // copy five times into silence (ENGINEERING, 2026-08-31). Samuel's
-        // same-account carve made the sentence true; what it never had, and has
-        // now, is the boundary — addressed only, own operator only, unobservable.
-        `ITS HANDLE IS \`@agent-${directive.agentId}\` — that exact form, prefixed, which is what the Dopl app writes and tints. A friendly NAME your operator may give it lives on their machine alone and is never addressable from here.`,
-        `TO REDIRECT IT LATER, write \`@agent-${directive.agentId}\` in the BODY of a post into this channel (thread it with the same thread id if it has one). That is the ONE case where a handle addresses an agent rather than a person: the token is parsed on your operator's machine, not by the server's mention resolver, so it stamps nobody and lands in no Tags inbox. ⚠ THREE LIMITS, AND THEY ARE THE FENCE RATHER THAN A KNACK: it must NAME the agent (an unaddressed post of yours starts nobody, whatever it says); it works only for YOUR OWN operator's agents, because you post under their account and no post of yours can start anything on another member's machine; and the wake happens on a desktop this server cannot see, so nothing here confirms it landed.`,
-        `⚠ IT IS NOT YOUR SESSION AND YOU CANNOT SEE INSIDE IT. What comes back to you are its POSTS and its milestones, in this channel — arm dopl_channel(op="await", channel="${ref}", since=<your cursor>) to receive them, or omit \`channel\` to watch every channel you are in at once. Its live state shows up in dopl_channel(op="read_sessions"), which also prints each session's addressable handle.`,
-        `⚠ "Started" means THE MACHINE SAID SO. There is no second source to confirm it against — if nothing appears in read_sessions and nothing is posted, say that rather than assuming it is working.`,
-      ].join("\n"),
+      factsLine("launched", {
+        agent: `@agent-${directive.agentId}`,
+        thread: directive.threadId ?? undefined,
+        template: directive.templateName ?? undefined,
+        model: directive.model ?? undefined,
+        // ⚠ `idle=yes` means STANDING BY AND RUNNING NOTHING.
+        idle: !(typeof opts.goal === "string" && opts.goal.trim() !== ""),
+      }),
     );
   }
 
   if (directive.status === "refused") {
+    // ⚠ THE REASON IS A KEY ON THE WIRE (`LaunchRefusalReason`, seven words) and
+    // is rendered AS the key. It used to be expanded into a sentence per reason
+    // plus a paragraph saying a refusal is normal; the sentences are in
+    // `channel-doctrine.ts` now, and the key is the half that a caller branches
+    // on. ⚠ `filed=yes`: the row exists and was answered — nothing to retry.
     return ok(
-      [
-        `No agent was started in **${label}** — your operator's machine REFUSED the request, and ${refusalSentence(directive.refusalReason)}`,
-        `⚠ A refusal is a normal answer from a machine its owner controls, not an error and not a bug in your request. Nothing is pending; there is nothing to cancel and nothing to wait for.`,
-        `You can still do the work yourself and post the result with dopl_channel(op="post", channel="${ref}", ...).`,
-      ].join("\n"),
+      factsLine("refused", {
+        reason: directive.refusalReason ?? undefined,
+        // ⚠ `-` WHEN THE MACHINE NAMED NO REASON, never a guessed retry verdict.
+        // The column's own CHECK forbids that row; if one arrives, the honest
+        // answer is that this build cannot advise.
+        retry: directive.refusalReason
+          ? RETRY_ADVICE[directive.refusalReason]
+          : undefined,
+        filed: true,
+      }),
     );
   }
 
-  // PENDING, CLAIMED (taken but not yet answered) or EXPIRED all end here: the
-  // agent's next action is identical, and the id is the handle.
   if (directive.status === "expired") {
-    return ok(
-      [
-        `No agent was started in **${label}** — the request LAPSED before any machine answered it (id \`${directive.id}\`). Most often that means the desktop was asleep or had launching over MCP turned off.`,
-        `Nothing is pending now. You may ask once more if you have reason to think the machine is up — dopl_channel(op="read_sessions") will show you whether anything of yours is running there — otherwise tell your operator and do the work yourself.`,
-      ].join("\n"),
-    );
+    // ⚠ LAPSED IS NOT REFUSED AND NOT PENDING: no machine ever answered, so
+    // nothing is outstanding and asking once more is legitimate — which is the
+    // opposite of the branch below.
+    return ok(factsLine("expired", { directive: directive.id, filed: true }));
   }
 
-  const claimed =
-    directive.status === "claimed"
-      ? ` A machine has TAKEN it and is working on it, so it is likely to land shortly.`
-      : "";
+  // PENDING and CLAIMED (taken but not yet answered) both end here: the next
+  // action is identical.
+  //
+  // ⚠ **DO NOT ISSUE THIS CALL AGAIN** is the one instruction that could not
+  // become a bare fact, because the cost of getting it wrong is a SECOND agent
+  // on the same work that nothing can tell apart afterwards. It survives as
+  // `retry=no` — a field, not a paragraph — and the reason is in the doctrine.
   return ok(
-    [
-      `No answer yet from your operator's machine about starting an agent in **${label}**.${claimed}`,
-      ...pendingLines(directive, ref),
-    ].join("\n"),
+    factsLine("pending", {
+      directive: directive.id,
+      claimed: directive.status === "claimed",
+      expires: directive.expiresAt,
+      retry: false,
+    }),
   );
 }

@@ -22,7 +22,9 @@ import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { inlineOr, isErr, resolveChannelOr, resolveMemberOr } from "./channel-shared";
 // ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
-import { createThreadReplyLines } from "./channel-wake-guidance";
+import { awaitFact } from "./channel-wake-guidance";
+// ⚠ ONE write-result renderer, shared with `post`/`launch_agent`/`direct_agent`.
+import { factsLine } from "./channel-facts";
 import {
   FIELD_CAPS_NOTE,
   classifyBadRequest,
@@ -106,10 +108,10 @@ export async function opCreateThread(
     throw e;
   }
   const thread = created.thread;
-  // ⚠ Neutralized even though the caller typed this title one argument ago:
-  // deciding per site whether a string is "really" reachable is what left a
-  // peer-typed title raw through a whole audit. One rule.
-  const named = inlineOr(thread.title, NO_TITLE);
+  // ⚠ THE TITLE IS NOT ECHOED, and that is a saving rather than a loss: the
+  // caller typed it one argument ago, so repeating it back (neutralized, under a
+  // header, because it is a member-typed string on every OTHER path) buys
+  // nothing this call did not already know. `op="get_thread"` renders it.
   // ⚠ Cursor is STATED from the route's returned opening seq, never "find the
   // newest message with read limit=1" — that costs a round-trip and races the
   // peer, whose reply becomes "the newest message" and is then awaited past.
@@ -126,40 +128,34 @@ export async function opCreateThread(
   // window. The server half still works perfectly and the last layer is missing,
   // which is the shape that produces the most confident wrong copy.
   //
-  // ⚠ THE OLD COPY'S OPERATIVE INSTRUCTION WAS "do NOT arm op=await yet", AND
-  // THAT IS WHAT MADE IT A DEFECT RATHER THAN AN OVERSTATEMENT: an external
-  // session did exactly that, nothing opened, and NOBODY watched the thread —
-  // the counterparty's reply landing to no one, silently, on both sides. So the
-  // block now says the flag changed nothing, tells the caller to arm the wait
-  // ITSELF, and points at `op="launch_agent"` for the capability that is real.
-  if (handoff) {
-    const since =
-      created.openingSeq === null
-        ? `<the seq of your opening message, from dopl_channel(op="read", channel="${ch.id}", limit=1)>`
-        : String(created.openingSeq);
-    return ok(
-      [
-        `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}. \`handoff\` was set and it CHANGED NOTHING.`,
-        `⚠ THE HANDOFF LANE OPENS NOTHING TODAY (F-274). The flag is still accepted and still stamped on the thread, but no current Dopl app reads that stamp — the reader was removed with the session window — so this thread behaves exactly as it would have without the flag: **nothing started on your operator's machine, and THIS session still owns the reply.**`,
-        `So YOU are the one waiting on ${member.label}, and you must arm the wait yourself: dopl_channel(op="await", channel="${ch.id}", since=${since}). ⚠ Do NOT skip that on the assumption a session took over — if you end your turn here, NOBODY is watching this thread and ${member.label}'s reply will be read by no one.`,
-        `IF WHAT YOU WANTED WAS AN AGENT RUNNING ON YOUR OPERATOR'S MACHINE, that is a different call and it exists: dopl_channel(op="launch_agent", channel="${ch.id}", thread="${thread.id}", goal="..."). It ASKS the machine, waits briefly, and tells you what it said — including if your operator has that turned off.`,
-      ].join("\n"),
-    );
-  }
-  const cursor =
-    created.openingSeq === null
-      ? `dopl_channel(op="read", channel="${ch.id}", limit=1) reports the highest seq (your request is the newest message), then call dopl_channel(op="await", channel="${ch.id}", since=<that seq>)`
-      : `call dopl_channel(op="await", channel="${ch.id}", since=${created.openingSeq}) — that since is your request's own seq, so the reply is the very next message it returns`;
+  // ── THE RESULT: ONE LINE OF FACTS (T10, 2026-09-02) ──────────────────────
+  //
+  // ⚠ WHAT LEFT. This op closed with four paragraphs: what a thread is for, the
+  // await mechanics, the ~30-minute stop rule, and — on the handoff branch — a
+  // three-paragraph account of a flag that does nothing. Every one of them is
+  // standing doctrine and is stated once in `channel-doctrine.ts`, behind
+  // `op="help"`. What survives is what only this call knows.
+  //
+  // ⚠ `handoff=ignored` IS THE WHOLE OF THE HANDOFF WARNING, AND IT IS ENOUGH.
+  // The lane opens nothing today (F-274): the flag is still accepted and still
+  // stamped, but no current Dopl app reads the stamp, so the thread behaves
+  // exactly as one created without it. The DEFECT the old copy fixed was an
+  // external session reading "a session took over" and NOT arming a wait, so
+  // nobody watched the thread. `await=since:<seq>` on the same line is that fix,
+  // stated for every branch rather than only the handoff one — a cursor is a
+  // stronger instruction than a paragraph telling the reader to go find one.
   return ok(
-    [
-      `Opened thread **${named}** in **${chName}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}. Thread every follow-up post with thread="${thread.id}".`,
-      ...createThreadReplyLines(
-        cursor,
-        member.label,
-        runtime,
-        `Keep re-arming while the exchange is alive; ${member.label}'s agent may work for a long stretch before answering. Every ~3 empty holds, check first with op="read" for progress milestones. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`,
-      ),
-    ].join("\n"),
+    factsLine("opened", {
+      thread: thread.id,
+      // ⚠ The OPENING message's seq, so the reply is the very next message an
+      // await returns. `null` when the server did not report one — then the
+      // caller reads it, and a fabricated cursor would silently skip messages.
+      seq: created.openingSeq ?? undefined,
+      mode: thread.mode,
+      addressed: true,
+      handoff: handoff ? "ignored" : undefined,
+      await: awaitFact(runtime, created.openingSeq),
+    }),
   );
 }
 

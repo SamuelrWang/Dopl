@@ -1,18 +1,20 @@
 /**
- * WHAT A POST'S ADDRESSING ACTUALLY DID — the result line that answers it, plus
- * the refusal that fires when a post's addressing contradicts itself. A post
- * addresses a PERSON or nobody. ⚠ `channel-` filename prefix required by the
- * parity split-scan (parity.test.ts).
+ * THE ONE REFUSAL A POST'S ADDRESSING CAN EARN. ⚠ `channel-` filename prefix
+ * required by the parity split-scan (parity.test.ts).
  *
- * ⚠ Every string below is server NARRATION with no untrusted framing. The two
- * peer-authored values reaching it arrive ALREADY render-safe:
- * `safeChannelName` is neutralized by its caller and a member `label` at its
- * source (`resolveMemberOr`). Neither may be neutralized AGAIN — double-wrapping
- * strips the span's own backticks and hands back the bare name.
+ * ⚠ WHAT LEFT THIS FILE (T10/T12, 2026-09-02). It also held `postAddressLines`
+ * — three paragraphs spliced under every successful post saying what the
+ * addressing had done: the "NOT ADDRESSED" note, its threaded variant, and the
+ * two chat notes. All four described a RULE that holds on every call, so all
+ * four are stated once in `channel-doctrine.ts`, and the post result carries the
+ * two FACTS instead: `addressed=yes|no` and `intent=request|chat`. Nothing
+ * observable was dropped — `addressed=no` is the same claim the paragraph made,
+ * and `intent=chat` is what kept a deliberate chat post from reading as a
+ * forgotten `to`.
+ *
+ * ⚠ THE REFUSAL STAYS, because it is not narration under a write that
+ * succeeded — it is the answer to a call that was never made.
  */
-
-import type { MessageIntent } from "@dopl/client";
-import { routesToASession, unaddressedPostNote } from "./channel-addressing";
 
 /**
  * ⚠ ONE constant for `intent:"chat"` + an address, used by BOTH places it can
@@ -28,69 +30,3 @@ import { routesToASession, unaddressedPostNote } from "./channel-addressing";
  */
 export const CHAT_ADDRESSED_REFUSAL =
   'A message with `intent`="chat" cannot be addressed — nothing was sent. "chat" means the people in the room and reaches nobody\'s machine; `to` means the opposite, and the server refuses the pair rather than guessing which half you meant. Send it as CHAT by dropping `to`, or as a REQUEST by dropping `intent` (a request is the default).';
-
-/** Everything the address lines need, read off the resolved post and its echo. */
-export interface PostAddressFacts {
-  /** The channel's id — what a follow-up call should be given. */
-  channelId: string;
-  /** ALREADY neutralized by the caller — splice it, do not re-wrap it. */
-  safeChannelName: string;
-  /** Whether this is a DIRECT (1:1) channel, where the server addresses for you. */
-  isDirect: boolean | undefined;
-  /** The post's declared intent; `chat` is unaddressed ON PURPOSE. */
-  intent: MessageIntent | undefined;
-  /** ALREADY render-safe (`resolveMemberOr`) — splice it, do not re-wrap it. */
-  toLabel: string | undefined;
-  /** `metadata.taskId` read back off the STORED message, not off the request. */
-  landedThread: string | undefined;
-}
-
-/**
- * Address lines for one successful post. Empty is legitimate — an ordinary
- * addressed post in a live thread has nothing to warn about.
- */
-export function postAddressLines(f: PostAddressFacts): string[] {
-  return addressingNoteLines(f);
-}
-
-/**
- * "Who was this put in front of" — or nothing when the post named somebody.
- *
- * ⚠ CHAT IS UNADDRESSED ON PURPOSE and must NOT get the warning written for a
- * FORGOTTEN address: `unaddressedPostNote`'s remedy is "re-post it with
- * to=<one member>", exactly what an `intent:"chat"` caller decided against, so
- * rendering it talks every deliberate chat message into becoming a request. The
- * chat line states the same fact with the opposite advice.
- *
- * ⚠ BUT CHAT STILL HAS TO READ `landedThread` (fixed 2026-08-22). This branch
- * returned early and never looked at it, so a chat post THREADED into a
- * first-class exchange was told "no agent was put in front of it" — and
- * `channel-addressing.ts` fact 3 says that is false: `feedLiveSession` hands a
- * uuid-tagged message straight into the counterparty's running turn without
- * reading the addressing at all. `intent` governs ADDRESSING; the thread tag is
- * a different route into the same session, and only ADDRESSING was skipped. An
- * agent told nothing was in front of its message says the same thing again
- * louder, into a session that already has it.
- */
-function addressingNoteLines(f: PostAddressFacts): string[] {
-  if (f.intent === "chat") {
-    // ⚠ Same predicate the non-chat path uses, for the same reason: only a
-    // FIRST-CLASS (uuid) tag reaches a session. A legacy `task-…` tag groups on
-    // a card and wakes nobody, so it correctly falls to the plain chat line.
-    if (routesToASession(f.landedThread)) {
-      return [
-        `CHAT, BUT THREADED — \`intent\`="chat" means this ADDRESSES nobody, and in a DIRECT channel it also skipped the other member. The THREAD TAG is a different route and it does not read addressing at all: a message carrying a first-class thread id is handed straight to the session the other party already has open on that thread, so this may be in front of their agent right now. So do NOT repeat it as a request — that lands as a second, unthreaded ask against work already running. If you want an answer, wait for it with dopl_channel(op="await", channel="${f.channelId}", since=<this seq>).`,
-      ];
-    }
-    return [
-      `CHAT — you posted this as \`intent\`="chat", so it addresses nobody: the people in **${f.safeChannelName}** can read it, no agent was put in front of it, and in a DIRECT channel the automatic address to the other member was skipped too. That is the point of the field, so this is NOT a delivery failure to repair. If you meant to ask for work, post again WITHOUT \`intent\` (a request is the default) and name who it is for.`,
-    ];
-  }
-  const note = unaddressedPostNote({
-    ref: f.channelId,
-    isDirect: f.isDirect,
-    addressed: !!f.toLabel,
-    landedThread: f.landedThread,
-  });
-  return note ? [note] : [];
-}

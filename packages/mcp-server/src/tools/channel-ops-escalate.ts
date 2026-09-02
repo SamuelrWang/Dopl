@@ -102,26 +102,23 @@ export async function opEscalate(
   // ⚠ `to` is NOT routed through: an escalation asks a PERSON to decide, and
   // addressing a member starts THEIR agent instead (INVARIANTS §5). The @-tag in
   // the body is the inbox mechanism, and it starts nobody.
-  const posted = await opPost(client, channelRef, body, {
+  // ⚠ ONE RESULT, NOT TWO (T10, 2026-09-02). This op used to APPEND three
+  // paragraphs to `opPost`'s already-long result: what a card is, where the
+  // answer arrives, and that the first answer wins. All three are true of every
+  // escalation, so all three are in `channel-doctrine.ts`; what only THIS call
+  // knows rides back as fields on the shared fact line — how many options were
+  // filed, and whether a recommendation went with them. The `tags=` field the
+  // post already carries is the one that matters most here: a card nobody is
+  // tagged in is a card nobody sees, and `tags=0/1` says so in four characters.
+  return opPost(client, channelRef, body, {
     escalation,
     thread: opts.thread,
     clientMsgId: opts.clientMsgId,
     runtime: opts.runtime,
+    resultHead: "escalated",
+    resultFacts: {
+      options: escalation.options.length,
+      recommended: escalation.recommendation?.index ?? undefined,
+    },
   });
-  if (posted.isError) return posted;
-
-  return {
-    ...posted,
-    content: [
-      ...posted.content,
-      {
-        type: "text" as const,
-        text: [
-          `That posted as an ESCALATION CARD: your operator (or whoever you tagged) sees the question, the options and your recommendation as buttons, and pressing one posts their choice back into this channel.`,
-          `⚠ THE ANSWER COMES BACK AS AN ORDINARY MESSAGE IN THIS CHANNEL, NOT PRIVATELY. Watch for it with dopl_channel(op="await", channel="${channelRef}", since=<the seq above>) — there is no separate place to poll and nothing else will arrive.`,
-          `⚠ ONE ANSWER, FIRST ONE WINS. Do not post the same question again while it is unanswered; a second card is a second question about one decision, and neither of you will be able to tell which answer belonged to which.`,
-        ].join("\n"),
-      },
-    ],
-  };
 }
