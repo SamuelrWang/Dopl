@@ -140,6 +140,13 @@ exports.WRITE_OPS = {
         // can write must be refused wholesale for a read-only token, or the read arm
         // becomes the door the write arm walks through.
         "update",
+        // ⚠ `ping` WRITES. It files a `channel_pings` row addressed at a person or a
+        // machine, and on the agent form it can WAKE a running session — a read-only
+        // token must be refused it for the SCOPE reason like any other write, or a
+        // dopl.read session can nudge agents through a non-admin tool.
+        // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out
+        // of the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
+        "ping",
     ]),
 };
 /**

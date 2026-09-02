@@ -60,6 +60,7 @@ import { opEscalate } from "./channel-ops-escalate";
 // THE PRIVATE DIRECT LANE (2026-08-31) — a mailbox the operator's OWN machine
 // claims, never a message and never another member's machine.
 import { opDirectAgent, opReadDirections } from "./channel-ops-direct";
+import { opPing, opReadPings } from "./channel-ops-ping";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 
 /**
@@ -286,6 +287,40 @@ export function registerChannelTool(
         // ⚠ BOTH FILTERS ARE OPTIONAL, hence no missingParams check. Own-scoped in
         // the service; the transport credential IS the caller, so no identity is
         // passed and none could be.
+        // ⚠ THE OUT-OF-BAND SIGNAL. `missingParams` covers only the three that
+        // are unconditional; the RECIPIENT is a choose-exactly-one over three
+        // params, which a required-list cannot express — `opPing` counts them
+        // and names the count it saw, because a caller that sent two cannot
+        // otherwise tell which one would have won.
+        case "ping": {
+          const miss = missingParams("ping", args, [
+            "channel",
+            "ping_kind",
+            "body",
+          ]);
+          if (miss) return miss;
+          return opPing(
+            client,
+            args.channel as string,
+            args.ping_kind as "done" | "question" | "blocked",
+            args.body as string,
+            {
+              to: args.to,
+              toDesktop: args.to_desktop,
+              agentId: args.agent_id,
+              thread: args.thread,
+            },
+          );
+        }
+        // ⚠ NO REQUIRED PARAMS, hence no missingParams check, and NO recipient
+        // argument either: the inbox is the caller's own, fenced at the server.
+        // The transport credential IS the caller, so no identity is passed here
+        // and none could be.
+        case "pings":
+          return opReadPings(client, {
+            since: args.since,
+            limit: args.limit,
+          });
         case "read_directions":
           return opReadDirections(client, {
             channel: args.channel,

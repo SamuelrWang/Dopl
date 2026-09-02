@@ -31,6 +31,25 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 /**
+ * THE BARE INSTANCE ID, from whichever form the caller pasted.
+ *
+ * ⚠ **BOTH FORMS ARE ACCEPTED BECAUSE `read_sessions` PRINTS THE HANDLE, NOT THE
+ * ID.** Every surface that shows an agent over MCP shows `@agent-<id>`, so that is
+ * what a model copies — and the column CHECK and the create schema both want the
+ * bare eight characters. Refusing the pasted form would be a 400 for doing exactly
+ * what the neighbouring op taught, which is the invisible-failure shape this
+ * surface refuses everywhere else.
+ * ⚠ IT STRIPS, IT DOES NOT VALIDATE. A value that is not an agent id after this
+ * is refused by the create schema and, failing that, reaches a machine that
+ * answers `no-session` — both honest, and neither is this function's job.
+ *
+ * ⚠ EXPORTED for `channel-ops-ping.ts` (2026-09-01), which takes the same
+ * pasted-handle argument on `agent_id` and must strip it the same way. ONE
+ * definition — a copy drifts, and the lane that drifts sends `@agent-` to a
+ * column CHECK that refuses it.
+ */
+export declare function bareAgentId(raw: string): string;
+/**
  * DIRECT ONE AGENT, then hold briefly for its answer.
  *
  * ⚠ FIVE TERMINAL SHAPES, each ending in a different next action: OFFLINE

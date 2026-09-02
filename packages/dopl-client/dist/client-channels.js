@@ -44,6 +44,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChannelMethods = void 0;
 const client_members_js_1 = require("./client-members.js");
 const channel = __importStar(require("./channel.js"));
+const ping = __importStar(require("./ping.js"));
 class ChannelMethods extends client_members_js_1.MemberMethods {
     listChannels(opts) {
         return channel.listChannels(this.transport, opts);
@@ -111,6 +112,21 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     /** The caller's own recent directions, terminal rows included. */
     listAgentDirections(query = {}) {
         return channel.listAgentDirections(this.transport, query);
+    }
+    /** THE "NEEDS YOU" SIGNAL (2026-09-01) — one recipient, out of band, never a
+     *  message. ⚠ There is no sender argument and no operator argument on the two
+     *  self-scoped recipient forms; the server stamps the authenticated caller. */
+    createPing(input) {
+        return ping.createPing(this.transport, input);
+    }
+    /** The caller's own recent pings. ⚠ `since` is a PING seq, never a message one. */
+    listPings(opts) {
+        return ping.listPings(this.transport, opts);
+    }
+    /** LONG-POLL the ping inbox. ⚠ Its own cursor space — a ping has no
+     *  `channel_messages.seq` and can never end a channel await. */
+    awaitPings(opts) {
+        return ping.awaitPings(this.transport, opts);
     }
     /** ⚠ A PAGE since 2026-08-23 (F-294), not a bare array: `operatorOnline`
      *  rides beside the rows because presence is a fact about the MACHINE, not

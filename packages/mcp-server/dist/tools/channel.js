@@ -54,6 +54,7 @@ const channel_ops_escalate_1 = require("./channel-ops-escalate");
 // THE PRIVATE DIRECT LANE (2026-08-31) — a mailbox the operator's OWN machine
 // claims, never a message and never another member's machine.
 const channel_ops_direct_1 = require("./channel-ops-direct");
+const channel_ops_ping_1 = require("./channel-ops-ping");
 const identity_1 = require("./identity");
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
@@ -240,6 +241,35 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
             // ⚠ BOTH FILTERS ARE OPTIONAL, hence no missingParams check. Own-scoped in
             // the service; the transport credential IS the caller, so no identity is
             // passed and none could be.
+            // ⚠ THE OUT-OF-BAND SIGNAL. `missingParams` covers only the three that
+            // are unconditional; the RECIPIENT is a choose-exactly-one over three
+            // params, which a required-list cannot express — `opPing` counts them
+            // and names the count it saw, because a caller that sent two cannot
+            // otherwise tell which one would have won.
+            case "ping": {
+                const miss = (0, respond_1.missingParams)("ping", args, [
+                    "channel",
+                    "ping_kind",
+                    "body",
+                ]);
+                if (miss)
+                    return miss;
+                return (0, channel_ops_ping_1.opPing)(client, args.channel, args.ping_kind, args.body, {
+                    to: args.to,
+                    toDesktop: args.to_desktop,
+                    agentId: args.agent_id,
+                    thread: args.thread,
+                });
+            }
+            // ⚠ NO REQUIRED PARAMS, hence no missingParams check, and NO recipient
+            // argument either: the inbox is the caller's own, fenced at the server.
+            // The transport credential IS the caller, so no identity is passed here
+            // and none could be.
+            case "pings":
+                return (0, channel_ops_ping_1.opReadPings)(client, {
+                    since: args.since,
+                    limit: args.limit,
+                });
             case "read_directions":
                 return (0, channel_ops_direct_1.opReadDirections)(client, {
                     channel: args.channel,

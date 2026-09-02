@@ -15,4 +15,5 @@ export type { ChannelInfoCard, ChannelInfoCardBuiltInKey, ChannelInfoCardRow, Ch
 export type { OntologyAttribute, OntologyAttributeValue, OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyClusterSummary, OntologyMethod, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologyObjectSummary, OntologyRelationship, OntologySnapshot, OntologySummary, OntologyTemplateField, } from "./ontology-types.js";
 export type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated, LaunchRefusalReason, } from "./launch-types.js";
 export type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated, DirectionRefusalReason, } from "./direction-types.js";
+export type { AwaitPingsOptions, ChannelPing, CreatePingInput, ListPingsOptions, PingAwaitResult, PingKind, PingRecipientKind, } from "./ping-types.js";
 export type { ChannelEscalationAnswerInput, ChannelEscalationFields, ChannelEscalationInput, ChannelEscalationOption, } from "./escalation-types.js";

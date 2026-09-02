@@ -77,13 +77,22 @@ export const CHANNEL_INPUT_SHAPE = {
       // but the four fields are validated and stamped, so the surface renders
       // them as a CARD WITH BUTTONS and the choice comes back to you as a reply.
       "escalate",
+      // ⚠ THE OUT-OF-BAND SIGNAL, AND IT IS NOT A POST. One recipient, three
+      // words, no room: it does not fan out, it cannot end an `await`, and its
+      // `seq` is its own cursor space. It exists because an agent that FINISHES
+      // had no instrument at all — an unaddressed post starts nobody, and an
+      // addressed one shouts at a whole channel and triggers a machine.
+      "ping",
+      // The inbox behind it. Read-only and recipient-scoped: what was sent TO
+      // ME, never what was sent to anybody else.
+      "pings",
     ])
     .describe("Operation to perform."),
   channel: z
     .string()
     .optional()
     .describe(
-      'Channel slug or id. Required for every op except four: "open" (which creates a channel), "list" (which lists them all), "read_sessions" (where it is an OPTIONAL filter — omit it to see every session of yours in the workspace), and "await" (where OMITTING it holds across EVERY channel you are a member of at once, instead of one).',
+      'Channel slug or id. Required for every op except five: "open" (which creates a channel), "list" (which lists them all), "read_sessions" (where it is an OPTIONAL filter — omit it to see every session of yours in the workspace), "await" (where OMITTING it holds across EVERY channel you are a member of at once, instead of one), and "pings" (your inbox spans every channel, so there is nothing to narrow).',
     ),
   direct: z
     .boolean()
@@ -126,13 +135,13 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(16000)
     .optional()
     .describe(
-      'op="post" / op="create_thread" / op="milestone" (required): the message text, <=16000 characters. For op="post" this is what you are actually saying, and it is a normal message whatever it contains — a half-sentence, a status line, or the finished deliverable. For op="milestone" it is ONE LINE naming the step that just landed, nothing more (content does not travel in a milestone; nobody reads one as an answer). For create_thread, it is the requester\'s initial request.',
+      'op="post" / op="create_thread" / op="milestone" (required): the message text, <=16000 characters. For op="post" this is what you are actually saying, and it is a normal message whatever it contains — a half-sentence, a status line, or the finished deliverable. For op="milestone" it is ONE LINE naming the step that just landed, nothing more (content does not travel in a milestone; nobody reads one as an answer). For create_thread, it is the requester\'s initial request. op="ping" (required): ONE LINE, <=600 characters — what you are signalling, not the report. The thread you point at is where the report lives, and a ping long enough to be read as one is a ping nobody reads.',
     ),
   to: z
     .string()
     .optional()
     .describe(
-      'op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post it makes the message a REQUEST that triggers that member\'s listener and can start their agent, so name someone only when you are asking for their machine. Omit it for talk nobody must act on — and say so outright with `intent`="chat", which addresses nobody even in a direct channel. A channel reaches PEOPLE: there is no way to address an agent by name. For create_thread, it is the member the thread is for.',
+      'op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post it makes the message a REQUEST that triggers that member\'s listener and can start their agent, so name someone only when you are asking for their machine. Omit it for talk nobody must act on — and say so outright with `intent`="chat", which addresses nobody even in a direct channel. A channel reaches PEOPLE: there is no way to address an agent by name. For create_thread, it is the member the thread is for. op="ping" (one of three recipient forms): file the signal in that PERSON\'S inbox. ⚠ Unlike a post it does NOT trigger their machine — it waits to be read, which is the point.',
     ),
   // ⚠ One param, one route now. The declared 2000 is deliberately LOOSER than
   // the post route's 200 so an over-length summary is the route's to reject,
@@ -229,7 +238,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). ⚠ For get_thread this returns the thread\'s METADATA ONLY — title, mode, the two parties, timestamps — and NO message bodies; to read what was said, use op="read" with thread=<id>. op="post" (optional): thread this post under that thread. op="launch_agent" (optional): start the agent ON that thread, so its posts land in that exchange. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is never thread-scoped, with or without a channel).',
+      'op="get_thread" / op="set_thread_mode" / op="milestone" (required): the thread id (returned by create_thread). ⚠ For get_thread this returns the thread\'s METADATA ONLY — title, mode, the two parties, timestamps — and NO message bodies; to read what was said, use op="read" with thread=<id>. op="post" (optional): thread this post under that thread. op="launch_agent" (optional): start the agent ON that thread, so its posts land in that exchange. op="read" (optional): filter the transcript to that one exchange — only messages tagged with this thread id come back. It FILTERS, so an id no message carries returns nothing rather than an error, and `await` has no counterpart (it is never thread-scoped, with or without a channel). op="ping" (optional): point the signal at that exchange, so whoever reads it can open the work in one click.',
     ),
   // ⚠ `agent_id`, NOT `agent`. `channel-addressing-rule.test.ts` bans a param
   // literally named `agent` — it was the retired named-agent ADDRESSING surface,
@@ -240,7 +249,27 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="direct_agent" (required): WHICH of your operator\'s agents to speak to — the 8-character instance id. dopl_channel(op="read_sessions") prints it as `@agent-<id>`; you may paste either that whole handle or the bare id, both are accepted. op="read_directions" (optional): narrow the listing to that one agent. ⚠ There is NO oldest-agent fallback on this lane, deliberately: a direction reaches a PRIVATE turn, so guessing which agent you meant would steer one you did not address with nothing reporting the swap.',
+      'op="direct_agent" (required): WHICH of your operator\'s agents to speak to — the 8-character instance id. dopl_channel(op="read_sessions") prints it as `@agent-<id>`; you may paste either that whole handle or the bare id, both are accepted. op="read_directions" (optional): narrow the listing to that one agent. ⚠ There is NO oldest-agent fallback on this lane, deliberately: a direction reaches a PRIVATE turn, so guessing which agent you meant would steer one you did not address with nothing reporting the swap. op="ping" (one of three recipient forms): signal THAT agent — again one of your OWN operator\'s, and if it is live on this channel the ping wakes it.',
+    ),
+  // ⚠ TWO PARAMS FOR ONE OP, and neither could be folded into an existing one.
+  // `kind` is a CLOSED enum of message kinds and widening it would let a post
+  // claim it was "done"; `to`/`agent_id` already carry the other two recipient
+  // forms, so only "my own operator's external session" had no spelling.
+  // ⚠ THERE IS NO PARAM FOR *WHOSE* MACHINE, ON PURPOSE. Both self-scoped forms
+  // resolve to the authenticated caller's own operator, server-side, and that
+  // absence is the whole of the loop brake: you cannot ping another member's
+  // agent because there is no argument with which to name one.
+  ping_kind: z
+    .enum(["done", "question", "blocked"])
+    .optional()
+    .describe(
+      'op="ping" (required): WHAT you are signalling. "done" — the work is finished; this is the one nothing else could say, and an agent that ends without it ends invisibly. "question" — you need an answer to continue (this is NOT op="escalate", which offers a human buttons to press; a question ping says "come look" and the thread holds the question). "blocked" — you cannot continue and are not asking a question: a credential, a dependency, a decision elsewhere.',
+    ),
+  to_desktop: z
+    .boolean()
+    .optional()
+    .describe(
+      'op="ping" (one of three recipient forms): set true to signal YOUR OWN operator\'s external session — the one holding the ping inbox open. This is what an agent uses to say "I have finished, come and look" to the human\'s own assistant, and it is the reason this op exists: nothing else could reach that session without the operator asking first.',
     ),
   // ⚠ `outcome` ("completed" | "failed") was a param here, required by
   // op="propose_close" alone. It left with thread closing (wiring plan Phase 4,
@@ -253,7 +282,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .min(0)
     .optional()
     .describe(
-      'op="read": return only messages with seq greater than this. op="await" (ALWAYS required, with or without `channel`): the last seq you have processed. `seq` is workspace-global, which is what lets ONE cursor cover every channel at once when you omit `channel`. ⚠ WHERE TO GET ONE, because there is a page that deliberately will not give you one: a THREAD-SCOPED read (op="read" with `thread`) offers NO cursor at all and says so — it filtered other exchanges out, and `await` is channel-wide with a strict "greater than", so a seq taken off that page would permanently skip every message the filter hid. Establish the cursor from an UNSCOPED read (drop `thread`) and carry that page\'s highest seq.',
+      'op="read": return only messages with seq greater than this. op="await" (ALWAYS required, with or without `channel`): the last seq you have processed. `seq` is workspace-global, which is what lets ONE cursor cover every channel at once when you omit `channel`. ⚠ WHERE TO GET ONE, because there is a page that deliberately will not give you one: a THREAD-SCOPED read (op="read" with `thread`) offers NO cursor at all and says so — it filtered other exchanges out, and `await` is channel-wide with a strict "greater than", so a seq taken off that page would permanently skip every message the filter hid. Establish the cursor from an UNSCOPED read (drop `thread`) and carry that page\'s highest seq. op="pings" (optional): return only pings with a higher ping seq than this. ⚠ **A PING SEQ IS NOT A MESSAGE SEQ.** They are separate cursor spaces, so crossing them reads a plausible WRONG page instead of erroring — carry the one op="pings" itself printed.',
     ),
   goal: z
     .string()
@@ -399,7 +428,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(200)
     .optional()
     .describe(
-      'op="read": max messages to return (1-200, DEFAULT 100). Omitted with no `since`, that is the NEWEST 100 — older messages are absent, not reported as absent.',
+      'op="read": max messages to return (1-200, DEFAULT 100). Omitted with no `since`, that is the NEWEST 100 — older messages are absent, not reported as absent. op="pings": max pings to return (1-100, DEFAULT 20).',
     ),
   timeout_ms: z.coerce
     .number()
