@@ -29,9 +29,37 @@ import {
   TOOLS,
   TOOL_BY_NAME,
   WRITE_OPS,
+  actionEnum,
   isAdmin,
   opEnum,
 } from "./parity-harness.js";
+import { CHANNEL_ACTIONS } from "./channel-schema.js";
+
+/**
+ * ⚠ **THE OPS THAT DISPATCH AGAIN, ON A SECOND WORD** (2026-09-02, slice B8).
+ * `dopl_channel(op="rooms")` READS on four actions and WRITES on four, so the
+ * gate key is `<op>.<action>` and the classification below is per PAIR. Anything
+ * else would be a hole: gating `rooms` wholesale as a write refuses a
+ * `dopl.read` token the four calls it exists to make, and gating it as a read
+ * hands one the four that change the room.
+ *
+ * ⚠ THE MAP IS IMPORTED FROM THE PRODUCTION CONSTANT, never restated — and the
+ * case below asserts the published `action` enum is exactly the union of its
+ * values, so a verb added to one and not the other fails here rather than
+ * arriving unclassified.
+ */
+const ACTIONS_BY_OP: Record<string, Readonly<Record<string, readonly string[]>>> = {
+  dopl_channel: CHANNEL_ACTIONS,
+};
+
+/** Every key a call on `tool` can be gated on — `op`, or `op.action` per pair. */
+function gateKeys(tool: { name: string }, enumOps: readonly string[]): string[] {
+  const actions = ACTIONS_BY_OP[tool.name];
+  if (!actions) return [...enumOps];
+  return enumOps.flatMap((op) =>
+    actions[op] ? actions[op].map((a) => `${op}.${a}`) : [op],
+  );
+}
 
 // ⚠ CURATED READ-OPS ALLOWLIST — THE SECURITY REVIEW. Per tool, the ops that
 // ONLY read (no client write call in the handler), derived by reading every op
@@ -55,39 +83,45 @@ const READ_OPS: Record<string, string[]> = {
   // web UI. ⚠ "who may call it" and "does it write" are different questions —
   // answering the second with the first is how a write op becomes callable
   // from a read-only token.
+  // ⚠ **KEYED BY `op.action` WHERE THE OP TAKES ONE** (2026-09-02, slice B8).
+  // Twenty-three ops became five, and the five are not five classifications:
+  // `rooms` is four reads and four writes, so this list names the four reads and
+  // `gating.ts › WRITE_OPS` names the four writes.
   dopl_channel: [
-    // `op="help"` RETURNS A CONSTANT AND MAKES NO REQUEST AT ALL — the same text
+    // `opRead` / `opReadAccount` / `opAwait` call only read endpoints. ⚠ The HOLD
+    // is the same op with `wait_ms` and is the same classification: a long-poll
+    // is a read that waits, and it was refused to a read-only token by nothing
+    // when it was its own op either.
+    "read",
+    // `opStatus` composes `listChannelSessions` (own-scoped) and
+    // `listAgentDirections` (own-scoped at the server, `operator_user_id =
+    // ctx.userId` in the SQL predicate). ⚠ THE TWO DESKTOP WRITES ON THE
+    // DIRECTIONS LANE — claim and decide — ARE NOT MCP OPS AND MUST NEVER BECOME
+    // ONE. They are how a MACHINE reports what it did with a direction; an
+    // external agent does not get to say a direction was delivered, still less to
+    // write the `reply` an operator will read as its own agent's words. They are
+    // unbound on `@dopl/client` for the same reason.
+    "status",
+    // `opList` calls only `listChannels`.
+    "rooms.list",
+    // `opMembers` calls only `listChannelMembers` and renders it. Membership
+    // changes via `rooms.invite` (gated as a write) and the web UI. ⚠ "who may
+    // call it" and "does it write" are different questions — answering the second
+    // with the first is how a write op becomes callable from a read-only token.
+    "rooms.members",
+    // `opListThreads` calls only `listChannelThreads`.
+    "rooms.threads",
+    // `rooms.help` RETURNS A CONSTANT AND MAKES NO REQUEST AT ALL — the same text
     // as the `dopl://doctrine/channels` MCP resource. It reads nothing, so it is
     // not merely "not a write": there is no client call in the handler to audit.
-    "help",
-    "list",
-    "read",
-    "await",
-    "members",
-    "list_threads",
-    // ⚠ `get_thread` STOOD HERE AND IS GONE (2026-09-02, C15 — it folded into
-    // `read(thread=)`). A stale READ_OPS entry is DEAD LAW THAT READS AS
-    // COVERAGE: the completeness test only walks the ENUM, so an allowlist entry
-    // for an op nobody serves fails nothing, and the next reader takes it for a
-    // classified op. The ⊆ assertion below is what turns that into a failure.
-    // `opReadSessions` calls only `listChannelSessions` — own-scoped, no write.
-    // ⚠ The desktop WRITE that feeds it posts straight to the route from the
-    // main process and must NOT become an MCP op: an external agent does not
-    // get to say what a session on somebody's machine is doing.
-    "read_sessions",
-    // `opReadPings` calls only `listPings` — own-scoped at the server
-    // (`recipient_user_id = ctx.userId` in the SQL predicate), no write. ⚠ Its
-    // sibling `ping` is a WRITE and is in WRITE_OPS; the two are one op apart in
-    // spelling and a whole scope apart in what they may do.
-    "pings",
-    // `opReadDirections` calls only `listAgentDirections` — own-scoped at the
-    // server (`operator_user_id = ctx.userId` in the SQL predicate), no write.
-    // ⚠ THE TWO DESKTOP WRITES ON THAT LANE — claim and decide — ARE NOT MCP OPS
-    // AND MUST NEVER BECOME ONE. They are how a MACHINE reports what it did with
-    // a direction; an external agent does not get to say that a direction was
-    // delivered, still less to write the `reply` an operator will read as its own
-    // agent's words. They are unbound on `@dopl/client` for the same reason.
-    "read_directions",
+    "rooms.help",
+    // ⚠ EIGHT NAMES STOOD HERE AND ARE GONE (2026-09-02, B8): `help`, `list`,
+    // `await`, `members`, `list_threads`, `read_sessions`, `pings` and
+    // `read_directions`, each folded into one of the five. A stale READ_OPS entry
+    // is DEAD LAW THAT READS AS COVERAGE — the completeness walk only visits keys
+    // the tool really serves, so an allowlist entry for an op nobody serves fails
+    // nothing, and the next reader takes it for a classified op. The ⊆ assertion
+    // below is what turns that into a failure.
   ],
 };
 
@@ -147,6 +181,63 @@ describe("tool capture", () => {
 
 // ── 1a. WRITE_OPS ⊆ op enum (kills the stale-op class) ───────────────
 
+/**
+ * Is `key` — plain `op` or dotted `op.action` — something `tool` really serves?
+ * ⚠ ONE resolver for both gate lists, because "this entry names nothing" is the
+ * same failure whichever list it sits in, and two copies is how one of them
+ * quietly stops asking.
+ */
+function servesKey(toolName: string, enumOps: readonly string[], key: string): boolean {
+  const [op, action, ...rest] = key.split(".");
+  if (rest.length > 0) return false;
+  if (!enumOps.includes(op)) return false;
+  // ⚠ A BARE OP IS A LEGAL ENTRY EVEN WHERE ACTIONS EXIST — it classifies the
+  // whole op, which `gating.ts › isWriteOp` honours the same way. What must NOT
+  // be legal is an action nobody serves.
+  if (action === undefined) return true;
+  return (ACTIONS_BY_OP[toolName]?.[op] ?? []).includes(action);
+}
+
+/**
+ * Is `key` classified by `set`? ⚠ A bare entry for the op covers every action of
+ * it, exactly as the gate reads it — a test that resolved this differently from
+ * `gating.ts › isWriteOp` would be measuring a table nothing enforces.
+ */
+function classifies(set: ReadonlySet<string>, key: string): boolean {
+  const dot = key.indexOf(".");
+  return set.has(key) || (dot > 0 && set.has(key.slice(0, dot)));
+}
+
+describe("the `action` sub-verb is declared once and published whole", () => {
+  it("the published enum is exactly the union of the per-op vocabularies", () => {
+    // ⚠ THE PAIR THE DOTTED GATE KEYS REST ON. `action` is one FLAT enum a
+    // client introspects, while the gate reasons per (op, action) — so a verb in
+    // the map but not the enum is unreachable, and one in the enum but not the
+    // map is unclassifiable. Either way a call arrives that no list describes.
+    for (const [name, actions] of Object.entries(ACTIONS_BY_OP)) {
+      const tool = TOOL_BY_NAME.get(name);
+      expect(tool, `${name} declares actions but is not registered`).toBeDefined();
+      const published = actionEnum(tool!);
+      expect(published, `${name} declares actions but publishes no enum`).not.toBeNull();
+      expect([...(published ?? [])].sort()).toEqual(
+        Object.values(actions).flat().sort(),
+      );
+    }
+  });
+
+  it("the per-op vocabularies are DISJOINT, so one word never means two things", () => {
+    // ⚠ Disjointness is what makes `rooms.open` unambiguous AND what lets the
+    // registrar refuse `manage(action="open")` by naming the op that does take
+    // the word. Overlapping verbs would make the refusal a guess.
+    for (const [name, actions] of Object.entries(ACTIONS_BY_OP)) {
+      const all = Object.values(actions).flat();
+      expect(new Set(all).size, `${name} reuses an action name across ops`).toBe(
+        all.length,
+      );
+    }
+  });
+});
+
 describe("WRITE_OPS ⊆ op enum", () => {
   it("every WRITE_OPS entry names a registered tool", () => {
     for (const name of Object.keys(WRITE_OPS)) {
@@ -161,9 +252,9 @@ describe("WRITE_OPS ⊆ op enum", () => {
       expect(enumOps, `${name} has no op enum but WRITE_OPS gates it`).not.toBeNull();
       for (const op of ops) {
         expect(
-          enumOps,
-          `WRITE_OPS.${name} lists op="${op}" which is NOT in the tool's op enum (stale op — the WRITE_OPS.dopl_skill drift bug)`,
-        ).toContain(op);
+          servesKey(name, enumOps ?? [], op),
+          `WRITE_OPS.${name} lists "${op}", which this tool does not serve — an op that left the enum, or an action that left its vocabulary (stale entry — the WRITE_OPS.dopl_skill drift bug)`,
+        ).toBe(true);
       }
     }
   });
@@ -190,9 +281,9 @@ describe("READ_OPS ⊆ op enum", () => {
       expect(enumOps, `${name} has no op enum but READ_OPS classifies it`).not.toBeNull();
       for (const op of ops) {
         expect(
-          enumOps,
-          `READ_OPS.${name} lists op="${op}" which is NOT in the tool's op enum — delete the entry rather than leaving a review of an op nobody serves`,
-        ).toContain(op);
+          servesKey(name, enumOps ?? [], op),
+          `READ_OPS.${name} lists "${op}", which this tool does not serve — delete the entry rather than leaving a review of a call nobody can make`,
+        ).toBe(true);
       }
     }
   });
@@ -207,11 +298,18 @@ describe("write-op completeness", () => {
       const write = WRITE_OPS[tool.name] ?? new Set<string>();
       const read = new Set(READ_OPS[tool.name] ?? []);
       const knownDrift = new Set(KNOWN_WRITE_OPS_DRIFT[tool.name] ?? []);
-      for (const op of enumOps) {
-        const classified = write.has(op) || read.has(op) || knownDrift.has(op);
+      // ⚠ THE WALK IS OVER GATE KEYS, NOT OVER OPS. On a tool whose op takes an
+      // `action`, the unit that gets refused is the PAIR — so the pair is the
+      // unit that owes a classification, and walking ops alone would let four
+      // room writes ride in on one classified op.
+      for (const key of gateKeys(tool, enumOps)) {
+        const classified =
+          classifies(write, key) ||
+          classifies(read, key) ||
+          classifies(knownDrift, key);
         expect(
           classified,
-          `UNCLASSIFIED op "${op}" on ${tool.name}. If it writes, add it to WRITE_OPS in packages/mcp-server/src/server.ts. If it only reads, add it to READ_OPS in this test after confirming it in the source.`,
+          `UNCLASSIFIED "${key}" on ${tool.name}. If it writes, add it to WRITE_OPS in packages/mcp-server/src/gating.ts. If it only reads, add it to READ_OPS in this test after confirming it in the source.`,
         ).toBe(true);
       }
     }
@@ -226,7 +324,9 @@ describe("write-op completeness", () => {
       const enumOps = opEnum(tool)!;
       const write = WRITE_OPS[tool.name] ?? new Set<string>();
       const read = new Set(READ_OPS[tool.name] ?? []);
-      const drift = enumOps.filter((op) => !write.has(op) && !read.has(op));
+      const drift = gateKeys(tool, enumOps).filter(
+        (key) => !classifies(write, key) && !classifies(read, key),
+      );
       if (drift.length > 0) computed[tool.name] = drift.sort();
     }
     const expected: Record<string, string[]> = {};
@@ -252,6 +352,13 @@ describe("write-op completeness", () => {
     // cannot be asserted absent here, and the case below — every enum op is
     // classified write-or-read — is what covers it, which is the check that
     // actually closes the read-only-token hole this block is about.
+    // ⚠ **THE EIGHTEEN RETIRED NAMES JOIN THE SIX (2026-09-02, B8), AND FOR THE
+    // SAME REASON RATHER THAN A NEW ONE.** They still PARSE — the runtime enum is
+    // the union, so their one-line redirects can run — but the PUBLISHED enum is
+    // five, and `opEnum` reads what is published. A retired name reappearing in
+    // the published enum would be the collapse silently coming undone; a retired
+    // name in `WRITE_OPS` would be a gate on a call that only ever answers a
+    // sentence.
     for (const op of [
       "agents",
       "summon_agent",
@@ -259,6 +366,28 @@ describe("write-op completeness", () => {
       "disengage_agent",
       "join_thread",
       "leave_thread",
+      "post",
+      "milestone",
+      "escalate",
+      "ping",
+      "pings",
+      "create_thread",
+      "list",
+      "open",
+      "invite",
+      "members",
+      "list_threads",
+      "set_thread_mode",
+      "update",
+      "launch_agent",
+      "end_agent",
+      "rename_agent",
+      "set_agent_mode",
+      "direct_agent",
+      "read_directions",
+      "read_sessions",
+      "await",
+      "help",
     ]) {
       expect(write.has(op), `dopl_channel op="${op}" is still gated as a write`).toBe(
         false,
@@ -275,7 +404,9 @@ describe("write-op completeness", () => {
       const enumOps = opEnum(tool)!;
       const write = WRITE_OPS[tool.name] ?? new Set<string>();
       const read = new Set(READ_OPS[tool.name] ?? []);
-      const ungated = enumOps.filter((op) => !write.has(op) && !read.has(op));
+      const ungated = gateKeys(tool, enumOps).filter(
+        (key) => !classifies(write, key) && !classifies(read, key),
+      );
       expect(ungated, `${tool.name} has un-gated write ops: ${ungated.join(", ")}`).toEqual([]);
     }
   });

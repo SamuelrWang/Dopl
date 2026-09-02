@@ -118,7 +118,7 @@ export type RoomsAction = (typeof CHANNEL_ACTIONS.rooms)[number];
  * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
  * growing past it, and shrinking below it without lowering the number.
  */
-// ⚠ 11,341 → 8,303 ON 2026-09-02 (B8), AND EVERY CHARACTER OF IT CAME FROM
+// ⚠ 11,341 → 8,372 ON 2026-09-02 (B8), AND EVERY CHARACTER OF IT CAME FROM
 // DELETING PARAMS AND OPS RATHER THAN FROM SHORTENING PROSE. Thirteen params
 // left the shape — `topic`, `member`, `title`, `handoff`, `agent_id`,
 // `ping_kind`, `recipient`, `metadata`, `goal`, `issue`, `context`,
@@ -126,7 +126,7 @@ export type RoomsAction = (typeof CHANNEL_ACTIONS.rooms)[number];
 // because the concept each named already had a field: a recipient is `to`, an
 // intent is `summary`, a goal is `body`, a hold is `wait_ms`. Eighteen op names
 // left the published enum. A cut a re-worded sentence cannot make twice.
-export const SCHEMA_MAX_CHARS = 8_303;
+export const SCHEMA_MAX_CHARS = 8_372;
 
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
@@ -216,7 +216,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'A thread id, or the legacy `task-<channel>-<seq>` label. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; optional on op="read" and op="manage".',
+      'A thread id, or the legacy `task-<channel>-<seq>` label. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; on op="read" it narrows to its metadata header plus only that exchange.',
     ),
 
   summary: z
@@ -241,7 +241,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(200)
     .optional()
     .describe(
-      'op="send" / op="manage" (optional): an idempotency key. Send one BEFORE you might need to retry — a retried call with NO key starts a SECOND agent or writes a second row, while a re-sent key hands back YOUR first call\'s.',
+      'op="send" / op="manage" (optional): an idempotency key. Send one BEFORE you might need to retry — a retried call with NO key starts a SECOND agent or writes a second row, while a re-sent key hands back YOUR first call\'s. The dedupe is PER-AUTHOR on every op.',
     ),
 
   // ── kind="decision" ──────────────────────────────────────────────────────

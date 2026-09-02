@@ -69,8 +69,14 @@ export const SHELF_ABSENT_RULE =
  * split, because the single most likely mistake is reaching for
  * `shelf="personal"` when the caller meant `workspace=<home channel container>`.
  */
+// ⚠ **"YOUR DEFAULT WORKSPACE" BECAME "YOUR PERSONAL CONTAINER" ON 2026-09-02**
+// (cross-slice request from B11, Samuel's ruling B10). The default workspace is
+// being REMOVED — after this wave it has no definition, so a description that
+// located the personal shelf inside one would have named a place that stopped
+// existing. The container is what B11 mints, one per user, and it is where those
+// rows already live.
 export const SHELF_ARG_DESCRIPTION =
-  `Which SHELF to target: "personal" = your own PERSONAL shelf (the private rows inside your DEFAULT workspace), "workspace" = the workspace's shared shelf. ${SHELF_ABSENT_RULE} This is NOT how you reach a home CHANNEL — a home channel is a separate container, addressed with \`workspace=<container id>\`, and it has no personal shelf at all.`;
+  `Which SHELF to target: "personal" = your own PERSONAL shelf (the private rows inside your personal container), "workspace" = the workspace's shared shelf. ${SHELF_ABSENT_RULE} This is NOT how you reach a home CHANNEL — a home channel is a separate container, addressed with \`workspace=<container id>\`, and it has no personal shelf at all.`;
 
 /**
  * 🔒 THE HOME-SHELF FENCE, SURFACED. Both features answer 403 with their own

@@ -296,7 +296,13 @@ export const WRITE_OPS: Record<string, Set<string>> = {
 /**
  * Does `op` — the key {@link Gates.requestedOp} produced — write?
  *
- * ⚠ **THE BARE-OP ARM FAILS CLOSED, AND THAT IS THE WHOLE REASON THIS IS A
+ * ⚠ **TWO GRAINS, ON PURPOSE.** A bare entry (`manage`) gates the whole op; a
+ * dotted one (`rooms.open`) gates one action and leaves its siblings readable.
+ * `rooms` needs the fine grain — four of its actions read — and `manage` needs
+ * the coarse one, because listing five actions that all write is five chances to
+ * add a sixth and forget.
+ *
+ * ⚠ **THE BARE-CALL ARM FAILS CLOSED, AND THAT IS THE WHOLE REASON THIS IS A
  * FUNCTION.** A sub-actioned call arrives as `rooms.open`; a call that named NO
  * action arrives as bare `rooms`, and it must not read as "no matching write
  * entry, therefore a read". The handler refuses a missing `action` before any
@@ -310,7 +316,12 @@ export function isWriteOp(name: string, op: string): boolean {
   const writes = WRITE_OPS[name];
   if (!writes) return false;
   if (writes.has(op)) return true;
-  if (op.includes(".")) return false;
+  const dot = op.indexOf(".");
+  // ⚠ A BARE ENTRY COVERS EVERY ACTION OF ITS OP, and that is not a shortcut: it
+  // is how a table says "this whole op writes" once instead of five times, which
+  // is the honest statement for `manage` and would be a lie for `rooms`.
+  if (dot > 0) return writes.has(op.slice(0, dot));
+  // ⚠ THE FAIL-CLOSED ARM: an op with WRITE actions, called with no action named.
   for (const entry of writes) {
     if (entry.startsWith(`${op}.`)) return true;
   }

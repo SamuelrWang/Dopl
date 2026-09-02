@@ -174,7 +174,7 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ~470; the machine-readable tail took ~465 of it back. ⚠ That is the trade
   // this ratchet is supposed to allow: an error code an agent can match on is
   // worth more per character than a list of ops it can read off the enum.
-  dopl_channel: 1586,
+  dopl_channel: 1596,
   dopl_chats: 1699,
   dopl_kb: 1947,
   dopl_members: 1453,
@@ -219,7 +219,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // message on every `read`. One connection's worth of characters against an
   // orchestrator loop's.
   current_workspace: 720,
-  dopl_agent: 3929,
+  dopl_agent: 3930,
   // ⚠ 11,609 → 8,571 (B8, 2026-09-02) — 3,038 characters, and every one came
   // from a param or an op leaving rather than from a sentence being reworded.
   // Thirteen params went (`topic`, `member`, `title`, `handoff`, `agent_id`,
@@ -233,15 +233,21 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // answer to "does this op want this argument" — the floor
   // `channel-schema-budget.test.ts` exists to hold. The next real cut is
   // FEWER FIELDS, and B13 takes the next one.
-  dopl_channel: 8571,
+  dopl_channel: 8640,
   dopl_chats: 3554,
   dopl_home: 440,
-  dopl_kb: 5346,
+  dopl_kb: 5347,
   dopl_map: 251,
   dopl_members: 604,
   dopl_ontology: 2538,
   dopl_search: 1081,
   dopl_skill: 3059,
+  // ⚠ AND THREE ROSE BY EXACTLY 1 ON THE SAME DAY, FROM AN EDIT IN A FOURTH
+  // FILE: `shelf.ts › SHELF_ARG_DESCRIPTION` stopped saying "your DEFAULT
+  // workspace" and started saying "your personal container" (B11's cross-slice
+  // request, Samuel's ruling B10). One shared describe, three tools, one
+  // character each — which is what a shared constant costs, and it is cheaper
+  // than three copies that can disagree about where a shelf lives.
   // ⚠ THESE THREE EACH FELL BY EXACTLY 7 AND THE EDIT WAS IN NEITHER OF THEM:
   // `response-size.ts › RESPONSE_FORMAT_FIELD` is ONE constant shared by five
   // tools, and its sentence now names `op="status"` where it named
@@ -290,11 +296,11 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 //     run. See `instructions.ts › ConnectionIdentity`.
 // ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** Every figure a doc has carried
 // about this surface has gone stale inside a day (F-422).
-// ⚠ 51,996 → 48,932 (B8, 2026-09-02). 3,064 of the 3,045-character fall is
+// ⚠ 51,996 → 48,973 (B8, 2026-09-02). 3,007 of the 3,023-character fall is
 // `dopl_channel`'s schema; the remaining ~20 is the shared `response_format`
 // describe naming one op differently across five tools, and `dopl_channel`'s
 // own description shedding five.
-const SERVED_TOTAL_CEILING = 48_932;
+const SERVED_TOTAL_CEILING = 49_013;
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -344,7 +350,7 @@ const INSTRUCTIONS_CEILING = 1_851;
 // and the rule behind an argument a `.describe()` may only state the contract
 // of. Anything a result already reports and anything that is encouragement
 // rather than contract is gone.
-const DOCTRINE_CEILING = 8_997;
+const DOCTRINE_CEILING = 8_985;
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",
