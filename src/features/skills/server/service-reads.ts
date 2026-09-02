@@ -1,6 +1,10 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { isUuid } from "@/shared/lib/id/uuid";
+import {
+  readResourceById,
+  type ContainerRead,
+} from "@/shared/tenancy/read-resource";
 import type {
   ResolvedSkill,
   ResolvedSkillReference,
@@ -57,20 +61,67 @@ export async function listSkills(
   return visible;
 }
 
-/** Resolve by slug OR stable UUID id — renames change the slug, so agents
- *  need an immutable handle. Every read/write op funnels through here, so id
- *  acceptance applies uniformly. */
+/**
+ * Resolve by slug OR stable UUID id — renames change the slug, so agents need an
+ * immutable handle. Every read/write op funnels through here, so id acceptance
+ * applies uniformly.
+ *
+ * 🔒 ⚠ **KEYED TO `ctx.workspaceId`, AND IT MUST STAY THAT WAY — IT IS THE WRITE
+ * GATE.** `service-writes.ts`, `service-body.ts`, `service-history.ts` and
+ * `service-insights.ts` all funnel through it, so the tenancy it reads in is the
+ * tenancy those writes land in. The ID-RESOLVING read is {@link readSkillByRef};
+ * the split is A12's, restated for this feature (INVARIANTS §T35).
+ */
 export async function getSkillBySlug(
   ctx: SkillContext,
   ref: string
 ): Promise<Skill> {
+  const skill = await loadVisibleSkill(ctx, ref);
+  if (!skill) throw new SkillNotFoundError(ref);
+  return skill;
+}
+
+/** The read every skill door shares: one row, in ONE named container, through
+ *  the matrix and the grant set. `null` = not visible, which the callers turn
+ *  into the single 404. */
+async function loadVisibleSkill(
+  ctx: SkillContext,
+  ref: string
+): Promise<Skill | null> {
   const skill = isUuid(ref)
     ? await repo.findSkillById(ctx.workspaceId, ref)
     : await repo.findSkillBySlug(ctx.workspaceId, ref);
-  if (!skill) throw new SkillNotFoundError(ref);
+  if (!skill) return null;
   const grants = await grantsForSkills(ctx, [skill]);
-  if (!canSeeSkill(ctx, skill, grants)) throw new SkillNotFoundError(ref);
+  if (!canSeeSkill(ctx, skill, grants)) return null;
   return withGrantSet(ctx, skill, grants);
+}
+
+/**
+ * 🔒 **THE ID-RESOLVING READ (B2)** — the same row, the same matrix, the same
+ * 404, but a UUID says which container to apply them in.
+ *
+ * ⚠ **ONLY A UUID FOLLOWS, AND A SLUG DELIBERATELY DOES NOT.** `skills` is
+ * unique on `(workspace_id, slug)` — per CONTAINER, not globally — so a slug can
+ * legitimately name a different skill in each container the caller belongs to,
+ * and every tie-break ("mine wins", "newest wins") silently resolves one the
+ * caller did not choose. An id is a primary key and has no such question, which
+ * is exactly why `workspace=` is redundant on it and not on a slug.
+ *
+ * ⚠ It returns the CONTEXT the read succeeded in: a skill's body, its files and
+ * its KB references are three more workspace-keyed reads, and composing them
+ * against the original context would read the row from one container and its
+ * contents from another.
+ */
+async function readSkillByRef(
+  ctx: SkillContext,
+  ref: string
+): Promise<ContainerRead<SkillContext, Skill> | null> {
+  if (!isUuid(ref)) {
+    const value = await loadVisibleSkill(ctx, ref);
+    return value ? { ctx, value } : null;
+  }
+  return readResourceById(ctx, "skill", ref, loadVisibleSkill);
 }
 
 export async function listFiles(
@@ -82,14 +133,22 @@ export async function listFiles(
   return file ? [file] : [];
 }
 
-/** Skill record + files + per-reference availability. Pointer-with-hint:
- *  ⚠ KB content is never inlined — the agent calls `kb_read_file` itself. */
+/**
+ * Skill record + files + per-reference availability. Pointer-with-hint:
+ * ⚠ KB content is never inlined — the agent calls `kb_read_file` itself.
+ *
+ * 🔒 **THE READ DOOR, SO IT FOLLOWS THE ID** ({@link readSkillByRef}) — and
+ * every read under it runs in the container the id named, `found`, never
+ * `ctx`.
+ */
 export async function resolveSkillBody(
   ctx: SkillContext,
-  slug: string
+  ref: string
 ): Promise<ResolvedSkill> {
-  const skill = await getSkillBySlug(ctx, slug);
-  const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
+  const hit = await readSkillByRef(ctx, ref);
+  if (!hit) throw new SkillNotFoundError(ref);
+  const { ctx: found, value: skill } = hit;
+  const file = await repo.readSkillBody(found.workspaceId, skill.id);
   const files = file ? [file] : [];
   const seen = new Set<string>();
   const refs: SkillRef[] = [];
@@ -105,7 +164,9 @@ export async function resolveSkillBody(
       }
     }
   }
-  const references = await Promise.all(refs.map((r) => resolveReference(ctx, r)));
+  const references = await Promise.all(
+    refs.map((r) => resolveReference(found, r))
+  );
   return { skill, files, references };
 }
 
