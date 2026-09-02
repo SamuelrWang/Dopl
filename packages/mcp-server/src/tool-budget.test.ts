@@ -176,22 +176,31 @@ describe("every tool description fits its budget, as served", () => {
     ).toEqual([]);
   });
 
-  it("the ratchet only ever moves DOWN — a listed tool that now fits must be delisted", () => {
-    // ⚠ THE OTHER HALF OF A RATCHET. Without this, a description trimmed under
-    // the cap keeps a stale ceiling and silently regains the headroom somebody
+  it("the ratchet only ever moves DOWN — a shrunk description must lower its ceiling", () => {
+    // ⚠ THE OTHER HALF OF A RATCHET. Without it a description trimmed below its
+    // ceiling keeps the old number and silently regains the headroom somebody
     // just spent effort removing.
+    //
+    // ⚠ **IT COMPARES AGAINST THE CEILING, NOT AGAINST THE CAP, AND THAT WAS THE
+    // BUG (2026-09-02).** It used to read `len <= Math.min(ceiling,
+    // DESCRIPTION_MAX_CHARS)` — and since every one of these ceilings is ABOVE
+    // the cap, `Math.min` collapsed to the cap for all of them. So the condition
+    // was "does an over-budget description now fit the budget", which is exactly
+    // what the case above already fails on. Every shrink in between — the whole
+    // range this half exists to police — passed silently, and the case reported
+    // green while asserting nothing.
     const byName = new Map(
       listed.tools.map((t) => [t.name, (t.description ?? "").length]),
     );
     const stale = Object.entries(OVER_BUDGET_CEILINGS)
       .filter(([name, ceiling]) => {
         const len = byName.get(name);
-        return len !== undefined && len <= Math.min(ceiling, DESCRIPTION_MAX_CHARS);
+        return len !== undefined && len < ceiling;
       })
-      .map(([name]) => name);
+      .map(([name, ceiling]) => `${name}: ${byName.get(name)} chars, ceiling ${ceiling}`);
     expect(
       stale,
-      `these now fit ${DESCRIPTION_MAX_CHARS} — remove them from OVER_BUDGET_CEILINGS so the cap enforces itself: ${stale.join(", ")}`,
+      `these shrank below their ceiling — lower it to the measured size, or (at or under ${DESCRIPTION_MAX_CHARS}) delete the entry so the cap enforces itself:\n- ${stale.join("\n- ")}`,
     ).toEqual([]);
   });
 

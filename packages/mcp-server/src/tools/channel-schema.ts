@@ -119,7 +119,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'Channel slug or id. Required for every op except five: "open" (which creates a channel), "list" (which lists them all), "read_sessions" (where it is an OPTIONAL filter — omit it to see every session of yours in the workspace), "await" (where OMITTING it holds across EVERY channel you are a member of at once, instead of one), and "pings" (your inbox spans every channel, so there is nothing to narrow).',
+      'Channel slug or id. Required for every op except six, and on three of those OMITTING it is a WIDER read, not a missing argument: "read" (omit it, with `since`, for new messages across every channel you are in, in EVERY workspace and home container at once), "read_sessions" (omit it to see every session of yours EVERYWHERE, not just this workspace), "await" (omit it to hold across every channel you are a member of at once, instead of one). The other three never take it: "open" creates a channel, "list" lists them all, and "pings" is your own inbox, which spans every channel already.',
     ),
   direct: z
     .boolean()
