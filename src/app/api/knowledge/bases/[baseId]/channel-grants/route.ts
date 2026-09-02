@@ -31,7 +31,7 @@ import type {
  * KNOWLEDGE BASE IS SHARED INTO, and the three-state write that changes one.
  * The inverse of `GET /api/knowledge/bases?channelId=`'s `channelGrants` map
  * (one channel, many KBs); same table, asked the other way round, and the
- * `channel_resource_grants_resource_idx` index is named for exactly this query.
+ * `resource_grants_resource_idx` index is named for exactly this query.
  *
  * ── The write contract ──────────────────────────────────────────────────────
  * `PUT` body `{channelId, level: "none"|"agent_only"|"visible", guestWrite?}`.
@@ -68,9 +68,13 @@ import type {
  *     own visible channels, 404 on a miss (the `?channelId=` precedent, §9).
  *  4. `canManageChannelGrants` in the service — creator or workspace admin+,
  *     mirroring the sharing gate rather than the content-write gate.
- *  5. The `enforce_channel_resource_grant()` trigger, same-workspace only —
- *     unreachable while (2) and (3) hold, translated to a 400 anyway so a moved
- *     fence surfaces as "refused" rather than as an outage.
+ *  5. The `enforce_resource_grant()` trigger — 🔒 "the GRANTOR may share this"
+ *     (`20260914120000`, ruling B4), which is a WIDER admission than the
+ *     same-container equality it replaced: it accepts a channel in another
+ *     container when the grantor reaches both. Unreachable while (2) and (3)
+ *     hold — they fence both sides to the caller's own container — and
+ *     translated to a 400 anyway, so a moved fence surfaces as "refused" rather
+ *     than as an outage.
  */
 
 function requireBaseId(auth: WorkspaceAuthContext): string {
