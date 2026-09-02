@@ -192,6 +192,16 @@ export interface KnowledgeBaseCreateInput {
      * than downgrading. Omitted/false = the workspace shelf.
      */
     homeScoped?: boolean;
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ REQUIRED ONLY ON THE NARROW PREDICATE — a `kind='link'` container with
+     * two or more active members, and the row landing at the SHARED visibility.
+     * The server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it and IGNORES
+     * it everywhere else (`src/features/workspaces/server/shared-publish.ts`).
+     * The MCP surface sets it from a spent `confirm_token`, never on its own.
+     */
+    acknowledgeShared?: boolean;
 }
 export interface KnowledgeBaseUpdateInput {
     name?: string;
@@ -201,6 +211,16 @@ export interface KnowledgeBaseUpdateInput {
     /** Via MCP, publish only (private→public); accessMode / team grants stay
      *  human-only. */
     visibility?: KnowledgeVisibility;
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ REQUIRED ONLY ON THE NARROW PREDICATE — a `kind='link'` container with
+     * two or more active members, and the row landing at the SHARED visibility.
+     * The server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it and IGNORES
+     * it everywhere else (`src/features/workspaces/server/shared-publish.ts`).
+     * The MCP surface sets it from a spent `confirm_token`, never on its own.
+     */
+    acknowledgeShared?: boolean;
 }
 export interface KnowledgeWriteFileInput {
     body?: string;

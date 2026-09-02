@@ -13,6 +13,18 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+// 🔒 G16's two reads (`features/workspaces/server/shared-publish.ts`). Every
+// create that lands at `workspace` visibility asks them, so a suite that leaves
+// them unmocked reaches Supabase and hangs. ⚠ A STANDARD workspace by default —
+// this file is about the write gates, and the publish precondition has its own
+// suite (`service-acknowledge-shared.test.ts`) that drives the link container.
+vi.mock("@/features/workspaces/server/repository", () => ({
+  findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
+  findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),
+}));
+vi.mock("@/features/workspaces/server/repository-overview", () => ({
+  countActiveMembers: vi.fn().mockResolvedValue(1),
+}));
 vi.mock("./repository", () => ({
   listTemplatesForWorkspace: vi.fn(),
   findTemplateById: vi.fn(),

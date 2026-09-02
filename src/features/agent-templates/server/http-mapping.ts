@@ -1,5 +1,6 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
+import { ContainerPublishUnacknowledgedError } from "@/features/workspaces/server/shared-publish";
 import {
   AgentTemplateNotFoundError,
   TemplateKnowledgeBaseNotFoundError,
@@ -42,6 +43,12 @@ export function mapAgentTemplateError(err: unknown): HttpError | null {
   }
   if (err instanceof TemplateHomeScopeForbiddenError) {
     return new HttpError(403, "TEMPLATE_HOME_SCOPE_FORBIDDEN", err.message);
+  }
+  // 🔒 G16 — 400, not 403: the caller is allowed to do this, the REQUEST is
+  // incomplete. Shared with the knowledge lane (`knowledge/server/
+  // http-mapping.ts`) — one error class, one code, two feature mappers.
+  if (err instanceof ContainerPublishUnacknowledgedError) {
+    return new HttpError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED", err.message);
   }
   return null;
 }
