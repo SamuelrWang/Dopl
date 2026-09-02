@@ -252,6 +252,18 @@ jobs:
       - name: Diff design tokens between globals.css and the SPA's tokens.css
         run: npx tsx scripts/check-css-token-drift.ts
 
+      # 🔒 EVERY `canSee*` PREDICATE HAS A NAMED POLICY TWIN (2026-09-02, Wave B
+      # B7). Visibility is stated twice today — a TS predicate that is the real
+      # fence, and a policy that never runs because every repository read goes
+      # through the service role — and the pair had already drifted WIDE on the
+      # knowledge tables. This gate does not claim the two AGREE; that is what
+      # the per-table redteam suites prove, one table at a time. It claims only
+      # that nothing is unpaired, so a NEW predicate cannot ship with no policy
+      # behind it at all. Mutation-verified: dropping an entry from `TWINS`, or
+      # naming a policy a later migration drops, turns it red.
+      - name: Pair every canSee* predicate with a live SELECT policy
+        run: npx tsx scripts/check-rls-pair-gate.ts
+
       # 🔒 THE COMMITTED `dist/` IS THE BUILD OF `src/`, AND THIS IS THE ONLY
       # THING THAT SAYS SO (2026-09-02, F-452). Both packages ship a TRACKED
       # `dist/` and `next.config.ts › serverExternalPackages` keeps them

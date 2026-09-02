@@ -71,7 +71,7 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and EIGHT non-suite gates** (eight since 2026-09-02) — the full table is
+**Five suites, TWO lints, TWO typechecks, and NINE non-suite gates** (nine since 2026-09-02) — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
 ⚠ **THE COUNT HAS BEEN WRONG THREE TIMES AND THE TWO ERRORS ARE OPPOSITE ONES — read both before
@@ -83,11 +83,12 @@ today for a different reason than it was FIVE in August, and both times the fix 
 command. ⚠ **AND IT IS EIGHT SINCE 2026-09-02**, when `check-session-health-drift`, then
 `check-message-kind-drift`, then the committed-`dist` check landed — all three shipped WITH their
 doc rows, in the same change, which is the whole remedy this warning has been asking for. Three in
-one day makes it the convention rather than the exception. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
+one day makes it the convention rather than the exception. ⚠ **AND NINE SINCE LATER THE SAME DAY**,
+when Wave B's B7 added `check-rls-pair-gate` — also with its rows, here and in §14. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
 many non-suite gates there are"** — the first item is on it precisely because it is a typecheck
 nobody remembers to run, and it is NOT one of the five.
 
-The nine things that are routinely forgotten (EIGHT non-suite gates since 2026-09-02, plus the
+The ten things that are routinely forgotten (NINE non-suite gates since 2026-09-02, plus the
 second typecheck):
 
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
@@ -138,6 +139,11 @@ second typecheck):
    SUCCEEDS and never that the committed output MATCHES. ⚠ **ADDED 2026-09-02 WITH ITS DOC ROW**,
    the third gate that day to do so (F-452). The build step is a precondition; the `git status`
    is the gate.
+10. `npx tsx scripts/check-rls-pair-gate.ts` — every `canSee*` predicate has a NAMED SELECT-policy
+    twin, checked in both directions (a new predicate with no declared twin fails; a twin a later
+    migration dropped fails). ⚠ **ADDED 2026-09-02 WITH ITS DOC ROW**, the fourth gate in two days
+    to do so. It does NOT claim the predicate and the policy AGREE — that is what the per-table
+    redteam suites prove, one table at a time.
 
 ⚠ **`npm run test:all` chains the first four SUITES and nothing else. It is not the definition of
 green.** The two lint steps differ: the ROOT one runs `npm run lint -- --max-warnings 0`, so a new

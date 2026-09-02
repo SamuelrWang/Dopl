@@ -7495,3 +7495,57 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Proposed resolution: none proposed. It is a posture question about `full` itself and belongs to whoever asks it.
 - Status: open.
 
+### F-520 — the SELECT policies on the three knowledge tables were WIDER than the TS predicate, in two named ways (2026-09-02)
+
+- Location: `supabase/migrations/20260720211005_rls_pin_workspace_member_and_initplan.sql` (the pre-image), `src/features/knowledge/server/service-shared.ts › canSeeBase` / `assertBaseVisible` / `filterTeamVisibleBases`.
+- Found during: Wave B B7, writing the first caller-scoped read path.
+- **THE TWO GAPS.** The live policy was `is_current_workspace_member(workspace_id,'viewer') AND (visibility='public' OR created_by = auth.uid())` on all three tables. The TS fence refuses two further cases: (1) a **SHARED CREDENTIAL** reading a private row — `canSeeBase`'s middle arm, M-10/F-336 — which the policy could not even ask, because a service-role read carries no credential axes; (2) a **teams-mode row with no grant**, which the policy did not mention at all.
+- ⚠ **NEITHER WAS A LIVE LEAK, AND THAT IS THE POINT.** Every read went through `supabaseAdmin()`, so no policy ran and the TS predicate was the only fence. The gap is the shape that BECOMES a leak the instant a read moves off the service role — i.e. the instant this slice's flag is turned on, had it not been closed first.
+- Status: RESOLVED 2026-09-02 by `supabase/migrations/20260919120000_rls_helpers_and_caller_scope.sql`, which states the rule once in `dopl_knowledge_base_readable()` and has the three SELECT policies call it. ⚠ **NEVER APPLIED** — Docker is down on this machine, so `supabase start` cannot run; the migration is written idempotent and is owed a replay with the rest of Wave B's.
+
+### F-521 — nothing stops the NEXT knowledge read reaching for `supabaseAdmin()` (2026-09-02)
+
+- Location: `src/features/knowledge/server/repository-bases.ts`, `repository-entries.ts`, `repository-folders.ts` (the two-client rule is stated in each header), `RLS-MIGRATION-PLAN.md` Phase 0, `eslint.config.mjs`.
+- Found during: Wave B B7.
+- **THE RULE IS PROSE.** A read that answers "what may this caller see" takes `readClient()`; a SYSTEM read (slug uniqueness, storage accounting, the `max(position)` append helpers) keeps `supabaseAdmin()` and says so at the call site. Nothing enforces the split: a new read that reaches for the admin client is invisible to every gate, and the failure is silent in the WIDE direction.
+- ⚠ The RLS plan's Phase 0 already specifies the remedy — `no-restricted-imports` on `supabaseAdmin` outside a named whitelist — and it has never been written. `eslint.config.mjs` names `@/shared/supabase/admin` only in the SPA-renderer fence, which is a different rule for a different reason.
+- Proposed resolution: land the Phase 0 lint rule when the second feature moves (B12), whitelisting `shared/supabase`, ingestion, billing webhooks and `scripts/**`; a per-file allow-comment for the named system reads. Doing it with ONE feature migrated would be a whitelist longer than the rule.
+- Status: open.
+
+### F-522 — `SUPABASE_JWT_SECRET` is a new deploy input and the repo has no env inventory to add it to (2026-09-02)
+
+- Location: `src/shared/supabase/caller-jwt.ts › SUPABASE_JWT_SECRET_ENV`, `src/shared/supabase/caller-client.ts › RLS_CALLER_SCOPED_READS_ENV`.
+- Found during: Wave B B7 — there is no `.env.example` and no doc listing required env vars, so a new one can only be discovered by reading the code that throws.
+- **THE FAILURE MODE IS ORDERED.** `RLS_CALLER_SCOPED_READS=1` without `SUPABASE_JWT_SECRET` throws at the first caller-scoped read rather than falling back to the service role — deliberately, because a silent fallback is a fence that reports itself armed while doing nothing. So the flag must never be flipped before the secret is set, and nothing in the repo says so except the throw message and this entry.
+- ⚠ **AND THE SECRET IS THE LEGACY HS256 ONE.** A project that has revoked its legacy JWT secret in favour of asymmetric keys needs `caller-jwt.ts` repointed at the project's signing key; the mint is one function, not a code path per lane.
+- Proposed resolution: an env table in `docs/INVARIANTS.md` §14's neighbourhood when the second feature moves, or a `.env.example` — whichever the wave lands first. Deploy state is a measurement (CLAUDE.md rule 4): record the command that reads the var, not its value.
+- Status: open.
+
+### F-523 — the redteam suite's SQL half is STRUCTURAL, and this repo has no way to make it behavioural (2026-09-02)
+
+- Location: `src/features/knowledge/server/rls-redteam.test.ts`.
+- Found during: Wave B B7, looking for a SQL executor.
+- **THERE IS NONE.** No `pglite`, no `pg-mem`, no `pg` client, no `DATABASE_URL` anywhere in the tree (re-derive: `grep -rn 'pglite\|pg-mem\|DATABASE_URL' --include='*.ts' --include='*.json' src packages apps scripts`). The only database client is `@supabase/supabase-js` over PostgREST, and `vitest.setup.ts` states the intent plainly: *"Real DB hits aren't expected"*. So a policy assertion can prove the rule is WRITTEN once and names every arm; it cannot prove Postgres AGREES.
+- ⚠ **THE LIVE HALF HAS NEVER RUN.** It drives the real `callerScopedClient` against a local stack and is `describe.skipIf`-ed off unless `RLS_REDTEAM_LIVE=1`; Docker is down on this machine (`docker info` fails), so `supabase start` could not run. That is a measurement about this machine, not a claim about the tree.
+- ⚠ **AND IT ESTABLISHES A CONVENTION THE REPO DID NOT HAVE**: before this file there were ZERO `describe.skip` / `it.skip` / `.skipIf` in `src/`, `packages/*/src` or `apps/*/src`. The repo's habit for "could not run" was prose in a doc. A skipped test is better — it runs the day the environment exists — but it is a new habit and the next slice should follow it rather than invent a third.
+- Proposed resolution: run the live half once against `supabase start` before the flag is turned on anywhere, and record the run (command + date) in the slice that flips it. B12 inherits the same shape for `skills` / `agent_templates` / `chats`.
+- Status: open.
+
+### F-524 — the AGENT AUDIENCE CEILING is not expressible as a policy, so the slice that deletes `canSeeBase` must not delete it (2026-09-02)
+
+- Location: `src/features/knowledge/server/service-audience.ts › resolveAgentAudience` / `audienceAdmits`, applied in `service-bases.ts › listBases` and the id/slug lookups.
+- Found during: Wave B B7, deciding what `20260919120000` may contain.
+- **WHY IT IS NOT IN THE POLICY.** The ceiling is a per-REQUEST bound, not a property of a row: it depends on the container's `kind`, its live ACTIVE-member count, and an `X-Dopl-Session-Id` that may NARROW the channel set. Two of those change under a row that has not; the third is a forgeable header whose safety comes entirely from being used to narrow an already-fenced set. Folding it into a policy would put a caller-supplied narrowing input inside the database's own fence, which is the one thing `repository-audience.ts`'s header says the layer must never do.
+- ⚠ **SO THE TABLE IS "RLS-COVERED" FOR THE M-10 AND TEAMS AXES ONLY.** The ceiling remains a TS fence with no twin, and B16's "delete the TS predicate once its policy is proven" applies to `canSeeBase` and NOT to `audienceAdmits`. Deleting both because they sit in the same feature would remove the only thing standing between a peer's container and the operator's ungranted bases (RULING 2).
+- Proposed resolution: keep it in TS; if it ever must move, it moves as a grant JOIN keyed on a SERVER-resolved session id, not on the header — which is a different design, not a translation.
+- Status: open.
+
+### F-525 — `dopl_teams_mode_visible()` reads a table slice B1 drops in the same batch (2026-09-02)
+
+- Location: `supabase/migrations/20260919120000_rls_helpers_and_caller_scope.sql` STEP 3; slice B1's `20260916120000_drop_team_resource_access`.
+- Found during: Wave B B7.
+- **THE COLLISION IS BY DESIGN AND THE MITIGATION IS THE FUNCTION.** The teams arm is a `CREATE OR REPLACE FUNCTION` rather than an inline `EXISTS` in three policies precisely so B1 repoints ONE definition at `resource_grants` and no policy moves. If B1 lands before this is applied, B1's migration owes that replacement; if it lands after, the replacement is its own migration.
+- ⚠ **A DROP WITH NO REPLACEMENT DOES NOT FAIL LOUDLY IN THE USEFUL DIRECTION** — the function would error at read time (relation does not exist) for every caller-scoped read, i.e. the flag becomes an outage rather than a leak. That is the safe direction, and it is still an outage.
+- Proposed resolution: cross-slice note to B1, recorded here because the two slices are in the same batch and the ownership protocol keeps each out of the other's files.
+- Status: open.
+

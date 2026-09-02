@@ -6,6 +6,8 @@ import { getBearerJwtUser } from "./bearer-jwt";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { HttpError } from "@/shared/lib/http-error";
+import { runWithCallerScope } from "@/shared/supabase/caller-scope";
+import { sessionCallerScope, tokenCallerScope } from "./with-auth-scope";
 
 /** Per-route options for `withUserAuth` (forwarded through
  *  `withWorkspaceAuth`). ⚠ Both flags affect OAuth-bearer (agent) callers ONLY;
@@ -123,6 +125,15 @@ async function runAndLog5xx(
  * fenced AND anonymous; a device token is unfenced AND personal. `null` on the
  * subject axis is "nobody in particular" and keeps the original refusal, so a
  * shared workspace key reintroduced later inherits the NARROW rule by default.
+ *
+ * 🔒 ⚠ AND IT ESTABLISHES THE CALLER SCOPE (`shared/supabase/caller-scope.ts`),
+ * which is what lets a repository read as the CALLER instead of as the service
+ * role once `RLS_CALLER_SCOPED_READS` is on. It is set HERE — the one wrapper
+ * every API route composes, `withWorkspaceAuth` and `withMcpAccess` included —
+ * from the credential this function has already validated. A route that
+ * authenticates some other way, or a read that runs outside a request, finds no
+ * scope and keeps the service-role client; the fence is then the TS predicate,
+ * exactly as today.
  */
 export function withUserAuth(
   handler: (
@@ -171,14 +182,16 @@ export function withUserAuth(
         if (jwtUser) {
           return runAndLog5xx(
             () =>
-              handler(request, {
-                userId: jwtUser.id,
-                // 🔒 A SIGNED-IN PERSON IS THEIR OWN SUBJECT, and unfenced. Both
-                // axes are stated rather than defaulted: the subject axis is the
-                // one whose ABSENCE used to widen.
-                credentialSubjectUserId: jwtUser.id,
-                params: resolvedParams,
-              }),
+              runWithCallerScope(sessionCallerScope(jwtUser.id), () =>
+                handler(request, {
+                  userId: jwtUser.id,
+                  // 🔒 A SIGNED-IN PERSON IS THEIR OWN SUBJECT, and unfenced. Both
+                  // axes are stated rather than defaulted: the subject axis is the
+                  // one whose ABSENCE used to widen.
+                  credentialSubjectUserId: jwtUser.id,
+                  params: resolvedParams,
+                })
+              ),
             {
               endpoint: `${request.method} ${request.nextUrl.pathname}`,
               userId: jwtUser.id,
@@ -259,17 +272,21 @@ export function withUserAuth(
 
         return runAndLog5xx(
           () =>
-            handler(request, {
-              userId: tok.userId,
-              agentTokenId: tok.tokenId,
-              // 🔒 AXIS 1. `null` for every ordinary credential.
-              apiKeyWorkspaceId: tok.containerId,
-              // 🔒 AXIS 2. Dropping this line is silent and fails CLOSED: every
-              // session reverts to being read as a shared credential, and the
-              // operator's agent 404s on the operator's own private rows (F-336).
-              credentialSubjectUserId: tok.subjectUserId,
-              params: resolvedParams,
-            }),
+            // 🔒 The one lane whose credential axes are not constant —
+            // `with-auth-scope.ts › tokenCallerScope` reads the SUBJECT axis.
+            runWithCallerScope(tokenCallerScope(tok), () =>
+              handler(request, {
+                userId: tok.userId,
+                agentTokenId: tok.tokenId,
+                // 🔒 AXIS 1. `null` for every ordinary credential.
+                apiKeyWorkspaceId: tok.containerId,
+                // 🔒 AXIS 2. Dropping this line is silent and fails CLOSED: every
+                // session reverts to being read as a shared credential, and the
+                // operator's agent 404s on the operator's own private rows (F-336).
+                credentialSubjectUserId: tok.subjectUserId,
+                params: resolvedParams,
+              })
+            ),
           {
             endpoint: `${request.method} ${request.nextUrl.pathname}`,
             userId: tok.userId,
@@ -287,13 +304,15 @@ export function withUserAuth(
     if (user) {
       return runAndLog5xx(
         () =>
-          handler(request, {
-            userId: user.id,
-            // 🔒 Same as the bearer-JWT branch above: a cookie caller is a
-            // person, and is nobody's shared credential.
-            credentialSubjectUserId: user.id,
-            params: resolvedParams,
-          }),
+          runWithCallerScope(sessionCallerScope(user.id), () =>
+            handler(request, {
+              userId: user.id,
+              // 🔒 Same as the bearer-JWT branch above: a cookie caller is a
+              // person, and is nobody's shared credential.
+              credentialSubjectUserId: user.id,
+              params: resolvedParams,
+            })
+          ),
         {
           endpoint: `${request.method} ${request.nextUrl.pathname}`,
           userId: user.id,

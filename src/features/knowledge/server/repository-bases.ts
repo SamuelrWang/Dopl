@@ -1,6 +1,7 @@
 import "server-only";
 import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { readClient } from "@/shared/supabase/caller-client";
 import type { KbShelf, KnowledgeBase } from "../types";
 import {
   KNOWLEDGE_BASE_COLS,
@@ -12,13 +13,30 @@ import {
 /**
  * Raw Supabase I/O for knowledge BASES. No business logic, no auth checks —
  * see `repository.ts` for the split map and conventions.
+ *
+ * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 1
+ * (Wave B B7). `readClient()` is the CALLER's client when
+ * `RLS_CALLER_SCOPED_READS` is on and `supabaseAdmin()` otherwise, so with the
+ * flag off this file behaves exactly as it did.
+ *
+ *   * **A read that answers "what may this caller see" takes `readClient()`.**
+ *     With the flag on, the row filter is the policy
+ *     (`20260919120000_rls_helpers_and_caller_scope`), which is written to equal
+ *     the TS predicate — the predicate stays until the flag has run a release.
+ *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`**, and
+ *     says so at the call site. Slug uniqueness, storage accounting and the
+ *     `max(position)` append helpers must see rows the caller cannot: scoped to
+ *     the caller they would answer a different question and answer it wrongly
+ *     (a slug "free" because someone else's private base holds it).
+ *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
+ *     until RLS plan phase 4.
  */
 
 export async function findBaseById(
   id: string,
   includeDeleted = false
 ): Promise<KnowledgeBase | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db.from("knowledge_bases").select(KNOWLEDGE_BASE_COLS).eq("id", id);
   if (!includeDeleted) query = query.is("deleted_at", null);
   const { data, error } = await query.maybeSingle();
@@ -33,7 +51,7 @@ export async function listBasesByIds(
   ids: string[]
 ): Promise<KnowledgeBase[]> {
   if (ids.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
@@ -48,7 +66,7 @@ export async function findBaseBySlug(
   slug: string,
   includeDeleted = false
 ): Promise<KnowledgeBase | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
@@ -65,7 +83,7 @@ export async function findBaseByPublicId(
   publicId: string,
   includeDeleted = false
 ): Promise<KnowledgeBase | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
@@ -96,7 +114,7 @@ export async function listBasesForWorkspace(
   includeDeleted = false,
   shelf?: KbShelf
 ): Promise<KnowledgeBase[]> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
@@ -128,7 +146,7 @@ export async function listHomeScopedBaseIds(
   baseIds: string[]
 ): Promise<string[]> {
   if (baseIds.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_bases")
     .select("id")
@@ -147,6 +165,8 @@ export async function listHomeScopedBaseIds(
 export async function listBaseSlugsForWorkspace(
   workspaceId: string
 ): Promise<string[]> {
+  // ⚠ SYSTEM READ, service role on purpose: uniqueness spans rows the caller
+  // cannot see. Scoped to the caller, a taken slug would read as free.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
@@ -303,6 +323,7 @@ export async function listBaseStorageBytes(
   baseIds: string[]
 ): Promise<Map<string, number>> {
   if (baseIds.length === 0) return new Map();
+  // ⚠ SYSTEM READ, service role on purpose: accounting, not visibility.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
@@ -329,6 +350,7 @@ export async function getBaseStorageBytes(
   workspaceId: string,
   baseId: string
 ): Promise<number | null> {
+  // ⚠ SYSTEM READ, service role on purpose: the write gate's quota reading.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
