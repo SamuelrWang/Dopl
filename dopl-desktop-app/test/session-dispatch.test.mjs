@@ -28,6 +28,14 @@
 // ⚠ AND THAT THE ROUTE IS UNGATED. Route (1) never had the window-mode guard the other four
 // opened with, and now that the switch itself is gone the absence is asserted against the
 // SOURCE rather than by driving a setting that no longer exists.
+//
+// ⚠ **THE TABLE HAS TWO HALVES SINCE 2026-09-02 (ruling B1), AND THE SPLIT IS THE FIXTURE.** A
+// message carrying NO `wakeVerdict` is what an older server writes, and the machine answers it
+// with its own body parse and the 2026-08-21 fan-out — that is the first half below, and every
+// case in it is the pre-narrowing assertion UNCHANGED, which is the whole compatibility claim
+// made drivable. A message carrying one is the narrowed lane: `THE STORED VERDICT` at the foot
+// drives all seven values, and its mutation case is that feeding a session the verdict did not
+// name FAILS.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -42,7 +50,7 @@ import assert from "node:assert/strict";
 // fan-out: `agent()` carries neither `awaitingDirective` nor a parked `state`, so every case here
 // drives the NOT-DORMANT path — the one no wake tier governs.
 import {
-  BLOCK, CODE, harness, agent, entry, peerMsg, ME, PEER, TASK, A1, A2,
+  BLOCK, CODE, harness, agent, idle, entry, peerMsg, verdictMsg, ME, PEER, TASK, A1, A2,
 } from "./_wake-dispatch-harness.mjs";
 
 // Referenced by the pins at the foot of this file; the slice + purity proof happen in the harness.
@@ -75,16 +83,28 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
 // message in it — the write only moves up the rank, so the false claim can never be corrected.
 // A dispatch that filed an unkeyed receipt would look fine here and land nothing.
 
-test("receipt: names the session that EARNED the verdict, carried never composed", async () => {
+test("receipt: one per FED session, each carrying that session's own outcome", async () => {
+  // ⚠ **THIS USED TO ASSERT ONE AGGREGATE RECEIPT PER MESSAGE** (2026-09-02, B9). The dispatch
+  // kept four counters and an `earnedBy` table naming which session had earned the winning word;
+  // with one recipient there is nothing to aggregate, so each fed session files its own and
+  // `delivery-ack.js` — which already holds ONE receipt per (operator, channel, seq) and only
+  // ever STRENGTHENS it — does the collapsing. The buffer is a RECORDER here, so both are visible.
   const h = harness({ agents: [agent(A1), agent(A2)] });
-  await h.feedLiveSession(entry, peerMsg({ body: `@${A2} take this one` }), ME);
-  assert.equal(h.calls.acks.length, 1, "one receipt per message, whatever the fan-out touched");
+  await h.feedLiveSession(entry, verdictMsg("agent", { recipientAgentIds: [A2], body: `@${A2} take this one` }), ME);
+  assert.equal(h.calls.acks.length, 1, "narrowed: only the addressee was fed, so only it acks");
   const [ws, channelId, seq, verdict, userId, sessionKey] = h.calls.acks[0];
   assert.deepEqual([ws, channelId, seq, verdict, userId], ["w1", "c1", 7, "delivered", ME]);
   // ⚠ A2's key, because A2 is the addressee that took the turn — the `delivered` arm. And it is
   // `s.key` verbatim: `session-store.js › sessionKey` owns the format, and composing one here
   // would make this module a second authority on it.
   assert.equal(sessionKey, `c1:${TASK}:${A2}`);
+
+  // …and on the FALLBACK lane, where the sibling is still fed, it files its own weaker word.
+  const old = harness({ agents: [agent(A1), agent(A2)] });
+  await old.feedLiveSession(entry, peerMsg({ body: `@${A2} take this one` }), ME);
+  assert.deepEqual(old.calls.acks.map((a) => [a[3], a[5]]), [
+    ["idle", `c1:${TASK}:${A1}`], ["delivered", `c1:${TASK}:${A2}`],
+  ], "the buffer ranks them; this loop only reports what each session did");
 });
 
 test("receipt: an ordinary fan-out reports `idle`, keyed to a session it actually fed", async () => {
@@ -260,14 +280,24 @@ test("the module exports ONE route, and nothing that was deleted comes back", ()
   // ⚠ `serverAddressed` JOINED THE LIST ON 2026-09-02 (A9, the delivery keystone): the reader
   // of the server's own recipient resolution, exported beside `mentionedAgentIds` because the
   // two are one decision with a fallback and their truth table has to drive both halves.
-  assert.match(CODE, /module\.exports = \{ feedLiveSession, mentionedAgentIds, serverAddressed, addressingFor, mayFeed, dormant, wakeCandidates \};/);
+  for (const named of [
+    "feedLiveSession", "mentionedAgentIds", "serverAddressed", "serverNamesMember",
+    "storedVerdict", "planFor", "addressingFor", "mayFeed", "mayWake", "dormant",
+  ]) {
+    assert.match(CODE, new RegExp(`^  ${named},$`, "m"), `${named} is exported`);
+  }
   for (const gone of [
     "maybeOpenRequesterSession", "maybeSurfaceRequesterReply", "noteRequestLifecycle",
     "maybeReopenAddressedThread", "diagRuntimeGateSkip", "REQUEST_MILESTONES",
     "exchangeTag", "reopenableRecord",
     // ⚠ 2026-08-21: the counterparty fence is gone from this module. Its return would silently
-    // re-narrow the fan-out to one author, which is the ruling reversed.
+    // re-narrow the delivery to one author, which is that ruling reversed.
     "counterpartyFor", "hasLiveSession",
+    // ⚠ 2026-09-02 (B9): the tier machinery. `wakeCandidates` picked between DORMANT agents for
+    // a tier-2/3 wake, and both tiers are deleted — RR3 answers the same question server-side.
+    // Their return would be a second, local answer to "who did this unaddressed message mean",
+    // which is the arrangement ruling B1 exists to collapse.
+    "wakeCandidates", "wakeTiers", "sessionTriage", "wakeEligibility", "tierFor",
   ]) {
     assert.ok(!CODE.includes(gone), `${gone} is deleted — no trace of it in the code`);
   }
@@ -299,3 +329,102 @@ test("the module exports ONE route, and nothing that was deleted comes back", ()
 // `targeting.classify`'s task-reply branch, which is untouched and is pinned in
 // test/classify.test.mjs and test/legacy-thread-reply.test.mjs. Nothing here was the only
 // reader of it.
+
+// ── THE STORED VERDICT — THE NARROWED LANE (2026-09-02, ruling B1) ───────────
+//
+// 🔒 **THE MACHINE EXECUTES THE SERVER'S ANSWER AND RESOLVES NOTHING OF ITS OWN.** Each case
+// below hands the route the row the server would have written and asserts exactly which sessions
+// were fed. The MUTATION that makes this table worth having is the last one: feeding a session
+// the verdict did not name is a failure here, not a wider delivery.
+
+const both = () => [agent(A1), agent(A2)];
+const fedIds = (h) => h.calls.feedInbound.map((c) => c.agentId);
+
+test("verdict `agent`: the named agent is fed and woken, and the sibling hears NOTHING", () => {
+  const h = harness({ agents: both() });
+  assert.equal(h.feedLiveSession(entry, verdictMsg("agent", { recipientAgentIds: [A1] }), ME), true);
+  assert.deepEqual(fedIds(h), [A1], "🔒 THE SIBLING IS NOT FED — this is the narrowing itself");
+  assert.equal(h.calls.feedInbound[0].wake, true);
+  assert.deepEqual(h.calls.feedInbound[0].addressing, { me: true, ids: [A1] });
+});
+
+test("verdict `responder`: RR3's repair wakes the nominated agent alone", () => {
+  // The author typed no `@` at all — the body is untouched, and the repair is entirely the
+  // server's. A machine that re-parsed the body here would wake nobody.
+  const h = harness({ agents: [idle(A1), idle(A2)] });
+  assert.equal(h.feedLiveSession(entry, verdictMsg("responder", { recipientAgentIds: [A2], body: "can someone look at the build?" }), ME), true);
+  assert.deepEqual(fedIds(h), [A2]);
+  assert.equal(h.calls.feedInbound[0].wake, true, "a dormant nominee is STARTED, not merely fed");
+});
+
+test("verdict `thread`: the sessions already working the thread hear it, and none wakes", () => {
+  const h = harness({ agents: both() });
+  assert.equal(h.feedLiveSession(entry, verdictMsg("thread"), ME), true);
+  assert.deepEqual(fedIds(h), [A1, A2]);
+  assert.deepEqual(h.calls.feedInbound.map((c) => c.wake), [false, false]);
+});
+
+test("verdict `none`: nobody is fed, and nothing is acked", () => {
+  const h = harness({ agents: both() });
+  assert.equal(h.feedLiveSession(entry, verdictMsg("none"), ME), false);
+  assert.deepEqual(fedIds(h), []);
+  assert.deepEqual(h.calls.acks, [], "nothing was aimed here, so nothing was refused");
+});
+
+test("the three MEMBER verdicts route on WHOSE machine this is", () => {
+  // 🔒 **NO CROSS-ACCOUNT DELIVERY.** `member` / `thread_peer` / `reciprocal` name a PERSON, and
+  // their side decides what runs. Named me -> my live sessions hear it as context and none wakes.
+  // Named a PEER -> this machine feeds nothing at all, which is the fan-out that used to run.
+  for (const verdict of ["member", "thread_peer", "reciprocal"]) {
+    const mine = harness({ agents: both() });
+    mine.feedLiveSession(entry, verdictMsg(verdict, { recipientUserIds: [ME] }), ME);
+    assert.deepEqual(fedIds(mine), [A1, A2], `${verdict} -> me`);
+    assert.deepEqual(mine.calls.feedInbound.map((c) => c.wake), [false, false],
+      `${verdict}: a member recipient wakes nobody — their side decides`);
+
+    const theirs = harness({ agents: both() });
+    assert.equal(theirs.feedLiveSession(entry, verdictMsg(verdict, { recipientUserIds: [PEER] }), ME), false,
+      `${verdict} -> a peer`);
+    assert.deepEqual(fedIds(theirs), [], `${verdict}: a peer's mail is not read here`);
+  }
+});
+
+test("an UNRESOLVED agent half falls back to the body parse — nothing is silenced", () => {
+  // ⚠ **`null` IS NOT `[]`** (INVARIANTS §5). The server names handles it could not resolve — a
+  // PEER's agent, or a projection row not yet pushed — and answers `null`; this machine knows the
+  // agent and still routes to it. `[]` there would silence a live agent, and the verdict's own
+  // word (`thread`) would have fed the sibling as well.
+  const h = harness({ agents: both() });
+  h.feedLiveSession(entry, verdictMsg("thread", { recipientAgentIds: null, body: `@agent-${A1} urgent` }), ME);
+  assert.deepEqual(fedIds(h), [A1], "the parse answered, and it narrowed exactly as a verdict does");
+  assert.equal(h.calls.feedInbound[0].wake, true);
+});
+
+test("the server's EMPTY answer is executed, never re-derived", () => {
+  // The `??` vs `||` case, from the machine's side: `[]` says "this body names no agent", so the
+  // verdict routes it and the body is not parsed at all.
+  const h = harness({ agents: both() });
+  h.feedLiveSession(entry, verdictMsg("none", { recipientAgentIds: [], body: `@agent-${A1} urgent` }), ME);
+  assert.deepEqual(fedIds(h), [], "an `[]` the machine re-derived would have fed A1");
+});
+
+test("a verdict this build does not know reads as NO ANSWER, never as silence", () => {
+  const h = harness({ agents: both() });
+  assert.equal(h.feedLiveSession(entry, verdictMsg("some_future_arm"), ME), true);
+  assert.deepEqual(fedIds(h), [A1, A2], "a newer server degrades to the fan-out, not to nobody");
+});
+
+test("the SAME-ACCOUNT CARVE survives as one predicate, on the lane that still needs it", () => {
+  // A PEER's agent naming my agent in prose reaches it (ruling 4 feeds a running session) but
+  // may not START it. On the stored lane the server cannot name my agent for a peer's agent at
+  // all; on the fallback lane this predicate is the only fence there is.
+  assert.equal(harness().mayWake({ authorKind: "user", authorUserId: PEER }, ME), true);
+  assert.equal(harness().mayWake({ authorKind: "agent", authorUserId: ME }, ME), true);
+  assert.equal(harness().mayWake({ authorKind: "agent", authorUserId: PEER }, ME), false);
+  assert.equal(harness().mayWake({ authorKind: "agent", authorUserId: ME }, ""), false,
+    "and it fails closed on an operator this machine cannot name");
+
+  const h = harness({ agents: [idle(A1)] });
+  assert.equal(h.feedLiveSession(entry, peerMsg({ authorKind: "agent", body: `@${A1} go` }), ME), false,
+    "a peer's agent starts nothing here");
+});

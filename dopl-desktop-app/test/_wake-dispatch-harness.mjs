@@ -1,5 +1,5 @@
-// THE SESSION-DISPATCH ROUTING HARNESS — shared by `test/session-dispatch.test.mjs` (the fan-out
-// truth table) and `test/wake-tier-routing.test.mjs` (the tiered-wake truth table).
+// THE SESSION-DISPATCH ROUTING HARNESS — shared by `test/session-dispatch.test.mjs` (the
+// delivery truth table) and `test/wake-routing.test.mjs` (the wake truth table).
 //
 // ⚠ ITS OWN FILE BECAUSE THERE ARE TWO TABLES AND ONE ROUTE (2026-08-28, the §2 500-line cap).
 // Both files drive the SAME sliced `SESSION-DISPATCH-PURE` block with the SAME fakes; a copy in
@@ -17,11 +17,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 export const SRC = readFileSync(join(HERE, "..", "main", "session-dispatch.js"), "utf8");
 
-// ⚠ THE REAL TIER MODULE, NOT A FAKE (2026-08-28). `session-wake-tiers.js` is pure — no electron,
-// no I/O, no model — so the wake rule these tables drive is the SHIPPED rule. Only the model CALL
-// (`session-triage.js › claim`) is injected, per test, because that is the one thing a unit test
-// must not make. Faking the tier table instead would make the tables assert a rule they own.
-const wakeTiers = require(join(HERE, "..", "main", "session-wake-tiers.js"));
 // ⚠ THE REAL SLUG RULE, NOT A FAKE (2026-08-28, F-350). The name door is a CONVENTION shared
 // with the renderer, so a stub here would let the two trees drift and every table below
 // would still pass. `handleIndexFor` takes its name resolver by argument, so the real module
@@ -59,7 +54,18 @@ export const A2 = "z9y8x7w6";
 export const A3 = "q1w2e3r4";
 
 export const entry = { channel: { id: "c1", name: "General" }, workspaceId: "w1" };
+// ⚠ **NO `wakeVerdict`, DELIBERATELY.** A row without one is what an OLD SERVER writes, and the
+// machine answers it with its own body parse and the 2026-08-21 fan-out — so every case built on
+// this fixture drives the COMPATIBILITY path. `verdictMsg` below is the narrowed one.
 export const peerMsg = (over = {}) => ({ kind: "message", authorUserId: PEER, body: "reply body", taskId: TASK, seq: 7, meta: {}, ...over });
+
+// A message carrying the server's stored resolution — the shape every current server writes.
+// ⚠ `recipientAgentIds` DEFAULTS TO `[]`, NOT ABSENT: `[]` is the server ANSWERING "this body
+// names no agent", and absent is it declining to answer. A fixture that blurred the two would
+// let a narrowed case pass on the fallback path.
+export const verdictMsg = (verdict, over = {}) => peerMsg({
+  wakeVerdict: verdict, recipientUserIds: [], recipientAgentIds: [], ...over,
+});
 
 // A fresh harness per test: configurable fakes + recorded calls.
 //
@@ -79,32 +85,22 @@ export const agent = (id, ownPostIds = []) => ({
 });
 
 export function harness(over = {}) {
-  const calls = { feedInbound: [], triage: [], acks: [] };
+  const calls = { feedInbound: [], acks: [] };
   const cfg = {
     agents: [],
     feedInboundReturn: true,
     displayName: (id) => `name:${id}`,
-    // ⚠ THE CHANNEL ROSTER IS ITS OWN KNOB (2026-08-28). "How many agents are associated with the
-    // CHANNEL" is what picks the tier, and it is a DIFFERENT question from "who is live on this
-    // THREAD" (`agents`) — a channel-level agent and a threaded one both count toward it. Default:
-    // whatever is on the thread, which is the ordinary single-thread case.
-    channelAgents: null,
-    // What the tier-3 router answers. `""` = nobody claimed.
-    triageClaim: "",
     ...over,
   };
   const targeting = {
     firstClassTaskId: (m) => m.taskId || "",
   };
+  // ⚠ TWO METHODS, NOT THREE (2026-09-02, B9). `agentIdsInChannel` was the CHANNEL-wide roster
+  // count the deleted tier table picked a tier from; the route asks no such question now — who a
+  // message is for is on the row — so a fake for it would be a fake for a call that is gone.
   const sessionEngine = {
     liveOnThread: () => cfg.agents,
-    agentIdsInChannel: () => (cfg.channelAgents === null
-      ? cfg.agents.map((a) => String(a.agentId || ""))
-      : cfg.channelAgents),
     feedInbound: (a) => { calls.feedInbound.push(a); return cfg.feedInboundReturn; },
-  };
-  const sessionTriage = {
-    claim: async (a) => { calls.triage.push(a); return cfg.triageClaim; },
   };
   // 2026-08-01: the label a fed message is titled with is the AUTHOR's — a peer's AGENT posts
   // from the peer's account, so the account's display name is the wrong answer for it. The
@@ -121,17 +117,16 @@ export function harness(over = {}) {
     note: (...a) => { calls.acks.push(a); return true; },
   };
   const api = new Function(
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
-    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, serverAddressed, escalationAnswerAgentIds, addressingFor, mayFeed, unwoken, dormant, wakeCandidates };`
-  )(targeting, sessionEngine, io, wakeTiers, sessionTriage, agentHandles, deliveryAck, () => {});
-  wakeTiers.resetForTests(); // the recent-message ring is module state; every harness starts cold
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag",
+    `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, serverAddressed, serverNamesMember, storedVerdict, planFor, escalationAnswerAgentIds, addressingFor, mayFeed, mayWake, unwoken, dormant };`
+  )(targeting, sessionEngine, io, agentHandles, deliveryAck, () => {});
   return { ...api, calls, cfg };
 }
 
 
 // ── THE DORMANT FIXTURES (2026-08-28) ────────────────────────────────────────
-// ⚠ `agent()` CARRIES NEITHER FLAG, and that is what makes the fan-out table honest: every case
-// built on it drives the NOT-DORMANT path, i.e. ruling 4's fan-out, untouched by any tier.
+// ⚠ `agent()` CARRIES NEITHER FLAG, and that is what makes the delivery table honest: every case
+// built on it drives the NOT-DORMANT path — the class no wake rule governs.
 export const idle = (id, ownPostIds = []) => ({ ...agent(id, ownPostIds), awaitingDirective: true });
 export const parked = (id, ownPostIds = []) => ({ ...agent(id, ownPostIds), state: { parked: true } });
 export const authHeld = (id) => ({ ...agent(id), state: { parked: true, authHeld: true } });
