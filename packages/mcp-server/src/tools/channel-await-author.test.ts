@@ -1,6 +1,6 @@
 /**
  * ⚠ OWN POSTS MUST NOT POP YOUR OWN HOLD — and "own" means THIS SESSION, not
- * this account (F-341, 2026-09-02).
+ * this account (F-405, 2026-09-02).
  *
  * An agent's own close-echo returning the hold instantly kills the wake the
  * primitive exists for, so the suppression is real and stays. What it must not
@@ -16,9 +16,14 @@
  * permanently invisible — a test can hold a defect in place as firmly as it
  * holds an invariant, and this one did for as long as it existed.
  *
- * The rule now: send `excludeAuthor` ONLY when this session cannot name itself.
- * When it can, send no author filter at all and drop own-session rows from the
- * page, advancing the cursor past them so the hold does not re-fetch them.
+ * ⚠ AND THE FIRST FIX WAS HALF OF ONE. It kept the account exclusion as a
+ * FALLBACK "when this session cannot name itself" — which is EVERY EXTERNAL MCP
+ * CLIENT, the exact population that reported the outage. The repro still
+ * reproduced. There is no fallback now.
+ *
+ * The rule: NEVER send `excludeAuthor`. Drop own-session rows from the page in
+ * hand when this session can name itself, advancing the cursor past them so the
+ * hold does not re-fetch them; drop nothing when it cannot.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -92,7 +97,7 @@ afterEach(() => {
 
 // ── The regression: a sibling session on ONE account ──────────────────
 
-describe("a SIBLING session on the same account is visible (F-341)", () => {
+describe("a SIBLING session on the same account is visible (F-405)", () => {
   it("sends NO excludeAuthor once this session can name itself", async () => {
     const awaitChannelMessages = quietHold();
 
@@ -225,39 +230,82 @@ describe("a SIBLING session on the same account is visible (F-341)", () => {
   });
 });
 
-// ── The fallback population, which must not change ───────────────────
+// ── The UNSTAMPED caller — every external MCP client ─────────────────
+//
+// ⚠ THIS IS THE POPULATION THAT REPORTED THE OUTAGE, and the first fix missed
+// it. Scoping the filter to the session left `excludeAuthor = <account>` as the
+// FALLBACK "when this session cannot name itself" — and no external client ever
+// can: Claude Code sends no `X-Dopl-Session-Id`. So the exact repro (await on
+// `since=853` returning nothing twice while seq 856, an agent post on the same
+// account, sat in the table) still reproduced against the fix that was supposed
+// to close it.
+//
+// ⚠ The cost is bounded and lands on the caller alone: an unstamped client may
+// wake on a post it made itself. It is BLOCKED inside this call and cannot post
+// during it, so only an older desktop build can trip that — and a noisy wake is
+// recoverable where a silent hold is not.
 
-describe("with no session stamp the account filter is still the best available", () => {
-  it("passes excludeAuthor = selfUserId on EVERY inner poll", async () => {
+describe("an unstamped caller sees its own account's agents", () => {
+  it("sends NO author filter, on every poll", async () => {
     const awaitChannelMessages = quietHold();
 
     await opAwait(stubClient({ awaitChannelMessages }), "general", 7, undefined, ME);
 
     expect(awaitChannelMessages.mock.calls.length).toBeGreaterThan(1);
     for (const [, opts] of awaitChannelMessages.mock.calls) {
-      // ⚠ Re-issued with the same cursor AND the same filter — dropping the
-      // filter on re-issue still wakes on an own echo.
+      // ⚠ This used to be `expect(opts.excludeAuthor).toBe(ME)` — the assertion
+      // that pinned the outage in place for the whole external population.
+      expect(opts).not.toHaveProperty("excludeAuthor");
       expect(opts.since).toBe(7);
-      expect(opts.excludeAuthor).toBe(ME);
     }
   });
 
-  it("passes it on the poll that RETURNS messages too", async () => {
+  it("REGRESSION (the reported repro): seq 856, an agent post on the caller's own account", async () => {
+    // ⚠ The stub enforces `excludeAuthor` THE WAY THE SERVER DOES
+    // (`repository-messages.ts › hasMessagesAfter`), so sending it empties the
+    // page and the hold reports a timeout — which is the outage, verbatim.
+    const clock = fakeClock();
+    const awaitChannelMessages = vi.fn<AwaitSpy>(async (_ref, opts) => {
+      clock.advance(opts.timeoutMs ?? 0);
+      const all = [row(856, undefined, ME)];
+      const visible = opts.excludeAuthor
+        ? all.filter((m) => m.authorUserId !== opts.excludeAuthor)
+        : all;
+      return { messages: visible, timedOut: visible.length === 0 };
+    });
+
+    const res = await opAwait(
+      stubClient({ awaitChannelMessages }),
+      "general",
+      853,
+      undefined,
+      ME,
+    );
+
+    expect(res.isError).toBeFalsy();
+    const text = JSON.stringify(res);
+    expect(text).toContain("856");
+    expect(text).toContain("1 new message");
+  });
+
+  it("drops nothing client-side either — there is no session id to key on", async () => {
     const awaitChannelMessages = vi.fn<AwaitSpy>(async () => ({
-      messages: [row(8)],
+      messages: [row(900, MY_SESSION, ME), row(901, undefined, "user-peer")],
       timedOut: false,
     }));
 
     const res = await opAwait(
       stubClient({ awaitChannelMessages }),
       "general",
-      7,
+      899,
       undefined,
       ME,
     );
 
-    expect(res.isError).toBeFalsy();
-    expect(awaitChannelMessages.mock.calls[0][1].excludeAuthor).toBe(ME);
+    // ⚠ Even a row carrying SOMEONE's session stamp survives: without a stamp of
+    // our own we cannot claim any of them is ours, and guessing is what hid the
+    // counterparty in the first place.
+    expect(JSON.stringify(res)).toContain("2 new messages");
   });
 
   it("passes NOTHING when selfUserId is null (boot handshake could not name the caller)", async () => {
@@ -278,22 +326,5 @@ describe("with no session stamp the account filter is still the best available",
     for (const [, opts] of awaitChannelMessages.mock.calls) {
       expect(opts).not.toHaveProperty("excludeAuthor");
     }
-  });
-
-  it("drops nothing client-side, so an unstamped peer row still returns", async () => {
-    const awaitChannelMessages = vi.fn<AwaitSpy>(async () => ({
-      messages: [row(9)],
-      timedOut: false,
-    }));
-
-    const res = await opAwait(
-      stubClient({ awaitChannelMessages }),
-      "general",
-      8,
-      undefined,
-      ME,
-    );
-
-    expect(JSON.stringify(res)).toContain("1 new message");
   });
 });

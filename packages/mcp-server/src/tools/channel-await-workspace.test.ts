@@ -176,19 +176,46 @@ describe("counterparty bodies are FRAMED before they are rendered", () => {
   });
 });
 
+/**
+ * ⚠ THE SUPPRESSION IS SESSION-SCOPED, AND THERE IS NO ACCOUNT FALLBACK (F-405).
+ * Across a whole workspace the account filter hid most of what an orchestrator
+ * waits for, and ALL of it from an unstamped external client — see
+ * `channel-await-author.test.ts` for the per-channel repro and the full
+ * argument. This block used to assert `excludeAuthor === ME`, i.e. the bug.
+ */
 describe("the caller's own posts never end its own workspace hold", () => {
-  it("passes excludeAuthor when the boot handshake named the caller", async () => {
-    const client = wsClient({});
-    await opAwaitWorkspace(client, 5, HOLD_MS, ME);
-    const call = vi.mocked(client.awaitWorkspaceMessages).mock.calls[0][0];
-    expect(call.excludeAuthor).toBe(ME);
+  it("sends NO author filter, stamped or not", async () => {
+    for (const self of [ME, null]) {
+      const client = wsClient({});
+      await opAwaitWorkspace(client, 5, HOLD_MS, self);
+      const call = vi.mocked(client.awaitWorkspaceMessages).mock.calls[0][0];
+      expect(call).not.toHaveProperty("excludeAuthor");
+    }
   });
 
-  it("passes NO filter when it did not", async () => {
-    const client = wsClient({});
-    await opAwaitWorkspace(client, 5, HOLD_MS, null);
-    const call = vi.mocked(client.awaitWorkspaceMessages).mock.calls[0][0];
-    expect(call).not.toHaveProperty("excludeAuthor");
+  it("RETURNS a sibling session's post on the caller's own account", async () => {
+    const client = wsClient({
+      messages: [message({ authorUserId: ME, metadata: { session_id: "chan-1:sibling" } })],
+      timedOut: false,
+    });
+
+    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, "chan-9:mine"))
+      .content[0].text as string;
+
+    expect(out).toContain("the parser is done");
+  });
+
+  it("still suppresses THIS session's own echo", async () => {
+    const client = wsClient({
+      messages: [message({ authorUserId: ME, metadata: { session_id: "chan-9:mine" } })],
+      timedOut: false,
+    });
+
+    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, "chan-9:mine"))
+      .content[0].text as string;
+
+    expect(out).not.toContain("the parser is done");
+    expect(out).toContain("timed out");
   });
 });
 

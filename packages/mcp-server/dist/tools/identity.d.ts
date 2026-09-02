@@ -64,7 +64,7 @@ export interface CallerIdentity {
      * (`service-writes-metadata.ts` fold 6b), so it is what lets an await tell its
      * OWN lines apart from a SIBLING session's.
      *
-     * ⚠ THIS IS THE ONLY FIELD THAT CAN DO THAT, and the reason is F-341: one
+     * ⚠ THIS IS THE ONLY FIELD THAT CAN DO THAT, and the reason is F-405: one
      * account runs many concurrent agents and every post is authored by the
      * ACCOUNT, so `userId` cannot distinguish "my own echo" from "the other
      * worker answering me". Excluding on `userId` made a same-account

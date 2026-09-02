@@ -94,7 +94,7 @@ async function handle(request: Request): Promise<Response> {
       vendor: callerVendor ?? null,
       credentialKind: credential_info.kind,
       credentialLabel: credential_info.label,
-      // ⚠ WHICH SESSION, not just which account (F-341). `op="await"` needs it
+      // ⚠ WHICH SESSION, not just which account (F-405). `op="await"` needs it
       // to suppress its OWN echo without also suppressing a SIBLING session on
       // the same account — one operator runs many concurrent agents and every
       // post is authored by the ACCOUNT, so excluding on `userId` made a

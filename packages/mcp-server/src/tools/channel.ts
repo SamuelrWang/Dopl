@@ -92,7 +92,7 @@ export function registerChannelTool(
 ): void {
   const selfUserId = caller.userId;
   const runtime = caller.runtime;
-  // ⚠ WHICH SESSION, for the await self-echo filter ONLY (F-341). Never a gate:
+  // ⚠ WHICH SESSION, for the await self-echo filter ONLY (F-405). Never a gate:
   // a session id is an attribution hint any token holder can send
   // (`shared/auth/session-header.ts`), so it may decide what to SHOW and nothing
   // else. Null for every caller that sent no stamp.

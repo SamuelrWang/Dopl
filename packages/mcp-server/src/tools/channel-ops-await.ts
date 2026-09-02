@@ -20,7 +20,7 @@ import {
   addresseeOf,
   formatMessages,
   // ⚠ WHICH SESSION wrote a line — the only field on the wire that names the
-  // process rather than the account. F-341's self-echo filter keys on it.
+  // process rather than the account. F-405's self-echo filter keys on it.
   sessionIdOf,
 } from "./channel-render";
 import {
@@ -182,31 +182,35 @@ export async function opAwait(
         // ⚠ Floored at 1ms, not 0 — the route's query schema requires a POSITIVE
         // timeout, so a `timeout_ms=0` caller would 400 instead of getting its check.
         timeoutMs: Math.max(1, Math.min(AWAIT_POLL_MS, remaining)),
-        // 🔒 **THE SELF-ECHO FILTER IS SESSION-SCOPED NOW, NOT ACCOUNT-SCOPED**
-        // (F-341). An await waits for a COUNTERPARTY: posting a `task_progress`
-        // milestone after arming must not pop the agent's own hold on its own
-        // echo. `excludeAuthor` did that by ACCOUNT — and every post, human or
-        // agent, is authored by the account (`service-writes.ts:448`), while one
-        // operator runs many concurrent sessions. So an orchestrator and its
-        // worker, both agents of the same person, could never see each other
-        // here: the row was filtered out of BOTH the page and the existence
-        // probe (`repository-messages.ts:98,143`), so the hold did not even
-        // spin — it held silently to the deadline while the answer sat in the
-        // table. `op="read"` never applied the filter, which is why a read
+        // 🔒 **NO `excludeAuthor`, EVER — THE SELF-ECHO FILTER IS SESSION-SCOPED
+        // AND NOTHING ELSE (F-405).** An await waits for a COUNTERPARTY, and
+        // posting a `task_progress` milestone after arming must not pop the
+        // agent's own hold on its own echo — that much is real, and it is why
+        // the suppression exists at all. What it may never do is decide by
+        // ACCOUNT: every post, human or agent, is stamped `author_user_id =
+        // ctx.userId` (`service-writes.ts › postMessage`) while one operator
+        // runs many concurrent sessions, so an orchestrator and its worker are
+        // the SAME author id. Filtering on it removed the row from BOTH the page
+        // and the existence probe (`repository-messages.ts › hasMessagesAfter`),
+        // so the hold did not even spin: it held silently to its deadline while
+        // the answer sat in the table, and `op="read"` — which sets no filter —
         // showed exactly what the await swore was not there.
         //
-        // When this session can NAME ITSELF we send no author filter at all and
-        // drop only our own lines below, keyed on `metadata.session_id`. That is
-        // strictly narrower: a sibling session, and the operator's own typing,
-        // both become visible again.
+        // ⚠ THE ACCOUNT FILTER WAS KEPT AS A FALLBACK FOR ONE COMMIT AND THAT
+        // WAS THE BUG STILL SHIPPING. An unstamped caller is EVERY EXTERNAL MCP
+        // CLIENT, which is precisely the population that reported the outage:
+        // Claude Code sends no `X-Dopl-Session-Id`, so it fell into the fallback
+        // and its own desktop agents' replies stayed invisible to it. Worse, the
+        // re-arm teaching (`rearmStopRule`) tells the caller to watch for the
+        // counterparty's `task_progress` milestones — posts the fallback filter
+        // was guaranteed to hide.
         //
-        // ⚠ THE OLD BEHAVIOUR IS THE FALLBACK, on purpose. With no session
-        // stamp (every external client, and an older desktop build) there is
-        // nothing finer than the account to key on, so excluding it is still the
-        // best available answer and this population sees no change.
-        ...(selfSessionId === null && selfUserId !== null
-          ? { excludeAuthor: selfUserId }
-          : {}),
+        // ⚠ WHAT THE UNSTAMPED CALLER GIVES UP is bounded and self-inflicted: it
+        // may wake on a post it made itself. An external client is BLOCKED
+        // inside this call and cannot post during it, so in practice only an
+        // older desktop build (which stamps no session id) can, and it wakes on
+        // its own milestone instead of hiding a peer forever. A noisy wake is
+        // recoverable; a silent hold is not.
       });
     } catch (e) {
       if (isNotFound(e)) return channelNotFound(ref);
@@ -227,8 +231,10 @@ export async function opAwait(
       // in hand and `session_id` is on it, so this needs no new query param and
       // no new predicate interpolated into PostgREST's `or` grammar (a session
       // id is not a uuid; it may carry `.` and `:`, which are that grammar's
-      // separators). With no session stamp nothing is dropped, because the
-      // account filter above already did it server-side.
+      // separators). ⚠ WITH NO SESSION STAMP NOTHING IS DROPPED AT ALL, and
+      // that is now the whole of the unstamped contract: the account filter that
+      // used to stand in for this is gone, because it hid counterparties (see
+      // the poll above).
       const fresh =
         selfSessionId === null
           ? result.messages
@@ -311,9 +317,12 @@ export async function opAwait(
   //
   // ⚠ Predicate runs over messages SOMEONE ELSE wrote. Its premise is "other
   // people wrote things and none names you" — a page of the caller's OWN posts
-  // satisfies a naive version and makes the notice absurd. Defense in depth
-  // (`excludeAuthor` should keep own posts out), but the notice must be
-  // false-free on whatever it is handed.
+  // satisfies a naive version and makes the notice absurd. ⚠ AND OWN-ACCOUNT
+  // ROWS NOW REACH THIS LINE ON PURPOSE (F-405): a sibling session of the same
+  // operator is a counterparty, so nothing upstream keeps them out any more.
+  // Filtering on `authorUserId` here is therefore the only thing holding the
+  // premise up, and it errs toward SILENCE — a page written entirely by the
+  // caller's own account renders no notice rather than a false one.
   if (selfUserId !== null) {
     const namesMe = (m: ChannelMessage) => addresseeOf(m) === selfUserId;
     const foreign = messages.filter((m) => m.authorUserId !== selfUserId);

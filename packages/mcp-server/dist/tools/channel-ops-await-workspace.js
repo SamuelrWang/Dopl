@@ -165,17 +165,13 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, sel
                 // ⚠ Floored at 1ms, not 0 — the route's query schema requires a POSITIVE
                 // timeout, so a `timeout_ms=0` caller would 400 instead of getting its check.
                 timeoutMs: Math.max(1, Math.min(channel_await_budget_1.AWAIT_POLL_MS, remaining)),
-                // 🔒 SESSION-SCOPED, NOT ACCOUNT-SCOPED (F-341) — the same correction the
-                // per-channel op carries, and the argument for it is there in full. An
-                // orchestrator posting into many rooms must not pop its own hold on its
-                // own echoes; that is real, and it is why the suppression stays. What it
-                // may NOT do is hide a SIBLING SESSION on the same account, which across
-                // a whole workspace is most of what an orchestrator is waiting for.
-                // ⚠ Account exclusion remains the fallback when this session cannot name
-                // itself, so an unstamped caller behaves exactly as before.
-                ...(selfSessionId === null && selfUserId !== null
-                    ? { excludeAuthor: selfUserId }
-                    : {}),
+                // 🔒 NO `excludeAuthor`, EVER — session-scoped suppression only (F-405).
+                // The argument is in `channel-ops-await.ts` in full. An orchestrator
+                // posting into many rooms must not pop its own hold on its own echoes;
+                // that is real, and it is why the suppression stays. What it may NOT do
+                // is decide by ACCOUNT, which across a whole workspace hides most of
+                // what an orchestrator is waiting for — and hides ALL of it from an
+                // unstamped external client, the population that reported the outage.
             });
         }
         catch (e) {
@@ -193,7 +189,8 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, sel
         }
         if (result.messages.length > 0) {
             // ⚠ Our own lines dropped from the page in hand — see the per-channel op
-            // for why this is not a SQL predicate.
+            // for why this is not a SQL predicate, and why an unstamped caller now
+            // drops nothing at all rather than falling back to the account.
             const fresh = selfSessionId === null
                 ? result.messages
                 : result.messages.filter((m) => (0, channel_render_1.sessionIdOf)(m) !== selfSessionId);
