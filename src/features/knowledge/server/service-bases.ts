@@ -1,12 +1,16 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { readResourceById } from "@/shared/tenancy/read-resource";
 import type {
   KbShelf,
   KnowledgeBase,
   KnowledgeBaseStats,
   KnowledgeContext,
 } from "../types";
-import { KnowledgeBaseNotFoundError } from "./errors";
+import {
+  KnowledgeBaseMismatchError,
+  KnowledgeBaseNotFoundError,
+} from "./errors";
 import * as repo from "./repository";
 import { audienceAdmits, resolveAgentAudience } from "./service-audience";
 import {
@@ -209,6 +213,15 @@ export async function listBaseStats(
   return stats;
 }
 
+/**
+ * 🔒 ⚠ **KEYED TO `ctx.workspaceId`, AND IT MUST STAY THAT WAY — IT IS THE WRITE
+ * GATE.** `service-base-writes.ts`, `service-entries.ts`, `service-folders.ts`,
+ * `service-paths.ts`, `service-pins.ts` and `service-stars.ts` all funnel
+ * through it, so the tenancy it reads in is the tenancy those writes land in.
+ * The ID-RESOLVING read is {@link readBaseById}; the split is A12's, restated
+ * for this feature — a PATCH that followed an id into another container would be
+ * `workspace=` becoming ignorable on a WRITE, which nobody has ruled.
+ */
 export async function getBaseById(
   ctx: KnowledgeContext,
   id: string
@@ -220,6 +233,61 @@ export async function getBaseById(
   await assertBaseVisible(ctx, base);
   await assertWithinAudience(ctx, base.id);
   return base;
+}
+
+/**
+ * 🔒 **THE ID-RESOLVING READ (B2).** The same row, the same two gates, the same
+ * 404 — but the id says which container to apply them in, so `workspace=` is
+ * optional on the way in and a `workspace=` that CONTRADICTS a resolvable id is
+ * IGNORED rather than refused.
+ *
+ * ⚠ **RESOLUTION IS NOT AUTHORISATION AND THE ORDER SAYS SO.**
+ * `shared/tenancy/resolve-resource.ts` is strictly NARROWER than this file's
+ * gates — it names only rows the caller could already list, and it cannot see a
+ * `teams`-scoped base an admin can — so the matrix AND the agent audience
+ * ceiling both run AGAIN in the container it named, with the caller's real role
+ * there. A row that clears one fence and not the other is the same 404 as a row
+ * that exists nowhere.
+ */
+export async function readBaseById(
+  ctx: KnowledgeContext,
+  id: string
+): Promise<KnowledgeBase> {
+  const hit = await readResourceById(ctx, "knowledge_base", id, loadVisibleBase);
+  if (!hit) throw new KnowledgeBaseNotFoundError(id);
+  return hit.value;
+}
+
+/**
+ * {@link getBaseById}'s answer as a `null`, which is what a follow needs.
+ *
+ * ⚠ **IT WRAPS THE GATE RATHER THAN RESTATING IT, AND THAT DIRECTION IS THE
+ * POINT.** The M-10 matrix, the teams arm and the audience ceiling are three
+ * predicates this file already composes in ONE place; a second null-returning
+ * copy of them is the F-278 shape ("the copy is the one that will not notice").
+ * So the twin is a TRANSLATION of two errors, listed explicitly — anything else
+ * this read can throw is a real failure and still propagates.
+ *
+ * ⚠ `KnowledgeBaseMismatchError` IS ONE OF THE TWO, and it is why a follow is
+ * needed at all: it is what `getBaseById` says about a base living in another
+ * container, and answering it to a caller holding a perfectly good id is the
+ * defect this slice removes.
+ */
+async function loadVisibleBase(
+  ctx: KnowledgeContext,
+  id: string
+): Promise<KnowledgeBase | null> {
+  try {
+    return await getBaseById(ctx, id);
+  } catch (err) {
+    if (
+      err instanceof KnowledgeBaseNotFoundError ||
+      err instanceof KnowledgeBaseMismatchError
+    ) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function getBaseBySlug(

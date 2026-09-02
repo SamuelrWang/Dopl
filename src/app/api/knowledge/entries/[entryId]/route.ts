@@ -5,8 +5,8 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
   buildKnowledgeContext,
-  getEntry,
   deleteEntry,
+  readEntry,
   updateEntry,
 } from "@/features/knowledge/server/service";
 import { KnowledgeEntryUpdateSchema } from "@/features/knowledge/schema";
@@ -17,10 +17,17 @@ function requireEntryId(auth: WorkspaceAuthContext): string {
   return id;
 }
 
+/**
+ * ⚠ **THE READ AND THE WRITES RESOLVE THE ID DIFFERENTLY, ON PURPOSE (B2).**
+ * GET goes through `readEntry`, which follows the entry's BASE into the
+ * container that base lives in. PATCH and DELETE stay on the workspace-keyed
+ * `getEntry` — a write that followed an id across a tenancy boundary is a ruling
+ * nobody has made. Same split as `/api/knowledge/bases/{baseId}`.
+ */
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildKnowledgeContext(auth);
-    const entry = await getEntry(ctx, requireEntryId(auth));
+    const entry = await readEntry(ctx, requireEntryId(auth));
     return NextResponse.json({ entry });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

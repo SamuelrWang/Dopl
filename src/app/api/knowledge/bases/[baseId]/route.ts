@@ -5,8 +5,8 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
   buildKnowledgeContext,
-  getBaseById,
   deleteBase,
+  readBaseById,
   updateBase,
 } from "@/features/knowledge/server/service";
 import { KnowledgeBaseUpdateSchema } from "@/features/knowledge/schema";
@@ -17,10 +17,17 @@ function requireBaseId(auth: WorkspaceAuthContext): string {
   return id;
 }
 
+/**
+ * ⚠ **THE READ AND THE WRITES RESOLVE THE ID DIFFERENTLY, ON PURPOSE (B2).**
+ * GET goes through `readBaseById`, so the id names its own container and a
+ * `workspace=` that contradicts it is IGNORED. PATCH and DELETE stay on the
+ * workspace-keyed gate — a write that followed an id across a tenancy boundary
+ * is a ruling nobody has made. Same split as `/api/agent-templates/{id}` (A12).
+ */
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildKnowledgeContext(auth);
-    const base = await getBaseById(ctx, requireBaseId(auth));
+    const base = await readBaseById(ctx, requireBaseId(auth));
     return NextResponse.json({ base });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

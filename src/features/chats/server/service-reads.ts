@@ -1,4 +1,5 @@
 import "server-only";
+import { readResourceById } from "@/shared/tenancy/read-resource";
 import type { ChatDetail, ChatList } from "../types";
 import { ChatNotFoundError, ChatOutsideRetentionError } from "./errors";
 import { mapChatRow, mapMessageRow, mapOwner } from "./dto";
@@ -50,17 +51,37 @@ export async function listChats(ctx: ChatContext): Promise<ChatList> {
   return { chats, hiddenCount, truncated };
 }
 
-/** ⚠ Visibility gate only, NO retention window. Used by `service-writes` to
- *  echo a just-written chat — an owner backfilling an old session must get
- *  their chat back, not a window denial. */
+/**
+ * ⚠ Visibility gate only, NO retention window. Used by `service-writes` to echo
+ * a just-written chat — an owner backfilling an old session must get their chat
+ * back, not a window denial.
+ *
+ * 🔒 ⚠ **KEYED TO `ctx.workspaceId`, AND IT MUST STAY THAT WAY — IT IS THE WRITE
+ * ECHO.** Every mutation in `service-writes.ts` returns through it, so the
+ * tenancy it reads in is the tenancy that write landed in. The ID-RESOLVING read
+ * is {@link getChat}; the split is A12's, restated for this feature
+ * (INVARIANTS §T35).
+ */
 export async function readChatDetail(
   ctx: ChatContext,
   chatId: string
 ): Promise<ChatDetail> {
+  const detail = await loadVisibleChat(ctx, chatId);
+  if (!detail) throw new ChatNotFoundError(chatId);
+  return detail;
+}
+
+/** The read both chat doors share: one chat, in ONE named container, through
+ *  the visibility gate and the folder-privacy fold. `null` = not visible, which
+ *  the callers turn into the single 404. */
+async function loadVisibleChat(
+  ctx: ChatContext,
+  chatId: string
+): Promise<ChatDetail | null> {
   const row = await repo.findChatById(ctx.workspaceId, chatId);
-  if (!row) throw new ChatNotFoundError(chatId);
+  if (!row) return null;
   const grants = await grantsForRows(ctx, [row]);
-  if (!canSeeChat(ctx, row, grants)) throw new ChatNotFoundError(chatId);
+  if (!canSeeChat(ctx, row, grants)) return null;
   const [messages, profiles] = await Promise.all([
     repo.listMessages(chatId),
     profilesById([row.owner_id]),
@@ -80,17 +101,34 @@ export async function readChatDetail(
   };
 }
 
-/** Window-enforced detail read for browsing (web UI + MCP `get`). Throws
- *  `ChatOutsideRetentionError` for the route to convert into the upgrade
- *  envelope. `sessionDate`/`since` are `YYYY-MM-DD`, so lexical `<` is date
- *  order; the boundary is DB-computed (`retentionCutoff`). */
+/**
+ * Window-enforced detail read for browsing (web UI + MCP `get`). Throws
+ * `ChatOutsideRetentionError` for the route to convert into the upgrade
+ * envelope. `sessionDate`/`since` are `YYYY-MM-DD`, so lexical `<` is date
+ * order; the boundary is DB-computed (`retentionCutoff`).
+ *
+ * 🔒 **THE READ DOOR, SO IT FOLLOWS THE ID (B2).** `workspace=` is optional on
+ * the way in, and one that contradicts a resolvable id is IGNORED.
+ *
+ * ⚠ **THE RETENTION WINDOW IS THE RESOLVED CONTAINER'S, WHICH IS WHY THE TWO
+ * READS ARE NO LONGER PARALLEL.** The window is a BILLING PLAN
+ * (`retention.ts › resolveChatsWindow`), and a chat followed into another
+ * container must be measured against THAT container's plan — asking the caller's
+ * would let a free container's chat through on a paid caller's window, and hide
+ * a paid container's chat from them. One extra round trip on this door, and it
+ * is not optional.
+ *
+ * ⚠ **THE WINDOW IS NOT PART OF THE FOLLOW**, deliberately: a chat outside it
+ * EXISTS and is visible, and says so with a distinct error the route turns into
+ * an upgrade envelope. Folding it into `load` would make "too old" resolve as
+ * "no such chat" and then quietly re-read the same chat in another container.
+ */
 export async function getChat(ctx: ChatContext, chatId: string): Promise<ChatDetail> {
-  const [{ since }, detail] = await Promise.all([
-    resolveChatsWindow(ctx.workspaceId),
-    readChatDetail(ctx, chatId),
-  ]);
-  if (since !== null && detail.sessionDate < since) {
+  const hit = await readResourceById(ctx, "chat", chatId, loadVisibleChat);
+  if (!hit) throw new ChatNotFoundError(chatId);
+  const { since } = await resolveChatsWindow(hit.ctx.workspaceId);
+  if (since !== null && hit.value.sessionDate < since) {
     throw new ChatOutsideRetentionError(chatId);
   }
-  return detail;
+  return hit.value;
 }

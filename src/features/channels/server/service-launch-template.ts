@@ -107,22 +107,33 @@ export async function resolveTemplateForDirective(
   if (resolution.kind === "elsewhere") {
     throw new LaunchTemplateNotFoundError(ref, resolution.template);
   }
-  // ⚠ **THE TWO LANES OF ONE LAUNCH DISAGREE ABOUT WHAT AN ID MAY NAME, AND
-  // THAT IS A RULING SAMUEL OWES — NOT A BUG TO CLOSE HERE** (2026-09-02, A12 ×
-  // A6b/A9, verified at integration).
+  // 🔒 **THE TWO LANES OF ONE LAUNCH NOW AGREE ABOUT WHAT AN ID MAY NAME —
+  // SAMUEL'S RULING #18, LANDED IN B2** (2026-09-02). Wave A recorded the
+  // asymmetry here rather than closing it, because closing it was a decision and
+  // not a fix.
   //
-  // This function is the REF DISAMBIGUATION door: a name-or-id resolved to an
-  // id, workspace-keyed through `repo.findTemplateById(ctx.workspaceId, …)`, so
-  // an id naming a template on the operator's PERSONAL shelf 404s here.
-  // The desktop's spawn-time door is `GET /api/agent-templates/{id}/resolve` →
-  // `agent-templates/server/service-reads.ts › resolveTemplateForLaunch` →
-  // `readTemplateById`, which since A12 follows an id into the container the id
-  // names — so the SAME template resolves there.
+  // This function is the REF DISAMBIGUATION door, under the ORCHESTRATOR's
+  // credential. The desktop's spawn-time door is
+  // `GET /api/agent-templates/{id}/resolve` → `agent-templates/server/
+  // service-reads.ts › resolveTemplateForLaunch` → `readTemplateById`, under the
+  // OPERATOR's. Both now compose `shared/tenancy/read-resource.ts ›
+  // readResourceById`, so an id naming a template on someone's PERSONAL shelf
+  // resolves on BOTH — which is ruling #18 in one sentence: **a personal
+  // template launches anywhere its owner is.**
   //
-  // ⚠ THERE IS STILL EXACTLY ONE READ DOOR FOR LAUNCH CONTENT (`readTemplateById`)
-  // and no duplicate resolver: this lane resolves a REF and never reads the
-  // template's content. So the asymmetry is a scope question, not a second
-  // fence — and it fails CLOSED on this side, which is why it is left alone.
-  // Deciding it either way is a one-line change; see the Wave A doc.
+  // ⚠ **AGREEING ABOUT THE ID IS NOT THE SAME AS BEING ONE FENCE, AND THE TWO
+  // FENCES ARE UNCHANGED.** They still belong to different people and still
+  // fail closed independently: a `team` template the orchestrator is in and the
+  // operator is not passes here and is refused there, as `no-template`. What
+  // changed is only WHICH CONTAINER each one asks in.
+  //
+  // ⚠ A NAME STILL DOES NOT FOLLOW, on either lane — `agent_templates` has no
+  // name uniqueness, so a name matching in two containers has no non-arbitrary
+  // answer. That is why `LaunchTemplateNotFoundError`'s `elsewhere` label
+  // survives above.
+  //
+  // ⚠ THERE IS STILL EXACTLY ONE READ DOOR FOR LAUNCH CONTENT
+  // (`readTemplateById`) and no duplicate resolver: this lane resolves a REF and
+  // never reads the template's content.
   return { id: resolution.id, name: resolution.name };
 }

@@ -22,7 +22,7 @@ import {
   canSeeBase,
   filterTeamVisibleBases,
 } from "./service-shared";
-import { getBaseById } from "./service-bases";
+import { getBaseById, readBaseById } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
 
 /** Entry reads + writes, plus `resolveEntryRefs` — the visibility-gated
@@ -84,6 +84,54 @@ export async function getEntry(
   assertSameWorkspace(entry.workspaceId, ctx.workspaceId, `entry ${id}`);
   await assertEntryBaseReadable(ctx, entry, id);
   return entry;
+}
+
+/**
+ * 🔒 **THE ID-RESOLVING READ (B2)** — the entry follows its BASE's id.
+ *
+ * ⚠ **AN ENTRY HAS NO TENANCY OF ITS OWN TO RESOLVE, WHICH IS WHY IT IS NOT A
+ * FIFTH ROW IN THE RESOLVER REGISTRY.** `knowledge_entries` carries no
+ * `visibility` column: its base is both its address and its fence, so clause 4
+ * of `shared/tenancy/resolve-resource.ts` would have no arm to apply and a
+ * registry row for entries would be a second, weaker way to name one. The entry
+ * lookup is already global by id; what follows the id is
+ * `service-bases.ts › readBaseById`, and the base's two gates then run in the
+ * container the BASE lives in.
+ *
+ * ⚠ **THE TWO `workspace_id`s MUST AGREE.** `knowledge_entries.workspace_id` is
+ * a denormalized copy of its base's; a row where they disagree is not a wider
+ * read, it is a broken row, and it resolves as the same single 404.
+ *
+ * ⚠ 404 IS `EntryNotFoundError`, never the base's error — the same
+ * one-answer rule {@link getEntry} states above.
+ *
+ * 🔒 ⚠ **{@link getEntry} STAYS WORKSPACE-KEYED AND IS THE WRITE GATE**:
+ * `updateEntry`, `moveEntry`, `deleteEntry` and `service-pins.ts` all funnel
+ * through it (INVARIANTS §T35).
+ */
+export async function readEntry(
+  ctx: KnowledgeContext,
+  id: string
+): Promise<KnowledgeEntry> {
+  const entry = await repo.findEntryById(id, false);
+  if (!entry) throw new EntryNotFoundError(id);
+  const base = await readEntryBase(ctx, entry.knowledgeBaseId);
+  if (!base || base.workspaceId !== entry.workspaceId) {
+    throw new EntryNotFoundError(id);
+  }
+  return entry;
+}
+
+/** {@link readBaseById}'s answer as a `null`. ⚠ Composed rather than restated,
+ *  exactly as {@link assertEntryBaseReadable} is — a new gate on the
+ *  foundational base lookup reaches entry reads for free. */
+async function readEntryBase(ctx: KnowledgeContext, baseId: string) {
+  try {
+    return await readBaseById(ctx, baseId);
+  } catch (err) {
+    if (err instanceof KnowledgeBaseNotFoundError) return null;
+    throw err;
+  }
 }
 
 /** `getBaseById`'s two gates (visibility + audience ceiling), re-answered as a

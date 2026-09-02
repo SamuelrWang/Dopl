@@ -32,6 +32,7 @@ export {
   listHomeScopedBaseIds,
   getBaseById,
   getBaseBySlug,
+  readBaseById,
 } from "./service-bases";
 
 export {
@@ -52,6 +53,7 @@ export {
 export {
   listEntries,
   getEntry,
+  readEntry,
   resolveEntryRefs,
   createEntry,
   updateEntry,
