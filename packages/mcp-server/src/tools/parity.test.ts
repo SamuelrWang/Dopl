@@ -8,10 +8,9 @@
  *      read-only-token write hole → WRITE_OPS ⊆ enum + completeness below.
  *
  * ⚠ Mechanism in `parity-harness.ts`: tools are captured through their real
- * registrars, and `WRITE_OPS` / `READ_ONLY_BLOCKED_TOOLS` are PARSED out of
- * source text so the tests check the REAL tables, not a copy that can drift.
- * `delete-block.test.ts` reads the same harness for HIDDEN_TOOLS and the
- * app-only-deletion suites.
+ * registrars, and `WRITE_OPS` is PARSED out of source text so the tests check
+ * the REAL table, not a copy that can drift. `delete-block.test.ts` reads the
+ * same harness for HIDDEN_TOOLS and the app-only-deletion suites.
  */
 
 import { describe, it, expect } from "vitest";
@@ -22,7 +21,6 @@ import { toolGroupSource } from "./tool-group-files.js";
 import {
   DELETE_BLOCKED_OPS,
   HIDDEN_TOOLS,
-  READ_ONLY_BLOCKED_TOOLS,
   TOOLS,
   TOOL_BY_NAME,
   WRITE_OPS,
@@ -88,9 +86,13 @@ const READ_OPS: Record<string, string[]> = {
 // holes) get listed here until fixed. Empty; the tripwire below keeps it empty.
 const KNOWN_WRITE_OPS_DRIFT: Record<string, string[]> = {};
 
-const NON_ADMIN_OP_TOOLS = TOOLS.filter(
-  (t) => !isAdmin(t.name) && opEnum(t) !== null,
-);
+/**
+ * Every captured tool that dispatches on an `op`. ⚠ It was `OP_TOOLS`
+ * until 2026-09-02, when the last `*_admin` tool was deleted: with no wholesale
+ * blocked tools left, EVERY op-carrying tool owes the write/read classification
+ * below, and an exclusion here would be a hole rather than a scoping.
+ */
+const OP_TOOLS = TOOLS.filter((t) => opEnum(t) !== null);
 
 // ── Sanity: capture worked ───────────────────────────────────────────
 
@@ -100,30 +102,27 @@ describe("tool capture", () => {
     expect(names).toEqual(
       [
         // MCP surface v2 wave A (2026-08-28): the template family joins.
+        // ⚠ THE FIVE `_admin` COMPANIONS LEFT ON 2026-09-02 — deleted, not
+        // hidden: registrars, op handlers and descriptions are gone. The rule
+        // they advertised is `sessionOnly` on the REST routes now.
         "dopl_agent",
-        "dopl_agent_admin",
         // Wave B: `dopl_home` registers on the META path and is captured anyway —
         // it has an op enum, a WRITE op and a charge (see `parity-harness.ts`).
         "dopl_home",
         "dopl_channel",
         "dopl_chats",
-        "dopl_chats_admin",
         "dopl_kb",
-        "dopl_kb_admin",
         "dopl_map",
         "dopl_members",
         "dopl_ontology",
-        "dopl_ontology_admin",
         "dopl_search",
         "dopl_skill",
-        "dopl_skill_admin",
       ].sort(),
     );
   });
 
-  it("parsed non-empty WRITE_OPS + READ_ONLY_BLOCKED_TOOLS tables", () => {
+  it("parsed a non-empty WRITE_OPS table", () => {
     expect(Object.keys(WRITE_OPS).length).toBeGreaterThan(0);
-    expect(READ_ONLY_BLOCKED_TOOLS.size).toBeGreaterThan(0);
   });
 
   it("parsed the HIDDEN_TOOLS + DELETE_BLOCKED_OPS tables", () => {
@@ -165,7 +164,7 @@ describe("WRITE_OPS ⊆ op enum", () => {
 
 describe("write-op completeness", () => {
   it("every op is classified as write (WRITE_OPS) or read (allowlist)", () => {
-    for (const tool of NON_ADMIN_OP_TOOLS) {
+    for (const tool of OP_TOOLS) {
       const enumOps = opEnum(tool)!;
       const write = WRITE_OPS[tool.name] ?? new Set<string>();
       const read = new Set(READ_OPS[tool.name] ?? []);
@@ -185,7 +184,7 @@ describe("write-op completeness", () => {
     // write op is added un-gated, shrinks when the table is fixed — either way
     // this fails and forces constant and source back in sync.
     const computed: Record<string, string[]> = {};
-    for (const tool of NON_ADMIN_OP_TOOLS) {
+    for (const tool of OP_TOOLS) {
       const enumOps = opEnum(tool)!;
       const write = WRITE_OPS[tool.name] ?? new Set<string>();
       const read = new Set(READ_OPS[tool.name] ?? []);
@@ -234,7 +233,7 @@ describe("write-op completeness", () => {
   });
 
   it("SECURITY: no read-only-token write holes — every op is gated as write or read", () => {
-    for (const tool of NON_ADMIN_OP_TOOLS) {
+    for (const tool of OP_TOOLS) {
       const enumOps = opEnum(tool)!;
       const write = WRITE_OPS[tool.name] ?? new Set<string>();
       const read = new Set(READ_OPS[tool.name] ?? []);
@@ -322,33 +321,24 @@ describe("schema / description parity", () => {
   });
 });
 
-// ── 1d. Admin-tool gating (every op is destructive → wholesale-gated) ─
+// ── 1d. There is no admin surface, and it must not grow back ─────────
 
-describe("admin tool gating", () => {
-  it("every registered *_admin tool is in READ_ONLY_BLOCKED_TOOLS", () => {
-    for (const tool of TOOLS) {
-      if (!isAdmin(tool.name)) continue;
-      expect(
-        READ_ONLY_BLOCKED_TOOLS.has(tool.name),
-        `${tool.name} is an admin tool but is NOT blocked for read-only sessions (missing from READ_ONLY_BLOCKED_TOOLS)`,
-      ).toBe(true);
-    }
+describe("no `*_admin` tool exists", () => {
+  it("no registrar registers one", () => {
+    // ⚠ THE REGROWTH GUARD, and it replaces the three "every admin tool is
+    // wholesale-blocked" cases those tools needed (2026-09-02). An `_admin`
+    // tool was destructive by construction and every op on all five was refused
+    // unconditionally — 9,295 served chars to publish a refusal. A new one is
+    // therefore not a gap in a gate, it is a tool that should not be written:
+    // deletion is app-only and fenced at the REST route.
+    const admins = TOOLS.map((t) => t.name).filter(isAdmin);
+    expect(
+      admins,
+      "an `*_admin` tool is registered again. Deletion is app-only and enforced by `sessionOnly` on the REST route; a tool that exists only to refuse does not need to exist",
+    ).toEqual([]);
   });
 
-  it("every READ_ONLY_BLOCKED_TOOLS entry is a registered admin tool", () => {
-    for (const name of READ_ONLY_BLOCKED_TOOLS) {
-      expect(TOOL_BY_NAME.has(name), `READ_ONLY_BLOCKED_TOOLS lists ${name} which is not registered`).toBe(true);
-      expect(isAdmin(name), `READ_ONLY_BLOCKED_TOOLS lists non-admin tool ${name}`).toBe(true);
-    }
-  });
-
-  it("no admin tool is gated per-op via WRITE_OPS (they are wholesale-blocked instead)", () => {
-    for (const tool of TOOLS) {
-      if (!isAdmin(tool.name)) continue;
-      expect(
-        WRITE_OPS[tool.name],
-        `${tool.name} is wholesale-blocked; it should not also appear in WRITE_OPS`,
-      ).toBeUndefined();
-    }
+  it("WRITE_OPS gates no admin tool", () => {
+    expect(Object.keys(WRITE_OPS).filter(isAdmin)).toEqual([]);
   });
 });

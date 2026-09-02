@@ -89,7 +89,11 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ⚠ 3,400 → 3,399 ON 2026-09-02: R2 reworded the `copy_base` bullet from "a
   // base you can READ" to "a base YOU CREATED", one character shorter. Caught by
   // the downward half of the ratchet the same day it was repaired.
-  dopl_kb: 3399,
+  // ⚠ 3,399 → 3,371 ON 2026-09-02 (A3): the closing line stopped routing to
+  // `dopl_kb_admin` — a tool that no longer exists — and says the rule instead.
+  // The same 28-character edit landed on four descriptions; the whole surface
+  // fell 9,295 served chars when the five `_admin` tools went with it.
+  dopl_kb: 3371,
   // ⚠ 1,197 OF THIS IS THE P1 SUMMARY AND THE REST IS **ONE PARAGRAPH THE P3
   // TENANCY TIER ASKED TO KEEP WORD FOR WORD** — `channel-description.ts ›
   // HOME_CHANNEL_ADDRESSING`, ~650 chars on how a home channel is addressed,
@@ -105,12 +109,17 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // correct word is six characters shorter. Caught by the downward half of the
   // ratchet, which is what that half is for.
   dopl_channel: 1775,
+  // ⚠ UNCHANGED BY A3 (2026-09-02) and that is worth a line: its closing
+  // sentence stopped naming `dopl_ontology_admin` and states the rule instead,
+  // and the replacement is exactly the same length. The win of that slice is
+  // the five tools, not this line.
   dopl_ontology: 2321,
   // ⚠ +383 ON 2026-09-02 for op="copy", after its bullet gave back the sentences
   // `copy-target.ts › TO_WORKSPACE_ARG_DESCRIPTION` already carries.
-  dopl_agent: 2476,
-  dopl_chats: 1701,
-  dopl_skill: 1615,
+  // ⚠ −30 ON 2026-09-02 (A3), same edit as `dopl_kb`.
+  dopl_agent: 2446,
+  dopl_chats: 1654,
+  dopl_skill: 1586,
   dopl_members: 1535,
 };
 

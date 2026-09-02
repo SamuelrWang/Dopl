@@ -108,17 +108,6 @@ describe("the name-only ontology reads ask for the cheap projection", () => {
     expect(viewArgs(c)).toEqual([{ view: "summary" }]);
   });
 
-  it('dopl_ontology_admin calls getOntology with { view: "summary" }', async () => {
-    // Unreachable in production (every `_admin` op is refused before the
-    // handler runs), so this pins the resolvers' honesty, not a payload saving.
-    const c = ontologyStub({ deleteOntologyCluster: vi.fn(async () => undefined) });
-    await callTool(registerOntologyTool, c, "dopl_ontology_admin", {
-      op: "delete_cluster",
-      cluster: "pipeline",
-    });
-    expect(viewArgs(c)).toEqual([{ view: "summary" }]);
-  });
-
   it('dopl_search calls getOntology with { view: "summary" }', async () => {
     const c = searchStub();
     await callTool(registerSearchTool, c, "dopl_search", { query: "acme" });
@@ -279,16 +268,5 @@ describe("a clipped ontology read is reported, not absorbed", () => {
     // ⚠ The clip is what makes the miss readable as "not searched" rather than
     // "not there".
     expect(text).toContain("## Ontology objects");
-  });
-
-  it("dopl_ontology_admin reports a cascade count it could not complete", async () => {
-    const text = await callTool(
-      registerOntologyTool,
-      stub(clipped({ deleteOntologyCluster: vi.fn(async () => undefined) })),
-      "dopl_ontology_admin",
-      { op: "delete_cluster", cluster: "pipeline" },
-    );
-    expect(text).toContain("CLIPPED");
-    expect(text).toContain("a floor, not the cascade");
   });
 });

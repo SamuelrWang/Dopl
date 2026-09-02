@@ -1,20 +1,19 @@
 /**
- * `dopl_kb` + `dopl_kb_admin` — the user's editable knowledge bases, addressed
- * like a filesystem (bases by slug or id, folders/entries by `/`-separated
- * path). `dopl_kb` = read + non-destructive writes; ⚠ `dopl_kb_admin` is the
- * delete surface and REFUSES every op it publishes.
+ * `dopl_kb` — the user's editable knowledge bases, addressed like a filesystem
+ * (bases by slug or id, folders/entries by `/`-separated path): reads plus
+ * non-destructive writes. ⚠ THERE IS NO DELETE OP AND NO `dopl_kb_admin`
+ * (deleted 2026-09-02) — deletion is app-only, fenced by `sessionOnly` on the
+ * REST routes, and `delete-policy.ts` is where that rule now lives.
  *
- * Thin registrar: two tool schemas + op routing, delegating to
+ * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
  *   - `knowledge-ops-write.ts` — create/update/move/write ops
  *   - `knowledge-ops-copy.ts`  — copy_base into another tenancy (two fenced legs)
- *   - `knowledge-ops-admin.ts` — the (refused) delete ops
  */
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
-import { deleteAdminDescription } from "../delete-policy.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import { err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import {
@@ -39,7 +38,6 @@ import {
   opUpdateBase,
   opWriteFile,
 } from "./knowledge-ops-write";
-import { opDeleteBase, opDeleteFile, opDeleteFolder } from "./knowledge-ops-admin";
 import { opCopyBase } from "./knowledge-ops-copy";
 import { TO_WORKSPACE_ARG_DESCRIPTION } from "./copy-target";
 import type { WorkspaceDirectory } from "../workspace-directory";
@@ -65,16 +63,8 @@ Set \`op\` to one of:
 - "pin" — add to the STARTUP CONTEXT: what every agent session launched in this workspace is handed the moment it starts, so nobody re-pastes the same documents. Requires: base; \`path\` picks base-or-entry (see its own description). A workspace-wide curation flag — it changes no visibility and no audience. The payload is capped, so anything past a few pages arrives as a pointer to fetch with op="read_file" rather than as content.
 - "unpin" — the exact inverse, same arguments. An entry unpinned on its own still arrives with the base if the BASE is pinned.
 
-Deleting is app-only: \`dopl_kb_admin\` refuses every op it lists.`;
+No delete op — deletion is app-only.`;
 
-const KB_ADMIN_DESCRIPTION = deleteAdminDescription(
-  [
-    { op: "delete_base", effect: "would have deleted a base and its folders + entries" },
-    { op: "delete_folder", effect: "would have deleted the folder at a path" },
-    { op: "delete_file", effect: "would have deleted the entry at a path" },
-  ],
-  `Reach for instead: \`dopl_kb\` op=write_file to replace an entry's contents, op=move_file / op=move_folder to reorganize. If something genuinely has to go, say so and ask the user to delete it in the Dopl app.`,
-);
 
 export function registerKnowledgeTools(
   register: RegisterTool,
@@ -252,41 +242,6 @@ export function registerKnowledgeTools(
           const miss = missingParams(args.op, args, ["base"]);
           if (miss) return miss;
           return opPin(client, args.base as string, args.path, args.op === "pin");
-        }
-      }
-    }
-  );
-
-  // ── dopl_kb_admin — the delete surface, every op refused ─────────
-  register(
-    "dopl_kb_admin",
-    KB_ADMIN_DESCRIPTION,
-    {
-      op: z
-        .enum(["delete_base", "delete_folder", "delete_file"])
-        .describe("Destructive operation to perform."),
-      base: z.string().optional().describe("Base slug or id. Required for all ops."),
-      path: z
-        .string()
-        .optional()
-        .describe("delete_folder/delete_file: required path of the resource the refused op names."),
-    },
-    async (args): Promise<ToolResponse> => {
-      switch (args.op) {
-        case "delete_base": {
-          const miss = missingParams("delete_base", args, ["base"]);
-          if (miss) return miss;
-          return opDeleteBase(client, args.base as string);
-        }
-        case "delete_folder": {
-          const miss = missingParams("delete_folder", args, ["base", "path"]);
-          if (miss) return miss;
-          return opDeleteFolder(client, args.base as string, args.path as string);
-        }
-        case "delete_file": {
-          const miss = missingParams("delete_file", args, ["base", "path"]);
-          if (miss) return miss;
-          return opDeleteFile(client, args.base as string, args.path as string);
         }
       }
     }

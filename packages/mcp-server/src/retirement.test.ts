@@ -45,9 +45,13 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 }));
 
 import { createServer, buildInstructions } from "./server.js";
-// The policy from the module owning BOTH halves: the refusal the server
-// returns and the description the `_admin` tools advertise.
-import { isBlockedDeleteOp, DELETE_REFUSAL } from "./delete-policy.js";
+// The policy from the module that owns it: the refusal, and the table of delete
+// ops no tool may publish.
+import {
+  DELETE_BLOCKED_OPS,
+  DELETE_REFUSAL,
+  isBlockedDeleteOp,
+} from "./delete-policy.js";
 
 const WS: WorkspaceListItem = {
   id: "id-1",
@@ -104,9 +108,6 @@ function tool(name: string): Handler {
   return h;
 }
 
-const textOf = (res: { content: Array<{ text: string }> }) =>
-  res.content.map((c) => c.text).join("");
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -123,6 +124,16 @@ const RETIRED = [
   "dopl_workflow_admin",
   "dopl_cluster",
   "dopl_cluster_admin",
+  // ⚠ THE FIVE `_admin` COMPANIONS (2026-09-02). Every op on all five was
+  // refused unconditionally, they were 9,295 served chars, and the sentence
+  // they existed to publish is now enforced in code: `sessionOnly: true` on all
+  // ten app-only `DELETE` routes. Same hide-then-delete path the four above
+  // took, and they are on this list for the same reason — regrowth.
+  "dopl_kb_admin",
+  "dopl_skill_admin",
+  "dopl_chats_admin",
+  "dopl_ontology_admin",
+  "dopl_agent_admin",
 ];
 
 describe("retired tools never register (D1/D2)", () => {
@@ -140,19 +151,14 @@ describe("retired tools never register (D1/D2)", () => {
     build();
     for (const name of [
       "dopl_kb",
-      "dopl_kb_admin",
       "dopl_skill",
-      "dopl_skill_admin",
       "dopl_chats",
-      "dopl_chats_admin",
       "dopl_ontology",
-      "dopl_ontology_admin",
       "dopl_members",
       "dopl_map",
       "dopl_search",
       "dopl_channel",
       "dopl_agent",
-      "dopl_agent_admin",
       "dopl_home",
       // ⚠ THE SECOND CHARGED META TOOL (2026-09-01, T20). It is on this list for
       // the same reason every other name is: a tool that stops registering is
@@ -186,37 +192,55 @@ describe("retired tools never register (D1/D2)", () => {
   });
 });
 
-// ── 2. Deletion is app-only (§2b) ────────────────────────────────────
+// ── 2. Deletion is app-only ──────────────────────────────────────────
 
-/** Every delete-shaped op on every admin tool that still registers. */
-const DELETE_CALLS: Array<[string, Record<string, unknown>]> = [
-  ["dopl_kb_admin", { op: "delete_base", base: "notes" }],
-  ["dopl_kb_admin", { op: "delete_folder", base: "notes", path: "a" }],
-  ["dopl_kb_admin", { op: "delete_file", base: "notes", path: "a/b" }],
-  ["dopl_skill_admin", { op: "delete", slug: "ship-it" }],
-  ["dopl_chats_admin", { op: "delete", chat_id: "c-1" }],
-  ["dopl_chats_admin", { op: "delete_folder", folder_id: "f-1" }],
-  ["dopl_ontology_admin", { op: "delete_object", object: "o-1" }],
-  ["dopl_ontology_admin", { op: "delete_cluster", cluster: "board" }],
-  ["dopl_agent_admin", { op: "delete", template: "Researcher" }],
+/**
+ * ⚠ THE OPS THAT NO LONGER EXIST, DRIVEN THROUGH THE REAL SERVER. Each was a
+ * published `_admin` op until 2026-09-02. The tool is gone, so the strongest
+ * behavioural claim left is that the call is not answerable at all — and the
+ * `[tool, op]` pairs are kept, rather than replaced by a name list, so a
+ * reintroduction under any spelling shows up here.
+ */
+const DELETED_DELETE_CALLS: Array<[string, string]> = [
+  ["dopl_kb_admin", "delete_base"],
+  ["dopl_kb_admin", "delete_folder"],
+  ["dopl_kb_admin", "delete_file"],
+  ["dopl_skill_admin", "delete"],
+  ["dopl_chats_admin", "delete"],
+  ["dopl_chats_admin", "delete_folder"],
+  ["dopl_ontology_admin", "delete_object"],
+  ["dopl_ontology_admin", "delete_cluster"],
+  ["dopl_agent_admin", "delete"],
 ];
 
-describe("every delete op is refused (§2b)", () => {
-  for (const [name, args] of DELETE_CALLS) {
-    it(`${name} op="${args.op}" returns the refusal and deletes nothing`, async () => {
-      const client = build();
-      const res = await tool(name)(args);
-      expect(res.isError).toBe(true);
-      expect(textOf(res)).toBe(DELETE_REFUSAL);
-      // ⚠ All-tripwire client: any handler that ran would throw, so passing
-      // here proves the op never reached the backend.
-      expect(client.listWorkspaces).not.toHaveBeenCalled();
-    });
-  }
+describe("no delete op is reachable over MCP", () => {
+  it("none of the deleted `_admin` tools registers, so no delete op has a handler", () => {
+    build();
+    for (const [name] of DELETED_DELETE_CALLS) {
+      expect(
+        registry.tools.has(name),
+        `${name} registered — it would appear in tools/list and its delete op would be callable`,
+      ).toBe(false);
+    }
+  });
+
+  it("the gate would refuse one on the DOMAIN tool it could only arrive on", () => {
+    // ⚠ The half that matters after the deletion: the capability must not
+    // reappear on a domain tool. `tools/delete-block.test.ts` asserts none of
+    // these ops is in a live `op` enum; this asserts the second layer — that if
+    // one were, the gate refuses it before workspace resolution and before any
+    // client call, so it could not half-happen.
+    for (const [tool, ops] of Object.entries(DELETE_BLOCKED_OPS)) {
+      for (const op of ops) {
+        expect(isBlockedDeleteOp(tool, op), `${tool} op="${op}" is not refused`).toBe(true);
+      }
+    }
+  });
 
   it("the refusal says the required sentence, verbatim", () => {
     // ⚠ Pinned so a reword cannot turn "ask the user" into an unactionable
-    // "denied".
+    // "denied". It is the answer the gate returns the moment a delete-shaped op
+    // lands on a tool, and the wording the `sessionOnly` 403 backs up.
     expect(DELETE_REFUSAL).toContain(
       "Deletion is app-only. Ask the user to delete this in the Dopl app.",
     );
@@ -224,16 +248,7 @@ describe("every delete op is refused (§2b)", () => {
     expect(DELETE_REFUSAL).toContain("do not retry");
   });
 
-  it("refuses BEFORE workspace resolution — a 2+-membership session gets the same answer", async () => {
-    // ⚠ ORDERING: a delete check after the workspace gate answers "which
-    // workspace?", which an agent fixes by adding `workspace=` and retrying.
-    build({ directory: [WS, { ...WS, id: "id-2", slug: "beta", name: "Beta" }], workspace: null, role: null, workspaceSource: null });
-    const res = await tool("dopl_kb_admin")({ op: "delete_base", base: "notes" });
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toBe(DELETE_REFUSAL);
-  });
-
-  it("does not touch the non-destructive ops on the same tools", async () => {
+  it("does not touch the non-destructive ops on the surviving tools", async () => {
     // ⚠ `restore_*` reads as recovery, not deletion — must not be swept up.
     const client = build();
     await expect(tool("dopl_kb")({ op: "list_bases" })).rejects.toThrow(
@@ -244,10 +259,12 @@ describe("every delete op is refused (§2b)", () => {
 });
 
 describe("isBlockedDeleteOp — the rule future tools inherit", () => {
-  it("blocks the enumerated ops", () => {
-    expect(isBlockedDeleteOp("dopl_kb_admin", "delete_base")).toBe(true);
-    expect(isBlockedDeleteOp("dopl_skill_admin", "delete")).toBe(true);
-    expect(isBlockedDeleteOp("dopl_ontology_admin", "delete_cluster")).toBe(true);
+  it("blocks the enumerated ops on the DOMAIN tools that would publish them", () => {
+    // ⚠ Re-keyed 2026-09-02: the table used to name `dopl_kb_admin`; with the
+    // `_admin` tools gone it names the tool a delete op could only arrive on.
+    expect(isBlockedDeleteOp("dopl_kb", "delete_base")).toBe(true);
+    expect(isBlockedDeleteOp("dopl_skill", "delete")).toBe(true);
+    expect(isBlockedDeleteOp("dopl_ontology", "delete_cluster")).toBe(true);
   });
 
   it("FAILS CLOSED on an admin op nobody added to the table", () => {

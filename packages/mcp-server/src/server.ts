@@ -10,8 +10,8 @@
  *                          fail-closed no-default refusal.
  *   gating.ts              THE FOUR GATES + their tables. ⚠ Read that file's
  *                          header before touching either registration path.
- *   delete-policy.ts       the delete refusal AND the description `_admin`
- *                          tools advertise.
+ *   delete-policy.ts       the app-only-deletion rule: the refusal, and the
+ *                          table of delete ops no tool may publish.
  *   registrar.ts           `registerTool` / `registerMetaTool`, workspace arg,
  *                          `strictInput`, ALS routing.
  *   status-footer.ts       the `_dopl_status` footer.
@@ -37,7 +37,7 @@ import { registerHomeTool } from "./tools/home.js";
 import { registerStatusTool } from "./tools/status.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
 import { buildInstructions } from "./instructions.js";
-import { createGates } from "./gating.js";
+import { createGates, offeredToolsFor } from "./gating.js";
 import { createToolRegistrars } from "./registrar.js";
 import { registerWorkspaceMetaTools } from "./meta-tools.js";
 import { registerResources } from "./resources.js";
@@ -110,9 +110,23 @@ export function createServer(
     sessionKey?: string;
     /**
      * OAuth scopes for this session. Present and lacking `dopl.write` ⇒
-     * write/admin ops gated.
+     * write ops gated.
      */
     scopes?: string[];
+    /**
+     * The ROLE this connection says it is running as — the `X-Dopl-Tool-Profile`
+     * request header, forwarded verbatim by the transport. `gating.ts ›
+     * TOOL_PROFILE_TOOLS` decides what a role means; it is EMPTY today, so every
+     * value serves the whole surface and this changes nothing yet (wave B fills
+     * the table).
+     *
+     * ⚠ IT MAY ONLY NARROW, AND IT IS A HINT AND NOT A FENCE. Absent, unknown,
+     * or a role with no row all resolve to "serve everything", so a stale
+     * desktop can never be locked out; and because it is caller-supplied,
+     * nothing may be GRANTED on it. Containment stays the desktop's
+     * `disallowedTools` + `grantDecision` and the credential itself.
+     */
+    toolProfile?: string | null;
   } = {},
 ): McpServer {
   // ⚠ FAIL CLOSED: write/admin capability ONLY on an explicit `dopl.write`
@@ -191,7 +205,9 @@ export function createServer(
   // ⚠ Four gates shared by BOTH registration paths, built here and passed in
   // rather than defined inside a wrapper: `registerMetaTool` registers straight
   // onto the SDK server and would otherwise pass through none of them.
-  const gates = createGates(canWrite);
+  // ⚠ The role narrowing is resolved HERE, to a set, so `gating.ts` owns the
+  // table and `createGates` owns no vocabulary. `null` ⇒ no narrowing.
+  const gates = createGates(canWrite, offeredToolsFor(options.toolProfile));
 
   const { registerTool, registerMetaTool, chargeCredit } = createToolRegistrars({
     server,
@@ -230,15 +246,17 @@ export function createServer(
 
   // ⚠ THIS LIST IS THE SURFACE. Every published tool is registered here and
   // nowhere else, so `tools/list` == these calls minus `gating.ts ›
-  // HIDDEN_TOOLS`. Each registrar exposes one `dopl_<domain>` action-tool (plus
-  // a `dopl_<domain>_admin` companion where the domain has destructive ops)
-  // dispatching on an `op` arg.
+  // HIDDEN_TOOLS` and minus anything outside this session's role-scoped offer.
+  // Each registrar exposes ONE `dopl_<domain>` action-tool dispatching on an
+  // `op` arg. ⚠ THE FIVE `_admin` COMPANIONS ARE GONE (2026-09-02): every op on
+  // all five was refused unconditionally, and the rule they advertised is now
+  // enforced by `sessionOnly` on the REST routes — see `delete-policy.ts`.
   // 🔒 `directory` is the FOURTH argument and it is the ONLY thing that resolves
   // `to_workspace` on op="copy_base" — a container id (§4A) resolves, and a
   // locked session resolves nothing but its own container.
-  registerKnowledgeTools(registerTool, client, caller, directory); // dopl_kb + dopl_kb_admin (user bases)
-  registerSkillTools(registerTool, client, caller); // dopl_skill + dopl_skill_admin
-  registerChatTools(registerTool, client); // dopl_chats + dopl_chats_admin (archive)
+  registerKnowledgeTools(registerTool, client, caller, directory); // dopl_kb — the user's bases
+  registerSkillTools(registerTool, client, caller); // dopl_skill
+  registerChatTools(registerTool, client); // dopl_chats — the archive
   registerMembersTool(registerTool, client, caller); // dopl_members — membership/teams/access (read-only)
   registerMapTool(registerTool, client); // dopl_map — compact workspace manifest
   // ⚠ `directory` + `chargeCredit` are what make `scope="everywhere"` possible
@@ -263,7 +281,7 @@ export function createServer(
   // as untrusted, and binding a confirm token to the identity that previewed.
   // 🔒 `directory` resolves `to_workspace` on op="copy", the same way it does for
   // `dopl_kb(op="copy_base")` above.
-  registerAgentTools(registerTool, client, caller, directory); // dopl_agent + dopl_agent_admin — persistent agent identities
+  registerAgentTools(registerTool, client, caller, directory); // dopl_agent — persistent agent identities
 
   return server;
 }

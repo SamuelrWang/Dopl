@@ -1,6 +1,8 @@
 /**
- * `dopl_agent` + `dopl_agent_admin` — AGENT TEMPLATES, the persistent agent
- * IDENTITIES a user authors once and launches many times.
+ * `dopl_agent` — AGENT TEMPLATES, the persistent agent IDENTITIES a user authors
+ * once and launches many times. ⚠ There is no delete op and no
+ * `dopl_agent_admin` (deleted 2026-09-02) — deletion is app-only, and
+ * `DELETE /api/agent-templates/{id}` has been `sessionOnly` since 2026-08-22.
  *
  * ⚠ THE NAME IS A DELIBERATE COLLISION, RESOLVED BY SAMUEL (ruling Q7,
  * 2026-08-28). "Agents" already names TWO surfaces — the identities on /home and
@@ -10,24 +12,21 @@
  * agent reaching for "the agents in this channel" is sent to
  * `dopl_channel(op="read_sessions")` instead of here.
  *
- * Thin registrar: two descriptions + schemas + op routing, delegating to
+ * Thin registrar: one description + schema + op routing, delegating to
  *   - `agent-shared.ts`    — the three-answer ref resolution + error mappers
  *   - `agent-ops-read.ts`  — list / get
  *   - `agent-ops-write.ts` — create / update (shelf fence + confirm gate)
  *   - `agent-ops-copy.ts`  — copy into another tenancy (two fenced legs)
- *   - `agent-ops-admin.ts` — the (refused) delete
  * ⚠ The `agent-` prefix is what the parity split-scan groups on.
  */
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
-import { deleteAdminDescription } from "../delete-policy.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity.js";
 import { missingParams, type RegisterTool, type ToolResponse } from "./respond.js";
 import { SHELF_ARG_DESCRIPTION, SHELF_VALUES } from "./shelf.js";
 import { opGet, opList } from "./agent-ops-read.js";
 import { opCreate, opUpdate } from "./agent-ops-write.js";
-import { opDelete } from "./agent-ops-admin.js";
 import { opCopy } from "./agent-ops-copy.js";
 import { TO_WORKSPACE_ARG_DESCRIPTION } from "./copy-target.js";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
@@ -43,18 +42,8 @@ Set \`op\` to one of:
 - "update" — Requires: template. Optional: name, description, instructions, model, fields, visibility, knowledge_bases, confirm_token. \`fields\` and \`knowledge_bases\` REPLACE the whole set — [] empties it. No shelf move.
 - "copy" — re-create a template YOU CREATED as a NEW template in ANOTHER workspace or home channel. Requires: template, to_workspace (see its own description for the target rules). Carries name, description, instructions, model and custom fields; NOT attached knowledge bases (a base id means nothing in another tenancy — the result says how many were dropped) and never visibility.
 
-Deleting is app-only — \`dopl_agent_admin\` refuses the op it lists. ⚠ Publishing a template into a home channel somebody ELSE is in previews first, returning what would be created, who would see it, and a one-time \`confirm_token\` to re-issue with.`;
+No delete op — deletion is app-only. ⚠ Publishing a template into a home channel somebody ELSE is in previews first, returning what would be created, who would see it, and a one-time \`confirm_token\` to re-issue with.`;
 
-const AGENT_ADMIN_DESCRIPTION = deleteAdminDescription(
-  [
-    {
-      op: "delete",
-      effect:
-        "would have destroyed an agent template and every attachment on it",
-    },
-  ],
-  `Reach for instead: \`dopl_agent\` op=update with visibility="private" takes a template out of everyone else's reach without destroying it, and op=update can rewrite its instructions in place. If it genuinely has to go, ask the user to delete it in the Dopl app.`,
-);
 
 /**
  * ⚠ THE SERVER'S BOUNDS, RE-TYPED — and NAMED since 2026-08-30 (G3).
@@ -233,27 +222,6 @@ export function registerAgentTools(
             shelf: args.shelf,
             confirm_token: args.confirm_token,
           });
-        }
-      }
-    },
-  );
-
-  register(
-    "dopl_agent_admin",
-    AGENT_ADMIN_DESCRIPTION,
-    {
-      op: z.enum(["delete"]).describe("DESTRUCTIVE operation to perform."),
-      template: z
-        .string()
-        .optional()
-        .describe("Template id or exact name. Required for the refused delete op."),
-    },
-    async (args): Promise<ToolResponse> => {
-      switch (args.op) {
-        case "delete": {
-          const miss = missingParams("delete", args, ["template"]);
-          if (miss) return miss;
-          return opDelete(client, args.template as string);
         }
       }
     },

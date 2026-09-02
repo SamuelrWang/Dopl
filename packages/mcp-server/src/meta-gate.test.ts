@@ -12,12 +12,15 @@
  * Registered against the REAL gate tables and driven through a real MCP
  * `Client` over `InMemoryTransport`.
  *
- * ⚠ THE SUPPRESSION LEG DRIVES `READ_ONLY_BLOCKED_TOOLS`, NOT `HIDDEN_TOOLS`.
- * `HIDDEN_TOOLS` is empty, and an empty table cannot suppress anything —
- * pinning against it is the vacuous pass this file exists to prevent.
- * `isSuppressedTool` reads BOTH tables on ONE line, so the non-empty one proves
- * the line still runs. `HIDDEN_TOOLS`'s emptiness is pinned as a value in
- * `tools/delete-block.test.ts`.
+ * ⚠ THE SUPPRESSION LEG DRIVES THE ROLE-SCOPED OFFER, NOT A NAME TABLE
+ * (2026-09-02). Both name tables are legitimately empty — `HIDDEN_TOOLS` is the
+ * hide-before-delete seam and `READ_ONLY_BLOCKED_TOOLS` was deleted with the
+ * five `_admin` tools it held — and an empty table cannot suppress anything, so
+ * pinning against one is the vacuous pass this file exists to prevent.
+ * `createGates` takes the RESOLVED offer set rather than a role name precisely
+ * so this file can hand it a synthetic one: the subject is the LINE, and a real
+ * `TOOL_PROFILE_TOOLS` row (wave B) reaches it the same way. `HIDDEN_TOOLS`'s
+ * emptiness is pinned as a value in `tools/delete-block.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
@@ -28,7 +31,7 @@ import { z } from "zod";
 
 import { createToolRegistrars } from "./registrar.js";
 import { createGates } from "./gating.js";
-import { HIDDEN_TOOLS, READ_ONLY_BLOCKED_TOOLS } from "./gating.js";
+import { HIDDEN_TOOLS, TOOL_PROFILE_TOOLS } from "./gating.js";
 import { DELETE_REFUSAL } from "./delete-policy.js";
 import { UNKNOWN_CALLER } from "./tools/identity.js";
 import type { WorkspaceDirectory } from "./workspace-directory.js";
@@ -44,11 +47,18 @@ const unusedDirectory = {
 } as unknown as WorkspaceDirectory;
 
 /**
- * A name `READ_ONLY_BLOCKED_TOOLS` suppresses, registered through the READ-ONLY
- * registrar (the posture in which that table bites). ⚠ Asserted against the
- * real table before it is trusted.
+ * A name OUTSIDE the role-scoped offer below, registered through the narrowed
+ * registrar. ⚠ Synthetic like the other two: the offer set is data, so the
+ * fixture is the set, and there is no table to drift from.
  */
-const SUPPRESSED_NAME = "dopl_kb_admin";
+const SUPPRESSED_NAME = "synthetic_out_of_role";
+/**
+ * The role's whole offer, applied to the SECOND registrar below. Everything not
+ * in it is absent from `tools/list`. ⚠ `dopl_kb` is the one name that registrar
+ * publishes, so the set is exactly "what survives", and the two legs below
+ * assert both polarities of the same line.
+ */
+const ROLE_OFFER = new Set(["dopl_kb"]);
 /**
  * An `_admin` name in NO table, so only `DELETE_OP_SHAPE` — the fail-closed
  * half — can refuse it. That is the half a future meta-tool relies on.
@@ -87,10 +97,12 @@ beforeAll(async () => {
   registerMetaTool(OPEN_NAME, "an ungated meta-tool", { op: z.string() }, handlers.open);
 
   // Second registrar on the SAME server for the read-only scope gate: a
-  // meta-tool carrying a WRITE op must be refused without `dopl.write`.
+  // meta-tool carrying a WRITE op must be refused without `dopl.write`. ⚠ It
+  // also carries the ROLE-SCOPED offer, so one registrar drives both narrowing
+  // axes and neither can hide the other's line going missing.
   const readOnly = createToolRegistrars({
     server,
-    gates: createGates(false),
+    gates: createGates(false, ROLE_OFFER),
     directory: unusedDirectory,
     activeWorkspace: null,
     sessionEffective: () => null,
@@ -102,7 +114,7 @@ beforeAll(async () => {
     { op: z.string() },
     handlers.writeGated,
   );
-  // Suppression leg: a READ_ONLY_BLOCKED_TOOLS name must not publish at all.
+  // Suppression leg: a name outside the role's offer must not publish at all.
   readOnly.registerMetaTool(
     SUPPRESSED_NAME,
     "should never be published",
@@ -123,16 +135,25 @@ afterAll(async () => {
 });
 
 describe("registerMetaTool runs isSuppressedTool (registrar.ts:299)", () => {
-  it("the table this pins against is real and still suppresses the name", () => {
-    // ⚠ A fixture that drifted out of the table would pass vacuously.
-    expect(READ_ONLY_BLOCKED_TOOLS.has(SUPPRESSED_NAME)).toBe(true);
+  it("the fixture really is outside the offer this registrar was built with", () => {
+    // ⚠ An offer that had grown to include the name would pass vacuously.
+    expect(ROLE_OFFER.has(SUPPRESSED_NAME)).toBe(false);
   });
 
-  it("HIDDEN_TOOLS is empty, which is WHY this drives the other table", () => {
-    // ⚠ This file's fixture choice depends on it: the day a name goes back
-    // into `HIDDEN_TOOLS`, this fails, and that is the prompt to add a second
-    // suppression leg driving that table too.
+  it("both NAME tables are empty, which is WHY this drives the role offer", () => {
+    // ⚠ This file's fixture choice depends on it: the day a name goes back into
+    // `HIDDEN_TOOLS`, or `TOOL_PROFILE_TOOLS` gains a row (wave B), this fails,
+    // and that is the prompt to add a suppression leg driving the real table.
     expect([...HIDDEN_TOOLS]).toEqual([]);
+    expect(Object.keys(TOOL_PROFILE_TOOLS)).toEqual([]);
+  });
+
+  it("a tool INSIDE the offer still registers — it narrows, it does not empty", async () => {
+    // ⚠ The other polarity, and the one a fail-closed bug would break:
+    // `isSuppressedTool` returning true for everything passes every assertion
+    // above and leaves the session with no tools at all.
+    const listed = await client.listTools();
+    expect(listed.tools.map((t) => t.name)).toContain("dopl_kb");
   });
 
   it("a SUPPRESSED meta-tool is absent from tools/list — not registered at all", async () => {

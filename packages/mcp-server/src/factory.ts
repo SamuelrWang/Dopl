@@ -24,9 +24,18 @@ export type DoplMcpServer = ReturnType<typeof createServer>;
 export interface BootOptions {
   /**
    * OAuth scopes granted for this session, if any. Stage 3 (OAuth) gates
-   * write/admin tools on these; absent ⇒ full access (stdio + bearer key).
+   * write tools on these; absent ⇒ full access (stdio + bearer key).
    */
   scopes?: string[];
+  /**
+   * The ROLE this connection is running as, from the `X-Dopl-Tool-Profile`
+   * header the TRANSPORT read (`src/shared/auth/tool-profile-header.ts`) — the
+   * desktop stamps the containment profile it already spawned the session under.
+   * Threaded verbatim into `createServer`, whose option docblock carries the
+   * narrowing-only rule and the hint-not-fence caveat. Absent ⇒ the whole
+   * surface, which is also what every value does until wave B fills the table.
+   */
+  toolProfile?: string | null;
   /**
    * Retry attempts for the initial status ping. Default 0 — fast for per-request
    * HTTP; the stdio binary passes retries because it boots once.
@@ -228,6 +237,7 @@ export async function bootServer(
     workspaceSource: source,
     sessionKey: opts.sessionKey,
     scopes: opts.scopes,
+    toolProfile: opts.toolProfile,
   });
 
   const activeWorkspace = active

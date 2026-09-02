@@ -1,23 +1,21 @@
 "use strict";
 /**
- * `dopl_ontology` + `dopl_ontology_admin` — the workspace object graph as a
- * ROUTING layer. Read funnel: anchor → map → resolve → get. Writes edit ONE
- * thing at a time so agents never round-trip whole objects.
+ * `dopl_ontology` — the workspace object graph as a ROUTING layer. Read funnel:
+ * anchor → map → resolve → get. Writes edit ONE thing at a time so agents never
+ * round-trip whole objects. ⚠ There is no delete op and no
+ * `dopl_ontology_admin` (deleted 2026-09-02) — deletion is app-only, fenced by
+ * `sessionOnly` on the object and cluster DELETE routes. The `remove_*` ops here
+ * strip a FIELD from an object that survives; they are not deletes.
  *
- * Thin registrar: two tool schemas wired to
+ * Thin registrar: one tool schema wired to
  *   - `ontology-render.ts`    — shared ref resolvers + object renderer
  *   - `ontology-ops-read.ts`  — map/anchor/resolve/get
  *   - `ontology-ops-write.ts` — op dispatch + every mutating handler
- * The admin tool (refused cascade deletes) stays inline here.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOntologyTool = registerOntologyTool;
 const zod_1 = require("zod");
-const delete_policy_js_1 = require("../delete-policy.js");
-const narration_1 = require("./narration");
 const identity_1 = require("./identity");
-const respond_1 = require("./respond");
-const ontology_render_1 = require("./ontology-render");
 const ontology_ops_write_1 = require("./ontology-ops-write");
 const ONTOLOGY_DESCRIPTION = `The workspace ontology — objects organized in clusters of columns, with attributes, relationships, and actions. An object IS whatever its column is named (a "Sales Rep" column holds sales reps). Objects are referenced by id (preferred) or exact name; clusters by slug/id/name.
 
@@ -43,11 +41,7 @@ WRITE — set \`op\` to:
 - "remove_action" — Requires: object, name.
 - "claim_anchor" — link the CALLING user to an object as their anchor. Requires: object.
 
-Object-mutating ops take an optional \`expected_version\`; deletes live in dopl_ontology_admin.`;
-const ONTOLOGY_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
-    { op: "delete_object", effect: "would have deleted one object" },
-    { op: "delete_cluster", effect: "would have deleted a cluster and, in cascade, every object it owns" },
-], `Reach for instead: \`dopl_ontology\` op="update_object" to rewrite an object, op="remove_attribute" / op="remove_relationship" to strip fields FROM one (those edit an object; they do not delete it). If a board or a card genuinely has to go, ask the user to delete it in the Dopl app.`);
+Object-mutating ops take an optional \`expected_version\`. No delete op — deletion is app-only.`;
 function registerOntologyTool(register, client, 
 /** The session identity record — `op="anchor"` states it before the object. */
 caller = identity_1.UNKNOWN_CALLER) {
@@ -116,61 +110,4 @@ caller = identity_1.UNKNOWN_CALLER) {
             .optional()
             .describe("Object-mutating ops: the object's Version from a prior op=\"get\", which rejects the write if the object changed since; omit to overwrite blindly (last-writer-wins)."),
     }, (args) => (0, ontology_ops_write_1.dispatch)(client, args, caller));
-    register("dopl_ontology_admin", ONTOLOGY_ADMIN_DESCRIPTION, {
-        op: zod_1.z.enum(["delete_object", "delete_cluster"]).describe("Destructive operation."),
-        object: zod_1.z.string().optional().describe("delete_object: id or exact name."),
-        cluster: zod_1.z.string().optional().describe("delete_cluster: slug, id, or exact name."),
-    }, async (args) => {
-        // ⚠ SUMMARY PROJECTION, NOT THE GRAPH: this resolves a ref and counts a
-        // cascade over `columnIds`/`childIds` — containment only, no JSONB.
-        // (Unreachable: the delete refusal fires before any client call, so the
-        // point is that the resolvers stay honest about what they read.)
-        const snapshot = await client.getOntology({ view: "summary" });
-        if (args.op === "delete_object") {
-            const miss = (0, respond_1.missingParams)("delete_object", args, ["object"]);
-            if (miss)
-                return miss;
-            const resolved = (0, ontology_render_1.resolveObjectRef)(snapshot, args.object);
-            if ("fail" in resolved)
-                return resolved.fail;
-            await client.deleteOntologyObject(resolved.hit.id);
-            return (0, respond_1.ok)(`Deleted object ${(0, narration_1.inlineOr)(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.id}\`).`);
-        }
-        const miss = (0, respond_1.missingParams)("delete_cluster", args, ["cluster"]);
-        if (miss)
-            return miss;
-        const resolved = (0, ontology_render_1.resolveClusterRef)(snapshot, args.cluster);
-        if ("fail" in resolved)
-            return resolved.fail;
-        const count = countClusterObjects(snapshot, resolved.hit);
-        // ⚠ A clipped read UNDER-counts the cascade — rows past the ceiling are
-        // still deleted, just never in hand to count. A flat number is worse than
-        // no number.
-        const floor = snapshot.truncated
-            ? ` The ontology read was CLIPPED by a server row ceiling, so that count is a floor, not the cascade.`
-            : "";
-        await client.deleteOntologyCluster(resolved.hit.id);
-        return (0, respond_1.ok)(`Deleted cluster ${(0, narration_1.inlineOr)(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and, in cascade, its ${count} object${count === 1 ? "" : "s"}.${floor} Permanent — there is nothing to restore it from.`);
-    });
-}
-/**
- * Size of a cluster's cascade set: columns plus every nested descendant. ⚠
- * Visited-set guards against cycles from objects shared across parents.
- *
- * ⚠ Typed to the containment fields it walks, so it accepts EITHER projection —
- * full snapshot and `view: "summary"` both carry `columnIds` and `childIds`.
- */
-function countClusterObjects(snapshot, cluster) {
-    const collected = new Set();
-    const stack = [...cluster.columnIds];
-    while (stack.length > 0) {
-        const id = stack.pop();
-        if (id === undefined || collected.has(id))
-            continue;
-        collected.add(id);
-        const obj = snapshot.objects[id];
-        if (obj)
-            stack.push(...obj.childIds);
-    }
-    return collected.size;
 }
