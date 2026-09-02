@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { readClient } from "@/shared/supabase/caller-client";
 import type {
   KnowledgeEntry,
   KnowledgeEntryType,
@@ -17,6 +18,23 @@ import {
 /**
  * Raw Supabase I/O for knowledge ENTRIES. No business logic, no auth checks —
  * see `repository.ts` for the split map and conventions.
+ *
+ * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 1
+ * (Wave B B7). `readClient()` is the CALLER's client when
+ * `RLS_CALLER_SCOPED_READS` is on and `supabaseAdmin()` otherwise, so with the
+ * flag off this file behaves exactly as it did.
+ *
+ *   * **A read that answers "what may this caller see" takes `readClient()`.**
+ *     With the flag on, the row filter is the policy
+ *     (`20260919120000_rls_helpers_and_caller_scope`), which is written to equal
+ *     the TS predicate — the predicate stays until the flag has run a release.
+ *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`**, and
+ *     says so at the call site. Slug uniqueness, storage accounting and the
+ *     `max(position)` append helpers must see rows the caller cannot: scoped to
+ *     the caller they would answer a different question and answer it wrongly
+ *     (a slug "free" because someone else's private base holds it).
+ *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
+ *     until RLS plan phase 4.
  */
 
 export interface ListEntriesOpts {
@@ -35,7 +53,7 @@ export async function findEntryById(
   id: string,
   includeDeleted = false
 ): Promise<KnowledgeEntry | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db.from("knowledge_entries").select(KNOWLEDGE_ENTRY_COLS).eq("id", id);
   if (!includeDeleted) query = query.is("deleted_at", null);
   const { data, error } = await query.maybeSingle();
@@ -50,7 +68,7 @@ export async function findActiveEntryByTitle(
   folderId: string | null,
   title: string
 ): Promise<KnowledgeEntry | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("knowledge_entries")
     .select(KNOWLEDGE_ENTRY_COLS)
@@ -70,7 +88,7 @@ export async function listActiveEntryTitlesIn(
   baseId: string,
   folderId: string | null
 ): Promise<Array<{ id: string; title: string }>> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("knowledge_entries")
     .select("id, title")
@@ -87,7 +105,7 @@ export async function listActiveEntryTitlesIn(
 export async function findActiveEntryById(
   entryId: string
 ): Promise<KnowledgeEntry | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_entries")
     .select(KNOWLEDGE_ENTRY_COLS)
@@ -104,7 +122,7 @@ export async function listEntriesForBase(
 ): Promise<KnowledgeEntry[]> {
   const includeBody = opts.includeBody ?? true;
   const includeDeleted = opts.includeDeleted ?? false;
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("knowledge_entries")
     .select(includeBody ? KNOWLEDGE_ENTRY_COLS : KNOWLEDGE_ENTRY_META_COLS)
@@ -147,6 +165,8 @@ export async function maxEntryPositionIn(
   baseId: string,
   folderId: string | null
 ): Promise<number> {
+  // ⚠ WRITE-PATH READ, service role on purpose: it feeds an INSERT, and writes
+  // stay on the service role until RLS plan phase 4.
   const db = supabaseAdmin();
   let query = db
     .from("knowledge_entries")
@@ -164,7 +184,7 @@ export async function maxEntryPositionIn(
 
 /** Active (non-deleted) entry count for a base — tree paging metadata. */
 export async function countEntriesForBase(baseId: string): Promise<number> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { count, error } = await db
     .from("knowledge_entries")
     .select("id", { count: "exact", head: true })
@@ -193,7 +213,7 @@ export async function listEntryStampsForBases(
   baseIds: string[]
 ): Promise<EntryStamp[]> {
   if (baseIds.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_entries")
     .select("knowledge_base_id, updated_at")
@@ -219,7 +239,7 @@ export async function listEntriesByIds(
   ids: string[]
 ): Promise<KnowledgeEntry[]> {
   if (ids.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_entries")
     .select(KNOWLEDGE_ENTRY_META_COLS)
