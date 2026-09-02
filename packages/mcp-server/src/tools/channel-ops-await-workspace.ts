@@ -45,7 +45,7 @@ import {
   resolveAwaitHoldCeilingMs,
   resolveAwaitHoldMs,
 } from "./channel-await-budget";
-import { sessionBlockLines } from "./channel-session-render";
+import { sessionBlockLines } from "./channel-session-table";
 
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = resolveAwaitHoldMs(process.env.DOPL_AWAIT_HOLD_MS);

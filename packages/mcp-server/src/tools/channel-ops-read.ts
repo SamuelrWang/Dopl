@@ -41,15 +41,14 @@ import {
 import { threadsClippedNote } from "./channel-render-threads";
 // ⚠ Addressing rule has ONE statement, in channel-addressing.ts.
 import { rosterAddressingRule } from "./channel-addressing";
+// ⚠ THE ONE LINE A READ RESULT SPENDS ON THE RULES. Every standing paragraph
+// these ops used to close with is in `channel-doctrine.ts`, behind `op="help"`
+// and the `dopl://doctrine/channels` resource.
+import { DOCTRINE_POINTER } from "./channel-doctrine";
 // ⚠ The session LINE — staleness hedge + operator-only telemetry — has ONE
 // statement, in channel-session-render.ts, shared with `await`'s session block.
-import {
-  SESSION_TELEMETRY_NOTE,
-  formatSessionLine,
-  sessionIsStale,
-  sessionLegend,
-} from "./channel-session-render";
-import { SESSION_HANDLE_NOTE } from "./channel-session-handle";
+import { sessionIsStale, sessionLegend } from "./channel-session-render";
+import { SESSION_TABLE_HEAD, sessionRow } from "./channel-session-table";
 
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
@@ -164,8 +163,14 @@ export async function opRead(
   // ⚠ Thread-scoped read yields NO channel-wide cursor — so it prints no
   // summary seq. See the docblock: naming the number and forbidding it in the
   // same sentence is what shipped, and the number is what got used.
+  // ⚠ THE ONE SENTENCE THAT MAY NOT SHRINK TO A TOKEN. `cursor=none` alone reads
+  // as "this page has no cursor yet", and the agent then takes the highest
+  // `**#seq**` off a message row — which is exactly the footgun. WHY there is no
+  // cursor is the whole content: a larger `since` returns FEWER messages, so a
+  // seq from a FILTERED page silently and permanently drops every row the filter
+  // hid. One line, and the remedy is in it.
   lines.push(
-    `\nNO CURSOR FROM THIS READ — it is deliberately not offering one. \`thread\` FILTERED other exchanges out of this page, and \`await\` is CHANNEL-WIDE with a strict "greater than", so a seq taken from here would skip every message this filter hid — permanently, because a cursor only moves forward. Await from the highest seq below which you have seen EVERYTHING in this channel. If you do not have one, establish it by reading the channel unscoped (drop \`thread\`) and awaiting from that page's last seq.`,
+    `\ncursor=none — \`thread\` filtered rows out of this page, and \`await\` is channel-wide with a strict "greater than", so a seq taken from here would permanently skip what the filter hid. Await from the highest seq below which you have seen EVERYTHING in this channel; read unscoped to establish one.`,
   );
   return ok(lines.join("\n"));
 }
@@ -228,7 +233,11 @@ export async function opReadSessions(
 
   if (sessions.length === 0) {
     return ok(
-      `No live sessions of yours are being reported${channelLabel} right now. This lists the agent sessions running on YOUR OWN machine, not another member's — to see what a PEER is doing, watch the thread you share with op="read" / op="await". If you expected a session here and see none, it may simply not be running, or your desktop has not reported its state yet.`,
+      // ⚠ "BEING REPORTED" IS THE LOAD-BEARING PHRASE and may never become "you
+      // have none": an asleep, signed-out or older machine reports nothing, so
+      // an empty page is not evidence a session is not running. The rest — that
+      // this is your own side only — is in the doctrine.
+      `No live sessions of yours are being REPORTED${channelLabel} right now. That is not the same as having none: an asleep, signed-out or older machine reports nothing. ${DOCTRINE_POINTER}`,
     );
   }
 
@@ -238,25 +247,38 @@ export async function opReadSessions(
   const now = Date.now();
   const anyStale = sessions.some((s) => sessionIsStale(s, now));
 
-  // ⚠ Banner moved to the tool DESCRIPTION (T11) — see opList.
-  const lines = [`## Your sessions — ${sessions.length}${channelLabel}\n`];
+  // ⚠ A TABLE, AND ONLY A TABLE (T13, 2026-09-02). Banner moved to the tool
+  // DESCRIPTION (T11) — see opList.
+  //
+  // ⚠ WHAT LEFT, AND WHY IT IS NOT A LOSS. This result used to close with three
+  // standing paragraphs — the legend, SESSION_HANDLE_NOTE (~1.1k chars on how a
+  // handle is spent) and SESSION_TELEMETRY_NOTE (~800) — on EVERY call, to a
+  // reader who calls this op in a loop. The legend stays, because it is the one
+  // that decodes THIS page's own cells and it is conditional on the page
+  // actually containing a hedged row. The other two are standing DOCTRINE about
+  // the surface rather than a report on these rows: they moved to
+  // dopl://doctrine/channels and dopl_channel(op="help"), which is where a
+  // reader who needs them can spend one call, instead of every reader paying
+  // for them on every call.
+  const lines = [
+    `## Your sessions — ${sessions.length}${channelLabel}\n`,
+    ...SESSION_TABLE_HEAD,
+  ];
   for (const s of sessions) {
     // ⚠ `handle: true` — this op is own-scoped by construction (it "never shows
     // a PEER's sessions"), which is the audience question
     // {@link SessionRenderOpts.handle} asks. See it for why an agent id is not
     // published on a peer row.
     lines.push(
-      formatSessionLine(s, { telemetry: true, handle: true, now, operatorOnline }),
+      sessionRow(s, { telemetry: true, handle: true, now, operatorOnline }),
     );
   }
-  lines.push(
-    `\n${sessionLegend(anyStale, operatorOnline)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`,
-    // ⚠ THE HANDLE NOTE SITS ABOVE THE TELEMETRY ONE, because it answers the
-    // question this op is actually asked ("which of these can I direct, and
-    // how") and the telemetry note answers a narrower one about the clauses.
-    `\n${SESSION_HANDLE_NOTE}`,
-    `\n${SESSION_TELEMETRY_NOTE}`,
-  );
+  // ⚠ THE LEGEND STAYS AND THE POINTER IS ONE LINE. The legend decodes THIS
+  // page's own cells and is conditional on the page actually containing a hedged
+  // row; the standing description of the columns (which are operator-only, what
+  // a `—` means, why a row is a REPORT and not an observation) is doctrine and
+  // is read once, not on every call of an op an orchestrator polls in a loop.
+  lines.push(`\n${sessionLegend(anyStale, operatorOnline)} ${DOCTRINE_POINTER}`);
   return ok(lines.join("\n"));
 }
 
@@ -299,8 +321,12 @@ export async function opListThreads(
   // Extra call, but a cold op (not the poll loop) and fail-soft — see `memberNames`.
   const view = { selfUserId, names: await memberNames(client, ref) };
   for (const t of threads) lines.push(formatThreadLine(t, view));
+  // ⚠ ONE POINTER LINE (T11/T82, 2026-09-02). The pair-only WRITE RULE that used
+  // to close this listing is standing doctrine — true of every thread in every
+  // channel — and is stated in `channel-doctrine.ts` under THE MODEL. What stays
+  // is the two calls a reader of THIS page needs next.
   lines.push(
-    `\nInspect one with dopl_channel(op="get_thread", channel="${ref}", thread=<id>); read its messages with op="read" (pass the same thread=<id> to see only that exchange). A thread accepts posts ONLY from the member who opened it and the member it is addressed to — everyone else in the channel can read it and is refused if they post into it.`,
+    `\nRead one with op="read" (thread=<id>); inspect it with op="get_thread". ${DOCTRINE_POINTER}`,
   );
   return ok(lines.join("\n"));
 }

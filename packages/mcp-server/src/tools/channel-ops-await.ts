@@ -38,7 +38,7 @@ import {
 // ⚠ The session block and every rule inside it (the staleness hedge, the
 // operator-only telemetry, `undefined` vs `[]`) have ONE statement, shared with
 // `read_sessions` — see channel-session-render.ts.
-import { sessionBlockLines } from "./channel-session-render";
+import { sessionBlockLines } from "./channel-session-table";
 
 /** Read once at module load — one value per server process, no per-call env read. */
 const AWAIT_HOLD_MS = resolveAwaitHoldMs(process.env.DOPL_AWAIT_HOLD_MS);
