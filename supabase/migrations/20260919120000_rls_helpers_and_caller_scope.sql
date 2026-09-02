@@ -62,15 +62,26 @@
 --   by the slice that deletes `canSeeBase`. Recorded as F-524.
 --
 -- ---------------------------------------------------------------------------
--- ⚠ CROSS-SLICE: `dopl_teams_mode_visible()` READS `team_resource_access`, WHICH
--- SLICE B1 DROPS in `20260916120000_drop_team_resource_access`. That is why the
--- team arm is a FUNCTION and not an inline EXISTS in three policies: B1 repoints
--- ONE `CREATE OR REPLACE` at `resource_grants` and the policies do not move. If
--- B1 lands before this is applied, its migration owes that replacement.
+-- ⚠ CROSS-SLICE, AND IT HAPPENED: `dopl_teams_mode_visible()` was written
+-- against `team_resource_access`, which slice B1 DROPS in
+-- `20260916120000_drop_team_resource_access`. That is why the team arm is a
+-- FUNCTION and not an inline EXISTS in three policies — the repair is ONE
+-- `CREATE OR REPLACE` and no policy moves. Applied at the Wave B batch-1
+-- integration (F-468/F-525): the body below reads `resource_grants` with
+-- `scope_type = 'team'`.
+-- ⚠ THE `scope_type` TERM IS NOT OPTIONAL. Without it this helper would answer
+-- "is this teams-mode resource visible to me" with a CHANNEL grant on the same
+-- resource — a room's audience silently becoming a workspace-wide read, through
+-- a function whose name says nothing about scopes.
+-- ⚠ `LANGUAGE sql` IS WHY THIS COULD NOT BE LEFT: Postgres parses the body at
+-- CREATE time, so the unrepaired version aborts the replay outright rather than
+-- failing on first call. `knowledge/schema-sql.test.ts` — "no migration AFTER
+-- the drop mentions a dropped table" — is the gate, and it was red on the merged
+-- tree before this edit.
 --
 -- ⚠ PERFORMANCE. `dopl_knowledge_base_readable()` is SECURITY DEFINER, so the
 -- planner will not inline it: it is one indexed lookup per candidate row (PK on
--- `knowledge_bases`, `team_resource_access_resource_idx`, `team_members_user_idx`
+-- `knowledge_bases`, `resource_grants_resource_idx`, `team_members_user_idx`
 -- — all present). The RLS plan's "measure with realistic data" gate applies at
 -- rollout; the flag is the mitigation if it does not hold.
 --
@@ -169,14 +180,15 @@ AS $function$
     OR p_created_by = (SELECT auth.uid())
     OR EXISTS (
       SELECT 1
-      FROM public.team_resource_access tra
+      FROM public.resource_grants g
       JOIN public.team_members tm
-        ON tm.team_id = tra.team_id
-       AND tm.workspace_id = tra.workspace_id
-      WHERE tra.workspace_id  = p_workspace_id
-        AND tra.resource_type = p_resource_type
-        AND tra.resource_id   = p_resource_id
-        AND tm.user_id        = (SELECT auth.uid())
+        ON tm.team_id = g.scope_id
+       AND tm.workspace_id = g.workspace_id
+      WHERE g.scope_type    = 'team'
+        AND g.workspace_id  = p_workspace_id
+        AND g.resource_type = p_resource_type
+        AND g.resource_id   = p_resource_id
+        AND tm.user_id      = (SELECT auth.uid())
     );
 $function$;
 
