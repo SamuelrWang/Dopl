@@ -16,6 +16,7 @@ import type { AwaitResult, ChannelMessage, DoplClient } from "@dopl/client";
 import { ok, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, neutralizeInline } from "./channel-shared";
 import {
+  UNTRUSTED_BODY_HEADER,
   addresseeOf,
   formatMessages,
   // ⚠ WHICH SESSION wrote a line — the only field on the wire that names the
@@ -292,11 +293,14 @@ export async function opAwait(
       ].join("\n"),
     );
   }
-  // ⚠ Banner moved to CHANNEL_DESCRIPTION's SECURITY paragraph (T11) — `await`
-  // renders the same counterparty bodies `read` does and is the call an
-  // orchestrator makes most, so it drops the repeat for the same reason.
   const lines = [
     `## ${ref} — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}\n`,
+    // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read
+    // BEFORE them, not as a footnote underneath. ⚠ IT IS NOT DUPLICATED BY THE
+    // TOOL DESCRIPTION, and removing it on that belief is exactly how it was
+    // lost once (2026-09-02): a description is read at connect time, a body is
+    // read now, and only the second one can carry an injected line.
+    `${UNTRUSTED_BODY_HEADER}\n`,
   ];
   lines.push(...formatMessages(messages, ref, selfUserId));
   const lastSeq = messages[messages.length - 1].seq;

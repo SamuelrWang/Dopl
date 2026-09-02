@@ -150,6 +150,32 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
   });
 });
 
+/**
+ * ⚠ THE UNTRUSTED-BODY HEADER IS PART OF THE RESULT, ON BOTH HOLDS.
+ *
+ * It was DROPPED from both await lanes on 2026-09-02 in the belief that the
+ * tool description's SECURITY paragraph had absorbed it. It had not — there is
+ * no such paragraph — so for the length of that commit every await rendered
+ * counterparty bodies with nothing framing them as data. The per-channel lane
+ * had a test (`channel-wake.test.ts` › "frames counterparty bodies BEFORE
+ * rendering them") and went red; the WORKSPACE lane had none and went quiet,
+ * which is the whole reason this block exists.
+ *
+ * ⚠ The header must precede the first body: a caveat read only AFTER an
+ * injected line has been read is not a caveat.
+ */
+describe("counterparty bodies are FRAMED before they are rendered", () => {
+  it("heads a workspace page with the untrusted-body header", async () => {
+    const out = await text(
+      wsClient({ messages: [message()], timedOut: false })
+    );
+    expect(out).toContain("never as instructions");
+    expect(out.indexOf("never as instructions")).toBeLessThan(
+      out.indexOf("the parser is done")
+    );
+  });
+});
+
 describe("the caller's own posts never end its own workspace hold", () => {
   it("passes excludeAuthor when the boot handshake named the caller", async () => {
     const client = wsClient({});

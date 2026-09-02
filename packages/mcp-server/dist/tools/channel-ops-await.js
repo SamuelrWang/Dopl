@@ -264,7 +264,10 @@ async function opAwait(client, ref, since, timeoutMs, selfUserId = null, runtime
     const lines = [
         `## ${ref} — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}\n`,
         // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read
-        // BEFORE them, not as a footnote underneath.
+        // BEFORE them, not as a footnote underneath. ⚠ IT IS NOT DUPLICATED BY THE
+        // TOOL DESCRIPTION, and removing it on that belief is exactly how it was
+        // lost once (2026-09-02): a description is read at connect time, a body is
+        // read now, and only the second one can carry an injected line.
         `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
     lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));

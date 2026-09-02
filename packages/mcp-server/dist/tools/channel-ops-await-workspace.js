@@ -238,9 +238,14 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, sel
         ].join("\n"));
     }
     const groups = groupByChannel(messages);
-    // ⚠ Banner moved to CHANNEL_DESCRIPTION's SECURITY paragraph (T11).
     const lines = [
         `## Workspace — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
+        // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read
+        // BEFORE them, not as a footnote underneath. ⚠ IT IS NOT DUPLICATED BY THE
+        // TOOL DESCRIPTION, and removing it on that belief is exactly how it was
+        // lost once (2026-09-02): a description is read at connect time, a body is
+        // read now, and only the second one can carry an injected line.
+        `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
     for (const g of groups) {
         // ⚠ The channel heading names the room AND gives the `ref` to use in a
