@@ -34,7 +34,7 @@ const {
 } = require('../../tool-profiles');
 // ⚠ DOPL'S OWN SURFACE, IMPORTED — see the header. `mcp__dopl__*` names are runtime-independent.
 const doplTools = require('../../session-dopl-tools');
-const { canonicalDoplName } = require('../../mcp-tool-names');
+const { canonicalDoplName, isDoplToolName } = require('../../mcp-tool-names');
 // ⚠ THE TWO AGENT-OPS VERBS, READ HERE BECAUSE THIS IS WHERE THE SHADOW HAS TO BE DECLARED — see
 // AGENT-OPS, BELOW THE PROFILE TABLE. Names only: the module is electron-free at load (its own
 // electron-bound halves are lazy, and the SERVER builder is `./axis-b.js`'s), so requiring it here
@@ -134,9 +134,10 @@ function buildSessionToolConfig(profile) {
     };
   }
 
-  // full: pre-approve local reads only; hard-deny ONLY the universal floor. Everything else —
-  // work tools, delegation, outbound, persistence, escalation, op-scoped dopl_channel —
-  // reaches canUseTool.
+  // full: pre-approve local reads only; hard-deny ONLY the universal floor; OFFER the built-ins
+  // Axis A classifies and no others (`FULL_BUILTIN_BOUND`, argued where it is derived). Every
+  // work tool, escalation and the op-scoped dopl_channel still reaches canUseTool — what changed
+  // on 2026-09-02 is the size of the OFFER, never a verdict.
   //
   // ⚠ YES, `dopl_only` PRE-APPROVES MORE THAN `full` DOES. IT WAS MEASURED, THEN LEFT ALONE
   // (2026-08-22, ruling 4). `dopl_only.preApproved` carries WEB_TOOLS + DOPL_READ_TOOLS on top
@@ -157,7 +158,7 @@ function buildSessionToolConfig(profile) {
   //     Narrowing `dopl_only` instead is a posture decision (its whole point is "look things
   //     up" with no shell), so it is recorded here rather than silently resolved either way.
   return {
-    builtinTools: [],
+    builtinTools: FULL_BUILTIN_BOUND.slice(), // POSITIVE bound since 2026-09-02 — see its derivation
     preApproved: READ_BUILTINS.concat(AGENT_OPS_TOOL_NAMES), // + AGENT-OPS, declared above
     disallowedTools: SESSION_HARD_DENY.slice(),
     doplToolsPolicy: null,
@@ -193,6 +194,45 @@ const BYPASS_READS = [
 ];
 const AUTO_TOOLS = READ_BUILTINS.concat(EDIT_TOOLS, ['MultiEdit'], DOPL_READ_TOOLS);
 const BYPASS_TOOLS = AUTO_TOOLS.concat(ESCALATION_TOOLS, DOPL_WRITE_TOOLS, BYPASS_READS);
+
+// ⚠ `full`'s POSITIVE BOUND — DERIVED FROM AXIS A, NEVER A FOURTH HAND-LIST (2026-09-02, A5).
+//
+// `full` carried `builtinTools: []` — NO bound — so it offered every built-in this CLI ships:
+// 29 tools, 87,402 chars of tool schema on EVERY turn, `Workflow` alone 21,332 — measured
+// 2026-09-02, the MCP/architecture v2 spec §2.3 (the wave's own doc, outside this tree).
+// Nearly all of them could never run.
+// AUTO_TOOLS and BYPASS_TOOLS are POSITIVE allow-lists, so an UNCLASSIFIED name gates in every
+// Axis-A mode INCLUDING `bypass`, and a windowless session answers a gate with a DENY
+// (`session-windowless.js › claimGate`). **A tool the gate denies in every mode has no reason to
+// be in context**, and this tree mints no windowed session, so "every mode" is every session.
+//
+// ⚠ SO THE BOUND IS EXACTLY WHAT AXIS A CLASSIFIES, COMPUTED FROM THE LISTS ABOVE RATHER THAN
+// RESTATED BESIDE THEM. `BYPASS_TOOLS` is the widest classification, so its built-in half IS
+// "every name some mode can allow". Deriving it is the whole point: a name added to any Axis-A
+// list becomes offered in the SAME edit, and a name this file stops classifying stops being
+// offered. A hand-maintained fourth list would drift from the three above it, and the drift's
+// face is a tool the mode picker says runs and the model never sees.
+//
+// ⚠ THE DOPL NAMES ARE FILTERED BECAUSE THIS FIELD BOUNDS BUILT-INS ONLY. `options.tools` does
+// not bound MCP tools (`tool-profiles.js`'s L0 note), so an `mcp__dopl__*` entry here would be a
+// claim the wire does not honour — and the dopl surface is bounded by `doplToolsPolicy` and
+// `disallowedTools`, which is where `read_only` and `dopl_only` already narrow it.
+//
+// ⚠ CONTAINMENT IS UNCHANGED — THIS IS OFFERED SURFACE, NOT A FENCE. `disallowedTools` is still
+// `SESSION_HARD_DENY` and nothing else, every built-in F-177 released still resolves `gate`
+// rather than `deny` if it is ever asked for, and nothing new is pre-approved. What this removes
+// is CONTEXT, not authority — do not read it as a re-narrowing of `full`.
+//
+// ⚠ `Agent` AND `Skill` COME OFF WITH THE REST, AND THAT HALF IS A POSTURE DEFAULT RECORDED FOR
+// OVERRULING (2026-09-02). They fall out of the derivation mechanically — neither is classified —
+// but they are the two whose removal a reader would want argued, because they are what injects
+// the OPERATOR'S PERSONAL Claude Code agent and skill catalogue into every Dopl agent turn
+// (8,322 ch measured 2026-09-02): the same privacy class as F-268, and it breaks cross-machine
+// prompt-cache identity too. Dopl's sanctioned delegation path is `dopl_channel(op="launch_agent")`,
+// not this CLI's own `Agent`. ⚠ ONE LINE REVERSES IT — `FULL_BUILTIN_BOUND.concat(['Agent',
+// 'Skill'])` re-OFFERS them; making them RUNNABLE is a second, separate decision (classify them),
+// which is the honest shape of the trade rather than one flag standing for both.
+const FULL_BUILTIN_BOUND = BYPASS_TOOLS.filter((name) => !isDoplToolName(name));
 
 function normalizeToolMode(mode) {
   return TOOL_MODES.indexOf(mode) === -1 ? 'manual' : mode; // fail-closed
@@ -259,6 +299,7 @@ module.exports = {
   shortDoplName,
   buildSessionToolConfig,
   TOOL_MODES, EDIT_TOOLS, ESCALATION_TOOLS, BYPASS_READS, AUTO_TOOLS, BYPASS_TOOLS,
+  FULL_BUILTIN_BOUND,
   normalizeToolMode, toolModeAllows, floorWindowlessTool,
   SESSION_HARD_DENY,
 };
