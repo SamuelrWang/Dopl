@@ -34,9 +34,9 @@
 // asks the registry for every gate decision.
 
 const STATUS_TIMEOUT_MS = 5000;
-// ⚠ THE SAME 5s WINDOW THE OTHER LANES CACHE THEIR PROBE FOR, and for the same reason: triage asks
-// this once per pass and a wake storm would otherwise spawn one child process per candidate to
-// learn one fact.
+// ⚠ THE SAME 5s WINDOW THE OTHER LANES CACHE THEIR PROBE FOR, and for the same reason: a burst of
+// launches asks this once each, and without the cache each would spawn one child process to learn
+// one fact.
 const CACHE_MS = 5000;
 
 // The documented environment credential. ⚠ ALSO `descriptor.envKeys`, so the ambient-fence note in

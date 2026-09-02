@@ -351,20 +351,18 @@ test("a bundled runtime's unpack globs are the build file's, verbatim", () => {
   }
 });
 
-// ── the triage fence is DECLARED, not just built ──────────────────────────────
+// ── ⚠ THE TRIAGE CAPABILITY IS DELETED FROM THE CONTRACT (2026-09-02, ruling B6) ──────────────
+//
+// A `triage` descriptor and a `triageSpec(request)` method used to be part of every adapter: the
+// SECOND spawn shape on a platform, declaring the four fences a wake-tier-3 router ran behind. The
+// tier is gone — `wake_verdict: "responder"` answers the same question server-side, at write time
+// — so the declaration answers nothing, and a capability nothing calls is worse than absent: the
+// next adapter would be asked to implement it.
 
-test("every declared triage carries a turn bound and an MCP surface, or it is not a fence", () => {
-  for (const { descriptor } of ADAPTERS) {
-    const t = descriptor.triage;
-    if (t === null) continue; // a runtime that cannot triage says so; nothing calls it
-    // ⚠ AN UNBOUNDED TRIAGE TURN READING UNTRUSTED GUEST TEXT IS AN UNFENCED ONE, and `null` here
-    // is the shape that ships one silently.
-    assert.ok(typeof t.turnBound === "number" && t.turnBound >= 1, `${descriptor.id}: triage.turnBound`);
-    assert.ok(t.mcpSurface != null, `${descriptor.id}: triage.mcpSurface — no way to say "no Dopl surface"`);
-    assert.ok(["none", "deny-callback"].includes(t.toolSurface), `${descriptor.id}: triage.toolSurface`);
-    assert.equal(t.cwdFence, "tmp", "the router has no business knowing the channel folder exists");
-    assert.equal(t.ambientIsolation, true);
-    assert.equal(t.envScrub, true);
+test("no adapter declares a capability nothing calls", () => {
+  for (const { descriptor, runtime } of ADAPTERS) {
+    assert.ok(!("triage" in descriptor), `${descriptor.id}: descriptor.triage outlived the tier`);
+    assert.equal(runtime.triageSpec, undefined, `${descriptor.id}: triageSpec outlived the tier`);
   }
 });
 

@@ -9,8 +9,8 @@
 // were no installs; every value below is read off `codex-research.md`, which was itself verified
 // against OpenAI's open source. WHAT COULD NOT BE GROUNDED IS DECLARED UNVERIFIED RATHER THAN
 // ASSUMED, and each one names the §5 smoke item that settles it. Three of those declarations have
-// teeth today: `meter.cost: null` hides the cost cap, `session.usageResetsOnResume: 'unverified'`
-// refuses a resume, and `triage: null` means this runtime does not run wake tier 3 at all.
+// teeth today: `meter.cost: null` hides the cost cap and `session.usageResetsOnResume:
+// 'unverified'` refuses a resume.
 //
 // ⚠ ELECTRON-FREE AT LOAD, BY CONTRACT. `main/session-profiles.js` is a PURE module two suites
 // slice and evaluate standalone, and it asks the registry for every gate decision — so requiring
@@ -25,7 +25,6 @@ const approval = require('./approval');
 const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
-const triage = require('./triage');
 const { packaging } = require('./packaging');
 
 const platform = () => require('./client');
@@ -244,10 +243,6 @@ const descriptor = {
   // plus a location picker, not a re-architecture. Length 1 renders no picker at all.
   execution: { locations: ['local'], remoteCapable: true },
 
-  // ⚠ NULL — this runtime does not run wake tier 3. `triage.js` carries the whole argument: two of
-  // the four fences have no documented analogue here (§5 item C5), and a fence that is declared
-  // but not applied is worse than an absent one.
-  triage: triage.descriptor,
   packaging,
 };
 
@@ -291,7 +286,6 @@ const runtime = {
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },
   signIn() { return credential.signIn(); },
-  triageSpec(request) { return triage.triageSpec(request); },
 };
 
 module.exports = { descriptor, runtime };

@@ -16,10 +16,10 @@
 // looks, and a mention inside a comment is always fine.
 //
 // ⚠ AND `cursor` IS SCANNED AS THE VENDOR SPELLING, NOT AS A BARE WORD — the one place the port's
-// design did not survive contact with this tree. `main/listener-io.js`, `main/listener-messages.js`
-// and `main/session-triage.js` all use `cursor` on CODE lines for the LISTENER's pagination
-// cursor, a core concept with nothing to do with Anysphere. Forbidding the bare word would fail
-// four correct lines and teach the next reader to rename a real domain term. The vendor spellings
+// design did not survive contact with this tree. `main/listener-io.js` and
+// `main/listener-messages.js` use `cursor` on CODE lines for the LISTENER's pagination cursor, a
+// core concept with nothing to do with Anysphere. Forbidding the bare word would fail correct
+// lines and teach the next reader to rename a real domain term. The vendor spellings
 // (`@cursor/`, `cursor-agent`, `cursor://`, and the id as a quoted literal) collide with nothing.
 //
 // HOW TO FIX A FAILURE. Not by moving the token into a comment. Either the code belongs in an
@@ -98,8 +98,7 @@ const DEFERRED = {
   // 24 code hits @ 2026-08-31, and every one is a frozen table entry (the id vocabulary, the
   // alias map, the context-window table). Not closeable by rewording: `descriptor.models` has to
   // become the source and `main/runtime/claude/models.js` the only copy, which is a data move
-  // with six duplicated vocabularies behind it (the design counts SIX, not five — `TRIAGE_MODEL_ID`
-  // sat outside `MODEL_IDS`, and that half already moved with the triage launch shape).
+  // with six duplicated vocabularies behind it.
   "session-model.js": "step 5: the frozen model + context-window tables move to the adapter's models.js",
   // ── step 6 — THE CREDENTIAL + IPC DE-NAMING. Owner: the step-6 wave, and the design says to do
   // it ALONE. It is a wire rename across preload, bridge and SPA (`claude:signIn` ->

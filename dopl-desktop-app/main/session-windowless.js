@@ -220,8 +220,8 @@ function noteDenied(s, tool) {
 // can widen it), or a tool nothing widens (`bypass` is a positive allow-list, so an unclassified
 // name gates in every mode). Without the mode the line is a complaint; with it, it is an action.
 //
-// ⚠ IT IS `task_progress`, NOT A `message`. A lifecycle kind wakes nobody
-// (`session-wake-tiers.js` refuses every non-`message` kind), so this cannot start a turn, cannot
+// ⚠ IT IS `task_progress`, NOT A `message`. A lifecycle kind reaches no session at all
+// (`session-dispatch.js › feedLiveSession`'s kind filter), so this cannot start a turn, cannot
 // feed back into the session that produced it, and cannot cost the peer a consent decision. A
 // `message` here would be an agent-shaped post that this machine, not the agent, wrote.
 //

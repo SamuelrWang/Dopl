@@ -207,7 +207,7 @@ const PARITY_TOKENS = [
  * and the truth tables need no disk. Production passes nothing and gets `agent-names.js`.
  * ⚠ A NAME LOOKUP MUST NEVER DECIDE A WAKE BY THROWING. `agent-names.js` is electron-store backed
  * and an unreadable store is a reason to resolve FEWER handles — never a reason to take the
- * routing path down. Same rule, and the same shape, as `session-triage.js › personaFor`.
+ * routing path down.
  */
 function handleIndexFor(agentIds, nameFor) {
   const resolve = typeof nameFor === 'function'

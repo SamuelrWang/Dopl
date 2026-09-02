@@ -17,14 +17,13 @@
 //     agent, you direct it") and is bounded by disclosure: an agent id is minted on this machine,
 //     known to no server, and the parse is intersected with the ids live on this thread.
 //
-// ── ⚠ AMENDED 2026-08-28 (Samuel's TIERED WAKE ruling) ───────────────────────────────────────
+// ── ⚠ AMENDED 2026-08-28, THEN NARROWED 2026-09-02 (rulings B1 + B6) ─────────────────────────
 // WHAT THIS FILE STILL PINS: the STAMP, the CLEAR at the one dispatch funnel, and the LAUNCH GOAL
-// — none of which the amendment touches. WHAT MOVED: the wake KEY. A dormant agent now wakes on
-// three tiers (@-mention, a solo-agent room, a triage claim), all of them behind a LOOP FENCE that
-// only HUMAN-authored `message` rows pass — so "FROM ANY AUTHOR" above is REVERSED for the peer's
-// AGENT, which can no longer wake anything on this machine. The tier table lives in
-// `session-wake-tiers.js` and is driven in `test/wake-tiers.test.mjs` + `test/session-dispatch
-// .test.mjs`; the BELT cases below are rewritten to the verdict the tiers hand it.
+// — none of which either ruling touches. WHAT MOVED: the wake KEY. "FROM ANY AUTHOR" above is
+// REVERSED for the peer's AGENT, which can no longer wake anything on this machine; and WHO a
+// message is for is decided on the SERVER now, so a dormant agent wakes on the address stored on
+// the row — written or REPAIRED — and on nothing this machine derives. The routing table lives in
+// `test/wake-routing.test.mjs`; the BELT cases below read the verdict it hands them.
 //
 // ── AND THE BUG FOUND IN THE SAME PASS ───────────────────────────────────────────────────────
 // The operator's LAUNCH GOAL was DEAD TEXT on this lane. `sessions:launch` composes one ("Join the
@@ -129,12 +128,12 @@ function gate(session) {
 const live = () => ({ settled: false, state: { messageMode: "auto_inbound" } });
 const undirected = () => ({ ...live(), awaitingDirective: true });
 
-// ⚠ THE BELT READS THE WAKE VERDICT SINCE 2026-08-28 (Samuel's TIERED WAKE ruling), NOT THE
-// ADDRESSING. It used to read `a.addressing.me`, which was correct while an @-mention was the ONLY
-// thing that could wake a dormant agent. There are THREE wake tiers now — @-mention, a solo-agent
-// room, a triage claim — and two of them carry no addressing at all, so an addressing-shaped belt
-// would have refused exactly the wakes the ruling adds. `session-dispatch.js › feedLiveSession`
-// makes the decision; this reads the boolean, so the belt tracks the rule instead of restating it.
+// ⚠ THE BELT READS THE WAKE VERDICT SINCE 2026-08-28, NOT THE ADDRESSING. It used to read
+// `a.addressing.me`, which was correct while an @-mention was the ONLY thing that could wake a
+// dormant agent. It is not: the SERVER may REPAIR an address a human forgot (RR3), and such a
+// message carries no `@` in its body at all — so an addressing-shaped belt would refuse exactly
+// the wakes the resilience arms deliver. `session-dispatch.js › feedLiveSession` makes the
+// decision; this reads the boolean, so the belt tracks the rule instead of restating it.
 test("BELT: the gate refuses an unwoken message for an undirected agent", () => {
   const g = gate(undirected());
   assert.equal(g.feedInbound({ message: "hello everyone", addressing: null, wake: false }), false);
@@ -145,12 +144,12 @@ test("BELT: the gate refuses an unwoken message for an undirected agent", () => 
   assert.equal(g.queued.length, 0);
 });
 
-test("BELT: a message the tier rules WOKE passes the belt and is dispatched", () => {
-  // All three tiers arrive here identically, which is the point of passing a verdict: the @-lane
-  // still carries its addressing (as FRAMING), the solo and triage lanes carry none.
+test("BELT: a message the routing WOKE passes the belt and is dispatched", () => {
+  // Both shapes arrive here identically, which is the point of passing a verdict: a written
+  // address carries its addressing (as FRAMING), and a caller that ran no verdict carries none.
   for (const a of [
     { message: "@abc12def go", addressing: { me: true, ids: ["abc12def"] }, wake: true },
-    { message: "can you look at this?", addressing: null, wake: true }, // solo room / triage claim
+    { message: "can you look at this?", addressing: null, wake: true },
   ]) {
     const g = gate(undirected());
     assert.equal(g.feedInbound(a), true, a.message);
@@ -160,9 +159,9 @@ test("BELT: a message the tier rules WOKE passes the belt and is dispatched", ()
 });
 
 test("BELT: an ADDRESSING alone no longer opens it — the verdict is the only key", () => {
-  // ⚠ THIS IS THE TIGHTENING, AND IT IS THE LOOP FENCE'S LAST MILE. An @-mention written by an
-  // AGENT now answers `wake: false` upstream (`session-wake-tiers.js › wakeEligible`), so a belt
-  // that still honoured `addressing.me` would be the one door the loop could still walk through.
+  // ⚠ THIS IS THE TIGHTENING, AND IT IS THE LOOP FENCE'S LAST MILE. An address written by a
+  // PEER'S AGENT answers `wake: false` upstream (`session-dispatch.js › mayWake`), so a belt that
+  // still honoured `addressing.me` would be the one door the loop could still walk through.
   const g = gate(undirected());
   assert.equal(g.feedInbound({ message: "@abc12def go", addressing: { me: true, ids: ["abc12def"] } }), false);
   assert.equal(g.dispatched.length, 0);

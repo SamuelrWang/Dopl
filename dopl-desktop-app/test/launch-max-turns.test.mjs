@@ -123,16 +123,13 @@ test("ONE ASSEMBLY POINT: nothing else in main/ sets a maxTurns", () => {
       if (/\bmaxTurns\s*:/.test(line)) producers.push(`${file}: ${line.trim()}`);
     }
   }
-  // ⚠ **TWO ENTRIES, AND THE SECOND IS DELIBERATE.** `triage.js` runs the wake ROUTER — one
-  // assistant turn, no retry even after a denied tool call — which is a different kind of query
-  // with a bound of its own, not a session that could ever loop. It is listed rather than
-  // excluded so that adding a third producer is a decision somebody makes here.
+  // ⚠ **ONE ENTRY SINCE 2026-09-02 (ruling B6).** There were two: `triage.js` assembled a
+  // `maxTurns: 1` for the wake ROUTER, a second kind of query with a bound of its own. The triage
+  // tier is deleted, so the session launch is once again the only thing on this platform that
+  // sets a turn brake — and a SECOND producer appearing here is a decision somebody makes here.
   assert.deepEqual(
     producers,
-    [
-      "launch-spec.js: maxTurns: SESSION_MAX_TURNS,",
-      "triage.js: maxTurns: 1,",
-    ],
+    ["launch-spec.js: maxTurns: SESSION_MAX_TURNS,"],
     "a new maxTurns producer, or the session one stopped naming the constant"
   );
 });

@@ -74,7 +74,6 @@ const RUNTIME_METHODS = {
   probeMcp: 0,
   credentialState: 0,
   signIn: 0,
-  triageSpec: 1,
 };
 
 // ── THE FOUR THAT REFUSE ─────────────────────────────────────────────────────────────────────

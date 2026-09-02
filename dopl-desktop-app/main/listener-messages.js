@@ -40,25 +40,25 @@ async function dispatchMessage(entry, m, myUserId) {
   // prompt on the peer's eventual reply. A NO-OP for anything that is not a self-authored,
   // addressed, thread-opening message, and re-seeing one only refreshes its eviction age.
   targeting.noteMyLegacyThread(m, entry, myUserId);
-  // THE ONE PRE-CLASSIFY ROUTE, checked BEFORE classify -> consent (§A.2): feed a LIVE
-  // session's next turn.
+  // ⚠ **THE DELIVERY LANE — ONE CALL, AND IT IS THE ONLY THING THAT MAY CLAIM A MESSAGE FOR AN
+  // AGENT.** It feeds the sessions the SERVER'S STORED VERDICT names (`session-dispatch.js`), and
+  // claiming is terminal: a message an agent took is not also a consent card.
   // ⚠ FOUR ROUTES STOOD BESIDE IT AND ARE DELETED (2026-08-20, F-228) — the requester-window
   // opener, the settled-requester reopen, the lifecycle-strip observer and the post-classify
   // reopen. All four were window-mode-gated and the switch is permanently off.
   // ⚠ THE CHAT BRAKE WENT WITH THEM, and that is a deletion rather than a relaxation. It
   // existed because routes 2 and 3 could claim a peer's chat line and bring a session INTO
-  // existence before classify's own chat brake ran. Route 1 was DELIBERATELY above that guard
+  // existence before classify's own chat brake ran. This one was DELIBERATELY above that guard
   // and stays unguarded for the same reason it always was: it feeds a session that is ALREADY
   // RUNNING, which is "seen", not "started". Chat still reaches classify, where an @-tag makes
   // it 'fyi' and an untagged line 'ignore'.
-  // ⚠ AWAITED SINCE 2026-08-28 (Samuel's TIERED WAKE ruling). This route was synchronous for its
-  // whole life; TIER 3 gives a multi-agent room's unaddressed message a bounded claim/pass pass
-  // (`session-triage.js`, `TRIAGE_TIMEOUT_MS`) before it can decide who — if anyone — it woke.
-  // ⚠ THE AWAIT HOLDS THIS CHANNEL'S CURSOR, WHICH IS THE POINT: `drainPage` may not step over a
-  // message whose routing has not finished, and `trigger.handleTrigger` below already serialises
-  // a consent POST plus a spawn on the same lane. The triage pass is time-bounded precisely
-  // because it sits here.
-  if (await sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
+  // ⚠ **SYNCHRONOUS AGAIN SINCE 2026-09-02 (ruling B6).** It was awaited for one wave and one
+  // reason: TIER 3 bought a multi-agent room's unaddressed message a bounded claim/pass MODEL
+  // CALL before it could say who it had woken, and that call HELD THIS CHANNEL'S CURSOR — which
+  // is why it needed a timeout at all. The triage tier is deleted; RR3 answers the same question
+  // on the row, at write time, so the route decides from data it already has and the listener
+  // gets its cursor back.
+  if (sessionDispatch.feedLiveSession(entry, m, myUserId)) return;
   const verdict = targeting.classify(m, entry, myUserId);
   diag(
     'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,

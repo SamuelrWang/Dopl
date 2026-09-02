@@ -86,9 +86,10 @@ const { diag } = require('./diag');
  * ── ⚠ `idle: !d.goal` — A GOAL RUNS, NO GOAL STANDS BY (2026-08-31; ENGINEERING §8 has the repro
  * and the whole argument). It was `idle: true` unconditionally, with the goal held for a WAKE
  * (`s.launchGoal` -> `session-seed.js › takeFraming`). Every link of that worked; the PREMISE did
- * not — **the only caller of this lane cannot produce that wake**, since a dormant session needs
- * a HUMAN-authored message and a directive is filed by an AGENT whose posts `session-wake-tiers
- * .js › wakeEligible` refuses. ⚠ THE FENCE DID NOT MOVE AND MUST NOT; the SPAWN SHAPE did. No-goal
+ * not — **the only caller of this lane cannot produce that wake**, since a dormant session is
+ * woken by an ADDRESS and a directive is filed by an AGENT, whose unaddressed posts
+ * `session-dispatch.js › mayWake` refuses. ⚠ THE FENCE DID NOT MOVE AND MUST NOT; the SPAWN SHAPE
+ * did. No-goal
  * keeps the shell (`defaultGoal` is a synthesized stand-by line, not an instruction anybody wrote);
  * `buildFencedTurn` fences the goal on both branches, and only the WHEN differs.
  */
