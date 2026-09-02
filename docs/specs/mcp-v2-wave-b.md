@@ -318,6 +318,52 @@ typechecks incl. `-w @dopl/desktop-ui` · the **eight** non-suite gates **re-der
 | **B6** `channel_agent` profile | `v2/b-channel-agent-profile` | `dopl-desktop-app/main/tool-profiles.js`, `main/session-profiles.js`, `main/runtime/{claude,codex}/tools.js`, new `main/runtime/tool-table.js`, `main/runtime/cursor/tools.js` (frozen) | 4th profile = `full` minus `Bash`, denied by name; one shared tool table for the two shipping lanes (X0: Cursor held) | SDK capture asserting `Bash` absent by NAME; `session-profiles.test.mjs` deepEqual moves with it | one line restores `FULL_BUILTIN_BOUND` | F-510..519 | — |
 | **B7** RLS real, phase 1 | `v2/b-rls-real-1` | `src/shared/supabase/**`, `src/shared/auth/with-auth.ts` (JWT mint), `src/features/knowledge/server/repository-bases.ts`, `.github/workflows/ci.yml` | Mint a short-lived Supabase JWT for `dopl_at_`; caller-scoped read client behind `RLS_CALLER_SCOPED_READS`; repair + prove policies on `knowledge_bases`, `knowledge_entries`, `knowledge_folders`. **No TS predicate deleted.** Ship the pair gate (every `canSee*` has a named policy twin) | a redteam case per table: a non-member gets **zero rows** through the caller client; happy path unchanged with the flag off | flag off; policies are never deleted (tenancy risk 1) | F-520..529 | `20260919120000_rls_helpers_and_caller_scope` |
 
+### Batch 1 landed — 2026-09-02, branch `v2/wave-b` (integration record)
+
+Merged `--no-ff`, in this order, onto `v2/wave-a` @ `523bfc92`. **Not pushed.** The order is the
+integrator's, not this document's: `b-credential-axes` went SECOND rather than third so the other six
+slices rebased onto its names (115 files) instead of against them.
+
+| # | Slice | Branch | Slice commits | Merge | Status |
+|---|---|---|---|---|---|
+| 0 | the spec itself | `v2/wave-b-plan` | `3bd9ebfd` | `9cca2c74` | DONE |
+| 1 | **B3** credential axes | `v2/b-credential-axes` | `ccf74b88..24688de7` (4, 115 files) | `b49e5174` | DONE — clean |
+| 2 | **B1** grants + team retirement | `v2/b-grants-and-teams` | `f35dd82f..57e39a04` (7) | `b78eb05a` | DONE — findings union |
+| 3 | **B2** id resolution completed | `v2/b-id-resolution` | `86444dd2..c61c2718` (8) | `1f0cd5ce` | DONE — findings union; fixtures repaired in `a42b091e` |
+| 4 | **B4** send semantics (server) | `v2/b-send-semantics` | `d0b1db85..61b3bb3f` (6) | `11bf0be2` | DONE — findings + ENGINEERING unions |
+| 5 | **B5** profile header | `v2/b-profile-header` | `65586407..55100076` (5) | `a1d2e4b8` | DONE — findings union |
+| 6 | **B6** `channel_agent` profile | `v2/b-channel-agent-profile` | `0456917a..0f7fe1d1` (5) | `b7e7d738` | DONE — findings union |
+| 7 | **B7** RLS real, phase 1 | `v2/b-rls-real-1` | `dba5c462..ff054c5e` (5) | `8813f700` | DONE — `with-auth.ts` resolved by hand (3 hunks) |
+
+**Cross-slice work the integration owned** (six commits; each names its slices):
+
+| Commit | What | Slices |
+|---|---|---|
+| `a42b091e` | B2's five resolve fixtures state the credential's SUBJECT axis; the retired `apiKeyWorkspaceLockKind` deleted from two | B2 × B3 |
+| `0321af77` | **F-468 / F-525** — `dopl_teams_mode_visible()` reads `resource_grants` with `scope_type='team'`; B1's merge assertion was RED and is green | B7 × B1 |
+| `c4db21ff` | the redteam case pins the grant table AND the scope term in one regex (mutation-verified) | B7 × B1 |
+| `19fdafae` | **F-510** — all three launch lanes resolve through `targeting-window.js › resolveLaunchToolProfile`; **F-513 RULED** — "shared" is the CHANNEL's member count | B6 (+ F-267's agreement test repaired) |
+| `ec99baa5` | **ruling B8** — the unapplied `channel_pings` migration DELETED; **F-526** filed and fenced (a second version collision cannot ship) | B8 ruling, B4 report |
+| `a950e733` | the template-launch suite back under the 500-line cap | — |
+
+**Rulings taken here, both reversible in one predicate:**
+
+- **F-513 (Desktop Agent default, Samuel may reverse).** *"Shared" is ANY channel with more than one
+  member, whatever container kind it sits in — standard workspace channels included.* The borrowed
+  container predicate called a nine-member `standard` workspace SOLO, so the busiest rooms kept a
+  shell under a ruling about shared rooms. The fact is now `targeting-window.js › isSharedChannel`;
+  the RULE (`tool-profiles.js › profileForChannel`) is a separate function and does not move if the
+  ruling does.
+- **F-491, settled in the SPEC's favour.** The brief handed to B4 named `done | question | blocked`;
+  §2.1 of this document refuses them. **Nothing was done to the kind enum** — the drift gate still
+  holds the wave-A set — and the ping FOLD stays where §5 puts it (B8's redirect, B16's deletion).
+  Only the unapplied migration moved, because an unapplied file is a replay hazard now.
+
+**Corrections to this document, made at integration:** B3's `Owns` column named `service-launch.ts`;
+the lock reads are in `service-launch-template.ts` (**F-481**).
+
+---
+
 ### Batch 2 — narrowing. Wire-visible; redirects live; nothing deleted yet.
 
 | Slice | Branch | Owns | Scope | Tests | Rollback | F-ids | Migrations |
