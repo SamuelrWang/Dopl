@@ -43,6 +43,11 @@ import type { ChannelContext } from "./service-shared";
  * `author_agent_id` is what the transcript reads to attribute an old message to
  * a handle, so a caller who could set it could attribute its own words to
  * somebody's retired agent. Stored rows keep theirs and keep rendering.
+ * ⚠ **AND THEY ARE NOT THE `toAgent` / `authorAgentId` ROUTE TOMBSTONES, WHICH
+ * WERE DELETED ON 2026-09-02.** Those were parameters with a delete-me clock;
+ * these are reserved NAMES, and dropping one is a widening, not a cleanup. The
+ * two are named together in one v2 spec row, which is what **F-434** exists to
+ * separate — read it before deleting anything here.
  */
 
 /**

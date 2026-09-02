@@ -17,10 +17,8 @@ import type {
 // they are the one block here scheduled to STOP existing, and that file carries
 // the delete-me clock. Nothing about their behaviour moved.
 import {
-  REMOVED_AUTHOR_AGENT,
   REMOVED_PARTICIPANTS,
   REMOVED_THREAD_CLOSE,
-  REMOVED_TO_AGENT,
   removedOp,
   removedParam,
 } from "./schema-removed-params";
@@ -158,7 +156,13 @@ const MessageIntentSchema = closedEnum<MessageIntent>()(["chat", "request"]);
  * is the one-liner in the receiver's notification. Both persist into `metadata`
  * as `{to_user_id, summary}`. `intent` → {@link MessageIntentSchema}.
  *
- * `z.never()` fields below → {@link removedParam}.
+ * ⚠ **THE THREE NAMED-AGENT TOMBSTONES ARE GONE (2026-09-02):** `toAgent` /
+ * `toAgents` / `authorAgentId` met the delete-me clock in
+ * `schema-removed-params.ts` and are now dropped like any unknown key. Neither
+ * fence that mattered moved with them — the MCP lane still refuses `to_agent` BY
+ * NAME through `z.strictObject`, and the snake_case METADATA strip stays, which
+ * is a different fence and a permanent one. **F-434 is why those are not one
+ * deletion.**
  */
 export const ChannelMessageCreateSchema = z.object({
   body: z.string().min(1).max(16000),
@@ -194,9 +198,6 @@ export const ChannelMessageCreateSchema = z.object({
    */
   escalation: ChannelEscalationSchema.optional(),
   escalationAnswer: ChannelEscalationAnswerSchema.optional(),
-  toAgent: removedParam(REMOVED_TO_AGENT),
-  toAgents: removedParam(REMOVED_TO_AGENT),
-  authorAgentId: removedParam(REMOVED_AUTHOR_AGENT),
 });
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema

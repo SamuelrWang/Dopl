@@ -6911,3 +6911,14 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Proposed resolution: (a) add an optional provenance field to `AgentTemplateCreateInput` / `KnowledgeBaseCreateInput` (zod + types, both trees), have the MCP copy ops SEND it, and refuse server-side unless `source.createdBy === ctx.userId` — failing closed when either side is null, mirroring `notOwnedRefusal`'s own rule; KEEP the MCP refusal; (b) accept the gap and say so in `copy-target.ts`, since the read was already fenced and the widening is bounded to content the caller could see.
 - Proposed resolution: defer — (a) is right but it is a contract change across two trees, not a hotfix.
 - Status: open.
+
+### F-434 — "delete the `to_agent*` / `author_agent_id` residue" names TWO fences, and only one of them is dead (2026-09-02)
+
+- Location: `src/features/channels/server/service-writes-metadata.ts › resolvePostMetadata` (the reserved-key strip, lines beginning `delete metadata.to_agent_id`) vs the now-deleted `z.never()` tombstones in `src/features/channels/schema.ts`.
+- Found during: v2 wave A slice A7, whose spec row reads *"Delete the `to_agent_id` / `to_agent_ids` / `author_agent_id` residue and tombstones"* as one deletion.
+- Severity: conflict — a plan row that, taken literally, is a security widening. Recorded rather than obeyed.
+- **The two fences are not the same fence.** The TOMBSTONES are camelCase ROUTE parameters (`toAgent` / `toAgents` / `authorAgentId`), refusals kept alive only for builds that still SENT them after the named-agent rollback (F-141); `schema-removed-params.ts` states that delete-me condition explicitly and it is met, so A7 deleted them. The STRIP is the snake_case METADATA keys, and it has no clock: it is what stops a caller from writing `metadata.author_agent_id` on a NEW post and wearing a retired agent's byline. INVARIANTS §5 already rules on it — *"removing a key from the strip is a WIDENING that makes it caller-settable"* — and `server/service-writes-metadata-attribution.test.ts` pins all three keys with that reason attached.
+- ⚠ **THE "NO RENDERER LEFT" ARGUMENT IS THE TRAP.** Both last renderers went at the 2026-08-18 cutover (F-218), which is what makes the strip look like residue. The order of return is the point: a reader comes back only after the key does, so a strip deleted today is a forgery live on the day someone re-adds the transcript byline — and that change would have no reason to look at this file.
+- Resolution: **taken.** Tombstones deleted; strip kept, with the distinction stated at both sites and in INVARIANTS §5 so the next reader of the spec row does not have to re-derive it.
+- Status: closed — recorded so the spec row is not re-read as unfinished work.
+
