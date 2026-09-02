@@ -7,9 +7,9 @@
  * slack_search_channels first"* — and it works only because the literal that
  * comes back on the wire is the literal the description taught. So a code is
  * declared ONCE, here; {@link renderErrors} puts it in the description and
- * {@link refusal} puts it on the wire, and `tool-description-checklist.test.ts`
- * asserts the two are the same characters. A paraphrase on either side is a
- * silent break — the agent reads a remedy it can never match.
+ * {@link refusal} puts it on the wire, so the two are the same characters by
+ * construction. A paraphrase on either side is a silent break — the agent reads
+ * a remedy it can never match.
  *
  * ⚠ WHY OUR OWN LITERALS RATHER THAN THE API's, EXCEPT WHERE THEY ARE THE
  * API's. Most refusals on this surface are raised by THIS layer — a missing
@@ -31,9 +31,12 @@
  * ⚠ `reason` IS THE SERVER'S OWN LITERAL CODE AND IS NEVER PARAPHRASED. That
  * is the whole mechanism: the agent string-matches what came back on the wire
  * against what the description told it, so the two must be the same characters.
- * `tool-description-checklist.test.ts` matches this table against the codes the
- * refusal renderers actually emit, so a renamed code fails the description that
- * still teaches the old one.
+ * ⚠ `tool-style.test.ts › its Errors block quotes only literals from
+ * tool-errors.ts` checks ONE direction — a description may teach only a code
+ * this table declares. The other direction is held by CONSTRUCTION rather than
+ * by a test: every refusal renders through {@link refusal}, so a renamed
+ * `reason` moves the wire and the description together. Hand-writing a
+ * `reason=` string anywhere else is the one way to break that.
  */
 export interface ToolError {
   /** The literal `reason=` code, exactly as a refusal renders it. */
