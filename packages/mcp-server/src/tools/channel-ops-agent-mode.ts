@@ -105,6 +105,11 @@ const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
   "no-counterparty": "no",
   "no-template": "no",
   "bad-name": "no",
+  // ⚠ NO PRODUCER ON THIS KIND — `no-chain` is the LAUNCH lane's word for a
+  // channel whose `channelAgentChain` toggle is off, and a re-posture starts
+  // nothing. Arriving here IS the anomaly, so `no`: re-issuing over a word
+  // nothing could have produced re-issues forever.
+  "no-chain": "no",
 };
 
 

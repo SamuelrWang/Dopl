@@ -145,7 +145,11 @@ test("CHAIN: asking for it where the channel forbids it REFUSES up front — not
   const h = boot({ chain: false });
   await h.api.handle(launchRow({ chain: true }), WS);
   assert.equal(h.cfg.lastSpec, undefined, "the funnel is never reached");
-  assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-bridge" }]);
+  // ⚠ `no-chain`, NOT `no-bridge` (2026-09-02). They were one word, and they are opposite
+  // instructions: `no-bridge` means this machine has no context for that channel — go elsewhere —
+  // where this means the channel is right and ONE NAMED SETTING is off. An orchestrator that read
+  // the first went looking for another route instead of asking for one toggle.
+  assert.deepEqual(decided(h), [{ directiveId: DID, status: "refused", refusalReason: "no-chain" }]);
   // ⚠ THE DIAG NAMES THE SETTING AND WHERE IT LIVES. A refusal that does not name its own remedy
   // is what makes an agent re-issue forever — the defect class `session-permissions.js` exists
   // to remove. The agent-facing sentence is the MCP result's; this is the operator's.

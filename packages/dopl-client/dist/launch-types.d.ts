@@ -38,7 +38,7 @@
  * lane has no human and the launch-over-MCP toggle stands in for the click there,
  * so it can never cross this wire.
  */
-export type LaunchRefusalReason = "cap" | "busy" | "no-sdk" | "auth-hold" | "no-bridge" | "no-counterparty" | "no-template" | "no-session" | "bad-name";
+export type LaunchRefusalReason = "cap" | "busy" | "no-sdk" | "auth-hold" | "no-bridge" | "no-counterparty" | "no-template" | "no-session" | "bad-name" | "no-chain";
 /**
  * WHICH VERB A DIRECTIVE ASKS FOR (2026-09-01).
  *

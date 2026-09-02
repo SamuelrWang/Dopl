@@ -131,6 +131,9 @@ const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
   "no-template": "no",
   "no-session": "no",
   "bad-name": "no",
+  // ⚠ NO PRODUCER ON AN END OR A RENAME — `no-chain` belongs to a launch that
+  // asked to chain. Arriving here means the machines disagree; still `no`.
+  "no-chain": "no",
 };
 
 /**

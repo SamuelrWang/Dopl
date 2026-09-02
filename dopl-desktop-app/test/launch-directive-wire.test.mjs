@@ -77,9 +77,15 @@ test("CONTRACT: the refusal words are this tree's existing vocabulary, verbatim"
   // producer in `session-launch.js` — they belong to the AGENT-MANAGEMENT kinds, whose producer
   // is `directive-agent-ops.js` — so the subset loop below stays one-directional and the two are
   // pinned against THAT file instead, in section 4.
+  // ⚠ TEN SINCE 2026-09-02: `no-chain`, produced by `launch-directive-spawn.js › spawn` on
+  // `plan.refused` — the chain request the channel's `channelAgentChain` setting denies. It used
+  // to answer `no-bridge`, which is this machine saying it has no context for that channel at
+  // all, and the two are opposite instructions to an orchestrator. Its producer is not in
+  // `session-launch.js` either, so the subset loop below stays one-directional; section 4 pins
+  // the producer.
   assert.deepEqual(wire.REFUSAL_REASONS,
     ["cap", "busy", "no-sdk", "auth-hold", "no-bridge", "no-counterparty", "no-template",
-      "no-session", "bad-name"]);
+      "no-session", "bad-name", "no-chain"]);
   const launchSrc = readFileSync(join(MAIN, "session-launch.js"), "utf8");
   const produced = [...launchSrc.matchAll(/skipped: '([a-z-]+)'/g)].map((m) => m[1]);
   for (const word of produced) {
@@ -90,7 +96,7 @@ test("CONTRACT: the refusal words are this tree's existing vocabulary, verbatim"
   }
 });
 
-test("CONTRACT: an unknown skip shape becomes `no-bridge`, never a seventh word", () => {
+test("CONTRACT: an unknown skip shape becomes `no-bridge`, never an eleventh word", () => {
   assert.equal(wire.refusalFor("cap"), "cap");
   assert.equal(wire.refusalFor("disabled"), "no-bridge");
   for (const junk of [undefined, null, "", "kaboom", 7, {}]) {

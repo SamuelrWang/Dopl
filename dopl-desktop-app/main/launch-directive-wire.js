@@ -183,8 +183,16 @@ const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 // where this list ran one word ahead of the CHECK, is exactly what that
 // sequencing avoids: a `decide` carrying a word the CHECK lacks passes zod, passes
 // the route, and is refused AT REST.
+// ⚠ TEN SINCE 2026-09-02. `no-chain` splits a fact off `no-bridge`: a directive that asked to
+// CHAIN in a channel where the operator has not enabled it used to answer the same word this
+// machine sends when it is not watching that channel at all. An orchestrator reading "this
+// machine could not take it" retries elsewhere; reading `no-chain` it names the setting
+// (`launch-posture.js › CHAIN_SETTING`) and asks the operator for one toggle. T24's rule — a
+// refusal explainable without opening the repo — applied to the one refusal that named nothing.
+// ⚠ Its CHECK lands in the SAME wave (`20260910120000_channel_launch_directives_posture.sql`
+// §3A), which is the 2026-08-22 sequencing lesson applied rather than re-learned.
 const REFUSAL_REASONS = ['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-counterparty',
-  'no-template', 'no-session', 'bad-name'];
+  'no-template', 'no-session', 'bad-name', 'no-chain'];
 
 // The keys this desktop puts on the wire, and the ones it reads back. Stated as data so the
 // suite can assert them without a live route, and so a route that lands with different names
@@ -452,7 +460,16 @@ function decideBody(directiveId, outcome) {
   // second id here would be a field this machine could get wrong about a row it
   // did not write. The route's schema has no field for one.
   if (o.done === true) {
-    return { directiveId: String(directiveId || ''), status: STATUS_DONE };
+    const body = { directiveId: String(directiveId || ''), status: STATUS_DONE };
+    // ⚠ THE ECHO RIDES A `done` TOO (2026-09-02), and the column is NOT kind-scoped precisely
+    // so it can (`20260910120000_…_posture.sql` §5 asserts that). `set_agent_mode` is the one
+    // non-launch kind that settles a posture, and it was answering `taken` with its clamp
+    // visible only in the operator's log. ⚠ NARROWED to the frozen enums, like the launched
+    // branch: a mode outside the list passes zod and is refused by the column CHECK at rest.
+    // ⚠ NO `appliedChain` — a re-posture starts nothing and decides no chaining.
+    if (TOOL_MODES.indexOf(o.appliedTools) !== -1) body.appliedTools = o.appliedTools;
+    if (MESSAGE_MODES.indexOf(o.appliedMessages) !== -1) body.appliedMessages = o.appliedMessages;
+    return body;
   }
   return {
     directiveId: String(directiveId || ''),

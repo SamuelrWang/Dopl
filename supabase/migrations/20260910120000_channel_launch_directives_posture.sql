@@ -254,6 +254,40 @@ ALTER TABLE public.channel_launch_directives
   );
 
 -- ===========================================================================
+-- 3A. THE REFUSAL VOCABULARY GAINS A TENTH WORD: `no-chain`.
+-- ===========================================================================
+-- ⚠ **RE-CREATED WHOLE**, this file's rule everywhere, because a CHECK cannot be
+-- ALTERed and a partially-rewritten one is how a word quietly disappears. Every
+-- word `20260907120000_channel_launch_directives_kind.sql` admitted is restated
+-- below and asserted afterwards.
+--
+-- ⚠ WHY IT EXISTS. A directive asking for `chain` in a channel where the
+-- operator has not enabled it was answered `no-bridge` — the SAME word this
+-- machine sends when it is not watching that channel at all. Two facts under one
+-- word, and an orchestrator that reads "this machine could not take it" retries
+-- somewhere else instead of asking the operator to flip one setting it can NAME.
+-- T24's whole point is that a refusal is explainable without opening the repo.
+--
+-- ⚠ IT IS A LAUNCH-KIND WORD ONLY, and that is not a CHECK clause: a refusal
+-- reason is not kind-scoped anywhere in this table (the same argument section 5
+-- makes for the `applied_*` echo), and inventing a scope here would refuse an
+-- honest report from a lane that later grows chaining.
+ALTER TABLE public.channel_launch_directives
+  DROP CONSTRAINT IF EXISTS channel_launch_directives_refusal_reason_check;
+
+ALTER TABLE public.channel_launch_directives
+  ADD CONSTRAINT channel_launch_directives_refusal_reason_check
+  CHECK (
+    refusal_reason IS NULL OR refusal_reason IN (
+      'cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-counterparty',
+      'no-template', 'no-session', 'bad-name',
+      -- ⚠ THE TENTH, 2026-09-02. Producer in the same wave:
+      -- `main/launch-directive-spawn.js › spawn`, on `plan.refused`.
+      'no-chain'
+    )
+  );
+
+-- ===========================================================================
 -- 4. THE TERMINAL SHAPE, NOW POSTURE-AWARE.
 -- ===========================================================================
 -- ⚠ RE-CREATED WHOLE. Every clause `20260907120000` §5 wrote is restated below
@@ -395,6 +429,43 @@ BEGIN
   IF position('''end''' IN def) = 0 OR position('''rename''' IN def) = 0 THEN
     RAISE EXCEPTION
       'ABORT: the kind CHECK lost end or rename — this file rewrites that constraint WHOLE, and dropping a word another lane still produces is exactly the failure a rewrite invites';
+  END IF;
+
+  -- ── The refusal vocabulary: the tenth word in, the forbidden one out ─────
+  SELECT pg_get_constraintdef(oid) INTO def FROM pg_constraint
+   WHERE conrelid = 'public.channel_launch_directives'::regclass
+     AND conname = 'channel_launch_directives_refusal_reason_check'
+     AND convalidated;
+
+  IF def IS NULL THEN
+    RAISE EXCEPTION
+      'ABORT: the refusal-reason CHECK is missing or NOT VALIDATED — any word at all would be storable and would reach a render with no copy for it';
+  END IF;
+
+  IF position('no-chain' IN def) = 0 THEN
+    RAISE EXCEPTION
+      'ABORT: the refusal CHECK does not admit no-chain — its producer ships in this same wave, so every chain refusal would be a constraint violation at rest';
+  END IF;
+
+  SELECT string_agg(w, ', ' ORDER BY w) INTO missing
+    FROM (VALUES
+      ('cap'), ('busy'), ('no-sdk'), ('auth-hold'), ('no-bridge'),
+      ('no-counterparty'), ('no-template'), ('no-session'), ('bad-name')
+    ) AS t(w)
+   WHERE position(w IN def) = 0;
+
+  IF missing IS NOT NULL THEN
+    RAISE EXCEPTION
+      'ABORT: the refusal CHECK lost a word this tree still produces (%) — this file restates that constraint WHOLE, which is precisely when a word disappears', missing;
+  END IF;
+
+  -- ⚠ THE NEGATIVE PIN SURVIVES THE REWRITE. `template-approval` is this
+  -- machine's word to its OWN renderer for a first-use click; the directive lane
+  -- has no human at the keyboard, and a column that could store it would tell a
+  -- future reader the lane has an approval gate it does not have.
+  IF position('template-approval' IN def) > 0 THEN
+    RAISE EXCEPTION
+      'ABORT: the refusal CHECK admits template-approval — that word has no producer on this lane and storing it would claim an approval gate this lane does not have';
   END IF;
 
   -- ── The two axis CHECKs, and both must name their whole enum ─────────────

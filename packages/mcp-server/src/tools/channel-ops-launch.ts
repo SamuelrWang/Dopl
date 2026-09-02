@@ -240,6 +240,10 @@ const RETRY_ADVICE: Record<LaunchRefusalReason, "once" | "no"> = {
   // could have produced re-issues forever.
   "no-session": "no",
   "bad-name": "no",
+  // ⚠ `no` LIKE EVERY OTHER SETTING WORD. The answer changes when a human flips
+  // one toggle, and asking again before they have is the retry loop the split
+  // off `no-bridge` exists to make avoidable rather than to invite.
+  "no-chain": "no",
 };
 
 /**

@@ -99,9 +99,14 @@ async function spawn(d, deps) {
   // ⚠ ANSWERED BEFORE ANY WORK, because the chain request REFUSES where the posture CLAMPS —
   // `launch-posture.js › resolveChain` carries both halves of that asymmetry.
   if (plan.refused) {
+    // ⚠ `no-chain`, NOT `no-bridge` (2026-09-02). They were one word until then, and the two facts
+    // are opposite instructions: `no-bridge` means this machine has no context for that channel —
+    // go elsewhere — while this means the channel is right and ONE SETTING is off. The setting's
+    // name travels in the log AND on the wire, because a refusal an orchestrator can only explain
+    // by reading this repo is the refusal T24 exists to delete.
     diag('launch-directive: chaining asked for and NOT enabled here —', launchPosture.CHAIN_SETTING,
       'is off for this channel; the operator turns it on in the channel Settings tab');
-    return { refused: 'no-bridge' };
+    return { refused: 'no-chain', setting: launchPosture.CHAIN_SETTING };
   }
   if (plan.clamped) {
     diag('launch-directive: posture CLAMPED to this channel\'s stored pair — asked',

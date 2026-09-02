@@ -57,7 +57,13 @@ export type LaunchRefusalReason =
   //    sanitizer (1-60 visible characters on one line; control, zero-width and
   //    bidi characters refused, not stripped).
   | "no-session"
-  | "bad-name";
+  | "bad-name"
+  // ⚠ THE TENTH, 2026-09-02, and it is a LAUNCH word. It means the channel is
+  // right and the operator has not enabled agent chaining in it
+  // (`main/launch-posture.js › CHAIN_SETTING` = `channelAgentChain`) — a
+  // NAMEABLE setting, where `no-bridge` reads as "this machine could not take
+  // it" and sends a caller looking for another route.
+  | "no-chain";
 
 /**
  * WHICH VERB A DIRECTIVE ASKS FOR (2026-09-01).

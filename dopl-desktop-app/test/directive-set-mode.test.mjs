@@ -109,7 +109,10 @@ test("APPLY: both axes reach `setModeByTask`, addressed by the RESOLVED registry
     { axis: "tools", mode: "auto", channelId: CH, taskId: "", agentId: "a1b2c3d4" },
     { axis: "messages", mode: "auto_both", channelId: CH, taskId: "", agentId: "a1b2c3d4" },
   ]);
-  assert.deepEqual(decided(h), [{ directiveId: DID, status: "done" }]);
+  // ⚠ THE ECHO RIDES THE `done` SINCE 2026-09-02 — see the CLAMP case below for why.
+  assert.deepEqual(decided(h), [{
+    directiveId: DID, status: "done", appliedTools: "auto", appliedMessages: "auto_both",
+  }]);
 });
 
 test("APPLY: ONE axis is a legal directive — the other is left alone", async () => {
@@ -117,7 +120,11 @@ test("APPLY: ONE axis is a legal directive — the other is left alone", async (
   await h.api.handle(modeRow({ target_tool_mode: "auto" }), WS);
   assert.equal(h.modes.length, 1);
   assert.equal(h.modes[0].axis, "tools");
-  assert.deepEqual(decided(h), [{ directiveId: DID, status: "done" }]);
+  // ⚠ AND THE UNASKED AXIS IS ABSENT FROM THE ECHO, never reported as the ceiling: the server
+  // stores that as NULL and `postureFacts` renders `-`, which is "not moved" rather than a move.
+  assert.deepEqual(decided(h), [{
+    directiveId: DID, status: "done", appliedTools: "auto",
+  }]);
 });
 
 test("APPLY: it is PER AGENT — a sibling on the same thread is not touched", async () => {
@@ -137,8 +144,15 @@ test("CLAMP: a request WIDER than the operator's channel posture lands at the ce
     "the operator's own durable pair is the ceiling on both axes");
   // ⚠ IT CLAMPS, IT DOES NOT REFUSE — `setModeByTask`'s own rule for the windowless floor one
   // layer down, and the right trade for the same reason: refusing would apply nothing when part
-  // of what was asked for was legal. The clamp is recorded in the diag rather than hidden.
-  assert.deepEqual(decided(h), [{ directiveId: DID, status: "done" }]);
+  // of what was asked for was legal.
+  // ⚠ AND THE CLAMP IS NOW REPORTED TO THE REQUESTER, not only to the operator's log
+  // (2026-09-02). A bare `{ done: true }` here answered `taken` for a posture that had been
+  // narrowed, and an orchestrator sized its next instruction for room the agent does not have —
+  // the exact defect T24's echo closed on the LAUNCH lane. ⚠ NO `appliedChain`: a re-posture
+  // starts nothing and decides no chaining.
+  assert.deepEqual(decided(h), [{
+    directiveId: DID, status: "done", appliedTools: "auto", appliedMessages: "auto_inbound",
+  }]);
   assert.ok(h.logged.some((l) => l.includes("CLAMPED") && l.includes("auto/auto_inbound")));
 });
 

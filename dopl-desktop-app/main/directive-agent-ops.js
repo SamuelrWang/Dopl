@@ -311,7 +311,20 @@ function setAgentMode(d) {
   }
   diag('directive-agent-ops: set_agent_mode', d.targetAgentId, 'ok —',
     (tools || '-') + '/' + (messages || '-'));
-  return { done: true };
+  // ⚠ THE ECHO, ON THIS LANE TOO (2026-09-02). It returned a bare `{ done: true }`, so a
+  // request CLAMPED to the channel's ceiling was answered `taken` with the clamp visible only
+  // in this machine's own log — the exact defect T24's echo closed on the LAUNCH lane, left
+  // open on the one lane whose entire purpose is moving a posture. An orchestrator told
+  // `taken` sizes its next instruction for the room it asked for.
+  // ⚠ ONLY WHAT WAS REALLY APPLIED. An axis the directive left alone stays ABSENT, which the
+  // server stores as NULL and `channel-ops-launch.ts › postureFacts` renders as `-`; echoing
+  // the ceiling for an axis nobody asked about would report a move that did not happen.
+  // ⚠ NO `appliedChain` — a re-posture starts nothing, so it decides no chaining, and a
+  // `false` here would be a claim about a session's spawn-time stamp this lane never touched.
+  const out = { done: true };
+  if (tools) out.appliedTools = tools;
+  if (messages) out.appliedMessages = messages;
+  return out;
 }
 
 /**

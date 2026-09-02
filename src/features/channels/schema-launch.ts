@@ -181,6 +181,13 @@ export type LaunchClaimInput = z.infer<typeof LaunchClaimSchema>;
 // (`20260907120000_channel_launch_directives_kind.sql`) — the 2026-08-22 window,
 // where this list ran one word ahead of the CHECK and four files carried a
 // standing "do not ship a producer yet", is exactly what that sequencing avoids.
+// ⚠ TEN SINCE 2026-09-02. `no-chain` splits a fact off `no-bridge`: a directive that asked
+// to CHAIN in a channel where the operator has not enabled it answered the SAME word this
+// machine sends when it is not watching that channel at all. The two are opposite
+// instructions — `no-bridge` says go elsewhere, `no-chain` says the channel is right and one
+// named setting is off — so an orchestrator that read the first retried somewhere else
+// instead of asking for one toggle. ⚠ THE COLUMN CHECK LANDS IN THE SAME WAVE
+// (`20260910120000_channel_launch_directives_posture.sql` §3A).
 export const LaunchRefusalReasonSchema = closedEnum<LaunchRefusalReason>()([
   "cap",
   "busy",
@@ -191,6 +198,7 @@ export const LaunchRefusalReasonSchema = closedEnum<LaunchRefusalReason>()([
   "no-template",
   "no-session",
   "bad-name",
+  "no-chain",
 ]);
 
 /**

@@ -338,7 +338,9 @@ test("SPAWN: `chain: true` into a channel that forbids it REFUSES, and starts no
   const h = boot({ chain: false });
   await h.api.handle(chainRow({ chain: true, channel_id: CHAIN_CH }), CHAIN_WS);
   assert.equal(h.cfg.lastSpec, undefined, "no spec ever reached the funnel");
-  assert.equal(chainDecides(h)[0].body.refusalReason, "no-bridge");
+  // ⚠ ITS OWN WORD SINCE 2026-09-02 — `no-bridge` means this machine could not take the channel
+  // at all, which sends an orchestrator looking for another route rather than for one toggle.
+  assert.equal(chainDecides(h)[0].body.refusalReason, "no-chain");
 });
 
 test("SPAWN: an absent `chain` still inherits the room — both directions", async () => {

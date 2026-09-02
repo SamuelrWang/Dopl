@@ -74,17 +74,17 @@ test("an explicit `chain: false` is reported as false even where the channel all
 });
 
 test("⚠ a REFUSAL carries no echo — nothing was applied, so nothing may be reported", async () => {
-  // ⚠ AN ECHO BESIDE A REFUSAL WOULD BE A CLAIM ABOUT A SESSION THAT DOES NOT EXIST. `no-bridge`
+  // ⚠ AN ECHO BESIDE A REFUSAL WOULD BE A CLAIM ABOUT A SESSION THAT DOES NOT EXIST. `no-chain`
   // here is the chain refusal, which happens BEFORE any spawn.
   const body = await decidedBody({ chain: true }, { chain: false });
   assert.equal(body.status, "refused");
-  assert.equal(body.refusalReason, "no-bridge");
+  assert.equal(body.refusalReason, "no-chain");
   for (const k of ["appliedTools", "appliedMessages", "appliedChain"]) {
     assert.ok(!(k in body), `${k} must not appear on a refusal`);
   }
 });
 
-test("⚠ a NON-LAUNCH kind's `done` carries no echo either — only a launch resolves a posture", async () => {
+test("⚠ a RENAME's `done` carries no echo — that verb resolves no posture at all", async () => {
   const h = boot({ live: [{ agentId: "a1b2c3d4", channelId: CH, taskId: "" }] });
   await h.api.handle(
     row({ kind: "rename", channel_id: CH, target_agent_id: "a1b2c3d4", target_name: "Auditor" }),
@@ -95,6 +95,50 @@ test("⚠ a NON-LAUNCH kind's `done` carries no echo either — only a launch re
   for (const k of ["appliedTools", "appliedMessages", "appliedChain"]) {
     assert.ok(!(k in body), `${k} must not appear on a ${body.status}`);
   }
+});
+
+test("⚠ a CLAMPED set_agent_mode's `done` DOES carry the echo — it is the one that settles one", async () => {
+  // ⚠ THE DEFECT THIS CLOSES (2026-09-02). `directive-agent-ops.js › setAgentMode` returned a
+  // bare `{ done: true }`, so a request narrowed to the channel's ceiling was answered `taken`
+  // with the clamp visible only in this machine's own log — the very gap T24's echo closed on
+  // the LAUNCH lane, left open on the lane whose whole job is moving a posture.
+  const h = boot({
+    live: [{ agentId: "a1b2c3d4", channelId: CH, taskId: "" }],
+    ceiling: { tools: "auto", messages: "auto_inbound" },
+  });
+  await h.api.handle(
+    row({
+      kind: "set_agent_mode", channel_id: CH, target_agent_id: "a1b2c3d4",
+      target_tool_mode: "bypass", target_message_mode: "auto_both",
+    }),
+    WS,
+  );
+  const body = decidePosts(h)[0].body;
+  assert.equal(body.status, "done");
+  assert.equal(body.appliedTools, "auto", "clamped to the ceiling, and SAID so");
+  assert.equal(body.appliedMessages, "auto_inbound");
+  // ⚠ NOT the request echoed back — that is the reading this whole trio exists to refuse.
+  assert.notEqual(body.appliedTools, "bypass");
+  // ⚠ AND NO `appliedChain`: a re-posture starts nothing, so it decides no chaining.
+  assert.ok(!("appliedChain" in body));
+});
+
+test("⚠ an axis the set_agent_mode LEFT ALONE stays absent, never echoed as the ceiling", async () => {
+  const h = boot({
+    live: [{ agentId: "a1b2c3d4", channelId: CH, taskId: "" }],
+    ceiling: { tools: "auto", messages: "auto_inbound" },
+  });
+  await h.api.handle(
+    row({
+      kind: "set_agent_mode", channel_id: CH, target_agent_id: "a1b2c3d4",
+      target_tool_mode: "accept_edits",
+    }),
+    WS,
+  );
+  const body = decidePosts(h)[0].body;
+  assert.equal(body.appliedTools, "accept_edits");
+  assert.ok(!("appliedMessages" in body),
+    "an axis nobody asked about must not be reported as moved");
 });
 
 // ── THE WIRE'S OWN NARROWING, DRIVEN DIRECTLY ────────────────────────────────────
@@ -124,7 +168,9 @@ test("REQUEST_KEYS names every key the decide really sends", () => {
       agentId: "a1b2c3d4", appliedTools: "auto", appliedMessages: "ask", appliedChain: true,
     })),
     ...Object.keys(wire.decideBody("d1", { refused: "cap" })),
-    ...Object.keys(wire.decideBody("d1", { done: true })),
+    ...Object.keys(wire.decideBody("d1", {
+      done: true, appliedTools: "auto", appliedMessages: "ask",
+    })),
   ]);
   for (const k of emitted) {
     assert.ok(wire.REQUEST_KEYS.decide.indexOf(k) !== -1, `REQUEST_KEYS.decide is missing ${k}`);
