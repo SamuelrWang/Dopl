@@ -109,15 +109,15 @@ describe("buildInstructions (M-2)", () => {
 
   it("1 membership → may omit workspace=, bakes the workspace in", () => {
     const out = buildInstructions([WS1]);
-    expect(out).toContain("exactly one workspace");
+    expect(out).toContain("one workspace, so every call targets it");
     expect(out).toMatch(/omit .*workspace=/);
     expect(out).toContain("`alpha`");
   });
 
   it("2+ memberships → MUST pass workspace= on every call, lists all with descriptions", () => {
     const out = buildInstructions([WS1, WS2]);
-    expect(out).toContain("member of 2 workspaces");
-    expect(out).toContain("EVERY tool call");
+    expect(out).toContain("You are in 2 workspaces and this connection has NO default");
+    expect(out).toContain("REQUIRED on EVERY call");
     expect(out).toContain("`alpha`");
     expect(out).toContain("`beta`");
     expect(out).toContain("second ws");
@@ -134,7 +134,7 @@ describe("buildInstructions (M-2)", () => {
 
   it("0 memberships with a transient load failure → 'couldn't load', not 'you have none'", () => {
     const out = buildInstructions([], { directoryLoadFailed: true });
-    expect(out).toContain("couldn't load");
+    expect(out).toContain("did not load");
     expect(out).not.toContain("not an active member of any workspace");
   });
 });
@@ -368,23 +368,21 @@ describe("buildInstructions — identity is taught before the first tool call", 
   });
 
   it("tells the agent to match on the id, not the display name", () => {
-    expect(buildInstructions([WS1])).toContain("a name alone never settles");
+    expect(buildInstructions([WS1])).toContain("two members can share a display name");
   });
 
   /**
    * ⚠ Pointing at the ANCHOR for "who the caller is" makes an agent read a
-   * member-typed object NAME as its own identity — point at whoami, and call
-   * the anchor context.
+   * member-typed object NAME as its own identity — point at whoami, which is
+   * the op that answers it. ⚠ REWRITTEN FOR THE 2,048-CHAR BUDGET (A1): the
+   * briefing no longer carries the anchor paragraph at all, so the claim it can
+   * still make is that identity resolves to `whoami` and to nothing else. The
+   * anchor's own framing is pinned where it renders (`tools/ontology.ts`).
    */
-  it("reframes the ontology anchor as context, not identity", () => {
+  it("sends 'who am I' to whoami, and nowhere near the ontology anchor", () => {
     const text = buildInstructions([WS1]);
-    expect(text).toContain("CONTEXT about them, not their identity");
+    expect(text).toContain("dopl_members(op='whoami')");
+    expect(text).not.toContain("anchor");
     expect(text).not.toContain("to learn who the caller is in the workspace graph");
-  });
-
-  it("refuses the same-machine question up front", () => {
-    const text = buildInstructions([WS1]);
-    expect(text).toContain("a different user id is a different ACCOUNT");
-    expect(text).toContain("do not assert it either way");
   });
 });
