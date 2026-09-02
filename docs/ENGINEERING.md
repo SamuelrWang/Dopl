@@ -6009,3 +6009,65 @@ twice. What replaced them is a different assertion, and it had to be: those gate
 DISAGREEING, and the failure mode now is a second copy APPEARING — which compiles, ships, and
 shadows the package for one tree's consumers. `src/shared/contracts/canonical-sets.test.ts` is that
 census.
+
+---
+
+## 2026-09-02 — The narrowing that could not ship alone: why a repaired address is a stored verdict
+
+Ruling B1 narrows the fan-out from *"every live agent on the thread"* to *"the addressed
+recipient"*. Taken by itself that is a one-line change with a failure mode nobody would report as a
+bug: a person forgets an `@`, the message lands in the room, the transcript looks completely normal,
+and nothing happens. The author waits. The conversation stalls, and there is no error anywhere to
+find — the send returned `ok`, the row exists, and every agent behaved correctly.
+
+So the ruling arrived with its own remedy attached: **a forgotten `@` must never stall a
+conversation.** That is why B4 is a bigger slice than "narrow the fan-out" sounds, and why three
+quarters of it is about the case where the caller addressed nobody.
+
+**The four decisions worth keeping.**
+
+**1. The repair is the SERVER's, not the desktop's.** This is the same argument A9 made about the
+verdict itself and it has not weakened: a rule that lives on every desktop lives on the WEAKEST
+build in the field, and the addressing doctrine had to be written against that build for a year.
+A repair rule shipped desktop-side would produce a room where two machines disagree about who a
+message was for — which is worse than the stall it was meant to fix, because it is invisible from
+both ends.
+
+**2. The repair is a VERDICT VALUE, not a flag.** The tempting shape is `wake_verdict: 'member'` plus
+`repaired: true`. It was refused because the desktop is not the only reader: a person looking at a
+transcript asks *"why did my agent answer that?"*, and the only honest answer distinguishes an
+address the author WROTE from one the server INVENTED on their behalf. A boolean beside a value is a
+fact one query forgets to select; three values in the column the reader already reads is a fact it
+cannot.
+
+**3. RR2 resolves a MEMBER, and that is load-bearing rather than incidental.** "The party that last
+addressed this agent" could have been read as "the agent that last addressed this agent", which
+reads more natural and would have quietly created an agent→peer-agent wake through a rule nobody
+wrote — exactly what Samuel's 2026-08-31 same-account carve forbids. The arm answers an ACCOUNT, and
+that account's own machine decides what runs. The carve then holds through every path by
+construction rather than by a test on the way out: both agent-resolution doors (the body parse and
+the new `to=` resolver) are own-scoped when the credential is an agent's, so a peer's agent is not in
+the index, cannot be resolved, and no stored verdict can name it.
+
+**4. `delivery=none` and a REFUSAL are different failures with different remedies, and conflating
+them was the near-miss.** An unaddressed post that nobody answers is a person talking to a room that
+has not been told who answers — normal, and the result lists the live handles. A `to=` naming
+somebody who is not there is a typo, and it is a 400 that names what IS reachable. Making the second
+one quiet would have re-created the exact stall the ruling exists to remove, one level down, in the
+one case where the author was CERTAIN they had addressed somebody.
+
+**What the LLM triage loop cost, and what replaced it.** B6 deletes it: two desktop modules whole
+plus roughly half of a third, and `tierFor` collapsing to `n === 1 ? SOLO : NONE`. The replacement is
+RR3 arm 2 — *exactly one live agent in the room answers* — which the server computes for free from
+a projection it already holds, and RR3 arm 1, a channel SETTING for the case where there is more
+than one. Twelve rules over "who wakes", spread across three modules that each declared they must not
+read the others, became one predicate. ⚠ The setting stores a HANDLE and not a template id, which is
+not a shortcut: an FK to `agent_templates` from a row every channel member can read is a
+cross-visibility reference, and `20260823130000_channel_sessions_template_name.sql` had already paid
+for that lesson on its own column.
+
+**The one thing this slice could not do.** G20 / F-450's eighth session-health field is assigned
+here and did not ship, for two structural reasons recorded in F-493: the slice holds exactly one
+migration, named for the default responder, and the field's only possible WRITER is the desktop —
+which belongs to two other slices. A column with no writer would have made the ledger read as
+enforced. The measurement G20 asks for has to land with the machine that can take it.

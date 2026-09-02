@@ -11,8 +11,19 @@
 /**
  * WHO the server resolved a message for, decided once at write time.
  * ⚠ Mirror of `src/features/channels/types.ts › ChannelWakeVerdict`.
+ * ⚠ The last three are the RESILIENCE arms (B1): the server repaired an address
+ * the author did not write, and a reader that cannot see the repair cannot
+ * explain the delivery. The original carries the argument.
  */
-export type ChannelWakeVerdict = "none" | "member" | "agent" | "thread";
+export type ChannelWakeVerdict = "none" | "member" | "agent" | "thread"
+/** RR1 — a threaded reply with no `to`, resolved to the thread's other party. */
+ | "thread_peer"
+/** RR2 — an unaddressed agent post in the main room, resolved to whoever last
+ *  addressed that agent there inside the 15-minute resilience window. */
+ | "reciprocal"
+/** RR3 — an unaddressed human message, resolved to the channel's default
+ *  responder or to the room's one live agent. */
+ | "responder";
 /**
  * WHAT HAPPENED to a message — the `delivery=` verdict that IS the
  * acknowledgement. The server stamps its write-time answer; the operator's

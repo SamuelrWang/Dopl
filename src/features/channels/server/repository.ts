@@ -218,12 +218,9 @@ type ChannelPatch = Partial<{
   agent_tool_ceiling: string | null;
   agent_message_ceiling: string | null;
   agent_chain_allowed: boolean | null;
-  /**
-   * **RR3's DEFAULT RESPONDER** (`20260918120000`, B4). `null` is the CLEAR, on
-   * the ceiling trio's terms — a room must be able to stop nominating one.
-   * Held to `^[a-z][a-z0-9-]{1,30}$` by `ChannelUpdateSchema` and again by
-   * `channels_default_responder_check`.
-   */
+  /** **RR3's DEFAULT RESPONDER** (`20260918120000`, B4). `null` is the CLEAR, on
+   *  the ceiling trio's terms. Held to the handle grammar by
+   *  `ChannelUpdateSchema` and again by `channels_default_responder_check`. */
   default_responder_agent_name: string | null;
 }>;
 

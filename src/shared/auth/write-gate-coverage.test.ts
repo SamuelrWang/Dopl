@@ -279,23 +279,24 @@ describe("H-3 write-gate coverage", () => {
       "utf8"
     );
     expect(src).toMatch(
-      /SESSION_ONLY_FIELDS\s*=\s*\[\s*"visibility",\s*"agentPosture"\s*\]/
+      /SESSION_ONLY_FIELDS\s*=\s*\[\s*"visibility",\s*"agentPosture",\s*"defaultResponderAgentName",?\s*\]/
     );
     expect(src).toMatch(/auth\.agentTokenId/);
     expect(src).toMatch(/SESSION_REQUIRED/);
   });
 
   /**
-   * ⚠ THE FULL FIELD SET, PINNED SO A SEVENTH LANDS UNGATED VISIBLY. The route's
-   * field gate names `visibility` and `agentPosture`; the service derives the
+   * ⚠ THE FULL FIELD SET, PINNED SO AN EIGHTH LANDS UNGATED VISIBLY. The route's
+   * field gate names `visibility`, `agentPosture` and
+   * `defaultResponderAgentName`; the service derives the
    * MANAGE set by SUBTRACTION and leaves `infoCard` alone. Both are correct only
-   * while the schema's fields are EXACTLY these six — a seventh added to
+   * while the schema's fields are EXACTLY these seven — an eighth added to
    * `ChannelUpdateSchema` would silently inherit the loose (member) gate unless
    * somebody decides otherwise. This asserts the set against the real schema, so
    * that decision cannot be skipped. (A pin on a symbol is not a pin — INVARIANTS
    * §14 — so it reads the schema's own shape.)
    */
-  it("ChannelUpdateSchema's fields are EXACTLY the six gated ones", () => {
+  it("ChannelUpdateSchema's fields are EXACTLY the seven gated ones", () => {
     // zod 4: `.refine()` adds a check to the same object type, so `.shape` is the
     // object's own field map (no ZodEffects wrapper to unwrap).
     expect(Object.keys(ChannelUpdateSchema.shape).sort()).toEqual(
@@ -303,7 +304,21 @@ describe("H-3 write-gate coverage", () => {
       // THE DECISION WAS MADE RATHER THAN INHERITED. It is SESSION-ONLY: it is
       // the CEILING on what a launched agent may be granted here, so an agent
       // credential able to raise it could widen its own successors' posture.
-      ["agentPosture", "archived", "infoCard", "name", "topic", "visibility"].sort()
+      // ⚠ `defaultResponderAgentName` JOINED ON 2026-09-02 (B4 — ruling B6) AND
+      // IT IS SESSION-ONLY FOR `agentPosture`'s REASON, SHARPENED: it names the
+      // agent that answers every UNADDRESSED human message in the room, so an
+      // agent credential able to set it could nominate ITSELF and route the
+      // room's unaddressed work to its own session. The gate made the decision
+      // rather than letting it be inherited, which is what this case is for.
+      [
+        "agentPosture",
+        "archived",
+        "defaultResponderAgentName",
+        "infoCard",
+        "name",
+        "topic",
+        "visibility",
+      ].sort()
     );
   });
 });

@@ -43,6 +43,12 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
  *   refuses the same carve-out for the same reason ("every caller on this lane IS the operator's
  *   own account", so an exception is not narrow, it is the whole set). BOTH directions are gated,
  *   on `visibility`'s argument: direction-free costs nothing and needs no read of the current row.
+ * - `defaultResponderAgentName` IS THE THIRD SESSION-ONLY FIELD (2026-09-02, B4 — ruling B6), on
+ *   `agentPosture`'s argument exactly: it names the agent that answers every UNADDRESSED human
+ *   message in this room (RR3). An agent credential able to set it could nominate ITSELF and
+ *   route the room's unaddressed work to its own session — self-authorizing reach, which is the
+ *   same lane `agentPosture` is gated for. BOTH directions, including the withdrawal: an agent
+ *   able to CLEAR somebody else's nomination silences that agent just as effectively.
  * - `name` / `topic` / `archived` stay MANAGE-gated in the service (`canManageChannel`), and
  *   `agentPosture` is manage-gated THERE as well — the two fences answer different questions
  *   (which CREDENTIAL, and which ROLE) and neither substitutes for the other.
@@ -55,7 +61,11 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
  * Session callers are untouched: cookie (web + desktop main) and Supabase-JWT (SPA) callers never
  * set `agentTokenId`, so `components/go-public-dialog.tsx` is unaffected.
  */
-const SESSION_ONLY_FIELDS = ["visibility", "agentPosture"] as const;
+const SESSION_ONLY_FIELDS = [
+  "visibility",
+  "agentPosture",
+  "defaultResponderAgentName",
+] as const;
 
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {

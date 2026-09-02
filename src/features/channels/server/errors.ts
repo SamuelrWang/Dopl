@@ -1,9 +1,6 @@
-class ChannelError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = new.target.name;
-  }
-}
+// ⚠ `ChannelError` MOVED TO `errors-base.ts` (§1, 2026-09-02) — a LEAF, so the
+// second error module can extend it without a cycle back through this file.
+import { ChannelError } from "./errors-base";
 
 export class ChannelNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
@@ -46,36 +43,11 @@ export class ChannelAddresseeNotMemberError extends ChannelError {
   }
 }
 
-/**
- * **`to=` NAMED SOMETHING THIS CHANNEL DOES NOT HAVE** (2026-09-02, v2 wave B
- * slice B4 — Samuel's ruling B1).
- *
- * ⚠ **IT IS A REFUSAL RATHER THAN A `delivery=none`, AND THAT IS THE WHOLE
- * POINT.** With the fan-out narrowed to the addressed recipient, a send whose
- * `to` resolves to nobody reaches nobody — and answering `ok` about it is the
- * invisible-delivery failure in its purest form: the author believes they
- * addressed somebody and the conversation stalls on a typo. Samuel's ruling is
- * that this must never happen silently.
- *
- * ⚠ **IT CARRIES THE CANDIDATES BECAUSE A REFUSAL THAT DOES NOT IS A SECOND
- * GUESS.** `liveHandles` are the room's live `agent-<id>` handles and `members`
- * its addresses, so the retry is one edit away. ⚠ Both lists are ROSTER- and
- * ROOM-scoped: this must not become a probe for whether an arbitrary address has
- * an account, so a stranger and a non-member get the same sentence.
- */
-export class ChannelRecipientUnresolvedError extends ChannelError {
-  constructor(
-    public readonly to: string,
-    public readonly liveHandles: readonly string[],
-    public readonly members: readonly string[]
-  ) {
-    super(
-      `No recipient in this channel matches "${to}". ` +
-        `Live agents: ${liveHandles.length > 0 ? liveHandles.map((h) => `@${h}`).join(", ") : "none"}. ` +
-        `Members: ${members.length > 0 ? members.join(", ") : "none"}.`
-    );
-  }
-}
+// ⚠ **`ChannelRecipientUnresolvedError` LIVES IN `errors-recipient.ts` (§1
+// SPLIT, 2026-09-02) AND IS RE-EXPORTED HERE**, because this file was AT the
+// 500-line cap. `errors.ts` stays the ONE import path for every channel error —
+// same arrangement `types.ts` has with `types-delivery.ts`.
+export { ChannelRecipientUnresolvedError } from "./errors-recipient";
 
 /** Would leave the channel with no owner — transfer ownership first. */
 export class ChannelLastOwnerError extends ChannelError {
