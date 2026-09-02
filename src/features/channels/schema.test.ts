@@ -224,25 +224,31 @@ describe("ChannelMessageCreateSchema", () => {
   });
 
   /**
-   * ⚠ Removed params are REFUSED, not dropped. Deleting the fields is SILENT
-   * (zod strips unknown keys), so an old client's `to_agent` would post
-   * successfully and address nobody. `z.never()` → 400 naming the field.
+   * ⚠ THE THREE NAMED-AGENT TOMBSTONES ARE DELETED (2026-09-02, v2 A7) and this
+   * asserts the DELETION, not a refusal: `toAgent` / `toAgents` /
+   * `authorAgentId` are now unknown keys and zod drops them, exactly as it drops
+   * any other. The refusal existed for builds that still sent them after the
+   * rollback; none does.
+   *
+   * ⚠ What it must NOT become is a message that PARSED one — a key that survived
+   * into `data` would reach `resolvePostMetadata` as caller metadata, which is
+   * the forgery this test's ancestor and the metadata strip both exist to stop.
+   * The strip itself is asserted in
+   * `server/service-writes-metadata-attribution.test.ts` and is NOT deleted with
+   * these (INVARIANTS §5, F-434).
    */
-  it("REFUSES toAgent / toAgents / authorAgentId with a message, not silence", () => {
-    for (const key of ["toAgent", "toAgents", "authorAgentId"]) {
-      const parsed = ChannelMessageCreateSchema.safeParse({
-        body: "x",
-        [key]: key === "toAgents" ? ["quartz"] : "quartz",
-      });
-      expect(parsed.success).toBe(false);
-      const issue = parsed.error?.issues[0];
-      expect(issue?.path).toEqual([key]);
-      expect(issue?.message).toMatch(/removed/i);
-    }
+  it("DROPS the deleted named-agent params instead of parsing them", () => {
+    const parsed = ChannelMessageCreateSchema.safeParse({
+      body: "x",
+      toAgent: "quartz",
+      toAgents: ["quartz"],
+      authorAgentId: "quartz",
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && Object.keys(parsed.data)).toEqual(["body"]);
   });
 
-  it("stamps nothing for the removed keys when they are ABSENT", () => {
-    // Point of the `.optional()`: an ordinary post's parsed shape is unchanged.
+  it("stamps nothing extra on an ordinary post", () => {
     const parsed = ChannelMessageCreateSchema.safeParse({ body: "x" });
     expect(parsed.success).toBe(true);
     expect(parsed.success && Object.keys(parsed.data)).toEqual(["body"]);

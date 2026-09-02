@@ -129,6 +129,15 @@ export type NotifyScope = "all" | "addressed" | "none";
 export type MessageAuthorKind = "user" | "agent" | "system";
 
 /**
+ * The author kinds a CALLER may claim. `system` is server-reserved — an
+ * anonymized system-styled post is a forgery primitive — and this type is what
+ * `schema.ts › PostableAuthorKindSchema` is closed over, so the carve-out is
+ * DERIVED rather than re-typed. Widening {@link MessageAuthorKind} without a
+ * decision about this one is a compile error, not a silent widening.
+ */
+export type PostableAuthorKind = Exclude<MessageAuthorKind, "system">;
+
+/**
  * Tool scope a member's responding agent runs with (operator controls their own
  * machine). `full` = no restriction (default); `dopl_only` = Dopl MCP + safe
  * reads; `read_only` = no writes. Desktop maps this to the spawned session's
@@ -198,6 +207,25 @@ export type ChannelMessageKind =
   | "task_finished"
   | "task_failed"
   | "system";
+
+/**
+ * The message kinds a CALLER may post. `system` is server-emitted only, so the
+ * postable set is the full set MINUS the server-owned one — DERIVED, never
+ * re-typed, which is what makes `schema.ts › PostableMessageKindSchema`'s
+ * `closedEnum` a proof rather than a second list to keep in step.
+ *
+ * ⚠ THIS IS THE TS↔ZOD HALF ONLY. The DATABASE states the full set a third time
+ * as a column `CHECK` (`20260725120000_channels.sql`), the SDK a fourth and
+ * fifth (`packages/dopl-client/src/channel-types.ts` and its committed
+ * `dist/`), and no TypeScript can reach any of them — that is
+ * `scripts/check-message-kind-drift.ts`, INVARIANTS §14.
+ *
+ * ⚠ POSTABLE IS NOT AGENT-WRITABLE. An agent token may write exactly `message`
+ * and `task_progress`; the three lifecycle kinds are refused from it at two
+ * layers on the CREDENTIAL (§5, `server/service-writes-lifecycle.ts`). That is
+ * an authorization, not a shape, and it is deliberately not expressed here.
+ */
+export type PostableMessageKind = Exclude<ChannelMessageKind, "system">;
 
 /**
  * Whether a post may REACH AN AGENT.
