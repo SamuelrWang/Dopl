@@ -238,6 +238,14 @@ jobs:
       - name: Diff the session-health field set across its four mirrors
         run: npx tsx scripts/check-session-health-drift.ts
 
+      # The `channel_messages` kind and author_kind sets, across the server
+      # union, the SDK's copy, its committed dist/ and the column CHECK
+      # (2026-09-02). The zod half is NOT a step here: `closedEnum` over a
+      # derived type makes that pair a compile error. Mutation-verified by
+      # `src/features/channels/message-kind-drift.test.ts`.
+      - name: Diff the message-kind sets across the union, the SDK and the column CHECK
+        run: npx tsx scripts/check-message-kind-drift.ts
+
       # The SPA's `tokens.css` is a hand copy of `globals.css`'s token layer
       # (F-074). The prose "edit both together" instruction it carries failed
       # twice in one wave, which is why this is a gate and not a comment.

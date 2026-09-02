@@ -9,16 +9,16 @@ import type {
   AgentToolProfile,
   ChannelVisibility,
   MessageIntent,
+  PostableAuthorKind,
+  PostableMessageKind,
   ThreadMode,
 } from "./types";
 // ⚠ THE RETIRED PARAMETERS LIVE IN THEIR OWN MODULE (§1 split, 2026-08-25) —
 // they are the one block here scheduled to STOP existing, and that file carries
 // the delete-me clock. Nothing about their behaviour moved.
 import {
-  REMOVED_AUTHOR_AGENT,
   REMOVED_PARTICIPANTS,
   REMOVED_THREAD_CLOSE,
-  REMOVED_TO_AGENT,
   removedOp,
   removedParam,
 } from "./schema-removed-params";
@@ -62,10 +62,16 @@ const ChannelTopicSchema = safeOptionalLabel("Channel topic", 2000);
 // message. `agent` stays postable: desktop posts task results with authorKind
 // `agent` over a cookie session; service derives agent vs user from the token
 // when authorKind omitted.
-const PostableAuthorKindSchema = z.enum(["user", "agent"]);
-// `system` server-emitted only (matches MCP post enum). Full kind union incl.
-// `system` lives in types.ts; schema only validates caller input.
-const PostableMessageKindSchema = z.enum([
+// ⚠ `closedEnum` over the DERIVED `PostableAuthorKind` — see `MessageKind` below.
+const PostableAuthorKindSchema = closedEnum<PostableAuthorKind>()([
+  "user",
+  "agent",
+]);
+// `system` server-emitted only. ⚠ `closedEnum` over the DERIVED type, so drift
+// against the full union is a COMPILE ERROR both ways; the three statements no
+// compiler reaches (the column CHECK, the SDK's two mirrors) are held by
+// `scripts/check-message-kind-drift.ts`. Argument: `types.ts › PostableMessageKind`.
+const PostableMessageKindSchema = closedEnum<PostableMessageKind>()([
   "message",
   "task_started",
   "task_progress",
@@ -150,7 +156,13 @@ const MessageIntentSchema = closedEnum<MessageIntent>()(["chat", "request"]);
  * is the one-liner in the receiver's notification. Both persist into `metadata`
  * as `{to_user_id, summary}`. `intent` → {@link MessageIntentSchema}.
  *
- * `z.never()` fields below → {@link removedParam}.
+ * ⚠ **THE THREE NAMED-AGENT TOMBSTONES ARE GONE (2026-09-02):** `toAgent` /
+ * `toAgents` / `authorAgentId` met the delete-me clock in
+ * `schema-removed-params.ts` and are now dropped like any unknown key. Neither
+ * fence that mattered moved with them — the MCP lane still refuses `to_agent` BY
+ * NAME through `z.strictObject`, and the snake_case METADATA strip stays, which
+ * is a different fence and a permanent one. **F-434 is why those are not one
+ * deletion.**
  */
 export const ChannelMessageCreateSchema = z.object({
   body: z.string().min(1).max(16000),
@@ -186,9 +198,6 @@ export const ChannelMessageCreateSchema = z.object({
    */
   escalation: ChannelEscalationSchema.optional(),
   escalationAnswer: ChannelEscalationAnswerSchema.optional(),
-  toAgent: removedParam(REMOVED_TO_AGENT),
-  toAgents: removedParam(REMOVED_TO_AGENT),
-  authorAgentId: removedParam(REMOVED_AUTHOR_AGENT),
 });
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema
