@@ -1,18 +1,19 @@
-// THE PER-SESSION `X-Dopl-Tool-Profile` STAMP — the desktop half of the role-scoped tool
-// offer (2026-09-02, MCP v2 wave A / A3).
+// THE PER-SESSION `X-Dopl-Tool-Profile` STAMP — the desktop half of the profile-scoped tool
+// offer (2026-09-02, MCP v2 wave A / A3; the vocabulary containment below is wave B / B5).
 //
 // WHAT IT IS FOR. This app already decides how contained every spawned session is —
-// `tool-profiles.js` picks read_only / dopl_only / full and enforces it locally through
-// `--disallowedTools`, the `--tools` bound and the permission gate. The MCP SERVER never
-// heard that word, so a `dopl_only` courier that will only ever call `dopl_channel` still
-// pays for all 13 tools' descriptions and input schemas on connection. One header fixes it.
+// `tool-profiles.js` picks the profile and enforces it locally through `--disallowedTools`,
+// the `--tools` bound and the permission gate. The MCP SERVER never heard that word, so a
+// session that will never be allowed to call a single Dopl tool still paid for all 13 tools'
+// descriptions and input schemas on connection. One header fixes it.
 //
 // WHY IT NEEDS ITS OWN FILE, and it is the same argument `session-id-stamp.test.mjs` makes:
-// this is a two-sided contract with a server that FAILS OPEN. A header name spelled
-// differently, or a value the server's shape check drops, produces no error anywhere — the
-// session simply keeps paying for the whole surface, invisibly, forever. So both sides are
-// read as SOURCE and pinned against each other; copying the literals here would let them
-// drift with a green suite.
+// this is a two-sided contract, and BOTH ways of getting it wrong are silent. A header name
+// spelled differently, or a value the server's shape check drops, keeps the session paying for
+// the whole surface invisibly; a value the server's VOCABULARY does not hold narrows that
+// session to the server's floor — which since wave B is an offer of NOTHING. So both sides are
+// read as SOURCE and pinned against each other; copying the literals here would let them drift
+// with a green suite.
 //
 // ⚠ AND IT PINS THE DIRECTION. The header may only NARROW and it GRANTS NOTHING: the value
 // is whatever `normalizeProfile` already answered for this spawn — the same fail-closed read
@@ -95,18 +96,46 @@ test("every value the desktop can stamp survives the server's shape check", () =
   }
 });
 
-test("the server's role table is the ONLY vocabulary — the reader enumerates nothing", () => {
+test("the server's table is the ONLY vocabulary — the reader enumerates nothing", () => {
   // ⚠ The asymmetry with X-Dopl-Runtime / X-Dopl-Vendor, which DO enumerate. A second list
   // of profile names on the server's request path would be a hand-mirror of
-  // `gating.ts › TOOL_PROFILE_TOOLS` whose only possible effect is drift.
+  // `gating.ts › TOOL_PROFILES` whose only possible effect is drift.
   for (const p of KNOWN_PROFILES) {
     assert.ok(
       !HEADER_SRC.includes(`"${p}"`),
       `tool-profile-header.ts hardcodes the profile name ${p} — the vocabulary belongs in gating.ts`
     );
   }
-  assert.match(GATING_SRC, /TOOL_PROFILE_TOOLS = new Map<string, ReadonlySet<string>>\(\)/,
-    "gating.ts must hold the role table (empty in wave A) — repoint this probe if it moved");
+});
+
+// The server's vocabulary, read out of its source. Throws rather than defaulting: a renamed or
+// reshaped table must fail loudly here, never pass by absence.
+const SERVER_PROFILES = (() => {
+  const m = /TOOL_PROFILES = \[([^\]]*)\] as const;/.exec(GATING_SRC);
+  assert.ok(m, "gating.ts must declare TOOL_PROFILES — repoint this probe if the table moved");
+  return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+})();
+
+test("every profile this app can stamp is one the SERVER can place", () => {
+  // 🔒 THE FAIL-CLOSED DIRECTION, and it is why this containment is a test. The server answers
+  // a profile it cannot place with its NARROWEST row, which offers no tool at all — so a name
+  // added here alone does not degrade a session, it empties it. Add the row on the server in
+  // the same change.
+  for (const p of KNOWN_PROFILES) {
+    assert.ok(SERVER_PROFILES.includes(p),
+      `${p} is stamped by this app and absent from gating.ts TOOL_PROFILES — that session is offered NOTHING`);
+  }
+});
+
+test("and the server knows no profile this app cannot spawn, except the one still landing", () => {
+  // ⚠ THE OTHER DIRECTION, bounded rather than dropped. The two lists are EQUAL after
+  // `channel_agent` lands on this side (MCP v2 wave B slice B6, `full` minus Bash); until then
+  // it is the only permitted difference, and anything else means a name entered the product
+  // vocabulary through the server. Delete this allowance with that slice — a stale one would
+  // let a second name in behind it.
+  const extra = SERVER_PROFILES.filter((p) => !KNOWN_PROFILES.includes(p));
+  assert.deepEqual(extra, extra.filter((p) => p === "channel_agent"),
+    `gating.ts names ${extra.join(", ")}, which this app never spawns`);
 });
 
 // ── it may only narrow, and it grants nothing ────────────────────────────────
