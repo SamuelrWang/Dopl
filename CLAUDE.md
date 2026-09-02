@@ -71,7 +71,7 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and SIX non-suite gates** (six since 2026-09-02) — the full table is
+**Five suites, TWO lints, TWO typechecks, and SEVEN non-suite gates** (seven since 2026-09-02) — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
 ⚠ **THE COUNT HAS BEEN WRONG THREE TIMES AND THE TWO ERRORS ARE OPPOSITE ONES — read both before
@@ -80,13 +80,13 @@ it counted included the desktop-ui typecheck, **which is one of the TWO typechec
 count. (2) It then said FOUR until 2026-09-01, and that was an UNDERCOUNT: two real gates
 (`check-role-drift`, then `check-css-token-drift`) had shipped in CI with no doc row. It is FIVE
 today for a different reason than it was FIVE in August, and both times the fix was the same
-command. ⚠ **AND IT IS SIX SINCE 2026-09-02**, when `check-session-health-drift` landed — that one
-shipped WITH its doc row, in the same change, which is the whole remedy this warning has been
-asking for. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
+command. ⚠ **AND IT IS SEVEN SINCE 2026-09-02**, when `check-session-health-drift` and then
+`check-message-kind-drift` landed — both shipped WITH their doc rows, in the same change, which is
+the whole remedy this warning has been asking for. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
 many non-suite gates there are"** — the first item is on it precisely because it is a typecheck
 nobody remembers to run, and it is NOT one of the five.
 
-The seven things that are routinely forgotten (SIX non-suite gates since 2026-09-02, plus the
+The eight things that are routinely forgotten (SEVEN non-suite gates since 2026-09-02, plus the
 second typecheck):
 
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
@@ -107,7 +107,13 @@ second typecheck):
    the previous two gates each shipped without one. Every field on this set is
    `optional` AND `nullable` by design (an older desktop must not 400 its whole
    push), so drift here fails no build and no test: the field just never arrives.
-7. `npx tsx scripts/check-css-token-drift.ts` — the DESIGN TOKENS, `src/app/globals.css` vs the
+7. `npx tsx scripts/check-message-kind-drift.ts` — the `channel_messages` **kind** and
+   **author_kind** SETS across the server union, the SDK's copy, its committed `dist/` and the
+   column `CHECK`. The zod half needs no step: `closedEnum` over an `Exclude`d type makes that pair
+   a compile error. ⚠ **ADDED 2026-09-02 WITH ITS DOC ROW**, the second gate that day to do so.
+   Both drift directions are silent — a kind the `CHECK` lacks throws `23514` only on a real
+   INSERT, and a kind the union lacks is cast into it and takes every default branch.
+8. `npx tsx scripts/check-css-token-drift.ts` — the DESIGN TOKENS, `src/app/globals.css` vs the
    SPA's `apps/desktop-ui/src/styles/tokens.css`, which is a second copy with no shared module.
    ⚠ **And this list said "five" and omitted THIS one until 2026-09-01**, though it has been the
    `type-drift` job's THIRD step since `522f53df` (2026-08-31). **The same failure, a second time,

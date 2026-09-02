@@ -30,10 +30,17 @@ export function removedParam(message: string) {
   return z.never({ error: message }).optional();
 }
 
-export const REMOVED_TO_AGENT =
-  "Agent addressing was removed. Address a PERSON with `toUserId`, or leave the message unaddressed.";
-export const REMOVED_AUTHOR_AGENT =
-  "Named-agent authorship was removed. A message is its human author's; there is no agent identity to post as.";
+/**
+ * ⚠ **TWO CONSTANTS LEFT HERE ON 2026-09-02 (v2 A7), AND THE CLOCK ABOVE IS WHY
+ * — this is the file working.** `REMOVED_TO_AGENT` (`toAgent` / `toAgents`) and
+ * `REMOVED_AUTHOR_AGENT` (`authorAgentId`) were the named-agent refusals from
+ * the rollback (F-141); they were held open only until no build in the field
+ * still sent the parameter, and that is the condition this module's docblock
+ * declares. The MCP lane never depended on them — it registers through
+ * `z.strictObject`, so `to_agent` is refused BY NAME there regardless — and the
+ * `to_agent_id` / `to_agent_ids` / `author_agent_id` METADATA strip is a
+ * different fence entirely and stays (INVARIANTS §5, F-434).
+ */
 export const REMOVED_PARTICIPANTS =
   "Breakout-room participants were removed. A thread is between its creator and the member in `toUserId`.";
 export const REMOVED_THREAD_CLOSE =
