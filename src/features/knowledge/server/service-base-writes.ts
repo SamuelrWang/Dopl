@@ -32,6 +32,10 @@ import {
   listSlugs,
 } from "./service-shared";
 import { getBaseById } from "./service-bases";
+// ⚠ THE SAME CEILING THE READS USE. `createBase` must ask the identical
+// question `listBases` / `getBaseBySlug` will ask a millisecond later, or it
+// writes rows nobody can reach — see `assertCreatorCanReadItBack`.
+import { resolveAgentAudience } from "./service-audience";
 import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 /**
@@ -92,13 +96,80 @@ async function resolveHomeScope(
   return true;
 }
 
+/**
+ * 🔒 **A CREATE MUST NOT PRODUCE A ROW ITS OWN CREATOR CANNOT READ BACK** — the
+ * authoring half of **F-323**, which that entry predicted in as many words:
+ * *"an agent can now write a base it will not be able to read back."* It could,
+ * and it did.
+ *
+ * THE SHAPE OF THE BUG. `resolveAgentAudience` answers `granted` for an agent
+ * inside a `kind='link'` container that has a PEER in it: the only bases it may
+ * reach are the ones carrying a channel GRANT. Every read composes that filter
+ * (`service-bases.ts › listBases`/`getBaseById`/`getBaseBySlug`,
+ * `service-entries.ts › resolveEntryRefs`). `createBase` composed NOTHING — the
+ * comment where this guard now stands said "No agent gate on CREATE … the base
+ * doesn't exist yet", which is true about the per-base agent-write toggle and
+ * silently untrue about the ceiling.
+ *
+ * A NEW BASE HAS NO GRANT BY CONSTRUCTION, so under a `granted` audience the
+ * insert succeeded, the tool answered "Created knowledge base … Private to
+ * you", and the row was invisible to its creator from the very next call:
+ * absent from `list_bases`, unresolvable by slug, unwritable. An agent that
+ * cannot see the failure retries, so the observed report was two identical
+ * successes and two orphaned rows.
+ *
+ * ⚠ **REFUSAL IS THE ONLY AVAILABLE ANSWER, NOT THE CAUTIOUS ONE.** The other
+ * repair would be to grant the new base into the container's channel — but
+ * `service-channel-grants.ts › setChannelKnowledgeGrant` refuses
+ * `ctx.source === "agent"` outright (2026-08-27), because a grant decides what
+ * the PEER standing in that room can read and that is a human's decision. So
+ * the create-and-share path (`input.shareToChannelId`) is ALSO always a refusal
+ * for an agent, and it already rolls the row back. This guard makes the plain
+ * create behave the way the sharing create has behaved all along, one call
+ * earlier and without writing a row first.
+ *
+ * ⚠ **IT CANNOT NARROW A HUMAN, A STANDARD WORKSPACE, OR A SOLO CONTAINER.**
+ * Those are `resolveAgentAudience`'s three `unrestricted` branches, and the
+ * ceiling "only ever closes" — so this refusal reaches exactly the population
+ * for which the write was already useless. ⚠ It is deliberately NOT keyed on
+ * `ctx.source === "agent"` alone: an agent in the operator's own workspace
+ * creates bases it reads back perfectly well, and refusing there would delete a
+ * working daily path to fix one that never worked.
+ *
+ * ⚠ The message names the ROOM and the REMEDY, because "forbidden" with no
+ * cause is what sends an agent to grep the repo: the operator creates the base
+ * (or shares an existing one into the channel) and the agent then reaches it.
+ */
+async function assertCreatorCanReadItBack(ctx: KnowledgeContext): Promise<void> {
+  const audience = await resolveAgentAudience(ctx);
+  if (audience.kind === "unrestricted") return;
+  throw new AgentWriteDisabledError(
+    "(new)",
+    "An agent cannot create a knowledge base inside a shared home channel. " +
+      "In a container with another member in it, an agent reaches only the bases " +
+      "the operator has SHARED into one of that channel's knowledge grants — and a " +
+      "base you just created carries no grant, so it would be invisible to you from " +
+      "your very next call. Sharing one into a channel is a human-only setting. " +
+      "Ask your operator to create the base here and share it into the channel, or " +
+      "create it in a workspace of your own instead."
+  );
+}
+
 export async function createBase(
   ctx: KnowledgeContext,
   input: KnowledgeBaseCreateInput
 ): Promise<KnowledgeBase> {
-  // No agent gate on CREATE — the toggle is per-base and the base doesn't
-  // exist yet. Slug unique per workspace keeps MCP `kb_*` slug addressing
-  // unambiguous; publicId is the URL routing key.
+  // 🔒 THE AUDIENCE CEILING, ASKED BEFORE THE INSERT rather than only by the
+  // reads afterwards (F-323's authoring half) — see
+  // `assertCreatorCanReadItBack`. ⚠ FIRST, before any other validation and
+  // before the slug derivation's read: a caller that may not create here should
+  // spend no round trips finding out, and must not be told about a slug
+  // collision with a row it cannot see.
+  await assertCreatorCanReadItBack(ctx);
+
+  // No per-base agent-write gate on CREATE — that toggle is per-base and the
+  // base doesn't exist yet. Slug unique per workspace keeps MCP `kb_*` slug
+  // addressing unambiguous; publicId is the URL routing key.
   //
   // Visibility default by caller: a SHARED credential must be 'public'
   // (⚠ `canSeeBase` blocks such credentials from reading their own private rows

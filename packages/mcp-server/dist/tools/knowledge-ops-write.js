@@ -27,6 +27,25 @@ const shelf_1 = require("./shelf");
 const NO_NAME = "`(unnamed)`";
 const NO_PATH = "`(unreadable path)`";
 /**
+ * A 403 `AGENT_WRITE_DISABLED` off `create_base` — ⚠ duck-typed on the CODE, the
+ * shape `homeShelfForbidden` above established, so no new error class crosses
+ * the package boundary. Returns the server's own sentence, which is the one
+ * place this refusal is worded.
+ */
+function agentCreateForbidden(e) {
+    if (typeof e !== "object" || e === null)
+        return null;
+    if (e.status !== 403)
+        return null;
+    if (e.code !== "AGENT_WRITE_DISABLED")
+        return null;
+    const msg = e.apiMessage;
+    const detail = typeof msg === "string" && msg
+        ? msg
+        : "An agent cannot create a knowledge base here.";
+    return `${detail} Nothing was created — no row, no slug taken, so retrying the same call will fail the same way.`;
+}
+/**
  * 🔒 CREATE, ON EITHER SHELF, WITH THE TWO GATES THE SPEC PUTS AROUND IT.
  *
  * 1. **THE SHELF CONTRADICTION IS REFUSED LOCALLY, BEFORE THE ROUND TRIP**
@@ -87,6 +106,16 @@ async function opCreateBase(client, callerUserId, input) {
         const home = (0, shelf_1.homeShelfForbidden)(e);
         if (home)
             return (0, respond_1.err)(home);
+        // ⚠ THE AUDIENCE CEILING'S CREATE REFUSAL, RENDERED AS A REFUSAL rather
+        // than rethrown as a transport-shaped error (F-323's authoring half). The
+        // server's message already names the room, the cause and the remedy —
+        // `knowledge/server/service-base-writes.ts › assertCreatorCanReadItBack` —
+        // and this is the one path where an agent MUST be able to act on it without
+        // opening the repo, because the alternative it used to get was a SUCCESS
+        // string over a row it could never see again.
+        const ceiling = agentCreateForbidden(e);
+        if (ceiling)
+            return (0, respond_1.err)(ceiling);
         throw e;
     }
     const visNote = base.visibility === "private"
