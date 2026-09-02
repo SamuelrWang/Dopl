@@ -27,23 +27,27 @@ vi.mock("./repository", () => ({
   listKnowledgeBaseTeamGrants: vi.fn(),
 }));
 
-// ⚠ THE CROSS-TENANCY PAIR (T35) LIVES IN ITS OWN MODULE, and is mocked EMPTY so
-// the default is "nothing to say" — every assertion in this file is about the
-// answer THIS workspace gives, and a classifier that answered would change the
-// error's DETAIL, never its visibility.
-vi.mock("./repository-tenancy", () => ({
-  listWorkspaceIdsForUser: vi.fn(async () => []),
-  findTemplateTenancyRows: vi.fn(async () => []),
+// ⚠ THE CROSS-CONTAINER READ LIVES IN `shared/tenancy/`, and is mocked EMPTY so
+// the default is "this id names nowhere else" — every assertion above the A12
+// block is about the answer THIS container gives.
+// 🔒 ⚠ THE FENCE ITSELF IS NOT RE-TESTED HERE. Shared credentials, the `viewer`
+// floor, the container lock and the two-arm "rows you could already list for
+// yourself" `.or()` are asserted un-mocked in
+// `shared/tenancy/resolve-resource.test.ts`; what this file owns is that the
+// launch door COMPOSES that answer and re-runs the matrix on top of it.
+vi.mock("@/shared/tenancy/resolve-resource", () => ({
+  resolveResource: vi.fn(async () => null),
 }));
 
 import * as repo from "./repository";
-import * as tenancyRepo from "./repository-tenancy";
+import * as tenancy from "@/shared/tenancy/resolve-resource";
+import type { ResolvedResource } from "@/shared/tenancy/resolve-resource";
 import { resolveTemplateForLaunch } from "./service";
 import { AgentTemplateNotFoundError } from "./errors";
 import { mapAgentTemplateError } from "./http-mapping";
 
 const mockRepo = vi.mocked(repo);
-const mockTenancy = vi.mocked(tenancyRepo);
+const mockTenancy = vi.mocked(tenancy);
 
 const CREATOR = "user-creator";
 const OTHER = "user-other";
@@ -79,8 +83,27 @@ function template(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
   };
 }
 
+/** WHERE an id lives, when the read has to follow it out of `ctx.workspaceId`. */
+function resolvedIn(
+  containerId: string,
+  over: Partial<ResolvedResource> = {}
+): ResolvedResource {
+  return {
+    type: "agent_template",
+    id: "tpl-1",
+    name: "Code Auditor",
+    containerId,
+    containerName: "Acme",
+    containerKind: "standard",
+    homeScoped: false,
+    containerRole: "member",
+    ...over,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockTenancy.resolveResource.mockResolvedValue(null);
   mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
@@ -165,52 +188,107 @@ describe("the payload, and the door it comes through", () => {
     ).rejects.toBeInstanceOf(AgentTemplateNotFoundError);
   });
 
-  // ── T35 — THE DESKTOP'S DOOR MAKES THE SAME DISTINCTION, WITH THE SAME HELPER
+  // ── A12 — THE ID NAMES ITS OWN CONTAINER, SO `workspace=` STOPS MATTERING ──
   //
-  // ⚠ THE STATUS DOES NOT MOVE: still 404, still never 403. What the desktop's
-  // resolve may now carry is the ONE non-leaky classification — a template THIS
-  // OPERATOR could already list for themselves, living in another tenancy — so
-  // the operator's own log can say "it is on your personal shelf" instead of
-  // "something went wrong". `classifyMissingTemplateRef` is the single producer,
-  // shared with the MCP create fence; a second copy of it here is the shape
-  // F-278 is filed against.
+  // ⚠ THIS BLOCK USED TO PIN THE OPPOSITE: a ref that resolved for the operator
+  // in ANOTHER tenancy was a 404 carrying `details.elsewhere`, a sentence the
+  // desktop could log and nothing more. The read now FOLLOWS the id instead of
+  // explaining why it could not, so the classifier's second door is gone and
+  // `classifyMissingTemplateRef` answers the MCP NAME lane alone.
+  //
+  // 🔒 ⚠ WHAT DID NOT MOVE: the visibility matrix runs again in the container
+  // the resolver named, so resolution is an ADDRESS and never a permission. The
+  // refusal is the same object it has always been — 404, never 403.
 
-  it("a miss the caller CAN account for carries the tenancy — same 404, extra fact", async () => {
-    mockRepo.findTemplateById.mockResolvedValue(null);
-    mockTenancy.listWorkspaceIdsForUser.mockResolvedValue(["ws-1", "ws-2"]);
-    mockTenancy.findTemplateTenancyRows.mockResolvedValue([
-      {
-        id: "tpl-1",
-        name: "Code Auditor",
-        workspaceId: "ws-2",
-        workspaceName: "Acme",
-        workspaceKind: "standard",
-        homeScoped: false,
-      },
-    ]);
-    const err = await resolveTemplateForLaunch(ctx(), "tpl-1").catch((e) => e);
-    expect(err).toBeInstanceOf(AgentTemplateNotFoundError);
-    expect((err as AgentTemplateNotFoundError).elsewhere).toEqual({
-      name: "Code Auditor",
-      label: "the workspace “Acme”",
-    });
+  it("resolves a template living in ANOTHER container of the caller's", async () => {
+    mockRepo.findTemplateById.mockImplementation(async (workspaceId) =>
+      workspaceId === "ws-2" ? template({ workspaceId: "ws-2" }) : null
+    );
+    mockTenancy.resolveResource.mockResolvedValue(resolvedIn("ws-2"));
+    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    expect(resolved.name).toBe("Code Auditor");
+    expect(resolved.authoredByCaller).toBe(true);
   });
 
-  it("a miss it cannot account for stays the BARE 404 — no key, not an empty one", async () => {
-    // 🔒 Somebody else's private template anywhere is exactly this: the query
-    // returns nothing, so there is nothing to name and nothing to infer from.
-    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "private" }));
-    mockTenancy.listWorkspaceIdsForUser.mockResolvedValue(["ws-1", "ws-2"]);
-    mockTenancy.findTemplateTenancyRows.mockResolvedValue([]);
-    const err = await resolveTemplateForLaunch(ctx({ userId: OTHER }), "tpl-1").catch((e) => e);
+  it("IGNORES a `workspace=` that contradicts a resolvable id", async () => {
+    // ⚠ The caller asked in `ws-9`, where the row does not live. An id is
+    // globally unique, so the workspace it was asked in was never information —
+    // it was the key the query happened to be built on.
+    mockRepo.findTemplateById.mockImplementation(async (workspaceId) =>
+      workspaceId === "ws-2" ? template({ workspaceId: "ws-2" }) : null
+    );
+    mockTenancy.resolveResource.mockResolvedValue(resolvedIn("ws-2"));
+    await expect(
+      resolveTemplateForLaunch(ctx({ workspaceId: "ws-9" }), "tpl-1")
+    ).resolves.toMatchObject({ name: "Code Auditor" });
+  });
+
+  it("re-runs the MATRIX in the container the id named — resolving is not seeing", async () => {
+    // 🔒 The resolver names only rows the caller could already list, but it
+    // cannot know about a row that went `private` under them. A second fence,
+    // in the tenancy the first one pointed at.
+    mockRepo.findTemplateById.mockImplementation(async (workspaceId) =>
+      workspaceId === "ws-2"
+        ? template({ workspaceId: "ws-2", visibility: "private", createdBy: OTHER })
+        : null
+    );
+    mockTenancy.resolveResource.mockResolvedValue(resolvedIn("ws-2"));
+    await expect(
+      resolveTemplateForLaunch(ctx(), "tpl-1")
+    ).rejects.toBeInstanceOf(AgentTemplateNotFoundError);
+  });
+
+  it("carries the caller's REAL ROLE into the container it resolved into", async () => {
+    // ⚠ A guessed `null` role would make the same template answer differently
+    // on the id lane than on the `workspace=` lane — an admin's team-scoped row
+    // would resolve in one and 404 in the other.
+    mockRepo.findTemplateById.mockImplementation(async (workspaceId) =>
+      workspaceId === "ws-2"
+        ? template({ workspaceId: "ws-2", visibility: "team", createdBy: OTHER })
+        : null
+    );
+    mockTenancy.resolveResource.mockResolvedValue(
+      resolvedIn("ws-2", { containerRole: "admin" })
+    );
+    await expect(
+      resolveTemplateForLaunch(ctx({ userId: ADMIN, role: null }), "tpl-1")
+    ).resolves.toMatchObject({ name: "Code Auditor" });
+  });
+
+  it("404s for a template nothing of the caller's can name — the probe-proof arm", async () => {
+    // 🔒 Somebody else's private template, an id that never existed, and a
+    // container outside this credential's LOCK are one answer, by construction:
+    // the resolver returns null and the refusal carries nothing.
+    mockRepo.findTemplateById.mockResolvedValue(null);
+    mockTenancy.resolveResource.mockResolvedValue(null);
+    const err = await resolveTemplateForLaunch(ctx(), "tpl-1").catch((e) => e);
+    expect(err).toBeInstanceOf(AgentTemplateNotFoundError);
     expect((err as AgentTemplateNotFoundError).elsewhere).toBeNull();
   });
 
-  it("costs NOTHING on the hit path — a resolved template never asks the classifier", async () => {
+  it("asks with the CALLER'S OWN CONTEXT, so the container LOCK reaches the fence", async () => {
+    // 🔒 ⚠ The lock lives on `apiKeyWorkspaceId` and is applied inside
+    // `shared/tenancy/resolve-resource.ts`; a read that handed it a bare
+    // `{ userId }` would strip a workspace fence in one line and every
+    // assertion in that module's suite would still pass.
+    mockRepo.findTemplateById.mockResolvedValue(null);
+    mockTenancy.resolveResource.mockResolvedValue(null);
+    const locked = ctx({
+      apiKeyWorkspaceId: "ws-1",
+      apiKeyWorkspaceLockKind: "container_session",
+    });
+    await resolveTemplateForLaunch(locked, "tpl-1").catch(() => {});
+    expect(mockTenancy.resolveResource).toHaveBeenCalledWith(
+      locked,
+      "agent_template",
+      "tpl-1"
+    );
+  });
+
+  it("costs NOTHING on the hit path — a template found where it was asked never resolves", async () => {
     mockRepo.findTemplateById.mockResolvedValue(template());
     await resolveTemplateForLaunch(ctx(), "tpl-1");
-    expect(mockTenancy.listWorkspaceIdsForUser).not.toHaveBeenCalled();
-    expect(mockTenancy.findTemplateTenancyRows).not.toHaveBeenCalled();
+    expect(mockTenancy.resolveResource).not.toHaveBeenCalled();
   });
 
   it("404s for a row that does not exist at all — the same error, deliberately", async () => {

@@ -6878,13 +6878,14 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 | **R4** | The pin/unpin routes are `sessionOnly`, on the channel-grants precedent. | `app/api/knowledge/bases/[baseId]/pin/route.ts`, `app/api/knowledge/entries/[entryId]/pin/route.ts` | Remove the flag from both, and from the census in `shared/auth/write-gate-coverage.test.ts`. ⚠ Then an agent token decides what every agent session launched in the workspace afterwards is handed at startup. **The MCP ops `dopl_kb(op="pin"|"unpin")` still work today for a human's session; what R4 refuses is the agent token.** |
 
 - ⚠ **THE REVIEW ALSO CONTESTED ONE FINDING, AND THE CODE WAS LEFT ALONE.** It read
-  `agent-templates/server/repository-tenancy.ts`'s `workspaces!inner` embed as violating the tree's
+  agent-templates' tenancy repository's `workspaces!inner` embed as violating the tree's
   "`!inner` 500s on this schema" rule. That note (`app/api/user/delete/route.ts`) is about joining
   OUT of `workspaces` after the May 2026 denormalizations; this is a child embedding its PARENT by
   FK, the shape `workspaces/server/repository.ts › listWorkspacesForUser` and
   `home/server/repository-containers.ts › listLinkContainers` run on every workspace list.
   `grep -rn '!inner' src --include='*.ts'` measures it. The half of that finding that WAS right —
-  no coverage over the real query — is `repository-tenancy.test.ts`.
+  no coverage over the real query — is now `src/shared/tenancy/resolve-resource.test.ts`; the query
+  moved there UNCHANGED on 2026-09-02 (A12) and the record is about the shape, not the path.
 - Status: **decisions recorded, code shipped.** Not debt; a standing question.
 
 ### F-418 — `dopl_channel(op="direct_agent")` PROMISES "refused outright and no request is filed" for a peer's agent id; the server files the row and lets the desktop answer `no-session` (2026-09-02)

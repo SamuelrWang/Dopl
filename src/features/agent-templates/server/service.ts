@@ -13,7 +13,9 @@ import "server-only";
  *   - `service-shared.ts` — context, `canSeeTemplate`, the mirrored KB access
  *                           predicate the attach gate is built on
  *   - `service-reads.ts`  — list / get / `resolveTemplateForLaunch`
- *                           (`getTemplateById` is the shared gate)
+ *                           (`getTemplateById` is the WRITE gate, keyed to the
+ *                           caller's tenancy; `readTemplateById` is the READ
+ *                           door, where the id names its own container — A12)
  *   - `service-writes.ts` — create / update / hard delete
  *   - `service-resolve-ref.ts` — ⚠ THE ONE CROSS-FEATURE EXPORT: id-or-name
  *                           resolution for the launch-directive lane, so
@@ -32,6 +34,7 @@ export {
   listTemplates,
   listHomeScopedTemplateIds,
   getTemplateById,
+  readTemplateById,
   resolveTemplateForLaunch,
 } from "./service-reads";
 
