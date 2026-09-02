@@ -16,6 +16,9 @@
  *                          `strictInput`, ALS routing.
  *   status-footer.ts       the `_dopl_status` footer.
  *   meta-tools.ts          `list_workspaces` + `current_workspace`.
+ *   resources.ts           the MCP RESOURCES — today the channels doctrine,
+ *                          which is where the prose the tool descriptions and
+ *                          write results used to repeat now lives.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DoplClient } from "@dopl/client";

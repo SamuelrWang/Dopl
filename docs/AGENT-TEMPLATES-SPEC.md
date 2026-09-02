@@ -256,7 +256,7 @@ Resolve budget: **`TEMPLATE_RESOLVE_TIMEOUT_MS = 5000`**, not `launch-directives
 - the `channel_launch_directives_refusal_reason_check` column CHECK (new migration, §3e)
 
 Plus copy in `use-agents-panel.ts › LAUNCH_REFUSALS` and a sentence in
-`packages/mcp-server/src/tools/channel-ops-launch.ts › REFUSAL_SENTENCES`.
+`packages/mcp-server/src/tools/channel-ops-launch.ts › RETRY_ADVICE` (⚠ the per-reason SENTENCES it replaced on 2026-09-02 are now in `channel-doctrine.ts`; the launch result renders the reason KEY plus a retry verdict).
 **Six files. Budget it.** On the button lane, `launchRefusalText` already falls back gracefully,
 so the SPA half is one line: `"no-template": "That template is gone — reload the list"`.
 
@@ -757,7 +757,7 @@ row exists. This argument does not depend on the telemetry ruling at all.
   the new field with **no new case**.
 
 **What a peer sees: unchanged.** A handle and a state, which is what
-`channel-session-render.ts › SESSION_TELEMETRY_NOTE` already promises.
+`channel-doctrine.ts › CHANNEL_DOCTRINE` already promises in its READING "read_sessions" section (⚠ that promise lived in a standing note under every `read_sessions` page until 2026-09-02, when T12/T13 moved it out of the per-call result; `channel-session-render.ts › shortModelLabel` is still what guarantees it).
 
 **Where the operator sees it:** the agent card's existing chip row, beside the model chip; and
 the `sessionBlockLines` telemetry block returned on every workspace-wide `await` hold

@@ -17,6 +17,9 @@
  *                          `strictInput`, ALS routing.
  *   status-footer.ts       the `_dopl_status` footer.
  *   meta-tools.ts          `list_workspaces` + `current_workspace`.
+ *   resources.ts           the MCP RESOURCES — today the channels doctrine,
+ *                          which is where the prose the tool descriptions and
+ *                          write results used to repeat now lives.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildInstructions = void 0;
@@ -38,6 +41,7 @@ const instructions_js_1 = require("./instructions.js");
 const gating_js_1 = require("./gating.js");
 const registrar_js_1 = require("./registrar.js");
 const meta_tools_js_1 = require("./meta-tools.js");
+const resources_js_1 = require("./resources.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
 const version_js_1 = require("./version.js");
 // ⚠ Keep: `factory.ts` and four suites import `buildInstructions` from HERE.
@@ -103,6 +107,10 @@ function createServer(client, options = {}) {
             directoryLoadFailed: options.directoryLoadFailed ?? false,
         }),
     });
+    // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
+    // `dopl_channel(op="help")`) rather than description prose, so an agent pays
+    // for it when it asks and never on connection. See `resources.ts`.
+    (0, resources_js_1.registerResources)(server);
     // ⚠ Four gates shared by BOTH registration paths, built here and passed in
     // rather than defined inside a wrapper: `registerMetaTool` registers straight
     // onto the SDK server and would otherwise pass through none of them.

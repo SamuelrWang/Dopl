@@ -16,8 +16,8 @@ import type { AwaitResult, ChannelMessage, DoplClient } from "@dopl/client";
 import { ok, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, neutralizeInline } from "./channel-shared";
 import {
-  UNTRUSTED_BODY_HEADER,
   addresseeOf,
+  UNTRUSTED_BODY_HEADER,
   formatMessages,
   // ⚠ WHICH SESSION wrote a line — the only field on the wire that names the
   // process rather than the account. F-405's self-echo filter keys on it.
@@ -41,14 +41,14 @@ import {
 // ⚠ The session block and every rule inside it (the staleness hedge, the
 // operator-only telemetry, `undefined` vs `[]`) have ONE statement, shared with
 // `read_sessions` — see channel-session-render.ts.
-import { sessionBlockLines } from "./channel-session-render";
+import { sessionBlockLines } from "./channel-session-table";
 
 /**
  * A thrown inner-poll failure reduced to one short line — this rides inside a
  * result a model reads, and a full API body buries the re-arm instruction.
  *
- * ⚠ NEUTRALIZED, not just shortened: this result splices upstream text OUTSIDE
- * {@link UNTRUSTED_BODY_HEADER}'s framing, and "our own server's error" says
+ * ⚠ NEUTRALIZED, not just shortened: this result splices upstream text that no
+ * framing covers, and "our own server's error" says
  * nothing about its CONTENT — a 400 echoing a rejected field, a proxy page, or
  * a not-found naming a counterparty ref all carry influenced text, read as
  * server narration in an unframed line.
@@ -279,6 +279,9 @@ export async function opAwait(
       ].join("\n"),
     );
   }
+  // ⚠ Banner moved to CHANNEL_DESCRIPTION's SECURITY paragraph (T11) — `await`
+  // renders the same counterparty bodies `read` does and is the call an
+  // orchestrator makes most, so it drops the repeat for the same reason.
   const lines = [
     `## ${ref} — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}\n`,
     // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read

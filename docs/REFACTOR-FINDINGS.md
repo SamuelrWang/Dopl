@@ -2681,7 +2681,7 @@ an agent reads at decision time steers the next call.
 
 ## F-302 — the zero-tag diagnostic proposed the WRONG REPAIR for the one cause both agents hit (2026-08-24, RESOLVED)
 
-- Location: `packages/mcp-server/src/tools/channel-post-guidance.ts › tagOutcomeNote` (the count-0 branch).
+- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › CHANNEL_DOCTRINE`, the "WHY A TAG RESOLVES TO NOBODY" causes. ⚠ This was `channel-post-guidance.ts`'s `tagOutcomeNote` (the count-0 branch) until 2026-09-02, when T12 moved the five causes out of the per-post result and left the verdict behind as `tags=<resolved>/<attempted>`.
 - Found during: the same run. **Both agents hit it independently**, which is what makes it a defect in the
   copy rather than a mistake by one model.
 - Severity: **major as a teaching defect** (the F-274 / F-291 class).
@@ -6413,3 +6413,32 @@ of a finished state to wait for — and the mechanism lecture is still taught wh
   property of somebody else's client. It is a floor to design under, never a promise — another client
   may be tighter, and nothing in this repo can detect that. The result text tells a caller what to do
   when it happens (pass a smaller `timeout_ms`), which is the only remedy available from this side.
+### F-407
+
+**`read` and `await` disagree about framing the same class of content.** Opened
+2026-09-02 by the P1 verbosity tier; not resolved here, deliberately.
+
+- What: `op="await"` and the workspace await render peer-authored message bodies
+  under `channel-render.ts › UNTRUSTED_BODY_HEADER`, restored and position-pinned
+  by the P0 branch (`1481c6a4`). `op="read"` renders the SAME bodies, through the
+  same `formatMessages`, with no header — T11 removed it and stated the rule once
+  in `channel-description.ts`'s `SECURITY, SAID ONCE HERE` paragraph.
+- Why it is a finding and not a fix: **both sides have a real argument and this
+  tier could not tell which is right.** For removal: the banner is the WEAKER
+  half (it asks a reader to discount text; `narration.ts › neutralizeInline` is
+  what actually defangs a hostile string, and it is untouched on every path),
+  §10's body rule is satisfied by the INDENT `clipBody` applies, and the two
+  banners were the single largest repeated cost in an orchestrator's loop. For
+  keeping: a description is read once at connect time and a body is read NOW, so
+  only the second can carry a line somebody else wrote — and **a caveat read
+  after the injected line has been read is not a caveat**, which is why P0 pinned
+  the header's POSITION rather than merely its presence.
+- ⚠ **Do not close this by deleting the `await` header.** That is the cheap
+  direction and it is the one that removes a defense; if the asymmetry is
+  resolved toward removal it should be because someone ruled that the indent plus
+  the description paragraph is sufficient framing for a body on EVERY op, and
+  said so in INVARIANTS §10 — which currently reads "a BODY is content rendered
+  as itself under framing that says what it is", with the indent as the stated
+  fallback.
+- Measure it: `grep -n UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
+  and compare `channel-ops-read.ts › opRead` with `channel-ops-await.ts › opAwait`.

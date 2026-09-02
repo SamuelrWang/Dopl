@@ -280,12 +280,38 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
     expect(out).toContain("not proof there are none");
   });
 
+  /**
+   * ⚠ **ADDITIVE, AND THE TELEMETRY IS ASSERTED THROUGH THE COLUMNS THAT
+   * EXIST** (T13). This asserted `900 tokens`, a clause on the prose line;
+   * `sessionRow` has no tokens and no context column, so the operator-only half
+   * is now pinned by template/model/tool — the same property, on the shape the
+   * block actually renders. ⚠ The shared fixture keeps `tokensSpent: 900` and
+   * it must appear NOWHERE: a column the table dropped may not leak into a
+   * neighbour. ⚠ Restore the tokens assertion when the column lands.
+   */
   it("workspace: a populated array renders the sessions, telemetry included", async () => {
     const out = await text(
-      wsClient({ messages: [message()], timedOut: false, sessions: [session] })
+      wsClient({
+        messages: [message()],
+        timedOut: false,
+        sessions: [
+          {
+            ...session,
+            templateName: "Code Auditor",
+            model: "claude-opus-5",
+            toolLabel: "Bash",
+          },
+        ],
+      })
     );
     expect(out).toContain("### Your agents — 1");
-    expect(out).toContain("900 tokens");
+    expect(out).toContain("| `Code Auditor` | `opus-5` | `Bash` |");
+    expect(out).not.toContain("900");
+    // ⚠ **ADDITIVE MEANS THE HOLD'S OWN RESULT IS UNTOUCHED.** The block rides
+    // UNDER the messages and their cursor, never in place of them — a caller
+    // that lost `Highest seq shown` to a session table would re-arm from the
+    // wrong seq, or not at all.
+    expect(out).toContain("Highest seq shown: 10");
   });
 
   it("per-channel: absent renders no block; populated renders one", async () => {

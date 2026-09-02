@@ -34,35 +34,31 @@
  */
 export declare function addressableHandle(name: string): string | null;
 /**
- * WHAT THE HANDLE IN EACH LINE IS, AND — THE HALF THAT WAS MISSING — HOW TO
- * SPEND IT (2026-08-31, from the live repro in ENGINEERING).
+ * ⚠ `SESSION_HANDLE_NOTE` USED TO LIVE HERE — ~1.1k characters on how a handle is
+ * spent, rendered under EVERY `read_sessions` page, to a reader that calls that
+ * op in a loop. It moved to `channel-doctrine.ts`'s YOUR OWN AGENTS section
+ * (T10, 2026-09-02), reached with `dopl_channel(op="help")` or the
+ * `dopl://doctrine/channels` resource. **The text was not softened: THE THREE
+ * LIMITS travelled with it verbatim**, and `channel-law.test.ts` pins them there.
  *
- * ⚠ **THIS EXISTS BECAUSE THE PRODUCT PUBLISHED AN ADDRESS AND NOT ITS RULE.**
- * An external orchestrator asked for an agent, was handed an id, wrote `@<id>`
- * into five posts exactly as `launch_agent`'s result told it to, and woke
- * nothing — the loop fence refused every agent-authored message, its own
- * included. Nothing refused the posts, nothing warned, and the caller had no way
- * to learn it. TWO RULINGS FOLLOWED (both 2026-08-31, both Samuel's), and this
- * copy exists to state the surface they leave behind:
- *   1. **THE SAME-ACCOUNT CARVE.** An agent-authored message posted under the
- *      OPERATOR'S OWN user id may @-wake that operator's dormant agents. An MCP
- *      caller holds its operator's credential, so this handle IS spendable by
- *      the caller reading this line. A PEER's agent stays unreachable, and an
- *      UNADDRESSED post still starts nobody.
- *   2. **A LAUNCH WITH A GOAL RUNS.** So the common case needs no wake at all,
- *      and the copy says that FIRST — an orchestrator that reaches for the wake
- *      when it should have sent a goal has spent two calls and a turn.
+ * Why it existed at all is still the reason it must stay somewhere. THE PRODUCT
+ * PUBLISHED AN ADDRESS AND NOT ITS RULE: an external orchestrator asked for an
+ * agent, was handed an id, wrote `@<id>` into five posts exactly as
+ * `launch_agent`'s result told it to, and woke nothing — the loop fence refused
+ * every agent-authored message, its own included, and nothing warned. Two of
+ * Samuel's rulings (both 2026-08-31) shaped the copy that answers it: the
+ * SAME-ACCOUNT CARVE (an agent-authored message under the OPERATOR'S OWN user id
+ * may @-wake that operator's dormant agents, so an MCP caller CAN spend this
+ * handle; a peer's agent stays unreachable and an unaddressed post still starts
+ * nobody), and A LAUNCH WITH A GOAL RUNS (so the common case needs no wake, and
+ * the copy says that FIRST).
  *
- * ⚠ **IT DESCRIBES THE FENCE THAT REMAINS, AND MUST NOT READ AS A WORKAROUND
- * FOR IT.** What is still refused — an unaddressed agent post, and anything
- * touching a peer's agent — is deliberate (INVARIANTS §11: two agents that can
- * wake each other on unaddressed prose is a loop with no operator in it). The
- * carve is narrow ON PURPOSE and the copy carries the boundary, not a hint.
+ * ⚠ Two constraints on that text, wherever it lives: it DESCRIBES THE FENCE AND
+ * MUST NOT READ AS A WORKAROUND FOR IT, and it MAY NOT PROMISE DELIVERY — the
+ * wake is decided on the operator's desktop, over ids minted there, and no
+ * server sees the outcome.
  *
- * ⚠ **AND IT STILL MAY NOT PROMISE DELIVERY.** The wake is decided on the
- * operator's DESKTOP, over ids minted there; no server sees the outcome. It also
- * cannot say whether a given row is dormant — a session between turns and one
- * whose query was torn down both report `idle` — so the sentence says the wake
- * is ATTEMPTED and names the one observable that answers it.
+ * {@link addressableHandle} stays here: it is the ID DOOR, and the reason this
+ * file is separate from `channel-session-render.ts` is unchanged — that file
+ * answers "what STATE is this session in", this one "what may I DO about it".
  */
-export declare const SESSION_HANDLE_NOTE = "The token in backticks after each name is that session's ADDRESSABLE HANDLE. The `@agent-<id>` form is the only one that means anything outside your operator's own machine \u2014 a friendly name they may have given the agent in the Dopl app is stored on that ONE machine, reaches no server, and can never be addressed from here. \u26A0 BEFORE YOU REACH FOR IT: a launch that carried a `goal` is ALREADY WORKING on it, so waking is for agents you need to REDIRECT, not for ones you just started. WRITING `@agent-<id>` IN A POST BODY WAKES THAT AGENT, and this is the one case where a handle addresses an agent rather than a person: the token is parsed on your operator's machine, never by the server's mention resolver, so it stamps nobody and lands in no Tags inbox. THREE LIMITS, and they are the fence rather than a knack: (1) it must NAME the agent \u2014 an unaddressed post of yours starts nobody, whatever it says, because agents do not wake each other by talking; (2) it works only for YOUR OWN operator's agents \u2014 you post under their account, which is what licenses it, and no post of yours can start a session on another member's machine; (3) delivery is not observable from here, because the wake happens on a desktop this server cannot see. So treat the post as a REQUEST: watch for the agent's own posts, or its state changing here, rather than assuming it woke.";

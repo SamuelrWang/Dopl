@@ -14,6 +14,9 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
+// ⚠ T12 — every "NOT ADDRESSED" pin below is now a pair: the paragraph is out
+// of the result, and the rule it stated is still shipped, from one place.
+import { CHANNEL_DOCTRINE, DOCTRINE_POINTER } from "./channel-doctrine";
 import { opAwait } from "./channel-ops-await";
 import { opGetThread, opListThreads, opMembers, opRead } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
@@ -342,16 +345,22 @@ describe("post — an unaddressed post outside a DM triggers nobody", () => {
     });
   }
 
-  it("says NOT ADDRESSED when a post carries no `to` in a normal channel", async () => {
+  it("says `addressed=no` when a post carries no `to` in a normal channel", async () => {
+    // ⚠ T12: the "NOT ADDRESSED" paragraph is stated once in the doctrine and the
+    // result carries the FACT. `no` means no agent was put in front of this post,
+    // which is the whole of what the paragraph claimed.
     const text = (await opPost(postClient({ isDirect: false }), "general", "anyone free?"))
       .content[0].text;
 
-    expect(text).toContain("NOT ADDRESSED");
-    expect(text).toContain("nothing put this post in front of an agent");
-    expect(text).toContain('op="members"');
+    expect(text).toContain("addressed=no");
+    expect(text).not.toContain("NOT ADDRESSED");
+    expect(text).not.toContain("nothing put this post in front of an agent");
     // ⚠ What makes THIS post safe to call unheard is its AUTHOR KIND, not the
-    // channel's size — the note may not generalize.
-    expect(text).toContain("from an AGENT is never taken as an implicit request");
+    // channel's size — and that claim may not generalize, so it is pinned where
+    // it is now stated rather than allowed to vanish with the paragraph.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "an AGENT-authored UNADDRESSED message starts nobody",
+    );
     expect(text).not.toContain("nobody was woken by it");
   });
 
@@ -359,15 +368,17 @@ describe("post — an unaddressed post outside a DM triggers nobody", () => {
     // ⚠ INVERTED 2026-08-18. This used to assert silence, because
     // `resolveDirectPeer` stamped the other member server-side. With that
     // fallback retired, silence here would be the invisible-delivery failure
-    // the whole module exists to prevent.
+    // the whole module exists to prevent. ⚠ The field does not branch on the
+    // channel shape at all now, which is a stronger form of the same guarantee
+    // than a sentence that had to remember to name the DM case.
     const text = (await opPost(postClient({ isDirect: true }), "general", "ping"))
       .content[0].text;
 
-    expect(text).toContain("NOT ADDRESSED");
-    expect(text).toContain("That holds in a DIRECT (1:1) message too");
+    expect(text).toContain("addressed=no");
+    expect(CHANNEL_DOCTRINE).toContain("in a room of two or of ten");
   });
 
-  it("stays quiet when the post named an addressee", async () => {
+  it("reports `addressed=yes` when the post named an addressee", async () => {
     const client = stubClient({
       listChannels: vi.fn(async () => [{ ...CHANNEL, isDirect: false }]),
       listWorkspaceMembers: vi.fn(async () => [
@@ -386,8 +397,12 @@ describe("post — an unaddressed post outside a DM triggers nobody", () => {
     const text = (await opPost(client, "general", "please do X", { to: "p@x.com" }))
       .content[0].text;
 
-    expect(text).toContain("addressed to `Peer`");
-    expect(text).not.toContain("NOT ADDRESSED");
+    // ⚠ READ OFF `toUserId`, WHICH IS WHAT THE SERVER WAS GIVEN — never off the
+    // resolved display label, which is only ever the render of it. That is also
+    // why the peer's NAME is no longer in a successful result at all: it bought
+    // nothing the boolean does not say, and it was peer-typed text.
+    expect(text).toContain("addressed=yes");
+    expect(text).not.toContain("Peer");
   });
 });
 
@@ -425,7 +440,15 @@ describe("thread reads — both parties (N-party)", () => {
 
     expect(text).toContain("by `Peer` (`u-peer`)");
     expect(text).toContain("for you");
-    expect(text).toContain("ONLY from the member who opened it");
+    // ⚠ THE PAIR-ONLY WRITE GATE MOVED, IT DID NOT GO (T11/T82). It is true of
+    // every thread in every channel — standing doctrine, not a report on THIS
+    // listing — so it is stated once under THE MODEL and the listing spends one
+    // pointer line instead of restating it per page.
+    expect(text).not.toContain("ONLY from the member who opened it");
+    expect(text).toContain(DOCTRINE_POINTER);
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Only those two can post into it — a third member's post is refused",
+    );
   });
 
   it("marks a thread nobody is on the hook for", async () => {

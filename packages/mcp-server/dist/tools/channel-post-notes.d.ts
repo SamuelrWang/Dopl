@@ -1,16 +1,20 @@
 /**
- * WHAT A POST'S ADDRESSING ACTUALLY DID — the result line that answers it, plus
- * the refusal that fires when a post's addressing contradicts itself. A post
- * addresses a PERSON or nobody. ⚠ `channel-` filename prefix required by the
- * parity split-scan (parity.test.ts).
+ * THE ONE REFUSAL A POST'S ADDRESSING CAN EARN. ⚠ `channel-` filename prefix
+ * required by the parity split-scan (parity.test.ts).
  *
- * ⚠ Every string below is server NARRATION with no untrusted framing. The two
- * peer-authored values reaching it arrive ALREADY render-safe:
- * `safeChannelName` is neutralized by its caller and a member `label` at its
- * source (`resolveMemberOr`). Neither may be neutralized AGAIN — double-wrapping
- * strips the span's own backticks and hands back the bare name.
+ * ⚠ WHAT LEFT THIS FILE (T10/T12, 2026-09-02). It also held `postAddressLines`
+ * — three paragraphs spliced under every successful post saying what the
+ * addressing had done: the "NOT ADDRESSED" note, its threaded variant, and the
+ * two chat notes. All four described a RULE that holds on every call, so all
+ * four are stated once in `channel-doctrine.ts`, and the post result carries the
+ * two FACTS instead: `addressed=yes|no` and `intent=request|chat`. Nothing
+ * observable was dropped — `addressed=no` is the same claim the paragraph made,
+ * and `intent=chat` is what kept a deliberate chat post from reading as a
+ * forgotten `to`.
+ *
+ * ⚠ THE REFUSAL STAYS, because it is not narration under a write that
+ * succeeded — it is the answer to a call that was never made.
  */
-import type { MessageIntent } from "@dopl/client";
 /**
  * ⚠ ONE constant for `intent:"chat"` + an address, used by BOTH places it can
  * be reached: `opPost`'s local guard (before anything is sent) and the route's
@@ -24,23 +28,3 @@ import type { MessageIntent } from "@dopl/client";
  * and let the CALLER choose.
  */
 export declare const CHAT_ADDRESSED_REFUSAL = "A message with `intent`=\"chat\" cannot be addressed \u2014 nothing was sent. \"chat\" means the people in the room and reaches nobody's machine; `to` means the opposite, and the server refuses the pair rather than guessing which half you meant. Send it as CHAT by dropping `to`, or as a REQUEST by dropping `intent` (a request is the default).";
-/** Everything the address lines need, read off the resolved post and its echo. */
-export interface PostAddressFacts {
-    /** The channel's id — what a follow-up call should be given. */
-    channelId: string;
-    /** ALREADY neutralized by the caller — splice it, do not re-wrap it. */
-    safeChannelName: string;
-    /** Whether this is a DIRECT (1:1) channel, where the server addresses for you. */
-    isDirect: boolean | undefined;
-    /** The post's declared intent; `chat` is unaddressed ON PURPOSE. */
-    intent: MessageIntent | undefined;
-    /** ALREADY render-safe (`resolveMemberOr`) — splice it, do not re-wrap it. */
-    toLabel: string | undefined;
-    /** `metadata.taskId` read back off the STORED message, not off the request. */
-    landedThread: string | undefined;
-}
-/**
- * Address lines for one successful post. Empty is legitimate — an ordinary
- * addressed post in a live thread has nothing to warn about.
- */
-export declare function postAddressLines(f: PostAddressFacts): string[];

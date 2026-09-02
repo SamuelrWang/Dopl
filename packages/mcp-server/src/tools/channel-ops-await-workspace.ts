@@ -51,16 +51,15 @@ import {
 // ⚠ The re-arm text branches on the caller's runtime here too, for the same
 // reason it does per-channel: an unstamped caller may not be promised a wake.
 import { workspaceAwaitTimedOutLines } from "./channel-wake-guidance";
-import { sessionBlockLines } from "./channel-session-render";
+import { sessionBlockLines } from "./channel-session-table";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed channel)";
 
 /**
  * A thrown inner-poll failure reduced to one short NEUTRALIZED line.
- * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: this rides
- * OUTSIDE {@link UNTRUSTED_BODY_HEADER}'s framing, and "our own server's error"
- * says nothing about its CONTENT.
+ * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: no framing
+ * covers this line, and "our own server's error" says nothing about its CONTENT.
  */
 function describeFailure(e: unknown): string {
   let raw: string;
@@ -273,6 +272,7 @@ export async function opAwaitWorkspace(
   }
 
   const groups = groupByChannel(messages);
+  // ⚠ Banner moved to CHANNEL_DESCRIPTION's SECURITY paragraph (T11).
   const lines = [
     `## Workspace — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
     // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read

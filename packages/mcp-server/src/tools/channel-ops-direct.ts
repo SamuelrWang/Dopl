@@ -32,6 +32,8 @@
 import type { AgentDirection, DirectionRefusalReason, DoplClient } from "@dopl/client";
 import { ok, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
+// ⚠ ONE write-result renderer, shared with `post` / `create_thread` / launch.
+import { factsLine } from "./channel-facts";
 // ⚠ THE SHARED INSTANCE-ID PARSER (2026-09-01). It LIVED here until `end_agent`
 // and `rename_agent` became its second and third callers; the whole argument for
 // why four characters of logic still deserve one home is in that module.
@@ -68,42 +70,28 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * ⚠ EACH SENTENCE ENDS IN WHAT TO DO, because a reason with no next action gets an
  * agent to retry the same call.
  */
-const REFUSAL_SENTENCES: Record<DirectionRefusalReason, string> = {
-  // ⚠ THE COMMON ONE, AND IT IS USUALLY TRUE RATHER THAN BROKEN. An agent that
-  // finished is gone; there is nothing to say anything to.
-  "no-session":
-    "there is NO SUCH AGENT RUNNING on that machine. Either it finished, it was ended or deleted, or the id is not one of your operator's live agents. This is normally a true statement rather than a fault — check what is actually running with dopl_channel(op=\"read_sessions\") and direct one of those, or ask for a new agent with dopl_channel(op=\"launch_agent\").",
-  "auth-hold":
-    "the desktop is SIGNED OUT or its credential is being held, so the agent has nothing to receive on. Tell your operator — this needs them, not another call.",
-  busy: "the machine declined FOR NOW. This one is genuinely temporary — it is reasonable to ask again in a minute or two, once, and to stop if it refuses the same way twice.",
-  blocked:
-    "that desktop is BELOW ITS VERSION FLOOR and is refusing every op that starts a turn until it updates. Tell your operator to let the app update; re-issuing will not change it.",
-  // ⚠ THE CONSENT REFUSAL. It must not read as a fault and must not suggest a
-  // workaround: the toggle is the operator's decision and the whole reason this
-  // op was allowed to exist.
-  "no-bridge":
-    "your operator has DIRECTING AGENTS OVER MCP TURNED OFF on that machine. That is a deliberate setting, not a failure and not something to work around — it is how they consented (or did not) to this capability. If you believe they want it on, ASK THEM; do not re-issue, and do not look for another route to reach that agent.",
+/**
+ * MAY THE CALLER ASK AGAIN? — ⚠ the ONE thing a refusal is read for, kept as a
+ * field where the sentence became doctrine (T10, 2026-09-02).
+ *
+ * ⚠ THE WORD STILL CROSSES THE WIRE AND IS STILL RENDERED AS THE WORD. What left
+ * is the paragraph per word: those are in `channel-doctrine.ts`'s WHY A LAUNCH,
+ * END, DIRECTION OR RENAME IS REFUSED section, which covers both mailboxes with
+ * one text — the two enums overlap on four of five words, and two copies of the
+ * same explanation is how they drift apart.
+ *
+ * ⚠ `busy` IS THE ONLY TEMPORARY ONE, exactly as on the launch lane. Everything
+ * else means the answer will not change: `no-session` is normally TRUE rather
+ * than broken (the agent finished), and `no-bridge` is a setting nobody here may
+ * work around.
+ */
+const RETRY_ADVICE: Record<DirectionRefusalReason, "once" | "no"> = {
+  "no-session": "no",
+  "auth-hold": "no",
+  busy: "once",
+  blocked: "no",
+  "no-bridge": "no",
 };
-
-function refusalSentence(reason: DirectionRefusalReason | null): string {
-  if (reason === null) {
-    return "the machine refused and gave no reason. That should not happen; report it to your operator.";
-  }
-  return (
-    REFUSAL_SENTENCES[reason] ??
-    "the machine refused for a reason this build does not recognize. Report it to your operator rather than re-issuing."
-  );
-}
-
-/** The line a PENDING (or expired) direction ends on. ⚠ Says the id, because the
- *  id is the only handle the agent has left, and says NOT to re-issue. */
-function pendingLines(d: AgentDirection): string[] {
-  return [
-    `The direction is still PENDING — id \`${d.id}\`, and it stays answerable until ${d.expiresAt}.`,
-    `⚠ A TIMEOUT IS NOT A REFUSAL. Your operator's machine may still deliver it; nothing has been cancelled. **DO NOT ISSUE THIS CALL AGAIN** — a second direction says the same thing to a LIVE agent a second time, and it will answer twice with no way for either of you to tell which answer belonged to which.`,
-    `To find out what happened, poll it: dopl_channel(op="read_directions", agent_id="${d.agentId}"). The reply lands on that row when the turn ends.`,
-  ];
-}
 
 /**
  * DIRECT ONE AGENT, then hold briefly for its answer.
@@ -123,7 +111,9 @@ export async function opDirectAgent(
   // cold (one call, then a hold), and the result names the channel repeatedly.
   const channel = await resolveChannelOr(client, ref);
   if (isErr(channel)) return channel;
-  const label = inlineOr(channel.name, NO_NAME);
+  // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result below is a fact line
+  // keyed on the AGENT, which is what the caller acts on; the channel is the
+  // caller's own argument from this call and repeating it back bought nothing.
   const agent = bareAgentId(agentId);
 
   let created;
@@ -142,12 +132,17 @@ export async function opDirectAgent(
   // ── OFFLINE: nothing was filed, and the caveat is HONEST about what presence
   //    can and cannot tell us. ────────────────────────────────────────────────
   if (created.offline) {
+    // ⚠ `filed=no` IS THE LOAD-BEARING HALF — nothing was written, so there is
+    // nothing pending and nothing to cancel, the opposite of the PENDING shape.
+    // ⚠ PRESENCE IS A HINT, NOT A VERDICT: a per-(user, workspace) heartbeat
+    // cannot say WHICH machine is up or whether directing is enabled there. The
+    // doctrine says so; the fact is that no listener has checked in.
     return ok(
-      [
-        `Nothing was sent to \`${agent}\` — your operator's machine is not reporting in, so there is nothing listening. **No direction was filed**, so there is nothing pending and nothing to cancel.`,
-        `⚠ THIS IS A HINT, NOT A VERDICT ON A PARTICULAR MACHINE. What was checked is a per-(user, workspace) presence heartbeat: it says no listener of your operator's has checked in recently. It cannot tell you WHICH of their machines is up, whether the one holding that agent is up, or whether directing over MCP is even enabled there.`,
-        `Most likely the machine is asleep, closed, or signed out. Ask your operator to open Dopl, then try again.`,
-      ].join("\n"),
+      factsLine("not delivered", {
+        agent: `@agent-${agent}`,
+        reason: "offline",
+        filed: false,
+      }),
     );
   }
 
@@ -173,58 +168,77 @@ export async function opDirectAgent(
   }
 
   if (direction.status === "delivered") {
-    const head = `Delivered to agent \`${direction.agentId}\` in **${label}**. It was said PRIVATELY — nobody else in the channel saw it, and its answer is private too.`;
-    if (direction.reply) {
-      return ok(
-        [
-          head,
-          "",
-          "Its answer:",
-          "",
-          direction.reply,
-          "",
-          `⚠ THAT IS THE FINAL TEXT OF ONE TURN, AND IT IS ALL YOU GET. It is not the agent's narration, not its tool calls, and not what it is doing now — for that, dopl_channel(op="read_sessions"). If you need it to do something else, send another direction; do not re-send this one.`,
-        ].join("\n"),
-      );
-    }
-    // ⚠ `null` IS "NOT REPORTED", NEVER "IT SAID NOTHING", and the difference is
-    // stated because an orchestrator that reads one as the other concludes its
-    // agent is broken.
+    // ── THE RESULT: A FACT LINE, PLUS THE REPLY IF THERE IS ONE ──────────────
+    //
+    // ⚠ THE 300-CHAR WRITE-RESULT BUDGET IS OVER THE FACT LINE, NOT OVER THIS
+    // WHOLE RESULT, and that is not a loophole. Every other write result is
+    // *narration* about a write, which is why it can be capped; this one carries
+    // a PAYLOAD the caller asked for and cannot get anywhere else — a direction
+    // is not a channel message, so `read`/`await` will never show it. Clipping
+    // the reply would delete the value of the call.
+    //
+    // ⚠ WHAT LEFT IS THE NARRATION AROUND IT: that the direction was private,
+    // that the answer is private too, and that what comes back is one turn's
+    // FINAL TEXT and not the agent's narration. All three are true of every
+    // direction and are in `channel-doctrine.ts`.
+    const head = factsLine("delivered", {
+      agent: `@agent-${direction.agentId}`,
+      // ⚠ `reply=none-reported` IS NOT "IT SAID NOTHING", and the difference is
+      // stated because an orchestrator that reads one as the other concludes its
+      // agent is broken. Either the turn's final text was empty, or that desktop
+      // predates the answer-reporting build — and this cannot tell which.
+      reply: direction.reply ? "below" : "none-reported",
+    });
     return ok(
-      [
-        head,
-        `⚠ **THE MACHINE REPORTED NO ANSWER TEXT**, which is not the same as the agent saying nothing. Either the turn's final text was empty, or that desktop is older than the answer-reporting build. Check what the agent is doing with dopl_channel(op="read_sessions") rather than re-sending.`,
-      ].join("\n"),
+      direction.reply
+        ? [head, "", "Its answer:", "", direction.reply].join("\n")
+        : head,
     );
   }
 
   if (direction.status === "refused") {
     return ok(
-      [
-        `Nothing reached agent \`${direction.agentId}\` in **${label}** — your operator's machine REFUSED, and ${refusalSentence(direction.refusalReason)}`,
-        `⚠ A refusal is a normal answer from a machine its owner controls, not an error and not a bug in your request. Nothing is pending; there is nothing to cancel and nothing to wait for.`,
-      ].join("\n"),
+      factsLine("refused", {
+        agent: `@agent-${direction.agentId}`,
+        reason: direction.refusalReason ?? undefined,
+        // ⚠ `-` WHEN THE MACHINE NAMED NO REASON, never a guessed verdict.
+        retry: direction.refusalReason
+          ? RETRY_ADVICE[direction.refusalReason]
+          : undefined,
+        filed: true,
+      }),
     );
   }
 
   if (direction.status === "expired") {
+    // ⚠ LAPSED IS NOT REFUSED: no machine ever answered. Asking again is
+    // legitimate — but check the agent is running first, because a direction to
+    // an agent that has since ended will lapse again.
     return ok(
-      [
-        `Nothing reached agent \`${direction.agentId}\` in **${label}** — the direction LAPSED before any machine answered it (id \`${direction.id}\`). Most often that means the desktop was asleep or had directing over MCP turned off.`,
-        `Nothing is pending now. Check whether that agent is even running with dopl_channel(op="read_sessions") before asking again — a lapsed direction to an agent that has since ended will lapse again.`,
-      ].join("\n"),
+      factsLine("expired", {
+        agent: `@agent-${direction.agentId}`,
+        direction: direction.id,
+        filed: true,
+      }),
     );
   }
 
-  const claimed =
-    direction.status === "claimed"
-      ? ` A machine has TAKEN it and is working on it, so it is likely to land shortly.`
-      : "";
+  // PENDING and CLAIMED both end here — the next action is identical.
+  //
+  // ⚠ **DO NOT ISSUE THIS CALL AGAIN** could not become a bare fact and did not:
+  // a second direction says the same thing to a LIVE agent twice and it answers
+  // twice, with no way for either side to tell which answer belonged to which.
+  // `retry=no` is the instruction; `poll=` is what to do instead, and it is the
+  // ONLY place a timed-out direction's answer can be picked up.
   return ok(
-    [
-      `No answer yet from agent \`${direction.agentId}\` in **${label}**.${claimed}`,
-      ...pendingLines(direction),
-    ].join("\n"),
+    factsLine("pending", {
+      agent: `@agent-${direction.agentId}`,
+      direction: direction.id,
+      claimed: direction.status === "claimed",
+      expires: direction.expiresAt,
+      retry: false,
+      poll: "read_directions",
+    }),
   );
 }
 
@@ -242,7 +256,15 @@ function renderDirection(d: AgentDirection): string {
     ].join("\n");
   }
   if (d.status === "refused") {
-    return [head, body, `  - refused: ${refusalSentence(d.refusalReason)}`].join("\n");
+    // ⚠ THE WORD, AND WHETHER TO ASK AGAIN. The sentence per word is in
+    // `channel-doctrine.ts` — this is a LISTING, so a paragraph per row would
+    // repeat the same five explanations down the page.
+    const reason = d.refusalReason;
+    return [
+      head,
+      body,
+      `  - refused: ${reason ?? "(no reason reported)"}${reason ? ` · retry ${RETRY_ADVICE[reason]}` : ""}`,
+    ].join("\n");
   }
   return [head, body].join("\n");
 }

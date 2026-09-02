@@ -18,14 +18,19 @@
 
 import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { DoplClient } from "@dopl/client";
+import type { ChannelMessage, DoplClient } from "@dopl/client";
 import {
   AWAIT_UNNAMED_NOTICE,
   GROUP_CHANNEL_MIN_MEMBERS,
-  routesToASession,
   rosterAddressingRule,
-  unaddressedPostNote,
 } from "./channel-addressing";
+// ⚠ THE ONE PREDICATE (T10, 2026-09-02). `routesToASession` was a DUPLICATE of
+// this; deleting it deleted a second regex for "is this a real thread", not a
+// rule. Fact 3 of `channel-addressing.ts` is unchanged and is still why the
+// distinction matters — the write and read lanes now share one definition.
+import { isFirstClassThreadId } from "./channel-render-threads";
+import { threadFacts } from "./channel-post-linkage";
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import { opAwait } from "./channel-ops-await";
 import { opMembers } from "./channel-ops-read";
@@ -65,13 +70,8 @@ function postClient(
   return {
     listChannels: vi.fn(async () => [{ ...CHANNEL, ...channel }]),
     postChannelMessage: vi.fn(async () => ({
-      id: "m1",
-      seq: 12,
-      kind: "message",
-      metadata,
-      authorUserId: ME,
+      id: "m1", seq: 12, kind: "message", metadata, authorUserId: ME,
     })),
-    listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
   } as unknown as DoplClient;
 }
 
@@ -95,9 +95,7 @@ describe("the group-channel threshold is not restated per lane", () => {
     expect(declared, "the web constant moved or was renamed").not.toBeNull();
     expect(Number(declared![1])).toBe(GROUP_CHANNEL_MIN_MEMBERS);
   });
-
 });
-
 
 describe("the removed named-agent surface is ABSENT from the published shape", () => {
   it("declares no to_agent / to_agents / as_agent / participants / agent / status", () => {
@@ -200,26 +198,50 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
 
 // ── which thread tags actually route ─────────────────────────────────
 
-describe("routesToASession — first-class only", () => {
+describe("isFirstClassThreadId — first-class only, and ONE definition of it", () => {
   it("is true for a uuid thread id and false for everything else", () => {
     // ⚠ Mirrors `firstClassTaskId` (targeting.js): pre-classify routes call it
     // and it returns '' for a legacy id, so only a uuid reaches a session.
-    expect(routesToASession(UUID)).toBe(true);
-    expect(routesToASession(UUID.toUpperCase())).toBe(true);
-    expect(routesToASession(LEGACY)).toBe(false);
-    expect(routesToASession(undefined)).toBe(false);
-    expect(routesToASession("")).toBe(false);
-    expect(routesToASession(`${UUID} `)).toBe(false);
+    expect(isFirstClassThreadId(UUID)).toBe(true);
+    expect(isFirstClassThreadId(UUID.toUpperCase())).toBe(true);
+    expect(isFirstClassThreadId(LEGACY)).toBe(false);
+    expect(isFirstClassThreadId("")).toBe(false);
+    expect(isFirstClassThreadId(`${UUID} `)).toBe(false);
+  });
+
+  it("⚠ AND THE WRITE LANE DECIDES `landed=` WITH THAT SAME FUNCTION", () => {
+    // ⚠ TWO REGEXES FOR "IS THIS A REAL THREAD" IS HOW THE WRITE AND READ LANES
+    // LEARN TO DISAGREE ABOUT ONE ID. The ABSENT case is expressed here rather
+    // than as an argument: an id nothing carries is a ROOM post, or a DROP.
+    const at = (taskId?: string) =>
+      ({ id: "m", seq: 1, kind: "message", metadata: taskId ? { taskId } : {} }) as unknown as ChannelMessage;
+    expect(threadFacts(at(UUID), UUID).landed).toBe("thread");
+    expect(threadFacts(at(LEGACY), LEGACY).landed).toBe("adhoc");
+    expect(threadFacts(at(), undefined).landed).toBe("room");
+    expect(threadFacts(at(), UUID).landed).toBe("dropped");
   });
 });
 
 // ── the post note ────────────────────────────────────────────────────
+//
+// ⚠ `unaddressedPostNote()` IS GONE (T12, 2026-09-02) — the "NOT ADDRESSED"
+// paragraph and its threaded variant, spliced under every post that named
+// nobody. The RULE it stated is true on every call, so it is stated once in
+// `channel-doctrine.ts`; the post result carries `addressed=no`, plus `landed=`
+// beside it. Each case below keeps both halves: the paragraph is out of the
+// result, and the claim it made is still shipped.
 
-describe("unaddressedPostNote", () => {
-  const base = { ref: "chan-1", isDirect: false, landedThread: undefined };
+/** An UNADDRESSED post's result line. ⚠ `addressed` is read off `toUserId`. */
+const bare = async (channel: Record<string, unknown>, metadata: Record<string, unknown> = {}) =>
+  (await opPost(postClient(channel, metadata), "general", "anyone free?")).content[0].text;
 
-  it("says nothing ONLY when the caller addressed someone", () => {
-    expect(unaddressedPostNote({ ...base, addressed: true })).toBeNull();
+describe("addressed= / landed= — what the note became", () => {
+  it("reports the addressing EITHER WAY, where the note was absent on success", async () => {
+    // ⚠ INVERTED BY T12, AND IT IS THE POINT OF THE FIELD: the old note was
+    // ABSENT on an addressed post, so "nothing said" carried the good news. A
+    // field is present either way, so a reader can no longer confuse "addressed"
+    // with "the narration was trimmed".
+    expect(await bare({ isDirect: false })).toContain("addressed=no");
   });
 
   /**
@@ -229,80 +251,79 @@ describe("unaddressedPostNote", () => {
    * nobody's agent like any other, and staying quiet about it is exactly the
    * invisible-delivery failure this module exists to prevent.
    */
-  it("WARNS in a direct channel too — nothing addresses a post for you now", () => {
-    const note = unaddressedPostNote({ ...base, isDirect: true, addressed: false });
-    expect(note).toContain("NOT ADDRESSED");
-    expect(note).toContain("That holds in a DIRECT (1:1) message too");
+  it("WARNS in a direct channel too — nothing addresses a post for you now", async () => {
+    expect(await bare({ isDirect: true })).toContain("addressed=no");
+    // ⚠ The DM clause is what a caller told otherwise acts on, by leaving `to`
+    // off and reaching nobody. It survives in the roster line and the doctrine.
+    expect(rosterAddressingRule("general", 2)).toContain("a DIRECT (1:1) message channel included");
+    expect(CHANNEL_DOCTRINE).toContain("in a room of two or of ten");
   });
 
-  it("names the AUTHOR KIND as the reason, never the member count", () => {
-    const note = unaddressedPostNote({ ...base, addressed: false })!;
-    expect(note).toContain("NOT ADDRESSED");
-    expect(note).toContain("from an AGENT is never taken as an implicit request");
-    // ⚠ A two-member channel is NOT one where an unaddressed message reaches
-    // nobody — that claim produces duplicate requests.
-    expect(note).not.toContain("nobody was woken");
-    expect(note).not.toMatch(/including a two-member/i);
+  it("names the AUTHOR KIND as the reason, never the member count", async () => {
+    // ⚠ THE LOOP BRAKE is what makes "your post woke nobody" safe against every
+    // desktop build in the field, old or new — and it is keyed on the author
+    // kind, never the size. A two-member channel is NOT a special case, and
+    // claiming it is produces duplicate requests.
+    const text = await bare({ isDirect: false });
+    expect(text).toContain("addressed=no");
+    expect(text).not.toContain("NOT ADDRESSED");
+    expect(text).not.toContain("nobody was woken");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "an AGENT-authored UNADDRESSED message starts nobody, in a room of two or of ten",
+    );
   });
 
-  it("does NOT claim silence for a post that landed on a first-class thread", () => {
-    const note = unaddressedPostNote({
-      ...base,
-      addressed: false,
-      landedThread: UUID,
-    })!;
-    expect(note).toContain("NOT ADDRESSED, BUT THREADED");
-    expect(note).toContain("may be in front of their agent right now");
-    // ⚠ Remedy must not be "re-post with to=" — that manufactures a duplicate.
-    expect(note).toContain("Do NOT re-post it with `to=`");
-    expect(note).not.toMatch(/re-post it with to="/);
+  it("does NOT claim silence for a post that landed on a first-class thread", async () => {
+    // ⚠ `landed=` SITS BESIDE `addressed=` RATHER THAN COLLAPSING INTO IT, which
+    // is the whole reason there are two fields: "nobody was woken" is FALSE for a
+    // threaded post (`feedLiveSession` reads the tag before the addressing), and
+    // the old remedy "re-post with `to=`" manufactured a duplicate request.
+    const text = await bare({ isDirect: false }, { taskId: UUID });
+    expect(text).toContain("landed=thread addressed=no");
+    expect(text).not.toContain("re-post");
+    expect(rosterAddressingRule("general", 2)).toContain(
+      "routes the post into the session already working it",
+    );
+    expect(CHANNEL_DOCTRINE).toContain(
+      "threaded into an exchange you are a party to is yours whatever its addressing says",
+    );
   });
 
-  it("keeps the plain note for a LEGACY tag, which routes to no session", () => {
-    const note = unaddressedPostNote({
-      ...base,
-      addressed: false,
-      landedThread: LEGACY,
-    })!;
-    expect(note).not.toContain("BUT THREADED");
-    expect(note).toContain("from an AGENT is never taken as an implicit request");
+  it("keeps the two apart for a LEGACY tag, which routes to no session", async () => {
+    // ⚠ Only a FIRST-CLASS (uuid) tag reaches a session, so the two cases may
+    // never be narrated with one word: `adhoc` groups on a card and wakes nobody.
+    const text = await bare({ isDirect: false }, { taskId: LEGACY });
+    expect(text).toContain("landed=adhoc addressed=no");
+    expect(text).not.toContain("landed=thread");
   });
 });
 
-describe("post — the note and the linkage line in one result", () => {
-  it("a threaded post never says nobody was woken next to 'reads this as a continuation'", async () => {
-    const client = postClient({ isDirect: false }, { taskId: UUID });
-
-    const text = (await opPost(client, "general", "here is the diff")).content[0]
-      .text;
-
-    expect(text).toContain("NOT ADDRESSED, BUT THREADED");
-    expect(text).toContain("the other side reads this as a continuation");
+describe("post — the addressing and the linkage on ONE line", () => {
+  it("a threaded post never reads as nobody-was-woken", async () => {
+    const text = await bare({ isDirect: false }, { taskId: UUID });
+    expect(text).toContain("landed=thread addressed=no");
     expect(text).not.toContain("nobody was woken");
     expect(text).not.toContain("NO member's agent was triggered");
   });
 
-  it("an unthreaded post still tells the sender it has to address a member", async () => {
-    const client = postClient({ isDirect: false });
-
-    const text = (await opPost(client, "general", "anyone free?")).content[0]
-      .text;
-
-    expect(text).toContain("NOT ADDRESSED");
-    expect(text).not.toContain("BUT THREADED");
-    expect(text).toContain('re-post it with to="<one member>"');
+  it("an unthreaded post reports both halves, and neither is a paragraph", async () => {
+    // ⚠ HOW to address someone is the roster op's line and the doctrine's, not
+    // this result's — it is the same sentence on every unaddressed post ever.
+    const text = await bare({ isDirect: false });
+    expect(text).toContain("landed=room addressed=no");
+    expect(text.split("\n")).toHaveLength(1);
+    expect(text).not.toContain('re-post it with to="<one member>"');
+    expect(rosterAddressingRule("general", 3)).toContain('to="<their user id>"');
   });
 
   it("warns in a DIRECT channel too, and still names the thread it landed in", async () => {
     // ⚠ Inverted with the DM auto-address retirement (2026-08-18). A threaded
-    // post takes the THREADED shape of the note, which tells the caller to WAIT
-    // rather than re-post — the one remedy that would double the request.
-    const client = postClient({ isDirect: true }, { taskId: UUID });
-
-    const text = (await opPost(client, "general", "ping")).content[0].text;
-
-    expect(text).toContain("NOT ADDRESSED, BUT THREADED");
-    expect(text).toContain("Do NOT re-post it");
+    // post reports the thread it landed in beside `addressed=no`, which is what
+    // tells the caller to WAIT rather than re-post — the one remedy that would
+    // double the request.
+    const text = await bare({ isDirect: true }, { taskId: UUID });
+    expect(text).toContain(`thread=${UUID} landed=thread addressed=no`);
+    expect(text).not.toContain("Do NOT re-post it");
   });
 });
 

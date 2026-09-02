@@ -37,6 +37,10 @@ const respond_1 = require("./respond");
 // The tool's two declared halves: PROSE (what a channel is, THE LAW, what each
 // op does) and published input SHAPE. This file is mechanism only.
 const channel_description_1 = require("./channel-description");
+// THE STANDING RULES, stated ONCE. `op="help"` and the MCP resource
+// `dopl://doctrine/channels` (`resources.ts`) return this same constant; the
+// description summarises and points, and no result repeats it.
+const channel_doctrine_1 = require("./channel-doctrine");
 const channel_schema_1 = require("./channel-schema");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_await_1 = require("./channel-ops-await");
@@ -87,6 +91,12 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
     const selfSessionId = caller.sessionId;
     register("dopl_channel", channel_description_1.CHANNEL_DESCRIPTION, channel_schema_1.CHANNEL_INPUT_SHAPE, async (args) => {
         switch (args.op) {
+            // ⚠ THE SECOND DOOR TO THE DOCTRINE, and it reaches nothing. The same
+            // text is the MCP resource `dopl://doctrine/channels`; this op exists
+            // for clients that never read resources, so the rules can never be
+            // unreachable. It takes no arguments and makes no request.
+            case "help":
+                return (0, respond_1.ok)(channel_doctrine_1.CHANNEL_DOCTRINE);
             case "list":
                 return (0, channel_ops_read_1.opList)(client);
             case "open": {
@@ -146,6 +156,10 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
                     thread: args.thread,
                     summary: args.summary,
                     runtime,
+                    // ⚠ ITS OWN VERB. A milestone result opening `posted` would report
+                    // the wrong act on the one lane whose whole point is that it is NOT
+                    // a delivery — see `PostOptions.resultHead`.
+                    resultHead: "milestone",
                 });
             }
             case "read": {

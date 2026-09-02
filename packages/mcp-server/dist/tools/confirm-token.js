@@ -202,7 +202,11 @@ function preview(act, target, token) {
         `NOTHING WAS CREATED — this is a dry run. ${act.tool} op="${act.op}" would publish into a home channel somebody ELSE is in, so it previews first.`,
         "",
         `**What would be created:** ${act.what}`,
-        `**Where:** ${target.label}${target.unknown ? " — ⚠ the workspace could not be read, so this is being treated as a shared room" : " (a home channel with at least one other person in it)"}`,
+        // ⚠ ONE NOUN FOR THE ROOM. Both arms said "home channel" and "workspace"
+        // about the SAME object, in the one line a reader uses to decide whether
+        // to go ahead — and "the workspace could not be read" invites the reader
+        // to go looking for a workspace that was never the subject.
+        `**Where:** ${target.label}${target.unknown ? " — ⚠ this home channel could not be read, so it is being treated as a shared room" : " (a home channel with at least one other person in it)"}`,
         `**Who would see it:** ${act.audience}`,
         "",
         `To go ahead, re-issue the SAME call with \`confirm_token="${token}"\` and every other argument UNCHANGED. The token is single-use, expires in 5 minutes, and is bound to this exact payload — changing any field invalidates it and you get a fresh preview instead of a surprise.`,

@@ -40,7 +40,7 @@ const NO_NAME = "`(unnamed)`";
  * ⚠ Names the FILTERS, never a hidden count — counting what you were not shown
  * is a second query on every list call.
  */
-const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases and bases scoped to a team you have no grant on are not listed, so this is not the workspace's base count. A row marked \`personal\` is on your own /home shelf and does not appear on the workspace Knowledge page; an UNMARKED row is on the workspace shelf, or on a server too old to say. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
+const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases and bases scoped to a team you have no grant on are not listed, so this is not the workspace's base count. A row marked \`personal\` is on your own personal shelf and does not appear on the workspace Knowledge page; an UNMARKED row is on the workspace shelf, or on a server too old to say. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
 /**
  * ⚠ `shelf` ABSENT LISTS BOTH SHELVES, and that is the RIGHT answer rather than
  * an oversight (F-342 rules the unfiltered MCP read right and says it "must stay

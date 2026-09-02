@@ -1,46 +1,56 @@
 /**
- * THE SELF-VERIFICATION LINE FOR A POST — did this land as a continuation of an
- * existing thread, or as a NEW request on the other side? ⚠ `channel-` filename
- * prefix required by the parity split-scan (parity.test.ts).
+ * DID THIS POST LAND IN A THREAD, AND IN THE ONE THAT WAS ASKED FOR? — the
+ * `thread=` and `landed=` facts on a post result.
  *
- * ⚠ PEER-CONTROLLED TEXT HERE: thread TITLES. `mine` is "threads I created OR am
- * the target of", and one I am merely the target of was opened AND TITLED by the
- * peer — so an unthreaded post pulls up to five peer-typed titles into the
- * confirmation of my own write. Neutralized, and framed by
- * `UNTRUSTED_THREAD_HEADER` on the one branch that renders them.
- */
-import type { ChannelMessage, DoplClient } from "@dopl/client";
-/**
- * ⚠ `closedThreadNote()` USED TO LIVE HERE — the line a post spent
- * `threadClosed` on. It went with thread closing (wiring plan Phase 4,
- * 2026-08-18) and so did the server field behind it.
+ * ⚠ WHAT THIS FILE USED TO BE (T10, 2026-09-02). `threadLinkageNote` answered
+ * the same question in up to five paragraphs, and to write the longest of them
+ * it made a SECOND API CALL per post — `listChannelThreads`, to offer the caller
+ * threads it might have meant. That call is gone with the paragraphs, so a post
+ * is now one round trip instead of two. The QUESTION it answered is not gone: a
+ * sender genuinely cannot tell a continuation from a new request, and a dropped
+ * tag is silent, so both survive as tokens the caller reads in one glance.
  *
- * Two rules it carried are worth not relearning. **WARNING, NOT A FAILURE**: the
- * post LANDED, and wording that reads as an error gets an agent to retry a
- * write that already succeeded. **Never claim a silence nothing enforces**: its
- * copy was scoped to the passive lane alone, because an updated desktop skipped
- * the passive wake off a status cache up to ~5 min stale while an older build
- * still woke, and an ADDRESSED post delivered either way.
- */
-/**
- * ⚠ Answer is read back off the STORED message, not off the request:
+ * ⚠ THE ANSWER IS READ OFF THE **STORED** MESSAGE, NEVER OFF THE REQUEST.
  * `metadata.taskId` is what the receiving desktop routes on, so this reports
- * what actually LANDED rather than what was asked for.
+ * what actually LANDED rather than what was asked for — which is the only way
+ * `dropped` can be told from `threaded` at all.
  *
- * ⚠ The id alone is NOT proof of a real thread. A first-class id validates
- * against `channel_tasks`; a legacy `task-<uuid>-<seq>` id names no row and
- * survives the write only as the caller's OWN exchange in THIS channel.
- * `taskTitle` is the unfakeable half — server-stamped from the thread row,
- * caller copies stripped. A note that names a title is backed by a real row; a
- * bare id is the tell that it is not.
+ * ⚠ AN AD-HOC ID IS NOT A THREAD, and the two must not render the same. A
+ * first-class (uuid) id names a `channel_tasks` row; a legacy
+ * `task-<channel>-<seq>` id is the label a receiving machine mints for an
+ * untagged request so a reply groups with it on that machine's card. It has no
+ * row, no title and nothing to join — and the remedies are OPPOSITE: an ad-hoc
+ * id the caller PASSED is working and must keep being passed (dropping it forks
+ * the exchange), where one the caller did NOT pass means the machine grouped it
+ * and a real thread is the upgrade. `landed=` states which case this is; the
+ * doctrine states what to do about each.
  *
- * Three shapes, descending urgency:
- *   1. asked for a thread and got none — the tag-drop signature;
- *   2. no thread but the caller has some — reads as a NEW request;
- *   3. threaded — name it so the sender can check.
- * No threads + unthreaded post says nothing; threads belonging only to OTHER
- * pairs says so without offering them.
+ * ⚠ `channel-` filename prefix required by the parity split-scan (parity.test.ts).
  */
-export declare function threadLinkageNote(client: DoplClient, channelId: string, 
-/** ALREADY neutralized by the caller — splice it, do not re-wrap it. */
-safeChannelName: string, message: ChannelMessage, askedThread: string | undefined): Promise<string | null>;
+import type { ChannelMessage } from "@dopl/client";
+import type { FactValue } from "./channel-facts";
+/**
+ * WHERE A POST LANDED, as one token.
+ *  - `thread`  — a first-class thread; the other side reads a continuation.
+ *  - `adhoc`   — grouped under a machine-minted id that names no thread row.
+ *  - `room`    — the channel itself, no thread tag, and no tag was asked for.
+ *  - `dropped` — ⚠ THE SILENT FAILURE. A `thread` was passed and the stored
+ *                message carries none, so this reads as a BRAND-NEW request on
+ *                the other side. Causes are a typo, another pair's legacy id, a
+ *                legacy id from a different channel, or a blank string; the
+ *                remedy is the same for all four, so the token does not guess.
+ */
+export type ThreadLanding = "thread" | "adhoc" | "room" | "dropped";
+/** The two thread facts a post result carries. */
+export interface ThreadFacts {
+    /** The thread id the message actually carries, or absent for a room post. */
+    thread: FactValue;
+    landed: ThreadLanding;
+}
+/**
+ * ⚠ PURE, AND THAT IS THE POINT: every input is already in hand by the time the
+ * post returns, so answering this costs no request. `askedThread` is the
+ * caller's own argument from THIS call — never round-tripped through storage —
+ * which is what makes a mismatch decidable.
+ */
+export declare function threadFacts(message: ChannelMessage, askedThread: string | undefined): ThreadFacts;

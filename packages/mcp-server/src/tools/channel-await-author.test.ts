@@ -336,4 +336,21 @@ describe("an unstamped caller sees its own account's agents", () => {
       expect(opts).not.toHaveProperty("excludeAuthor");
     }
   });
+
+  it("drops nothing client-side, so an unstamped peer row still returns", async () => {
+    const awaitChannelMessages = vi.fn<AwaitSpy>(async () => ({
+      messages: [row(9)],
+      timedOut: false,
+    }));
+
+    const res = await opAwait(
+      stubClient({ awaitChannelMessages }),
+      "general",
+      8,
+      undefined,
+      ME,
+    );
+
+    expect(JSON.stringify(res)).toContain("1 new message");
+  });
 });

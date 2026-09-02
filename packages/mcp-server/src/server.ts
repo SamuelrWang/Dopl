@@ -16,6 +16,9 @@
  *                          `strictInput`, ALS routing.
  *   status-footer.ts       the `_dopl_status` footer.
  *   meta-tools.ts          `list_workspaces` + `current_workspace`.
+ *   resources.ts           the MCP RESOURCES — today the channels doctrine,
+ *                          which is where the prose the tool descriptions and
+ *                          write results used to repeat now lives.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -36,6 +39,7 @@ import { buildInstructions } from "./instructions.js";
 import { createGates } from "./gating.js";
 import { createToolRegistrars } from "./registrar.js";
 import { registerWorkspaceMetaTools } from "./meta-tools.js";
+import { registerResources } from "./resources.js";
 import {
   createWorkspaceDirectory,
   type ActiveWorkspaceState,
@@ -169,6 +173,11 @@ export function createServer(
       }),
     },
   );
+
+  // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
+  // `dopl_channel(op="help")`) rather than description prose, so an agent pays
+  // for it when it asks and never on connection. See `resources.ts`.
+  registerResources(server);
 
   // ⚠ Four gates shared by BOTH registration paths, built here and passed in
   // rather than defined inside a wrapper: `registerMetaTool` registers straight

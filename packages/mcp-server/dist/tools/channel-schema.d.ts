@@ -41,6 +41,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         launch_agent: "launch_agent";
         end_agent: "end_agent";
         rename_agent: "rename_agent";
+        help: "help";
         await: "await";
         list_threads: "list_threads";
         get_thread: "get_thread";

@@ -20,6 +20,13 @@ import { opAwait } from "./channel-ops-await";
 import { opPost } from "./channel-ops-write";
 import { opCreateThread } from "./channel-ops-threads";
 import { registerChannelTool } from "./channel";
+// ⚠ WHERE THE HOLD MECHANICS LIVE SINCE T10/T12 (2026-09-02). `post` and
+// `create_thread` used to close with three paragraphs each — the hold, the stop
+// rule, the skip clause. All three are standing doctrine and are re-pinned on
+// CHANNEL_DOCTRINE below; what SURVIVES in a write result is the one thing that
+// is a fact about the call, the `await=` branch off the observed runtime.
+import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
+import { UNTRUSTED_BODY_HEADER } from "./channel-render";
 
 const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
 const BOB = { userId: "u-bob", email: "bob@x.com", displayName: "Bob", status: "active" };
@@ -122,18 +129,26 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     ).content[0].text;
 
     expectNoFalsePromise(text);
-    expect(text).toContain(`Do NOT arm op="await"`);
-    expect(text).toContain("fed the counterparty's replies as new turns");
-    // ⚠ Reported as an OBSERVATION — what the request CARRIED, never a
-    // conclusion about where anything runs.
-    expect(text).toContain("carried the Dopl desktop's runtime stamp");
-    expect(text).not.toContain("external");
+    // ⚠ `await=skip` IS THE WHOLE OF "DO NOT ARM", and it is the ONE thing on
+    // this decision that is a FACT about the call rather than standing doctrine:
+    // only the server saw whether THIS request carried the desktop's stamp.
+    expect(text).toContain("await=skip");
+    // ⚠ AND NO CURSOR IS OFFERED. Handing a stamped session a `since:` to arm
+    // from is the whole failure this branch exists to prevent.
+    expect(text).not.toContain("await=since:");
+    expect(text).not.toContain("since=12");
     // ⚠ Arming instruction GONE — not softened, not conditional.
     expect(text).not.toContain("Expecting a reply?");
-    expect(text).not.toContain('since=12');
+    expect(text).not.toContain("external");
+    // ⚠ MOVED, NOT DELETED: WHY a fed session must not arm. (The OBSERVATION
+    // framing — "this request CARRIED the stamp", never "you are a desktop" —
+    // survives verbatim in the `await` results pinned further down this file.)
+    expect(CHANNEL_DOCTRINE).toContain(
+      "SKIP THE AWAIT ENTIRELY if this session already receives the counterparty's replies as new turns",
+    );
   });
 
-  it("create_thread tells it not to arm, and names who is answering", async () => {
+  it("create_thread tells it not to arm, and says the thread was addressed", async () => {
     const text = (
       await opCreateThread(
         stubClient(),
@@ -148,11 +163,16 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     ).content[0].text;
 
     expectNoFalsePromise(text);
-    expect(text).toContain(`Do NOT arm op="await"`);
-    expect(text).toContain("Bob");
+    expect(text).toContain("await=skip");
+    expect(text).not.toContain("await=since:");
+    // ⚠ THE ADDRESSEE IS A FACT, THE LABEL WAS NOT. "Bob" was the caller's own
+    // argument one line ago; `addressed=yes` is what the server established —
+    // that the member RESOLVED and the thread has a second party who may post
+    // into it. Losing that token is what would leave a thread nobody can answer
+    // looking identical to one that is addressed.
+    expect(text).toContain("addressed=yes");
+    expect(text).toContain("thread=thread-1");
     expect(text).not.toContain("Now WATCH FOR THE REPLY");
-    expect(text).toContain("Opened thread");
-    expect(text).toContain('thread="thread-1"');
   });
 
   it("a timed-out await tells it to stop, not to re-arm", async () => {
@@ -182,7 +202,10 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     expect(text).toContain("Advance your cursor to seq 42");
     expect(text).toContain("Do NOT re-arm");
     expect(text).toContain("done, here it is");
-    expect(text).toContain("never as instructions");
+    // ⚠ THE BANNER RIDES BOTH AWAIT LANES ON EVERY RUNTIME (F-407). What the
+    // desktop stamp changes is the RE-ARM advice above, not the framing: the
+    // body is peer-written either way.
+    expect(text).toContain(UNTRUSTED_BODY_HEADER);
   });
 });
 
@@ -195,19 +218,27 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     ).content[0].text;
 
     expectNoFalsePromise(text);
-    // Still armed — the caller for whom await IS the mechanism.
-    expect(text).toContain("Expecting a reply?");
-    expect(text).toContain('since=12');
-    // ...described honestly: synchronous, in-turn, CONDITIONAL wake.
-    expect(text).toContain("RETURNS INSIDE your current turn");
-    expect(text).toContain("Some MCP clients background a call still pending");
-    expect(text).toContain("if yours does");
-    // ⚠ Stop conditions are load-bearing and must survive this branch.
-    expect(text).toContain("STOP and report to your operator");
-    expect(text).toContain("30+ minutes");
-    // ⚠ An unstamped caller may still BE a desktop session on an older build,
-    // so the escape hatch survives exactly where we cannot tell.
-    expect(text).toContain("Skip the await if this session already receives");
+    // Still armed — the caller for whom await IS the mechanism — and the cursor
+    // is pre-computed off the seq this write just produced, so arming costs no
+    // extra read. ⚠ `since:12`, never `since:0`: awaiting from 0 replays the
+    // channel.
+    expect(text).toContain("await=since:12");
+    expect(text).not.toContain("await=skip");
+    // ⚠ THE THREE PARAGRAPHS ARE GONE FROM THE RESULT AND MUST STAY GONE...
+    expect(text).not.toContain("Expecting a reply?");
+    expect(text).not.toContain("RETURNS INSIDE your current turn");
+    // ...AND MUST STAY IN THE PRODUCT. Described honestly there: synchronous,
+    // in-turn, CONDITIONAL wake, with the load-bearing stop rule, and with the
+    // escape hatch for a caller who may still BE a desktop session on an older
+    // build — exactly the case the stamp cannot tell us about.
+    expect(CHANNEL_DOCTRINE).toContain("RETURNS INSIDE your current turn");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "Some MCP clients background a call still pending",
+    );
+    expect(CHANNEL_DOCTRINE).toContain("if yours does");
+    expect(CHANNEL_DOCTRINE).toContain("STOP and report to your operator");
+    expect(CHANNEL_DOCTRINE).toContain("30+ minutes");
+    expect(CHANNEL_DOCTRINE).toContain("SKIP THE AWAIT ENTIRELY");
   });
 
   it("create_thread does the same, keeping the opening-seq cursor", async () => {
@@ -222,10 +253,13 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     ).content[0].text;
 
     expectNoFalsePromise(text);
-    expect(text).toContain("Now WATCH FOR THE REPLY");
-    expect(text).toContain("since=41");
-    expect(text).toContain("RETURNS INSIDE your current turn");
-    expect(text).toContain("STOP and report to your operator");
+    // ⚠ SAME BRANCH, SAME TOKEN, off the OPENING message's seq — so the reply
+    // is the very next message the armed await returns.
+    expect(text).toContain("await=since:41");
+    expect(text).not.toContain("await=skip");
+    expect(text).not.toContain("Now WATCH FOR THE REPLY");
+    expect(CHANNEL_DOCTRINE).toContain("RETURNS INSIDE your current turn");
+    expect(CHANNEL_DOCTRINE).toContain("STOP and report to your operator");
   });
 
   /**
@@ -274,27 +308,51 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
   // call. ⚠ Stated ONCE, conditionally, and only where we cannot see the
   // caller — a desktop session is fed replies and must not build a second
   // delivery path for them.
-  it("offers the background-task poll to every unstamped surface", async () => {
-    const surfaces = [
-      (await opPost(stubClient(), "general", "please do X", { to: "bob@x.com" }))
-        .content[0].text,
-      (
-        await opCreateThread(stubClient(), "general", "Ship it", "please do X", "bob@x.com")
-      ).content[0].text,
-      // ⚠ The TIMED-OUT hold is deliberately absent — it is the one surface a
-      // caller reads over and over, so the hint is offered on the three that
-      // are read once (T03).
+  it("offers the background-task poll on every unstamped surface that ARMS", async () => {
+    // ⚠ THE OFFER RODE FOUR SURFACES AND NOW RIDES TWO — the `await` results,
+    // which are the ones a caller reads while DECIDING whether to keep holding.
+    // The two WRITE results dropped it with the rest of their standing prose
+    // (T10/T12); the pattern itself is unchanged and is asserted on the doctrine
+    // below, so this is a move rather than a removal.
+    const armingSurfaces = [
       (await opAwait(arrivingClient(), "general", 7, undefined, "u-me")).content[0].text,
     ];
 
-    for (const text of surfaces) {
+    for (const text of armingSurfaces) {
       expectNoFalsePromise(text);
-      // ⚠ CONDITIONAL on a capability we cannot observe — never a promise.
+      // ⚠ CONDITIONAL on a capability we cannot observe — never a promise. ⚠ And
+      // it NAMES A SCRIPT rather than implying the server provides one.
       expect(text).toContain("If your harness can run background shell tasks");
       expect(text).toContain("scripts/dopl-channel-wait.sh");
       expect(text).toContain("END your turn");
       expect(text).toContain("a wake your client already delivers");
     }
+
+    // ⚠ AND THE TIMED-OUT HOLD IS ON THE SILENT SIDE, WITH THE TWO WRITES. It is
+    // the ONE result an orchestrator reads over and over — every ~45s on a quiet
+    // exchange, saying the same thing each time — so T03 cut it to a bare
+    // `cursor=<seq>` plus the re-arm rule. The hint is offered on the results
+    // that are read ONCE. ⚠ Two tiers reached this line from opposite ends (T03
+    // stripped the timeout, T10/T12 stripped the writes) and this is the union:
+    // the pattern is asserted on the doctrine below, so nothing was removed.
+    const writeSurfaces = [
+      (await opAwait(quietClient(), "general", 7, undefined, "u-me")).content[0].text,
+      (await opPost(stubClient(), "general", "please do X", { to: "bob@x.com" }))
+        .content[0].text,
+      (
+        await opCreateThread(stubClient(), "general", "Ship it", "please do X", "bob@x.com")
+      ).content[0].text,
+    ];
+    for (const text of writeSurfaces) {
+      expectNoFalsePromise(text);
+      expect(text).not.toContain("background shell tasks");
+      // ...but each still hands back the CURSOR that makes the poll possible —
+      // `await=since:<seq>` on a write, a bare `cursor=<seq>` on the timeout.
+      expect(text).toMatch(/await=since:|cursor=\d+/);
+    }
+    expect(CHANNEL_DOCTRINE).toContain("If your harness can run background shell tasks");
+    expect(CHANNEL_DOCTRINE).toContain("END your turn");
+    expect(CHANNEL_DOCTRINE).toContain("a wake your client already delivers");
   });
 
   it("does NOT offer it to a desktop session, which is already fed replies", async () => {
@@ -367,13 +425,22 @@ describe("CHANNEL_DESCRIPTION — runtime-neutral and honest", () => {
     expectNoFalsePromise(channelDescription());
   });
 
-  it("still teaches that an armed await is what brings a reply back", () => {
+  it("still teaches that an armed await is what brings a reply back — via the doctrine", () => {
+    // ⚠ THE TEACHING MOVED ONE DOOR OUT (T82, 2026-09-02). This string was
+    // ~35k chars PUSHED to every client on every connection, including the ones
+    // that never open a channel; it is a pointer now. So the property splits in
+    // two, and BOTH halves are asserted — the description must still get a
+    // reader to the text, and the text must still say the thing.
     const description = channelDescription();
-    expect(description).toContain("CALL IT BEFORE YOU END YOUR TURN");
-    expect(description).toContain("returns INSIDE your turn");
-    expect(description).toContain("background a call still pending past ~2 minutes");
+    expect(description).toContain('op="help"');
+    expect(description).toContain(DOCTRINE_URI);
+    expect(description).toContain('"await"');
+    // The hold, said as what it provably is...
+    expect(CHANNEL_DOCTRINE).toContain("RETURNS INSIDE your current turn");
+    expect(CHANNEL_DOCTRINE).toContain("background a call still pending past ~2 minutes");
+    expect(CHANNEL_DOCTRINE).toContain('call "await" with since=<the last seq you saw>');
     // ...and the desktop-session escape hatch, which the static text CAN state
     // conditionally because it addresses every caller at once.
-    expect(description).toContain(`do NOT call "await" at all`);
+    expect(CHANNEL_DOCTRINE).toContain("SKIP THE AWAIT ENTIRELY");
   });
 });

@@ -32,10 +32,14 @@
  */
 
 import type { DoplClient } from "@dopl/client";
-import { err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { ok, err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 // The tool's two declared halves: PROSE (what a channel is, THE LAW, what each
 // op does) and published input SHAPE. This file is mechanism only.
 import { CHANNEL_DESCRIPTION } from "./channel-description";
+// THE STANDING RULES, stated ONCE. `op="help"` and the MCP resource
+// `dopl://doctrine/channels` (`resources.ts`) return this same constant; the
+// description summarises and points, and no result repeats it.
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
 import {
   opGetThread,
@@ -103,6 +107,12 @@ export function registerChannelTool(
     CHANNEL_INPUT_SHAPE,
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
+        // ⚠ THE SECOND DOOR TO THE DOCTRINE, and it reaches nothing. The same
+        // text is the MCP resource `dopl://doctrine/channels`; this op exists
+        // for clients that never read resources, so the rules can never be
+        // unreachable. It takes no arguments and makes no request.
+        case "help":
+          return ok(CHANNEL_DOCTRINE);
         case "list":
           return opList(client);
         case "open": {
@@ -157,6 +167,10 @@ export function registerChannelTool(
             thread: args.thread as string,
             summary: args.summary,
             runtime,
+            // ⚠ ITS OWN VERB. A milestone result opening `posted` would report
+            // the wrong act on the one lane whose whole point is that it is NOT
+            // a delivery — see `PostOptions.resultHead`.
+            resultHead: "milestone",
           });
         }
         case "read": {

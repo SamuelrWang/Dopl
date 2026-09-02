@@ -12,6 +12,46 @@ import { describe, it, expect, vi } from "vitest";
 import type { ChannelSessionState, DoplClient } from "@dopl/client";
 import { opReadSessions } from "./channel-ops-read";
 import { opCreateThread } from "./channel-ops-threads";
+// ⚠ THE TABLE MOVED (T13, 2026-09-02): `channel-session-render.ts` kept the
+// vocabulary and the staleness window, `channel-session-table.ts` took the page
+// shape. {@link cells} excludes the header BY IDENTITY against this constant, so
+// it has to be the one the renderer actually emits.
+import { SESSION_TABLE_HEAD } from "./channel-session-table";
+// ⚠ BOTH STANDING NOTES ARE DELETED (T10/T13) — `SESSION_TELEMETRY_NOTE` from
+// `channel-session-render.ts`, `SESSION_HANDLE_NOTE` from
+// `channel-session-handle.ts`, each leaving a tombstone docblock. Their text is
+// in `CHANNEL_DOCTRINE`, behind op="help" and the MCP resource. The
+// guard below therefore pins the SENTENCES rather than importing two constants
+// — a constant that stops being rendered makes `not.toContain(CONST)` pass for
+// the wrong reason the day someone re-inlines a paraphrase of it.
+import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
+
+/**
+ * THE SENTENCES THE TWO DELETED NOTES CARRIED — the load-bearing half of each,
+ * as they are now written in `CHANNEL_DOCTRINE`.
+ *
+ * ⚠ **THEY ARE ASSERTED IN BOTH DIRECTIONS AND THAT IS THE WHOLE POINT.** The
+ * handle note (~1.1k chars on how a handle is spent) and the telemetry note
+ * (~800 on whose telemetry this is) closed EVERY `read_sessions` page, to a
+ * reader that calls this op in a loop. The tersening is only a win if the text
+ * still EXISTS somewhere a reader can reach in one call, so each phrase is
+ * required in the doctrine and forbidden in the result.
+ */
+const NOTE_PHRASES = [
+  // …the handle, and the three limits on spending it (was SESSION_HANDLE_NOTE).
+  "form is the only one",
+  "reaches no server",
+  "WAKES THAT AGENT",
+  "never by the server's mention resolver",
+  "ALREADY WORKING on it",
+  "waking is for agents you need to REDIRECT",
+  "an unaddressed post of yours starts nobody",
+  "only for YOUR OWN operator's agents",
+  "delivery is not observable from here",
+  "rather than assuming it woke",
+  // …and the column promise (was SESSION_TELEMETRY_NOTE).
+  "ONE unbroken token",
+] as const;
 
 const CHANNEL = {
   id: "chan-1",
@@ -69,6 +109,45 @@ const PAGE = (
   ...(operatorOnline === undefined ? {} : { operatorOnline }),
 });
 
+/**
+ * ONE SESSION'S CELLS, by the handle its row is keyed on.
+ *
+ * ⚠ **THE COLUMN, NOT THE PAGE** (T13). `read_sessions` renders a TABLE, and a
+ * bare `toContain("idle")` over the whole result now passes on the `idle`
+ * COLUMN HEADING no matter what any row says — so every per-session fact below
+ * is asserted against the cell that is supposed to carry it. The header and its
+ * alignment row are excluded by identity against the exported constant, which
+ * is also what makes a mis-ordered or renamed column fail here rather than
+ * quietly re-point {@link COL}.
+ */
+function cells(text: string, handle: string): string[] {
+  const row = text
+    .split("\n")
+    .find(
+      (l) =>
+        l.startsWith("| ") &&
+        l.includes(handle) &&
+        !SESSION_TABLE_HEAD.includes(l),
+    );
+  expect(row, `no session row for ${handle}`).toBeDefined();
+  return row!
+    .split("|")
+    .slice(1, -1)
+    .map((c) => c.trim());
+}
+
+/** Column order — the row's, and `SESSION_TABLE_HEAD`'s. */
+const COL = {
+  handle: 0,
+  state: 1,
+  thread: 2,
+  channel: 3,
+  template: 4,
+  model: 5,
+  tool: 6,
+  idle: 7,
+} as const;
+
 describe("read_sessions — the summary shape (rollback §3.5)", () => {
   it("returns each session's name, state and thread", async () => {
     const listChannelSessions = vi.fn(async () => PAGE([
@@ -81,17 +160,58 @@ describe("read_sessions — the summary shape (rollback §3.5)", () => {
     const res = await opReadSessions(client);
     const text = res.content[0].text;
 
-    expect(text).toContain("flint");
-    expect(text).toContain("working");
-    expect(text).toContain("Deploy check");
-    expect(text).toContain("onyx");
-    expect(text).toContain("idle");
-    expect(text).toContain("no thread"); // the thread-less session says so
-    expect(text).toContain("quartz");
-    expect(text).toContain("ended");
+    expect(cells(text, "flint")[COL.state]).toBe("working");
+    expect(cells(text, "flint")[COL.thread]).toBe("`Deploy check`");
+    expect(cells(text, "onyx")[COL.state]).toBe("idle");
+    // ⚠ **WAS `no thread`, AND THE FACT IS THE SAME ONE.** The prose line said
+    // it in words; the grid says it with `—`, which the legend defines as NOT
+    // REPORTED — never zero and never "none". Asserted on the thread CELL and
+    // not on the page, because `—` also fills this row's operator-only columns.
+    expect(cells(text, "onyx")[COL.thread]).toBe("—");
+    expect(cells(text, "quartz")[COL.state]).toBe("ended");
+    expect(cells(text, "quartz")[COL.thread]).toBe("`Old ask`");
+    // ⚠ **TELEMETRY IS OPERATOR-ONLY, AND A PEER-SHAPED ROW CARRIES NONE.**
+    // These fixtures are `ChannelSessionState` — the type a peer's session maps
+    // to, which has none of the telemetry fields — so `sessionRow`'s `"model"
+    // in s` gate must dash every one of those columns. ⚠ A DASH, NOT A `0` AND
+    // NOT A BLANK: a grid begs to be filled, and a zero in a column nobody
+    // reported is a measurement nobody took, stated as fact.
+    for (const col of [COL.template, COL.model, COL.tool] as const) {
+      expect(cells(text, "flint")[col]).toBe("—");
+    }
     // ⚠ the caller's OWN sessions, never a peer's
     expect(text).toMatch(/Your sessions/i);
     expect(listChannelSessions).toHaveBeenCalledWith(undefined);
+  });
+
+  /**
+   * ⚠ **THE TERSENESS IS THE POINT, SO IT IS PINNED AS AN ABSENCE** (T13). This
+   * result used to close with two STANDING paragraphs on EVERY call — the
+   * handle note (~1.1k chars on how a handle is spent) and the telemetry note
+   * (~800 on whose telemetry this is) — to a reader that calls this op in a
+   * loop. Both are doctrine about the SURFACE rather than a report on these
+   * rows, and both moved to `dopl://doctrine/channels` and op="help", where a
+   * reader who needs them spends one call instead of every reader paying on
+   * every call. ⚠ Pasting either back is a REGRESSION, not a kindness — which
+   * is why this is a guard and not a deleted assertion.
+   */
+  it("carries neither standing paragraph any more — only the legend", async () => {
+    const listChannelSessions = vi.fn(async () => PAGE([SESSION()]));
+    const text = (await opReadSessions(stubClient({ listChannelSessions })))
+      .content[0].text;
+    // ⚠ BOTH HALVES, AND NEITHER IS SUFFICIENT ALONE. The absence proves the
+    // result got terse; the presence proves nothing was DELETED on the way — a
+    // move that drops a sentence and a move that keeps it look identical from
+    // the result side, which is how doctrine quietly disappears.
+    for (const phrase of NOTE_PHRASES) {
+      expect(CHANNEL_DOCTRINE, `${phrase} left the doctrine`).toContain(phrase);
+      expect(text, `${phrase} is back in the read_sessions result`).not.toContain(
+        phrase,
+      );
+    }
+    // ⚠ …AND THE ONE THAT STAYS, because it is the only standing text that
+    // decodes THIS page's own cells: a `—` is unreadable without it.
+    expect(text).toContain("never zero");
   });
 
   it("the three states are the only vocabulary — no 'thinking'", async () => {
@@ -110,8 +230,18 @@ describe("read_sessions — the summary shape (rollback §3.5)", () => {
     const text = res.content[0].text;
     expect(res.isError).toBeUndefined();
     expect(text).toMatch(/no live sessions/i);
-    // ⚠ points at reading the shared thread for a PEER, not at this op
-    expect(text.toLowerCase()).toContain("peer");
+    // ⚠ THE FACT OF THIS CALL STAYS IN THE RESULT: an empty page is not
+    // evidence there are no sessions, and that is the sentence an orchestrator
+    // reads at the moment it decides whether to keep waiting.
+    expect(text).toMatch(/not the same as having none/i);
+    // ⚠ **THE PEER POINTER MOVED, AND IS ASSERTED WHERE IT LANDED** (T10). This
+    // read `toContain("peer")` against the result, which said in every empty
+    // answer that a PEER's work is read off the shared thread. That is standing
+    // doctrine, not a report on this call, so the result now carries the one-line
+    // pointer and the doctrine carries the rule.
+    expect(text).toContain(DOCTRINE_URI);
+    expect(text).toContain('op="help"');
+    expect(CHANNEL_DOCTRINE).toContain("To learn what a PEER is doing");
   });
 
   it("a channel arg resolves the ref and filters the read to that channel id", async () => {
@@ -167,7 +297,12 @@ describe("read_sessions — the summary shape (rollback §3.5)", () => {
       const listChannelSessions = vi.fn(async () => PAGE([SESSION({ state })]));
       const text = (await opReadSessions(stubClient({ listChannelSessions })))
         .content[0].text;
-      expect(text).toContain(`— ${state} ·`);
+      // ⚠ **THE WHOLE CELL, NOT A SUBSTRING** (T13). `— ${state} ·` pinned the
+      // prose line's delimiters; the equivalent guard on a grid is that the
+      // state cell is the state and NOTHING else — which also catches the
+      // failure the sibling case is about, a hedge or a forged fragment
+      // riding along beside a state that passed the membership test.
+      expect(cells(text, "flint")[COL.state]).toBe(state);
       expect(text).not.toContain("(unrecognized state)");
     }
   });
@@ -229,7 +364,13 @@ describe("create_thread handoff (rollback §3.5)", () => {
       true,
     );
     const text = res.content[0].text;
-    expect(text).toMatch(/HANDOFF/);
+    // ⚠ **THE VERDICT IS A TOKEN NOW, AND IT SAYS THE SAME THING** (T10). The
+    // three paragraphs this pinned — `HANDOFF`, `OPENS NOTHING TODAY`, `F-274` —
+    // were an account of a flag that does nothing; `handoff=ignored` is that
+    // account, stated once, in the field the caller set. What may NOT weaken is
+    // that the result still refuses to report an OUTCOME the server cannot see,
+    // and the negatives below are unchanged from the day F-274 was filed.
+    expect(text).toContain("handoff=ignored");
     // ⚠ **REWRITTEN 2026-08-22 (F-274), AND THE OLD ASSERTIONS WERE PINNING THE
     // DEFECT.** They required a HEDGE — "REQUESTED, not confirmed", "never learns
     // whether a session started" — which was the right shape for a request whose
@@ -237,16 +378,16 @@ describe("create_thread handoff (rollback §3.5)", () => {
     // outcome became KNOWABLE and always the same: `main/targeting.js ›
     // requesterTaskOpen` has had no caller since F-228, so nothing opens, ever.
     // A hedge over a certainty is a lie with better manners.
-    expect(text).toContain("OPENS NOTHING TODAY");
-    expect(text).toContain("F-274");
-    // ⚠ THE OPERATIVE FIX. The old copy said `do NOT arm op="await" yet`, and an
-    // external session obeyed it: nothing opened, nobody watched the thread, and
-    // the peer's reply was read by no one. The result must now tell the caller
-    // the wait is ITS OWN.
+
+    // ⚠ THE OPERATIVE FIX, AND IT SURVIVED THE TERSENING. The old copy said
+    // `do NOT arm op="await" yet`, and an external session obeyed it: nothing
+    // opened, nobody watched the thread, and the peer's reply was read by no
+    // one. `await=since:41` is that instruction AND the cursor in one token — a
+    // stronger form than the sentences it replaces ("you must arm the wait
+    // yourself", "NOBODY is watching this thread"), which said the same thing in
+    // words and charged every caller for them.
     expect(text).not.toContain('do NOT arm op="await"');
-    expect(text).toContain("you must arm the wait yourself");
-    expect(text).toContain("since=41");
-    expect(text).toContain("NOBODY is watching this thread");
+    expect(text).toContain("await=since:41");
     // ⚠ Nothing may tell the agent the desktop has it, in any wording.
     expect(text).not.toContain("A full session is opening");
     expect(text).not.toContain("You are done with this thread");
@@ -271,14 +412,18 @@ describe("create_thread handoff (rollback §3.5)", () => {
     // where something else picks the thread up, so "how to notice that nothing
     // did" is not a branch any more — the await is simply what happens next, and
     // it is stated first rather than as a contingency.
-    expect(text).toContain('op="await"');
-    // ⚠ Still the REAL cursor, so taking it cannot start past the peer's reply.
-    expect(text).toContain("since=41");
+    // ⚠ It is the `await=` FIELD rather than the words `op="await"` since T10:
+    // one token carries the instruction AND the REAL cursor, so taking it still
+    // cannot start past the peer's reply.
+    expect(text).toContain("await=since:41");
     expect(text).not.toContain("IF NOTHING PICKS IT UP");
     // ⚠ AND THE CAPABILITY THE CALLER ACTUALLY WANTED IS NAMED. Without this the
     // result closes a door and opens none, which is how an agent invents a
     // workaround.
-    expect(text).toContain('op="launch_agent"');
+    // ⚠ …AND IT IS NAMED IN THE DOCTRINE, not on every create. Stating it per
+    // call charged every caller for a pointer; dropping it entirely would close
+    // a door and open none, which is how an agent invents a workaround.
+    expect(CHANNEL_DOCTRINE).toContain('op="launch_agent"');
   });
 
   it("a handoff create with NO opening seq asks for the cursor instead of inventing one", async () => {
@@ -297,9 +442,19 @@ describe("create_thread handoff (rollback §3.5)", () => {
       true,
     );
     const text = res.content[0].text;
+    // ⚠ A CURSOR IS NEVER INVENTED, and the terse form makes that legible: an
+    // unreported seq DASHES in both fields rather than printing a number the
+    // server never had. A fabricated `since` silently skips the peer's reply,
+    // which is the failure this case exists for.
     expect(text).not.toContain("since=null");
     expect(text).not.toContain("since=undefined");
-    expect(text).toContain('op="read"');
+    expect(text).not.toContain("since:null");
+    expect(text).toContain("seq=-");
+    expect(text).toContain("await=-");
+    // ⚠ "Go and read the cursor yourself" left the result with every other
+    // standing sentence; the dash is this call's statement that there is nothing
+    // to take, and the doctrine still names the op that takes it.
+    expect(CHANNEL_DOCTRINE).toContain('"read"');
   });
 
   it("WITHOUT handoff, behaviour is unchanged: the create keeps the reply and arms await", async () => {
@@ -317,7 +472,11 @@ describe("create_thread handoff (rollback §3.5)", () => {
     const [, input] = createChannelThread.mock.calls[0];
     expect(input.handoff).toBeUndefined();
     const text = res.content[0].text;
-    expect(text).not.toMatch(/HANDOFF/);
-    expect(text).toContain('op="await"');
+    // ⚠ The handoff FIELD dashes rather than vanishing, so "not requested" and
+    // "requested and ignored" stay two readings of one line and never one
+    // absence. The await instruction is identical on both branches.
+    expect(text).toContain("handoff=-");
+    expect(text).not.toContain("handoff=ignored");
+    expect(text).toContain("await=since:41");
   });
 });

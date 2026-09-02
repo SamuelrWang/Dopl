@@ -27,6 +27,8 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+/** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
+ *  id is the only handle the agent has left, and says NOT to re-issue. */
 /**
  * ASK FOR AN AGENT, then hold briefly for the answer.
  *

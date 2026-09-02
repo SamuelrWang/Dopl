@@ -53,6 +53,10 @@ const READ_OPS: Record<string, string[]> = {
   // answering the second with the first is how a write op becomes callable
   // from a read-only token.
   dopl_channel: [
+    // `op="help"` RETURNS A CONSTANT AND MAKES NO REQUEST AT ALL — the same text
+    // as the `dopl://doctrine/channels` MCP resource. It reads nothing, so it is
+    // not merely "not a write": there is no client call in the handler to audit.
+    "help",
     "list",
     "read",
     "await",

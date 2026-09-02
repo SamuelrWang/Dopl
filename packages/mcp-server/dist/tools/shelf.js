@@ -64,7 +64,7 @@ exports.SHELF_ABSENT_RULE = `\`shelf\` absent means BOTH shelves on a READ and t
  * split, because the single most likely mistake is reaching for
  * `shelf="personal"` when the caller meant `workspace=<home channel container>`.
  */
-exports.SHELF_ARG_DESCRIPTION = `Which SHELF to target: "personal" = your own /home shelf (the private rows inside your DEFAULT workspace), "workspace" = the workspace's shared shelf. ${exports.SHELF_ABSENT_RULE} This is NOT how you reach a home CHANNEL — a home channel is a workspace, addressed with \`workspace=<container id>\`.`;
+exports.SHELF_ARG_DESCRIPTION = `Which SHELF to target: "personal" = your own PERSONAL shelf (the private rows inside your DEFAULT workspace), "workspace" = the workspace's shared shelf. ${exports.SHELF_ABSENT_RULE} This is NOT how you reach a home CHANNEL — a home channel is a separate container, addressed with \`workspace=<container id>\`, and it has no personal shelf at all.`;
 /**
  * 🔒 THE HOME-SHELF FENCE, SURFACED. Both features answer 403 with their own
  * code — `HOME_SCOPE_FORBIDDEN` (knowledge) / `TEMPLATE_HOME_SCOPE_FORBIDDEN`
@@ -94,7 +94,26 @@ function homeShelfForbidden(e) {
     }
     const msg = e.apiMessage;
     const detail = typeof msg === "string" && msg
-        ? msg
+        ? personalShelfNoun(msg)
         : "This cannot be created on your personal shelf.";
     return `${detail} Nothing was created. The personal shelf needs THREE things at once: a credential that stands for a PERSON (a shared or service credential has no personal shelf), a PRIVATE row, and your OWN default workspace as the target — so \`workspace=\` naming a home-channel container or a second workspace you own is refused here by design. Create it on the workspace shelf instead (omit \`shelf\`), or retry without \`workspace=\`.`;
+}
+/**
+ * ⚠ THE WIRE NOUN, MAPPED — the ONE place a server sentence is re-spelled on its
+ * way to an agent.
+ *
+ * The server calls this shelf the "home shelf" (`knowledge/server/errors.ts`,
+ * `agent-templates/server/errors.ts`), and this surface calls it the PERSONAL
+ * shelf, because "home" is already the word for the CHANNEL — a different axis
+ * with different storage. Passing the server's spelling through verbatim
+ * produced a single refusal that said "the home shelf" and "personal shelf" in
+ * one breath, which is the exact conflation this tier exists to remove.
+ *
+ * ⚠ IT RE-SPELLS A NOUN AND NOTHING ELSE. The server's sentence is still the
+ * only text that knows WHICH of the three conditions failed, so it is not
+ * replaced, summarized, or dropped — a mapping table here that grew arms would
+ * be a second, staler copy of the server's reasoning.
+ */
+function personalShelfNoun(message) {
+    return message.replace(/\/?home shelf/gi, "personal shelf");
 }

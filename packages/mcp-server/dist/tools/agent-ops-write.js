@@ -79,7 +79,7 @@ async function opCreate(client, callerUserId, input) {
         tool: "dopl_agent",
         op: "create",
         callerUserId,
-        what: `an agent template named ${(0, narration_js_1.inlineOr)(input.name, agent_shared_js_1.NO_NAME)}, shared with the whole container`,
+        what: `an agent template named ${(0, narration_js_1.inlineOr)(input.name, agent_shared_js_1.NO_NAME)}, shared with the whole home channel`,
         audience: `everyone in that home channel — the peer standing in it can list it, read its instructions, and launch it`,
         payload: {
             name: input.name,
@@ -160,7 +160,7 @@ async function opUpdate(client, callerUserId, ref, input) {
         tool: "dopl_agent",
         op: "update",
         callerUserId,
-        what: `sharing the agent template ${(0, narration_js_1.inlineOr)(template.name, agent_shared_js_1.NO_NAME)} (id: \`${template.id}\`) with the whole container`,
+        what: `sharing the agent template ${(0, narration_js_1.inlineOr)(template.name, agent_shared_js_1.NO_NAME)} (id: \`${template.id}\`) with the whole home channel`,
         audience: `everyone in that home channel — the peer standing in it can list it, read its instructions, and launch it`,
         payload: {
             template: template.id,

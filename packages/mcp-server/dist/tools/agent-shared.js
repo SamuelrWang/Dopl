@@ -206,4 +206,4 @@ function templateRow(t, personal = false) {
  * that does not send the key — rather than letting an absent label be read as an
  * assertion.
  */
-exports.TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE. Another member's private templates, and team templates you have no grant on, are not listed — this is your view, not the workspace's roster. A row marked \`personal\` is on your own /home shelf and does not appear on the workspace Agents page; an UNMARKED row is on the workspace shelf, or on a server too old to say._`;
+exports.TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE. Another member's private templates, and team templates you have no grant on, are not listed — this is your view, not the workspace's roster. A row marked \`personal\` is on your own personal shelf and does not appear on the workspace Agents page; an UNMARKED row is on the workspace shelf, or on a server too old to say._`;

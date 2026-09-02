@@ -24,26 +24,25 @@ import type {
   MessageIntent,
 } from "@dopl/client";
 import { ok, err, type ToolResponse } from "./respond";
+// ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
+// FIELDS, not prose; the standing rules they used to restate live once in
+// `channel-doctrine.ts`, behind `op="help"`.
+import { factsLine, type FactValue } from "./channel-facts";
 // "Did it thread?" — the question a sender cannot otherwise settle.
-import { threadLinkageNote } from "./channel-post-linkage";
-// "What did the ADDRESSING do?" — conflict note + addressed/chat/unaddressed line.
-import {
-  CHAT_ADDRESSED_REFUSAL,
-  postAddressLines,
-} from "./channel-post-notes";
-// "What may I do NEXT?" — the sparse main-room post and the @-tag, taught in the
-// RESULT because that is where the decision is made (INVARIANTS §10).
-import { postGuidanceLines } from "./channel-post-guidance";
+import { threadFacts } from "./channel-post-linkage";
+// The one refusal that is not a fact about a successful write.
+import { CHAT_ADDRESSED_REFUSAL } from "./channel-post-notes";
+// "What became of the `@…` tokens?" — the server's own resolution, read back.
+import { postMentionFacts } from "./channel-post-guidance";
 import {
   inlineOr,
   isErr,
-  metaString,
   resolveChannelOr,
   resolveMemberOr,
 } from "./channel-shared";
 // ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
-import { postReplyLines } from "./channel-wake-guidance";
+import { awaitFact } from "./channel-wake-guidance";
 // ⚠ A 400's MEANING is read off its CODE, never guessed from its status.
 import {
   FIELD_CAPS_NOTE,
@@ -123,6 +122,21 @@ interface PostOptions {
    * card it renders carries buttons that write back and wake an agent.
    */
   escalation?: ChannelMessageInput["escalation"];
+  /**
+   * The VERB the terse result opens with. Defaults to `posted`.
+   *
+   * ⚠ THE OPS THAT RIDE THIS ONE NEED THEIR OWN WORD. `milestone` and
+   * `escalate` both delegate here rather than growing a second delivery path,
+   * and a result that opened `posted` for all three would report the wrong act
+   * — the one kind of wrong nothing downstream can detect.
+   */
+  resultHead?: string;
+  /**
+   * Facts only the CALLING op knows, appended after the shared ones. ⚠ Kept to
+   * things the server observed about this write (an option count, a resolved
+   * posture) — never guidance, which belongs in `channel-doctrine.ts`.
+   */
+  resultFacts?: Record<string, FactValue>;
 }
 
 export async function opPost(
@@ -241,67 +255,59 @@ export async function opPost(
     throw e;
   }
 
-  const kindNote = message.kind !== "message" ? `, kind ${message.kind}` : "";
-  // ⚠ `toLabel` is already render-safe from its resolver — do not re-wrap.
-  const toNote = toLabel ? `, addressed to ${toLabel}` : "";
-  // ⚠ `landedThread` read back off the STORED message: what actually landed,
-  // not what was asked for.
-  const addressLines = postAddressLines({
-    channelId: ch.id,
-    safeChannelName: chName,
-    isDirect: ch.isDirect,
-    intent: opts.intent,
-    toLabel,
-    landedThread: metaString(message, "taskId"),
-  });
-  // Second line under the confirmation — a sender cannot otherwise tell
-  // continuation from new request, and the tag drop it catches is silent.
-  const linkage = await threadLinkageNote(
-    client,
-    ch.id,
-    chName,
+  // ── THE RESULT: ONE LINE OF FACTS (T10/T12, 2026-09-02) ──────────────────
+  //
+  // ⚠ WHAT THIS REPLACED, AND THE RULE THAT DECIDED IT. A successful post used
+  // to return ~2.5–3.5k characters: the addressing paragraph, the thread-linkage
+  // paragraph, the per-mention breakdown, the five causes a tag resolves to
+  // nobody, the main-room sparseness bar, the await lecture and its stop rule.
+  // Every one of those was true BEFORE this call and is true AFTER it — standing
+  // doctrine, re-transmitted on every write, ~25 times in one measured
+  // orchestration run. It is stated once now, in `channel-doctrine.ts`.
+  //
+  // ⚠ EVERY FIELD BELOW IS SOMETHING ONLY THIS CALL KNOWS, and each replaces a
+  // paragraph rather than deleting one:
+  //   seq/msg   — the cursor and the id a follow-up call needs.
+  //   thread    — read off the STORED message, so `landed=dropped` still catches
+  //               the silent tag-drop the long note existed for.
+  //   addressed — T12: the whole of the "NOT ADDRESSED" paragraph. `no` means no
+  //               agent was put in front of this post; the doctrine says why.
+  //   intent    — `chat` addresses nobody ON PURPOSE, so it must be
+  //               distinguishable from a forgotten `to`.
+  //   tags      — the server's own mention resolution. THE ONE THING IN THE
+  //               PRODUCT THAT CATCHES A MISSPELLED HANDLE (INVARIANTS §10):
+  //               `0/1` is the verdict, and it may never be dropped for brevity.
+  //   wake      — the `@agent-…` handles the body named. NOT counted in `tags`:
+  //               they resolve on the operator's machine, never on the server.
+  //   await     — the one runtime-derived branch: arm from this seq, or skip.
+  const landing = threadFacts(
     message,
     // ⚠ The caller named a thread if EITHER argument carried one. `metadata` is
     // a caller-settable passthrough whose schema description tells agents to
     // put `taskId` in it, and it is forwarded untouched when `thread` is
     // absent — reading `opts.thread` alone makes such a post look unthreaded
-    // and produces a false "you named no thread" claim.
+    // and produces a false `landed=dropped`.
     opts.thread ??
       (typeof opts.metadata?.taskId === "string" && opts.metadata.taskId.trim()
         ? opts.metadata.taskId
         : undefined),
   );
+  const mentions = postMentionFacts(body, message);
   return ok(
-    [
-      `Posted to **${chName}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`,
-      ...addressLines,
-      ...(linkage ? [linkage] : []),
-      // ⚠ WHERE IT LANDED decides which capability is worth teaching here, and
-      // the answer comes off the STORED message like every other line above —
-      // a post that asked for a thread and did not get one is a MAIN-ROOM post,
-      // whatever the caller intended.
-      ...postGuidanceLines({
-        channelId: ch.id,
-        landedThread: metaString(message, "taskId"),
-        body,
-        message,
-      }),
-      // ⚠ A `closedThreadNote(ch.id)` line rode here whenever the server
-      // answered `threadClosed`. Both went with thread closing (wiring plan
-      // Phase 4, 2026-08-18): nothing settles a thread, so nothing can raise it.
-      // ⚠ Whether the await outlives this turn is `channel-wake-guidance.ts`'s
-      // to assert, off the caller's observed runtime — never promise it here.
-      //
-      // Stop rule rides with it: "re-arm on timeout" with no exit loops forever
-      // over an abandoned exchange, but a plain timeout COUNTER abandons a peer
-      // legitimately heads-down for 20+ minutes. The exit is the THREAD's state.
-      ...postReplyLines(
-        ch.id,
-        message.seq,
-        opts.runtime ?? null,
-        `Keep re-arming while the exchange is alive; an agent working a real task can be quiet for a long stretch. Every ~3 empty holds, check first with op="read" for new activity — a working agent posts task_progress as it goes. Judge that on the member you addressed alone: in a channel with others, their traffic is not evidence YOUR exchange is alive. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`,
-      ),
-    ].join("\n"),
+    factsLine(opts.resultHead ?? "posted", {
+      seq: message.seq,
+      msg: message.id,
+      thread: landing.thread,
+      landed: landing.landed,
+      // ⚠ Read off `toUserId`, which is what the server was given — never off
+      // `toLabel`, which is only ever the render of it.
+      addressed: !!toUserId,
+      intent: opts.intent ?? "request",
+      tags: mentions.tags,
+      wake: mentions.wake,
+      await: awaitFact(opts.runtime ?? null, message.seq),
+      ...(opts.resultFacts ?? {}),
+    }),
   );
 }
 

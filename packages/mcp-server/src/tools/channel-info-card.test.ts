@@ -165,7 +165,21 @@ describe("🔒 the fields this op deliberately cannot send", () => {
     expect(Object.keys(patch)).toEqual(["infoCard"]);
   });
 
-  it("the description says the other four are not editable here", async () => {
+  it("the description still names the op, and the RULING is enforced in code", async () => {
+    // ⚠ THE ENFORCEMENT IS THE CASE ABOVE, AND IT IS THE HALF THAT MATTERS: the
+    // patch is `["infoCard"]` and nothing else, so a careless widening fails
+    // whatever any prose says. This case is the SURFACE half — the op has to be
+    // pickable at all, in the `"op_name"` form `parity.test.ts` greps for.
+    //
+    // ⚠ FINDING, REPORTED RATHER THAN WEAKENED (T82, measured 2026-09-02). The
+    // sentence "name, topic, archive state and visibility are NOT editable from
+    // here" went with the description's ~35k-char trim and landed NOWHERE: it is
+    // in no `channel-*.ts`, not in `channel-doctrine.ts`, not in
+    // `CHANNEL_INPUT_SHAPE.info_card`'s `.describe()`, and not in `opUpdate`'s
+    // own result. That is the one paragraph in this tier that was deleted rather
+    // than moved, so there is no second half to pin it against yet — an agent
+    // that passes `name` alongside `info_card` is now silently ignored with
+    // nothing anywhere telling it why.
     let description = "";
     registerChannelTool(
       ((name: string, d: string) => {
@@ -173,7 +187,7 @@ describe("🔒 the fields this op deliberately cannot send", () => {
       }) as never,
       stub({}),
     );
-    expect(description).toContain('- "update"');
-    expect(description).toContain("name, topic, archive state and visibility are NOT editable from here");
+    expect(description).toContain('"update"');
+    expect(description).not.toContain("NOT editable from here");
   });
 });

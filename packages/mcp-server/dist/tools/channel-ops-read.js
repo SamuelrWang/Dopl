@@ -27,10 +27,14 @@ const channel_render_1 = require("./channel-render");
 const channel_render_threads_1 = require("./channel-render-threads");
 // ⚠ Addressing rule has ONE statement, in channel-addressing.ts.
 const channel_addressing_1 = require("./channel-addressing");
+// ⚠ THE ONE LINE A READ RESULT SPENDS ON THE RULES. Every standing paragraph
+// these ops used to close with is in `channel-doctrine.ts`, behind `op="help"`
+// and the `dopl://doctrine/channels` resource.
+const channel_doctrine_1 = require("./channel-doctrine");
 // ⚠ The session LINE — staleness hedge + operator-only telemetry — has ONE
 // statement, in channel-session-render.ts, shared with `await`'s session block.
 const channel_session_render_1 = require("./channel-session-render");
-const channel_session_handle_1 = require("./channel-session-handle");
+const channel_session_table_1 = require("./channel-session-table");
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
 async function opList(client) {
@@ -38,12 +42,12 @@ async function opList(client) {
     if (channels.length === 0) {
         return (0, respond_1.ok)('No channels yet. Create one with dopl_channel(op="open", name="...").');
     }
-    const lines = [
-        `## Channels — ${channels.length}\n`,
-        // ⚠ Framing FIRST — member-typed names/topics, and a PUBLIC channel puts a
-        // stranger's text before an agent that never opted into contact.
-        `${channel_render_1.UNTRUSTED_LISTING_HEADER}\n`,
-    ];
+    // ⚠ NO PER-RESULT SECURITY BANNER (T11, 2026-09-02). The framing did not go
+    // away — it moved to CHANNEL_DESCRIPTION's own SECURITY paragraph, which is
+    // read at connection and covers every result this tool returns. It is
+    // repeated here no longer because ~3k chars of identical banner on every
+    // read/list/await is what the orchestrator loop actually pays.
+    const lines = [`## Channels — ${channels.length}\n`];
     for (const c of channels)
         lines.push((0, channel_render_1.formatChannelLine)(c));
     lines.push('\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="post"; watch for new messages with op="await".');
@@ -110,13 +114,11 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread) {
         return (0, respond_1.ok)(`No messages in **${ref}**${sinceNote}. Watch for new ones with ${watch}${since ?? 0}).`);
     }
     const count = `${messages.length} message${messages.length === 1 ? "" : "s"}`;
+    // ⚠ Banner moved to the tool DESCRIPTION (T11) — see opList.
     const lines = [
         scope
             ? `## ${ref} — ${count} in thread ${safeScope} (ONE exchange, not the whole channel)\n`
             : `## ${ref} — ${count}\n`,
-        // ⚠ Framing FIRST — a caveat under counterparty bodies is read after the
-        // injected line it warns about.
-        `${channel_render_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
     // ⚠ No roster read here — hot path, the whole reason `read` skips `resolveChannelOr`.
     lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
@@ -129,7 +131,13 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread) {
     // ⚠ Thread-scoped read yields NO channel-wide cursor — so it prints no
     // summary seq. See the docblock: naming the number and forbidding it in the
     // same sentence is what shipped, and the number is what got used.
-    lines.push(`\nNO CURSOR FROM THIS READ — it is deliberately not offering one. \`thread\` FILTERED other exchanges out of this page, and \`await\` is CHANNEL-WIDE with a strict "greater than", so a seq taken from here would skip every message this filter hid — permanently, because a cursor only moves forward. Await from the highest seq below which you have seen EVERYTHING in this channel. If you do not have one, establish it by reading the channel unscoped (drop \`thread\`) and awaiting from that page's last seq.`);
+    // ⚠ THE ONE SENTENCE THAT MAY NOT SHRINK TO A TOKEN. `cursor=none` alone reads
+    // as "this page has no cursor yet", and the agent then takes the highest
+    // `**#seq**` off a message row — which is exactly the footgun. WHY there is no
+    // cursor is the whole content: a larger `since` returns FEWER messages, so a
+    // seq from a FILTERED page silently and permanently drops every row the filter
+    // hid. One line, and the remedy is in it.
+    lines.push(`\ncursor=none — \`thread\` filtered rows out of this page, and \`await\` is channel-wide with a strict "greater than", so a seq taken from here would permanently skip what the filter hid. Await from the highest seq below which you have seen EVERYTHING in this channel; read unscoped to establish one.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /** Peer-influenced display text (a session's channel name), neutralized for a
@@ -183,31 +191,48 @@ async function opReadSessions(client, ref) {
     // report it, and the render must hedge exactly as it did before.
     const { sessions, operatorOnline } = await client.listChannelSessions(channelId);
     if (sessions.length === 0) {
-        return (0, respond_1.ok)(`No live sessions of yours are being reported${channelLabel} right now. This lists the agent sessions running on YOUR OWN machine, not another member's — to see what a PEER is doing, watch the thread you share with op="read" / op="await". If you expected a session here and see none, it may simply not be running, or your desktop has not reported its state yet.`);
+        return (0, respond_1.ok)(
+        // ⚠ "BEING REPORTED" IS THE LOAD-BEARING PHRASE and may never become "you
+        // have none": an asleep, signed-out or older machine reports nothing, so
+        // an empty page is not evidence a session is not running. The rest — that
+        // this is your own side only — is in the doctrine.
+        `No live sessions of yours are being REPORTED${channelLabel} right now. That is not the same as having none: an asleep, signed-out or older machine reports nothing. ${channel_doctrine_1.DOCTRINE_POINTER}`);
     }
     // ⚠ ONE `now` FOR THE WHOLE PAGE. Calling `Date.now()` per line lets two
     // sessions pushed in the same instant land on either side of the window and
     // render with different tenses, which reads as a fact about them.
     const now = Date.now();
     const anyStale = sessions.some((s) => (0, channel_session_render_1.sessionIsStale)(s, now));
+    // ⚠ A TABLE, AND ONLY A TABLE (T13, 2026-09-02). Banner moved to the tool
+    // DESCRIPTION (T11) — see opList.
+    //
+    // ⚠ WHAT LEFT, AND WHY IT IS NOT A LOSS. This result used to close with three
+    // standing paragraphs — the legend, SESSION_HANDLE_NOTE (~1.1k chars on how a
+    // handle is spent) and SESSION_TELEMETRY_NOTE (~800) — on EVERY call, to a
+    // reader who calls this op in a loop. The legend stays, because it is the one
+    // that decodes THIS page's own cells and it is conditional on the page
+    // actually containing a hedged row. The other two are standing DOCTRINE about
+    // the surface rather than a report on these rows: they moved to
+    // dopl://doctrine/channels and dopl_channel(op="help"), which is where a
+    // reader who needs them can spend one call, instead of every reader paying
+    // for them on every call.
     const lines = [
         `## Your sessions — ${sessions.length}${channelLabel}\n`,
-        // ⚠ Framing FIRST — channel names / thread titles below are
-        // counterparty-influenced, same class as a channel listing's.
-        `${channel_render_1.UNTRUSTED_LISTING_HEADER}\n`,
+        ...channel_session_table_1.SESSION_TABLE_HEAD,
     ];
     for (const s of sessions) {
         // ⚠ `handle: true` — this op is own-scoped by construction (it "never shows
         // a PEER's sessions"), which is the audience question
         // {@link SessionRenderOpts.handle} asks. See it for why an agent id is not
         // published on a peer row.
-        lines.push((0, channel_session_render_1.formatSessionLine)(s, { telemetry: true, handle: true, now, operatorOnline }));
+        lines.push((0, channel_session_table_1.sessionRow)(s, { telemetry: true, handle: true, now, operatorOnline }));
     }
-    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} To watch one, open it in the Dopl app's Agents tab; to reach the PEER a thread is with, post into that thread.`, 
-    // ⚠ THE HANDLE NOTE SITS ABOVE THE TELEMETRY ONE, because it answers the
-    // question this op is actually asked ("which of these can I direct, and
-    // how") and the telemetry note answers a narrower one about the clauses.
-    `\n${channel_session_handle_1.SESSION_HANDLE_NOTE}`, `\n${channel_session_render_1.SESSION_TELEMETRY_NOTE}`);
+    // ⚠ THE LEGEND STAYS AND THE POINTER IS ONE LINE. The legend decodes THIS
+    // page's own cells and is conditional on the page actually containing a hedged
+    // row; the standing description of the columns (which are operator-only, what
+    // a `—` means, why a row is a REPORT and not an observation) is doctrine and
+    // is read once, not on every call of an op an orchestrator polls in a loop.
+    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale, operatorOnline)} ${channel_doctrine_1.DOCTRINE_POINTER}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opListThreads(client, ref, selfUserId = null) {
@@ -247,7 +272,11 @@ async function opListThreads(client, ref, selfUserId = null) {
     const view = { selfUserId, names: await (0, channel_shared_1.memberNames)(client, ref) };
     for (const t of threads)
         lines.push((0, channel_render_1.formatThreadLine)(t, view));
-    lines.push(`\nInspect one with dopl_channel(op="get_thread", channel="${ref}", thread=<id>); read its messages with op="read" (pass the same thread=<id> to see only that exchange). A thread accepts posts ONLY from the member who opened it and the member it is addressed to — everyone else in the channel can read it and is refused if they post into it.`);
+    // ⚠ ONE POINTER LINE (T11/T82, 2026-09-02). The pair-only WRITE RULE that used
+    // to close this listing is standing doctrine — true of every thread in every
+    // channel — and is stated in `channel-doctrine.ts` under THE MODEL. What stays
+    // is the two calls a reader of THIS page needs next.
+    lines.push(`\nRead one with op="read" (thread=<id>); inspect it with op="get_thread". ${channel_doctrine_1.DOCTRINE_POINTER}`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opGetThread(client, ref, threadId, selfUserId = null) {

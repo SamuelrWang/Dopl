@@ -38,14 +38,13 @@ const channel_await_budget_1 = require("./channel-await-budget");
 // ⚠ The re-arm text branches on the caller's runtime here too, for the same
 // reason it does per-channel: an unstamped caller may not be promised a wake.
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
-const channel_session_render_1 = require("./channel-session-render");
+const channel_session_table_1 = require("./channel-session-table");
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed channel)";
 /**
  * A thrown inner-poll failure reduced to one short NEUTRALIZED line.
- * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: this rides
- * OUTSIDE {@link UNTRUSTED_BODY_HEADER}'s framing, and "our own server's error"
- * says nothing about its CONTENT.
+ * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: no framing
+ * covers this line, and "our own server's error" says nothing about its CONTENT.
  */
 function describeFailure(e) {
     let raw;
@@ -214,7 +213,7 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, run
                 `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="await", since=${cursor}).`,
                 `If the very next hold fails the same way, stop re-arming and report it to your operator.`,
                 workspaceRearmStopRule(),
-                ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
+                ...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline),
             ].join("\n"));
         }
         if (elapsedMs < Math.min(channel_await_budget_1.AWAIT_SHORT_HOLD_MS, holdMs / 2)) {
@@ -234,10 +233,11 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, run
             timedOut,
             scopeNote(channelCount),
             ...(0, channel_wake_guidance_1.workspaceAwaitTimedOutLines)(cursor, runtime),
-            ...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline),
+            ...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline),
         ].join("\n"));
     }
     const groups = groupByChannel(messages);
+    // ⚠ Banner moved to CHANNEL_DESCRIPTION's SECURITY paragraph (T11).
     const lines = [
         `## Workspace — ${messages.length} new message${messages.length === 1 ? "" : "s"} since seq ${cursor}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
         // ⚠ Framing FIRST — counterparty-written bodies, so the caveat must be read
@@ -263,6 +263,6 @@ async function opAwaitWorkspace(client, since, timeoutMs, selfUserId = null, run
     lines.push(``, scopeNote(channelCount));
     lines.push(`Highest seq shown: ${lastSeq}. Re-arm with dopl_channel(op="await", since=${lastSeq}) — and read the "· to ..." and "· thread ..." tags on each line first: a workspace hold is even less targeted than a channel one, so most of what wakes you is context, not a request.`);
     lines.push(workspaceRearmStopRule());
-    lines.push(...(0, channel_session_render_1.sessionBlockLines)(sessions, undefined, operatorOnline));
+    lines.push(...(0, channel_session_table_1.sessionBlockLines)(sessions, undefined, operatorOnline));
     return (0, respond_1.ok)(lines.join("\n"));
 }

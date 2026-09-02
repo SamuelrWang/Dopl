@@ -25,7 +25,7 @@ const WORKSPACE_ARG_SHAPE = {
     workspace: zod_1.z
         .string()
         .optional()
-        .describe("Workspace slug or UUID to target for this single call. Omit to use the session's workspace (see `current_workspace`). REQUIRED on every call when the user belongs to 2+ workspaces — there is no default then, so a no-arg call is refused with the list of choices. Use `list_workspaces` to discover slugs."),
+        .describe("Workspace slug or UUID to target for this single call, OR the container id of a home channel — a home channel is addressed here, by id, and that is the only way to reach one. Omit to use the session's workspace (see `current_workspace`). REQUIRED on every call when there is no session default, which is every caller with 2+ standard workspaces; a no-arg call is then refused with the list of choices. ⚠ THAT COUNT IGNORES HOME CHANNELS: one workspace plus two home channels still auto-targets the workspace, so omitting this arg silently misses the two rooms. Discover with `list_workspaces` for workspace slugs and `dopl_home(op=\"list_channels\")` for home-channel container ids — the first does not list the second."),
 };
 /**
  * ⚠ AN UNKNOWN ARGUMENT MUST BE REFUSED, NOT STRIPPED. A raw shape becomes a

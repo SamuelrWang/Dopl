@@ -30,11 +30,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  SESSION_HANDLE_NOTE,
-  addressableHandle,
-} from "./channel-session-handle";
+import { addressableHandle } from "./channel-session-handle";
 import { formatSessionLine } from "./channel-session-render";
+// ⚠ THE PAGE RENDERER MOVED with the table it renders (T13) — see
+// `channel-session-table.ts`'s header for why the dependency runs one way.
+import { sessionBlockLines } from "./channel-session-table";
+// THE HANDLE RULE'S NEW HOME. It is shipped prose, pulled on demand, and these
+// pins are what keep it word-for-word what it was in the deleted constant.
+import { CHANNEL_DOCTRINE, CHANNEL_OWN_AGENTS } from "./channel-doctrine";
 import type { ChannelSessionStateOwn } from "@dopl/client";
 
 const NOW = Date.parse("2026-08-31T05:00:00.000Z");
@@ -127,13 +130,29 @@ describe("the session LINE carries the handle, and only for an own row", () => {
   });
 });
 
-describe("SESSION_HANDLE_NOTE says the three things the repro proved were missing", () => {
+/**
+ * ⚠ THE SUBJECT MOVED; THE ASSERTIONS DID NOT (T10, 2026-09-02).
+ *
+ * These pins were written against `SESSION_HANDLE_NOTE`, a ~1.1k-char paragraph
+ * rendered under EVERY `read_sessions` page — on an op an orchestrator polls in
+ * a loop. The constant is DELETED and its text is in `channel-doctrine.ts`,
+ * pulled through `dopl_channel(op="help")` or the `dopl://doctrine/channels`
+ * resource. **Not one sentence was softened on the way**, which is what these
+ * assertions are here to keep true: each still names a thing the live repro
+ * proved was missing, and each is checked in BOTH directions — still in the
+ * product, and no longer re-transmitted per call.
+ */
+describe("the handle rule survived the move to the doctrine, word for word", () => {
   it("names the form, and says a CUSTOM NAME is machine-local", () => {
     // A rename lives in `main/agent-names.js`, on ONE machine, keyed by an id
     // minted there. No server holds it, so it is not addressable from here —
     // and a caller who saw a friendly name in the Dopl app must not assume it is.
-    expect(SESSION_HANDLE_NOTE).toContain("`@agent-<id>` form is the only one");
-    expect(SESSION_HANDLE_NOTE).toContain("reaches no server");
+    expect(CHANNEL_DOCTRINE).toContain("`@agent-<id>` form is the only one");
+    expect(CHANNEL_DOCTRINE).toContain("reaches no server");
+    // ⚠ PEER-INVISIBILITY WAS RESTORED ON 2026-09-02 after this tier found it had
+    // stopped appearing in ANY shipped prose. It is the half a caller cannot
+    // infer: a name they can see, nobody else can.
+    expect(CHANNEL_DOCTRINE).toContain("is invisible to every other member");
   });
 
   it("⚠ SAYS THE HANDLE WAKES, AND NAMES IT AS A WAKE RATHER THAN A TAG", () => {
@@ -141,34 +160,52 @@ describe("SESSION_HANDLE_NOTE says the three things the repro proved were missin
     // caller posts under its operator's account, which is what licenses the wake.
     // Before it, the id `launch_agent` handed out could not be spent by the only
     // caller that had it — five posts, nothing woken, nothing said.
-    expect(SESSION_HANDLE_NOTE).toContain("WAKES THAT AGENT");
-    expect(SESSION_HANDLE_NOTE).toContain("never by the server's mention resolver");
+    expect(CHANNEL_DOCTRINE).toContain("WAKES THAT AGENT");
+    expect(CHANNEL_DOCTRINE).toContain("never by the server's mention resolver");
   });
 
   it("puts the GOAL first — waking is for redirecting, not for starting", () => {
     // ⚠ An orchestrator that reaches for the wake when it should have sent a
     // goal has spent two calls and a turn on one instruction.
-    expect(SESSION_HANDLE_NOTE).toContain("ALREADY WORKING on it");
-    expect(SESSION_HANDLE_NOTE).toContain("waking is for agents you need to REDIRECT");
+    expect(CHANNEL_DOCTRINE).toContain("ALREADY WORKING on it");
+    expect(CHANNEL_DOCTRINE).toContain("waking is for agents you need to REDIRECT");
   });
 
   it("⚠ CARRIES ALL THREE LIMITS — an exception without its boundary is a hole", () => {
     // (1) ADDRESSED ONLY. Tiers 2 and 3 wake on traffic nobody addressed and stay
     // shut to every agent-authored message; dropping this clause invites exactly
     // the unaddressed post the loop brake exists to refuse.
-    expect(SESSION_HANDLE_NOTE).toContain("an unaddressed post of yours starts nobody");
+    expect(CHANNEL_DOCTRINE).toContain("an unaddressed post of yours starts nobody");
     // (2) OWN OPERATOR ONLY — the 2026-08-28 fence, which the carve did not move.
-    expect(SESSION_HANDLE_NOTE).toContain("only for YOUR OWN operator's agents");
+    expect(CHANNEL_DOCTRINE).toContain("only for YOUR OWN operator's agents");
     // (3) NOT OBSERVABLE. The wake is decided on a desktop no server can see, so
     // the copy may not promise delivery it cannot witness.
-    expect(SESSION_HANDLE_NOTE).toContain("delivery is not observable from here");
-    expect(SESSION_HANDLE_NOTE).toContain("rather than assuming it woke");
+    expect(CHANNEL_DOCTRINE).toContain("delivery is not observable from here");
+    expect(CHANNEL_DOCTRINE).toContain("rather than assuming it woke");
+    // ⚠ AND THE THREE ARE LABELLED AS LIMITS, not merely present as sentences. A
+    // reader who takes the capability without the boundary is the failure mode.
+    expect(CHANNEL_DOCTRINE).toContain("THREE LIMITS");
   });
 
   it("never suggests a way AROUND the fence", () => {
     // ⚠ The loop brake is deliberate (INVARIANTS §11). This copy describes it;
     // it must never read as an obstacle with a workaround, because the workaround
     // an agent would invent is the loop the fence exists to stop.
-    expect(SESSION_HANDLE_NOTE).not.toMatch(/work ?around|bypass|instead you can post/i);
+    // ⚠ SCOPED TO THE SECTION THAT REPLACED THE NOTE, not to the whole doctrine.
+    // The REFUSALS section says "not something to work around" about the
+    // operator's launch toggle — the OPPOSITE claim, and a whole-text match
+    // would read it as an offender and pressure someone into deleting a fence.
+    expect(CHANNEL_OWN_AGENTS).not.toMatch(/work ?around|bypass|instead you can post/i);
+  });
+
+  it("⚠ IS NO LONGER RE-TRANSMITTED PER CALL — the other half of the move", () => {
+    // A rule that moved out of a result and did NOT arrive in the doctrine has
+    // left the product; a rule in BOTH is the repetition this tier removed. The
+    // test above proves arrival, this one proves departure.
+    const page = sessionBlockLines([ownRow({})], NOW).join("\n");
+    expect(page).not.toContain("THREE LIMITS");
+    expect(page).not.toContain("WAKES THAT AGENT");
+    expect(page).not.toContain("reaches no server");
   });
 });
+
