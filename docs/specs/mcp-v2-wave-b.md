@@ -374,6 +374,61 @@ the lock reads are in `service-launch-template.ts` (**F-481**).
 | **B11** personal container | `v2/b-personal-container` | `supabase/migrations/*`, `src/features/knowledge/server/repository-bases.ts`, `src/features/agent-templates/server/repository.ts`, `packages/mcp-server/src/tools/shelf.ts`, `scripts/check-knowledge-type-drift.ts` | Mint one per user; move the 3 `home_scoped` rows; **dual-write for one release** behind `TENANCY_PERSONAL_CONTAINER` | a stale-cache test per new payload field (`?? EMPTY_X`, INVARIANTS); both read paths agree under the flag | flag off; the column still carries the truth | F-560..569 | `20260920120000_workspace_kind_personal` |
 | **B12** RLS real, phase 2 | `v2/b-rls-real-2` | `src/features/{skills,agent-templates,chats}/server/**` read paths | `skills`, `agent_templates`, `chats`, `resource_grants` behind the same flag | a redteam case per table | flag off | F-570..579 | `20260921120000_rls_phase2_policies` |
 
+### Batch 2 landed — 2026-09-02, branch `v2/wave-b` (integration record)
+
+Merged `--no-ff` onto the batch-1 integration at `1a0283f7`. **Not pushed. No migration applied.
+No KB sync.** Five merges + eight integration commits.
+
+| # | Slice | Branch | Slice commits | Merge | Status |
+|---|---|---|---|---|---|
+| 1 | **B11** personal container | `v2/b-personal-container` | `a7a32db9..3a9ef9bb` (5) | `28bc8f8d` | DONE — clean |
+| 2 | **B12** RLS real, phase 2 | `v2/b-rls-real-2` | `e65035c5..801aa21c` (5) | `0dc5d8a0` | DONE — `agent-templates/server/repository.ts` resolved by hand (3 hunks), findings union |
+| 3 | **B10** composer chips | `v2/b-composer-chips` | `a78c85ff..a31c3f27` (5) | `4b356200` | DONE — findings union |
+| 4 | **B9** fan-out narrowed | `v2/b-fanout-narrow` | `0e53a140..ad3bfb87` (6) | `b07cd6f4` | DONE — clean |
+| 5 | **B8** ops collapse 23→5 | `v2/b-ops-collapse` | `2567d616..63a8ade8` (7) | `2bf6f1e3` | DONE — findings union |
+
+**The ownership protocol held.** Three of five merges were clean; the only CODE conflict was
+`agent-templates/server/repository.ts`, whose row §5 released from B1 to B11 while B12 owned the
+same feature's read paths — both intents kept (`readClient()` + `resolveShelfScope`), and the file
+went over the 500-line cap as a result (F-562, split below). Every other conflict was
+`REFACTOR-FINDINGS.md`, unioned in F-id order.
+
+**Cross-slice work the integration owned** (eight commits; each names its slices):
+
+| Commit | What | Slices |
+|---|---|---|
+| `bed0ba5e` | `WorkspaceKind += "personal"`; **F-561** — `findMemberWorkspaceBySlug` filters `isStandardWorkspace` | B11 × B14 |
+| `00814a51` | **F-564** — the migration header states its CODE precondition and the two ways to meet it | B11 × B13/B15 |
+| `cd855b5d` | **F-575** — `knowledge_entry_chunks` gets its parent's policy, into the UNAPPLIED `20260921120000` | B12 |
+| `856c877d` | the channel law's loop brake names where the rule now lives; **F-576** spec row corrected to what shipped | B8 × B9 |
+| `f39754d3` | **F-578** — the desktop learns the five op names, keyed `<op>.<action>` | B8 × B6 × B9 |
+| `a5b56a02` | **G13's other half** — `agentIdentityFraming` is one line, 870 → 26 chars | B9 |
+| `061be54f` | **F-562** — knowledge-base attachments lifted to a sibling; the lint's `max-lines` forced it | B11 × B12 |
+| `b45b0171` | the `threadOpen` discriminator deleted — every outbound gate carries its own frame now | B8 × B9 |
+
+**Rulings and judgement calls taken here:**
+
+- **F-578, one deviation from its own exact edits, and its own last warning asks for it.**
+  `OWN_CHANNEL_READ_OPS` is `['read','status','rooms.threads','rooms.members']`, not `[…,'rooms']`.
+  Four of `rooms`' eight actions WRITE — the same four `gating.ts › WRITE_OPS` names — so a bare
+  entry would have handed Axis B's INBOUND half a lane that opens channels and invites people into
+  them. The action is part of the key everywhere, through one spelling (`main/channel-op-key.js`).
+- **The retired op names were REMOVED from every desktop list, not kept.** This reverses the
+  2026-08-22 fail-safe that kept `get_thread` on the read set for a desktop facing an older
+  server. A name in no list gates, so only the ALLOW side shrank — and an allow list carrying
+  eighteen dead names is one nobody can read for what it admits.
+- **G13's claim protocol deleted rather than kept as the standing half.** B9's commit body leaned
+  on it surviving; the argument does not survive the fan-out it describes. A session that was not
+  named is not fed, so the question the protocol asks cannot arise — and it had been measured to
+  fire zero times in 40 real messages before that.
+- **The `threadOpen` discriminator deleted, not left unreached.** F-321's case is gone: a thread
+  open and an escalation are `send`s, so both carry the `outbound_post` frame that mints the card.
+- **F-576 amended toward what SHIPPED**, per option (b): `direct_agent` folded to
+  `manage(action="direct")`. Building the idle-agent direction filing that would make
+  `send(to=@agent)` work is batch 3's, and is recorded as a gap rather than closed.
+
+---
+
 ### Batch 3 — deletion. Only after batch 2 has run one release.
 
 | Slice | Branch | Owns | Scope | F-ids | Migrations |
