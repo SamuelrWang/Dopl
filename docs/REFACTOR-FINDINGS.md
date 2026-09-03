@@ -7838,7 +7838,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-595 — a bare `node --test` failed permanently on an Electron entry point (2026-09-02, FIXED)
 
-- Location: `dopl-desktop-app/scripts/smoke-test.js`, now `scripts/smoke.js`. Re-derive: `cd dopl-desktop-app && node --test`.
+- Location: `dopl-desktop-app/scripts/smoke.js` — it was `scripts/smoke-test.js`, and the NAME was the defect. Re-derive: `cd dopl-desktop-app && node --test`.
 - Found during: the wave-B batch-1/2 review.
 - **THE SHAPE.** `node --test` with no glob collects `*-test.js` by default, so the headless Electron smoke script was run as a test, launched no Electron, and failed — permanently, one failure, on every bare run. `npm test` passes `test/**/*.mjs` and never saw it, **so the two invocations of the same suite disagreed and the by-hand one was always red by one**. A red that means nothing trains a reader to skip the red that means something, which is the cost, not the failure itself.
 - Resolution: renamed to `scripts/smoke.js` — the file is an Electron entry point and its NAME was the whole defect. `npm run smoke` and the three docs that name it move with it. Bare `node --test` is now 3,016 / 0.
