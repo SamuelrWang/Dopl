@@ -341,10 +341,24 @@ CREATE TRIGGER resource_grants_scope_cleanup AFTER DELETE ON public.workspaces
   FOR EACH ROW EXECUTE FUNCTION public.drop_resource_grants_for_scope('container');
 
 -- ── 6. Backfill — both live tables, joined to a LIVE resource ───────────────
+-- 🔒 **A DEPARTED GRANTOR IS CARRIED AS UNATTRIBUTED, NOT VERBATIM** (F-582).
+-- `created_by` outlives a MEMBERSHIP: `ON DELETE SET NULL` clears it when the
+-- auth user is deleted, and nothing clears it when the user merely leaves the
+-- workspace. Copying such a row verbatim hands the validity trigger above a
+-- `created_by` that fails `is_workspace_member(…)` — which RAISEs, and a RAISE
+-- inside a backfill aborts the whole migration on the first historical row.
+-- ⚠ NULLING IS THE FAIL-SAFE DIRECTION AND LOSES NOTHING THIS TABLE ENFORCES:
+-- an unattributed row falls back to the SAME-CONTAINER rule, and every row
+-- reaching this statement is same-container by construction — the old table's
+-- own `enforce_channel_resource_grant()` required all three workspaces to
+-- match. What is lost is the AUTHOR of a grant whose author is already gone.
 INSERT INTO public.resource_grants
   (scope_type, scope_id, resource_type, resource_id, workspace_id, level, guest_write, created_by, created_at, updated_at)
 SELECT 'channel', g.channel_id, 'knowledge_base', g.resource_id, g.workspace_id,
-       g.level, g.guest_write, g.created_by, g.created_at, g.updated_at
+       g.level, g.guest_write,
+       CASE WHEN is_workspace_member(g.workspace_id, g.created_by, 'viewer')
+            THEN g.created_by END,
+       g.created_at, g.updated_at
   FROM public.channel_resource_grants g
   JOIN public.knowledge_bases kb ON kb.id = g.resource_id
  WHERE g.resource_type = 'knowledge_base'
@@ -391,7 +405,13 @@ ON CONFLICT DO NOTHING;
 -- so a replay of a tree that HAS rows does not lose them.
 INSERT INTO public.resource_grants
   (scope_type, scope_id, resource_type, resource_id, workspace_id, level, created_by, created_at, updated_at)
-SELECT 'team', t.team_id, 'agent_template', t.template_id, t.workspace_id, 'read', t.granted_by, t.granted_at, t.granted_at
+SELECT 'team', t.team_id, 'agent_template', t.template_id, t.workspace_id, 'read',
+       -- Same fail-safe as the channel backfill above (F-582): a `granted_by`
+       -- who has left the workspace becomes an unattributed grant rather than
+       -- an aborted migration. A team scope is same-container by definition.
+       CASE WHEN is_workspace_member(t.workspace_id, t.granted_by, 'viewer')
+            THEN t.granted_by END,
+       t.granted_at, t.granted_at
   FROM public.agent_template_teams t
   JOIN public.agent_templates r ON r.id = t.template_id
 ON CONFLICT DO NOTHING;

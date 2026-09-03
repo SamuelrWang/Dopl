@@ -7719,3 +7719,28 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE POLICY DROP ALONE WOULD HAVE BROKEN THE LEGAL LANE.** `mirror_channel_resource_grant()` ran with INVOKER rights, so a `resource_grants` write from a user client would have had its mirror INSERT refused and taken the legal write down with it. And `drop_channel_resource_grants_for_kb()` would have deleted zero rows in silence, because RLS filters rather than raises.
 - Resolution: `20260921130000_channel_resource_grants_read_only.sql` drops the write policy outright (the surviving `_member_select` already carries the `admin` arm, so a `FOR SELECT` replacement would be a permissive duplicate) and makes the GC writer `SECURITY DEFINER`; `20260914120000` makes the mirror writer the same, at its own definition. Both write values derived from a row that already passed its table's validity trigger. Pinned in `knowledge/schema-sql.test.ts`.
 - Status: FIXED. Batch 3 deletes the table, the mirror and both functions together once the reader moves (F-460).
+
+### F-582 — the grant backfill copies a grantor who may have left, and a RAISE in a backfill aborts the apply (2026-09-02, FIXED)
+
+- Location: `supabase/migrations/20260914120000_resource_grants.sql` §6, the `channel_resource_grants` and `agent_template_teams` INSERTs. Re-derive: `grep -n 'CASE WHEN is_workspace_member' supabase/migrations/20260914120000_resource_grants.sql`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** `created_by` outlives a MEMBERSHIP. `ON DELETE SET NULL` clears it when the auth user is deleted; nothing clears it when the user merely leaves the workspace. The backfill copied it verbatim into a table whose BEFORE INSERT trigger requires the grantor to be an active member — so the first historical row with a departed grantor would `RAISE`, and a RAISE inside a backfill aborts the migration, mid-wave, on a database nobody can inspect from here.
+- Resolution: `CASE WHEN is_workspace_member(ws, grantor, 'viewer') THEN grantor END`. An unattributed row falls back to the same-container rule, and every row reaching those statements is same-container by construction (the old table's `enforce_channel_resource_grant()` required all three workspaces to match; a team scope is same-container by definition). What is lost is the author of a grant whose author is already gone.
+- Status: FIXED. Pinned in `knowledge/schema-sql.test.ts`.
+
+### F-583 — `enforce_resource_grant()` asked whether the grantor was IN the container, never whether they could see the resource (2026-09-02, FIXED)
+
+- Location: `supabase/migrations/20260914120000_resource_grants.sql › enforce_resource_grant` arm 4, replaced by `20260921140000_resource_grant_trigger_arms.sql`. Re-derive: `grep -n 'dopl_user_may_share_resource' supabase/migrations/*.sql`.
+- Found during: the wave-B batch-1/2 review. Samuel's ruling B4 is that a grant is *"the grantor may share this"*; the trigger implemented *"the grantor is here"*.
+- **THE SHAPE.** `is_workspace_member(res_ws, NEW.created_by, 'viewer')` — rank 0, and no reference to the resource's own `visibility`, `created_by`/`owner_id`/`user_id` or `access_mode`. So a bare viewer of a container could file a grant lending out a `private` knowledge base they cannot read, a `teams`-mode skill no team of theirs holds, or someone else's `private` agent template. **And `resource_grants` IS the fence those readers consult** — `dopl_teams_mode_visible()`, `listGrantedBaseIdsForChannels`. A row no reader may create is not a row a writer may file.
+- Resolution: two arms. An EDIT-CAPABLE rank (`'member'`) on the RESOURCE side — the scope side stays `'viewer'`, because lending into a room you can see is not an edit to that room — and `dopl_user_may_share_resource()`, the five `canSee*` matrices asked about a NAMED user. The teams axis needed generalising for that, so `dopl_teams_visible_for_user()` now holds the rule and `dopl_teams_mode_visible()` is one line over it: same name, same signature, same answer, and one statement of the axis instead of two that could drift.
+- ⚠ **The shared-credential axis is deliberately absent from the grantor test.** `dopl_credential_is_shared()` asks about the token in the request; this asks about a uuid recorded on a row, possibly long ago.
+- Status: FIXED, structurally. The six behavioural probes (P15–P20) are written into the migration header and are OWED — Docker has been down for two waves.
+
+### F-584 — a legal cross-container grant made its grantor's account undeletable (2026-09-02, FIXED)
+
+- Location: `enforce_resource_grant()`, step 0 in `supabase/migrations/20260921140000_resource_grant_trigger_arms.sql`. Re-derive: `grep -n "TG_OP = 'UPDATE'" supabase/migrations/20260921140000_resource_grant_trigger_arms.sql`.
+- Found during: the wave-B batch-1/2 review, reading F-583's arm against the column definition four lines above it.
+- **THE SHAPE.** `created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL`. Deleting the user fires the BEFORE **UPDATE** trigger with `NEW.created_by IS NULL`, which takes the unattributed branch — and that branch RAISEs for a CROSS-CONTAINER grant, the one shape ruling B4 exists to unlock. So `DELETE FROM auth.users` failed with `P0001 … may not cross containers`, and the more the feature was used the more accounts became undeletable. The row was valid when written; a de-attribution is not a re-grant.
+- Resolution: skip the grantor arms on exactly that transition — UPDATE, `created_by` NOT NULL → NULL, every other column identical. A statement that de-attributes and moves the grant in one breath is still validated as a re-grant.
+- Status: FIXED. Probe P19/P20 owed with the rest of F-461.
