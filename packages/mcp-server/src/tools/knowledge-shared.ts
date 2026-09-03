@@ -13,13 +13,46 @@ import { FENCE_HEADER } from "./untrusted-fence";
 /** ⚠ The row `dopl_kb`'s description teaches first — one declaration, both uses. */
 const BASE_NOT_FOUND = KB_ERRORS[0];
 
+/** ⚠ Local, like `agent-shared.ts` and `channel-addressing.ts` — this package
+ *  already carries several copies and unifying them is not this change. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Base reference (slug or UUID) → `KnowledgeBase` row, null when nothing
  * matches. ⚠ Calls `listKbBases` once per invocation — not for tight loops.
+ *
+ * 🔒 **AND A UUID GETS A SECOND, ID-ONLY LOOKUP (F-470).** `listKbBases` answers
+ * for the container this connection is bound to, so matching a ref against that
+ * list made every `dopl_kb` op container-keyed — including the ops whose whole
+ * argument is an ID. A base on the caller's own personal shelf, or in another
+ * container they belong to, answered `base_not_found` for an id that
+ * `GET /api/knowledge/bases/<id>` resolves, which is the wave's headline claim
+ * ("an id resolves its own container") being untrue on this surface.
+ *
+ * ⚠ **THE SECOND LOOKUP IS NOT A SECOND FENCE AND ADDS NO REACH.** It is the
+ * server's own id door, which runs the resolver's four clauses, the M-10 matrix
+ * and the agent audience ceiling in the container the id names. A ref this
+ * caller may not name comes back a refusal and is reported as `base_not_found`,
+ * the same answer as before.
+ *
+ * ⚠ **UUID ONLY, AND NO NAME FALLBACK.** A slug is scoped to a container by
+ * definition, so asking the id door about one would be asking a different
+ * question; and an id lookup that degraded into a name lookup would make "no
+ * such id" and "no such name" answer through each other.
+ * ⚠ **ONLY AN API REFUSAL IS SWALLOWED.** A transport failure must not read as
+ * "no such base" — that is how an outage becomes a deletion in an agent's notes.
  */
 async function resolveBase(client: DoplClient, ref: string): Promise<KnowledgeBase | null> {
   const bases = await client.listKbBases();
-  return bases.find((b) => b.slug === ref || b.id === ref) ?? null;
+  const here = bases.find((b) => b.slug === ref || b.id === ref);
+  if (here) return here;
+  if (!UUID_RE.test(ref)) return null;
+  try {
+    return await client.getKbBase(ref);
+  } catch (e) {
+    if (isApiError(e, 404, "KNOWLEDGE_BASE_NOT_FOUND")) return null;
+    throw e;
+  }
 }
 
 /** resolveBase + the standard not-found error; caller short-circuits on `isError`. */
