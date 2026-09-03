@@ -1,7 +1,7 @@
 /**
  * `dopl_channel` READ op handlers: list, read, list_threads, members. All
  * non-mutating, all ONE round-trip rendered — except a THREAD-SCOPED `read`,
- * which is two. `await` lives in `channel-ops-await.ts` (the only looping op).
+ * which is two. The HOLD lives in `channel-ops-hold.ts` (the only looping shape).
  *
  * ⚠ **`op="get_thread"` WAS FOLDED INTO `read(thread=)` ON 2026-09-02 (C15).**
  * Two ops answered one noun — "what is this exchange" — and the split cost 200
@@ -53,7 +53,7 @@ import { rosterAddressingRule } from "./channel-addressing";
 // and the `dopl://doctrine/channels` resource.
 import { DOCTRINE_POINTER } from "./channel-doctrine";
 // ⚠ The session LINE — staleness hedge + operator-only telemetry — has ONE
-// statement, in channel-session-render.ts, shared with `await`'s session block.
+// statement, in channel-session-render.ts, shared with the HOLD's session block.
 import { sessionIsStale, sessionLegend } from "./channel-session-render";
 import { SESSION_TABLE_HEAD, sessionRow } from "./channel-session-table";
 
@@ -89,15 +89,15 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
  * `task-<channelId>-<seq>` ids). Blank/whitespace treated as unset rather than
  * sent, so `thread=""` reads the channel instead of 400ing on the route's `min(1)`.
  *
- * ⚠ `await` has no thread parameter — a filtered hold would miss messages an
+ * ⚠ A HOLD has no thread parameter — a filtered hold would miss messages an
  * agent must follow. Never suggest a thread-scoped wait here; the agent ends up
  * armed on a call that cannot exist.
  *
  * ⚠ NEITHER SEQ IS A CURSOR, so this hint offers NO number to await from. A safe
  * `since` is the highest seq below which the reader has seen EVERYTHING
  * channel-wide; a thread-scoped read deliberately filtered rows out and
- * establishes no such bound. `await` is `gt("seq", since)`, so a LARGER `since`
- * returns FEWER messages: awaiting from the channel-wide max drops every row in
+ * establishes no such bound. A HOLD is `gt("seq", since)`, so a LARGER `since`
+ * returns FEWER messages: holding from the channel-wide max drops every row in
  * `(threadMax, channelMax]` permanently, since the cursor only moves forward.
  *
  * ⚠ SO A SCOPED READ PRINTS NO SEQ AT ALL (2026-08-22, Samuel's ruling). It used
@@ -184,7 +184,7 @@ export async function opRead(
       return ok(
         [
           ...card,
-          `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. Watch for new messages with ${watch}${since ?? 0}); await is channel-wide and takes no thread.`,
+          `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. Watch for new messages with ${watch}${since ?? 0}); a HOLD is channel-wide and takes no thread.`,
         ].join("\n"),
       );
     }
@@ -223,7 +223,7 @@ export async function opRead(
   // seq from a FILTERED page silently and permanently drops every row the filter
   // hid. One line, and the remedy is in it.
   lines.push(
-    `\ncursor=none — \`thread\` filtered rows out of this page, and \`await\` is channel-wide with a strict "greater than", so a seq taken from here would permanently skip what the filter hid. Await from the highest seq below which you have seen EVERYTHING in this channel; read unscoped to establish one.`,
+    `\ncursor=none — \`thread\` filtered rows out of this page, and a HOLD is channel-wide with a strict "greater than", so a seq taken from here would permanently skip what the filter hid. Hold from the highest seq below which you have seen EVERYTHING in this channel; read unscoped to establish one.`,
   );
   return ok(lines.join("\n"));
 }
@@ -356,7 +356,7 @@ export async function opListThreads(
   ref: string,
   selfUserId: string | null = null,
 ): Promise<ToolResponse> {
-  // Hot-path parity with read/await: ref straight to the route (slug-or-id +
+  // Hot-path parity with the hold: ref straight to the route (slug-or-id +
   // visibility enforced there), no pre-resolve via listChannels.
   //
   // ⚠ THE ORDER IS THE SERVER'S AND IS NOT RE-DERIVED HERE. One repository read

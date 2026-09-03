@@ -10,9 +10,10 @@
  *
  * ⚠ **FIVE OPS SINCE 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9)** —
  * `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three. The
- * other twenty-two names still PARSE for one release and answer ONE line naming
- * their replacement (`channel-retired-ops.ts`); they are absent from the
- * published enum, so nothing a model can SEE names a retired op.
+ * other twenty-two names parsed for one release and answered ONE line naming
+ * their replacement; slice B16 closed that window, so the enum is five words
+ * wide at runtime as well as in the published schema and a retired name is
+ * refused by `channel-schema.ts › unknownOpRefusal`.
  *
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`        — ref resolution + the ONE neutralizer every
@@ -21,7 +22,7 @@
  *                                  and `channel-facts.ts` for its result line)
  *   - `channel-ops-threads.ts`   — thread="new"
  *   - `channel-ops-escalate.ts`  — kind="decision"
- *   - `channel-ops-read.ts` / `channel-ops-account.ts` / `channel-ops-await*.ts`
+ *   - `channel-ops-read.ts` / `channel-ops-account.ts` / `channel-ops-hold*.ts`
  *                                — the page, the account-wide page, the hold
  *   - `channel-ops-status.ts`    — sessions + the direction mailbox
  *   - `channel-dispatch-agents.ts` — op="manage"
@@ -46,19 +47,16 @@ const respond_1 = require("./respond");
 // and published input SHAPE. This file is mechanism only.
 const channel_description_1 = require("./channel-description");
 const channel_schema_1 = require("./channel-schema");
-// THE ONE-LINE MIGRATION WINDOW — every retired op name, and the line it
-// answers with. Deleted whole by slice B16.
-const channel_retired_ops_1 = require("./channel-retired-ops");
 // ⚠ THE TWO DISPATCHERS, in siblings — see each module's header for why its
 // group is one lane and why its parameter list is as narrow as it is.
 const channel_dispatch_agents_1 = require("./channel-dispatch-agents");
 const channel_dispatch_rooms_1 = require("./channel-dispatch-rooms");
 const channel_ops_read_1 = require("./channel-ops-read");
-const channel_ops_await_1 = require("./channel-ops-await");
-// ⚠ WORKSPACE-WIDE hold is a SIBLING handler, not a branch inside `opAwait`:
+const channel_ops_hold_1 = require("./channel-ops-hold");
+// ⚠ WORKSPACE-WIDE hold is a SIBLING handler, not a branch inside `opHold`:
 // the per-channel result vocabulary splices `ref` into every sentence, and
 // threading an absent ref through it would produce guidance with a hole in it.
-const channel_ops_await_workspace_1 = require("./channel-ops-await-workspace");
+const channel_ops_hold_workspace_1 = require("./channel-ops-hold-workspace");
 // ⚠ G14's cap travels WITH the lane it bounds — the seam enforces it, the
 // send lane owns the number and the sentence.
 const channel_ops_write_1 = require("./channel-ops-write");
@@ -218,8 +216,8 @@ directory) {
                     if (missHold)
                         return missHold;
                     return scoped
-                        ? (0, channel_ops_await_1.opAwait)(client, args.channel, args.since, args.wait_ms, selfUserId, runtime, selfSessionId)
-                        : (0, channel_ops_await_workspace_1.opAwaitWorkspace)(client, args.since, args.wait_ms, selfUserId, runtime, selfSessionId);
+                        ? (0, channel_ops_hold_1.opHold)(client, args.channel, args.since, args.wait_ms, selfUserId, runtime, selfSessionId)
+                        : (0, channel_ops_hold_workspace_1.opHoldWorkspace)(client, args.since, args.wait_ms, selfUserId, runtime, selfSessionId);
                 }
                 if (!scoped) {
                     const missAcct = (0, respond_1.missingParams)("read (every channel)", args, [
@@ -270,21 +268,16 @@ directory) {
                 }
                 return (0, channel_dispatch_rooms_1.dispatchRoomsAction)(action, args, client, selfUserId, isAdmin);
             }
-            // ── THE ONE-RELEASE MIGRATION WINDOW ──────────────────────────────
+            // ── THE BELT ──────────────────────────────────────────────────────
             //
-            // ⚠ **THE `default` IS EXHAUSTIVE, NOT A FALLBACK.** `args.op` is the
-            // union of the five published names and the twenty-two retired ones, and
-            // the five are handled above — so TypeScript narrows this arm to exactly
-            // `RetiredOp`. The `isRetiredOp` guard is what proves that to the
-            // compiler after the narrowing, and it is also the belt for a bypassed
-            // build: an op that is neither published nor retired cannot be
-            // constructed, and if one ever is, it must not fall through as a success.
-            default: {
-                const op = args.op;
-                if ((0, channel_retired_ops_1.isRetiredOp)(op))
-                    return (0, channel_retired_ops_1.retiredRedirect)(op);
-                return (0, respond_1.err)(`dopl_channel has no op "${op}".`);
-            }
+            // ⚠ **UNREACHABLE BY TYPE, AND KEPT ANYWAY.** `args.op` is the five
+            // published names and the five are handled above, so TypeScript narrows
+            // this arm to `never` — zod refuses anything else before a handler runs,
+            // with this same sentence (`channel-schema.ts › unknownOpRefusal`). What
+            // it covers is a build where that validation did not happen: an
+            // unrecognized op must be REFUSED, never fall through as a success.
+            default:
+                return (0, respond_1.err)((0, channel_schema_1.unknownOpRefusal)(args.op));
         }
     });
 }

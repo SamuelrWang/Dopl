@@ -73,10 +73,14 @@ const BASE = "https://api.example.test";
  *        an argument choosing the VERB (`PUT`/`DELETE`) rather than a second
  *        binding: two idempotent verbs, never a toggle, and never two names.
  *   83 — PLUS THREE with THE "NEEDS YOU" SIGNAL (2026-09-01, T70): `createPing`,
- *        `listPings`, `awaitPings`. ⚠ THREE, and the omission is the shape both
- *        agent lanes already take — there is no ACK, DISMISS or DELETE binding,
- *        because v1 has no write on a ping beyond its insert (spec §6.1). A
- *        fourth name here would be a capability the routes do not have.
+ *        `listPings`, `awaitPings`.
+ *   80 — LESS THOSE SAME THREE (2026-09-02, slice B16, Samuel's ruling B8). The
+ *        ping lane is DELETED, table and all: a directed `send` IS the delivery
+ *        record, and "what is addressed to me and unanswered" is DERIVED by
+ *        `getAccountStatus` from the transcript rather than kept in a second
+ *        mailbox. ⚠ **THE NUMBER GOING DOWN IS THE POINT** — this list has only
+ *        ever grown by a capability arriving, so a shrink is a capability
+ *        leaving, and it must be argued for exactly like an arrival.
  */
 const PUBLIC_SURFACE = [
     "appendChatMessages",
@@ -145,9 +149,6 @@ const PUBLIC_SURFACE = [
     // ⚠ NO ACK / DISMISS / DELETE binding, because v1 has no write on a ping past
     // its insert — a name here for a route arm that does not exist would publish a
     // capability an agent would then plan around.
-    "createPing",
-    "listPings",
-    "awaitPings",
     "getChannelThread",
     "getChat",
     "getHomeChannels",

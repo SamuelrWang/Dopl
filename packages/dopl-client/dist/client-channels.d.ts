@@ -11,7 +11,6 @@ import type { AccountMessagesOptions, AccountMessagesPage, AccountStatus, Accoun
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
 import type { AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
-import type { AwaitPingsOptions, ChannelPing, CreatePingInput, ListPingsOptions, PingAwaitResult } from "./ping-types.js";
 export declare class ChannelMethods extends MemberMethods {
     listChannels(opts?: {
         includeArchived?: boolean;
@@ -66,15 +65,6 @@ export declare class ChannelMethods extends MemberMethods {
         channel?: string;
         agent?: string;
     }): Promise<AgentDirection[]>;
-    /** THE "NEEDS YOU" SIGNAL (2026-09-01) — one recipient, out of band, never a
-     *  message. ⚠ There is no sender argument and no operator argument on the two
-     *  self-scoped recipient forms; the server stamps the authenticated caller. */
-    createPing(input: CreatePingInput): Promise<ChannelPing>;
-    /** The caller's own recent pings. ⚠ `since` is a PING seq, never a message one. */
-    listPings(opts?: ListPingsOptions): Promise<ChannelPing[]>;
-    /** LONG-POLL the ping inbox. ⚠ Its own cursor space — a ping has no
-     *  `channel_messages.seq` and can never end a channel await. */
-    awaitPings(opts: AwaitPingsOptions): Promise<PingAwaitResult>;
     /** ⚠ A PAGE since 2026-08-23 (F-294), not a bare array: `operatorOnline`
      *  rides beside the rows because presence is a fact about the MACHINE, not
      *  about any one session. See `channel-types.ts › ChannelSessionsPage`. */

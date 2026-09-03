@@ -72,7 +72,7 @@ function isErr(x) {
 }
 /**
  * Uniform not-found for a channel reference. Shared by `resolveChannelOr` and
- * by the hot read/await handlers, which skip the pre-resolve and map a route
+ * by the hot read and hold handlers, which skip the pre-resolve and map a route
  * 404 to this same copy.
  */
 function channelNotFound(ref) {
@@ -84,7 +84,7 @@ function channelNotFound(ref) {
  * addressable, and matches on id or slug.
  *
  * Used by the write ops so a confirmation can name the channel and a bad ref is
- * caught before the mutation. ⚠ The hot read/await ops must NOT call this —
+ * caught before the mutation. ⚠ The hot read and hold shapes must NOT call this —
  * they pass the ref straight to the route (which resolves slug-or-id and
  * enforces visibility), avoiding a listChannels() round-trip per poll.
  */

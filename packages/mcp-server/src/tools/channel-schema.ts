@@ -9,14 +9,14 @@
  * every declared param must be referenced by some handler in the `channel-*`
  * group, and no handler may read an arg not declared here.
  *
- * ⚠ **FIVE OPS SINCE 2026-09-02 (MCP v2 wave B slice B8, Samuel's ruling B9).**
- * `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three. The
- * other twenty-two names still PARSE for one release and answer one line naming
- * their replacement (`channel-retired-ops.ts`) — and they are **absent from the
- * published enum**, because a retired name a model can see is a name a model
- * will call. The runtime enum is the union; `.meta({ enum: CHANNEL_OPS })`
- * overrides what `z.toJSONSchema` publishes, which is the exact conversion the
- * MCP SDK renders for `tools/list`.
+ * ⚠ **FIVE OPS SINCE 2026-09-02 (MCP v2 wave B slice B8, Samuel's ruling B9),
+ * AND FIVE AT RUNTIME TOO SINCE SLICE B16.** `send` · `read` · `status` ·
+ * `manage` · `rooms`, down from twenty-three. The other twenty-two names parsed
+ * for one release and answered a one-line redirect; that window is CLOSED, so
+ * the runtime enum and the published one are the same five and a retired name is
+ * refused by schema validation with {@link unknownOpRefusal}'s line. The names
+ * are kept as dead vocabulary in `law-removed-vocabulary.ts ›
+ * RETIRED_CHANNEL_OPS`, which is what stops a shipped string teaching one.
  *
  * ⚠ **EVERY `.describe()` HERE IS PUSHED ON EVERY CONNECTION, EXACTLY LIKE THE
  * TOOL DESCRIPTION, AND IS BUDGETED LIKE ONE** (A6, 2026-09-02). It was 20,844
@@ -48,9 +48,8 @@
 
 import { z } from "zod";
 import { RESPONSE_FORMAT_FIELD } from "./response-size";
-import { RETIRED_OP_NAMES } from "./channel-retired-ops";
 import { DOCTRINE_SECTION_NAMES } from "./channel-doctrine";
-import { AWAIT_HOLD_CAP_MS } from "./channel-await-budget";
+import { HOLD_CAP_MS } from "./channel-hold-budget";
 
 /**
  * THE FIVE OPS AN AGENT SEES, and the only five it may pick from.
@@ -66,6 +65,32 @@ export const CHANNEL_OPS = [
   "rooms",
 ] as const;
 export type ChannelOp = (typeof CHANNEL_OPS)[number];
+
+/**
+ * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice
+ * (slice B16): the schema's own zod error, and `channel.ts`'s exhaustive
+ * `default` for a build where that validation did not run.
+ *
+ * ⚠ **WITHOUT IT, RETIREMENT IS A `-32602 invalid enum value`** — the opaque
+ * failure B8's one-release redirect window existed to prevent, arriving one
+ * release later. ⚠ **ONE LINE, AND IT NAMES THE FIVE**, because the replacement
+ * for any retired name is one of five words; anything longer is the doctrine,
+ * and `rooms(action="help")` is where that lives.
+ *
+ * ⚠ The caller's own word is echoed BOUNDED AND ON ONE LINE — it is the only
+ * part of this sentence they wrote, and an unbounded multi-line echo is
+ * structure a caller can forge inside our narration.
+ */
+export function unknownOpRefusal(op: unknown): string {
+  const raw = typeof op === "string" ? op : (JSON.stringify(op) ?? String(op));
+  const shown = raw.replace(/\s+/g, " ").slice(0, 40);
+  // ⚠ Same sentence shape as the two `action` refusals in `channel.ts` — one
+  // vocabulary, listed and then joined with "or", derived from the enum so a
+  // sixth op cannot arrive without appearing here.
+  const quoted = CHANNEL_OPS.map((o) => `"${o}"`);
+  const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
+  return `dopl_channel has no op "${shown}" — it takes ${offered}. Nothing was done.`;
+}
 
 /**
  * THE SUB-VERBS, per dispatching op.
@@ -145,17 +170,17 @@ export const CHANNEL_INPUT_SHAPE = {
   // teaches an agent to stop passing it where it is not.
   response_format: RESPONSE_FORMAT_FIELD,
 
-  // ⚠ **THE RUNTIME ENUM IS THE UNION; THE PUBLISHED ONE IS FIVE.** The retired
-  // names have to PARSE or their redirect can never run — zod would answer a
-  // `-32602 invalid enum value` before any handler sees the call, which is the
-  // opaque failure the one-release window exists to prevent. They must not be
-  // LISTED, or the collapse buys nothing: a model picks from what it is shown.
-  // `.meta()` overrides the `enum` keyword `z.toJSONSchema` emits, and that is
-  // the exact conversion `@modelcontextprotocol/sdk › toJsonSchemaCompat` runs
-  // for `tools/list`; `channel-retired-ops.test.ts` asserts both halves.
+  // ⚠ **ONE ENUM NOW — THE RUNTIME SET AND THE PUBLISHED SET ARE THE SAME FIVE**
+  // (slice B16). They were deliberately different for one release: the twenty-two
+  // retired names had to PARSE so their redirect could run, and had to be absent
+  // from the JSON Schema so no model could see one. Both halves retire together —
+  // a hidden name that no longer answers anything is a name that only ever
+  // produces a confusing success. What replaces the redirect is the REFUSAL:
+  // zod's own error carries {@link unknownOpRefusal}, so a caller pinned to an
+  // older desktop still reads one line naming the five instead of an opaque
+  // `-32602 invalid enum value`.
   op: z
-    .enum([...CHANNEL_OPS, ...RETIRED_OP_NAMES])
-    .meta({ enum: [...CHANNEL_OPS] })
+    .enum(CHANNEL_OPS, { error: (issue) => unknownOpRefusal(issue.input) })
     .describe("Operation to perform."),
 
   // ⚠ ONE SUB-VERB PARAM FOR BOTH DISPATCHERS, not two. The vocabularies are
@@ -319,13 +344,13 @@ export const CHANNEL_INPUT_SHAPE = {
   // server to hold for a message. Both are "how long may this call take before
   // it comes back with nothing", both cap server-side, and two names for one
   // knob is how a caller learns to guess. ⚠ The published cap is the HOLD's
-  // (`AWAIT_HOLD_CAP_MS`); the directive lane clamps to its own, which it has
+  // (`HOLD_CAP_MS`); the directive lane clamps to its own, which it has
   // always done in code (`channel-ops-launch.ts › WAIT_CAP_MS`).
   wait_ms: z.coerce
     .number()
     .int()
     .min(0)
-    .max(AWAIT_HOLD_CAP_MS)
+    .max(HOLD_CAP_MS)
     .optional()
     .describe(
       'Optional HOLD. op="read": long-poll for messages after `since` instead of returning a page. op="manage": how long to hold for your operator\'s desktop to accept or refuse — a timeout is NOT a failure, the request stays PENDING.',

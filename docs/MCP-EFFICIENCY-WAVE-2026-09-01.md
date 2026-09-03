@@ -168,8 +168,9 @@ Recorded in full, with the exact edit that reverses each, as **F-417** in the fi
 
 1. **R1** — the pings READ lane enforces channel membership AND party, matching the RLS policy,
    rather than party alone. The hold gained the `AWAIT_REVALIDATE_EVERY_TICKS` cadence its two
-   siblings run, and `service-pings-await.ts` / `docs/specs/needs-you-ping.md` are corrected: both
-   argued that delivery past a departure was designed.
+   siblings run, and the ping hold's own module / `docs/specs/needs-you-ping.md` are corrected: both
+   argued that delivery past a departure was designed. (⚠ That module and the whole ping
+   lane were DELETED at slice B16, 2026-09-02 — ruling B8.)
 2. **R2** — `dopl_agent(op="copy")` and `dopl_kb(op="copy_base")` copy what the operator OWNS, per
    the spec's own wording, and fail CLOSED on an unprovable owner.
 3. **R3** — the two account routes narrow to `ctx.apiKeyWorkspaceId`. They use `withUserAuth`

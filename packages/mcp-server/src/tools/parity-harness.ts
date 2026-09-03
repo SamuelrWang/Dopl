@@ -112,15 +112,14 @@ export const SRC_DIR = path.resolve(process.cwd(), "src");
 /**
  * The op enum **AS PUBLISHED**, or null for a tool that dispatches on none.
  *
- * ⚠ **THE PUBLISHED SET, NOT `ZodEnum.options`, SINCE 2026-09-02 (B8).**
- * `dopl_channel` accepts twenty-two retired names at RUNTIME so their one-line
- * redirects can run, and publishes five — `z.enum([...]).meta({ enum: [...] })`,
- * which overrides the `enum` keyword `z.toJSONSchema` emits, and that conversion
- * is the one `@modelcontextprotocol/sdk › toJsonSchemaCompat` runs for
- * `tools/list`. Reading `.options` here would make every suite below classify,
- * document and gate twenty-two names no agent can see — the opposite of what
- * they are for. ⚠ It also makes the harness read what a CLIENT reads, which is
- * the same discipline `tool-budget.test.ts` applies to descriptions.
+ * ⚠ **THE PUBLISHED SET, NOT `ZodEnum.options`, SINCE 2026-09-02 (B8).** It read
+ * `.options` until `dopl_channel` grew a runtime enum wider than its published
+ * one — twenty-two retired names that parsed for one release so their redirects
+ * could run — and every suite below would have classified, documented and gated
+ * names no agent could see. ⚠ **THAT GAP CLOSED AT SLICE B16 and this stayed the
+ * published set anyway**: it makes the harness read what a CLIENT reads, which
+ * is the same discipline `tool-budget.test.ts` applies to descriptions, and it
+ * is the one form that cannot go wrong the next time the two diverge.
  */
 export function opEnum(t: CapturedTool): string[] | null {
   const op = t.schema.op;

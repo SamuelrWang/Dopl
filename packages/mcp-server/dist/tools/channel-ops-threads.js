@@ -22,7 +22,7 @@ exports.opCreateThread = opCreateThread;
 exports.opSetThreadMode = opSetThreadMode;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
-// ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
+// ⚠ Whether a pending HOLD outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
 // ⚠ ONE write-result renderer, shared with `post`/`launch_agent`/`direct_agent`.
@@ -109,7 +109,7 @@ handoff) {
     // ── THE RESULT: ONE LINE OF FACTS (T10, 2026-09-02) ──────────────────────
     //
     // ⚠ WHAT LEFT. This op closed with four paragraphs: what a thread is for, the
-    // await mechanics, the ~30-minute stop rule, and — on the handoff branch — a
+    // hold mechanics, the ~30-minute stop rule, and — on the handoff branch — a
     // three-paragraph account of a flag that does nothing. Every one of them is
     // standing doctrine and is stated once in `channel-doctrine.ts`, behind
     // `op="rooms" action="help"`. What survives is what only this call knows.
@@ -119,19 +119,19 @@ handoff) {
     // stamped, but no current Dopl app reads the stamp, so the thread behaves
     // exactly as one created without it. The DEFECT the old copy fixed was an
     // external session reading "a session took over" and NOT arming a wait, so
-    // nobody watched the thread. `await=since:<seq>` on the same line is that fix,
+    // nobody watched the thread. `hold=since:<seq>` on the same line is that fix,
     // stated for every branch rather than only the handoff one — a cursor is a
     // stronger instruction than a paragraph telling the reader to go find one.
     return (0, respond_1.ok)((0, channel_facts_1.factsLine)("opened", {
         thread: thread.id,
         // ⚠ The OPENING message's seq, so the reply is the very next message an
-        // await returns. `null` when the server did not report one — then the
+        // hold returns. `null` when the server did not report one — then the
         // caller reads it, and a fabricated cursor would silently skip messages.
         seq: created.openingSeq ?? undefined,
         mode: thread.mode,
         addressed: true,
         handoff: handoff ? "ignored" : undefined,
-        await: (0, channel_wake_guidance_1.awaitFact)(runtime, created.openingSeq),
+        hold: (0, channel_wake_guidance_1.holdFact)(runtime, created.openingSeq),
     }));
 }
 /**

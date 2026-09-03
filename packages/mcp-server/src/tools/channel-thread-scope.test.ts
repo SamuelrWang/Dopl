@@ -2,8 +2,8 @@
  * ONE THREAD'S CURSOR — the two ends of a scoped exchange.
  *
  *   1. ⚠ `op="read"` with `thread=<id>` filters the transcript but must NOT
- *      hand back a wait that pretends to be filtered too: `await` is
- *      channel-wide with no thread parameter, so "await this thread" arms a
+ *      hand back a wait that pretends to be filtered too: a HOLD is
+ *      channel-wide with no thread parameter, so "hold on this thread" arms a
  *      call that cannot exist.
  *   2. ⚠ A seq here is REPORTED, never derived. Guessing a marker/echo seq
  *      (last known + 1) and arming the wait one past it silently skips the
@@ -142,8 +142,8 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
 
   it("a thread-scoped read offers NO await cursor at all (P1-8b)", async () => {
     // ⚠ NEITHER number is a cursor — a filtered page cannot establish "I have
-    // seen everything below this". `await` is gt(seq, since), so a LARGER since
-    // returns FEWER rows: awaiting from the CHANNEL max permanently drops
+    // seen everything below this". A HOLD is gt(seq, since), so a LARGER since
+    // returns FEWER rows: holding from the CHANNEL max permanently drops
     // `(threadMax, channelMax]`, the other exchanges this reader never saw.
     const text = (
       await opRead(twoLaneClient([41, 44], 91), "general", undefined, undefined, null, "thread-1")
@@ -295,7 +295,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     expect(text).toContain("No messages tagged with thread `thread-9`");
     expect(text).toContain("comes back empty rather than as an error");
     expect(text).toContain('op="rooms", action="threads"');
-    expect(text).toContain("await is channel-wide and takes no thread");
+    expect(text).toContain("a HOLD is channel-wide and takes no thread");
   });
 
   it("leaves the UNFILTERED read exactly as it was", async () => {

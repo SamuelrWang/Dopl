@@ -39,10 +39,10 @@ const REUSE_MARGIN_MS = 7 * 24 * 60 * 60 * 1000; // re-mint when <7d remain
 // rather than restating it — restating is exactly how the two drifted the last time (a stale
 // copy of this number against a server cap that had moved). ⚠ The old literal must not reappear
 // in EITHER module, prose included; mcp-client-timeout.test.mjs bans it by value.
-// ⚠ DO NOT HAND-TUNE. Arithmetic over packages/mcp-server/src/tools/channel-await-budget.ts:
-//   AWAIT_HOLD_CAP_MS 230_000    the LONGEST hold a caller can get via explicit `timeout_ms`
+// ⚠ DO NOT HAND-TUNE. Arithmetic over packages/mcp-server/src/tools/channel-hold-budget.ts:
+//   HOLD_CAP_MS 230_000    the LONGEST hold a caller can get via explicit `timeout_ms`
 //                                (the 215_000 DEFAULT is not the bound that matters)
-//   AWAIT_HOLD_MARGIN_MS 60_000  auth + MCP boot + workspace handshake on top of any hold
+//   HOLD_MARGIN_MS 60_000  auth + MCP boot + workspace handshake on top of any hold
 //   => must not abort before 290_000; MCP_ROUTE_MAX_DURATION_MS (300_000) is the upper bound.
 // test/mcp-client-timeout.test.mjs pins the RELATION, so moving the cap fails a test.
 // Verified against claude-agent-sdk 0.3.220 / Claude Code 2.1.220: the per-server `timeout`

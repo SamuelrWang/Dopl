@@ -329,7 +329,7 @@ test("FIX Q9: the dopl entry raises the per-call timeout past the 60s client abo
     assert.ok(t > 215_000 && t < 300_000, `ws=${ws} timeout=${t} must clear the hold and the function ceiling`);
   }
   // Pinned as WIRING, not as a number: dropping the field silently disables the wake,
-  // while the VALUE and its arithmetic (AWAIT_HOLD_CAP_MS + AWAIT_HOLD_MARGIN_MS <=
+  // while the VALUE and its arithmetic (HOLD_CAP_MS + HOLD_MARGIN_MS <=
   // MCP_CLIENT_TIMEOUT_MS) are owned by test/mcp-client-timeout.test.mjs, which reads
   // the server's own constants. A literal here would be a second place to maintain it.
   assert.match(MCP_BLOCK, /timeout: clientTimeoutMs\(\),/, "the field is still set");

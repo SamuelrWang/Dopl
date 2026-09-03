@@ -19,8 +19,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { describe, it, expect } from "vitest";
-import { REMOVED_VOCABULARY } from "./law-removed-vocabulary";
-import { RETIRED_OP_NAMES } from "./channel-retired-ops";
+import {
+  REMOVED_VOCABULARY,
+  RETIRED_CHANNEL_OPS,
+} from "./law-removed-vocabulary";
 
 /**
  * Scan of every SHIPPED STRING, not just the description: a tool RESULT is read
@@ -126,10 +128,10 @@ describe("no SHIPPED STRING in the channel tool teaches removed vocabulary", () 
    * 🔒 **A SHIPPED STRING MAY NOT NAME A RETIRED `dopl_channel` OP** (F-592).
    *
    * ⚠ A DIFFERENT QUESTION FROM {@link REMOVED_VOCABULARY}, and it has to be:
-   * these twenty-two names still PARSE for one release, so they are not banned
-   * words — they are answers to a question nobody should still be asking. A
-   * string that TELLS a caller to use one has taught the retired spelling and
-   * spent a redirect that exists for callers pinned to an older desktop.
+   * these twenty-two names are ordinary WORDS elsewhere, so what is forbidden is
+   * the `dopl_channel` op POSITION rather than the word. ⚠ **AND THE COST WENT
+   * UP AT SLICE B16**: they no longer parse at all, so a string that tells a
+   * caller to use one now routes them into a refusal instead of into a redirect.
    *
    * ⚠ **SCOPED TO `dopl_channel`, BECAUSE THE NAMES ARE ORDINARY WORDS
    * ELSEWHERE.** `list`, `update`, `open`, `members` and `help` are live ops on
@@ -137,7 +139,7 @@ describe("no SHIPPED STRING in the channel tool teaches removed vocabulary", () 
    * `dopl_channel(op="…")` anywhere, and a bare `op="…"` inside a
    * `channel-*.ts` module, where the tool is the file.
    */
-  const RETIRED = new Set<string>(RETIRED_OP_NAMES);
+  const RETIRED = new Set<string>(RETIRED_CHANNEL_OPS);
   const QUALIFIED = /dopl_channel\(\s*op\s*=\s*"([a-z_]+)"/g;
   const BARE = /\bop\s*=\s*"([a-z_]+)"/g;
 
@@ -155,7 +157,7 @@ describe("no SHIPPED STRING in the channel tool teaches removed vocabulary", () 
       }
       expect(
         found,
-        `a shipped string names an op B8 retired — say the replacement instead (channel-retired-ops.ts has the mapping):\n${found.join("\n")}`,
+        `a shipped string names an op B8 retired and B16 deleted — say the replacement instead (law-removed-vocabulary.ts › RETIRED_CHANNEL_OPS is the list):\n${found.join("\n")}`,
       ).toEqual([]);
     });
   }

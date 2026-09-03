@@ -16,7 +16,6 @@ import type {
   AccountStatus,
   AccountStatusOptions,
 } from "./account-types.js";
-import * as ping from "./ping.js";
 import type {
   AwaitMessagesOptions,
   AwaitResult,
@@ -48,13 +47,6 @@ import type {
   AgentDirectionCreateInput,
   AgentDirectionCreated,
 } from "./direction-types.js";
-import type {
-  AwaitPingsOptions,
-  ChannelPing,
-  CreatePingInput,
-  ListPingsOptions,
-  PingAwaitResult,
-} from "./ping-types.js";
 
 export class ChannelMethods extends MemberMethods {
   listChannels(opts?: { includeArchived?: boolean }): Promise<Channel[]> {
@@ -179,24 +171,6 @@ export class ChannelMethods extends MemberMethods {
     query: { channel?: string; agent?: string } = {}
   ): Promise<AgentDirection[]> {
     return channel.listAgentDirections(this.transport, query);
-  }
-
-  /** THE "NEEDS YOU" SIGNAL (2026-09-01) — one recipient, out of band, never a
-   *  message. ⚠ There is no sender argument and no operator argument on the two
-   *  self-scoped recipient forms; the server stamps the authenticated caller. */
-  createPing(input: CreatePingInput): Promise<ChannelPing> {
-    return ping.createPing(this.transport, input);
-  }
-
-  /** The caller's own recent pings. ⚠ `since` is a PING seq, never a message one. */
-  listPings(opts?: ListPingsOptions): Promise<ChannelPing[]> {
-    return ping.listPings(this.transport, opts);
-  }
-
-  /** LONG-POLL the ping inbox. ⚠ Its own cursor space — a ping has no
-   *  `channel_messages.seq` and can never end a channel await. */
-  awaitPings(opts: AwaitPingsOptions): Promise<PingAwaitResult> {
-    return ping.awaitPings(this.transport, opts);
   }
 
   /** ⚠ A PAGE since 2026-08-23 (F-294), not a bare array: `operatorOnline`

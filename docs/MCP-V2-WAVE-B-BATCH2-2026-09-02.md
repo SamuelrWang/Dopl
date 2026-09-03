@@ -102,7 +102,8 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
 - **The TWENTY-TWO retired op names were REMOVED from every desktop list, not kept.** ⚠ This
   paragraph said EIGHTEEN, which is `23 − 5` — the net change in what the enum SHOWS, not the
   number of retirements. Twenty-two names retired and four arrived; `read` is the one old name
-  that survived (`channel-retired-ops.ts › RETIRED_OPS`, which has always said twenty-two).
+  that survived (`RETIRED_OPS`, which has always said twenty-two; slice B16 deleted that
+  module and the list is now `law-removed-vocabulary.ts › RETIRED_CHANNEL_OPS`).
   This reverses
   the 2026-08-22 note that kept `get_thread` on the read set as a fail-safe. A name in no list
   GATES, so only the ALLOW side shrank.
@@ -257,9 +258,9 @@ files exist only where the object they change is live.
 
 ### Contested
 
-- **"`channel-retired-ops.ts:6` / `channel-schema.ts:126` say eighteen"** —
-  CONTESTED. Both source files have always said **twenty-two**
-  (`channel-retired-ops.ts:5`, `channel-schema.ts:14`). The wrong number was in
+- **"the retired-op module and `channel-schema.ts` say eighteen"** —
+  CONTESTED. Both source files have always said **twenty-two** (the module the
+  redirects lived in, which slice B16 deleted, and `channel-schema.ts`). The wrong number was in
   three DOCS only, and `23 − 5 = 18` is where it came from: that is the net
   change in what the enum SHOWS, not a count of retirements. Docs corrected.
 - **"three served strings route to retired ops"** — CONTESTED AS AN UNDERCOUNT.

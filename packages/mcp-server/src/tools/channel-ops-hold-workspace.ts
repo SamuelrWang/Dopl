@@ -4,8 +4,8 @@
  * ⚠ `channel-` filename prefix required by the parity split-scan
  * (parity.test.ts).
  *
- * ⚠ **A SIBLING OF `channel-ops-await.ts`, NOT A BRANCH INSIDE IT.** The two
- * share every CLOCK (`channel-await-budget.ts`) and every rule about what a hold
+ * ⚠ **A SIBLING OF `channel-ops-hold.ts`, NOT A BRANCH INSIDE IT.** The two
+ * share every CLOCK (`channel-hold-budget.ts`) and every rule about what a hold
  * may CLAIM (`channel-wake-guidance.ts`), and they deliberately do not share a
  * function: the per-channel op's whole result vocabulary is written around ONE
  * named channel — its re-arm call, its not-found, its stop rule all splice
@@ -28,60 +28,26 @@
  * keep waiting.
  */
 
-import type {
-  DoplClient,
-  WorkspaceAwaitResult,
-  WorkspaceChannelMessage,
-} from "@dopl/client";
+import type { DoplClient, WorkspaceChannelMessage } from "@dopl/client";
 import { ok, type ToolResponse } from "./respond";
-import { neutralizeInline } from "./channel-shared";
 // ⚠ `groupByChannel` MOVED to `channel-render.ts` on 2026-09-01, when the
 // ACCOUNT-wide read needed the same grouping. It was private here; a second copy
 // would be a second opinion about which channel ref a per-message remedy points
 // at. See that function's docblock.
-import {
-  formatMessages,
-  groupByChannel,
-  // ⚠ F-405 — the only wire field naming the PROCESS rather than the account.
-  sessionIdOf,
-} from "./channel-render";
+import { formatMessages, groupByChannel } from "./channel-render";
 import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
-import {
-  AWAIT_MAX_POLLS,
-  AWAIT_MIN_POLL_MS,
-  AWAIT_POLL_MS,
-  AWAIT_SHORT_HOLD_MS,
-  awaitHoldMs,
-} from "./channel-await-budget";
+// ⚠ THE ONE HOLD IMPLEMENTATION — see `channel-ops-hold.ts` for the split.
+import { describeFailure, runHold, wasCutShort } from "./channel-hold-loop";
 // ⚠ The re-arm text branches on the caller's runtime here too, for the same
 // reason it does per-channel: an unstamped caller may not be promised a wake.
-import { workspaceAwaitTimedOutLines } from "./channel-wake-guidance";
+import { workspaceHoldTimedOutLines } from "./channel-wake-guidance";
 import { sessionBlockLines } from "./channel-session-table";
-
-/**
- * A thrown inner-poll failure reduced to one short NEUTRALIZED line.
- * ⚠ Same reasoning as `channel-ops-await.ts › describeFailure`: no framing
- * covers this line, and "our own server's error" says nothing about its CONTENT.
- */
-function describeFailure(e: unknown): string {
-  let raw: string;
-  if (e instanceof Error) raw = e.message;
-  else if (typeof e === "string") raw = e;
-  else {
-    try {
-      raw = JSON.stringify(e) ?? String(e);
-    } catch {
-      raw = String(e);
-    }
-  }
-  return neutralizeInline(raw) ?? "`no detail reported`";
-}
 
 /**
  * The re-arm stop rule for a WORKSPACE hold.
  *
  * ⚠ **IT IS DELIBERATELY DIFFERENT FROM THE PER-CHANNEL ONE, AND THE DIFFERENCE
- * IS THE WHOLE POINT.** `channel-ops-await.ts › rearmStopRule` says to judge
+ * IS THE WHOLE POINT.** `channel-ops-hold.ts › rearmStopRule` says to judge
  * liveness ONLY on the member you addressed, because in a busy channel other
  * members' traffic is not evidence your exchange is alive. A workspace hold
  * makes that trap strictly worse — EVERY channel's traffic now wakes you — so
@@ -106,104 +72,50 @@ function scopeNote(channelCount: number): string {
 }
 
 /**
- * LONG-HOLD workspace await. One call holds for `awaitHoldMs(timeoutMs,
- * runtime)` by re-issuing the ~50s inner long-poll on the same `since` cursor.
+ * THE WORKSPACE-WIDE HOLD. One call holds for `holdMsFor(waitMs, runtime)` by
+ * re-issuing the ~50s inner long-poll on the same cursor
+ * (`channel-hold-loop.ts › runHold`).
  *
  * ⚠ Four results, never a thrown error once the hold is underway: messages,
- * timed-out, FAILED-MID-HOLD, CUT SHORT — the same four the per-channel op has,
- * for the same reasons.
+ * timed-out, FAILED-MID-HOLD, CUT SHORT — the same four the per-channel lane
+ * has, for the same reasons.
  * ⚠ NO not-found branch, because there is no ref to resolve: a caller with no
  * memberships gets a page with `channelCount: 0` and a result that says so.
  */
-export async function opAwaitWorkspace(
+export async function opHoldWorkspace(
   client: DoplClient,
   since: number,
-  timeoutMs?: number,
+  waitMs?: number,
   selfUserId: string | null = null,
   runtime: string | null = null,
   selfSessionId: string | null = null,
 ): Promise<ToolResponse> {
-  // ⚠ Same two rules as the per-channel lane: explicit ask honoured exactly,
-  // default sized to the caller's runtime (`channel-await-budget.ts ›
-  // awaitHoldMs`). ⚠ `runtime` REACHES THIS OP AT ALL ONLY SINCE T03 — it was
-  // never threaded from `channel.ts`, so the workspace hold both ran the
-  // desktop-length default for external callers AND wrote external-flavoured
-  // re-arm guidance to desktop sessions.
-  const holdMs = awaitHoldMs(timeoutMs, runtime);
-  const startedAt = Date.now();
-  const deadline = startedAt + holdMs;
-  let messages: WorkspaceChannelMessage[] = [];
+  // ⚠ **CAPTURED IN THE POLL RATHER THAN RETURNED BY THE LOOP**, which is why
+  // the loop needs no workspace-shaped result type: `channelCount` is this
+  // lane's own fact, and the last poll to answer is the one that knows it.
   let channelCount = 0;
-  let sessions: WorkspaceAwaitResult["sessions"];
-  // ⚠ MOVES WITH `sessions` AND ONLY WITH IT (2026-08-23, F-294) — the caller's
-  // own `agent_presence` freshness, which is what lets a quiet row render as
-  // "quiet Xm" rather than as an accusation that the desktop died. The route
-  // emits both keys or neither; pairing a fresh row set with a liveness answer
-  // carried over from an earlier poll is the one way to make it lie.
-  let operatorOnline: WorkspaceAwaitResult["operatorOnline"];
-  let pollError: unknown = null;
-  // ⚠ Advances ONLY past this session's own rows — see the per-channel op.
-  let cursor = since;
-
-  for (let poll = 0; poll < AWAIT_MAX_POLLS; poll++) {
-    const remaining = deadline - Date.now();
-    if (poll > 0 && remaining < AWAIT_MIN_POLL_MS) break;
-    let result: WorkspaceAwaitResult;
-    try {
-      result = await client.awaitWorkspaceMessages({
-        since: cursor,
-        // ⚠ Floored at 1ms, not 0 — the route's query schema requires a POSITIVE
-        // timeout, so a `timeout_ms=0` caller would 400 instead of getting its check.
-        timeoutMs: Math.max(1, Math.min(AWAIT_POLL_MS, remaining)),
-        // 🔒 NO `excludeAuthor`, EVER — session-scoped suppression only (F-405).
-        // The argument is in `channel-ops-await.ts` in full. An orchestrator
-        // posting into many rooms must not pop its own hold on its own echoes;
-        // that is real, and it is why the suppression stays. What it may NOT do
-        // is decide by ACCOUNT, which across a whole workspace hides most of
-        // what an orchestrator is waiting for — and hides ALL of it from an
-        // unstamped external client, the population that reported the outage.
-      });
-    } catch (e) {
-      // ⚠ Poll 0 still throws — nothing is established yet, so the error IS the
-      // honest answer. Later, a transient failure must not destroy the hold.
-      if (poll === 0) throw e;
-      pollError = e;
-      break;
-    }
-    channelCount = result.channelCount;
-    if (result.sessions !== undefined) {
-      sessions = result.sessions;
-      operatorOnline = result.operatorOnline;
-    }
-    if (result.messages.length > 0) {
-      // ⚠ Our own lines dropped from the page in hand — see the per-channel op
-      // for why this is not a SQL predicate, and why an unstamped caller now
-      // drops nothing at all rather than falling back to the account.
-      const fresh =
-        selfSessionId === null
-          ? result.messages
-          : result.messages.filter((m) => sessionIdOf(m) !== selfSessionId);
-      if (fresh.length > 0) {
-        messages = fresh;
-        break;
-      }
-      // ⚠ Own echoes only: advance past them rather than re-fetching them every
-      // tick, which would spin the budget away and trip the CUT SHORT branch.
-      // Skips nothing anyone else wrote — every foreign row returns above first.
-      cursor = result.messages[result.messages.length - 1].seq;
-      continue;
-    }
-  }
+  const held = await runHold<WorkspaceChannelMessage>(
+    async (args) => {
+      const result = await client.awaitWorkspaceMessages(args);
+      channelCount = result.channelCount;
+      return result;
+    },
+    since,
+    waitMs,
+    runtime,
+    selfSessionId,
+  );
+  const { messages, cursor, elapsedMs, budgetMs, sessions, operatorOnline } = held;
+  const seconds = Math.round(elapsedMs / 1000);
 
   if (messages.length === 0) {
-    const elapsedMs = Date.now() - startedAt;
-    const timedOut = `No new messages in ANY channel you belong to since seq ${cursor} — the wait timed out after about ${Math.round(elapsedMs / 1000)}s with nothing arriving.`;
+    const timedOut = `No new messages in ANY channel you belong to since seq ${cursor} — the wait timed out after about ${seconds}s with nothing arriving.`;
     // ⚠ Say what BROKE before diagnosing a platform clamp, or a transient blip is
     // misread as "the wait is not holding" and a live exchange is abandoned.
-    if (pollError !== null) {
+    if (held.pollError !== null) {
       return ok(
         [
-          `The workspace wait ended early, after about ${Math.round(elapsedMs / 1000)}s: an inner poll failed — ${describeFailure(pollError)}.`,
+          `The workspace wait ended early, after about ${seconds}s: an inner poll failed — ${describeFailure(held.pollError)}.`,
           `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="read", since=${cursor}, wait_ms=<ms>).`,
           `If the very next hold fails the same way, stop re-arming and report it to your operator.`,
           workspaceRearmStopRule(),
@@ -211,17 +123,17 @@ export async function opAwaitWorkspace(
         ].join("\n"),
       );
     }
-    if (elapsedMs < Math.min(AWAIT_SHORT_HOLD_MS, holdMs / 2)) {
+    if (wasCutShort(elapsedMs, budgetMs)) {
       return ok(
         [
           timedOut,
-          `That hold was CUT SHORT — it asked for about ${Math.round(holdMs / 1000)}s and returned in ${Math.round(elapsedMs / 1000)}s, which usually means the platform is clamping the call (or the server is erroring instantly). A hold this short can never stay pending long enough to wake you.`,
+          `That hold was CUT SHORT — it asked for about ${Math.round(budgetMs / 1000)}s and returned in ${seconds}s, which usually means the platform is clamping the call (or the server is erroring instantly). A hold this short can never stay pending long enough to wake you.`,
           `Do NOT immediately re-arm — you would loop on short calls that never wake anything. Report this to your operator and check channels with dopl_channel(op="read") instead.`,
         ].join("\n"),
       );
     }
     // ⚠ The TIMEOUT is the compressed result (T03) — see
-    // `channel-wake-guidance.ts › workspaceAwaitTimedOutLines`. `scopeNote`
+    // `channel-wake-guidance.ts › workspaceHoldTimedOutLines`. `scopeNote`
     // STAYS: it is a fact about what was watched, not doctrine, and "no
     // messages" versus "that room was never being watched" are different
     // answers. The full `workspaceRearmStopRule` is still taught where it is
@@ -230,7 +142,7 @@ export async function opAwaitWorkspace(
       [
         timedOut,
         scopeNote(channelCount),
-        ...workspaceAwaitTimedOutLines(cursor, runtime),
+        ...workspaceHoldTimedOutLines(cursor, runtime),
         ...sessionBlockLines(sessions, undefined, operatorOnline),
       ].join("\n"),
     );

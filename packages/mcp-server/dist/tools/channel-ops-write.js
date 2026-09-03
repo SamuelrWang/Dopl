@@ -40,7 +40,7 @@ const channel_post_linkage_1 = require("./channel-post-linkage");
 // "What became of the `@…` tokens?" — the server's own resolution, read back.
 const channel_post_guidance_1 = require("./channel-post-guidance");
 const channel_shared_1 = require("./channel-shared");
-// ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
+// ⚠ Whether a pending HOLD outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
 // ⚠ A 400's MEANING is read off its CODE, never guessed from its status.
@@ -169,7 +169,7 @@ async function opPost(client, channelRef, body, opts = {}) {
     // ⚠ WHAT THIS REPLACED, AND THE RULE THAT DECIDED IT. A successful post used
     // to return ~2.5–3.5k characters: the addressing paragraph, the thread-linkage
     // paragraph, the per-mention breakdown, the five causes a tag resolves to
-    // nobody, the main-room sparseness bar, the await lecture and its stop rule.
+    // nobody, the main-room sparseness bar, the hold lecture and its stop rule.
     // Every one of those was true BEFORE this call and is true AFTER it — standing
     // doctrine, re-transmitted on every write, ~25 times in one measured
     // orchestration run. It is stated once now, in `channel-doctrine.ts`.
@@ -189,7 +189,7 @@ async function opPost(client, channelRef, body, opts = {}) {
     //               `0/1` is the verdict, and it may never be dropped for brevity.
     //   wake      — the `@agent-…` handles the body named. NOT counted in `tags`:
     //               they resolve on the operator's machine, never on the server.
-    //   await     — the one runtime-derived branch: arm from this seq, or skip.
+    //   hold      — the one runtime-derived branch: arm from this seq, or skip.
     const landing = (0, channel_post_linkage_1.threadFacts)(message, 
     // ⚠ The caller named a thread if EITHER argument carried one. `metadata` is
     // a caller-settable passthrough whose schema description tells agents to
@@ -221,7 +221,7 @@ async function opPost(client, channelRef, body, opts = {}) {
         // machine reporting what it did. Absent = this server computes no verdict,
         // which is NOT `none`. See `channel-facts.ts › deliveryFact`.
         delivery: (0, channel_facts_1.deliveryFact)(message.delivery, message.deliveryAt),
-        await: (0, channel_wake_guidance_1.awaitFact)(opts.runtime ?? null, message.seq),
+        hold: (0, channel_wake_guidance_1.holdFact)(opts.runtime ?? null, message.seq),
         ...(opts.resultFacts ?? {}),
     }));
 }

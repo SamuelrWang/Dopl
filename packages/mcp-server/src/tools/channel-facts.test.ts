@@ -88,7 +88,7 @@ describe("no input can push a line past the budget", () => {
       intent: "request",
       tags: "0/1",
       wake: "@agent-x2sz1ztt",
-      await: "since:858",
+      hold: "since:858",
     });
     expect(line.length, line).toBeLessThanOrEqual(WRITE_RESULT_MAX_CHARS);
   });

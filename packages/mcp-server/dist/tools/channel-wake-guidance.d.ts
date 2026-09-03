@@ -13,7 +13,7 @@
  * CARRIED the stamp; absence is `unstamped`, usually an external client but
  * also how a desktop spawn on an older build looks. Never "external".
  *   - stamped   → a session this product spawned, fed replies as new turns.
- *                 Awaiting is the wrong primitive, so the wake promise is
+ *                 Holding is the wrong primitive, so the wake promise is
  *                 DROPPED and the caller is told not to arm.
  *   - unstamped → nothing promised. The hold is described as what it provably
  *                 is — a synchronous wait returning in this turn — plus the
@@ -33,22 +33,22 @@
  * call and now live once in `channel-doctrine.ts`. What is NOT derivable by the
  * caller is the branch below — whether THIS request carried the desktop's
  * runtime stamp — so that survives:
- *   - `await=skip`        — a desktop-run session, fed the counterparty's
+ *   - `hold=skip`        — a desktop-run session, fed the counterparty's
  *                           replies as new turns. Arming is simply wrong here.
- *   - `await=since:<seq>` — everyone else: the cursor to arm from, pre-computed
+ *   - `hold=since:<seq>` — everyone else: the cursor to arm from, pre-computed
  *                           off the seq this write just produced, so the next
  *                           call needs no read to find it.
  *   - absent (`-`)        — the write produced no seq to arm from. ⚠ `0` is NOT
- *                           a substitute: awaiting from 0 replays the channel.
+ *                           a substitute: holding from 0 replays the channel.
  *
  * ⚠ IT STAYS AN OBSERVATION. An UNSTAMPED caller may still BE a desktop session
  * on an older build, which is why the unstamped branch offers a cursor rather
  * than an instruction, and why the doctrine states the wake as the client-side
  * conditional it is.
  */
-export declare function awaitFact(runtime: string | null, seq: number | null): string | undefined;
+export declare function holdFact(runtime: string | null, seq: number | null): string | undefined;
 /**
- * `await` CAME BACK EMPTY — ⚠ ONE LINE, cursor-first (T03).
+ * THE HOLD CAME BACK EMPTY — ⚠ ONE LINE, cursor-first (T03).
  *
  * ⚠ **THE TIMEOUT IS THE HOTTEST RESULT ON THIS SURFACE AND CARRIES THE LEAST
  * NEWS.** An external orchestrator polling a quiet exchange reads this text
@@ -70,14 +70,14 @@ export declare function awaitFact(runtime: string | null, seq: number | null): s
  * ⚠ Desktop branch UNCHANGED — it is already one line, and it says the opposite
  * thing (do not re-arm at all).
  */
-export declare function awaitTimedOutLines(ref: string, since: number, runtime: string | null): string[];
+export declare function holdTimedOutLines(ref: string, since: number, runtime: string | null): string[];
 /**
  * The same compression for the WORKSPACE hold's timeout. ⚠ A sibling line, not
- * a shared one, for the reason `channel-ops-await-workspace.ts` gives in full:
+ * a shared one, for the reason `channel-ops-hold-workspace.ts` gives in full:
  * the workspace stop rule is a DIFFERENT rule (any channel's traffic wakes you,
  * so a wake is not news), and collapsing the two would restate the per-channel
  * trap where the worse one applies.
  */
-export declare function workspaceAwaitTimedOutLines(since: number, runtime: string | null): string[];
-/** `await` returned messages: advance the cursor, then re-arm — or don't. */
-export declare function awaitArrivedLines(ref: string, lastSeq: number, runtime: string | null, stopRule: string): string[];
+export declare function workspaceHoldTimedOutLines(since: number, runtime: string | null): string[];
+/** The HOLD returned messages: advance the cursor, then re-arm — or don't. */
+export declare function holdArrivedLines(ref: string, lastSeq: number, runtime: string | null, stopRule: string): string[];

@@ -11,9 +11,9 @@
  *     before `classify` (listener-messages.js) and none reads `to_user_id`: a
  *     first-class thread tag feeds the counterparty's live session directly.
  *
- * ⚠ THE THIRD CLAIM — the `AWAIT_UNNAMED_NOTICE`, which must not tell a
+ * ⚠ THE THIRD CLAIM — the `HOLD_UNNAMED_NOTICE`, which must not tell a
  * requester its own answer is somebody else's traffic — moved to
- * `channel-addressing-await-notice.test.ts` on 2026-09-02, at the §1 cap. The
+ * `channel-addressing-hold-notice.test.ts` on 2026-09-02, at the §1 cap. The
  * seam is SUBJECT: what a WRITE reports about who it reached stays here; what a
  * HOLD says about a page somebody else wrote is over there.
  */
@@ -146,12 +146,13 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
    * never the spelling, it was that no name is an address.
    */
   it("the revived rename brought back NO addressing surface", () => {
-    // ⚠ B8: `op="rename_agent"` is `op="manage" action="rename"`; the retired
-    // spelling parses for one release so its redirect can run. ⚠ RE-POINTED:
-    // `agent_id` folded into the ONE recipient field, so the instance renamed is
-    // `to` and `name` pre-existed — still no param of its own, and `agent` is
-    // still banned by the case above.
-    expect(CHANNEL_INPUT_SHAPE.op.safeParse("rename_agent").success).toBe(true);
+    // ⚠ B8: `op="rename_agent"` is `op="manage" action="rename"`, and slice B16
+    // retired the old spelling for good — it parsed for one release so its
+    // redirect could run. ⚠ RE-POINTED: `agent_id` folded into the ONE recipient
+    // field, so the instance renamed is `to` and `name` pre-existed — still no
+    // param of its own, and `agent` is still banned by the case above.
+    expect(CHANNEL_INPUT_SHAPE.op.safeParse("rename_agent").success).toBe(false);
+    expect(CHANNEL_INPUT_SHAPE.op.safeParse("manage").success).toBe(true);
     expect(CHANNEL_INPUT_SHAPE.action.safeParse("rename").success).toBe(true);
     expect(CHANNEL_INPUT_SHAPE).toHaveProperty("to");
     expect(CHANNEL_INPUT_SHAPE).toHaveProperty("name");
@@ -159,35 +160,44 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
     expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("as_agent");
   });
 
-  // ⚠ EVERY NAME BELOW IS A RETIRED SPELLING PARSING INTO ITS ONE-LINE REDIRECT
-  // (B8), not a published op — drop the parse and it is an opaque -32602.
-  it("still accepts every op that SURVIVED, so the rollback took nothing extra", () => {
-    for (const op of [
-      "list",
-      "open",
-      "invite",
-      "post",
-      "milestone",
-      "read",
-      "await",
-      "members",
-      "list_threads",
-      "create_thread",
-      // ⚠ `get_thread` left this list on 2026-09-02 (C15) — folded into
-      // `read(thread=)`, which now renders the card as well as the transcript,
-      // so ONE op answers the noun and 200 characters of prose keeping the two
-      // apart went with it.
-      // ⚠ `propose_close` and `close_thread` were on this list until thread
-      // closing was removed (wiring plan Phase 4, 2026-08-18). `close_thread`
-      // was kept in the enum ON PURPOSE so an older agent got a teaching
-      // refusal rather than an opaque enum error — a trade that only pays
-      // while there is something to do instead.
-      "set_thread_mode",
-    ]) {
+  /**
+   * ⚠ **THE ROLLBACK TOOK NO CAPABILITY, AND THIS IS THE CASE THAT SAYS SO** —
+   * restated at slice B16 as a pair of live words rather than a list of parsing
+   * names. Every concept the named-agent surface had is still reachable; what
+   * changed twice is only its SPELLING (B8 collapsed 23 ops to 5, B16 stopped
+   * the old spellings parsing). Asserting the old names still parsed would now
+   * assert the compatibility window, which is the thing that closed.
+   */
+  it("every surviving CONCEPT is still reachable, under a live op", () => {
+    const reachable: ReadonlyArray<readonly [string, string | null]> = [
+      ["send", null], //          post · milestone · escalate · create_thread
+      ["read", null], //          read · await (`wait_ms`) · get_thread (`thread=`)
+      ["status", null], //        read_sessions · read_directions
+      ["rooms", "list"],
+      ["rooms", "open"],
+      ["rooms", "invite"],
+      ["rooms", "members"],
+      ["rooms", "threads"],
+      ["rooms", "thread_mode"],
+      ["rooms", "update"],
+      ["rooms", "help"],
+      ["manage", "launch"],
+      ["manage", "end"],
+      ["manage", "rename"],
+      ["manage", "posture"],
+      ["manage", "direct"],
+    ];
+    for (const [op, action] of reachable) {
       expect(
         CHANNEL_INPUT_SHAPE.op.safeParse(op).success,
         `op="${op}" was lost`,
       ).toBe(true);
+      if (action !== null) {
+        expect(
+          CHANNEL_INPUT_SHAPE.action.safeParse(action).success,
+          `action="${action}" was lost`,
+        ).toBe(true);
+      }
     }
   });
 

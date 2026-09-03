@@ -36,9 +36,9 @@ import { threadFacts } from "./channel-post-linkage";
 // "What became of the `@…` tokens?" — the server's own resolution, read back.
 import { postMentionFacts } from "./channel-post-guidance";
 import { inlineOr, isErr, resolveChannelOr } from "./channel-shared";
-// ⚠ Whether a pending `await` outlives the turn is a CLIENT property this
+// ⚠ Whether a pending HOLD outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
-import { awaitFact } from "./channel-wake-guidance";
+import { holdFact } from "./channel-wake-guidance";
 // ⚠ A 400's MEANING is read off its CODE, never guessed from its status.
 import {
   FIELD_CAPS_NOTE,
@@ -259,7 +259,7 @@ export async function opPost(
   // ⚠ WHAT THIS REPLACED, AND THE RULE THAT DECIDED IT. A successful post used
   // to return ~2.5–3.5k characters: the addressing paragraph, the thread-linkage
   // paragraph, the per-mention breakdown, the five causes a tag resolves to
-  // nobody, the main-room sparseness bar, the await lecture and its stop rule.
+  // nobody, the main-room sparseness bar, the hold lecture and its stop rule.
   // Every one of those was true BEFORE this call and is true AFTER it — standing
   // doctrine, re-transmitted on every write, ~25 times in one measured
   // orchestration run. It is stated once now, in `channel-doctrine.ts`.
@@ -279,7 +279,7 @@ export async function opPost(
   //               `0/1` is the verdict, and it may never be dropped for brevity.
   //   wake      — the `@agent-…` handles the body named. NOT counted in `tags`:
   //               they resolve on the operator's machine, never on the server.
-  //   await     — the one runtime-derived branch: arm from this seq, or skip.
+  //   hold      — the one runtime-derived branch: arm from this seq, or skip.
   const landing = threadFacts(
     message,
     // ⚠ The caller named a thread if EITHER argument carried one. `metadata` is
@@ -315,7 +315,7 @@ export async function opPost(
       // machine reporting what it did. Absent = this server computes no verdict,
       // which is NOT `none`. See `channel-facts.ts › deliveryFact`.
       delivery: deliveryFact(message.delivery, message.deliveryAt),
-      await: awaitFact(opts.runtime ?? null, message.seq),
+      hold: holdFact(opts.runtime ?? null, message.seq),
       ...(opts.resultFacts ?? {}),
     }),
   );

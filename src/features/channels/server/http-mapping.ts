@@ -29,8 +29,6 @@ import {
   LaunchDirectiveNotFoundError,
   LaunchTemplateAmbiguousError,
   LaunchTemplateNotFoundError,
-  PingRecipientNotMemberError,
-  PingSelfTargetError,
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
@@ -148,18 +146,6 @@ function mapChannelError(err: unknown): HttpError | null {
     return new HttpError(409, "AGENT_TEMPLATE_AMBIGUOUS", err.message, {
       matches: err.matches,
     });
-  }
-  // ⚠ 400 FOR BOTH PING REFUSALS — they are statements about the RECIPIENT the
-  // caller named, reached only after the channel fence has already admitted it,
-  // so neither discloses anything a 404 was protecting and both are fixable by
-  // the caller without another read.
-  if (err instanceof PingRecipientNotMemberError) {
-    return new HttpError(400, "CHANNEL_PING_RECIPIENT_NOT_MEMBER", err.message);
-  }
-  // ⚠ The message names `toDesktop` as the instrument that works — see the
-  // error's own docblock; a bare refusal here strands the most likely caller.
-  if (err instanceof PingSelfTargetError) {
-    return new HttpError(400, "CHANNEL_PING_SELF_TARGET", err.message);
   }
   // SIX ARMS ENDED HERE (channels rollback §1) and each was a named-agent or
   // breakout-room refusal: CHANNEL_AGENT_NOT_FOUND / _NOT_IN_CHANNEL /

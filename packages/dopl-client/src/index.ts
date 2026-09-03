@@ -205,18 +205,6 @@ export type {
   DirectionRefusalReason,
 } from "./direction-types.js";
 
-// THE "NEEDS YOU" SIGNAL's types — their own module since 2026-09-01, for the
-// same reason. ⚠ Re-exported here unchanged, so no consumer moved.
-export type {
-  AwaitPingsOptions,
-  ChannelPing,
-  CreatePingInput,
-  ListPingsOptions,
-  PingAwaitResult,
-  PingKind,
-  PingRecipientKind,
-} from "./ping-types.js";
-
 // STRUCTURED ESCALATION types — their own module since 2026-08-31, for the same
 // reason. ⚠ Re-exported here unchanged, so no consumer moved.
 export type {

@@ -137,12 +137,13 @@ exports.CHANNEL_DESCRIPTION = (0, tool_style_1.composeDescription)({
         // two `action` vocabularies are listed with them because a dispatcher named
         // without its verbs is a door with no handle.
         `OPS — "send" a message (to= addresses one party; kind="milestone" or "decision"; thread="new" opens an exchange), "read" the transcript (since=, wait_ms= holds), "status" your live agents and their queue, "manage" one of them, "rooms" for the place. The last two take action=.`,
-        // ⚠ **THE EIGHTEEN RETIRED NAMES ARE NOT LISTED HERE, AND THAT IS THE WHOLE
-        // POINT OF THE COLLAPSE.** A migration note in the description is 430
+        // ⚠ **THE TWENTY-TWO RETIRED NAMES ARE NOT LISTED HERE, AND THAT IS THE
+        // WHOLE POINT OF THE COLLAPSE.** A migration note in the description is 430
         // characters pushed to every connection, including the overwhelming majority
         // of callers that never used an old name — and the caller who DOES gets the
-        // redirect, addressed to them, at the only moment it helps. The one-line
-        // answer IS the notice (`channel-retired-ops.ts`).
+        // answer addressed to them, at the only moment it helps. That was a redirect
+        // for one release; since slice B16 it is the enum's own refusal
+        // (`channel-schema.ts › unknownOpRefusal`), which names the five.
     ],
     // ⚠ THE `Limits:` BLOCK, ADDED BY B8 AND RENDERED FROM THE ZOD SHAPE. It did
     // not exist while every bound was hand-typed into an argument's own

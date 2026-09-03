@@ -9,9 +9,10 @@
  *
  * ⚠ **FIVE OPS SINCE 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9)** —
  * `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three. The
- * other twenty-two names still PARSE for one release and answer ONE line naming
- * their replacement (`channel-retired-ops.ts`); they are absent from the
- * published enum, so nothing a model can SEE names a retired op.
+ * other twenty-two names parsed for one release and answered ONE line naming
+ * their replacement; slice B16 closed that window, so the enum is five words
+ * wide at runtime as well as in the published schema and a retired name is
+ * refused by `channel-schema.ts › unknownOpRefusal`.
  *
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`        — ref resolution + the ONE neutralizer every
@@ -20,7 +21,7 @@
  *                                  and `channel-facts.ts` for its result line)
  *   - `channel-ops-threads.ts`   — thread="new"
  *   - `channel-ops-escalate.ts`  — kind="decision"
- *   - `channel-ops-read.ts` / `channel-ops-account.ts` / `channel-ops-await*.ts`
+ *   - `channel-ops-read.ts` / `channel-ops-account.ts` / `channel-ops-hold*.ts`
  *                                — the page, the account-wide page, the hold
  *   - `channel-ops-status.ts`    — sessions + the direction mailbox
  *   - `channel-dispatch-agents.ts` — op="manage"

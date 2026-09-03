@@ -139,11 +139,11 @@ describe("the served input schema fits its budget", () => {
     // ⚠ ANY QUOTED OP NAME COUNTS, not just the `op="x"` form — `channel` is
     // taken by all but three actions and lists the exceptions instead, which is
     // shorter AND the thing a caller needs.
-    // ⚠ **THE FIVE PUBLISHED OPS, NOT `op.options`** (B8, 2026-09-02). The zod
-    // enum accepts twenty-two retired names so their redirects can run, and a
-    // `.describe()` naming one of those would be teaching a call the client
-    // cannot see in the enum — which this assertion would have waved through if
-    // it read the runtime union.
+    // ⚠ **THE FIVE PUBLISHED OPS** (B8, 2026-09-02). They were once a subset of
+    // what the enum accepted — twenty-two retired names parsed for one release
+    // so their redirects could run — and a `.describe()` naming one would have
+    // taught a call no client could see. Slice B16 made the two sets one; the
+    // constant stays the source because it is the SERVED set either way.
     const ops: readonly string[] = CHANNEL_OPS;
     const anonymous = Object.entries(served)
       .filter(([name]) => name !== "op")

@@ -103,7 +103,7 @@ const READ_OPS: Record<string, string[]> = {
   // `rooms` is four reads and four writes, so this list names the four reads and
   // `gating.ts › WRITE_OPS` names the four writes.
   dopl_channel: [
-    // `opRead` / `opReadAccount` / `opAwait` call only read endpoints. ⚠ The HOLD
+    // `opRead` / `opReadAccount` / `opHold` call only read endpoints. ⚠ The HOLD
     // is the same op with `wait_ms` and is the same classification: a long-poll
     // is a read that waits, and it was refused to a read-only token by nothing
     // when it was its own op either.
@@ -296,13 +296,12 @@ describe("write-op completeness", () => {
     // cannot be asserted absent here, and the case below — every enum op is
     // classified write-or-read — is what covers it, which is the check that
     // actually closes the read-only-token hole this block is about.
-    // ⚠ **THE EIGHTEEN RETIRED NAMES JOIN THE SIX (2026-09-02, B8), AND FOR THE
-    // SAME REASON RATHER THAN A NEW ONE.** They still PARSE — the runtime enum is
-    // the union, so their one-line redirects can run — but the PUBLISHED enum is
-    // five, and `opEnum` reads what is published. A retired name reappearing in
-    // the published enum would be the collapse silently coming undone; a retired
-    // name in `WRITE_OPS` would be a gate on a call that only ever answers a
-    // sentence.
+    // ⚠ **THE TWENTY-TWO RETIRED NAMES JOIN THE SIX (2026-09-02, B8), AND FOR
+    // THE SAME REASON RATHER THAN A NEW ONE.** They parsed for one release so
+    // their one-line redirects could run; slice B16 deleted the redirects, so
+    // they now parse nowhere. Either way a retired name reappearing in the enum
+    // would be the collapse silently coming undone, and one in `WRITE_OPS` would
+    // be a gate on a call no handler can reach.
     for (const op of [
       "agents",
       "summon_agent",

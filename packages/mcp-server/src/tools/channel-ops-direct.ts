@@ -298,7 +298,7 @@ function renderDirection(d: AgentDirection): string {
  * without this op a timed-out hold would strand it forever.
  * ⚠ **A SIBLING OP, NOT A MODE ON `direct_agent`.** Collapsing a read into a write
  * would put two authorization stories behind one signature, which is the argument
- * `channel-ops-await-workspace.ts` was split out on.
+ * `channel-ops-hold-workspace.ts` was split out on.
  * ⚠ OWN-SCOPED AT THE SERVER — the transport credential IS the caller, so no
  * identity is passed and there is no argument that could name another operator.
  */

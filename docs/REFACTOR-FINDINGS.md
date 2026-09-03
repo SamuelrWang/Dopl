@@ -615,14 +615,14 @@ COMMIT;
 - Status: open (rule holding; **5-file backlog, down from 10**; the desktop cluster is now the worse half)
 
 ### F-096: Stale prose still describes the deleted `main/mcp-cli-entry.js` as live — and it SHIPS — ✅ RESOLVED 2026-08-30
-- Location: `packages/mcp-server/src/tools/channel-await-budget.ts:71`, its byte-identical committed build output `packages/mcp-server/dist/tools/channel-await-budget.js:74` and `.d.ts:69`, and `src/app/api/mcp/route.ts:171`
+- Location: `packages/mcp-server/src/tools/channel-hold-budget.ts › HOLD_CAP_MS`, its byte-identical committed build output `packages/mcp-server/dist/tools/channel-hold-budget.js` and `.d.ts:69`, and `src/app/api/mcp/route.ts:171`
 - Found during: Q9 follow-up (2026-07-31)
 - Severity: smell (prose that ships as part of the server)
 - Description: `main/mcp-cli-entry.js` rewrote the operator's own `~/.claude.json` — a file holding their `oauthAccount` credential block — to add a per-server `timeout`. Deleted 2026-07-31 for four reasons recorded in ENGINEERING §18. **The module is confirmed absent** and `dopl-desktop-app/test/sdk-mcp-token.test.mjs:264` asserts it. What remains is prose describing it as live, in one source file plus its `dist/` twins, which ship with the SERVER.
 - **Line numbers re-measured 2026-08-08 (all four had drifted).** Other surviving mentions are DELIBERATE and must not be "cleaned up": `dopl-desktop-app/main/mcp-config.js:13` and `main/mcp-cli-add.js:11` explain the removal; `test/sdk-mcp-token.test.mjs:251,257,260,264` assert it; `docs/ENGINEERING.md:567` records the reasoning.
-- Proposed resolution: fix-now — one sentence in `channel-await-budget.ts` plus one in the route, then `npm run build:packages`.
+- Proposed resolution: fix-now — one sentence in `channel-hold-budget.ts` plus one in the route, then `npm run build:packages`.
 - Status: open (prose only; rides the next build + push)
-- ⚠ **CLOSED 2026-08-30 — superseded:** the prose sweep shipped. `mcp-cli-entry` no longer appears anywhere in `packages/` (source or `dist/`) or `src/`, and `packages/mcp-server/src/tools/channel-await-budget.ts › AWAIT_HOLD_CAP_MS` states the CLI abort floor generically. The only surviving mentions are the four DELIBERATE ones this entry itself listed — `dopl-desktop-app/main/mcp-config.js › MCP_CLIENT_TIMEOUT_MS`, `main/mcp-cli-add.js`, `test/sdk-mcp-token.test.mjs`, `docs/ENGINEERING.md`.
+- ⚠ **CLOSED 2026-08-30 — superseded:** the prose sweep shipped. `mcp-cli-entry` no longer appears anywhere in `packages/` (source or `dist/`) or `src/`, and `packages/mcp-server/src/tools/channel-hold-budget.ts › HOLD_CAP_MS` states the CLI abort floor generically. The only surviving mentions are the four DELIBERATE ones this entry itself listed — `dopl-desktop-app/main/mcp-config.js › MCP_CLIENT_TIMEOUT_MS`, `main/mcp-cli-add.js`, `test/sdk-mcp-token.test.mjs`, `docs/ENGINEERING.md`.
 
 ### F-097: `POST` and `DELETE` on `/api/auth/mcp-device-token` disagree about an invalid `label`
 - Location: `src/app/api/auth/mcp-device-token/route.ts:24-32` (`readLabel`) vs `:87-92` (`RevokeSchema.safeParse`)
@@ -682,7 +682,7 @@ COMMIT;
 - Status: open (residual)
 
 ### F-105: Nothing ever closes a thread, and three mechanisms that key on thread status degrade as open threads pile up
-- Location: `src/features/channels/server/service-tasks.ts` (`closeTask`, the only writer of `status='closed'`); `server/repository-tasks.ts:71-82` (`listTasksByChannel` — no status filter, no limit); `server/service-writes-metadata.ts:135` (`candidates.length === 1`) and `:448` (the `taskMode` stamp, read at `dopl-desktop-app/main/trigger.js:289` and `main/session-dispatch.js:200`); the four copies of the await stop-rule — `packages/mcp-server/src/tools/channel-ops-write.ts:342`, `channel-description.ts:61`, `channel-ops-await.ts:122`, `channel-ops-threads.ts:194`
+- Location: `src/features/channels/server/service-tasks.ts` (`closeTask`, the only writer of `status='closed'`); `server/repository-tasks.ts:71-82` (`listTasksByChannel` — no status filter, no limit); `server/service-writes-metadata.ts:135` (`candidates.length === 1`) and `:448` (the `taskMode` stamp, read at `dopl-desktop-app/main/trigger.js:289` and `main/session-dispatch.js:200`); the four copies of the await stop-rule — `packages/mcp-server/src/tools/channel-ops-write.ts:342`, `channel-description.ts:61`, `channel-ops-hold.ts`, `channel-ops-threads.ts:194`
 - Found during: live observation, 2026-07-31 — ONE DM channel holding SIX open threads
 - Severity: bug (the accumulation is silent, and past two open threads in a pair it changes ROUTING, not just tidiness)
 - **All four surviving consequences re-verified line by line 2026-08-08; every line number in this entry is fresh.**
@@ -725,7 +725,7 @@ COMMIT;
 - Status: open
 
 ### F-109: The two-agent information-loss round — the five accepted residuals
-- Location: `src/features/channels/**`, `packages/mcp-server/src/tools/channel-ops-await.ts`, `scripts/dopl-channel-wait.sh`, `dopl-desktop-app/main/queued-notice.js`
+- Location: `src/features/channels/**`, `packages/mcp-server/src/tools/channel-ops-hold.ts`, `scripts/dopl-channel-wait.sh`, `dopl-desktop-app/main/queued-notice.js`
 - Found during: a live two-agent cross-machine stress test (2026-07-31)
 - Severity: bug (all six defects fixed)
 - **Rewritten down to the residuals 2026-08-08.** The fixes — `?thread=<id>` as a FILTER on the message read (deliberately moving NO read watermark, because the watermark is content-derived and monotonic so a filtered read would mark unrelated older messages seen); `closeTask` returning `{ thread, echoSeq }` as an ADDITIVE ENVELOPE KEY; the corrected `seq` documentation (the identity sequence is on the TABLE, so a channel's seqs are gappy — an agent reading a range as a count concludes it lost messages); and the background-shell wake — are in ENGINEERING §8.
@@ -6382,7 +6382,7 @@ Renumbered before merge. Ids are never reused; two entries under one id makes bo
 `dopl_channel(op="await", since=853)` returned "nothing" twice while seq 856 — an agent post in that
 channel, on the caller's own account — sat in the table. `op="read"` showed it plainly.
 
-`channel-ops-await.ts` passed `excludeAuthor = <the account>`, and every post is stamped
+`channel-ops-hold.ts` passed `excludeAuthor = <the account>`, and every post is stamped
 `author_user_id = ctx.userId` (`channels/server/service-writes.ts › postMessage`) whether a human or
 an agent wrote it. One operator runs many concurrent sessions, so **an orchestrator and its worker
 are the same author id.** The filter removed the row from BOTH the page and the existence probe
@@ -6406,7 +6406,7 @@ caller gives up instead is bounded and self-inflicted — it may wake on a post 
 blocked inside the call so in practice only an older desktop build can trip that. A noisy wake is
 recoverable; a silent hold is not.
 
-⚠ `channel-await-author.test.ts` ASSERTED THIS BUG — it pinned `excludeAuthor === ME` on every poll,
+⚠ `channel-hold-author.test.ts` ASSERTED THIS BUG — it pinned `excludeAuthor === ME` on every poll,
 which is the behaviour that hid the counterparty. A test can hold a defect in place as firmly as it
 holds an invariant.
 
@@ -6419,10 +6419,10 @@ The default hold is 215s. Claude Code wraps every non-GET fetch to an `http` MCP
 AbortController firing after `max(server.timeout ?? MCP_TOOL_TIMEOUT, 60_000)` ms. So at the default,
 an external caller did not get a long wait — it got a **raw transport `TimeoutError` carrying no
 cursor, no session block and none of the re-arm teaching**, which is the exact outcome the deadline
-chain in `channel-await-budget.ts` exists to prevent. The chain documented the client cap as layer 6
+chain in `channel-hold-budget.ts` exists to prevent. The chain documented the client cap as layer 6
 and then sized layer 4 as though only layer 5 existed.
 
-**Resolved:** `channel-await-budget.ts › awaitHoldMs` is the one resolver both lanes call. An
+**Resolved:** `channel-hold-budget.ts › holdMsFor` is the one resolver both lanes call. An
 explicit `timeout_ms` is honoured EXACTLY (clamped only by the cap and the `DOPL_AWAIT_HOLD_MS`
 incident lever); the DEFAULT branches on the caller's runtime stamp — desktop keeps the wake-length
 hold, everything else gets `EXTERNAL_CLIENT_ABORT_MS - AWAIT_HOLD_EXTERNAL_MARGIN_MS`.
@@ -6476,14 +6476,14 @@ of a finished state to wait for — and the mechanism lecture is still taught wh
   as itself under framing that says what it is", with the indent as the stated
   fallback.
 - Measure it: `grep -n UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
-  and compare `channel-ops-read.ts › opRead` with `channel-ops-await.ts › opAwait`.
+  and compare `channel-ops-read.ts › opRead` with `channel-ops-hold.ts › opHold`.
 
 #### ⚠ EXTENDED 2026-09-02 (review) — the boundary is WAKE, not `await`, and the LISTING half is filed too
 
 **(a) FOUR IMPORTERS, NOT TWO, AND THE ACCOUNT LANE IS A DECISION.** The header's docblock said "the
 two `await` lanes only" while `grep -rln UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
 answered four: the two holds, `channel-ops-account.ts` (the cross-channel read, T21) and
-`channel-ops-ping.ts` (the "needs you" inbox, T70). **The account lane KEEPS the banner** — ruled
+the ping inbox op (the "needs you" inbox, T70; that module was deleted at slice B16). **The account lane KEEPS the banner** — ruled
 here rather than left ambiguous: it is what an orchestrator arms INSTEAD of N per-channel holds, so
 it carries bodies from rooms the caller did not name and members it did not address, on the same
 wake cadence a hold runs. Every argument for the hold's header applies to it verbatim, while the
@@ -6874,7 +6874,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 | # | Ruling | Where it lives | To loosen |
 |---|---|---|---|
-| **R1** | The pings READ lane enforces channel MEMBERSHIP **and** party, matching `channel_pings_party_select`, instead of party alone. | `channels/server/service-pings.ts › listPings`, `service-pings-await.ts › awaitPings`, `repository-pings.ts` | Drop the `channelIds` argument from the two repository reads and the proof from the two services. ⚠ Then the REST lane is WIDER than the client lane for a removed member, and `service-pings-await.ts`'s old docblock (that delivery past a departure is designed) becomes true again — say so in `docs/specs/needs-you-ping.md`, which now says the opposite. |
+| **R1** | The pings READ lane enforces channel MEMBERSHIP **and** party, matching `channel_pings_party_select`, instead of party alone. | the three ping-lane modules under `src/features/channels/server/` — ⚠ all DELETED at slice B16 (ruling B8), so this row is history | Drop the `channelIds` argument from the two repository reads and the proof from the two services. ⚠ Then the REST lane is WIDER than the client lane for a removed member, and the ping hold's old docblock (that delivery past a departure is designed) becomes true again — say so in `docs/specs/needs-you-ping.md`, which now says the opposite. |
 | **R2** | The copy ops take operator-**OWNED** sources, not "anything the caller can read". | `mcp-server/src/tools/copy-target.ts › notOwnedRefusal`, called from both `opCopy` and `opCopyBase` | Delete the two call sites. ⚠ Then a teammate's `workspace`-visible template or shared base copies into a container that teammate may not be in, landing PRIVATE to the copier — and INVARIANTS §10 says "an operator's OWN template or knowledge base", so that wording moves with it. |
 | **R3** | The two account routes honour `ctx.apiKeyWorkspaceId`, narrowing to the locked workspace. | `app/api/channels/account/{status,messages}/route.ts` → `service-account.ts` → `repository-account.ts › listAccountChannelRefs` | Stop passing `lockedWorkspaceId`. ⚠ Then a container-locked credential reads channel names, operator-only session telemetry and message previews out of every workspace its operator belongs to — B1's ceiling is enforced by `withWorkspaceAuth` everywhere else and these two routes deliberately do not use it. |
 | **R4** | The pin/unpin routes are `sessionOnly`, on the channel-grants precedent. | `app/api/knowledge/bases/[baseId]/pin/route.ts`, `app/api/knowledge/entries/[entryId]/pin/route.ts` | Remove the flag from both, and from the census in `shared/auth/write-gate-coverage.test.ts`. ⚠ Then an agent token decides what every agent session launched in the workspace afterwards is handed at startup. **The MCP ops `dopl_kb(op="pin"|"unpin")` still work today for a human's session; what R4 refuses is the agent token.** |
@@ -7162,7 +7162,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-445 — `op="pings"` lost its cursor to close C13, and the trade is a re-read rather than a skip (2026-09-02)
 
-- Location: `packages/mcp-server/src/tools/channel-ops-ping.ts › opReadPings` and `channel.ts`'s `case "pings"`, against `src/app/api/pings/await/route.ts`, which still carries one.
+- Location: the MCP ping-inbox handler and `channel.ts`'s `case "pings"`, against the held `/api/pings/await` route, which still carried one. ⚠ **ALL THREE DELETED AT SLICE B16** (ruling B8).
 - Found during: A6b, landing C13 (*"one cursor"*).
 - Severity: **a deliberate capability trade, recorded so it is not re-litigated as a bug.**
 - **What was wrong.** One `since` param served TWO cursor spaces — a message seq on `read`/`await`, a ping seq on `pings` — and the spec's own words for the defect are *"crossing reads a plausible WRONG page instead of erroring"*. The failure is SILENT and the wrong direction: a message seq is routinely hundreds larger than a ping seq, so crossing them skips the inbox rather than repeating it.
@@ -7395,7 +7395,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 - Location: the unapplied `channel_pings` migration at version `20260907130000` (DELETED at this integration), `src/features/channels/{schema-ping.ts,server/{repository-pings,service-pings,service-pings-await}.ts}`, `src/app/api/pings/**`, `packages/mcp-server/src/{gating.ts,tools/channel-agent-id.ts}`, `dopl-desktop-app/main/{ping-wire,realtime-mailboxes}.js`.
 - Found during: v2 wave B slice B4, checking whether the ping fold was assigned to it.
-- **IT IS NOT.** The wave-B spec assigns the pieces elsewhere and B4 owns none of them: §2.3 puts the `ping` / `pings` → `send(to=…)` / `read` REDIRECT on **B8**, and §5 batch 3 gives **B16** the migration file, `server/service-pings*.ts`, `src/app/api/pings/**` and `channel-ops-ping.ts`. B4's row is the metadata/verdict family, `service-writes-lifecycle.ts`, the broadcast rename, and the two Settings components.
+- **IT IS NOT.** The wave-B spec assigns the pieces elsewhere and B4 owns none of them: §2.3 puts the `ping` / `pings` → `send(to=…)` / `read` REDIRECT on **B8**, and §5 batch 3 gives **B16** the migration file, the ping service modules, the `/api/pings` routes and the MCP ping op — all deleted there on 2026-09-02. B4's row is the metadata/verdict family, `service-writes-lifecycle.ts`, the broadcast rename, and the two Settings components.
 - ⚠ **A SECOND DISAGREEMENT, AND IT IS ABOUT THE KIND SET.** The brief handed to B4 describes the fold as *"a directed send with kind `done|question|blocked` is the delivery record"*. The SPEC refuses those three by name (§2.1: *"`question`/`blocked`/`done` from the messaging report are **not adopted** — a value with no distinct behaviour is prose wearing a schema"*) and fixes `kind` at `message | milestone | decision`. B4 changed no kind, so the tree still carries the wave-A set and `scripts/check-message-kind-drift.ts` still holds it. **Whoever lands the fold must settle which of the two is Samuel's current word before touching the enum**, because the two answers produce different `CHECK` constraints and the drift gate will hold whichever ships.
 - Proposed resolution: B8 lands the redirect; B16 deletes `20260907130000` unapplied and the TS lane with it. Nothing to do in B4.
 - Status: **RESOLVED AS A DISAGREEMENT 2026-09-02**, at the Wave B batch-1 integration, and the resolution is that **THE SPEC IS THE AUTHORITY**: `kind` stays `message | milestone | decision` as `docs/specs/mcp-v2-wave-b.md` §2.1 rules, and `done | question | blocked` — which the brief handed to B4 named — are NOT adopted. ⚠ **NOTHING WAS DONE TO THE ENUM AND THAT IS THE POINT.** The tree still carries the wave-A set (`node scripts/../scripts/check-message-kind-drift.ts` → `message, system, task_failed, task_finished, task_progress, task_started`, re-derived at integration and green), so no `CHECK` constraint moved and the drift gate holds the set the spec asks for. The FOLD itself is untouched here and stays where §5 puts it — B8 lands the one-line redirect, B16 deletes `20260907130000` unapplied with the TS ping lane. ⚠ The migration file is **deleted at this integration** under ruling B8 (it was never applied), which is the one part of the fold that could not wait for B16: an unapplied file that a replay would pick up is a live hazard, not a scheduled deletion.
@@ -7684,7 +7684,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 ### F-577 — `dopl_channel`'s input schema is 8,372 served against a wave target of 3,000, and the remainder is 23 one-sentence contracts (2026-09-02)
 
 - **MEASURED**, as served, injected `workspace` excluded: 11,609 → 8,372 (`npx vitest run src/tools/channel-schema-budget.test.ts` prints it). The wave target in `docs/specs/mcp-v2-wave-b.md` §6 is **3,000**.
-- **WHERE THE 3,038 CAME FROM.** Params, not prose: thirteen fields left because the concept each named already had one (`to`, `summary`, `body`, `wait_ms`), and the op enum went 23 → 5. ⚠ **THAT IS A NET OF EIGHTEEN AND NOT A COUNT OF RETIREMENTS** (corrected 2026-09-02): TWENTY-TWO names retired and four arrived — `read` is the one old name that survived. `channel-retired-ops.ts › RETIRED_OPS` is the list.
+- **WHERE THE 3,038 CAME FROM.** Params, not prose: thirteen fields left because the concept each named already had one (`to`, `summary`, `body`, `wait_ms`), and the op enum went 23 → 5. ⚠ **THAT IS A NET OF EIGHTEEN AND NOT A COUNT OF RETIREMENTS** (corrected 2026-09-02): TWENTY-TWO names retired and four arrived — `read` is the one old name that survived. `law-removed-vocabulary.ts › RETIRED_CHANNEL_OPS` is the list — it moved there when slice B16 deleted the redirect module that used to hold it.
 - **WHY THE GAP IS NOT CLOSED BY TRIMMING.** 3,000 over 23 fields is ~130 characters each INCLUDING the JSON Schema structure around them, which buys the number by deleting the answer to *"does this op want this argument"* — the floor `channel-schema-budget.test.ts › "every declared field still names at least one op that takes it"` exists to hold. The remaining prose is one sentence of contract per field, with every BOUND already moved out into the rendered `Limits:` block and every RULE already moved into `channel-doctrine.ts › FIELDS`.
 - **SO THE NEXT REAL CUT IS FEWER FIELDS.** B13 takes the next one (`workspace=` off; `section`, `visibility` and `mode` are the three that are each the sole argument of one action). Param count is 23 against a target of ≤20 for the same reason.
 - Status: **OPEN, measured, and ratcheted** — `SCHEMA_CEILINGS.dopl_channel` only moves down.
@@ -7816,10 +7816,10 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-592 — the removed-vocabulary scan globbed one tool's files, and five shipped strings routed callers to retired ops (2026-09-02, FIXED)
 
-- Location: `packages/mcp-server/src/tools/law-scan.test.ts` (the glob), and `agent.ts`, `agent-ops-write.ts`, `status.ts`, `status-render.ts`, `channel-ops-ping.ts` (the strings). Re-derive: `npx vitest run src/tools/law-scan.test.ts` from `packages/mcp-server`.
+- Location: `packages/mcp-server/src/tools/law-scan.test.ts` (the glob), and `agent.ts`, `agent-ops-write.ts`, `status.ts`, `status-render.ts` and the MCP ping op (the strings). Re-derive: `npx vitest run src/tools/law-scan.test.ts` from `packages/mcp-server`.
 - Found during: the wave-B batch-1/2 review.
 - **THE HOLE WAS THE SHAPE OF THE PRODUCT.** The scan walked every non-test `channel-*.ts`, which reads as thorough — `dopl_channel` is the tool whose vocabulary keeps changing. But **the sentences that TELL an agent to call `dopl_channel` are written in the OTHER tools**: `dopl_agent` says how to launch a template into a channel, `dopl_status` says how to wait instead of polling. Those strings were scanned by nothing.
-- **FIVE, NOT THREE.** `agent.ts` (`op="read_sessions"` + `op="launch_agent"`), `agent-ops-write.ts` (`op="launch_agent"`), `status.ts` (`op="await"`), `status-render.ts` (`op="open"`), `channel-ops-ping.ts` (`op="await"`). Every one of them spends a redirect that exists for callers pinned to an OLDER desktop, on a caller reading a string this server shipped today. ⚠ **And a test was holding one of them there**: `agent-fences.test.ts` asserted the description contained `read_sessions` and `launch_agent` by name, so the retired spelling had a green test defending it.
+- **FIVE, NOT THREE.** `agent.ts` (`op="read_sessions"` + `op="launch_agent"`), `agent-ops-write.ts` (`op="launch_agent"`), `status.ts` (`op="await"`), `status-render.ts` (`op="open"`), and the MCP ping op (`op="await"`, deleted at B16). Every one of them spends a redirect that exists for callers pinned to an OLDER desktop, on a caller reading a string this server shipped today. ⚠ **And a test was holding one of them there**: `agent-fences.test.ts` asserted the description contained `read_sessions` and `launch_agent` by name, so the retired spelling had a green test defending it.
 - Resolution: the glob is every non-test `*.ts` in the directory, with ONE exclusion — `law-removed-vocabulary.ts`, whose LABELS are string literals of the banned words (its regexes are not literals and were never the problem). The exclusion is by NAME now rather than by the accident of a missing prefix. A SECOND check is added: no shipped string may name a retired `dopl_channel` op, scoped to `dopl_channel(op="…")` anywhere and to a bare `op="…"` inside `channel-*.ts`, because `list`/`update`/`open`/`members`/`help` are live ops on other tools. The five strings say the live spelling; the test says the DESTINATION rather than the name.
 - ⚠ The widened glob found ZERO existing `REMOVED_VOCABULARY` hits outside `channel-*.ts`, so the widening cost nothing and buys the next one.
 - Status: FIXED. Served surface 49,793 → 49,790 (the re-spellings are 3 chars shorter); `dopl_agent`'s description ceiling 1,948 → 1,941.
@@ -7924,3 +7924,38 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **TWO SELF-REFERENCES, AND THE SECOND IS THE INTERESTING ONE.** The first is obvious: the file quotes five deleted strings as its red proof, so it matches itself and must be excluded. The second is not: the file was first named for the concept, `service.ts` cites it by path the way this repo's comments cite everything, and **that citation put the banned phrase back into a file in scope** — a gate that fails because of its own name, in a file it does not scan.
 - Resolution: renamed, and the reason is written where the exclusion is. ⚠ The general form is worth keeping: **a gate's NAME is part of its scope**, because the docs convention here is to cite files by path.
 - Status: RESOLVED.
+
+### F-650 — 🔒 the five `canSee*` TS predicates are NOT deleted, and the deletion is deferred to RLS phase 3 (2026-09-02, DEFERRED BY RULING)
+
+- Location: the five predicates the pair gate enumerates. Re-derive: `npx tsx scripts/check-rls-pair-gate.ts`, then `grep -rn 'export function canSee' src/ --include='*.ts'`.
+- Found during: Wave B batch 3, slice **B16**, whose spec row (`docs/specs/mcp-v2-wave-b.md` §5) says *"delete the TS predicates RLS now holds, one at a time, each behind its own green redteam test"*.
+- **WHY THE ROW WAS NOT EXECUTED, AND IT IS NOT A SCHEDULING PREFERENCE.** The row's own condition is unmet twice over, and the two failures compound:
+  1. **`RLS_PHASE_2` IS DEFAULT-OFF and no migration in the covering set has been applied** (INVARIANTS §12 records THIRTEEN pending, replay never run). A policy behind an unset flag over a table in no database fences nothing.
+  2. **THE `rls-redteam` CI JOB HAS NEVER RUN.** It landed in the batch-2 review (D2) precisely because every behavioural RLS case in two waves had been green while executing no statement, and the machine it landed on has no Docker. **The "green redteam test" the spec row makes each deletion conditional on does not exist yet in the only form that means anything.**
+- ⚠ **SO THE TS PREDICATES ARE THE ONLY LIVE FENCE TODAY**, and every repository still reads `supabaseAdmin()` (§10) — the service role, which RLS does not apply to at all. Deleting a predicate now removes the fence and replaces it with a policy that is off, on a table that does not exist, proved by a job that has not run.
+- **THE TWO PRECONDITIONS, so the next slice can check them rather than re-derive the argument:** (a) the flag is DEFAULT-ON and has run one release; (b) `rls-redteam` is green in CI, per predicate, against a real database. ⚠ And the third, already recorded at **F-524**: `service-audience.ts › audienceAdmits` is a per-request BOUND and not a property of a row, so it is covered by no policy and must NOT be deleted with `canSeeBase` however adjacent the two look.
+- Status: **DEFERRED to RLS phase 3.** Nothing was changed. B16 delivered the other four halves of its row.
+
+### F-651 — the "Needs you" card was asked for `done | question | blocked`, which the spec refuses (2026-09-02, RESOLVED AS A DISAGREEMENT)
+
+- Location: `apps/desktop-ui/src/pages/overview/needs-you.tsx`, against `docs/specs/mcp-v2-wave-b.md` §2.1 and **F-491**.
+- Found during: Wave B batch 3, slice B16 — the brief for the ping-lane deletion asked that the card switch to directed sends *"with kind done|question|blocked read via `read`/`status`"*, which are the three PING kinds carried over.
+- **THE DISAGREEMENT.** The spec refuses those three values on `send`'s `kind` — *"a value with no distinct behaviour is prose wearing a schema"* — and F-491 settled it in the spec's favour at the batch-1 integration, explicitly recording that **nothing was done to the kind enum**. `channel_messages.kind` is `message | system | task_started | task_progress | task_finished | task_failed`, held in both directions by `scripts/check-message-kind-drift.ts` against the column `CHECK`. Adopting the three would have meant a migration, a drift-gate change, and reopening a ruling B16 does not own.
+- **WHAT SHIPPED INSTEAD.** The card renders the distinction the surface actually makes: `AccountWaitingItem.isEscalation` — a decision card with option buttons, waiting on a PRESS — against an ordinary request, waiting on a REPLY. It is a fact about the stored message rather than a sender's self-report, which is the property the three kinds never had.
+- Status: **RESOLVED AS A DISAGREEMENT, the spec is the authority** — the same resolution F-491 took. Reopen only with a ruling that also moves the `CHECK` and the drift gate.
+
+### F-652 — "Needs you" now reads an ACCOUNT-wide endpoint and throws most of it away (2026-09-02, OPEN)
+
+- Location: `apps/desktop-ui/src/pages/overview/needs-you.tsx › needsYouRows`, over `GET /api/channels/account/status`. Re-derive: `grep -n 'ACCOUNT_STATUS_PATH\|workspaceId ===' apps/desktop-ui/src/pages/overview/needs-you.tsx`.
+- Found during: Wave B batch 3, slice B16 — deleting the ping lane took `GET /api/pings` with it, which was `withWorkspaceAuth` and answered for ONE container.
+- **THE SHAPE.** The replacement read is USER-scoped by design: it exists so an orchestrator can check in across every workspace and home container in one call. The panel sits on a WORKSPACE overview, so the rows are filtered client-side on `channel.workspaceId` — correct, and the alternative (rendering it whole) would silently put another container's open requests under this workspace's heading. What it costs is a payload most of which is discarded, on a page that also pays for `overview`, `overview-series` and `billing/status`.
+- Proposed resolution: a workspace-scoped projection — either a `waiting` block on `…/overview` (whose service already fans over that workspace's channels) or a `workspace=` narrowing on the account read. ⚠ **NOT a second `waiting` implementation**: the rule is `repository-account.ts › listAddressedToMe` + `listMyLatestSeqByChannel`, and a second copy is a second opinion about what "unanswered" means.
+- Status: **OPEN.** Correct today, wasteful today.
+
+### F-653 — `await` survives in the ROUTE and the SDK method, and that is the last of it (2026-09-02, OPEN, deliberate)
+
+- Location: `src/app/api/channels/[channelId]/await/route.ts`, `src/app/api/channels/await/route.ts`, `@dopl/client › awaitChannelMessages` / `awaitWorkspaceMessages`, `src/features/channels/server/service-await*.ts`, and the desktop's `main/session-profiles.js › AWAIT_OP` / `isAwaitOp`.
+- Found during: Wave B batch 3, slice B16, which renamed the whole MCP-side lane to HOLD and banned the word from every shipped string (`law-removed-vocabulary.ts`).
+- **THE SHAPE, AND WHY IT WAS LEFT.** These are TRANSPORT, not the retired op: the hold rides them and nothing publishes their names to a model. Renaming them is a route move plus an SDK rename on a frozen public surface plus the desktop's live route checks — a change whose whole benefit is vocabulary, in a slice whose job was to delete a lane. ⚠ **The desktop GATE is already keyed on the new shape and was verified**: `isAwaitOp` tests `op === "read" && wait_ms != null` (T85 — a desktop-run session refuses the hold), so what is stale is the NAME and not the rule.
+- Proposed resolution: rename with the next change that already touches those routes; the SDK half needs a `client-surface.test.ts › PUBLIC_SURFACE` edit and is the only part with a compatibility question.
+- Status: **OPEN, deliberate.** No behaviour depends on it.

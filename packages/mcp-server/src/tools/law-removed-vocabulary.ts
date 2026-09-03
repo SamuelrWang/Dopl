@@ -84,4 +84,60 @@ export const REMOVED_VOCABULARY: ReadonlyArray<[string, RegExp]> = [
   // The columns survive as legacy storage; the surface must not report them,
   // because reporting a state is how an agent learns to wait on it.
   ["thread status / outcome vocabulary", /\bthread('s)?\s+(status|outcome)\b|\boutcome summar(y|ies)\b/i],
+  // ── THE `await` OP, retired 2026-09-02 (B8) and DELETED at slice B16 ──────
+  // The hold is `op="read"` carrying `wait_ms`, and the verb this surface means
+  // is HOLD. ⚠ **A BANNED WORD RATHER THAN A ROW IN `RETIRED_CHANNEL_OPS`,
+  // BECAUSE THE OP-POSITION SCAN WAS NOT ENOUGH**: the send lane shipped a
+  // `await=since:<seq>` FACT KEY on every write, which names the retired lane
+  // without ever writing `op="await"`. That key is `hold=` now, and the word is
+  // measured absent from every shipped string in this directory — which is what
+  // makes the ban enforceable rather than aspirational.
+  // ⚠ It is a rule about SHIPPED STRINGS only; the `await` KEYWORD is on nearly
+  // every line of this package and is not a literal, so the scan cannot see it.
+  ["the await op", /\bawait\b/i],
+];
+
+/**
+ * **THE TWENTY-TWO OP NAMES THE COLLAPSE RETIRED** (B8, 2026-09-02), and they
+ * stopped PARSING at slice B16 one release later.
+ *
+ * ⚠ **A DIFFERENT QUESTION FROM {@link REMOVED_VOCABULARY}, WHICH IS WHY IT IS A
+ * SECOND EXPORT RATHER THAN MORE ROWS.** That table bans WORDS anywhere in a
+ * shipped string; these are ordinary words elsewhere — `list`, `update`, `open`,
+ * `members` and `help` are live ops on other tools — so the scan that reads this
+ * one matches a `dopl_channel` op POSITION, never the bare word
+ * (`law-scan.test.ts`).
+ *
+ * ⚠ **IT LIVES HERE BECAUSE THIS FILE IS THE ONE THE SCAN SKIPS.** The rule book
+ * literally contains the strings it forbids; a copy in any `channel-*.ts` would
+ * fail the guard on the file that defines it.
+ *
+ * ⚠ **THE ONE-LINE REDIRECTS ARE GONE WITH `channel-retired-ops.ts`** — these
+ * names now fail schema validation with the refusal `channel-schema.ts ›
+ * unknownOpRefusal` writes. `read` is deliberately ABSENT: it is the one old
+ * name that survived the collapse with its own meaning.
+ */
+export const RETIRED_CHANNEL_OPS: readonly string[] = [
+  "post",
+  "milestone",
+  "escalate",
+  "ping",
+  "pings",
+  "create_thread",
+  "list",
+  "open",
+  "invite",
+  "members",
+  "list_threads",
+  "set_thread_mode",
+  "update",
+  "help",
+  "await",
+  "launch_agent",
+  "end_agent",
+  "rename_agent",
+  "set_agent_mode",
+  "direct_agent",
+  "read_directions",
+  "read_sessions",
 ];

@@ -19,11 +19,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import {
-  AWAIT_HOLD_DEFAULT_MS,
-  AWAIT_HOLD_EXTERNAL_DEFAULT_MS,
-} from "./channel-await-budget";
+  HOLD_DEFAULT_MS,
+  HOLD_EXTERNAL_DEFAULT_MS,
+} from "./channel-hold-budget";
 import { DESKTOP_SESSION_RUNTIME } from "./identity";
-import { opAwait } from "./channel-ops-await";
+import { opHold } from "./channel-ops-hold";
 
 const CHANNEL = {
   id: "chan-1",
@@ -77,13 +77,13 @@ const desktopAwait = (
   ref: string,
   since: number,
   timeoutMs?: number,
-) => opAwait(client, ref, since, timeoutMs, null, DESKTOP_SESSION_RUNTIME);
+) => opHold(client, ref, since, timeoutMs, null, DESKTOP_SESSION_RUNTIME);
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("opAwait — how long the hold is, and for whom (T03)", () => {
+describe("opHold — how long the hold is, and for whom (T03)", () => {
   it("a DESKTOP session still holds ~215s across polls, then says to re-arm", async () => {
     const clock = fakeClock();
     const start = clock.now;
@@ -95,7 +95,7 @@ describe("opAwait — how long the hold is, and for whom (T03)", () => {
     expect(res.isError).toBeFalsy();
     // ⚠ Elapsed is the bound, and the DEFAULT is below the cap so it clears
     // every surrounding deadline; the cap is reachable only on an explicit ask.
-    expect(clock.elapsedFrom(start)).toBe(AWAIT_HOLD_DEFAULT_MS);
+    expect(clock.elapsedFrom(start)).toBe(HOLD_DEFAULT_MS);
     expect(clock.elapsedFrom(start)).toBe(215_000);
     expect(awaitChannelMessages).toHaveBeenCalledTimes(5);
     for (const [, opts] of awaitChannelMessages.mock.calls) {
@@ -109,10 +109,10 @@ describe("opAwait — how long the hold is, and for whom (T03)", () => {
     const start = clock.now;
     const awaitChannelMessages = quietHold(clock);
 
-    const res = await opAwait(stubClient({ awaitChannelMessages }), "general", 7);
+    const res = await opHold(stubClient({ awaitChannelMessages }), "general", 7);
 
     expect(res.isError).toBeFalsy();
-    expect(clock.elapsedFrom(start)).toBe(AWAIT_HOLD_EXTERNAL_DEFAULT_MS);
+    expect(clock.elapsedFrom(start)).toBe(HOLD_EXTERNAL_DEFAULT_MS);
     // ⚠ Comfortably under 60s, with room for the route's auth + MCP boot +
     // workspace handshake, all of which run inside the caller's clock.
     expect(clock.elapsedFrom(start)).toBeLessThan(60_000);
@@ -134,7 +134,7 @@ describe("opAwait — how long the hold is, and for whom (T03)", () => {
       const start = clock.now;
       const awaitChannelMessages = quietHold(clock);
 
-      await opAwait(stubClient({ awaitChannelMessages }), "general", 7, 150_000, null, runtime);
+      await opHold(stubClient({ awaitChannelMessages }), "general", 7, 150_000, null, runtime);
 
       expect(clock.elapsedFrom(start)).toBe(150_000);
       vi.restoreAllMocks();
