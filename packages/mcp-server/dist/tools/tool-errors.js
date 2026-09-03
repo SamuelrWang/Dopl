@@ -61,7 +61,7 @@ exports.MISSING_PARAMS = {
 exports.WORKSPACE_REQUIRED = {
     reason: "workspace_required",
     meaning: "no workspace resolved for this call",
-    retry: "list_workspaces",
+    retry: "dopl_workspaces",
 };
 exports.READ_ONLY_SESSION = {
     reason: "read_only_session",

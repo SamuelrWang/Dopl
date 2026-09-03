@@ -94,11 +94,11 @@ function registerChannelTool(register, client, caller = identity_1.UNKNOWN_CALLE
 // 🔒 THE CONTAINER LOCK, for the ACCOUNT-WIDE reads alone. Their routes are
 // `withUserAuth` and answer for the whole account, so the narrowing cannot live
 // there; `tools/account-scope.ts` applies it, through the one reader of the lock
-// (`home-scopes.ts › narrowToLock`).
+// (`workspace-directory.ts › narrowToLock`).
 // ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — and it is required even
 // though it follows two defaulted parameters. A default would mean an
 // UNNARROWED account read for any caller that forgot it, which is the
-// enumeration oracle B3 exists to deny; `dopl_home` takes the same argument
+// enumeration oracle B3 exists to deny; `dopl_status` takes the same argument
 // the same way, and `parity-harness.ts` passes a stub because capture never
 // runs a handler. `container-lock.test.ts` drives the real one through
 // `bootServer`.

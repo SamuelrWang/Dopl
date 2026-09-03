@@ -12,7 +12,7 @@
  * the credential.
  *
  * ⚠ **SO THE NARROWING LIVES HERE, ONCE, AND IT DELEGATES TO
- * `home-scopes.ts › narrowToLock`.** That module's header states the rule this
+ * `workspace-directory.ts › narrowToLock`.** That function's docblock states the rule this
  * one obeys: there is ONE reader of `WorkspaceDirectory.lockedWorkspaceId()`,
  * and a second reader has rebuilt the enumeration oracle B3 denies. A caller
  * that reaches `client.getAccountStatus()` directly has done exactly that — it
@@ -28,7 +28,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.accountStatus = accountStatus;
 exports.accountMessages = accountMessages;
-const home_scopes_js_1 = require("./home-scopes.js");
+const workspace_directory_js_1 = require("../workspace-directory.js");
 /**
  * The caller's account-wide channel status, NARROWED to the container lock.
  *
@@ -43,7 +43,7 @@ async function accountStatus(client, directory, opts = {}) {
         ...status,
         // ⚠ `?? []` — the wire type is non-optional and an older server is not, and
         // a `.filter` on undefined throws where an empty list merely says "none".
-        channels: (0, home_scopes_js_1.narrowToLock)(status.channels ?? [], directory),
+        channels: (0, workspace_directory_js_1.narrowToLock)(status.channels ?? [], directory),
     };
 }
 /**
@@ -56,7 +56,7 @@ async function accountStatus(client, directory, opts = {}) {
  */
 async function accountMessages(client, directory, opts) {
     const page = await client.readAccountMessages(opts);
-    const messages = (0, home_scopes_js_1.narrowToLock)(page.messages ?? [], directory);
+    const messages = (0, workspace_directory_js_1.narrowToLock)(page.messages ?? [], directory);
     const locked = directory.lockedWorkspaceId();
     return {
         ...page,

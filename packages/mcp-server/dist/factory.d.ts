@@ -49,17 +49,6 @@ export interface BootOptions {
      */
     caller?: Partial<CallerIdentity>;
     /**
-     * 🔒 OPAQUE SESSION KEY for the workspace pin an agent can set
-     * (`session-pin.ts`). Supplied by the TRANSPORT, which is the only layer that
-     * can identify one MCP connection across the stateless per-request boots.
-     *
-     * ⚠ IT IS A MAP KEY AND NOTHING ELSE. Never rendered, never logged, never
-     * compared to anything but itself, and it grants nothing — a pin only ever
-     * picks among memberships the boot directory already proved. Absent ⇒ no pin
-     * can be read or written, which is the pre-pin behaviour verbatim.
-     */
-    sessionKey?: string;
-    /**
      * The caller's own live agent handles and the posture this session runs at,
      * when the TRANSPORT knows them. ⚠ Threaded verbatim into the `instructions`
      * briefing (`instructions.ts › ConnectionIdentity`) so an orchestrator does
@@ -76,9 +65,9 @@ export interface BootResult {
     userId: string | null;
     isAdmin: boolean;
     /**
-     * Session default workspace resolved at boot: a request X-Workspace-Id pin,
-     * else the sole membership. Null on 0 or 2+ memberships with no pin — each
-     * tool call must then pass `workspace=`.
+     * The container this connection is BOUND to: the request's `X-Workspace-Id`,
+     * or null. ⚠ **NULL IS ORDINARY SINCE B13** — a call that names no container
+     * is resolved by the SERVER, not refused and not guessed here.
      */
     activeWorkspace: {
         id: string;

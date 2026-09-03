@@ -8,7 +8,7 @@
  *                          (`buildInstructions`, re-exported below because
  *                          `factory.ts` and four suites import it from HERE).
  *   workspace-directory.ts membership cache, `workspace=` resolution, the
- *                          fail-closed no-default refusal.
+ *                          container lock, and the search fan-out's legs.
  *   gating.ts              THE FOUR GATES + their tables. ⚠ Read that file's
  *                          header before touching either registration path.
  *   delete-policy.ts       the app-only-deletion rule: the refusal, and the
@@ -16,7 +16,7 @@
  *   registrar.ts           `registerTool` / `registerMetaTool`, workspace arg,
  *                          `strictInput`, ALS routing.
  *   status-footer.ts       the `_dopl_status` footer.
- *   meta-tools.ts          `list_workspaces` + `current_workspace`.
+ *   meta-tools.ts          `dopl_workspaces` — the one orientation tool.
  *   resources.ts           the MCP RESOURCES — today the channels doctrine,
  *                          which is where the prose the tool descriptions and
  *                          write results used to repeat now lives.
@@ -25,7 +25,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildInstructions = void 0;
 exports.createServer = createServer;
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
-const client_1 = require("@dopl/client");
 const knowledge_js_1 = require("./tools/knowledge.js");
 const skills_js_1 = require("./tools/skills.js");
 const chats_js_1 = require("./tools/chats.js");
@@ -35,7 +34,6 @@ const search_js_1 = require("./tools/search.js");
 const ontology_js_1 = require("./tools/ontology.js");
 const channel_js_1 = require("./tools/channel.js");
 const agent_js_1 = require("./tools/agent.js");
-const home_js_1 = require("./tools/home.js");
 const status_js_1 = require("./tools/status.js");
 const identity_js_1 = require("./tools/identity.js");
 const instructions_js_1 = require("./instructions.js");
@@ -53,9 +51,9 @@ function createServer(client, options = {}) {
     // scope. Absent/empty scopes must never grant write — a scope-less code path
     // would otherwise silently expose every write/destructive tool.
     const canWrite = Array.isArray(options.scopes) && options.scopes.includes("dopl.write");
-    // ⚠ Session default resolved once at boot and NEVER mutated — there is no
-    // `set_workspace`; per-call `workspace=` scopes one call via AsyncLocalStorage
-    // without touching this. Null on 0 or 2+ memberships with no pin.
+    // ⚠ The connection's container is resolved once at boot and NEVER mutated —
+    // there is no `set_workspace` and no pin; per-call `workspace=` scopes one
+    // call via AsyncLocalStorage without touching this.
     const caller = options.caller ?? {
         ...identity_js_1.UNKNOWN_CALLER,
         userId: options.userId ?? null,
@@ -69,8 +67,8 @@ function createServer(client, options = {}) {
         }
         : null;
     const sessionSource = options.workspaceSource ?? null;
-    // Session default rendered footer-ready, or null. Used by the meta-tools and
-    // the no-arg tool path so the footer always names where a response came from.
+    // The binding rendered footer-ready, or null. Used by the meta tools and the
+    // no-arg tool path so the footer names where a response came from.
     function sessionEffective() {
         if (!activeWorkspace || !sessionSource)
             return null;
@@ -83,24 +81,20 @@ function createServer(client, options = {}) {
     });
     // 🔒 A LOCKED SESSION'S INSTRUCTION TABLE IS EMPTY, and that is the right
     // answer rather than `[lockedTo]`: the table exists to tell an agent what it
-    // can TARGET with `workspace=`, and a locked session already has that one
-    // workspace as its resolved pin (the briefing says so on the `pin` line
-    // below). Listing the container here would additionally put a link
-    // container in an advertisement, which §4A forbids everywhere else.
-    const listableDirectory = options.lockedTo
-        ? []
-        : (options.directory ?? []).filter(client_1.isStandardWorkspace);
+    // can TARGET with `workspace=`, and a locked session is already bound to that
+    // one container (the briefing says so on the identity line).
+    // ⚠ **IT IS THE WHOLE DIRECTORY OTHERWISE, CONTAINERS INCLUDED** (B10): the
+    // briefing's table renders each row's KIND, so listing a container names it
+    // for what it is rather than advertising it as a workspace.
+    const listableDirectory = options.lockedTo ? [] : (options.directory ?? []);
     const server = new mcp_js_1.McpServer({
         name: "dopl",
         // ⚠ Source of truth is package.json via version.ts, so the MCP handshake
         // and version-keyed analytics stay accurate across publishes.
         version: version_js_1.packageVersion,
     }, {
-        // ⚠ Thread the boot-resolved pin so a 2+-membership connection with a pin
-        // is told the pin IS its default, not "pass workspace= on every call".
-        // ⚠ LISTABLE directory only — the targeting table an agent reads must not
-        // advertise `kind='link'` home-channel containers. The full directory
-        // still seeds the cache above, so `workspace=<link>` resolves.
+        // ⚠ Thread the boot-resolved binding so a connection with one is told
+        // which container it is in, not "pass workspace= on every call".
         instructions: (0, instructions_js_1.buildInstructions)(listableDirectory, {
             pin: options.workspaceSource === "header pin" && options.workspace
                 ? { name: options.workspace.name, slug: options.workspace.slug }
@@ -110,14 +104,6 @@ function createServer(client, options = {}) {
             // — no loopback is added, which `factory.ts › bootServer` forbids.
             identity: {
                 userId: caller.userId,
-                // 🔒 ZERO UNDER A LOCK, AND THAT IS THE POINT rather than a rounding.
-                // A locked session must not learn that its operator holds other
-                // rooms, which is the enumeration oracle B3 exists to deny; the count
-                // renders only when it is > 0, so the line simply omits it.
-                homeChannels: options.lockedTo
-                    ? 0
-                    : (options.directory ?? []).filter((w) => !(0, client_1.isStandardWorkspace)(w))
-                        .length,
                 boundChannelId: (0, identity_js_1.boundChannelId)(caller),
                 liveAgents: options.liveAgents,
                 posture: options.posture ?? null,
@@ -149,17 +135,9 @@ function createServer(client, options = {}) {
         directory,
         activeWorkspace,
         caller,
-        // 🔒 The pin's store key. Absent here means `op="set"` REFUSES — the
-        // fail-closed rule in `session-pin.ts`.
-        sessionKey: options.sessionKey,
-    });
+    }); // dopl_workspaces — every container the caller is in
     // ⚠ META PATH, CHARGED — the ONE tool that takes `MetaToolOptions.charged`
-    // (Samuel's ruling Q2 (b)). It cannot be a domain tool: that path injects the
-    // `workspace=` argument this tool exists to make answerable. 🔒 `directory` is
-    // threaded in for the CONTAINER LOCK — `home-scopes.ts` narrows the channel
-    // list to it, or a locked session enumerates its operator's other rooms.
-    (0, home_js_1.registerHomeTool)(registerMetaTool, client, directory); // dopl_home — the caller's home channels
-    // ⚠ META PATH, CHARGED, FOR THE SAME REASON `dopl_home` IS (T20, 2026-09-01).
+    // since B13 retired `dopl_home` (T20, 2026-09-01).
     // The domain path injects a `workspace=` this tool exists to make unnecessary
     // — it answers ACROSS every workspace at once, so such an argument could only
     // ever be wrong — and it refuses a no-arg call from exactly the 2+-membership

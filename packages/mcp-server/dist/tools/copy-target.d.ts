@@ -33,11 +33,11 @@ import { type ToolResponse } from "./respond.js";
  * The `to_workspace` arg's schema description, worded ONCE for both tools.
  *
  * ⚠ It names the CONTAINER form explicitly, because a home channel is the one
- * target an agent cannot discover from `list_workspaces` — §4A keeps containers
- * out of every listing, and `dopl_home(op="list_channels")` is the only surface
+ * target an agent can discover from `dopl_workspaces`, which since B10 lists
+ * containers beside workspaces — the tool
  * that publishes their ids.
  */
-export declare const TO_WORKSPACE_ARG_DESCRIPTION = "Where the COPY is created: a workspace slug or UUID, or a home-channel CONTAINER id from dopl_home(op=\"list_channels\"). Required for the copy ops, and the SOURCE must be one you created. It must be somewhere you are a member \u2014 an id that does not resolve for you refuses and creates nothing, and there is no fallback to the current workspace. The copy always lands PRIVATE to you, and it is a STRANGER to the original: editing one never touches the other.";
+export declare const TO_WORKSPACE_ARG_DESCRIPTION = "Where the COPY is created: a workspace slug or UUID, or a home-channel CONTAINER id from dopl_workspaces. Required for the copy ops, and the SOURCE must be one you created. It must be somewhere you are a member \u2014 an id that does not resolve for you refuses and creates nothing, and there is no fallback to the current workspace. The copy always lands PRIVATE to you, and it is a STRANGER to the original: editing one never touches the other.";
 /**
  * 🔒 **R2 — A COPY IS OF SOMETHING THE OPERATOR OWNS, NOT OF ANYTHING THEY CAN
  * READ** (Desktop Agent default 2026-09-02; Samuel may loosen).
@@ -96,8 +96,8 @@ createOp: string): ToolResponse | null;
  * The `workspace=` handle a follow-up call addresses the copy with.
  *
  * ⚠ SLUG FOR A WORKSPACE, ID FOR A CONTAINER — the same split
- * `home-scopes.ts › SearchLeg` renders. §4A keeps a container's slug off every
- * agent-facing surface; its id is what `dopl_home` publishes and what
+ * `workspace-directory.ts › SearchLeg` renders. §4A keeps a container's slug off every
+ * agent-facing surface; its id is what `dopl_workspaces` publishes and what
  * `resolveWorkspaceRef` takes.
  */
 export declare function workspaceHandle(ws: WorkspaceListItem): string;

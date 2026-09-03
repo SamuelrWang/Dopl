@@ -9,45 +9,33 @@
  * through `registerTool`'s wrapper. Do not fold the gate calls into one wrapper.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WORKSPACE_ARG_DESCRIPTION = void 0;
+exports.acceptsWorkspaceArg = exports.WORKSPACE_ARG_OPS = exports.WORKSPACE_ARG_DESCRIPTION = void 0;
 exports.createToolRegistrars = createToolRegistrars;
 const zod_1 = require("zod");
 const client_1 = require("@dopl/client");
 const respond_js_1 = require("./tools/respond.js");
 const narration_js_1 = require("./tools/narration.js");
+const workspace_arg_js_1 = require("./workspace-arg.js");
+// ⚠ Re-exported: `tool-budget.test.ts` and `server.test.ts` read the contract
+// through the registrar that injects it, which is where an agent meets it.
+var workspace_arg_js_2 = require("./workspace-arg.js");
+Object.defineProperty(exports, "WORKSPACE_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ARG_DESCRIPTION; } });
+Object.defineProperty(exports, "WORKSPACE_ARG_OPS", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ARG_OPS; } });
+Object.defineProperty(exports, "acceptsWorkspaceArg", { enumerable: true, get: function () { return workspace_arg_js_2.acceptsWorkspaceArg; } });
 const status_footer_js_1 = require("./status-footer.js");
-/**
- * THE PER-CALL `workspace` ARG'S DESCRIPTION — ONE SHORT CONTRACT, PUSHED ONCE
- * PER DOMAIN TOOL (C9, 2026-09-02).
- *
- * ⚠ EVERY CHARACTER HERE IS PAID FOR FOURTEEN TIMES, ON EVERY CONNECTION.
- * `registerTool` injects this arg into all 14 domain schemas, so the 717-char
- * paragraph this replaced spent ~10,000 served chars stating one rule fourteen
- * times — thirteen of them pure repetition, and the same rule the instructions
- * already owe the agent before its first tool call.
- *
- * ⚠ THE FULL RULE IS STATED ONCE, IN `instructions.ts` (slice A1, which this
- * one lands after): which callers MUST pass it (0 / 2+ standard memberships),
- * that the membership count IGNORES home-channel containers, and how to
- * discover each kind of id — `list_workspaces` for workspace slugs,
- * `dopl_home(op="list_channels")` for home-channel container ids, and the first
- * does not list the second. ⚠ DO NOT RESTATE ANY OF IT HERE. A rule an agent
- * needs before it calls anything belongs in the instructions, which are pushed
- * once; the refusals in `registerTool` below name the discovery surfaces again
- * at the only moment an agent is actually stuck.
- *
- * Pinned by `server.test.ts` — the length, and that every domain tool carries
- * this exact string rather than a per-tool copy.
- */
-exports.WORKSPACE_ARG_DESCRIPTION = "Workspace or home-channel container id/slug for this call; omit to use the session default.";
 /**
  * Optional per-call `workspace` arg injected into every domain tool's schema by
  * `registerTool`. Slug or UUID; routes via the transport's AsyncLocalStorage
- * override, leaving the session default unchanged. Const so its description
- * renders verbatim — and identically — in every tool's MCP introspection.
+ * override, leaving the connection's container unchanged. Const so its
+ * description renders verbatim — and identically — in every tool's MCP
+ * introspection.
+ *
+ * ⚠ IT IS INJECTED EVEN WHERE IT IS IGNORED, and that is the point of the
+ * one-release window: `strictInput` refuses an unknown key, so a schema without
+ * it would turn "ignored" into `-32602`, which is the one thing B13 rules out.
  */
 const WORKSPACE_ARG_SHAPE = {
-    workspace: zod_1.z.string().optional().describe(exports.WORKSPACE_ARG_DESCRIPTION),
+    workspace: zod_1.z.string().optional().describe(workspace_arg_js_1.WORKSPACE_ARG_DESCRIPTION),
 };
 /**
  * ⚠ AN UNKNOWN ARGUMENT MUST BE REFUSED, NOT STRIPPED. A raw shape becomes a
@@ -88,9 +76,14 @@ function createCreditedRunner(charge) {
      * Charge one credit, then run the handler. Converts an entitlement denial (403
      * from any write op through @dopl/client) into a tool error; all other errors
      * rethrow unchanged.
+     *
+     * ⚠ **`null` IS "NOTHING TO CHARGE", NOT "FREE BY DEFAULT"** (B13). It reaches
+     * here only from `billingTarget`, whose docblock owns the fail-open decision;
+     * folding a second skip-the-charge path in anywhere else is how a tool call
+     * stops being metered exactly once.
      */
     return async function runWithCredits(workspaceId, run) {
-        const refusal = await charge(workspaceId);
+        const refusal = workspaceId === null ? null : await charge(workspaceId);
         if (refusal)
             return refusal;
         try {
@@ -108,12 +101,35 @@ function createToolRegistrars(deps) {
     const { server, client, gates, directory, activeWorkspace, sessionEffective, caller, } = deps;
     const chargeCredit = createCharger(client);
     const runWithCredits = createCreditedRunner(chargeCredit);
-    // Every domain tool funnels through here for two things:
-    //   1. `workspace` arg auto-injected. Provided → runs inside a
-    //      transport-level AsyncLocalStorage override so client.* requests carry
-    //      the right `X-Workspace-Id`. Omitted AND no session default (0/2+
-    //      memberships, no pin) → REFUSED rather than guessing a workspace.
-    //   2. Mandatory `_dopl_status` footer naming the effective workspace + how
+    /**
+     * WHICH WORKSPACE PAYS when no per-call `workspace=` was honoured. ⚠ ONE
+     * RULE FOR BOTH REGISTRATION PATHS since B13 — the domain path used to refuse
+     * instead of answering this, and two rules is how a meta tool and a domain
+     * tool come to bill different workspaces for the same connection.
+     *
+     * ⚠ NO LISTABLE WORKSPACE ⇒ NO CHARGE, fail-open and stated. A caller whose
+     * container the SERVER resolves is exactly the caller this server cannot name
+     * one for, and refusing them would break the path B13 exists to open.
+     */
+    async function billingTarget() {
+        if (activeWorkspace)
+            return activeWorkspace.id;
+        try {
+            return (await directory.getWorkspaceList())[0]?.id ?? null;
+        }
+        catch {
+            // A metering target is not worth failing a call over.
+            return null;
+        }
+    }
+    // Every domain tool funnels through here for three things:
+    //   1. `workspace` arg auto-injected. HONOURED on the ops in
+    //      `WORKSPACE_ARG_OPS` — the call then runs inside a transport-level
+    //      AsyncLocalStorage override so client.* requests carry the right
+    //      `X-Workspace-Id`. IGNORED everywhere else, and never refused (B13).
+    //   2. ⚠ THE IGNORE IS REPORTED, not swallowed — `_dopl_status` names the op
+    //      that dropped it, which is what makes a one-release window observable.
+    //   3. Mandatory `_dopl_status` footer naming the effective workspace + how
     //      it was chosen.
     // Signature mirrors the MCP SDK's zod inference so handler arg types resolve.
     function registerTool(name, description, schema, handler) {
@@ -126,22 +142,23 @@ function createToolRegistrars(deps) {
             const { workspace: workspaceRef, ...rest } = args;
             const innerArgs = rest;
             // ⚠ Both per-call refusals before any work: delete block, then read-only
-            // write-scope gate. `op` read ONCE.
-            const refusal = gates.opRefusal(name, gates.requestedOp(innerArgs));
+            // write-scope gate. `op` read ONCE, and it is also the routing key below.
+            const op = gates.requestedOp(innerArgs);
+            const refusal = gates.opRefusal(name, op);
             if (refusal)
                 return refusal;
-            // ⚠ "provided but blank" (fail closed) must stay distinct from "not
-            // provided" (session default). A falsy-string test lets a
-            // computed-but-empty ref route a write to the user's REAL workspace.
-            if (workspaceRef !== undefined) {
-                const ref = typeof workspaceRef === "string" ? workspaceRef.trim() : "";
-                if (!ref) {
+            const supplied = typeof workspaceRef === "string" ? workspaceRef.trim() : "";
+            if (workspaceRef !== undefined && (0, workspace_arg_js_1.acceptsWorkspaceArg)(name, op)) {
+                // ⚠ "provided but blank" (fail closed) must stay distinct from "not
+                // provided". A falsy-string test lets a computed-but-empty ref route a
+                // write to a container the caller never named.
+                if (!supplied) {
                     return {
                         isError: true,
                         content: [
                             {
                                 type: "text",
-                                text: `The \`workspace\` argument was blank. Pass a workspace slug or id from \`list_workspaces\`, or a home-channel container id from \`dopl_home(op="list_channels")\`, or omit \`workspace=\` entirely to use the session's active workspace.`,
+                                text: `The \`workspace\` argument was blank. Pass a container id or slug from \`dopl_workspaces\`, or omit \`workspace=\` entirely to use this connection's container.`,
                             },
                         ],
                     };
@@ -151,7 +168,7 @@ function createToolRegistrars(deps) {
                 // framework error.
                 let resolved;
                 try {
-                    resolved = await directory.resolveWorkspaceRef(ref);
+                    resolved = await directory.resolveWorkspaceRef(supplied);
                 }
                 catch (err) {
                     return {
@@ -161,7 +178,7 @@ function createToolRegistrars(deps) {
                                 type: "text",
                                 // ⚠ Loopback origin names where the bytes came from, not who
                                 // wrote them — a 4xx can echo a rejected field.
-                                text: `Couldn't validate the \`workspace\` argument (${(0, narration_js_1.inlineOr)(err instanceof Error ? err.message : String(err), "`no detail reported`")}). Try again, or call without \`workspace=\` to use the session's active workspace.`,
+                                text: `Couldn't validate the \`workspace\` argument (${(0, narration_js_1.inlineOr)(err instanceof Error ? err.message : String(err), "\`no detail reported\`")}). Try again, or call without \`workspace=\`.`,
                             },
                         ],
                     };
@@ -174,7 +191,7 @@ function createToolRegistrars(deps) {
                                 type: "text",
                                 // ⚠ Caller's own arg, but a raw backtick still escapes this
                                 // span and puts the tail into narration.
-                                text: `Workspace not found: ${(0, narration_js_1.inlineOr)(ref, "`(unreadable ref)`")}. Call \`list_workspaces\` for the workspaces you can reach, or \`dopl_home(op="list_channels")\` for home-channel container ids — the first does not list the second.`,
+                                text: `Workspace not found: ${(0, narration_js_1.inlineOr)(supplied, "\`(unreadable ref)\`")}. Call \`dopl_workspaces\` for every container you can reach — workspaces and home channels alike.`,
                             },
                         ],
                     };
@@ -192,20 +209,18 @@ function createToolRegistrars(deps) {
                 const result = await runWithCredits(resolved.id, () => client_1.workspaceContext.run(resolved.id, () => handler(innerArgs)));
                 return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller);
             }
-            // ⚠ No `workspace=`: use the session default (single membership or header
-            // pin), else REFUSE — a 0/2+-membership caller must pass `workspace=`
-            // rather than have one guessed.
-            if (!activeWorkspace) {
-                return directory.noWorkspaceError();
-            }
-            const result = await runWithCredits(activeWorkspace.id, () => handler(innerArgs));
-            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller);
+            // ⚠ NO HONOURED `workspace=`. The call runs in this connection's
+            // container, and when the connection names none the SERVER resolves the
+            // caller's own — there is no guess to make here and nothing to refuse.
+            const ignored = workspaceRef === undefined ? null : (0, workspace_arg_js_1.ignoredWorkspaceNote)(op, supplied);
+            const result = await runWithCredits(await billingTarget(), () => handler(innerArgs));
+            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, ignored);
         };
         server.registerTool(name, { description, inputSchema: strictInput(enhancedSchema) }, 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         wrapped);
     }
-    // Meta-tools skip the `workspace` arg — a membership lookup is user-scoped,
+    // Meta-tools skip the `workspace` arg — an account-wide lookup is user-scoped,
     // so ALS routing adds noise without changing behavior. The workspace arg is
     // the ONLY difference between the two paths; everything else applies here too.
     //
@@ -213,19 +228,18 @@ function createToolRegistrars(deps) {
     // `registerTool`'s wrapper by construction — hence the explicit gate calls
     // below. Never add a gate that only one path performs.
     //
-    // ⚠ MCP CREDITS ARE NOT CHARGED HERE BY DEFAULT, by DECISION:
-    // `current_workspace` / `list_workspaces` are how a lost agent finds out where
-    // it is, and are user-scoped, so a 0/2+-membership session has no workspace to
-    // charge.
+    // ⚠ MCP CREDITS ARE NOT CHARGED HERE BY DEFAULT, by DECISION: `dopl_workspaces`
+    // is how a lost agent finds out where it is, and it is user-scoped.
     //
     // ⚠ **ONE TOOL OPTS IN, AND THE CALL IS EXPLICIT AND LOCAL** (Samuel's ruling
-    // Q2 (b), 2026-08-28). `dopl_home` reads content-adjacent data and WRITES, so
-    // it pays like a domain tool — but it cannot use the domain path, which injects
-    // a `workspace=` arg this tool exists to make answerable. The charge is
-    // therefore written HERE, by name, exactly as `opRefusal` is on both paths,
-    // rather than by routing this file's two registration helpers through one
-    // shared wrapper. A blanket charge on this path would meter the two
-    // orientation tools and delete the decision above.
+    // Q2 (b), 2026-08-28; `dopl_status` is the one since B13 retired `dopl_home`).
+    // It reads content-adjacent data across the whole account, so it pays like a
+    // domain tool — but it cannot use the domain path, which injects a `workspace=`
+    // arg this tool exists to make unnecessary. The charge is therefore written
+    // HERE, by name, exactly as `opRefusal` is on both paths, rather than by
+    // routing this file's two registration helpers through one shared wrapper. A
+    // blanket charge on this path would meter the orientation tool and delete the
+    // decision above.
     function registerMetaTool(name, description, schema, handler, opts = {}) {
         if (gates.isSuppressedTool(name))
             return;
@@ -235,17 +249,10 @@ function createToolRegistrars(deps) {
                 return refusal;
             if (!opts.charged)
                 return handler(args);
-            // ⚠ WHICH WORKSPACE PAYS, for a tool that targets none. The session
-            // default when there is one; otherwise the FIRST workspace this session
-            // may list. Under a container lock that list is `[container]`, and a
-            // container's burn reroutes server-side to the container owner
-            // (`billing/server/credits-service.ts › resolveBillingTarget`) — which is
-            // the F-325 guest-metering answer, reached here for free.
-            // ⚠ NO LISTABLE WORKSPACE ⇒ NO CHARGE, and that is FAIL-OPEN on purpose:
-            // this tool is user-scoped precisely so it works for a caller with no
-            // resolved workspace, and refusing them would break the one path the
-            // design exists to serve. Stated so the hole is a decision, not a gap.
-            const billTo = activeWorkspace?.id ?? (await firstListableWorkspaceId());
+            // ⚠ WHICH WORKSPACE PAYS, for a tool that targets none — `billingTarget`
+            // above, the SAME rule the domain path uses since B13, and its docblock
+            // owns both halves (the container-lock reroute and the fail-open hole).
+            const billTo = await billingTarget();
             if (billTo) {
                 const denied = await chargeCredit(billTo);
                 if (denied)
@@ -256,21 +263,6 @@ function createToolRegistrars(deps) {
         server.registerTool(name, { description, inputSchema: strictInput(schema) }, 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (0, status_footer_js_1.withDoplStatus)(gated, sessionEffective, caller));
-    }
-    /**
-     * The first workspace this session may LIST, or null. ⚠ Reads
-     * `getWorkspaceList`, which is `lockedTo`-narrowed and container-filtered, so
-     * a locked session bills its container and an unlocked one bills a standard
-     * workspace it belongs to. Failures answer null — a metering target is not
-     * worth failing a call over.
-     */
-    async function firstListableWorkspaceId() {
-        try {
-            return (await directory.getWorkspaceList())[0]?.id ?? null;
-        }
-        catch {
-            return null;
-        }
     }
     return { registerTool, registerMetaTool, chargeCredit };
 }

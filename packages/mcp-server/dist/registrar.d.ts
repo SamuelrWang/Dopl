@@ -10,33 +10,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DoplClient } from "@dopl/client";
 import { type RegisterMetaTool, type RegisterTool, type ToolResponse } from "./tools/respond.js";
+export { WORKSPACE_ARG_DESCRIPTION, WORKSPACE_ARG_OPS, acceptsWorkspaceArg } from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
 import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } from "./workspace-directory.js";
-/**
- * THE PER-CALL `workspace` ARG'S DESCRIPTION — ONE SHORT CONTRACT, PUSHED ONCE
- * PER DOMAIN TOOL (C9, 2026-09-02).
- *
- * ⚠ EVERY CHARACTER HERE IS PAID FOR FOURTEEN TIMES, ON EVERY CONNECTION.
- * `registerTool` injects this arg into all 14 domain schemas, so the 717-char
- * paragraph this replaced spent ~10,000 served chars stating one rule fourteen
- * times — thirteen of them pure repetition, and the same rule the instructions
- * already owe the agent before its first tool call.
- *
- * ⚠ THE FULL RULE IS STATED ONCE, IN `instructions.ts` (slice A1, which this
- * one lands after): which callers MUST pass it (0 / 2+ standard memberships),
- * that the membership count IGNORES home-channel containers, and how to
- * discover each kind of id — `list_workspaces` for workspace slugs,
- * `dopl_home(op="list_channels")` for home-channel container ids, and the first
- * does not list the second. ⚠ DO NOT RESTATE ANY OF IT HERE. A rule an agent
- * needs before it calls anything belongs in the instructions, which are pushed
- * once; the refusals in `registerTool` below name the discovery surfaces again
- * at the only moment an agent is actually stuck.
- *
- * Pinned by `server.test.ts` — the length, and that every domain tool carries
- * this exact string rather than a per-tool copy.
- */
-export declare const WORKSPACE_ARG_DESCRIPTION = "Workspace or home-channel container id/slug for this call; omit to use the session default.";
 /**
  * THE BILLING SEAM FOR ONE TOOL CALL — charge, then run. ⚠ Must stay ONE helper
  * called at exactly the two terminal paths of `registerTool`'s wrapper; that is
@@ -66,7 +43,7 @@ export declare const WORKSPACE_ARG_DESCRIPTION = "Workspace or home-channel cont
  * ⚠ **ONE CHARGE FUNCTION, THREE EXPLICIT CALL SITES** (2026-08-28). It was
  * private to `createCreditedRunner` while the domain wrapper was the only meter;
  * two more seams now call it BY NAME — `registerMetaTool`'s opt-in charge
- * (`dopl_home`, ruling Q2) and `dopl_search`'s PER-LEG charge (ruling Q3). That
+ * (`dopl_status`, ruling Q2) and `dopl_search`'s PER-LEG charge (ruling Q3). That
  * is the shape `opRefusal` already has and the shape this module's header
  * demands: explicit at every path, never folded into a wrapper only one of them
  * passes through.
@@ -80,11 +57,16 @@ export interface RegistrarDeps {
     client: DoplClient;
     /** The four gates for this session (see `gating.ts`). */
     gates: Gates;
-    /** Membership cache + `workspace=` resolution + the M-3 refusal. */
+    /** Membership cache + `workspace=` resolution. */
     directory: WorkspaceDirectory;
-    /** Session default workspace resolved at boot, or null (0/2+ memberships). */
+    /**
+     * The container this CONNECTION is bound to (`X-Workspace-Id`), or null.
+     * ⚠ **NULL IS ORDINARY SINCE B13 AND IS NEVER A REFUSAL** — an unbound
+     * connection simply names no container, and the server resolves the caller's
+     * own when nothing is passed.
+     */
     activeWorkspace: ActiveWorkspaceState | null;
-    /** That default rendered footer-ready, or null when there is none. */
+    /** That binding rendered footer-ready, or null when there is none. */
     sessionEffective: () => EffectiveWorkspace | null;
     /** The caller identity every footer renders from. */
     caller: CallerIdentity;
@@ -94,7 +76,7 @@ export interface ToolRegistrars {
     registerTool: RegisterTool;
     /**
      * The meta-tool path: no workspace arg, session footer, same gates — and an
-     * OPT-IN charge (`MetaToolOptions.charged`), which only `dopl_home` takes.
+     * OPT-IN charge (`MetaToolOptions.charged`), which only `dopl_status` takes.
      */
     registerMetaTool: RegisterMetaTool;
     /**

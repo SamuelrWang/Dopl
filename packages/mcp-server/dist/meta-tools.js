@@ -1,275 +1,113 @@
 "use strict";
 /**
- * meta-tools.ts — `list_workspaces` and `current_workspace`.
+ * meta-tools.ts — `dopl_workspaces`, the orientation tool.
  *
  * ⚠ USER-scoped, not workspace-scoped: a membership lookup needs no workspace,
- * which is why they register through `registerMetaTool` (no injected
- * `workspace=` arg) and report the session default in their footer. Everything
- * else the domain path enforces — the four gates, `strictInput` — applies
+ * which is why it registers through `registerMetaTool` (no injected
+ * `workspace=` arg) and reports the connection's container in its footer.
+ * Everything else the domain path enforces — the gates, `strictInput` — applies
  * identically; see `registrar.ts`.
+ *
+ * ── ⚠ THREE TOOLS BECAME ONE (B13, 2026-09-02) ─────────────────────────────
+ *
+ * `list_workspaces`, `current_workspace` and `dopl_home` answered three
+ * questions that had stopped being three: *which containers am I in*, *which
+ * one does a no-arg call hit*, and *which of them are home channels*. B10
+ * deletes the middle one — there is no default workspace to report, because
+ * "home is the default; all workspaces are just normal workspaces" — and with
+ * it the reason the third existed. A home-channel container was hidden from
+ * `list_workspaces` only because a listing was an advertisement of things a
+ * no-arg call might silently pick; nothing picks now, so a container is simply
+ * one more container the caller is in, LISTED WITH ITS KIND.
+ *
+ * ⚠ **WHAT LEFT WITH THEM, AND IT IS A SURFACE DECISION, NOT A TIDY-UP.**
+ * `current_workspace(op="set"|"clear")` — the session pin — is gone with the
+ * default it pinned. `dopl_home(op="create_channel")` is gone too: minting a
+ * room is now an app act, which is what its own INVITE half already was.
+ * Reading a home channel is unaffected — its container id is on every row here,
+ * and `dopl_status` still answers for the rooms inside it.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWorkspaceMetaTools = registerWorkspaceMetaTools;
-const zod_1 = require("zod");
 const tool_style_js_1 = require("./tools/tool-style.js");
-const client_1 = require("@dopl/client");
 const identity_js_1 = require("./tools/identity.js");
 const narration_js_1 = require("./tools/narration.js");
-const respond_js_1 = require("./tools/respond.js");
 const instructions_js_1 = require("./instructions.js");
-const session_pin_js_1 = require("./session-pin.js");
+const workspace_directory_js_1 = require("./workspace-directory.js");
 /**
  * ⚠ **RENDERED, NOT WRITTEN** (A14) — `tool-style.ts › composeDescription`
- * holds the order for all thirteen tools, and refuses a headline over its
- * window or a description over its cap at import time.
+ * holds the order for all eleven tools, and refuses a headline over its window
+ * or a description over its cap at import time.
  *
- * ⚠ THESE TWO ARE BUDGETED AT {@link READ_DESCRIPTION_MAX_CHARS}, NOT THE
- * DISPATCH CAP. `list_workspaces` takes no arguments at all and
- * `current_workspace` takes two; neither has an `op` enum whose every member
+ * ⚠ IT IS BUDGETED AT {@link READ_DESCRIPTION_MAX_CHARS}, NOT THE DISPATCH CAP.
+ * It takes no arguments at all — no `op` enum whose every member
  * `parity.test.ts` requires glossed, which is the only thing that gives a tool
  * a floor above 450.
- *
- * ⚠ **WHAT LEFT, AND IT IS NOT A FACT.** The old strings ran 804 and 1,011
- * chars and both spent most of it restating their own schema: which of
- * "set"/"clear" does what, that a container id is a legal target, the ~60s
- * cache. A description and its arg descriptions are BOTH pushed on every
- * connection, so that was one fact paid for twice — the same trade
- * `tool-budget.test.ts` records these two making on 2026-09-02, applied again.
- * The container rule itself survives because it is the one thing NEITHER schema
- * says: a container is addressable and is counted by nothing.
  */
-const LIST_WORKSPACES_DESCRIPTION = (0, tool_style_js_1.composeDescription)({
-    headline: "The workspaces you are an active member of, with your role on each — NOT your home channels, which are containers this never lists.",
+const WORKSPACES_DESCRIPTION = (0, tool_style_js_1.composeDescription)({
+    headline: "Every container you are in — workspaces AND home channels, each with its kind, its id and your role. Read-only, and the only place a container id is published.",
     policy: "Read-only.",
     routing: [
-        'Use dopl_home(op="list_channels") for home channels and the container ids they take as `workspace=`.',
-        "Use current_workspace for the one a no-arg call targets.",
+        "Use dopl_status for the rooms, sessions and unanswered asks inside them.",
     ],
     body: [
-        '⚠ Containers count toward NOTHING — including the "2+ workspaces" rule that decides whether `workspace=` is required.',
+        "Pass an id or slug from here as `workspace=` when you list or create somewhere other than this connection's container.",
     ],
     examples: [{}],
     cap: tool_style_js_1.READ_DESCRIPTION_MAX_CHARS,
 });
-const CURRENT_WORKSPACE_DESCRIPTION = (0, tool_style_js_1.composeDescription)({
-    headline: "Who this connection is, and which workspace a no-`workspace=` call resolves to — standard memberships only, never a home-channel container.",
-    policy: 'Read-only; op="set"/"clear" pin this connection\'s default and change no data.',
-    routing: ["Use dopl_members(op='whoami') for your role, teams and the locus caveats."],
-    body: [
-        "With 2+ standard memberships there is no auto-target and this lists them with ids to pick from.",
-    ],
-    examples: [{}, { op: "set", workspace: "alpha" }, { op: "clear" }],
-    cap: tool_style_js_1.READ_DESCRIPTION_MAX_CHARS,
-});
-// Two read-only tools: discover your workspaces, and see (or SET) what a no-arg
-// call resolves to.
-//
-// ⚠ **`current_workspace` GAINED A STICKY DEFAULT ON 2026-09-01 (T41), AND THIS
-// COMMENT USED TO SAY IT COULD NOT EXIST.** It read: *"Targeting is PER-CALL only
-// … There is no sticky `set_workspace` — the connection is stateless, so a
-// 'switch' could not persist."* Statelessness is real — `/api/mcp` runs
-// `sessionIdGenerator: undefined` and `bootServer` boots per HTTP REQUEST — but
-// the conclusion did not follow: the PROCESS outlives the request, which is the
-// same seam `tools/confirm-token.ts` already stores its tokens in. The pin is
-// therefore best-effort and FAIL-CLOSED (a pin the next process never sees is
-// simply no pin, i.e. the old refusal), never durable state. See
-// `session-pin.ts` for the whole argument.
-function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspace, caller, sessionKey }) {
+function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspace, caller }) {
     /**
-     * Caller identity as a standalone block, for the meta-tools whose answers can
-     * be read without a footer. ⚠ Same record and wording as the footer and
-     * `whoami` — one definition, so two surfaces cannot disagree about a session.
+     * The CREDENTIAL this connection acts through, as a standalone block.
+     *
+     * ⚠ **IT IS THE SESSION LINE AND NOT THE CALLER LINE**, and the difference is
+     * B13's: `appendDoplStatus` now renders `caller: id=…` on EVERY successful
+     * response, bound container or not, so restating it here would print one
+     * agent's identity twice in one answer. What the footer deliberately does NOT
+     * carry is the credential label (a per-response tax on every result), and
+     * that is exactly the fact somebody reaching for this tool is missing.
      */
     function callerBlock() {
-        return [...(0, identity_js_1.sessionLines)(caller), (0, identity_js_1.callerStatusLine)(caller).trim(), ""];
+        const lines = (0, identity_js_1.sessionLines)(caller);
+        return lines.length > 0 ? [...lines, ""] : [];
     }
-    /**
-     * 🔒 PIN A DEFAULT — FAIL CLOSED AT EVERY STEP.
-     *
-     * Three refusals, and none of them pins anything: no ref, a ref that resolves
-     * to no active membership (`resolveWorkspaceRef` is also where the CONTAINER
-     * LOCK answers, so a locked session can pin only its own container), and no
-     * session key to store it against.
-     *
-     * ⚠ **IT DOES NOT MOVE *THIS* CALL'S TARGET, AND THE RESULT SAYS SO.** The
-     * session default is resolved once at boot and never mutated (`server.ts`), so
-     * the pin governs the NEXT call. An agent told only "pinned" would read the
-     * footer under this very response — which still names the old target — as the
-     * pin having failed.
-     */
-    async function opSetPin(ref) {
-        const target = ref?.trim();
-        if (!target) {
-            return (0, respond_js_1.err)('op="set" needs `workspace`. Pass a slug or UUID from `list_workspaces`, or a home-channel container id from dopl_home(op="list_channels"). Nothing was pinned.');
-        }
-        let resolved;
-        try {
-            resolved = await directory.resolveWorkspaceRef(target);
-        }
-        catch (e) {
-            return (0, respond_js_1.err)(`Couldn't validate that workspace (${(0, narration_js_1.inlineOr)(e instanceof Error ? e.message : String(e), "`no detail reported`")}). Nothing was pinned — retry, or keep passing \`workspace=\` per call.`);
-        }
-        if (!resolved) {
-            // ⚠ Caller's own argument, but a raw backtick still escapes this span.
-            return (0, respond_js_1.err)(`Workspace not found: ${(0, narration_js_1.inlineOr)(target, "`(unreadable ref)`")}. Nothing was pinned. Call \`list_workspaces\` for the workspaces you can target, or dopl_home(op="list_channels") for your home channels.`);
-        }
-        if (!(0, session_pin_js_1.writeSessionPin)(sessionKey, resolved.id)) {
-            return (0, respond_js_1.err)(`This connection cannot hold a default — it did not arrive with anything identifying the session, so there is nowhere to store a pin. Nothing was pinned. Keep passing \`workspace=<slug_or_id>\` on each call.`);
-        }
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: [
-                        `Pinned ${(0, narration_js_1.inlineOr)(resolved.name, instructions_js_1.UNNAMED_WORKSPACE)} (slug: \`${resolved.slug}\` · id: \`${resolved.id}\`) as this connection's default workspace.`,
-                        `⚠ FROM YOUR NEXT CALL ON, not this one — this response's own \`_dopl_status\` footer still names the target that was resolved before the pin existed. A no-\`workspace=\` call now lands in the pinned workspace, and a per-call \`workspace=\` still wins over it.`,
-                        `⚠ IT IS BEST-EFFORT AND IT EXPIRES. The pin lives in the server process that answered this call, so a later call may be refused for want of a workspace anyway — if that happens, set it again rather than concluding the pin was wrong. \`current_workspace(op="clear")\` removes it.`,
-                    ].join("\n"),
-                },
-            ],
-        };
-    }
-    async function opClearPin() {
-        const had = (0, session_pin_js_1.clearSessionPin)(sessionKey);
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: had
-                        ? `Cleared this connection's pinned default workspace. From your next call on, a no-\`workspace=\` call resolves the way it did before the pin — which, if you belong to 2+ workspaces, means it is refused and asks you to name one.`
-                        : `There was no pinned default to clear on this connection, so nothing changed.`,
-                },
-            ],
-        };
-    }
-    registerMetaTool("list_workspaces", LIST_WORKSPACES_DESCRIPTION, {}, async () => {
+    registerMetaTool("dopl_workspaces", WORKSPACES_DESCRIPTION, {}, async () => {
         const list = await directory.getWorkspaceList();
         if (list.length === 0) {
             return {
                 content: [
                     {
                         type: "text",
-                        text: "You're not an active member of any workspaces yet.",
-                    },
-                ],
-            };
-        }
-        const lines = [
-            "Workspaces you have access to:",
-            "",
-            instructions_js_1.UNTRUSTED_DIRECTORY_NOTE,
-            "",
-        ];
-        // 🔒 THE ONE ROW THAT IS NOT A WORKSPACE. This listing is
-        // `isStandardWorkspace`-filtered by construction — EXCEPT under the
-        // container lock, where `getWorkspaceList` answers `[lockedTo]` so a
-        // locked session has a name to target (`workspace-directory.ts:143-151`,
-        // deliberate). That one row is a `kind='link'` home channel, and rendering
-        // it in the workspace shape said three false things at once: that it is a
-        // workspace, that its slug is an address, and (via ★) that it is "the
-        // workspace a no-arg call auto-targets".
-        // ⚠ KIND IS RENDERED, NOT INFERRED BY THE READER, and the slug is withheld
-        // — the same rule and the same shape as `tools/home-scopes.ts › searchLegs`
-        // (a container's slug "is not advertised"). Ask the predicate rather than
-        // assuming the source.
-        let starred = false;
-        for (const w of list) {
-            if (!(0, client_1.isStandardWorkspace)(w)) {
-                lines.push(`- ${(0, narration_js_1.inlineOr)(w.name, instructions_js_1.UNNAMED_WORKSPACE)} — home channel (id: \`${w.id}\`, role: ${w.role})`);
-                continue;
-            }
-            const star = w.id === activeWorkspace?.id ? " ★" : "";
-            if (star)
-                starred = true;
-            lines.push(`- ${(0, narration_js_1.inlineOr)(w.name, instructions_js_1.UNNAMED_WORKSPACE)} (slug: \`${w.slug}\` · id: \`${w.id}\`, role: ${w.role})${star}`);
-        }
-        lines.push("");
-        if (starred) {
-            lines.push("★ = the workspace a no-arg call auto-targets.");
-        }
-        else if (activeWorkspace) {
-            // ⚠ NO ★ AND NO LEGEND: the auto-target is a home channel, not a
-            // workspace, so the legend's own noun would be wrong. Said plainly
-            // instead, with the id — which is the only handle that addresses it.
-            lines.push(`A no-\`workspace=\` call targets the home channel above. It is addressed by id (\`workspace=${activeWorkspace.id}\`), never by slug.`);
-        }
-        else {
-            lines.push("There is no auto-target — pass `workspace=<slug_or_id>` on every tool call. Home-channel containers are not listed here; reach one with `dopl_home(op=\"list_channels\")` and pass its container id as `workspace=`.");
-        }
-        return {
-            content: [{ type: "text", text: lines.join("\n") }],
-        };
-    });
-    // ⚠ **THE DESCRIPTION IS UNDER `DESCRIPTION_MAX_CHARS` AND STAYS THERE**
-    // (`channel-description.ts`; `tool-budget.test.ts` holds the number). It
-    // measured 1,312 on 2026-09-02 — over the cap — after T41's pin paragraph
-    // joined P3's standard-workspace caveat, and BOTH tiers' facts survive the
-    // trim because neither was cut: what went was the half the `op` and
-    // `workspace` SCHEMA DESCRIPTIONS below already say word for word (which of
-    // "set"/"clear" does what; that a home-channel CONTAINER id is a legal target
-    // here). A description and its own arg descriptions are both PUSHED on every
-    // connection, so a fact stated in both is paid for twice — the rule
-    // `channel-description.ts` states as "the arguments that are NOT
-    // self-describing from their own `.describe()`".
-    registerMetaTool("current_workspace", CURRENT_WORKSPACE_DESCRIPTION, {
-        op: zod_1.z
-            .enum(["get", "set", "clear"])
-            .optional()
-            .describe('Default "get" — report the current target. "set" pins a default for the rest of this connection (requires `workspace`); "clear" removes the pin. A pin is BEST-EFFORT and a per-call `workspace=` beats it — if a later call is refused for want of a workspace, set it again.'),
-        workspace: zod_1.z
-            .string()
-            .optional()
-            .describe(
-        // ⚠ The home-channel rule is stated ONCE, in the tool description above
-        // and in the server instructions (F-425) — it used to run here too, in
-        // 330 chars pushed on every connection that never pins anything.
-        'op="set" (required): the workspace slug or UUID — or a home-channel container id — to make this connection\'s default. A ref that does not resolve to one of your active memberships is REFUSED and nothing is pinned.'),
-    }, async (args) => {
-        if (args.op === "set")
-            return opSetPin(args.workspace);
-        if (args.op === "clear")
-            return opClearPin();
-        // ⚠ Caller line per branch: with a session default the footer already
-        // carries it (rendering here too prints the caller twice); without one
-        // `appendDoplStatus` returns early and the response carries NO identity —
-        // exactly the state an agent is in when it reaches for this tool.
-        if (activeWorkspace) {
-            const lines = [
-                `A no-\`workspace=\` call targets ${(0, narration_js_1.inlineOr)(activeWorkspace.name, instructions_js_1.UNNAMED_WORKSPACE)}:`,
-                `- slug: \`${activeWorkspace.slug}\``,
-                `- id: \`${activeWorkspace.id}\``,
-                `- your role: ${activeWorkspace.role}`,
-            ];
-            return {
-                content: [{ type: "text", text: lines.join("\n") }],
-            };
-        }
-        const list = await directory.getWorkspaceList();
-        if (list.length === 0) {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: "You're not an active member of any workspace yet, so no tool call can resolve a target.",
+                        text: "You're not an active member of any container yet.",
                     },
                 ],
             };
         }
         const lines = [
             ...callerBlock(),
-            `You belong to ${list.length} workspaces and there is no auto-target — pass \`workspace=<slug_or_id>\` on every tool call. ⚠ These are your STANDARD workspaces; home channels are not counted or listed here, so if you are looking for one, ask \`dopl_home(op="list_channels")\` and pass its container id as \`workspace=\`. Choices:`,
+            "Containers you are in:",
             "",
             instructions_js_1.UNTRUSTED_DIRECTORY_NOTE,
             "",
         ];
         for (const w of list) {
-            // ⚠ Id joins the slug here as everywhere else — this is the surface an
-            // agent reaches for when it does not know where it is, so it must not
-            // withhold the handle nobody can forge.
-            lines.push(`- ${(0, narration_js_1.inlineOr)(w.name, instructions_js_1.UNNAMED_WORKSPACE)} (slug: \`${w.slug}\` · id: \`${w.id}\`, role: ${w.role})`);
+            const kind = (0, workspace_directory_js_1.containerKind)(w);
+            // ⚠ KIND IS RENDERED, NOT INFERRED BY THE READER, and a container's SLUG
+            // is withheld — its id is the only handle that addresses it, and printing
+            // a slug beside a room would read as a second, equivalent address.
+            const address = kind === "workspace"
+                ? `slug: \`${w.slug}\` · id: \`${w.id}\``
+                : `id: \`${w.id}\``;
+            const here = w.id === activeWorkspace?.id ? " ←" : "";
+            lines.push(`- ${(0, narration_js_1.inlineOr)(w.name, instructions_js_1.UNNAMED_WORKSPACE)} — ${kind} (${address}, role: ${w.role})${here}`);
         }
-        return {
-            content: [{ type: "text", text: lines.join("\n") }],
-        };
+        lines.push("");
+        lines.push(activeWorkspace
+            ? "← this connection's container: a call that names none lands there."
+            : // ⚠ NOT "you have no default" — there is no default to lack. The
+                // server answers for a call that names nothing, and saying so is what
+                // stops an agent hunting for a tool that would set one.
+                "This connection names no container, so a call that names none is resolved for you. Pass `workspace=` to list or create somewhere specific.");
+        return { content: [{ type: "text", text: lines.join("\n") }] };
     });
 }

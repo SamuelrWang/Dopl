@@ -15,7 +15,7 @@ const partial_read_1 = require("./partial-read");
 const response_size_1 = require("./response-size");
 const tool_errors_1 = require("./tool-errors");
 const tool_style_1 = require("./tool-style");
-const home_scopes_1 = require("./home-scopes");
+const workspace_directory_1 = require("../workspace-directory");
 const search_everywhere_1 = require("./search-everywhere");
 const respond_1 = require("./respond");
 const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
@@ -155,7 +155,7 @@ function registerSearchTool(register, client, directory, charge) {
         };
         // ── scope="everywhere": N ordinary fenced searches, one per scope ──
         if (args.scope === "everywhere" && directory && charge) {
-            const { legs, homeReadFailed } = await (0, home_scopes_1.searchLegs)(client, directory);
+            const legs = await (0, workspace_directory_1.searchLegs)(directory);
             // ⚠ The leg the REGISTRAR already charged for, matched by id — the
             // resolved workspace is not always the first leg.
             const alreadyCharged = client_1.workspaceContext.getStore() ?? client.getWorkspaceId();
@@ -175,12 +175,12 @@ function registerSearchTool(register, client, directory, charge) {
                 `# Search: ${(0, narration_1.inlineOr)(args.query, "`(unreadable query)`")} — everywhere`,
                 "",
             ];
-            const foot = [
-                homeReadFailed
-                    ? `_⚠ YOUR HOME CHANNELS COULD NOT BE READ, so none of them was searched and none is named above. What follows covers your workspaces only._`
-                    : "",
-                `_${fan.coverage} ${SCOPE_AXIS_NOTE}_`,
-            ].filter(Boolean);
+            // ⚠ **THE PARTIAL-READ FOOTNOTE LEFT WITH ITS FAILURE MODE** (B13). It
+            // warned that a second read — `GET /api/home/channels` — had failed and
+            // that the home legs were therefore missing. There is no second read:
+            // `searchLegs` derives every leg from the one narrowed directory, so a
+            // leg list that arrives is complete or the call has already thrown.
+            const foot = [`_${fan.coverage} ${SCOPE_AXIS_NOTE}_`];
             return (0, respond_1.ok)([...head, ...fan.lines, ...foot].join("\n"));
         }
         const terse = (0, response_size_1.isConcise)(args.response_format);

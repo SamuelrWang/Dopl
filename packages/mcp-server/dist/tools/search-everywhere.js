@@ -18,7 +18,7 @@
  * 3. **A FAILED LEG IS NAMED, NEVER RENDERED AS EMPTY.** "No matches in Acme"
  *    and "Acme could not be read" must never look alike.
  * 4. 🔒 **B3 IS RESPECTED BECAUSE THE LEG LIST *IS* THE LOCKED LIST**
- *    (`home-scopes.ts › searchLegs`). A locked session searches its container and
+ *    (`workspace-directory.ts › searchLegs`). A locked session searches its container and
  *    learns nothing about the existence of anything else.
  *
  * ── THE TWO COSTS, PAID RATHER THAN HIDDEN ────────────────────────────────
