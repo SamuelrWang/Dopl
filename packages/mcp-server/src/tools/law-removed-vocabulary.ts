@@ -85,3 +85,48 @@ export const REMOVED_VOCABULARY: ReadonlyArray<[string, RegExp]> = [
   // because reporting a state is how an agent learns to wait on it.
   ["thread status / outcome vocabulary", /\bthread('s)?\s+(status|outcome)\b|\boutcome summar(y|ies)\b/i],
 ];
+
+/**
+ * **THE TWENTY-TWO OP NAMES THE COLLAPSE RETIRED** (B8, 2026-09-02), and they
+ * stopped PARSING at slice B16 one release later.
+ *
+ * ⚠ **A DIFFERENT QUESTION FROM {@link REMOVED_VOCABULARY}, WHICH IS WHY IT IS A
+ * SECOND EXPORT RATHER THAN MORE ROWS.** That table bans WORDS anywhere in a
+ * shipped string; these are ordinary words elsewhere — `list`, `update`, `open`,
+ * `members` and `help` are live ops on other tools — so the scan that reads this
+ * one matches a `dopl_channel` op POSITION, never the bare word
+ * (`law-scan.test.ts`).
+ *
+ * ⚠ **IT LIVES HERE BECAUSE THIS FILE IS THE ONE THE SCAN SKIPS.** The rule book
+ * literally contains the strings it forbids; a copy in any `channel-*.ts` would
+ * fail the guard on the file that defines it.
+ *
+ * ⚠ **THE ONE-LINE REDIRECTS ARE GONE WITH `channel-retired-ops.ts`** — these
+ * names now fail schema validation with the refusal `channel-schema.ts ›
+ * unknownOpRefusal` writes. `read` is deliberately ABSENT: it is the one old
+ * name that survived the collapse with its own meaning.
+ */
+export const RETIRED_CHANNEL_OPS: readonly string[] = [
+  "post",
+  "milestone",
+  "escalate",
+  "ping",
+  "pings",
+  "create_thread",
+  "list",
+  "open",
+  "invite",
+  "members",
+  "list_threads",
+  "set_thread_mode",
+  "update",
+  "help",
+  "await",
+  "launch_agent",
+  "end_agent",
+  "rename_agent",
+  "set_agent_mode",
+  "direct_agent",
+  "read_directions",
+  "read_sessions",
+];
