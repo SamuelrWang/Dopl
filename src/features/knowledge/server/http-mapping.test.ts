@@ -1,6 +1,6 @@
 /**
  * 🔒 **A TENANCY MISMATCH THAT REACHES A RESPONSE IS A SERVER BUG, AND SAYS SO**
- * (2026-09-03, F-671).
+ * (2026-09-03, F-664).
  *
  * ⚠ `KnowledgeBaseMismatchError` is TWO events wearing one name. On the id lane
  * it is control flow — `service-bases.ts › loadVisibleBase` catches it to mean

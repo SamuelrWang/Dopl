@@ -1,7 +1,7 @@
 -- ============================================================================
 -- THE CHILDREN FOLLOW THE ROW — repairing `20260920120000`'s personal-container
 -- move, which changed a parent's tenancy and left every child stamped with the
--- old one (F-671).
+-- old one (F-664).
 -- ============================================================================
 --
 -- ⚠ **THIS IS A REPAIR OF AN APPLIED MIGRATION, NOT A NEW FEATURE.**

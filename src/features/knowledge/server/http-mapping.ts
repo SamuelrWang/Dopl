@@ -38,7 +38,7 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
     return new HttpError(409, "KNOWLEDGE_FOLDER_CYCLE", err.message);
   }
   if (err instanceof KnowledgeBaseMismatchError) {
-    // 🔒 **500, NOT 400, AND IT CHANGED ON 2026-09-03 (F-671).** A mismatch that
+    // 🔒 **500, NOT 400, AND IT CHANGED ON 2026-09-03 (F-664).** A mismatch that
     // reaches a RESPONSE is never something the caller did: the id lane catches
     // this error as control flow (`service-bases.ts › loadVisibleBase`), so what
     // is left is a row whose tenancy disagrees with its parent's — the state

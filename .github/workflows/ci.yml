@@ -265,7 +265,7 @@ jobs:
         run: npx tsx scripts/check-rls-pair-gate.ts
 
       # 🔒 A MIGRATION THAT RE-STAMPS A PARENT'S `workspace_id` RE-STAMPS EVERY
-      # CHILD THAT COPIES IT (2026-09-03, F-671). `20260920120000` moved the
+      # CHILD THAT COPIES IT (2026-09-03, F-664). `20260920120000` moved the
       # personal rows into their author's container and left the folders,
       # entries, chunks and template↔KB junctions on the old tenancy. Nothing
       # compares the two until a caller resolves a PATH inside a moved base, so

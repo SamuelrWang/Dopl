@@ -249,7 +249,7 @@ export function deriveSlug(input: string, taken: string[]): string {
 }
 
 /**
- * ⚠ **THE IDS TRAVEL WITH THE REFUSAL** (2026-09-03, F-671). The message is what
+ * ⚠ **THE IDS TRAVEL WITH THE REFUSAL** (2026-09-03, F-664). The message is what
  * the caller sees and says no more than it did; the two tenancies and the
  * subject ride the error for the server log, because this throw is how a child
  * row stranded on an old tenancy first announces itself and "belongs to a

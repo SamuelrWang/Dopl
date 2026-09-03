@@ -1,6 +1,6 @@
 /**
  * 🔒 **THE CHILDREN FOLLOW THE ROW** — a migration that re-stamps a parent's
- * `workspace_id` must re-stamp every child that denormalises it (F-671).
+ * `workspace_id` must re-stamp every child that denormalises it (F-664).
  *
  * ⚠ **THE DEFECT THIS EXISTS TO CATCH, AND IT SHIPPED.**
  * `20260920120000_workspace_kind_personal.sql` moved every personal knowledge
@@ -211,7 +211,7 @@ for (const [name, sql] of sources) {
       // very statement this file is missing.
       if (repairSql && restamps(repairSql, child)) continue;
       problems.push(
-        `${name} re-stamps ${parent}.workspace_id but not ${child}.workspace_id. A child left on the old tenancy is invisible to every list read and 500s the first time something compares the two (F-671) — add the UPDATE to this migration, derived from the parent.`
+        `${name} re-stamps ${parent}.workspace_id but not ${child}.workspace_id. A child left on the old tenancy is invisible to every list read and 500s the first time something compares the two (F-664) — add the UPDATE to this migration, derived from the parent.`
       );
     }
   }

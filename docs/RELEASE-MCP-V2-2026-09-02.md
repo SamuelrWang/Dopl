@@ -327,7 +327,7 @@ resource_grant_trigger_arms …0344. Snapshot 58/172/73/571 → 59/184/74/618.
 personal-shelf base was unreachable from a home channel — `base_not_found`, then
 `KNOWLEDGE_BASE_MISMATCH` — through four independently-correct fences composing
 to a refusal (F-470 the id doors and the MCP ref resolver, F-662 the grant lanes
-filtering by the caller's container, F-671 `20260920120000` moving parents
+filtering by the caller's container, F-664 `20260920120000` moving parents
 without their children). The last is a DATA defect in an applied migration and is
 repaired by `20260924120000_personal_container_child_rows.sql`, with
 `scripts/check-tenancy-move-gate.ts` as the class fix. ⚠ `20260924120000` is

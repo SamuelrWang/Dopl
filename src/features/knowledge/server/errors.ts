@@ -149,7 +149,7 @@ export class FolderCycleError extends Error {
  * catches it to mean "not in this container, follow the id" — and it is not
  * logged, because a follow is the normal path. Anything that reaches a RESPONSE
  * is the other kind: a child row left on a tenancy its parent no longer has
- * (F-671), which is a server invariant violation and not a caller's mistake.
+ * (F-664), which is a server invariant violation and not a caller's mistake.
  *
  * ⚠ **SO IT CARRIES THE TWO IDS.** Until 2026-09-03 it carried a sentence
  * ("entry belongs to a different workspace") and the mapper answered 400 with
