@@ -217,6 +217,35 @@ function liveFunctionBody(name: string): string | null {
   return body;
 }
 
+/**
+ * The DECLARATION of `name` as the replay leaves it — everything between
+ * `CREATE OR REPLACE FUNCTION` and the body's opening dollar-quote.
+ *
+ * ⚠ A DIFFERENT QUESTION FROM {@link liveFunctionBody}, which answers only what
+ * is INSIDE the quotes. `SECURITY DEFINER`, `SET search_path` and the return
+ * type all live out here, so the body scan cannot see them — and a `CREATE OR
+ * REPLACE` in a later migration that dropped `SECURITY DEFINER` would leave
+ * every body assertion green.
+ */
+function liveFunctionHeader(name: string): string | null {
+  let header: string | null = null;
+  const create = new RegExp(
+    String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?:public\.)?${name}\s*\(`,
+    "gi"
+  );
+  for (const { sql } of FILES) {
+    for (const m of sql.matchAll(create)) {
+      if (m.index === undefined) continue;
+      const tag = /AS\s+\$[A-Za-z_]*\$/.exec(sql.slice(m.index));
+      header =
+        tag && tag.index !== undefined
+          ? sql.slice(m.index, m.index + tag.index)
+          : sql.slice(m.index);
+    }
+  }
+  return header;
+}
+
 const GRANTS = livePolicies("resource_grants");
 
 describe("resource_grants — the replayed RLS state", () => {
@@ -410,20 +439,37 @@ describe("the retired tables are gone, and the one left behind is unchanged", ()
     expect(livePolicies("agent_template_teams").size).toBe(0);
   });
 
-  it("`channel_resource_grants` is STILL LIVE, and still tightened", () => {
+  it("🔒 `channel_resource_grants` is STILL LIVE, and now READ-ONLY (F-581)", () => {
     // ⚠ Deliberate, and batch 3's to remove: `repository-audience.ts` still
-    // reads it, so `20260914120000` mirrors into it instead of dropping it. The
-    // two policies `20260828120000` corrected must not have been loosened on
-    // the way past.
+    // reads it, so `20260914120000` mirrors into it instead of dropping it.
     expect(tableIsLive("channel_resource_grants")).toBe(true);
     const old = livePolicies("channel_resource_grants");
-    expect([...old.keys()].sort()).toEqual([
-      "channel_resource_grants_admin_write",
-      "channel_resource_grants_member_select",
-    ]);
-    const write = old.get("channel_resource_grants_admin_write")!;
-    expect(write).toMatch(/is_current_workspace_member\(\s*workspace_id\s*,\s*'admin'\s*\)/i);
+    // 🔒 THE MIRROR IS NOT A WRITE SURFACE. `20260828120000`'s `FOR ALL` write
+    // policy was correct while this table WAS the grant table; once
+    // `20260914120000` made it a mirror that one reader still trusts, an admin
+    // reaching PostgREST could file a grant that never met
+    // `enforce_resource_grant()`. `20260921130000` drops it — the only writers
+    // left are the two SECURITY DEFINER trigger functions.
+    expect([...old.keys()].sort()).toEqual(["channel_resource_grants_member_select"]);
     expect(old.get("channel_resource_grants_member_select")).toMatch(/level\s*=\s*'visible'/i);
+    // The read stays as narrow as `20260828120000` made it: admin sees all,
+    // everyone else only `visible`, and the `admin` arm is what makes a second
+    // admin-SELECT policy pure duplication rather than a replacement.
+    expect(old.get("channel_resource_grants_member_select")).toMatch(
+      /is_current_workspace_member\(\s*workspace_id\s*,\s*'admin'\s*\)/i
+    );
+  });
+
+  it("🔒 both mirror writers are SECURITY DEFINER, or the read-only table loses its writes (F-581)", () => {
+    // The policy drop and these two are ONE change: an invoker-rights mirror
+    // would refuse its own INSERT under the narrowed table and take the LEGAL
+    // `resource_grants` write down with it, and an invoker-rights GC would
+    // silently delete zero rows (RLS filters, it does not raise).
+    for (const fn of ["mirror_channel_resource_grant", "drop_channel_resource_grants_for_kb"]) {
+      const header = liveFunctionHeader(fn);
+      expect(header, fn).not.toBeNull();
+      expect(header, fn).toMatch(/SECURITY\s+DEFINER/i);
+    }
   });
 
   /**

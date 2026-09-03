@@ -402,8 +402,19 @@ ON CONFLICT DO NOTHING;
 -- reader outside this slice's file ownership — keeps answering. Created AFTER
 -- the backfill so the backfill does not churn rows that are already correct.
 -- **Batch 3 deletes this trigger, this function and the old table together.**
+-- 🔒 **SECURITY DEFINER, AND THAT IS WHAT LETS THE OLD TABLE BE READ-ONLY**
+-- (2026-09-02, F-581). `20260921130000` drops `channel_resource_grants`'
+-- FOR ALL write policy: nothing but this trigger and the GC one may write the
+-- mirror, so a workspace admin reaching PostgREST directly can no longer file a
+-- grant that `listGrantedBaseIdsForChannels` honours while `resource_grants`
+-- — and `enforce_resource_grant()` above — never saw it. With the policy gone,
+-- an INVOKER-rights mirror would refuse the write and take the LEGAL
+-- `resource_grants` INSERT down with it, so the two changes are one change.
+-- ⚠ It decides nothing: every value below comes from a NEW row that has already
+-- passed `enforce_resource_grant()`, and the old table's own
+-- `enforce_channel_resource_grant()` still fires underneath.
 CREATE OR REPLACE FUNCTION public.mirror_channel_resource_grant() RETURNS TRIGGER
-LANGUAGE plpgsql SET search_path TO 'public' AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
 DECLARE channel_ws UUID;
 BEGIN
   IF TG_OP <> 'INSERT'
