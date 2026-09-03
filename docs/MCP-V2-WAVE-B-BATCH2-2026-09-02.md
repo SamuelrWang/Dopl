@@ -96,7 +96,11 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
   channels and invites people into them. The action is part of the key everywhere, through one
   spelling (`main/channel-op-key.js › channelOpKey`), the grain the server's write gate already
   reads.
-- **The eighteen retired op names were REMOVED from every desktop list, not kept.** This reverses
+- **The TWENTY-TWO retired op names were REMOVED from every desktop list, not kept.** ⚠ This
+  paragraph said EIGHTEEN, which is `23 − 5` — the net change in what the enum SHOWS, not the
+  number of retirements. Twenty-two names retired and four arrived; `read` is the one old name
+  that survived (`channel-retired-ops.ts › RETIRED_OPS`, which has always said twenty-two).
+  This reverses
   the 2026-08-22 note that kept `get_thread` on the read set as a fail-safe. A name in no list
   GATES, so only the ALLOW side shrank.
 - **G13's claim protocol deleted rather than kept as the standing half** (B9's commit body leaned
@@ -115,9 +119,9 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
 | Slice | Deletes |
 |---|---|
 | **B13** `workspace=` off | `session-pin.ts`, `home-scopes.ts`, `noWorkspaceError`, the auto-target, both pin ops, `dopl_home`; `current_workspace`+`list_workspaces` → one `dopl_workspaces` (13 → 11 tools). Also the four `!isStandardWorkspace` sites it owns (F-564) |
-| **B14** default workspace off | `ensureDefaultWorkspace` → `ensurePersonalContainer`; `findDefaultWorkspaceForUser` → `findSoleOwnedStandardWorkspace`, billing-only; both `resolveHomeScope` copies repointed; `20260802200000` + `20260823160000`'s guard dropped; `default_workspace_of()` (B11 shipped it DEPRECATED, for the revert only) |
+| **B14** default workspace off | `ensureDefaultWorkspace` → `ensurePersonalContainer`; `findDefaultWorkspaceForUser` → `findSoleOwnedStandardWorkspace`, billing-only; both `resolveHomeScope` copies repointed; `20260802200000` + `20260823160000`'s guard dropped; `default_workspace_of()` — ⚠ **NOT "for the revert only": it is a LIVE DEPENDENCY of `ensure_personal_container`**, which mints a container FROM today's default and reads it for the name and `created_at` (corrected 2026-09-02, in review). Dropping it before that mint stops running is a `CREATE OR REPLACE` away from an apply failure, not a tidy-up |
 | **B15** copies off | the copy ops (681 MCP lines + 490 draft/UI), `shelf.ts` (+ its `SHELF_ARG_DESCRIPTION` "default workspace" wording and ratchet), `copy-target.ts`, `home_scoped` on both tables |
-| **B16** old ops + TS fences off | the 18 one-line redirects, the `await` lane (AWAITING 3,914 + two handlers + the budget module), the ping lane, the five `canSee*` predicates one at a time behind green redteam tests |
+| **B16** old ops + TS fences off | the 22 one-line redirects, the `await` lane (AWAITING 3,914 + two handlers + the budget module), the ping lane, the five `canSee*` predicates one at a time behind green redteam tests |
 | **B9/B10 residue** | `channel_resource_grants` + the in-txn mirror, after `repository-audience.ts › listGrantedBaseIdsForChannels` moves (F-460); `agentIdsInChannel` and its two re-exports (F-579); `use-agents-panel.ts`'s duplicate thread-other-party derivation (F-551) |
 
 ## Gates — all green at `430007e4`

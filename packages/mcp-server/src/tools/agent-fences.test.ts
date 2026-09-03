@@ -97,7 +97,10 @@ describe("the home-shelf fence, surfaced", () => {
       { name: "Researcher", shelf: "personal" },
     );
     expect(textOf(res)).toContain("it is not your home workspace");
-    expect(textOf(res)).toContain("your OWN default workspace as the target");
+    // ⚠ The phrase moved on 2026-09-02: the default workspace has no definition
+    // after this wave (ruling B10), and a REFUSAL naming one sends the caller to
+    // fix a thing that will not exist.
+    expect(textOf(res)).toContain("YOUR OWN tenancy as the target");
   });
 
   it("RE-SPELLS THE WIRE NOUN: the server's 'home shelf' surfaces as 'personal shelf' (T32)", async () => {

@@ -455,6 +455,20 @@ BEGIN
   -- so mirroring one would RAISE and turn a legal lend into an outage. Its
   -- reader is a per-container audience read, which cannot ask this question
   -- anyway.
+  --
+  -- 🔒 ⚠ **SO B11's HEADLINE CAPABILITY IS NOT FUNCTIONAL UNTIL F-460 MOVES THE
+  -- READER, AND THAT IS WORTH SAYING OUT LOUD** (2026-09-02, review). The whole
+  -- point of the fold is that a base can be lent ACROSS containers — Samuel's
+  -- ruling B4 — and `listGrantedBaseIdsForChannels`, the agent's reachable-base
+  -- set, reads the MIRROR. A cross-container grant is therefore written
+  -- correctly, refused by nothing, visible in `resource_grants`, and **invisible
+  -- to the one reader that would act on it**. The grant is real; the reach is
+  -- not, yet.
+  -- ⚠ **IT IS A GAP, NOT A LEAK** — the missing rows are missing in the
+  -- CLOSED direction, which is why this lands as documentation rather than as a
+  -- second mirror. Batch 3 repoints the reader at `resource_grants` with its
+  -- `scope_type = 'channel'` term (F-460) and deletes this function, the trigger
+  -- and the old table in one change.
   SELECT workspace_id INTO channel_ws FROM channels WHERE id = NEW.scope_id;
   IF channel_ws IS DISTINCT FROM NEW.workspace_id THEN
     RETURN NULL;

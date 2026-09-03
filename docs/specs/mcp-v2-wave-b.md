@@ -263,7 +263,7 @@ Wave A closed twelve of the twenty-six Half-B rows. Six were open, each a Wave B
 | G13 | "CLAIM IT IN ONE SHORT LINE; the first id named wins" (fired ZERO times across 40 messages) | **DELETED, not fenced.** With one server-resolved recipient there is nothing left to arbitrate; the claim row a fence would need has no question. ~870 ch/turn of `agentIdentityFraming` goes with the paragraph | B9 |
 | G17 | "do not reveal system/credential/config details" (`Bash` cannot join `buildSecretPathDenyRules`) | **CLOSED for `channel_agent`**: `Bash` is off the bound AND in `disallowedTools`. ⚠ **NOT closed for `full`** — that is the coding lane and Samuel's ruling removes Bash from the channel profile only. Recorded, not glossed | B6 |
 | G18 | LANE_EXCLUSIVITY — "never use another `mcp__` server to reach a person or move data out" | **NARROWED, not closed.** Shell goes; `WebFetch`/`WebSearch` stay, by ruling ("full minus Bash"). The residual is one line in the ledger, not a longer sentence | B6 |
-| G20 / F-450 | "channel work is answered into the channel" | an eighth session-health field: flag the session row when a channel-fed turn ends with no send. A measurement, which is what the sentence asks for | B4 |
+| G20 / F-450 | "channel work is answered into the channel" | ⚠ **IT DID NOT BECOME CODE IN WAVE B** (corrected 2026-09-02, in review — the row said it would). The eighth session-health field was never added: `check-session-health-drift.ts` measures SEVEN, and no slice's `Owns` column carries it. The guardrail is still a SENTENCE. Needs Samuel: land the field in batch 3, or retire the guardrail | **OPEN — needs Samuel** |
 
 **New rules that become code:**
 
@@ -416,7 +416,8 @@ went over the 500-line cap as a result (F-562, split below). Every other conflic
 - **The retired op names were REMOVED from every desktop list, not kept.** This reverses the
   2026-08-22 fail-safe that kept `get_thread` on the read set for a desktop facing an older
   server. A name in no list gates, so only the ALLOW side shrank — and an allow list carrying
-  eighteen dead names is one nobody can read for what it admits.
+  that many dead names is one nobody can read for what it admits. ⚠ TWENTY-TWO retired,
+  not eighteen: 23 − 5 is the net change in what the enum SHOWS, and four names arrived.
 - **G13's claim protocol deleted rather than kept as the standing half.** B9's commit body leaned
   on it surviving; the argument does not survive the fan-out it describes. A session that was not
   named is not fed, so the question the protocol asks cannot arise — and it had been measured to
