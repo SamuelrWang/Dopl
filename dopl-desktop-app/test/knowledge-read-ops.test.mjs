@@ -73,11 +73,26 @@ function serverOpEnum() {
     src.indexOf("KB_INPUT_SHAPE", at) !== -1,
     "dopl_kb no longer registers KB_INPUT_SHAPE — this parse would be reading a schema nobody is served"
   );
-  const open = src.indexOf(".enum([", shape);
-  const close = src.indexOf("])", open);
-  assert.ok(open !== -1 && close > open, "the dopl_kb op enum moved");
+  // ⚠ **IT READS `KB_OPS`, NOT THE `.enum([…])` LITERAL, SINCE 2026-09-02.**
+  // B15 made the runtime enum a SPREAD — `.enum([...KB_OPS, ...RETIRED_COPY_OP_NAMES])`
+  // over a `.meta({ enum: [...KB_OPS] })` that publishes only the first half —
+  // so slicing between `.enum([` and `])` parsed the two identifiers as ops and
+  // this test failed with "only parsed 2". **The published set is the right
+  // subject anyway**: a retired name PARSES for one release and no client can
+  // SEE it, so deriving a desktop grant from the wider set would have granted
+  // windowless sessions ops that are not on the surface. It is the same rule
+  // `packages/mcp-server/src/tools/parity-harness.ts › opEnum` states
+  // server-side — read what a CLIENT reads.
+  const list = src.indexOf("const KB_OPS = [");
+  assert.notEqual(list, -1, "KB_OPS moved — re-anchor this parse");
+  assert.ok(
+    src.indexOf("KB_OPS", shape) !== -1,
+    "KB_INPUT_SHAPE no longer builds its enum from KB_OPS — this parse would be reading a list nobody is served"
+  );
+  const close = src.indexOf("]", list + "const KB_OPS = [".length);
+  assert.ok(close > list, "KB_OPS is unterminated");
   return src
-    .slice(open + ".enum([".length, close)
+    .slice(list + "const KB_OPS = [".length, close)
     .split(",")
     .map((s) => s.trim().replace(/^"|"$/g, ""))
     .filter(Boolean);

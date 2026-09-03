@@ -59,18 +59,6 @@ export declare function resourceLabel(name: string | null | undefined): string;
 export declare function statusLabel(m: WorkspaceMember): string;
 export declare function defaultLevel(role: string): "none" | "read" | "edit";
 export declare function typeLabel(resourceType: string): string;
-export declare function isRetiredResourceType(resourceType: string): boolean;
-/** Drop rows for retired resource types from any resource-shaped list. */
-export declare function withoutRetiredResources<T extends {
-    resourceType: string;
-}>(rows: readonly T[]): T[];
-/**
- * Access matrix with retired rows gone from BOTH halves — resource inventory
- * AND every team's grant list. ⚠ Applied once per `getAccessMatrix()` in
- * `members.ts` so every downstream render inherits the filter rather than each
- * having to remember it.
- */
-export declare function pruneRetiredResources(matrix: AccessMatrix): AccessMatrix;
 /**
  * One teams-mode resource's grants as `<team> (<id>): <level>` pairs, or the
  * "nobody was granted this" note.

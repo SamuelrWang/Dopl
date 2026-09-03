@@ -116,7 +116,7 @@ async function opWhoami(client, caller) {
     const [members, access, matrix] = await Promise.all([
         client.listWorkspaceMembers(),
         client.getMyAccess(),
-        client.getAccessMatrix().then(members_render_1.pruneRetiredResources),
+        client.getAccessMatrix(),
     ]);
     const selfId = caller.userId ?? me.userId;
     const self = selfId ? members.find((m) => m.userId === selfId) : undefined;
@@ -217,7 +217,7 @@ async function opTeams(client) {
     const [teams, members, matrix] = await Promise.all([
         client.listWorkspaceTeams(),
         client.listWorkspaceMembers(),
-        client.getAccessMatrix().then(members_render_1.pruneRetiredResources),
+        client.getAccessMatrix(),
     ]);
     if (teams.length === 0) {
         return (0, respond_1.ok)("No teams in this workspace yet. Teams are created in the web UI (Members → Teams).");
@@ -235,7 +235,7 @@ async function opGetTeam(client, ref) {
     const [teams, members, matrix] = await Promise.all([
         client.listWorkspaceTeams(),
         client.listWorkspaceMembers(),
-        client.getAccessMatrix().then(members_render_1.pruneRetiredResources),
+        client.getAccessMatrix(),
     ]);
     const lower = ref.trim().toLowerCase();
     const team = teams.find((t) => t.id === ref) ??
@@ -260,7 +260,7 @@ async function opGetTeam(client, ref) {
  */
 const MATRIX_SCOPE_NOTE = `_Covers knowledge bases and skills only; chats, chat folders and ontology objects are not in this grid. If you are an ADMIN or OWNER this is the full inventory of those two, every status and every visibility included, and it is what settles a disagreement between two members' list ops. If you are a MEMBER or VIEWER it has been re-filtered to what you can reach, so it is a view like the rest. The teams half above is unfiltered for everyone._`;
 async function opAccessMatrix(client) {
-    const matrix = (0, members_render_1.pruneRetiredResources)(await client.getAccessMatrix());
+    const matrix = await client.getAccessMatrix();
     if (matrix.resources.length === 0) {
         return (0, respond_1.ok)(`No shareable resources visible to you in this workspace.\n\n${MATRIX_SCOPE_NOTE}`);
     }
@@ -283,7 +283,7 @@ async function opMyAccess(client) {
     const [me, access, matrix] = await Promise.all([
         client.getMyMembership(),
         client.getMyAccess(),
-        client.getAccessMatrix().then(members_render_1.pruneRetiredResources),
+        client.getAccessMatrix(),
     ]);
     const lines = [];
     lines.push(`## Your access in ${(0, narration_1.inlineOr)(me.workspace.name, "`(unnamed workspace)`")}\n`);

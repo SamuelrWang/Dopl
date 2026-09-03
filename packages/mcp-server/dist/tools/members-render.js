@@ -18,9 +18,6 @@ exports.resourceLabel = resourceLabel;
 exports.statusLabel = statusLabel;
 exports.defaultLevel = defaultLevel;
 exports.typeLabel = typeLabel;
-exports.isRetiredResourceType = isRetiredResourceType;
-exports.withoutRetiredResources = withoutRetiredResources;
-exports.pruneRetiredResources = pruneRetiredResources;
 exports.grantDetail = grantDetail;
 exports.matchMember = matchMember;
 exports.formatTeam = formatTeam;
@@ -152,43 +149,19 @@ const TYPE_LABELS = {
 function typeLabel(resourceType) {
     return TYPE_LABELS[resourceType] ?? resourceType;
 }
-/**
- * CONTAINMENT FLOOR for a grant row whose feature no longer exists.
- *
- * ⚠ Keep this set even though the app stopped emitting `workflow`: THE ROWS DO
- * NOT COME FROM US. The backend builds this payload from `team_resource_access`
- * and `resource_type` still ACCEPTS `'workflow'` at the database — the drop
- * migration deliberately left that CHECK value alone. A surviving or replayed
- * row would otherwise reach an agent as a grid of who can edit a resource that
- * does not exist. Filtered at the seam where the payload enters our narration.
- *
- * ⚠ HAND-COPIED mirror in `src/features/teams/access-levels.ts` (this package
- * cannot import from `src/`) — keep both in sync.
+/*
+ * ⚠ **`RETIRED_RESOURCE_TYPES`, `isRetiredResourceType`,
+ * `withoutRetiredResources` AND `pruneRetiredResources` ARE DELETED
+ * (2026-09-02, F-466).** They were a CONTAINMENT FLOOR for a `'workflow'` grant
+ * row: the payload was built from `team_resource_access`, whose `resource_type`
+ * CHECK deliberately kept the value after the feature was dropped
+ * (`20260811120000`), so a surviving or replayed row could reach an agent as a
+ * grid of who can edit a resource that does not exist. **Ruling B4 moved the
+ * payload's source** to `resource_grants`, whose CHECK refuses the value and
+ * whose backfill drops such rows rather than carrying them. The hand-copied
+ * mirror in `src/features/teams/access-levels.ts` went in the same change,
+ * which is one fewer pair for F7 to keep in sync.
  */
-const RETIRED_RESOURCE_TYPES = new Set(["workflow"]);
-function isRetiredResourceType(resourceType) {
-    return RETIRED_RESOURCE_TYPES.has(resourceType);
-}
-/** Drop rows for retired resource types from any resource-shaped list. */
-function withoutRetiredResources(rows) {
-    return rows.filter((r) => !isRetiredResourceType(r.resourceType));
-}
-/**
- * Access matrix with retired rows gone from BOTH halves — resource inventory
- * AND every team's grant list. ⚠ Applied once per `getAccessMatrix()` in
- * `members.ts` so every downstream render inherits the filter rather than each
- * having to remember it.
- */
-function pruneRetiredResources(matrix) {
-    return {
-        ...matrix,
-        resources: withoutRetiredResources(matrix.resources),
-        teams: matrix.teams.map((t) => ({
-            ...t,
-            grants: withoutRetiredResources(t.grants),
-        })),
-    };
-}
 /**
  * One teams-mode resource's grants as `<team> (<id>): <level>` pairs, or the
  * "nobody was granted this" note.
@@ -242,9 +215,10 @@ function formatTeam(team, members, matrix, opts = {}) {
             .join(", ")
         : "no members";
     lines.push(`- Members (${team.memberCount}): ${roster}`);
-    // ⚠ Second, UNPRUNED source: a team's grants arrive on the TEAM object,
-    // reaching `opTeams`/`opGetTeam` straight from `listWorkspaceTeams()`.
-    const grants = withoutRetiredResources(team.grants);
+    // ⚠ A team's grants arrive on the TEAM object, reaching `opTeams`/`opGetTeam`
+    // straight from `listWorkspaceTeams()` — a SECOND source, which is why it had
+    // its own retired-type filter until 2026-09-02 (F-466).
+    const grants = team.grants;
     if (grants.length === 0) {
         lines.push(`- Grants: none`);
     }
@@ -270,9 +244,10 @@ function formatEffectiveAccess(rows, role) {
         lines.push(`_${role} — edit on everything._`);
         return lines.join("\n");
     }
-    // ⚠ `getMemberAccess()` is its own endpoint — a THIRD source of resource rows,
-    // needing its own retired-type filter.
-    const visible = withoutRetiredResources(rows);
+    // ⚠ `getMemberAccess()` is its own endpoint — a THIRD source of resource
+    // rows, which is why it had its own retired-type filter until 2026-09-02
+    // (F-466).
+    const visible = rows;
     if (visible.length === 0) {
         lines.push(`_No shareable resources in this workspace yet._`);
         return lines.join("\n");

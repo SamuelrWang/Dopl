@@ -26,7 +26,7 @@
  * position here is what decides which remedy an agent is told about.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WORKSPACE_ERRORS = exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.HOME_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.CREDITS_EXHAUSTED = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.WORKSPACE_REQUIRED = exports.MISSING_PARAMS = void 0;
+exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.HOME_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.CREDITS_EXHAUSTED = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.MISSING_PARAMS = void 0;
 exports.refusal = refusal;
 exports.versionConflict = versionConflict;
 /**
@@ -57,11 +57,6 @@ exports.MISSING_PARAMS = {
     reason: "missing_params",
     meaning: "a param this op needs is absent; the message names it",
     retry: "no",
-};
-exports.WORKSPACE_REQUIRED = {
-    reason: "workspace_required",
-    meaning: "no workspace resolved for this call",
-    retry: "dopl_workspaces",
 };
 exports.READ_ONLY_SESSION = {
     reason: "read_only_session",
@@ -219,7 +214,6 @@ exports.SEARCH_ERRORS = [
         retry: 'the same call',
     },
     exports.CREDITS_EXHAUSTED,
-    exports.WORKSPACE_REQUIRED,
 ];
 /**
  * ⚠ **ONE ROW, AND `no_cursor` IS NOT THE SECOND.** It was drafted as one and
@@ -231,4 +225,13 @@ exports.SEARCH_ERRORS = [
  * it belongs: on `since`'s own `.describe()`.
  */
 exports.STATUS_ERRORS = [exports.CREDITS_EXHAUSTED];
-exports.WORKSPACE_ERRORS = [exports.WORKSPACE_REQUIRED];
+/**
+ * ⚠ **`WORKSPACE_REQUIRED` AND `WORKSPACE_ERRORS` ARE DELETED (2026-09-02,
+ * batch-3 integration).** B10 removed the default workspace and B14 removed the
+ * refusal with it: `workspaces/server/service.ts › WorkspaceResolutionError` is
+ * ONE CODE now — `WORKSPACE_INVALID`, *"you named something that is not a
+ * workspace id"* — and naming NOTHING stopped being a question. **No server path
+ * emits `WORKSPACE_REQUIRED`**, so the constant taught a refusal that could not
+ * arrive, which is the exact break the error tables exist to prevent, pointed
+ * the other way. `WORKSPACE_ERRORS` had lost its last consumer with `dopl_home`.
+ */

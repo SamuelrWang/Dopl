@@ -207,10 +207,9 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // saving per RESULT — `concise` drops ~750 chars of scope note from every
   // `dopl_search` and a two-line legend from every `dopl_status`, the call an
   // orchestrator makes most. One connection's characters against a loop's.
-  // ⚠ **AND THREE MORE ROSE IN THE BATCH-2 REVIEW (2026-09-02), SAME LICENCE** —
-  // A16's last three knobs, recorded as shipped and absent from the tree
-  // (F-591): `fields=` (+242), `response_format` (+279), `max_chars` (+215).
-  // ⚠ 4,145 → 4,025 (B15): `shelf` + `to_workspace` out, three grant args in
+  // ⚠ **AND THREE MORE ROSE IN THE BATCH-2 REVIEW, SAME LICENCE** — A16's three
+  // knobs, absent from the tree (F-591): `fields=`/`response_format`/`max_chars`.
+  // ⚠ 4,145 → 4,024 (B15): `shelf` + `to_workspace` out, three grant args in
   dopl_agent: 4024,
   // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
   dopl_channel: 8677,
@@ -225,16 +224,12 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // ⚠ THESE THREE EACH FELL BY 7 AND ROSE BY 1, BOTH EDITS IN OTHER FILES —
   // `response-size.ts › RESPONSE_FORMAT_FIELD` and `shelf.ts › SHELF_ARG_DESCRIPTION`.
   dopl_status: 787,
-  // ⚠ THE ONE THAT REPLACED THREE (B13): `current_workspace`'s 720 and
-  // `dopl_home`'s 440 are gone with the ops they described.
-  // ⚠ **114 → 364 AT THE BATCH-3 INTEGRATION (F-621), AND IT IS A RISE ON THE
-  // ONE LICENCE THIS FILE ACCEPTS: A NEW OP.** 114 was the empty object the SDK
-  // renders for a tool with no arguments; `dopl_home(op="create_channel")` was
-  // retired with no successor, which is a wire-visible deletion of a capability
-  // rather than a rename, so the mint moved here as
-  // `op="create_home_channel"` with a `name`. **The two together cost 250 and
-  // replaced 1,160** — `dopl_home`'s own schema was 440 and its description 440
-  // more. The DESCRIPTION did not rise: it still fits the 450-char READ cap.
+  // ⚠ THE ONE THAT REPLACED THREE (B13). ⚠ **114 → 364 (F-621), A RISE ON THE
+  // ONE LICENCE THIS FILE ACCEPTS: A NEW OP.** 114 was the empty object an
+  // argument-less tool renders; the home-channel mint moved here when B13
+  // retired `dopl_home` with no successor. `op` + `name` cost 250 and replaced
+  // 1,160 (`dopl_home`'s 440 of schema, 440 of description, `current_workspace`'s
+  // 720 schema). The DESCRIPTION did not rise — it still fits the 450 READ cap.
   dopl_workspaces: 364,
 };
 

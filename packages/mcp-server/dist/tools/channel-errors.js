@@ -55,7 +55,8 @@ function classifyBadRequest(e) {
         case "INVALID_JSON":
         case "BAD_REQUEST":
             return "invalid_request";
-        case "WORKSPACE_REQUIRED":
+        // ⚠ `WORKSPACE_REQUIRED` SHARED THIS ARM UNTIL 2026-09-02 and is gone with
+        // the default workspace: `workspaces/server/service.ts` raises ONE code now.
         case "WORKSPACE_INVALID":
             return "workspace";
         default:

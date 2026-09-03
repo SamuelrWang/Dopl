@@ -68,7 +68,6 @@ export declare function refusal(error: ToolError, detail?: string): string;
  * these only when it is among its own top three.
  */
 export declare const MISSING_PARAMS: ToolError;
-export declare const WORKSPACE_REQUIRED: ToolError;
 export declare const READ_ONLY_SESSION: ToolError;
 export declare const DELETE_IS_APP_ONLY: ToolError;
 export declare const CREDITS_EXHAUSTED: ToolError;
@@ -129,4 +128,13 @@ export declare const SEARCH_ERRORS: readonly ToolError[];
  * it belongs: on `since`'s own `.describe()`.
  */
 export declare const STATUS_ERRORS: readonly ToolError[];
-export declare const WORKSPACE_ERRORS: readonly ToolError[];
+/**
+ * ⚠ **`WORKSPACE_REQUIRED` AND `WORKSPACE_ERRORS` ARE DELETED (2026-09-02,
+ * batch-3 integration).** B10 removed the default workspace and B14 removed the
+ * refusal with it: `workspaces/server/service.ts › WorkspaceResolutionError` is
+ * ONE CODE now — `WORKSPACE_INVALID`, *"you named something that is not a
+ * workspace id"* — and naming NOTHING stopped being a question. **No server path
+ * emits `WORKSPACE_REQUIRED`**, so the constant taught a refusal that could not
+ * arrive, which is the exact break the error tables exist to prevent, pointed
+ * the other way. `WORKSPACE_ERRORS` had lost its last consumer with `dopl_home`.
+ */
