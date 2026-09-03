@@ -266,3 +266,25 @@ say "the hold", or ratify the quote.**
 9. **The `wait_ms` fence** (review finding 6) — ratify or reverse; it is one predicate.
 10. **The `await` word in the shared refusal sentence** — re-word both halves, or ratify the
     `VERBATIM_QUOTES` exemption that lets a banned word ship in exactly one string.
+
+---
+
+## Release runbook
+
+The ordered steps for shipping this wave live in
+**`docs/RELEASE-MCP-V2-2026-09-02.md`** — the migration ledger (apply-now vs
+held), the expand → deploy → contract ordering and why neither single-phase
+order is safe, the flag plan, the verify queries, and the desktop release.
+
+Two things from it belong here, because they change what item 6 above means:
+
+- **`20260923120000_drop_home_scoped` is now HELD**, in
+  `supabase/migrations-held/`, enforced by the filesystem and by
+  `src/shared/supabase/migrations-held.test.ts` rather than by the sentence in
+  item 6. `db push` cannot reach it.
+- **The wave is not releasable yet.** `rls-redteam` — the first-ever replay of
+  these migrations — dies on a duplicate `20260901120000` version stamp
+  (`schema_migrations_pkey`, 23505) before it reaches any wave file, so **no
+  evidence exists that these 17 migrations apply at all**. That, and a
+  Linux-only `electron` import failure in `delivery-composed.test.ts`, are §0 of
+  the runbook.
