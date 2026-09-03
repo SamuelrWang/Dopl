@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./admin";
 import { callerScopedClient } from "./caller-client";
 import type { CallerScope } from "./caller-scope";
+import { generatePublicId } from "@/shared/lib/id/public-id";
 
 /**
  * THE LIVE HALF OF A REDTEAM SUITE, ONCE — the tenants, the roles, the teams and
@@ -82,7 +83,18 @@ export async function deleteUsers(ids: Array<string | null>): Promise<void> {
 export async function makeWorkspace(ownerId: string): Promise<string> {
   const { data, error } = await admin()
     .from("workspaces")
-    .insert({ owner_id: ownerId, name: "RLS redteam", slug: `rls-redteam-${Date.now()}` })
+    // ⚠ `public_id` IS NOT NULL AND HAS NO DEFAULT — the app mints it
+    // (`workspaces/server/repository.ts` calls `generatePublicId()` at both
+    // insert sites). Omitting it here made all five live redteam suites die in
+    // this one shared line, which nobody had seen because THIS JOB HAD NEVER
+    // RUN: the duplicate `20260901120000` version killed the replay before the
+    // suites started.
+    .insert({
+      owner_id: ownerId,
+      name: "RLS redteam",
+      slug: `rls-redteam-${Date.now()}`,
+      public_id: generatePublicId(),
+    })
     .select("id")
     .single();
   if (error || !data) throw error ?? new Error("no workspace");

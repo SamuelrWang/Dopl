@@ -3710,7 +3710,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 
 **⚠ UPDATE 2026-09-01 — READ THIS BEFORE THE ENTRY BELOW, WHICH DESCRIBES THE PRE-LEDGER WORLD.**
 Samuel asked the /home Overview for credits BY CHANNEL and BY PERSON, so the attribution gap was
-closed at the schema rather than worked around: **`supabase/migrations/20260901120000_credit_usage_events.sql`**
+closed at the schema rather than worked around: **`supabase/migrations/20260901130000_credit_usage_events.sql`**
 adds a per-burn ledger — `workspace_id` (the PAYER), `origin_workspace_id` (where the call was made,
 which IS the channel dimension), `user_id`, `amount`, `period_start` — written by
 `src/features/billing/server/credit-ledger.ts › recordCreditUsageEvent`, fired from
@@ -7554,13 +7554,14 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-526 — two APPLIED migrations share the version `20260901120000`, and the class has now fired twice (2026-09-02)
 
-- Location: `supabase/migrations/20260901120000_agent_template_home_scoped.sql` and `supabase/migrations/20260901120000_credit_usage_events.sql`. Both are on `master` (`0f19c938`, 2026-09-01) and both are applied.
+- Location: `supabase/migrations/20260901120000_agent_template_home_scoped.sql` and `supabase/migrations/20260901130000_credit_usage_events.sql`. Both are on `master` (`0f19c938`, 2026-09-01) and both are applied.
 - Found during: the Wave B batch-1 integration, asserting strictly increasing versions across the merged directory.
 - **THE SHAPE, AND WHY IT IS A MERGE DEFECT RATHER THAN A TYPO.** A migration's VERSION is its filename prefix. Every parallel branch picks the next free slot in the directory IT can see, so two branches landing on one day pick the same one and nothing notices until the directories are merged — which is the same class as F-468, on the same directory, one field over. ⚠ **IT HAS HAPPENED BEFORE AND WAS CAUGHT BY HAND:** `channel_pings` and `channel_launch_directives_kind` both took `20260907120000` in the MCP-efficiency wave, and `docs/MCP-EFFICIENCY-WAVE-2026-09-01.md` records the rename as a **BLOCKER**. The remedy that wave shipped was a rename and a warning; a warning did not stop the next one.
 - ⚠ **WHAT IT COSTS, AND WHAT IT DOES NOT.** Supabase's tracker joins on the migration NAME, not the prefix (the Wave B spec §3 restates this: `20260823150000`→`20260823205007`), so two files at one version replay in filename order and both get recorded — nothing is skipped today. What breaks is every tool and every human that treats the version as an identity: a `list_migrations` reader cannot join a row to a file, and the ordering between the two is decided by the SUFFIX, alphabetically, which nobody wrote down.
-- ⚠ **THE FIX IS NOT A RENAME HERE.** Both files are APPLIED. Renaming an applied migration is how a replay diverges from production — the tracker holds the old name and the directory offers a new one — so this pair stays as it is and is named rather than corrected.
-- Resolution taken: a RATCHET, in `src/features/knowledge/schema-sql.test.ts › "no TWO migrations share a version, except the one already applied"`. The live collision is allow-listed by version and every other one fails; the case says in its own body that the fix is to rename the UNAPPLIED file and never to bless a second entry. Mutation-verified red by copying a file to a colliding name. ⚠ It sits beside F-468's gate deliberately: both are assertions about the MERGED directory, which is the only place either defect exists.
-- Status: **NAMED and FENCED** — the pair stands, a second one cannot ship.
+- ⚠ ~~**THE FIX IS NOT A RENAME HERE.** Both files are APPLIED. Renaming an applied migration is how a replay diverges from production.~~ **REVERSED 2026-09-03 — and this bullet contradicted the one directly above it.** The tracker joins on migration NAME (first bullet), so the filename's version prefix was never what reconciled the two histories, and renaming a file cannot diverge a replay that does not read the prefix. Production confirms it: versions there are AUTO-STAMPED at apply time and have not matched filenames since ~2026-08-23 — `credit_usage_events` is applied as `20260901193049`, `agent_template_home_scoped` as `20260827135014`.
+- ⚠ **AND THE CARVE-OUT WAS NOT FREE.** `supabase db reset` stamps `schema_migrations` FROM THE FILENAME, so two files at one version is a duplicate primary key. The first time the `rls-redteam` replay job ever ran (2026-09-02) it died on `schema_migrations_pkey` (23505) before reaching a single migration — **the ratchet was fencing the one defect that made the replay impossible**, and with it the only evidence that 20 pending migrations apply at all. Allow-listing a defect hid it from the gate that would have caught it.
+- Resolution taken (2026-09-03): **RENAMED.** `credit_usage_events` → `20260901130000`, which also restores chronological truth (production applied it AFTER `agent_template_home_scoped`). `src/features/knowledge/schema-sql.test.ts › "no TWO migrations share a version (F-526)"` is now a clean assertion with no allow-list. The replay then ran end to end and applied all 20 pending files against a fresh Postgres — its first green run.
+- Status: **FIXED** — the collision is gone and the gate admits no exceptions.
 
 ### F-550 — the composer offers agent handles the transcript cannot tint, and the two ends are now deliberately different widths (2026-09-02)
 

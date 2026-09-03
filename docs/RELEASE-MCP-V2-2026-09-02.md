@@ -90,7 +90,7 @@ any of these before the deploy takes production down.
 | File | Drops | Live (master) reader that breaks |
 |---|---|---|
 | `20260915120000_drop_agent_template_teams` | table `agent_template_teams` | `features/agent-templates/server/repository.ts` |
-| `20260916120000_drop_team_resource_access` | table `team_resource_access` + 6 fns | `features/teams/server/repository-{grants,resources}.ts`, `mcp-server/tools/members-render.ts` |
+| `20260916120000_drop_team_resource_access` | table `team_resource_access` + 6 fns | `features/teams/server/repository-{grants,resources}.ts`, `packages/mcp-server/src/tools/members-render.ts` |
 | `20260922120000_drop_default_workspace_rpc` | `default_workspace_of`, `ensure_default_workspace` | `features/workspaces/server/{repository,service}.ts` — **the app entry point** |
 | `20260923130000_drop_channel_resource_grants` | table `channel_resource_grants` | `api/knowledge/bases/[baseId]/channel-grants/route.ts`, `repository-channel-grants.ts` |
 | `20260923140000_grant_read_arm` | — (fn replacements) | none; pairs with the grant model, so it goes last |
@@ -185,7 +185,7 @@ expand set and one-way for the contract set.**
 - Expand: old code never names the new columns, and the dual-read fallbacks hold
   — `shared/auth/mcp-access-token.ts` carries a sticky `42703` catch for the
   `mcp_tokens` axes, and the `?? EMPTY_X` inline fallbacks are intact at head
-  (`knowledge/client/api.ts`, `channels/.../knowledge-lane.ts`, `home/types.ts`).
+  (`knowledge/client/api.ts`, `src/features/channels/components/channels-v2/knowledge-lane.ts`, `home/types.ts`).
 - Contract: `agent_template_teams`, `team_resource_access`,
   `channel_resource_grants` and `ensure_default_workspace` are **gone**. Old code
   reads all four. **Reverting past phase 2 requires restoring them from the

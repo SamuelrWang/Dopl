@@ -26,7 +26,7 @@
  * because it reads the same two hand-mirrored knowledge type files, and CI
  * runs this step already.
  */
-import { readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
 // ⚠ IMPORTED, NOT RE-TYPED. `check-role-drift.ts`'s `main()` is guarded on
 // `require.main`, so this import brings the helper and not that gate.
@@ -170,18 +170,30 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
   // CONTAINER now, so a third value is a code change and not a migration, and
   // the assertion would have gone on passing while describing nothing. What
   // replaces it is the assertion below — the column must not come BACK.
-  const migrations = resolve(__dirname, "..", "supabase", "migrations");
-  const drop = readdirSync(migrations).some(
-    (f) =>
-      f.endsWith("_drop_home_scoped.sql") &&
-      /DROP\s+COLUMN\s+IF\s+EXISTS\s+home_scoped/i.test(
-        readFileSync(resolve(migrations, f), "utf8")
-      )
+  // ⚠ **BOTH DIRECTORIES, BECAUSE THE DROP CAN BE HELD.** This asserts the
+  // column must not come BACK, not that it is already gone —
+  // `20260923120000_drop_home_scoped.sql` lives in `supabase/migrations-held/`
+  // until `TENANCY_PERSONAL_CONTAINER` has been on for a release (see that
+  // directory's README). Reading only `migrations/` turned a deliberate,
+  // documented hold into a drift failure and would have pressured whoever hit
+  // it into un-holding a migration that aborts mid-push.
+  const migrationDirs = [
+    resolve(__dirname, "..", "supabase", "migrations"),
+    resolve(__dirname, "..", "supabase", "migrations-held"),
+  ].filter((d) => existsSync(d));
+  const drop = migrationDirs.some((dir) =>
+    readdirSync(dir).some(
+      (f) =>
+        f.endsWith("_drop_home_scoped.sql") &&
+        /DROP\s+COLUMN\s+IF\s+EXISTS\s+home_scoped/i.test(
+          readFileSync(resolve(dir, f), "utf8")
+        )
+    )
   );
   if (!drop) {
     drift = true;
     console.error(
-      `[drift] no migration drops \`home_scoped\`. The shelf is a TENANCY (the caller's kind='personal' container) and nothing may re-introduce the boolean beside it — a column and a container answering the same question is how a row comes to be on one shelf and listed on the other.`
+      `[drift] no migration (applied or held) drops \`home_scoped\`. The shelf is a TENANCY (the caller's kind='personal' container) and nothing may re-introduce the boolean beside it — a column and a container answering the same question is how a row comes to be on one shelf and listed on the other.`
     );
   }
 
