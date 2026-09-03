@@ -80,10 +80,10 @@ export interface AgentTemplate {
  * `GET /api/agent-templates`, as the rows PLUS the shelf sibling key.
  *
  * 🔒 ⚠ **SIBLING KEY, NOT A ROW FIELD**, for the same reason
- * `KnowledgeBaseListPayload.homeScopedBaseIds` is one: `home_scoped` is
- * deliberately absent from `server/dto.ts › AGENT_TEMPLATE_COLS`, so the cached
- * list payload gains no new key on the ROW and §8's stale-cache rule has nothing
- * to apply to there. It applies HERE instead — read it as `?? []`.
+ * `KnowledgeBaseListPayload.homeScopedBaseIds` is one: nothing shelf-shaped is
+ * projected onto the row (and since 2026-09-02 there is no column to project —
+ * the shelf is the row's own container), so the cached list payload gains no new
+ * key THERE and §8's stale-cache rule applies HERE — read it as `?? []`.
  */
 export interface AgentTemplateListPayload {
   templates: AgentTemplate[];
@@ -104,10 +104,11 @@ export interface AgentTemplateCreateInput {
   /** REPLACE-SET, never merged. Every id must be visible to the caller. */
   knowledgeBaseIds?: string[];
   /**
-   * Put the new template on the /home SHELF instead of the workspace Agents
-   * page. ⚠ A REQUEST, NOT A DECISION: `src/features/agent-templates/server/
-   * service-writes.ts › resolveTemplateHomeScope` is the fence and it 403s
-   * rather than downgrading. Omitted/false = the workspace shelf.
+   * Put the new template on the PERSONAL SHELF instead of the workspace Agents
+   * page. ⚠ A REQUEST, NOT A DECISION, and since 2026-09-02 it ROUTES the row's
+   * container rather than being stored on it: `src/shared/tenancy/
+   * personal-container.ts › personalWriteWorkspaceId` is the fence and it 403s
+   * rather than downgrading. Omitted/false = the container the call is in.
    */
   homeScoped?: boolean;
   /**

@@ -1,25 +1,20 @@
 /**
- * `dopl_agent` WRITE op handlers: create, update. Routed from the registrar in
- * `agent.ts`.
+ * `dopl_agent` WRITE op handlers: create, update, grant. Routed from the
+ * registrar in `agent.ts`.
  *
- * ── THE THREE THINGS EVERY LINE IN HERE RESPECTS ──────────────────────────
+ * ── THE TWO THINGS EVERY LINE IN HERE RESPECTS ────────────────────────────
  *
- * 1. 🔒 **THE HOME-SHELF FENCE IS THE SERVER'S, AND IT REFUSES RATHER THAN
- *    DOWNGRADING.** `src/features/agent-templates/server/service-writes.ts ›
- *    resolveTemplateHomeScope` wants three things at once — a credential that
- *    stands for a PERSON, a PRIVATE row, and the caller's OWN default standard
- *    workspace — and 403s otherwise. Nothing here relaxes it; the only local
- *    work is REFUSING A CONTRADICTION BEFORE THE ROUND TRIP (spec §7.2), the
- *    `channel-ops-write.ts` refuse-before-send idiom.
+ * ⚠ **THE SHELF FENCE THIS HEADER OPENED WITH IS GONE (2026-09-02, slice B15,
+ * ruling B10).** It had three numbered rules; the first two were about
+ * `resolveTemplateHomeScope` and about not confusing it with the credential's
+ * container lock (F-336). The `home_scoped` column is dropped and a personal
+ * template is an ordinary row in the caller's own `kind='personal'` container,
+ * so there is no shelf to fence and no contradiction to refuse before the round
+ * trip. **The container LOCK is untouched** — it was always the thing doing the
+ * work in rule 2 — and it is still what answers a container-locked session that
+ * reaches for a tenancy it is not in.
  *
- * 2. ⚠ **A CONTAINER-LOCKED SESSION IS REFUSED BY B1, NOT BY THE SHELF FENCE,
- *    AND THE TWO MUST NOT BE CONFUSED.** That confusion IS F-336. A container
- *    session is NOT a shared credential — it is one human's session, it owns
- *    private rows exactly as its operator does — and what stops it writing the
- *    operator's personal shelf is the credential's workspace lock answering 403
- *    first. Nothing in this file lets it reach that shelf, and nothing should.
- *
- * 3. ⚠ **THE CONFIRM GATE IS A TRIPWIRE, AND SINCE G16 IT FEEDS A FENCE.** See
+ * 1. ⚠ **THE CONFIRM GATE IS A TRIPWIRE, AND SINCE G16 IT FEEDS A FENCE.** See
  *    `confirm-token.ts`'s header for the tripwire half — nothing here stops an
  *    agent previewing and echoing the token back without showing a human. What
  *    is new is that a SPENT token now sets `acknowledgeShared: true` on the
@@ -28,15 +23,17 @@
  *    refusal, because the refusal belongs to the server that owns the rows.
  *    It fires only for a row landing at `visibility: "workspace"` inside a SHARED
  *    link container — publishing the operator's agent identity into the room a
- *    peer is standing in, which is precisely the argument
- *    `lib/template-draft.ts › containerCopyDraft` was reversed over on
- *    2026-08-27.
+ *    peer is standing in.
  *    ⚠ IT READS THE EXPLICIT `visibility` ONLY. An OMITTED visibility takes the
  *    server's default, which is `private` for every credential that stands for a
  *    person and `workspace` for one that does not — and a credential that does
  *    not is `isSharedCredential`, which B1 keeps out of containers entirely. So
  *    the omitted case cannot publish into a shared room; said here because the
  *    reasoning is not local to this file.
+ *
+ * 2. 🔒 **A GRANT LENDS ONE ROW AND THE FENCE IS BOTH SIDES OF IT** — see
+ *    {@link opGrantTemplate} and `grant.ts`. It replaced `op="copy"`, whose
+ *    two-leg cross-tenancy create is deleted.
  */
 
 import type {
@@ -45,14 +42,23 @@ import type {
   DoplClient,
   TemplateField,
 } from "@dopl/client";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 import { inlineOr } from "./narration.js";
+import {
+  grantedLine,
+  isGrantRefusal,
+  levelForScope,
+  notOwnedRefusal,
+  resolveGrantScopeId,
+  type GrantLevelArg,
+  type GrantScopeArg,
+} from "./grant.js";
 import { ok, err, type ToolResponse } from "./respond.js";
 import {
   confirmGate,
   containerPublishUnacknowledged,
   RECONFIRM_REMEDY,
 } from "./confirm-token.js";
-import { homeShelfForbidden, type ShelfArg } from "./shelf.js";
 import {
   isErr,
   knowledgeBaseNotAttachable,
@@ -71,32 +77,12 @@ export interface TemplateWriteInput {
   fields?: TemplateField[];
   visibility?: OfferedTemplateVisibility;
   knowledge_bases?: string[];
-  shelf?: ShelfArg;
   confirm_token?: string;
-}
-
-/**
- * ⚠ THE CONTRADICTION, REFUSED LOCALLY AND BY NAME. `shelf:"personal"` sends
- * `visibility: "private"`, so an explicit non-private visibility beside it is
- * two incompatible instructions — and the server would answer a 403 whose
- * `reason` ("the home shelf holds private agents only") is correct but reads as
- * a permission problem rather than as a contradiction the caller can fix.
- */
-function shelfVisibilityContradiction(
-  input: TemplateWriteInput,
-): ToolResponse | null {
-  if (input.shelf !== "personal") return null;
-  if (input.visibility === undefined || input.visibility === "private") return null;
-  return err(
-    `Refused before sending: shelf="personal" and visibility="${input.visibility}" contradict each other, so nothing was created. Your personal shelf holds PRIVATE agents only — a template there has exactly one consumer, which is the whole reason it can be called yours. Either drop \`visibility\` (personal implies private) or drop \`shelf\` and share it on the workspace shelf.`,
-  );
 }
 
 /** Map the write errors that have an actionable sentence; rethrow anything
  *  else. ⚠ ONE mapper for both verbs so the two cannot answer differently. */
 function mapWriteError(e: unknown): ToolResponse | null {
-  const home = homeShelfForbidden(e);
-  if (home) return err(home);
   // 🔒 G16 — only ever a RACE on these two verbs: `confirmGate` already
   // previewed and spent a token, so reaching this means the room gained a
   // member in between.
@@ -114,13 +100,8 @@ export async function opCreate(
   callerUserId: string | null,
   input: TemplateWriteInput & { name: string },
 ): Promise<ToolResponse> {
-  const contradiction = shelfVisibilityContradiction(input);
-  if (contradiction) return contradiction;
-
-  const personal = input.shelf === "personal";
-  // 🔒 **VISIBILITY IS ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT** — for
-  // `shelf:"personal"` (or condition 2 refuses on a default the agent never
-  // chose) AND, since 2026-09-02, for the ordinary case too.
+  // 🔒 **VISIBILITY IS ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT**
+  // (2026-09-02).
   //
   // ⚠ **AN OMITTED VISIBILITY WAS AN UNESCAPABLE LOOP.** The server's default is
   // credential-dependent (`service-writes.ts › createTemplate`: a SHARED
@@ -133,9 +114,7 @@ export async function opCreate(
   // ⚠ Sending it makes the wire match what the tool's own description promises
   // ("default 'private'"), so the branch cannot fire at all; a shared credential
   // then gets its clean, named 403 instead of an unanswerable 400.
-  const visibility: OfferedTemplateVisibility = personal
-    ? "private"
-    : (input.visibility ?? "private");
+  const visibility: OfferedTemplateVisibility = input.visibility ?? "private";
 
   const verdict = await confirmGate(
     client,
@@ -151,7 +130,6 @@ export async function opCreate(
         instructions: input.instructions ?? null,
         model: input.model ?? null,
         visibility,
-        shelf: input.shelf ?? null,
         knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
         fields: (input.fields ?? []).map((f) => [f.key, f.value]),
       },
@@ -174,10 +152,6 @@ export async function opCreate(
     // showed nobody anything would re-create the client-side confirm this
     // replaces. See `confirm-token.ts › ConfirmVerdict`.
     acknowledgeShared: verdict.acknowledgedShared || undefined,
-    // ⚠ Only ever `true` — an explicit `false` and an omission mean the same
-    // thing to `resolveTemplateHomeScope` ("the default is false and silent"),
-    // and sending `false` would suggest to a reader that it is examined.
-    homeScoped: personal ? true : undefined,
   };
   let template;
   try {
@@ -187,9 +161,6 @@ export async function opCreate(
     if (mapped) return mapped;
     throw e;
   }
-  const where = personal
-    ? "on your personal shelf"
-    : "on this workspace's shelf";
   // ⚠ TWO ARMS, because `create` sends the two-arm enum and nothing else: the
   // server's own default for an omitted `visibility` is `private`, so this
   // response cannot describe a row at a visibility this surface never offered.
@@ -199,30 +170,18 @@ export async function opCreate(
       : "Shared with everyone in this workspace — every member can list it and launch it.";
   return ok(
     [
-      `Created agent template ${inlineOr(template.name, NO_NAME)} ${where} (id: \`${template.id}\`). ${audience}`,
+      `Created agent template ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`). ${audience}`,
       `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"),
   );
 }
 
-/**
- * ⚠ THE SHELF IS NOT PATCHABLE, AND THE REFUSAL SAYS SO RATHER THAN IGNORING
- * THE ARG. `home_scoped` is set at create and never written again for bases and
- * templates alike (F-342; Samuel's ruling Q8, 2026-08-28 keeps it that way for
- * v1), and the server's update schema does not accept it — so a silently
- * dropped `shelf` here would return a 2xx over a move that never happened.
- */
 export async function opUpdate(
   client: DoplClient,
   callerUserId: string | null,
   ref: string,
   input: TemplateWriteInput,
 ): Promise<ToolResponse> {
-  if (input.shelf !== undefined) {
-    return err(
-      `op="update" does not take \`shelf\`, and nothing was changed. A template's shelf is fixed when it is created and there is no move: to put an existing agent on your personal shelf, create a NEW one there with op="create", shelf="personal". ⚠ The copy and the original are STRANGERS — editing one never touches the other.`,
-    );
-  }
   const patch: AgentTemplateUpdateInput = {
     name: input.name,
     description: input.description,
@@ -285,4 +244,46 @@ export async function opUpdate(
   return ok(
     `Updated agent template ${inlineOr(updated.name, NO_NAME)} (id: \`${updated.id}\`).${note}`,
   );
+}
+
+/**
+ * `op="grant"` — lend ONE template to a channel, container or team. The op that
+ * REPLACED `op="copy"` (Wave B slice B15, ruling B11).
+ *
+ * ⚠ **THIS IS THE `op="share"` §5A SAID WOULD NEVER EXIST, AND THE PREMISE THAT
+ * REFUSED IT DIED IN THE SAME WAVE.** The argument was *"a template has no grant
+ * table, so sharing into a container IS `visibility: 'workspace'` on
+ * `op='update'` — a second verb would be two doors onto one write"*. Since
+ * `20260914120000` a template HAS a grant table (`resource_grants` accepts
+ * `resource_type='agent_template'`), and the two verbs are no longer one write:
+ * `visibility` says who inside THIS container may use the identity, and a grant
+ * lends the row to a scope somewhere else. A personal template lives in the
+ * caller's own personal container, where `visibility:"workspace"` reaches an
+ * audience of one — which is exactly why sharing it needs this op.
+ */
+export async function opGrantTemplate(
+  client: DoplClient,
+  directory: WorkspaceDirectory,
+  selfUserId: string | null,
+  ref: string,
+  scope: GrantScopeArg,
+  to: string,
+  level: GrantLevelArg | undefined,
+): Promise<ToolResponse> {
+  const chosen = levelForScope(scope, level);
+  if (isGrantRefusal(chosen)) return chosen;
+  const found = await resolveTemplateOr(client, ref);
+  if (isErr(found)) return found;
+  const notOwned = notOwnedRefusal(found.createdBy, selfUserId, "agent template", found.name);
+  if (notOwned) return notOwned;
+  const scopeId = await resolveGrantScopeId(directory, scope, to);
+  if (isGrantRefusal(scopeId)) return scopeId;
+  await client.grantResource({
+    resourceType: "agent_template",
+    resourceId: found.id,
+    scopeType: scope,
+    scopeId,
+    level: chosen,
+  });
+  return grantedLine("agent template", found.name, scope, scopeId, chosen);
 }

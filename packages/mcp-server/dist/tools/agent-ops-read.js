@@ -11,7 +11,6 @@ const narration_js_1 = require("./narration.js");
 const untrusted_fence_1 = require("./untrusted-fence");
 const respond_js_1 = require("./respond.js");
 const response_size_js_1 = require("./response-size.js");
-const shelf_js_1 = require("./shelf.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 /** One heading per OFFERED visibility, in the order `op="list"` prints them. */
 const VISIBILITY_HEADINGS = {
@@ -23,23 +22,17 @@ const OFFERED_VISIBILITIES = new Set(agent_shared_js_1.TEMPLATE_VISIBILITY_VALUE
  *  purpose: it exists so a row SHOWS, not so a retired sharing model gets taught
  *  back to the reader one heading at a time. */
 const OTHER_HEADING = "Shared";
-async function opList(client, shelf) {
-    const payload = await client.listAgentTemplatesPayload({
-        shelf: (0, shelf_js_1.toWireShelfOrUndefined)(shelf),
-    });
-    const templates = payload.templates;
-    // 🔒 ⚠ SIBLING KEY, `?? []` INLINE (INVARIANTS §8) — the twin of
-    // `dopl_kb(op="list_bases")`'s. `home_scoped` stays off the row so no client
-    // can re-derive the shelf fence; an absent key leaves every row UNLABELLED,
-    // which is what this surface showed before the key existed.
-    const personal = new Set(payload.homeScopedTemplateIds ?? []);
-    const where = shelf === "personal"
-        ? " on your personal shelf"
-        : shelf === "workspace"
-            ? " on the workspace shelf"
-            : "";
+/**
+ * ⚠ **THE `shelf` ARGUMENT AND ITS `· personal` LABEL LEFT ON 2026-09-02**
+ * (slice B15, ruling B10) — the twin of `dopl_kb(op="list_bases")`'s, for the
+ * same reason: a personal template is an ordinary row in the caller's own
+ * `kind='personal'` CONTAINER, so "which shelf" is the tenancy the call is
+ * already in.
+ */
+async function opList(client) {
+    const templates = (await client.listAgentTemplatesPayload()).templates;
     if (templates.length === 0) {
-        return (0, respond_js_1.ok)(`No agent templates visible to you${where}. ${agent_shared_js_1.TEMPLATES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`);
+        return (0, respond_js_1.ok)(`No agent templates visible to you here. ${agent_shared_js_1.TEMPLATES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`);
     }
     // ⚠ GROUPED BY VISIBILITY because that is the axis a caller acts on ("the
     // private one is mine, the workspace one is everyone's") — and it is what
@@ -58,13 +51,13 @@ async function opList(client, shelf) {
         ]),
         [OTHER_HEADING, templates.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility))],
     ];
-    const lines = [`## Agent templates${where}\n`];
+    const lines = ["## Agent templates\n"];
     for (const [heading, rows] of groups) {
         if (rows.length === 0)
             continue;
         lines.push(`### ${heading}`);
         for (const t of rows)
-            lines.push((0, agent_shared_js_1.templateRow)(t, personal.has(t.id)));
+            lines.push((0, agent_shared_js_1.templateRow)(t));
         lines.push("");
     }
     lines.push(agent_shared_js_1.TEMPLATES_SCOPE_NOTE);

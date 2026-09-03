@@ -133,13 +133,13 @@ export async function shareCtxForTemplates(
  * to every member for as long as nobody compared them.
  *
  * 🔒 ⚠ ARM 2 ASKS `isSharedCredential`, NOT `ctx.apiKeyWorkspaceId` — F-333,
- * ruled by Samuel and fixed 2026-08-27. The old form made every "Use in this
- * channel" copy invisible to the agents running in that channel:
- * `lib/template-draft.ts › containerCopyDraft` FORCES `private` (correctly —
- * "use" must not publish the operator's agent into a room the peer is standing
- * in), and layer B1 sets the lock for every read a session in a shared container
- * makes, so the copy could not be listed, named or resolved by the very agent it
- * was made for. **A container-session credential is the operator's own session**,
+ * ruled by Samuel and fixed 2026-08-27. The old form made every PRIVATE
+ * template invisible to the agents running in a container: layer B1 sets the
+ * lock for every read a session in a shared container makes, so such a row could
+ * not be listed, named or resolved by the very agent it was made for. ⚠ **THE
+ * CASE THAT SURFACED IT WAS THE "Use in this channel" COPY**, which forced
+ * `private` and is deleted in B15; the arm is unchanged and the population it
+ * covers is now every personal row. **A container-session credential is the operator's own session**,
  * so arm 3 (creator) now answers for it exactly as it answers for the operator
  * at their keyboard. ⚠ NO PEER EXPOSURE IS OPENED: the peer, and the peer's own
  * agent, carry the PEER's user id, so arm 3 misses and arm 4 (`private` → nobody

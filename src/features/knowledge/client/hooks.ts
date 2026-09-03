@@ -147,10 +147,10 @@ export function knowledgeBasesCacheSegment(
   // reaches it unchanged. A key off by one ELEMENT is a silent no-op (§8); a
   // key off by one SUFFIX is still reachable. Read that helper's docblock
   // before inventing a fourth shape here.
-  // ⚠ `channelId` WINS when both are given, and no caller gives both: a
-  // container has no home shelf (`resolveHomeScope` fences the marker to the
-  // caller's default STANDARD workspace), so `?channelId=&shelf=home` would be
-  // a question with one possible answer — the empty list.
+  // ⚠ `channelId` WINS when both are given, and no caller gives both: the
+  // personal shelf is the caller's own `kind='personal'` container and a channel
+  // lives in a different one, so `?channelId=&shelf=home` would be a question
+  // with one possible answer — the empty list.
   if (shelf) return `${ws}:shelf:${shelf}`;
   return ws;
 }

@@ -24,11 +24,12 @@ import type { TemplateShelf } from "@/features/agent-templates/types";
  * identities exist here" is the whole reason they are persistent. The
  * destructive verb is the one that is session-gated; see `[templateId]/route.ts`.
  *
- * ⚠ `homeScopedTemplateIds` IS A SIBLING KEY (2026-08-28), not a field on the row.
- * `home_scoped` stays out of `server/dto.ts › AGENT_TEMPLATE_COLS` so the cached
- * row payload gains no new key and §8's stale-cache rule has nothing to apply to
- * THERE; it applies to this key instead, so every reader spells `?? []`. Only ever
- * a SUBSET of the ids in `templates`.
+ * ⚠ `homeScopedTemplateIds` IS A SIBLING KEY (2026-08-28), not a field on the row,
+ * and it outlived the `home_scoped` column: since 2026-09-02 (slice B15) it answers
+ * "is this row in my `kind='personal'` container". The cached row payload gains no
+ * new key either way, so §8's stale-cache rule applies to this key rather than to
+ * the row, and every reader spells `?? []`. Only ever a SUBSET of the ids in
+ * `templates`.
  *
  * ⚠ EACH ROW CARRIES ITS `visibility` SO THE CLIENT CAN GROUP. The server does
  * not group: which sections a surface wants (a spawn picker vs. a settings page)
@@ -71,8 +72,8 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
  * 🔒 AN UNRECOGNISED VALUE IS A 400, NOT AN IGNORED PARAM. Silently dropping a
  * misspelled `?shelf=hom` would answer the WIDER list — the workspace shelf
  * folded back into the /home pane — and it would look like it worked. There is
- * no client-side fallback to catch it: `home_scoped` is never projected. Fail
- * loud, fail narrow. Mirrors `api/knowledge/bases/route.ts › readShelf`.
+ * no client-side fallback to catch it: the shelf is a tenancy the client cannot
+ * re-derive from a row. Fail loud, fail narrow. Mirrors `api/knowledge/bases/route.ts › readShelf`.
  */
 function readShelf(request: NextRequest): TemplateShelf | undefined {
   const raw = request.nextUrl.searchParams.get("shelf");

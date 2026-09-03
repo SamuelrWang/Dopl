@@ -5,7 +5,7 @@
  * registrar in knowledge.ts.
  */
 
-import type { DoplClient, KbShelf } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration";
 import { ok, type ToolResponse } from "./respond";
 import { isErr, resolveBaseOr } from "./knowledge-shared";
@@ -43,48 +43,30 @@ const NO_NAME = "`(unnamed)`";
  * ⚠ Names the FILTERS, never a hidden count — counting what you were not shown
  * is a second query on every list call.
  */
-const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases, and any you have no grant on, are not listed, so this is not the workspace's base count. A row marked \`personal\` is on your own personal shelf and does not appear on the workspace Knowledge page; an UNMARKED row is on the workspace shelf, or on a server too old to say. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
+const BASES_SCOPE_NOTE = `_Bases you can READ here. Another member's private bases, and any you have no grant on, are not listed, so this is not the workspace's base count. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
 
 /**
- * ⚠ `shelf` ABSENT LISTS BOTH SHELVES, and that is the RIGHT answer rather than
- * an oversight (F-342 rules the unfiltered MCP read right and says it "must stay
- * right"): an operator's agent asking "what knowledge is here" should see the
- * operator's whole workspace. The narrowing is a server-side `WHERE`, so a shelf
- * the caller did not ask for never reaches the wire.
+ * ⚠ **THE `shelf` ARGUMENT AND ITS `· personal` LABEL LEFT ON 2026-09-02
+ * (slice B15, ruling B10).** A personal base is no longer a `home_scoped`
+ * BOOLEAN inside a shared workspace — it is an ordinary row in the caller's own
+ * `kind='personal'` CONTAINER — so "which shelf" stopped being a question this
+ * op could ask and became the tenancy the call is already in. Labelling rows
+ * that are all in one container is chrome, and F-342's rule (the unfiltered MCP
+ * read is the right one) is now the only rule there is.
  */
-export async function opListBases(
-  client: DoplClient,
-  shelf?: KbShelf,
-): Promise<ToolResponse> {
-  const payload = await client.listKbBasesPayload({ shelf });
-  const bases = payload.bases;
-  // 🔒 ⚠ SIBLING KEY, `?? []` INLINE (INVARIANTS §8). `home_scoped` is
-  // deliberately not projected onto the row — no client may re-derive the shelf
-  // FENCE — so the label rides beside the list. An ABSENT key (older server,
-  // degraded read) means NO ROW IS LABELLED, which is exactly what this surface
-  // showed before the key existed. The unsafe direction would be calling a
-  // workspace base personal, and nothing here can produce that.
-  const personal = new Set(payload.homeScopedBaseIds ?? []);
-  const where =
-    shelf === "home"
-      ? " on your personal shelf"
-      : shelf === "workspace"
-        ? " on the workspace shelf"
-        : "";
+export async function opListBases(client: DoplClient): Promise<ToolResponse> {
+  const bases = (await client.listKbBasesPayload()).bases;
   if (bases.length === 0)
     return ok(
-      `No knowledge bases visible to you${where}. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`,
+      `No knowledge bases visible to you here. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`,
     );
-  const lines = [`## Knowledge bases${where}\n`];
+  const lines = ["## Knowledge bases\n"];
   for (const b of bases) {
     // ⚠ Immutable id beside the slug — the slug changes on rename.
     const vis = b.visibility === "private" ? "private" : "public";
     const desc = b.description ? `\n  ${inlineOr(b.description, "")}` : "";
-    // ⚠ The label appears only when the flag SAYS SO. An unlabelled row is
-    // "workspace shelf, or unknown" — never asserted as one of the two.
-    const shelfLabel = personal.has(b.id) ? " · personal" : "";
     lines.push(
-      `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis}${shelfLabel})${desc}`,
+      `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
     );
   }
   lines.push("", BASES_SCOPE_NOTE);

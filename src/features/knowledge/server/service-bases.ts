@@ -61,10 +61,11 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
  * must never be handed a wider set; the id set IS the fence, exactly as
  * `service-stars.ts › listStarredBaseIds` states it.
  *
- * ⚠ IT DOES NOT PROJECT `home_scoped` ONTO THE ROW. That column stays out of
- * `KNOWLEDGE_BASE_COLS` so no client can re-derive the shelf FENCE, and out of
- * the SDK-mirrored `KnowledgeBase` so `check-knowledge-type-drift` has nothing
- * new to compare. A sibling key is the shipped answer for this exact shape.
+ * ⚠ IT PROJECTS NOTHING SHELF-SHAPED ONTO THE ROW, and since 2026-09-02 (slice
+ * B15) there is no column to project: the shelf is the row's own container. The
+ * SDK-mirrored `KnowledgeBase` therefore still does not widen
+ * (`check-knowledge-type-drift`), and a sibling key remains the shipped answer
+ * for this exact shape.
  */
 export async function listHomeScopedBaseIds(
   ctx: KnowledgeContext,

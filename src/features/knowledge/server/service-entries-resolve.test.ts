@@ -96,7 +96,7 @@ function resolvedIn(containerId: string): ResolvedResource {
     containerId,
     containerName: "Acme",
     containerKind: "standard",
-    homeScoped: false,
+    ownedByCaller: true,
     containerRole: "admin",
   };
 }

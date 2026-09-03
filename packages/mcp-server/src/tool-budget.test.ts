@@ -139,10 +139,8 @@ function expectRatchet(
  *     never sees is an op it cannot pick, and `parity.test.ts` requires every
  *     enum op to appear as a quoted `"op_name"` with a bullet
  *     `tool-scope-claims.test.ts` then reads. That content cannot leave, so the
- *     ceilings moved to the measured post-trim size — and the trim came first:
- *     `dopl_kb` 3,557 → 3,400 and `dopl_agent` 2,632 → 2,476 by deleting the
- *     halves of the copy/pin bullets that `to_workspace` and `path` already
- *     say. `dopl_channel` had nothing duplicative to give back.
+ *     ceilings moved to the measured post-trim size — and the trim came first.
+ *     (The copy half of that trim is moot since B15 deleted the ops.)
  *
  * ⚠ **A RISE IS A DECISION AND IT IS RECORDED HERE, NOT ABSORBED.** The honest
  * next move for the three is the one `dopl_channel` already made for its LAW: a
@@ -163,13 +161,15 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // FENCE (`untrusted-fence.ts`), not prose. A fence cannot move into a pulled
   // doctrine, because the agent that has not read the doctrine is exactly the
   // one that needs it. Both descriptions FELL by hundreds in the same change.
-  dopl_agent: 1941,
+  // ⚠ 1,941 → 1,797 (B15): the copy bullet and its `to_workspace` gloss out,
+  // one grant bullet in.
+  dopl_agent: 1797,
   // ⚠ 1,591 → 1,596 (B8): barely moved while the string changed completely — 23
   // op names fell to 5, and a generated `Limits:` block took it back.
   // ⚠ 1,596 → 1,587 (B13): the discovery sentence names `dopl_workspaces`.
   dopl_channel: 1587,
   dopl_chats: 1699,
-  dopl_kb: 1947,
+  dopl_kb: 1937, // ⚠ 1,947 → 1,937 (B15) — the copy bullet, minus the grant one
   dopl_members: 1453,
   dopl_ontology: 1924,
   dopl_skill: 1593,
@@ -210,10 +210,12 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // ⚠ **AND THREE MORE ROSE IN THE BATCH-2 REVIEW (2026-09-02), SAME LICENCE** —
   // A16's last three knobs, recorded as shipped and absent from the tree
   // (F-591): `fields=` (+242), `response_format` (+279), `max_chars` (+215).
+  // ⚠ 4,145 → 4,025 (B15): `shelf` + `to_workspace` out, three grant args in
   dopl_agent: 4128,
   // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
   dopl_channel: 8677,
   dopl_chats: 3553,
+  // ⚠ 5,347 → 5,142 (B15), same trade
   dopl_kb: 5330,
   dopl_map: 250,
   dopl_members: 845,
@@ -261,8 +263,9 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // ⚠ **49,790 → 47,021 (B13), A FALL OF 2,769, AND IT IS ALMOST ALL TOOL COUNT:**
 // three meta tools became one (`dopl_home`, `current_workspace`,
 // `list_workspaces` → `dopl_workspaces`), the injected `workspace` contract lost
-// 5 chars × 9 tools, and the briefing fell 56.
-const SERVED_TOTAL_CEILING = 47_021; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review)
+// 5 chars × 9 tools, and the briefing fell 56. **B15 then took the copy ops, the
+// `shelf` axis and its two labels out and put the grant op and its three args in.**
+const SERVED_TOTAL_CEILING = 47_021; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review) → 47,021 (B13) → re-measured at batch-3 integration
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of

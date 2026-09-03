@@ -265,8 +265,8 @@ export function createServer(
   // all five was refused unconditionally, and the rule they advertised is now
   // enforced by `sessionOnly` on the REST routes — see `delete-policy.ts`.
   // 🔒 `directory` is the FOURTH argument and it is the ONLY thing that resolves
-  // `to_workspace` on op="copy_base" — a container id (§4A) resolves, and a
-  // locked session resolves nothing but its own container.
+  // `to` on op="grant" — a container id (§4A) resolves, and a locked session
+  // resolves nothing but its own container.
   registerKnowledgeTools(registerTool, client, caller, directory); // dopl_kb — the user's bases
   registerSkillTools(registerTool, client, caller); // dopl_skill
   registerChatTools(registerTool, client); // dopl_chats — the archive
@@ -292,8 +292,8 @@ export function createServer(
   ); // dopl_channel — cross-user collaboration channels
   // ⚠ `caller` for TWO reasons here: framing another member's INSTRUCTIONS block
   // as untrusted, and binding a confirm token to the identity that previewed.
-  // 🔒 `directory` resolves `to_workspace` on op="copy", the same way it does for
-  // `dopl_kb(op="copy_base")` above.
+  // 🔒 `directory` resolves `to` on op="grant", the same way it does for
+  // `dopl_kb(op="grant")` above.
   registerAgentTools(registerTool, client, caller, directory); // dopl_agent — persistent agent identities
 
   return server;

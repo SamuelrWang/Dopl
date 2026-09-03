@@ -1,12 +1,18 @@
 import "server-only";
-import { isOwnPersonalContainer } from "@/features/workspaces/server/service";
 import type { KnowledgeContext } from "../types";
-import type { KnowledgeBaseCreateInput } from "../schema";
-import { AgentWriteDisabledError, HomeScopeForbiddenError } from "./errors";
+import { AgentWriteDisabledError } from "./errors";
 import { resolveAgentAudience } from "./service-audience";
 
 /**
- * 🔒 THE TWO GATES A KNOWLEDGE-BASE **CREATE** PASSES, and nothing else.
+ * 🔒 THE GATE A KNOWLEDGE-BASE **CREATE** PASSES, and nothing else.
+ *
+ * ⚠ **IT HELD TWO UNTIL 2026-09-02 (slice B15).** `resolveHomeScope` — the
+ * three-condition home-shelf fence — is DELETED with the `home_scoped` column it
+ * answered for; what replaces it is `shared/tenancy/personal-container.ts ›
+ * personalWriteWorkspaceId`, which fences ONE condition (a credential that
+ * stands for a person, with a container) because the other two died with the
+ * `default workspace` and with the shelf-inside-a-shared-workspace it protected.
+ * That module's docblock retires each condition by name.
  *
  * ⚠ **SPLIT OUT OF `service-base-writes.ts` ON 2026-09-02 AT THE §1 CAP** (it
  * measured 498 of 500). The seam is not arbitrary: both functions below are
@@ -16,62 +22,10 @@ import { resolveAgentAudience } from "./service-audience";
  * persists it. A gate that lives beside the insert is a gate a later edit
  * reorders past it.
  *
- * ⚠ NEITHER IS EXPORTED ANY FURTHER THAN THAT MODULE. They are not a general
- * "knowledge gate" surface: `resolveHomeScope` returns a value `createBase`
- * writes onto the row, and {@link assertCreatorCanReadItBack} is meaningful only
- * before an insert that has not happened yet.
+ * ⚠ NOT EXPORTED ANY FURTHER THAN THAT MODULE. This is not a general "knowledge
+ * gate" surface: {@link assertCreatorCanReadItBack} is meaningful only before an
+ * insert that has not happened yet.
  */
-
-/**
- * 🔒 THE HOME-SHELF FENCE — may THIS create land on the /home shelf?
- * (Samuel's ruling 2026-08-26; `20260831120000_knowledge_base_home_scoped.sql`
- * carries the full argument.)
- *
- * Three conditions, ALL required, and each one is a different question:
- *
- *   1. **A PERSON asked.** `isSharedCredential` false. A workspace-scoped key
- *      or a container-locked session is a credential that may be shared between
- *      humans — it has no "my home shelf" to write to, and `canSeeBase` would
- *      not read the row back for it anyway.
- *   2. **PRIVATE.** The shelf is the operator's own; a `public` base on it
- *      would be visible to every member on a surface no member navigates to.
- *      ⚠ Checked against the RESOLVED visibility, not `input.visibility` — the
- *      teams branch above rewrites it to `public`, and reading the raw input
- *      here would let `accessMode: "teams"` onto the shelf.
- *   3. **THE CALLER'S OWN PERSONAL CONTAINER.** `isOwnPersonalContainer` is
- *      the SAME answer `getBootState` gives `POST /api/boot`'s `workspace`,
- *      which is what the /home pane hands `CreateBaseDialog` — so the fence and
- *      the surface cannot disagree about which container "home" means. A link
- *      container fails this, and so does any workspace the caller merely
- *      belongs to. ⚠ Ruling B10: home is a CONSTANT per user, not a lookup, so
- *      there is nothing left here to derive or to tie-break.
- *
- * ⚠ THE DEFAULT IS FALSE AND SILENT. Only an explicit `homeScoped: true` is
- * ever examined, so MCP `kb_create_base` and every other existing caller keep
- * writing workspace-shelf rows with no new failure mode.
- */
-export async function resolveHomeScope(
-  ctx: KnowledgeContext,
-  input: KnowledgeBaseCreateInput,
-  resolvedVisibility: "public" | "private",
-  fromSharedCredential: boolean,
-): Promise<boolean> {
-  if (input.homeScoped !== true) return false;
-  if (fromSharedCredential) {
-    throw new HomeScopeForbiddenError(
-      "a shared credential has no personal shelf",
-    );
-  }
-  if (resolvedVisibility !== "private") {
-    throw new HomeScopeForbiddenError(
-      "the home shelf holds private bases only",
-    );
-  }
-  if (!(await isOwnPersonalContainer(ctx.userId, ctx.workspaceId))) {
-    throw new HomeScopeForbiddenError("it is not your home");
-  }
-  return true;
-}
 
 /**
  * 🔒 **A CREATE MUST NOT PRODUCE A ROW ITS OWN CREATOR CANNOT READ BACK** — the

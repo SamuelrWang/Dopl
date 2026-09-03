@@ -18,12 +18,12 @@ import { getEntry } from "./service-entries";
  * row is personal, but because no request shape may name a workspace either.
  * Both come off `KnowledgeContext`.
  *
- * ⚠ IT IS PATCHABLE WHERE `home_scoped` IS NOT, AND THE ASYMMETRY IS DELIBERATE.
+ * ⚠ IT IS PATCHABLE WHERE THE SHELF IS NOT, AND THE ASYMMETRY IS DELIBERATE.
  * A shelf move is a TENANCY question — which workspace a row belongs to and who
- * can therefore reach it — so `home_scoped` is create-only (F-342; Samuel's
- * ruling Q8, 2026-08-28) and `knowledge-ops-write.ts › opUpdateBase` REFUSES a
- * `shelf` rather than dropping it. A pin changes no audience, no tenancy and no
- * visibility: it decides only whether an agent is HANDED content its caller
+ * can therefore reach it — and since 2026-09-02 (slice B15) it is that
+ * LITERALLY: moving a row between shelves means moving its `workspace_id`, so
+ * the shelf stays create-only (F-342; Samuel's ruling Q8, 2026-08-28). A pin
+ * changes no audience, no tenancy and no visibility: it decides only whether an agent is HANDED content its caller
  * could already read. So it gets two idempotent verbs of its own and is
  * deliberately absent from `../schema.ts › KnowledgeBaseUpdateSchema` and
  * `repository-bases.ts › UpdateBasePatch` — a PATCH arm would be a second door

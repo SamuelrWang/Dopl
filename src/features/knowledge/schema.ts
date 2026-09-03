@@ -169,11 +169,14 @@ export const KnowledgeBaseCreateSchema = z
     /** Initial team grants — only valid with `accessMode: 'teams'`. */
     teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
     /**
-     * Put the new base on the /home SHELF (`types.ts › KbShelf`) instead of the
-     * workspace Knowledge page. ⚠ A REQUEST, NOT A DECISION: the schema only
-     * says the word is spellable — `server/service-base-writes.ts ›
-     * resolveHomeScope` is the fence, and it 403s rather than downgrading.
-     * Omitted/false = the workspace shelf, which is every existing caller.
+     * Put the new base on the PERSONAL SHELF (`types.ts › KbShelf`) instead of
+     * the workspace Knowledge page. ⚠ A REQUEST, NOT A DECISION: the schema only
+     * says the word is spellable — `shared/tenancy/personal-container.ts ›
+     * personalWriteWorkspaceId` is the fence, and it 403s rather than
+     * downgrading. ⚠ **IT ROUTES THE ROW AND NOTHING STORES IT** (2026-09-02,
+     * slice B15): it decides the `workspace_id`, where it used to be written
+     * onto a `home_scoped` column beside one. Omitted/false = the container the
+     * call is in, which is every existing caller.
      */
     homeScoped: z.boolean().optional(),
     /**

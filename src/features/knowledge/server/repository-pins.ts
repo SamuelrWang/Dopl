@@ -24,12 +24,12 @@ import {
  * (`service-bases.ts › listBases` / `› getBaseById`). The id set is the fence,
  * exactly as `repository-stars.ts › listStarredBaseIds` requires.
  *
- * ⚠ `pinned` IS FILTERED AND SET BUT NEVER SELECTED, mirroring
- * `repository-bases.ts › listBasesForWorkspace`'s treatment of `home_scoped`:
- * the column is absent from `dto.ts › KNOWLEDGE_BASE_COLS` /
- * `› KNOWLEDGE_ENTRY_COLS` on purpose, Postgres does not need a column
- * projected to filter on it, and leaving it off the row is what keeps clients
- * from re-deriving the read.
+ * ⚠ `pinned` IS FILTERED AND SET BUT NEVER SELECTED. The column is absent from
+ * `dto.ts › KNOWLEDGE_BASE_COLS` / `› KNOWLEDGE_ENTRY_COLS` on purpose, Postgres
+ * does not need a column projected to filter on it, and leaving it off the row
+ * is what keeps clients from re-deriving the read. ⚠ **THIS NAMED
+ * `home_scoped` AS ITS PRECEDENT UNTIL 2026-09-02**; that column is dropped
+ * (slice B15) and `pinned` is the last of its shape here.
  */
 
 /**

@@ -38,10 +38,7 @@ import { getBaseById } from "./service-bases";
 // module's header for the seam. `assertCreatorCanReadItBack` asks the SAME
 // ceiling question `listBases` / `getBaseBySlug` will ask a millisecond later,
 // or this writes rows nobody can reach.
-import {
-  assertCreatorCanReadItBack,
-  resolveHomeScope,
-} from "./service-base-gates";
+import { assertCreatorCanReadItBack } from "./service-base-gates";
 import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 /**
@@ -112,20 +109,10 @@ export async function createBase(
     resolvedVisibility = "public";
   }
 
-  // 🔒 WHICH SHELF, decided BEFORE the insert loop so a slug retry cannot
-  // re-ask a question with a side effect. Throws rather than returning false.
-  const homeScoped = await resolveHomeScope(
-    ctx,
-    input,
-    resolvedVisibility,
-    fromWorkspaceKey,
-  );
-
   // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
   // visibility, after the teams branch has had its say: `accessMode: "teams"`
   // rewrites it to `public`, and reading `input.visibility` would let that
-  // rewrite publish unacknowledged. Same reason `resolveHomeScope` takes the
-  // resolved value rather than the raw input.
+  // rewrite publish unacknowledged.
   // ⚠ BEFORE THE SLUG LOOP, so a refusal costs no slug and cannot half-land.
   await assertSharedPublishAcknowledged({
     workspaceId: ctx.workspaceId,
@@ -150,8 +137,10 @@ export async function createBase(
         // NOT this column — TRUE here only keeps UI/MCP messaging honest.
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
-        accessMode: wantsTeams ? "teams" : "workspace",
-        homeScoped,
+        // 🔒 A ROUTING FLAG, NOT A COLUMN (B15): it decides the row's
+        // `workspace_id`, and `personalWriteWorkspaceId` REFUSES rather than
+        // falling back when the caller has no personal container.
+        homeScoped: input.homeScoped,
         createdBy: ctx.userId,
       });
       break;

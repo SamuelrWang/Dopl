@@ -32,9 +32,8 @@ import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
 /**
  * The server's 403 code for "a credential that may be shared between humans
  * cannot own a PRIVATE row". ⚠ ONE SPELLING, shared with the knowledge surface
- * (`knowledge-shared.ts › sharedCredentialPrivateBaseDenied`) — both copy ops
- * force `visibility: "private"`, so both can raise it and neither may guess at
- * the string.
+ * (`knowledge-shared.ts › sharedCredentialPrivateBaseDenied`) — both create
+ * paths can raise it and neither may guess at the string.
  */
 export const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 
@@ -243,17 +242,14 @@ export function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null {
 /** One template rendered as a list row. ⚠ Every displayed field is a VALUE
  *  spliced into a line we wrote — name and description are length-bounded only,
  *  so a newline in either would otherwise start a row of its own. */
-export function templateRow(t: AgentTemplate, personal = false): string {
+export function templateRow(t: AgentTemplate): string {
   const desc = t.description ? `\n  ${inlineOr(t.description, "")}` : "";
   const model = t.model ? ` · model ${inlineOr(t.model, "`(unnamed)`")}` : "";
   const kbs =
     t.knowledgeBases.length > 0
       ? ` · ${t.knowledgeBases.length} knowledge base${t.knowledgeBases.length === 1 ? "" : "s"}`
       : "";
-  // ⚠ Present only when the SIBLING KEY says so. An unlabelled row is "workspace
-  // shelf, or a server that does not say" — never asserted as either.
-  const shelf = personal ? " · personal" : "";
-  return `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility}${model}${kbs}${shelf})${desc}`;
+  return `- ${inlineOr(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility}${model}${kbs})${desc}`;
 }
 
 /**
@@ -263,12 +259,11 @@ export function templateRow(t: AgentTemplate, personal = false): string {
  * absent — an untraced filter makes a four-row heading read as the workspace's
  * roster.
  *
- * ⚠ AND THE SHELF IS NOT ON THE ROW. `home_scoped` is deliberately absent from
- * `server/dto.ts › AGENT_TEMPLATE_COLS` so no client can re-implement the fence;
- * the `personal` marker {@link templateRow} prints comes from the response's
- * SIBLING KEY (`homeScopedTemplateIds`), never from the row. Which is why the
- * note below states what an UNMARKED row means — workspace shelf, or a server
- * that does not send the key — rather than letting an absent label be read as an
- * assertion.
+ * ⚠ **THE `· personal` MARKER LEFT ON 2026-09-02 (slice B15, ruling B10).** It
+ * rode a `homeScopedTemplateIds` SIBLING KEY over the `home_scoped` boolean, and
+ * that column is dropped: a personal template is an ordinary row in the caller's
+ * own `kind='personal'` container, so every row a single list returns is on the
+ * same shelf and a per-row label says nothing. **The tenancy is what answers
+ * now**, and the status footer already names it.
  */
-export const TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE. Another member's private templates, and any you have no grant on, are not listed — this is your view, not the workspace's roster. A row marked \`personal\` is on your own personal shelf and does not appear on the workspace Agents page; an UNMARKED row is on the workspace shelf, or on a server too old to say._`;
+export const TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE here. Another member's private templates, and any you have no grant on, are not listed — this is your view, not the workspace's roster._`;

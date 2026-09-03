@@ -62,8 +62,19 @@ const OPEN_SITES: Record<string, string> = {
   // ⚠ Not in ANY slice's `Owns` column, and the migration header says so. It
   // needs assigning before either half of F-564 can be called finished.
   "packages/mcp-server/src/tools/confirm-token.ts":
-    "UNASSIGNED — needs an owner before B15 can close F-564",
-  "packages/mcp-server/src/tools/copy-target.ts": "B15 DELETES the file with the copy ops",
+    "UNASSIGNED — needs an owner before F-564 can be closed",
+  // ⚠ **`copy-target.ts`, `factory.ts`, `meta-tools.ts`, `server.ts` and
+  // `tools/home-scopes.ts` LEFT THIS MAP ON 2026-09-02** — B13 repointed the
+  // three at `workspace-directory.ts › containerKind` and deleted the fourth
+  // with `dopl_home`; B15 deleted the fifth with the copy ops. Each row leaves
+  // in the same change as its code, which is the property the two cases below
+  // assert in both directions.
+  // ⚠ **`src/features/agent-templates/server/service-resolve-ref.ts` NEVER
+  // REACHED THIS MAP AND IS ALSO FIXED IN B15.** Its `tenancyLabel` read the
+  // `home_scoped` boolean first and fell through to `!== "standard"`, so it
+  // would have called every personal container "a home channel of yours" the
+  // moment the column dropped — the same defect, one arm further down, and
+  // invisible to this scan because the boolean hid it.
 };
 
 /**

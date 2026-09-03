@@ -108,15 +108,12 @@ export async function findBaseByPublicId(
  * `service-bases.ts › listBases` — which MUST see both shelves, or a workspace
  * whose only bases are home-scoped would re-seed on every list call.
  *
- * ⚠ `home_scoped` IS FILTERED ON BUT NEVER SELECTED. It is absent from
- * `KNOWLEDGE_BASE_COLS` on purpose (`../types.ts › KbShelf` holds the argument);
- * Postgres does not require a column to be projected to filter on it, and
- * leaving it off the row is what keeps the fence server-side.
- *
- * ⚠ WHICH CONTAINER `shelf="home"` MEANS IS NO LONGER `workspaceId` — it is the
- * caller's PERSONAL CONTAINER once one exists
- * (`shared/tenancy/personal-container.ts`, wave B B11). The decision lives
- * there, in one 2x2; what stays here is applying it.
+ * ⚠ **THE SHELF IS A TENANCY, NOT A `WHERE` (2026-09-02, slice B15).** This
+ * used to filter a `home_scoped` BOOLEAN alongside the workspace; the column is
+ * dropped and `shelf="home"` is the caller's PERSONAL CONTAINER
+ * (`shared/tenancy/personal-container.ts`). The decision lives there; what stays
+ * here is applying it, and it is now one `.in()` rather than an `.in()` plus a
+ * conditional `.eq()`.
  */
 export async function listBasesForWorkspace(
   workspaceId: string,
@@ -131,23 +128,20 @@ export async function listBasesForWorkspace(
     .in("workspace_id", scope.workspaceIds)
     .order("created_at", { ascending: true });
   if (!includeDeleted) query = query.is("deleted_at", null);
-  if (scope.homeScoped !== undefined) {
-    query = query.eq("home_scoped", scope.homeScoped);
-  }
   const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as KnowledgeBaseRow[]).map(mapBaseRow);
 }
 
 /**
- * WHICH of `baseIds` live on the /home SHELF — the fold behind
+ * WHICH of `baseIds` are on the caller's PERSONAL shelf — the fold behind
  * `GET /api/knowledge/bases › homeScopedBaseIds`. One query for N bases.
  *
- * 🔒 ⚠ **THIS IS THE ONLY PLACE `home_scoped` IS SELECTED, AND IT SELECTS THE
- * FLAG ALONE.** The column is deliberately absent from `KNOWLEDGE_BASE_COLS`
- * (`dto.ts`) so no client can re-implement the shelf FENCE from a projected row
- * — and nothing here changes that: what crosses the wire is a set of ids the
- * caller was ALREADY shown, labelled, not a new column on the row.
+ * ⚠ **IT ASKS A TENANCY QUESTION SINCE 2026-09-02 (slice B15).** It selected the
+ * `home_scoped` flag, which was the ONLY place that column was projected; the
+ * column is dropped and the question is "is this row in my personal container".
+ * The answer set is the same one it always returned — ids the caller was ALREADY
+ * shown, labelled — so the wire contract and the sibling key are untouched.
  *
  * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. The id set IS the fence, exactly
  * as `repository-stars.ts › listStarredBaseIds` requires — this function applies
@@ -163,17 +157,13 @@ export async function listHomeScopedBaseIds(
   baseIds: string[]
 ): Promise<string[]> {
   if (baseIds.length === 0) return [];
-  const db = readClient();
   const scope = await resolveShelfScope(workspaceId, "home");
-  let query = db
+  if (scope.workspaceIds.length === 0) return [];
+  const { data, error } = await readClient()
     .from("knowledge_bases")
     .select("id")
     .in("workspace_id", scope.workspaceIds)
     .in("id", baseIds);
-  if (scope.homeScoped !== undefined) {
-    query = query.eq("home_scoped", scope.homeScoped);
-  }
-  const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
 }
@@ -210,10 +200,10 @@ export interface InsertBaseArgs {
   /** `'workspace'` if omitted (matches DB column default). */
   accessMode?: "workspace" | "teams";
   /**
-   * WHICH SHELF (`../types.ts › KbShelf`). `false` if omitted, matching the DB
-   * column default — so the seed path and every batch insert land on the
-   * WORKSPACE shelf without naming it. ⚠ Only `createBase` ever passes `true`,
-   * and only behind its three-part fence.
+   * WHICH SHELF (`../types.ts › KbShelf`). ⚠ **A ROUTING FLAG, NOT A COLUMN,
+   * SINCE 2026-09-02 (slice B15)** — it decides the row's `workspace_id` and
+   * nothing stores it. Absent = the container the call is in, so the seed path
+   * and every batch insert are unchanged; only `createBase` ever passes `true`.
    */
   homeScoped?: boolean;
   createdBy: string | null;
@@ -231,18 +221,18 @@ function baseInsertRow(args: InsertBaseArgs) {
     agent_write_enabled: args.agentWriteEnabled ?? false,
     visibility: args.visibility ?? "public",
     access_mode: args.accessMode ?? "workspace",
-    home_scoped: args.homeScoped ?? false,
     created_by: args.createdBy,
   };
 }
 
 /**
- * ⚠ THE DUAL-WRITE (wave B B11). A base created for the PERSONAL shelf keeps
- * `home_scoped = true` AND is filed in the author's personal container once the
- * flag is on — the two halves of "writes set both" — so the flag can be flipped
- * back without stranding the row. Everything else inserts unchanged; only
- * `insertBase` can be personal, which is why {@link insertBases} (the
- * new-workspace seed, always workspace-shelf) is not on this path.
+ * 🔒 **THE PERSONAL WRITE LANDS IN THE CONTAINER, OR IT REFUSES** (slice B15).
+ * The dual-write this replaced kept `home_scoped = true` beside a `workspace_id`
+ * a flag might or might not have moved; with the column dropped there is one
+ * place a personal row can be, and a fallback would write a row no surface can
+ * find. `personalWriteWorkspaceId` throws rather than guessing. Everything else
+ * inserts unchanged; only `insertBase` can be personal, which is why
+ * {@link insertBases} (the new-workspace seed) is not on this path.
  */
 export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
   const db = supabaseAdmin();

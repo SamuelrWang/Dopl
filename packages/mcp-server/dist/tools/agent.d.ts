@@ -15,8 +15,7 @@
  * Thin registrar: one description + schema + op routing, delegating to
  *   - `agent-shared.ts`    — the three-answer ref resolution + error mappers
  *   - `agent-ops-read.ts`  — list / get
- *   - `agent-ops-write.ts` — create / update (shelf fence + confirm gate)
- *   - `agent-ops-copy.ts`  — copy into another tenancy (two fenced legs)
+ *   - `agent-ops-write.ts` — create / update / grant (confirm gate + grant fence)
  * ⚠ The `agent-` prefix is what the parity split-scan groups on.
  */
 import type { DoplClient } from "@dopl/client";

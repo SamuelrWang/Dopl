@@ -1,5 +1,5 @@
 /**
- * `dopl_kb` non-destructive WRITE op handlers: create/update/set_visibility
+ * `dopl_kb` non-destructive WRITE op handlers: create/update/set_visibility/grant
  * on bases, create/move folders, write/move entries. Every write maps @dopl/client errors — conflict (412),
  * already-exists (409), agent-write-denied (403), and validation (400) —
  * to actionable tool messages. Routed from the registrar in knowledge.ts.
@@ -20,7 +20,16 @@ import {
   containerPublishUnacknowledged,
   RECONFIRM_REMEDY,
 } from "./confirm-token";
-import { homeShelfForbidden, type ShelfArg } from "./shelf";
+import type { WorkspaceDirectory } from "../workspace-directory";
+import {
+  grantedLine,
+  isGrantRefusal,
+  levelForScope,
+  notOwnedRefusal,
+  resolveGrantScopeId,
+  type GrantLevelArg,
+  type GrantScopeArg,
+} from "./grant";
 
 /**
  * ⚠ Write confirmations read back the STORED value, not the argument (a
@@ -33,8 +42,8 @@ const NO_PATH = "`(unreadable path)`";
 
 /**
  * A 403 `AGENT_WRITE_DISABLED` off `create_base` — ⚠ duck-typed on the CODE, the
- * shape `homeShelfForbidden` above established, so no new error class crosses
- * the package boundary. Returns the server's own sentence, which is the one
+ * shape every mapper in this file follows, so no new error class crosses the
+ * package boundary. Returns the server's own sentence, which is the one
  * place this refusal is worded.
  */
 function agentCreateForbidden(e: unknown): string | null {
@@ -50,23 +59,15 @@ function agentCreateForbidden(e: unknown): string | null {
 }
 
 /**
- * 🔒 CREATE, ON EITHER SHELF, WITH THE TWO GATES THE SPEC PUTS AROUND IT.
+ * 🔒 CREATE, WITH THE ONE GATE THE SPEC PUTS AROUND IT.
  *
- * 1. **THE SHELF CONTRADICTION IS REFUSED LOCALLY, BEFORE THE ROUND TRIP**
- *    (spec §7.2, the `channel-ops-write.ts` refuse-before-send idiom).
- *    `shelf: "personal"` sends `homeScoped: true` + `visibility: "private"`, so
- *    an explicit `visibility: "public"` beside it is two incompatible
- *    instructions — and the server's 403 ("the /home shelf holds private bases
- *    only") is correct but reads as a permission problem rather than as
- *    something the caller can fix by dropping one argument.
+ * ⚠ **THE TWO SHELF RULES THIS DOCBLOCK OPENED WITH ARE GONE (2026-09-02, slice
+ * B15, ruling B10)** — the local shelf/visibility contradiction and the server's
+ * `resolveHomeScope`. The `home_scoped` column is dropped and a personal base is
+ * an ordinary row in the caller's own `kind='personal'` container, so there is
+ * no second shelf for a `public` base to contradict.
  *
- * 2. 🔒 **THE HOME-SHELF FENCE STAYS THE SERVER'S.**
- *    `src/features/knowledge/server/service-base-writes.ts › resolveHomeScope`
- *    wants a PERSON's credential, a PRIVATE row, and the caller's OWN default
- *    standard workspace, all three, and 403s otherwise. Nothing here relaxes it
- *    — `shelf.ts › homeShelfForbidden` only makes the refusal actionable.
- *
- * 3. ⚠ **THE CONFIRM GATE IS A TRIPWIRE** (see `confirm-token.ts`). It fires
+ * ⚠ **THE CONFIRM GATE IS A TRIPWIRE** (see `confirm-token.ts`). It fires
  *    only for `visibility: "public"` inside a SHARED link container — a base
  *    published into the room a peer is standing in, which is the knowledge half
  *    of the audience-changing class. It does NOT fire in a standard workspace:
@@ -80,17 +81,10 @@ export async function opCreateBase(
   input: {
     name: string;
     description?: string;
-    shelf?: ShelfArg;
     visibility?: "public" | "private";
     confirm_token?: string;
   },
 ): Promise<ToolResponse> {
-  const personal = input.shelf === "personal";
-  if (personal && input.visibility !== undefined && input.visibility !== "private") {
-    return err(
-      `Refused before sending: shelf="personal" and visibility="${input.visibility}" contradict each other, so nothing was created. Your personal shelf holds PRIVATE bases only — a public base on it would be readable by every member on a surface no member navigates to. Either drop \`visibility\` (personal implies private) or drop \`shelf\`.`,
-    );
-  }
   // 🔒 **ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT** (2026-09-02) — the same
   // rule and the same reason as `agent-ops-write.ts › opCreate`, which states it
   // in full: the server's default is credential-dependent, this process cannot
@@ -98,7 +92,7 @@ export async function opCreateBase(
   // resolve to `public`, trip G16 and answer a 400 whose remedy was "preview
   // again" — the thing the caller had just done. `"private"` is what this tool's
   // `visibility` description already promises as the default.
-  const visibility = personal ? "private" : (input.visibility ?? "private");
+  const visibility = input.visibility ?? "private";
 
   const verdict = await confirmGate(
     client,
@@ -112,7 +106,6 @@ export async function opCreateBase(
         name: input.name,
         description: input.description ?? null,
         visibility,
-        shelf: input.shelf ?? null,
       },
     },
     { publishes: visibility === "public", token: input.confirm_token },
@@ -129,13 +122,8 @@ export async function opCreateBase(
       // `true`, and only from a token this call actually consumed. See
       // `confirm-token.ts › ConfirmVerdict`.
       acknowledgeShared: verdict.acknowledgedShared || undefined,
-      // ⚠ Only ever `true` — an explicit `false` and an omission mean the same
-      // thing to `resolveHomeScope` ("the default is false and silent").
-      homeScoped: personal ? true : undefined,
     });
   } catch (e) {
-    const home = homeShelfForbidden(e);
-    if (home) return err(home);
     // ⚠ THE AUDIENCE CEILING'S CREATE REFUSAL, RENDERED AS A REFUSAL rather
     // than rethrown as a transport-shaped error (F-323's authoring half). The
     // server's message already names the room, the cause and the remedy —
@@ -155,32 +143,12 @@ export async function opCreateBase(
     base.visibility === "private"
       ? "Private to you — only you and your agent can see it."
       : "Visible to the whole workspace.";
-  const shelfNote = personal
-    ? " It is on your personal shelf, so the workspace Knowledge page will not list it."
-    : "";
   return ok(
-    `Created knowledge base ${inlineOr(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}${shelfNote}`
+    `Created knowledge base ${inlineOr(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}`
   );
 }
 
-/**
- * ⚠ THE SHELF IS NOT PATCHABLE, AND THE REFUSAL SAYS SO RATHER THAN IGNORING
- * THE ARG — the twin of `agent-ops-write.ts › opUpdate`'s, word for word in
- * substance. `home_scoped` is set at create and never written again for bases
- * and templates alike (F-342; Samuel's ruling Q8, 2026-08-28 keeps it that way
- * for v1), and the server's update schema does not accept it — so a silently
- * dropped `shelf` here would return a 2xx over a move that never happened.
- *
- * ⚠ `shelf` RIDES `dopl_kb`'s SHARED OP SCHEMA, so it is spellable on every op;
- * this is the ONE other op where it would read as an instruction the server
- * carried out. The reads ignore it exactly as `dopl_agent(op="get")` does.
- */
-export async function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string, shelf?: ShelfArg): Promise<ToolResponse> {
-  if (shelf !== undefined) {
-    return err(
-      `op="update_base" does not take \`shelf\`, and nothing was changed. A base's shelf is fixed when it is created and there is no move: to put an existing base on your personal shelf, create a NEW one there with op="create_base", shelf="personal". ⚠ The copy and the original are STRANGERS — writing to one never touches the other.`,
-    );
-  }
+export async function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   let updated;
@@ -445,4 +413,41 @@ export async function opMoveFile(client: DoplClient, ref: string, from_path: str
     );
   }
   return ok(`Entry moved: ${inlineOr(from_path, NO_PATH)} → ${inlineOr(to_path, NO_PATH)}.`);
+}
+
+/**
+ * `op="grant"` — lend ONE base to a channel, container or team. The op that
+ * REPLACED `op="copy_base"` (Wave B slice B15, ruling B11).
+ *
+ * ⚠ **THE RESOLVE IS THE ORDINARY ONE.** `resolveBaseOr` answers what this
+ * caller may see, `notOwnedRefusal` then narrows that to what they CREATED (R2),
+ * and the server repeats both — this tier exists to spend no round trip on a
+ * refusal it can already prove and to say WHY, where the server's uniform 404
+ * deliberately cannot.
+ */
+export async function opGrantBase(
+  client: DoplClient,
+  directory: WorkspaceDirectory,
+  selfUserId: string | null,
+  ref: string,
+  scope: GrantScopeArg,
+  to: string,
+  level: GrantLevelArg | undefined,
+): Promise<ToolResponse> {
+  const chosen = levelForScope(scope, level);
+  if (isGrantRefusal(chosen)) return chosen;
+  const base = await resolveBaseOr(client, ref);
+  if (isErr(base)) return base;
+  const notOwned = notOwnedRefusal(base.createdBy, selfUserId, "knowledge base", base.name);
+  if (notOwned) return notOwned;
+  const scopeId = await resolveGrantScopeId(directory, scope, to);
+  if (isGrantRefusal(scopeId)) return scopeId;
+  await client.grantResource({
+    resourceType: "knowledge_base",
+    resourceId: base.id,
+    scopeType: scope,
+    scopeId,
+    level: chosen,
+  });
+  return grantedLine("knowledge base", base.name, scope, scopeId, chosen);
 }

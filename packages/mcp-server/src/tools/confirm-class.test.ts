@@ -1,10 +1,11 @@
 /**
- * THE TWO MECHANISMS MCP SURFACE V2 WAVE A ADDS, checked where they bite.
+ * THE MECHANISMS MCP SURFACE V2 WAVE A ADDS, checked where they bite.
+ * ⚠ **THIS FILE WAS `shelf-confirm.test.ts` UNTIL 2026-09-02**; it was renamed
+ * with the axis it named.
  *
- *   A. THE SHELF AXIS on `dopl_kb` — the operator's noun (`personal`) mapped
- *      onto the wire's (`home`) in ONE place, the asymmetric absent-argument
- *      rule (READ = both shelves, WRITE = the workspace shelf), and the
- *      home-shelf fence's 403 arriving as something a caller can act on.
+ *   A. THE `dopl_kb` CREATE WRITE — one surviving assertion; the SHELF AXIS
+ *      this file was named for is deleted (2026-09-02, slice B15, ruling B10)
+ *      and the section comment below says what went with it.
  *
  *   B. 🔒 THE CONFIRM CLASS — dry run, then an opaque single-use token bound to
  *      the exact payload, the caller and the room. ⚠ IT IS A TRIPWIRE, NOT A
@@ -17,8 +18,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 
-import { opListBases } from "./knowledge-ops-read";
-import { opCreateBase, opUpdateBase } from "./knowledge-ops-write";
+import { opCreateBase } from "./knowledge-ops-write";
 import { opCreate } from "./agent-ops-write";
 import { stub } from "./narration-fixtures";
 import { __resetConfirmTokensForTest } from "./confirm-token";
@@ -85,15 +85,6 @@ function workspaceStub(
 /** A `kind='link'` container with a PEER in it — the only room the class fires in. */
 const sharedContainer = () => workspaceStub("link", 2);
 
-function apiError(status: number, code: string, apiMessage?: string): Error {
-  return Object.assign(new Error(`HTTP ${status}`), {
-    name: "DoplApiError",
-    status,
-    code,
-    apiMessage,
-  });
-}
-
 /** The token the preview handed back. */
 function tokenIn(text: string): string {
   const m = /confirm_token="([^"]+)"/.exec(text);
@@ -106,54 +97,25 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// ── A. The shelf axis ────────────────────────────────────────────────
+// ── A. The shelf axis — 🔒 DELETED 2026-09-02 (slice B15, ruling B10) ─────
+//
+// ⚠ **NINE CASES STOOD HERE AND ALL NINE ARE GONE, NOT ADAPTED.** They pinned
+// the `personal` → `home` wire mapping, the asymmetric absent-argument rule, the
+// `homeScopedBaseIds` sibling label (present, absent and fail-safe), the
+// local personal+public contradiction, the fence's 403 and the no-shelf-move
+// refusal on `update_base`. Every one of them was an assertion about the
+// `home_scoped` BOOLEAN, which the migration drops: a personal base is now an
+// ordinary row in the caller's own `kind='personal'` container, so there is no
+// axis left to map, label, contradict or refuse a move along.
+//
+// ⚠ **WHAT SURVIVES IS ONE LINE OF THE OLD SECTION, MOVED INTO THE CREATE
+// ASSERTION BELOW**: the write still SENDS `visibility` explicitly rather than
+// leaving it to the server's credential-dependent default, and that rule is
+// nothing to do with shelves — it is what stops a shared credential resolving to
+// `public`, tripping G16 and answering an unanswerable 400.
 
-describe("dopl_kb — the shelf argument", () => {
-  it("READ: absent asks for BOTH shelves; personal maps to the wire's `home`", async () => {
-    const list = vi.fn(async () => ({ bases: [BASE] }));
-    const client = stub({ listKbBasesPayload: list }) as DoplClient;
-
-    await opListBases(client);
-    expect(list).toHaveBeenCalledWith({ shelf: undefined });
-
-    await opListBases(client, "home");
-    expect(list).toHaveBeenLastCalledWith({ shelf: "home" });
-  });
-
-  it("READ: the SIBLING KEY labels a personal row, and only that row", async () => {
-    // 🔒 `home_scoped` is deliberately absent from the DTO so no client can
-    // re-implement the fence, so the label rides BESIDE the list.
-    const other = { ...BASE, id: "kb-2", slug: "shared", name: "Shared" };
-    const text = textOf(
-      await opListBases(
-        stub({
-          listKbBasesPayload: vi.fn(async () => ({
-            bases: [BASE, other],
-            homeScopedBaseIds: ["kb-1"],
-          })),
-        }) as DoplClient,
-      ),
-    );
-    expect(text).toContain("`notes` · id: `kb-1` · private · personal");
-    // ⚠ The row NOT in the key carries no label at all — never "workspace",
-    // which would be an assertion the server did not make.
-    expect(text).toContain("id: `kb-2` · private)");
-  });
-
-  it("READ: an ABSENT sibling key leaves every row UNLABELLED (§8, fail-safe)", async () => {
-    // ⚠ THE DIRECTION THAT MATTERS. An older server sends no key; the reflex
-    // fallback would be to guess, and a guess here mislabels a workspace base as
-    // personal. Unknown must render as nothing.
-    const text = textOf(
-      await opListBases(
-        stub({ listKbBasesPayload: vi.fn(async () => ({ bases: [BASE] })) }) as DoplClient,
-      ),
-    );
-    expect(text).not.toContain("· personal");
-    expect(text).toContain("id: `kb-1` · private)");
-  });
-
-  it("WRITE: absent shelf writes the WORKSPACE shelf — homeScoped is never sent as false", async () => {
+describe("dopl_kb — the create write", () => {
+  it("SENDS visibility explicitly, and sends no shelf of any kind", async () => {
     const create = vi.fn(async () => BASE);
     await opCreateBase(
       stub({ ...workspaceStub("standard", 3), createKbBase: create }) as DoplClient,
@@ -163,87 +125,11 @@ describe("dopl_kb — the shelf argument", () => {
     expect(create).toHaveBeenCalledWith({
       name: "Notes",
       description: undefined,
-      // 🔒 **SENT, NOT OMITTED** (2026-09-02). The server's default is
-      // credential-dependent and this process cannot see which credential it
-      // holds — an omitted value let a SHARED one resolve to `public`, trip G16
-      // and answer a 400 whose remedy was "preview again", which is what the
-      // caller had just done. `"private"` is what this tool's own description
-      // promises as the default, so the wire now says it.
       visibility: "private",
-      homeScoped: undefined,
     });
   });
-
-  it('WRITE: shelf="personal" sends homeScoped AND an explicit private visibility', async () => {
-    const create = vi.fn(async () => BASE);
-    await opCreateBase(
-      stub({ ...workspaceStub("standard", 3), createKbBase: create }) as DoplClient,
-      ME,
-      { name: "Notes", shelf: "personal" },
-    );
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ homeScoped: true, visibility: "private" }),
-    );
-  });
-
-  it("WRITE: personal + public is refused LOCALLY, before any round trip", async () => {
-    const create = vi.fn();
-    const res = await opCreateBase(
-      stub({ ...workspaceStub("standard", 3), createKbBase: create }) as DoplClient,
-      ME,
-      { name: "Notes", shelf: "personal", visibility: "public" },
-    );
-    expect(res.isError).toBe(true);
-    expect(create).not.toHaveBeenCalled();
-    expect(textOf(res)).toContain("Refused before sending");
-  });
-
-  it("🔒 the fence's 403 SURFACES with its reason and with nothing created", async () => {
-    const res = await opCreateBase(
-      stub({
-        ...workspaceStub("standard", 3),
-        createKbBase: vi.fn(async () => {
-          throw apiError(
-            403,
-            "HOME_SCOPE_FORBIDDEN",
-            "This base cannot be created on your /home shelf — a shared credential has no personal shelf.",
-          );
-        }),
-      }) as DoplClient,
-      ME,
-      { name: "Notes", shelf: "personal" },
-    );
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain("a shared credential has no personal shelf");
-    expect(textOf(res)).toContain("Nothing was created");
-  });
-
-  /**
-   * ⚠ THE TWIN OF `agent-fences.test.ts › op=update REFUSES a shelf`. `shelf`
-   * rides `dopl_kb`'s SHARED op schema, so it is spellable on update_base — and
-   * a silently dropped one would answer 2xx over a shelf move that never
-   * happened. The two tools must refuse it identically or an agent learns the
-   * rule from one and unlearns it on the other.
-   */
-  it("WRITE: op=update_base REFUSES a shelf rather than dropping it — there is no move", async () => {
-    const update = vi.fn();
-    const list = vi.fn();
-    const res = await opUpdateBase(
-      stub({ updateKbBase: update, listKbBases: list }) as DoplClient,
-      "notes",
-      "Renamed",
-      undefined,
-      undefined,
-      "personal",
-    );
-    expect(res.isError).toBe(true);
-    expect(update).not.toHaveBeenCalled();
-    // ⚠ Refused BEFORE the ref is even resolved — no round trip at all.
-    expect(list).not.toHaveBeenCalled();
-    expect(textOf(res)).toContain("nothing was changed");
-    expect(textOf(res)).toContain('op="create_base", shelf="personal"');
-  });
 });
+
 
 // ── B. The confirm class ─────────────────────────────────────────────
 

@@ -86,8 +86,9 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
    not a leak, so it does not block the code landing; it blocks the migration running. Either each
    site asks `kind === "link"`, or B13/B15 delete the surface — but only if the deletion lands
    FIRST. `confirm-token.ts` is in no slice's `Owns` column and needs assigning.
-3. **B8's ruling still stands:** `20260907130000_channel_pings` is deleted, unapplied, forever.
-4. ⚠ **Replay is SKIPPED — Docker is down** (`docker info` fails), as it has been for all of wave A
+3. 🔒 **`20260923120000_drop_home_scoped` HAS TWO PRECONDITIONS, AND THEY ARE NOT THE SAME (B15, 2026-09-02).** **P1** — `20260920120000` has run, so its §5 one-time move has already filed every `home_scoped` row in its author's container. **P2** — `TENANCY_PERSONAL_CONTAINER` has been DEFAULT-ON for a full release, and B15's code is deployed. ⚠ **P2 IS THE ORDERING TRAP.** §5's move ran ONCE; the flag decided where personal writes landed AFTERWARDS, so there is a window — containers minted, flag still off — in which every new personal write went to the shared workspace carrying the boolean. **Dropping the column then publishes those rows to their workspace with nothing anywhere that could notice.** The migration's §1 RAISEs on any such row rather than trusting the order; the flag is deleted from the code by B15, so once this file is applied there is nothing left for it to decide. The B15 code may land before the flag flip — it is the MIGRATION that waits.
+4. **B8's ruling still stands:** `20260907130000_channel_pings` is deleted, unapplied, forever.
+5. ⚠ **Replay is SKIPPED — Docker is down** (`docker info` fails), as it has been for all of wave A
    and all of wave B. Every claim above is read out of SQL TEXT. Only a database can say what a
    trigger does: F-461's grant probes and F-563's four personal-container claims are still owed.
 
@@ -124,7 +125,7 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
 |---|---|
 | **B13** `workspace=` off — ✅ **LANDED 2026-09-02** | the session-pin module, the home-scopes module, the no-default refusal, the auto-target, both pin ops, `dopl_home`; `current_workspace`+`list_workspaces` → one `dopl_workspaces` (**13 → 11 tools, measured**; served 49,790 → 47,021). Its four `!isStandardWorkspace` sites are closed and out of F-564's map |
 | **B14** default workspace off | `ensureDefaultWorkspace` → `ensurePersonalContainer`; `findDefaultWorkspaceForUser` → `findSoleOwnedStandardWorkspace`, billing-only; both `resolveHomeScope` copies repointed; `20260802200000` + `20260823160000`'s guard dropped; `default_workspace_of()` — ⚠ **NOT "for the revert only": it is a LIVE DEPENDENCY of `ensure_personal_container`**, which mints a container FROM today's default and reads it for the name and `created_at` (corrected 2026-09-02, in review). Dropping it before that mint stops running is a `CREATE OR REPLACE` away from an apply failure, not a tidy-up |
-| **B15** copies off | the copy ops (681 MCP lines + 490 draft/UI), `shelf.ts` (+ its `SHELF_ARG_DESCRIPTION` "default workspace" wording and ratchet), `copy-target.ts`, `home_scoped` on both tables |
+| **B15** copies off ✅ **DONE 2026-09-02** | the copy ops (681 MCP lines: `knowledge-ops-copy` 377 + `agent-ops-copy` 138 + the shared copy-target 166) + their two test files, the whole MCP shelf module and its argument, both `resolveHomeScope` copies, and `home_scoped` on both tables. ⚠ **`template-draft.ts` AND the deleted /home copy dialog (B15) ARE 490 LINES AND ONLY 240 OF THEM WERE THE COPY** — the deleted /home copy dialog (B15) (194) went whole, `containerCopyDraft` (~46) came out of `template-draft.ts`, and the other 250 are the shared editor draft, which `template-editor.tsx`, `agent-editor.tsx` and `agent-templates-core.tsx` all import |
 | **B16** old ops + TS fences off | the 22 one-line redirects, the `await` lane (AWAITING 3,914 + two handlers + the budget module), the ping lane, the five `canSee*` predicates one at a time behind green redteam tests |
 | **B9/B10 residue** | `channel_resource_grants` + the in-txn mirror, after `repository-audience.ts › listGrantedBaseIdsForChannels` moves (F-460); `agentIdsInChannel` and its two re-exports (F-579); `use-agents-panel.ts`'s duplicate thread-other-party derivation (F-551) |
 
@@ -222,7 +223,7 @@ files exist only where the object they change is live.
 | `personal-container.ts` — flipping the flag ON HID every row written before it | `d7758ae3` — the read stops asking the flag (F-590) |
 | A16's three response-size knobs recorded as shipped, absent from the tree | `175db662` — **D3**, all three wired (F-591) |
 | `law-scan.test.ts` globbed one tool; five strings routed to retired ops | `7708499a` — every non-test module, plus a retired-op check (F-592) |
-| four doc claims measured against the tree | `162a599b` — the retired-op count, G20/F-450, `default_workspace_of`, `shelf.ts`'s refusal |
+| four doc claims measured against the tree | `162a599b` — the retired-op count, G20/F-450, `default_workspace_of`, the MCP shelf module's refusal (that module is deleted in B15) |
 | the delivery ack proved the session, never that the message was FOR it | `b6f5dadb` — fence (3) (F-593) |
 | Cursor's frozen table fell through to `full` for the profile it refuses | same commit (F-594) |
 | a bare `node --test` failed permanently on an Electron entry point | same commit — `scripts/smoke.js` (F-595) |

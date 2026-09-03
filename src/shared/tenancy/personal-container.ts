@@ -1,62 +1,44 @@
 import "server-only";
+import { HttpError } from "@/shared/lib/http-error";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getCallerScope } from "@/shared/supabase/caller-scope";
 
 /**
  * THE PERSONAL CONTAINER — one `kind='personal'` workspace per user, and the
- * one place the personal shelf's ADDRESS is decided (Samuel's ruling B10 + #18,
+ * one place the personal shelf's ADDRESS is decided (Samuel's rulings B10 + #18,
  * `supabase/migrations/20260920120000_workspace_kind_personal.sql`).
  *
- * 🔒 **THE SHELF STOPS BEING A `WHERE` AND BECOMES A TENANCY.** Today a personal
- * row is `home_scoped = true` inside whichever standard workspace a lookup
- * called "the default"; after B11 it is an ordinary row in a container the user
- * owns and is the only member of. That is what lets a personal template or KB be
- * used from ANY container the user is in — the id resolves its own container
- * (`resolve-resource.ts`) and sharing it is a GRANT, not a copy.
+ * 🔒 **THE SHELF IS A TENANCY NOW, AND THE `WHERE` IS GONE (2026-09-02, slice
+ * B15).** Until `20260923120000_drop_home_scoped.sql` a personal row was
+ * `home_scoped = true` inside whichever standard workspace a lookup called "the
+ * default"; the column is dropped and it is an ordinary row in a container the
+ * user owns and is the only member of. That is what lets a personal template or
+ * KB be used from ANY container the user is in — the id resolves its own
+ * container (`resolve-resource.ts`) and sharing it is a GRANT, not a copy.
  *
- * ── ⚠ THE 2x2 THIS MODULE EXISTS TO MAKE SAFE ─────────────────────────────
+ * ── ⚠ WHAT THIS MODULE LOST, AND WHY THE LOSS IS THE POINT ────────────────
  *
- * The migration and the deploy move independently, so all four combinations of
- * (containers minted?) x ({@link TENANCY_PERSONAL_CONTAINER_ENV} on?) happen for
- * real, and **each one must read back every row the others wrote**:
+ * It carried a 2x2 over (containers minted?) x (`TENANCY_PERSONAL_CONTAINER`
+ * on?) and a UNION read that had to find personal rows in EITHER place, because
+ * the migration and the deploy moved independently. **`home_scoped` was what
+ * made the union possible and also what made it necessary**: every personal row
+ * carried the boolean wherever it lived, so one predicate found all of them.
+ * With the column dropped there is exactly one place a personal row can be, so
+ * the union, the flag and the fallback all go — and the flag's absence is a
+ * PRECONDITION on the migration, not a simplification of it:
  *
- * | minted | flag | personal shelf reads            | a personal write lands in |
- * |--------|------|---------------------------------|---------------------------|
- * | no     | any  | `W` + `home_scoped`             | `W` (today, unchanged)    |
- * | yes    | any  | `W` **or** `C`, + `home_scoped` | off → `W`; on → `C`       |
+ * > 🔒 **`20260923120000` MAY ONLY BE APPLIED AFTER `TENANCY_PERSONAL_CONTAINER`
+ * > HAS BEEN ON FOR A FULL RELEASE**, so that every personal row written since
+ * > `20260920120000`'s one-time move already sits in a container. The migration's
+ * > header states this and its `DO $$` block RAISEs rather than trusting it.
  *
- * 🔒 **THE READ DOES NOT BRANCH ON THE FLAG AT ALL, AND THAT IS THE FIX FOR
- * F-590.** It used to: flag ON read `C` ALONE. The migration and the flag move
- * independently, so **there is a window — containers minted, flag still off — in
- * which every new personal row lands in `W`**, and the one-time move in
- * `20260920120000` §5 has already run and never runs again. Flipping the flag ON
- * then HID every row written in that window: no error, no log, a shelf that
- * silently lost the last N days of work, and no reader anywhere that could
- * notice.
- *
- * ⚠ **THE UNION IS CORRECT IN EVERY CELL, WHICH IS WHY THE BRANCH WENT RATHER
- * THAN GAINING A THIRD ARM.** `home_scoped` is not cleared by the move — the
- * migration says so in as many words (*"the column still carries the truth"*)
- * and the write path never touches it — so **every personal row carries
- * `home_scoped = true` wherever it lives**, and one predicate finds all of them.
- * The alternative was re-running the move at flip time, which is a migration
- * that has to be scheduled against a flag flip; this is a `WHERE … IN (…)` with
- * one extra element.
- *
- * ⚠ **IT DOES NOT WIDEN.** Both arms keep `home_scoped`, `C` has exactly one
- * member at every moment, and a `home_scoped` row of ANOTHER member sitting in
- * `W` is still refused by `canSeeBase` / `canSeeTemplate` — this module answers
- * WHERE, never WHO.
- *
- * ⚠ **SO THE FLAG NOW MOVES WRITES ONLY** ({@link personalContainerWritesEnabled}),
- * and the rollback property it was named for is unchanged and now symmetric:
- * what ON writes, OFF reads, and what OFF writes, ON reads.
- *
- * ⚠ **THE WORKSPACE SHELF DOES NOT MOVE IN THIS SLICE.** `shelf="workspace"`
- * keeps its `home_scoped = false` filter under both flag states, and an ABSENT
- * shelf keeps meaning "everything in `W`, no filter". A row that has not been
- * migrated yet must not surface on the shared shelf just because the flag went
- * on, and the redundant-once-migrated predicate costs one indexed boolean.
+ * ⚠ **THE FALLBACK IS GONE IN BOTH DIRECTIONS, DELIBERATELY.** The old write
+ * path fell back to the given `workspaceId` whenever anything was missing — the
+ * flag off, the author unknown, the container not minted. Every one of those
+ * fallbacks now writes a row that NOTHING can find: there is no marker left to
+ * distinguish it from a workspace-shelf row, so a personal create with no
+ * container REFUSES ({@link PersonalContainerMissingError}) rather than landing
+ * somewhere the surface that asked for it will never list.
  *
  * ⚠ **NOT A VISIBILITY GATE.** This module answers WHERE a row lives. Who may
  * read it is still `canSeeBase` / `canSeeTemplate` and their RLS twins, applied
@@ -69,30 +51,46 @@ import { getCallerScope } from "@/shared/supabase/caller-scope";
 export type PersonalShelf = "home" | "workspace";
 
 /**
- * ⚠ OPT-IN, AND THE ABSENT VALUE IS THE SAFE ONE — the same shape as
- * `caller-client.ts › RLS_CALLER_SCOPED_READS_ENV`, deliberately, because a
- * second spelling of "is this flag on" is how two flags come to disagree.
- */
-export const TENANCY_PERSONAL_CONTAINER_ENV = "TENANCY_PERSONAL_CONTAINER";
-
-const ON_VALUES = new Set(["1", "true", "on"]);
-
-/**
- * Does a personal WRITE land in the container?
+ * 🔒 **THE PERSONAL-SHELF FENCE, AND IT IS THE ONLY ONE LEFT.**
  *
- * ⚠ Read PER CALL, never captured at module load — flipping the flag must need
- * no redeploy.
- * ⚠ **NAMED FOR WRITES SINCE 2026-09-02 (F-590)**, because that is now the only
- * thing it decides: the personal READ is the union under both flag states, so a
- * row written in the migrated-but-flag-off window is not stranded by the flip.
- * The ENV VAR is unchanged — it is a deploy contract.
+ * ⚠ **IT REPLACES `resolveHomeScope` AND `resolveTemplateHomeScope`, BOTH
+ * DELETED (2026-09-02, slice B15).** Those were two hand-mirrored copies of one
+ * three-condition fence — a PERSON's credential, a PRIVATE row, and the caller's
+ * own DEFAULT STANDARD WORKSPACE — and each condition died for its own reason:
+ *
+ *   1. **A PERSON asked** — kept, and it is the whole of this error's first
+ *      cause. A credential that may be passed between humans stands for nobody
+ *      in particular, so there is no "my container" to point it at.
+ *   2. **PRIVATE** — moot. It existed because a `public` row on a shelf inside a
+ *      SHARED workspace was readable by every member on a surface no member
+ *      navigates to. A personal container has exactly one member, so its
+ *      audience is the same either way.
+ *   3. **THE CALLER'S OWN DEFAULT STANDARD WORKSPACE** — gone with the concept
+ *      (ruling B10). The container is the caller's by construction: it is looked
+ *      up BY OWNER, so there is no second workspace to confuse it with and no
+ *      derived-default lookup to keep in step with `POST /api/boot`. ⚠ The old
+ *      condition NAMED that lookup; this docblock may not, because the case
+ *      below bans the name from this module in either half of the file.
+ *
+ * ⚠ **REFUSE, NEVER DOWNGRADE** — unchanged: both features answered 403 and
+ * neither silently created on the other shelf.
+ *
+ * ⚠ **ONE CLASS, ONE WIRE CODE, WHERE THERE WERE TWO.**
+ * `HomeScopeForbiddenError` / `TEMPLATE_HOME_SCOPE_FORBIDDEN` were a pair of
+ * hand-mirrors over a pair of hand-mirrored fences, and both are deleted with
+ * them. It extends `HttpError`, so `shared/api/http-error-response.ts`'s
+ * pass-through carries it at EVERY boundary with no per-feature mapping arm —
+ * which is the whole reason there is nothing left to keep in step.
  */
-export function personalContainerWritesEnabled(
-  env: Record<string, string | undefined> = process.env
-): boolean {
-  const raw = env[TENANCY_PERSONAL_CONTAINER_ENV];
-  if (typeof raw !== "string") return false;
-  return ON_VALUES.has(raw.trim().toLowerCase());
+export class PersonalContainerMissingError extends HttpError {
+  constructor(reason: string) {
+    super(
+      403,
+      "PERSONAL_CONTAINER_MISSING",
+      `This cannot be created on your personal shelf — ${reason}.`
+    );
+    this.name = "PersonalContainerMissingError";
+  }
 }
 
 /**
@@ -126,17 +124,11 @@ export async function findPersonalContainerId(
 /**
  * The CURRENT request's personal container.
  *
- * 🔒 **A SHARED CREDENTIAL HAS NO PERSONAL SHELF** — arm 1 of both
- * `resolveHomeScope` fences, restated rather than re-decided. A credential that
- * may be passed between humans stands for nobody in particular, so there is no
- * "my container" for it to be pointed at.
- *
  * ⚠ Reads the caller off `caller-scope.ts`'s AsyncLocalStorage for the same
  * reason `readClient()` does: the repositories take no context argument, and
- * threading one would be a 406-site edit landing in the same change as the first
- * moved row. A read OUTSIDE a request (cron, ingestion, a script) finds no scope
- * and gets `null`, which is today's behaviour — the correct answer for a system
- * path, which has no personal shelf either.
+ * threading one would be a 406-site edit. A read OUTSIDE a request (cron,
+ * ingestion, a script) finds no scope and gets `null`, which is the correct
+ * answer for a system path — it has no personal shelf either.
  */
 async function callerPersonalContainerId(): Promise<string | null> {
   const scope = getCallerScope();
@@ -146,65 +138,72 @@ async function callerPersonalContainerId(): Promise<string | null> {
 
 /** Where a shelf-scoped read looks, resolved once per query. */
 export interface ShelfScope {
-  /** ⚠ ALWAYS an `IN` list, never an `eq`: the flag-off personal read spans two
-   *  containers and every other case is the same shape with one element. */
+  /** ⚠ STILL AN `IN` LIST, though every case now has exactly one element (or
+   *  none): the repositories apply it with `.in()` and a shape change here would
+   *  be a two-feature edit for no gain. An EMPTY list is the fail-safe read — a
+   *  caller with no personal container has no personal rows. */
   workspaceIds: string[];
-  /** `home_scoped` to require, or `undefined` to apply no shelf filter. */
-  homeScoped: boolean | undefined;
 }
 
 /**
- * WHERE `shelf` lives for this caller — the whole of the 2x2 in the module
- * header, decided once and applied by each query in two lines (a PostgREST
- * builder is generic over its table, so the DECISION is shared and the
- * application is not).
+ * WHERE `shelf` lives for this caller.
+ *
+ * ⚠ **THE `homeScoped` HALF OF THIS ANSWER IS GONE (slice B15)** along with the
+ * column it named, so `shelf="workspace"` and an ABSENT shelf are now the SAME
+ * scope — the container the call is in. They stay two spellings because they are
+ * two questions: absent means "no filter was asked for" and `workspace` means
+ * "the shared shelf, explicitly", and a caller that has to be told they are the
+ * same answer has learned something that will stop being true if a third shelf
+ * ever exists.
  */
 export async function resolveShelfScope(
   workspaceId: string,
   shelf: PersonalShelf | undefined
 ): Promise<ShelfScope> {
-  if (shelf === undefined) return { workspaceIds: [workspaceId], homeScoped: undefined };
-  if (shelf === "workspace") return { workspaceIds: [workspaceId], homeScoped: false };
-
-  // ⚠ THE FLAG IS NOT ASKED HERE (F-590) — see the module header's table. Both
-  // places a personal row can be carry `home_scoped = true`, so one predicate
-  // over both containers finds every one of them under either flag state.
+  if (shelf !== "home") return { workspaceIds: [workspaceId] };
   const containerId = await callerPersonalContainerId();
-  if (containerId === null) return { workspaceIds: [workspaceId], homeScoped: true };
-  return { workspaceIds: [workspaceId, containerId], homeScoped: true };
+  // ⚠ EMPTY, NOT `[workspaceId]`. Falling back to the calling workspace would
+  // answer a request for the personal shelf with the SHARED one's rows, which is
+  // the widening direction — and it is what the `home_scoped` filter used to
+  // stop from happening by accident.
+  return { workspaceIds: containerId === null ? [] : [containerId] };
 }
 
-/** The three fields of an insert this decision reads. ⚠ Both features' insert
+/** The two fields of an insert this decision reads. ⚠ Both features' insert
  *  args already have exactly these, which is why one call serves both. */
 export interface ShelfBoundInsert {
   workspaceId: string;
-  /** `false`/absent = the workspace shelf, matching both DB column defaults. */
+  /** `false`/absent = the workspace shelf — the container the call is in. */
   homeScoped?: boolean;
   createdBy: string | null;
 }
 
 /**
- * WHERE an INSERT lands — the dual-write's other half. The row still carries
- * `home_scoped` exactly as it does today; what the flag moves is the
- * `workspace_id` beside it, and only for a personal one.
+ * 🔒 WHERE AN INSERT LANDS, and the fence that refuses rather than guessing.
  *
- * ⚠ KEYED ON THE ROW'S AUTHOR, NOT ON THE AMBIENT CALLER, and the two are the
- * same person by construction: a personal write only reaches here through
- * `resolveHomeScope`, whose first condition is that a PERSON asked. Taking the
- * author makes the write path independent of the request store, so a seed, a
- * script or a test writes the same row a request does.
+ * ⚠ **`homeScoped` IS A ROUTING FLAG NOW, NOT A COLUMN.** It used to be written
+ * onto the row beside a `workspace_id` the flag might or might not have moved;
+ * it decides the `workspace_id` and nothing else, and nothing stores it.
  *
- * ⚠ FALLS BACK TO THE GIVEN `workspaceId` whenever anything is missing — the
- * flag is off, the row is not personal, the author is unknown, or the container
- * is not minted yet — so a deploy landing ahead of the migration writes exactly
- * what it writes today.
+ * ⚠ KEYED ON THE ROW'S AUTHOR, NOT ON THE AMBIENT CALLER. Taking the author
+ * makes the write path independent of the request store, so a seed, a script or
+ * a test writes the same row a request does — and for a personal write the two
+ * are the same person by construction, because only a person can ask for one.
  */
 export async function personalWriteWorkspaceId(
   args: ShelfBoundInsert
 ): Promise<string> {
   if (args.homeScoped !== true) return args.workspaceId;
-  if (args.createdBy === null || !personalContainerWritesEnabled()) {
-    return args.workspaceId;
+  if (args.createdBy === null) {
+    throw new PersonalContainerMissingError(
+      "a shared credential has no personal shelf"
+    );
   }
-  return (await findPersonalContainerId(args.createdBy)) ?? args.workspaceId;
+  const containerId = await findPersonalContainerId(args.createdBy);
+  if (containerId === null) {
+    throw new PersonalContainerMissingError(
+      "your personal container has not been created yet"
+    );
+  }
+  return containerId;
 }

@@ -309,7 +309,7 @@ describe("the miss that is not a mystery", () => {
       containerId: OTHER_WS,
       containerName: "Acme",
       containerKind: "standard",
-      homeScoped: false,
+      ownedByCaller: true,
       containerRole: "member",
       ...over,
     };
@@ -328,16 +328,20 @@ describe("the miss that is not a mystery", () => {
     });
   });
 
-  it("calls the PERSONAL SHELF the personal shelf, never a workspace", async () => {
-    // ⚠ A `home_scoped` row is `private` by fence, so the only way it reached
-    // the caller-owned arm of the query is that the caller created it — this
-    // label is a statement about their own rows and nobody else's.
+  it("calls the PERSONAL CONTAINER the personal container, never a home channel", async () => {
+    // ⚠ **THE LABEL IS A CONTAINER KIND SINCE 2026-09-02 (B15, F-564).** It read
+    // the `home_scoped` boolean; the column is dropped and a personal row is an
+    // ordinary row in the caller's own `kind='personal'` container.
+    // ⚠ **THIS IS THE CASE F-564 NAMED**: a personal container is not standard,
+    // so with the boolean gone and the arms in their old order every personal
+    // row would have rendered as "a home channel of yours" plus an id the
+    // caller has no use for.
     vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
-      elsewhere({ homeScoped: true }),
+      elsewhere({ containerKind: "personal" }),
     ]);
     expect(await resolveTemplateRef(ctx, "Code Auditor")).toEqual({
       kind: "elsewhere",
-      template: { name: "Code Auditor", label: "your personal shelf" },
+      template: { name: "Code Auditor", label: "your personal container" },
     });
   });
 
@@ -368,7 +372,7 @@ describe("the miss that is not a mystery", () => {
     // refusal read differently on two consecutive calls — so it is sorted.
     vi.mocked(tenancy.resolveResourcesByName).mockResolvedValue([
       elsewhere({ containerName: "Zephyr" }),
-      elsewhere({ homeScoped: true }),
+      elsewhere({ containerKind: "personal" }),
     ]);
     expect(await resolveTemplateRef(ctx, "Code Auditor")).toEqual({
       kind: "elsewhere",

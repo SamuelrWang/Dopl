@@ -80,8 +80,8 @@ const CLOSED: EditorState = { open: false, template: null, session: 0 };
 /**
  * 🔒 WHICH SHELF THIS PAGE IS. ⚠ FORGETTING IT WIDENS: an omitted `shelf` means
  * BOTH shelves, which is the pre-ruling behaviour and looks exactly like working
- * code. There is no client-side fallback filter anywhere in this chain —
- * `home_scoped` is deliberately never projected.
+ * code. There is no client-side fallback filter anywhere in this chain — the
+ * shelf is a TENANCY the client is never handed on the row.
  */
 const WORKSPACE_SHELF: TemplateShelf = "workspace";
 
@@ -91,7 +91,8 @@ export function AgentTemplatesCore({
   loadingSkeleton,
 }: AgentTemplatesCoreProps) {
   // 🔒 THE WORKSPACE SHELF, AND THE EXCLUSION RUNS BOTH WAYS (Samuel's ruling
-  // 2026-08-27, `20260901120000_agent_template_home_scoped.sql`). This page and
+  // 2026-08-27; structural since 2026-09-02, when the shelf became a separate
+  // CONTAINER rather than a boolean beside one). This page and
   // /home → Agents → Personal are two PLACES over one table: a template created
   // from the /home pane does not appear here, and this page's creates do not
   // appear there. A shelf that is its own place in one direction only is just a

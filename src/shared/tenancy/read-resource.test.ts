@@ -45,7 +45,7 @@ function elsewhere(over: Partial<ResolvedResource> = {}): ResolvedResource {
     containerId: WS_B,
     containerName: "Acme",
     containerKind: "standard",
-    homeScoped: false,
+    ownedByCaller: true,
     containerRole: "admin",
     ...over,
   };

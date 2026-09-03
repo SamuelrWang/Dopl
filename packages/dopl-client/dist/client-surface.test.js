@@ -166,6 +166,9 @@ const PUBLIC_SURFACE = [
     "getSkill",
     "getWorkspace",
     "getWorkspaceId",
+    // LEND ONE RESOURCE TO ONE SCOPE (2026-09-02, wave B B15) — the write that
+    // replaced the two MCP copy ops. On link 2 because a grant is cross-domain.
+    "grantResource",
     "inviteToChannel",
     "listAgentTemplates",
     "listAgentTemplatesPayload",
@@ -286,6 +289,19 @@ function captureWire() {
         ["getWorkspace", (c) => c.getWorkspace("s p"), { path: "/api/workspaces/s%20p", method: "GET", tool: "get_workspace" }],
         ["getActiveWorkspace", (c) => c.getActiveWorkspace(), { path: "/api/workspaces/me", method: "GET", tool: "get_active_workspace" }],
         ["pingMcpStatus", (c) => c.pingMcpStatus(), { path: "/api/user/mcp-status", method: "POST", tool: "_mcp_status_ping" }],
+        // ⚠ PUT, not POST: the write states an END STATE and the server upserts on
+        // the grant's primary key, so a retry after an ambiguous failure is a no-op.
+        [
+            "grantResource",
+            (c) => c.grantResource({
+                resourceType: "knowledge_base",
+                resourceId: "kb-1",
+                scopeType: "channel",
+                scopeId: "ch-1",
+                level: "visible",
+            }),
+            { path: "/api/resource-grants", method: "PUT", tool: "resource_grant" },
+        ],
     ];
     for (const [name, call, expected] of cases) {
         (0, vitest_1.it)(`${name} hits ${expected.method} ${expected.path}`, async () => {

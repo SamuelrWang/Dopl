@@ -4944,7 +4944,7 @@ than leaving a dependency nobody exercised.
 each call site — it is a ternary. What makes that expensive is the FAILURE MODE, which the route's
 own `readShelf` already documents: an unrecognised shelf answers the WIDER list. A second mapping
 that drifts does not throw; it quietly folds the workspace shelf back into the personal pane. So
-`tools/shelf.ts › toWireShelf` is the only place either word is translated, and both tools call it.
+the MCP shelf module's `toWireShelf` was the only place either word was translated, and both tools called it. ⚠ **THE WHOLE AXIS LEFT THAT SURFACE ON 2026-09-02** (wave B slice B15, ruling B10): the module, the argument and the mapper are deleted, because a personal row is now an ordinary row in the caller's own `kind='personal'` container and the tenancy answers the question. The REST `?shelf=` guards survive and are still hand-mirrored — `scripts/check-knowledge-type-drift.ts` counts three classes now, not five.
 
 The same file carries the ASYMMETRY, because that is the other thing an agent gets wrong here:
 absent `shelf` means BOTH shelves on a read and the WORKSPACE shelf on a write. Those are different
@@ -5043,9 +5043,11 @@ is `dopl_channel`, which stays out and denied, and authoring a template starts n
 ### Mutation-verified, because a green suite proves nothing on its own
 
 Two mutations, per INVARIANTS §14. `confirmGate`'s publishing branch forced open (`if (true)`) →
-**9 of 20** failures in `shelf-confirm.test.ts`. `shelf.ts › homeShelfForbidden` short-circuited to
-`return null` → **3** failures across `shelf-confirm.test.ts` and `agent-ops.test.ts`. Both restored;
-full suites re-run green afterwards.
+**9 of 20** failures in the shelf-and-confirm suite. The MCP `homeShelfForbidden` mapper
+short-circuited to `return null` → **3** failures across that suite and `agent-ops.test.ts`. Both
+restored; full suites re-run green afterwards. ⚠ **BOTH THE MAPPER AND THE SHELF HALF OF THAT SUITE
+WERE DELETED ON 2026-09-02** (wave B slice B15); the file is `packages/mcp-server/src/tools/confirm-class.test.ts`
+now and the confirm mutation above still applies to it.
 
 ---
 
@@ -6195,3 +6197,73 @@ so the TS predicate is the only live fence, and deleting one would replace a fen
 is off, on a table that does not exist, proved by a job that has not run. **A conditional row whose
 condition is unmet is not a row you execute carefully; it is a row you do not execute.** F-650 states
 the two preconditions so the next slice can check them instead of re-deriving the argument.
+
+## 2026-09-02 — Wave B slice B15: what a copy cost, and why the shelf could not stay a boolean
+
+**Two rulings landed together and the second is what made the first cheap.** B11: *grants replace
+copies*. B10: one personal container per user, so the `home_scoped` flag retires. Taken separately
+each is a deletion; taken together they are the same deletion twice, because the copy ops existed to
+work around the thing the shelf was.
+
+**What the copy actually was.** `dopl_agent(op="copy")` and `dopl_kb(op="copy_base")` composed two
+already-fenced legs — read in the source, create in the target — precisely so no new cross-tenancy
+authz path had to be written. That was a good decision and it is why the ops shipped with no
+migration and no route. What it could not fix is what a copy IS: a second row that diverges from the
+first the moment it lands. Every rule the surface accumulated followed from that and from nothing
+else. The template copy DROPPED its attached knowledge bases, because a base id from the source
+workspace means nothing in the target and the target's own attach gate would 404 it — so the thing
+that arrived wore the operator's agent's name and could not read what that agent read. The `visibility`
+was FORCED, and the forced value was reversed once (2026-08-27, `private` → `workspace`) when the
+container's private section was deleted and a private copy became reachable from nowhere. The name
+was carried unchanged because templates have no uniqueness constraint to dodge, which is correct and
+also means two identical names in one list. And the confirm dialog's job was largely to say those
+three things out loud before the operator pressed.
+
+**A grant answers all of it by not making a second row.** The template stays in its author's
+container, its attachments still resolve there, an edit reaches everyone it is lent to, and there is
+one name. `resource_grants` had shipped in B1 with a validity trigger and five resource types and
+**no door outside the app's own team and channel-grant panels** — so the user-facing half of B11 was
+one route, not a feature. What did NOT move is the ownership fence: R2 (*you lend what you created,
+not what you can read*) is carried over verbatim onto both tiers, because a grant widens an audience
+in exactly the direction a copy did.
+
+**F-419 is disposed by deletion rather than fixed, and the difference is worth keeping.** That entry
+said the ownership rule lived only in the MCP package while the REST create routes it composed over
+had no equivalent, and proposed a provenance field carried into two schemas and two services. Nobody
+built it. There is no client-composed create left to attribute, so the gap it described cannot be
+reached — and the two-layer fence it insisted on exists anyway, because the new door has a server
+side. **A finding closed by deleting its subject is not the same as a finding fixed**, and the entry
+says which.
+
+**Why the shelf could not stay a boolean, and the ordering trap under it.** B11's dual-write was a
+2x2 over (containers minted?) × (`TENANCY_PERSONAL_CONTAINER` on?), and what made every cell safe was
+that `home_scoped` rode the row wherever it lived: one predicate found every personal row in either
+container. That property is also what made the flag *removable* — and it is exactly what the drop
+takes away. After `20260923120000` there is one place a personal row can be, so every fallback in
+that module becomes a row nothing can find: a read that falls back answers a request for the PERSONAL
+shelf with the SHARED workspace's rows, and a write that falls back lands on a shelf no surface will
+list. Both now fail closed — empty, and a 403.
+
+**The trap is that the migration's two preconditions are not the same precondition.** P1 (the
+one-time move has run) is the obvious one. P2 is that the flag has been DEFAULT-ON for a full
+release: the move ran ONCE, and the flag decided where personal writes landed *afterwards*, so a
+window with containers minted and the flag still off leaves rows on a shared workspace's shelf that
+the drop would publish to every member of it, with no marker left and no reader that could notice.
+This is F-590's shape read backwards — that finding was about the flag flip HIDING rows written in
+the same window — and it is why the migration's first statement is a `RAISE` rather than a comment.
+
+**Two hand-mirrored fences became one, and the mirrors were the reason.** `resolveHomeScope` and
+`resolveTemplateHomeScope` were one three-condition rule written twice, and their docblocks had
+already drifted into arguing about each other (a template's `private` is TERMINAL, a KB's is a
+FLOOR). Both are deleted. Of the three conditions only *a credential that stands for a person*
+survives; `private` was protecting a shelf that sat inside a SHARED workspace, and a container has
+one member, while *the caller's own default standard workspace* went with the concept B10 removes.
+**Two error classes and two wire codes collapsed with them** into one that extends `HttpError`, so
+no feature carries a mapping arm — which is the only way a shared fence stops growing new mirrors.
+
+**One thing shipped incomplete, deliberately, and it is recorded rather than smoothed over.** A
+grant is written and the lent row does not yet appear in the target's list (F-604): `canSeeTemplate`
+and `agent_templates_member_select` are ONE RULE WRITTEN TWICE and may only move together, and that
+pair belongs to B12/B16 with the redteam suites that prove it. Adding an arm to a predicate this
+slice does not own, whose twin lives in another slice's unapplied migration, is the exact drift
+`20260716150000_chats_team_aware_rls.sql` is the record of.

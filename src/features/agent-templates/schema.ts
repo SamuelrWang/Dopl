@@ -175,12 +175,13 @@ export const AgentTemplateCreateSchema = z
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
     /**
-     * Put the new template on the /home SHELF (`types.ts › TemplateShelf`)
-     * instead of the workspace Agents page. ⚠ A REQUEST, NOT A DECISION: the
-     * schema only says the word is spellable — `server/service-writes.ts ›
-     * resolveTemplateHomeScope` is the fence, and it 403s rather than
-     * downgrading. Omitted/false = the workspace shelf, which is every existing
-     * caller.
+     * Put the new template on the PERSONAL SHELF (`types.ts › TemplateShelf`)
+     * instead of the workspace Agents page. ⚠ A REQUEST, NOT A DECISION, AND IT
+     * ROUTES THE ROW RATHER THAN BEING STORED ON IT (2026-09-02, slice B15) —
+     * the twin of `knowledge/schema.ts › homeScoped`, which carries the
+     * argument. `shared/tenancy/personal-container.ts › personalWriteWorkspaceId`
+     * is the fence and it 403s rather than downgrading. Omitted/false = the
+     * container the call is in, which is every existing caller.
      */
     homeScoped: z.boolean().optional(),
     /**

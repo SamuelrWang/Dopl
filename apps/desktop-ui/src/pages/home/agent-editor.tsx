@@ -55,7 +55,7 @@ import { useTeams } from "@/features/members/hooks/use-teams";
  * because `emptyDraft()` starts at `private` and a draft opening on a value the
  * control cannot show is a form with no visible selection.
  * ⚠ A home-workspace template saved as Team or Public LANDS OUTSIDE THE PERSONAL
- * SECTION, which lists `private` + mine + `home_scoped`. That is correct, not a
+ * SECTION, which lists `private` + mine on the personal shelf. That is correct, not a
  * bug: the row is in the operator's own workspace and its home is that
  * workspace's Agents page (`/:workspaceSegment/agents`).
  *
@@ -82,10 +82,10 @@ export interface HomeTemplateEditorProps {
  * ⚠ NO `useTeams` CALL IN THIS COMPONENT, and that is the assertion. See the
  * module docblock.
  *
- * ⚠ NO `shelf` EITHER. Shelves live only in a standard workspace
- * (`resolveTemplateHomeScope` fences the marker to the caller's own default
- * one), so the container's list and its cache entry are the UNFILTERED ones —
- * and the writes below must address that same entry.
+ * ⚠ NO `shelf` EITHER. A shelf is a TENANCY and this container is not the
+ * caller's personal one, so `?shelf=` here would be a question with one possible
+ * answer: the container's list and its cache entry are the UNFILTERED ones, and
+ * the writes below must address that same entry.
  */
 export function ContainerTemplateEditor({
   workspaceId,
@@ -136,9 +136,10 @@ export function HomeWorkspaceTemplateEditor({
       teams={teams ?? NO_TEAMS}
       sections={SECTIONS}
       // 🔒 THE SHELF THE PERSONAL SECTION READS. It does two things and both
-      // are silent when wrong: it sends `homeScoped: true` so the row lands on
-      // the shelf this pane lists, and it keys the cache entry the optimistic
-      // patch addresses (F-331, with the shelf as a second axis).
+      // are silent when wrong: it sends `homeScoped: true`, which ROUTES the row
+      // into the caller's personal container (the shelf this pane lists), and it
+      // keys the cache entry the optimistic patch addresses (F-331, with the
+      // shelf as a second axis).
       shelf="home"
       onClose={onClose}
     />

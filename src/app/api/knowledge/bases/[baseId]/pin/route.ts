@@ -20,7 +20,8 @@ import { buildKnowledgeContext, pinBase } from "@/features/knowledge/server/serv
  * ⚠ THERE IS DELIBERATELY NO PATCH ARM ON THE BASE ROUTE. `pinned` is absent from
  * `features/knowledge/schema.ts › KnowledgeBaseUpdateSchema`, so this file is the only door;
  * adding the field there would be a second one, with a second gate to keep in step. (Its
- * near-twin `home_scoped` is create-only for a different reason — a shelf is TENANCY. See
+ * near-twin, the SHELF, is create-only for a different reason and is literally a tenancy since
+ * 2026-09-02 — moving it would mean moving the row's `workspace_id`. See
  * `features/knowledge/server/service-pins.ts`.)
  */
 

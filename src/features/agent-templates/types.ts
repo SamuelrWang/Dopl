@@ -58,19 +58,20 @@ export interface TemplateKnowledgeBaseRef {
 /**
  * WHICH SHELF a template lives on — the /home Agents pane's "Personal" section,
  * or the workspace Agents page. Two PLACES over one table (Samuel's ruling
- * 2026-08-27; `20260901120000_agent_template_home_scoped.sql`), and they
- * exclude each other BOTH ways.
+ * 2026-08-27) and, since 2026-09-02, two CONTAINERS: the boolean of
+ * `20260901120000` is dropped by `20260923120000_drop_home_scoped.sql` and the
+ * personal shelf is the caller's own `kind='personal'` workspace. See
+ * `features/knowledge/types.ts › KbShelf`, which carries the argument.
  *
  * ⚠ MIRRORED FROM `features/knowledge/types.ts › KbShelf`, NOT IMPORTED — §1
  * forbids the cross-feature import, and `canSeeBase` is mirrored into this
  * feature for the same reason. Same vocabulary, two declarations, on purpose.
  *
  * ⚠ NOT A FIELD ON `AgentTemplate`, and never make it one. It is a WRITE input
- * (`AgentTemplateCreateInput.homeScoped`) and a READ FILTER
- * (`GET /api/agent-templates?shelf=`); the stored `home_scoped` column is
- * deliberately absent from `server/dto.ts › AGENT_TEMPLATE_COLS`, so the cached
- * list payload gains no new key and §8's stale-cache rule has nothing to apply
- * to.
+ * (`AgentTemplateCreateInput.homeScoped`, which ROUTES the row) and a READ
+ * FILTER (`GET /api/agent-templates?shelf=`); nothing shelf-shaped is projected
+ * onto the row, so the cached list payload gains no new key and §8's
+ * stale-cache rule has nothing to apply to.
  *
  * 🔒 IT IS NOT THE VISIBILITY AXIS. `visibility` says who may READ; this says
  * which surface LISTS. `canSeeTemplate` never sees it.

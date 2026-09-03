@@ -10,6 +10,15 @@ export {
 } from "./errors.js";
 export { isStandardWorkspace } from "./types.js";
 export type {
+  ChannelGrantLevel,
+  ContainerGrantLevel,
+  GrantLevel,
+  GrantResourceType,
+  GrantScopeType,
+  ResourceGrantInput,
+  ResourceGrantResult,
+} from "./grant-types.js";
+export type {
   BuildResult,
   CreditConsumeResponse,
   WorkspaceKind,

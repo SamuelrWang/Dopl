@@ -69,73 +69,23 @@ export function draftFromTemplate(template: AgentTemplate): TemplateDraft {
 }
 
 /**
- * THE COPY — one home-workspace template, as a draft for a NEW row in a link
- * CONTAINER ("Use in this channel", `docs/specs/home-agents-tab.plan.md` §3 and
- * Samuel's ruling Q2, 2026-08-26).
+ * ⚠ **`containerCopyDraft` STOOD HERE UNTIL 2026-09-02 (wave B slice B15,
+ * Samuel's ruling B11: *grants replace copies*).** It composed the "Use in this
+ * channel" copy: `draftFromTemplate` with `visibility` forced to `workspace` and
+ * both id sets cleared, because a home-workspace KB id meant nothing in the
+ * container and carrying it turned a copy into a failed write.
  *
- * ⚠ WHY A COPY AT ALL, since a "share across workspaces" flag sounds simpler: a
- * scope-C template COULD NOT LAUNCH INTO A CONTAINER. `getTemplateById` was
- * workspace-filtered and `/resolve` passes the LAUNCH workspace, so the id 404'd
- * — a same-workspace trigger, not a permission anyone lacked. This is
- * CLIENT-COMPOSED over the EXISTING POST: no new route, no new service, no
- * server change.
+ * **Nothing replaced it in this module.** The control is a GRANT now
+ * (`apps/desktop-ui/src/pages/home/agent-share.tsx`), which writes a
+ * `resource_grants` row and composes no draft at all — there is no second
+ * template to build.
  *
- * ⚠ **AND THAT TRIGGER IS GONE SINCE 2026-09-02 (A12), SO THIS OP IS NO LONGER
- * LOAD-BEARING — ONLY THE COPY'S OWN SEMANTICS ARE.** `/resolve` composes
- * `server/service-reads.ts › readTemplateById` now, which follows an id into the
- * container it actually lives in, so the operator's home-workspace template
- * launches into a container without being duplicated first. What survives is the
- * choice a copy MAKES: a divergent snapshot the operator owns in that container,
- * with its own visibility and its own edits. ⚠ Do not delete this op on the
- * strength of the paragraph above — B11 rules on copies-vs-grants, and until
- * then the button keeps working.
- *
- * 🔒 **THE ATTACHED KNOWLEDGE BASES ARE DROPPED, NOT CARRIED.** A home-workspace
- * KB id is not in the container, and the attach gate ("a KB the CALLER can
- * currently read", §5A) would 404 it — so carrying the ids turns a copy into a
- * failed write. ⚠ **AND THERE IS NO NAME-MATCH RE-ATTACH.** Resolving "Fundraise
- * memos" here against a same-named base in the container would be a SECOND,
- * WEAKER ATTACH GATE — one that resolves by string where the server resolves by
- * id and readability — and the first time two bases share a name it attaches the
- * wrong one silently. The drop is stated to the operator in the confirm step.
- *
- * ⚠ **IT IS A SNAPSHOT THAT DIVERGES.** No FK, no back-pointer, no sync: the two
- * rows are strangers the moment this returns, and editing the original does not
- * reach the copy. That is the same culture as `channel_sessions.template_name` —
- * A DENORMALIZED SNAPSHOT, NOT AN FK, AND NOTHING MAY "FIX" THAT LATER. A future
- * `copiedFrom` column would make the container row point at a workspace its
- * members cannot read.
- *
- * ⚠ **`visibility` IS FORCED TO `private`, NEVER CARRIED.** A home template that
- * happened to be `workspace`-visible would otherwise land SHARED WITH THE PEER on
- * a gesture whose whole word is "use" — publishing into a shared container is a
- * decision the operator makes afterwards, in the editor, deliberately.
- *
- * ⚠ **THE NAME IS CARRIED UNCHANGED — NO "(copy)" SUFFIX.** Templates have NO
- * name uniqueness, deliberately (there is no unique index and no 409 on the
- * route), so a suffix would be dodging a constraint that does not exist and
- * renaming the operator's agent to do it.
+ * ⚠ **THE REST OF THIS FILE IS THE SHARED EDITOR DRAFT AND IS UNTOUCHED.** The
+ * wave-B spec's B15 row counted this file whole as copy code (F-600); 250 of its
+ * lines are `TemplateDraft` and its eight helpers, imported by
+ * `components/template-editor.tsx`, `apps/desktop-ui/src/pages/home/agent-editor.tsx`
+ * and `components/agent-templates-core.tsx`.
  */
-export function containerCopyDraft(template: AgentTemplate): TemplateDraft {
-  return {
-    ...draftFromTemplate(template),
-    // 🔒 ⚠ `workspace`, AND IT WAS `private` UNTIL 2026-08-27. The old value was
-    // right under the old pane: "use" must not publish the operator's agent into
-    // the room the peer is standing in, so the copy landed in the container's
-    // PRIVATE section. **That section is gone** (Samuel's ruling — the /home
-    // Agents face converged on Knowledge's two-section shape), and a container
-    // is not navigable, so a `private` container row is now reachable from
-    // NOWHERE: the copy would succeed, the dialog would close, and nothing would
-    // appear anywhere. A write-only row is worse than a stated audience change.
-    // ⚠ THE AUDIENCE CHANGE IS REAL AND IS SAID OUT LOUD — `agent-copy.tsx`'s
-    // confirm text names the peer before the operator presses. Do not quietly
-    // put this back to `private`; the fix for "I did not want to share it" is
-    // not to make it invisible.
-    visibility: "workspace",
-    teamIds: [],
-    knowledgeBaseIds: [],
-  };
-}
 
 /**
  * Custom fields worth sending: a row whose KEY is blank carries nothing, and the
