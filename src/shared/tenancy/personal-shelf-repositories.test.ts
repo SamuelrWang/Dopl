@@ -124,13 +124,17 @@ describe("the personal shelf is addressed by CONTAINER, on both tables", () => {
     }
   });
 
-  it("flag ON asks the container and nothing else", async () => {
+  it("🔒 flag ON asks BOTH too — the flip strands nothing (F-590)", async () => {
+    // ⚠ It used to ask the container and nothing else, which HID every personal
+    // row written in the migrated-but-flag-off window: the one-time move in
+    // `20260920120000` §5 had already run and never runs again. `home_scoped`
+    // survives the move, so one filter over both containers finds all of them.
     process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
     await listBasesForWorkspace(WORKSPACE, false, "home");
     await listTemplatesForWorkspace(WORKSPACE, "home");
     for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toEqual([CONTAINER]);
-      expect(filterFor(table, "home_scoped"), table).toBeUndefined();
+      expect(filterFor(table, "workspace_id"), table).toEqual([WORKSPACE, CONTAINER]);
+      expect(filterFor(table, "home_scoped"), table).toBe(true);
     }
   });
 
@@ -157,16 +161,19 @@ describe("the personal shelf is addressed by CONTAINER, on both tables", () => {
 });
 
 describe("the LABEL asks what the LIST asked", () => {
-  it("flag ON: the sibling-key fold reads the container, so a listed row is still labelled", async () => {
+  it("flag ON: the sibling-key fold reads what the list reads, so a listed row is still labelled", async () => {
     // ⚠ THE BUG THIS CLOSES. `listHomeScoped*Ids` used to hardcode
     // `workspace_id = <the request's workspace>`; once the rows live in the
     // container, that filter matches nothing and the `· personal` marker
-    // silently disappears from every row it is supposed to mark.
+    // silently disappears from every row it is supposed to mark. The fold and
+    // the list ask through the SAME `resolveShelfScope`, which is the property
+    // being pinned — not the particular id set it answers with today.
     process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
     await listHomeScopedBaseIds(WORKSPACE, ["kb-1"]);
     await listHomeScopedTemplateIds(WORKSPACE, ["tpl-1"]);
     for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toEqual([CONTAINER]);
+      expect(filterFor(table, "workspace_id"), table).toContain(CONTAINER);
+      expect(filterFor(table, "workspace_id"), table).toEqual([WORKSPACE, CONTAINER]);
     }
   });
 

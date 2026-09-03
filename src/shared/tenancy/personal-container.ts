@@ -23,16 +23,34 @@ import { getCallerScope } from "@/shared/supabase/caller-scope";
  * | minted | flag | personal shelf reads            | a personal write lands in |
  * |--------|------|---------------------------------|---------------------------|
  * | no     | any  | `W` + `home_scoped`             | `W` (today, unchanged)    |
- * | yes    | off  | `W` **or** `C`, + `home_scoped` | `W` (today, unchanged)    |
- * | yes    | on   | `C`                             | `C`                       |
+ * | yes    | any  | `W` **or** `C`, + `home_scoped` | off → `W`; on → `C`       |
  *
- * ⚠ **THE FLAG-OFF READ IS THE DUAL ONE, AND THAT ASYMMETRY IS THE ROLLBACK.**
- * Flipping the flag ON is safe because the migration already moved the existing
- * rows into `C`; flipping it back OFF is safe because the off read still looks
- * in `C`. A row written during the ON window is therefore never stranded — which
- * is what "rollback fails CLOSED, never open" means here. It never widens
- * either: both off arms keep `home_scoped`, and `C` has exactly one member at
- * every moment in both directions.
+ * 🔒 **THE READ DOES NOT BRANCH ON THE FLAG AT ALL, AND THAT IS THE FIX FOR
+ * F-590.** It used to: flag ON read `C` ALONE. The migration and the flag move
+ * independently, so **there is a window — containers minted, flag still off — in
+ * which every new personal row lands in `W`**, and the one-time move in
+ * `20260920120000` §5 has already run and never runs again. Flipping the flag ON
+ * then HID every row written in that window: no error, no log, a shelf that
+ * silently lost the last N days of work, and no reader anywhere that could
+ * notice.
+ *
+ * ⚠ **THE UNION IS CORRECT IN EVERY CELL, WHICH IS WHY THE BRANCH WENT RATHER
+ * THAN GAINING A THIRD ARM.** `home_scoped` is not cleared by the move — the
+ * migration says so in as many words (*"the column still carries the truth"*)
+ * and the write path never touches it — so **every personal row carries
+ * `home_scoped = true` wherever it lives**, and one predicate finds all of them.
+ * The alternative was re-running the move at flip time, which is a migration
+ * that has to be scheduled against a flag flip; this is a `WHERE … IN (…)` with
+ * one extra element.
+ *
+ * ⚠ **IT DOES NOT WIDEN.** Both arms keep `home_scoped`, `C` has exactly one
+ * member at every moment, and a `home_scoped` row of ANOTHER member sitting in
+ * `W` is still refused by `canSeeBase` / `canSeeTemplate` — this module answers
+ * WHERE, never WHO.
+ *
+ * ⚠ **SO THE FLAG NOW MOVES WRITES ONLY** ({@link personalContainerWritesEnabled}),
+ * and the rollback property it was named for is unchanged and now symmetric:
+ * what ON writes, OFF reads, and what OFF writes, ON reads.
  *
  * ⚠ **THE WORKSPACE SHELF DOES NOT MOVE IN THIS SLICE.** `shelf="workspace"`
  * keeps its `home_scoped = false` filter under both flag states, and an ABSENT
@@ -59,9 +77,17 @@ export const TENANCY_PERSONAL_CONTAINER_ENV = "TENANCY_PERSONAL_CONTAINER";
 
 const ON_VALUES = new Set(["1", "true", "on"]);
 
-/** ⚠ Read PER CALL, never captured at module load — flipping the flag must need
- *  no redeploy. */
-export function personalContainerReadsEnabled(
+/**
+ * Does a personal WRITE land in the container?
+ *
+ * ⚠ Read PER CALL, never captured at module load — flipping the flag must need
+ * no redeploy.
+ * ⚠ **NAMED FOR WRITES SINCE 2026-09-02 (F-590)**, because that is now the only
+ * thing it decides: the personal READ is the union under both flag states, so a
+ * row written in the migrated-but-flag-off window is not stranded by the flip.
+ * The ENV VAR is unchanged — it is a deploy contract.
+ */
+export function personalContainerWritesEnabled(
   env: Record<string, string | undefined> = process.env
 ): boolean {
   const raw = env[TENANCY_PERSONAL_CONTAINER_ENV];
@@ -140,11 +166,11 @@ export async function resolveShelfScope(
   if (shelf === undefined) return { workspaceIds: [workspaceId], homeScoped: undefined };
   if (shelf === "workspace") return { workspaceIds: [workspaceId], homeScoped: false };
 
+  // ⚠ THE FLAG IS NOT ASKED HERE (F-590) — see the module header's table. Both
+  // places a personal row can be carry `home_scoped = true`, so one predicate
+  // over both containers finds every one of them under either flag state.
   const containerId = await callerPersonalContainerId();
   if (containerId === null) return { workspaceIds: [workspaceId], homeScoped: true };
-  if (personalContainerReadsEnabled()) {
-    return { workspaceIds: [containerId], homeScoped: undefined };
-  }
   return { workspaceIds: [workspaceId, containerId], homeScoped: true };
 }
 
@@ -177,7 +203,7 @@ export async function personalWriteWorkspaceId(
   args: ShelfBoundInsert
 ): Promise<string> {
   if (args.homeScoped !== true) return args.workspaceId;
-  if (args.createdBy === null || !personalContainerReadsEnabled()) {
+  if (args.createdBy === null || !personalContainerWritesEnabled()) {
     return args.workspaceId;
   }
   return (await findPersonalContainerId(args.createdBy)) ?? args.workspaceId;

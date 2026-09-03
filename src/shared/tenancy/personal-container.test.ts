@@ -24,7 +24,7 @@ import { getCallerScope } from "@/shared/supabase/caller-scope";
 import {
   TENANCY_PERSONAL_CONTAINER_ENV,
   findPersonalContainerId,
-  personalContainerReadsEnabled,
+  personalContainerWritesEnabled,
   personalWriteWorkspaceId,
   resolveShelfScope,
 } from "./personal-container";
@@ -82,13 +82,13 @@ describe("the flag", () => {
     const off = [undefined, "", "0", "false", "yes", "off", "enabled"];
     for (const v of on) {
       expect(
-        personalContainerReadsEnabled({ [TENANCY_PERSONAL_CONTAINER_ENV]: v }),
+        personalContainerWritesEnabled({ [TENANCY_PERSONAL_CONTAINER_ENV]: v }),
         `${v} should read as ON`
       ).toBe(true);
     }
     for (const v of off) {
       expect(
-        personalContainerReadsEnabled({ [TENANCY_PERSONAL_CONTAINER_ENV]: v }),
+        personalContainerWritesEnabled({ [TENANCY_PERSONAL_CONTAINER_ENV]: v }),
         `${String(v)} should read as OFF`
       ).toBe(false);
     }
@@ -155,12 +155,35 @@ describe("resolveShelfScope — the 2x2", () => {
     });
   });
 
-  it("flag ON: the container is the whole answer, and `home_scoped` stops being asked", async () => {
+  it("🔒 flag ON reads the SAME UNION — the flip strands nothing (F-590)", async () => {
+    // ⚠ THE WINDOW THIS EXISTS FOR: the migration mints containers and the flag
+    // flips later, so between the two every new personal row lands in `W` — and
+    // `20260920120000` §5's one-time move has already run and never runs again.
+    // An ON read of `C` alone HID all of them: no error, no log, a shelf that
+    // silently lost the window's work. `home_scoped` is not cleared by the move,
+    // so one predicate over both containers finds every personal row.
     process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [CONTAINER],
-      homeScoped: undefined,
+      workspaceIds: [WORKSPACE, CONTAINER],
+      homeScoped: true,
     });
+  });
+
+  it("🔒 OFF→ON: what the flag OFF wrote, the flag ON still reads (F-590)", async () => {
+    // The other direction of the rollback property this module already pins,
+    // and the one that was false. Driven, not argued.
+    delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
+    const wrote = await personalWriteWorkspaceId({
+      workspaceId: WORKSPACE,
+      createdBy: USER,
+      homeScoped: true,
+    });
+    expect(wrote).toBe(WORKSPACE);
+    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
+    const scope = await resolveShelfScope(WORKSPACE, "home");
+    expect(scope.workspaceIds).toContain(wrote);
+    // …and the row is still `home_scoped`, which is why one filter serves both.
+    expect(scope.homeScoped).toBe(true);
   });
 
   it("flag ON with no container minted falls back to today rather than reading nothing", async () => {
