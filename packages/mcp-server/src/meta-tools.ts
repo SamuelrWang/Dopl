@@ -21,16 +21,35 @@
  *
  * ⚠ **WHAT LEFT WITH THEM, AND IT IS A SURFACE DECISION, NOT A TIDY-UP.**
  * `current_workspace(op="set"|"clear")` — the session pin — is gone with the
- * default it pinned. `dopl_home(op="create_channel")` is gone too: minting a
- * room is now an app act, which is what its own INVITE half already was.
- * Reading a home channel is unaffected — its container id is on every row here,
- * and `dopl_status` still answers for the rooms inside it.
+ * default it pinned.
+ *
+ * ⚠ **`create_home_channel` CAME BACK AT THE INTEGRATION (F-621).** B13 retired
+ * `dopl_home(op="create_channel")` with its tool and named no successor, which
+ * is a wire-visible deletion of a capability rather than a rename — so the op
+ * moved here instead. Minting a room and INVITING somebody into one are not the
+ * same act: the invite half has been `sessionOnly` since the tool shipped, and
+ * a room an agent can make but not populate is a finished state, not a
+ * half-built one. Reading a home channel was never affected — its container id
+ * is on every row here, and `dopl_status` answers for the rooms inside it.
+ *
+ * 🔒 **`op` IS OPTIONAL AND ITS DEFAULT MUST STAY THE READ.**
+ * `gating.ts › opRefusal` returns `null` for an ABSENT op — an op-less tool has
+ * nothing to gate — so a default that wrote would be a write no scope gate ever
+ * sees. The default is `list`, and this tool is the one an agent that has lost
+ * its bearings calls with `{}`.
  */
 
+import { z } from "zod";
 import { composeDescription, READ_DESCRIPTION_MAX_CHARS } from "./tools/tool-style.js";
 import { sessionLines, type CallerIdentity } from "./tools/identity.js";
 import { inlineOr } from "./tools/narration.js";
-import type { RegisterMetaTool } from "./tools/respond.js";
+import {
+  missingParams,
+  ok,
+  type RegisterMetaTool,
+  type ToolResponse,
+} from "./tools/respond.js";
+import type { DoplClient } from "@dopl/client";
 import { UNNAMED_WORKSPACE, UNTRUSTED_DIRECTORY_NOTE } from "./instructions.js";
 import {
   containerKind,
@@ -48,17 +67,34 @@ import {
  * `parity.test.ts` requires glossed, which is the only thing that gives a tool
  * a floor above 450.
  */
+const WORKSPACES_SHAPE = {
+  op: z
+    .enum(["list", "create_home_channel"])
+    .optional()
+    .describe('Default: "list".'),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .optional()
+    .describe(
+      'op="create_home_channel" (required): names the room and its hidden container both.',
+    ),
+};
+
 const WORKSPACES_DESCRIPTION = composeDescription({
   headline:
-    "Every container you are in — workspaces AND home channels, each with its kind, its id and your role. Read-only, and the only place a container id is published.",
-  policy: "Read-only.",
+    "Every container you are in — workspaces AND home channels, each with its kind, its id and your role. The only place a container id is published.",
+  policy: 'Only "create_home_channel" writes; nothing deletes or invites.',
   routing: [
     "Use dopl_status for the rooms, sessions and unanswered asks inside them.",
   ],
   body: [
-    "Pass an id or slug from here as `workspace=` when you list or create somewhere other than this connection's container.",
+    '- "list" (default) — every container and the id you pass as `workspace=`.',
+    '- "create_home_channel" — Requires: name. A room outside any workspace, yours alone.',
   ],
-  examples: [{}],
+  examples: [{}, { op: "create_home_channel", name: "Ops" }],
   cap: READ_DESCRIPTION_MAX_CHARS,
 });
 
@@ -67,11 +103,35 @@ export interface MetaToolDeps {
   /** The container this connection is bound to, or null. */
   activeWorkspace: ActiveWorkspaceState | null;
   caller: CallerIdentity;
+  /** ⚠ The WRITE half only. The list is the directory's, which is already
+   *  `lockedTo`-narrowed; this client mints. */
+  client: DoplClient;
+}
+
+/**
+ * ⚠ THE FOLLOW-UP IS REFUSED BY DESIGN AND THE RESULT SAYS SO IMMEDIATELY —
+ * carried over verbatim from the deleted `dopl_home`, because the loop it
+ * closes is unchanged. An agent that makes a room and is not told it cannot
+ * invite anybody will look for an invite op, then a link op, then a members op,
+ * and read each absence as a broken connection.
+ */
+async function opCreateHomeChannel(
+  client: DoplClient,
+  name: string,
+): Promise<ToolResponse> {
+  const { channel } = await client.createHomeChannel({ name });
+  return ok(
+    [
+      `Created home channel ${inlineOr(channel.name, UNNAMED_WORKSPACE)}. You are in it alone.`,
+      `Address it with workspace=\`${channel.workspaceId}\` on any other tool, and with channel=\`${channel.channelId}\` on dopl_channel.`,
+      `⚠ You cannot add a person to it. Minting the invitation is an interactive-session act, refused over MCP for every role and token — ask the user to add someone from the Dopl app.`,
+    ].join("\n"),
+  );
 }
 
 export function registerWorkspaceMetaTools(
   registerMetaTool: RegisterMetaTool,
-  { directory, activeWorkspace, caller }: MetaToolDeps,
+  { directory, activeWorkspace, caller, client }: MetaToolDeps,
 ): void {
   /**
    * The CREDENTIAL this connection acts through, as a standalone block.
@@ -88,7 +148,7 @@ export function registerWorkspaceMetaTools(
     return lines.length > 0 ? [...lines, ""] : [];
   }
 
-  registerMetaTool("dopl_workspaces", WORKSPACES_DESCRIPTION, {}, async () => {
+  async function opList(): Promise<ToolResponse> {
     const list = await directory.getWorkspaceList();
     if (list.length === 0) {
       return {
@@ -131,5 +191,16 @@ export function registerWorkspaceMetaTools(
           "This connection names no container, so a call that names none is resolved for you. Pass `workspace=` to list or create somewhere specific.",
     );
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-  });
+  }
+
+  registerMetaTool(
+    "dopl_workspaces",
+    WORKSPACES_DESCRIPTION,
+    WORKSPACES_SHAPE,
+    async (args): Promise<ToolResponse> => {
+      if ((args.op ?? "list") === "list") return opList();
+      const miss = missingParams("create_home_channel", args, ["name"]);
+      return miss ?? opCreateHomeChannel(client, args.name as string);
+    },
+  );
 }

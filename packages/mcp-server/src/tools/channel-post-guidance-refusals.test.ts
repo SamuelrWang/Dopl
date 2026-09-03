@@ -95,7 +95,12 @@ describe('Q9 · send thread="new" — a 400 is read off its CODE', () => {
   });
 
   it("a workspace rejection is reported as connection-level, not channel-level", async () => {
-    const text = await createThreadWith(apiError(400, "WORKSPACE_REQUIRED", "Pick a workspace"));
+    // ⚠ **THE CODE MOVED WITH THE CONCEPT (2026-09-02).** It was
+    // `WORKSPACE_REQUIRED`, which B10/B14 deleted along with the default
+    // workspace — `workspaces/server/service.ts` raises ONE code now. The
+    // BEHAVIOUR under test is unchanged: a workspace-axis rejection is reported
+    // as connection-level, never as "you aren't a member of this channel".
+    const text = await createThreadWith(apiError(400, "WORKSPACE_INVALID", "Not a workspace id"));
     expect(text).not.toContain("aren't a member");
     expect(text).toContain("no usable workspace");
     expect(text).toContain("report it to your operator");

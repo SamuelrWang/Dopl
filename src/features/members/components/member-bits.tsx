@@ -13,7 +13,6 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Popover, MenuItem } from "@/shared/ui/popover-menu";
 import {
-  withoutRetiredResources,
   type TeamResourceType,
 } from "@/features/teams/access-levels";
 import type { TeamView } from "@/features/teams/types";
@@ -58,14 +57,13 @@ export function resourceMeta(type: TeamResourceType): {
 }
 
 /**
- * Resources a team is scoped to, AS RENDERED — retired types not counted.
- * ⚠ `team.grants` still carries `workflow` rows (`teams/server/repository.ts`
- * selects grants with no `resource_type` filter, on purpose), so counting it
- * straight captions "3 scoped resources" above a list of 2. Both call sites
- * (the teams list and the team pane) must count through here.
+ * Resources a team is scoped to. ⚠ **IT FILTERED RETIRED TYPES UNTIL 2026-09-02
+ * (F-466)**; `resource_grants` cannot hold one, so the count is the length.
+ * Kept as a function because both call sites (the teams list and the team pane)
+ * must caption from ONE derivation.
  */
 export function scopedResourceCount(team: Pick<TeamView, "grants">): number {
-  return withoutRetiredResources(team.grants).length;
+  return team.grants.length;
 }
 
 /** Role pills: weight/emphasis carries rank, not hue. Owner is the inverted

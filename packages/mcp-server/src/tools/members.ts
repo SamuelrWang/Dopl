@@ -27,7 +27,6 @@ import {
   matchMember,
   memberDisplay,
   memberListLine,
-  pruneRetiredResources,
   resourceLabel,
   sortByRole,
   statusLabel,
@@ -153,7 +152,7 @@ async function opWhoami(
   const [members, access, matrix] = await Promise.all([
     client.listWorkspaceMembers(),
     client.getMyAccess(),
-    client.getAccessMatrix().then(pruneRetiredResources),
+    client.getAccessMatrix(),
   ]);
   const selfId = caller.userId ?? me.userId;
   const self = selfId ? members.find((m) => m.userId === selfId) : undefined;
@@ -267,7 +266,7 @@ async function opTeams(client: DoplClient): Promise<ToolResponse> {
   const [teams, members, matrix] = await Promise.all([
     client.listWorkspaceTeams(),
     client.listWorkspaceMembers(),
-    client.getAccessMatrix().then(pruneRetiredResources),
+    client.getAccessMatrix(),
   ]);
   if (teams.length === 0) {
     return ok("No teams in this workspace yet. Teams are created in the web UI (Members → Teams).");
@@ -286,7 +285,7 @@ async function opGetTeam(client: DoplClient, ref: string): Promise<ToolResponse>
   const [teams, members, matrix] = await Promise.all([
     client.listWorkspaceTeams(),
     client.listWorkspaceMembers(),
-    client.getAccessMatrix().then(pruneRetiredResources),
+    client.getAccessMatrix(),
   ]);
   const lower = ref.trim().toLowerCase();
   const team =
@@ -316,7 +315,7 @@ async function opGetTeam(client: DoplClient, ref: string): Promise<ToolResponse>
 const MATRIX_SCOPE_NOTE = `_Covers knowledge bases and skills only; chats, chat folders and ontology objects are not in this grid. If you are an ADMIN or OWNER this is the full inventory of those two, every status and every visibility included, and it is what settles a disagreement between two members' list ops. If you are a MEMBER or VIEWER it has been re-filtered to what you can reach, so it is a view like the rest. The teams half above is unfiltered for everyone._`;
 
 async function opAccessMatrix(client: DoplClient): Promise<ToolResponse> {
-  const matrix = pruneRetiredResources(await client.getAccessMatrix());
+  const matrix = await client.getAccessMatrix();
   if (matrix.resources.length === 0) {
     return ok(`No shareable resources visible to you in this workspace.\n\n${MATRIX_SCOPE_NOTE}`);
   }
@@ -343,7 +342,7 @@ async function opMyAccess(client: DoplClient): Promise<ToolResponse> {
   const [me, access, matrix] = await Promise.all([
     client.getMyMembership(),
     client.getMyAccess(),
-    client.getAccessMatrix().then(pruneRetiredResources),
+    client.getAccessMatrix(),
   ]);
 
   const lines: string[] = [];

@@ -50,41 +50,35 @@ const SHAPES: ReadonlyArray<[string, RegExp]> = [
 ];
 
 /**
- * EVERY FILE that still MISLABELS, and what closes each one.
+ * 🔒 **`OPEN_SITES` IS GONE, AND ITS DELETION IS THE SIGN-OFF** (2026-09-02,
+ * batch-3 integration). The map's whole contract was *"when this set is EMPTY,
+ * `20260920120000` may be applied"*, so an empty map is not a map — it is a
+ * migration whose precondition is met. The record of what closed each site is
+ * one commit away in `git log` and one paragraph away in F-564; leaving an
+ * empty declaration here would be a gate that can only ever pass.
  *
- * ⚠ **A DECLARATION, NOT AN ALLOWLIST.** `OPEN_SITES ∪ FENCE_SITES` must EQUAL
- * what the scan finds. A NEW site fails this gate (nobody may add one quietly);
- * a site that is FIXED or DELETED also fails it, so the entry leaves in the same
- * change as the code — which is how the migration's precondition stays true
- * rather than becoming another paragraph nobody re-derived.
- */
-const OPEN_SITES: Record<string, string> = {
-  // ⚠ Not in ANY slice's `Owns` column, and the migration header says so. It
-  // needs assigning before either half of F-564 can be called finished.
-  "packages/mcp-server/src/tools/confirm-token.ts":
-    "UNASSIGNED — needs an owner before F-564 can be closed",
-  // ⚠ **`copy-target.ts`, `factory.ts`, `meta-tools.ts`, `server.ts` and
-  // `tools/home-scopes.ts` LEFT THIS MAP ON 2026-09-02** — B13 repointed the
-  // three at `workspace-directory.ts › containerKind` and deleted the fourth
-  // with `dopl_home`; B15 deleted the fifth with the copy ops. Each row leaves
-  // in the same change as its code, which is the property the two cases below
-  // assert in both directions.
-  // ⚠ **`src/features/agent-templates/server/service-resolve-ref.ts` NEVER
-  // REACHED THIS MAP AND IS ALSO FIXED IN B15.** Its `tenancyLabel` read the
-  // `home_scoped` boolean first and fell through to `!== "standard"`, so it
-  // would have called every personal container "a home channel of yours" the
-  // moment the column dropped — the same defect, one arm further down, and
-  // invisible to this scan because the boolean hid it.
-};
-
-/**
- * ⚠ **B13 CLOSED ITS FOUR AND THE RECORD LEAVES WITH THEM**, which is what the
- * "EQUALS, not INCLUDES" rule above is for. `factory.ts`, `meta-tools.ts` and
- * `server.ts` now ask `workspace-directory.ts › containerKind`, a positive
- * `switch` on `kind` with a `default` arm that answers "workspace" — so an
- * unknown kind is never advertised as somebody's room. `tools/home-scopes.ts`
- * is DELETED with `dopl_home`; its lock narrowing and leg list moved into
- * `workspace-directory.ts` and derive the label the same way.
+ * ⚠ **THE SCAN AND THE "EQUALS" ASSERTION STAY**, and they are what still
+ * earns this file: a NEW site added tomorrow fails `DECLARED`, because
+ * `FENCE_SITES` is now the whole of it. That is the half that was always going
+ * to matter after the precondition was met.
+ *
+ * How the eight closed, for the reader who lands here from the migration:
+ *   • **B13** repointed `factory.ts`, `meta-tools.ts` and `server.ts` at
+ *     `packages/mcp-server/src/workspace-directory.ts › containerKind`, a
+ *     positive `switch` on `kind` whose `default` arm answers "workspace", so an
+ *     unknown kind is never advertised as somebody's room. Its home-scopes
+ *     module was DELETED with `dopl_home`, its lock narrowing moving into
+ *     `workspace-directory.ts` and deriving the same label.
+ *   • **B15** deleted its copy-target module with the copy ops, and fixed a
+ *     NINTH site this scan could never see: `agent-templates/server/
+ *     service-resolve-ref.ts › tenancyLabel` read the `home_scoped` BOOLEAN
+ *     first and fell through to `!== "standard"`, so the boolean HID the shape.
+ *   • **B14** repaired the one FENCE below, where the negation is right.
+ *   • **the integration** closed `packages/mcp-server/src/tools/confirm-token.ts`,
+ *     which was in no slice's `Owns` column: `resolveConfirmTarget` asked
+ *     `!isStandardWorkspace(…)` and was saved only by its member-count term,
+ *     which a one-member personal container happens to fail. Correct by
+ *     accident is not correct.
  */
 
 /**
@@ -109,7 +103,8 @@ const FENCE_SITES: Record<string, string> = {
     "B14 — CLOSED: the refusal is kind-agnostic by design, the message branches on `kind`",
 };
 
-const DECLARED = { ...OPEN_SITES, ...FENCE_SITES };
+/** ⚠ `FENCE_SITES` IS THE WHOLE DECLARATION SINCE `OPEN_SITES` EMPTIED. */
+const DECLARED = FENCE_SITES;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -187,28 +182,27 @@ describe("🔒 F-564 — `!isStandardWorkspace` is not `kind === 'link'`", () =>
     }
   });
 
-  it("🔒 the migration may be applied only when OPEN_SITES is EMPTY", () => {
-    // ⚠ THE PRECONDITION ITSELF, and the ONE place the code and the migration
-    // are joined. `20260920120000` adds `personal` for every user at once; while
-    // any OPEN site stands, applying it makes each of them advertise a person's
-    // own container as a home channel.
+  it("🔒 the precondition on `20260920120000` IS MET, and stays met", () => {
+    // ⚠ **THIS CASE USED TO RECORD A COUNT AND EXPECT IT TO BE NON-ZERO.** Its
+    // contract was "when `OPEN_SITES` is empty the migration may be applied";
+    // the set emptied at the batch-3 integration, so what is left to hold is
+    // the INVERSE — that nothing has been added back. The scan above already
+    // fails on a new site; this states, at the place the migration's header
+    // points, that the answer today is NONE.
     //
-    // ⚠ **THIS ASSERTION IS EXPECTED TO BE RED-ON-INVERSION, NOT RED NOW.** It
-    // records the count rather than demanding zero, because B13 and B15 hold the
-    // remaining sites — what the gate buys today is that the number cannot drift
-    // and cannot be quoted wrong again. **When they are gone, delete this case
-    // and `OPEN_SITES` with it; that deletion IS the sign-off for applying the
-    // migration.** `FENCE_SITES` outlives it — those sites are correct.
-    expect(Object.keys(OPEN_SITES).length).toBeGreaterThan(0);
-    expect(FOUND.size).toBe(Object.keys(DECLARED).length);
+    // 🔒 A site is either a LABEL, which must ask `kind === "link"`, or a
+    // FENCE, which must keep the negation AND branch its message on the kind.
+    // There is no third disposition, which is why an empty third map would be
+    // a gate that can only pass.
+    expect([...FOUND.keys()].sort()).toEqual(Object.keys(FENCE_SITES).sort());
   });
 
-  it("the ternary and the early-return shapes are why a negation grep undercounts", () => {
-    // The header told readers to `grep -rn '!isStandardWorkspace'`, which sees
-    // only the first shape. Measured here rather than asserted in prose.
-    const byShape = [...FOUND.values()].flat();
-    expect(byShape.filter((s) => s === "negation").length).toBeLessThan(FOUND.size);
-    expect(byShape).toContain("ternary else-branch");
-    expect(byShape).toContain("early return");
-  });
+  // ⚠ **A CASE MEASURING THE SHAPE MIX OVER `FOUND` LIVED HERE UNTIL
+  // 2026-09-02**, asserting that a `!isStandardWorkspace` grep undercounts
+  // because half the sites were ternaries or early returns. **It measured the
+  // OPEN set, and the open set is empty** — one fence site remains and it is an
+  // early return, so the case could only be made green by asserting whatever
+  // that one site happens to be. The claim it protected has not gone anywhere:
+  // the red-proof case above drives all three shapes through the real regexes
+  // over lines taken from real files, which is the half that was ever evidence.
 });

@@ -39,8 +39,9 @@
  */
 
 import { randomBytes, createHash } from "node:crypto";
-import { workspaceContext, isStandardWorkspace } from "@dopl/client";
+import { workspaceContext } from "@dopl/client";
 import type { DoplClient } from "@dopl/client";
+import { containerKind } from "../workspace-directory.js";
 import { inlineOr } from "./narration.js";
 import { err, type ToolResponse } from "./respond.js";
 
@@ -170,7 +171,14 @@ export async function resolveConfirmTarget(
     const { workspaces } = await client.listWorkspaces();
     const found = workspaces.find((w) => w.id === workspaceId);
     if (!found) return { ...UNKNOWN_TARGET, workspaceId };
-    const container = !isStandardWorkspace(found);
+    // 🔒 **`kind === "link"`, ASKED POSITIVELY, NOT `!isStandardWorkspace(…)`**
+    // (F-564, closed here 2026-09-02). The negation answered "container" for
+    // ANY non-standard kind, and `20260920120000` mints a `personal` one for
+    // every user at once — a shelf with one member, which the member-count
+    // term below happens to exclude. **Correct by accident is not correct**:
+    // the class exists because a PEER arrived, and only a link container has
+    // peers. `containerKind`'s `default` arm keeps an unknown future kind out.
+    const container = containerKind(found) === "home channel";
     return {
       workspaceId,
       label: inlineOr(found.name, "`(unnamed workspace)`"),

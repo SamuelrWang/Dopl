@@ -82,12 +82,6 @@ export const MISSING_PARAMS: ToolError = {
   retry: "no",
 };
 
-export const WORKSPACE_REQUIRED: ToolError = {
-  reason: "workspace_required",
-  meaning: "no workspace resolved for this call",
-  retry: "dopl_workspaces",
-};
-
 export const READ_ONLY_SESSION: ToolError = {
   reason: "read_only_session",
   meaning: "this session is read-only — its token has no `dopl.write` scope",
@@ -258,7 +252,6 @@ export const SEARCH_ERRORS: readonly ToolError[] = [
     retry: 'the same call',
   },
   CREDITS_EXHAUSTED,
-  WORKSPACE_REQUIRED,
 ];
 
 /**
@@ -272,4 +265,13 @@ export const SEARCH_ERRORS: readonly ToolError[] = [
  */
 export const STATUS_ERRORS: readonly ToolError[] = [CREDITS_EXHAUSTED];
 
-export const WORKSPACE_ERRORS: readonly ToolError[] = [WORKSPACE_REQUIRED];
+/**
+ * ⚠ **`WORKSPACE_REQUIRED` AND `WORKSPACE_ERRORS` ARE DELETED (2026-09-02,
+ * batch-3 integration).** B10 removed the default workspace and B14 removed the
+ * refusal with it: `workspaces/server/service.ts › WorkspaceResolutionError` is
+ * ONE CODE now — `WORKSPACE_INVALID`, *"you named something that is not a
+ * workspace id"* — and naming NOTHING stopped being a question. **No server path
+ * emits `WORKSPACE_REQUIRED`**, so the constant taught a refusal that could not
+ * arrive, which is the exact break the error tables exist to prevent, pointed
+ * the other way. `WORKSPACE_ERRORS` had lost its last consumer with `dopl_home`.
+ */

@@ -3,9 +3,17 @@
  *
  * `registerMetaTool` publishes STRAIGHT onto the SDK server, bypassing
  * `registerTool`'s wrapper by construction, so `registrar.ts` calls the gates
- * explicitly on two of its own lines. ⚠ Both lines are INERT for today's two
- * meta-tools (neither is hidden, blocked, or carries an `op`), so without this
- * file they could be deleted with every other test still green.
+ * explicitly on two of its own lines. ⚠ **THE SUPPRESSION LINE IS STILL INERT
+ * for today's two meta-tools** (neither is hidden or blocked), so without this
+ * file it could be deleted with every other test still green.
+ *
+ * ⚠ **THE WRITE-GATE LINE STOPPED BEING INERT ON 2026-09-02 (F-621)**, and this
+ * paragraph said both lines were. `dopl_workspaces` took the home-channel mint
+ * when B13 retired `dopl_home` with no successor, so a meta tool carries an `op`
+ * enum and a `WRITE_OPS` row again — a `dopl.read` token calling
+ * `op="create_home_channel"` is refused on the second of those two lines. The
+ * synthetic subjects below are unchanged and still the point: they cover the
+ * LINE, for the day the real tool loses its op again.
  *
  * ⚠ SYNTHETIC NAMES on purpose: the gates do not fire on `list_workspaces`,
  * which is the whole problem. The subject is the PATH, not today's two tools.

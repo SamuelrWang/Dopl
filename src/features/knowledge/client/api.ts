@@ -403,9 +403,9 @@ export type KnowledgeExportKind = "base" | "folder" | "entry";
  * Download base/folder as zip, or single entry as `.md`. Honors the
  * routes' `Content-Disposition` filename, else a default.
  * ⚠ `fetch` + object-URL anchor, NOT a plain link: the link form drops
- * `X-Workspace-Id` (multi-workspace caller fails closed as
- * WORKSPACE_REQUIRED) and navigates to an error page instead of
- * surfacing `KnowledgeApiError`.
+ * `X-Workspace-Id`, and a caller with no header resolves somewhere it did not
+ * ask for — or, for a header that is not a workspace id, navigates to an error
+ * page instead of surfacing `KnowledgeApiError`.
  */
 export async function downloadKnowledgeExport(
   kind: KnowledgeExportKind,

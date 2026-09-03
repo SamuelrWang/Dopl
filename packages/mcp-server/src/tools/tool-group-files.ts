@@ -10,7 +10,7 @@
  * or description string in an unprefixed file is invisible to every scan.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -20,9 +20,24 @@ import path from "node:path";
  */
 export const TOOLS_DIR = path.resolve(process.cwd(), "src", "tools");
 
+/**
+ * ⚠ **THE META TOOLS REGISTER FROM `src/`, NOT `src/tools/`** — they go on the
+ * SDK server directly rather than through `registerTool`'s wrapper
+ * (`registrar.ts`), so they sit a layer up with it. Every scan here is
+ * basename-keyed, so the directory is resolved rather than assumed: a hardcoded
+ * `src/tools` silently returned an EMPTY source for `meta-tools.ts`, which made
+ * the described-but-dead-param scan pass over it by finding nothing (2026-09-02,
+ * F-621 — the first meta tool with a param since B13).
+ */
+function dirFor(file: string): string {
+  return existsSync(path.join(TOOLS_DIR, file))
+    ? TOOLS_DIR
+    : path.resolve(process.cwd(), "src");
+}
+
 /** One tool-source file, read from disk. */
 export function sourceOf(file: string): string {
-  return readFileSync(path.join(TOOLS_DIR, file), "utf8");
+  return readFileSync(path.join(dirFor(file), file), "utf8");
 }
 
 /**
@@ -31,7 +46,7 @@ export function sourceOf(file: string): string {
  */
 export function toolGroupFiles(registrarFile: string): string[] {
   const stem = registrarFile.replace(/\.ts$/, "");
-  return readdirSync(TOOLS_DIR).filter(
+  return readdirSync(dirFor(registrarFile)).filter(
     (f) =>
       f.endsWith(".ts") &&
       !f.endsWith(".test.ts") &&

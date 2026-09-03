@@ -7,7 +7,6 @@ import { SectionBox } from "@/shared/ui/section-box";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { formatDate } from "@/shared/lib/format-time";
-import { withoutRetiredResources } from "@/features/teams/access-levels";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
 import type { WorkspaceMemberView } from "../../types";
 import { resourceMeta } from "../member-bits";
@@ -44,8 +43,7 @@ export function TeamDetailPane({
     .map((id) => members.find((m) => m.userId === id))
     .filter((m): m is WorkspaceMemberView => Boolean(m));
   const addable = members.filter((m) => !team.memberIds.includes(m.userId));
-  // ⚠ Retired grant rows still arrive from the server; nothing may render one.
-  const grants = withoutRetiredResources(team.grants);
+  const grants = team.grants;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-card-surface-subtle">

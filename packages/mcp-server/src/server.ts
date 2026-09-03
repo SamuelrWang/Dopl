@@ -246,7 +246,8 @@ export function createServer(
     directory,
     activeWorkspace,
     caller,
-  }); // dopl_workspaces — every container the caller is in
+    client,
+  }); // dopl_workspaces — every container the caller is in, and the home-channel mint
   // ⚠ META PATH, CHARGED — the ONE tool that takes `MetaToolOptions.charged`
   // since B13 retired `dopl_home` (T20, 2026-09-01).
   // The domain path injects a `workspace=` this tool exists to make unnecessary

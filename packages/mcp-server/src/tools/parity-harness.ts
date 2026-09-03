@@ -29,6 +29,8 @@ import { registerSearchTool } from "./search.js";
 import { registerOntologyTool } from "./ontology.js";
 import { registerChannelTool } from "./channel.js";
 import { registerAgentTools } from "./agent.js";
+import { registerWorkspaceMetaTools } from "../meta-tools.js";
+import type { CallerIdentity } from "./identity.js";
 
 // ── Capture every registered domain tool ─────────────────────────────
 
@@ -69,13 +71,41 @@ export const REGISTRARS: Array<{
     file: "agent.ts",
     register: (r, c) => registerAgentTools(r, c, undefined, STUB_DIRECTORY),
   },
-  // ⚠ **NO META TOOL IS CAPTURED SINCE B13** (2026-09-02). `dopl_home` was the
-  // one that earned a place here — it had an `op` enum, a WRITE op in
-  // `WRITE_OPS` and a charge, so leaving it out would have meant its enum was
-  // never checked against the write-gate table. It is deleted, and the two meta
-  // tools that remain (`dopl_workspaces`, `dopl_status`) carry no `op` and no
-  // write, so every suite below would be vacuous over them.
 ];
+
+/**
+ * ⚠ **META TOOLS ARE CAPTURED SEPARATELY, AND ONLY ONCE ONE HAS A WRITE.**
+ * B13 removed the only entry that had been in {@link REGISTRARS} (`dopl_home`)
+ * on exactly that rule: a meta tool with no `op` enum and no `WRITE_OPS` row
+ * makes every gate-table suite vacuous over it. `dopl_workspaces` took the
+ * home-channel mint at the batch-3 integration (F-621), so it has both again.
+ *
+ * 🔒 **IT IS A SECOND LIST RATHER THAN A ROW IN THE FIRST**, which was the
+ * mistake worth not making: {@link TOOLS} is *"the DOMAIN surface"* to
+ * `parity.test.ts`'s registration census and to `retirement.test.ts`, and
+ * folding a meta tool into it would have made both of those assert a list they
+ * do not describe. {@link TOOL_BY_NAME} spans both, because the gate tables are
+ * keyed on a NAME and do not care which path registered it.
+ */
+export const META_REGISTRARS: Array<{
+  file: string;
+  register: (r: RegisterTool, c: DoplClient) => void;
+}> = [
+  {
+    file: "meta-tools.ts",
+    register: (r, c) =>
+      registerWorkspaceMetaTools(r, {
+        directory: STUB_DIRECTORY,
+        activeWorkspace: null,
+        caller: STUB_CALLER,
+        client: c,
+      }),
+  },
+];
+
+/** Capture reads a description and a schema; the identity only reaches the
+ *  RESULT, which capture never renders. */
+const STUB_CALLER = { userId: null, credentialLabel: null } as CallerIdentity;
 
 /** Capture never invokes a handler, so the directory is never read. ⚠ The lock
  *  itself is pinned for real in `container-lock.test.ts`, through `bootServer`. */
@@ -85,10 +115,12 @@ const STUB_DIRECTORY = {
   lockedWorkspaceId: () => null,
 };
 
-export function captureTools(): CapturedTool[] {
+export function captureTools(
+  registrars = REGISTRARS,
+): CapturedTool[] {
   const tools: CapturedTool[] = [];
   const stubClient = {} as DoplClient;
-  for (const { file, register } of REGISTRARS) {
+  for (const { file, register } of registrars) {
     const cap: RegisterTool = (name, description, schema) => {
       tools.push({ name, description, schema, sourceFile: file });
     };
@@ -97,8 +129,14 @@ export function captureTools(): CapturedTool[] {
   return tools;
 }
 
+/** The DOMAIN surface — what a registration census and the retirement gate mean
+ *  by "the tools". */
 export const TOOLS = captureTools();
-export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
+/** ⚠ DOMAIN + META, and the gate tables read THIS: `WRITE_OPS` / `READ_OPS` are
+ *  keyed on a tool NAME and do not care which path registered it. */
+export const TOOL_BY_NAME = new Map(
+  [...TOOLS, ...captureTools(META_REGISTRARS)].map((t) => [t.name, t]),
+);
 
 // ⚠ Paths are relative to the package root (vitest cwd): `import.meta` is
 // disallowed by the CommonJS tsc target and `__dirname` is not guaranteed under
@@ -122,7 +160,15 @@ export const SRC_DIR = path.resolve(process.cwd(), "src");
  * is the one form that cannot go wrong the next time the two diverge.
  */
 export function opEnum(t: CapturedTool): string[] | null {
-  const op = t.schema.op;
+  // ⚠ **AN OPTIONAL ENUM IS STILL AN ENUM, AND IT WAS INVISIBLE HERE UNTIL
+  // 2026-09-02** (F-621). `dopl_workspaces` publishes `op` as optional — its
+  // default is the READ, because `gating.ts › opRefusal` does not fire for an
+  // absent op — and an unwrapped `instanceof` check answered `null` for it, so
+  // every WRITE_OPS / READ_OPS / doc-coverage suite below would have passed
+  // over a tool with a real write op by finding no enum to compare.
+  const declared = t.schema.op;
+  const op =
+    declared instanceof z.ZodOptional ? declared.unwrap() : declared;
   if (!(op instanceof z.ZodEnum)) return null;
   const published = (
     z.toJSONSchema(z.object({ op }), { io: "input" }) as {

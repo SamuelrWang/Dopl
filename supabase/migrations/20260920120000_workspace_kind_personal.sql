@@ -8,10 +8,22 @@
 -- (INVARIANTS §12, F-304). Nine batch-1 migrations are pending ahead of this
 -- one; apply them first, in filename order.
 --
--- ⚠⚠ **APPLYING THIS FILE HAS A CODE PRECONDITION, AND IT IS NOT OPTIONAL
--- (F-564).** A set of sites derive "this is a home channel" from
+-- ✅ **THE CODE PRECONDITION (F-564) IS SATISFIED — at the wave-B batch-3
+-- integration, and the gate below is what says so.** It is recorded rather than
+-- deleted because an operator reading this header a month from now needs to know
+-- that a precondition EXISTED and was met, not to wonder whether one was
+-- skipped. Re-derive; never trust this line:
+--
+--   npx vitest run src/features/workspaces/home-channel-derivation.test.ts
+--
+-- ⚠⚠ **WHAT IT WAS.** A set of sites derived "this is a home channel" from
 -- `!isStandardWorkspace(w)` — the LISTING predicate's negation — rather than
--- from `kind === "link"`.
+-- from `kind === "link"`. B13 repointed three and deleted one with `dopl_home`;
+-- B15 deleted one with the copy ops and fixed a ninth the scan could not see;
+-- B14 repaired the one FENCE, where the negation is correct and stays; the
+-- integration closed `packages/mcp-server/src/tools/confirm-token.ts`, which was
+-- in no slice's `Owns` column. The gate's open map is DELETED, and that deletion
+-- is the sign-off.
 --
 -- 🔒 **THE PRECONDITION IS A GATE NOW, NOT THIS PARAGRAPH** (2026-09-02, in
 -- review):
@@ -29,11 +41,12 @@
 -- it), and fails in BOTH directions — a new site, or a fixed one whose record
 -- did not leave with it.
 --
--- **WHEN THAT SET IS EMPTY, THIS FILE MAY BE APPLIED.** Deleting the gate's map
--- IS the sign-off; there is no second place to look.
+-- **THAT SET IS EMPTY, SO THIS FILE MAY BE APPLIED** — subject only to the nine
+-- migrations ahead of it. The map is deleted; the gate now asserts the INVERSE,
+-- that nothing has been added back, and it is still the only place to look.
 --
--- Today those sites are correct by accident: `standard` and `link` are the only
--- kinds, so "not standard" IS "link". THIS MIGRATION MAKES THAT FALSE for every
+-- Those sites were correct by accident: `standard` and `link` were the only
+-- kinds, so "not standard" WAS "link". THIS MIGRATION MAKES THAT FALSE for every
 -- user at once — each of them would advertise a `personal` container as a home
 -- channel. It is a MISLABEL rather than a leak (the container is the caller's
 -- own, listed to its only member), which is why it does not block the code

@@ -11,7 +11,8 @@ import { resolveAgentAudience } from "./service-audience";
  * answered for; what replaces it is `shared/tenancy/personal-container.ts ›
  * personalWriteWorkspaceId`, which fences ONE condition (a credential that
  * stands for a person, with a container) because the other two died with the
- * `default workspace` and with the shelf-inside-a-shared-workspace it protected.
+ * derived-container concept B14 deleted and with the
+ * shelf-inside-a-shared-workspace it protected.
  * That module's docblock retires each condition by name.
  *
  * ⚠ **SPLIT OUT OF `service-base-writes.ts` ON 2026-09-02 AT THE §1 CAP** (it

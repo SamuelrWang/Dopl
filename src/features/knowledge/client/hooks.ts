@@ -104,8 +104,9 @@ export function useKnowledgeBaseList(
   options?: { initialData?: KnowledgeBaseList; shelf?: KbShelf }
 ): Result<KnowledgeBaseList> {
   // Workspace id in the key so switching workspaces re-fetches. Sentinel
-  // fallback keeps the hook firing with no id (sole-workspace caller
-  // auto-targets; multi-workspace fails closed as WORKSPACE_REQUIRED).
+  // fallback keeps the hook firing with no id — since B10 a call that names no
+  // workspace is resolved server-side rather than refused, so the sentinel is a
+  // CACHE key and never a claim about which container answered.
   // ⚠ SHELF IN THE KEY TOO, for the reason the channel variant is in it: a
   // narrowed read is a DIFFERENT RESPONSE, and sharing one entry would let an
   // unfiltered refetch overwrite what the narrowed reader is rendering.
