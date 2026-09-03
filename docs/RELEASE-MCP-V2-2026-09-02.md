@@ -9,53 +9,63 @@ This is the operator's file. The design rationale lives in
 
 ---
 
-## §0 — BLOCKERS (all must clear before step 1)
+## §0 — HOW PRODUCTION'S HISTORY IS MATCHED, AND WHAT IS STILL BLOCKING
 
-| # | Blocker | Evidence | Who |
-|---|---|---|---|
-| B1 | **Duplicate migration version `20260901120000`** — two files carry it (`_agent_template_home_scoped`, `_credit_usage_events`). The replay dies on `schema_migrations_pkey` (SQLSTATE 23505). | CI job *RLS redteam*, run 33725307319 | needs a ruling — see below |
-| B2 | **`delivery-composed.test.ts` fails on Linux**: `Cannot find module 'electron'` via `dopl-desktop-app/main/diag.js` ← `main/agent-handles.js`. A `src/` test imports desktop main code. | CI job *node 22 / ubuntu-latest*, 1 failed / 5674 passed | needs a fix |
-| B3 | **The 17 wave migrations have executed NOWHERE.** Their own headers say so. `rls-redteam` is the first-ever replay and it has never reached the SQL — B1 stops it in the first seconds. | file headers; CI | clears with B1 |
-| B4 | **No local replay possible here**: Docker unavailable, so `supabase start` / `db reset` cannot run. | `docker info` | clears with B1 (CI becomes the replay) |
+### ⚠ Production versions are AUTO-STAMPED. Match by NAME, never by filename version.
 
-**B1 is the one that matters.** Until the replay runs end to end, *no evidence
-exists that any of these 17 files can apply at all*. Applying them to production
-would be their first execution anywhere.
+Since ~2026-08-23 every migration has been applied through tooling that stamps
+its **own** version at apply time, so repo filenames and production versions
+have not corresponded for a month:
 
-Two ways to resolve B1 — this is a **decision, not a cleanup**:
+| Repo filename | Applied on prod as |
+|---|---|
+| `20260823130000_channel_sessions_template_name` | `20260823092005` |
+| `20260827120000_channel_resource_grants` | `20260826100635` |
+| `20260901130000_credit_usage_events` | `20260901193049` |
+| `20260901120000_agent_template_home_scoped` | `20260827135014` |
+| `20260906120000_chats_source_codex` | `20260901202204` |
 
-- **Re-stamp** one of the two `20260901120000` files to a free version. Correct
-  going forward, but both are **already applied on production** under whatever
-  stamps the CLI minted, so a re-stamp needs a matching
-  `supabase migration repair --status applied <version>` or the next push tries
-  to re-run it.
-- **Repair history only**, leaving filenames alone. Keeps production truthful
-  and leaves the replay red forever — which forfeits B3's entire point.
+🔒 **NEVER RUN `supabase db push` AGAINST PRODUCTION.** It compares filename
+versions against `supabase_migrations.schema_migrations`, finds ~25 names it
+believes are missing, and re-applies them. Several are destructive. Apply
+per-file instead (§2).
 
-⚠ Related and unresolved: production's applied list reportedly contains
-`20260901202204 chats_source_codex` while the repo holds
-`20260906120000_chats_source_codex.sql` — **same name, different version**, the
-F-526 class. If that is the same migration, `20260906120000` is *already applied*
-and the true pending count is 18, not 19. **This was not verified**: no
-`SUPABASE_ACCESS_TOKEN` / `SUPABASE_DB_PASSWORD` is present in this environment,
-so `supabase migration list --linked` could not run. Verify before step 1.
+Reconciliation is by **migration NAME**. Everything through
+`chats_source_codex` and `channel_sessions_display_name` is applied.
 
----
+### Blockers
+
+| # | Blocker | State |
+|---|---|---|
+| B1 | Duplicate version `20260901120000` (two files) killed the CI replay on `schema_migrations_pkey` 23505. | ✅ **RESOLVED 2026-09-03** — `credit_usage_events` renamed to `20260901130000`, which preserves chronological truth (prod applied it after `agent_template_home_scoped`). Safe precisely because the repo prefix never matched prod. `schema-sql.test.ts`'s F-526 carve-out is now a clean no-duplicates assertion. |
+| B2 | `delivery-composed.test.ts` — `Cannot find module 'electron'` on ubuntu. | ✅ **RESOLVED** — and it was a real defect, not a test artifact: `agent-handles.js › handleIndexFor` caught a failing name lookup and then called `require('./diag')`, which requires `electron` and **threw out of the catch**, taking down the routing path the catch exists to protect. The diagnostic is now non-fatal. |
+| B3 | 24 Windows failures across `canonical-sets`, `b10-no-derived-default`, `delivery-composed`. | ✅ **RESOLVED** — native path separators compared against `/`-spelled literals. Normalised at both scan sites. |
+| B4 | **The 20 pending migrations have executed NOWHERE.** | ⚠ **OPEN until `rls-redteam` goes green.** That job is the first replay these files have ever had; B1 was stopping it before it reached any of them. **Do not apply to production until it passes** — that run is the only evidence that exists. |
+| B5 | No local replay here (Docker unavailable) and no CLI creds (`SUPABASE_ACCESS_TOKEN` / `SUPABASE_DB_PASSWORD` absent). | Accepted — CI is the replay; §2 applies per-file rather than through the CLI. |
 
 ## §1 — THE MIGRATION LEDGER
 
-19 repo files sort after production's last applied version
-(`20260905120000_channel_sessions_display_name`). One is held; the rest split
-into **expand** (safe while the OLD code is still live) and **contract** (safe
-only once v2/wave-b is live).
+**22** repo files sort after `20260905120000_channel_sessions_display_name`.
+One (`chats_source_codex`) is **already applied** on prod under an auto-stamped
+version, and one (`drop_home_scoped`) is **held** — so:
+
+> **22 − 1 applied − 1 held = 20 TO APPLY: 15 expand + 5 contract.**
+
+⚠ Earlier drafts of this file said 19, and the wave was briefed as "17
+migrations". Both were wrong; the arithmetic above is the count.
+
+They split into **expand** (safe while the OLD code is still live) and
+**contract** (safe only once v2/wave-b is live).
 
 Destructive = drops an object. Data-moving = writes rows.
 
-### EXPAND — apply BEFORE the deploy (phase 1)
+### EXPAND — apply BEFORE the deploy (phase 1) — 15 files
+
+⚠ `20260906120000_chats_source_codex` is **NOT** in this list: it is already on
+prod as `20260901202204`. Do not re-apply it.
 
 | File | Destr. | Data | Reversible | Notes |
 |---|---|---|---|---|
-| `20260906120000_chats_source_codex` | no | no | yes | ⚠ may already be applied as `20260901202204` — verify |
 | `20260907120000_channel_launch_directives_kind` | no | no | yes | additive cols + CHECK widen |
 | `20260908120000_knowledge_pinned_startup_context` | no | no | yes | `DEFAULT FALSE` *is* the no-backfill guarantee |
 | `20260909120000_channel_sessions_health` | no | no | yes | 7 nullable cols, service_role only |
@@ -72,7 +82,7 @@ Destructive = drops an object. Data-moving = writes rows.
 | `20260921130000_channel_resource_grants_read_only` | policy | no | yes | drops a WRITE policy; old writes go through service_role, which bypasses it |
 | `20260921140000_resource_grant_trigger_arms` | no | no | yes | function replacements |
 
-### CONTRACT — apply only AFTER v2/wave-b is live (phase 2)
+### CONTRACT — apply only AFTER v2/wave-b is live (phase 2) — 5 files
 
 Each drops something **master's currently-deployed code still reads**. Applying
 any of these before the deploy takes production down.
@@ -124,34 +134,38 @@ split. The expand set is invisible to old code.
 
 ### Executing the split
 
-`db push` applies every pending file in version order and cannot skip a middle,
-and `20260915`/`20260916` sort *before* the rest of the expand set. So phase 1
-is done by temporarily holding the contract files:
+**Per file, never `db push`** (§0). Each file is applied with the Supabase MCP:
 
-```bash
-# phase 1 — hold the contract set, push expand only
-git mv supabase/migrations/2026091{5,6}120000_*.sql supabase/migrations-held/
-git mv supabase/migrations/20260922120000_*.sql     supabase/migrations-held/
-git mv supabase/migrations/202609231{3,4}0000_*.sql supabase/migrations-held/
-#   ⚠ update the "held set is exactly" assertion in migrations-held.test.ts
-supabase db push --linked --dry-run     # paste the plan into the release notes
-supabase db push --linked
-
-# → deploy (§4)
-
-# phase 2 — release the contract set
-git mv supabase/migrations-held/2026091{5,6}120000_*.sql supabase/migrations/
-git mv supabase/migrations-held/20260922120000_*.sql     supabase/migrations/
-git mv supabase/migrations-held/202609231{3,4}0000_*.sql supabase/migrations/
-supabase db push --linked --dry-run
-supabase db push --linked --include-all   # out-of-order: they sort before 20260923140000
+```
+apply_migration(name = <filename minus version and ".sql">, query = <file contents verbatim>)
 ```
 
-⚠ `--include-all` applies **every** pending file. Re-read the dry-run plan and
-confirm `20260923120000_drop_home_scoped` is not in it — it is held, so it must
-not be.
+in filename order — the same path the previous ~25 took, which is why prod's
+versions are auto-stamped. `list_migrations` before and after each phase; the
+name is what reconciles, so keep it exact.
 
----
+Because files are applied individually, the expand/contract split needs no
+directory juggling: **just stop after the 15th.** The held file is not in
+`supabase/migrations/` at all and cannot be reached by either phase.
+
+Before the first apply, take a schema snapshot (`db dump` needs CLI creds that
+are absent):
+
+```sql
+SELECT (SELECT count(*) FROM information_schema.tables  WHERE table_schema='public') AS tables,
+       (SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace)     AS functions,
+       (SELECT count(*) FROM pg_policies WHERE schemaname='public')                 AS policies,
+       (SELECT count(*) FROM information_schema.columns WHERE table_schema='public') AS columns;
+```
+
+Re-run it after each phase and record the deltas in §6. It is not a backup —
+**there is no backup without CLI credentials**, which is its own reason to stop
+before the contract phase if anything looks wrong.
+
+⚠ **`20260914120000` and `20260917120000` move DATA.** Run the §5 verify query
+immediately after each, before continuing. `20260914120000`'s backfill is what
+`20260923130000` later checks for exactness; if the backfill is short, the
+contract phase raises and the release stops half-applied.
 
 ## §3 — FLAGS
 
@@ -183,14 +197,14 @@ expand set and one-way for the contract set.**
 
 ## §4 — THE ORDERED RELEASE
 
-1. **Back up.** `supabase db dump --linked -f backups/prod-pre-mcp-v2-$(date +%Y%m%d%H%M).sql` — confirm `backups/` is gitignored first.
-2. **Verify the true pending list.** `supabase migration list --linked`. Reconcile the `chats_source_codex` version mismatch (§0) and re-count. Do not proceed on the assumption of 19.
-3. **CI green**, `rls-redteam` included. That job is the only replay evidence that exists.
-4. **Phase 1 push** (§2), dry-run first, plan pasted into this file.
-5. **Verify phase 1** (§5).
+1. **Snapshot** (§2). ⚠ Not a backup — `db dump` needs CLI credentials that are absent. Getting them, and taking a real dump, is the one thing that makes the contract phase reversible. **Do this before step 8, not after.**
+2. **`list_migrations`** and reconcile **by name** (§0). Confirm 20 pending: 15 expand + 5 contract, `chats_source_codex` absent from the list, `drop_home_scoped` absent from the repo's apply directory.
+3. **CI green**, `rls-redteam` included — its first full replay of all 20. That job is the only evidence these files apply at all. **Do not start step 4 without it.**
+4. **Phase 1: apply the 15 expand files** per-file, in filename order (§2).
+5. **Verify phase 1** (§5), including the mirror-exactness query that phase 2 depends on.
 6. **Merge PR #12** to master — **merge commit, not squash**; the branch carries 370+ commits.
 7. **Wait for the Vercel production deploy to report READY.** Do not start phase 2 before it does.
-8. **Phase 2 push** (§2), dry-run first.
+8. **Phase 2: apply the 5 contract files** per-file (§2). ⚠ One-way without a dump — see step 1.
 9. **Verify phase 2** (§5).
 10. **Smoke**: `GET https://www.usedopl.com/api/version`; then an authenticated MCP `initialize` + `tools/list` — expect **11 tools**, and measure served chars against the 46,851 baseline. That measurement is the point of the wave.
 11. **Desktop**: `cd dopl-desktop-app && npm run release -- --dry-run`, then `npm run release` (notary profile `dopl-notary`). Verify per `docs/ENGINEERING.md` §18: `xcrun stapler validate`, `spctl -a -vvv`, and `latest-mac.yml` serving 1.26.0. Tag `v1.26.0`.

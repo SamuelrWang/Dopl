@@ -23,11 +23,16 @@ enforced by the filesystem, not by a comment asking people to be careful.
 ## ⚠ A held file may sort BEFORE applied ones — releasing it is OUT OF ORDER
 
 `20260923120000` is held while `20260923130000` and `20260923140000` are
-applied. Its version therefore sorts **earlier than the newest version on the
-target**, and `supabase db push` refuses an older-than-remote local migration by
-default. Releasing it later needs `supabase db push --include-all`, and that
-flag applies **every** pending file — so re-read the pending list before using
-it rather than assuming it means "just this one".
+applied, so its version sorts **earlier than the newest version on the target**.
+
+⚠ This matters less than it first appears, because **production is not applied
+with `supabase db push` at all** — versions there are auto-stamped at apply time
+and reconciled by migration NAME (see `docs/RELEASE-MCP-V2-2026-09-02.md` §0).
+Releasing a held file means applying it per-file like every other, at which
+point its filename version is not consulted. What the ordering *does* affect is
+the **local/CI replay**, where `db reset` applies in filename order: this file
+will replay before the two that follow it, which is correct, since neither
+depends on it (assertion 3 above is what proves that).
 
 Do **not** fix this by re-stamping the file to a newer version. The stamp is
 when it was written, the two files after it do not depend on it (assertion 3

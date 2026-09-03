@@ -282,9 +282,15 @@ Two things from it belong here, because they change what item 6 above means:
   `supabase/migrations-held/`, enforced by the filesystem and by
   `src/shared/supabase/migrations-held.test.ts` rather than by the sentence in
   item 6. `db push` cannot reach it.
-- **The wave is not releasable yet.** `rls-redteam` — the first-ever replay of
-  these migrations — dies on a duplicate `20260901120000` version stamp
-  (`schema_migrations_pkey`, 23505) before it reaches any wave file, so **no
-  evidence exists that these 17 migrations apply at all**. That, and a
-  Linux-only `electron` import failure in `delivery-composed.test.ts`, are §0 of
-  the runbook.
+- **The count is 20, not 17.** 22 files sort after the last applied migration;
+  one (`chats_source_codex`) is already on production under an auto-stamped
+  version and one is held. **20 to apply: 15 expand + 5 contract.**
+- **Production versions are auto-stamped and have not matched repo filenames
+  since ~2026-08-23**, so reconciliation is by migration NAME and
+  `supabase db push` must never be run against production — it would re-apply
+  ~25 files, several destructive. Runbook §0.
+- **The three red CI jobs are fixed** (2026-09-03): the duplicate
+  `20260901120000` version that killed the first-ever replay, a `require`
+  inside an error handler that threw and took down the routing path it was
+  protecting, and native path separators compared against `/` literals on
+  Windows. The replay's first green run is still the gate before any apply.
