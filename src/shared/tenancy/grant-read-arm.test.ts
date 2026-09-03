@@ -23,6 +23,18 @@
  * ⚠ **NO DATABASE, AND NOTHING MOCKED.** Both predicates are total functions of
  * a context, a row and a set. That is the whole reason the async lookup was kept
  * OUT of them.
+ *
+ * 🔒 ⚠ **AND THE LAST CASE COMPARES THE TWO HALVES OF THE RULE, NOT ONE OF
+ * THEM** (added 2026-09-02 in review). `grantedResourceIds` has a SQL twin,
+ * `dopl_grant_admits()`, and the arm each is OR-ed into is written twice — so
+ * the shared-credential refusal standing ABOVE the grant is a property of the
+ * PAIR. It was true in TypeScript and false in SQL for the length of one
+ * review: the migration OR-ed the grant in at the top of both predicates,
+ * outside the guard, and every green test in this file was green about the half
+ * that was right. It therefore parses the migration the way
+ * `check-rls-pair-gate.ts` and the redteam suites do — a replay of
+ * `supabase/migrations/*.sql`, not a read of the newest file — rather than
+ * asserting on TypeScript alone.
  */
 
 import { describe, it, expect } from "vitest";
@@ -40,6 +52,7 @@ import type {
   AgentTemplateContext,
 } from "@/features/agent-templates/types";
 import { NO_GRANTS } from "./resource-grant-reach";
+import { liveFunction } from "@/shared/supabase/rls-policy-scan";
 
 const ME = "u-me";
 const PEER = "u-peer";
@@ -166,4 +179,36 @@ describe("🔒 the grant prefilter never hides a row the grant arm would admit",
       )
     ).toBe(false);
   });
+
+  it.each([
+    ["dopl_knowledge_base_readable", "'knowledge_base'"],
+    ["can_current_user_read_agent_template", "'agent_template'"],
+  ])(
+    "🔒 …and %s says the same thing in SQL, which is the half that diverged",
+    (fn, resourceType) => {
+      // ⚠ THE SAME SENTENCE, READ OUT OF THE MIGRATIONS. The TypeScript above
+      // proves arm 2 stands above arm 4 for the predicate the SERVICE runs; a
+      // policy is a second statement of it and the two must agree, or a row the
+      // service hides is served by PostgREST. `liveFunction` replays every
+      // migration in filename order, so a later file that re-states either
+      // predicate is what this reads.
+      const sql = liveFunction(fn);
+      expect(sql).toContain("dopl_grant_admits(");
+      // The grant is reachable ONLY through the refusal, never beside it.
+      expect(sql).toMatch(
+        new RegExp(
+          `NOT public\\.dopl_credential_is_shared\\(\\) AND public\\.dopl_grant_admits\\( ?${resourceType}`,
+          "i"
+        )
+      );
+      const unguarded = new RegExp(
+        `(?<!dopl_credential_is_shared\\(\\) AND )public\\.dopl_grant_admits\\( ?${resourceType}`,
+        "i"
+      );
+      expect(
+        sql,
+        `${fn} reaches dopl_grant_admits() without the shared-credential guard — the TypeScript twin refuses that credential two arms earlier`
+      ).not.toMatch(unguarded);
+    }
+  );
 });

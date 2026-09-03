@@ -54,10 +54,29 @@
 -- here would refuse precisely the cross-container lend this function exists to
 -- honour. The membership tests below are the fence, and they are the CALLER's.
 --
--- ⚠ THE ARM IS AN `OR` AT THE TOP OF EACH PREDICATE, not a term inside the
--- membership branch, for the same reason: the grantee is typically NOT a member
--- of the resource's container, so an arm under `is_current_workspace_member`
--- would be unreachable.
+-- ⚠ THE ARM IS AN `OR` BESIDE THE MEMBERSHIP GROUP, not a term inside it, for
+-- the same reason: the grantee is typically NOT a member of the resource's
+-- container, so an arm under `is_current_workspace_member` would be unreachable.
+--
+-- ═══ 🔒 …BUT IT IS NOT AT THE TOP — TWO ARMS STAND ABOVE IT ════════════════
+--
+-- The TypeScript twins are the specification, and both refuse before they ever
+-- reach the grant (`knowledge › canSeeBase` arm 2, `agent-templates ›
+-- canSeeTemplate` arm 2):
+--
+--   1. **A SHARED CREDENTIAL IS NEVER WIDENED BY A GRANT.** It stands for
+--      nobody in particular, so it has no membership of the granted scope to
+--      read the grant THROUGH. Written here as
+--      `NOT public.dopl_credential_is_shared() AND public.dopl_grant_admits(…)`
+--      — the conjunct is the arm-2 refusal, restated where the arm is.
+--      ⚠ Without it the policy admitted what its twin refuses, which is the
+--      exact divergence the redteam suites exist to catch.
+--   2. **THE TEAMS GATE STILL APPLIES TO A LENT ROW** (knowledge only). Its
+--      twin is `assertBaseVisible`, which runs `canSeeBase` AND THEN the
+--      teams-mode check, and `filterTeamVisibleBases` drops a teams-mode base
+--      the caller holds no level on however it became visible. So the gate is
+--      AND-ed over the whole readable group rather than restated inside each
+--      arm — one statement, and a grant cannot route around it.
 --
 -- ⚠ SECURITY DEFINER, matching `dopl_teams_mode_visible()`: `resource_grants`
 -- carries its own SELECT policy and a nested policy evaluation is both slower
@@ -80,8 +99,9 @@
 --   P22  container grant, caller is NOT                      → invisible
 --   P23  channel grant at `agent_only`, caller in the channel→ invisible
 --   P24  the same row at `visible`                           → visible
+--   P25  ANY grant, read through a SHARED credential          → invisible
 -- The live halves of `rls-redteam.test.ts` (knowledge, agent_templates) are
--- these four; `RLS_REDTEAM_LIVE=1` in CI is what pays them.
+-- these five; `RLS_REDTEAM_LIVE=1` in CI is what pays them.
 
 -- ── 1. The sentence, once ────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.dopl_grant_admits(
@@ -127,18 +147,25 @@ AS $function$
     SELECT 1
     FROM public.knowledge_bases kb
     WHERE kb.id = p_base_id
+      -- `canSeeBase`: membership + M-10, OR the grant — and the grant carries
+      -- arm 2's refusal with it, because a shared credential reaches no scope.
       AND (
         (
           public.is_current_workspace_member(kb.workspace_id, 'viewer')
           AND public.dopl_can_see_visibility(kb.visibility, kb.created_by)
-          AND (
-            kb.access_mode IS DISTINCT FROM 'teams'
-            OR public.dopl_teams_mode_visible(
-                 kb.workspace_id, 'knowledge_base', kb.id, kb.created_by
-               )
-          )
         )
-        OR public.dopl_grant_admits('knowledge_base', kb.id)
+        OR (
+          NOT public.dopl_credential_is_shared()
+          AND public.dopl_grant_admits('knowledge_base', kb.id)
+        )
+      )
+      -- `assertBaseVisible`'s SECOND question, AND-ed over both arms exactly as
+      -- the TypeScript asks it: a lent row in teams mode still needs a level.
+      AND (
+        kb.access_mode IS DISTINCT FROM 'teams'
+        OR public.dopl_teams_mode_visible(
+             kb.workspace_id, 'knowledge_base', kb.id, kb.created_by
+           )
       )
   );
 $function$;
@@ -177,7 +204,12 @@ AS $function$
              )
            )
          )
-         OR public.dopl_grant_admits('agent_template', t.id)
+         -- Arm 4, and arm 2 travels with it: `canSeeTemplate` refuses a shared
+         -- credential BEFORE it consults the grant set.
+         OR (
+           NOT public.dopl_credential_is_shared()
+           AND public.dopl_grant_admits('agent_template', t.id)
+         )
        )
   );
 $function$;

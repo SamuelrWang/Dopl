@@ -43,6 +43,14 @@ const POLICIES = livePolicies();
 /** The matrix, stated once — `20260915120000` collapsed three copies onto it. */
 const READABLE = "can_current_user_read_agent_template";
 
+/**
+ * THE GRANT ARM'S WHOLE SHAPE: a `)` closing the membership group, then the arm
+ * — and the arm is the shared-credential refusal AND the grant, never the grant
+ * alone. The twin of `knowledge/server/rls-redteam.test.ts › GRANT_ARM`.
+ */
+const GRANT_ARM =
+  /\) OR \( NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'agent_template', t\.id\s*\) \)/i;
+
 describe("REDTEAM agent_templates — the policy alone", () => {
   const policy = () => POLICIES.get("agent_templates.agent_templates_member_select") ?? "";
 
@@ -69,18 +77,32 @@ describe("REDTEAM agent_templates — the policy alone", () => {
     );
   });
 
-  it("🔒 carries the GRANT arm, at the TOP and not inside the membership branch (F-604)", () => {
+  it("🔒 carries the GRANT arm BESIDE the membership branch, never inside it (F-604)", () => {
     // ⚠ THE POSITION IS THE ASSERTION. A grantee is typically NOT a member of
     // the resource's container, so an arm nested under
     // `is_current_workspace_member` would be unreachable and the write door
     // B15 shipped would go on writing rows nothing reads.
     const fn = liveFunction(READABLE);
     // It is OR-ed onto a CLOSED membership group…
-    expect(fn).toMatch(/\)\s*OR\s+public\.dopl_grant_admits\(\s*'agent_template'/i);
-    // …and never AND-ed, which is the nesting failure mode: an arm conjoined
-    // with the membership test can only ever narrow, so the grant would do
-    // nothing for the caller it is written for.
-    expect(fn).not.toMatch(/AND\s+public\.dopl_grant_admits/i);
+    expect(fn).toMatch(GRANT_ARM);
+    // …and never conjoined with the membership test, which is the nesting
+    // failure mode: an arm AND-ed onto it can only ever narrow, so the grant
+    // would do nothing for the caller it is written for.
+    expect(fn).not.toMatch(
+      /is_current_workspace_member\([^)]*\)\s*AND\s+public\.dopl_grant_admits/i,
+    );
+  });
+
+  it("🔒 …and the arm carries arm 2 with it — a SHARED credential is not widened (P25)", () => {
+    // 🔒 THE ARM THE FIRST DRAFT LOST. `(membership AND …) OR grant_admits(…)`
+    // put the grant ABOVE the shared-credential refusal, so a credential that
+    // stands for nobody read a lent row the TS twin refuses at arm 2 —
+    // `canSeeTemplate` asks `isSharedCredential` before it consults
+    // `share.grantedIds`. A policy admitting what its twin refuses is the
+    // divergence this suite exists to catch.
+    expect(liveFunction(READABLE)).toMatch(
+      /NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'agent_template'/i,
+    );
   });
 
   it("🔒 `dopl_grant_admits` answers CHANNEL and CONTAINER, and refuses `team`", () => {
@@ -246,6 +268,32 @@ describe.skipIf(!liveRedteamEnabled)(
       expect(
         await readableIds(outsiderId, "agent_templates", workspaceId)
       ).toHaveLength(0);
+    });
+
+    it("🔒 P25 — a SHARED CREDENTIAL is not widened by that grant, live", async () => {
+      // The same row, the same reader, the same grant; the ONE axis that moves
+      // is whether the credential stands for a person. `canSeeTemplate` refuses
+      // at arm 2 and the policy must refuse with it.
+      const ref = {
+        workspaceId,
+        scopeType: "container" as const,
+        scopeId: outsiderContainerId,
+        resourceType: "agent_template" as const,
+        resourceId: privateTemplateId,
+      };
+      await grantToScope({ ...ref, createdBy: ownerId });
+      try {
+        expect(
+          await readableIds(outsiderId, "agent_templates", workspaceId)
+        ).toEqual([privateTemplateId]);
+        expect(
+          await readableIds(outsiderId, "agent_templates", workspaceId, {
+            shared: true,
+          })
+        ).toHaveLength(0);
+      } finally {
+        await revokeFromScope(ref);
+      }
     });
   }
 );

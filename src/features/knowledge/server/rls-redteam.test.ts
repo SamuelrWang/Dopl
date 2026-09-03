@@ -65,6 +65,14 @@ const DENY_ALL_UNTIL_PHASE_3 = "knowledge_entry_chunks";
 /** "May the caller read this base?" — the rule, written once (STEP 4). */
 const READABLE = "dopl_knowledge_base_readable";
 
+/**
+ * THE GRANT ARM'S WHOLE SHAPE, IN ONE PATTERN: a `)` closing the membership
+ * group, then the arm — and the arm is the shared-credential refusal AND the
+ * grant, never the grant alone.
+ */
+const GRANT_ARM =
+  /\) OR \( NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'knowledge_base', kb\.id\s*\) \)/i;
+
 describe("REDTEAM knowledge — the GRANT arm (F-604)", () => {
   it("🔒 is OR-ed onto a CLOSED membership group, never AND-ed into one", () => {
     // ⚠ THE POSITION IS THE ASSERTION. A grantee is typically NOT a member of
@@ -72,8 +80,31 @@ describe("REDTEAM knowledge — the GRANT arm (F-604)", () => {
     // could only ever narrow — the write door B15 shipped would go on writing
     // rows nothing reads.
     const fn = liveFunction(READABLE);
-    expect(fn).toMatch(/\)\s*OR\s+public\.dopl_grant_admits\(\s*'knowledge_base'/i);
-    expect(fn).not.toMatch(/AND\s+public\.dopl_grant_admits/i);
+    expect(fn).toMatch(GRANT_ARM);
+    expect(fn).not.toMatch(/is_current_workspace_member\([^)]*\)\s*AND\s+public\.dopl_grant_admits/i);
+  });
+
+  it("🔒 …and it carries the SHARED-CREDENTIAL refusal with it — `canSeeBase` arm 2 (P25)", () => {
+    // 🔒 THIS IS THE ARM THE FIRST DRAFT LOST, and it lost it by being written
+    // at the TOP of the predicate: `(membership AND …) OR grant_admits(…)`
+    // admitted a credential standing for NOBODY to a row lent to a scope it
+    // cannot be a member of, while `canSeeBase` refuses it two arms earlier.
+    // A policy that admits what its twin refuses is the whole failure this
+    // suite exists to catch, so the conjunct is asserted, not assumed.
+    expect(liveFunction(READABLE)).toMatch(
+      /NOT public\.dopl_credential_is_shared\(\) AND public\.dopl_grant_admits\(\s*'knowledge_base'/i,
+    );
+  });
+
+  it("🔒 …and a lent row still answers the TEAMS gate — `assertBaseVisible`'s second question", () => {
+    // The TS twin runs `canSeeBase` AND THEN the teams check, and
+    // `filterTeamVisibleBases` drops a teams-mode base the caller holds no
+    // level on however it became visible. So the gate is AND-ed over the whole
+    // readable group; a grant arm OR-ed ABOVE it would route around it.
+    const fn = liveFunction(READABLE);
+    const teamsAfterGroup =
+      /dopl_grant_admits\(\s*'knowledge_base', kb\.id\s*\) \) \) AND \( kb\.access_mode IS DISTINCT FROM 'teams'/i;
+    expect(fn).toMatch(teamsAfterGroup);
   });
 
   it("🔒 the child policies inherit it by asking about the PARENT, not by restating it", () => {
@@ -323,6 +354,27 @@ describe.skipIf(!liveRedteamEnabled)(
       await revokeFromScope(ref);
       expect(await rows(outsiderId, "knowledge_bases")).toHaveLength(0);
       expect(await rows(outsiderId, "knowledge_entries")).toHaveLength(0);
+    });
+
+    it("🔒 P25 — a SHARED CREDENTIAL is not widened by that grant, live", async () => {
+      // The same row, the same reader, the same grant — and the ONE axis that
+      // changes is whether the credential stands for a person. `canSeeBase`
+      // refuses at arm 2 and the policy must refuse with it.
+      const ref = {
+        workspaceId,
+        scopeType: "container" as const,
+        scopeId: outsiderContainerId,
+        resourceType: "knowledge_base" as const,
+        resourceId: privateBaseId,
+      };
+      await grantToScope({ ...ref, createdBy: ownerId });
+      try {
+        expect(await rows(outsiderId, "knowledge_bases")).toEqual([privateBaseId]);
+        expect(await rows(outsiderId, "knowledge_bases", true)).toHaveLength(0);
+        expect(await rows(outsiderId, "knowledge_entries", true)).toHaveLength(0);
+      } finally {
+        await revokeFromScope(ref);
+      }
     });
   }
 );
