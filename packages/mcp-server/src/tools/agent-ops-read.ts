@@ -9,7 +9,6 @@ import { inlineOr, isForeignAuthored } from "./narration.js";
 import { fenceBody } from "./untrusted-fence";
 import { ok, type ToolResponse } from "./respond.js";
 import { clipToMaxChars } from "./response-size.js";
-import { toWireShelfOrUndefined, type ShelfArg } from "./shelf.js";
 import {
   isErr,
   NO_NAME,
@@ -33,28 +32,18 @@ const OFFERED_VISIBILITIES = new Set<string>(TEMPLATE_VISIBILITY_VALUES);
  *  back to the reader one heading at a time. */
 const OTHER_HEADING = "Shared";
 
-export async function opList(
-  client: DoplClient,
-  shelf?: ShelfArg,
-): Promise<ToolResponse> {
-  const payload = await client.listAgentTemplatesPayload({
-    shelf: toWireShelfOrUndefined(shelf),
-  });
-  const templates = payload.templates;
-  // 🔒 ⚠ SIBLING KEY, `?? []` INLINE (INVARIANTS §8) — the twin of
-  // `dopl_kb(op="list_bases")`'s. `home_scoped` stays off the row so no client
-  // can re-derive the shelf fence; an absent key leaves every row UNLABELLED,
-  // which is what this surface showed before the key existed.
-  const personal = new Set(payload.homeScopedTemplateIds ?? []);
-  const where =
-    shelf === "personal"
-      ? " on your personal shelf"
-      : shelf === "workspace"
-        ? " on the workspace shelf"
-        : "";
+/**
+ * ⚠ **THE `shelf` ARGUMENT AND ITS `· personal` LABEL LEFT ON 2026-09-02**
+ * (slice B15, ruling B10) — the twin of `dopl_kb(op="list_bases")`'s, for the
+ * same reason: a personal template is an ordinary row in the caller's own
+ * `kind='personal'` CONTAINER, so "which shelf" is the tenancy the call is
+ * already in.
+ */
+export async function opList(client: DoplClient): Promise<ToolResponse> {
+  const templates = (await client.listAgentTemplatesPayload()).templates;
   if (templates.length === 0) {
     return ok(
-      `No agent templates visible to you${where}. ${TEMPLATES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`,
+      `No agent templates visible to you here. ${TEMPLATES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`,
     );
   }
   // ⚠ GROUPED BY VISIBILITY because that is the axis a caller acts on ("the
@@ -77,11 +66,11 @@ export async function opList(
     ),
     [OTHER_HEADING, templates.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility))],
   ];
-  const lines = [`## Agent templates${where}\n`];
+  const lines = ["## Agent templates\n"];
   for (const [heading, rows] of groups) {
     if (rows.length === 0) continue;
     lines.push(`### ${heading}`);
-    for (const t of rows) lines.push(templateRow(t, personal.has(t.id)));
+    for (const t of rows) lines.push(templateRow(t));
     lines.push("");
   }
   lines.push(TEMPLATES_SCOPE_NOTE);

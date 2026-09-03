@@ -1,30 +1,23 @@
 /**
- * `dopl_kb` non-destructive WRITE op handlers: create/update/set_visibility
+ * `dopl_kb` non-destructive WRITE op handlers: create/update/set_visibility/grant
  * on bases, create/move folders, write/move entries. Every write maps @dopl/client errors — conflict (412),
  * already-exists (409), agent-write-denied (403), and validation (400) —
  * to actionable tool messages. Routed from the registrar in knowledge.ts.
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-import { type ShelfArg } from "./shelf";
+import type { WorkspaceDirectory } from "../workspace-directory";
+import { type GrantLevelArg, type GrantScopeArg } from "./grant";
 /**
- * 🔒 CREATE, ON EITHER SHELF, WITH THE TWO GATES THE SPEC PUTS AROUND IT.
+ * 🔒 CREATE, WITH THE ONE GATE THE SPEC PUTS AROUND IT.
  *
- * 1. **THE SHELF CONTRADICTION IS REFUSED LOCALLY, BEFORE THE ROUND TRIP**
- *    (spec §7.2, the `channel-ops-write.ts` refuse-before-send idiom).
- *    `shelf: "personal"` sends `homeScoped: true` + `visibility: "private"`, so
- *    an explicit `visibility: "public"` beside it is two incompatible
- *    instructions — and the server's 403 ("the /home shelf holds private bases
- *    only") is correct but reads as a permission problem rather than as
- *    something the caller can fix by dropping one argument.
+ * ⚠ **THE TWO SHELF RULES THIS DOCBLOCK OPENED WITH ARE GONE (2026-09-02, slice
+ * B15, ruling B10)** — the local shelf/visibility contradiction and the server's
+ * `resolveHomeScope`. The `home_scoped` column is dropped and a personal base is
+ * an ordinary row in the caller's own `kind='personal'` container, so there is
+ * no second shelf for a `public` base to contradict.
  *
- * 2. 🔒 **THE HOME-SHELF FENCE STAYS THE SERVER'S.**
- *    `src/features/knowledge/server/service-base-writes.ts › resolveHomeScope`
- *    wants a PERSON's credential, a PRIVATE row, and the caller's OWN default
- *    standard workspace, all three, and 403s otherwise. Nothing here relaxes it
- *    — `shelf.ts › homeShelfForbidden` only makes the refusal actionable.
- *
- * 3. ⚠ **THE CONFIRM GATE IS A TRIPWIRE** (see `confirm-token.ts`). It fires
+ * ⚠ **THE CONFIRM GATE IS A TRIPWIRE** (see `confirm-token.ts`). It fires
  *    only for `visibility: "public"` inside a SHARED link container — a base
  *    published into the room a peer is standing in, which is the knowledge half
  *    of the audience-changing class. It does NOT fire in a standard workspace:
@@ -35,23 +28,10 @@ import { type ShelfArg } from "./shelf";
 export declare function opCreateBase(client: DoplClient, callerUserId: string | null, input: {
     name: string;
     description?: string;
-    shelf?: ShelfArg;
     visibility?: "public" | "private";
     confirm_token?: string;
 }): Promise<ToolResponse>;
-/**
- * ⚠ THE SHELF IS NOT PATCHABLE, AND THE REFUSAL SAYS SO RATHER THAN IGNORING
- * THE ARG — the twin of `agent-ops-write.ts › opUpdate`'s, word for word in
- * substance. `home_scoped` is set at create and never written again for bases
- * and templates alike (F-342; Samuel's ruling Q8, 2026-08-28 keeps it that way
- * for v1), and the server's update schema does not accept it — so a silently
- * dropped `shelf` here would return a 2xx over a move that never happened.
- *
- * ⚠ `shelf` RIDES `dopl_kb`'s SHARED OP SCHEMA, so it is spellable on every op;
- * this is the ONE other op where it would read as an instruction the server
- * carried out. The reads ignore it exactly as `dopl_agent(op="get")` does.
- */
-export declare function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string, shelf?: ShelfArg): Promise<ToolResponse>;
+export declare function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string): Promise<ToolResponse>;
 /**
  * ⚠ **THE OTHER PUBLISHING DOOR, AND IT IS NOT PREVIEWED HERE — DELIBERATELY,
  * AND ONLY FOR NOW.** This file used to argue that gating `create_base` and not
@@ -107,3 +87,14 @@ export declare function opCreateFolder(client: DoplClient, ref: string, path: st
 export declare function opMoveFolder(client: DoplClient, ref: string, from_path: string, to_path: string): Promise<ToolResponse>;
 export declare function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string): Promise<ToolResponse>;
 export declare function opMoveFile(client: DoplClient, ref: string, from_path: string, to_path: string): Promise<ToolResponse>;
+/**
+ * `op="grant"` — lend ONE base to a channel, container or team. The op that
+ * REPLACED `op="copy_base"` (Wave B slice B15, ruling B11).
+ *
+ * ⚠ **THE RESOLVE IS THE ORDINARY ONE.** `resolveBaseOr` answers what this
+ * caller may see, `notOwnedRefusal` then narrows that to what they CREATED (R2),
+ * and the server repeats both — this tier exists to spend no round trip on a
+ * refusal it can already prove and to say WHY, where the server's uniform 404
+ * deliberately cannot.
+ */
+export declare function opGrantBase(client: DoplClient, directory: WorkspaceDirectory, selfUserId: string | null, ref: string, scope: GrantScopeArg, to: string, level: GrantLevelArg | undefined): Promise<ToolResponse>;

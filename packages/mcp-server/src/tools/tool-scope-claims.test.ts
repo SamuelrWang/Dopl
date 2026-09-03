@@ -174,11 +174,12 @@ const LEDGER: FilteredOp[] = [
     tool: "dopl_kb",
     op: "list_bases",
     filter: "canSeeBase + filterTeamVisibleBases",
-    // ⚠ Moved TWICE on 2026-08-28: `client.listKbBases()` → `({` when the shelf
-    // arg landed, → `Payload({` when the shelf LABEL needed the sibling key. The
-    // call is what proves the filter is still upstream of the render; its
-    // argument list is not part of the claim.
-    proof: "client.listKbBasesPayload({",
+    // ⚠ Moved THREE times: `client.listKbBases()` → `({` (the shelf arg,
+    // 2026-08-28) → `Payload({` (the shelf LABEL's sibling key) → `Payload()`
+    // (2026-09-02, slice B15, when the shelf left this surface entirely). The
+    // CALL is what proves the filter is still upstream of the render; its
+    // argument list never was part of the claim, and has now been empty twice.
+    proof: "client.listKbBasesPayload()",
     discloses: ["can READ", "private", "no grant on"],
   },
   {
@@ -233,10 +234,14 @@ const LEDGER: FilteredOp[] = [
   {
     tool: "dopl_agent",
     op: "list",
-    filter:
-      "canSeeTemplate server-side + the shelf column is not projected onto the row",
-    proof: "client.listAgentTemplatesPayload({",
-    discloses: ["you can SEE", "not the workspace's roster", "NO shelf label"],
+    filter: "canSeeTemplate server-side",
+    proof: "client.listAgentTemplatesPayload()",
+    // ⚠ **"NO shelf label" LEFT THIS ROW ON 2026-09-02 (slice B15).** It was a
+    // disclosure about an axis this surface no longer has: the `home_scoped`
+    // column is dropped and a personal template is an ordinary row in the
+    // caller's own `kind='personal'` container, so there is no unlabelled state
+    // to warn about. The VISIBILITY disclosures are untouched.
+    discloses: ["you can SEE", "not the workspace's roster"],
   },
 ];
 
