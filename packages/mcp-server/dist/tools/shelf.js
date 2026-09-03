@@ -102,7 +102,13 @@ function homeShelfForbidden(e) {
     const detail = typeof msg === "string" && msg
         ? personalShelfNoun(msg)
         : "This cannot be created on your personal shelf.";
-    return `${detail} Nothing was created. The personal shelf needs THREE things at once: a credential that stands for a PERSON (a shared or service credential has no personal shelf), a PRIVATE row, and your OWN default workspace as the target — so \`workspace=\` naming a home-channel container or a second workspace you own is refused here by design. Create it on the workspace shelf instead (omit \`shelf\`), or retry without \`workspace=\`.`;
+    // ⚠ **"YOUR OWN DEFAULT WORKSPACE" WAS STILL HERE ON 2026-09-02**, six lines
+    // under the comment that says why the phrase left `SHELF_ARG_DESCRIPTION`.
+    // The default workspace has no definition after this wave (ruling B10), so a
+    // REFUSAL that names one sends the caller to fix a thing that will not exist —
+    // and a refusal is read harder than a description, because it arrives at the
+    // moment the caller is deciding what to try next.
+    return `${detail} Nothing was created. The personal shelf needs THREE things at once: a credential that stands for a PERSON (a shared or service credential has no personal shelf), a PRIVATE row, and YOUR OWN tenancy as the target — so \`workspace=\` naming a home-channel container or a second workspace you own is refused here by design. Create it on the workspace shelf instead (omit \`shelf\`), or retry without \`workspace=\`.`;
 }
 /**
  * ⚠ THE WIRE NOUN, MAPPED — the ONE place a server sentence is re-spelled on its

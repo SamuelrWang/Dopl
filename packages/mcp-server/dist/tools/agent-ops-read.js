@@ -10,6 +10,7 @@ exports.opGet = opGet;
 const narration_js_1 = require("./narration.js");
 const untrusted_fence_1 = require("./untrusted-fence");
 const respond_js_1 = require("./respond.js");
+const response_size_js_1 = require("./response-size.js");
 const shelf_js_1 = require("./shelf.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 /** One heading per OFFERED visibility, in the order `op="list"` prints them. */
@@ -72,7 +73,9 @@ async function opList(client, shelf) {
 async function opGet(client, ref, 
 // ⚠ Only the FRAMING reads this — visibility is the server's decision and it
 // already ran.
-callerUserId = null) {
+callerUserId = null, 
+/** A16: clip the INSTRUCTIONS body, and SAY so. */
+maxChars) {
     const template = await (0, agent_shared_js_1.resolveTemplateOr)(client, ref);
     if ((0, agent_shared_js_1.isErr)(template))
         return template;
@@ -119,9 +122,20 @@ callerUserId = null) {
     // own fence and claim the text after it. The caller's OWN templates render
     // bare: framing every one of them is noise on the common path, and noise is
     // how a security header stops being read.
-    const instructions = template.instructions ?? "_No instructions set._";
+    // ⚠ **CLIPPED BEFORE THE FENCE, NEVER AFTER** (A16). `fenceBody` closes with a
+    // per-response random suffix; clipping the fenced block would cut that close
+    // tag off and leave a system prompt somebody else wrote running to the end of
+    // the response with nothing marking where it stops. The clip is a size knob,
+    // not a licence to break the one structure that makes foreign instructions
+    // safe to render at all.
+    const whole = template.instructions ?? "_No instructions set._";
+    const { body: instructions, notice } = (0, response_size_js_1.clipToMaxChars)(whole, maxChars);
     lines.push(...(foreign && template.instructions
         ? (0, untrusted_fence_1.fenceBody)(instructions, "agent instructions by another member")
         : [instructions]));
+    // ⚠ OUTSIDE the fence, so the notice is visibly this server's — a line the
+    // clipped prompt could otherwise be read as having written about itself.
+    if (notice)
+        lines.push("", notice);
     return (0, respond_js_1.ok)(lines.join("\n"));
 }

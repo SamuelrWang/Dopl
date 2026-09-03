@@ -143,7 +143,7 @@ recipientRef, thread) {
         // tool RESULT is read at the moment the model picks its next action, so it
         // outvotes the description (INVARIANTS §10). The failure this prevents is
         // an agent pinging repeatedly because it expected a reply to arrive.
-        "⚠ A ping is not a message: it is in NO transcript, it will never come back on an op=\"await\", and nothing replies to it. If you need an answer, the answer comes as a normal message on the channel — keep awaiting there.",
+        "⚠ A ping is not a message: it is in NO transcript, it will never come back on a read with wait_ms, and nothing replies to it. If you need an answer, the answer comes as a normal message on the channel — keep waiting there.",
         `⚠ ping seq ${ping.seq} is a PING cursor and is not a message seq. Never pass it to op="read" or op="read" with wait_ms.`,
     ].join("\n"));
 }

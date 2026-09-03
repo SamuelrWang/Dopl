@@ -15,6 +15,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOntologyTool = registerOntologyTool;
 const zod_1 = require("zod");
+const response_size_1 = require("./response-size");
 const identity_1 = require("./identity");
 const ontology_ops_write_1 = require("./ontology-ops-write");
 const tool_errors_1 = require("./tool-errors");
@@ -149,5 +150,10 @@ caller = identity_1.UNKNOWN_CALLER) {
             .string()
             .optional()
             .describe("Object-mutating ops: the object's Version from a prior op=\"get\", which rejects the write if the object changed since; omit to overwrite blindly (last-writer-wins)."),
+        // ⚠ A16's response-size knob, on the FOUR read ops. ONE `.describe()`,
+        // in `response-size.ts`, shared with every tool that takes it — because
+        // five wordings is five chances to promise something `concise` does not
+        // do, and the promise ("bodies are untouched") is why it gets used.
+        response_format: response_size_1.RESPONSE_FORMAT_FIELD,
     }, (args) => (0, ontology_ops_write_1.dispatch)(client, args, caller));
 }

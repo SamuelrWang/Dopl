@@ -6,6 +6,7 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import { type ResponseFormat } from "./response-size";
 import { type CallerIdentity } from "./identity";
 /**
  * ⚠ SUMMARY PROJECTION, NOT THE GRAPH, for the two name-only ops. Between them
@@ -18,7 +19,15 @@ import { type CallerIdentity } from "./identity";
  * `renderObject`, which reads JSONB off the target AND scans every object's
  * `relationships` for the inbound "Referenced by" list.
  */
-export declare function opMap(client: DoplClient): Promise<ToolResponse>;
+/**
+ * ⚠ **WHAT `concise` DROPS HERE, AND WHAT IT MAY NEVER DROP** (A16). It removes
+ * the LEGENDS — the scope note, the "drill in with…" pointer, the Version line
+ * and its parenthetical — and nothing else. It never removes an object, an
+ * attribute, a count, or a `clippedNote`: a truncation notice is a statement
+ * about the READ's completeness, and hiding it to save characters is the one
+ * saving that could make a prefix read as a whole.
+ */
+export declare function opMap(client: DoplClient, format?: ResponseFormat): Promise<ToolResponse>;
 /**
  * ⚠ THE STRONGEST IDENTITY CLAIM IN THE PRODUCT — the server instructions send
  * every agent here for any "my/me" request. The anchor is CONTEXT, NOT
@@ -27,6 +36,6 @@ export declare function opMap(client: DoplClient): Promise<ToolResponse>;
  * caller's immutable id FIRST, from the same session record `whoami` and the
  * footer use, and never let a name stand as identity.
  */
-export declare function opAnchor(client: DoplClient, caller?: CallerIdentity): Promise<ToolResponse>;
-export declare function opResolve(client: DoplClient, query: string): Promise<ToolResponse>;
-export declare function opGet(client: DoplClient, ref: string): Promise<ToolResponse>;
+export declare function opAnchor(client: DoplClient, caller?: CallerIdentity, format?: ResponseFormat): Promise<ToolResponse>;
+export declare function opResolve(client: DoplClient, query: string, format?: ResponseFormat): Promise<ToolResponse>;
+export declare function opGet(client: DoplClient, ref: string, format?: ResponseFormat): Promise<ToolResponse>;

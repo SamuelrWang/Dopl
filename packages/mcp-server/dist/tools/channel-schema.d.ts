@@ -177,12 +177,12 @@ export declare const CHANNEL_INPUT_SHAPE: {
     }, z.core.$strip>>;
     section: z.ZodOptional<z.ZodEnum<{
         read: "read";
+        fields: "fields";
         send: "send";
         manage: "manage";
         law: "law";
         model: "model";
         rooms: "rooms";
-        fields: "fields";
     }>>;
     model: z.ZodOptional<z.ZodString>;
     template: z.ZodOptional<z.ZodString>;

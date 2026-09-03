@@ -37,6 +37,19 @@ export declare function sortByRole(members: WorkspaceMember[]): WorkspaceMember[
  * peer-typed name with nothing immutable beside it.
  */
 export declare function memberDisplay(m: WorkspaceMember): string;
+/**
+ * ONE ROSTER LINE, under an optional `fields=` projection (A16 / ruling B8).
+ *
+ * 🔒 **THE ID IS PRINTED BY CONSTRUCTION AND IS NOT ONE OF THE NAMES** —
+ * Samuel's ruling. A caller can neither ask for it nor drop it, so no projection
+ * can produce a row nothing else in the product can address. That is why the
+ * `name`-less shape still opens with the id rather than falling back to a label.
+ *
+ * ⚠ NO FILTER ⇒ BYTE-IDENTICAL TO THE UNPROJECTED LINE. The knob is opt-in and
+ * an omitted one must change nothing — which is also what keeps the roster's
+ * `· you` marker aligned with `channel-render.ts › formatMemberLine`.
+ */
+export declare function memberListLine(m: WorkspaceMember, you: string, wants: ((name: string) => boolean) | null): string;
 /** A team as a neutralized name plus the id it cannot forge. */
 export declare function teamDisplay(name: string, id: string): string;
 /** A member's team chips — neutralized names with their ids, or "none". */

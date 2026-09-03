@@ -159,7 +159,7 @@ async function opCreate(client, callerUserId, input) {
         : "Shared with everyone in this workspace — every member can list it and launch it.";
     return (0, respond_js_1.ok)([
         `Created agent template ${(0, narration_js_1.inlineOr)(template.name, agent_shared_js_1.NO_NAME)} ${where} (id: \`${template.id}\`). ${audience}`,
-        `Launch it into a channel with dopl_channel(op="launch_agent", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
+        `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"));
 }
 /**

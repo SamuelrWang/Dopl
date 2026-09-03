@@ -23,6 +23,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerAgentTools = registerAgentTools;
 const zod_1 = require("zod");
+const response_size_1 = require("./response-size");
 const identity_js_1 = require("./identity.js");
 const respond_js_1 = require("./respond.js");
 const shelf_js_1 = require("./shelf.js");
@@ -131,6 +132,12 @@ const AGENT_INPUT_SHAPE = {
         .string()
         .optional()
         .describe("op=create / op=update: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable."),
+    // ⚠ A16's third response-size knob, and the only one on THIS surface: an
+    // INSTRUCTIONS block is a system prompt up to 32 KB, and an agent looking for
+    // a template's model or attached bases pays for all of it. ONE `.describe()`,
+    // in `response-size.ts`. The render SAYS when it clipped, which is what makes
+    // the knob safe to reach for.
+    max_chars: response_size_1.MAX_CHARS_FIELD,
 };
 /**
  * ⚠ RENDERED, NOT WRITTEN (A14, 2026-09-02) — `tool-style.ts › composeDescription`
@@ -175,7 +182,7 @@ const AGENT_DESCRIPTION = (0, tool_style_js_1.composeDescription)({
     headline: `Read and author AGENT TEMPLATES: the persistent identities (name, instructions, model, fields, attached bases) a session is spawned FROM — it starts and lists no RUNNING agent.`,
     policy: `Reads plus creates and updates; no delete op — deletion is app-only.`,
     routing: [
-        `Use dopl_channel(op="read_sessions") for agents RUNNING in a channel, and op="launch_agent" to start one.`,
+        `Use dopl_channel(op="status") for agents RUNNING in a channel; manage(action="launch") starts one.`,
         `Use dopl_kb for the knowledge bases a template attaches.`,
     ],
     body: [
@@ -226,7 +233,7 @@ directory) {
                 const miss = (0, respond_js_1.missingParams)("get", args, ["template"]);
                 if (miss)
                     return miss;
-                return (0, agent_ops_read_js_1.opGet)(client, args.template, caller.userId);
+                return (0, agent_ops_read_js_1.opGet)(client, args.template, caller.userId, args.max_chars);
             }
             case "create": {
                 const miss = (0, respond_js_1.missingParams)("create", args, ["name"]);

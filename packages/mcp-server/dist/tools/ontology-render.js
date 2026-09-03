@@ -9,6 +9,7 @@ exports.resolveObjectRef = resolveObjectRef;
 exports.resolveClusterRef = resolveClusterRef;
 exports.resolveResourceHandles = resolveResourceHandles;
 exports.renderObject = renderObject;
+const response_size_1 = require("./response-size");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 /**
@@ -112,7 +113,9 @@ async function resolveResourceHandles(client, object) {
     }
     return handles;
 }
-function renderObject(object, snapshot, headline, handles = new Map()) {
+function renderObject(object, snapshot, headline, handles = new Map(), 
+/** A16: `concise` drops the two LEGENDS below and nothing else. */
+format) {
     const nameOf = (id) => snapshot.objects[id] ? (0, narration_1.inlineOr)(snapshot.objects[id].name, NO_NAME) : `\`${id}\``;
     // ⚠ What the object IS = its container's NAME (column, or the object it is
     // nested in) — member-typed like any other. Only the "column" fallback is ours.
@@ -124,7 +127,10 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
     lines.push(`# ${(0, narration_1.inlineOr)(object.name, NO_NAME)} (${kindLabel} · id: \`${object.id}\`)`);
     if (object.subtitle)
         lines.push((0, narration_1.inlineOr)(object.subtitle, ""));
-    if (object.updatedAt) {
+    // ⚠ A TIMESTAMP AND ITS LEGEND — `response-size.ts`'s own list of what
+    // `concise` drops opens with "timestamps". A caller that is about to WRITE
+    // asks for `detailed`, which is the default.
+    if (object.updatedAt && !(0, response_size_1.isConcise)(format)) {
         lines.push(`Version: \`${object.updatedAt}\` (pass as expected_version to a later write so a concurrent edit can't clobber yours)`);
     }
     if (object.attributes.length > 0) {
@@ -155,7 +161,9 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
         lines.push("", "## Referenced by", ...backlinks);
     }
     if ((object.template ?? []).length > 0) {
-        lines.push("", "## Default fields (template)", "_New objects created inside this one are born with these fields, empty:_");
+        lines.push("", "## Default fields (template)", ...((0, response_size_1.isConcise)(format)
+            ? []
+            : ["_New objects created inside this one are born with these fields, empty:_"]));
         for (const f of object.template) {
             lines.push(`- ${(0, narration_1.inlineOr)(f.label, NO_NAME)} (${f.kind})`);
         }

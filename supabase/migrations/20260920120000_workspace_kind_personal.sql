@@ -9,18 +9,35 @@
 -- one; apply them first, in filename order.
 --
 -- ⚠⚠ **APPLYING THIS FILE HAS A CODE PRECONDITION, AND IT IS NOT OPTIONAL
--- (F-564).** Eight sites derive "this is a home channel" from
+-- (F-564).** A set of sites derive "this is a home channel" from
 -- `!isStandardWorkspace(w)` — the LISTING predicate's negation — rather than
--- from `kind === "link"`. Re-derive them, never quote:
+-- from `kind === "link"`.
 --
---   grep -rn '!isStandardWorkspace' packages apps src --exclude-dir=dist
+-- 🔒 **THE PRECONDITION IS A GATE NOW, NOT THIS PARAGRAPH** (2026-09-02, in
+-- review):
 --
--- Today they are correct by accident: `standard` and `link` are the only kinds,
--- so "not standard" IS "link". THIS MIGRATION MAKES THAT FALSE for every user
--- at once — each of those sites would advertise a `personal` container as a
--- home channel. It is a MISLABEL rather than a leak (the container is the
--- caller's own, listed to its only member), which is why it does not block the
--- code landing; it blocks the migration RUNNING.
+--   npx vitest run src/features/workspaces/home-channel-derivation.test.ts
+--
+-- ⚠ **AND THE PARAGRAPH IT REPLACES WAS WRONG IN A WAY THAT MATTERS.** It said
+-- EIGHT sites and told the reader to `grep -rn '!isStandardWorkspace'`, which
+-- answers FOUR — because half of them are the ELSE BRANCH of a ternary
+-- (`isStandardWorkspace(w) ? "workspace" : "home channel"`) or an early return,
+-- and a negation grep cannot see either shape. So the count and the command
+-- under it disagreed, and the precondition on an unapplied migration was prose
+-- with no way to check it. The gate scans all three shapes across all three
+-- trees, holds the disposition of each FILE (which slice repoints or deletes
+-- it), and fails in BOTH directions — a new site, or a fixed one whose record
+-- did not leave with it.
+--
+-- **WHEN THAT SET IS EMPTY, THIS FILE MAY BE APPLIED.** Deleting the gate's map
+-- IS the sign-off; there is no second place to look.
+--
+-- Today those sites are correct by accident: `standard` and `link` are the only
+-- kinds, so "not standard" IS "link". THIS MIGRATION MAKES THAT FALSE for every
+-- user at once — each of them would advertise a `personal` container as a home
+-- channel. It is a MISLABEL rather than a leak (the container is the caller's
+-- own, listed to its only member), which is why it does not block the code
+-- landing; it blocks the migration RUNNING.
 --
 -- ⚠ THE FIX IS EITHER DIRECTION AND BOTH ARE BATCH 3: each site asks
 -- `kind === "link"` (`workspaces/server/shared-publish.ts` states the rule in

@@ -55,13 +55,13 @@ caller = identity_1.UNKNOWN_CALLER) {
     }
     switch (args.op) {
         case "map":
-            return (0, ontology_ops_read_1.opMap)(client);
+            return (0, ontology_ops_read_1.opMap)(client, args.response_format);
         case "anchor":
-            return (0, ontology_ops_read_1.opAnchor)(client, caller);
+            return (0, ontology_ops_read_1.opAnchor)(client, caller, args.response_format);
         case "resolve":
-            return (0, ontology_ops_read_1.opResolve)(client, args.query);
+            return (0, ontology_ops_read_1.opResolve)(client, args.query, args.response_format);
         case "get":
-            return (0, ontology_ops_read_1.opGet)(client, args.object);
+            return (0, ontology_ops_read_1.opGet)(client, args.object, args.response_format);
         case "create_cluster": {
             const cluster = await client.createOntologyCluster({
                 name: args.name,

@@ -15,6 +15,7 @@ const narration_1 = require("./narration");
 const identity_1 = require("./identity");
 const members_render_1 = require("./members-render");
 const respond_1 = require("./respond");
+const response_size_1 = require("./response-size");
 const tool_errors_1 = require("./tool-errors");
 const tool_style_1 = require("./tool-style");
 /**
@@ -71,12 +72,16 @@ caller = identity_1.UNKNOWN_CALLER) {
             .string()
             .optional()
             .describe("op=get_team (required): the team — id or name."),
+        // ⚠ A16's response-size knob. ONE `.describe()`, in `response-size.ts`,
+        // shared with every tool that takes a projection — and the user id is
+        // outside it by construction (Samuel's ruling).
+        fields: response_size_1.FIELDS_FIELD,
     }, async (args) => {
         switch (args.op) {
             case "whoami":
                 return opWhoami(client, caller);
             case "list":
-                return opList(client, caller);
+                return opList(client, caller, args.fields);
             case "get": {
                 const miss = (0, respond_1.missingParams)("get", args, ["member"]);
                 if (miss)
@@ -135,19 +140,22 @@ async function opWhoami(client, caller) {
     lines.push(``, identity_1.LOCUS_NOTE);
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opList(client, caller) {
+async function opList(client, caller, fields) {
     const members = await client.listWorkspaceMembers();
     if (members.length === 0)
         return (0, respond_1.ok)("No members found.");
+    // ⚠ RESOLVED ONCE, NOT PER ROW. An unknown name is IGNORED rather than
+    // refused (`response-size.ts › fieldFilter`): a mistyped one of four should
+    // cost the caller that field, never the whole read.
+    const wants = (0, response_size_1.fieldFilter)(fields);
     const lines = [];
     lines.push(`## Members — ${members.length}\n`);
     lines.push(`${members_render_1.UNTRUSTED_ROSTER_HEADER}\n`);
     for (const m of (0, members_render_1.sortByRole)(members)) {
-        const teams = m.teams.length > 0 ? (0, members_render_1.teamChips)(m.teams) : "no teams";
         // ⚠ `· you` must match `channel-render.ts › formatMemberLine` exactly — the
         // two rosters render the same workspace from the same column.
         const you = caller.userId && m.userId === caller.userId ? " · you" : "";
-        lines.push(`- ${(0, members_render_1.memberDisplay)(m)} — **${m.role}** · ${(0, members_render_1.statusLabel)(m)} · ${teams}${you}`);
+        lines.push((0, members_render_1.memberListLine)(m, you, wants));
     }
     if (!caller.userId) {
         lines.push(`\nNo row is marked "you" — this connection could not resolve your own user id.`);

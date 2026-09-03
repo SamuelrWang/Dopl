@@ -61,9 +61,13 @@ export type MembershipStatus = "pending" | "active" | "revoked";
  * takes every default branch, which is the mirror of the failure
  * `check-message-kind-drift.ts` exists for.
  *
- * ⚠ **`!isStandardWorkspace(…)` IS NOT "THEREFORE A HOME CHANNEL"** and eight
- * sites read it that way — F-564, which is an ORDERING constraint on applying
- * `20260920120000`, not only a code fix. Ask `kind === "link"`.
+ * ⚠ **`!isStandardWorkspace(…)` IS NOT "THEREFORE A HOME CHANNEL"** — F-564,
+ * which is an ORDERING constraint on applying `20260920120000`, not only a code
+ * fix. Ask `kind === "link"`. ⚠ This said EIGHT sites and the count was wrong in
+ * both directions: a negation grep answers four, because half the sites are a
+ * ternary's else-branch or an early return. The set is derived, and the
+ * migration may be applied only when it is empty —
+ * `src/features/workspaces/home-channel-derivation.test.ts`.
  */
 export type WorkspaceKind = "standard" | "link" | "personal";
 
