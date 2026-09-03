@@ -59,9 +59,15 @@
 --                                    something does, it inherits the NARROW rule
 --                                    by construction rather than by remembering.
 --   container_id NULL, subject NULL  a shared credential with no fence at all.
---                                    Representable and correctly handled (it
---                                    reads nobody's private rows), but nothing
---                                    mints one and nothing should.
+--                                    ⚠ **NOT REPRESENTABLE WHILE THE LEGACY
+--                                    PAIR EXISTS** — `mcp_tokens_subject_axis_
+--                                    agree_check` below refuses it, because the
+--                                    legacy pair has no spelling for it and the
+--                                    reader's `?? legacy` fallback would hand
+--                                    back the OWNER (F-587). B13 drops the
+--                                    legacy columns and that constraint
+--                                    together, and the shape becomes both
+--                                    representable and correctly handled.
 --
 -- ── BACKFILL: EXACTLY TODAY'S THREE-ARM PREDICATE, WRITTEN DOWN ──────────────
 --
@@ -181,6 +187,41 @@ ALTER TABLE mcp_tokens
   ADD CONSTRAINT mcp_tokens_axes_agree_check
   CHECK (container_id IS NULL OR workspace_id IS NULL OR container_id = workspace_id);
 
+-- 🔒 **AND THE SAME GUARD ON THE SUBJECT AXIS (2026-09-02, F-587).** The
+-- container axis had one and the subject axis did not, and the two lanes fail
+-- in OPPOSITE directions — which is exactly why the missing one was the
+-- dangerous one to omit.
+--
+-- ⚠ **WITHOUT IT, `subject_user_id IS NULL` MEANS TWO THINGS AND THE READER
+-- CANNOT TELL THEM APART.** `mcp-access-token.ts` resolves the axis as
+-- `data.subject_user_id ?? legacyAxes(data).subjectUserId`, and a `??` cannot
+-- distinguish *"this row predates the backfill"* from *"this credential is
+-- deliberately SHARED"*. For the `container_id NULL, subject NULL` shape the
+-- header above calls representable — a shared credential with no fence — the
+-- legacy derivation answers `hasPerson = true` and hands back `user_id`: **the
+-- one row shape that must read as nobody reads as the OWNER, and reads every
+-- one of their private rows.**
+--
+-- The CHECK is the verification block's own identity assertion, promoted from a
+-- one-time apply-time count to a permanent constraint. With it, `?? legacy` is
+-- provably the identity on BOTH axes for every stored row, which is what the
+-- reader's comment has been claiming.
+--
+-- ⚠ IT MAKES `NULL/NULL` UNREPRESENTABLE **WHILE THE LEGACY PAIR EXISTS**, and
+-- that is honest rather than restrictive: the legacy pair has no spelling for
+-- "shared and unfenced", so a row in that shape is a row the two lanes cannot
+-- both describe. B13 drops the legacy columns and this constraint together, and
+-- the shape becomes representable — and correctly handled — the moment there is
+-- only one lane left to read.
+ALTER TABLE mcp_tokens
+  DROP CONSTRAINT IF EXISTS mcp_tokens_subject_axis_agree_check;
+ALTER TABLE mcp_tokens
+  ADD CONSTRAINT mcp_tokens_subject_axis_agree_check
+  CHECK (
+    (subject_user_id IS NULL)
+    = (workspace_id IS NOT NULL AND workspace_lock_kind IS DISTINCT FROM 'container_session')
+  );
+
 -- ── VERIFICATION ────────────────────────────────────────────────────────────
 -- A partially-applied file RAISEs here rather than shipping half an axis.
 DO $$
@@ -257,6 +298,14 @@ BEGIN
      AND conname = 'mcp_tokens_axes_agree_check';
   IF agree_check IS NULL THEN
     RAISE EXCEPTION 'mcp_token_credential_axes: the dual-write agreement CHECK is missing';
+  END IF;
+
+  SELECT pg_get_constraintdef(oid) INTO agree_check
+    FROM pg_constraint
+   WHERE conrelid = 'public.mcp_tokens'::regclass
+     AND conname = 'mcp_tokens_subject_axis_agree_check';
+  IF agree_check IS NULL THEN
+    RAISE EXCEPTION 'mcp_token_credential_axes: the SUBJECT-axis agreement CHECK is missing — a NULL/NULL row would read as the owner (F-587)';
   END IF;
 
   -- 🔒 THE BACKFILL IS THE IDENTITY, ASSERTED IN BOTH DIRECTIONS. Every row must

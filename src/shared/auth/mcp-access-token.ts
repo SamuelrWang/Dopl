@@ -67,6 +67,64 @@ interface TokenRow {
 /** Flips false the first time the axis columns answer 42703; see readTokenRow. */
 let axisColumnsPresent = true;
 
+/**
+ * THE TWO AXES OF A PERSONAL, UNFENCED CREDENTIAL — an OAuth grant, a device
+ * token, a playground guest. Every one of them is *"a person, unfenced: the
+ * overwhelming majority"* in `20260917120000`'s own four-way table.
+ *
+ * 🔒 **THEY WERE WRITTEN BY NO MINTER BUT `issueContainerToken` UNTIL
+ * 2026-09-02 (F-587), AND THE COST IS DEFERRED TO B13.** Today those rows read
+ * correctly by ACCIDENT: `container_id`/`subject_user_id` are NULL, so
+ * {@link validateAccessToken}'s `?? legacy` falls through to the legacy pair,
+ * which is also NULL and therefore answers "unfenced, and a person". The day
+ * B13 drops the legacy columns, that fallback has nothing behind it and **every
+ * device and OAuth credential in existence reads as SHARED** — the CLOSING
+ * direction, so the tell is every operator's agent 404ing on their own private
+ * rows at once, with no error anywhere.
+ *
+ * ⚠ Stated as a function rather than a constant so the `subject_user_id = user_id`
+ * equality the DB's own `mcp_tokens_subject_is_owner_check` enforces cannot be
+ * spelled three different ways at three call sites.
+ */
+export function personalUnfencedAxes(userId: string): {
+  container_id: null;
+  subject_user_id: string;
+} {
+  return { container_id: null, subject_user_id: userId };
+}
+
+/** The axis columns, for the retry below. */
+const AXIS_KEYS = ["container_id", "subject_user_id"] as const;
+
+/**
+ * INSERT a `mcp_tokens` row that carries the axis columns, against a database
+ * that may not have them yet.
+ *
+ * ⚠ **THE SAME TOLERANCE {@link readTokenRow} HAS, AND FOR A SHARPER REASON.**
+ * These minters are the sign-in path: a bare INSERT naming a column the
+ * migration has not created 42703s, and nobody gets a credential at all — the
+ * `20260825150000` trap (INVARIANTS §12), total rather than per-feature.
+ * Dropping the axis keys on that one retry is SAFE because the legacy pair on
+ * the same row already says the same thing: these rows carry neither
+ * `workspace_id` nor `workspace_lock_kind`, which `legacyAxes` reads as
+ * "unfenced, and a person" — exactly what the axes assert.
+ * ⚠ The flag is SHARED with the reader and sticky, so one 42703 anywhere costs
+ * one extra round trip once per process.
+ */
+export async function insertTokenRow(row: Record<string, unknown>): Promise<void> {
+  const db = supabaseAdmin();
+  if (axisColumnsPresent) {
+    const { error } = await db.from("mcp_tokens").insert(row);
+    if (!error) return;
+    if (error.code !== UNDEFINED_COLUMN) throw error;
+    axisColumnsPresent = false;
+  }
+  const legacyRow = { ...row };
+  for (const key of AXIS_KEYS) delete legacyRow[key];
+  const { error } = await db.from("mcp_tokens").insert(legacyRow);
+  if (error) throw error;
+}
+
 // Per-instance debounce so a hot token doesn't write last_used_at every request
 // (mirrors touchMcpStatus). At most one write/min/token/instance.
 const lastUsedTouched = new Map<string, number>();

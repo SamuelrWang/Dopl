@@ -2,7 +2,13 @@ import "server-only";
 import { createHash, randomUUID } from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { DEVICE_CLIENT_ID, DEVICE_CLIENT_NAME } from "./mcp-credential";
-import { ACCESS_PREFIX, randToken, sha256 } from "./mcp-access-token";
+import {
+  ACCESS_PREFIX,
+  insertTokenRow,
+  personalUnfencedAxes,
+  randToken,
+  sha256,
+} from "./mcp-access-token";
 
 /**
  * Core of Dopl's OAuth 2.1 authorization server for the remote MCP endpoint.
@@ -27,7 +33,9 @@ export type McpScope = (typeof MCP_SCOPES)[number];
 
 export {
   ACCESS_PREFIX,
+  insertTokenRow,
   isOAuthAccessToken,
+  personalUnfencedAxes,
   randToken,
   sha256,
   validateAccessToken,
@@ -184,7 +192,9 @@ export async function issueTokens(input: {
   const accessToken = randToken(ACCESS_PREFIX);
   const refreshToken = randToken(REFRESH_PREFIX);
   const now = Date.now();
-  const { error } = await db.from("mcp_tokens").insert({
+  // 🔒 A PERSON, UNFENCED — stated on the row rather than left to be derived
+  // from two NULL legacy columns, which is what B13 takes away (F-587).
+  await insertTokenRow({
     user_id: input.userId,
     client_id: input.clientId,
     access_token_hash: sha256(accessToken),
@@ -194,8 +204,8 @@ export async function issueTokens(input: {
     refresh_expires_at: new Date(now + REFRESH_TTL_S * 1000).toISOString(),
     client_name: input.clientName ?? null,
     family_id: input.familyId ?? randomUUID(),
+    ...personalUnfencedAxes(input.userId),
   });
-  if (error) throw error;
   return {
     access_token: accessToken,
     refresh_token: refreshToken,
@@ -249,7 +259,7 @@ export async function issueDeviceToken(input: {
   const expiresAt = new Date(
     Date.now() + DEVICE_TOKEN_TTL_S * 1000,
   ).toISOString();
-  const { error } = await db.from("mcp_tokens").insert({
+  await insertTokenRow({
     user_id: input.userId,
     client_id: DEVICE_CLIENT_ID,
     access_token_hash: sha256(accessToken),
@@ -259,8 +269,9 @@ export async function issueDeviceToken(input: {
     access_expires_at: expiresAt,
     refresh_expires_at: null,
     client_name: input.deviceLabel,
+    // 🔒 A person, unfenced — a device token is one operator's machine.
+    ...personalUnfencedAxes(input.userId),
   });
-  if (error) throw error;
   return { token: accessToken, expiresAt };
 }
 

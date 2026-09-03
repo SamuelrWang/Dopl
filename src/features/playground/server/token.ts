@@ -2,6 +2,8 @@ import "server-only";
 import {
   ACCESS_PREFIX,
   MCP_SCOPES,
+  insertTokenRow,
+  personalUnfencedAxes,
   randToken,
   sha256,
 } from "@/shared/auth/mcp-oauth";
@@ -40,7 +42,7 @@ export async function issuePlaygroundToken(input: {
 
   const accessToken = randToken(ACCESS_PREFIX);
   const expiresAt = new Date(Date.now() + input.ttlSeconds * 1000).toISOString();
-  const { error } = await db.from("mcp_tokens").insert({
+  await insertTokenRow({
     user_id: input.userId,
     client_id: PLAYGROUND_CLIENT_ID,
     access_token_hash: sha256(accessToken),
@@ -49,7 +51,10 @@ export async function issuePlaygroundToken(input: {
     access_expires_at: expiresAt,
     refresh_expires_at: null,
     client_name: PLAYGROUND_CLIENT_NAME,
+    // 🔒 A person, unfenced — the guest is a real (ephemeral) user and the
+    // token acts as them. A guest row left with a NULL subject would read as a
+    // SHARED credential the day B13 drops the legacy pair (F-587).
+    ...personalUnfencedAxes(input.userId),
   });
-  if (error) throw error;
   return { token: accessToken, expiresAt };
 }
