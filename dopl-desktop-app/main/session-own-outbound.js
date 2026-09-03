@@ -108,6 +108,8 @@ const OWN_CHANNEL_ESCALATE_KIND = 'decision';
 // `isOwnChannelPost` matches: under the collapse a marker, a thread open and a decision card ARE
 // posts, told apart by their arguments. The two `grantDecision` branches therefore reach the
 // same verdict for the same call, which is what makes this refactor a no-op on the allow set.
+const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the ONE spelling (F-578)
+
 const OWN_CHANNEL_OUTBOUND_OPS = ['send'];
 
 // THE ONE SCOPE RULE, shared by every predicate below so two of them can never disagree about
@@ -115,7 +117,14 @@ const OWN_CHANNEL_OUTBOUND_OPS = ['send'];
 // `session-profiles.js › isOwnChannelPost`: target unset or exactly the session's channel ID.
 function scopedToOwnChannel(ops, input, sessionChannelId) {
   const i = input || {};
-  if (ops.indexOf(i.op) === -1) return false;
+  // ⚠ `channelOpKey`, NOT A BARE `i.op` (2026-09-02, F-578's spelling applied here too). The
+  // outbound set is `['send']`, which carries no action, so today the two agree exactly — this is
+  // a NO-OP that removes the last place a classifier reads the op alone. The moment an
+  // action-bearing op joins this list, a bare read would match EVERY action of it, and every list
+  // in this tree is an ALLOW list: the wide direction. Four other classifiers already ask through
+  // this module; a fifth spelling of "which call is this" is how a gate and the sentence
+  // describing it come to disagree.
+  if (ops.indexOf(channelOpKey(i)) === -1) return false;
   const target = i.channel;
   if (target == null || target === '') return true; // no explicit target -> own channel
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);

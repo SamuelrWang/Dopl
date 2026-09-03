@@ -102,10 +102,18 @@
 -- `caller-jwt.ts` states the axis explicitly.
 -- ⚠ THE CLAIM NAME IS THE CONTRACT, shared with `caller-jwt.ts ›
 -- DOPL_CREDENTIAL_CLAIM`.
+-- ⚠ `SET search_path` ON A SECURITY INVOKER FUNCTION, ADDED 2026-09-02 IN REVIEW.
+-- Both bodies are already fully schema-qualified (`auth.jwt()`,
+-- `public.dopl_credential_is_shared()`), so nothing here was resolvable to a
+-- caller's own schema — but these two were the only helpers in this file
+-- WITHOUT the setting, which makes them the two the Supabase advisor
+-- (`function_search_path_mutable`, 0011) flags and the two a reader has to
+-- reason about individually. Uniform is cheaper than argued.
 CREATE OR REPLACE FUNCTION public.dopl_credential_is_shared()
   RETURNS boolean
   LANGUAGE sql
   STABLE
+  SET search_path = public, pg_temp
 AS $function$
   SELECT COALESCE(
     ((SELECT auth.jwt()) -> 'dopl_credential' ->> 'shared')::boolean,
@@ -131,6 +139,7 @@ CREATE OR REPLACE FUNCTION public.dopl_can_see_visibility(
   RETURNS boolean
   LANGUAGE sql
   STABLE
+  SET search_path = public, pg_temp
 AS $function$
   SELECT
     p_visibility = 'public'
