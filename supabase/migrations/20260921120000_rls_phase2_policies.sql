@@ -353,30 +353,30 @@ CREATE POLICY chat_messages_select ON chat_messages
 -- `readClient()`, search goes quietly EMPTY behind a fence that reports itself
 -- armed.
 --
--- ⚠ ONE STATEMENT, AND IT MIRRORS ITS PARENT'S MATRIX BY CALLING IT — the same
--- bargain `knowledge_entries_member_select` and `chat_messages_select` keep, and
--- the reason F-571 exists: a child that RESTATES its parent's arms is where the
--- fence goes stale. The chunk table carries both columns the entries policy
--- filters on, so the child is its parent's policy verbatim.
+-- 🔒 **AND IT STAYS DENY-ALL UNTIL PHASE 3 — THE POLICY THIS FILE ONCE ADDED IS
+-- WITHDRAWN** (2026-09-02, review of batch 2; Desktop Agent default, Samuel may
+-- reverse). The rest of phase 2 NARROWS four tables; this one arm WIDENED a
+-- table from "nobody" to "every viewer whose base is readable", and it did so
+-- **regardless of `RLS_PHASE_2`**, because a policy is not behind a flag. The
+-- wave's own rule is that no net widening happens while the flag is off, and a
+-- widening that closes a documentation gap is still a widening.
 --
--- ⚠ IT DOES NOT MOVE A SINGLE READ. This closes the phase-1 table list (the RLS
--- plan names this table on the same line as `skills` / `skill_files`); moving the
--- chunk reads onto `readClient()` is still owed, and the policy has to exist
--- FIRST or that move is the outage described above.
+-- ⚠ NOTHING IS LOST BY WAITING. The trap F-575 records is DIRECTIONAL: the
+-- table fails CLOSED today, so the cost of no policy is an EMPTY search the day
+-- a chunk read moves to `readClient()` — never a leak. That move is phase 3's,
+-- and the policy belongs in the same change as the reader it unblocks, where a
+-- redteam suite can run against both. Writing it a phase early buys nothing and
+-- spends the one property this phase promised.
+--
+-- ⚠ **F-575 STAYS FILED AND OPEN.** The covered-table count is TEN, not eleven;
+-- `scripts/check-rls-pair-gate.ts › POLICY_ONLY` does not list this table, and
+-- the entry that re-adds it here is the same entry that adds the reader.
+--
+-- ⚠ The `knowledge_base_id` index this file also added is withdrawn with it —
+-- and it was a DUPLICATE in any case:
+-- `20260720185006_covering_fk_indexes.sql › knowledge_entry_chunks_knowledge_base_id_idx`
+-- is already exactly `(knowledge_base_id)`.
 DROP POLICY IF EXISTS knowledge_entry_chunks_member_select ON knowledge_entry_chunks;
-CREATE POLICY knowledge_entry_chunks_member_select ON knowledge_entry_chunks
-  FOR SELECT
-  USING (
-    is_current_workspace_member(workspace_id, 'viewer'::text)
-    AND public.dopl_knowledge_base_readable(knowledge_base_id)
-  );
-
--- ⚠ The parent column, indexed on its own — every child policy joins on it, and
--- `knowledge_entry_chunks_workspace_idx` leads with `workspace_id`, so it cannot
--- serve a `knowledge_base_id` probe. Same addition `20260919120000` STEP 6 made
--- for the other two children.
-CREATE INDEX IF NOT EXISTS knowledge_entry_chunks_base_idx
-  ON knowledge_entry_chunks (knowledge_base_id);
 
 
 -- ===========================================================================

@@ -77,8 +77,11 @@ describe("REDTEAM agent_templates — the policy alone", () => {
     // spelled a fourth time here; it is unreachable for a `private` row because
     // the `'team'` term guards the call.
     expect(fn).not.toMatch(/'admin'::text/i);
-    expect(liveFunction("dopl_teams_mode_visible")).toMatch(
-      /is_current_workspace_member\(p_workspace_id, 'admin'\)/i
+    // ⚠ Follow the chain: the axis is stated in `dopl_teams_visible_for_user`
+    // since F-583 made it answer for a NAMED user, and `dopl_teams_mode_visible`
+    // is the caller-scoped case of it.
+    expect(liveFunction("dopl_teams_visible_for_user")).toMatch(
+      /is_workspace_member\(p_workspace_id, p_user_id, 'admin'\)/i
     );
   });
 
@@ -86,7 +89,7 @@ describe("REDTEAM agent_templates — the policy alone", () => {
     expect(liveFunction(READABLE)).toContain("'agent_template', t.id");
     // ⚠ Without the `scope_type` term this would answer "is this team template
     // visible to me" with a CHANNEL grant on the same resource (F-468).
-    expect(liveFunction("dopl_teams_mode_visible")).toMatch(
+    expect(liveFunction("dopl_teams_visible_for_user")).toMatch(
       /FROM\s+public\.resource_grants\s+g\b[\s\S]*?g\.scope_type\s*=\s*'team'/i
     );
   });

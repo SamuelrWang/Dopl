@@ -45,13 +45,19 @@ const SELECT_POLICY = {
   knowledge_bases: "knowledge_bases.knowledge_bases_member_select",
   knowledge_folders: "knowledge_folders.knowledge_folders_member_select",
   knowledge_entries: "knowledge_entries.knowledge_entries_member_select",
-  // ⚠ F-575, closed at the batch-2 integration: this table had RLS ENABLED and
-  // NO policy since `20260612090000`. It failed CLOSED, so nothing leaked — the
-  // hazard was the other direction, a fence reporting itself armed while
-  // answering nothing the moment a chunk read moved onto `readClient()`.
-  knowledge_entry_chunks:
-    "knowledge_entry_chunks.knowledge_entry_chunks_member_select",
 } as const;
+
+/**
+ * ⚠ **`knowledge_entry_chunks` IS NOT IN THAT MAP, AND ITS ABSENCE IS THE
+ * ASSERTION** — F-575, still open (2026-09-02, review of batch 2; Desktop Agent
+ * default, Samuel may reverse). RLS has been ENABLED on it with NO policy since
+ * `20260612090000`, which fails CLOSED. Phase 2 briefly gave it its parent's
+ * policy; that arm was withdrawn, because every other change in that file
+ * NARROWS and this one would have widened a table from "nobody" to "every
+ * viewer whose base is readable" — **regardless of `RLS_PHASE_2`, because a
+ * policy is not behind a flag.**
+ */
+const DENY_ALL_UNTIL_PHASE_3 = "knowledge_entry_chunks";
 
 /** "May the caller read this base?" — the rule, written once (STEP 4). */
 const READABLE = "dopl_knowledge_base_readable";
@@ -69,24 +75,28 @@ describe("the read rule is stated ONCE", () => {
   // `shared/supabase/rls-redteam-resource-grants.test.ts`.
 });
 
-describe("REDTEAM knowledge_entry_chunks — the table that had no policy", () => {
-  const policy = () => POLICIES.get(SELECT_POLICY.knowledge_entry_chunks) ?? "";
-
-  it("EXISTS at all — the whole of F-575", () => {
-    expect(policy()).not.toBe("");
+describe("REDTEAM knowledge_entry_chunks — the table that stays DENY-ALL (F-575)", () => {
+  it("🔒 carries NO SELECT policy at all, in either direction", () => {
+    // ⚠ THE FENCE IS THE EMPTY SET. A policy here is a WIDENING — this table
+    // answers nobody today — and the phase this branch ships promised no net
+    // widening while `RLS_PHASE_2` is off. The policy belongs in phase 3, in
+    // the same change as the `readClient()` move it unblocks, where a
+    // behavioural probe can run against both halves at once.
+    const own = [...POLICIES.keys()].filter((k) =>
+      k.startsWith(`${DENY_ALL_UNTIL_PHASE_3}.`)
+    );
+    expect(own).toEqual([]);
   });
 
-  it("is its PARENT's policy, by calling it rather than restating the matrix", () => {
-    // ⚠ The same bargain `knowledge_entries_member_select` keeps (F-571): a
-    // child that restates its parent's arms is the copy nobody updates.
-    expect(policy()).toContain(`${READABLE}(knowledge_base_id)`);
-    expect(policy()).toContain("is_current_workspace_member(workspace_id");
-  });
-
-  it("states NO visibility arm of its own — a chunk is as visible as its base", () => {
-    for (const inlined of ["visibility", "access_mode", "created_by"]) {
-      expect(policy()).not.toContain(inlined);
-    }
+  it("and no phase-2 predicate quietly reaches it either", () => {
+    // The other way a deny-all table stops being one: a SIBLING policy that
+    // joins to it. Nothing in the replayed set may name it in a USING clause.
+    const naming = [...POLICIES.entries()].filter(
+      ([key, body]) =>
+        !key.startsWith(`${DENY_ALL_UNTIL_PHASE_3}.`) &&
+        body.includes(DENY_ALL_UNTIL_PHASE_3)
+    );
+    expect(naming.map(([key]) => key)).toEqual([]);
   });
 });
 
@@ -113,9 +123,20 @@ describe("REDTEAM knowledge_bases — the policy alone", () => {
 
   it("refuses a TEAMS-MODE row with no grant — the arm the old policy did not have at all", () => {
     expect(liveFunction(READABLE)).toMatch(/access_mode IS DISTINCT FROM 'teams'/i);
-    const teams = liveFunction("dopl_teams_mode_visible");
-    expect(teams).toMatch(/is_current_workspace_member\(p_workspace_id, 'admin'\)/i);
-    expect(teams).toMatch(/p_created_by\s*=\s*\(\s*SELECT auth\.uid\(\)\s*\)/i);
+    // ⚠ **THE AXIS MOVED ONE INDIRECTION FURTHER ON 2026-09-02 (F-583) AND THE
+    // INVARIANT DID NOT.** `enforce_resource_grant()` needs this rule for a
+    // NAMED grantor, and the only statement of it read `auth.uid()`. So the
+    // rule is `dopl_teams_visible_for_user` and `dopl_teams_mode_visible` is one
+    // line over it — asserting on the CALLER would read a de-duplication as a
+    // lost fence, which is the mistake B12's own note warns about.
+    const teams = liveFunction("dopl_teams_visible_for_user");
+    expect(teams).toMatch(/is_workspace_member\(p_workspace_id, p_user_id, 'admin'\)/i);
+    expect(teams).toMatch(/p_created_by\s*=\s*p_user_id/i);
+    // …and the caller-scoped case supplies `auth.uid()` and nothing else, so a
+    // policy still cannot be handed a user id it chose.
+    expect(liveFunction("dopl_teams_mode_visible")).toMatch(
+      /dopl_teams_visible_for_user\(\s*\(\s*SELECT auth\.uid\(\)\s*\)/i
+    );
     // ⚠ THE GRANT TABLE IS `resource_grants` SINCE B1 FOLDED THE TEAM AXIS INTO
     // IT, and the `scope_type` term is asserted with it rather than beside it:
     // this helper reading the table WITHOUT that term would answer "is this
@@ -127,7 +148,7 @@ describe("REDTEAM knowledge_bases — the policy alone", () => {
       /FROM\s+public\.resource_grants\s+g\b[\s\S]*?g\.scope_type\s*=\s*'team'/i
     );
     expect(teams).not.toMatch(/team_resource_access/i);
-    expect(teams).toMatch(/tm\.user_id\s*=\s*\(\s*SELECT auth\.uid\(\)\s*\)/i);
+    expect(teams).toMatch(/tm\.user_id\s*=\s*p_user_id/i);
   });
 
   it("does NOT hide soft-deleted rows — trash is a repository filter, not a fence", () => {

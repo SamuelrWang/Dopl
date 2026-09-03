@@ -85,11 +85,14 @@ const TWINS: Record<string, { table: string; policies: string[] }> = {
 const POLICY_ONLY: Record<string, string[]> = {
   knowledge_folders: ["knowledge_folders_member_select"],
   knowledge_entries: ["knowledge_entries_member_select"],
-  // ⚠ F-575: RLS was ENABLED on this table with no policy at all (fail-closed,
-  // and the day a chunk read moved to `readClient()` search would have gone
-  // silently empty). `20260921120000` gives it its parent's policy, by calling
-  // the parent's predicate rather than restating it.
-  knowledge_entry_chunks: ["knowledge_entry_chunks_member_select"],
+  // ⚠ **`knowledge_entry_chunks` IS DELIBERATELY ABSENT — F-575, still open.**
+  // RLS is ENABLED on it with no policy at all, which fails CLOSED: the cost is
+  // an EMPTY search the day a chunk read moves to `readClient()`, never a leak.
+  // Phase 2 briefly gave it its parent's policy and that arm was WITHDRAWN in
+  // review: every other change in that file narrows, this one widened a table
+  // from "nobody" to "every viewer", and a policy is not behind the phase flag.
+  // The policy lands in phase 3, in the same change as the reader it unblocks.
+  // ⚠ Adding it here without a live policy is what turns this gate red.
   skill_files: ["skill_files_member_select"],
   chat_messages: ["chat_messages_select"],
   agent_template_knowledge_bases: ["agent_template_knowledge_bases_member_select"],

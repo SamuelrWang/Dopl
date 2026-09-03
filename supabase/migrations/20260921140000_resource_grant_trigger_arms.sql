@@ -113,8 +113,15 @@ AS $function$
     );
 $function$;
 
+-- 🔒 **NOT GRANTED TO `authenticated`, AND THAT IS M-9.** This function takes a
+-- USER ID, so a direct call would answer "does <somebody else> hold this
+-- resource through a team" — the membership oracle the caller-pinned
+-- `is_current_workspace_member` exists to refuse. It needs no grant: every
+-- legitimate caller reaches it through a SECURITY DEFINER function
+-- (`dopl_teams_mode_visible`, `dopl_user_may_share_resource`), which executes as
+-- the owner.
 REVOKE ALL ON FUNCTION public.dopl_teams_visible_for_user(uuid, uuid, text, uuid, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.dopl_teams_visible_for_user(uuid, uuid, text, uuid, uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.dopl_teams_visible_for_user(uuid, uuid, text, uuid, uuid) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.dopl_teams_visible_for_user(uuid, uuid, text, uuid, uuid) TO service_role;
 
 -- ── 2. …and the caller-scoped case becomes one line over it ─────────────────
@@ -221,9 +228,16 @@ AS $function$
   END;
 $function$;
 
+-- 🔒 SAME REFUSAL, SAME REASON: it takes a user id, so a grant to
+-- `authenticated` would be an oracle on somebody else's reach. `service_role`
+-- is the only caller that needs one — every grant write in this app runs on the
+-- service-role client (`knowledge/server/repository-channel-grants.ts` says so
+-- at its own head), and the trigger runs with INVOKER rights so that a write
+-- attempted through PostgREST FAILS CLOSED here rather than being validated by
+-- a definer. PostgREST being a second door is the whole subject of
+-- `20260828120000` and of `20260921130000`.
 REVOKE ALL ON FUNCTION public.dopl_user_may_share_resource(uuid, text, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.dopl_user_may_share_resource(uuid, text, uuid) FROM anon;
-GRANT EXECUTE ON FUNCTION public.dopl_user_may_share_resource(uuid, text, uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.dopl_user_may_share_resource(uuid, text, uuid) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.dopl_user_may_share_resource(uuid, text, uuid) TO service_role;
 
 -- ── 4. 🔒 The validity trigger, with both arms repaired ─────────────────────
