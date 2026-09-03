@@ -44,6 +44,8 @@ export interface OntologyArgs {
   outcome?: string;
   tools?: string;
   expected_version?: string;
+  /** A16's response-size knob — read ops only; the writes render one line. */
+  response_format?: "concise" | "detailed";
 }
 
 // ⚠ HAND-MIRRORED from the server schema (attributeValueSchema) so an
@@ -85,13 +87,13 @@ export async function dispatch(
 
   switch (args.op) {
     case "map":
-      return opMap(client);
+      return opMap(client, args.response_format);
     case "anchor":
-      return opAnchor(client, caller);
+      return opAnchor(client, caller, args.response_format);
     case "resolve":
-      return opResolve(client, args.query as string);
+      return opResolve(client, args.query as string, args.response_format);
     case "get":
-      return opGet(client, args.object as string);
+      return opGet(client, args.object as string, args.response_format);
     case "create_cluster": {
       const cluster = await client.createOntologyCluster({
         name: args.name as string,

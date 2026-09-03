@@ -26,6 +26,7 @@ import {
   grantDetail,
   matchMember,
   memberDisplay,
+  memberListLine,
   pruneRetiredResources,
   resourceLabel,
   sortByRole,
@@ -36,6 +37,7 @@ import {
   UNTRUSTED_ROSTER_HEADER,
 } from "./members-render";
 import { err, ok, isNotFound, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { FIELDS_FIELD, fieldFilter } from "./response-size";
 import { MEMBERS_ERRORS } from "./tool-errors";
 import { composeDescription, DESCRIPTION_MAX_CHARS } from "./tool-style";
 
@@ -102,13 +104,17 @@ export function registerMembersTool(
         .string()
         .optional()
         .describe("op=get_team (required): the team — id or name."),
+      // ⚠ A16's response-size knob. ONE `.describe()`, in `response-size.ts`,
+      // shared with every tool that takes a projection — and the user id is
+      // outside it by construction (Samuel's ruling).
+      fields: FIELDS_FIELD,
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
         case "whoami":
           return opWhoami(client, caller);
         case "list":
-          return opList(client, caller);
+          return opList(client, caller, args.fields);
         case "get": {
           const miss = missingParams("get", args, ["member"]);
           if (miss) return miss;
@@ -178,19 +184,23 @@ async function opWhoami(
 async function opList(
   client: DoplClient,
   caller: CallerIdentity,
+  fields?: string,
 ): Promise<ToolResponse> {
   const members = await client.listWorkspaceMembers();
   if (members.length === 0) return ok("No members found.");
 
+  // ⚠ RESOLVED ONCE, NOT PER ROW. An unknown name is IGNORED rather than
+  // refused (`response-size.ts › fieldFilter`): a mistyped one of four should
+  // cost the caller that field, never the whole read.
+  const wants = fieldFilter(fields);
   const lines: string[] = [];
   lines.push(`## Members — ${members.length}\n`);
   lines.push(`${UNTRUSTED_ROSTER_HEADER}\n`);
   for (const m of sortByRole(members)) {
-    const teams = m.teams.length > 0 ? teamChips(m.teams) : "no teams";
     // ⚠ `· you` must match `channel-render.ts › formatMemberLine` exactly — the
     // two rosters render the same workspace from the same column.
     const you = caller.userId && m.userId === caller.userId ? " · you" : "";
-    lines.push(`- ${memberDisplay(m)} — **${m.role}** · ${statusLabel(m)} · ${teams}${you}`);
+    lines.push(memberListLine(m, you, wants));
   }
   if (!caller.userId) {
     lines.push(`\nNo row is marked "you" — this connection could not resolve your own user id.`);

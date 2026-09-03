@@ -70,6 +70,35 @@ export function memberDisplay(m: WorkspaceMember): string {
   return `${label}${email} (\`${m.userId}\`)`;
 }
 
+/**
+ * ONE ROSTER LINE, under an optional `fields=` projection (A16 / ruling B8).
+ *
+ * 🔒 **THE ID IS PRINTED BY CONSTRUCTION AND IS NOT ONE OF THE NAMES** —
+ * Samuel's ruling. A caller can neither ask for it nor drop it, so no projection
+ * can produce a row nothing else in the product can address. That is why the
+ * `name`-less shape still opens with the id rather than falling back to a label.
+ *
+ * ⚠ NO FILTER ⇒ BYTE-IDENTICAL TO THE UNPROJECTED LINE. The knob is opt-in and
+ * an omitted one must change nothing — which is also what keeps the roster's
+ * `· you` marker aligned with `channel-render.ts › formatMemberLine`.
+ */
+export function memberListLine(
+  m: WorkspaceMember,
+  you: string,
+  wants: ((name: string) => boolean) | null,
+): string {
+  const teams = m.teams.length > 0 ? teamChips(m.teams) : "no teams";
+  if (wants === null) {
+    return `- ${memberDisplay(m)} — **${m.role}** · ${statusLabel(m)} · ${teams}${you}`;
+  }
+  const parts: string[] = [];
+  if (wants("role")) parts.push(`**${m.role}**`);
+  if (wants("status")) parts.push(statusLabel(m));
+  if (wants("teams")) parts.push(teams);
+  const head = wants("name") ? memberDisplay(m) : `\`${m.userId}\``;
+  return `- ${head}${parts.length > 0 ? ` — ${parts.join(" · ")}` : ""}${you}`;
+}
+
 /** A team as a neutralized name plus the id it cannot forge. */
 export function teamDisplay(name: string, id: string): string {
   return `${inlineOr(name, "`(unnamed team)`")} (\`${id}\`)`;

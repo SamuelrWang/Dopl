@@ -8,6 +8,7 @@ import type { AgentTemplate, DoplClient } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration.js";
 import { fenceBody } from "./untrusted-fence";
 import { ok, type ToolResponse } from "./respond.js";
+import { clipToMaxChars } from "./response-size.js";
 import { toWireShelfOrUndefined, type ShelfArg } from "./shelf.js";
 import {
   isErr,
@@ -93,6 +94,8 @@ export async function opGet(
   // ⚠ Only the FRAMING reads this — visibility is the server's decision and it
   // already ran.
   callerUserId: string | null = null,
+  /** A16: clip the INSTRUCTIONS body, and SAY so. */
+  maxChars?: number,
 ): Promise<ToolResponse> {
   const template = await resolveTemplateOr(client, ref);
   if (isErr(template)) return template;
@@ -144,11 +147,21 @@ export async function opGet(
   // own fence and claim the text after it. The caller's OWN templates render
   // bare: framing every one of them is noise on the common path, and noise is
   // how a security header stops being read.
-  const instructions = template.instructions ?? "_No instructions set._";
+  // ⚠ **CLIPPED BEFORE THE FENCE, NEVER AFTER** (A16). `fenceBody` closes with a
+  // per-response random suffix; clipping the fenced block would cut that close
+  // tag off and leave a system prompt somebody else wrote running to the end of
+  // the response with nothing marking where it stops. The clip is a size knob,
+  // not a licence to break the one structure that makes foreign instructions
+  // safe to render at all.
+  const whole = template.instructions ?? "_No instructions set._";
+  const { body: instructions, notice } = clipToMaxChars(whole, maxChars);
   lines.push(
     ...(foreign && template.instructions
       ? fenceBody(instructions, "agent instructions by another member")
       : [instructions]),
   );
+  // ⚠ OUTSIDE the fence, so the notice is visibly this server's — a line the
+  // clipped prompt could otherwise be read as having written about itself.
+  if (notice) lines.push("", notice);
   return ok(lines.join("\n"));
 }

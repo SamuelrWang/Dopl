@@ -212,16 +212,28 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // orchestrator makes most), and the timestamp and session tag from every
   // message on every `read`. One connection's worth of characters against an
   // orchestrator loop's.
+  //
+  // ⚠ **AND THREE MORE ROSE ON 2026-09-02 IN THE BATCH-2 REVIEW, FOR THE SAME
+  // REASON AND WITH THE SAME LICENCE** — A16's last three knobs, which the
+  // wave-B spec's §5 B8 row claimed shipped and which were absent from the
+  // tree: `fields=` on `dopl_members` (+242), `response_format` on
+  // `dopl_ontology` (+279), `max_chars` on `dopl_agent(op="get")` (+215). Same
+  // argument, same precedent: a published PARAMETER cannot move into a pulled
+  // document, and a knob nobody can find is not a knob. 736 chars of
+  // per-connection cost against a per-RESULT saving on three of the widest
+  // renders on the surface — a roster row is six fields wide, an ontology
+  // object carries a Version line and two legends, and a template's
+  // INSTRUCTIONS block is up to 32 KB.
   current_workspace: 720,
-  dopl_agent: 3930,
+  dopl_agent: 4145,
   // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
   dopl_channel: 8678,
   dopl_chats: 3554,
   dopl_home: 440,
   dopl_kb: 5347,
   dopl_map: 251,
-  dopl_members: 604,
-  dopl_ontology: 2538,
+  dopl_members: 846,
+  dopl_ontology: 2817,
   dopl_search: 1081,
   dopl_skill: 3059,
   // ⚠ THESE THREE EACH FELL BY 7 AND ROSE BY 1, BOTH EDITS IN OTHER FILES —
@@ -270,7 +282,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 //     run. See `instructions.ts › ConnectionIdentity`.
 // ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** Every figure a doc has carried
 // about this surface has gone stale inside a day (F-422).
-const SERVED_TOTAL_CEILING = 49_057; // ⚠ 51,996 → 49,057 (B8), almost all schema
+const SERVED_TOTAL_CEILING = 49_793; // ⚠ 51,996 → 49,057 (B8) → 49,793 (A16's last three knobs, batch-2 review)
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of

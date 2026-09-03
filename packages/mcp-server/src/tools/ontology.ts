@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { RESPONSE_FORMAT_FIELD } from "./response-size";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool, type ToolResponse } from "./respond";
@@ -163,6 +164,11 @@ export function registerOntologyTool(
         .describe(
           "Object-mutating ops: the object's Version from a prior op=\"get\", which rejects the write if the object changed since; omit to overwrite blindly (last-writer-wins)."
         ),
+      // ⚠ A16's response-size knob, on the FOUR read ops. ONE `.describe()`,
+      // in `response-size.ts`, shared with every tool that takes it — because
+      // five wordings is five chances to promise something `concise` does not
+      // do, and the promise ("bodies are untouched") is why it gets used.
+      response_format: RESPONSE_FORMAT_FIELD,
     },
     (args): Promise<ToolResponse> => dispatch(client, args, caller)
   );

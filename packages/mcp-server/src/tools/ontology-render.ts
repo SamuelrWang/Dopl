@@ -5,6 +5,7 @@
  */
 
 import type { DoplClient, OntologyObject, OntologySnapshot } from "@dopl/client";
+import { isConcise, type ResponseFormat } from "./response-size";
 import { inlineOr } from "./narration";
 import { err, type ToolResponse } from "./respond";
 
@@ -169,7 +170,9 @@ export function renderObject(
   object: OntologyObject,
   snapshot: OntologySnapshot,
   headline?: string,
-  handles: ResourceHandles = new Map()
+  handles: ResourceHandles = new Map(),
+  /** A16: `concise` drops the two LEGENDS below and nothing else. */
+  format?: ResponseFormat
 ): string {
   const nameOf = (id: string) =>
     snapshot.objects[id] ? inlineOr(snapshot.objects[id].name, NO_NAME) : `\`${id}\``;
@@ -183,7 +186,10 @@ export function renderObject(
   if (headline) lines.push(headline, "");
   lines.push(`# ${inlineOr(object.name, NO_NAME)} (${kindLabel} · id: \`${object.id}\`)`);
   if (object.subtitle) lines.push(inlineOr(object.subtitle, ""));
-  if (object.updatedAt) {
+  // ⚠ A TIMESTAMP AND ITS LEGEND — `response-size.ts`'s own list of what
+  // `concise` drops opens with "timestamps". A caller that is about to WRITE
+  // asks for `detailed`, which is the default.
+  if (object.updatedAt && !isConcise(format)) {
     lines.push(
       `Version: \`${object.updatedAt}\` (pass as expected_version to a later write so a concurrent edit can't clobber yours)`
     );
@@ -226,7 +232,9 @@ export function renderObject(
     lines.push(
       "",
       "## Default fields (template)",
-      "_New objects created inside this one are born with these fields, empty:_"
+      ...(isConcise(format)
+        ? []
+        : ["_New objects created inside this one are born with these fields, empty:_"])
     );
     for (const f of object.template) {
       lines.push(`- ${inlineOr(f.label, NO_NAME)} (${f.kind})`);

@@ -56,6 +56,39 @@ export function isConcise(format: ResponseFormat | undefined): boolean {
 }
 
 /**
+ * ⚠ THE ONE `.describe()` FOR THE FIELD-SELECTION KNOB. Same argument as
+ * {@link RESPONSE_FORMAT_FIELD}: one wording, so no tool can promise a
+ * projection a renderer does not do.
+ *
+ * 🔒 **`id` IS NOT LISTABLE AND NOT OMITTABLE** (Samuel's ruling, wave B). It is
+ * included BY CONSTRUCTION on every row, so it is not one of the names — a
+ * caller cannot ask for it and cannot drop it. A roster row whose id can be
+ * projected away is a roster row nothing else in the product can address.
+ */
+export const FIELDS_FIELD = z
+  .string()
+  .max(200)
+  .optional()
+  .describe(
+    'op="list": comma-separated subset of `name,role,status,teams` to render — the user id is always included and is not one of these. Omit for every field; ask for the fewest you need.',
+  );
+
+/**
+ * ⚠ THE ONE `.describe()` FOR THE BODY CLIP. It names the op that takes it and
+ * the fact that makes it safe: the render SAYS when it clipped
+ * ({@link clipToMaxChars}), so a prefix can never be mistaken for a whole.
+ */
+export const MAX_CHARS_FIELD = z
+  .number()
+  .int()
+  .min(200)
+  .max(200_000)
+  .optional()
+  .describe(
+    'op="get": clip the INSTRUCTIONS body to this many characters. The result says it clipped and by how much; omit for the whole document.',
+  );
+
+/**
  * ⚠ THE FIELD-SELECTION KNOB, for the surfaces whose ROW IS WIDE. A member row
  * carries name, email, role, status, last-active and team chips; an agent
  * looking for one person's role pays for all six on every row. Absent ⇒ every

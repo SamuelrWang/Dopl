@@ -21,6 +21,7 @@
  */
 
 import { z } from "zod";
+import { MAX_CHARS_FIELD } from "./response-size";
 import type { DoplClient } from "@dopl/client";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity.js";
 import { missingParams, type RegisterTool, type ToolResponse } from "./respond.js";
@@ -151,6 +152,12 @@ const AGENT_INPUT_SHAPE = {
     .describe(
       "op=create / op=update: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable.",
     ),
+  // ⚠ A16's third response-size knob, and the only one on THIS surface: an
+  // INSTRUCTIONS block is a system prompt up to 32 KB, and an agent looking for
+  // a template's model or attached bases pays for all of it. ONE `.describe()`,
+  // in `response-size.ts`. The render SAYS when it clipped, which is what makes
+  // the knob safe to reach for.
+  max_chars: MAX_CHARS_FIELD,
 };
 
 /**
@@ -255,7 +262,7 @@ export function registerAgentTools(
         case "get": {
           const miss = missingParams("get", args, ["template"]);
           if (miss) return miss;
-          return opGet(client, args.template as string, caller.userId);
+          return opGet(client, args.template as string, caller.userId, args.max_chars);
         }
         case "create": {
           const miss = missingParams("create", args, ["name"]);
