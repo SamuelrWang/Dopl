@@ -2395,21 +2395,30 @@ In the same 2026-08-11 pass the sidebar's `.brandPill` gave up its own flatter r
 `src/features/billing/server/entitlements.ts › upgradeUrl` carried a long note justifying its target. The note had **both facts backwards**: it claimed `/canvas?billing=upgrade` was on the KEEP list and `/pricing` was being deleted. `docs/migration-research/website-retirement-plan.md` says the opposite on both — the whole `[workspaceSlug]` tree RETIRES (and the top-level `/canvas` redirect with it), while `/pricing` is KEEP-PUBLIC (decision D6).
 
 - **Why this comment mattered more than most.** These envelopes are read by **API-first clients, MCP agents included**, which follow `upgrade_url` literally. A doc-comment that is confidently wrong about which page survives is one edit away from re-pointing a money URL at a 302. The correction (decision D1, GAP-11) sends every envelope at `/billing` — `src/app/billing/[segment]/page.tsx`, reached through its segment-less forwarder — and it is built by `features/billing/url.ts` so this and the other five billing entry points cannot drift apart again.
-- **The builder is workspace-AGNOSTIC on purpose.** These call sites are reached with a workspace *id* only, never a resolved `{slug}-{publicId}` SEGMENT, and bare `/billing` resolves the caller's DEFAULT workspace — the same trade `/canvas` made. The Stripe `return_url`s, which DO know their workspace, already pass a segment; plumbing one through here is follow-up, not a blocker.
+- **The builder is workspace-AGNOSTIC on purpose.** These call sites are reached with a workspace *id* only, never a resolved `{slug}-{publicId}` SEGMENT, and bare `/billing` resolved the caller's derived default workspace — the same trade `/canvas` made. ⚠ **Since 2026-09-02 (B14) it forwards only when the caller owns exactly ONE standard workspace and otherwise renders their list**, so the trade is now "one extra click when it is ambiguous" rather than "possibly the wrong workspace". The Stripe `return_url`s, which DO know their workspace, already pass a segment; plumbing one through here is follow-up, not a blocker.
 - **The lesson, which is the reason this is in ENGINEERING and not in the file.** A comment that ARGUES against a plan document is the shape a fiction takes. `entitlements.test.ts` now pins the target string, so the assertion lives where it can fail rather than where it can only be believed.
 
 *Relocated from* `src/features/billing/server/entitlements.ts › upgradeUrl`
 
 ### `ensureDefaultWorkspace`: the catch-23505 recovery became dead code when the slug constraints were dropped (2026-08-02, A-019 superseded)
 
-`workspaces/server/service.ts › ensureDefaultWorkspace` is a SELECT-then-INSERT, and it is racy: a fast OAuth round trip lands a second caller while the first is still inserting, both see "no existing", both insert.
+⚠ **THE SUBJECT OF THIS ENTRY NO LONGER EXISTS (2026-09-02, wave B B14).** Samuel's ruling B10
+deleted the derived default workspace outright: `ensureDefaultWorkspace`, `ensureDefaultWorkspaceRow`
+and the `ensure_default_workspace` RPC are gone, replaced by `ensurePersonalContainer` over
+`ensure_personal_container`. **The lesson below outlived them and is why the replacement was written
+the same way** — race-proofing in the database, `created` returned so the caller knows whether it
+owes the seed — so the entry is kept as the argument for that shape rather than as a map of the
+tree. Current state: INVARIANTS §4.
+
+The old `ensureDefaultWorkspace` was a SELECT-then-INSERT, and it was racy: a fast OAuth round trip
+landed a second caller while the first was still inserting, both saw "no existing", both inserted.
 
 - **The original fix (Audit A-019) was to catch the unique-constraint violation on the second insert and re-fetch.** That worked only while a unique constraint existed to violate.
 - **It silently stopped working.** Migrations `20260502120000` and `20260504000000` DROPPED the slug uniqueness constraints (`public_id` is random and never collides), so there was no longer any constraint for the second concurrent insert to trip. The recovery branch became unreachable code and two cold-booting clients could both create an "Untitled" workspace.
-- **Race-proofing moved INTO the database.** The `ensure_default_workspace` RPC (migration `20260802200000`) serializes check-then-insert under a **per-owner, transaction-scoped advisory lock**, and returns `created` so the caller knows whether THIS call won and therefore owes the starter-corpus seed. `repository.ts › ensureDefaultWorkspaceRow` is the only caller.
+- **Race-proofing moved INTO the database.** The `ensure_default_workspace` RPC (migration `20260802200000`) serialized check-then-insert under a **per-owner, transaction-scoped advisory lock**, and returned `created` so the caller knew whether THIS call won and therefore owed the starter-corpus seed. One repository wrapper was its only caller. ⚠ The successor keeps both properties and adds a partial UNIQUE index, so a second container is unrepresentable even if a future code path forgets the function.
 - **The general shape:** an app-side recovery keyed on a DATABASE constraint is only as live as that constraint. Dropping a constraint is not a no-op for the code that catches its error — and nothing in the type system or the test suite noticed.
 
-*Relocated from* `src/features/workspaces/server/service.ts › ensureDefaultWorkspace`
+*Relocated from* `src/features/workspaces/server/service.ts` (the function it names was deleted 2026-09-02)
 
 ### `first_cluster_built` outlived its only emitter — the funnel tiles that could never move again (2026-08-11, clusters removal)
 
@@ -4371,9 +4380,10 @@ anything was changed:
 - the transport sends the header (`dopl-desktop-app/main/ui-bridge.js › sendApiRequest`), and
   refuses a non-UUID rather than dropping it;
 - the server is `.eq("workspace_id", …)` (`server/repository-bases.ts › listBasesForWorkspace`);
-- and **production said so.** The caller's default standard workspace — oldest owned standard, via
-  `features/workspaces/server/repository.ts › findDefaultWorkspaceForUser`, which is what
-  `getBootState` answers with — is the workspace **MedMe** and **Dopl GTM** actually live in. They
+- and **production said so.** The caller's default standard workspace — oldest owned standard, which
+  is what `getBootState` answered with in 2026-08 (that lookup was deleted 2026-09-02 by B14; boot
+  answers the caller's personal container now) — is the workspace **MedMe** and **Dopl GTM** actually
+  live in. They
   were private, they were his, and they were exactly where scope C was defined to look.
 
 So every gate held and the pane did what INVARIANTS said it did. **What was wrong was the RANGE.**

@@ -34,7 +34,7 @@ vi.mock("@/shared/supabase/admin", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
+  findSoleOwnedStandardWorkspace: vi.fn().mockResolvedValue({ workspace: null, count: 0 }),
   findWorkspaceById: vi.fn(),
 }));
 vi.mock("./repository-overview", () => ({

@@ -1,10 +1,7 @@
 import "server-only";
 import type Stripe from "stripe";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import {
-  countWorkspacesOwnedBy,
-  findDefaultWorkspaceForUser,
-} from "@/features/workspaces/server/repository";
+import { findSoleOwnedStandardWorkspace } from "@/features/workspaces/server/repository";
 import { getSeatPriceId, getSoloPriceId, getStripe, selectSeatItem } from "./stripe";
 import { syncSeatQuantity } from "./seats";
 import { getUserByStripeCustomer } from "./subscriptions";
@@ -33,8 +30,8 @@ import {
  * (active) resurrecting a workspace `subscription.deleted` already canceled.
  *
  * Grandfathering: a subscription with no workspace mapping (the one legacy $20
- * per-user sub) routes customer id → profile → that user's primary owned
- * workspace.
+ * per-user sub) routes customer id → profile → that user's SOLE owned standard
+ * workspace, and refuses when there is not exactly one.
  */
 
 export interface ProcessResult {
@@ -80,8 +77,22 @@ function derivePlan(subscription: Stripe.Subscription): "solo" | "team" {
   return "team";
 }
 
-/** Resolve (and backfill) the workspace behind a Stripe customer. Grandfather
- *  fallback: customer → user → primary owned workspace. */
+/**
+ * Resolve (and backfill) the workspace behind a Stripe customer. Grandfather
+ * fallback: customer → user → their SOLE owned standard workspace.
+ *
+ * 🔒 **AMBIGUITY IS A REFUSAL, NOT A WARNING (B10).** This used to route the
+ * legacy subscription to the oldest owned workspace and `console.warn` that it
+ * had guessed — so an owner of two workspaces had a real payment applied to
+ * whichever one was created first, and the only trace was a log line. There is
+ * no derived default left to appeal to, so the mapping either has ONE answer or
+ * it has none: `null` here leaves the subscription unmapped, alerted, and
+ * repairable by writing the mapping the customer actually meant.
+ *
+ * ⚠ BOTH REFUSALS ALERT, AND THEY SAY DIFFERENT THINGS — "nothing to map" is a
+ * customer with no workspace; "too many" is a customer whose intent was never
+ * recorded. Collapsing them into one message loses the operator's next step.
+ */
 async function resolveWorkspaceIdForCustomer(
   customerId: string | null
 ): Promise<string | null> {
@@ -91,23 +102,14 @@ async function resolveWorkspaceIdForCustomer(
   const userId = await getUserByStripeCustomer(customerId);
   if (!userId) return null;
 
-  // Grandfather path: warn on ambiguous shapes.
-  const [workspace, ownedCount] = await Promise.all([
-    findDefaultWorkspaceForUser(userId),
-    countWorkspacesOwnedBy(userId),
-  ]);
-  if (ownedCount > 1) {
-    console.warn(
-      `[webhook] Ambiguous grandfather mapping: user ${userId} (customer ${customerId}) owns ${ownedCount} workspaces; routing the legacy subscription to default workspace ${workspace?.id ?? "none"}.`
-    );
-  }
-  if (!workspace) {
-    console.warn(
-      `[webhook] Legacy subscription for customer ${customerId} (user ${userId}) could not be mapped to any workspace — payment received but no Pro granted.`
-    );
-    return null;
-  }
-  return workspace.id;
+  const { workspace, count } = await findSoleOwnedStandardWorkspace(userId);
+  if (workspace) return workspace.id;
+  console.error(
+    count === 0
+      ? `[webhook] Legacy subscription for customer ${customerId} (user ${userId}) could not be mapped to any workspace — payment received but no Pro granted.`
+      : `[webhook] Legacy subscription for customer ${customerId} (user ${userId}) is ambiguous: they own ${count} workspaces and none is mapped — payment received, no Pro granted, and nothing guessed. Write the workspace_billing mapping by hand.`
+  );
+  return null;
 }
 
 async function resolveWorkspaceIdForSubscription(

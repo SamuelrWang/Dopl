@@ -6,15 +6,18 @@ import { getBridge } from "#/lib/dopl-bridge";
 
 /**
  * `POST /api/boot` — THE launch read. Two modes, one endpoint:
- *   - no `segment` — cold launch at `/`. Provisions if needed (`ensure-default`
- *     semantics, idempotent) and answers the onboarding gate in one breath.
+ *   - no `segment` — cold launch at `/`. Provisions the caller's own container
+ *     if needed (idempotent) and answers the onboarding gate in one breath.
  *   - `segment` — shell resolve, fail-closed + membership-scoped, plus role,
  *     caller id and access matrix.
  *
- * The four endpoints it subsumes (`/api/user/onboarding-state`,
- * `/api/workspaces/{ensure-default,resolve,me}`) are all still live for the web
- * app, `@dopl/client` and deep links; `seedBootAnswer` (use-workspace-route.ts)
+ * The endpoints it subsumes (`/api/user/onboarding-state`,
+ * `/api/workspaces/{resolve,me}`) are still live for the web app,
+ * `@dopl/client` and deep links; `seedBootAnswer` (use-workspace-route.ts)
  * writes this answer into their cache keys so those callers get it free.
+ * ⚠ **A THIRD ONE IS GONE** — the dedicated provisioning route was deleted with
+ * the default-workspace concept (wave B B14, F-631); `POST /api/boot` has been
+ * its only caller in this repo since 2026-08-07.
  */
 export const BOOT_PATH = "/api/boot";
 

@@ -36,24 +36,23 @@ vi.mock("./repository", () => ({
   listKnowledgeLinksForTemplates: vi.fn(),
 }));
 
-vi.mock("@/features/workspaces/server/repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn(),
+vi.mock("@/features/workspaces/server/service", () => ({
+  isOwnPersonalContainer: vi.fn(),
 }));
 
 import * as repo from "./repository";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
+import { isOwnPersonalContainer } from "@/features/workspaces/server/service";
 import { listTemplates } from "./service-reads";
 import { createTemplate } from "./service-writes";
 import { TemplateHomeScopeForbiddenError } from "./errors";
 
 const mockRepo = vi.mocked(repo);
-const mockDefaultWorkspace = vi.mocked(findDefaultWorkspaceForUser);
+const mockIsOwnHome = vi.mocked(isOwnPersonalContainer);
 
 const HOME_WS = "ws-home";
-const OTHER_WS = "ws-other";
 const USER = "u-operator";
 
-/** A signed-in person in their own default standard workspace. */
+/** A signed-in person in their own personal container. */
 function personCtx(over: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
   return {
     workspaceId: HOME_WS,
@@ -97,7 +96,7 @@ beforeEach(() => {
   mockRepo.findTemplateById.mockImplementation((_ws, id) =>
     Promise.resolve(tpl({ id })) as never
   );
-  mockDefaultWorkspace.mockResolvedValue({ id: HOME_WS } as never);
+  mockIsOwnHome.mockImplementation(async (_userId, workspaceId) => workspaceId === HOME_WS);
   mockRepo.insertTemplate.mockImplementation(
     (args) => Promise.resolve(tpl({ name: args.name, visibility: args.visibility })) as never
   );
@@ -167,11 +166,11 @@ describe("creating onto the home shelf", () => {
     );
   });
 
-  it("REFUSES when the target is not the caller's own default standard workspace", async () => {
-    // A link CONTAINER fails this, and so does a second workspace the caller
-    // owns. `findDefaultWorkspaceForUser` is the same lookup `POST /api/boot`
-    // runs, so the fence and the /home surface cannot disagree about "home".
-    mockDefaultWorkspace.mockResolvedValue({ id: OTHER_WS } as never);
+  it("REFUSES when the target is not the caller's own personal container", async () => {
+    // A link CONTAINER fails this, and so does any workspace the caller merely
+    // belongs to. `isOwnPersonalContainer` is the same answer `POST /api/boot`
+    // gives, so the fence and the /home surface cannot disagree about "home".
+    mockIsOwnHome.mockResolvedValue(false);
 
     await expect(
       createTemplate(personCtx(), { name: "Elsewhere", homeScoped: true })

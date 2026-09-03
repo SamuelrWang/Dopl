@@ -62,7 +62,7 @@ async function checkout(segment?: string | null) {
 
 describe("the checkout return", () => {
   it("lands on the billing page for the workspace that was PAID FOR", async () => {
-    // ⚠ Not the buyer's DEFAULT workspace — a multi-workspace admin would be
+    // ⚠ Not whatever `/billing` resolves — a multi-workspace admin would be
     // returned to the first workspace's billing state.
     expect(await checkout(SEGMENT)).toBe(
       `https://www.usedopl.com/billing/${SEGMENT}?billing=success&session_id={CHECKOUT_SESSION_ID}`
@@ -76,7 +76,7 @@ describe("the checkout return", () => {
     expect(url).not.toContain("%7B");
   });
 
-  it("falls back to the default-workspace forwarder when no segment is known", async () => {
+  it("falls back to the segment-less entry when no segment is known", async () => {
     expect(await checkout(undefined)).toBe(
       "https://www.usedopl.com/billing?billing=success&session_id={CHECKOUT_SESSION_ID}"
     );

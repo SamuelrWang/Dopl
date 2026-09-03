@@ -1,5 +1,5 @@
 import "server-only";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
+import { isOwnPersonalContainer } from "@/features/workspaces/server/service";
 import type { KnowledgeContext } from "../types";
 import type { KnowledgeBaseCreateInput } from "../schema";
 import { AgentWriteDisabledError, HomeScopeForbiddenError } from "./errors";
@@ -38,12 +38,13 @@ import { resolveAgentAudience } from "./service-audience";
  *      ⚠ Checked against the RESOLVED visibility, not `input.visibility` — the
  *      teams branch above rewrites it to `public`, and reading the raw input
  *      here would let `accessMode: "teams"` onto the shelf.
- *   3. **THE CALLER'S OWN DEFAULT STANDARD WORKSPACE.**
- *      `findDefaultWorkspaceForUser` is the SAME lookup `getBootState` runs to
- *      answer `POST /api/boot`'s `workspace`, which is what the /home pane
- *      hands `CreateBaseDialog` — so the fence and the surface cannot disagree
- *      about which workspace "home" means. A link container fails this, and so
- *      does a second workspace the caller owns.
+ *   3. **THE CALLER'S OWN PERSONAL CONTAINER.** `isOwnPersonalContainer` is
+ *      the SAME answer `getBootState` gives `POST /api/boot`'s `workspace`,
+ *      which is what the /home pane hands `CreateBaseDialog` — so the fence and
+ *      the surface cannot disagree about which container "home" means. A link
+ *      container fails this, and so does any workspace the caller merely
+ *      belongs to. ⚠ Ruling B10: home is a CONSTANT per user, not a lookup, so
+ *      there is nothing left here to derive or to tie-break.
  *
  * ⚠ THE DEFAULT IS FALSE AND SILENT. Only an explicit `homeScoped: true` is
  * ever examined, so MCP `kb_create_base` and every other existing caller keep
@@ -66,9 +67,8 @@ export async function resolveHomeScope(
       "the home shelf holds private bases only",
     );
   }
-  const home = await findDefaultWorkspaceForUser(ctx.userId);
-  if (home === null || home.id !== ctx.workspaceId) {
-    throw new HomeScopeForbiddenError("it is not your home workspace");
+  if (!(await isOwnPersonalContainer(ctx.userId, ctx.workspaceId))) {
+    throw new HomeScopeForbiddenError("it is not your home");
   }
   return true;
 }

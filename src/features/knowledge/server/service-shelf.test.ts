@@ -9,7 +9,7 @@
  *
  * ⚠ IT IS NOT A CROSS-WORKSPACE LEAK SUITE, and the distinction is the whole
  * history of this wave. Measured against production on 2026-08-26: the bases
- * Samuel saw under "across all channels" really did live in his own default
+ * Samuel saw under "across all channels" really did live in his own home
  * standard workspace, the request really did carry `x-workspace-id`, and
  * `listBasesForWorkspace` really did `.eq("workspace_id", …)`. Nothing leaked.
  * The RANGE was wrong — a whole workspace shelf behind a pill labelled "across
@@ -58,8 +58,8 @@ vi.mock("./repository", () => ({
 
 vi.mock("./service-seed", () => ({ seedWorkspace: vi.fn() }));
 
-vi.mock("@/features/workspaces/server/repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn(),
+vi.mock("@/features/workspaces/server/service", () => ({
+  isOwnPersonalContainer: vi.fn(),
 }));
 
 vi.mock("@/features/teams/server/repository", () => ({
@@ -71,7 +71,7 @@ vi.mock("@/features/teams/server/repository", () => ({
 }));
 
 import { findWorkspaceKind } from "./repository-audience";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
+import { isOwnPersonalContainer } from "@/features/workspaces/server/service";
 import * as repo from "./repository";
 import { listBases } from "./service-bases";
 import { createBase } from "./service-base-writes";
@@ -79,14 +79,13 @@ import { seedWorkspace } from "./service-seed";
 import { HomeScopeForbiddenError } from "./errors";
 
 const mockRepo = vi.mocked(repo);
-const mockDefaultWorkspace = vi.mocked(findDefaultWorkspaceForUser);
+const mockIsOwnHome = vi.mocked(isOwnPersonalContainer);
 const mockSeed = vi.mocked(seedWorkspace);
 
 const HOME_WS = "ws-home";
-const OTHER_WS = "ws-other";
 const USER = "u-operator";
 
-/** A signed-in person in their own default standard workspace. */
+/** A signed-in person in their own personal container. */
 function personCtx(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
   return {
     workspaceId: HOME_WS,
@@ -126,7 +125,7 @@ beforeEach(() => {
   vi.mocked(findWorkspaceKind).mockResolvedValue("standard");
   mockRepo.listBasesForWorkspace.mockResolvedValue([]);
   mockRepo.listBaseSlugsForWorkspace.mockResolvedValue([]);
-  mockDefaultWorkspace.mockResolvedValue({ id: HOME_WS } as never);
+  mockIsOwnHome.mockImplementation(async (_userId, workspaceId) => workspaceId === HOME_WS);
   mockRepo.insertBase.mockImplementation(
     (args) => Promise.resolve(baseRow({ name: args.name, slug: args.slug })) as never
   );
@@ -206,11 +205,11 @@ describe("creating onto the home shelf", () => {
     );
   });
 
-  it("REFUSES when the target is not the caller's own default standard workspace", async () => {
-    // A link container fails this, and so does a second workspace the caller
-    // owns. `findDefaultWorkspaceForUser` is the same lookup `POST /api/boot`
-    // runs, so the fence and the /home surface cannot disagree about "home".
-    mockDefaultWorkspace.mockResolvedValue({ id: OTHER_WS } as never);
+  it("REFUSES when the target is not the caller's own personal container", async () => {
+    // A link container fails this, and so does any workspace the caller merely
+    // belongs to. `isOwnPersonalContainer` is the same answer `POST /api/boot`
+    // gives, so the fence and the /home surface cannot disagree about "home".
+    mockIsOwnHome.mockResolvedValue(false);
 
     await expect(
       createBase(personCtx(), { name: "Elsewhere", homeScoped: true })

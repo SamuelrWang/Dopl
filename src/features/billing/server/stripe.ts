@@ -10,8 +10,8 @@ import { STRIPE_SESSION_ID_TEMPLATE, billingUrl } from "../url";
  *
  * ⚠ Pass the segment whenever the caller has one (`withWorkspaceAuth` hands
  * every billing route a `workspaceSlug` + `workspacePublicId`). Without it,
- * bare `/billing` resolves the caller's DEFAULT workspace — a different one
- * than the subscription just paid for.
+ * bare `/billing` resolves the caller's SOLE owned workspace or asks them to
+ * pick — either way, possibly not the one the subscription just paid for.
  */
 function returnUrl(
   segment: string | null | undefined,
@@ -88,7 +88,7 @@ export interface WorkspaceCheckoutArgs {
   email: string;
   stripeCustomerId?: string | null;
   /** ⚠ Canonical `{slug}-{publicId}` segment of the workspace being bought
-   *  for — without it the return lands on the buyer's DEFAULT workspace. */
+   *  for — without it the return lands on the picker, not on the purchase. */
   segment?: string | null;
 }
 

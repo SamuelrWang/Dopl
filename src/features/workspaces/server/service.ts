@@ -6,7 +6,7 @@ import type {
   WorkspaceWithRole,
   Role,
 } from "../types";
-import { isStandardWorkspace, meetsMinRole } from "../types";
+import { meetsMinRole } from "../types";
 import { slugifyWorkspaceName } from "../slug";
 import { touchLastSeen } from "./last-seen";
 import { seedNewWorkspace } from "./seed-workspace";
@@ -15,15 +15,15 @@ import {
   deleteWorkspace,
   findWorkspaceById,
   findWorkspaceByPublicId,
-  findDefaultWorkspaceForUser,
   findMemberWorkspaceBySlug,
   findMembership,
   insertWorkspaceWithOwnerMembership,
   listWorkspacesWithRoleForUser,
   listMembers,
   updateWorkspace,
-  ensureDefaultWorkspaceRow,
+  ensurePersonalContainerRow,
 } from "./repository";
+import { findPersonalContainerId } from "@/shared/tenancy/personal-container";
 
 export interface ResolvedMembership {
   workspace: Workspace;
@@ -40,46 +40,29 @@ export interface MemberWorkspace {
   userId: string;
 }
 
-/** One entry in a `WORKSPACE_REQUIRED` body so the caller can pick a target. */
-export interface WorkspaceChoice {
-  name: string;
-  slug: string;
-  role: Role;
-}
-
 /**
  * Workspace-resolution failure from `resolveActiveWorkspace`. ⚠ FLAT
- * billing-style envelope (`{ error, message, workspaces? }`, mirroring
+ * billing-style envelope (`{ error, message }`, mirroring
  * `entitlementDeniedBody`), NOT the nested `HttpError` shape, so the MCP client
  * and web `apiRequest` surface code + message verbatim.
+ *
+ * 🔒 **ONE CODE SINCE B10** — `WORKSPACE_INVALID`, "you named something that is
+ * not a workspace id". `WORKSPACE_REQUIRED` and the `workspaces: []` choice list
+ * it carried are DELETED: naming nothing is no longer a question, so there is no
+ * refusal to render and nothing to pick from. A caller who names nothing gets
+ * their own container.
  */
 export class WorkspaceResolutionError extends Error {
   readonly status = 400 as const;
-  readonly code: "WORKSPACE_REQUIRED" | "WORKSPACE_INVALID";
-  readonly workspaces?: WorkspaceChoice[];
+  readonly code = "WORKSPACE_INVALID" as const;
 
-  constructor(
-    code: "WORKSPACE_REQUIRED" | "WORKSPACE_INVALID",
-    message: string,
-    workspaces?: WorkspaceChoice[]
-  ) {
+  constructor(message: string) {
     super(message);
     this.name = "WorkspaceResolutionError";
-    this.code = code;
-    this.workspaces = workspaces;
   }
 
-  toResponseBody(): {
-    error: string;
-    message: string;
-    workspaces?: WorkspaceChoice[];
-  } {
-    const body: { error: string; message: string; workspaces?: WorkspaceChoice[] } = {
-      error: this.code,
-      message: this.message,
-    };
-    if (this.workspaces) body.workspaces = this.workspaces;
-    return body;
+  toResponseBody(): { error: string; message: string } {
+    return { error: this.code, message: this.message };
   }
 }
 
@@ -114,28 +97,31 @@ export async function resolveMembershipOrThrow(
 
 /**
  * Resolve the active workspace for an authenticated request
- * (`withWorkspaceAuth`, `GET /api/workspaces/me`). ⚠ Fail-CLOSED: there is NO
- * silent default-workspace fallback.
+ * (`withWorkspaceAuth`, `GET /api/workspaces/me`).
  *
  *   1. `X-Workspace-Id` header (or export `?workspaceId=`, threaded as
  *      `headerWorkspaceId`) — UUID only. Blank or non-UUID → 400
  *      `WORKSPACE_INVALID`, never coerced to "no header".
- *   2. No header → the caller's ACTIVE STANDARD memberships
- *      (`listWorkspacesWithRoleForUser`), ONE query powering count,
- *      auto-target and the 400 body:
- *        - exactly 1 → auto-target (role from the same lookup);
- *        - 0 → 400 `WORKSPACE_REQUIRED`, `workspaces: []`;
- *        - 2+ → 400 `WORKSPACE_REQUIRED` listing {name, slug, role}.
+ *   2. No header → **the caller's PERSONAL CONTAINER**, minted on first ask.
  *
- * ⚠ `kind='link'` containers are NOT candidates and are NOT listed: a user with
- * one standard workspace and N home-channel links still auto-targets their
- * standard one, and a link-only user gets WORKSPACE_REQUIRED exactly as a
- * membership-less user does today. Reaching a link workspace is an EXPLICIT
- * act — step 1's header (or `workspace=`), which stays unfiltered.
+ * 🔒 **THE ANSWER IS A CONSTANT, NOT A LOOKUP (Samuel's ruling B10).** *"The
+ * home channel is now the default … all workspaces are just normal
+ * workspaces."* What went from this function is the whole apparatus that used
+ * to derive one: the membership COUNT, the sole-membership auto-target, the
+ * `WORKSPACE_REQUIRED` refusal at 0 and at 2+, and the `WorkspaceChoice[]` list
+ * the refusal carried. None of them has a question left to answer — a caller
+ * who names nothing means their own container, and a caller who means anything
+ * else names it.
  *
- * ⚠ NEVER use `findDefaultWorkspaceForUser` here — oldest-OWNED only
- * (billing-webhook legacy), which diverges from membership. The API-key
- * workspace lock is applied by `withWorkspaceAuth` before this runs.
+ * ⚠ **THIS IS STILL FAIL-CLOSED, AND FOR A BETTER REASON THAN BEFORE.** The old
+ * refusal was fail-closed because it refused; this is fail-closed because the
+ * answer cannot be somebody ELSE's workspace. A container is minted for the
+ * caller, owned by the caller, with exactly one member — so an unnamed request
+ * can no longer land on a tenant the caller merely belongs to, which is the
+ * cross-tenant hazard the count was standing in for.
+ *
+ * ⚠ The API-key workspace LOCK is applied by `withWorkspaceAuth` before this
+ * runs, so a locked credential never reaches step 2.
  */
 export async function resolveActiveWorkspace(
   userId: string,
@@ -145,50 +131,40 @@ export async function resolveActiveWorkspace(
     const trimmed = headerWorkspaceId.trim();
     if (!WORKSPACE_ID_RE.test(trimmed)) {
       throw new WorkspaceResolutionError(
-        "WORKSPACE_INVALID",
-        "X-Workspace-Id must be a workspace UUID. Omit it to auto-target your workspace when you belong to exactly one, or pass a UUID from GET /api/workspaces."
+        "X-Workspace-Id must be a workspace UUID. Omit it to target your own home, or pass a UUID from GET /api/workspaces."
       );
     }
     return resolveMembershipOrThrow(trimmed, userId);
   }
 
-  const memberships = (await listWorkspacesWithRoleForUser(userId)).filter(
-    isStandardWorkspace
-  );
-  if (memberships.length === 1) {
-    return resolveMembershipOrThrow(memberships[0].id, userId);
-  }
-
-  const workspaces: WorkspaceChoice[] = memberships.map((w) => ({
-    name: w.name,
-    slug: w.slug,
-    role: w.role,
-  }));
-  const message =
-    memberships.length === 0
-      ? "You are not an active member of any workspace. Create one with POST /api/workspaces, then retry."
-      : `You belong to ${memberships.length} workspaces, so this request needs an explicit target. Set the X-Workspace-Id header (or pass workspace= on MCP tool calls) to one of the workspaces listed below.`;
-  throw new WorkspaceResolutionError("WORKSPACE_REQUIRED", message, workspaces);
+  const container = await ensurePersonalContainer(userId);
+  // ⚠ Fail-closed even on the container just ensured: the membership read is
+  // what every other caller of this function gets, and a revoked row must 404
+  // here exactly as it does on a named workspace.
+  return resolveMembershipOrThrow(container.id, userId);
 }
 
 /**
- * Idempotent: creates the user's default workspace if absent. Called from
- * `resolveActiveWorkspace` (auth callback, first-time route hit) and signup.
+ * THE CALLER'S HOME — their one `kind='personal'` container, minted if absent.
+ *
+ * 🔒 **THE ONE ANSWER TO "WHICH WORKSPACE, WHEN NOTHING IS NAMED"** (ruling
+ * B10), and the replacement for the provisioning call that derived one.
+ * Every entry point that used to provision a default calls this: the auth
+ * callback, `POST /api/boot`'s provisioning mode, `resolveActiveWorkspace` and
+ * onboarding.
+ *
+ * ⚠ ONE ROUND TRIP, DELIBERATELY. The old shape read first and locked only on a
+ * miss; the RPC's own `SELECT` under a per-owner advisory lock is the same
+ * check, so the fast path bought a second query to avoid an uncontended lock.
+ * Race-proofing lives in the DATABASE either way — `workspaces_personal_owner_uidx`
+ * makes a second container unrepresentable, so a catch-23505 here would be
+ * reporting a bug rather than resolving a race.
+ *
+ * ⚠ `created` SAYS WHETHER THIS CALL OWES THE SEED. A first container is the
+ * only container a brand-new account has, so the starter corpus lands in it.
  */
-export async function ensureDefaultWorkspace(userId: string): Promise<Workspace> {
-  // Fast path — no lock taken when the workspace already exists.
-  const existing = await findDefaultWorkspaceForUser(userId);
-  if (existing) return existing;
-  const name = "Untitled";
-  // ⚠ Race-proofing lives in the DATABASE — catch-23505 cannot work here (slug
-  // uniqueness constraints dropped, public_id never collides). The
-  // `ensure_default_workspace` RPC serializes check-then-insert under a
-  // per-owner advisory lock; `created` says whether THIS call owes the seed.
-  const { workspace, created } = await ensureDefaultWorkspaceRow({
-    ownerId: userId,
-    name,
-    slug: slugifyWorkspaceName(name),
-  });
+export async function ensurePersonalContainer(userId: string): Promise<Workspace> {
+  const { workspace, created } = await ensurePersonalContainerRow(userId);
   if (created) {
     // Starter corpus. Best-effort + idempotent (never throws).
     await seedNewWorkspace(workspace.id, userId);
@@ -197,21 +173,60 @@ export async function ensureDefaultWorkspace(userId: string): Promise<Workspace>
 }
 
 /**
- * Onboarding helper: name the default workspace, + optional description.
- * ⚠ Only fires while the name is still the placeholder "Untitled" — a user
- * rename (settings, MCP) wins. Idempotent.
+ * Is `workspaceId` this user's OWN home?
+ *
+ * ⚠ EXPORTED FOR THE TWO `resolveHomeScope` FENCES —
+ * `knowledge/server/service-base-gates.ts` and
+ * `agent-templates/server/service-writes.ts` — which asked the same question of
+ * the derived default and must not each grow their own spelling of the new one.
+ * It is stated here rather than in `shared/tenancy/personal-container.ts`
+ * because it is a POLICY over that module's read, and this feature owns the
+ * policy; that module answers WHERE a row lives and holds no opinion about who.
+ *
+ * ⚠ FALSE, never null: "not minted yet" and "not yours" are the same refusal to
+ * a fence, and a fence that distinguishes them leaks whether a container exists.
  */
-export async function renameDefaultWorkspaceIfUntitled(
+export async function isOwnPersonalContainer(
+  userId: string,
+  workspaceId: string
+): Promise<boolean> {
+  return (await findPersonalContainerId(userId)) === workspaceId;
+}
+
+/**
+ * The name `ensure_personal_container` mints when there is nothing to inherit —
+ * a brand-new account with no workspace to be named after.
+ *
+ * ⚠ **THE LITERAL IS THE MIGRATION'S** (`20260922120000` §2's restatement of
+ * `COALESCE(origin.name, 'Personal')`), so the two are pinned together by
+ * `workspaces/b10-no-derived-default.test.ts` rather than by whoever reads
+ * both files next. Drift is silent in BOTH directions: onboarding would either
+ * refuse to name a fresh container or overwrite one a user already named.
+ */
+export const PERSONAL_CONTAINER_PLACEHOLDER_NAME = "Personal";
+
+/**
+ * Onboarding helper: name the caller's home, + optional description.
+ *
+ * ⚠ Only fires while the name is still the placeholder — a user rename
+ * (settings, MCP) wins, and so does the name the container inherited from the
+ * workspace it was minted from. Idempotent.
+ *
+ * ⚠ **THE SLUG IS NOT TOUCHED, AND THE MIGRATION'S ARGUMENT IS WHY.**
+ * `ensure_personal_container` mints the constant `personal` precisely so this
+ * row is never routed to by slug (it has its own surface, `/home`), and
+ * `findMemberWorkspaceBySlug` answers `null` on 2+ matches. Re-sluggifying it
+ * to the user's chosen name would put a second row in that scan under a name a
+ * real workspace is likely to hold — F-561, re-opened by a rename.
+ */
+export async function renamePersonalContainerIfPlaceholder(
   userId: string,
   name: string,
   description?: string | null
 ): Promise<Workspace> {
-  const workspace = await ensureDefaultWorkspace(userId);
-  if (workspace.name !== "Untitled") return workspace;
-  const patch: { name: string; slug: string; description?: string | null } = {
-    name,
-    slug: slugifyWorkspaceName(name),
-  };
+  const workspace = await ensurePersonalContainer(userId);
+  if (workspace.name !== PERSONAL_CONTAINER_PLACEHOLDER_NAME) return workspace;
+  const patch: { name: string; description?: string | null } = { name };
   if (description !== undefined) patch.description = description;
   return updateWorkspace(workspace.id, patch);
 }

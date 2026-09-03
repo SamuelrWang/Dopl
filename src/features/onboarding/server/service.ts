@@ -4,7 +4,7 @@ import {
   logConversionEvent,
   hasFiredEvent,
 } from "@/features/analytics/server/conversion-events";
-import { renameDefaultWorkspaceIfUntitled } from "@/features/workspaces/server/service";
+import { renamePersonalContainerIfPlaceholder } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { OnboardingStatus, SurveySubmission } from "../types";
 import {
@@ -44,9 +44,11 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
 }
 
 /**
- * Finish onboarding: name default workspace, stamp onboarded_at, return the
- * URL to land on. Blank name → "{FirstName}'s Workspace". ⚠ Every step
- * idempotent so a retry after partial failure converges.
+ * Finish onboarding: name the caller's HOME — their personal container, which
+ * is what ruling B10 leaves for a first-run survey to name — stamp
+ * onboarded_at, return the URL to land on. Blank name →
+ * "{FirstName}'s Workspace". ⚠ Every step idempotent so a retry after partial
+ * failure converges.
  */
 export async function completeOnboarding(
   userId: string,
@@ -63,7 +65,7 @@ export async function completeOnboarding(
     workspaceName = firstName ? `${firstName}'s Workspace` : "My Workspace";
   }
 
-  const workspace = await renameDefaultWorkspaceIfUntitled(
+  const workspace = await renamePersonalContainerIfPlaceholder(
     userId,
     workspaceName,
     description

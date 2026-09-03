@@ -60,13 +60,24 @@ export async function requireWorkspaceRole(
  * The column (migration 20260823150000) APPLIED 2026-08-24 and is NOT NULL
  * DEFAULT 'standard', so live rows carry it — the default survives for the rows
  * that omit it: a narrowed projection, an older server, a test fixture.
+ *
+ * 🔒 ⚠ **THE REFUSAL IS RIGHT FOR EVERY CONTAINER; THE SENTENCE WAS RIGHT FOR
+ * ONE (F-564, closed here 2026-09-02).** This reads the LISTING predicate's
+ * negation, which is correct as a FENCE — nobody may be added to a container of
+ * any kind, and a fourth kind must inherit that refusal rather than opt into it
+ * — and was wrong as a DESCRIPTION the moment `personal` existed: a `personal`
+ * container is nobody's home channel and has no invite link to point at. So the
+ * predicate stays negative on purpose and the MESSAGE branches on the kind,
+ * which is the split the rule in `shared-publish.ts` is actually asking for.
  */
 export function assertMemberAddable(workspace: { kind?: WorkspaceKind }): void {
   if (isStandardWorkspace(workspace)) return;
   throw new HttpError(
     403,
     "LINK_CONTAINER_CLOSED",
-    "This is a private home channel — people join it by its own invite link."
+    workspace.kind === "link"
+      ? "This is a private home channel — people join it by its own invite link."
+      : "This container has exactly one member, its owner, and nobody can be added to it."
   );
 }
 
