@@ -297,3 +297,48 @@ SELECT proname FROM pg_proc WHERE proname IN ('default_workspace_of','ensure_def
 SELECT table_name FROM information_schema.columns
  WHERE column_name='home_scoped' AND table_schema='public';
 ```
+
+## §6 — EXECUTION LOG (2026-09-03, Desktop Agent)
+
+**Mechanism actually used:** per-file, byte-exact from disk through the Supabase
+Management API (`POST /v1/projects/<ref>/database/query`, a script that reads
+the file bytes, wraps `BEGIN … INSERT INTO supabase_migrations.schema_migrations
+(version, name, statements) … COMMIT`, then compares
+`md5(array_to_string(statements,''))` with the file's md5). ⚠ **Never retype a
+migration through a model's tool call** — the first attempt (via the MCP
+`apply_migration` tool) landed `channel_launch_directives_kind` with line 137's
+`​…` escape-form regex replaced by a duplicate of line 138, weakening the
+`target_name` charset check (U+202F admitted). Repaired in place: the constraint
+re-created from the file bytes and the stored `statements` corrected; md5 now
+matches (version `20260903075949`).
+
+**Phase 1 applied (stamped versions):** channel_launch_directives_kind
+20260903075949 · knowledge_pinned_startup_context 20260903080320 ·
+channel_sessions_health …0323 · channel_launch_directives_posture …0325 ·
+launch_direction_client_msg_id …0327 · channel_delivery_verdict …0328 ·
+channel_tasks_author_scoped_idempotency …0330 · resource_grants …0331 (verify:
+5 team + 2 channel grants, unmirrored 0, mirror trigger present) ·
+mcp_token_credential_axes …0334 (fenced 7 / personal 136 / total 136) ·
+channel_default_responder …0336 · rls_helpers_and_caller_scope …0337 ·
+workspace_kind_personal …0340 · channel_resource_grants_read_only …0343 ·
+resource_grant_trigger_arms …0344. Snapshot 58/172/73/571 → 59/184/74/618.
+
+**Two corrections to §1/§2, found live:**
+1. **`20260921120000_rls_phase2_policies` belongs to PHASE 2, after
+   `20260915120000`.** Its end-check requires every SELECT policy on
+   `agent_templates` / `agent_template_knowledge_bases` to call
+   `can_current_user_read_agent_template`, and that helper and those policies
+   are created by `20260915120000_drop_agent_template_teams` — a contract file.
+   Filename-order replays (CI) never see the split, so the dependency was
+   invisible. On prod it RAISEd and rolled back cleanly (no history row). The
+   two files after it (`…130000`, `…140000`) applied out of order; they share no
+   object with it. Phase-2 order is therefore: 20260915 → 20260916 →
+   **20260921120000** → 20260922 → 20260923130000 → 20260923140000.
+2. **`20260920120000_workspace_kind_personal` is NOT inert.** It minted 15
+   personal containers and moved the 3 `home_scoped` rows (Orchestration
+   Guidelines KB + 2 templates) into the owner's container. There is no runtime
+   flag left in the code — `src/shared/tenancy/personal-container.ts` resolves
+   the container by owner — so the rows are invisible to the OLD code until the
+   deploy lands and visible immediately after. That also satisfies the P1 half of
+   the held file's precondition; P2 ("a release with the container live") begins
+   with this deploy.
