@@ -50,13 +50,13 @@ const SHAPES: ReadonlyArray<[string, RegExp]> = [
 ];
 
 /**
- * EVERY FILE that still derives it, and what closes each one.
+ * EVERY FILE that still MISLABELS, and what closes each one.
  *
- * ⚠ **A DECLARATION, NOT AN ALLOWLIST.** The set below must EQUAL what the scan
- * finds. A NEW site fails this gate (nobody may add a ninth quietly); a site
- * that is FIXED or DELETED also fails it, so the entry leaves in the same change
- * as the code — which is how the migration's precondition stays true rather than
- * becoming another paragraph nobody re-derived.
+ * ⚠ **A DECLARATION, NOT AN ALLOWLIST.** `OPEN_SITES ∪ FENCE_SITES` must EQUAL
+ * what the scan finds. A NEW site fails this gate (nobody may add one quietly);
+ * a site that is FIXED or DELETED also fails it, so the entry leaves in the same
+ * change as the code — which is how the migration's precondition stays true
+ * rather than becoming another paragraph nobody re-derived.
  */
 const OPEN_SITES: Record<string, string> = {
   // ⚠ Not in ANY slice's `Owns` column, and the migration header says so. It
@@ -68,12 +68,31 @@ const OPEN_SITES: Record<string, string> = {
   "packages/mcp-server/src/server.ts": "B13 — same",
   "packages/mcp-server/src/tools/home-scopes.ts": "B13 DELETES the file with `dopl_home`",
   "packages/mcp-server/src/tools/copy-target.ts": "B15 DELETES the file with the copy ops",
-  // ⚠ The refusal is RIGHT for a personal container (nobody may be added to
-  // one); the SENTENCE is what mislabels it. A fix here is a copy change, not a
-  // fence change.
-  "src/features/workspaces/server/authz.ts":
-    "B13/B15 — the refusal holds, the sentence names the wrong kind",
 };
+
+/**
+ * 🔒 **SITES WHERE THE NEGATION IS CORRECT AND STAYS — ADDED 2026-09-02 (B14).**
+ *
+ * ⚠ **THIS SET EXISTS BECAUSE THE ORIGINAL GATE COULD NOT GO GREEN.** Its
+ * contract was *"the migration may be applied when this set is EMPTY"*, and one
+ * of the eight sites is a FENCE rather than a label: `assertMemberAddable`
+ * refuses to add a member to a container of ANY kind, and it must go on reading
+ * the negation so a fourth kind inherits the refusal instead of opting into it.
+ * Repointing it to `kind === "link"` would have OPENED personal containers to
+ * member-add — the gate would have gone green by introducing the bug F-295
+ * exists to prevent.
+ *
+ * What was actually wrong at such a site is the SENTENCE, and that is what B14
+ * fixed: the message branches on the kind, the predicate does not. Every entry
+ * here therefore asserts a REPAIR, not a permission — the scan still finds the
+ * shape, and the file states why the shape is right.
+ */
+const FENCE_SITES: Record<string, string> = {
+  "src/features/workspaces/server/authz.ts":
+    "B14 — CLOSED: the refusal is kind-agnostic by design, the message branches on `kind`",
+};
+
+const DECLARED = { ...OPEN_SITES, ...FENCE_SITES };
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -135,23 +154,36 @@ describe("🔒 F-564 — `!isStandardWorkspace` is not `kind === 'link'`", () =>
   it("EVERY site is declared, and every declared site is still there", () => {
     // ⚠ EQUALS, NOT INCLUDES, in both directions. A new site is a regression; a
     // disappeared one is a fix whose record has to leave with it.
-    expect([...FOUND.keys()].sort()).toEqual(Object.keys(OPEN_SITES).sort());
+    expect([...FOUND.keys()].sort()).toEqual(Object.keys(DECLARED).sort());
   });
 
-  it("🔒 the migration may be applied only when this set is EMPTY", () => {
+  it("a FENCE site is declared as repaired, never as merely permitted", () => {
+    // ⚠ The two maps are not interchangeable. Moving a mislabel into
+    // `FENCE_SITES` would silence this gate, so each entry there has to be a
+    // site whose refusal is kind-agnostic AND whose message is not — which the
+    // file itself must show.
+    for (const file of Object.keys(FENCE_SITES)) {
+      const text = readFileSync(join(ROOT, file), "utf8");
+      expect(text, `${file} must branch its MESSAGE on the kind`).toMatch(
+        /kind === "link"/
+      );
+    }
+  });
+
+  it("🔒 the migration may be applied only when OPEN_SITES is EMPTY", () => {
     // ⚠ THE PRECONDITION ITSELF, and the ONE place the code and the migration
     // are joined. `20260920120000` adds `personal` for every user at once; while
-    // any site above stands, applying it makes each of them advertise a person's
+    // any OPEN site stands, applying it makes each of them advertise a person's
     // own container as a home channel.
     //
     // ⚠ **THIS ASSERTION IS EXPECTED TO BE RED-ON-INVERSION, NOT RED NOW.** It
-    // records the count rather than demanding zero, because F-564 is batch 3's
-    // and this branch does not fix it — what the gate buys today is that the
-    // number cannot drift and cannot be quoted wrong again. **When the sites are
-    // gone, delete this case and the map with them; that deletion IS the
-    // sign-off for applying the migration.**
-    expect(FOUND.size).toBeGreaterThan(0);
-    expect(FOUND.size).toBe(Object.keys(OPEN_SITES).length);
+    // records the count rather than demanding zero, because B13 and B15 hold the
+    // remaining sites — what the gate buys today is that the number cannot drift
+    // and cannot be quoted wrong again. **When they are gone, delete this case
+    // and `OPEN_SITES` with it; that deletion IS the sign-off for applying the
+    // migration.** `FENCE_SITES` outlives it — those sites are correct.
+    expect(Object.keys(OPEN_SITES).length).toBeGreaterThan(0);
+    expect(FOUND.size).toBe(Object.keys(DECLARED).length);
   });
 
   it("the ternary and the early-return shapes are why a negation grep undercounts", () => {
