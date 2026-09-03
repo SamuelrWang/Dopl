@@ -6267,3 +6267,92 @@ and `agent_templates_member_select` are ONE RULE WRITTEN TWICE and may only move
 pair belongs to B12/B16 with the redteam suites that prove it. Adding an arm to a predicate this
 slice does not own, whose twin lives in another slice's unapplied migration, is the exact drift
 `20260716150000_chats_team_aware_rls.sql` is the record of.
+
+## 2026-09-03 — Waiting is a hold, not a poll: a rule that had to stop being prose
+
+Samuel's ruling, in as many words: *"there should be a Dopl actual guardrail in the code."*
+
+### The bill nobody on this side pays
+
+An EXTERNAL client — Claude Code, Claude Desktop, Codex, anything that is not a session the Dopl
+desktop spawned — that wants to be reachable from Dopl has two ways to wait. It can HOLD, with
+`dopl_channel(op="read", wait_ms=…)`, or it can re-read the channel on a timer. **Every wake of an
+LLM session re-sends its whole context.** A hold pays that once, when a message actually lands. A
+poll pays it per tick, forever, for pages that say nothing.
+
+⚠ **THAT COST IS INVISIBLE FROM HERE, AND IT IS WHY NO RATE LIMIT WOULD EVER HAVE FIRED.** A
+session re-reading a quiet channel every thirty seconds is two requests a minute — nowhere near any
+ceiling this product has. The thing being spent is the CALLER's own context window, off-server. So
+the natural instrument was the wrong instrument, and the right one had to be built from the only
+thing the server can actually see: the SHAPE. Same credential, same channel, same cursor, no
+`wait_ms`, nothing new to report, again. Three of those inside ten minutes is not a read pattern,
+it is a timer (`src/shared/channels/caps.ts › POLL_STRIKE_LIMIT` / `POLL_STRIKE_WINDOW_MS`).
+
+### Why the doctrine was not enough, and why the RESULTS were worse than the doctrine
+
+The rule had been written down. `dopl://doctrine/channels` said it; every hold result restated it.
+Agents polled anyway — a document is a thing an agent may simply not have pulled, and a habit is not
+corrected by a paragraph it never read. This is the same argument
+`channel-hold-budget.ts › DESKTOP_HOLD_REFUSAL` makes about T85: *a rule stated in doctrine and
+enforced by one client is not enforced.*
+
+The restating was itself the second half of the problem. Measured at `1fcf044f`, with `ref="general"`:
+a hold that RETURNED messages closed with **1,599 characters** of re-arm doctrine, and one that
+timed out with **644** — paid by an orchestrator sitting on a quiet exchange, every ~45 seconds,
+forever, on the one result that carries the least news there is. So the fix pulls in both
+directions at once: the rule becomes ONE canonical statement (`channel-doctrine.ts › waiting`, 593
+chars, capped at 600 by `WAITING_MAX_CHARS`), and every result that used to restate it spends ONE
+line instead — `cursor=<seq> · hold, never poll: <the exact call> · dopl://doctrine/channels ›
+Waiting`, bounded by `channel-result-budget.test.ts`. Arrived 1,599 → 134. Timed out 644 → 131.
+The workspace hold's 656 → 112.
+
+⚠ **NOTHING SEMANTIC WAS DELETED, AND THAT CLAIM IS ASSERTED FROM BOTH ENDS.** INVARIANTS §10 asks
+that a re-arm instruction never ship without a stop condition. It never asked that the stop
+condition be RESTATED in the result — and the suites now pin both halves, so a future trim cannot
+drop the pointer and keep the section, or the section and keep the pointer. The one clause that did
+retire is the "~3 empty holds" checkpoint: it was a heuristic for what the 30-minute rule already
+requires, since you cannot know nothing has come from the member you addressed without looking. The
+rule says LOOK; it does not say give up after three, and the suite pins that it never starts to.
+
+### The guardrail, and the three things it refuses to guess
+
+`packages/mcp-server/src/tools/channel-poll-detector.ts`. On the third empty, `wait_ms`-less read of
+one credential/scope/cursor inside ten minutes, the result LEADS with
+`reason=POLLING_DETECTED · use wait_ms · retry=…` and the empty page is WITHHELD.
+
+- **It is external-only.** A desktop-run caller is already refused the hold outright, so counting
+  its reads would accuse it of not doing the one thing it may not do.
+- **A hold RESETS the count rather than merely not adding to it.** A caller that has held once has
+  demonstrably learned the shape; the next empty page is a fresh observation, not strike four.
+- **It withholds the page and never the cursor.** What is withheld is a result that had no messages
+  in it — which is the only reason a guardrail is allowed to withhold anything at all.
+
+⚠ **THE STATE IS IN-PROCESS, AND THAT IS A DELIBERATE FAIL-OPEN.** `rate_limit_events` +
+`check_and_record_rate_limit_subject` is this repo's generic subject counter and would have been the
+natural home, but it is `server-only` app code behind a fixed 60-second window and
+`packages/mcp-server` reaches the app only over loopback HTTP (its tsconfig `rootDir` is its own
+`src`). Reaching it meant a new route and a new RPC for a counter whose whole job is to nudge a
+caller in a result it is already reading. The asymmetry is what makes that acceptable: **a cold
+start LOSES strikes, so the detector under-fires and a poller merely keeps polling; no lost state
+can invent a strike.** The failure mode is a missed nudge, never a withheld page. `touchMcpStatus`
+in the same app takes the same trade for the same reason.
+
+### And the half a server cannot reach at all
+
+A session with background tasks can move the wait OUT of its turn entirely — run the hold in a
+background task, end the turn, and the task's completion is a wake the client already delivers. The
+server can TELL a session to do that, but it cannot hand it a script, and a session on a machine
+that never cloned this repo has nowhere to run one from. So `scripts/dopl-channel-wait.sh` became
+the canonical loop (`--container`, `--channel`, `--to`, `--cursor-file`; exit 0 on the first
+addressed message, ONE line; no secret ever an argument), and the desktop ships it with a
+`dopl-channels-wait` skill on the same signed-in lane that ensures the CLI's `dopl` MCP entry.
+
+⚠ **A SKILL IS THE ONLY SURFACE THAT ARRIVES EARLY ENOUGH.** It is read before the first tool call —
+earlier than the MCP `instructions` block, much earlier than any result — and by the time a session
+is re-reading a channel on a timer the lesson is already being paid for. ⚠ It lives in
+`main/runtime/claude/`, not core: `~/.claude/skills` is ONE runtime's convention, and a core module
+naming it is exactly the branch `test/core-vocabulary.test.mjs` exists to stop. ⚠ And it never
+clobbers an operator's edit — a `.dopl-installed.json` sidecar records a sha256 per file, so an
+untouched older copy upgrades, an edited one is left alone, and a directory with no sidecar is never
+touched. That check is the one `docs/M5-M6-M10-AUDIT-FINDINGS.md` records the previous generation of
+this idea shipping without.

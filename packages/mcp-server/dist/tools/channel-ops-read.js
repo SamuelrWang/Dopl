@@ -38,6 +38,13 @@ const channel_addressing_1 = require("./channel-addressing");
 // these ops used to close with is in `channel-doctrine.ts`, behind `op="rooms" action="help"`
 // and the `dopl://doctrine/channels` resource.
 const channel_doctrine_1 = require("./channel-doctrine");
+// ⚠ THE ONE LINE A READ SPENDS ON WAITING — cursor, the exact hold call, and a
+// pointer at the rule. Shared with both hold lanes so the three cannot drift.
+const channel_wake_guidance_1 = require("./channel-wake-guidance");
+// 🔒 THE GUARDRAIL. A timed re-read is refused its (empty) page — never its
+// cursor — after three strikes on one credential/scope/cursor. See that file
+// for why the rule could not stay prose.
+const channel_poll_detector_1 = require("./channel-poll-detector");
 // ⚠ The session LINE — staleness hedge + operator-only telemetry — has ONE
 // statement, in channel-session-render.ts, shared with the HOLD's session block.
 const channel_session_render_1 = require("./channel-session-render");
@@ -57,7 +64,7 @@ async function opList(client) {
     const lines = [`## Channels — ${channels.length}\n`];
     for (const c of channels)
         lines.push((0, channel_render_1.formatChannelLine)(c));
-    lines.push('\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="send"; watch for new messages with op="read" with wait_ms.');
+    lines.push('\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="send"; WAIT for new ones by HOLDING — op="read" with wait_ms, never a timed re-read.');
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
@@ -120,7 +127,12 @@ async function threadHeader(client, ref, threadId, selfUserId) {
     };
     return [(0, channel_render_1.formatThreadDetail)(thread, view), ``];
 }
-async function opRead(client, ref, since, limit, selfUserId = null, thread, format) {
+async function opRead(client, ref, since, limit, selfUserId = null, thread, format, 
+// ⚠ The credential this read is counted under, or `null` for a caller the
+// poll detector must not judge (a desktop-run session, or one whose user id
+// the boot could not resolve). Defaulting to `null` is what keeps every
+// test-constructed call and every other caller of this function unchanged.
+subject = null) {
     const scope = thread?.trim() ? thread.trim() : undefined;
     // ⚠ Id ROUND TRIPS: agent copies it from a `read` legend, and a legend id is
     // `metadata.taskId`, stored verbatim by a peer for any non-UUID value. A
@@ -146,16 +158,34 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread, form
     // question the caller is about to ask — "is this even a thread?" — and the
     // op it replaced would have answered it.
     const card = scope ? await threadHeader(client, ref, scope, selfUserId) : [];
-    const watch = `dopl_channel(op="read" with wait_ms, channel="${ref}", since=`;
     if (messages.length === 0) {
         const sinceNote = since !== undefined ? ` after seq ${since}` : "";
         if (scope) {
             return (0, respond_1.ok)([
                 ...card,
-                `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. Watch for new messages with ${watch}${since ?? 0}); a HOLD is channel-wide and takes no thread.`,
+                `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. A HOLD is channel-wide and takes no thread.`,
+                (0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.channelHoldCall)(ref, since ?? 0), since ?? 0),
             ].join("\n"));
         }
-        return (0, respond_1.ok)(`No messages in **${ref}**${sinceNote}. Watch for new ones with ${watch}${since ?? 0}).`);
+        // 🔒 THE STRIKE, AND IT IS RECORDED ON THIS BRANCH ALONE: an UNSCOPED read
+        // that came back EMPTY with no `wait_ms`. A page with messages advanced the
+        // caller's cursor (different key, different observation), and a
+        // thread-scoped read is a different question with a different cursor story
+        // — neither is a timer.
+        if ((0, channel_poll_detector_1.notePollingRead)(subject, ref, since)) {
+            // ⚠ THE PAGE IS WITHHELD AND THE CURSOR IS NOT. What is withheld is a
+            // result that had no messages in it, so the caller loses nothing it could
+            // have acted on — which is the only reason a guardrail is allowed to
+            // withhold anything at all.
+            return (0, respond_1.ok)([
+                (0, channel_poll_detector_1.pollingDetectedLine)((0, channel_wake_guidance_1.channelHoldCall)(ref, since ?? 0), since),
+                (0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.channelHoldCall)(ref, since ?? 0), since ?? 0),
+            ].join("\n"));
+        }
+        return (0, respond_1.ok)([
+            `No messages in **${ref}**${sinceNote}.`,
+            (0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.channelHoldCall)(ref, since ?? 0), since ?? 0),
+        ].join("\n"));
     }
     const count = `${messages.length} message${messages.length === 1 ? "" : "s"}`;
     // ⚠ Banner moved to the tool DESCRIPTION (T11) — see opList.
@@ -173,7 +203,7 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread, form
     const lastSeq = messages[messages.length - 1].seq;
     if (!scope) {
         // A channel-wide read already IS the channel-wide cursor.
-        lines.push(`\nHighest seq shown: ${lastSeq}. Watch for newer messages with ${watch}${lastSeq}).`);
+        lines.push(`\n${(0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.channelHoldCall)(ref, lastSeq), lastSeq)}`);
         return (0, respond_1.ok)(lines.join("\n"));
     }
     // ⚠ Thread-scoped read yields NO channel-wide cursor — so it prints no

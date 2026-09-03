@@ -43,7 +43,9 @@ import type { WorkspaceDirectory } from "../workspace-directory.js";
  * listAccountMessagesAfter`. That is a stronger fact than the workspace-wide
  * await's copy states, and it is the whole reason this op can exist.
  */
-export declare function opReadAccount(client: DoplClient, directory: WorkspaceDirectory, since: number, limit: number | undefined, selfUserId?: string | null): Promise<ToolResponse>;
+export declare function opReadAccount(client: DoplClient, directory: WorkspaceDirectory, since: number, limit: number | undefined, selfUserId?: string | null, 
+/** @see opRead — the credential this read is counted under, or `null`. */
+subject?: string | null): Promise<ToolResponse>;
 /**
  * `op="status"` WITH NO `channel` — every session of the caller's,
  * grouped by the room it is working in.

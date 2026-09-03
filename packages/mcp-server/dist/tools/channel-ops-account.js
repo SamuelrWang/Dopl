@@ -43,6 +43,10 @@ const channel_render_1 = require("./channel-render");
 const channel_framing_1 = require("./channel-framing");
 const channel_session_render_1 = require("./channel-session-render");
 const channel_session_table_1 = require("./channel-session-table");
+// 🔒 The account-wide page is pollable in exactly the same way the per-channel
+// one is, so it is counted under the same detector, at its own scope key.
+const channel_poll_detector_1 = require("./channel-poll-detector");
+const channel_wake_guidance_1 = require("./channel-wake-guidance");
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed channel)";
 /**
@@ -69,13 +73,29 @@ function accountScopeNote(channelCount) {
  * listAccountMessagesAfter`. That is a stronger fact than the workspace-wide
  * await's copy states, and it is the whole reason this op can exist.
  */
-async function opReadAccount(client, directory, since, limit, selfUserId = null) {
+async function opReadAccount(client, directory, since, limit, selfUserId = null, 
+/** @see opRead — the credential this read is counted under, or `null`. */
+subject = null) {
     const page = await (0, account_scope_1.accountMessages)(client, directory, { since, limit });
     if (page.messages.length === 0) {
+        // 🔒 Same strike, same rule — see `opRead`. ⚠ The scope note SURVIVES the
+        // refusal: "you are a member of nothing" is a fact about why the page is
+        // empty, not doctrine, and withholding it would leave the caller reading a
+        // polling complaint over a cursor that can never advance.
+        if ((0, channel_poll_detector_1.notePollingRead)(subject, channel_poll_detector_1.ACCOUNT_SCOPE, since)) {
+            return (0, respond_1.ok)([
+                (0, channel_poll_detector_1.pollingDetectedLine)((0, channel_wake_guidance_1.workspaceHoldCall)(since), since),
+                accountScopeNote(page.channelCount),
+                (0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.workspaceHoldCall)(since), since),
+            ].join("\n"));
+        }
         return (0, respond_1.ok)([
             `No new messages anywhere since seq ${since}.`,
             accountScopeNote(page.channelCount),
-            `Check again with dopl_channel(op="read", since=${since}) — or, to be WOKEN rather than to poll, hold with dopl_channel(op="read", since=${since}, wait_ms=<ms>), which watches one workspace at a time.`,
+            // ⚠ The hold this points at watches ONE WORKSPACE, not the account —
+            // the scopes differ, and saying so is the fact this line carries that
+            // the shared waiting line cannot.
+            `${(0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.workspaceHoldCall)(since), since)} — that hold watches one workspace at a time.`,
         ].join("\n"));
     }
     const groups = (0, channel_render_1.groupByChannel)(page.messages);

@@ -16,6 +16,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { opHoldWorkspace } from "./channel-ops-hold-workspace";
 import { opHold } from "./channel-ops-hold";
+import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
 
 const ME = "11111111-1111-1111-1111-111111111111";
 
@@ -94,7 +95,10 @@ describe("a workspace page names the channel every message came from", () => {
         timedOut: false,
       })
     );
-    expect(out).toContain("Highest seq shown: 99");
+    // ⚠ `cursor=` IS THE CURSOR TOKEN NOW (2026-09-03) — same fact, lifted
+    // without parsing prose. The property under test is unchanged: the number
+    // is the page MAXIMUM, not the last rendered line.
+    expect(out).toContain("cursor=99");
     expect(out).toContain("since=99");
   });
 
@@ -132,9 +136,13 @@ describe("the scope is stated on every result", () => {
 
 describe("the workspace stop rule is its own, not the per-channel one", () => {
   it("warns that ANY channel's traffic wakes it, so a wake is not news", async () => {
-    const out = await text(wsClient({}), 5, HOLD_MS);
+    // ⚠ ON THE PAGE, NOT ON THE TIMEOUT (2026-09-03). The scope warning is a
+    // FACT about this lane and it survives; what left the timed-out result with
+    // the rest of the re-arm doctrine is the STOP RULE, which is the same rule
+    // in both lanes and is now stated once in `dopl://doctrine/channels`.
+    const out = await text(wsClient({ messages: [message()], timedOut: false }));
     expect(out).toContain("wakes on ANY message in ANY channel");
-    expect(out).toContain("workspace activity as a sign of life");
+    expect(out).toContain("judge liveness there");
   });
 
   /**
@@ -145,10 +153,15 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
    * same exit (checked below).
    */
   it("says the TIMEOUT stops being the 'nothing is happening' signal", async () => {
+    // ⚠ **RE-POINTED (2026-09-03).** The clause that said the timeout stops
+    // being a signal was part of an 855-character stop rule; what replaced it
+    // is the same fact said as an inversion of how a WAKE reads — a workspace
+    // hold fires for any room, so neither firing nor timing out is news about
+    // the one exchange you are blocked on.
     const out = await text(
       wsClient({ messages: [message()], timedOut: false })
     );
-    expect(out).toContain("almost never time out");
+    expect(out).toContain("not news about the ONE exchange you are blocked on");
   });
 
   it("the COMPRESSED timeout still carries the cursor and the 30-minute exit", async () => {
@@ -156,9 +169,10 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
     // long ask lands in the CUT SHORT branch, not the timeout one.
     const out = await text(wsClient({}), 5, HOLD_MS);
     expect(out).toContain("cursor=5");
-    expect(out).toContain("STOP and report to your operator");
-    expect(out).toContain("30+ minutes");
-    expect(out).toContain("no finished STATE to wait for");
+    // ⚠ THE EXIT IS CARRIED BY A POINTER NOW, NOT BY A COPY (2026-09-03) — one
+    // statement of it, in the section every hold result names. Both halves are
+    // asserted, here and on the doctrine below.
+    expect(out).toContain(`${DOCTRINE_URI} › Waiting`);
     // ⚠ …and it still states the SCOPE, which is a fact about what was watched
     // rather than doctrine: "no messages" and "that room was never watched" are
     // different answers.
@@ -166,8 +180,15 @@ describe("the workspace stop rule is its own, not the per-channel one", () => {
   });
 
   it("states the ABSENCE of a finished state (INVARIANTS §10)", async () => {
+    // ⚠ An agent trained on a surface that HAD a finished state waits for one
+    // forever, so the absence must be SAID rather than merely be true. It is
+    // said once, in the section both hold lanes point at.
     expect(await text(wsClient({}), 5, HOLD_MS)).toContain(
-      "no finished STATE to wait for"
+      `${DOCTRINE_URI} › Waiting`,
+    );
+    expect(CHANNEL_DOCTRINE).toContain("No thread ever closes");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
   });
 });
@@ -311,7 +332,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
     // UNDER the messages and their cursor, never in place of them — a caller
     // that lost `Highest seq shown` to a session table would re-arm from the
     // wrong seq, or not at all.
-    expect(out).toContain("Highest seq shown: 10");
+    expect(out).toContain("cursor=10");
   });
 
   it("per-channel: absent renders no block; populated renders one", async () => {

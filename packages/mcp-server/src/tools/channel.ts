@@ -74,6 +74,11 @@ import { opEscalate } from "./channel-ops-escalate";
 import { opReadAccount } from "./channel-ops-account";
 import { opStatus } from "./channel-ops-status";
 import { isDesktopRun, UNKNOWN_CALLER, type CallerIdentity } from "./identity";
+// 🔒 THE POLL GUARDRAIL. The subject is resolved ONCE per call, here, so the
+// read handlers take a string and never a whole identity — and so the
+// external-only fence (`pollSubject` returns null for a desktop-run caller)
+// has exactly one statement.
+import { ACCOUNT_SCOPE, noteHold, pollSubject } from "./channel-poll-detector";
 import { DESKTOP_HOLD_REFUSAL } from "./channel-hold-budget";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
 
@@ -253,6 +258,14 @@ export function registerChannelTool(
             if (isDesktopRun(caller)) return err(DESKTOP_HOLD_REFUSAL);
             const missHold = missingParams("read (holding)", args, ["since"]);
             if (missHold) return missHold;
+            // 🔒 A HOLD IS NEVER A POLL, SO IT CLEARS THE STRIKES — the caller
+            // did the one thing the rule asks. ⚠ Recorded BEFORE the hold runs
+            // and not after: a hold can occupy the whole function budget, and
+            // credit for arming it must not depend on it returning.
+            noteHold(
+              pollSubject(caller),
+              scoped ? (args.channel as string) : ACCOUNT_SCOPE,
+            );
             return scoped
               ? opHold(
                   client,
@@ -283,6 +296,7 @@ export function registerChannelTool(
               args.since as number,
               args.limit,
               selfUserId,
+              pollSubject(caller),
             );
           }
           return opRead(
@@ -295,6 +309,7 @@ export function registerChannelTool(
             // ids are real `metadata.taskId` values and must stay filterable.
             args.thread,
             args.response_format,
+            pollSubject(caller),
           );
         }
 

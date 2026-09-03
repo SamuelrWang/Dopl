@@ -21,7 +21,7 @@ import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 import { type ResponseFormat } from "./response-size";
 export declare function opList(client: DoplClient): Promise<ToolResponse>;
-export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string, format?: ResponseFormat): Promise<ToolResponse>;
+export declare function opRead(client: DoplClient, ref: string, since?: number, limit?: number, selfUserId?: string | null, thread?: string, format?: ResponseFormat, subject?: string | null): Promise<ToolResponse>;
 /**
  * READ-SESSION-STATE — the caller's OWN live sessions: handle, reduced state
  * (working / idle / ended — desktop `session-summary.js` vocabulary;

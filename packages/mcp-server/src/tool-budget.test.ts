@@ -212,7 +212,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // ⚠ 4,145 → 4,024 (B15): `shelf` + `to_workspace` out, three grant args in
   dopl_agent: 4021,
   // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
-  dopl_channel: 8677,
+  dopl_channel: 8672, // ⚠ 8,677 → 8,672 (2026-09-03): `section=`'s enum gained `waiting` (+10 — a section a model cannot name is a section it cannot pull) and that field's own `.describe()` paid for it twice over (−15).
   dopl_chats: 3553,
   // ⚠ 5,347 → 5,141 (B15), same trade
   dopl_kb: 5138,
@@ -267,7 +267,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // `list_workspaces` → `dopl_workspaces`), the injected `workspace` contract lost
 // 5 chars × 9 tools, and the briefing fell 56. **B15 then took the copy ops, the
 // `shelf` axis and its two labels out and put the grant op and its three args in.**
-const SERVED_TOTAL_CEILING = 46_851; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review) → 46,857 (batch 3, MEASURED whole at the integration: B13's three-tools-into-one and B15's shelf-for-grant trade, less F-621's 250-char mint) → 46,851 (batch-3 review: the grant `to` argument routes at `dopl_workspaces(op="list")` instead of two deleted tools, −3 on each of the two schemas that publish it)
+const SERVED_TOTAL_CEILING = 46_846; // ⚠ **46,851 → 46,846 (2026-09-03): THE HOLD-NOT-POLL WAVE MADE THIS SURFACE SMALLER.** The `section=` enum gained `waiting` (+10) and that field's `.describe()` paid for it (−15); the briefing's new WAIT sentence cost nothing here because it was paid for by trimming the contract around it. What the ten characters buy is a caller that HOLDS instead of re-reading on a timer — and a timed poll re-sends that caller's whole context per tick, a cost this ceiling cannot see. Per-call, the hold results fell ~1,400 EACH (`channel-result-budget.test.ts`).
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -288,7 +288,7 @@ const SERVED_TOTAL_CEILING = 46_851; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A
 // ⚠ **1,857 → 1,801 (B13):** the membership-count branch and the home-channel
 // count both left — nothing is refused for want of a workspace, and containers
 // are LISTED by the orientation tool rather than counted here.
-const INSTRUCTIONS_CEILING = 1_801;
+const INSTRUCTIONS_CEILING = 1_801; // ⚠ **UNMOVED ON 2026-09-03, AND THAT IS THE ONLY WAY THE WAITING RULE GOT IN.** One sentence ("To WAIT, HOLD — … never poll on a timer") plus its blank line, 130 chars, paid for by trimming exactly that much out of the contract around it: the WHICH TOOL parenthetical, five glosses that restated their own tool descriptions, and the `workspace=` clause. ⚠ **THE TRIM CAME FIRST** — this briefing is the only surface reaching a client that has not pulled the doctrine, so the rule had to be in it, and a ceiling raised to fit a sentence is a ceiling that stops being one.
 
 /**
  * ⚠ THE PULLED SIDE, AND IT IS BUDGETED SEPARATELY ON PURPOSE (principle 7).
@@ -317,7 +317,7 @@ const INSTRUCTIONS_CEILING = 1_801;
 // ⚠ **32,551 → 8,960 (B8), THE LARGEST SINGLE FALL HERE.** The doctrine was
 // where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
 // narrative, 3,914 on a hold that is now a knob on `read`.
-const DOCTRINE_CEILING = 8_960;
+const DOCTRINE_CEILING = 9_446; // ⚠ **8,960 → 9,446 (2026-09-03): A RISE, RECORDED HERE BECAUSE THIS IS THE GATE THAT WOULD OTHERWISE ABSORB IT.** ~490 pulled once against ~1,400 pushed per empty hold — `channel-doctrine-budget.test.ts` states the trade in full.
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",

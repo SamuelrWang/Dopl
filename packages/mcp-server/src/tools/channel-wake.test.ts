@@ -24,10 +24,9 @@ import { DESKTOP_SESSION_RUNTIME } from "./identity";
 import { opCreateThread } from "./channel-ops-threads";
 import { CHANNEL_DESCRIPTION } from "./channel-description";
 import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
-// ⚠ WHERE THE AWAIT PROTOCOL LIVES SINCE T10/T12 (2026-09-02). `create_thread`
-// closed with four paragraphs of it; the result is one fact line now, so the
-// paragraphs are re-pinned HERE — moved, never dropped.
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
+// ⚠ WHERE THE HOLD PROTOCOL LIVES SINCE T10/T12 (2026-09-02) and, since
+// 2026-09-03, the WAITING rule with it — moved, never dropped, re-pinned here.
+import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
 import { opHold } from "./channel-ops-hold";
 
 const CHANNEL = {
@@ -283,7 +282,7 @@ describe("opHold — long hold (WAKE-V1)", () => {
     expect(text).toContain("Report this to your operator");
     // ⚠ The ordinary re-arm instruction must NOT also be present — the two read
     // as contradictory advice in one result.
-    expect(text).not.toContain("re-arm the wait NOW");
+    expect(text).not.toContain("hold, never poll");
   });
 
   it("an EARLY inner failure is reported as a failure, not as a platform clamp", async () => {
@@ -317,7 +316,7 @@ describe("opHold — long hold (WAKE-V1)", () => {
       await opHold(stubClient({ awaitChannelMessages }), "general", 7, 60_000)
     ).content[0].text;
     expect(text).not.toContain("CUT SHORT");
-    expect(text).toContain("re-arm the wait NOW");
+    expect(text).toContain("hold, never poll");
   });
 
   // ── The stop rule (M3): thread STATE, not a timeout counter ───────────
@@ -339,26 +338,29 @@ describe("opHold — long hold (WAKE-V1)", () => {
     ).content[0].text;
 
     for (const text of [timedOut, withMessages]) {
-      // ⚠ THE EXIT IS THE ADDRESSEE'S SILENCE, AND NOW IT IS THE ONLY ONE. It
-      // used to have a cheaper first half — "stop when the thread is closed or
-      // failed" — and thread closing was removed (wiring plan Phase 4,
-      // 2026-08-18), taking the state and `get_thread`'s report of it. ⚠ The
-      // absence must be SAID, not merely dropped: an agent trained on the old
-      // surface waits for a close forever if nothing tells it there is none.
-      expect(text).toContain("STOP and report");
-      expect(text).toContain("30+ minutes");
-      expect(text).toContain("operator");
-      expect(text).toContain("no finished STATE to wait for");
+      // ⚠ THE EXIT IS THE ADDRESSEE'S SILENCE, AND NOW IT IS THE ONLY ONE —
+      // thread closing was removed (wiring plan Phase 4, 2026-08-18) and the
+      // absence must be SAID, or an agent trained on the old surface waits for
+      // a close forever. ⚠ **CARRIED BY A POINTER, NOT A COPY (2026-09-03):**
+      // §10 asks that a re-arm instruction never ship WITHOUT a stop condition,
+      // not that it be RESTATED per result at ~700 chars to the one caller
+      // reading it in a loop. Both halves are asserted below.
+      expect(text).toContain(`${DOCTRINE_URI} › Waiting`);
       expect(text).not.toContain("closed or failed");
       expect(text).not.toContain('op="get_thread"');
-      expect(text).toContain("task_progress");
-      // ⚠ A flat "stop after N timeouts" abandons a peer heads-down on a long
-      // job — the exact case this feature exists for.
-      expect(text).not.toMatch(/stop\D{0,40}3 (consecutive )?(empty )?(holds|timeouts)/i);
     }
+    expect(CHANNEL_DOCTRINE).toContain(
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
+    );
+    expect(CHANNEL_DOCTRINE).toContain("No thread ever closes");
+    // ⚠ A flat "stop after N timeouts" abandons a peer heads-down on a long
+    // job — the exact case this feature exists for.
+    expect(CHANNEL_DOCTRINE).not.toMatch(
+      /stop\D{0,40}3 (consecutive )?(empty )?(holds|timeouts)/i,
+    );
   });
 
-  it("treats ~3 empty holds as a CHECKPOINT, not a deadline", async () => {
+  it("makes waiting a LOOK, not a countdown to giving up", async () => {
     const clock = fakeClock();
     const empty = vi.fn<AwaitSpy>(async (_ref, opts) => {
       clock.advance(opts.timeoutMs ?? 0);
@@ -367,11 +369,12 @@ describe("opHold — long hold (WAKE-V1)", () => {
     const text = (await opHold(stubClient({ awaitChannelMessages: empty }), "general", 7))
       .content[0].text;
 
-    // ⚠ Unconditional instruction stays "re-arm now" — the count only triggers
-    // a look at the thread, and the look decides.
-    expect(text).toContain("re-arm the wait NOW");
-    expect(text).toMatch(/every ~3 empty holds[\s\S]{0,80}check/i);
-    expect(text).toContain("Keep re-arming while something came from that member");
+    // ⚠ **THE "~3 EMPTY HOLDS" COUNTER RETIRED INTO THE LOOK RULE (2026-09-03)**
+    // — a heuristic for what the 30-minute rule already requires, since you
+    // cannot know nothing came from the member you addressed without looking.
+    expect(text).toContain("hold, never poll");
+    expect(CHANNEL_DOCTRINE).toContain("LOOK before each re-arm");
+    expect(CHANNEL_DOCTRINE).toMatch(/STOP when nothing has come[\s\S]{0,80}30 min/);
   });
 
   // ── FIX M1: the untrusted-content caveat is a HEADER, not a footnote ──
@@ -455,11 +458,12 @@ describe("opCreateThread — the hold cursor rides back (WAKE-V1)", () => {
     // `read(since=, wait_ms=)`. Its ONE surviving contract is the stop rule,
     // which is the load-bearing half this pair was ever about, and it is what
     // the doctrine end of the pair now holds.
+    // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
     expect(CHANNEL_DOCTRINE).toContain(
-      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
     expect(CHANNEL_DOCTRINE).toContain(
-      "an empty return is the budget expiring, not an answer",
+      "An empty return is the budget expiring, not an answer",
     );
   });
 

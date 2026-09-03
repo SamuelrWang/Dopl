@@ -52,6 +52,13 @@ import { rosterAddressingRule } from "./channel-addressing";
 // these ops used to close with is in `channel-doctrine.ts`, behind `op="rooms" action="help"`
 // and the `dopl://doctrine/channels` resource.
 import { DOCTRINE_POINTER } from "./channel-doctrine";
+// ⚠ THE ONE LINE A READ SPENDS ON WAITING — cursor, the exact hold call, and a
+// pointer at the rule. Shared with both hold lanes so the three cannot drift.
+import { channelHoldCall, waitingLine } from "./channel-wake-guidance";
+// 🔒 THE GUARDRAIL. A timed re-read is refused its (empty) page — never its
+// cursor — after three strikes on one credential/scope/cursor. See that file
+// for why the rule could not stay prose.
+import { notePollingRead, pollingDetectedLine } from "./channel-poll-detector";
 // ⚠ The session LINE — staleness hedge + operator-only telemetry — has ONE
 // statement, in channel-session-render.ts, shared with the HOLD's session block.
 import { sessionIsStale, sessionLegend } from "./channel-session-render";
@@ -75,7 +82,7 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
   const lines = [`## Channels — ${channels.length}\n`];
   for (const c of channels) lines.push(formatChannelLine(c));
   lines.push(
-    '\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="send"; watch for new messages with op="read" with wait_ms.',
+    '\nRead a channel with dopl_channel(op="read", channel=<slug|id>); post with op="send"; WAIT for new ones by HOLDING — op="read" with wait_ms, never a timed re-read.',
   );
   return ok(lines.join("\n"));
 }
@@ -153,6 +160,11 @@ export async function opRead(
   selfUserId: string | null = null,
   thread?: string,
   format?: ResponseFormat,
+  // ⚠ The credential this read is counted under, or `null` for a caller the
+  // poll detector must not judge (a desktop-run session, or one whose user id
+  // the boot could not resolve). Defaulting to `null` is what keeps every
+  // test-constructed call and every other caller of this function unchanged.
+  subject: string | null = null,
 ): Promise<ToolResponse> {
   const scope = thread?.trim() ? thread.trim() : undefined;
   // ⚠ Id ROUND TRIPS: agent copies it from a `read` legend, and a legend id is
@@ -177,19 +189,39 @@ export async function opRead(
   // question the caller is about to ask — "is this even a thread?" — and the
   // op it replaced would have answered it.
   const card = scope ? await threadHeader(client, ref, scope, selfUserId) : [];
-  const watch = `dopl_channel(op="read" with wait_ms, channel="${ref}", since=`;
   if (messages.length === 0) {
     const sinceNote = since !== undefined ? ` after seq ${since}` : "";
     if (scope) {
       return ok(
         [
           ...card,
-          `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. Watch for new messages with ${watch}${since ?? 0}); a HOLD is channel-wide and takes no thread.`,
+          `No messages tagged with thread ${safeScope} in **${ref}**${sinceNote}. \`thread\` FILTERS the transcript — an id no message carries comes back empty rather than as an error — so check the id with dopl_channel(op="rooms", action="threads", channel="${ref}") before you conclude the exchange is silent, or drop \`thread\` to read the whole channel. A HOLD is channel-wide and takes no thread.`,
+          waitingLine(channelHoldCall(ref, since ?? 0), since ?? 0),
+        ].join("\n"),
+      );
+    }
+    // 🔒 THE STRIKE, AND IT IS RECORDED ON THIS BRANCH ALONE: an UNSCOPED read
+    // that came back EMPTY with no `wait_ms`. A page with messages advanced the
+    // caller's cursor (different key, different observation), and a
+    // thread-scoped read is a different question with a different cursor story
+    // — neither is a timer.
+    if (notePollingRead(subject, ref, since)) {
+      // ⚠ THE PAGE IS WITHHELD AND THE CURSOR IS NOT. What is withheld is a
+      // result that had no messages in it, so the caller loses nothing it could
+      // have acted on — which is the only reason a guardrail is allowed to
+      // withhold anything at all.
+      return ok(
+        [
+          pollingDetectedLine(channelHoldCall(ref, since ?? 0), since),
+          waitingLine(channelHoldCall(ref, since ?? 0), since ?? 0),
         ].join("\n"),
       );
     }
     return ok(
-      `No messages in **${ref}**${sinceNote}. Watch for new ones with ${watch}${since ?? 0}).`,
+      [
+        `No messages in **${ref}**${sinceNote}.`,
+        waitingLine(channelHoldCall(ref, since ?? 0), since ?? 0),
+      ].join("\n"),
     );
   }
   const count = `${messages.length} message${messages.length === 1 ? "" : "s"}`;
@@ -208,9 +240,7 @@ export async function opRead(
   const lastSeq = messages[messages.length - 1].seq;
   if (!scope) {
     // A channel-wide read already IS the channel-wide cursor.
-    lines.push(
-      `\nHighest seq shown: ${lastSeq}. Watch for newer messages with ${watch}${lastSeq}).`,
-    );
+    lines.push(`\n${waitingLine(channelHoldCall(ref, lastSeq), lastSeq)}`);
     return ok(lines.join("\n"));
   }
   // ⚠ Thread-scoped read yields NO channel-wide cursor — so it prints no

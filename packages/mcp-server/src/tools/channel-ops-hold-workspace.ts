@@ -40,26 +40,32 @@ import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 import { describeFailure, runHold, wasCutShort } from "./channel-hold-loop";
 // ⚠ The re-arm text branches on the caller's runtime here too, for the same
 // reason it does per-channel: an unstamped caller may not be promised a wake.
-import { workspaceHoldTimedOutLines } from "./channel-wake-guidance";
+import {
+  waitingLine,
+  workspaceHoldCall,
+  workspaceHoldTimedOutLines,
+} from "./channel-wake-guidance";
 import { sessionBlockLines } from "./channel-session-table";
 
 /**
- * The re-arm stop rule for a WORKSPACE hold.
+ * THE ONE THING A WORKSPACE HOLD KNOWS THAT THE DOCTRINE CANNOT — ⚠ a SCOPE
+ * fact, and all that is left of what was an 855-character stop rule.
  *
- * ⚠ **IT IS DELIBERATELY DIFFERENT FROM THE PER-CHANNEL ONE, AND THE DIFFERENCE
- * IS THE WHOLE POINT.** `channel-ops-hold.ts › rearmStopRule` says to judge
- * liveness ONLY on the member you addressed, because in a busy channel other
- * members' traffic is not evidence your exchange is alive. A workspace hold
- * makes that trap strictly worse — EVERY channel's traffic now wakes you — so
- * the rule has to be restated here rather than reused, and it has to name the
- * new failure: an orchestrator re-arming forever because the workspace is busy
- * while the one agent it is waiting on died an hour ago.
- * ⚠ It also states the ABSENCE of a finished state, for the same reason every
- * other stop rule does (INVARIANTS §10): an agent trained on a surface that had
- * one waits for it forever.
+ * ⚠ **THE STOP RULE ITSELF MOVED (2026-09-03).** "Keep re-arming while the
+ * member you addressed has spoken in the last ~30 minutes; stop when they have
+ * not; no thread ever closes, so that silence is the only signal" is true of
+ * both lanes and of every hold, and is now stated once in
+ * `channel-doctrine.ts › waiting`, which every result points at.
+ *
+ * ⚠ **WHAT COULD NOT MOVE IS THE SENTENCE BELOW**, because it is not a rule
+ * about waiting — it is a fact about THIS hold's scope, and it inverts how a
+ * wake should be read. A per-channel hold that fires is at least about the room
+ * you care about; a workspace hold that fires may be about any room you are in,
+ * so an orchestrator can re-arm forever on a busy workspace while the one agent
+ * it is blocked on died an hour ago.
  */
 export function workspaceRearmStopRule(): string {
-  return `A WORKSPACE hold wakes on ANY message in ANY channel you belong to, so a wake is not by itself news about the thing you are waiting on. Before re-arming, ask which exchange you are actually blocked on and check THAT one — dopl_channel(op="read", channel=<that channel>, since=<your cursor>) — rather than treating workspace activity as a sign of life. Keep re-arming while something has come from the member or agent you are waiting on in roughly the last 30 minutes; STOP and report to your operator when nothing has for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so that silence is the only stop signal there is. ⚠ In a busy workspace this hold will almost never time out, which means the timeout can no longer be your "nothing is happening" signal; you have to look.`;
+  return `⚠ A WORKSPACE hold wakes on ANY message in ANY channel you belong to, so a wake is not news about the ONE exchange you are blocked on — read THAT channel by name and judge liveness there, never off workspace activity.`;
 }
 
 /** The scope sentence, stated on every result. ⚠ Never omitted on a full page:
@@ -116,7 +122,7 @@ export async function opHoldWorkspace(
       return ok(
         [
           `The workspace wait ended early, after about ${seconds}s: an inner poll failed — ${describeFailure(held.pollError)}.`,
-          `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="read", since=${cursor}, wait_ms=<ms>).`,
+          `Nothing was missed, so re-arm before you end your turn. ${waitingLine(workspaceHoldCall(cursor), cursor)}`,
           `If the very next hold fails the same way, stop re-arming and report it to your operator.`,
           workspaceRearmStopRule(),
           ...sessionBlockLines(sessions, undefined, operatorOnline),
@@ -174,8 +180,9 @@ export async function opHoldWorkspace(
   const lastSeq = messages.reduce((max, m) => (m.seq > max ? m.seq : max), messages[0].seq);
   lines.push(``, scopeNote(channelCount));
   lines.push(
-    `Highest seq shown: ${lastSeq}. Re-arm with dopl_channel(op="read", since=${lastSeq}, wait_ms=<ms>) — and read the "· to ..." and "· thread ..." tags on each line first: a workspace hold is even less targeted than a channel one, so most of what wakes you is context, not a request.`,
+    `Read the "· to ..." and "· thread ..." tags on each line first: a workspace hold is even less targeted than a channel one, so most of what wakes you is context, not a request.`,
   );
+  lines.push(waitingLine(workspaceHoldCall(lastSeq), lastSeq));
   lines.push(workspaceRearmStopRule());
   lines.push(...sessionBlockLines(sessions, undefined, operatorOnline));
   return ok(lines.join("\n"));

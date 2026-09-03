@@ -22,7 +22,6 @@
  * declared-param drift guards.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rearmStopRule = rearmStopRule;
 exports.opHold = opHold;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
@@ -40,23 +39,6 @@ const channel_wake_guidance_1 = require("./channel-wake-guidance");
 // operator-only telemetry, `undefined` vs `[]`) have ONE statement, shared with
 // `op="status"` — see channel-session-table.ts.
 const channel_session_table_1 = require("./channel-session-table");
-/**
- * ⚠ Stop condition is scoped to the MEMBER the caller addressed, not to channel
- * activity: a five-member channel always has someone posting, so "any activity
- * in the last 30 minutes" keeps an agent re-arming forever over an exchange its
- * own counterparty abandoned.
- *
- * ⚠ AND IT IS NOW THE ONLY STOP CONDITION. It used to have a second half —
- * "stop when the thread is closed or failed" — which was the CHEAP exit, a state
- * the server would eventually show. Thread closing was removed (wiring plan
- * Phase 4, 2026-08-18), `get_thread` no longer reports a status, and a stop rule
- * naming a state that can never arrive is a rule to re-arm forever. Say the
- * absence out loud rather than dropping the clause: an agent that has been
- * taught to wait for a close will otherwise keep waiting for one.
- */
-function rearmStopRule(ref) {
-    return `Keep waiting while the exchange is alive — an agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (a working agent posts task_progress milestones). Judge that ONLY on the member you are waiting on — the one you addressed. In a channel with other members, traffic between THEM is not evidence your exchange is alive. Keep re-arming while something came from that member in roughly the last 30 minutes. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`;
-}
 /**
  * THE PER-CHANNEL HOLD. One call holds for `holdMsFor(waitMs, runtime)` by
  * re-issuing the ~50s inner long-poll on the same cursor
@@ -106,9 +88,12 @@ async function opHold(client, ref, since, waitMs, selfUserId = null, runtime = n
         if (held.pollError !== null) {
             return (0, respond_1.ok)([
                 `The wait on **${ref}** ended early, after about ${seconds}s: an inner poll failed — ${(0, channel_hold_loop_1.describeFailure)(held.pollError)}.`,
-                `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="read", channel="${ref}", since=${cursor}, wait_ms=<ms>).`,
+                // ⚠ Nothing was missed — the cursor did not move — so the ORDINARY
+                // waiting line is the whole remedy. The extra sentence is the one
+                // fact this branch has that the doctrine cannot: a SECOND failure of
+                // the same shape is not a hold to re-arm, it is an outage to report.
+                `Nothing was missed, so re-arm before you end your turn. ${(0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.channelHoldCall)(ref, cursor), cursor)}`,
                 `If the very next hold fails the same way, stop re-arming and report it to your operator; read the channel with dopl_channel(op="read", channel="${ref}", since=${cursor}) instead.`,
-                rearmStopRule(ref),
             ].join("\n"));
         }
         if ((0, channel_hold_loop_1.wasCutShort)(elapsedMs, budgetMs)) {
@@ -162,7 +147,7 @@ async function opHold(client, ref, since, waitMs, selfUserId = null, runtime = n
             lines.push(`\n${channel_addressing_1.HOLD_UNNAMED_NOTICE}`);
         }
     }
-    lines.push(...(0, channel_wake_guidance_1.holdArrivedLines)(ref, lastSeq, runtime, rearmStopRule(ref)));
+    lines.push(...(0, channel_wake_guidance_1.holdArrivedLines)(ref, lastSeq, runtime));
     // ⚠ AFTER the messages and after the re-arm guidance — a block of server
     // narration spliced between counterparty bodies would let a body's last line
     // read as the start of this section.

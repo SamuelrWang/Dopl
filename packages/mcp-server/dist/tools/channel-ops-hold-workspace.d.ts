@@ -30,19 +30,21 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 /**
- * The re-arm stop rule for a WORKSPACE hold.
+ * THE ONE THING A WORKSPACE HOLD KNOWS THAT THE DOCTRINE CANNOT — ⚠ a SCOPE
+ * fact, and all that is left of what was an 855-character stop rule.
  *
- * ⚠ **IT IS DELIBERATELY DIFFERENT FROM THE PER-CHANNEL ONE, AND THE DIFFERENCE
- * IS THE WHOLE POINT.** `channel-ops-hold.ts › rearmStopRule` says to judge
- * liveness ONLY on the member you addressed, because in a busy channel other
- * members' traffic is not evidence your exchange is alive. A workspace hold
- * makes that trap strictly worse — EVERY channel's traffic now wakes you — so
- * the rule has to be restated here rather than reused, and it has to name the
- * new failure: an orchestrator re-arming forever because the workspace is busy
- * while the one agent it is waiting on died an hour ago.
- * ⚠ It also states the ABSENCE of a finished state, for the same reason every
- * other stop rule does (INVARIANTS §10): an agent trained on a surface that had
- * one waits for it forever.
+ * ⚠ **THE STOP RULE ITSELF MOVED (2026-09-03).** "Keep re-arming while the
+ * member you addressed has spoken in the last ~30 minutes; stop when they have
+ * not; no thread ever closes, so that silence is the only signal" is true of
+ * both lanes and of every hold, and is now stated once in
+ * `channel-doctrine.ts › waiting`, which every result points at.
+ *
+ * ⚠ **WHAT COULD NOT MOVE IS THE SENTENCE BELOW**, because it is not a rule
+ * about waiting — it is a fact about THIS hold's scope, and it inverts how a
+ * wake should be read. A per-channel hold that fires is at least about the room
+ * you care about; a workspace hold that fires may be about any room you are in,
+ * so an orchestrator can re-arm forever on a busy workspace while the one agent
+ * it is blocked on died an hour ago.
  */
 export declare function workspaceRearmStopRule(): string;
 /**

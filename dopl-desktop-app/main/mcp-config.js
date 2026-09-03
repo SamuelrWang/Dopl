@@ -28,6 +28,11 @@ const spawner = require('./session-spawner');
 const { probeMcpEntry, removeMcpEntry, addMcpEntry } = require('./mcp-cli-add');
 const { apiFetch } = require('./api');
 const { diag } = require('./diag');
+// ⚠ THE CLAUDE ADAPTER'S, not core's — `~/.claude/skills` is one runtime's convention and
+// core may not name one (test/core-vocabulary.test.mjs). This file is already on that scan's
+// deferred census because it drives that runtime's CLI, which is the same lane and the same
+// gate; a second runtime with a skills convention gets its own sibling, never a branch here.
+const { ensureDoplSkills } = require('./runtime/claude/skill-install');
 const { MCP_URL, MCP_DEVICE_TOKEN_PATH } = require('./config');
 
 const store = new Store();
@@ -384,6 +389,16 @@ async function ensureMcpConfigInner() {
     // ⚠ A REMOVAL, not a write. This is where an already-installed machine sheds the plaintext
     // 90-day bearer an older build left in userData/mcp-spawn.json.
     removeSpawnConfig();
+
+    // ⚠ THE SKILLS RIDE THIS LANE, and it is the same argument the CLI entry below makes: a
+    // Claude Code session that can reach the Dopl MCP server should also have arrived knowing
+    // how to WAIT on it. A skill is read before the first tool call — earlier than the server's
+    // own `instructions` block and much earlier than any result — which is the only moment
+    // early enough to stop a session polling a channel on a timer.
+    // ⚠ Best-effort and it never throws (`skill-install.js`); it also never overwrites a file
+    // the operator edited. Placed after the sign-in gate and before the CLI probe so a machine
+    // whose `claude` binary is unresolved still gets the skill.
+    ensureDoplSkills();
 
     const probe = await probeMcpEntry(bin);
     if (probe.state === 'unknown') {
