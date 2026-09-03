@@ -261,10 +261,17 @@ export async function classifyMissingTemplateRef(
 /**
  * The phrase for a tenancy the caller belongs to.
  *
- * ⚠ THREE SHAPES, AND THE FIRST ONE CANNOT BE ANYONE ELSE'S. A `home_scoped`
- * row is `private` by fence (`service-writes.ts › resolveHomeScope`), so the
- * only way it reached the caller-owned arm of the query is that the caller
- * created it — "your personal shelf" is a statement about their own rows.
+ * ⚠ THREE SHAPES, AND THE FIRST ONE IS A CONTAINER KIND SINCE 2026-09-02
+ * (slice B15, F-564). It read the `home_scoped` BOOLEAN and said "your personal
+ * shelf"; the column is dropped and a personal row is an ordinary row in the
+ * caller's own `kind='personal'` container (ruling B10), so the KIND is what
+ * answers now — and it answers for KBs, skills and chats too, which the boolean
+ * never did.
+ * ⚠ **THIS IS ALSO WHY THE `!== "standard"` ARM COULD NOT STAY FIRST.** A
+ * personal container is not standard, so under B11 every personal row would have
+ * rendered as "a home channel of yours" with a container id the caller has no
+ * use for. The two non-standard kinds are different places and the label says
+ * which.
  * ⚠ A `kind='link'` container is named by ITS ID and not by its name: the id is
  * the actionable half (`workspace=<container id>`), and §4A forbids advertising
  * a container as a workspace.
@@ -274,7 +281,7 @@ export async function classifyMissingTemplateRef(
  * WORDS.
  */
 function tenancyLabel(row: ResolvedResource): string {
-  if (row.homeScoped) return "your personal shelf";
+  if (row.containerKind === "personal") return "your personal container";
   if (row.containerKind !== "standard") {
     return `a home channel of yours, container ${row.containerId}`;
   }

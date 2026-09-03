@@ -3,6 +3,7 @@ export type { DoplClientOptions } from "./client.js";
 export { workspaceContext } from "./transport.js";
 export { DoplAbortError, DoplApiError, DoplAuthError, DoplNetworkError, DoplTimeoutError, } from "./errors.js";
 export { isStandardWorkspace } from "./types.js";
+export type { ChannelGrantLevel, ContainerGrantLevel, GrantLevel, GrantResourceType, GrantScopeType, ResourceGrantInput, ResourceGrantResult, } from "./grant-types.js";
 export type { BuildResult, CreditConsumeResponse, WorkspaceKind, WorkspaceRole, WorkspaceSummary, WorkspaceListItem, DoplEntry, ListResult, PendingIngestItem, PendingStatus, PrepareIngestResult, ResolvedWorkspace, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult, } from "./types.js";
 export type { AgentTemplate, AgentTemplateCreateInput, AgentTemplateListPayload, AgentTemplateUpdateInput, TemplateField, TemplateKnowledgeBaseRef, TemplateShelf, TemplateVisibility, } from "./agent-template-types.js";
 export type { HomeChannel, HomeChannelCreateResult, HomeChannelsPayload, HomePeer, HomePendingLink, } from "./home-types.js";

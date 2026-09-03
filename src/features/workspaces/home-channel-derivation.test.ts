@@ -67,7 +67,16 @@ const OPEN_SITES: Record<string, string> = {
   "packages/mcp-server/src/meta-tools.ts": "B13 — same",
   "packages/mcp-server/src/server.ts": "B13 — same",
   "packages/mcp-server/src/tools/home-scopes.ts": "B13 DELETES the file with `dopl_home`",
-  "packages/mcp-server/src/tools/copy-target.ts": "B15 DELETES the file with the copy ops",
+  // ⚠ **`packages/mcp-server/src/tools/copy-target.ts` LEFT THIS MAP ON
+  // 2026-09-02** — slice B15 deleted the file with the copy ops, exactly as this
+  // row predicted, and the row leaves in the same change as the code because
+  // that is the property the two cases below assert in both directions.
+  // ⚠ **`src/features/agent-templates/server/service-resolve-ref.ts` NEVER
+  // REACHED THIS MAP AND IS ALSO FIXED IN B15.** Its `tenancyLabel` read the
+  // `home_scoped` boolean first and fell through to `!== "standard"`, so it
+  // would have called every personal container "a home channel of yours" the
+  // moment the column dropped — the same defect, one arm further down, and
+  // invisible to this scan because the boolean hid it.
   // ⚠ The refusal is RIGHT for a personal container (nobody may be added to
   // one); the SENTENCE is what mislabels it. A fix here is a copy change, not a
   // fence change.

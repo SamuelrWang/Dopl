@@ -79,7 +79,7 @@ function templateRow(over: Record<string, unknown> = {}) {
     id: T1,
     name: "Code Auditor",
     workspace_id: WS_B,
-    home_scoped: false,
+    created_by: ME,
     workspace: { name: "Acme", kind: "standard" },
     ...over,
   };
@@ -258,7 +258,7 @@ describe("an id resolves by id and a name by name — never through each other",
       containerId: WS_B,
       containerName: "Acme",
       containerKind: "standard",
-      homeScoped: false,
+      ownedByCaller: true,
       containerRole: "member",
     });
     expect(calls.some((c) => c.op === "ilike")).toBe(false);
@@ -331,10 +331,11 @@ describe("every resource type resolves through the one query", () => {
       });
       const resolved = await resolveResource(caller, type, T1);
       expect(resolved).toMatchObject({ type, id: T1, containerId: WS_B });
-      // ⚠ MUTATION CHECK — the projection, per table. `skills` and `chats`
-      // have NO `home_scoped`, so one that crept into their select would 400
-      // the whole query; `chats` has no `name`, so a missing alias would too.
-      // ⚠ Scoped to `table`: the membership read selects first.
+      // ⚠ MUTATION CHECK — the projection, per table. The OWNER column's NAME
+      // differs per table (`created_by` / `owner_id`), so a hard-coded one would
+      // 400 `chats` outright and silently answer `ownedByCaller: false` for
+      // every row of the others; `chats` has no `name`, so a missing alias
+      // would 400 too. ⚠ Scoped to `table`: the membership read selects first.
       expect(
         calls.find((c) => c.table === table && c.op === "select")?.args[0]
       ).toBe(
@@ -342,7 +343,7 @@ describe("every resource type resolves through the one query", () => {
           "id",
           `name:${nameColumn}`,
           "workspace_id",
-          ...(table === "knowledge_bases" ? ["home_scoped"] : []),
+          ownerColumn,
           "workspace:workspaces!inner(name, kind)",
         ].join(", ")
       );
@@ -388,16 +389,13 @@ describe("the 1:1 embed is flattened, whichever way PostgREST types it", () => {
     makeAdmin({
       workspace_members: [member(WS_B, "admin")],
       agent_templates: [
-        templateRow({
-          home_scoped: true,
-          workspace: [{ name: "Alpha", kind: "link" }],
-        }),
+        templateRow({ workspace: [{ name: "Alpha", kind: "link" }] }),
       ],
     });
     expect(await resolveResource(caller, "agent_template", T1)).toMatchObject({
       containerName: "Alpha",
       containerKind: "link",
-      homeScoped: true,
+      ownedByCaller: true,
       containerRole: "admin",
     });
   });
@@ -407,13 +405,15 @@ describe("the 1:1 embed is flattened, whichever way PostgREST types it", () => {
     // "standard" is the answer that claims the least.
     makeAdmin({
       workspace_members: [member(WS_B)],
-      agent_templates: [templateRow({ home_scoped: null, workspace: [] })],
+      agent_templates: [templateRow({ created_by: null, workspace: [] })],
     });
     expect(await resolveResource(caller, "agent_template", T1)).toMatchObject({
       containerName: "",
       containerKind: "standard",
-      // ⚠ `=== true`, so a null column is FALSE rather than truthy-unknown.
-      homeScoped: false,
+      // 🔒 AN UNATTRIBUTED ROW IS NOT YOURS. `created_by` is `SET NULL` when an
+      // author leaves the workspace, and a null that read as ownership would
+      // hand their rows to whoever asks.
+      ownedByCaller: false,
     });
   });
 });

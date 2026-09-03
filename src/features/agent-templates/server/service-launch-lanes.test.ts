@@ -102,7 +102,7 @@ function livesOnTheShelf(over: Partial<AgentTemplate> = {}) {
     containerId: SHELF,
     containerName: "",
     containerKind: "standard",
-    homeScoped: true,
+    ownedByCaller: true,
     containerRole: "admin",
   } satisfies ResolvedResource);
 }
@@ -185,14 +185,15 @@ describe("⚠ a NAME does not follow, on either lane, and that is deliberate", (
         name: "Code Auditor",
         containerId: SHELF,
         containerName: "",
-        containerKind: "standard",
-        homeScoped: true,
+        // ⚠ **THE PERSONAL SHELF IS A CONTAINER KIND SINCE 2026-09-02 (B15).**
+        containerKind: "personal",
+        ownedByCaller: true,
         containerRole: "admin",
       },
     ]);
     await expect(resolveTemplateRef(ctx(), "Code Auditor")).resolves.toEqual({
       kind: "elsewhere",
-      template: { name: "Code Auditor", label: "your personal shelf" },
+      template: { name: "Code Auditor", label: "your personal container" },
     });
   });
 });

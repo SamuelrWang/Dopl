@@ -76,7 +76,6 @@ export type ResourceType =
  * else — a `public` base/skill/chat in `access_mode = 'teams'` is visible to the
  * GRANTED TEAMS and not to the container, so naming it here would widen clause 4
  * into the existence oracle the clause exists to close.
- * ⚠ `shelfColumn` is `null` where the table has no personal-shelf flag.
  * ⚠ `deletedColumn` is `null` where a delete is a `DELETE`. A soft-deleted row
  * is not listable by anyone, so it must not be nameable either — otherwise an id
  * resolves a container for a row every read path skips.
@@ -86,7 +85,6 @@ interface ResourceTable {
   ownerColumn: string;
   nameColumn: string;
   sharedArm: string;
-  shelfColumn: string | null;
   deletedColumn: string | null;
 }
 
@@ -104,7 +102,6 @@ const RESOURCE_TABLES: Record<ResourceType, ResourceTable> = {
     // ⚠ `agent_templates` has no `access_mode`: its third value IS `team`, so
     // the team scope is already outside this arm rather than hidden inside it.
     sharedArm: "visibility.eq.workspace",
-    shelfColumn: "home_scoped",
     // ⚠ No soft delete — `20260822200000_agent_templates.sql`: "A delete is a
     // `DELETE`, and both junctions go with it".
     deletedColumn: null,
@@ -114,7 +111,6 @@ const RESOURCE_TABLES: Record<ResourceType, ResourceTable> = {
     ownerColumn: "created_by",
     nameColumn: "name",
     sharedArm: SHARED_WITH_CONTAINER,
-    shelfColumn: "home_scoped",
     deletedColumn: "deleted_at",
   },
   skill: {
@@ -122,7 +118,6 @@ const RESOURCE_TABLES: Record<ResourceType, ResourceTable> = {
     ownerColumn: "created_by",
     nameColumn: "name",
     sharedArm: SHARED_WITH_CONTAINER,
-    shelfColumn: null,
     deletedColumn: "deleted_at",
   },
   chat: {
@@ -132,7 +127,6 @@ const RESOURCE_TABLES: Record<ResourceType, ResourceTable> = {
     // on, so the alias in {@link selectList} is load-bearing rather than tidy.
     nameColumn: "title",
     sharedArm: SHARED_WITH_CONTAINER,
-    shelfColumn: null,
     deletedColumn: "deleted_at",
   },
 };
@@ -177,9 +171,20 @@ export interface ResolvedResource {
   containerId: string;
   containerName: string;
   containerKind: string;
-  /** The personal-shelf flag, `false` for tables that have none. ⚠ A LABEL
-   *  INPUT — never projected onto a DTO. */
-  homeScoped: boolean;
+  /**
+   * 🔒 **DID THIS CALLER CREATE THE ROW?** ⚠ **REPLACED `homeScoped` ON
+   * 2026-09-02 (slice B15)**, when the `home_scoped` column was dropped and the
+   * personal shelf became a CONTAINER (`containerKind === "personal"`) rather
+   * than a boolean beside one.
+   *
+   * ⚠ **IT IS AN AUTHORISATION INPUT, NOT A LABEL, AND IT IS THE ONE FIELD HERE
+   * THAT IS.** `resolveResource` answers what the caller may NAME; lending a row
+   * to somebody else needs the narrower question, and the copy ops' R2 fence
+   * (`copy-target.ts › notOwnedRefusal`, deleted with them) is where it comes
+   * from. ⚠ `=== true` against a NULLABLE owner column, so a row whose author
+   * left the workspace (`created_by` is `SET NULL`) fails closed.
+   */
+  ownedByCaller: boolean;
   containerRole: Role;
 }
 
@@ -304,7 +309,9 @@ async function findResources(
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as unknown as ResourceRow[];
-  return rows.map((row) => toResolved(type, spec, row, containers));
+  return rows.map((row) =>
+    toResolved(type, spec, row, containers, caller.userId)
+  );
 }
 
 /** The row shape `select` asks for. ⚠ Supabase types a 1:1 embed as an array;
@@ -317,7 +324,9 @@ interface ResourceRow {
   workspace:
     | { name: string; kind: string }
     | Array<{ name: string; kind: string }>;
-  [shelfColumn: string]: unknown;
+  /** ⚠ The OWNER column, whose NAME differs per table (`created_by` /
+   *  `owner_id`), so it is read through `spec.ownerColumn` rather than declared. */
+  [ownerColumn: string]: unknown;
 }
 
 function selectList(spec: ResourceTable): string {
@@ -327,18 +336,19 @@ function selectList(spec: ResourceTable): string {
     // same way as `name:title` so no reader has to check which table is which.
     `name:${spec.nameColumn}`,
     "workspace_id",
-    spec.shelfColumn,
+    // 🔒 PROJECTED FOR THE OWNERSHIP ANSWER, never for a DTO — see
+    // `ResolvedResource.ownedByCaller`.
+    spec.ownerColumn,
     "workspace:workspaces!inner(name, kind)",
-  ]
-    .filter((column): column is string => column !== null)
-    .join(", ");
+  ].join(", ");
 }
 
 function toResolved(
   type: ResourceType,
   spec: ResourceTable,
   row: ResourceRow,
-  containers: Map<string, Role>
+  containers: Map<string, Role>,
+  callerUserId: string
 ): ResolvedResource {
   const container = Array.isArray(row.workspace)
     ? row.workspace[0]
@@ -352,8 +362,9 @@ function toResolved(
     // a blank name and `standard` are the answers that claim the least.
     containerName: container?.name ?? "",
     containerKind: container?.kind ?? "standard",
-    // ⚠ `=== true`, so a null column is FALSE rather than truthy-unknown.
-    homeScoped: spec.shelfColumn !== null && row[spec.shelfColumn] === true,
+    // ⚠ Both halves may be null (an unattributed row, an unresolved caller) and
+    // neither is evidence of ownership, so neither passes.
+    ownedByCaller: row[spec.ownerColumn] === callerUserId,
     // ⚠ Non-null by construction: the row's container came out of `.in()` over
     // this very map. `viewer` is the fail-closed floor if that ever stops
     // holding.
