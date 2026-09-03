@@ -45,6 +45,7 @@ const zod_1 = require("zod");
 const tool_style_js_1 = require("./tools/tool-style.js");
 const identity_js_1 = require("./tools/identity.js");
 const narration_js_1 = require("./tools/narration.js");
+const workspace_arg_js_1 = require("./workspace-arg.js");
 const respond_js_1 = require("./tools/respond.js");
 const instructions_js_1 = require("./instructions.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
@@ -95,7 +96,11 @@ async function opCreateHomeChannel(client, name) {
     const { channel } = await client.createHomeChannel({ name });
     return (0, respond_js_1.ok)([
         `Created home channel ${(0, narration_js_1.inlineOr)(channel.name, instructions_js_1.UNNAMED_WORKSPACE)}. You are in it alone.`,
-        `Address it with workspace=\`${channel.workspaceId}\` on any other tool, and with channel=\`${channel.channelId}\` on dopl_channel.`,
+        // ⚠ THE OPS ARE NAMED, and they are named from `WORKSPACE_ARG_OPS`
+        // rather than by hand: this line said "on any other tool" and B13 had
+        // already made that false — the arg is IGNORED off that table, so the
+        // advice cost a call and a footer note to discover.
+        `Address it with workspace=\`${channel.workspaceId}\` on ${(0, workspace_arg_js_1.workspaceArgTargets)()}, and with channel=\`${channel.channelId}\` on dopl_channel.`,
         `⚠ You cannot add a person to it. Minting the invitation is an interactive-session act, refused over MCP for every role and token — ask the user to add someone from the Dopl app.`,
     ].join("\n"));
 }

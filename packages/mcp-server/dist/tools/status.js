@@ -26,7 +26,7 @@
  *
  * 🔒 **THE CONTAINER LOCK IS APPLIED, AND NOT HERE.** `tools/account-scope.ts`
  * is the seam, and it delegates to the one reader of the lock
- * (`home-scopes.ts › narrowToLock`). Calling `client.getAccountStatus()` from
+ * (`workspace-directory.ts › narrowToLock`). Calling `client.getAccountStatus()` from
  * this file would hand a locked session the ids and names of its operator's
  * other rooms — the enumeration oracle B3 exists to deny.
  */

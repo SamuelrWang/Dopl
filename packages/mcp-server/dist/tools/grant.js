@@ -136,8 +136,19 @@ async function resolveGrantScopeId(directory, scope, to) {
     const target = await directory.resolveWorkspaceRef(needle);
     return target ? target.id : unresolvableScope(scope, to);
 }
+/**
+ * WHERE A CONTAINER ID COMES FROM, worded ONCE — it is answered by the refusal
+ * above and by {@link GRANT_TO_ARG_DESCRIPTION}, which is two places for one
+ * fact and therefore two places for it to go stale.
+ *
+ * ⚠ **IT NAMED TWO DELETED DOORS UNTIL 2026-09-02** — `dopl_home(op=
+ * "list_channels")` and `list_workspaces`, both retired by B13 — so an agent
+ * that had just been refused was routed to a tool that no longer exists. B13's
+ * successor publishes container ids in exactly one place, and this is it.
+ */
+const CONTAINER_ID_SOURCE = 'Container ids come from dopl_workspaces(op="list");';
 function unresolvableScope(scope, to) {
-    return (0, respond_js_1.err)(`\`to\` ${(0, narration_js_1.inlineOr)(to, "`(unreadable ref)`")} does not resolve as a ${scope} you can act in, so NOTHING was shared — this op never falls back to the workspace you are calling from. Either there is no such ${scope} or it is not one you can act in; those are one answer here on purpose. Container ids come from dopl_home(op="list_channels") and \`list_workspaces\`; a channel id is a uuid from dopl_channel(op="rooms", action="list").`);
+    return (0, respond_js_1.err)(`\`to\` ${(0, narration_js_1.inlineOr)(to, "`(unreadable ref)`")} does not resolve as a ${scope} you can act in, so NOTHING was shared — this op never falls back to the workspace you are calling from. Either there is no such ${scope} or it is not one you can act in; those are one answer here on purpose. ${CONTAINER_ID_SOURCE} a channel id is a uuid from dopl_channel(op="rooms", action="list").`);
 }
 /**
  * The three argument descriptions, worded ONCE for both tools. ⚠ They name the
@@ -146,7 +157,7 @@ function unresolvableScope(scope, to) {
  * same fact pushed twice on every connection (`tool-budget.test.ts`).
  */
 exports.GRANT_SCOPE_ARG_DESCRIPTION = `op=grant (required): WHERE to lend it — "channel" (everyone in that room) or "container" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.`;
-exports.GRANT_TO_ARG_DESCRIPTION = `op=grant (required): the scope's handle — a channel UUID, or for scope="container" a workspace slug/UUID or a home-channel CONTAINER id from dopl_home(op="list_channels"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.`;
+exports.GRANT_TO_ARG_DESCRIPTION = `op=grant (required): the scope's handle — a channel UUID, or for scope="container" a workspace slug/UUID or a home-channel CONTAINER id from dopl_workspaces(op="list"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.`;
 exports.GRANT_LEVEL_ARG_DESCRIPTION = `op=grant: "visible" or "agent_only" on a CHANNEL scope (two audiences inside the room, not a high/low pair); "read" or "edit" on a container. Omitted, the narrower one for the scope. Mixing the two vocabularies is refused.`;
 /** The `granted` line both tools answer with. ⚠ ONE sentence per fact, and the
  *  DIVERGENCE sentence is the one the copy ops had to carry as a warning: a

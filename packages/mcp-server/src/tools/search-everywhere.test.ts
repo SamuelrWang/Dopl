@@ -342,7 +342,7 @@ describe("🔒 the fan-out obeys the container lock", () => {
   it("a LOCKED session fans out over its own room ALONE", async () => {
     // ⚠ Both halves of the leg list are narrowed: `getWorkspaceList()` answers
     // `[container]` under a lock, and the home half goes through
-    // `home-scopes.ts › narrowToLock`. Neither the name nor the id of another
+    // `workspace-directory.ts › narrowToLock`. Neither the name nor the id of another
     // room may appear.
     // ⚠ The container's WORKSPACE name and its CHANNEL name are the same string
     // by construction (`features/home/schema.ts`: one name names both), so the

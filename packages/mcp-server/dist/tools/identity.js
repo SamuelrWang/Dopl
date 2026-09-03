@@ -17,6 +17,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.CURSOR_VENDOR = exports.CODEX_VENDOR = exports.CLAUDE_VENDOR = exports.DESKTOP_SESSION_RUNTIME = void 0;
 exports.isDesktopRuntime = isDesktopRuntime;
+exports.isDesktopRun = isDesktopRun;
 exports.callerStatusLine = callerStatusLine;
 exports.sessionLines = sessionLines;
 exports.identityLine = identityLine;
@@ -52,6 +53,7 @@ exports.UNKNOWN_CALLER = {
     vendor: null,
     credentialKind: null,
     credentialLabel: null,
+    containerId: null,
     sessionId: null,
 };
 /**
@@ -66,6 +68,27 @@ exports.UNKNOWN_CALLER = {
  */
 function isDesktopRuntime(runtime) {
     return runtime === exports.DESKTOP_SESSION_RUNTIME;
+}
+/**
+ * 🔒 **IS THIS CALL RUNNING ON THE OPERATOR'S OWN MACHINE?** — the ONE question
+ * the `wait_ms` fence asks (T85, Desktop Agent default 2026-09-02; Samuel may
+ * reverse, and reversing is this predicate).
+ *
+ * ⚠ **TWO MARKS, AND THE SECOND IS WHY THIS IS ALLOWED TO GATE.**
+ * {@link isDesktopRuntime} reads a HEADER, which a `full`-profile agent with
+ * Bash can send or omit at will; {@link CallerIdentity.containerId} rides the
+ * TOKEN ROW, and only the desktop's container minter sets it. Either mark alone
+ * is enough — an ordinary device-token spawn carries the header and no lock, a
+ * container session carries both — and neither can be forged into a WIDER
+ * answer, because both only ever add a refusal.
+ *
+ * ⚠ FALSE MEANS "NOT KNOWN TO BE DESKTOP-RUN", never "external". An older
+ * desktop build stamps no runtime and holds no container lock, and it keeps the
+ * hold — which is the pre-2026-09-02 behaviour and the safe direction: the cost
+ * is a wasted long-poll, not a lost message.
+ */
+function isDesktopRun(identity) {
+    return isDesktopRuntime(identity.runtime) || identity.containerId !== null;
 }
 /**
  * ⚠ What the server SAW in the runtime header, never what it concluded.

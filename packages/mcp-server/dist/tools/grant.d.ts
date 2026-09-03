@@ -100,7 +100,7 @@ export declare function resolveGrantScopeId(directory: WorkspaceDirectory, scope
  * same fact pushed twice on every connection (`tool-budget.test.ts`).
  */
 export declare const GRANT_SCOPE_ARG_DESCRIPTION = "op=grant (required): WHERE to lend it \u2014 \"channel\" (everyone in that room) or \"container\" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.";
-export declare const GRANT_TO_ARG_DESCRIPTION = "op=grant (required): the scope's handle \u2014 a channel UUID, or for scope=\"container\" a workspace slug/UUID or a home-channel CONTAINER id from dopl_home(op=\"list_channels\"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.";
+export declare const GRANT_TO_ARG_DESCRIPTION = "op=grant (required): the scope's handle \u2014 a channel UUID, or for scope=\"container\" a workspace slug/UUID or a home-channel CONTAINER id from dopl_workspaces(op=\"list\"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.";
 export declare const GRANT_LEVEL_ARG_DESCRIPTION = "op=grant: \"visible\" or \"agent_only\" on a CHANNEL scope (two audiences inside the room, not a high/low pair); \"read\" or \"edit\" on a container. Omitted, the narrower one for the scope. Mixing the two vocabularies is refused.";
 /** The `granted` line both tools answer with. ⚠ ONE sentence per fact, and the
  *  DIVERGENCE sentence is the one the copy ops had to carry as a warning: a

@@ -9,7 +9,7 @@
  * through `registerTool`'s wrapper. Do not fold the gate calls into one wrapper.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.acceptsWorkspaceArg = exports.WORKSPACE_ARG_OPS = exports.WORKSPACE_ARG_DESCRIPTION = void 0;
+exports.workspaceArgTargets = exports.acceptsWorkspaceArg = exports.WORKSPACE_ARG_OPS = exports.WORKSPACE_ARG_DESCRIPTION = void 0;
 exports.createToolRegistrars = createToolRegistrars;
 const zod_1 = require("zod");
 const client_1 = require("@dopl/client");
@@ -22,6 +22,7 @@ var workspace_arg_js_2 = require("./workspace-arg.js");
 Object.defineProperty(exports, "WORKSPACE_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ARG_DESCRIPTION; } });
 Object.defineProperty(exports, "WORKSPACE_ARG_OPS", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ARG_OPS; } });
 Object.defineProperty(exports, "acceptsWorkspaceArg", { enumerable: true, get: function () { return workspace_arg_js_2.acceptsWorkspaceArg; } });
+Object.defineProperty(exports, "workspaceArgTargets", { enumerable: true, get: function () { return workspace_arg_js_2.workspaceArgTargets; } });
 const status_footer_js_1 = require("./status-footer.js");
 /**
  * Optional per-call `workspace` arg injected into every domain tool's schema by

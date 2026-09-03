@@ -69,10 +69,13 @@
  * connection, and re-emitting it per page was the largest repeated cost in a
  * check-in loop.
  *
- * ⚠ **THERE ARE FOUR IMPORTERS, NOT TWO, AND THE RULE IS "IS THIS A WAKE
- * SURFACE" RATHER THAN "IS THIS AN await"** (docblock corrected 2026-09-02; it
- * had said "the two await lanes only" while naming four). Re-derive:
- * `grep -rln UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`.
+ * ⚠ **THERE ARE THREE IMPORTERS, AND THE RULE IS "IS THIS A WAKE SURFACE"
+ * RATHER THAN "IS THIS AN await"** (docblock corrected 2026-09-02; it had said
+ * "the two await lanes only" while naming four, and then named FOUR after the
+ * ping lane's retirement had deleted one of them — the count is the thing this
+ * paragraph keeps getting wrong, which is why the command is here). Re-derive:
+ * `grep -rln UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
+ * (excluding this file and `untrusted-fence.ts`, which define it).
  *   - `channel-ops-hold.ts` and `channel-ops-hold-workspace.ts` — the two holds.
  *   - `channel-ops-account.ts` — the CROSS-CHANNEL read (T21). ⚠ **IT KEEPS THE
  *     BANNER, AND THAT IS A DECISION, NOT AN OVERSIGHT.** It is the surface an
@@ -83,9 +86,11 @@
  *     banner is the loop's largest repeated cost — bites on `read`, which is
  *     called with a channel and a cursor by an agent that already knows what it
  *     asked for.
- *   - `channel-ops-ping.ts` — the ping inbox, for the same reason: it is the
- *     out-of-band wake signal, and its body is one member's text delivered to
- *     exactly one recipient who did not ask for it right then.
+ *   ⚠ **AND THE PING INBOX WAS THE FOURTH UNTIL THE PING LANE WAS RETIRED**
+ *   (B8/B15). It kept the banner for the same reason — an out-of-band wake
+ *   signal carrying one member's text to a recipient who did not ask for it
+ *   right then — and the lane, the module and the importer are all gone. The
+ *   rule is unchanged; only the roll call is.
  *
  * ⚠ THESE LANES KEEP IT because of WHERE IT SITS RATHER THAN WHAT IT SAYS.
  * It is emitted FIRST, above the bodies — a description is read at connect time,

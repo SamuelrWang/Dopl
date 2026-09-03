@@ -19,7 +19,7 @@
  * 🔒 **THEY ENUMERATE, AND THEY ARE NOT NARROWED HERE.** The routes answer for
  * the whole account; the CONTAINER LOCK (B3) that narrows a pinned MCP session
  * to one room lives in the MCP layer
- * (`packages/mcp-server/src/tools/home-scopes.ts`), because a lock is a property
+ * (`packages/mcp-server/src/workspace-directory.ts › narrowToLock`), because a lock is a property
  * of one MCP CONNECTION and not of the credential. A caller of these functions
  * that forgets to narrow has built the enumeration oracle B3 exists to deny —
  * the identical caveat `home.ts › getHomeChannels` carries.

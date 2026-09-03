@@ -70,10 +70,22 @@ export type GrantedResourceIds = ReadonlySet<string>;
 export const NO_GRANTS: GrantedResourceIds = new Set<string>();
 
 /**
- * Ceiling on the grant fan for ONE list. Same number and same reason as
- * `knowledge/server/repository-audience.ts › AUDIENCE_GRANT_LIMIT`: PostgREST
- * truncates an unlimited select SILENTLY, and a truncation here fails in the
- * SAFE direction (fewer rows admitted) — but invisibly, so it is stated.
+ * 🔒 **THE CEILING ON A `resource_grants` FAN-OUT, AND IT IS ONE CONSTANT.**
+ * PostgREST truncates an unlimited select SILENTLY, and a truncation on either
+ * lane fails in the SAFE direction (fewer rows admitted) — but invisibly, so
+ * the bound is stated rather than inherited.
+ *
+ * ⚠ **IT WAS TWO CONSTANTS UNTIL 2026-09-02** — this one and
+ * `knowledge/server/repository-audience.ts › AUDIENCE_GRANT_LIMIT`, both 500,
+ * each documented as *"the same number for the same reason"* as the other.
+ * Two names for one number is how they stop being the same number: whichever
+ * is retuned first, the other keeps its old value and the two grant lanes
+ * silently start truncating at different points. `AUDIENCE_GRANT_LIMIT` is
+ * deleted and that reader imports this.
+ *
+ * ⚠ NOT `CHANNEL_GRANT_LIMIT` (200) OR `CONTAINER_CHANNEL_LIMIT` (200), which
+ * are deliberately different numbers over different tables — a per-base grant
+ * page and a container's channel list. Only the two grant FAN-OUTS share this.
  */
 export const GRANT_REACH_LIMIT = 500;
 

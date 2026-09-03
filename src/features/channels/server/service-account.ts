@@ -55,7 +55,7 @@ import { fetchProfiles } from "./repository-workspace";
  *     MCP session must see one room only, but that lock is a property of one MCP
  *     CONNECTION and not of the credential — so, exactly as for `GET
  *     /api/home/channels`, the narrowing lives in the MCP layer
- *     (`packages/mcp-server/src/tools/home-scopes.ts › narrowToLock`). A reader
+ *     (`packages/mcp-server/src/workspace-directory.ts › narrowToLock`). A reader
  *     that calls this service and skips it has rebuilt the enumeration oracle B3
  *     exists to deny.
  *   - 🔒 **B1, `ctx.apiKeyWorkspaceId`, IS APPLIED HERE (R3, 2026-09-02).** That

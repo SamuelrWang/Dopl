@@ -27,7 +27,7 @@ import { AccountStatusQuerySchema } from "@/features/channels/schema";
  *
  * 🔒 **THE CONTAINER LOCK (B3) IS NOT APPLIED HERE.** A lock is a property of one
  * MCP CONNECTION, not of the credential, so — as for `/api/home/channels` — the
- * narrowing lives in the MCP layer (`packages/mcp-server/src/tools/home-scopes.ts
+ * narrowing lives in the MCP layer (`packages/mcp-server/src/workspace-directory.ts
  * › narrowToLock`). A future non-MCP caller that skips it has rebuilt the
  * enumeration oracle B3 denies.
  *

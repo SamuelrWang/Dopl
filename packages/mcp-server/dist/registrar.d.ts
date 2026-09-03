@@ -10,7 +10,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DoplClient } from "@dopl/client";
 import { type RegisterMetaTool, type RegisterTool, type ToolResponse } from "./tools/respond.js";
-export { WORKSPACE_ARG_DESCRIPTION, WORKSPACE_ARG_OPS, acceptsWorkspaceArg } from "./workspace-arg.js";
+export { WORKSPACE_ARG_DESCRIPTION, WORKSPACE_ARG_OPS, acceptsWorkspaceArg, workspaceArgTargets, } from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
 import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } from "./workspace-directory.js";

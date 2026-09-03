@@ -8,7 +8,9 @@ landed"*.
 ## What shipped
 
 **Deletion was the batch, and the ledger is net −3,234 lines.** `workspace=` is a list-and-create
-argument; there is no default workspace; the copy ops, the `shelf` axis and `home_scoped` are gone;
+argument; there is no default workspace; the copy ops and `home_scoped` are gone and the `shelf`
+axis is off the MCP surface (⚠ **not gone** — `GET /api/knowledge/bases?shelf=` and
+`GET /api/agent-templates?shelf=` still take `home | workspace`, INVARIANTS §10);
 the 22 redirect aliases, the `await` lane and the ping lane are retired. Thirteen tools became
 **eleven**.
 
@@ -110,10 +112,17 @@ hold two drops nine versions apart) and the duplicate-version ratchet are both g
    applied. **P2: the personal-container flag has been default-ON for a release.** P2 is a DEPLOY
    fact, not a repo fact — this batch cannot satisfy it and does not claim to.
 4. **F-583's six probes (P15–P20) and F-461's grant probes are still owed**, and this batch adds
-   **four more (P21–P24)** on the grant read arm: container grant with/without membership, channel
-   grant at `agent_only` vs `visible`.
-5. **B8's ruling stands:** `20260907130000_channel_pings` is deleted, unapplied, forever.
-6. ⚠ **Replay is SKIPPED — Docker is down** (`docker info` fails), as for all of wave A and all of
+   **five more (P21–P25)** on the grant read arm: container grant with/without membership, channel
+   grant at `agent_only` vs `visible`, and (P25, added in review) any grant read through a SHARED
+   credential.
+5. 🔒 **`20260922120000` NEEDS `src/shared/supabase/types.ts` REGENERATED IN THE SAME APPLY.** It is
+   the only pending migration that changes the FUNCTION surface the generated types describe —
+   `default_workspace_of` and `ensure_default_workspace` out, `personal_container_origin_of` in —
+   and that file is a §1 carve-out nothing typechecks against the database, so a stale copy declares
+   two RPCs that answer `42883` and omits the one that works. Command, not the answer:
+   `npx supabase gen types typescript --linked > src/shared/supabase/types.ts`.
+6. **B8's ruling stands:** `20260907130000_channel_pings` is deleted, unapplied, forever.
+7. ⚠ **Replay is SKIPPED — Docker is down** (`docker info` fails), as for all of wave A and all of
    wave B. **Every migration claim above is read out of SQL TEXT.** The `rls-redteam` CI job is the
    first thing that can pay any probe.
 

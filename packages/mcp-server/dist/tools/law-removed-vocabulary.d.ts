@@ -22,6 +22,30 @@
  */
 export declare const REMOVED_VOCABULARY: ReadonlyArray<[string, RegExp]>;
 /**
+ * 🔒 **THE ONE EXEMPTION, AND IT IS AN EXACT-STRING WHITELIST OF ONE.**
+ *
+ * `channel-hold-budget.ts › DESKTOP_HOLD_REFUSAL` is the desktop's own refusal
+ * sentence, quoted VERBATIM (`dopl-desktop-app/main/session-permissions.js ›
+ * AWAIT_DENY_MESSAGE`). Two refusals for one bound, worded differently, read to
+ * an agent as two different problems — so the server-side fence T85 asked for
+ * says exactly what the desktop's permission gate says, and the two literals are
+ * pinned against each other from the desktop side.
+ *
+ * ⚠ **THE COLLISION IS REAL AND IT IS NOT RESOLVED IN THIS FILE'S FAVOUR.** The
+ * sentence opens with the word `await`, which the row above bans because B8
+ * retired that op — the desktop's wording predates the retirement by a day
+ * (T85 is 2026-09-01, B8 landed 2026-09-02). Owed to Samuel: re-word BOTH
+ * halves to say "the hold", or ratify the quote. Until then the exemption is
+ * declared here rather than worked around by moving the constant out of the
+ * scanned glob, because relocating a string to escape a gate is how a rule
+ * becomes decorative.
+ *
+ * ⚠ **EXACT EQUALITY, NEVER `includes`.** A substring rule would exempt every
+ * sentence that happens to contain this one, which is the whole failure mode a
+ * whitelist has. One string, matched whole, or the ban applies.
+ */
+export declare const VERBATIM_QUOTES: ReadonlySet<string>;
+/**
  * **THE TWENTY-TWO OP NAMES THE COLLAPSE RETIRED** (B8, 2026-09-02), and they
  * stopped PARSING at slice B16 one release later.
  *

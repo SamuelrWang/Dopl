@@ -18,8 +18,10 @@
  * `z.enum([...LIVE, ...RETIRED_COPY_OP_NAMES]).meta({ enum: LIVE })`: the
  * RUNTIME accepts the old word, the PUBLISHED JSON Schema — the one every
  * client reads — does not carry it. A retired name a model can SEE is a name a
- * model will call. Same construction as `channel-retired-ops.ts`, whose header
- * carries the full argument.
+ * model will call. Same construction `dopl_channel` used for its own retired
+ * names; ⚠ that module is DELETED (slice B16 closed its window), so the record
+ * of the argument is `channel-retired-ops.test.ts`'s header and the refusal
+ * `channel-schema.ts › unknownOpRefusal` writes in its place.
  *
  * ⚠ **THIS FILE IS THE WHOLE OF THE COMPATIBILITY WINDOW.** It is deleted — the
  * map, the type and the arm in each registrar — one release after the desktop
@@ -64,8 +66,10 @@ export function retiredCopyRedirect(
 ): ToolResponse | null {
   const key = `${tool}.${op}`;
   if (!Object.prototype.hasOwnProperty.call(RETIRED_COPY_OPS, key)) return null;
-  // ⚠ **NOT `err()`, DELIBERATELY** — the same argument `channel-retired-ops.ts`
-  // makes: this call did not fail, it was answered, and an `isError` response is
-  // a failure a model retries behind whatever policy the client applies.
+  // ⚠ **NOT `err()`, DELIBERATELY** — the argument `dopl_channel`'s own retired
+  // names made while their window was open (that module is gone; the reasoning
+  // survives in `channel-retired-ops.test.ts`): this call did not fail, it was
+  // answered, and an `isError` response is a failure a model retries behind
+  // whatever policy the client applies.
   return ok(`${tool} op="${op}" ${RETIRED_COPY_OPS[key as RetiredCopyKey]}`);
 }

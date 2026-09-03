@@ -163,9 +163,23 @@ describe("🔒 F-564 — `!isStandardWorkspace` is not `kind === 'link'`", () =>
     }
   });
 
-  it("EVERY site is declared, and every declared site is still there", () => {
+  it("🔒 EVERY site is declared, every declared site is still there — and that IS `20260920120000`'s precondition", () => {
     // ⚠ EQUALS, NOT INCLUDES, in both directions. A new site is a regression; a
     // disappeared one is a fix whose record has to leave with it.
+    //
+    // ⚠ **AND IT IS ONE ASSERTION, NOT TWO** (de-duplicated 2026-09-02 in
+    // review). A second case below restated this line verbatim under the name
+    // "the precondition IS MET": `DECLARED` IS `FENCE_SITES` since `OPEN_SITES`
+    // emptied at the batch-3 integration, so "every site is declared" and "no
+    // site is still open" became the same sentence — and two copies of one
+    // assertion is two places for it to be weakened, with a reviewer counting
+    // two gates. The migration's header points at this file; this case is what
+    // it points at.
+    //
+    // 🔒 A site is either a LABEL, which must ask `kind === "link"`, or a FENCE,
+    // which must keep the negation AND branch its message on the kind. There is
+    // no third disposition, which is why an empty third map would be a gate that
+    // can only pass.
     expect([...FOUND.keys()].sort()).toEqual(Object.keys(DECLARED).sort());
   });
 
@@ -180,21 +194,6 @@ describe("🔒 F-564 — `!isStandardWorkspace` is not `kind === 'link'`", () =>
         /kind === "link"/
       );
     }
-  });
-
-  it("🔒 the precondition on `20260920120000` IS MET, and stays met", () => {
-    // ⚠ **THIS CASE USED TO RECORD A COUNT AND EXPECT IT TO BE NON-ZERO.** Its
-    // contract was "when `OPEN_SITES` is empty the migration may be applied";
-    // the set emptied at the batch-3 integration, so what is left to hold is
-    // the INVERSE — that nothing has been added back. The scan above already
-    // fails on a new site; this states, at the place the migration's header
-    // points, that the answer today is NONE.
-    //
-    // 🔒 A site is either a LABEL, which must ask `kind === "link"`, or a
-    // FENCE, which must keep the negation AND branch its message on the kind.
-    // There is no third disposition, which is why an empty third map would be
-    // a gate that can only pass.
-    expect([...FOUND.keys()].sort()).toEqual(Object.keys(FENCE_SITES).sort());
   });
 
   // ⚠ **A CASE MEASURING THE SHAPE MIX OVER `FOUND` LIVED HERE UNTIL

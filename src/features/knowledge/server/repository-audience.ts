@@ -1,5 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+// ⚠ ONE ceiling for both `resource_grants` fan-outs — this read and
+// `grantedResourceIds`. Two copies of one number stop being one number.
+import { GRANT_REACH_LIMIT } from "@/shared/tenancy/resource-grant-reach";
 
 /**
  * Raw Supabase I/O for the AGENT AUDIENCE CEILING (`service-audience.ts`). Four
@@ -121,13 +124,6 @@ export async function listChannelIdsForWorkspace(
 }
 
 /**
- * Ceiling on the reachable-base set. Deliberately the same number as
- * `CHANNEL_GRANT_LIMIT` for the same reason, and generous relative to it
- * because this read spans every channel in the container rather than one.
- */
-export const AUDIENCE_GRANT_LIMIT = 500;
-
-/**
  * The DISTINCT knowledge-base ids granted onto ANY of `channelIds`, AT EITHER
  * LEVEL — the reachable set behind {@link resolveAgentAudience}.
  *
@@ -166,7 +162,7 @@ export async function listGrantedBaseIdsForChannels(
     .eq("scope_type", "channel")
     .eq("resource_type", "knowledge_base")
     .in("scope_id", channelIds)
-    .limit(AUDIENCE_GRANT_LIMIT);
+    .limit(GRANT_REACH_LIMIT);
   if (error) throw error;
   return [
     ...new Set(((data ?? []) as { resource_id: string }[]).map((r) => r.resource_id)),

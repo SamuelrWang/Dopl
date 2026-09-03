@@ -30,7 +30,7 @@
  * can observe about which side of layer 6 it is on — the runtime stamp.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HOLD_SHORT_MS = exports.HOLD_MAX_POLLS = exports.HOLD_MIN_POLL_MS = exports.HOLD_POLL_MS = exports.HOLD_MARGIN_MS = exports.MCP_ROUTE_MAX_DURATION_MS = exports.HOLD_EXTERNAL_DEFAULT_MS = exports.HOLD_EXTERNAL_MARGIN_MS = exports.EXTERNAL_CLIENT_ABORT_MS = exports.HOLD_DEFAULT_MS = exports.HOLD_CAP_MS = void 0;
+exports.DESKTOP_HOLD_REFUSAL = exports.HOLD_SHORT_MS = exports.HOLD_MAX_POLLS = exports.HOLD_MIN_POLL_MS = exports.HOLD_POLL_MS = exports.HOLD_MARGIN_MS = exports.MCP_ROUTE_MAX_DURATION_MS = exports.HOLD_EXTERNAL_DEFAULT_MS = exports.HOLD_EXTERNAL_MARGIN_MS = exports.EXTERNAL_CLIENT_ABORT_MS = exports.HOLD_DEFAULT_MS = exports.HOLD_CAP_MS = void 0;
 exports.resolveHoldMs = resolveHoldMs;
 exports.resolveHoldCeilingMs = resolveHoldCeilingMs;
 exports.holdMsFor = holdMsFor;
@@ -224,3 +224,30 @@ function holdMsFor(timeoutMs, runtime) {
         ? ENV_HOLD_MS
         : Math.min(ENV_HOLD_MS, exports.HOLD_EXTERNAL_DEFAULT_MS);
 }
+/**
+ * 🔒 **THE HOLD IS EXTERNAL-ONLY, AND THE FENCE IS SERVER-SIDE** (T85; Desktop
+ * Agent default 2026-09-02, **Samuel may reverse** — reversing is deleting this
+ * branch).
+ *
+ * ⚠ **THE DESKTOP ALREADY REFUSED THIS AND THAT WAS NOT ENOUGH.** A session the
+ * operator's Dopl app runs is woken by the MESSAGE ITSELF
+ * (`session-dispatch.js › feedLiveSession`), so a hold there is a long-poll for
+ * something already arriving as a turn; `session-permissions.js` denies it with
+ * the sentence below. But that refusal is a PERMISSION PROMPT in one runtime,
+ * and this server's own doctrine states the rule as prose an agent may simply
+ * not have pulled — so an agent on that machine that issues the call anyway
+ * (another vendor's runtime, a raw loopback, Bash) got the full wake-length
+ * hold and spent its turn asleep. A rule stated in doctrine and enforced by one
+ * client is not enforced.
+ *
+ * ⚠ **THE REASON IS THE DESKTOP'S, VERBATIM AND ON PURPOSE.** Two refusals for
+ * one bound, worded differently, read to an agent as two different problems.
+ * `packages/*` cannot import the desktop's CommonJS main, so the literals agree
+ * or they do not: `dopl-desktop-app/test/session-await-refusal.test.mjs` reads
+ * both sources and fails from either side, the join
+ * `runtime-stamp-literals.test.mjs` established.
+ *
+ * ⚠ IT REFUSES THE HOLD, NEVER THE READ. `op="read"` without `wait_ms` is
+ * untouched — nothing is withheld, which is why the sentence names no remedy.
+ */
+exports.DESKTOP_HOLD_REFUSAL = "await is not available in a desktop-run session: end your turn; you are woken when addressed.";

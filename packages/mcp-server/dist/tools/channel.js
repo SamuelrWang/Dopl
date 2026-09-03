@@ -69,6 +69,7 @@ const channel_ops_escalate_1 = require("./channel-ops-escalate");
 const channel_ops_account_1 = require("./channel-ops-account");
 const channel_ops_status_1 = require("./channel-ops-status");
 const identity_1 = require("./identity");
+const channel_hold_budget_1 = require("./channel-hold-budget");
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
  * at boot:
@@ -212,6 +213,12 @@ directory) {
             case "read": {
                 const scoped = args.channel !== undefined && args.channel.trim() !== "";
                 if (args.wait_ms !== undefined) {
+                    // 🔒 THE HOLD IS EXTERNAL-ONLY, FENCED HERE AND NOT ONLY IN THE
+                    // DESKTOP'S PERMISSION GATE (T85). Ahead of the missing-`since`
+                    // check: a desktop-run caller may not have the hold at all, so
+                    // asking it for a cursor first would teach it to retry.
+                    if ((0, identity_1.isDesktopRun)(caller))
+                        return (0, respond_1.err)(channel_hold_budget_1.DESKTOP_HOLD_REFUSAL);
                     const missHold = (0, respond_1.missingParams)("read (holding)", args, ["since"]);
                     if (missHold)
                         return missHold;

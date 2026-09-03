@@ -36,26 +36,22 @@ export interface McpAuthContext {
   /** WHICH credential answered, for the agent's benefit. ⚠ NOT an authorization
    *  input — nothing here may gate anything. */
   credential_info: McpCredential;
-  /**
-   * 🔒 THE OPAQUE KEY ONE MCP CONNECTION IS IDENTIFIED BY, and its ONLY consumer
-   * is the session workspace PIN (`@dopl/mcp-server › session-pin.ts`, T41).
-   *
-   * ⚠ **IT IS A MAP KEY AND NOTHING ELSE — never rendered, never logged, never
-   * compared to anything but itself, and it GATES NOTHING.** A pin only ever
-   * picks among memberships the boot directory already proved, so the worst a
-   * wrong key can do is lose a default and fall back to the pre-existing
-   * `WORKSPACE_REQUIRED` refusal.
-   *
-   * ⚠ **THE TOKEN ROW ID IS THE RIGHT GRANULARITY BECAUSE THE TRANSPORT IS
-   * STATELESS.** `/api/mcp` runs `sessionIdGenerator: undefined` and `bootServer`
-   * boots per HTTP REQUEST, so there is no protocol session id to key on; one
-   * OAuth credential is one client install, which is what an operator means by
-   * "this connection". It is already the rate-limit subject
-   * (`mcp:<tokenId>`), so it is not a new identifier — it is the one this
-   * boundary already treats as the caller.
-   */
-  tokenId: string;
 }
+
+/**
+ * ⚠ **`tokenId` LEFT THIS CONTEXT ON 2026-09-02 (batch-3 review), BECAUSE ITS
+ * ONLY CONSUMER DID.** It was the opaque key one MCP connection was identified
+ * by, and the session workspace PIN (`@dopl/mcp-server › session-pin.ts`, T41)
+ * was the whole of what read it. B13 deleted both pin ops and that module, and
+ * the docblock here went on describing a map key nothing keyed, a
+ * `WORKSPACE_REQUIRED` fallback B10/B14 deleted, and a `bootServer` argument
+ * that is no longer passed.
+ *
+ * ⚠ **THE TOKEN ROW ID IS STILL THE RATE-LIMIT SUBJECT** — `mcp:<tokenId>`,
+ * read straight off `validateAccessToken`'s result inside
+ * {@link authenticateMcpRequest} — so nothing about the identifier changed;
+ * only the field that carried it out of this function, which nobody caught.
+ */
 
 export type McpAuthResult =
   | { ok: true; auth: McpAuthContext }
@@ -101,7 +97,6 @@ export async function authenticateMcpRequest(
           // authorization input with no reader.
           scopes: tok.scopes,
           credential_info: tok.credential,
-          tokenId: tok.tokenId,
         },
       };
     }

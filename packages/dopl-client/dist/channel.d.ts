@@ -15,16 +15,21 @@ import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, Ch
 import type { AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
 /** Network read-timeout for the long-poll — above the server cap.
- *  ⚠ EXPORTED for `ping.ts`, which holds the SAME route ceiling (`maxDuration`
- *  60) and must not restate the number: two copies drift, and the one that
- *  drifts low turns a graceful hold into a transport abort. */
+ *  ⚠ **EXPORTED FOR A DIFFERENT READER THAN IT WAS.** It was `ping.ts`'s, which
+ *  held the SAME route ceiling (`maxDuration` 60); the ping lane and that module
+ *  are gone. What reads it now is the DEADLINE CHAIN's gate —
+ *  `@dopl/mcp-server › tools/channel-deadlines.test.ts` greps this literal so
+ *  the hold budget can never be raised past the network timeout that bounds it.
+ *  The reason is unchanged: two copies drift, and the one that drifts low turns
+ *  a graceful hold into a transport abort. */
 export declare const AWAIT_TIMEOUT_MS = 55000;
 /**
  * Server-side long-poll window when the caller passes none. Sent explicitly
  * rather than relying on the route default, so poll length is pinned
  * client-side and stays under AWAIT_TIMEOUT_MS.
  *
- * ⚠ EXPORTED for `ping.ts`, for {@link AWAIT_TIMEOUT_MS}'s reason.
+ * ⚠ EXPORTED for {@link AWAIT_TIMEOUT_MS}'s reader and for its reason — not for
+ * `ping.ts`, which is deleted with its lane.
  */
 export declare const DEFAULT_AWAIT_TIMEOUT_MS = 50000;
 export declare function listChannels(t: DoplTransport, opts?: {
