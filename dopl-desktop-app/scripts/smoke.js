@@ -1,7 +1,16 @@
 /**
  * Smoke test: launch Electron, load the BUNDLED SPA with production webPreferences, assert the
  * page loads. Prints a JSON result, exits non-zero on failure.
- * Run: `node_modules/.bin/electron scripts/smoke-test.js`
+ * Run: `node_modules/.bin/electron scripts/smoke.js`  (npm run smoke)
+ *
+ * ⚠ **NOT NAMED `smoke-test.js` ANY MORE, AND THE RENAME IS THE FIX (2026-09-02).**
+ * `node --test` — with no glob, which is how this suite is run by hand and in
+ * every doc that names it — collects `*-test.js` by DEFAULT, so this file was
+ * picked up as a test, launched no Electron, and failed. **PERMANENTLY, ONE
+ * FAILURE, ON EVERY BARE RUN**, which is the worst possible shape for a suite:
+ * a red that means nothing trains a reader to skip the red that means
+ * something. `npm test` passes an explicit `test/**/*.mjs` glob and never saw
+ * it, so the two invocations of the same suite disagreed.
  *
  * ⚠ Loads the LOCAL `renderer/app/index.html`, never a remote URL — accurate and offline.
  * ⚠ NEEDS A BUILT SPA (`npm run build:ui` from the repo root); a tree that never built one

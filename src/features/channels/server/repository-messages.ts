@@ -339,6 +339,37 @@ export async function stampDelivery(
   return (data ?? []).length > 0;
 }
 
+/**
+ * The RECIPIENT AGENT SET the server stored on one message, for the delivery
+ * ack's third fence (`service-writes-delivery.ts`).
+ *
+ * ⚠ **THREE ANSWERS, AND THE CALLER MUST TELL THEM APART.** `null` = the server
+ * did not resolve the agent half (an unresolvable handle, or a kind that cannot
+ * reach a session) and the machine's own parse decided; `[]` = it resolved to
+ * nobody; a list = these agents and no others. Collapsing `null` into `[]` here
+ * would turn "you decide" into "nobody", which is the distinction
+ * `service-wake-verdict.ts` is built around.
+ *
+ * ⚠ NO ROW ⇒ `undefined`, which is not the same as a row with a NULL column: a
+ * receipt for a seq that does not exist is a receipt for nothing.
+ */
+export async function findRecipientAgentIds(
+  workspaceId: string,
+  channelId: string,
+  seq: number
+): Promise<string[] | null | undefined> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("recipient_agent_ids")
+    .eq("workspace_id", workspaceId)
+    .eq("channel_id", channelId)
+    .eq("seq", seq)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { recipient_agent_ids: string[] | null } | null)?.recipient_agent_ids;
+}
+
 type MessageInsert = {
   channel_id: string;
   workspace_id: string;

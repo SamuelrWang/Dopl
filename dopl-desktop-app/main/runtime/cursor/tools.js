@@ -227,6 +227,22 @@ function buildSessionToolConfig(profile) {
     };
   }
 
+  // 🔒 ⚠ `channel_agent` THROWS RATHER THAN FALLING THROUGH TO `full` (2026-09-02, F-594).
+  // `normalizeProfile` KNOWS the fourth profile — it is in `KNOWN_PROFILES` for the two adapters
+  // that ship it — so it arrives here unchanged and, without this arm, took the `full` return
+  // below: the exact posture ruling B7 exists to narrow, with the shell NOT denied. The freeze
+  // note above says the refusal lives in `contract.js › LAUNCH_BLOCKING[1]`, and it does; this is
+  // the arm that makes that true when a caller reaches this builder by another road. **A FREEZE
+  // whose fall-through is the WIDEST profile on the table is not a freeze.**
+  // ⚠ THROWS rather than returning `read_only`: a silent downgrade would run the session under
+  // containment the operator did not ask for and nothing would say so, and a silent UPGRADE is
+  // what this replaces. When X0 clears, this arm becomes the fourth branch.
+  if (p === 'channel_agent') {
+    throw new Error(
+      'cursor: no containment table for profile "channel_agent" — this runtime is frozen at three profiles (ruling X0, interrupt unverified). Launch is refused by contract.js LAUNCH_BLOCKING before this point.',
+    );
+  }
+
   // full: the UNIVERSAL FLOOR plus the credential-path fence, and nothing else. Everything else
   // reaches either Cursor's own supervision (its built-ins) or Dopl's gate (Dopl's tools).
   return {

@@ -51,6 +51,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(repo.findMembership).mockResolvedValue({ role: "member" } as never);
   vi.mocked(repoMessages.stampDelivery).mockResolvedValue(true);
+  // ⚠ THE SERVER'S OWN ANSWER TO "WHO WAS THIS FOR" — fence (3), F-593.
+  // `null` is the DEFERRING value ("the server did not resolve the agent half"),
+  // which is the default here because most cases below are about the other two
+  // fences and must not be filtered by this one.
+  vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(null);
 });
 
 describe("weakerOrEqual — the one ranking of the outcome vocabulary", () => {
@@ -210,5 +215,76 @@ describe("the SQL CHECK states the same vocabulary", () => {
       (x) => x[1]
     );
     expect(values.sort()).toEqual(["agent", "member", "none", "thread"].sort());
+  });
+});
+
+describe("🔒 fence (3) — the message was FOR this session (F-593)", () => {
+  it("skips a receipt from an agent the message did not address", async () => {
+    // ⚠ THE LIE IS PERMANENT, which is why this is a fence and not a report.
+    // Fences (1) and (2) say "you hold a live session in that room"; they say
+    // nothing about the MESSAGE. `woken` is the top of the monotonic rank, so
+    // the machine that really handled it can never correct the stamp.
+    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(["z9y8x7w6"]);
+    expect(
+      await recordDeliveryAcks(CTX, [ack()], reported(KEY))
+    ).toEqual({ stamped: 0 });
+    expect(repoMessages.stampDelivery).not.toHaveBeenCalled();
+  });
+
+  it("stamps a receipt from an agent the message DID address", async () => {
+    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue([
+      "z9y8x7w6",
+      "a1b2c3d4",
+    ]);
+    expect(await recordDeliveryAcks(CTX, [ack()], reported(KEY))).toEqual({
+      stamped: 1,
+    });
+  });
+
+  it("`null` DEFERS and `[]` does not refuse — only a NON-EMPTY list is an answer", async () => {
+    // `null` = "the server did not resolve the agent half, your own parse
+    // decided"; `[]` = "this body named no agent", which every non-`message`
+    // kind also stores. Refusing on either would break the lanes the desktop
+    // legitimately delivers on its own.
+    for (const stored of [null, []]) {
+      vi.mocked(repoMessages.stampDelivery).mockClear();
+      vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(stored);
+      expect(
+        await recordDeliveryAcks(CTX, [ack()], reported(KEY)),
+        JSON.stringify(stored)
+      ).toEqual({ stamped: 1 });
+    }
+  });
+
+  it("skips a receipt for a seq that has NO ROW — a receipt for nothing", async () => {
+    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(undefined);
+    expect(await recordDeliveryAcks(CTX, [ack()], reported(KEY))).toEqual({
+      stamped: 0,
+    });
+  });
+
+  it("an OLDER desktop's two-segment key cannot say which agent it is, and is not refused for it", async () => {
+    // INVARIANTS §13: an older build is a supported peer. It falls back to
+    // fences (1) and (2), which is exactly what it had before this fence
+    // existed — a degrade, never a new refusal aimed at it.
+    const legacy = `${CHAN}:`;
+    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(["z9y8x7w6"]);
+    expect(
+      await recordDeliveryAcks(
+        CTX,
+        [ack({ sessionKey: legacy })],
+        reported(legacy)
+      )
+    ).toEqual({ stamped: 1 });
+  });
+
+  it("asks ONCE per message, however many receipts name it", async () => {
+    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(null);
+    await recordDeliveryAcks(
+      CTX,
+      [ack(), ack({ delivery: "idle" }), ack({ seq: 43 })],
+      reported(KEY)
+    );
+    expect(vi.mocked(repoMessages.findRecipientAgentIds).mock.calls).toHaveLength(2);
   });
 });

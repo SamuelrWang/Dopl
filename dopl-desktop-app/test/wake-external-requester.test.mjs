@@ -205,7 +205,6 @@ function harness(over = {}) {
   const sessionEngine = {
     liveOnThread: () => (cfg.live ? [{ agentId: "a1b2c3d4", ownPostIds: new Set() }] : []),
     // The tier rule counts the CHANNEL's agents; here that is the same one session.
-    agentIdsInChannel: () => (cfg.live ? ["a1b2c3d4"] : []),
     feedInbound: (a) => { calls.feed.push(a); return true; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };

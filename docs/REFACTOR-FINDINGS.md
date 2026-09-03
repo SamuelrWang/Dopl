@@ -7818,3 +7818,27 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Resolution: the glob is every non-test `*.ts` in the directory, with ONE exclusion — `law-removed-vocabulary.ts`, whose LABELS are string literals of the banned words (its regexes are not literals and were never the problem). The exclusion is by NAME now rather than by the accident of a missing prefix. A SECOND check is added: no shipped string may name a retired `dopl_channel` op, scoped to `dopl_channel(op="…")` anywhere and to a bare `op="…"` inside `channel-*.ts`, because `list`/`update`/`open`/`members`/`help` are live ops on other tools. The five strings say the live spelling; the test says the DESTINATION rather than the name.
 - ⚠ The widened glob found ZERO existing `REMOVED_VOCABULARY` hits outside `channel-*.ts`, so the widening cost nothing and buys the next one.
 - Status: FIXED. Served surface 49,793 → 49,790 (the re-spellings are 3 chars shorter); `dopl_agent`'s description ceiling 1,948 → 1,941.
+
+### F-593 — a delivery receipt proved the SESSION, never that the message was for it (2026-09-02, FIXED)
+
+- Location: `channels/server/service-writes-delivery.ts › recordDeliveryAcks`. Re-derive: `grep -n "fence (3)\|recipientAgentIds" src/features/channels/server/service-writes-delivery.ts`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** Fences (1) and (2) say *"you hold a live session in that room"*. They say nothing about the MESSAGE. So an operator with any live agent in a channel could stamp `delivery: "woken"` on a `seq` addressed to somebody ELSE'S agent — and the same monotonicity that makes fence (1) necessary makes this lie permanent: `woken` is the top of the rank and the machine that actually handled the message can never correct it. It is fence (1)'s own argument, one field further in.
+- Resolution: fence (3) checks the acking session's agent id (the third segment of the desktop's session key) against the message's stored `recipient_agent_ids`. **Only a NON-EMPTY list refuses**: `null` means the server did not resolve the agent half and the machine's own parse decided, `[]` means the body named no agent (and is what every non-`message` kind stores), and a seq with no row is a receipt for nothing. An older desktop's two-segment key cannot say which agent it is and falls back to fences (1) and (2) — a degrade, not a new refusal aimed at a supported peer (§13). One read per distinct message, memoized like the membership probe.
+- Status: FIXED. Six cases in `service-writes-delivery.test.ts`.
+
+### F-594 — Cursor's frozen containment table fell through to `full` for the profile it refuses (2026-09-02, FIXED)
+
+- Location: `dopl-desktop-app/main/runtime/cursor/tools.js › buildSessionToolConfig`. Re-derive: `grep -n "channel_agent" dopl-desktop-app/main/runtime/cursor/tools.js`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** Ruling X0 freezes the Cursor adapter at three profiles, and the launch refusal lives upstream in `contract.js › LAUNCH_BLOCKING[1]` — correctly. But `normalizeProfile` KNOWS `channel_agent` (it is in `KNOWN_PROFILES` for the two adapters that ship it), so the value reached this builder unchanged and took the `full` return: the widest posture on the table, **with the shell not denied**, under the label of the profile B7 created to deny exactly that. A freeze whose fall-through is `full` is not a freeze; it is an upstream check with nothing behind it. ⚠ A test PINNED the fall-through, on the argument that the launch is refused anyway.
+- Resolution: an explicit throw. Not a downgrade to `read_only` either — that would run the session under containment the operator did not ask for and say nothing; neither answer is one a frozen adapter is entitled to give. When X0 clears the arm becomes the fourth branch. `test/channel-agent-profile.test.mjs` pins the refusal instead of the fall-through.
+- Status: FIXED.
+
+### F-595 — a bare `node --test` failed permanently on an Electron entry point (2026-09-02, FIXED)
+
+- Location: `dopl-desktop-app/scripts/smoke-test.js`, now `scripts/smoke.js`. Re-derive: `cd dopl-desktop-app && node --test`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** `node --test` with no glob collects `*-test.js` by default, so the headless Electron smoke script was run as a test, launched no Electron, and failed — permanently, one failure, on every bare run. `npm test` passes `test/**/*.mjs` and never saw it, **so the two invocations of the same suite disagreed and the by-hand one was always red by one**. A red that means nothing trains a reader to skip the red that means something, which is the cost, not the failure itself.
+- Resolution: renamed to `scripts/smoke.js` — the file is an Electron entry point and its NAME was the whole defect. `npm run smoke` and the three docs that name it move with it. Bare `node --test` is now 3,016 / 0.
+- Status: FIXED.

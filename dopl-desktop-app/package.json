@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "DOPL_UI_DEV_URL=http://localhost:5173 electron .",
-    "smoke": "electron scripts/smoke-test.js",
+    "smoke": "electron scripts/smoke.js",
     "lint": "eslint .",
     "test": "node --test 'test/**/*.mjs'",
     "test:live": "node test/live/run.js",

@@ -64,9 +64,25 @@ export function weakerOrEqual(delivery: ChannelDelivery): ChannelDelivery[] {
 }
 
 /**
+ * The agent id inside a desktop session key, `<channelId>:<taskId>:<agentId>`.
+ *
+ * ⚠ **`null` FOR THE TWO-SEGMENT FORM, WHICH IS AN OLDER DESKTOP AND A
+ * SUPPORTED PEER** (INVARIANTS §13, and the reason `SESSION_KEY_RE` still
+ * accepts it). It cannot say which agent it is, so fence (3) cannot ask — the
+ * receipt falls back to fences (1) and (2), which is exactly today's behaviour
+ * for that build rather than a new refusal aimed at it.
+ * ⚠ NOT A SECOND PARSER OF THE KEY FORMAT: it reads the segment the schema's
+ * own comment names and nothing else. The desktop owns what a key IS.
+ */
+function ackAgentId(sessionKey: string): string | null {
+  const third = sessionKey.split(":")[2];
+  return third !== undefined && third.length > 0 ? third : null;
+}
+
+/**
  * Record every receipt in one push. Returns how many actually moved a row.
  *
- * 🔒 **TWO FENCES, AND THE SECOND ONE IS THE POINT.**
+ * 🔒 **THREE FENCES, AND THE SECOND AND THIRD ARE THE POINT.**
  *
  * **(1) THE CLAIMANT HOLDS THE SESSION IT IS REPORTING FOR.** `ack.sessionKey`
  * must name a session in `reported` — the live set this same push just
@@ -87,7 +103,27 @@ export function weakerOrEqual(delivery: ChannelDelivery): ChannelDelivery[] {
  * are fed that operator's own posts (the fan-out ruling of 2026-08-21), so the
  * author's machine is a legitimate reporter.
  *
- * ⚠ **A RECEIPT THAT FAILS EITHER FENCE IS SKIPPED, NOT REFUSED.** Zod
+ * **(3) THE MESSAGE WAS FOR THIS SESSION** (2026-09-02, F-593). Fences (1) and
+ * (2) together say *"you hold a live session in that room"* — they say nothing
+ * about the MESSAGE. So an operator with any live agent in a channel could
+ * stamp `woken` on a `seq` addressed to somebody else's agent, and the same
+ * monotonic rank that makes fence (1) necessary makes THAT lie permanent too:
+ * `woken` is the top of the scale and the machine that actually handled the
+ * message can never correct it. The stored `recipient_agent_ids` is the
+ * server's own answer to *"who was this for"*, so the receipt is checked
+ * against it.
+ *
+ * ⚠ **THE THREE STORED VALUES MEAN THREE DIFFERENT THINGS AND ONLY ONE OF THEM
+ * REFUSES.** A NON-EMPTY list is the server's authoritative answer — an ack from
+ * an agent outside it is skipped. `null` is *"the server did not resolve the
+ * agent half; your own parse decided"*, and `[]` is *"this body named no
+ * agent"*, which is also what every non-`message` kind stores; refusing on
+ * either would break the lanes the desktop legitimately delivers on its own
+ * (`service-wake-verdict.ts` is built around exactly this distinction). ⚠ A seq
+ * with NO ROW is skipped: a receipt for a message that does not exist is a
+ * receipt for nothing.
+ *
+ * ⚠ **A RECEIPT THAT FAILS ANY FENCE IS SKIPPED, NOT REFUSED.** Zod
  * validates the ARRAY on this endpoint, and throwing here would take the whole
  * session push down with it — the unretryable 400 that leaves `read_sessions`
  * answering `[]` for a machine's LIVE sessions. The session set is the
@@ -121,6 +157,22 @@ export async function recordDeliveryAcks(
     return asked;
   };
 
+  // ⚠ ONE READ PER DISTINCT MESSAGE, memoized on the promise for the same
+  // reason `isMember` is: a machine reporting several receipts for one seq must
+  // not pay for several.
+  const recipients = new Map<string, Promise<string[] | null | undefined>>();
+  const recipientAgentIds = (
+    channelId: string,
+    seq: number
+  ): Promise<string[] | null | undefined> => {
+    const key = `${channelId}:${seq}`;
+    const held = recipients.get(key);
+    if (held) return held;
+    const asked = repoMessages.findRecipientAgentIds(ctx.workspaceId, channelId, seq);
+    recipients.set(key, asked);
+    return asked;
+  };
+
   let stamped = 0;
   for (const ack of acks) {
     // ⚠ THE CHANNEL MUST MATCH THE SESSION'S OWN, not merely be a room the
@@ -128,6 +180,17 @@ export async function recordDeliveryAcks(
     // room B.
     if (ownSessions.get(ack.sessionKey) !== ack.channelId) continue;
     if (!(await isMember(ack.channelId))) continue;
+    const addressed = await recipientAgentIds(ack.channelId, ack.seq);
+    if (addressed === undefined) continue;
+    const claimant = ackAgentId(ack.sessionKey);
+    if (
+      addressed !== null &&
+      addressed.length > 0 &&
+      claimant !== null &&
+      !addressed.includes(claimant)
+    ) {
+      continue;
+    }
     const moved = await repoMessages.stampDelivery(
       ctx.workspaceId,
       ack.channelId,

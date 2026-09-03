@@ -61,28 +61,16 @@ function agentIdsOnThread(a) {
   return liveOnThread(a).map((s) => String(s.agentId || '')).filter(Boolean);
 }
 
-/**
- * Every live agent id in a CHANNEL, thread-scoped and channel-level alike.
- *
- * ⚠ THE FRAMING'S SIBLING LIST IS CHANNEL-WIDE, NOT THREAD-WIDE (2026-08-21, the channel-agent
- * ruling). Two of the operator's agents in one channel can duplicate each other's work even when
- * one is inside a thread and the other is watching the main room, so the coordination
- * instruction is about the ROOM they share — and the room is the channel. ⚠ THE FEED IS STILL
- * STRICTLY SCOPED (`session-dispatch.js`): knowing a sibling exists is not the same as hearing
- * it, and this function must never become the fan-out's input.
- */
-function agentIdsInChannel(channelId) {
-  const want = String(channelId || '');
-  const out = [];
-  if (!deps.sessions) return out;
-  for (const s of deps.sessions.values()) {
-    if (s.settled) continue;
-    if (String(s.channelId || '') !== want) continue;
-    const id = String(s.agentId || '');
-    if (id) out.push(id);
-  }
-  return out;
-}
+// ⚠ `agentIdsInChannel` WAS DELETED HERE ON 2026-09-02 (F-579, closed in the batch-2 review).
+// It answered "every live agent id in this CHANNEL" for ONE reader: the ~870-character voluntary
+// claim protocol in `prompt-framing.js › agentIdentityFraming`, which B9 deleted whole with the
+// triage tier. `noteSiblings` stopped stamping `context.siblingAgentIds` in the same change; this
+// function computed that field and nothing else ever called it, so it survived as an exported
+// registry read answering a question nobody asks — the shape a future paragraph gets written
+// around. ⚠ THE THREAD-SCOPED `agentIdsOnThread` IS LIVE AND STAYS: it is a different question.
+// ⚠ AND THE OLD DOCTRINE IT CARRIED IS NOT LOST, because it is the delivery core's rule and is
+// stated there: knowing a sibling exists is not the same as hearing it, and the FEED is strictly
+// scoped in `session-dispatch.js`. A channel-wide roster must never become the fan-out's input.
 
 /**
  * ONE session, for an op that names (channel, thread) and MAY name an agent.
@@ -128,4 +116,4 @@ function noteSiblings(s) {
 
 // ─── END SESSION-REGISTRY-PURE ────────────────────────────────────────────────────
 
-module.exports = { bind, liveOnThread, agentIdsOnThread, agentIdsInChannel, sessionOn, noteSiblings };
+module.exports = { bind, liveOnThread, agentIdsOnThread, sessionOn, noteSiblings };

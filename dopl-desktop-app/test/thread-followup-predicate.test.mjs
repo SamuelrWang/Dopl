@@ -98,7 +98,6 @@ function harness(over = {}) {
   const sessionEngine = {
     liveOnThread: () => (cfg.live ? [{ agentId: "a1b2c3d4", ownPostIds: new Set() }] : []),
     // The tier rule (2026-08-28) counts the CHANNEL's agents; here that is the same one session.
-    agentIdsInChannel: () => (cfg.live ? ["a1b2c3d4"] : []),
     feedInbound: (a) => { calls.feed.push(a); return true; },
   };
   // ⚠ THE REAL ROUTE, NO WAKE STUBS (2026-09-02) — the fixtures below are all RUNNING sessions,

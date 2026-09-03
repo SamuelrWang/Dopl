@@ -270,18 +270,31 @@ test("CURSOR refuses a channel_agent launch through the EXISTING contract rule",
   assert.match(String(capability.profileRefusal(d, "channel_agent")), /no deny list/);
 });
 
-test("CURSOR's table has NO channel_agent branch — the freeze is in the source too", () => {
-  // Without this the freeze could rot into a silent fall-through: `normalizeProfile` accepts the
-  // name, and an adapter with no branch for it would hand back `full`'s config under a narrower
-  // label. Pinned so the day X0 clears, the branch and this line move together.
+test("CURSOR's table REFUSES channel_agent rather than falling through to full", () => {
+  // ⚠ **THIS CASE PINNED THE FALL-THROUGH UNTIL 2026-09-02 (F-594)**, on the argument that the
+  // launch is refused upstream — and it is. But `normalizeProfile` KNOWS the name, so the value
+  // arrived here unchanged and took the `full` return: **the freeze's fall-through was the WIDEST
+  // profile on the table, with the shell not denied**, which is the exact posture ruling B7
+  // exists to narrow. A freeze whose fall-through is `full` is not a freeze; it is an upstream
+  // check with nothing behind it.
   const src = readMain("runtime", "cursor", "tools.js");
-  const table = src.slice(src.indexOf("function buildSessionToolConfig"));
-  assert.equal(/p === 'channel_agent'/.test(table), false);
   assert.match(src, /ruling X0/, "and the freeze names the ruling that holds it");
-  // The fall-through it therefore has, said out loud rather than discovered later.
-  assert.deepEqual(CURSOR.buildSessionToolConfig("channel_agent"),
-    CURSOR.buildSessionToolConfig("full"),
-    "an un-declared profile falls through to full HERE — which is why the launch is refused above");
+  assert.throws(
+    () => CURSOR.buildSessionToolConfig("channel_agent"),
+    /channel_agent/,
+    "the builder must refuse the fourth profile, not answer for it",
+  );
+  // ⚠ IT THROWS RATHER THAN DOWNGRADING. A silent `read_only` would run the session under
+  // containment the operator did not ask for and say nothing; a silent `full` is what this
+  // replaces. Neither is an answer this adapter is entitled to give.
+  assert.notDeepEqual(
+    (() => { try { return CURSOR.buildSessionToolConfig("channel_agent"); } catch { return null; } })(),
+    CURSOR.buildSessionToolConfig("read_only"),
+  );
+  // The three it DOES declare still answer, so the refusal is scoped to the frozen one.
+  for (const p of ["read_only", "dopl_only", "full"]) {
+    assert.ok(CURSOR.buildSessionToolConfig(p), p);
+  }
 });
 
 // ── 7. THE SELECTION RULE — shared ROOMS get it by default ───────────────────────────────────
