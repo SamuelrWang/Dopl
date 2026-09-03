@@ -38,7 +38,8 @@ import * as repoMessages from "./server/repository-messages";
 import { draftReach } from "./lib/draft-recipients";
 import { resolveWakeVerdict } from "./server/service-wake-verdict";
 import type { ChannelContext } from "./server/service-shared";
-import type { ChannelRow, SessionStateRow } from "./server/dto";
+import type { ChannelRow } from "./server/dto";
+import type { SessionStateRow } from "./server/collab-dto";
 import type { ChannelMember } from "./types";
 import type { ChannelMessageCreateInput } from "./schema";
 
@@ -192,7 +193,7 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
     expect([...(server.recipientAgentIds ?? [])].sort(), "server agents").toEqual(
       [...c.expect.agentIds].sort()
     );
-    expect([...server.recipientUserIds].sort(), "server members").toEqual(
+    expect([...(server.recipientUserIds ?? [])].sort(), "server members").toEqual(
       [...c.expect.userIds].sort()
     );
   });
