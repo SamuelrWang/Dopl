@@ -129,6 +129,26 @@ export function threadOtherParty(
  * own key) gets NO reciprocal arm and answers `delivery=none`. Guessing which
  * agent wrote it would aim somebody's reply at the wrong conversation.
  *
+ * 🔒 ⚠ **AND `client_msg_id` IS CALLER-SUPPLIED, SO THE STAMP IS A CLAIM AND IS
+ * CHECKED (2026-09-02, F-589).** It was not. Agent ids are not secret — the
+ * desktop stamps `agent-<agentId>-<n>` and `agentId` is publicly readable off
+ * `channel_sessions.name` — so any caller could post `client_msg_id:
+ * "agent-<someone else's id>-1"` and have this arm answer with the member who
+ * last addressed THAT agent. The message then lands in front of a person who was
+ * mid-conversation with a different agent, attributed to the wrong exchange,
+ * from a room they may not have been talking in at all. It is the same class of
+ * defect the author-scoped idempotency probe closed in `service-writes.ts`, on
+ * the same field, and one door along.
+ *
+ * ⚠ **THE CHECK IS `ownAgentIds`, PASSED IN RATHER THAN COMPUTED HERE.** "A live
+ * agent of mine" has ONE definition (`service-wake-verdict.ts ›
+ * ownLiveAgentIds`) and this module cannot import it — that file imports this
+ * one. A second spelling of the own-scope rule is exactly what the desktop's
+ * three-module version cost, so the caller resolves it and hands it over.
+ * ⚠ A STALE PROJECTION THEREFORE ANSWERS `null`, not "trust the stamp": this arm
+ * RESOLVES a recipient, and {@link isFresh}'s asymmetry says a fresh row is
+ * evidence enough to resolve while a stale one is not evidence of anything.
+ *
  * ⚠ **NO ROW ⇒ `delivery=none`, AND THAT IS THE RULE RATHER THAN A GAP.** An
  * agent talking to the room with nobody having addressed it inside the window is
  * a BROADCAST, and the standing "agent-authored unaddressed starts nobody" rule
@@ -137,10 +157,14 @@ export function threadOtherParty(
 export async function reciprocalParty(
   channelId: string,
   input: ChannelMessageCreateInput,
-  now: number
+  now: number,
+  /** The agent ids the AUTHOR'S OWN fresh sessions answer to, from
+   *  `service-wake-verdict.ts › ownLiveAgentIds`. The stamp must name one. */
+  ownAgentIds: readonly string[]
 ): Promise<string | null> {
   const authorAgentId = parseAgentPostStamp(input.clientMsgId);
   if (authorAgentId === null) return null;
+  if (!ownAgentIds.includes(authorAgentId)) return null;
   const sinceIso = new Date(now - RESILIENCE_WINDOW_MS).toISOString();
   const row = await repoMessages.findLastRoomAddressToAgent(
     channelId,

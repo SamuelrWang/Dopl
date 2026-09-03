@@ -30,11 +30,13 @@ import { join } from "node:path";
 
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 vi.mock("./repository");
+vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
 import type { ChannelMemberRow, ChannelMessageRow, ChannelRow } from "./dto";
 import type { ChannelContext } from "./service-shared";
@@ -88,6 +90,11 @@ function eqFilters(calls: Call[]): Record<string, unknown> {
 
 describe("the two (channel, client_msg_id) reads are scoped differently", () => {
   beforeEach(() => {
+    // ⚠ THE AUTHOR'S OWN PROJECTION, EMPTY (2026-09-02, F-589). RR2 reads it to
+    // check the `client_msg_id` agent stamp — a CALLER-SUPPLIED claim — against
+    // the agents this author actually runs, so a file that leaves it unstubbed
+    // reaches the real admin client and times out rather than failing.
+    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
     vi.clearAllMocks();
   });
 

@@ -329,7 +329,15 @@ export async function resolveWakeVerdict(
     }
   } else if (repairable && wakeCtx.authorKind === "agent") {
     // RR2 — whoever last addressed this agent in this room, inside the window.
-    const party = await reciprocalParty(channelId, input, now);
+    // ⚠ THE AUTHOR'S OWN LIVE AGENT IDS GO WITH IT (F-589): the arm keys on a
+    // `client_msg_id` stamp, which is CALLER-SUPPLIED and names a public id, so
+    // the claim "I am agent X" is checked against the projection before it is
+    // allowed to select a recipient. Resolved HERE because {@link
+    // ownLiveAgentIds} is this file's, and `service-wake-verdict-resilience.ts`
+    // cannot import it without a cycle — one definition of "a live agent of
+    // mine", handed over rather than restated.
+    const { ids } = await ownLiveAgentIds(ctx, channelId, now);
+    const party = await reciprocalParty(channelId, input, now, ids);
     if (party !== null) {
       resilience = { verdict: "reciprocal", userIds: [party], agentIds: [] };
     }

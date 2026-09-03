@@ -24,10 +24,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import {
@@ -120,6 +122,11 @@ const withHeader = (value: string) => ({
 });
 
 beforeEach(() => {
+  // ⚠ THE AUTHOR'S OWN PROJECTION, EMPTY (2026-09-02, F-589). RR2 reads it to
+  // check the `client_msg_id` agent stamp — a CALLER-SUPPLIED claim — against
+  // the agents this author actually runs, so a file that leaves it unstubbed
+  // reaches the real admin client and times out rather than failing.
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
   vi.clearAllMocks();
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>

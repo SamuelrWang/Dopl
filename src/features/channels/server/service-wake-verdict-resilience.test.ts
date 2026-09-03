@@ -212,6 +212,48 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
 });
 
 describe("RR2 — an unaddressed agent post in the main room goes back to whoever addressed it", () => {
+  // 🔒 THE AUTHOR'S OWN LIVE SESSION. The stamp on `client_msg_id` is a CLAIM
+  // (F-589) and the arm checks it against this projection before it selects a
+  // recipient, so every case below must stand up an agent for the author to BE.
+  beforeEach(() => {
+    projection(sessionRow({ name: "k3v7d2mq" }));
+  });
+
+  it("🔒 REFUSES a stamp naming an agent the author does not run (F-589)", async () => {
+    // ⚠ AGENT IDS ARE NOT SECRET — the desktop stamps `agent-<id>-<n>` and the
+    // id is publicly readable off `channel_sessions.name`. Without the check,
+    // any caller could claim a PEER's agent id and be handed the member who
+    // last addressed that agent: their reply lands in front of somebody who was
+    // mid-conversation with a different agent, in the wrong exchange. Same
+    // class as the author-scoped idempotency probe, on the same field.
+    lastAddress({ author_user_id: "user-9" });
+    const out = await resolve("summary", {}, {
+      authorKind: "agent",
+      clientMsgId: "agent-peerpeer-4",
+    });
+    expect(out).toMatchObject({ verdict: "none", delivery: "none" });
+    // …and it never even asks: the claim is refused before the read.
+    expect(vi.mocked(repoMessages.findLastRoomAddressToAgent)).not.toHaveBeenCalled();
+  });
+
+  it("🔒 a STALE projection is not evidence either — the arm resolves on freshness only", async () => {
+    // `isFresh`'s asymmetry, applied in the direction that matters here: this
+    // arm RESOLVES a recipient, so it needs positive evidence. A stale row is
+    // not evidence of presence and must not stand in for one.
+    projection(
+      sessionRow({
+        name: "k3v7d2mq",
+        updated_at: new Date(NOW - SESSION_PROJECTION_FRESH_MS - 1).toISOString(),
+      })
+    );
+    lastAddress({ author_user_id: "user-9" });
+    const out = await resolve("summary", {}, {
+      authorKind: "agent",
+      clientMsgId: "agent-k3v7d2mq-4",
+    });
+    expect(out.verdict).toBe("none");
+  });
+
   it("resolves the AUTHOR of the last row addressed to this agent, inside the window", async () => {
     lastAddress({ author_user_id: "user-9", seq: 12 });
     const out = await resolve("here is the summary", {}, {
@@ -279,6 +321,7 @@ describe("RR2 — an unaddressed agent post in the main room goes back to whoeve
     // 🔒 THE ARMS ARE DISJOINT. RR3 exists so a PERSON is answered; handing an
     // agent's unaddressed thinking to the room's responder is the fan-out this
     // wave is deleting, wearing a new name.
+    projection(sessionRow({ name: "m8q1zzzz" }));
     roomProjection(sessionRow({ name: "k3v7d2mq" }));
     lastAddress(null);
     const out = await resolve("musing", {}, {

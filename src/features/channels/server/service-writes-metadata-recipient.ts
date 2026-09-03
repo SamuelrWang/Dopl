@@ -1,4 +1,5 @@
 import "server-only";
+import { meetsMinRole } from "@/features/workspaces/types";
 import { isUuid } from "@/shared/lib/id/uuid";
 import {
   agentIdHandle,
@@ -178,6 +179,21 @@ export async function resolveToRecipient(
  *
  * ⚠ **BUILT ONLY ON THE FAILING PATH.** Both reads are a round trip each and the
  * happy path must not pay for a sentence nobody will read.
+ *
+ * 🔒 **EMAIL IS ENTITLEMENT-SCOPED, AND THIS LIST USED TO IGNORE THAT
+ * (2026-09-02, F-588).** It rendered EVERY member's email, to any caller —
+ * agent tokens included — from a single mistyped `to=`. That is the same
+ * enumeration `channel-render.ts › formatMemberLine` refuses in as many words
+ * (*"an agent can list every PUBLIC channel and `op='rooms' action='members'`
+ * each, so email renders only for a workspace admin or the caller's own row"*),
+ * reached through a door that never asked. **A refusal is a read**, and this
+ * one was the cheapest roster dump on the surface: no membership needed beyond
+ * the room, no rate limit, one call.
+ *
+ * The rule is the SAME rule, applied here: a display name, else — for an admin
+ * or the caller's own row — the email, else the user id. It stays actionable
+ * (`to=` takes a name, an email or an id) without handing an agent the roster's
+ * addresses.
  */
 async function unresolved(
   ctx: ChannelContext,
@@ -187,9 +203,17 @@ async function unresolved(
   const { handles } = await liveAgentHandles(ctx, channel.id);
   const members = await repo.listMembers(channel.id);
   const profiles = await repo.fetchProfiles(members.map((m) => m.user_id));
-  const emails = profiles
-    .map((p) => p.email)
-    .filter((e): e is string => typeof e === "string" && e.length > 0)
+  const byId = new Map(profiles.map((p) => [p.id, p]));
+  // ⚠ `role` is the WORKSPACE role and may be null when the auth layer resolved
+  // none — which reads as "not an admin", the restrictive answer.
+  const adminReads = ctx.role !== null && meetsMinRole(ctx.role, "admin");
+  const labels = members
+    .map((m) => {
+      const profile = byId.get(m.user_id);
+      const email = adminReads || m.user_id === ctx.userId ? profile?.email : null;
+      return profile?.display_name || email || m.user_id;
+    })
+    .filter((label): label is string => label.length > 0)
     .sort();
-  return new ChannelRecipientUnresolvedError(to, handles, emails);
+  return new ChannelRecipientUnresolvedError(to, handles, labels);
 }

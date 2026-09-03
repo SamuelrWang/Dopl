@@ -43,7 +43,9 @@ function sessionRow(over: Partial<SessionStateRow>): SessionStateRow {
   } as SessionStateRow;
 }
 
-function roster(...users: Array<{ id: string; email: string | null }>): void {
+function roster(
+  ...users: Array<{ id: string; email: string | null; name?: string | null }>
+): void {
   vi.mocked(repo.listMembers).mockResolvedValue(
     users.map((u) => ({ user_id: u.id })) as never
   );
@@ -51,7 +53,7 @@ function roster(...users: Array<{ id: string; email: string | null }>): void {
     users.map((u) => ({
       id: u.id,
       email: u.email,
-      display_name: null,
+      display_name: u.name ?? null,
       avatar_url: null,
     }))
   );
@@ -182,16 +184,49 @@ describe("🔒 the refusal lists what the caller can actually reach", () => {
       sessionRow({ id: "s-1", name: "k3v7d2mq" }),
       sessionRow({ id: "s-2", name: "m8q1zzzz" }),
     ]);
-    roster({ id: "user-2", email: "ada@example.com" });
+    roster({ id: "user-2", email: "ada@example.com", name: "Ada" });
     const err = await resolveToRecipient(HUMAN, CHANNEL, "@nobody").catch((e) => e);
     expect(err).toBeInstanceOf(ChannelRecipientUnresolvedError);
     expect(err.liveHandles).toEqual(["agent-k3v7d2mq", "agent-m8q1zzzz"]);
-    expect(err.members).toEqual(["ada@example.com"]);
+    expect(err.members).toEqual(["Ada"]);
     // ⚠ THE SENTENCE ITSELF, because the MCP side renders `err.message` and a
     // refusal that names nothing is a second guess for the caller.
     expect(err.message).toContain("@agent-k3v7d2mq");
-    expect(err.message).toContain("ada@example.com");
+    expect(err.message).toContain("Ada");
     expect(err.message).toContain("@nobody");
+  });
+
+  it("🔒 does NOT enumerate other members' EMAILS to a plain member (F-588)", async () => {
+    // ⚠ THE CHEAPEST ROSTER DUMP ON THE SURFACE: one mistyped `to=` returned
+    // every member's email, to any caller, agent tokens included — the same
+    // enumeration `channel-render.ts › formatMemberLine` refuses by name. A
+    // REFUSAL IS A READ.
+    roster({ id: "user-2", email: "ada@example.com" });
+    const err = await resolveToRecipient(HUMAN, CHANNEL, "@nobody").catch((e) => e);
+    // Nameless member → the id, never the address.
+    expect(err.members).toEqual(["user-2"]);
+    expect(err.message).not.toContain("ada@example.com");
+  });
+
+  it("🔒 an AGENT TOKEN gets the same narrow list (F-588)", async () => {
+    roster({ id: "user-2", email: "ada@example.com" });
+    const err = await resolveToRecipient(AGENT_CALLER, CHANNEL, "@nobody").catch((e) => e);
+    expect(err.message).not.toContain("ada@example.com");
+  });
+
+  it("shows the CALLER'S OWN email, and every email to a workspace ADMIN", async () => {
+    // The entitlement rule, both arms — `formatMemberLine`'s, applied at the one
+    // place that can see who is asking.
+    roster(
+      { id: "user-1", email: "me@example.com" },
+      { id: "user-2", email: "ada@example.com" }
+    );
+    const own = await resolveToRecipient(HUMAN, CHANNEL, "@nobody").catch((e) => e);
+    expect(own.members).toEqual(["me@example.com", "user-2"]);
+
+    const admin = { ...HUMAN, role: "admin" } as ChannelContext;
+    const all = await resolveToRecipient(admin, CHANNEL, "@nobody").catch((e) => e);
+    expect(all.members).toEqual(["ada@example.com", "me@example.com"]);
   });
 
   it("lists the ID form, never a contested slug — a refusal must not teach a second refusal", async () => {
