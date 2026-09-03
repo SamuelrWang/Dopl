@@ -4,6 +4,30 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Changed — waiting on a channel is a HOLD, never a poll (2026-09-03)
+
+- **One canonical statement.** `dopl://doctrine/channels` gains a `waiting`
+  section (also `dopl_channel(op="rooms", action="help", section="waiting")`):
+  hold rather than re-read on a timer because every wake re-sends a session's
+  whole context, the shape for a client with background tasks and for one
+  without, the ~30-minute silence exit, and the desktop's own refusal.
+- **No result restates it.** Every hold and read result drops its re-arm
+  doctrine for ONE line — `cursor=<seq> · hold, never poll: <call> ·
+  dopl://doctrine/channels › Waiting`. Measured with `ref="general"`: a hold
+  that returned messages 1,599 → 134 chars, a timed-out hold 644 → 131, the
+  workspace hold's timeout 656 → 112. Nothing semantic was dropped: the stop
+  condition is carried by the pointer and pinned on both ends.
+- **Added — a poll detector.** For EXTERNAL callers only, three empty
+  `op="read"` calls WITHOUT `wait_ms` on the same credential, channel and
+  cursor inside ten minutes answer
+  `reason=POLLING_DETECTED · use wait_ms · retry=…` and withhold the (empty)
+  page; the cursor comes back, so nothing is lost, and any `wait_ms` read
+  clears the count. A desktop-run session is never counted — it is refused the
+  hold outright and is woken by the message itself.
+- **`instructions` gains one sentence and did not grow** (1,801 chars,
+  unchanged): the contract around it was trimmed by the same amount.
+
+
 ### Added — folder descriptions + entry excerpts in `dopl_kb`
 
 - **`get_tree` / `list_dir` render summaries inline.** Folder `description`
