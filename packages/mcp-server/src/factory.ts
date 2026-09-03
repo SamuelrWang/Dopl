@@ -6,12 +6,10 @@
  * orphan-skill cleanup) in `index.ts`.
  */
 
-import { isStandardWorkspace } from "@dopl/client";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
-import { readSessionPin } from "./session-pin.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
-import type { WorkspaceSource } from "./workspace-directory.js";
+import { containerKind, type WorkspaceSource } from "./workspace-directory.js";
 
 export type { CallerIdentity } from "./tools/identity.js";
 
@@ -57,17 +55,6 @@ export interface BootOptions {
    */
   caller?: Partial<CallerIdentity>;
   /**
-   * 🔒 OPAQUE SESSION KEY for the workspace pin an agent can set
-   * (`session-pin.ts`). Supplied by the TRANSPORT, which is the only layer that
-   * can identify one MCP connection across the stateless per-request boots.
-   *
-   * ⚠ IT IS A MAP KEY AND NOTHING ELSE. Never rendered, never logged, never
-   * compared to anything but itself, and it grants nothing — a pin only ever
-   * picks among memberships the boot directory already proved. Absent ⇒ no pin
-   * can be read or written, which is the pre-pin behaviour verbatim.
-   */
-  sessionKey?: string;
-  /**
    * The caller's own live agent handles and the posture this session runs at,
    * when the TRANSPORT knows them. ⚠ Threaded verbatim into the `instructions`
    * briefing (`instructions.ts › ConnectionIdentity`) so an orchestrator does
@@ -89,9 +76,9 @@ export interface BootResult {
   userId: string | null;
   isAdmin: boolean;
   /**
-   * Session default workspace resolved at boot: a request X-Workspace-Id pin,
-   * else the sole membership. Null on 0 or 2+ memberships with no pin — each
-   * tool call must then pass `workspace=`.
+   * The container this connection is BOUND to: the request's `X-Workspace-Id`,
+   * or null. ⚠ **NULL IS ORDINARY SINCE B13** — a call that names no container
+   * is resolved by the SERVER, not refused and not guessed here.
    */
   activeWorkspace: {
     id: string;
@@ -143,12 +130,15 @@ export async function bootServer(
     directoryLoadFailed = true;
   }
 
-  // Session default: an X-Workspace-Id pin naming a membership wins; else
-  // exactly one membership auto-targets; else ⚠ NO transport default — the
-  // wrapper demands `workspace=` per call, so no header-less loopback fires.
-  // ⚠ Only STANDARD memberships can auto-target: a home-channel container must
-  // never become the workspace a no-arg tool call silently lands in. A PIN is
-  // explicit addressing and still matches the full directory.
+  // 🔒 **THE CONNECTION'S CONTAINER IS THE `X-Workspace-Id` HEADER AND NOTHING
+  // ELSE** (B10/B13). The sole-membership auto-target and the agent's own
+  // session pin are DELETED: neither is something the caller said on this call,
+  // and the sole-membership rule was a second copy of one the API already
+  // applies (`with-workspace-auth.ts › resolveActiveWorkspace`) — so a
+  // one-workspace caller resolves identically, one layer down, from one rule.
+  // ⚠ NO HEADER ⇒ NO `X-Workspace-Id` ON THE LOOPBACK, which is what lets the
+  // server answer with the caller's own container rather than this process
+  // guessing at one.
   const pin = client.getWorkspaceId();
   let active: WorkspaceListItem | null = null;
   let source: WorkspaceSource | null = null;
@@ -166,32 +156,16 @@ export async function bootServer(
       );
     }
   }
-  // 🔒 THE AGENT'S OWN PIN, BELOW THE TRANSPORT'S AND ABOVE THE SOLE
-  // MEMBERSHIP. Below `header pin` because that one is explicit addressing on
-  // THIS request and a stored default must never override the argument in front
-  // of it; above `sole membership` because a session with exactly one standard
-  // workspace and a pin naming its home CONTAINER meant the container.
-  // ⚠ IT RESOLVES AGAINST THE UNFILTERED DIRECTORY, exactly as the header pin
-  // does — a `kind='link'` container is a legal EXPLICIT target (§4A) and a pin
-  // is explicit. What it can never do is widen: a pinned id that is not an
-  // active membership is dropped and the resolution continues below.
-  if (!active) {
-    const pinned = readSessionPin(opts.sessionKey);
-    if (pinned) {
-      active = directory.find((w) => w.id === pinned) ?? null;
-      if (active) source = "session pin";
-    }
-  }
-  const listable = directory.filter(isStandardWorkspace);
-  if (!active && listable.length === 1) {
-    active = listable[0];
-    source = "sole membership";
-  }
 
   // 🔒 THE CONTAINER LOCK (plan §4.4 B3). A session pinned to a SHARED link
   // container — one with a PEER in it — sees and addresses that container
   // ALONE: no `list_workspaces` entry for the operator's other workspaces, no
   // `workspace=` that resolves to one, no instruction table naming any.
+  //
+  // ⚠ **IT ASKS `kind === "link"`, NOT `!isStandardWorkspace(…)`** (F-564).
+  // The negation reads "not in the rail" as "therefore somebody's room", which
+  // `20260920120000`'s `personal` kind makes false for every user at once —
+  // each operator's OWN container would arm a lock built for a shared one.
   //
   // ⚠ SHARED, NOT SOLO. A one-member container is the operator's own primary
   // agent surface and is deliberately untouched, exactly as the audience ceiling
@@ -210,7 +184,9 @@ export async function bootServer(
   // fences are the container-locked credential and the server-side audience
   // ceiling. Do not describe this line as containment.
   const lockedTo =
-    active && !isStandardWorkspace(active) && (active.memberCount ?? 0) !== 1
+    active &&
+    containerKind(active) === "home channel" &&
+    (active.memberCount ?? 0) !== 1
       ? active
       : null;
   if (lockedTo) {
@@ -246,7 +222,6 @@ export async function bootServer(
     workspace: active,
     role: active?.role ?? null,
     workspaceSource: source,
-    sessionKey: opts.sessionKey,
     scopes: opts.scopes,
     toolProfile: opts.toolProfile,
     liveAgents: opts.liveAgents,

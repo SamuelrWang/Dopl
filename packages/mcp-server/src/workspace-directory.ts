@@ -1,27 +1,31 @@
 /**
- * workspace-directory.ts — the session's view of WHICH workspaces exist and
- * which one a call lands in: membership caching, slug→id resolution, and the
- * "you must pass `workspace=`" refusal.
+ * workspace-directory.ts — the session's view of WHICH containers exist and
+ * which one a call lands in: membership caching, slug→id resolution, the
+ * container lock, and the search fan-out's leg list.
  *
- * ⚠ FAIL-CLOSED throughout. A blank `workspace=` is rejected by the caller in
- * `registrar.ts`; 0 or 2+ memberships with no pin gets
- * {@link WorkspaceDirectory.noWorkspaceError}, never a guessed workspace; and a
- * FAILED boot directory load does not seed the cache, so the first resolution
- * retries instead of serving a bogus empty list for a full TTL.
+ * ⚠ **THERE IS NO DEFAULT WORKSPACE HERE ANY MORE** (B10/B13). It held the
+ * "you belong to N workspaces, name one" refusal and the sole-membership
+ * auto-target; both are gone, and the server resolves the caller's own
+ * container when a call names none. A blank `workspace=` is still rejected by
+ * the caller in `registrar.ts` — fail-closed on an argument that was PASSED is
+ * a different question from guessing one that was not.
+ *
+ * ⚠ A FAILED boot directory load does not seed the cache, so the first
+ * resolution retries instead of serving a bogus empty list for a full TTL.
  */
 
-import { isStandardWorkspace } from "@dopl/client";
-import type { DoplClient, WorkspaceListItem, WorkspaceRole } from "@dopl/client";
-import type { ToolResponse } from "./tools/respond.js";
-import { WORKSPACE_REQUIRED, refusal } from "./tools/tool-errors.js";
-import { inlineOr } from "./tools/narration.js";
-import { UNNAMED_WORKSPACE, UNTRUSTED_DIRECTORY_NOTE } from "./instructions.js";
+import type {
+  DoplClient,
+  WorkspaceKind,
+  WorkspaceListItem,
+  WorkspaceRole,
+} from "@dopl/client";
 
 /**
- * Session default workspace, resolved once at boot (X-Workspace-Id pin, else
- * the sole membership). Read by `appendDoplStatus`. ⚠ Null on 0 or 2+
- * memberships with no pin — a no-arg tool call is then REFUSED, so nothing is
- * silently routed to a guessed workspace.
+ * The container this CONNECTION is bound to, resolved once at boot from
+ * `X-Workspace-Id`. Read by `appendDoplStatus`. ⚠ Null is ORDINARY and is not a
+ * refusal: an unbound connection names no container and the server answers with
+ * the caller's own.
  */
 export interface ActiveWorkspaceState {
   id: string;
@@ -31,19 +35,16 @@ export interface ActiveWorkspaceState {
 }
 
 /**
- * How the workspace a call hit was chosen — surfaced verbatim in the
+ * How the container a call hit was chosen — surfaced verbatim in the
  * `_dopl_status` footer so the agent can confirm targeting.
  *
- * ⚠ `session pin` is the one an AGENT sets (`current_workspace(op="set")`,
- * `session-pin.ts`) and it is deliberately a DIFFERENT label from `header pin`,
- * which the transport sets: an agent debugging where its call landed must be
- * able to tell "the default I chose" from "the default my client chose".
+ * ⚠ **TWO LABELS SINCE B13, AND BOTH ARE EXPLICIT ADDRESSING.** `sole
+ * membership` (the auto-target) and `session pin` (`current_workspace(op=
+ * "set")`) are deleted: neither was a thing the caller said on this call, and
+ * B10 removes the default-workspace concept they both implemented. A footer
+ * that cannot say WHO chose the target is a footer an agent cannot debug from.
  */
-export type WorkspaceSource =
-  | "per-call arg"
-  | "sole membership"
-  | "header pin"
-  | "session pin";
+export type WorkspaceSource = "per-call arg" | "header pin";
 
 export interface EffectiveWorkspace extends ActiveWorkspaceState {
   source: WorkspaceSource;
@@ -90,29 +91,29 @@ export interface WorkspaceDirectoryOptions {
 
 export interface WorkspaceDirectory {
   /**
-   * The caller's LISTABLE memberships, cached for
-   * {@link WORKSPACE_CACHE_TTL_MS}. ⚠ `kind='link'` home-channel containers are
-   * excluded — they are never advertised to an agent.
+   * Every container the caller is an active member of, cached for
+   * {@link WORKSPACE_CACHE_TTL_MS}.
+   *
+   * ⚠ **IT NO LONGER FILTERS THROUGH `isStandardWorkspace`** (B10). "All
+   * workspaces are just normal workspaces": a home-channel container is one
+   * more container the caller is in, and hiding it here is what made it
+   * unaddressable without a second tool. The KIND is RENDERED by every surface
+   * that lists these rows — a container is still never called a workspace.
    */
   getWorkspaceList(): Promise<WorkspaceListItem[]>;
-  /**
-   * A slug-or-UUID `workspace=` ref resolved against ALL memberships, links
-   * included: explicit addressing is how a home channel is reached.
-   */
+  /** A slug-or-UUID `workspace=` ref resolved against every membership. */
   resolveWorkspaceRef(ref: string): Promise<WorkspaceListItem | null>;
-  /** The isError response for a no-`workspace=` call with no session default. */
-  noWorkspaceError(): Promise<ToolResponse>;
   /**
    * 🔒 THE LOCK, READABLE — the container id this session is narrowed to, or
    * null when it is not locked.
    *
    * ⚠ EXPOSED BECAUSE THE LOCK NOW HAS A CONSUMER THIS OBJECT CANNOT SERVE
-   * (2026-08-28). `getWorkspaceList` narrows the WORKSPACE directory; `dopl_home`
-   * and `dopl_search(scope="everywhere")` narrow a list of HOME CHANNELS, which
-   * comes from `/api/home/channels` and never passes through here. Without this,
-   * each of them would restate the rule — and a restated fence is the one that
-   * drifts. ⚠ There is exactly ONE reader, `tools/home-scopes.ts ›
-   * narrowToLock`; add a second only by routing it through that.
+   * (2026-08-28). `getWorkspaceList` narrows the CONTAINER directory; the
+   * account-wide CHANNEL reads narrow rows that come from
+   * `/api/channels/account/**` and never pass through here. Without this, each
+   * would restate the rule — and a restated fence is the one that
+   * drifts. ⚠ There is exactly ONE reader, {@link narrowToLock} below; add a
+   * second only by routing it through that.
    */
   lockedWorkspaceId(): string | null;
 }
@@ -153,11 +154,9 @@ export function createWorkspaceDirectory(
   async function getWorkspaceList(): Promise<WorkspaceListItem[]> {
     // 🔒 THE LOCK SHORT-CIRCUITS BEFORE THE CACHE IS EVEN READ. A locked session
     // sees its container and nothing else — including no evidence that anything
-    // else exists. ⚠ It answers `[lockedTo]` rather than filtering the directory
-    // through `isStandardWorkspace`, which would answer `[]`: the agent needs a
-    // name to target, and hiding the room it is standing in helps nobody.
+    // else exists.
     if (lockedTo) return [lockedTo];
-    return (await getAllWorkspaces()).filter(isStandardWorkspace);
+    return getAllWorkspaces();
   }
 
   async function resolveWorkspaceRef(
@@ -170,9 +169,6 @@ export function createWorkspaceDirectory(
     if (lockedTo) {
       return ref === lockedTo.id || ref === lockedTo.slug ? lockedTo : null;
     }
-    // ⚠ Resolves against the UNFILTERED directory: `workspace=<link id>` is how
-    // an agent acting in a home channel addresses its container, and the
-    // container is deliberately absent from every listing.
     // ⚠ A workspace slug can be shaped like a UUID, so match id AND slug on the
     // first pass — id alone forces a wasteful refresh.
     let list = await getAllWorkspaces();
@@ -185,68 +181,111 @@ export function createWorkspaceDirectory(
     return match ?? null;
   }
 
-  /**
-   * isError for a no-`workspace=` call with no session default. Lists the
-   * caller's workspaces so the agent can retry explicitly; mirrors the backend
-   * WORKSPACE_REQUIRED envelope. Reads the boot-seeded cache — no extra
-   * loopback on the happy path.
-   */
-  async function noWorkspaceError(): Promise<ToolResponse> {
-    let list: WorkspaceListItem[];
-    // Start from the boot-time load state; a fresh successful load supersedes
-    // it (an unseeded cache after a failed boot means this really retries).
-    let loadFailed = options.directoryLoadFailed ?? false;
-    try {
-      list = await getWorkspaceList();
-      loadFailed = false;
-    } catch {
-      list = options.directory ?? [];
-    }
-    if (list.length === 0) {
-      return {
-        isError: true,
-        content: [
-          {
-            type: "text" as const,
-            text: loadFailed
-              ? "We couldn't load your workspace memberships just now — this looks like a transient backend issue, not that you have none. Retry in a moment, and reconnect if it persists."
-              : "You're not an active member of any workspace, so there's nothing to act on. Create one in the Dopl web app, then reconnect.",
-          },
-        ],
-      };
-    }
-    const lines = [
-      // ⚠ THE SENTENCE IS UNCHANGED AND THE `reason=` PREFIX IS ADDITIVE
-      // (A14). `narration.test.ts` and `workspace-kind.test.ts` both pin this
-      // copy by phrase; what the code buys is a literal an agent can match,
-      // which prose alone never gave it.
-      refusal(
-        WORKSPACE_REQUIRED,
-        `This connection has no default workspace because you belong to ${list.length} workspaces. Pass \`workspace=<slug_or_id>\` on this call — pick one:`,
-      ),
-      "",
-      // ⚠ The count and the list are STANDARD memberships only (`getWorkspaceList`
-      // filters through `isStandardWorkspace`). An agent that meant to act in a
-      // home channel would otherwise read this as "your rooms are not here" with
-      // no next step; the container id is the only handle that reaches one.
-      `⚠ Home channels are not among these. They are addressed the same way — \`workspace=<container id>\` — but their ids come from \`dopl_home(op="list_channels")\`, not from this list.`,
-      "",
-      UNTRUSTED_DIRECTORY_NOTE,
-      "",
-    ];
-    for (const w of list) {
-      lines.push(`- ${inlineOr(w.name, UNNAMED_WORKSPACE)} (slug: \`${w.slug}\`, role: ${w.role})`);
-    }
-    return {
-      isError: true,
-      content: [{ type: "text" as const, text: lines.join("\n") }],
-    };
-  }
-
   return {
     getWorkspaceList,
     resolveWorkspaceRef,
-    noWorkspaceError,
     lockedWorkspaceId: () => lockedTo?.id ?? null,
   };
+}
+
+/**
+ * 🔒 **WHAT KIND OF CONTAINER THIS ROW IS, ASKED POSITIVELY AND IN ONE PLACE**
+ * (F-564).
+ *
+ * ⚠ **IT IS A `switch` ON `kind`, NOT `!isStandardWorkspace(…)`.** That
+ * predicate answers "does this belong in the rail"; its NEGATION was read as
+ * "therefore a home channel" at four sites in this package, which was correct
+ * by accident while `standard` and `link` were the only kinds and stops being
+ * correct the moment `20260920120000` mints a `personal` container for every
+ * user at once. A `default` arm that says "workspace" also fails safe for a
+ * kind added later: an unknown container is not silently advertised as somebody
+ * else's room.
+ *
+ * ⚠ **RENDERED, NEVER INFERRED BY THE READER.** A container and a workspace are
+ * different things to the operator, and every surface that lists these rows
+ * prints this label — which is what lets `getWorkspaceList()` stop hiding
+ * containers (B10) without ever calling one a workspace.
+ */
+export type ContainerKind = "workspace" | "home channel" | "personal";
+
+export function containerKind(row: { kind?: WorkspaceKind }): ContainerKind {
+  switch (row.kind ?? "standard") {
+    case "link":
+      return "home channel";
+    case "personal":
+      return "personal";
+    default:
+      return "workspace";
+  }
+}
+
+/**
+ * 🔒 THE LOCK, APPLIED — and the ONLY reader of
+ * {@link WorkspaceDirectory.lockedWorkspaceId} outside this module.
+ *
+ * ⚠ **GENERIC OVER ANYTHING CARRYING A `workspaceId`, ON PURPOSE.** The
+ * account-wide channel reads (T20/T21/T22) need exactly this narrowing over a
+ * different row: `GET /api/channels/account/**` is `withUserAuth` and answers
+ * the WHOLE ACCOUNT, so the route cannot narrow and the directory those rows
+ * never pass through cannot either. The alternative was a second reader of the
+ * lock, and a second reader IS the enumeration oracle B3 exists to deny.
+ * **Widening the parameter is how a second caller routes THROUGH this instead
+ * of around it.**
+ *
+ * ⚠ It narrows on the SAME id `getWorkspaceList` answers with — one lock, one
+ * identity, no second notion of "which room am I in". Unlocked ⇒ unchanged.
+ *
+ * ⚠ AND IT IS A TRIPWIRE, NOT A FENCE. Bash can open a second unpinned MCP
+ * connection, or issue the loopback HTTP directly, and neither passes through
+ * this module. What refuses cross-container reads is the container-locked
+ * credential and the audience ceiling in
+ * `src/features/knowledge/server/service-audience.ts`.
+ */
+export function narrowToLock<T extends { workspaceId: string }>(
+  rows: T[],
+  directory: WorkspaceDirectory,
+): T[] {
+  const locked = directory.lockedWorkspaceId();
+  if (!locked) return rows;
+  return rows.filter((r) => r.workspaceId === locked);
+}
+
+/**
+ * ONE SCOPE the `dopl_search(scope="everywhere")` fan-out searches.
+ *
+ * ⚠ `kind` IS RENDERED, NOT INFERRED BY THE READER — see {@link containerKind}.
+ */
+export interface SearchLeg {
+  /** The workspace id every per-leg request runs against. */
+  id: string;
+  /** Neutralized display name — a VALUE, spliced into a heading we wrote. */
+  label: string;
+  kind: ContainerKind;
+  /** Slug, for a standard workspace only — a container's is not advertised. */
+  slug?: string;
+}
+
+/**
+ * THE LEG LIST: every container the caller is in.
+ *
+ * 🔒 **ONE NARROWED SOURCE, AND SINCE B10 IT IS THE ONLY ONE.** It used to be
+ * two — the standard-workspace directory plus a second `GET /api/home/channels`
+ * read, de-duped by id, with its own failure mode and its own "your home
+ * channels could not be read" footnote. `getWorkspaceList()` answers for both
+ * halves now that containers are no longer filtered out of it, so a locked
+ * session searches exactly one scope, nothing can be searched twice, and there
+ * is no second read to fail.
+ */
+export async function searchLegs(
+  directory: WorkspaceDirectory,
+): Promise<SearchLeg[]> {
+  return (await directory.getWorkspaceList()).map((w) => {
+    const kind = containerKind(w);
+    return {
+      id: w.id,
+      label: w.name,
+      kind,
+      ...(kind === "workspace" ? { slug: w.slug } : {}),
+    };
+  });
 }
