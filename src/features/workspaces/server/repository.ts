@@ -101,27 +101,21 @@ export interface SoleOwnedStandardWorkspace {
  * The caller's SOLE owned standard workspace — **billing's question and only
  * billing's** (spec §7 answer (a), the one option that changes nobody's bill).
  *
- * 🔒 **THE DERIVED DEFAULT IS DELETED** (Samuel's ruling B10). This
- * function is what is LEFT of the lookup that used to answer "the default": the
- * legacy `slug='default'` branch is gone, the oldest-owned pick is gone, and
- * what remains refuses rather than guessing. Two callers, both of them a
- * question about MONEY — the Stripe grandfather path
- * (`billing/server/webhook-handler.ts`) and the container burn reroute
- * (`billing/server/credits-service.ts › resolveBillingTarget`). **Tenancy never
- * calls it**: every "where am I" answer is the caller's personal container.
+ * 🔒 **THE DERIVED DEFAULT IS DELETED** (Samuel's ruling B10). This is what is
+ * LEFT of the lookup that answered "the default": the legacy `slug='default'`
+ * branch and the oldest-owned pick are gone, and what remains REFUSES rather
+ * than guessing — the old shape picked the oldest of N and warned, and a wrong
+ * guess there is a charge against a workspace nobody chose. `count` comes back
+ * so a caller can name WHICH refusal (nothing to bill vs. too many) without a
+ * second read.
  *
- * ⚠ REFUSES ON AMBIGUITY BY CONSTRUCTION, which is the behaviour change. The
- * old shape picked the oldest of N and warned; a wrong guess there is a charge
- * against a workspace nobody chose. `count` is returned so the caller can say
- * WHICH refusal it is (nothing to bill vs. too many to choose) without a second
- * read.
- *
+ * ⚠ TWO CALLERS, BOTH ABOUT MONEY — the Stripe grandfather path and the
+ * container burn reroute. **Tenancy never calls it**: every "where am I" answer
+ * is the caller's personal container.
  * ⚠ OWNERSHIP-based, diverging from active membership, and that is right for a
- * bill: the plan hangs off the owner. It MUST NOT be used for request auth.
- *
- * ⚠ `link` and `personal` containers are never candidates — neither carries a
- * plan. The filter is the POSITIVE `isStandardWorkspace` (§4A, F-295), so a
- * fourth kind is excluded by default rather than admitted by default.
+ * bill — the plan hangs off the owner. It MUST NOT be used for request auth.
+ * ⚠ Containers are never candidates (neither kind carries a plan), through the
+ * POSITIVE `isStandardWorkspace` (§4A, F-295).
  */
 export async function findSoleOwnedStandardWorkspace(
   userId: string
@@ -410,14 +404,13 @@ export async function insertWorkspaceWithOwnerMembership(
 /**
  * Race-proof SELECT-or-INSERT of the caller's PERSONAL CONTAINER via the
  * `ensure_personal_container` RPC (migration 20260920120000): a per-owner
- * transaction-scoped advisory lock serializes concurrent callers so two cold
- * boots cannot mint two containers. `created` = THIS call made it.
+ * advisory lock serializes concurrent callers so two cold boots cannot mint two
+ * containers. `created` = THIS call made it.
  *
- * ⚠ TAKES ONLY AN OWNER. The name and `created_at` are the DATABASE's to
- * choose — it mints them from the row it is replacing
+ * ⚠ TAKES ONLY AN OWNER, so it takes no `CreateWorkspaceArgs`: the name and
+ * `created_at` are the DATABASE's, minted from the row this container replaces
  * (`personal_container_origin_of`, migration 20260922120000) so nothing is
- * invented — and the slug is the constant `personal`. That is why
- * this takes no `CreateWorkspaceArgs`: there is nothing for a caller to name.
+ * invented, and the slug is the constant `personal`.
  *
  * ⚠ `kind` COMES BACK AND MUST. `mapWorkspaceRow` reads an ABSENT kind as
  * `standard` (§4A), which would put a personal container in the rail; the RPC

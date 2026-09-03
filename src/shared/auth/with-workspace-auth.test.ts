@@ -4,8 +4,9 @@
  * plumbing runs:
  *   - `workspaceIdFromQuery` lets `?workspaceId=` participate; header wins;
  *   - API-key workspace lock wins over both (403 on mismatch);
- *   - `minRole` enforced after auto-target;
- *   - WORKSPACE_REQUIRED / WORKSPACE_INVALID render as the flat envelope.
+ *   - `minRole` enforced after resolution;
+ *   - no header resolves the caller's own container (ruling B10);
+ *   - WORKSPACE_INVALID renders as the flat envelope.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -14,7 +15,6 @@ import type {
   Role,
   Workspace,
   WorkspaceMembership,
-  WorkspaceWithRole,
 } from "@/features/workspaces/types";
 
 const state = vi.hoisted(() => ({
@@ -101,21 +101,6 @@ const UUID_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 /** The caller's personal container — never one of the granted memberships. */
 const UUID_HOME = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
-function wsWithRole(id: string, slug: string, role: Role): WorkspaceWithRole {
-  return {
-    id,
-    ownerId: "owner",
-    name: `${slug} ws`,
-    slug,
-    publicId: `pub-${id}`,
-    description: null,
-    iconUrl: null,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    role,
-  };
-}
-
 function workspace(id: string, slug: string): Workspace {
   return {
     id,
@@ -143,41 +128,30 @@ function membership(id: string, role: Role): WorkspaceMembership {
   };
 }
 
-/** Wire the repo so the given workspace ids resolve as active memberships. */
-function grantMemberships(entries: Array<{ id: string; slug: string; role: Role }>) {
+/**
+ * Wire the repo so the given workspace ids resolve as active memberships, and
+ * `home` as the caller's PERSONAL CONTAINER — what a header-less request
+ * resolves to (ruling B10). ⚠ The container is deliberately NOT one of
+ * `entries`: a fixture where it is also a listed membership cannot tell
+ * "answered the container" from "auto-targeted a workspace".
+ */
+function grantMemberships(
+  entries: Array<{ id: string; slug: string; role: Role }>,
+  home?: Role
+) {
+  const container = { ...workspace(UUID_HOME, "personal"), kind: "personal" as const };
+  if (home) {
+    entries = [...entries, { id: UUID_HOME, slug: "personal", role: home }];
+    mockRepo.ensurePersonalContainerRow.mockResolvedValue({ workspace: container, created: false });
+  }
   const byId = new Map(entries.map((e) => [e.id, e]));
-  mockRepo.findWorkspaceById.mockImplementation(async (id: string) => {
-    const e = byId.get(id);
-    return e ? workspace(e.id, e.slug) : null;
-  });
+  mockRepo.findWorkspaceById.mockImplementation(async (id: string) =>
+    id === UUID_HOME ? container : byId.has(id) ? workspace(id, byId.get(id)!.slug) : null
+  );
   mockRepo.findMembership.mockImplementation(async (id: string) => {
     const e = byId.get(id);
     return e ? membership(e.id, e.role) : null;
   });
-}
-
-/**
- * The caller's HOME, which is what a header-less request now resolves to
- * (ruling B10). ⚠ It is NOT one of `grantMemberships`' entries on purpose: a
- * fixture where the container is also a listed membership cannot tell "answered
- * the container" from "auto-targeted a workspace".
- */
-function grantOwnContainer(role: Role = "owner") {
-  const container = { ...workspace(UUID_HOME, "personal"), kind: "personal" as const };
-  mockRepo.ensurePersonalContainerRow.mockResolvedValue({
-    workspace: container,
-    created: false,
-  });
-  const byId = mockRepo.findWorkspaceById.getMockImplementation();
-  const byMembership = mockRepo.findMembership.getMockImplementation();
-  mockRepo.findWorkspaceById.mockImplementation(async (id: string) =>
-    id === UUID_HOME ? container : ((await byId?.(id)) ?? null)
-  );
-  mockRepo.findMembership.mockImplementation(async (id: string, userId: string) =>
-    id === UUID_HOME
-      ? membership(UUID_HOME, role)
-      : ((await byMembership?.(id, userId)) ?? null)
-  );
 }
 
 /** Echo handler — surfaces the resolved context for assertions. */
@@ -221,12 +195,11 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
   });
 
   it("ignores ?workspaceId= when the option is OFF (falls through to the caller's home)", async () => {
-    // The named workspace is reachable — so answering the CONTAINER instead is
-    // the proof that the query param never participated by default. (This used
-    // to be proven by a 400 on an ambiguous membership set; there is no such
-    // refusal any more, and the positive form is the stronger assertion.)
-    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
-    grantOwnContainer();
+    // The named workspace is REACHABLE, so answering the container instead is
+    // the proof that the query param never participated by default. (It used to
+    // be proven by a 400 on an ambiguous membership set; no such refusal exists
+    // now, and the positive form is the stronger assertion.)
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }], "owner");
     const res = await echo(req(`/api/x?workspaceId=${UUID_A}`), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect((await res.json()).workspaceId).toBe(UUID_HOME);
@@ -311,16 +284,16 @@ describe("the credential workspace lock (LIVE since Home Knowledge Panels M5)", 
 
 describe("resolution outcomes surfaced by the wrapper", () => {
   it("no header resolves the caller's own container", async () => {
-    grantOwnContainer("owner");
+    grantMemberships([], "owner");
     const res = await echo(req("/api/x"), { params: Promise.resolve({}) });
     expect(await res.json()).toEqual({ workspaceId: UUID_HOME, role: "owner" });
   });
 
   it("403 WORKSPACE_FORBIDDEN when the container role is below minRole", async () => {
-    // ⚠ Unreachable in production — a container's only member is its owner —
-    // and pinned anyway: the role floor must run on the resolved membership
-    // whatever resolved it, not only on a named workspace.
-    grantOwnContainer("viewer");
+    // ⚠ Unreachable in production (a container's only member is its owner) and
+    // pinned anyway: the floor runs on the resolved membership whatever
+    // resolved it, not only on a named workspace.
+    grantMemberships([], "viewer");
     const guarded = withWorkspaceAuth(
       async (_req, ctx) => NextResponse.json({ workspaceId: ctx.workspaceId }),
       { minRole: "member" }
@@ -331,18 +304,18 @@ describe("resolution outcomes surfaced by the wrapper", () => {
   });
 
   it("🔒 N memberships and no header is NOT a refusal any more — it is home", async () => {
-    // ⚠ THE REVERT DETECTOR FOR B10. This was a 400 `WORKSPACE_REQUIRED`
-    // carrying a `workspaces: [...]` list to pick from; the count that produced
-    // it is gone, so the busiest account and the emptiest take one path.
-    mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([
-      wsWithRole(UUID_A, "acme", "owner"),
-      wsWithRole(UUID_B, "beta", "member"),
-    ]);
-    grantMemberships([
-      { id: UUID_A, slug: "acme", role: "owner" },
-      { id: UUID_B, slug: "beta", role: "member" },
-    ]);
-    grantOwnContainer();
+    // ⚠ THE REVERT DETECTOR FOR B10. This was a 400 `WORKSPACE_REQUIRED` with a
+    // `workspaces: [...]` list to pick from; the count that produced it is gone,
+    // so the busiest account and the emptiest take one path. ⚠ The membership
+    // DIRECTORY is deliberately left unprimed — the last assertion is that it is
+    // never read, and priming it would hide a resolver that still counted.
+    grantMemberships(
+      [
+        { id: UUID_A, slug: "acme", role: "owner" },
+        { id: UUID_B, slug: "beta", role: "member" },
+      ],
+      "owner"
+    );
     const res = await echo(req("/api/x"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect((await res.json()).workspaceId).toBe(UUID_HOME);

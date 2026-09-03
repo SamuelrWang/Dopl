@@ -439,6 +439,36 @@ went over the 500-line cap as a result (F-562, split below). Every other conflic
 | **B15** copies off | `v2/b-copies-off` | `packages/mcp-server/src/tools/{knowledge-ops-copy,agent-ops-copy,copy-target,shelf}.ts` + the two enums, `src/features/agent-templates/lib/template-draft.ts`, `apps/desktop-ui/src/pages/home/agent-copy.tsx` | B11: delete the copy ops (681 MCP lines + 490 draft/UI); drop `home_scoped`; delete `shelf.ts` and both `resolveHomeScope` | F-600..609 | `20260923120000_drop_home_scoped` |
 | **B16** old ops + TS fences off | `v2/b-old-ops-off` | `packages/mcp-server/src/tools/channel-ops-await*.ts`, `channel-ops-ping.ts`, `channel-doctrine.ts`, `src/features/channels/server/{service-await*,service-pings*}.ts`, `src/app/api/pings/**`, `supabase/migrations/20260907130000_channel_pings.sql`, the five `canSee*` → one `src/shared/` predicate | Retire the redirects; delete the `await` lane (AWAITING 3,914 + two handlers + the budget module) and the ping lane; **delete `20260907130000` unapplied** (B8); delete the TS predicates RLS now holds, one at a time, each behind its own green redteam test | F-610..619 | — |
 
+### B14 landed — 2026-09-02, branch `v2/b-default-workspace-off` (slice record)
+
+Three commits, not pushed, no migration applied. **§3 rows 1–17 are done or explicitly reassigned**;
+the deltas from this document, each argued in the commit that made it:
+
+| Row | What this document said | What shipped |
+|---|---|---|
+| 1 | `findSoleOwnedStandardWorkspace`, billing-only, legacy branch deleted | as written, **plus `countWorkspacesOwnedBy` folded into its `{workspace, count}` return** and `findWorkspaceBySlug` deleted (its only caller was the legacy branch) |
+| 2 | `ensurePersonalContainer`; *"signup still seeds a standard workspace"* | ⚠ **THE PARENTHESIS IS THE ONE PLACE THIS SLICE CONTRADICTS THE SPEC.** Row 14 repoints the auth callback at `ensurePersonalContainer`, and nothing else in the signup path creates a workspace — so a new user gets ONE personal container and no standard workspace, which is what the brief's acceptance test asks for and what "all workspaces are just normal workspaces" means. The starter corpus seeds into the container. **Recorded, not glossed: if Samuel meant signup to keep minting a standard workspace, one call comes back.** |
+| 3 | both SQL objects dropped | as written — and `default_workspace_of` is RENAMED to `personal_container_origin_of` rather than inlined, because it is a live dependency of the mint and F-560's exact revert reads it (F-630) |
+| 4 | regenerate `shared/supabase/types.ts` | **NOT DONE, AND IT IS NOT OWED YET.** `supabaseAdmin()` returns an untyped `SupabaseClient`, so no `.rpc(…)` name is compiler-checked; that file describes PRODUCTION and its own header says to regenerate in the change that APPLIES the migrations |
+| 5 | no count; `WORKSPACE_REQUIRED` and `WorkspaceChoice[]` deleted | as written |
+| 12–13 | `findSoleOwnedStandardWorkspace`, refusing on ambiguity | as written; the burn gets a third `UnmeteredReason`, the webhook a second `console.error` |
+| 14 | all call `ensurePersonalContainer`; `/billing` renders the list; route deleted | as written. ⚠ The route's deletion overrides **F-164**'s standing condition (a minimum-version floor that does not exist) — transferred to **F-631**, unmeasured |
+| 17 | `isStandardWorkspace` into `@dopl/contracts`; `WorkspaceKind` gains `personal` | **already done at the batch-2 integration and VERIFIED, not repeated.** The predicate deliberately did NOT move — that package is type-only |
+
+Rows 6–11 and 15–16 are `packages/mcp-server`'s and the SPA's: **B13's**, untouched here. The server
+can no longer emit `WORKSPACE_REQUIRED`, so B13 deletes a constant with no producer.
+
+**Outside B14's ownership, and each is one line or one comment:** the two `resolveHomeScope` fences
+(B15's) each swap an import for `isOwnPersonalContainer`; `home-channel-derivation.test.ts` grows a
+second map (F-632); `server/authz.ts` branches one message on the kind; `apps/desktop-ui/src/pages/boot/use-boot-state.ts`
+stops naming a deleted route; six billing/SPA comments lose the phrase.
+
+**Findings:** F-630 (B11's revert names the renamed helper — a doc edit owed before those two
+migrations run), F-631 (the deleted route's version floor, unmeasured), F-632 (the F-564 gate's
+precondition was unsatisfiable), F-633 (a gate's name is part of its scope).
+
+---
+
 **Sequence, and why.** id-resolution (B2) → credential-axis split (B3) → `workspace=` removal (B13),
 per tenancy risk 4. RLS made real per table behind a flag (B7, B12) **before** any TS fence is deleted
 (B16), per risk 1. Ops collapse with redirects (B8) **before** retirement (B16). Team retirement (B1)

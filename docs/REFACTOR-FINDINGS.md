@@ -982,12 +982,12 @@ COMMIT;
 - Status: open
 
 ### F-164: Two boot-chain follow-ups
-- Location: `apps/desktop-ui/src/pages/chats/index.tsx:49,56`; `apps/desktop-ui/src/components/settings-modal/settings-modal.tsx:64`; `src/app/api/workspaces/ensure-default/route.ts`
+- Location: `apps/desktop-ui/src/pages/chats/index.tsx:49,56`; `apps/desktop-ui/src/components/settings-modal/settings-modal.tsx:64`; the dedicated provisioning route under `src/app/api/workspaces/` (DELETED 2026-09-02 — see the follow-up below)
 - Found during: launch-readiness P0-2 (2026-08-07)
 - Severity: smell
 - **Rewritten down to the follow-ups 2026-08-08.** The collapse landed: launch → actionable screen is now `bridge.getAuthState()` (IPC, local, no network) → `POST /api/boot` → the page's own data. 5 round trips → 1.
 - **Two details of the client half are load-bearing and must not be "tidied":** `seedBootAnswer` seeds DURING RENDER, not in an effect (React runs child effects first, so `<Navigate>` and the `<Outlet/>` page would each dispatch their own request before a parent effect's seed landed), and it seeds only where nothing is cached, so a live answer is never clobbered by an older boot payload.
-- **Open follow-up — `/api/workspaces/ensure-default` now has no runtime caller in this repo.** It stays deployed on purpose: an older shipped DMG still calls it. **Delete it only alongside a minimum-version floor that excludes those builds.**
+- **Follow-up CLOSED BY DELETION 2026-09-02 (wave B B14), and the caveat this entry raised is NOT discharged — it is transferred to F-631.** The route went with the default-workspace concept (spec §3 row 14). This entry's own condition — *"delete it only alongside a minimum-version floor that excludes those builds"* — **was not met**, because that floor does not exist to add. What makes the deletion survivable is a different fact, and it is recorded rather than assumed: an older DMG calling it would now 404 at cold launch, so F-631 states the exposure and what would measure it.
 - **Open follow-up — the chats page and the settings modal still READ `resolve`/`me` directly.** They are free today because boot seeds their keys, but that is a CONVENTION, not a structure — both should move to `useWorkspaceRoute`.
 - Status: open
 
@@ -7846,3 +7846,39 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **THE SHAPE.** `node --test` with no glob collects `*-test.js` by default, so the headless Electron smoke script was run as a test, launched no Electron, and failed — permanently, one failure, on every bare run. `npm test` passes `test/**/*.mjs` and never saw it, **so the two invocations of the same suite disagreed and the by-hand one was always red by one**. A red that means nothing trains a reader to skip the red that means something, which is the cost, not the failure itself.
 - Resolution: renamed to `scripts/smoke.js` — the file is an Electron entry point and its NAME was the whole defect. `npm run smoke` and the three docs that name it move with it. Bare `node --test` is now 3,016 / 0.
 - Status: FIXED.
+
+### F-630 — B11's revert reads a helper B14 renames, and it is a COMMENT, so nothing breaks and nothing warns (2026-09-02)
+
+- Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql` (the header's `ROLLBACK` block, two `UPDATE … SET workspace_id = public.default_workspace_of(…)` lines); the rename is `20260922120000_drop_default_workspace_rpc.sql` §1.
+- Found during: wave B B14, deciding whether to inline `default_workspace_of` into `ensure_personal_container` or to rename it.
+- **THE SHAPE.** F-560 records that B11's revert is EXACT because the mint and the revert read "where this container came from" through ONE expression. B14 deletes the default-workspace concept, and that function's NAME is the concept. Renaming it to `personal_container_origin_of` keeps the property; what it cannot keep is the other migration's HEADER, which is prose in a file B14 does not own. An operator reverting B11 after `20260922120000` has run pastes two `UPDATE`s naming a function that no longer exists — a clean `42883`, not a silent wrong write, but at the worst possible moment.
+- ⚠ **INLINING WOULD HAVE BEEN WORSE, NOT SAFER.** It removes the name from both places and leaves the mint and the revert stating the same five-line SELECT twice — which is exactly the shape F-560 exists to prevent, and the copy that rots is always the revert's.
+- Recorded in the one place an operator running that revert would already be reading: `20260922120000`'s header names the substitution explicitly.
+- Resolution owed, OUTSIDE B14's OWNERSHIP: `20260920120000`'s header takes the successor's name. **Whoever applies these two migrations should make that edit first** — the file is unapplied, so editing it is legal until the moment it is not.
+- Status: OPEN, and it is a documentation edit, not a code one.
+
+### F-631 — the provisioning route is deleted and the minimum-version floor its own finding asked for still does not exist (2026-09-02)
+
+- Location: deleted — the dedicated provisioning route under `src/app/api/workspaces/`; the record of why it survived is F-164's third bullet.
+- Found during: wave B B14, executing spec §3 row 14 (*"the dedicated route is deleted"*).
+- **THE DISAGREEMENT, STATED RATHER THAN PICKED.** F-164 (2026-08-07) says the route *"stays deployed on purpose: an older shipped DMG still calls it. Delete it only alongside a minimum-version floor that excludes those builds."* The wave-B spec says delete it. Both are instructions; only one could be followed, and **the spec is the later ruling**, so the route is gone and the condition is recorded here instead of being quietly dropped.
+- **WHAT THE EXPOSURE ACTUALLY IS.** A DMG old enough to call it is one shipped before 2026-08-07, when `POST /api/boot` took over. Such a build's cold launch would 404 at its provisioning step. Nothing in this repo has called the route since that date (`grep -rn "ensure-default" apps src` finds only prose and one SPA test asserting boot does NOT call it).
+- ⚠ **NOBODY HAS MEASURED WHETHER ANY SUCH BUILD IS STILL RUNNING**, and that is the whole finding. The measurement is a route-hit count over the deploy's access logs before the release that carries this ships — **a fact only the deployment holds** (CLAUDE.md doc rule 4). A minimum-version floor remains unbuilt.
+- Status: OPEN. Not blocking the code; blocking a claim that the deletion is free.
+
+### F-632 — the F-564 gate's precondition was unsatisfiable, because one of its eight sites is a FENCE (2026-09-02)
+
+- Location: `src/features/workspaces/home-channel-derivation.test.ts` (the map and the "may be applied when EMPTY" case); the site is `src/features/workspaces/server/authz.ts › assertMemberAddable`.
+- Found during: wave B B14, closing the F-564 sites inside its own ownership.
+- **THE SHAPE.** The gate's contract was *"when this set is empty, `20260920120000` may be applied"*, over a set derived by scanning for three shapes of `!isStandardWorkspace`. Seven of the eight sites are LABELS — they read the negation and print "home channel" — and repointing each to `kind === "link"` is right. The eighth is a FENCE: `assertMemberAddable` refuses to add a member to a container of any kind, and **the negation is what makes a fourth kind inherit that refusal instead of opting into it**. Repointing it would have opened personal containers to member-add — i.e. the gate would have gone green by introducing the bug F-295 exists to prevent.
+- ⚠ **SO THE SET COULD NEVER EMPTY, AND THE MIGRATION COULD NEVER BE APPLIED** by its own stated rule. The gate was written in review, one day old, and the defect is not the scan — a scan cannot tell a fence from a label — it is the single map.
+- Resolution: TWO maps. `OPEN_SITES` (six, all B13's and B15's) is what still gates the migration; `FENCE_SITES` holds sites whose negation is correct, and an entry there must PROVE the repair — the gate asserts the file branches its MESSAGE on the kind — so it cannot be used to silence a mislabel. `assertMemberAddable`'s sentence now names a home channel only for a `link` container.
+- Status: RESOLVED. ⚠ The migration's precondition is unchanged in substance: six sites, in two other slices.
+
+### F-633 — a grep gate named after the thing it forbids reintroduces it (2026-09-02)
+
+- Location: `src/features/workspaces/b10-no-derived-default.test.ts`; the citation that exposed it is in `workspaces/server/service.ts › PERSONAL_CONTAINER_PLACEHOLDER_NAME`.
+- Found during: wave B B14, writing the gate that keeps the default-workspace concept deleted.
+- **TWO SELF-REFERENCES, AND THE SECOND IS THE INTERESTING ONE.** The first is obvious: the file quotes five deleted strings as its red proof, so it matches itself and must be excluded. The second is not: the file was first named for the concept, `service.ts` cites it by path the way this repo's comments cite everything, and **that citation put the banned phrase back into a file in scope** — a gate that fails because of its own name, in a file it does not scan.
+- Resolution: renamed, and the reason is written where the exclusion is. ⚠ The general form is worth keeping: **a gate's NAME is part of its scope**, because the docs convention here is to cite files by path.
+- Status: RESOLVED.

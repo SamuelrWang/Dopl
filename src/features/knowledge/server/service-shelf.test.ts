@@ -83,7 +83,6 @@ const mockIsOwnHome = vi.mocked(isOwnPersonalContainer);
 const mockSeed = vi.mocked(seedWorkspace);
 
 const HOME_WS = "ws-home";
-const OTHER_WS = "ws-other";
 const USER = "u-operator";
 
 /** A signed-in person in their own personal container. */

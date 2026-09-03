@@ -61,7 +61,7 @@
 -- AND IT IS A COMMENT, NOT CODE.** An operator reverting B11 after this file has
 -- run substitutes `public.personal_container_origin_of` in the two `UPDATE`s;
 -- the shape is unchanged. Recorded here rather than by editing another slice's
--- migration (F-596).
+-- migration (F-630).
 --
 -- ── ROLLBACK ───────────────────────────────────────────────────────────────
 --
