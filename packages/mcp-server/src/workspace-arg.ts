@@ -79,6 +79,21 @@ export const WORKSPACE_ARG_OPS: Record<string, ReadonlySet<string> | null> = {
 };
 
 /**
+ * 🔒 **WHERE `workspace=` IS HONOURED, AS A SENTENCE — RENDERED FROM THE TABLE
+ * ABOVE AND NEVER RETYPED.** The mint's success line has to tell an operator's
+ * agent what to do with the container id it was just handed, and it said *"on
+ * any other tool"* until 2026-09-02: false on the day B13 shipped, because the
+ * arg is IGNORED everywhere outside this table. A hand-written list would be the
+ * same claim one release later, so it is derived — a row added above changes
+ * this sentence with it.
+ */
+export function workspaceArgTargets(): string {
+  return Object.entries(WORKSPACE_ARG_OPS)
+    .map(([tool, ops]) => (ops === null ? tool : `${tool} (${[...ops].join(", ")})`))
+    .join(", ");
+}
+
+/**
  * Does this op still take `workspace=`? ⚠ A tool with NO row takes it nowhere —
  * fail closed, so a tool added without a row cannot silently inherit routing.
  */

@@ -20,6 +20,7 @@ import type { ZodRawShape } from "zod";
 
 import { registerWorkspaceMetaTools } from "./meta-tools.js";
 import { UNKNOWN_CALLER } from "./tools/identity.js";
+import { WORKSPACE_ARG_OPS } from "./workspace-arg.js";
 import type { ToolResponse } from "./tools/respond.js";
 import type { WorkspaceDirectory } from "./workspace-directory.js";
 
@@ -93,6 +94,22 @@ describe("dopl_workspaces — dispatch", () => {
     expect(text).toContain("workspace=`ws-new`");
     expect(text).toContain("channel=`ch-new`");
     expect(text).toMatch(/cannot add a person/i);
+  });
+
+  it("🔒 names the ops that HONOUR `workspace=`, not \"any other tool\"", async () => {
+    // ⚠ B13 retired the argument everywhere outside `WORKSPACE_ARG_OPS`, where
+    // it is now IGNORED with a footer note. So the mint's advice was false on
+    // the day it shipped: an agent following it spent a call to learn that the
+    // id it had just been given did nothing. The line is RENDERED from that
+    // table, and this asserts the derivation rather than the sentence — a row
+    // added to the table must reach this result.
+    const { handler } = boot();
+    const text = textOf(await handler({ op: "create_home_channel", name: "Ops" }));
+    expect(text).not.toMatch(/on any other tool/i);
+    for (const [tool, ops] of Object.entries(WORKSPACE_ARG_OPS)) {
+      expect(text, tool).toContain(tool);
+      for (const op of ops ?? []) expect(text, `${tool}.${op}`).toContain(op);
+    }
   });
 
   it("refuses create_home_channel with no name, and mints nothing", async () => {

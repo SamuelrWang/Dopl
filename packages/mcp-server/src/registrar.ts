@@ -30,7 +30,12 @@ import {
 
 // ⚠ Re-exported: `tool-budget.test.ts` and `server.test.ts` read the contract
 // through the registrar that injects it, which is where an agent meets it.
-export { WORKSPACE_ARG_DESCRIPTION, WORKSPACE_ARG_OPS, acceptsWorkspaceArg } from "./workspace-arg.js";
+export {
+  WORKSPACE_ARG_DESCRIPTION,
+  WORKSPACE_ARG_OPS,
+  acceptsWorkspaceArg,
+  workspaceArgTargets,
+} from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
 import { appendDoplStatus, withDoplStatus } from "./status-footer.js";

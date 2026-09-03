@@ -210,12 +210,12 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // ⚠ **AND THREE MORE ROSE IN THE BATCH-2 REVIEW, SAME LICENCE** — A16's three
   // knobs, absent from the tree (F-591): `fields=`/`response_format`/`max_chars`.
   // ⚠ 4,145 → 4,024 (B15): `shelf` + `to_workspace` out, three grant args in
-  dopl_agent: 4024,
+  dopl_agent: 4021,
   // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
   dopl_channel: 8677,
   dopl_chats: 3553,
   // ⚠ 5,347 → 5,141 (B15), same trade
-  dopl_kb: 5141,
+  dopl_kb: 5138,
   dopl_map: 250,
   dopl_members: 845,
   dopl_ontology: 2816,
@@ -267,7 +267,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // `list_workspaces` → `dopl_workspaces`), the injected `workspace` contract lost
 // 5 chars × 9 tools, and the briefing fell 56. **B15 then took the copy ops, the
 // `shelf` axis and its two labels out and put the grant op and its three args in.**
-const SERVED_TOTAL_CEILING = 46_857; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review) → 46,857 (batch 3, MEASURED whole at the integration: B13's three-tools-into-one and B15's shelf-for-grant trade, less F-621's 250-char mint)
+const SERVED_TOTAL_CEILING = 46_851; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review) → 46,857 (batch 3, MEASURED whole at the integration: B13's three-tools-into-one and B15's shelf-for-grant trade, less F-621's 250-char mint) → 46,851 (batch-3 review: the grant `to` argument routes at `dopl_workspaces(op="list")` instead of two deleted tools, −3 on each of the two schemas that publish it)
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of

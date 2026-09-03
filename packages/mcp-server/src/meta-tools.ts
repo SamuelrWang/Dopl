@@ -43,6 +43,7 @@ import { z } from "zod";
 import { composeDescription, READ_DESCRIPTION_MAX_CHARS } from "./tools/tool-style.js";
 import { sessionLines, type CallerIdentity } from "./tools/identity.js";
 import { inlineOr } from "./tools/narration.js";
+import { workspaceArgTargets } from "./workspace-arg.js";
 import {
   missingParams,
   ok,
@@ -123,7 +124,11 @@ async function opCreateHomeChannel(
   return ok(
     [
       `Created home channel ${inlineOr(channel.name, UNNAMED_WORKSPACE)}. You are in it alone.`,
-      `Address it with workspace=\`${channel.workspaceId}\` on any other tool, and with channel=\`${channel.channelId}\` on dopl_channel.`,
+      // ⚠ THE OPS ARE NAMED, and they are named from `WORKSPACE_ARG_OPS`
+      // rather than by hand: this line said "on any other tool" and B13 had
+      // already made that false — the arg is IGNORED off that table, so the
+      // advice cost a call and a footer note to discover.
+      `Address it with workspace=\`${channel.workspaceId}\` on ${workspaceArgTargets()}, and with channel=\`${channel.channelId}\` on dopl_channel.`,
       `⚠ You cannot add a person to it. Minting the invitation is an interactive-session act, refused over MCP for every role and token — ask the user to add someone from the Dopl app.`,
     ].join("\n"),
   );

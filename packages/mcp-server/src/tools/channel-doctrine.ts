@@ -32,9 +32,21 @@
  */
 
 export const TENANCY_RULE =
-  "A template resolves ONLY in the container the channel lives in — and a home channel IS its own container, so one on your personal shelf or in a standard workspace does not resolve there however visible it is to you.";
+  "A template resolves ONLY in the container the channel lives in — and a home channel IS its own container, so one in your personal container or in a standard workspace does not resolve there however visible it is to you.";
+/**
+ * ⚠ **IT NAMES THE GRANT, NOT THE COPY** (fixed 2026-09-02 in review). This
+ * sentence read `dopl_agent op="copy", passing to_workspace` for as long as
+ * B15's deletion of the copy ops had been shipped: it sent an agent that had
+ * just been refused a launch to spend its next call on an op and an argument the
+ * surface no longer has. Ruling B11's successor is a LEND — one row, still the
+ * grantor's, reaching everyone the scope holds.
+ *
+ * ⚠ It is a REFUSAL string, not a served one, and that is why the served-surface
+ * scan did not catch it. `retired-vocabulary.test.ts` reads the constants in
+ * this file directly for that reason.
+ */
 export const TENANCY_FIX =
-  'Copy it into this channel\'s container (dopl_agent op="copy", passing to_workspace) or create it there — or launch without a template.';
+  'Lend it into this channel\'s container (dopl_agent op="grant", scope="container", to=<that container>) or create it there — or launch without a template.';
 
 /** The MCP resource URI this text is published at. ⚠ One spelling, imported. */
 export const DOCTRINE_URI = "dopl://doctrine/channels";

@@ -24,6 +24,28 @@
  * whether a `channel-*.ts` SOURCE FILE contains a banned string; this asks what
  * an external connection actually receives, across all eleven tools. A word can
  * pass one and fail the other, and both directions have happened.
+ *
+ * 🔒 ⚠ **AND `listTools()` IS NOT THE WHOLE SURFACE — THAT GAP LET FOUR STALE
+ * ROUTES SHIP** (fixed 2026-09-02 in review). A description and a schema are
+ * what an agent reads BEFORE it calls; a REFUSAL is what it reads at the one
+ * moment it is looking for the next thing to try, which is when a dead route
+ * costs the most. Nothing here saw them, because they are neither served at
+ * connect time nor published as a resource: `channel-doctrine.ts › TENANCY_FIX`
+ * still routed a refused launch at `dopl_agent op="copy", to_workspace` (B15
+ * deleted both), `TENANCY_RULE` still said "personal shelf", and the grant
+ * scope refusal sent a caller to `dopl_home(op="list_channels")` and
+ * `list_workspaces` (B13 deleted both TOOLS). So the scan takes three sources
+ * now, not one:
+ *
+ *   1. what `listTools()` / `instructions` / the published RESOURCES carry;
+ *   2. every exported STRING of the doctrine module — the refusal prose that is
+ *      pulled on demand or spliced into a result, never served;
+ *   3. results DRIVEN out of the renderers that build them, because a template
+ *      literal only becomes a sentence when something calls it.
+ *
+ * ⚠ **`tools/retired-copy-ops.ts` IS DELIBERATELY NOT A SOURCE.** Its whole job
+ * is to NAME a retired op back to the caller that tried it; scanning it would
+ * fail the suite on the one file that is supposed to say those words.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
@@ -32,6 +54,12 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
 import { createServer } from "./server.js";
+// SOURCE 2 — the doctrine/refusal prose, as a namespace so a constant added to
+// that module joins this scan without anyone remembering to list it.
+import * as doctrine from "./tools/channel-doctrine.js";
+// SOURCE 3 — the renderers. ⚠ Driven, not read: these are template literals.
+import { grantedLine, resolveGrantScopeId } from "./tools/grant.js";
+import type { WorkspaceDirectory } from "./workspace-directory.js";
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -56,6 +84,19 @@ const RETIRED: ReadonlyArray<[string, RegExp]> = [
   ["the copy ops' target argument", /\bto_workspace\b/],
   ["the shelf argument", /\bshelf\b/i],
   ["the dropped column", /home_scoped|homeScoped/],
+  // ⚠ **THE THREE DELETED TOOLS (B13), AND A TOOL NAME IS THE WORST KIND OF
+  // STALE ROUTE**: an argument that no longer parses answers `-32602` and the
+  // agent learns something; a tool that no longer EXISTS answers "unknown
+  // tool", which reads as a broken connection rather than as a retirement.
+  // Their successor is `dopl_workspaces`.
+  [
+    "a retired orientation tool",
+    /\bdopl_home\b|\blist_workspaces\b|\bcurrent_workspace\b/,
+  ],
+  // …and the ops those tools carried. Banned separately because a SURVIVING
+  // tool can name one: the grant refusal routed at `op="list_channels"` for a
+  // release after the tool holding it was deleted.
+  ["a retired orientation op", /\blist_channels\b|\bcreate_channel\b/],
 ];
 
 /** Enough of the client for registration. ⚠ No handler runs on this path. */
@@ -109,7 +150,47 @@ beforeAll(async () => {
       read.contents.map((c) => ("text" in c ? c.text : "")).join(""),
     ]);
   }
+
+  // ── SOURCE 2: the doctrine module's prose, whether or not it is published ──
+  for (const [name, value] of Object.entries(doctrine)) {
+    if (typeof value === "string") served.push([`channel-doctrine.${name}`, value]);
+  }
+
+  // ── SOURCE 3: results driven out of the renderers that build them ─────────
+  for (const [where, body] of await renderedResults()) served.push([where, body]);
 });
+
+/**
+ * The RESULT strings a caller only sees by making the call. ⚠ Each one is
+ * driven through its real renderer rather than imported: they are template
+ * literals, so a constant read at its source is not the sentence an agent gets
+ * — the same reason this file measures `listTools()` over a transport.
+ *
+ * ⚠ **THE REFUSALS ARE THE POINT.** A caller reads a refusal at the one moment
+ * it is choosing what to try next, so a dead route named there costs a call and
+ * an inference about the connection. Add a renderer here whenever one starts
+ * naming another tool.
+ */
+async function renderedResults(): Promise<Array<[string, string]>> {
+  const text = (r: { content: Array<{ type: string; text?: string }> }) =>
+    r.content.map((c) => c.text ?? "").join("\n");
+  // A directory that resolves NOTHING — the refusal branch, which is the one
+  // that has to tell the caller where a container id comes from.
+  const noDirectory = {
+    resolveWorkspaceRef: async () => null,
+  } as unknown as WorkspaceDirectory;
+  const refusal = await resolveGrantScopeId(noDirectory, "container", "nope");
+  return [
+    [
+      "grant.resolveGrantScopeId (unresolvable container)",
+      typeof refusal === "string" ? refusal : text(refusal),
+    ],
+    [
+      "grant.grantedLine",
+      text(grantedLine("knowledge base", "Notes", "container", "ws-1", "read")),
+    ],
+  ];
+}
 
 afterAll(async () => {
   await client?.close();
@@ -121,6 +202,15 @@ describe("no served string names a retired copy or shelf", () => {
     // tools, every assertion below would pass over an empty list.
     expect(served.length).toBeGreaterThan(20);
     expect(served.some(([, body]) => body.length > 500)).toBe(true);
+    // …and the same fence over each ADDED source, because a namespace import
+    // that stopped exporting strings, or a renderer that started throwing,
+    // would otherwise widen the scan back to `listTools()` silently.
+    for (const prefix of ["channel-doctrine.", "grant."]) {
+      expect(
+        served.filter(([where]) => where.startsWith(prefix)).length,
+        prefix,
+      ).toBeGreaterThan(1);
+    }
   });
 
   for (const [what, pattern] of RETIRED) {
