@@ -154,7 +154,7 @@ describe("isStandardWorkspace", () => {
   it("is POSITIVE — a kind nobody has heard of is NOT standard", () => {
     // ⚠ THE SPELLING IS THE TEST. `!== "link"` would answer TRUE here, and the
     // next kind added to the union would be silently standard in the rail, the
-    // switcher, `list_workspaces` and default resolution, with no error
+    // switcher and every listing that renders a kind, with no error
     // anywhere. A listing predicate must let a value IN, not fail to keep it
     // out. The cast is the whole point: it is a future union member, arriving
     // over the wire from a newer server.

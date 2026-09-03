@@ -15,10 +15,11 @@ import { fetchProfiles } from "./repository-workspace";
  *
  * ── WHY THIS EXISTS ────────────────────────────────────────────────────────
  *
- * An orchestrator's check-in used to be ~10 tool calls: `list_workspaces`, then
+ * An orchestrator's check-in used to be ~10 tool calls: a workspace list, then
  * per workspace a channel list, then per channel a read and a session list, and
- * home containers were not reachable from any of them because
- * `list_workspaces` filters them out by design (§4A). This is that loop as ONE
+ * home containers were not reachable from any of them, because the workspace
+ * listing filtered them out by design (§4A — reversed by B10, which lists them
+ * with their kind). This is that loop as ONE
  * server-side read with a bounded fan — the shape
  * `home/server/service-overview.ts` already uses for the /home Overview face.
  *

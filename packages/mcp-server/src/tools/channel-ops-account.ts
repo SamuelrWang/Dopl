@@ -61,7 +61,7 @@ const NO_NAME = "(unnamed channel)";
  */
 function accountScopeNote(channelCount: number): string {
   if (channelCount === 0) {
-    return `⚠ THIS READ COVERED NOTHING: you are not a member of any channel in any workspace and you have no home channels, so no cursor can ever advance. Open a room with dopl_channel(op="rooms", action="open", …) or dopl_home(op="create_channel", name="…") first.`;
+    return `⚠ THIS READ COVERED NOTHING: you are not a member of any channel in any workspace and you have no home channels, so no cursor can ever advance. Open a room with dopl_channel(op="rooms", action="open", …) first.`;
   }
   return `Scope: every channel you are a MEMBER of, in every workspace AND every home channel (${channelCount}). ⚠ A PUBLIC channel you never joined is NOT included, so silence here is evidence YOUR rooms are quiet and not that the product is.`;
 }

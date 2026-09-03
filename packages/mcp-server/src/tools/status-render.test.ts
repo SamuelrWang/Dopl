@@ -63,8 +63,8 @@ describe("the status table", () => {
 
   it("publishes BOTH ids on every row — the workspace handle is the point", () => {
     const text = statusLines(status([channel(1)]), NOW).join("\n");
-    // A home channel's CONTAINER id appears here and in `dopl_home` and nowhere
-    // else; without it the row names a room the reader cannot address.
+    // A home channel's CONTAINER id appears here and in `dopl_workspaces`;
+    // without it the row names a room the reader cannot address.
     expect(text).toContain("workspace=`ws-1`");
     expect(text).toContain("channel=`room-1`");
   });
@@ -232,6 +232,6 @@ describe("the status table", () => {
   it("says so, and offers a next step, when there is nothing at all", () => {
     const text = statusLines(status([]), NOW).join("\n");
     expect(text).toContain("No channels");
-    expect(text).toContain("dopl_home(op='create_channel'".replace(/'/g, '"'));
+    expect(text).toContain('dopl_channel(op="rooms", action="open"');
   });
 });

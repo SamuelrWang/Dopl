@@ -34,7 +34,7 @@
 //
 // ── THE RULE ────────────────────────────────────────────────────────────────────────
 // THE SHORT NAME IS THE SEGMENT AFTER THE LAST `__`. MCP tool names do not contain `__` (ours
-// are `dopl_channel`, `current_workspace`); server names can. Stripping GREEDILY therefore
+// are `dopl_channel`, `dopl_workspaces`); server names can. Stripping GREEDILY therefore
 // yields the tool half for every real name, and for a pathological one it OVER-matches, which
 // is the safe direction at both call sites (session-profiles' isChannelTool documents why: the
 // hard-deny set is checked first, and Axis B is stricter than Axis A). A name carrying no

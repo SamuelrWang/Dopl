@@ -41,17 +41,16 @@ function wsItem(id: string, slug: string, kind: "standard" | "link" = "standard"
   };
 }
 
-function homeChannel(workspaceId: string, name: string) {
-  return {
-    workspaceId,
-    workspaceSegment: `${workspaceId}-seg`,
-    channelId: `ch-${workspaceId}`,
-    name,
-    peers: [],
-    createdAt: "2026-01-01T00:00:00Z",
-    lastMessageAt: null,
-    lastMessagePreview: null,
-  };
+/**
+ * A home-channel CONTAINER, as a directory row. ⚠ **IT IS A DIRECTORY ROW AND
+ * NOT A `GET /api/home/channels` PAYLOAD SINCE B13** — `searchLegs` derives
+ * every leg from the one narrowed membership list, so a container reaches the
+ * fan-out the same way a workspace does.
+ */
+function homeContainer(id: string, name: string): WorkspaceListItem {
+  const row = wsItem(id, `${id}-seg`, "link");
+  row.name = name;
+  return row;
 }
 
 function directoryStub(
@@ -61,7 +60,6 @@ function directoryStub(
   return {
     getWorkspaceList: async () => workspaces,
     resolveWorkspaceRef: async () => null,
-    noWorkspaceError: async () => ({ content: [], isError: true }),
     lockedWorkspaceId: () => locked,
   };
 }
@@ -160,13 +158,8 @@ describe("per-leg billing", () => {
   it("home channels are legs too, and they are billed", async () => {
     const charge = vi.fn(async () => null);
     await search(
-      clientStub({
-        getWorkspaceId: () => "ws-a",
-        getHomeChannels: vi.fn(async () => ({
-          channels: [homeChannel("home-1", "With Dana")],
-        })),
-      }),
-      directoryStub([wsItem("ws-a", "acme")]),
+      clientStub({ getWorkspaceId: () => "ws-a" }),
+      directoryStub([wsItem("ws-a", "acme"), homeContainer("home-1", "With Dana")]),
       charge,
       { query: "ship", scope: "everywhere" },
     );
@@ -272,13 +265,8 @@ describe("truncation is named, never silent", () => {
 describe("provenance is structural", () => {
   it("every scope gets its OWN heading, naming what it is and the id to target", async () => {
     const text = await search(
-      clientStub({
-        getWorkspaceId: () => "ws-a",
-        getHomeChannels: vi.fn(async () => ({
-          channels: [homeChannel("home-1", "With Dana")],
-        })),
-      }),
-      directoryStub([wsItem("ws-a", "acme")]),
+      clientStub({ getWorkspaceId: () => "ws-a" }),
+      directoryStub([wsItem("ws-a", "acme"), homeContainer("home-1", "With Dana")]),
       noopCharge,
       { query: "ship", scope: "everywhere" },
     );
@@ -327,20 +315,26 @@ describe("provenance is structural", () => {
     expect(text).toContain("CHAT ARCHIVE, members, teams and channels are not searched in ANY scope");
   });
 
-  it("an unreadable HOME list is named, and the workspace legs still run", async () => {
+  /**
+   * ⚠ **THE PARTIAL-READ CASE IT REPLACES IS GONE WITH ITS FAILURE MODE**
+   * (B13). There used to be a SECOND read behind the leg list — `GET
+   * /api/home/channels` — that could fail on its own and leave the home legs
+   * silently unsearched, so the result carried a footnote saying so. One
+   * narrowed list answers for both halves now: the legs are complete, or the
+   * call has already thrown. What is asserted instead is that no half is
+   * derived from a source the lock does not narrow.
+   */
+  it("every leg comes from the ONE narrowed list — no second read to fail", async () => {
+    const getHomeChannels = vi.fn(async () => ({ channels: [] }));
     const text = await search(
-      clientStub({
-        getWorkspaceId: () => "ws-a",
-        getHomeChannels: vi.fn(async () => {
-          throw new Error("boom");
-        }),
-      }),
-      directoryStub([wsItem("ws-a", "acme")]),
+      clientStub({ getWorkspaceId: () => "ws-a", getHomeChannels }),
+      directoryStub([wsItem("ws-a", "acme"), homeContainer("home-1", "With Dana")]),
       noopCharge,
       { query: "ship", scope: "everywhere" },
     );
-    expect(text).toContain("YOUR HOME CHANNELS COULD NOT BE READ");
+    expect(getHomeChannels).not.toHaveBeenCalled();
     expect(text).toContain("## `acme workspace`");
+    expect(text).toContain("## `With Dana` (home channel · id `home-1`)");
   });
 });
 

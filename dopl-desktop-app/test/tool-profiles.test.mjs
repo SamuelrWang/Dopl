@@ -145,7 +145,7 @@ test("dopl_only -> read tools + explicitly named non-admin dopl tools", () => {
   for (const t of ["Read", "Grep", "Glob", "LS"]) {
     assert.ok(set.includes(t), `dopl_only should include ${t}`);
   }
-  // These nine names are pinned against the server's real registration sites
+  // These eight names are pinned against the server's real registration sites
   // by the drift alarm at the bottom of this file — this list is the readable
   // copy, that one is the check. NOTE: dopl_channel is intentionally NOT here
   // (see the exfiltration test below) — it is the one non-admin tool a
@@ -158,8 +158,7 @@ test("dopl_only -> read tools + explicitly named non-admin dopl tools", () => {
     "mcp__dopl__dopl_skill",
     "mcp__dopl__dopl_ontology",
     "mcp__dopl__dopl_chats",
-    "mcp__dopl__current_workspace",
-    "mcp__dopl__list_workspaces",
+    "mcp__dopl__dopl_workspaces",
   ]) {
     assert.ok(set.includes(t), `dopl_only should include ${t}`);
   }
@@ -374,8 +373,8 @@ function mcpSources(dir) {
 
 // A registration site names its tool as a STRING LITERAL first argument:
 // `register("dopl_map", …)` in the domain registrars (the injected registrar is
-// named `register` there) and `registerMetaTool("list_workspaces", …)` in
-// server.ts. The SDK call underneath — `server.registerTool(name, …)` — passes a
+// named `register` there) and `registerMetaTool("dopl_workspaces", …)` in
+// meta-tools.ts. The SDK call underneath — `server.registerTool(name, …)` — passes a
 // variable, so there is no literal to match; the lookbehind drops it regardless.
 const REGISTER_SITE = /(?<![.\w$])register(?:Tool|MetaTool)?\s*\(\s*"([a-z][a-z0-9_]*)"/g;
 
@@ -433,11 +432,11 @@ const ALL_DOPL = [
 // exactly like "no drift". Fail here instead, naming what to repoint.
 test("the mcp-server source parser still finds what it is looking for", () => {
   const hiddenTools = hiddenNames();
-  assert.ok(registeredTools.length >= 13,
+  assert.ok(registeredTools.length >= 11,
     `only ${registeredTools.length} registration sites parsed — the register(...) call shape changed; repoint REGISTER_SITE`);
   assert.equal(new Set(registeredTools).size, registeredTools.length,
     "the same tool name is registered twice");
-  for (const a of ["dopl_kb", "dopl_map", "dopl_channel", "current_workspace", "list_workspaces"]) {
+  for (const a of ["dopl_kb", "dopl_map", "dopl_channel", "dopl_workspaces"]) {
     assert.ok(registeredTools.includes(a), `parser missed a known tool: ${a}`);
   }
   for (const h of hiddenTools) {
@@ -459,10 +458,12 @@ test("the desktop's Dopl tool lists match the MCP server's live surface", () => 
     `main/tool-profiles.js has drifted from packages/mcp-server/src (HIDDEN_TOOLS read from ${hiddenDecls[0].file})`);
   // The number INVARIANTS §10 states in prose, asserted once. 14 → 16 → 17 on
   // 2026-08-28 (waves A and B), 17 → 18 on 2026-09-01 (`dopl_status`, T20),
-  // 18 → 13 on 2026-09-02 (MCP v2 wave A: the five `*_admin` tools deleted).
+  // 18 → 13 on 2026-09-02 (MCP v2 wave A: the five `*_admin` tools deleted),
+  // 13 → 11 the same day (wave B B13: `current_workspace`, `list_workspaces`
+  // and `dopl_home` became the one `dopl_workspaces`).
   // ⚠ The assertion ABOVE is the one that catches a new tool, by construction;
   // this one exists so adding one costs a doc edit too.
-  assert.equal(live.length, 13, "the agent surface is documented as 13 tools");
+  assert.equal(live.length, 11, "the agent surface is documented as 11 tools");
 });
 
 // RETIRED_DOPL_TOOLS is a SUPERSET of HIDDEN_TOOLS, never an equality.

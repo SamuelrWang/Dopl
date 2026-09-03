@@ -73,7 +73,7 @@ export interface InvitationStatus {
  * ⚠ POSITIVE FORM, and that is the point: `=== "standard"`, never `!== "link"`.
  * The negative spelling admits every kind that has not been invented yet — the
  * NEXT kind added to the union would be silently standard in the rail, in the
- * switcher, in `list_workspaces` and in default resolution, with no error
+ * switcher and in every listing that renders a kind, with no error
  * anywhere. A listing predicate must let a value IN, not merely fail to keep
  * one out.
  *
@@ -106,7 +106,7 @@ export interface Workspace {
 
 /**
  * Workspace row + the caller's effective role. Read by `GET /api/workspaces`
- * and the MCP `list_workspaces` tool, so an agent can switch without a second
+ * and the MCP `dopl_workspaces` tool, so an agent can switch without a second
  * query.
  */
 export interface WorkspaceWithRole extends Workspace {

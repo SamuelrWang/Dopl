@@ -89,14 +89,14 @@ describe("DoplClient headers", () => {
     const client = new DoplClient(BASE, "k");
     await client.listWorkspaces();
     const headers = mock.calls[0].init.headers as Record<string, string>;
-    expect(headers["X-MCP-Tool"]).toBe("list_workspaces");
+    expect(headers["X-MCP-Tool"]).toBe("dopl_workspaces");
   });
 
   it("uses a custom tool header name", async () => {
     const client = new DoplClient(BASE, "k", { toolHeaderName: "X-Dopl-Cli" });
     await client.listWorkspaces();
     const headers = mock.calls[0].init.headers as Record<string, string>;
-    expect(headers["X-Dopl-Cli"]).toBe("list_workspaces");
+    expect(headers["X-Dopl-Cli"]).toBe("dopl_workspaces");
     expect(headers["X-MCP-Tool"]).toBeUndefined();
   });
 });

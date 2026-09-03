@@ -50,7 +50,7 @@ test("F-139: canonicalization rewrites ONLY the known Dopl vocabulary", () => {
   assert.equal(names.canonicalDoplName("mcp__claude_ai_Dopl__dopl_kb"), "mcp__dopl__dopl_kb");
   assert.equal(names.canonicalDoplName("mcp__dopl__dopl_kb"), "mcp__dopl__dopl_kb", "idempotent");
   assert.equal(names.canonicalDoplName("dopl_search"), "mcp__dopl__dopl_search", "the bare form too");
-  assert.equal(names.canonicalDoplName("current_workspace"), "mcp__dopl__current_workspace");
+  assert.equal(names.canonicalDoplName("dopl_workspaces"), "mcp__dopl__dopl_workspaces");
   // Everything else comes back untouched, so it stays unclassified and keeps gating.
   for (const n of ["Bash", "mcp__other__some_tool", "mcp__claude_ai_Dopl__not_a_dopl_tool", "", "x__y"]) {
     assert.equal(names.canonicalDoplName(n), n, n);
