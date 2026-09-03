@@ -20,7 +20,9 @@ a lent row stays `private` and created-by-the-grantor, so in the scope it was le
 `canSee*` and their policy twins refused it. The arm is one sentence written twice and only twice:
 `shared/tenancy/resource-grant-reach.ts › grantedResourceIds` and
 `20260923140000 › dopl_grant_admits()`, OR-ed onto a **closed** membership group in both readable
-predicates. No policy moves, so the pair gate keeps finding its twins.
+predicates. No policy moves, so the pair gate keeps finding its twins. ⚠ **AND THE SQL HALF WAS
+WRONG UNTIL THE REVIEW** — see *Review fixes*, finding 1: the arm was OR-ed in at the TOP, outside
+the shared-credential refusal both TS twins make two arms above it.
 
 Three decisions inside it, each recorded where it is made: it sits **below** the shared-credential
 refusal (a credential standing for nobody has no membership of the granted scope to read the grant
@@ -46,9 +48,9 @@ ratchet fails on a SHRINK as well as a growth, so every figure below **is** the 
 
 | Metric | Wave-A start | Batch-1 | Batch-2 | **Batch-3** | Wave target |
 |---|---:|---:|---:|---:|---:|
-| **Served per external connection** | 95,174 | 51,996 | 49,790 | **46,857** | ≤30,000 |
+| **Served per external connection** | 95,174 | 51,996 | 49,790 | **46,851** | ≤30,000 |
 | ↳ descriptions | — | 16,092 (13) | 16,097 (13) | **14,461 (11)** | ≤8,000 |
-| ↳ input schemas | — | 34,053 (13) | 31,839 (13) | **30,595 (11)** | ≤19,000 |
+| ↳ input schemas | — | 34,053 (13) | 31,839 (13) | **30,589 (11)** | ≤19,000 |
 | ↳ `dopl_channel` schema | — | 11,609 | 8,678 | **8,677** | 3,000 |
 | ↳ `instructions` | — | 1,851 | 1,857 | **1,801** | ≤1,900 ✅ |
 | **Doctrine (pulled)** | 32,551 | 32,551 | **8,960** | 8,960 | ≤9,000 ✅ |
@@ -59,7 +61,7 @@ ratchet fails on a SHRINK as well as a growth, so every figure below **is** the 
 
 ⚠ **95,174 IS THE WAVE-A-START FIGURE AND IT IS NOT COMPARABLE ROW BY ROW** — it was measured over
 seventeen tools before A3 recomposed the surface, so only the TOTAL is a like-for-like. Five of the
-six targets are met. **The served target is not, and the gap is the same one F-577 named**: 16,857
+six targets are met. **The served target is not, and the gap is the same one F-577 named**: 16,851
 over, and it is FIELDS, not prose — `dopl_channel`'s 8,677 alone is 23 fields at ~130 chars each
 including JSON Schema structure. Samuel's standing answer is a separate parameter-diet slice with
 usage evidence per param.
@@ -151,21 +153,39 @@ hold two drops nine versions apart) and the duplicate-version ratchet are both g
 - **F-661 — a gate that could not fail was fixed, not documented.** `liveFunctionHeader` ignored
   `DROP FUNCTION`, so every "this function is gone" assertion was green by construction.
 
-## Gates — all green, measured 2026-09-02 at `e90843b2`
+## Gates — all green, RE-MEASURED 2026-09-02 at `c66a3eb6` (the review head)
 
-Five suites — root **5,671** (386 files, 27 skipped, **0 failures**), mcp-server **1,551** (100
-files), client **59** (4 files), desktop-ui **432** (46 files), desktop **2,983** (`npm test`;
-**2,992** on a bare `node --test`, which additionally collects `test/live/*.js`) — both lints
-(root at `--max-warnings 0`), both typechecks incl. `-w @dopl/desktop-ui`, and **ten** non-suite
-gates: `check-doc-refs`, `size-check`, the five drift scripts, the RLS pair gate (5 predicates over
-9 covered tables, four checks each), the committed-`dist` check, and the `rls-redteam` job.
+Five suites — root **5,675** (386 files, 29 skipped, **0 failures**), mcp-server **1,570** (101
+files), client **59** (4 files), desktop-ui **432** (46 files), desktop **2,993** on a bare
+`node --test`, which additionally collects `test/live/*.js` — both lints (root at
+`--max-warnings 0`), both typechecks incl. `-w @dopl/desktop-ui`, and **ten** non-suite gates:
+`check-doc-refs`, `size-check`, the five drift scripts, the RLS pair gate (5 predicates over 9
+covered tables, four checks each), the committed-`dist` check, and the `rls-redteam` job.
 
-⚠ **THE ROOT SUITE'S EXIT CODE WAS READABLE ON THE FINAL RUN (0), AND THAT IS NOT A FIX** — the
-same sentence batch 2 had to write. `credits-link-reroute.test.ts`'s `EnvironmentTeardownError` is
-a race; it FIRED on the first full run of this integration (same 386/5,671/0-failures) and not on
-the second. **Read the counts, not the exit code.** No other listed flake fired;
-`apps/desktop-ui` was run alone, not concurrently with the root suite (the batch-2 contention
-note).
+⚠ **THE DELTAS ARE THE REVIEW'S OWN, AND EVERY ONE IS ACCOUNTED FOR.** Root +4 = two SQL-comparison
+cases in `grant-read-arm.test.ts`, three structural grant-arm cases across the two redteam suites,
+less one duplicate assertion deleted from `home-channel-derivation.test.ts`; skipped +2 = the two
+live P25 probes. mcp-server +19 over +1 file = the desktop-fence suite (15), the mint's derived
+address line, the exact-exemption case, and the two extra retired-vocabulary patterns. Desktop +1 =
+the literal join in `session-await-refusal.test.mjs`.
+
+⚠ **AND THE COMMITTED-`dist` CHECK WAS ONE OF THE TEN AND COULD NOT FAIL** — see *Review fixes*,
+finding 10. The count is still ten; it is armed now.
+
+⚠ **THE ROOT SUITE'S EXIT CODE IS 1 ON BOTH REVIEW RUNS, AND THE COUNTS ARE CLEAN.** The
+`EnvironmentTeardownError` (*"Closing rpc while `onUserConsoleLog` was pending"*, from
+`src/app/api/mcp/credits/consume/route-guest-floor.test.ts`) fired on both, which is the batch-1/2
+flake behaving as recorded. **Read the counts, not the exit code.**
+
+⚠ **AND A SECOND FLAKE FIRED THAT NO LIST NAMED — IT IS ADDED HERE RATHER THAN WAVED THROUGH.**
+`src/features/auth/components/login-form-core.test.tsx › submitting after the switch runs sign-in`
+failed on the FIRST full run (`Unable to find role="heading" and name "Log In"`, 1,448ms) and
+passed on the second, and passes alone (9/9) and inside the scoped
+`vitest run src/features src/shared`. It asserts on a heading revealed behind a 180ms CSS opacity
+transition with no fake clock, so it is load-sensitive in the way the batch-2 `apps/desktop-ui`
+contention note describes — **and nothing in this review touches auth or that component.** It is a
+flake to WATCH, not a cleared one: the honest statement is two runs, one failure, cause not proved.
+`apps/desktop-ui` was run alone, not concurrently with the root suite.
 
 ⚠ **THE `rls-redteam` GATE IS STILL THE ONE THAT HAS NOT RUN, AND IT IS THE ONE THAT MATTERS MOST.**
 This machine has no Docker. **Nothing in these counts is behavioural evidence about a policy or a
@@ -176,6 +196,55 @@ trigger** — including the grant read arm, whose whole point is a policy.
 B15 made that enum a SPREAD — the parse read two identifiers as ops. It reads `KB_OPS` now, which is
 the PUBLISHED set and the right subject. **Four slices each green alone; the cross-tree parse is
 what only the merge could show.**
+
+## Review fixes (2026-09-02, `13cac8d2` → `c66a3eb6`)
+
+Five commits on `v2/wave-b`, **not pushed**. Nothing is CONTESTED — every finding reproduced.
+Each fix carries a test that fails when the fix is reverted; the reverts were run, not assumed.
+
+| # | Finding | Commit |
+|---|---|---|
+| 1 | 🔒 **BLOCKER — `dopl_grant_admits()` was OR-ed in at the TOP of both readable predicates**, outside the `NOT dopl_credential_is_shared()` arm and (on knowledge) outside the teams gate, while both TS twins refuse a shared credential two arms ABOVE the grant. The policy admitted what the service refuses. Both arms are `NOT dopl_credential_is_shared() AND dopl_grant_admits(…)` now, and the KB predicate AND-s its teams gate over the whole readable group, which is `assertBaseVisible`'s order | `13cac8d2` |
+| 2 | …and the tests **PINNED the defect** — both redteam suites asserted `not.toMatch(/AND\s+dopl_grant_admits/)`, the exact wrong shape. They assert the guarded shape and refuse only the real nesting failure (the arm conjoined with `is_current_workspace_member`), and each gains structural + live **P25** | `13cac8d2` |
+| 3 | `grant-read-arm.test.ts` compared TypeScript to TypeScript and was green about the half that was right. It replays the migrations the way the pair gate does and proves, per predicate, that the grant is unreachable except through the guard | `13cac8d2` |
+| 4 | **MAJOR — four refusal routes named deleted things**: `TENANCY_FIX` → `dopl_agent op="copy", to_workspace`; `TENANCY_RULE` → "personal shelf"; the grant scope refusal and `GRANT_TO_ARG_DESCRIPTION` → `dopl_home(op="list_channels")` / `list_workspaces`; the mint → "workspace= on any other tool". All four repointed, the last RENDERED from `WORKSPACE_ARG_OPS` | `dad982c5` |
+| 5 | …and the gate that should have caught them scanned only `listTools()`, `instructions` and the resources — **none of which carry a refusal**. `retired-vocabulary.test.ts` takes three sources now (served surface · every exported doctrine string · results driven out of their renderers) and bans the three deleted tool names and two ops. Reverting the four fixes fails five of its cases | `dad982c5` |
+| 6 | **MAJOR — the `wait_ms` hold had no server-side fence.** Ruling below | `ac24f1b4` |
+| 7 | **MINOR — eleven citations to modules that no longer exist.** The retired-channel-ops module (B16), the ping-inbox module and the SDK's ping module (the ping lane), and the session-pin module (B13) — whose dead `McpAuthContext.tokenId` field went with the citation. Plus six pointing at the deleted home-scopes module, repointed at `workspace-directory.ts › narrowToLock`. ⚠ **None of the five names is backticked above**: `check-doc-refs` existence-checks a backticked path, which is how this table would otherwise become five new dead refs | `3948b6f1` |
+| 8 | **MINOR — one duplicate assertion** (`DECLARED` IS `FENCE_SITES`, so two cases said one thing) and **two constants that were one number**: `AUDIENCE_GRANT_LIMIT` folded into `GRANT_REACH_LIMIT`, both 500, each docblock claiming to be "the same number for the same reason" as the other | `3948b6f1` |
+| 9 | **MINOR/NIT — the doc**: the `shelf` axis is off the MCP SURFACE, not gone (`?shelf=` is live on two REST routes); the apply checklist gains `20260922120000`'s `src/shared/supabase/types.ts` regeneration; P25 joins the owed probes | `3948b6f1` |
+| 10 | 🔒 **FOUND WHILE RUNNING THE GATES — the committed-`dist` check could not fail.** `git status --porcelain -- 'packages/*/dist'` matches NOTHING: a git pathspec GLOB must match the whole path, so `git ls-files` answers 0 against 286 tracked files. It reported every stale build as clean from the day it landed, and it is counted among the ten. One `/*`, in ci.yml, CLAUDE.md and §14 | `c66a3eb6` |
+
+### The `wait_ms` ruling, as taken
+
+🔒 **`dopl_channel(op="read", wait_ms=…)` IS REFUSED SERVER-SIDE FOR A DESKTOP-RUN CALLER —
+Desktop Agent default, and Samuel may reverse.** Reversing is `tools/identity.ts › isDesktopRun`.
+
+The rule was doctrine already and the desktop enforces it in `session-permissions.js`, i.e. in ONE
+runtime's permission gate. Another vendor's runtime, a raw loopback and a `full`-profile shell all
+reach `/api/mcp` without passing through it, and each got the whole wake-length hold — a turn spent
+asleep waiting for a message already arriving as a turn. **A rule stated in doctrine and enforced
+by one client is not enforced.**
+
+Two marks, either sufficient: the `X-Dopl-Runtime: desktop-session` stamp, or
+`CallerIdentity.containerId` — the credential's own container lock, from `mcp_tokens.container_id`.
+The second is why this is allowed to gate at all: it rides the TOKEN ROW rather than a header, only
+`mcp-container-token.ts` sets it, and it sets it for one thing (a container session the desktop
+spawned), so an agent with a shell can drop the stamp and not the lock. ⚠ **The HOLD is refused and
+the READ is not** — nothing is withheld, which is why the sentence names no remedy. ⚠ An UNSTAMPED
+caller keeps the hold: an older desktop build looks exactly like an external one, and the
+fail-toward is a wasted long-poll rather than a lost message.
+
+The refusal is the desktop's `AWAIT_DENY_MESSAGE` **verbatim** — two refusals for one bound, worded
+differently, read to an agent as two different problems — pinned from the desktop side, reading
+both sources, because `packages/*` cannot import that CommonJS main.
+
+⚠ **ONE DECLARED EXEMPTION RIDES WITH IT AND IT IS OWED TO SAMUEL.** That sentence opens with the
+word `await`, which `law-removed-vocabulary.ts` bans from every shipped `channel-*.ts` string
+because B8 retired the op — the desktop's wording is one day older than the retirement (T85 is
+09-01, B8 is 09-02). `VERBATIM_QUOTES` exempts that exact string, matched WHOLE, rather than moving
+the constant out of the scanned glob, which would make the ban decorative. **Re-word both halves to
+say "the hold", or ratify the quote.**
 
 ## What needs Samuel
 
@@ -194,3 +263,6 @@ what only the merge could show.**
 7. **The parameter diet** — the served target needs ~16,857 more and it is FIELDS. Samuel's
    standing answer is a separate slice with usage evidence per param.
 8. **F-620's roster question** before its code question: may a >1-match refusal name the containers?
+9. **The `wait_ms` fence** (review finding 6) — ratify or reverse; it is one predicate.
+10. **The `await` word in the shared refusal sentence** — re-word both halves, or ratify the
+    `VERBATIM_QUOTES` exemption that lets a banned word ship in exactly one string.
