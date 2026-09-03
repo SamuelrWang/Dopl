@@ -85,14 +85,19 @@ describe("REDTEAM skills — the policy alone", () => {
     expect(matrix).toMatch(/p_visibility\s*=\s*'public'\s*AND\s*public\.dopl_teams_mode_visible/i);
   });
 
-  it("fences the CHILD table on the parent, and retires a caller-supplied uid", () => {
-    const files = POLICIES.get("skill_files.skill_files_member_select") ?? "";
-    expect(files).toContain(`${READABLE}(skill_id)`);
-    expect(files).toMatch(/is_current_workspace_member\(workspace_id, 'viewer'::text\)/i);
-    // The body replaced asked `is_workspace_member(workspace_id, auth.uid(), …)`.
-    expect(files).not.toMatch(/[^_]is_workspace_member\(/i);
-    // …and it inherits the narrowing arms rather than restating them.
-    expect(files).not.toMatch(/visibility\s*=/i);
+  it("🔒 has NO child table to fence — `skill_files` was dropped in July 2026 (F-586)", () => {
+    // ⚠ THIS CASE REPLACES ONE THAT ASSERTED ON A POLICY FOR A TABLE THAT DOES
+    // NOT EXIST, and passed, because `livePolicies()` replays `CREATE POLICY` /
+    // `DROP POLICY` and not `DROP TABLE`. `20260716064733` dropped `skill_files`
+    // CASCADE — *"CASCADE takes its triggers + RLS policies"* — and
+    // `skills/types.ts` has said "No `skill_files` table" ever since. Phase 2
+    // wrote it a policy anyway, which would have aborted the apply.
+    // The gate that finds this class is `scripts/check-rls-pair-gate.ts` check
+    // 2 (RLS enabled per covered table, over a DROP TABLE-aware replay); this
+    // case is the local reminder not to write the policy back.
+    for (const key of POLICIES.keys()) {
+      expect(key.startsWith("skill_files."), `${key} names a dropped table`).toBe(false);
+    }
   });
 
   it("does NOT hide soft-deleted rows — trash is a repository filter, not a fence", () => {
@@ -165,8 +170,11 @@ describe.skipIf(!liveRedteamEnabled)(
       await deleteUsers([ownerId, outsiderId, guestId, teammateId]);
     }, 60_000);
 
-    it.each(["skills", "skill_files"])("%s: a NON-MEMBER sees zero rows", async (table) => {
-      expect(await readableIds(outsiderId, table, workspaceId)).toHaveLength(0);
+    it("skills: a NON-MEMBER sees zero rows", async () => {
+      // ⚠ `skill_files` was the second case here and is GONE with its table
+      // (F-586). A live probe of it would have failed at `supabase db reset`,
+      // which is the run nobody has been able to make for two waves.
+      expect(await readableIds(outsiderId, "skills", workspaceId)).toHaveLength(0);
     });
 
     it("a GUEST sees zero rows — the floor is rank, not a separate arm", async () => {

@@ -77,12 +77,24 @@ const CREATE_POLICY =
   /CREATE\s+POLICY\s+"?([a-z0-9_]+)"?\s+ON\s+(?:public\.)?"?([a-z0-9_]+)"?/gi;
 const DROP_POLICY =
   /DROP\s+POLICY\s+(?:IF\s+EXISTS\s+)?"?([a-z0-9_]+)"?\s+ON\s+(?:public\.)?"?([a-z0-9_]+)"?/gi;
+const DROP_TABLE =
+  /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?([a-z0-9_]+)"?/gi;
 
 /**
  * The policy bodies alive after the replay, keyed `<table>.<policy>`.
  * ⚠ Events inside ONE file are applied in TEXT ORDER, so the `DROP … ; CREATE …`
  * idiom this repo uses for a policy edit lands as a replacement rather than as a
  * deletion.
+ *
+ * 🔒 **A `DROP TABLE` TAKES ITS POLICIES WITH IT, SILENTLY, AND THIS SCANNER DID
+ * NOT KNOW THAT UNTIL 2026-09-02 (F-586).** A policy is a dependency of its
+ * table; Postgres removes it without a `DROP POLICY` line for anyone to replay.
+ * So `skill_files`, dropped CASCADE in July 2026, went on answering as a fenced
+ * table to every reader of this function — four redteam suites, the pair gate
+ * and two findings — and phase 2 wrote it a NEW policy that would have aborted
+ * the apply with `relation "skill_files" does not exist`. **A scanner that
+ * cannot tell a fence from an epitaph is worse than no scanner: it reports the
+ * dead one as armed.**
  */
 export function livePolicies(): Map<string, string> {
   const live = new Map<string, string>();
@@ -96,6 +108,15 @@ export function livePolicies(): Map<string, string> {
     for (const m of file.sql.matchAll(DROP_POLICY)) {
       const key = `${m[2]}.${m[1]}`;
       events.push({ at: m.index, run: () => live.delete(key) });
+    }
+    for (const m of file.sql.matchAll(DROP_TABLE)) {
+      const prefix = `${m[1]}.`;
+      events.push({
+        at: m.index,
+        run: () => {
+          for (const key of [...live.keys()]) if (key.startsWith(prefix)) live.delete(key);
+        },
+      });
     }
     for (const e of events.sort((a, b) => a.at - b.at)) e.run();
   }

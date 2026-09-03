@@ -15,9 +15,11 @@
 -- ---------------------------------------------------------------------------
 -- Phase 1 (`20260919120000`) covered `knowledge_bases`, `knowledge_folders`,
 -- `knowledge_entries`. This file covers `skills`, `agent_templates`, `chats`
--- and `resource_grants` — the spec's target of SEVEN — plus the two CHILD
--- tables that restate a covered parent's matrix inline (`skill_files`,
--- `chat_messages`). The children are not new coverage; they are the same rule,
+-- and `resource_grants` — the spec's target of SEVEN — plus the one CHILD
+-- table that restates a covered parent's matrix inline (`chat_messages`; the
+-- `skill_files` half was WITHDRAWN — that table was dropped in July 2026 and a
+-- policy on it would have aborted the apply, F-586). The child is not new
+-- coverage; it is the same rule,
 -- and leaving them behind would leave a child policy WIDER than the parent it
 -- guards, which is the 2026-08-26 entry-body incident (INVARIANTS §4) in a new
 -- table. `chat_messages` is not optional in a second way: `chats/server/
@@ -82,10 +84,9 @@
 --   and `canSeeBaseRow` all stay until the flag has been on for a release; B16
 --   deletes each one behind its own green redteam test.
 -- * **INSERT / UPDATE / DELETE policies are untouched.** Writes stay on the
---   service role until RLS plan phase 4. ⚠ `skill_files_editor_update` and
---   `skill_files_editor_delete` still use the 3-arg `is_workspace_member(ws,
---   auth.uid(), …)` form M-9 closed for reads; filed as F-573 rather than fixed
---   here, because a write policy is a different phase and a different gate.
+--   service role until RLS plan phase 4. ⚠ F-573 named two `skill_files` write
+--   policies still on the 3-arg `is_workspace_member(ws, auth.uid(), …)` form;
+--   they went with the table in July 2026 (F-586) and the finding is moot.
 -- * **The AGENT AUDIENCE CEILING is still not in any policy** (F-524): a
 --   per-request bound keyed on the container's kind, its live member count and a
 --   session-scoped header is not a property of a row, and folding it in would put
@@ -97,14 +98,14 @@
 -- reaches it, because Postgres short-circuits `OR`/`AND` — one indexed probe of
 -- `resource_grants` (`resource_grants_resource_idx`) joined to `team_members`
 -- (`team_members_user_idx`). Both indexes already exist, as do the two PKs and
--- `chat_messages`' and `skill_files`' own `chat_id` / `skill_id` indexes, so
+-- `chat_messages`' own `chat_id` index, so
 -- this file adds none. The RLS plan's "measure with realistic data" gate applies
 -- at rollout; the flag is the mitigation if it does not hold.
 --
 -- ROLLBACK: turn `RLS_CALLER_SCOPED_READS` off — every read returns to the
 -- service-role client and nothing below is consulted. To revert the SQL itself,
--- recreate `skills_member_select` and `skill_files_member_select` with the bodies
--- in `20260720211005` / `20260504030000`, `chats_member_select` and
+-- recreate `skills_member_select` with the body
+-- in `20260720211005`, `chats_member_select` and
 -- `chat_messages_select` with the bodies in `20260916120000`, `chats_owner_select`
 -- with `20260720211005`'s, and re-run `20260915120000`'s
 -- `can_current_user_read_agent_template`.
@@ -304,19 +305,23 @@ CREATE POLICY skills_member_select ON skills
   FOR SELECT
   USING (public.dopl_skill_readable(id));
 
--- ---- skill_files ----------------------------------------------------------
--- ⚠ THIS ALSO RETIRES A CALLER-SUPPLIED-UID READ. The body being replaced asks
--- `is_workspace_member(workspace_id, auth.uid(), 'viewer')` — the 3-ARG form,
--- where the CALLER supplies the user id; M-9 closed that oracle for every other
--- read by moving to `is_current_workspace_member`, and this policy was missed
--- because `20260720211005` only rewrote the tables it was measuring.
-DROP POLICY IF EXISTS skill_files_member_select ON skill_files;
-CREATE POLICY skill_files_member_select ON skill_files
-  FOR SELECT
-  USING (
-    is_current_workspace_member(workspace_id, 'viewer'::text)
-    AND public.dopl_skill_readable(skill_id)
-  );
+-- ---- skill_files: 🔒 THE TABLE DOES NOT EXIST (F-586) ----------------------
+-- ⚠ **AND A `CREATE POLICY` ON IT WOULD HAVE ABORTED THIS MIGRATION** with
+-- `relation "skill_files" does not exist`, on the first database it ever met.
+-- `20260716064733_collapse_skill_files_into_skills.sql` §e ran
+-- `DROP TABLE IF EXISTS skill_files CASCADE` — *"CASCADE takes its triggers +
+-- RLS policies + realtime-publication membership"* — and nothing re-creates it.
+-- `skills/types.ts` has said so in one line ever since: *"No `skill_files`
+-- table — body lives in [skills]"*.
+--
+-- ⚠ **WHAT MADE IT SURVIVE REVIEW IS WORTH MORE THAN THE FIX.** Every reader of
+-- this file — the header prose, `check-rls-pair-gate.ts`, the redteam suite,
+-- two findings (F-570, F-573) — replayed only `CREATE POLICY` / `DROP POLICY`
+-- and never `DROP TABLE`, so a policy on a dead table read as a LIVE FENCE to
+-- all of them. The gate now tracks `DROP TABLE` and asserts `ENABLE ROW LEVEL
+-- SECURITY` per covered table, which is what found this.
+-- ⚠ F-573 is moot with it: those two write policies died in July 2026, with the
+-- table.
 
 -- ---- chats ----------------------------------------------------------------
 -- ⚠ BOTH POLICIES CALL THE SAME PREDICATE, AND THAT IS THE POINT. Permissive
@@ -392,11 +397,10 @@ DROP POLICY IF EXISTS knowledge_entry_chunks_member_select ON knowledge_entry_ch
 --   P5  P4 with a `resource_grants` row on the viewer's team     → 1 row
 --   P6  P5 with the grant's `scope_type` flipped to 'container'  → 0 rows
 --   P7  guest reads a `public`/`workspace` skill                 → 0 rows
---   P8  `skill_files` for each of P1–P7                          → same verdicts
---   P9  the eight again against `chats` / `chat_messages`, with
+--   P8  the seven again against `chats` / `chat_messages`, with
 --       ADMIN-READS-A-PRIVATE-CHAT explicitly 0 rows (it was 1)
---   P10 shared credential reads its minter's `private` template  → 0 rows (was 1)
---   P11 shared credential reads a `workspace` template           → 1 row
+--   P9  shared credential reads its minter's `private` template  → 0 rows (was 1)
+--   P10 shared credential reads a `workspace` template           → 1 row
 -- ⚠ REPLAY (`supabase db reset` → exit 0) IS THE GATE, OWED.
 -- ⚠ NEW FILE — never an edit to an applied migration.
 --
@@ -416,7 +420,7 @@ BEGIN
      WHERE schemaname = 'public'
        AND cmd = 'SELECT'
        AND (
-         (tablename IN ('skills','skill_files')
+         (tablename = 'skills'
             AND qual::text NOT LIKE '%dopl_skill_readable%')
          OR (tablename IN ('chats','chat_messages')
             AND qual::text NOT LIKE '%dopl_chat_readable%')

@@ -7646,13 +7646,9 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Proposed resolution: fold into B16 with the TS-predicate deletions, or give `teams/` a row of its own in batch 3; either way it lands with the Phase 0 lint rule (F-521) that would have found it.
 - Status: open.
 
-### F-573 — two `skill_files` WRITE policies still take the user id from the caller (2026-09-02)
+### F-573 — two `skill_files` WRITE policies still take the user id from the caller (2026-09-02, MOOT)
 
-- Location: `skill_files_editor_update` and `skill_files_editor_delete` (`20260504030000_visibility_private_resources.sql`), both `is_workspace_member(workspace_id, auth.uid(), 'editor')`.
-- Found during: Wave B B12, while repairing the SELECT policy on the same table.
-- **WHY NOT FIXED IN THE SAME FILE.** The 3-arg form lets the caller supply the user id — the oracle M-9 closed — and passing `auth.uid()` into it is harmless TODAY because that is what the 2-arg form does anyway. It is still the wrong form, and it is a WRITE policy: writes stay on the service role until RLS plan phase 4, they have no redteam suite, and a policy edit with no test behind it is the thing this wave has been avoiding.
-- Proposed resolution: sweep every remaining 3-arg call site in one migration when phase 4 opens (`grep -n "is_workspace_member(" supabase/migrations/*.sql`), with a probe per policy branch.
-- Status: open.
+- Status: **MOOT, and the reason is F-586.** `skill_files` has not existed since `20260716064733_collapse_skill_files_into_skills.sql` §e ran `DROP TABLE IF EXISTS skill_files CASCADE` in July 2026 — *"CASCADE takes its triggers + RLS policies"*. Both write policies died with it. The finding was filed against a policy body read out of a migration replay that did not track `DROP TABLE`, so a dead table's policies read as live to every consumer of that scan. Nothing to fix; kept as the record of how it was filed.
 
 ### F-574 — the skills KB picker lists every base in the workspace, private ones included (2026-09-02)
 
@@ -7747,3 +7743,21 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **THE SHAPE.** `created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL`. Deleting the user fires the BEFORE **UPDATE** trigger with `NEW.created_by IS NULL`, which takes the unattributed branch — and that branch RAISEs for a CROSS-CONTAINER grant, the one shape ruling B4 exists to unlock. So `DELETE FROM auth.users` failed with `P0001 … may not cross containers`, and the more the feature was used the more accounts became undeletable. The row was valid when written; a de-attribution is not a re-grant.
 - Resolution: skip the grantor arms on exactly that transition — UPDATE, `created_by` NOT NULL → NULL, every other column identical. A statement that de-attributes and moves the grant in one breath is still validated as a re-grant.
 - Status: FIXED. Probe P19/P20 owed with the rest of F-461.
+
+### F-585 — the RLS pair gate asserted that a policy NAME survived, and nothing else (2026-09-02, FIXED)
+
+- Location: `scripts/check-rls-pair-gate.ts`. Re-derive: `npx tsx scripts/check-rls-pair-gate.ts`.
+- Found during: the wave-B batch-1/2 review, reading the gate against what it claims in CLAUDE.md's "definition of green".
+- **THE SHAPE.** It replayed `CREATE POLICY` / `DROP POLICY` and checked that each declared name was in the surviving set. Four mutations were therefore green: a body rewritten to `USING (true)`; a SECOND permissive SELECT policy beside the declared one (permissive policies are OR-ed, so an extra one widens the table while every declared one still passes); an `ALTER TABLE … DISABLE ROW LEVEL SECURITY`, which retires every policy on a table at once and leaves all their names standing; and a `FOR SELECT` → `FOR INSERT` flip, which empties the table's read surface under an unchanged name. **A gate whose failure mode is "the fence is still CALLED a fence" is the failure it exists to catch, one level up.**
+- Resolution: three checks added and the two declaration maps folded into one table-keyed `COVERED` (the split meant the tables with a predicate and those without were checked by different code, and only one half ever grew a check). RLS-enabled per covered table over a `DROP TABLE`-aware replay; live SELECT-policy set EQUALS the declared set; each declared policy is explicitly `FOR SELECT` and its body reaches the predicate function named beside it. All four mutations above were re-run and all four now fail the gate.
+- ⚠ It still does not claim the predicate and the policy AGREE — that is the per-table redteam suites' job.
+- Status: FIXED. Covered tables 10 → 9, and the missing one is F-586.
+
+### F-586 — `20260921120000` writes a policy for `skill_files`, a table dropped in July 2026, and would abort the apply (2026-09-02, FIXED)
+
+- Location: `supabase/migrations/20260921120000_rls_phase2_policies.sql`, the `skill_files` block; the table's death is `20260716064733_collapse_skill_files_into_skills.sql` §e. Re-derive: `grep -rn "skill_files" supabase/migrations/*.sql | grep -iE "create table|drop table"`.
+- Found during: the wave-B batch-1/2 review — by the F-585 strengthening, on its first run, before it was ever pointed at anything.
+- **THE SHAPE.** `DROP TABLE IF EXISTS skill_files CASCADE`, with the migration's own note *"CASCADE takes its triggers + RLS policies + realtime-publication membership"*. Nothing re-creates it, and `skills/types.ts` has carried the one-line statement of that fact ever since: *"No `skill_files` table — body lives in [skills]"*. Phase 2 nevertheless issued `CREATE POLICY skill_files_member_select ON skill_files`, which **fails outright** with `relation "skill_files" does not exist` — taking every later statement in the file with it, on the first database it ever meets. It was never caught because replay is the only thing standing in for a database here and **no replay in the tree tracked `DROP TABLE`**.
+- ⚠ **THE INTERESTING PART IS THE BLAST RADIUS OF ONE MISSING ARM.** `shared/supabase/rls-policy-scan.ts › livePolicies` feeds four redteam suites; `check-rls-pair-gate.ts` had its own copy. Both replayed policies only, so a table dropped fourteen months of migrations ago went on answering as a FENCED table to: the pair gate (which declared it covered), the skills redteam suite (two cases, one of them a LIVE probe that would have failed at `supabase db reset`), this file's header prose, and two findings — F-570 counted its policy among the four it repaired, and F-573 was filed entirely against a body that had not existed for six weeks.
+- Resolution: the block, the pair-gate row, the redteam cases and the header prose are removed; `rls-policy-scan.ts` and the gate both track `DROP TABLE` now, and the gate additionally asserts RLS is ENABLED per covered table. The replacement redteam case asserts that NO policy key names `skill_files`, so writing it back turns the suite red.
+- Status: FIXED. F-573 is marked moot. Covered tables: NINE.
