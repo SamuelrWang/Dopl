@@ -32,7 +32,7 @@ carries the truth.
 `knowledge_entry_chunks` as children), each read rule stated ONCE in a predicate the policies call.
 Four wider-than-fence gaps closed (F-570): skills had no shared-credential arm and said nothing
 about `access_mode='teams'`; `chats_member_select` led with a blanket admin arm that read every
-private transcript; `chats_owner_select` was unfenced. **Ten covered tables, 11 with F-575.**
+private transcript; `chats_owner_select` was unfenced. ⚠ **NINE covered tables after the review**, not eleven: D1 withdrew `knowledge_entry_chunks` (F-575 back to OPEN) and `skill_files` was a policy for a table dropped in July 2026 (F-586).
 **No TS predicate was deleted; that is B16.**
 
 ## Measured, BEFORE (batch-1 end) → AFTER
@@ -42,15 +42,15 @@ ratchet fails on a SHRINK as well as a growth, so every ceiling below **is** the
 
 | Metric | Batch-1 end | Batch-2 end | Wave target |
 |---|---:|---:|---:|
-| **Served per external connection** | 51,996 | **49,057** | ≤30,000 |
+| **Served per external connection** | 51,996 | **49,790** | ≤30,000 |
 | ↳ 13 descriptions | 16,092 | 16,097 | ≤8,000 (11 tools) |
-| ↳ 13 input schemas | 34,053 | **31,103** | ≤19,000 |
+| ↳ 13 input schemas | 34,053 | **31,839** | ≤19,000 |
 | ↳ `dopl_channel` schema | 11,609 | **8,678** | 3,000 |
 | ↳ `instructions` | 1,851 | 1,857 | ≤1,900 |
 | **Doctrine (pulled)** | 32,551 | **8,960** | ≤9,000 ✅ |
 | Tools served | 13 | 13 | 11 (B13) |
 | `dopl_channel` ops / params | 23 / 35 | **5 / 23** | 5 / ≤20 ✅ / — |
-| RLS-covered tables | 3 | **11** | 7 ✅ |
+| RLS-covered tables | 3 | **9** | 7 ✅ |
 
 **The doctrine target is MET and the served target is not, for one reason each.** Doctrine is
 pulled, so deleting the six agent ops deleted `REFUSALS` and `CHANNEL_OWN_AGENTS` with them. The
@@ -59,13 +59,16 @@ over 23 fields is ~130 chars each including JSON Schema structure, which buys th
 deleting the answer to *"does this op want this argument"* (F-577). B13 takes the next one
 (`workspace=` off; `section`, `visibility` and `mode` are each the sole argument of one action).
 
-## Migrations pending — eleven, none applied, replay never run
+## Migrations pending — THIRTEEN, none applied, replay never run
 
 `…0911` launch_direction_client_msg_id · `…0912` channel_delivery_verdict · `…0913`
 channel_tasks_author_scoped_idempotency · `…0914` resource_grants · `…0915`
 drop_agent_template_teams · `…0916` drop_team_resource_access · `…0917` mcp_token_credential_axes ·
 `…0918` channel_default_responder · `…0919` rls_helpers_and_caller_scope · **`…0920`
-workspace_kind_personal** · **`…0921` rls_phase2_policies** (all `2026NNNN120000`).
+workspace_kind_personal** · **`…0921` rls_phase2_policies** (all `2026NNNN120000`), plus the
+review's two: **`20260921130000`** channel_resource_grants_read_only ·
+**`20260921140000`** resource_grant_trigger_arms. Both land after `…0921` and before batch 3's
+reserved `20260922120000`.
 
 Verified at integration: **strictly increasing** across the pending set; every `ADD COLUMN` carries
 `IF NOT EXISTS`; every `CREATE POLICY` and `CREATE TRIGGER` is preceded by a matching
@@ -124,14 +127,34 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
 | **B16** old ops + TS fences off | the 22 one-line redirects, the `await` lane (AWAITING 3,914 + two handlers + the budget module), the ping lane, the five `canSee*` predicates one at a time behind green redteam tests |
 | **B9/B10 residue** | `channel_resource_grants` + the in-txn mirror, after `repository-audience.ts › listGrantedBaseIdsForChannels` moves (F-460); `agentIdsInChannel` and its two re-exports (F-579); `use-agents-panel.ts`'s duplicate thread-other-party derivation (F-551) |
 
-## Gates — all green at `430007e4`
+## Gates — all green at `430007e4`, and RE-MEASURED after the review fixes
 
-Five suites — root **5,645** (381 files, 26 skipped), mcp-server **1,474** (99 files), client **58**,
-desktop-ui **433** (46 files), desktop **3,007** — both lints (root `--max-warnings 0`), both
-typechecks incl. `-w @dopl/desktop-ui`, and **nine** non-suite gates: `check-doc-refs`,
-`size-check`, five drift scripts, the RLS pair gate (11 covered tables) and the committed-`dist`
-check, which is clean with no rebuild commit because no merge after B8's `chore(dist)` moved
-package `src/`.
+**AT `430007e4` (the batch-2 landing).** Five suites — root **5,645** (381 files, 26 skipped),
+mcp-server **1,474** (99 files), client **58**, desktop-ui **433** (46 files), desktop **3,007** —
+both lints (root `--max-warnings 0`), both typechecks incl. `-w @dopl/desktop-ui`, and **nine**
+non-suite gates: `check-doc-refs`, `size-check`, five drift scripts, the RLS pair gate (11 covered
+tables) and the committed-`dist` check, which is clean with no rebuild commit because no merge
+after B8's `chore(dist)` moved package `src/`.
+
+**AFTER THE REVIEW FIXES** (measured 2026-09-02, at the end of this document's *Review fixes*
+section). Five suites — root **5,684** (384 files, 25 skipped), mcp-server **1,615** (100 files),
+client **58** (4 files), desktop-ui **433** (46 files), desktop **3,007** (`npm test`) — both
+lints at **0 errors / 0 warnings**, both typechecks, and **TEN** non-suite gates: the nine above
+with the pair gate now over **9** covered tables and four checks instead of one, plus the new
+`rls-redteam` job. `build:packages` leaves `packages/*/dist` clean.
+
+⚠ **THE `rls-redteam` GATE IS THE ONE THAT DID NOT RUN, AND IT IS THE ONE THAT MATTERS MOST.**
+This machine has no Docker — which is the reason the job exists. **Nothing in these counts is
+behavioural evidence about a policy or a trigger.**
+
+⚠ **THE ROOT SUITE'S EXIT CODE WAS READABLE THIS TIME (0), AND THAT IS NOT A FIX.** The
+`EnvironmentTeardownError` below is a race; it simply did not fire on this run. **Read the counts,
+not the exit code**, exactly as at batch 1.
+
+⚠ **A BARE `node --test` IN `dopl-desktop-app` NOW REPORTS 3,016, NOT 3,007**, and both numbers
+are right: `npm test` globs `test/**/*.mjs` and the bare form additionally collects the nine
+credential-less cases in `test/live/*.js`. It used to report 3,017 with one PERMANENT failure
+(F-595's smoke script), which is what made the discrepancy invisible.
 
 ⚠ **THE ROOT SUITE'S EXIT CODE IS STILL UNREADABLE, AND FOR THE SAME REASON AS AT BATCH 1.**
 `src/app/api/mcp/credits/consume/route-guest-floor.test.ts` raises an `EnvironmentTeardownError`
