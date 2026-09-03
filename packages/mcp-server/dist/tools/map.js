@@ -11,6 +11,10 @@ const narration_1 = require("./narration");
 const ontology_clipped_1 = require("./ontology-clipped");
 const partial_read_1 = require("./partial-read");
 const respond_1 = require("./respond");
+const tool_errors_1 = require("./tool-errors");
+const tool_style_1 = require("./tool-style");
+/** ⚠ The same row `dopl_search` teaches — one fan-out failure, one code. */
+const PARTIAL_READ_ERROR = tool_errors_1.SEARCH_ERRORS[0];
 const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
 /**
  * ⚠ EVERY string this tool renders is a member-typed one-liner LABEL (KB name +
@@ -34,7 +38,20 @@ const NO_NAME = "`(unnamed)`";
  * {@link SCOPE_NOTE} restates it on the RESULT for an agent that never read the
  * description, and both name the authoritative alternative.
  */
-const MAP_DESCRIPTION = `Curated routing manifest of the active workspace: the ACTIVE, caller-visible knowledge bases, skills and ontology clusters, with one-line descriptions and stable handles. It is a VIEW, not an inventory, so the counts here are not workspace totals: draft skills and anything scoped to a team you have no grant on are absent, and a domain that fails to load is NAMED in a PARTIAL READ notice on the result rather than passing as an empty section. For the authoritative inventory across every status and visibility use dopl_members(op="access_matrix"), which for an admin or owner enumerates every knowledge base and skill. Cheap; call at task start to decide where to look, then drill in with dopl_kb / dopl_skill / dopl_ontology. No parameters.`;
+const MAP_DESCRIPTION = (0, tool_style_1.composeDescription)({
+    headline: "Routing manifest of this workspace: ACTIVE, caller-visible knowledge bases, skills and ontology clusters, one line each, with handles.",
+    policy: "Read-only. No parameters.",
+    routing: [
+        'Use dopl_members(op="access_matrix") for the inventory across status and visibility.',
+        "Use dopl_kb / dopl_skill / dopl_ontology to drill in.",
+    ],
+    body: [
+        "A VIEW, not an inventory: these counts are not workspace totals, and an unread domain is NAMED with reason=partial_read. Call at task start.",
+    ],
+    errors: [PARTIAL_READ_ERROR],
+    examples: [{}],
+    cap: tool_style_1.READ_DESCRIPTION_MAX_CHARS,
+});
 /**
  * ⚠ Denominator the PARTIAL READ notice reports against. Must equal the count
  * of reads fanned out below — never a constant maintained beside them.
@@ -46,7 +63,7 @@ const DOMAIN_COUNT = 3;
  * the absence of a PARTIAL READ prefix proves every section was read; do not
  * revert to "an unreadable domain renders as an empty section".
  */
-const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named in a PARTIAL READ notice opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix").`;
+const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix").`;
 /**
  * The one destination this manifest cannot list, named anyway. `dopl_channel`
  * is DEFERRED in some clients, so its description is invisible until ToolSearch
@@ -63,7 +80,7 @@ const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-sc
  * queries must not inherit it. Routes and nothing more; cost and permissions
  * are `dopl_channel`'s to state.
  */
-const CHANNELS_ROUTING = `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="list") for the channels and DMs this account can post into.`;
+const CHANNELS_ROUTING = `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.`;
 function registerMapTool(register, client) {
     register("dopl_map", MAP_DESCRIPTION, {}, async () => {
         // ⚠ Fail-soft — one broken domain must not fail the manifest — but record

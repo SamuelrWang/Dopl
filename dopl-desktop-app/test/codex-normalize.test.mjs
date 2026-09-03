@@ -81,7 +81,7 @@ const TURN_DONE_CAMEL = {
 // what our server registers; `main/mcp-tool-names.js` canonicalises it.
 const POST_STARTED = {
   method: "item/started",
-  params: { item: { id: "it_3", type: "mcpToolCall", name: "dopl_channel", arguments: { op: "post", body: "done" } } },
+  params: { item: { id: "it_3", type: "mcpToolCall", name: "dopl_channel", arguments: { op: "send", body: "done" } } },
 };
 
 test("a thread start becomes `launched`, and it carries the handle every resume depends on", () => {
@@ -161,7 +161,7 @@ test("an own-channel post becomes ONE outbound_post, and the generic tool card i
   assert.equal(gated[0].payload.ownChannel, true);
   // ⚠ IT IS A BOOLEAN, NEVER ANOTHER CHANNEL'S ID (§H-9).
   const other = normalize.normalize(
-    { method: "item/started", params: { item: { id: "it_4", type: "mcpToolCall", name: "dopl_channel", arguments: { op: "post", channel: "other", body: "x" } } } },
+    { method: "item/started", params: { item: { id: "it_4", type: "mcpToolCall", name: "dopl_channel", arguments: { op: "send", channel: "other", body: "x" } } } },
     CTX
   );
   assert.deepEqual(types(other), ["tool_use"], "a CROSS-channel post is not an own-channel send");

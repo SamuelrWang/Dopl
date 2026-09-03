@@ -634,7 +634,7 @@ other.
 **Files/symbols.** `packages/mcp-server/src/tools/channel-description.ts ›
 CHANNEL_DESCRIPTION` (THE LAW block stays FIRST and stays SHORT —
 `channel-law.test.ts` pins its load-bearing sentences), `channel-post-guidance.ts` /
-`channel-post-notes.ts`, and the desktop's own
+the since-deleted `channel-post-notes` module, and the desktop's own
 `main/prompt-framing-text.js › VOCABULARY` for spawned sessions.
 
 ⚠ **A tool RESULT teaches harder than a description** — it is read by the same model at the

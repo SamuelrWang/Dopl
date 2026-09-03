@@ -8,6 +8,7 @@ import {
   readVendorHeader,
 } from "@/shared/auth/runtime-header";
 import { readSessionIdHeader } from "@/shared/auth/session-header";
+import { readToolProfileHeader } from "@/shared/auth/tool-profile-header";
 import { resolveTransportWorkspaceId } from "@/shared/auth/mcp-transport-pin";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
 
@@ -66,6 +67,13 @@ async function handle(request: Request): Promise<Response> {
   // is the conflation the second header exists to prevent.
   const callerVendor = readVendorHeader(request);
   const callerSessionId = readSessionIdHeader(request);
+  // THE CONTAINMENT PROFILE this connection is running under, so `createServer`
+  // can offer it a narrower tool set. ⚠ It may only NARROW and it GATES NOTHING
+  // — the vocabulary lives in `@dopl/mcp-server › gating.ts › TOOL_PROFILES`,
+  // which is also where a value this server cannot place falls to the narrowest
+  // profile. Not forwarded onto the loopback: it is about what THIS MCP
+  // connection is offered, not about what the app does with a request.
+  const callerToolProfile = readToolProfileHeader(request);
   // `signal` hands the caller's disconnect to the loopback; without it nothing downstream learns
   // the client hung up and an orphaned `op="await"` keeps re-polling for its whole ~215s budget.
   // ⚠ Scope: the client refuses to START further requests but only interrupts in-flight IDEMPOTENT
@@ -94,7 +102,26 @@ async function handle(request: Request): Promise<Response> {
       vendor: callerVendor ?? null,
       credentialKind: credential_info.kind,
       credentialLabel: credential_info.label,
+      // 🔒 THE CREDENTIAL'S CONTAINER LOCK, and the ONE thing on `caller` that
+      // gates: it rides the token row rather than a header, and only
+      // `mcp-container-token.ts` sets it — for a container SESSION the desktop
+      // spawned. `@dopl/mcp-server › identity.ts › isDesktopRun` reads it as
+      // the second mark of a desktop-run caller, beside the runtime stamp.
+      containerId: apiKeyWorkspaceId,
+      // ⚠ WHICH SESSION, not just which account (F-405). `op="await"` needs it
+      // to suppress its OWN echo without also suppressing a SIBLING session on
+      // the same account — one operator runs many concurrent agents and every
+      // post is authored by the ACCOUNT, so excluding on `userId` made a
+      // same-account counterparty permanently invisible to the hold. Same value
+      // already goes to the client above, which is what stamps it onto this
+      // session's own posts; the two must come from the one read.
+      sessionId: callerSessionId ?? null,
     },
+    // ⚠ CONTAINMENT, NOT PRIVILEGE. See `readToolProfileHeader` above and
+    // `BootOptions.toolProfile`: only an ABSENT header means "serve everything",
+    // while a header this server cannot read narrows to the floor rather than
+    // widening on a value nobody could parse.
+    toolProfile: callerToolProfile,
     onDiag: (message) => console.error(message),
   });
 

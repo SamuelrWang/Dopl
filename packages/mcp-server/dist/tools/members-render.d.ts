@@ -28,7 +28,7 @@ export declare const UNNAMED_MEMBER = "`(unnamed member)`";
  * reads the same route. ROUTING pointer only: cost, permissions and addressing
  * are `dopl_channel`'s to state.
  */
-export declare const CONTACT_POINTER = "To contact a member or their agent: dopl_channel (op=\"list\" for your channels, op=\"open\" for a DM). It is deferred in some clients, so load it with ToolSearch if it is not in your tool list.";
+export declare const CONTACT_POINTER = "To contact a member or their agent: dopl_channel (op=\"rooms\" for your channels and for opening a DM, op=\"send\" to say something). It is deferred in some clients, so load it with ToolSearch if it is not in your tool list.";
 export declare function sortByRole(members: WorkspaceMember[]): WorkspaceMember[];
 /**
  * How a member is NAMED in this tool's output: a neutralized label, then ⚠ the
@@ -37,6 +37,19 @@ export declare function sortByRole(members: WorkspaceMember[]): WorkspaceMember[
  * peer-typed name with nothing immutable beside it.
  */
 export declare function memberDisplay(m: WorkspaceMember): string;
+/**
+ * ONE ROSTER LINE, under an optional `fields=` projection (A16 / ruling B8).
+ *
+ * 🔒 **THE ID IS PRINTED BY CONSTRUCTION AND IS NOT ONE OF THE NAMES** —
+ * Samuel's ruling. A caller can neither ask for it nor drop it, so no projection
+ * can produce a row nothing else in the product can address. That is why the
+ * `name`-less shape still opens with the id rather than falling back to a label.
+ *
+ * ⚠ NO FILTER ⇒ BYTE-IDENTICAL TO THE UNPROJECTED LINE. The knob is opt-in and
+ * an omitted one must change nothing — which is also what keeps the roster's
+ * `· you` marker aligned with `channel-render.ts › formatMemberLine`.
+ */
+export declare function memberListLine(m: WorkspaceMember, you: string, wants: ((name: string) => boolean) | null): string;
 /** A team as a neutralized name plus the id it cannot forge. */
 export declare function teamDisplay(name: string, id: string): string;
 /** A member's team chips — neutralized names with their ids, or "none". */
@@ -46,18 +59,6 @@ export declare function resourceLabel(name: string | null | undefined): string;
 export declare function statusLabel(m: WorkspaceMember): string;
 export declare function defaultLevel(role: string): "none" | "read" | "edit";
 export declare function typeLabel(resourceType: string): string;
-export declare function isRetiredResourceType(resourceType: string): boolean;
-/** Drop rows for retired resource types from any resource-shaped list. */
-export declare function withoutRetiredResources<T extends {
-    resourceType: string;
-}>(rows: readonly T[]): T[];
-/**
- * Access matrix with retired rows gone from BOTH halves — resource inventory
- * AND every team's grant list. ⚠ Applied once per `getAccessMatrix()` in
- * `members.ts` so every downstream render inherits the filter rather than each
- * having to remember it.
- */
-export declare function pruneRetiredResources(matrix: AccessMatrix): AccessMatrix;
 /**
  * One teams-mode resource's grants as `<team> (<id>): <level>` pairs, or the
  * "nobody was granted this" note.

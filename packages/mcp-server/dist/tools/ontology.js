@@ -1,53 +1,88 @@
 "use strict";
 /**
- * `dopl_ontology` + `dopl_ontology_admin` — the workspace object graph as a
- * ROUTING layer. Read funnel: anchor → map → resolve → get. Writes edit ONE
- * thing at a time so agents never round-trip whole objects.
+ * `dopl_ontology` — the workspace object graph as a ROUTING layer. Read funnel:
+ * anchor → map → resolve → get. Writes edit ONE thing at a time so agents never
+ * round-trip whole objects. ⚠ There is no delete op and no
+ * `dopl_ontology_admin` (deleted 2026-09-02) — deletion is app-only, fenced by
+ * `sessionOnly` on the object and cluster DELETE routes. The `remove_*` ops here
+ * strip a FIELD from an object that survives; they are not deletes.
  *
- * Thin registrar: two tool schemas wired to
+ * Thin registrar: one tool schema wired to
  *   - `ontology-render.ts`    — shared ref resolvers + object renderer
  *   - `ontology-ops-read.ts`  — map/anchor/resolve/get
  *   - `ontology-ops-write.ts` — op dispatch + every mutating handler
- * The admin tool (refused cascade deletes) stays inline here.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOntologyTool = registerOntologyTool;
 const zod_1 = require("zod");
-const delete_policy_js_1 = require("../delete-policy.js");
-const narration_1 = require("./narration");
+const response_size_1 = require("./response-size");
 const identity_1 = require("./identity");
-const respond_1 = require("./respond");
-const ontology_render_1 = require("./ontology-render");
 const ontology_ops_write_1 = require("./ontology-ops-write");
-const ONTOLOGY_DESCRIPTION = `The workspace ontology — objects organized in clusters of columns, with attributes, relationships, and actions. An object IS whatever its column is named (a "Sales Rep" column holds sales reps). LOOK UP identity, context, and how work gets done here instead of inferring; AUTHOR it the same way (no web UI needed). Objects are referenced by id (preferred) or exact name; clusters by slug/id/name.
-
-READ — set \`op\` to:
-- "map" — the clusters and their COLUMNS, with each column's direct members named. TWO LEVELS ONLY: objects nested below a column's own children, and objects that belong to no column at all, never appear here, and trashed clusters/objects are never listed by any read. So it routes, it does not inventory — op="resolve" and op="get" reach what it does not show. Call first to route.
-- "anchor" — the object representing the CALLER. Start here for any "my/me" request. At most one object is returned even if the data holds several anchored to you.
-- "resolve" — find objects whose NAME or SUBTITLE contains the query (substring, case-insensitive; attributes, relationships and actions are not matched). Returns ids, capped at 20 matches, and the result says when it truncated.
-- "get" — one object in full: attributes (linked knowledge/skills resolved to openable handles), OUTBOUND relationships plus an inbound "Referenced by" backlink list, nested objects, action recipes. Also returns a Version token — pass it back as \`expected_version\` on a later write so a concurrent edit can't silently clobber yours. Requires: object.
-
-WRITE — set \`op\` to:
-- "create_cluster" — new ontology board. Requires: name. Optional: purpose (agents read it to route — write a good one).
-- "update_cluster" — rename / repurpose. Requires: cluster. Optional: name, purpose.
-- "create_column" — new column (container object) in a cluster; its name says what its objects ARE (e.g. "Sales Rep"). Requires: cluster, name.
-- "create_object" — new object inside a column (or nested in any object). Inherits from the parent: its template as empty fields, and a copy of its relationships and actions. Requires: parent, name.
-- "update_object" — rename / redescribe. Requires: object. Optional: name, subtitle.
-- "set_template_field" — upsert one DEFAULT field on a column (or any container): new objects created inside it are born with these fields, empty. Requires: object, label. Optional: kind (default text).
-- "remove_template_field" — Requires: object, label.
-- "set_attribute" — upsert one attribute by label. Requires: object, label. kind="text"|"pill" need \`value\`; kind="ref" needs \`values\` (object ids/names); kind="knowledge"|"skill" need \`values\` — KB/skill slugs or ids, and for kind="knowledge" also specific ENTRIES as \`<base>/<entry path>\` (e.g. "ai-ops-leads/Track 1 leads") or an entry uuid. Default kind: text.
-- "remove_attribute" — Requires: object, label.
-- "set_relationship" — replace one labeled edge. Requires: object, label, targets (object ids/names — at least one, and never the object itself). To clear an edge use "remove_relationship".
-- "remove_relationship" — Requires: object, label.
-- "set_action" — upsert an action by name: something the OBJECT can do day to day, performed by an agent on its behalf (e.g. "Send email", "Search LinkedIn"). Requires: object, name. Optional: description (how/when to do it), outcome (what the result should be, e.g. "Follow-up email sent and logged"), tools (what to use, e.g. "Gmail").
-- "remove_action" — Requires: object, name.
-- "claim_anchor" — link the CALLING user to an object as their identity anchor. Requires: object.
-
-Object-mutating ops (update_object, set/remove_attribute, set/remove_template_field, set/remove_action, set/remove_relationship) accept an optional \`expected_version\` (the Version from a prior op="get"). When supplied, the write is rejected if the object changed since — re-get, reconcile, and retry. Destructive deletes live in dopl_ontology_admin.`;
-const ONTOLOGY_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
-    { op: "delete_object", effect: "would have deleted one object" },
-    { op: "delete_cluster", effect: "would have deleted a cluster and, in cascade, every object it owns" },
-], `Reach for instead: \`dopl_ontology\` op="update_object" to rewrite an object, op="remove_attribute" / op="remove_relationship" to strip fields FROM one (those edit an object; they do not delete it). If a board or a card genuinely has to go, ask the user to delete it in the Dopl app.`);
+const tool_errors_1 = require("./tool-errors");
+const tool_style_1 = require("./tool-style");
+/**
+ * ⚠ THE ONE PROSE BUDGET ON THIS SURFACE THAT IS NOT
+ * {@link DESCRIPTION_MAX_CHARS}, AND IT IS A DECISION RECORDED IN CODE RATHER
+ * THAN A CAP QUIETLY ABSORBED. EIGHTEEN ops, and `parity.test.ts` requires
+ * every one of them to appear as a quoted `"op_name"`, on top of the two
+ * disclosures `tool-scope-claims.test.ts` pins by phrase (op="map"'s TWO LEVELS
+ * ONLY, op="resolve"'s cap). That floor does not fit 1,200.
+ *
+ * ⚠ 1,508 IS THE MEASURED PROSE, NOT A ROUND NUMBER WITH ROOM IN IT: it is a
+ * ratchet, so the next sentence added here fails at import instead of being
+ * absorbed. The whole SERVED string still answers to
+ * {@link HARD_DESCRIPTION_CEILING}, which no constant may raise — that is what
+ * grouped the inverse write ops onto one line below.
+ *
+ * ⚠ THE HONEST NEXT MOVE IS NOT A HIGHER NUMBER — it is the one `dopl_channel`
+ * already made for its law: pull the write-op glosses into an MCP resource, so
+ * they stop being pushed to every client that only ever reads the graph.
+ */
+const ONTOLOGY_PROSE_BUDGET = 1_508;
+/**
+ * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
+ * order for every tool on this surface.
+ *
+ * ⚠ WHAT LEFT: every "Requires:" / "Optional:" clause, the `expected_version`
+ * sentence, the ref-syntax sentence (id preferred, exact name, cluster by
+ * slug/id/name) and the attribute `kind` → `value`/`values` mapping. Each is
+ * stated by the param's own `.describe()` below, and a description and its arg
+ * descriptions are BOTH pushed on every connection.
+ */
+const ONTOLOGY_DESCRIPTION = (0, tool_style_1.composeDescription)({
+    headline: "The workspace object graph — objects in clusters of columns, with attributes, relationships and actions; it routes rather than inventories.",
+    policy: "Reads plus writes that edit ONE thing at a time. No delete op — a `remove_*` op strips a field, never the object.",
+    routing: ["Use dopl_map for the workspace-wide routing view."],
+    body: [
+        `READ — set \`op\` to:
+- "map" — clusters and their COLUMNS, with each column's direct members. TWO LEVELS ONLY: objects nested deeper, and objects in no column, never appear. Call first.
+- "anchor" — the CALLER's own object; start here for any "my/me" request, at most one.
+- "resolve" — objects whose NAME or SUBTITLE contains the query (case-insensitive substring), capped at 20 matches; the result says so.
+- "get" — one object: attributes, relationships, backlinks, nested objects, actions, a Version token.`,
+        // ⚠ GROUPED, NOT ONE LINE PER OP, AND THAT IS THE HARD CEILING TALKING.
+        // `parity.test.ts` needs every enum op to appear as a quoted `"op_name"`,
+        // not to own a line; eight of these lines were the op name said twice
+        // (`"remove_attribute" — drop one.`), and the whole served string has to
+        // fit {@link HARD_DESCRIPTION_CEILING}, which no constant may raise.
+        // ⚠ The two ops `tool-scope-claims.test.ts` reads as BULLETS — "map" and
+        // "resolve" — keep their own lines and must keep them.
+        `WRITE — set \`op\` to:
+- "create_cluster" / "update_cluster" — a cluster's name and \`purpose\`.
+- "create_column" — a container; its name says what its objects ARE.
+- "create_object" / "update_object" — born with the parent's template, relationships and actions.
+- "set_template_field" — a DEFAULT field; objects made inside inherit it, empty.
+- "set_attribute" / "set_relationship" / "set_action" — one attribute, one labeled edge (never onto the object itself), or one thing the OBJECT does day to day.
+- "remove_template_field" / "remove_attribute" / "remove_relationship" / "remove_action" — drop one, by label or name.
+- "claim_anchor" — link the CALLING user to an object as their anchor.`,
+    ],
+    errors: tool_errors_1.ONTOLOGY_ERRORS,
+    examples: [
+        { op: "map" },
+        { op: "resolve", query: "acme" },
+        { op: "set_attribute", object: "o-12", label: "Stage", value: "Won" },
+    ],
+    cap: ONTOLOGY_PROSE_BUDGET,
+});
 function registerOntologyTool(register, client, 
 /** The session identity record — `op="anchor"` states it before the object. */
 caller = identity_1.UNKNOWN_CALLER) {
@@ -114,63 +149,11 @@ caller = identity_1.UNKNOWN_CALLER) {
         expected_version: zod_1.z
             .string()
             .optional()
-            .describe("Optional optimistic-concurrency token for object-mutating ops: the object's Version from a prior op=\"get\". If the object changed since, the write is rejected so you can re-get, reconcile, and retry. Omit to overwrite blindly (last-writer-wins)."),
+            .describe("Object-mutating ops: the object's Version from a prior op=\"get\", which rejects the write if the object changed since; omit to overwrite blindly (last-writer-wins)."),
+        // ⚠ A16's response-size knob, on the FOUR read ops. ONE `.describe()`,
+        // in `response-size.ts`, shared with every tool that takes it — because
+        // five wordings is five chances to promise something `concise` does not
+        // do, and the promise ("bodies are untouched") is why it gets used.
+        response_format: response_size_1.RESPONSE_FORMAT_FIELD,
     }, (args) => (0, ontology_ops_write_1.dispatch)(client, args, caller));
-    register("dopl_ontology_admin", ONTOLOGY_ADMIN_DESCRIPTION, {
-        op: zod_1.z.enum(["delete_object", "delete_cluster"]).describe("Destructive operation."),
-        object: zod_1.z.string().optional().describe("delete_object: id or exact name."),
-        cluster: zod_1.z.string().optional().describe("delete_cluster: slug, id, or exact name."),
-    }, async (args) => {
-        // ⚠ SUMMARY PROJECTION, NOT THE GRAPH: this resolves a ref and counts a
-        // cascade over `columnIds`/`childIds` — containment only, no JSONB.
-        // (Unreachable: the delete refusal fires before any client call, so the
-        // point is that the resolvers stay honest about what they read.)
-        const snapshot = await client.getOntology({ view: "summary" });
-        if (args.op === "delete_object") {
-            const miss = (0, respond_1.missingParams)("delete_object", args, ["object"]);
-            if (miss)
-                return miss;
-            const resolved = (0, ontology_render_1.resolveObjectRef)(snapshot, args.object);
-            if ("fail" in resolved)
-                return resolved.fail;
-            await client.deleteOntologyObject(resolved.hit.id);
-            return (0, respond_1.ok)(`Deleted object ${(0, narration_1.inlineOr)(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.id}\`).`);
-        }
-        const miss = (0, respond_1.missingParams)("delete_cluster", args, ["cluster"]);
-        if (miss)
-            return miss;
-        const resolved = (0, ontology_render_1.resolveClusterRef)(snapshot, args.cluster);
-        if ("fail" in resolved)
-            return resolved.fail;
-        const count = countClusterObjects(snapshot, resolved.hit);
-        // ⚠ A clipped read UNDER-counts the cascade — rows past the ceiling are
-        // still deleted, just never in hand to count. A flat number is worse than
-        // no number.
-        const floor = snapshot.truncated
-            ? ` The ontology read was CLIPPED by a server row ceiling, so that count is a floor, not the cascade.`
-            : "";
-        await client.deleteOntologyCluster(resolved.hit.id);
-        return (0, respond_1.ok)(`Deleted cluster ${(0, narration_1.inlineOr)(resolved.hit.name, "`(unnamed)`")} (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and, in cascade, its ${count} object${count === 1 ? "" : "s"}.${floor} Permanent — there is nothing to restore it from.`);
-    });
-}
-/**
- * Size of a cluster's cascade set: columns plus every nested descendant. ⚠
- * Visited-set guards against cycles from objects shared across parents.
- *
- * ⚠ Typed to the containment fields it walks, so it accepts EITHER projection —
- * full snapshot and `view: "summary"` both carry `columnIds` and `childIds`.
- */
-function countClusterObjects(snapshot, cluster) {
-    const collected = new Set();
-    const stack = [...cluster.columnIds];
-    while (stack.length > 0) {
-        const id = stack.pop();
-        if (id === undefined || collected.has(id))
-            continue;
-        collected.add(id);
-        const obj = snapshot.objects[id];
-        if (obj)
-            stack.push(...obj.childIds);
-    }
-    return collected.size;
 }

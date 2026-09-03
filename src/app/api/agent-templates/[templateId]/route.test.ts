@@ -20,6 +20,7 @@ let params: Record<string, string> = { templateId: ID };
 
 const AUTH: Omit<WorkspaceAuthContext, "params"> = {
   userId: "user-1",
+  credentialSubjectUserId: "user-1",
   workspaceId: "ws-1",
   workspaceSlug: "acme",
   workspacePublicId: "pub-1",
@@ -57,7 +58,7 @@ vi.mock("@/features/agent-templates/server/service", () => ({
     role: auth.role,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId,
   }),
-  getTemplateById: vi.fn(),
+  readTemplateById: vi.fn(),
   updateTemplate: vi.fn(),
   deleteTemplate: vi.fn(),
 }));
@@ -65,11 +66,11 @@ vi.mock("@/features/agent-templates/server/service", () => ({
 import { GET, PATCH, DELETE } from "./route";
 import {
   deleteTemplate,
-  getTemplateById,
+  readTemplateById,
   updateTemplate,
 } from "@/features/agent-templates/server/service";
 
-const mockGet = vi.mocked(getTemplateById);
+const mockGet = vi.mocked(readTemplateById);
 const mockUpdate = vi.mocked(updateTemplate);
 const mockDelete = vi.mocked(deleteTemplate);
 

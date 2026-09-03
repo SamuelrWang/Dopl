@@ -231,8 +231,153 @@ jobs:
       - name: Diff workspace role set across server, SDK and MCP
         run: npx tsx scripts/check-role-drift.ts
 
+      # The SEVEN session-health fields, across FOUR hand-mirrors plus the
+      # migration's columns (2026-09-02). Every one of them is optional AND
+      # nullable by design, so drift there fails no build and no test — the
+      # field simply never arrives.
+      - name: Diff the session-health field set across its four mirrors
+        run: npx tsx scripts/check-session-health-drift.ts
+
+      # The `channel_messages` kind and author_kind sets, across the server
+      # union, the SDK's copy, its committed dist/ and the column CHECK
+      # (2026-09-02). The zod half is NOT a step here: `closedEnum` over a
+      # derived type makes that pair a compile error. Mutation-verified by
+      # `src/features/channels/message-kind-drift.test.ts`.
+      - name: Diff the message-kind sets across the union, the SDK and the column CHECK
+        run: npx tsx scripts/check-message-kind-drift.ts
+
       # The SPA's `tokens.css` is a hand copy of `globals.css`'s token layer
       # (F-074). The prose "edit both together" instruction it carries failed
       # twice in one wave, which is why this is a gate and not a comment.
       - name: Diff design tokens between globals.css and the SPA's tokens.css
         run: npx tsx scripts/check-css-token-drift.ts
+
+      # 🔒 EVERY `canSee*` PREDICATE HAS A NAMED POLICY TWIN (2026-09-02, Wave B
+      # B7). Visibility is stated twice today — a TS predicate that is the real
+      # fence, and a policy that never runs because every repository read goes
+      # through the service role — and the pair had already drifted WIDE on the
+      # knowledge tables. This gate does not claim the two AGREE; that is what
+      # the per-table redteam suites prove, one table at a time. It claims only
+      # that nothing is unpaired, so a NEW predicate cannot ship with no policy
+      # behind it at all. Mutation-verified: dropping an entry from `TWINS`, or
+      # naming a policy a later migration drops, turns it red.
+      - name: Pair every canSee* predicate with a live SELECT policy
+        run: npx tsx scripts/check-rls-pair-gate.ts
+
+      # 🔒 THE COMMITTED `dist/` IS THE BUILD OF `src/`, AND THIS IS THE ONLY
+      # THING THAT SAYS SO (2026-09-02, F-452). Both packages ship a TRACKED
+      # `dist/` and `next.config.ts › serverExternalPackages` keeps them
+      # external, so the committed output is what the app LOADS. A slice that
+      # edits `src/` and forgets the rebuild ships a change that exists in the
+      # repo and in no running process — which is exactly what the A10 branch
+      # did, and nothing caught it: the suites import `src/`, both typechecks
+      # read `src/`, and `build-test` rebuilds into a throwaway checkout, so it
+      # proves the build SUCCEEDS and never that the committed output matches.
+      - name: Build the packages
+        run: npm run build:packages
+
+      - name: Fail if the committed dist/ is not the build of src/
+        run: |
+          # ⚠ SCOPED TO dist/, not to `packages`: a clean checkout plus a build
+          # can only dirty generated output, and widening it would make an
+          # unrelated stray file read as a stale build.
+          #
+          # 🔒 ⚠ THE PATHSPEC ENDS `/*` AND THAT IS THE WHOLE GATE (fixed
+          # 2026-09-02, batch-3 review). It read `packages/*/dist`, which
+          # matches NOTHING: git applies leading-directory matching only to
+          # LITERAL pathspecs, and a glob has to match the whole path — so
+          # `packages/dopl-client/dist/channel.js` was never a match and
+          # `git ls-files -- 'packages/*/dist'` answers 0 against 286 tracked
+          # files. This job has been reporting a stale `dist/` as clean since
+          # the day it landed, which is F-661's shape a second time: a gate
+          # that cannot fail is worse than no gate, because it is counted.
+          # `*` does NOT stop at `/` in a git pathspec, so one `/*` covers
+          # `dist/tools/*.js` as well.
+          DIRTY=$(git status --porcelain -- 'packages/*/dist/*')
+          if [ -n "$DIRTY" ]; then
+            echo "::error::packages/*/dist is stale — run 'npm run build:packages' and commit the result."
+            echo "$DIRTY"
+            git diff --stat -- 'packages/*/dist'
+            exit 1
+          fi
+
+  # 🔒 THE LIVE HALF OF THE RLS REDTEAM SUITES — the only thing that can say
+  # POSTGRES agrees (2026-09-02, review of wave-B batch 2).
+  #
+  # ⚠ WHY THIS JOB EXISTS. Every behavioural case in the five redteam suites is
+  # `skipIf(!liveRedteamEnabled)`, and `RLS_REDTEAM_LIVE` was set NOWHERE — not
+  # in CI, not on the authoring machine, where Docker has been down for two full
+  # waves. So twenty-six cases were green having never executed a statement, and
+  # every claim about a policy in this wave is read out of SQL TEXT. **A
+  # structural assertion is not a behavioural one (F-523):** the scan proves a
+  # rule is WRITTEN once and names every arm; only a database can say what a
+  # policy admits. The gap was not theoretical — the same replay-only reading is
+  # what let a policy be written for a table dropped in July 2026 (F-586).
+  #
+  # ⚠ UBUNTU RUNNERS HAVE DOCKER, which is the whole reason this is possible in
+  # CI and not on the machine the wave was written on. `supabase db reset` also
+  # REPLAYS every migration against a real Postgres, so this job is simultaneously
+  # the replay gate that INVARIANTS §12 has been recording as OWED — a migration
+  # that cannot apply fails here before any assertion runs.
+  #
+  # ⚠ THE LOCAL SKIP STAYS. `liveRedteamEnabled` still requires a LOOPBACK
+  # Supabase URL as well as the flag, because the fixture writes auth users and
+  # rows and cannot tell a staging project from a local one.
+  rls-redteam:
+    name: RLS redteam (live, against a real Postgres)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `db reset` applies every migration in `supabase/migrations` in filename
+      # order. It is the gate as much as the setup: a migration that cannot
+      # apply — a policy on a dropped table, a function referencing one — fails
+      # the job here, with the SQL error, instead of on a production apply.
+      - name: Start Supabase and replay every migration
+        run: |
+          supabase start
+          supabase db reset
+
+      # The keys are the local stack's own, read back rather than hardcoded:
+      # `supabase start` prints them and they are not secrets — the stack is
+      # loopback-only and dies with the runner.
+      - name: Export the local stack's credentials
+        run: |
+          set -eu
+          status=$(supabase status -o json)
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$status" | jq -r .API_URL)"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$status" | jq -r .ANON_KEY)"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(echo "$status" | jq -r .SERVICE_ROLE_KEY)"
+            echo "SUPABASE_JWT_SECRET=$(echo "$status" | jq -r .JWT_SECRET)"
+          } >> "$GITHUB_ENV"
+
+      # ⚠ NAMED FILES, NOT A GLOB. `RLS_REDTEAM_LIVE=1` changes the behaviour of
+      # exactly these five suites; running the whole root suite under it would
+      # spend ten minutes to re-run 5,600 tests that do not read the flag.
+      - name: Run the redteam suites with the live half ARMED
+        env:
+          RLS_REDTEAM_LIVE: "1"
+        run: >-
+          npx vitest run
+          src/features/knowledge/server/rls-redteam.test.ts
+          src/features/skills/server/rls-redteam.test.ts
+          src/features/chats/server/rls-redteam.test.ts
+          src/features/agent-templates/server/rls-redteam.test.ts
+          src/shared/supabase/rls-redteam-resource-grants.test.ts
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup

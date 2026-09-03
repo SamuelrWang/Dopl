@@ -5,14 +5,16 @@
  * registrar in knowledge.ts.
  */
 
-import type { DoplClient, KbShelf } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import { inlineOr, isForeignAuthored } from "./narration";
 import { ok, type ToolResponse } from "./respond";
+import { isErr, resolveBaseOr } from "./knowledge-shared";
 import {
-  isErr,
-  resolveBaseOr,
-  UNTRUSTED_ENTRY_BODY_HEADER,
-} from "./knowledge-shared";
+  clipToMaxChars,
+  isConcise,
+  type ResponseFormat,
+} from "./response-size";
+import { fenceBody } from "./untrusted-fence";
 
 /**
  * ⚠ WHAT IS AND ISN'T NEUTRALIZED IN A KNOWLEDGE READ. A published base is
@@ -41,48 +43,30 @@ const NO_NAME = "`(unnamed)`";
  * ⚠ Names the FILTERS, never a hidden count — counting what you were not shown
  * is a second query on every list call.
  */
-const BASES_SCOPE_NOTE = `_Bases you can READ. Another member's private bases and bases scoped to a team you have no grant on are not listed, so this is not the workspace's base count. A row marked \`personal\` is on your own /home shelf and does not appear on the workspace Knowledge page; an UNMARKED row is on the workspace shelf, or on a server too old to say. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
+const BASES_SCOPE_NOTE = `_Bases you can READ here. Another member's private bases, and any you have no grant on, are not listed, so this is not the workspace's base count. Full inventory across every visibility: dopl_members(op="access_matrix")._`;
 
 /**
- * ⚠ `shelf` ABSENT LISTS BOTH SHELVES, and that is the RIGHT answer rather than
- * an oversight (F-342 rules the unfiltered MCP read right and says it "must stay
- * right"): an operator's agent asking "what knowledge is here" should see the
- * operator's whole workspace. The narrowing is a server-side `WHERE`, so a shelf
- * the caller did not ask for never reaches the wire.
+ * ⚠ **THE `shelf` ARGUMENT AND ITS `· personal` LABEL LEFT ON 2026-09-02
+ * (slice B15, ruling B10).** A personal base is no longer a `home_scoped`
+ * BOOLEAN inside a shared workspace — it is an ordinary row in the caller's own
+ * `kind='personal'` CONTAINER — so "which shelf" stopped being a question this
+ * op could ask and became the tenancy the call is already in. Labelling rows
+ * that are all in one container is chrome, and F-342's rule (the unfiltered MCP
+ * read is the right one) is now the only rule there is.
  */
-export async function opListBases(
-  client: DoplClient,
-  shelf?: KbShelf,
-): Promise<ToolResponse> {
-  const payload = await client.listKbBasesPayload({ shelf });
-  const bases = payload.bases;
-  // 🔒 ⚠ SIBLING KEY, `?? []` INLINE (INVARIANTS §8). `home_scoped` is
-  // deliberately not projected onto the row — no client may re-derive the shelf
-  // FENCE — so the label rides beside the list. An ABSENT key (older server,
-  // degraded read) means NO ROW IS LABELLED, which is exactly what this surface
-  // showed before the key existed. The unsafe direction would be calling a
-  // workspace base personal, and nothing here can produce that.
-  const personal = new Set(payload.homeScopedBaseIds ?? []);
-  const where =
-    shelf === "home"
-      ? " on your personal shelf"
-      : shelf === "workspace"
-        ? " on the workspace shelf"
-        : "";
+export async function opListBases(client: DoplClient): Promise<ToolResponse> {
+  const bases = (await client.listKbBasesPayload()).bases;
   if (bases.length === 0)
     return ok(
-      `No knowledge bases visible to you${where}. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`,
+      `No knowledge bases visible to you here. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`,
     );
-  const lines = [`## Knowledge bases${where}\n`];
+  const lines = ["## Knowledge bases\n"];
   for (const b of bases) {
     // ⚠ Immutable id beside the slug — the slug changes on rename.
     const vis = b.visibility === "private" ? "private" : "public";
     const desc = b.description ? `\n  ${inlineOr(b.description, "")}` : "";
-    // ⚠ The label appears only when the flag SAYS SO. An unlabelled row is
-    // "workspace shelf, or unknown" — never asserted as one of the two.
-    const shelfLabel = personal.has(b.id) ? " · personal" : "";
     lines.push(
-      `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis}${shelfLabel})${desc}`,
+      `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
     );
   }
   lines.push("", BASES_SCOPE_NOTE);
@@ -199,25 +183,39 @@ export async function opReadFile(
   path: string,
   // ⚠ Only the FRAMING reads this — readability is the server's decision and
   // it already ran.
-  callerUserId: string | null = null
+  callerUserId: string | null = null,
+  format?: ResponseFormat,
+  maxChars?: number,
 ): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   const entry = await client.readKbFileByPath(base.id, path);
+  const { body, notice } = clipToMaxChars(entry.body, maxChars);
+  const terse = isConcise(format);
   const lines = [
-    // ⚠ FRAMING FIRST, and only for a document this caller did not write — a
-    // header after the body is read after the injected instruction.
-    ...(isForeignAuthored(entry, callerUserId)
-      ? [UNTRUSTED_ENTRY_BODY_HEADER, ""]
-      : []),
-    // ⚠ BODY below the `---` is the document itself — deliberately untouched.
+    // ⚠ `concise` KEEPS THE VERSION TOKEN AND DROPS THE REST OF THE METADATA.
+    // That split is not arbitrary: `write_file` REFUSES without an
+    // `expected_version`, so dropping it would make the smaller read unable to
+    // feed the write it exists to precede — a knob that quietly costs a round
+    // trip is a knob nobody uses twice.
     `# ${inlineOr(entry.title, NO_NAME)}`,
-    `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
-    `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
+    ...(terse
+      ? [`Version: \`${entry.updatedAt}\` (pass as expected_version to write_file)`]
+      : [
+          `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
+          `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
+        ]),
+    ...(notice ? ["", notice] : []),
     "",
     "---",
     "",
-    entry.body,
+    // ⚠ FENCED, and only for a document this caller did not write. The fence's
+    // own header goes first — a caveat read after the injected line has already
+    // been read is not a caveat — and the close tag carries a per-response
+    // random suffix so the body cannot end its own fence (`untrusted-fence.ts`).
+    ...(isForeignAuthored(entry, callerUserId)
+      ? fenceBody(body, "knowledge entry by another member")
+      : [body]),
   ];
   return ok(lines.join("\n"));
 }

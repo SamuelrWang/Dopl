@@ -41,6 +41,21 @@
 // ⚠ SO A CURSOR SESSION AT `read_only` OR `dopl_only` IS NOT PROVEN UNABLE TO DELEGATE, exactly
 // as on the other native-containment runtime. It is Samuel's §8 open question 2 in concrete form
 // and it is recorded, not papered over.
+//
+// ── ⚠ FROZEN AT THREE PROFILES (2026-09-02, ruling X0) ───────────────────────────────────────
+// The other two adapters gained a FOURTH, `channel_agent` (ruling B7: `full` minus the shell, for
+// a session launched into a SHARED container). THIS TABLE DID NOT, AND THAT IS THE FREEZE, NOT AN
+// OVERSIGHT. X0 holds this runtime: `descriptor.session.interrupt` is `'unverified'`, and *"Dopl
+// cannot own a session it cannot stop"* — a runtime that does not ship does not grow a profile,
+// because a containment table written against research nobody has smoke-tested is a claim, not a
+// fence.
+// ⚠ THE REFUSAL IS THE ONE ALREADY IN THE CONTRACT, not a new branch here.
+// `contract.js › LAUNCH_BLOCKING[1]` (`containment.profiles.<profile>.denyList`) refuses a LAUNCH
+// AT A PROFILE this adapter declares no deny list for, and `capability.js › profileRefusal` is
+// the sentence an operator reads. `cursor/index.js › containment.profiles` therefore names three,
+// and `test/channel-agent-profile.test.mjs` pins the refusal so the freeze cannot rot into a
+// silent fall-through. ⚠ WHEN X0 CLEARS, this file gains the branch and that descriptor gains the
+// entry, in one change with the smoke item that grounds it.
 
 const {
   DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY,
@@ -210,6 +225,22 @@ function buildSessionToolConfig(profile) {
       doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),
       native: { runMode: 'allowlist', sandbox: true },
     };
+  }
+
+  // 🔒 ⚠ `channel_agent` THROWS RATHER THAN FALLING THROUGH TO `full` (2026-09-02, F-594).
+  // `normalizeProfile` KNOWS the fourth profile — it is in `KNOWN_PROFILES` for the two adapters
+  // that ship it — so it arrives here unchanged and, without this arm, took the `full` return
+  // below: the exact posture ruling B7 exists to narrow, with the shell NOT denied. The freeze
+  // note above says the refusal lives in `contract.js › LAUNCH_BLOCKING[1]`, and it does; this is
+  // the arm that makes that true when a caller reaches this builder by another road. **A FREEZE
+  // whose fall-through is the WIDEST profile on the table is not a freeze.**
+  // ⚠ THROWS rather than returning `read_only`: a silent downgrade would run the session under
+  // containment the operator did not ask for and nothing would say so, and a silent UPGRADE is
+  // what this replaces. When X0 clears, this arm becomes the fourth branch.
+  if (p === 'channel_agent') {
+    throw new Error(
+      'cursor: no containment table for profile "channel_agent" — this runtime is frozen at three profiles (ruling X0, interrupt unverified). Launch is refused by contract.js LAUNCH_BLOCKING before this point.',
+    );
   }
 
   // full: the UNIVERSAL FLOOR plus the credential-path fence, and nothing else. Everything else

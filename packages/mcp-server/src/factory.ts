@@ -6,10 +6,10 @@
  * orphan-skill cleanup) in `index.ts`.
  */
 
-import { isStandardWorkspace } from "@dopl/client";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
+import { containerKind, type WorkspaceSource } from "./workspace-directory.js";
 
 export type { CallerIdentity } from "./tools/identity.js";
 
@@ -22,9 +22,19 @@ export type DoplMcpServer = ReturnType<typeof createServer>;
 export interface BootOptions {
   /**
    * OAuth scopes granted for this session, if any. Stage 3 (OAuth) gates
-   * write/admin tools on these; absent ⇒ full access (stdio + bearer key).
+   * write tools on these; absent ⇒ full access (stdio + bearer key).
    */
   scopes?: string[];
+  /**
+   * The CONTAINMENT PROFILE this connection is running under, from the
+   * `X-Dopl-Tool-Profile` header the TRANSPORT read
+   * (`src/shared/auth/tool-profile-header.ts`) — the desktop stamps the profile
+   * it already spawned the session under. Threaded verbatim into
+   * `createServer`, whose option docblock carries the narrowing-only rule and
+   * the hint-not-fence caveat. Absent ⇒ the whole surface; a value this server
+   * cannot place ⇒ the narrowest profile, never the widest.
+   */
+  toolProfile?: string | null;
   /**
    * Retry attempts for the initial status ping. Default 0 — fast for per-request
    * HTTP; the stdio binary passes retries because it boots once.
@@ -44,6 +54,16 @@ export interface BootOptions {
    * against a second code path that fails on its own.
    */
   caller?: Partial<CallerIdentity>;
+  /**
+   * The caller's own live agent handles and the posture this session runs at,
+   * when the TRANSPORT knows them. ⚠ Threaded verbatim into the `instructions`
+   * briefing (`instructions.ts › ConnectionIdentity`) so an orchestrator does
+   * not spend a `dopl_status` call finding its own agents. Absent renders as a
+   * pointer to that tool, never as "you have none" — and nothing here costs a
+   * loopback, which this function's own docblock forbids.
+   */
+  liveAgents?: readonly string[];
+  posture?: string | null;
 }
 
 function errText(err: unknown): string {
@@ -56,9 +76,9 @@ export interface BootResult {
   userId: string | null;
   isAdmin: boolean;
   /**
-   * Session default workspace resolved at boot: a request X-Workspace-Id pin,
-   * else the sole membership. Null on 0 or 2+ memberships with no pin — each
-   * tool call must then pass `workspace=`.
+   * The container this connection is BOUND to: the request's `X-Workspace-Id`,
+   * or null. ⚠ **NULL IS ORDINARY SINCE B13** — a call that names no container
+   * is resolved by the SERVER, not refused and not guessed here.
    */
   activeWorkspace: {
     id: string;
@@ -110,15 +130,18 @@ export async function bootServer(
     directoryLoadFailed = true;
   }
 
-  // Session default: an X-Workspace-Id pin naming a membership wins; else
-  // exactly one membership auto-targets; else ⚠ NO transport default — the
-  // wrapper demands `workspace=` per call, so no header-less loopback fires.
-  // ⚠ Only STANDARD memberships can auto-target: a home-channel container must
-  // never become the workspace a no-arg tool call silently lands in. A PIN is
-  // explicit addressing and still matches the full directory.
+  // 🔒 **THE CONNECTION'S CONTAINER IS THE `X-Workspace-Id` HEADER AND NOTHING
+  // ELSE** (B10/B13). The sole-membership auto-target and the agent's own
+  // session pin are DELETED: neither is something the caller said on this call,
+  // and the sole-membership rule was a second copy of one the API already
+  // applies (`with-workspace-auth.ts › resolveActiveWorkspace`) — so a
+  // one-workspace caller resolves identically, one layer down, from one rule.
+  // ⚠ NO HEADER ⇒ NO `X-Workspace-Id` ON THE LOOPBACK, which is what lets the
+  // server answer with the caller's own container rather than this process
+  // guessing at one.
   const pin = client.getWorkspaceId();
   let active: WorkspaceListItem | null = null;
-  let source: "header pin" | "sole membership" | null = null;
+  let source: WorkspaceSource | null = null;
   if (pin) {
     active = directory.find((w) => w.id === pin || w.slug === pin) ?? null;
     if (active) {
@@ -133,16 +156,16 @@ export async function bootServer(
       );
     }
   }
-  const listable = directory.filter(isStandardWorkspace);
-  if (!active && listable.length === 1) {
-    active = listable[0];
-    source = "sole membership";
-  }
 
   // 🔒 THE CONTAINER LOCK (plan §4.4 B3). A session pinned to a SHARED link
   // container — one with a PEER in it — sees and addresses that container
   // ALONE: no `list_workspaces` entry for the operator's other workspaces, no
   // `workspace=` that resolves to one, no instruction table naming any.
+  //
+  // ⚠ **IT ASKS `kind === "link"`, NOT `!isStandardWorkspace(…)`** (F-564).
+  // The negation reads "not in the rail" as "therefore somebody's room", which
+  // `20260920120000`'s `personal` kind makes false for every user at once —
+  // each operator's OWN container would arm a lock built for a shared one.
   //
   // ⚠ SHARED, NOT SOLO. A one-member container is the operator's own primary
   // agent surface and is deliberately untouched, exactly as the audience ceiling
@@ -161,7 +184,9 @@ export async function bootServer(
   // fences are the container-locked credential and the server-side audience
   // ceiling. Do not describe this line as containment.
   const lockedTo =
-    active && !isStandardWorkspace(active) && (active.memberCount ?? 0) !== 1
+    active &&
+    containerKind(active) === "home channel" &&
+    (active.memberCount ?? 0) !== 1
       ? active
       : null;
   if (lockedTo) {
@@ -198,6 +223,9 @@ export async function bootServer(
     role: active?.role ?? null,
     workspaceSource: source,
     scopes: opts.scopes,
+    toolProfile: opts.toolProfile,
+    liveAgents: opts.liveAgents,
+    posture: opts.posture,
   });
 
   const activeWorkspace = active

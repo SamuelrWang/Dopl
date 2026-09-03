@@ -1,6 +1,11 @@
 import "server-only";
 import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { readClient } from "@/shared/supabase/caller-client";
+import {
+  personalWriteWorkspaceId,
+  resolveShelfScope,
+} from "@/shared/tenancy/personal-container";
 import type { KbShelf, KnowledgeBase } from "../types";
 import {
   KNOWLEDGE_BASE_COLS,
@@ -12,13 +17,30 @@ import {
 /**
  * Raw Supabase I/O for knowledge BASES. No business logic, no auth checks —
  * see `repository.ts` for the split map and conventions.
+ *
+ * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 1
+ * (Wave B B7). `readClient()` is the CALLER's client when
+ * `RLS_CALLER_SCOPED_READS` is on and `supabaseAdmin()` otherwise, so with the
+ * flag off this file behaves exactly as it did.
+ *
+ *   * **A read that answers "what may this caller see" takes `readClient()`.**
+ *     With the flag on, the row filter is the policy
+ *     (`20260919120000_rls_helpers_and_caller_scope`), which is written to equal
+ *     the TS predicate — the predicate stays until the flag has run a release.
+ *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`**, and
+ *     says so at the call site. Slug uniqueness, storage accounting and the
+ *     `max(position)` append helpers must see rows the caller cannot: scoped to
+ *     the caller they would answer a different question and answer it wrongly
+ *     (a slug "free" because someone else's private base holds it).
+ *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
+ *     until RLS plan phase 4.
  */
 
 export async function findBaseById(
   id: string,
   includeDeleted = false
 ): Promise<KnowledgeBase | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db.from("knowledge_bases").select(KNOWLEDGE_BASE_COLS).eq("id", id);
   if (!includeDeleted) query = query.is("deleted_at", null);
   const { data, error } = await query.maybeSingle();
@@ -33,7 +55,7 @@ export async function listBasesByIds(
   ids: string[]
 ): Promise<KnowledgeBase[]> {
   if (ids.length === 0) return [];
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
@@ -48,7 +70,7 @@ export async function findBaseBySlug(
   slug: string,
   includeDeleted = false
 ): Promise<KnowledgeBase | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
@@ -65,7 +87,7 @@ export async function findBaseByPublicId(
   publicId: string,
   includeDeleted = false
 ): Promise<KnowledgeBase | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
@@ -86,54 +108,61 @@ export async function findBaseByPublicId(
  * `service-bases.ts › listBases` — which MUST see both shelves, or a workspace
  * whose only bases are home-scoped would re-seed on every list call.
  *
- * ⚠ `home_scoped` IS FILTERED ON BUT NEVER SELECTED. It is absent from
- * `KNOWLEDGE_BASE_COLS` on purpose (`../types.ts › KbShelf` holds the argument);
- * Postgres does not require a column to be projected to filter on it, and
- * leaving it off the row is what keeps the fence server-side.
+ * ⚠ **THE SHELF IS A TENANCY, NOT A `WHERE` (2026-09-02, slice B15).** This
+ * used to filter a `home_scoped` BOOLEAN alongside the workspace; the column is
+ * dropped and `shelf="home"` is the caller's PERSONAL CONTAINER
+ * (`shared/tenancy/personal-container.ts`). The decision lives there; what stays
+ * here is applying it, and it is now one `.in()` rather than an `.in()` plus a
+ * conditional `.eq()`.
  */
 export async function listBasesForWorkspace(
   workspaceId: string,
   includeDeleted = false,
   shelf?: KbShelf
 ): Promise<KnowledgeBase[]> {
-  const db = supabaseAdmin();
+  const db = readClient();
+  const scope = await resolveShelfScope(workspaceId, shelf);
   let query = db
     .from("knowledge_bases")
     .select(KNOWLEDGE_BASE_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", scope.workspaceIds)
     .order("created_at", { ascending: true });
   if (!includeDeleted) query = query.is("deleted_at", null);
-  if (shelf !== undefined) query = query.eq("home_scoped", shelf === "home");
   const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as KnowledgeBaseRow[]).map(mapBaseRow);
 }
 
 /**
- * WHICH of `baseIds` live on the /home SHELF — the fold behind
+ * WHICH of `baseIds` are on the caller's PERSONAL shelf — the fold behind
  * `GET /api/knowledge/bases › homeScopedBaseIds`. One query for N bases.
  *
- * 🔒 ⚠ **THIS IS THE ONLY PLACE `home_scoped` IS SELECTED, AND IT SELECTS THE
- * FLAG ALONE.** The column is deliberately absent from `KNOWLEDGE_BASE_COLS`
- * (`dto.ts`) so no client can re-implement the shelf FENCE from a projected row
- * — and nothing here changes that: what crosses the wire is a set of ids the
- * caller was ALREADY shown, labelled, not a new column on the row.
+ * ⚠ **IT ASKS A TENANCY QUESTION SINCE 2026-09-02 (slice B15).** It selected the
+ * `home_scoped` flag, which was the ONLY place that column was projected; the
+ * column is dropped and the question is "is this row in my personal container".
+ * The answer set is the same one it always returned — ids the caller was ALREADY
+ * shown, labelled — so the wire contract and the sibling key are untouched.
  *
  * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. The id set IS the fence, exactly
  * as `repository-stars.ts › listStarredBaseIds` requires — this function applies
  * no visibility of its own and must never be given a wider set.
+ *
+ * ⚠ IT ASKS THE SAME QUESTION `listBasesForWorkspace(_, _, "home")` ASKS, so it
+ * asks it through the same {@link resolveShelfScope} — a second, hand-rolled
+ * spelling of "is this row personal" is how a label comes to disagree with the
+ * list it labels.
  */
 export async function listHomeScopedBaseIds(
   workspaceId: string,
   baseIds: string[]
 ): Promise<string[]> {
   if (baseIds.length === 0) return [];
-  const db = supabaseAdmin();
-  const { data, error } = await db
+  const scope = await resolveShelfScope(workspaceId, "home");
+  if (scope.workspaceIds.length === 0) return [];
+  const { data, error } = await readClient()
     .from("knowledge_bases")
     .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("home_scoped", true)
+    .in("workspace_id", scope.workspaceIds)
     .in("id", baseIds);
   if (error) throw error;
   return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
@@ -147,6 +176,8 @@ export async function listHomeScopedBaseIds(
 export async function listBaseSlugsForWorkspace(
   workspaceId: string
 ): Promise<string[]> {
+  // ⚠ SYSTEM READ, service role on purpose: uniqueness spans rows the caller
+  // cannot see. Scoped to the caller, a taken slug would read as free.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
@@ -169,16 +200,17 @@ export interface InsertBaseArgs {
   /** `'workspace'` if omitted (matches DB column default). */
   accessMode?: "workspace" | "teams";
   /**
-   * WHICH SHELF (`../types.ts › KbShelf`). `false` if omitted, matching the DB
-   * column default — so the seed path and every batch insert land on the
-   * WORKSPACE shelf without naming it. ⚠ Only `createBase` ever passes `true`,
-   * and only behind its three-part fence.
+   * WHICH SHELF (`../types.ts › KbShelf`). ⚠ **A ROUTING FLAG, NOT A COLUMN,
+   * SINCE 2026-09-02 (slice B15)** — it decides the row's `workspace_id` and
+   * nothing stores it. Absent = the container the call is in, so the seed path
+   * and every batch insert are unchanged; only `createBase` ever passes `true`.
    */
   homeScoped?: boolean;
   createdBy: string | null;
 }
 
-/** ⚠ Shared by single AND batch insert so column defaults can't drift. */
+/** ⚠ Shared by single AND batch insert so column defaults can't drift.
+ *  ⚠ `workspaceId` is the RESOLVED one — see {@link insertBase}. */
 function baseInsertRow(args: InsertBaseArgs) {
   return {
     workspace_id: args.workspaceId,
@@ -189,16 +221,25 @@ function baseInsertRow(args: InsertBaseArgs) {
     agent_write_enabled: args.agentWriteEnabled ?? false,
     visibility: args.visibility ?? "public",
     access_mode: args.accessMode ?? "workspace",
-    home_scoped: args.homeScoped ?? false,
     created_by: args.createdBy,
   };
 }
 
+/**
+ * 🔒 **THE PERSONAL WRITE LANDS IN THE CONTAINER, OR IT REFUSES** (slice B15).
+ * The dual-write this replaced kept `home_scoped = true` beside a `workspace_id`
+ * a flag might or might not have moved; with the column dropped there is one
+ * place a personal row can be, and a fallback would write a row no surface can
+ * find. `personalWriteWorkspaceId` throws rather than guessing. Everything else
+ * inserts unchanged; only `insertBase` can be personal, which is why
+ * {@link insertBases} (the new-workspace seed) is not on this path.
+ */
 export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
   const db = supabaseAdmin();
+  const workspaceId = await personalWriteWorkspaceId(args);
   const { data, error } = await db
     .from("knowledge_bases")
-    .insert(baseInsertRow(args))
+    .insert(baseInsertRow({ ...args, workspaceId }))
     .select(KNOWLEDGE_BASE_COLS)
     .single();
   if (error || !data) throw error || new Error("Failed to insert knowledge base");
@@ -303,6 +344,7 @@ export async function listBaseStorageBytes(
   baseIds: string[]
 ): Promise<Map<string, number>> {
   if (baseIds.length === 0) return new Map();
+  // ⚠ SYSTEM READ, service role on purpose: accounting, not visibility.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
@@ -329,6 +371,7 @@ export async function getBaseStorageBytes(
   workspaceId: string,
   baseId: string
 ): Promise<number | null> {
+  // ⚠ SYSTEM READ, service role on purpose: the write gate's quota reading.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")

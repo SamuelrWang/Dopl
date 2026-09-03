@@ -16,6 +16,7 @@ const USER = "user-1";
 const CTX: SkillContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "user",
   role: "owner",
   apiKeyWorkspaceId: null,

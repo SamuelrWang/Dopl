@@ -18,6 +18,7 @@ import "server-only";
  *   - `repository-folders.ts` — folder reads + ancestor walk + writes + delete
  *   - `repository-entries.ts` — entry reads (incl. path helpers) + writes + delete
  *   - `repository-stars.ts`   — PER-USER base stars, every statement by user_id
+ *   - `repository-pins.ts`    — WORKSPACE-WIDE pins + the startup-context reads
  */
 
 export {
@@ -76,3 +77,12 @@ export {
   insertBaseStar,
   deleteBaseStar,
 } from "./repository-stars";
+
+export {
+  listPinnedBaseIds,
+  setBasePinned,
+  setEntryPinned,
+  listPinnedEntriesForBases,
+  listFolderNodesForBases,
+} from "./repository-pins";
+export type { KnowledgeFolderNode } from "./repository-pins";

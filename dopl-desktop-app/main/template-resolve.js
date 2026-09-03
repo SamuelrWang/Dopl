@@ -65,6 +65,8 @@ const MAX_FIELD_VALUE = 1000; // …and its `.value`
 const MAX_MODEL = 120; // an id or an alias; `session-model.js` re-coerces it anyway
 const MAX_BASE_LABEL = 200; // a base id or slug and its display name — neither reaches a prompt
                             // line unsanitized (`prompt-framing-template.js › knowledgeLines`)
+const MAX_TENANCY_LABEL = 200; // a workspace name (120) or a container id in a fixed phrase — a
+                               // DIAGNOSTIC string (T35), and it reaches no prompt at all
 
 // ⚠ THE SHARED UUID RULE, NEVER A LOCAL COPY. `test/uuid-rule-parity.test.mjs` is a CENSUS of
 // every file in `main/` that spells the rule itself, and its standing instruction is that a new
@@ -116,6 +118,23 @@ function narrow(body) {
 }
 
 /**
+ * The server's own tenancy classification off a 404 body, or null. NEVER THROWS AND NEVER GUESSES.
+ *
+ * ⚠ A BOUNDARY READ, so it is bounded like every other one in this file: two short strings, sliced,
+ * and anything that is not a pair of non-empty strings is `null`. This text is diagnostic and
+ * operator-facing on this machine; the AGENT-facing sentence is written server-side.
+ */
+async function tenancyHint(res) {
+  let body = null;
+  try { body = await res.json(); } catch (_err) { return null; }
+  const raw = body && body.error && body.error.details && body.error.details.elsewhere;
+  if (!raw || typeof raw !== 'object') return null;
+  const name = label(raw.name, MAX_NAME);
+  const where = label(raw.label, MAX_TENANCY_LABEL);
+  return name && where ? { name, label: where } : null;
+}
+
+/**
  * Resolve a template for a spawn. Never throws.
  *
  * ANSWERS, and they are the F-1…F-6 table from the spec, verbatim:
@@ -157,8 +176,33 @@ async function resolveTemplate(templateId, workspaceId) {
   }
   if (!res) return { ok: false, reason: 'busy' };
   if (res.status === 404) {
-    diag('template-resolve: 404', String(templateId).slice(0, 8), '— deleted or not visible to this operator');
-    return { ok: false, reason: 'no-template' };
+    // ⚠ THREE CAUSES, ONE WORD, AND THE THIRD IS THE COMMON ONE. `workspaceId` scopes this read to
+    // the CHANNEL's tenancy — a home channel's own `kind='link'` container — and the route reads
+    // `(workspace_id, id)`, so a template this operator owns in ANOTHER workspace (their personal
+    // shelf included) is ABSENT here, not hidden. Deleted / not visible / wrong tenancy stay ONE
+    // `reason` on purpose: 404-never-403 is what stops an id being probed, and this machine must
+    // not guess between them.
+    //
+    // ⚠ BUT THE SERVER MAY HAND BACK THE THIRD ONE NAMED (T35). `details.elsewhere` is present
+    // only when the row is one THIS OPERATOR could already list for themselves — their own, or
+    // `workspace`-visible, in a workspace they belong to — living in another tenancy
+    // (`agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef` is the fence).
+    // It is a CLASSIFICATION THE SERVER MADE, never one this machine infers, so carrying it
+    // reconstructs no oracle: absent means "nothing non-leaky to say", which is also what an older
+    // server sends.
+    const elsewhere = await tenancyHint(res);
+    diag(
+      'template-resolve: 404',
+      String(templateId).slice(0, 8),
+      elsewhere ? `— lives in ${elsewhere.label}, not this channel's container` : '— deleted, not visible to this operator, or in another container'
+    );
+    // ⚠ THE WORD DOES NOT MOVE, AND THAT IS THE WIRE'S LIMIT RATHER THAN A CHOICE: a decide carries
+    // a refusal REASON out of a closed vocabulary and no free text, so `elsewhere` cannot reach the
+    // orchestrator from here. What reaches it is `channel-ops-launch.ts › REFUSAL_SENTENCES` —
+    // which states the same TENANCY RULE, in the same shape, for exactly this reason.
+    return elsewhere
+      ? { ok: false, reason: 'no-template', elsewhere }
+      : { ok: false, reason: 'no-template' };
   }
   if (!res.ok) {
     // ⚠ EVERY OTHER NON-2xx IS `busy`, 4xx INCLUDED. A 401 that survived the shared repair, a
@@ -270,6 +314,7 @@ module.exports = {
   resolveTemplate,
   isTemplateId,
   narrow, // exported so the whitelist can be driven directly, without a fake transport
+  tenancyHint, // T35: the server's own "it lives elsewhere" classification, read off a 404 body
   narrowOverrides, // 2026-08-22: the launch sheet's ephemeral re-points, re-validated main-side
   applyOverrides,
   isSafeLabel, // the server's charset, as this tree's single copy answers it

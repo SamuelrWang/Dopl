@@ -13,19 +13,30 @@
  * `task`) are storage names, deliberately unchanged; mapping happens here and
  * in `channel.ts`.
  */
-export type ChannelVisibility = "public" | "private";
-export type ChannelMemberRole = "owner" | "member";
 import type { ChannelEscalationFields } from "./escalation-types.js";
-export type ThreadMode = "interactive" | "autonomous";
-export type ThreadStatus = "open" | "closed";
-export type ThreadOutcome = "completed" | "failed";
-export type ChannelAuthorKind = "user" | "agent" | "system";
 /**
- * `message` = chat; `task_*` = structured activity events (machine payload in
- * `metadata`, human render in `body`); `system` = server-emitted joins / topic
- * changes (agents don't post these).
+ * ⚠ **THE TEN CLOSED SETS AND THE TELEMETRY SHAPE BELOW ARE DECLARED IN
+ * `@dopl/contracts` AND RE-EXPORTED HERE UNDER THIS PACKAGE'S OWN NAMES**
+ * (2026-09-02, v2 slice A13). `ChannelMemberRole` is the package's
+ * `ChannelRole` and `ChannelAuthorKind` is its `MessageAuthorKind`, aliased on
+ * the way through, so **NO CONSUMER IMPORT CHANGES**: `@dopl/client` publishes
+ * exactly the names it always has.
+ *
+ * ⚠ **THIS IS WHAT THE "HAND MIRROR" HEADERS IN THIS PACKAGE WERE ASKING FOR.**
+ * Every one of these was re-typed here because this package cannot import
+ * `src/` — separate `tsc` programs, resolved through `node_modules`.
+ * `@dopl/contracts` is the shared module that removes the reason: it is TYPE-ONLY
+ * and has no build, so importing it costs this package nothing at runtime and
+ * adds nothing to its `dist/`.
+ *
+ * ⚠ **THE `dist/` COPIES OF THESE UNIONS ARE GONE, NOT STALE.** Three drift
+ * gates used to parse `packages/dopl-client/dist/*.d.ts` as a separate mirror
+ * because it is what `@dopl/mcp-server` actually imports. A re-export emits a
+ * re-export, so there is no literal union in `dist/` left to disagree — the
+ * gates dropped those sites rather than being pointed at them.
  */
-export type ChannelMessageKind = "message" | "task_started" | "task_progress" | "task_finished" | "task_failed" | "system";
+import type { ChannelVisibility, ChannelRole as ChannelMemberRole, ThreadMode, ThreadStatus, ThreadOutcome, MessageAuthorKind as ChannelAuthorKind, ChannelMessageKind, MessageIntent, SessionPillState, ChannelSessionTelemetry } from "@dopl/contracts";
+export type { ChannelVisibility, ChannelMemberRole, ThreadMode, ThreadStatus, ThreadOutcome, ChannelAuthorKind, ChannelMessageKind, MessageIntent, SessionPillState, ChannelSessionTelemetry, };
 import type { ChannelInfoCard } from "./info-card-types.js";
 export type { ChannelInfoCard, ChannelInfoCardBuiltInKey, ChannelInfoCardRow, ChannelUpdateInput, } from "./info-card-types.js";
 export interface Channel {
@@ -59,6 +70,8 @@ export interface Channel {
      */
     infoCard?: ChannelInfoCard;
 }
+import type { ChannelDelivery, ChannelWakeVerdict } from "./delivery-types.js";
+export type { ChannelDelivery, ChannelWakeVerdict };
 export interface ChannelMessage {
     id: string;
     /** Monotonic cursor — `read`/`await` return messages with a higher seq. */
@@ -78,6 +91,12 @@ export interface ChannelMessage {
      */
     authorName?: string | null;
     authorAvatarUrl?: string | null;
+    wakeVerdict?: ChannelWakeVerdict | null;
+    recipientUserIds?: string[] | null;
+    recipientAgentIds?: string[] | null;
+    /** ⚠ Without `deliveryAt` this is the server's write-time PREDICTION. */
+    delivery?: ChannelDelivery | null;
+    deliveryAt?: string | null;
 }
 /**
  * POST result: the stored message.
@@ -154,110 +173,8 @@ export interface ChannelThreadPage {
     threads: ChannelThread[];
     truncated: boolean;
 }
-/**
- * States a session's pill (and read-session-state) reports. NO `thinking` — it
- * needs streaming, which is off. Mirrors `SessionPillState` in the app.
- */
-export type SessionPillState = "working" | "idle" | "ended";
-/**
- * ONE of a member's live (or just-ended) sessions, from
- * `dopl_channel(op="read_sessions")`. Server-visible projection of the
- * desktop's `session-summary.list()`.
- */
-/**
- * WHICH OF SIX SITUATIONS a live session is in — one step finer than
- * {@link SessionPillState} and the only refinement that crosses machines.
- *
- * ⚠ **A CLOSED KEY VOCABULARY, NOT PROSE, AND THAT IS WHY IT MAY BE SEEN BY A
- * PEER.** Six fixed words, each coarse enough to show a counterparty: they say
- * what CLASS of work is happening and never which tool, which model, or what it
- * cost. Anything free-form belongs on the operator-only side
- * ({@link ChannelSessionTelemetry}).
- *
- * ⚠ A DELIBERATE COPY of `src/features/channels/types.ts › SessionDetailKey`
- * (itself derived from the desktop's own `DesktopSessionSummary["detail"]`) —
- * this package cannot import across the tree boundary. `channel-session-
- * staleness.test.ts` pins the two against that file's text.
- * ⚠ AN UNKNOWN KEY NEVER ARRIVES: the server narrows anything outside this set
- * to `null` before it reaches the wire, so a newer desktop's seventh key reads
- * as "no refinement" rather than as raw text in a rendered result.
- */
-export type SessionDetailKey = "thinking" | "tool" | "posting" | "permission" | "awaiting_peer" | "awaiting_inbound";
-export interface ChannelSessionState {
-    channelId: string;
-    /** Thread (task) this session is on, or null. */
-    threadId: string | null;
-    /** Friendly handle the pills show (flint / onyx / …). */
-    name: string;
-    state: SessionPillState;
-    /**
-     * WHICH OF SIX SITUATIONS this session is in — see {@link SessionDetailKey}.
-     * ⚠ OPTIONAL **and** nullable: ABSENT means this projection does not carry the
-     * field (an older server), `null` means the machine reported no refinement.
-     * Neither means "doing nothing". ⚠ It only ever REFINES `working`.
-     */
-    detail?: SessionDetailKey | null;
-    channelName: string | null;
-    threadTitle: string | null;
-    updatedAt: string;
-}
-/**
- * OPERATOR-ONLY session telemetry (server ruling, 2026-08-22). Rides only on
- * OWN-scoped reads — `listChannelSessions` (`GET /api/channels/sessions`) and
- * the `sessions` block on an await result. A PEER's session never carries these
- * fields: the server's channel-scoped mapper cannot emit them.
- *
- * ⚠ **EVERY MEASURED `null` MEANS UNKNOWN, NEVER ZERO.** Render "unknown" or
- * render nothing; never render `0` for an absent count, and never divide by an
- * absent `contextWindow`.
- *
- * ⚠ **THE NAME IS ABOUT THE AUDIENCE, NOT THE SUBJECT** (2026-08-23):
- * `templateName` is an identity snapshot rather than a measurement and rides
- * here because it reaches the same single reader.
- */
-export interface ChannelSessionTelemetry {
-    model: string | null;
-    /** The tool running right now ("Bash", "Edit"). */
-    toolLabel: string | null;
-    contextUsed: number | null;
-    contextWindow: number | null;
-    tokensSpent: number | null;
-    startedAt: string | null;
-    lastActivityAt: string | null;
-    /**
-     * The agent TEMPLATE this session was launched from, by name, AS OF SPAWN.
-     *
-     * ⚠ **A SNAPSHOT, NOT A POINTER** — a session reports what it RAN AS, so this
-     * may name a template that has since been renamed or deleted. That is correct,
-     * not stale. ⚠ OPERATOR-ONLY like the rest of this interface: a private
-     * template's name reaching a peer is an existence oracle. `null` = no
-     * template, or a desktop older than the field.
-     */
-    templateName: string | null;
-}
-/** The caller's OWN session — coarse projection plus the operator-only half. */
-export type ChannelSessionStateOwn = ChannelSessionState & ChannelSessionTelemetry;
-/**
- * `listChannelSessions`' whole answer — the rows AND whether the machine that
- * would have written them is still heartbeating (2026-08-23, F-294).
- *
- * ⚠ **THE SECOND FIELD IS NOT ABOUT ANY ONE SESSION AND MUST NOT BE FOLDED INTO
- * ONE.** `agent_presence` is per-(user, workspace): it says a listener of this
- * operator's heartbeat recently, which is why it lives on the ENVELOPE rather
- * than repeated onto every row as if each machine had answered separately.
- * ⚠ **OPTIONAL, AND IT STAYS OPTIONAL** — INVARIANTS §13, an older deployment is
- * a supported peer. Absent = NOT REPORTED, and a render must treat that exactly
- * as it treats `false`: a fact nobody reported is not evidence of life.
- * ⚠ It is a BOOLEAN and never a stamp, deliberately: the freshness window is the
- * server's (`PRESENCE_ONLINE_WINDOW_MS`), and a stamp on the wire invites a
- * client to re-derive it against a second number.
- * ⚠ Precedent for the envelope shape is `ChannelThreadPage`, for the same reason
- * — one fact about the PAGE that is not a fact about any row on it.
- */
-export interface ChannelSessionsPage {
-    sessions: ChannelSessionStateOwn[];
-    operatorOnline?: boolean;
-}
+import type { ChannelSessionStateOwn } from "./session-types.js";
+export type { ChannelSessionState, ChannelSessionStateOwn, ChannelSessionsPage, SessionDetailKey, } from "./session-types.js";
 export interface ChannelThreadCreateInput {
     title: string;
     mode?: ThreadMode;
@@ -316,6 +233,18 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
      * (or, in a 2-member channel, the implicit other member).
      */
     toUserId?: string;
+    /**
+     * **THE ONE RECIPIENT, IN EITHER NAMESPACE** (2026-09-02, B4/B8) — a member
+     * (email or user id) **or an agent** (`@agent-<id>` / `@<handle>`). The route
+     * resolves it once at the door (`service-writes-metadata-recipient.ts ›
+     * resolveToRecipient`): a member BECOMES {@link toUserId} before any fence
+     * runs, an agent rides `recipient_agent_ids`, and a name that resolves to
+     * NOBODY is a 400 `CHANNEL_RECIPIENT_UNRESOLVED` listing the live handles.
+     * ⚠ Mutually exclusive with {@link toUserId} — sending both is
+     * `CHANNEL_CHAT_ADDRESSED`, because two addressee fields on one message is
+     * two answers to one question.
+     */
+    to?: string;
     /** One-line intent (<=200 chars) surfaced in the receiver's notification. */
     summary?: string;
     /**
@@ -335,11 +264,6 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
      */
     intent?: MessageIntent;
 }
-/**
- * `request` (default) reaches an agent; `chat` reaches only the humans in the
- * room. See `ChannelMessageInput.intent`.
- */
-export type MessageIntent = "chat" | "request";
 export interface ReadMessagesOptions {
     /** Only messages with seq greater than this. */
     since?: number;

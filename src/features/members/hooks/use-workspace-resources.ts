@@ -1,7 +1,6 @@
 "use client";
 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import { withoutRetiredResources } from "@/features/teams/access-levels";
 import { accessMatrixPath } from "../client/query-keys";
 import type { ResourcesCache } from "../lib/optimistic-cache";
 
@@ -16,8 +15,7 @@ import type { ResourcesCache } from "../lib/optimistic-cache";
  * filtered per-pane. Predicate lives in
  * `teams/access-levels`.
  */
-const selectResources = (body: ResourcesCache) =>
-  withoutRetiredResources(body.resources ?? []);
+const selectResources = (body: ResourcesCache) => body.resources ?? [];
 
 /** Grantable resources the UI still renders (KBs + skills, name + access
  *  mode). Feeds the Access tab, team detail grant rows, create-team dialog. */

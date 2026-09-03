@@ -70,30 +70,18 @@ export function capLevel(level: AccessLevel, ceiling: AccessLevel): AccessLevel 
 
 /* ------------------------ retired resource types ------------------------ */
 
-/**
- * Containment floor for grant rows whose feature no longer exists.
- * ⚠ Keep this set even though nothing in this tree emits `workflow` and
- * `TeamResourceType` no longer names one: `team_resource_access.resource_type`
- * still ACCEPTS `'workflow'` (the CHECK constraint deliberately kept the
- * value, `supabase/migrations/20260811120000_drop_workflows_and_clusters.sql`),
- * so a surviving or replayed row reaches a payload without passing any deleted
- * code. This is a RENDER filter at the UI boundary and it fails safe.
- * ⚠ Hand-copied mirror in `packages/mcp-server/src/tools/members-render.ts`,
- * which cannot import from `src/` — keep both in sync.
- * Here rather than `server/` because every consumer is a client component or
- * a `select` in a client hook.
+/*
+ * ⚠ **`RETIRED_RESOURCE_TYPES`, `isRetiredResourceType` AND
+ * `withoutRetiredResources` ARE DELETED (2026-09-02, F-466).** They dropped
+ * `'workflow'` rows from a payload built out of `team_resource_access`, whose
+ * `resource_type` CHECK deliberately kept the value after the feature was
+ * dropped (`20260811120000`) — so a surviving or replayed row could reach a
+ * render with no live code between it and the screen. **The payload's SOURCE
+ * moved**: ruling B4 folded that table into `resource_grants`, whose own CHECK
+ * REFUSES the value and whose backfill drops such rows rather than carrying
+ * them, and every reader goes through `teams/server/repository-grants.ts`. A
+ * fail-safe whose failure mode cannot occur is a filter nobody re-derives — and
+ * this one had a hand-copied mirror in `packages/mcp-server`, which is one
+ * fewer on F7's count.
  */
-const RETIRED_RESOURCE_TYPES: ReadonlySet<string> = new Set(["workflow"]);
 
-export function isRetiredResourceType(resourceType: string): boolean {
-  return RETIRED_RESOURCE_TYPES.has(resourceType);
-}
-
-/** Drop retired resource types from any resource-shaped list. ⚠ Apply to BOTH
- *  halves of a payload — the inventory AND every team's `grants` array;
- *  filtering only the inventory captions "3 scoped resources" above 2. */
-export function withoutRetiredResources<T extends { resourceType: string }>(
-  rows: readonly T[]
-): T[] {
-  return rows.filter((r) => !isRetiredResourceType(r.resourceType));
-}

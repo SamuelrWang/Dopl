@@ -27,6 +27,13 @@ const registry = vi.hoisted(() => ({ tools: new Map<string, Handler>() }));
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // ⚠ THE MCP RESOURCE SEAM (2026-09-02). `createServer` publishes
+    // `dopl://doctrine/channels` through `registerResource` (`resources.ts`), so
+    // a double without this method throws before a single tool is registered.
+    // ⚠ IT IS A NO-OP HERE ON PURPOSE — these suites assert over TOOLS. The
+    // resource's own content is pinned in `channel-doctrine.test.ts`, and that
+    // it is registered at all in `server.test.ts`.
+    registerResource() {}
     registerTool(name: string, _config: unknown, handler: Handler) {
       registry.tools.set(name, handler);
     }
@@ -96,7 +103,7 @@ function build(opts: { sole: boolean }) {
     directory,
     workspace: opts.sole ? WS1 : null,
     role: opts.sole ? "owner" : null,
-    workspaceSource: opts.sole ? "sole membership" : null,
+    workspaceSource: opts.sole ? "header pin" : null,
   });
   const map = registry.tools.get("dopl_map");
   if (!map) throw new Error("dopl_map was not registered");
@@ -278,33 +285,39 @@ describe("fail direction", () => {
 });
 
 describe("what is NOT charged", () => {
-  it("meta-tools are exempt — `current_workspace` costs nothing", async () => {
+  it("the orientation meta tool is exempt — `dopl_workspaces` costs nothing", async () => {
     const { client } = build({ sole: true });
-    await tool("current_workspace")({});
+    await tool("dopl_workspaces")({});
     expect(client.consumeCredits).not.toHaveBeenCalled();
   });
 
-  it("`list_workspaces` is exempt too", async () => {
-    const { client } = build({ sole: true });
-    await tool("list_workspaces")({});
-    expect(client.consumeCredits).not.toHaveBeenCalled();
-  });
-
-  it("an app-only DELETE refusal (§10) fires first and costs nothing", async () => {
+  it("an app-only DELETE refusal fires first and costs nothing", async () => {
     // ⚠ ORDERING, made executable: the delete block is unconditional and must
     // never become reachable only after another gate — or a billing round trip
     // — lets the call through.
+    // ⚠ Driven through `dopl_kb` since 2026-09-02: `dopl_kb_admin` and its four
+    // siblings are deleted, and `delete-policy.ts › DELETE_BLOCKED_OPS` moved
+    // onto the DOMAIN tools as the fence against a delete op coming back. The
+    // op is not in the enum, so this call only exists at this layer — which is
+    // exactly the layer the ordering claim is about.
     const { client } = build({ sole: true });
-    const res = await tool("dopl_kb_admin")({ op: "delete_base", baseId: "b-1" });
+    const res = await tool("dopl_kb")({ op: "delete_base", baseId: "b-1" });
     expect(res.isError).toBe(true);
     expect(client.consumeCredits).not.toHaveBeenCalled();
   });
 
-  it("a call refused for having no default workspace (M-3) is not charged", async () => {
+  /**
+   * ⚠ **THE M-3 REFUSAL IS GONE, AND WITH IT THE ONE CALL THAT WAS FREE FOR
+   * BEING REFUSED** (B10/B13). An unbound connection is now answered, so it is
+   * also METERED — against the first container the session may list, which is
+   * `registrar.ts › billingTarget` and the same rule the meta path uses.
+   */
+  it("an UNBOUND connection is answered, and is charged the first listable container", async () => {
     const { map, client } = build({ sole: false });
     const res = await map({});
-    expect(res.isError).toBe(true);
-    expect(client.consumeCredits).not.toHaveBeenCalled();
+    expect(res.isError).toBeFalsy();
+    expect(client.consumeCredits).toHaveBeenCalledTimes(1);
+    expect(client.consumeCredits).toHaveBeenCalledWith("id-1");
   });
 
   it("a blank `workspace=` is refused before any charge", async () => {

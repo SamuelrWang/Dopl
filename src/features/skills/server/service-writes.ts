@@ -4,6 +4,7 @@ import { isUuid } from "@/shared/lib/id/uuid";
 import { slugify } from "@/shared/lib/slug/slugify";
 import { HttpError } from "@/shared/lib/http-error";
 import { meetsMinRole } from "@/features/workspaces/types";
+import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
   deleteGrantsForResource,
   insertReadGrantsIfMissing,
@@ -50,6 +51,18 @@ export async function createSkill(
   } else {
     resolvedVisibility = resolvedVisibility ?? "private";
   }
+
+  // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
+  // visibility, after the shared-credential default above has had its say:
+  // reading `input.visibility` would let that default publish unacknowledged,
+  // which is exactly the lane with no client dialog in front of it.
+  // ⚠ BEFORE THE SLUG LOOP, so a refusal costs no slug and cannot half-land.
+  await assertSharedPublishAcknowledged({
+    workspaceId: ctx.workspaceId,
+    publishes: resolvedVisibility === "public",
+    acknowledged: input.acknowledgeShared,
+    noun: "skill",
+  });
 
   if (input.slug && isUuid(input.slug)) {
     throw HttpError.badRequest(
@@ -146,6 +159,20 @@ export async function updateSkill(
       visibility: patch.visibility,
       accessMode: wantsTeams ? "teams" : "workspace",
     };
+    // 🔒 G16 — the same precondition on the UPDATE path, which is the door
+    // `dopl_skill(op="set_visibility")` and the sharing settings both come
+    // through. ⚠ `patch.visibility === "public"`, so narrowing to private and a
+    // grant-only edit on an ALREADY-public skill pass untouched: neither changes
+    // an audience, and gating them would be a gate on the wrong verb.
+    // ⚠ AFTER the owner/admin refusal above and BEFORE any row write or grant
+    // replacement, so a refusal leaves neither behind.
+    await assertSharedPublishAcknowledged({
+      workspaceId: ctx.workspaceId,
+      publishes: patch.visibility === "public",
+      acknowledged: patch.acknowledgeShared,
+      noun: "skill",
+    });
+
     // Narrowing is never blocked — nothing guards this path.
     if (wantsTeams) {
       grantTeamIds = [...new Set(patch.teamIds ?? [])];

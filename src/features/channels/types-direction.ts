@@ -9,43 +9,18 @@
  * PROCESS; a direction asks an EXISTING one to hear something. They share a
  * transport shape and nothing else — different refusal vocabularies, a required
  * `agentId` where a launch has none, and a `reply` a launch could never carry.
+ *
+ * ⚠ **{@link DirectionRefusalReason} IS DECLARED IN `@dopl/contracts ›
+ * directives.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13). It had a
+ * byte-equal twin in `packages/dopl-client/src/direction-types.ts` and no script
+ * between the two. No import path changed; `@/features/channels/types` (which
+ * re-exports this file) is still the one path to the name. ⚠ The DATABASE states
+ * the same set a third time as a column CHECK, which is why the docblock over
+ * there still says a sixth reason is a schema change in both trees.
  */
+import type { DirectionRefusalReason } from "@dopl/contracts";
 
-/**
- * WHY A DESKTOP SAID NO TO A DIRECTION — **exactly five words, and the closed set
- * is the wire contract both trees code against.**
- *
- * ⚠ **A KEY, NEVER A SENTENCE**, for {@link LaunchRefusalReason}'s reason: prose
- * on the wire needs a desktop release to reword, and desktop-authored text
- * rendered into an MCP result is text nobody neutralized.
- *
- *  - `no-session` — **the one that actually happens.** No live session on that
- *                   machine with that `(channel, thread, agent)` key: the agent
- *                   ended, was deleted, or was never there. It is the honest
- *                   answer and the only authoritative one, because whether an
- *                   agent is alive is knowable only on the machine running it.
- *  - `auth-hold`  — the desktop is signed out or its credential is held, so the
- *                   session has no query to feed and the words would vanish.
- *  - `busy`       — the machine declined for now. Genuinely temporary.
- *  - `blocked`    — the desktop is below the version floor and is refusing every
- *                   turn-starting op until it updates.
- *  - `no-bridge`  — **the operator's direct-over-MCP toggle is OFF.** Kept in the
- *                   set for the same reason the launch lane keeps it, and written
- *                   by nothing today: a machine that has not opted in ignores the
- *                   row SILENTLY, because a refusal would itself admit the machine
- *                   is listening. It exists so an older or future producer has a
- *                   word, and so the reader has a sentence if one ever arrives.
- *
- * ⚠ A SIXTH REASON IS A SCHEMA CHANGE IN BOTH TREES, deliberately: the column
- * carries the same CHECK, so an unknown value cannot be stored and cannot reach a
- * render as raw text.
- */
-export type DirectionRefusalReason =
-  | "no-session"
-  | "auth-hold"
-  | "busy"
-  | "blocked"
-  | "no-bridge";
+export type { DirectionRefusalReason };
 
 /**
  * ONE PRIVATE DIRECTION from an operator's external agent to that operator's own

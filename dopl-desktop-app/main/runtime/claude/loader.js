@@ -12,6 +12,7 @@
 //   resolveClaudeExecutable()  asar-unpacked path for options.pathToClaudeCodeExecutable
 //   buildMcpServers(cfg, wsId) in-memory mcpServers object (dopl bearer from safeStorage +
 //                              the session's X-Workspace-Id pin)
+//   withToolProfileStamp()     this session's containment PROFILE onto that entry (X-Dopl-Tool-Profile)
 //   buildSecretPathDenyRules() credential-path deny rules every session runs with
 //
 // ⚠ Dynamic import, not require: the SDK ships `sdk.mjs` (ESM only) and Electron main is CJS,
@@ -26,6 +27,9 @@ const path = require('path');
 const { app } = require('electron');
 const { MCP_URL } = require('../../config');
 const { diag } = require('../../diag');
+// ⚠ The one fail-closed read of a profile name, shared with the deny list this session was
+// spawned under — see `withToolProfileStamp`. `tool-profiles.js` is electron/fs/path-free.
+const { normalizeProfile } = require('../../tool-profiles');
 
 const SDK_PKG = '@anthropic-ai/claude-agent-sdk';
 
@@ -125,8 +129,9 @@ function buildSecretPathDenyRules() {
 }
 
 // The in-memory mcpServers object (replaces the --mcp-config file).
-// ⚠ `doplToolsPolicy` is ACCEPTED AND DELIBERATELY NOT FORWARDED — see the block at the end of
-// this function. No token (pre-sign-in) => {}, so the session still runs.
+// ⚠ `doplToolsPolicy` is ACCEPTED AND DELIBERATELY NOT FORWARDED AS `server.tools` — see the
+// block at the end of this function. What the server IS told is the profile's NAME, one header,
+// stamped by `withToolProfileStamp` below. No token (pre-sign-in) => {}, so the session runs.
 //
 // ⚠ The url is ALWAYS the compiled-in MCP_URL. A `dopl.url || MCP_URL` read trusts a value off
 // disk, so any local process rewriting that file repoints the session's whole MCP surface —
@@ -216,6 +221,11 @@ function buildMcpServers(doplToolsPolicy, workspaceId, bearerOverride) {
   // surviving it still stops at canUseTool. `doplToolsPolicy` stays in the SIGNATURE so
   // session-query's call shape and the profile table are untouched — deliberately unread.
   // Pinned by test/mcp-server-tools-policy.test.mjs.
+  // ⚠ THE SERVER-SIDE HALF OF THE SAME IDEA IS A HEADER, NOT THIS FIELD (2026-09-02). The
+  // profile's NAME rides as `X-Dopl-Tool-Profile` (`withToolProfileStamp`), and the MCP server
+  // decides what a name means. That inverts what failed here: the CLI validated a per-entry
+  // tool LIST and dropped the whole server on a bad one, whereas a name it does not recognize
+  // is served the whole surface. Nothing is granted on it either way.
   return { dopl: server };
 }
 
@@ -246,6 +256,40 @@ function withSessionStamp(servers, sessionId) {
   if (entry && typeof entry === 'object' && slot && SESSION_ID_RE.test(slot)) {
     entry.headers = entry.headers || {};
     entry.headers['X-Dopl-Session-Id'] = slot;
+  }
+  return servers;
+}
+
+// HOW CONTAINED THIS SESSION IS, stamped onto an entry buildMcpServers just made. The desktop
+// already computes a containment profile per session and enforces it LOCALLY (`tool-profiles.js`,
+// `disallowedTools`, the permission gate); the server never heard the word, so a session that
+// will never be allowed to call a single Dopl tool still paid for all 13 tools' descriptions
+// and input schemas on connection. This is that one word.
+//
+// ⚠ IT MAY ONLY NARROW, AND IT GRANTS NOTHING. The MCP server's table
+// (`packages/mcp-server/src/gating.ts › PROFILE_TOOLS`) maps each value to the tools that
+// profile is offered, and a value it cannot place resolves to the NARROWEST profile — never to
+// the whole surface. ⚠ SO A NEW PROFILE NAME IS A TWO-SIDED CHANGE: this side stamping a name
+// the server has not learned yet narrows that session to nothing, which is why
+// `test/tool-profile-stamp.test.mjs` holds `KNOWN_PROFILES` inside the server's own vocabulary,
+// read out of its source. Only an ABSENT header serves everything. Nothing may be GRANTED on
+// this value; a LABEL, exactly like the runtime, vendor and session-id stamps beside it.
+//
+// ⚠ SEPARATE FUNCTION for `withSessionStamp`'s reason: `buildMcpServers` answers "what MCP
+// server does this app offer" — the same answer for every spawn — and this answers something
+// about THIS run. ⚠ It normalizes through `tool-profiles.js › normalizeProfile`, the same
+// fail-closed read the deny list was built from, so the header can never name a wider profile
+// than the one the session is actually contained at.
+//
+// MUTATES IN PLACE: the call site ignores the return value.
+const TOOL_PROFILE_HEADER = 'X-Dopl-Tool-Profile';
+function withToolProfileStamp(servers, profile) {
+  const entry = servers && typeof servers === 'object' ? servers.dopl : null;
+  // ⚠ A LABEL MUST NEVER BREAK A LAUNCH — same rule as the session stamp: this runs inside
+  // buildSdkOptions, the one assembly point every spawn shape goes through.
+  if (entry && typeof entry === 'object') {
+    entry.headers = entry.headers || {};
+    entry.headers[TOOL_PROFILE_HEADER] = normalizeProfile(profile);
   }
   return servers;
 }
@@ -303,6 +347,8 @@ module.exports = {
   resolveClaudeExecutable,
   buildMcpServers,
   withSessionStamp, // F2: this run's slot key, onto the entry above
+  withToolProfileStamp, // this run's containment profile, onto the same entry — narrowing-only
+  TOOL_PROFILE_HEADER,
   buildSecretPathDenyRules, // credential-path deny every session runs with
   buildScrubbedEnv,
   CLAUDEAI_MCP_ENV, // F-268: the connector lane's only reachable off switch

@@ -11,7 +11,6 @@ import {
 import type { ChannelTaskRow } from "./dto";
 import { mapTaskRow } from "./dto";
 import * as repo from "./repository";
-import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
 import {
@@ -42,10 +41,10 @@ import {
  * (`20260822120000`, which widened that index to include the author).
  *
  * ⚠ THE WIDENING IS INVISIBLE TO THIS KEY AND THAT IS NOT LUCK. Only the thread's
- * CREATOR ever re-drives the opening post — `convergeOnThread` sends everyone else
- * to `storedOpeningSeq`, a READ — so both writers of `task-open-<taskId>` are the
- * same user by construction and the dedup still fires. The READ stays
- * channel-scoped precisely because it is the not-the-creator path.
+ * CREATOR ever reaches this post — the thread probe is author-scoped too
+ * (`repository-tasks.ts › findOwnTaskByClientId`, 2026-09-02), so every writer of
+ * `task-open-<taskId>` for a given task is the same user by construction and the
+ * message dedup still fires.
  */
 function openingMessageClientId(taskId: string): string {
   return `task-open-${taskId}`;
@@ -103,29 +102,6 @@ async function postOpeningMessage(
 }
 
 /**
- * Seq of a thread's opening message as ALREADY STORED — a pure READ of the
- * derived key, NEVER a post. What a caller that converged on SOMEONE ELSE's
- * thread gets instead of a re-post.
- *
- * ⚠ Reading is safe where posting is not: the opening message is in a channel
- * the caller is a member of and would come back from an ordinary `read`. What
- * must not happen is the LOSER posting into the winner's thread.
- *
- * ⚠ `null` when there is genuinely no stored opening message (the winner crashed
- * between insert and post). Never a fabricated number.
- */
-async function storedOpeningSeq(
-  channelId: string,
-  taskId: string
-): Promise<number | null> {
-  const stored = await repoMessages.findMessageByClientId(
-    channelId,
-    openingMessageClientId(taskId)
-  );
-  return stored?.seq ?? null;
-}
-
-/**
  * What `createTask` hands back: the thread plus the seq of its opening message —
  * the cursor a requester passes straight to `dopl_channel(op="await")`.
  *
@@ -134,8 +110,10 @@ async function storedOpeningSeq(
  * create and that read makes the "newest message" its reply, so the await starts
  * one message too late and waits forever for something already delivered.
  *
- * `null` only when no opening message exists to name — see
- * {@link storedOpeningSeq}.
+ * ⚠ `null` is kept on the type for the WIRE, not for this service: the route's
+ * field is additive and an older deployment omits it
+ * (`packages/dopl-client/src/channel.ts › createChannelThread`), so every reader
+ * already handles the absence.
  */
 export interface TaskCreateResult {
   thread: ChannelThread;
@@ -147,12 +125,15 @@ export interface TaskCreateResult {
  * short-circuit and the lost-insert race, the same situation reached two ways,
  * so they must answer IDENTICALLY.
  *
- * The caller always gets the STORED thread: not an error, not a second row.
+ * The caller always gets the STORED thread: not an error, not a second row, and
+ * it re-drives the opening post (the repair for a create that half-landed).
  *
- * ⚠ What differs is what it may WRITE. The CREATOR re-drives its opening post
- * (the repair for a create that half-landed). ANYONE ELSE posts NOTHING and only
- * READS the stored opening seq — a colliding key from another member must not
- * put a message into their thread.
+ * ⚠ THE THREAD IS ALWAYS THIS CALLER'S OWN, AND THAT IS ENFORCED, NOT ASSUMED —
+ * `findOwnTaskByClientId` narrows by `created_by` and the unique index behind it
+ * says the same (`20260913120000_channel_tasks_author_scoped_idempotency.sql`).
+ * A colliding key from another member now yields a SEPARATE thread rather than
+ * converging here, which is why this function no longer has a
+ * somebody-else's-thread arm to take.
  */
 async function convergeOnThread(
   ctx: ChannelContext,
@@ -161,17 +142,14 @@ async function convergeOnThread(
   input: TaskCreateInput,
   opts: TaskCreateOptions
 ): Promise<TaskCreateResult> {
-  const isCreator = task.created_by === ctx.userId;
-  const openingSeq = isCreator
-    ? await postOpeningMessage(
-        ctx,
-        channelId,
-        task,
-        input.body,
-        input.handoff,
-        opts.fanoutGroupId
-      )
-    : await storedOpeningSeq(channelId, task.id);
+  const openingSeq = await postOpeningMessage(
+    ctx,
+    channelId,
+    task,
+    input.body,
+    input.handoff,
+    opts.fanoutGroupId
+  );
   return { thread: mapTaskRow(task), openingSeq };
 }
 
@@ -238,13 +216,15 @@ export async function createTask(
     throw new TaskSelfTargetError();
   }
 
-  // A re-sent client_msg_id returns the already-created task WITHOUT a second
-  // row. Whether the caller may re-drive the opening post depends on whether it
-  // IS the thread's creator — {@link convergeOnThread}, also the 23505 branch's
-  // answer so the two ways of losing a race cannot drift apart.
+  // A re-sent client_msg_id returns the caller's OWN already-created task WITHOUT
+  // a second row — {@link convergeOnThread}, also the 23505 branch's answer so the
+  // two ways of losing a race cannot drift apart. ⚠ The probe is author-scoped:
+  // another member's row under the same key is not a hit here and never was
+  // supposed to be.
   if (input.clientMsgId) {
-    const existing = await repoTasks.findTaskByClientId(
+    const existing = await repoTasks.findOwnTaskByClientId(
       channel.id,
+      ctx.userId,
       input.clientMsgId
     );
     if (existing) return convergeOnThread(ctx, channel.id, existing, input, opts);
@@ -266,8 +246,9 @@ export async function createTask(
     // post is safe (same derived key, so at most one message lands) and covers
     // the winner having crashed before posting.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
-      const raced = await repoTasks.findTaskByClientId(
+      const raced = await repoTasks.findOwnTaskByClientId(
         channel.id,
+        ctx.userId,
         input.clientMsgId
       );
       if (raced) return convergeOnThread(ctx, channel.id, raced, input, opts);

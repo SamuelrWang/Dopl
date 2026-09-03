@@ -8,45 +8,27 @@
  * ⚠ THE ONE THING TO CARRY AWAY: **a directive is a REQUEST, not a command, and
  * it is NOT A MESSAGE.** It never touches `channel_messages` (the loop brake and
  * transcript purity), so it has no `seq` and can never end an `await`.
+ *
+ * ⚠ **THE FOUR CLOSED SETS ARE DECLARED IN `@dopl/contracts › directives.ts`
+ * AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — they were hand mirrors of
+ * `src/features/channels/types-launch.ts` with no script between them. No
+ * consumer import changed. ⚠ {@link LaunchToolMode} and {@link LaunchMessageMode}
+ * are ORDERED NARROWEST FIRST and the desktop's clamp is an index comparison
+ * over that order, so read the declaration before re-spelling either.
  */
+import type {
+  LaunchRefusalReason,
+  LaunchDirectiveKind,
+  LaunchToolMode,
+  LaunchMessageMode,
+} from "@dopl/contracts";
 
-/**
- * WHY A DESKTOP SAID NO TO A LAUNCH — **exactly six words**, the wire contract
- * both trees code against.
- *
- * ⚠ A KEY, NEVER A SENTENCE: the readable line is written by the READER, so a
- * reword does not need a desktop release and no desktop-authored prose is
- * rendered into an agent-facing result.
- *
- *  - `cap`             — at the machine's concurrent-agent ceiling.
- *  - `busy`            — under load, declined for now.
- *  - `no-sdk`          — no agent runtime on that machine.
- *  - `auth-hold`       — signed out, or the credential is held.
- *  - `no-bridge`       — ⚠ the operator's launch-over-MCP TOGGLE IS OFF. This is
- *                        the consent mechanism, so it is a CHOICE and must never
- *                        be rendered as a fault or a thing to retry.
- *  - `no-counterparty` — nothing to work with in that channel.
- *  - `no-template`     — ⚠ THE SEVENTH, 2026-08-22 (agent templates). The named
- *                        TEMPLATE did not resolve on the operator's machine:
- *                        deleted, or not visible to the OPERATOR even though the
- *                        orchestrator that named it could see it. One answer for
- *                        both, deliberately — the resolve endpoint is
- *                        404-never-403, so the difference is not observable and a
- *                        render that guessed would rebuild the oracle.
- *
- * ⚠ `template-approval` IS NOT A MEMBER. That word is the desktop's answer to its
- * OWN renderer when a foreign template needs its one first-use click; the directive
- * lane has no human and the launch-over-MCP toggle stands in for the click there,
- * so it can never cross this wire.
- */
-export type LaunchRefusalReason =
-  | "cap"
-  | "busy"
-  | "no-sdk"
-  | "auth-hold"
-  | "no-bridge"
-  | "no-counterparty"
-  | "no-template";
+export type {
+  LaunchRefusalReason,
+  LaunchDirectiveKind,
+  LaunchToolMode,
+  LaunchMessageMode,
+};
 
 /**
  * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
@@ -64,6 +46,8 @@ export type LaunchRefusalReason =
  */
 export interface LaunchDirective {
   id: string;
+  /** Which verb this asks for. ⚠ `launch` on every row that names no kind. */
+  kind: LaunchDirectiveKind;
   /**
    * The operator whose machine was asked — **always your own id** (2026-08-23).
    * The read is fenced on it server-side, so it echoes the caller back rather
@@ -88,9 +72,81 @@ export interface LaunchDirective {
   /** The template's name AT CREATE TIME — a snapshot, never a join, so it
    *  survives the id's `ON DELETE SET NULL`. */
   templateName: string | null;
-  status: "pending" | "claimed" | "launched" | "refused" | "expired";
+  /** ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS and `launched` IS THE LAUNCH'S.
+   *  They are two words because this row is rendered into an agent-facing
+   *  sentence, and "launched" on the record of an agent being STOPPED is the one
+   *  kind of wrong nothing downstream can detect. */
+  status: "pending" | "claimed" | "launched" | "done" | "refused" | "expired";
   /** Set iff `status` is `refused`. */
   refusalReason: LaunchRefusalReason | null;
+  /** WHICH AGENT an `end` / `rename` acts on — an INPUT you named. `null` on a
+   *  launch. ⚠ Never confuse it with `agentId` below, which is the OUTPUT a
+   *  launch produced. */
+  targetAgentId: string | null;
+  /** The rename's new display name. Non-null iff `kind` is `rename`, where `""`
+   *  is legal and means CLEAR (back to `Agent #<id>`). ⚠ Display only, on one
+   *  machine — nothing resolves an agent by it. */
+  targetName: string | null;
+  /**
+   * THE POSTURE A **LAUNCH** ASKED ITS NEW SESSION TO START ON (T24). `null` on
+   * an axis is "not asked", which resolves to the operator's own stored channel
+   * value. `null` on every kind but `launch`.
+   * ⚠ SEPARATE FROM {@link LaunchDirective.targetToolMode} — one is the posture a
+   * NEW session starts on, the other the posture a RUNNING one moves to.
+   */
+  startToolMode: LaunchToolMode | null;
+  startMessageMode: LaunchMessageMode | null;
+  /** MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? **A TRUE TRI-STATE** (fixed
+   *  2026-09-01): `true` ASKED IT ON, `false` ASKED IT OFF, `null` did not ask and
+   *  inherits the channel setting. ⚠ `true` is REFUSED rather than clamped when
+   *  the channel forbids it — the one asymmetry with the two axes. ⚠ `false` is
+   *  ALWAYS granted and WINS over a channel set to ON: it only ever narrows, so
+   *  there is nothing for the operator setting to protect.
+   *  ⚠ This said `false` was indistinguishable from `null`, which was true while
+   *  the desktop's narrower read only `true`/`"true"`. It no longer does. */
+  chain: boolean | null;
+  /** THE POSTURE A `set_agent_mode` ASKED A **RUNNING** AGENT TO MOVE TO. `null`
+   *  on an axis means it was not requested, which is ordinary; at least one is
+   *  non-null on that kind and both are `null` on every other. */
+  targetToolMode: LaunchToolMode | null;
+  targetMessageMode: LaunchMessageMode | null;
+  /**
+   * **THE ECHO — what the machine says it actually applied, after its clamp.**
+   *
+   * ⚠ **`null` MEANS "NOT REPORTED". NOT "unclamped", and NEVER the requested
+   * value echoed back.** The writer is the DECIDE and it landed on 2026-09-01,
+   * but `null` is still the live value on every row written before that wave and
+   * on every row decided by a desktop older than it — the decide's echo fields
+   * are optional so such a machine can still report. A reader that treats `null`
+   * as agreement tells its caller the posture landed on the strength of a field
+   * nobody filled in.
+   * ⚠ `appliedChain: null` IS NOT `false` — reading it as "no chaining" is wrong
+   * in the direction that makes an orchestrator do the work itself for no reason.
+   */
+  appliedToolMode: LaunchToolMode | null;
+  appliedMessageMode: LaunchMessageMode | null;
+  appliedChain: boolean | null;
+  /**
+   * **WHAT THE SERVER PERMITTED** (2026-09-02, A9 — G6/G7/G8), decided at
+   * creation from the request and the channel's own ceiling.
+   *
+   * ⚠ **A THIRD GROUP, NOT A SPELLING OF EITHER OTHER ONE.** `startToolMode` is
+   * what was ASKED, `applied*` is what the MACHINE says it did, and this is what
+   * the SERVER allowed to be asked — the half that happens whether or not a
+   * machine is listening. ⚠ `null` STILL MEANS "DID NOT ASK" and survives the
+   * clamp: a request that named no posture stays unnamed all the way to the
+   * machine, which then applies the OPERATOR's own stored pair.
+   * ⚠ **`resolvedModel` IS AN ECHO, NOT A GATE** — the canonical id a recognised
+   * request resolved to, `null` for one this server does not know. Read it beside
+   * `model`: both null = nothing asked; `model` set and this null = asked and
+   * unrecognised, so the machine will use its own default (G8).
+   * ⚠ Hand mirror of `src/features/channels/types-launch.ts › LaunchDirective`,
+   * which carries the full argument.
+   */
+  resolvedToolMode?: LaunchToolMode | null;
+  resolvedMessageMode?: LaunchMessageMode | null;
+  resolvedChain?: boolean | null;
+  resolvedModel?: string | null;
   /** The agent instance started. Set iff `status` is `launched` — it is what a
    *  requester types as `@<agentId>` to direct it. */
   agentId: string | null;
@@ -117,13 +173,106 @@ export interface LaunchDirectiveCreateInput {
    * list (409 `AGENT_TEMPLATE_AMBIGUOUS`, `details.matches`) — never picked.
    */
   template?: string;
+  /**
+   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it
+   * may launch workers (T24, 2026-09-01).
+   *
+   * ⚠ **ASKS, NEVER WIDENS.** The operator's machine clamps both axes to that
+   * operator's own stored channel posture and REFUSES a chain the channel
+   * forbids. Omitting all three is the pre-T24 behaviour exactly: the operator's
+   * own stored pair, and the channel's own chain setting.
+   * ⚠ **`chain` IS A TRI-STATE AND `false` DOES TURN CHAINING OFF** (fixed
+   * 2026-09-01). `true` asks it on and is REFUSED where the channel forbids it;
+   * `false` asks it off, is always granted, and WINS over a channel set to ON;
+   * OMITTING it inherits the channel setting. ⚠ This said `false` did nothing,
+   * which was true while the desktop's narrower read only `true` — it no longer
+   * does, and omitting is still not the same as sending `false`.
+   */
+  tools?: LaunchToolMode;
+  messages?: LaunchMessageMode;
+  chain?: boolean;
+  /**
+   * **AN IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"** (2026-09-02,
+   * A10/G10).
+   *
+   * ⚠ **SEND ONE WHENEVER A RETRY IS POSSIBLE, WHICH ON THIS OP IS ALWAYS.** The
+   * create holds for the operator's machine and then returns PENDING; a timeout
+   * is indistinguishable from a lost response, so without a key the caller has to
+   * choose between an unknown outcome and a second agent on the same work.
+   * Re-sending the same key returns the FIRST request's directive
+   * ({@link LaunchDirectiveCreated}'s `existing`).
+   * ⚠ Any stable string of the caller's own, 1-200 chars. Uniqueness is scoped to
+   * `(channel, this operator)` server-side, so another member's key cannot
+   * collide with yours.
+   */
+  clientMsgId?: string;
 }
 
 /**
  * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR. The operator's machine is not
  * listening, **no row was created**, and nothing was asked. Render the caveat;
  * do not retry, and do not classify it as a failure.
+ *
+ * ⚠ **`existing: true` MEANS THIS CALL FILED NOTHING** (2026-09-02, A10/G10) —
+ * the `clientMsgId` had been used before and this is the FIRST request's
+ * directive. Render it as a converged retry, never as a fresh launch: the two are
+ * the same shape and only this flag separates "your retry was absorbed" from "a
+ * second agent was requested".
+ * ⚠ **OPTIONAL, BECAUSE A SERVER OLDER THAN THIS WAVE SENDS NO SUCH KEY** and
+ * this client is deployed against both (INVARIANTS §13). Absent reads as `false`
+ * — "a row was filed" — which is the safe direction against an old server,
+ * because an old server also stored no key and every call there really was fresh.
  */
 export type LaunchDirectiveCreated =
+  | { offline: true; directive: null }
+  | { offline: false; directive: LaunchDirective; existing?: boolean };
+
+/**
+ * WHAT `createAgentDirective` ASKS FOR — END or RENAME one of the operator's own
+ * running agents (2026-09-01).
+ *
+ * ⚠ A DISCRIMINATED UNION: a rename REQUIRES a name and an end must not carry
+ * one, which the column CHECK also says at rest.
+ * ⚠ **THERE IS NO OPERATOR FIELD AND THERE MUST NEVER BE ONE** — the server
+ * stamps the authenticated caller, because the only machine an agent may reach is
+ * its own operator's.
+ * ⚠ `channel` IS REQUIRED even though `agentId` addresses the target on its own:
+ * the create proves a MEMBERSHIP ROW in that channel, which is what stops this
+ * being a bare "end agent `abcdefgh`" primitive with no room the caller had to be
+ * in first.
+ */
+export type AgentDirectiveCreateInput =
+  | { kind: "end"; channel: string; agentId: string }
+  /** ⚠ `name: ""` IS LEGAL AND MEANS CLEAR. A separate "unname" verb would be a
+   *  second way to say one thing. Bounded at 60 — the desktop store's own cap. */
+  | { kind: "rename"; channel: string; agentId: string; name: string }
+  /**
+   * **RE-POSTURE A RUNNING AGENT** (2026-09-01).
+   *
+   * ⚠ **BOTH AXES OPTIONAL, AT LEAST ONE REQUIRED** — the route's schema refuses
+   * the empty ask with a 400 rather than filing a row nothing could answer.
+   * ⚠ **ASKS, NEVER WIDENS.** The machine clamps each axis to the operator's own
+   * stored channel posture; there is no operator carve-out, because every caller
+   * on this lane already IS the operator's own account.
+   * ⚠ **NO MODEL FIELD, AND THERE MUST NEVER BE ONE** — the desktop's narrower
+   * has no column for one, so it would be accepted and silently dropped.
+   * ⚠ **THIS ONE IS BEHIND THE MACHINE'S LAUNCH TOGGLE** while `end` and `rename`
+   * are not, so `no-bridge` here CAN mean the toggle is off — the opposite of what
+   * that word means on the other two kinds.
+   */
+  | {
+      kind: "set_agent_mode";
+      channel: string;
+      agentId: string;
+      tools?: LaunchToolMode;
+      messages?: LaunchMessageMode;
+    };
+
+/**
+ * ⚠ `offline: true` IS A NORMAL 200, NOT AN ERROR — the launch create's rule
+ * verbatim. The operator's machine is not listening, **no row was created**, and
+ * nothing was asked.
+ */
+export type AgentDirectiveCreated =
   | { offline: true; directive: null }
   | { offline: false; directive: LaunchDirective };

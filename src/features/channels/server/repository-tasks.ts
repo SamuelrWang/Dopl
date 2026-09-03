@@ -21,7 +21,7 @@ type TaskInsert = {
   mode: string;
   created_by: string;
   target_user_id: string | null;
-  /** Idempotency key — a partial unique index dedups (channel_id, client_msg_id). */
+  /** Idempotency key — a partial unique index dedups (channel_id, client_msg_id, created_by). */
   client_msg_id?: string | null;
 };
 
@@ -37,12 +37,30 @@ export async function insertTask(row: TaskInsert): Promise<ChannelTaskRow> {
 }
 
 /**
- * One task in a channel by idempotency key, or null. Backs create_task dedup:
- * a re-sent client_msg_id returns the already-created task instead of inserting
- * a second (mirrors `findMessageByClientId` for messages).
+ * THE IDEMPOTENCY PROBE for threads — (channel, CREATOR, client_msg_id).
+ * `createTask`'s short-circuit and its lost-race repair, and nothing else.
+ *
+ * ⚠ WHY THE AUTHOR IS PART OF THE KEY. Idempotency is a SAME-AUTHOR RETRY
+ * contract: "I already sent this, give me back what you stored". Channel-scoped,
+ * it was a contract with the whole ROOM — a member who reused a key another
+ * member had used was handed back THEIR thread, and the served MCP schema said
+ * so out loud. The keys are derived and guessable: `service-tasks-broadcast.ts ›
+ * addresseeClientMsgId` mints `${base}:${toUserId}` over ids every member can
+ * read. Same vulnerability, same shape, same fix as
+ * `repository-messages.ts › findOwnMessageByClientId`.
+ *
+ * ⚠ THE DATABASE AGREES WITH THIS FUNCTION, and it has to: the unique index is
+ * `(channel_id, client_msg_id, created_by)`
+ * (`supabase/migrations/20260913120000_channel_tasks_author_scoped_idempotency.sql`).
+ * Scoping only the READ turns the silent redirect into a `23505` the caller sees
+ * as a 500. Change one, change both.
+ *
+ * ⚠ COLUMN ORDER IN THAT INDEX IS `(channel_id, client_msg_id, created_by)`, not
+ * the argument order here — the leading pair stays a usable prefix.
  */
-export async function findTaskByClientId(
+export async function findOwnTaskByClientId(
   channelId: string,
+  createdBy: string,
   clientMsgId: string
 ): Promise<ChannelTaskRow | null> {
   const db = supabaseAdmin();
@@ -51,6 +69,7 @@ export async function findTaskByClientId(
     .select("*")
     .eq("channel_id", channelId)
     .eq("client_msg_id", clientMsgId)
+    .eq("created_by", createdBy)
     .maybeSingle();
   if (error) throw error;
   return (data as ChannelTaskRow | null) ?? null;

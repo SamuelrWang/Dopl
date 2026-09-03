@@ -26,7 +26,7 @@
  * because it reads the same two hand-mirrored knowledge type files, and CI
  * runs this step already.
  */
-import { readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
 // ⚠ IMPORTED, NOT RE-TYPED. `check-role-drift.ts`'s `main()` is guarded on
 // `require.main`, so this import brings the helper and not that gate.
@@ -80,7 +80,16 @@ function extractInterfaces(source: string): Map<string, InterfaceDecl> {
  * workspace shelf back into the personal pane, looking like it worked. Drift
  * here does not break; it silently widens.
  *
- * FIVE CLASSES, and the last two are not `export type` declarations at all:
+ * ⚠ **THREE CLASSES SINCE 2026-09-02 (slice B15), DOWN FROM FIVE.** The MCP
+ * MAPPER (`tools/shelf.ts › toWireShelf`, class 4) and the DATABASE's
+ * `home_scoped BOOLEAN` (class 5) are both DELETED: the MCP surface no longer
+ * takes a `shelf` argument at all, and the shelf is a TENANCY — the caller's
+ * `kind='personal'` container — rather than a boolean beside one. **The union is
+ * therefore no longer capped at two by the schema**, so the cap assertion went
+ * with the column; what is left is the same hand-mirroring problem in the same
+ * silent direction.
+ *
+ * THREE CLASSES, and the last is not an `export type` declaration at all:
  *
  *   1. THE UNIONS — `KbShelf` and `TemplateShelf` in `src/`, mirrored again in
  *      the SDK. `agent-templates/types.ts › TemplateShelf`'s own docblock says
@@ -92,15 +101,6 @@ function extractInterfaces(source: string): Map<string, InterfaceDecl> {
  *   3. THE ROUTE GUARDS — each `readShelf` re-types the two literals in a
  *      `raw === "…"` comparison, and each is the 400 that stops a misspelling
  *      from widening the answer.
- *   4. THE MCP MAPPER — `tools/shelf.ts › toWireShelf` is the ONE operator-noun
- *      → wire-noun translation. ⚠ Its ARGUMENT vocabulary (`SHELF_VALUES` =
- *      personal|workspace) is deliberately NOT the wire's and is not compared
- *      here; what must equal the union is the set of values the mapper can
- *      RETURN.
- *   5. THE DATABASE — there is no shelf column. The shelf is stored as the
- *      BOOLEAN `home_scoped`, so a boolean can encode exactly two shelves. A
- *      third member of the union is a migration, not a type edit, and this is
- *      the only place that says so.
  */
 function checkShelfUnions(read: (rel: string) => string): boolean {
   const REFERENCE_FILE = "src/features/knowledge/types.ts";
@@ -111,15 +111,6 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
     const body = /function readShelf\([\s\S]*?\n\}/.exec(source);
     if (!body) throw new Error("could not find `function readShelf` in source");
     return [...body[0].matchAll(/raw\s*===\s*"([^"]+)"/g)].map((m) => m[1]);
-  }
-
-  /** The wire literals `toWireShelf` can RETURN — never its argument enum. */
-  function toWireShelfResults(source: string): string[] {
-    const body = /function toWireShelf\([\s\S]*?\n\}/.exec(source);
-    if (!body) throw new Error("could not find `function toWireShelf` in source");
-    // `shelf === "personal" ? "home" : "workspace"` — the two RESULT literals,
-    // with the operator-vocabulary comparand dropped.
-    return [...body[0].matchAll(/[?:]\s*"([^"]+)"/g)].map((m) => m[1]);
   }
 
   const sites: Array<[string, string[]]> = [
@@ -157,14 +148,6 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
       "src/app/api/agent-templates/route.ts › readShelf",
       readShelfArms(read("src/app/api/agent-templates/route.ts")),
     ],
-    [
-      "packages/mcp-server/src/tools/shelf.ts › toWireShelf",
-      toWireShelfResults(read("packages/mcp-server/src/tools/shelf.ts")),
-    ],
-    [
-      "packages/mcp-server/dist/tools/shelf.js › toWireShelf",
-      toWireShelfResults(read("packages/mcp-server/dist/tools/shelf.js")),
-    ],
   ];
 
   let drift = false;
@@ -180,27 +163,37 @@ function checkShelfUnions(read: (rel: string) => string): boolean {
     }
   }
 
-  // ⚠ THE DATABASE'S SIDE OF IT. Both features store the shelf as a BOOLEAN
-  // `home_scoped` column, so the union is capped at two by the schema itself.
-  // Read out of the migrations rather than asserted as a number here, so this
-  // fails on the day the column stops being a boolean too.
-  const migrations = resolve(__dirname, "..", "supabase", "migrations");
-  const booleanColumns = readdirSync(migrations)
-    .filter((f) => f.endsWith(".sql"))
-    .filter((f) =>
-      /home_scoped\s+BOOLEAN\s+NOT\s+NULL/i.test(
-        readFileSync(resolve(migrations, f), "utf8")
-      )
-    );
-  if (booleanColumns.length !== 2) {
+  // 🔒 ⚠ **THE COLUMN IS GONE AND SO IS ITS CAP (2026-09-02, slice B15).** This
+  // block read the migrations for `home_scoped BOOLEAN NOT NULL` and refused a
+  // union of more than two on the grounds that a boolean encodes exactly two
+  // shelves. `20260923120000_drop_home_scoped.sql` drops it: a shelf is a
+  // CONTAINER now, so a third value is a code change and not a migration, and
+  // the assertion would have gone on passing while describing nothing. What
+  // replaces it is the assertion below — the column must not come BACK.
+  // ⚠ **BOTH DIRECTORIES, BECAUSE THE DROP CAN BE HELD.** This asserts the
+  // column must not come BACK, not that it is already gone —
+  // `20260923120000_drop_home_scoped.sql` lives in `supabase/migrations-held/`
+  // until `TENANCY_PERSONAL_CONTAINER` has been on for a release (see that
+  // directory's README). Reading only `migrations/` turned a deliberate,
+  // documented hold into a drift failure and would have pressured whoever hit
+  // it into un-holding a migration that aborts mid-push.
+  const migrationDirs = [
+    resolve(__dirname, "..", "supabase", "migrations"),
+    resolve(__dirname, "..", "supabase", "migrations-held"),
+  ].filter((d) => existsSync(d));
+  const drop = migrationDirs.some((dir) =>
+    readdirSync(dir).some(
+      (f) =>
+        f.endsWith("_drop_home_scoped.sql") &&
+        /DROP\s+COLUMN\s+IF\s+EXISTS\s+home_scoped/i.test(
+          readFileSync(resolve(dir, f), "utf8")
+        )
+    )
+  );
+  if (!drop) {
     drift = true;
     console.error(
-      `[drift] expected 2 migrations declaring a \`home_scoped BOOLEAN NOT NULL\` column (knowledge + agent templates); found ${booleanColumns.length}: ${booleanColumns.join(", ") || "none"}`
-    );
-  } else if (reference.size !== 2) {
-    drift = true;
-    console.error(
-      `[drift] the shelf union has ${reference.size} member(s) (${[...reference].join(", ")}) but both features store it as the BOOLEAN \`home_scoped\` (${booleanColumns.join(", ")}). A boolean encodes exactly two shelves — a third is a MIGRATION, not a type edit.`
+      `[drift] no migration (applied or held) drops \`home_scoped\`. The shelf is a TENANCY (the caller's kind='personal' container) and nothing may re-introduce the boolean beside it — a column and a container answering the same question is how a row comes to be on one shelf and listed on the other.`
     );
   }
 
@@ -267,7 +260,7 @@ function main(): void {
   // The SECOND family this script guards — see `checkShelfUnions`.
   if (checkShelfUnions((rel) => readFileSync(resolve(repoRoot, rel), "utf8"))) {
     console.error(
-      "\n❌ Shelf vocabulary drift detected. `KbShelf`/`TemplateShelf`, their committed dist/ mirrors, both `readShelf` guards and the MCP wire mapper are hand-mirrored: change every side in ONE change, rebuild with `npm run build -w @dopl/client && npm run build -w @dopl/mcp-server`, and remember a THIRD shelf needs a migration off the `home_scoped` boolean."
+      "\n❌ Shelf vocabulary drift detected. `KbShelf`/`TemplateShelf`, their committed dist/ mirrors and both `readShelf` guards are hand-mirrored: change every side in ONE change and rebuild with `npm run build -w @dopl/client`."
     );
     process.exit(1);
   }

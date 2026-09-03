@@ -14,6 +14,7 @@
 // exactly the two-place gate that F-228 / 1.7.10 bought, and the reason the outbound card and the
 // dock card are two PAYLOADS of one decision rather than two decisions.
 
+const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the classifiers' own key (F-578)
 const crypto = require('crypto');
 const { grantDecisionDetail, grantKeyFor, isOwnChannelPost, isChannelTool, mcpShortName } = require('./session-profiles');
 const outboundTag = require('./session-outbound-tag');
@@ -46,11 +47,21 @@ function shortToolLabel(name) {
 // archaeology to find. THE OP NAME ONLY (a closed vocabulary from the server's enum), sanitized
 // because it arrives from model input; never a body, recipient or channel. Non-channel tools get
 // no `op=` segment, so every line this file already produced is byte-unchanged.
+//
+// ⚠ **AND THE ACTION SINCE 2026-09-02 (F-578), BECAUSE `op=rooms` ALONE IS THE 2026-08-05 DEFECT
+// AGAIN.** Under the five-op surface, `rooms` is four reads and four writes and `manage` is five
+// verbs, so a line naming the bare op reads identically for a roster read and an invite —
+// exactly the archaeology this segment exists to prevent. The label is
+// `channel-op-key.js › channelOpKey`'s output, the same key the CLASSIFIERS match on, so the
+// audit line and the decision can never name different calls.
 function channelOpLabel(toolName, callInput) {
   if (!isChannelTool(toolName)) return '';
   const raw = callInput && callInput.op;
   if (typeof raw !== 'string') return raw == null ? 'none' : 'invalid';
-  return raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, DIAG_OP_CAP) || 'invalid';
+  // ⚠ SANITIZED AFTER the key is built, and the dot is in the kept set: both halves arrive from
+  // model input, and `slice` bounds the pair rather than each half.
+  const key = channelOpKey(callInput);
+  return key.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, DIAG_OP_CAP) || 'invalid';
 }
 function logGateVerdict(log, s, toolName, verdict, op) {
   if (typeof log !== 'function') return;
@@ -72,8 +83,14 @@ function gatePayload(s, name, input, opts, requestId, verdict) {
       requestId,
       toolUseId: opts && opts.toolUseID,
       ownChannel: true, ...(s.direct === true ? { directChannel: true } : {}), // H2: in a DM the server addresses this post, so the card names who gets it
-      // ⚠ `threadOpen` → `entryFor` mints the pending card a create_thread lacks an `outbound_post` to carry, else a gated windowless one hangs to its 24h TTL (F-321).
-      ...(isOutboundPost(name, input, s.channelId) ? {} : { threadOpen: true }),
+      // ⚠ **`threadOpen` IS DELETED, BECAUSE THE CASE IT DISCRIMINATED IS GONE (2026-09-02, B8).**
+      // It stamped the gate of a `create_thread` — an op that was NOT a post, rendered as a
+      // plain `tool_use` with no `pending`, so without a minted card the operator saw a
+      // `dopl_channel` row and then silence to the 24h TTL (F-321). The collapse made a thread
+      // open `send(thread="new")` and an escalation `send(kind="decision")`, so BOTH are
+      // `isOutboundPost` now and `runtime/claude/normalize.js › renderEvents` emits the same
+      // `outbound_post` frame (`pending: true` under `willGatePost`) it emits for any other
+      // send. F-321's card is minted by the ordinary path; the flag had no reachable arm left.
       text: input && input.body != null ? String(input.body) : '',
     }, input, s.counterpartyName, s.counterpartyId)
     : {
@@ -131,7 +148,14 @@ function gateCall(s, name, input, opts, dispatch, log) {
     log('session: outbound post names thread', String(tag.supplied).slice(0, 24),
       'but this session drives', String(tag.wanted).slice(0, 24), '— leaving the call as written');
   }
-  if (decision === 'preapproved' || decision === 'allow') return { settled: true, verdict: 'allow', tag };
+  if (decision === 'preapproved' || decision === 'allow') {
+    // ⚠ THE STALENESS CLOCK IS STAMPED HERE, ON THE VERDICT, NOT UP THERE WITH THE ID
+    // (2026-09-02). The tag is minted BEFORE the verdict because it has to ride one it cannot
+    // make; stamping `lastOwnPostAt` there meant every DENIED post reset T51's clock, so a
+    // session wedged against a tool it is refused looked freshly talkative once per denial.
+    if (outbound) outboundTag.markOwnPost(s);
+    return { settled: true, verdict: 'allow', tag };
+  }
   // F-320: a deny has two causes now, and the LAUNCH BOUND is not "blocked by the profile"
   if (decision === 'deny') return { settled: true, verdict: 'deny', tag: null, message: denyMessageFor(verdict.reason) };
 
@@ -146,7 +170,12 @@ function gateCall(s, name, input, opts, dispatch, log) {
     tag,
     park: function park(resolve) {
       // The tag rides the OPERATOR's allow here; a deny (park included) carries nothing.
-      s.pendingPermissions.set(requestId, outboundTag.wrapAllow(resolve, tag));
+      // ⚠ AND ON THE OPERATOR'S OWN ALLOW TOO — a parked post a human says yes to IS speech;
+      // their deny is not, and `wrapAllow` fires the hook on neither but the first.
+      s.pendingPermissions.set(
+        requestId,
+        outboundTag.wrapAllow(resolve, tag, outbound ? function () { outboundTag.markOwnPost(s); } : null),
+      );
       s.pendingNames.set(requestId, grantName);
       dispatch(s, { type: 'permission_request', requestId, name: grantName, payload });
     },

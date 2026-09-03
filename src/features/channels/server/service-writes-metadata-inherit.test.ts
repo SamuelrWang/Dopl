@@ -30,10 +30,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
@@ -55,6 +57,7 @@ const OTHER_TASK_ID = "55555555-e29b-41d4-a716-446655440000";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "agent",
   role: "member",
 };
@@ -153,6 +156,11 @@ function has(meta: Record<string, unknown>, key: string): boolean {
 }
 
 beforeEach(() => {
+  // ⚠ THE AUTHOR'S OWN PROJECTION, EMPTY (2026-09-02, F-589). RR2 reads it to
+  // check the `client_msg_id` agent stamp — a CALLER-SUPPLIED claim — against
+  // the agents this author actually runs, so a file that leaves it unstubbed
+  // reaches the real admin client and times out rather than failing.
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
   vi.clearAllMocks();
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
@@ -164,7 +172,6 @@ beforeEach(() => {
     memberRow(USER, "owner"),
     memberRow(PEER),
   ]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>

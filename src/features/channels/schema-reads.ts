@@ -74,3 +74,61 @@ export const AwaitQuerySchema = z.object({
   excludeAuthor: z.string().uuid().optional(),
 });
 export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
+
+/**
+ * `?since=<seq>&view=full|sessions` for the ACCOUNT-WIDE status read
+ * (`GET /api/channels/account/status`).
+ *
+ * ⚠ `since` IS OPTIONAL HERE AND REQUIRED ON THE AWAIT, and the difference is
+ * the difference between a page and a wait: a status answer with no cursor is a
+ * complete, useful answer that simply reports `unread: null` — "not asked" —
+ * whereas a hold with no cursor is a firehose. See
+ * `server/service-account.ts › AccountChannelStatus.unread`.
+ *
+ * ⚠ `view` IS A PARAMETER AND THE EXPENSIVE VIEW IS THE DEFAULT (INVARIANTS §9):
+ * nothing may get a thinner answer than it asked for, and an unrecognised value
+ * is a 400 rather than a silent fall-through to `full`.
+ */
+export const AccountStatusQuerySchema = z
+  .object({
+    since: z.coerce.number().int().nonnegative().optional(),
+    view: z.enum(["full", "sessions"]).optional().default("full"),
+  })
+  // ⚠ **`view="sessions"` WITH A `since` IS REFUSED, NOT IGNORED (2026-09-02).**
+  // That view skips the cursor arithmetic entirely — `unread` is `null` on every
+  // row by construction — so the answer ECHOED a cursor back beside a column that
+  // could never be a count, which reads as "0 new everywhere" to anything that
+  // does not know the view's shape. Silently dropping the argument is the other
+  // wrong answer: a caller that asked a question and got no error believes it was
+  // answered. ⚠ It is a REFUSAL rather than an upgrade to `full` for §9's reason
+  // in reverse: nothing may get a WIDER answer than it asked for either, and a
+  // status read that quietly ran the expensive view is a cost nobody chose.
+  .refine((q) => !(q.view === "sessions" && q.since !== undefined), {
+    path: ["since"],
+    message:
+      'since= is not answerable with view="sessions": that view reports no unread counts, so a cursor there would be echoed back beside a column that is always null. Drop since=, or ask for view="full".',
+  });
+export type AccountStatusQuery = z.infer<typeof AccountStatusQuerySchema>;
+
+/**
+ * `?since=<seq>&limit=<n<=200>` for the ACCOUNT-WIDE message read
+ * (`GET /api/channels/account/messages`).
+ *
+ * ⚠ `since` IS REQUIRED. `channel_messages.seq` is a TABLE-WIDE identity, so one
+ * cursor really does cover every channel of every workspace at once — and that
+ * is exactly why a cursorless call here would return the newest N messages of
+ * the caller's entire working life across every tenancy they belong to. The
+ * companion read (`MessageReadQuerySchema`) may omit it because it is bounded to
+ * ONE channel; this one may not.
+ */
+export const AccountMessagesQuerySchema = z.object({
+  since: z.coerce.number().int().nonnegative(),
+  limit: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(MAX_MESSAGE_LIMIT)
+    .optional()
+    .default(DEFAULT_MESSAGE_LIMIT),
+});
+export type AccountMessagesQuery = z.infer<typeof AccountMessagesQuerySchema>;

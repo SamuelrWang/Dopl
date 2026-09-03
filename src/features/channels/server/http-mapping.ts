@@ -4,6 +4,7 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   ChannelAddresseeNotMemberError,
   ChannelChatAddressedError,
+  ChannelRecipientUnresolvedError,
   ChannelForbiddenError,
   ChannelInfoCardTooLargeError,
   ChannelInviteeNotMemberError,
@@ -14,6 +15,8 @@ import {
   ChannelSlugConflictError,
   ChannelTaskNotInChannelError,
   ConsentAlreadyDecidedError,
+  AgentDirectiveForeignError,
+  ChannelAgentChainForbiddenError,
   ConsentNotFoundError,
   DirectChannelImmutableError,
   DirectionNotClaimableError,
@@ -58,6 +61,13 @@ function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof ChannelAddresseeNotMemberError) {
     return new HttpError(400, "CHANNEL_ADDRESSEE_NOT_MEMBER", err.message);
   }
+  // ⚠ 400, and it is the LOUD half of ruling B1: with the fan-out narrowed, a
+  // `to` that resolves to nobody must never come back as a quiet
+  // `delivery=none`. The message carries the live handles and the roster, which
+  // is what the MCP side renders (`channel-errors.ts`).
+  if (err instanceof ChannelRecipientUnresolvedError) {
+    return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
+  }
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
   }
@@ -87,6 +97,22 @@ function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof DirectionNotClaimableError) {
     return new HttpError(409, "CHANNEL_DIRECTION_NOT_CLAIMABLE", err.message);
   }
+  // ⚠ 403, AND IT IS THE ONE 403 ON THIS LANE — the error's own docblock argues
+  // why the 404-never-403 rule does not apply to it: the caller has already
+  // proved channel membership, inside which the roster and the live agent set are
+  // readable anyway, so nothing is disclosed. A 404 here would tell an
+  // orchestrator its own agent had vanished and send it to re-launch.
+  if (err instanceof AgentDirectiveForeignError) {
+    return new HttpError(403, "CHANNEL_AGENT_FOREIGN", err.message);
+  }
+  // ⚠ **400, NOT 403, AND THAT IS DELIBERATE (2026-09-02, A9 — G7).** Nothing is
+  // hidden and nobody is unauthorized: the caller is a member, the setting is
+  // this channel's, and the answer is "that combination is not available here".
+  // A 403 would read as "you may not launch", which is false and sends an
+  // orchestrator to ask for a permission rather than to drop one argument.
+  if (err instanceof ChannelAgentChainForbiddenError) {
+    return new HttpError(400, "CHANNEL_AGENT_CHAIN_FORBIDDEN", err.message);
+  }
   // ⚠ 404 FOR "not yours", not 403 — see the error's own docblock. A 403 would
   // confirm the id exists, which is exactly the probe the single error prevents.
   if (err instanceof LaunchDirectiveNotFoundError) {
@@ -102,7 +128,15 @@ function mapChannelError(err: unknown): HttpError | null {
   // branches on the CODE to tell a missing TEMPLATE from a missing CHANNEL — both of
   // which arrive here as a 404 from the same call.
   if (err instanceof LaunchTemplateNotFoundError) {
-    return new HttpError(404, "AGENT_TEMPLATE_NOT_FOUND", err.message);
+    // ⚠ `details` ONLY WHEN THERE IS SOMETHING NON-LEAKY TO SAY (T35) — the key
+    // is absent, not null, for an ordinary miss, so a client cannot read its
+    // PRESENCE as a signal about a row it may not see.
+    return new HttpError(
+      404,
+      "AGENT_TEMPLATE_NOT_FOUND",
+      err.message,
+      err.elsewhere ? { elsewhere: err.elsewhere } : undefined
+    );
   }
   // ⚠ 409 WITH `details.matches`, because the REFUSAL IS ONLY USEFUL WITH THE LIST.
   // "That name is ambiguous" with nothing else forces the caller to guess or to go

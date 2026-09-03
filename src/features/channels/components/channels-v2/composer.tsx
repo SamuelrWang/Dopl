@@ -63,7 +63,9 @@ import { COMPOSER_BOTTOM, ComposerInputRow, ComposerSend } from "./composer-inpu
 import { AgentRequestPanel } from "./composer-request-panel";
 import { useThreadRequest } from "./use-thread-request";
 import { MentionPopover } from "./composer-mentions";
+import { ComposerRecipients } from "./composer-recipients";
 import { useComposerMentions } from "./use-composer-mentions";
+import type { LiveAgentSession } from "../../lib/draft-recipients";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import { TemplateApprovalDialog } from "@/features/agent-templates/components/template-approval";
 import { ComposerLaunch } from "./composer-launch-panel";
@@ -74,10 +76,9 @@ import { useThreadWrites } from "../../hooks/use-thread-writes";
 import { newClientMsgId } from "../../lib/optimistic-cache";
 import type { ChannelMember } from "../../types";
 
-/** ⚠ A STABLE EMPTY MAP, not `new Map()` at the call site: an agents prop that is a fresh object
- *  every render re-derives the whole @-picker shortlist off-desktop, where there are none. */
-const EMPTY_AGENTS: ReadonlyMap<string, { displayName: string | null }> =
-  new Map();
+/** ⚠ A STABLE EMPTY ARRAY, not `[]` at the call site: an agents prop that is a fresh object every
+ *  render re-derives the whole @-picker shortlist on a surface that has no sessions read. */
+const EMPTY_LIVE_AGENTS: readonly LiveAgentSession[] = [];
 
 export function ChannelsV2Composer({
   channelId,
@@ -90,7 +91,9 @@ export function ChannelsV2Composer({
   newAgent,
   openThreadId = null,
   newThreadSignal = 0,
-  agents = EMPTY_AGENTS,
+  liveAgents = EMPTY_LIVE_AGENTS,
+  defaultResponderAgentName = null,
+  threadOtherParty = null,
 }: {
   /** ⚠ CAPTURED AT SUBMIT into every draft — never re-read from the selection
    *  while a write is in flight (INVARIANTS §8, rule 4). */
@@ -117,11 +120,17 @@ export function ChannelsV2Composer({
    *  drift. Each increment is one request; the default is nobody asking. */
   newThreadSignal?: number;
   /**
-   * THIS MACHINE'S OWN AGENTS, for the @-picker (2026-08-27). ⚠ Same map the transcript tints
-   * from (`AuthorIndex.agents`), so the picker cannot offer a handle the body would not
-   * highlight. Empty off-desktop, where there are no agents to mention.
+   * **THE CHANNEL'S LIVE AGENTS — every member's, not this machine's** (2026-09-02, slice B10).
+   * The peer projection the Agents tab already polls (`use-channel-agent-sessions.ts`), which is
+   * the same set the server resolves a person's `to=` against. Empty where a surface has no
+   * sessions read; the picker then offers members only.
    */
-  agents?: ReadonlyMap<string, { displayName: string | null }>;
+  liveAgents?: readonly LiveAgentSession[];
+  /** The channel's nominated responder (`channels.default_responder_agent_name`) — what RR3 arm 1
+   *  reads, and what the recipient line names when the draft tags nobody. */
+  defaultResponderAgentName?: string | null;
+  /** RR1's answer for a thread composer: the exchange's OTHER party. `null` in the main room. */
+  threadOtherParty?: ChannelMember | null;
 }) {
   const [draft, setDraft] = useState("");
   const draftRef = useRef<HTMLTextAreaElement>(null);
@@ -148,7 +157,7 @@ export function ChannelsV2Composer({
   });
 
   // THE @-PICKER — `use-composer-mentions.ts` (the §1 split at the cap, 2026-08-27).
-  const mentions = useComposerMentions({ draft, setDraft, members, agents, currentUserId });
+  const mentions = useComposerMentions({ draft, setDraft, members, sessions: liveAgents, currentUserId });
 
   const body = draft.trim();
   /**
@@ -310,37 +319,10 @@ export function ChannelsV2Composer({
                 // A new token is a new shortlist — start at the top of it.
                 mentions.setHighlight(0);
               }}
-              onKeyDown={(e) => {
-                // ⚠ THE IME GUARD COVERS THE WHOLE HANDLER, NOT JUST SEND. A composition's own
-                // Enter CONFIRMS a candidate and its arrows MOVE through one; stealing either
-                // posts a half-typed word or silently rewrites what the IME is offering.
-                if (e.nativeEvent.isComposing) return;
-                if (mentions.suggestions.length > 0) {
-                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                    e.preventDefault();
-                    const step = e.key === "ArrowDown" ? 1 : -1;
-                    // Wraps, so the list has no dead end in either direction.
-                    mentions.setHighlight(
-                      (mentions.active + step + mentions.suggestions.length) %
-                        mentions.suggestions.length
-                    );
-                    return;
-                  }
-                  // ⚠ THE PICKER OUTRANKS SEND while it is open. Enter with a highlighted
-                  // candidate confirms the candidate — posting the half-typed `@dia` instead is
-                  // the behaviour every chat client trained the reader out of expecting.
-                  if (e.key === "Enter" || e.key === "Tab") {
-                    if (e.key === "Enter" && e.shiftKey) return;
-                    e.preventDefault();
-                    mentions.pick(mentions.suggestions[mentions.active]);
-                    return;
-                  }
-                }
-                // Enter sends, Shift+Enter breaks the line.
-                if (e.key !== "Enter" || e.shiftKey) return;
-                e.preventDefault();
-                submit();
-              }}
+              // ⚠ THE HANDLER IS THE PICKER'S (`use-composer-mentions.ts › keyDown`, moved
+              // there 2026-09-02 at the cap): four of its five branches are about the shortlist,
+              // and what stays this file's is the one act it owns — send.
+              onKeyDown={(e) => mentions.keyDown(e, submit)}
               placeholder="Write a message"
               ariaLabel="Message"
             />
@@ -464,6 +446,24 @@ export function ChannelsV2Composer({
               <ComposerSend onSend={submit} sendDisabled={!canSend} sendTitle={hint} sendLabel={sendState.label} />
             )}
           </div>
+
+          {/* WHO THIS DRAFT REACHES (2026-09-02, slice B10, Samuel's ruling) — `→ @handle`,
+              `→ <the default responder>` or `→ nobody`, restated on every keystroke.
+              ⚠ ON THE SAME `!panelOpen` CONDITION THE CHAT FIELD ITSELF FOLLOWS. With a panel up
+              there is no chat draft on screen, and a line reporting the reach of an invisible
+              one would describe a message the operator is not writing — the same misfire the `@`
+              glyph was gated for on 2026-08-28. A PANEL states its own addressing
+              (`composer-request-panel.tsx › AgentRequestPanel`). */}
+          {!panelOpen && (
+            <ComposerRecipients
+              body={body}
+              members={members}
+              sessions={liveAgents}
+              currentUserId={currentUserId}
+              defaultResponderAgentName={defaultResponderAgentName}
+              threadOtherParty={threadOtherParty}
+            />
+          )}
 
           {/* ⚠ A REFUSED LAUNCH IS SAID OUT LOUD, HERE, because nothing else
               will: main answering `{ok:false}` changes nothing on its side, so

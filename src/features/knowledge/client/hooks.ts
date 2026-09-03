@@ -104,8 +104,9 @@ export function useKnowledgeBaseList(
   options?: { initialData?: KnowledgeBaseList; shelf?: KbShelf }
 ): Result<KnowledgeBaseList> {
   // Workspace id in the key so switching workspaces re-fetches. Sentinel
-  // fallback keeps the hook firing with no id (sole-workspace caller
-  // auto-targets; multi-workspace fails closed as WORKSPACE_REQUIRED).
+  // fallback keeps the hook firing with no id — since B10 a call that names no
+  // workspace is resolved server-side rather than refused, so the sentinel is a
+  // CACHE key and never a claim about which container answered.
   // ⚠ SHELF IN THE KEY TOO, for the reason the channel variant is in it: a
   // narrowed read is a DIFFERENT RESPONSE, and sharing one entry would let an
   // unfiltered refetch overwrite what the narrowed reader is rendering.
@@ -147,10 +148,10 @@ export function knowledgeBasesCacheSegment(
   // reaches it unchanged. A key off by one ELEMENT is a silent no-op (§8); a
   // key off by one SUFFIX is still reachable. Read that helper's docblock
   // before inventing a fourth shape here.
-  // ⚠ `channelId` WINS when both are given, and no caller gives both: a
-  // container has no home shelf (`resolveHomeScope` fences the marker to the
-  // caller's default STANDARD workspace), so `?channelId=&shelf=home` would be
-  // a question with one possible answer — the empty list.
+  // ⚠ `channelId` WINS when both are given, and no caller gives both: the
+  // personal shelf is the caller's own `kind='personal'` container and a channel
+  // lives in a different one, so `?channelId=&shelf=home` would be a question
+  // with one possible answer — the empty list.
   if (shelf) return `${ws}:shelf:${shelf}`;
   return ws;
 }

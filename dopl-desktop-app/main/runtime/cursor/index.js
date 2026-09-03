@@ -25,7 +25,6 @@
 //   `session.usageResetsOnResume: 'unverified'`  refuses a RESUME (cold launch unaffected), and it
 //                                             matters more here than anywhere because this is the
 //                                             one runtime that reports a REAL BILLED COST.
-//   `triage: null`                            this runtime does not run wake tier 3.
 
 const tools = require('./tools');
 const axisB = require('./axis-b');
@@ -33,7 +32,6 @@ const approval = require('./approval');
 const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
-const triage = require('./triage');
 const { packaging } = require('./packaging');
 
 // ⚠ ELECTRON-FREE AT LOAD, BY CONTRACT. `main/session-profiles.js` is a PURE module two suites
@@ -298,10 +296,6 @@ const descriptor = {
   // descriptor change plus a location picker, not a re-architecture. Length 1 renders no picker.
   execution: { locations: ['local'], remoteCapable: true },
 
-  // ⚠ NULL — this runtime does not run wake tier 3. `triage.js` carries the whole argument: two of
-  // the four fences have no documented analogue here (§5 item X6), and one of them is weaker on
-  // this runtime than anywhere because an over-running triage call could not be stopped (X0).
-  triage: triage.descriptor,
   packaging,
 };
 
@@ -351,7 +345,6 @@ const runtime = {
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },
   signIn() { return credential.signIn(); },
-  triageSpec(request) { return triage.triageSpec(request); },
 };
 
 module.exports = { descriptor, runtime };

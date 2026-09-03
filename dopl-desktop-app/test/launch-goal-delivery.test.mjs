@@ -109,7 +109,8 @@ test("BUTTON: New Agent still spawns IDLE — ruling 3 is not what moved", () =>
   assert.match(call, /\n\s*idle: true,/, "the button lane spawns idle, unconditionally");
   assert.ok(!/idle: !/.test(call), "…and must not copy the directive lane's conditional");
   // The directive lane's own literal, so the two cannot silently converge.
-  const dir = readFileSync(join(MAIN, "launch-directives.js"), "utf8");
+  // ⚠ `spawn` LEFT `launch-directives.js` ON 2026-09-01 (the §1 split, T24) and took `idle:` with it.
+  const dir = readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8");
   assert.match(dir, /idle: !d\.goal,/);
 });
 

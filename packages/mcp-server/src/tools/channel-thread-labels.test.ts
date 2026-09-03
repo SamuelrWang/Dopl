@@ -110,8 +110,11 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
     // ⚠ No "continue" instruction on an ad-hoc-only page — there is no shared
     // exchange to continue.
     expect(text).not.toContain("Threads above:");
-    expect(text).not.toContain('dopl_channel(op="post"');
-    expect(text).toContain('dopl_channel(op="create_thread"');
+    // ⚠ RE-POINTED (B8): BOTH instructions are `op="send"` now — "continue"
+    // carries the full id, "open one" carries thread="new" — so the absent half
+    // is named by its own sentence rather than by an op name it no longer owns.
+    expect(text).not.toContain('Continue one with dopl_channel(op="send"');
+    expect(text).toContain('dopl_channel(op="send", channel="general", thread="new"');
     // ⚠ …and must not order the reader to DROP the tag: the desktop prompt
     // (main/prompt-framing.js THREAD_TAG) tells a session to keep its `thread`
     // argument on every post, and for a legacy exchange that argument IS this
@@ -133,7 +136,7 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
     const threadsLine = text
       .split("\n")
       .find((l) => l.startsWith("Threads above:")) as string;
-    expect(threadsLine).toContain('dopl_channel(op="post"');
+    expect(threadsLine).toContain('dopl_channel(op="send"');
     expect(threadsLine).not.toContain(SYNTHETIC);
   });
 
@@ -154,7 +157,6 @@ describe("F4 — the POST result says the same thing the read render does", () =
       listChannels: vi.fn(async () => [
         { id: "chan-1", slug: "general", name: "General", visibility: "private" },
       ]),
-      listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
       postChannelMessage: vi.fn(async () => ({
         id: "m1",
         seq: 346,
@@ -164,105 +166,129 @@ describe("F4 — the POST result says the same thing the read render does", () =
       })),
     } as unknown as DoplClient;
   }
+  const landed = async (taskId: string, opts: Record<string, unknown> = {}, title?: string) =>
+    (await opPost(postClient(taskId, title), "general", "reply", opts)).content[0].text;
+  // ⚠ A LEGACY ID RENDERS WHOLE, and the case below is why the cap is 48 rather
+  // than the 40 it shipped as for part of 2026-09-02.
 
-  it("calls a synthetic id an AD-HOC EXCHANGE, not a thread it was THREADED into", async () => {
-    const text = (await opPost(postClient(SYNTHETIC), "general", "reply", {}))
-      .content[0].text;
-
-    expect(text).toContain("GROUPED into the ad-hoc exchange");
-    expect(text).toContain("NOT a thread");
-    expect(text).not.toContain("THREADED into");
+  it("calls a synthetic id AD-HOC, not a thread it was THREADED into", async () => {
+    // ⚠ THE TWO RENDER DIFFERENTLY ON BOTH LANES, AND FROM ONE PREDICATE. `landed`
+    // is built by `channel-post-linkage.ts` from the same
+    // `isFirstClassThreadId` the read legend decides `· thread` vs `· ad-hoc`
+    // with — two regexes for "is this a real thread" is how the write lane and
+    // the read lane learn to disagree about one id.
+    const text = await landed(SYNTHETIC);
+    expect(text).toContain("landed=adhoc");
+    expect(text).not.toContain("landed=thread");
+    expect(text).toContain(`thread=${SYNTHETIC}`);
   });
 
-  // ⚠ Advice SPLITS on who chose the id: telling a caller that PASSED this id
-  // to open a real thread reads as "drop the tag" and forks the exchange.
-  it("tells a caller who PASSED the id to KEEP passing it, and offers no thread", async () => {
-    const text = (
-      await opPost(postClient(SYNTHETIC), "general", "reply", { thread: SYNTHETIC })
-    ).content[0].text;
-
-    expect(text).toContain("GROUPED into the ad-hoc exchange");
-    expect(text).toContain("KEEP passing thread=");
-    expect(text).toContain("forks the exchange");
-    expect(text).not.toContain('dopl_channel(op="create_thread"');
+  it("a legacy id survives WHOLE — two exchanges must never render the same line", async () => {
+    // ⚠ THE REGRESSION THIS CATCHES ONCE COST TWO EXCHANGES THEIR IDENTITY.
+    // `channel-facts.ts › FACT_VALUE_MAX` was 40, and a legacy
+    // `task-<channel uuid>-<seq>` id is 45: the 39 characters kept were `task-`
+    // plus the CHANNEL uuid, which every ad-hoc id in one channel shares, and
+    // the trailing seq — the only distinguishing half — was what got dropped.
+    // The two ids below rendered byte-identical lines (measured 2026-09-02).
+    //
+    // ⚠ AND IT IS A VALUE A CALLER MUST COPY: the ad-hoc remedy is
+    // `thread="<the full id>"` on every post in that exchange, and a caller that
+    // INHERITED the id has no other copy of it. `shortRef` in this same file
+    // abbreviates from the OTHER end precisely because a blind prefix collapses.
+    const a = await landed(SYNTHETIC);
+    const b = await landed(SYNTHETIC_2);
+    expect(a).not.toBe(b);
+    expect(a).toContain(SYNTHETIC);
+    expect(b).toContain(SYNTHETIC_2);
+    // The trailing seq is the half that distinguishes them, so it must be there.
+    expect(a).toContain("-345");
+    expect(b).toContain("-360");
   });
 
-  it("offers create_thread only when the caller passed NO thread at all", async () => {
-    const text = (await opPost(postClient(SYNTHETIC), "general", "reply", {}))
-      .content[0].text;
-
-    expect(text).toContain("You passed no thread");
-    expect(text).toContain('dopl_channel(op="create_thread"');
-    expect(text).not.toContain("KEEP passing");
+  // ⚠ ADVICE SPLIT ON WHO CHOSE THE ID, and that advice is STANDING: telling a
+  // caller that PASSED this id to open a real thread reads as "drop the tag" and
+  // forks the exchange, on every such post ever made. So it left the result and
+  // the caller's own argument is what tells the two apart — a caller always knows
+  // what it passed, which is the test for whether something is a FACT this call
+  // has to report at all.
+  it("reports the SAME token whether the caller passed the id or not", async () => {
+    const passed = await landed(SYNTHETIC, { thread: SYNTHETIC });
+    const inherited = await landed(SYNTHETIC);
+    expect(passed).toBe(inherited);
+    expect(passed).toContain("landed=adhoc");
+    expect(passed).not.toContain("KEEP passing thread=");
+    expect(passed).not.toContain("You passed no thread");
+    expect(inherited).not.toContain('thread="new"');
   });
 
-  it("says only that the id resolved elsewhere when a DIFFERENT one was asked for", async () => {
-    const text = (
-      await opPost(postClient(SYNTHETIC), "general", "reply", {
-        thread: SYNTHETIC_2,
-      })
-    ).content[0].text;
-
-    expect(text).toContain("GROUPED into the ad-hoc exchange");
-    expect(text).toContain(`you asked for thread \`${SYNTHETIC_2}\``);
-    expect(text).not.toContain("KEEP passing");
-    expect(text).not.toContain('dopl_channel(op="create_thread"');
+  it("…and the ad-hoc advice itself is still SHIPPED, on the read legend", async () => {
+    // ⚠ THE "MOVED, NOT DELETED" HALF. Both remedies survive verbatim where a
+    // reader meets an ad-hoc id in the first place: keep passing it (dropping it
+    // forks the exchange), and open a real thread if the work needs one.
+    const text = await readText([msg({ metadata: { taskId: SYNTHETIC } })]);
+    expect(text).toContain("keeps a reply grouped with its request");
+    expect(text).toContain("does not open a shared exchange");
+    expect(text).toContain('dopl_channel(op="send", channel="general", thread="new"');
   });
 
-  it("still says THREADED for a real one", async () => {
-    const text = (
-      await opPost(postClient(THREAD_UUID, "Wire the listener"), "general", "reply", {})
-    ).content[0].text;
-
-    expect(text).toContain("THREADED into `Wire the listener`");
-    expect(text).not.toContain("ad-hoc");
+  it("echoes the id that RESOLVED when a DIFFERENT one was asked for", async () => {
+    // ⚠ `thread=` IS READ OFF THE STORED MESSAGE, NEVER OFF THE REQUEST — which
+    // is what makes the mismatch reportable at all. The caller knows what it
+    // passed, so seeing another id come back IS the report; a sentence saying
+    // "you asked for X" would be the server repeating the caller's own argument
+    // back to it. ⚠ But see the FINDING above: at this clip length the two ids
+    // render the same, so THIS mismatch is not visible today.
+    const text = await landed(SYNTHETIC, { thread: SYNTHETIC_2 });
+    expect(text).toContain(`thread=${SYNTHETIC}`);
+    expect(text).not.toContain(SYNTHETIC_2);
+    expect(text).toContain("landed=adhoc");
   });
 
-  // ⚠ WHO CHOSE THE THREAD must be stated: a post that NAMED a thread and one
-  // the server INHERITED one for otherwise render byte-identically (`mismatch`
-  // fires only when `askedThread` is present AND different, and both paths
-  // converge on the same `metadata.taskId`).
-  it("says so when the SERVER inherited the thread the caller did not name", async () => {
-    const text = (
-      await opPost(postClient(THREAD_UUID, "Wire the listener"), "general", "reply", {})
-    ).content[0].text;
-
-    expect(text).toContain("THREADED into `Wire the listener`");
-    expect(text).toContain("You named no thread");
-    // ⚠ State the RULE, not just the fact — inheritance stops once a second
-    // thread is open, which reads as a regression to an agent that does not know.
-    expect(text).toContain("SECOND thread");
-    expect(text).toContain(`thread=\`${THREAD_UUID}\``);
+  it("still says THREADED for a real one, without echoing its title", async () => {
+    const text = await landed(THREAD_UUID, {}, "Wire the listener");
+    expect(text).toContain(`thread=${THREAD_UUID}`);
+    expect(text).toContain("landed=thread");
+    expect(text).not.toContain("adhoc");
+    // ⚠ The peer-typed title is not spliced into a write result any more; it is
+    // rendered by the READ lane, under the untrusted-data framing that belongs
+    // with it.
+    expect(text).not.toContain("Wire the listener");
   });
 
-  it("stays silent when the caller named the thread through metadata.taskId", async () => {
+  // ⚠ WHO CHOSE THE THREAD used to be stated, because a post that NAMED a thread
+  // and one the server INHERITED one for render byte-identically. It is still
+  // true that they do — and it is now deliberate: the caller's own `thread`
+  // argument is the half it already has, so only the LANDED id is reported.
+  it("reports an inherited thread as an ordinary landing", async () => {
+    const text = await landed(THREAD_UUID, {}, "Wire the listener");
+    expect(text).toContain(`thread=${THREAD_UUID} landed=thread`);
+    expect(text).not.toContain("You named no thread");
+    // ⚠ FINDING, NOT A SOFTENED ASSERTION: the RULE that inheritance stops once a
+    // SECOND thread is open — which reads as a regression to an agent that does
+    // not know it — is stated nowhere in the shipped surface as of 2026-09-02
+    // (no "SECOND thread" and no "inherit" in any non-test `channel-*.ts`, and no
+    // such section in `channel-doctrine.ts`). Reported rather than pinned against
+    // text that does not exist.
+    expect(text).not.toContain("SECOND thread");
+  });
+
+  it("stays identical when the caller named the thread through metadata.taskId", async () => {
     // ⚠ `metadata` is a caller-settable passthrough whose schema description
     // tells agents to put `taskId` in it, and opPost forwards it untouched when
-    // `thread` is absent — a post tagged that way looks unthreaded to the note,
-    // which then claims the server inherited a thread the caller named.
-    const text = (
-      await opPost(postClient(THREAD_UUID, "Wire the listener"), "general", "reply", {
-        metadata: { taskId: THREAD_UUID },
-      })
-    ).content[0].text;
-
-    expect(text).toContain("THREADED into `Wire the listener`");
-    expect(text).not.toContain("You named no thread");
-    expect(text).not.toContain("SECOND thread");
+    // `thread` is absent. Reading `opts.thread` ALONE would make such a post look
+    // unthreaded and produce a false `landed=dropped` — the one reading of this
+    // field that would be actively wrong.
+    const text = await landed(THREAD_UUID, { metadata: { taskId: THREAD_UUID } }, "Wire the listener");
+    expect(text).toContain(`thread=${THREAD_UUID} landed=thread`);
+    expect(text).not.toContain("landed=dropped");
   });
 
-  it("stays silent about inheritance when the caller named the thread itself", async () => {
-    // ⚠ CONTROL: without it, "the note appeared" also holds for a note that
-    // fires unconditionally.
-    const text = (
-      await opPost(postClient(THREAD_UUID, "Wire the listener"), "general", "reply", {
-        thread: THREAD_UUID,
-      })
-    ).content[0].text;
-
-    expect(text).toContain("THREADED into `Wire the listener`");
-    expect(text).not.toContain("You named no thread");
-    expect(text).not.toContain("SECOND thread");
+  it("stays identical when the caller named the thread itself", async () => {
+    // ⚠ CONTROL: without it, "the token appeared" also holds for a token that is
+    // rendered unconditionally.
+    const text = await landed(THREAD_UUID, { thread: THREAD_UUID }, "Wire the listener");
+    expect(text).toContain(`thread=${THREAD_UUID} landed=thread`);
+    expect(text).not.toContain("landed=dropped");
   });
 });
 

@@ -180,6 +180,83 @@ function toolLabel(payload) {
     .slice(0, 40);
 }
 
+// ── THE DENIAL LEDGER (2026-09-01, T25) — WHAT AN ORCHESTRATOR CAN SEE ───────
+//
+// ⚠ THE DEFECT IT CLOSES IS INVISIBILITY, NOT THE DENY ITSELF. A windowless session whose calls
+// are being refused looks IDENTICAL, from off this machine, to one that is working: the
+// projection said `working · tool Bash` for sixteen minutes while every call died. The operator
+// gets a banner (`notifyDenied`) and the agent gets a sentence
+// (`session-permissions.js › denialMessage`); the ORCHESTRATOR that launched the agent and is
+// waiting on it got nothing at all, and its only recourse was to keep waiting.
+//
+// ⚠ TWO NUMBERS ON THE SESSION OBJECT, AND THEY DIE WITH IT. `deniedCalls` counts every denial
+// this bridge DECIDED and `lastDeniedTool` names the most recent one; both ride the projection
+// (`session-metrics.js › metrics`) out to `read_sessions`. Nothing is stored per (session, tool)
+// here — `notifiedDenials` below already pays that cost for the BANNER, and a second bounded set
+// for a COUNT would be a bound on a number that cannot grow.
+//
+// ⚠ IT COUNTS THE TWO DENIALS THIS FILE DECIDES AND NO OTHERS, WHICH IS THE HONEST SCOPE. A
+// `deny` VERDICT from `grantDecision` (a hard deny, the launch-depth cap, the T85 await refusal)
+// never reaches `claimGate` — `session-gate-bridge.js › gateCall` answers it settled — so it is
+// not counted and must not be described as if it were. What IS counted is the class the ticket
+// is about: a call that was HELD and then refused with nobody deciding it.
+function noteDenied(s, tool) {
+  if (!s) return false;
+  s.deniedCalls = (Number(s.deniedCalls) || 0) + 1;
+  s.lastDeniedTool = tool;
+  return s.deniedCalls === 1;
+}
+
+// ── THE ONE POST (2026-09-01, T25) ───────────────────────────────────────────
+//
+// ⚠ EXACTLY ONE PER SESSION, AND THE BOUND IS THE WHOLE DESIGN. This writes into the SHARED
+// channel transcript, which every member reads, so the failure mode a per-denial post would have
+// is `notifyDenied`'s storm one turn worse: a wall of identical rows in a room, each of them
+// costing a peer's listener a decision. The FIRST denial is the one that carries information —
+// "this agent has started being refused" — and every one after it is the same sentence.
+//
+// ⚠ IT SAYS THE MODE, BECAUSE THE MODE IS THE REMEDY. `denied Bash (tool mode auto)` tells the
+// reader which of two different things happened: a posture too narrow for the work (the operator
+// can widen it), or a tool nothing widens (`bypass` is a positive allow-list, so an unclassified
+// name gates in every mode). Without the mode the line is a complaint; with it, it is an action.
+//
+// ⚠ IT IS `task_progress`, NOT A `message`. A lifecycle kind reaches no session at all
+// (`session-dispatch.js › feedLiveSession`'s kind filter), so this cannot start a turn, cannot
+// feed back into the session that produced it, and cannot cost the peer a consent decision. A
+// `message` here would be an agent-shaped post that this machine, not the agent, wrote.
+//
+// ⚠ THE `clientMsgId` IS PER SESSION, NOT PER MESSAGE, so the server's own uniqueness is a SECOND
+// guarantee of the same bound rather than a different one. `postTaskEvent`'s default keys on
+// (kind, channel, seq) and two denials under one inbound seq would share it by luck; this says
+// what is actually meant.
+//
+// ⚠ BEST-EFFORT AND NEVER IN THE WAY OF THE DENY. `postTaskEvent` never throws and the deny is
+// already dispatched by the time this runs; a channel that cannot be posted into costs the
+// visibility, never the decision.
+function announceDenial(s, tool) {
+  try {
+    if (!s || !s.channelId) return;
+    const mode = (s.state && s.state.toolMode) || 'manual';
+    const entry = { channel: { id: s.channelId }, workspaceId: s.workspaceId };
+    Promise.resolve(channelPost.postTaskEvent(
+      entry,
+      { seq: s.lastInboundSeq },
+      'task_progress',
+      s.taskId || undefined,
+      undefined,
+      `denied ${tool} (tool mode ${mode}); further denials counted`,
+      { clientMsgId: `denied-${s.channelId}-${s.sessionId}` }
+    )).catch((err) => diag('windowless denial notice failed —', err && err.message));
+  } catch (err) {
+    diag('windowless denial notice threw —', (err && err.message) || String(err));
+  }
+}
+
+/** Both deny paths funnel here: count it, and announce the FIRST one only. */
+function recordDenial(s, tool) {
+  if (noteDenied(s, tool)) announceDenial(s, tool);
+}
+
 function bridgeToolGate(s, payload, decide) {
   const rid = payload.requestId;
   const tool = toolLabel(payload);
@@ -208,6 +285,7 @@ function bridgeToolGate(s, payload, decide) {
     decide(rid, 'deny');
     diag('windowless session: gated tool denied (no surface to ask on)', tool);
     notifyDenied(s, payload);
+    recordDenial(s, tool); // T25: after the deny — the ledger never delays a decision
     return;
   }
   diag('windowless tool gated — operator notified', tool, 'req', String(rid).slice(0, 8));
@@ -220,6 +298,10 @@ function bridgeToolGate(s, payload, decide) {
     sessionPermissions.noteGateTimeout(s, rid);
     decide(rid, 'deny');
     diag('windowless tool gate expired unanswered', tool, 'req', String(rid).slice(0, 8));
+    // T25: an unanswered prompt is the MODERN shape of the silent denial this ticket is about —
+    // the operator was asked, said nothing, and the orchestrator waiting on the agent still has
+    // no way to know. Counted and announced on exactly the same terms as the no-surface deny.
+    recordDenial(s, tool);
     try { notif.close(); } catch (_) { /* best-effort */ }
   }, TOOL_GATE_TTL_MS);
   if (timer && typeof timer.unref === 'function') timer.unref();
@@ -399,4 +481,8 @@ module.exports = {
   claimGate,
   MAX_CONCURRENT_SESSIONS,
   TOOL_GATE_TTL_MS, // 2026-08-31: how long a held tool gate waits for the banner's Allow
+  // 2026-09-01 (T25): the denial LEDGER. Exported for the suite and for nothing else — the two
+  // call sites are in this file, and a second writer of `deniedCalls` is how a count that an
+  // orchestrator ACTS on comes to mean two different things.
+  noteDenied,
 };

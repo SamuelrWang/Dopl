@@ -11,7 +11,7 @@ import { parseSegment } from "@/shared/lib/url/parse-segment";
 import { meetsMinRole, type Role, type Workspace } from "../types";
 import { workspaceSegment } from "../url";
 import {
-  ensureDefaultWorkspace,
+  ensurePersonalContainer,
   findWorkspaceForMember,
   findWorkspaceForMemberByPublicId,
   resolveMembershipOrThrow,
@@ -247,16 +247,16 @@ export async function resolveApiWorkspaceAccess(
 /**
  * THE BOOT ANSWER — everything the bundled SPA needs before it can render, in
  * one round trip (`POST /api/boot`). Replaces a serial chain of four
- * (`onboarding-state` → `ensure-default` → `resolve` → `me`, + `my-access`).
+ * (`onboarding-state` → provision → `resolve` → `me`, + `my-access`).
  *
  * TWO MODES, and the difference is the fail-closed rule (ENGINEERING §9
  * "Workspace resolution"):
  *   - `segment` GIVEN (shell, deep link) — resolve it and nothing else.
  *     Membership-scoped, so "not a member" and "does not exist" both arrive as
- *     `null` → plain 404. ⚠ NEVER falls back to a default workspace; a boot
- *     endpoint that guesses is a cross-tenant bug.
+ *     `null` → plain 404. ⚠ NEVER falls back to the caller's own home; a boot
+ *     endpoint that answers a segment it was not given is a cross-tenant bug.
  *   - `segment` ABSENT (cold launch at `/`) — the PROVISIONING path:
- *     `ensureDefaultWorkspace`, idempotent, always 200. ⚠ Gated on onboarding —
+ *     `ensurePersonalContainer`, idempotent, always 200. ⚠ Gated on onboarding —
  *     an un-onboarded caller must not have a workspace provisioned underneath
  *     them, so that branch returns a null workspace and the SPA routes to
  *     `/onboarding`.
@@ -310,11 +310,11 @@ const BOOT_MIN_ROLE: Role = "guest";
  *
  * 🔒 ⚠ `apiKeyWorkspaceId` IS THE CONTAINER LOCK, AND THE NO-SEGMENT MODE IS THE
  * REASON IT HAD TO REACH THIS FUNCTION (2026-08-26). The provisioning branch
- * answers `ensureDefaultWorkspace` — the operator's oldest OWNED standard
- * workspace — to anything holding a valid credential. For a container-locked
- * child token that is the FIRST MOVE out of the container: it learns the home
- * workspace's id AND its canonical `{slug}-{publicId}` segment, which is exactly
- * the argument the 19 `resolveApiWorkspace` routes take. So a locked caller is
+ * answers `ensurePersonalContainer` — the OPERATOR's own home — to anything
+ * holding a valid credential. For a container-locked child token that is the
+ * FIRST MOVE out of the container: it learns the operator's own container id AND
+ * its canonical `{slug}-{publicId}` segment, which is exactly the argument the
+ * 19 `resolveApiWorkspace` routes take. So a locked caller is
  * refused the provisioning mode OUTRIGHT (`null` → the route's plain 404), and
  * the segment mode is fenced by the resolver's own lock, stated once there.
  *
@@ -371,7 +371,7 @@ export async function getBootState(
     };
   }
 
-  const workspace = await ensureDefaultWorkspace(userId);
+  const workspace = await ensurePersonalContainer(userId);
   // ⚠ Fail-closed even on the workspace just ensured: a revoked owner has no
   // active membership and must get the same 404.
   const { membership } = await resolveMembershipOrThrow(workspace.id, userId);

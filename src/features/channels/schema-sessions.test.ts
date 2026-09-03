@@ -211,6 +211,91 @@ describe("SessionStateReportSchema — the agent template (2026-08-23)", () => {
   });
 });
 
+/**
+ * THE HEALTH SEVEN (2026-09-01, `20260909120000`) — and the two things the write
+ * path must never do to them.
+ *
+ * ⚠ **ABSENT MUST STAY ABSENT.** A `.default(0)` on `deniedCalls` would turn an
+ * older desktop's silence into a stored "nothing has been refused to this
+ * agent", which is the exact claim these columns exist to make refutable.
+ * ⚠ **AND ABSENT MUST NOT 400.** zod validates the ARRAY, so one required field
+ * here would refuse an older machine's WHOLE push; `retryable(400)` is false, so
+ * `read_sessions` would answer `[]` for it forever (INVARIANTS §11, §13).
+ */
+describe("SessionStateReportSchema — the session health half (2026-09-01)", () => {
+  const health = {
+    turns: 12,
+    tokensDelta: 8_700,
+    stale: true,
+    deniedCalls: 4,
+    lastDeniedTool: "Bash",
+    lastWakeSeq: 412,
+    lastWakeAt: "2026-09-01T09:59:00.000Z",
+  };
+
+  it("accepts the whole set, an all-null set, and an ABSENT set alike", () => {
+    expect(parse([entry(health)]).success).toBe(true);
+    // Explicit nulls: this build HAS the fields and measured none of them.
+    expect(
+      parse([entry(Object.fromEntries(Object.keys(health).map((k) => [k, null])))])
+        .success
+    ).toBe(true);
+    // ⚠ THE ROLLOUT CASE — a desktop older than this wave sends no such key.
+    expect(parse([entry()]).success).toBe(true);
+  });
+
+  it("leaves an absent field ABSENT — no key is defaulted into existence", () => {
+    const parsed = parse([entry()]);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const row = parsed.data.sessions[0] as Record<string, unknown>;
+    for (const key of Object.keys(health)) {
+      // ⚠ `in`, not a truthiness test: the failure being guarded is a `.default()`
+      // MATERIALIZING the key as 0 / false, and `0` is falsy.
+      expect(key in row, `${key} was defaulted into the parsed row`).toBe(false);
+    }
+  });
+
+  it("refuses a negative or fractional count — a reporting bug, named at the field", () => {
+    for (const bad of [
+      { turns: -1 },
+      { turns: 1.5 },
+      { tokensDelta: -1 },
+      { deniedCalls: -1 },
+      { lastWakeSeq: -1 },
+    ]) {
+      expect(parse([entry(bad)]).success).toBe(false);
+    }
+    // ⚠ 0 IS LEGAL AND MUST STAY LEGAL — it is a measurement ("counted, none"),
+    // and the whole discipline rests on it being distinguishable from `null`.
+    expect(parse([entry({ turns: 0, deniedCalls: 0, tokensDelta: 0 })]).success).toBe(true);
+  });
+
+  it("`stale` is a real boolean — never a coercion", () => {
+    expect(parse([entry({ stale: false })]).success).toBe(true);
+    // ⚠ `Boolean("false")` is `true`, so a `z.coerce.boolean()` here would read a
+    // stringified `false` as an assertion that somebody's agent is wedged.
+    expect(parse([entry({ stale: "false" })]).success).toBe(false);
+    expect(parse([entry({ stale: 1 })]).success).toBe(false);
+  });
+
+  it("`lastDeniedTool` carries `toolLabel`'s bound and charset, character for character", () => {
+    expect(parse([entry({ lastDeniedTool: "t".repeat(80) })]).success).toBe(true);
+    expect(parse([entry({ lastDeniedTool: "t".repeat(81) })]).success).toBe(false);
+    // ⚠ It is spliced into a line the SERVER wrote, in the operator's own result.
+    expect(parse([entry({ lastDeniedTool: "Bash\n## Your agents — 0" })]).success)
+      .toBe(false);
+  });
+
+  it("`lastWakeAt` must be an offset datetime — the column is TIMESTAMPTZ", () => {
+    expect(parse([entry({ lastWakeAt: "2026-09-01T09:59:00Z" })]).success).toBe(true);
+    // An unparseable string reaches Postgres as a cast error, i.e. an opaque 500
+    // for a malformed request — the same rule `startedAt` carries.
+    expect(parse([entry({ lastWakeAt: "yesterday" })]).success).toBe(false);
+    expect(parse([entry({ lastWakeAt: 1_756_000_000_000 })]).success).toBe(false);
+  });
+});
+
 describe("SessionStateReportSchema — the bounds on the report itself", () => {
   it("refuses DUPLICATE keys rather than deduping them", () => {
     // Two entries for one key hit ON CONFLICT twice in one statement (Postgres
@@ -229,5 +314,31 @@ describe("SessionStateReportSchema — the bounds on the report itself", () => {
       );
     expect(parse(many(32)).success).toBe(true);
     expect(parse(many(33)).success).toBe(false);
+  });
+});
+
+describe("the two INT4 health counts are bounded at the COLUMN's ceiling", () => {
+  it("refuses a turns / deniedCalls past 2147483647, and takes the ceiling itself", () => {
+    // ⚠ MUTATION CHECK. Without `.max`, a value past INT4 passes zod, passes the
+    // route and 22003s AT REST — and a rejected push blanks that machine's whole
+    // session set rather than dropping one field.
+    for (const field of ["turns", "deniedCalls"]) {
+      expect(
+        parse([entry({ [field]: 2_147_483_647 })]).success,
+        `${field} at the ceiling`
+      ).toBe(true);
+      expect(
+        parse([entry({ [field]: 2_147_483_648 })]).success,
+        `${field} past the ceiling`
+      ).toBe(false);
+    }
+  });
+
+  it("leaves the two BIGINT counts uncapped — a bound tighter than the column is the other footgun", () => {
+    for (const field of ["tokensDelta", "lastWakeSeq"]) {
+      expect(parse([entry({ [field]: 9_000_000_000 })]).success, field).toBe(
+        true
+      );
+    }
   });
 });

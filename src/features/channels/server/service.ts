@@ -113,7 +113,7 @@ export { createTask, setTaskMode } from "./service-tasks";
 // Its own module because it is a CALLER of `createTask` and nothing else — the
 // per-addressee idempotency key and the derived group id are the whole content,
 // and both are the kind of rule that gets "simplified" out of a create.
-export { createTaskFanOut } from "./service-tasks-fanout";
+export { createTaskFanOut } from "./service-tasks-broadcast";
 
 // THREAD DELETION (Samuel, 2026-08-21) — HARD, cascading, creator-or-manager,
 // and NOT a finished state: a thread that exists is still live, this is how one
@@ -144,6 +144,12 @@ export {
   reportSessionStates,
 } from "./session-state-service";
 
+// THE WAKE ACK (2026-09-02, A9) — what a machine DID with a message, riding the
+// session-health push beside the projection it already sends. Its own module
+// because it writes `channel_messages`, which the session projection never
+// touches: one file, one reason to change.
+export { recordDeliveryAcks } from "./service-writes-delivery";
+
 // LAUNCH-OVER-MCP (Samuel, 2026-08-22) — an operator's external agent asking
 // that operator's OWN desktop to start an agent. ⚠ Its own module because it is
 // the one channel write that produces NO MESSAGE: a directive stays off
@@ -159,6 +165,21 @@ export {
   LAUNCH_REFUSAL_REASONS,
 } from "./service-launch";
 
+// AGENT MANAGEMENT OVER MCP (Samuel, 2026-09-01) — the SAME mailbox, two more
+// KINDS. ⚠ A separate module and NOT a separate lane: `end` and `rename` are
+// `channel_launch_directives` rows with `kind <> 'launch'`, so every fence, the
+// claim CAS, lazy expiry and the refusal vocabulary are the launch lane's,
+// unchanged. What the split buys is that the CONSENT DIFFERENCE — the launch
+// toggle gates `launch` and gates neither of these — is argued in one place
+// instead of as a branch inside a function about starting processes.
+export {
+  createAgentDirective,
+} from "./service-launch-agent";
+export type {
+  CreateAgentDirectiveInput,
+  CreateAgentDirectiveResult,
+} from "./service-launch-agent";
+
 // THE PRIVATE DIRECT LANE (2026-08-31) — the launch mailbox's sibling, and off
 // `channel_messages` for the same two reasons plus a third: the lane is PRIVATE BY
 // DEFINITION, so the shared transcript is not a trade-off but the feature's
@@ -172,3 +193,25 @@ export {
   decideAgentDirection,
   DIRECTION_REFUSAL_REASONS,
 } from "./service-directions";
+
+// THE ACCOUNT-WIDE READS (2026-09-01, T20/T21/T22) — one answer across every
+// workspace AND every home-channel container the caller belongs to.
+//
+// ⚠ USER-SCOPED, NOT WORKSPACE-SCOPED, and that is why they are a separate
+// module rather than a flag on `listChannels` / `awaitWorkspaceMessages`: those
+// take a `ChannelContext`, which names ONE workspace, and threading an absent
+// workspace through them would put two authorization stories behind one
+// signature. The fence is `channel_members.user_id` alone — see
+// `service-account.ts`'s header, and note that the CONTAINER LOCK is applied by
+// the MCP layer rather than by these.
+export { getAccountStatus, readAccountMessages } from "./service-account";
+export type {
+  AccountChannelMessage,
+  AccountChannelStatus,
+  AccountMessagesPage,
+  AccountStatus,
+  AccountStatusClips,
+  AccountStatusOptions,
+  AccountStatusView,
+  AccountWaitingItem,
+} from "./service-account";

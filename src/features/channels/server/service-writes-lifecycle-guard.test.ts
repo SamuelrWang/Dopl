@@ -21,10 +21,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
@@ -45,6 +47,7 @@ const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
 const agentCtx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "agent",
   role: "member",
 };
@@ -128,13 +131,17 @@ function inserted() {
 }
 
 beforeEach(() => {
+  // ⚠ THE AUTHOR'S OWN PROJECTION, EMPTY (2026-09-02, F-589). RR2 reads it to
+  // check the `client_msg_id` agent stamp — a CALLER-SUPPLIED claim — against
+  // the agents this author actually runs, so a file that leaves it unstubbed
+  // reaches the real admin client and times out rather than failing.
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
   vi.clearAllMocks();
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockResolvedValue(memberRow(USER));
   vi.mocked(repo.listMembers).mockResolvedValue([memberRow(USER), memberRow(PEER)]);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => insertedRow(row));
   vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
   vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
@@ -173,9 +180,9 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
 
   it("refuses BEFORE the idempotency short-circuit, so a retry cannot replay it", async () => {
     // ⚠ If the guard sat AFTER, a refused caller could re-send the same
-    // client_msg_id, hit `findMessageByClientId`, and be handed a stored message
+    // client_msg_id, hit `findOwnMessageByClientId`, and be handed a stored message
     // back as if the post succeeded.
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
+    vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(
       insertedRow({
         channel_id: "chan-1",
         workspace_id: WS,
@@ -185,6 +192,13 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
         body: "done",
         metadata: {},
         client_msg_id: "k1",
+        // ⚠ The stored row's own verdict (A9). Not this case's subject — it is
+        // here because the insert states a verdict on every path, and a fixture
+        // that could omit it would let a real omission compile.
+        wake_verdict: "none",
+        recipient_user_ids: [],
+        recipient_agent_ids: null,
+        delivery: "none",
       })
     );
     await expect(
@@ -194,7 +208,7 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
         clientMsgId: "k1",
       })
     ).rejects.toBeInstanceOf(ChannelLifecycleKindForbiddenError);
-    expect(repoMessages.findMessageByClientId).not.toHaveBeenCalled();
+    expect(repoMessages.findOwnMessageByClientId).not.toHaveBeenCalled();
   });
 });
 

@@ -40,6 +40,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WorkspaceMethods = void 0;
 const client_base_js_1 = require("./client-base.js");
 const workspaces = __importStar(require("./workspaces.js"));
+const grants = __importStar(require("./grants.js"));
 class WorkspaceMethods extends client_base_js_1.DoplClientBase {
     async listWorkspaces() {
         return workspaces.listWorkspaces(this.transport);
@@ -50,6 +51,15 @@ class WorkspaceMethods extends client_base_js_1.DoplClientBase {
     /** See `workspaces.getActiveWorkspace`. */
     async getActiveWorkspace() {
         return workspaces.getActiveWorkspace(this.transport);
+    }
+    /**
+     * Lend one resource to one scope — the write that REPLACED the copy ops
+     * (Wave B ruling B11). ⚠ It lives on link 2 because a grant is cross-domain:
+     * `KnowledgeMethods` and `AgentTemplateMethods` both call it, and a method on
+     * either of those would be invisible to the other.
+     */
+    async grantResource(input) {
+        return grants.grantResource(this.transport, input);
     }
     async pingMcpStatus() {
         return workspaces.pingMcpStatus(this.transport);

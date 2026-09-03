@@ -1,4 +1,4 @@
-// THE OWN-MACHINE DIRECT LANE — `dopl_channel(op="direct_agent")` addressed at THIS session's own
+// THE OWN-MACHINE DIRECT LANE — `dopl_channel(op="manage", action="direct")` addressed at THIS session's own
 // channel, so that an operator's OWN agents may direct each other PRIVATELY.
 //
 // ⚠ SAMUEL'S RULING, 2026-08-31: **the user's OWN agents may `direct_agent` each other privately.
@@ -90,14 +90,20 @@
 // wished for at the same time. It cannot bound the operator's own composer, which does not go
 // through that funnel at all.
 
-// THE OP, NAMED EXPLICITLY. ⚠ A LIST OF ONE, DELIBERATELY: this is an ALLOW list, never a
-// default-widening of unknown ops. An op named nowhere resolves to `gate` in every posture.
-// ⚠ `read_directions` IS NOT HERE AND MUST NOT BE. It is a READ — it starts no turn and sends
-// nothing — so it belongs to Axis B's INBOUND half and is a member of `session-profiles.js ›
-// OWN_CHANNEL_READ_OPS`, beside `read_sessions`, whose shape it shares exactly (this operator's
-// own runtimes, `channel` an optional filter rather than a required argument). Putting a read
+// THE CALL, NAMED EXPLICITLY. ⚠ A LIST OF ONE, DELIBERATELY: this is an ALLOW list, never a
+// default-widening of unknown calls. A call named nowhere resolves to `gate` in every posture.
+// ⚠ READING THE MAILBOX IS NOT HERE AND MUST NOT BE. `op="status"` — which absorbed
+// `read_directions` — is a READ: it starts no turn and sends nothing, so it belongs to Axis B's
+// INBOUND half and is a member of `session-profiles.js › OWN_CHANNEL_READ_OPS`. Putting a read
 // behind a `bypass` conjunction would be the strictly wrong answer for it.
-const OWN_MACHINE_DIRECT_OPS = ['direct_agent'];
+//
+// ⚠ **`<op>.<action>`, NOT AN OP (2026-09-02, F-578).** `direct_agent` folded into
+// `manage(action="direct")`; keying on the bare `manage` would admit `launch`, `end`, `rename`
+// and `posture` to a lane that carries no depth bound at all. Same key as the launch lane's,
+// from `channel-op-key.js`, and the same grain the server's write gate reads.
+const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the ONE spelling (F-578)
+
+const OWN_MACHINE_DIRECT_OPS = ['manage.direct'];
 
 // The Axis-A posture that may buy local compute. ⚠ COMPARED AS A LITERAL, and a value outside the
 // enum is simply not it — `session-io.js › grantArgs` has already normalized and floored the axis
@@ -107,7 +113,7 @@ const OWN_MACHINE_DIRECT_OPS = ['direct_agent'];
 const DIRECT_TOOL_MODE = 'bypass';
 
 /**
- * A `direct_agent` aimed at THIS session's own channel.
+ * A `manage(action="direct")` aimed at THIS session's own channel.
  *
  * ⚠ SAME SCOPE RULE AND SAME SAFE FAILURE AS EVERY OTHER OWN-CHANNEL PREDICATE
  * (`session-own-launch.js › isOwnMachineLaunch`, `session-own-outbound.js › scopedToOwnChannel`):
@@ -120,7 +126,7 @@ const DIRECT_TOOL_MODE = 'bypass';
  */
 function isOwnMachineDirect(input, sessionChannelId) {
   const i = input || {};
-  if (OWN_MACHINE_DIRECT_OPS.indexOf(i.op) === -1) return false;
+  if (OWN_MACHINE_DIRECT_OPS.indexOf(channelOpKey(i)) === -1) return false;
   const target = i.channel;
   if (target == null || target === '') return true; // no explicit target -> own channel
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);

@@ -77,10 +77,56 @@ function openChannelForEntry(entry, opts) {
 // (F-170, 2026-08-08): the control, the schema field, the DTO and both runtime reads are
 // gone, so pointing at it as the shape to follow would send the next reader looking for a
 // field nothing sets.
-const { normalizeProfile } = require('./tool-profiles');
+const { normalizeProfile, profileForChannel } = require('./tool-profiles');
 
 function resolveToolProfile(channel) {
   return normalizeProfile(channel && (channel.myAgentToolProfile || channel.agentToolProfile));
 }
 
-module.exports = { setHandlers, openChannelForEntry, resolveToolProfile };
+/**
+ * IS THIS ROOM SHARED — i.e. is there a second audience for what a session here does?
+ * (2026-09-02, Samuel's ruling on F-513.)
+ *
+ * ⚠ THE FACT IS THE CHANNEL'S MEMBER COUNT, NOT THE CONTAINER'S KIND, and the ruling is what
+ * changed: ruling B7 says *"a session launched into a SHARED channel"*, and the predicate the
+ * first lane borrowed — `session-park-on-claim.js › isSharedContainer`, `kind === 'link' &&
+ * memberCount !== 1` — answers a DIFFERENT question. It called a nine-member `standard`
+ * workspace solo, so the room with the most people in it was the one that kept its shell.
+ * ⚠ THE OTHER TWO READERS OF THAT CONTAINER PREDICATE ARE UNCHANGED and must stay so: the
+ * credential lock and the park-on-claim stop are both about the CLAIM lane, where a link
+ * container gaining a peer IS the event. Same word, two questions; this one is the room's.
+ *
+ * 🔒 ⚠ AN ABSENT COUNT READS AS SHARED, matching every other stale-field direction on this
+ * machine: the only thing this answer can do is REMOVE the shell from a launch, so an unknown
+ * that reads "solo" would hand a stranger's room a session that has one. `!== 1` rather than
+ * `> 1` says that in one term — 0 and `undefined` are the unknown, and only an exact 1 is solo.
+ */
+function isSharedChannel(channel) {
+  const n = channel && typeof channel.memberCount === 'number' ? channel.memberCount : 0;
+  return n !== 1;
+}
+
+/**
+ * 🔒 THE PROFILE A LAUNCH INTO THIS CHANNEL REALLY STARTS AT — the channel's stored scope, with
+ * ruling B7's narrowing already applied.
+ *
+ * ⚠ IT EXISTS BECAUSE THE RULE HAD THREE CALL SITES AND LANDED ON ONE (F-510). Every launch lane
+ * on this machine — the directive spawn, the New Agent button and the responder trigger — reads
+ * its profile through here, so "shared room ⇒ no shell" cannot be true on one lane and false on
+ * the next. The C-11 argument, one level up: a rule spelled beside three resolvers is a rule two
+ * of them will stop spelling.
+ * ⚠ `resolveToolProfile` STAYS the stored read and is still exported — the narrowing is a
+ * LAUNCH-TIME derivation and nothing writes it back, so the channel's own enum is still three
+ * values and an operator who moves it moves what this reads.
+ */
+function resolveLaunchToolProfile(channel) {
+  return profileForChannel(resolveToolProfile(channel), isSharedChannel(channel));
+}
+
+module.exports = {
+  setHandlers,
+  openChannelForEntry,
+  resolveToolProfile,
+  isSharedChannel,
+  resolveLaunchToolProfile,
+};

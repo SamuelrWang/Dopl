@@ -87,22 +87,28 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // (`^[a-z][a-z0-9-]{1,30}$`) would refuse a human name anyway. A peer's card still shows
     // what THEIR machine reports.
     "agentId", "channelId", "channelName", "contextUsed", "contextWindow",
+    // ⚠ THE HEALTH HALF joined 2026-09-01 (T25 / T50 / T51 / T83). Like `templateName` below,
+    // these are NOT local-only — all seven are named in `reportRow` on purpose, with
+    // OPERATOR-ONLY columns to receive them. They are not REPORT-only either, which is all this
+    // case claims: the Agents tab reads them too.
+    "deniedCalls",
     // ⚠ `description` joined 2026-08-27 (Samuel's launch-panel ruling) and is LOCAL-only on
     // exactly `displayName`'s terms — same store (`main/agent-names.js`), same machine-local
     // rule, and `reportRow` picks the server columns BY NAME so it never reaches
     // `channel_sessions`, which has no column to receive it.
     "description", "detail",
     "displayName", "endedAt",
-    "lastActivityAt", "listening", "messageMode",
+    "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
     // ⚠ `model` joined 2026-08-22 (Samuel's model-selection ruling) and is LOCAL-only on the same
     // terms as `detail` / `toolMode` / `messageMode`: `session-state-push.js › reportRow` picks
     // columns by name, so the wire is unchanged and the claim here stays the narrower one.
     "model",
-    "name", "sessionId", "startedAt", "state", "taskId",
+    "name", "sessionId", "stale", "startedAt", "state", "taskId",
     // ⚠ `templateName` joined 2026-08-22 (agent templates) and is the ONE field on this list
     // that is NOT local-only: it is named in `reportRow` on purpose, because Phase 4 added the
     // column to receive it. It is still not REPORT-only, which is all this case claims.
-    "templateName", "threadTitle", "tokensSpent", "toolLabel", "toolMode",
+    "templateName", "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
+    "turns",
   ]);
   // The renderer has no use for either, and `DesktopSessionSummary` is a wire contract.
   assert.equal("key" in m.list()[0], false);

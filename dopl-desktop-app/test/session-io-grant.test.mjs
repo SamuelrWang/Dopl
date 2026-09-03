@@ -27,6 +27,8 @@ const io = require(join(HERE, "..", "main", "session-io.js"));
 // platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
 // callback, so they take it from there.
 const axisB = require(join(HERE, "..", "main", "runtime", "claude", "axis-b.js"));
+// 2026-09-01 (T85): the sentence a refused `await` carries, read from its one definition.
+const permissions = require(join(HERE, "..", "main", "session-permissions.js"));
 
 // A minimal live-session stub — just the fields makeCanUseTool reads. Both axes live on
 // state exactly as the reducer models them, and default to the most restrictive value.
@@ -116,7 +118,7 @@ test("bypass: a preapproved read is allowed exactly as before (the mode does not
 // like any other write, carrying the drafted body so the dock can render it.
 
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
-const POST = { op: "post", body: "Shipping the invoice import tonight." };
+const POST = { op: "send", body: "Shipping the invoice import tonight." };
 
 // RE-PINNED for v2.7 L3: the post's DECISION SURFACE moved from the bottom dock to its own
 // inline stream card, so the renderer payload is now `outbound_gate` (requestId +
@@ -159,21 +161,23 @@ test("D2/L3: an own-channel post DISPATCHES a permission_request, rendered as it
 // outright — there is no surface to ask on. A gated thread open that dispatched the dock shape
 // would therefore be auto-refused, which is the live v1.19.0 defect this ruling closes.
 
-test("THREAD OPEN: a gated own-channel create_thread raises the OUTBOUND payload, not the dock", async () => {
+test("THREAD OPEN: a gated own-channel thread open raises the OUTBOUND payload, not the dock", async () => {
   const s = mkSession(); // messageMode `ask` — the posture that holds it for the operator
   const rec = recorder();
-  const open = { op: "create_thread", title: "Wire the listener", body: "the request", to: "bob@x.com" };
+  const open = { op: "send", thread: "new", title: "Wire the listener", body: "the request", to: "bob@x.com" };
   const p = axisB.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, open, { requestId: "r40", toolUseID: "t40" });
   assert.equal(rec.events.length, 1, "the thread open reaches the gate");
   assert.equal(rec.events[0].type, "permission_request", "the POLICY path is the same reducer event");
   // ⚠ `to` IS THE CALL'S OWN ADDRESSEE, through the SAME withPostSurface the post path uses, so
   // the operator is shown who the exchange would be opened with — not the session's assumed peer.
-  // ⚠ `threadOpen: true` is the create_thread discriminator (F-321): unlike a post, a thread open
-  // emits no `outbound_post` frame, so `session-narration.js › entryFor` needs this flag to mint
-  // the pending sent-lane card. A POST gate must NOT carry it (asserted in the post test above).
+  // ⚠ **NO `threadOpen` (2026-09-02, B8).** That flag was the `create_thread` discriminator
+  // (F-321): the op was not a post, rendered as a plain `tool_use` with no `pending`, so
+  // `session-narration.js › entryFor` had to mint the sent-lane card itself. A thread open is
+  // `send(thread="new")` now, so `renderEvents` emits the SAME `outbound_post` frame it emits
+  // for any send and the card is minted the ordinary way. The payload is a post's, exactly.
   assert.deepEqual(rec.events[0].payload, {
     type: "outbound_gate", requestId: "r40", toolUseId: "t40", ownChannel: true,
-    threadOpen: true, text: open.body, to: "bob@x.com", addressed: true,
+    text: open.body, to: "bob@x.com", addressed: true,
     gateReason: "message-approval-required",
   });
   assert.ok(!("channel" in rec.events[0].payload), "still a boolean destination, never a channel id");
@@ -184,7 +188,7 @@ test("THREAD OPEN: a gated own-channel create_thread raises the OUTBOUND payload
 test("THREAD OPEN: auto_outbound sends it with NO dispatch; a SLUG falls back to the dock", async () => {
   const auto = mkSession({ messageMode: "auto_outbound" });
   const recA = recorder();
-  const open = { op: "create_thread", title: "T", body: "x", to: "bob@x.com" };
+  const open = { op: "send", thread: "new", title: "T", body: "x", to: "bob@x.com" };
   assert.deepEqual(await axisB.makeCanUseTool(auto, recA.dispatch)(CHANNEL_TOOL, open, { requestId: "r41" }),
     { behavior: "allow" }, "the operator's auto-send posture honors a thread open");
   assert.equal(recA.events.length, 0, "…with no card, exactly like a post");
@@ -208,15 +212,19 @@ test("THREAD OPEN: it is NOT given the forced thread tag — there is no thread 
   s.taskId = "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
   const rec = recorder();
   const verdict = await axisB.makeCanUseTool(s, rec.dispatch)(
-    CHANNEL_TOOL, { op: "create_thread", title: "T", body: "x", to: "bob@x.com" }, { requestId: "r43" });
+    CHANNEL_TOOL, { op: "send", thread: "new", title: "T", body: "x", to: "bob@x.com" }, { requestId: "r43" });
   assert.deepEqual(verdict, { behavior: "allow" }, "no updatedInput rides a thread open");
-  assert.equal(io.isOutboundPost(CHANNEL_TOOL, { op: "create_thread" }, s.channelId), false);
+  // ⚠ IT IS A POST NOW (2026-09-02, B8) — and the tag is still not forced, for the rule that
+  // was always the real one: `suppliedThreadId` reads `"new"` as the agent's OWN choice, and
+  // `session-outbound-tag.js` NEVER OVERWRITES one. What used to be a classification difference
+  // is the same refusal, made by the rule that does not depend on the op set.
+  assert.equal(io.isOutboundPost(CHANNEL_TOOL, { op: "send", thread: "new" }, s.channelId), true);
 });
 
 test("D2/L3: a CROSS-channel post still uses the DOCK payload (the exfil shape FIX #9 marks)", async () => {
   const s = mkSession();
   const rec = recorder();
-  const cross = { op: "post", channel: "other-channel", body: "the file contents" };
+  const cross = { op: "send", channel: "other-channel", body: "the file contents" };
   const p = axisB.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, cross, { requestId: "r16", toolUseID: "t16" });
   assert.equal(rec.events[0].payload.type, "permission_request", "not an inline outbound card");
   assert.equal(rec.events[0].payload.name, CHANNEL_TOOL, "the dock shows the real tool name");
@@ -253,7 +261,7 @@ test("D2: the allow-for-task grant recorded for a post is the SCOPED post key", 
   const canUse2 = axisB.makeCanUseTool(s, rec2.dispatch);
   assert.deepEqual(await canUse2(CHANNEL_TOOL, POST, { requestId: "r12" }), { behavior: "allow" });
   assert.equal(rec2.events.length, 0, "no second prompt for the granted shape");
-  canUse2(CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" }, { requestId: "r13" });
+  canUse2(CHANNEL_TOOL, { op: "rooms", action: "open", direct: true, member: "evil@x" }, { requestId: "r13" });
   assert.equal(rec2.events.length, 1, "a DM open still needs its own decision");
   s.pendingPermissions.get("r13")({ behavior: "deny" });
 });
@@ -285,10 +293,10 @@ test("FIX F2: a grant taken on op=read does NOT let a later post or DM open thro
   const rec2 = recorder();
   const canUse2 = axisB.makeCanUseTool(s, rec2.dispatch);
   canUse2(CHANNEL_TOOL, POST, { requestId: "r21" });
-  canUse2(CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" }, { requestId: "r22" });
+  canUse2(CHANNEL_TOOL, { op: "rooms", action: "open", direct: true, member: "evil@x" }, { requestId: "r22" });
   assert.equal(rec2.events.length, 2, "the post AND the DM open each still need their own decision");
   assert.ok(rec2.events[0].name.startsWith(CHANNEL_TOOL + "#post#body:"));
-  assert.equal(rec2.events[1].name, CHANNEL_TOOL + "#op:open");
+  assert.equal(rec2.events[1].name, CHANNEL_TOOL + "#op:rooms");
   // A second op=read rides the grant it was actually given.
   assert.deepEqual(await canUse2(CHANNEL_TOOL, { op: "read" }, { requestId: "r23" }), { behavior: "allow" });
   assert.equal(rec2.events.length, 2, "no new prompt for the granted op");
@@ -310,7 +318,7 @@ test("INVARIANT: AXIS B auto_outbound sends the post with no dispatch, and NOTHI
   assert.equal(rec.events.length, 1, "Axis B can never run a work tool");
   s.pendingPermissions.get("r15b")({ behavior: "deny" });
   // ...and neither can it open a DM with another member (the v1.9 FIX H1 exfil path).
-  canUse(CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" }, { requestId: "r15c" });
+  canUse(CHANNEL_TOOL, { op: "rooms", action: "open", direct: true, member: "evil@x" }, { requestId: "r15c" });
   assert.equal(rec.events.length, 2, "auto_outbound covers own-channel POSTS only");
   s.pendingPermissions.get("r15c")({ behavior: "deny" });
 });
@@ -324,15 +332,38 @@ test("M3: auto_inbound reads the OWN channel with no dispatch, and opens nothing
   const s = mkSession({ messageMode: "auto_inbound" });
   const rec = recorder();
   const canUse = axisB.makeCanUseTool(s, rec.dispatch);
-  for (const op of ["read", "await", "list_threads", "get_thread", "members"]) {
-    assert.deepEqual(await canUse(CHANNEL_TOOL, { op }, { requestId: "m-" + op }), { behavior: "allow" }, op);
+  // ⚠ THE FOUR KEYS OF `OWN_CHANNEL_READ_OPS` (2026-09-02, F-578) — `list_threads` and
+  // `members` are `rooms` ACTIONS, `get_thread` is `read(thread=)`, and `read_sessions` /
+  // `read_directions` are one `status`. ⚠ The `rooms` entries are DOTTED: four of that op's
+  // actions write, so a bare `rooms` here would be asserting a widening.
+  for (const input of [
+    { op: "read" },
+    { op: "read", thread: "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b" },
+    { op: "status" },
+    { op: "rooms", action: "threads" },
+    { op: "rooms", action: "members" },
+  ]) {
+    const label = JSON.stringify(input);
+    assert.deepEqual(await canUse(CHANNEL_TOOL, input, { requestId: "m-" + label }), { behavior: "allow" }, label);
   }
+  // ⚠ `await` LEFT THAT LIST ON 2026-09-01 (T85) AND IS ASSERTED HERE INSTEAD, through the SAME
+  // end-to-end path: it is answered SYNCHRONOUSLY with a deny and its own sentence, and — the
+  // half that matters for the token budget — it dispatches NOTHING, so a windowless session pops
+  // no notification and holds no resolver for a call that could not have helped it.
+  assert.deepEqual(
+    await canUse(CHANNEL_TOOL, { op: "read", wait_ms: 30000 }, { requestId: "m-await" }),
+    { behavior: "deny", message: permissions.AWAIT_DENY_MESSAGE }
+  );
   assert.equal(rec.events.length, 0, "the operator opted into receiving; asking again is the bug");
   // The exfil surface is untouched: each of these still earns its own card at auto_inbound.
   // `propose_close` was on this list until thread closing (wiring plan Phase 4,
   // 2026-08-18) took it out of the tool's enum.
-  const gated = ["open", "invite", "create_thread", "set_thread_mode", "list"];
-  gated.forEach((op, i) => canUse(CHANNEL_TOOL, { op, direct: true, member: "evil@x" }, { requestId: "g" + i }));
+  const gated = [
+    { op: "rooms", action: "open" }, { op: "rooms", action: "invite" },
+    { op: "send", thread: "new" }, { op: "rooms", action: "thread_mode" },
+    { op: "rooms", action: "list" }, { op: "rooms", action: "update" },
+  ];
+  gated.forEach((shape, i) => canUse(CHANNEL_TOOL, { ...shape, direct: true, member: "evil@x" }, { requestId: "g" + i }));
   assert.equal(rec.events.length, gated.length, "every channel-changing op still asks");
   // ...and so is a read of ANOTHER channel, and a POST (that is the outbound half's business).
   canUse(CHANNEL_TOOL, { op: "read", channel: "other-id" }, { requestId: "x1" });

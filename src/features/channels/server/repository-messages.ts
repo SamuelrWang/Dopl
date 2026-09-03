@@ -168,35 +168,15 @@ export async function hasMessagesAfter(
  * real message — the same trap `excludeAuthorFilter` documents above.
  */
 
-/**
- * ⚠ TWO READS OF (channel, client_msg_id), AND THE AUTHOR SCOPE IS THE WHOLE
- * DIFFERENCE — 2026-08-22. They are deliberately NOT merged and neither may be
- * substituted for the other.
- *
- * THIS one is CHANNEL-SCOPED and is a plain READ of a DERIVED key. Its only
- * caller is `service-tasks.ts › storedOpeningSeq`, where reading ACROSS authors
- * is the documented behaviour: a create that converged on somebody else's thread
- * posts nothing and reads the WINNER's opening seq
- * (`service-tasks.ts › convergeOnThread`). Author-scoping it would answer `null`
- * for exactly the case it exists to serve.
- *
- * ⚠ IT IS NOT AN IDEMPOTENCY PROBE, AND USING IT AS ONE IS THE SECURITY BUG THIS
- * SPLIT FIXES. See {@link findOwnMessageByClientId}.
- */
-export async function findMessageByClientId(
-  channelId: string,
-  clientMsgId: string
-): Promise<ChannelMessageRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_messages")
-    .select("*")
-    .eq("channel_id", channelId)
-    .eq("client_msg_id", clientMsgId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as ChannelMessageRow | null) ?? null;
-}
+// ⚠ `findMessageByClientId` — the CHANNEL-SCOPED read of (channel,
+// client_msg_id) — STOOD HERE AND IS DELETED (2026-09-02). Its one caller was
+// `service-tasks.ts › storedOpeningSeq`, the arm a create took when it converged
+// on SOMEBODY ELSE's thread. Author-scoping the thread probe
+// (`repository-tasks.ts › findOwnTaskByClientId`) removed that arm: a colliding
+// key from another member yields a separate thread instead of converging, so
+// nothing reads across authors any more. Deleted with its caller rather than
+// left exported — an orphan repository helper is invisible to the orphan check
+// and reads as a live door.
 
 /**
  * THE IDEMPOTENCY PROBE — (channel, AUTHOR, client_msg_id). `postMessage`'s
@@ -222,8 +202,9 @@ export async function findMessageByClientId(
  * a 500. Change one, change both.
  *
  * ⚠ COLUMN ORDER IN THAT INDEX IS `(channel_id, client_msg_id, author_user_id)`,
- * not the argument order here — the leading pair is what keeps
- * {@link findMessageByClientId} above index-served.
+ * not the argument order here. When it was chosen, the leading pair kept a
+ * CROSS-author read index-served; that read is gone (see the note above) and the
+ * order is kept because re-creating an index is a data question, not a cleanup.
  */
 export async function findOwnMessageByClientId(
   channelId: string,
@@ -312,6 +293,13 @@ export async function findMessageById(
   return (data as ChannelMessageRow | null) ?? null;
 }
 
+// ⚠ **THE DELIVERY COLUMN'S TWO STATEMENTS LIVE IN `repository-delivery.ts`**
+// (split 2026-09-02 at the 500-line cap; §1's rule is "split, do not squeeze").
+// The seam is real rather than arithmetic: everything here is about WRITING and
+// READING a message, and those two are about the ack lane's own column — one
+// monotonic UPDATE and the read that answers "who was this for". They move
+// together because `service-writes-delivery.ts` is the only caller of either.
+
 type MessageInsert = {
   channel_id: string;
   workspace_id: string;
@@ -321,6 +309,14 @@ type MessageInsert = {
   body: string;
   metadata: Record<string, unknown>;
   client_msg_id: string | null;
+  // ── THE DELIVERY KEYSTONE (20260912120000) ──────────────────────────────
+  // ⚠ WRITTEN THROUGH THE RPC, not by a second statement afterwards. The RPC
+  // holds the per-channel advisory lock, so a follow-up UPDATE would open a
+  // window in which a realtime subscriber sees the row without its verdict.
+  wake_verdict: string | null;
+  recipient_user_ids: string[] | null;
+  recipient_agent_ids: string[] | null;
+  delivery: string | null;
 };
 
 /**
@@ -343,6 +339,10 @@ export async function insertMessage(
     p_body: row.body,
     p_metadata: row.metadata,
     p_client_msg_id: row.client_msg_id,
+    p_wake_verdict: row.wake_verdict,
+    p_recipient_user_ids: row.recipient_user_ids,
+    p_recipient_agent_ids: row.recipient_agent_ids,
+    p_delivery: row.delivery,
   });
   if (error) throw error;
   // ⚠ A single-composite RETURNS comes back as an object — normalize.
@@ -395,6 +395,50 @@ export async function deleteMessagesByThread(
 }
 
 /** Per-channel latest message (seq + created_at) via the bounded RPC. */
+/**
+ * **RR2's ONE READ** (2026-09-02, v2 wave B slice B4 — ruling B1): the newest
+ * MAIN-ROOM message in this channel, inside the resilience window, whose STORED
+ * recipient set names this agent. `null` when nobody has addressed it there
+ * lately.
+ *
+ * ⚠ **IT READS THE STORED RESOLUTION, NEVER THE BODY.** `recipient_agent_ids` is
+ * what `service-wake-verdict.ts` wrote at the time, so this asks "who addressed
+ * this agent" in exactly the vocabulary the server itself used — a body re-parse
+ * here would be a fifth spelling of the addressing rule and would disagree with
+ * the row it is reading.
+ *
+ * ⚠ **`seq` IS THE ORDER AND `seq` IS UNIQUE PER CHANNEL**
+ * (`channel_messages_channel_seq_idx`, and the advisory-locked insert RPC makes
+ * commit order monotonic). So "the highest one" is TOTAL: no tie is
+ * representable and there is no tie-break to get wrong. Ordering by `created_at`
+ * instead would reintroduce one, because two rows can share a timestamp.
+ *
+ * ⚠ **`thread IS NULL` IS SPELLED `metadata->>taskId IS NULL`** — the same
+ * expression `listMessages`' `threadId` filter uses, and the thread tag has no
+ * column of its own. A row tagged into a thread is RR1's business, never RR2's.
+ *
+ * ⚠ NO INDEX ON `recipient_agent_ids`, deliberately — the migration's section 3
+ * records why, and the measurement to record if that ever changes.
+ */
+export async function findLastRoomAddressToAgent(
+  channelId: string,
+  agentId: string,
+  sinceIso: string
+): Promise<ChannelMessageRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("*")
+    .eq("channel_id", channelId)
+    .is("metadata->>taskId", null)
+    .gt("created_at", sinceIso)
+    .contains("recipient_agent_ids", [agentId])
+    .order("seq", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return ((data ?? [])[0] as ChannelMessageRow | undefined) ?? null;
+}
+
 export async function lastMessages(
   channelIds: string[]
 ): Promise<Map<string, string>> {

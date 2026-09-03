@@ -133,6 +133,38 @@ describe("H-3 write-gate coverage", () => {
         // AGENT LISTING AND EDITING TEMPLATES IS THE FEATURE. Narrowing this
         // route to `sessionOnly` wholesale would gate the thing it exists for.
         "agent-templates/[templateId]/route.ts",
+        // ── APP-ONLY DELETION, GIVEN A FENCE (2026-09-02) ──────────────────
+        // Every `_admin` tool in `packages/mcp-server` serves the sentence
+        // "Deletion is app-only … there is no MCP path to it, for any role or
+        // token" (`delete-policy.ts › deleteAdminDescription`), and until this
+        // wave `gating.ts › opRefusal` was the ONLY thing making it true. That
+        // guards ONE door: the MCP server reaches the app over LOOPBACK HTTP,
+        // a `full`-profile session has Bash and its own `dopl_at_*` bearer, and
+        // each route below was `minRole: "member"` and nothing else — so the
+        // agent just told "no role, scope or argument changes that" could
+        // delete the row anyway. Samuel's ruling: a rule an agent is TOLD must
+        // have a fence in the code, not only in the prompt.
+        // ⚠ Per-METHOD throughout — the GETs and PATCHes stay ungated on
+        // purpose, because editing and rewriting are exactly what
+        // `DELETE_REFUSAL` redirects an agent to instead. Gating them would
+        // gate the capability the refusal advertises as the alternative.
+        // ⚠ `minRole` is UNCHANGED: this adds a caller-type gate, it does not
+        // raise the role floor. A member still deletes — in the app.
+        // ⚠ THE OP→ROUTE MAP IS `app-only-delete-gate.test.ts`, which fails
+        // when a NEW `_admin` delete op ships with no route on this list.
+        "chats/[chatId]/route.ts",
+        "chats/folders/[folderId]/route.ts",
+        // ⚠ `folders-by-path` IS THE SECOND DOOR ONTO THE SAME TWO ACTS and
+        // the one easiest to miss: its `?path=` resolves to a folder OR an
+        // entry, so gating only the id-keyed routes above would have left both
+        // refused ops reachable by name.
+        "knowledge/bases/[baseId]/folders-by-path/route.ts",
+        "knowledge/bases/[baseId]/route.ts",
+        "knowledge/entries/[entryId]/route.ts",
+        "knowledge/folders/[folderId]/route.ts",
+        "ontology/clusters/[clusterId]/route.ts",
+        "ontology/objects/[objectId]/route.ts",
+        "skills/[skillSlug]/route.ts",
         // POST mints a CONTAINER-LOCKED child credential, DELETE revokes one
         // (2026-08-26, plan §4.4 B1). Sharper than its sibling below, because
         // the credential in question IS the audience ceiling's fence: a bearer
@@ -193,6 +225,16 @@ describe("H-3 write-gate coverage", () => {
         // that file stays ungated — reading which channels a base already
         // reaches decides nothing.
         "knowledge/bases/[baseId]/channel-grants/route.ts",
+        // 🔒 R4 (2026-09-02, Desktop Agent default — Samuel may loosen). A PIN
+        // decides what EVERY agent session launched in this workspace afterwards
+        // is handed at startup (T81). The write reaches no person and changes no
+        // audience, which is what the two routes argued before — and beside the
+        // point: an agent token settling its own successors' standing context is
+        // a machine editing what agents get told, with no operator at the
+        // keyboard. Same shape, same precedent, as the grants route above.
+        // ⚠ Per-METHOD is moot here — both verbs are writes and both are gated.
+        "knowledge/bases/[baseId]/pin/route.ts",
+        "knowledge/entries/[entryId]/pin/route.ts",
         "home/link/[token]/claim/route.ts",
         "home/links/[linkId]/route.ts",
         "home/links/route.ts",
@@ -236,26 +278,47 @@ describe("H-3 write-gate coverage", () => {
       path.join(API_ROOT, "channels/[channelId]/route.ts"),
       "utf8"
     );
-    expect(src).toMatch(/SESSION_ONLY_FIELDS\s*=\s*\[\s*"visibility"\s*\]/);
+    expect(src).toMatch(
+      /SESSION_ONLY_FIELDS\s*=\s*\[\s*"visibility",\s*"agentPosture",\s*"defaultResponderAgentName",?\s*\]/
+    );
     expect(src).toMatch(/auth\.agentTokenId/);
     expect(src).toMatch(/SESSION_REQUIRED/);
   });
 
   /**
-   * ⚠ THE FULL FIELD SET, PINNED SO A SIXTH LANDS UNGATED VISIBLY. The route's
-   * field gate names only `visibility`; the service derives the MANAGE set by
-   * SUBTRACTION and leaves `infoCard` alone. Both are correct only while the
-   * schema's fields are EXACTLY these five — a sixth added to
+   * ⚠ THE FULL FIELD SET, PINNED SO AN EIGHTH LANDS UNGATED VISIBLY. The route's
+   * field gate names `visibility`, `agentPosture` and
+   * `defaultResponderAgentName`; the service derives the
+   * MANAGE set by SUBTRACTION and leaves `infoCard` alone. Both are correct only
+   * while the schema's fields are EXACTLY these seven — an eighth added to
    * `ChannelUpdateSchema` would silently inherit the loose (member) gate unless
    * somebody decides otherwise. This asserts the set against the real schema, so
    * that decision cannot be skipped. (A pin on a symbol is not a pin — INVARIANTS
    * §14 — so it reads the schema's own shape.)
    */
-  it("ChannelUpdateSchema's fields are EXACTLY the five gated ones", () => {
+  it("ChannelUpdateSchema's fields are EXACTLY the seven gated ones", () => {
     // zod 4: `.refine()` adds a check to the same object type, so `.shape` is the
     // object's own field map (no ZodEffects wrapper to unwrap).
     expect(Object.keys(ChannelUpdateSchema.shape).sort()).toEqual(
-      ["archived", "infoCard", "name", "topic", "visibility"].sort()
+      // ⚠ `agentPosture` JOINED ON 2026-09-02 (A9 — G6/G7) AND THIS GATE IS WHY
+      // THE DECISION WAS MADE RATHER THAN INHERITED. It is SESSION-ONLY: it is
+      // the CEILING on what a launched agent may be granted here, so an agent
+      // credential able to raise it could widen its own successors' posture.
+      // ⚠ `defaultResponderAgentName` JOINED ON 2026-09-02 (B4 — ruling B6) AND
+      // IT IS SESSION-ONLY FOR `agentPosture`'s REASON, SHARPENED: it names the
+      // agent that answers every UNADDRESSED human message in the room, so an
+      // agent credential able to set it could nominate ITSELF and route the
+      // room's unaddressed work to its own session. The gate made the decision
+      // rather than letting it be inherited, which is what this case is for.
+      [
+        "agentPosture",
+        "archived",
+        "defaultResponderAgentName",
+        "infoCard",
+        "name",
+        "topic",
+        "visibility",
+      ].sort()
     );
   });
 });

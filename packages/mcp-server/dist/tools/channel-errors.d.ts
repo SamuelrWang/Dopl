@@ -2,7 +2,7 @@
  * `dopl_channel` API-ERROR CLASSIFICATION — ⚠ what a 4xx MEANS is read off the
  * error CODE, never guessed from the status. A bare `status === 400` branch
  * blames whichever param happened to be set, so an over-length title comes back
- * as "invite them first" and `op="invite"` then answers "already a member".
+ * as "invite them first" and `op="rooms" action="invite"` then answers "already a member".
  *
  * `DoplApiError` parses `{ error: { code, message } }` into `.code` /
  * `.apiMessage` (packages/dopl-client/src/errors.ts) and every channels-route
@@ -20,6 +20,10 @@ export declare function isForbidden(e: unknown): boolean;
  * What a 400 from a channels route MEANS, as far as the caller can act on it.
  *
  *   - `addressee_not_member`  — the `to` member is not in the channel.
+ *   - `recipient_unresolved`  — `to` named nobody this server can see, in
+ *     either namespace. ⚠ NOT a delivery failure and NOT a membership problem:
+ *     nothing was written at all, and the server's own message lists the live
+ *     handles and the roster.
  *   - `thread_not_in_channel` — a first-class `thread` id not of this channel.
  *   - `self_target`           — `create_thread` addressed to the CALLER: only
  *     creator and target may post, so it has one party and can never be
@@ -27,15 +31,17 @@ export declare function isForbidden(e: unknown): boolean;
  *   - `invalid_request`       — the route's zod schema (or JSON parse) rejected
  *     the body BEFORE any channel logic ran; almost always a field over its cap.
  *     ⚠ Emphatically NOT a membership problem.
- *   - `chat_addressed`        — `intent:"chat"` AND an addressee, which mean
- *     opposite things (`ChannelChatAddressedError`). The tool refuses it before
- *     the call, so this arm should be unreachable — ⚠ classified anyway,
- *     because "unreachable" is the assumption the status-only branch was built on.
+ *   ⚠ A SEVENTH KIND ENDED HERE (C12, 2026-09-02): `chat_addressed` classified
+ *     `CHANNEL_CHAT_ADDRESSED` — `intent:"chat"` beside a `to`, which mean
+ *     opposite things. Its own comment said the arm "should be unreachable"
+ *     because the tool refused the pair before the call; `intent` has now left
+ *     the published shape entirely, so the contradiction is not EXPRESSIBLE and
+ *     an arm for it would claim a live rule. Chat is "no `to`" and nothing else.
  *   - `workspace`             — no usable workspace on the call.
  *   - `unknown`               — a 400 with no recognized code (or none at all,
  *     e.g. an edge/proxy error page). ⚠ Say so; never invent a cause.
  */
-export type BadRequestKind = "addressee_not_member" | "thread_not_in_channel" | "self_target" | "invalid_request" | "chat_addressed" | "workspace" | "unknown";
+export type BadRequestKind = "addressee_not_member" | "recipient_unresolved" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
 /**
  * What a 403 from a channels route MEANS. Same doctrine as
@@ -72,4 +78,4 @@ export declare function serverDetail(e: unknown): string;
  * number to act on. ⚠ HAND-COPIED from `src/features/channels/schema.ts`, and
  * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
  */
-export declare const FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, client_msg_id <=200.";
+export declare const FIELD_CAPS_NOTE = "Field caps: summary <=200 characters, body <=16000, client_msg_id <=200.";

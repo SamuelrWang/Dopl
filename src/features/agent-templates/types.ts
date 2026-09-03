@@ -14,15 +14,18 @@
  * there.
  */
 
-import type { Role } from "@/features/workspaces/types";
-
 /**
- * Three-way sharing scope.
- *   private   → the creator (and workspace admins) only
- *   team      → members of any team linked through `agent_template_teams`
- *   workspace → every active workspace member
+ * ⚠ **{@link TemplateVisibility} IS DECLARED IN `@dopl/contracts ›
+ * workspaces.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it had a
+ * twin in `packages/dopl-client/src/agent-template-types.ts` with no script
+ * between them. No import path changed.
  */
-export type TemplateVisibility = "private" | "team" | "workspace";
+import type { TemplateVisibility } from "@dopl/contracts";
+
+export type { TemplateVisibility };
+
+
+import type { Role } from "@/features/workspaces/types";
 
 export const TEMPLATE_VISIBILITIES: readonly TemplateVisibility[] = [
   "private",
@@ -55,19 +58,20 @@ export interface TemplateKnowledgeBaseRef {
 /**
  * WHICH SHELF a template lives on — the /home Agents pane's "Personal" section,
  * or the workspace Agents page. Two PLACES over one table (Samuel's ruling
- * 2026-08-27; `20260901120000_agent_template_home_scoped.sql`), and they
- * exclude each other BOTH ways.
+ * 2026-08-27) and, since 2026-09-02, two CONTAINERS: the boolean of
+ * `20260901120000` is dropped by `20260923120000_drop_home_scoped.sql` and the
+ * personal shelf is the caller's own `kind='personal'` workspace. See
+ * `features/knowledge/types.ts › KbShelf`, which carries the argument.
  *
  * ⚠ MIRRORED FROM `features/knowledge/types.ts › KbShelf`, NOT IMPORTED — §1
  * forbids the cross-feature import, and `canSeeBase` is mirrored into this
  * feature for the same reason. Same vocabulary, two declarations, on purpose.
  *
  * ⚠ NOT A FIELD ON `AgentTemplate`, and never make it one. It is a WRITE input
- * (`AgentTemplateCreateInput.homeScoped`) and a READ FILTER
- * (`GET /api/agent-templates?shelf=`); the stored `home_scoped` column is
- * deliberately absent from `server/dto.ts › AGENT_TEMPLATE_COLS`, so the cached
- * list payload gains no new key and §8's stale-cache rule has nothing to apply
- * to.
+ * (`AgentTemplateCreateInput.homeScoped`, which ROUTES the row) and a READ
+ * FILTER (`GET /api/agent-templates?shelf=`); nothing shelf-shaped is projected
+ * onto the row, so the cached list payload gains no new key and §8's
+ * stale-cache rule has nothing to apply to.
  *
  * 🔒 IT IS NOT THE VISIBILITY AXIS. `visibility` says who may READ; this says
  * which surface LISTS. `canSeeTemplate` never sees it.
@@ -148,16 +152,16 @@ export interface AgentTemplateContext {
   /**
    * Workspace this credential is fenced to. ⚠ *WHICH WORKSPACE* ONLY — it is
    * NOT the visibility answer, which is the F-333/F-336 defect (fixed
-   * 2026-08-27). See {@link AgentTemplateContext.apiKeyWorkspaceLockKind}.
+   * 2026-08-27). See {@link AgentTemplateContext.credentialSubjectUserId}.
    */
   apiKeyWorkspaceId?: string | null;
   /**
-   * `mcp_tokens.workspace_lock_kind`. ⚠ Read ONLY through
-   * `shared/auth/credential-audience.ts › isSharedCredential`; absent reads as
-   * a SHARED credential. A credential that may be shared between humans (CI
-   * runners, service accounts) gets NO private visibility — M-10, same rule as
-   * `canSeeSkill` / `canSeeBase`. A container-SESSION credential is one human's
-   * session and is not that.
+   * WHOSE REACH this credential inherits (`mcp_tokens.subject_user_id`); `null`
+   * = nobody in particular. ⚠ Read ONLY through
+   * `shared/auth/credential-audience.ts › isSharedCredential`. A credential that
+   * may be passed between humans (CI runners, service accounts) gets NO private
+   * visibility — M-10, same rule as `canSeeSkill` / `canSeeBase`. A container
+   * SESSION is one human's session and is not that.
    */
-  apiKeyWorkspaceLockKind?: string | null;
+  credentialSubjectUserId: string | null;
 }

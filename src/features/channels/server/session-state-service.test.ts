@@ -31,6 +31,7 @@ const TASK = "44444444-e29b-41d4-a716-446655440000";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "agent",
   role: "member",
 };
@@ -58,6 +59,17 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     started_at: null,
     last_activity_at: null,
     template_name: null,
+    // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────
+    // ⚠ `null` IS THE FIXTURE DEFAULT, and that is the honest one: a desktop
+    // older than these columns reports none, so the row a test builds by default
+    // is the row most live rows still are.
+    turns: null,
+    tokens_delta: null,
+    stale: null,
+    denied_calls: null,
+    last_denied_tool: null,
+    last_wake_seq: null,
+    last_wake_at: null,
     display_name: null,
     ...over,
   };
@@ -97,6 +109,17 @@ describe("listSessionStates", () => {
         lastActivityAt: null,
         templateName: null,
         displayName: null,
+        // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
+        // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
+        // rows report none, and the mapper must carry that through as UNKNOWN.
+        // A `0` on any of the four counts would be a measurement nobody took.
+        turns: null,
+        tokensDelta: null,
+        stale: null,
+        deniedCalls: null,
+        lastDeniedTool: null,
+        lastWakeSeq: null,
+        lastWakeAt: null,
       },
       {
         channelId: CHAN,
@@ -116,6 +139,17 @@ describe("listSessionStates", () => {
         lastActivityAt: null,
         templateName: null,
         displayName: null,
+        // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
+        // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
+        // rows report none, and the mapper must carry that through as UNKNOWN.
+        // A `0` on any of the four counts would be a measurement nobody took.
+        turns: null,
+        tokensDelta: null,
+        stale: null,
+        deniedCalls: null,
+        lastDeniedTool: null,
+        lastWakeSeq: null,
+        lastWakeAt: null,
       },
       {
         channelId: CHAN,
@@ -135,6 +169,17 @@ describe("listSessionStates", () => {
         lastActivityAt: null,
         templateName: null,
         displayName: null,
+        // ── THE HEALTH SEVEN (2026-09-01, 20260909120000) ─────────────────
+        // ⚠ `null` ACROSS THE BOARD IS THE ASSERTION, not filler: the fixture
+        // rows report none, and the mapper must carry that through as UNKNOWN.
+        // A `0` on any of the four counts would be a measurement nobody took.
+        turns: null,
+        tokensDelta: null,
+        stale: null,
+        deniedCalls: null,
+        lastDeniedTool: null,
+        lastWakeSeq: null,
+        lastWakeAt: null,
       },
     ]);
   });
@@ -273,6 +318,17 @@ describe("reportSessionStates", () => {
         started_at: null,
         last_activity_at: null,
         template_name: null,
+        // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────
+        // ⚠ ABSENT ON THE WIRE BECOMES `null`, NEVER `0` AND NEVER `false`. An
+        // older desktop omits all seven keys, and a `?? 0` on `denied_calls`
+        // here would store "nothing has been refused to this agent" as fact.
+        turns: null,
+        tokens_delta: null,
+        stale: null,
+        denied_calls: null,
+        last_denied_tool: null,
+        last_wake_seq: null,
+        last_wake_at: null,
         display_name: null,
       },
     ]);
@@ -312,6 +368,15 @@ describe("reportSessionStates", () => {
       // explicit-null are the same statement here ("no template"), which is why
       // the service is allowed to collapse them with `?? null`.
       template_name: null,
+      // ── HEALTH (2026-09-01, 20260909120000) — the same rule, seven more
+      // keys, and it bites harder because six of them are COUNTS.
+      turns: null,
+      tokens_delta: null,
+      stale: null,
+      denied_calls: null,
+      last_denied_tool: null,
+      last_wake_seq: null,
+      last_wake_at: null,
       display_name: null,
     });
   });
@@ -335,6 +400,44 @@ describe("reportSessionStates", () => {
     ]);
     const rows = vi.mocked(sessionRepo.replaceSessionStates).mock.calls[0][2];
     expect(rows[0].template_name).toBe("Code Auditor");
+  });
+
+  /**
+   * ⚠ THE HEALTH ROUND TRIP, camelCase wire → snake_case column, INCLUDING THE
+   * TWO VALUES A CARELESS `?? ` WOULD DESTROY. `turns: 0` and `stale: false` are
+   * REPORTED measurements and must arrive as `0` and `false` — `entry.turns ??
+   * null` keeps them, `entry.turns || null` does not, and the two differ only on
+   * exactly these inputs. That is why the case drives them rather than a set of
+   * comfortable non-zero numbers.
+   */
+  it("carries a reported health set to its columns, zero and false included", async () => {
+    vi.mocked(sessionRepo.replaceSessionStates).mockResolvedValue({
+      stored: 1,
+      changed: 1,
+      removed: 0,
+    });
+    await reportSessionStates(ctx, [
+      {
+        ...entry,
+        turns: 0,
+        tokensDelta: 8_675_309,
+        stale: false,
+        deniedCalls: 419,
+        lastDeniedTool: "Terraform",
+        lastWakeSeq: 90_210,
+        lastWakeAt: "2026-09-01T09:59:00.000Z",
+      },
+    ]);
+    const rows = vi.mocked(sessionRepo.replaceSessionStates).mock.calls[0][2];
+    expect(rows[0]).toMatchObject({
+      turns: 0,
+      tokens_delta: 8_675_309,
+      stale: false,
+      denied_calls: 419,
+      last_denied_tool: "Terraform",
+      last_wake_seq: 90_210,
+      last_wake_at: "2026-09-01T09:59:00.000Z",
+    });
   });
 
   it("an EMPTY report is a real instruction — it clears the caller's set", async () => {

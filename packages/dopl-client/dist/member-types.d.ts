@@ -6,8 +6,14 @@
  * resource kinds and keeps retired ones, and a read client must render an
  * unknown kind, not reject it.
  */
+/**
+ * ⚠ **{@link MembershipStatus} IS DECLARED IN `@dopl/contracts › workspaces.ts`
+ * AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it was a hand mirror of
+ * `src/features/workspaces/types.ts`. No consumer import changed.
+ */
+import type { MembershipStatus } from "@dopl/contracts";
+export type { MembershipStatus };
 import type { WorkspaceRole, WorkspaceSummary } from "./types.js";
-export type MembershipStatus = "pending" | "active" | "revoked";
 export type MemberAccessLevel = "read" | "edit";
 export interface MemberTeamRef {
     teamId: string;

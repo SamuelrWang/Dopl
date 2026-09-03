@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ESCALATION_BODY_PARITY_CASES = void 0;
 exports.escalationBody = escalationBody;
 /**
- * THE HUMAN-READABLE RENDER OF AN ESCALATION — the `body` an `op="escalate"`
+ * THE HUMAN-READABLE RENDER OF AN ESCALATION — the `body` an `op="send" with kind="decision"`
  * post carries.
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan

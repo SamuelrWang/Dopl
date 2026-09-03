@@ -67,6 +67,20 @@ export interface ChannelsV2SettingsTabProps {
    */
   agent?: ReactNode;
   /**
+   * `settings-channel-agents.tsx › ChannelAgentsSettings`, injected as a SLOT on
+   * the `agent` slot's terms (2026-09-02, B4): it needs the room's live sessions
+   * and two write handlers, all of which live in `channel-manage.tsx`.
+   *
+   * ⚠ **`null` FOR A NON-MANAGER, AND THAT IS THE NO-DEAD-ROWS RULE, NOT THE
+   * GATE.** `service-writes.ts › MANAGED_CHANNEL_FIELDS` floors both settings at
+   * the channel's manage role on the server; this slot only decides whether a
+   * reader is shown controls they cannot use.
+   *
+   * ⚠ IT COUNTS TOWARD `hasContent` BELOW, so a manager whose lifecycle rows are
+   * all suppressed still gets the panel rather than the empty state.
+   */
+  channelAgents?: ReactNode;
+  /**
    * Whether this container's membership can CHANGE (`channel-surface.tsx ›
    * ChannelSurfaceCapabilities`). Default `true`. `false` drops the invite row
    * AND the delete row — NO DEAD ROWS is the rule this section already keeps,
@@ -103,6 +117,7 @@ export function ChannelsV2SettingsTab({
   channel,
   canManage,
   agent,
+  channelAgents,
   memberManagement = true,
   selfManagement = true,
   onInvite,
@@ -131,7 +146,7 @@ export function ChannelsV2SettingsTab({
 
   const hasActions = canInvite || canToggleVisibility || canManage || canDelete || canLeave;
 
-  if (!agent && !hasActions) {
+  if (!agent && !channelAgents && !hasActions) {
     // ⚠ TWO AUDIENCES REACH THIS EMPTY STATE and only one of them can join: a
     // non-member browsing a public channel, and a MEMBER whose host turned the
     // management capabilities off (the guest lane, ruling R2/R3 2026-08-25).
@@ -153,6 +168,11 @@ export function ChannelsV2SettingsTab({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
       {agent}
+
+      {/* ⚠ THE CHANNEL'S OWN AGENT SETTINGS, ABOVE THE LIFECYCLE ROWS AND BELOW
+          THE VIEWER'S OWN. The column reads outward: my agent here, then this
+          room's rule for everyone's agents, then the room itself. */}
+      {channelAgents}
 
       {hasActions && (
         <>

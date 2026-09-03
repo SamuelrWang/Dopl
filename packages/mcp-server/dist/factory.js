@@ -9,9 +9,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.packageVersion = exports.clientIdentifier = exports.buildInstructions = exports.createServer = void 0;
 exports.bootServer = bootServer;
-const client_1 = require("@dopl/client");
 const server_js_1 = require("./server.js");
 const identity_js_1 = require("./tools/identity.js");
+const workspace_directory_js_1 = require("./workspace-directory.js");
 var server_js_2 = require("./server.js");
 Object.defineProperty(exports, "createServer", { enumerable: true, get: function () { return server_js_2.createServer; } });
 Object.defineProperty(exports, "buildInstructions", { enumerable: true, get: function () { return server_js_2.buildInstructions; } });
@@ -53,12 +53,15 @@ async function bootServer(client, opts = {}) {
         directory = [];
         directoryLoadFailed = true;
     }
-    // Session default: an X-Workspace-Id pin naming a membership wins; else
-    // exactly one membership auto-targets; else ⚠ NO transport default — the
-    // wrapper demands `workspace=` per call, so no header-less loopback fires.
-    // ⚠ Only STANDARD memberships can auto-target: a home-channel container must
-    // never become the workspace a no-arg tool call silently lands in. A PIN is
-    // explicit addressing and still matches the full directory.
+    // 🔒 **THE CONNECTION'S CONTAINER IS THE `X-Workspace-Id` HEADER AND NOTHING
+    // ELSE** (B10/B13). The sole-membership auto-target and the agent's own
+    // session pin are DELETED: neither is something the caller said on this call,
+    // and the sole-membership rule was a second copy of one the API already
+    // applies (`with-workspace-auth.ts › resolveActiveWorkspace`) — so a
+    // one-workspace caller resolves identically, one layer down, from one rule.
+    // ⚠ NO HEADER ⇒ NO `X-Workspace-Id` ON THE LOOPBACK, which is what lets the
+    // server answer with the caller's own container rather than this process
+    // guessing at one.
     const pin = client.getWorkspaceId();
     let active = null;
     let source = null;
@@ -73,15 +76,15 @@ async function bootServer(client, opts = {}) {
             diag(`[dopl-mcp] X-Workspace-Id pin "${pin}" matched no active membership${directoryLoadFailed ? " (directory load had failed)" : ""}; ignoring it and resolving from memberships`);
         }
     }
-    const listable = directory.filter(client_1.isStandardWorkspace);
-    if (!active && listable.length === 1) {
-        active = listable[0];
-        source = "sole membership";
-    }
     // 🔒 THE CONTAINER LOCK (plan §4.4 B3). A session pinned to a SHARED link
     // container — one with a PEER in it — sees and addresses that container
     // ALONE: no `list_workspaces` entry for the operator's other workspaces, no
     // `workspace=` that resolves to one, no instruction table naming any.
+    //
+    // ⚠ **IT ASKS `kind === "link"`, NOT `!isStandardWorkspace(…)`** (F-564).
+    // The negation reads "not in the rail" as "therefore somebody's room", which
+    // `20260920120000`'s `personal` kind makes false for every user at once —
+    // each operator's OWN container would arm a lock built for a shared one.
     //
     // ⚠ SHARED, NOT SOLO. A one-member container is the operator's own primary
     // agent surface and is deliberately untouched, exactly as the audience ceiling
@@ -99,7 +102,9 @@ async function bootServer(client, opts = {}) {
     // issue the loopback HTTP directly; neither passes through this object. The
     // fences are the container-locked credential and the server-side audience
     // ceiling. Do not describe this line as containment.
-    const lockedTo = active && !(0, client_1.isStandardWorkspace)(active) && (active.memberCount ?? 0) !== 1
+    const lockedTo = active &&
+        (0, workspace_directory_js_1.containerKind)(active) === "home channel" &&
+        (active.memberCount ?? 0) !== 1
         ? active
         : null;
     if (lockedTo) {
@@ -130,6 +135,9 @@ async function bootServer(client, opts = {}) {
         role: active?.role ?? null,
         workspaceSource: source,
         scopes: opts.scopes,
+        toolProfile: opts.toolProfile,
+        liveAgents: opts.liveAgents,
+        posture: opts.posture,
     });
     const activeWorkspace = active
         ? {

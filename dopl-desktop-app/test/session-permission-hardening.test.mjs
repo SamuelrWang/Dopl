@@ -54,7 +54,7 @@ const REDUCER_SRC = readFileSync(M("session-reducer.js"), "utf8");
 const CH = "ch1";
 const decide = (over) => grantDecision({ profile: "full", channelId: CH, ...over });
 const keyOf = (input) => grantKeyFor(DOPL_CHANNEL_TOOL, input, CH);
-const post = (over) => ({ op: "post", body: "shipping tonight", ...over });
+const post = (over) => ({ op: "send", body: "shipping tonight", ...over });
 
 // ── F1 -> M2 (2026-08-05): the SOURCE half, inverted with the requirement ──────────
 // F1's original claim was "a standing grant must not outlive the watched window", and this pin
@@ -233,13 +233,13 @@ test("F3: a VERSIONED channel tool is answered by AXIS B, never by a tool postur
   const V2 = "mcp__dopl__dopl_channel_v2";
   // THE INVERSION: at `bypass` this used to resolve 'allow' — a tool posture sending a message.
   for (const toolMode of TOOL_MODES) {
-    for (const input of [post(), { op: "open", direct: true }, { op: "read" }]) {
+    for (const input of [post(), { op: "rooms", action: "open", direct: true }, { op: "read" }]) {
       assert.equal(decide({ toolName: V2, input, toolMode }), "gate", `${toolMode} / ${input.op}`);
     }
   }
   // Axis B, and only Axis B, can send its own-channel post.
   assert.equal(decide({ toolName: V2, input: post(), messageMode: "auto_outbound" }), "allow");
-  assert.equal(decide({ toolName: V2, input: { op: "open", direct: true }, messageMode: "auto_both" }), "gate");
+  assert.equal(decide({ toolName: V2, input: { op: "rooms", action: "open", direct: true }, messageMode: "auto_both" }), "gate");
   // Its grants are its OWN: a grant on the canonical tool does not carry over, and vice versa.
   const v2Grant = grantKeyFor(V2, post(), CH);
   assert.equal(decide({ toolName: V2, input: post(), allowForTask: [v2Grant] }), "allow");
@@ -322,7 +322,7 @@ test("F6: two DIFFERENT cross-channel targets never share a grant key", () => {
     assert.notEqual(keyOf(post({ channel: a })), keyOf(post({ channel: b })), why);
   }
   // The readable half is kept for the diag line, so the key still says where it points.
-  assert.ok(keyOf(post({ channel: "team.alpha" })).includes("#op:post:teamalpha#"));
+  assert.ok(keyOf(post({ channel: "team.alpha" })).includes("#op:send:teamalpha#"));
 });
 
 test("F6: a grant to post into one other channel does NOT post into its near-twin", () => {
@@ -334,7 +334,7 @@ test("F6: a grant to post into one other channel does NOT post into its near-twi
 });
 
 // ── F7: a post grant covers the BODY the operator read, not every later body ───────
-// EXPLOIT: grantKeyFor(ch,{op:'post',body:'hi'}) === grantKeyFor(ch,{op:'post',body:'ssh key:
+// EXPLOIT: grantKeyFor(ch,{op: 'send',body:'hi'}) === grantKeyFor(ch,{op: 'send',body:'ssh key:
 // AAAA…'}). HIGH-1's rationale ("ls -la must not authorize rm -rf") was applied to every tool
 // class EXCEPT the one that moves data off the machine, so one "Send for this session" on a
 // benign reply authorized every later body the counterparty's text steered the agent into
@@ -350,7 +350,7 @@ test("F7: two different bodies are two different post grants", () => {
   assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ body: "on it, will report back" }), allowForTask: [benign] }), "allow");
   assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: post({ body: "ssh key: AAAAB3NzaC1yc2EAAAA" }), allowForTask: [benign] }), "gate");
   // An absent body is its own shape too, and cannot ride a grant taken on a real message.
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post" }, allowForTask: [benign] }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send" }, allowForTask: [benign] }), "gate");
   // A body that only PREFIXES the granted one does not match either (length-prefixed digest).
   assert.notEqual(keyOf(post({ body: "on it" })), keyOf(post({ body: "on it, will report back" })));
 });

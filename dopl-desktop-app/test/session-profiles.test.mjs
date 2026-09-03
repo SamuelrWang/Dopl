@@ -84,7 +84,7 @@ const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
 // cap and could not carry the ruling's argument beside the list it admits to. The block reads
 // them off the module head, so they are injected here exactly like `isKnowledgeReadCall`, and
 // the REAL implementations, so the block stays pinned to what ships.
-// ⚠ `isOwnChannelMarker` / `OWN_CHANNEL_MARKER_OPS` are RE-EXPORTED from the injected module
+// ⚠ `isOwnChannelMarker` / `OWN_CHANNEL_MARKER_KIND` are RE-EXPORTED from the injected module
 // rather than returned out of the block, which is why the destructure below shrank.
 const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
 // 2026-08-25 (Samuel's launch ruling, F-320): the OWN-MACHINE LAUNCH LANE is a THIRD §2 file on
@@ -109,6 +109,7 @@ const RUNTIME = require(join(HERE, "..", "main", "runtime", "index.js"));
 const CLAUDE_TOOLS = require(join(HERE, "..", "main", "runtime", "claude", "tools.js"));
 const buildSessionToolConfig = CLAUDE_TOOLS.buildSessionToolConfig;
 const shortDoplName = CLAUDE_TOOLS.shortDoplName;
+const toolModeAllows = CLAUDE_TOOLS.toolModeAllows; // A5: "is this offered name classified at all?"
 
 
 const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
@@ -116,7 +117,7 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
-  "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
+  "OWN_CHANNEL_MARKER_KIND", "OWN_CHANNEL_THREAD_NEW", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
   "isOwnMachineDirect", "directLaneVerdict",
@@ -129,13 +130,13 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
   KB_OPS.isKnowledgeReadCall,
-  OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
+  OUT.OWN_CHANNEL_MARKER_KIND, OUT.OWN_CHANNEL_THREAD_NEW, OUT.OWN_CHANNEL_OUTBOUND_OPS,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
   DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
   RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(null)));
-const { isOwnChannelMarker, OWN_CHANNEL_MARKER_OPS } = OUT;
+const { isOwnChannelMarker, OWN_CHANNEL_MARKER_KIND } = OUT;
 
 const CHANNEL_SHORT = "dopl_channel";
 // ⚠ D7.2 (2026-09-01): THE TWO AGENT-OPS VERBS ARE PART OF THE TABLE NOW, SO THE deepEqual PINS
@@ -157,7 +158,9 @@ const HARD_DENY = UNIVERSAL_HARD_DENY.slice();
 // What `full` used to hard-deny on top of that floor, and now live-gates instead. Derived by
 // subtraction from the REAL shared blacklist so a new DENIED_BUILTINS entry joins it for free.
 const RELEASED_UNDER_FULL = DENIED_BUILTINS.filter((t) => !GATED_WORK.includes(t));
-const post = (channel) => ({ op: "post", channel });
+// ⚠ `send`, NOT `post` (2026-09-02, F-578): the five-op collapse made the plain delivery post
+// `op="send"`, and every own-channel outbound shape a `send` told apart by its arguments.
+const post = (channel) => ({ op: "send", channel });
 
 // ── shortDoplName ────────────────────────────────────────────────────────────
 
@@ -227,7 +230,14 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
 
 test("F-177: full pre-approves only local reads and hard-denies ONLY the universal floor", () => {
   const cfg = buildSessionToolConfig("full");
-  assert.deepEqual(cfg.builtinTools, [], "no positive bound: work tools offered then gated per call");
+  // ⚠ A5 (2026-09-02) REPLACED `[]` — no bound, i.e. every built-in the CLI ships — WITH A
+  // POSITIVE ONE. The BY-NAME assertion is `session-builtin-bound.test.mjs`, deliberately not
+  // here: a constant compared against itself is not evidence. What belongs in the profile table's
+  // own suite is the PROPERTY, which is what makes the bound safe to derive.
+  assert.ok(cfg.builtinTools.length > 0, "`[]` means NO BOUND, never an empty one — A5");
+  for (const t of cfg.builtinTools) {
+    assert.equal(toolModeAllows("bypass", t), true, `${t} is offered but UNCLASSIFIED — it would gate in every mode`);
+  }
   assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(AGENT_OPS),
     "FIX H1: no dopl_channel pre-approved. D7.2: + the two self-ops verbs, DECLARED");
   assert.equal(cfg.doplToolsPolicy, null, "no per-server scoping under full");
@@ -289,13 +299,13 @@ test("no tool is ever both pre-approved and disallowed (the shadow gotcha can't 
 
 // ── FIX H1: isOwnChannelPost + grantDecision op-scoping ──────────────────────────
 
-test("isOwnChannelPost: only op=post into the session's own channel (or no explicit channel)", () => {
-  assert.equal(isOwnChannelPost({ op: "post", channel: "c1" }, "c1"), true);
-  assert.equal(isOwnChannelPost({ op: "post" }, "c1"), true, "no explicit channel -> own channel");
-  assert.equal(isOwnChannelPost({ op: "post", channel: "" }, "c1"), true);
-  assert.equal(isOwnChannelPost({ op: "post", channel: "OTHER" }, "c1"), false, "cross-channel post is NOT own-channel");
-  assert.equal(isOwnChannelPost({ op: "open", channel: "c1" }, "c1"), false, "op=open is never an own-channel post");
-  assert.equal(isOwnChannelPost({ op: "create_task", channel: "c1" }, "c1"), false);
+test("isOwnChannelPost: only op=send into the session's own channel (or no explicit channel)", () => {
+  assert.equal(isOwnChannelPost({ op: "send", channel: "c1" }, "c1"), true);
+  assert.equal(isOwnChannelPost({ op: "send" }, "c1"), true, "no explicit channel -> own channel");
+  assert.equal(isOwnChannelPost({ op: "send", channel: "" }, "c1"), true);
+  assert.equal(isOwnChannelPost({ op: "send", channel: "OTHER" }, "c1"), false, "cross-channel post is NOT own-channel");
+  assert.equal(isOwnChannelPost({ op: "rooms", action: "open", channel: "c1" }, "c1"), false, "rooms.open is never an own-channel post");
+  assert.equal(isOwnChannelPost({ op: "post", channel: "c1" }, "c1"), false, "the RETIRED spelling classifies as nothing, and gates");
   assert.equal(isOwnChannelPost(undefined, "c1"), false);
 });
 
@@ -333,18 +343,18 @@ const ownPostKey = (input) => grantKeyFor(DOPL_CHANNEL_TOOL, input, "c1");
 
 test("FIX F2: grantKeyFor op-scopes every dopl_channel shape (own post, cross post, each op)", () => {
   assert.ok(ownPostKey(post("c1")).startsWith(POST_GRANT + "#body:"));
-  assert.equal(ownPostKey({ op: "post" }), ownPostKey(post("c1")), "no explicit channel -> own channel");
-  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "open", direct: true }, "c1"), DOPL_CHANNEL_TOOL + "#op:open");
+  assert.equal(ownPostKey({ op: "send" }), ownPostKey(post("c1")), "no explicit channel -> own channel");
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "rooms", direct: true }, "c1"), DOPL_CHANNEL_TOOL + "#op:rooms");
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "read" }, "c1"), DOPL_CHANNEL_TOOL + "#op:read");
-  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "list_tasks" }, "c1"), DOPL_CHANNEL_TOOL + "#op:list_tasks");
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "status" }, "c1"), DOPL_CHANNEL_TOOL + "#op:status");
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, {}, "c1"), DOPL_CHANNEL_TOOL + "#op:unknown", "a missing op is its own key");
   // A CROSS-channel post carries its target, so a grant to post into one other channel
   // cannot post into a different one (and never collides with the own-channel key). FIX F6:
   // the readable token is followed by a digest of the RAW target.
-  assert.ok(ownPostKey(post("OTHER")).startsWith(DOPL_CHANNEL_TOOL + "#op:post:other#" + shaKey("OTHER")));
+  assert.ok(ownPostKey(post("OTHER")).startsWith(DOPL_CHANNEL_TOOL + "#op:send:other#" + shaKey("OTHER")));
   assert.notEqual(ownPostKey(post("OTHER")), ownPostKey(post("SECOND")));
   // Sanitizing must not let a junk op collapse onto the own-channel post key.
-  for (const junk of [{ op: "post ", channel: "OTHER" }, { op: "p!o!s!t", channel: "OTHER" }]) {
+  for (const junk of [{ op: "send ", channel: "OTHER" }, { op: "s!e!n!d", channel: "OTHER" }]) {
     assert.ok(!ownPostKey(junk).startsWith(POST_GRANT + "#"), JSON.stringify(junk));
   }
   // Every key is bounded, even with a hostile op / channel string: the readable half is
@@ -377,14 +387,18 @@ test("FIX F2: the BARE tool name in allowForTask allows NOTHING on the channel t
   }
 });
 
-test("D2: an 'Allow for this session' taken on a POST authorizes posts only, never op=open", () => {
+test("D2: an 'Allow for this session' taken on a POST authorizes posts only, never rooms.open", () => {
   const granted = [ownPostKey(post("c1"))];
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("c1"), allowForTask: granted }), "allow");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "post" }, allowForTask: granted }), "allow");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "send" }, allowForTask: granted }), "allow");
   // The exfil ops stay gated under a post-only grant — this is the whole point of the key.
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "open", direct: true, member: "evil@x" }, allowForTask: granted }), "gate");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "rooms", action: "open", direct: true, member: "evil@x" }, allowForTask: granted }), "gate");
   assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("OTHER"), allowForTask: granted }), "gate", "cross-channel post is not covered");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "create_task" }, allowForTask: granted }), "gate");
+  // ⚠ AND THE RETIRED SPELLING IS COVERED BY NOTHING (2026-09-02, F-578): `post` matches no
+  // classifier now, so it falls to the unclassified arm and GATES — the safe direction, and the
+  // reason a deleted op never needs an explicit deny.
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "post" }, allowForTask: granted }), "gate");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "status" }, allowForTask: granted }), "gate", "a read is not covered by a post grant");
 });
 
 test("D2/F2: every channel grant key is unrepresentable as a real SDK tool name", () => {

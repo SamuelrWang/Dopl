@@ -4,17 +4,20 @@
  * workspace) and render metadata / bodies for the agent. Routed from the
  * registrar in knowledge.ts.
  */
-import type { DoplClient, KbShelf } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+import { type ResponseFormat } from "./response-size";
 /**
- * ⚠ `shelf` ABSENT LISTS BOTH SHELVES, and that is the RIGHT answer rather than
- * an oversight (F-342 rules the unfiltered MCP read right and says it "must stay
- * right"): an operator's agent asking "what knowledge is here" should see the
- * operator's whole workspace. The narrowing is a server-side `WHERE`, so a shelf
- * the caller did not ask for never reaches the wire.
+ * ⚠ **THE `shelf` ARGUMENT AND ITS `· personal` LABEL LEFT ON 2026-09-02
+ * (slice B15, ruling B10).** A personal base is no longer a `home_scoped`
+ * BOOLEAN inside a shared workspace — it is an ordinary row in the caller's own
+ * `kind='personal'` CONTAINER — so "which shelf" stopped being a question this
+ * op could ask and became the tenancy the call is already in. Labelling rows
+ * that are all in one container is chrome, and F-342's rule (the unfiltered MCP
+ * read is the right one) is now the only rule there is.
  */
-export declare function opListBases(client: DoplClient, shelf?: KbShelf): Promise<ToolResponse>;
+export declare function opListBases(client: DoplClient): Promise<ToolResponse>;
 export declare function opGetTree(client: DoplClient, ref: string, entryLimit?: number, entryCursor?: string): Promise<ToolResponse>;
 export declare function opListDir(client: DoplClient, ref: string, path?: string): Promise<ToolResponse>;
-export declare function opReadFile(client: DoplClient, ref: string, path: string, callerUserId?: string | null): Promise<ToolResponse>;
+export declare function opReadFile(client: DoplClient, ref: string, path: string, callerUserId?: string | null, format?: ResponseFormat, maxChars?: number): Promise<ToolResponse>;
 export declare function opSearch(client: DoplClient, query: string, base?: string, limit?: number): Promise<ToolResponse>;

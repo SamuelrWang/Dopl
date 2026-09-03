@@ -169,11 +169,14 @@ export const KnowledgeBaseCreateSchema = z
     /** Initial team grants — only valid with `accessMode: 'teams'`. */
     teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
     /**
-     * Put the new base on the /home SHELF (`types.ts › KbShelf`) instead of the
-     * workspace Knowledge page. ⚠ A REQUEST, NOT A DECISION: the schema only
-     * says the word is spellable — `server/service-base-writes.ts ›
-     * resolveHomeScope` is the fence, and it 403s rather than downgrading.
-     * Omitted/false = the workspace shelf, which is every existing caller.
+     * Put the new base on the PERSONAL SHELF (`types.ts › KbShelf`) instead of
+     * the workspace Knowledge page. ⚠ A REQUEST, NOT A DECISION: the schema only
+     * says the word is spellable — `shared/tenancy/personal-container.ts ›
+     * personalWriteWorkspaceId` is the fence, and it 403s rather than
+     * downgrading. ⚠ **IT ROUTES THE ROW AND NOTHING STORES IT** (2026-09-02,
+     * slice B15): it decides the `workspace_id`, where it used to be written
+     * onto a `home_scoped` column beside one. Omitted/false = the container the
+     * call is in, which is every existing caller.
      */
     homeScoped: z.boolean().optional(),
     /**
@@ -188,6 +191,22 @@ export const KnowledgeBaseCreateSchema = z
      * rest; the base is rolled back if the grant fails, so this never half-lands.
      */
     shareToChannelId: z.string().uuid().optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * base landing at `visibility: 'public'`. Everywhere else it is IGNORED,
+     * never refused. `features/workspaces/server/shared-publish.ts` is the one
+     * statement of both the predicate and the 400, shared with agent templates
+     * so the two lanes cannot answer differently.
+     *
+     * ⚠ NOT THE SAME QUESTION AS `shareToChannelId`. That one asks for a
+     * `channel_resource_grants` row — a base reaching ONE channel while staying
+     * private. This one is about the WORKSPACE axis, which inside a container
+     * means every member of it at once.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
   .superRefine(refineScope(true));
 export type KnowledgeBaseCreateInput = z.infer<typeof KnowledgeBaseCreateSchema>;
@@ -211,6 +230,22 @@ export const KnowledgeBaseUpdateSchema = z
      * removes missing).
      */
     teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * base landing at `visibility: 'public'`. Everywhere else it is IGNORED,
+     * never refused. `features/workspaces/server/shared-publish.ts` is the one
+     * statement of both the predicate and the 400, shared with agent templates
+     * so the two lanes cannot answer differently.
+     *
+     * ⚠ NOT THE SAME QUESTION AS `shareToChannelId`. That one asks for a
+     * `channel_resource_grants` row — a base reaching ONE channel while staying
+     * private. This one is about the WORKSPACE axis, which inside a container
+     * means every member of it at once.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
   .superRefine(refineScope(false));
 export type KnowledgeBaseUpdateInput = z.infer<typeof KnowledgeBaseUpdateSchema>;

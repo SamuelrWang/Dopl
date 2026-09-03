@@ -13,6 +13,17 @@
  * having, and is not the same as a person having approved it. Do not describe
  * this module as containment, and do not let a caller's copy imply it.
  *
+ * ⚠ **ONE THING DID BECOME A FENCE, AND ONLY ONE (G16, A11).** A SPENT token
+ * now yields `acknowledgedShared: true`, which the caller puts on the write body
+ * as `acknowledgeShared` — and `src/features/workspaces/server/
+ * shared-publish.ts` answers **400 `CONTAINER_PUBLISH_UNACKNOWLEDGED`** to a
+ * publish into a shared `kind='link'` container that arrives without it. That
+ * refusal is the SERVER'S, so skipping this module does not skip it. It still
+ * does not mean a human approved anything — an agent can set the flag by
+ * previewing and confirming alone — so every sentence above stands. What
+ * changed is only that the act can no longer happen with NOTHING said about the
+ * audience, anywhere in the stack.
+ *
  * ⚠ SCOPED TO THE AUDIENCE-CHANGING WRITE CLASS AND NOTHING ELSE. A confirm on
  * every write trains the agent to skip it — the identical argument INVARIANTS
  * §10 makes for untrusted-content headers ("a header on every result trains
@@ -28,12 +39,15 @@
  * "the write goes through". That is the only direction this may ever fail.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.RECONFIRM_REMEDY = void 0;
 exports.resolveConfirmTarget = resolveConfirmTarget;
 exports.refuseStrayToken = refuseStrayToken;
+exports.containerPublishUnacknowledged = containerPublishUnacknowledged;
 exports.confirmGate = confirmGate;
 exports.__resetConfirmTokensForTest = __resetConfirmTokensForTest;
 const node_crypto_1 = require("node:crypto");
 const client_1 = require("@dopl/client");
+const workspace_directory_js_1 = require("../workspace-directory.js");
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
 /** ⚠ SHORT-LIVED on purpose: the preview must be the thing the agent is still
@@ -133,7 +147,14 @@ async function resolveConfirmTarget(client) {
         const found = workspaces.find((w) => w.id === workspaceId);
         if (!found)
             return { ...UNKNOWN_TARGET, workspaceId };
-        const container = !(0, client_1.isStandardWorkspace)(found);
+        // 🔒 **`kind === "link"`, ASKED POSITIVELY, NOT `!isStandardWorkspace(…)`**
+        // (F-564, closed here 2026-09-02). The negation answered "container" for
+        // ANY non-standard kind, and `20260920120000` mints a `personal` one for
+        // every user at once — a shelf with one member, which the member-count
+        // term below happens to exclude. **Correct by accident is not correct**:
+        // the class exists because a PEER arrived, and only a link container has
+        // peers. `containerKind`'s `default` arm keeps an unknown future kind out.
+        const container = (0, workspace_directory_js_1.containerKind)(found) === "home channel";
         return {
             workspaceId,
             label: (0, narration_js_1.inlineOr)(found.name, "`(unnamed workspace)`"),
@@ -148,7 +169,11 @@ async function resolveConfirmTarget(client) {
         return { ...UNKNOWN_TARGET, workspaceId };
     }
 }
-const PROCEED = { kind: "proceed" };
+const PROCEED = { kind: "proceed", acknowledgedShared: false };
+const PROCEED_ACKNOWLEDGED = {
+    kind: "proceed",
+    acknowledgedShared: true,
+};
 /**
  * ⚠ A TOKEN ON A CALL THAT IS NOT IN THE CONFIRM CLASS IS REFUSED, not ignored.
  * The house rule is that an unknown argument is refused rather than stripped
@@ -160,6 +185,35 @@ function refuseStrayToken(tool, op) {
     return (0, respond_js_1.err)(`\`confirm_token\` was passed to ${tool} op="${op}", but this call is not audience-changing — it creates something only you can see, so there is no preview to confirm and nothing was created. Re-issue WITHOUT \`confirm_token\`. Tokens are only ever minted for a write that publishes into a shared home channel.`);
 }
 /**
+ * 🔒 **THE SERVER'S OWN REFUSAL, MADE LEGIBLE — 400
+ * `CONTAINER_PUBLISH_UNACKNOWLEDGED`** (G16;
+ * `src/features/workspaces/server/shared-publish.ts`).
+ *
+ * ⚠ DUCK-TYPED ON THE STATUS AND THE CODE, never on an error class: no server
+ * error type crosses this package boundary, which is the shape
+ * `shelf.ts › homeShelfForbidden` established and `knowledge-ops-write.ts ›
+ * agentCreateForbidden` repeated.
+ *
+ * ⚠ **THE REMEDY IS THE CALLER'S TO SUPPLY, BECAUSE IT DIFFERS BY OP.** On a
+ * previewed op this refusal can only be a RACE — the room gained a member
+ * between the preview and the act — and the fix is a fresh preview. On an op
+ * with no preview step it is the ordinary answer, and the fix is a human. One
+ * message for both would be wrong for both.
+ */
+function containerPublishUnacknowledged(e, remedy) {
+    if (typeof e !== "object" || e === null)
+        return null;
+    if (e.status !== 400)
+        return null;
+    if (e.code !== "CONTAINER_PUBLISH_UNACKNOWLEDGED") {
+        return null;
+    }
+    return (0, respond_js_1.err)(`Nothing was written. This would publish into a home channel somebody ELSE is standing in, and the server requires that the audience change be acknowledged. ${remedy}`);
+}
+/** The remedy for an op that HAS a preview step: this refusal means the room
+ *  changed under the token, so the answer is to look again. */
+exports.RECONFIRM_REMEDY = `Re-issue the SAME call WITHOUT \`confirm_token\` to get a fresh preview of who would see it, then confirm THAT one.`;
+/**
  * THE GATE. Call it after the local contradiction refusals and before the
  * client write.
  *
@@ -168,6 +222,8 @@ function refuseStrayToken(tool, op) {
  *   - publishing, not a shared container → proceed (nobody else is in the room)
  *   - publishing into a shared container, no token → PREVIEW + a fresh token
  *   - publishing into a shared container, token    → verify, then proceed
+ *     WITH `acknowledgedShared: true` — which the caller must put on the write
+ *     body as `acknowledgeShared`, or the server refuses it (G16).
  */
 async function confirmGate(client, act, opts) {
     const token = opts.token?.trim() ?? "";
@@ -188,7 +244,7 @@ async function confirmGate(client, act, opts) {
     }
     const verdict = consume(token, fp);
     if (verdict === "ok")
-        return PROCEED;
+        return PROCEED_ACKNOWLEDGED;
     return { kind: "halt", response: tokenRefusal(act, verdict) };
 }
 /**
@@ -202,7 +258,11 @@ function preview(act, target, token) {
         `NOTHING WAS CREATED — this is a dry run. ${act.tool} op="${act.op}" would publish into a home channel somebody ELSE is in, so it previews first.`,
         "",
         `**What would be created:** ${act.what}`,
-        `**Where:** ${target.label}${target.unknown ? " — ⚠ the workspace could not be read, so this is being treated as a shared room" : " (a home channel with at least one other person in it)"}`,
+        // ⚠ ONE NOUN FOR THE ROOM. Both arms said "home channel" and "workspace"
+        // about the SAME object, in the one line a reader uses to decide whether
+        // to go ahead — and "the workspace could not be read" invites the reader
+        // to go looking for a workspace that was never the subject.
+        `**Where:** ${target.label}${target.unknown ? " — ⚠ this home channel could not be read, so it is being treated as a shared room" : " (a home channel with at least one other person in it)"}`,
         `**Who would see it:** ${act.audience}`,
         "",
         `To go ahead, re-issue the SAME call with \`confirm_token="${token}"\` and every other argument UNCHANGED. The token is single-use, expires in 5 minutes, and is bound to this exact payload — changing any field invalidates it and you get a fresh preview instead of a surprise.`,

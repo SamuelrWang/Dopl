@@ -62,7 +62,7 @@ const KNOWLEDGE_TOOL = 'mcp__dopl__dopl_kb';
 //             set_visibility                                                 (gating.ts)
 //   ⇒ reads   list_bases get_tree list_dir read_file search
 //
-// ⚠ `search` IS A READ AND IT IS NOT `dopl_channel op="list"`. The reason `list` is kept OFF
+// ⚠ `search` IS A READ AND IT IS NOT `dopl_channel op="rooms", action="list"`. The reason that one is kept OFF
 // `OWN_CHANNEL_READ_OPS` is that it enumerates OTHER PEOPLE'S channels and DMs; `dopl_kb`
 // op="search" is server-side filtered to bases this caller may already read, so it discloses
 // nothing a `list_bases` would not. Both are the caller's own reach, never a peer's.

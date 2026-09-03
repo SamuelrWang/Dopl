@@ -9,6 +9,13 @@
 
 import { MemberMethods } from "./client-members.js";
 import * as channel from "./channel.js";
+import * as channelAccount from "./channel-account.js";
+import type {
+  AccountMessagesOptions,
+  AccountMessagesPage,
+  AccountStatus,
+  AccountStatusOptions,
+} from "./account-types.js";
 import type {
   AwaitMessagesOptions,
   AwaitResult,
@@ -29,6 +36,8 @@ import type {
   WorkspaceAwaitResult,
 } from "./channel-types.js";
 import type {
+  AgentDirectiveCreateInput,
+  AgentDirectiveCreated,
   LaunchDirective,
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
@@ -42,6 +51,22 @@ import type {
 export class ChannelMethods extends MemberMethods {
   listChannels(opts?: { includeArchived?: boolean }): Promise<Channel[]> {
     return channel.listChannels(this.transport, opts);
+  }
+
+  /**
+   * ⚠ ACCOUNT-WIDE AND USER-SCOPED — every channel the caller is in, across
+   * every workspace AND every home-channel container. It ENUMERATES and is not
+   * narrowed here; see `channel-account.ts`'s header for the container-lock
+   * caveat that applies to both of these.
+   */
+  getAccountStatus(opts?: AccountStatusOptions): Promise<AccountStatus> {
+    return channelAccount.getAccountStatus(this.transport, opts);
+  }
+
+  readAccountMessages(
+    opts: AccountMessagesOptions
+  ): Promise<AccountMessagesPage> {
+    return channelAccount.readAccountMessages(this.transport, opts);
   }
 
   getChannel(channelId: string): Promise<Channel> {
@@ -109,6 +134,16 @@ export class ChannelMethods extends MemberMethods {
     input: LaunchDirectiveCreateInput
   ): Promise<LaunchDirectiveCreated> {
     return channel.createLaunchDirective(this.transport, input);
+  }
+
+  /** END or RENAME one of the operator's OWN running agents (2026-09-01).
+   *  ⚠ THE SAME MAILBOX as a launch, a different `kind` — so the answer is a
+   *  `LaunchDirective` and `getLaunchDirective` polls it. ⚠ No launch toggle
+   *  applies to these two; do not tell a caller to turn one on. */
+  createAgentDirective(
+    input: AgentDirectiveCreateInput
+  ): Promise<AgentDirectiveCreated> {
+    return channel.createAgentDirective(this.transport, input);
   }
 
   /** Poll one launch directive. ⚠ Coarse (1-2s) — see `channel.ts`. */

@@ -1,29 +1,36 @@
 import "server-only";
-// ⚠ THE ONE CROSS-FEATURE IMPORT ON THIS PATH, AND IT IS THE COMPOSITION RATHER
-// THAN THE COPY. `resolveTemplateRef` applies `canSeeTemplate` — the visibility
-// matrix that is ALREADY written twice (that function and
-// `agent_templates_member_select`) and documented as having to move together. A
-// third statement of it here is precisely the shape F-278 is filed against
-// ("the copy is the one that will not notice"). INVARIANTS §1 says there are no
-// cross-feature imports; F-275 records that the tree has never obeyed that and
-// that `channels → agent-templates` already exists on the client side.
-import {
-  resolveTemplateRef,
-  type TemplateRefMatch,
-} from "@/features/agent-templates/server/service";
 import { LAUNCH_DIRECTIVE_TTL_MS, PRESENCE_ONLINE_WINDOW_MS } from "../constants";
-import type { LaunchDirective, LaunchRefusalReason } from "../types";
+import type {
+  LaunchDirective,
+  LaunchMessageMode,
+  LaunchRefusalReason,
+  LaunchToolMode,
+} from "../types";
 import {
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
-  LaunchTemplateAmbiguousError,
-  LaunchTemplateNotFoundError,
 } from "./errors";
+// ⚠ THE CEILING IS THE CREATE'S FIFTH GATE AND ITS OWN MODULE (§1 cap, and the
+// `service-launch-template.ts` precedent one line up): it is a SECOND COPY of the
+// desktop's clamp across a tree boundary the two cannot import over, so it lives
+// in one place with a parity test rather than inline in a service.
+import { resolveDirectivePosture } from "./service-launch-posture";
 import * as launchRepo from "./repository-launch";
-import type { LaunchDirectiveRow } from "./repository-launch";
 import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+// ⚠ THE RACE HALF OF G10, SHARED WITH THE DIRECTION LANE — see that module for
+// why the PROBE is not in it and this file states its own gate ordering instead.
+import { insertOrConverge } from "./service-mailbox-idempotency";
+// ⚠ THE TEMPLATE FENCE LEFT THIS FILE ON 2026-09-02 (§1 cap). It is the CREATE's
+// third gate and its position in the order is argued below, where the gates are.
+import { resolveTemplateForDirective } from "./service-launch-template";
+// ⚠ THE MAPPER AND THE REFUSAL VOCABULARY LEFT THIS FILE ON 2026-09-01 (§1 cap,
+// and a second service now reads both — `service-launch-agent.ts`). RE-EXPORTED
+// below so no import path outside this feature changed and there is still no
+// second path to either symbol.
+import { isTerminal, toDirective } from "./service-launch-dto";
+export { LAUNCH_REFUSAL_REASONS, toDirective } from "./service-launch-dto";
 
 /**
  * LAUNCH-OVER-MCP — an operator's external agent asking that operator's OWN
@@ -44,77 +51,6 @@ import { loadVisibleChannel, type ChannelContext } from "./service-shared";
  * argument. The type signatures below are the enforcement, not a convention.
  */
 
-/** The refusal contract, as a value. ⚠ ONE DECLARATION — the column's CHECK, the
- *  route schema and the MCP render all point at this.
- *  ⚠ SEVEN SINCE 2026-08-22: `no-template` is the agent-templates word — a directive
- *  named a template the OPERATOR's machine could not resolve (deleted, or invisible
- *  to them though visible to the orchestrator). ⚠ THE COLUMN CHECK CAUGHT UP ON
- *  2026-08-23 (`20260823140000_channel_launch_directives_template.sql`, WRITTEN —
- *  applied is a measurement, §12), in the same wave as the producer that makes the
- *  word reachable: `main/launch-directives.js › spawn` resolves the directive's
- *  template at CLAIM time. This list and that CHECK are back in agreement. */
-export const LAUNCH_REFUSAL_REASONS = [
-  "cap",
-  "busy",
-  "no-sdk",
-  "auth-hold",
-  "no-bridge",
-  "no-counterparty",
-  "no-template",
-] as const;
-
-function isTerminal(status: string): boolean {
-  return status === "launched" || status === "refused" || status === "expired";
-}
-
-/**
- * ROW → DTO, **with lazy expiry applied**.
- *
- * ⚠ **THE STORED `status` AND THE REPORTED ONE MAY DISAGREE, ON PURPOSE.** There
- * is no cron sweeping this table (INVARIANTS §12's standing lesson: a scheduled
- * job is an environment fact nothing in the repo can observe, and this one would
- * exist purely to make a column cosmetically accurate). So a non-terminal row
- * past its TTL is REPORTED as `expired` at read time. Every reader goes through
- * this function, so there is one answer to "is it still live".
- * ⚠ The direction is fail-safe: expiry can only ever make a directive look LESS
- * live. It never resurrects one, and it never turns a decided row into anything.
- */
-function toDirective(row: LaunchDirectiveRow, now: number): LaunchDirective {
-  const expired = !isTerminal(row.status) && now > Date.parse(row.expires_at);
-  return {
-    id: row.id,
-    // ⚠ ON THE DTO ON PURPOSE, AND IT DISCLOSES NOTHING (F-284, 2026-08-23).
-    // Every read that reaches this mapper is already fenced on
-    // `operator_user_id = ctx.userId` (`repository-launch.ts`), so this can only
-    // ever be the caller's own id. It is here because the DESKTOP re-checks
-    // ownership locally before acting — `main/launch-directive-wire.js ›
-    // directiveFrom` reads it and `main/launch-directives.js › handle` drops any
-    // row that is not the signed-in operator's. Omitting it made every row the
-    // breaker-open backstop polled compare against `''` and be discarded, i.e.
-    // the F-273 recovery read returned rows nothing could ever action.
-    operatorUserId: row.operator_user_id,
-    channelId: row.channel_id,
-    threadId: row.task_id,
-    goal: row.goal,
-    model: row.model,
-    // ⚠ BOTH, ALWAYS, AND NEVER ONE. `template_id` is `ON DELETE SET NULL`, so a
-    // null id ALONE cannot say whether no template was named or the named one was
-    // deleted — and the desktop's answer to those two is opposite (launch blank
-    // vs refuse `no-template`, spec E-4). Mapping only the id would make the DTO
-    // the place the signal was lost, one layer above the wire narrowing that gets
-    // blamed for it.
-    templateId: row.template_id,
-    templateName: row.template_name,
-    status: expired ? "expired" : (row.status as LaunchDirective["status"]),
-    refusalReason: row.refusal_reason as LaunchRefusalReason | null,
-    agentId: row.agent_id,
-    claimedAt: row.claimed_at,
-    decidedAt: row.decided_at,
-    expiresAt: row.expires_at,
-    createdAt: row.created_at,
-  };
-}
-
 /**
  * IS THE OPERATOR'S MACHINE EVEN THERE?
  *
@@ -133,7 +69,12 @@ function toDirective(row: LaunchDirectiveRow, now: number): LaunchDirective {
  * liveness number would let the roster call a member offline while this path
  * happily filed a directive for them.
  */
-async function operatorIsOnline(ctx: ChannelContext): Promise<boolean> {
+// ⚠ EXPORTED SINCE 2026-09-01 for `service-launch-agent.ts` — the SAME question,
+// the SAME window, and a second copy would let one lane call a machine online
+// while the other filed nothing for it.
+export async function operatorIsOnline(
+  ctx: ChannelContext
+): Promise<boolean> {
   const presence = await collab.presenceForWorkspace(ctx.workspaceId);
   const mine = presence.get(ctx.userId);
   // ⚠ NO ROW AND NO STAMP BOTH READ AS OFFLINE — the fail-safe direction. A
@@ -165,79 +106,55 @@ export type CreateLaunchInput = {
    * spelling on this path. See {@link resolveTemplateForDirective}.
    */
   template?: string;
+  /**
+   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it
+   * may launch workers (2026-09-01, T24).
+   *
+   * ⚠ **ASKS. NEVER WIDENS — AND THIS SERVICE DOES NOT AND CANNOT CHECK THAT.**
+   * The ceiling is the operator's own stored channel posture, an
+   * `electron-store` record no server sees; `main/launch-posture.js ›
+   * resolveLaunch` CLAMPS the two axes to it and REFUSES a chain the channel
+   * forbids. All this path does is carry the request.
+   * ⚠ **THE TICKET'S "unless the caller is the operator" CARVE-OUT WAS REFUSED,
+   * and the reason is measurable here: every caller on this lane IS the
+   * operator's own account** (INVARIANTS §11), so the exception is not narrow,
+   * it is the whole set. Do not add one.
+   * ⚠ OMITTING ALL THREE IS THE PRE-T24 BEHAVIOUR BYTE FOR BYTE.
+   */
+  tools?: LaunchToolMode;
+  messages?: LaunchMessageMode;
+  chain?: boolean;
+  /**
+   * **THE CALLER'S IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"**
+   * (2026-09-02, A10/G10).
+   *
+   * ⚠ **IT IS THE ONLY THING THAT MAKES THE SURFACE'S STRONGEST WARNING TRUE.**
+   * `op="launch_agent"` holds ~15 s and then returns PENDING, and the doctrine
+   * tells the caller not to re-issue because a second launch starts a second
+   * agent on the same work. That was enforced by NOTHING. Sending the same key
+   * again now returns the stored directive instead
+   * ({@link CreateLaunchResult.existing}).
+   * ⚠ ABSENT IS THE ORDINARY CASE and changes nothing — see
+   * `service-mailbox-idempotency.ts`.
+   */
+  clientMsgId?: string;
 };
-
-/**
- * ⚠ WHAT A DIRECTIVE STORES ABOUT A TEMPLATE, AND WHY IT IS NOT THE CONTENT.
- *
- * The row carries the resolved `id` plus a NAME SNAPSHOT and nothing else. The
- * INSTRUCTIONS, fields and knowledge bases are read on the DESKTOP, at spawn,
- * under the OPERATOR's own credential (`main/template-resolve.js`) — which is
- * load-bearing rather than tidy: `knowledgeBases` is viewer-filtered, and on this
- * lane the caller who NAMED the template and the operator who RUNS it are
- * routinely different people. Resolving content here would attach the
- * orchestrator's reach to the operator's session.
- */
-type DirectiveTemplate = { id: string; name: string } | null;
-
-/**
- * RESOLVE THE CALLER'S `template` REF — **the CREATE fence, under the
- * ORCHESTRATOR's credential** (spec §3e).
- *
- * ⚠ THERE ARE TWO FENCES ON THIS LANE AND THEY BELONG TO DIFFERENT PEOPLE. This
- * one says the caller cannot NAME what it cannot SEE. The other runs on the
- * desktop at spawn and says the OPERATOR cannot RUN what THEY cannot see. Both
- * are required and neither substitutes: a `team` template the orchestrator is in
- * and the operator is not passes here and is refused there, as `no-template`.
- * That is a real, fail-closed state, stated in the docs rather than debugged.
- *
- * ⚠ AMBIGUITY REFUSES AND LISTS. Never picks — see
- * {@link LaunchTemplateAmbiguousError}.
- */
-async function resolveTemplateForDirective(
-  ctx: ChannelContext,
-  ref: string | undefined
-): Promise<DirectiveTemplate> {
-  if (ref === undefined) return null;
-  const resolution = await resolveTemplateRef(
-    {
-      workspaceId: ctx.workspaceId,
-      userId: ctx.userId,
-      source: ctx.source,
-      role: ctx.role,
-      // ⚠ CARRIED, NOT DROPPED, AND IT IS ARM 2 OF THE MATRIX (M-10). A
-      // workspace-scoped API key may be shared between humans, so it inherits no
-      // one person's reach and must see NOTHING beyond `visibility: 'workspace'`.
-      // `canSeeTemplate` reads this field; handing it `null` would let such a key
-      // resolve the key-owner's private templates by name.
-      apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
-      // ⚠ AND ITS KIND, OR ARM 2 REFUSES THE OPERATOR'S OWN SESSION (F-333).
-      // Dropping this line puts `AGENT_TEMPLATE_NOT_FOUND` on every private
-      // template a locked session names — including every "Use in this channel"
-      // copy, which `containerCopyDraft` forces to `private`.
-      apiKeyWorkspaceLockKind: ctx.apiKeyWorkspaceLockKind ?? null,
-    },
-    ref
-  );
-  if (resolution.kind === "ambiguous") {
-    throw new LaunchTemplateAmbiguousError(
-      ref,
-      resolution.matches as ReadonlyArray<TemplateRefMatch>
-    );
-  }
-  if (resolution.kind === "not-found") {
-    throw new LaunchTemplateNotFoundError(ref);
-  }
-  return { id: resolution.id, name: resolution.name };
-}
 
 /**
  * `offline` = no row was created and nothing was asked; the caller renders the
  * honest caveat. Any other outcome carries the filed directive.
+ *
+ * ⚠ **`existing: true` MEANS THE ROW WAS ALREADY THERE — this call filed
+ * NOTHING** (2026-09-02, A10/G10). The caller re-sent a `clientMsgId` it had
+ * used before and got the FIRST request's directive back, which is the whole
+ * point: a timed-out launch may be retried without starting a second agent. The
+ * MCP result renders it as `retry=existing`, because a converged retry that
+ * looked like a fresh launch would leave the caller guessing exactly what the
+ * key removed.
  */
 export type CreateLaunchResult =
   | { offline: true; directive: null }
-  | { offline: false; directive: LaunchDirective };
+  | { offline: false; directive: LaunchDirective; existing: boolean };
 
 /**
  * FILE A LAUNCH DIRECTIVE.
@@ -284,6 +201,30 @@ export async function createLaunchDirective(
     throw new LaunchDirectiveNotFoundError(input.channel);
   }
 
+  // ⚠ **THE IDEMPOTENCY PROBE SITS HERE — ABOVE THE THREAD, TEMPLATE AND
+  // PRESENCE GATES — AND THE POSITION IS THE CONTRACT** (2026-09-02, A10/G10).
+  // A key that has already been filed means THIS REQUEST ALREADY HAPPENED, so the
+  // honest answer is the stored row and nothing else may be re-decided against
+  // today's world:
+  //   • THE TEMPLATE GATE would refuse a retry of a launch that SUCCEEDED, if the
+  //     template has since been deleted or unshared. The row already names the id
+  //     it resolved to.
+  //   • THE PRESENCE GATE would answer `offline` — "nothing was filed" — about a
+  //     directive that IS filed and may be running. That is the double-launch
+  //     hazard inverted, and it is the reading most likely to make a caller retry.
+  // ⚠ It is BELOW membership because the fence may never be skipped: converging
+  // on a stored row is still a read of a channel the caller must be in.
+  if (input.clientMsgId) {
+    const stored = await launchRepo.findLaunchDirectiveByClientMsgId(
+      ctx.userId,
+      channel.id,
+      input.clientMsgId
+    );
+    if (stored) {
+      return { offline: false, directive: toDirective(stored, Date.now()), existing: true };
+    }
+  }
+
   let taskId: string | null = null;
   if (input.threadId) {
     const task = await repoTasks.findTaskByChannelAndId(
@@ -299,27 +240,78 @@ export async function createLaunchDirective(
 
   const template = await resolveTemplateForDirective(ctx, input.template);
 
+  // ── 5. **THE POSTURE CEILING** (2026-09-02, A9 — G6, G7, G8) ──────────────
+  //
+  // ⚠ **ABOVE PRESENCE, ON THE TEMPLATE GATE'S ARGUMENT.** `offline` is a 200
+  // saying "nothing was asked", and answering a chain the channel forbids with
+  // "your machine is asleep" makes the caller fix the wrong thing and ask again a
+  // minute later for the real refusal — a ceiling needs nobody's machine.
+  // ⚠ **AND BELOW THE IDEMPOTENCY PROBE**: a stored row is this request's answer
+  // and must not be re-decided against a ceiling that has moved since.
+  // The rule itself, and why it refuses on one axis and clamps on two, is
+  // `service-launch-posture.ts`.
+  const posture = resolveDirectivePosture(channel, input);
+
   if (!(await operatorIsOnline(ctx))) {
     return { offline: true, directive: null };
   }
 
   const now = Date.now();
-  const row = await launchRepo.insertLaunchDirective(ctx.userId, {
-    workspace_id: ctx.workspaceId,
-    channel_id: channel.id,
-    task_id: taskId,
-    goal: input.goal ?? null,
-    model: input.model ?? null,
-    // ⚠ THE PAIR, WRITTEN TOGETHER. `template_name` is a SNAPSHOT and is what
-    // survives the FK's `ON DELETE SET NULL` — without it a template deleted
-    // between here and the claim is indistinguishable from no template at all,
-    // and the desktop would launch a blank agent wearing an identity the caller
-    // asked for and will not notice is missing (E-4).
-    template_id: template?.id ?? null,
-    template_name: template?.name ?? null,
-    expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
+  // ⚠ THE RACE HALF OF G10. The probe above answers the ordinary retry; this
+  // answers two of them arriving together, where both probes missed and the
+  // partial unique index refuses the second insert. See
+  // `service-mailbox-idempotency.ts` for why the two are one rule.
+  const { row, existing } = await insertOrConverge({
+    clientMsgId: input.clientMsgId,
+    find: (key) =>
+      launchRepo.findLaunchDirectiveByClientMsgId(ctx.userId, channel.id, key),
+    insert: () => launchRepo.insertLaunchDirective(ctx.userId, {
+      workspace_id: ctx.workspaceId,
+      channel_id: channel.id,
+      task_id: taskId,
+      goal: input.goal ?? null,
+      model: input.model ?? null,
+      // ⚠ THE PAIR, WRITTEN TOGETHER. `template_name` is a SNAPSHOT and is what
+      // survives the FK's `ON DELETE SET NULL` — without it a template deleted
+      // between here and the claim is indistinguishable from no template at all,
+      // and the desktop would launch a blank agent wearing an identity the caller
+      // asked for and will not notice is missing (E-4).
+      template_id: template?.id ?? null,
+      template_name: template?.name ?? null,
+      // ⚠ **THE REQUESTED POSTURE, CARRIED VERBATIM AND VALIDATED NOWHERE ELSE
+      // HERE.** The route's zod holds each axis to its closed enum and the column
+      // CHECK says the same at rest; this path adds no opinion, because the only
+      // opinion that matters is the OPERATOR'S CEILING and it lives on their
+      // machine. ⚠ `?? null` maps "not asked" onto the column's own spelling for it,
+      // which the desktop then resolves to that ceiling — the pre-T24 behaviour.
+      // ⚠ `chain` USES `?? null` RATHER THAN `|| null` SO THE ROW RECORDS WHAT THE
+      // CALLER ACTUALLY SENT. `||` would rewrite a `false` into "did not ask" here,
+      // in the one place that is supposed to be a faithful record of the request.
+      // ⚠ **AND SINCE 2026-09-01 THE `false` IS HONOURED, NOT MERELY RECORDED**:
+      // `main/launch-directive-wire.js › directiveFrom` carries all three states and
+      // `main/launch-posture.js › resolveChain` grants `false` unconditionally — it
+      // only ever NARROWS, so it wins even over a channel set to ON. This comment
+      // said the opposite ("promised to nobody") while the desktop flattened `false`
+      // into `null`; see `types-launch.ts › LaunchDirective.chain` for the fix.
+      start_tool_mode: input.tools ?? null,
+      start_message_mode: input.messages ?? null,
+      chain: input.chain ?? null,
+      // ⚠ **THE THIRD POSTURE GROUP, AND THE CREATE IS ITS ONLY WRITER**
+      // (2026-09-02, A9). `start_*` records what was ASKED and is never
+      // rewritten; `applied_*` is the MACHINE's echo and is written by the
+      // DECIDE; this is what the SERVER permitted. G6 asks for the applied value
+      // to be non-null, and it is — by CONSTRUCTION, on every row this build
+      // files, rather than by a constraint that would 500 an insert from a
+      // rolled-back one.
+      resolved_tool_mode: posture.tools,
+      resolved_message_mode: posture.messages,
+      resolved_chain: posture.chain,
+      resolved_model: posture.model,
+      expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
+      client_msg_id: input.clientMsgId ?? null,
+    }),
   });
-  return { offline: false, directive: toDirective(row, now) };
+  return { offline: false, directive: toDirective(row, now), existing };
 }
 
 /**
@@ -408,7 +400,27 @@ export async function claimLaunchDirective(
 }
 
 export type DecideLaunchInput =
-  | { status: "launched"; agentId: string }
+  /**
+   * ⚠ THE LAUNCH KIND'S SUCCESS ONLY — the column CHECK pairs `launched` with
+   * `kind = 'launch'`, so this arm on an `end` row is refused AT REST.
+   *
+   * ⚠ **THE THREE `applied*` FIELDS ARE THE ECHO, AND THEY ARE OPTIONAL FOREVER**
+   * (2026-09-01). A desktop older than this wave reports nothing and must keep
+   * being able to decide (INVARIANTS §13), so absent is a first-class input —
+   * it maps to `null`, which every reader is required to render as "not
+   * reported" rather than as agreement.
+   */
+  | {
+      status: "launched";
+      agentId: string;
+      appliedTools?: LaunchToolMode;
+      appliedMessages?: LaunchMessageMode;
+      appliedChain?: boolean;
+    }
+  /** ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). No agent id: the row already
+   *  NAMES its target, so a second id on the decide would be a field the machine
+   *  could get wrong about a row it did not write. */
+  | { status: "done" }
   | { status: "refused"; refusalReason: LaunchRefusalReason };
 
 /**
@@ -426,6 +438,22 @@ export type DecideLaunchInput =
  * that no directive accounts for — the worst of the available outcomes. Expiry
  * governs whether a NEW claim may begin, not whether a completed one may be
  * reported.
+ *
+ * ⚠ **THE DECIDE IS THE ECHO TRIO'S ONLY WRITER, AND THAT IS THE WHOLE POINT OF
+ * PUTTING IT HERE** (2026-09-01, T24's second half). `repository-launch.ts ›
+ * LaunchDirectiveInsert` deliberately has no field for `applied_*`: a CREATE that
+ * could stamp them would let the REQUESTER write its own confirmation, which is
+ * the one value on this row that must not come from the asking side. The machine
+ * that did the clamping is the only honest reporter of it.
+ * ⚠ **ABSENT MAPS TO `null`, AND `null` IS "NOT REPORTED".** Never a value
+ * echoed from the REQUEST columns (`start_tool_mode` / `start_message_mode` /
+ * `chain`). Echoing those back would produce a value that is right whenever
+ * nothing was clamped and confidently wrong precisely when it mattered, and the
+ * orchestrator would size its next instruction for room the agent does not have.
+ * ⚠ `?? null` RATHER THAN `|| null` ON THE CHAIN, for the reason
+ * `createLaunchDirective` states about the REQUEST column: `||` would rewrite a
+ * reported `false` — "I settled the chain OFF" — into "I said nothing", which is
+ * the exact collapse this wave exists to remove from the other half of the lane.
  */
 export async function decideLaunchDirective(
   ctx: ChannelContext,
@@ -442,6 +470,15 @@ export async function decideLaunchDirective(
       agent_id: input.status === "launched" ? input.agentId : null,
       refusal_reason:
         input.status === "refused" ? input.refusalReason : null,
+      // ⚠ ONLY THE `launched` ARM CAN CARRY THESE. On `done` and `refused` they
+      // are written as `null` rather than left off, so a retried decide cannot
+      // leave a stale echo standing beside a refusal.
+      applied_tool_mode:
+        input.status === "launched" ? input.appliedTools ?? null : null,
+      applied_message_mode:
+        input.status === "launched" ? input.appliedMessages ?? null : null,
+      applied_chain:
+        input.status === "launched" ? input.appliedChain ?? null : null,
       decided_at: new Date(now).toISOString(),
     }
   );

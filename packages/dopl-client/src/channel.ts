@@ -33,6 +33,8 @@ import type {
   ThreadMode,
 } from "./channel-types.js";
 import type {
+  AgentDirectiveCreateInput,
+  AgentDirectiveCreated,
   LaunchDirective,
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
@@ -45,15 +47,21 @@ import type {
 
 const enc = encodeURIComponent;
 
-/** Network read-timeout for the long-poll — above the server cap. */
-const AWAIT_TIMEOUT_MS = 55_000;
+/** Network read-timeout for the long-poll — above the server cap.
+ *  ⚠ EXPORTED for the DEADLINE CHAIN's gate, not for the deleted `ping.ts`:
+ *  `@dopl/mcp-server › tools/channel-deadlines.test.ts` greps this literal so
+ *  the hold budget cannot be raised past the timeout bounding it. Two copies
+ *  drift, and the one that drifts low aborts a graceful hold. */
+export const AWAIT_TIMEOUT_MS = 55_000;
 
 /**
  * Server-side long-poll window when the caller passes none. Sent explicitly
  * rather than relying on the route default, so poll length is pinned
  * client-side and stays under AWAIT_TIMEOUT_MS.
+ *
+ * ⚠ EXPORTED for {@link AWAIT_TIMEOUT_MS}'s reader, and for its reason.
  */
-const DEFAULT_AWAIT_TIMEOUT_MS = 50_000;
+export const DEFAULT_AWAIT_TIMEOUT_MS = 50_000;
 
 // ─── Read ───────────────────────────────────────────────────────────
 
@@ -391,6 +399,34 @@ export async function createLaunchDirective(
     body: input,
     toolName: "channel_launch_agent",
   });
+}
+
+/**
+ * ASK THE OPERATOR'S OWN DESKTOP TO **END** OR **RENAME** ONE OF ITS AGENTS
+ * (2026-09-01).
+ *
+ * ⚠ **THE SAME MAILBOX, A DIFFERENT KIND — so the result is a `LaunchDirective`
+ * and `getLaunchDirective` polls it.** There is no second lane and no second poll
+ * endpoint; only the CREATE body differs, because a launch's shape (goal, model,
+ * template) and an end's (which agent) have nothing in common.
+ * ⚠ A REQUEST, NOT A COMMAND, exactly as a launch is. `offline` means the machine
+ * is not listening and NOTHING WAS FILED.
+ * ⚠ **NO LAUNCH TOGGLE APPLIES TO THESE TWO.** The desktop's launch-over-MCP
+ * setting gates `launch_agent` and neither of these; do not tell a caller to turn
+ * it on because an end was refused.
+ */
+export async function createAgentDirective(
+  t: DoplTransport,
+  input: AgentDirectiveCreateInput
+): Promise<AgentDirectiveCreated> {
+  return t.request<AgentDirectiveCreated>(
+    "/api/channels/launch-directives/agent",
+    {
+      method: "POST",
+      body: input,
+      toolName: "channel_agent_directive",
+    }
+  );
 }
 
 /**

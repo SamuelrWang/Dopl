@@ -28,8 +28,8 @@ const { spawn, execFile } = require('child_process');
 
 const BIN = 'codex';
 // ⚠ BOUNDED, because a probe that hangs takes the whole launch with it: `available()` is awaited
-// on the spawn path and on the triage path, and a `codex` that never answers must read as absent
-// rather than as a stuck session.
+// on the spawn path, and a `codex` that never answers must read as absent rather than as a stuck
+// session.
 const PROBE_TIMEOUT_MS = 5000;
 
 /**

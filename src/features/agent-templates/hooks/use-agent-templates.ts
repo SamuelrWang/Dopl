@@ -64,8 +64,8 @@ export interface UseAgentTemplatesOptions {
    * `[path, ws, {shelf:"home"}]` patched by a writer on `[path, ws, undefined]`
    * is F-331 with a new axis: silent, and visible only as a created row that
    * never appears.
-   * ⚠ Omitting it WIDENS. There is no client-side fallback filter; `home_scoped`
-   * is never projected.
+   * ⚠ Omitting it WIDENS. There is no client-side fallback filter; the shelf is
+   * a TENANCY the client is never handed on the row.
    */
   shelf?: TemplateShelf;
 }

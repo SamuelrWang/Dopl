@@ -41,10 +41,29 @@ import { inlineOr } from "./channel-shared";
 // ⚠ THE HANDLE — its own file since 2026-08-31 (the §2 cap, and a different
 // reason to change). See `channel-session-handle.ts`'s header.
 import { addressableHandle } from "./channel-session-handle";
+// ⚠ THE HEALTH CLAUSES — their own file since 2026-09-01, same cap and a
+// different reason to change. 🔒 **READ ITS HEADER BEFORE TOUCHING `stale`
+// ANYWHERE IN THIS FILE**: the desktop reports a field of that name which is a
+// DIFFERENT FACT from {@link sessionIsStale}'s, and the two are kept apart by
+// vocabulary alone (that module says WEDGED; this one says stale).
+import {
+  sessionHealthClauses,
+  sessionProgressClauses,
+} from "./channel-session-health";
+// ⚠ THE COARSE UNITS moved DOWN into their own module in the same change — the
+// health clauses need the same three and importing them back out of this file
+// would be an import cycle. See `channel-session-units.ts`'s header.
+import { ageMs, coarseAge, compactCount } from "./channel-session-units";
+
+// ⚠ THE HELPERS BELOW ARE EXPORTED FOR ONE CONSUMER: `channel-session-table.ts`,
+// which was split out of this file at the 500-line cap. They are NOT a general
+// API — the point of the split is that a session's vocabulary, its staleness
+// window and its coarse-age spelling still have exactly ONE definition, and the
+// table renders from these rather than growing a second set.
 
 /** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed)";
-const NO_TITLE = "(untitled)";
+export const NO_NAME = "(unnamed)";
+export const NO_TITLE = "(untitled)";
 
 
 /**
@@ -56,12 +75,12 @@ const NO_TITLE = "(untitled)";
  * holds. Membership, not neutralization: the set is closed and 3 long, so
  * anything outside it is not a state we can render.
  */
-const SESSION_STATES: ReadonlySet<string> = new Set([
+export const SESSION_STATES: ReadonlySet<string> = new Set([
   "working",
   "idle",
   "ended",
 ]);
-const UNKNOWN_STATE = "(unrecognized state)";
+export const UNKNOWN_STATE = "(unrecognized state)";
 
 /**
  * PAST THIS, A ROW STOPS ASSERTING A LIVE STATE.
@@ -115,29 +134,9 @@ const DETAIL_PHRASES: Record<SessionDetailKey, string> = {
   awaiting_inbound: "holding an inbound reply",
 };
 
-function detailPhrase(detail: SessionDetailKey | null | undefined): string | null {
+export function detailPhrase(detail: SessionDetailKey | null | undefined): string | null {
   if (!detail) return null;
   return DETAIL_PHRASES[detail] ?? null;
-}
-
-/** "6m" / "2h" / "3d" — coarse on purpose; nobody acts on seconds here. */
-function coarseAge(ms: number): string {
-  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
-  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h`;
-  return `${Math.round(ms / 86_400_000)}d`;
-}
-
-/**
- * How long ago `iso` was, or `null` when it is absent or unparseable.
- * ⚠ UNPARSEABLE IS `null`, NOT `0`. A stamp we cannot read is a stamp we know
- * nothing about, and rendering "0s ago" for one invents a report.
- */
-function ageMs(iso: string | null | undefined, now: number): number | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  return Math.max(0, now - t);
 }
 
 /**
@@ -191,7 +190,7 @@ const MODEL_LABEL_EDGE = /^[`*_#>[\]{}|\s]+|[`*_#>[\]{}|\s]+$/g;
  * contextWindowFor` reads that suffix as the window), and `narration.ts ›
  * neutralizeInline` turns `[` and `]` into SPACES because they are markdown
  * structure. So the model clause rendered `` `opus-5 1m` `` — a bare `1m` sitting
- * in the one segment {@link SESSION_TELEMETRY_NOTE} promises holds bare NAMES,
+ * in the one segment the doctrine promises holds bare NAMES,
  * one clause away from `started 12m ago` and `stale, 10m ago`. A relative time is
  * exactly what `coarseAge` emits, so an operator reads a time shard as a template
  * or a model. **Whatever the neutralizer would blank into a space is joined with
@@ -224,13 +223,6 @@ function contextClause(s: ChannelSessionStateOwn): string | null {
     return `context ${used} tokens (window not reported)`;
   }
   return `context ${Math.round((used / window) * 100)}% of ${window}`;
-}
-
-/** `41k` / `912` — compact, and never for a null. */
-function compactCount(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) return `${Math.round(n / 100) / 10}k`;
-  return `${Math.round(n / 100_000) / 10}M`;
 }
 
 /**
@@ -267,9 +259,21 @@ function telemetryClauses(
   if (s.tokensSpent !== null && s.tokensSpent !== undefined) {
     out.push(`${compactCount(s.tokensSpent)} tokens`);
   }
+  // ⚠ TURNS AND THE SPEND DELTA RIDE HERE, IMMEDIATELY AFTER THE LIFETIME
+  // TOTAL, because a reader comparing "41k tokens" with "+8.7k since it last
+  // posted" is doing ONE piece of arithmetic — see
+  // `channel-session-health.ts › sessionProgressClauses`.
+  out.push(...sessionProgressClauses(s));
   if (s.toolLabel) out.push(`tool ${inlineOr(s.toolLabel, "(unnamed tool)")}`);
   const started = ageMs(s.startedAt, now);
   if (started !== null) out.push(`started ${coarseAge(started)} ago`);
+  // ⚠ LAST, AND THE POSITION IS LOAD-BEARING. Two of these three are things an
+  // orchestrator must ACT on (calls being denied, a session its own machine
+  // calls wedged), and the end of a `·`-joined line is the position a partial
+  // scan still reaches. ⚠ The `stale` rendered in here is the MACHINE's wedged
+  // flag and NOT {@link sessionIsStale}'s row-freshness fact — that module says
+  // WEDGED and this one says stale, deliberately, and neither word may migrate.
+  out.push(...sessionHealthClauses(s, now));
   return out;
 }
 
@@ -305,6 +309,18 @@ export interface SessionRenderOpts {
    * production call sites are own-scoped and pass it explicitly.
    */
   handle?: boolean;
+  /**
+   * Emit the leading `- ` markdown bullet. Default TRUE — the shape every
+   * existing caller already gets.
+   *
+   * ⚠ **IT EXISTS BECAUSE ONE CALLER WAS DOING STRING SURGERY ON THE RESULT**
+   * (2026-09-02). `status-render.ts` renders these rows INDENTED under a channel
+   * line rather than as a list, and it was stripping the prefix with
+   * `.replace(/^- /, "")` — a reader of this function's OUTPUT FORMAT rather than
+   * of its contract, which breaks silently the day the prefix changes and leaves
+   * a stray `- ` mid-line rather than an error. An option is the contract.
+   */
+  bullet?: boolean;
 }
 
 /**
@@ -317,7 +333,7 @@ export interface SessionRenderOpts {
  * to say "this report is still current"; it does not license us to date a report
  * whose own stamp we cannot read.
  */
-function rowIsQuietNotGone(
+export function rowIsQuietNotGone(
   age: number | null,
   stale: boolean,
   operatorOnline: boolean | undefined
@@ -386,7 +402,9 @@ export function formatSessionLine(
   // extra rather than a plausible-looking handle — see {@link addressableHandle}.
   const at = opts.handle ? addressableHandle(s.name) : null;
   const address = at ? ` (\`${at}\`)` : "";
-  return `- **${inlineOr(s.name, NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
+  // ⚠ `bullet` DEFAULTS TO TRUE, so every existing caller's bytes are unchanged.
+  const lead = opts.bullet === false ? "" : "- ";
+  return `${lead}**${inlineOr(s.name, NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
 }
 
 /**
@@ -405,80 +423,24 @@ export function sessionLegend(
   anyStale: boolean,
   operatorOnline?: boolean
 ): string {
+  // ⚠ TWO SENTENCES, AND THE SECOND IS THE ONE A GRID NEEDS. `idle` is the age
+  // of the last REPORT, not of the agent, and `—` is a fact nobody sent. Both
+  // are misread as "0 / none" the moment they sit in a column.
   const base =
-    'Each line is one agent SESSION on your machine and its state: **working** (running tools now), **idle** (between turns, or waiting), **ended** (finished).';
+    'One row per agent SESSION on your machine: **working** (running tools now), **idle** (between turns, or waiting), **ended** (finished). `idle` is how long since that session last REPORTED, not how long it has been doing nothing, and `—` means the machine reported no value — never zero, and never "none".';
   if (!anyStale) return base;
   if (operatorOnline === true) {
     // ⚠ The trailing clause covers the one row that can still take the other
     // branch under a live heartbeat: an `updatedAt` this server could not parse.
-    return `${base} A line reading **quiet Xm** is ALIVE, not unknown: your desktop is still heartbeating, and this projection only moves when a session's state does — so nothing has been reported because nothing CHANGED. It is not fresh evidence either; it is the last report, still standing. (A line that instead reads **last reported <state>** carries a stamp that could not be read — treat that one as UNKNOWN.)`;
+    return `${base} A state reading **(unchanged)** is ALIVE, not unknown: your desktop is still heartbeating, and this projection only moves when a session's state does — so nothing has been reported because nothing CHANGED. It is not fresh evidence either; it is the last report, still standing. (A state that instead reads **last reported <state>** carries a stamp that could not be read — treat that one as UNKNOWN.)`;
   }
-  return `${base} A line reading **last reported <state>** is NOT a live state: nothing has been reported for that session in a while, and its desktop may be asleep, signed out, or gone. Treat it as UNKNOWN — do not wait on it as if it were still working, and do not report it as stopped either.`;
+  return `${base} A state reading **last reported <state>** is NOT a live state: nothing has been reported for that session in a while, and its desktop may be asleep, signed out, or gone. Treat it as UNKNOWN — do not wait on it as if it were still working, and do not report it as stopped either.`;
 }
 
 /**
- * THE SESSION BLOCK AN `await` RETURNS WITH ITS RESULT — the caller's own agents
- * as of the moment the hold came back.
- *
- * ⚠ **`undefined` AND `[]` ARE DIFFERENT ANSWERS AND MUST RENDER DIFFERENTLY.**
- * `undefined` = the server did not report (an older deployment, or the read
- * failed) — say nothing at all, because a heading with no rows under it reads as
- * "you have none". `[]` = the server looked and this machine is reporting
- * nothing, which IS worth one line: it is the shape a crashed or signed-out
- * desktop produces, and an orchestrator waiting on an agent needs to see it.
- *
- * ⚠ **IT IS A BLOCK UNDER THE MESSAGES, NEVER INTERLEAVED WITH THEM.** The
- * messages above it are counterparty-authored under their own framing header;
- * splicing server narration between them would let a body's last line be read as
- * the start of this section.
- *
- * ⚠ COMPACT ON PURPOSE. This rides on EVERY returned hold, including every
- * timeout, so it is one line per session and one legend — never the full
- * `read_sessions` preamble.
+ * ⚠ `sessionBlockLines()` MOVED TO `channel-session-table.ts` with the table it
+ * renders (T13, 2026-09-02). It is the PAGE renderer — a header, the shared
+ * table head, one row per session, the legend — and leaving it here made the two
+ * modules import each other. The dependency now runs ONE way: the table imports
+ * this file's vocabulary, and nothing here imports the table.
  */
-export function sessionBlockLines(
-  sessions: readonly ChannelSessionStateOwn[] | undefined,
-  now: number = Date.now(),
-  // ⚠ THIRD, POSITIONAL AND OPTIONAL, so the five call sites that pass only the
-  // set keep compiling. See {@link SessionRenderOpts.operatorOnline}: absent is
-  // "not reported", which takes the offline-hedge branch.
-  operatorOnline?: boolean
-): string[] {
-  if (sessions === undefined) return [];
-  if (sessions.length === 0) {
-    return [
-      ``,
-      `### Your agents — none reported`,
-      `No sessions of YOURS are being reported in this workspace right now. That is not proof there are none: an asleep, signed-out, crashed or older-build machine reports nothing. If you are waiting on an agent you launched, this is the line that says you cannot see it.`,
-    ];
-  }
-  const anyStale = sessions.some((s) => sessionIsStale(s, now));
-  const lines = [``, `### Your agents — ${sessions.length}`];
-  for (const s of sessions) {
-    // ⚠ `handle: true` — own-scoped by construction (`ChannelSessionStateOwn`,
-    // and the await route reads the caller's own rows). See
-    // {@link SessionRenderOpts.handle} for why it is not the telemetry flag.
-    lines.push(
-      formatSessionLine(s, { telemetry: true, handle: true, now, operatorOnline }),
-    );
-  }
-  if (anyStale) {
-    // ⚠ Same branch the lines above took, for the reason `sessionLegend` states:
-    // a caveat about a form the page does not contain teaches the wrong lesson.
-    lines.push(
-      operatorOnline === true
-        ? `A line reading **quiet Xm** is ALIVE — your desktop is still heartbeating and this projection only moves when a session's state does, so nothing was reported because nothing CHANGED. Do not read it as a fresh observation, and do not read it as stopped.`
-        : `A line reading **last reported <state>** is NOT a live state — nothing has been reported for that session in a while and its desktop may be gone. Treat it as UNKNOWN: do not wait on it as if it were working, and do not report it as stopped.`,
-    );
-  }
-  return lines;
-}
-
-/**
- * TELEMETRY IS THE CALLER'S OWN, AND THE RESULT SAYS SO ONCE.
- * ⚠ Stated because an orchestrator that sees model/tokens on its own lines will
- * otherwise assume it can see a PEER'S, ask for them, and be silently answered
- * with a coarse row it reads as "that agent is running no model".
- */
-export const SESSION_TELEMETRY_NOTE =
-  "Template, model, context, tokens, current tool and start time are reported for YOUR OWN sessions only — a peer's agent is visible to you as a handle and a state, never as a template or a cost. Where a line carries two bare names, the first is the agent TEMPLATE it was launched from and the second is the model; the MODEL is always ONE unbroken token, so a name containing a space is a template and never a model. A template name is what the session was launched as and is never updated afterwards, so it may name a template that has since been renamed or deleted. A field that is absent was NOT REPORTED by the machine running that session; it is not a zero, and no template named is not a template hidden.";

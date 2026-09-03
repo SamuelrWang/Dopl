@@ -6,8 +6,8 @@
  * A `kind='link'` home-channel container is a relationship, not a tenant: it has
  * no `workspace_billing` row and never will. The person who minted the link is
  * the one who invited the traffic, so a burn inside the container lands on the
- * CONTAINER OWNER's oldest-owned standard workspace — whoever made the call.
- * Pins the four things that makes true, because each wrong answer is a
+ * CONTAINER OWNER's SOLE owned standard workspace — whoever made the call.
+ * Pins the five things that makes true, because each wrong answer is a
  * different bug:
  *   1. STANDARD target → charged to itself, byte-identical to before, and it
  *      asks nobody who owns it. This is also the migration-unapplied case
@@ -18,6 +18,9 @@
  *   3. LINK target, OWNER owns no standard workspace → UNMETERED and ALLOWED,
  *      with a LOGGED reason. Fail-open by ruling; a guest doing invited work
  *      must not read "out of credits" for a plan that is not theirs.
+ *   3b. LINK target, OWNER owns TWO → the SAME unmetered answer under its own
+ *      reason (B10, spec §7 (a)). ⚠ This case used to CHARGE, picking the
+ *      oldest and calling it the default; a refusal replaces a silent guess.
  *   4. The METER is narrowed to the PAYER. `GET /api/billing/status` carries the
  *      whole entitlements payload, so handing a peer the owner's target would
  *      print the operator's private workspace inside the relationship.
@@ -39,13 +42,13 @@ vi.mock("./workspace-billing", () => ({
 }));
 vi.mock("@/features/workspaces/server/repository", () => ({
   findActiveOwnerUserId: vi.fn(),
-  findDefaultWorkspaceForUser: vi.fn(),
+  findSoleOwnedStandardWorkspace: vi.fn(),
 }));
 
 import * as repo from "./workspace-billing";
 import {
   findActiveOwnerUserId,
-  findDefaultWorkspaceForUser,
+  findSoleOwnedStandardWorkspace,
 } from "@/features/workspaces/server/repository";
 import {
   consumeMcpCredits,
@@ -55,7 +58,7 @@ import {
 import { getWorkspaceBillingStatus } from "./status-service";
 
 const mockRepo = vi.mocked(repo);
-const mockFindDefault = vi.mocked(findDefaultWorkspaceForUser);
+const mockFindSole = vi.mocked(findSoleOwnedStandardWorkspace);
 const mockFindOwner = vi.mocked(findActiveOwnerUserId);
 
 const LINK_WS = "ws-link";
@@ -108,11 +111,13 @@ beforeEach(() => {
   mockFindOwner.mockResolvedValue(OWNER);
   // Both users own a standard workspace, so "picked the caller's" and "picked
   // the owner's" are two DIFFERENT ids rather than one id and a null.
-  mockFindDefault.mockImplementation(async (userId: string) =>
-    userId === OWNER
-      ? standardWorkspace(OWNER_WS, OWNER)
-      : standardWorkspace(GUEST_WS, GUEST)
-  );
+  mockFindSole.mockImplementation(async (userId: string) => ({
+    workspace:
+      userId === OWNER
+        ? standardWorkspace(OWNER_WS, OWNER)
+        : standardWorkspace(GUEST_WS, GUEST),
+    count: 1,
+  }));
   mockRepo.getWorkspaceBilling.mockResolvedValue(billing());
   mockRepo.countActiveMembers.mockResolvedValue(1);
   mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: true, used: 7 });
@@ -140,7 +145,7 @@ describe("resolveBillingTarget", () => {
       })
     ).toEqual({ workspaceId: OWNER_WS, payerUserId: null });
     expect(mockFindOwner).not.toHaveBeenCalled();
-    expect(mockFindDefault).not.toHaveBeenCalled();
+    expect(mockFindSole).not.toHaveBeenCalled();
   });
 
   it("link target bills the CONTAINER OWNER's workspace, not the caller's", async () => {
@@ -149,19 +154,31 @@ describe("resolveBillingTarget", () => {
       payerUserId: OWNER,
     });
     expect(mockFindOwner).toHaveBeenCalledWith(LINK_WS);
-    expect(mockFindDefault).toHaveBeenCalledWith(OWNER);
+    expect(mockFindSole).toHaveBeenCalledWith(OWNER);
     // ⚠ THE REVERT DETECTOR. The pre-2026-08-26 code asked for the caller's own
     // workspace; without this line that version passes the assertion above only
     // when the guest happens to own nothing.
-    expect(mockFindDefault).not.toHaveBeenCalledWith(GUEST);
+    expect(mockFindSole).not.toHaveBeenCalledWith(GUEST);
   });
 
   it("owner with no standard workspace → null, with a reason", async () => {
-    mockFindDefault.mockResolvedValue(null);
+    mockFindSole.mockResolvedValue({ workspace: null, count: 0 });
     expect(await resolveBillingTarget(LINK_WS, guestCaller)).toEqual({
       workspaceId: null,
       payerUserId: OWNER,
       reason: "container-owner-has-no-billing-workspace",
+    });
+  });
+
+  it("🔒 owner with TWO standard workspaces REFUSES rather than picking one", async () => {
+    // ⚠ THE REVERT DETECTOR FOR B10. The lookup this replaced answered the
+    // OLDEST owned workspace here and warned; that is a real charge against a
+    // workspace nobody named, and the only trace was a log line.
+    mockFindSole.mockResolvedValue({ workspace: null, count: 2 });
+    expect(await resolveBillingTarget(LINK_WS, guestCaller)).toEqual({
+      workspaceId: null,
+      payerUserId: OWNER,
+      reason: "container-owner-has-ambiguous-billing-workspace",
     });
   });
 
@@ -173,12 +190,12 @@ describe("resolveBillingTarget", () => {
       reason: "container-has-no-active-owner",
     });
     // Nothing to look up once there is no owner to look it up for.
-    expect(mockFindDefault).not.toHaveBeenCalled();
+    expect(mockFindSole).not.toHaveBeenCalled();
   });
 
   it("resolveBillingWorkspaceId is the same answer, narrowed", async () => {
     expect(await resolveBillingWorkspaceId(LINK_WS, guestCaller)).toBe(OWNER_WS);
-    mockFindDefault.mockResolvedValue(null);
+    mockFindSole.mockResolvedValue({ workspace: null, count: 0 });
     expect(await resolveBillingWorkspaceId(LINK_WS, guestCaller)).toBeNull();
   });
 });
@@ -230,7 +247,7 @@ describe("consumeMcpCredits — link containers", () => {
   });
 
   it("owner with no billable workspace runs UNMETERED and allowed — nothing charged", async () => {
-    mockFindDefault.mockResolvedValue(null);
+    mockFindSole.mockResolvedValue({ workspace: null, count: 0 });
 
     const res = await consumeMcpCredits(LINK_WS, guestCaller);
 
@@ -246,7 +263,7 @@ describe("consumeMcpCredits — link containers", () => {
   });
 
   it("...and SAYS SO — the fail-open is logged, never silent", async () => {
-    mockFindDefault.mockResolvedValue(null);
+    mockFindSole.mockResolvedValue({ workspace: null, count: 0 });
     await consumeMcpCredits(LINK_WS, guestCaller);
     const line = warn.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
     expect(line).toContain("container-owner-has-no-billing-workspace");
@@ -310,7 +327,7 @@ describe("getWorkspaceBillingStatus — payer-only meter", () => {
   });
 
   it("unresolvable target reports the consume path's zeroes, stamped", async () => {
-    mockFindDefault.mockResolvedValue(null);
+    mockFindSole.mockResolvedValue({ workspace: null, count: 0 });
     const status = await getWorkspaceBillingStatus(LINK_WS, {
       userId: OWNER,
       workspaceKind: "link",

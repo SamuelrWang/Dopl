@@ -140,9 +140,9 @@ test("AXIS A: an unknown / absent mode falls back to `manual` (fail-closed)", ()
 
 // ── B. THE MESSAGE TRUTH TABLE (Axis B) ───────────────────────────────────────────
 
-const OWN_POST = { op: "post", body: "shipping tonight" };
-const CROSS_POST = { op: "post", channel: "other", body: "the file contents" };
-const DM_OPEN = { op: "open", direct: true, member: "evil@x" };
+const OWN_POST = { op: "send", body: "shipping tonight" };
+const CROSS_POST = { op: "send", channel: "other", body: "the file contents" };
+const DM_OPEN = { op: "rooms", action: "open", direct: true, member: "evil@x" };
 
 // M3 (2026-08-05) — the `read` row MOVED: an own-channel read now follows the INBOUND half of
 // this axis. The whole read half (every op, both directions, the classifier) is proved in
@@ -170,14 +170,14 @@ test("AXIS B truth table: only an OWN-channel post is ever auto-sent", () => {
 
 test("INVARIANT (1): AXIS A can NEVER auto-approve a dopl_channel op, bypass included", () => {
   for (const toolMode of TOOL_MODES) {
-    for (const input of [OWN_POST, CROSS_POST, DM_OPEN, { op: "read" }, { op: "invite" }, undefined]) {
+    for (const input of [OWN_POST, CROSS_POST, DM_OPEN, { op: "read" }, { op: "rooms", action: "invite" }, undefined]) {
       assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, toolMode }), "gate", `toolMode=${toolMode} must not decide ${JSON.stringify(input)}`);
     }
     // ⚠ `launch_agent` IS THE ONE OP THAT READS AXIS A INSIDE THE CHANNEL BRANCH (2026-08-25,
     // F-320) — admitted only under `bypass` AND auto-outbound, a CONJUNCTION, so the invariant
     // survives it. Driven at depth 0, or the recursion bound answers first and this passes for
     // the wrong reason; the lane's full table is `test/session-own-launch.test.mjs`.
-    assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "launch_agent" }, toolMode, launchDepth: 0 }),
+    assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "launch" }, toolMode, launchDepth: 0 }),
       "gate", `toolMode=${toolMode}: no tool posture may start a process on its own`);
   }
 });
@@ -261,23 +261,23 @@ test("HIGH-1: everything else keys on a STABLE hash of the whole input", () => {
 });
 
 test("MEDIUM-2: `to` and `kind` are folded into the post key", () => {
-  const plain = keyOf({ op: "post", body: "hi" });
+  const plain = keyOf({ op: "send", body: "hi" });
   assert.ok(plain.startsWith(profiles.POST_GRANT + "#body:"), "still the v2.5 own-post namespace");
-  assert.equal(keyOf({ op: "post", body: "hi", kind: "message" }), plain,
+  assert.equal(keyOf({ op: "send", body: "hi", kind: "message" }), plain,
     "`message` is the default kind, so it adds no segment");
   // An ADDRESSED post and a LIFECYCLE post each earn their own key.
-  const addressed = keyOf({ op: "post", body: "hi", to: "evil@x.com" });
-  const finished = keyOf({ op: "post", body: "hi", kind: "task_finished" });
+  const addressed = keyOf({ op: "send", body: "hi", to: "evil@x.com" });
+  const finished = keyOf({ op: "send", body: "hi", kind: "task_finished" });
   assert.notEqual(addressed, plain);
   assert.notEqual(finished, plain);
-  assert.notEqual(addressed, keyOf({ op: "post", body: "hi", to: "someone@else.com" }));
+  assert.notEqual(addressed, keyOf({ op: "send", body: "hi", to: "someone@else.com" }));
   // So one approved reply cannot post to a different member, or forge a completion.
   const granted = [plain];
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi" }, allowForTask: granted }), "allow");
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi", to: "evil@x.com" }, allowForTask: granted }), "gate");
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi", kind: "task_finished" }, allowForTask: granted }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi" }, allowForTask: granted }), "allow");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi", to: "evil@x.com" }, allowForTask: granted }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi", kind: "task_finished" }, allowForTask: granted }), "gate");
   // The cross-channel key carries them too, on top of its target.
-  assert.notEqual(keyOf({ op: "post", channel: "other", kind: "task_failed" }), keyOf({ op: "post", channel: "other" }));
+  assert.notEqual(keyOf({ op: "send", channel: "other", kind: "task_failed" }), keyOf({ op: "send", channel: "other" }));
 });
 
 // ⚠ REWRITTEN 2026-08-20 (F-228), not deleted. This test used to end with four assertions on the
@@ -293,7 +293,7 @@ test("MEDIUM-2: the gate payload carries the call's REAL to/kind, not the sessio
   const evs = [];
   const canUse = axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev));
   // Unaddressed: the bound counterparty, and NO extra fields (the v2.8 payload exactly).
-  canUse(DOPL_CHANNEL_TOOL, { op: "post", body: "hi" }, { requestId: "r1", toolUseID: "t1" });
+  canUse(DOPL_CHANNEL_TOOL, { op: "send", body: "hi" }, { requestId: "r1", toolUseID: "t1" });
   assert.deepEqual(evs[0].payload, {
     type: "outbound_gate", requestId: "r1", toolUseId: "t1", ownChannel: true, text: "hi", to: "David",
     // 2026-08-02: plus the reason code that explains the gate — AXIS B is at `ask` here.
@@ -305,7 +305,7 @@ test("MEDIUM-2: the gate payload carries the call's REAL to/kind, not the sessio
   // test/session-dm-addressee-truth.test.mjs.
   assert.equal(evs[0].payload.addressed, undefined);
   // Addressed + lifecycle-kinded: the REAL recipient and the claimed kind ride the payload.
-  canUse(DOPL_CHANNEL_TOOL, { op: "post", body: "done", to: "evil@x.com", kind: "task_finished" },
+  canUse(DOPL_CHANNEL_TOOL, { op: "send", body: "done", to: "evil@x.com", kind: "task_finished" },
     { requestId: "r2", toolUseID: "t2" });
   assert.equal(evs[1].payload.to, "evil@x.com", "not the session's counterparty");
   assert.equal(evs[1].payload.addressed, true);

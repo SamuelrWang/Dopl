@@ -54,6 +54,29 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       // unresolvable one is a 404 `AGENT_TEMPLATE_NOT_FOUND`, the same code and
       // the same shape `/api/agent-templates/[id]/resolve` answers.
       template: input.template,
+      // ⚠ **THE POSTURE IS PASSED THROUGH AND IS NOT A GRANT** (T24, 2026-09-01).
+      // The two axes and the chain are a REQUEST: the operator's machine clamps
+      // each axis to that operator's own stored channel posture and REFUSES a
+      // chain the channel forbids (`main/launch-posture.js › resolveLaunch`).
+      // ⚠ THE SERVER CANNOT VERIFY THAT ANY MORE THAN IT CAN VERIFY THE TOGGLE
+      // ABOVE — the ceiling is an `electron-store` record — which is exactly why
+      // nothing here tries, and why no operator carve-out may be added.
+      tools: input.tools,
+      messages: input.messages,
+      // ⚠ NOT COLLAPSED WITH `||` — the row is a faithful record of what was
+      // sent, and since 2026-09-01 all three states are also HONOURED: `true`
+      // asks chaining on (refused where the channel forbids it), `false` asks it
+      // OFF and wins even over a channel set to ON (narrowing is never refused),
+      // and an omission inherits the channel setting. `schema-launch.ts › chain`
+      // carries the fix, which removed the flattening in
+      // `main/launch-directive-wire.js › directiveFrom`.
+      chain: input.chain,
+      // ⚠ **THE IDEMPOTENCY KEY, AND IT IS THE ONLY REASON A TIMED-OUT LAUNCH IS
+      // RETRYABLE** (2026-09-02, A10/G10). Re-sending it returns the stored
+      // directive — `result.existing` — instead of filing a second row and
+      // starting a second agent on the same work. Absent is the ordinary case and
+      // is the pre-A10 behaviour byte for byte.
+      clientMsgId: input.clientMsgId,
     });
     // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS. Nothing failed: the
     // server looked, the operator's machine is not listening, and NO ROW WAS

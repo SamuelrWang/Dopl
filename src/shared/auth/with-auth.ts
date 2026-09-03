@@ -6,6 +6,8 @@ import { getBearerJwtUser } from "./bearer-jwt";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { HttpError } from "@/shared/lib/http-error";
+import { runWithCallerScope } from "@/shared/supabase/caller-scope";
+import { sessionCallerScope, tokenCallerScope } from "./with-auth-scope";
 
 /** Per-route options for `withUserAuth` (forwarded through
  *  `withWorkspaceAuth`). ⚠ Both flags affect OAuth-bearer (agent) callers ONLY;
@@ -100,29 +102,38 @@ async function runAndLog5xx(
 /**
  * Injects the authenticated user's ID into the handler.
  *
- * - OAuth-token (remote MCP): token's user_id, and — since 2026-08-26 — the
- *   token's own `workspace_id` as `apiKeyWorkspaceId`.
- * - Session: user.id from the Supabase session.
+ * - OAuth-token (remote MCP): token's user_id, plus the credential's TWO AXES.
+ * - Session / bearer JWT: user.id, unfenced, and the subject is that user.
  *
- * 🔒 ⚠ `apiKeyWorkspaceId` HAS A PRODUCER AGAIN, AND THIS IS IT. This docblock
- * used to say it was *"always undefined"*, and it was: the `api_keys` table it
- * was written for was dropped by `20260609000000_drop_api_key_auth.sql` and
- * INVARIANTS §4 recorded the whole chain as "dead scaffolding; preserved". What
- * revived it is the CONTAINER-LOCKED CHILD CREDENTIAL (plan §4.4 B1): the
- * desktop mints a token carrying `mcp_tokens.workspace_id` for a session
- * spawned into a SHARED link container, and this line is what makes the lock
- * reach `with-workspace-auth`'s 403.
+ * 🔒 ⚠ THE CREDENTIAL CARRIES TWO INDEPENDENT AXES AND THIS IS WHERE THEY ENTER
+ * THE APP (`20260917120000_mcp_token_credential_axes`, wave B slice B3):
+ *   - `apiKeyWorkspaceId` — WHICH CONTAINER, from `mcp_tokens.container_id`.
+ *     Its producer is the CONTAINER-LOCKED CHILD CREDENTIAL (plan §4.4 B1); this
+ *     line is what makes the fence reach `with-workspace-auth`'s 403. (This
+ *     docblock used to say the field was *"always undefined"*, and it was: the
+ *     `api_keys` table it was written for was dropped by
+ *     `20260609000000_drop_api_key_auth.sql` and INVARIANTS §4 recorded the
+ *     whole chain as "dead scaffolding; preserved".)
+ *   - `credentialSubjectUserId` — WHOSE REACH, from `mcp_tokens.subject_user_id`.
+ *     The M-10 gates — `knowledge/server/service-shared.ts › canSeeBase`, the
+ *     same predicate in chats, skills and agent-templates, and the
+ *     `fromWorkspaceKey` branches in the three write services — read this axis
+ *     and ONLY this axis, through `credential-audience.ts › isSharedCredential`.
  *
- * 🔒 ⚠ AND `apiKeyWorkspaceLockKind` RIDES BESIDE IT, BECAUSE THE LOCK ANSWERS
- * TWO QUESTIONS AND ONLY ONE OF THEM IS THIS FILE'S (2026-08-27, F-336/F-333).
- * WHICH WORKSPACE is the lock; WHICH ROWS WITHIN IT is visibility. The M-10
- * gates — `knowledge/server/service-shared.ts › canSeeBase`, the same predicate
- * in chats, skills and agent-templates, and the `fromWorkspaceKey` branches in
- * the three write services — read the SECOND question off
- * `credential-audience.ts › isSharedCredential`, never off the lock directly. A
- * container-session credential is one human's session and reads what that human
- * reads; a lock with any other kind (or none) keeps the original refusal, so a
+ * 🔒 ⚠ READING ONE OFF THE OTHER IS F-336/F-333, WHICH IS WHY THEY ARE TWO
+ * FIELDS. A session credential is fenced AND personal; a shared container key is
+ * fenced AND anonymous; a device token is unfenced AND personal. `null` on the
+ * subject axis is "nobody in particular" and keeps the original refusal, so a
  * shared workspace key reintroduced later inherits the NARROW rule by default.
+ *
+ * 🔒 ⚠ AND IT ESTABLISHES THE CALLER SCOPE (`shared/supabase/caller-scope.ts`),
+ * which is what lets a repository read as the CALLER instead of as the service
+ * role once `RLS_CALLER_SCOPED_READS` is on. It is set HERE — the one wrapper
+ * every API route composes, `withWorkspaceAuth` and `withMcpAccess` included —
+ * from the credential this function has already validated. A route that
+ * authenticates some other way, or a read that runs outside a request, finds no
+ * scope and keeps the service-role client; the fence is then the TS predicate,
+ * exactly as today.
  */
 export function withUserAuth(
   handler: (
@@ -134,11 +145,12 @@ export function withUserAuth(
       // by writeback `source` tagging and per-resource agent gates
       // (`agent_write_enabled`, canvas-edit).
       agentTokenId?: string;
+      /** AXIS 1 — WHICH CONTAINER (`mcp_tokens.container_id`). `null` = unfenced. */
       apiKeyWorkspaceId?: string | null;
-      /** `mcp_tokens.workspace_lock_kind` — WHAT KIND of lock, never WHICH
-       *  workspace. ⚠ Read only through `credential-audience.ts ›
-       *  isSharedCredential`; absent reads as a shared credential. */
-      apiKeyWorkspaceLockKind?: string | null;
+      /** AXIS 2 — WHOSE REACH (`mcp_tokens.subject_user_id`). `null` = nobody in
+       *  particular. ⚠ REQUIRED, and read only through
+       *  `credential-audience.ts › isSharedCredential`. */
+      credentialSubjectUserId: string | null;
       params?: Record<string, string>;
     }
   ) => Promise<Response | NextResponse>,
@@ -169,7 +181,17 @@ export function withUserAuth(
         const jwtUser = await getBearerJwtUser(token);
         if (jwtUser) {
           return runAndLog5xx(
-            () => handler(request, { userId: jwtUser.id, params: resolvedParams }),
+            () =>
+              runWithCallerScope(sessionCallerScope(jwtUser.id), () =>
+                handler(request, {
+                  userId: jwtUser.id,
+                  // 🔒 A SIGNED-IN PERSON IS THEIR OWN SUBJECT, and unfenced. Both
+                  // axes are stated rather than defaulted: the subject axis is the
+                  // one whose ABSENCE used to widen.
+                  credentialSubjectUserId: jwtUser.id,
+                  params: resolvedParams,
+                })
+              ),
             {
               endpoint: `${request.method} ${request.nextUrl.pathname}`,
               userId: jwtUser.id,
@@ -250,18 +272,21 @@ export function withUserAuth(
 
         return runAndLog5xx(
           () =>
-            handler(request, {
-              userId: tok.userId,
-              agentTokenId: tok.tokenId,
-              // 🔒 THE CONTAINER LOCK. `null` for every ordinary credential.
-              apiKeyWorkspaceId: tok.workspaceId,
-              // 🔒 …AND ITS KIND. Dropping this line is silent and fails CLOSED:
-              // every container session reverts to being read as a shared
-              // workspace key, and the operator's agent 404s on the operator's
-              // own private rows (F-336).
-              apiKeyWorkspaceLockKind: tok.workspaceLockKind,
-              params: resolvedParams,
-            }),
+            // 🔒 The one lane whose credential axes are not constant —
+            // `with-auth-scope.ts › tokenCallerScope` reads the SUBJECT axis.
+            runWithCallerScope(tokenCallerScope(tok), () =>
+              handler(request, {
+                userId: tok.userId,
+                agentTokenId: tok.tokenId,
+                // 🔒 AXIS 1. `null` for every ordinary credential.
+                apiKeyWorkspaceId: tok.containerId,
+                // 🔒 AXIS 2. Dropping this line is silent and fails CLOSED: every
+                // session reverts to being read as a shared credential, and the
+                // operator's agent 404s on the operator's own private rows (F-336).
+                credentialSubjectUserId: tok.subjectUserId,
+                params: resolvedParams,
+              })
+            ),
           {
             endpoint: `${request.method} ${request.nextUrl.pathname}`,
             userId: tok.userId,
@@ -278,7 +303,16 @@ export function withUserAuth(
     const user = await getSessionUser(request);
     if (user) {
       return runAndLog5xx(
-        () => handler(request, { userId: user.id, params: resolvedParams }),
+        () =>
+          runWithCallerScope(sessionCallerScope(user.id), () =>
+            handler(request, {
+              userId: user.id,
+              // 🔒 Same as the bearer-JWT branch above: a cookie caller is a
+              // person, and is nobody's shared credential.
+              credentialSubjectUserId: user.id,
+              params: resolvedParams,
+            })
+          ),
         {
           endpoint: `${request.method} ${request.nextUrl.pathname}`,
           userId: user.id,

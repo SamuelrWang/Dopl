@@ -200,6 +200,35 @@ function buildSessionToolConfig(profile) {
     };
   }
 
+  // ⚠ THE FOURTH PROFILE (2026-09-02, Samuel's ruling B7) — `full`, MINUS THE SHELL, IN CODEX'S
+  // OWN WORDS. Every field is `full`'s with `ESCALATION_ITEMS` added to the floor, and that list
+  // is the SHELL PLUS THE ESCAPE THAT REACHES IT: `commandExecution` is local execution, and
+  // `sandbox_approval` is the one documented way out of the sandbox that bounds it. Denying the
+  // first without the second would be a fence with the gate beside it open — which is the same
+  // reason the Claude adapter's shell group carries `BashOutput` / `KillShell` beside `Bash`.
+  //
+  // ⚠ IT IS DERIVED FROM A LIST THIS FILE ALREADY HAS, NOT A NEW ONE. `ESCALATION_ITEMS` is the
+  // twin of Claude's `SHELL_BUILTINS` half of `ESCALATION_TOOLS`, so the two lanes narrow by the
+  // same idea in two vocabularies rather than by two hand-written lists.
+  //
+  // ⚠ `native` STAYS NULL, LIKE `full`'S. The ruling removes the SHELL; pinning a `sandbox_mode`
+  // / `approval_policy` pair here would be a second, unasked posture decision, and it would take
+  // the operator's own Axis-A pick off a profile that is otherwise `full`. The deny list is the
+  // fence, exactly as this file's own header argues for the restricted profiles.
+  //
+  // ⚠ AND THE TWO UNGROUNDED HARM GROUPS ARE UNCHANGED HERE. Delegation and persistence have no
+  // documented name to deny on this runtime (see the header), so `channel_agent` is no more
+  // proven against a Codex subagent than `read_only` is. Recorded, not papered over.
+  if (p === 'channel_agent') {
+    return {
+      builtinTools: [],
+      preApproved: [],
+      disallowedTools: UNIVERSAL_HARD_DENY.concat(ESCALATION_ITEMS),
+      doplToolsPolicy: null,
+      native: null,
+    };
+  }
+
   // full: the UNIVERSAL FLOOR and nothing else — Dopl's own admin + retired tools, openable by no
   // mode and no grant on any runtime. Everything else reaches the gate, where Axis A supervises it
   // in Codex's own mode vocabulary and the sandbox row bounds the filesystem.

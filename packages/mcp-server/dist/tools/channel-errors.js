@@ -3,7 +3,7 @@
  * `dopl_channel` API-ERROR CLASSIFICATION — ⚠ what a 4xx MEANS is read off the
  * error CODE, never guessed from the status. A bare `status === 400` branch
  * blames whichever param happened to be set, so an over-length title comes back
- * as "invite them first" and `op="invite"` then answers "already a member".
+ * as "invite them first" and `op="rooms" action="invite"` then answers "already a member".
  *
  * `DoplApiError` parses `{ error: { code, message } }` into `.code` /
  * `.apiMessage` (packages/dopl-client/src/errors.ts) and every channels-route
@@ -40,6 +40,13 @@ function classifyBadRequest(e) {
     switch (apiErrorCode(e)) {
         case "CHANNEL_ADDRESSEE_NOT_MEMBER":
             return "addressee_not_member";
+        // ⚠ **THE UNION RESOLVER'S OWN REFUSAL** (2026-09-02, B4/B8). `to` names one
+        // party in either namespace, and a name that resolves to NOBODY is a 400
+        // rather than a silent `delivery=none` — the server's own message lists the
+        // live agent handles and the channel's members, so `serverDetail` carries
+        // the remedy and this arm only has to say nothing was sent.
+        case "CHANNEL_RECIPIENT_UNRESOLVED":
+            return "recipient_unresolved";
         case "CHANNEL_TASK_NOT_IN_CHANNEL":
             return "thread_not_in_channel";
         case "CHANNEL_TASK_SELF_TARGET":
@@ -48,9 +55,8 @@ function classifyBadRequest(e) {
         case "INVALID_JSON":
         case "BAD_REQUEST":
             return "invalid_request";
-        case "CHANNEL_CHAT_ADDRESSED":
-            return "chat_addressed";
-        case "WORKSPACE_REQUIRED":
+        // ⚠ `WORKSPACE_REQUIRED` SHARED THIS ARM UNTIL 2026-09-02 and is gone with
+        // the default workspace: `workspaces/server/service.ts` raises ONE code now.
         case "WORKSPACE_INVALID":
             return "workspace";
         default:
@@ -89,4 +95,4 @@ function serverDetail(e) {
  * number to act on. ⚠ HAND-COPIED from `src/features/channels/schema.ts`, and
  * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
  */
-exports.FIELD_CAPS_NOTE = "Field caps: title <=200 characters, body <=16000, a post's summary <=200, client_msg_id <=200.";
+exports.FIELD_CAPS_NOTE = "Field caps: summary <=200 characters, body <=16000, client_msg_id <=200.";

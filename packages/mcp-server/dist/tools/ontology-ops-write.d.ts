@@ -28,6 +28,8 @@ export interface OntologyArgs {
     outcome?: string;
     tools?: string;
     expected_version?: string;
+    /** A16's response-size knob — read ops only; the writes render one line. */
+    response_format?: "concise" | "detailed";
 }
 export declare function dispatch(client: DoplClient, args: OntologyArgs, 
 /** The session identity record — only `op="anchor"` uses it (see `opAnchor`). */

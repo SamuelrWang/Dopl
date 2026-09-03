@@ -16,9 +16,12 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.CURSOR_VENDOR = exports.CODEX_VENDOR = exports.CLAUDE_VENDOR = exports.DESKTOP_SESSION_RUNTIME = void 0;
+exports.isDesktopRuntime = isDesktopRuntime;
+exports.isDesktopRun = isDesktopRun;
 exports.callerStatusLine = callerStatusLine;
 exports.sessionLines = sessionLines;
 exports.identityLine = identityLine;
+exports.boundChannelId = boundChannelId;
 const narration_1 = require("./narration");
 /**
  * Recognized `X-Dopl-Runtime` value. ⚠ HAND-COPIED from
@@ -50,16 +53,50 @@ exports.UNKNOWN_CALLER = {
     vendor: null,
     credentialKind: null,
     credentialLabel: null,
+    containerId: null,
+    sessionId: null,
 };
+/**
+ * DID THE REQUEST CARRY THE DESKTOP'S RUNTIME STAMP? ⚠ The ONE statement of that
+ * comparison — `channel-wake-guidance.ts` (what the hold may CLAIM) and
+ * `channel-hold-budget.ts` (how long the hold may BE) both branch on it, and a
+ * second copy is how the two answers drift into disagreeing about one request.
+ *
+ * ⚠ An OBSERVATION, and it gates nothing (`src/shared/auth/runtime-header.ts`
+ * grants nothing). False means UNSTAMPED — usually an external client, but also
+ * how a desktop spawn on an older build looks. Never read it as "external".
+ */
+function isDesktopRuntime(runtime) {
+    return runtime === exports.DESKTOP_SESSION_RUNTIME;
+}
+/**
+ * 🔒 **IS THIS CALL RUNNING ON THE OPERATOR'S OWN MACHINE?** — the ONE question
+ * the `wait_ms` fence asks (T85, Desktop Agent default 2026-09-02; Samuel may
+ * reverse, and reversing is this predicate).
+ *
+ * ⚠ **TWO MARKS, AND THE SECOND IS WHY THIS IS ALLOWED TO GATE.**
+ * {@link isDesktopRuntime} reads a HEADER, which a `full`-profile agent with
+ * Bash can send or omit at will; {@link CallerIdentity.containerId} rides the
+ * TOKEN ROW, and only the desktop's container minter sets it. Either mark alone
+ * is enough — an ordinary device-token spawn carries the header and no lock, a
+ * container session carries both — and neither can be forged into a WIDER
+ * answer, because both only ever add a refusal.
+ *
+ * ⚠ FALSE MEANS "NOT KNOWN TO BE DESKTOP-RUN", never "external". An older
+ * desktop build stamps no runtime and holds no container lock, and it keeps the
+ * hold — which is the pre-2026-09-02 behaviour and the safe direction: the cost
+ * is a wasted long-poll, not a lost message.
+ */
+function isDesktopRun(identity) {
+    return isDesktopRuntime(identity.runtime) || identity.containerId !== null;
+}
 /**
  * ⚠ What the server SAW in the runtime header, never what it concluded.
  * `unstamped` means the stamp was absent — usually an external client, but also
  * how a desktop spawn on an older build looks.
  */
 function runtimeWord(identity) {
-    return identity.runtime === exports.DESKTOP_SESSION_RUNTIME
-        ? exports.DESKTOP_SESSION_RUNTIME
-        : "unstamped";
+    return isDesktopRuntime(identity.runtime) ? exports.DESKTOP_SESSION_RUNTIME : "unstamped";
 }
 /**
  * The `_dopl_status` caller line — ⚠ terse on purpose: this rides EVERY
@@ -130,3 +167,21 @@ function identityLine(identity, self) {
     }
     return `- You are: UNKNOWN — this connection could not resolve your user id, so nothing below identifies you. Reconnect before acting on identity.`;
 }
+/**
+ * ⚠ THE ROOM THIS SESSION IS STANDING IN, from `X-Dopl-Session-Id`'s
+ * `<channelId>:<tail>` head — the SAME split
+ * `src/features/knowledge/server/service-audience.ts › narrowToSessionChannel`
+ * makes, and the same uuid guard, because a client that is not the desktop can
+ * send an opaque handle carrying a colon that names no channel at all.
+ *
+ * ⚠ IT ESTABLISHES NOTHING AND GATES NOTHING. The header is a documented
+ * NON-authorization signal (§10) and this only tells an agent which room it was
+ * spawned into — a fact it would otherwise spend a call discovering. Null
+ * whenever the header was absent, unshaped, or not uuid-headed.
+ */
+function boundChannelId(identity) {
+    const head = identity.sessionId?.split(":")[0];
+    return head && UUID_RE.test(head) ? head : null;
+}
+/** ⚠ Shape only — a uuid here is a ROUTING hint, never a proven channel. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

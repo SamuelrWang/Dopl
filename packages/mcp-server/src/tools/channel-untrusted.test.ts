@@ -4,7 +4,7 @@
  * (below) and the read result's thread-legend title (bottom of this file).
  *
  * ⚠ `await`'s FAILED-MID-HOLD branch is the one place that splices upstream
- * text outside `UNTRUSTED_BODY_HEADER`, and "our own server's error" is a claim
+ * text no framing covers, and "our own server's error" is a claim
  * about the SOURCE, not the CONTENT — a 400 echoing a rejected field, a proxy
  * error page, or a not-found naming a counterparty ref all carry influenced text.
  *
@@ -18,7 +18,8 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opAwait } from "./channel-ops-await";
+import { HOLD_DEFAULT_MS } from "./channel-hold-budget";
+import { opHold } from "./channel-ops-hold";
 import { opRead } from "./channel-ops-read";
 
 type AwaitSpy = (
@@ -54,7 +55,14 @@ async function failMidHold(message: string): Promise<string> {
     clock.advance(opts.timeoutMs ?? 0);
     return { messages: [], timedOut: true };
   });
-  const res = await opAwait(stubClient({ awaitChannelMessages }), "general", 7);
+  // ⚠ Explicit hold: an unstamped caller's DEFAULT is one inner poll long
+  // (T03), and this branch needs a SECOND poll to fail on.
+  const res = await opHold(
+    stubClient({ awaitChannelMessages }),
+    "general",
+    7,
+    HOLD_DEFAULT_MS,
+  );
   return res.content[0].text;
 }
 
@@ -115,7 +123,7 @@ describe("describeFailure — untrusted upstream text in an await result", () =>
 /**
  * THE SAME HOLE ONE LINE LOWER: the thread legend's TITLE.
  *
- * ⚠ `UNTRUSTED_BODY_HEADER` disclaims message BODIES; the legend sits under it
+ * ⚠ The description's SECURITY paragraph disclaims message BODIES; the legend sits outside it
  * and reads as the server's own narration. The title is peer-typed —
  * "server-stamped" says where the bytes were copied from, not who wrote them —
  * and runs to 200 chars with interior newlines allowed: room to close the line
@@ -199,7 +207,7 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     expect(text.split("\n").filter((l) => l.includes("SYSTEM"))).toHaveLength(1);
     expect(text).not.toContain("`attacker-thread`");
     expect(line).toContain(`\`${THREAD_ID}\``);
-    expect(line).toContain('op="post"');
+    expect(line).toContain('op="send"');
   });
 
   it("a title made only of markup renders as NO title — the L3 tell, not a broken span", async () => {
@@ -213,6 +221,6 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     const span = titleSpan(line)!;
     expect(span.length).toBeLessThanOrEqual(160);
     expect(span.endsWith("...")).toBe(true);
-    expect(line).toContain('op="post"');
+    expect(line).toContain('op="send"');
   });
 });

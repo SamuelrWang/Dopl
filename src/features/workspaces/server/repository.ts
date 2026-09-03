@@ -44,21 +44,6 @@ export async function findWorkspaceById(workspaceId: string): Promise<Workspace 
   return data ? mapWorkspaceRow(data as WorkspaceRow) : null;
 }
 
-export async function findWorkspaceBySlug(
-  ownerId: string,
-  slug: string
-): Promise<Workspace | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("workspaces")
-    .select(WORKSPACE_COLS)
-    .eq("owner_id", ownerId)
-    .eq("slug", slug)
-    .maybeSingle();
-  if (error) throw error;
-  return data ? mapWorkspaceRow(data as WorkspaceRow) : null;
-}
-
 /**
  * Primary routing lookup. `public_id` is globally unique, so no
  * owner/membership filter here — authz is `resolveMembershipOrThrow`.
@@ -81,50 +66,68 @@ export async function findWorkspaceByPublicId(
  * ⚠ Returns null on zero OR 2+ matches: slug uniqueness is not enforced
  * post-publicId, so an ambiguous legacy URL must 404 rather than route to the
  * wrong workspace. Canonical `{slug}-{publicId}` URLs bypass this entirely.
+ *
+ * ⚠ **STANDARD KINDS ONLY (2026-09-02, F-561).** `link` and `personal`
+ * containers are memberships with slugs too, and neither has ever had a URL of
+ * this shape — counting them makes a real workspace's own legacy URL ambiguous
+ * (2 matches → `null` → 404) whenever a hidden container beside it shares the
+ * slug. `link` has carried that since `20260823150000`; `20260920120000` mints
+ * a second such kind for every user. ⚠ POSITIVE form (§4A, F-295).
  */
 export async function findMemberWorkspaceBySlug(
   userId: string,
   slug: string
 ): Promise<Workspace | null> {
   const memberships = await listWorkspacesForUser(userId);
-  const matches = memberships.filter((c) => c.slug === slug);
+  const matches = memberships
+    .filter(isStandardWorkspace)
+    .filter((c) => c.slug === slug);
   if (matches.length !== 1) return null;
   return matches[0];
 }
 
 /**
- * Oldest-owned STANDARD workspace: literal slug "default" (legacy), else oldest
- * by created_at ASC. ⚠ Link containers are never candidates — they carry no
- * plan and must not become anyone's default.
- *
- * ⚠ OWNERSHIP-based, diverging from active membership. THREE sanctioned uses:
- * the signup bootstrap (`ensureDefaultWorkspace`), the Stripe webhook
- * grandfather path, and the link-workspace billing reroute
- * (`billing/server/credits-service.ts`). MUST NOT be used for request auth —
- * `resolveActiveWorkspace` resolves off active memberships so an owned
- * workspace cannot swallow another's request.
+ * The answer to "which standard workspace does this person unambiguously own",
+ * and the COUNT the ambiguity is judged from — one read, both facts.
  */
-export async function findDefaultWorkspaceForUser(
-  userId: string
-): Promise<Workspace | null> {
-  const legacy = await findWorkspaceBySlug(userId, "default");
-  if (legacy && isStandardWorkspace(legacy)) return legacy;
-
-  // ⚠ No `.limit(1)`: the kind filter runs in code, so the oldest row may be a
-  // link container the pick has to skip. The read is ceiling-bounded instead
-  // (`OWNED_WORKSPACE_LIMIT`).
-  const owned = await listWorkspacesOwnedBy(userId);
-  return owned.find(isStandardWorkspace) ?? null;
+export interface SoleOwnedStandardWorkspace {
+  /** The single owned standard workspace. `null` whenever `count !== 1`. */
+  workspace: Workspace | null;
+  /** How many STANDARD workspaces the user owns. `0` and `2+` both refuse. */
+  count: number;
 }
 
 /**
- * STANDARD workspaces OWNED by a user. The Stripe webhook's grandfather path
- * uses this to detect ambiguous legacy-subscription mappings (2+ owned → warn);
- * link containers must not make an unambiguous mapping look ambiguous.
+ * The caller's SOLE owned standard workspace — **billing's question and only
+ * billing's** (spec §7 answer (a), the one option that changes nobody's bill).
+ *
+ * 🔒 **THE DERIVED DEFAULT IS DELETED** (Samuel's ruling B10). This is what is
+ * LEFT of the lookup that answered "the default": the legacy `slug='default'`
+ * branch and the oldest-owned pick are gone, and what remains REFUSES rather
+ * than guessing — the old shape picked the oldest of N and warned, and a wrong
+ * guess there is a charge against a workspace nobody chose. `count` comes back
+ * so a caller can name WHICH refusal (nothing to bill vs. too many) without a
+ * second read.
+ *
+ * ⚠ TWO CALLERS, BOTH ABOUT MONEY — the Stripe grandfather path and the
+ * container burn reroute. **Tenancy never calls it**: every "where am I" answer
+ * is the caller's personal container.
+ * ⚠ OWNERSHIP-based, diverging from active membership, and that is right for a
+ * bill — the plan hangs off the owner. It MUST NOT be used for request auth.
+ * ⚠ Containers are never candidates (neither kind carries a plan), through the
+ * POSITIVE `isStandardWorkspace` (§4A, F-295).
  */
-export async function countWorkspacesOwnedBy(userId: string): Promise<number> {
-  const owned = await listWorkspacesOwnedBy(userId);
-  return owned.filter(isStandardWorkspace).length;
+export async function findSoleOwnedStandardWorkspace(
+  userId: string
+): Promise<SoleOwnedStandardWorkspace> {
+  // ⚠ No `.limit(1)`: the kind filter runs in code, so the rows read may hold
+  // containers the count has to skip. The read is ceiling-bounded instead
+  // (`OWNED_WORKSPACE_LIMIT`), and "sole" needs the count anyway.
+  const owned = (await listWorkspacesOwnedBy(userId)).filter(isStandardWorkspace);
+  return {
+    workspace: owned.length === 1 ? owned[0] : null,
+    count: owned.length,
+  };
 }
 
 /**
@@ -140,13 +143,12 @@ const OWNED_WORKSPACE_LIMIT = 200;
  * caller's.
  *
  * ⚠ BOUNDED, and the ordering is what makes the bound safe: `created_at ASC`
- * means the ceiling drops the NEWEST rows, and every caller wants the oldest —
- * `findDefaultWorkspaceForUser` reads `[0]` of the standard ones, so its answer
- * is identical with or without the limit. `countWorkspacesOwnedBy` only asks
- * "more than one?".
+ * means the ceiling drops the NEWEST rows, and the sole caller asks only "is
+ * there exactly one standard row here?" — an account that owns 200 workspaces
+ * is ambiguous under any prefix of them.
  *
- * ⚠ NOT a cold path any more: `findDefaultWorkspaceForUser` is on the MCP
- * credit-consume reroute, which runs once per tool call for every home-channel
+ * ⚠ NOT a cold path: `findSoleOwnedStandardWorkspace` is on the MCP
+ * credit-consume reroute, which runs once per tool call for every container
  * agent. An unbounded scan there is a per-call full read of one owner's
  * workspaces.
  */
@@ -400,26 +402,33 @@ export async function insertWorkspaceWithOwnerMembership(
 }
 
 /**
- * Race-proof SELECT-or-INSERT of the default workspace via the
- * `ensure_default_workspace` RPC (migration 20260802200000): a per-owner
- * transaction-scoped advisory lock serializes concurrent callers so two cold
- * boots cannot double-create "Untitled". `created` = THIS call made it.
+ * Race-proof SELECT-or-INSERT of the caller's PERSONAL CONTAINER via the
+ * `ensure_personal_container` RPC (migration 20260920120000): a per-owner
+ * advisory lock serializes concurrent callers so two cold boots cannot mint two
+ * containers. `created` = THIS call made it.
+ *
+ * ⚠ TAKES ONLY AN OWNER, so it takes no `CreateWorkspaceArgs`: the name and
+ * `created_at` are the DATABASE's, minted from the row this container replaces
+ * (`personal_container_origin_of`, migration 20260922120000) so nothing is
+ * invented, and the slug is the constant `personal`.
+ *
+ * ⚠ `kind` COMES BACK AND MUST. `mapWorkspaceRow` reads an ABSENT kind as
+ * `standard` (§4A), which would put a personal container in the rail; the RPC
+ * returns the column for exactly this reason.
  */
-export async function ensureDefaultWorkspaceRow(
-  args: CreateWorkspaceArgs
+export async function ensurePersonalContainerRow(
+  ownerId: string
 ): Promise<{ workspace: Workspace; created: boolean }> {
   const db = supabaseAdmin();
-  const { data, error } = await db.rpc("ensure_default_workspace", {
-    p_owner_id: args.ownerId,
-    p_name: args.name,
-    p_slug: args.slug,
+  const { data, error } = await db.rpc("ensure_personal_container", {
+    p_owner_id: ownerId,
     p_public_id: generatePublicId(),
   });
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as
     | (WorkspaceRow & { created: boolean })
     | undefined;
-  if (!row) throw new Error("ensure_default_workspace returned no row");
+  if (!row) throw new Error("ensure_personal_container returned no row");
   return { workspace: mapWorkspaceRow(row), created: row.created };
 }
 

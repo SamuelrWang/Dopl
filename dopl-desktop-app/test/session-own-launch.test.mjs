@@ -1,13 +1,13 @@
 // THE OWN-MACHINE LAUNCH LANE (Samuel's ruling, 2026-08-25) — F-320's fix, driven end to end.
 //
 // THE DEFECT, as the orchestrator that filed it received it. A windowless desktop-run session
-// called `dopl_channel(op="launch_agent")` to put its workers in visible windows and was told:
+// called `dopl_channel(op="manage", action="launch")` to put its workers in visible windows and was told:
 // "This tool needs a permission prompt and this session has no surface to show one on, so the
 // call was refused automatically." The op was on NO lane, so it fell through to the Axis-A gate,
 // and a windowless session answers a gate with `deny` — in EVERY posture, with nothing an
 // operator could set. The remedy the refusal named (widen the tool posture) could not work.
 //
-// THE RULE. An own-channel `launch_agent` is admitted under BOTH axes together — tools `bypass`
+// THE RULE. An own-channel `manage(action="launch")` is admitted under BOTH axes together — tools `bypass`
 // AND messages auto-outbound — and it carries a RECURSION BOUND: a session may ask only while it
 // is under `MAX_LAUNCH_DEPTH`, which only the operator's own New Agent button sets to 0.
 // The whole argument (and why this is not the outbound lane) is `main/session-own-launch.js`.
@@ -41,7 +41,7 @@ const { GATE_REASONS } = require(M("session-gate-reason.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
 const CH = "ch1";
-const LAUNCH = { op: "launch_agent", goal: "staff this channel" };
+const LAUNCH = { op: "manage", action: "launch", goal: "staff this channel" };
 const decide = (over) => profiles.grantDecision({ profile: "full", channelId: CH, ...over });
 const detail = (over) => profiles.grantDecisionDetail({ profile: "full", channelId: CH, ...over });
 const launchArgs = (over) => ({ toolName: DOPL_CHANNEL_TOOL, input: LAUNCH, launchDepth: 0, ...over });
@@ -53,34 +53,41 @@ const NOT_AUTO_OUT = MESSAGE_MODES.filter((m) => !AUTO_OUT.includes(m));
 
 // ── A. THE LANE MODULE ITSELF (pure) ──────────────────────────────────────────────
 
-test("the op list is EXACTLY `launch_agent`, and it is an ALLOW list of one", () => {
-  assert.deepEqual(lane.OWN_MACHINE_LAUNCH_OPS, ["launch_agent"]);
-  // ⚠ THE ADMISSION IS NAMED, NEVER INFERRED: an op in no list gates in every posture, which is
+test("the key is EXACTLY `manage.launch`, and it is an ALLOW list of one", () => {
+  assert.deepEqual(lane.OWN_MACHINE_LAUNCH_OPS, ["manage.launch"]);
+  // ⚠ THE ADMISSION IS NAMED, NEVER INFERRED: a call in no list gates in every posture, which is
   // the safe direction, so this must never grow by pattern-match or by prefix.
-  for (const op of ["launch", "launch_agents", "spawn_agent", "post", "open", "invite", ""]) {
+  for (const op of ["launch", "launch_agent", "spawn_agent", "send", "rooms", "manage", ""]) {
     assert.equal(lane.isOwnMachineLaunch({ op }, CH), false, `${op} must not reach the lane`);
+  }
+  // ⚠ AND THE BARE OP IS NOT ENOUGH (2026-09-02, F-578): `manage` also carries `end`, `rename`,
+  // `posture` and `direct`, and admitting the dispatcher would hand a windowless session all
+  // five under a ruling written for one.
+  for (const action of ["end", "rename", "posture", "direct", ""]) {
+    assert.equal(lane.isOwnMachineLaunch({ op: "manage", action }, CH), false,
+      `manage.${action} must not reach the LAUNCH lane`);
   }
 });
 
 test("the lane is DISJOINT from the outbound and the read halves of Axis B", () => {
   // F-320's own argument: a launch is not outbound CONTENT and is not a read. Three lanes.
-  for (const op of lane.OWN_MACHINE_LAUNCH_OPS) {
-    assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes(op), `${op} is not outbound content`);
-    assert.ok(!profiles.OWN_CHANNEL_READ_OPS.includes(op), `${op} is not a read`);
+  for (const key of lane.OWN_MACHINE_LAUNCH_OPS) {
+    assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes(key), `${key} is not outbound content`);
+    assert.ok(!profiles.OWN_CHANNEL_READ_OPS.includes(key), `${key} is not a read`);
   }
 });
 
 test("the scope is the CHANNEL, BY ID — a slug is another channel, exactly like a post", () => {
-  assert.equal(lane.isOwnMachineLaunch({ op: "launch_agent" }, CH), true, "unset -> own channel");
-  assert.equal(lane.isOwnMachineLaunch({ op: "launch_agent", channel: "" }, CH), true);
-  assert.equal(lane.isOwnMachineLaunch({ op: "launch_agent", channel: CH }, CH), true);
-  assert.equal(lane.isOwnMachineLaunch({ op: "launch_agent", channel: "my-slug" }, CH), false);
-  assert.equal(lane.isOwnMachineLaunch({ op: "launch_agent", channel: "ch2" }, CH), false);
+  assert.equal(lane.isOwnMachineLaunch({ op: "manage", action: "launch" }, CH), true, "unset -> own channel");
+  assert.equal(lane.isOwnMachineLaunch({ op: "manage", action: "launch", channel: "" }, CH), true);
+  assert.equal(lane.isOwnMachineLaunch({ op: "manage", action: "launch", channel: CH }, CH), true);
+  assert.equal(lane.isOwnMachineLaunch({ op: "manage", action: "launch", channel: "my-slug" }, CH), false);
+  assert.equal(lane.isOwnMachineLaunch({ op: "manage", action: "launch", channel: "ch2" }, CH), false);
   // An agent must not be able to staff a room it is not in — and that includes gating in EVERY
   // posture, not merely classifying differently.
   for (const toolMode of TOOL_MODES) {
     for (const messageMode of MESSAGE_MODES) {
-      assert.equal(decide(launchArgs({ input: { op: "launch_agent", channel: "ch2" }, toolMode, messageMode })),
+      assert.equal(decide(launchArgs({ input: { op: "manage", action: "launch", channel: "ch2" }, toolMode, messageMode })),
         "gate", `${toolMode}/${messageMode}: a cross-channel launch always gates`);
     }
   }
@@ -166,8 +173,8 @@ test("...and it says WHY: `launch-depth-capped`, never `hard-denied`", () => {
 test("THE DEPTH TOUCHES THE LAUNCH LANE AND NOTHING ELSE", () => {
   // Every other channel op decides identically at depth 0 and at the cap: the bound is about how
   // many agents come into existence, not about what an agent may say or read.
-  const others = [{ op: "post", body: "hi" }, { op: "read" }, { op: "milestone", body: "step" },
-    { op: "create_thread", title: "t", body: "b" }, { op: "open" }, { op: "invite" }];
+  const others = [{ op: "send", body: "hi" }, { op: "read" }, { op: "send", kind: "milestone", body: "step" },
+    { op: "send", thread: "new", title: "t", body: "b" }, { op: "rooms", action: "open" }, { op: "rooms", action: "invite" }];
   for (const input of others) {
     for (const toolMode of TOOL_MODES) {
       for (const messageMode of MESSAGE_MODES) {
@@ -297,7 +304,7 @@ test("exactly ONE lane in main/ claims depth 0, and it is the New Agent button",
 
 test("the AGENT-DRIVEN spawn lanes pass NO depth, so their sessions are at the cap", () => {
   // ⚠ THE SILENCE IS LOAD-BEARING, which is why it is pinned. `launch-directives.js › spawn` is
-  // the lane an orchestrator's own `launch_agent` comes back through; if it ever claimed a depth,
+  // the lane an orchestrator's own launch comes back through; if it ever claimed a depth,
   // an agent could staff an agent that staffs an agent, forever.
   for (const f of ["launch-directives.js", "trigger.js"]) {
     assert.ok(!/launchDepth/.test(read(f)), `${f} must not set a launch depth`);

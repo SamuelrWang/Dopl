@@ -10,24 +10,29 @@
  *   ⚠ "nobody was woken by it", said about a THREADED post — three routes run
  *     before `classify` (listener-messages.js) and none reads `to_user_id`: a
  *     first-class thread tag feeds the counterparty's live session directly.
- *   ⚠ "NONE of the messages above is addressed to you … do not answer them" —
- *     the canonical reply here is UNADDRESSED (`channel-post.js › postResult`,
- *     `prompt-framing.js › deliveryCall`), so this tells a requester its own
- *     answer is somebody else's traffic.
+ *
+ * ⚠ THE THIRD CLAIM — the `HOLD_UNNAMED_NOTICE`, which must not tell a
+ * requester its own answer is somebody else's traffic — moved to
+ * `channel-addressing-hold-notice.test.ts` on 2026-09-02, at the §1 cap. The
+ * seam is SUBJECT: what a WRITE reports about who it reached stays here; what a
+ * HOLD says about a page somebody else wrote is over there.
  */
 
 import { readFileSync } from "node:fs";
-import { describe, it, expect, vi, afterEach } from "vitest";
-import type { DoplClient } from "@dopl/client";
+import { describe, it, expect, vi } from "vitest";
+import type { ChannelMessage, DoplClient } from "@dopl/client";
 import {
-  AWAIT_UNNAMED_NOTICE,
   GROUP_CHANNEL_MIN_MEMBERS,
-  routesToASession,
   rosterAddressingRule,
-  unaddressedPostNote,
 } from "./channel-addressing";
+// ⚠ THE ONE PREDICATE (T10, 2026-09-02). `routesToASession` was a DUPLICATE of
+// this; deleting it deleted a second regex for "is this a real thread", not a
+// rule. Fact 3 of `channel-addressing.ts` is unchanged and is still why the
+// distinction matters — the write and read lanes now share one definition.
+import { isFirstClassThreadId } from "./channel-render-threads";
+import { threadFacts } from "./channel-post-linkage";
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
-import { opAwait } from "./channel-ops-await";
 import { opMembers } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
 
@@ -65,13 +70,8 @@ function postClient(
   return {
     listChannels: vi.fn(async () => [{ ...CHANNEL, ...channel }]),
     postChannelMessage: vi.fn(async () => ({
-      id: "m1",
-      seq: 12,
-      kind: "message",
-      metadata,
-      authorUserId: ME,
+      id: "m1", seq: 12, kind: "message", metadata, authorUserId: ME,
     })),
-    listChannelThreads: vi.fn(async () => ({ threads: [], truncated: false })),
   } as unknown as DoplClient;
 }
 
@@ -95,9 +95,7 @@ describe("the group-channel threshold is not restated per lane", () => {
     expect(declared, "the web constant moved or was renamed").not.toBeNull();
     expect(Number(declared![1])).toBe(GROUP_CHANNEL_MIN_MEMBERS);
   });
-
 });
-
 
 describe("the removed named-agent surface is ABSENT from the published shape", () => {
   it("declares no to_agent / to_agents / as_agent / participants / agent / status", () => {
@@ -116,10 +114,19 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
     // to `propose_close` — and both left with thread closing (wiring plan
     // Phase 4, 2026-08-18), which is the rule stated the other way round: a
     // teaching refusal is only honest while there is something to teach.
+    // ⚠ SIX, NOT SEVEN, SINCE 2026-09-01. `rename_agent` IS ACCEPTED AGAIN and is
+    // a different verb: the retired one changed a named agent's channel-visible
+    // ADDRESS; this one sets a LOCAL DISPLAY LABEL stored on one machine
+    // (`main/agent-names.js`), reaching no server and addressing nobody — the
+    // same verb the in-process `mcp__dopl_agents__rename_agent` has carried since
+    // 2026-08-31. The argument in full is on
+    // `channel-law.test.ts › REMOVED_VOCABULARY`'s lifecycle entry.
+    // ⚠ WHAT THIS FILE GUARDS IS UNCHANGED AND IS ASSERTED HARDER, not relaxed:
+    // the case below still requires that NO param named `agent` exists, and the
+    // addressing contract still has exactly one address — `@agent-<id>`.
     for (const op of [
       "agents",
       "summon_agent",
-      "rename_agent",
       "set_agent_status",
       "disengage_agent",
       "join_thread",
@@ -132,30 +139,65 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
     }
   });
 
-  it("still accepts every op that SURVIVED, so the rollback took nothing extra", () => {
-    for (const op of [
-      "list",
-      "open",
-      "invite",
-      "post",
-      "milestone",
-      "read",
-      "await",
-      "members",
-      "list_threads",
-      "get_thread",
-      "create_thread",
-      // ⚠ `propose_close` and `close_thread` were on this list until thread
-      // closing was removed (wiring plan Phase 4, 2026-08-18). `close_thread`
-      // was kept in the enum ON PURPOSE so an older agent got a teaching
-      // refusal rather than an opaque enum error — a trade that only pays
-      // while there is something to do instead.
-      "set_thread_mode",
-    ]) {
+  /**
+   * ⚠ **THE REVIVED WORD DOES NOT REVIVE THE SURFACE**, and this is the case that
+   * says so. The retired `rename_agent` belonged to a model where an agent was a
+   * named channel participant and its name ROUTED; the property that mattered was
+   * never the spelling, it was that no name is an address.
+   */
+  it("the revived rename brought back NO addressing surface", () => {
+    // ⚠ B8: `op="rename_agent"` is `op="manage" action="rename"`, and slice B16
+    // retired the old spelling for good — it parsed for one release so its
+    // redirect could run. ⚠ RE-POINTED: `agent_id` folded into the ONE recipient
+    // field, so the instance renamed is `to` and `name` pre-existed — still no
+    // param of its own, and `agent` is still banned by the case above.
+    expect(CHANNEL_INPUT_SHAPE.op.safeParse("rename_agent").success).toBe(false);
+    expect(CHANNEL_INPUT_SHAPE.op.safeParse("manage").success).toBe(true);
+    expect(CHANNEL_INPUT_SHAPE.action.safeParse("rename").success).toBe(true);
+    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("to");
+    expect(CHANNEL_INPUT_SHAPE).toHaveProperty("name");
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("agent");
+    expect(CHANNEL_INPUT_SHAPE).not.toHaveProperty("as_agent");
+  });
+
+  /**
+   * ⚠ **THE ROLLBACK TOOK NO CAPABILITY, AND THIS IS THE CASE THAT SAYS SO** —
+   * restated at slice B16 as a pair of live words rather than a list of parsing
+   * names. Every concept the named-agent surface had is still reachable; what
+   * changed twice is only its SPELLING (B8 collapsed 23 ops to 5, B16 stopped
+   * the old spellings parsing). Asserting the old names still parsed would now
+   * assert the compatibility window, which is the thing that closed.
+   */
+  it("every surviving CONCEPT is still reachable, under a live op", () => {
+    const reachable: ReadonlyArray<readonly [string, string | null]> = [
+      ["send", null], //          post · milestone · escalate · create_thread
+      ["read", null], //          read · await (`wait_ms`) · get_thread (`thread=`)
+      ["status", null], //        read_sessions · read_directions
+      ["rooms", "list"],
+      ["rooms", "open"],
+      ["rooms", "invite"],
+      ["rooms", "members"],
+      ["rooms", "threads"],
+      ["rooms", "thread_mode"],
+      ["rooms", "update"],
+      ["rooms", "help"],
+      ["manage", "launch"],
+      ["manage", "end"],
+      ["manage", "rename"],
+      ["manage", "posture"],
+      ["manage", "direct"],
+    ];
+    for (const [op, action] of reachable) {
       expect(
         CHANNEL_INPUT_SHAPE.op.safeParse(op).success,
         `op="${op}" was lost`,
       ).toBe(true);
+      if (action !== null) {
+        expect(
+          CHANNEL_INPUT_SHAPE.action.safeParse(action).success,
+          `action="${action}" was lost`,
+        ).toBe(true);
+      }
     }
   });
 
@@ -175,26 +217,50 @@ describe("the removed named-agent surface is ABSENT from the published shape", (
 
 // ── which thread tags actually route ─────────────────────────────────
 
-describe("routesToASession — first-class only", () => {
+describe("isFirstClassThreadId — first-class only, and ONE definition of it", () => {
   it("is true for a uuid thread id and false for everything else", () => {
     // ⚠ Mirrors `firstClassTaskId` (targeting.js): pre-classify routes call it
     // and it returns '' for a legacy id, so only a uuid reaches a session.
-    expect(routesToASession(UUID)).toBe(true);
-    expect(routesToASession(UUID.toUpperCase())).toBe(true);
-    expect(routesToASession(LEGACY)).toBe(false);
-    expect(routesToASession(undefined)).toBe(false);
-    expect(routesToASession("")).toBe(false);
-    expect(routesToASession(`${UUID} `)).toBe(false);
+    expect(isFirstClassThreadId(UUID)).toBe(true);
+    expect(isFirstClassThreadId(UUID.toUpperCase())).toBe(true);
+    expect(isFirstClassThreadId(LEGACY)).toBe(false);
+    expect(isFirstClassThreadId("")).toBe(false);
+    expect(isFirstClassThreadId(`${UUID} `)).toBe(false);
+  });
+
+  it("⚠ AND THE WRITE LANE DECIDES `landed=` WITH THAT SAME FUNCTION", () => {
+    // ⚠ TWO REGEXES FOR "IS THIS A REAL THREAD" IS HOW THE WRITE AND READ LANES
+    // LEARN TO DISAGREE ABOUT ONE ID. The ABSENT case is expressed here rather
+    // than as an argument: an id nothing carries is a ROOM post, or a DROP.
+    const at = (taskId?: string) =>
+      ({ id: "m", seq: 1, kind: "message", metadata: taskId ? { taskId } : {} }) as unknown as ChannelMessage;
+    expect(threadFacts(at(UUID), UUID).landed).toBe("thread");
+    expect(threadFacts(at(LEGACY), LEGACY).landed).toBe("adhoc");
+    expect(threadFacts(at(), undefined).landed).toBe("room");
+    expect(threadFacts(at(), UUID).landed).toBe("dropped");
   });
 });
 
 // ── the post note ────────────────────────────────────────────────────
+//
+// ⚠ `unaddressedPostNote()` IS GONE (T12, 2026-09-02) — the "NOT ADDRESSED"
+// paragraph and its threaded variant, spliced under every post that named
+// nobody. The RULE it stated is true on every call, so it is stated once in
+// `channel-doctrine.ts`; the post result carries `addressed=no`, plus `landed=`
+// beside it. Each case below keeps both halves: the paragraph is out of the
+// result, and the claim it made is still shipped.
 
-describe("unaddressedPostNote", () => {
-  const base = { ref: "chan-1", isDirect: false, landedThread: undefined };
+/** An UNADDRESSED post's result line. ⚠ `addressed` is read off `toUserId`. */
+const bare = async (channel: Record<string, unknown>, metadata: Record<string, unknown> = {}) =>
+  (await opPost(postClient(channel, metadata), "general", "anyone free?")).content[0].text;
 
-  it("says nothing ONLY when the caller addressed someone", () => {
-    expect(unaddressedPostNote({ ...base, addressed: true })).toBeNull();
+describe("addressed= / landed= — what the note became", () => {
+  it("reports the addressing EITHER WAY, where the note was absent on success", async () => {
+    // ⚠ INVERTED BY T12, AND IT IS THE POINT OF THE FIELD: the old note was
+    // ABSENT on an addressed post, so "nothing said" carried the good news. A
+    // field is present either way, so a reader can no longer confuse "addressed"
+    // with "the narration was trimmed".
+    expect(await bare({ isDirect: false })).toContain("addressed=no");
   });
 
   /**
@@ -204,80 +270,80 @@ describe("unaddressedPostNote", () => {
    * nobody's agent like any other, and staying quiet about it is exactly the
    * invisible-delivery failure this module exists to prevent.
    */
-  it("WARNS in a direct channel too — nothing addresses a post for you now", () => {
-    const note = unaddressedPostNote({ ...base, isDirect: true, addressed: false });
-    expect(note).toContain("NOT ADDRESSED");
-    expect(note).toContain("That holds in a DIRECT (1:1) message too");
+  it("WARNS in a direct channel too — nothing addresses a post for you now", async () => {
+    expect(await bare({ isDirect: true })).toContain("addressed=no");
+    // ⚠ The DM clause is what a caller told otherwise acts on, by leaving `to`
+    // off and reaching nobody. It survives in the roster line and the doctrine.
+    expect(rosterAddressingRule("general", 2)).toContain("a DIRECT (1:1) message channel included");
+    expect(CHANNEL_DOCTRINE).toContain("in a room of two or of ten");
   });
 
-  it("names the AUTHOR KIND as the reason, never the member count", () => {
-    const note = unaddressedPostNote({ ...base, addressed: false })!;
-    expect(note).toContain("NOT ADDRESSED");
-    expect(note).toContain("from an AGENT is never taken as an implicit request");
-    // ⚠ A two-member channel is NOT one where an unaddressed message reaches
-    // nobody — that claim produces duplicate requests.
-    expect(note).not.toContain("nobody was woken");
-    expect(note).not.toMatch(/including a two-member/i);
+  it("names the AUTHOR KIND as the reason, never the member count", async () => {
+    // ⚠ THE LOOP BRAKE is what makes "your post woke nobody" safe against every
+    // desktop build in the field, old or new — and it is keyed on the author
+    // kind, never the size. A two-member channel is NOT a special case, and
+    // claiming it is produces duplicate requests.
+    const text = await bare({ isDirect: false });
+    expect(text).toContain("addressed=no");
+    expect(text).not.toContain("NOT ADDRESSED");
+    expect(text).not.toContain("nobody was woken");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "an AGENT-authored UNADDRESSED message starts nobody, in a room of two or of ten",
+    );
   });
 
-  it("does NOT claim silence for a post that landed on a first-class thread", () => {
-    const note = unaddressedPostNote({
-      ...base,
-      addressed: false,
-      landedThread: UUID,
-    })!;
-    expect(note).toContain("NOT ADDRESSED, BUT THREADED");
-    expect(note).toContain("may be in front of their agent right now");
-    // ⚠ Remedy must not be "re-post with to=" — that manufactures a duplicate.
-    expect(note).toContain("Do NOT re-post it with `to=`");
-    expect(note).not.toMatch(/re-post it with to="/);
+  it("does NOT claim silence for a post that landed on a first-class thread", async () => {
+    // ⚠ `landed=` SITS BESIDE `addressed=` RATHER THAN COLLAPSING INTO IT, which
+    // is the whole reason there are two fields: "nobody was woken" is FALSE for a
+    // threaded post (`feedLiveSession` reads the tag before the addressing), and
+    // the old remedy "re-post with `to=`" manufactured a duplicate request.
+    const text = await bare({ isDirect: false }, { taskId: UUID });
+    expect(text).toContain("landed=thread addressed=no");
+    expect(text).not.toContain("re-post");
+    expect(rosterAddressingRule("general", 2)).toContain(
+      "routes the post into the session already working it",
+    );
+    // ⚠ RE-POINTED: the trailing "whatever its addressing says" was compressed out.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "anything threaded into an exchange you are a party to is yours",
+    );
   });
 
-  it("keeps the plain note for a LEGACY tag, which routes to no session", () => {
-    const note = unaddressedPostNote({
-      ...base,
-      addressed: false,
-      landedThread: LEGACY,
-    })!;
-    expect(note).not.toContain("BUT THREADED");
-    expect(note).toContain("from an AGENT is never taken as an implicit request");
+  it("keeps the two apart for a LEGACY tag, which routes to no session", async () => {
+    // ⚠ Only a FIRST-CLASS (uuid) tag reaches a session, so the two cases may
+    // never be narrated with one word: `adhoc` groups on a card and wakes nobody.
+    const text = await bare({ isDirect: false }, { taskId: LEGACY });
+    expect(text).toContain("landed=adhoc addressed=no");
+    expect(text).not.toContain("landed=thread");
   });
 });
 
-describe("post — the note and the linkage line in one result", () => {
-  it("a threaded post never says nobody was woken next to 'reads this as a continuation'", async () => {
-    const client = postClient({ isDirect: false }, { taskId: UUID });
-
-    const text = (await opPost(client, "general", "here is the diff")).content[0]
-      .text;
-
-    expect(text).toContain("NOT ADDRESSED, BUT THREADED");
-    expect(text).toContain("the other side reads this as a continuation");
+describe("post — the addressing and the linkage on ONE line", () => {
+  it("a threaded post never reads as nobody-was-woken", async () => {
+    const text = await bare({ isDirect: false }, { taskId: UUID });
+    expect(text).toContain("landed=thread addressed=no");
     expect(text).not.toContain("nobody was woken");
     expect(text).not.toContain("NO member's agent was triggered");
   });
 
-  it("an unthreaded post still tells the sender it has to address a member", async () => {
-    const client = postClient({ isDirect: false });
-
-    const text = (await opPost(client, "general", "anyone free?")).content[0]
-      .text;
-
-    expect(text).toContain("NOT ADDRESSED");
-    expect(text).not.toContain("BUT THREADED");
-    expect(text).toContain('re-post it with to="<one member>"');
+  it("an unthreaded post reports both halves, and neither is a paragraph", async () => {
+    // ⚠ HOW to address someone is the roster op's line and the doctrine's, not
+    // this result's — it is the same sentence on every unaddressed post ever.
+    const text = await bare({ isDirect: false });
+    expect(text).toContain("landed=room addressed=no");
+    expect(text.split("\n")).toHaveLength(1);
+    expect(text).not.toContain('re-post it with to="<one member>"');
+    expect(rosterAddressingRule("general", 3)).toContain('to="<their user id>"');
   });
 
   it("warns in a DIRECT channel too, and still names the thread it landed in", async () => {
     // ⚠ Inverted with the DM auto-address retirement (2026-08-18). A threaded
-    // post takes the THREADED shape of the note, which tells the caller to WAIT
-    // rather than re-post — the one remedy that would double the request.
-    const client = postClient({ isDirect: true }, { taskId: UUID });
-
-    const text = (await opPost(client, "general", "ping")).content[0].text;
-
-    expect(text).toContain("NOT ADDRESSED, BUT THREADED");
-    expect(text).toContain("Do NOT re-post it");
+    // post reports the thread it landed in beside `addressed=no`, which is what
+    // tells the caller to WAIT rather than re-post — the one remedy that would
+    // double the request.
+    const text = await bare({ isDirect: true }, { taskId: UUID });
+    expect(text).toContain(`thread=${UUID} landed=thread addressed=no`);
+    expect(text).not.toContain("Do NOT re-post it");
   });
 });
 
@@ -340,109 +406,5 @@ describe("members — the rule reaches the result", () => {
 
     expect(text).toContain("With 3 members, an UNADDRESSED, UNTHREADED post reaches no one's agent");
     expect(text).not.toContain("Two members is the ONE size");
-  });
-});
-
-// ── the await notice ─────────────────────────────────────────────────
-
-describe("AWAIT_UNNAMED_NOTICE — a wake that names nobody", () => {
-  it("does not tell a waiting agent that its own answer belongs to someone else", () => {
-    // ⚠ `postResult` posts a responder's reply with no `toUserId` and
-    // `deliveryCall` teaches the delivery call with no `to`, so "nothing here
-    // is addressed to you" cannot narrow to "none of this is yours".
-    expect(AWAIT_UNNAMED_NOTICE).toContain("a reply here is normally posted UNADDRESSED");
-    expect(AWAIT_UNNAMED_NOTICE).toContain("that is your reply");
-    expect(AWAIT_UNNAMED_NOTICE).not.toContain("Do not answer them");
-    expect(AWAIT_UNNAMED_NOTICE).not.toContain("they are context.");
-  });
-
-  it("accounts for threading, which the addressing field cannot express", () => {
-    expect(AWAIT_UNNAMED_NOTICE).toContain(
-      "THREADED into an exchange you are a party to is for you",
-    );
-  });
-
-  it("still refuses another member's request", () => {
-    expect(AWAIT_UNNAMED_NOTICE).toContain("aimed at another member");
-    expect(AWAIT_UNNAMED_NOTICE).toContain("adopt an unaddressed message as a task you were assigned");
-  });
-});
-
-// ── ...and WHEN it fires, a separate claim ───────────────────────────
-//
-// ⚠ Premise is "somebody ELSE wrote things and none names you". A predicate
-// running over the caller's OWN posts fires on a page holding only the caller's
-// own request and tells the agent it does not name them. `excludeAuthor` should
-// keep own posts out; this is the second line of defence, because the notice
-// must be false-free on whatever it is handed.
-
-describe("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
-  function awaitClient(messages: Array<Record<string, unknown>>): DoplClient {
-    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
-    return {
-      listChannels: vi.fn(async () => [CHANNEL]),
-      awaitChannelMessages: vi.fn(async () => ({ messages, timedOut: false })),
-    } as unknown as DoplClient;
-  }
-
-  function message(
-    seq: number,
-    authorUserId: string,
-    toUserId?: string,
-  ): Record<string, unknown> {
-    return {
-      id: `m-${seq}`,
-      seq,
-      channelId: "chan-1",
-      authorUserId,
-      authorKind: "agent",
-      kind: "message",
-      body: "the body",
-      metadata: toUserId ? { to_user_id: toUserId } : {},
-      clientMsgId: null,
-      createdAt: "2026-07-31T00:00:00Z",
-    };
-  }
-
-  async function noticeFor(
-    messages: Array<Record<string, unknown>>,
-    selfUserId: string | null = ME,
-  ): Promise<string> {
-    const res = await opAwait(awaitClient(messages), "general", 7, undefined, selfUserId);
-    return res.content[0].text;
-  }
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("says NOTHING when every message on the page is the caller's own", async () => {
-    const text = await noticeFor([message(8, ME, PEER)]);
-    expect(text).not.toContain("NONE of the messages above NAMES you");
-  });
-
-  it("still fires when a peer wrote something that names nobody", async () => {
-    expect(await noticeFor([message(8, PEER)])).toContain(
-      "NONE of the messages above NAMES you",
-    );
-  });
-
-  it("stays silent when a peer's message DOES name the caller", async () => {
-    expect(await noticeFor([message(8, PEER, ME)])).not.toContain(
-      "NONE of the messages above NAMES you",
-    );
-  });
-
-  it("judges the peer's messages alone — the caller's own can't suppress it", async () => {
-    // Mixed page — the notice is about theirs; mine changes nothing.
-    expect(await noticeFor([message(8, ME, PEER), message(9, PEER)])).toContain(
-      "NONE of the messages above NAMES you",
-    );
-  });
-
-  it("says nothing at all when the caller's own id is unknown", async () => {
-    expect(await noticeFor([message(8, PEER)], null)).not.toContain(
-      "NONE of the messages above NAMES you",
-    );
   });
 });

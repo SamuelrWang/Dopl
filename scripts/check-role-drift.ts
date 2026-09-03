@@ -1,22 +1,29 @@
 /**
- * Catch drift between the hand-mirrored declarations of the workspace role SET.
- * There is no shared module across the server, the SDK, the MCP package and the
- * DATABASE (the SDK and MCP cannot import from `src/`; SQL can import nothing),
- * so the same list of role names is re-typed in several places and nothing but
- * this script keeps them equal:
+ * Catch drift between the declarations of the workspace role SET that no
+ * compiler can hold together.
  *
- *   - src/features/workspaces/types.ts          › `Role`         (source of truth)
- *   - packages/dopl-client/src/types.ts         › `WorkspaceRole`
+ * ⚠ **THE TWO TYPE DECLARATIONS BECAME ONE ON 2026-09-02 (v2 slice A13).** The
+ * set now lives in `packages/contracts/src/workspaces.ts › WorkspaceRole`;
+ * `src/features/workspaces/types.ts › Role` and
+ * `packages/dopl-client/src/types.ts › WorkspaceRole` both RE-EXPORT it, and the
+ * SDK's committed `dist/types.d.ts` therefore emits a re-export too. Those three
+ * sites left this script — **not because they stopped mattering, but because a
+ * re-export cannot disagree, and `extractUnion` would throw on one.** What is
+ * left is everything the compiler still cannot reach:
+ *
+ *   - packages/contracts/src/workspaces.ts › `WorkspaceRole`   (the reference)
  *   - packages/mcp-server/src/tools/members-render.ts › `ROLE_ORDER` (Record keys)
  *
  * ⚠ **THREE MORE CLASSES OF DECLARATION JOINED ON 2026-08-26, AND EACH ONE HAD
  * ALREADY DRIFTED IN PRODUCTION.**
  *
- *   1. **THE COMMITTED `dist/` COPIES.** `packages/dopl-client/dist/types.d.ts`
- *      and `packages/mcp-server/dist/tools/members-render.js` are TRACKED files
- *      (`git ls-files packages | grep dist`), they are what `main` actually imports,
- *      and during the guest-role wave they were hand-edited. The gate read only
- *      `src/`, so a `dist/` that disagreed with its own source was invisible.
+ *   1. **THE COMMITTED `dist/` COPY.** `packages/mcp-server/dist/tools/
+ *      members-render.js` is a TRACKED file (`git ls-files packages | grep dist`),
+ *      it is what `main` actually imports, and during the guest-role wave it was
+ *      hand-edited. The gate read only `src/`, so a `dist/` that disagreed with
+ *      its own source was invisible. ⚠ A `Record` LITERAL survives compilation as
+ *      a real object, which is why this one is still a site while the SDK's
+ *      re-exported union is not.
  *   2. **THE SQL RANK FUNCTION.** `public.is_workspace_member`'s `CASE` is a
  *      THIRD scale and it governs every RLS policy. Its arms are read out of the
  *      migration that last defined it.
@@ -40,11 +47,19 @@
  * `dist/` is not, and because the check states the requirement where a reader
  * of this file will look for it.
  *
- * ⚠ THIS SCRIPT NOW GUARDS THREE FAMILIES, not one — each is a hand-mirror
- * across the SAME two type files, so they share one read and one CI step:
+ * ⚠ THIS SCRIPT GUARDS THREE FAMILIES, not one, and they share one read and one
+ * CI step:
  *   A. the ROLE set (above)                        — `main`
  *   B. the workspace LIST-ITEM field set            — `checkWorkspaceMirror`
- *   C. `WorkspaceKind` + `isStandardWorkspace`      — `checkWorkspaceKind` (F-295)
+ *   C. `isStandardWorkspace`'s POSITIVE form        — `checkWorkspaceKind` (F-295)
+ *
+ * ⚠ **B AND C ARE THE TWO THAT A13 COULD NOT DELETE, FOR DIFFERENT REASONS.** B
+ * compares INTERFACE FIELD SETS between two DTOs that are legitimately different
+ * shapes (the SDK's carries one recorded asymmetry, `iconUrl`, F-335); moving
+ * either into `@dopl/contracts` would be unifying two types that were never the
+ * same. C compares a RUNTIME PREDICATE, and `@dopl/contracts` is type-only — the
+ * KIND SET it used to check alongside is now one declaration and is gone from
+ * here, but the three copies of the function are not.
  *
  * Exits non-zero with a diff summary if any set drifts. Run via:
  *   npx tsx scripts/check-role-drift.ts
@@ -262,35 +277,7 @@ function checkWorkspaceMirror(read: (rel: string) => string): boolean {
  *      out of. A set-only check cannot see a coordinated flip to `!==`.
  */
 function checkWorkspaceKind(read: (rel: string) => string): boolean {
-  const kinds: Array<[string, string[]]> = [
-    [
-      "src/features/workspaces/types.ts › WorkspaceKind",
-      extractUnion(read("src/features/workspaces/types.ts"), "WorkspaceKind"),
-    ],
-    [
-      "packages/dopl-client/src/types.ts › WorkspaceKind",
-      extractUnion(read("packages/dopl-client/src/types.ts"), "WorkspaceKind"),
-    ],
-    [
-      "packages/dopl-client/dist/types.d.ts › WorkspaceKind",
-      extractUnion(read("packages/dopl-client/dist/types.d.ts"), "WorkspaceKind"),
-    ],
-  ];
-  // The `src/` union is the reference — it is the one the SDK's docblock names
-  // as the source of its own wording.
-  const reference = new Set(kinds[0][1]);
   let drift = false;
-  for (const [label, set] of kinds.slice(1)) {
-    const have = new Set(set);
-    const missing = [...reference].filter((k) => !have.has(k));
-    const extra = [...have].filter((k) => !reference.has(k));
-    if (missing.length || extra.length) {
-      drift = true;
-      console.error(`[drift] ${label}:`);
-      if (missing.length) console.error(`  missing kind(s): ${missing.join(", ")}`);
-      if (extra.length) console.error(`  extra kind(s):   ${extra.join(", ")}`);
-    }
-  }
 
   // ⚠ The `dist/` copy checked here is `types.js`, the EMITTED BODY — the
   // `.d.ts` carries only a signature, so a `dist/` whose runtime predicate was
@@ -311,7 +298,7 @@ function checkWorkspaceKind(read: (rel: string) => string): boolean {
 
   if (!drift) {
     console.log(
-      `✅ WorkspaceKind agrees across 3 declarations (${[...reference].sort().join(", ")}) and all 3 isStandardWorkspace copies are the positive form.`
+      "✅ All 3 isStandardWorkspace copies are the positive form (the KIND SET itself is now one declaration — `@dopl/contracts`)."
     );
   }
   return drift;
@@ -321,8 +308,10 @@ function main(): void {
   const root = resolve(__dirname, "..");
   const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
 
-  const server = extractUnion(read("src/features/workspaces/types.ts"), "Role");
-  const sdk = extractUnion(read("packages/dopl-client/src/types.ts"), "WorkspaceRole");
+  const server = extractUnion(
+    read("packages/contracts/src/workspaces.ts"),
+    "WorkspaceRole"
+  );
   const mcp = extractRecordKeys(
     read("packages/mcp-server/src/tools/members-render.ts"),
     "ROLE_ORDER"
@@ -330,14 +319,12 @@ function main(): void {
   const sql = extractSqlRoleArms(resolve(root, "supabase/migrations"));
 
   const sources: Array<[string, string[]]> = [
-    ["src/features/workspaces/types.ts › Role", server],
-    ["packages/dopl-client/src/types.ts › WorkspaceRole", sdk],
+    ["packages/contracts/src/workspaces.ts › WorkspaceRole", server],
     ["packages/mcp-server/src/tools/members-render.ts › ROLE_ORDER", mcp],
-    // ── the committed dist/ mirrors: what `main` actually imports ──
-    [
-      "packages/dopl-client/dist/types.d.ts › WorkspaceRole",
-      extractUnion(read("packages/dopl-client/dist/types.d.ts"), "WorkspaceRole"),
-    ],
+    // ── the committed dist/ mirror: what `main` actually imports. ⚠ The SDK's
+    //    `dist/types.d.ts` is NOT here any more: it re-exports `@dopl/contracts`,
+    //    so there is no literal union in it left to drift (A13). This one stays
+    //    because a `Record` LITERAL still compiles into `dist/` as a real object.
     [
       "packages/mcp-server/dist/tools/members-render.js › ROLE_ORDER",
       extractRecordKeys(
@@ -388,7 +375,7 @@ function main(): void {
 
   if (drift) {
     console.error(
-      "\n❌ Workspace role drift detected. Every declaration above — src, the committed dist/ mirrors, the role-keyed decision maps and the SQL rank CASE — must carry the same role SET."
+      "\n❌ Workspace role drift detected. Every declaration above — `@dopl/contracts`, the role-keyed decision maps in both trees (source AND committed dist/) and the SQL rank CASE — must carry the same role SET."
     );
     process.exit(1);
   }
@@ -409,7 +396,7 @@ function main(): void {
   // The THIRD family — same two files again, same reason (F-295).
   if (checkWorkspaceKind(read)) {
     console.error(
-      "\n❌ Workspace KIND drift detected (F-295). `WorkspaceKind` and `isStandardWorkspace` are hand-mirrored across src, the SDK and its committed dist/: change every side in ONE change, keep the POSITIVE spelling, and rebuild with `npm run build -w @dopl/client`."
+      "\n❌ `isStandardWorkspace` drift detected (F-295). The PREDICATE is still hand-mirrored across src, the SDK and its committed dist/ — `@dopl/contracts` is type-only and cannot hold a function — so change every copy in ONE change, keep the POSITIVE spelling, and rebuild with `npm run build -w @dopl/client`."
     );
     process.exit(1);
   }

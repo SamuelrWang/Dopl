@@ -1,5 +1,10 @@
 import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
+import {
+  grantedResourceIds,
+  NO_GRANTS,
+  type GrantedResourceIds,
+} from "@/shared/tenancy/resource-grant-reach";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type {
   AgentTemplate,
@@ -27,7 +32,9 @@ export interface AuthLike {
   role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
-  apiKeyWorkspaceLockKind?: string | null;
+  /** WHOSE REACH the credential inherits; `null` = nobody in particular.
+   *  ⚠ REQUIRED — this axis has no safe default (F-336). */
+  credentialSubjectUserId: string | null;
 }
 
 export function buildAgentTemplateContext(
@@ -39,7 +46,7 @@ export function buildAgentTemplateContext(
     source: auth.agentTokenId ? "agent" : "user",
     role: auth.role ?? null,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
-    apiKeyWorkspaceLockKind: auth.apiKeyWorkspaceLockKind ?? null,
+    credentialSubjectUserId: auth.credentialSubjectUserId,
   };
 }
 
@@ -66,11 +73,20 @@ export interface TemplateShareCtx {
   myTeamIds: Set<string>;
   /** templateId → linked team ids. */
   byTemplate: Map<string, string[]>;
+  /**
+   * Template ids lent to a channel or container the caller is in — the GRANT
+   * axis, added 2026-09-02 (F-604). ⚠ It rides this context rather than a
+   * second parameter precisely because a second parameter is what a caller
+   * forgets: every existing `canSeeTemplate` call already threads a
+   * `TemplateShareCtx`, so the arm arrives everywhere at once.
+   */
+  grantedIds: GrantedResourceIds;
 }
 
 const EMPTY_SHARE_CTX: TemplateShareCtx = {
   myTeamIds: new Set(),
   byTemplate: new Map(),
+  grantedIds: NO_GRANTS,
 };
 
 export async function shareCtxForTemplates(
@@ -78,7 +94,21 @@ export async function shareCtxForTemplates(
   rows: AgentTemplate[]
 ): Promise<TemplateShareCtx> {
   const teamScoped = rows.filter((t) => t.visibility === "team");
-  if (teamScoped.length === 0) return EMPTY_SHARE_CTX;
+  // ⚠ **THE `team` SHORT-CIRCUIT NO LONGER SHORT-CIRCUITS THE WHOLE CONTEXT.**
+  // A grant is orthogonal to visibility — a `private` row is the ordinary thing
+  // to lend — so returning `EMPTY_SHARE_CTX` for a row set with no team-scoped
+  // member would have dropped the grant arm on exactly the rows it is for. The
+  // grant read has its own empty-input short-circuit.
+  const grantedIds = await grantedResourceIds(
+    ctx.userId,
+    "agent_template",
+    rows.filter((t) => needsGrantArm(ctx, t)).map((t) => t.id)
+  );
+  if (teamScoped.length === 0) {
+    return grantedIds === NO_GRANTS
+      ? EMPTY_SHARE_CTX
+      : { ...EMPTY_SHARE_CTX, grantedIds };
+  }
   // The caller's own team-scoped rows are visible without a membership lookup,
   // and a SHARED credential never gets one (it has no person behind it).
   // ⚠ `isSharedCredential`, not the lock: a container session HAS a person
@@ -100,7 +130,7 @@ export async function shareCtxForTemplates(
       link.teamId,
     ]);
   }
-  return { myTeamIds: new Set(myTeams), byTemplate };
+  return { myTeamIds: new Set(myTeams), byTemplate, grantedIds };
 }
 
 /**
@@ -112,11 +142,20 @@ export async function shareCtxForTemplates(
  *                                         humans, so it never inherits one
  *                                         person's reach).
  *   3. creator                          → always.
- *   4. `private`                        → nobody else, ADMINS INCLUDED.
- *   5. workspace admin, `team`          → always.
- *   6. `team` + a shared team in common → yes.
+ *   4. a GRANT into a channel or container the caller is in → yes.
+ *   5. `private`                        → nobody else, ADMINS INCLUDED.
+ *   6. workspace admin, `team`          → always.
+ *   7. `team` + a shared team in common → yes.
  *
- * ⚠ ARM 4 BEFORE ARM 5 IS THE WHOLE OF "PRIVATE MEANS PRIVATE": a workspace
+ * ⚠ **ARM 4 IS NEW ON 2026-09-02 (F-604) AND ITS POSITION IS THE DECISION.** A
+ * lent row is `private` — that is the ordinary thing to lend — so anywhere
+ * below arm 5 it would be unreachable and B15's write door would go on writing
+ * rows nothing reads. It is BELOW arm 2 for the reason arm 2 exists: a
+ * credential that stands for nobody has no membership of the granted scope to
+ * read the grant through. `shared/tenancy/resource-grant-reach.ts` holds the
+ * lookup and states which levels admit a HUMAN read.
+ *
+ * ⚠ ARM 5 BEFORE ARM 6 IS THE WHOLE OF "PRIVATE MEANS PRIVATE": a workspace
  * admin administers SHARING, which is why they pass on a `team` template, and
  * that is not a licence to read a teammate's private one. `canSeeSkill` orders
  * its arms the same way (it returns false for `visibility !== "public"` before
@@ -131,20 +170,43 @@ export async function shareCtxForTemplates(
  * to every member for as long as nobody compared them.
  *
  * 🔒 ⚠ ARM 2 ASKS `isSharedCredential`, NOT `ctx.apiKeyWorkspaceId` — F-333,
- * ruled by Samuel and fixed 2026-08-27. The old form made every "Use in this
- * channel" copy invisible to the agents running in that channel:
- * `lib/template-draft.ts › containerCopyDraft` FORCES `private` (correctly —
- * "use" must not publish the operator's agent into a room the peer is standing
- * in), and layer B1 sets the lock for every read a session in a shared container
- * makes, so the copy could not be listed, named or resolved by the very agent it
- * was made for. **A container-session credential is the operator's own session**,
+ * ruled by Samuel and fixed 2026-08-27. The old form made every PRIVATE
+ * template invisible to the agents running in a container: layer B1 sets the
+ * lock for every read a session in a shared container makes, so such a row could
+ * not be listed, named or resolved by the very agent it was made for. ⚠ **THE
+ * CASE THAT SURFACED IT WAS THE "Use in this channel" COPY**, which forced
+ * `private` and is deleted in B15; the arm is unchanged and the population it
+ * covers is now every personal row. **A container-session credential is the operator's own session**,
  * so arm 3 (creator) now answers for it exactly as it answers for the operator
  * at their keyboard. ⚠ NO PEER EXPOSURE IS OPENED: the peer, and the peer's own
- * agent, carry the PEER's user id, so arm 3 misses and arm 4 (`private` → nobody
- * else, admins included) refuses them. Guests never reach a template surface at
+ * agent, carry the PEER's user id, so arm 3 misses and arm 5 (`private` → nobody
+ * else, admins included) refuses them — unless the row was deliberately GRANTED
+ * to a scope that peer is in, which is arm 4 and is the point of it. Guests never reach a template surface at
  * all — every `agent-templates` route and `POST /api/channels/launch-directives`
  * sits at `withWorkspaceAuth`'s `viewer` floor and `guest` ranks below it.
  */
+/**
+ * Rows whose answer arm 4 could still CHANGE — the negation of arms 1-3, and
+ * the twin of `knowledge/server/service-shared.ts › needsGrantArm`.
+ *
+ * ⚠ **A DELIBERATE MIRROR OF THE ARMS BELOW, PINNED AS ONE** by
+ * `shared/tenancy/grant-read-arm.test.ts`, which drives every (credential ×
+ * visibility × author) combination through both and fails if a row this says NO
+ * about would have had its answer moved by a grant. It buys the case that
+ * matters: a workspace whose templates are all `workspace`-visible, or all the
+ * caller's own, asks the grant table nothing.
+ */
+export function needsGrantArm(
+  ctx: AgentTemplateContext,
+  template: AgentTemplate
+): boolean {
+  return (
+    template.visibility !== "workspace" &&
+    !isSharedCredential(ctx) &&
+    template.createdBy !== ctx.userId
+  );
+}
+
 export function canSeeTemplate(
   ctx: AgentTemplateContext,
   template: AgentTemplate,
@@ -155,6 +217,14 @@ export function canSeeTemplate(
   if (template.createdBy !== null && template.createdBy === ctx.userId) {
     return true;
   }
+  // 🔒 ARM 4 IS THE GRANT (F-604, 2026-09-02), AND IT PRECEDES THE `private`
+  // REFUSAL RATHER THAN FOLLOWING IT. A lent row is `private` — that is the
+  // ordinary thing to lend — so an arm below arm 5 would never be reached, and
+  // the write door B15 shipped would go on writing rows nothing reads. It stays
+  // BELOW the shared-credential refusal for the reason `canSeeBase`'s twin
+  // states: a credential standing for nobody has no membership of the granted
+  // scope to read the grant through.
+  if (share.grantedIds.has(template.id)) return true;
   if (template.visibility === "private") return false;
   if (isWorkspaceAdmin(ctx)) return true;
   const linked = share.byTemplate.get(template.id) ?? [];

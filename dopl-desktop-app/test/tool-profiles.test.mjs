@@ -41,12 +41,13 @@ const {
   DOPL_CHANNEL_TOOL,
   DOPL_SAFE_TOOLS,
   RETIRED_DOPL_TOOLS,
+  UNIVERSAL_HARD_DENY,
   WEB_TOOLS,
 } = new Function(
   `${BLOCK}
    return { buildAllowedTools, buildDeniedTools, buildBuiltinTools,
             buildRestrictionArgs, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL,
-            DOPL_SAFE_TOOLS, RETIRED_DOPL_TOOLS, WEB_TOOLS };`
+            DOPL_SAFE_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, WEB_TOOLS };`
 )();
 
 const RESTRICTED = ["read_only", "dopl_only"];
@@ -82,10 +83,10 @@ test("read_only -> local read tools only, no web, no MCP", () => {
   );
 });
 
-test("read_only denies the whole dopl MCP server, admins, and web", () => {
+test("read_only denies the whole dopl MCP server, the hard-deny floor, and web", () => {
   const denied = buildDeniedTools("read_only");
   assert.ok(denied.includes("mcp__dopl"), "read_only must deny the bare dopl server prefix");
-  for (const t of DOPL_ADMIN_TOOLS) {
+  for (const t of UNIVERSAL_HARD_DENY) {
     assert.ok(denied.includes(t), `read_only must also deny ${t} by name`);
   }
   // read_only is the zero-outbound profile: web is an exfil channel and must be
@@ -109,18 +110,18 @@ test("H-2: dopl_only must NEVER grant the bare mcp__dopl server prefix", () => {
 });
 
 test("H-2: no admin MCP tool is grantable under any restricted profile", () => {
-  // FIVE since 2026-08-28, when `dopl_agent_admin` joined (MCP surface v2 wave A). It was
-  // FOUR from the 2026-08-07 retirement: dopl_cluster_admin / dopl_workflow_admin are no
-  // longer registered by the server, so there is no tool to grant. They did not simply
-  // vanish from the deny path — see RETIRED_DOPL_TOOLS and its own test below.
-  // ⚠ The COUNT is the weak half of this test; the loop under it is the strong half, and
-  // "the admin list is exactly the live *_admin tools" is what stops the two drifting.
-  assert.ok(DOPL_ADMIN_TOOLS.length === 5, "expected exactly five admin tools");
+  // ⚠ DRIVEN OVER THE HARD-DENY FLOOR, NOT `DOPL_ADMIN_TOOLS`, SINCE 2026-09-02, when the
+  // last five `*_admin` tools were deleted server-side and their names moved to
+  // RETIRED_DOPL_TOOLS. Iterating the now-empty admin list would make every assertion below
+  // a vacuous pass on the very names this test exists to keep denied. The floor is 9: five
+  // deleted admins + the four from the 2026-08-07 retirement. "The admin list is exactly the
+  // live *_admin tools" (below) is what stops a NEW one landing in the safe list instead.
+  assert.equal(UNIVERSAL_HARD_DENY.length, 9, "the universal hard-deny floor is 9 names");
   for (const profile of RESTRICTED) {
     const allowed = buildAllowedTools(profile);
     const denied = buildDeniedTools(profile);
     const args = buildRestrictionArgs(profile, "/tmp/s.json").join(" ");
-    for (const admin of DOPL_ADMIN_TOOLS) {
+    for (const admin of UNIVERSAL_HARD_DENY) {
       assert.ok(!allowed.includes(admin), `${profile} must not allow ${admin}`);
       assert.ok(denied.includes(admin), `${profile} must deny ${admin}`);
       // The emitted --allowedTools flag must not name an admin, and must not
@@ -144,7 +145,7 @@ test("dopl_only -> read tools + explicitly named non-admin dopl tools", () => {
   for (const t of ["Read", "Grep", "Glob", "LS"]) {
     assert.ok(set.includes(t), `dopl_only should include ${t}`);
   }
-  // These nine names are pinned against the server's real registration sites
+  // These eight names are pinned against the server's real registration sites
   // by the drift alarm at the bottom of this file — this list is the readable
   // copy, that one is the check. NOTE: dopl_channel is intentionally NOT here
   // (see the exfiltration test below) — it is the one non-admin tool a
@@ -157,8 +158,7 @@ test("dopl_only -> read tools + explicitly named non-admin dopl tools", () => {
     "mcp__dopl__dopl_skill",
     "mcp__dopl__dopl_ontology",
     "mcp__dopl__dopl_chats",
-    "mcp__dopl__current_workspace",
-    "mcp__dopl__list_workspaces",
+    "mcp__dopl__dopl_workspaces",
   ]) {
     assert.ok(set.includes(t), `dopl_only should include ${t}`);
   }
@@ -373,8 +373,8 @@ function mcpSources(dir) {
 
 // A registration site names its tool as a STRING LITERAL first argument:
 // `register("dopl_map", …)` in the domain registrars (the injected registrar is
-// named `register` there) and `registerMetaTool("list_workspaces", …)` in
-// server.ts. The SDK call underneath — `server.registerTool(name, …)` — passes a
+// named `register` there) and `registerMetaTool("dopl_workspaces", …)` in
+// meta-tools.ts. The SDK call underneath — `server.registerTool(name, …)` — passes a
 // variable, so there is no literal to match; the lookbehind drops it regardless.
 const REGISTER_SITE = /(?<![.\w$])register(?:Tool|MetaTool)?\s*\(\s*"([a-z][a-z0-9_]*)"/g;
 
@@ -432,11 +432,11 @@ const ALL_DOPL = [
 // exactly like "no drift". Fail here instead, naming what to repoint.
 test("the mcp-server source parser still finds what it is looking for", () => {
   const hiddenTools = hiddenNames();
-  assert.ok(registeredTools.length >= 14,
+  assert.ok(registeredTools.length >= 11,
     `only ${registeredTools.length} registration sites parsed — the register(...) call shape changed; repoint REGISTER_SITE`);
   assert.equal(new Set(registeredTools).size, registeredTools.length,
     "the same tool name is registered twice");
-  for (const a of ["dopl_kb", "dopl_map", "dopl_channel", "current_workspace", "list_workspaces"]) {
+  for (const a of ["dopl_kb", "dopl_map", "dopl_channel", "dopl_workspaces"]) {
     assert.ok(registeredTools.includes(a), `parser missed a known tool: ${a}`);
   }
   for (const h of hiddenTools) {
@@ -456,10 +456,14 @@ test("the desktop's Dopl tool lists match the MCP server's live surface", () => 
     .map(shortName).sort();
   assert.deepEqual(desktop, live,
     `main/tool-profiles.js has drifted from packages/mcp-server/src (HIDDEN_TOOLS read from ${hiddenDecls[0].file})`);
-  // The number ENGINEERING.md §7 states in prose, asserted once.
-  // 14 → 16 on 2026-08-28 (`dopl_agent` + `dopl_agent_admin`, wave A), then
-  // 16 → 17 the same day (`dopl_home`, wave B).
-  assert.equal(live.length, 17, "the agent surface is documented as 17 tools");
+  // The number INVARIANTS §10 states in prose, asserted once. 14 → 16 → 17 on
+  // 2026-08-28 (waves A and B), 17 → 18 on 2026-09-01 (`dopl_status`, T20),
+  // 18 → 13 on 2026-09-02 (MCP v2 wave A: the five `*_admin` tools deleted),
+  // 13 → 11 the same day (wave B B13: `current_workspace`, `list_workspaces`
+  // and `dopl_home` became the one `dopl_workspaces`).
+  // ⚠ The assertion ABOVE is the one that catches a new tool, by construction;
+  // this one exists so adding one costs a doc edit too.
+  assert.equal(live.length, 11, "the agent surface is documented as 11 tools");
 });
 
 // RETIRED_DOPL_TOOLS is a SUPERSET of HIDDEN_TOOLS, never an equality.

@@ -50,7 +50,7 @@ test("F-139: canonicalization rewrites ONLY the known Dopl vocabulary", () => {
   assert.equal(names.canonicalDoplName("mcp__claude_ai_Dopl__dopl_kb"), "mcp__dopl__dopl_kb");
   assert.equal(names.canonicalDoplName("mcp__dopl__dopl_kb"), "mcp__dopl__dopl_kb", "idempotent");
   assert.equal(names.canonicalDoplName("dopl_search"), "mcp__dopl__dopl_search", "the bare form too");
-  assert.equal(names.canonicalDoplName("current_workspace"), "mcp__dopl__current_workspace");
+  assert.equal(names.canonicalDoplName("dopl_workspaces"), "mcp__dopl__dopl_workspaces");
   // Everything else comes back untouched, so it stays unclassified and keeps gating.
   for (const n of ["Bash", "mcp__other__some_tool", "mcp__claude_ai_Dopl__not_a_dopl_tool", "", "x__y"]) {
     assert.equal(names.canonicalDoplName(n), n, n);
@@ -91,7 +91,7 @@ test("F-139: AXIS B governs the channel tool under ANY server name, not just our
     "mcp__6a12c8bd-4187-40eb-9b21-eb230264f726__", ""];
   for (const server of SERVERS) {
     const tool = server + "dopl_channel";
-    const own = { op: "post", body: "hi" };
+    const own = { op: "send", body: "hi" };
     // Axis B sends an own-channel post; this is the line that gated forever on Anthony's machine.
     assert.equal(decide({ toolName: tool, input: own, messageMode: "auto_both" }), "allow", `${tool} post @ auto_both`);
     assert.equal(decide({ toolName: tool, input: own, messageMode: "auto_outbound" }), "allow", `${tool} post @ auto_outbound`);

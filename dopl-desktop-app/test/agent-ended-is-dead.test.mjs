@@ -34,7 +34,6 @@ const MAIN = join(HERE, "..", "main");
 const require = createRequire(import.meta.url);
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 // The SHIPPED tier rule (pure; no electron) — see `dispatch()` below.
-const wakeTiers = require(join(MAIN, "session-wake-tiers.js"));
 const agentHandles = require(join(MAIN, "agent-handles.js"));
 
 const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -95,19 +94,21 @@ function dispatch(agents) {
     liveOnThread: () => agents,
     feedInbound: (a) => { fed.push(a); return true; },
   };
-  // ⚠ THE REAL TIER MODULE, A STUB TRIAGE (2026-08-28). `session-wake-tiers.js` is pure, so the
-  // wake rule driven here is the shipped one; only the MODEL CALL is faked, and it never claims —
-  // an ended agent must be unreachable whatever a router would have said about it.
+  // ⚠ THE REAL ROUTE, NO WAKE STUBS (2026-09-02). The route reads the stored verdict off the
+  // message, so there is nothing left to fake between "who is this for" and "who is live here" —
+  // an ended agent must be unreachable whatever any verdict says about it.
   const api = new Function(
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "diag",
+    // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
+    // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
+    // the buffer.
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag",
     `${BLOCK}\n return { feedLiveSession, mentionedAgentIds };`
   )(
     { firstClassTaskId: (m) => m.taskId || "" },
-    Object.assign({ agentIdsInChannel: () => agents.map((a) => a.agentId) }, engine),
+    engine,
     { displayNameFor: (id) => `name:${id}` },
-    wakeTiers,
-    { claim: async () => "" },
     agentHandles,
+    { note: () => true, verdictFor: () => '' },
     () => {}
   );
   return { ...api, fed };

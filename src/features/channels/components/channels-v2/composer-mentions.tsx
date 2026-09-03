@@ -84,7 +84,25 @@ export function mentionSuggestions({
   query,
 }: {
   members: readonly ChannelMember[];
-  /** THIS machine's own agents (`AuthorIndex.agents`), or none off-desktop. */
+  /**
+   * **THE CHANNEL'S LIVE AGENTS, WHOEVER RUNS THEM** (2026-09-02, slice B10) —
+   * `lib/draft-recipients.ts › liveAgentCandidates` over the peer projection
+   * (`server/collab-dto.ts › mapPeerSessionStateRow`), which is the SAME set
+   * `service-writes-metadata-recipient.ts › liveAgentHandles` resolves a person's
+   * `to=` against.
+   *
+   * ⚠ **IT USED TO BE THIS MACHINE'S OWN AGENTS AND THAT MADE TAGGING A DESKTOP
+   * FEATURE.** Off-desktop the list was empty, so the web — where a guest reads
+   * the room — offered no agent at all, which is precisely the surface Samuel's
+   * ruling is about. The widening is not a new reach: an unaddressed human post
+   * already reaches every machine's agents in the room, and the Agents tab
+   * already shows a member every peer card.
+   *
+   * ⚠ **THE COST IS THAT AN OFFERED HANDLE MAY NOT TINT.** The transcript's tint
+   * is machine-local by construction (`lib/agent-mentions.ts`, and a peer's ids
+   * are minted on their machine) — so a peer's handle routes and renders plain.
+   * Filed as F-550; the alternative was to keep offering nothing.
+   */
   agents?: ReadonlyArray<{ agentId: string; displayName: string | null }>;
   /**
    * ⚠ DROPPED FROM THE LIST (Samuel, 2026-08-27). You do not tag yourself: the SERVER already
@@ -189,6 +207,17 @@ export function MentionPopover({
               <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
             )}
             <span className="truncate">{suggestion.label}</span>
+            {/* ⚠ THE HANDLE, BESIDE THE NAME, ON AGENT ROWS ONLY (2026-09-02,
+                slice B10). It is the string the row INSERTS and the one the
+                resolver accepts — showing only the friendly name is what left a
+                reader guessing at `@Research Bot`. A member's handle is derived
+                from the name already on the row, so a second string there would
+                be noise. */}
+            {suggestion.kind === "agent" && (
+              <span className="ml-auto shrink-0 text-micro text-text-muted">
+                @{suggestion.handle}
+              </span>
+            )}
           </button>
         ))
       )}

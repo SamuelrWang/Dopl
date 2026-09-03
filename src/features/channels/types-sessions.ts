@@ -20,39 +20,33 @@
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 
 /**
- * SESSION RUN STATE. The three states desktop `session-summary.js` reduces
- * every engine phase/activity to, and the ONLY vocabulary session state is ever
- * reported in — over IPC to the **Agents tab** (`components/channels-v2/
- * agents-tab.tsx`, INVARIANTS §5), over MCP to an external agent. ⚠ The TYPE
- * name is still `SessionPillState` and the desktop reducer's is still
- * `pillState`: the web's session PILLS were deleted in wiring plan Phase 5
- * (2026-08-18) and the names outlived them on the desktop side.
+ * ⚠ **THE RUN STATE AND THE TWO OPERATOR-ONLY HALVES ARE DECLARED IN
+ * `@dopl/contracts › sessions.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice
+ * A13). All three were hand-mirrored into `packages/dopl-client`
+ * (`channel-types.ts` and `session-health-types.ts`), and `ChannelSessionHealth`
+ * was the worst case in the repo: FOUR declarations of one 7-field type, every
+ * field `optional` AND `nullable`, so drift failed no build and no test — the
+ * field just never arrived. The two TypeScript declarations are now one.
  *
- * ⚠ No `thinking` state, and the REASON CHANGED on 2026-08-20 — re-read it
- * before quoting it, because both earlier reasons are now retired. It was never
- * that streaming is off (F-146 corrected that in four places). Nor is it still
- * "pillState cannot see what has been RENDERED this turn": the desktop lifted
- * that fact at the engine's dispatch funnel, and
- * `dopl-desktop-app/main/session-detail.js` derives a six-valued `detail` from
- * it today.
+ * ⚠ **`check-session-health-drift.ts` DID NOT GO AWAY.** The zod half
+ * (`schema-sessions.ts › SessionStateEntrySchema`) and the migration's own
+ * columns are still outside the compiler's reach, and those are still the two
+ * silent failure modes. The gate now compares the contracts file against exactly
+ * those two.
  *
- * What keeps THIS type at three values is that it is the SERVER's vocabulary and
- * a wire contract with three enforcers — `channel_sessions.state`'s CHECK, the
- * `z.enum` in `schema-sessions.ts`, and the membership set the MCP renderer
- * splices through (`channel-ops-read.ts`). The write path validates the ARRAY, so
- * a single row carrying a fourth value 400s the desktop's whole push
- * unretryably and silently stops every later one for that workspace.
- *
- * ⚠ THE FINER SIGNAL IS NO LONGER LOCAL-ONLY, AND THIS BLOCK SAID IT WAS UNTIL
- * 2026-08-22. `DesktopSessionSummary["detail"]` now CROSSES as
- * `channel_sessions.detail` (migration `20260822150000`), because an
- * orchestrator reading `read_sessions` over MCP is not on the machine and had
- * no way to tell "working" apart from "working on the third of four files".
- * **What did NOT change is this ENUM**: `detail` is a free-text line beside the
- * state, never a fourth state, precisely so the three-enforcer contract above
- * keeps holding.
+ * ⚠ **`SessionDetailKey`, `ChannelSessionState` AND `…Own` STAY HERE ON
+ * PURPOSE** — see the "WHAT IS DELIBERATELY NOT HERE" note in
+ * `@dopl/contracts › sessions.ts`. `detail` is DERIVED from the desktop's own
+ * bridge shape, and moving that derivation into a package the desktop cannot
+ * import would trade one mirror for a worse one.
  */
-export type SessionPillState = "working" | "idle" | "ended";
+import type {
+  SessionPillState,
+  ChannelSessionTelemetry,
+  ChannelSessionHealth,
+} from "@dopl/contracts";
+
+export type { SessionPillState, ChannelSessionTelemetry, ChannelSessionHealth };
 
 /**
  * One live (or just-ended) session, as answered by
@@ -123,65 +117,8 @@ export type ChannelSessionState = {
   updatedAt: string;
 };
 
-/**
- * THE OPERATOR-ONLY HALF OF A SESSION (Samuel's ruling, 2026-08-22; extended
- * 2026-08-23).
- *
- * ⚠ **THE NAME SAYS "TELEMETRY" AND THE TYPE IS ABOUT AN AUDIENCE.** Seven of
- * its eight fields are measurements; `templateName` is an identity snapshot and
- * is here because it reaches the same one reader, not because anybody measured
- * it. The name is kept because it is cited from four files across three trees and
- * a rename buys a word — see {@link ChannelSessionTelemetry.templateName} for why
- * that field is operator-only on its own two arguments.
- *
- * ⚠ EVERY MEASURED FIELD'S `null` MEANS **UNKNOWN**, NEVER ZERO AND NEVER "NONE". A
- * desktop that reports no `tokensSpent` has not reported that its agent spent
- * nothing, and a render that prints `0` for an absent number is asserting
- * something no machine said. The columns are NULLABLE with no defaults for
- * exactly this reason.
- *
- * ⚠ IT REACHES ONE AUDIENCE: the member whose machine is running the session.
- * `collab-dto.ts › mapPeerSessionStateRow` cannot emit these fields, because it
- * BUILDS its object rather than scrubbing one — see that function's docblock for
- * why construction is the fence and the column GRANT is only the belt.
- */
-export type ChannelSessionTelemetry = {
-  /** Model id/label the session is running on, as the desktop reports it. */
-  model: string | null;
-  /** The tool the session is running RIGHT NOW ("Bash", "Edit"). */
-  toolLabel: string | null;
-  /** Context tokens in use, and the window they are in use against. */
-  contextUsed: number | null;
-  contextWindow: number | null;
-  /** Total tokens billed to this session so far. */
-  tokensSpent: number | null;
-  /** When the session started, and when it last did anything. */
-  startedAt: string | null;
-  lastActivityAt: string | null;
-  /**
-   * THE AGENT TEMPLATE THIS SESSION WAS LAUNCHED FROM, BY NAME, AS OF SPAWN.
-   *
-   * ⚠ **A SNAPSHOT, NOT A POINTER.** The column is TEXT and deliberately not an
-   * FK (`20260823130000_channel_sessions_template_name.sql`): a session keeps
-   * its spawn-time template content for its whole life, so it must go on
-   * reporting what it RAN AS after the template is renamed or deleted. A stale
-   * name here is CORRECT, not drift.
-   *
-   * ⚠ **OPERATOR-ONLY, on two independent arguments** (Samuel, OQ-5). It is
-   * operator-authored free text, which is the exact condition
-   * `20260822150000` states for a field going private; and a private template's
-   * name on a peer's screen is an existence oracle for a row that carries no
-   * name uniqueness precisely so it cannot be probed. ⚠ There is deliberately
-   * **no `hasTemplate` boolean** on the peer projection — a smaller oracle is
-   * still one.
-   *
-   * `null` = this session was not launched from a template, OR the desktop
-   * reporting it predates the field. The two are not distinguished and the
-   * render treats them the same.
-   */
-  templateName: string | null;
-};
-
-/** The caller's OWN session — coarse projection plus the operator-only half. */
+/** The caller's OWN session — coarse projection, plus the two operator-only
+ *  halves: what it COSTS and whether it is GETTING ANYWHERE. */
 export type ChannelSessionStateOwn = ChannelSessionState &
-  ChannelSessionTelemetry;
+  ChannelSessionTelemetry &
+  ChannelSessionHealth;

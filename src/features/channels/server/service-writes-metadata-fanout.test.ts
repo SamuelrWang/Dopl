@@ -52,6 +52,7 @@ const TASK_ID = "44444444-e29b-41d4-a716-446655440000";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "agent",
   role: "member",
 };
@@ -159,7 +160,6 @@ beforeEach(() => {
     memberRow(USER, "owner"),
     memberRow(PEER),
   ]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>

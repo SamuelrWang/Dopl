@@ -55,10 +55,15 @@ describe("the server instructions route 'ask X's agent' to dopl_channel", () => 
     expect(OUT).toContain("member-to-member and agent-to-agent messaging");
   });
 
-  it("names dopl_channel as the tool for asking something OF another member", () => {
-    expect(OUT).toContain("ask, tell, or request something OF ANOTHER MEMBER");
-    expect(OUT).toContain("the tool is dopl_channel");
-    expect(OUT).toContain('dopl_channel(op="list")');
+  it("names dopl_channel as the tool for reaching another member", () => {
+    // ⚠ REWRITTEN FOR THE 2,048-CHAR BUDGET (A1): the briefing states the route
+    // as one clause of the routing line rather than as its own paragraph. The
+    // claim is unchanged — a request aimed at a PERSON goes through this tool.
+    expect(OUT).toContain("dopl_channel to reach a MEMBER or their agent");
+    // ⚠ THE CALL IT NAMES MUST BE ONE AN AGENT CAN MAKE (B8): the briefing is
+    // read before any tool description, so a retired op name here is a first
+    // call that fails for a reader with no way to find out why.
+    expect(OUT).toContain('dopl_channel(op="rooms", action="list")');
   });
 
   it("says the tool is DEFERRED, so an empty tool list is not an absent feature", () => {
@@ -68,10 +73,12 @@ describe("the server instructions route 'ask X's agent' to dopl_channel", () => 
     expect(OUT).toContain("ToolSearch");
   });
 
-  it("the decision tree has a row for reaching a person, next to the one for listing them", () => {
-    const tree = OUT.split("## Decision tree")[1] ?? "";
-    expect(tree).toContain("another MEMBER or their AGENT -> dopl_channel");
-    expect(tree).toContain("dopl_members tells you who exists");
+  it("the routing line separates LISTING people from REACHING them", () => {
+    // ⚠ Two tools, one line, and the order matters: an agent that reads only
+    // `dopl_members` concludes the workspace has no way to contact anybody.
+    const routing = OUT.split("WHICH TOOL (")[1]?.split("\n")[0] ?? "";
+    expect(routing).toContain("dopl_members who is here");
+    expect(routing).toContain("dopl_channel to reach a MEMBER or their agent");
   });
 
   it("does not restate the channel tool's own rules", () => {
@@ -95,7 +102,11 @@ describe("dopl_map names the destination it cannot list", () => {
   it("routes to dopl_channel for reaching a member or their agent", async () => {
     const text = await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {});
     expect(text).toContain("Reaching a member or their agent: dopl_channel");
-    expect(text).toContain('dopl_channel(op="list")');
+    // ⚠ THE OP NAME MOVED WITH THE COLLAPSE (B8): `list` is an `action` on
+    // `rooms`. The claim is unchanged — a pre-discovery pointer must name a call
+    // the enum accepts, and `dopl_map` is one of the three surfaces that carry
+    // one before an agent has ever listed a tool.
+    expect(text).toContain('dopl_channel(op="rooms", action="list")');
     expect(text).toContain("ToolSearch");
   });
 
@@ -181,8 +192,11 @@ describe("dopl_members answers 'who is here' with a way to reach them", () => {
   });
 
   it("the pointer names both ops an agent needs to get started", () => {
-    expect(CONTACT_POINTER).toContain('op="list"');
-    expect(CONTACT_POINTER).toContain('op="open"');
+    // ⚠ RE-POINTED (B8), SAME CLAIM: two ops still — `rooms` to find the room
+    // or open the DM (`list` and `open` are its actions now), `send` to say
+    // something in it. A pointer naming a retired op is a dead first call.
+    expect(CONTACT_POINTER).toContain('op="rooms"');
+    expect(CONTACT_POINTER).toContain('op="send"');
     expect(CONTACT_POINTER).toContain("ToolSearch");
   });
 

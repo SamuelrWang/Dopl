@@ -23,8 +23,8 @@ describe("the path it builds", () => {
     );
   });
 
-  it("falls back to the default-workspace forwarder when no segment is known", () => {
-    // `/billing` resolves the caller's default workspace rather than 404ing.
+  it("falls back to the segment-less entry when no segment is known", () => {
+    // `/billing` resolves or asks rather than 404ing.
     expect(billingPath()).toBe(BILLING_SURFACE_ROOT);
     expect(billingPath({ segment: null, intent: "upgrade" })).toBe(
       "/billing?billing=upgrade"

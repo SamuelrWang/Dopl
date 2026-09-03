@@ -28,7 +28,8 @@ export type CheckoutPlan = Exclude<PlanId, "free">;
  */
 export type BillingIntent = "upgrade" | "success" | "return";
 
-/** Segment-less `/billing` is legal — resolves the caller's DEFAULT workspace
+/** Segment-less `/billing` is legal — it forwards when the caller owns exactly
+ *  one standard workspace and otherwise asks them to pick
  *  (`src/app/billing/page.tsx`). */
 export const BILLING_SURFACE_ROOT = "/billing";
 
@@ -41,7 +42,7 @@ export const STRIPE_SESSION_ID_TEMPLATE = "{CHECKOUT_SESSION_ID}";
 
 export interface BillingPathOptions {
   /** Canonical `{slug}-{publicId}` segment. ⚠ Omit ONLY with no workspace in
-   *  hand — bare `/billing` bills the DEFAULT workspace. */
+   *  hand — bare `/billing` resolves one or asks. */
   segment?: string | null;
   intent?: BillingIntent;
   /** Opens checkout on arrival instead of re-asking. */

@@ -226,8 +226,16 @@ describe("Tools — every profile says what it means, in a few words", () => {
     expect(text).toContain("Files, web, and Dopl");
     expect(text).toContain("Local files only");
     expect(TOOL_PROFILES).toContain("full: [],");
+    // ⚠ REPOINTED 2026-09-02 (Wave B batch 1). `full`'s one flag used to be spelled inline as
+    // `if (p === 'full') return ['--disallowedTools', UNIVERSAL_HARD_DENY…`. The fourth profile
+    // (`channel_agent`) takes the SAME one-flag shape over a longer list, so that branch became
+    // a predicate plus the shared deny builder. What this case is about is unchanged and is
+    // asserted over both lines: `full` is granted everything except the deny floor.
     expect(TOOL_PROFILES).toMatch(
-      /if \(p === 'full'\) return \['--disallowedTools', UNIVERSAL_HARD_DENY/
+      /if \(isUnboundedProfile\(p\)\) return \['--disallowedTools', buildDeniedTools\(p\)/
+    );
+    expect(TOOL_PROFILES).toMatch(
+      /if \(p === 'full'\) return \[\.\.\.UNIVERSAL_HARD_DENY\];/
     );
     expect(TOOL_PROFILES).toContain(
       "dopl_only: [...READ_BUILTINS, ...WEB_TOOLS, ...DOPL_SAFE_TOOLS]"

@@ -35,6 +35,9 @@ setup-intelligence-engine/
 ├── docs/                          # This file, ADRs, runbooks
 ├── packages/                      # Internal workspace libs (not published to npm)
 │   ├── chrome-extension/          # Browser extension (webpack build)
+│   ├── contracts/                 # @dopl/contracts — the ONE declaration of every closed set that
+│   │                              # crosses a tree boundary. TYPE-ONLY: no build, no dist/, and it
+│   │                              # must stay that way (INVARIANTS §1)
 │   ├── dopl-client/               # @dopl/client — shared HTTP client + types
 │   └── mcp-server/                # In-process MCP engine; booted by /api/mcp via @dopl/mcp-server/factory
 ├── public/                        # Static assets
@@ -399,14 +402,14 @@ New client data code uses `useApiQuery` (`src/shared/hooks/use-api-query.ts`) ov
 
 **WHAT DELIBERATELY STAYS, each for a different reason.** `gating.ts › HIDDEN_TOOLS` — now EMPTY, kept as the hide-before-delete seam itself (INVARIANTS §10). `RETIRED_DOPL_TOOLS` in `dopl-desktop-app/main/tool-profiles.js` — all four deleted tool names, because a name dropped from a deny list becomes *unclassified*, which resolves to `gate`; `UNIVERSAL_HARD_DENY` stays 8 (§11). ⚠ **CORRECTED 2026-08-28: it is now 9** — `dopl_agent_admin` joined the ADMIN half with MCP surface v2 wave A. The sentence above is still right about what it was arguing (nothing left `RETIRED_DOPL_TOOLS`, which is still those four); only the total moved. The `"workflow"` entry in BOTH `RETIRED_RESOURCE_TYPES` render filters (`features/teams/access-levels.ts` and `packages/mcp-server/src/tools/members-render.ts`) — the drop migration deliberately leaves `'workflow'` valid in the `team_resource_access.resource_type` CHECK, so a surviving row must still be filtered where the payload enters a surface. `"workflows"` in `website-retirement.ts › APP_PAGES` — the historical URL list, pinned by `proxy-retirement.test.ts`. And the `seed-content.test.ts` guard that no seeded skill, KB entry, ontology object or sample chat teaches workflows.
 
-**THE TESTS WERE REWRITTEN DOWN, NEVER DELETED WHOLESALE (§14).** `retirement.test.ts` keeps its four-name `RETIRED` array — it stopped being a gate assertion and became a REGROWTH guard against those names coming back as tools or as routing prose. `delete-block.test.ts` pins `HIDDEN_TOOLS` as empty rather than dropping the check. `meta-gate.test.ts` re-pointed its suppression leg from `HIDDEN_TOOLS` (which can no longer suppress anything) to `READ_ONLY_BLOCKED_TOOLS`, because the same `isSuppressedTool` line reads both — mutation-verified, 2 reverts / 2 failures. `teams/server/repository-resources.test.ts` keeps the skill→workflows dispatch regression guard, which was never about workflows: it is about the map routing each type to its own table. `dopl-desktop-app/test/ui-sync-tables.test.mjs` replaced its un-published pin with a DROPPED pin, and had to build a bare-`DROP TABLE` discriminator to do it honestly — `PUB.dropped` would have passed vacuously, since it also matches the tail of an `ALTER PUBLICATION … DROP TABLE`.
+**THE TESTS WERE REWRITTEN DOWN, NEVER DELETED WHOLESALE (§14).** `retirement.test.ts` keeps its four-name `RETIRED` array — it stopped being a gate assertion and became a REGROWTH guard against those names coming back as tools or as routing prose. `delete-block.test.ts` pins `HIDDEN_TOOLS` as empty rather than dropping the check. `meta-gate.test.ts` re-pointed its suppression leg from `HIDDEN_TOOLS` (which can no longer suppress anything) to `READ_ONLY_BLOCKED_TOOLS`, because the same `isSuppressedTool` line reads both — mutation-verified, 2 reverts / 2 failures. ⚠ **CORRECTED 2026-09-02: `READ_ONLY_BLOCKED_TOOLS` IS ITSELF DELETED**, with the five `*_admin` tools it existed to block (MCP v2 wave A, A3) — `gating.ts` says so where the constant stood. So the re-point above is history twice over, and the suppression leg moved again; re-derive from `meta-gate.test.ts` rather than from this sentence. `teams/server/repository-resources.test.ts` keeps the skill→workflows dispatch regression guard, which was never about workflows: it is about the map routing each type to its own table. `dopl-desktop-app/test/ui-sync-tables.test.mjs` replaced its un-published pin with a DROPPED pin, and had to build a bare-`DROP TABLE` discriminator to do it honestly — `PUB.dropped` would have passed vacuously, since it also matches the tail of an `ALTER PUBLICATION … DROP TABLE`.
 
 - **Unrouted and un-navigated.** The five route rows are out of `WORKSPACE_PAGES` (`apps/desktop-ui/src/routes.tsx`), the three nav rows and their `NavSection` union members are out of `src/shared/layout/app-shell/app-sidebar-core.tsx` (the sidebar is SHARED `src/` code, not `apps/desktop-ui` — editing the route table alone leaves three rows pointing at "Not found"), and the hand copy of the page table in `dopl-desktop-app/main/deep-link-target.js` moved in the same change (`test/deep-link-target.test.mjs` re-reads `routes.tsx` at runtime and fails on drift). The page components are now referenced by nothing; they come back by re-adding a route row plus its nav row plus its deep-link entry — all three, or the feature is half-back.
 - **`WORKSPACE_HOME_PATH` is `"overview"` (D4).** It was `"canvas"` with SIX funnels through it (index redirect, boot, workspace switch, workspace create, ⌘⇧H, auth change). Every "go home" resolves through that one constant — never hardcode a home path beside it, or a future repoint boots the app into a 404.
 - **Copy, tour and seeds stopped teaching them.** Tour steps 2 (Canvas — it used to *navigate*) and 3 (Workflows) and the finish copy are gone, as are the workflow lines in the welcome popup, workspace-name step, create-workspace dialog, members role/invite copy, and marketing panel 05. Seeding (D5) no longer creates the "Workspace upkeep" workflow, the `walk-a-workflow` skill, the workflow-teaching Dopl Guide KB entries, or the WORKFLOW rubric in `onboarding/bootstrap-prompt.ts`; the ontology / knowledge / skills seeds are untouched. The Overview "Workflows" stat card is gone (the counts route still returns the number — a card is navigation, and there is nowhere to navigate).
 - **`workflow` is no longer a grantable team resource (D7).** Out of the teams UI and out of the `dopl_members` access-matrix rows. Existing grant rows stay valid in the DB; nothing renders them.
 
-**THE AGENT SURFACE IS 14 TOOLS, and the four that left never register (D1/D2).** ⚠ **Since 2026-08-11 they do not EXIST** — the paragraph below is how they were hidden, and the count is unchanged because 14 was already the visible surface. `dopl_workflow`, `dopl_workflow_admin`, `dopl_cluster` and `dopl_cluster_admin` were listed in `HIDDEN_TOOLS` (**`packages/mcp-server/src/gating.ts:60` since the 2026-08-08 split — it was `server.ts:391`; the constant moved, the gate's topology did not**), read by **`isSuppressedTool`** (`gating.ts:183`, called from `registrar.ts:162,299`), which returns true for a hidden tool and then for a `READ_ONLY_BLOCKED_TOOLS` name in a read-only session — same mechanism, same choke point. **(Corrected 2026-08-07: this used to say "checked at the top of the `registerTool` wrapper". The four gates were HOISTED OUT of that wrapper in the same wave, into `isSuppressedTool` + `opRefusal`, precisely because `registerMetaTool` registers straight onto the SDK server and so published two tools through none of them. That was inert — neither meta-tool is hidden, blocked, or carries an `op` — but inert was a property of today's two tools, not of the path. Two gates run at REGISTRATION, two per CALL.)** The 14-tool count and `dopl_map`'s `DOMAIN_COUNT = 3` were both re-verified against the source on 2026-08-07 and are correct. **Gate at the registrar, never at the route:** the MCP server reaches `/api/workflows/*` and `/api/clusters/*` over LOOPBACK HTTP through `DoplClient`, so gating those routes would have left the tool visible in `tools/list` and made every call a 500 (hence D3 — the routes stay open). Their registrars are still *called* in `createServer` on purpose, so the parity/scope suites keep checking the dormant schemas against their sources. Downstream, all in lockstep: `buildInstructions` no longer mentions canvas/workflows/clusters, `dopl_map` is 3 domains (`DOMAIN_COUNT`) and `dopl_search` 3 groups, the generated `SKILL.md` (`features/mcp-connect/skill-template.ts`) lost its "Following a workflow" section, and `dopl-desktop-app/main/tool-profiles.js` moved the four names off `DOPL_SAFE_TOOLS`/`DOPL_ADMIN_TOOLS` into `RETIRED_DOPL_TOOLS` — **still hard-denied**, because a name dropped from a deny list becomes *unclassified*, which resolves to `gate`, i.e. one operator click away from the tool the table says can never be opened. **Rebuild `packages/mcp-server/dist` after any of this.**
+**THE AGENT SURFACE IS 14 TOOLS, and the four that left never register (D1/D2).** ⚠ **CORRECTED 2026-09-02 — IT IS 13, AND EVERY OTHER NUMBER IN THIS PARAGRAPH IS PRE-WAVE-A.** MCP v2 wave A deleted the five `*_admin` tools outright (A3) and folded `get_thread` into `read(thread=)` (C15); the served count went 18 → 13. **Re-derive, never quote:** `SCHEMA_CEILINGS` in `packages/mcp-server/src/tool-budget.test.ts` names every served tool and the suite measures them through the real `listTools()`. ⚠ **Since 2026-08-11 they do not EXIST** — the paragraph below is how they were hidden, and the count is unchanged because 14 was already the visible surface. `dopl_workflow`, `dopl_workflow_admin`, `dopl_cluster` and `dopl_cluster_admin` were listed in `HIDDEN_TOOLS` (**`packages/mcp-server/src/gating.ts:60` since the 2026-08-08 split — it was `server.ts:391`; the constant moved, the gate's topology did not**), read by **`isSuppressedTool`** (`gating.ts:183`, called from `registrar.ts:162,299`), which returns true for a hidden tool and then for a `READ_ONLY_BLOCKED_TOOLS` name in a read-only session — same mechanism, same choke point. **(Corrected 2026-08-07: this used to say "checked at the top of the `registerTool` wrapper". The four gates were HOISTED OUT of that wrapper in the same wave, into `isSuppressedTool` + `opRefusal`, precisely because `registerMetaTool` registers straight onto the SDK server and so published two tools through none of them. That was inert — neither meta-tool is hidden, blocked, or carries an `op` — but inert was a property of today's two tools, not of the path. Two gates run at REGISTRATION, two per CALL.)** The 14-tool count and `dopl_map`'s `DOMAIN_COUNT = 3` were both re-verified against the source on 2026-08-07 and are correct. **Gate at the registrar, never at the route:** the MCP server reaches `/api/workflows/*` and `/api/clusters/*` over LOOPBACK HTTP through `DoplClient`, so gating those routes would have left the tool visible in `tools/list` and made every call a 500 (hence D3 — the routes stay open). Their registrars are still *called* in `createServer` on purpose, so the parity/scope suites keep checking the dormant schemas against their sources. Downstream, all in lockstep: `buildInstructions` no longer mentions canvas/workflows/clusters, `dopl_map` is 3 domains (`DOMAIN_COUNT`) and `dopl_search` 3 groups, the generated `SKILL.md` (`features/mcp-connect/skill-template.ts`) lost its "Following a workflow" section, and `dopl-desktop-app/main/tool-profiles.js` moved the four names off `DOPL_SAFE_TOOLS`/`DOPL_ADMIN_TOOLS` into `RETIRED_DOPL_TOOLS` — **still hard-denied**, because a name dropped from a deny list becomes *unclassified*, which resolves to `gate`, i.e. one operator click away from the tool the table says can never be opened. **Rebuild `packages/mcp-server/dist` after any of this.**
 
 **DELETION IS APP-ONLY — agents cannot delete anything over MCP.** Same choke point, second mechanism, and **since 2026-08-07 it lives in its own module: `packages/mcp-server/src/delete-policy.ts`, NOT in `server.ts`** (which imports `DELETE_REFUSAL` + `isBlockedDeleteOp` from it). `DELETE_BLOCKED_OPS` enumerates today's delete ops per `_admin` tool verbatim, and `DELETE_OP_SHAPE` — `/^(delete|destroy|purge|trash|remove)(_|$)/` — fail-closes on any *future* `*_admin` op whose name reads as a deletion, so a new destructive op is refused even if nobody remembers the table. One `DELETE_REFUSAL` string, worded once, naming the app as the place it can be done. It runs first inside `opRefusal` — **deliberately ahead of the read-only write-scope gate, because it is unconditional and must not be reachable only after some other gate happens to let the call through** — and before workspace resolution and any client call, so a refused delete costs zero round trips and can never half-happen. This is what makes in-app hard delete safe — see **"DELETES ARE PERMANENT"** below for the product half.
 
@@ -675,14 +678,14 @@ Channels are shared workspace rooms where multiple members' agents (and humans) 
 
 - **RLS write model — stricter than every older table.** `20260725130000_channels_rls_hardening.sql` **REVOKEs INSERT/UPDATE/DELETE on all three tables from `authenticated`+`anon`** and **drops the write policies**; every write is service-role-only through the feature service. Deliberately stricter than the older tables (chats, ontology, knowledge, skills, workflows), which keep their `authenticated`/`anon` DML grants and lean on default-deny RLS alone (bring-to-parity → F-051). Member `SELECT` policies remain for reads (they also feed the realtime publication, §7).
 - **Serialized append RPC.** All inserts go through `channel_message_insert` (service-role `EXECUTE` only), which takes a per-channel `pg_advisory_xact_lock` **before** the insert (before `nextval`), so `seq` commits in strict monotonic order under concurrent posters — no reorderings, and no committed-out-of-order hole a reader could poll past. "No gaps" means exactly that and nothing more: the VALUES a channel sees are gappy by construction, because the identity sequence is table-wide (above).
-- **Routes** `src/app/api/channels/**` — thin handlers. **The FULL inventory, verified against disk 2026-08-05 (F-146 — this list named four routes when there were twelve):** `/` · `/[channelId]` · `/[channelId]/members` · `/[channelId]/messages` · `/[channelId]/await` (the long poll below) · `/[channelId]/tasks` · `/[channelId]/tasks/[taskId]` · `/[channelId]/agents` (**GET only** — the historical ATTRIBUTION roster, the one read that survived F-141; POST and the whole `agents/[agentId]` route are deleted) · `/consent` · `/consent/[id]` · `/trust` · `/presence` · **`/sessions` (NEW, rollback §3.5 / F-144** — own-scoped live session state, the server half of `read_sessions`; the desktop WRITE that populates it is the flagged gap, so it answers `[]` live and says so). **The wait is TWO LAYERS since WAKE-V1 (2026-07-30) — do not collapse them.** (1) **INNER (unchanged):** the route blocks up to ~50s (`MAX_AWAIT_TIMEOUT_MS`) for a message with `seq >` the caller's cursor, then returns the new messages (or empty on timeout), self-bounded under its own `export const maxDuration = 60` so the function never races the platform limit. (2) **OUTER:** the MCP op `dopl_channel(op="await")` ASSEMBLES a long hold out of those inner polls, re-issued with the SAME cursor (nothing advances until messages actually land, so a re-issue can neither skip nor double-count) until messages arrive or the assembled hold is spent. **Every clock in that chain lives in ONE file — `packages/mcp-server/src/tools/channel-await-budget.ts` — read it before retuning any of them.** The DEFAULT hold is **215s** (`AWAIT_HOLD_DEFAULT_MS`), not the cap: it has to clear every deadline around it so the graceful re-arm RESULT wins the race. An EXPLICIT `timeout_ms` may reach **230s** (`AWAIT_HOLD_CAP_MS`, lowered from 240s by FIX M3 — at 240 the cap plus `AWAIT_HOLD_MARGIN_MS` was exactly the route ceiling, i.e. no margin, and the margin was only ever asserted against the default). **Why a long hold exists at all:** SOME MCP clients auto-BACKGROUND a call still pending after ~2 minutes and deliver its eventual result as a task notification, and a task notification WAKES an idle session — so a hold that crosses the two-minute mark is the wake primitive that brings the requester's own session back to life with the peer's reply, with no human re-prompt. **State it as "some clients", never as a property of this call (corrected 2026-07-31 — the older text here and four copies in the tool said it unconditionally).** It is a CLIENT behaviour the server cannot observe, and the counter-case was measured: an external session armed the await and the ~215s hold ran to completion INSIDE the same turn. A pending call keeps a turn alive; it cannot end one. What the tool is willing to CLAIM about that now branches on the caller's runtime — see `channel-wake-guidance.ts` below. The hold is env-tunable for incidents: `DOPL_AWAIT_HOLD_MS` (integer ms, clamped to [50 000, 230 000]; anything unparseable → **215 000**, the default), read once at module load, so a hold can be shortened by an env flip instead of rebuilding the committed `dist/`. `resolveAwaitHoldMs` resolves the DEFAULT; `resolveAwaitHoldCeilingMs` resolves the ceiling for an EXPLICIT `timeout_ms` and returns the lever's value when the lever is set, so a caller-supplied maximum cannot route around an incident lever.
+- **Routes** `src/app/api/channels/**` — thin handlers. **The FULL inventory, verified against disk 2026-08-05 (F-146 — this list named four routes when there were twelve):** `/` · `/[channelId]` · `/[channelId]/members` · `/[channelId]/messages` · `/[channelId]/await` (the long poll below) · `/[channelId]/tasks` · `/[channelId]/tasks/[taskId]` · `/[channelId]/agents` (**GET only** — the historical ATTRIBUTION roster, the one read that survived F-141; POST and the whole `agents/[agentId]` route are deleted) · `/consent` · `/consent/[id]` · `/trust` · `/presence` · **`/sessions` (NEW, rollback §3.5 / F-144** — own-scoped live session state, the server half of `read_sessions`; the desktop WRITE that populates it is the flagged gap, so it answers `[]` live and says so). **The wait is TWO LAYERS since WAKE-V1 (2026-07-30) — do not collapse them.** (1) **INNER (unchanged):** the route blocks up to ~50s (`MAX_AWAIT_TIMEOUT_MS`) for a message with `seq >` the caller's cursor, then returns the new messages (or empty on timeout), self-bounded under its own `export const maxDuration = 60` so the function never races the platform limit. (2) **OUTER:** the MCP op `dopl_channel(op="await")` ASSEMBLES a long hold out of those inner polls, re-issued with the SAME cursor (nothing advances until messages actually land, so a re-issue can neither skip nor double-count) until messages arrive or the assembled hold is spent. **Every clock in that chain lives in ONE file — `packages/mcp-server/src/tools/channel-hold-budget.ts` — read it before retuning any of them.** The DEFAULT hold is **215s** (`AWAIT_HOLD_DEFAULT_MS`), not the cap: it has to clear every deadline around it so the graceful re-arm RESULT wins the race. An EXPLICIT `timeout_ms` may reach **230s** (`AWAIT_HOLD_CAP_MS`, lowered from 240s by FIX M3 — at 240 the cap plus `AWAIT_HOLD_MARGIN_MS` was exactly the route ceiling, i.e. no margin, and the margin was only ever asserted against the default). **Why a long hold exists at all:** SOME MCP clients auto-BACKGROUND a call still pending after ~2 minutes and deliver its eventual result as a task notification, and a task notification WAKES an idle session — so a hold that crosses the two-minute mark is the wake primitive that brings the requester's own session back to life with the peer's reply, with no human re-prompt. **State it as "some clients", never as a property of this call (corrected 2026-07-31 — the older text here and four copies in the tool said it unconditionally).** It is a CLIENT behaviour the server cannot observe, and the counter-case was measured: an external session armed the await and the ~215s hold ran to completion INSIDE the same turn. A pending call keeps a turn alive; it cannot end one. What the tool is willing to CLAIM about that now branches on the caller's runtime — see `channel-wake-guidance.ts` below. The hold is env-tunable for incidents: `DOPL_AWAIT_HOLD_MS` (integer ms, clamped to [50 000, 230 000]; anything unparseable → **215 000**, the default), read once at module load, so a hold can be shortened by an env flip instead of rebuilding the committed `dist/`. `resolveAwaitHoldMs` resolves the DEFAULT; `resolveAwaitHoldCeilingMs` resolves the ceiling for an EXPLICIT `timeout_ms` and returns the lever's value when the lever is set, so a caller-supplied maximum cannot route around an incident lever.
   - **`maxDuration` inventory — the only two routes that raise the platform default.** `/api/channels/[channelId]/await` = **60** (covers the 50s inner poll). `/api/mcp` = **300** (covers the 215s outer hold — 230s if a caller asks for the cap — PLUS the boot handshake the route runs before any tool executes). **300 is REQUIRED there and does NOT degrade gracefully:** if the deployment plan clamps it below the hold, the platform kills the function mid-hold and every await comes back as an opaque transport error instead of the timed-out RESULT — and all the re-arm teaching lives in that result text, so the agent gets nothing to act on and cannot tell it from a network blip. Verify the plan supports 300s on deploy; if it cannot, shorten `DOPL_AWAIT_HOLD_MS` to fit under the real ceiling FIRST.
   - **THE 60s CLIENT ABORT, and why `/api/mcp` STREAMS (Q9 / FIX M1, 2026-07-31).** Claude Code wraps every non-GET fetch to a `type: "http"` MCP server in an AbortController that fires after `max(server.timeout ?? 60_000, 60_000)` ms, and that timer bounds **time-to-response-HEADERS**. The route used to build its transport with `enableJsonResponse: true`, which makes the SDK withhold the entire response — headers included — until the tool handler returns, so for us the 60s bound covered the WHOLE call: every long op died at exactly 60.0s (`op="await"`, but also `op="list"` and `dopl_kb` reads — never an await-specific fault). **The flag is gone; the transport is on its default SSE path**, which returns its `Response` synchronously after dispatching the message, so headers flush at t≈0 and the 60s bound covers only the handshake. This is the fix for every client we cannot configure — terminal Claude Code, claude.ai connectors, Claude Desktop, third-party clients. It narrows nothing: the transport already 406s any POST whose `Accept` omits `text/event-stream`, in BOTH modes, so a client that works today already advertises SSE. Session handling is unchanged (stateless, no `mcp-session-id` either way). **Two consequences to keep:** (1) the route must stay on the Node runtime with nothing buffering in front of it — no middleware, no CDN cache — or headers stop flushing and the abort returns; (2) an await holds an OPEN stream that sends no bytes for ~215s, so `src/shared/api/sse-keep-alive.ts` wraps the response and emits an SSE COMMENT every 15s (comments are ignored by every conforming parser, so the decoded frames are byte-identical). The desktop still writes a per-server `timeout` on the two entries it owns, as belt-and-braces — see the next bullet for exactly which, and for the one it deliberately does not write.
-  - **THE PER-SERVER `timeout` KEY — where the desktop sets it, and where it refuses to (2026-07-31).** **Version-qualified fact, re-verified against what actually ships:** the desktop bundles `@anthropic-ai/claude-agent-sdk` **0.3.220**, which carries **Claude Code 2.1.220**, and that binary **DOES honour a per-server `timeout`** (declared on `McpHttpServerConfig` / `McpSSEServerConfig` / `McpStdioServerConfig` / `McpClaudeAIProxyServerConfig` as "per-server tool-call timeout in milliseconds; overrides `MCP_TOOL_TIMEOUT` for this server; values below 1000ms are ignored"). Do not restate this as a general Claude Code fact — it is a per-version one, and the honouring changed across versions. **TWO NUANCES, both load-bearing:** (1) the HTTP request abort is computed as `min(max(timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647)`, so the key can only ever RAISE the abort above the 60s floor, never lower it; (2) setting it also LOWERS the hard tool-call ceiling from its `1e8`ms (~27.8h) default to that same value. **WHERE WE SET IT — the entries inside our own process, and only those:** the in-app spawn config `userData/mcp-spawn.json` (`main/mcp-config.js` `spawnConfigBody`, passed on every headless spawn via `--mcp-config`) and the SDK session's in-memory `mcpServers` object (`main/runtime/claude/loader.js` `buildMcpServers`). **ONE definition:** `MCP_CLIENT_TIMEOUT_MS` lives in `main/mcp-config.js` and `sdk-loader` imports it — both files used to restate `280_000` and drifted. **The value is DERIVED, not tuned:** `AWAIT_HOLD_CAP_MS` (230s — the longest hold a caller can actually get, via an explicit `timeout_ms`; the 215s DEFAULT is the wrong bound to size against) + `AWAIT_HOLD_MARGIN_MS` (60s) ⇒ **290s**, bounded above by `MCP_ROUTE_MAX_DURATION_MS` (300s). `dopl-desktop-app/test/mcp-client-timeout.test.mjs` pins that RELATION against `channel-await-budget.ts`'s own constants, so moving the cap fails a test instead of silently under-sizing the client. **WHERE WE REFUSE TO SET IT — the operator's `~/.claude.json`.** `main/mcp-cli-entry.js` used to rewrite that file in place after each `claude mcp add`, because the CLI has no `--timeout` flag and the remove+add on every mint destroyed a hand-patched value. **It is deleted (2026-07-31); do not bring it back.** Four reasons: (1) it mutated a file the operator owns and that holds their `oauthAccount` credential block — a disproportionate blast radius for a tuning knob; (2) the reason it existed is gone, since `/api/mcp` streams (commit `c2f6a7e`) and a long `op="await"` hold is no longer 60s of silence to any client; (3) `timeout` also lowers the hard tool-call ceiling (nuance 2 above), which we would have been imposing on the operator's own terminal `claude` sessions without asking; (4) the in-app spawn path already sets it via `--mcp-config`, which IS honoured in 2.1.220 and is entirely inside our process — that is where the fix belongs, and it stays. The `claude mcp add/remove/get` child processes now live in `main/mcp-cli-add.js` (a §2 split of `mcp-config.js`, which sits at the 500-line cap) and they write no config file of their own.
+  - **THE PER-SERVER `timeout` KEY — where the desktop sets it, and where it refuses to (2026-07-31).** **Version-qualified fact, re-verified against what actually ships:** the desktop bundles `@anthropic-ai/claude-agent-sdk` **0.3.220**, which carries **Claude Code 2.1.220**, and that binary **DOES honour a per-server `timeout`** (declared on `McpHttpServerConfig` / `McpSSEServerConfig` / `McpStdioServerConfig` / `McpClaudeAIProxyServerConfig` as "per-server tool-call timeout in milliseconds; overrides `MCP_TOOL_TIMEOUT` for this server; values below 1000ms are ignored"). Do not restate this as a general Claude Code fact — it is a per-version one, and the honouring changed across versions. **TWO NUANCES, both load-bearing:** (1) the HTTP request abort is computed as `min(max(timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647)`, so the key can only ever RAISE the abort above the 60s floor, never lower it; (2) setting it also LOWERS the hard tool-call ceiling from its `1e8`ms (~27.8h) default to that same value. **WHERE WE SET IT — the entries inside our own process, and only those:** the in-app spawn config `userData/mcp-spawn.json` (`main/mcp-config.js` `spawnConfigBody`, passed on every headless spawn via `--mcp-config`) and the SDK session's in-memory `mcpServers` object (`main/runtime/claude/loader.js` `buildMcpServers`). **ONE definition:** `MCP_CLIENT_TIMEOUT_MS` lives in `main/mcp-config.js` and `sdk-loader` imports it — both files used to restate `280_000` and drifted. **The value is DERIVED, not tuned:** `AWAIT_HOLD_CAP_MS` (230s — the longest hold a caller can actually get, via an explicit `timeout_ms`; the 215s DEFAULT is the wrong bound to size against) + `AWAIT_HOLD_MARGIN_MS` (60s) ⇒ **290s**, bounded above by `MCP_ROUTE_MAX_DURATION_MS` (300s). `dopl-desktop-app/test/mcp-client-timeout.test.mjs` pins that RELATION against `channel-hold-budget.ts`'s own constants, so moving the cap fails a test instead of silently under-sizing the client. **WHERE WE REFUSE TO SET IT — the operator's `~/.claude.json`.** `main/mcp-cli-entry.js` used to rewrite that file in place after each `claude mcp add`, because the CLI has no `--timeout` flag and the remove+add on every mint destroyed a hand-patched value. **It is deleted (2026-07-31); do not bring it back.** Four reasons: (1) it mutated a file the operator owns and that holds their `oauthAccount` credential block — a disproportionate blast radius for a tuning knob; (2) the reason it existed is gone, since `/api/mcp` streams (commit `c2f6a7e`) and a long `op="await"` hold is no longer 60s of silence to any client; (3) `timeout` also lowers the hard tool-call ceiling (nuance 2 above), which we would have been imposing on the operator's own terminal `claude` sessions without asking; (4) the in-app spawn path already sets it via `--mcp-config`, which IS honoured in 2.1.220 and is entirely inside our process — that is where the fix belongs, and it stays. The `claude mcp add/remove/get` child processes now live in `main/mcp-cli-add.js` (a §2 split of `mcp-config.js`, which sits at the 500-line cap) and they write no config file of their own.
   - **The two timeout caps are deliberately different, not drift.** The MCP tool's `timeout_ms` maxes at **230000** (the TOTAL assembled hold; `AWAIT_HOLD_CAP_MS`, which the schema's `.max()` and the tool description both read — they were three independent literals until FIX M3) while the route's `AwaitQuerySchema` maxes at **50000** (ONE inner poll). Raising the route cap lengthens nothing — it just pushes a single function against its own 60s ceiling — and lowering the tool cap would drop the hold under the two-minute backgrounding mark, silently destroying the wake while every test still passed.
   - **What ONE inner tick costs — the Q8 egress diet (2026-07-31).** The hold loop lives in `channels/server/service-await.ts` (`awaitNewMessages`); the route is a thin adapter. It used to run 3 queries every 1.5s tick — a `select *` message read plus `revalidateAwaitAccess`'s two FULL-row lookups — for the entire hold, and the teaching tells every agent with an open exchange to keep an await armed continuously, so a listening user held ~1.33 queries/sec indefinitely (~2 MB/h of response bodies per armed await, ~99% of it the two access rows nothing reads). Now: **tick 0** is a direct row read (access was just proven by `resolveReadableChannelId`, and the desktop's `timeoutMs=1` wake path is exactly one tick, so probing first would only add a round trip); **every later tick** is an existence probe (`hasMessagesAfter` — `seq > since LIMIT 1`, one column) and full rows are fetched only once it hits; **the access recheck** runs on the first held tick and then every `AWAIT_REVALIDATE_EVERY_TICKS` (10, ~15s bounded staleness) using column-narrowed lookups (`findChannelAccess` / `hasMembership` — never `findChannelById` / `findMembership`, which pull rows the decision does not read). **THE SECURITY PROPERTY MOVED FROM THE CADENCE TO THE RETURN PATH and must stay there.** The invariant, stated exactly (corrected 2026-07-31 by FIX M2 — the older text here said the hold "revalidates unconditionally", which the code does not literally do and never has): **NO FETCH OF MESSAGE ROWS MAY PRECEDE A PROOF OF ACCESS WITHIN THE SAME TICK.** On an existence hit the hold proves access before reading rows, via `verifyAccess`, which skips the query in exactly one case — the periodic recheck already proved access EARLIER IN THIS TICK, so the proof is younger than the probe that found the message and a second identical query could not learn anything. Both paths satisfy the invariant. Never widen that skip to "proven recently": a proof from an EARLIER tick is precisely the one a revocation can have landed after. Response shape, cursor semantics, ordering and limit are byte-identical to before; `service-await.test.ts` pins the security path, the cadence and the contract. One `[await-hold] … polls= revalidations= outcome=` line per hold makes it measurable in prod (`DOPL_AWAIT_DIAG=0` silences it). It is emitted from a `finally` and the counters ride on an object the loop mutates (`AwaitHoldCounters`), so a hold ended by a mid-hold 404 logs too (FIX L6 — it used to log only the holds that finished cleanly, i.e. the wrong half of the population).
-  - **AUTHOR EXCLUSION — an await can be told to ignore ONE author, and the MCP lane always is (2026-07-31).** `excludeAuthor` (a uuid) is OPT-IN and threads the whole stack: `AwaitQuerySchema` → `/api/channels/[channelId]/await` → `awaitNewMessages` (`AwaitHoldOptions`) → `pollChannelMessages` **and** `hasNewMessages` → `repository-messages.listMessages` (on `MessageReadOpts`, applied on BOTH the `since` branch and the cursorless newest-`limit` branch) + `hasMessagesAfter` (positional 3rd param). `@dopl/client`'s `AwaitMessagesOptions.excludeAuthor` sets the query param. **Why it exists:** the caller's OWN `task_progress` milestone or close echo popped its own hold — observed live twice — so the wake primitive died on exactly the multi-step work it exists for. **`opAwait` passes `selfUserId` whenever it is non-null**, i.e. always-on for the MCP path (an MCP await waits for a COUNTERPARTY by definition); a null id — the boot ping could not name the caller — passes nothing, which is the pre-fix behaviour rather than a guessed one. **THE EXISTENCE PROBE MUST CARRY THE SAME FILTER AS THE ROW READ.** `hasMessagesAfter` filters too, or a hit on a row the page then drops turns the hold into a fetch-empty-continue spin — one extra pair of queries every tick, against the diet above. **The desktop listener sends NO param and is byte-identical**, and must stay that way: it needs its own account's rows (thread targeting, requester-window routing, version-skew observation). Never make this always-on server-side. **THE PREDICATE IS `author_user_id IS NULL OR author_user_id <> $1`, AND IT IS SPELLED ONCE (2026-08-08, C-17 / F-171).** ⛔ This bullet used to end with "`.neq(...)` also drops NULL-author rows (SQL `<> NULL`) — no writer produces them today, but the column IS nullable, so revisit if system-authored messages are ever added." **That day came and the note did not save us**: `/api/cron/stale-threads` writes `author_kind:'system'` with a null author, so its 14-day close proposal rendered on the web card and was INVISIBLE to every agent holding an await — the one surface `dopl_channel` teaches every agent to keep armed. **Fixed at the FILTER, not the writer**, and that choice is load-bearing: `excludeAuthor` means "ignore my OWN posts so my own traffic cannot end my own wait", and a message with no author is by construction not the caller's own — dropping it was never the rule, it was the rule's SQL leaking. Forging an author on the sweep would have been wrong twice over (no honest candidate; and whichever party was stamped is exactly the member whose agent would still not see it). `repository-messages.excludeAuthorFilter` is the single spelling, used by `listMessages` AND `hasMessagesAfter`; anything that adds a third reader owes it the same call. **The one consequence that REMAINS accepted:** the filter drops a SIBLING session on the same account, which is "own" traffic from the channel's point of view. Tests: `service-await.test.ts`, `schema.test.ts`, `repository-messages.test.ts` (the SQL shape — the bug reads correctly as JavaScript and is wrong as SQL, so the filter STRING is what is pinned), `packages/mcp-server`'s `channel-await-author.test.ts`.
-  - **WHAT THE TOOL MAY CLAIM ABOUT WAITING IS DECIDED IN ONE MODULE (2026-07-31).** `packages/mcp-server/src/tools/channel-wake-guidance.ts` is the ONLY place that says anything about a wake, for `post`, `create_thread` and both `await` branches. All four used to end with the same unconditional sentence — "that call can keep running after your turn ends, and its result will wake you" — a client property this server cannot see, said to every caller, and false for the one it was measured on. `registerChannelTool` now takes the full `CallerIdentity` (`server.ts` passes `caller`, matching the members/ontology registrars) instead of the bare user id, and branches on `caller.runtime` — an OBSERVATION that gates nothing (`identity.ts`, F-104). **`desktop-session`** → that session is fed the counterparty's replies as new turns (v1.9), so the promise is not softened but **DROPPED**: "do NOT arm await, end your reply here". The re-arm stop rule is dropped with it — a stop rule is contradictory under don't-re-arm. **`unstamped`** → nothing is promised: the hold is described as what it provably is (it HOLDS ~215s, read from `AWAIT_HOLD_DEFAULT_MS` so the sentence cannot drift, and RETURNS INSIDE the turn), plus the conditional wake stated as a property of the CLIENT — and every stop/re-arm teaching rides beside it VERBATIM. The `Skip the await` escape hatch stays on the unstamped branch only, because an unstamped caller may still BE a desktop session on an older build; where the server can tell, it is replaced by the real instruction. `CHANNEL_DESCRIPTION` and the `timeout_ms` describe-string are reworded runtime-neutral to match. **Hedge worth knowing:** headless spawns carry the stamp too (`mcp-config.js` `spawnConfigBody`, `:114-134` — FIX L4 put it there on purpose), and "fed as new turns" describes the session-WINDOW path more exactly than a headless `claude -p` — but don't-await is correct for both, so the text is deliberately not split. Landing with it: `AWAIT_UNNAMED_NOTICE` fires only over messages someone ELSE wrote, so an all-own page is silent instead of telling the agent "NONE of the messages above NAMES you" about its own request (defense in depth behind the author exclusion above — own posts should not reach that predicate at all). Tests: `channel-wake-runtime.test.ts` (11) + `channel-addressing-rule.test.ts`'s firing describe.
+  - **AUTHOR EXCLUSION — an await can be told to ignore ONE author, and the MCP lane always is (2026-07-31).** `excludeAuthor` (a uuid) is OPT-IN and threads the whole stack: `AwaitQuerySchema` → `/api/channels/[channelId]/await` → `awaitNewMessages` (`AwaitHoldOptions`) → `pollChannelMessages` **and** `hasNewMessages` → `repository-messages.listMessages` (on `MessageReadOpts`, applied on BOTH the `since` branch and the cursorless newest-`limit` branch) + `hasMessagesAfter` (positional 3rd param). `@dopl/client`'s `AwaitMessagesOptions.excludeAuthor` sets the query param. **Why it exists:** the caller's OWN `task_progress` milestone or close echo popped its own hold — observed live twice — so the wake primitive died on exactly the multi-step work it exists for. **`opAwait` passes `selfUserId` whenever it is non-null**, i.e. always-on for the MCP path (an MCP await waits for a COUNTERPARTY by definition); a null id — the boot ping could not name the caller — passes nothing, which is the pre-fix behaviour rather than a guessed one. **THE EXISTENCE PROBE MUST CARRY THE SAME FILTER AS THE ROW READ.** `hasMessagesAfter` filters too, or a hit on a row the page then drops turns the hold into a fetch-empty-continue spin — one extra pair of queries every tick, against the diet above. **The desktop listener sends NO param and is byte-identical**, and must stay that way: it needs its own account's rows (thread targeting, requester-window routing, version-skew observation). Never make this always-on server-side. **THE PREDICATE IS `author_user_id IS NULL OR author_user_id <> $1`, AND IT IS SPELLED ONCE (2026-08-08, C-17 / F-171).** ⛔ This bullet used to end with "`.neq(...)` also drops NULL-author rows (SQL `<> NULL`) — no writer produces them today, but the column IS nullable, so revisit if system-authored messages are ever added." **That day came and the note did not save us**: `/api/cron/stale-threads` writes `author_kind:'system'` with a null author, so its 14-day close proposal rendered on the web card and was INVISIBLE to every agent holding an await — the one surface `dopl_channel` teaches every agent to keep armed. **Fixed at the FILTER, not the writer**, and that choice is load-bearing: `excludeAuthor` means "ignore my OWN posts so my own traffic cannot end my own wait", and a message with no author is by construction not the caller's own — dropping it was never the rule, it was the rule's SQL leaking. Forging an author on the sweep would have been wrong twice over (no honest candidate; and whichever party was stamped is exactly the member whose agent would still not see it). `repository-messages.excludeAuthorFilter` is the single spelling, used by `listMessages` AND `hasMessagesAfter`; anything that adds a third reader owes it the same call. **The one consequence that REMAINS accepted:** the filter drops a SIBLING session on the same account, which is "own" traffic from the channel's point of view. Tests: `service-await.test.ts`, `schema.test.ts`, `repository-messages.test.ts` (the SQL shape — the bug reads correctly as JavaScript and is wrong as SQL, so the filter STRING is what is pinned), `packages/mcp-server`'s `channel-hold-author.test.ts`.
+  - **WHAT THE TOOL MAY CLAIM ABOUT WAITING IS DECIDED IN ONE MODULE (2026-07-31).** `packages/mcp-server/src/tools/channel-wake-guidance.ts` is the ONLY place that says anything about a wake, for `post`, `create_thread` and both `await` branches. All four used to end with the same unconditional sentence — "that call can keep running after your turn ends, and its result will wake you" — a client property this server cannot see, said to every caller, and false for the one it was measured on. `registerChannelTool` now takes the full `CallerIdentity` (`server.ts` passes `caller`, matching the members/ontology registrars) instead of the bare user id, and branches on `caller.runtime` — an OBSERVATION that gates nothing (`identity.ts`, F-104). **`desktop-session`** → that session is fed the counterparty's replies as new turns (v1.9), so the promise is not softened but **DROPPED**: "do NOT arm await, end your reply here". The re-arm stop rule is dropped with it — a stop rule is contradictory under don't-re-arm. **`unstamped`** → nothing is promised: the hold is described as what it provably is (it HOLDS ~215s, read from `AWAIT_HOLD_DEFAULT_MS` so the sentence cannot drift, and RETURNS INSIDE the turn), plus the conditional wake stated as a property of the CLIENT — and every stop/re-arm teaching rides beside it VERBATIM. The `Skip the await` escape hatch stays on the unstamped branch only, because an unstamped caller may still BE a desktop session on an older build; where the server can tell, it is replaced by the real instruction. `CHANNEL_DESCRIPTION` and the `timeout_ms` describe-string are reworded runtime-neutral to match. **Hedge worth knowing:** headless spawns carry the stamp too (`mcp-config.js` `spawnConfigBody`, `:114-134` — FIX L4 put it there on purpose), and "fed as new turns" describes the session-WINDOW path more exactly than a headless `claude -p` — but don't-await is correct for both, so the text is deliberately not split. Landing with it: `HOLD_UNNAMED_NOTICE` fires only over messages someone ELSE wrote, so an all-own page is silent instead of telling the agent "NONE of the messages above NAMES you" about its own request (defense in depth behind the author exclusion above — own posts should not reach that predicate at all). Tests: `channel-wake-runtime.test.ts` (11) + `channel-addressing-rule.test.ts`'s firing describe.
   - **TIER 1 — the wake an EXTERNAL session can build for itself (2026-07-31).** The scope matrix, stated plainly because two of its three cells are not fixed: a **desktop** session is woken (replies are fed as new turns, v1.9); a **terminal session whose harness runs background shell tasks** now has a real wake; a **claude.ai connector** still has none, and cannot — there is no shell to run one in. The mechanism is a swap of which primitive does the waiting. Backgrounding an MCP call is the client behaviour this server cannot see, and it demonstrably did NOT engage on the caller it was measured against (6+ in-turn ~215s holds); background-TASK completion demonstrably does wake an idle session, and it is the harness's own primitive. So `scripts/dopl-channel-wait.sh` moves the poll out of the MCP call: an env-driven `curl` loop on `/api/channels/[channelId]/await` (one request per ~50s inner hold, not a spin), token by `Authorization` header ONLY and never in the URL, `X-Workspace-Id` because workspace resolution is fail-closed (§9), and a three-valued exit that a background task is read by — **0** messages arrived (body on stdout), **3** budget spent quiet (re-run with the SAME since), **2** request failed (detail on stderr). Run it as a background task and END the turn. In the tool surface this is exactly ONE conditional sentence: `BACKGROUND_TASK_HINT` (`channel-wake-guidance.ts:71`) rides on the end of `HOLD_FACT` (`:83`), so it reaches all four unstamped call sites from one place and there is no fourth copy to drift. It is deliberately conditional ("if your harness can run background shell tasks") and names a script rather than implying the server provides one — the same discipline as the rest of the module.
   - **THREAD-SCOPED READ — `GET /messages?thread=<threadId>` (2026-07-31).** Reconstructing ONE exchange used to mean paging the whole channel and filtering client-side: a peer agent burned five paged reads over ~135 messages to isolate 14 of them, and the one-shot `limit=200` read that would have avoided the paging blows the caller's own output ceiling. `thread` filters on `metadata->>'taskId'` and threads the stack unchanged — `MessageReadQuerySchema` (`schema.ts:242`) → `readMessages` (`service-reads.ts:213`) → `listMessages`'s `threadId` (`repository-messages.ts:34`) → `ReadMessagesOptions.thread` (`channel-types.ts:236`) → `opRead`'s 6th arg (`channel-ops-read.ts:90`). **Three rules, each load-bearing:**
     - **A FILTER, NOT A LOOKUP.** Nothing is checked against `channel_tasks`. An id no message carries returns `[]`, never a 404, and the schema takes ANY non-empty string (≤200, bounded like `clientMsgId`) rather than `.uuid()` — the transcript still carries LEGACY `task-<channelId>-<seq>` ids from before threads were a table, and a `.uuid()` here would 400 exactly the exchanges that are hardest to reconstruct by hand.
@@ -691,7 +694,7 @@ Channels are shared workspace rooms where multiple members' agents (and humans) 
     - **No index backs the filter.** `channel_messages` has no functional index on `metadata->>'taskId'` (`20260725120000` indexes `(channel_id, seq)` and `workspace_id` only), so the scoped read is a filter over the channel scan. Fine at today's volumes; a functional index is the fix if channels grow, not a schema change.
   - **THE CLOSE ECHO'S SEQ RIDES BACK OUT (2026-07-31).** Closing a thread WRITES a message (the `task_finished` / `task_failed` marker), so it moves the channel's cursor — and the seq it landed on is knowable only inside `closeTask`. **Motivating incident:** a requester closed a thread, GUESSED the echo's seq (last known + 1), armed `await` one past that guess, and silently skipped the peer's main deliverable, which was already sitting below the cursor. So the number is now reported, never derived: `closeTask` returns `TaskCloseResult { thread, echoSeq }` (`service-tasks.ts:219`), `PATCH /tasks/[taskId] {op:"close"}` answers `{ task, echoSeq }` (the `task` key keeps the storage name — the web and `@dopl/client` both read it), `closeChannelThread` returns `ChannelThreadClosed` (`channel-types.ts:198`), and `opCloseThread` prints "Close echo posted at seq \<n\> …never a guessed seq" (`channel-ops-threads.ts:213`) — or says nothing at all about a seq when there isn't one. This is `openingSeq`'s mirror at the other end of a thread, and additive on the wire exactly like it, so an older deployment that omits the field reads as `null`.
     - **BEHAVIOUR CHANGE, flagged by its author: a failed echo post no longer throws.** The row is already `closed` by the time the marker is written, so letting the marker's failure propagate reported a close that HAD landed as a 5xx, and the caller's retry re-closed it. The echo is now wrapped and its failure surfaces as `echoSeq: null` — "closed, no echo" — while every error the CLOSE itself can raise (not a member, not creator-or-target, unknown thread) is untouched and still throws. `null` is never a cursor: a caller that gets it must look its cursor up, which is the whole point. Pinned by `service-tasks-lifecycle.test.ts`'s three-case echo describe (seq returned, echo-fails-close-still-lands, authz-still-throws).
-- **MCP tool `dopl_channel`** (`packages/mcp-server/src/tools/channel*.ts`) — the op enum, verified against `channel-schema.ts` 2026-08-05: `list` / `open` (create; `open{direct:true, member}` opens a DM, see v1.5) / `invite` / `members` / `post` / `milestone` / `read` / `await` / `list_threads` / `get_thread` / **`read_sessions`** / `create_thread` / `propose_close` / `close_thread` / `set_thread_mode`. **The THREE Phase-5 capabilities (rollback §3.5, F-144) that replace summon / `to_agent`, none of which this list used to mention:** (1) **`read_sessions`** — a READ, own-scoped, "what is flint doing?"; `channel` is an OPTIONAL filter on it, unlike every other op. (2) **`create_thread{handoff:true}`** — an EXTERNAL agent opens a full session on its OWN operator's machine to carry the thread, and stops awaiting. (3) **`propose_close`** — DECISION 2 (2026-08-04): an agent proposes, a human closes; `close_thread` stays in the enum only so an older agent gets a teaching refusal naming its replacement rather than an enum error. **Seven MORE existed and are gone (2026-08-05, F-141): `agents` / `summon_agent` / `rename_agent` / `set_agent_status` / `disengage_agent` / `join_thread` / `leave_thread`, dropped from the enum outright.** The five thread ops were named `*_task` until the v3.0 vocabulary round (2026-07-30), which was a **HARD CUTOVER with no aliases** — the old names are gone and a connector must be reloaded. `post` likewise takes `thread=<id>` (it folds into the storage key `metadata.taskId`), not `task=`. `read`+`await` are the listener loop (learn the latest seq, then re-issue `await` from the last seq processed). `@dopl/client` has the matching methods (`listChannelThreads` / `getChannelThread` / `createChannelThread` / `closeChannelThread` / `setChannelThreadMode`) and the parity test is wired. `read`/`await`/`list_threads`/`get_thread` pass the ref straight to the route (no `listChannels` on the poll loop); `invite`/`post` still pre-resolve the channel via `listChannels` (F-055). **The committed `dist/` of both packages is what the app loads at runtime** — after any change here run `npm run build:packages` or the old surface ships.
+- **MCP tool `dopl_channel`** (`packages/mcp-server/src/tools/channel*.ts`) — the op enum, verified against `channel-schema.ts` 2026-08-05: `list` / `open` (create; `open{direct:true, member}` opens a DM, see v1.5) / `invite` / `members` / `post` / `milestone` / `read` / `await` / `list_threads` / `get_thread` / **`read_sessions`** / `create_thread` / `propose_close` / `close_thread` / `set_thread_mode`. ⚠ **DATED 2026-08-05 AND OUT OF DATE SINCE 2026-09-02: `get_thread` FOLDED INTO `read(thread=)`** (wave A, C15), and `kind` / `intent` / `direct` went with A6b. This list is the enum as it was; `channel-schema.ts` is the enum as it is. **The THREE Phase-5 capabilities (rollback §3.5, F-144) that replace summon / `to_agent`, none of which this list used to mention:** (1) **`read_sessions`** — a READ, own-scoped, "what is flint doing?"; `channel` is an OPTIONAL filter on it, unlike every other op. (2) **`create_thread{handoff:true}`** — an EXTERNAL agent opens a full session on its OWN operator's machine to carry the thread, and stops awaiting. (3) **`propose_close`** — DECISION 2 (2026-08-04): an agent proposes, a human closes; `close_thread` stays in the enum only so an older agent gets a teaching refusal naming its replacement rather than an enum error. **Seven MORE existed and are gone (2026-08-05, F-141): `agents` / `summon_agent` / `rename_agent` / `set_agent_status` / `disengage_agent` / `join_thread` / `leave_thread`, dropped from the enum outright.** The five thread ops were named `*_task` until the v3.0 vocabulary round (2026-07-30), which was a **HARD CUTOVER with no aliases** — the old names are gone and a connector must be reloaded. `post` likewise takes `thread=<id>` (it folds into the storage key `metadata.taskId`), not `task=`. `read`+`await` are the listener loop (learn the latest seq, then re-issue `await` from the last seq processed). `@dopl/client` has the matching methods (`listChannelThreads` / `getChannelThread` / `createChannelThread` / `closeChannelThread` / `setChannelThreadMode`) and the parity test is wired. `read`/`await`/`list_threads`/`get_thread` pass the ref straight to the route (no `listChannels` on the poll loop); `invite`/`post` still pre-resolve the channel via `listChannels` (F-055). **The committed `dist/` of both packages is what the app loads at runtime** — after any change here run `npm run build:packages` or the old surface ships.
 - **Desktop listener.** `dopl-desktop-app` (Electron 43) runs a channel listener that spawns a local Claude Code session on channel activity via a `dopl://` deep link (§18, F-054).
 
 #### v1.1 additions (2026-07-26)
@@ -757,11 +760,11 @@ v1.5 promotes a thread ("task" in the v1.5-era vocabulary) from a message-derive
 
 Five robustness gaps in the `dopl_channel` MCP tool, so an agent can reliably drive cross-user task collaboration. No web/desktop changes; MCP + client + one service change + one migration. Migration `channel_tasks_client_msg_id` **APPLIED LIVE to prod** (`mrefkedvdehahjejreae`).
 
-- **Thread READ ops.** `list_threads` (`channel`) and `get_thread` (`channel`,`thread`) — the first way to enumerate/inspect threads over MCP (previously agents could create/close by id but not discover them). `list_threads` reuses the existing `GET /tasks` + `listChannelTasks` (server lane, storage name); `get_thread` adds `GET /tasks/[taskId]` + `getChannelTask(ctx, channelId, taskId)` (404 for a thread not in the channel — id unprobeable). `@dopl/client` gains `listChannelThreads`/`getChannelThread`; handlers `opListThreads`/`opGetThread` render readably (thread list / detail block) through the `_dopl_status` footer. Both are **READS** — added to `READ_OPS.dopl_channel` in `parity.test.ts` (NOT `WRITE_OPS`, NOT `sessionOnly`); `KNOWN_*_DRIFT` stays `{}`.
+- **Thread READ ops.** `list_threads` (`channel`) and `get_thread` (`channel`,`thread`) — the first way to enumerate/inspect threads over MCP (previously agents could create/close by id but not discover them). `list_threads` reuses the existing `GET /tasks` + `listChannelTasks` (server lane, storage name); `get_thread` adds `GET /tasks/[taskId]` + `getChannelTask(ctx, channelId, taskId)` (404 for a thread not in the channel — id unprobeable). `@dopl/client` gains `listChannelThreads`/`getChannelThread`; handlers `opListThreads`/`opGetThread` render readably (thread list / detail block) through the `_dopl_status` footer. Both are **READS** — added to `READ_OPS.dopl_channel` in `parity.test.ts` (NOT `WRITE_OPS`, NOT `sessionOnly`); `KNOWN_*_DRIFT` stays `{}`. ⚠ **`get_thread` AND ITS `READ_OPS` ENTRY BOTH LEFT ON 2026-09-02** — the op folded into `read(thread=)` (C15) and the allowlist entry outlived it by a day, which is why `parity.test.ts` now asserts `READ_OPS ⊆ op enum` the way it always did for `WRITE_OPS`: an allowlist entry for an op nobody serves fails nothing and reads as a classification somebody made.
 - **`create_thread` idempotency.** `create_thread` accepts `client_msg_id` (like `post`). Server-side dedup mirrors `channel_messages`: nullable `channel_tasks.client_msg_id` + partial unique index `(channel_id, client_msg_id) WHERE client_msg_id IS NOT NULL`; `createTask` (`service-tasks.ts` since v2.6) returns the existing task on a `client_msg_id` hit (and on a 23505 insert race) **without re-posting the initial request** — so a retried create can't double-create the row OR double-spawn the responder window. Wired through `TaskCreateSchema`, `POST /tasks`, `repository-tasks.findTaskByClientId`, `@dopl/client.createChannelThread`, and `opCreateThread`.
 - **`post task=` error mapping.** `opPost` (`channel-ops-write.ts`) now catches `isBadRequest` **independent of `to`**: an unresolvable `task=<uuid>` with no `to` previously rethrew the raw `CHANNEL_TASK_NOT_IN_CHANNEL` 400; it now maps to "That task is not in this channel — check the task id, or post without `task`."
 - **PEER-AUTHORED TEXT IN `dopl_channel` RESULTS — the one rule, and the module that owns it (Q1, completed on the WRITE side 2026-07-31).** A tool result has TWO ZONES. Message **bodies** are the zone `UNTRUSTED_BODY_HEADER` explicitly disclaims. **Everything else — headings, bullet heads, author labels, the legend, every confirmation and every error line — is read by the model as NARRATION BY THE SERVER**, and any peer-authored string spliced there is read as ours. The rule: **every peer-authored string that reaches a result goes through `neutralizeInline` / `inlineOr` in `packages/mcp-server/src/tools/channel-shared.ts`. ONE definition — do not add a second neutralizer, and do not decide per site whether a value is "really" attacker-reachable.** That per-site judgement is exactly what left `opCloseThread` rendering a raw `**${thread.title}**` through a whole audit: closing is permitted to the thread's TARGET, so the ordinary case renders a title the *peer* typed. Peer-authored = channel `name`/`topic`, thread `title`/`outcomeSummary`, `profiles.display_name`, **and `metadata.taskId`** (stored VERBATIM for any non-UUID value — `resolvePostMetadata` gates only inside `if (isUuid(...))` and the route's `metadata` is an unbounded `z.record`). `ResolvedMember.label` is neutralized AT THE SOURCE in `memberLabel`, so write ops splice it directly and must NOT re-wrap it. Three scoped headers live in `channel-render.ts` (`_BODY_`, `_LISTING_`, `_THREAD_`) and are shared by both sides; a header is emitted **FIRST**, above the content it frames. Backed at the data layer by charset rules in `src/features/channels/schema.ts` (name + topic) and `src/app/api/user/profile/route.ts` (display_name). Pinned by `channel-narration.test.ts` (read), `channel-narration-write.test.ts` (write), `channel-untrusted.test.ts`.
-- **§2 splits (2026-07-31) — the op files are now four, and the seams are behavioural, not arithmetic.** (1) `channel-ops-write.ts` was at 488 lines; the three thread ops moved to **`channel-ops-threads.ts`** (`create_thread` / `close_thread` / `set_thread_mode`), along the `─── Threads ───` divider the file already carried. `channel-ops-write.ts` keeps open / invite / post. (2) `channel-ops-read.ts` hit the cap when `read` gained its `thread` filter, so **`channel-ops-await.ts`** took `op="await"` (480 → **271**, the new file 287). That is the seam the read file had already drawn twice — `channel-await-budget.ts` took the clocks, `channel-wake-guidance.ts` the wake claims — and `await` is the only op there that LOOPS, the only one with a budget, and the only one whose result text reasons about the caller's client; nothing in it was shared with the other five beyond the renderers. `channel-ops-read.ts` now holds list / read / list_threads / get_thread / members, all one-round-trip-and-render. **Keep the `channel-` filename prefix on any further split:** the parity split-scan (`parity.test.ts`) auto-discovers `channel-*.ts`, and a handler in an unprefixed file is invisible to the declared-param drift guards. Neither split needed a test edit.
+- **§2 splits (2026-07-31) — the op files are now four, and the seams are behavioural, not arithmetic.** (1) `channel-ops-write.ts` was at 488 lines; the three thread ops moved to **`channel-ops-threads.ts`** (`create_thread` / `close_thread` / `set_thread_mode`), along the `─── Threads ───` divider the file already carried. `channel-ops-write.ts` keeps open / invite / post. (2) `channel-ops-read.ts` hit the cap when `read` gained its `thread` filter, so **`channel-ops-hold.ts`** took `op="await"` (480 → **271**, the new file 287). That is the seam the read file had already drawn twice — `channel-hold-budget.ts` took the clocks, `channel-wake-guidance.ts` the wake claims — and `await` is the only op there that LOOPS, the only one with a budget, and the only one whose result text reasons about the caller's client; nothing in it was shared with the other five beyond the renderers. `channel-ops-read.ts` now holds list / read / list_threads / get_thread / members, all one-round-trip-and-render. **Keep the `channel-` filename prefix on any further split:** the parity split-scan (`parity.test.ts`) auto-discovers `channel-*.ts`, and a handler in an unprefixed file is invisible to the declared-param drift guards. Neither split needed a test edit.
 - **THE NEUTRALIZER MOVED — it is `packages/mcp-server/src/tools/narration.ts` now, not `channel-shared.ts` (2026-07-31, cross-tool sweep).** The rule above is not a channel rule; it is the rule for EVERY `dopl_*` tool, because every one of them splices member-typed strings into the same kind of line. `channel-shared.ts` **re-exports** `neutralizeInline` / `inlineOr` / `INLINE_TEXT_MAX`, so channel imports are unchanged and there is still exactly ONE definition — pinned by identity (`expect(channelNeutralize).toBe(neutralizeInline)`) and by a source scan asserting no second `function neutralizeInline` exists in `src/tools/`. See "MCP NARRATION — the whole surface" below.
 - **Description clarifications (agent-facing, no behavior change).** `CHANNEL_DESCRIPTION` warns that (1) in a live desktop **session window** EVERY channel op may raise an operator Allow/Deny — **including own-channel `op=post`**. (The v1.8 text said own-channel post ran un-prompted; that was already false when written, since v2.5 D2 gates it. Rewritten in the v3.0 round so the model plans against the real cost: the only thing that sends without a click is the operator's Axis-B Messages posture, which the agent cannot observe, and any grant it earns is per-session and dropped on park.) (2) If the counterparty's replies already arrive as new turns (desktop-run session), do NOT call `await` (await is only for a standalone listener loop). (3) **WAKE-V1 result-text rules, all load-bearing:** the untrusted-content caveat is emitted as a HEADER above the rendered bodies in BOTH `read` and `await` (a caveat placed under the content is read after the injected line it warns about); every "re-arm" instruction carries a stop condition so an abandoned exchange cannot loop forever, and that condition is the THREAD's STATE, never a timeout counter — cross-machine exchanges are meant to run unattended for hours and a peer agent doing real work is legitimately silent for 20+ minutes, so "~3 empty holds" is only a CHECKPOINT (look at `get_thread` status + recent `task_progress` milestones before re-arming), and the actual exits are: thread closed/failed, or no peer activity at all for ~30+ minutes. Third exit: a hold that returns far under what it asked for is reported as CUT SHORT with an explicit "do NOT re-arm, report this" — a clamped hold can never stay pending long enough to wake anyone, so re-arming it is a spin.
 - **THE `CONVENTIONS:` BLOCK IN `CHANNEL_DESCRIPTION` (`channel.ts:68-71`, 2026-07-31) — three rules an agent cannot derive from the op list, each one a live incident.** It sits between THE PROTOCOL and the op list on purpose: these are things the tool cannot enforce, only teach. (1) **LARGE DELIVERABLES.** A body is capped at 16000 chars (`schema.ts:129`); anything bigger goes to `dopl_kb` and the ENTRY REFERENCE gets posted into the thread. Chunking one artifact across many messages is named as the wrong answer, because the obvious workaround for a cap is the one that destroys the transcript. (2) **BEFORE A FINAL DELIVERABLE, read your unread inbound** (`read` with `since=<your cursor>`) and only then post — a scope correction landed **14 seconds** after a deliverable went out and ~250 words of it were already wrong. (3) **SEQ NUMBERS ARE GLOBAL, not per-channel** — the agent-facing statement of the identity-sequence fact corrected above; never read a seq range as a message count. Keep this block and the §8 seq text in agreement; they are one fact said twice, to two audiences.
@@ -952,11 +955,11 @@ The wave that took Channels from "two people, two agents, one pair-shaped thread
 - **THE PARTICIPANT SET OF A HANDSHAKE THREAD IS DERIVED SERVER-SIDE (`service-thread-handshake.ts`), and the module assumes the protocol is ignored.** The MCP lane teaches agents that exactly one of them opens (the addressed agent whose AGENT ID sorts lexicographically first), but **a rule an agent has to remember is a rule the third model that reads it will break**, so the server holds instead: the create's handshake key names a `seq` in this channel, the message at that seq is the human's instruction, and its **server-stamped** `metadata.to_agent_ids` is the address list. The derived set is every addressed agent + every addressed agent's OWNER + the instruction's author, each re-validated through `identityBelongs`. **It cannot be forged** (`to_agent_ids` is reserved and re-stamped only from validated fields) and **it is not a curation bypass** — it seeds at CREATE time on the thread the call created or converged on, and a caller who is not the instruction's author and owns none of the addressed agents is not in the derived set at all. **EVERY MISS IS SILENT AND SEEDS NOTHING**: a non-handshake key, a seq with no message, a message that addressed nobody, a deleted agent, an owner who has left. Seeding fewer identities is always the SAFE direction, and a `client_msg_id` is caller-supplied and unverifiable, so it must never make a create fail.
   - Why an addressed agent brings its OWNER in as a user participant: the agent runs on the owner's machine and every message it posts carries the owner as `author_user_id`, so the owner is the identity the write gate actually sees. Seeding the agent alone would admit it in name and refuse it on any post that did not also claim `authorAgentId`.
 - **`read` AND `await` NOW RENDER AGENT ADDRESSING**, which is the precondition for the whole handshake rule — an agent could not previously see that it had been co-addressed. `agentAddressTag` (`channel-render-agents.ts`) appends `` · to agents `quartz` (`agent-1`) `` to the message head; when the roster read fails or a handle is unknown it degrades to the **bare id with no parens**, not to silence. An agent-only address also suppresses the old `· unaddressed` marker (`channel-render.ts:283-287`).
-  - **`AWAIT_UNNAMED_NOTICE`'s predicate was WRONG for exactly the case multi-address created.** It tested `to_user_id` alone, and the owner bridge stamps that from the FIRST addressed agent's owner — so on `"@quartz @onyx work on X"`, onyx's machine woke to a message naming its own agent by handle and was told *"NONE of the messages above NAMES you as its addressee"*, i.e. instructed not to act on the job it had just been handed. It now also asks whether any addressed agent id is MINE (`channel-ops-await.ts:307-313`). **Fail-soft is preserved:** a failed roster read leaves `agents.mine` empty, which makes the notice fire exactly as before rather than suppressing on a guess.
+  - **`HOLD_UNNAMED_NOTICE`'s predicate was WRONG for exactly the case multi-address created.** It tested `to_user_id` alone, and the owner bridge stamps that from the FIRST addressed agent's owner — so on `"@quartz @onyx work on X"`, onyx's machine woke to a message naming its own agent by handle and was told *"NONE of the messages above NAMES you as its addressee"*, i.e. instructed not to act on the job it had just been handed. It now also asks whether any addressed agent id is MINE (`channel-ops-hold.ts-313`). **Fail-soft is preserved:** a failed roster read leaves `agents.mine` empty, which makes the notice fire exactly as before rather than suppressing on a guess.
 - **THE LAW's NEGATIVE GUARD GENERALIZED — and it was ADDED BESIDE the old one, not rewritten in place.** The original `to=`/spawning guard is intact (`channel-law.test.ts:319-332`). A SECOND guard sits next to it whose stated form is the general rule: **"a sentence must not promise the READER an effect the reader cannot cause"** (`:356-358`) — the rule that would have caught four of this session's six agent-facing lies. Its teeth-test pins the exact sentence that shipped (*"To pick the exchange back up, address it by handle again — that re-engages it."* — false for an agent reader, since engagement requires a human credential). **What is ENFORCED is still a narrow regex pair** (`ENGAGES` × `HUMAN_KEYED`); the general form lives in the docblock. Do not read the docblock as coverage.
   - **Trap in that file: the test named `keeps the law to at most 12 BULLETS` does not measure bullets.** It counts non-blank LINES including the `THE LAW OF THIS ROOM` header (`:277`), so the real bullet ceiling is **11**, and the law is at 11 today. New length guards are real and do work: `LAW.length <= 4000` (actual 3650) and `<= 900` per bullet (longest 722).
-- **THE `channel-` FILENAME PREFIX IS LOAD-BEARING IN `packages/mcp-server/src/tools/`, in BOTH directions.** `toolGroupFiles` (`tool-group-files.ts:39-47`) is a runtime `readdirSync` scan — not eslint, not a size test — that treats every non-`.test.ts` file starting `channel-` as CHANNEL TOOL SOURCE, and two invariant suites read it: `parity.test.ts` (every declared schema param appears in the source; every `args.X` the handler reads is a declared param) and `channel-deadlines.test.ts` (no stray `240_000`). **A real op module MUST carry the prefix** — `channel-render-agents.ts`, `channel-post-notes.ts` and `channel-ops-open.ts` each say so in their headers. **A TEST HARNESS MUST NOT**, which is why the two new fixture files are `agent-addressing-fixtures.ts` / `agent-ops-fixtures.ts` and not `channel-*`. Stated precisely, because the tempting version is wrong: leaking today's fixtures would break NO test — the hazard is **fail-open masking** of a described-but-dead schema param at `parity.test.ts`, plus a false failure the first time a fixture writes `args.something`. The prefix decision is deliberate; the breakage is latent.
-- **New server modules.** `service-writes-members.ts` (193) — channel membership writes split out of `service-writes.ts` (`addMember` / `removeMember` / `updateMyMemberSettings` + the private `clearDepartedEngagement`). `service-thread-handshake.ts` (229) — the handshake seq parse + participant derivation above. **New MCP modules:** `channel-handshake-key.ts` (137), `channel-render-agents.ts` (128, split off `channel-render.ts` at the cap), `channel-post-notes.ts` (167, the result lines that narrate what a post's addressing actually did) and `channel-ops-open.ts` (126, `open` + `invite`, split off `channel-ops-write.ts` when the notes extraction alone left it at **503**). Test splits: `channel-thread-participants.test.ts` (284), `channel-ops-participants.test.ts` (219).
+- **THE `channel-` FILENAME PREFIX IS LOAD-BEARING IN `packages/mcp-server/src/tools/`, in BOTH directions.** `toolGroupFiles` (`tool-group-files.ts:39-47`) is a runtime `readdirSync` scan — not eslint, not a size test — that treats every non-`.test.ts` file starting `channel-` as CHANNEL TOOL SOURCE, and two invariant suites read it: `parity.test.ts` (every declared schema param appears in the source; every `args.X` the handler reads is a declared param) and `channel-deadlines.test.ts` (no stray `240_000`). **A real op module MUST carry the prefix** — `channel-render-agents.ts`, `channel-errors.ts` and `channel-ops-open.ts` each say so in their headers. (⚠ This named a `channel-post-notes` module until 2026-09-02; the file is gone with the `intent` param, and the same claim lives in the file above.) **A TEST HARNESS MUST NOT**, which is why the two new fixture files are `agent-addressing-fixtures.ts` / `agent-ops-fixtures.ts` and not `channel-*`. Stated precisely, because the tempting version is wrong: leaking today's fixtures would break NO test — the hazard is **fail-open masking** of a described-but-dead schema param at `parity.test.ts`, plus a false failure the first time a fixture writes `args.something`. The prefix decision is deliberate; the breakage is latent.
+- **New server modules.** `service-writes-members.ts` (193) — channel membership writes split out of `service-writes.ts` (`addMember` / `removeMember` / `updateMyMemberSettings` + the private `clearDepartedEngagement`). `service-thread-handshake.ts` (229) — the handshake seq parse + participant derivation above. **New MCP modules:** `channel-handshake-key.ts` (137), `channel-render-agents.ts` (128, split off `channel-render.ts` at the cap), a `channel-post-notes` module (167, the result lines that narrate what a post's addressing actually did; ⚠ **the file is GONE as of 2026-09-02** — T12 moved its three paragraphs into `channel-doctrine.ts`, and A6b deleted its last constant with the `intent` param, so there is no path to cite) and `channel-ops-open.ts` (126, `open` + `invite`, split off `channel-ops-write.ts` when the notes extraction alone left it at **503**). Test splits: `channel-thread-participants.test.ts` (284), `channel-ops-participants.test.ts` (219).
 
 **Everything this wave shipped WITH is F-111 in `REFACTOR-FINDINGS.md`.** Read its residuals before touching `to_user_notify`, the web/server disengage asymmetry, or the auto-posture bound on two agents in one thread.
 
@@ -1865,7 +1868,7 @@ The full story lives in **F-138 in REFACTOR-FINDINGS.md**. Three independent mec
 
 - **A POSTURE THE OPERATOR SET LIVES AS LONG AS THE SESSION DOES — and so do the standing grants.** `toolMode`, `messageMode`, `inboundForTask` and `allowForTask` survive an idle park and its resume. This REVERSES v2.3 FIX #3, MEDIUM-3/C9 and v2.9 FIX F1, which cleared them on park; those fixes were answering a real AWAY threat with a bad proxy for away (fifteen quiet minutes is equally true of an operator reading something else, and — before M1 — of an exchange blocked on the peer). The threat is answered in two better places instead: an ABANDONED session ENDS (below), which is terminal and so strictly stronger than a downgrade that left the session wakeable; and **the real boundary was always the PROFILE**, whose hard-deny set is checked FIRST in `grantDecision` and cannot be widened by any posture, any grant, or `bypass`. **(F-177, 2026-08-08: under `full` that set is now the four `dopl_*_admin` tools + the four retired dopl tools and nothing else — Task/Agent, Skill, ToolSearch, SendMessage and Cron* GATE there instead. They are still unreachable without a click in every mode, and the restricted profiles still hard-deny them, so the park argument is unaffected; the cross-channel exfil ops are Axis B's, not the profile's, and are untouched.)** THE ONE PARK THAT STILL RESETS is the AUTH HOLD: a session with no credential relaunches through `startQuery` on sign-in rather than resuming in place, so its arm belongs to the run that ended.
 - **THREE TIMER BOUNDS, ONE HANDLE, ONE ARMING PATH.** `session-state.idleTimeout(state)` answers `{ms, type}` and is the only place the decision is made; `session-engine.scheduleIdle` is one `clearTimeout` + one `setTimeout` over it. Live and working → `DEFAULT_IDLE_MS` (15 min) → `idle_timeout` → PARK. **Live and `awaiting_peer`** (the turn that posted, which the reducer already labelled and nothing consulted) → `AWAITING_PEER_IDLE_MS` (4 h) → still a park, because suppressing the timer would leave a live query and its awaited promises alive forever when the reply never comes. Parked → `ABANDONED_MS` (12 h) → `abandon_timeout` → **END**. Adding a second timer here is the regression: one handle is what makes every existing teardown path correct and makes a wake's own `scheduleIdle` overwrite a park's arm.
-- **AXIS B GOVERNS THE OWN CHANNEL IN BOTH DIRECTIONS.** An own-channel POST follows the outbound half (`auto_outbound`/`auto_both`); the own-channel READ-ONLY ops follow the INBOUND half (`auto_inbound`/`auto_both`), because a read sends nothing and does exactly what the inbound gate governs: brings the peer's words into this agent's context. Before this, posting ran with no card while reading asked, which is backwards. **The set is FIVE ops and is `OWN_CHANNEL_READ_OPS` in `main/session-profiles.js` — believe that constant, not this sentence: `read`, `await`, `list_threads`, `get_thread`, `members`.** (`agents` was a sixth and went with the op, channels rollback §1, F-141.) **What still gates in every posture:** `open`, `invite`, `create_thread`, `close_thread`, `set_thread_mode`, ANY post or read naming another channel (a slug counts as another channel — the safe failure), `list`, which is read-only but enumerates every channel this account can reach and so is not own-channel-scoped at all, and — **for exactly that reason — `read_sessions`** (rollback §3.5), whose `channel` is an OPTIONAL filter: omitted, it enumerates every session of the caller's in the workspace. `join_thread` / `leave_thread` and the four agent-lifecycle ops used to be named here as gated; they are dropped rather than annotated, **because a containment table that names ops the tool does not publish reads as coverage** (the code says the same, `session-profiles.ts` `:224-236`). **AMENDED 2026-08-05 (F-139, M4):** `propose_close` and `milestone` LEFT that always-gated list and follow the OUTBOUND half with the post, because each is strictly less powerful than a post into the same channel — a proposal closes nothing (the thread stays live until the operator confirms, and the confirm is untouched) and a milestone carries no deliverable. `close_thread` is NOT among them and is never conflated with its proposal.
+- **AXIS B GOVERNS THE OWN CHANNEL IN BOTH DIRECTIONS.** An own-channel POST follows the outbound half (`auto_outbound`/`auto_both`); the own-channel READ-ONLY ops follow the INBOUND half (`auto_inbound`/`auto_both`), because a read sends nothing and does exactly what the inbound gate governs: brings the peer's words into this agent's context. Before this, posting ran with no card while reading asked, which is backwards. **The set is `OWN_CHANNEL_READ_OPS` in `main/session-profiles.js` — believe that constant, not this sentence.** It was FIVE when this was written (`read`, `await`, `list_threads`, `get_thread`, `members`); ⚠ **it is SEVEN as measured 2026-09-02** — `read_sessions` and `read_directions` joined. ⚠ **`get_thread` STAYS ON IT THOUGH THE OP WAS DELETED SERVER-SIDE THAT DAY** (wave A, C15 — folded into `read(thread=)`), and that is not the "names ops the tool does not publish" defect this bullet warns about: **the desktop ships on its own cadence**, so a machine on a new build can face a server, or a cached connector schema, still publishing the old op — and an ALLOW entry that outlives its op fails safe (the read classifies and auto-allows) exactly as `RETIRED_DOPL_TOOLS`'s DENY entries do. The rule the warning states is about ops that were never published at all. (`agents` was a sixth and went with the op, channels rollback §1, F-141.) **What still gates in every posture:** `open`, `invite`, `create_thread`, `close_thread`, `set_thread_mode`, ANY post or read naming another channel (a slug counts as another channel — the safe failure), `list`, which is read-only but enumerates every channel this account can reach and so is not own-channel-scoped at all, and — **for exactly that reason — `read_sessions`** (rollback §3.5), whose `channel` is an OPTIONAL filter: omitted, it enumerates every session of the caller's in the workspace. `join_thread` / `leave_thread` and the four agent-lifecycle ops used to be named here as gated; they are dropped rather than annotated, **because a containment table that names ops the tool does not publish reads as coverage** (the code says the same, `session-profiles.ts` `:224-236`). **AMENDED 2026-08-05 (F-139, M4):** `propose_close` and `milestone` LEFT that always-gated list and follow the OUTBOUND half with the post, because each is strictly less powerful than a post into the same channel — a proposal closes nothing (the thread stays live until the operator confirms, and the confirm is untouched) and a milestone carries no deliverable. `close_thread` is NOT among them and is never conflated with its proposal.
 - **THE `mcp__<server>__` PREFIX IS THE CLIENT'S, NEVER OURS TO ASSUME (F-139).** `mcp__dopl__` is only what our own in-process registration produces; the claude.ai connector exposes the same server as `mcp__claude_ai_Dopl__` and other clients use a UUID segment. Every list in `session-profiles.js` is written in the `mcp__dopl__…` form, so **every tool name reaching the gate is normalized first** — `main/mcp-tool-names.js`: `mcpShortName` (the segment after the LAST `__`) and `canonicalDoplName` (rewrite the KNOWN Dopl vocabulary onto the canonical prefix, leave everything else alone). `grantDecision` normalizes ONCE at the top and the hard-deny, pre-approval and both Axis-A lookups all use that one value; `session-gate-reason` and the diag label read through the same helpers. **Never add a fourth matcher that compares a raw tool name against a `mcp__dopl__…` literal** — that is the bug, four times over, and its worst face is the deny direction (a hard-denied `dopl_*_admin` under a foreign prefix resolved `gate`, i.e. one operator click from running). *(The grant-key exception is a live rule and is stated once, in INVARIANTS §11.)*
 - **THE GATE DIAG LINE NAMES THE CHANNEL OP.** `session gate: dopl_channel op=read allow auto-inbound-read tool=bypass msg=auto_both session=xxxxxxxx`. The op NAME only, sanitized (it is model input); never a body, recipient, channel or any other field, and no `op=` segment on a non-channel tool.
 
@@ -2392,21 +2395,30 @@ In the same 2026-08-11 pass the sidebar's `.brandPill` gave up its own flatter r
 `src/features/billing/server/entitlements.ts › upgradeUrl` carried a long note justifying its target. The note had **both facts backwards**: it claimed `/canvas?billing=upgrade` was on the KEEP list and `/pricing` was being deleted. `docs/migration-research/website-retirement-plan.md` says the opposite on both — the whole `[workspaceSlug]` tree RETIRES (and the top-level `/canvas` redirect with it), while `/pricing` is KEEP-PUBLIC (decision D6).
 
 - **Why this comment mattered more than most.** These envelopes are read by **API-first clients, MCP agents included**, which follow `upgrade_url` literally. A doc-comment that is confidently wrong about which page survives is one edit away from re-pointing a money URL at a 302. The correction (decision D1, GAP-11) sends every envelope at `/billing` — `src/app/billing/[segment]/page.tsx`, reached through its segment-less forwarder — and it is built by `features/billing/url.ts` so this and the other five billing entry points cannot drift apart again.
-- **The builder is workspace-AGNOSTIC on purpose.** These call sites are reached with a workspace *id* only, never a resolved `{slug}-{publicId}` SEGMENT, and bare `/billing` resolves the caller's DEFAULT workspace — the same trade `/canvas` made. The Stripe `return_url`s, which DO know their workspace, already pass a segment; plumbing one through here is follow-up, not a blocker.
+- **The builder is workspace-AGNOSTIC on purpose.** These call sites are reached with a workspace *id* only, never a resolved `{slug}-{publicId}` SEGMENT, and bare `/billing` resolved the caller's derived default workspace — the same trade `/canvas` made. ⚠ **Since 2026-09-02 (B14) it forwards only when the caller owns exactly ONE standard workspace and otherwise renders their list**, so the trade is now "one extra click when it is ambiguous" rather than "possibly the wrong workspace". The Stripe `return_url`s, which DO know their workspace, already pass a segment; plumbing one through here is follow-up, not a blocker.
 - **The lesson, which is the reason this is in ENGINEERING and not in the file.** A comment that ARGUES against a plan document is the shape a fiction takes. `entitlements.test.ts` now pins the target string, so the assertion lives where it can fail rather than where it can only be believed.
 
 *Relocated from* `src/features/billing/server/entitlements.ts › upgradeUrl`
 
 ### `ensureDefaultWorkspace`: the catch-23505 recovery became dead code when the slug constraints were dropped (2026-08-02, A-019 superseded)
 
-`workspaces/server/service.ts › ensureDefaultWorkspace` is a SELECT-then-INSERT, and it is racy: a fast OAuth round trip lands a second caller while the first is still inserting, both see "no existing", both insert.
+⚠ **THE SUBJECT OF THIS ENTRY NO LONGER EXISTS (2026-09-02, wave B B14).** Samuel's ruling B10
+deleted the derived default workspace outright: `ensureDefaultWorkspace`, `ensureDefaultWorkspaceRow`
+and the `ensure_default_workspace` RPC are gone, replaced by `ensurePersonalContainer` over
+`ensure_personal_container`. **The lesson below outlived them and is why the replacement was written
+the same way** — race-proofing in the database, `created` returned so the caller knows whether it
+owes the seed — so the entry is kept as the argument for that shape rather than as a map of the
+tree. Current state: INVARIANTS §4.
+
+The old `ensureDefaultWorkspace` was a SELECT-then-INSERT, and it was racy: a fast OAuth round trip
+landed a second caller while the first was still inserting, both saw "no existing", both inserted.
 
 - **The original fix (Audit A-019) was to catch the unique-constraint violation on the second insert and re-fetch.** That worked only while a unique constraint existed to violate.
 - **It silently stopped working.** Migrations `20260502120000` and `20260504000000` DROPPED the slug uniqueness constraints (`public_id` is random and never collides), so there was no longer any constraint for the second concurrent insert to trip. The recovery branch became unreachable code and two cold-booting clients could both create an "Untitled" workspace.
-- **Race-proofing moved INTO the database.** The `ensure_default_workspace` RPC (migration `20260802200000`) serializes check-then-insert under a **per-owner, transaction-scoped advisory lock**, and returns `created` so the caller knows whether THIS call won and therefore owes the starter-corpus seed. `repository.ts › ensureDefaultWorkspaceRow` is the only caller.
+- **Race-proofing moved INTO the database.** The `ensure_default_workspace` RPC (migration `20260802200000`) serialized check-then-insert under a **per-owner, transaction-scoped advisory lock**, and returned `created` so the caller knew whether THIS call won and therefore owed the starter-corpus seed. One repository wrapper was its only caller. ⚠ The successor keeps both properties and adds a partial UNIQUE index, so a second container is unrepresentable even if a future code path forgets the function.
 - **The general shape:** an app-side recovery keyed on a DATABASE constraint is only as live as that constraint. Dropping a constraint is not a no-op for the code that catches its error — and nothing in the type system or the test suite noticed.
 
-*Relocated from* `src/features/workspaces/server/service.ts › ensureDefaultWorkspace`
+*Relocated from* `src/features/workspaces/server/service.ts` (the function it names was deleted 2026-09-02)
 
 ### `first_cluster_built` outlived its only emitter — the funnel tiles that could never move again (2026-08-11, clusters removal)
 
@@ -2578,7 +2590,7 @@ Rule: for any string that crosses a process boundary with no shared type, exactl
 
 `ChannelChatAddressedError`'s message read "Mention an agent with toAgents to have it act". That was correct for exactly the four days between the 2026-07-31 chat/request narrowing and the rollback that deleted named-agent addressing. After the rollback, `schema.ts#removedParam` declares `toAgent` / `toAgents` as `z.never()` — so a caller who followed the advice got a SECOND 400, from a different layer, naming the parameter the first error had just recommended.
 
-Nothing pinned the sentence, so nothing noticed. The MCP twin (`packages/mcp-server/src/tools/channel-post-notes.ts` `CHAT_ADDRESSED_REFUSAL`) was rewritten at the time; this HTTP copy was missed. Two statements of one rule is how the copy in this feature drifted from the code three times.
+Nothing pinned the sentence, so nothing noticed. The MCP twin — a `CHAT_ADDRESSED_REFUSAL` constant in the since-deleted `channel-post-notes` module — was rewritten at the time; this HTTP copy was missed. ⚠ **BOTH ENDS ARE RETIRED AS OF 2026-09-02 (A6b/C12):** `intent` left the published shape, so `intent="chat"` beside a `to` is no longer a contradiction anything can express, and the MCP refusal and its `chat_addressed` error classification went with it. Two statements of one rule is how the copy in this feature drifted from the code three times.
 
 The same shape recurred in the tool descriptions: `channel-description.ts`'s `propose_close` entry and `channel-ops-threads.ts`'s close refusal both ended "do not propose twice", which — left alone after `propose_close` became re-raisable — would have stopped a well-behaved agent from ever re-proposing, defeating the change entirely from the one place no test looks.
 
@@ -4368,9 +4380,10 @@ anything was changed:
 - the transport sends the header (`dopl-desktop-app/main/ui-bridge.js › sendApiRequest`), and
   refuses a non-UUID rather than dropping it;
 - the server is `.eq("workspace_id", …)` (`server/repository-bases.ts › listBasesForWorkspace`);
-- and **production said so.** The caller's default standard workspace — oldest owned standard, via
-  `features/workspaces/server/repository.ts › findDefaultWorkspaceForUser`, which is what
-  `getBootState` answers with — is the workspace **MedMe** and **Dopl GTM** actually live in. They
+- and **production said so.** The caller's default standard workspace — oldest owned standard, which
+  is what `getBootState` answered with in 2026-08 (that lookup was deleted 2026-09-02 by B14; boot
+  answers the caller's personal container now) — is the workspace **MedMe** and **Dopl GTM** actually
+  live in. They
   were private, they were his, and they were exactly where scope C was defined to look.
 
 So every gate held and the pane did what INVARIANTS said it did. **What was wrong was the RANGE.**
@@ -4931,7 +4944,7 @@ than leaving a dependency nobody exercised.
 each call site — it is a ternary. What makes that expensive is the FAILURE MODE, which the route's
 own `readShelf` already documents: an unrecognised shelf answers the WIDER list. A second mapping
 that drifts does not throw; it quietly folds the workspace shelf back into the personal pane. So
-`tools/shelf.ts › toWireShelf` is the only place either word is translated, and both tools call it.
+the MCP shelf module's `toWireShelf` was the only place either word was translated, and both tools called it. ⚠ **THE WHOLE AXIS LEFT THAT SURFACE ON 2026-09-02** (wave B slice B15, ruling B10): the module, the argument and the mapper are deleted, because a personal row is now an ordinary row in the caller's own `kind='personal'` container and the tenancy answers the question. The REST `?shelf=` guards survive and are still hand-mirrored — `scripts/check-knowledge-type-drift.ts` counts three classes now, not five.
 
 The same file carries the ASYMMETRY, because that is the other thing an agent gets wrong here:
 absent `shelf` means BOTH shelves on a read and the WORKSPACE shelf on a write. Those are different
@@ -5030,9 +5043,11 @@ is `dopl_channel`, which stays out and denied, and authoring a template starts n
 ### Mutation-verified, because a green suite proves nothing on its own
 
 Two mutations, per INVARIANTS §14. `confirmGate`'s publishing branch forced open (`if (true)`) →
-**9 of 20** failures in `shelf-confirm.test.ts`. `shelf.ts › homeShelfForbidden` short-circuited to
-`return null` → **3** failures across `shelf-confirm.test.ts` and `agent-ops.test.ts`. Both restored;
-full suites re-run green afterwards.
+**9 of 20** failures in the shelf-and-confirm suite. The MCP `homeShelfForbidden` mapper
+short-circuited to `return null` → **3** failures across that suite and `agent-ops.test.ts`. Both
+restored; full suites re-run green afterwards. ⚠ **BOTH THE MAPPER AND THE SHELF HALF OF THAT SUITE
+WERE DELETED ON 2026-09-02** (wave B slice B15); the file is `packages/mcp-server/src/tools/confirm-class.test.ts`
+now and the confirm mutation above still applies to it.
 
 ---
 
@@ -5065,7 +5080,9 @@ route that answers the whole account and cannot narrow, because the lock is a pr
 CONNECTION and not of the credential.
 
 So `WorkspaceDirectory` gained `lockedWorkspaceId()`, with exactly one reader:
-`tools/home-scopes.ts › narrowToLock`. **The alternative was each tool restating the rule, and a
+`workspace-directory.ts › narrowToLock` (⚠ **it lived in a `tools/` home-scopes module until
+2026-09-02, when B13 deleted that file with `dopl_home`**). **The alternative was each tool
+restating the rule, and a
 restated fence is the one that drifts.** The pin is in `container-lock.test.ts` and it drives the
 REAL registered tool through `bootServer` — a lock asserted on the helper stays green when a tool
 stops calling the helper, which is the failure mode this suite already exists to catch for
@@ -5467,7 +5484,7 @@ spawn-idle lane that goal is delivered AT A WAKE, and
 
 > **the only caller of the directive lane cannot produce a wake.**
 
-A dormant session woke on a HUMAN-authored message (`session-wake-tiers.js › wakeEligibility`, the
+A dormant session woke on a HUMAN-authored message (the loop fence, in the wake-tiers module deleted 2026-09-02 with the tiers; the
 2026-08-28 loop fence), and a directive is filed by an AGENT whose every post is agent-authored.
 The five @-posts were not misrouted, misspelled or refused — they were correctly, silently inert,
 and nothing in the product said so. The agent eventually ran because a human reached it through
@@ -5661,7 +5678,7 @@ exactly why raising one meant revisiting the others by hand.
   raise was FOR. **A rate ceiling below the cost ceiling is not a backstop — it is the real cap
   wearing the wrong name.** `test/launch-budget.test.mjs` pins the ORDERING (rate > cost) rather
   than either literal, which is why the relationship survives the next retune.
-- **`session-triage.js › MAX_TRIAGE_PER_MESSAGE` 6 → 15, and this one is the subtle one.** The cap
+- **The triage cap `MAX_TRIAGE_PER_MESSAGE` 6 → 15, and this one is the subtle one** (the module was deleted 2026-09-02 with the tier). The cap
   **TRUNCATES rather than refusing** — an over-budget room triages its oldest N candidates and the
   rest stay asleep. So leaving it at 6 under a cap of 15 would not have cost money, it would have
   cost **WAKES**: past the sixth dormant agent in a room, a candidate could never be triaged and
@@ -5722,3 +5739,531 @@ not depend on how the reader's git is configured.**
 CHECKOUT and not of the code. This is the same shape as the lockfile that recorded only
 darwin-arm64 native binaries and the node-20 `--test` glob. **`gh run list` before believing a
 local green.**
+
+---
+
+## 2026-09-01 — The verb that existed on the wrong side of the wall: end/rename over the external MCP
+
+**Samuel, verbatim:** *"yeah I need you to build out dopl mcp being able to end agents. Dopl MCP
+need to be able to do all that stuff."*
+
+### The shape of the gap
+
+`end_agent` and `rename_agent` had existed since 2026-08-31 — as `mcp__dopl_agents__*`, the
+in-process MCP server mounted into every desktop-spawned session (`main/agent-self-ops.js`). So an
+agent running INSIDE Dopl could stop a sibling. **The operator's own external agent — the Claude
+Desktop / Claude Code session holding their credential, the thing that had been LAUNCHING the
+workers — could not.** It could create agents and never stop them.
+
+The gap is structural, not an oversight: **the server cannot reach a desktop main process.**
+Exactly one mechanism in this tree crosses that wall, and `launch_agent` already is it — MCP writes
+a `channel_launch_directives` row, the operator's machine claims it over realtime, acts, and writes
+back a verdict.
+
+### Why the verbs became a `kind` column and not a second table
+
+The DIRECTION lane (`channel_agent_directions`, 2026-08-31) was the tempting precedent — a sibling
+mailbox already cloned from this one. It was the wrong precedent, and the reason it was right THERE
+is the reason it is wrong here: a direction carries a `reply`, its TTL measures a TURN rather than a
+claim, and its rows hold a private answer. An end and a rename carry none of that. What they need is
+precisely what the launch mailbox already has — a workspace/channel fence, `operator_user_id`, the
+pending → claimed → terminal lifecycle, the claim CAS, lazy expiry, a closed refusal vocabulary, a
+realtime binding, a replica identity, a breaker-open backstop. **A sibling table would have cloned
+four mechanisms so that one discriminator could be a table name instead.**
+
+⚠ **A `payload JSONB` was the obvious column and it was wrong, for a reason that lives on the other
+side of the wire.** `main/launch-directive-wire.js › directiveFrom` is a LITERAL WHITELIST, and that
+whitelist is the only thing that stops a widened table from starting to influence the desktop by
+accident. A JSON blob passes the whitelist as one opaque key and then carries whatever it likes into
+main — the exact property the narrowing exists to deny. Typed `target_agent_id` + `target_name`
+columns are refusable AT REST; a JSON field is refusable only by whoever remembers to look.
+
+### `launched` was free and would have been a lie
+
+Reusing `launched` as the terminal success for an end would have cost no columns and no code. It
+would also have put the word "launched" on the row that RECORDS AN AGENT BEING STOPPED — and this
+row is read back by the orchestrator that filed it and rendered into an agent-facing sentence. That
+is the one class of wrong nothing downstream can detect, so `done` was added and the column CHECK
+pairs each word with its kind.
+
+### The ruling that needed writing down: no toggle on the two new verbs
+
+`launch` is gated per-machine by `getOrchestratorLaunch` — **"THE TOGGLE IS THE CONSENT"** (Samuel,
+2026-08-22). The obvious move was to gate all three the same way. It is wrong, and the argument was
+already in the tree: `agent-self-ops.js`'s header spends a paragraph explaining why these same two
+verbs, on these same subjects, ride PRE-APPROVED past the Axis-A gate inside every spawned session.
+**A stop verb and a display verb widen nothing** — neither can start a query, wake a shell, grant a
+tool or post — so the failure direction of an abused call is an agent that stops or a card that
+reads differently, on the machine of the operator whose agents they all are. **The toggle exists to
+gate LOCAL COMPUTE BEING SPENT**, and neither spends any.
+
+Gating them would also have produced a genuinely bad state: an operator who has not armed
+launch-over-MCP can still have agents started for them by the button, and would then be unable to
+stop them from where their orchestrator lives.
+
+⚠ **The consequence is the part worth flagging.** `refresh` bound realtime on `armed && enabled()`,
+which was the same condition while the mailbox carried one verb. It is not any more, so it now binds
+on `armed` alone. **That widened a READ** — one more `postgres_changes` binding on a subscription
+this process already holds, over rows whose RLS SELECT is `operator_user_id = auth.uid()` — **and
+nothing this machine DOES.** A launch with the toggle off is still claimed by nobody and spawns
+nothing, and that case sits beside the new one in `test/launch-directive-agent-ops.test.mjs` on
+purpose: the asymmetry is only defensible while the §6 gate is provably untouched.
+
+### The banned word that came back
+
+`rename_agent` was one of SEVEN ops of the retired named-agent surface (channels rollback §1,
+2026-08-05), banned by literal string in three separate guards. In that model an agent was a named
+channel participant and a rename changed its **ADDRESS**.
+
+Six of the seven stay banned. This one came back as a different verb — and the tree had already been
+using the word for that verb for a month, in `mcp__dopl_agents__rename_agent`: a LOCAL DISPLAY LABEL
+in `main/agent-names.js`, on one machine, reaching no server, addressing nobody. **Keeping the ban
+would have forced two names for one verb depending on whether the caller was inside a session or
+outside it**, which is a worse teaching failure than the one the ban was written to prevent.
+
+⚠ **The guard did not weaken; it moved from the SPELLING to the MEANING, and got stronger doing so.**
+A banned string can only say "this word is absent" — it could never have caught the retired
+surface's actual danger, which was never the spelling. `channel-law.test.ts` now drives the shipped
+copy for *a LABEL, never an ADDRESS*, and `channel-addressing-rule.test.ts` asserts the revival
+brought back no addressing param.
+
+### The check that is not the fence
+
+The brief asked for a server-side own-operator check on the target agent id. `service-directions.ts`
+had already refused to write one, at length and correctly: `channel_sessions` is a PROJECTION the
+desktop pushes, so **an absent row means nobody reported, never that no such agent exists** — and an
+agent launched seconds ago is routinely in exactly that state.
+
+So `repository-agent-owner.ts` refuses only on a POSITIVE fact (a row this workspace holds whose
+`user_id` is somebody else's) and passes on silence. It buys a SENTENCE — *"that agent belongs to
+another member"* instead of a two-minute round trip ending in `no-session` — and it is documented
+three times over as **not the fence**, because the fence is `operator_user_id` and a future reader
+"hardening" this into a refusal-on-absence would break every end of an unreported agent.
+
+### What a result must not say
+
+The two new ops got their own refusal-sentence map over the shared nine-word enum, and the
+duplication is the point. The wire word is shared; **what it means to do next is not.** `cap` on a
+launch says "wait for a running agent to finish", which contradicts a request to END one. And
+`no-bridge` on a launch says the operator's toggle is off and to ask for it to be turned on —
+copying that here would send an orchestrator to request a permission that does not gate these verbs,
+and to conclude its operator had denied it something they never denied. Both are pinned as NEGATIVE
+assertions in `channel-ops-agent.test.ts`.
+
+The other copy rule this wave bought: `no-session` on an end is usually GOOD NEWS. An agent that
+finished is the ordinary cause, and that is the outcome the caller wanted, reached without them. A
+result that read as a failure would send an orchestrator to re-launch the very work it was stopping.
+
+## 2026-09-02 — The doctrine that was true, and shipped three times: inverting the "say it in the result" rule
+
+On 2026-08-18 (wiring plan Phase 11) this surface adopted a rule that was correct about how models
+read: a tool RESULT is read at the moment the model picks its next action, and therefore OUTVOTES a
+description read once at connection time. So the two capabilities an agent has to be told it has —
+the sparse main-room post and the @-tag — were written into the `post` RESULT as well as the
+description. The rule generalised, honestly, one sentence at a time. Every addition was a real
+lesson somebody had been bitten by.
+
+What nobody was measuring was the bill. An orchestration run across four home channels spent ~55
+tool calls for about 8 calls of real work, and the transcript said where it went: ~25 write results
+at ~2.5–3.5k characters each ≈ 70k characters, almost all of it the same paragraphs — the addressing
+note, the thread-linkage note, the five reasons an @-tag resolves to nobody, the main-room
+sparseness bar, the await lecture and its stop rule. `dopl_channel`'s description was 34,904
+characters, more than half the entire 17-tool surface, pushed to every client on every connection
+including the ones that never open a channel. `read_sessions` — an op an orchestrator polls in a
+loop — closed with ~1.9k of standing paragraphs on every call.
+
+**The correction is a distinction, not a deletion.** A RESULT carries what THIS call did; a rule
+that is true before the call and after it is DOCTRINE. Doctrine is now one constant, published as
+the MCP resource `dopl://doctrine/channels` and by `dopl_channel(op="help")` — pulled when an agent
+wants it instead of pushed at every agent forever. Write results became one line of `key=value`
+facts under 300 characters.
+
+**The teaching-strength argument survives intact, and it is what decided which tokens stayed.** The
+things a caller cannot derive are still in the result, as fields: `tags=0/1` is the server's own
+mention resolution and remains the only thing in the product that catches a misspelled handle — the
+five CAUSES moved, the VERDICT did not. `landed=dropped` is still the silent thread-tag drop.
+`filed=no` still separates "nothing was written" from a pending row that must not be re-issued.
+`idle=no` still separates an agent working its goal from one parked and running nothing, which is
+the difference an orchestrator waits forever on.
+
+Two things fell out that were not the point. Splitting `wake=` from `tags=` fixed a real
+mis-narration: agent handles are resolved on the operator's desktop and never stamped by the server,
+so counting them in the tag fraction reported `0/1` for a token nobody was ever going to stamp — the
+reading a live orchestrator acted on in the 2026-08-31 repro. And a `post` is now ONE round trip:
+the old thread-linkage note called `listChannelThreads` per post to offer threads the caller might
+have meant, and a paragraph that costs a request is a paragraph twice over.
+
+⚠ The honest remainder: six descriptions still do not fit the 1,200-character budget, and each is at
+its smallest honest size — a headline, one line per op, the tenancy wording the P3 tier owns, and
+security sentences other suites pin by phrase. They sit under a ratchet that only moves down, with a
+second test that fails a stale ceiling. Adding a name to that list is not a fix.
+
+## 2026-09-01 — Six branches, one file: what an integration actually decides
+
+Six tiers of the MCP agent-efficiency wave were built in parallel, each green in isolation, and
+merged onto `integration/mcp-efficiency` in one sitting. Every branch passed its own gates. The
+integration still had to make five decisions no tier could have made alone, and the shape of those
+decisions is the thing worth keeping.
+
+**A merge order is a set of rulings, not a sequence.** The order was P0 → P3 → P1 → desktop →
+surface → ping, and each position bought something. P0 first because a BUG FIX is the one change
+that must not be re-litigated by a later tier's restyling. P1 third because it owned every tool
+description and every write-result renderer, so it had to land after the two tiers whose sentences
+it was shrinking — and its ownership was declared BEFORE the merge, which is why the contested
+files resolved in minutes instead of by argument.
+
+**The tiers that never touched each other's files still collided.** P1 rewrote the `no-template`
+refusal into a facts line and moved its paragraphs to a doctrine module. P3 had, on a different
+branch, added a THIRD cause to that same paragraph — the tenancy one, the only cause a caller can
+act on alone. Neither branch's tests failed. The merged tree compiled, passed, and quietly told
+orchestrators two of the three reasons a launch can fail. **Nothing automated catches that class:
+both sides are green, and the loss is a sentence.** It was found by reading both diffs against the
+ticket, which is the only method there is.
+
+**A constant can be byte-identical and still be in the wrong file.** P3 wrote `TENANCY_RULE` and
+`TENANCY_FIX` into `channel-description.ts` so P1's character-counting could not trim them. P1 then
+made that file import `DOCTRINE_URI` from `channel-doctrine.ts`. The doctrine needed the tenancy
+sentences; taking them from the description would have closed a module cycle whose loser is a **TDZ
+throw at connect time** — not a lint warning, not a test failure, a dead MCP server for whichever
+module loaded second. The constants moved to the leaf side, byte-identical, and the docblock now
+says never to give that module an import of the description.
+
+**Three branches allocated finding ids from `master` and produced six entries under three numbers.**
+`check-doc-refs.mjs` passed on that state: two headings under one id both RESOLVE, so the gate that
+exists to keep references honest is blind to the exact failure. The rule — *allocate from the
+highest id claimed on any live branch* — is now in the findings log header and CLAUDE.md, with the
+re-derive command. ⚠ And writing that rule as an `##` heading briefly turned 1,011 legitimate
+references dangling, because the gate treats everything above the first `##` as the header block
+that records deleted ids. The note is bold text now, and says why.
+
+**Four files went over the 500-line cap without any tier adding a line to a file it did not own.**
+`channel.ts` took `set_agent_mode` from one branch and `ping`/`pings` from another; each was small,
+and together they were 51 lines over. The cap is doing its job here: it forced the seam that was
+already true (the six ops that ask the operator's own machine to do something) into a module that
+states it, rather than leaving it to be re-derived from a switch.
+
+**And re-deriving the gate list found a third undocumented gate.** `scripts/check-css-token-drift.ts`
+had been in CI since 2026-08-31 and in no doc — the same failure `check-role-drift.ts` produced a
+month earlier. §14 had told everyone to re-derive rather than quote; nobody ran the command until an
+integration needed the real list. **A doc that says "re-derive this" is not a substitute for
+re-deriving it, and the wave that adds a gate is the one that will not think to.**
+
+## 2026-09-02 — The subsystem that was an apology: what an id could not do, explained in four places
+
+`classifyMissingTemplateRef` was one of the tree's better-written functions. It had a real
+property — it named a tenancy without ever becoming an existence oracle — a test suite that drove
+it adversarially, a docblock that argued for every arm, and three careful label shapes. It also
+existed for exactly one reason: **a template read was keyed `(workspace_id, id)`, so a read could
+not follow its own id.** Everything above it was scaffolding around that: a 145-line "ONE CONSUMER"
+repository, an `elsewhere` arm on a domain error, an optional `details` key on a 404, a duck-type in
+the desktop main process, a `TENANCY_RULE` paragraph interpolated into the MCP doctrine, and a
+`workspace` argument on fourteen tool schemas explaining which of them to pass.
+
+**None of that was wrong. All of it was the cost of one missing capability**, and the shape is worth
+naming because it repeats: when a system cannot DO something, the explanation of why not grows into
+a subsystem, acquires its own tests, and starts looking like a feature. The tell is that the
+explanation is better engineered than the thing it explains — five surfaces agreed perfectly about a
+sentence, and no surface could act on it.
+
+A12 made ids resolve their own container (`shared/tenancy/resolve-resource.ts`), and the read
+follows the answer instead of describing it. The classifier survives on the NAME lane, where the
+ambiguity is real — `agent_templates` has no name uniqueness on purpose — and B2 deletes the rest.
+
+**Two fence gaps fell out of the move, and both were invisible while the answer was a sentence.**
+The generalised query had to decide what "a container the caller belongs to" means for a READ, and
+the old one had answered a weaker question: any ACTIVE membership. It did not consult the
+credential's workspace lock (F-442) — the mirror of F-336, where the lock was read as a visibility
+answer; here a lane that had correctly stopped asking it about visibility forgot it still had a
+WORKSPACE claim. And it did not consult the caller's ROLE (F-443), though `guest` ranks below the
+`viewer` floor every template route runs at. As labels these leaked a workspace name. As addresses
+they would have been reads under the route floor. **The generalisation is what surfaced them: the
+same membership set now answers "may you name this" and "may you read it", so the two questions
+could no longer disagree quietly.**
+
+⚠ **And the pilot is READS only, on purpose.** `getTemplateById` stays keyed to `ctx.workspaceId`
+because `service-writes.ts` funnels through it — a PATCH that followed an id into another container
+would be `workspace=` becoming ignorable on a WRITE, which is a ruling nobody has made. One
+function, two doors, and the split is the whole reason this was safe to build unattended.
+---
+
+### `@dopl/contracts` — why a fourth package, and why it has no build (2026-09-02)
+
+**The measurement that bought it.** 47 duplicated tenancy/channel types across
+`src/features/**/types*.ts` and `packages/dopl-client/src/*`, 15% of them gated, over **1,038 lines
+of drift script** — and four live drifts sitting in the tree while those scripts were green
+(`WorkspaceSummary.iconUrl` F-335, `ChannelMessage.authorName`/`authorAvatarUrl`,
+`HomePendingLink.grantedRole`, `HomeChannelsPayload.pendingLinks`). Three of the four gates parsed
+the committed `dist/` as a SEPARATE mirror, because that is what `@dopl/mcp-server` and `main`
+actually import. `check-session-health-drift.ts` shipped on the morning of 2026-09-02 naming **four
+hand-mirrors of one seven-field type**; the package landed the same afternoon and took it to two.
+
+**Why the mirrors existed at all** — and it was never laziness: `packages/dopl-client` and
+`packages/mcp-server` are separate `tsc` programs with their own `rootDir`, reached through
+`node_modules`, so `import "@/features/channels/types"` is not a thing either can write. A shared
+WORKSPACE PACKAGE is the only shape that both trees and `src/` can all name.
+
+**The one design decision worth keeping: it is TYPE-ONLY, and that is what makes it free.**
+`package.json` sets `types: "./src/index.ts"` and nothing else. There is no `tsc` step, no `dist/`,
+no `build:packages` line, no CI step, and nothing to rebuild before committing — because every
+import of it is an `import type` and all four toolchains erase it. The alternative was considered
+and rejected on cost: a package with runtime exports needs a build, and then either a committed
+`dist/` (the exact 1.6 MB of diff surface this work exists to shrink) or a new build step in two CI
+jobs plus a fresh clone that cannot typecheck until somebody runs it. ⚠ **The rule this buys has to
+be defended, because the first `const` looks harmless:** a single runtime export makes
+`@dopl/contracts` a build input for Next/webpack, the SPA's Vite and two NodeNext programs at once.
+`isStandardWorkspace` is the thing that WANTED to move and could not — which is why
+`check-role-drift.ts › checkWorkspaceKind` survives as a predicate check with its set comparison
+deleted out from under it.
+
+**What the gates became, and why the deletions were deletions.** A re-export cannot disagree with
+what it re-exports, so the SDK sites in three scripts were not merely redundant — `extractUnion` and
+`typeFields` THROW on one, i.e. a gate left pointing at a retired mirror fails on the CORRECT state.
+Repointing them at the package would have been worse: two readers of one file, reporting one fact
+twice. What replaced them is a different assertion, and it had to be: those gates caught two copies
+DISAGREEING, and the failure mode now is a second copy APPEARING — which compiles, ships, and
+shadows the package for one tree's consumers. `src/shared/contracts/canonical-sets.test.ts` is that
+census.
+
+---
+
+## 2026-09-02 — Two axes, one field: the fix that fixed a symptom, and the fix that fixed the shape
+
+Wave B slice B3. `mcp_tokens` carried a container lock — `workspace_id` — and every M-10 visibility
+predicate read it as `if (apiKeyWorkspaceId) return false`. That is F-336/F-333, and the August
+remedy was `workspace_lock_kind`: a discriminator saying `'container_session'` for a credential the
+desktop minted for one operator's session, with a three-arm predicate over the PAIR. It worked, it
+shipped, and it left the shape wrong.
+
+**A KIND is not a PERSON, and inferring one from the other is the same defect in a smaller place.**
+The predicate's real question was *"is there a single human behind this credential?"*, and the answer
+lived nowhere on the row — it was reconstructed from a lock plus an enum on every call. That is
+survivable while exactly one producer exists, which is why the August version was correct in
+practice; it stops being survivable the moment a second kind of credential is minted, because
+whoever adds it has to know that naming a string in `credential-audience.ts` is what grants a
+credential somebody's private rows.
+
+**So the row states both facts.** `container_id` = WHICH container, `subject_user_id` = WHOSE reach.
+They are independent, and the reason to insist on that is not tidiness: all four combinations are
+meaningful, and one of them — fenced AND anonymous — is precisely the case M-10 was written for and
+the case the single field could not represent. `isSharedCredential` becomes one null check;
+`CHECK (subject_user_id IS NULL OR subject_user_id = user_id)` makes "acts as somebody else"
+unstorable rather than merely un-minted.
+
+**The backfill was the identity, and that is why it was allowed to exist.** `20260829120000`
+deliberately refused to backfill, because writing `'container_session'` onto live rows would have
+WIDENED them as a side effect of a schema change. This file writes `subject_user_id = user_id` for
+exactly the two arms the live predicate already calls a person, so no row's answer moves — and the
+verification block asserts that equivalence in both directions rather than asserting the absence of
+a backfill. The same mapping is the code's fallback, stated once (`legacyAxes`), so the migration
+and the dual-read cannot drift apart.
+
+**The field is REQUIRED, and that is the half that will outlast the rename.** The old context field
+was optional, and `buildChannelContext` carried a docblock about the container field being "the one
+field on this context whose ABSENCE widens". An optional security axis has to pick a default, and
+both defaults are wrong: "the caller" widens, "nobody" silently 404s an operator on their own rows.
+Making it required moved the question to the typechecker, which found all 88 construction sites in
+one pass — 54 of them mechanical, and every one of the rest a fixture that had been expressing "a
+shared credential" as *a container id with no subject stated*, i.e. the conflation, re-entered by
+hand in the tests that were supposed to guard against it.
+
+**What the tests had to change to.** Every case is now stated at BOTH container values, so a
+predicate that starts consulting the fence again fails in `credential-audience.test.ts` rather than
+in whichever feature suite happens to notice first. The pre-existing suites asserted "a lock refuses
+a private row", which is true of the old predicate and true of a predicate that reads the fence —
+i.e. they could not tell the fix from the defect. Pinning the pair, not the arm, is what makes them
+mutation tests.
+
+**The one asymmetry, stated rather than smoothed.** The READ path tolerates a database this
+migration has not reached (`42703`, caught once per process, legacy column list thereafter) because
+`mcp_tokens` is the one table where an unapplied column 401s **every** credential instead of 500ing
+one feature. The MINT path does not: it INSERTs the new columns and 42703s if they are missing,
+which fails open to a device token and is logged. That is deliberate — a degraded ceiling is
+recoverable, a total auth outage is not — and it is the `20260829120000` precedent applied in the
+direction each path can afford.
+
+---
+
+## 2026-09-02 — The narrowing that could not ship alone: why a repaired address is a stored verdict
+
+Ruling B1 narrows the fan-out from *"every live agent on the thread"* to *"the addressed
+recipient"*. Taken by itself that is a one-line change with a failure mode nobody would report as a
+bug: a person forgets an `@`, the message lands in the room, the transcript looks completely normal,
+and nothing happens. The author waits. The conversation stalls, and there is no error anywhere to
+find — the send returned `ok`, the row exists, and every agent behaved correctly.
+
+So the ruling arrived with its own remedy attached: **a forgotten `@` must never stall a
+conversation.** That is why B4 is a bigger slice than "narrow the fan-out" sounds, and why three
+quarters of it is about the case where the caller addressed nobody.
+
+**The four decisions worth keeping.**
+
+**1. The repair is the SERVER's, not the desktop's.** This is the same argument A9 made about the
+verdict itself and it has not weakened: a rule that lives on every desktop lives on the WEAKEST
+build in the field, and the addressing doctrine had to be written against that build for a year.
+A repair rule shipped desktop-side would produce a room where two machines disagree about who a
+message was for — which is worse than the stall it was meant to fix, because it is invisible from
+both ends.
+
+**2. The repair is a VERDICT VALUE, not a flag.** The tempting shape is `wake_verdict: 'member'` plus
+`repaired: true`. It was refused because the desktop is not the only reader: a person looking at a
+transcript asks *"why did my agent answer that?"*, and the only honest answer distinguishes an
+address the author WROTE from one the server INVENTED on their behalf. A boolean beside a value is a
+fact one query forgets to select; three values in the column the reader already reads is a fact it
+cannot.
+
+**3. RR2 resolves a MEMBER, and that is load-bearing rather than incidental.** "The party that last
+addressed this agent" could have been read as "the agent that last addressed this agent", which
+reads more natural and would have quietly created an agent→peer-agent wake through a rule nobody
+wrote — exactly what Samuel's 2026-08-31 same-account carve forbids. The arm answers an ACCOUNT, and
+that account's own machine decides what runs. The carve then holds through every path by
+construction rather than by a test on the way out: both agent-resolution doors (the body parse and
+the new `to=` resolver) are own-scoped when the credential is an agent's, so a peer's agent is not in
+the index, cannot be resolved, and no stored verdict can name it.
+
+**4. `delivery=none` and a REFUSAL are different failures with different remedies, and conflating
+them was the near-miss.** An unaddressed post that nobody answers is a person talking to a room that
+has not been told who answers — normal, and the result lists the live handles. A `to=` naming
+somebody who is not there is a typo, and it is a 400 that names what IS reachable. Making the second
+one quiet would have re-created the exact stall the ruling exists to remove, one level down, in the
+one case where the author was CERTAIN they had addressed somebody.
+
+**What the LLM triage loop cost, and what replaced it.** B6 deletes it: two desktop modules whole
+plus roughly half of a third, and `tierFor` collapsing to `n === 1 ? SOLO : NONE`. The replacement is
+RR3 arm 2 — *exactly one live agent in the room answers* — which the server computes for free from
+a projection it already holds, and RR3 arm 1, a channel SETTING for the case where there is more
+than one. Twelve rules over "who wakes", spread across three modules that each declared they must not
+read the others, became one predicate. ⚠ The setting stores a HANDLE and not a template id, which is
+not a shortcut: an FK to `agent_templates` from a row every channel member can read is a
+cross-visibility reference, and `20260823130000_channel_sessions_template_name.sql` had already paid
+for that lesson on its own column.
+
+**The one thing this slice could not do.** G20 / F-450's eighth session-health field is assigned
+here and did not ship, for two structural reasons recorded in F-493: the slice holds exactly one
+migration, named for the default responder, and the field's only possible WRITER is the desktop —
+which belongs to two other slices. A column with no writer would have made the ledger read as
+enforced. The measurement G20 asks for has to land with the machine that can take it.
+
+## 2026-09-02 — The window that had to close as a SENTENCE: retiring an op, and deleting a mailbox that was a copy
+
+Wave B batch 3, slice **B16** — the second half of ruling B9 (*"retire the old channel op names after
+one release"*), ruling B8's ping fold, and the `await` op's disappearance from everything except its
+transport.
+
+**A compatibility window is not free to close.** B8 collapsed `dopl_channel` from twenty-three ops to
+five and kept the twenty-two retired names PARSING for one release, each answering one line naming
+its replacement, because zod refuses an unknown enum member with `-32602 invalid enum value` — an
+error with no content, arriving before any handler can say anything. That is the failure the window
+existed to prevent. **So deleting the window naively re-creates it one release later**: the redirect
+goes away and the caller pinned to an older desktop gets exactly the opaque refusal the whole
+exercise was avoiding, just further from the change that caused it.
+
+**The answer is that the REFUSAL carries the sentence.** `z.enum(CHANNEL_OPS, { error })` puts
+`channel-schema.ts › unknownOpRefusal` — *"dopl_channel has no op `post` — it takes "send", "read",
+"status", "manage" or "rooms". Nothing was done."* — into the validation failure itself. The same
+function is the registrar's exhaustive `default`, so the two answers cannot drift, and the whole
+compatibility surface is now one line instead of a module, a type, a map and an arm. **What a
+migration notice has to do is name the replacement; it never had to be a successful call.**
+
+**A retired name is dead vocabulary, and dead vocabulary has a home.** The twenty-two moved into
+`law-removed-vocabulary.ts › RETIRED_CHANNEL_OPS` — the one module the shipped-string scan skips,
+because it literally contains the strings it forbids. **And the scan learned the lesson the fact key
+taught it**: `law-scan.test.ts` matched `op="await"`, which the send lane's `await=since:<seq>`
+result field never wrote, so a served string had been naming the retired lane on every write since
+the collapse. The key is `hold=` now and the WORD is banned outright, measured absent first.
+
+**Two mailboxes, one of which was a copy of a delivery.** The ping lane existed because an agent that
+FINISHED had no instrument: an unaddressed post starts nobody (the loop brake), and an addressed one
+triggers a whole room. Ruling B8's answer was that a directed `send` already IS that instrument — it
+names one recipient, the server resolves it, and `delivery=` is the acknowledgement the ping row was
+standing in for. What made the deletion safe rather than merely smaller is that **the signal is
+DERIVABLE**: *"addressed to me and unanswered"* is `metadata.to_user_id = me` with no later message
+of my own in that channel, which `repository-account.ts` already computed for `op="status"`. A
+derived answer cannot drift from the message it points at; a second table can, and this one would
+have — its migration was never applied in any environment, so for a wave the whole lane was code
+against storage that did not exist.
+
+**The three ping kinds did NOT become message kinds, and refusing them is the same ruling twice.**
+The brief asked for `done | question | blocked` on the replacement card; §2.1 refuses them (*"a value
+with no distinct behaviour is prose wearing a schema"*) and F-491 had already settled it once. The
+card shows `isEscalation` instead — a fact about the stored message rather than a sender's
+self-report, which is the property those three never had (F-651).
+
+**What was NOT done, and why the row was left undone rather than deferred quietly.** B16's spec row
+also said to delete the five `canSee*` predicates, *"one at a time, each behind its own green redteam
+test"*. Its condition is unmet twice: `RLS_PHASE_2` is default-OFF over migrations no database has,
+and the `rls-redteam` job — which exists precisely because two waves of behavioural RLS cases were
+green having executed no statement — has never run. Every repository still reads `supabaseAdmin()`,
+so the TS predicate is the only live fence, and deleting one would replace a fence with a policy that
+is off, on a table that does not exist, proved by a job that has not run. **A conditional row whose
+condition is unmet is not a row you execute carefully; it is a row you do not execute.** F-650 states
+the two preconditions so the next slice can check them instead of re-deriving the argument.
+
+## 2026-09-02 — Wave B slice B15: what a copy cost, and why the shelf could not stay a boolean
+
+**Two rulings landed together and the second is what made the first cheap.** B11: *grants replace
+copies*. B10: one personal container per user, so the `home_scoped` flag retires. Taken separately
+each is a deletion; taken together they are the same deletion twice, because the copy ops existed to
+work around the thing the shelf was.
+
+**What the copy actually was.** `dopl_agent(op="copy")` and `dopl_kb(op="copy_base")` composed two
+already-fenced legs — read in the source, create in the target — precisely so no new cross-tenancy
+authz path had to be written. That was a good decision and it is why the ops shipped with no
+migration and no route. What it could not fix is what a copy IS: a second row that diverges from the
+first the moment it lands. Every rule the surface accumulated followed from that and from nothing
+else. The template copy DROPPED its attached knowledge bases, because a base id from the source
+workspace means nothing in the target and the target's own attach gate would 404 it — so the thing
+that arrived wore the operator's agent's name and could not read what that agent read. The `visibility`
+was FORCED, and the forced value was reversed once (2026-08-27, `private` → `workspace`) when the
+container's private section was deleted and a private copy became reachable from nowhere. The name
+was carried unchanged because templates have no uniqueness constraint to dodge, which is correct and
+also means two identical names in one list. And the confirm dialog's job was largely to say those
+three things out loud before the operator pressed.
+
+**A grant answers all of it by not making a second row.** The template stays in its author's
+container, its attachments still resolve there, an edit reaches everyone it is lent to, and there is
+one name. `resource_grants` had shipped in B1 with a validity trigger and five resource types and
+**no door outside the app's own team and channel-grant panels** — so the user-facing half of B11 was
+one route, not a feature. What did NOT move is the ownership fence: R2 (*you lend what you created,
+not what you can read*) is carried over verbatim onto both tiers, because a grant widens an audience
+in exactly the direction a copy did.
+
+**F-419 is disposed by deletion rather than fixed, and the difference is worth keeping.** That entry
+said the ownership rule lived only in the MCP package while the REST create routes it composed over
+had no equivalent, and proposed a provenance field carried into two schemas and two services. Nobody
+built it. There is no client-composed create left to attribute, so the gap it described cannot be
+reached — and the two-layer fence it insisted on exists anyway, because the new door has a server
+side. **A finding closed by deleting its subject is not the same as a finding fixed**, and the entry
+says which.
+
+**Why the shelf could not stay a boolean, and the ordering trap under it.** B11's dual-write was a
+2x2 over (containers minted?) × (`TENANCY_PERSONAL_CONTAINER` on?), and what made every cell safe was
+that `home_scoped` rode the row wherever it lived: one predicate found every personal row in either
+container. That property is also what made the flag *removable* — and it is exactly what the drop
+takes away. After `20260923120000` there is one place a personal row can be, so every fallback in
+that module becomes a row nothing can find: a read that falls back answers a request for the PERSONAL
+shelf with the SHARED workspace's rows, and a write that falls back lands on a shelf no surface will
+list. Both now fail closed — empty, and a 403.
+
+**The trap is that the migration's two preconditions are not the same precondition.** P1 (the
+one-time move has run) is the obvious one. P2 is that the flag has been DEFAULT-ON for a full
+release: the move ran ONCE, and the flag decided where personal writes landed *afterwards*, so a
+window with containers minted and the flag still off leaves rows on a shared workspace's shelf that
+the drop would publish to every member of it, with no marker left and no reader that could notice.
+This is F-590's shape read backwards — that finding was about the flag flip HIDING rows written in
+the same window — and it is why the migration's first statement is a `RAISE` rather than a comment.
+
+**Two hand-mirrored fences became one, and the mirrors were the reason.** `resolveHomeScope` and
+`resolveTemplateHomeScope` were one three-condition rule written twice, and their docblocks had
+already drifted into arguing about each other (a template's `private` is TERMINAL, a KB's is a
+FLOOR). Both are deleted. Of the three conditions only *a credential that stands for a person*
+survives; `private` was protecting a shelf that sat inside a SHARED workspace, and a container has
+one member, while *the caller's own default standard workspace* went with the concept B10 removes.
+**Two error classes and two wire codes collapsed with them** into one that extends `HttpError`, so
+no feature carries a mapping arm — which is the only way a shared fence stops growing new mirrors.
+
+**One thing shipped incomplete, deliberately, and it is recorded rather than smoothed over.** A
+grant is written and the lent row does not yet appear in the target's list (F-604): `canSeeTemplate`
+and `agent_templates_member_select` are ONE RULE WRITTEN TWICE and may only move together, and that
+pair belongs to B12/B16 with the redteam suites that prove it. Adding an arm to a predicate this
+slice does not own, whose twin lives in another slice's unapplied migration, is the exact drift
+`20260716150000_chats_team_aware_rls.sql` is the record of.

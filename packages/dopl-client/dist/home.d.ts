@@ -23,7 +23,7 @@ import type { HomeChannelCreateResult, HomeChannelsPayload } from "./home-types.
  * 🔒 ⚠ **THIS IS AN ENUMERATION, AND IT IS NOT NARROWED HERE.** The route
  * answers every home channel the account belongs to; the CONTAINER LOCK (B3)
  * that narrows a pinned session to one room lives in the MCP layer
- * (`packages/mcp-server/src/tools/home-scopes.ts`), because the lock is a
+ * (`packages/mcp-server/src/workspace-directory.ts › narrowToLock`), because the lock is a
  * property of one MCP CONNECTION and not of the credential. A caller of this
  * function that forgets to narrow has built the enumeration oracle B3 exists to
  * deny — do not add a second reader that skips it.

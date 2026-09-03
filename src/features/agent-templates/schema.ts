@@ -123,6 +123,16 @@ export const TemplateFieldsSchema = z
 
 // ─── Visibility ─────────────────────────────────────────────────────────
 
+/**
+ * ⚠ **`team` IS STILL ACCEPTED HERE AND IS REFUSED FOR AN AGENT ONE LAYER DOWN**
+ * (2026-09-02). A8 took the value off `dopl_agent`'s enum, so the MCP surface
+ * refuses it in zod before any round trip — but this schema is the REST route's,
+ * an agent credential reaches that route directly, and a rule enforced only where
+ * the caller happens to enter is not enforced. `server/service-writes.ts ›
+ * assertTeamScopeIsHuman` is the fence, on the create AND the update path.
+ * ⚠ It stays in the enum because the value is still legal for a HUMAN: taking it
+ * out of the DB is B4, and B4 has not been ruled.
+ */
 export const TemplateVisibilitySchema = z.enum([
   "private",
   "team",
@@ -165,14 +175,25 @@ export const AgentTemplateCreateSchema = z
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
     /**
-     * Put the new template on the /home SHELF (`types.ts › TemplateShelf`)
-     * instead of the workspace Agents page. ⚠ A REQUEST, NOT A DECISION: the
-     * schema only says the word is spellable — `server/service-writes.ts ›
-     * resolveTemplateHomeScope` is the fence, and it 403s rather than
-     * downgrading. Omitted/false = the workspace shelf, which is every existing
-     * caller.
+     * Put the new template on the PERSONAL SHELF (`types.ts › TemplateShelf`)
+     * instead of the workspace Agents page. ⚠ A REQUEST, NOT A DECISION, AND IT
+     * ROUTES THE ROW RATHER THAN BEING STORED ON IT (2026-09-02, slice B15) —
+     * the twin of `knowledge/schema.ts › homeScoped`, which carries the
+     * argument. `shared/tenancy/personal-container.ts › personalWriteWorkspaceId`
+     * is the fence and it 403s rather than downgrading. Omitted/false = the
+     * container the call is in, which is every existing caller.
      */
     homeScoped: z.boolean().optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * row landing at `visibility: 'workspace'`. Everywhere else it is IGNORED,
+     * never refused: see `features/workspaces/server/shared-publish.ts`, which
+     * is the one statement of both the predicate and the 400.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
   .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
 export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>;
@@ -184,6 +205,23 @@ export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>
  * `[]` = empty it) — there is no add/remove verb, because a partial mutation
  * over a set that two clients can edit is how sets silently diverge.
  */
+/**
+ * The columns and junctions `updateTemplate` can actually move. ⚠ NAMED so the
+ * "changes at least one field" refine cannot silently count a field that
+ * changes nothing — `acknowledgeShared` is the first such field and will not be
+ * the last.
+ */
+const MUTABLE_UPDATE_KEYS = [
+  "name",
+  "description",
+  "instructions",
+  "model",
+  "fields",
+  "visibility",
+  "teamIds",
+  "knowledgeBaseIds",
+] as const;
+
 export const AgentTemplateUpdateSchema = z
   .object({
     name: NameSchema.optional(),
@@ -194,9 +232,25 @@ export const AgentTemplateUpdateSchema = z
     visibility: TemplateVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
+    /**
+     * 🔒 "I know this publishes into a room somebody else is standing in."
+     *
+     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
+     * PREDICATE — `kind='link'` container, two or more active members, and the
+     * row landing at `visibility: 'workspace'`. Everywhere else it is IGNORED,
+     * never refused: see `features/workspaces/server/shared-publish.ts`, which
+     * is the one statement of both the predicate and the 400.
+     */
+    acknowledgeShared: z.boolean().optional(),
   })
-  .refine((patch) => Object.keys(patch).length > 0, {
-    message: "Patch must change at least one field",
-  })
+  .refine(
+    // ⚠ `acknowledgeShared` IS NOT A FIELD THIS PATCH CHANGES, so it may not
+    // satisfy the "at least one" rule on its own. It is an assertion ABOUT the
+    // change, and a PATCH carrying nothing but an acknowledgement changes no
+    // column — which is exactly the empty-body 500 class `service-writes.ts`
+    // guards (F-404), reached one layer earlier.
+    (patch) => MUTABLE_UPDATE_KEYS.some((key) => patch[key] !== undefined),
+    { message: "Patch must change at least one field" }
+  )
   .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
 export type AgentTemplateUpdateInput = z.infer<typeof AgentTemplateUpdateSchema>;

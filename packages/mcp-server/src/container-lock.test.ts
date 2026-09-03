@@ -12,12 +12,14 @@
  *     answers `null` for every other id and slug;
  *   - the INSTRUCTIONS table is empty under a lock, so the briefing cannot
  *     advertise a workspace the tools then refuse;
- *   - 🔒 **`dopl_home` DOES NOT ENUMERATE** (2026-08-28). `/api/home/channels` is
- *     `withUserAuth` and answers the WHOLE ACCOUNT, so the narrowing cannot live
- *     in the route — it lives in `tools/home-scopes.ts`, and a locked session
- *     must see exactly the room it stands in with no evidence another exists.
- *     ⚠ This is the single easiest way to regress B3, which is why it is driven
- *     through the REAL registered tool rather than asserted on the helper.
+ *   - 🔒 **`dopl_workspaces` DOES NOT ENUMERATE** — a locked session sees
+ *     exactly the container it stands in, with no evidence another exists.
+ *     ⚠ **THE HOME HALF OF THIS SUITE RETIRED WITH `dopl_home` (B13).** It
+ *     narrowed a SECOND account-wide read (`/api/home/channels`, `withUserAuth`)
+ *     that the route could not narrow; the containers come from the one
+ *     narrowed membership list now, so there is no second read to leak from.
+ *     `narrowToLock` still guards the account-wide CHANNEL reads and is pinned
+ *     in `tools/account-scope.test.ts`.
  *
  * ⚠ THIS IS A TRIPWIRE SUITE, NOT A CONTAINMENT SUITE. Nothing here proves an
  * agent cannot reach another workspace — Bash can open a second MCP connection
@@ -37,6 +39,13 @@ const registeredTools = new Map<
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // ⚠ THE MCP RESOURCE SEAM (2026-09-02). `createServer` publishes
+    // `dopl://doctrine/channels` through `registerResource` (`resources.ts`), so
+    // a double without this method throws before a single tool is registered.
+    // ⚠ IT IS A NO-OP HERE ON PURPOSE — these suites assert over TOOLS. The
+    // resource's own content is pinned in `channel-doctrine.test.ts`, and that
+    // it is registered at all in `server.test.ts`.
+    registerResource() {}
     constructor(_info: unknown, opts?: { instructions?: string }) {
       registeredInstructions.push(opts?.instructions ?? "");
     }
@@ -130,7 +139,7 @@ function mockClient(
 
 /**
  * Boot a real server and hand back BOTH the briefing it registered and a driver
- * for `list_workspaces` — the meta-tool that reads the directory through the
+ * for `dopl_workspaces` — the meta tool that reads the directory through the
  * same object `createServer` built. Driving it is what pins the WIRING; the
  * `createWorkspaceDirectory` tests below only pin the object's own behaviour,
  * and a lock that is never threaded in would leave those green.
@@ -141,23 +150,16 @@ async function bootDirectory(
 ): Promise<{
   instructions: string;
   listWorkspaces: () => Promise<string>;
-  listHomeChannels: () => Promise<string>;
 }> {
   registeredInstructions.length = 0;
   registeredTools.clear();
   await bootServer(mockClient(rows, pin));
-  const cb = registeredTools.get("list_workspaces");
-  const home = registeredTools.get("dopl_home");
+  const cb = registeredTools.get("dopl_workspaces");
   return {
     instructions: registeredInstructions[0] ?? "",
     listWorkspaces: async () => {
-      if (!cb) throw new Error("list_workspaces was never registered");
+      if (!cb) throw new Error("dopl_workspaces was never registered");
       const res = await cb({});
-      return res.content.map((c) => c.text ?? "").join("\n");
-    },
-    listHomeChannels: async () => {
-      if (!home) throw new Error("dopl_home was never registered");
-      const res = await home({ op: "list_channels" });
       return res.content.map((c) => c.text ?? "").join("\n");
     },
   };
@@ -174,7 +176,7 @@ describe("bootServer — when the directory LOCKS", () => {
     expect(instructions).not.toContain("beta");
   });
 
-  it("🔒 the lock is WIRED: `list_workspaces` names the container ALONE", async () => {
+  it("🔒 the lock is WIRED: `dopl_workspaces` names the container ALONE", async () => {
     // Drives the real meta-tool through the real directory `createServer` built.
     // Without this, dropping `lockedTo` on the way into
     // `createWorkspaceDirectory` leaves every other assertion here green.
@@ -189,7 +191,28 @@ describe("bootServer — when the directory LOCKS", () => {
     expect(text).not.toContain("beta");
   });
 
-  it("does NOT lock on a SOLO container — today's behaviour, untouched", async () => {
+  it("🔒 the locked row is a HOME CHANNEL, with no slug (T37)", async () => {
+    // The row `getWorkspaceList` answers with under the lock is a `kind='link'`
+    // container. Rendering it in the workspace shape told the agent two false
+    // things: that it is a workspace, and that its slug addresses it. (The
+    // third — a ★ meaning "the workspace a no-arg call auto-targets" — retired
+    // with the auto-target.) Same rule as `workspace-directory.ts › searchLegs`.
+    const booted = await bootDirectory(
+      [STANDARD, OTHER_STANDARD, SHARED_CONTAINER],
+      "id-shared",
+    );
+    const text = await booted.listWorkspaces();
+
+    expect(text).toContain("home channel");
+    // The id is the ONLY handle that addresses a container, so it stays.
+    expect(text).toContain("id-shared");
+    // ⚠ Asserted as the RENDERED slug field, not the bare string: the fixture's
+    // name is `shared-c workspace`, so the slug substring is in the row either
+    // way and a bare `not.toContain("shared-c")` could never fail.
+    expect(text).not.toContain("slug: `shared-c`");
+  });
+
+  it("does NOT lock on a SOLO container — the lock is for a SHARED room", async () => {
     const booted = await bootDirectory(
       [STANDARD, OTHER_STANDARD, SOLO_CONTAINER],
       "id-solo",
@@ -221,34 +244,6 @@ describe("bootServer — when the directory LOCKS", () => {
 
     expect(instructions).not.toContain("alpha");
     expect(instructions).not.toContain("beta");
-  });
-
-  it("🔒 dopl_home DOES NOT ENUMERATE under a lock — one room, no evidence of another", async () => {
-    // ⚠ THE ORACLE THIS CLOSES: `/api/home/channels` answers the whole account,
-    // so without `home-scopes.ts › narrowToLock` a session pinned into a shared
-    // room would hand its operator's PEER the ids of every other room the
-    // operator is in.
-    const booted = await bootDirectory(
-      [STANDARD, OTHER_STANDARD, SHARED_CONTAINER, SOLO_CONTAINER],
-      "id-shared",
-    );
-    const text = await booted.listHomeChannels();
-
-    expect(text).toContain("With Dana");
-    expect(text).toContain("id-shared");
-    // ⚠ Neither the NAME nor the ID of the other room may appear.
-    expect(text).not.toContain("My own room");
-    expect(text).not.toContain("id-solo");
-  });
-
-  it("an UNLOCKED session's dopl_home lists every home channel", async () => {
-    // ⚠ The other direction: a narrowing that always narrowed would pass the
-    // assertion above while breaking the tool for everybody.
-    const booted = await bootDirectory([STANDARD], null);
-    const text = await booted.listHomeChannels();
-
-    expect(text).toContain("With Dana");
-    expect(text).toContain("My own room");
   });
 
   it("does not lock when there is no pin at all", async () => {
@@ -310,7 +305,12 @@ describe("WorkspaceDirectory — the lock itself", () => {
       { directory: [STANDARD, SHARED_CONTAINER] },
     );
 
-    expect((await dir.getWorkspaceList()).map((w) => w.id)).toEqual(["id-std"]);
+    // ⚠ UNCHANGED means the WHOLE list since B10 — a container is one more
+    // container the caller is in, and the KIND is what every surface renders.
+    expect((await dir.getWorkspaceList()).map((w) => w.id)).toEqual([
+      "id-std",
+      "id-shared",
+    ]);
     expect((await dir.resolveWorkspaceRef("id-shared"))?.id).toBe("id-shared");
   });
 });

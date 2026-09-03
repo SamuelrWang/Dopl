@@ -15,23 +15,43 @@ const narration_1 = require("./narration");
 const identity_1 = require("./identity");
 const members_render_1 = require("./members-render");
 const respond_1 = require("./respond");
-const DESCRIPTION = `READ-ONLY view of workspace membership, teams, and access — for answering "who's in this workspace, who's on which team, what can they (or I) touch". You cannot change any of it: roles, teams, and grants are managed by humans in the Dopl web UI; if the user asks for a change, point them there.
-
-The access model, so you can explain it:
-- Roles rank guest < viewer < member < admin < owner. Role default level: guest → none, viewer → read, member/admin/owner → edit. A GUEST is link-granted and reaches ONE channel, nothing else in the workspace — no knowledge base, skill, chat or ontology object at any level.
-- A shareable resource (KNOWLEDGE BASE, SKILL) is either workspace-mode (open to all members at their role default) or teams-mode (visible only to granted teams — plus admins/owners and the resource's creator). Chats, chat folders and ontology objects carry their OWN sharing and are not part of the teams grid.
-- A member's effective level on a teams-mode resource = the highest grant across their teams, capped at their role default. No grant → the resource is invisible to them.
-- Admins and owners always have edit on everything.
-- SO TWO MEMBERS' LISTINGS LEGITIMATELY DISAGREE. dopl_map, dopl_skill(op="list") and dopl_kb(op="list_bases") each return one caller's view; a smaller count is normally private or team-scoped items, not a bug. op="access_matrix" below is what settles it.
-
-Set \`op\` to one of:
-- "whoami" — WHO AND WHERE YOU ARE, and the authoritative answer to both: your immutable user id, name, role, teams, default access level, the runtime and credential this session is acting through, and what that does and does not establish about another party. Start here whenever identity is in question — a display name alone never settles it.
-- "list" — the member roster: name, email, role, status, last active, team chips. EVERY membership row, INVITED AND DEACTIVATED INCLUDED — read the status on each before you count "members". Not role-shaped: a viewer gets the same roster an owner does.
-- "get" — one member in depth: profile, teams, and their server-resolved effective access per resource. \`member\` may be a user id, email, or display name. Effective access for OTHER members is admin-only (the server hides it otherwise — you'll still get their profile + teams from the roster).
-- "teams" — every team: members, and each resource grant with its level. Unshaped by role, so a grant can name a resource you cannot otherwise see (it renders as "a resource not visible to you").
-- "get_team" — one team in depth. \`team\` may be a team id or name.
-- "access_matrix" — THE INVENTORY, and the op to reach for when two members' listings disagree. Covers KNOWLEDGE BASES and SKILLS only (chats, chat folders and ontology objects are not in it). For an ADMIN OR OWNER it enumerates every one of those regardless of status or visibility — drafts and other members' private items included — which is exactly what the per-domain list ops do not do. A NON-ADMIN sees only the resources they can reach, so their matrix is a view like everything else. The teams half is unshaped for everyone.
-- "my_access" — the caller's effective level on the teams-mode resources they can reach. ADMINS AND OWNERS GET NO PER-RESOURCE ROWS AT ALL: they hold edit on everything, and the op says so instead of enumerating. Workspace-mode resources are never listed either — they collapse into your role's default level.`;
+const response_size_1 = require("./response-size");
+const tool_errors_1 = require("./tool-errors");
+const tool_style_1 = require("./tool-style");
+/**
+ * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
+ * order for every tool on this surface and refuses, at import, a headline over
+ * its window or prose over its cap.
+ *
+ * ⚠ WHAT LEFT: every "Requires: …" clause, because each param's own
+ * `.describe()` already names the ops that require it, and a description and
+ * its arg descriptions are BOTH pushed on every connection.
+ */
+const DESCRIPTION = (0, tool_style_1.composeDescription)({
+    headline: "Workspace membership, teams and effective access as your role sees them — chats and ontology objects are not in this model.",
+    policy: "Read-only: roles, teams and grants are edited by humans in the web UI.",
+    routing: [
+        "Use dopl_channel to reach a member; this only describes them.",
+    ],
+    body: [
+        `Set \`op\` to one of:
+- "whoami" — your user id, role, teams, default level, and the runtime and credential this session acts through.
+- "list" — the roster: role, status, last active, teams. INVITED and DEACTIVATED rows are included — read the status before counting.
+- "get" — one member's profile, teams and effective access; for OTHERS, admin-only.
+- "teams" — each team's members and grants; a grant can name a resource you cannot otherwise see.
+- "get_team" — one team in depth.
+- "access_matrix" — KNOWLEDGE BASES and SKILLS only. For an ADMIN OR OWNER it enumerates those at any status or visibility; a NON-ADMIN sees only what they can reach, so it is a view like the rest.
+- "my_access" — your level on the teams-mode resources you can reach. ADMINS AND OWNERS GET NO PER-RESOURCE ROWS — they hold edit on everything.`,
+    ],
+    errors: tool_errors_1.MEMBERS_ERRORS,
+    examples: [
+        { op: "whoami" },
+        { op: "list" },
+        { op: "get", member: "dana@acme.io" },
+        { op: "access_matrix" },
+    ],
+    cap: tool_style_1.DESCRIPTION_MAX_CHARS,
+});
 function registerMembersTool(register, client, 
 /**
  * ⚠ The session's ONE identity record. Re-deriving the caller from
@@ -52,12 +72,16 @@ caller = identity_1.UNKNOWN_CALLER) {
             .string()
             .optional()
             .describe("op=get_team (required): the team — id or name."),
+        // ⚠ A16's response-size knob. ONE `.describe()`, in `response-size.ts`,
+        // shared with every tool that takes a projection — and the user id is
+        // outside it by construction (Samuel's ruling).
+        fields: response_size_1.FIELDS_FIELD,
     }, async (args) => {
         switch (args.op) {
             case "whoami":
                 return opWhoami(client, caller);
             case "list":
-                return opList(client, caller);
+                return opList(client, caller, args.fields);
             case "get": {
                 const miss = (0, respond_1.missingParams)("get", args, ["member"]);
                 if (miss)
@@ -92,7 +116,7 @@ async function opWhoami(client, caller) {
     const [members, access, matrix] = await Promise.all([
         client.listWorkspaceMembers(),
         client.getMyAccess(),
-        client.getAccessMatrix().then(members_render_1.pruneRetiredResources),
+        client.getAccessMatrix(),
     ]);
     const selfId = caller.userId ?? me.userId;
     const self = selfId ? members.find((m) => m.userId === selfId) : undefined;
@@ -116,19 +140,22 @@ async function opWhoami(client, caller) {
     lines.push(``, identity_1.LOCUS_NOTE);
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opList(client, caller) {
+async function opList(client, caller, fields) {
     const members = await client.listWorkspaceMembers();
     if (members.length === 0)
         return (0, respond_1.ok)("No members found.");
+    // ⚠ RESOLVED ONCE, NOT PER ROW. An unknown name is IGNORED rather than
+    // refused (`response-size.ts › fieldFilter`): a mistyped one of four should
+    // cost the caller that field, never the whole read.
+    const wants = (0, response_size_1.fieldFilter)(fields);
     const lines = [];
     lines.push(`## Members — ${members.length}\n`);
     lines.push(`${members_render_1.UNTRUSTED_ROSTER_HEADER}\n`);
     for (const m of (0, members_render_1.sortByRole)(members)) {
-        const teams = m.teams.length > 0 ? (0, members_render_1.teamChips)(m.teams) : "no teams";
         // ⚠ `· you` must match `channel-render.ts › formatMemberLine` exactly — the
         // two rosters render the same workspace from the same column.
         const you = caller.userId && m.userId === caller.userId ? " · you" : "";
-        lines.push(`- ${(0, members_render_1.memberDisplay)(m)} — **${m.role}** · ${(0, members_render_1.statusLabel)(m)} · ${teams}${you}`);
+        lines.push((0, members_render_1.memberListLine)(m, you, wants));
     }
     if (!caller.userId) {
         lines.push(`\nNo row is marked "you" — this connection could not resolve your own user id.`);
@@ -190,7 +217,7 @@ async function opTeams(client) {
     const [teams, members, matrix] = await Promise.all([
         client.listWorkspaceTeams(),
         client.listWorkspaceMembers(),
-        client.getAccessMatrix().then(members_render_1.pruneRetiredResources),
+        client.getAccessMatrix(),
     ]);
     if (teams.length === 0) {
         return (0, respond_1.ok)("No teams in this workspace yet. Teams are created in the web UI (Members → Teams).");
@@ -208,7 +235,7 @@ async function opGetTeam(client, ref) {
     const [teams, members, matrix] = await Promise.all([
         client.listWorkspaceTeams(),
         client.listWorkspaceMembers(),
-        client.getAccessMatrix().then(members_render_1.pruneRetiredResources),
+        client.getAccessMatrix(),
     ]);
     const lower = ref.trim().toLowerCase();
     const team = teams.find((t) => t.id === ref) ??
@@ -233,7 +260,7 @@ async function opGetTeam(client, ref) {
  */
 const MATRIX_SCOPE_NOTE = `_Covers knowledge bases and skills only; chats, chat folders and ontology objects are not in this grid. If you are an ADMIN or OWNER this is the full inventory of those two, every status and every visibility included, and it is what settles a disagreement between two members' list ops. If you are a MEMBER or VIEWER it has been re-filtered to what you can reach, so it is a view like the rest. The teams half above is unfiltered for everyone._`;
 async function opAccessMatrix(client) {
-    const matrix = (0, members_render_1.pruneRetiredResources)(await client.getAccessMatrix());
+    const matrix = await client.getAccessMatrix();
     if (matrix.resources.length === 0) {
         return (0, respond_1.ok)(`No shareable resources visible to you in this workspace.\n\n${MATRIX_SCOPE_NOTE}`);
     }
@@ -256,7 +283,7 @@ async function opMyAccess(client) {
     const [me, access, matrix] = await Promise.all([
         client.getMyMembership(),
         client.getMyAccess(),
-        client.getAccessMatrix().then(members_render_1.pruneRetiredResources),
+        client.getAccessMatrix(),
     ]);
     const lines = [];
     lines.push(`## Your access in ${(0, narration_1.inlineOr)(me.workspace.name, "`(unnamed workspace)`")}\n`);

@@ -1,5 +1,5 @@
-// THE OWN-CHANNEL OUTBOUND OPS BESIDE THE POST — AXIS B's outbound half for the `dopl_channel`
-// ops that are not `op="post"`.
+// THE OWN-CHANNEL OUTBOUND SHAPES BESIDE THE PLAIN POST — AXIS B's outbound half for the
+// `dopl_channel` sends that carry a `kind` or open a thread.
 //
 // §2 SPLIT out of session-profiles.js (2026-08-24, Samuel's create_thread ruling). That file
 // measured 496 of the 500-line cap, and the ruling needed the ADMISSION ARGUMENT written down
@@ -63,13 +63,24 @@
 // deliberately NOT scoped: the gate is handed a channelId, not a taskId, so a wrong thread id
 // costs a confirm prompt inside a channel the operator is already bound to (F-139).
 
-// The MARKER half. Kept as its own name because the diag line's `auto-outbound-marker` reason
-// code is keyed on it, and "the agent logged a milestone" is not the same answer to "what left
-// this machine with no click?" as "the agent opened a thread".
-const OWN_CHANNEL_MARKER_OPS = ['milestone'];
+// ── THE THREE HALVES ARE SHAPES OF ONE OP NOW (2026-09-02, F-578) ───────────────────────────
+//
+// `milestone`, `create_thread` and `escalate` were three ops; the collapse made all three — and
+// the `post` beside them — `op="send"`, distinguished by `kind` and by `thread`. So this module
+// stops matching on OP NAMES and matches on the SHAPE that carried each admission argument. The
+// lane admits exactly what it admitted before; nothing here is a widening, and nothing narrowed.
+//
+// ⚠ THE THREE NAMES SURVIVE BECAUSE THE REASON CODES DO. `auto-outbound-marker`,
+// `auto-outbound-thread` and `auto-outbound-escalate` are three different answers to "what left
+// this machine with no click?", and an audit line that could not tell a milestone from a
+// decision card would be a worse record than the one this replaces.
 
-// The THREAD-OPEN half (Samuel's ruling, 2026-08-24). Its own name for the same reason.
-const OWN_CHANNEL_THREAD_OPS = ['create_thread'];
+// The MARKER half — `send` carrying `kind="milestone"` (`channel-schema.ts › CHANNEL_KINDS`).
+const OWN_CHANNEL_MARKER_KIND = 'milestone';
+
+// The THREAD-OPEN half (Samuel's ruling, 2026-08-24) — `send` with `thread="new"`, the literal
+// the schema reserves for "open one and return its id".
+const OWN_CHANNEL_THREAD_NEW = 'new';
 
 // The ESCALATION half (Samuel's ruling, 2026-08-31). Its own name for the same reason as the two
 // above: `auto-outbound-escalate` is a different answer to "what left this machine with no click?"
@@ -88,42 +99,63 @@ const OWN_CHANNEL_THREAD_OPS = ['create_thread'];
 // windowless session answers a gate with `deny` — so the op the tool's own protocol tells a stuck
 // agent to reach for would be auto-refused in EVERY posture, with nothing an operator could set.
 //
-// ⚠ `escalationAnswer` IS NOT HERE AND MUST NEVER BE. An agent answering an escalation is an agent
-// deciding a question a human was asked, which is the whole thing the card exists to prevent. It
-// rides an ordinary `post` and hits `isOwnChannelPost`'s gate like any other.
-const OWN_CHANNEL_ESCALATE_OPS = ['escalate'];
+// ⚠ AN ESCALATION ANSWER IS NOT HERE AND MUST NEVER BE. An agent answering an escalation is an
+// agent deciding a question a human was asked, which is the whole thing the card exists to
+// prevent. It rides an ordinary `send` and hits `isOwnChannelPost`'s gate like any other.
+const OWN_CHANNEL_ESCALATE_KIND = 'decision';
 
-// What `grantDecision` actually asks about. Derived, never restated: a third member added to
-// either list above joins the lane and the reason codes for free.
-const OWN_CHANNEL_OUTBOUND_OPS = OWN_CHANNEL_MARKER_OPS
-  .concat(OWN_CHANNEL_THREAD_OPS)
-  .concat(OWN_CHANNEL_ESCALATE_OPS);
+// The OP every outbound shape above now spells. ⚠ ONE ENTRY, AND IT IS THE SAME OP
+// `isOwnChannelPost` matches: under the collapse a marker, a thread open and a decision card ARE
+// posts, told apart by their arguments. The two `grantDecision` branches therefore reach the
+// same verdict for the same call, which is what makes this refactor a no-op on the allow set.
+const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the ONE spelling (F-578)
+
+const OWN_CHANNEL_OUTBOUND_OPS = ['send'];
 
 // THE ONE SCOPE RULE, shared by every predicate below so two of them can never disagree about
 // what "my own channel" means. Same shape and same safe failure as
 // `session-profiles.js › isOwnChannelPost`: target unset or exactly the session's channel ID.
 function scopedToOwnChannel(ops, input, sessionChannelId) {
   const i = input || {};
-  if (ops.indexOf(i.op) === -1) return false;
+  // ⚠ `channelOpKey`, NOT A BARE `i.op` (2026-09-02, F-578's spelling applied here too). The
+  // outbound set is `['send']`, which carries no action, so today the two agree exactly — this is
+  // a NO-OP that removes the last place a classifier reads the op alone. The moment an
+  // action-bearing op joins this list, a bare read would match EVERY action of it, and every list
+  // in this tree is an ALLOW list: the wide direction. Four other classifiers already ask through
+  // this module; a fifth spelling of "which call is this" is how a gate and the sentence
+  // describing it come to disagree.
+  if (ops.indexOf(channelOpKey(i)) === -1) return false;
   const target = i.channel;
   if (target == null || target === '') return true; // no explicit target -> own channel
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
 }
 
-/** An own-channel `milestone`. Used by the gate REASON, to say which allow this was. */
+// The KIND half, once: an own-channel `send` whose `kind` is exactly this one. ⚠ A missing or
+// non-string `kind` is the DEFAULT (`message`) and matches neither named kind, which is the same
+// fail-safe `scopedToOwnChannel` takes on the channel — an unmatched shape is an ordinary post
+// and is answered by the post branch, never by a marker's allow.
+function isSendKind(kind, input, sessionChannelId) {
+  const i = input || {};
+  return scopedToOwnChannel(OWN_CHANNEL_OUTBOUND_OPS, i, sessionChannelId) && i.kind === kind;
+}
+
+/** An own-channel milestone marker. Used by the gate REASON, to say which allow this was. */
 function isOwnChannelMarker(input, sessionChannelId) {
-  return scopedToOwnChannel(OWN_CHANNEL_MARKER_OPS, input, sessionChannelId);
+  return isSendKind(OWN_CHANNEL_MARKER_KIND, input, sessionChannelId);
 }
 
-/** An own-channel `create_thread`. Also the predicate `session-io.js` asks to decide that a
- *  gated one raises the OUTBOUND consent payload rather than the dock's `permission_request`. */
+/** An own-channel thread OPEN — `send(thread="new")`. Also the predicate `session-io.js` asks to
+ *  decide that a gated one raises the OUTBOUND consent payload rather than the dock's
+ *  `permission_request`. */
 function isOwnChannelThreadOpen(input, sessionChannelId) {
-  return scopedToOwnChannel(OWN_CHANNEL_THREAD_OPS, input, sessionChannelId);
+  const i = input || {};
+  return scopedToOwnChannel(OWN_CHANNEL_OUTBOUND_OPS, i, sessionChannelId)
+    && i.thread === OWN_CHANNEL_THREAD_NEW;
 }
 
-/** An own-channel `escalate`. Used by the gate REASON, to say which allow this was. */
+/** An own-channel decision card. Used by the gate REASON, to say which allow this was. */
 function isOwnChannelEscalate(input, sessionChannelId) {
-  return scopedToOwnChannel(OWN_CHANNEL_ESCALATE_OPS, input, sessionChannelId);
+  return isSendKind(OWN_CHANNEL_ESCALATE_KIND, input, sessionChannelId);
 }
 
 /** Any of them — the single question `grantDecision`'s Axis-B branch asks. */
@@ -132,9 +164,9 @@ function isOwnChannelOutbound(input, sessionChannelId) {
 }
 
 module.exports = {
-  OWN_CHANNEL_MARKER_OPS,
-  OWN_CHANNEL_THREAD_OPS,
-  OWN_CHANNEL_ESCALATE_OPS,
+  OWN_CHANNEL_MARKER_KIND,
+  OWN_CHANNEL_THREAD_NEW,
+  OWN_CHANNEL_ESCALATE_KIND,
   OWN_CHANNEL_OUTBOUND_OPS,
   isOwnChannelMarker,
   isOwnChannelThreadOpen,

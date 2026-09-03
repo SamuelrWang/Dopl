@@ -3,7 +3,6 @@
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useApiMutation } from "@/shared/hooks/use-api-mutation";
 import { apiPathKey } from "@/shared/api/query-keys";
-import { withoutRetiredResources } from "@/features/teams/access-levels";
 import type { EffectiveAccessRow } from "@/features/teams/effective-access";
 import type { ActivityEventRow } from "../../activity-visibility";
 import {
@@ -12,10 +11,9 @@ import {
   memberKeys,
 } from "../../client/query-keys";
 
-/** ⚠ Workflow rows are filtered here as well as in `use-workspace-resources`:
- *  the server still resolves and returns them, and nothing may render the word. */
-const selectAccess = (body: { rows: EffectiveAccessRow[] }) =>
-  withoutRetiredResources(body.rows ?? []);
+/** ⚠ A retired-type filter stood here until 2026-09-02 (F-466); `resource_grants`
+ *  refuses the value, so the rows are the rows. */
+const selectAccess = (body: { rows: EffectiveAccessRow[] }) => body.rows ?? [];
 
 /**
  * One member's server-resolved effective access.

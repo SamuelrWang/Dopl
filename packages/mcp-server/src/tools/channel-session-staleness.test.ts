@@ -3,7 +3,7 @@
  *
  * ⚠ **THE DEFECT THIS SUITE PINS: A CRASHED DESKTOP USED TO READ AS `working`
  * FOREVER.** `updatedAt` already crossed the wire and was dropped at render, so
- * `read_sessions` reported the last thing a machine said as if it were the
+ * `op="status"` reported the last thing a machine said as if it were the
  * present tense — with no upper bound on how long ago that was. An orchestrator
  * waiting on such an agent has no signal that it should stop.
  *
@@ -21,11 +21,20 @@ import type { ChannelSessionState, ChannelSessionStateOwn } from "@dopl/client";
 import {
   SESSION_STALE_WINDOW_MS,
   formatSessionLine,
-  sessionBlockLines,
   sessionIsStale,
   sessionLegend,
   shortModelLabel,
 } from "./channel-session-render";
+// ⚠ THE PAGE RENDERER MOVED (T13, 2026-09-02). `channel-session-render.ts` kept
+// the VOCABULARY — what state a row is in, the staleness window, the legend —
+// and `channel-session-table.ts` took "how does a page of them render". The
+// dependency runs one way, so the block comes from there and the predicates
+// this file drives it with still come from the file above.
+import { sessionBlockLines } from "./channel-session-table";
+// ⚠ THE COLUMN PROMISES ARE DOCTRINE NOW, not a constant under every page. The
+// order and the "one unbroken token" rule this suite renders against are pinned
+// against `CHANNEL_DOCTRINE`, which is the text a reader is actually served.
+import { CHANNEL_DOCTRINE } from "./channel-doctrine";
 
 const NOW = Date.parse("2026-08-22T12:00:00.000Z");
 const fresh = new Date(NOW - 5_000).toISOString();
@@ -193,8 +202,15 @@ describe("the operator-only telemetry, compactly", () => {
     );
     // ⚠ ADJACENT AND IN THIS ORDER. Two bare names separated by the tokens or
     // the tool clause is how a skimming orchestrator reads a template name as a
-    // tool name — and `SESSION_TELEMETRY_NOTE` promises this order in words.
+    // tool name. ⚠ THE PROMISE MOVED, NOT THE RULE (T13): `SESSION_TELEMETRY_NOTE`
+    // used to state it under every page and is deleted; the doctrine states it
+    // once, so the words are pinned there and the RENDER is pinned here.
     expect(line).toContain("`Code Auditor` · `opus-5`");
+    // ⚠ THE PROMISE MOVED, NOT THE RULE — and the doctrine's clause now says
+    // what this ORDER is for: a two-token span is a template beside a model.
+    expect(CHANNEL_DOCTRINE).toContain(
+      "ONE unbroken token, so a name with a space in it is a template",
+    );
   });
 
   it("an ABSENT template renders nothing at all — a blank launch is the common case", () => {
@@ -287,21 +303,53 @@ describe("the await session block", () => {
     expect(out).toContain("not proof there are none");
   });
 
-  it("renders one line per session, with telemetry", () => {
+  /**
+   * ⚠ **THE TELEMETRY THE TABLE CARRIES, AND THE TELEMETRY IT DROPS** (T13).
+   * This asserted `900 tokens`, which was a CLAUSE on the prose line.
+   * `sessionRow` has no tokens column and no context column, so that assertion
+   * was about a fact this surface no longer states — it is replaced by the
+   * operator-only fields the row DOES carry (template, model, tool), which is
+   * the same property under the new shape. ⚠ `tokensSpent: 900` stays on the
+   * fixture on purpose: a dropped field must leak into no neighbouring cell.
+   * ⚠ Bring the tokens/context assertions back when the COLUMNS land — the
+   * blocker is the projection (`ChannelSessionTelemetry` reports them, the
+   * table has nowhere to put them yet), not this test.
+   */
+  it("renders one ROW per session, with telemetry", () => {
     const out = sessionBlockLines(
-      [session({ tokensSpent: 900 }), session({ name: "efgh5678", state: "idle" })],
+      [
+        session({
+          tokensSpent: 900,
+          templateName: "Code Auditor",
+          model: "claude-opus-5",
+          toolLabel: "Bash",
+        }),
+        session({ name: "efgh5678", state: "idle" }),
+      ],
       NOW
     ).join("\n");
     expect(out).toContain("### Your agents — 2");
-    expect(out).toContain("900 tokens");
+    // ⚠ THE WHOLE ROW, so a column that moves or disappears fails here rather
+    // than passing on a substring found somewhere else on the page.
+    expect(out).toContain(
+      "| `@agent-abcd1234` | working | `Deploy check` | `General` | `Code Auditor` | `opus-5` | `Bash` | 5s |"
+    );
+    expect(out).not.toContain("900");
     expect(out).toContain("efgh5678");
   });
 
   it("carries the staleness caveat only when a row needs it", () => {
     expect(sessionBlockLines([session()], NOW).join("\n")).not.toContain("last reported");
-    expect(
-      sessionBlockLines([session({ updatedAt: stale })], NOW).join("\n")
-    ).toContain("last reported");
+    const out = sessionBlockLines([session({ updatedAt: stale })], NOW).join("\n");
+    expect(out).toContain("last reported");
+    // ⚠ **HEDGE FIRST, IN THE CELL ITSELF** (T13). The row is a grid now, and a
+    // grid makes this rule easy to lose: `working (stale)` skims as `working`,
+    // which is the reading this whole suite exists to prevent. So the state
+    // cell OPENS with the hedge, and the age it used to trail is read off the
+    // `idle` column instead.
+    expect(out).toContain("| last reported working |");
+    // ⚠ …and NO cell anywhere may open on a bare present tense.
+    expect(out).not.toMatch(/\|\s*working\b/);
   });
 });
 

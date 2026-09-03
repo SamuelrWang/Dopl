@@ -15,8 +15,14 @@
 // id DERIVED from the escalation's own post stamp.
 //
 // ⚠ THE PROPERTY THAT MATTERS MOST IS AN ABSENCE: **THE LOOP FENCE IS UNCHANGED.** This is a door
-// onto ADDRESSING, not a hole in `wakeEligibility` — which is asked first, of the MESSAGE, so an
-// agent-authored row carrying the key still wakes nothing at all.
+// onto ADDRESSING, not a hole in it — the fence is asked of the MESSAGE, so an agent-authored row
+// carrying the key still wakes nothing at all.
+//
+// ⚠ **AND IT IS THE ONE DOOR THE SERVER DELIBERATELY DOES NOT RESOLVE** (2026-09-02, B1).
+// `escalationAnswer.agentId` names the agent that ASKED, which belongs to whoever posted the
+// escalation — usually not the author — so `service-wake-verdict.ts` would have to answer `[]` for
+// it, and `[]` is authoritative. The union happens on the machine, which is the only place the
+// thread's live ids are known.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -74,11 +80,11 @@ test("ROUTE: the answer WAKES the dormant agent that asked", async () => {
   // human — is not woken by the answer it was waiting for, and the operator's click reaches it
   // only when they next type something.
   //
-  // ⚠ TWO AGENTS, NOT ONE, AND THAT IS THE DIFFERENCE BETWEEN A PIN AND A VACUOUS CASE. Tier 2
-  // (the solo room) wakes the ONLY agent on a channel for every human message, with no address at
-  // all — so a one-agent fixture here stays green with this door deleted. Measured: it did.
+  // ⚠ TWO AGENTS, NOT ONE, AND THAT IS THE DIFFERENCE BETWEEN A PIN AND A VACUOUS CASE — it was
+  // the deleted solo tier that made a one-agent fixture vacuous here, and the DEGRADE case below
+  // is what keeps the comparison honest now.
   const h = harness({ agents: [idle(A1), idle(A2)] });
-  await h.feedLiveSession(entry, answer(A1), ME);
+  h.feedLiveSession(entry, answer(A1), ME);
   assert.equal(h.calls.feedInbound.length, 1, "the asking agent was fed");
   assert.equal(h.calls.feedInbound[0].agentId, A1);
 });
@@ -117,14 +123,24 @@ test("ORDER: an explicit @-mention still sorts ahead of the answer's id", () => 
   assert.deepEqual(ids, [A2], "the body door answers on its own");
 });
 
-test("DEGRADE: an ordinary post with no key routes exactly as it did", async () => {
+test("DEGRADE: an ordinary post with no key wakes nobody — the door is the only difference", () => {
+  // ⚠ **REPOINTED 2026-09-02 (ruling B6).** This asserted `length === 1`, because TIER 2 (the
+  // solo room) woke the one agent in a channel on EVERY human message. That heuristic is deleted
+  // — `wake_verdict: "responder"` answers it on the row now — so the comparison this case exists
+  // to make is sharper than it was: with the key, the asking agent wakes; without it, nothing
+  // does, and the door is the whole of the difference.
   const h = harness({ agents: [idle(A1)] });
-  await h.feedLiveSession(entry, peerMsg({ body: "just talking" }), ME);
-  // Tier 2 (the solo room) is what wakes it, not this door — the pre-existing behaviour.
-  assert.equal(h.calls.feedInbound.length, 1);
+  h.feedLiveSession(entry, peerMsg({ body: "just talking" }), ME);
+  assert.equal(h.calls.feedInbound.length, 0);
 });
 
-// ── THE OUTBOUND LANE FOR `escalate` ITSELF ──────────────────────────────────
+// ── THE OUTBOUND LANE FOR THE DECISION CARD ITSELF ───────────────────────────
+//
+// ⚠ `escalate` IS `send(kind="decision")` SINCE 2026-09-02 (F-578). The lane, its argument and
+// its own gate-diag ALLOW code are unchanged; only the spelling moved.
+const ESCALATE = { op: "send", kind: "decision" };
+
+// ── (the original section header) ────────────────────────────────────────────
 //
 // ⚠ SEPARATE FROM THE ANSWER DOOR ABOVE, and the two are opposite directions of one feature: the
 // door lets an ANSWER reach the asking agent, and this lets the QUESTION leave the machine at all.
@@ -147,16 +163,20 @@ const { DOPL_CHANNEL_TOOL } = req(M("tool-profiles.js"));
 const CH = "ch1";
 
 test("LANE: an own-channel escalate is on the OUTBOUND half", () => {
-  assert.deepEqual(profiles.OWN_CHANNEL_ESCALATE_OPS, ["escalate"]);
-  assert.ok(profiles.isOwnChannelEscalate({ op: "escalate" }, CH));
-  assert.ok(profiles.isOwnChannelOutbound({ op: "escalate" }, CH));
-  assert.ok(profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("escalate"));
+  // ⚠ A SHAPE OF `send`, NOT AN OP (2026-09-02, F-578): the collapse folded `escalate` into
+  // `send(kind="decision")`, and the constant is the KIND that tells it from a milestone.
+  assert.equal(profiles.OWN_CHANNEL_ESCALATE_KIND, "decision");
+  assert.ok(profiles.isOwnChannelEscalate(ESCALATE, CH));
+  assert.ok(profiles.isOwnChannelOutbound(ESCALATE, CH));
+  assert.ok(profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("send"));
+  // …and an ordinary message is NOT one: the kind is half the predicate.
+  assert.ok(!profiles.isOwnChannelEscalate({ op: "send" }, CH));
 });
 
 test("LANE: it is admitted under auto_outbound and GATES under ask", () => {
   const decide = (messageMode) => profiles.grantDecision({
     profile: "full", channelId: CH, toolName: DOPL_CHANNEL_TOOL,
-    input: { op: "escalate", channel: CH }, messageMode,
+    input: { ...ESCALATE, channel: CH }, messageMode,
   });
   assert.equal(decide("auto_both"), "allow");
   assert.equal(decide("auto_outbound"), "allow");
@@ -165,11 +185,11 @@ test("LANE: it is admitted under auto_outbound and GATES under ask", () => {
 });
 
 test("FENCE: a SLUG is another channel and gates, like every own-channel predicate", () => {
-  assert.equal(profiles.isOwnChannelEscalate({ op: "escalate", channel: "general" }, CH), false);
+  assert.equal(profiles.isOwnChannelEscalate({ ...ESCALATE, channel: "general" }, CH), false);
   assert.equal(
     profiles.grantDecision({
       profile: "full", channelId: CH, toolName: DOPL_CHANNEL_TOOL,
-      input: { op: "escalate", channel: "general" }, messageMode: "auto_both",
+      input: { ...ESCALATE, channel: "general" }, messageMode: "auto_both",
     }),
     "gate"
   );
@@ -178,15 +198,15 @@ test("FENCE: a SLUG is another channel and gates, like every own-channel predica
 test("BRIDGE: a gated escalate takes the OUTBOUND payload, not the dock's request", () => {
   // ⚠ On a windowless session this IS the difference between the operator being shown the
   // question and the agent being told there is no surface to show one on.
-  assert.ok(outboundTag.outboundConsentShape(DOPL_CHANNEL_TOOL, { op: "escalate" }, CH));
-  assert.ok(!outboundTag.outboundConsentShape(DOPL_CHANNEL_TOOL, { op: "escalate", channel: "general" }, CH));
-  assert.ok(!outboundTag.outboundConsentShape("Bash", { op: "escalate" }, CH));
+  assert.ok(outboundTag.outboundConsentShape(DOPL_CHANNEL_TOOL, ESCALATE, CH));
+  assert.ok(!outboundTag.outboundConsentShape(DOPL_CHANNEL_TOOL, { ...ESCALATE, channel: "general" }, CH));
+  assert.ok(!outboundTag.outboundConsentShape("Bash", ESCALATE, CH));
 });
 
 test("ALLOW CODE: it says which allow this was, not just that it was one", () => {
   const d = profiles.grantDecisionDetail({
     profile: "full", channelId: CH, toolName: DOPL_CHANNEL_TOOL,
-    input: { op: "escalate", channel: CH }, messageMode: "auto_both",
+    input: { ...ESCALATE, channel: CH }, messageMode: "auto_both",
   });
   assert.equal(d.reason, "auto-outbound-escalate");
 });

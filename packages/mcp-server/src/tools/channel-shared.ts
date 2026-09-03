@@ -75,12 +75,12 @@ export function isErr<T>(x: T | ToolResponse): x is ToolResponse {
 
 /**
  * Uniform not-found for a channel reference. Shared by `resolveChannelOr` and
- * by the hot read/await handlers, which skip the pre-resolve and map a route
+ * by the hot read and hold handlers, which skip the pre-resolve and map a route
  * 404 to this same copy.
  */
 export function channelNotFound(ref: string): ToolResponse {
   return err(
-    `Channel not found: "${ref}". Use dopl_channel(op="list") to see channels you can access (pass a slug or id from there).`,
+    `Channel not found: "${ref}". Use dopl_channel(op="rooms", action="list") to see channels you can access (pass a slug or id from there).`,
   );
 }
 
@@ -90,7 +90,7 @@ export function channelNotFound(ref: string): ToolResponse {
  * addressable, and matches on id or slug.
  *
  * Used by the write ops so a confirmation can name the channel and a bad ref is
- * caught before the mutation. ⚠ The hot read/await ops must NOT call this —
+ * caught before the mutation. ⚠ The hot read and hold shapes must NOT call this —
  * they pass the ref straight to the route (which resolves slug-or-id and
  * enforces visibility), avoiding a listChannels() round-trip per poll.
  */
@@ -161,7 +161,7 @@ export async function resolveMemberOr(
   const match = byId ?? (byEmail.length === 1 ? byEmail[0] : undefined);
   if (!match) {
     return err(
-      `No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (see dopl_members(op="list")).`,
+      `No workspace member matching "${ref}". Invites are in-workspace only — pass the email or user id of an ACTIVE member (see dopl_members(op="rooms" action="list")).`,
     );
   }
   if (match.status !== "active") {

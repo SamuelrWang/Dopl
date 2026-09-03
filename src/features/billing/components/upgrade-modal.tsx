@@ -215,8 +215,8 @@ function BrowserCheckoutHandoff({ plan }: { plan: CheckoutPlan }) {
  * is CURRENTLY showing (`src/app/billing/[segment]/page.tsx`).
  *
  * ⚠ Segment comes off the desktop hash router's location (`#/{segment}/…`): a
- * segment-less `/billing` resolves the user's DEFAULT workspace, not the one
- * being upgraded. Origin comes from the preload constant, never
+ * segment-less `/billing` resolves or asks, and either way not necessarily the
+ * one being upgraded. Origin comes from the preload constant, never
  * `window.location` (a `file://` document here). `plan` rides along so the
  * browser opens straight into checkout.
  */

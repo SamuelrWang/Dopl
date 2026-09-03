@@ -76,7 +76,7 @@ const TURN_DONE = {
 // server registers; `main/mcp-tool-names.js` canonicalises it.
 const POST_RUNNING = {
   type: "tool_call", call_id: "tc_3", name: "dopl_channel", status: "running",
-  args: { op: "post", body: "done" },
+  args: { op: "send", body: "done" },
 };
 
 test("an agent creation becomes `launched`, and it carries the handle every resume depends on", () => {
@@ -164,7 +164,7 @@ test("an own-channel post becomes ONE outbound_post, and the generic tool card i
   assert.equal(gated[0].payload.ownChannel, true);
   // ⚠ IT IS A BOOLEAN, NEVER ANOTHER CHANNEL'S ID (§H-9), and a CROSS-channel post is not an
   // own-channel send — it is the exfil shape and renders as a plain tool card.
-  const other = run({ ...POST_RUNNING, call_id: "tc_4", args: { op: "post", channel: "other", body: "x" } });
+  const other = run({ ...POST_RUNNING, call_id: "tc_4", args: { op: "send", channel: "other", body: "x" } });
   assert.deepEqual(types(other), ["tool_use"]);
 });
 

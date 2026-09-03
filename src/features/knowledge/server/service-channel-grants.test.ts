@@ -49,6 +49,7 @@ const mockDelete = vi.mocked(deleteChannelKnowledgeGrant);
 const OWNER: KnowledgeContext = {
   workspaceId: "ws-1",
   userId: "user-1",
+  credentialSubjectUserId: "user-1",
   role: "member",
   source: "user",
   apiKeyWorkspaceId: null,
@@ -272,7 +273,7 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
     mockUpsert.mockRejectedValue({
       code: "P0001",
       message:
-        "channel_resource_grants: resource workspace mismatch (grant=ws-1, resource=ws-2)",
+        "resource_grants: resource workspace mismatch (grant=ws-1, resource=ws-2)",
     });
 
     const err = await setChannelKnowledgeGrant(OWNER, BASE, {
@@ -295,6 +296,46 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
         guestWrite: false,
       })
     ).rejects.toBeInstanceOf(ChannelGrantInvalidError);
+  });
+
+  it("translates a 23514 CHECK violation the same way — the per-scope level set", async () => {
+    // `resource_grants_level_check` refuses `read`/`edit` on a channel scope and
+    // `visible`/`agent_only` on a team's. It is a refusal, not an outage, and it
+    // became reachable when the two vocabularies moved into one column
+    // (`20260914120000`).
+    mockUpsert.mockRejectedValue({
+      code: "23514",
+      message: 'violates check constraint "resource_grants_level_check"',
+    });
+    await expect(
+      setChannelKnowledgeGrant(OWNER, BASE, {
+        channelId: "chan-1",
+        level: "visible",
+        guestWrite: false,
+      })
+    ).rejects.toBeInstanceOf(ChannelGrantInvalidError);
+  });
+
+  it("🔒 translates the GRANTOR-MAY-SHARE refusal, and keeps its names off the wire", async () => {
+    // The branch ruling B4 added: `enforce_resource_grant()` refuses a grant
+    // whose author does not reach both containers. The message names the
+    // grantor AND the container they could not reach — an id oracle for
+    // anyone who can provoke it.
+    mockUpsert.mockRejectedValue({
+      code: "P0001",
+      message:
+        "resource_grants: grantor user-9 may not share into container ws-2",
+    });
+
+    const err = await setChannelKnowledgeGrant(OWNER, BASE, {
+      channelId: "chan-1",
+      level: "visible",
+      guestWrite: false,
+    }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ChannelGrantInvalidError);
+    expect((err as Error).message).not.toContain("ws-2");
+    expect((err as Error).message).not.toContain("user-9");
   });
 
   it("RE-THROWS an unrelated P0001 rather than relabelling it a grant refusal", async () => {

@@ -269,7 +269,7 @@ describe("5 — channel membership, and the compensation that is NOT a rollback"
     // The claimer is not a member of anything yet, so a context built for them
     // would be refused by the channel's own gate.
     expect(mockAddMember).toHaveBeenCalledWith(
-      { userId: OWNER, workspaceId: WS, role: "owner" },
+      { userId: OWNER, workspaceId: WS, role: "owner", credentialSubjectUserId: OWNER },
       CHANNEL_ID,
       CLAIMER
     );

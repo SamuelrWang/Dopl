@@ -13,8 +13,32 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTemplate, AgentTemplateContext } from "../types";
+// 🔒 G16's two reads (`features/workspaces/server/shared-publish.ts`). Every
+// create that lands at `workspace` visibility asks them, so a suite that leaves
+// them unmocked reaches Supabase and hangs. ⚠ A STANDARD workspace by default —
+// this file is about the write gates, and the publish precondition has its own
+// suite (`service-acknowledge-shared.test.ts`) that drives the link container.
+// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
+// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
+// batch precompute is the one part of this seam that talks to Postgres. Every
+// case in this file is about the OTHER arms, so the grant set is empty — which
+// is also the pre-2026-09-02 behaviour, and therefore the right default for a
+// suite that predates the arm. The cases that exercise a GRANT live in
+// `service-shared-grant-arm.test.ts` and the redteam suites.
+vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/shared/tenancy/resource-grant-reach")
+  >()),
+  grantedResourceIds: vi.fn(async () => new Set<string>()),
+}));
 
+vi.mock("@/features/workspaces/server/repository", () => ({
+  findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
+  findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),
+}));
+vi.mock("@/features/workspaces/server/repository-overview", () => ({
+  countActiveMembers: vi.fn().mockResolvedValue(1),
+}));
 vi.mock("./repository", () => ({
   listTemplatesForWorkspace: vi.fn(),
   findTemplateById: vi.fn(),
@@ -36,96 +60,30 @@ import { createTemplate, deleteTemplate, updateTemplate } from "./service";
 import {
   TemplateKnowledgeBaseNotFoundError,
   TemplateTeamNotGrantableError,
+  TemplateTeamScopeAgentForbiddenError,
   TemplateWriteForbiddenError,
   WorkspaceKeyPrivateTemplateError,
 } from "./errors";
 
+import {
+  BASES,
+  KB_OPEN,
+  KB_PRIVATE,
+  KB_TEAM,
+  OTHER,
+  OWNER,
+  TEAM_A,
+  TEAM_B,
+  ctx,
+  resetRepoMocks,
+  template,
+} from "./service-writes-fixtures";
+
 const mockRepo = vi.mocked(repo);
-
-const OWNER = "user-owner";
-const OTHER = "user-other";
-const TEAM_A = "11111111-1111-4111-8111-111111111111";
-const TEAM_B = "22222222-2222-4222-8222-222222222222";
-const KB_OPEN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const KB_PRIVATE = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const KB_TEAM = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-
-function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContext {
-  return {
-    workspaceId: "ws-1",
-    userId: OWNER,
-    source: "user",
-    role: "member",
-    apiKeyWorkspaceId: null,
-    ...overrides,
-  };
-}
-
-function template(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
-  return {
-    id: "tpl-1",
-    workspaceId: "ws-1",
-    name: "Researcher",
-    description: null,
-    instructions: null,
-    model: null,
-    fields: [],
-    visibility: "private",
-    teamIds: [],
-    knowledgeBases: [],
-    createdBy: OWNER,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
-/** Knowledge-base rows as the repository hands them over. */
-const BASES = {
-  [KB_OPEN]: {
-    id: KB_OPEN,
-    name: "Handbook",
-    visibility: "public" as const,
-    accessMode: "workspace" as const,
-    createdBy: OTHER,
-  },
-  [KB_PRIVATE]: {
-    id: KB_PRIVATE,
-    name: "Someone's notes",
-    visibility: "private" as const,
-    accessMode: "workspace" as const,
-    createdBy: OTHER,
-  },
-  [KB_TEAM]: {
-    id: KB_TEAM,
-    name: "Legal",
-    visibility: "public" as const,
-    accessMode: "teams" as const,
-    createdBy: OTHER,
-  },
-};
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
-  mockRepo.listTeamIdsForUser.mockResolvedValue([]);
-  mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
-  mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
-  mockRepo.filterTeamIdsInWorkspace.mockImplementation(async (_ws, ids) => ids);
-  // ⚠ The insert mock ECHOES the visibility it was asked for, and
-  // `findTemplateById` returns the same row. Both writes re-read through
-  // `getTemplateById` so the response is the gated shape a GET returns — a
-  // fixture that answered a fixed `private` row would make every create by a
-  // non-owner 404 on its own result, which is a fixture bug that reads exactly
-  // like a gate bug.
-  mockRepo.insertTemplate.mockImplementation(async (args) => {
-    const row = template({ visibility: args.visibility, createdBy: args.createdBy });
-    mockRepo.findTemplateById.mockResolvedValue(row);
-    return row;
-  });
-  mockRepo.updateTemplateRow.mockResolvedValue(template());
-  mockRepo.findTemplateById.mockResolvedValue(template());
+  resetRepoMocks(mockRepo);
 });
 
 // ── Create defaults ──────────────────────────────────────────────────
@@ -139,7 +97,7 @@ describe("createTemplate — visibility defaults by caller kind", () => {
   });
 
   it("a workspace-scoped API key gets 'workspace' and CANNOT ask for private", async () => {
-    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1" });
+    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     await createTemplate(keyCtx, { name: "Researcher" });
     expect(mockRepo.insertTemplate).toHaveBeenCalledWith(
       expect.objectContaining({ visibility: "workspace" })
@@ -156,7 +114,7 @@ describe("createTemplate — visibility defaults by caller kind", () => {
   // the exact state the create guard exists to prevent, invisible to the key itself and to every
   // workspace admin. This case is pinned BESIDE the create one deliberately: they are one rule.
   it("…and it cannot reach 'private' by PATCHing afterwards either (F-289)", async () => {
-    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1" });
+    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     const owned = template({ visibility: "workspace", createdBy: OWNER });
     mockRepo.findTemplateById.mockResolvedValue(owned);
     await expect(
@@ -171,7 +129,7 @@ describe("createTemplate — visibility defaults by caller kind", () => {
   // `service-shared.ts › canSeeBaseRow`'s template twin), so `getTemplateById` 404s BEFORE the
   // fence. Pinned as the 404 it really is, rather than as a fence firing where it cannot.
   it("a workspace key cannot even SEE an already-private template to PATCH it (F-289)", async () => {
-    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1" });
+    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     mockRepo.findTemplateById.mockResolvedValue(
       template({ visibility: "private", createdBy: OWNER })
     );
@@ -181,7 +139,7 @@ describe("createTemplate — visibility defaults by caller kind", () => {
 
   // …and the fence stops exactly there: widening is what a shared key is FOR.
   it("a workspace key may still PATCH a workspace template (F-289)", async () => {
-    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1" });
+    const keyCtx = ctx({ apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null });
     mockRepo.findTemplateById.mockResolvedValue(
       template({ visibility: "workspace", createdBy: OWNER })
     );
@@ -338,6 +296,60 @@ describe("team sharing — grantability", () => {
     // The junction's workspace-guard trigger would also catch this, as an
     // opaque 500. Catching it here is what makes the error sayable.
     expect(err.message).toMatch(/Not a team in this workspace/);
+  });
+
+  it("SECURITY: an AGENT credential cannot create into `team`, on either path", async () => {
+    // 🔒 A8's SERVER HALF (2026-09-02). A8 took `team` off `dopl_agent`'s enum,
+    // so the MCP surface refuses it in zod — but the REST route's schema still
+    // accepts it and an agent credential reaches that route directly, so the rule
+    // held on one road only. It refuses the CREDENTIAL, not the value: `team`
+    // stays legal for a human until B4 is ruled, and every stored row keeps
+    // working.
+    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
+    await expect(
+      createTemplate(ctx({ source: "agent" }), {
+        name: "R",
+        visibility: "team",
+        teamIds: [TEAM_A],
+      })
+    ).rejects.toBeInstanceOf(TemplateTeamScopeAgentForbiddenError);
+    // ⚠ REFUSED BEFORE THE ROW, not after: a template that exists with the wrong
+    // sharing is worse than one that was never created.
+    expect(mockRepo.insertTemplate).not.toHaveBeenCalled();
+  });
+
+  it("SECURITY: …and cannot MOVE a row into `team` in a second call", async () => {
+    // ⚠ A create fence with no update twin is a fence defeated in two calls —
+    // F-289's own argument on this very service.
+    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "private" }));
+    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
+    await expect(
+      updateTemplate(ctx({ source: "agent" }), "tpl-1", {
+        visibility: "team",
+        teamIds: [TEAM_A],
+      })
+    ).rejects.toBeInstanceOf(TemplateTeamScopeAgentForbiddenError);
+    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
+  });
+
+  it("SECURITY: a teamIds-only patch on an ALREADY-team row is the same act", async () => {
+    // ⚠ It moves the audience without naming a visibility, which is why the fence
+    // reads the LANDING value rather than `patch.visibility`.
+    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "team" }));
+    mockRepo.listTeamLinksForTemplates.mockResolvedValue([
+      { templateId: "tpl-1", teamId: TEAM_A },
+    ]);
+    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A, TEAM_B]);
+    await expect(
+      updateTemplate(ctx({ source: "agent" }), "tpl-1", { teamIds: [TEAM_B] })
+    ).rejects.toBeInstanceOf(TemplateTeamScopeAgentForbiddenError);
+  });
+
+  it("a HUMAN is untouched — the fence is the credential, not the value", async () => {
+    mockRepo.listTeamIdsForUser.mockResolvedValue([TEAM_A]);
+    await expect(
+      createTemplate(ctx(), { name: "R", visibility: "team", teamIds: [TEAM_A] })
+    ).resolves.toBeTruthy();
   });
 
   it("an owner may KEEP a team an admin granted, even outside their own teams", async () => {

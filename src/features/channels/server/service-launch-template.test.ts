@@ -58,6 +58,7 @@ import {
   LaunchTemplateNotFoundError,
 } from "./errors";
 import { createLaunchDirective, getLaunchDirective } from "./service-launch";
+import { toChannelErrorResponse } from "./http-mapping";
 import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
 
 const WS = "22222222-2222-2222-2222-222222222222";
@@ -68,6 +69,7 @@ const DIR = "55555555-5555-5555-5555-555555555555";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };
@@ -185,18 +187,32 @@ describe("the template ref — resolved under the CALLER's visibility, before an
   // as a shared credential and `POST /api/channels/launch-directives` answers
   // AGENT_TEMPLATE_NOT_FOUND for the operator's own private template, which is
   // every "Use in this channel" copy.
-  it("carries the lock KIND to the resolver as well, or a container session cannot name its own template", async () => {
+  it("carries BOTH axes to the resolver, or a container session cannot name its own template", async () => {
     online();
     vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
     await createLaunchDirective(
-      { ...ctx, apiKeyWorkspaceId: WS, apiKeyWorkspaceLockKind: "container_session" },
+      { ...ctx, apiKeyWorkspaceId: WS, credentialSubjectUserId: ctx.userId },
       { channel: "general", template: "X" }
     );
     const [templateCtx] = vi.mocked(resolveTemplateRef).mock.calls[0];
     expect(templateCtx).toMatchObject({
       apiKeyWorkspaceId: WS,
-      apiKeyWorkspaceLockKind: "container_session",
+      credentialSubjectUserId: ctx.userId,
     });
+  });
+
+  it("carries a SHARED credential's absent subject through unchanged", async () => {
+    // 🔒 The mutation: forwarding `ctx.userId` instead of the subject axis would
+    // hand `canSeeTemplate` a person that is not there and let a shared
+    // credential name the key owner's private templates.
+    online();
+    vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "found", id: T1, name: "X" });
+    await createLaunchDirective(
+      { ...ctx, apiKeyWorkspaceId: WS, credentialSubjectUserId: null },
+      { channel: "general", template: "X" }
+    );
+    const [templateCtx] = vi.mocked(resolveTemplateRef).mock.calls[0];
+    expect(templateCtx).toMatchObject({ credentialSubjectUserId: null });
   });
 
   it("an UNRESOLVABLE ref refuses and files NOTHING", async () => {
@@ -206,6 +222,41 @@ describe("the template ref — resolved under the CALLER's visibility, before an
       createLaunchDirective(ctx, { channel: "general", template: "Ghost" })
     ).rejects.toBeInstanceOf(LaunchTemplateNotFoundError);
     expect(launchRepo.insertLaunchDirective).not.toHaveBeenCalled();
+  });
+
+  it("an `elsewhere` ref refuses with the TENANCY attached, and still files nothing (T35)", async () => {
+    // ⚠ THE FOURTH ANSWER, WIRED LIKE THE OTHER THREE. The classification is the
+    // template feature's — this service adds no rule of its own to it, it only
+    // carries it — and the OUTCOME does not move: still a refusal, still a 404,
+    // still nothing filed. What changes is that the sentence can name the place.
+    online();
+    vi.mocked(resolveTemplateRef).mockResolvedValue({
+      kind: "elsewhere",
+      template: { name: "Code Auditor", label: "your personal shelf" },
+    });
+    const err = await createLaunchDirective(ctx, {
+      channel: "general",
+      template: "Code Auditor",
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(LaunchTemplateNotFoundError);
+    expect((err as LaunchTemplateNotFoundError).elsewhere).toEqual({
+      name: "Code Auditor",
+      label: "your personal shelf",
+    });
+    expect(launchRepo.insertLaunchDirective).not.toHaveBeenCalled();
+  });
+
+  it("a plain NOT-FOUND carries NO tenancy — the two must stay one answer", async () => {
+    // 🔒 `null`, not an empty object: "no such template" and "somebody else's,
+    // not yours to see" are the pair this surface refuses to distinguish, and a
+    // detail key present on one and absent on the other IS the distinction.
+    online();
+    vi.mocked(resolveTemplateRef).mockResolvedValue({ kind: "not-found" });
+    const err = await createLaunchDirective(ctx, {
+      channel: "general",
+      template: "Ghost",
+    }).catch((e) => e);
+    expect((err as LaunchTemplateNotFoundError).elsewhere).toBeNull();
   });
 
   it("an AMBIGUOUS name refuses, files nothing, and carries every match", async () => {
@@ -275,5 +326,39 @@ describe("the template ref — resolved under the CALLER's visibility, before an
     const out = await getLaunchDirective(ctx, DIR);
     expect(out.templateId).toBeNull();
     expect(out.templateName).toBe("Code Auditor");
+  });
+});
+
+// ── T35 — AND THE FACT REACHES THE WIRE, OR IS ABSENT FROM IT ────────────
+//
+// ⚠ ABSENT, NOT NULL. `HttpError.toResponseBody` omits `details` when it is
+// `undefined`, and that is the shape this arm depends on: a `details` key
+// present on one 404 and absent on the other must correspond to "there was
+// something non-leaky to say" and nothing else. A `details: { elsewhere: null }`
+// on every miss would make the KEY the signal instead of its content.
+describe("the 404 body", () => {
+  it("carries `details.elsewhere` when the refusal named a tenancy", async () => {
+    const res = toChannelErrorResponse(
+      new LaunchTemplateNotFoundError("Code Auditor", {
+        name: "Code Auditor",
+        label: "your personal shelf",
+      })
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: {
+        code: "AGENT_TEMPLATE_NOT_FOUND",
+        message: "Agent template not found: Code Auditor",
+        details: { elsewhere: { name: "Code Auditor", label: "your personal shelf" } },
+      },
+    });
+  });
+
+  it("has NO `details` key at all for an ordinary miss", async () => {
+    const res = toChannelErrorResponse(new LaunchTemplateNotFoundError("Ghost"));
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error.code).toBe("AGENT_TEMPLATE_NOT_FOUND");
+    expect(body.error).not.toHaveProperty("details");
   });
 });

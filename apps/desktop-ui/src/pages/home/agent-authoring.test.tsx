@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { WORKSPACE_ID, bootBody, bridgeCalls, installBridge } from "#/test-utils/bridge";
 import { LINK_WORKSPACE_ID, renderHome } from "./home-test-harness";
+import { CHANNEL_ID } from "./home-test-ids";
 import {
   CHANNEL_ONLY_BASE,
   TEAMS_PATH,
@@ -127,9 +128,44 @@ describe("each section's create writes where its section reads", () => {
     expect(shared.textContent).not.toContain("Deck reviewer");
   });
 
+  it("🔒 the SHARED create ACKNOWLEDGES the audience the section names (A11)", async () => {
+    // 🔒 G16 — the server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without this,
+    // so "New shared agent" cannot save at all if the flag is dropped. ⚠ NO NEW
+    // DIALOG: `SECTIONS_CONTAINER`'s single option is labelled "Shared in this
+    // channel" and the section heading repeats it — that control IS the
+    // audience statement (INVARIANTS §5, minimal UI copy).
+    renderHome();
+    await openAgents();
+    await screen.findByText("Renewal chaser");
+
+    await startNewAgent("Intake triage", SHARED_BUTTON);
+    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+
+    await waitFor(() => expect(createCall()).toBeDefined());
+    expect(createCall()!.opts.body).toMatchObject({
+      visibility: "workspace",
+      acknowledgeShared: true,
+    });
+  });
+
+  it("🔒 the PERSONAL create sends NO acknowledgement — nothing is published", async () => {
+    // ⚠ `undefined`, never `false`. The server examines only an explicit
+    // `true`, and a `false` on every private save would suggest to a reader
+    // that the other value is examined too — the rule `homeScoped` states.
+    renderHome();
+    await openAgents();
+    await screen.findByText("Fundraise analyst");
+
+    await startNewAgent("Deck reviewer");
+    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+
+    await waitFor(() => expect(createCall()).toBeDefined());
+    expect(createCall()!.opts.body).not.toHaveProperty("acknowledgeShared");
+  });
+
   it("🔒 the SHARED create sends NO homeScoped — a container has no shelf", async () => {
-    // `resolveTemplateHomeScope` would 403 it, and an explicit `false` would
-    // widen the contract the fence has to allow for no reason.
+    // `personalWriteWorkspaceId` routes on it and this create is not personal;
+    // an explicit `false` would widen the contract for no reason.
     renderHome();
     await openAgents();
     await screen.findByText("Renewal chaser");
@@ -315,127 +351,93 @@ describe("the writes stay in their own workspace", () => {
 });
 
 /**
- * "USE IN THIS CHANNEL" — the COPY (plan §3, M4, Samuel's ruling Q2).
+ * "SHARE INTO THIS CHANNEL" — the GRANT (Samuel's ruling B11, 2026-09-02, wave B
+ * slice B15: *grants replace copies*).
  *
- * ⚠ THE LOAD-BEARING ASSERTION IS ON THE REQUEST BODY. What the copy CARRIES
- * and what it DROPS is not visible on screen — a container row with no bases
- * and a container row with the home row's bases render identically — so a suite
- * that only looked at the DOM would pass while the write 400d on an
- * unreachable KB id.
+ * ⚠ **THIS BLOCK WAS SIX CASES ABOUT A COPY AND IS NOW FOUR ABOUT A GRANT.**
+ * The three that went were about what a COPY carried and dropped — the exact
+ * create body, the "attached knowledge base stays behind" line, and the
+ * stale-cache guard on `source.knowledgeBases.length` that the KB line needed.
+ * A grant lends the ONE row: nothing is composed, nothing is dropped, and the
+ * cached row's `knowledgeBases` is never read, so all three were assertions
+ * about a mechanism rather than about a promise.
+ *
+ * ⚠ **THE LOAD-BEARING ASSERTION IS STILL ON THE REQUEST BODY**, and for the
+ * same reason: a grant into the CHANNEL and a grant into the CONTAINER render
+ * identically (as nothing), and only one of them puts the agent in front of the
+ * people in the room.
  */
-describe("use in this channel", () => {
-  /** Reach the copy control on the PERSONAL card. */
-  async function openCopyConfirm(): Promise<void> {
+describe("share into this channel", () => {
+  /** Reach the share control on the PERSONAL card. */
+  async function openShareConfirm(): Promise<void> {
     renderHome();
     await openAgents();
     await screen.findByText("Fundraise analyst");
-    fireEvent.click(screen.getByRole("button", { name: "Use in this channel" }));
-    await screen.findByRole("button", { name: "Make a copy" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Share into this channel" })
+    );
+    await screen.findByRole("button", { name: "Share" });
   }
 
-  it("🔒 posts a SHARED copy to the CONTAINER, with the knowledge bases dropped", async () => {
-    await openCopyConfirm();
-    fireEvent.click(screen.getByRole("button", { name: "Make a copy" }));
+  /** The grant call, or `undefined`. */
+  function grantCall() {
+    return bridgeCalls(apiRequest).find(
+      (c) => c.path === "/api/resource-grants"
+    );
+  }
 
-    await waitFor(() => expect(createCall()).toBeDefined());
-    const call = createCall()!;
-    // 🔒 THE CONTAINER, not the workspace the row came from.
-    expect(call.opts.workspaceId).toBe(LINK_WORKSPACE_ID);
-    // 🔒 `workspace`, AND IT WAS `private` UNTIL 2026-08-27 — see
-    // `lib/template-draft.test.ts › SHARES into the channel`. The pane's
-    // per-channel private section is gone and a container is not navigable, so
-    // a private copy would land nowhere visible; the audience change is stated
-    // in the confirm dialog instead of hidden.
-    // ⚠ `teamIds` and `knowledgeBaseIds` absent, which is what "cleared" means
-    // on a create body. The name carries UNCHANGED — no "(copy)" suffix,
-    // because templates have no name uniqueness to dodge.
+  it("🔒 grants the template into the CHANNEL, at the narrower channel level", async () => {
+    await openShareConfirm();
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+
+    await waitFor(() => expect(grantCall()).toBeDefined());
+    const call = grantCall()!;
+    expect(call.opts.method).toBe("PUT");
+    // 🔒 EXACT EQUALITY. `scopeType: "channel"` is the whole difference between
+    // putting the agent in front of the people in the room and filing it against
+    // a tenancy nobody reads; `level: "visible"` is the narrower of the two
+    // channel words, where `agent_only` names no human audience at all.
     expect(call.opts.body).toEqual({
-      name: "Fundraise analyst",
-      visibility: "workspace",
-      description: "Reads the data room",
-      instructions: "Cite the memo.",
-      model: "claude-opus-5",
-      fields: [{ key: "round", value: "seed" }],
+      resourceType: "agent_template",
+      resourceId: T_HOME.id,
+      scopeType: "channel",
+      scopeId: CHANNEL_ID,
+      level: "visible",
     });
   });
 
-  it("says the knowledge bases stay behind BEFORE anything is written", async () => {
-    await openCopyConfirm();
-    // ⚠ The drop is a rule the operator has to know in advance: the copy is not
-    // the agent they were using, it is that agent without its reading. One line,
-    // and it names the count.
-    expect(document.body.textContent).toContain("attached knowledge base stays behind");
-    expect(document.body.textContent).toContain("snapshot");
+  it("🔒 writes NOTHING until the confirm — the dialog alone is not consent", async () => {
+    // 🔒 THE SHAPE OF THE CONSENT STEP, CARRIED OVER FROM THE COPY (A11/G16).
+    // The audience sentence is what the operator is pressing through, and it
+    // must be on screen before anything reaches the wire.
+    await openShareConfirm();
+    expect(document.body.textContent).toContain("everyone here will see it");
+    expect(grantCall()).toBeUndefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    await waitFor(() => expect(grantCall()).toBeDefined());
+  });
+
+  it("🔒 CREATES NO TEMPLATE — the row is lent, not copied", async () => {
+    // ⚠ THE ASSERTION THE WHOLE RULING TURNS ON, and it is the one a DOM-level
+    // test cannot make: the old control POSTed a second `agent_templates` row.
+    await openShareConfirm();
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    await waitFor(() => expect(grantCall()).toBeDefined());
     expect(createCall()).toBeUndefined();
+    // …and the operator is told the thing that follows from that.
+    expect(document.body.textContent).toContain("It stays yours");
   });
 
-  it("lands the copy in the SHARED section, and NOT in the home shelf (F-331)", async () => {
-    await openCopyConfirm();
-    fireEvent.click(screen.getByRole("button", { name: "Make a copy" }));
-
-    // The copy appears in SHARED — with both sections on screen there is no
-    // scope to switch back to, which is what the old "the pill follows the copy
-    // home" step was compensating for.
-    const shared = () => screen.getByRole("region", { name: "Shared in this channel" });
-    await waitFor(() => expect(shared().textContent).toContain("Fundraise analyst"));
-
-    // 🔒 …AND THE OTHER SHELF IS UNCHANGED, WHICH IS THE HALF THAT KEEPS THIS AN
-    // F-331 PIN. Over the one-element PATH prefix the created CONTAINER row
-    // would be appended to the warmed HOME entry as well — and since 2026-08-27
-    // the home entry is keyed by `{shelf:"home"}`, so a writer that kept
-    // passing `undefined` would miss it in the other direction. ⚠ Counted by
-    // the COPY CONTROL, not by the name: the copy carries the original's name
-    // unchanged, so two identical names is exactly the state a name-count
-    // cannot see.
-    const personal = screen.getByRole("region", { name: "Personal" });
-    expect(
-      within(personal).getAllByRole("button", { name: "Use in this channel" })
-    ).toHaveLength(1);
-  });
-
-  it("still renders the confirm step when the cached row predates `knowledgeBases`", async () => {
-    // ⚠ §8's STALE-CACHE RULE, on a payload this pane reads out of a CACHE
-    // ENTRY rather than off a fresh response: the row can have been written by
-    // an older build of the app. `source.knowledgeBases.length` with no
-    // fallback throws inside the render of an already-open dialog, which blanks
-    // the surface instead of showing a sentence — the worst place for it.
-    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) => {
-      if (path.split("?")[0] === "/api/agent-templates" && opts.workspaceId === WORKSPACE_ID) {
-        const stale = { ...T_HOME } as Partial<typeof T_HOME>;
-        delete stale.knowledgeBases;
-        return Promise.resolve({
-          status: 200,
-          statusText: "OK",
-          hasBody: true,
-          body: { templates: [stale] },
-        });
-      }
-      return agentRoutes(path, opts);
-    });
-    renderHome();
-    await openAgents();
-    await screen.findByText("Fundraise analyst");
-
-    fireEvent.click(screen.getByRole("button", { name: "Use in this channel" }));
-    // The dialog opens and the snapshot sentence is there; the KB line is
-    // correctly absent, because a payload with no field carries no attachments
-    // to warn about.
-    expect(await screen.findByRole("button", { name: "Make a copy" })).toBeTruthy();
-    expect(document.body.textContent).toContain("snapshot");
-    expect(document.body.textContent).not.toContain("stays behind");
-  });
-
-  it("offers no copy control on a row already IN this channel", async () => {
+  it("offers no share control on a row already IN this channel", async () => {
     renderHome();
     await openAgents();
     await screen.findByText("Renewal chaser");
-    // Copying a container row into its own container is a copy of a thing into
-    // the place it already is. ⚠ Scoped to the SHARED region: the control lives
-    // on every Personal card now, so a document-wide query would find those and
-    // prove nothing about this one.
+    // ⚠ Scoped to the SHARED region: the control lives on every Personal card,
+    // so a document-wide query would find those and prove nothing about this one.
     const shared = screen.getByRole("region", { name: "Shared in this channel" });
     expect(
-      within(shared).queryByRole("button", { name: "Use in this channel" })
+      within(shared).queryByRole("button", { name: "Share into this channel" })
     ).toBeNull();
   });
 });

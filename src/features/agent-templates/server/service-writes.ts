@@ -10,9 +10,12 @@ import type {
   AgentTemplateCreateInput,
   AgentTemplateUpdateInput,
 } from "../schema";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
+// 🔒 G16 — the ONE statement of the publish-into-a-peer's-room precondition,
+// shared with `knowledge/server/service-base-writes.ts`. Two copies of a
+// tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
+import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
-  TemplateHomeScopeForbiddenError,
+  TemplateTeamScopeAgentForbiddenError,
   TemplateKnowledgeBaseNotFoundError,
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
@@ -40,58 +43,16 @@ import {
 // ─── Create ─────────────────────────────────────────────────────────────
 
 /**
- * 🔒 THE HOME-SHELF FENCE FOR TEMPLATES — the sibling of
- * `features/knowledge/server/service-base-writes.ts › resolveHomeScope`
- * (Samuel's ruling 2026-08-27;
- * `20260901120000_agent_template_home_scoped.sql` carries the full argument).
- *
- * Three conditions, ALL required:
- *
- *   1. **A PERSON asked.** `isSharedCredential` false. A credential that may be
- *      shared between humans has no "my home shelf" to write to — and
- *      `canSeeTemplate` arm 2 would not read the row back for it anyway.
- *   2. **PRIVATE.** ⚠ CHECKED AGAINST THE RESOLVED VALUE, NOT `input.visibility`
- *      — the branch above rewrites it, and reading the raw input would let a
- *      `team` or `workspace` template onto a shelf the UI calls "yours alone".
- *      **This is where the fence DIFFERS from Knowledge's in substance, not just
- *      in wording**: a KB can be `private` and still reach a channel through a
- *      `(kb, channel)` grant, so there `private` is a floor. A template has NO
- *      grant table and exactly one consumer per row, so `private` is TERMINAL —
- *      it is the entire audience statement, which is precisely what makes it the
- *      right condition for a personal shelf.
- *   3. **THE CALLER'S OWN DEFAULT STANDARD WORKSPACE.**
- *      `findDefaultWorkspaceForUser` is the same lookup `getBootState` runs to
- *      answer `POST /api/boot`'s `workspace`, which is what the /home pane
- *      hands its editor — so the fence and the surface cannot disagree about
- *      what "home" means. A link CONTAINER fails this, and so does a second
- *      workspace the caller owns.
- *
- * ⚠ THE DEFAULT IS FALSE AND SILENT. Only an explicit `homeScoped: true` is
- * examined, so MCP and every other existing caller keep writing workspace-shelf
- * rows with no new failure mode.
+ * ⚠ **THE HOME-SHELF FENCE STOOD HERE UNTIL 2026-09-02 (slice B15).**
+ * `resolveTemplateHomeScope` was a hand-mirror of
+ * `knowledge/server/service-base-gates.ts › resolveHomeScope`, and both are
+ * DELETED with the `home_scoped` column they answered for. `shared/tenancy/
+ * personal-container.ts › personalWriteWorkspaceId` is the one fence now, and
+ * its docblock retires each of the three conditions by name — including the one
+ * this copy's docblock argued was substantively different (a template's
+ * `private` is TERMINAL where a KB's is a floor), which stopped mattering when
+ * the shelf became a container with one member.
  */
-async function resolveTemplateHomeScope(
-  ctx: AgentTemplateContext,
-  input: AgentTemplateCreateInput,
-  resolvedVisibility: TemplateVisibility
-): Promise<boolean> {
-  if (input.homeScoped !== true) return false;
-  if (isSharedCredential(ctx)) {
-    throw new TemplateHomeScopeForbiddenError(
-      "a shared credential has no personal shelf"
-    );
-  }
-  if (resolvedVisibility !== "private") {
-    throw new TemplateHomeScopeForbiddenError(
-      "the home shelf holds private agents only"
-    );
-  }
-  const home = await findDefaultWorkspaceForUser(ctx.userId);
-  if (home === null || home.id !== ctx.workspaceId) {
-    throw new TemplateHomeScopeForbiddenError("it is not your home workspace");
-  }
-  return true;
-}
 
 export async function createTemplate(
   ctx: AgentTemplateContext,
@@ -118,6 +79,7 @@ export async function createTemplate(
   // exists with the wrong sharing (or with attachments silently dropped) is
   // worse than one that was never created — there is no transaction across
   // these three statements, so the order IS the atomicity story.
+  assertTeamScopeIsHuman(ctx, visibility);
   const teamIds =
     visibility === "team"
       ? await assertGrantableTeams(ctx, input.teamIds ?? [], [])
@@ -127,9 +89,16 @@ export async function createTemplate(
     input.knowledgeBaseIds ?? []
   );
 
-  // 🔒 WHICH SHELF, resolved before the insert so no half-written row depends
-  // on it. Throws rather than returning false.
-  const homeScoped = await resolveTemplateHomeScope(ctx, input, visibility);
+  // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
+  // visibility, for the same reason the shelf fence reads it: the row's landing
+  // value is the audience, and `input.visibility` is not it for a caller that
+  // named nothing.
+  await assertSharedPublishAcknowledged({
+    workspaceId: ctx.workspaceId,
+    publishes: visibility === "workspace",
+    acknowledged: input.acknowledgeShared,
+    noun: "agent",
+  });
 
   const template = await repo.insertTemplate({
     workspaceId: ctx.workspaceId,
@@ -139,7 +108,8 @@ export async function createTemplate(
     model: normalizeLabel(input.model),
     fields: normalizeFieldsInput(input.fields),
     visibility,
-    homeScoped,
+    // 🔒 A ROUTING FLAG, NOT A COLUMN (B15) — see `insertTemplate`.
+    homeScoped: input.homeScoped,
     createdBy: ctx.userId,
   });
 
@@ -201,12 +171,33 @@ export async function updateTemplate(
     throw new WorkspaceKeyPrivateTemplateError();
   }
 
+  // 🔒 G16 — the same precondition on the UPDATE path, which is the OTHER way a
+  // row reaches the shared visibility (F-289's argument, on a different axis:
+  // a create fence with no update twin is a fence defeated in two calls).
+  // ⚠ `patch.visibility`, NOT `nextVisibility`, AND THAT IS THE OPPOSITE CHOICE
+  // FROM THE PRIVATE FENCE ABOVE — deliberately. That one asks where the row
+  // LANDS, because a shared credential must not own a private row however it
+  // got there. This one asks what the caller CHANGED: a row already shared is
+  // already seen by the room, and making a rename acknowledge an audience it
+  // did not touch would be a gate on the wrong verb.
+  await assertSharedPublishAcknowledged({
+    workspaceId: ctx.workspaceId,
+    publishes: patch.visibility === "workspace",
+    acknowledged: patch.acknowledgeShared,
+    noun: "agent",
+  });
+
   // VISIBILITY TRANSITIONS ARE FREE FOR THE OWNER, in any direction —
   // `private → workspace → team → private`. Nothing here guards narrowing (the
   // skills service makes the same note), because narrowing removes reach and
   // the person removing it is the person who granted it.
   let teamIds: string[] | null = null;
   if (patch.visibility !== undefined || patch.teamIds !== undefined) {
+    // 🔒 A8's SERVER HALF, on the update path too — a create fence with no update
+    // twin is a fence defeated in two calls (F-289's own argument).
+    // ⚠ `nextVisibility`, so a `teamIds`-only patch on a row that is ALREADY
+    // `team` is refused as well: it MOVES the audience, which is the act.
+    assertTeamScopeIsHuman(ctx, nextVisibility);
     teamIds =
       nextVisibility === "team"
         ? await assertGrantableTeams(
@@ -222,7 +213,23 @@ export async function updateTemplate(
       ? null
       : await assertAttachableKnowledgeBases(ctx, patch.knowledgeBaseIds);
 
-  await repo.updateTemplateRow(ctx.workspaceId, id, {
+  // ⚠ A JUNCTION-ONLY PATCH TOUCHES NO SCALAR COLUMN, so it must not reach the
+  // row write at all (F-404, 2026-09-02). `knowledgeBaseIds`-only and
+  // `teamIds`-only patches are both legal — `packages/mcp-server/src/tools/
+  // agent-ops-write.ts › opUpdate` refuses only the patch that names NOTHING,
+  // and `agent-templates/schema.ts › UpdateTemplateSchema` marks every field
+  // optional — and both used to arrive at `updateTemplateRow` as an
+  // all-`undefined` patch, i.e. an empty UPDATE body, which PostgREST rejects
+  // and `http-mapping.ts` had no arm for: the agent got a bare INTERNAL_ERROR
+  // 500 for a request that was entirely valid. The repo is now total on the
+  // empty patch too, so this is the round trip we skip rather than the guard we
+  // depend on. Mirrors `workspaces/server/service.ts › renameWorkspace`, which
+  // has guarded this exact class all along.
+  //
+  // ⚠ TYPED AS THE REPOSITORY'S OWN PATCH, so the emptiness test and the column
+  // set cannot drift: a seventh scalar column added to `UpdateTemplatePatch` and
+  // forgotten here is a compile-time absence to notice, not a silent skip.
+  const rowPatch: repo.UpdateTemplatePatch = {
     name: patch.name === undefined ? undefined : stripNullBytes(patch.name),
     description:
       patch.description === undefined ? undefined : normalizeProse(patch.description),
@@ -233,7 +240,10 @@ export async function updateTemplate(
     model: patch.model === undefined ? undefined : normalizeLabel(patch.model),
     fields: patch.fields === undefined ? undefined : normalizeFieldsInput(patch.fields),
     visibility: patch.visibility,
-  });
+  };
+  if (Object.values(rowPatch).some((value) => value !== undefined)) {
+    await repo.updateTemplateRow(ctx.workspaceId, id, rowPatch);
+  }
 
   // ⚠ REPLACE-SET, and it runs even for the empty set: leaving a template's
   // team links behind when it goes `private` would leave rows that come back to
@@ -292,6 +302,29 @@ function assertMayWrite(
  *     silently revoke the parts the owner cannot re-add).
  * Both rules are lifted verbatim from `updateSkill`'s sharing branch.
  */
+/**
+ * 🔒 **THE TEAM AXIS NEEDS A HUMAN** — A8's server half (2026-09-02).
+ *
+ * A8 took `team` off `dopl_agent`'s enum, so the MCP surface refuses it in zod.
+ * The REST route's schema still accepts it and an agent credential reaches that
+ * route directly, so the rule held on one road only — the prompt-only shape this
+ * wave exists to remove. See {@link TemplateTeamScopeAgentForbiddenError} for why
+ * it refuses the CREDENTIAL rather than the value, and why `team` stays legal for
+ * a human until B4 is ruled.
+ *
+ * ⚠ `ctx.source === "agent"` is the same discriminator `updateSkill` and
+ * `createBase` use for their own human-only settings — the CREDENTIAL a call
+ * arrived on, never a claim in the body.
+ */
+function assertTeamScopeIsHuman(
+  ctx: AgentTemplateContext,
+  landing: TemplateVisibility
+): void {
+  if (landing === "team" && ctx.source === "agent") {
+    throw new TemplateTeamScopeAgentForbiddenError();
+  }
+}
+
 async function assertGrantableTeams(
   ctx: AgentTemplateContext,
   requested: string[],

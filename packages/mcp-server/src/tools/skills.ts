@@ -5,88 +5,126 @@
  * per-skill `agent_write_enabled` toggle — without it, 403
  * `SKILL_AGENT_WRITE_DISABLED`.
  *
- *   - `dopl_skill`       — reads + non-destructive writes.
- *   - `dopl_skill_admin` — ⚠ the delete surface, REFUSING; the ops stay listed
- *                          to teach the refusal.
+ * ⚠ ONE TOOL: reads + non-destructive writes. There is no delete op and no
+ * `dopl_skill_admin` (deleted 2026-09-02) — deletion is app-only, fenced by
+ * `sessionOnly` on `DELETE /api/skills/[skillSlug]`.
  *
- * Thin registrar: two descriptions + schemas + op routing, delegating to
+ * Thin registrar: one description + schema + op routing, delegating to
  * `skills-shared.ts`, `skills-ops-read.ts`, `skills-ops-write.ts`. ⚠ The
  * `skills-` prefix is what the parity split-scan groups on.
  */
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
-import { deleteAdminDescription } from "../delete-policy.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import { ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { SKILL_ERRORS } from "./tool-errors";
+import { composeDescription, DESCRIPTION_MAX_CHARS } from "./tool-style";
 import { SKILL_AUTHORING_GUIDE } from "../prompts/skill-authoring-guide.js";
 import { opGet, opList, opRead } from "./skills-ops-read";
 import {
   opCreate,
-  opDelete,
   opSetVisibility,
   opUpdate,
   opWrite,
 } from "./skills-ops-write";
 
-const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-FILE: one tight, self-contained procedure (its SKILL.md) plus metadata — NOT a folder of files. Long reference material (specs, tables, examples) belongs in a knowledge base, linked from the body as \`[label](dopl://kb/<slug>)\`; the skill stays short. Prefer MANY SMALL skills — one action each — over monoliths: small skills attach cleanly to ontology objects and trigger more reliably. Organize them with the \`folder\` label. Set \`op\` to one of:
-- "list" — the ACTIVE skills VISIBLE TO YOU in the active workspace, with trigger metadata (name, description, when_to_use, when_not_to_use, status), grouped by folder. Two filters, and both hide rows silently: this op keeps only \`status\`="active" (drafts are absent, including your own), and the server has already dropped skills private to another member or scoped to a team you have no grant on. So this is a view, not the workspace's skill inventory, and two members legitimately get different counts from it; dopl_members(op="access_matrix") is the inventory. Call at every new task boundary. Optional: folder (filter to one folder).
-- "get" — fetch a skill's resolved detail: the SKILL.md body, reference availability for KBs and connectors, and metadata. KB references appear as \`[label](dopl://kb/<slug>)\` — use \`dopl_kb(op='read_file')\` / \`dopl_kb(op='get_tree')\` to load that KB when you actually need it. Requires: slug. Optional: detail ("summary" = metadata + body length only; "full" (default) = includes the body).
-- "read" — read the skill's SKILL.md body plus its Version token (pass that as expected_version to write). Requires: slug.
-- "write" — overwrite the skill's SKILL.md body (PUT semantics — the whole body is replaced). read it first to get the Version token and pass it as \`expected_version\` — REQUIRED when a body already exists (412 without it), so a concurrent edit can't be silently overwritten. \`force=true\` skips the check. Requires: slug, body.
-- "create" — create a new skill (returns the row + a fresh SKILL.md). New skills default to private. Requires: name, description, when_to_use. Optional: when_not_to_use, slug (auto-derived), status (defaults active), folder, body (initial SKILL.md content). Before calling: use op="authoring_guide" so the description and when_to_use meet the framework's standards.
-- "update" — update skill metadata (name, description, when_to_use, when_not_to_use, new_slug, status, folder). \`agent_write_enabled\` is a human-only protection toggle — an agent that passes it here is rejected; change it from the Dopl web UI. Requires: slug.
-- "set_visibility" — change a skill's sharing: "public" (workspace-visible) or "private" (owner-only). Owner or workspace-admin only. Team-scoped sharing is web-UI-managed; a team-scoped skill set here to "public" becomes workspace-wide. Requires: slug, visibility.
-- "authoring_guide" — fetch the canonical skill-authoring framework: what makes a high-quality single-file skill, how to write description + when_to_use, the body section order, anti-patterns, and a quality checklist. Call before authoring any new skill (every op="create").
+/**
+ * ⚠ ONE OBJECT, REGISTERED AND DESCRIBED. `renderLimits` reads THIS shape, so
+ * the description cannot state a cap the schema does not enforce.
+ */
+const SKILL_SHAPE = {
+  op: z
+    .enum([
+      "list",
+      "get",
+      "read",
+      "write",
+      "create",
+      "update",
+      "set_visibility",
+      "authoring_guide",
+    ])
+    .describe("Operation to perform."),
+  slug: z
+    .string()
+    .optional()
+    .describe("Skill slug OR stable id (the uuid from list/get output — survives renames, prefer it for held references). Required for get, read, write, update, set_visibility."),
+  name: z.string().min(1).max(120).optional().describe("op=create (required) / op=update: skill name."),
+  description: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: skill description."),
+  when_to_use: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: when_to_use trigger."),
+  when_not_to_use: z.string().max(2000).nullable().optional().describe("op=create / op=update: when_not_to_use trigger."),
+  new_slug: z.string().min(1).max(80).optional().describe("op=update: rename the skill's slug."),
+  status: z.enum(["active", "draft"]).optional().describe("op=create / op=update: skill status (create defaults to active)."),
+  agent_write_enabled: z.boolean().optional().describe("op=create: initial agent-write toggle. On op=update an agent passing this is rejected — it's a human-only protection setting (change it from the Dopl web UI)."),
+  folder: z.string().max(80).nullable().optional().describe("op=create / op=update: organizing folder label (empty or null = unfiled). op=list: filter to skills in this folder."),
+  body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=write (required): the new full SKILL.md body."),
+  expected_version: z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check."),
+  force: z.boolean().optional().describe("op=write: overwrite even if the body changed since you read it. Discards the other edit — use only when intentional."),
+  visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
+  detail: z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + body length WITHOUT the body (cheap orientation); 'full' (default) includes the SKILL.md body."),
+  confirm_token: z
+    .string()
+    .optional()
+    .describe(
+      "op=set_visibility: the one-time token from this call's own preview, echoed back to publish. Needed only when publishing into a home channel somebody else is in; refused on any other call, and never guessable.",
+    ),
+};
 
-Deleting is not available to you over MCP: \`dopl_skill_admin\` refuses the op it lists and removes nothing. Ask the user to delete in the Dopl app.`;
+/**
+ * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
+ * order for every tool on this surface and refuses, at import, a headline over
+ * its window or prose over its cap.
+ *
+ * ⚠ WHAT LEFT: the "Requires:" / "Optional:" clauses, the `expected_version`
+ * 412 rule, the `agent_write_enabled` rejection and the two visibility values.
+ * Every one of them is stated by the param's own `.describe()` below, and a
+ * description and its arg descriptions are BOTH pushed on every connection —
+ * so that was one fact bought twice.
+ */
+const SKILL_DESCRIPTION = composeDescription({
+  headline:
+    "The user's skills — one single-file procedure (SKILL.md) plus metadata each, as visible to you; not the skill inventory.",
+  policy:
+    "Reads plus non-destructive writes, gated per skill by the human-only `agent_write_enabled` toggle. No delete op — deletion is app-only.",
+  routing: [
+    "Use dopl_kb for long reference material, linked as `[label](dopl://kb/<slug>)`.",
+  ],
+  body: [
+    `Set \`op\` to one of:
+- "list" — ACTIVE skills visible to you, with triggers, grouped by folder. Two silent filters: drafts are absent (your own included), and skills private to another member or scoped to a team you have no grant on are dropped. A view — dopl_members(op="access_matrix") is the inventory. Call at every task boundary.
+- "get" — resolved detail: SKILL.md body, reference availability, metadata.
+- "read" — the SKILL.md body plus the Version token op="write" wants.
+- "write" — replace the SKILL.md body.
+- "create" — a new skill. Call op="authoring_guide" first.
+- "update" — skill metadata.
+- "set_visibility" — share workspace-wide, or make it owner-only.
+- "authoring_guide" — the canonical skill-authoring framework.`,
+  ],
+  limits: { shape: SKILL_SHAPE, only: ["name"] },
+  errors: SKILL_ERRORS,
+  examples: [
+    { op: "list" },
+    { op: "list", folder: "Sales" },
+    { op: "get", slug: "outreach" },
+    { op: "write", slug: "outreach", body: "# …", expected_version: "3" },
+  ],
+  cap: DESCRIPTION_MAX_CHARS,
+});
 
-const SKILL_ADMIN_DESCRIPTION = deleteAdminDescription(
-  [{ op: "delete", effect: "would have deleted a skill" }],
-  `Reach for instead: \`dopl_skill\` op=write to replace the SKILL.md body, or op=update with status="draft" to take a skill out of the list an agent sees without destroying it. If it genuinely has to go, ask the user to delete it in the Dopl app.`,
-);
 
 export function registerSkillTools(
   register: RegisterTool,
   client: DoplClient,
-  // ⚠ Read for exactly ONE thing: whether a SKILL.md is somebody else's, which
-  // decides `UNTRUSTED_SKILL_BODY_HEADER`.
+  // ⚠ Read for TWO things: whether a SKILL.md is somebody else's (which decides
+  // `UNTRUSTED_SKILL_BODY_HEADER`), and who the confirm preview belongs to on
+  // `set_visibility` (G16).
   caller: CallerIdentity = UNKNOWN_CALLER,
 ): void {
   register(
     "dopl_skill",
     SKILL_DESCRIPTION,
-    {
-      op: z
-        .enum([
-          "list",
-          "get",
-          "read",
-          "write",
-          "create",
-          "update",
-          "set_visibility",
-          "authoring_guide",
-        ])
-        .describe("Operation to perform."),
-      slug: z
-        .string()
-        .optional()
-        .describe("Skill slug OR stable id (the uuid from list/get output — survives renames, prefer it for held references). Required for get, read, write, update, set_visibility."),
-      name: z.string().min(1).max(120).optional().describe("op=create (required) / op=update: skill name."),
-      description: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: skill description."),
-      when_to_use: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: when_to_use trigger."),
-      when_not_to_use: z.string().max(2000).nullable().optional().describe("op=create / op=update: when_not_to_use trigger."),
-      new_slug: z.string().min(1).max(80).optional().describe("op=update: rename the skill's slug."),
-      status: z.enum(["active", "draft"]).optional().describe("op=create / op=update: skill status (create defaults to active)."),
-      agent_write_enabled: z.boolean().optional().describe("op=create: initial agent-write toggle. On op=update an agent passing this is rejected — it's a human-only protection setting (change it from the Dopl web UI)."),
-      folder: z.string().max(80).nullable().optional().describe("op=create / op=update: organizing folder label (empty or null = unfiled). op=list: filter to skills in this folder."),
-      body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=write (required): the new full SKILL.md body."),
-      expected_version: z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check."),
-      force: z.boolean().optional().describe("op=write: overwrite even if the body changed since you read it. Discards the other edit — use only when intentional."),
-      visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
-      detail: z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + body length WITHOUT the body (cheap orientation); 'full' (default) includes the SKILL.md body."),
-    },
+    SKILL_SHAPE,
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
         case "list":
@@ -125,28 +163,16 @@ export function registerSkillTools(
         case "set_visibility": {
           const miss = missingParams("set_visibility", args, ["slug", "visibility"]);
           if (miss) return miss;
-          return opSetVisibility(client, args.slug as string, args.visibility as string);
+          return opSetVisibility(
+            client,
+            caller.userId,
+            args.slug as string,
+            args.visibility as string,
+            args.confirm_token,
+          );
         }
         case "authoring_guide":
           return ok(SKILL_AUTHORING_GUIDE);
-      }
-    },
-  );
-
-  register(
-    "dopl_skill_admin",
-    SKILL_ADMIN_DESCRIPTION,
-    {
-      op: z.enum(["delete"]).describe("DESTRUCTIVE operation to perform."),
-      slug: z.string().optional().describe("Skill slug. Required for delete."),
-    },
-    async (args): Promise<ToolResponse> => {
-      switch (args.op) {
-        case "delete": {
-          const miss = missingParams("delete", args, ["slug"]);
-          if (miss) return miss;
-          return opDelete(client, args.slug as string);
-        }
       }
     },
   );

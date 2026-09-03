@@ -19,6 +19,7 @@ import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
 
 import type { RegisterTool } from "./respond.js";
+import { CHANNEL_ACTIONS } from "./channel-schema.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerSkillTools } from "./skills.js";
 import { registerChatTools } from "./chats.js";
@@ -28,7 +29,8 @@ import { registerSearchTool } from "./search.js";
 import { registerOntologyTool } from "./ontology.js";
 import { registerChannelTool } from "./channel.js";
 import { registerAgentTools } from "./agent.js";
-import { registerHomeTool } from "./home.js";
+import { registerWorkspaceMetaTools } from "../meta-tools.js";
+import type { CallerIdentity } from "./identity.js";
 
 // ── Capture every registered domain tool ─────────────────────────────
 
@@ -44,43 +46,81 @@ export const REGISTRARS: Array<{
   file: string;
   register: (r: RegisterTool, c: DoplClient) => void;
 }> = [
-  { file: "knowledge.ts", register: registerKnowledgeTools },
+  // ⚠ Both take a `directory` their registrars REQUIRE (it resolves the copy
+  // ops' `to_workspace`); the harness passes the same stub `channel.ts` and
+  // `channel.ts` gets, because capture never runs a handler.
+  {
+    file: "knowledge.ts",
+    register: (r, c) => registerKnowledgeTools(r, c, undefined, STUB_DIRECTORY),
+  },
   { file: "skills.ts", register: registerSkillTools },
   { file: "chats.ts", register: registerChatTools },
   { file: "members.ts", register: registerMembersTool },
   { file: "map.ts", register: registerMapTool },
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
-  { file: "channel.ts", register: registerChannelTool },
-  { file: "agent.ts", register: registerAgentTools },
-  // ⚠ **THE ONE META TOOL IN THIS CAPTURE, AND IT EARNS ITS PLACE** (2026-08-28).
-  // `current_workspace` / `list_workspaces` are deliberately absent: they carry
-  // no `op`, no write and no charge, so every suite below would be vacuous over
-  // them. `dopl_home` has all three — an `op` enum, a WRITE op in `WRITE_OPS`,
-  // and an explicit credit charge — so leaving it out would mean its enum is
-  // never checked against the write-gate table, which is exactly the
-  // read-only-token hole `parity.test.ts` exists to close.
-  // ⚠ It takes a `directory` its registrar needs; the harness passes a stub,
+  // ⚠ It takes a `directory` its registrar REQUIRES (the container lock for the
+  // two account-wide reads); the harness passes the same stub `knowledge.ts` gets,
   // because capture never runs a handler.
   {
-    file: "home.ts",
-    register: (r, c) => registerHomeTool(r, c, STUB_DIRECTORY),
+    file: "channel.ts",
+    register: (r, c) =>
+      registerChannelTool(r, c, undefined, false, STUB_DIRECTORY),
+  },
+  {
+    file: "agent.ts",
+    register: (r, c) => registerAgentTools(r, c, undefined, STUB_DIRECTORY),
   },
 ];
+
+/**
+ * ⚠ **META TOOLS ARE CAPTURED SEPARATELY, AND ONLY ONCE ONE HAS A WRITE.**
+ * B13 removed the only entry that had been in {@link REGISTRARS} (`dopl_home`)
+ * on exactly that rule: a meta tool with no `op` enum and no `WRITE_OPS` row
+ * makes every gate-table suite vacuous over it. `dopl_workspaces` took the
+ * home-channel mint at the batch-3 integration (F-621), so it has both again.
+ *
+ * 🔒 **IT IS A SECOND LIST RATHER THAN A ROW IN THE FIRST**, which was the
+ * mistake worth not making: {@link TOOLS} is *"the DOMAIN surface"* to
+ * `parity.test.ts`'s registration census and to `retirement.test.ts`, and
+ * folding a meta tool into it would have made both of those assert a list they
+ * do not describe. {@link TOOL_BY_NAME} spans both, because the gate tables are
+ * keyed on a NAME and do not care which path registered it.
+ */
+export const META_REGISTRARS: Array<{
+  file: string;
+  register: (r: RegisterTool, c: DoplClient) => void;
+}> = [
+  {
+    file: "meta-tools.ts",
+    register: (r, c) =>
+      registerWorkspaceMetaTools(r, {
+        directory: STUB_DIRECTORY,
+        activeWorkspace: null,
+        caller: STUB_CALLER,
+        client: c,
+      }),
+  },
+];
+
+/** Capture reads a description and a schema; the identity only reaches the
+ *  RESULT, which capture never renders. */
+const STUB_CALLER = { userId: null, credentialLabel: null } as CallerIdentity;
 
 /** Capture never invokes a handler, so the directory is never read. ⚠ The lock
  *  itself is pinned for real in `container-lock.test.ts`, through `bootServer`. */
 const STUB_DIRECTORY = {
   getWorkspaceList: async () => [],
   resolveWorkspaceRef: async () => null,
-  noWorkspaceError: async () => ({ content: [], isError: true }),
   lockedWorkspaceId: () => null,
 };
 
-export function captureTools(): CapturedTool[] {
+export function captureTools(
+  registrars = REGISTRARS,
+): CapturedTool[] {
   const tools: CapturedTool[] = [];
   const stubClient = {} as DoplClient;
-  for (const { file, register } of REGISTRARS) {
+  for (const { file, register } of registrars) {
     const cap: RegisterTool = (name, description, schema) => {
       tools.push({ name, description, schema, sourceFile: file });
     };
@@ -89,8 +129,14 @@ export function captureTools(): CapturedTool[] {
   return tools;
 }
 
+/** The DOMAIN surface — what a registration census and the retirement gate mean
+ *  by "the tools". */
 export const TOOLS = captureTools();
-export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
+/** ⚠ DOMAIN + META, and the gate tables read THIS: `WRITE_OPS` / `READ_OPS` are
+ *  keyed on a tool NAME and do not care which path registered it. */
+export const TOOL_BY_NAME = new Map(
+  [...TOOLS, ...captureTools(META_REGISTRARS)].map((t) => [t.name, t]),
+);
 
 // ⚠ Paths are relative to the package root (vitest cwd): `import.meta` is
 // disallowed by the CommonJS tsc target and `__dirname` is not guaranteed under
@@ -101,10 +147,55 @@ export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 // slips past the guard. `toolGroupSource` is that scan.
 export const SRC_DIR = path.resolve(process.cwd(), "src");
 
+/**
+ * The op enum **AS PUBLISHED**, or null for a tool that dispatches on none.
+ *
+ * ⚠ **THE PUBLISHED SET, NOT `ZodEnum.options`, SINCE 2026-09-02 (B8).** It read
+ * `.options` until `dopl_channel` grew a runtime enum wider than its published
+ * one — twenty-two retired names that parsed for one release so their redirects
+ * could run — and every suite below would have classified, documented and gated
+ * names no agent could see. ⚠ **THAT GAP CLOSED AT SLICE B16 and this stayed the
+ * published set anyway**: it makes the harness read what a CLIENT reads, which
+ * is the same discipline `tool-budget.test.ts` applies to descriptions, and it
+ * is the one form that cannot go wrong the next time the two diverge.
+ */
 export function opEnum(t: CapturedTool): string[] | null {
-  const op = t.schema.op;
-  if (op instanceof z.ZodEnum) return op.options as string[];
-  return null;
+  // ⚠ **AN OPTIONAL ENUM IS STILL AN ENUM, AND IT WAS INVISIBLE HERE UNTIL
+  // 2026-09-02** (F-621). `dopl_workspaces` publishes `op` as optional — its
+  // default is the READ, because `gating.ts › opRefusal` does not fire for an
+  // absent op — and an unwrapped `instanceof` check answered `null` for it, so
+  // every WRITE_OPS / READ_OPS / doc-coverage suite below would have passed
+  // over a tool with a real write op by finding no enum to compare.
+  const declared = t.schema.op;
+  const op =
+    declared instanceof z.ZodOptional ? declared.unwrap() : declared;
+  if (!(op instanceof z.ZodEnum)) return null;
+  const published = (
+    z.toJSONSchema(z.object({ op }), { io: "input" }) as {
+      properties?: { op?: { enum?: unknown } };
+    }
+  ).properties?.op?.enum;
+  return Array.isArray(published)
+    ? (published as string[])
+    : (op.options as string[]);
+}
+
+/**
+ * The `action` sub-verb enum a dispatching tool publishes, or null.
+ *
+ * ⚠ It exists so the gate tables can name ONE action of a mixed op
+ * (`rooms.open`) and still be checked against something the tool really
+ * declares — an entry naming an action nobody serves is the same dead law a
+ * stale op name is.
+ */
+export function actionEnum(t: CapturedTool): string[] | null {
+  // ⚠ It is `.optional()` — three of the five ops take none — so the enum sits
+  // one wrapper down. Reading the wrapper would answer `null` for a tool that
+  // declares one, which is a guard that passes by finding nothing.
+  const declared = t.schema.action;
+  const action =
+    declared instanceof z.ZodOptional ? declared.unwrap() : declared;
+  return action instanceof z.ZodEnum ? (action.options as string[]) : null;
 }
 
 export function isAdmin(name: string): boolean {
@@ -146,12 +237,13 @@ function parseToolSet(src: string, name: string, where: string): Set<string> {
 }
 
 /**
- * ⚠ THE PARSE FOLLOWS THE CONSTANT, NOT THE FILENAME. `HIDDEN_TOOLS`,
- * `READ_ONLY_BLOCKED_TOOLS` and `WRITE_OPS` live in `gating.ts`; the delete
- * table lives in `delete-policy.ts` (keeping it in `server.ts` would be an
- * import cycle through the four `_admin` registrars). A "not found" throw here
- * means a table was RENAMED or reshaped — the loud failure this parse exists
- * to produce.
+ * ⚠ THE PARSE FOLLOWS THE CONSTANT, NOT THE FILENAME. `HIDDEN_TOOLS` and
+ * `WRITE_OPS` live in `gating.ts`; the delete table lives in
+ * `delete-policy.ts`, its own module because the policy is read by BOTH the MCP
+ * gate and the app's REST census (`src/shared/auth/app-only-delete-gate.test.ts`
+ * parses the same constant out of the same source text). A "not found" throw
+ * here means a table was RENAMED or reshaped — the loud failure this parse
+ * exists to produce.
  */
 export const GATING_SOURCE = readFileSync(path.join(SRC_DIR, "gating.ts"), "utf8");
 export const DELETE_POLICY_SOURCE = readFileSync(
@@ -160,14 +252,13 @@ export const DELETE_POLICY_SOURCE = readFileSync(
 );
 
 export const WRITE_OPS = parseOpTable(GATING_SOURCE, "WRITE_OPS", "gating.ts");
-export const READ_ONLY_BLOCKED_TOOLS = parseToolSet(
-  GATING_SOURCE,
-  "READ_ONLY_BLOCKED_TOOLS",
-  "gating.ts",
-);
 /** Hide-before-delete guard — see `gating.ts › HIDDEN_TOOLS`. */
 export const HIDDEN_TOOLS = parseToolSet(GATING_SOURCE, "HIDDEN_TOOLS", "gating.ts");
-/** The §2b app-only-deletion table, same shape as WRITE_OPS. */
+/**
+ * The app-only-deletion table, same shape as WRITE_OPS. ⚠ Keyed on the DOMAIN
+ * tool since 2026-09-02: it names ops that must NEVER appear in a live `op`
+ * enum, which is the opposite of `WRITE_OPS`, whose entries must all appear.
+ */
 export const DELETE_BLOCKED_OPS = parseOpTable(
   DELETE_POLICY_SOURCE,
   "DELETE_BLOCKED_OPS",
@@ -185,3 +276,58 @@ export const DELETE_BLOCKED_OPS = parseOpTable(
  * ships a "hidden" tool every parity assertion treats as live.
  */
 export const VISIBLE_TOOLS = TOOLS.filter((t) => !HIDDEN_TOOLS.has(t.name));
+
+// ── THE GATE KEY A CALL IS CLASSIFIED ON ─────────────────────────────
+
+/**
+ * ⚠ **THE OPS THAT DISPATCH AGAIN, ON A SECOND WORD** (2026-09-02, slice B8).
+ * `dopl_channel(op="rooms")` READS on four actions and WRITES on four, so the
+ * gate key is `<op>.<action>` and the classification below is per PAIR. Anything
+ * else would be a hole: gating `rooms` wholesale as a write refuses a
+ * `dopl.read` token the four calls it exists to make, and gating it as a read
+ * hands one the four that change the room.
+ *
+ * ⚠ THE MAP IS IMPORTED FROM THE PRODUCTION CONSTANT, never restated — and the
+ * case below asserts the published `action` enum is exactly the union of its
+ * values, so a verb added to one and not the other fails here rather than
+ * arriving unclassified.
+ */
+export const ACTIONS_BY_OP: Record<string, Readonly<Record<string, readonly string[]>>> = {
+  dopl_channel: CHANNEL_ACTIONS,
+};
+
+/** Every key a call on `tool` can be gated on — `op`, or `op.action` per pair. */
+export function gateKeys(tool: { name: string }, enumOps: readonly string[]): string[] {
+  const actions = ACTIONS_BY_OP[tool.name];
+  if (!actions) return [...enumOps];
+  return enumOps.flatMap((op) =>
+    actions[op] ? actions[op].map((a) => `${op}.${a}`) : [op],
+  );
+}
+
+/**
+ * Is `key` — plain `op` or dotted `op.action` — something `tool` really serves?
+ * ⚠ ONE resolver for both gate lists, because "this entry names nothing" is the
+ * same failure whichever list it sits in, and two copies is how one of them
+ * quietly stops asking.
+ */
+export function servesKey(toolName: string, enumOps: readonly string[], key: string): boolean {
+  const [op, action, ...rest] = key.split(".");
+  if (rest.length > 0) return false;
+  if (!enumOps.includes(op)) return false;
+  // ⚠ A BARE OP IS A LEGAL ENTRY EVEN WHERE ACTIONS EXIST — it classifies the
+  // whole op, which `gating.ts › isWriteOp` honours the same way. What must NOT
+  // be legal is an action nobody serves.
+  if (action === undefined) return true;
+  return (ACTIONS_BY_OP[toolName]?.[op] ?? []).includes(action);
+}
+
+/**
+ * Is `key` classified by `set`? ⚠ A bare entry for the op covers every action of
+ * it, exactly as the gate reads it — a test that resolved this differently from
+ * `gating.ts › isWriteOp` would be measuring a table nothing enforces.
+ */
+export function classifies(set: ReadonlySet<string>, key: string): boolean {
+  const dot = key.indexOf(".");
+  return set.has(key) || (dot > 0 && set.has(key.slice(0, dot)));
+}

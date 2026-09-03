@@ -10,6 +10,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DoplClient } from "@dopl/client";
 import { type RegisterMetaTool, type RegisterTool, type ToolResponse } from "./tools/respond.js";
+export { WORKSPACE_ARG_DESCRIPTION, WORKSPACE_ARG_OPS, acceptsWorkspaceArg, workspaceArgTargets, } from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
 import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } from "./workspace-directory.js";
@@ -42,7 +43,7 @@ import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } fro
  * ⚠ **ONE CHARGE FUNCTION, THREE EXPLICIT CALL SITES** (2026-08-28). It was
  * private to `createCreditedRunner` while the domain wrapper was the only meter;
  * two more seams now call it BY NAME — `registerMetaTool`'s opt-in charge
- * (`dopl_home`, ruling Q2) and `dopl_search`'s PER-LEG charge (ruling Q3). That
+ * (`dopl_status`, ruling Q2) and `dopl_search`'s PER-LEG charge (ruling Q3). That
  * is the shape `opRefusal` already has and the shape this module's header
  * demands: explicit at every path, never folded into a wrapper only one of them
  * passes through.
@@ -56,11 +57,16 @@ export interface RegistrarDeps {
     client: DoplClient;
     /** The four gates for this session (see `gating.ts`). */
     gates: Gates;
-    /** Membership cache + `workspace=` resolution + the M-3 refusal. */
+    /** Membership cache + `workspace=` resolution. */
     directory: WorkspaceDirectory;
-    /** Session default workspace resolved at boot, or null (0/2+ memberships). */
+    /**
+     * The container this CONNECTION is bound to (`X-Workspace-Id`), or null.
+     * ⚠ **NULL IS ORDINARY SINCE B13 AND IS NEVER A REFUSAL** — an unbound
+     * connection simply names no container, and the server resolves the caller's
+     * own when nothing is passed.
+     */
     activeWorkspace: ActiveWorkspaceState | null;
-    /** That default rendered footer-ready, or null when there is none. */
+    /** That binding rendered footer-ready, or null when there is none. */
     sessionEffective: () => EffectiveWorkspace | null;
     /** The caller identity every footer renders from. */
     caller: CallerIdentity;
@@ -70,7 +76,7 @@ export interface ToolRegistrars {
     registerTool: RegisterTool;
     /**
      * The meta-tool path: no workspace arg, session footer, same gates — and an
-     * OPT-IN charge (`MetaToolOptions.charged`), which only `dopl_home` takes.
+     * OPT-IN charge (`MetaToolOptions.charged`), which only `dopl_status` takes.
      */
     registerMetaTool: RegisterMetaTool;
     /**

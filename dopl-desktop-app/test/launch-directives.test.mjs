@@ -67,17 +67,37 @@ test("TOGGLE: off does not even write a refusal — the row is left to expire", 
   assert.deepEqual(decidePosts(h), []);
 });
 
-test("TOGGLE: off means realtime binds nothing — the table is never named on the wire", () => {
+// ── ⚠ THE BINDING IS NO LONGER THE TOGGLE, AND THAT IS THE 2026-09-01 CHANGE ─────────────
+//
+// It WAS `armed && enabled()`, and while the mailbox carried one verb those were the same
+// condition. The mailbox carries three now and two of them — `end` and `rename` — need no
+// consent (`directive-agent-ops.js`'s header carries the argument). A machine that bound nothing
+// with the launch toggle off would make those two reachable ONLY on machines that had granted
+// the consent they do not need, which is the exact inversion the ruling removes.
+//
+// ⚠ WHAT WIDENED IS A **READ**, AND ONLY OF THIS OPERATOR'S OWN ROWS: one more `postgres_changes`
+// binding on a subscription this process already holds, over rows whose RLS SELECT is
+// `operator_user_id = auth.uid()`. WHAT DID NOT WIDEN IS ANYTHING THIS MACHINE **DOES** — the two
+// cases above still pass unchanged: with the toggle off a LAUNCH is claimed by nobody, decided by
+// nobody and spawns nothing. Those are the cases that carry the §6 argument, and they are why
+// this one can be flipped without weakening it.
+test("TOGGLE: off still BINDS — the two consent-free kinds have to be seen (2026-09-01)", () => {
   const h = boot({ enabled: false });
-  assert.deepEqual(h.arms, [{ on: false, handler: "function" }]);
+  assert.deepEqual(h.arms, [{ on: true, handler: "function" }]);
 });
 
-test("TOGGLE: on arms the binding, and `refresh` re-arms after a flip", () => {
+test("TOGGLE: `refresh` re-arms and the binding tracks ARMED, not the toggle", () => {
   const h = boot({ enabled: true });
   assert.deepEqual(h.arms[0], { on: true, handler: "function" });
   h.cfg.enabled = false;
   h.api.refresh();
-  assert.deepEqual(h.arms[h.arms.length - 1], { on: false, handler: "function" });
+  // ⚠ STILL BOUND. The flip changes what this machine will ACT on, never what it can SEE.
+  assert.deepEqual(h.arms[h.arms.length - 1], { on: true, handler: "function" });
+  // …and the §6 half is unchanged: a launch arriving now is still claimed by nobody.
+  const before = claimPosts(h).length;
+  return h.api.handle(row(), WS).then(() => {
+    assert.equal(claimPosts(h).length, before, "the toggle still gates every LAUNCH");
+  });
 });
 
 // ⚠ READ AT DECISION TIME, NEVER CACHED. The operator may turn the lane off while a directive is
@@ -317,8 +337,14 @@ test("ONCE: the ledger is BOUNDED, so a long-running machine cannot leak one ent
 test("DECIDE: a successful launch writes `launched` and the AGENT ID", async () => {
   const h = boot();
   await h.api.handle(row(), WS);
-  assert.deepEqual(decidePosts(h)[0].body,
-    { directiveId: DID, status: "launched", agentId: "a1b2c3d4" });
+  // ⚠ THE ECHO TRIO JOINED THIS BODY ON 2026-09-01 (T24's second half, F-410) — what the machine
+  // says it APPLIED, after its clamp. It is asserted whole here rather than key by key because
+  // this case is the shape of the decide; `launch-directive-echo.test.mjs` is where the echo's own
+  // rules live (clamped-not-requested, `false` is a report, a refusal carries none).
+  assert.deepEqual(decidePosts(h)[0].body, {
+    directiveId: DID, status: "launched", agentId: "a1b2c3d4",
+    appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
+  });
   assert.equal(decidePosts(h)[0].workspaceId, WS, "fenced on the workspace, like every write here");
 });
 
@@ -362,9 +388,14 @@ test("CRASH: there is no restart sweep, and that is the documented decision, not
 test("BACKSTOP: a healthy workspace is never polled — push already delivers those", async () => {
   const h = boot({ healthy: true });
   await h.api.handle(row(), WS); // prove the module is live
-  const before = h.gets.length;
+  // ⚠ **THE CLAIM IS ABOUT THE *POLL*, NOT ABOUT EVERY GET THIS LANE MAKES**, and it was written
+  // as `h.gets.length === 0` while the poll was the only read there was. A SPAWN now reads the
+  // pinned startup context too (2026-09-01, T81), on a different route and for a different
+  // reason, so counting all GETs would fail on an unrelated feature and — worse — would have gone
+  // green if the poll moved to a path this file does not name. Filtered on the backstop's own route.
+  const polls = h.gets.filter((g) => g.path === wire.ROUTES.pending);
   // The interval is 60s and `unref`'d; the behaviour is driven directly.
-  assert.equal(before, 0, "no GET while push is up");
+  assert.equal(polls.length, 0, "no backstop GET while push is up");
   assert.equal(h.api.POLL_MS, 60000);
 });
 

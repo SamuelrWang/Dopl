@@ -8,6 +8,7 @@
  */
 
 import { EMPTY_INFO_CARD } from "../../info-card";
+import { EMPTY_AGENT_POSTURE } from "../../lib/agent-posture";
 import type {
   Channel,
   ChannelMember,
@@ -48,6 +49,8 @@ export function channel(over: Partial<Channel> = {}): Channel {
     myFavoritedAt: null,
     onlineMemberCount: 1,
     infoCard: EMPTY_INFO_CARD,
+    agentPosture: EMPTY_AGENT_POSTURE,
+    defaultResponderAgentName: null,
     ...over,
   };
 }

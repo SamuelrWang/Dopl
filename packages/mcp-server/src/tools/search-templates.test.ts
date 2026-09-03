@@ -142,8 +142,16 @@ describe("dopl_search finds agent templates", () => {
     expect(description).toContain("FOUR domains");
     expect(description).toContain('dopl_agent(op="get")');
     expect(description).not.toContain("THREE domains");
-    // ⚠ The coverage sentence had to move with the group, or the tool claims a
-    // reach it does not have.
-    expect(description).toContain("agent templates are matched on names and short metadata only");
+    // ⚠ **THE CLAIM IS PINNED, NOT THE SENTENCE (A14, 2026-09-02).** It used to
+    // read "agent templates are matched on names and short metadata only" —
+    // one of four clauses enumerating what each group matches on. The house
+    // style states the same limit ONCE and from the other direction ("only
+    // ENTRIES match on bodies"), which is shorter and strictly more
+    // informative: it tells the agent what the exception IS rather than
+    // repeating the rule per group. What must not weaken is the consequence,
+    // and that is what these two assert — a term living only inside a template
+    // is not findable here.
+    expect(description).toContain("only ENTRIES match on bodies");
+    expect(description).toContain("INSTRUCTIONS");
   });
 });

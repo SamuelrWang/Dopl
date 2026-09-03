@@ -32,17 +32,20 @@ export type Visibility = "public" | "private";
 /**
  * WHICH SHELF a base lives on — the /home Knowledge pane's "across all
  * channels" scope, or the workspace Knowledge page. Two PLACES over one table
- * (Samuel's ruling 2026-08-26; `20260831120000_knowledge_base_home_scoped.sql`),
- * and they exclude each other BOTH ways.
+ * (Samuel's ruling 2026-08-26).
+ *
+ * ⚠ **AND SINCE 2026-09-02 THEY ARE LITERALLY TWO CONTAINERS** (slice B15,
+ * ruling B10). `20260923120000_drop_home_scoped.sql` drops the boolean this used
+ * to name: the personal shelf is the caller's own `kind='personal'` workspace,
+ * so "which shelf" resolves to a `workspace_id` rather than to a `WHERE`. The
+ * exclusion is now structural instead of enforced.
  *
  * ⚠ NOT A FIELD ON `KnowledgeBase`, and never make it one. It is a WRITE input
- * (`KnowledgeBaseCreateInput.homeScoped`) and a READ FILTER
- * (`GET /api/knowledge/bases?shelf=`); the stored `home_scoped` column is
- * deliberately absent from `server/dto.ts › KNOWLEDGE_BASE_COLS`, so it never
- * reaches a client that could re-implement the fence over a list it was handed
- * — and the SDK-mirrored row type does not widen
- * (`scripts/check-knowledge-type-drift.ts`). A surface that must SHOW the shelf
- * gets a SIBLING key on the list response, like `baseStats` / `channelGrants`.
+ * (`KnowledgeBaseCreateInput.homeScoped`, which ROUTES the row) and a READ
+ * FILTER (`GET /api/knowledge/bases?shelf=`). A surface that must SHOW the shelf
+ * gets a SIBLING key on the list response, like `baseStats` / `channelGrants` —
+ * the shape is unchanged, and it is what stops the SDK-mirrored row type
+ * widening (`scripts/check-knowledge-type-drift.ts`).
  *
  * ⚠ ABSENT IS NOT A THIRD VALUE — it means NO FILTER, which is what keeps MCP
  * `kb_list_bases` and workspace search seeing the whole workspace.
@@ -178,22 +181,23 @@ export interface KnowledgeContext {
    * Workspace this credential is locked to; `null` for session callers and
    * unlocked tokens. ⚠ IT ANSWERS *WHICH WORKSPACE* AND NOTHING ELSE. It used
    * to double as the M-10 visibility gate, which is the F-336 defect: see
-   * {@link KnowledgeContext.apiKeyWorkspaceLockKind}.
+   * {@link KnowledgeContext.credentialSubjectUserId}.
    */
   apiKeyWorkspaceId?: string | null;
   /**
-   * `mcp_tokens.workspace_lock_kind` — WHAT KIND of lock the credential
-   * carries. ⚠ NEVER read directly; the one reader is
-   * `shared/auth/credential-audience.ts › isSharedCredential`, and absent
-   * reads as a SHARED credential (fail-closed).
+   * WHOSE REACH this credential inherits (`mcp_tokens.subject_user_id`): the ONE
+   * human it acts as, or `null` for a credential that may be passed between
+   * humans. ⚠ NEVER read directly; the one reader is
+   * `shared/auth/credential-audience.ts › isSharedCredential`.
    *
    * M-10 means *"a credential with no single human behind it inherits nobody's
-   * personal reach"*. A container-session lock has a human behind it — the
-   * operator, whose own private bases are the whole point of the `agent_only`
-   * grant (§10 layer A) — so it reads private rows exactly as its operator
-   * does, while staying fenced to one workspace and to the GRANTED bases.
+   * personal reach"*. A container SESSION has a human behind it — the operator,
+   * whose own private bases are the whole point of the `agent_only` grant (§10
+   * layer A) — so it reads private rows exactly as its operator does, while
+   * staying fenced to one container by the OTHER axis and to the GRANTED bases
+   * by layer A.
    */
-  apiKeyWorkspaceLockKind?: string | null;
+  credentialSubjectUserId: string | null;
   /**
    * `X-Dopl-Session-Id` verbatim (the desktop's slot key, `<channelId>:<tail>`),
    * or `null`/absent for every caller that sends none.

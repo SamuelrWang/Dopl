@@ -83,7 +83,7 @@ main-window slot. The lazy-accessor reasoning is unchanged and now covers one mo
   after `auth.signOut()` — both replace a timing guess with a deterministic
   re-arm (C15). Until `start()` is called the timer never runs; the cookie path
   is unaffected either way.
-- **`scripts/smoke-test.js` still loads the remote site.** After the flip it
+- **`scripts/smoke.js` (renamed from `smoke-test.js`) still loads the remote site.** After the flip it
   should `loadFile` the built SPA and assert first paint + the bridge — which
   makes it a real release gate for the first time.
 

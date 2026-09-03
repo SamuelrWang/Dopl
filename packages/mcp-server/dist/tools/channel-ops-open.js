@@ -32,7 +32,7 @@ async function opOpen(client, opts) {
         });
         return (0, respond_1.ok)([
             `Opened a direct message with ${member.label} (id: \`${channel.id}\` · slug: \`${channel.slug}\`).`,
-            `Post with dopl_channel(op="post", channel="${channel.id}", body="...").`,
+            `Post with dopl_channel(op="send", channel="${channel.id}", body="...").`,
         ].join("\n"));
     }
     const name = opts.name;
@@ -61,7 +61,7 @@ async function opOpen(client, opts) {
         // rule as everything else. Per-site judgement about who could have
         // authored a value is what leaves a peer-typed string raw.
         `Created channel **${(0, channel_shared_1.inlineOr)(channel.name, NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}`,
-        `Post with dopl_channel(op="post", channel="${channel.slug}", body="..."); add members with op="invite".`,
+        `Post with dopl_channel(op="send", channel="${channel.slug}", body="..."); add members with op="rooms" action="invite".`,
     ].join("\n"));
 }
 async function opInvite(client, channelRef, memberRef) {

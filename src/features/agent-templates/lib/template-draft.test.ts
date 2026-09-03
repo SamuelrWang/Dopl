@@ -12,7 +12,6 @@ import { describe, expect, it } from "vitest";
 import type { AgentTemplate } from "../client/types";
 import {
   cleanFields,
-  containerCopyDraft,
   draftFromTemplate,
   draftToCreateBody,
   draftToPatchBody,
@@ -223,71 +222,14 @@ describe("optimisticTemplate", () => {
   });
 });
 
-describe("containerCopyDraft — \"Use in this channel\"", () => {
-  it("carries what a template IS, and drops the KNOWLEDGE BASES", () => {
-    // 🔒 A home-workspace KB id is NOT in the container and the attach gate
-    // ("a KB the caller can currently read") would 404 it, so carrying the ids
-    // turns a copy into a failed write. The rest of the template rides along —
-    // instructions, model and custom fields are what the operator is reusing.
-    const body = draftToCreateBody(containerCopyDraft(template()));
-    expect(body).toEqual({
-      name: "Release captain",
-      visibility: "workspace",
-      description: "Runs the release checklist",
-      instructions: "Be terse.",
-      model: "claude-opus-5",
-      fields: [{ key: "repo", value: "dopl" }],
-    });
-    // ⚠ ABSENT, not `[]` — a create OMITS an empty optional (see the top of this
-    // file), and the assertion is spelled out because "the key is missing" is
-    // what "cleared" MEANS on this body.
-    expect("knowledgeBaseIds" in body).toBe(false);
-    expect("teamIds" in body).toBe(false);
-  });
+// ⚠ **THE `containerCopyDraft` BLOCK (FIVE CASES) IS DELETED HERE, 2026-09-02**
+// (wave B slice B15, Samuel's ruling B11: *grants replace copies*). It pinned
+// what the "Use in this channel" COPY carried and dropped — the forced
+// `workspace` visibility, the cleared teams and knowledge bases, the unsuffixed
+// name, and the absence of any back-pointer. **None of it has a successor
+// assertion**: the control is a GRANT now
+// (`apps/desktop-ui/src/pages/home/agent-share.tsx`), it composes no draft at
+// all, and what it writes is pinned in
+// `apps/desktop-ui/src/pages/home/agent-authoring.test.tsx › share into this
+// channel`. The rest of this file — the shared editor draft — is untouched.
 
-  it("🔒 SHARES into the channel, whatever the original was — and the dialog says so", () => {
-    // 🔒 ⚠ THIS PIN WAS INVERTED ON 2026-08-27, DELIBERATELY. It read "FORCES
-    // private, even from a template that was shared where it came from", on the
-    // argument that "use" must never silently PUBLISH the operator's agent into
-    // a container the peer is standing in. That argument was right while the
-    // /home pane HAD a per-channel private section for the copy to land in.
-    // **Samuel's restructure deleted that section**, and a container is not
-    // navigable, so a `private` container row is now reachable from nowhere:
-    // the copy would succeed and appear on no surface at all.
-    //
-    // The choice was between an invisible write and a stated audience change,
-    // and the second is the honest one. **The "silently" half of the old
-    // argument is what the fix has to answer**, so it is answered where the
-    // operator is: `pages/home/agent-copy.tsx › describe` names the audience —
-    // "everyone here will see it" — before the confirm button. If that sentence
-    // is ever softened, this pin is wrong again.
-    const source = template({ visibility: "private" });
-    expect(containerCopyDraft(source).visibility).toBe("workspace");
-    expect(draftToCreateBody(containerCopyDraft(source)).visibility).toBe("workspace");
-  });
-
-  it("clears the TEAMS, which a container has none of anyway", () => {
-    // A container has no teams (INVARIANTS §4A), and the schema REFUSES a
-    // `teamIds` key without `visibility: 'team'` — so carrying them is a 400,
-    // not a harmless extra.
-    const source = template({ visibility: "team", teamIds: ["team-9"] });
-    expect(containerCopyDraft(source).teamIds).toEqual([]);
-  });
-
-  it("keeps the NAME exactly, with no \"(copy)\" suffix", () => {
-    // ⚠ Templates have NO name uniqueness, deliberately — there is no unique
-    // index and no 409 on the route — so a suffix would be dodging a constraint
-    // that does not exist, and renaming the operator's agent to do it.
-    expect(containerCopyDraft(template()).name).toBe("Release captain");
-    expect(containerCopyDraft(template({ name: "Scout" })).name).toBe("Scout");
-  });
-
-  it("is a SNAPSHOT: nothing in the draft points back at the original", () => {
-    // No FK, no back-pointer, no sync (precedent: `channel_sessions.template_name`
-    // — a denormalized snapshot, and nothing may "fix" that later). The draft is
-    // the editor's own six fields and carries no id at all.
-    const draft = containerCopyDraft(template());
-    expect(Object.values(draft)).not.toContain("tpl-1");
-    expect(Object.values(draft)).not.toContain("ws-1");
-  });
-});

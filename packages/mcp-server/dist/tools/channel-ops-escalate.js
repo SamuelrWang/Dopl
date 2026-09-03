@@ -1,6 +1,6 @@
 "use strict";
 /**
- * `dopl_channel` op="escalate" — ASK A HUMAN A STRUCTURED QUESTION
+ * `dopl_channel` op="send" with kind="decision" — ASK A HUMAN A STRUCTURED QUESTION
  * (Samuel's ruling, 2026-08-31: agents escalate as STRUCTURE, not prose walls).
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan
@@ -56,10 +56,10 @@ async function opEscalate(client, channelRef, escalation, opts = {}) {
     // wrong and nothing about which direction to move, and the two directions have
     // opposite remedies: one option means DO IT, seven means COLLAPSE THEM.
     if (escalation.options.length < MIN_OPTIONS) {
-        return (0, respond_1.err)(`Nothing was posted. An escalation offers ${MIN_OPTIONS}-${MAX_OPTIONS} options and you gave ${escalation.options.length} — **one option is not a question.** If there is only one way forward, that is a decision you already have: take it, and report it with dopl_channel(op="milestone", thread="<id>", body="<one line>"). If you are asking permission for that one path, the second option is what happens if they say no — write it out.`);
+        return (0, respond_1.err)(`Nothing was posted. An escalation offers ${MIN_OPTIONS}-${MAX_OPTIONS} options and you gave ${escalation.options.length} — **one option is not a question.** If there is only one way forward, that is a decision you already have: take it, and report it with dopl_channel(op="send", kind="milestone", thread="<id>", body="<one line>"). If you are asking permission for that one path, the second option is what happens if they say no — write it out.`);
     }
     if (escalation.options.length > MAX_OPTIONS) {
-        return (0, respond_1.err)(`Nothing was posted. An escalation offers at most ${MAX_OPTIONS} options and you gave ${escalation.options.length} — past that it is the wall of prose this op exists to replace, with numbers on it. Collapse the near-duplicates into the decision they actually differ on, and put what you dropped into \`context\` in one line if it matters.`);
+        return (0, respond_1.err)(`Nothing was posted. An escalation offers at most ${MAX_OPTIONS} options and you gave ${escalation.options.length} — past that it is the wall of prose this op exists to replace, with numbers on it. Collapse the near-duplicates into the decision they actually differ on, and put what you dropped into the \`body\` in one line if it matters.`);
     }
     // ⚠ REFUSED, NEVER DROPPED. A dropped recommendation posts a card that
     // recommends nothing over an agent that believes it recommended something —
@@ -75,33 +75,30 @@ async function opEscalate(client, channelRef, escalation, opts = {}) {
     // not know `metadata.escalation` — op="read", a plain browser, the pop-out,
     // and any desktop older than the card. See `channel-escalate-render.ts`.
     const body = (0, channel_escalate_render_1.escalationBody)(escalation);
-    // ⚠ DELEGATES rather than growing a second delivery path — `op="milestone"`'s
+    // ⚠ DELEGATES rather than growing a second delivery path — `op="send" with kind="milestone"`'s
     // precedent. `kind` is left at the default `message` and MUST stay there:
     // `dopl-desktop-app/main/targeting.js › classify` returns `ignore` for every
     // other kind, so a card on one could never notify the human it is asking.
     // ⚠ `to` is NOT routed through: an escalation asks a PERSON to decide, and
     // addressing a member starts THEIR agent instead (INVARIANTS §5). The @-tag in
     // the body is the inbox mechanism, and it starts nobody.
-    const posted = await (0, channel_ops_write_1.opPost)(client, channelRef, body, {
+    // ⚠ ONE RESULT, NOT TWO (T10, 2026-09-02). This op used to APPEND three
+    // paragraphs to `opPost`'s already-long result: what a card is, where the
+    // answer arrives, and that the first answer wins. All three are true of every
+    // escalation, so all three are in `channel-doctrine.ts`; what only THIS call
+    // knows rides back as fields on the shared fact line — how many options were
+    // filed, and whether a recommendation went with them. The `tags=` field the
+    // post already carries is the one that matters most here: a card nobody is
+    // tagged in is a card nobody sees, and `tags=0/1` says so in four characters.
+    return (0, channel_ops_write_1.opPost)(client, channelRef, body, {
         escalation,
         thread: opts.thread,
         clientMsgId: opts.clientMsgId,
         runtime: opts.runtime,
+        resultHead: "escalated",
+        resultFacts: {
+            options: escalation.options.length,
+            recommended: escalation.recommendation?.index ?? undefined,
+        },
     });
-    if (posted.isError)
-        return posted;
-    return {
-        ...posted,
-        content: [
-            ...posted.content,
-            {
-                type: "text",
-                text: [
-                    `That posted as an ESCALATION CARD: your operator (or whoever you tagged) sees the question, the options and your recommendation as buttons, and pressing one posts their choice back into this channel.`,
-                    `⚠ THE ANSWER COMES BACK AS AN ORDINARY MESSAGE IN THIS CHANNEL, NOT PRIVATELY. Watch for it with dopl_channel(op="await", channel="${channelRef}", since=<the seq above>) — there is no separate place to poll and nothing else will arrive.`,
-                    `⚠ ONE ANSWER, FIRST ONE WINS. Do not post the same question again while it is unanswered; a second card is a second question about one decision, and neither of you will be able to tell which answer belonged to which.`,
-                ].join("\n"),
-            },
-        ],
-    };
 }

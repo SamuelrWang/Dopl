@@ -43,7 +43,7 @@ const sessionMetrics = require('./session-metrics'); // ...and what it cost, fro
 const sessionPrivate = require('./session-private'); // 2026-08-22: the 1:1 turn's window
 const sessionDirected = require('./session-directed'); // 2026-08-31: the DIRECTED turn's capture
 const sessionRegistry = require('./session-registry');
-const { liveOnThread, agentIdsOnThread, agentIdsInChannel, sessionOn, noteSiblings } = sessionRegistry;
+const { liveOnThread, agentIdsOnThread, sessionOn, noteSiblings } = sessionRegistry;
 // §2 SPLIT (2026-08-22): the TERMINAL — teardown order, the history freeze, and the read of a
 // dead agent's ring. Injected below like every other engine handle; it never requires back.
 const sessionTeardown = require('./session-teardown');
@@ -480,7 +480,6 @@ module.exports = {
   // 2026-08-21 multiplayer: (channel, thread) names a GROUP of sessions, not one.
   liveOnThread,
   agentIdsOnThread,
-  agentIdsInChannel,
   sessionOn,
   // The three session-team.js exports (`summonTeamSession`, `wakeTeamSession`,
   // `acceptsInboundFrom`) went with summoning — docs/ENGINEERING.md §18 F-141 carries that

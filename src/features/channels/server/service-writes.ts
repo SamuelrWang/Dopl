@@ -11,10 +11,8 @@ import {
   ChannelChatAddressedError,
   ChannelForbiddenError,
   ChannelInfoCardTooLargeError,
-  ChannelInviteeNotMemberError,
   ChannelSlugConflictError,
   DirectChannelImmutableError,
-  DirectSelfTargetError,
   EscalationAlreadyAnsweredError,
 } from "./errors";
 import {
@@ -30,7 +28,10 @@ import { mapMessageRow, type ChannelMessageRow } from "./dto";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import { getChannel } from "./service-reads";
+import { createDirectChannel } from "./service-writes-direct";
 import { resolvePostMetadata } from "./service-writes-metadata";
+import { resolveToRecipient } from "./service-writes-metadata-recipient";
+import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   canManageChannel,
   loadVisibleChannel,
@@ -64,6 +65,24 @@ import {
 function assertChatIsUnaddressed(input: ChannelMessageCreateInput): void {
   if (input.intent !== "chat") return;
   if (input.toUserId) throw new ChannelChatAddressedError("toUserId");
+  // ⚠ THE SECOND DOOR INTO THE SAME CONTRADICTION (2026-09-02, B4). `to` is the
+  // union form of the same field, so a `chat` carrying one says the same two
+  // opposite things — and leaving it out here would make "chat + addressed"
+  // refusable through one spelling and silent through the other.
+  if (input.to) throw new ChannelChatAddressedError("to");
+}
+
+/**
+ * **ONE RECIPIENT, SO ONE FIELD** (2026-09-02, B4). `to` and `toUserId` are the
+ * loose and the uuid form of the same thing; a post carrying both is a caller
+ * that does not know which one it means, and picking either would be a guess
+ * about who a message is for. 400, on `assertChatIsUnaddressed`'s terms and in
+ * the same place, so it also refuses on the retry.
+ */
+function assertOneRecipientField(input: ChannelMessageCreateInput): void {
+  if (input.to && input.toUserId) {
+    throw new ChannelChatAddressedError("to + toUserId");
+  }
 }
 
 // ─── Channel lifecycle ──────────────────────────────────────────────
@@ -108,130 +127,13 @@ export async function createChannel(
 }
 
 /**
- * Open (or dedup-return) a direct channel. `direct_key` is the two user-ids
- * sorted and joined ':'; lookup by (workspace, direct_key) makes repeat opens
- * idempotent. Peer must be an active workspace member, self-DM refused, exactly
- * two members inserted — ⚠ membership-of-2 lives here because a CHECK can't
- * count.
+ * ⚠ **THE DM LIFECYCLE — open, dedup, revive, self-heal — LIVES IN
+ * `service-writes-direct.ts`** (§1 split, 2026-09-02, at the cap). The seam is
+ * real: that file changes when the two-member DM contract changes (the
+ * `direct_key` dedup, the soft-delete revive, the torn-roster self-heal), and
+ * this one when a channel WRITE does. `createChannel` above still dispatches to
+ * it, so there is no second door.
  */
-async function createDirectChannel(
-  ctx: ChannelContext,
-  memberUserId: string
-): Promise<Channel> {
-  if (memberUserId === ctx.userId) {
-    throw new DirectSelfTargetError();
-  }
-  if (!(await repo.isActiveWorkspaceMember(ctx.workspaceId, memberUserId))) {
-    throw new ChannelInviteeNotMemberError(memberUserId);
-  }
-
-  const directKey = [ctx.userId, memberUserId].sort().join(":");
-  // ⚠ Look up INCLUDING soft-deleted rows — the partial unique index counts a
-  // soft-deleted DM, so a fresh insert for a deleted pair 23505s. Live row
-  // returned as-is; soft-deleted row REVIVED with its member rows, so the same
-  // conversation and history reopen. A DM delete is "hide until reopened".
-  const existing = await repo.findDirectChannelAnyStatus(
-    ctx.workspaceId,
-    directKey
-  );
-  if (existing) return reopenDirectChannel(ctx, existing, memberUserId);
-
-  const taken = await repo.existingSlugs(ctx.workspaceId);
-  const slug = slugify("direct-message", "dm", taken);
-
-  let channel;
-  try {
-    channel = await repo.insertChannel({
-      workspace_id: ctx.workspaceId,
-      created_by: ctx.userId,
-      slug,
-      // Ignored by the DM UI (it renders the peer), but NOT NULL / CHECK still
-      // require a non-empty name.
-      name: "Direct message",
-      topic: "",
-      visibility: "private",
-      is_direct: true,
-      direct_key: directKey,
-    });
-  } catch (err) {
-    // 23505 = the direct_key index (concurrent open of the SAME pair) or the
-    // workspace slug index (concurrent create took the slug). ⚠ Look the pair up
-    // INCLUDING soft-deleted rows and converge; a slug race resolves to nothing
-    // and surfaces as a clean 409 instead of a generic 500.
-    if (repo.pgErrorCode(err) === UNIQUE_VIOLATION) {
-      const raced = await repo.findDirectChannelAnyStatus(
-        ctx.workspaceId,
-        directKey
-      );
-      if (raced) return reopenDirectChannel(ctx, raced, memberUserId);
-      throw new ChannelSlugConflictError(slug);
-    }
-    throw err;
-  }
-
-  await repo.insertMember({
-    channel_id: channel.id,
-    user_id: ctx.userId,
-    workspace_id: ctx.workspaceId,
-    role: "owner",
-    added_by: ctx.userId,
-  });
-  await repo.insertMember({
-    channel_id: channel.id,
-    user_id: memberUserId,
-    workspace_id: ctx.workspaceId,
-    role: "member",
-    added_by: ctx.userId,
-  });
-
-  return getChannel(ctx, channel.id);
-}
-
-/**
- * Return an existing direct channel, reviving it first when soft-deleted so the
- * same conversation and history reopen. A live row is returned as-is.
- *
- * ⚠ Both member rows are re-asserted on EVERY open, not only the revive branch.
- * A live DM with a torn roster is otherwise a dead end: the missing side reads
- * the channel as not-found, and the partial unique index on `direct_key` keeps
- * the live row reserving the pair, so no fresh DM can be created either. A
- * WORKSPACE departure legitimately removes the leaver's row
- * (`service-workspace-departure.ts`), so re-asserting here is the only self-heal
- * — from EITHER side, a rejoined leaver included.
- */
-async function reopenDirectChannel(
-  ctx: ChannelContext,
-  existing: { id: string; deleted_at: string | null },
-  memberUserId: string
-): Promise<Channel> {
-  if (existing.deleted_at) {
-    await repo.reviveChannel(ctx.workspaceId, existing.id);
-  }
-  await ensureDirectMember(ctx, existing.id, ctx.userId, "owner");
-  await ensureDirectMember(ctx, existing.id, memberUserId, "member");
-  return getChannel(ctx, existing.id);
-}
-
-/**
- * Restore one member of a reopened direct channel — normally a no-op, since a
- * soft-delete leaves `channel_members` in place. Caller takes `owner`, peer
- * `member`, so a pair healed from the evicted side still has a manager.
- */
-async function ensureDirectMember(
-  ctx: ChannelContext,
-  channelId: string,
-  userId: string,
-  role: "owner" | "member"
-): Promise<void> {
-  if (await repo.findMembership(channelId, userId)) return;
-  await repo.insertMember({
-    channel_id: channelId,
-    user_id: userId,
-    workspace_id: ctx.workspaceId,
-    role,
-    added_by: ctx.userId,
-  });
-}
 
 /**
  * THE FOUR HEADER FIELDS `updateChannel` REQUIRES `canManageChannel` FOR.
@@ -247,6 +149,21 @@ const MANAGED_CHANNEL_FIELDS = [
   "topic",
   "visibility",
   "archived",
+  // ⚠ **THE POSTURE CEILING IS MANAGED, NOT MEMBER-GATED (2026-09-02, A9 —
+  // G6/G7)**, which is the OPPOSITE call from `infoCard` one field along. The
+  // card is a shared scratch surface about a relationship; this decides how much
+  // room somebody else's agent gets in this room, and widening it is a
+  // permission change. It is listed here rather than left to the subtraction
+  // below because the default this list produces — MANAGED — is the one it
+  // wants, and stating it is what keeps that from looking accidental.
+  "agentPosture",
+  // ⚠ **MANAGED FOR `agentPosture`'s REASON, ONE STEP SHARPER (2026-09-02, B4 —
+  // ruling B6).** The ceiling decides how much room somebody else's agent gets
+  // here; this decides WHOSE agent the room's unaddressed work lands on, which
+  // is a statement about a machine the setter does not own. ⚠ **THE SERVER IS
+  // THE GATE.** The Settings control is an affordance — a UI that hid the row
+  // would change nothing about who may write the field.
+  "defaultResponderAgentName",
 ] as const satisfies ReadonlyArray<keyof ChannelUpdateInput>;
 
 export async function updateChannel(
@@ -306,6 +223,21 @@ export async function updateChannel(
       throw new ChannelInfoCardTooLargeError(bytes, INFO_CARD_MAX_BYTES);
     }
     dbPatch.info_card = patch.infoCard;
+  }
+  // ⚠ **PER AXIS, AND `null` IS A VALUE.** Absent means "no opinion, leave it";
+  // `null` means "this channel records no ceiling on that axis any more", which
+  // is the only way a recorded ceiling can be removed. Collapsing the two —
+  // `patch.agentPosture.tools ?? undefined` — would make a ceiling permanent.
+  if (patch.agentPosture) {
+    const p = patch.agentPosture;
+    if (p.tools !== undefined) dbPatch.agent_tool_ceiling = p.tools;
+    if (p.messages !== undefined) dbPatch.agent_message_ceiling = p.messages;
+    if (p.chain !== undefined) dbPatch.agent_chain_allowed = p.chain;
+  }
+  // ⚠ **`null` IS A VALUE HERE TOO** — see the posture note above. `undefined`
+  // leaves the nomination alone; `null` withdraws it.
+  if (patch.defaultResponderAgentName !== undefined) {
+    dbPatch.default_responder_agent_name = patch.defaultResponderAgentName;
   }
 
   await repo.updateChannel(ctx.workspaceId, channel.id, dbPatch);
@@ -370,7 +302,7 @@ export async function postMessage(
   rawInput: ChannelMessageCreateInput,
   opts: PostMessageOptions = {}
 ): Promise<ChannelMessagePosted> {
-  const input = stripNulDeep(rawInput);
+  const raw = stripNulDeep(rawInput);
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
     throw new ChannelForbiddenError("post to this channel");
@@ -378,7 +310,27 @@ export async function postMessage(
 
   // ⚠ Beside the membership check because both must precede the idempotency
   // short-circuit — a contradictory post has to fail on the retry too.
-  assertChatIsUnaddressed(input);
+  assertChatIsUnaddressed(raw);
+  assertOneRecipientField(raw);
+
+  // **`to=` RESOLVED ONCE, HERE** (2026-09-02, B4 — ruling B1). A MEMBER becomes
+  // the `toUserId` every fence below already knows how to check, so there is one
+  // addressee path and not two; an AGENT rides `toAgentId` into the verdict and
+  // stamps no metadata key (see `service-writes-metadata-recipient.ts`).
+  //
+  // ⚠ IT RUNS BEFORE THE IDEMPOTENCY SHORT-CIRCUIT for the same reason the two
+  // asserts above do: `to` naming nobody is a REFUSAL (ruling B1), and a refusal
+  // that a retry can replay out of storage is not one.
+  let toAgentId: string | null = null;
+  let input = raw;
+  if (raw.to) {
+    const recipient = await resolveToRecipient(ctx, channel, raw.to);
+    if (recipient.kind === "member") {
+      input = { ...raw, toUserId: recipient.userId };
+    } else {
+      toAgentId = recipient.agentId;
+    }
+  }
   // ⚠ Same placement rule, same reason. Takes no `opts` since 2026-08-20 — the
   // `internalLifecycle` exemption it used to read is deleted, so the credential
   // is the whole question.
@@ -435,10 +387,48 @@ export async function postMessage(
     fanoutGroupId: opts.fanoutGroupId,
   });
 
+  // ⚠ **WHO THIS IS FOR AND WHAT IT DID — DECIDED HERE, ONCE** (2026-09-02, A9).
+  // It runs AFTER the metadata fold and reads that fold's output rather than the
+  // caller's input, because `to_user_id` and `taskId` are only trustworthy once
+  // the anti-spoof strip has re-stamped them from validated values.
+  // ⚠ It comes AFTER the idempotency short-circuit too: a converged retry
+  // returns the FIRST request's stored verdict, which is the whole point of the
+  // key — a retry must not re-resolve against a world that has moved on.
   // `system` is server-reserved and rejected by the route schema, so a posted
   // message always ties to the acting user (agent posts included).
+  //
+  // ⚠ **IT IS RESOLVED BEFORE THE VERDICT NOW (2026-09-02, B4), BECAUSE THE
+  // VERDICT BRANCHES ON IT.** RR2 and RR3 are the same situation — an
+  // unaddressed post in the main room — split by whether an agent or a person
+  // wrote it, and the credential is what answers that. Reading it after would
+  // mean the resolver guessing from the body, which is the whole class of defect
+  // this file's A9 note is about.
+  //
+  // ⚠ **THE CLAIM MAY ONLY ESCALATE, NEVER DOWNGRADE (2026-09-02, F-580).** It
+  // was `input.authorKind ?? (ctx.source === "agent" ? …)` — a plain `??`, so an
+  // AGENT CREDENTIAL could post `authorKind: "user"` and be routed as a person.
+  // That is not a cosmetic label: the verdict splits RR2 from RR3 on it, and RR3
+  // is the arm that reaches `freshChannelSessions` — CHANNEL-WIDE, every
+  // operator's agents, the one door Samuel's same-account carve closes. That
+  // file's own note says *"no path from an agent author reaches this function"*,
+  // and the `??` was the path.
+  //
+  // So the two directions are NOT symmetric, and each has its own reason:
+  //   - `ctx.source === "agent"` ⇒ `agent`, unconditionally. The credential is
+  //     `auth.agentTokenId` (`service-shared.ts`), which nothing a caller sends
+  //     can forge, and it is the stronger fact.
+  //   - a COOKIE session may still CLAIM `agent`, and must: the desktop posts
+  //     its agents' thread results over the operator's own Supabase session
+  //     (`main/channel-post.js`), and that lane is the one this parameter exists
+  //     for. Claiming `agent` only ever narrows the wake (RR2 over RR3), so it
+  //     is safe in a way the reverse is not.
   const authorKind =
-    input.authorKind ?? (ctx.source === "agent" ? "agent" : "user");
+    ctx.source === "agent" || input.authorKind === "agent" ? "agent" : "user";
+
+  const wake = await resolveWakeVerdict(ctx, channel, input, metadata, {
+    authorKind,
+    toAgentId,
+  });
 
   let row;
   try {
@@ -451,6 +441,14 @@ export async function postMessage(
       body: input.body,
       metadata,
       client_msg_id: input.clientMsgId ?? null,
+      wake_verdict: wake.verdict,
+      recipient_user_ids: wake.recipientUserIds,
+      recipient_agent_ids: wake.recipientAgentIds,
+      // ⚠ THE SERVER'S PREDICTION, WHICH THE MACHINE'S ACK OVERWRITES
+      // (`service-writes-delivery.ts`). Stored rather than derived on read so a
+      // later reader sees what was true AT THE TIME, not what the projection
+      // says now.
+      delivery: wake.delivery,
     });
   } catch (err) {
     // ⚠ Lost an idempotency race — the short-circuit reached a second way, so

@@ -26,7 +26,7 @@ export declare const SCOPE_NOTE = "Drafts and other members' private or team-sco
 /**
  * Untrusted-content framing for a SKILL.md written by somebody other than the
  * caller — emitted as a HEADER, before the body, never after. Same idiom as
- * `channel-render.UNTRUSTED_BODY_HEADER` and `chats-render.UNTRUSTED_ARCHIVE_HEADER`
+ * `channel-description.ts`'s SECURITY paragraph and `chats-render.UNTRUSTED_ARCHIVE_HEADER`
  * (SECURITY prefix, states what the content IS, states what it cannot do),
  * conditional on authorship the way the chats one is conditional on visibility.
  *

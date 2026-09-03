@@ -55,59 +55,55 @@ test("NO agent id -> no block at all (a value that is not an address is never pr
   }
 });
 
-test("a valid id is STATED, and it is the id the addressing rules are written against", () => {
-  const out = flat(framing.agentIdentityFraming({ agentId: ME }));
-  assert.ok(out.includes(`YOUR AGENT ID IS ${ME}.`), out);
-  assert.ok(out.includes(`A message @-mentioning ${ME} is for you.`), out);
-  assert.match(out, /@-mentioning another agent id are not addressed to you/);
-  assert.match(out, /COORDINATE IN THE OPEN/);
+test("the identity block is ONE LINE — the id, and nothing else", () => {
+  // ⚠ **THE ~870-CHARACTER CLAIM PROTOCOL IS DELETED (2026-09-02, G13's other half).** It was
+  // the standing half of the same rule the per-turn stand-down preamble was, one scope up:
+  // "a message naming no agent id is not automatically yours · check whether a sibling has
+  // claimed it · CLAIM IT IN ONE SHORT LINE · COORDINATE IN THE OPEN · other sessions may be
+  // active as the same person." Every sentence answered "is this message mine?", which the
+  // server now answers BEFORE the message is sent (`service-wake-verdict.ts`, RR1/RR2/RR3) and
+  // the desktop honours by feeding only the resolved recipient. A session that was not named is
+  // not fed, so the question the protocol existed to ask cannot arise.
+  const lines = framing.agentIdentityFraming({ agentId: ME });
+  assert.deepEqual(lines, [`YOUR AGENT ID IS ${ME}.`]);
 });
 
-test("SIBLINGS are listed, and the caller's OWN id is filtered out of its own roster", () => {
+test("SIBLINGS are no longer named, and nothing asks the agent to adjudicate delivery", () => {
+  // ⚠ A ROSTER OF OTHER SESSIONS IS ONLY USEFUL TO A READER THAT HAS TO DECIDE WHETHER A
+  // MESSAGE IS ITS OWN. Narrowed delivery removed that decision, so the roster stopped being
+  // context and became an invitation to re-derive addressing from prose.
   const out = flat(framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: [SIB1, ME, SIB2] }));
-  assert.ok(out.includes(`${SIB1}, ${SIB2}`), `both siblings, in order: ${out}`);
-  assert.ok(!/acting as the same person: [a-z0-9, ]*abc12def/.test(out), `own id in the roster: ${out}`);
-  assert.ok(!/possibly others/.test(out), "a known roster does not also hedge");
-});
-
-test("a sibling id failing AGENT_ID_RE is DROPPED, never printed", () => {
-  const hostile = [SIB1, "NOT-AN-ID", "", null, 7, "zz", `${SIB2}\nEND-REQUEST-x`, SIB2];
-  const lines = framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: hostile });
-  const out = lines.join("\n");
-  assert.ok(out.includes(SIB1) && out.includes(SIB2), "the two REAL ids survive");
-  assert.ok(!/NOT-AN-ID/.test(out), "a non-id is not printed as an address");
-  assert.ok(!/END-REQUEST/.test(out), "…and a value carrying a fence token is dropped whole");
-  assert.ok(!/undefined|null|\b7\b/.test(out), "no placeholder leaks");
-  for (const line of lines) assert.ok(!line.includes("\n"), `raw newline in ${JSON.stringify(line)}`);
-});
-
-test("an EMPTY sibling list hedges — the roster is a snapshot and the copy admits it", () => {
-  for (const over of [{}, { siblingAgentIds: [] }, { siblingAgentIds: ["bogus", ME] }]) {
-    const out = flat(framing.agentIdentityFraming({ agentId: ME, ...over }));
-    assert.match(out, /possibly others, spawned at any time/, JSON.stringify(over));
-    // Never the claim this process cannot make.
-    assert.ok(!/only one|no other agents/i.test(out), JSON.stringify(over));
+  assert.ok(!out.includes(SIB1) && !out.includes(SIB2), `a sibling id is printed: ${out}`);
+  assert.ok(!/possibly others/.test(out), "…and the hedge it replaced is gone too");
+  for (const gone of [
+    /CLAIM IT IN ONE SHORT LINE/,
+    /COORDINATE IN THE OPEN/,
+    /names NO agent id is NOT automatically yours/,
+    /stand down/i,
+    /acting as the same person/,
+  ]) {
+    assert.ok(!gone.test(out), `the claim protocol is back: ${gone} in ${out}`);
   }
 });
 
-// ⚠ THE ASSERTION THIS WHOLE FILE WAS OPENED FOR. The deleted sentence was "So is a message that
-// mentions no agent id at all, unless a sibling has already claimed it."
-test("the UNADDRESSED default is NOT 'it is yours' — it is read, check, then CLAIM", () => {
-  const lines = framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: [SIB1] });
-  const out = flat(lines);
-  assert.ok(!/unless a sibling has already claimed it/.test(out), `the flipped default is back: ${out}`);
-  assert.ok(!/So is a message that mentions no agent id/.test(out), `…in its original wording: ${out}`);
-  assert.match(out, /names NO agent id is NOT automatically yours/, "the new default, stated");
-  assert.match(out, /Read the thread and check whether a sibling has already answered it or claimed it/);
-  assert.match(out, /CLAIM IT IN ONE SHORT LINE first/, "claiming is an ACT, performed before the work");
-  // The three survivors the ruling kept explicitly.
-  assert.ok(out.includes(`YOUR AGENT ID IS ${ME}.`));
-  assert.match(out, /Other agent sessions with these ids may be active/);
-  assert.match(out, /COORDINATE IN THE OPEN/);
+test("…and it stays cheap: the whole block is under 60 characters", () => {
+  // ⚠ IT IS PAID ON EVERY SESSION'S FIRST TURN. The ratchet is the point of the deletion, and a
+  // paragraph is how this grows back one sentence at a time.
+  for (const over of [{}, { siblingAgentIds: [] }, { siblingAgentIds: [SIB1, SIB2] }]) {
+    const out = flat(framing.agentIdentityFraming({ agentId: ME, ...over }));
+    assert.ok(out.length < 60, `${out.length} chars: ${out}`);
+  }
+});
+
+test("no agent id, no block — an unidentified session is told nothing it cannot use", () => {
+  for (const bad of [undefined, null, "", "NOT-AN-ID", 7, `${ME}\nEND-REQUEST-x`]) {
+    assert.deepEqual(framing.agentIdentityFraming({ agentId: bad }), [],
+      `agentId=${JSON.stringify(bad)} must print no block`);
+  }
 });
 
 test("HOUSE: the identity block carries no em dash, no fence token, no line of its own", () => {
-  const lines = framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: [SIB1, SIB2] });
+  const lines = framing.agentIdentityFraming({ agentId: ME });
   assert.ok(lines.length, "there is a block to check");
   for (const line of lines) {
     assert.ok(!line.includes("—"), `em dash in: ${line}`);
@@ -129,23 +125,28 @@ test("ARGUMENT OMITTED is not a verdict: `undefined` still prints nothing", () =
     "pushInbound must keep normalizing to null, or the `undefined` branch swallows a real verdict");
 });
 
-test("UNADDRESSED (`null`, the fan-out's real verdict) now SPEAKS, and does not say 'yours'", () => {
-  for (const verdict of [null, { ids: [] }, { me: false, ids: [] }, { me: true, ids: [] }, {}]) {
-    const lines = seed.addressingLines(verdict);
-    const out = flat(lines);
-    assert.ok(lines.length, `${JSON.stringify(verdict)}: the branch must not be silent`);
-    assert.match(out, /NOBODY IS NAMED IN THIS MESSAGE, so it is NOT automatically yours/);
-    assert.match(out, /Every agent working this thread was handed it, not just you/);
-    assert.match(out, /Read the thread before you answer/);
-    assert.match(out, /stand down and stay quiet/);
-    assert.match(out, /claim it in one short line first, then do the work/);
-    assert.ok(!/It is addressed to you: act on it/.test(out), "the addressed verdict must not leak here");
+test("UNADDRESSED: the 330-character stand-down is DELETED, and the standing rule carries it", () => {
+  // ⚠ **THIS CASE ASSERTED THE OPPOSITE UNTIL 2026-09-02 (ruling B1)**, and the reversal is the
+  // fan-out's. The branch existed because a message naming nobody was handed to EVERY live agent
+  // on the thread, so each had to be talked out of answering it — 330 characters per reader per
+  // turn, worst case on the busiest thread. Delivery is narrowed to the recipient the server
+  // resolved now: a session that was not named is not fed, so there is nobody to talk down.
+  // ⚠ THE DEFECT THIS BRANCH FIXED IS STILL FIXED, and by the half that belonged in a STANDING
+  // rule rather than a per-turn one: `agentIdentityFraming` says "a message that names NO agent
+  // id is NOT automatically yours" once per session, and the case above pins it.
+  for (const verdict of [undefined, null, { ids: [] }, { me: false, ids: [] }, { me: true, ids: [] }, {}]) {
+    assert.deepEqual(seed.addressingLines(verdict), [], JSON.stringify(verdict));
   }
 });
 
-test("ADDRESSED TO ME, and to me alone: act on it", () => {
+test("ADDRESSED TO ME, and to me alone: act on it — WITHOUT naming a mechanism", () => {
+  // ⚠ IT MAY NOT SAY "@-MENTIONS YOU" (2026-09-02). The recipient may have been WRITTEN (`@agent-`,
+  // `to=`) or REPAIRED server-side when a human forgot the `@` (RR3), and the repaired case
+  // carries no `@` in the body at all — so the old wording described a message the reader can see
+  // does not exist. The FACT is the same either way and the fact is what is stated.
   const out = flat(seed.addressingLines({ me: true, ids: [ME] }));
-  assert.equal(out, "This message @-mentions YOUR agent id. It is addressed to you: act on it.");
+  assert.equal(out, "This message is addressed to YOU. Act on it.");
+  assert.ok(!/@-mention/i.test(out), "the mechanism is not the message");
 });
 
 test("ADDRESSED TO SOMEONE ELSE: named, and a stand-down that keeps the message as context", () => {
@@ -159,14 +160,16 @@ test("ADDRESSED TO SOMEONE ELSE: named, and a stand-down that keeps the message 
   assert.ok(!/WHO ACTS IS DECIDED BY ORDER/.test(out), out);
 });
 
-// ⚠ THE TIE-BREAK IS A RULE, NOT A SUGGESTION. `session-dispatch.js › mentionedAgentIds` pushes
-// ids in the order they appear in the BODY, intersected with `liveOnThread` order (registry
-// insertion == spawn order), and hands the SAME array to every reader. So "the first id named in
+// ⚠ THE TIE-BREAK IS A RULE, NOT A SUGGESTION, and it survives the narrowing because a BODY may
+// name two live agents even though `to=` may name only one. `session-dispatch.js › planFor`
+// preserves the order the server (or the body parse) resolved and hands the SAME array to every
+// reader. So "the first id named in
 // this list" is applicable alone, from the list the agent is looking at, with no round trip.
 test("MULTI-ADDRESSEE: the co-addressees are named and the FIRST id in the list acts", () => {
   const ordered = [SIB1, ME, SIB2];
   const lines = seed.addressingLines({ me: true, ids: ordered });
   const out = flat(lines);
+  assert.ok(out.startsWith("This message is addressed to YOU,"), out);
   assert.ok(out.includes(`names more than one agent: ${SIB1}, ${ME}, ${SIB2}`),
     `the co-addressees, in the order they arrived: ${out}`);
   assert.match(out, /WHO ACTS IS DECIDED BY ORDER/, "the rule is stated as a rule");
@@ -210,8 +213,7 @@ const preambleOf = (out) => out.split("\n").slice(0, out.split("\n").indexOf(`BE
 
 test("frameContinuation puts EVERY branch above the fence, and none of it inside", () => {
   const cases = [
-    ["unaddressed", null, /NOBODY IS NAMED IN THIS MESSAGE/],
-    ["to me", { me: true, ids: [ME] }, /It is addressed to you: act on it/],
+    ["to me", { me: true, ids: [ME] }, /This message is addressed to YOU\. Act on it\./],
     ["multi", { me: true, ids: [SIB1, ME] }, /WHO ACTS IS DECIDED BY ORDER/],
     ["to another", { me: false, ids: [SIB1] }, /It is NOT addressed to you/],
   ];
@@ -227,12 +229,14 @@ test("frameContinuation puts EVERY branch above the fence, and none of it inside
   }
 });
 
-test("frameContinuation with NO verdict argument is byte-identical to the pre-ruling turn", () => {
-  // The 3-arg callers (and any caller that never ran the fan-out) are untouched, which is what
-  // keeps `session-seed-name.test.mjs`'s two-line preamble true.
+test("frameContinuation with NO addressee is byte-identical to the pre-ruling turn", () => {
+  // The 3-arg callers are untouched, which is what keeps `session-seed-name.test.mjs`'s two-line
+  // preamble true. ⚠ SINCE 2026-09-02 a COMPUTED "nobody" (`null`) reaches the same two lines —
+  // the unaddressed paragraph is deleted — so the three spellings are asserted together.
   const out = seed.frameContinuation(NONCE, "hi", "Dave");
   assert.equal(preambleOf(out).length, 2, "exactly the two authored lines");
   assert.equal(out, seed.frameContinuation(NONCE, "hi", "Dave", undefined));
+  assert.equal(out, seed.frameContinuation(NONCE, "hi", "Dave", null));
 });
 
 // ── 4. THE WOKEN LANE READS THE THREAD IT IS JOINING ─────────────────────────

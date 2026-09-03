@@ -22,7 +22,7 @@ vi.mock("@/features/analytics/server/conversion-events", () => ({
   hasFiredEvent: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/service", () => ({
-  renameDefaultWorkspaceIfUntitled: vi.fn(),
+  renamePersonalContainerIfPlaceholder: vi.fn(),
 }));
 vi.mock("./repository", () => ({
   findDisplayName: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock("./repository", () => ({
   markOnboarded: vi.fn(),
 }));
 
-import { renameDefaultWorkspaceIfUntitled } from "@/features/workspaces/server/service";
+import { renamePersonalContainerIfPlaceholder } from "@/features/workspaces/server/service";
 import { markOnboarded } from "./repository";
 import { completeOnboarding } from "./service";
 
@@ -62,7 +62,7 @@ function spaWorkspaceHomePath(): string {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(renameDefaultWorkspaceIfUntitled).mockResolvedValue({
+  vi.mocked(renamePersonalContainerIfPlaceholder).mockResolvedValue({
     id: "ws-1",
     slug: "acme",
     publicId: "a1b2c3d4e5f6",

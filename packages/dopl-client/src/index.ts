@@ -10,6 +10,15 @@ export {
 } from "./errors.js";
 export { isStandardWorkspace } from "./types.js";
 export type {
+  ChannelGrantLevel,
+  ContainerGrantLevel,
+  GrantLevel,
+  GrantResourceType,
+  GrantScopeType,
+  ResourceGrantInput,
+  ResourceGrantResult,
+} from "./grant-types.js";
+export type {
   BuildResult,
   CreditConsumeResponse,
   WorkspaceKind,
@@ -58,6 +67,10 @@ export type {
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
   KnowledgeWriteSource,
+  // PINNED STARTUP CONTEXT (T81) — the payload `getKbStartupContext` returns.
+  StartupContext,
+  StartupContextItem,
+  StartupContextPointer,
 } from "./knowledge-types.js";
 export type {
   ResolvedSkill,
@@ -107,6 +120,7 @@ export type {
   Channel,
   ChannelAuthorKind,
   ChannelCreateInput,
+  ChannelDelivery,
   ChannelMember,
   ChannelMemberRole,
   ChannelMessage,
@@ -122,6 +136,7 @@ export type {
   ChannelThreadCreateInput,
   ChannelThreadPage,
   ChannelVisibility,
+  ChannelWakeVerdict,
   MessageIntent,
   ReadMessagesOptions,
   SessionDetailKey,
@@ -132,6 +147,22 @@ export type {
   WorkspaceChannelMessage,
   ThreadStatus,
 } from "./channel-types.js";
+// ⚠ The HEALTH half of an own-scoped session — its own module because
+// `channel-types.ts` is at the 500-line cap, and a HAND MIRROR of
+// `src/features/channels/types-sessions.ts › ChannelSessionHealth` with no drift
+// gate: both halves move in ONE change.
+export type { ChannelSessionHealth } from "./session-health-types.js";
+export type {
+  AccountChannelMessage,
+  AccountChannelStatus,
+  AccountMessagesOptions,
+  AccountMessagesPage,
+  AccountStatus,
+  AccountStatusClips,
+  AccountStatusOptions,
+  AccountStatusView,
+  AccountWaitingItem,
+} from "./account-types.js";
 export type {
   ChannelInfoCard,
   ChannelInfoCardBuiltInKey,
@@ -159,9 +190,18 @@ export type {
 // LAUNCH-OVER-MCP types — their own module since 2026-08-22 (`channel-types.ts`
 // hit the 500-line cap). ⚠ Re-exported here unchanged, so no consumer moved.
 export type {
+  // ⚠ THE AGENT-MANAGEMENT KINDS (2026-09-01) live in the SAME module because
+  // they are the same mailbox — `end` / `rename` directives, not a second lane.
+  AgentDirectiveCreateInput,
+  AgentDirectiveCreated,
   LaunchDirective,
   LaunchDirectiveCreateInput,
   LaunchDirectiveCreated,
+  LaunchDirectiveKind,
+  // ⚠ THE TWO POSTURE AXES (2026-09-01, T24). ORDERED unions — the clamp on the
+  // machine indexes into them, so their order is contract, not presentation.
+  LaunchToolMode,
+  LaunchMessageMode,
   LaunchRefusalReason,
 } from "./launch-types.js";
 

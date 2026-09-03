@@ -4,63 +4,29 @@
  *
  * ⚠ SPLIT OUT OF `types.ts` at the 500-line cap; re-exported from there, so no
  * import path changed and there is no second path to a symbol.
+ *
+ * ⚠ **THE FOUR CLOSED SETS — the refusal vocabulary, the directive verb and the
+ * TWO POSTURE AXES — ARE DECLARED IN `@dopl/contracts › directives.ts` AND
+ * RE-EXPORTED HERE** (2026-09-02, v2 slice A13). All four had twins in
+ * `packages/dopl-client/src/launch-types.ts` with no script between them. ⚠ The
+ * ORDER of {@link LaunchToolMode} / {@link LaunchMessageMode} is part of the
+ * contract (the desktop's clamp is an index comparison), and the arrays it
+ * compares over live in `main/launch-directive-wire.js`, which imports neither
+ * tree — so the ordering argument stays stated at the declaration.
  */
+import type {
+  LaunchRefusalReason,
+  LaunchDirectiveKind,
+  LaunchToolMode,
+  LaunchMessageMode,
+} from "@dopl/contracts";
 
-/**
- * WHY A DESKTOP SAID NO TO A LAUNCH — **exactly six words, and the closed set is
- * the wire contract both trees code against** (2026-08-22).
- *
- * ⚠ **A KEY, NEVER A SENTENCE.** The readable line is written by the reader
- * (`packages/mcp-server/src/tools/channel-ops-launch.ts`), for the same reason
- * {@link SessionDetailKey} splits that way: prose on the wire is prose that needs
- * a desktop release to reword, and desktop-authored text rendered into an MCP
- * result is text nobody neutralized.
- *
- *  - `cap`             — already at the machine's concurrent-agent ceiling.
- *  - `busy`            — the machine is under load and declined for now.
- *  - `no-sdk`          — no agent runtime available on that machine.
- *  - `auth-hold`       — the desktop is signed out or its credential is held.
- *  - `no-bridge`       — **the operator's launch-over-MCP toggle is OFF.** This
- *                        is Samuel's consent mechanism, so this reason is a
- *                        CHOICE and the render must not read as a fault.
- *  - `no-counterparty` — nothing to work with in that channel.
- *  - `no-template`     — ⚠ THE SEVENTH, 2026-08-22 (agent templates). The
- *                        directive named a TEMPLATE and the operator's machine
- *                        could not resolve it: DELETED, or not visible to the
- *                        OPERATOR even though it was visible to the orchestrator
- *                        that named it. Those are ONE answer on purpose — the
- *                        resolve endpoint is 404-never-403 so the difference is
- *                        not observable, and a render that guessed would rebuild
- *                        the oracle. The next action is to re-check the template
- *                        list as the operator, not to re-issue.
- *
- * ⚠ AN EIGHTH REASON IS A SCHEMA CHANGE IN BOTH TREES, deliberately: the column
- * carries the same CHECK, so an unknown value cannot be stored and cannot reach
- * a render as raw text.
- * ⚠ `no-template` IS FULLY LANDED SINCE 2026-08-23. It was half-landed for a day
- * — this list at seven while the column CHECK was at six — and the note here said
- * so, because a producer shipped in that window would have passed zod and been
- * refused AT REST. Both halves are in now:
- * `20260823140000_channel_launch_directives_template.sql` widens the CHECK
- * (⚠ WRITTEN — applied is a measurement, INVARIANTS §12) in the same wave as the
- * producer, `main/launch-directives.js › spawn`, which resolves the directive's
- * template at CLAIM time under the OPERATOR's credential.
- *
- * ⚠ `template-approval` IS NOT A MEMBER AND MUST NOT BECOME ONE. It is an
- * IPC-only word: the desktop answers it to its OWN renderer when a FOREIGN
- * template's first run on that machine needs one human click. There is no human
- * at the keyboard on this lane, and `orchestratorLaunchEnabled` already stands in
- * for the click here (the toggle IS the standing consent), so a directive can
- * never produce it and the column must never be able to store it.
- */
-export type LaunchRefusalReason =
-  | "cap"
-  | "busy"
-  | "no-sdk"
-  | "auth-hold"
-  | "no-bridge"
-  | "no-counterparty"
-  | "no-template";
+export type {
+  LaunchRefusalReason,
+  LaunchDirectiveKind,
+  LaunchToolMode,
+  LaunchMessageMode,
+};
 
 /**
  * ONE LAUNCH REQUEST from an operator's external agent to that operator's own
@@ -80,6 +46,9 @@ export type LaunchRefusalReason =
  */
 export type LaunchDirective = {
   id: string;
+  /** Which verb this asks for. ⚠ `launch` on every row written before
+   *  2026-09-01 and on every row that names no kind — the column's DEFAULT. */
+  kind: LaunchDirectiveKind;
   /**
    * The operator whose machine this asks to launch — **always the reader's own
    * id, never anyone else's** (2026-08-23, F-284).
@@ -117,9 +86,138 @@ export type LaunchDirective = {
    *  join: it is the only thing that survives the FK's SET NULL, which is what
    *  makes a deletion distinguishable from "no template was asked for". */
   templateName: string | null;
-  status: "pending" | "claimed" | "launched" | "refused" | "expired";
+  /**
+   * ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS AND `launched` IS THE LAUNCH'S,
+   * and the split is not fussiness (2026-09-01). This row is read back by the
+   * orchestrator that filed it and rendered into an agent-facing sentence;
+   * putting the word "launched" on the record of an agent being STOPPED is the
+   * one kind of wrong nothing downstream can detect. The column CHECK enforces
+   * the pairing, so no reader has to ask which meaning it is looking at.
+   */
+  status: "pending" | "claimed" | "launched" | "done" | "refused" | "expired";
   /** Set iff `status` is `refused`. */
   refusalReason: LaunchRefusalReason | null;
+  /**
+   * WHICH AGENT AN `end` / `rename` ACTS ON — an INPUT, named by the caller at
+   * create (2026-09-01). `null` on a launch.
+   *
+   * ⚠ **NEVER CONFLATE IT WITH {@link LaunchDirective.agentId}, WHICH IS THE
+   * OUTPUT.** One says what this row aimed at, the other says what it produced;
+   * a single field carrying both would make a table whose whole purpose is to be
+   * read back as a record of what was asked unable to answer that question.
+   */
+  targetAgentId: string | null;
+  /**
+   * THE RENAME'S NEW DISPLAY NAME. Non-null iff `kind` is `rename`.
+   *
+   * ⚠ **`""` IS LEGAL AND MEANS "CLEAR IT"** — back to `Agent #<id>`, the same
+   * gesture `sessions:rename` and the in-process `rename_agent` already take. So
+   * `null` here is "this is not a rename", never "clear the name": a second
+   * spelling for the clear would be a second way to say one thing.
+   * ⚠ DISPLAY ONLY, ON ONE MACHINE. `main/agent-names.js` holds it in a local
+   * `electron-store`; nothing resolves an agent by it, so a rename can never
+   * re-point a running instruction.
+   */
+  targetName: string | null;
+  /**
+   * THE POSTURE A **LAUNCH** ASKED ITS NEW SESSION TO START ON (T24). `null` on
+   * either axis is "not asked", which resolves to the operator's own stored
+   * channel value — the pre-T24 behaviour byte for byte. `null` on every kind but
+   * `launch`.
+   *
+   * ⚠ **SEPARATE FROM {@link LaunchDirective.targetToolMode} AND THEY MUST STAY
+   * SO.** One names the posture a NEW session starts on, the other the posture a
+   * RUNNING one moves to; merging them would let a `set_agent_mode` be answered
+   * by a launch's fields on a row that carried both.
+   * ⚠ **A REQUEST, NEVER A GRANT.** `main/launch-posture.js › resolveLaunch`
+   * clamps both to the operator's ceiling before a spawn sees them.
+   */
+  startToolMode: LaunchToolMode | null;
+  startMessageMode: LaunchMessageMode | null;
+  /**
+   * MAY THE LAUNCHED AGENT LAUNCH FURTHER AGENTS? **A TRUE TRI-STATE, AND ALL
+   * THREE VALUES ARE LOAD-BEARING** (fixed 2026-09-01):
+   *   `true`  — ASK IT ON. Granted only if the channel allows it; denied is a
+   *             REFUSAL, not a clamp (below).
+   *   `false` — ASK IT OFF. **Always granted, and it WINS over a channel set to
+   *             ON.** It is strictly narrower than anything that setting would
+   *             have given, so there is nothing for the operator's setting to
+   *             protect, and NARROWING IS NEVER REFUSED.
+   *   `null`  — DID NOT ASK. Inherits the channel setting silently, which is what
+   *             every launch did before T24.
+   *
+   * ⚠ **THIS DOCBLOCK SAID `false` WAS INDISTINGUISHABLE FROM `null` UNTIL
+   * 2026-09-01, AND IT WAS TRUE WHEN WRITTEN.** `main/launch-directive-wire.js ›
+   * directiveFrom` narrowed the column as `r.chain === true || r.chain === 'true'
+   * ? true : null` — a `false` arrived as "did not ask" and inherited a channel
+   * setting that may be ON — and `main/launch-posture.js › resolveChain` had the
+   * matching defect on the other side. Both are fixed and
+   * `dopl-desktop-app/test/launch-chain.test.mjs` drives the two halves TOGETHER,
+   * because testing them separately is what let each hide the other.
+   *
+   * ⚠ **REFUSED RATHER THAN CLAMPED WHEN THE CHANNEL FORBIDS IT**, which is the
+   * one asymmetry with the posture pair above (`launch-posture.js ›
+   * resolveChain`). A clamped posture still does the asked-for work under more
+   * supervision; a clamped chain produces an agent that hits a bound it was told
+   * it did not have, mid-run, after workers were already promised.
+   */
+  chain: boolean | null;
+  /**
+   * THE POSTURE A `set_agent_mode` ASKED A **RUNNING** AGENT TO MOVE TO. `null`
+   * on either axis means that axis was not requested, which is ordinary — a
+   * directive may move one and leave the other. At least one is non-null on a
+   * `set_agent_mode` row (the column CHECK), and both are `null` on every other
+   * kind.
+   */
+  targetToolMode: LaunchToolMode | null;
+  targetMessageMode: LaunchMessageMode | null;
+  /**
+   * **THE ECHO — WHAT THE MACHINE SAYS IT ACTUALLY APPLIED, after its clamp.**
+   *
+   * ⚠ **`null` MEANS "NOT REPORTED". IT DOES NOT MEAN "UNCLAMPED" AND IT IS NEVER
+   * THE REQUESTED VALUE ECHOED BACK.** The writer landed on 2026-09-01 — the
+   * desktop's `decideBody` puts the three on the `launched` body and
+   * `service-launch.ts › decideLaunchDirective` maps them onto the columns — but
+   * `null` is still the live value on every row written before that wave AND on
+   * every row decided by a desktop older than it (INVARIANTS §13: an older peer
+   * is supported, so a machine that reports nothing must still be able to
+   * decide). A render that read `null` as agreement would tell an orchestrator
+   * its posture landed on the strength of a column nobody filled in, and it would
+   * then size the work for room the agent may not have. The one statement of that
+   * render is `packages/mcp-server/src/tools/channel-ops-launch.ts › postureFacts`.
+   * ⚠ `appliedChain: null` IS NOT `false` either — reading it as "no chaining"
+   * is wrong in the direction that makes an orchestrator do the work itself for
+   * no reason.
+   */
+  appliedToolMode: LaunchToolMode | null;
+  appliedMessageMode: LaunchMessageMode | null;
+  appliedChain: boolean | null;
+  /**
+   * **WHAT THE SERVER PERMITTED** (2026-09-02, A9 — G6/G7/G8), decided at
+   * creation from the request and `Channel.agentPosture`.
+   *
+   * ⚠ **A THIRD GROUP, NOT A SPELLING OF EITHER OTHER ONE.** `startToolMode` is
+   * what was ASKED, `appliedToolMode` is what the MACHINE says it did, and this
+   * is what the SERVER allowed to be asked. G6's *"your operator's machine
+   * narrows what you ask; it never widens"* was enforced on the desktop only, so
+   * an offline or older one narrowed nothing at all — this is the half that
+   * happens whether or not a machine is listening.
+   * ⚠ **`null` STILL MEANS "DID NOT ASK" AND SURVIVES THE CLAMP.** A request that
+   * named no posture must stay unnamed all the way to the machine, which then
+   * applies the OPERATOR's own stored pair. Substituting the ceiling here would
+   * turn "whatever the operator chose" into "whatever this channel allows".
+   * ⚠ **`resolvedModel` IS AN ECHO, NOT A GATE.** It carries the canonical id a
+   * recognised request resolved to and `null` for one this build does not know —
+   * which is NOT a refusal: the raw value still reaches the machine, and a newer
+   * desktop may run a model this server predates. Read it BESIDE {@link model}:
+   * both null = nothing asked; `model` set and this null = asked and
+   * unrecognised, i.e. the machine will use its own default and now the caller is
+   * told (guardrail G8, whose whole complaint was the silence).
+   */
+  resolvedToolMode: LaunchToolMode | null;
+  resolvedMessageMode: LaunchMessageMode | null;
+  resolvedChain: boolean | null;
+  resolvedModel: string | null;
   /** The agent instance the desktop started. Set iff `status` is `launched` —
    *  it is what the requester types as `@<agentId>` to direct it. */
   agentId: string | null;

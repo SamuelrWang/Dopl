@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="direct_agent" / op="read_directions" — THE PRIVATE DIRECT
+ * `dopl_channel` op="manage" action="direct" / op="status" — THE PRIVATE DIRECT
  * LANE (Samuel's ruling, 2026-08-31).
  *
  * ⚠ `channel-` filename prefix required by the parity split-scan
@@ -23,7 +23,7 @@
  *      nothing can tell the two apart afterwards.
  *   4. **THE REPLY IS THE TURN'S FINAL TEXT AND NOTHING ELSE.** Not its narration,
  *      not its tool calls, not what it is doing now. An orchestrator that needs
- *      the latter wants `op="read_sessions"`.
+ *      the latter wants `op="status"`.
  *
  * ⚠ A DIRECTION IS NOT A MESSAGE (INVARIANTS §5) — no `seq`, so it can never end
  * an `await`. That is why this op holds on the ROW, exactly as `launch_agent` does.
@@ -39,6 +39,12 @@ import { type ToolResponse } from "./respond";
  */
 export declare function opDirectAgent(client: DoplClient, ref: string, agentId: string, body: string, opts?: {
     thread?: string;
+    /** ⚠ **THE IDEMPOTENCY KEY, AND IT IS WHAT MAKES A TIMED-OUT DIRECTION SAFE
+     *  TO RETRY** (2026-09-02, A10/G10). Passed through untouched: the server
+     *  probes it against `(channel, this operator)` and returns the stored
+     *  direction — `reply` included, if the machine has answered by now — rather
+     *  than saying the same thing to a live agent twice. */
+    clientMsgId?: string;
     waitMs?: number;
 }): Promise<ToolResponse>;
 /**
@@ -50,7 +56,7 @@ export declare function opDirectAgent(client: DoplClient, ref: string, agentId: 
  * without this op a timed-out hold would strand it forever.
  * ⚠ **A SIBLING OP, NOT A MODE ON `direct_agent`.** Collapsing a read into a write
  * would put two authorization stories behind one signature, which is the argument
- * `channel-ops-await-workspace.ts` was split out on.
+ * `channel-ops-hold-workspace.ts` was split out on.
  * ⚠ OWN-SCOPED AT THE SERVER — the transport credential IS the caller, so no
  * identity is passed and there is no argument that could name another operator.
  */

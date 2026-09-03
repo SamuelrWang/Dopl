@@ -18,6 +18,7 @@
 import { describe, it, expect } from "vitest";
 import {
   MessageReadQuerySchema,
+  AccountStatusQuerySchema,
   AwaitQuerySchema,
   ConsentListQuerySchema,
   SessionStateQuerySchema,
@@ -89,6 +90,43 @@ describe("AwaitQuerySchema", () => {
   it("ignores a `thread` param (the scope is read-only, not an await feature)", () => {
     const parsed = AwaitQuerySchema.parse({ since: "1", thread: UUID });
     expect(Object.prototype.hasOwnProperty.call(parsed, "thread")).toBe(false);
+  });
+});
+
+describe("AccountStatusQuerySchema", () => {
+  it("takes a cursor on the DEFAULT view, and defaults the view to the expensive one", () => {
+    // ⚠ §9: nothing may get a thinner answer than it asked for.
+    expect(AccountStatusQuerySchema.parse({}).view).toBe("full");
+    expect(AccountStatusQuerySchema.parse({ since: "4" })).toEqual({
+      since: 4,
+      view: "full",
+    });
+  });
+
+  it("REFUSES since= with view=\"sessions\" rather than echoing a cursor it cannot use", () => {
+    // ⚠ MUTATION CHECK. Drop the refine and the answer echoes `since: 4` beside
+    // `unread: null` on every row — which reads as "0 new everywhere" to anything
+    // that does not know the sessions view reports no counts at all.
+    const bad = AccountStatusQuerySchema.safeParse({
+      since: "4",
+      view: "sessions",
+    });
+    expect(bad.success).toBe(false);
+    expect(bad.error!.issues[0].path).toEqual(["since"]);
+    // ⚠ AND IT IS NOT AN UPGRADE TO `full`: nothing may get a WIDER answer than
+    // it asked for either.
+    expect(
+      AccountStatusQuerySchema.safeParse({ view: "sessions" }).success
+    ).toBe(true);
+  });
+
+  it("still refuses a junk view and a negative cursor", () => {
+    expect(AccountStatusQuerySchema.safeParse({ view: "brief" }).success).toBe(
+      false
+    );
+    expect(AccountStatusQuerySchema.safeParse({ since: "-1" }).success).toBe(
+      false
+    );
   });
 });
 

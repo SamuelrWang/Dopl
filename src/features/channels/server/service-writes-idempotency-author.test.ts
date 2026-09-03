@@ -3,7 +3,7 @@
  * the three layers that have to agree about it or it is not enforced anywhere.
  *
  * ── THE VULNERABILITY ────────────────────────────────────────────────────────
- * `postMessage`'s short-circuit read `findMessageByClientId(channel.id, key)` —
+ * `postMessage`'s short-circuit read was `(channel.id, key)` —
  * scoped to the CHANNEL — so "I already sent this, give me back what you stored"
  * was a contract with the whole ROOM. The keys are neither secret nor random on
  * the caller that sets them at scale: the desktop stamps `agent-<agentId>-<n>`
@@ -30,11 +30,13 @@ import { join } from "node:path";
 
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 vi.mock("./repository");
+vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
 import type { ChannelMemberRow, ChannelMessageRow, ChannelRow } from "./dto";
 import type { ChannelContext } from "./service-shared";
@@ -47,6 +49,7 @@ const KEY = "agent-a1b2c3d4-5"; // the desktop's stamp, exactly as it ships
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };
@@ -87,6 +90,11 @@ function eqFilters(calls: Call[]): Record<string, unknown> {
 
 describe("the two (channel, client_msg_id) reads are scoped differently", () => {
   beforeEach(() => {
+    // ⚠ THE AUTHOR'S OWN PROJECTION, EMPTY (2026-09-02, F-589). RR2 reads it to
+    // check the `client_msg_id` agent stamp — a CALLER-SUPPLIED claim — against
+    // the agents this author actually runs, so a file that leaves it unstubbed
+    // reaches the real admin client and times out rather than failing.
+    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
     vi.clearAllMocks();
   });
 
@@ -103,21 +111,12 @@ describe("the two (channel, client_msg_id) reads are scoped differently", () => 
     });
   });
 
-  it("the CROSS-AUTHOR read is unchanged — `storedOpeningSeq` depends on it", async () => {
-    // ⚠ NOT AN OVERSIGHT. A create that converged on somebody else's thread posts
-    // nothing and READS the winner's opening seq (`service-tasks.ts ›
-    // convergeOnThread`). Author-scoping this would answer `null` for exactly the
-    // case it exists to serve.
-    const real = await vi.importActual<typeof repoMessages>("./repository-messages");
-    const calls = makeAdmin(null);
-
-    await real.findMessageByClientId("chan-1", "task-open-660e8400");
-
-    expect(eqFilters(calls)).toEqual({
-      channel_id: "chan-1",
-      client_msg_id: "task-open-660e8400",
-    });
-    expect(Object.keys(eqFilters(calls))).not.toContain("author_user_id");
+  it("and it is the ONLY (channel, client_msg_id) read left on this module", () => {
+    // ⚠ THE CROSS-AUTHOR SIBLING IS DELETED (2026-09-02). It existed for
+    // `service-tasks.ts › storedOpeningSeq`, the arm a create took when it
+    // converged on somebody else's thread; author-scoping the THREAD probe too
+    // removed that arm, and an orphan repository helper reads as a live door.
+    expect("findMessageByClientId" in repoMessages).toBe(false);
   });
 });
 
@@ -181,7 +180,6 @@ describe("postMessage's short-circuit belongs to the author, not the room", () =
     vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
     vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
     vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
     vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(null);
     vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
       storedRow({
@@ -199,10 +197,9 @@ describe("postMessage's short-circuit belongs to the author, not the room", () =
   it("THE ATTACK: another member's row on the same key does NOT swallow my post", async () => {
     const { postMessage } = await import("./service-writes");
     // The attacker pre-claimed the key: a row exists in this channel under it,
-    // authored by someone else. The CHANNEL-scoped read would find it.
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
-      storedRow({ id: "msg-preclaimed", seq: 40, author_user_id: ATTACKER })
-    );
+    // authored by someone else. A CHANNEL-scoped probe would find it; the
+    // author-scoped one cannot, so it answers null for THIS author.
+    vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(null);
 
     const out = await postMessage(ctx, "general", { body: "the answer", clientMsgId: KEY });
 
@@ -249,13 +246,10 @@ describe("postMessage's short-circuit belongs to the author, not the room", () =
       postMessage(ctx, "general", { body: "the answer", clientMsgId: KEY })
     ).resolves.toMatchObject({ id: "msg-stored" });
 
-    // ⚠ AND IT DOES NOT REACH FOR THE CHANNEL-SCOPED READ TO AVOID THROWING. A
-    // `23505` this author cannot account for is a real error; answering it with
-    // somebody else's row is the swallow, wearing a different hat.
+    // ⚠ AND IT DOES NOT REACH FOR A WIDER READ TO AVOID THROWING. A `23505` this
+    // author cannot account for is a real error; answering it with somebody
+    // else's row is the swallow, wearing a different hat.
     vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(null);
-    vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(
-      storedRow({ id: "msg-preclaimed", author_user_id: ATTACKER })
-    );
     await expect(
       postMessage(ctx, "general", { body: "the answer", clientMsgId: KEY })
     ).rejects.toMatchObject({ code: "23505" });
@@ -265,7 +259,6 @@ describe("postMessage's short-circuit belongs to the author, not the room", () =
     const { postMessage } = await import("./service-writes");
     await postMessage(ctx, "general", { body: "no key" });
     expect(repoMessages.findOwnMessageByClientId).not.toHaveBeenCalled();
-    expect(repoMessages.findMessageByClientId).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
   });
 });

@@ -59,7 +59,9 @@ import { CreateChannelDialog } from "../create-channel-dialog";
 import { DirectMessageDialog } from "../direct-message-dialog";
 import { GoPublicDialog, needsGoPublicConfirm } from "../go-public-dialog";
 import { InviteDialog } from "../invite-dialog";
+import { useChannelAgentSessions } from "../../hooks/use-channel-agent-sessions";
 import { ChannelAgentSettings } from "./settings-agent";
+import { ChannelAgentsSettings } from "./settings-channel-agents";
 import { ChannelsV2SettingsTab } from "./settings-tab";
 import type { AgentToolProfile, Channel, ChannelMember } from "../../types";
 
@@ -131,6 +133,14 @@ export function ChannelsV2ManageActions({
   });
 
   const canManage = channel.role === "owner";
+  // ⚠ **READ ONLY FOR A MANAGER**, because only a manager is shown the picker it
+  // feeds — and this read POLLS while mounted (`channel_sessions` is deliberately
+  // unpublished, INVARIANTS §7). A member who cannot set the responder must not
+  // pay for a poll to render nothing. `null` is what stops it.
+  const { sessions } = useChannelAgentSessions(
+    canManage ? channel.id : null,
+    workspaceId
+  );
   const displayName = channelDisplayName(channel, members, currentUserId);
   const peerName =
     displayName === "Direct message" ? "your teammate" : displayName;
@@ -181,6 +191,21 @@ export function ChannelsV2ManageActions({
               // (`posture-warning.tsx`).
               roster={members}
               currentUserId={currentUserId}
+            />
+          ) : null
+        }
+        // ⚠ THE CHANNEL'S OWN AGENT SETTINGS — the default responder (ruling
+        // B6) and the posture ceiling F-449 records as having no surface at all.
+        // ONE panel, two settings, one manage gate, per the wave-B spec; the
+        // SERVER gate is `MANAGED_CHANNEL_FIELDS`, and this is the affordance.
+        channelAgents={
+          canManage ? (
+            <ChannelAgentsSettings
+              channel={channel}
+              sessions={sessions}
+              busy={lifecycle.agentSettingsPending}
+              onSetDefaultResponder={lifecycle.setDefaultResponder}
+              onSetCeiling={lifecycle.setAgentCeiling}
             />
           ) : null
         }

@@ -12,15 +12,15 @@
  */
 
 /**
- * Three-way sharing scope.
- *   private   → the creator (and workspace admins) only
- *   team      → members of any team linked through `agent_template_teams`
- *   workspace → every active workspace member
- *
- * ⚠ ONE field, not the `visibility` × `accessMode` PAIR that skills / chats /
- * knowledge bases carry — the server type's docblock carries the porting rule.
+ * ⚠ **{@link TemplateVisibility} IS DECLARED IN `@dopl/contracts ›
+ * workspaces.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it was a
+ * hand mirror of `src/features/agent-templates/types.ts`. No consumer import
+ * changed.
  */
-export type TemplateVisibility = "private" | "team" | "workspace";
+import type { TemplateVisibility } from "@dopl/contracts";
+
+export type { TemplateVisibility };
+
 
 /** One user-defined custom field. Both halves are short LABELS: they are
  *  spliced into the launch payload an agent reads back line by line. */
@@ -80,10 +80,10 @@ export interface AgentTemplate {
  * `GET /api/agent-templates`, as the rows PLUS the shelf sibling key.
  *
  * 🔒 ⚠ **SIBLING KEY, NOT A ROW FIELD**, for the same reason
- * `KnowledgeBaseListPayload.homeScopedBaseIds` is one: `home_scoped` is
- * deliberately absent from `server/dto.ts › AGENT_TEMPLATE_COLS`, so the cached
- * list payload gains no new key on the ROW and §8's stale-cache rule has nothing
- * to apply to there. It applies HERE instead — read it as `?? []`.
+ * `KnowledgeBaseListPayload.homeScopedBaseIds` is one: nothing shelf-shaped is
+ * projected onto the row (and since 2026-09-02 there is no column to project —
+ * the shelf is the row's own container), so the cached list payload gains no new
+ * key THERE and §8's stale-cache rule applies HERE — read it as `?? []`.
  */
 export interface AgentTemplateListPayload {
   templates: AgentTemplate[];
@@ -104,12 +104,23 @@ export interface AgentTemplateCreateInput {
   /** REPLACE-SET, never merged. Every id must be visible to the caller. */
   knowledgeBaseIds?: string[];
   /**
-   * Put the new template on the /home SHELF instead of the workspace Agents
-   * page. ⚠ A REQUEST, NOT A DECISION: `src/features/agent-templates/server/
-   * service-writes.ts › resolveTemplateHomeScope` is the fence and it 403s
-   * rather than downgrading. Omitted/false = the workspace shelf.
+   * Put the new template on the PERSONAL SHELF instead of the workspace Agents
+   * page. ⚠ A REQUEST, NOT A DECISION, and since 2026-09-02 it ROUTES the row's
+   * container rather than being stored on it: `src/shared/tenancy/
+   * personal-container.ts › personalWriteWorkspaceId` is the fence and it 403s
+   * rather than downgrading. Omitted/false = the container the call is in.
    */
   homeScoped?: boolean;
+  /**
+   * 🔒 "I know this publishes into a room somebody else is standing in."
+   *
+   * ⚠ REQUIRED ONLY ON THE NARROW PREDICATE — a `kind='link'` container with
+   * two or more active members, and the row landing at the SHARED visibility.
+   * The server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it and IGNORES
+   * it everywhere else (`src/features/workspaces/server/shared-publish.ts`).
+   * The MCP surface sets it from a spent `confirm_token`, never on its own.
+   */
+  acknowledgeShared?: boolean;
 }
 
 /**
@@ -130,4 +141,14 @@ export interface AgentTemplateUpdateInput {
   visibility?: TemplateVisibility;
   teamIds?: string[];
   knowledgeBaseIds?: string[];
+  /**
+   * 🔒 "I know this publishes into a room somebody else is standing in."
+   *
+   * ⚠ REQUIRED ONLY ON THE NARROW PREDICATE — a `kind='link'` container with
+   * two or more active members, and the row landing at the SHARED visibility.
+   * The server 400s `CONTAINER_PUBLISH_UNACKNOWLEDGED` without it and IGNORES
+   * it everywhere else (`src/features/workspaces/server/shared-publish.ts`).
+   * The MCP surface sets it from a spent `confirm_token`, never on its own.
+   */
+  acknowledgeShared?: boolean;
 }

@@ -1,7 +1,21 @@
 import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
-import type { SessionPillState } from "./types";
+import type { MachineDelivery, SessionPillState } from "./types";
+
+/**
+ * ⚠ **THE `INT4` CEILING, AND IT EXISTS BECAUSE TWO OF THE HEALTH COLUMNS ARE
+ * `INTEGER` WHERE EVERY OTHER COUNT ON THIS ROW IS `BIGINT`** (2026-09-02).
+ * `20260909120000_channel_sessions_health.sql` declares `turns` and
+ * `denied_calls` as `INTEGER`; a value past this bound passes `.nonnegative()`,
+ * passes the route, and 22003s AT REST — which on this lane is the failure the
+ * whole two-half rule exists to avoid, because a rejected push blanks a
+ * machine's entire session set rather than dropping one field.
+ * ⚠ It bounds only the two `INT4` columns. `tokensDelta` and `lastWakeSeq` are
+ * `BIGINT` and are deliberately NOT capped here — a bound tighter than the
+ * column is `20260909120000`'s own footgun in the other direction.
+ */
+const INT4_MAX = 2_147_483_647;
 
 /**
  * READ-SESSION-STATE's two schemas — the `?channelId=` of the READ and the body
@@ -193,6 +207,72 @@ const SessionStateEntrySchema = z.object({
    */
   templateName: safeLabel("Template name", 120).nullable().optional(),
 
+  // ── HEALTH (2026-09-01, migration 20260909120000) ────────────────────────
+  //
+  // ⚠ THE SAME TWO-HALF RULE THE TELEMETRY BLOCK STATES, AND IT IS THE REASON
+  // THIS BLOCK IS SAFE TO SHIP AHEAD OF ANY DESKTOP. `optional` is the rollout
+  // contract — an older desktop sends none of these keys, and a required field
+  // would 400 its WHOLE push, unretryably, leaving `read_sessions` answering
+  // `[]` for that machine forever (INVARIANTS §11, §13). `nullable` is the
+  // semantic half — `main/session-health.js` sends an explicit `null` for a
+  // count nothing has measured, and that must survive as `null` to the render.
+  // ⚠ **ABSENT MUST STAY ABSENT.** There is no `.default()` below and there must
+  // not be: a `.default(0)` on `deniedCalls` would turn an older desktop's
+  // silence into "nothing has been refused to this agent", which is the exact
+  // claim these columns were added to stop the surface making.
+  /** Turns taken. ⚠ `.int().nonnegative()` and NOT quantized by the desktop —
+   *  the difference between 1 turn and 4 IS the signal
+   *  (`main/session-telemetry.js`'s own note).
+   *  ⚠ **`.max(INT4_MAX)`, BECAUSE THE COLUMN IS `INTEGER` AND NOT `BIGINT`.**
+   *  See {@link INT4_MAX}. */
+  turns: z.number().int().nonnegative().max(INT4_MAX).nullable().optional(),
+  /** Tokens burned SINCE THIS SESSION LAST POSTED — not per turn, and not since
+   *  the last row push (`main/session-health.js › tokensSinceLastPost`). Same
+   *  `.int().nonnegative()` bound as `tokensSpent`, whose bucket it shares. */
+  tokensDelta: z.number().int().nonnegative().nullable().optional(),
+  /**
+   * THE MACHINE'S OWN WEDGED FLAG — `working` AND silent past ten minutes AND
+   * still spending (`main/session-health.js › isStale`).
+   *
+   * ⚠ 🔒 **NOT THE SERVER'S `sessionIsStale`, WHICH IS ABOUT THE ROW.** That one
+   * is derived here from `updated_at` and means "nobody has said anything";
+   * this one is derived THERE and means "this live session is getting nowhere".
+   * The wire name is the desktop's and is deliberately not renamed on the way
+   * in — a server that renamed a reported field would make the two trees stop
+   * agreeing about what was reported. The RENDER keeps them apart
+   * (`packages/mcp-server/src/tools/channel-session-health.ts`).
+   * ⚠ `z.boolean()`, never `z.coerce.boolean()`: `Boolean("false")` is `true`,
+   * so a coercion here would read a stringified `false` as an assertion that
+   * somebody's agent is wedged.
+   */
+  stale: z.boolean().nullable().optional(),
+  /** Tool calls REFUSED to this session, and the last tool that was
+   *  (`main/session-windowless.js › noteDenied`). ⚠ A `null` count is "nothing
+   *  counted", NEVER "nothing was denied". */
+  deniedCalls: z
+    .number()
+    .int()
+    .nonnegative()
+    // ⚠ `INTEGER`, like `turns` — see {@link INT4_MAX}.
+    .max(INT4_MAX)
+    .nullable()
+    .optional(),
+  /** ⚠ Bound is `safeLabel` at **80** — character for character `toolLabel`'s,
+   *  which is character for character the desktop's own `TOOL_LABEL_MAX`. A tool
+   *  name can come from the operator's OWN MCP servers, so the charset is not
+   *  ours to assume, and it is spliced into narration in the operator's own
+   *  result — where a forged line is still a forged line. */
+  lastDeniedTool: safeLabel("Last denied tool", 80).nullable().optional(),
+  /** The `seq` the last ENQUEUED wake was carrying, and when
+   *  (`main/session-gate.js › enqueue`). ⚠ A report of what the machine DID —
+   *  never a delivery guarantee, and the render says so in those words.
+   *  ⚠ `.int().nonnegative()` because it is a `channel_messages.seq`, which is a
+   *  monotonic positive counter; `.datetime({ offset: true })` on the stamp for
+   *  the reason `startedAt` carries it — it lands in a TIMESTAMPTZ column and an
+   *  unparseable string reaches Postgres as a cast error, i.e. an opaque 500. */
+  lastWakeSeq: z.number().int().nonnegative().nullable().optional(),
+  lastWakeAt: z.string().datetime({ offset: true }).nullable().optional(),
+
   // ── THE OPERATOR-GIVEN AGENT NAME (2026-08-31, migration 20260905120000) ──
   /**
    * WHAT THE OPERATOR CALLS THIS AGENT ("Bug Reviewer"), snapshotted from the
@@ -268,6 +348,69 @@ const SESSION_REPORT_MAX = 32;
  * `ON CONFLICT` twice in one statement (Postgres 21000 → opaque 500), and there
  * is no honest way to pick which contradictory state is true.
  */
+/**
+ * **ONE MACHINE'S RECEIPT FOR ONE MESSAGE** (2026-09-02, A9).
+ *
+ * ⚠ **FOUR VALUES, NOT SIX**, and `MachineDelivery` is what proves it: the two
+ * the subset omits (`none`, `unreachable`) are the SERVER'S write-time answers
+ * about a message it resolved, and a delivery attempt does not observe "nobody
+ * was addressed". A desktop reports only what it did: fed and woke (`woken`),
+ * fed a running session (`delivered`), reached sessions that took no wake
+ * (`idle`), or declined to feed at all (`refused`).
+ *
+ * ⚠ **`seq`, NOT the message id.** The seq is what the desktop's listener holds
+ * (`main/listener-io.js`'s cursor) and what it already stamps on the turn it
+ * feeds (`session-gate.js › lastInboundSeq`); making it name a UUID would mean
+ * carrying an id the dispatch path has no reason to keep.
+ */
+export const DeliveryAckSchema = z.object({
+  /**
+   * 🔒 **WHICH OF THIS MACHINE'S SESSIONS IS REPORTING** — the fence, not a
+   * label (2026-09-02, review D3).
+   *
+   * ⚠ **WITHOUT IT THE ONLY FENCE WAS CHANNEL MEMBERSHIP**, so any member of a
+   * room could post `delivery: "woken"` for any `seq` in it, and the write is
+   * MONOTONIC — `woken` is the top rank, so the lie is permanent and no later
+   * receipt from the machine that actually handled the message can correct it.
+   * A receipt is a claim about what a MACHINE did; the claimant must therefore
+   * hold a live session on that machine, in that room.
+   *
+   * ⚠ **CHECKED AGAINST THE SESSION SET IN THIS SAME PUSH**, which
+   * `reportSessionStates` has already reconciled into `channel_sessions` under
+   * this caller's own id — so the binding costs no read and cannot name a
+   * session belonging to somebody else. `service-writes-delivery.ts` states the
+   * arms.
+   *
+   * ⚠ **REQUIRED, NOT OPTIONAL, AND THAT IS ONLY SAFE BECAUSE `acks` IS NEW.**
+   * The compatibility rule everywhere else on this body is that a required
+   * field 400s the whole push from an installed desktop; nothing in the field
+   * sends `acks` at all (A9 ships the first writer, `main/delivery-ack.js`), so
+   * there is no older payload to break. A LATER field on this object must be
+   * optional again.
+   */
+  sessionKey: z.string().regex(SESSION_KEY_RE, "Invalid session key"),
+  channelId: z.string().uuid(),
+  seq: z.number().int().positive(),
+  delivery: closedEnum<MachineDelivery>()([
+    "delivered",
+    "woken",
+    "idle",
+    "refused",
+  ]),
+});
+export type DeliveryAckInput = z.infer<typeof DeliveryAckSchema>;
+
+/**
+ * ⚠ **THE SAME ARRAY BOUND AS THE SESSION SET, AND FOR THE SAME REASON.** Zod
+ * validates the ARRAY, so one oversized payload 400s the WHOLE push — sessions
+ * included — and `retryable(400)` is false, which is the failure mode
+ * {@link SESSION_REPORT_MAX} is written around. A machine with more receipts than
+ * this drops the excess rather than losing its whole report; the ack is a
+ * convenience for an orchestrator, and the session set is the projection an
+ * entire tool reads.
+ */
+const DELIVERY_ACK_MAX = SESSION_REPORT_MAX;
+
 export const SessionStateReportSchema = z.object({
   sessions: z
     .array(SessionStateEntrySchema)
@@ -276,5 +419,17 @@ export const SessionStateReportSchema = z.object({
       (list) => new Set(list.map((s) => s.sessionKey)).size === list.length,
       { message: "Duplicate session keys in one report" }
     ),
+  /**
+   * **THE WAKE ACK, RIDING THE LANE THAT ALREADY EXISTS.**
+   *
+   * ⚠ **OPTIONAL, AND THAT IS THE WHOLE COMPATIBILITY STORY.** Every desktop in
+   * the field posts this body without the key, and must go on doing so — a
+   * required field here would 400 every push from every installed build, which
+   * is the unretryable failure this schema's other bounds exist to avoid.
+   * ⚠ NOT deduped and not ordered: two receipts for one seq are two real
+   * observations, and `service-writes-delivery.ts` resolves them by RANK rather
+   * than by arrival, so nothing depends on which came first.
+   */
+  acks: z.array(DeliveryAckSchema).max(DELIVERY_ACK_MAX).optional(),
 });
 export type SessionStateReportInput = z.infer<typeof SessionStateReportSchema>;

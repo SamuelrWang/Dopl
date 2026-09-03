@@ -1,16 +1,16 @@
 /**
- * MCP KIND-AWARENESS — `kind='link'` home-channel containers are UNLISTABLE and
- * UN-DEFAULTABLE, but stay explicitly ADDRESSABLE. The asymmetry is the whole
- * feature, so both halves are pinned here:
+ * MCP KIND-AWARENESS, AFTER B10 — a `kind='link'` container is LISTED like any
+ * other container and is never CALLED a workspace. The asymmetry that used to
+ * be the feature is gone with the thing it protected:
  *
- *   - `bootServer` never auto-targets a link container off "sole membership",
- *     and a caller whose only membership is a link resolves to NO default (the
- *     wrapper then demands `workspace=`, which is the correct fail-closed
- *     answer for a workspace that has no UI).
- *   - `list_workspaces` / `noWorkspaceError` never advertise one.
- *   - `resolveWorkspaceRef` DOES resolve one, by id and by slug, off the same
- *     cache — that is how an agent acting inside a home channel targets its own
- *     container.
+ *   - `bootServer` auto-targets NOTHING. There is no sole-membership rule left
+ *     to exclude a container from, so the "un-defaultable" half is not a
+ *     narrower rule — it is no rule at all, for any kind.
+ *   - `getWorkspaceList` LISTS containers (B10: "all workspaces are just normal
+ *     workspaces"). What keeps §4A true is that every surface renders the KIND,
+ *     which `containerKind` answers positively from the row.
+ *   - `resolveWorkspaceRef` resolves one by id and by slug off the same cache —
+ *     how an agent acting inside a home channel targets its own container.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -19,12 +19,19 @@ import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // ⚠ THE MCP RESOURCE SEAM (2026-09-02). `createServer` publishes
+    // `dopl://doctrine/channels` through `registerResource` (`resources.ts`), so
+    // a double without this method throws before a single tool is registered.
+    // ⚠ IT IS A NO-OP HERE ON PURPOSE — these suites assert over TOOLS. The
+    // resource's own content is pinned in `channel-doctrine.test.ts`, and that
+    // it is registered at all in `server.test.ts`.
+    registerResource() {}
     registerTool() {}
   },
 }));
 
 import { bootServer } from "./factory.js";
-import { createWorkspaceDirectory } from "./workspace-directory.js";
+import { containerKind, createWorkspaceDirectory } from "./workspace-directory.js";
 
 function wsItem(
   id: string,
@@ -63,25 +70,31 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("bootServer — session default excludes link containers", () => {
-  it("one standard + N links auto-targets the STANDARD one", async () => {
+describe("bootServer — nothing auto-targets, of any kind", () => {
+  it("one standard + N links binds NOTHING and sends no X-Workspace-Id", async () => {
+    // ⚠ **THIS USED TO ASSERT THE STANDARD ONE WAS PICKED**, and the pick is
+    // what B10 deletes: a container the caller never named must not become the
+    // one their calls land in, and neither must a workspace. The API applies
+    // the identical sole-membership rule one layer down
+    // (`with-workspace-auth.ts › resolveActiveWorkspace`), so the caller's
+    // answer is unchanged and there is now ONE copy of it.
     const client = mockClient([LINK_A, STANDARD, LINK_B]);
     const res = await bootServer(client);
-    expect(res.activeWorkspace).toMatchObject({ id: "id-std", slug: "alpha" });
-    expect(client.setWorkspaceId).toHaveBeenCalledWith("id-std");
+    expect(res.activeWorkspace).toBeNull();
+    expect(client.setWorkspaceId).toHaveBeenCalledWith(null);
   });
 
-  it("links ONLY → no default, and no bogus X-Workspace-Id on the wire", async () => {
+  it("links ONLY → nothing bound, and no bogus X-Workspace-Id on the wire", async () => {
     const client = mockClient([LINK_A, LINK_B]);
     const res = await bootServer(client);
     expect(res.activeWorkspace).toBeNull();
     expect(client.setWorkspaceId).toHaveBeenCalledWith(null);
   });
 
-  it("a kind-less directory (migration unapplied) still auto-targets its sole row", async () => {
+  it("a sole standard membership is not special either", async () => {
     const client = mockClient([KINDLESS]);
     const res = await bootServer(client);
-    expect(res.activeWorkspace).toMatchObject({ id: "id-old" });
+    expect(res.activeWorkspace).toBeNull();
   });
 
   it("an explicit X-Workspace-Id pin on a link container is honoured", async () => {
@@ -97,9 +110,9 @@ describe("WorkspaceDirectory — listing vs resolution", () => {
     return createWorkspaceDirectory(mockClient(rows), { directory: rows });
   }
 
-  it("getWorkspaceList drops link containers", async () => {
+  it("getWorkspaceList LISTS link containers — they are containers too (B10)", async () => {
     const list = await directoryOver([STANDARD, LINK_A, KINDLESS]).getWorkspaceList();
-    expect(list.map((w) => w.id)).toEqual(["id-std", "id-old"]);
+    expect(list.map((w) => w.id)).toEqual(["id-std", "id-link-a", "id-old"]);
   });
 
   it("resolveWorkspaceRef resolves a link container by id AND by slug", async () => {
@@ -108,20 +121,16 @@ describe("WorkspaceDirectory — listing vs resolution", () => {
     expect((await dir.resolveWorkspaceRef("link-a"))?.id).toBe("id-link-a");
   });
 
-  it("noWorkspaceError never names a link container", async () => {
-    const err = await directoryOver([LINK_A, LINK_B]).noWorkspaceError();
-    expect(err.isError).toBe(true);
-    const text = err.content.map((c) => ("text" in c ? c.text : "")).join("\n");
-    expect(text).not.toContain("link-a");
-    expect(text).toContain("not an active member of any workspace");
-  });
-
-  it("2+ standards alongside links list only the standards in the refusal", async () => {
-    const other = wsItem("id-std2", "beta", "standard");
-    const err = await directoryOver([STANDARD, LINK_A, other]).noWorkspaceError();
-    const text = err.content.map((c) => ("text" in c ? c.text : "")).join("\n");
-    expect(text).toContain("you belong to 2 workspaces");
-    expect(text).not.toContain("link-a");
+  it("containerKind labels each row POSITIVELY, from its own kind (F-564)", () => {
+    // ⚠ THE F-564 SHAPE, ASSERTED. `!isStandardWorkspace(…)` answered "home
+    // channel" for anything not standard, which `20260920120000`'s `personal`
+    // kind makes false for every user at once. The `default` arm is the safe
+    // one: an unknown kind is a workspace, never somebody's room.
+    expect(containerKind(STANDARD)).toBe("workspace");
+    expect(containerKind(KINDLESS)).toBe("workspace");
+    expect(containerKind(LINK_A)).toBe("home channel");
+    expect(containerKind({ kind: "personal" })).toBe("personal");
+    expect(containerKind({ kind: "vault" as never })).toBe("workspace");
   });
 });
 

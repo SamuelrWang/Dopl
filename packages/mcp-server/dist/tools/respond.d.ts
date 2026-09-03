@@ -18,7 +18,7 @@ export type RegisterTool = <S extends ZodRawShape>(name: string, description: st
  * Per-tool options on the META registration path.
  *
  * ⚠ `charged` EXISTS BECAUSE ONE META TOOL IS NOT LIKE THE OTHERS (Samuel's
- * ruling Q2 (b), 2026-08-28). `current_workspace` and `list_workspaces` are
+ * ruling Q2 (b), 2026-08-28). `dopl_workspaces` is
  * uncharged BY DECISION — they are how a lost agent finds out where it is —
  * while `dopl_home` READS CONTENT-ADJACENT DATA AND WRITES, so it pays like a
  * domain tool. It cannot use the domain path at all: that path injects a
@@ -47,6 +47,25 @@ export declare function err(message: string): ToolResponse;
 export declare function isConflict(e: unknown): boolean;
 /** True for a 404. Same duck-typing as `isConflict`. */
 export declare function isNotFound(e: unknown): boolean;
+/**
+ * Duck-typed match on a `@dopl/client` HTTP error's STATUS **and** its `code`.
+ *
+ * ⚠ **ONE COPY OF THE DUCK-TYPE, MANY SENTENCES.** Four mappers across the agent
+ * and knowledge surfaces were each re-typing this five-line shape
+ * (`typeof e === "object" && e !== null && e.status === … && e.code === …`), and
+ * a fifth was written for the KB copy on 2026-09-02. The PREDICATE is one fact
+ * about the wire; the MESSAGE is domain prose and stays with its domain, which
+ * is why this exports the test rather than a message builder.
+ * ⚠ Duck-typed on purpose — this package must not import the client's error
+ * class to ask a question about a status code.
+ */
+export declare function isApiError(e: unknown, status: number, code: string): boolean;
+/**
+ * The SERVER's own human sentence off an api error, or null when it sent none.
+ * ⚠ Prefer it over a hand-written one wherever it exists: the server knows which
+ * credential class or gate refused, and this layer does not.
+ */
+export declare function apiMessage(e: unknown): string | null;
 /** True for a 409 (name/title/slug already-exists collision). */
 export declare function isAlreadyExists(e: unknown): boolean;
 /**
@@ -54,7 +73,7 @@ export declare function isAlreadyExists(e: unknown): boolean;
  * surfaces: the registrar's up-front refusal (reading `allowed: false` off the
  * consume response, not an error) and `entitlementDenied` below.
  */
-export declare const CREDITS_EXHAUSTED_CODE = "credits_exhausted";
+export declare const CREDITS_EXHAUSTED_CODE: string;
 /**
  * Credits refusal rendered exactly like an entitlement denial (message +
  * upgrade link) so an agent reads ONE shape for every plan gate. ⚠ URL comes

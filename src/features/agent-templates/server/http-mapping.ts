@@ -1,11 +1,12 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
+import { ContainerPublishUnacknowledgedError } from "@/features/workspaces/server/shared-publish";
 import {
   AgentTemplateNotFoundError,
   TemplateKnowledgeBaseNotFoundError,
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
-  TemplateHomeScopeForbiddenError,
+  TemplateTeamScopeAgentForbiddenError,
   WorkspaceKeyPrivateTemplateError,
 } from "./errors";
 
@@ -14,7 +15,15 @@ import {
  *  as `mapSkillError` / `mapKnowledgeError`. */
 export function mapAgentTemplateError(err: unknown): HttpError | null {
   if (err instanceof AgentTemplateNotFoundError) {
-    return new HttpError(404, "AGENT_TEMPLATE_NOT_FOUND", err.message);
+    // ⚠ `details` ONLY WHEN THERE IS SOMETHING NON-LEAKY TO SAY (T35): the key
+    // is ABSENT for an ordinary miss, so its presence cannot itself be read as
+    // a fact about a row the caller may not see.
+    return new HttpError(
+      404,
+      "AGENT_TEMPLATE_NOT_FOUND",
+      err.message,
+      err.elsewhere ? { elsewhere: err.elsewhere } : undefined
+    );
   }
   if (err instanceof TemplateKnowledgeBaseNotFoundError) {
     // ⚠ 404, not 403 — see the error class: a distinguishable "forbidden" here
@@ -32,8 +41,14 @@ export function mapAgentTemplateError(err: unknown): HttpError | null {
   if (err instanceof WorkspaceKeyPrivateTemplateError) {
     return new HttpError(403, "WORKSPACE_KEY_PRIVATE_VISIBILITY", err.message);
   }
-  if (err instanceof TemplateHomeScopeForbiddenError) {
-    return new HttpError(403, "TEMPLATE_HOME_SCOPE_FORBIDDEN", err.message);
+  if (err instanceof TemplateTeamScopeAgentForbiddenError) {
+    return new HttpError(403, "TEMPLATE_TEAM_SCOPE_AGENT_FORBIDDEN", err.message);
+  }
+  // 🔒 G16 — 400, not 403: the caller is allowed to do this, the REQUEST is
+  // incomplete. Shared with the knowledge lane (`knowledge/server/
+  // http-mapping.ts`) — one error class, one code, two feature mappers.
+  if (err instanceof ContainerPublishUnacknowledgedError) {
+    return new HttpError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED", err.message);
   }
   return null;
 }

@@ -3,9 +3,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChannelGrantLevel } from "../types";
 
 /**
- * Raw Supabase I/O for CHANNEL RESOURCE GRANTS (`channel_resource_grants`, the
- * scope-A grant table behind Home Knowledge Panels). No business logic, no auth
- * checks — those live in `service-channel-grants.ts`.
+ * Raw Supabase I/O for CHANNEL RESOURCE GRANTS — the scope-A grant rows behind
+ * Home Knowledge Panels. No business logic, no auth checks — those live in
+ * `service-channel-grants.ts`.
+ *
+ * ⚠ THE TABLE IS `resource_grants`, NOT `channel_resource_grants` (Wave B,
+ * ruling B4, `20260914120000_resource_grants.sql`). One grant table now carries
+ * every scope a resource can be lent to — `channel`, `container`, `team` — so
+ * every statement here pins BOTH halves of its slice through
+ * {@link CHANNEL_KNOWLEDGE_GRANT}: a missing `scope_type` would read a team's
+ * grants as a channel's.
+ *
+ * ⚠ `channel_id` SURVIVES AS THE PROJECTED NAME. The column is `scope_id`; this
+ * module answers questions about CHANNELS, and `channel_id:scope_id` in the
+ * select keeps the domain word at the boundary while the storage word stays in
+ * the filter. One alias, in one constant, rather than a rename rippling through
+ * the service and its callers.
  *
  * ⚠ TAKES A `SupabaseClient` rather than reaching for `supabaseAdmin()` itself.
  * The service passes the service-role client (which BYPASSES RLS), so every
@@ -26,8 +39,21 @@ export interface ChannelResourceGrantRow {
   updated_at: string;
 }
 
+const GRANTS_TABLE = "resource_grants";
+
+/**
+ * The slice of `resource_grants` this module owns, as an equality filter set for
+ * `.match()`. ⚠ STATED ONCE AND SPREAD INTO EVERY STATEMENT, reads and writes
+ * alike: the day a second `resource_type` is granted into a channel, a statement
+ * that had been hand-spelling its filters would quietly widen.
+ */
+const CHANNEL_KNOWLEDGE_GRANT = {
+  scope_type: "channel",
+  resource_type: "knowledge_base",
+} as const;
+
 export const CHANNEL_RESOURCE_GRANT_COLS =
-  "channel_id, resource_type, resource_id, workspace_id, level, guest_write, created_by, created_at, updated_at";
+  "channel_id:scope_id, resource_type, resource_id, workspace_id, level, guest_write, created_by, created_at, updated_at";
 
 /**
  * Knowledge-base grants on ONE channel, restricted to a base-id set — the
@@ -44,14 +70,16 @@ export async function listChannelKnowledgeGrants(
 ): Promise<ChannelResourceGrantRow[]> {
   if (baseIds.length === 0) return [];
   const { data, error } = await db
-    .from("channel_resource_grants")
+    .from(GRANTS_TABLE)
     .select(CHANNEL_RESOURCE_GRANT_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("channel_id", channelId)
-    .eq("resource_type", "knowledge_base")
+    .match({
+      workspace_id: workspaceId,
+      scope_id: channelId,
+      ...CHANNEL_KNOWLEDGE_GRANT,
+    })
     .in("resource_id", baseIds);
   if (error) throw error;
-  return (data ?? []) as ChannelResourceGrantRow[];
+  return (data ?? []) as unknown as ChannelResourceGrantRow[];
 }
 
 /**
@@ -76,15 +104,17 @@ export async function listChannelGrantsAtLevel(
   limit: number
 ): Promise<ChannelResourceGrantRow[]> {
   const { data, error } = await db
-    .from("channel_resource_grants")
+    .from(GRANTS_TABLE)
     .select(CHANNEL_RESOURCE_GRANT_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("channel_id", channelId)
-    .eq("resource_type", "knowledge_base")
-    .eq("level", level)
+    .match({
+      workspace_id: workspaceId,
+      scope_id: channelId,
+      level,
+      ...CHANNEL_KNOWLEDGE_GRANT,
+    })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []) as ChannelResourceGrantRow[];
+  return (data ?? []) as unknown as ChannelResourceGrantRow[];
 }
 
 /**
@@ -105,23 +135,25 @@ export async function findChannelKnowledgeGrant(
   baseId: string
 ): Promise<ChannelResourceGrantRow | null> {
   const { data, error } = await db
-    .from("channel_resource_grants")
+    .from(GRANTS_TABLE)
     .select(CHANNEL_RESOURCE_GRANT_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("channel_id", channelId)
-    .eq("resource_type", "knowledge_base")
-    .eq("resource_id", baseId)
+    .match({
+      workspace_id: workspaceId,
+      scope_id: channelId,
+      resource_id: baseId,
+      ...CHANNEL_KNOWLEDGE_GRANT,
+    })
     .maybeSingle();
   if (error) throw error;
-  return (data ?? null) as ChannelResourceGrantRow | null;
+  return (data ?? null) as unknown as ChannelResourceGrantRow | null;
 }
 
 /**
  * Every channel ONE knowledge base is granted into — the other direction of the
- * same table, and the query `channel_resource_grants_resource_idx
- * (workspace_id, resource_type, resource_id)` is named for. Behind the settings
- * section, which asks about one KB across many channels rather than one channel
- * across many KBs.
+ * same table, and the query `resource_grants_resource_idx (workspace_id,
+ * resource_type, resource_id)` is named for. Behind the settings section, which
+ * asks about one KB across many channels rather than one channel across many
+ * KBs.
  *
  * ⚠ The caller INTERSECTS the result with its own fenced channel list. This
  * returns grants on channels the caller may not see (the KB owner can share
@@ -135,14 +167,16 @@ export async function listChannelGrantsForBase(
   limit: number
 ): Promise<ChannelResourceGrantRow[]> {
   const { data, error } = await db
-    .from("channel_resource_grants")
+    .from(GRANTS_TABLE)
     .select(CHANNEL_RESOURCE_GRANT_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("resource_type", "knowledge_base")
-    .eq("resource_id", baseId)
+    .match({
+      workspace_id: workspaceId,
+      resource_id: baseId,
+      ...CHANNEL_KNOWLEDGE_GRANT,
+    })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []) as ChannelResourceGrantRow[];
+  return (data ?? []) as unknown as ChannelResourceGrantRow[];
 }
 
 /**
@@ -155,10 +189,15 @@ export async function listChannelGrantsForBase(
  * overwrites it with the current actor, which is what "who shared this, as it
  * stands" should mean. ⚠ `updated_at` is left to `touch_knowledge_updated_at()`.
  *
- * ⚠ The same-workspace VALIDITY TRIGGER fires here (BEFORE INSERT OR UPDATE) and
- * RAISEs `P0001` on a mismatch. This function does NOT translate it — the
- * service does, so the raw message (which names both workspace ids) never
- * reaches a client.
+ * 🔒 ⚠ `created_by` IS ALSO THE GRANTOR THE VALIDITY TRIGGER JUDGES. Since
+ * `20260914120000`, `enforce_resource_grant()` asserts that this user reaches
+ * BOTH containers — the base's and the channel's — rather than that the two
+ * containers are the same one. Writing a stale or borrowed actor here does not
+ * loosen the check; it moves it onto the wrong person.
+ *
+ * ⚠ The trigger RAISEs `P0001` on a refusal. This function does NOT translate it
+ * — the service does, so the raw message (which names both containers, and the
+ * grantor) never reaches a client.
  */
 export async function upsertChannelKnowledgeGrant(
   db: SupabaseClient,
@@ -172,23 +211,23 @@ export async function upsertChannelKnowledgeGrant(
   }
 ): Promise<ChannelResourceGrantRow> {
   const { data, error } = await db
-    .from("channel_resource_grants")
+    .from(GRANTS_TABLE)
     .upsert(
       {
-        channel_id: row.channelId,
-        resource_type: "knowledge_base",
+        ...CHANNEL_KNOWLEDGE_GRANT,
+        scope_id: row.channelId,
         resource_id: row.baseId,
         workspace_id: row.workspaceId,
         level: row.level,
         guest_write: row.guestWrite,
         created_by: row.createdBy,
       },
-      { onConflict: "channel_id,resource_type,resource_id" }
+      { onConflict: "scope_type,scope_id,resource_type,resource_id" }
     )
     .select(CHANNEL_RESOURCE_GRANT_COLS)
     .single();
   if (error) throw error;
-  return data as ChannelResourceGrantRow;
+  return data as unknown as ChannelResourceGrantRow;
 }
 
 /**
@@ -196,7 +235,7 @@ export async function upsertChannelKnowledgeGrant(
  * state, so un-sharing is a DELETE and never a row at some lower level.
  *
  * ⚠ `workspace_id`-filtered like every read here: the service-role client
- * bypasses RLS, and the PK alone (channel + type + resource) would let a
+ * bypasses RLS, and the PK alone (scope + type + resource) would let a
  * mis-routed call delete another tenant's row. Deleting nothing is SUCCESS —
  * the end state asked for is the end state reached, so a double-click cannot
  * fail.
@@ -208,12 +247,14 @@ export async function deleteChannelKnowledgeGrant(
   baseId: string
 ): Promise<void> {
   const { error } = await db
-    .from("channel_resource_grants")
+    .from(GRANTS_TABLE)
     .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("channel_id", channelId)
-    .eq("resource_type", "knowledge_base")
-    .eq("resource_id", baseId);
+    .match({
+      workspace_id: workspaceId,
+      scope_id: channelId,
+      resource_id: baseId,
+      ...CHANNEL_KNOWLEDGE_GRANT,
+    });
   if (error) throw error;
 }
 
@@ -223,19 +264,24 @@ export async function deleteChannelKnowledgeGrant(
  *
  * ⚠ **ONE `IN (baseIds)` QUERY FOR THE WHOLE GRID, never a lookup per card.** It
  * is the shape `listChannelKnowledgeGrants` already uses; the only difference is
- * that no `channel_id` narrows it, because the question is "any channel at all".
+ * that no `scope_id` narrows it, because the question is "any channel at all".
  * Empty `baseIds` short-circuits with no query.
  *
  * ⚠ **ONE COLUMN, AND THE OMISSIONS ARE THE POINT.** It selects `resource_id`
- * alone — not `channel_id`, not `level`, not `created_by`. The caller wants a
- * SET of base ids; every other column would put the identity of channels the
- * caller may not be able to see one `.map()` away from a response body, which is
+ * alone — not the scope, not `level`, not `created_by`. The caller wants a SET
+ * of base ids; every other column would put the identity of channels the caller
+ * may not be able to see one `.map()` away from a response body, which is
  * exactly what `listChannelGrantsForBase`'s docblock warns its own caller to
  * intersect against. Answering "yes, somewhere" leaks nothing about where.
  *
  * ⚠ **BOTH LEVELS COUNT.** `agent_only` and `visible` are both a share — the
  * base has left the operator's private shelf either way, and the pill answers
  * "is this still only mine", not "who can read it".
+ *
+ * ⚠ **AND ONLY CHANNEL SCOPES COUNT**, which is why `CHANNEL_KNOWLEDGE_GRANT`
+ * is spread here too. A `team` or `container` grant is a share as well, but this
+ * pill is the CHANNEL panel's; widening it silently is how one word starts
+ * meaning two things.
  *
  * ⚠ `workspace_id`-filtered like every read in this file: the service passes the
  * RLS-BYPASSING client, so the tenancy fence has to be explicit.
@@ -248,10 +294,9 @@ export async function listSharedBaseIds(
 ): Promise<string[]> {
   if (baseIds.length === 0) return [];
   const { data, error } = await db
-    .from("channel_resource_grants")
+    .from(GRANTS_TABLE)
     .select("resource_id")
-    .eq("workspace_id", workspaceId)
-    .eq("resource_type", "knowledge_base")
+    .match({ workspace_id: workspaceId, ...CHANNEL_KNOWLEDGE_GRANT })
     .in("resource_id", baseIds)
     .limit(limit);
   if (error) throw error;

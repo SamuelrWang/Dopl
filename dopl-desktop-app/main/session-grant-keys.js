@@ -41,7 +41,11 @@ function shaKey(value) {
 // v2.9 review: POST_GRANT is the own-channel post BASE. A real key always extends it with
 // the to/kind segments (MEDIUM-2) and the body digest (FIX F7), so the bare constant matches
 // nothing on its own — it names the namespace, not a grant.
-const POST_GRANT = DOPL_CHANNEL_TOOL + '#post'; // op=post into the session's OWN channel
+// ⚠ THE SEGMENT IS A GRANT-CLASS NAME, NOT AN OP NAME, and it stays `#post` through the
+// five-op collapse (2026-09-02, F-578). The op it scopes is `send` now; what the operator was
+// shown, and what this namespace means — "a message into this session's own channel" — did not
+// move, and renaming the segment would invalidate every grant a live session is holding.
+const POST_GRANT = DOPL_CHANNEL_TOOL + '#post'; // op=send into the session's OWN channel
 const OP_PREFIX = '#op:'; // every other shape lives in a DISJOINT namespace
 const OP_CAP = 32;
 const TARGET_CAP = 40;
@@ -195,7 +199,9 @@ function makeGrantKeyFor(deps) {
       const base = String(toolName);
       if (isOwnChannelPost(input, channelId)) return postScope(base + '#post', i);
       const op = keyToken(i.op, OP_CAP);
-      if (op === 'post') return postScope(base + OP_PREFIX + 'post:' + targetSegment(i.channel), i);
+      // ⚠ THE CROSS-CHANNEL SEND, which is a different namespace from the own-channel one
+      // above: a grant to message ONE other channel must not cover a second.
+      if (op === 'send') return postScope(base + OP_PREFIX + 'send:' + targetSegment(i.channel), i);
       return base + OP_PREFIX + op;
     }
     if (toolName === 'Bash') return bashKey(toolName, i);

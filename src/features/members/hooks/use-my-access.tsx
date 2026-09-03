@@ -11,7 +11,7 @@
 
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import { isRetiredResourceType, type AccessLevel } from "@/features/teams/access-levels";
+import { type AccessLevel } from "@/features/teams/access-levels";
 
 /** Resource kinds the badge UI may ask about. Teams-mode resolution only
  *  produces knowledge_base entries; skill falls through to the role
@@ -24,28 +24,24 @@ interface Override<T extends string> {
   level: AccessLevel;
 }
 
-/** What the endpoint actually sends. ⚠ `workflow` grants are still valid
- *  rows in the DB and the route still emits them; `selectAccess` drops them
- *  on arrival so nothing downstream resolves against a retired resource. */
-interface MyAccessWire {
-  defaultLevel: AccessLevel;
-  overrides: Array<Override<ResourceType | "workflow">>;
-}
-
+/**
+ * What the endpoint actually sends.
+ *
+ * ⚠ **IT CARRIED `| "workflow"` AND A NARROWING FILTER UNTIL 2026-09-02
+ * (F-466).** `team_resource_access.resource_type` kept the value in its CHECK
+ * after the feature was dropped (`20260811120000`), so a surviving row could
+ * reach this hook with no live code between. Ruling B4 moved the route onto
+ * `resource_grants`, whose CHECK refuses it — the wire union is the resource
+ * union now, and there is nothing to narrow from.
+ */
 interface MyAccessPayload {
   defaultLevel: AccessLevel;
   overrides: Array<Override<ResourceType>>;
 }
 
-// Hand-rolled `.filter`, not `withoutRetiredResources`: this one NARROWS the
-// element type (drops `"workflow"` from the union) and the shared helper is
-// type-preserving. Predicate is still the shared one, so un-retiring stays a
-// single edit in `teams/access-levels`.
-const selectAccess = (body: MyAccessWire): MyAccessPayload => ({
+const selectAccess = (body: MyAccessPayload): MyAccessPayload => ({
   defaultLevel: body.defaultLevel,
-  overrides: (body.overrides ?? []).filter(
-    (o): o is Override<ResourceType> => !isRetiredResourceType(o.resourceType)
-  ),
+  overrides: body.overrides ?? [],
 });
 
 export interface UseMyAccessResult {
@@ -59,7 +55,7 @@ export interface UseMyAccessResult {
 }
 
 function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
-  const query = useApiQuery<MyAccessWire, MyAccessPayload>(
+  const query = useApiQuery<MyAccessPayload, MyAccessPayload>(
     workspaceSegment
       ? `/api/workspaces/${encodeURIComponent(workspaceSegment)}/my-access`
       : null,

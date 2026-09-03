@@ -27,15 +27,35 @@
 //              approve-out gate), NO Dopl MCP, no write/exec/delegation. Zero-outbound.
 //              Answers come back on stdout, so no tool is needed to reply.
 //   dopl_only  local reads + WEB reads + NON-ADMIN Dopl MCP, each named EXPLICITLY.
-//              ⚠ Never the bare `mcp__dopl` prefix in an allow list — it matches the
-//              destructive *_admin tools too (made v1.1's dopl_only MORE dangerous than full).
+//              ⚠ Never the bare `mcp__dopl` prefix in an allow list — it matches EVERY tool on
+//              the server, `dopl_channel` (the exfil surface) included, and back when the
+//              destructive *_admin tools existed it made v1.1's dopl_only MORE dangerous than full.
 //              `dopl_channel` excluded AND denied, so the reply
 //              routes through stdout + approve-out. Residual exfil (a GET query string) is
 //              bounded: no Bash/Write/admin, so injected web content cannot ACT.
+//   channel_agent
+//              `full` MINUS THE SHELL (2026-09-02, Samuel's ruling B7). Same offer, same floor,
+//              same absence of a positive bound — plus `Bash` / `BashOutput` / `KillShell`
+//              denied BY NAME. ⚠ DEFENSE IN DEPTH FOR A SESSION LAUNCHED INTO A SHARED
+//              CONTAINER: with a shell AND its own bearer, an agent can call the REST API
+//              directly over loopback and bypass every fence that lives at the MCP layer.
+//              ⚠ DERIVED FROM `full`, NEVER HAND-LISTED — see CHANNEL_AGENT_HARD_DENY below
+//              and `runtime/claude/tools.js › CHANNEL_AGENT_BUILTIN_BOUND`. A fourth hand-list
+//              is a fourth thing to forget.
+//              ⚠ IT IS NOT A STORED SETTING. `channel_agent` is never written to
+//              `channel_members.agent_tool_profile` (still the three-value enum,
+//              `src/features/channels/types.ts › AgentToolProfile`) — it is what a LAUNCH
+//              resolves to, via `profileForChannel` below.
 //   full       no restriction flags beyond the deny floor; the CLI's own gating applies.
 //              ⚠ A headless `full` spawn CANNOT use Bash/Write/MCP — DELIBERATE: pre-approving
 //              them for an untrusted teammate message lets side effects land DURING the run,
 //              before the approve-out gate. Real shell access = Run-in-Terminal (live TTY).
+//
+// ⚠ G18 IS NARROWED BY THE FOURTH PROFILE, NOT CLOSED. `WebFetch` / `WebSearch` stay reachable
+// under `channel_agent` — the ruling is "full minus Bash", and web reads are governed per profile
+// by WEB_TOOLS, not by the shell group. So a `channel_agent` session still has ONE outbound path
+// that does not cross the approve-out gate (a GET query string). Recorded here rather than
+// glossed; closing it is a separate posture decision about `full` itself.
 //
 // Unrecognized names in --allowedTools / --disallowedTools / --tools are harmless no-ops, so
 // these lists may name tools that exist only in some CLI versions.
@@ -64,29 +84,36 @@ const DOPL_SAFE_TOOLS = [
   // by the same rule `dopl_kb` and `dopl_skill` sit here under: it authors rows in
   // the workspace, which a restricted spawn may already do, and it POSTS NOTHING —
   // the exfil surface is `dopl_channel`, which stays out (and denied). Authoring a
-  // template starts no agent either: that is `dopl_channel(op="launch_agent")`.
+  // template starts no agent either: that is `dopl_channel(op="manage", action="launch")`.
   'mcp__dopl__dopl_agent',
-  // HOME CHANNELS (2026-08-28, wave B). ⚠ SAFE-LIST placement by the same rule
-  // as `dopl_kb`: it authors rows the caller could author anyway and POSTS
-  // NOTHING. Its one write makes a room the caller is ALONE in — it cannot
-  // invite anybody, because minting the link that reaches a person is
-  // `sessionOnly` and unreachable over MCP for every role and token.
-  'mcp__dopl__dopl_home',
-  'mcp__dopl__current_workspace',
-  'mcp__dopl__list_workspaces',
+  // THE ORCHESTRATOR'S CHECK-IN (2026-09-01, agent-efficiency wave T20). ⚠ SAFE-LIST
+  // placement, and the rule it sits under is the strictest one on this list: it is a
+  // READ that POSTS NOTHING. It answers with the caller's OWN memberships, their OWN
+  // sessions and the messages addressed to THEM — a projection of rows the caller can
+  // already reach one call at a time, which is the whole point of the op (it replaces
+  // ~10 calls per check-in). It starts no agent, writes no row, and reaches no other
+  // member's side. The exfil surface is still `dopl_channel`, which stays out and denied.
+  'mcp__dopl__dopl_status',
+  // ORIENTATION (v2 wave B, B13, 2026-09-02). ⚠ ONE NAME WHERE THREE STOOD:
+  // `current_workspace`, `list_workspaces` and `dopl_home` are deleted
+  // server-side. It is a pure READ that posts nothing and writes nothing — the
+  // strictest safe-list rule, the same one `dopl_status` sits under.
+  // ⚠ THE THREE NAMES ARE SIMPLY REMOVED, NOT MOVED TO THE DENY FLOOR. A name
+  // in no list GATES, and the floor is for tools whose DENY must outlive them
+  // (the destructive ones); an orientation read is not that. Same move B8 made
+  // for the twenty-two retired channel ops.
+  'mcp__dopl__dopl_workspaces',
 ];
 
-// Destructive admin companions. NEVER grantable under any restricted profile: denied
-// explicitly (belt) AND excluded from the allow list (braces).
-// ⚠ Keep even though each now refuses every delete op server-side — containment must not
-// depend on server-side policy, and a deny the operator cannot click through is stronger.
-const DOPL_ADMIN_TOOLS = [
-  'mcp__dopl__dopl_kb_admin',
-  'mcp__dopl__dopl_skill_admin',
-  'mcp__dopl__dopl_ontology_admin',
-  'mcp__dopl__dopl_chats_admin',
-  'mcp__dopl__dopl_agent_admin',
-];
+// Destructive admin companions that the server registers TODAY. EMPTY since 2026-09-02:
+// the five that lived here were DELETED server-side (registrars, op handlers, descriptions)
+// once `sessionOnly` on the app-only DELETE routes made the sentence they published true in
+// code. Their names did not leave the deny path — they moved to RETIRED_DOPL_TOOLS below,
+// which is the same move the 2026-08-11 retirement made, so UNIVERSAL_HARD_DENY is still 9.
+// ⚠ THE SLOT STAYS, and `test/tool-profiles.test.mjs` holds it EQUAL to the server's live
+// `*_admin` registrations: a destructive companion that ever ships again must land here, not
+// in DOPL_SAFE_TOOLS, or a dopl_only spawn gets it pre-approved.
+const DOPL_ADMIN_TOOLS = [];
 
 // Dopl tools that NO LONGER EXIST — deleted server-side, registrars, routes and tables.
 // ⚠ THE DENY OUTLIVES THE TOOL, DELIBERATELY. Dropping a name from DOPL_ADMIN_TOOLS alone
@@ -94,18 +121,29 @@ const DOPL_ADMIN_TOOLS = [
 // instead of immovably denied. The caller is a CLI we do not control and the name is
 // attacker-suppliable, so containment must not depend on the server's current tool list.
 // UNIVERSAL_HARD_DENY = admins + these = 9 since 2026-08-28 (it was 8 from 2026-08-11, and moved
-// because `dopl_agent_admin` joined the admin half — NOT because anything was retired; this list
-// is unchanged). docs/INVARIANTS.md §11 pins the number.
+// because `dopl_agent_admin` joined the admin half — NOT because anything was retired).
+// ⚠ IT IS STILL 9 AFTER 2026-09-02, AND THE WHOLE FLOOR IS ON THIS LIST NOW: the five `*_admin`
+// tools were DELETED server-side (their unconditional refusal is a `sessionOnly` REST gate now)
+// and their names moved here from DOPL_ADMIN_TOOLS. The floor did not move, because a deny
+// outlives its tool — which is the entire point of this list.
+// docs/INVARIANTS.md §11 pins the number.
 // Do NOT shorten this list to tidy up.
 const RETIRED_DOPL_TOOLS = [
   'mcp__dopl__dopl_workflow',
   'mcp__dopl__dopl_workflow_admin',
   'mcp__dopl__dopl_cluster',
   'mcp__dopl__dopl_cluster_admin',
+  // MCP v2 wave A (2026-09-02). Every op on all five was refused unconditionally, so they
+  // cost 9,295 served chars to publish a refusal that the `sessionOnly` REST gate enforces.
+  'mcp__dopl__dopl_kb_admin',
+  'mcp__dopl__dopl_skill_admin',
+  'mcp__dopl__dopl_ontology_admin',
+  'mcp__dopl__dopl_chats_admin',
+  'mcp__dopl__dopl_agent_admin',
 ];
 
 // ⚠ Bare server prefix — valid ONLY in a DENY list (it matches every tool on the server,
-// admins included), NEVER in an allow list.
+// `dopl_channel` included), NEVER in an allow list.
 const DOPL_SERVER_PREFIX = 'mcp__dopl';
 
 // Local READ built-ins every restricted spawn may use; also the base of the --tools positive
@@ -117,11 +155,20 @@ const READ_BUILTINS = ['Read', 'Grep', 'Glob', 'LS', 'TodoWrite'];
 // and read_only is the zero-outbound profile.
 const WEB_TOOLS = ['WebFetch', 'WebSearch'];
 
+// THE SHELL, SPELLED ONCE (2026-09-02, ruling B7). Local execution, and the read half of it —
+// `BashOutput` / `KillShell` reach the same child process, so a group that named only `Bash`
+// would be a fence with the door beside it open.
+// ⚠ THREE READERS, AND THAT IS THE WHOLE REASON IT IS A CONSTANT: `DENIED_BUILTINS` below (every
+// restricted profile), `CHANNEL_AGENT_HARD_DENY` (the fourth profile's floor) and
+// `runtime/claude/tools.js › ESCALATION_TOOLS` + `CHANNEL_AGENT_BUILTIN_BOUND`. Adding a fourth
+// shell verb must be one edit, not four.
+const SHELL_BUILTINS = ['Bash', 'BashOutput', 'KillShell'];
+
 // Built-ins a restricted spawn must never reach, grouped by what they'd buy an attacker who
 // has injected the untrusted message body.
 const DENIED_BUILTINS = [
   // Local execution + filesystem writes.
-  'Bash', 'BashOutput', 'KillShell',
+  ...SHELL_BUILTINS,
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
   // Delegation: a subagent is a fresh session that does not inherit this bound.
   'Task', 'Agent', 'TaskCreate', 'TaskUpdate', 'TaskStop',
@@ -147,13 +194,31 @@ const DENIED_BUILTINS = [
 // stop on a button in every mode). Universal floor = retired tools + destructive admins.
 const UNIVERSAL_HARD_DENY = [...DOPL_ADMIN_TOOLS, ...RETIRED_DOPL_TOOLS];
 
+// ⚠ THE FOURTH PROFILE'S FLOOR — `full`'S, PLUS THE SHELL, DERIVED (2026-09-02, ruling B7).
+// It is a CONCATENATION of the two constants above it and never a list of its own: `full` and
+// `channel_agent` must move together whenever the universal floor moves, and the only difference
+// between them that anyone may read off this file is the shell group.
+const CHANNEL_AGENT_HARD_DENY = [...UNIVERSAL_HARD_DENY, ...SHELL_BUILTINS];
+
 const TOOL_PROFILES = {
   read_only: [...READ_BUILTINS],
   dopl_only: [...READ_BUILTINS, ...WEB_TOOLS, ...DOPL_SAFE_TOOLS],
+  // ⚠ EMPTY, EXACTLY LIKE `full` — the fourth profile narrows by DENY, never by a narrower
+  // allow list. Pre-approving a subset here would shadow those names past the gate, which is a
+  // widening dressed as a restriction.
+  channel_agent: [],
   full: [], // empty => no --allowedTools bound at all
 };
 
-const KNOWN_PROFILES = ['read_only', 'dopl_only', 'full'];
+// ⚠ NARROWEST FIRST, AND `channel_agent` SITS BELOW `full` BECAUSE IT IS STRICTLY NARROWER THAN
+// IT. Nothing indexes this array today (`normalizeProfile` is a membership test), so the order is
+// documentation — but it is the order every other posture vocabulary in this tree is written in
+// (`descriptor.toolMode.options`, `launch-directive-wire.js › TOOL_MODES`), and a reader who
+// assumes it should not be wrong.
+// ⚠ `main/session-park.js › KNOWN_PROFILES` IS A SECOND COPY OF THIS SET, over the durable
+// record. It is held equal to this one by `test/channel-agent-profile.test.mjs`; a profile added
+// here and not there silently downgrades every parked session carrying it.
+const KNOWN_PROFILES = ['read_only', 'dopl_only', 'channel_agent', 'full'];
 
 // ⚠ FAIL CLOSED ON AN UNKNOWN VALUE -> read_only, matching session-park.knownProfile.
 // `myAgentToolProfile` is null for a non-member read, an unrefreshed DTO, and any out-of-enum
@@ -172,6 +237,40 @@ function normalizeProfile(p) {
   return 'read_only';
 }
 
+// The two profiles that carry NO positive bound and NO scoped settings — `full` and the fourth
+// profile derived from it. ⚠ A PREDICATE RATHER THAN `p === 'full' || p === 'channel_agent'`
+// REPEATED IN THREE BUILDERS: the three must never disagree about which shape a profile takes,
+// and three copies of a disjunction is how two of them come to.
+function isUnboundedProfile(p) {
+  return p === 'full' || p === 'channel_agent';
+}
+
+/**
+ * THE PROFILE A LAUNCH INTO THIS ROOM RESOLVES TO (2026-09-02, Samuel's ruling B7).
+ *
+ * ⚠ IT NARROWS AND IT CAN NEVER WIDEN. The only pair it moves is `full` -> `channel_agent`, in a
+ * SHARED room; `read_only` and `dopl_only` are already narrower than the fourth profile and come
+ * back untouched, and an unresolvable value still fails closed through `normalizeProfile`.
+ *
+ * ⚠ THE OPERATOR'S EXPLICIT `full` STILL MEANS `full` IN A ROOM WITH ONLY THEM IN IT. That is the
+ * whole of the `shared` argument, and since the F-513 ruling the FACT behind it is the CHANNEL's
+ * member count — `targeting-window.js › isSharedChannel` — not the container's kind. A room is
+ * shared when more than one person is in it, `standard` workspaces included; the container
+ * predicate this first read (`session-park-on-claim.js › isSharedContainer`) answers a different
+ * question and called a nine-member workspace solo.
+ * ⚠ IT STILL TAKES A BOOLEAN, and that is deliberate: this module owns the VOCABULARY and knows
+ * nothing about DTOs, so the fact is computed by the one caller that holds a channel record and
+ * the rule stays a rule.
+ *
+ * ⚠ AND IT IS A LAUNCH-TIME DERIVATION, NOT A SETTING. Nothing writes `channel_agent` back to the
+ * channel — the stored enum is still three values — so an operator who moves the channel's
+ * profile still moves the thing this reads, and the narrowing is re-derived per spawn.
+ */
+function profileForChannel(profile, shared) {
+  const p = normalizeProfile(profile);
+  return shared === true && p === 'full' ? 'channel_agent' : p;
+}
+
 // The --allowedTools list for a profile (empty array => omit the flag).
 function buildAllowedTools(profile) {
   return TOOL_PROFILES[normalizeProfile(profile)] || [];
@@ -181,8 +280,9 @@ function buildAllowedTools(profile) {
 // settings file and as --disallowedTools. Empty for `full`.
 function buildDeniedTools(profile) {
   const p = normalizeProfile(profile);
-  // `full` is the UNIVERSAL FLOOR and nothing else.
+  // `full` is the UNIVERSAL FLOOR and nothing else; `channel_agent` is that floor plus the shell.
   if (p === 'full') return [...UNIVERSAL_HARD_DENY];
+  if (p === 'channel_agent') return [...CHANNEL_AGENT_HARD_DENY];
   const denied = [...DENIED_BUILTINS, ...DOPL_ADMIN_TOOLS, ...RETIRED_DOPL_TOOLS];
   // read_only: no Dopl MCP at all AND no web. Admins repeated by name so containment survives
   // a CLI that stops honoring the bare-prefix form.
@@ -201,7 +301,10 @@ function buildDeniedTools(profile) {
 // is not offered to the model at all.
 function buildBuiltinTools(profile) {
   const p = normalizeProfile(profile);
-  if (p === 'full') return [];
+  // ⚠ `channel_agent` TAKES `full`'S SHAPE HERE — no positive bound — and its shell is removed by
+  // the DENY instead. Naming a bound would mean restating the CLI's whole built-in surface minus
+  // three names in this file, which is the fourth hand-list the ruling's derivation forbids.
+  if (isUnboundedProfile(p)) return [];
   return p === 'dopl_only' ? [...READ_BUILTINS, ...WEB_TOOLS] : [...READ_BUILTINS];
 }
 
@@ -212,8 +315,10 @@ function buildRestrictionArgs(profile, settingsPath) {
   const p = normalizeProfile(profile);
   // ⚠ `full` gets the deny floor and EXACTLY ONE FLAG: no `--tools`, no `--allowedTools`, no
   // `--settings`, and NO `--strict-mcp-config` — the operator's global MCP servers are the
-  // point of `full`.
-  if (p === 'full') return ['--disallowedTools', UNIVERSAL_HARD_DENY.join(',')];
+  // point of `full`. ⚠ `channel_agent` takes the same ONE FLAG over a longer list: the ruling
+  // removes the shell, not the operator's MCP servers, so the other three layers stay off here
+  // exactly as they are for `full`.
+  if (isUnboundedProfile(p)) return ['--disallowedTools', buildDeniedTools(p).join(',')];
   const args = [];
   const builtins = buildBuiltinTools(p);
   if (builtins.length) args.push('--tools', builtins.join(','));
@@ -245,7 +350,12 @@ onUnknownProfile(function (value) {
 
 // Plain-language profile label for the consent notification's blast-radius line.
 // ⚠ OUTSIDE the extracted table block so it never perturbs the source-extraction test.
-const PROFILE_LABELS = { read_only: 'Read-only', dopl_only: 'Dopl-only', full: 'Full-access' };
+const PROFILE_LABELS = {
+  read_only: 'Read-only',
+  dopl_only: 'Dopl-only',
+  channel_agent: 'Shared-channel',
+  full: 'Full-access',
+};
 function profileLabel(profile) {
   // ⚠ Fallback follows normalizeProfile — a label of 'Full-access' over a spawn contained at
   // read_only is a consent card that lies.
@@ -257,6 +367,7 @@ function profileLabel(profile) {
 const PROFILE_HINTS = {
   read_only: 'Reads your local files only — no web, Dopl, shell, or file writes.',
   dopl_only: 'Reads your files, the Dopl archive/KB, and the web — no shell or writes.',
+  channel_agent: 'Full access minus the shell, because other people are in this channel.',
   full: 'Limited headless (no shell or writes). Run it in a session window to approve each tool live.',
 };
 function profileHint(profile) {
@@ -267,6 +378,8 @@ module.exports = {
   DOPL_CHANNEL_TOOL,
   KNOWN_PROFILES,
   UNIVERSAL_HARD_DENY, // the floor that applies under `full` too
+  CHANNEL_AGENT_HARD_DENY, // B7: that floor + the shell, and the fourth profile's whole delta
+  SHELL_BUILTINS, // the shell group, spelled once; the adapters derive from it
   onUnknownProfile, // injected reporter (wired to diag above; tests drive it directly)
   DOPL_SAFE_TOOLS,
   DOPL_ADMIN_TOOLS,
@@ -276,6 +389,7 @@ module.exports = {
   WEB_TOOLS,
   DENIED_BUILTINS,
   normalizeProfile,
+  profileForChannel, // B7: `full` -> `channel_agent` in a SHARED room, and never wider
   buildAllowedTools,
   buildDeniedTools,
   buildBuiltinTools,

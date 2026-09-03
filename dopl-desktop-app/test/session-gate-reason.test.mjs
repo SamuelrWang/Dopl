@@ -58,22 +58,22 @@ test("FIX 1: every gate/deny branch names WHY, with a code from the closed set",
     ["manual is the posture asking, not a coverage hole",
       { toolName: "Bash", input: { command: "ls" }, toolMode: "manual" }, "gate", "awaiting-approval"],
     ["a SLUG-addressed post is classified cross-channel (the safe failure)",
-      { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", channel: "my-slug", body: "hi" } }, "gate", "cross-channel-post"],
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "send", channel: "my-slug", body: "hi" } }, "gate", "cross-channel-post"],
     ["and so is a genuinely other-channel post",
-      { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", channel: "other-id", body: "hi" } }, "gate", "cross-channel-post"],
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "send", channel: "other-id", body: "hi" } }, "gate", "cross-channel-post"],
     ["a malformed `to` refuses to auto-allow (FIX F9) and says which field",
-      { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", to: { a: 1 }, body: "hi" } }, "gate", "malformed-post-fields"],
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "send", to: { a: 1 }, body: "hi" } }, "gate", "malformed-post-fields"],
     ["a malformed `kind` the same way",
-      { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", kind: ["x"], body: "hi" } }, "gate", "malformed-post-fields"],
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "send", kind: ["x"], body: "hi" } }, "gate", "malformed-post-fields"],
     ["an own-channel post held by AXIS B at `ask`",
-      { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi" }, messageMode: "ask" }, "gate", "message-approval-required"],
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi" }, messageMode: "ask" }, "gate", "message-approval-required"],
     ["a NON-post, NON-read channel op is never auto-run, even at auto_both",
-      { toolName: DOPL_CHANNEL_TOOL, input: { op: "open", direct: true }, messageMode: "auto_both" }, "gate", "channel-op-approval-required"],
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "rooms", action: "open", direct: true }, messageMode: "auto_both" }, "gate", "channel-op-approval-required"],
     // M3 (2026-08-05): a READ has its own two facts, and they are not the post's two facts.
     ["an own-channel read held by AXIS B at `ask` says which half of the axis is asking",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "read" }, messageMode: "ask" }, "gate", "read-approval-required"],
     ["a slug-addressed read is classified cross-channel, and says READ, not POST",
-      { toolName: DOPL_CHANNEL_TOOL, input: { op: "get_thread", channel: "my-slug" }, messageMode: "auto_both" }, "gate", "cross-channel-read"],
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "read", channel: "my-slug" }, messageMode: "auto_both" }, "gate", "cross-channel-read"],
   ];
   for (const [label, args, decision, reason] of cases) {
     const d = detail(args);
@@ -90,7 +90,7 @@ test("FIX 1: an ALLOW is explained too, so the diag can tell WHICH rule let it t
   const key = profiles.grantKeyFor("Bash", { command: "ls" }, CH);
   assert.deepEqual(detail({ toolName: "Bash", input: { command: "ls" }, allowForTask: [key] }),
     { decision: "allow", reason: "granted-for-session" });
-  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi" }, messageMode: "auto_outbound" }),
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi" }, messageMode: "auto_outbound" }),
     { decision: "allow", reason: "auto-outbound" });
   // M3: the two Axis-B allows are DIFFERENT rules, so the diag can tell "your outbound setting
   // sent this" from "your inbound setting read this" without a source read.
@@ -103,8 +103,8 @@ test("FIX 1: the reason NEVER moves the verdict — grantDecision is byte-identi
     { toolName: "Bash", input: { command: "rm -rf /" } },
     { toolName: "Task", input: {} },
     { toolName: "Read", input: { file_path: "/a" } },
-    { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi" } },
-    { toolName: DOPL_CHANNEL_TOOL, input: { op: "post", channel: "x", to: 7 } },
+    { toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi" } },
+    { toolName: DOPL_CHANNEL_TOOL, input: { op: "send", channel: "x", to: 7 } },
     { toolName: "", input: {} },
     { toolName: null, input: undefined },
   ];
@@ -128,9 +128,9 @@ test("FIX 1: the code set is CLOSED — nothing produces a reason the renderer h
       for (const messageMode of profiles.MESSAGE_MODES) {
         for (const toolName of ["Bash", "BashOutput", "Read", "Task", "Nope", DOPL_CHANNEL_TOOL,
           "mcp__dopl__dopl_kb", "NotebookRead", "WebFetch"]) {
-          for (const input of [{}, { command: "ls" }, { op: "post", body: "b" },
-            { op: "post", channel: "z" }, { op: "read" }, { op: "read", channel: "z" },
-            { op: "open" }, { to: 1 }]) {
+          for (const input of [{}, { command: "ls" }, { op: "send", body: "b" },
+            { op: "send", channel: "z" }, { op: "read" }, { op: "read", channel: "z" },
+            { op: "rooms", action: "open" }, { to: 1 }]) {
             const r = profiles.grantDecisionDetail({ profile, channelId: CH, toolMode, messageMode, toolName, input }).reason;
             if (r) seen.add(r);
           }
@@ -183,7 +183,7 @@ test("FIX 2: NO other profile widens — read_only and dopl_only still hard-deny
 // THE v2.9 INVARIANT, extended to the two new names in BOTH directions.
 test("INVARIANT: no tool mode answers a channel op, and no message mode answers BashOutput/KillShell", () => {
   for (const toolMode of profiles.TOOL_MODES) {
-    for (const input of [{ op: "post", body: "hi" }, { op: "open", direct: true }, { op: "read" }]) {
+    for (const input of [{ op: "send", body: "hi" }, { op: "rooms", action: "open", direct: true }, { op: "read" }]) {
       assert.equal(profiles.grantDecision({ profile: "full", channelId: CH, toolName: DOPL_CHANNEL_TOOL, input, toolMode }),
         "gate", `toolMode=${toolMode} must not decide ${input.op}`);
     }
@@ -237,10 +237,10 @@ test("FIX 1: BOTH gate surfaces carry the code — the dock card and the inline 
     "Bash", { command: "ls" });
   assert.equal(bypassMiss.payload.gateReason, "not-covered-by-bypass",
     "the one the operator reads as a broken toggle");
-  const cross = gateOnce({}, DOPL_CHANNEL_TOOL, { op: "post", channel: "my-slug", body: "hi" });
+  const cross = gateOnce({}, DOPL_CHANNEL_TOOL, { op: "send", channel: "my-slug", body: "hi" });
   assert.equal(cross.payload.type, "permission_request", "a cross-channel post keeps the dock payload");
   assert.equal(cross.payload.gateReason, "cross-channel-post");
-  const own = gateOnce({}, DOPL_CHANNEL_TOOL, { op: "post", body: "hi" });
+  const own = gateOnce({}, DOPL_CHANNEL_TOOL, { op: "send", body: "hi" });
   assert.equal(own.payload.type, "outbound_gate", "an own-channel post decides on its own card");
   assert.equal(own.payload.gateReason, "message-approval-required");
 });
@@ -259,8 +259,8 @@ test("FIX 3: the line carries NO body, NO prompt text, NO tool input and NO full
   const SECRET = "ssh-rsa AAAAB3NzaC1yc2E-not-for-the-log";
   const runs = [
     gateOnce({}, "Bash", { command: SECRET }),
-    gateOnce({}, DOPL_CHANNEL_TOOL, { op: "post", body: SECRET }),
-    gateOnce({}, DOPL_CHANNEL_TOOL, { op: "post", channel: SECRET, body: SECRET }),
+    gateOnce({}, DOPL_CHANNEL_TOOL, { op: "send", body: SECRET }),
+    gateOnce({}, DOPL_CHANNEL_TOOL, { op: "send", channel: SECRET, body: SECRET }),
     gateOnce({}, "mcp__dopl__dopl_kb", { op: "write_file", content: SECRET }),
   ];
   for (const { logged } of runs) {
@@ -286,10 +286,14 @@ test("M3: a channel verdict names the op; nothing else on the line moves", () =>
   const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
   const read = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "read" });
   assert.match(read.logged[0], /^session gate: dopl_channel op=read allow auto-inbound-read tool=bypass msg=auto_both session=sess-123$/);
-  const open = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" });
-  assert.match(open.logged[0], /^session gate: dopl_channel op=open gate channel-op-approval-required tool=bypass msg=auto_both session=sess-123$/);
+  const open = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "rooms", action: "open", direct: true, member: "evil@x" });
+  assert.match(open.logged[0], /^session gate: dopl_channel op=rooms.open gate channel-op-approval-required tool=bypass msg=auto_both session=sess-123$/);
   // THE PRODUCTION LINE FROM THE DIAG LOG, now diagnosable: it says WHICH op stopped.
-  assert.ok(open.logged[0].includes("op=open"), "the field that turns archaeology into reading");
+  assert.ok(open.logged[0].includes("op=rooms.open"), "the field that turns archaeology into reading");
+  // ⚠ **THE ACTION IS ON THE LINE SINCE 2026-09-02 (F-578), and it has to be:** `rooms` is four
+  // reads and four writes, so `op=rooms` would read identically for a roster read and an invite
+  // — the exact incoherence this segment was added to end, one collapse later.
+  assert.ok(!/op=rooms\b(?!\.)/.test(open.logged[0]), "the bare dispatcher name is not the label");
 });
 
 // ── F-139: the diagnostic hole and the defect had ONE root ────────────────────────
@@ -311,8 +315,8 @@ test("F-139: a connector-named channel tool logs the SAME line as our own regist
     // ...and the BROKEN machine's line — `gate unclassified-tool`, with no `op=` at all — is gone.
     assert.ok(!read.logged[0].includes("unclassified-tool"), server);
     assert.ok(read.logged[0].includes("op=read"), `${server} must name the op`);
-    const open = gateOnce({ state: modes }, server + "dopl_channel", { op: "open", direct: true });
-    assert.match(open.logged[0], /^session gate: dopl_channel op=open gate channel-op-approval-required /, server);
+    const open = gateOnce({ state: modes }, server + "dopl_channel", { op: "rooms", action: "open", direct: true });
+    assert.match(open.logged[0], /^session gate: dopl_channel op=rooms.open gate channel-op-approval-required /, server);
   }
 });
 
@@ -325,11 +329,11 @@ test("F-139: a Dopl tool's name is stripped for a server segment with underscore
 
 test("M4: the diag distinguishes a marker allow from a message allow", () => {
   const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
-  const milestone = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "milestone", thread: "T1", body: "step" });
-  assert.match(milestone.logged[0], /^session gate: dopl_channel op=milestone allow auto-outbound-marker /);
+  const milestone = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "send", kind: "milestone", thread: "T1", body: "step" });
+  assert.match(milestone.logged[0], /^session gate: dopl_channel op=send allow auto-outbound-marker /);
   // A post keeps its OWN code: "did my agent send a message?" is a different audit question.
-  const post = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "post", body: "hi" });
-  assert.match(post.logged[0], /^session gate: dopl_channel op=post allow auto-outbound /);
+  const post = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "send", body: "hi" });
+  assert.match(post.logged[0], /^session gate: dopl_channel op=send allow auto-outbound /);
   // ⚠ `propose_close` was the marker set's other member and `close_thread` was pinned here as
   // the op that STILL gated in the very posture that auto-allowed its proposal. Both left the
   // tool's enum with thread closing (wiring plan Phase 4, 2026-08-18). An unclassified op
@@ -345,12 +349,12 @@ test("M4: an own-channel marker that GATES says message approval, not 'this oper
   // The old code claimed "message approval covers this channel's messages, not this operation",
   // which stopped being true for a marker the moment the axis started covering it.
   const ask = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } },
-    DOPL_CHANNEL_TOOL, { op: "milestone", thread: "T1", body: "one line" });
-  assert.match(ask.logged[0], /op=milestone gate message-approval-required /);
+    DOPL_CHANNEL_TOOL, { op: "send", kind: "milestone", thread: "T1", body: "one line" });
+  assert.match(ask.logged[0], /op=send gate message-approval-required /);
   // A marker aimed elsewhere (a SLUG is the common case) gets the code that names the fix.
   const away = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" } },
-    DOPL_CHANNEL_TOOL, { op: "milestone", channel: "team-alpha", thread: "T1", body: "x" });
-  assert.match(away.logged[0], /op=milestone gate cross-channel-post /);
+    DOPL_CHANNEL_TOOL, { op: "send", kind: "milestone", channel: "team-alpha", thread: "T1", body: "x" });
+  assert.match(away.logged[0], /op=send gate cross-channel-post /);
 });
 
 test("M3: a NON-channel tool's line is byte-unchanged (no `op=` segment at all)", () => {
@@ -363,7 +367,7 @@ test("M3: a NON-channel tool's line is byte-unchanged (no `op=` segment at all)"
 test("M3: the op is a NAME, never a value — hostile input cannot open the line", () => {
   const SECRET = "ssh-rsa AAAAB3-not-for-the-log";
   const runs = [
-    [{ op: "post ssh-rsa AAAAB3-not-for-the-log", body: SECRET }, "op=postssh-rsaAAAAB3-not-f"],
+    [{ op: "send ssh-rsa AAAAB3-not-for-the-log", body: SECRET }, "op=sendssh-rsaAAAAB3-not-f"],
     [{ op: "r".repeat(4000) }, "op=" + "r".repeat(24)],
     [{ op: { evil: SECRET } }, "op=invalid"],
     [{ op: ["read"] }, "op=invalid"],

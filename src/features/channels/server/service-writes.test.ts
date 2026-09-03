@@ -11,10 +11,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
@@ -34,6 +36,7 @@ const ADDRESSEE = "550e8400-e29b-41d4-a716-446655440000";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "user",
   role: "member",
 };
@@ -109,9 +112,18 @@ function wireMembership(addresseeIsMember: boolean) {
 }
 
 beforeEach(() => {
+  // ⚠ THE AUTHOR'S OWN PROJECTION, EMPTY (2026-09-02, F-589). RR2 reads it to
+  // check the `client_msg_id` agent stamp — a CALLER-SUPPLIED claim — against
+  // the agents this author actually runs, so a file that leaves it unstubbed
+  // reaches the real admin client and times out rather than failing.
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
+  // ⚠ THE ROOM'S PROJECTION, EMPTY (2026-09-02, B4). RR3 reads it for every
+  // UNADDRESSED HUMAN message, so a file that leaves it unstubbed reaches the
+  // real admin client and times out rather than failing. Empty = no live agent,
+  // which is this file's subject: it measures the METADATA fold, not the wake.
+  vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([]);
   vi.clearAllMocks();
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => insertedRow(row));
@@ -373,12 +385,37 @@ describe("postMessage — addressing + author derivation", () => {
     expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
   });
 
-  it("an explicit authorKind wins in BOTH directions (it is a claim, not a derivation)", async () => {
-    // ⚠ `authorKind` is NOT derived from the credential — the desktop peer-post
-    // path depends on the caller's value winning. Both directions pinned so a
-    // "harden this" edit cannot turn the `??` into a hard derive (F-082).
+  it("an AGENT CREDENTIAL cannot claim authorKind='user' (F-580)", async () => {
+    // ⚠ THE CLAIM ESCALATES ONLY. It used to win in both directions, and the
+    // downgrade direction was a cross-account wake: `authorKind` is what splits
+    // RR2 (the agent's own reciprocal party) from RR3 (`freshChannelSessions`,
+    // CHANNEL-WIDE, every operator's agents in the room). An agent token that
+    // said "user" bought itself the arm Samuel's same-account carve closes.
+    // The credential is `auth.agentTokenId` and outranks anything in the body.
     await postMessage(agentCtx, "general", { body: "hi", authorKind: "user" });
-    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("user");
+    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
+  });
+
+  it("the downgrade claim does not buy RR3's channel-wide wake (F-580)", async () => {
+    // ⚠ THE ROUTING HALF, and the one that made this a BLOCKER rather than a
+    // mislabel. A live agent belonging to ANOTHER operator sits in the room, so
+    // RR3 has a candidate: an unaddressed post that reaches RR3 wakes it. The
+    // agent credential asks to be treated as a person; the verdict must still be
+    // the agent one (RR2, which answers `null` here with no reciprocal party).
+    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
+      {
+        name: "k3v7d2mq",
+        user_id: "user-2",
+        channel_id: "chan-1",
+        updated_at: new Date().toISOString(),
+      } as never,
+    ]);
+    vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
+
+    await postMessage(agentCtx, "general", { body: "status?", authorKind: "user" });
+    const row = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
+    expect(row.wake_verdict).not.toBe("responder");
+    expect(row.recipient_agent_ids ?? []).not.toContain("k3v7d2mq");
   });
 
   it("never lets the caller move authorship off ctx.userId", async () => {

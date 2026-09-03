@@ -24,10 +24,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import {
@@ -50,6 +52,7 @@ const PAIR_SLOT = "dba90694-de4f-4950-83a9-f2d890c9ff3f:79ce5325-f53e-4d00-a1c0-
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "agent",
   role: "member",
 };
@@ -119,6 +122,11 @@ const withHeader = (value: string) => ({
 });
 
 beforeEach(() => {
+  // ⚠ THE AUTHOR'S OWN PROJECTION, EMPTY (2026-09-02, F-589). RR2 reads it to
+  // check the `client_msg_id` agent stamp — a CALLER-SUPPLIED claim — against
+  // the agents this author actually runs, so a file that leaves it unstubbed
+  // reaches the real admin client and times out rather than failing.
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
   vi.clearAllMocks();
   vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
   vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
@@ -131,7 +139,6 @@ beforeEach(() => {
     memberRow(USER, "owner"),
     memberRow(PEER),
   ]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
@@ -182,15 +189,15 @@ describe("readSessionIdHeader — an id-shaped token, or nothing", () => {
   it("buildChannelContext re-narrows what the auth layer handed it", () => {
     // Same predicate, applied twice: no other construction path can widen it.
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS, sessionId: ROOM_SLOT })
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER, sessionId: ROOM_SLOT })
         .sessionId
     ).toBe(ROOM_SLOT);
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS, sessionId: "two words" })
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER, sessionId: "two words" })
         .sessionId
     ).toBeUndefined();
     expect(
-      buildChannelContext({ userId: USER, workspaceId: WS }).sessionId
+      buildChannelContext({ userId: USER, workspaceId: WS, credentialSubjectUserId: USER }).sessionId
     ).toBeUndefined();
     expect(narrowSessionId(null)).toBeUndefined();
   });

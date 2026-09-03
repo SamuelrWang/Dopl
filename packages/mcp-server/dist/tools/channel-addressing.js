@@ -42,9 +42,7 @@
  * states only what holds at every size.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AWAIT_UNNAMED_NOTICE = exports.GROUP_CHANNEL_MIN_MEMBERS = void 0;
-exports.routesToASession = routesToASession;
-exports.unaddressedPostNote = unaddressedPostNote;
+exports.HOLD_UNNAMED_NOTICE = exports.GROUP_CHANNEL_MIN_MEMBERS = void 0;
 exports.rosterAddressingRule = rosterAddressingRule;
 /**
  * Where a channel stops being a pair and becomes a room. ⚠ HAND-COPIED from
@@ -60,47 +58,41 @@ exports.rosterAddressingRule = rosterAddressingRule;
  * added for.
  */
 exports.GROUP_CHANNEL_MIN_MEMBERS = 3;
-/** Mirrors the desktop's `firstClassTaskId` gate (targeting.js) exactly. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
- * TRUE for a thread id the receiving desktop will ROUTE on. Only a first-class
- * (uuid) id reaches `feedLiveSession` / `maybeSurfaceRequesterReply` — both call
- * `firstClassTaskId`, which returns '' for a legacy `task-<channel>-<seq>` id.
- * ⚠ A legacy tag groups on a thread card and wakes nobody; the two cases must
- * not be narrated with one sentence.
- */
-function routesToASession(threadId) {
-    return threadId !== undefined && UUID_RE.test(threadId);
-}
-/** Where the roster op sends a reader who needs a member to name. */
-function membersCall(ref) {
-    return `dopl_channel(op="members", channel="${ref}")`;
-}
-/**
- * The line a `post` result carries when the caller named nobody. `null` ONLY
- * when the caller passed an explicit `to`.
+ * ⚠ `UUID_RE` AND `routesToASession()` USED TO LIVE HERE, and their removal
+ * DELETED A DUPLICATE PREDICATE rather than a rule (T10, 2026-09-02). Fact 3
+ * above is unchanged and is still the reason the distinction matters: only a
+ * FIRST-CLASS (uuid) thread id reaches `feedLiveSession` /
+ * `maybeSurfaceRequesterReply`, so a legacy `task-<channel>-<seq>` tag groups on
+ * a card and wakes nobody, and the two cases may never be narrated with one
+ * sentence.
  *
- * ⚠ A DIRECT CHANNEL NO LONGER SUPPRESSES THIS NOTE. It used to: the server
- * stamped the other member for you (`resolveDirectPeer`), so an unaddressed DM
- * post really was addressed. That fallback is retired (2026-08-18), and a DM
- * post with no `to` now reaches nobody's agent like any other — telling a caller
- * otherwise is the invisible-delivery failure this module exists to prevent.
- *
- * ⚠ Two shapes:
- *   - THREADED into a first-class thread — may already be in front of the other
- *     party's agent, so the remedy is WAIT, never re-post;
- *   - anything else — nothing reached an agent, so name a member and re-post.
+ * The last caller of this copy was the "NOT ADDRESSED, BUT THREADED" paragraph,
+ * which T12 replaced with the post result's `landed=` field. That field is built
+ * by `channel-post-linkage.ts` from **`channel-render-threads.ts ›
+ * isFirstClassThreadId`** — the SAME predicate the read render decides
+ * `· thread` vs `· ad-hoc` with. One definition is the point: two regexes for
+ * "is this a real thread" is exactly how the write lane and the read lane learn
+ * to disagree about the same id.
  */
-function unaddressedPostNote({ ref, addressed, landedThread, }) {
-    if (addressed)
-        return null;
-    if (routesToASession(landedThread)) {
-        return `NOT ADDRESSED, BUT THREADED — you passed no \`to\`, so the ADDRESSING on this post woke nobody. The thread tag can: a message carrying a first-class thread id is handed straight to the session the other party already has open on that thread, with no addressing check at all, so this may be in front of their agent right now. Do NOT re-post it with \`to=\` to be sure — that lands as a second, UNTHREADED request and starts a second run against the same work. Wait for the answer with dopl_channel(op="await", channel="${ref}", since=<this seq>), or check the thread with op="get_thread".`;
-    }
-    return `NOT ADDRESSED — you passed no \`to\`, so nothing put this post in front of an agent: every member can read it, and it arrives as a notification rather than as a request. That holds in a DIRECT (1:1) message too — nothing is addressed for you anywhere any more. (An unaddressed post from an AGENT is never taken as an implicit request, whatever the channel's size — and posts you make are agent-authored.) If it is a request rather than a remark, re-post it with to="<one member>" — ${membersCall(ref)} lists who is here.`;
-}
 /**
- * The closing line of `op="members"` — how to address someone, and what an
+ * ⚠ `unaddressedPostNote()` USED TO LIVE HERE — the "NOT ADDRESSED" paragraph a
+ * post result carried whenever the caller named nobody, and its threaded
+ * variant. It went with T12 (2026-09-02): the rule it stated is true on every
+ * call, so it is stated once in `channel-doctrine.ts`, and the post result
+ * carries the FACT instead — `addressed=no`, plus `landed=thread` when a thread
+ * tag routed it anyway.
+ *
+ * Two things it knew are worth not relearning, and both survive above and below.
+ * **A THREAD TAG WAKES PEOPLE WITHOUT READING THE ADDRESSING AT ALL** (fact 3),
+ * which is why the result reports `landed=` beside `addressed=` rather than
+ * collapsing them into one verdict — "nobody was woken" is FALSE for a threaded
+ * post, and the old remedy ("re-post with `to=`") manufactured a duplicate
+ * request. And **only a FIRST-CLASS (uuid) tag reaches a session** — decided by
+ * the ONE predicate, `channel-render-threads.ts › isFirstClassThreadId`.
+ */
+/**
+ * The closing line of `op="rooms" action="members"` — how to address someone, and what an
  * unaddressed post does in a channel of THIS size.
  *
  * The roster is the one surface that knows the exact count, so the count can be
@@ -114,9 +106,9 @@ function rosterAddressingRule(ref, memberCount) {
     // at every size (`feedLiveSession` reads the tag, never the roster), and a
     // count-scoped "reaches no one's agent at all" is the over-claim this module
     // exists to stop.
-    const how = `Address a request to ONE of them: dopl_channel(op="post", channel="${ref}", to="<their user id>", body=..., summary=...), or open a tracked exchange with op="create_thread". A channel reaches PEOPLE — \`to\` names a MEMBER, and there is no member-shaped handle for somebody else's agent. NOTHING addresses a post for you, a DIRECT (1:1) message channel included. Two other things reach an agent, and neither uses \`to\`: a THREAD tag (\`thread=<id>\` on an existing thread routes the post into the session already working it, addressed or not), and \`@agent-<id>\` in the BODY, which wakes one of YOUR OWN operator's agents by name (op="read_sessions" lists their handles).`;
+    const how = `Address a request to ONE of them: dopl_channel(op="send", channel="${ref}", to="<their user id>", body=..., summary=...), or open a tracked exchange with op="send" with thread="new". A channel reaches PEOPLE — \`to\` names a MEMBER, and there is no member-shaped handle for somebody else's agent. NOTHING addresses a post for you, a DIRECT (1:1) message channel included. Two other things reach an agent, and neither uses \`to\`: a THREAD tag (\`thread=<id>\` on an existing thread routes the post into the session already working it, addressed or not), and \`@agent-<id>\` in the BODY, which wakes one of YOUR OWN operator's agents by name (op="status" lists their handles).`;
     if (memberCount < 2) {
-        return `\n${how} There is nobody else on this roster to address yet — add a member with op="invite" first.`;
+        return `\n${how} There is nobody else on this roster to address yet — add a member with op="rooms" action="invite" first.`;
     }
     if (memberCount >= exports.GROUP_CHANNEL_MIN_MEMBERS) {
         return `\n${how} With ${memberCount} members, an UNADDRESSED, UNTHREADED post reaches no one's agent: everyone can read it, and nobody's agent wakes for it. Naming one member is the only way to ask for work — to ask two people, post twice.`;
@@ -124,7 +116,7 @@ function rosterAddressingRule(ref, memberCount) {
     return `\n${how} With two members an UNADDRESSED, UNTHREADED post still reaches no one's agent — the size buys you nothing. Name the other member and the post becomes a request.`;
 }
 /**
- * The `await` wake notice — said when nothing that arrived NAMES the caller.
+ * The HOLD's wake notice — said when nothing that arrived NAMES the caller.
  *
  * ⚠ Must NOT tell the agent to ignore what it got: THE CANONICAL REPLY IN THIS
  * PRODUCT IS UNADDRESSED. `channel-post.js › postResult` posts a responder's
@@ -135,4 +127,4 @@ function rosterAddressingRule(ref, memberCount) {
  * does (2026-08-18), so the answer a requester waits on names nobody there
  * either — which makes this notice MORE load-bearing, not less.
  */
-exports.AWAIT_UNNAMED_NOTICE = `NONE of the messages above NAMES you as its addressee. That is not the same as "none of this is yours": a reply here is normally posted UNADDRESSED (a responding agent answers without a \`to\`), and a message THREADED into an exchange you are a party to is for you whatever its addressing says — read the "· thread <id>" tags above. So: if you were waiting on someone and one of these came from them, that is your reply, and you should handle it. What you must NOT do is adopt an unaddressed message as a task you were assigned, or answer one aimed at another member. If you were not waiting on anyone, all of it is context — stop here.`;
+exports.HOLD_UNNAMED_NOTICE = `NONE of the messages above NAMES you as its addressee. That is not the same as "none of this is yours": a reply here is normally posted UNADDRESSED (a responding agent answers without a \`to\`), and a message THREADED into an exchange you are a party to is for you whatever its addressing says — read the "· thread <id>" tags above. So: if you were waiting on someone and one of these came from them, that is your reply, and you should handle it. What you must NOT do is adopt an unaddressed message as a task you were assigned, or answer one aimed at another member. If you were not waiting on anyone, all of it is context — stop here.`;

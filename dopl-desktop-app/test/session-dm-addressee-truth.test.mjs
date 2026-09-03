@@ -90,7 +90,7 @@ test("H2: main stamps `directChannel` on a DM session's post surface, and only t
   });
   const gated = (s) => {
     const evs = [];
-    axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev))(DOPL_CHANNEL_TOOL, { op: "post", body: "hi" },
+    axisB.makeCanUseTool(s, (_s, ev) => evs.push(ev))(DOPL_CHANNEL_TOOL, { op: "send", body: "hi" },
       { requestId: "r1", toolUseID: "t1" });
     for (const id of s.pendingPermissions.keys()) s.pendingPermissions.get(id)({ behavior: "deny" });
     return evs[0].payload;
@@ -130,16 +130,16 @@ test("the counterparty's id is resolved to their name before it leaves main", ()
 
   // Addressed by ID -> the NAME rides the payload, and `addressed` still reports that the CALL
   // named someone (it is what a consumer branches "Sent to X" vs "Posted to channel" on).
-  const byId = post({ op: "post", body: "hi", to: ID });
+  const byId = post({ op: "send", body: "hi", to: ID });
   assert.equal(byId.to, "Samuel Wang", "the raw user id reached the card");
   assert.equal(byId.addressed, true, "resolving the label must not un-address the post");
 
   // Addressed by NAME already -> unchanged.
-  assert.equal(post({ op: "post", body: "hi", to: "Samuel Wang" }).to, "Samuel Wang");
+  assert.equal(post({ op: "send", body: "hi", to: "Samuel Wang" }).to, "Samuel Wang");
 
   // UNADDRESSED -> the bound-counterparty fill, and NOT flagged as addressed. This is the
   // pre-existing behaviour the fix must not disturb.
-  const bare = post({ op: "post", body: "hi" });
+  const bare = post({ op: "send", body: "hi" });
   assert.equal(bare.to, "Samuel Wang");
   assert.equal("addressed" in bare, false);
 
@@ -147,16 +147,16 @@ test("the counterparty's id is resolved to their name before it leaves main", ()
   // `===`, so an agent addressing by an uppercase uuid — which the tool description invites
   // and says nothing about casing — still painted the raw id, i.e. the exact symptom this
   // function exists to fix.
-  assert.equal(post({ op: "post", body: "hi", to: ID.toUpperCase() }).to, "Samuel Wang");
+  assert.equal(post({ op: "send", body: "hi", to: ID.toUpperCase() }).to, "Samuel Wang");
 
   // A DIFFERENT member's id is LEFT VERBATIM rather than guessed at — this session knows one
   // counterparty and nothing else, and a wrong name is worse than an ugly id.
   const third = "33333333-3333-3333-3333-333333333333";
-  assert.equal(post({ op: "post", body: "hi", to: third }).to, third);
+  assert.equal(post({ op: "send", body: "hi", to: third }).to, third);
 
   // No name to substitute -> the id stands. Never `null`, never "undefined".
   assert.equal(
-    io.withPostSurface({ type: "outbound_gate" }, { op: "post", to: ID }, null, ID).to,
+    io.withPostSurface({ type: "outbound_gate" }, { op: "send", to: ID }, null, ID).to,
     ID
   );
 });
@@ -168,7 +168,7 @@ test("H2: an AUTO-ALLOWED post carries the same destination fields as a gated on
   const emitted = [];
   const s = { channelId: "ch1", counterpartyName: "David", direct: true };
   outbound.wrapGate(s, () => Promise.resolve({ behavior: "allow" }), (_s, ev) => emitted.push(ev))(
-    DOPL_CHANNEL_TOOL, { op: "post", body: "hi" }, { toolUseID: "t1" });
+    DOPL_CHANNEL_TOOL, { op: "send", body: "hi" }, { toolUseID: "t1" });
   return new Promise((resolve) => setImmediate(() => {
     assert.equal(emitted[0].directChannel, true);
     // ⚠ REWRITTEN 2026-08-20: the two assertions here used to be

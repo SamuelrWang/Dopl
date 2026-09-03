@@ -1,6 +1,10 @@
 /**
- * 🔒 THE TWO SHELVES — Samuel's ruling, 2026-08-26 ("home-only shelf"), schema
- * in `20260831120000_knowledge_base_home_scoped.sql`.
+ * 🔒 THE TWO SHELVES — Samuel's ruling, 2026-08-26 ("home-only shelf").
+ * ⚠ **THE SHELF IS A TENANCY SINCE 2026-09-02 (slice B15, ruling B10)**: the
+ * `home_scoped` column of `20260831120000` is dropped by
+ * `20260923120000_drop_home_scoped.sql` and the personal shelf is the caller's
+ * own `kind='personal'` container. The four read properties below are unchanged
+ * — they were always about the SERVICE's shape, not the column's.
  *
  * WHAT THIS SUITE IS FOR, in one sentence: the /home Knowledge pane's "across
  * all channels" and the workspace Knowledge page are two PLACES over one table,
@@ -25,8 +29,12 @@
  *      state of a young workspace whose content is all on the other one, and
  *      the seed gate reads it as "no bases at all".
  *
- * THE WRITE HALF — `resolveHomeScope`'s three conditions, each refused
- * separately, plus the default that keeps every existing caller unmarked.
+ * THE WRITE HALF — ⚠ **`resolveHomeScope`'s THREE CONDITIONS LEFT THIS FILE ON
+ * 2026-09-02 (slice B15)** with the fence and the column. One survives, in
+ * `shared/tenancy/personal-container.ts`, and is pinned against BOTH tables at
+ * once in `shared/tenancy/personal-shelf-repositories.test.ts` — which is where
+ * the two hand-mirrored copies should always have been compared. What is left
+ * here is that the SERVICE does not re-decide the flag on its way down.
  *
  * ⚠ MUTATION-VERIFIED, WITH ONE STATED EXCEPTION. Each fence was confirmed red
  * with that fence removed — except "never SEEDS off an empty shelf", which is a
@@ -58,10 +66,6 @@ vi.mock("./repository", () => ({
 
 vi.mock("./service-seed", () => ({ seedWorkspace: vi.fn() }));
 
-vi.mock("@/features/workspaces/server/repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn(),
-}));
-
 vi.mock("@/features/teams/server/repository", () => ({
   deleteGrantRow: vi.fn(),
   deleteGrantsForResource: vi.fn(),
@@ -71,19 +75,15 @@ vi.mock("@/features/teams/server/repository", () => ({
 }));
 
 import { findWorkspaceKind } from "./repository-audience";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
 import * as repo from "./repository";
 import { listBases } from "./service-bases";
 import { createBase } from "./service-base-writes";
 import { seedWorkspace } from "./service-seed";
-import { HomeScopeForbiddenError } from "./errors";
 
 const mockRepo = vi.mocked(repo);
-const mockDefaultWorkspace = vi.mocked(findDefaultWorkspaceForUser);
 const mockSeed = vi.mocked(seedWorkspace);
 
 const HOME_WS = "ws-home";
-const OTHER_WS = "ws-other";
 const USER = "u-operator";
 
 /** A signed-in person in their own default standard workspace. */
@@ -94,7 +94,7 @@ function personCtx(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
     role: "owner",
     source: "user",
     apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+    credentialSubjectUserId: USER,
     sessionId: null,
     ...over,
   };
@@ -126,7 +126,6 @@ beforeEach(() => {
   vi.mocked(findWorkspaceKind).mockResolvedValue("standard");
   mockRepo.listBasesForWorkspace.mockResolvedValue([]);
   mockRepo.listBaseSlugsForWorkspace.mockResolvedValue([]);
-  mockDefaultWorkspace.mockResolvedValue({ id: HOME_WS } as never);
   mockRepo.insertBase.mockImplementation(
     (args) => Promise.resolve(baseRow({ name: args.name, slug: args.slug })) as never
   );
@@ -186,72 +185,32 @@ describe("listing one shelf", () => {
   });
 });
 
-describe("creating onto the home shelf", () => {
-  it("marks the row when a person creates a PRIVATE base in their own home workspace", async () => {
-    await createBase(personCtx(), { name: "Shelf note", homeScoped: true });
+describe("creating onto the personal shelf", () => {
+  // ⚠ **SIX CASES BECAME TWO ON 2026-09-02 (slice B15).** Four of them pinned
+  // `resolveHomeScope`'s three conditions — the caller's own default standard
+  // workspace, a PRIVATE row, the teams rewrite under the fence, and a shared
+  // credential — and that fence is DELETED with the `home_scoped` column. One
+  // condition survives it (`shared/tenancy/personal-container.ts ›
+  // personalWriteWorkspaceId`, pinned in `personal-shelf-repositories.test.ts`
+  // against BOTH tables at once, which is where the two copies should always
+  // have been compared); the other two died with the concepts they guarded.
+  //
+  // ⚠ **WHAT THIS BLOCK ASSERTS NOW IS THAT THE SERVICE DOES NOT RE-DECIDE.**
+  // `homeScoped` is a routing flag the repository reads; a service that
+  // resolved, defaulted or rewrote it would be a second fence with no test.
 
+  it("passes the caller's own flag straight through, unchanged", async () => {
+    await createBase(personCtx(), { name: "Shelf note", homeScoped: true });
     expect(mockRepo.insertBase).toHaveBeenCalledWith(
       expect.objectContaining({ homeScoped: true, visibility: "private" })
     );
   });
 
-  it("leaves the row UNMARKED when nobody asked — every pre-existing caller", async () => {
-    // ⚠ MCP `kb_create_base` is this case. The flag is opt-in and silent;
-    // widening the default would move every agent-created base onto a shelf
-    // no agent surface reads.
+  it("passes NOTHING through when nobody asked — every pre-existing caller", async () => {
+    // ⚠ ABSENT, not `false`. The two mean the same thing to the repository and
+    // an explicit `false` would suggest to a reader that it is examined.
     await createBase(personCtx(), { name: "Ordinary" });
-
-    expect(mockRepo.insertBase).toHaveBeenCalledWith(
-      expect.objectContaining({ homeScoped: false })
-    );
-  });
-
-  it("REFUSES when the target is not the caller's own default standard workspace", async () => {
-    // A link container fails this, and so does a second workspace the caller
-    // owns. `findDefaultWorkspaceForUser` is the same lookup `POST /api/boot`
-    // runs, so the fence and the /home surface cannot disagree about "home".
-    mockDefaultWorkspace.mockResolvedValue({ id: OTHER_WS } as never);
-
-    await expect(
-      createBase(personCtx(), { name: "Elsewhere", homeScoped: true })
-    ).rejects.toBeInstanceOf(HomeScopeForbiddenError);
-    expect(mockRepo.insertBase).not.toHaveBeenCalled();
-  });
-
-  it("REFUSES a PUBLIC base on the shelf", async () => {
-    await expect(
-      createBase(personCtx(), {
-        name: "Announcement",
-        visibility: "public",
-        homeScoped: true,
-      })
-    ).rejects.toBeInstanceOf(HomeScopeForbiddenError);
-    expect(mockRepo.insertBase).not.toHaveBeenCalled();
-  });
-
-  it("REFUSES the teams path, whose visibility is rewritten to public UNDER the fence", async () => {
-    // 🔒 THE ORDER IS THE ASSERTION. The teams branch rewrites `visibility` to
-    // `public` after the input is read, so a fence that consulted
-    // `input.visibility` would wave this through and put a team-shared base on
-    // a shelf described as "yours alone".
-    await expect(
-      createBase(personCtx(), {
-        name: "Team shelf",
-        accessMode: "teams",
-        teamGrants: [{ teamId: "11111111-2222-4333-8444-555555555555", level: "edit" }],
-        homeScoped: true,
-      })
-    ).rejects.toBeInstanceOf(HomeScopeForbiddenError);
-    expect(mockRepo.insertBase).not.toHaveBeenCalled();
-  });
-
-  it("REFUSES a SHARED credential — a workspace key has no personal shelf", async () => {
-    await expect(
-      createBase(
-        personCtx({ apiKeyWorkspaceId: HOME_WS, source: "agent" }),
-        { name: "From a key", homeScoped: true }
-      )
-    ).rejects.toBeInstanceOf(HomeScopeForbiddenError);
-    expect(mockRepo.insertBase).not.toHaveBeenCalled();
+    const args = mockRepo.insertBase.mock.calls[0][0];
+    expect(args.homeScoped).toBeUndefined();
   });
 });

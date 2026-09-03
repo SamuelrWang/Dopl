@@ -2,16 +2,16 @@
 //
 // THE BUG THIS LOCKS OUT. `main/mcp-config.js` and `main/sdk-loader.js` each
 // hardcoded `280_000`, and both comments justified it against "the 215s hold".
-// 215s is the DEFAULT hold (`AWAIT_HOLD_DEFAULT_MS`), which is not the number a
+// 215s is the DEFAULT hold (`HOLD_DEFAULT_MS`), which is not the number a
 // client has to survive: a caller may pass `timeout_ms` explicitly and reach
-// `AWAIT_HOLD_CAP_MS` = 230s. 280 − 230 = 50s of headroom, UNDER this repo's own
-// `AWAIT_HOLD_MARGIN_MS` = 60s — the very margin the server package computes its
+// `HOLD_CAP_MS` = 230s. 280 − 230 = 50s of headroom, UNDER this repo's own
+// `HOLD_MARGIN_MS` = 60s — the very margin the server package computes its
 // own numbers against. Nothing anywhere pinned the relation, so the desktop's
 // client abort could be moved under a reachable hold by editing either file, or
 // by raising the cap on the server, with a fully green suite.
 //
 // So this file asserts the RELATION against the server's own constants, read out
-// of `packages/mcp-server/src/tools/channel-await-budget.ts` as source. Move the
+// of `packages/mcp-server/src/tools/channel-hold-budget.ts` as source. Move the
 // cap or the margin and this fails, which is the point — a literal-for-literal
 // test would have passed through the whole regression.
 //
@@ -30,7 +30,7 @@ const CONFIG = M("mcp-config.js");
 const LOADER = M("runtime/claude/loader.js");
 
 const BUDGET = readFileSync(
-  join(HERE, "..", "..", "packages", "mcp-server", "src", "tools", "channel-await-budget.ts"),
+  join(HERE, "..", "..", "packages", "mcp-server", "src", "tools", "channel-hold-budget.ts"),
   "utf8"
 );
 
@@ -38,13 +38,13 @@ const BUDGET = readFileSync(
 // than defaulting: a renamed constant must fail loudly, not silently pass.
 function budgetConst(name) {
   const m = new RegExp(`export const ${name} = ([\\d_]+);`).exec(BUDGET);
-  assert.ok(m, `channel-await-budget.ts must export ${name}`);
+  assert.ok(m, `channel-hold-budget.ts must export ${name}`);
   return Number(m[1].replace(/_/g, ""));
 }
 
-const AWAIT_HOLD_CAP_MS = budgetConst("AWAIT_HOLD_CAP_MS");
-const AWAIT_HOLD_DEFAULT_MS = budgetConst("AWAIT_HOLD_DEFAULT_MS");
-const AWAIT_HOLD_MARGIN_MS = budgetConst("AWAIT_HOLD_MARGIN_MS");
+const HOLD_CAP_MS = budgetConst("HOLD_CAP_MS");
+const HOLD_DEFAULT_MS = budgetConst("HOLD_DEFAULT_MS");
+const HOLD_MARGIN_MS = budgetConst("HOLD_MARGIN_MS");
 const MCP_ROUTE_MAX_DURATION_MS = budgetConst("MCP_ROUTE_MAX_DURATION_MS");
 
 const CLIENT_TIMEOUT_MS = (() => {
@@ -59,21 +59,21 @@ test("the client timeout covers the LONGEST REACHABLE hold plus the route's own 
   // THE INVARIANT. Not "280 > 215" — that comparison is what shipped, and it was
   // measured against a hold no caller has to ask for.
   assert.ok(
-    AWAIT_HOLD_CAP_MS + AWAIT_HOLD_MARGIN_MS <= CLIENT_TIMEOUT_MS,
-    `cap ${AWAIT_HOLD_CAP_MS} + margin ${AWAIT_HOLD_MARGIN_MS} must fit inside the ` +
+    HOLD_CAP_MS + HOLD_MARGIN_MS <= CLIENT_TIMEOUT_MS,
+    `cap ${HOLD_CAP_MS} + margin ${HOLD_MARGIN_MS} must fit inside the ` +
       `client timeout ${CLIENT_TIMEOUT_MS} — move the cap and fix this number, not this test`
   );
 });
 
 test("the DEFAULT hold is the weaker bound, and is not what the number is derived from", () => {
   // Kept as a regression note: the old 280_000 satisfied this and failed the one above.
-  assert.ok(AWAIT_HOLD_DEFAULT_MS < AWAIT_HOLD_CAP_MS, "the default is below the cap by design");
+  assert.ok(HOLD_DEFAULT_MS < HOLD_CAP_MS, "the default is below the cap by design");
   assert.ok(
-    AWAIT_HOLD_DEFAULT_MS + AWAIT_HOLD_MARGIN_MS <= CLIENT_TIMEOUT_MS,
+    HOLD_DEFAULT_MS + HOLD_MARGIN_MS <= CLIENT_TIMEOUT_MS,
     "…so satisfying the cap satisfies the default automatically"
   );
   assert.ok(
-    280_000 < AWAIT_HOLD_CAP_MS + AWAIT_HOLD_MARGIN_MS,
+    280_000 < HOLD_CAP_MS + HOLD_MARGIN_MS,
     "the shipped-and-wrong value must stay outside the invariant, or this test proves nothing"
   );
 });

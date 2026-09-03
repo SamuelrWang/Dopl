@@ -71,6 +71,17 @@ test("ROW: the payload is the schema's shape, field for field", () => {
     tokensSpent: null,
     startedAt: null,
     lastActivityAt: null,
+    // ⚠ THE HEALTH HALF, JOINED 2026-09-01 (T25 / T50 / T51 / T83). Fourteen measured fields
+    // arrive NULL on this fixture and are still PRESENT, for the reason at the top of this case;
+    // `stale` is the one DERIVATION on the row and is `false`, never null — see
+    // `session-telemetry.test.mjs` for why a two-valued fact must not become three-valued.
+    turns: null,
+    tokensDelta: null,
+    stale: false,
+    deniedCalls: null,
+    lastDeniedTool: null,
+    lastWakeSeq: null,
+    lastWakeAt: null,
   });
 });
 
@@ -90,7 +101,7 @@ test("ROW: the payload is the schema's shape, field for field", () => {
 // on `session-summary.js` and reaching the table because nobody chose to send it. ⚠ SIXTEEN SINCE 2026-08-22 (agent
 // templates): `templateName` was added DELIBERATELY, with the column to receive it (`channel_sessions.template_name`,
 // OPERATOR-ONLY — the server's mapper is the fence and the GRANT list is the belt, neither of which is this file's).
-test("ROW: the wire row is exactly the sixteen columns, and no summary field rides along free", () => {
+test("ROW: the wire row is exactly the twenty-four columns, and no summary field rides along free", () => {
   const m = load();
   const wide = entry({
     detail: "tool",
@@ -112,10 +123,14 @@ test("ROW: the wire row is exactly the sixteen columns, and no summary field rid
   });
   // ⚠ SEVENTEEN since 2026-08-31: `displayName` joined DELIBERATELY, with the column to
   // receive it (`channel_sessions.display_name`, PEER-VISIBLE by design — Samuel's ruling).
+  // ⚠ TWENTY-FOUR since 2026-09-01: the HEALTH half (T25 / T50 / T51 / T83) joined, again
+  // DELIBERATELY and again with the columns to receive it — all seven OPERATOR-ONLY, because
+  // every one of them is a fact about how somebody's own machine is getting on.
   assert.deepEqual(Object.keys(m.reportRow(wide)).sort(), [
-    "channelId", "channelName", "contextUsed", "contextWindow", "detail", "displayName",
-    "lastActivityAt", "model", "name", "sessionKey", "startedAt", "state", "templateName",
-    "threadId", "threadTitle", "tokensSpent", "toolLabel",
+    "channelId", "channelName", "contextUsed", "contextWindow", "deniedCalls", "detail",
+    "displayName", "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "model",
+    "name", "sessionKey", "stale", "startedAt", "state", "templateName", "threadId",
+    "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "turns",
   ]);
   // ⚠ THE NAME CROSSES SANITIZED, exactly as `templateName` does below — `labelOrNull` at 60
   // (`agent-names.js › MAX_NAME`, the column CHECK's own bound).

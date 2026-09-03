@@ -1,4 +1,5 @@
 import "server-only";
+import { readResourceById } from "@/shared/tenancy/read-resource";
 import type {
   AgentTemplate,
   AgentTemplateContext,
@@ -79,17 +80,76 @@ export async function listHomeScopedTemplateIds(
  * "forbidden" would confirm that a private template with that id exists, which
  * is exactly the oracle the visibility matrix is there to close. Same rule as
  * `getSkillBySlug`.
+ *
+ * 🔒 ⚠ **THIS ONE IS KEYED TO `ctx.workspaceId` AND MUST STAY THAT WAY — IT IS
+ * THE WRITE GATE.** `service-writes.ts` funnels create, update and delete
+ * through it, so the tenancy it reads in is the tenancy those writes land in.
+ * The ID-RESOLVING read is {@link readTemplateById}, and the split is the whole
+ * reason A12 is a READ pilot: a PATCH that followed an id into another container
+ * would be `workspace=` becoming ignorable on a WRITE, which nobody has ruled.
  */
 export async function getTemplateById(
   ctx: AgentTemplateContext,
   id: string
 ): Promise<AgentTemplate> {
-  const template = await repo.findTemplateById(ctx.workspaceId, id);
+  const template = await loadVisibleTemplate(ctx, id);
   if (!template) throw new AgentTemplateNotFoundError(id);
+  return template;
+}
+
+/**
+ * 🔒 **THE ID-RESOLVING READ (A12).** The same row, the same matrix, the same
+ * 404 — but the id says which container to apply them in, so `workspace=` is
+ * optional on the way in.
+ *
+ * ⚠ **A `workspace=` THAT CONTRADICTS A RESOLVABLE ID IS IGNORED, NOT REFUSED.**
+ * An id is globally unique, so a caller who names one has said everything the
+ * read needs; the workspace it was asked in was only ever the key the query
+ * happened to be built on, and answering "not here" to a caller holding a
+ * perfectly good id is the defect the "it lives elsewhere" subsystem existed to
+ * apologise for.
+ *
+ * ⚠ **RESOLUTION IS NOT AUTHORISATION AND THE ORDER SAYS SO.** The resolver
+ * (`shared/tenancy/resolve-resource.ts`) is strictly NARROWER than
+ * `canSeeTemplate` — it names only rows the caller could already list — and the
+ * matrix then runs AGAIN in the container it named, with the caller's real role
+ * there. Two fences, and a row that clears one and not the other is the same
+ * 404 as a row that exists nowhere.
+ *
+ * ⚠ IT COSTS TWO EXTRA READS **ONLY ON A MISS IN THIS TENANCY**; a template that
+ * resolves where it was asked for is byte-identical to before.
+ *
+ * ⚠ **THE FOLLOW ITSELF IS `shared/tenancy/read-resource.ts › readResourceById`
+ * SINCE B2**, where it was twelve hand-written lines here. Knowledge bases,
+ * skills and chats compose the same function, and the copy that would have gone
+ * wrong is the one this file used to be the only example of: the re-based
+ * context's `role`.
+ */
+export async function readTemplateById(
+  ctx: AgentTemplateContext,
+  id: string
+): Promise<AgentTemplate> {
+  const hit = await readResourceById(
+    ctx,
+    "agent_template",
+    id,
+    loadVisibleTemplate
+  );
+  if (!hit) throw new AgentTemplateNotFoundError(id);
+  return hit.value;
+}
+
+/** The read every door shares: one row, in ONE named container, through the
+ *  matrix and the viewer-filtered decoration. `null` = not visible, which the
+ *  callers turn into the single 404. */
+async function loadVisibleTemplate(
+  ctx: AgentTemplateContext,
+  id: string
+): Promise<AgentTemplate | null> {
+  const template = await repo.findTemplateById(ctx.workspaceId, id);
+  if (!template) return null;
   const share = await shareCtxForTemplates(ctx, [template]);
-  if (!canSeeTemplate(ctx, template, share)) {
-    throw new AgentTemplateNotFoundError(id);
-  }
+  if (!canSeeTemplate(ctx, template, share)) return null;
   const [decorated] = await decorateWithKnowledgeBases(ctx, [
     withSharingSet(ctx, template, share),
   ]);
@@ -137,12 +197,24 @@ export async function getTemplateById(
  * ⚠ AND THE DESKTOP FAILS FOREIGN INDEPENDENTLY: `template-resolve.js › narrow`
  * treats anything that is not an explicit `true` as somebody else's, so an older
  * server that does not send this field cannot silently downgrade a header.
+ *
+ * ── ⚠ THE MISS THAT USED TO CARRY A TENANCY NOW RESOLVES INSTEAD (A12) ──────
+ *
+ * This door composes {@link readTemplateById}, so a launch that names a template
+ * of the operator's own living in ANOTHER container of theirs now SUCCEEDS
+ * rather than 404-ing with an `elsewhere` label the desktop could only log. The
+ * classification was the apology for a read that could not follow its own id;
+ * `service-resolve-ref.ts › classifyMissingTemplateRef` still answers the MCP
+ * create fence, where a NAME cannot resolve a tenancy.
+ * ⚠ THE REFUSAL IS UNCHANGED WHERE IT STILL BITES — still 404, still never 403,
+ * and a template the operator could not list for themselves anywhere resolves
+ * nowhere.
  */
 export async function resolveTemplateForLaunch(
   ctx: AgentTemplateContext,
   id: string
 ): Promise<ResolvedAgentTemplate> {
-  const template = await getTemplateById(ctx, id);
+  const template = await readTemplateById(ctx, id);
   return {
     name: template.name,
     instructions: template.instructions,

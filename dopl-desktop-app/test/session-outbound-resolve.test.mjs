@@ -37,7 +37,7 @@ const outbound = require(join(HERE, "..", "main", "session-outbound.js"));
 
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
 const CH = "ch1";
-const POST = { op: "post", body: "Shipping the invoice import tonight." };
+const POST = { op: "send", body: "Shipping the invoice import tonight." };
 
 function session() {
   return { channelId: CH, counterpartyName: "David" };
@@ -89,8 +89,8 @@ test("C6: a DENIED post emits nothing — the operator's own decision owns that 
 test("C6: every NON-post call is passed through untouched (same promise, no events)", async () => {
   const h = harness({ behavior: "allow" });
   await h.gated("Bash", { command: "ls" }, { toolUseID: "t1" });
-  await h.gated(CHANNEL_TOOL, { op: "open", direct: true }, { toolUseID: "t2" }); // not a post
-  await h.gated(CHANNEL_TOOL, { op: "post", channel: "other-channel" }, { toolUseID: "t3" }); // cross-channel
+  await h.gated(CHANNEL_TOOL, { op: "rooms", action: "open", direct: true }, { toolUseID: "t2" }); // not a post
+  await h.gated(CHANNEL_TOOL, { op: "send", channel: "other-channel" }, { toolUseID: "t3" }); // cross-channel
   assert.deepEqual(h.emitted, [], "only an OWN-channel post has a card to resolve");
 });
 
@@ -103,7 +103,7 @@ test("C6: a call with no tool_use id resolves nothing (there is no card to key o
 
 test("C6: a bodiless post still resolves its card (text degrades to '')", async () => {
   const h = harness({ behavior: "allow" });
-  await h.gated(CHANNEL_TOOL, { op: "post" }, { toolUseID: "t1" });
+  await h.gated(CHANNEL_TOOL, { op: "send" }, { toolUseID: "t1" });
   assert.equal(h.emitted[0].text, "");
   assert.equal(h.emitted[1].decision, "allow-once");
 });

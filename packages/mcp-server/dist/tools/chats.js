@@ -3,15 +3,17 @@
  * MCP tools for the chat archive. Chats are agent-exported conversation
  * records: per-message summaries under an agent-filled session header. Private
  * to their owner by default; the owner can share one with the workspace.
- *   - `dopl_chats`       — reads + non-destructive writes.
- *   - `dopl_chats_admin` — DESTRUCTIVE delete, split out on purpose.
+ * ⚠ ONE TOOL: reads + non-destructive writes. There is no delete op and no
+ * `dopl_chats_admin` (deleted 2026-09-02) — deletion is app-only and permanent,
+ * fenced by `sessionOnly` on the two chat DELETE routes.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerChatTools = registerChatTools;
 const zod_1 = require("zod");
-const delete_policy_js_1 = require("../delete-policy.js");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
+const tool_errors_1 = require("./tool-errors");
+const tool_style_1 = require("./tool-style");
 const chats_render_1 = require("./chats-render");
 const EXPORT_GUIDE = `## Exporting conversations into Dopl — the rules
 
@@ -60,22 +62,6 @@ it first, or change the folder's scope.
 **Privacy.** Exports default to private (owner-only). Only set
 visibility="public" when the user explicitly says to share it with the
 workspace.`;
-const CHATS_DESCRIPTION = `The user's chat archive — exported conversation records this and future sessions can recall. Set \`op\` to one of:
-- "export" — save the current (or a finished) conversation into the archive. Requires: title, messages (array of {role: "user"|"agent", summary, verbatim?}). Strongly recommended: client_session_id (stable session id — makes re-export update instead of duplicate), overview, deliverables, learnings, session_date, source, project, folder. Read op="guide" before your first export: summarize per message, verbatim only on explicit request.
-- "append" — add messages to an already-exported chat (mid-session incremental export). Requires: chat_id, messages.
-- "update" — update a chat's header (title, overview, project, session_date, deliverables, learnings, folder, pinned) or share/unshare it (visibility). Owner-only. Requires: chat_id plus the fields to change. NOTE: a chat filed in a folder inherits the folder's sharing — moving it into a folder re-scopes it, and setting visibility on a filed chat is rejected (unfile first or use op="update_folder").
-- "list" — chats the user can read (their own, workspace-shared ones, and team-shared ones granted to a team they are on), newest first, with id/title/date/source/visibility/owner. On the FREE PLAN a 90-day history window hides older chats from this listing — nothing is deleted, and the result says so whenever any are hidden. Optional: scope ("private" = the user's unshared chats | "shared" = workspace-public ones | "all", default "all"), query (case-insensitive filter on TITLE and OVERVIEW only — transcripts are not searched, and neither is the archive by dopl_search).
-- "get" — read one chat in full: header, deliverables, learnings, and the summarized transcript. Requires: chat_id. Use this to pull past-session context the user references.
-- "folders" — list the user's chat folders with their sharing scope.
-- "create_folder" — create a chat folder (private by default). Requires: name.
-- "update_folder" — rename a folder and/or change its sharing (visibility "private"|"public" = whole workspace). Changing sharing re-scopes EVERY chat in the folder — confirm with the user first. Team-scoped folder sharing is web-UI only. Requires: folder_id plus name and/or visibility.
-- "guide" — the export etiquette guide (message style, header discipline, idempotency, privacy). Read before your first export of a session.
-
-Deleting is APP-ONLY and permanent — there is no trash and nothing to restore. \`dopl_chats_admin\` lists its delete ops only to refuse them; ask the user to delete an archived chat in the Dopl app.`;
-const CHATS_ADMIN_DESCRIPTION = (0, delete_policy_js_1.deleteAdminDescription)([
-    { op: "delete", effect: "would have deleted a chat and its transcript" },
-    { op: "delete_folder", effect: "would have deleted a chat folder (leaving its chats unfiled)" },
-], `Reach for instead: \`dopl_chats\` op=update to retitle or re-file a chat, op=update_folder to rename a folder. If an archived chat genuinely has to go, ask the user to delete it in the Dopl app.`);
 const MessageShape = zod_1.z.object({
     role: zod_1.z.enum(["user", "agent"]),
     summary: zod_1.z.string().min(1).max(4000),
@@ -85,29 +71,89 @@ const DeliverableShape = zod_1.z.object({
     label: zod_1.z.string().min(1).max(300),
     done: zod_1.z.boolean(),
 });
+/**
+ * ⚠ ONE OBJECT, REGISTERED AND DESCRIBED. `renderLimits` reads THIS shape, so
+ * the description cannot state a cap the schema does not enforce.
+ */
+const CHATS_SHAPE = {
+    op: zod_1.z
+        .enum(["export", "append", "update", "list", "get", "folders", "create_folder", "update_folder", "guide"])
+        .describe("Operation to perform."),
+    chat_id: zod_1.z.string().optional().describe("Chat id. Required for append, update, get."),
+    title: zod_1.z.string().min(1).max(200).optional().describe("op=export (required) / op=update: chat title — specific enough to disambiguate later."),
+    overview: zod_1.z.string().max(2000).optional().describe("op=export / op=update: one-paragraph framing of what the session was about."),
+    messages: zod_1.z.array(MessageShape).max(500).optional().describe("op=export (required) / op=append: ordered transcript entries. Summarize each message concisely; verbatim only when the user asked."),
+    deliverables: zod_1.z.array(DeliverableShape).max(50).optional().describe("op=export / op=update: what was completed (done=true) or agreed but unfinished (done=false)."),
+    learnings: zod_1.z.array(zod_1.z.string().min(1).max(1000)).max(50).optional().describe("op=export / op=update: durable facts worth recalling in future sessions."),
+    client_session_id: zod_1.z.string().min(1).max(200).optional().describe("op=export: your stable session id — idempotency key so re-exports update instead of duplicate. Always pass one."),
+    // ⚠ **THE REGEX LEFT THE PUBLISHED SCHEMA ON 2026-09-02 (A14, item 10).** It
+    // was `.regex(/^\d{4}-\d{2}-\d{2}$/)`, which the SDK publishes as a JSON
+    // Schema `pattern` — a rule the model has to reverse-engineer from a
+    // character class, whose only failure mode is an opaque `-32602` naming
+    // neither the field nor the format. Notion states the same constraint in one
+    // clause (*"Date filter values use the YYYY-MM-DD calendar-date format"*) and
+    // that is what this does; the shape is checked in the handler, which can
+    // answer with a code and an example. `tool-style.test.ts` refuses a `pattern`
+    // on any published param, so it cannot come back by reflex.
+    session_date: zod_1.z
+        .string()
+        .optional()
+        .describe('op=export / op=update: the calendar date the session happened, YYYY-MM-DD (e.g. "2026-09-02"). Any other shape is refused by name.'),
+    source: zod_1.z.enum(["claude-code", "claude-desktop", "codex", "cursor", "other"]).optional().describe("op=export: which client the session ran in."),
+    project: zod_1.z.string().max(120).optional().describe("op=export / op=update: repo or project name the session worked on. op=update: pass empty string to clear it."),
+    folder: zod_1.z.string().max(80).optional().describe("op=export / op=update: folder NAME to file the chat under (created if missing). Filing makes the chat INHERIT the folder's sharing scope. op=update: pass empty string to unfile."),
+    visibility: zod_1.z.enum(["private", "public"]).optional().describe("op=update / op=update_folder: share ('public') or unshare ('private') with the workspace. Rejected on a chat that sits in a folder — the folder's scope is authoritative. op=export: defaults to private — only set public when the user explicitly says so (superseded when folder is passed)."),
+    pinned: zod_1.z.boolean().optional().describe("op=update: pin/unpin the chat."),
+    scope: zod_1.z.enum(["private", "shared", "all"]).optional().describe("op=list: which chats to list (default all)."),
+    query: zod_1.z.string().max(200).optional().describe("op=list: case-insensitive title/overview filter."),
+    name: zod_1.z.string().min(1).max(80).optional().describe("op=create_folder (required) / op=update_folder: folder name."),
+    folder_id: zod_1.z.string().optional().describe("op=update_folder (required): folder id."),
+};
+/**
+ * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
+ * order for every tool on this surface and refuses, at import, a headline over
+ * its window or prose over its cap.
+ *
+ * ⚠ WHAT LEFT: every "Requires:" / "Optional:" clause, the message-entry shape,
+ * the `client_session_id` idempotency paragraph and the folder-inheritance rule
+ * — each is stated by the param's own `.describe()` below, and a description
+ * and its arg descriptions are BOTH pushed on every connection.
+ */
+const CHATS_DESCRIPTION = (0, tool_style_1.composeDescription)({
+    headline: "The user's chat archive — exported conversation records this and future sessions can recall; dopl_search never reads it.",
+    policy: "Reads plus non-destructive writes. No delete op — deleting is APP-ONLY and permanent: no trash, nothing to restore.",
+    routing: [
+        "Use dopl_kb for durable reference material rather than a session record.",
+    ],
+    body: [
+        `Set \`op\` to one of:
+- "export" — save a conversation: a header plus one summarized entry per message. Read op="guide" first.
+- "append" — add messages to an exported chat.
+- "update" — header fields, or share/unshare via visibility. Owner-only.
+- "list" — chats you can read, newest first. On the FREE PLAN a 90-day history window hides older ones — nothing is deleted, and the result says so. \`query\` matches TITLE and OVERVIEW only, never transcripts.
+- "get" — one chat: header, deliverables, learnings, summarized transcript.
+- "folders" — your chat folders and their sharing scope.
+- "create_folder" — private by default.
+- "update_folder" — rename and/or re-scope. ⚠ Re-scoping cascades to EVERY chat in the folder — confirm first.
+- "guide" — export etiquette: message style, headers, idempotency, privacy.`,
+    ],
+    limits: { shape: CHATS_SHAPE, only: ["title"] },
+    errors: tool_errors_1.CHATS_ERRORS,
+    examples: [
+        { op: "list" },
+        { op: "list", scope: "shared", query: "oauth" },
+        { op: "get", chat_id: "c-12" },
+        {
+            op: "export",
+            title: "OAuth fix",
+            messages: [{ role: "user", summary: "…" }],
+            client_session_id: "s-9",
+        },
+    ],
+    cap: tool_style_1.DESCRIPTION_MAX_CHARS,
+});
 function registerChatTools(register, client) {
-    register("dopl_chats", CHATS_DESCRIPTION, {
-        op: zod_1.z
-            .enum(["export", "append", "update", "list", "get", "folders", "create_folder", "update_folder", "guide"])
-            .describe("Operation to perform."),
-        chat_id: zod_1.z.string().optional().describe("Chat id. Required for append, update, get."),
-        title: zod_1.z.string().min(1).max(200).optional().describe("op=export (required) / op=update: chat title — specific enough to disambiguate later."),
-        overview: zod_1.z.string().max(2000).optional().describe("op=export / op=update: one-paragraph framing of what the session was about."),
-        messages: zod_1.z.array(MessageShape).max(500).optional().describe("op=export (required) / op=append: ordered transcript entries. Summarize each message concisely; verbatim only when the user asked."),
-        deliverables: zod_1.z.array(DeliverableShape).max(50).optional().describe("op=export / op=update: what was completed (done=true) or agreed but unfinished (done=false)."),
-        learnings: zod_1.z.array(zod_1.z.string().min(1).max(1000)).max(50).optional().describe("op=export / op=update: durable facts worth recalling in future sessions."),
-        client_session_id: zod_1.z.string().min(1).max(200).optional().describe("op=export: your stable session id — idempotency key so re-exports update instead of duplicate. Always pass one."),
-        session_date: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("op=export / op=update: date the session happened (YYYY-MM-DD)."),
-        source: zod_1.z.enum(["claude-code", "claude-desktop", "codex", "cursor", "other"]).optional().describe("op=export: which client the session ran in."),
-        project: zod_1.z.string().max(120).optional().describe("op=export / op=update: repo or project name the session worked on. op=update: pass empty string to clear it."),
-        folder: zod_1.z.string().max(80).optional().describe("op=export / op=update: folder NAME to file the chat under (created if missing). Filing makes the chat INHERIT the folder's sharing scope. op=update: pass empty string to unfile."),
-        visibility: zod_1.z.enum(["private", "public"]).optional().describe("op=update / op=update_folder: share ('public') or unshare ('private') with the workspace. Rejected on a chat that sits in a folder — the folder's scope is authoritative. op=export: defaults to private — only set public when the user explicitly says so (superseded when folder is passed)."),
-        pinned: zod_1.z.boolean().optional().describe("op=update: pin/unpin the chat."),
-        scope: zod_1.z.enum(["private", "shared", "all"]).optional().describe("op=list: which chats to list (default all)."),
-        query: zod_1.z.string().max(200).optional().describe("op=list: case-insensitive title/overview filter."),
-        name: zod_1.z.string().min(1).max(80).optional().describe("op=create_folder (required) / op=update_folder: folder name."),
-        folder_id: zod_1.z.string().optional().describe("op=update_folder (required): folder id."),
-    }, async (args) => {
+    register("dopl_chats", CHATS_DESCRIPTION, CHATS_SHAPE, async (args) => {
         switch (args.op) {
             case "guide":
                 return (0, respond_1.ok)(EXPORT_GUIDE);
@@ -118,6 +164,9 @@ function registerChatTools(register, client) {
                 if (typeof args.title === "string" && args.title.trim().length === 0) {
                     return (0, respond_1.err)(`op="export" got a blank title — pass a specific, non-empty title (whitespace-only is rejected).`);
                 }
+                const badDate = badSessionDate(args.session_date);
+                if (badDate)
+                    return badDate;
                 if ((args.messages ?? []).length === 0) {
                     return (0, respond_1.err)(`op="export" got an empty messages array — summarize the conversation's messages and pass at least one entry.`);
                 }
@@ -136,6 +185,9 @@ function registerChatTools(register, client) {
                 const miss = (0, respond_1.missingParams)("update", args, ["chat_id"]);
                 if (miss)
                     return miss;
+                const badUpdateDate = badSessionDate(args.session_date);
+                if (badUpdateDate)
+                    return badUpdateDate;
                 return opUpdate(client, args.chat_id, args);
             }
             case "list":
@@ -168,38 +220,28 @@ function registerChatTools(register, client) {
             }
         }
     });
-    register("dopl_chats_admin", CHATS_ADMIN_DESCRIPTION, {
-        op: zod_1.z.enum(["delete", "delete_folder"]).describe("DESTRUCTIVE operation to perform."),
-        chat_id: zod_1.z.string().optional().describe("op=delete (required): chat id."),
-        folder_id: zod_1.z.string().optional().describe("op=delete_folder (required): folder id."),
-    }, async (args) => {
-        switch (args.op) {
-            case "delete": {
-                const miss = (0, respond_1.missingParams)("delete", args, ["chat_id"]);
-                if (miss)
-                    return miss;
-                try {
-                    await client.deleteChat(args.chat_id);
-                    return (0, respond_1.ok)(`Deleted chat \`${args.chat_id}\` and its transcript. Permanent — there is nothing to restore it from.`);
-                }
-                catch (e) {
-                    return (0, respond_1.err)(`Delete failed: ${(0, chats_render_1.failureDetail)(e)}`);
-                }
-            }
-            case "delete_folder": {
-                const miss = (0, respond_1.missingParams)("delete_folder", args, ["folder_id"]);
-                if (miss)
-                    return miss;
-                try {
-                    await client.deleteChatFolder(args.folder_id);
-                    return (0, respond_1.ok)(`Deleted folder \`${args.folder_id}\`. Its chats are now unfiled.`);
-                }
-                catch (e) {
-                    return (0, respond_1.err)(`Delete failed: ${(0, chats_render_1.failureDetail)(e)}`);
-                }
-            }
-        }
-    });
+}
+/**
+ * ⚠ **THE SHAPE CHECK THE SCHEMA USED TO DO WITH A REGEX** (A14, item 10). It
+ * lives here rather than in the published schema for the reason the reference
+ * gives: a `pattern` keyword fails as an opaque `-32602` that names neither the
+ * field nor the format, while a handler can answer with a literal an agent
+ * matches on AND the example that would have worked.
+ *
+ * ⚠ IT IS THE SAME CHECK, NOT A LOOSER ONE. Anchored, four-two-two digits — and
+ * it additionally rejects a date the old regex ACCEPTED, because `2026-13-45`
+ * matched the character class and only failed later, at the server, as a 400
+ * this layer mis-narrated.
+ */
+function badSessionDate(value) {
+    if (value === undefined)
+        return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    const iso = m && new Date(`${value}T00:00:00Z`);
+    if (m && iso && !Number.isNaN(iso.getTime()) && iso.toISOString().slice(0, 10) === value) {
+        return null;
+    }
+    return (0, respond_1.err)((0, tool_errors_1.refusal)(tool_errors_1.BAD_SESSION_DATE, `Got ${(0, narration_1.inlineOr)(value, "`(unreadable)`")}.`));
 }
 async function opExport(client, args) {
     try {

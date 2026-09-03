@@ -20,7 +20,7 @@ export async function seedWorkspace(
     source: "user",
     role: "owner" as Role,
     apiKeyWorkspaceId: null,
-    apiKeyWorkspaceLockKind: null,
+    credentialSubjectUserId: userId,
   };
   const chat = await exportChat(ctx, buildChatSeed());
   return { chatId: chat.id };

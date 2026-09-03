@@ -131,9 +131,35 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     // from the other side, by file name) and `test/launch-directives.test.mjs`.
     // ⚠ A THIRD READER STILL NEEDS AN ARGUMENT OF THIS SHAPE. Do not raise this number
     // without one.
-    const readers = desktopMainFilesContaining("channelPrefs.launchStartModes(");
-    expect(readers).toHaveLength(2);
-    expect(readers).toContain("launch-directives.js");
+    //
+    // ⚠ **THE ORCHESTRATOR LANE'S SPELLING CHANGED ON 2026-09-01 AND THE RULE DID
+    // NOT (T24).** It read `channelPrefs.launchStartModes(`, which is
+    // `getLaunchPosture` + `windowlessMessageMode` welded together and FLOORED. T24
+    // let a directive ASK for a posture, which has to be CLAMPED to the operator's
+    // ceiling BEFORE the windowless floor is applied — clamp then floor, or a
+    // clamped `ask` comes back out as `auto_inbound` looking as though the ceiling
+    // had allowed it. `launchStartModes` cannot express that order, so the lane now
+    // reads the two halves and composes them in `main/launch-posture.js ›
+    // resolveLaunch`. **The stored posture is still the ceiling and still the only
+    // thing that decides.** The lane also moved file, `launch-directives.js` →
+    // `launch-directive-spawn.js`, in the same wave's 500-line split.
+    //
+    // ⚠ SO THE CENSUS IS OVER BOTH SPELLINGS, and it must stay that way: pinning
+    // only the old one would have gone GREEN on a lane that had stopped reading the
+    // posture at all, and pinning only the new one would miss the button lane.
+    // ⚠ `channel-dir-ipc.js` IS EXCLUDED BY NAME AND IT IS NOT AN EXEMPTION: it
+    // DISCLOSES the stored posture to the settings UI over IPC and hands it to no
+    // spawn. H2 counts who APPLIES a stored posture to a launch, which is a
+    // different question from who can read one back.
+    const DISCLOSURE_ONLY = "channel-dir-ipc.js";
+    const readers = [
+      ...desktopMainFilesContaining("channelPrefs.launchStartModes("),
+      ...desktopMainFilesContaining("channelPrefs.getLaunchPosture("),
+    ].filter((f) => f !== DISCLOSURE_ONLY);
+    expect([...new Set(readers)].sort()).toEqual([
+      "launch-directive-spawn.js",
+      "session-launch-op.js",
+    ]);
   });
 
   it("drops the whole posture subsection, heading included, with no bridge", () => {

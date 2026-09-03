@@ -41,9 +41,11 @@ interface Props {
    * entry keyed by that same shelf. Sending one without the other creates a
    * base the surface that created it cannot see (§8).
    *
-   * ⚠ A REQUEST, NOT A GUARANTEE — `server/service-base-writes.ts ›
-   * resolveHomeScope` 403s if this workspace is not the caller's home one, and
-   * the dialog surfaces that message rather than retrying unmarked.
+   * ⚠ A REQUEST, NOT A GUARANTEE — `shared/tenancy/personal-container.ts ›
+   * personalWriteWorkspaceId` 403s when the caller has no personal container to
+   * write into, and the dialog surfaces that message rather than retrying
+   * unmarked. ⚠ Since 2026-09-02 (slice B15) the flag ROUTES the row's
+   * `workspace_id`; nothing stores it.
    */
   shelf?: KbShelf;
   /**

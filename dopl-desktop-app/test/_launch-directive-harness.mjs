@@ -40,6 +40,19 @@ export const SRC = readFileSync(join(MAIN, "launch-directives.js"), "utf8");
 // `wire.directiveFrom`. A stubbed pair would have moved all of that out of the suite's reach in a
 // change whose whole point was that nothing moved.
 export const CALLS_SRC = readFileSync(join(MAIN, "launch-directive-calls.js"), "utf8");
+// ⚠ 2026-09-01 (the agent-management kinds): the REAL `directive-agent-ops.js`, evaluated with
+// stubbed leaves, exactly as `launch-directive-calls.js` above and for the same reason. It is
+// where the two new verbs are DECIDED — the end verdict, the rename write, and which wire word
+// each failure becomes — so faking it would move the whole feature out of the suite's reach.
+// ⚠ ITS TWO REAL DEPENDENCIES ARE NOT STUBBED: `agent-self-ops.js` (the verdict table and the
+// rename primitive, both electron-free and both shared with the in-process tool) and
+// `launch-directive-wire.js`. What IS stubbed is `session-engine.js` (the live registry) and
+// `agent-names.js` (an electron-store), which is the same seam `./targeting` is stubbed at.
+export const AGENT_OPS_SRC = readFileSync(join(MAIN, "directive-agent-ops.js"), "utf8");
+// ⚠ `spawn` MOVED OUT OF `launch-directives.js` ON 2026-09-01 (T24, the §1 cap) and is
+// evaluated here the same way `directive-agent-ops.js` is: through the SAME stub `require`, so
+// the containment inputs every case in this suite asserts are the real ones.
+export const SPAWN_SRC = readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8");
 export const wire = require_(join(MAIN, "launch-directive-wire.js"));
 
 export const WS = "11111111-1111-4111-8111-111111111111";
@@ -72,8 +85,19 @@ export function boot(over = {}) {
   const cfg = {
     enabled: true,
     user: ME,
-    watched: { id: CH, name: "General", toolProfile: "full" },
+    // ⚠ SOLO BY DEFAULT (`memberCount: 1`), so every existing case in these suites keeps asserting
+    // the profile it always did. Ruling B7 narrows `full` -> `channel_agent` in a SHARED room and
+    // an ABSENT count reads as shared, so this number is stated rather than left off; a case opts
+    // into the narrowing by raising it.
+    watched: { id: CH, name: "General", toolProfile: "full", memberCount: 1 },
     launch: async () => ({ agentId: "a1b2c3d4", sessionId: "s1" }),
+    // ⚠ THE LIVE REGISTRY, as `session-engine.js › listLiveSessions` projects it. Empty by
+    // default, so the ordinary `no-session` answer is what a case gets unless it says otherwise.
+    live: [],
+    // What `controlByTask` answers. `{ok:true}` unless a case makes the session settle mid-flight.
+    control: { ok: true },
+    // What `agent-names.js › rename` answers: the STORED string, or null for a sanitizer refusal.
+    renameAnswer: undefined,
     claimAnswer: { ok: true, status: 200, json: { ok: true, directive: null } },
     ...over,
   };
@@ -81,6 +105,9 @@ export function boot(over = {}) {
   const gets = [];
   const arms = [];
   const logged = [];
+  const controls = []; // every `session-engine.controlByTask` call the lane made
+  const names = [];    // every `agent-names` write the lane made
+  const modes = [];    // every `session-engine.setModeByTask` call the lane made (2026-09-01)
   const resolves = [];
   const stub = (id) => {
     if (id === "./api") {
@@ -88,6 +115,18 @@ export function boot(over = {}) {
         apiFetch: async (path, opts) => {
           if ((opts.method || "GET") === "GET") {
             gets.push({ path, opts });
+            // ⚠ THE PINNED STARTUP CONTEXT (2026-09-01, T81) — a SECOND GET on this lane, and it
+            // is answered separately because it is ENRICHMENT rather than a decision: the spawn
+            // degrades to absent on any failure, so a stub that answered every GET with the
+            // backstop's `{ directives }` envelope would leave that whole branch untestable while
+            // looking like it worked. ⚠ THE DEFAULT IS A FAILURE-SHAPED ANSWER, deliberately, so
+            // every case in every OTHER suite keeps producing the pre-T81 spawn spec byte for
+            // byte; `cfg.startupContext` is how `launch-startup-context.test.mjs` opts in.
+            if (path === "/api/knowledge/startup-context") {
+              const a = cfg.startupContext || { ok: true, body: {} };
+              if (a.throws) throw new Error(a.throws);
+              return { ok: a.ok !== false, status: a.status || 200, json: async () => a.body || {} };
+            }
             return { ok: true, status: 200, json: async () => ({ directives: cfg.pending || [] }) };
           }
           posts.push({ path, workspaceId: opts.workspaceId, body: opts.body });
@@ -124,14 +163,42 @@ export function boot(over = {}) {
         // FALSE — the one-generation bound — so every existing case in this suite keeps asserting
         // the shipped behaviour; `cfg.chain` opts a case in, and `launch-chain.test.mjs` drives it.
         getAgentChain: () => cfg.chain === true,
+        // ⚠ THE CEILING THE `set_agent_mode` KIND CLAMPS TO (2026-09-01). It is the operator's
+        // OWN durable, human-set channel posture, and the whole safety argument of that kind is
+        // that nothing an orchestrator writes may exceed it. The default here is the WIDEST pair
+        // so an unrelated case never trips the clamp; `cfg.ceiling` is how a clamp case sets one.
+        getLaunchPosture: () => cfg.ceiling || { tools: "bypass", messages: "auto_both", model: null },
+        // ⚠ THE WINDOWLESS MESSAGE FLOOR, REAL RATHER THAN STUBBED (2026-09-01, T24). It is the
+        // rule the clamp composes with — clamp, THEN floor — and a fake would let this suite go
+        // green about an order that is the contract. The real function is pure.
+        windowlessMessageMode: (_c, picked) => (picked === "auto_outbound" || picked === "auto_both"
+          ? "auto_both" : "auto_inbound"),
       };
     }
     if (id === "./targeting") {
       // The REAL question this stands in for is "what does main think this channel allows".
       // Answering off the DTO is the behaviour under test in §3.
-      return { resolveToolProfile: (c) => (c && c.toolProfile) || "read_only" };
+      // ⚠ ONLY THE FIELD NAME IS FAKED. These suites spell the channel's stored scope
+      // `toolProfile`; the server DTO spells it `myAgentToolProfile`. Everything after the
+      // rename — the fail-closed floor, the shared/solo fact and ruling B7's narrowing — is
+      // `targeting-window.js`'s own, unfaked, because a hand-written narrowing here would let
+      // the suite go green about a rule the lane no longer applies (F-510).
+      const win = require_(join(MAIN, "targeting-window.js"));
+      const asDto = (c) => ({ ...(c || {}), myAgentToolProfile: c && c.toolProfile });
+      return {
+        resolveToolProfile: (c) => win.resolveToolProfile(asDto(c)),
+        resolveLaunchToolProfile: (c) => win.resolveLaunchToolProfile(asDto(c)),
+      };
     }
     if (id === "./launch-directive-wire") return wire;
+    // ⚠ THE CONTAINMENT NARROWING (2026-09-02, ruling B7) — the REAL table, not a stub. It is the
+    // one statement of the profile vocabulary and it is electron-free by contract, so a fake here
+    // would let this suite go green about a narrowing that never happened.
+    if (id === "./tool-profiles") return require_(join(MAIN, "tool-profiles.js"));
+    // ⚠ THE SHARED POSTURE BOUND (2026-09-01, T24) — the REAL module, not a stub. It is pure (no
+    // require, no clock, no store) and it is the rule under test on both lanes; a fake here would
+    // let the suite go green about a clamp that never happened.
+    if (id === "./launch-posture") return require_(join(MAIN, "launch-posture.js"));
     if (id === "./launch-directive-calls") {
       const m = { exports: {} };
       new Function("require", "module", "exports", CALLS_SRC)(stub, m, m.exports);
@@ -162,6 +229,43 @@ export function boot(over = {}) {
     // hand-written copy here would make the two lanes' model chains agree only in this file —
     // which is the drift the shared helper exists to prevent.
     if (id === "./session-launch-op") return launchOp;
+    // ── ⚠ THE AGENT-MANAGEMENT KINDS (2026-09-01) ───────────────────────────────────────────
+    if (id === "./launch-directive-spawn") {
+      const m = { exports: {} };
+      new Function("require", "module", "exports", SPAWN_SRC)(stub, m, m.exports);
+      return m.exports;
+    }
+    if (id === "./directive-agent-ops") {
+      const m = { exports: {} };
+      new Function("require", "module", "exports", AGENT_OPS_SRC)(stub, m, m.exports);
+      return m.exports;
+    }
+    if (id === "./agent-self-ops") return require_(join(MAIN, "agent-self-ops.js"));
+    if (id === "./session-engine") {
+      return {
+        listLiveSessions: () => cfg.live,
+        controlByTask: (a) => { controls.push(a); return cfg.control; },
+        // ⚠ THE LIVE MODE OP, STUBBED AT ITS SEAM (2026-09-01) — the real one is
+        // `session-reopen.js › setModeByTask`, where the windowless MESSAGE floor and the
+        // reducer's fail-closed coercion live, and it is driven for real in
+        // `session-mode-floor.test.mjs`. What THIS harness controls is which answer comes back,
+        // so a case can ask what the DIRECTIVE lane does with each.
+        setModeByTask: (a) => { modes.push(a); return cfg.setMode || { ok: true }; },
+      };
+    }
+    if (id === "./agent-names") {
+      return {
+        // ⚠ THE STORE'S OWN CONTRACT, not a sanitizer: `rename` answers the STORED string or
+        // `null` when it refuses, and `clear` answers nothing. The real sanitizer is driven for
+        // real in `agent-self-ops.test.mjs`; what THIS harness controls is which answer comes
+        // back, so a case can ask what the DIRECTIVE lane does with each.
+        rename: (agentId, name) => {
+          names.push({ op: "rename", agentId, name });
+          return cfg.renameAnswer !== undefined ? cfg.renameAnswer : String(name);
+        },
+        clear: (agentId) => { names.push({ op: "clear", agentId }); },
+      };
+    }
     if (id === "./diag") return { diag: (...p) => logged.push(p.join(" ")) };
     throw new Error(`unexpected require: ${id}`);
   };
@@ -177,7 +281,7 @@ export function boot(over = {}) {
   // ⚠ THE FRAME IS RECORDED BEFORE IT IS HANDED IN, so the claim stub above can grant the row it
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
-  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves };
+  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names, modes };
 }
 
 /**

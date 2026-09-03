@@ -59,6 +59,30 @@ const BASE = "https://api.example.test";
  *        `*Payload` readers each DELEGATE to nothing new on the wire: they are
  *        the same request their array sibling makes, so the surface grew by two
  *        names and by zero round trips.
+ *   77 — PLUS TWO with the ACCOUNT-WIDE reads (2026-09-01, T20/T21/T22):
+ *        `getAccountStatus` and `readAccountMessages`. ⚠ TWO, NOT THREE — the
+ *        all-sessions read (T22) is `getAccountStatus({view:"sessions"})`, a
+ *        query PARAMETER over one resource rather than a second endpoint
+ *        (INVARIANTS §9), so it costs no third name and no third route to gate.
+ *   80 — PLUS THREE with PINNED STARTUP CONTEXT (2026-09-01, T81):
+ *        `setKbBasePinned`, `setKbEntryPinned` and `getKbStartupContext`.
+ *        ⚠ TWO WRITE NAMES FOR ONE FLAG, and that is the count being deliberate
+ *        rather than lazy: a base and an entry are different objects with
+ *        different gates (the entry write chases the row up to its base), so
+ *        folding them into one `setKbPinned(kind, id)` would put two
+ *        authorization stories behind one signature. ⚠ And THREE, not five —
+ *        each write is ONE method covering both directions, because `pinned` is
+ *        an argument choosing the VERB (`PUT`/`DELETE`) rather than a second
+ *        binding: two idempotent verbs, never a toggle, and never two names.
+ *   83 — PLUS THREE with THE "NEEDS YOU" SIGNAL (2026-09-01, T70): `createPing`,
+ *        `listPings`, `awaitPings`.
+ *   80 — LESS THOSE SAME THREE (2026-09-02, slice B16, Samuel's ruling B8). The
+ *        ping lane is DELETED, table and all: a directed `send` IS the delivery
+ *        record, and "what is addressed to me and unanswered" is DERIVED by
+ *        `getAccountStatus` from the transcript rather than kept in a second
+ *        mailbox. ⚠ **THE NUMBER GOING DOWN IS THE POINT** — this list has only
+ *        ever grown by a capability arriving, so a shrink is a capability
+ *        leaving, and it must be argued for exactly like an arrival.
  */
 const PUBLIC_SURFACE = [
   "appendChatMessages",
@@ -72,6 +96,12 @@ const PUBLIC_SURFACE = [
   "createChannel",
   "createHomeChannel",
   "createLaunchDirective",
+  // AGENT MANAGEMENT OVER MCP (2026-09-01, Samuel's end/rename ruling) — ONE more
+  // method and no more, because it is the SAME mailbox with a different `kind`.
+  // ⚠ THERE IS NO `getAgentDirective` AND THERE MUST NOT BE: the row it files IS a
+  // launch directive, so `getLaunchDirective` polls it. A second poll method would
+  // be a second name for one endpoint and would invite a second expiry rule.
+  "createAgentDirective",
   "createChannelThread",
   "createChatFolder",
   "createAgentTemplate",
@@ -89,6 +119,11 @@ const PUBLIC_SURFACE = [
   "deleteSkill",
   "exportChat",
   "getAccessMatrix",
+  // ACCOUNT-WIDE, USER-SCOPED (2026-09-01, T20/T22) — every channel the caller
+  // is in, across every workspace AND every home-channel container, in one read.
+  // A SIBLING of the per-workspace reads, never a flag on them: different
+  // wrapper, different fence, and no workspace argument anywhere on the path.
+  "getAccountStatus",
   "getActiveWorkspace",
   "getAgentTemplate",
   "getBaseUrl",
@@ -112,10 +147,18 @@ const PUBLIC_SURFACE = [
   "createAgentDirection",
   "getAgentDirection",
   "listAgentDirections",
+  // THE "NEEDS YOU" SIGNAL (2026-09-01): send one, catch up, hold for the next.
+  // ⚠ NO ACK / DISMISS / DELETE binding, because v1 has no write on a ping past
+  // its insert — a name here for a route arm that does not exist would publish a
+  // capability an agent would then plan around.
   "getChannelThread",
   "getChat",
   "getHomeChannels",
   "getKbBase",
+  // PINNED STARTUP CONTEXT (2026-09-01, T81) — the capped reading list a
+  // session starts with. ⚠ Read `truncated`/`omitted`: a clipped payload that
+  // renders as the whole of what is pinned is the bug (INVARIANTS §9).
+  "getKbStartupContext",
   "getKbTree",
   "getMemberAccess",
   "getMyAccess",
@@ -125,6 +168,9 @@ const PUBLIC_SURFACE = [
   "getSkill",
   "getWorkspace",
   "getWorkspaceId",
+  // LEND ONE RESOURCE TO ONE SCOPE (2026-09-02, wave B B15) — the write that
+  // replaced the two MCP copy ops. On link 2 because a grant is cross-domain.
+  "grantResource",
   "inviteToChannel",
   "listAgentTemplates",
   "listAgentTemplatesPayload",
@@ -144,11 +190,18 @@ const PUBLIC_SURFACE = [
   "moveKbByPath",
   "pingMcpStatus",
   "postChannelMessage",
+  // ACCOUNT-WIDE cross-channel page (2026-09-01, T21) — one cursor, every
+  // channel, because seq is a TABLE-WIDE identity.
+  "readAccountMessages",
   "readChannelMessages",
   "readKbFileByPath",
   "readSkillBody",
   "searchKb",
   "setChannelThreadMode",
+  // T81 — ONE method per object, each covering BOTH directions: `pinned` picks
+  // the verb (PUT/DELETE), so there is no `unpinKbBase` to forget to gate.
+  "setKbBasePinned",
+  "setKbEntryPinned",
   "setWorkspaceId",
   "updateAgentTemplate",
   "updateChannel",
@@ -251,10 +304,24 @@ describe("routes that MOVED out of client.ts", () => {
 
   const cases: Array<[string, (c: DoplClient) => Promise<unknown>, Wire]> = [
     // ── workspaces.ts ────────────────────────────────────────────────
-    ["listWorkspaces", (c) => c.listWorkspaces(), { path: "/api/workspaces", method: "GET", tool: "list_workspaces" }],
+    ["listWorkspaces", (c) => c.listWorkspaces(), { path: "/api/workspaces", method: "GET", tool: "dopl_workspaces" }],
     ["getWorkspace", (c) => c.getWorkspace("s p"), { path: "/api/workspaces/s%20p", method: "GET", tool: "get_workspace" }],
     ["getActiveWorkspace", (c) => c.getActiveWorkspace(), { path: "/api/workspaces/me", method: "GET", tool: "get_active_workspace" }],
     ["pingMcpStatus", (c) => c.pingMcpStatus(), { path: "/api/user/mcp-status", method: "POST", tool: "_mcp_status_ping" }],
+    // ⚠ PUT, not POST: the write states an END STATE and the server upserts on
+    // the grant's primary key, so a retry after an ambiguous failure is a no-op.
+    [
+      "grantResource",
+      (c) =>
+        c.grantResource({
+          resourceType: "knowledge_base",
+          resourceId: "kb-1",
+          scopeType: "channel",
+          scopeId: "ch-1",
+          level: "visible",
+        }),
+      { path: "/api/resource-grants", method: "PUT", tool: "resource_grant" },
+    ],
   ];
 
   for (const [name, call, expected] of cases) {

@@ -19,10 +19,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
+// ⚠ **THE VERDICT RESOLVER READS `channel_sessions` (A9)** and this suite is
+// about the METADATA fold, not about who a post wakes. Mocked to the empty
+// projection so the agent half of `service-wake-verdict.ts` resolves nothing:
+// unmocked it reaches `supabaseAdmin()` and every case with an `@` in its body
+// hangs on a real client. `service-wake-verdict.test.ts` is where that
+// resolution is driven.
+vi.mock("./repository-sessions");
+
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
+import * as repoSessions from "./repository-sessions";
 import { postMessage } from "./service-writes";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
 import type {
@@ -40,6 +49,7 @@ const THIRD = "33333333-e29b-41d4-a716-446655440000";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
+  credentialSubjectUserId: USER,
   source: "user",
   role: "member",
 };
@@ -130,8 +140,13 @@ beforeEach(() => {
     profile(PEER, "Diana Taylor", "diana@example.com"),
     profile(THIRD, "Daniel Anderson", "dan@example.com"),
   ]);
-  vi.mocked(repoMessages.findMessageByClientId).mockResolvedValue(null);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
+  // ⚠ THE ROOM'S PROJECTION, EMPTY (2026-09-02, B4). RR3 reads it for every
+  // UNADDRESSED HUMAN message, so a file that leaves it unstubbed reaches the
+  // real admin client and times out rather than failing. Empty = no live agent,
+  // which is this file's subject: it measures the METADATA fold, not the wake.
+  vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );

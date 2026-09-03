@@ -1,7 +1,7 @@
 /**
- * `dopl_skill` WRITE op handlers plus `dopl_skill_admin`'s delete. ⚠ Every one
- * can come back 403 `SKILL_AGENT_WRITE_DISABLED`, which is why
- * `agentWriteDenied` lives beside `failureDetail` in `skills-shared.ts`.
+ * `dopl_skill` WRITE op handlers. ⚠ Every one can come back 403
+ * `SKILL_AGENT_WRITE_DISABLED`, which is why `agentWriteDenied` lives beside
+ * `failureDetail` in `skills-shared.ts`.
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
@@ -28,5 +28,14 @@ export declare function opUpdate(client: DoplClient, params: {
     agent_write_enabled?: boolean;
     folder?: string | null;
 }): Promise<ToolResponse>;
-export declare function opSetVisibility(client: DoplClient, slug: string, visibility: string): Promise<ToolResponse>;
-export declare function opDelete(client: DoplClient, slug: string): Promise<ToolResponse>;
+/**
+ * 🔒 **THE PUBLISH DOOR FOR SKILLS (G16, closed 2026-09-02).** `dopl_kb` and
+ * `dopl_agent` have previewed this act since A11/F-441 and this op did not, so
+ * a skill was the one resource an agent could publish into a peer's container
+ * with nothing in front of it and nothing on the server behind it.
+ *
+ * ⚠ **UN-PUBLISHING IS NOT GATED AND MUST NOT BE.** `visibility="private"` only
+ * ever narrows an audience; a preview there would ask the operator to confirm
+ * the safe direction, which is how a confirm step stops being read.
+ */
+export declare function opSetVisibility(client: DoplClient, callerUserId: string | null, slug: string, visibility: string, confirmToken?: string): Promise<ToolResponse>;

@@ -211,7 +211,7 @@ export const CHANNEL_MENTION_MARK_MAX = CHANNEL_MENTION_LIST_LIMIT;
 
 /**
  * Hard cap on the addressees of ONE request fan-out
- * (`server/service-tasks-fanout.ts › createTaskFanOut`).
+ * (`server/service-tasks-broadcast.ts › createTaskFanOut`).
  *
  * ⚠ A BOUND ON WORK, not a product rule. The fan-out is N sequential
  * `createTask` calls, each of which posts through the channel's advisory lock —
@@ -325,3 +325,30 @@ export const LAUNCH_DIRECTIVE_TTL_MS = 120_000;
  * `service-directions.ts › toDirection`; **there is no cron.**
  */
 export const AGENT_DIRECTION_TTL_MS = 600_000;
+
+
+/**
+ * **HOW RECENT A `channel_sessions` ROW MUST BE FOR THE SERVER TO ACT ON IT**
+ * (2026-09-02, A9 — the delivery keystone).
+ *
+ * ⚠ **`channel_sessions` IS A PROJECTION, NOT A REGISTRY**, and the whole reason
+ * this constant exists is stated in `server/repository-sessions.ts` and again in
+ * **F-418**: the desktop pushes it ON STATE CHANGE and never on a timer
+ * (`main/session-state-push.js`, and the keepalive was refused there for
+ * reasons that still stand), so *a quiet row means nobody said anything, not
+ * that nothing is running*. A server that REFUSES on the strength of a stale
+ * projection converts a benign `no-session` answer into a hard 400 for every
+ * legitimate call sent while the push is behind.
+ *
+ * ⚠ **SO THE RULE IS ASYMMETRIC AND MUST STAY SO.** A row inside this window is
+ * evidence enough to RESOLVE a recipient and to REFUSE a direction naming an
+ * agent that is not in it; outside it, the server resolves nothing and refuses
+ * nothing, and the machine answers — which is exactly today's behaviour. Never
+ * invert it: "no fresh row" may not become "no such agent".
+ *
+ * ⚠ It is deliberately LONGER than `PRESENCE_ONLINE_WINDOW_MS`. Presence is a
+ * 30-second heartbeat, so 90 s is a real liveness read; this table is written
+ * only when a session's derived state MOVES, and an agent thinking for four
+ * minutes writes nothing at all.
+ */
+export const SESSION_PROJECTION_FRESH_MS = 5 * 60_000;

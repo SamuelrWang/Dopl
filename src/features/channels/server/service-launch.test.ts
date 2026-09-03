@@ -60,6 +60,7 @@ const DIR = "55555555-5555-5555-5555-555555555555";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: ME,
+  credentialSubjectUserId: ME,
   source: "agent",
   role: "member",
 };

@@ -14,6 +14,19 @@
 // else by `with-workspace-auth.ts`, and everything the agent shells out to
 // inherits the same token. The lock rides the credential.
 //
+// 🔒 WHAT THE MINT ACTUALLY BUYS, SINCE 2026-09-02 (wave B slice B3). The row it
+// creates carries TWO INDEPENDENT AXES, not one lock with a kind bolted on:
+//   container_id     WHICH container the session may act in. This is the fence.
+//   subject_user_id  WHOSE reach it inherits — the OPERATOR's own id, because a
+//                    session credential is one human's session, narrowed.
+// Nothing on this side names either column: the desktop asks for a credential
+// for `s.workspaceId` and the server decides both axes
+// (`shared/auth/mcp-container-token.ts › issueContainerToken`). It is written
+// here because the failure it prevents is invisible from here — a credential
+// minted with a container and NO subject is the "shared key" case, and the
+// operator's own agent would 404 on the operator's own private rows with
+// nothing in this log saying why (F-336/F-333).
+//
 // ⚠ MINTED AT SPAWN, STAMPED ON THE SESSION, REVOKED AT SETTLE. It is stamped
 // rather than fetched on demand for the reason `launchDepth` is: `buildSdkOptions`
 // is SYNCHRONOUS and is re-entered by every spawn shape (fresh launch, parked

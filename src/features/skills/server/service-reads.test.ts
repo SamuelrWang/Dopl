@@ -41,6 +41,7 @@ function ctx(overrides: Partial<SkillContext> = {}): SkillContext {
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: "user-viewer",
     ...overrides,
   };
 }

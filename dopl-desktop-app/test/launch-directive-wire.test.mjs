@@ -41,6 +41,16 @@ const TH = "33333333-3333-4333-8333-333333333333";
 const ME = "44444444-4444-4444-8444-444444444444";
 const DID = "66666666-6666-4666-8666-666666666666";
 
+/**
+ * ⚠ **THE MAPPER MOVED ON 2026-09-01** — `service-launch.ts` hit the §1 cap when the
+ * agent-management kinds gave `toDirective` a second service (`service-launch-agent.ts`), so the
+ * row → DTO half lives in `service-launch-dto.ts` now. Named once here rather than at four call
+ * sites, because a suite that pins the OTHER TREE'S SOURCE has to be repointed as one thing when
+ * that source moves — four independent path literals is four chances to leave one asserting
+ * against a file that no longer contains what it is asserting about.
+ */
+const DTO_FILE = "service-launch-dto.ts";
+
 /** A pending directive row, as the server would write it (snake_case, like a realtime frame). */
 const row = (over = {}) => ({
   id: DID,
@@ -63,8 +73,19 @@ test("CONTRACT: the refusal words are this tree's existing vocabulary, verbatim"
   // ⚠ SEVEN SINCE 2026-08-22 (agent templates): `no-template`. It is the one member with NO
   // producer in `session-launch.js` — the funnel cannot fail to resolve a template, because the
   // resolve happens above it — so the loop below is a subset check in that direction only.
+  // ⚠ NINE SINCE 2026-09-01 (external end / rename). `no-session` and `bad-name` also have no
+  // producer in `session-launch.js` — they belong to the AGENT-MANAGEMENT kinds, whose producer
+  // is `directive-agent-ops.js` — so the subset loop below stays one-directional and the two are
+  // pinned against THAT file instead, in section 4.
+  // ⚠ TEN SINCE 2026-09-02: `no-chain`, produced by `launch-directive-spawn.js › spawn` on
+  // `plan.refused` — the chain request the channel's `channelAgentChain` setting denies. It used
+  // to answer `no-bridge`, which is this machine saying it has no context for that channel at
+  // all, and the two are opposite instructions to an orchestrator. Its producer is not in
+  // `session-launch.js` either, so the subset loop below stays one-directional; section 4 pins
+  // the producer.
   assert.deepEqual(wire.REFUSAL_REASONS,
-    ["cap", "busy", "no-sdk", "auth-hold", "no-bridge", "no-counterparty", "no-template"]);
+    ["cap", "busy", "no-sdk", "auth-hold", "no-bridge", "no-counterparty", "no-template",
+      "no-session", "bad-name", "no-chain"]);
   const launchSrc = readFileSync(join(MAIN, "session-launch.js"), "utf8");
   const produced = [...launchSrc.matchAll(/skipped: '([a-z-]+)'/g)].map((m) => m[1]);
   for (const word of produced) {
@@ -75,7 +96,7 @@ test("CONTRACT: the refusal words are this tree's existing vocabulary, verbatim"
   }
 });
 
-test("CONTRACT: an unknown skip shape becomes `no-bridge`, never a seventh word", () => {
+test("CONTRACT: an unknown skip shape becomes `no-bridge`, never an eleventh word", () => {
   assert.equal(wire.refusalFor("cap"), "cap");
   assert.equal(wire.refusalFor("disabled"), "no-bridge");
   for (const junk of [undefined, null, "", "kaboom", 7, {}]) {
@@ -167,7 +188,7 @@ test("the 404 stand-down survives for OLDER servers, and still names the gap", (
 /** `toDirective`'s output shape, read out of the server's own source. */
 const dtoKeys = () => {
   const service = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "server", "service-launch.ts"), "utf8"
+    join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
   const body = service.slice(service.indexOf("function toDirective"));
   return [...body.slice(0, body.indexOf("\n}")).matchAll(/^\s{4}([A-Za-z]+):/gm)].map((m) => m[1]);
@@ -177,7 +198,7 @@ test("CONTRACT: the pending-read DTO carries `operatorUserId` (F-284)", () => {
   assert.ok(dtoKeys().includes("operatorUserId"),
     "without it every POLLED row fails handle's owner re-check and the backstop recovers nothing");
   const service = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "server", "service-launch.ts"), "utf8"
+    join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
   assert.match(service, /operatorUserId: row\.operator_user_id/);
   // …and the TYPE mirrors carry it too, or the mapper does not compile / the SDK cannot read it.
@@ -195,6 +216,10 @@ test("CONTRACT: the pending-read DTO carries `operatorUserId` (F-284)", () => {
 test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner check (F-284)", async () => {
   const dto = {
     id: DID,
+    // ⚠ THE AGENT-MANAGEMENT FIELDS (2026-09-01). A LAUNCH carries `kind: "launch"` and NULL on
+    // both targets — which is what makes them a fair part of this fixture: the DTO emits them on
+    // every row, so a `handle` that choked on their presence would break the launch lane too.
+    kind: "launch",
     operatorUserId: ME,
     channelId: CH,
     threadId: TH,
@@ -202,6 +227,33 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     model: "claude-opus-5",
     templateId: null,
     templateName: null,
+    targetAgentId: null,
+    targetName: null,
+    // ⚠ THE EIGHT POSTURE KEYS (2026-09-01, T24 + `set_agent_mode` + the echo). Same argument as
+    // the agent-management pair above: `toDirective` emits all eight on EVERY row, so a launch
+    // whose fixture lacked them would be testing a shape the server does not send — which is what
+    // the `dtoKeys()` belt below caught when the surface tier landed them and this object stood
+    // still. ⚠ ALL NULL, WHICH IS THE ORDINARY LAUNCH: asked for no posture, no chain, and the
+    // echo is the MACHINE's answer, so it is null on a row that has not been decided yet.
+    startToolMode: null,
+    startMessageMode: null,
+    chain: null,
+    targetToolMode: null,
+    targetMessageMode: null,
+    appliedToolMode: null,
+    appliedMessageMode: null,
+    appliedChain: null,
+    // ⚠ THE SERVER'S RESOLVED GROUP (2026-09-02, A9 — G6/G7/G8), the THIRD posture group and
+    // not a spelling of either neighbour: `start*` is what was asked, `applied*` is what this
+    // machine says it did, and this is what the SERVER permitted. `directiveFrom` PREFERS these
+    // over `start*`, so a fixture lacking them would test a precedence the server does not send.
+    // ⚠ ALL NULL HERE, WHICH IS THE ORDINARY LAUNCH into a channel that records no ceiling: the
+    // request was empty, so the resolution is too, and `resolvedModel` is null on a model this
+    // SERVER build does not recognise — never a refusal.
+    resolvedToolMode: null,
+    resolvedMessageMode: null,
+    resolvedChain: null,
+    resolvedModel: null,
     status: "pending",
     refusalReason: null,
     agentId: null,
@@ -230,16 +282,26 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
 // looks like a success.
 test("CONTRACT: the claimed row's `threadId` is read, not just the raw row's `task_id`", () => {
   const service = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "server", "service-launch.ts"), "utf8"
+    join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
   assert.match(service, /threadId: row\.task_id/, "the DTO really does rename it");
   assert.equal(wire.directiveFrom({ id: DID, channel_id: CH, threadId: TH }, WS).taskId, TH);
   assert.equal(wire.directiveFrom({ id: DID, channel_id: CH, task_id: TH }, WS).taskId, TH);
 });
 
-test("CONTRACT: `decideBody` has exactly two shapes and never a third", () => {
+test("CONTRACT: `decideBody` has exactly three shapes and never a fourth", () => {
   assert.deepEqual(wire.decideBody(DID, { agentId: "a1b2c3d4" }),
     { directiveId: DID, status: "launched", agentId: "a1b2c3d4" });
+  // ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). It carries NO agent id — the row already NAMES
+  // its target — and `launched` is deliberately not reused: this row is rendered into an
+  // agent-facing sentence, and "launched" on the record of an agent being STOPPED is the one kind
+  // of wrong nothing downstream can detect.
+  assert.deepEqual(wire.decideBody(DID, { done: true }),
+    { directiveId: DID, status: "done" });
+  // ⚠ ORDER IS THE CORRECTNESS: an outcome carrying BOTH is a launch, and a `done` must never
+  // fall through to the refusal tail and report a successful end as `no-bridge`.
+  assert.equal(wire.decideBody(DID, { agentId: "a1b2c3d4", done: true }).status, "launched");
+  assert.equal(wire.decideBody(DID, { done: false, refused: "no-session" }).status, "refused");
   assert.deepEqual(wire.decideBody(DID, { refused: "cap" }),
     { directiveId: DID, status: "refused", refusalReason: "cap" });
   // ⚠ AN EMPTY OUTCOME IS A REFUSAL, NOT A SILENCE. A claimed directive with no decision is the
@@ -250,9 +312,16 @@ test("CONTRACT: `decideBody` has exactly two shapes and never a third", () => {
 
 test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing this machine", () => {
   const d = wire.directiveFrom(row({ shell_command: "rm -rf /", start_modes: { tools: "bypass" } }), WS);
+  // ⚠ THREE KEYS JOINED ON 2026-09-01 (the agent-management kinds) and TWO MORE LATER THAT DAY
+  // (`set_agent_mode`), and the LIST IS THE TEST: `directiveFrom` is a literal whitelist, so this
+  // assertion is simultaneously "the new fields arrive" and "nothing else does". A column the
+  // server adds and the whitelist does not name is dropped without a word — which is the point of
+  // the narrowing, and also the one way to ship a feature over this lane and have it do nothing.
   assert.deepEqual(Object.keys(d).sort(),
-    ["agentId", "channelId", "goal", "id", "model", "operatorUserId", "status", "taskId",
-      "templateId", "templateName", "workspaceId"]);
+    ["agentId", "channelId", "goal", "id", "kind", "model", "operatorUserId", "status",
+      "chain", "startMessageMode", "startToolMode",
+      "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "taskId",
+      "templateId", "templateName", "workspaceId"].sort());
   assert.equal(d.shell_command, undefined);
   assert.equal(d.startModes, undefined);
 });
@@ -274,7 +343,7 @@ test("TEMPLATE: `template_id` survives the narrowing, in BOTH spellings", () => 
   assert.equal(wire.directiveFrom(row({ template_id: TPL }), WS).templateId, TPL);
   assert.equal(wire.directiveFrom(row({ templateId: TPL }), WS).templateId, TPL);
   const service = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "server", "service-launch.ts"), "utf8"
+    join(HERE, "..", "..", "src", "features", "channels", "server", DTO_FILE), "utf8"
   );
   assert.match(service, /templateId: row\.template_id/, "the DTO really does rename it");
   assert.match(service, /templateName: row\.template_name/, "…and the name half with it");
@@ -334,7 +403,7 @@ test("TEMPLATE: `template-approval` is NOT a directive refusal word, on either s
 // ⚠ THE CHECK AND THE ENUM WERE ONE WORD APART FOR A DAY, DELIBERATELY AND DANGEROUSLY: the TS
 // vocabulary went to seven on 2026-08-22 while the column CHECK stayed at six, and four files
 // carried a standing instruction not to ship a producer into that window — a `decide` with the
-// word would have passed zod and been refused AT REST. `launch-directives.js › spawn` IS that
+// word would have passed zod and been refused AT REST. `launch-directive-spawn.js › spawn` IS that
 // producer now, so this case is what says the migration landed with it.
 test("TEMPLATE: the column CHECK admits `no-template`, and the producer exists", () => {
   const MIG = join(HERE, "..", "..", "supabase", "migrations",
@@ -347,8 +416,11 @@ test("TEMPLATE: the column CHECK admits `no-template`, and the producer exists",
   assert.match(sql, /ADD COLUMN IF NOT EXISTS template_name TEXT/);
   assert.match(sql, /CREATE INDEX IF NOT EXISTS channel_launch_directives_template_idx/,
     "the FK cover is not optional — a template DELETE would scan the whole table");
-  assert.match(SRC, /refused: 'no-template'/,
-    "the producer this migration was landed for must be in launch-directives.js");
+  // ⚠ THE PRODUCER MOVED FILE ON 2026-09-01 — `spawn` left `launch-directives.js` at the §1 cap
+  // (T24) — and the claim is unchanged: the word this migration widened the CHECK for must have
+  // a producer in this tree, or the CHECK admits a refusal nothing can write.
+  assert.match(readFileSync(join(MAIN, "launch-directive-spawn.js"), "utf8"), /refused: 'no-template'/,
+    "the producer this migration was landed for must be in launch-directive-spawn.js");
 });
 
 test("TEMPLATE: the migration NEVER touches the replica identity", () => {

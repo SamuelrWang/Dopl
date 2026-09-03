@@ -9,8 +9,8 @@
 // a workspace is added.
 //
 // Every comparable cache in this tree already carries one — `avatar-cache.js › MAX_CACHE` (64),
-// `legacy-threads.js › LEGACY_THREAD_CAP` (500 + TTL), `session-wake-tiers.js › MAX_CHANNELS`
-// (32, LRU), `queued-notice.js › MAX_ANNOUNCED` (256), `version-skew.js › SEEN_CAP` (200),
+// `legacy-threads.js › LEGACY_THREAD_CAP` (500 + TTL),
+// `queued-notice.js › MAX_ANNOUNCED` (256), `version-skew.js › SEEN_CAP` (200),
 // `agent-names.js › MAX_NAMES` (500). These two were the exception.
 //
 // WHY SOURCE EXTRACTION: listener-io.js is CommonJS and pulls in electron + electron-store, so

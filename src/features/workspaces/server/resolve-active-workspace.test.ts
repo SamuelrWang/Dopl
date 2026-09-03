@@ -1,30 +1,27 @@
 /**
- * The fail-closed workspace resolver. Pins the resolution matrix and the flat
- * error envelope `withWorkspaceAuth` / `GET /api/workspaces/me` surface
- * verbatim:
+ * The workspace resolver. Pins the resolution matrix and the flat error
+ * envelope `withWorkspaceAuth` / `GET /api/workspaces/me` surface verbatim:
  *   - header UUID → membership check (404 for non-member / nonexistent);
  *   - blank / non-UUID header → 400 WORKSPACE_INVALID (never a 500, never a
- *     silent fall-through to auto-targeting);
- *   - no header → active memberships decide (1 auto-targets; 0 or 2+ → 400
- *     WORKSPACE_REQUIRED with the choices, never `findDefaultWorkspaceForUser`).
+ *     silent fall-through);
+ *   - **no header → the caller's own personal container, minted on first ask**
+ *     (ruling B10). No membership count, no auto-target, no refusal.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type {
-  Role,
-  Workspace,
-  WorkspaceMembership,
-  WorkspaceWithRole,
-} from "../types";
+import type { Role, Workspace, WorkspaceMembership } from "../types";
 
 vi.mock("./repository", () => ({
   listWorkspacesWithRoleForUser: vi.fn(),
   findWorkspaceById: vi.fn(),
   findMembership: vi.fn(),
-  findDefaultWorkspaceForUser: vi.fn(),
+  ensurePersonalContainerRow: vi.fn(),
 }));
 vi.mock("./last-seen", () => ({ touchLastSeen: vi.fn() }));
 vi.mock("./seed-workspace", () => ({ seedNewWorkspace: vi.fn() }));
+vi.mock("@/shared/tenancy/personal-container", () => ({
+  findPersonalContainerId: vi.fn(),
+}));
 
 import * as repo from "./repository";
 import { HttpError } from "@/shared/lib/http-error";
@@ -38,25 +35,6 @@ const mockRepo = vi.mocked(repo);
 
 const USER = "user-1";
 const UUID_A = "11111111-1111-1111-1111-111111111111";
-
-function wsWithRole(
-  id: string,
-  slug: string,
-  role: Role = "member"
-): WorkspaceWithRole {
-  return {
-    id,
-    ownerId: "owner",
-    name: `${slug} workspace`,
-    slug,
-    publicId: `pub-${id}`,
-    description: null,
-    iconUrl: null,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    role,
-  };
-}
 
 function workspace(id: string, slug: string): Workspace {
   return {
@@ -149,53 +127,58 @@ describe("resolveActiveWorkspace — header path", () => {
     )) as WorkspaceResolutionError;
     expect(err).toBeInstanceOf(WorkspaceResolutionError);
     expect(err.code).toBe("WORKSPACE_INVALID");
-    expect(err.workspaces).toBeUndefined();
   });
 });
 
-describe("resolveActiveWorkspace — no-header path (active memberships)", () => {
-  it("auto-targets the sole active membership", async () => {
-    mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([
-      wsWithRole("ws-solo", "solo", "viewer"),
-    ]);
-    mockRepo.findWorkspaceById.mockResolvedValue(workspace("ws-solo", "solo"));
-    mockRepo.findMembership.mockResolvedValue(membership("ws-solo", "viewer"));
+describe("resolveActiveWorkspace — no-header path is the PERSONAL CONTAINER", () => {
+  function primeContainer(role: Role = "owner") {
+    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
+      workspace: { ...workspace("ws-home", "personal"), kind: "personal" },
+      created: false,
+    });
+    mockRepo.findWorkspaceById.mockResolvedValue({
+      ...workspace("ws-home", "personal"),
+      kind: "personal",
+    });
+    mockRepo.findMembership.mockResolvedValue(membership("ws-home", role));
+  }
+
+  it("answers the caller's own container, and asks the membership directory nothing", async () => {
+    primeContainer();
 
     const res = await resolveActiveWorkspace(USER, null);
-    expect(res.workspace.id).toBe("ws-solo");
-    expect(res.membership.role).toBe("viewer");
-    // Ownership-based fallback must never be consulted.
-    expect(mockRepo.findDefaultWorkspaceForUser).not.toHaveBeenCalled();
+    expect(res.workspace.id).toBe("ws-home");
+    expect(res.membership.role).toBe("owner");
+    // 🔒 THE COUNT IS GONE, not merely unreached: the one query that powered
+    // the auto-target, the refusal and its choice list is never issued.
+    expect(mockRepo.listWorkspacesWithRoleForUser).not.toHaveBeenCalled();
   });
 
-  it("400 WORKSPACE_REQUIRED with an empty list + create hint for 0 memberships", async () => {
-    mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([]);
+  it("🔒 a caller who belongs to N workspaces still lands on their OWN container", async () => {
+    // The old shape refused here (2+ memberships → WORKSPACE_REQUIRED) and
+    // auto-targeted at exactly 1. Neither number is asked any more, so this
+    // case and the zero-workspace one below are the SAME code path.
+    primeContainer();
+    expect((await resolveActiveWorkspace(USER, null)).workspace.id).toBe("ws-home");
+    expect(mockRepo.listWorkspacesWithRoleForUser).not.toHaveBeenCalled();
+  });
+
+  it("🔒 a caller with ZERO workspaces resolves — sign-in cannot dead-end", async () => {
+    primeContainer();
+    const res = await resolveActiveWorkspace(USER, null);
+    expect(res.workspace.kind).toBe("personal");
+    expect(mockRepo.ensurePersonalContainerRow).toHaveBeenCalledWith(USER);
+  });
+
+  it("still fails closed on the container it just ensured (revoked membership → 404)", async () => {
+    primeContainer();
+    mockRepo.findMembership.mockResolvedValue(null);
 
     const err = (await catchErr(
       resolveActiveWorkspace(USER, null)
-    )) as WorkspaceResolutionError;
-    expect(err).toBeInstanceOf(WorkspaceResolutionError);
-    expect(err.code).toBe("WORKSPACE_REQUIRED");
-    expect(err.workspaces).toEqual([]);
-    expect(err.message).toContain("POST /api/workspaces");
-  });
-
-  it("400 WORKSPACE_REQUIRED listing every workspace for 2+ memberships", async () => {
-    mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([
-      wsWithRole("ws-1", "alpha", "owner"),
-      wsWithRole("ws-2", "beta", "member"),
-    ]);
-
-    const err = (await catchErr(
-      resolveActiveWorkspace(USER, null)
-    )) as WorkspaceResolutionError;
-    expect(err.code).toBe("WORKSPACE_REQUIRED");
-    expect(err.workspaces).toEqual([
-      { name: "alpha workspace", slug: "alpha", role: "owner" },
-      { name: "beta workspace", slug: "beta", role: "member" },
-    ]);
-    // Never resolves a membership when the target is ambiguous.
-    expect(mockRepo.findMembership).not.toHaveBeenCalled();
+    )) as HttpError;
+    expect(err).toBeInstanceOf(HttpError);
+    expect(err.status).toBe(404);
   });
 });
 
@@ -241,23 +224,21 @@ describe("resolveMembershipOrThrow — the two reads are PARALLEL", () => {
   });
 });
 
-describe("WorkspaceResolutionError — flat billing-style envelope", () => {
-  it("REQUIRED serializes { error, message, workspaces }", () => {
-    const err = new WorkspaceResolutionError("WORKSPACE_REQUIRED", "pick one", [
-      { name: "alpha workspace", slug: "alpha", role: "owner" },
-    ]);
-    expect(err.toResponseBody()).toEqual({
-      error: "WORKSPACE_REQUIRED",
-      message: "pick one",
-      workspaces: [{ name: "alpha workspace", slug: "alpha", role: "owner" }],
-    });
-  });
-
-  it("INVALID serializes { error, message } with no workspaces key", () => {
-    const err = new WorkspaceResolutionError("WORKSPACE_INVALID", "bad header");
+describe("WorkspaceResolutionError — flat billing-style envelope, ONE code", () => {
+  it("serializes { error, message } and nothing else", () => {
+    const err = new WorkspaceResolutionError("bad header");
     expect(err.toResponseBody()).toEqual({
       error: "WORKSPACE_INVALID",
       message: "bad header",
     });
+  });
+
+  it("🔒 carries no choice list at all — there is nothing to choose between", () => {
+    // The `workspaces: []` key existed only to render a WORKSPACE_REQUIRED
+    // refusal. Asserted by SHAPE so re-adding a third field fails here.
+    expect(Object.keys(new WorkspaceResolutionError("x").toResponseBody())).toEqual([
+      "error",
+      "message",
+    ]);
   });
 });

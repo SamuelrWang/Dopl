@@ -13,7 +13,7 @@ export async function listWorkspaces(
   t: DoplTransport
 ): Promise<{ workspaces: WorkspaceListItem[] }> {
   return t.request<{ workspaces: WorkspaceListItem[] }>("/api/workspaces", {
-    toolName: "list_workspaces",
+    toolName: "dopl_workspaces",
   });
 }
 

@@ -6,6 +6,7 @@ import type {
   WorkspaceOverview,
   WorkspaceOverviewSeries,
 } from "@/features/workspaces/types";
+import type { AccountStatus } from "@/features/channels/types";
 import { useWorkspaceRoute } from "#/components/app-shell";
 import { PageError } from "#/components/page-states";
 import { useApiQuery } from "#/hooks/use-api-query";
@@ -14,6 +15,7 @@ import { MemberLoad } from "./member-load";
 import { OverviewHeader } from "./overview-header";
 import { OverviewSkeleton } from "./overview-skeleton";
 import { PeriodStats } from "./period-stats";
+import { ACCOUNT_STATUS_PATH, NeedsYou, needsYouRows } from "./needs-you";
 import { RecentActivity } from "./recent-activity";
 import { StatCards } from "./stat-cards";
 
@@ -90,6 +92,15 @@ function OverviewSurface({
     keepPreviousData: true,
   });
   const credits = useWorkspaceEntitlements(workspaceId);
+  // WHAT IS ADDRESSED TO YOU AND UNANSWERED, account-wide (slice B16 — it read
+  // the ping inbox until that lane was deleted). ⚠ NOT part of the paint gate
+  // below, deliberately: it is an out-of-band signal, and letting its read hold
+  // the whole page at the skeleton would make the least important read on the
+  // page the slowest one. An empty panel while it lands is the correct first
+  // frame.
+  const waiting = useApiQuery<AccountStatus>(ACCOUNT_STATUS_PATH, {
+    workspaceId,
+  });
 
   const error = overview.error ?? series.error;
   if (error) {
@@ -122,6 +133,10 @@ function OverviewSurface({
             metric={metric}
             onMetricChange={setMetric}
             days={series.data.days}
+          />
+          <NeedsYou
+            rows={needsYouRows(waiting.data, workspaceId)}
+            segment={segment}
           />
           {/* 48/52 split, matching the reference's uneven bottom row. */}
           <div className="grid grid-cols-[48fr_52fr] gap-3">

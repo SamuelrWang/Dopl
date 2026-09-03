@@ -178,7 +178,10 @@ async function handleTrigger(entry, m) {
   const bodyPreview = targeting.truncate(m.body, 2000);
   // Snapshot the tool profile now — the launch may land much later, and the operator is being
   // shown this profile's containment on the banner they are about to press.
-  const toolProfile = targeting.resolveToolProfile(entry.channel);
+  // ⚠ THE NARROWED ONE, which is the point of snapshotting it here: the banner must name the
+  // containment the session will really start at, and a responder trigger fires on a message from
+  // somebody else — i.e. in a room that is shared by construction (2026-09-02, ruling B7 / F-510).
+  const toolProfile = targeting.resolveLaunchToolProfile(entry.channel);
   const inboundTaskId = targeting.firstClassTaskId(m);
   const taskId = taskIdFor(entry, m);
   diag('ask notify:', entry.channel.id.slice(0, 8), 'seq', m.seq, 'profile', toolProfile);

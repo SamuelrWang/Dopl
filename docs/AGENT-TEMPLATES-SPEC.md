@@ -212,8 +212,9 @@ Four arguments, in decreasing weight:
 
 1. **It is the lane's existing architecture, not a new one.** Every security-relevant input on
    this lane is computed by main from main's own state, specifically so the renderer cannot
-   influence it: `toolProfile` ← `targeting.resolveToolProfile(listener.watchedChannel(...))`
-   (`session-launch-op.js › resolveToolProfile`), `startModes` ← `channelPrefs.launchStartModes`,
+   influence it: `toolProfile` ← `targeting.resolveLaunchToolProfile(listener.watchedChannel(...))`
+   (`session-launch-op.js › launchFromButton`; since 2026-09-02 that resolver applies ruling B7's
+   shared-room narrowing as well as the stored read), `startModes` ← `channelPrefs.launchStartModes`,
    `model` ← `channelPrefs.getLaunchModel`, `goal` ← three canned strings. **F-267 is the
    scar**: main read a *projection* instead of its own DTO and every button-launch silently
    floored to `read_only`. A renderer-supplied template snapshot repeats that mistake with
@@ -256,7 +257,7 @@ Resolve budget: **`TEMPLATE_RESOLVE_TIMEOUT_MS = 5000`**, not `launch-directives
 - the `channel_launch_directives_refusal_reason_check` column CHECK (new migration, §3e)
 
 Plus copy in `use-agents-panel.ts › LAUNCH_REFUSALS` and a sentence in
-`packages/mcp-server/src/tools/channel-ops-launch.ts › REFUSAL_SENTENCES`.
+`packages/mcp-server/src/tools/channel-ops-launch.ts › RETRY_ADVICE` (⚠ the per-reason SENTENCES it replaced on 2026-09-02 are now in `channel-doctrine.ts`; the launch result renders the reason KEY plus a retry verdict).
 **Six files. Budget it.** On the button lane, `launchRefusalText` already falls back gracefully,
 so the SPA half is one line: `"no-template": "That template is gone — reload the list"`.
 
@@ -667,7 +668,7 @@ CREATE INDEX IF NOT EXISTS channel_launch_directives_template_idx
 | `› CreateLaunchInput` | accept the resolved id |
 | `schema-launch.ts › LaunchCreateSchema` | accept `template` (string) |
 | `packages/mcp-server/src/tools/channel-schema.ts › CHANNEL_INPUT_SHAPE` | the param above |
-| `mcp-server/src/tools/channel.ts › opLaunchAgent` | pass it into `opLaunchAgent` |
+| `mcp-server/src/tools/channel-dispatch-agents.ts › dispatchManageAction` | pass it into `opLaunchAgent` (the six agent-lifecycle ops left `channel.ts`'s switch on 2026-09-01, at the 500-line cap) |
 | **`main/launch-directive-wire.js › directiveFrom`** | **narrows unknown keys away — a `template_id` not added here NEVER reaches the desktop** |
 
 #### Resolve at claim time on the desktop
@@ -757,7 +758,7 @@ row exists. This argument does not depend on the telemetry ruling at all.
   the new field with **no new case**.
 
 **What a peer sees: unchanged.** A handle and a state, which is what
-`channel-session-render.ts › SESSION_TELEMETRY_NOTE` already promises.
+`channel-doctrine.ts › CHANNEL_DOCTRINE` already promises in its READING "read_sessions" section (⚠ that promise lived in a standing note under every `read_sessions` page until 2026-09-02, when T12/T13 moved it out of the per-call result; `channel-session-render.ts › shortModelLabel` is still what guarantees it).
 
 **Where the operator sees it:** the agent card's existing chip row, beside the model chip; and
 the `sessionBlockLines` telemetry block returned on every workspace-wide `await` hold

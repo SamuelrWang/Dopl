@@ -57,7 +57,12 @@ function boot() {
     if (id === "./channel-listener") {
       return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
     }
-    if (id === "./targeting") return { resolveToolProfile: () => "full" };
+    // ⚠ BOTH READS, because `session-launch-op.js` takes the LAUNCH one since ruling B7 and
+    // this file is about templates, not containment: a constant keeps the profile out of the
+    // way of what it does assert. `channel-agent-profile.test.mjs` drives the real rule.
+    if (id === "./targeting") {
+      return { resolveToolProfile: () => "full", resolveLaunchToolProfile: () => "full" };
+    }
     // Real: a blank launch calls `narrowOverrides` and nothing else in it.
     if (id === "./template-resolve") return require(join(MAIN, "template-resolve.js"));
     if (id === "./channel-prefs") {
@@ -154,7 +159,7 @@ test("SPAWN IDLE survives the id (ruling 3): register, prepare context, send NO 
   // description leaking into it would be the renderer writing prompt text.
   assert.equal(
     spec.goal,
-    "Join this thread as my agent: read it with dopl_channel (op \"get_thread\") and carry the work forward."
+    "Join this thread as my agent: read it with dopl_channel (op \"read\", thread=<id>) and carry the work forward."
   );
   assert.equal(spec.firstMessage, undefined, "the ENGINE arg — a turn is not sent from here");
 });

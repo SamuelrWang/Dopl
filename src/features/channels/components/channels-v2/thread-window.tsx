@@ -216,6 +216,12 @@ export function ChannelsV2ThreadWindow({
         outboundBusy={consentBusy}
         onDecideOutbound={decideOutbound}
         scrollTarget={null}
+        // ⚠ THE SAME POLL THIS WINDOW ALREADY MAKES for the peer-activity row, handed on so the
+        // pop-out's composer offers the same @-chips the main pane does (2026-09-02, slice B10).
+        // ⚠ NO `defaultResponderAgentName`: this surface reads a THREAD, never the channel row, so
+        // it cannot state arm 1 and the recipient line falls to arm 2 (the room's one live agent).
+        // Understating the reach is the safe direction; a second channel read for one string is not.
+        liveAgents={peerSessions}
         peerActivity={
           <PeerActivityRow
             peers={peerWorkingOn(peerSessions, currentUserId, thread.id)}

@@ -1,5 +1,5 @@
 /**
- * `dopl_channel` op="launch_agent" — ASK THE OPERATOR'S OWN DESKTOP TO START AN
+ * `dopl_channel` op="manage" action="launch" — ASK THE OPERATOR'S OWN DESKTOP TO START AN
  * AGENT (Samuel's ruling, 2026-08-22: launch-over-MCP approved, with a LOCAL
  * DESKTOP TOGGLE as the consent).
  *
@@ -25,8 +25,10 @@
  * an `await`. That is why this op holds on the ROW rather than telling the agent
  * to arm a wait.
  */
-import type { DoplClient } from "@dopl/client";
+import type { DoplClient, LaunchMessageMode, LaunchToolMode } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+/** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
+ *  id is the only handle the agent has left, and says NOT to re-issue. */
 /**
  * ASK FOR AN AGENT, then hold briefly for the answer.
  *
@@ -41,5 +43,19 @@ export declare function opLaunchAgent(client: DoplClient, ref: string, opts?: {
     /** Template id OR exact name. ⚠ Passed through untouched — the id/name
      *  disambiguation and the visibility check both happen server-side. */
     template?: string;
+    /** ⚠ **ASKED FOR, NEVER SET.** The operator's machine clamps each axis to
+     *  that operator's own stored ceiling; omitting both is the pre-T24
+     *  behaviour. Passed through untouched — this process cannot see the
+     *  ceiling and must not pretend to. */
+    tools?: LaunchToolMode;
+    messages?: LaunchMessageMode;
+    /** ⚠ REFUSED rather than clamped when the channel forbids it, which is why
+     *  it is a separate field and not a third axis. Omitted is NOT `false`. */
+    chain?: boolean;
+    /** ⚠ **THE IDEMPOTENCY KEY, AND IT IS WHAT MAKES A TIMED-OUT LAUNCH SAFE TO
+     *  RETRY** (2026-09-02, A10/G10). Passed through untouched: the server
+     *  probes it against `(channel, this operator)` and returns the stored
+     *  directive rather than filing a second one. */
+    clientMsgId?: string;
     waitMs?: number;
 }): Promise<ToolResponse>;

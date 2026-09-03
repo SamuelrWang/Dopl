@@ -49,6 +49,12 @@ function applyBindings(ch, wsId) {
       (payload) => onDirection(wsId, payload)
     );
   }
+  // ⚠ **A THIRD BINDING STOOD HERE UNTIL 2026-09-02 (slice B16) AND IT WAS THE ONLY
+  // UNCONDITIONAL ONE**: `channel_pings`, bound with no consent flag because a ping bought an
+  // external agent neither COMPUTE nor a private turn. The lane is deleted — ruling B8 folded
+  // it into a directed `send` — and the table it watched was never applied in any environment.
+  // ⚠ **SO EVERY BINDING IS BEHIND A FLAG AGAIN, AND THAT IS THE INVARIANT TO KEEP:** a
+  // machine that never opts in names no table on the wire.
   return out;
 }
 

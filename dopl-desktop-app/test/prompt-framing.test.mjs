@@ -91,7 +91,7 @@ test("milestoneGuidance appears only when the profile can post", () => {
   const line = milestoneGuidance({ hasPostingTool: true });
   // P0-1: the milestone is its OWN op now, so there is no kind for the agent to pick and
   // nothing to confuse with a reply. FIX S1 still holds for the ARGUMENT: `thread=<id>`.
-  assert.ok(line.includes('op "milestone"'), "posting profile gets the milestone guidance");
+  assert.ok(line.includes('op "send", kind "milestone"'), "posting profile gets the milestone guidance");
   assert.ok(line.includes("thread=<id>"), "and the real argument name");
   assert.ok(!/\btask=/.test(line), `milestone line still teaches task=: ${line}`);
   assert.ok(!/kind\s*=/.test(line), `milestone line still makes the agent pick a kind: ${line}`);
@@ -199,7 +199,7 @@ test("buildFencedTurn falls back cleanly for an empty message / missing context"
 
 // ── v2.x: THE SPAWNED AGENT IS TOLD WHERE IT LIVES ───────────────────────────────
 // The defect: a spawn's first turn named only the channel's DISPLAY NAME, so the agent
-// could not fill dopl_channel's required `channel=` and went hunting with op "list" —
+// could not fill dopl_channel's required `channel=` and went hunting with op "rooms", action "list" —
 // and because the device token spans several workspaces with no connection default,
 // every unqualified dopl call was refused for a `workspace=`. Both ids ride the spawn
 // context now and the delivery section states the exact call.
@@ -210,7 +210,7 @@ const ids = (over = {}) => ({ channelName: "Ops", authorName: "Alice", channelId
 
 test("buildFencedTurn responder: the delivery section states the EXACT dopl_channel call", () => {
   const out = buildFencedTurn({ side: "responder", message: "summarize it", nonce: "n1", context: ids() });
-  assert.ok(out.includes(`op "post", channel "${CH}", workspace "${WS}"`), "the concrete call, ids and all");
+  assert.ok(out.includes(`op "send", channel "${CH}", workspace "${WS}"`), "the concrete call, ids and all");
   assert.match(out, /Make the call exactly like this/, "stated as the call to make, not as trivia");
   assert.match(out, /post your reply into this channel with the mcp__dopl__dopl_channel MCP tool/, "the v1.9 line survives");
   assert.match(out, /there is no other capture/);
@@ -221,7 +221,7 @@ test("buildFencedTurn requester: the same concrete call rides the requester fram
     side: "requester", message: "ship it", nonce: "n2",
     context: ids({ taskTitle: "Q3 report" }),
   });
-  assert.ok(out.includes(`op "post", channel "${CH}", workspace "${WS}"`));
+  assert.ok(out.includes(`op "send", channel "${CH}", workspace "${WS}"`));
   assert.match(out, /Deliver every message to the peer by posting into this channel/, "the v1.9 line survives");
   assert.match(out, /That is how the peer's agent receives you/);
 });
@@ -231,13 +231,13 @@ test("both sides say it is the session's OWN channel and that discovery is unnec
     const flat = buildFencedTurn({ side, message: "x", nonce: "n3", context: ids() }).replace(/\s+/g, " ");
     assert.ok(flat.includes("IS this session's own channel"), `${side}: names the channel as its own`);
     assert.ok(/not a cross-channel post/.test(flat), `${side}: and says a post there is not cross-channel`);
-    assert.ok(/discovery call like op "list" is unnecessary here/.test(flat), `${side}: no id hunting`);
+    assert.ok(/discovery call like op "rooms", action "list" is unnecessary here/.test(flat), `${side}: no id hunting`);
     assert.ok(/can fail on this connection/.test(flat), `${side}: and says why hunting is not free`);
   }
 });
 
 // The one line that carries the concrete call (there is exactly one).
-const callLine = (out) => out.split("\n").filter((l) => l.includes('op "post", channel "'));
+const callLine = (out) => out.split("\n").filter((l) => l.includes('op "send", channel "'));
 
 test("the WORKSPACE UUID is what the prompt carries (a slug can name two workspaces)", () => {
   // The framing prints the ids it is GIVEN, verbatim and quoted — the spawn sites pass the
@@ -269,7 +269,7 @@ test("a MISSING id degrades to the pre-fix wording — never `undefined` or empt
       assert.ok(!/undefined|null/.test(out), `${label}: no placeholder leaks into the prompt`);
       assert.ok(!out.includes('channel ""') && !out.includes('workspace ""'), `${label}: no empty quotes`);
       assert.ok(!out.includes("Make the"), `${label}: no half-addressed call`);
-      assert.ok(out.includes('(op "post",'), `${label}: the v1.9 wording is what it falls back to`);
+      assert.ok(out.includes('(op "send",'), `${label}: the v1.9 wording is what it falls back to`);
       assert.match(out, /dopl_channel/, `${label}: delivery is still named`);
     }
   }
@@ -304,7 +304,7 @@ test("FIX F4: sanitizing an id can no longer RECONSTRUCT a fence token (the belt
       });
       const label = `${side} ${JSON.stringify(forged)}`;
       assert.deepEqual(callLine(out), [], `${label}: the id is dropped, never printed`);
-      assert.ok(out.includes('(op "post",'), `${label}: and the delivery wording degrades cleanly`);
+      assert.ok(out.includes('(op "send",'), `${label}: and the delivery wording degrades cleanly`);
       const lines = out.split("\n");
       assert.equal(lines.filter((l) => l.trim() === "BEGIN-REQUEST-n8").length, 1, `${label}: one opening fence`);
       assert.equal(lines.filter((l) => l.trim() === "END-REQUEST-n8").length, 1, `${label}: one closing fence`);
@@ -317,7 +317,7 @@ test("FIX F4: sanitizing an id can no longer RECONSTRUCT a fence token (the belt
   });
   assert.deepEqual(callLine(ws), [], "a half-addressed call is never printed");
   assert.ok(buildFencedTurn({ side: "responder", message: "b", nonce: "n9", context: ids() })
-    .includes(`op "post", channel "${CH}", workspace "${WS}"`), "a real pair still states the call");
+    .includes(`op "send", channel "${CH}", workspace "${WS}"`), "a real pair still states the call");
 });
 
 // ── THE THREAD TAG (incident 2026-07-31) ─────────────────────────────────────────
@@ -347,7 +347,7 @@ test("the delivery call NAMES the thread, legacy ids included, on both sides", (
       const line = callLine(out);
       assert.equal(line.length, 1, `${side} ${taskId}: exactly one call line`);
       assert.ok(
-        line[0].includes(`op "post", channel "${CH}", workspace "${WS}", thread "${taskId}"`),
+        line[0].includes(`op "send", channel "${CH}", workspace "${WS}", thread "${taskId}"`),
         `${side} ${taskId}: ${line[0]}`
       );
     }
@@ -400,14 +400,14 @@ test("a task id cannot forge a fence or open a line, and never half-states the c
     });
     assert.deepEqual(callLine(half), [], JSON.stringify(over));
     assert.ok(!half.includes('thread "'), `${JSON.stringify(over)}: no orphan tag`);
-    assert.ok(half.includes('(op "post",'), `${JSON.stringify(over)}: degrades to the v1.9 wording`);
+    assert.ok(half.includes('(op "send",'), `${JSON.stringify(over)}: degrades to the v1.9 wording`);
   }
 });
 
 test("the delivery copy carries no em dash (§H-13 house voice)", () => {
   for (const side of ["responder", "requester"]) {
     const out = buildFencedTurn({ side, message: "x", nonce: "n7", context: ids() });
-    const delivery = out.split("\n").filter((l) => /dopl_channel|op "post"|op "list"/.test(l));
+    const delivery = out.split("\n").filter((l) => /dopl_channel|op "send"|op "rooms", action "list"/.test(l));
     assert.ok(delivery.length, `${side}: found the delivery lines`);
     for (const line of delivery) assert.ok(!line.includes("—"), `${side}: em dash in ${JSON.stringify(line)}`);
   }

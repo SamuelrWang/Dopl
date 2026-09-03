@@ -1,137 +1,211 @@
 /**
- * meta-tools.ts — `list_workspaces` and `current_workspace`.
+ * meta-tools.ts — `dopl_workspaces`, the orientation tool.
  *
  * ⚠ USER-scoped, not workspace-scoped: a membership lookup needs no workspace,
- * which is why they register through `registerMetaTool` (no injected
- * `workspace=` arg) and report the session default in their footer. Everything
- * else the domain path enforces — the four gates, `strictInput` — applies
+ * which is why it registers through `registerMetaTool` (no injected
+ * `workspace=` arg) and reports the connection's container in its footer.
+ * Everything else the domain path enforces — the gates, `strictInput` — applies
  * identically; see `registrar.ts`.
+ *
+ * ── ⚠ THREE TOOLS BECAME ONE (B13, 2026-09-02) ─────────────────────────────
+ *
+ * `list_workspaces`, `current_workspace` and `dopl_home` answered three
+ * questions that had stopped being three: *which containers am I in*, *which
+ * one does a no-arg call hit*, and *which of them are home channels*. B10
+ * deletes the middle one — there is no default workspace to report, because
+ * "home is the default; all workspaces are just normal workspaces" — and with
+ * it the reason the third existed. A home-channel container was hidden from
+ * `list_workspaces` only because a listing was an advertisement of things a
+ * no-arg call might silently pick; nothing picks now, so a container is simply
+ * one more container the caller is in, LISTED WITH ITS KIND.
+ *
+ * ⚠ **WHAT LEFT WITH THEM, AND IT IS A SURFACE DECISION, NOT A TIDY-UP.**
+ * `current_workspace(op="set"|"clear")` — the session pin — is gone with the
+ * default it pinned.
+ *
+ * ⚠ **`create_home_channel` CAME BACK AT THE INTEGRATION (F-621).** B13 retired
+ * `dopl_home(op="create_channel")` with its tool and named no successor, which
+ * is a wire-visible deletion of a capability rather than a rename — so the op
+ * moved here instead. Minting a room and INVITING somebody into one are not the
+ * same act: the invite half has been `sessionOnly` since the tool shipped, and
+ * a room an agent can make but not populate is a finished state, not a
+ * half-built one. Reading a home channel was never affected — its container id
+ * is on every row here, and `dopl_status` answers for the rooms inside it.
+ *
+ * 🔒 **`op` IS OPTIONAL AND ITS DEFAULT MUST STAY THE READ.**
+ * `gating.ts › opRefusal` returns `null` for an ABSENT op — an op-less tool has
+ * nothing to gate — so a default that wrote would be a write no scope gate ever
+ * sees. The default is `list`, and this tool is the one an agent that has lost
+ * its bearings calls with `{}`.
  */
 
-import { callerStatusLine, sessionLines, type CallerIdentity } from "./tools/identity.js";
+import { z } from "zod";
+import { composeDescription, READ_DESCRIPTION_MAX_CHARS } from "./tools/tool-style.js";
+import { sessionLines, type CallerIdentity } from "./tools/identity.js";
 import { inlineOr } from "./tools/narration.js";
-import type { RegisterTool } from "./tools/respond.js";
+import { workspaceArgTargets } from "./workspace-arg.js";
+import {
+  missingParams,
+  ok,
+  type RegisterMetaTool,
+  type ToolResponse,
+} from "./tools/respond.js";
+import type { DoplClient } from "@dopl/client";
 import { UNNAMED_WORKSPACE, UNTRUSTED_DIRECTORY_NOTE } from "./instructions.js";
-import type {
-  ActiveWorkspaceState,
-  WorkspaceDirectory,
+import {
+  containerKind,
+  type ActiveWorkspaceState,
+  type WorkspaceDirectory,
 } from "./workspace-directory.js";
+
+/**
+ * ⚠ **RENDERED, NOT WRITTEN** (A14) — `tool-style.ts › composeDescription`
+ * holds the order for all eleven tools, and refuses a headline over its window
+ * or a description over its cap at import time.
+ *
+ * ⚠ IT IS BUDGETED AT {@link READ_DESCRIPTION_MAX_CHARS}, NOT THE DISPATCH CAP.
+ * It takes no arguments at all — no `op` enum whose every member
+ * `parity.test.ts` requires glossed, which is the only thing that gives a tool
+ * a floor above 450.
+ */
+const WORKSPACES_SHAPE = {
+  op: z
+    .enum(["list", "create_home_channel"])
+    .optional()
+    .describe('Default: "list".'),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .optional()
+    .describe(
+      'op="create_home_channel" (required): names the room and its hidden container both.',
+    ),
+};
+
+const WORKSPACES_DESCRIPTION = composeDescription({
+  headline:
+    "Every container you are in — workspaces AND home channels, each with its kind, its id and your role. The only place a container id is published.",
+  policy: 'Only "create_home_channel" writes; nothing deletes or invites.',
+  routing: [
+    "Use dopl_status for the rooms, sessions and unanswered asks inside them.",
+  ],
+  body: [
+    '- "list" (default) — every container and the id you pass as `workspace=`.',
+    '- "create_home_channel" — Requires: name. A room outside any workspace, yours alone.',
+  ],
+  examples: [{}, { op: "create_home_channel", name: "Ops" }],
+  cap: READ_DESCRIPTION_MAX_CHARS,
+});
 
 export interface MetaToolDeps {
   directory: WorkspaceDirectory;
-  /** Session default workspace resolved at boot, or null (0/2+ memberships). */
+  /** The container this connection is bound to, or null. */
   activeWorkspace: ActiveWorkspaceState | null;
   caller: CallerIdentity;
+  /** ⚠ The WRITE half only. The list is the directory's, which is already
+   *  `lockedTo`-narrowed; this client mints. */
+  client: DoplClient;
 }
 
-// Two read-only tools: discover your workspaces, and see what a no-arg call
-// resolves to. ⚠ Targeting is PER-CALL only (`workspace=`, injected by
-// `registerTool`). There is no sticky `set_workspace` — the connection is
-// stateless, so a "switch" could not persist.
+/**
+ * ⚠ THE FOLLOW-UP IS REFUSED BY DESIGN AND THE RESULT SAYS SO IMMEDIATELY —
+ * carried over verbatim from the deleted `dopl_home`, because the loop it
+ * closes is unchanged. An agent that makes a room and is not told it cannot
+ * invite anybody will look for an invite op, then a link op, then a members op,
+ * and read each absence as a broken connection.
+ */
+async function opCreateHomeChannel(
+  client: DoplClient,
+  name: string,
+): Promise<ToolResponse> {
+  const { channel } = await client.createHomeChannel({ name });
+  return ok(
+    [
+      `Created home channel ${inlineOr(channel.name, UNNAMED_WORKSPACE)}. You are in it alone.`,
+      // ⚠ THE OPS ARE NAMED, and they are named from `WORKSPACE_ARG_OPS`
+      // rather than by hand: this line said "on any other tool" and B13 had
+      // already made that false — the arg is IGNORED off that table, so the
+      // advice cost a call and a footer note to discover.
+      `Address it with workspace=\`${channel.workspaceId}\` on ${workspaceArgTargets()}, and with channel=\`${channel.channelId}\` on dopl_channel.`,
+      `⚠ You cannot add a person to it. Minting the invitation is an interactive-session act, refused over MCP for every role and token — ask the user to add someone from the Dopl app.`,
+    ].join("\n"),
+  );
+}
+
 export function registerWorkspaceMetaTools(
-  registerMetaTool: RegisterTool,
-  { directory, activeWorkspace, caller }: MetaToolDeps,
+  registerMetaTool: RegisterMetaTool,
+  { directory, activeWorkspace, caller, client }: MetaToolDeps,
 ): void {
   /**
-   * Caller identity as a standalone block, for the meta-tools whose answers can
-   * be read without a footer. ⚠ Same record and wording as the footer and
-   * `whoami` — one definition, so two surfaces cannot disagree about a session.
+   * The CREDENTIAL this connection acts through, as a standalone block.
+   *
+   * ⚠ **IT IS THE SESSION LINE AND NOT THE CALLER LINE**, and the difference is
+   * B13's: `appendDoplStatus` now renders `caller: id=…` on EVERY successful
+   * response, bound container or not, so restating it here would print one
+   * agent's identity twice in one answer. What the footer deliberately does NOT
+   * carry is the credential label (a per-response tax on every result), and
+   * that is exactly the fact somebody reaching for this tool is missing.
    */
   function callerBlock(): string[] {
-    return [...sessionLines(caller), callerStatusLine(caller).trim(), ""];
+    const lines = sessionLines(caller);
+    return lines.length > 0 ? [...lines, ""] : [];
+  }
+
+  async function opList(): Promise<ToolResponse> {
+    const list = await directory.getWorkspaceList();
+    if (list.length === 0) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "You're not an active member of any container yet.",
+          },
+        ],
+      };
+    }
+    const lines = [
+      ...callerBlock(),
+      "Containers you are in:",
+      "",
+      UNTRUSTED_DIRECTORY_NOTE,
+      "",
+    ];
+    for (const w of list) {
+      const kind = containerKind(w);
+      // ⚠ KIND IS RENDERED, NOT INFERRED BY THE READER, and a container's SLUG
+      // is withheld — its id is the only handle that addresses it, and printing
+      // a slug beside a room would read as a second, equivalent address.
+      const address =
+        kind === "workspace"
+          ? `slug: \`${w.slug}\` · id: \`${w.id}\``
+          : `id: \`${w.id}\``;
+      const here = w.id === activeWorkspace?.id ? " ←" : "";
+      lines.push(
+        `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — ${kind} (${address}, role: ${w.role})${here}`,
+      );
+    }
+    lines.push("");
+    lines.push(
+      activeWorkspace
+        ? "← this connection's container: a call that names none lands there."
+        : // ⚠ NOT "you have no default" — there is no default to lack. The
+          // server answers for a call that names nothing, and saying so is what
+          // stops an agent hunting for a tool that would set one.
+          "This connection names no container, so a call that names none is resolved for you. Pass `workspace=` to list or create somewhere specific.",
+    );
+    return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 
   registerMetaTool(
-    "list_workspaces",
-    "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer/guest). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.",
-    {},
-    async () => {
-      const list = await directory.getWorkspaceList();
-      if (list.length === 0) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "You're not an active member of any workspaces yet.",
-            },
-          ],
-        };
-      }
-      const lines = [
-        "Workspaces you have access to:",
-        "",
-        UNTRUSTED_DIRECTORY_NOTE,
-        "",
-      ];
-      for (const w of list) {
-        const star = w.id === activeWorkspace?.id ? " ★" : "";
-        lines.push(
-          `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} (slug: \`${w.slug}\` · id: \`${w.id}\`, role: ${w.role})${star}`,
-        );
-      }
-      lines.push("");
-      if (activeWorkspace) {
-        lines.push("★ = the workspace a no-arg call auto-targets.");
-      } else {
-        lines.push(
-          "You belong to 2+ workspaces, so there is no auto-target — pass `workspace=<slug_or_id>` on every tool call.",
-        );
-      }
-      return {
-        content: [{ type: "text" as const, text: lines.join("\n") }],
-      };
-    },
-  );
-
-  registerMetaTool(
-    "current_workspace",
-    "Report WHO this connection is and which workspace a no-`workspace=` tool call resolves to. Answers with your own immutable user id and your session's runtime, then the target workspace (id, slug, name, role) when the caller has exactly one membership (or a request pin); when the caller belongs to 2+ workspaces there is NO auto-target, and this lists them with ids so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?' or 'who am I?' — for your role, teams and the full locus caveats use dopl_members(op='whoami').",
-    {},
-    async () => {
-      // ⚠ Caller line per branch: with a session default the footer already
-      // carries it (rendering here too prints the caller twice); without one
-      // `appendDoplStatus` returns early and the response carries NO identity —
-      // exactly the state an agent is in when it reaches for this tool.
-      if (activeWorkspace) {
-        const lines = [
-          `A no-\`workspace=\` call targets ${inlineOr(activeWorkspace.name, UNNAMED_WORKSPACE)}:`,
-          `- slug: \`${activeWorkspace.slug}\``,
-          `- id: \`${activeWorkspace.id}\``,
-          `- your role: ${activeWorkspace.role}`,
-        ];
-        return {
-          content: [{ type: "text" as const, text: lines.join("\n") }],
-        };
-      }
-      const list = await directory.getWorkspaceList();
-      if (list.length === 0) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "You're not an active member of any workspace yet, so no tool call can resolve a target.",
-            },
-          ],
-        };
-      }
-      const lines = [
-        ...callerBlock(),
-        `You belong to ${list.length} workspaces and there is no auto-target — pass \`workspace=<slug_or_id>\` on every tool call. Choices:`,
-        "",
-        UNTRUSTED_DIRECTORY_NOTE,
-        "",
-      ];
-      for (const w of list) {
-        // ⚠ Id joins the slug here as everywhere else — this is the surface an
-        // agent reaches for when it does not know where it is, so it must not
-        // withhold the handle nobody can forge.
-        lines.push(
-          `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} (slug: \`${w.slug}\` · id: \`${w.id}\`, role: ${w.role})`,
-        );
-      }
-      return {
-        content: [{ type: "text" as const, text: lines.join("\n") }],
-      };
+    "dopl_workspaces",
+    WORKSPACES_DESCRIPTION,
+    WORKSPACES_SHAPE,
+    async (args): Promise<ToolResponse> => {
+      if ((args.op ?? "list") === "list") return opList();
+      const miss = missingParams("create_home_channel", args, ["name"]);
+      return miss ?? opCreateHomeChannel(client, args.name as string);
     },
   );
 }

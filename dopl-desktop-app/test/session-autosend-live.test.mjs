@@ -44,7 +44,7 @@ const sess = (over = {}) => ({
   state: { toolMode: "manual", messageMode: "auto_both", activity: "idle", allowForTask: [] },
   ...over,
 });
-const post = (over = {}) => ({ op: "post", channel: CH, body: "here you go", ...over });
+const post = (over = {}) => ({ op: "send", channel: CH, body: "here you go", ...over });
 
 // ── The pure block, with the live read INJECTED — the only way to drive the ON case in plain
 // node, where `channel-prefs.js` cannot load (its electron-store) and `channelAutoSend`

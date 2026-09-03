@@ -1,3 +1,25 @@
+/**
+ * **GENERATED FROM THE DEPLOYED DATABASE — NOT FROM `supabase/migrations/`.**
+ * Do not hand-edit; re-generate.
+ *
+ *   npx supabase gen types typescript --linked > src/shared/supabase/types.ts
+ *
+ * ⚠ **SO "STALE" HERE MEANS TWO DIFFERENT THINGS AND ONLY ONE OF THEM IS A BUG**
+ * (recorded 2026-09-02, in the wave-B batch-2 review, which flagged the file as
+ * out of date). This file describes what PRODUCTION HOLDS. Wave B's eleven
+ * migrations are UNAPPLIED, so the absence of `resource_grants` and
+ * `ensure_personal_container`, and the presence of `team_resource_access`, are
+ * this file being CORRECT about a database that has not moved yet.
+ * Re-generating it now would rewrite it to the same thing.
+ * ⚠ **IT BECOMES A REAL DEFECT THE MOMENT THOSE MIGRATIONS APPLY**, and it will
+ * not announce itself: the repositories that touch the new tables take a
+ * `SupabaseClient` as a parameter rather than the typed singleton
+ * (`knowledge/server/repository-channel-grants.ts` says why), so a missing table
+ * here is not a compile error anywhere — it is `never` inference nobody meets.
+ * **Re-generate in the same change that applies them.**
+ * ⚠ Deploy state is a MEASUREMENT (CLAUDE.md doc rule 4): the command above is
+ * the claim this comment makes, not the table list below it.
+ */
 export type Json =
   | string
   | number

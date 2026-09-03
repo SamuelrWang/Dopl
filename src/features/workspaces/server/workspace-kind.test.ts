@@ -9,13 +9,13 @@
  *      and is NOT NULL DEFAULT 'standard', so live rows carry it; the default
  *      is what a narrowed projection or a fixture omits, and that must not
  *      change behaviour.
- *   2. `resolveActiveWorkspace` no-header path — a user with ONE standard and N
- *      link memberships still auto-targets their standard one; a link-ONLY user
- *      gets WORKSPACE_REQUIRED, exactly as a membership-less user does. The
- *      fail-closed shape of INVARIANTS §4 is unchanged, only the candidate set.
- *   3. `findDefaultWorkspaceForUser` — "oldest OWNED" now means "oldest owned
- *      STANDARD", so a link container claimed before the user ever made a
- *      workspace cannot become their default.
+ *   2. `resolveActiveWorkspace` no-header path — it answers the caller's own
+ *      PERSONAL CONTAINER (ruling B10), so no membership of any kind is an
+ *      implicit candidate any more and an EXPLICIT header still reaches a link
+ *      container.
+ *   3. `findSoleOwnedStandardWorkspace` — billing's question, and `link` /
+ *      `personal` containers are excluded from it: neither carries a plan, and
+ *      neither may make an unambiguous owner look ambiguous.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -33,10 +33,7 @@ vi.mock("./last-seen", () => ({ touchLastSeen: vi.fn() }));
 vi.mock("./seed-workspace", () => ({ seedNewWorkspace: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import {
-  countWorkspacesOwnedBy,
-  findDefaultWorkspaceForUser,
-} from "./repository";
+import { findSoleOwnedStandardWorkspace } from "./repository";
 
 const USER = "user-1";
 
@@ -89,21 +86,34 @@ async function withMemberships(memberships: WorkspaceWithRole[]) {
       lastSeenAt: null,
     })
   );
+  const container: Workspace = {
+    id: "ws-home",
+    ownerId: USER,
+    name: "Personal",
+    slug: "personal",
+    publicId: "pub-ws-home",
+    description: null,
+    iconUrl: null,
+    kind: "personal",
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  };
   vi.doMock("./repository", () => ({
     listWorkspacesWithRoleForUser: vi.fn(async () => memberships),
-    findWorkspaceById,
+    findWorkspaceById: vi.fn(async (id: string) =>
+      id === container.id ? container : findWorkspaceById(id)
+    ),
     findMembership,
-    findDefaultWorkspaceForUser: vi.fn(),
+    ensurePersonalContainerRow: vi.fn(async () => ({
+      workspace: container,
+      created: false,
+    })),
   }));
   const service = await import("./service");
   return { service, findMembership };
 }
 
-/**
- * Chainable Supabase stub for the owned-rows reads. `maybeSingle()` answers the
- * legacy `slug='default'` probe; awaiting the builder answers the owned-rows
- * read.
- */
+/** Chainable Supabase stub for the owned-rows read. */
 function primeOwnedWorkspaces(
   owned: Array<Partial<Workspace> & { kind?: WorkspaceKind }>
 ) {
@@ -127,8 +137,6 @@ function primeOwnedWorkspaces(
     eq: rec,
     order: rec,
     limit: rec,
-    // Legacy `slug='default'` probe — no such workspace in these fixtures.
-    maybeSingle: async () => ({ data: null, error: null }),
     then: (resolve: (r: unknown) => void) => resolve({ data: rows, error: null }),
   });
   vi.mocked(supabaseAdmin).mockReturnValue(
@@ -154,7 +162,7 @@ describe("isStandardWorkspace", () => {
   it("is POSITIVE — a kind nobody has heard of is NOT standard", () => {
     // ⚠ THE SPELLING IS THE TEST. `!== "link"` would answer TRUE here, and the
     // next kind added to the union would be silently standard in the rail, the
-    // switcher, `list_workspaces` and default resolution, with no error
+    // switcher and every listing that renders a kind, with no error
     // anywhere. A listing predicate must let a value IN, not fail to keep it
     // out. The cast is the whole point: it is a future union member, arriving
     // over the wire from a newer server.
@@ -175,78 +183,46 @@ describe("a SOLO (one-member) link container is a link container", () => {
     expect(isStandardWorkspace({ kind: "link" })).toBe(false);
   });
 
-  it("never auto-targets, even as the caller's ONLY membership", async () => {
-    const { service, findMembership } = await withMemberships([
+  it("is never the implicit target, even as the caller's ONLY membership", async () => {
+    const { service } = await withMemberships([
       wsWithRole("ws-solo", "solo", "link", "owner"),
     ]);
 
-    const err = await service
-      .resolveActiveWorkspace(USER, null)
-      .then(() => null)
-      .catch((e: unknown) => e);
-    expect((err as InstanceType<typeof service.WorkspaceResolutionError>).code).toBe(
-      "WORKSPACE_REQUIRED"
-    );
-    expect(findMembership).not.toHaveBeenCalled();
+    const res = await service.resolveActiveWorkspace(USER, null);
+    expect(res.workspace.id).toBe("ws-home");
+    expect(res.workspace.kind).toBe("personal");
   });
 
-  it("never becomes the default workspace, even when it is the only owned row", async () => {
+  it("never becomes anyone's billing target, even as the only owned row", async () => {
     primeOwnedWorkspaces([{ id: "ws-solo", kind: "link" }]);
-    expect(await findDefaultWorkspaceForUser(USER)).toBeNull();
+    expect((await findSoleOwnedStandardWorkspace(USER)).workspace).toBeNull();
   });
 });
 
-describe("resolveActiveWorkspace — link containers are not candidates", () => {
-  it("sole STANDARD membership among N links still auto-targets", async () => {
+describe("resolveActiveWorkspace — no membership is an IMPLICIT candidate", () => {
+  it("a caller with a standard workspace among N links still lands on their container", async () => {
     const { service } = await withMemberships([
       wsWithRole("ws-link-a", "link-a", "link"),
       wsWithRole("ws-real", "real", "standard", "owner"),
       wsWithRole("ws-link-b", "link-b", "link"),
     ]);
 
+    // 🔒 THE BEHAVIOUR CHANGE OF B10, STATED AS A CASE: this used to answer
+    // `ws-real` by counting. "Which of my workspaces" is not a question the
+    // resolver asks any more — home is a constant.
     const res = await service.resolveActiveWorkspace(USER, null);
-    expect(res.workspace.id).toBe("ws-real");
-    expect(res.membership.role).toBe("owner");
+    expect(res.workspace.id).toBe("ws-home");
   });
 
-  it("ZERO standard + N links → 400 WORKSPACE_REQUIRED with an empty list, never a link", async () => {
-    const { service, findMembership } = await withMemberships([
+  it("ZERO standard + N links resolves too — there is no refusal left to raise", async () => {
+    const { service } = await withMemberships([
       wsWithRole("ws-link-a", "link-a", "link"),
       wsWithRole("ws-link-b", "link-b", "link"),
     ]);
 
-    const err = await service
-      .resolveActiveWorkspace(USER, null)
-      .then(() => null)
-      .catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(service.WorkspaceResolutionError);
-    expect((err as InstanceType<typeof service.WorkspaceResolutionError>).code).toBe(
-      "WORKSPACE_REQUIRED"
-    );
-    expect(
-      (err as InstanceType<typeof service.WorkspaceResolutionError>).workspaces
-    ).toEqual([]);
-    // Never proves membership on a container it refused to consider.
-    expect(findMembership).not.toHaveBeenCalled();
-  });
-
-  it("the WORKSPACE_REQUIRED choice list omits link containers", async () => {
-    const { service } = await withMemberships([
-      wsWithRole("ws-1", "alpha", "standard", "owner"),
-      wsWithRole("ws-link", "link-a", "link"),
-      wsWithRole("ws-2", "beta", undefined, "member"),
-    ]);
-
-    const err = await service
-      .resolveActiveWorkspace(USER, null)
-      .then(() => null)
-      .catch((e: unknown) => e);
-    expect(
-      (err as InstanceType<typeof service.WorkspaceResolutionError>).workspaces
-    ).toEqual([
-      { name: "alpha workspace", slug: "alpha", role: "owner" },
-      { name: "beta workspace", slug: "beta", role: "member" },
-    ]);
+    const res = await service.resolveActiveWorkspace(USER, null);
+    expect(res.workspace.id).toBe("ws-home");
+    expect(res.workspace.kind).toBe("personal");
   });
 
   it("an EXPLICIT header targeting a link container still resolves", async () => {
@@ -261,36 +237,47 @@ describe("resolveActiveWorkspace — link containers are not candidates", () => 
   });
 });
 
-describe("findDefaultWorkspaceForUser / countWorkspacesOwnedBy — standard only", () => {
+describe("findSoleOwnedStandardWorkspace — standard only, and it REFUSES", () => {
   const primeSupabase = primeOwnedWorkspaces;
 
-  it("skips a link container that is older than the user's real workspace", async () => {
+  it("ignores the containers beside the one real workspace", async () => {
     primeSupabase([
       { id: "ws-link", kind: "link" },
       { id: "ws-real", kind: "standard" },
+      { id: "ws-home", kind: "personal" },
     ]);
-    const found = await findDefaultWorkspaceForUser(USER);
-    expect(found?.id).toBe("ws-real");
+    const { workspace, count } = await findSoleOwnedStandardWorkspace(USER);
+    expect(workspace?.id).toBe("ws-real");
+    expect(count).toBe(1);
   });
 
-  it("owning only link containers resolves to NO default", async () => {
-    primeSupabase([{ id: "ws-link", kind: "link" }]);
-    expect(await findDefaultWorkspaceForUser(USER)).toBeNull();
+  it("owning only containers answers NOTHING, with the count that says why", async () => {
+    primeSupabase([{ id: "ws-link", kind: "link" }, { id: "ws-home", kind: "personal" }]);
+    expect(await findSoleOwnedStandardWorkspace(USER)).toEqual({
+      workspace: null,
+      count: 0,
+    });
   });
 
-  it("kind-less rows (migration unapplied) behave exactly as today", async () => {
+  it("🔒 TWO owned standard workspaces REFUSE — the old shape picked the oldest", async () => {
     primeSupabase([{ id: "ws-oldest" }, { id: "ws-newer" }]);
-    const found = await findDefaultWorkspaceForUser(USER);
-    expect(found?.id).toBe("ws-oldest");
-    expect(found?.kind).toBeUndefined();
+    const { workspace, count } = await findSoleOwnedStandardWorkspace(USER);
+    expect(workspace).toBeNull();
+    expect(count).toBe(2);
   });
 
-  it("countWorkspacesOwnedBy excludes link containers", async () => {
-    primeSupabase([
-      { id: "ws-real", kind: "standard" },
-      { id: "ws-link-a", kind: "link" },
-      { id: "ws-link-b", kind: "link" },
-    ]);
-    expect(await countWorkspacesOwnedBy(USER)).toBe(1);
+  it("kind-less rows (a narrowed projection) still count as standard", async () => {
+    primeSupabase([{ id: "ws-oldest" }]);
+    const { workspace, count } = await findSoleOwnedStandardWorkspace(USER);
+    expect(workspace?.id).toBe("ws-oldest");
+    expect(workspace?.kind).toBeUndefined();
+    expect(count).toBe(1);
+  });
+
+  it("🔒 a `slug='default'` row gets no special treatment", async () => {
+    // The legacy branch this function inherited preferred that slug outright.
+    // It is gone: two workspaces are two workspaces, whatever they are called.
+    primeSupabase([{ id: "ws-a", slug: "default" }, { id: "ws-b", slug: "beta" }]);
+    expect((await findSoleOwnedStandardWorkspace(USER)).workspace).toBeNull();
   });
 });

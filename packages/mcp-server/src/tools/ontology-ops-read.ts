@@ -9,6 +9,7 @@ import type { DoplClient } from "@dopl/client";
 import { inlineOr } from "./narration";
 import { clippedNote } from "./ontology-clipped";
 import { ok, type ToolResponse } from "./respond";
+import { isConcise, type ResponseFormat } from "./response-size";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import {
   renderObject,
@@ -42,7 +43,18 @@ const RESOLVE_CAP = 20;
  * `renderObject`, which reads JSONB off the target AND scans every object's
  * `relationships` for the inbound "Referenced by" list.
  */
-export async function opMap(client: DoplClient): Promise<ToolResponse> {
+/**
+ * ⚠ **WHAT `concise` DROPS HERE, AND WHAT IT MAY NEVER DROP** (A16). It removes
+ * the LEGENDS — the scope note, the "drill in with…" pointer, the Version line
+ * and its parenthetical — and nothing else. It never removes an object, an
+ * attribute, a count, or a `clippedNote`: a truncation notice is a statement
+ * about the READ's completeness, and hiding it to save characters is the one
+ * saving that could make a prefix read as a whole.
+ */
+export async function opMap(
+  client: DoplClient,
+  format?: ResponseFormat,
+): Promise<ToolResponse> {
   const snapshot = await client.getOntology({ view: "summary" });
   if (snapshot.clusters.length === 0) {
     // ⚠ "The graph is empty" is an assertion a CLIPPED read never established —
@@ -79,8 +91,10 @@ export async function opMap(client: DoplClient): Promise<ToolResponse> {
       "",
     );
   }
-  lines.push(`Drill in with op="get" (object id or exact name).`);
-  lines.push("", MAP_SCOPE_NOTE);
+  if (!isConcise(format)) {
+    lines.push(`Drill in with op="get" (object id or exact name).`);
+    lines.push("", MAP_SCOPE_NOTE);
+  }
   return ok(lines.join("\n"));
 }
 
@@ -95,6 +109,7 @@ export async function opMap(client: DoplClient): Promise<ToolResponse> {
 export async function opAnchor(
   client: DoplClient,
   caller: CallerIdentity = UNKNOWN_CALLER,
+  format?: ResponseFormat,
 ): Promise<ToolResponse> {
   const [anchor, snapshot] = await Promise.all([
     client.getOntologyAnchor(),
@@ -112,12 +127,21 @@ export async function opAnchor(
     renderObject(
       anchor,
       snapshot,
-      `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`
+      `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`,
+      // ⚠ THE HEADLINE IS NOT A LEGEND AND IS NOT DROPPED. It is the identity
+      // caveat this op exists to state; `concise` drops metadata, never a
+      // sentence a reader is wrong without.
+      new Map(),
+      format,
     )
   );
 }
 
-export async function opResolve(client: DoplClient, query: string): Promise<ToolResponse> {
+export async function opResolve(
+  client: DoplClient,
+  query: string,
+  format?: ResponseFormat,
+): Promise<ToolResponse> {
   const snapshot = await client.getOntology({ view: "summary" });
   // ⚠ A clip and the RESOLVE_CAP are DIFFERENT truncations: the cap hid matches
   // we found, the clip hid objects we never scanned. Conflating them tells an
@@ -159,15 +183,22 @@ export async function opResolve(client: DoplClient, query: string): Promise<Tool
     hits.length > shown.length
       ? `\n\n_Showing ${shown.length} of ${hits.length} matches. Narrow the query for the rest._`
       : "";
+  // ⚠ The COUNT survives `concise` and the pointer does not — `truncated` is a
+  // fact about this answer, `Read one with…` is a legend.
+  const pointer = isConcise(format) ? "" : `\n\nRead one with op="get".`;
   return ok(
-    `Matches for ${inlineOr(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}${clipped}\n\nRead one with op="get".`,
+    `Matches for ${inlineOr(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}${clipped}${pointer}`,
   );
 }
 
-export async function opGet(client: DoplClient, ref: string): Promise<ToolResponse> {
+export async function opGet(
+  client: DoplClient,
+  ref: string,
+  format?: ResponseFormat,
+): Promise<ToolResponse> {
   const snapshot = await client.getOntology();
   const resolved = resolveObjectRef(snapshot, ref);
   if ("fail" in resolved) return resolved.fail;
   const handles = await resolveResourceHandles(client, resolved.hit);
-  return ok(renderObject(resolved.hit, snapshot, undefined, handles));
+  return ok(renderObject(resolved.hit, snapshot, undefined, handles, format));
 }

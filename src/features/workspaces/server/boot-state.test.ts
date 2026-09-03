@@ -1,7 +1,7 @@
 /**
  * `getBootState` + the membership facts the segment resolver carries. Pins:
  *   - FAIL-CLOSED: segment mode resolves or returns null, NEVER falls through
- *     to `ensureDefaultWorkspace` (that is a cross-tenant bug).
+ *     to the caller's own container (that is a cross-tenant bug).
  *   - NO PROVISIONING BEFORE ONBOARDING (gate moved server-side from the SPA's
  *     `enabled: signedIn && onboarded`).
  *   - ROLE THREADED, NOT RE-READ: the membership fetch proving access is the
@@ -21,9 +21,8 @@ vi.mock("./repository", () => ({
   findWorkspaceByPublicId: vi.fn(),
   findMemberWorkspaceBySlug: vi.fn(),
   findMembership: vi.fn(),
-  findDefaultWorkspaceForUser: vi.fn(),
   listWorkspacesWithRoleForUser: vi.fn(),
-  ensureDefaultWorkspaceRow: vi.fn(),
+  ensurePersonalContainerRow: vi.fn(),
   deleteWorkspace: vi.fn(),
   insertWorkspaceWithOwnerMembership: vi.fn(),
   listMembers: vi.fn(),
@@ -138,8 +137,7 @@ describe("getBootState — segment mode", () => {
       overrides: [{ resourceType: "knowledge_base", resourceId: "kb-1", level: "read" }],
     });
     // FAIL-CLOSED: nothing in the segment mode may provision.
-    expect(mockRepo.ensureDefaultWorkspaceRow).not.toHaveBeenCalled();
-    expect(mockRepo.findDefaultWorkspaceForUser).not.toHaveBeenCalled();
+    expect(mockRepo.ensurePersonalContainerRow).not.toHaveBeenCalled();
   });
 
   it("returns null — and provisions NOTHING — for a segment that misses", async () => {
@@ -147,8 +145,7 @@ describe("getBootState — segment mode", () => {
     mockRepo.findMemberWorkspaceBySlug.mockResolvedValue(null);
 
     expect(await getBootState(USER, "someone-elses-workspace")).toBeNull();
-    expect(mockRepo.ensureDefaultWorkspaceRow).not.toHaveBeenCalled();
-    expect(mockRepo.findDefaultWorkspaceForUser).not.toHaveBeenCalled();
+    expect(mockRepo.ensurePersonalContainerRow).not.toHaveBeenCalled();
     expect(mockAccess).not.toHaveBeenCalled();
   });
 
@@ -167,8 +164,11 @@ describe("getBootState — segment mode", () => {
 });
 
 describe("getBootState — launch mode", () => {
-  it("provisions the default workspace and answers its membership", async () => {
-    mockRepo.findDefaultWorkspaceForUser.mockResolvedValue(WORKSPACE);
+  it("provisions the caller's personal container and answers its membership", async () => {
+    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
+      workspace: WORKSPACE,
+      created: false,
+    });
     mockRepo.findWorkspaceById.mockResolvedValue(WORKSPACE);
     mockRepo.findMembership.mockResolvedValue(membership("owner"));
 
@@ -194,12 +194,14 @@ describe("getBootState — launch mode", () => {
       role: null,
       myAccess: null,
     });
-    expect(mockRepo.findDefaultWorkspaceForUser).not.toHaveBeenCalled();
-    expect(mockRepo.ensureDefaultWorkspaceRow).not.toHaveBeenCalled();
+    expect(mockRepo.ensurePersonalContainerRow).not.toHaveBeenCalled();
   });
 
-  it("404s a workspace the caller owns but is no longer an active member of", async () => {
-    mockRepo.findDefaultWorkspaceForUser.mockResolvedValue(WORKSPACE);
+  it("404s a container the caller owns but is no longer an active member of", async () => {
+    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
+      workspace: WORKSPACE,
+      created: false,
+    });
     mockRepo.findWorkspaceById.mockResolvedValue(WORKSPACE);
     mockRepo.findMembership.mockResolvedValue({ ...membership(), status: "revoked" });
 

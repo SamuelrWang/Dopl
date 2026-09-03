@@ -24,7 +24,6 @@ const approval = require('./approval');
 const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
-const triage = require('./triage');
 const { packaging } = require('./packaging');
 
 const platform = () => require('./loader');
@@ -127,6 +126,11 @@ const descriptor = {
     profiles: {
       read_only: profileEntry('read_only'),
       dopl_only: profileEntry('dopl_only'),
+      // ⚠ THE FOURTH PROFILE (2026-09-02, ruling B7). It is DECLARED here for the same reason
+      // every other one is: `contract.js › mirrorProblems` holds this entry equal to what
+      // `toolConfigFor('channel_agent')` ENFORCES, and a profile the descriptor does not name is
+      // one `capability.js › canLaunchProfile` refuses.
+      channel_agent: profileEntry('channel_agent'),
       full: profileEntry('full'),
     },
   },
@@ -179,7 +183,6 @@ const descriptor = {
   // Length 1 renders no picker at all.
   execution: { locations: ['local'], remoteCapable: false },
 
-  triage: triage.descriptor,
   packaging,
 };
 
@@ -236,7 +239,6 @@ const runtime = {
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },
   signIn() { return credential.signIn(); },
-  triageSpec(request) { return triage.triageSpec(request); },
 };
 
 module.exports = { descriptor, runtime };

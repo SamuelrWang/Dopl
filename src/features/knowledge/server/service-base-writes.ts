@@ -1,6 +1,10 @@
 import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole } from "@/features/workspaces/types";
+// 🔒 G16 — the ONE statement of the publish-into-a-peer's-room precondition,
+// shared with `agent-templates/server/service-writes.ts`. Two copies of a
+// tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
+import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
   deleteGrantRow,
   deleteGrantsForResource,
@@ -13,10 +17,8 @@ import type {
   KnowledgeBaseCreateInput,
   KnowledgeBaseUpdateInput,
 } from "../schema";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
 import {
   AgentWriteDisabledError,
-  HomeScopeForbiddenError,
   KnowledgeBaseSlugConflictError,
   KnowledgeStaleVersionError,
   ScopeChangeForbiddenError,
@@ -32,6 +34,11 @@ import {
   listSlugs,
 } from "./service-shared";
 import { getBaseById } from "./service-bases";
+// ⚠ THE TWO PRE-WRITE GATES, SPLIT OUT AT THE §1 CAP (2026-09-02). Read that
+// module's header for the seam. `assertCreatorCanReadItBack` asks the SAME
+// ceiling question `listBases` / `getBaseBySlug` will ask a millisecond later,
+// or this writes rows nobody can reach.
+import { assertCreatorCanReadItBack } from "./service-base-gates";
 import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 /**
@@ -41,64 +48,21 @@ import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 const SLUG_RETRY_MAX = 3;
 
-/**
- * 🔒 THE HOME-SHELF FENCE — may THIS create land on the /home shelf?
- * (Samuel's ruling 2026-08-26; `20260831120000_knowledge_base_home_scoped.sql`
- * carries the full argument.)
- *
- * Three conditions, ALL required, and each one is a different question:
- *
- *   1. **A PERSON asked.** `isSharedCredential` false. A workspace-scoped key
- *      or a container-locked session is a credential that may be shared between
- *      humans — it has no "my home shelf" to write to, and `canSeeBase` would
- *      not read the row back for it anyway.
- *   2. **PRIVATE.** The shelf is the operator's own; a `public` base on it
- *      would be visible to every member on a surface no member navigates to.
- *      ⚠ Checked against the RESOLVED visibility, not `input.visibility` — the
- *      teams branch above rewrites it to `public`, and reading the raw input
- *      here would let `accessMode: "teams"` onto the shelf.
- *   3. **THE CALLER'S OWN DEFAULT STANDARD WORKSPACE.**
- *      `findDefaultWorkspaceForUser` is the SAME lookup `getBootState` runs to
- *      answer `POST /api/boot`'s `workspace`, which is what the /home pane
- *      hands `CreateBaseDialog` — so the fence and the surface cannot disagree
- *      about which workspace "home" means. A link container fails this, and so
- *      does a second workspace the caller owns.
- *
- * ⚠ THE DEFAULT IS FALSE AND SILENT. Only an explicit `homeScoped: true` is
- * ever examined, so MCP `kb_create_base` and every other existing caller keep
- * writing workspace-shelf rows with no new failure mode.
- */
-async function resolveHomeScope(
-  ctx: KnowledgeContext,
-  input: KnowledgeBaseCreateInput,
-  resolvedVisibility: "public" | "private",
-  fromSharedCredential: boolean
-): Promise<boolean> {
-  if (input.homeScoped !== true) return false;
-  if (fromSharedCredential) {
-    throw new HomeScopeForbiddenError(
-      "a shared credential has no personal shelf"
-    );
-  }
-  if (resolvedVisibility !== "private") {
-    throw new HomeScopeForbiddenError("the home shelf holds private bases only");
-  }
-  const home = await findDefaultWorkspaceForUser(ctx.userId);
-  if (home === null || home.id !== ctx.workspaceId) {
-    throw new HomeScopeForbiddenError(
-      "it is not your home workspace"
-    );
-  }
-  return true;
-}
-
 export async function createBase(
   ctx: KnowledgeContext,
-  input: KnowledgeBaseCreateInput
+  input: KnowledgeBaseCreateInput,
 ): Promise<KnowledgeBase> {
-  // No agent gate on CREATE — the toggle is per-base and the base doesn't
-  // exist yet. Slug unique per workspace keeps MCP `kb_*` slug addressing
-  // unambiguous; publicId is the URL routing key.
+  // 🔒 THE AUDIENCE CEILING, ASKED BEFORE THE INSERT rather than only by the
+  // reads afterwards (F-323's authoring half) — see
+  // `assertCreatorCanReadItBack`. ⚠ FIRST, before any other validation and
+  // before the slug derivation's read: a caller that may not create here should
+  // spend no round trips finding out, and must not be told about a slug
+  // collision with a row it cannot see.
+  await assertCreatorCanReadItBack(ctx);
+
+  // No per-base agent-write gate on CREATE — that toggle is per-base and the
+  // base doesn't exist yet. Slug unique per workspace keeps MCP `kb_*` slug
+  // addressing unambiguous; publicId is the URL routing key.
   //
   // Visibility default by caller: a SHARED credential must be 'public'
   // (⚠ `canSeeBase` blocks such credentials from reading their own private rows
@@ -130,12 +94,12 @@ export async function createBase(
     if (ctx.source === "agent") {
       throw new AgentWriteDisabledError(
         "(new)",
-        "Sharing scope is a human-only setting — agents cannot create teams-scoped knowledge bases."
+        "Sharing scope is a human-only setting — agents cannot create teams-scoped knowledge bases.",
       );
     }
     if (!meetsMinRole(ctx.role, "admin")) {
       const myTeams = new Set(
-        await listTeamIdsForUser(ctx.workspaceId, ctx.userId)
+        await listTeamIdsForUser(ctx.workspaceId, ctx.userId),
       );
       if (teamGrants.some((g) => !myTeams.has(g.teamId))) {
         throw new TeamScopeForbiddenError();
@@ -145,14 +109,17 @@ export async function createBase(
     resolvedVisibility = "public";
   }
 
-  // 🔒 WHICH SHELF, decided BEFORE the insert loop so a slug retry cannot
-  // re-ask a question with a side effect. Throws rather than returning false.
-  const homeScoped = await resolveHomeScope(
-    ctx,
-    input,
-    resolvedVisibility,
-    fromWorkspaceKey
-  );
+  // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
+  // visibility, after the teams branch has had its say: `accessMode: "teams"`
+  // rewrites it to `public`, and reading `input.visibility` would let that
+  // rewrite publish unacknowledged.
+  // ⚠ BEFORE THE SLUG LOOP, so a refusal costs no slug and cannot half-land.
+  await assertSharedPublishAcknowledged({
+    workspaceId: ctx.workspaceId,
+    publishes: resolvedVisibility === "public",
+    acknowledged: input.acknowledgeShared,
+    noun: "knowledge base",
+  });
 
   let attempt = 0;
   let baseSlug =
@@ -170,8 +137,10 @@ export async function createBase(
         // NOT this column — TRUE here only keeps UI/MCP messaging honest.
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
-        accessMode: wantsTeams ? "teams" : "workspace",
-        homeScoped,
+        // 🔒 A ROUTING FLAG, NOT A COLUMN (B15): it decides the row's
+        // `workspace_id`, and `personalWriteWorkspaceId` REFUSES rather than
+        // falling back when the caller has no personal container.
+        homeScoped: input.homeScoped,
         createdBy: ctx.userId,
       });
       break;
@@ -199,7 +168,7 @@ export async function createBase(
           grant.teamId,
           "knowledge_base",
           base.id,
-          grant.level
+          grant.level,
         );
       }
     } catch (err) {
@@ -249,7 +218,7 @@ export async function updateBase(
   ctx: KnowledgeContext,
   id: string,
   patch: KnowledgeBaseUpdateInput,
-  expectedUpdatedAt?: string
+  expectedUpdatedAt?: string,
 ): Promise<KnowledgeBase> {
   const base = await getBaseById(ctx, id);
   // Agents can never flip the toggle itself, whatever its current state.
@@ -280,7 +249,7 @@ export async function updateBase(
     if (ctx.source === "agent" && !agentPurePublish) {
       throw new AgentWriteDisabledError(
         base.id,
-        "Sharing scope is a human-only setting — an agent can only publish (make public) a base it created."
+        "Sharing scope is a human-only setting — an agent can only publish (make public) a base it created.",
       );
     }
     const isAdmin = meetsMinRole(ctx.role, "admin");
@@ -290,6 +259,20 @@ export async function updateBase(
     if (agentPurePublish ? !isCreator : !isCreator && !isAdmin) {
       throw new ScopeChangeForbiddenError();
     }
+
+    // 🔒 G16 — the same precondition on the UPDATE path, which is the door
+    // `dopl_kb(op="set_visibility")` and the sharing settings both come through.
+    // ⚠ `patch.visibility`, NOT `targetVisibility`: a grant-only or accessMode
+    // edit on a base that is ALREADY public changes no audience, and gating it
+    // would be a gate on the wrong verb.
+    // ⚠ AFTER the creator/admin check above and BEFORE any grant upsert, so a
+    // refusal leaves neither a row nor a grant behind.
+    await assertSharedPublishAcknowledged({
+      workspaceId: ctx.workspaceId,
+      publishes: patch.visibility === "public",
+      acknowledged: patch.acknowledgeShared,
+      noun: "knowledge base",
+    });
 
     const targetVisibility = patch.visibility ?? base.visibility;
     const targetMode =
@@ -311,7 +294,7 @@ export async function updateBase(
       const current = await listGrantsForResource(
         ctx.workspaceId,
         "knowledge_base",
-        base.id
+        base.id,
       );
       const currentByTeam = new Map(current.map((g) => [g.teamId, g.level]));
       const desiredByTeam =
@@ -319,16 +302,16 @@ export async function updateBase(
           ? new Map(patch.teamGrants.map((g) => [g.teamId, g.level]))
           : currentByTeam;
       const addedOrRaised = [...desiredByTeam].filter(
-        ([teamId, level]) => currentByTeam.get(teamId) !== level
+        ([teamId, level]) => currentByTeam.get(teamId) !== level,
       );
       grantTeamIdsToRemove = [...currentByTeam.keys()].filter(
-        (teamId) => !desiredByTeam.has(teamId)
+        (teamId) => !desiredByTeam.has(teamId),
       );
 
       // Non-admins may add/raise only their own teams; removal always OK.
       if (!isAdmin && addedOrRaised.length > 0) {
         const myTeams = new Set(
-          await listTeamIdsForUser(ctx.workspaceId, ctx.userId)
+          await listTeamIdsForUser(ctx.workspaceId, ctx.userId),
         );
         if (addedOrRaised.some(([teamId]) => !myTeams.has(teamId))) {
           throw new TeamScopeForbiddenError();
@@ -341,7 +324,7 @@ export async function updateBase(
           teamId,
           "knowledge_base",
           base.id,
-          level
+          level,
         );
       }
       // NARROWING IS UNCHECKED, DELIBERATELY: no cross-resource dependency
@@ -378,13 +361,17 @@ export async function updateBase(
         visibility: resolvedVisibility,
         accessMode: resolvedAccessMode,
       },
-      expectedUpdatedAt
+      expectedUpdatedAt,
     );
     // ⚠ Grant deletions only AFTER the row update succeeds, else a
     // stale-version rejection half-applies the scope change.
     if (saved !== null) {
       if (dropAllGrants) {
-        await deleteGrantsForResource(ctx.workspaceId, "knowledge_base", base.id);
+        await deleteGrantsForResource(
+          ctx.workspaceId,
+          "knowledge_base",
+          base.id,
+        );
       } else {
         for (const teamId of grantTeamIdsToRemove) {
           await deleteGrantRow(teamId, "knowledge_base", base.id);
@@ -416,7 +403,7 @@ export async function updateBase(
  */
 export async function deleteBase(
   ctx: KnowledgeContext,
-  id: string
+  id: string,
 ): Promise<void> {
   const base = await getBaseById(ctx, id);
   // F-10: agent-read-only base is undeletable by an agent even its own

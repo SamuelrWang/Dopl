@@ -48,6 +48,13 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * input to this module that widens anything; the worst a misuse achieves is a
  * credential that can do less than the one the caller already holds.
  *
+ * 🔒 ⚠ THE ROW CARRIES TWO INDEPENDENT AXES SINCE 2026-09-02
+ * (`20260917120000_mcp_token_credential_axes`): `container_id` says WHICH
+ * container this credential may act in, `subject_user_id` says WHOSE reach it
+ * inherits. This minter sets both, because a container session is BOTH fenced
+ * AND personal — and the two used to be one field, which is the defect the next
+ * paragraph records.
+ *
  * 🔒 ⚠ IT LIT UP THE M-10 VISIBILITY GATES TOO UNTIL 2026-08-27, AND THAT WAS
  * THE DEFECT F-336/F-333 RECORD. This paragraph used to argue that a credential
  * existing BECAUSE a peer is in the room is "a key shared between humans", so
@@ -160,13 +167,21 @@ export async function issueContainerToken(input: {
       access_expires_at: expiresAt,
       refresh_expires_at: null,
       client_name: CONTAINER_CLIENT_NAME,
-      // 🔒 THE LOCK. Everything else on this row is an ordinary device token.
+      // 🔒 AXIS 1 — WHICH CONTAINER. Everything else on this row is an
+      // ordinary device token.
+      container_id: input.workspaceId,
+      // 🔒 AXIS 2 — WHOSE REACH. The OPERATOR's own id, because that is what
+      // this credential is: one human's session, narrowed. Leaving it null
+      // would make the row a SHARED container credential and the operator's own
+      // agent would 404 on the operator's own private rows, grant or no grant
+      // (F-336/F-333). ⚠ It may only ever be `user_id` — the migration's
+      // `mcp_tokens_subject_is_owner_check` makes anything else unstorable.
+      subject_user_id: input.userId,
+      // ⚠ DUAL-WRITTEN FOR ONE RELEASE, AND THE PAIR IS PINNED BY
+      // `mcp_tokens_axes_agree_check`: an older app instance still reading the
+      // legacy pair must see the same two facts. B13 deletes these two lines
+      // with the columns.
       workspace_id: input.workspaceId,
-      // 🔒 AND WHAT KIND OF LOCK IT IS — the field that stops the WORKSPACE
-      // fence from being read as a VISIBILITY fence (`credential-audience.ts`,
-      // F-336/F-333). Without it this row reads as a SHARED workspace
-      // credential and the operator's own agent 404s on the operator's own
-      // private rows, grant or no grant.
       workspace_lock_kind: CONTAINER_SESSION_LOCK,
     })
     .select("id")
@@ -201,6 +216,12 @@ export async function revokeContainerTokens(input: {
     .from("mcp_tokens")
     .update({ revoked_at: new Date().toISOString() })
     .eq("user_id", input.userId)
+    // ⚠ STILL THE LEGACY COLUMN, DELIBERATELY, UNTIL B13. It is dual-written
+    // and `mcp_tokens_axes_agree_check` keeps it equal to `container_id`, so it
+    // selects the same rows — and unlike `container_id` it is present on a
+    // database this wave's migration has not reached, where a filter naming a
+    // missing column would make teardown revoke NOTHING and silently strand
+    // every child credential until its TTL.
     .not("workspace_id", "is", null)
     .is("revoked_at", null);
   if (input.tokenId) query = query.eq("id", input.tokenId);

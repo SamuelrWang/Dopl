@@ -73,15 +73,17 @@ describe("op=list", () => {
         template(),
         template({ id: "22222222-2222-4222-8222-222222222222", name: "Auditor", visibility: "workspace" }),
       ],
-      homeScopedTemplateIds: ["11111111-1111-4111-8111-111111111111"],
     }));
     const text = textOf(
       await opList(stub({ listAgentTemplatesPayload: list }) as DoplClient),
     );
 
-    expect(list).toHaveBeenCalledWith({ shelf: undefined });
-    // 🔒 The SIBLING KEY labels the row; the column is never on the row itself.
-    expect(text).toContain("· personal");
+    expect(list).toHaveBeenCalledWith();
+    // ⚠ **NO `· personal` LABEL SINCE 2026-09-02 (slice B15).** It rode the
+    // `homeScopedTemplateIds` sibling key over a dropped column; every row a
+    // list returns is now in the same container, so a per-row shelf label says
+    // nothing.
+    expect(text).not.toContain("· personal");
     expect(text).toContain("### Private to you");
     expect(text).toContain("### Shared with the whole workspace");
     expect(text).toContain("`11111111-1111-4111-8111-111111111111`");
@@ -89,25 +91,17 @@ describe("op=list", () => {
     expect(text).toContain("not the workspace's roster");
   });
 
-  it('maps shelf="personal" onto the WIRE value `home`, in one place', async () => {
-    // ⚠ The whole point of Q1's ruling: the operator's noun on the tool, the
-    // route's noun on the wire, and exactly one mapping between them.
-    const list = vi.fn(async () => ({ templates: [] }));
-    await opList(stub({ listAgentTemplatesPayload: list }) as DoplClient, "personal");
-    expect(list).toHaveBeenCalledWith({ shelf: "home" });
+  // ⚠ **THE TWO SHELF CASES HERE ARE DELETED (2026-09-02, slice B15).** One
+  // pinned the `personal` → `home` wire mapping and one the shelf-scoped empty
+  // sentence; both described an argument this op no longer takes.
 
-    await opList(stub({ listAgentTemplatesPayload: list }) as DoplClient, "workspace");
-    expect(list).toHaveBeenLastCalledWith({ shelf: "workspace" });
-  });
-
-  it("an empty shelf does not claim the workspace has no templates", async () => {
+  it("an empty list does not claim the workspace has no templates", async () => {
     const text = textOf(
       await opList(
         stub({ listAgentTemplatesPayload: vi.fn(async () => ({ templates: [] })) }) as DoplClient,
-        "personal",
       ),
     );
-    expect(text).toContain("on your personal shelf");
+    expect(text).toContain("No agent templates visible to you here");
     expect(text).toContain("you can SEE");
   });
 });
@@ -189,34 +183,25 @@ describe("op=create", () => {
       homeScoped: undefined,
     });
     expect(text).toContain("Created agent template");
-    expect(text).toContain('dopl_channel(op="launch_agent"');
+    // ⚠ THE LIVE SPELLING, and it changed at B8: `launch_agent` retired into
+    // `manage(action="launch")`. A result line naming the old one teaches a
+    // caller to spend a one-release redirect (F-592).
+    expect(text).toContain('dopl_channel(op="manage", action="launch"');
   });
 
-  it('shelf="personal" sends homeScoped AND an explicit private visibility', async () => {
-    // ⚠ Condition 2 of the fence is checked against the RESOLVED visibility, so
-    // omitting it would have the server refuse on a default the agent never
-    // chose.
+  it("sends an explicit visibility and NO shelf of any kind", async () => {
+    // ⚠ The visibility half survives the shelf's deletion and is unrelated to
+    // it: the server's default is credential-dependent, so an omitted value let
+    // a shared credential resolve to `workspace` and trip G16 unanswerably.
     const create = vi.fn(async () => template());
     await opCreate(
       stub({ ...standardWorkspace(), createAgentTemplate: create }) as DoplClient,
       ME,
-      { name: "Researcher", shelf: "personal" },
+      { name: "Researcher" },
     );
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ homeScoped: true, visibility: "private" }),
-    );
-  });
-
-  it("never sends homeScoped:false — absent and false mean the same thing", async () => {
-    const create = vi.fn(async () => template());
-    await opCreate(
-      stub({ ...standardWorkspace(), createAgentTemplate: create }) as DoplClient,
-      ME,
-      { name: "Researcher", shelf: "workspace" },
-    );
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ homeScoped: undefined }),
-    );
+    const body = create.mock.calls[0][0] as Record<string, unknown>;
+    expect(body.visibility).toBe("private");
+    expect("homeScoped" in body).toBe(false);
   });
 });
 

@@ -4,6 +4,7 @@
  * error listing candidates, never a guess).
  */
 import type { DoplClient, OntologyObject, OntologySnapshot } from "@dopl/client";
+import { type ResponseFormat } from "./response-size";
 import { type ToolResponse } from "./respond";
 export type Resolved<T> = {
     hit: T;
@@ -50,4 +51,6 @@ export type ResourceHandles = Map<string, {
     path: string;
 }>;
 export declare function resolveResourceHandles(client: DoplClient, object: OntologyObject): Promise<ResourceHandles>;
-export declare function renderObject(object: OntologyObject, snapshot: OntologySnapshot, headline?: string, handles?: ResourceHandles): string;
+export declare function renderObject(object: OntologyObject, snapshot: OntologySnapshot, headline?: string, handles?: ResourceHandles, 
+/** A16: `concise` drops the two LEGENDS below and nothing else. */
+format?: ResponseFormat): string;

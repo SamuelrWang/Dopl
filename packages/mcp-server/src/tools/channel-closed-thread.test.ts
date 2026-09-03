@@ -48,7 +48,7 @@ function posted() {
   };
 }
 
-describe("opPost — a post into a LEGACY closed thread says nothing about it", () => {
+describe("opPost — a send into a LEGACY closed thread says nothing about it", () => {
   it("reports an ordinary successful post, with no closed-thread warning", async () => {
     const postChannelMessage = vi.fn(async () => posted());
     const client = stubClient({ postChannelMessage });
@@ -59,7 +59,14 @@ describe("opPost — a post into a LEGACY closed thread says nothing about it", 
     const text = res.content[0].text;
 
     expect(res.isError).toBeFalsy();
-    expect(text).toContain("Posted to **`General`**");
+    // ⚠ AN ORDINARY SUCCESS IS NOW A FACT LINE (T12). "Posted to **`General`**"
+    // is gone with the rest of the narration — the channel is a value the caller
+    // passed, and echoing it spliced peer-controlled text (`resolveChannelOr`
+    // lists PUBLIC channels the caller was never invited to) into every write.
+    // What proves the post succeeded is the seq and the landing, which is what a
+    // follow-up call actually needs.
+    expect(text.startsWith("posted seq=356 ")).toBe(true);
+    expect(text).toContain(`thread=${THREAD_ID} landed=thread`);
     // The vocabulary the note carried, pinned as an absence. Each one taught a
     // state transition that no longer exists.
     expect(text).not.toContain("THAT THREAD IS CLOSED");

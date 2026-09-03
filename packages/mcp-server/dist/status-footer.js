@@ -11,18 +11,23 @@ const identity_js_1 = require("./tools/identity.js");
 const narration_js_1 = require("./tools/narration.js");
 const instructions_js_1 = require("./instructions.js");
 /**
- * Append the mandatory `_dopl_status` footer. ⚠ Always reports the EFFECTIVE
- * workspace this call HIT plus a source label (`per-call arg` / `sole
- * membership` / `header pin`) — no session-default duality.
+ * Append the mandatory `_dopl_status` footer. ⚠ Reports the EFFECTIVE workspace
+ * this call HIT plus a source label (`per-call arg` / `header pin`), and any
+ * per-call `note` the registrar wants the agent to see.
  *
- * Skipped when the handler returned `isError` (don't muddy error messages) or
- * there is no effective workspace (meta-tools with no session default).
+ * ⚠ **THE CALLER LINE IS UNCONDITIONAL SINCE B13, AND THE OLD EARLY RETURN WAS
+ * THE BUG WAITING TO HAPPEN.** It used to skip the whole footer when there was
+ * no effective workspace — harmless while every connection auto-targeted one,
+ * and a silent deletion of `caller: id=…` from every response the moment the
+ * auto-target went. The server instructions tell every agent that footer opens
+ * with its own user id; a workspace it has not got must not take the identity
+ * with it.
+ *
+ * Skipped only when the handler returned `isError` — don't muddy error messages.
  */
-async function appendDoplStatus(response, effective, caller) {
+async function appendDoplStatus(response, effective, caller, note) {
     const res = response;
     if (res.isError)
-        return res;
-    if (!effective)
         return res;
     // ⚠ Name goes through the neutralizer: this footer is the agent's targeting
     // check, so it is the line worth forging, and a name is bounded only by
@@ -39,8 +44,15 @@ async function appendDoplStatus(response, effective, caller) {
         "---",
         "_dopl_status:",
         (0, identity_js_1.callerStatusLine)(caller),
-        `  active_workspace: ${(0, narration_js_1.inlineOr)(effective.name, instructions_js_1.UNNAMED_WORKSPACE)} (slug=\`${effective.slug}\`, id=\`${effective.id}\`, role=${effective.role})`,
-        `  workspace_source: ${effective.source}`,
+        // ⚠ An UNBOUND connection names no container rather than guessing one; the
+        // server resolves the caller's own when nothing is passed (B10).
+        ...(effective
+            ? [
+                `  active_workspace: ${(0, narration_js_1.inlineOr)(effective.name, instructions_js_1.UNNAMED_WORKSPACE)} (slug=\`${effective.slug}\`, id=\`${effective.id}\`, role=${effective.role})`,
+                `  workspace_source: ${effective.source}`,
+            ]
+            : []),
+        ...(note ? [`  ${note}`] : []),
     ].join("\n");
     // Append to the final text block; add a new one if there is no text content.
     const content = [...res.content];
@@ -58,7 +70,7 @@ async function appendDoplStatus(response, effective, caller) {
 }
 /**
  * Wrap a meta-tool handler so every successful response ends with the
- * `_dopl_status` footer reporting the session default (if any).
+ * `_dopl_status` footer reporting the connection's container (if any).
  */
 function withDoplStatus(handler, getEffective, caller) {
     return async (args) => {

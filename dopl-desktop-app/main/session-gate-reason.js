@@ -45,6 +45,13 @@ const GATE_REASONS = [
   //                             `dopl_channel` is hard-denied on no profile at all — reporting
   //                             the bound as a profile deny would send an operator to a deny
   //                             list that does not contain it.
+  'await-desktop-session', //    2026-09-01 (T85): a HELD `dopl_channel(op="read", wait_ms=…)` from a session this
+  //                             machine RUNS. Its own code for the reason `launch-depth-capped`
+  //                             has one — `dopl_channel` is hard-denied on no profile, so
+  //                             `hard-denied` would send an operator to a deny list that does not
+  //                             contain it — and because the fix is NOT a setting: the call is
+  //                             refused because a wake already arrives as a TURN here
+  //                             (`session-profiles.js › isAwaitOp`).
   'container-audience', //       2026-08-26 (plan §4.4 B2): this session runs in a SHARED link
   //                             container and the call named a DIFFERENT workspace. Its own code
   //                             for the same reason `launch-depth-capped` has one — the tool is
@@ -66,7 +73,7 @@ const GATE_REASONS = [
   //                             "what asked this machine for a process with no click?", which no
   //                             outbound code can give, because nothing left as CONTENT.
   'auto-outbound-escalate', //   2026-08-31 (Samuel's ruling): the same outbound half on an
-  //                             own-channel op="escalate" — an agent asking a HUMAN a structured
+  //                             own-channel `send(kind="decision")` — an agent asking a HUMAN a structured
   //                             question. Its own code because "the agent asked for a decision"
   //                             is a different answer to "what left with no click?" than a
   //                             milestone or a thread open.
@@ -122,10 +129,16 @@ function makeGateReason(deps) {
     // fact and the operator's fix are identical ("address your own channel by id"), and a code
     // the operator cannot act on differently is a code that should not exist. (2026-08-24: the
     // list this reads is the UNION, so a slug-addressed `create_thread` lands here too.)
-    if (op === 'post' || (d.OWN_CHANNEL_OUTBOUND_OPS || []).indexOf(op) !== -1) return 'cross-channel-post';
+    // (2026-09-02, F-578: the collapse made every outbound shape `op="send"`, so the union this
+    // reads is a list of one and the `post` disjunct it used to need is gone with the op.)
+    if ((d.OWN_CHANNEL_OUTBOUND_OPS || []).indexOf(op) !== -1) return 'cross-channel-post';
     // M3: a READ op that got here named a channel this session is not bound to (or a slug),
     // which is a DIFFERENT fact from "reads are never auto-run" and now says so.
-    if ((d.OWN_CHANNEL_READ_OPS || []).indexOf(op) !== -1) return 'cross-channel-read';
+    // ⚠ ASKED THROUGH THE GATE'S OWN MEMBERSHIP PREDICATE, not by indexing the list: since the
+    // five-op collapse the entries are `<op>.<action>` keys (F-578), and a bare `indexOf(op)`
+    // here would call a cross-channel `rooms.open` a READ — the one classification the gate
+    // itself refuses to make.
+    if (d.isOwnChannelReadCall && d.isOwnChannelReadCall(a.input)) return 'cross-channel-read';
     return 'channel-op-approval-required';
   };
   // WHY did a WORK tool stop? "Not in any list this build knows" is a DIFFERENT fact from "known
@@ -166,6 +179,12 @@ function makeGateReason(deps) {
       if (!hardDenied && d.containerOnlyDenies && d.containerOnlyDenies(a, d.isDoplTool)) {
         return 'container-audience';
       }
+      // ⚠ 2026-09-01: `deny` HAS FOUR CAUSES NOW, AND THE ORDER STILL MIRRORS `grantDecision`'S.
+      // `await` is refused inside the channel branch, ahead of the launch lane, so it is asked
+      // ahead of the depth cap here. The two are disjoint ops, so the order buys nothing today —
+      // it is kept because "mirror the gate" is the only rule that has ever kept this function
+      // honest, and a branch ordered by coincidence is one nobody can check.
+      if (channel && !hardDenied && d.isAwaitOp && d.isAwaitOp(a.input)) return 'await-desktop-session';
       return channel && d.isOwnMachineLaunch(a.input, a.channelId) ? 'launch-depth-capped' : 'hard-denied';
     }
     if (decision === 'preapproved') return 'profile-preapproved';

@@ -308,20 +308,19 @@ describe("validateAccessToken vs a revoked row", () => {
       scopes: ["dopl.read", "dopl.write"],
       tokenId: "tok-1",
       credential: { kind: "oauth-app", label: null },
-      // 🔒 THE CONTAINER LOCK, and `null` is the answer for every ordinary
-      // credential (plan §4.4 B1, 2026-08-26). A row with no `workspace_id`
-      // must report the ABSENCE explicitly rather than omitting the key —
-      // `with-auth.ts` forwards this field verbatim as `apiKeyWorkspaceId`, and
-      // an omitted key and a null one read identically there today but would
-      // stop doing so the moment anything distinguishes "unlocked" from "the
-      // server did not say".
-      workspaceId: null,
-      // 🔒 AND ITS KIND, on the same argument (F-336, 2026-08-27). `null` here
-      // means "kind not stated", which `credential-audience.ts ›
-      // isSharedCredential` reads as a SHARED credential — the RESTRICTIVE
-      // answer. An omitted key would read the same today and must not be
-      // allowed to start meaning something else quietly.
-      workspaceLockKind: null,
+      // 🔒 AXIS 1 — WHICH CONTAINER, and `null` is the answer for every
+      // ordinary credential (plan §4.4 B1). A row with no container must report
+      // the ABSENCE explicitly rather than omitting the key — `with-auth.ts`
+      // forwards this verbatim as `apiKeyWorkspaceId`, and an omitted key and a
+      // null one read identically there today but would stop doing so the
+      // moment anything distinguishes "unfenced" from "the server did not say".
+      containerId: null,
+      // 🔒 AXIS 2 — WHOSE REACH. ⚠ THE ROW HERE CARRIES NEITHER NEW COLUMN, so
+      // this is the DUAL-READ answering: an unfenced legacy row derives a
+      // subject of the token's own user, which is the identity the migration's
+      // backfill writes. Reading `null` here would make every pre-migration
+      // credential anonymous at once.
+      subjectUserId: "user-9",
     });
   });
 
@@ -353,7 +352,7 @@ describe("validateAccessToken vs a revoked row", () => {
    * mutation hardcoding `workspaceId: null` left that one green: "answers null for an unlocked
    * row" is true of a function that answers null for EVERY row.
    */
-  it("carries the CONTAINER LOCK when the row has one", async () => {
+  it("carries the CONTAINER axis when the row has one", async () => {
     vi.mocked(supabaseAdmin).mockReturnValue(
       makeReader({
         id: "tok-1",
@@ -363,34 +362,37 @@ describe("validateAccessToken vs a revoked row", () => {
         revoked_at: null,
         client_id: DEVICE_CLIENT_ID,
         client_name: "Dopl Desktop (container session)",
-        workspace_id: "ws-container",
+        container_id: "ws-container",
+        subject_user_id: "user-9",
       }) as never
     );
     expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
-      workspaceId: "ws-container",
+      containerId: "ws-container",
     });
   });
 
   /**
-   * 🔒 THE LOCK'S KIND IS READ OFF THE ROW TOO (F-336, 2026-08-27) — the first
-   * hop of the OTHER axis. A projection that drops this column makes every
-   * container session read as a SHARED workspace credential, and the operator's
-   * own agent is refused the operator's own private rows. ⚠ The positive case
-   * needs its own assertion for the reason the bullet above gives: a mutation
-   * hardcoding `workspaceLockKind: null` leaves the null case green.
+   * 🔒 THE SUBJECT AXIS IS READ OFF THE ROW TOO (F-336) — the first hop of the
+   * OTHER axis. A projection that drops this column makes every session read as
+   * a SHARED credential, and the operator's own agent is refused the operator's
+   * own private rows. ⚠ The positive case needs its own assertion for the
+   * reason the bullet above gives: a mutation hardcoding `subjectUserId: null`
+   * leaves the null case green.
    */
   /**
    * 🔒 THE PROJECTION IS THE FENCE, AND NOTHING ELSE IN THIS FILE CAN SEE IT.
    * `makeReader` answers the whole row regardless of what was selected, so
-   * "carries the lock" and "carries the kind" above both stay GREEN if either
-   * column is dropped from the `select(...)` — measured, not assumed (a
-   * mutation removing `workspace_lock_kind` from the SELECT left all 16 tests
-   * passing before this one existed). Against the real PostgREST an unselected
-   * column is simply ABSENT, which makes every locked credential read as
-   * unlocked and every container session read as shared — silently, in opposite
-   * directions. So the projection string is asserted directly.
+   * every assertion above stays GREEN if a column is dropped from the
+   * `select(...)` — measured, not assumed (a mutation removing
+   * `workspace_lock_kind` from the SELECT left all 16 tests passing before this
+   * one existed). Against the real PostgREST an unselected column is simply
+   * ABSENT, which makes every fenced credential read as unfenced and every
+   * session read as shared — silently, in opposite directions. So the
+   * projection string is asserted directly. ⚠ ALL FOUR COLUMNS: the two axes
+   * AND the legacy pair the dual-read falls back to (B13 removes the pair, and
+   * these two lines with it).
    */
-  it("🔒 SELECTS both authorization columns — the one thing the row mock cannot check", async () => {
+  it("🔒 SELECTS all four authorization columns — the one thing the row mock cannot check", async () => {
     vi.mocked(supabaseAdmin).mockReturnValue(
       makeReader({
         id: "tok-1",
@@ -402,11 +404,13 @@ describe("validateAccessToken vs a revoked row", () => {
     );
     await validateAccessToken("dopl_at_deadbeef");
 
+    expect(selects[0]).toContain("container_id");
+    expect(selects[0]).toContain("subject_user_id");
     expect(selects[0]).toContain("workspace_id");
     expect(selects[0]).toContain("workspace_lock_kind");
   });
 
-  it("carries the lock's KIND when the row has one", async () => {
+  it("carries the SUBJECT axis when the row has one", async () => {
     vi.mocked(supabaseAdmin).mockReturnValue(
       makeReader({
         id: "tok-1",
@@ -416,13 +420,51 @@ describe("validateAccessToken vs a revoked row", () => {
         revoked_at: null,
         client_id: DEVICE_CLIENT_ID,
         client_name: "Dopl Desktop (container session)",
-        workspace_id: "ws-container",
-        workspace_lock_kind: "container_session",
+        container_id: "ws-container",
+        subject_user_id: "user-9",
       }) as never
     );
     expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
-      workspaceLockKind: "container_session",
+      subjectUserId: "user-9",
     });
+  });
+
+  /**
+   * 🔒 THE DUAL-READ, EVERY ARM, ON ROWS THE BACKFILL HAS NOT REACHED. The
+   * fallback must reproduce the legacy three-arm predicate EXACTLY — a
+   * disagreement between it and the migration is a visibility change nobody
+   * asked for — and the axis columns must WIN when present, or the backfill
+   * could never correct a legacy row. ⚠ RETIRES WITH THE LEGACY PAIR, IN B13.
+   */
+  it("derives both axes from the legacy pair, and prefers the axis columns", async () => {
+    const row = (over: Record<string, unknown>) => ({
+      id: "tok-1",
+      user_id: "user-9",
+      scopes: ["dopl.read"],
+      access_expires_at: future,
+      revoked_at: null,
+      client_id: DEVICE_CLIENT_ID,
+      client_name: "Dopl Desktop (container session)",
+      workspace_id: "ws-container",
+      ...over,
+    });
+    const cases: Array<[Record<string, unknown>, string | null]> = [
+      // legacy only: a container session ⇒ the operator is behind it…
+      [{ workspace_lock_kind: "container_session" }, "user-9"],
+      // …an unstated kind ⇒ SHARED, fail-closed…
+      [{ workspace_lock_kind: null }, null],
+      // …and an unknown future kind is the same arm…
+      [{ workspace_lock_kind: "ci_runner" }, null],
+      // …while a stated axis overrides a legacy pair that disagrees.
+      [{ workspace_lock_kind: null, container_id: "ws-container", subject_user_id: "user-9" }, "user-9"],
+    ];
+    for (const [over, subjectUserId] of cases) {
+      vi.mocked(supabaseAdmin).mockReturnValue(makeReader(row(over)) as never);
+      expect(await validateAccessToken("dopl_at_deadbeef")).toMatchObject({
+        containerId: "ws-container",
+        subjectUserId,
+      });
+    }
   });
 
   /** ⚠ DISCRIMINATOR IS `client_id`, NOT THE NAME. `client_name` is

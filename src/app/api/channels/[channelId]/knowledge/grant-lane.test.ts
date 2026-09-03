@@ -186,7 +186,13 @@ describe("2. a workspace VIEWER on a PUBLIC channel they never joined reaches no
       "@/features/channels/server/service"
     );
     const { channel, membership } = await loadVisibleChannel(
-      { workspaceId: WS, userId: VIEWER, source: "user", role: "viewer" },
+      {
+        workspaceId: WS,
+        userId: VIEWER,
+        source: "user",
+        role: "viewer",
+        credentialSubjectUserId: VIEWER,
+      },
       CHANNEL
     );
     expect(channel.id).toBe(CHANNEL);

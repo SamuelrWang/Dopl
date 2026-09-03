@@ -43,6 +43,13 @@ const registry = vi.hoisted(() => ({
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
   McpServer: class {
+    // ⚠ THE MCP RESOURCE SEAM (2026-09-02). `createServer` publishes
+    // `dopl://doctrine/channels` through `registerResource` (`resources.ts`), so
+    // a double without this method throws before a single tool is registered.
+    // ⚠ IT IS A NO-OP HERE ON PURPOSE — these suites assert over TOOLS. The
+    // resource's own content is pinned in `channel-doctrine.test.ts`, and that
+    // it is registered at all in `server.test.ts`.
+    registerResource() {}
     constructor(_info: unknown, opts: { instructions?: string }) {
       registry.instructions = opts?.instructions ?? "";
     }
@@ -164,7 +171,7 @@ describe("the MCP instructions block — a workspace name from whoever invited y
       if (!line.includes(MARKER)) continue;
       expect(line.trimStart().startsWith(MARKER)).toBe(false);
     }
-    expect(out).toContain("no-arg tool call targets it");
+    expect(out).toContain("every call lands there unless it names another");
   });
 
   it("a name made only of markup renders as (unnamed workspace), not an empty span", () => {
@@ -211,14 +218,14 @@ describe("the _dopl_status footer — on EVERY successful tool response", () => 
 });
 
 describe("the workspace-directory tools", () => {
-  it("list_workspaces frames the listing and neutralizes each name", async () => {
+  it("dopl_workspaces frames the listing and neutralizes each name", async () => {
     const tools = build({
       directory: [GOOD, HOSTILE],
       workspace: null,
       role: null,
       workspaceSource: null,
     });
-    const text = textOf(await tools.get("list_workspaces")!({}));
+    const text = textOf(await tools.get("dopl_workspaces")!({}));
 
     expectContained(text);
     expectNoForgedStructure(text);
@@ -229,37 +236,19 @@ describe("the workspace-directory tools", () => {
     expect(text).toContain("slug: `beta` · id: `id-2`");
   });
 
-  it("current_workspace neutralizes the name it reports", async () => {
+  it("dopl_workspaces neutralizes the name of the container it is bound to", async () => {
     const tools = build({
       directory: [HOSTILE],
       workspace: { id: "id-2", slug: "beta", name: FORGERY } as never,
       role: "member",
-      workspaceSource: "sole membership",
+      workspaceSource: "header pin",
     });
-    const text = textOf(await tools.get("current_workspace")!({}));
+    const text = textOf(await tools.get("dopl_workspaces")!({}));
 
     // Named twice (answer + appended footer), so both are checked.
     expectEveryHitContained(text);
     expectNoForgedStructure(text);
-    expect(text).toContain("- id: `id-2`");
-  });
-
-  it("the no-default refusal frames and neutralizes the choices it lists", async () => {
-    const tools = build({
-      directory: [GOOD, HOSTILE],
-      workspace: null,
-      role: null,
-      workspaceSource: null,
-    });
-    const res = await tools.get("dopl_map")!({});
-    expect(res.isError).toBe(true);
-    const text = textOf(res);
-
-    expectContained(text);
-    expectNoForgedStructure(text);
-    expect(text).toContain("typed by whoever owns each workspace");
-    expect(text).toContain("no default workspace");
-    expect(text).toContain("`beta`");
+    expect(text).toContain("id: `id-2`");
   });
 
   it("an unresolvable workspace= echo cannot escape its own span", async () => {

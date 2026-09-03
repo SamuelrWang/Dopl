@@ -20,7 +20,7 @@ import {
   ContainerTemplateEditor,
   HomeWorkspaceTemplateEditor,
 } from "./agent-editor";
-import { CopyToChannelDialog, UseInThisChannelButton } from "./agent-copy";
+import { ShareIntoChannelButton, ShareIntoChannelDialog } from "./agent-share";
 import { CreateButton } from "./panel-buttons";
 import { HomeAgentPanelsSkeleton } from "./home-skeleton";
 
@@ -97,12 +97,12 @@ export function HomeAgentPanels({
   currentUserId: string;
 }) {
   const [editing, setEditing] = useState<EditorTarget | null>(null);
-  /** The PERSONAL row waiting on its confirm step (plan §3, M4). */
-  const [copying, setCopying] = useState<AgentTemplate | null>(null);
+  /** The PERSONAL row waiting on its confirm step. ⚠ **A GRANT SINCE
+   *  2026-09-02 (slice B15), where it was a COPY** — see `agent-share.tsx`. */
+  const [sharing, setSharing] = useState<AgentTemplate | null>(null);
 
-  // ⚠ A CONTAINER READ IS UNFILTERED. Shelves exist only in a standard
-  // workspace — `resolveTemplateHomeScope` fences the marker to the caller's
-  // own default one — so `?shelf=` on a container would be a question with one
+  // ⚠ A CONTAINER READ IS UNFILTERED. A shelf is a TENANCY and this container is
+  // not the caller's personal one, so `?shelf=` here would be a question with one
   // possible answer.
   const containerList = useAgentTemplates(channel?.workspaceId ?? null);
   // ⚠ NO LONGER LAZY (2026-08-27). It was gated on the scope pill; with the
@@ -242,9 +242,9 @@ export function HomeAgentPanels({
         // scope B's rows were already in the container; there is no scope B any
         // more, so the condition has no second branch to guard against.
         cardActionFor={(template) => (
-          <UseInThisChannelButton
-            disabled={copying !== null}
-            onClick={() => setCopying(template)}
+          <ShareIntoChannelButton
+            disabled={sharing !== null}
+            onClick={() => setSharing(template)}
           />
         )}
         action={
@@ -276,16 +276,15 @@ export function HomeAgentPanels({
         />
       )}
 
-      {copying && (
-        <CopyToChannelDialog
-          source={copying}
-          containerWorkspaceId={channel.workspaceId}
-          onClose={() => setCopying(null)}
-          // ⚠ NOTHING TO SWITCH ANY MORE. This used to point the scope pill
-          // back at the channel so the new row was where the operator was
-          // looking; with both sections on screen at once the copy simply
-          // appears in Shared above, which is the outcome that argument wanted.
-          onCopied={() => setCopying(null)}
+      {sharing && (
+        <ShareIntoChannelDialog
+          source={sharing}
+          // ⚠ THE CHANNEL, NOT THE CONTAINER. A `channel` scope is what puts the
+          // row in front of the people in the room; a `container` grant would
+          // name the tenancy and no audience.
+          channelId={channel.channelId}
+          onClose={() => setSharing(null)}
+          onShared={() => setSharing(null)}
         />
       )}
     </div>
@@ -326,14 +325,18 @@ interface EditorTarget {
  * ONE CAPTION LINE, and it is a RULING rather than an explainer (minimal UI
  * copy; plan §4.4).
  *
- * ⚠ IT NAMES A CONTROL, AND THAT CONTROL EXISTS — "Use in this channel" on
- * every Personal card (`agent-copy.tsx`). A home-shelf template CANNOT launch
- * into a container: `getTemplateById` is workspace-filtered and resolve passes
- * the LAUNCH workspace, so the id 404s (plan §0.3). Copying is the answer, and
- * this line is what says so.
+ * ⚠ IT NAMES A CONTROL, AND THAT CONTROL EXISTS — "Share into this channel" on
+ * every Personal card (`agent-share.tsx`).
+ * ⚠ **IT SAID "make a shared COPY" UNTIL 2026-09-02, AND HAD BEEN STALE TWICE
+ * OVER (F-471).** First the JUSTIFICATION under it moved (A12: a personal
+ * template could not launch into a container, then it could) and the caption did
+ * not; then B11 replaced the copy with a GRANT, which is what the word "copy"
+ * was naming. **The caption and the control move together or neither is true** —
+ * the sentence promises the peer can USE it, which launching your own agent in
+ * the room still does not give them.
  */
 const PERSONAL_CAPTION =
-  "Yours alone. Use one here to make a shared copy in this channel.";
+  "Yours alone. Share one into this channel to let everyone here use it.";
 
 /** No home workspace yet — a different sentence from "none here". */
 const SCOPE_UNAVAILABLE = "Finish setting up your workspace to keep agents there.";

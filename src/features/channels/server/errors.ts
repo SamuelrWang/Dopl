@@ -1,9 +1,6 @@
-class ChannelError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = new.target.name;
-  }
-}
+// ⚠ `ChannelError` MOVED TO `errors-base.ts` (§1, 2026-09-02) — a LEAF, so the
+// second error module can extend it without a cycle back through this file.
+import { ChannelError } from "./errors-base";
 
 export class ChannelNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
@@ -45,6 +42,12 @@ export class ChannelAddresseeNotMemberError extends ChannelError {
     super(`Addressed user is not a member of this channel: ${userId}`);
   }
 }
+
+// ⚠ **`ChannelRecipientUnresolvedError` LIVES IN `errors-recipient.ts` (§1
+// SPLIT, 2026-09-02) AND IS RE-EXPORTED HERE**, because this file was AT the
+// 500-line cap. `errors.ts` stays the ONE import path for every channel error —
+// same arrangement `types.ts` has with `types-delivery.ts`.
+export { ChannelRecipientUnresolvedError } from "./errors-recipient";
 
 /** Would leave the channel with no owner — transfer ownership first. */
 export class ChannelLastOwnerError extends ChannelError {
@@ -310,6 +313,59 @@ export class DirectionNotClaimableError extends ChannelError {
  * this a probe primitive for every directive in the deployment — the same rule
  * `ChannelNotFoundError` follows for a private channel, and the same reason.
  */
+/**
+ * **THE TARGET AGENT BELONGS TO ANOTHER MEMBER** — the agent-management kinds'
+ * cross-member refusal (2026-09-01, `end` / `rename` over MCP).
+ *
+ * ⚠ **403-SHAPED, AND IT IS THE ONE PLACE ON THIS LANE THAT IS.** Everywhere
+ * else here a foreign id answers 404 so existence cannot be probed
+ * ({@link LaunchDirectiveNotFoundError}), and that rule is not being relaxed —
+ * it does not APPLY. To reach this error the caller has already proved
+ * membership of the channel, and inside a channel `dopl_channel(op="members")`
+ * and `op="read_sessions"` disclose the roster and the live agents anyway. So
+ * "that instance is another member's" reveals nothing new, while a 404 here
+ * would tell an orchestrator its OWN agent had vanished and send it to re-launch.
+ *
+ * ⚠ **IT IS NOT THE FENCE.** `operator_user_id` is: a directive is stamped with
+ * the authenticated caller and only that caller's machines ever claim one. This
+ * turns a two-minute round trip ending in `no-session` into an immediate,
+ * actionable sentence. `server/repository-agent-owner.ts` states exactly what the
+ * underlying read can and cannot prove.
+ */
+export class AgentDirectiveForeignError extends ChannelError {
+  constructor(public readonly agentId: string) {
+    super(`Agent ${agentId} belongs to another member`);
+  }
+}
+
+/**
+ * A LAUNCH ASKED FOR `chain: true` IN A CHANNEL WHOSE STORED CEILING FORBIDS IT
+ * (2026-09-02, A9 — guardrail G7).
+ *
+ * ⚠ **REFUSED, NOT CLAMPED, AND THE ASYMMETRY WITH THE POSTURE PAIR IS THE
+ * POINT.** A clamped posture still produces a working agent doing the asked-for
+ * work under more supervision; a clamped chain produces an agent that hits a
+ * bound it was told it did not have, MID-RUN, after the orchestrator has already
+ * handed it work that assumes workers. Refusing costs one round trip; clamping
+ * costs the whole run, and the orchestrator learns about it from silence.
+ *
+ * ⚠ **IT NAMES THE SETTING, because the caller cannot change it and the operator
+ * can.** `channelAgentChain` is a per-channel toggle on the operator's own
+ * Settings tab, and a refusal that did not name it leaves the caller with nothing
+ * to ask for. This is the SERVER half of a refusal the desktop already mints as
+ * `no-chain` — the difference is that this one happens whether or not a machine
+ * is listening.
+ */
+export class ChannelAgentChainForbiddenError extends ChannelError {
+  constructor() {
+    super(
+      "This channel does not allow launched agents to launch further agents " +
+        "(channelAgentChain). Re-issue without `chain`, or ask your operator to " +
+        "enable that one setting for this channel."
+    );
+  }
+}
+
 export class LaunchDirectiveNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
     super(`Launch directive not found: ${ref}`);
@@ -347,9 +403,21 @@ export class LaunchDirectiveNotClaimableError extends ChannelError {
  * `agent-templates/server › resolveTemplateRef` answers with a union and throws
  * nothing, so this feature's error mapper does not have to import another
  * feature's error classes to know what a 404 means.
+ *
+ * ⚠ `elsewhere` IS THE ONE THING IT MAY ADD, AND IT IS NOT A CRACK IN THE RULE
+ * ABOVE (T35). It is present only when the ref names a template the caller
+ * COULD ALREADY LIST FOR THEMSELVES — their own row, or a `workspace`-visible
+ * one, in a workspace they are an active member of — sitting in a DIFFERENT
+ * tenancy than the channel's (`agent-templates/server/service-resolve-ref.ts ›
+ * classifyMissingTemplateRef` holds the whole argument). It therefore says
+ * nothing a list call would not, and `null` covers BOTH "no such template" and
+ * "somebody else's, and not yours to see" — the two that must stay one answer.
  */
 export class LaunchTemplateNotFoundError extends ChannelError {
-  constructor(public readonly ref: string) {
+  constructor(
+    public readonly ref: string,
+    public readonly elsewhere: { name: string; label: string } | null = null
+  ) {
     super(`Agent template not found: ${ref}`);
   }
 }

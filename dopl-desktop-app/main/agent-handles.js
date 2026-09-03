@@ -207,7 +207,7 @@ const PARITY_TOKENS = [
  * and the truth tables need no disk. Production passes nothing and gets `agent-names.js`.
  * ⚠ A NAME LOOKUP MUST NEVER DECIDE A WAKE BY THROWING. `agent-names.js` is electron-store backed
  * and an unreadable store is a reason to resolve FEWER handles — never a reason to take the
- * routing path down. Same rule, and the same shape, as `session-triage.js › personaFor`.
+ * routing path down.
  */
 function handleIndexFor(agentIds, nameFor) {
   const resolve = typeof nameFor === 'function'
@@ -221,7 +221,19 @@ function handleIndexFor(agentIds, nameFor) {
     try {
       displayName = resolve(agentId) || '';
     } catch (err) {
-      require('./diag').diag('agent-handles: name lookup failed', err && err.message);
+      // ⚠ **THE DIAGNOSTIC MUST NOT BECOME THE FAILURE.** `diag` is electron-backed, and
+      // this catch exists precisely for contexts where the electron side is absent — the
+      // default `nameFor` above requires `agent-names`, which requires `electron-store`.
+      // Where that throws, `require('./diag')` throws too (it requires `electron`), so the
+      // handler re-raised out of the block and took down THE ROUTING PATH THE CATCH EXISTS
+      // TO PROTECT — the exact failure the header two comments up forbids. It fired in CI
+      // (`delivery-composed.test.ts`, ubuntu, where the desktop's deps are not installed)
+      // and would fire in any packaged context missing either module.
+      try {
+        require('./diag').diag('agent-handles: name lookup failed', err && err.message);
+      } catch (_) {
+        /* no diag sink reachable here — resolving FEWER handles is the documented answer */
+      }
     }
     entries.push({ agentId: agentId, displayName: displayName });
   }

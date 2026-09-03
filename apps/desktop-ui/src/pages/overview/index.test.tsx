@@ -119,6 +119,20 @@ function transport(req: TransportRequest, allZero = false) {
   if (path === "/api/boot") return Promise.resolve(ok(bootBody()));
   if (path === "/api/billing/status") return Promise.resolve(ok(CREDITS));
   if (path === OVERVIEW_PATH) return Promise.resolve(ok(OVERVIEW));
+  // ⚠ The "Needs you" read is NOT in this page's paint gate (it is out-of-band,
+  // and the least important read must not be the slowest), so an empty answer is
+  // a legitimate first frame — served rather than rejected so the render leaves
+  // no rejected promise behind. `needs-you.test.tsx` owns the panel's own cases.
+  if (path === "/api/channels/account/status") {
+    return Promise.resolve(
+      ok({
+        channels: [],
+        operatorOnline: false,
+        since: null,
+        truncated: { channels: false, unread: false, waiting: false },
+      })
+    );
+  }
   if (path === SERIES_PATH) {
     const metric = metricOf(req.path);
     return Promise.resolve(ok({ metric, days: seriesDays(metric, allZero) }));
@@ -177,7 +191,7 @@ describe("overview page", () => {
     expect(container.querySelector(".grid-cols-\\[48fr_52fr\\]")).not.toBeNull();
   });
 
-  it("renders the header, the four sections and every live figure", async () => {
+  it("renders the header, the five sections and every live figure", async () => {
     renderPage();
 
     expect(
@@ -198,6 +212,12 @@ describe("overview page", () => {
     ).toEqual([
       "This billing period",
       "Messages per day",
+      // ⚠ JOINED 2026-09-01 — the ping inbox then, what is ADDRESSED TO YOU AND
+      // UNANSWERED since slice B16, and it sits ABOVE the bottom row
+      // deliberately: it is the only section on this page that is waiting on the
+      // reader, so a position below the fold would reproduce the unread-card
+      // failure it was built to fix.
+      "Needs you",
       "Recent activity",
       "Member load, last 30 days",
     ]);

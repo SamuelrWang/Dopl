@@ -1,6 +1,6 @@
 // SAME-OWNER AGENT→AGENT PRIVATE DIRECTIONS (Samuel's ruling, 2026-08-31).
 //
-// THE RULING, in its own words: **the user's OWN agents may `direct_agent` each other privately.
+// THE RULING, in its own words: **the user's OWN agents may direct each other privately.
 // Another user's agent: NEVER — channel or thread only; the existing fence stays for peers.**
 //
 // ⚠ **WHAT THE FENCE ACTUALLY WAS, MEASURED BEFORE IT MOVED.** The field report called the
@@ -40,8 +40,8 @@ const rate = require(M("direction-rate.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
 const CH = "ch1";
-const DIRECT = { op: "direct_agent", agent_id: "k3wpf7c5", body: "check the deploy" };
-const READ = { op: "read_directions" };
+const DIRECT = { op: "manage", action: "direct", agent_id: "k3wpf7c5", body: "check the deploy" };
+const READ = { op: "status" };
 const decide = (over) => profiles.grantDecision({ profile: "full", channelId: CH, ...over });
 const args = (over) => ({ toolName: DOPL_CHANNEL_TOOL, input: DIRECT, ...over });
 
@@ -50,25 +50,31 @@ const NOT_AUTO_OUT = profiles.MESSAGE_MODES.filter((m) => !AUTO_OUT.includes(m))
 
 // ── A. THE LANE MODULE ITSELF (pure) ──────────────────────────────────────────────
 
-test("the op list is EXACTLY `direct_agent`, and it is an ALLOW list of one", () => {
-  assert.deepEqual(lane.OWN_MACHINE_DIRECT_OPS, ["direct_agent"]);
-  // ⚠ NAMED, NEVER INFERRED: an op in no list gates in every posture, which is the safe
+test("the key is EXACTLY `manage.direct`, and it is an ALLOW list of one", () => {
+  assert.deepEqual(lane.OWN_MACHINE_DIRECT_OPS, ["manage.direct"]);
+  // ⚠ NAMED, NEVER INFERRED: a call in no list gates in every posture, which is the safe
   // direction, so this must never grow by pattern-match or by prefix.
-  for (const op of ["direct", "direct_agents", "read_directions", "post", "steer", ""]) {
+  for (const op of ["direct", "direct_agent", "status", "send", "steer", "manage", ""]) {
     assert.equal(lane.isOwnMachineDirect({ op }, CH), false, `${op} must not reach the lane`);
+  }
+  // ⚠ AND THE BARE OP IS NOT ENOUGH (2026-09-02, F-578): this lane carries NO depth bound, so
+  // admitting the whole dispatcher would open `launch` through the one door that does not count.
+  for (const action of ["launch", "end", "rename", "posture", ""]) {
+    assert.equal(lane.isOwnMachineDirect({ op: "manage", action }, CH), false,
+      `manage.${action} must not reach the DIRECT lane`);
   }
 });
 
 test("it is DISJOINT from the launch lane, and that separation is a ruling, not tidiness", () => {
-  // ⚠ IF `direct_agent` JOINED `OWN_MACHINE_LAUNCH_OPS` it would inherit the LAUNCH-DEPTH bound,
+  // ⚠ IF `manage.direct` JOINED `OWN_MACHINE_LAUNCH_OPS` it would inherit the LAUNCH-DEPTH bound,
   // and private directions would silently depend on the channel's agent-chaining setting — two of
   // Samuel's rulings answering through each other, with the one that is OFF by default quietly
   // governing the one that is not.
-  assert.ok(!launchLane.OWN_MACHINE_LAUNCH_OPS.includes("direct_agent"));
-  assert.ok(!lane.OWN_MACHINE_DIRECT_OPS.includes("launch_agent"));
-  assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("direct_agent"),
+  assert.ok(!launchLane.OWN_MACHINE_LAUNCH_OPS.includes("manage.direct"));
+  assert.ok(!lane.OWN_MACHINE_DIRECT_OPS.includes("manage.launch"));
+  assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("manage.direct"),
     "it is not outbound CONTENT — it buys a TURN");
-  assert.ok(!profiles.OWN_CHANNEL_READ_OPS.includes("direct_agent"),
+  assert.ok(!profiles.OWN_CHANNEL_READ_OPS.includes("manage.direct"),
     "it is not a read — it starts work");
 });
 
@@ -106,10 +112,11 @@ test("CROSS-CHANNEL gates in every posture — a slug is another room, and so is
   }
 });
 
-test("`read_directions` is on the INBOUND half, where its twin is not", () => {
+test("READING the mailbox is on the INBOUND half, where its twin is not", () => {
   // It starts no turn and sends nothing: this operator's own directions and their own agents'
-  // replies, `channel` an optional filter — `read_sessions`'s shape exactly.
-  assert.ok(profiles.OWN_CHANNEL_READ_OPS.includes("read_directions"));
+  // replies, `channel` an optional filter. ⚠ `read_directions` and `read_sessions` are ONE op
+  // now — `status` (2026-09-02, F-578) — and they always had one shape.
+  assert.ok(profiles.OWN_CHANNEL_READ_OPS.includes("status"));
   for (const messageMode of ["auto_inbound", "auto_both"]) {
     assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: READ, messageMode }), "allow");
   }

@@ -15,7 +15,7 @@
  *
  * ⚠ MUTATION-VERIFIED: restoring the `h-6 … px-2.5 text-caption` className on
  * ANY of the four converted buttons turns the scan red; on either of the two
- * rendered below (the create button, "Use in this channel") the face
+ * rendered below (the create button, "Share into this channel") the face
  * comparison goes red with it. The Agents section's "Try again" is the one
  * converted button reachable only through a failed read, and the scan is what
  * holds it.
@@ -27,7 +27,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
-import { UseInThisChannelButton } from "./agent-copy";
+import { ShareIntoChannelButton } from "./agent-share";
 import { CreateButton } from "./panel-buttons";
 
 /** This directory, and the knowledge module up in the web tree. See the note
@@ -62,7 +62,7 @@ describe("the /home section button IS the KB card's Open button", () => {
           onToggleStar={() => {}}
         />
         <CreateButton onClick={() => {}}>New base</CreateButton>
-        <UseInThisChannelButton onClick={() => {}} disabled={false} />
+        <ShareIntoChannelButton onClick={() => {}} disabled={false} />
       </>
     );
 
@@ -72,7 +72,7 @@ describe("the /home section button IS the KB card's Open button", () => {
     // Everything else must be the same source's output.
     const withDisabledInk = new Set([...open, "disabled:opacity-60"]);
     expect(faceOf("New base")).toEqual(withDisabledInk);
-    expect(faceOf("Use in this channel")).toEqual(withDisabledInk);
+    expect(faceOf("Share into this channel")).toEqual(withDisabledInk);
     // …and that face is really the shared pill, not empty class lists agreeing
     // with each other.
     expect(open.has("btn-light")).toBe(true);

@@ -59,80 +59,29 @@
 
 // ─── BEGIN LAUNCH-DIRECTIVE-WIRE (pure; unit-tested via source extraction) ───────────────
 
-// THE TABLE the second `postgres_changes` binding names (`main/realtime.js › addChannel`).
-const DIRECTIVE_TABLE = 'channel_launch_directives';
+// ⚠ THE FROZEN VOCABULARIES LIVE IN A LEAF (2026-09-02, F-415's seam, taken at the §1 cap): every
+// list, bound and pattern this file used to declare is in `launch-directive-vocab.js`, a module
+// that requires nothing. This file destructures them and RE-EXPORTS every one verbatim, so
+// `wire.REFUSAL_REASONS`, `wire.KINDS` and the rest are unchanged addresses for every caller and
+// every test. ⚠ Do not re-declare one here: two statements of a closed vocabulary is the drift
+// the whole lane's suite exists to catch.
+const vocab = require('./launch-directive-vocab');
+const {
+  DIRECTIVE_TABLE, ROUTES,
+  STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_DONE, STATUS_REFUSED, STATUS_EXPIRED,
+  STATUSES,
+  KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE, KINDS, KINDS_NEEDING_LAUNCH_CONSENT,
+  TOOL_MODES, MESSAGE_MODES, REFUSAL_REASONS, REQUEST_KEYS, RESPONSE_KEYS,
+  TARGET_NAME_MAX, AGENT_ID_RE, GOAL_MAX, TEMPLATE_NAME_MAX, text,
+} = vocab;
 
-// ⚠ THESE WERE THE GUESS AND ALL THREE ARE NOW CONFIRMED against the route files (header above;
-// the suite re-measures it). All are authenticated (cookie auth via `main/api.js`, which carries
-// the shared 401 repair). The two writes are POSTs — a claim is a COMPARE-AND-SWAP and a decision
-// is a write — and the backstop READ is a GET on the collection.
-const ROUTES = {
-  // CAS: "give me this directive if it is still pending and still mine". Losing is normal.
-  claim: '/api/channels/launch-directives/claim',
-  // The terminal write: launched + agent id, or refused + one of the seven words.
-  decide: '/api/channels/launch-directives/decide',
-  // The breaker-open backstop: what is still pending for me in this workspace.
-  pending: '/api/channels/launch-directives',
-};
-
-// The row's own status vocabulary, as the other lane stated it.
-const STATUS_PENDING = 'pending';
-const STATUS_CLAIMED = 'claimed';
-const STATUS_LAUNCHED = 'launched';
-const STATUS_REFUSED = 'refused';
-const STATUS_EXPIRED = 'expired';
-const STATUSES = [STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_REFUSED, STATUS_EXPIRED];
-
-// ⚠ THE WORDS, VERBATIM AND CLOSED. Not a guess — see the header.
-// ⚠ SEVEN SINCE 2026-08-22 (agent templates). `no-template` is what this machine answers when a
-// directive names a template its OPERATOR cannot resolve — deleted, or invisible to them though
-// visible to the orchestrator that named it. The two fences on this lane belong to DIFFERENT
-// PEOPLE, which is why that is a real state and not a bug.
-// ⚠ IT IS DECLARED HERE BEFORE IT HAS A PRODUCER, DELIBERATELY, and the direction is the safe
-// one: `directiveFrom` and `decideBody` NARROW to this list, so a word the list lacks is dropped
-// rather than sent. Declaring it early costs nothing; discovering it missing at the moment the
-// producer lands costs a refusal that reaches an orchestrator as `no-bridge`, which reads as the
-// operator having turned the lane off.
-// ⚠ AND THE COLUMN CHECK CAUGHT UP ON 2026-08-23. This list ran one word ahead of
-// `channel_launch_directives_refusal_reason_check` for a day, which was safe only because nothing
-// produced the word. `launch-directives.js › spawn` now DOES (resolve-at-claim), and
-// `20260823140000_channel_launch_directives_template.sql` widens the CHECK in the same wave.
-// ⚠ `template-approval` IS NOT A MEMBER AND MUST NOT BECOME ONE. That word is this machine's
-// answer to its OWN RENDERER when a foreign template's first run needs one human click
-// (`session-launch-op.js › launchFromButton`). There is no human at the keyboard on the directive
-// lane — the launch-over-MCP toggle IS the standing consent there (Samuel, OQ-3) — so it can never
-// be produced here, the column cannot store it, and `refusalFor` would map it to `no-bridge`
-// anyway, which would read to an orchestrator as the operator having turned the lane off.
-const REFUSAL_REASONS = ['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-counterparty',
-  'no-template'];
-
-// The keys this desktop puts on the wire, and the ones it reads back. Stated as data so the
-// suite can assert them without a live route, and so a route that lands with different names
-// fails in ONE place.
-const REQUEST_KEYS = { claim: ['directiveId'], decide: ['directiveId', 'status', 'agentId', 'refusalReason'] };
-const RESPONSE_KEYS = { claim: ['ok', 'directive', 'reason'] };
-
+// ⚠ **THE UUID RULE STAYS HERE**, with `directiveFrom`, which is its only reader. It is one of
+// the handful of hand-copies of that pattern in `main/`, and `test/uuid-rule-parity.test.mjs`
+// holds a CENSUS of exactly which files carry one and why — moving it into the vocabulary leaf
+// would have edited that census silently instead of taking the review it says a change to it is.
+// ⚠ AND THE COPY IS LOAD-BEARING: it is what refuses a directive whose `id` or `channel_id` is
+// not a UUID, on a row that arrives over a realtime frame this module does not trust.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Bounded, whitespace-collapsed display text, or ''. */
-function text(value, max) {
-  if (typeof value !== 'string') return '';
-  return value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max).trim();
-}
-
-// ⚠ THE GOAL'S BOUND. It becomes the wake turn's fenced request body
-// (`session-seed.js › takeFraming`), so it is COUNTERPARTY-INFLUENCEABLE PROMPT INPUT and the
-// same discipline every other body on that path follows applies: bounded here, fenced there,
-// never in the trusted preamble. 4 000 characters is well past a real instruction and well
-// short of anything that could crowd a turn.
-const GOAL_MAX = 4000;
-
-// ⚠ THE TEMPLATE NAME'S BOUND — `agent_templates.name`'s own 120, and the same number
-// `channel_launch_directives.template_name`'s CHECK enforces at rest. It is not prompt input on
-// this lane (the ROLE BLOCK's name comes from the OPERATOR's own resolve, never from the wire),
-// so this is a display/diagnostic bound; it is bounded anyway because an unbounded field from a
-// server row has no business travelling into main at all.
-const TEMPLATE_NAME_MAX = 120;
 
 /**
  * A REALTIME FRAME OR A POLLED ROW -> THE FIELDS THIS DESKTOP WILL ACT ON, or null.
@@ -163,6 +112,43 @@ const TEMPLATE_NAME_MAX = 120;
  * turns (spec E-4, F-1). The NAME is what survives the SET NULL and makes the difference legible,
  * so narrowing it away would re-create exactly the ambiguity the server added a column to close.
  */
+/**
+ * THE FIRST OF SEVERAL SPELLINGS OF ONE MODE THAT THIS BUILD RECOGNISES, else `''`.
+ *
+ * ⚠ IT IS A NARROWING, NOT A MERGE: the candidates are ONE fact spelled several ways — the
+ * server's resolved value, then its snake/camel pair, then the raw request's — and the ORDER
+ * is the precedence (2026-09-02, A9). A mode this build has never heard of collapses to `''`
+ * rather than travelling toward a reducer that would coerce it to the most restrictive member
+ * without anybody saying so, which is `templateId`'s rule one field along.
+ *
+ * ⚠ IT EXISTS BECAUSE THE PRECEDENCE IS NOW FOUR-DEEP AND WAS WRITTEN TWICE. Two copies of a
+ * fallback chain is how the tool axis and the message axis come to disagree about which value
+ * wins — the `chain: false` defect of 2026-09-01 in a different costume.
+ */
+function pickMode(order, ...candidates) {
+  for (const c of candidates) {
+    const v = String(c == null ? '' : c);
+    if (v && order.indexOf(v) !== -1) return v;
+  }
+  return '';
+}
+
+/**
+ * A TRI-STATE OFF THE WIRE: `true`, `false`, or `null` for "did not ask".
+ *
+ * ⚠ `'false'` IS ACCEPTED BESIDE `false` for the same reason `'true'` is: a row may arrive over
+ * a transport that stringifies booleans, and a one-sided coercion is how the two halves of a
+ * tri-state stop being symmetric. **That asymmetry WAS the 2026-09-01 bug**: a stored `false`
+ * fell down the `null` arm, arrived as "did not ask", and INHERITED a channel setting that may
+ * be ON — so `chain: false` could not turn chaining off while every doc on the lane said it
+ * could. Extracted here so the rule has one statement rather than one per reader.
+ */
+function triState(v) {
+  if (v === true || v === 'true') return true;
+  if (v === false || v === 'false') return false;
+  return null;
+}
+
 function directiveFrom(raw, workspaceId) {
   const r = raw || {};
   const id = String(r.id || '');
@@ -179,8 +165,19 @@ function directiveFrom(raw, workspaceId) {
   // having to.
   const taskId = String(r.task_id || r.threadId || r.taskId || '');
   const status = String(r.status || '');
+  // ⚠ THE TARGET OF AN END / RENAME — an INPUT, never `agent_id`, which is the
+  // OUTPUT a launch produced. Both spellings for `templateId`'s reason: a REALTIME
+  // frame is the raw row and the CLAIM's answer is the server DTO.
+  const targetAgentId = String(r.target_agent_id || r.targetAgentId || '');
   return {
     id: id,
+    // ⚠ UNKNOWN COLLAPSES TO `launch`, WHICH IS THE **GATED** BRANCH — see the
+    // KINDS block above. A fourth kind minted by a newer server reaching this
+    // build must not be dispatched by a machine that has no branch for it, and
+    // must not be silently dropped either (the row would be claimed and never
+    // answered); routing it to the fully-consented branch is the only reading
+    // that is both safe and honest.
+    kind: KINDS.indexOf(String(r.kind || '')) === -1 ? KIND_LAUNCH : String(r.kind),
     workspaceId: String(r.workspace_id || r.workspaceId || workspaceId || ''),
     channelId: channelId,
     // ⚠ '' IS A REAL VALUE AND MEANS CHANNEL-LEVEL, exactly as it does on `sessions:launch`. A
@@ -199,6 +196,86 @@ function directiveFrom(raw, workspaceId) {
     // narrowing that dropped the name whenever the id was missing would throw away the only
     // evidence a template was ever named.
     templateName: text(r.template_name || r.templateName, TEMPLATE_NAME_MAX),
+    // ⚠ SHAPE-CHECKED HERE, not merely carried: it is about to be handed to
+    // `session-engine.js › controlByTask` as an address and printed into a diag.
+    // `''` is "no target", which the caller treats as a refusal on any kind that
+    // needs one rather than as "act on whatever is oldest" — there is no
+    // oldest-agent fallback on this lane and an end that guessed is unrecoverable.
+    targetAgentId: AGENT_ID_RE.test(targetAgentId) ? targetAgentId : '',
+    // ⚠ **`null` AND `''` ARE DIFFERENT AND BOTH ARE REAL, WHICH IS WHY THIS IS
+    // NOT `text()`.** `''` is the RENAME'S CLEAR gesture (back to `Agent #<id>`);
+    // `null` is "this directive is not a rename". Collapsing them — which every
+    // other string field here does, correctly, because none of them has a
+    // meaningful empty value — would turn "no rename requested" into "clear the
+    // name" on a kind that never asked for one.
+    // ⚠ AND IT IS NOT TRUNCATED. `text()` would silently store an altered name;
+    // `agent-names.js › sanitizeName` is the authority and REFUSES rather than
+    // strips, which is what produces the honest `bad-name`. What this does is
+    // refuse to carry an absurd length into main at all.
+    targetName: typeof r.target_name === 'string' || typeof r.targetName === 'string'
+      ? String(r.target_name !== undefined && r.target_name !== null
+        ? r.target_name : r.targetName).slice(0, TARGET_NAME_MAX + 1)
+      : null,
+    // ⚠ THE TWO AXES A `set_agent_mode` CARRIES, NARROWED TO THE FROZEN ENUMS HERE.
+    // `''` is "this axis was not requested", which is a REAL and common value: a
+    // directive may move one axis and leave the other alone, and the caller applies
+    // only what it was given. A value outside the enum collapses to `''` for
+    // `templateId`'s reason — this function is a NARROWING, and a mode this build has
+    // never heard of must not be carried toward a reducer that would coerce it to the
+    // most restrictive member without anybody saying so.
+    // ⚠ BOTH `''` MEANS THE DIRECTIVE ASKED FOR NOTHING THIS BUILD CAN DO, and the
+    // caller refuses rather than reporting a no-op as success — see `setAgentMode`.
+    targetToolMode: TOOL_MODES.indexOf(String(r.target_tool_mode || r.targetToolMode || '')) === -1
+      ? '' : String(r.target_tool_mode || r.targetToolMode),
+    targetMessageMode: MESSAGE_MODES.indexOf(String(r.target_message_mode || r.targetMessageMode || '')) === -1
+      ? '' : String(r.target_message_mode || r.targetMessageMode),
+    // ── ⚠ THE POSTURE A **LAUNCH** ASKS TO START ON (2026-09-01, T24) ────────────────────
+    // Narrowed to the same frozen enums, and `''` means "not asked for" exactly as above —
+    // which resolves to the operator's stored channel pair, i.e. the pre-T24 behaviour byte
+    // for byte. ⚠ THEY ARE SEPARATE FIELDS FROM THE `target*` PAIR ABOVE AND MUST STAY SO:
+    // one names the posture a NEW session starts on, the other the posture a RUNNING one moves
+    // to, and merging them would let a `set_agent_mode` be answered by a launch's fields on a
+    // row that carried both.
+    // ⚠ **NEITHER DECIDES ANYTHING.** `launch-posture.js › resolvePosture` clamps both to the
+    // operator's own durable channel pair before they reach a spawn — the lane's standing
+    // invariant, which T24 does not get to relax. That module's header carries the argument,
+    // including why the ticket's "unless the caller is the operator" carve-out is the whole set.
+    // ⚠ **THE SERVER'S RESOLVED VALUE IS PREFERRED OVER THE RAW REQUEST SINCE 2026-09-02
+    // (A9 — G6).** The server now clamps the request to the CHANNEL'S stored ceiling at
+    // creation and writes `resolved_*`; reading `start_*` here instead would leave that clamp
+    // cosmetic, because this machine's own ceiling is a different record and may be wider.
+    // ⚠ **IT CAN ONLY EVER NARROW**, which is why preferring it needs no new argument: the
+    // server's value IS the request, clamped. `launch-posture.js › resolvePosture` still runs
+    // over the result and still clamps to the OPERATOR's own stored pair — two fences on one
+    // rule, and the machine's is the finer one (it also holds the windowless message floor).
+    // ⚠ **AN OLDER SERVER SENDS NO `resolved_*` AND THE `||` CHAIN FALLS THROUGH TO
+    // `start_*`**, which is exactly today's behaviour. Same shape as every other field here.
+    startToolMode: pickMode(TOOL_MODES, r.resolved_tool_mode, r.resolvedToolMode,
+      r.start_tool_mode, r.startToolMode),
+    startMessageMode: pickMode(MESSAGE_MODES, r.resolved_message_mode, r.resolvedMessageMode,
+      r.start_message_mode, r.startMessageMode),
+    // ⚠ A TRI-STATE, NOT A BOOLEAN, AND **ALL THREE VALUES ARE LOAD-BEARING**. `true` is "I need
+    // this agent to be able to launch workers"; `false` is "run it with chaining OFF, whatever
+    // the channel allows"; `null` is "I did not ask", which inherits the channel's setting
+    // silently as every launch did before T24. Collapsing `null` into a request would turn every
+    // ordinary launch into one, and a request the channel denies is a REFUSAL.
+    //
+    // ⚠ **THIS LINE READ `r.chain === true || r.chain === 'true' ? true : null` AND THAT WAS THE
+    // BUG (2026-09-01).** A stored `false` fell down the `null` arm and arrived as "did not ask",
+    // so it INHERITED the channel setting — which may be ON. `chain: false` could not turn
+    // chaining off, and every doc, comment and agent-facing description on the lane said it
+    // could. The server has always stored the three states faithfully
+    // (`service-launch.ts › createLaunchDirective` uses `?? null`, not `|| null`, for exactly
+    // this); it was only this narrowing that flattened them.
+    // ⚠ `'false'` IS ACCEPTED BESIDE `false` for the same reason `'true'` is: this row may arrive
+    // over a transport that stringifies booleans, and a one-sided coercion is how the two halves
+    // of a tri-state stop being symmetric.
+    // ⚠ **THE SERVER'S RESOLVED CHAIN FIRST, ON `startToolMode`'S ARGUMENT** — it can only
+    // narrow (a `chain: true` the channel forbids is REFUSED at creation, never silently
+    // turned off), and an older server sends none, which falls through to the raw request.
+    chain: triState(r.resolved_chain !== undefined && r.resolved_chain !== null
+      ? r.resolved_chain
+      : r.resolvedChain !== undefined && r.resolvedChain !== null ? r.resolvedChain : r.chain),
     status: STATUSES.indexOf(status) === -1 ? '' : status,
     agentId: String(r.agent_id || r.agentId || ''),
   };
@@ -229,12 +306,55 @@ function claimBody(directiveId) {
  * The decision body — LAUNCHED with an address, or REFUSED with a word. Never both, and never
  * neither: a directive this machine claimed and then said nothing about is the one outcome the
  * orchestrator cannot act on, which is why `decide` has no third shape.
+ *
+ * ── ⚠ THE ECHO TRIO, ON THE LAUNCHED BRANCH ONLY (2026-09-01, T24's echo) ────────────────
+ *
+ * The posture columns landed as a REQUEST with nothing to answer it: an orchestrator could ask
+ * for `bypass/auto_both` and never learn this machine's ceiling clamped it to `auto/auto_inbound`,
+ * so it sized its next instruction for room the agent does not have. `launch-directive-spawn.js ›
+ * spawn` now hands back what `launch-posture.js › resolveLaunch` settled on; these keys carry it.
+ *
+ * ⚠ **EMITTED ONLY WHEN THIS MACHINE REALLY HAS A VALUE, AND OMITTED IS "NOT REPORTED".** The
+ * server maps an absent key to a NULL column and `channel-ops-launch.ts › postureFacts` renders
+ * NULL as the words `not reported` — which is also what a desktop OLDER than this wave produces,
+ * and why the route's schema keeps all three OPTIONAL (INVARIANTS §13: an older peer must still
+ * be able to decide). Sending `''` would be this machine claiming to report and reporting nothing.
+ * ⚠ **NARROWED TO THE FROZEN ENUMS HERE**, as `directiveFrom` narrows the request pair: a mode
+ * outside the list would pass zod and hit the column CHECK — a decide refused AT REST for a
+ * launch that really happened.
+ * ⚠ `appliedChain` IS A BOOLEAN AND `false` IS A REPORT, NOT A SILENCE, hence `typeof` rather than
+ * truthiness: "this session may NOT launch workers" is the fact that stops an orchestrator
+ * planning for them, and a `||` would delete it — the collapse that made `chain: false`
+ * unhonourable on the way IN.
  */
 function decideBody(directiveId, outcome) {
   const o = outcome || {};
   const agentId = String(o.agentId || '');
   if (agentId) {
-    return { directiveId: String(directiveId || ''), status: STATUS_LAUNCHED, agentId: agentId };
+    const body = { directiveId: String(directiveId || ''), status: STATUS_LAUNCHED, agentId: agentId };
+    if (TOOL_MODES.indexOf(o.appliedTools) !== -1) body.appliedTools = o.appliedTools;
+    if (MESSAGE_MODES.indexOf(o.appliedMessages) !== -1) body.appliedMessages = o.appliedMessages;
+    if (typeof o.appliedChain === 'boolean') body.appliedChain = o.appliedChain;
+    return body;
+  }
+  // ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). ORDER MATTERS AND IS THE WHOLE
+  // CORRECTNESS OF THIS FUNCTION: `agentId` is checked FIRST, so a launch can
+  // never fall into this branch, and `done` is checked before the refusal
+  // fallthrough, so an end that succeeded is never reported as `no-bridge`.
+  // ⚠ IT CARRIES NO ID, deliberately — the row already NAMES its target, and a
+  // second id here would be a field this machine could get wrong about a row it
+  // did not write. The route's schema has no field for one.
+  if (o.done === true) {
+    const body = { directiveId: String(directiveId || ''), status: STATUS_DONE };
+    // ⚠ THE ECHO RIDES A `done` TOO (2026-09-02), and the column is NOT kind-scoped precisely
+    // so it can (`20260910120000_…_posture.sql` §5 asserts that). `set_agent_mode` is the one
+    // non-launch kind that settles a posture, and it was answering `taken` with its clamp
+    // visible only in the operator's log. ⚠ NARROWED to the frozen enums, like the launched
+    // branch: a mode outside the list passes zod and is refused by the column CHECK at rest.
+    // ⚠ NO `appliedChain` — a re-posture starts nothing and decides no chaining.
+    if (TOOL_MODES.indexOf(o.appliedTools) !== -1) body.appliedTools = o.appliedTools;
+    if (MESSAGE_MODES.indexOf(o.appliedMessages) !== -1) body.appliedMessages = o.appliedMessages;
+    return body;
   }
   return {
     directiveId: String(directiveId || ''),
@@ -246,19 +366,32 @@ function decideBody(directiveId, outcome) {
 // ─── END LAUNCH-DIRECTIVE-WIRE ───────────────────────────────────────────────────────────
 
 module.exports = {
+  // ⚠ THE VOCABULARY IS RE-EXPORTED VERBATIM from `launch-directive-vocab.js` — see the require
+  // above. Every address a caller or a test already used is unchanged by the 2026-09-02 split.
   DIRECTIVE_TABLE,
   ROUTES,
   STATUSES,
   STATUS_PENDING,
   STATUS_CLAIMED,
   STATUS_LAUNCHED,
+  STATUS_DONE,
   STATUS_REFUSED,
   STATUS_EXPIRED,
+  KINDS,
+  KIND_LAUNCH,
+  KIND_END,
+  KIND_RENAME,
+  KIND_SET_MODE, // 2026-09-01: the posture verb — the one non-launch kind the toggle gates
+  KINDS_NEEDING_LAUNCH_CONSENT,
+  TOOL_MODES,
+  MESSAGE_MODES,
+  AGENT_ID_RE,
   REFUSAL_REASONS,
   REQUEST_KEYS,
   RESPONSE_KEYS,
   GOAL_MAX,
   TEMPLATE_NAME_MAX,
+  TARGET_NAME_MAX,
   directiveFrom,
   refusalFor,
   claimBody,

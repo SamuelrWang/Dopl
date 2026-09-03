@@ -7,13 +7,22 @@
  * watches a channel without busy-looping.
  */
 import { MemberMethods } from "./client-members.js";
+import type { AccountMessagesOptions, AccountMessagesPage, AccountStatus, AccountStatusOptions } from "./account-types.js";
 import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, ThreadMode, WorkspaceAwaitResult } from "./channel-types.js";
-import type { LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
+import type { AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
 export declare class ChannelMethods extends MemberMethods {
     listChannels(opts?: {
         includeArchived?: boolean;
     }): Promise<Channel[]>;
+    /**
+     * ⚠ ACCOUNT-WIDE AND USER-SCOPED — every channel the caller is in, across
+     * every workspace AND every home-channel container. It ENUMERATES and is not
+     * narrowed here; see `channel-account.ts`'s header for the container-lock
+     * caveat that applies to both of these.
+     */
+    getAccountStatus(opts?: AccountStatusOptions): Promise<AccountStatus>;
+    readAccountMessages(opts: AccountMessagesOptions): Promise<AccountMessagesPage>;
     getChannel(channelId: string): Promise<Channel>;
     createChannel(input: ChannelCreateInput): Promise<Channel>;
     /** ⚠ `infoCard` ONLY — see `channel.ts › updateChannel` for why the other
@@ -37,6 +46,11 @@ export declare class ChannelMethods extends MemberMethods {
      *  may refuse with one of six words, and `offline: true` means nothing was
      *  even filed. There is no operator argument, deliberately. */
     createLaunchDirective(input: LaunchDirectiveCreateInput): Promise<LaunchDirectiveCreated>;
+    /** END or RENAME one of the operator's OWN running agents (2026-09-01).
+     *  ⚠ THE SAME MAILBOX as a launch, a different `kind` — so the answer is a
+     *  `LaunchDirective` and `getLaunchDirective` polls it. ⚠ No launch toggle
+     *  applies to these two; do not tell a caller to turn one on. */
+    createAgentDirective(input: AgentDirectiveCreateInput): Promise<AgentDirectiveCreated>;
     /** Poll one launch directive. ⚠ Coarse (1-2s) — see `channel.ts`. */
     getLaunchDirective(id: string): Promise<LaunchDirective>;
     /** DIRECT one of the operator's OWN running agents, privately (2026-08-31).

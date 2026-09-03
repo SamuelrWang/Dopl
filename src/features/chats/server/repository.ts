@@ -1,8 +1,34 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { readClient } from "@/shared/supabase/caller-client";
 import type { Database } from "@/shared/supabase/types";
 import type { ChatFolderRow, ChatMessageRow, ChatRow, ProfileRef } from "./dto";
 import { CHAT_LIST_LIMIT } from "../constants";
+
+/**
+ * Raw I/O for chats, their transcripts and their folders.
+ *
+ * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 2
+ * (Wave B B12); `knowledge/server/repository-bases.ts` states the same split for
+ * phase 1. `readClient()` is the CALLER's client when `RLS_CALLER_SCOPED_READS`
+ * is on and `supabaseAdmin()` otherwise, so with the flag off this file behaves
+ * exactly as it did.
+ *
+ *   * **A read that answers "what may this caller see" takes `readClient()`,**
+ *     and the row filter becomes `chats_owner_select` + `chats_member_select` —
+ *     BOTH restated onto `dopl_chat_readable()` in
+ *     `20260921120000_rls_phase2_policies`, because permissive policies are
+ *     OR-ed and repairing one of a pair changes nothing. That predicate equals
+ *     `service-shared.ts › canSeeChat`.
+ *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`** and says
+ *     so at the call site: re-export idempotency, transcript LENGTH after a
+ *     write, and the folder-propagation target set are not "what may this caller
+ *     see" and would answer wrongly if they were.
+ *   * **A read of a table this slice does NOT cover keeps `supabaseAdmin()`**
+ *     too — `chat_folders` and `profiles` are not among the seven.
+ *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
+ *     until RLS plan phase 4.
+ */
 
 type ChatUpdate = Database["public"]["Tables"]["chats"]["Update"];
 
@@ -39,7 +65,7 @@ export async function listVisibleChats(
   userId: string,
   since: string | null = null
 ): Promise<{ rows: ChatRowWithCount[]; truncated: boolean }> {
-  const db = supabaseAdmin();
+  const db = readClient();
   let query = db
     .from("chats")
     .select(CHAT_SELECT)
@@ -70,7 +96,7 @@ export async function countHiddenChats(
   userId: string,
   since: string
 ): Promise<number> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { count, error } = await db
     .from("chats")
     .select("*", { count: "exact", head: true })
@@ -87,7 +113,7 @@ export async function findChatById(
   workspaceId: string,
   chatId: string
 ): Promise<ChatRowWithCount | null> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("chats")
     .select(CHAT_SELECT)
@@ -103,6 +129,11 @@ export async function findChatById(
 // ⚠ Deliberately does NOT filter `deleted_at`: the (workspace_id, owner_id,
 // client_session_id) unique index spans trashed rows, so a re-export must
 // find a soft-deleted match and revive it rather than collide.
+// ⚠ SERVICE ROLE ON PURPOSE — this is the re-export IDEMPOTENCY lookup, a
+// SYSTEM question about that unique index. Scoped to the caller it would miss a
+// row the caller may not read and the next insert would hit the index instead
+// of reviving; a shared credential re-exporting its own prior session is the
+// case that finds it first.
 export async function findChatByClientSession(
   workspaceId: string,
   ownerId: string,
@@ -158,7 +189,7 @@ export async function hardDeleteChat(workspaceId: string, chatId: string): Promi
 // ─── Messages ───────────────────────────────────────────────────────
 
 export async function listMessages(chatId: string): Promise<ChatMessageRow[]> {
-  const db = supabaseAdmin();
+  const db = readClient();
   const { data, error } = await db
     .from("chat_messages")
     .select("*")
@@ -168,6 +199,10 @@ export async function listMessages(chatId: string): Promise<ChatMessageRow[]> {
   return data ?? [];
 }
 
+/** ⚠ SERVICE ROLE ON PURPOSE — the transcript LENGTH returned by a write
+ *  (`mergeMessages`, `appendMessagesTx`), not a projection of what the caller
+ *  may read. A caller-scoped count would report a shorter transcript than the
+ *  one just written. */
 export async function countMessages(chatId: string): Promise<number> {
   const db = supabaseAdmin();
   const { count, error } = await db
@@ -352,7 +387,11 @@ export async function updateFolder(
   return data;
 }
 
-/** Ids of every ACTIVE chat filed in the folder — the propagation target set. */
+/** Ids of every ACTIVE chat filed in the folder — the propagation target set.
+ *  ⚠ SERVICE ROLE ON PURPOSE: the folder OWNER re-scopes every chat filed in it,
+ *  including ones they cannot read, and a target set narrowed to what they can
+ *  see would leave rows behind at the old scope — a partial re-share that
+ *  reports itself as success. */
 export async function listChatIdsInFolder(folderId: string): Promise<string[]> {
   const db = supabaseAdmin();
   const { data, error } = await db

@@ -161,6 +161,20 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     // desktop that predates the field from a blank launch; only the DIRECTIVE
     // lane needs that distinction (spec E-4) and it is a different table.
     template_name: entry.templateName ?? null,
+    // ── HEALTH (2026-09-01, 20260909120000) ─────────────────────────────────
+    // ⚠ `?? null` HERE TOO, AND NEVER `?? 0` / `?? false`. An older desktop
+    // omits every one of these keys; the columns then store NULL, which the
+    // render prints nothing for. A `?? 0` on `denied_calls` would manufacture
+    // "nothing has been refused to this agent" — the precise claim these columns
+    // exist to stop the surface making — and `?? false` on `stale` would assert
+    // a health verdict on behalf of a machine that never ran the check.
+    turns: entry.turns ?? null,
+    tokens_delta: entry.tokensDelta ?? null,
+    stale: entry.stale ?? null,
+    denied_calls: entry.deniedCalls ?? null,
+    last_denied_tool: entry.lastDeniedTool ?? null,
+    last_wake_seq: entry.lastWakeSeq ?? null,
+    last_wake_at: entry.lastWakeAt ?? null,
     // 2026-08-31 (20260905120000): the operator-given agent name — peer-visible
     // by design, `?? null` on the rollout contract every optional field here has.
     display_name: entry.displayName ?? null,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/shared/supabase/admin";
 import { cookies } from "next/headers";
 import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
-import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
+import { ensurePersonalContainer } from "@/features/workspaces/server/service";
 import { webPostAuthDestination } from "@/shared/lib/url/post-auth-landing";
 
 export async function GET(request: NextRequest) {
@@ -47,8 +47,10 @@ export async function GET(request: NextRequest) {
             });
           }
 
-          // Idempotent — a returning user pays one cheap SELECT.
-          await ensureDefaultWorkspace(user.id);
+          // The caller's HOME, and the only container signup mints — ruling
+          // B10 leaves nothing else to provision. Idempotent: a returning user
+          // pays one advisory-locked SELECT.
+          await ensurePersonalContainer(user.id);
         }
       } catch (err) {
         // Swallow: event/provisioning failures must not break sign-in.

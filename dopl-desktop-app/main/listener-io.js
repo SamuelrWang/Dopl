@@ -30,8 +30,7 @@ const avatarUrlCache = new Map(); // userId -> avatarUrl (item 1/5/6), refreshed
  * dev incident): no cap, no TTL, no `delete`, no `clear` — every member of every workspace ever
  * enumerated stayed for the life of the process. Every comparable structure here already carries
  * one (`avatar-cache.js › MAX_CACHE`, `legacy-threads.js › LEGACY_THREAD_CAP`,
- * `session-wake-tiers.js › MAX_CHANNELS`, `version-skew.js › SEEN_CAP`, `agent-names.js ›
- * MAX_NAMES`). ⚠ NOT what ate the 17 GB — that was `session-narration.js`'s per-flush fan-out
+ * `version-skew.js › SEEN_CAP`, `agent-names.js › MAX_NAMES`). ⚠ NOT what ate the 17 GB — that was `session-narration.js`'s per-flush fan-out
  * and abandoned `fetch` bodies — and bounded anyway, so nobody has to re-derive "how many members
  * could this operator see" the next time a workspace is added.
  * ⚠ OLDEST-OUT (insertion order) IS THE RIGHT EVICTION rather than an LRU because

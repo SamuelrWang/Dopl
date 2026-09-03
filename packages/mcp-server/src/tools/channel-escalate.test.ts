@@ -1,6 +1,11 @@
 /**
- * `dopl_channel(op="escalate")` — structured escalation cards, and the four
- * rules that make one worth having.
+ * `dopl_channel(op="send", kind="decision")` — structured escalation cards, and
+ * the four rules that make one worth having.
+ *
+ * ⚠ THE OP COLLAPSED INTO A `kind` (B8, 2026-09-02) AND TWO PARAMS WENT WITH IT:
+ * the ISSUE is the send's `summary` and the CONTEXT is its `body`, because the
+ * surface already had both fields under other names. Nothing below is weaker for
+ * it — the payload the seam builds is the same validated `escalation` object.
  *
  * ⚠ THE HEADLINE ASSERTION IS THAT THE BODY CARRIES EVERYTHING. The card is
  * `kind='message'` plus reserved `metadata.escalation`, and four live surfaces
@@ -69,11 +74,16 @@ const OPTIONS = [
   { label: "Wait for review", consequence: "Blocked until tomorrow." },
 ];
 
+/** The ISSUE and the CONTEXT, under the names the send lane publishes. */
+const ISSUE = "Ship the migration now or wait?";
+const CONTEXT = "It is additive and reversible.";
+
 const ASK = {
-  op: "escalate",
+  op: "send",
+  kind: "decision",
   channel: "with-dana",
-  issue: "Ship the migration now or wait?",
-  context: "It is additive and reversible.",
+  summary: ISSUE,
+  body: CONTEXT,
   options: OPTIONS,
   recommendation: { index: 0, why: "Reversible, nothing depends on it." },
 };
@@ -83,8 +93,8 @@ describe("the card DEGRADES — the body carries the whole question", () => {
     const post = vi.fn(async () => POSTED);
     await run(channelStub({ postChannelMessage: post }), ASK);
     const body = post.mock.calls[0][1].body as string;
-    expect(body).toContain("Ship the migration now or wait?");
-    expect(body).toContain("It is additive and reversible.");
+    expect(body).toContain(ISSUE);
+    expect(body).toContain(CONTEXT);
     expect(body).toContain("Ship now");
     expect(body).toContain("Live in ten minutes.");
     expect(body).toContain("Wait for review");
@@ -101,8 +111,8 @@ describe("the card DEGRADES — the body carries the whole question", () => {
     await run(channelStub({ postChannelMessage: post }), ASK);
     const input = post.mock.calls[0][1] as Record<string, unknown>;
     expect(input.escalation).toEqual({
-      issue: ASK.issue,
-      context: ASK.context,
+      issue: ISSUE,
+      context: CONTEXT,
       options: OPTIONS,
       recommendation: ASK.recommendation,
     });
@@ -125,6 +135,12 @@ describe("the card DEGRADES — the body carries the whole question", () => {
       // Even if a caller supplies one, the routing seam does not forward it.
       to: "dana@example.com",
     });
+    // ⚠ RE-POINTED AT THE FIELD THAT REPLACED IT (B8): `to` is now a UNION
+    // resolved SERVER-side and goes out as the message input's own `to`, so
+    // `toUserId` no longer exists on the wire shape and asserting its absence
+    // would pass whatever the seam forwarded. The claim is unchanged — the
+    // decision lane routes no recipient at all.
+    expect(post.mock.calls[0][1].to).toBeUndefined();
     expect(post.mock.calls[0][1].toUserId).toBeUndefined();
   });
 });
@@ -139,7 +155,7 @@ describe("the option bounds refuse in the direction that says what to do", () =>
     expect(post).not.toHaveBeenCalled();
     expect(text).toContain("Nothing was posted");
     expect(text).toContain("one option is not a question");
-    expect(text).toContain('op="milestone"');
+    expect(text).toContain('kind="milestone"');
   });
 
   it("SEVEN options are refused, and the remedy is to collapse rather than to act", async () => {
@@ -173,18 +189,62 @@ describe("the option bounds refuse in the direction that says what to do", () =>
   });
 });
 
-describe("the result says where the answer arrives", () => {
-  it("names the channel await and states it is NOT private", async () => {
-    // Without this an agent taught by `launch_agent`'s bullet polls a surface
-    // that has nothing to give it, forever.
+/**
+ * ⚠ THE THREE APPENDED PARAGRAPHS ARE GONE (T10, 2026-09-02) — what a card is,
+ * where the answer arrives, and that the first answer wins. `opEscalate` no
+ * longer wraps `opPost`'s result; it rides the shared fact line with its own
+ * verb and two extra fields.
+ *
+ * ⚠ AND THIS IS A HALF-GUARD, DELIBERATELY, BECAUSE THE OTHER HALF IS MISSING.
+ * The rule for every "moved, not deleted" case in this tier is: assert the
+ * paragraph is out of the RESULT **and** the sentence is still in
+ * `channel-doctrine.ts`. `channel-ops-escalate.ts`'s own comment says all three
+ * moved there — measured 2026-09-02, the doctrine contains no escalation section
+ * at all (no "escalat", no "first one wins", no "card ... buttons"). So the
+ * terseness half is pinned below and the doctrine half is REPORTED rather than
+ * softened into something weaker that would pass. Add the section and this block
+ * gets its second assertion.
+ */
+describe("the result reports the card it filed, not what a card is", () => {
+  it("opens on its OWN verb and counts the options it validated", async () => {
+    // ⚠ `milestone` and `escalate` both delegate to `opPost` rather than growing
+    // a second delivery path, so a result that opened `posted` for all three
+    // would report the wrong ACT — the one kind of wrong nothing downstream can
+    // detect. The two extra fields are things only THIS call knows: how many
+    // options were filed, and whether a recommendation went with them.
     const text = await run(channelStub(), ASK);
-    expect(text).toContain("NOT PRIVATELY");
-    expect(text).toContain('op="await"');
+    expect(text.startsWith("escalated ")).toBe(true);
+    expect(text).toContain("options=2");
+    expect(text).toContain("recommended=0");
   });
 
-  it("forbids a second card for the same question", async () => {
+  it("⚠ REPORTS THE TAG, which is what decides whether the card is SEEN", async () => {
+    // ⚠ A CARD NOBODY IS TAGGED IN IS A CARD NOBODY SEES — the @-tag is what puts
+    // it in a person's inbox, and an exact-match resolver posts a mistyped tag
+    // successfully and reaches nobody. `tags=0/1` says so in four characters and
+    // is the field on this result that matters most.
+    const text = await run(channelStub(), {
+      ...ASK,
+      body: "@samue the rollback window closes at 02:00.",
+    });
+    expect(text).toContain("tags=0/1");
+  });
+
+  it("does not re-teach where the answer arrives, or that the first one wins", async () => {
+    // ⚠ TERSENESS GUARD. Both claims are true of EVERY escalation — standing
+    // doctrine, not a report on this one — so neither may grow back onto a result
+    // an orchestrator reads in a loop. Without this the prose returns one honest
+    // sentence at a time.
     const text = await run(channelStub(), ASK);
-    expect(text).toContain("ONE ANSWER, FIRST ONE WINS");
+    expect(text.split("\n")).toHaveLength(1);
+    expect(text).not.toContain("NOT PRIVATELY");
+    expect(text).not.toContain("ONE ANSWER, FIRST ONE WINS");
+    expect(text).not.toContain("ESCALATION CARD");
+    // ⚠ What the result DOES hand back is the cursor to watch on, which is the
+    // operative half of "where the answer arrives" and costs eight characters.
+    // Without it an agent taught by `manage(action="launch")`'s bullet polls a surface that
+    // has nothing to give it, forever.
+    expect(text).toContain("hold=since:42");
   });
 });
 

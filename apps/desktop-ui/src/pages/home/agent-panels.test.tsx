@@ -262,9 +262,13 @@ describe("the pane token", () => {
    * state can only survive a switch if the instance did, so a reset `scope` and
    * a torn-down dialog ARE the identity claim. What made it a HIGH rather than
    * a cosmetic bug is what the survivors point at — `ContainerTemplateEditor`
-   * and `CopyToChannelDialog` take the target workspace as a PROP, so a dialog
-   * held open across the switch silently retargets at the NEW container and its
-   * write SUCCEEDS there: no 404, no rollback, the wrong relationship.
+   * and the share dialog take their target as a PROP, so one held open across
+   * the switch silently retargets at the NEW room and its write SUCCEEDS there:
+   * no 404, no rollback, the wrong relationship. ⚠ **THE TARGET IS A CHANNEL ID
+   * SINCE 2026-09-02 (slice B15), NOT A CONTAINER ID** — the copy dialog became
+   * `agent-share.tsx › ShareIntoChannelDialog` and writes a grant — and the
+   * defect is IDENTICAL in shape, which is why this case moved with it rather
+   * than being deleted.
    */
   it("TEARS THE PANE DOWN on a channel switch — no held state retargets", async () => {
     twoChannels();
@@ -273,21 +277,23 @@ describe("the pane token", () => {
     await screen.findByText("Renewal chaser");
 
     // ⚠ ONE PIECE OF HELD STATE SINCE 2026-08-27, NOT TWO. The scope pill was
-    // the second, and it is gone — which makes the copy dialog the whole of
-    // this pin, and the sharper half anyway: it is the one that holds a
-    // WORKSPACE ID.
+    // the second, and it is gone — which makes the share dialog the whole of
+    // this pin, and the sharper half anyway: it is the one that holds the id it
+    // will write against.
     await screen.findByText("Fundraise analyst");
-    fireEvent.click(screen.getByRole("button", { name: "Use in this channel" }));
-    await screen.findByRole("button", { name: "Make a copy" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Share into this channel" })
+    );
+    await screen.findByRole("button", { name: "Share" });
 
     fireEvent.click(screen.getByText("Dana Ruiz"));
     await screen.findByText("Dana's assistant");
 
     // The dialog went with the pane it belonged to. Held across the switch it
-    // would still be open — now addressing Dana's container, where its write
+    // would still be open — now addressing Dana's channel, where its write
     // would SUCCEED.
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Make a copy" })).toBeNull()
+      expect(screen.queryByRole("button", { name: "Share" })).toBeNull()
     );
   });
 });

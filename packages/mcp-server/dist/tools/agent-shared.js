@@ -1,7 +1,7 @@
 "use strict";
 /**
- * Shared resolution + rendering for `dopl_agent` / `dopl_agent_admin`. The
- * registrar (`agent.ts`) routes; the op modules render.
+ * Shared resolution + rendering for `dopl_agent`. The registrar (`agent.ts`)
+ * routes; the op modules render.
  *
  * ⚠ THE `agent-` FILENAME PREFIX IS THE CONTRACT — `tool-group-files.ts` groups
  * a tool's files on the registrar's stem, and a handler in an unprefixed file is
@@ -26,7 +26,7 @@
  * §5A), and this surface must not rebuild on a new door what the route closed.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TEMPLATES_SCOPE_NOTE = exports.NO_NAME = void 0;
+exports.TEMPLATES_SCOPE_NOTE = exports.NO_NAME = exports.VISIBILITY_ENUM_MESSAGE = exports.TEMPLATE_VISIBILITY_VALUES = exports.PRIVATE_VISIBILITY_DENIED_CODE = void 0;
 exports.resolveTemplateRef = resolveTemplateRef;
 exports.resolveTemplateOr = resolveTemplateOr;
 exports.isErr = isErr;
@@ -38,6 +38,43 @@ exports.sharedCredentialPrivateDenied = sharedCredentialPrivateDenied;
 exports.templateRow = templateRow;
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
+/**
+ * The server's 403 code for "a credential that may be shared between humans
+ * cannot own a PRIVATE row". ⚠ ONE SPELLING, shared with the knowledge surface
+ * (`knowledge-shared.ts › sharedCredentialPrivateBaseDenied`) — both create
+ * paths can raise it and neither may guess at the string.
+ */
+exports.PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
+/**
+ * 🔒 THE VISIBILITY AXIS THIS SURFACE OFFERS — **TWO values, not three.**
+ *
+ * `TemplateVisibility` in `src/features/agent-templates/types.ts` still carries
+ * `'team'`, the column still stores it and the route still accepts it from the
+ * app. A8 takes the axis off the MCP SURFACE ONLY, so no agent is ever TAUGHT a
+ * third option: measured in production 2026-09-02 there are **0 team-visibility
+ * templates and 0 `agent_template_teams` rows**, and an axis nothing uses is an
+ * enum arm a model still has to read, weigh and occasionally pick. Dropping the
+ * column, the two tables, the trigger and the app's second editor is B4.
+ *
+ * ⚠ ONE DECLARATION, read by the tool's enum ({@link agent.ts}), the list
+ * grouping ({@link agent-ops-read.ts}) and the write input type
+ * ({@link agent-ops-write.ts}) — a second list is how an enum and its headings
+ * drift apart in silence.
+ *
+ * ⚠ IT NARROWS WHAT IS OFFERED, NOT WHAT EXISTS. A row the server hands back at
+ * a visibility absent from this list is still RENDERED (see `opList`); filtering
+ * the read to match the write enum would drop rows instead of retiring an axis.
+ */
+exports.TEMPLATE_VISIBILITY_VALUES = ["private", "workspace"];
+/**
+ * The one-line refusal for a retired `visibility`, raised by zod as `-32602`
+ * before any round trip — the same argument `shelf.ts` makes for its enum.
+ *
+ * ⚠ IT NAMES THE RETIRED VALUE. zod's own "Invalid option: expected one of …"
+ * reads as a typo and invites a retry with the same word; saying the option is
+ * gone is what stops the second call.
+ */
+exports.VISIBILITY_ENUM_MESSAGE = 'visibility must be "private" or "workspace", and nothing was written — "team" is no longer a sharing option on this surface.';
 /** A template with nothing nameable left after neutralization. */
 exports.NO_NAME = "`(unnamed)`";
 /** ⚠ Local, like `channel-addressing.ts` and `ontology-ops-write.ts` — three
@@ -153,12 +190,8 @@ function templateWriteDenied(e) {
  * The refusal here must not soften that into a "forbidden".
  */
 function knowledgeBaseNotAttachable(e) {
-    if (typeof e !== "object" ||
-        e === null ||
-        e.status !== 404 ||
-        e.code !== "KNOWLEDGE_BASE_NOT_FOUND") {
+    if (!(0, respond_js_1.isApiError)(e, 404, "KNOWLEDGE_BASE_NOT_FOUND"))
         return null;
-    }
     return (0, respond_js_1.err)(`At least one knowledge base id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops a template laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. Check ids with dopl_kb(op="list_bases").`);
 }
 /**
@@ -168,42 +201,33 @@ function knowledgeBaseNotAttachable(e) {
  * credential is in play.
  */
 function sharedCredentialPrivateDenied(e) {
-    if (typeof e !== "object" ||
-        e === null ||
-        e.status !== 403 ||
-        e.code !== "WORKSPACE_KEY_PRIVATE_VISIBILITY") {
+    if (!(0, respond_js_1.isApiError)(e, 403, exports.PRIVATE_VISIBILITY_DENIED_CODE))
         return null;
-    }
-    const msg = e.apiMessage;
-    return (0, respond_js_1.err)(`${typeof msg === "string" && msg ? msg : "This credential cannot own a private agent template."} Nothing was created. A credential that may be shared between humans has no "private to me" to write to — create it with visibility="workspace", or reconnect with a personal credential.`);
+    return (0, respond_js_1.err)(`${(0, respond_js_1.apiMessage)(e) ?? "This credential cannot own a private agent template."} Nothing was created. A credential that may be shared between humans has no "private to me" to write to — create it with visibility="workspace", or reconnect with a personal credential.`);
 }
 /** One template rendered as a list row. ⚠ Every displayed field is a VALUE
  *  spliced into a line we wrote — name and description are length-bounded only,
  *  so a newline in either would otherwise start a row of its own. */
-function templateRow(t, personal = false) {
+function templateRow(t) {
     const desc = t.description ? `\n  ${(0, narration_js_1.inlineOr)(t.description, "")}` : "";
     const model = t.model ? ` · model ${(0, narration_js_1.inlineOr)(t.model, "`(unnamed)`")}` : "";
     const kbs = t.knowledgeBases.length > 0
         ? ` · ${t.knowledgeBases.length} knowledge base${t.knowledgeBases.length === 1 ? "" : "s"}`
         : "";
-    // ⚠ Present only when the SIBLING KEY says so. An unlabelled row is "workspace
-    // shelf, or a server that does not say" — never asserted as either.
-    const shelf = personal ? " · personal" : "";
-    return `- ${(0, narration_js_1.inlineOr)(t.name, exports.NO_NAME)} (id: \`${t.id}\` · ${t.visibility}${model}${kbs}${shelf})${desc}`;
+    return `- ${(0, narration_js_1.inlineOr)(t.name, exports.NO_NAME)} (id: \`${t.id}\` · ${t.visibility}${model}${kbs})${desc}`;
 }
 /**
  * ⚠ WHOSE VIEW THIS IS, stated ON THE RESULT and not only in the description.
  * `listTemplates` is filtered server-side by `canSeeTemplate`, so another
- * member's private templates and team templates the caller has no grant on are
- * simply absent — an untraced filter makes a four-row heading read as the
- * workspace's roster.
+ * member's private templates, and any the caller has no grant on, are simply
+ * absent — an untraced filter makes a four-row heading read as the workspace's
+ * roster.
  *
- * ⚠ AND THE SHELF IS NOT ON THE ROW. `home_scoped` is deliberately absent from
- * `server/dto.ts › AGENT_TEMPLATE_COLS` so no client can re-implement the fence;
- * the `personal` marker {@link templateRow} prints comes from the response's
- * SIBLING KEY (`homeScopedTemplateIds`), never from the row. Which is why the
- * note below states what an UNMARKED row means — workspace shelf, or a server
- * that does not send the key — rather than letting an absent label be read as an
- * assertion.
+ * ⚠ **THE `· personal` MARKER LEFT ON 2026-09-02 (slice B15, ruling B10).** It
+ * rode a `homeScopedTemplateIds` SIBLING KEY over the `home_scoped` boolean, and
+ * that column is dropped: a personal template is an ordinary row in the caller's
+ * own `kind='personal'` container, so every row a single list returns is on the
+ * same shelf and a per-row label says nothing. **The tenancy is what answers
+ * now**, and the status footer already names it.
  */
-exports.TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE. Another member's private templates, and team templates you have no grant on, are not listed — this is your view, not the workspace's roster. A row marked \`personal\` is on your own /home shelf and does not appear on the workspace Agents page; an UNMARKED row is on the workspace shelf, or on a server too old to say._`;
+exports.TEMPLATES_SCOPE_NOTE = `_Agent templates you can SEE here. Another member's private templates, and any you have no grant on, are not listed — this is your view, not the workspace's roster._`;

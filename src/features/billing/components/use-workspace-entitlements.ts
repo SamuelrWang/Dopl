@@ -9,7 +9,7 @@ import { MONTHLY_MCP_CREDITS } from "../credits";
 /**
  * Client mirror of `/api/billing/status` (see `server/entitlements.ts`) — THE
  * single billing read for every surface. Omitting `workspaceId` lets the
- * endpoint fall back to the caller's default workspace.
+ * endpoint resolve the caller's own container.
  *
  * Pro = flat $5.99/mo, single-member only; Team = $7.99 per seat per month.
  */

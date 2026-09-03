@@ -4,6 +4,39 @@ A running log of bugs, conflicts, friction, and suspicious patterns discovered d
 
 See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture.
 
+**ALLOCATING AN ID — ⚠ FROM THE HIGHEST CLAIMED ON ANY LIVE BRANCH, NEVER FROM `master`'s.**
+⚠ *Deliberately BOLD TEXT and not an `##` heading:* `check-doc-refs.mjs` treats everything above
+the first `##` as this file's HEADER — the block that records which ids were deleted and may
+still be referenced — so a heading here truncates that record and turns hundreds of legitimate
+references into dangling ones. (Measured: it did, the first time this section was written.)
+
+**This file is an append-only shared counter, and parallel branches make "the next number" a
+question `master` cannot answer.** Established 2026-09-01, the hard way: master's highest id was
+`F-403`, and THREE branches of one wave then allocated `F-404` onward independently — the P0 bug
+tier (three ids), the desktop-lifecycle tier (three DIFFERENT findings under the SAME three ids),
+and the orchestrator-surface tier (two more). Six entries under three ids; only one set could
+survive the merge, and the integration had to renumber two whole tiers and every reference to them.
+
+Re-derive across every live branch before you file, never from `master` and never from memory:
+
+```
+for b in $(git branch --format='%(refname:short)'); do
+  git show "$b:docs/REFACTOR-FINDINGS.md" 2>/dev/null | grep -oE '^### F-[0-9]{3}'
+done | grep -oE 'F-[0-9]{3}' | sort -u | tail -1
+```
+
+- **Ids are never reused and never reassigned once merged.** Two entries under one id makes both
+  unreadable, which is the whole cost being avoided here. Gaps are fine — `F-160`, `F-161` and
+  `F-162` have been permanently unused since 2026-08-08.
+- **Renumber on the BRANCH, before the merge, in one commit that also moves every reference** —
+  `docs/`, code comments, and any test that pins an id. `scripts/check-doc-refs.mjs` resolves
+  `F-NNN` refs in the SOURCE trees too, so a half-done renumber fails the gate rather than rotting.
+- ⚠ **The gate cannot catch a COLLISION, only a DANGLING id.** Two headings under one number both
+  resolve, so `check-doc-refs` passes on exactly the state this rule exists to prevent. The rule is
+  the only thing standing between the wave and that outcome.
+- ⚠ **A note about a collision may not CITE the colliding id in `F-NNN` notation** if that id lives
+  only on another branch — the gate would resolve it here and fail. Describe it by number-block.
+
 **Pruned 2026-07-17:** a three-agent audit verified every entry against the live tree; resolved/obsolete findings were removed so this file holds only OPEN debt. Removed IDs (details in git history of this file): F-001–F-015, F-018, F-019, F-021, F-022, F-024, F-025, F-028–F-032, F-034, F-039. IDs are never reused. The second of two entries that both carried "F-038" was renumbered to F-040.
 
 **Pruned 2026-07-31:** every remaining entry was re-verified AGAINST THE CODE AT HEAD (not against commit messages — several entries had been written by agents that were mistaken). Deleted as genuinely resolved: F-020, F-043, F-045 (body; one follow-up kept), F-046, F-047, F-056, F-057, F-062, F-069, F-082, F-084, F-086, F-087, F-088, F-089, F-090, F-095. Deleted as STALE rather than resolved — the code they describe no longer exists: **F-065** and **F-066**. **F-041** was deleted as superseded by F-093. Entries that were only PARTLY resolved were rewritten down to the open half rather than deleted (F-042 item 3, F-092, F-093, F-094, F-096, F-098, F-099, F-100, F-101, F-102). IDs are never reused.
@@ -582,14 +615,14 @@ COMMIT;
 - Status: open (rule holding; **5-file backlog, down from 10**; the desktop cluster is now the worse half)
 
 ### F-096: Stale prose still describes the deleted `main/mcp-cli-entry.js` as live — and it SHIPS — ✅ RESOLVED 2026-08-30
-- Location: `packages/mcp-server/src/tools/channel-await-budget.ts:71`, its byte-identical committed build output `packages/mcp-server/dist/tools/channel-await-budget.js:74` and `.d.ts:69`, and `src/app/api/mcp/route.ts:171`
+- Location: `packages/mcp-server/src/tools/channel-hold-budget.ts › HOLD_CAP_MS`, its byte-identical committed build output `packages/mcp-server/dist/tools/channel-hold-budget.js` and `.d.ts:69`, and `src/app/api/mcp/route.ts:171`
 - Found during: Q9 follow-up (2026-07-31)
 - Severity: smell (prose that ships as part of the server)
 - Description: `main/mcp-cli-entry.js` rewrote the operator's own `~/.claude.json` — a file holding their `oauthAccount` credential block — to add a per-server `timeout`. Deleted 2026-07-31 for four reasons recorded in ENGINEERING §18. **The module is confirmed absent** and `dopl-desktop-app/test/sdk-mcp-token.test.mjs:264` asserts it. What remains is prose describing it as live, in one source file plus its `dist/` twins, which ship with the SERVER.
 - **Line numbers re-measured 2026-08-08 (all four had drifted).** Other surviving mentions are DELIBERATE and must not be "cleaned up": `dopl-desktop-app/main/mcp-config.js:13` and `main/mcp-cli-add.js:11` explain the removal; `test/sdk-mcp-token.test.mjs:251,257,260,264` assert it; `docs/ENGINEERING.md:567` records the reasoning.
-- Proposed resolution: fix-now — one sentence in `channel-await-budget.ts` plus one in the route, then `npm run build:packages`.
+- Proposed resolution: fix-now — one sentence in `channel-hold-budget.ts` plus one in the route, then `npm run build:packages`.
 - Status: open (prose only; rides the next build + push)
-- ⚠ **CLOSED 2026-08-30 — superseded:** the prose sweep shipped. `mcp-cli-entry` no longer appears anywhere in `packages/` (source or `dist/`) or `src/`, and `packages/mcp-server/src/tools/channel-await-budget.ts › AWAIT_HOLD_CAP_MS` states the CLI abort floor generically. The only surviving mentions are the four DELIBERATE ones this entry itself listed — `dopl-desktop-app/main/mcp-config.js › MCP_CLIENT_TIMEOUT_MS`, `main/mcp-cli-add.js`, `test/sdk-mcp-token.test.mjs`, `docs/ENGINEERING.md`.
+- ⚠ **CLOSED 2026-08-30 — superseded:** the prose sweep shipped. `mcp-cli-entry` no longer appears anywhere in `packages/` (source or `dist/`) or `src/`, and `packages/mcp-server/src/tools/channel-hold-budget.ts › HOLD_CAP_MS` states the CLI abort floor generically. The only surviving mentions are the four DELIBERATE ones this entry itself listed — `dopl-desktop-app/main/mcp-config.js › MCP_CLIENT_TIMEOUT_MS`, `main/mcp-cli-add.js`, `test/sdk-mcp-token.test.mjs`, `docs/ENGINEERING.md`.
 
 ### F-097: `POST` and `DELETE` on `/api/auth/mcp-device-token` disagree about an invalid `label`
 - Location: `src/app/api/auth/mcp-device-token/route.ts:24-32` (`readLabel`) vs `:87-92` (`RevokeSchema.safeParse`)
@@ -649,7 +682,7 @@ COMMIT;
 - Status: open (residual)
 
 ### F-105: Nothing ever closes a thread, and three mechanisms that key on thread status degrade as open threads pile up
-- Location: `src/features/channels/server/service-tasks.ts` (`closeTask`, the only writer of `status='closed'`); `server/repository-tasks.ts:71-82` (`listTasksByChannel` — no status filter, no limit); `server/service-writes-metadata.ts:135` (`candidates.length === 1`) and `:448` (the `taskMode` stamp, read at `dopl-desktop-app/main/trigger.js:289` and `main/session-dispatch.js:200`); the four copies of the await stop-rule — `packages/mcp-server/src/tools/channel-ops-write.ts:342`, `channel-description.ts:61`, `channel-ops-await.ts:122`, `channel-ops-threads.ts:194`
+- Location: `src/features/channels/server/service-tasks.ts` (`closeTask`, the only writer of `status='closed'`); `server/repository-tasks.ts:71-82` (`listTasksByChannel` — no status filter, no limit); `server/service-writes-metadata.ts:135` (`candidates.length === 1`) and `:448` (the `taskMode` stamp, read at `dopl-desktop-app/main/trigger.js:289` and `main/session-dispatch.js:200`); the four copies of the await stop-rule — `packages/mcp-server/src/tools/channel-ops-write.ts:342`, `channel-description.ts:61`, `channel-ops-hold.ts`, `channel-ops-threads.ts:194`
 - Found during: live observation, 2026-07-31 — ONE DM channel holding SIX open threads
 - Severity: bug (the accumulation is silent, and past two open threads in a pair it changes ROUTING, not just tidiness)
 - **All four surviving consequences re-verified line by line 2026-08-08; every line number in this entry is fresh.**
@@ -692,7 +725,7 @@ COMMIT;
 - Status: open
 
 ### F-109: The two-agent information-loss round — the five accepted residuals
-- Location: `src/features/channels/**`, `packages/mcp-server/src/tools/channel-ops-await.ts`, `scripts/dopl-channel-wait.sh`, `dopl-desktop-app/main/queued-notice.js`
+- Location: `src/features/channels/**`, `packages/mcp-server/src/tools/channel-ops-hold.ts`, `scripts/dopl-channel-wait.sh`, `dopl-desktop-app/main/queued-notice.js`
 - Found during: a live two-agent cross-machine stress test (2026-07-31)
 - Severity: bug (all six defects fixed)
 - **Rewritten down to the residuals 2026-08-08.** The fixes — `?thread=<id>` as a FILTER on the message read (deliberately moving NO read watermark, because the watermark is content-derived and monotonic so a filtered read would mark unrelated older messages seen); `closeTask` returning `{ thread, echoSeq }` as an ADDITIVE ENVELOPE KEY; the corrected `seq` documentation (the identity sequence is on the TABLE, so a channel's seqs are gappy — an agent reading a range as a count concludes it lost messages); and the background-shell wake — are in ENGINEERING §8.
@@ -949,12 +982,12 @@ COMMIT;
 - Status: open
 
 ### F-164: Two boot-chain follow-ups
-- Location: `apps/desktop-ui/src/pages/chats/index.tsx:49,56`; `apps/desktop-ui/src/components/settings-modal/settings-modal.tsx:64`; `src/app/api/workspaces/ensure-default/route.ts`
+- Location: `apps/desktop-ui/src/pages/chats/index.tsx:49,56`; `apps/desktop-ui/src/components/settings-modal/settings-modal.tsx:64`; the dedicated provisioning route under `src/app/api/workspaces/` (DELETED 2026-09-02 — see the follow-up below)
 - Found during: launch-readiness P0-2 (2026-08-07)
 - Severity: smell
 - **Rewritten down to the follow-ups 2026-08-08.** The collapse landed: launch → actionable screen is now `bridge.getAuthState()` (IPC, local, no network) → `POST /api/boot` → the page's own data. 5 round trips → 1.
 - **Two details of the client half are load-bearing and must not be "tidied":** `seedBootAnswer` seeds DURING RENDER, not in an effect (React runs child effects first, so `<Navigate>` and the `<Outlet/>` page would each dispatch their own request before a parent effect's seed landed), and it seeds only where nothing is cached, so a live answer is never clobbered by an older boot payload.
-- **Open follow-up — `/api/workspaces/ensure-default` now has no runtime caller in this repo.** It stays deployed on purpose: an older shipped DMG still calls it. **Delete it only alongside a minimum-version floor that excludes those builds.**
+- **Follow-up CLOSED BY DELETION 2026-09-02 (wave B B14), and the caveat this entry raised is NOT discharged — it is transferred to F-631.** The route went with the default-workspace concept (spec §3 row 14). This entry's own condition — *"delete it only alongside a minimum-version floor that excludes those builds"* — **was not met**, because that floor does not exist to add. What makes the deletion survivable is a different fact, and it is recorded rather than assumed: an older DMG calling it would now 404 at cold launch, so F-631 states the exposure and what would measure it.
 - **Open follow-up — the chats page and the settings modal still READ `resolve`/`me` directly.** They are free today because boot seeds their keys, but that is a CONVENTION, not a structure — both should move to `useWorkspaceRoute`.
 - Status: open
 
@@ -1476,6 +1509,8 @@ COMMIT;
 - **`src/shared/version/latest-release.test.ts › "honours an injected clock"`** — first flagged by the Phase 1 pass, reproduced at the wave-2 join. ⚠ **THE RATE CLAIM IS WITHDRAWN, 2026-08-18 (fix wave 3): "roughly 1 run in 2..3, INCLUDING in isolation" is UNREPRODUCED.** That figure came from a 1-fail/2-run sample, which cannot support a rate at all. **Re-measured: 7 consecutive isolated runs of `npx vitest run src/shared/version/latest-release.test.ts`, 26/26 tests passing every time — 0 failures in 7.** The review that prompted the re-measure got 7/7 as well, independently. **What is still open is the MECHANISM, not the rate:** the file does hold a module-level cache read against an injected clock, and nobody has shown that shape is safe — a 0/7 sample no more proves determinism than 1/2 proved a coin flip. **Do not close this on the passing runs, and do not quote a rate in either direction; state the sample.** The honest status is "a suspicious shape with no current reproduction"
 - **`apps/desktop-ui/src/pages/channels/index.test.tsx`** — fails ~40% under the FULL parallel suite, passes 4/4 in isolation; the Phase 3 pass measured the same rate at a pre-branch baseline worktree. Parallel-load shape, not a logic failure. (The Phase 5 pass saw the same contention pattern spread over channels/skills files in its worktree)
   - ⚠ **THE FILE WAS REWRITTEN AT THE PHASE 12 CUTOVER (2026-08-18)** — it mounted the deleted two-pane page and now mounts the three-column one, with a different transport mock. **Measured after the rewrite: 5 consecutive FULL parallel runs of `npm test -w @dopl/desktop-ui`, 25/25 files and 158/158 tests each time — no reproduction.** That is not a fix and must not be read as one: nobody changed the interleaving, the sample is small against a ~40% rate, and the OTHER half of this entry (`latest-release.test.ts`) is untouched and still flakes in isolation. Re-measure before closing
+  - ✅ **THE SPA HALF IS REPRODUCED AGAIN, WITH A NAME, 2026-09-02 (Wave B slice B2).** Sample, stated per the rule above: **2 full `npm test -w @dopl/desktop-ui` runs, 1 failed** — `src/pages/channels/index.test.tsx:197`, `findByText("Picked it up, wiring the client queries now.")` timing out; the other run was 46/46 files and 433/433 tests clean. **Then 3 consecutive ISOLATED runs of that one file, 7/7 tests each, 0 failures** — which falsifies nothing, per the 2026-08-22 note, and is recorded only because it confirms the file is not broken on its own. **The branch touched no `apps/` file** (`git diff --stat` against the wave base lists 19 files, all `src/`), so it is neither caused nor masked by that work.
+  - ⚠ **THE ASSERTION THAT TIMES OUT IS A `findByText`, WHICH IS THE SHAPE THIS ENTRY KEEPS DESCRIBING AND HAS NEVER NAMED.** `findBy*` is a `waitFor` with a fixed default timeout, so it converts "slow under parallel load" into "failed" with no other symptom — the same class as the `waitFor` at line 856 of this file, and the reason the two halves look alike under contention. **The output was redirected to a file, not piped, per this entry's own operational lesson**, which is the only reason the name survived this time.
 - Cost: "1 failure" and "1 failure plus mine" read the same at a glance — the same argument F-209 made about a standing red gate applies to a COIN-FLIP gate
 - Proposed resolution: the latest-release test needs its module-level cache reset (or injection) per test; the SPA page test likely needs its transport mock hardened against interleaving. Neither belongs to the channels branch; both are worth one quiet pass
 - ⚠ **THE ENTRY'S OWN LESSON, TURNED ON ITSELF (2026-08-18, fix wave 3): BOTH HALVES OF THIS FINDING NOW CARRY A NUMBER NOBODY CAN REPRODUCE** — 5 clean full runs against the SPA test's "~40%", 7 clean isolated runs against the latest-release test's "1 in 2..3". A flake rate is a MEASUREMENT and obeys the same rule every other number in these docs does: it carries its sample and its date, or it is not written down. **Neither half is closed** — the shapes that would explain a flake are still in both files, and an unreproduced flake is the one kind of bug that looks fixed for free
@@ -1775,7 +1810,7 @@ COMMIT;
   - **WHY NULLING IS HONEST RATHER THAN A SWALLOW:** the row's other half — *user U is running an agent, in channel C, state working* — is still true, and a null `task_id` is exactly what the column's own `ON DELETE SET NULL` would have left had the row been stored a moment earlier. Dropping the row instead would lose a LIVE agent from the projection; nulling the whole batch would discard the thread of rows whose threads are fine
   - ⚠ **IT NEVER GUESSES WHICH CONSTRAINT FAILED.** `channel_sessions` has four FKs and the match is on the CODE alone (the house rule — a constraint name in an error message is prose). If nothing in the batch names a dead thread the ORIGINAL error is rethrown: a `23503` on `channel_id` means the CHANNEL is gone, which nulling a thread id cannot fix and must not be made to look fixed
   - ⚠ **ONE RETRY, BY CONSTRUCTION** — the healer returns rows, the caller upserts once more and throws. No loop, so a violation this degrade does not cover cannot spin. The existence probe runs on the FAILURE PATH ONLY; a pre-flight check on every push would add a query per push to protect against a once-per-deleted-thread race, which is the cost this table's design refuses
-  - **Pinned by `repository-sessions.test.ts › "a thread deleted under a live peer agent (F-241)"`** — five cases: the replace SUCCEEDS with one dead `task_id` and only that row nulled; a `23503` naming no dead thread rethrows; a report with no thread ids never probes; every other write error still surfaces; a second failure throws rather than looping
+  - **Pinned by `repository-sessions-replace.test.ts › "replaceSessionStates — a thread deleted under a live peer agent (F-241)"`** (⚠ it lived in `repository-sessions.test.ts` until 2026-09-01, when the health columns split that file at the §1 cap; the anchor moved with the test) — five cases: the replace SUCCEEDS with one dead `task_id` and only that row nulled; a `23503` naming no dead thread rethrows; a report with no thread ids never probes; every other write error still surfaces; a second failure throws rather than looping
   - **Remedy (b) is still worth doing later and is not blocked by this** — a desktop that drops a session whose thread 404s stops reporting the dead id at all. This makes the server survive it; that would stop it happening
 - Status: **RESOLVED** (2026-08-21, remedy (a))
 
@@ -1874,7 +1909,7 @@ COMMIT;
 - **THE VULNERABILITY.** `service-writes.ts › postMessage`'s short-circuit read `repository-messages.ts › findMessageByClientId(channel.id, key)` — scoped to the CHANNEL — and the unique index behind it was `(channel_id, client_msg_id)`. So "I already sent this, give me back what you stored" was a contract with the whole ROOM rather than with the retrying author
 - ⚠ **THE KEYS ARE NEITHER SECRET NOR RANDOM ON THE CALLER THAT SETS THEM AT SCALE.** The desktop stamps `agent-<agentId>-<n>` (`session-outbound-tag.js › nextOwnPostId`); `agentId` is published to every workspace member as `channel_sessions.name` via `read_sessions`; `n` counts from 1. **The next several keys of every visible agent are guessable.** A member posts messages carrying them; when the victim agent posts, the server finds the pre-claimed row, writes nothing, and answers `{ok}` with the attacker's message id. Agent believes it replied, peer gets silence, no error either side
 - **RESOLVED — and it took BOTH halves, which is the part the first read of this finding got wrong.** Author-scoping only the query converts the silent swallow into a `23505` the caller sees as a 500: the probe misses, the INSERT still hits a channel-scoped index, and the race repair (also author-scoped) finds nothing and rethrows. So: (a) a NEW `repository-messages.ts › findOwnMessageByClientId` narrows on `(channel_id, client_msg_id, author_user_id)` and is `postMessage`'s only probe, in both the short-circuit and the lost-race repair; (b) `supabase/migrations/20260822120000_channel_messages_author_scoped_idempotency.sql` widens the unique index to match
-- ⚠ **`findMessageByClientId` SURVIVES AND MUST STAY CHANNEL-SCOPED.** Its remaining caller, `service-tasks.ts › storedOpeningSeq`, asks the CROSS-AUTHOR question by design: a create that converged on somebody else's thread posts nothing and READS the winner's opening seq (`convergeOnThread`). Author-scoping it would answer `null` for exactly the case it exists to serve. The two reads are documented against each other in one file
+- ⚠ **`findMessageByClientId` SURVIVED AS THE CHANNEL-SCOPED READ, AND IS DELETED (2026-09-02).** It was kept for `storedOpeningSeq`, which asked the CROSS-AUTHOR question by design: a create that converged on somebody else's thread posted nothing and READ the winner's opening seq. **That whole arm went when `channel_tasks` took the same author scope** (`20260913120000`, `repository-tasks.ts › findOwnTaskByClientId`) — a colliding key from another member now yields a SEPARATE thread instead of converging, so nothing reads across authors and an orphan repository helper would read as a live door. The sentence below about column order is therefore history, not a live constraint
 - ⚠ **COLUMN ORDER IN THE NEW INDEX IS `(channel_id, client_msg_id, author_user_id)`, not the argument order** — the leading pair is what keeps that cross-author read index-served
 - **Tests:** `service-writes-idempotency-author.test.ts`, one rule at three layers — the repository QUERY SHAPE (both reads, so a mocked-repository suite cannot be green over an unnarrowed filter), the service behaviour (the attack, two authors → two messages, my own retry idempotent, the race repair, no-key unchanged), and the MIGRATION (the index really carries the author and the pair index is really dropped)
 - Status: **RESOLVED** (2026-08-22)
@@ -2681,7 +2716,7 @@ an agent reads at decision time steers the next call.
 
 ## F-302 — the zero-tag diagnostic proposed the WRONG REPAIR for the one cause both agents hit (2026-08-24, RESOLVED)
 
-- Location: `packages/mcp-server/src/tools/channel-post-guidance.ts › tagOutcomeNote` (the count-0 branch).
+- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › CHANNEL_DOCTRINE`, the "WHY A TAG RESOLVES TO NOBODY" causes. ⚠ This was `channel-post-guidance.ts`'s `tagOutcomeNote` (the count-0 branch) until 2026-09-02, when T12 moved the five causes out of the per-post result and left the verdict behind as `tags=<resolved>/<attempted>`.
 - Found during: the same run. **Both agents hit it independently**, which is what makes it a defect in the
   copy rather than a mistake by one model.
 - Severity: **major as a teaching defect** (the F-274 / F-291 class).
@@ -3512,8 +3547,22 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   AND, from the next tool call, to the agent that made it. **That is a sharper version of the same
   oddity, not a resolution of it** — an agent can now write a base it will not be able to read back,
   which is a worse ergonomic than the one filed here and a better security posture.
-  Status: **open, NARROWED** (read direction closed by the audience ceiling; authoring deferred per
-  Samuel's Q5)
+- ✅ **AND THE AUTHORING HALF IS NOW CLOSED TOO (2026-09-01), BECAUSE IT STOPPED BEING AN ODDITY AND
+  BECAME A REPORTED BUG.** The paragraph above predicted it verbatim — *"an agent can now write a base
+  it will not be able to read back"* — and that is what `dopl_kb(op="create_base")` did in a
+  two-member container: two SUCCESS strings ("Created knowledge base … Private to you"), a
+  `list_bases` that never showed it, a slug that would not resolve, two orphaned rows each holding a
+  slug the next attempt would collide with. `service-base-writes.ts › assertCreatorCanReadItBack`
+  now runs `resolveAgentAudience` BEFORE the insert and refuses the `granted` branch, so a create
+  either writes a base its creator can immediately list and resolve, or returns an error naming the
+  room, the cause and the remedy. **Refusal is the only available answer**, not the cautious one:
+  what would make the base reachable is a channel grant, and `setChannelKnowledgeGrant` refuses
+  `ctx.source === "agent"` outright because that grant decides what the PEER may read — so the
+  create-and-share path was already a refusal, just one that inserted the row and hard-deleted it
+  first. ⚠ Only the `granted` branch narrows; any human, any standard workspace and any SOLO
+  container are untouched.
+  Status: **RESOLVED** (read direction closed 2026-08-26 by the audience ceiling; authoring closed
+  2026-09-01)
 
 ### F-324 — ✅ RESOLVED 2026-08-26 — a REAL guest was RLS-denied on realtime channel reads, and the mitigation this entry claimed DID NOT EXIST
 
@@ -3615,7 +3664,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 
 - Location: `src/features/channels/server/service-mentions.ts` — both `listMyChannelMentions` and
   `markMentionsRead` destructure `{ channel }` out of `loadVisibleChannel` and never look at
-  `membership`. Contrast `service-writes.ts › postMessage` and `service-tasks-fanout.ts ›
+  `membership`. Contrast `service-writes.ts › postMessage` and `service-tasks-broadcast.ts ›
   createTaskFanOut`, which both `throw new ChannelForbiddenError(...)` on `!membership`.
 - Found during: **the guest-role review wave, 2026-08-26**, while tracing which of the fourteen
   guest-floored routes compose the public-channel arm.
@@ -3626,7 +3675,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   and mark-read their own mentions in it without joining. Own-scoped by `ctx.userId` throughout, so
   nothing crosses between users.
 - ⚠ **What it really costs is a TEST GAP:** `app/api/channels/guest-route-floor.test.ts`'s closing
-  assertion pins the membership fence on `service-writes.ts` and `service-tasks-fanout.ts` and does
+  assertion pins the membership fence on `service-writes.ts` and `service-tasks-broadcast.ts` and does
   not cover `service-mentions.ts` — so if the mentions route's own scoping ever loosened, the floor
   would silently become the gate.
 - Proposed resolution: decide whether reading your own mentions in a public room you never joined
@@ -3661,7 +3710,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
 
 **⚠ UPDATE 2026-09-01 — READ THIS BEFORE THE ENTRY BELOW, WHICH DESCRIBES THE PRE-LEDGER WORLD.**
 Samuel asked the /home Overview for credits BY CHANNEL and BY PERSON, so the attribution gap was
-closed at the schema rather than worked around: **`supabase/migrations/20260901120000_credit_usage_events.sql`**
+closed at the schema rather than worked around: **`supabase/migrations/20260901130000_credit_usage_events.sql`**
 adds a per-burn ledger — `workspace_id` (the PAYER), `origin_workspace_id` (where the call was made,
 which IS the channel dimension), `user_id`, `amount`, `period_start` — written by
 `src/features/billing/server/credit-ledger.ts › recordCreditUsageEvent`, fired from
@@ -4411,7 +4460,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
     **A ruling that is only in `src/` is not shipped**, and `check-role-drift.ts`'s own docblock says
     why the committed `dist/` is read as its own declaration class.
 - ⚠ **NARROWING ON THE MCP LEG: *"MCP has no shelf concept"* IS NO LONGER TRUE** (it was when this was
-  filed). `packages/mcp-server/src/tools/shelf.ts › SHELF_VALUES` is a full operator-facing vocabulary
+  filed). the MCP shelf module's `SHELF_VALUES` was a full operator-facing vocabulary
   (`personal` | `workspace`, mapped to the wire nouns by `› toWireShelf`), `agent-ops-write.ts` takes it
   on create and `› agent-ops-read.ts` takes it on list. **Only the READ DEFAULT is unfiltered, and this
   entry calls that right** — item 1's argument is untouched. As of 2026-08-30 the whole shelf vocabulary
@@ -4670,7 +4719,7 @@ gate's scope unchanged and puts the argument check where every other argument ch
 **Neighbour, and it is now CLOSED so nobody re-files it:** `shelf` had the same shape on
 `dopl_kb(op="update_base")` — spellable, dropped, 2xx over a shelf move that never happened, while
 its twin `dopl_agent(op="update")` refused it by name and pinned the refusal. `opUpdateBase` now
-refuses it too (`shelf-confirm.test.ts › op=update_base REFUSES a shelf`), and INVARIANTS §10 states
+refused it too (that case is deleted with the argument in B15), and INVARIANTS §10 states
 the rule once for both tools. That one was a WRITE answering success over a no-op, which is why it
 was fixed rather than filed.
 
@@ -5131,7 +5180,7 @@ in ENGINEERING 2026-08-31). A directive landed `launched` with a **1 111-char go
 `@x2sz1ztt` and one `@agent-x2sz1ztt`, none carrying `to`. None woke anything.
 
 **The class, and it is not "the fence was wrong".** The 2026-08-28 loop fence
-(`session-wake-tiers.js › wakeEligibility`, then a boolean) refused every agent-authored message; the 2026-08-22
+(the loop fence, then a boolean in the since-deleted wake-tiers module) refused every agent-authored message; the 2026-08-22
 `launch_agent` copy told its reader to direct the agent by writing `@<id>` in a post body. Each
 was correct when written. **The fence moved and the surface that hands out the key did not** —
 and because an inert post is not a refused post, the caller repeated itself four more times with
@@ -5599,7 +5648,7 @@ are real and neither is caught by that scan**, because a built-in's NAME is not 
 **And one design claim did not survive contact with the tree, recorded so the next wave does not
 re-derive it:** the port's design specifies a core-vocabulary scan forbidding the bare word
 `cursor`. Four CODE lines in core use it for the LISTENER's pagination cursor
-(`main/listener-io.js`, `main/listener-messages.js` × 2, `main/session-triage.js`) — a core domain
+(`main/listener-io.js`, `main/listener-messages.js` × 2, and one in the since-deleted triage module) — a core domain
 term with nothing to do with Anysphere. The scan forbids the VENDOR SPELLINGS instead
 (`@cursor/`, `cursor-agent`, `cursor://`, and the id as a quoted literal), which collide with
 nothing. Forbidding the bare word would have failed four correct lines and taught the next reader
@@ -6294,3 +6343,1722 @@ rejects one). And `getBaseTree` lives in `src/features/knowledge/server/service-
 `repository.ts` — that file is a re-export barrel with no queries in it.
 
 - Status: open
+
+### F-404 — ✅ RESOLVED 2026-09-01 — a junction-only template patch sent an empty UPDATE and 500'd deterministically
+
+`dopl_agent(op="update", knowledge_bases=[…])` failed in every workspace and every home
+container. A junction-only patch names none of the six scalar columns, so the body
+`agent-templates/server/repository.ts › updateTemplateRow` built stayed `{}`; PostgREST cannot emit
+`UPDATE … SET` with no assignments, and the raw driver object thrown had no arm in
+`http-mapping.ts`, so it surfaced as a bare `INTERNAL_ERROR` 500. **The junction write that was the
+entire point of the call never ran** — a valid request lost its write and got back an error naming
+nothing. `teamIds`-only patches hit the same wall.
+
+The docblock above the query asserted *"the service never calls with one"*. It was false:
+`service-writes.ts › updateTemplate` called it unconditionally, and both upstream guards
+(`packages/mcp-server/src/tools/agent-ops-write.ts › opUpdate`, `agent-templates/schema.ts ›
+UpdateTemplateSchema`) pass a KB-only patch by design.
+
+**Resolved** in two places, deliberately: the SERVICE skips the row write when no scalar is present
+(mirroring `workspaces/server/service.ts › renameWorkspace`, which has guarded this class all
+along — and is why `skills` never had the bug, since it always stamps `lastEditedBy`), and the
+REPOSITORY is now TOTAL on the empty patch, reading the row back instead of writing it, so no future
+caller can rediscover this. ⚠ The read path deliberately does NOT fire
+`agent_templates_touch_updated_at`: a no-op UPDATE that bumps `updated_at` is the other thing the
+old comment wanted to avoid, and it was right about that one.
+
+⚠ **The one test that ran this repro mocked `updateTemplateRow`**, so the empty body never reached
+PostgREST and the suite stayed green through the outage. `repository.test.ts` runs the real function
+against a recording client, which is where the empty body is now actually observed. The service
+guard is typed as `repository.ts › UpdateTemplatePatch` so its emptiness test cannot drift from the
+column set it is deciding about.
+
+⚠ **Id note:** first filed as **F-340**, which is a LIVE and unrelated entry (the channel info
+column's five-tab width budget, cited from INVARIANTS §5 and `channels-v2/knowledge-tab.test.tsx`).
+Renumbered before merge. Ids are never reused; two entries under one id makes both unreadable.
+
+### F-405 — ✅ RESOLVED 2026-09-01 — `op="await"` filtered out its own account, so a same-account counterparty was invisible
+
+`dopl_channel(op="await", since=853)` returned "nothing" twice while seq 856 — an agent post in that
+channel, on the caller's own account — sat in the table. `op="read"` showed it plainly.
+
+`channel-ops-hold.ts` passed `excludeAuthor = <the account>`, and every post is stamped
+`author_user_id = ctx.userId` (`channels/server/service-writes.ts › postMessage`) whether a human or
+an agent wrote it. One operator runs many concurrent sessions, so **an orchestrator and its worker
+are the same author id.** The filter removed the row from BOTH the page and the existence probe
+(`channels/server/repository-messages.ts › hasMessagesAfter`), so the hold did not even spin — it
+held silently to its deadline while the answer sat in the table. Re-issuing the same cursor could
+never help, which is why the report was two empty holds. ⚠ It also contradicted the op's own
+teaching: `rearmStopRule` tells the caller to watch for the counterparty's `task_progress`
+milestones, which for a same-account worker were exactly the posts the filter guaranteed to hide.
+
+**Resolved:** no author filter is ever sent, on either lane. Own lines are dropped from the page in
+hand keyed on `metadata.session_id` — the only wire field naming the PROCESS rather than the account
+(`shared/auth/session-header.ts`) — and the cursor advances past them so the hold does not re-fetch
+them every tick. With no session stamp, nothing is dropped.
+
+🔴 **THE ACCOUNT FILTER MAY NOT RETURN AS A "FALLBACK" FOR UNSTAMPED CALLERS, AND THAT IS NOT
+HYPOTHETICAL — IT IS THE SHAPE THE FIRST FIX SHIPPED WITH.** Scoping to the session while keeping
+`excludeAuthor` "when this session cannot name itself" reads like a safe default and is not: unstamped
+is EVERY EXTERNAL MCP CLIENT (Claude Code sends no `X-Dopl-Session-Id`), i.e. precisely the population
+that reported the outage, which therefore reproduced unchanged against its own fix. What an unstamped
+caller gives up instead is bounded and self-inflicted — it may wake on a post it made itself, and it is
+blocked inside the call so in practice only an older desktop build can trip that. A noisy wake is
+recoverable; a silent hold is not.
+
+⚠ `channel-hold-author.test.ts` ASSERTED THIS BUG — it pinned `excludeAuthor === ME` on every poll,
+which is the behaviour that hid the counterparty. A test can hold a defect in place as firmly as it
+holds an invariant.
+
+⚠ **Id note:** first filed as **F-341**, a LIVE and unrelated entry (the live-agent posture strip,
+cited from INVARIANTS §5 and two specs). Renumbered before merge.
+
+### F-406 — ✅ RESOLVED 2026-09-01 — the `await` default hold was ~3.5× an external MCP client's call timeout, so the op was unusable from one
+
+The default hold is 215s. Claude Code wraps every non-GET fetch to an `http` MCP server in an
+AbortController firing after `max(server.timeout ?? MCP_TOOL_TIMEOUT, 60_000)` ms. So at the default,
+an external caller did not get a long wait — it got a **raw transport `TimeoutError` carrying no
+cursor, no session block and none of the re-arm teaching**, which is the exact outcome the deadline
+chain in `channel-hold-budget.ts` exists to prevent. The chain documented the client cap as layer 6
+and then sized layer 4 as though only layer 5 existed.
+
+**Resolved:** `channel-hold-budget.ts › holdMsFor` is the one resolver both lanes call. An
+explicit `timeout_ms` is honoured EXACTLY (clamped only by the cap and the `DOPL_AWAIT_HOLD_MS`
+incident lever); the DEFAULT branches on the caller's runtime stamp — desktop keeps the wake-length
+hold, everything else gets `EXTERNAL_CLIENT_ABORT_MS - AWAIT_HOLD_EXTERNAL_MARGIN_MS`.
+
+⚠ **This trades the wake primitive away for that population, deliberately.** Under a ~60s abort the
+wake was never available, so what the long default actually bought an external caller was nothing at
+all. A returned result it can poll on beats a wake it cannot have.
+
+Three things found in the same file while fixing it, all now closed: **`opAwaitWorkspace` was never
+passed `runtime`** (so the workspace hold ran the desktop-length default for external callers AND
+wrote external-flavoured wake guidance to desktop sessions); **four hold constants existed twice**,
+byte-identical, one copy per lane — a hold constant that exists twice is one that gets retuned once;
+and **`isDesktopRuntime` existed twice**, so the hold's LENGTH and the hold's CLAIMS could come to
+disagree about one request. It is one exported statement in `identity.ts` now.
+
+⚠ The TIMED-OUT result is also COMPRESSED, cursor-first: it is the hottest text on the surface and
+the one that never changes, so ~1.4k of re-arm doctrine was paid per empty hold to say nothing new.
+Every clause INVARIANTS §10 requires of a re-arm instruction still rides it — including the ABSENCE
+of a finished state to wait for — and the mechanism lecture is still taught where it is NEW: `post`,
+`create_thread`, and the hold that RETURNS.
+
+- Status: RESOLVED. ⚠ Open follow-up, NOT taken here: `EXTERNAL_CLIENT_ABORT_MS` is a HAND-MEASURED
+  property of somebody else's client. It is a floor to design under, never a promise — another client
+  may be tighter, and nothing in this repo can detect that. The result text tells a caller what to do
+  when it happens (pass a smaller `timeout_ms`), which is the only remedy available from this side.
+### F-407
+
+**`read` and `await` disagree about framing the same class of content.** Opened
+2026-09-02 by the P1 verbosity tier; not resolved here, deliberately.
+
+- What: `op="await"` and the workspace await render peer-authored message bodies
+  under `channel-framing.ts › UNTRUSTED_BODY_HEADER`, restored and position-pinned
+  by the P0 branch (`1481c6a4`). `op="read"` renders the SAME bodies, through the
+  same `formatMessages`, with no header — T11 removed it and stated the rule once
+  in `channel-description.ts`'s `SECURITY, SAID ONCE HERE` paragraph.
+- Why it is a finding and not a fix: **both sides have a real argument and this
+  tier could not tell which is right.** For removal: the banner is the WEAKER
+  half (it asks a reader to discount text; `narration.ts › neutralizeInline` is
+  what actually defangs a hostile string, and it is untouched on every path),
+  §10's body rule is satisfied by the INDENT `clipBody` applies, and the two
+  banners were the single largest repeated cost in an orchestrator's loop. For
+  keeping: a description is read once at connect time and a body is read NOW, so
+  only the second can carry a line somebody else wrote — and **a caveat read
+  after the injected line has been read is not a caveat**, which is why P0 pinned
+  the header's POSITION rather than merely its presence.
+- ⚠ **Do not close this by deleting the `await` header.** That is the cheap
+  direction and it is the one that removes a defense; if the asymmetry is
+  resolved toward removal it should be because someone ruled that the indent plus
+  the description paragraph is sufficient framing for a body on EVERY op, and
+  said so in INVARIANTS §10 — which currently reads "a BODY is content rendered
+  as itself under framing that says what it is", with the indent as the stated
+  fallback.
+- Measure it: `grep -n UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
+  and compare `channel-ops-read.ts › opRead` with `channel-ops-hold.ts › opHold`.
+
+#### ⚠ EXTENDED 2026-09-02 (review) — the boundary is WAKE, not `await`, and the LISTING half is filed too
+
+**(a) FOUR IMPORTERS, NOT TWO, AND THE ACCOUNT LANE IS A DECISION.** The header's docblock said "the
+two `await` lanes only" while `grep -rln UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
+answered four: the two holds, `channel-ops-account.ts` (the cross-channel read, T21) and
+the ping inbox op (the "needs you" inbox, T70; that module was deleted at slice B16). **The account lane KEEPS the banner** — ruled
+here rather than left ambiguous: it is what an orchestrator arms INSTEAD of N per-channel holds, so
+it carries bodies from rooms the caller did not name and members it did not address, on the same
+wake cadence a hold runs. Every argument for the hold's header applies to it verbatim, while the
+argument against (a per-page banner is the loop's largest repeated cost) bites on `read`, which is
+called with a channel and a cursor by an agent that already knows what it asked for. So the real
+line is **WAKE SURFACE vs. DIRECTED READ**, and the docblock says that now.
+
+**(b) THE LISTING HALF WAS NEVER FILED.** This entry only ever named the BODY header. T11 also
+deleted `UNTRUSTED_LISTING_HEADER` — the banner over `op="list"`'s CHANNEL NAMES AND TOPICS — and
+that is a materially different case from a body, in both directions:
+  - **Weaker than the body case**, because a name and a topic go through
+    `narration.ts › neutralizeInline` and cannot render as structure, and because they are LABELS a
+    caller asked for rather than payload delivered to it.
+  - **Stronger than the body case in exactly one respect**, and that is why it belongs on the same
+    ruling: on a PUBLIC channel the author of a name or topic need not be someone the reader has
+    any relationship with, where a message body at least comes from a room they are in.
+  ⚠ **The same instruction applies: do not close this by deleting the surviving headers.** Whoever
+  rules on (a) rules on (b) in the same breath, or the surface goes on disagreeing with itself about
+  one class of content in two places.
+### F-408 — the `stale` flag is derived at projection time, so a session that stops dispatching ENTIRELY can never report it (2026-09-01, T51)
+
+`dopl-desktop-app/main/session-health.js › isStale` answers "working, quiet past ten minutes, and
+still spending". It is computed inside `session-summary.js › reportList`, which runs on `touch()`
+— an ENGINE DISPATCH — and the server write behind it is change-driven by design
+(`session-state-push.js`'s header refuses a keepalive in capitals, and F-294 argued the refusal).
+
+So the flag becomes TRUE the moment the bound passes and REACHES THE SERVER on the session's next
+dispatch. For the class the ticket was written about — an agent that runs turns, spends tokens and
+posts nothing, whose tool calls keep the dispatch loop alive — that is immediate. For a process
+wedged so completely that nothing moves at all, it is never, and the only honest reading stays the
+server's own: a row whose `updatedAt` has gone quiet under a live `agent_presence` heartbeat
+(`packages/mcp-server/src/tools/channel-session-render.ts › sessionIsStale`).
+
+**Not fixed here, and not papered over.** Closing it needs the keepalive `session-state-push.js`
+refuses, and that module requires the reason to be argued IN ITS OWN HEADER. This ticket did not
+have one: it can say what the gap is, not that a heartbeat is worth its cost. A future wave that
+wants it should start from F-294's own two objections rather than from this paragraph.
+
+- Status: open
+
+### F-409 — ✅ RESOLVED 2026-09-02 — the desktop reported seven health fields the server had no columns for (2026-09-01, T25 / T50 / T51 / T83)
+
+⚠ **THIS ENTRY SAID "Status: open" ON A BRANCH THAT SUPPLIES ALL SIX PIECES**, and INVARIANTS §11.1
+repeated the claim. Both are corrected. Re-derive rather than trusting this list:
+
+```
+grep -c denied_calls supabase/migrations/20260909120000_channel_sessions_health.sql   # 11
+grep -c deniedCalls  src/features/channels/schema-sessions.ts                          # the zod half
+grep -c denied_calls src/features/channels/server/collab-dto.ts                        # 5
+grep -c deniedCalls  src/features/channels/types-sessions.ts
+grep -c deniedCalls  packages/dopl-client/src/session-health-types.ts
+grep -c deniedCalls  packages/mcp-server/src/tools/channel-session-health.ts           # the render
+```
+
+Every piece the gap named exists on `integration/mcp-efficiency`, measured 2026-09-02: the
+migration (`20260909120000_channel_sessions_health.sql`, ⚠ **WRITTEN, NOT APPLIED** — §12), the
+seven fields on `SessionStateEntrySchema`, the `collab-dto.ts` upsert / operator-only column list /
+`mapOwnSessionStateRow` half, `ChannelSessionHealth` in both trees, and the render in
+`channel-session-health.ts`. ⚠ **The APPLY is still owed** — deploy state is a measurement, and
+until the migration replays the columns do not exist, so `zod` keeps stripping the seven at the
+route exactly as described below. That is the ONE thing left, and it is Samuel's, not this
+entry's.
+
+#### What the gap was, kept for the reasoning
+
+```
+grep -n "tokensDelta\|deniedCalls\|lastWakeSeq" dopl-desktop-app/main/session-telemetry.js
+grep -c "denied_calls" src/features/channels/server/collab-dto.ts
+```
+
+`session-telemetry.js › telemetryFields` now puts `turns`, `tokensDelta`, `stale`, `deniedCalls`,
+`lastDeniedTool`, `lastWakeSeq` and `lastWakeAt` on the wire row, quantized (or deliberately not —
+that file states which and why). **The server side of the chain is not written**: no migration on
+`channel_sessions`, no fields on `schema-sessions.ts › SessionStateEntrySchema`, no entries in
+`collab-dto.ts › OPERATOR_ONLY_SESSION_COLUMNS` / `SessionStateUpsert` / `mapOwnSessionStateRow`,
+no `ChannelSessionTelemetry` members in either `src/features/channels/types-sessions.ts` or
+`packages/dopl-client/src/channel-types.ts`, and no render.
+
+**The direction of the gap is safe and that is why it shipped this way.** `zod` strips unknown
+keys, so the extra fields are DROPPED at the route rather than 400-ing the whole push — which is
+the failure mode `session-state-push.js` is built around, where one bad row blanks a machine's
+entire session set for the run. Nothing regresses; the fields simply do not arrive yet.
+
+**All seven are OPERATOR-ONLY when they land** — each is a fact about how one member's own machine
+is getting on, and `collab-dto.ts`'s two parallel arrays plus
+`src/features/channels/schema-sql.test.ts`'s grant census are where that is enforced. The render is
+`channel-session-render.ts`, owned by the terse-results tier.
+
+- Status: **RESOLVED 2026-09-02.** The apply remains owed, as it does for all four of this wave's
+  migrations.
+
+### F-410 — ✅ RESOLVED 2026-09-01 — a CLAMPED posture directive had no way to tell the caller it was clamped (T24)
+
+`launch-posture.js › resolvePosture` answers a `clamped` flag and both callers log it
+(`launch-directive-spawn.js › spawn`, `directive-agent-ops.js › setAgentMode`). The DIAG is the
+only surface: `channel_launch_directives` has no column for an applied posture, so the row's
+terminal `launched` / `done` status says nothing about what actually landed.
+
+That is the "surface showing a posture main is not enforcing" lie this tree has paid for twice
+(`session-reopen.js › setModeByTask` carries the argument for why a reply must be main's
+post-dispatch truth). It is bounded here — the clamp only ever NARROWS, so the caller's agent is
+more supervised than it asked for, never less — but an orchestrator that asked for `bypass` and got
+`auto` will read its agent's later refusals as a bug.
+
+T24's own acceptance names the fix: the launch RESULT should echo the resolved posture
+(`launched @agent-x posture=bypass/auto_both chain=on`). That needs applied-posture columns, the
+DTO field and the result line, all of which are the orchestrator-surface tier's.
+
+**RESOLVED — the round trip is closed end to end.** The surface tier had landed three of the four
+pieces and the fourth is what made the other three inert: the columns
+(`20260910120000_channel_launch_directives_posture.sql`), the DTO fields
+(`service-launch-dto.ts › toDirective`) and the render (`channel-ops-launch.ts › postureFacts`)
+all existed with **no writer**, so every live row read `null` and every result said
+`posture=not reported`. The writer is now:
+
+- `main/launch-directive-spawn.js › spawn` returns `plan.modes.tools` / `plan.modes.messages` /
+  `plan.chain` beside `{ agentId }` — the RESOLVED values, and the same objects handed to
+  `deps.launch`, so the report cannot drift from the session it describes;
+- `main/launch-directive-wire.js › decideBody` emits `appliedTools` / `appliedMessages` /
+  `appliedChain` on the LAUNCHED branch only, narrowed to the frozen enums;
+- `schema-launch.ts › LaunchDecideSchema` accepts all three as **optional**, and
+  `service-launch.ts › decideLaunchDirective` maps absent onto `null`.
+
+⚠ **`null` DID NOT STOP MEANING "NOT REPORTED", AND THE OPTIONALITY IS WHY.** A desktop older than
+this wave sends no echo and must still be able to decide (§13: an older peer is supported) — making
+any field required would turn "I cannot tell you what I applied" into "I could not report at all",
+and the row would expire with a running agent behind it. So the render keeps the word, and
+`packages/mcp-server/src/tools/channel-ops-launch-posture.test.ts` pins the null case as hard as the
+reported one.
+
+⚠ **THE ECHO IS SENT ON EVERY LAUNCH, NOT ONLY A CLAMPED ONE.** Reporting only when something was
+narrowed would make silence mean two different things at once — "an older desktop said nothing" and
+"a current desktop agreed with you" — and the render has one word for both.
+
+⚠ **THE CREATE STILL CANNOT WRITE THEM.** `repository-launch.ts › LaunchDirectiveInsert` has no
+field for `applied_*`, deliberately: a requester able to stamp its own confirmation is the one write
+this row must never accept from the asking side.
+
+Suites: `dopl-desktop-app/test/launch-directive-echo.test.mjs` (the decide BODY, which is the object
+that crosses the boundary), `src/features/channels/server/service-launch-posture.test.ts` (the
+schema's optionality and the service's `?? null`), `packages/mcp-server/src/tools/channel-ops-launch-posture.test.ts`
+(the render's truth table).
+
+- Status: ✅ resolved 2026-09-01
+---
+
+## The 2026-09-01 ORCHESTRATOR-SURFACE wave — F-411 through F-412
+
+⚠ **THESE WERE FILED IN THE 404-406 BLOCK AND RENUMBERED THE SAME DAY, BECAUSE THREE TIERS OF ONE
+WAVE CLAIMED IT AT ONCE.** Master's highest id was 403 — re-derive with
+`git show master:docs/REFACTOR-FINDINGS.md | grep -oE 'F-[0-9]{3}' | sort -u | tail -1` — and three
+branches then allocated 404 onward independently: the P0 tier (three ids), the DESKTOP tier (three
+different findings under the SAME three ids), and this tier (two). Only one set can survive a merge.
+
+⚠ **THE FIX IS A RULE, NOT THIS PARAGRAPH: ALLOCATE FROM THE HIGHEST ID CLAIMED ON ANY LIVE BRANCH,
+NEVER FROM MASTER'S.** A findings file is an append-only shared counter, and parallel branches make
+"the next number" a question master cannot answer. Re-derive across every live branch before filing:
+`for b in <branches>; do git show $b:docs/REFACTOR-FINDINGS.md | grep -oE 'F-[0-9]{3}'; done | sort -u
+| tail -1`.
+
+⚠ **`scripts/check-doc-refs.mjs` IS WHY THIS NOTE NAMES NO COLLIDING ID IN ITS OWN NOTATION.** The
+gate resolves every `F-NNN` reference to a heading in these docs, and an id that lives only on
+another branch is a DANGLING ref here — so the collision is described by number-block rather than
+cited. That is the gate working: a doc may not point at a finding this tree does not hold.
+
+These two moved to the next free block above every claim. ⚠ **RESOLVED AT MERGE 2026-09-01, and the
+allocation went in the order the tiers merged**, which is the only tie-break that is not a
+preference: the P0 tier kept `F-404`/`F-405`/`F-406` (it merged first and its ids were already cited
+from four source files), the P1 tier kept `F-407`, the DESKTOP tier's three became
+`F-408`/`F-409`/`F-410`, and this tier's two became `F-411`/`F-412`. The rule that would have
+avoided the whole exercise is now stated once at the top of this file.
+
+Opened while building T20/T21/T22/T40/T41/T81 of `docs/specs/` — the MCP agent-efficiency spec's P2
+tier. Both are things the wave MEASURED and deliberately did not fix inside it.
+
+### F-411 — `set_agent_mode` over MCP could not be made safe from the server side, because the bound it needs lives only on the desktop (2026-09-01) — ✅ DISCHARGED the same day by the desktop tier
+
+**The ask** was a `dopl_channel(op="set_agent_mode", agent_id=…, tool_mode=…, message_mode=…)` — a
+fourth KIND on the launch mailbox, letting an orchestrator re-posture one of its operator's RUNNING
+agents, alongside `end_agent` / `rename_agent`.
+
+🔒 **IT IS BLOCKED BY AN EXPLICIT STANDING RULING, NOT BY EFFORT.** INVARIANTS §3 says
+`PATCH /api/channels/[channelId]/members` is `sessionOnly` *"because the agent tool profile is a
+CONTAINMENT control, not a preference — the setting relied on for containment must not be writable by
+the thing it contains, durably."* An MCP op that accepts `tool_mode` would hand exactly that write to
+exactly that thing: a windowless session floored at `auto` could ask its own machine for `bypass`,
+voiding the audience ceiling's B2 tripwire and, through Bash, B1's residual #3.
+
+**The safe shape is NARROWING-ONLY — never wider than the session already has — and it is not
+buildable on this side of the boundary.** Measured 2026-09-01: `channel_sessions` carries **no
+`tool_mode` / `message_mode` column** (`20260822150000_channel_sessions_telemetry.sql` adds eight
+columns and neither is one; re-derive with
+`grep -rn 'tool_mode\|message_mode' src/features/channels/server/collab-dto.ts supabase/migrations`).
+So **the server cannot know a session's current posture, and therefore cannot enforce "never wider"**
+— the only layer that can is `dopl-desktop-app/main/session-reducer.js`, whose `set_tool_mode` /
+`set_message_mode` already coerce fail-closed through `coerceMode(TOOL_MODES, …)` /
+`coerceMode(MESSAGE_MODES, …)` (`channel-prefs.js › TOOL_MODES` = manual/accept_edits/auto/bypass,
+`› MESSAGE_MODES` = ask/auto_inbound/auto_outbound/auto_both).
+
+⚠ **SO SHIPPING THE OP WITHOUT THE DESKTOP HALF IS NOT "PARTIAL", IT IS THE WIDENING.** An MCP op
+whose only bound is unimplemented is a posture-widening primitive with a docblock. This wave shipped
+NOTHING for it rather than a gated-looking op that gates nothing.
+
+**What the whole change needs, in order** (the `20260823140000` precedent — the CHECK widens BEFORE a
+producer ships, and the producer lands with the consumer it unblocks):
+1. the `kind` CHECK on `channel_launch_directives` widened to admit `set_mode`;
+2. the desktop dispatcher mapping it onto the existing `set_tool_mode` / `set_message_mode` reducer
+   events, **refusing any value wider than the session's current one** and answering one of the
+   existing refusal words otherwise — this is the fence, and it is the only place it can live;
+3. `channel_sessions` gaining the two mode columns so `read_sessions` / `dopl_status` can show the
+   posture the caller is about to change (T25's territory — without it an orchestrator sets a mode
+   blind);
+4. only then the server schema/service, the `@dopl/client` union arm, and the MCP op.
+
+✅ **STEP 2 LANDED THE SAME DAY** (desktop branch `p2/desktop-lifecycle`, commit `219304e5`
+*"dispatch set_agent_mode directives, clamped to the operator's posture"*), so the premise of this
+finding is discharged and the op is buildable. **What discharged it is worth keeping**: the desktop's
+two mode vocabularies are ORDERED arrays and the clamp is an INDEX COMPARISON against the operator's
+own stored channel posture — so "never wider" is enforced where the posture actually lives, and the
+MCP op ASKS rather than sets. ⚠ **`set_agent_mode` is also the only non-launch kind still behind the
+machine-wide launch-consent toggle**, because a posture at `bypass` pre-approves work tools on
+hardware the operator pays for, where `end` and `rename` widen nothing.
+
+⚠ **THE DESKTOP SYMBOLS ARE DELIBERATELY NOT CITED BY ANCHOR HERE.** They live on a branch this tree
+has not merged, and `scripts/check-doc-refs.mjs` correctly rejects a `path › symbol` anchor at a
+symbol this checkout does not hold — the same reason the block note above names no colliding id.
+Re-anchor them at merge, when the files exist.
+
+⚠ **THE ORDER IN THIS FINDING IS THE REUSABLE PART, NOT THE VERDICT.** A capability whose only bound
+lives in another process must ship its FENCE first and its SURFACE second; shipping the op while step
+2 was hypothetical would have been a posture-widening primitive with a docblock.
+
+- Status: ✅ discharged 2026-09-01. Step 3 (the mode columns on `channel_sessions`, so an
+  orchestrator can SEE the posture it is about to change) is the wave's session-health half.
+
+### F-412 — INVARIANTS called `channel_messages.seq` "workspace-global", and it is TABLE-global (2026-09-01) — ✅ RESOLVED in this change
+
+§10's workspace-await bullet and `repository-await-workspace.ts › listWorkspaceMessagesAfter` both say
+*"`seq` is WORKSPACE-GLOBAL and gappy"*. Measured against the DDL: `20260725120000_channels.sql`
+declares `seq BIGINT GENERATED ALWAYS AS IDENTITY` on `channel_messages` — **one identity sequence per
+TABLE**, so a `seq` is unique and monotonic across every workspace and every `kind='link'` container
+at once.
+
+The doc was never FALSE (table-global implies workspace-global) but it was **narrower than the truth in
+the direction that mattered**: read as an upper bound it says one cursor cannot span two workspaces,
+which is exactly the fact T21's account-wide read rests on. Per CLAUDE.md's precedence rule the CODE
+wins and INVARIANTS is corrected in the same change; §10's bullet now states the identity and its
+consequence.
+
+⚠ **The workspace-await's own wording is left alone on purpose** — it is describing a hold that IS
+workspace-scoped, and there the narrower statement is the accurate one for what that function does.
+
+- Status: ✅ resolved 2026-09-01 (§10 corrected; `repository-account.ts › listAccountMessagesAfter`
+  states the stronger fact where it is relied on).
+
+---
+
+## The 2026-09-01 INTEGRATION — F-413 through F-414
+
+Both were produced BY the merge of the agent-efficiency tiers, not by any branch, and both were
+found only because a suite from one tier was made to run against code from another. Neither is
+visible on any branch in isolation.
+
+### F-413 — ✅ RESOLVED 2026-09-01 — an OFFLINE `set_agent_mode` told the caller its posture request was a RENAME
+
+`channel-ops-agent.ts › fileAndHold` rendered the offline result as
+`factsLine(input.kind === "end" ? "not ended" : "not renamed", …)`. That is a ternary over a CLOSED
+SET, and the set grew to three when the orchestrator-surface tier added the `set_agent_mode` kind.
+
+- What a caller saw: `not renamed agent=@agent-xxxxxxxx reason=offline filed=no` — a true statement
+  about a verb it did not use, in place of the one it did. Reachable from `opSetAgentMode`, which
+  returns `filed.response` verbatim.
+- ⚠ **THE SAME FILE ALREADY HELD THE FIX AND SAID WHY.** `VERB_PAST` and `PENDING_CONFIRM` are both
+  `Record<AgentDirectiveKind, …>` maps, and both docblocks state the rule outright: *a conditional
+  over a closed set is the shape that goes wrong the day the set grows, failing nothing on the way.*
+  This one line was the site that had not been converted. **A rule written in a docblock does not
+  apply itself.**
+- Why no branch could see it: the P1 tier wrote the ternary when the set had two members and was
+  correct; the P2 tier added the third member and never touched this line. Both suites green.
+- **Resolved** by rendering `not ${VERB_PAST[input.kind]}`. Pinned by
+  `channel-ops-agent-mode.test.ts › OFFLINE names THIS verb, not a rename`, which was left RED with
+  the diagnosis in its assertion message until the fix landed (§14: a suite that goes green against
+  the bug it names is the defect, not the evidence).
+
+### F-414 — ✅ RESOLVED 2026-09-01 — `dopl_status` had no security framing anywhere, because a banner was moved into a DIFFERENT tool's description
+
+The T11 verbosity cut removed per-result SECURITY banners on the grounds that the rule is stated
+once in `channel-description.ts`'s `SECURITY, SAID ONCE HERE` paragraph, read at connection. Applied
+to `status-render.ts` during the integration, that reasoning was **false**.
+
+- ⚠ **THAT PARAGRAPH SCOPES ITSELF TO "EVERY RESULT THIS TOOL RETURNS", AND `dopl_status` IS A
+  DIFFERENT TOOL.** It registers separately, carries its own description, and an agent that never
+  calls `dopl_channel` never reads that paragraph at all. So the page splicing member-typed channel
+  names, author names and message previews was framed by nothing.
+- ⚠ **THE GENERAL RULE, which is the part worth keeping: moving a banner into a description only
+  works WITHIN the tool that serves it.** A per-result string and a per-tool string have different
+  scopes, and "said once" is only true relative to a reader who reads the place it is said.
+- Neutralization was never affected — every value still goes through `neutralizeInline` — which is
+  why this was a framing regression and not an injection one.
+- **Resolved** by stating the rule in `status.ts › STATUS_DESCRIPTION`, this tool's own. ⚠ It was
+  TRIMMED back under the 1,200-char budget rather than ratcheted: the clauses that gave way were
+  ones restating the tool's own `since` argument description.
+
+### F-415 — FILES AT THE §1 CAP, where the next correction becomes a split rather than a doc fix
+
+⚠ **WIDENED 2026-09-02 from one file to the class.** The review of this branch found four more at or
+within eight lines of 500, and one over. The rule they share is the one below: **a file at the cap
+cannot absorb a COMMENT**, so correcting a stale claim in it stops being a doc fix. Re-derive rather
+than trusting these numbers:
+
+```
+find src packages dopl-desktop-app/main -name '*.ts' -o -name '*.js' | xargs awk 'END{}' 2>/dev/null
+awk 'END{print FILENAME, NR}' <file>
+```
+
+Measured 2026-09-02 on `integration/mcp-efficiency`:
+
+| File | Lines | Note |
+|---|---|---|
+| `src/features/knowledge/server/service-base-writes.ts` | 498 → 394 | ✅ **SPLIT 2026-09-02** — the two PRE-WRITE gates moved to `service-base-gates.ts` (135). Seam: a refusal that answers a question about the CALLER, versus composing and persisting a row. |
+| `packages/dopl-client/src/channel-types.ts` | 500 | ⚠ **EXACTLY AT IT.** A wire-type module, so every new field is also a comment explaining what `null` means there. |
+| `packages/mcp-server/src/tools/channel-schema.ts` | 497 | The `.describe()` strings ARE the product surface; a correction to one is a line change, not a line add — but a NEW op is both. |
+| `packages/mcp-server/src/tools/channel-ops-agent.ts` | 495 | |
+| `dopl-desktop-app/main/launch-directive-wire.js` | 495 → 512 → 351 | ✅ **SPLIT 2026-09-02** — the tenth refusal word (`no-chain`) and its argument put it 12 OVER, which is the entry's own prediction arriving. Every frozen list, bound and pattern moved to `launch-directive-vocab.js` (239), a LEAF that requires nothing; the wire re-exports all of them verbatim, so no caller and no test changed. ⚠ `UUID_RE` deliberately did NOT move — `test/uuid-rule-parity.test.mjs` holds a census of which files carry their own copy and why, and relocating it would have edited that census silently. |
+
+- ⚠ **THE THREE REMAINING ARE NOT SPLIT HERE, DELIBERATELY** — same argument as the original: they
+  are under the cap, both lints are green, and a structural split of modules that own a wire
+  vocabulary is not a thing to do inside a review-fix pass. Each needs its own review, and the seam
+  for the desktop one is named below.
+
+#### The original entry — `main/launch-directive-wire.js` is at 495 of 500 (RESOLVED above)
+
+Measured 2026-09-01 on `integration/mcp-efficiency`:
+`awk 'END{print NR}' dopl-desktop-app/main/launch-directive-wire.js`.
+
+It absorbed two blocks in one day — the `chain` tri-state fix's argument and the T24 applied-posture
+echo in `decideBody` — and both were comment-heavy because both were correcting a claim the file had
+made and got wrong.
+
+- ⚠ **THE COST IS NOT THE FIVE LINES, IT IS WHAT A FILE AT THE CAP STOPS BEING ABLE TO DO** (§1): a
+  file at 500 cannot absorb a COMMENT, so correcting a stale docblock in it becomes a split rather
+  than a doc fix. **This file is where the wire vocabulary's claims are written down** — the closed
+  refusal enum, the tri-state narrowings, `decideBody`'s ordering argument — so it is precisely the
+  file whose comments must stay correctable. It has already been wrong twice about `chain` alone.
+- The seam, if somebody takes it: `directiveFrom` (server row → narrowed record, all the enum and
+  tri-state coercion) is a different job from `decideBody` + `refusalFor` (this machine's answer →
+  the wire). One reads, one writes, and they share only the frozen vocabularies at the top.
+- ⚠ **NOT SPLIT IN THE INTEGRATION, DELIBERATELY.** It is under the cap, the desktop lint is green,
+  and a structural split of the module that owns a security vocabulary is not a thing to do in the
+  same change as six merges. It needs its own review.
+- Status: **PARTIALLY RESOLVED 2026-09-02** — this file and `service-base-writes.ts` are split;
+  three files remain within eight lines of the cap and are named in the table above. Debt, not
+  breakage.
+
+### F-416 — ✅ RESOLVED 2026-09-01 — a self-referential `node_modules` SYMLINK was committed into the desktop tree, and `.gitignore` could not see it
+
+`dopl-desktop-app/node_modules` existed at HEAD as a **`mode 120000` blob** — a symlink pointing at
+its own path — introduced by `7dc82283` on `p2/needs-you-ping`. It is not in `master`; the
+integration merge brought it in.
+
+- What it does on a fresh checkout: the link resolves to itself, so every `require` out of
+  `dopl-desktop-app/main` fails. Measured on this branch before the fix: `npm test` in that tree
+  reported **72 failures, all `Cannot find module 'electron-store' / 'electron-updater'`**, and
+  `ls node_modules/` answers `Too many levels of symbolic links`. **The desktop CI job would have
+  gone red on this branch** — it runs `npm ci --ignore-scripts` then `npm test` there, and a
+  committed symlink survives the install.
+- ⚠ **IT LOOKS LIKE AN ENVIRONMENT PROBLEM AND IS NOT ONE**, which is the part worth keeping. The
+  failure mode reads as "somebody's machine has no dependencies installed", so the reflex is to
+  re-run `npm ci` — which succeeds, changes nothing, and leaves the tree just as broken.
+- ⚠ **WHY `.gitignore` DID NOT CATCH IT: `node_modules/` MATCHES DIRECTORIES ONLY.** A symlink is a
+  FILE to git, so the trailing slash let it through. Both `.gitignore`s carried only the slashed
+  form. The desktop one now carries both spellings, with this reason written beside it.
+- **Resolved** by deleting the tracked link and restoring the tree with `npm ci --ignore-scripts`
+  (`package-lock.json` unchanged). Desktop suite then measured 2948 pass / 0 fail.
+### F-417 — THE FOUR REVIEW RULINGS OF 2026-09-02 (R1–R4), taken as Desktop Agent DEFAULTS
+
+An independent review of `integration/mcp-efficiency` produced 34 findings; four of them could not
+be fixed without deciding a product question first. **The Desktop Agent took each as the STRICT
+default and shipped it. ⚠ EVERY ONE IS SAMUEL'S TO LOOSEN — none is settled, and each is recorded
+here with the exact edit that reverses it**, so loosening is a one-line change and not an
+archaeology exercise.
+
+The shared reasoning, stated once: **all four move in the NARROWING direction, and all four are
+cheap to reverse and expensive to have got wrong.** Three of them close a gap where an agent token
+reached further than the surface it belongs to claims; the fourth tightens an op to the wording its
+own spec uses. A narrowing that turns out to be wrong produces a refusal somebody reports on day
+one; a widening that turns out to be wrong produces nothing anybody sees.
+
+| # | Ruling | Where it lives | To loosen |
+|---|---|---|---|
+| **R1** | ~~The pings READ lane enforces channel MEMBERSHIP **and** party, matching `channel_pings_party_select`, instead of party alone.~~ ⚠ **MOOT SINCE 2026-09-02 (B16): THE PING LANE IS DELETED END TO END** — the table, the two services, the repository, the routes, the SDK methods and the desktop halves. The ruling is kept as a ROW rather than removed because it is the record of a narrowing Samuel was owed a chance to loosen, and there is no longer anything to loosen. | deleted — the "Needs you" card reads `AccountChannelStatus.waiting` | Nothing. Restoring the lane would mean restoring `20260907130000`, which ruling B8 says is never applied. |
+| **R2** | The grant op takes operator-**OWNED** sources, not "anything the caller can read". ⚠ **IT MOVED WITH THE OPS IT FENCED (2026-09-02, B15)**: the copy ops are deleted and `op="grant"` inherited the rule verbatim, on both tiers. | `mcp-server/src/tools/grant.ts › notOwnedRefusal` (local, so the refusal can say WHY) and `src/shared/grants/service.ts › assertGrantableResource` (the real fence, uniform 404) | Delete the two call sites and drop `ownedByCaller` from the service. ⚠ Then a teammate's `workspace`-visible template or shared base can be lent into a room that teammate is not in — and INVARIANTS §10 says "an operator's OWN template or knowledge base", so that wording moves with it. |
+| **R3** | The two account routes honour `ctx.apiKeyWorkspaceId`, narrowing to the locked workspace. | `app/api/channels/account/{status,messages}/route.ts` → `service-account.ts` → `repository-account.ts › listAccountChannelRefs` | Stop passing `lockedWorkspaceId`. ⚠ Then a container-locked credential reads channel names, operator-only session telemetry and message previews out of every workspace its operator belongs to — B1's ceiling is enforced by `withWorkspaceAuth` everywhere else and these two routes deliberately do not use it. |
+| **R4** | The pin/unpin routes are `sessionOnly`, on the channel-grants precedent. | `app/api/knowledge/bases/[baseId]/pin/route.ts`, `app/api/knowledge/entries/[entryId]/pin/route.ts` | Remove the flag from both, and from the census in `shared/auth/write-gate-coverage.test.ts`. ⚠ Then an agent token decides what every agent session launched in the workspace afterwards is handed at startup. **The MCP ops `dopl_kb(op="pin"|"unpin")` still work today for a human's session; what R4 refuses is the agent token.** |
+
+- ⚠ **THE REVIEW ALSO CONTESTED ONE FINDING, AND THE CODE WAS LEFT ALONE.** It read
+  agent-templates' tenancy repository's `workspaces!inner` embed as violating the tree's
+  "`!inner` 500s on this schema" rule. That note (`app/api/user/delete/route.ts`) is about joining
+  OUT of `workspaces` after the May 2026 denormalizations; this is a child embedding its PARENT by
+  FK, the shape `workspaces/server/repository.ts › listWorkspacesForUser` and
+  `home/server/repository-containers.ts › listLinkContainers` run on every workspace list.
+  `grep -rn '!inner' src --include='*.ts'` measures it. The half of that finding that WAS right —
+  no coverage over the real query — is now `src/shared/tenancy/resolve-resource.test.ts`; the query
+  moved there UNCHANGED on 2026-09-02 (A12) and the record is about the shape, not the path.
+- Status: **decisions recorded, code shipped.** Not debt; a standing question.
+
+### F-418 — `dopl_channel(op="direct_agent")` PROMISES "refused outright and no request is filed" for a peer's agent id; the server files the row and lets the desktop answer `no-session` (2026-09-02)
+
+- Location: the promise is `packages/mcp-server/src/tools/channel-schema.ts › agent_id` (*"⚠ YOUR OWN OPERATOR'S AGENTS ONLY. An id belonging to another member is REFUSED outright and no request is filed"*); the code is `src/features/channels/server/service-directions.ts › createAgentDirection`, whose own docblock states the opposite in as many words: *"⚠ THE AGENT ID IS NOT VALIDATED HERE AND CANNOT BE."*
+- Found during: the app-only-deletion fence wave, auditing served prose against the code behind it (Samuel's ruling, 2026-09-02 — a rule an agent is TOLD must have a fence in the code).
+- Severity: conflict (two statements of one rule), NOT a leak — see the next bullet before acting.
+- 🔒 **THE OUTCOME THE PROMISE DESCRIBES IS REAL; THE MECHANISM IT NAMES IS NOT.** A peer's agent is genuinely unreachable, but by SCOPE rather than by refusal: the row is inserted with `directionRepo.insertAgentDirection(ctx.userId, …)`, the presence check is `operatorIsOnline(ctx)`, and the desktop's backstop read is `listPendingAgentDirections(ctx.userId, ctx.workspaceId)` — so a foreign `agent_id` lands in the CALLER'S OWN operator's queue, on the caller's own machine, and is answered `no-session` there. It never reaches the peer. Structurally identical to the bound INVARIANTS §6 records for `channels/launch-directives/claim` + `/decide`: *"The bound is SCOPE, in the SQL predicate."*
+- **So what is wrong is the WORD, not the fence.** "Refused outright and no request is filed" overstates: a request IS filed, against your own machine, and is answered rather than refused. An agent reading that sentence and receiving a filed direction back has been told something the surface did not do.
+- ⚠ **DO NOT "FIX" THIS BY INTERSECTING `input.agentId` WITH `channel_sessions`.** The docblock explains why the validation cannot live here and it is not a stylistic claim: `channel_sessions` is a PROJECTION the desktop pushes, so *"a quiet row means nobody said anything, not that nothing is running"*. Gating on it converts a benign `no-session` answer into a hard 400 for every legitimate direction sent while the projection is stale — a windowless session that has not pushed yet, or a push that failed. That trades a wording defect for a liveness bug.
+- Proposed resolution, in preference order: (a) correct the PROSE to describe the real bound — your own operator's queue, answered `no-session`, reaches nobody — which is both true and the more useful thing for a model to know; (b) if "no row at all" is genuinely wanted, it is a DESKTOP-side decision (the machine already knows its own agents) and belongs in the claim path, not in a server predicate over a projection.
+- Proposed resolution: prose fix, and it belongs to the MCP-description tier rather than to a server change.
+- Status: **prose fixed (A6, `v2/a6-channel-schema-diet`).** `agent_id`'s `.describe()` and `channel-doctrine.ts › DOCTRINE_SECTIONS` now say the request is filed against the caller's OWN side and answered `no-session`; `channel-schema-caps.test.ts` pins both ends and the retired sentence's absence. Resolution (a) as written — the projection gate is still explicitly NOT taken. The SERVER becoming the authority remains A9's.
+
+### F-419 — the copy-ownership fence lives ONLY in the MCP package; the REST create routes it composes over have no equivalent (2026-09-02)
+
+- Location: the MCP copy ops' shared ownership fence, spent by the two `op="copy"` handlers; the uncovered doors were `POST /api/agent-templates` and `POST /api/knowledge/bases`.
+- 🔒 **DISPOSED BY DELETION, 2026-09-02 (slice B15, ruling B11 — the spec's §4 row G4 says "DELETED, not fenced", and this is that).** The copy ops, their shared resolver and both test files are gone; `op="grant"` replaces them, and the provenance field option (a) below was never built because there is no longer a client-composed create to attribute. **The gap this entry describes cannot be reached**: a grant does not create a row, so there is no second door to walk through with content you legitimately read. The ownership rule itself SURVIVED on both tiers — `grant.ts › notOwnedRefusal` and `shared/grants/service.ts › assertGrantableResource`, which is the two-layer shape §9 asks for and the thing this finding said must not be lost.
+- Found during: the same audit as F-418, immediately after the app-only-deletion fence landed (`src/shared/auth/app-only-delete-gate.test.ts`).
+- Severity: conflict, and the SAME CLASS the deletion wave just closed — a rule enforced at one layer only, where that layer is not the only door.
+- **The shape.** `op="copy"` was COMPOSED CLIENT-SIDE — a fenced read, then an ordinary create — so the ownership refusal gated the composition and nothing gated the second half. The same credential could `POST` the create route directly with content it legitimately read, landing a teammate's `workspace`-visible template or base PRIVATE to itself in a container that teammate may not be in. That is precisely the widening the deleted copy-target module's docblock named as *"the one direction a copy can widen an audience"*.
+- ⚠ **IT IS NOT THE DELETION CASE, AND THE DIFFERENCE IS WHY THIS IS A FINDING RATHER THAN A FIX.** The deletion prose made an absolute claim about the SURFACE (*"there is no MCP path to it, for any role or token"*) that the REST door falsified. `notOwnedRefusal` makes a claim about the OP (*"op=copy copies things YOU created"*) and the op does exactly that; a direct create is not a copy and promises nothing. So no agent is told something false — the gap is an undefended audience move, not a broken guarantee.
+- ⚠ **AND THE OBVIOUS FIX IS NOT THE DELETION FIX.** `sessionOnly` is wrong here: creating a base or a template over MCP is a shipped capability (`dopl_kb op="create_base"`, `dopl_agent op="create"`) and gating the route would delete it. The fence would have to be a `copiedFromId`-style provenance field carried into both schemas and both services and checked server-side — a cross-tree contract change, not a caller-type flag.
+- ⚠ **AND `notOwnedRefusal` MUST NOT BE DELETED IF THAT LANDS.** INVARIANTS §9 already settles the pattern for a two-layer fence: *"the route refuses the CREDENTIAL at the door, this refuses the ACT; removing either is a widening."* The MCP refusal is also the TEACHING half — it names the owner and closes the retry loop. ⚠ **IT WAS NOT DELETED**: B15 moved it, function and argument intact, to `packages/mcp-server/src/tools/grant.ts` with mutation checks in `packages/mcp-server/src/tools/grant.test.ts` and `packages/mcp-server/src/tools/agent-fences.test.ts`, and gave it the server-side twin this entry asked for.
+- Proposed resolution, as filed: (a) a provenance field carried into both schemas and checked server-side; (b) accept the gap. **Neither was taken.**
+- Status: **DISPOSED (B15).** Not "fixed" — the op it was about does not exist. ⚠ The direct-create doors are unchanged and still take anything the caller may write; that was always true and was never what this entry claimed.
+
+### F-422 — INVARIANTS §10 quotes three served-surface numbers that the ratchet it describes had already moved past, on the same day (2026-09-02)
+
+- Location: `docs/INVARIANTS.md` §10, the "EVERY TOOL DESCRIPTION HAS A TOKEN BUDGET" bullet and its follow-up; measured against `packages/mcp-server/src/tool-budget.test.ts › OVER_BUDGET_CEILINGS`, re-derived through `Client.listTools()` on 2026-09-02.
+- Found during: A2 of the MCP v2 wave, measuring today's served surface to pin the schema / instructions / doctrine ratchets at it.
+- Severity: doc drift — INVARIANTS is wrong and the code is right, so by CLAUDE.md's precedence rule the doc is what changes.
+- **Three numbers, all stale by the same event.** The bullet says `dopl_channel` "is 1,781" (measured **1,775**), the follow-up says `dopl_kb` "3,400" (measured **3,399**), and the total says "64,322 → 24,527" (measured **24,526**). The two per-tool numbers are the two shrinks the repaired STALE half of the description ratchet caught the hour it was repaired — the `seq` wording fix (F-412) and R2's `copy_base` rewording — and the total is their sum, off by the one character `dopl_kb` gave back. Nothing regressed: the doc simply recorded the pre-trim figures and the same-day trims never came back to it.
+- ⚠ **THE BULLET ITSELF SAYS "re-derive with that suite, do not quote", AND IT IS THE THING BEING QUOTED.** That is the whole shape of the finding: a doc that carries a measurement in prose will drift from the gate that owns it, no matter how loudly it disclaims. The gate is not wrong and was never wrong — the ceilings are the measured values and the STALE half fails the moment they are not.
+- Proposed resolution: (a) correct the three figures in place and re-date them, in whichever wave slice next touches §10 — A1, A3, A4 and A6 all move these numbers again, so the cheapest correct moment is the last of them rather than four separate edits; or (b) better, replace the figures with the command that derives them (`npx vitest run src/tool-budget.test.ts` in `packages/mcp-server`), per the standing "prefer the command over the number" rule, and keep only the ORDERS of magnitude in prose. **(b) is preferred** — this bullet has now been re-measured twice in two days.
+- ⚠ Not fixed in the A2 commit: `docs/INVARIANTS.md` is outside A2's file ownership and is contested by four other Wave A slices editing the same section.
+- Status: open.
+
+### F-423 — the `instructions` briefing has no truncation anywhere in this tree, so "written vs delivered" cannot be gated here and must not be asserted here (2026-09-02)
+
+- Location: `packages/mcp-server/src/instructions.ts › buildInstructions`, passed to the `McpServer` constructor in `packages/mcp-server/src/server.ts › createServer`; measured through `Client.getInstructions()` in `packages/mcp-server/src/tool-budget.test.ts`.
+- Found during: A2, building the instructions ratchet — the spec's target table carries an `instructions delivered` row of 2,048 against an `instructions written` row of 17,067 and asks one test to pin both.
+- Severity: an unfenceable claim, i.e. exactly the class Samuel's 2026-09-02 ruling is about — prose that tells an agent something no code in this repo enforces or even observes.
+- **Measured: written == delivered == 17,067, and the repo contains no 2,048 anywhere near this path.** `grep -rn '2048\|2_048'` over the whole tree (excluding `node_modules`, `dist`) returns exactly two hits, both `redirect_uri` length checks in `src/app/api/oauth/register/route.ts`. The MCP handshake carries the briefing whole; a real `Client` receives every character the server wrote.
+- **So the cut, if it exists, is inside the CONSUMING RUNTIME** — the Claude Code CLI / SDK that reads the handshake — which this repo neither ships nor pins. It is unobservable from any harness here, it moves when that dependency moves, and no test in this package can fail when it changes.
+- ⚠ **WHICH MAKES "17,067 written, 2,048 delivered" A CLAIM ABOUT SOMEBODY ELSE'S CODE, AND THE 15,019 CHARACTERS IT IMPLIES ARE FREE ARE NOT KNOWN TO BE FREE.** If the cut is real, the tail of the briefing reaches no agent and the doc rules that depend on it (the `dopl_map` session-start rule, the workspace-targeting table, the channels routing pointer) are asserting behaviour nothing delivers. If it is not real — or the number is different on another client — then the briefing is 17,067 chars pushed on every connection and the saving A1 claims is the whole of it, not the tail.
+- ⚠ **EITHER WAY THE FIX IS THE SAME AND IT IS A1's**: get the briefing under 2,048 at the SOURCE, where this package can measure it, and the question stops mattering. What must not happen is a test in this tree asserting a delivered/written gap it cannot see.
+- What A2 shipped instead: `tool-budget.test.ts` ratchets the WRITTEN length (17,067 today, A1's target 2,048) and separately asserts `getInstructions() === buildInstructions(…)` — i.e. written == delivered **at the one layer this repo owns**, verified to fail on a one-character difference. The client-side cut is named as out of scope in the constant's docblock rather than assumed.
+- Proposed resolution: (a) measure the real cut once, on the wire, with the SDK capture harness A5 uses (`dopl-desktop-app/test/session-profiles.test.mjs`), and record it as a dated measurement of a DEPENDENCY, not as a property of this surface; (b) delete the "delivered" row from any target table until (a) has a number — a target nothing can measure is not a target.
+- Status: open.
+
+### F-424 — `packages/mcp-server/dist/` is a TRACKED build artifact that was IN SYNC with `src/`, and nothing holds it there (2026-09-02)
+
+- Location: `packages/mcp-server/dist/` (tracked — `git ls-files packages/mcp-server/dist | wc -l`), regenerated by `packages/mcp-server/package.json › build` (`tsc`) and reached from the app through the `./factory` export.
+- Found during: the A4 `workspace`-arg diet. The one-line `src/registrar.ts` edit desynced exactly two artifacts and nothing complained.
+- Severity: silent drift, no gate. **Measured, not assumed:** at `79b28242` a full `npm run build -w @dopl/mcp-server` produced a `git status` of **zero** changed files — the committed `dist/` was byte-identical to a fresh build. After A4's source change it produced exactly two (`dist/registrar.js`, `dist/registrar.d.ts`). So this tree is a MAINTAINED mirror, not abandoned residue, and that is what makes the drift a defect rather than a non-event.
+- ⚠ **AND EVERY SLICE OF THIS WAVE DESYNCS IT.** A1, A3, A4 and A6 all edit `packages/mcp-server/src/`, none of them owns `dist/`, and if each committed its own rebuild the wave would collide on a GENERATED file — the one kind of conflict that cannot be resolved by reading the diff. A4 therefore did NOT commit its two files, deliberately.
+- **Why nothing is red today:** the root `package.json › build:packages` runs the package build before `next build`, so a deploy always compiles fresh and no connection is served the stale paragraph. The exposure is any consumer that resolves `@dopl/mcp-server/factory` WITHOUT a build first — a local run, a test that imports the built entry, or a desktop bundle — which reads whatever was last committed.
+- ⚠ **THE PRECEDENT IS ALREADY IN THE TREE AND IT ARGUES FOR A GATE, NOT FOR A CONVENTION.** `scripts/check-session-health-drift.ts` exists precisely because `@dopl/client`'s committed `dist/` is a hand-mirror that fails no build and no test when it drifts. This is the same class, one package over, and it currently has no equivalent.
+- Proposed resolution, in preference order: (a) untrack `packages/mcp-server/dist/` and `.gitignore` it — it is derived, the build regenerates it, and the spec's Wave B already proposes deleting ~1.6 MB of committed `dist/`; (b) if it must stay tracked, add a CI step that builds and fails on a non-empty `git status --porcelain packages/*/dist`, which is one `run:` line and catches the whole class; (c) at minimum, whoever integrates Wave A runs `npm run build:packages` ONCE after the merge and commits the result in a single `chore(dist)` commit.
+- Status: open. **Integration action required for this wave** — resolution (c) is the floor.
+
+## The 2026-09-02 MCP/ARCHITECTURE v2 WAVE A — slice A1 (instructions budget) — F-420, F-421, F-425
+
+### F-420 — the neutralizer's coverage of the `instructions` surface is now CONTINGENT ON THE BUDGET, and nothing says so at the fixture (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/narration.test.ts › "the MCP instructions block — a workspace name from whoever invited you"`, against `packages/mcp-server/src/instructions.ts › directoryBlock`.
+- Found during: A1, cutting the briefing to the 2,048-char prefix the CLI actually delivers.
+- Severity: test-coverage contingency, not a live hole — the RENDER is safe either way.
+- **The shape.** The directory is now elastic: rows that do not fit are dropped whole (descriptions first), with the count and `list_workspaces` in their place. Nothing is ever truncated mid-span, so an escaped name cannot be cut open — the safety property holds. But those two cases assert containment over a ~215-char hostile fixture, and they only assert anything **while that row still fits**: measured 2026-09-02 the two-workspace hostile shape renders at 2,044 of 2,048. A future sentence added to the contract drops the row, and the assertion goes red saying "0 hits" rather than "your framing broke" — the right colour for the wrong reason.
+- ⚠ **The guard is NOT lost when that happens**: the same neutralizer is asserted on the `_dopl_status` footer and on both meta-tool renders in the same file, and those are not budgeted.
+- Proposed resolution: (a) have the instructions cases assert on a directory sized to fit, and keep one case asserting the DROP is a whole row (never a partial span); or (b) move the hostile-name case to `directoryRow` directly, where no budget can make it vacuous. Either is ~10 lines and belongs with whoever next edits that file.
+- Status: open.
+
+### F-421 — `current_workspace` and `list_workspaces` still restate the home-channel rule in their RESULTS, once per call (2026-09-02)
+
+- Location: `packages/mcp-server/src/meta-tools.ts` — the no-auto-target result line and the 2+-workspaces choices line both carry *"home channels are not counted or listed here … ask `dopl_home(op=\"list_channels\")`"*.
+- Found during: A1, resolving F-425 (the same rule stated twice on the PUSHED surface — the tool description and its own `workspace` arg).
+- Severity: repetition on a pulled surface; C19's class (standing doctrine riding a per-call result), not a correctness defect.
+- **Why it was left.** F-425 was scoped to the pushed half, which every connection pays for whether or not it ever calls the tool. These two are paid only by the caller who hit the exact branch that needs the rule, which is the cheap end of the trade — but the rule is now stated in `instructions.ts` for every session, so a per-call restatement is a third copy.
+- Proposed resolution: cut both to the pointer (`dopl_home(op="list_channels")`) and let the briefing carry the rule; ~120 chars per hit, and it belongs with the C20 footer work rather than as a standalone change.
+- Status: open.
+
+### F-425 — ✅ RESOLVED 2026-09-02 — `current_workspace` stated the home-channel rule twice on the surface every connection pays for
+
+- ⚠ **Id allocated by the wave coordinator alongside slice A4**, which found it; A1 owns `meta-tools.ts` for the fix. If A4's branch files the same id, the two entries describe ONE finding and integration keeps one.
+- Location: `packages/mcp-server/src/meta-tools.ts` — the `current_workspace` description's ⚠ paragraph and the `workspace` argument's own `.describe()`, ~700 chars between them saying the same thing: a home-channel container is a legal `workspace=` target, is counted by nothing, and is listed only by `dopl_home(op="list_channels")`.
+- Resolution: stated ONCE in the tool description, pointing at the server instructions, which now carry the `workspace=` contract for the whole surface (A1/A4, C9). The argument keeps the one clause that is about the ARGUMENT — a container id is a legal ref, an unresolvable one is refused and pins nothing.
+### F-426 — the MCP-v2 spec's A5 row contradicts its own rule in one sentence: `NotebookEdit` is CLASSIFIED (2026-09-02)
+
+- Location: the MCP/architecture v2 spec, WAVE A table, row A5 (held outside this tree, in the wave's own checkout) against `dopl-desktop-app/main/runtime/claude/tools.js › EDIT_TOOLS`.
+- Found during: building A5 (`v2/a5-builtin-bound`), while deriving `full`'s positive bound.
+- Severity: conflict — spec vs. spec, resolved in favour of the rule. No code is wrong; recorded so the wave's author can rule rather than discover it in review.
+- **The shape.** The row states the rule as *"remove ONLY tools `grantDecision` classifies as unclassified → gate in every mode including `bypass`"* and then names `NotebookEdit` in the removal list. `NotebookEdit` is a member of `EDIT_TOOLS`, which is contract A2's `accept_edits` set and a constituent of `AUTO_TOOLS`, so it is classified at `accept_edits`, `auto` and `bypass`. It cannot be removed under the rule the same sentence states. The other twelve names on that list are genuinely unclassified; this is the only one.
+- **What A5 shipped, and why.** The RULE, not the list: the bound is `BYPASS_TOOLS` minus the dopl names, so `admitted ⇔ classified` is structurally true rather than asserted, and `NotebookEdit` is offered. ⚠ Removing it would need a fourth hand-maintained list and would mint the drift class the derivation exists to prevent — a name the mode picker says runs while the model never sees it.
+- ⚠ **The cost of the other answer is small and is the reason this is a finding rather than a debate**: `NotebookEditInput` is one of the smaller built-in schemas, so the token argument does not favour removing it either.
+- Proposed resolution: (a) correct the A5 row to drop `NotebookEdit` from its removal list — the rule is right and the list is a slip; (b) if the intent really was "no notebook tooling on a channel agent", that is a CLASSIFICATION decision (drop `NotebookEdit` from `EDIT_TOOLS` and `NotebookRead` from `BYPASS_READS`), and it changes what `accept_edits` means, so it needs saying out loud.
+- Status: open — (a) recommended.
+
+### F-427 — two authorities disagree about what `options.tools = []` means, and the tree believes the older one (2026-09-02)
+
+- Location: `docs/INVARIANTS.md` §11 (the triage FENCE bullet) and the triage-call suite (*"`tools: []` would mean NO BOUND — it must not be set"*) — ⚠ **BOTH DELETED 2026-09-02 with the triage tier (B6); the SDK question survives and now bears only on the session launch**, against the bundled `@anthropic-ai/claude-agent-sdk` type declarations — the `tools` option's own docblock, SDK 0.3.220 / claude 2.1.220.
+- Found during: A5, reading the SDK's option contract before setting `options.tools` for the first time on the `full` profile.
+- Severity: conflict — a documented contract vs. a tree-wide belief. **Nothing depends on the difference today**, which is why this is a finding and not a fix.
+- **The shape.** The bundled SDK's own type declarations document the option as: *"`[]` (empty array) — Disable all built-in tools"*. This tree states the opposite in two places and reasons from it: the triage lane deliberately leaves `tools` ABSENT and fences with a denying `canUseTool` *because* the positive bound *"cannot express"* an empty offer. If the declaration is right, `tools: []` expresses it exactly, and the fence's own comment is teaching the next reader something false.
+- ⚠ **NEITHER SIDE IS SAFE TO ASSUME AND THAT IS THE POINT.** The tree's claim is unattributed and undated; the declaration file is generated documentation, not a measurement of the bundled binary — which is precisely the class where this repo has been burned before (the SDK-lane MCP cell said "do not load" while nine servers loaded, F-268). **Only the child's own `init` message settles it.**
+- ⚠ **A5 IS UNAFFECTED EITHER WAY.** `launch-spec.js` sets the field only when the list is non-empty and no profile's bound is empty, so no lane passes `[]`. `test/session-builtin-bound.test.mjs` pins that a bound may never empty itself, for exactly this reason.
+- Proposed resolution: measure it — run the recorded harness from `claudeai-connector-lane.test.mjs`'s header with `--tools ''` / an empty `tools` and read the init message's tool list; then correct whichever of the two is wrong, and re-argue the triage fence's comment on the answer. **Until then change neither** — the denying gate is the real fence there and holds under both readings.
+### F-436 — the `team` axis is off `dopl_agent`/`dopl_kb` but three OTHER MCP tools still teach it, so "an agent is never told about teams" is not true of the surface (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/skills-ops-read.ts › accessMode === "teams"` (two arms, rendering a team label on every skill row), `› chats-render.ts › folderScopeLabel` (`"team-shared"`), `› skills.ts` (the `visibility` arg's *"Team-scoped sharing is web-UI-managed"*), and `› search.ts` (two notes naming teams among the unsearched domains). `dopl_members` is NOT in this list — teams are its subject.
+- Found during: A8, taking the axis off `dopl_agent` / `dopl_kb`. The four tools A8 owns are clean and `tools/agent-team-axis.test.ts` holds them that way; the scan is deliberately scoped to those four, because widening it today fails on files A8 may not touch.
+- Severity: friction, not a defect — every sentence above is TRUE of the storage as it stands. The cost is the wave's own goal: an axis with **0 live rows** (0 teams-mode KBs, 0 team-visibility templates, 0 `agent_template_teams` rows, 5 inert `team_resource_access` rows, measured in production 2026-09-02) is still pushed to every connected client on every connection, and a model that reads "team-shared" on a chats folder can still reach for a sharing model nothing implements.
+- ⚠ **THIS IS NOT A REASON TO WIDEN `agent-team-axis.test.ts` NOW.** The scan's own header records the scope and why; a test that fails on work its slice is forbidden to do is a broken gate, not a strict one.
+- Proposed resolution: fold it into the DB/app retirement of the axis — when `access_mode` goes, these labels have nothing left to render and come out with it, and the scan widens to every tool but `dopl_members` in the same change.
+- Status: open.
+
+### F-437 — the scope footers now promise "any you have no grant on", and the only grant mechanism behind that phrase is a table with 5 inert rows (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/agent-shared.ts › TEMPLATES_SCOPE_NOTE`, `› knowledge-ops-read.ts › BASES_SCOPE_NOTE`, and the `"list_bases"` bullet in `› knowledge.ts`. The ledger row that REQUIRES the phrase is `› tool-scope-claims.test.ts › LEDGER` (`dopl_kb` / `list_bases`, `discloses: [… "no grant on"]`).
+- Found during: A8. The clause used to name the team axis (*"bases scoped to a team you have no grant on"*); A8 removed the axis and kept the disclosure, because the server-side filters (`filterTeamVisibleBases`, `canSeeTemplate`) still run and a footer that claimed a full census would be the exact lie that ledger exists to catch.
+- Severity: latent staleness, correct today. Grants exist only through `team_resource_access` — 5 rows, all inert, measured in production 2026-09-02.
+- **The shape.** When the axis is retired in the database, the phrase stops describing anything: nothing will be able to drop a row for want of a grant, and the footer will be spending characters on every read to disclose a filter that no longer exists. It will NOT fail any test — the ledger only checks the phrase is PRESENT, never that the filter still bites — so nothing catches it.
+- ⚠ **DO NOT PRE-EMPTIVELY DELETE THE PHRASE.** The filters run today. Removing the disclosure before the filter is what turns an honest footer into a false census claim, which is the direction that ledger was built to prevent.
+- Proposed resolution: in the same change that drops the axis from the database, delete the clause from all three strings AND the `"no grant on"` entry from the ledger row — one commit, or the ledger fails and invites somebody to put the prose back.
+- Status: open.
+### F-434 — "delete the `to_agent*` / `author_agent_id` residue" names TWO fences, and only one of them is dead (2026-09-02)
+
+- Location: `src/features/channels/server/service-writes-metadata.ts › resolvePostMetadata` (the reserved-key strip, lines beginning `delete metadata.to_agent_id`) vs the now-deleted `z.never()` tombstones in `src/features/channels/schema.ts`.
+- Found during: v2 wave A slice A7, whose spec row reads *"Delete the `to_agent_id` / `to_agent_ids` / `author_agent_id` residue and tombstones"* as one deletion.
+- Severity: conflict — a plan row that, taken literally, is a security widening. Recorded rather than obeyed.
+- **The two fences are not the same fence.** The TOMBSTONES are camelCase ROUTE parameters (`toAgent` / `toAgents` / `authorAgentId`), refusals kept alive only for builds that still SENT them after the named-agent rollback (F-141); `schema-removed-params.ts` states that delete-me condition explicitly and it is met, so A7 deleted them. The STRIP is the snake_case METADATA keys, and it has no clock: it is what stops a caller from writing `metadata.author_agent_id` on a NEW post and wearing a retired agent's byline. INVARIANTS §5 already rules on it — *"removing a key from the strip is a WIDENING that makes it caller-settable"* — and `server/service-writes-metadata-attribution.test.ts` pins all three keys with that reason attached.
+- ⚠ **THE "NO RENDERER LEFT" ARGUMENT IS THE TRAP.** Both last renderers went at the 2026-08-18 cutover (F-218), which is what makes the strip look like residue. The order of return is the point: a reader comes back only after the key does, so a strip deleted today is a forgery live on the day someone re-adds the transcript byline — and that change would have no reason to look at this file.
+- Resolution: **taken.** Tombstones deleted; strip kept, with the distinction stated at both sites and in INVARIANTS §5 so the next reader of the spec row does not have to re-derive it.
+- Status: closed — recorded so the spec row is not re-read as unfinished work.
+
+### F-435 — ✅ RESOLVED 2026-09-02 (at Wave A integration) — the MCP tool's `kind` enum was the fifth statement of the message-kind set and stood outside the drift gate
+
+- Location: `packages/mcp-server/src/tools/channel-schema.ts` (the five postable kinds published to an agent, AS IT STOOD AT `80bcff51`) and the three lifecycle kinds refused from an agent credential, which live at `src/features/channels/server/service-writes-lifecycle.ts › LIFECYCLE_KINDS`, against `scripts/check-message-kind-drift.ts`, which reads neither.
+- Found during: building that gate (A7). Four statements are now held together; these two are not.
+- Severity: known gap, bounded — an MCP enum that drifts wider than the union publishes a kind the route refuses, which is a 400 with a message, not a silent wrong row. That is why it was acceptable to leave out and why it should not be left out forever.
+- ⚠ **THE REASON IS SCHEDULING, NOT PRINCIPLE.** The v2 architecture spec (§3 C21) deletes the `kind` parameter from that surface outright. A gate that read it would fail the change that removes it, and *a gate must not be the reason a deletion cannot land*. `LIFECYCLE_KINDS` is a partition of the same set (`full \ {message, task_progress, system}`) and has the same property.
+- Proposed resolution: when C21 lands, either the parameter is gone and this closes itself, or the surviving enum joins `FAMILIES` in the gate as a fifth site with its own subset relation. Whoever lands C21 decides; the gate's docblock names this finding.
+- Resolution: **it closed itself, exactly as the first branch predicted.** C21 landed in slice A6b (`b41e9971`): the `kind` parameter is DELETED from `channel-schema.ts` — a milestone is its own op and fixes the stored kind at the routing seam — so the fifth statement no longer exists and there is nothing for the gate to hold. The four sites `check-message-kind-drift.ts` covers are now the whole set.
+- ⚠ **AND THE FINDING IS WHY THE GATE DID NOT BLOCK THE DELETION**, which was its point: A7 deliberately left this enum out because *a gate must not be the reason a deletion cannot happen*. A fifth site added "for completeness" would have failed A6b and cost an argument.
+- Status: **resolved** — no gate change was needed, and none was made.
+### F-440 — ✅ RESOLVED 2026-09-02 — INVARIANTS §5A stated the "Use in this channel" copy's visibility BOTH WAYS, six days apart, in one section
+
+- Location: `docs/INVARIANTS.md` §5A — the bullet *"USE IN THIS CHANNEL NOW COPIES AT `workspace`, NOT `private` (2026-08-27)"* and, nineteen bullets later in the same section, *"`visibility` IS FORCED TO `private`, NEVER CARRIED"*. The code is `src/features/agent-templates/lib/template-draft.ts › containerCopyDraft`.
+- Found during: A11 (the MCP/architecture v2 spec's G16 row — that spec is NOT in this tree, so it is named and never cited as a path), reading §5A's copy/publish semantics before adding the `acknowledgeShared` precondition.
+- Severity: doc-vs-doc, resolved in place per `CLAUDE.md` (*"INVARIANTS is wrong → fix INVARIANTS in the same change"*). **No code was touched for it.**
+- **Which side was right, measured not remembered:** `containerCopyDraft` returns `visibility: "workspace"` and says so in a docblock naming the 2026-08-27 reversal; the deleted `containerCopyDraft` block pins it. So the LATER bullet was the stale one — it survived the reversal because the reversal edited the bullet ABOVE it and nothing linked the two.
+- ⚠ **THE STALE HALF WAS THE ONE CARRYING THE ARGUMENT**, which is why it read as current: "a gesture whose whole word is 'use' must not publish into the room the peer is standing in" is a good sentence about a value the code stopped writing. A reader taking §5A in order met the correct rule first and the persuasive obsolete one second.
+- ⚠ **THE SAME STALE CLAIM WAS ALSO IN THE CODE**, in the deleted /home copy dialog (B15)'s module docblock (*"AND `visibility` IS FORCED TO `private`"*), one file away from the dialog that states the opposite to the operator. Corrected in the same change.
+- Resolution: the later bullet now states `workspace`, dates the change, records that it was wrong for six days, and points at G16's precondition as what answers the argument the old value used to answer. Status: **resolved.**
+
+### F-441 — `dopl_kb(op="set_visibility")` is now gated by the server and cannot preview: its registrar arm passes no caller id and no `confirm_token` (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/knowledge.ts` — the `case "set_visibility"` arm calls `opSetVisibility(client, args.base, args.visibility)`; the handler is `packages/mcp-server/src/tools/knowledge-ops-write.ts › opSetVisibility`. The gate it now meets is `src/features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`, reached through `knowledge/server/service-base-writes.ts › updateBase`.
+- Found during: A11 (G16), wiring the confirm class's spent token to the server's `acknowledgeShared` precondition.
+- Severity: an ops gap opened BY a fix, in the safe direction — a refusal where there used to be a silent publish — but not the designed end state.
+- **The shape.** G16 puts the precondition on the knowledge UPDATE path, which is the door `set_visibility` uses. `create_base` can satisfy it because its registrar arm hands the handler `caller.userId` and `args.confirm_token`, so `confirmGate` can preview and mint. This arm hands over neither, so the handler cannot run the gate at all: inside a `kind='link'` container with a peer, an agent publishing a base it created gets a 400 it has no argument to answer.
+- ⚠ **THE PLUMBING WAS NOT DONE IN A11 ON PURPOSE.** `tools/knowledge.ts` is owned by slice **A3** of this wave (the MCP/architecture v2 spec's §4 ownership protocol — *"Where a slice needs a change inside a file another slice owns, it does not make the edit"* — and that spec is not in this tree). This is that cross-slice request, recorded rather than taken.
+- ⚠ **AND THE REFUSAL WAS MADE ACTIONABLE MEANWHILE**, not left as a raw 400: `confirm-token.ts › containerPublishUnacknowledged` takes a per-op REMEDY, and this op's names the operator (publish it from the Dopl app) because the agent genuinely has no way to acknowledge. A remedy an agent cannot perform would be worse than the silent publish it replaces; a remedy a person can perform is not.
+- Proposed resolution: (a) A3 passes `caller.userId` and `args.confirm_token` into `opSetVisibility` and widens the `confirm_token` description from `op=create_base` to both ops; the handler then previews and confirms exactly as `opCreateBase` does — its docblock already carries the shape. (b) If instead the ruling is that an AGENT may never publish into a room a peer stands in, delete the pure-publish carve-out in `updateBase` for `ctx.source === "agent"` and say so once; do not leave both.
+- Status: open — cross-slice request to A3.
+### F-428 — every `dopl_channel` param deletion in Wave A is blocked on `channel.ts`, which no slice owns (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel.ts` (the routing seam) against the MCP/architecture v2 spec, Wave A slice **A6** (branch `v2/architecture`; not in this tree).
+- Found during: building A6, the `dopl_channel` schema diet.
+- Severity: **process/ownership**, and it costs a measured third of the slice's stated win.
+- **The shape.** The spec assigns three contested files by name — `channel-schema.ts` to A6, `tool-budget.test.ts` to A2, `instructions.ts` to A1 — and A6's own scope then requires deleting `kind`, `intent`, `direct`, folding ping's three recipient forms into one, turning `chain` into a three-value enum, prefixing the cursor, retiring `get_thread` for `read(thread=)`, and capping a milestone. **Every one of those is a two-file change**: the schema DECLARES the arg and `channel.ts` READS it (`args.intent` :169, `args.ping_kind` :383, `args.to_desktop` :394, `args.chain`, `args.direct`, the `op` dispatch). `channel.ts` is in no slice's Owns column, and `parity.test.ts` — owned by A3 — fails the moment the declared shape and the handlers disagree, in either direction.
+- **Measured consequence.** A6 shipped the half it owns: served input schema 21,778 → 12,371 (−43%), doctrine 28,870 → 32,085. The spec's `−~14,000 ch` and its 8,000-char Wave A budget for this tool are **not reachable** from inside A6's ownership: what remains is ~4,200 chars of JSON structure (the 24-value `op` enum at 322, `info_card` at 716, `options` at 427, `recommendation` at 317) plus the `.describe()` floor, and only op/param DELETION moves those.
+- Proposed resolution: assign `channel.ts` and the unowned `channel-ops-*.ts` handlers to ONE slice (A6 is the natural owner — it already owns the shape they must agree with), or schedule a follow-on slice that owns the seam and lands C11–C15 + G14 as one change with `parity.test.ts` green.
+- Status: open — **the ownership question, not the code, is what is blocked.**
+
+### F-429 — C5's `recipient` param is a name an existing guard bans, and the guard is right (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel-ping.test.ts` (*"declares no `operator` / `operator_id` / `user_id` / `sender` / `sender_agent_id` / `recipient`"*) against the MCP/architecture v2 spec, collision **C5** (*"one `recipient` field on `ping`"*; branch `v2/architecture`, not in this tree).
+- Found during: A6, scoping C5.
+- Severity: conflict — a spec instruction that fails a shipped test on the name alone.
+- **The guard's reason still holds and is not a naming quibble:** *"a param an MCP client can see is a param a model will try, and a silently-dropped address is the invisible-delivery failure the addressing contract exists to prevent."* `recipient` was banned as one of the shapes that could re-introduce an address the server does not resolve.
+- **So the fold is only safe as a DELETION.** Adding `recipient` while `to`, `agent_id` and `to_desktop` remain declared makes four spellings of one concept where C5 counts six as the defect. Whoever lands C5 must delete the three in the same change and move the guard from "no param named `recipient`" to "exactly one recipient param, server-resolved" — the property the ban was standing in for.
+- Proposed resolution: land C5 with A9's `delivery=` verdict (the server-side resolution is what makes one field answerable), not before it.
+- Status: open.
+
+### F-430 — a tool's `.describe()` prose is pinned by tests three other modules own, so a schema diet is never a one-file edit (2026-09-02)
+
+- Location: `channel-thread-scope.test.ts:165` (four phrases of `since`), `channel-ops-agent.test.ts:371,386` (two phrases of `name`), `channel-law.test.ts:409-411,461-469` (six phrases of `thread` and `name`, via an `ARG_PROSE` join over the whole shape).
+- Found during: A6 — three of the longest `.describe()` blocks could not be cut to a contract sentence because their exact wording is asserted from files outside the slice that owns the prose.
+- Severity: friction, and it is the reason a "just shorten the descriptions" slice is not self-contained.
+- **The pins are not wrong** — each records a real misread (a poisoned thread cursor, a rename read as a re-address) and INVARIANTS §10 is explicit that a capability taught only in the description is taught weakly. The defect is that the assertion lives with the CONSUMER rather than with the prose, so the owning slice cannot restate a rule without editing another slice's file.
+- Proposed resolution: when Wave B cuts this tool to 620/3,000, move every `ARG_PROSE`/`.description` assertion into the owning module's own suite (here `channel-schema-caps.test.ts` / `channel-schema-budget.test.ts`) and leave the consumer asserting its own RESULT copy. `channel-law.test.ts` is at 499 of its 500-line cap, so that move is also what unblocks the next pin anyone needs to add there.
+- Status: open.
+
+### F-438 — `op="launch_agent"` publishes `tools`, `messages` and `chain`, and the dispatcher never passes them: a posture request is accepted, described at length, and silently dropped (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel-dispatch-agents.ts › dispatchManageAction`, the `case "launch_agent"` arm — it builds `{ thread, goal, model, template, waitMs }` and reads none of `args.tools` / `args.messages` / `args.chain`. Every other layer of the lane implements them: `channel-schema.ts › tools|messages|chain` publishes them (~2,000 chars of description across the three), `channel-ops-launch.ts › opLaunchAgent` accepts them, `schema-launch.ts › LaunchCreateSchema` validates them, `service-launch.ts › createLaunchDirective` stores them, and `20260910120000_channel_launch_directives_posture.sql` gives them columns and CHECKs.
+- Found during: A10 (launch/direct idempotency), while plumbing `client_msg_id` through that exact object literal.
+- Severity: real defect, and the failure mode is the invisible one — the caller is told nothing, the row records "did not ask", and the desktop resolves to the operator's stored ceiling, which is also what an honest omission produces. **Nothing anywhere reports the difference.**
+- ⚠ **THE SAME OP'S `set_agent_mode` SIBLING DOES PASS THEM** (`case "set_agent_mode"` reads `args.tools` / `args.messages`), so this is an omission in one arm rather than a design.
+- ⚠ **THE DIRECTION OF THE BUG IS SAFE AND THAT IS WHY IT SURVIVED.** A dropped posture request can only NARROW: the operator's ceiling applies either way, and `main/launch-posture.js › resolveChain` refuses a chain the channel forbids. So nothing is over-granted — what is lost is the caller's ability to ask for LESS (`tools: "manual"`, `chain: false`), which T24 shipped precisely so an orchestrator could hand a worker a narrower posture than its own.
+- ⚠ **NOT FIXED IN A10, DELIBERATELY.** The fix is three lines at a call site A10 already edits, but the slice's ownership is the idempotency key and `maxTurns`; widening it to complete another wave's plumbing would put a posture behaviour change inside a commit nobody reviewed for one. `channel-dispatch-agents.ts` is unowned in the Wave A table — see F-439's note on the ownership list.
+- Proposed resolution: add `tools: args.tools, messages: args.messages, chain: args.chain` to the `launch_agent` arm, and extend `channel-ops-launch-body.test.ts`'s whole-body assertion — which enumerates every key and is exactly the guard that should have caught this, but which is driven through `opLaunchAgent` DIRECTLY and therefore never sees the dispatcher. **The durable fix is a case driven through `registerChannelTool`**, so the arm and the op are proved together; `channel-agent-idempotency.test.ts` is that shape.
+- Status: **FIXED (A6b, `v2/a6b-channel-seam`).** The three reads are on the `launch_agent` arm, and the new cases are in `channel-launch-posture-wire.test.ts` — driven through `registerChannelTool`, exactly as the resolution asked, because a guard that skips the seam cannot see a seam defect. ⚠ `chain` went through the same commit as a THREE-VALUE ENUM (C11), so the arm passes `CHAIN_ON_WIRE[args.chain ?? "inherit"]` rather than `args.chain`; `inherit` maps to `undefined`, never to `false`, which is the GAP C bug class stated as a table.
+
+### F-439 — the v2 spec's A10 cell asks for G9 work that shipped on 2026-08-23, and its file list points at the wrong tree (2026-09-02)
+
+- Location: `/Users/samuelwang/Downloads/sie-v2/docs/specs/mcp-v2-architecture.md` §4 (the A10 row) and §2.4 (the G9 row), against `src/features/channels/server/service-launch-template.ts › resolveTemplateForDirective` and `dopl-desktop-app/main/template-resolve.js › resolveTemplate`.
+- Found during: A10, verifying the slice's second deliverable before writing code.
+- Severity: doc/spec drift. No code defect — the measurement is that the work is DONE, not that it is broken.
+- **What the spec asks for:** *"resolve to an id at request time and store the id; the desktop stops re-resolving a name"*. **What the tree does, at `79b28242`:** the create resolves the caller's ref through the agent-templates visibility matrix and stores `template_id` plus a name SNAPSHOT (asserted by `service-launch-template.test.ts`, *"both columns or the feature does not work"*); the desktop reads CONTENT by that id and refuses anything that is not a UUID (`template-resolve.js › isTemplateId` → `ipc-guards.js › isUuid`), and E-4 refuses a nulled id beside a live name WITHOUT a resolve attempt (`test/launch-directive-template.test.mjs`). Both halves, both pinned.
+- ⚠ **THE RESIDUAL IS NOT A GAP AND MUST NOT BE "FIXED".** Content is still resolved on the DESKTOP, under the OPERATOR's credential, and that is load-bearing rather than tidy: `knowledgeBases` is viewer-filtered, so resolving content server-side at request time would attach the ORCHESTRATOR's reach to the operator's session. `template-resolve.js`'s header holds the four-reason argument. The two-fence outcome the `template` description warns about (a template the caller can see and the operator cannot ⇒ `no-template`) is therefore the DESIGN, and G9's prose remains accurate.
+- ⚠ **THE FILE LIST IS ALSO WRONG IN A WAY THAT COSTS A BUILDER TIME.** The A10 row names `repository-launch.ts`, `service-directions.ts`, `main/launch-posture.js` and `main/template-resolve.js`; the change actually needs `service-launch*.ts`, `schema-launch.ts`, `schema-direction.ts`, both repositories, the two create ROUTES, `packages/dopl-client` (both create types), and `channel-dispatch-agents.ts` — the last of which is assigned to no slice in §4's ownership table while being the only place a new `dopl_channel` param can be plumbed. See F-438 for what that gap already cost.
+- Proposed resolution: (a) mark G9's verdict ENFORCED with the two anchors above, and reduce the A10 cell to `client_msg_id` + `maxTurns`; (b) add `channel-dispatch-agents.ts` to the contested-file list beside `channel-schema.ts`. This log is the record; the spec is read-only from here.
+- Status: open (spec-side).
+### F-442 — the "it lives elsewhere" classifier answered OUTSIDE the credential's own container lock (2026-09-02, A12) — ✅ RESOLVED in this change
+
+- Location: `src/features/agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef`, as it stood at `79b28242` — it read the caller's WHOLE membership set and never looked at `ctx.apiKeyWorkspaceId`.
+- Found during: A12, generalising that lane's tenancy repository into `src/shared/tenancy/resolve-resource.ts`.
+- Severity: leak, narrow — a tenancy NAME, never a row, and only over rows the caller could already list for themselves.
+- **The shape, and it is F-336's shape read backwards.** The lock answers WHICH WORKSPACE a credential may act in, and every gate that reads it as a VISIBILITY answer is the defect F-333/F-336 fixed. This is the mirror error: a lane that correctly stopped asking about VISIBILITY forgot that the lock still had a WORKSPACE claim to make. `isSharedCredential` returns `false` for `container_session` — correctly, one human is behind it — so a desktop session locked into a `kind='link'` container was classified normally, and the refusal it produced named a workspace the credential was fenced OUT of. INVARIANTS §4 step 1 says the lock *"OVERRIDES rather than merely validating"*; here a read stepped over it while every WRITE around it was refused.
+- ⚠ **NOTHING WAS 403'd AND NOTHING SHOULD HAVE BEEN.** The 404 was correct in every case; what crossed the fence was the SENTENCE attached to it, so the residual is one tenancy label reaching an agent running under a locked credential.
+- Resolution: the lock is now a clause of the one fence — `resolve-resource.ts › listContainersForCaller` narrows the candidate containers to `apiKeyWorkspaceId` when the credential carries one, so a locked credential resolves inside its lock and nowhere else. Pinned by the `container lock is honoured, and narrows` block in `src/shared/tenancy/resolve-resource.test.ts`, mutation-stated.
+- ⚠ **RESIDUE THIS CHANGE DELIBERATELY LEAVES, FOR B2.** `AgentTemplateNotFoundError.elsewhere` and its `details.elsewhere` mapping now have ONE producer (the MCP name lane) where they had two, and `dopl-desktop-app/main/template-resolve.js` still duck-types a key the desktop's own door can no longer receive. Two SPA docblocks — `apps/desktop-ui/src/pages/home/agent-panels.tsx` and `› agent-copy.tsx` — still say a personal-shelf template *"CANNOT LAUNCH INTO A CONTAINER"* because `getTemplateById` is workspace-filtered; the READ door is `readTemplateById` now and it can, so those two sentences are stale prose over correct code. Left alone on purpose: they are outside this slice's ownership and they die with the classifier.
+- Status: **resolved**; residue named above is B2's.
+
+### F-443 — the same classifier answered for containers the caller is only a `guest` in, below the floor every template route runs at (2026-09-02, A12) — ✅ RESOLVED in this change
+
+- Location: the same function, and the `listWorkspaceIdsForUser` it called in agent-templates' tenancy repository, as both stood at `79b28242` — `status='active'` was checked and `role` was not.
+- Found during: A12, deciding what "a container the caller actively belongs to" has to mean once an id can be READ there and not merely named.
+- Severity: leak, narrow — same shape as F-442, different axis.
+- **The shape.** `guest` is a LINK-granted role that ranks below `viewer`, and INVARIANTS §4 records that *"guests never reach a template surface at all"* — every `agent-templates` route sits at `withWorkspaceAuth`'s `viewer` floor. An ACTIVE membership was therefore not the same fact as "may read templates here", and the classifier used the first to answer a question about the second. It could tell a guest that a `visibility='workspace'` template lives in a container whose template surface they cannot open.
+- ⚠ **IT ONLY BECAME LOAD-BEARING WHEN THE ANSWER STOPPED BEING A SENTENCE.** As a label it leaked a tenancy; as A12's ADDRESS it would have been a read under the route floor — the same membership set now decides both, which is why the floor had to move into it rather than be re-stated at each door.
+- Resolution: `resolve-resource.ts › CONTAINER_READ_FLOOR` (`viewer`), applied in `listContainersForCaller` alongside `status='active'`. Pinned by the `EXCLUDES a container the caller is only a GUEST in` case in `src/shared/tenancy/resolve-resource.test.ts`.
+- ⚠ **THE FLOOR IS THE RESOLVER'S, NOT THE FEATURE'S**, and it is a constant rather than a parameter on purpose: a caller that could pass its own floor is a caller that can pass `guest`.
+- Status: **resolved**.
+
+### F-452 — ✅ RESOLVED 2026-09-02 — the A10 branch edited `packages/mcp-server/src` and shipped a `dist/` that predates the edit
+
+- Location: `packages/mcp-server/dist/tools/channel-dispatch-agents.js` (the `launch_agent` / `direct_agent` arms) against `packages/mcp-server/src/tools/channel-dispatch-agents.ts`, plus `dist/tools/channel-ops-{direct,launch}.{js,d.ts}`.
+- Found during: A13, immediately after merging `v2/a7-kinds-residue-drift`, `v2/a10-idempotency-maxturns` and `v2/a11-acknowledge-shared` — the first `npm run build -w @dopl/mcp-server` of the merged tree produced a non-empty diff in files nothing in A13 touches.
+- Severity: real defect, and the failure is total rather than partial — **the committed `dist/` is what the app loads at runtime** (`next.config.ts › serverExternalPackages` keeps both packages external), so A10's `client_msg_id` plumbing existed in source and in no running process. The op would have gone on filing a second directive on every re-issue, which is the exact bug A10 shipped to close.
+- ⚠ **NOTHING WOULD HAVE CAUGHT IT.** The suites import `src/`; both typechecks read `src/`; `check-*-drift.ts` reads `dist/` only for the three declarations it names. There is no gate asserting `dist/` is the build of `src/`, and ENGINEERING's rule for it — *"When you edit either package's `src/`, rebuild its `dist/` … before committing"* — is prose. CI's `build-test` job DOES rebuild, but into a throwaway checkout: it proves the build succeeds, never that the committed output matches.
+- ⚠ **A13 IS THE THIRD WAVE THIS HAS BITTEN AND THE SECOND TO RECORD IT** — `check-role-drift.ts`'s header opens with the guest-role wave hand-editing `dist/`, which is the same class from the other direction.
+- Resolution: **taken** — rebuilt in its own commit, no source change, so the fix is reviewable as "what A10 should have committed".
+- Proposed follow-up (NOT taken here, it is a `ci.yml` change and A7 owns that file this wave): a CI step that runs `npm run build:packages` and fails on a dirty `git status` under `packages/*/dist`. That is the only thing that turns the prose rule into a gate.
+- Status: closed (the rebuild), with the follow-up open.
+
+### F-453 — what `@dopl/contracts` could NOT absorb, stated once so the next reader does not re-derive it (2026-09-02)
+
+- Location: `packages/contracts/src/index.ts` (the two rules), against the four things below.
+- Found during: A13, deciding the package's boundary.
+- Severity: not a defect — a boundary record. It exists because "why isn't X in contracts?" is a question three different files would otherwise answer differently, and because two of these look like oversights and are not.
+- **1. `isStandardWorkspace` and every other runtime value.** The package is TYPE-ONLY, which is precisely what lets it have no build and no `dist/`; a single `const` makes it a build input for Next/webpack, the SPA's Vite and two NodeNext `tsc` programs. So the predicate stays hand-mirrored in three places and `check-role-drift.ts › checkWorkspaceKind` stays with it, reduced to the POSITIVE-form assertion (INVARIANTS §4A, F-295). ⚠ **The cheap-looking fix — give the package a build — is the expensive one**, and its cost is the 1.6 MB of committed `dist/` that C18 exists to delete.
+- **2. `SessionDetailKey` and `ChannelSessionState` / `…Own`.** The server DERIVES the six-key `detail` vocabulary from `src/shared/lib/spa-bridge-shapes.ts › DesktopSessionSummary["detail"]`, because that is where the DESKTOP's own wire shape is declared. Moving the declaration into a package the desktop cannot import would invert a derivation the desktop tree owns — trading one mirror for a worse one. The SDK's `SessionDetailKey` is therefore still a literal union and still ungated.
+- **3. `check-role-drift.ts › checkWorkspaceMirror`.** `Workspace`+`WorkspaceWithRole` and `WorkspaceSummary`+`WorkspaceListItem` are not the same shape and never were — the gate carries a recorded asymmetry (`iconUrl`, F-335) whose allow-list may only shrink. Unifying two types that legitimately differ is not deduplication.
+- **4. Everything `dopl-desktop-app/` states a second time.** It is a SEPARATE npm project with its own lockfile, not a workspace of the root, so it cannot depend on `@dopl/contracts` at any price. Its copies are `.js` (`main/launch-directive-wire.js › TOOL_MODES` / `MESSAGE_MODES`, the ping kinds, the session-state reducer) and remain a prose-and-test problem. ⚠ **`TOOL_MODES` / `MESSAGE_MODES` are ORDER-sensitive** — `main/launch-posture.js › narrowTo` clamps by index — so they are not even the same KIND of statement as the unions they mirror.
+- Proposed resolution: none required. Re-read this entry before proposing a fifth family for the package; three of the four are deliberate and the fourth is impossible.
+- Status: closed as recorded.
+
+
+### F-444 — `get_thread` is folded out of the MCP surface, and three desktop files still teach it (2026-09-02)
+
+- Location: `dopl-desktop-app/main/session-profiles.js › OWN_CHANNEL_READ_OPS`, `main/prompt-framing.js` (*"op \"get_thread\", …, thread \"<id>\" gives you one thread"*) and `main/session-launch-op.js` / `main/launch-directive-spawn.js` (the spawn prompt: *"read it with dopl_channel (op \"get_thread\")"*), against `packages/mcp-server/src/tools/channel-schema.ts › CHANNEL_INPUT_SHAPE.op` after slice A6b.
+- Found during: A6b, landing C15 (`get_thread` → `read(thread=)`).
+- Severity: **stale teaching, not a broken fence** — and the direction matters. The gating list holding a dead op name grants nothing (`OWN_CHANNEL_READ_OPS` is a membership test over ops that ARRIVE); the PROMPTS are the live half, because they hand a launching agent an op the server now answers with a `-32602`.
+- **Why it was not fixed in the same change.** `dopl-desktop-app/main/**` is in no Wave A slice's Owns column, and the MCP-side fold is a two-file edit in this slice's own files. Widening a schema slice into the desktop's prompt copy is how a wave stops being reviewable.
+- ⚠ **THE FAILURE IS ONE TURN, NOT A LOOP.** A spawned agent that calls `get_thread` gets an invalid-enum error naming the field, and `read(thread=)` is the op that answers the same question with strictly MORE (the card AND the transcript). So the cost is one wasted call and a confused first turn, not an unrecoverable session.
+- Proposed resolution: (a) replace the op name with `read` + `thread=<id>` in the two prompt builders and drop it from `OWN_CHANNEL_READ_OPS` — one edit, four sites, in a slice that owns `main/`; (b) add `get_thread` to `dopl-desktop-app/test/removed-vocabulary.test.mjs`, which is the desktop's own regrowth guard and the thing that would have caught this had the MCP side and the desktop side ever shared one.
+- Status: open.
+
+### F-445 — `op="pings"` lost its cursor to close C13, and the trade is a re-read rather than a skip (2026-09-02)
+
+- Location: the MCP ping-inbox handler and `channel.ts`'s `case "pings"`, against the held `/api/pings/await` route, which still carried one. ⚠ **ALL THREE DELETED AT SLICE B16** (ruling B8).
+- Found during: A6b, landing C13 (*"one cursor"*).
+- Severity: **a deliberate capability trade, recorded so it is not re-litigated as a bug.**
+- **What was wrong.** One `since` param served TWO cursor spaces — a message seq on `read`/`await`, a ping seq on `pings` — and the spec's own words for the defect are *"crossing reads a plausible WRONG page instead of erroring"*. The failure is SILENT and the wrong direction: a message seq is routinely hundreds larger than a ping seq, so crossing them skips the inbox rather than repeating it.
+- **What shipped, and why not the spec's prefix.** C13 proposed an opaque `msg:861` / `ping:12` cursor rejected on prefix mismatch. That keeps two spaces and adds a parser, two error arms and a new syntax to every result that prints a cursor. **The slice deleted the second space instead**: `pings` takes no cursor and returns the newest page (still bounded by `limit`). One space cannot be crossed, and there is nothing to reject.
+- ⚠ **THE COST IS REAL AND IS NAMED IN THE RESULT.** A reader that acted on a ping can be handed it again; the row's `seq` is how it tells. That is the safe direction — a repeat is visible, a skip is not — and an inbox of at most 100 bounded signals is not a transcript to replay. ⚠ **THE HELD LANE IS UNTOUCHED**: `GET /api/pings/await?since=` still takes a ping cursor, is not an MCP op, and is where an external session gets exactly-once behaviour.
+- Proposed resolution: none needed unless a caller is measured re-processing pings. If one is, the answer is a `pings` ack (a column and a filter), not a second cursor space on `since`.
+- Status: closed by decision — recorded, not open.
+
+### F-446 — a `.describe()` is pinned by tests in FIVE other modules, and F-430 undercounted by two (2026-09-02)
+
+- Location: the same `ARG_PROSE`/`.description` joins F-430 names, plus `channel-lifecycle-kinds.test.ts` (the `kind` describe, six phrases) and `channel-post-guidance.test.ts` (the `intent` enum, three values) — both of which pinned a param this slice DELETED.
+- Found during: A6b. F-430 measured the cost of SHORTENING a describe; this is the cost of deleting one, and it is higher.
+- Severity: friction, and it is the same defect F-430 records with a second data point rather than a new one.
+- **The shape.** A param's prose is owned by `channel-schema.ts`, and five suites in five other files assert on it. Deleting the param therefore edits five files that have nothing to do with the deletion — and the edits are not mechanical: `channel-lifecycle-kinds.test.ts` had to be rewritten from *"the refusal names the kind you passed"* to *"the value is not sayable"*, which is a DIFFERENT and stronger guard, and the change had to be reasoned about rather than applied.
+- ⚠ **THE REWRITES ARE THE GOOD OUTCOME AND SHOULD NOT BE READ AS AN ARGUMENT FOR LOOSER PINS.** Each one forced the question *"what is the guard now that the param is gone"*, and in two cases the answer was stronger than the assertion it replaced. The cost is that the question was asked in somebody else's file.
+- Proposed resolution: as F-430's — when Wave B cuts this tool to 620/3,000, move every `ARG_PROSE`/`.description` assertion into `channel-schema-caps.test.ts` / `channel-schema-budget.test.ts`, and leave each consumer asserting its own RESULT copy. ⚠ Add the two files above to that move.
+- Status: open (folded into F-430's remedy; recorded separately because the measurement is different).
+
+### F-447 — the doctrine document GREW while every pushed surface shrank, and only a per-section budget makes that legible (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/channel-doctrine.ts › CHANNEL_DOCTRINE` and the new `channel-doctrine-budget.test.ts`.
+- Found during: A6b, adding `op="help", section=`.
+- Severity: measurement hazard, not a defect — filed because the NUMBER moved the wrong way and a future reader comparing waves will otherwise read it as a regression.
+- **The measurement.** Across A6 + A6b the two PUSHED surfaces fell — served input schema 21,778 → 11,103 (−49%), description 1,775 → 1,703 — while the PULLED doctrine rose 28,870 → 32,085 → **32,728**. The last +643 is `section=` itself: an index line naming the sections, and the SECURITY sentence repeated at the head of each one, because a caller that pulls a single section skipped the header that rule used to live in.
+- ⚠ **THE TOTAL IS THE WRONG NUMBER AND THAT IS THE FINDING.** Nobody is served the whole document unless they ask for it; what an agent now pays is ONE SECTION, and the largest is 6,252 characters — under a fifth of the text, and comparable to a single tool description. `channel-doctrine-budget.test.ts` gates BOTH, in both directions, so the per-section figure is the one that ratchets.
+- ⚠ **AND A PULLED SURFACE STILL NEEDS A GATE.** Prose evicted from a pushed surface lands here by design (T10/T12/T82), so an unmeasured doctrine turns a diet into a relocation. That is the whole argument for the third budget; the growth above is the first thing it caught.
+- Proposed resolution: when Wave B re-measures this tool, quote the SECTION figure beside the total, and treat a rise in the total that lowers the section maximum as a win rather than a regression.
+- Status: closed by decision — recorded so the numbers are comparable.
+
+### F-448 — the web's agent-handle INDEX does not claim the bare `@<id>` form the desktop routes on, so a tinted-nothing token still reaches an agent (2026-09-02)
+
+- Location: `src/features/channels/lib/agent-mentions.ts › buildAgentMentionIndex` (claims `agent-<id>` and the slug, and nothing else) against `dopl-desktop-app/main/session-dispatch.js › mentionedAgentIds`, whose regex is `@(?:agent-)?([a-z][a-z0-9]{7})` — the prefix OPTIONAL, with its own comment saying why: *"the bare `@<id>` form is what every message written before that carries"*.
+- Found during: v2 wave A slice A9, wiring the server's own resolution of `@agent-<id>` through the shared index. The gap is what made a bare-id case fail on the first run.
+- Severity: conflict, small blast radius, **and it is the F-266 defect with the signs reversed.** F-266 was tint-says-tagged / stamp-says-nobody; this is tint-says-nothing / machine-says-routed. The transcript renders `@k3v7d2mq` as plain prose while the desktop feeds that agent the turn.
+- ⚠ **THE SERVER SIDE IS NORMALISED RATHER THAN FIXED, DELIBERATELY.** `server/service-wake-verdict.ts › bareId` maps a well-formed bare id onto the canonical `agent-<id>` handle before the ONE index lookup, because a server answering `unreachable` for a form the desktop routes happily would be a worse lie than the one that slice exists to remove. It is a normalisation of a handle, not a second parser: the token still comes from `lib/mentions.ts › mentionTokensOf`.
+- ⚠ **THE REAL FIX IS ONE LINE IN THE INDEX** (`claim(id, id)` beside `claim(agentIdHandle(id), id)`), and it was NOT taken here because it changes what the TRANSCRIPT TINTS and what the composer offers — a rendering change, in a slice that touches no rendering. Taking it would also make `server/service-wake-verdict.ts › bareId` deletable, which is the tell that it is the right place.
+- ⚠ AND IT IS NOT COVERED BY `lib/agent-handle-parity.test.ts`. That suite pins the SLUG rule and the token STRIP across the two trees; the id doors are a regex on one side and an index on the other, and nothing holds those against each other.
+- Proposed resolution: (a) claim the bare id in `buildAgentMentionIndex`, delete `bareId`, and extend the parity suite to cover both id doors; or (b) record the asymmetry in `agent-mentions.ts` as deliberate, which would need an argument nobody has made.
+- Status: open.
+
+### F-449 — the ceiling `channels.agent_*` now records has NO editing surface, so the server's clamp is armed and unarmed (2026-09-02)
+
+- Location: `supabase/migrations/20260912120000_channel_delivery_verdict.sql` §2 (the three columns), `src/features/channels/schema.ts › ChannelUpdateSchema.agentPosture` and `server/service-writes.ts › MANAGED_CHANNEL_FIELDS` (the manage-gated write), against the desktop's own Settings tab (`main/channel-prefs.js › getLaunchPosture`, `AGENT_CHAIN_KEY = 'channelAgentChain'`) and `apps/desktop-ui`, which has no control for the new columns.
+- Found during: v2 wave A slice A9, closing G6 and G7.
+- Severity: incomplete feature, deliberately, and it is **fail-open by construction** — `null` on every axis means "no ceiling recorded", so the clamp and the chain refusal do nothing until somebody writes one, and the desktop's own clamp remains the fence exactly as before. Nothing regresses; nothing is enforced either.
+- **WHY IT SHIPPED THIS WAY.** G6/G7 record that the ceiling was an `electron-store` record no server could read, so a launch's requested posture "decided nothing" server-side and an offline or older desktop enforced nothing at all. Closing that needs (a) a server-side ceiling, (b) a clamp against it, and (c) a way for an operator to set one. A9 owns the server (`service-writes*.ts`, `service-launch*.ts`, a migration); the Settings surface is `apps/desktop-ui` and `main/channel-prefs.js`, neither of which is in that slice's ownership, and inventing a control there inside a server slice is how a UI change lands in a commit nobody reviewed for one.
+- ⚠ **THE HONEST OPTION WAS NOT "WAIT".** A clamp with no writer is inert and reversible; a *promise* of a clamp with no writer would be the class G6 exists to record. So the API accepts it, the tests drive it, and the columns are documented as "not recorded" rather than "unrestricted" at every site.
+- ⚠ **AND DO NOT CLOSE IT BY MIRRORING THE DESKTOP STORE AUTOMATICALLY.** `channelAgentChain` and the operator's stored pair are that OPERATOR's settings on that MACHINE; `channels.agent_*` is a property of the ROOM, manage-gated, and applies to every member's launches. They are two different facts that happen to constrain the same axis, and a sync would quietly make one member's local preference everybody's ceiling.
+- Proposed resolution: a Settings-tab control on the channel (manage-gated to match the server), wired to the existing channel PATCH — no new endpoint. Until then the columns stay null and the desktop is the only fence, which is the pre-A9 state.
+- Status: RESOLVED 2026-09-02 (v2 wave B slice B4). `components/channels-v2/settings-channel-agents.tsx` is the control, exactly as proposed: three axes plus "No ceiling" on each, wired to the ordinary channel PATCH through `hooks/use-channel-lifecycle-writes.ts › channelAgentSettingsConfig`, and mounted only for a manager (`channel-manage.tsx`). ⚠ **THE SERVER IS STILL THE GATE** — `MANAGED_CHANNEL_FIELDS`, unchanged; the panel is an affordance and hiding it would fence nothing. ⚠ **IT SHARES THE PANEL WITH THE DEFAULT RESPONDER** (ruling B6) rather than getting one of its own: both are channel properties, manage-gated, about somebody else's machine. ⚠ **THE PROHIBITION ABOVE IS UNCHANGED AND UNSPENT**: nothing mirrors the desktop's `channelAgentChain` into the column, and a channel nobody has set still behaves exactly as it did before.
+
+### F-450 — G20 ("channel work is answered into the channel") is the one A9 row that did not ship, and it is an eighth session-health field (2026-09-02)
+
+- Location: the v2 spec's A9 cell (`/Users/samuelwang/Downloads/sie-v2/docs/specs/mcp-v2-architecture.md` §4) and its G20 ledger row — *"not a refusal — a measurement: flag the session row when a channel-fed turn ends with no send"* — against `dopl-desktop-app/main/session-health.js` and `scripts/check-session-health-drift.ts`.
+- Found during: A9, scoping the slice against the checklist it was given.
+- Severity: unbuilt work, recorded so it is not read as done. **A9's other seven guardrails (G6, G7, G8, G11, G12, G15, plus G23 measured) did ship**; this one did not, and the spec's summary line for the row therefore overstates.
+- **WHY IT IS SEPARABLE, AND IT IS NOT LAZINESS.** G20 is not a message fact at all — it is a SESSION fact, and every session fact on this lane is a hand-mirrored field across FOUR sites plus a column: `types-sessions.ts`, the zod block in `schema-sessions.ts`, the SDK's `session-health-types.ts`, its committed `dist/`, and the migration, held together by `scripts/check-session-health-drift.ts` (whose own doc row warns that every field there is `optional` AND `nullable` by design, so drift fails no build and no test — the field just never arrives). Adding an eighth means a second migration in a slice that already writes one, a desktop producer in `session-health.js`, and a gate change. None of that is delivery-verdict work.
+- ⚠ **AND ITS PRODUCER IS NOT OBVIOUS.** "A channel-fed turn ended with no send" needs the turn boundary, which `session-health.js` does not currently observe — it derives from the engine's state, not from a turn's outcome. The measurement has to be defined before it can be mirrored.
+- Proposed resolution: one slice — define the flag on the desktop first (what counts as a channel-fed turn, and when it is judged), then the field across the four mirrors + the column, in that order, with the drift gate updated in the SAME change (the remedy CLAUDE.md's warning has asked for three times).
+- Status: open.
+
+### F-451 — a launch's `resolved_*` is the third posture group on one table, and nothing structurally stops a reader taking it for the other two (2026-09-02)
+
+- Location: `supabase/migrations/20260912120000_channel_delivery_verdict.sql` §3, `src/features/channels/types-launch.ts › LaunchDirective` (`startToolMode` / `appliedToolMode` / `resolvedToolMode`), `server/service-launch-dto.ts › toDirective`, `main/launch-directive-wire.js › directiveFrom`.
+- Found during: A9, writing the third group.
+- Severity: comprehension hazard, not a defect — every site is currently correct and every one of them says so at length. Filed because the LENGTH is the tell: three near-identical column trios on one table, distinguished only by prose, is the shape that eventually gets read wrong.
+- **THE THREE, IN ONE LINE EACH.** `start_*` / `chain` = what the caller ASKED (never rewritten; `null` = did not ask). `applied_*` = what the MACHINE says it did after its own clamp (`null` = NOT REPORTED, and it still has no writer). `resolved_*` = what the SERVER permitted, written on every create.
+- ⚠ **THE MOST LIKELY WRONG READ IS THE COMFORTABLE ONE**: defaulting `applied_*` from `resolved_*` on a render, which would make the row assert that the machine applied exactly what the server allowed — the one claim this lane cannot make about a value the machine clamps again. `20260910120000`'s header already forbids the same shortcut from `start_*`.
+- ⚠ **AND `resolvedModel` IS NOT A POSTURE AT ALL** — it rides the group because it is written by the same create, but `null` there means "this server does not recognise the id", not "did not ask", and it is an ECHO rather than a bound (G8).
+- Proposed resolution: (a) when B9's `manage(op, …)` collapses the launch surface, collapse the three groups into one nested shape (`{requested, permitted, applied}`) so the distinction is structural rather than prefixal; (b) until then, keep every new reader's `?? null` and its comment, and treat a render that reads two of the three as the review question.
+- Status: open.
+
+### F-454 — a SIXTH flake, and it is an off-by-one-millisecond assertion nobody has counted (2026-09-02)
+
+- Location: `src/features/channels/server/service-launch-agent.test.ts` › *"reuses the LAUNCH TTL rather than minting a second liveness number"*.
+- Found during: the Wave A review fixes, running `src/features/channels` — it failed with `expected 120001 to be less than or equal to 120000` and passed on an immediate isolated re-run.
+- **THE SHAPE.** The case takes `const before = Date.now()`, calls the service, and asserts `Date.parse(insert.expires_at) - before <= LAUNCH_DIRECTIVE_TTL_MS`. But the service takes its OWN `Date.now()` after that one (`service-launch-agent.ts`, and `service-launch.ts › createLaunchDirective` does the same), so the stored expiry is `serviceNow + TTL` and the measured delta is `TTL + (serviceNow − before)`. **Any millisecond that elapses between the two clock reads fails it.** The lower bound is slack by 5,000 ms; the upper bound has none at all.
+- ⚠ **IT IS NOT ON THE KNOWN-FLAKE LIST.** The wave doc names five (`credits/consume`, `shared/version/latest-release`, `login-form-core`, `agent-authoring`, `billing/credits-link-reroute`) and reports "no flake was hit"; this is a sixth, and unlike the others it fails on machine SPEED rather than on ordering, so it will show up more often in CI than locally.
+- ⚠ **THE FIX IS NOT "ADD SLACK TO THE UPPER BOUND"** — that would make the assertion unable to catch a second, longer TTL, which is the whole thing it exists to pin. Inject the clock (both services already take an optional `now`, which is how `service-launch-ceiling.test.ts` drives them) and assert the expiry EXACTLY.
+- Proposed resolution: pass a fixed `now` into `createAgentDirective` from this case and assert `Date.parse(insert.expires_at) === NOW + LAUNCH_DIRECTIVE_TTL_MS`. Left unfixed here because it is outside the 26 findings this pass was scoped to, and a flake fixed in passing is a flake nobody counts.
+- Status: RESOLVED 2026-09-02 (A14). The clock is pinned and the expiry asserted EXACTLY — `expect(Date.parse(insert.expires_at)).toBe(NOW + LAUNCH_DIRECTIVE_TTL_MS)` — so both bounds collapse to one and neither carries slack. ⚠ **THE PROPOSED RESOLUTION'S PREMISE WAS WRONG AND IS CORRECTED HERE**: neither `createAgentDirective` nor `service-launch.ts › createLaunchDirective` takes an optional `now`, and `service-launch-ceiling.test.ts` asserts on no timestamp at all — it drives nothing with a clock. With no injection point and the fix scoped to the one test file, `vi.useFakeTimers({ toFake: ["Date"] })` freezes `Date` alone (timers stay real) and the presence stub is re-stamped under it. One assertion of this shape in the file; no others.
+
+### F-460 — the grant fold left ONE reader on the old table, and a DB trigger is holding it up (2026-09-02)
+
+- Location: `src/features/knowledge/server/repository-audience.ts › listGrantedBaseIdsForChannels` (still `.from("channel_resource_grants")`), against `supabase/migrations/20260914120000_resource_grants.sql` §7 `mirror_channel_resource_grant()`.
+- Found during: B1, moving the channel grant path onto `resource_grants`.
+- Severity: **deliberate expand/contract debt, with a deadline.** Not a defect today — the mirror runs in the same transaction as the write, so no reader can observe the two tables disagreeing.
+- **Why the mirror and not the edit.** That file is in no Wave B slice's Owns column. It answers the AGENT's reachable-base set, so a table that quietly stopped receiving writes would fence the operator's own agents out of every newly-shared base — a silent, fail-*closed*-then-fail-*open* pair (a stale row un-shared elsewhere would keep reading). A trigger is atomic; a TypeScript dual-write is not.
+- ⚠ **IT IS NOT A SECOND SOURCE OF TRUTH.** Nothing reads `channel_resource_grants` back into `resource_grants`, and cross-container rows are SKIPPED rather than mirrored — the old table's own `enforce_channel_resource_grant()` cannot hold them and would RAISE inside a legal write. `schema-sql.test.ts` pins both properties.
+- Resolution, TAKEN 2026-09-02 at the batch-3 integration, exactly as proposed: `listGrantedBaseIdsForChannels` reads `resource_grants` with `scope_type='channel'` beside its existing `resource_type='knowledge_base'` term (BOTH halves, or a team's grants would be counted as a channel's), and `20260923130000_drop_channel_resource_grants.sql` drops the mirror trigger and function, the KB hard-delete GC, the validity trigger and the table. `schema-sql.test.ts`'s "still live" case is replaced by its inverse, and its F-468 ratchet's cutoff became PER TABLE — one shared `AFTER` could not hold two drops nine versions apart.
+- ⚠ **THE ORDER IS THE SAFETY ARGUMENT AND IT IS PINNED:** the WRITER is dropped before the table (a mirror whose target is gone aborts every legal `resource_grants` write), and step 0 RAISEs on any old row absent from the new table — a drop that cannot lose anything is still worth proving, because `DROP TABLE` reports nothing.
+- Status: **RESOLVED** (code), pending replay like every other migration in this wave.
+
+### F-461 — three migrations written with their probe lists, and not one probe has run (2026-09-02)
+
+- Location: `supabase/migrations/2026091{4,5,6}120000_*.sql`, each header's `APPLY / VERIFY / REPLAY` block.
+- Found during: B1.
+- Severity: **a measurement gap, recorded rather than glossed** — the `20260827120000` precedent is three behavioural probes per trigger branch inside a rolled-back transaction, run through the Supabase MCP against a real database.
+- **What is actually asserted instead.** (a) each file's in-migration `DO $$` block, which RAISEs unless the objects it claims to create exist; (b) `src/features/knowledge/schema-sql.test.ts`, which REPLAYS `supabase/migrations` in filename order and pins the live policy set, the validity trigger's branches and the retirement of both old tables — mutation-verified red on seven separate reverts. Neither is a probe: both read SQL, and only a database can say what a trigger DOES.
+- ⚠ **AND MIGRATION REPLAY IS OWED FOR THE WHOLE WAVE, not just this slice.** `supabase db reset` has never run on any branch of either wave — Docker was unavailable for all of Wave A and is unavailable here — and Wave A's seven migrations are themselves unapplied. Nothing in this slice may reach production before that changes.
+- Proposed resolution: run the fifteen + eleven + eleven probes listed in the three headers, in order, on the first machine that can start the local stack; then `supabase db reset`. Record the command and the answer, per INVARIANTS §12.
+- Status: open.
+
+### F-462 — `scope_id` is projected as `team_id` and `channel_id`, and two DTO layers never learned (2026-09-02)
+
+- Location: `src/features/teams/server/repository-grants.ts › GRANT_COLS` (`team_id:scope_id`) and `src/features/knowledge/server/repository-channel-grants.ts › CHANNEL_RESOURCE_GRANT_COLS` (`channel_id:scope_id`), against `teams/server/dto.ts › TeamGrantDbRow` and `knowledge/server/repository-channel-grants.ts › ChannelResourceGrantRow`.
+- Found during: B1.
+- Severity: **a deliberate boundary, filed because it looks like an oversight.** The column is `scope_id` for all three scopes; each feature asks about ONE of them and the domain word at its boundary is `team` or `channel`, not `scope`.
+- **What it bought.** `dto.ts`, `types.ts › TeamGrant`, the teams service, the members access matrix and every knowledge caller are untouched by a schema change that renamed a primary-key column. One alias string per module, stated once, instead of a rename rippling through four features.
+- ⚠ **THE HAZARD IS A THIRD READER**, not these two: a new module that selects `scope_id` raw and a reviewer who reads `channel_id` in one file and `scope_id` in another will disagree about what the column is called. Both aliases sit in a named exported constant with a docblock for exactly that reason.
+- Proposed resolution: none while each feature owns one scope. If a surface ever needs to read ACROSS scopes (the `container` lend, F-467), give it its own repository that speaks `scope_id`/`scope_type` and leave these two alone — a shared mapper over three vocabularies would be worse than three names.
+- Status: closed as recorded.
+
+### F-463 — `TeamResourceType` names four types, `resource_grants` accepts five, and only one of them may widen (2026-09-02)
+
+- Location: `src/features/teams/access-levels.ts › TeamResourceType` (knowledge_base | chat | chat_folder | skill) against `supabase/migrations/20260914120000_resource_grants.sql`'s `resource_type` CHECK (those four plus `agent_template`).
+- Found during: B1, folding `agent_template_teams` into the shared table.
+- Severity: **a contract that must NOT be unified, stated so nobody unifies it.** `20260822200000` §2 split the template junction off the polymorphic table precisely to avoid widening this union (F-277), and that reasoning survives the fold.
+- **Why.** `TeamResourceType` has four consumers outside the teams lane — `teams/server/repository-resources.ts › RESOURCE_TABLES` (a `satisfies Record<TeamResourceType, …>` assuming every member has an `access_mode` column; `agent_templates` has `visibility` instead), `listTeamsModeResources`, `members/components/member-bits.tsx › RESOURCE_META`, and the hand-copied mirror in `packages/mcp-server/src/tools/members-render.ts`. A grant row of an unmodelled type reaching the members access matrix renders through an undefined lookup.
+- **Why it is safe as it stands.** The template rows never reach those consumers: `repository-grants.ts` filters `resource_type` on every statement, and the template links are read by `agent-templates/server/repository.ts › listTeamLinksForTemplates` alone. The DB accepts five; each lane asks about its own.
+- Proposed resolution: leave both. If `agent_template` must ever join the union, the same change has to teach all four consumers — that is the work item, not the type edit.
+- Status: closed as recorded.
+
+### F-464 — the generated `types.ts` still declares a table this wave dropped (2026-09-02)
+
+- Location: `src/shared/supabase/types.ts` (`team_resource_access`, ~line 1863 at time of writing — a real `supabase gen types` output), against `supabase/migrations/20260916120000_drop_team_resource_access.sql`.
+- Found during: B1.
+- Severity: **cosmetic today, and only because nothing type-checks against it.** `supabaseAdmin()` calls `createClient` with no `Database` generic, so `.from("resource_grants")` compiles with the new table absent from the file and `.from("team_resource_access")` would compile with it dropped. Four references, all in `features/chats` (findings-tenancy F7).
+- ⚠ **THE DIRECTION OF THE RISK IS THE TYPING, NOT THE FILE.** The day anyone parameterises the client with `Database` — which is the natural fix for F7's 47 hand mirrors — a stale generated file turns from decoration into a compile error on the wrong side: it would reject the live table and accept the dropped one.
+- Proposed resolution: re-run `supabase gen types typescript` after the three migrations are APPLIED (F-461), not before — the file is a snapshot of a database, and generating it from an unapplied branch would record a schema that exists nowhere.
+- Status: open.
+
+### F-465 — two MCP comments teach a schema the database no longer has (2026-09-02)
+
+- Location: `packages/mcp-server/src/tools/members-render.ts` (*"the backend builds this payload from `team_resource_access`"*) and `tools/agent-shared.ts` (*"0 `agent_template_teams` rows"*), against the two tables dropped by `20260915120000` / `20260916120000`.
+- Found during: B1.
+- Severity: **stale teaching, no live fence.** Both are comments; the payload is unchanged (the teams service still answers the same shape off `resource_grants`), and `agent-team-axis.test.ts` still passes because the `'team'` VISIBILITY it guards is untouched by ruling B4.
+- **Why it was not fixed here.** `packages/mcp-server/src/tools/**` belongs to B8 (`members`, `agent`) and to no slice for `agent-shared.ts`; widening a schema slice into the MCP package's prose is how a wave stops being reviewable.
+- Proposed resolution: B8 repoints both to `resource_grants` while it is in those files, naming the scope: *"…from `resource_grants` at `scope_type='team'`"*. One line each, no behaviour.
+- Status: open.
+
+### F-466 — `RETIRED_RESOURCE_TYPES` outlived the CHECK constraint that justified it (2026-09-02)
+
+- Location: `src/features/teams/access-levels.ts › RETIRED_RESOURCE_TYPES` / `isRetiredResourceType` / `withoutRetiredResources`, and its hand-copied mirror in `packages/mcp-server/src/tools/members-render.ts`.
+- Found during: B1, dropping `team_resource_access`.
+- Severity: **a fail-safe with nothing left to fail against.** The comment states its own premise in as many words: *"keep this set even though `TeamResourceType` no longer names one: `team_resource_access.resource_type` still ACCEPTS `'workflow'`"* (`20260811120000` deliberately kept the CHECK value after deleting the feature). `resource_grants` does not name the value, its `resource_type` CHECK refuses it, and `20260914120000`'s backfill drops such rows rather than carrying them — a `'workflow'` row can no longer exist to be filtered.
+- ⚠ **NOT DELETED IN THIS SLICE, AND THE REASON IS OWNERSHIP, NOT DOUBT.** `access-levels.ts` is in no Wave B slice's Owns column, the filter fails safe (it removes rows that cannot occur), and a render filter deleted from outside its lane is exactly the change nobody reviews.
+- Resolution, TAKEN 2026-09-02 at the batch-3 integration: the set, both helpers, `pruneRetiredResources`, and every call site in both trees are deleted — nine sites, one fewer hand-copied mirror on F7's count. `use-my-access.tsx`'s wire type loses its `| "workflow"` arm with the filter that narrowed it, so the union it renders is the union it receives.
+- ⚠ **THE EVIDENCE IS SOURCE-DERIVED, NOT REPLAY-DERIVED, AND THAT IS A CHANGE FROM WHAT THIS ENTRY PROPOSED.** It asked to wait for F-461's replay. What made waiting unnecessary is that the READER moved: every one of these payloads is now built from `resource_grants` through `teams/server/repository-grants.ts`, so the premise the comments stated in as many words — *"`team_resource_access.resource_type` still ACCEPTS `'workflow'`"* — is about a table this code no longer reads. Replay is still owed for the migration; it is not owed for this filter.
+- Status: **RESOLVED.**
+
+### F-467 — `scope_type='container'` is schema with no writer, and that is the whole point of B4's other half (2026-09-02)
+
+- Location: `supabase/migrations/20260914120000_resource_grants.sql` (the `scope_type` CHECK and `enforce_resource_grant()`'s `WHEN 'container'` arm), against the absence of any TypeScript that writes one.
+- Found during: B1.
+- Severity: **anticipated schema, filed so it is not read as dead code.** The ruling names three scopes; two have writers today. The arm is not speculative generality — it is the axis findings-tenancy F2 identifies as the reason the product shipped COPY ops instead of lending, and it is unreachable until a caller exists.
+- ⚠ **THE TRIGGER IS WHAT MAKES IT MEAN ANYTHING.** `enforce_resource_grant()` admits a grant whose scope sits in another container only when `created_by` is an active member of BOTH — so the capability arrives with its fence already written and mutation-pinned, rather than being added later beside a fence that assumed same-container.
+- ⚠ **AND AN UNATTRIBUTED CROSS-CONTAINER ROW IS REFUSED**, which is why the backfilled team grants (no `created_by` column existed) cannot become a cross-tenant read path by accident.
+- Proposed resolution: B15, which deletes the copy ops, is where the container writer belongs — the two changes are one sentence.
+- Status: **RESOLVED (2026-09-02, B15).** `PUT /api/resource-grants` is the writer, `dopl_kb(op="grant")` / `dopl_agent(op="grant")` are its callers, and the `container` scope arm is reached by both. ⚠ The MCP surface offers `channel` and `container` and NOT `team` — A8's standing rule (`agent-team-axis.test.ts`) refuses a served axis with zero live rows; `shared/grants/schema.ts` accepts all three, so the app keeps the capability.
+
+### F-468 — a `LANGUAGE sql` helper on another branch reads a table this slice drops, and filename order decides who is wrong (2026-09-02)
+
+- Location: the `dopl_teams_mode_visible` helper in the migration named `rls_helpers_and_caller_scope`, version `20260919120000` — ⚠ **NOT IN THIS TREE**: it lives on branch `v2/b-rls-real-1`, which has its own entry for this under an id from its reserved range, so no symbol anchor is given and none would resolve. Against `supabase/migrations/20260916120000_drop_team_resource_access.sql`, which is in this tree.
+- Found during: B1, on a cross-slice request relayed after both slices were written.
+- Severity: **a replay-breaking collision that exists in NEITHER branch and appears at MERGE.** Each branch's own gates are green; the directory they will share is not.
+- **Why it FAILS OUTRIGHT rather than degrading.** The helper is `LANGUAGE sql`, so Postgres parses the body and records a dependency at creation time. `20260916120000` < `20260919120000`, so by the time the `CREATE OR REPLACE` runs the table is gone and the statement errors with `relation "team_resource_access" does not exist` — the migration stops, and every file after it stops with it. A `plpgsql` body would have deferred the failure to the first call, which is worse and is not what happened here.
+- **Whose change it is, and why it is not this slice's.** The reader runs LAST, so the reader is the file that must be right; a "fix" from B1 would have to take a version above `20260919120000`, which is B11's slot, and would still be overwritten by the `CREATE OR REPLACE` it was trying to correct. Ownership and ordering agree for once.
+- **The replacement, which is a join source and a scope term and nothing else** — no policy moves, no signature changes, no grant changes:
+  ```sql
+  FROM public.resource_grants g
+  JOIN public.team_members tm
+    ON tm.team_id = g.scope_id
+   AND tm.workspace_id = g.workspace_id
+  WHERE g.scope_type    = 'team'
+    AND g.workspace_id  = p_workspace_id
+    AND g.resource_type = p_resource_type
+    AND g.resource_id   = p_resource_id
+    AND tm.user_id      = (SELECT auth.uid())
+  ```
+  ⚠ **`scope_type = 'team'` IS NOT OPTIONAL AND IS THE WHOLE HAZARD OF THE FOLD.** Without it the helper answers "is this teams-mode resource visible to me" with a CHANNEL grant on the same resource — turning a room's audience into a workspace-wide read, silently, through a function whose name says nothing about scopes. ⚠ The `tm.workspace_id = g.workspace_id` term is carried over verbatim; `resource_grants.workspace_id` is the RESOURCE's container, which is the same container the team lives in for every team grant.
+- **The gate that will catch this, and any repeat of it.** `src/features/knowledge/schema-sql.test.ts` — *"no migration AFTER the drop mentions a dropped table"* — replays `supabase/migrations` in filename order and fails on any file sorting after `20260916120000` that names `team_resource_access` or `agent_template_teams`. ⚠ **IT IS GREEN ON BOTH BRANCHES IN ISOLATION AND THAT IS THE POINT**: verified red by copying B7's file into this worktree, which reproduced exactly the merge state. Every branch of this wave writes migrations against a directory it cannot see; this is the only assertion in the tree that reads the merged one.
+- Proposed resolution: B7 applies the body above. If B7 has already landed, the same edit is a one-line follow-up on whichever branch integrates second — never a re-creation of the dropped table.
+- Status: **RESOLVED 2026-09-02** at the Wave B batch-1 integration. `20260919120000_rls_helpers_and_caller_scope.sql`'s `dopl_teams_mode_visible()` now reads `resource_grants` with the `scope_type = 'team'` term, verbatim from F-468's body; the `tm.workspace_id = g.workspace_id` join term and the function's signature, `SECURITY DEFINER` marker and three call sites are unchanged, and the performance note's index reference moves to `resource_grants_resource_idx` (`20260914120000_resource_grants.sql`, `(workspace_id, resource_type, resource_id)` — the exact prefix the new `WHERE` uses). ⚠ **THE GATE WAS RED ON THE MERGED TREE AND GREEN ON EACH BRANCH ALONE**, which is what it was written for: `knowledge/schema-sql.test.ts › "no migration AFTER the drop mentions a dropped table"` reported `20260919120000_… → team_resource_access` before the edit and passes after it.
+
+### F-470 — an id resolves on the PRIMARY read door and on none of its neighbours (2026-09-02)
+
+- Location: `src/app/api/skills/[skillSlug]/{export,body,history}/route.ts`, `src/app/api/knowledge/bases/[baseId]/{export,tree,entries,files,folders,folders-by-path}/route.ts`, `src/app/api/knowledge/entries/route.ts` (`?ids=` → `service-entries.ts › resolveEntryRefs`).
+- Found during: B2, wiring `readResourceById` into the four features' read doors.
+- **THE SHAPE.** B2 gave each feature ONE id-resolving read (`readBaseById`, `readEntry`, `resolveSkillBody`, `getChat`) and left every other read on the feature's workspace-keyed gate, because those gates are also the WRITE gates and a write that follows an id across a tenancy boundary is a ruling nobody has made. The consequence is legible but uneven: `GET /api/skills/{id}` follows an id and `GET /api/skills/{id}/export` does not, over the same row and the same caller.
+- ⚠ **IT FAILS CLOSED, WHICH IS WHY IT IS DEBT AND NOT A DEFECT.** The neighbour answers the 404 it always answered; nothing widens. What it costs is a surface where two adjacent GETs disagree about the same id — the exact confusion T35 was written to end, at one level down.
+- ⚠ **THE FIX IS NOT "CALL THE ID-RESOLVING READ FROM EACH NEIGHBOUR".** Every one of those routes composes follow-on workspace-keyed reads (a body, a tree, a folder walk), so the container the id named has to reach ALL of them — which is what `read-resource.ts › ContainerRead.ctx` exists to carry, and what each neighbour would have to thread through by hand. Doing that per route is four more hand copies of the composition this slice removed.
+- Proposed resolution: after B13 takes `workspace=` off the read ops, revisit these as ONE pass per feature — the neighbour reads become "resolve once at the door, then run the whole handler in the container the id named", which is a shape the route layer does not have today. Not attempted here: it is a route-layer refactor, and the slice that owns those routes is not this one.
+
+### F-471 — /home's scope-C caption still describes a restriction ruling #18 removed (2026-09-02)
+
+- Location: `apps/desktop-ui/src/pages/home/agent-panels.tsx` (the scope-C section caption) and the deleted /home copy dialog (B15) (the "Use in this channel" affordance).
+- Found during: B2, correcting the INVARIANTS bullet that claimed a home-workspace template cannot launch into a home channel.
+- **THE SHAPE.** The caption — *"Yours alone. Use one here to make a copy in this channel."* — is the operator-facing statement of a 404 that no longer happens. Both launch lanes follow an id now, so a scope-C template launches into a container directly; the copy is a workaround for a restriction that is gone, and it still costs a divergent snapshot (no FK, no sync) plus a dropped KB list every time it is used.
+- ⚠ **THE COPY MACHINERY IS NOT THIS FINDING'S TO DELETE.** `lib/template-draft.ts › containerCopyDraft` and the deleted /home copy dialog (B15) are named in Wave B's B15 (`v2/b-copies-off`), which removes the copy ops wholesale. Deleting them here would take a file that slice owns.
+- ⚠ **AND THE CAPTION IS UI COPY**, which this tree treats as a ruling surface rather than a refactor. It is recorded rather than rewritten.
+- Proposed resolution: B15 deletes the affordance; whoever lands it rewrites the caption in the same change, or the pane keeps explaining a workaround for a problem the product no longer has.
+
+### F-480 — the credential-axes DUAL LANE is three coupled sites, and B13 must retire all three in one change (2026-09-02)
+
+- Locations: `supabase/migrations/20260917120000_mcp_token_credential_axes.sql` (`mcp_tokens_axes_agree_check`), `src/shared/auth/mcp-access-token.ts` (`› legacyAxes`, `LEGACY_AXIS_COLS`, `axisColumnsPresent`), `src/shared/auth/mcp-container-token.ts` (`› issueContainerToken`'s two legacy lines and `› revokeContainerTokens`' `workspace_id IS NOT NULL` guard).
+- Found during: wave B slice B3, writing the split itself. Recorded rather than fixed because the whole point of the lane is that it lives for one release.
+- **THE SHAPE.** `mcp_tokens` now carries `container_id` + `subject_user_id` AND the legacy `workspace_id` + `workspace_lock_kind`, dual-written and dual-read. Three things depend on the legacy pair still existing, and they fail differently: the CHECK constraint simply becomes undroppable-in-place, `legacyAxes` becomes dead code, and **`revokeContainerTokens`' guard becomes a filter on a missing column — which silently revokes NOTHING and strands every child credential until its 24h TTL.** The third is the one with no error anywhere.
+- ⚠ **THE ORDER IS NOT SYMMETRIC WITH THIS FILE'S OWN ROLLBACK.** Dropping the NEW columns is free (the fallback reproduces them exactly). Dropping the LEGACY pair before every reader is off it leaves `validateAccessToken` with neither source: every credential reads as unfenced AND anonymous — the container fence OPENS and every visibility gate CLOSES, at once, silently.
+- ⚠ **`axisColumnsPresent` IS A STICKY PROCESS FLAG** and is safe only while `legacyAxes` is the identity. The moment the legacy pair carries anything the axes do not, that flag is a divergence with a one-process lifetime and no log line.
+- Proposed resolution (B13, one commit): repoint `revokeContainerTokens` onto `container_id`, delete `legacyAxes` + `LEGACY_AXIS_COLS` + `axisColumnsPresent` + the 42703 retry, delete `issueContainerToken`'s two legacy lines, then a migration dropping `mcp_tokens_axes_agree_check`, `workspace_lock_kind`, `workspace_id` and `mcp_tokens_workspace_idx` — code first, columns last.
+- Status: OPEN — deliberate one-release debt, owned by B13.
+
+### F-481 — the Wave B spec names `service-launch.ts` for this slice's lock reads; they are in `service-launch-template.ts` (2026-09-02)
+
+- Location: `src/features/channels/server/service-launch-template.ts › resolveTemplateForDirective` — the only place in `features/channels` that forwards a credential axis into another feature's visibility matrix. `service-launch.ts` reads neither axis.
+- Found during: wave B slice B3, resolving the slice's ownership row against the tree.
+- **WHY IT MATTERS AND WHY IT IS NOT A CODE BUG.** The ownership rows in the Wave B spec — which lives on the `v2/wave-b-plan` branch and is deliberately not a file on this one — are what keeps parallel slices off each other's files; a row naming the wrong file is a collision the branch protocol cannot see. The code is correct as written — the forward belongs beside the ref resolution, not beside the directive create.
+- Proposed resolution: correct the B3 row's `Owns` column at integration. No code change.
+- Status: **RESOLVED 2026-09-02** at the Wave B batch-1 integration. The spec's B3 `Owns` column now names `src/features/channels/server/service-launch-template.ts` (`docs/specs/mcp-v2-wave-b.md` §5, batch 1), which is where the credential-axis forward really is; `service-launch.ts` reads neither axis and is no longer claimed by that slice. No code change, which is the whole finding.
+
+### F-490 — the wave-B spec calls `src/shared/channels/caps.ts` "A7's module" and it did not exist (2026-09-02)
+
+- Location: the wave-B spec, §2.2 (*"declared once in `src/shared/channels/caps.ts` (A7's module)"*) — it lives in the PLAN checkout and not in this tree, which is why it is named in prose here — against `523bfc92`, where `src/shared/` had no `channels/` directory at all.
+- Found during: v2 wave B slice B4, wiring `RESILIENCE_WINDOW_MS`.
+- Severity: **spec-vs-tree, and the tree was right** — nothing was broken, but a slice that trusted the sentence would have gone looking for a file to edit and found none, then guessed at where the constant lives.
+- **WHAT IS ACTUALLY TRUE.** The only place a 15-minute channel-scoped window was written down is `dopl-desktop-app/main/launch-budget.js › WINDOW_MS`, which no web module may import (INVARIANTS §13 — the two trees ship on different cadences and are not on one tsconfig path). So the value could not have been "declared once" anywhere a server slice could reach.
+- Resolution: `src/shared/channels/caps.ts` is CREATED by B4 and carries `RESILIENCE_WINDOW_MS`, with its docblock stating that the sameness with `launch-budget.js`'s span is deliberate and NOT derived — one is a RATE bound on launches, the other a RESOLUTION window on addressing, and tuning one must not move the other. That is the relationship `launch-budget.js` already refuses to express as arithmetic about its own pair.
+- Status: RESOLVED 2026-09-02 (B4). Recorded rather than silently fixed because the spec's other "A7's module" references have not been checked and may be the same claim.
+
+### F-491 — `channel_pings` is superseded by ruling B8, and every part of the fold is outside B4's ownership (2026-09-02)
+
+- Location: the unapplied `channel_pings` migration at version `20260907130000` (DELETED at this integration), `src/features/channels/{schema-ping.ts,server/{repository-pings,service-pings,service-pings-await}.ts}`, `src/app/api/pings/**`, `packages/mcp-server/src/{gating.ts,tools/channel-agent-id.ts}`, `dopl-desktop-app/main/{ping-wire,realtime-mailboxes}.js`.
+- Found during: v2 wave B slice B4, checking whether the ping fold was assigned to it.
+- **IT IS NOT.** The wave-B spec assigns the pieces elsewhere and B4 owns none of them: §2.3 puts the `ping` / `pings` → `send(to=…)` / `read` REDIRECT on **B8**, and §5 batch 3 gives **B16** the migration file, the ping service modules, the `/api/pings` routes and the MCP ping op — all deleted there on 2026-09-02. B4's row is the metadata/verdict family, `service-writes-lifecycle.ts`, the broadcast rename, and the two Settings components.
+- ⚠ **A SECOND DISAGREEMENT, AND IT IS ABOUT THE KIND SET.** The brief handed to B4 describes the fold as *"a directed send with kind `done|question|blocked` is the delivery record"*. The SPEC refuses those three by name (§2.1: *"`question`/`blocked`/`done` from the messaging report are **not adopted** — a value with no distinct behaviour is prose wearing a schema"*) and fixes `kind` at `message | milestone | decision`. B4 changed no kind, so the tree still carries the wave-A set and `scripts/check-message-kind-drift.ts` still holds it. **Whoever lands the fold must settle which of the two is Samuel's current word before touching the enum**, because the two answers produce different `CHECK` constraints and the drift gate will hold whichever ships.
+- Proposed resolution: B8 lands the redirect; B16 deletes `20260907130000` unapplied and the TS lane with it. Nothing to do in B4.
+- Status: **RESOLVED AS A DISAGREEMENT 2026-09-02**, at the Wave B batch-1 integration, and the resolution is that **THE SPEC IS THE AUTHORITY**: `kind` stays `message | milestone | decision` as `docs/specs/mcp-v2-wave-b.md` §2.1 rules, and `done | question | blocked` — which the brief handed to B4 named — are NOT adopted. ⚠ **NOTHING WAS DONE TO THE ENUM AND THAT IS THE POINT.** The tree still carries the wave-A set (`node scripts/../scripts/check-message-kind-drift.ts` → `message, system, task_failed, task_finished, task_progress, task_started`, re-derived at integration and green), so no `CHECK` constraint moved and the drift gate holds the set the spec asks for. The FOLD itself is untouched here and stays where §5 puts it — B8 lands the one-line redirect, B16 deletes `20260907130000` unapplied with the TS ping lane. ⚠ The migration file is **deleted at this integration** under ruling B8 (it was never applied), which is the one part of the fold that could not wait for B16: an unapplied file that a replay would pick up is a live hazard, not a scheduled deletion.
+
+### F-492 — `service-writes.ts` and `schema.ts` carry B4's `to=` union but belong to no slice (2026-09-02)
+
+- Location: `src/features/channels/schema.ts` (`ChannelMessageCreateSchema.to`, `ChannelUpdateSchema.defaultResponderAgentName`), `src/features/channels/server/service-writes.ts` (`postMessage`'s resolution step, `assertOneRecipientField`, `MANAGED_CHANNEL_FIELDS`), plus `server/{dto,repository,errors,http-mapping,repository-messages}.ts`, `types.ts`, `hooks/use-channel-lifecycle-writes.ts`, and — because the default responder is a THIRD session-only field — `src/app/api/channels/[channelId]/route.ts` with `src/shared/auth/write-gate-coverage.test.ts`.
+- Found during: v2 wave B slice B4.
+- **THE SHAPE.** The spec's ownership map (§5) names `service-writes-metadata*.ts` and `service-wake-verdict.ts` for B4 and assigns the contested files explicitly — but `service-writes.ts` is neither. It is where `postMessage` lives, so a union `to`, a manage-gated channel field and a verdict signature change all have to land in it, and none of them is expressible anywhere else: the MCP `send(to=)` can only pass a field the ROUTE SCHEMA accepts.
+- Severity: **ownership gap, not a conflict** — no other batch-1 slice's row lists these files, so nothing was contended in practice. It is recorded because the ownership protocol's whole value is that a collision is impossible rather than merely unlikely, and an unassigned file on the hottest write path is where the next wave's collision comes from.
+- ⚠ **THE ROUTE PAIR IS NOT A GAP — IT IS A GATE DOING ITS JOB.** `write-gate-coverage.test.ts` pins `ChannelUpdateSchema`'s field set EXACTLY so a new field cannot inherit the loose (member) gate by silence. It failed on `defaultResponderAgentName`, the decision was made rather than inherited (SESSION-ONLY, on `agentPosture`'s argument: an agent credential able to set it could nominate ITSELF and route the room's unaddressed work to its own session), and both directions are refused — clearing somebody else's nomination silences that agent just as effectively.
+- Proposed resolution: assign `src/features/channels/{schema.ts,server/service-writes.ts}` explicitly in the next wave's map, the way `service-writes-metadata.ts` already is.
+- Status: **CONFIRMED 2026-09-02** at the Wave B batch-1 integration, and the census is right: `src/shared/auth/write-gate-coverage.test.ts` pins `SESSION_ONLY_FIELDS = ["visibility", "agentPosture", "defaultResponderAgentName"]` by source text AND asserts the same three as a value against `ChannelUpdateSchema`'s exact field set — so the THIRD session-only field is inside the gate, in both halves, and a fourth cannot inherit the member gate by silence. Verified green at integration (7 cases). The ownership half stands: assign `src/features/channels/{schema.ts,server/service-writes.ts}` explicitly in the next wave's map.
+
+### F-493 — G20 / F-450's eighth session-health field cannot be built inside B4's allotment (2026-09-02)
+
+- Location: F-450 (the finding), the wave-B spec's §4 G20 row (slice B4 — the spec is in the PLAN checkout, not this tree), against `supabase/migrations/20260909120000_channel_sessions_health.sql`, `src/features/channels/schema-sessions.ts`, `packages/contracts/src/sessions.ts`, `scripts/check-session-health-drift.ts` and `dopl-desktop-app/main/session-state-push.js`.
+- Found during: v2 wave B slice B4, working its assigned rows.
+- **WHY IT DID NOT SHIP HERE, IN TWO PARTS AND BOTH STRUCTURAL.** (a) **The migration.** B4 is allotted exactly one, `20260918120000_channel_default_responder`, and a session-health COLUMN inside a file named for the default responder is the kind of misfiling that makes a schema unreadable a month later — a reviewer looking for when the eighth field landed would not open it. (b) **The writer is not B4's.** The field records "a channel-fed turn ended with no send", which only the machine that ran the turn can observe: the write is `dopl-desktop-app/main/`, owned by B6 and B9. A column with no writer is the `applied_*` shape this tree already carries and documents, and adding a second one is not what G20 asks for — G20 asks for a MEASUREMENT.
+- ⚠ **DO NOT "CLOSE" IT BY ADDING THE COLUMN ALONE.** The gate (`check-session-health-drift.ts`) would then pin an eighth field nothing writes, and the ledger would read as G20 enforced. F-450's own text is what to honour.
+- Proposed resolution: one slice that owns a migration, `schema-sessions.ts` + `@dopl/contracts › sessions.ts` + the drift gate, AND the desktop's push — i.e. it belongs with B9, which already owns the delivery core, or with a slice minted for it.
+- Status: open — F-450 stays open, unchanged.
+
+### F-494 — the spec renames the request fan-out module to a word INVARIANTS §5 says this product does not have (2026-09-02)
+
+- Location: `src/features/channels/server/service-tasks-broadcast.ts` (renamed here), against INVARIANTS §5's *"broadcast is not a shape this product has"*.
+- Found during: v2 wave B slice B4, taking C16's rename.
+- **BOTH ARE TRUE AND THE FILE NOW SAYS SO.** The INVARIANT is about ADDRESSING — there is no way to reach a room without naming who you mean, and this wave STRENGTHENS that rather than relaxing it. The module is about the SEND SHAPE: one request, N explicit addressees the sender typed, N threads, one card. The rename was taken as specified and the docblock states the distinction, so a reader who finds the word here does not conclude the addressing rule was relaxed.
+- ⚠ **IF A LATER SLICE FINDS THIS TOO SUBTLE, RENAME THE MODULE — NOT THE INVARIANT.** a name built on "multi-addressee" says the same thing with no collision. It was not taken here because the spec names the target file explicitly and a slice inventing a third name is how the C16 confusion is reproduced under new spelling.
+- Status: RESOLVED 2026-09-02 (B4), recorded so the tension is on the record rather than rediscovered.
+
+### F-500 — INVARIANTS §11 counts `DOPL_SAFE_TOOLS` at 11; the list holds 12 (2026-09-02)
+
+- Location: `docs/INVARIANTS.md` §11 *"Profile tables (`main/tool-profiles.js`, re-measured 2026-09-02)"* vs `dopl-desktop-app/main/tool-profiles.js › DOPL_SAFE_TOOLS`.
+- Found during: MCP v2 wave B slice B5, mirroring that list into `gating.ts › PROFILE_TOOLS` (the `dopl_only` row) and counting both sides.
+- **THE MEASUREMENT.** `sed -n '/^const DOPL_SAFE_TOOLS/,/^\];/p' dopl-desktop-app/main/tool-profiles.js | grep -c 'mcp__dopl__'` answers **12**: `dopl_kb`, `dopl_search`, `dopl_map`, `dopl_members`, `dopl_skill`, `dopl_ontology`, `dopl_chats`, `dopl_agent`, `dopl_home`, `dopl_status`, `current_workspace`, `list_workspaces`. That is exactly the 13 registered tools minus `dopl_channel`, which is what `dopl-desktop-app/test/tool-profiles.test.mjs` enforces — so **the list is right and the doc's number is one behind**, most likely written before `dopl_status` landed (2026-09-01, T20).
+- ⚠ **THE COUNT IS PROSE AND THE TEST IS THE ENFORCEMENT**, which is why nothing went red: the same §11 bullet says so. It is still a doc that a future slice will quote.
+- Not fixed here: `main/tool-profiles.js` is slice B6's file and that slice is rewriting the surrounding table, so a count edit from this branch would collide with it in the same paragraph. **B6 owns the fix** — re-measure with the command above and correct the §11 line in the same change.
+- Status: **RESOLVED 2026-09-02** at the Wave B batch-1 integration (B6 landed without it — the paragraph was rewritten around the count, not over it). §11 now reads **12**, re-derived rather than re-typed: `node -e "console.log(require('./dopl-desktop-app/main/tool-profiles.js').DOPL_SAFE_TOOLS.length)"` → `12`. The command is now in the bullet beside the number, per the standing rule that a doc should carry the measurement rather than the answer.
+
+### F-501 — the wave B spec's `read_only` row offers `dopl_channel`, which that profile's own deny list refuses (2026-09-02)
+
+- Location: the wave B plan's §1.2 profile table — row `read_only`, *"local reads; `dopl_channel` op-scoped"*; it lives on branch `v2/wave-b-plan` and not in this tree, which is why no path is cited — vs `dopl-desktop-app/main/tool-profiles.js › buildDeniedTools`.
+- Found during: MCP v2 wave B slice B5, writing the `PROFILE_TOOLS` rows.
+- **THE CONTRADICTION.** A `read_only` spawn's deny list opens with the bare `mcp__dopl` server prefix (`denied.unshift(DOPL_SERVER_PREFIX)`), so **every Dopl tool is refused locally, `dopl_channel` included** — the profile is the zero-outbound one. Serving it `dopl_channel` would publish ~11,600 characters of schema for a tool the machine denies, which is exactly the "offer wider than the deny list" the header exists to avoid.
+- **SHIPPED AS ∅** (`PROFILE_TOOLS.read_only = new Set([])`), on the rule that the offer may never be wider than the containment already applied. The spec row reads as a description of the profile across BOTH layers (local reads on the desktop; `dopl_channel` op-scoped where a read-only *credential* is what narrows) rather than as this server's offer — recorded here so the row is not read back later as the contract.
+- ⚠ **THE CONSEQUENCE IS VISIBLE ON THE WIRE, and it is intended**: a session that is offered nothing registers nothing, so that connection declares no `tools` capability and `tools/list` answers `Method not found` (measured through a real `Client` over `InMemoryTransport`). Every client we ship reads capabilities first; a client that calls `tools/list` unconditionally sees an error where it used to see 13 tools it could not call.
+- Status: RESOLVED 2026-09-02 (B5) — recorded, not open work.
+
+### F-510 — the shared-container profile narrowing covers ONE of the three launch lanes (2026-09-02)
+
+- Location: `dopl-desktop-app/main/launch-directive-spawn.js` › `spawn` (narrowed), vs `dopl-desktop-app/main/session-launch-op.js` › `launchFromButton` and `dopl-desktop-app/main/trigger.js` › `launchResponderSession` (not narrowed).
+- Found during: Wave B slice `v2/b-channel-agent-profile`, landing Samuel's ruling B7 (`channel_agent` = `full` minus the shell, for a session launched into a shared container).
+- **THE SHAPE.** There are THREE lanes that resolve a tool profile and they all read the same DTO through `targeting-window.js › resolveToolProfile` — that agreement is the property `test/launch-tool-profile.test.mjs` exists to pin (F-267). This slice added a `profileForContainer` narrowing (since renamed `tool-profiles.js › profileForChannel`) to exactly one of them, the DIRECTIVE lane, because the other two files are outside its ownership. **So the three lanes no longer agree**: an operator pressing New Agent in a shared channel still launches at `full`, with a shell, while an orchestrator's directive into the same channel launches at `channel_agent`.
+- ⚠ **IT IS NOT A HOLE THE RULING LEAVES OPEN — IT IS A HOLE THE OWNERSHIP BOUNDARY LEAVES OPEN.** B7 is about "a session launched into a SHARED channel", not about who pressed. The button lane has a human at the keyboard, which is an argument for keeping an explicit `full`, but it is an argument nobody has made and it is not what the ruling says.
+- ⚠ **AND F-267's TWO-LANE AGREEMENT TEST STILL PASSES**, because it compares the two lanes' *resolvers* over a channel record and knows nothing about the container. A test that agreed on the raw read is now green over two lanes that disagree on the applied profile.
+- Proposed resolution: one line in each of the other two lanes, `profileForContainer(resolveToolProfile(ch), isSharedContainer(wsId))`, plus an extension of `launch-tool-profile.test.mjs`'s agreement case to compare the APPLIED profile rather than the resolved one. Both files are unowned by any Wave B slice, so this is a cross-slice request rather than a re-scope.
+- Status: **RESOLVED 2026-09-02** at the Wave B batch-1 integration, and closed structurally rather than by a line in each lane. `targeting-window.js › resolveLaunchToolProfile(channel)` composes the stored read with ruling B7's narrowing and is what ALL THREE lanes call (`launch-directive-spawn.js › spawn`, `session-launch-op.js › launchFromButton`, `trigger.js › launchResponderSession`); the two arguments the directive lane used to spell out are gone from it, and `channel-agent-profile.test.mjs` asserts the spawn body names neither the rule nor the fact. ⚠ **AND F-267's AGREEMENT TEST WAS REPAIRED IN THE SAME CHANGE** — `launch-tool-profile.test.mjs` compared the two lanes' reads of the STORED column, which is why it stayed green over two lanes that disagreed about the applied profile; it now compares `resolveLaunchToolProfile`, over a fixture set that includes a shared room. ⚠ The button lane's "a human is at the keyboard" carve-out was NOT taken: it is an argument nobody has made, and the ruling is about the room.
+
+### F-511 — an adapter with no branch for a profile answers `full`'s config, silently (2026-09-02)
+
+- Location: `dopl-desktop-app/main/runtime/cursor/tools.js` › `buildSessionToolConfig` (the shape; `codex/tools.js` and `claude/tools.js` have it too).
+- Found during: the same slice, freezing the Cursor adapter at three profiles under ruling X0.
+- **THE SHAPE.** Every adapter's `buildSessionToolConfig` is a chain of `if (p === …)` with `full` as the FALL-THROUGH. `normalizeProfile` accepts `channel_agent` on every runtime, so an adapter that has not implemented it hands back `full`'s config — the WIDEST one — under a narrower label. Asserted out loud in `test/channel-agent-profile.test.mjs` rather than left to be discovered.
+- ⚠ **NOTHING SHIPS THROUGH IT TODAY, AND THAT IS THE ONLY REASON IT IS A FINDING RATHER THAN A BUG.** Cursor is held (X0) and its descriptor names three profiles, so `capability.js › canLaunchProfile` refuses `channel_agent` there with a sentence. ⚠ **But that refusal has NO PRODUCTION CONSUMER** — `canLaunchProfile` / `profileRefusal` are read by tests only (`grep -rn canLaunchProfile main/`), so the thing standing between this fall-through and a real launch is that Cursor does not ship at all.
+- ⚠ **THE DEFAULT DIRECTION IS THE DEFECT, NOT THE MISSING BRANCH.** A profile chain whose default is the widest member fails open by construction; `normalizeProfile`, one file over, fails closed for exactly this reason.
+- Proposed resolution: (a) give `canLaunchProfile` a real consumer at `session-launch.js`, beside `windowlessFloorRefusal`, which is the refusal that already reads a descriptor there; or (b) make the adapters' fall-through the NARROWEST profile and name `full` explicitly. (b) alone is not enough — a silently-narrowed session is a session that reports it cannot do its work.
+- Status: open.
+
+### F-512 — `session-park.js` still hand-copies the profile vocabulary (2026-09-02)
+
+- Location: `dopl-desktop-app/main/session-park.js` › `knownProfile`, against `dopl-desktop-app/main/tool-profiles.js` › `normalizeProfile`.
+- Found during: the same slice, adding the fourth profile — the copy did not have it, and a parked `channel_agent` session would have recreated at `read_only`.
+- **THE SHAPE.** Two answers to "which profiles are real", one over the live launch and one over the durable record. They agree today only because a test now holds them equal (`test/channel-agent-profile.test.mjs` › *"the DURABLE record's profile set is held EQUAL to the table's"*), which is the tree's standing remedy but not the fix.
+- ⚠ **THE DRIFT IS SILENT IN THE ONE DIRECTION THAT MATTERS.** A profile missing from the park copy does not refuse — it RECREATES the session at `read_only`, which reads as an agent that has quietly lost its tools, which is F-267's symptom exactly.
+- ⚠ **WHY IT WAS NOT DEDUPLICATED HERE.** `session-park.js`'s pure block may not reference `require(`, and every extraction harness that slices it would have to inject a new module-scope identifier — five test files, none of them this slice's. The test is the cheap half of the fix.
+- Proposed resolution: bind `normalizeProfile` at module scope beside `directedTurn` / `runtimeCapability` (both of which the pure block already reads that way) and delete the Set, injecting it in the five harnesses in one change.
+- Status: open.
+
+### F-513 — "shared container" is `kind='link'` only, so a multi-member `standard` workspace is "solo" (2026-09-02)
+
+- Location: `dopl-desktop-app/main/session-park-on-claim.js` › `newlySharedContainers` / `isSharedContainer`, `dopl-desktop-app/main/session-credential.js` › `shouldLockSession`, and `packages/mcp-server/src/factory.ts` › `bootServer` — three copies of one predicate.
+- Found during: the same slice, wiring ruling B7's default selection onto that predicate.
+- **THE SHAPE.** All three ask `kind === 'link' && memberCount !== 1`. A `kind='standard'` workspace with nine members therefore answers NOT SHARED, so a channel in it launches at `full` — with a shell — under a ruling whose stated reason is *"a session launched into a SHARED channel"*.
+- ⚠ **IT IS THE SHIPPED MEANING AND IT IS DELIBERATE FOR THE OTHER TWO READERS**: the container credential lock and the park-on-claim stop are both about the CLAIM lane, where a link container gaining a peer is the event. B7's reader inherited the definition because reusing it was the alternative to a fourth copy.
+- ⚠ **THE HONEST ALTERNATIVE IS THE CHANNEL, NOT THE CONTAINER.** `Channel.memberCount` is already on the DTO `launch-directive-spawn.js` holds, and "this room has more than one person in it" is closer to what the ruling says than "this container is a claimed link". Not taken here because the slice's instruction named the container definition explicitly, and silently substituting a wider one would be a re-scope wearing a bug fix.
+- Proposed resolution: put the question to Samuel as a one-line ruling — container or channel — then move all three readers or none.
+- Status: **RULED 2026-09-02** (Desktop Agent default at the batch-1 integration; Samuel may reverse with one line). **"Shared" is ANY channel with more than one member, whatever kind of container it sits in — standard workspace channels included.** The fact moves off the container and onto the room: `targeting-window.js › isSharedChannel`, `memberCount !== 1` on the channel DTO, with an absent count reading as SHARED because the answer can only ever remove the shell. the container predicate `isSharedContainer` (retired from `dopl-desktop-app/main/session-park-on-claim.js` in this change) is DELETED — it answered the CLAIM lane's question and had no third reader once this one moved; `newlySharedContainers` and its two container readers (`session-credential.js › shouldLockSession`, the park-on-claim stop) are untouched, which is the "move all three or none" this entry asked for, resolved as *the two that mean containers keep meaning containers*. ⚠ **REVERSING IT IS ONE PREDICATE**, not a re-plumb: the rule (`tool-profiles.js › profileForChannel`) and the fact are separate functions and only the fact would change.
+
+### F-514 — G18's web residual survives the fourth profile, by ruling (2026-09-02)
+
+- Location: `dopl-desktop-app/main/tool-profiles.js` › `WEB_TOOLS`, reachable under `channel_agent` and `full`.
+- Found during: the same slice; it is the guardrail ledger's own G18 row, recorded here so it has an id rather than only a table cell.
+- **THE SHAPE.** B7 is "full minus Bash". Web reads are a separate per-profile group, so a `channel_agent` session keeps `WebFetch` / `WebSearch` — one outbound path that does not cross the approve-out gate (a GET query string carries the data). The shell went; the exfil surface is NARROWED, not closed.
+- ⚠ **THE BOUND ON IT IS REAL AND IS WHY THIS IS A LEDGER ROW RATHER THAN A P0.** Under `channel_agent` both are `ESCALATION_TOOLS`, so they GATE at every Axis-A mode below `bypass` — and injected web content still cannot ACT, because the shell is gone.
+- ⚠ **DO NOT "FIX" IT BY DENYING WEB ON `channel_agent` WITHOUT A RULING.** That would make the profile something other than `full` minus the shell, and the derivation — one subtraction, asserted in both directions — is what keeps the two profiles from drifting apart.
+- Proposed resolution: none proposed. It is a posture question about `full` itself and belongs to whoever asks it.
+- Status: open.
+
+### F-520 — the SELECT policies on the three knowledge tables were WIDER than the TS predicate, in two named ways (2026-09-02)
+
+- Location: `supabase/migrations/20260720211005_rls_pin_workspace_member_and_initplan.sql` (the pre-image), `src/features/knowledge/server/service-shared.ts › canSeeBase` / `assertBaseVisible` / `filterTeamVisibleBases`.
+- Found during: Wave B B7, writing the first caller-scoped read path.
+- **THE TWO GAPS.** The live policy was `is_current_workspace_member(workspace_id,'viewer') AND (visibility='public' OR created_by = auth.uid())` on all three tables. The TS fence refuses two further cases: (1) a **SHARED CREDENTIAL** reading a private row — `canSeeBase`'s middle arm, M-10/F-336 — which the policy could not even ask, because a service-role read carries no credential axes; (2) a **teams-mode row with no grant**, which the policy did not mention at all.
+- ⚠ **NEITHER WAS A LIVE LEAK, AND THAT IS THE POINT.** Every read went through `supabaseAdmin()`, so no policy ran and the TS predicate was the only fence. The gap is the shape that BECOMES a leak the instant a read moves off the service role — i.e. the instant this slice's flag is turned on, had it not been closed first.
+- Status: RESOLVED 2026-09-02 by `supabase/migrations/20260919120000_rls_helpers_and_caller_scope.sql`, which states the rule once in `dopl_knowledge_base_readable()` and has the three SELECT policies call it. ⚠ **NEVER APPLIED** — Docker is down on this machine, so `supabase start` cannot run; the migration is written idempotent and is owed a replay with the rest of Wave B's.
+
+### F-521 — nothing stops the NEXT knowledge read reaching for `supabaseAdmin()` (2026-09-02)
+
+- Location: `src/features/knowledge/server/repository-bases.ts`, `repository-entries.ts`, `repository-folders.ts` (the two-client rule is stated in each header), `RLS-MIGRATION-PLAN.md` Phase 0, `eslint.config.mjs`.
+- Found during: Wave B B7.
+- **THE RULE IS PROSE.** A read that answers "what may this caller see" takes `readClient()`; a SYSTEM read (slug uniqueness, storage accounting, the `max(position)` append helpers) keeps `supabaseAdmin()` and says so at the call site. Nothing enforces the split: a new read that reaches for the admin client is invisible to every gate, and the failure is silent in the WIDE direction.
+- ⚠ The RLS plan's Phase 0 already specifies the remedy — `no-restricted-imports` on `supabaseAdmin` outside a named whitelist — and it has never been written. `eslint.config.mjs` names `@/shared/supabase/admin` only in the SPA-renderer fence, which is a different rule for a different reason.
+- Proposed resolution: land the Phase 0 lint rule when the second feature moves (B12), whitelisting `shared/supabase`, ingestion, billing webhooks and `scripts/**`; a per-file allow-comment for the named system reads. Doing it with ONE feature migrated would be a whitelist longer than the rule.
+- Status: open.
+
+### F-522 — `SUPABASE_JWT_SECRET` is a new deploy input and the repo has no env inventory to add it to (2026-09-02)
+
+- Location: `src/shared/supabase/caller-jwt.ts › SUPABASE_JWT_SECRET_ENV`, `src/shared/supabase/caller-client.ts › RLS_CALLER_SCOPED_READS_ENV`.
+- Found during: Wave B B7 — there is no `.env.example` and no doc listing required env vars, so a new one can only be discovered by reading the code that throws.
+- **THE FAILURE MODE IS ORDERED.** `RLS_CALLER_SCOPED_READS=1` without `SUPABASE_JWT_SECRET` throws at the first caller-scoped read rather than falling back to the service role — deliberately, because a silent fallback is a fence that reports itself armed while doing nothing. So the flag must never be flipped before the secret is set, and nothing in the repo says so except the throw message and this entry.
+- ⚠ **AND THE SECRET IS THE LEGACY HS256 ONE.** A project that has revoked its legacy JWT secret in favour of asymmetric keys needs `caller-jwt.ts` repointed at the project's signing key; the mint is one function, not a code path per lane.
+- Proposed resolution: an env table in `docs/INVARIANTS.md` §14's neighbourhood when the second feature moves, or a `.env.example` — whichever the wave lands first. Deploy state is a measurement (CLAUDE.md rule 4): record the command that reads the var, not its value.
+- Status: open.
+
+### F-523 — the redteam suite's SQL half is STRUCTURAL, and this repo has no way to make it behavioural (2026-09-02)
+
+- Location: `src/features/knowledge/server/rls-redteam.test.ts`.
+- Found during: Wave B B7, looking for a SQL executor.
+- **THERE IS NONE.** No `pglite`, no `pg-mem`, no `pg` client, no `DATABASE_URL` anywhere in the tree (re-derive: `grep -rn 'pglite\|pg-mem\|DATABASE_URL' --include='*.ts' --include='*.json' src packages apps scripts`). The only database client is `@supabase/supabase-js` over PostgREST, and `vitest.setup.ts` states the intent plainly: *"Real DB hits aren't expected"*. So a policy assertion can prove the rule is WRITTEN once and names every arm; it cannot prove Postgres AGREES.
+- ⚠ **THE LIVE HALF HAS NEVER RUN.** It drives the real `callerScopedClient` against a local stack and is `describe.skipIf`-ed off unless `RLS_REDTEAM_LIVE=1`; Docker is down on this machine (`docker info` fails), so `supabase start` could not run. That is a measurement about this machine, not a claim about the tree.
+- ⚠ **AND IT ESTABLISHES A CONVENTION THE REPO DID NOT HAVE**: before this file there were ZERO `describe.skip` / `it.skip` / `.skipIf` in `src/`, `packages/*/src` or `apps/*/src`. The repo's habit for "could not run" was prose in a doc. A skipped test is better — it runs the day the environment exists — but it is a new habit and the next slice should follow it rather than invent a third.
+- Proposed resolution: run the live half once against `supabase start` before the flag is turned on anywhere, and record the run (command + date) in the slice that flips it. B12 inherits the same shape for `skills` / `agent_templates` / `chats`.
+- Status: open.
+
+### F-524 — the AGENT AUDIENCE CEILING is not expressible as a policy, so the slice that deletes `canSeeBase` must not delete it (2026-09-02)
+
+- Location: `src/features/knowledge/server/service-audience.ts › resolveAgentAudience` / `audienceAdmits`, applied in `service-bases.ts › listBases` and the id/slug lookups.
+- Found during: Wave B B7, deciding what `20260919120000` may contain.
+- **WHY IT IS NOT IN THE POLICY.** The ceiling is a per-REQUEST bound, not a property of a row: it depends on the container's `kind`, its live ACTIVE-member count, and an `X-Dopl-Session-Id` that may NARROW the channel set. Two of those change under a row that has not; the third is a forgeable header whose safety comes entirely from being used to narrow an already-fenced set. Folding it into a policy would put a caller-supplied narrowing input inside the database's own fence, which is the one thing `repository-audience.ts`'s header says the layer must never do.
+- ⚠ **SO THE TABLE IS "RLS-COVERED" FOR THE M-10 AND TEAMS AXES ONLY.** The ceiling remains a TS fence with no twin, and B16's "delete the TS predicate once its policy is proven" applies to `canSeeBase` and NOT to `audienceAdmits`. Deleting both because they sit in the same feature would remove the only thing standing between a peer's container and the operator's ungranted bases (RULING 2).
+- Proposed resolution: keep it in TS; if it ever must move, it moves as a grant JOIN keyed on a SERVER-resolved session id, not on the header — which is a different design, not a translation.
+- Status: open.
+
+### F-525 — `dopl_teams_mode_visible()` reads a table slice B1 drops in the same batch (2026-09-02)
+
+- Location: `supabase/migrations/20260919120000_rls_helpers_and_caller_scope.sql` STEP 3; slice B1's `20260916120000_drop_team_resource_access`.
+- Found during: Wave B B7.
+- **THE COLLISION IS BY DESIGN AND THE MITIGATION IS THE FUNCTION.** The teams arm is a `CREATE OR REPLACE FUNCTION` rather than an inline `EXISTS` in three policies precisely so B1 repoints ONE definition at `resource_grants` and no policy moves. If B1 lands before this is applied, B1's migration owes that replacement; if it lands after, the replacement is its own migration.
+- ⚠ **A DROP WITH NO REPLACEMENT DOES NOT FAIL LOUDLY IN THE USEFUL DIRECTION** — the function would error at read time (relation does not exist) for every caller-scoped read, i.e. the flag becomes an outage rather than a leak. That is the safe direction, and it is still an outage.
+- Proposed resolution: cross-slice note to B1, recorded here because the two slices are in the same batch and the ownership protocol keeps each out of the other's files.
+- Status: **RESOLVED 2026-09-02** at the Wave B batch-1 integration. `20260919120000_rls_helpers_and_caller_scope.sql`'s `dopl_teams_mode_visible()` now reads `resource_grants` with the `scope_type = 'team'` term, verbatim from F-468's body; the `tm.workspace_id = g.workspace_id` join term and the function's signature, `SECURITY DEFINER` marker and three call sites are unchanged, and the performance note's index reference moves to `resource_grants_resource_idx` (`20260914120000_resource_grants.sql`, `(workspace_id, resource_type, resource_id)` — the exact prefix the new `WHERE` uses). ⚠ **THE GATE WAS RED ON THE MERGED TREE AND GREEN ON EACH BRANCH ALONE**, which is what it was written for: `knowledge/schema-sql.test.ts › "no migration AFTER the drop mentions a dropped table"` reported `20260919120000_… → team_resource_access` before the edit and passes after it.
+
+
+### F-526 — two APPLIED migrations share the version `20260901120000`, and the class has now fired twice (2026-09-02)
+
+- Location: `supabase/migrations/20260901120000_agent_template_home_scoped.sql` and `supabase/migrations/20260901130000_credit_usage_events.sql`. Both are on `master` (`0f19c938`, 2026-09-01) and both are applied.
+- Found during: the Wave B batch-1 integration, asserting strictly increasing versions across the merged directory.
+- **THE SHAPE, AND WHY IT IS A MERGE DEFECT RATHER THAN A TYPO.** A migration's VERSION is its filename prefix. Every parallel branch picks the next free slot in the directory IT can see, so two branches landing on one day pick the same one and nothing notices until the directories are merged — which is the same class as F-468, on the same directory, one field over. ⚠ **IT HAS HAPPENED BEFORE AND WAS CAUGHT BY HAND:** `channel_pings` and `channel_launch_directives_kind` both took `20260907120000` in the MCP-efficiency wave, and `docs/MCP-EFFICIENCY-WAVE-2026-09-01.md` records the rename as a **BLOCKER**. The remedy that wave shipped was a rename and a warning; a warning did not stop the next one.
+- ⚠ **WHAT IT COSTS, AND WHAT IT DOES NOT.** Supabase's tracker joins on the migration NAME, not the prefix (the Wave B spec §3 restates this: `20260823150000`→`20260823205007`), so two files at one version replay in filename order and both get recorded — nothing is skipped today. What breaks is every tool and every human that treats the version as an identity: a `list_migrations` reader cannot join a row to a file, and the ordering between the two is decided by the SUFFIX, alphabetically, which nobody wrote down.
+- ⚠ ~~**THE FIX IS NOT A RENAME HERE.** Both files are APPLIED. Renaming an applied migration is how a replay diverges from production.~~ **REVERSED 2026-09-03 — and this bullet contradicted the one directly above it.** The tracker joins on migration NAME (first bullet), so the filename's version prefix was never what reconciled the two histories, and renaming a file cannot diverge a replay that does not read the prefix. Production confirms it: versions there are AUTO-STAMPED at apply time and have not matched filenames since ~2026-08-23 — `credit_usage_events` is applied as `20260901193049`, `agent_template_home_scoped` as `20260827135014`.
+- ⚠ **AND THE CARVE-OUT WAS NOT FREE.** `supabase db reset` stamps `schema_migrations` FROM THE FILENAME, so two files at one version is a duplicate primary key. The first time the `rls-redteam` replay job ever ran (2026-09-02) it died on `schema_migrations_pkey` (23505) before reaching a single migration — **the ratchet was fencing the one defect that made the replay impossible**, and with it the only evidence that 20 pending migrations apply at all. Allow-listing a defect hid it from the gate that would have caught it.
+- Resolution taken (2026-09-03): **RENAMED.** `credit_usage_events` → `20260901130000`, which also restores chronological truth (production applied it AFTER `agent_template_home_scoped`). `src/features/knowledge/schema-sql.test.ts › "no TWO migrations share a version (F-526)"` is now a clean assertion with no allow-list. The replay then ran end to end and applied all 20 pending files against a fresh Postgres — its first green run.
+- Status: **FIXED** — the collision is gone and the gate admits no exceptions.
+
+### F-550 — the composer offers agent handles the transcript cannot tint, and the two ends are now deliberately different widths (2026-09-02)
+
+- Location: `src/features/channels/components/channels-v2/composer-mentions.tsx › mentionSuggestions` (the offer) vs `src/features/channels/lib/agent-mentions.ts › buildAgentMentionIndex` as the TRANSCRIPT builds it (the tint), fed by `components/channels-v2/view-model.ts › AuthorIndex.agents`.
+- Found during: v2 wave B slice B10, widening the @-picker from this machine's own agents to the channel's live ones.
+- **THE SHAPE.** The picker now offers every agent live in the room (the peer projection, which is the set `server/service-writes-metadata-recipient.ts › liveAgentHandles` resolves a person's `to=` against). The TINT is still machine-local by construction: a peer's agent ids are minted on their machine, `AuthorIndex.agents` is the desktop bridge's own feed, and `agent-mentions.ts` says in its header that a peer's agent "has no entry, cannot be tinted". So a handle the picker inserts for a PEER's agent routes correctly and renders as plain text.
+- ⚠ **THE DIRECTION IS THE SAFE ONE, AND THAT IS WHY IT WAS TAKEN.** INVARIANTS §5 states both failure modes for this pair: an unstamped TINT lies to the author (it looks addressed and is not), a tintless STAMP lies to nobody — it reaches the recipient and merely looks plain. This is the second. The alternative on offer was to keep the web offering NO agent at all, which is the surface Samuel's ruling is about.
+- ⚠ **THE FIX IS NOT IN THE PICKER.** Widening the tint means giving the web transcript a peer-agent index, which is a change to `view-model.ts` / `message-markdown.tsx` — B9's tree, not this slice's. Recorded rather than taken.
+- Status: **OPEN**, and behaviourally harmless today. Pinned in the sense that `composer-recipients.test.tsx` asserts the peer handle is offered and round-trips through the server's own index; nothing asserts it tints, because it does not.
+
+### F-551 — the thread's "other party" is derived in two places, from two different sources (2026-09-02)
+
+- Location: `src/features/channels/lib/draft-recipients.ts › threadOtherPartyOf` (new, for the composer's recipient line) and `src/features/channels/components/channels-v2/use-agents-panel.ts › launchAgent` (the launch's `counterpartyId`). The SERVER's third copy — `server/service-wake-verdict-resilience.ts › threadOtherParty` — reads the metadata fold's stamps rather than the thread row and is deliberately separate.
+- Found during: v2 wave B slice B10, wiring RR1 into the composer's recipient line.
+- **THE SHAPE.** Both client copies answer "given this thread and me, who is the other member", and both spell it as a two-arm conditional over `createdBy` / `targetUserId`. They agree today. They are one edit apart from disagreeing, and the disagreement would be silent in exactly the way F-266's parser split was: the LINE would name one person and the LAUNCH would hand the agent another counterparty.
+- ⚠ **NOT FOLDED HERE.** `use-agents-panel.ts` is not in this slice's `Owns` column, and its copy carries an extra arm this one does not need (a channel-level launch has no thread at all, which is a legitimate `null` rather than a non-participant's). Folding them is a small change to a file this slice may not touch.
+- ⚠ **THE REVIEW WIDENED THIS AND PART-PAID IT (2026-09-02).** The batch-2 review counted FIVE independent statements of "who will this reach" across the tree and made the sharper point: **each had a suite that agreed with ITSELF, which is not the two ends agreeing.** The two that matter most — the composer's `draftReach` and the server's `resolveWakeVerdict` — now run over ONE fixture table in `src/features/channels/draft-reach-parity.test.ts` (seven cases: the tagged arm, RR3's three outcomes, RR1, and the two `none`s). They agree today, and a drift in either fails there.
+- ⚠ **ONE SHARED RESOLVER IS STILL NOT THE ANSWER FOR THAT PAIR, AND THE REASON IS STRUCTURAL.** The server's arms take DATABASE reads and its module is `server-only`; the client has a rendered pane and no credentials. What they must share is the ARM ORDER and the PARSERS, and they do. The fold F-551 asks for is the `use-agents-panel.ts` copy, unchanged.
+- ⚠ **AND THE REVIEW NAMED A GAP THE FOLD WOULD NOT CLOSE: RR2 IS PREDICTED NOWHERE.** It is an agent author's arm and no browser holds an agent credential — so the ONE arm with no client preview is the one whose author is a machine, i.e. the caller least able to notice a silent non-delivery. Pinned as a decision in the parity suite rather than left as an absence.
+- Status: **OPEN** for the `use-agents-panel.ts` fold. The remedy is one import: it calls `threadOtherPartyOf` and reads `.userId`.
+
+### F-560 — the personal container's revert has an ORDER, and the cascade makes the wrong one destructive (2026-09-02)
+
+- Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql` (header, "ROLLBACK"); the cascade is `supabase/migrations/20260501000000_knowledge_bases.sql` and `20260822200000_agent_templates.sql` (`workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE`).
+- Found during: writing B11's rollback story against the Wave B spec §3, which states step 1's revert as *"a `DELETE ... WHERE kind='personal'` plus a `DROP FUNCTION`"*.
+- **THE SPEC'S ONE-LINE REVERT IS DESTRUCTIVE AS WRITTEN, AND ONLY AFTER THE SAME MIGRATION'S DATA STEP.** Step 1 moves the `home_scoped` rows INTO the containers; both owning tables cascade on `workspace_id`; so the bare delete takes every personal knowledge base and agent template with it. The safe revert is two `UPDATE`s and then the delete, in that order, and it is written out in the migration header.
+- ⚠ **THE REVERT IS EXACT, AND ITS PRECONDITION IS NAMED.** `default_workspace_of()` — the same helper the mint uses, added by this migration for exactly this reason — is the one SQL spelling of "today's default", so the move back is the move forward inverted. If an owner's last standard workspace was deleted in between it answers NULL and the `UPDATE` violates `NOT NULL`, which FAILS the revert rather than filing a row somewhere. That direction is deliberate: **rollback fails closed, never open.**
+- Status: **NAMED, and the safe order is in the file.** Not fenced by a test — a test cannot run a revert nobody has applied. It converts to a probe the moment migration replay runs (F-563).
+
+### F-561 — the personal container's slug makes the legacy slug-only URL fallback ambiguous, the same way a link container already can (2026-09-02)
+
+- Location: `src/features/workspaces/server/repository.ts › findMemberWorkspaceBySlug`; the minted slug is `supabase/migrations/20260920120000_workspace_kind_personal.sql › ensure_personal_container`.
+- Found during: choosing which fields the mint copies from today's derived default.
+- **THE SHAPE.** `findMemberWorkspaceBySlug` scans the caller's ACTIVE MEMBERSHIPS for a slug and answers `null` on 2+ matches, deliberately, so an ambiguous legacy URL 404s instead of routing to the wrong workspace. It does not filter by `kind`. A personal container is a membership, so it joins that scan. This is why the mint does NOT copy the origin's slug — that would have made every legacy URL of the workspace it was minted from ambiguous, for all 15 users at once. It mints the constant `personal` instead, leaving a residue: a user whose OWN workspace is slugged `personal` loses that one legacy URL.
+- ⚠ **NOT NEW, AND NOT WORSE.** `kind='link'` containers have carried the identical hazard since `20260823150000` — they are memberships with slugs too. What is new is a second kind that does it.
+- Resolution owed, OUTSIDE THIS SLICE'S OWNERSHIP: `findMemberWorkspaceBySlug` should compose `isStandardWorkspace` on `matches`, which closes it for both kinds in one line. `workspaces/server/repository.ts` belongs to **B14** (`v2/b-default-workspace-off`) — recorded as a cross-slice request rather than taken here.
+- Status: RESOLVED 2026-09-02 at the batch-2 integration. `findMemberWorkspaceBySlug` filters `isStandardWorkspace` before matching the slug — the POSITIVE form (§4A, F-295), so it closes `link` and `personal` together and every kind after them. ⚠ Taken by the INTEGRATOR rather than by B14 because it is one line, it is safe with the migration unapplied, and B14 is batch 3: leaving it would mean minting a kind whose only fence is a slice that has not run.
+
+### F-562 — `agent-templates/server/repository.ts` sits at 493 of the 500-line cap (2026-09-02)
+
+- Location: `src/features/agent-templates/server/repository.ts`. Re-derive, never quote: `wc -l`.
+- Found during: B11's dual-write, which pushed the file to 504 and had to be trimmed back rather than shipped.
+- The file already has its split seams marked — three `// ───` sections (Templates · Team links · Knowledge-base attachments) — and the house move at the cap is the one `service-base-gates.ts` made on 2026-09-02: lift a section into a sibling and re-export, exactly as `knowledge/server/repository.ts` is already a barrel over five. Not taken in B11 because **B15** deletes part of this file's shelf lane in batch 3 and a split then would have landed under its feet.
+- Status: RESOLVED 2026-09-02 at the batch-2 integration, and it was FORCED rather than chosen: B11's dual-write and B12's `readClient()` both landed in this file, taking it to 515 and turning the root lint's `max-lines` red. Knowledge-base attachments lifted to `repository-knowledge-links.ts` (142 lines) and re-exported; `repository.ts` is 402. ⚠ The section chosen is the one B15 does NOT touch — the shelf lane stays in `repository.ts`, so batch 3's deletion still lands where its slice expects it.
+
+### F-563 — the personal-container migration has never met a database, and its four claims are text-asserted (2026-09-02)
+
+- Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql`, `src/shared/tenancy/personal-container-schema.test.ts`.
+- **WHAT IS PROVEN AND WHAT IS NOT.** The test reads SQL and proves the file still SAYS: one container per user (partial unique index), an owner membership on it, the shelf moved by `created_by`, and no destructive statement. **It cannot prove the advisory lock serializes, that the backfill loop terminates over `auth.users`, that the `UPDATE ... FROM` moves what it should, or that `RETURNS TABLE` matches what `ensureDefaultWorkspaceRow`'s caller destructures.** Only a database can say those.
+- Owed: the three-probe-per-branch pattern inside a rolled-back transaction (the `20260827120000` precedent, restated by F-461 for the grant trigger). ⚠ Docker has been down for all of Wave A and all of Wave B batch 1 — **replay is owed for TEN migrations, not one**, and this is the tenth.
+- Status: **OPEN**, and blocking nothing until replay runs.
+
+### F-564 — sites derive "home channel" as `!isStandardWorkspace`, and a THIRD kind makes each one a mislabel (2026-09-02)
+
+- Locations, re-derive rather than quote (`grep -rn '!isStandardWorkspace' packages apps src --exclude-dir=dist` plus the ternaries beside it): `packages/mcp-server/src/server.ts` (the home-channel half of the served directory) · `› meta-tools.ts › registerWorkspaceMetaTools`'s "home channel" line · `› factory.ts`'s shared-container predicate (`!isStandardWorkspace(active) && memberCount !== 1`) · the home-scopes module (**two**: the `kind:` label and the slug it omits — ⚠ **DELETED by B13**) · `› tools/copy-target.ts` (**two**: the address it prints and the `kind` word beside it) · `› tools/confirm-token.ts`'s `container` flag.
+- Found during: B11, checking what a `kind='personal'` row does to every consumer before minting one.
+- **THE RULE THIS BREAKS IS ALREADY WRITTEN IN THE TREE**, in `src/features/workspaces/server/shared-publish.ts`, in as many words: *"`=== "link"`, NOT `!isStandardWorkspace(…)`. That predicate is the LISTING one and its negative spelling admits every kind nobody has designed yet."* `service-audience.ts › findWorkspaceKind` makes the same choice. The eight sites above are the ones that did not.
+- ⚠ **THIS IS F-295's MIRROR IMAGE, NOT A REPEAT OF IT.** F-295 flipped the LISTING predicate positive so a new kind is kept OUT of the rail; these sites read that same predicate's NEGATION as a positive claim ("therefore a home channel"), so a new kind is silently pulled IN. Fixing one direction never fixed the other, and only a third kind could show it.
+- ⚠ **NOT REACHABLE TODAY** — `20260920120000` is unapplied, so no `personal` row exists anywhere. It becomes reachable the moment that migration runs, and it is a MISLABEL rather than a leak: a personal container advertised as a home channel is the caller's own container, listed to its only member.
+- Resolution, COMPLETE 2026-09-02 at the batch-3 integration: each remaining site asks `kind === "link"` positively, or is declared a FENCE. **B13** repointed `server.ts`, `meta-tools.ts` and `factory.ts` at `packages/mcp-server/src/workspace-directory.ts › containerKind` and deleted its home-scopes module with `dopl_home`; **B15** deleted its copy-target module with the copy ops; **B14** repaired the one fence; **the integration** closed `packages/mcp-server/src/tools/confirm-token.ts › resolveConfirmTarget`, which was in no slice's `Owns` column and was saved only by a member-count term a one-member personal container happens to fail — correct by accident is not correct.
+- ⚠ **B15 ALSO FIXED A NINTH SITE THE GATE COULD NOT SEE** (2026-09-02): `agent-templates/server/service-resolve-ref.ts › tenancyLabel` read the `home_scoped` BOOLEAN first and fell through to `!== "standard"`, so the boolean HID the defect — every personal container would have rendered as "a home channel of yours, container <id>" the moment the column dropped. It reads `containerKind === "personal"` now. **A gate that scans for a predicate cannot see a site the predicate is not reached at**; the drop of `home_scoped` is what made this one reachable and visible in the same change.
+- Recorded 2026-09-02 at the batch-2 integration, in the two places an operator would look: the migration's own header (a ⚠⚠ block naming the `grep`, the two acceptable fixes and `confirm-token.ts`'s missing owner) and the wave doc's *"Migrations pending — apply order"* section. The CODE fix is still batch 3's.
+- ⚠ **THE COUNT AND THE COMMAND DISAGREED, AND BOTH ARE REPLACED BY A GATE (2026-09-02, in the batch-2 review).** This entry, the migration header and `@dopl/contracts › WorkspaceKind` all said EIGHT and all told the reader to `grep -rn '!isStandardWorkspace'` — **which answers FOUR**, because half the sites are the ELSE BRANCH of a ternary or an early return and a negation grep sees neither shape. A precondition on an unapplied migration was therefore prose with no way to check it, carrying a number nobody could reproduce. `src/features/workspaces/home-channel-derivation.test.ts` scans all three shapes across all three trees, holds each FILE's disposition (which slice repoints or deletes it), and fails in BOTH directions — a new site, or a fixed one whose record did not leave with it. It also found one the list omits: `src/features/workspaces/server/authz.ts › assertMemberAddable`, where the REFUSAL is right for a personal container and the SENTENCE names the wrong kind.
+- 🔒 **THE GATE'S OPEN MAP IS DELETED, AND THAT DELETION IS THE SIGN-OFF.** `home-channel-derivation.test.ts` now declares only `FENCE_SITES` and asserts the scan EQUALS it, so the property that still earns the file is the inverse one: a new site added tomorrow fails. The migration's header records that a precondition existed and was met, rather than saying nothing — an operator who finds no mention cannot tell "met" from "skipped".
+- Status: **RESOLVED.** `20260920120000` may be applied, subject only to the nine migrations ahead of it in filename order.
+
+### F-570 — the SELECT policies on skills, chats and agent_templates were WIDER than their TS predicates, in four named ways (2026-09-02)
+
+- Location: `supabase/migrations/20260720211005_rls_pin_workspace_member_and_initplan.sql`, `20260916120000_drop_team_resource_access.sql`, `20260915120000_drop_agent_template_teams.sql` (the pre-images); `src/features/skills/server/service-shared.ts › canSeeSkill`, `src/features/chats/server/service-shared.ts › canSeeChat`, `src/features/agent-templates/server/service-shared.ts › canSeeTemplate`.
+- Found during: Wave B B12, comparing each predicate against the replayed final policy body before moving its reads.
+- **THE FOUR GAPS.** (1) `skills_member_select` was `is_current_workspace_member(ws,'viewer') AND (visibility='public' OR created_by=auth.uid())` — no **SHARED CREDENTIAL** arm, so a credential standing for nobody in particular read the minter's private skills (M-10/F-336, `canSeeSkill` arm 2). (2) The same policy said nothing about **`access_mode='teams'`**, so a skill narrowed to one team was readable by every viewer; `20260708150001` recorded that in a comment — *"team scoping [is] enforced in the service"* — which was true while the service was the only reader. (3) `chats_member_select` led with a **blanket `is_current_workspace_member(ws,'admin')`**, so a workspace admin read every PRIVATE transcript; `canSeeChat` returns false for `visibility !== "public"` before its admin arm. (4) `chats_owner_select` was an **unfenced `owner_id = auth.uid()`** — no membership floor, no credential axis — and a fifth, adjacent: `can_current_user_read_agent_template()` carried five of `canSeeTemplate`'s six arms and omitted arm 2.
+- ⚠ **NONE WAS A LIVE LEAK, AND THAT IS THE POINT** — the same sentence F-520 ends on. Every read went through `supabaseAdmin()`, so no policy ran. These are the shapes that become leaks the instant a read moves off the service role, which is what this slice does.
+- ⚠ **GAP 3 WAS DELIBERATE AND IS OVERRULED BY B5, NOT BY OPINION.** `20260916120000`'s probe P2 records the blanket admin arm as intended ("the arm this policy has always had — unchanged"), and `20260915120000` calls `agent_templates` "tighter than `chats_member_select` on purpose". Ruling B5 asks the policy to EQUAL the predicate; the templates policy had already made exactly this correction, and its own comment explains why moving an admin arm out of the team branch is a widening.
+- Status: RESOLVED 2026-09-02 by `supabase/migrations/20260921120000_rls_phase2_policies.sql`. Each rule is stated once — `dopl_skill_readable()`, `dopl_chat_readable()`, the shared `dopl_public_teams_admits()` — and the policies call it; the template function is replaced in place, so no policy moves. Mutation-verified in six directions by the four redteam suites. ⚠ **NEVER APPLIED** — Docker is down on this machine, replay owed with the rest of Wave B's.
+
+### F-571 — a child policy that restates its parent's matrix is where the fence goes stale (2026-09-02)
+
+- Location: `skill_files_member_select` (`20260504030000_visibility_private_resources.sql`), `chat_messages_select` (`20260916120000_drop_team_resource_access.sql`).
+- Found during: Wave B B12, after repairing the two parents.
+- **THE SHAPE.** Each of these restated its parent's visibility matrix INLINE — `skill_files` as `(s.visibility='public' OR s.created_by=auth.uid())`, `chat_messages` as the whole four-arm chats body — so every parent repair had to be made twice and the second copy is the one nobody makes. That is the 2026-08-26 entry-body incident (INVARIANTS §4) with the table names changed, and it is why `20260919120000` made the knowledge children call `dopl_knowledge_base_readable()` rather than repeat it.
+- ⚠ **`chat_messages` IS NOT OPTIONAL IN A SECOND WAY.** `chats/server/repository.ts › listVisibleChats` selects `*, chat_messages(count)`, so under a caller-scoped client the child policy filters an EMBEDDED count: a wider child publishes the LENGTH of a transcript the caller may not read.
+- ⚠ **AND `skill_files_member_select` STILL ASKED THE 3-ARG `is_workspace_member(ws, auth.uid(), …)`** — the form where the CALLER supplies the user id, which M-9 closed for every table `20260720211005` was measuring. It was missed because that migration rewrote the tables it measured and this one was not among them.
+- Status: RESOLVED 2026-09-02 by `20260921120000`; the surviving child (`chat_messages`) calls the parent's predicate, and `scripts/check-rls-pair-gate.ts › COVERED` watches it with `predicates: []` — it has no `canSee*` to pair with. ⚠ The `skill_files` half of this entry was never real: that table was dropped in July 2026 (F-586).
+
+### F-572 — `teams/` reads two covered tables on the service role, and it belongs to no slice in this wave (2026-09-02)
+
+- Location: `src/features/teams/server/repository-resources.ts` and `src/features/teams/server/service.ts` (both `.from("knowledge_bases")` + `.from("skills")`), `src/features/teams/server/repository-grants.ts` (`resource_grants`).
+- Found during: Wave B B12, sweeping for readers of the phase-2 tables outside the slice's ownership.
+- **WHAT IT MEANS.** Phases 1–2 moved the read paths in `knowledge/`, `skills/`, `agent-templates/` and `chats/`. The teams sharing surface reads the SAME rows through its own repository and still does so as the service role, so with the flag ON the tree has one table read two ways: caller-scoped from its owning feature, service-role from `teams/`. That is not a leak the flag introduces — it is today's behaviour, unchanged — but it is the exact residue F-521's unwritten lint rule exists to make visible.
+- ⚠ Not fixed here: `teams/server/**` is in no slice's `Owns` column in `docs/specs/mcp-v2-wave-b.md` §5, and a cross-slice edit to a fence is how two branches disagree about one policy.
+- Proposed resolution: fold into B16 with the TS-predicate deletions, or give `teams/` a row of its own in batch 3; either way it lands with the Phase 0 lint rule (F-521) that would have found it.
+- Status: open.
+
+### F-573 — two `skill_files` WRITE policies still take the user id from the caller (2026-09-02, MOOT)
+
+- Status: **MOOT, and the reason is F-586.** `skill_files` has not existed since `20260716064733_collapse_skill_files_into_skills.sql` §e ran `DROP TABLE IF EXISTS skill_files CASCADE` in July 2026 — *"CASCADE takes its triggers + RLS policies"*. Both write policies died with it. The finding was filed against a policy body read out of a migration replay that did not track `DROP TABLE`, so a dead table's policies read as live to every consumer of that scan. Nothing to fix; kept as the record of how it was filed.
+
+### F-574 — the skills KB picker lists every base in the workspace, private ones included (2026-09-02)
+
+- Location: `src/features/skills/server/repository.ts › listWorkspaceKnowledgeBases`, `src/features/skills/server/service-reads.ts › listWorkspaceKnowledgeBases`.
+- Found during: Wave B B12, classifying each read as caller-scoped or system.
+- **NO SERVICE-SIDE FILTER EXISTS.** The service passes `ctx.workspaceId` and returns `{slug, name}` for every row; nothing asks `canSeeBase`, and the feature deliberately does not import `features/knowledge` (§1), so the only fence available to it is the policy. On the service role there is none, so the picker names other people's private bases. It leaks NAMES, not contents.
+- Status: MITIGATED 2026-09-02 — the read moved to `readClient()`, so with `RLS_CALLER_SCOPED_READS` on the phase-1 policy is the fence. ⚠ **With the flag off (the default) the over-share stands**, which is why this is filed rather than closed: the fix that holds in both states is a visibility filter in the service, and that belongs to whoever owns the picker.
+
+### F-575 — `knowledge_entry_chunks` has RLS enabled and NO policy at all (2026-09-02)
+
+- Location: `supabase/migrations/20260612090000_knowledge_embeddings.sql` (`ALTER TABLE knowledge_entry_chunks ENABLE ROW LEVEL SECURITY;`, and nothing else). Re-derive: `grep -rn "knowledge_entry_chunks" supabase/migrations/*.sql | grep -i policy` → no output.
+- Found during: Wave B B12, checking the RLS plan's phase-1 table list against what the two migrations actually cover.
+- **IT FAILS CLOSED, WHICH IS WHY IT IS A NOTE AND NOT A P0.** RLS enabled with no policy denies every row to `authenticated`. Nothing breaks today because the embeddings repository still reads as the service role. The trap is directional: the day a chunk read moves to `readClient()` it returns ZERO rows and search goes quietly empty — a fence that reports itself armed while answering nothing, which is the mirror of the failure `caller-jwt.ts` refuses to have.
+- ⚠ The RLS plan's phase 1 names this table on the same line as `skills` and `skill_files`; it is the one member of that line still uncovered after B7 and B12.
+- ⚠ **A POLICY WAS WRITTEN FOR IT AT THE BATCH-2 INTEGRATION AND WITHDRAWN IN REVIEW (2026-09-02).** *Desktop Agent default, Samuel may reverse.* The policy was its parent's, by calling `dopl_knowledge_base_readable` — correct in itself, and the wrong change for this branch: **every other arm of `20260921120000` NARROWS a table, and this one WIDENED one, from "nobody" to "every viewer whose base is readable". A policy is not behind `RLS_PHASE_2`**, so the flag being off would not have held it. The batch's own promise is no net widening while the flag is off.
+- ⚠ **NOTHING IS LOST BY WAITING, BECAUSE THE TRAP IS DIRECTIONAL.** The cost of no policy is an EMPTY search the day a chunk read moves onto `readClient()` — never a leak. That move is phase 3's, and the policy belongs in the same change as the reader it unblocks, where one redteam suite can prove both halves at once. Writing it a phase early bought a documentation line and spent the property the phase promised.
+- ⚠ The `knowledge_base_id` index that came with it was withdrawn too, and it was a DUPLICATE in any case: `20260720185006_covering_fk_indexes.sql › knowledge_entry_chunks_knowledge_base_id_idx` is already exactly `(knowledge_base_id)`.
+- Status: OPEN, for phase 3. The covered-table count is TEN. The deny-all state is now PINNED in both directions — `knowledge/server/rls-redteam.test.ts` asserts the table has no policy of its own AND that no sibling policy names it — so re-adding the policy without also moving the reader turns that suite red rather than passing silently.
+
+### F-576 — the wave-B spec folds `direct_agent` into `send(to=@agent)`, and batch 1 did not build the half that makes it work (2026-09-02)
+
+- **WHERE.** `docs/specs/mcp-v2-wave-b.md` §2.3, row `direct_agent` → *"`send(to=@agent)` landing `delivery=idle`; `channel_agent_directions` kept as STORAGE; the op goes"*. §2.1 says `idle` means *"the message is filed in the recipient's direction mailbox and claimed when that machine next reconciles"*.
+- **WHAT IS ACTUALLY THERE.** `src/features/channels/server/service-wake-verdict.ts › DELIVERY_FOR` maps the `agent` verdict to `woken`, and there is no `idle` arm for an agent recipient at all — `freshChannelSessions` resolves only LIVE sessions, so a dormant agent either resolves to a live one or does not resolve. Nothing anywhere in the write path calls `createAgentDirection`. Grep: `grep -rn "createAgentDirection" src/features/channels/server` — one writer, `service-directions.ts`, reached only from `POST /api/channels/{id}/directions`.
+- **WHY IT MATTERS.** Retiring `direct_agent` on the strength of that row would have DELETED the private direct lane rather than moving it: a directed `send` posts a message every member of the channel can read, and the whole point of a direction is that it does not. The two are not the same act with two spellings.
+- **WHAT SLICE B8 DID INSTEAD.** `direct_agent` folded into `manage(action="direct")` — the same lane, the same directive storage, under the dispatcher that owns every other "ask the operator's own machine" verb — and the mapping is recorded as shipped in the slice commit body and in INVARIANTS §10. `read_directions` DID fold, into `op="status"`, because reading the mailbox has no such problem.
+- Status: **OPEN, and it is a SPEC finding rather than a code one.** Closing it means either (a) building the idle-agent direction filing in `service-writes.ts` + `service-wake-verdict.ts` (B4's files) and then retiring `manage(action="direct")` in a later slice, or (b) amending §2.3. Do not "fix" it by retiring the action.
+
+### F-577 — `dopl_channel`'s input schema is 8,372 served against a wave target of 3,000, and the remainder is 23 one-sentence contracts (2026-09-02)
+
+- **MEASURED**, as served, injected `workspace` excluded: 11,609 → 8,372 (`npx vitest run src/tools/channel-schema-budget.test.ts` prints it). The wave target in `docs/specs/mcp-v2-wave-b.md` §6 is **3,000**.
+- **WHERE THE 3,038 CAME FROM.** Params, not prose: thirteen fields left because the concept each named already had one (`to`, `summary`, `body`, `wait_ms`), and the op enum went 23 → 5. ⚠ **THAT IS A NET OF EIGHTEEN AND NOT A COUNT OF RETIREMENTS** (corrected 2026-09-02): TWENTY-TWO names retired and four arrived — `read` is the one old name that survived. `law-removed-vocabulary.ts › RETIRED_CHANNEL_OPS` is the list — it moved there when slice B16 deleted the redirect module that used to hold it.
+- **WHY THE GAP IS NOT CLOSED BY TRIMMING.** 3,000 over 23 fields is ~130 characters each INCLUDING the JSON Schema structure around them, which buys the number by deleting the answer to *"does this op want this argument"* — the floor `channel-schema-budget.test.ts › "every declared field still names at least one op that takes it"` exists to hold. The remaining prose is one sentence of contract per field, with every BOUND already moved out into the rendered `Limits:` block and every RULE already moved into `channel-doctrine.ts › FIELDS`.
+- **SO THE NEXT REAL CUT IS FEWER FIELDS.** B13 takes the next one (`workspace=` off; `section`, `visibility` and `mode` are the three that are each the sole argument of one action). Param count is 23 against a target of ≤20 for the same reason.
+- Status: **OPEN, measured, and ratcheted** — `SCHEMA_CEILINGS.dopl_channel` only moves down.
+
+### F-578 — the desktop still classifies channel calls by the RETIRED op names, and every new one reads to it as unclassified (2026-09-02)
+
+- **WHERE.** `dopl-desktop-app/main/session-profiles.js` — `OWN_CHANNEL_READ_OPS` (`read`, `await`, `list_threads`, `get_thread`, `members`, `read_sessions`, `read_directions`), `isAwaitOp` (`input.op === 'await'`), `isOwnChannelPost` / `main/session-own-outbound.js › OWN_CHANNEL_OUTBOUND_OPS` (`milestone`, `create_thread`), and `main/session-launch-op.js` / `main/prompt-framing.js`, which name ops in teaching copy.
+- **THE EFFECT, AND IT IS A GATE RATHER THAN A FENCE.** A desktop-run session calling `op="rooms"` or `op="send"` matches no classifier, so `grantDecision` reaches its unclassified arm and GATES — a notification a human must answer for a call the old spelling would have allowed. Nothing is leaked; work stalls. The redirects protect the other direction (an older desktop calling `post` still gets a sentence).
+- **THE EXACT EDITS OWED**, none of them slice B8's to make (`main/session-profiles.js` is **B6 alone**; the delivery core is **B9**): `OWN_CHANNEL_READ_OPS` → `['read', 'status', 'rooms']`; `isAwaitOp` → `input.op === 'read' && input.wait_ms != null`; `OWN_CHANNEL_OUTBOUND_OPS` → `['send']`, with the own-channel POST test reading `op === 'send'`; `isOwnMachineLaunch` / `isOwnMachineDirect` → `op === 'manage'` plus `action` in `launch` / `direct`; and the teaching copy in `prompt-framing.js` / `session-launch-op.js`.
+- ⚠ **THE ACTION IS PART OF THE CLASSIFICATION NOW.** `rooms` is four reads and four writes, so a desktop predicate keyed on the op alone is either too wide or too narrow — the server's own gate reads `<op>.<action>` (`gating.ts › isWriteOp`) and the desktop's should too.
+- Status: RESOLVED 2026-09-02 at the batch-2 integration (B8 × B6 × B9). ⚠ **ONE DEVIATION FROM THE EDITS ABOVE, AND IT IS THE ONE THIS FINDING'S OWN LAST WARNING ASKS FOR.** `OWN_CHANNEL_READ_OPS` is **`['read','status','rooms.threads','rooms.members']`**, not `['read','status','rooms']`: four of `rooms`' eight actions WRITE (`open`, `invite`, `thread_mode`, `update` — the same four `gating.ts › WRITE_OPS` names), so a bare `rooms` entry would have handed the INBOUND half of Axis B a lane that opens channels and invites people into them. Every classifier keys `<op>.<action>` through one spelling, `main/channel-op-key.js › channelOpKey` — the read set, both own-machine lanes (`manage.launch` / `manage.direct`), the explainer and the `op=` segment of the diag line, which for the same reason now prints `rooms.open` rather than `rooms`. `isAwaitOp` asks `op === "read" && wait_ms != null`. The outbound half is `['send']` with the three ALLOW codes kept as SHAPES (`kind:"milestone"`, `thread:"new"`, `kind:"decision"`). The teaching copy in `prompt-framing.js` and eight other `main/` files no longer names a retired op. ⚠ **THE RETIRED NAMES WERE REMOVED, NOT KEPT**: a name in no list falls to the unclassified arm and GATES, so only the ALLOW side shrank — which also reverses the 2026-08-22 fail-safe note that kept `get_thread` on the read set, because that many dead names make a list nobody can read for what it admits (TWENTY-TWO retired, not eighteen — see the correction on F-577). INVARIANTS §11 restated; F-444 superseded.
+
+### F-579 — the sibling roster survives its only reader, and `agentIdsInChannel` is now a dead export (2026-09-02)
+
+- Location: `dopl-desktop-app/main/session-registry.js › agentIdsInChannel`, re-exported by `main/session-engine.js`. Re-derive: `grep -rn "agentIdsInChannel" dopl-desktop-app/main dopl-desktop-app/test`.
+- Found during: the batch-2 integration, deleting G13's other half — `prompt-framing.js › agentIdentityFraming`'s ~870-character voluntary claim protocol.
+- **THE SHAPE.** `noteSiblings` stamped two fields: `context.agentId` (the identity line, still read) and `context.siblingAgentIds` — every other agent live in the same channel — whose ONLY reader was the deleted paragraph. The field went with the paragraph; the function that computed it, `agentIdsInChannel`, did not, because it is an exported registry read and B9 had already stopped calling it from the delivery core (`test/_wake-dispatch-harness.mjs`: *"TWO METHODS, NOT THREE"*).
+- ⚠ **IT IS DEAD RATHER THAN WRONG.** Nothing calls it in `main/`; two test harnesses still supply a fake for it. Deleting it is an edit to `session-registry.js` and `session-engine.js`'s re-export list, which is the desktop delivery core — **B9's ownership**, in a batch that is already integrated.
+- Proposed resolution: delete the function and its two re-exports with the batch-3 desktop pass, together with the harness fakes. A registry read that answers a question nobody asks is the shape a future paragraph gets written around.
+- Status: open, and costing nothing.
+
+### F-580 — `authorKind` was a claim in BOTH directions, and the downgrade direction bought an agent token RR3's channel-wide wake (2026-09-02, FIXED)
+
+- Location: `src/features/channels/server/service-writes.ts › postMessage`, the `authorKind` derivation. Re-derive: `grep -n 'ctx.source === "agent" || input.authorKind' src/features/channels/server/service-writes.ts`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** It read `input.authorKind ?? (ctx.source === "agent" ? "agent" : "user")` — the caller's value won unconditionally, pinned in both directions by a test that called it *"a claim, not a derivation"*. B4 then made the verdict BRANCH on that value: `service-wake-verdict.ts` splits RR2 (the agent's own reciprocal party, own-scoped) from RR3 (`service-wake-verdict-resilience.ts › freshChannelSessions`, CHANNEL-WIDE — every operator's live agents in the room) on `authorKind === "agent"`. So an agent credential posting `authorKind: "user"` took the human arm and could wake another account's agent, which is exactly the cross-account wake Samuel's 2026-08-31 same-account carve closes. `freshChannelSessions`' own header asserts *"no path from an agent author reaches this function"*; the `??` was the path.
+- ⚠ **THE TWO DIRECTIONS ARE NOT SYMMETRIC, WHICH IS WHY THE FIX IS NOT "DERIVE IT".** A COOKIE session must still be able to claim `agent`: the desktop posts its agents' thread results over the operator's own Supabase session (`dopl-desktop-app/main/channel-post.js`, `authorKind: 'agent'`), and that lane is what the parameter exists for. Claiming `agent` only ever NARROWS the wake (RR2 over RR3). Claiming `user` from an agent token widens it.
+- Resolution: the claim ESCALATES ONLY — `ctx.source === "agent" || input.authorKind === "agent"`. `ctx.source` is `auth.agentTokenId` (`service-shared.ts`), which no request body can forge. Two tests in `service-writes.test.ts` pin both halves: the label, and the verdict RR3 would otherwise have produced.
+- Status: FIXED. `dopl-desktop-app/main/session-dispatch.js` already told its readers `author_kind` *"is derived server-side from the caller's credential"* — it now is.
+
+### F-581 — the grant table that became a MIRROR kept its write policy, and PostgREST was still a door onto it (2026-09-02, FIXED)
+
+- Location: `supabase/migrations/20260828120000_channel_resource_grants_rls_tighten.sql` §1 (`channel_resource_grants_admin_write`), against `knowledge/server/repository-audience.ts › listGrantedBaseIdsForChannels`. Re-derive: `grep -rn "channel_resource_grants" supabase/migrations src --exclude-dir=dist`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** `20260828120000` raised the write floor to `admin` and left the policy `FOR ALL`, which was right while that table WAS the grant table. `20260914120000` moved the truth to `resource_grants` and demoted this one to a compatibility mirror — but the write policy came along, and so did one reader. So an admin with their own JWT could `INSERT INTO channel_resource_grants` through PostgREST and have that row counted as a grant by the agent's reachable-base set, **having never met `enforce_resource_grant()`** — the trigger that decides whether the grantor may reach both containers. The service role was never the exposure. PostgREST is, which is the sentence `20260828120000` exists to answer.
+- ⚠ **THE POLICY DROP ALONE WOULD HAVE BROKEN THE LEGAL LANE.** `mirror_channel_resource_grant()` ran with INVOKER rights, so a `resource_grants` write from a user client would have had its mirror INSERT refused and taken the legal write down with it. And `drop_channel_resource_grants_for_kb()` would have deleted zero rows in silence, because RLS filters rather than raises.
+- Resolution: `20260921130000_channel_resource_grants_read_only.sql` drops the write policy outright (the surviving `_member_select` already carries the `admin` arm, so a `FOR SELECT` replacement would be a permissive duplicate) and makes the GC writer `SECURITY DEFINER`; `20260914120000` makes the mirror writer the same, at its own definition. Both write values derived from a row that already passed its table's validity trigger. Pinned in `knowledge/schema-sql.test.ts`.
+- Status: FIXED. Batch 3 deletes the table, the mirror and both functions together once the reader moves (F-460).
+
+### F-582 — the grant backfill copies a grantor who may have left, and a RAISE in a backfill aborts the apply (2026-09-02, FIXED)
+
+- Location: `supabase/migrations/20260914120000_resource_grants.sql` §6, the `channel_resource_grants` and `agent_template_teams` INSERTs. Re-derive: `grep -n 'CASE WHEN is_workspace_member' supabase/migrations/20260914120000_resource_grants.sql`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** `created_by` outlives a MEMBERSHIP. `ON DELETE SET NULL` clears it when the auth user is deleted; nothing clears it when the user merely leaves the workspace. The backfill copied it verbatim into a table whose BEFORE INSERT trigger requires the grantor to be an active member — so the first historical row with a departed grantor would `RAISE`, and a RAISE inside a backfill aborts the migration, mid-wave, on a database nobody can inspect from here.
+- Resolution: `CASE WHEN is_workspace_member(ws, grantor, 'viewer') THEN grantor END`. An unattributed row falls back to the same-container rule, and every row reaching those statements is same-container by construction (the old table's `enforce_channel_resource_grant()` required all three workspaces to match; a team scope is same-container by definition). What is lost is the author of a grant whose author is already gone.
+- Status: FIXED. Pinned in `knowledge/schema-sql.test.ts`.
+
+### F-583 — `enforce_resource_grant()` asked whether the grantor was IN the container, never whether they could see the resource (2026-09-02, FIXED)
+
+- Location: `supabase/migrations/20260914120000_resource_grants.sql › enforce_resource_grant` arm 4, replaced by `20260921140000_resource_grant_trigger_arms.sql`. Re-derive: `grep -n 'dopl_user_may_share_resource' supabase/migrations/*.sql`.
+- Found during: the wave-B batch-1/2 review. Samuel's ruling B4 is that a grant is *"the grantor may share this"*; the trigger implemented *"the grantor is here"*.
+- **THE SHAPE.** `is_workspace_member(res_ws, NEW.created_by, 'viewer')` — rank 0, and no reference to the resource's own `visibility`, `created_by`/`owner_id`/`user_id` or `access_mode`. So a bare viewer of a container could file a grant lending out a `private` knowledge base they cannot read, a `teams`-mode skill no team of theirs holds, or someone else's `private` agent template. **And `resource_grants` IS the fence those readers consult** — `dopl_teams_mode_visible()`, `listGrantedBaseIdsForChannels`. A row no reader may create is not a row a writer may file.
+- Resolution: two arms. An EDIT-CAPABLE rank (`'member'`) on the RESOURCE side — the scope side stays `'viewer'`, because lending into a room you can see is not an edit to that room — and `dopl_user_may_share_resource()`, the five `canSee*` matrices asked about a NAMED user. The teams axis needed generalising for that, so `dopl_teams_visible_for_user()` now holds the rule and `dopl_teams_mode_visible()` is one line over it: same name, same signature, same answer, and one statement of the axis instead of two that could drift.
+- ⚠ **The shared-credential axis is deliberately absent from the grantor test.** `dopl_credential_is_shared()` asks about the token in the request; this asks about a uuid recorded on a row, possibly long ago.
+- Status: FIXED, structurally. The six behavioural probes (P15–P20) are written into the migration header and are OWED — Docker has been down for two waves.
+
+### F-584 — a legal cross-container grant made its grantor's account undeletable (2026-09-02, FIXED)
+
+- Location: `enforce_resource_grant()`, step 0 in `supabase/migrations/20260921140000_resource_grant_trigger_arms.sql`. Re-derive: `grep -n "TG_OP = 'UPDATE'" supabase/migrations/20260921140000_resource_grant_trigger_arms.sql`.
+- Found during: the wave-B batch-1/2 review, reading F-583's arm against the column definition four lines above it.
+- **THE SHAPE.** `created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL`. Deleting the user fires the BEFORE **UPDATE** trigger with `NEW.created_by IS NULL`, which takes the unattributed branch — and that branch RAISEs for a CROSS-CONTAINER grant, the one shape ruling B4 exists to unlock. So `DELETE FROM auth.users` failed with `P0001 … may not cross containers`, and the more the feature was used the more accounts became undeletable. The row was valid when written; a de-attribution is not a re-grant.
+- Resolution: skip the grantor arms on exactly that transition — UPDATE, `created_by` NOT NULL → NULL, every other column identical. A statement that de-attributes and moves the grant in one breath is still validated as a re-grant.
+- Status: FIXED. Probe P19/P20 owed with the rest of F-461.
+
+### F-585 — the RLS pair gate asserted that a policy NAME survived, and nothing else (2026-09-02, FIXED)
+
+- Location: `scripts/check-rls-pair-gate.ts`. Re-derive: `npx tsx scripts/check-rls-pair-gate.ts`.
+- Found during: the wave-B batch-1/2 review, reading the gate against what it claims in CLAUDE.md's "definition of green".
+- **THE SHAPE.** It replayed `CREATE POLICY` / `DROP POLICY` and checked that each declared name was in the surviving set. Four mutations were therefore green: a body rewritten to `USING (true)`; a SECOND permissive SELECT policy beside the declared one (permissive policies are OR-ed, so an extra one widens the table while every declared one still passes); an `ALTER TABLE … DISABLE ROW LEVEL SECURITY`, which retires every policy on a table at once and leaves all their names standing; and a `FOR SELECT` → `FOR INSERT` flip, which empties the table's read surface under an unchanged name. **A gate whose failure mode is "the fence is still CALLED a fence" is the failure it exists to catch, one level up.**
+- Resolution: three checks added and the two declaration maps folded into one table-keyed `COVERED` (the split meant the tables with a predicate and those without were checked by different code, and only one half ever grew a check). RLS-enabled per covered table over a `DROP TABLE`-aware replay; live SELECT-policy set EQUALS the declared set; each declared policy is explicitly `FOR SELECT` and its body reaches the predicate function named beside it. All four mutations above were re-run and all four now fail the gate.
+- ⚠ It still does not claim the predicate and the policy AGREE — that is the per-table redteam suites' job.
+- Status: FIXED. Covered tables 10 → 9, and the missing one is F-586.
+
+### F-586 — `20260921120000` writes a policy for `skill_files`, a table dropped in July 2026, and would abort the apply (2026-09-02, FIXED)
+
+- Location: `supabase/migrations/20260921120000_rls_phase2_policies.sql`, the `skill_files` block; the table's death is `20260716064733_collapse_skill_files_into_skills.sql` §e. Re-derive: `grep -rn "skill_files" supabase/migrations/*.sql | grep -iE "create table|drop table"`.
+- Found during: the wave-B batch-1/2 review — by the F-585 strengthening, on its first run, before it was ever pointed at anything.
+- **THE SHAPE.** `DROP TABLE IF EXISTS skill_files CASCADE`, with the migration's own note *"CASCADE takes its triggers + RLS policies + realtime-publication membership"*. Nothing re-creates it, and `skills/types.ts` has carried the one-line statement of that fact ever since: *"No `skill_files` table — body lives in [skills]"*. Phase 2 nevertheless issued `CREATE POLICY skill_files_member_select ON skill_files`, which **fails outright** with `relation "skill_files" does not exist` — taking every later statement in the file with it, on the first database it ever meets. It was never caught because replay is the only thing standing in for a database here and **no replay in the tree tracked `DROP TABLE`**.
+- ⚠ **THE INTERESTING PART IS THE BLAST RADIUS OF ONE MISSING ARM.** `shared/supabase/rls-policy-scan.ts › livePolicies` feeds four redteam suites; `check-rls-pair-gate.ts` had its own copy. Both replayed policies only, so a table dropped fourteen months of migrations ago went on answering as a FENCED table to: the pair gate (which declared it covered), the skills redteam suite (two cases, one of them a LIVE probe that would have failed at `supabase db reset`), this file's header prose, and two findings — F-570 counted its policy among the four it repaired, and F-573 was filed entirely against a body that had not existed for six weeks.
+- Resolution: the block, the pair-gate row, the redteam cases and the header prose are removed; `rls-policy-scan.ts` and the gate both track `DROP TABLE` now, and the gate additionally asserts RLS is ENABLED per covered table. The replacement redteam case asserts that NO policy key names `skill_files`, so writing it back turns the suite red.
+- Status: FIXED. F-573 is marked moot. Covered tables: NINE.
+
+### F-587 — three of the four token minters wrote neither credential axis, and the `NULL/NULL` shape read as the account owner (2026-09-02, FIXED)
+
+- Location: `shared/auth/mcp-oauth.ts › issueTokens` / `› issueDeviceToken`, `features/playground/server/token.ts › issuePlaygroundToken`, against `shared/auth/mcp-access-token.ts › validateAccessToken` and `supabase/migrations/20260917120000_mcp_token_credential_axes.sql`. Re-derive: `grep -rn "personalUnfencedAxes" src`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE, PART 1 — A DEBT THAT COMES DUE IN B13.** B3 separated the two axes and only `issueContainerToken` writes them. The other three minters left both columns NULL, and their rows carry no `workspace_id`/`workspace_lock_kind` either — so `validateAccessToken`'s `?? legacyAxes(row)` answered "unfenced, and a person", which is right. **B13 drops the legacy pair.** With nothing behind the `??`, every device and OAuth credential in existence reads as a SHARED one and is denied every private row: the CLOSING direction, silent, no error anywhere, and the tell is every operator's own agent 404ing on their own knowledge base at once.
+- **THE SHAPE, PART 2 — AND ONE SHAPE IS WRONG TODAY.** `subject_user_id IS NULL` means two different things and a `??` cannot tell them apart: *"this row predates the backfill"* and *"this credential is deliberately SHARED"*. For `container_id NULL, subject NULL` — the combination the migration header itself calls representable — `legacyAxes` computes `hasPerson = true` and hands back `user_id`. **The one row shape that must read as nobody reads as the account owner.**
+- Resolution: `mcp-access-token.ts` gains `personalUnfencedAxes(userId)` (one spelling of the `subject_user_id = user_id` equality the DB's own `mcp_tokens_subject_is_owner_check` enforces) and `insertTokenRow`, which carries the SAME sticky 42703 tolerance the reader has — these are the sign-in paths, and a bare INSERT naming a column the migration has not created 42703s and nobody gets a credential at all (`20260825150000`, total rather than per-feature). All three minters use both. `20260917120000` gains `mcp_tokens_subject_axis_agree_check`, the verification block's own identity assertion promoted from an apply-time count to a permanent constraint — the sibling of `mcp_tokens_axes_agree_check`, which existed only on the container axis.
+- ⚠ The new CHECK makes `NULL/NULL` UNREPRESENTABLE while the legacy pair exists, and that is honest rather than restrictive: the legacy pair has no spelling for "shared and unfenced". **B13 drops the legacy columns and this constraint together**, and the shape becomes representable and correctly handled at the moment there is one lane left to read.
+- Status: FIXED. Pinned by `shared/auth/mcp-token-axes.test.ts` (8 cases; all 8 fail on revert).
+
+### F-588 — the unresolved-recipient refusal enumerated every member's EMAIL, to any caller (2026-09-02, FIXED)
+
+- Location: `channels/server/service-writes-metadata-recipient.ts › unresolved` and `channels/server/errors-recipient.ts › ChannelRecipientUnresolvedError`. Re-derive: `grep -n "adminReads" src/features/channels/server/service-writes-metadata-recipient.ts`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** B4 made a `to=` that resolves to nobody a 400 rather than a silent `delivery=none`, and made the refusal carry the candidates *"because a refusal that does not is a second guess"*. That is right. What it carried was every channel member's EMAIL — to any caller, **agent tokens included** — from one mistyped `to=`. **A REFUSAL IS A READ**, and this was the cheapest roster dump on the surface: no rate limit, no extra entitlement, one call.
+- ⚠ **THE RULE IT SKIPPED WAS ALREADY WRITTEN, ONE FILE AWAY.** `packages/mcp-server/src/tools/channel-render.ts › formatMemberLine` says it in as many words — *"an agent can list every PUBLIC channel and `op='rooms' action='members'` each, so email renders only for a workspace admin or the caller's own row"*. The refusal reached the same data through a door that never asked.
+- Resolution: the same rule, applied at the one place that can see the caller — a display name, else the email for a workspace admin or the caller's own row, else the user id. `ctx.role === null` reads as "not an admin". The error class now documents that it formats LABELS and may not re-widen them. Four cases in `service-writes-metadata-recipient.test.ts`, including the agent-token one.
+- Status: FIXED.
+
+### F-589 — RR2 keyed on a caller-supplied agent stamp and never checked it (2026-09-02, FIXED)
+
+- Location: `channels/server/service-wake-verdict-resilience.ts › reciprocalParty`, called from `› resolveWakeVerdict`. Re-derive: `grep -n "ownAgentIds" src/features/channels/server/service-wake-verdict-resilience.ts`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** RR2 answers *"whoever last addressed THIS agent in this room"*, and "this agent" came from `parseAgentPostStamp(input.clientMsgId)` — the caller's own `client_msg_id`. **Agent ids are neither secret nor random**: the desktop stamps `agent-<agentId>-<n>` and `agentId` is publicly readable off `channel_sessions.name`. So any caller could post `client_msg_id: "agent-<somebody else's id>-1"` and have the arm select the member who last addressed THAT agent — their message lands in front of a person who was mid-conversation with a different agent, attributed to an exchange they were never in. It is the same class of defect the author-scoped idempotency probe closed in `service-writes.ts`, **on the same field**, one door along.
+- Resolution: the stamp must name an agent the AUTHOR'S OWN fresh sessions answer to. `ownAgentIds` is passed IN from `service-wake-verdict.ts › ownLiveAgentIds` rather than recomputed — that module imports this one, so a local copy would be a second spelling of the own-scope rule, which is what the desktop's three-module version cost. A stale projection answers `null`: this arm RESOLVES a recipient, and `isFresh`'s asymmetry says a stale row is not evidence of presence.
+- ⚠ It adds one own-projection read on the RR2 path. Ten `service-writes*` suites now stub `listSessionStates` for the reason the file beside them already stubs `listChannelSessionStates`: an unstubbed projection read reaches the real admin client and times out rather than failing.
+- Status: FIXED. Two cases in `service-wake-verdict-resilience.test.ts`, both red on revert.
+
+### F-590 — the personal-container flag flip HID every row written in the window before it (2026-09-02, FIXED)
+
+- Location: `shared/tenancy/personal-container.ts › resolveShelfScope`, against `supabase/migrations/20260920120000_workspace_kind_personal.sql` §5. Re-derive: `grep -n "personalContainerWritesEnabled" src/shared/tenancy/personal-container.ts`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE, AND IT IS A WINDOW RATHER THAN A STATE.** The migration and the deploy move independently, which the module's own 2x2 says. In the cell *(containers minted, flag still OFF)* — the cell every deployment passes through, for as long as the operator wants — **every new personal row lands in `W`**, and the one-time move in §5 has already run and never runs again. The read then branched on the flag: ON meant `C` ALONE. **So flipping the flag hid every row written in that window** — no error, no log, a personal shelf that silently lost the last N days of work, and nothing anywhere that could notice. The module's claim that *"flipping ON is safe because the migration already moved the existing rows"* was true only of the rows that existed at migration time.
+- Resolution: **the READ stops asking the flag.** `home_scoped` is not cleared by the move (the migration says *"the column still carries the truth"* and the write path never touches it), so every personal row carries it wherever it lives and one predicate over both containers finds all of them. The alternative — re-running the move at flip time — is a migration that has to be scheduled against a flag flip; this is one extra element in a `WHERE … IN (…)`. It does not widen: both arms keep `home_scoped`, `C` has one member, and another member's `home_scoped` row in `W` is still refused by `canSeeBase`/`canSeeTemplate` — this module answers WHERE, never WHO.
+- ⚠ `personalContainerReadsEnabled` is renamed `personalContainerWritesEnabled`, because moving writes is now the only thing it decides. The ENV VAR is unchanged: it is a deploy contract.
+- Status: FIXED. The rollback property is now pinned in BOTH directions — what ON writes OFF reads (already there), and what OFF writes ON reads (the half that was false). Four cases red on revert across `personal-container.test.ts` and `personal-shelf-repositories.test.ts`.
+
+### F-591 — A16's last three response-size knobs were recorded as shipped and were not in the tree (2026-09-02, FIXED)
+
+- Location: `packages/mcp-server/src/tools/{members,ontology,agent}.ts`, against `packages/mcp-server/src/tools/response-size.ts`. Re-derive: `grep -rn "FIELDS_FIELD\|MAX_CHARS_FIELD\|RESPONSE_FORMAT_FIELD" packages/mcp-server/src/tools --include=*.ts | grep -v test`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** `docs/specs/mcp-v2-wave-b.md` §5's B8 row and the batch-2 record both list `fields=` on `dopl_members`, `response_format` on `dopl_ontology` and `max_chars` on `dopl_agent(op="get")` as landed. The three HELPERS existed in `response-size.ts` — `fieldFilter`, `isConcise`, `clipToMaxChars` — with nothing calling them; not one of the three tools published a parameter.
+- ⚠ **AND THE RATCHET STAYED GREEN, WHICH IS THE PART WORTH KEEPING.** `tool-budget.test.ts` bounds what the surface COSTS. A knob that does not exist costs nothing, so the gate that was supposed to hold these three to a budget was structurally incapable of noticing their absence. **A budget ratchet is not a coverage gate**, and any doc that reads one as evidence a feature shipped is making the same mistake.
+- Resolution: all three wired through the real renderers, with one shared `.describe()` each in `response-size.ts` (five wordings is five chances to promise something the renderer does not do). `id` is outside `fields=` by construction, per Samuel's ruling — not listable and not omittable. `concise` drops the ontology's Version line, its two legends, the map scope note and the drill-in pointers, and nothing else: values, counts and every `clippedNote` survive. `max_chars` clips INSIDE the untrusted fence and puts its notice OUTSIDE it, so the fence still closes and the clipped prompt cannot be read as having written the sentence about its own truncation.
+- ⚠ Three ceilings rose, by 736 chars total: `dopl_members` 604→846, `dopl_ontology` 2,538→2,817, `dopl_agent` 3,930→4,145, served 49,057→49,793. Same licence the four earlier knobs took (a published PARAMETER cannot move into a pulled document) and the same trade: a per-CONNECTION cost against a per-RESULT saving.
+- Status: FIXED. Nine cases in `packages/mcp-server/src/tools/response-size-knobs.test.ts`.
+
+### F-592 — the removed-vocabulary scan globbed one tool's files, and five shipped strings routed callers to retired ops (2026-09-02, FIXED)
+
+- Location: `packages/mcp-server/src/tools/law-scan.test.ts` (the glob), and `agent.ts`, `agent-ops-write.ts`, `status.ts`, `status-render.ts` and the MCP ping op (the strings). Re-derive: `npx vitest run src/tools/law-scan.test.ts` from `packages/mcp-server`.
+- Found during: the wave-B batch-1/2 review.
+- **THE HOLE WAS THE SHAPE OF THE PRODUCT.** The scan walked every non-test `channel-*.ts`, which reads as thorough — `dopl_channel` is the tool whose vocabulary keeps changing. But **the sentences that TELL an agent to call `dopl_channel` are written in the OTHER tools**: `dopl_agent` says how to launch a template into a channel, `dopl_status` says how to wait instead of polling. Those strings were scanned by nothing.
+- **FIVE, NOT THREE.** `agent.ts` (`op="read_sessions"` + `op="launch_agent"`), `agent-ops-write.ts` (`op="launch_agent"`), `status.ts` (`op="await"`), `status-render.ts` (`op="open"`), and the MCP ping op (`op="await"`, deleted at B16). Every one of them spends a redirect that exists for callers pinned to an OLDER desktop, on a caller reading a string this server shipped today. ⚠ **And a test was holding one of them there**: `agent-fences.test.ts` asserted the description contained `read_sessions` and `launch_agent` by name, so the retired spelling had a green test defending it.
+- Resolution: the glob is every non-test `*.ts` in the directory, with ONE exclusion — `law-removed-vocabulary.ts`, whose LABELS are string literals of the banned words (its regexes are not literals and were never the problem). The exclusion is by NAME now rather than by the accident of a missing prefix. A SECOND check is added: no shipped string may name a retired `dopl_channel` op, scoped to `dopl_channel(op="…")` anywhere and to a bare `op="…"` inside `channel-*.ts`, because `list`/`update`/`open`/`members`/`help` are live ops on other tools. The five strings say the live spelling; the test says the DESTINATION rather than the name.
+- ⚠ The widened glob found ZERO existing `REMOVED_VOCABULARY` hits outside `channel-*.ts`, so the widening cost nothing and buys the next one.
+- Status: FIXED. Served surface 49,793 → 49,790 (the re-spellings are 3 chars shorter); `dopl_agent`'s description ceiling 1,948 → 1,941.
+
+### F-593 — a delivery receipt proved the SESSION, never that the message was for it (2026-09-02, FIXED)
+
+- Location: `channels/server/service-writes-delivery.ts › recordDeliveryAcks`. Re-derive: `grep -n "fence (3)\|recipientAgentIds" src/features/channels/server/service-writes-delivery.ts`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** Fences (1) and (2) say *"you hold a live session in that room"*. They say nothing about the MESSAGE. So an operator with any live agent in a channel could stamp `delivery: "woken"` on a `seq` addressed to somebody ELSE'S agent — and the same monotonicity that makes fence (1) necessary makes this lie permanent: `woken` is the top of the rank and the machine that actually handled the message can never correct it. It is fence (1)'s own argument, one field further in.
+- Resolution: fence (3) checks the acking session's agent id (the third segment of the desktop's session key) against the message's stored `recipient_agent_ids`. **Only a NON-EMPTY list refuses**: `null` means the server did not resolve the agent half and the machine's own parse decided, `[]` means the body named no agent (and is what every non-`message` kind stores), and a seq with no row is a receipt for nothing. An older desktop's two-segment key cannot say which agent it is and falls back to fences (1) and (2) — a degrade, not a new refusal aimed at a supported peer (§13). One read per distinct message, memoized like the membership probe.
+- Status: FIXED. Six cases in `service-writes-delivery.test.ts`.
+
+### F-594 — Cursor's frozen containment table fell through to `full` for the profile it refuses (2026-09-02, FIXED)
+
+- Location: `dopl-desktop-app/main/runtime/cursor/tools.js › buildSessionToolConfig`. Re-derive: `grep -n "channel_agent" dopl-desktop-app/main/runtime/cursor/tools.js`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** Ruling X0 freezes the Cursor adapter at three profiles, and the launch refusal lives upstream in `contract.js › LAUNCH_BLOCKING[1]` — correctly. But `normalizeProfile` KNOWS `channel_agent` (it is in `KNOWN_PROFILES` for the two adapters that ship it), so the value reached this builder unchanged and took the `full` return: the widest posture on the table, **with the shell not denied**, under the label of the profile B7 created to deny exactly that. A freeze whose fall-through is `full` is not a freeze; it is an upstream check with nothing behind it. ⚠ A test PINNED the fall-through, on the argument that the launch is refused anyway.
+- Resolution: an explicit throw. Not a downgrade to `read_only` either — that would run the session under containment the operator did not ask for and say nothing; neither answer is one a frozen adapter is entitled to give. When X0 clears the arm becomes the fourth branch. `test/channel-agent-profile.test.mjs` pins the refusal instead of the fall-through.
+- Status: FIXED.
+
+### F-595 — a bare `node --test` failed permanently on an Electron entry point (2026-09-02, FIXED)
+
+- Location: `dopl-desktop-app/scripts/smoke.js` — it was named smoke-**test**.js in that directory, and the NAME was the defect. Re-derive: `cd dopl-desktop-app && node --test`.
+- Found during: the wave-B batch-1/2 review.
+- **THE SHAPE.** `node --test` with no glob collects `*-test.js` by default, so the headless Electron smoke script was run as a test, launched no Electron, and failed — permanently, one failure, on every bare run. `npm test` passes `test/**/*.mjs` and never saw it, **so the two invocations of the same suite disagreed and the by-hand one was always red by one**. A red that means nothing trains a reader to skip the red that means something, which is the cost, not the failure itself.
+- Resolution: renamed to `scripts/smoke.js` — the file is an Electron entry point and its NAME was the whole defect. `npm run smoke` and the three docs that name it move with it. Bare `node --test` is now 3,016 / 0.
+- Status: FIXED.
+
+### F-600 — the spec's B15 line count treats `template-draft.ts` as a copy file, and 250 of its 296 lines are the shared editor draft (2026-09-02, RULED)
+
+- Location: `docs/specs/mcp-v2-wave-b.md` §5 row **B15** — *"delete the copy ops (681 MCP lines + 490 draft/UI)"* — against `src/features/agent-templates/lib/template-draft.ts` and the deleted /home copy dialog (B15).
+- Found during: B15, at the first read of the files the row names.
+- **THE SHAPE.** The MCP half is exact: 377 + 138 + 166 = **681**, and all three files went. The UI half counts two WHOLE files, and only one of them is a copy file. the deleted /home copy dialog (B15) is 194 lines of copy dialog and went whole; `template-draft.ts` is 296 lines of which `containerCopyDraft` plus its docblock is ~46 — the other 250 are `TemplateDraft`, `emptyDraft`, `draftFromTemplate`, `cleanFields`, `isDraftSavable`, `draftToCreateBody`, `draftToPatchBody`, `isEmptyPatch` and `optimisticTemplate`, imported by `template-editor.tsx`, `agent-editor.tsx` and `agent-templates-core.tsx`. **Deleting the file deletes the template editor.**
+- ⚠ **A COUNT IS NOT A SCOPE, AND THIS IS THE SECOND TIME IN THIS WAVE A WHOLE-FILE FIGURE READ AS AN INSTRUCTION** — `docs/specs/mcp-v2-wave-b.md`'s own header already warns that its numbers are quoted rather than re-derived (F-422).
+- Resolution: **`containerCopyDraft` deleted, the module kept.** ~240 UI lines went, not 490, and the wave doc's batch-3 row now says which. The spec is the loser of this disagreement (CLAUDE.md's precedence: code > INVARIANTS > a spec's arithmetic), and it is corrected rather than followed.
+- Status: RULED — deviation taken deliberately and recorded here and in `docs/MCP-V2-WAVE-B-BATCH2-2026-09-02.md`.
+
+### F-601 — a template HAS a grant table now, and §5A's "there is no `op=share`, deliberately" was premised on it not having one (2026-09-02, RESOLVED)
+
+- Location: `docs/INVARIANTS.md` §10 — *"THERE IS NO `op="share"`, DELIBERATELY. A template has no grant table, so sharing into a container IS `visibility: "workspace"` on `op="update"`"* (Samuel's ruling, 2026-08-27).
+- Found during: B15, adding `dopl_agent(op="grant")`.
+- **THE SHAPE.** The ruling's PREMISE died in B1: `20260914120000_resource_grants.sql` accepts `resource_type='agent_template'` and `enforce_resource_grant()` has an arm for it. The ruling's ARGUMENT — *"a second verb would be two doors onto one write"* — also stops holding once the shelf is a container: `visibility: "workspace"` on a row in the caller's PERSONAL container reaches an audience of one, so the two verbs are no longer one write. `visibility` says who inside THIS container may use the identity; a grant lends the row to a scope somewhere else.
+- ⚠ **THE COLLISION IS WHY THIS IS A FINDING AND NOT A SILENT ADDITION.** A ruling is not overturned by a slice; what happened is that the fact it rested on changed, twice, in the same wave.
+- Resolution: `op="grant"` shipped, and the §10 bullet now says both things — the two verbs, and which question each answers. **If Samuel wants the single-door rule back, the reversal is deleting the op and its two handlers; `visibility: "workspace"` on a personal-container row would then reach nobody, which is the state the ruling did not anticipate.**
+- Status: RESOLVED, with the ruling's collision recorded rather than papered over.
+
+### F-602 — `PUT /api/resource-grants` is not `sessionOnly` and the channel-grants route is, and the two must not drift toward each other (2026-09-02)
+
+- Location: `src/app/api/resource-grants/route.ts` versus `src/app/api/knowledge/bases/[baseId]/channel-grants/route.ts`.
+- Found during: B15.
+- **THE SHAPE.** The older route's `sessionOnly` docblock argues that *an agent token must not be able to widen its own operator's audience*. Taken literally that would refuse the grant op, which is the whole user-facing half of B11. What separates them is what each door ADMITS: channel-grants is admin-or-creator and carries `guestWrite`, so an agent there could share ANOTHER member's base into a room and hand a guest a pen; this door refuses anything the caller did not create and has no `guest_write` on its schema at all.
+- ⚠ **THE DIFFERENCE IS THE FENCE, NOT THE VERB, WHICH IS EXACTLY THE KIND OF DISTINCTION THAT ERODES.** Adding `guest_write` or a workspace-admin arm to this door re-creates the refused capability under a route nobody re-reads. Both are stated in the route's own docblock and in INVARIANTS §10.
+- **RULED 2026-09-02 at the batch-3 integration (Desktop Agent default — SAMUEL MAY REVERSE, and reversing is one flag).** *The grant door stays usable by AGENT credentials; it is NOT `sessionOnly`.* Three reasons, in the order they weigh:
+  1. **The owner-only fence is what makes it safe, and it holds.** The door refuses anything the caller did not create, and has no `guest_write` on its schema. An agent acting for its operator can lend its operator's own rows and nothing else — which is the same reach that operator has at their keyboard.
+  2. **`sessionOnly` would delete the capability rather than narrow it.** The whole of B11 is *grants replace copies*, and the copy ops it replaced were agent-callable. A grant door refused to agents is strictly less than what shipped before this wave, so "leave it app-only" is not the conservative choice here — it is a regression wearing one.
+  3. **The asymmetry with `channel-grants` is the FENCE, not the verb**, and it is now stated in three places (the route's docblock, INVARIANTS §10, and this entry). The erosion this finding fears is `guest_write` or an admin arm arriving on this door, and THAT is what a gate should catch.
+- Follow-through owed if it is reversed, or if either half moves: the route joins `src/shared/auth/write-gate-coverage.test.ts`'s pinned `sessionOnly` set **in the same change** — the R4 shape.
+- ⚠ **AND THE READ HALF LANDED THE SAME DAY (F-604)**, which changes what this ruling is worth: until then the door wrote rows nothing honoured, so "is it agent-callable" was a question about an inert write. It is a real capability now.
+- Status: **RULED, and it wants Samuel's word to stand or to flip.**
+
+### F-603 — `resource_grants` now has three TypeScript writers and no shared repository (2026-09-02)
+
+- Locations: `src/features/teams/server/repository-grants.ts` (the `scope_type='team'` slice), `src/features/knowledge/server/repository-channel-grants.ts` (the `scope_type='channel'` × `knowledge_base` slice) and, since B15, `src/shared/grants/service.ts` (the generic write).
+- Found during: B15.
+- **THE SHAPE.** Each pins its own slice and each restates the trigger-refusal predicate. B15 removed ONE of the three copies of that predicate — `knowledge/server/service-channel-grants.ts` imports `isGrantValidityViolation` from the shared module instead of declaring its own — but the two feature repositories still hold their own column projections and filter sets.
+- ⚠ **IT IS NOT OBVIOUSLY WRONG.** The two feature modules project feature-shaped DTOs (`TeamGrant`, `ChannelResourceGrant`) and pinning `scope_type` per module is what stops a team question answering with a channel's grants. What is worth watching is a FOURTH writer, or a second copy of the refusal predicate.
+- Proposed resolution: leave the three; add nothing without a shared reader first. B16 unifies the `canSee*` predicates and is the natural place to ask whether the grant READS want the same treatment.
+- Status: open (watch item).
+
+### F-604 — a grant is RECORDED and does not yet make the row appear in the target's list (2026-09-02)
+
+- Locations: `src/features/agent-templates/server/service-shared.ts › canSeeTemplate`, `src/features/knowledge/server/service-shared.ts › canSeeBase`, and their RLS twins.
+- Found during: B15, building the op that replaced the copy ops.
+- 🔒 **THE SHAPE, AND IT IS THE ONE INCOMPLETE SEAM IN THIS SLICE.** A lent row still lives in the grantor's container and is `private` + created-by-them. In the TARGET container the reading member hits `canSeeTemplate`'s arm 4 (*private → nobody else, admins included*) and the row is not listed. So `op="grant"` and the /home "Share into this channel" control write a correct row that nothing reads yet.
+- ⚠ **WHY THE READ HALF WAS NOT BUILT HERE.** It is a new arm on a visibility matrix that is *"ONE RULE WRITTEN TWICE"* (§5A) — the predicate and `agent_templates_member_select` must move together, and the pair is proved by the per-table redteam suites B12 owns and the gate B7 shipped. Adding an arm to a predicate this slice does not own, whose twin lives in another slice's unapplied migration, is the drift shape §5A exists to warn about.
+- ⚠ **THE `channel` × `knowledge_base` LANE IS THE EXCEPTION AND ALREADY WORKS**: `knowledge/server/repository-audience.ts` reads the channel grants directly, which is why the /home Knowledge pane's SHARED section has always listed granted bases. Nothing else does.
+- Resolution, TAKEN 2026-09-02 at the batch-3 integration (not B16 — B16 deferred the `canSee*` unification itself, F-650, so the arm was added to the two predicates as they stand). **Both halves in one change**: `src/shared/tenancy/resource-grant-reach.ts › grantedResourceIds` is the TS lookup, `20260923140000_grant_read_arm.sql › dopl_grant_admits()` is the SQL twin, and it is OR-ed onto a CLOSED membership group in `dopl_knowledge_base_readable()` and `can_current_user_read_agent_template()`. No policy moves, so the pair gate keeps finding its twins — the payoff of having made each matrix a function.
+- ⚠ **THREE DECISIONS INSIDE THE ARM, EACH RECORDED WHERE IT IS MADE.** (1) It sits BELOW the shared-credential refusal: a credential standing for nobody has no membership of the granted scope to read the grant through. (2) It sits ABOVE the `private` refusal: a lent row IS private, so anywhere lower it would be unreachable. (3) `scope_type='team'` returns FALSE from the helper — that axis is already `dopl_teams_mode_visible()`'s, and two rules for one grant is how the second rots.
+- ⚠ **LEVEL IS TWO VOCABULARIES**: a `container` grant admits at `read` and at `edit`; a `channel` grant admits only at `visible`, because `agent_only` names no HUMAN audience. That is the same split `resource_grants_member_select` makes about the grant row's own existence and the INVERSE of the one `listGrantedBaseIdsForChannels` makes for the AGENT ceiling. Three lanes over one table.
+- Evidence: `shared/tenancy/resource-grant-reach.test.ts` (the level and scope rules, and that the level filter runs before the membership read); `shared/tenancy/grant-read-arm.test.ts` (the prefilter/predicate mirror, over every credential × visibility × author); a live redteam case per table — *granted into a container → visible to its members; revoked → invisible* — which **has not run** (no Docker; the `rls-redteam` CI job is what pays it).
+- Status: **RESOLVED for the visibility question. See F-662 for the half that is not visibility.**
+
+### F-605 — `PersonalContainerMissingError` replaced two wire codes with one, and nothing outside this repo was asked (2026-09-02)
+
+- Location: `src/shared/tenancy/personal-container.ts › PersonalContainerMissingError`; the deleted `HOME_SCOPE_FORBIDDEN` and `TEMPLATE_HOME_SCOPE_FORBIDDEN`.
+- Found during: B15.
+- **THE SHAPE.** Two features each had an error class, a wire code and a mapping arm for one three-condition fence. With the fence collapsed to one shared function, keeping two codes would have meant two mapping arms over one throw. The new class extends `HttpError`, so `shared/api/http-error-response.ts`'s pass-through carries it at every boundary with no per-feature arm — and both old codes are gone.
+- ⚠ **THE ONLY KNOWN CONSUMER WENT IN THE SAME CHANGE.** The MCP `homeShelfForbidden` mapper read both codes by name and is deleted with the shelf argument. A DESKTOP build pinned to an older server never sees the new code (the server is the one that changed), and the app renders the server's message rather than branching on the code.
+- Proposed resolution: none needed unless an external consumer is found. Recorded because a wire code is a contract and this one was retired without a deprecation window.
+- Status: open (informational).
+
+### F-620 — two MCP-side ref resolvers still narrow to the CURRENT container, so B2's id door is unreachable through them (2026-09-02)
+
+- Locations: `packages/mcp-server/src/tools/knowledge-shared.ts › resolveBaseOr` (over `client.listKbBases()`), `packages/mcp-server/src/tools/agent-shared.ts › resolveTemplateRef` (over `client.listAgentTemplates()`).
+- Found during: B13, deriving `workspace-arg.ts › WORKSPACE_ARG_OPS` — the question "can the server find this op's container from the argument the caller already passed" has to be answered per op, and answering it exposed the two tools where the answer is NO for a reason that is not the server's.
+- **THE SHAPE.** B2 made an id resolve its own tenancy SERVER-side (`src/shared/tenancy/read-resource.ts › readResourceById`), and `dopl_skill(op="get"|"read")` / `dopl_chats(op="get")` reach it because they pass the ref STRAIGHT to a by-id route. These two do not: they list the container's rows first and answer not-found when the ref is not among them, so a base or template that lives in another container is refused before the door is ever knocked on. **The door is open and these two tools do not walk to it.**
+- ⚠ **IT IS WHY `dopl_kb` AND `dopl_agent` KEEP `workspace=` ON MORE THAN `list`/`create` TODAY.** Retiring it there while the resolver is container-local would not move the question to an id — it would delete cross-container reach for those two tools, which is a regression rather than a simplification.
+- Resolution owed, OUTSIDE THIS SLICE'S OWNERSHIP (neither file is in any slice's `Owns` column): on a miss, follow the ref through the by-id route the way skills and chats already do, then narrow `WORKSPACE_ARG_OPS.dopl_kb` to `list_bases`/`create_base`/`search` and `.dopl_agent` to `list`/`create`. `workspace-arg.test.ts` pins the table both ways, so the narrowing is one line and a failing assertion until the resolver moves.
+- 🔒 **ATTEMPTED AND NOT TAKEN AT THE BATCH-3 INTEGRATION (2026-09-02), FOR A REASON THAT IS NOT SCHEDULE.** The integration was asked to resolve a NAME across the caller's containers through `shared/tenancy/resolve-resource.ts › resolveResourcesByName`, refusing on more than one match by listing the container names. **Two things stop that being an integration-sized change, and the second is a decision somebody has to take:**
+  1. **There is no route to reach it through.** `resolveResourcesByName` is server-side and `packages/mcp-server` cannot import from `src/` — every crossing is an HTTP method on `@dopl/client`. B2's cross-container door is an ID door (`readResourceById`, behind the existing by-id routes); a NAME door is a new public API surface, a new SDK method, a `PUBLIC_SURFACE` change and a `check-knowledge-type-drift` pass. That is a slice, not a fix.
+  2. ⚠ **AND "REFUSE ON >1, LISTING THE CONTAINER NAMES" CONTRADICTS A SHIPPED RULING.** `agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef` is the server's own cross-container name lookup and it deliberately *"NAMES A TENANCY, NEVER A ROSTER — one name and one place, never how many matched, never who else is in that workspace, never the other candidates"* (T35/A12). Listing the containers a name matched in IS that roster. The finding's proposed refusal and the existing resolver's stated rule cannot both be right, and picking here would overturn A12 silently.
+- **What is needed instead:** Samuel's word on whether a >1-match refusal may name the containers (an existence oracle over container membership the surface currently closes), and then a slice that ships the name door as a route. Until then the deviation is the argument, not a fence: `dopl_kb` and `dopl_agent` keep `workspace=` past `list`/`create`, and nothing regresses.
+- Status: **OPEN — needs Samuel on the roster question before the code question.**
+
+### F-621 — `dopl_home(op="create_channel")` was deleted with its tool, and no surface replaced it (2026-09-02)
+
+- Location: the deleted `packages/mcp-server/src/tools/` home tool; `docs/specs/mcp-v2-wave-b.md` §5's B13 row, which says "`dopl_home` deleted" and names no successor.
+- Found during: B13, building `dopl_workspaces`.
+- **THE DECISION, AND IT WANTS SAMUEL'S WORD.** The spec retires the tool; the slice brief scopes its replacement to "list + identity in one, ≤450 chars", which is the READ description cap and admits no `op` enum. So the WRITE op retires with the tool rather than moving. The argument for letting it: minting a room is the same act as inviting somebody into one, and the invite half has been app-only (`sessionOnly`, refused over MCP for every role and token) since the tool shipped — a room an agent makes and cannot populate is a half-built object the product has no other way to finish. The argument against: it is a wire-visible deletion of a capability, not a rename.
+- ⚠ **READING A HOME CHANNEL IS UNAFFECTED.** Its container id is on every `dopl_workspaces` row and the rooms inside it are `dopl_status`'s answer, so the discovery path `dopl_home` existed for is strictly wider than it was.
+- Resolution, TAKEN 2026-09-02 at the batch-3 integration (Desktop Agent default, **Samuel may reverse — see the SHAPE below**): `dopl_workspaces(op="create_home_channel", name=)`. The server route is unchanged and `client.createHomeChannel` was never retired; what moved is the MCP surface. The argument that won is the one this entry already stated — minting a room and INVITING into one are different acts, the invite half has been `sessionOnly` since the tool shipped, and a room an agent can make but not populate is a finished state.
+- ⚠ **AND THE 450-CHAR BUDGET WAS KEPT**, which is what the entry predicted would be the cost. Two ops, two glosses, two args, measured at 446 of 450 by `composeDescription`'s own throw. The schema is 114 → 364.
+- 🔒 **`op` IS OPTIONAL AND DEFAULTS TO `list`, AND THAT IS A FENCE, NOT A CONVENIENCE.** `gating.ts › opRefusal` returns `null` for an ABSENT op — an op-less tool has nothing to gate — so a default that WROTE would be a write no scope gate ever sees. `meta-create-home-channel.test.ts` is what would notice. It also keeps the tool callable with `{}`, which is the recovery path it exists for.
+- **THE SHAPE IS WHAT NEEDS SAMUEL, NOT WHETHER**: `create_home_channel` on the orientation tool, versus a dedicated write tool, versus leaving it app-only. The reversal is one enum member and one `WRITE_OPS` row.
+- ⚠ Three harness defects were found putting it back, and each is fixed in the same change: `parity-harness.ts › opEnum` did not unwrap `ZodOptional`, so an optional op enum was invisible to every gate-table suite; `TOOL_BY_NAME` captured no meta tool, so a `WRITE_OPS` row on one could name nothing; and `tool-group-files.ts` resolved sources only under `src/tools`, so the described-but-dead-param scan read an EMPTY file for `meta-tools.ts` and passed by finding nothing.
+- Status: **RESOLVED, and the SHAPE still wants Samuel's word.**
+
+### F-622 — a `workspace=` that is ignored must be SAID, or a deprecation window is a silent re-target (2026-09-02, FIXED)
+
+- Location: `packages/mcp-server/src/workspace-arg.ts › ignoredWorkspaceNote`, rendered by `packages/mcp-server/src/status-footer.ts › appendDoplStatus`.
+- Found during: B13, writing the one-release ignore B2 asks for.
+- **THE SHAPE.** "Ignored, never refused" is the right contract and it has one failure mode: a caller that passed `workspace=<other container>` to reach elsewhere gets an answer from HERE, and nothing distinguishes that from the answer it asked for. A refusal is legible; a silent re-target is not, and it is exactly what the window is supposed to make safe.
+- Resolution: the drop rides `_dopl_status` — the one line every response carries and the briefing tells every agent to read — naming the OP that dropped it and saying the argument retires there next release. It costs bytes only on the deprecated path.
+- Status: FIXED. Pinned in `packages/mcp-server/src/workspace-arg.test.ts`, including that the call stayed in the connection's container rather than being quietly re-aimed.
+
+### F-623 — the `_dopl_status` footer's caller line was conditional on a workspace, and B10 removes the workspace (2026-09-02, FIXED)
+
+- Location: `packages/mcp-server/src/status-footer.ts › appendDoplStatus`.
+- Found during: B13, deleting the sole-membership auto-target.
+- **THE SHAPE, AND IT IS A LATENT BUG THAT ONLY B10 COULD DETONATE.** The footer returned early when there was no effective workspace. That was harmless while every connection auto-targeted one — so the early return was reachable only for a caller already being refused. With nothing auto-targeted, the ordinary case has no workspace, and the early return would have deleted `caller: id=…` from EVERY successful response on those connections. The server instructions tell every agent that footer opens with its own user id.
+- Resolution: the caller line is unconditional; the two workspace lines render only when there is a container to name.
+- Status: FIXED. `server.test.ts` asserts an unbound connection footers the caller and neither workspace line.
+
+### F-624 — the search fan-out's second read could fail on its own, and B10 deleted the read rather than the footnote (2026-09-02, FIXED)
+
+- Location: `packages/mcp-server/src/workspace-directory.ts › searchLegs` (was a `tools/` home-scopes module); `packages/mcp-server/src/tools/search.ts`'s `everywhere` branch.
+- Found during: B13.
+- **THE SHAPE.** The leg list was a UNION: the standard-workspace directory, plus a second account-wide read of `/api/home/channels`, de-duped on id. The second read had its own failure mode, so a partial fan-out shipped a footnote — *"your home channels could not be read"* — and a caller who never saw the footnote had no way to know whether a scope had been skipped. Since B10 lists containers in the one membership directory, the union, the de-dupe, the second failure mode and the footnote all have nothing left to do.
+- Resolution: `searchLegs` is a map over `getWorkspaceList()`. One narrowed source, so a leg list that arrives is complete or the call has already thrown — and the container lock narrows both halves by construction rather than by two functions agreeing.
+- Status: FIXED. `search-everywhere.test.ts` asserts `getHomeChannels` is not called at all and that a container still renders under its own heading.
+
+### F-630 — B11's revert reads a helper B14 renames, and it is a COMMENT, so nothing breaks and nothing warns (2026-09-02)
+
+- Location: `supabase/migrations/20260920120000_workspace_kind_personal.sql` (the header's `ROLLBACK` block, two `UPDATE … SET workspace_id = public.default_workspace_of(…)` lines); the rename is `20260922120000_drop_default_workspace_rpc.sql` §1.
+- Found during: wave B B14, deciding whether to inline `default_workspace_of` into `ensure_personal_container` or to rename it.
+- **THE SHAPE.** F-560 records that B11's revert is EXACT because the mint and the revert read "where this container came from" through ONE expression. B14 deletes the default-workspace concept, and that function's NAME is the concept. Renaming it to `personal_container_origin_of` keeps the property; what it cannot keep is the other migration's HEADER, which is prose in a file B14 does not own. An operator reverting B11 after `20260922120000` has run pastes two `UPDATE`s naming a function that no longer exists — a clean `42883`, not a silent wrong write, but at the worst possible moment.
+- ⚠ **INLINING WOULD HAVE BEEN WORSE, NOT SAFER.** It removes the name from both places and leaves the mint and the revert stating the same five-line SELECT twice — which is exactly the shape F-560 exists to prevent, and the copy that rots is always the revert's.
+- Recorded in the one place an operator running that revert would already be reading: `20260922120000`'s header names the substitution explicitly.
+- Resolution owed, OUTSIDE B14's OWNERSHIP: `20260920120000`'s header takes the successor's name. **Whoever applies these two migrations should make that edit first** — the file is unapplied, so editing it is legal until the moment it is not.
+- Status: OPEN, and it is a documentation edit, not a code one.
+
+### F-631 — the provisioning route is deleted and the minimum-version floor its own finding asked for still does not exist (2026-09-02)
+
+- Location: deleted — the dedicated provisioning route under `src/app/api/workspaces/`; the record of why it survived is F-164's third bullet.
+- Found during: wave B B14, executing spec §3 row 14 (*"the dedicated route is deleted"*).
+- **THE DISAGREEMENT, STATED RATHER THAN PICKED.** F-164 (2026-08-07) says the route *"stays deployed on purpose: an older shipped DMG still calls it. Delete it only alongside a minimum-version floor that excludes those builds."* The wave-B spec says delete it. Both are instructions; only one could be followed, and **the spec is the later ruling**, so the route is gone and the condition is recorded here instead of being quietly dropped.
+- **WHAT THE EXPOSURE ACTUALLY IS.** A DMG old enough to call it is one shipped before 2026-08-07, when `POST /api/boot` took over. Such a build's cold launch would 404 at its provisioning step. Nothing in this repo has called the route since that date (`grep -rn "ensure-default" apps src` finds only prose and one SPA test asserting boot does NOT call it).
+- ⚠ **NOBODY HAS MEASURED WHETHER ANY SUCH BUILD IS STILL RUNNING**, and that is the whole finding. The measurement is a route-hit count over the deploy's access logs before the release that carries this ships — **a fact only the deployment holds** (CLAUDE.md doc rule 4). A minimum-version floor remains unbuilt.
+- Status: OPEN. Not blocking the code; blocking a claim that the deletion is free.
+
+### F-632 — the F-564 gate's precondition was unsatisfiable, because one of its eight sites is a FENCE (2026-09-02)
+
+- Location: `src/features/workspaces/home-channel-derivation.test.ts` (the map and the "may be applied when EMPTY" case); the site is `src/features/workspaces/server/authz.ts › assertMemberAddable`.
+- Found during: wave B B14, closing the F-564 sites inside its own ownership.
+- **THE SHAPE.** The gate's contract was *"when this set is empty, `20260920120000` may be applied"*, over a set derived by scanning for three shapes of `!isStandardWorkspace`. Seven of the eight sites are LABELS — they read the negation and print "home channel" — and repointing each to `kind === "link"` is right. The eighth is a FENCE: `assertMemberAddable` refuses to add a member to a container of any kind, and **the negation is what makes a fourth kind inherit that refusal instead of opting into it**. Repointing it would have opened personal containers to member-add — i.e. the gate would have gone green by introducing the bug F-295 exists to prevent.
+- ⚠ **SO THE SET COULD NEVER EMPTY, AND THE MIGRATION COULD NEVER BE APPLIED** by its own stated rule. The gate was written in review, one day old, and the defect is not the scan — a scan cannot tell a fence from a label — it is the single map.
+- Resolution: TWO maps. `OPEN_SITES` (six, all B13's and B15's) is what still gates the migration; `FENCE_SITES` holds sites whose negation is correct, and an entry there must PROVE the repair — the gate asserts the file branches its MESSAGE on the kind — so it cannot be used to silence a mislabel. `assertMemberAddable`'s sentence now names a home channel only for a `link` container.
+- Status: RESOLVED. ⚠ The migration's precondition is unchanged in substance: six sites, in two other slices.
+
+### F-633 — a grep gate named after the thing it forbids reintroduces it (2026-09-02)
+
+- Location: `src/features/workspaces/b10-no-derived-default.test.ts`; the citation that exposed it is in `workspaces/server/service.ts › PERSONAL_CONTAINER_PLACEHOLDER_NAME`.
+- Found during: wave B B14, writing the gate that keeps the default-workspace concept deleted.
+- **TWO SELF-REFERENCES, AND THE SECOND IS THE INTERESTING ONE.** The first is obvious: the file quotes five deleted strings as its red proof, so it matches itself and must be excluded. The second is not: the file was first named for the concept, `service.ts` cites it by path the way this repo's comments cite everything, and **that citation put the banned phrase back into a file in scope** — a gate that fails because of its own name, in a file it does not scan.
+- Resolution: renamed, and the reason is written where the exclusion is. ⚠ The general form is worth keeping: **a gate's NAME is part of its scope**, because the docs convention here is to cite files by path.
+- Status: RESOLVED.
+
+### F-650 — 🔒 the five `canSee*` TS predicates are NOT deleted, and the deletion is deferred to RLS phase 3 (2026-09-02, DEFERRED BY RULING)
+
+- Location: the five predicates the pair gate enumerates. Re-derive: `npx tsx scripts/check-rls-pair-gate.ts`, then `grep -rn 'export function canSee' src/ --include='*.ts'`.
+- Found during: Wave B batch 3, slice **B16**, whose spec row (`docs/specs/mcp-v2-wave-b.md` §5) says *"delete the TS predicates RLS now holds, one at a time, each behind its own green redteam test"*.
+- **WHY THE ROW WAS NOT EXECUTED, AND IT IS NOT A SCHEDULING PREFERENCE.** The row's own condition is unmet twice over, and the two failures compound:
+  1. **`RLS_PHASE_2` IS DEFAULT-OFF and no migration in the covering set has been applied** (INVARIANTS §12 records THIRTEEN pending, replay never run). A policy behind an unset flag over a table in no database fences nothing.
+  2. **THE `rls-redteam` CI JOB HAS NEVER RUN.** It landed in the batch-2 review (D2) precisely because every behavioural RLS case in two waves had been green while executing no statement, and the machine it landed on has no Docker. **The "green redteam test" the spec row makes each deletion conditional on does not exist yet in the only form that means anything.**
+- ⚠ **SO THE TS PREDICATES ARE THE ONLY LIVE FENCE TODAY**, and every repository still reads `supabaseAdmin()` (§10) — the service role, which RLS does not apply to at all. Deleting a predicate now removes the fence and replaces it with a policy that is off, on a table that does not exist, proved by a job that has not run.
+- **THE TWO PRECONDITIONS, so the next slice can check them rather than re-derive the argument:** (a) the flag is DEFAULT-ON and has run one release; (b) `rls-redteam` is green in CI, per predicate, against a real database. ⚠ And the third, already recorded at **F-524**: `service-audience.ts › audienceAdmits` is a per-request BOUND and not a property of a row, so it is covered by no policy and must NOT be deleted with `canSeeBase` however adjacent the two look.
+- Status: **DEFERRED to RLS phase 3.** Nothing was changed. B16 delivered the other four halves of its row.
+
+### F-651 — the "Needs you" card was asked for `done | question | blocked`, which the spec refuses (2026-09-02, RESOLVED AS A DISAGREEMENT)
+
+- Location: `apps/desktop-ui/src/pages/overview/needs-you.tsx`, against `docs/specs/mcp-v2-wave-b.md` §2.1 and **F-491**.
+- Found during: Wave B batch 3, slice B16 — the brief for the ping-lane deletion asked that the card switch to directed sends *"with kind done|question|blocked read via `read`/`status`"*, which are the three PING kinds carried over.
+- **THE DISAGREEMENT.** The spec refuses those three values on `send`'s `kind` — *"a value with no distinct behaviour is prose wearing a schema"* — and F-491 settled it in the spec's favour at the batch-1 integration, explicitly recording that **nothing was done to the kind enum**. `channel_messages.kind` is `message | system | task_started | task_progress | task_finished | task_failed`, held in both directions by `scripts/check-message-kind-drift.ts` against the column `CHECK`. Adopting the three would have meant a migration, a drift-gate change, and reopening a ruling B16 does not own.
+- **WHAT SHIPPED INSTEAD.** The card renders the distinction the surface actually makes: `AccountWaitingItem.isEscalation` — a decision card with option buttons, waiting on a PRESS — against an ordinary request, waiting on a REPLY. It is a fact about the stored message rather than a sender's self-report, which is the property the three kinds never had.
+- Status: **RESOLVED AS A DISAGREEMENT, the spec is the authority** — the same resolution F-491 took. Reopen only with a ruling that also moves the `CHECK` and the drift gate.
+
+### F-652 — "Needs you" now reads an ACCOUNT-wide endpoint and throws most of it away (2026-09-02, OPEN)
+
+- Location: `apps/desktop-ui/src/pages/overview/needs-you.tsx › needsYouRows`, over `GET /api/channels/account/status`. Re-derive: `grep -n 'ACCOUNT_STATUS_PATH\|workspaceId ===' apps/desktop-ui/src/pages/overview/needs-you.tsx`.
+- Found during: Wave B batch 3, slice B16 — deleting the ping lane took `GET /api/pings` with it, which was `withWorkspaceAuth` and answered for ONE container.
+- **THE SHAPE.** The replacement read is USER-scoped by design: it exists so an orchestrator can check in across every workspace and home container in one call. The panel sits on a WORKSPACE overview, so the rows are filtered client-side on `channel.workspaceId` — correct, and the alternative (rendering it whole) would silently put another container's open requests under this workspace's heading. What it costs is a payload most of which is discarded, on a page that also pays for `overview`, `overview-series` and `billing/status`.
+- Proposed resolution: a workspace-scoped projection — either a `waiting` block on `…/overview` (whose service already fans over that workspace's channels) or a `workspace=` narrowing on the account read. ⚠ **NOT a second `waiting` implementation**: the rule is `repository-account.ts › listAddressedToMe` + `listMyLatestSeqByChannel`, and a second copy is a second opinion about what "unanswered" means.
+- Status: **OPEN.** Correct today, wasteful today.
+
+### F-653 — `await` survives in the ROUTE and the SDK method, and that is the last of it (2026-09-02, OPEN, deliberate)
+
+- Location: `src/app/api/channels/[channelId]/await/route.ts`, `src/app/api/channels/await/route.ts`, `@dopl/client › awaitChannelMessages` / `awaitWorkspaceMessages`, `src/features/channels/server/service-await*.ts`, and the desktop's `main/session-profiles.js › AWAIT_OP` / `isAwaitOp`.
+- Found during: Wave B batch 3, slice B16, which renamed the whole MCP-side lane to HOLD and banned the word from every shipped string (`law-removed-vocabulary.ts`).
+- **THE SHAPE, AND WHY IT WAS LEFT.** These are TRANSPORT, not the retired op: the hold rides them and nothing publishes their names to a model. Renaming them is a route move plus an SDK rename on a frozen public surface plus the desktop's live route checks — a change whose whole benefit is vocabulary, in a slice whose job was to delete a lane. ⚠ **The desktop GATE is already keyed on the new shape and was verified**: `isAwaitOp` tests `op === "read" && wait_ms != null` (T85 — a desktop-run session refuses the hold), so what is stale is the NAME and not the rule.
+- Proposed resolution: rename with the next change that already touches those routes; the SDK half needs a `client-surface.test.ts › PUBLIC_SURFACE` edit and is the only part with a compatibility question.
+- Status: **OPEN, deliberate.** No behaviour depends on it.
+### F-661 — `liveFunctionHeader` ignored `DROP FUNCTION`, so every "this function is gone" assertion was green by construction (2026-09-02, FIXED)
+
+- Location: `src/features/knowledge/migration-replay.ts › liveFunctionHeader`, against its sibling `liveFunctionBody`. Re-derive: `npx vitest run src/features/knowledge/schema-sql.test.ts`.
+- Found during: the wave-B batch-3 integration, writing the assertion that `20260923130000` removes `mirror_channel_resource_grant` (F-460).
+- **THE SHAPE, AND IT IS THE ONE A DOCBLOCK CANNOT CATCH.** The two readers of the replayed migration set answer different halves of one question — the body inside the dollar quotes, the header outside them — and their docblocks say so. Only ONE of them replayed `DROP FUNCTION`: `liveFunctionBody` sorted create and drop events per file and nulled on a drop; `liveFunctionHeader` scanned for creates alone. So a function a later migration DROPPED still reported the header of its last `CREATE OR REPLACE`, and `expect(liveFunctionHeader(fn)).toBeNull()` **could not fail** — the assertion a drop migration most wants was decoration.
+- ⚠ **NOTHING WAS WRONG IN THE TREE YET**, because until this integration no migration dropped a function these suites ask about. It is a gate that had never been asked the question it gets wrong.
+- Resolution: both readers share `replayFunction(name, read)` — one copy of the create/drop ordering, with the per-reader difference reduced to what it extracts from a surviving create. Mutation-verified: deleting the `20260923130000` drop turns the F-460 case red.
+- Status: FIXED.
+
+### F-662 — the grant arm widens VISIBILITY, and a cross-container grant is still not LISTED (2026-09-02)
+
+- Locations: `src/features/knowledge/server/service-bases.ts › listBases` and `src/features/agent-templates/server/service-reads.ts › listTemplates` (both read `WHERE workspace_id = ctx.workspaceId`); `src/shared/tenancy/resolve-resource.ts › listContainersForCaller` (the id lane's clause 3).
+- Found during: the batch-3 integration, building F-604's read half.
+- **THE BOUNDARY, STATED SO NOBODY INFERS THE WIDER CLAIM.** F-604 was filed as *"the reading member hits `canSeeTemplate`'s arm 4 and the row is not listed"*, and that framing assumes the row is in the candidate set. It is, for a SAME-container grant — a `private` row lent to a channel of its own container, or to that container — and those now work end to end. It is NOT, for a grant ACROSS containers: the row lives in the grantor's `workspace_id` and both list paths are keyed on the caller's, so the predicate that would admit it is never asked. The id lane refuses one step earlier, in `listContainersForCaller`, which narrows to the caller's own memberships.
+- ⚠ **SO THE ARM IS NOT DECORATION AND IT IS NOT THE WHOLE FEATURE.** RLS is the layer where the cross-container case already works: the policy has no `workspace_id` term, so a caller-scoped read (`RLS_CALLER_SCOPED_READS`) returns the lent row today. The gap is in the SERVICE-role reads that still do the tenancy filtering themselves — i.e. it closes on its own as B5's phased plan moves reads onto the caller client, which is the argument for not widening the fetch by hand now.
+- ⚠ **WIDENING IT IS A TENANCY CHANGE, NOT A VISIBILITY ONE**, and that is why it is a separate finding rather than an unfinished half of F-604: every downstream composition (entries, folders, attachments, credits) is `ctx.workspaceId`-keyed, and a list that returned rows from two containers would hand each of them a context that is right for one.
+- Proposed resolution: RLS phase 3, with F-650's `canSee*` unification and F-572's service-role reads — or, if a product answer is wanted sooner, a `shelf`-style second leg on the two list paths that returns lent rows under their OWN container id.
+- Status: OPEN, and it is the honest boundary of what shipped.
+
+### F-663 — the MCP grant op carries `channel|container` and NOT `team`, and that is A8 rather than an omission (2026-09-02, RULED)
+
+- Locations: `packages/mcp-server/src/tools/knowledge.ts` / `agent.ts` (`op="grant"`'s scope enum), against `supabase/migrations/20260914120000_resource_grants.sql`'s `scope_type IN ('channel','container','team')`.
+- Found during: the batch-3 integration, confirming what B15 shipped.
+- **THE COLUMN HAS THREE VALUES AND THE SURFACE OFFERS TWO, DELIBERATELY.** Ruling B4 made `team` a SCOPE rather than a special axis — the CAPABILITY is kept and the table holds team grants — while A8 took the team axis off the MCP surface entirely: `team` is gone from the `visibility` enum, from `op="list"`'s gloss and from every served description on the four knowledge/agent tools, and a `visibility="team"` arriving over MCP is a `-32602` naming the retired value. **A grant op that offered `scope="team"` would put the axis back on the surface the same week it was taken off**, through a different argument.
+- ⚠ **THE READ SIDE IS CONSISTENT WITH IT.** `dopl_grant_admits()` and `shared/tenancy/resource-grant-reach.ts` answer FALSE for `scope_type='team'` — that axis is `dopl_teams_mode_visible()`'s, reached through `access_mode='teams'` / `visibility='team'`, and answering it twice is how the second copy rots (F-604). So the write surface and the read arm agree about which two scopes MCP knows.
+- ⚠ **WHAT IS NOT CLAIMED:** that team grants are unreachable. The app's team editor writes them, the trigger validates them, and both read paths honour them. Only the MCP door is two-valued.
+- Status: **RULED (A8 applied, not a new decision).** Recorded because "the column has three and the tool has two" reads as a bug to anyone who finds it without the A8 context.

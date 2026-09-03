@@ -51,6 +51,7 @@ function ctxWith(overrides: Partial<ChannelContext> = {}): ChannelContext {
     userId: USER,
     source: "user",
     role: "member",
+    credentialSubjectUserId: USER,
     ...overrides,
   };
 }

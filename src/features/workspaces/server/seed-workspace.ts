@@ -22,7 +22,7 @@ import { seedWorkspace as seedChat } from "@/features/chats/server/service-seed"
  *     by a seed hiccup.
  *
  * Only called from the workspace-CREATION path
- * (`service.ensureDefaultWorkspace` / `service.createWorkspaceForUser`).
+ * (`service.ensurePersonalContainer` / `service.createWorkspaceForUser`).
  */
 
 export interface SeedNewWorkspaceResult {
@@ -73,6 +73,7 @@ export async function seedNewWorkspace(
       source: "user",
       role: "owner",
       apiKeyWorkspaceId: null,
+      credentialSubjectUserId: userId,
     };
     const res = await seedKnowledge(ctx);
     result.knowledgeBases = res.basesCreated;
@@ -94,6 +95,7 @@ export async function seedNewWorkspace(
       source: "user",
       role: "owner",
       apiKeyWorkspaceId: null,
+      credentialSubjectUserId: userId,
     };
     const res = await seedSkills(ctx);
     result.skills = res.skillsCreated;

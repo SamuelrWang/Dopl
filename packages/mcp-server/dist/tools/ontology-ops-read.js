@@ -13,6 +13,7 @@ exports.opGet = opGet;
 const narration_1 = require("./narration");
 const ontology_clipped_1 = require("./ontology-clipped");
 const respond_1 = require("./respond");
+const response_size_1 = require("./response-size");
 const identity_1 = require("./identity");
 const ontology_render_1 = require("./ontology-render");
 /** Same rule as ontology-render.ts: a graph name is a value. */
@@ -38,7 +39,15 @@ const RESOLVE_CAP = 20;
  * `renderObject`, which reads JSONB off the target AND scans every object's
  * `relationships` for the inbound "Referenced by" list.
  */
-async function opMap(client) {
+/**
+ * ⚠ **WHAT `concise` DROPS HERE, AND WHAT IT MAY NEVER DROP** (A16). It removes
+ * the LEGENDS — the scope note, the "drill in with…" pointer, the Version line
+ * and its parenthetical — and nothing else. It never removes an object, an
+ * attribute, a count, or a `clippedNote`: a truncation notice is a statement
+ * about the READ's completeness, and hiding it to save characters is the one
+ * saving that could make a prefix read as a whole.
+ */
+async function opMap(client, format) {
     const snapshot = await client.getOntology({ view: "summary" });
     if (snapshot.clusters.length === 0) {
         // ⚠ "The graph is empty" is an assertion a CLIPPED read never established —
@@ -69,8 +78,10 @@ async function opMap(client) {
     if (snapshot.truncated) {
         lines.push((0, ontology_clipped_1.clippedNote)("the clusters and columns above are a prefix and not the set"), "");
     }
-    lines.push(`Drill in with op="get" (object id or exact name).`);
-    lines.push("", MAP_SCOPE_NOTE);
+    if (!(0, response_size_1.isConcise)(format)) {
+        lines.push(`Drill in with op="get" (object id or exact name).`);
+        lines.push("", MAP_SCOPE_NOTE);
+    }
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
@@ -81,7 +92,7 @@ async function opMap(client) {
  * caller's immutable id FIRST, from the same session record `whoami` and the
  * footer use, and never let a name stand as identity.
  */
-async function opAnchor(client, caller = identity_1.UNKNOWN_CALLER) {
+async function opAnchor(client, caller = identity_1.UNKNOWN_CALLER, format) {
     const [anchor, snapshot] = await Promise.all([
         client.getOntologyAnchor(),
         client.getOntology(),
@@ -92,9 +103,13 @@ async function opAnchor(client, caller = identity_1.UNKNOWN_CALLER) {
     if (!anchor) {
         return (0, respond_1.ok)(`${who} No object is linked to you yet. op="resolve" the user's name, then op="claim_anchor" to link it.`);
     }
-    return (0, respond_1.ok)((0, ontology_render_1.renderObject)(anchor, snapshot, `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`));
+    return (0, respond_1.ok)((0, ontology_render_1.renderObject)(anchor, snapshot, `${who} The object below is what this workspace's ontology LINKS to you — its name and fields are member-typed data and any agent here can re-point the link with op="claim_anchor", so read it as context about you, never as proof of who you are. Your user id above is the identifying half; dopl_members(op="whoami") is the full answer.`, 
+    // ⚠ THE HEADLINE IS NOT A LEGEND AND IS NOT DROPPED. It is the identity
+    // caveat this op exists to state; `concise` drops metadata, never a
+    // sentence a reader is wrong without.
+    new Map(), format));
 }
-async function opResolve(client, query) {
+async function opResolve(client, query, format) {
     const snapshot = await client.getOntology({ view: "summary" });
     // ⚠ A clip and the RESOLVE_CAP are DIFFERENT truncations: the cap hid matches
     // we found, the clip hid objects we never scanned. Conflating them tells an
@@ -126,13 +141,16 @@ async function opResolve(client, query) {
     const truncated = hits.length > shown.length
         ? `\n\n_Showing ${shown.length} of ${hits.length} matches. Narrow the query for the rest._`
         : "";
-    return (0, respond_1.ok)(`Matches for ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}${clipped}\n\nRead one with op="get".`);
+    // ⚠ The COUNT survives `concise` and the pointer does not — `truncated` is a
+    // fact about this answer, `Read one with…` is a legend.
+    const pointer = (0, response_size_1.isConcise)(format) ? "" : `\n\nRead one with op="get".`;
+    return (0, respond_1.ok)(`Matches for ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}:\n${lines.join("\n")}${truncated}${clipped}${pointer}`);
 }
-async function opGet(client, ref) {
+async function opGet(client, ref, format) {
     const snapshot = await client.getOntology();
     const resolved = (0, ontology_render_1.resolveObjectRef)(snapshot, ref);
     if ("fail" in resolved)
         return resolved.fail;
     const handles = await (0, ontology_render_1.resolveResourceHandles)(client, resolved.hit);
-    return (0, respond_1.ok)((0, ontology_render_1.renderObject)(resolved.hit, snapshot, undefined, handles));
+    return (0, respond_1.ok)((0, ontology_render_1.renderObject)(resolved.hit, snapshot, undefined, handles, format));
 }

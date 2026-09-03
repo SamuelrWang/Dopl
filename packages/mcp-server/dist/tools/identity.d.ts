@@ -58,9 +58,76 @@ export interface CallerIdentity {
     credentialKind: CallerCredentialKind | null;
     /** The credential's label, UNTRUSTED — neutralized on the way out, never before. */
     credentialLabel: string | null;
+    /**
+     * 🔒 **THE CREDENTIAL'S CONTAINER LOCK — `mcp_tokens.container_id`, or null.**
+     *
+     * ⚠ **THE ONLY FIELD ON THIS RECORD THAT MAY GATE ANYTHING**, and it may
+     * because it is not a header: `X-Dopl-Runtime`, `X-Dopl-Vendor` and
+     * `X-Dopl-Session-Id` are all caller-supplied, while this rides the token row
+     * (`src/shared/auth/mcp-container-token.ts`: *"the fence rides the
+     * credential"*). Nothing but that minter sets it, and it mints for one thing —
+     * a container SESSION the operator's own Dopl app spawned.
+     *
+     * ⚠ So a non-null value MARKS THE CALLER AS DESKTOP-RUN, which is the second
+     * half of {@link isDesktopRun}. It is deliberately NOT the directory lock
+     * (`workspace-directory.ts › lockedWorkspaceId`): that one asks whether the
+     * container is SHARED, a different question with a different answer for a
+     * solo room.
+     */
+    containerId: string | null;
+    /**
+     * WHICH SESSION this connection is, from `X-Dopl-Session-Id` — the same value
+     * the loopback stamps onto every post this session makes
+     * (`service-writes-metadata.ts` fold 6b), so it is what lets a hold tell its
+     * OWN lines apart from a SIBLING session's.
+     *
+     * ⚠ THIS IS THE ONLY FIELD THAT CAN DO THAT, and the reason is F-405: one
+     * account runs many concurrent agents and every post is authored by the
+     * ACCOUNT, so `userId` cannot distinguish "my own echo" from "the other
+     * worker answering me". Excluding on `userId` made a same-account
+     * counterparty permanently invisible to a hold.
+     *
+     * ⚠ A LABEL, NOT A LOCK (`shared/auth/session-header.ts`) — nothing may GATE
+     * on it. Suppressing one's own echo is presentation, not authorization, which
+     * is the only reason it is allowed to read an attribution hint.
+     *
+     * Null when the caller sent no recognized header — every external client, and
+     * an older desktop build.
+     */
+    sessionId: string | null;
 }
 /** No identity at all — the shape every test-constructed server gets by default. */
 export declare const UNKNOWN_CALLER: CallerIdentity;
+/**
+ * DID THE REQUEST CARRY THE DESKTOP'S RUNTIME STAMP? ⚠ The ONE statement of that
+ * comparison — `channel-wake-guidance.ts` (what the hold may CLAIM) and
+ * `channel-hold-budget.ts` (how long the hold may BE) both branch on it, and a
+ * second copy is how the two answers drift into disagreeing about one request.
+ *
+ * ⚠ An OBSERVATION, and it gates nothing (`src/shared/auth/runtime-header.ts`
+ * grants nothing). False means UNSTAMPED — usually an external client, but also
+ * how a desktop spawn on an older build looks. Never read it as "external".
+ */
+export declare function isDesktopRuntime(runtime: string | null | undefined): boolean;
+/**
+ * 🔒 **IS THIS CALL RUNNING ON THE OPERATOR'S OWN MACHINE?** — the ONE question
+ * the `wait_ms` fence asks (T85, Desktop Agent default 2026-09-02; Samuel may
+ * reverse, and reversing is this predicate).
+ *
+ * ⚠ **TWO MARKS, AND THE SECOND IS WHY THIS IS ALLOWED TO GATE.**
+ * {@link isDesktopRuntime} reads a HEADER, which a `full`-profile agent with
+ * Bash can send or omit at will; {@link CallerIdentity.containerId} rides the
+ * TOKEN ROW, and only the desktop's container minter sets it. Either mark alone
+ * is enough — an ordinary device-token spawn carries the header and no lock, a
+ * container session carries both — and neither can be forged into a WIDER
+ * answer, because both only ever add a refusal.
+ *
+ * ⚠ FALSE MEANS "NOT KNOWN TO BE DESKTOP-RUN", never "external". An older
+ * desktop build stamps no runtime and holds no container lock, and it keeps the
+ * hold — which is the pre-2026-09-02 behaviour and the safe direction: the cost
+ * is a wasted long-poll, not a lost message.
+ */
+export declare function isDesktopRun(identity: CallerIdentity): boolean;
 /**
  * The `_dopl_status` caller line — ⚠ terse on purpose: this rides EVERY
  * successful response.
@@ -102,3 +169,16 @@ export declare const LOCUS_NOTE = "LOCUS \u2014 what this establishes, and what 
  * the answer dropping to a role with nobody attached.
  */
 export declare function identityLine(identity: CallerIdentity, self: string | null): string;
+/**
+ * ⚠ THE ROOM THIS SESSION IS STANDING IN, from `X-Dopl-Session-Id`'s
+ * `<channelId>:<tail>` head — the SAME split
+ * `src/features/knowledge/server/service-audience.ts › narrowToSessionChannel`
+ * makes, and the same uuid guard, because a client that is not the desktop can
+ * send an opaque handle carrying a colon that names no channel at all.
+ *
+ * ⚠ IT ESTABLISHES NOTHING AND GATES NOTHING. The header is a documented
+ * NON-authorization signal (§10) and this only tells an agent which room it was
+ * spawned into — a fact it would otherwise spend a call discovering. Null
+ * whenever the header was absent, unshaped, or not uuid-headed.
+ */
+export declare function boundChannelId(identity: CallerIdentity): string | null;

@@ -16,6 +16,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { meetsMinRole } from "@/features/workspaces/types";
 import type { AgentTemplate, AgentTemplateContext } from "../types";
 
+// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
+// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
+// batch precompute is the one part of this seam that talks to Postgres. Every
+// case in this file is about the OTHER arms, so the grant set is empty — which
+// is also the pre-2026-09-02 behaviour, and therefore the right default for a
+// suite that predates the arm. The cases that exercise a GRANT live in
+// `service-shared-grant-arm.test.ts` and the redteam suites.
+vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/shared/tenancy/resource-grant-reach")
+  >()),
+  grantedResourceIds: vi.fn(async () => new Set<string>()),
+}));
+
 vi.mock("./repository", () => ({
   listTemplatesForWorkspace: vi.fn(),
   findTemplateById: vi.fn(),
@@ -45,6 +59,7 @@ function ctx(overrides: Partial<AgentTemplateContext> = {}): AgentTemplateContex
     source: "user",
     role: "member",
     apiKeyWorkspaceId: null,
+    credentialSubjectUserId: CREATOR,
     ...overrides,
   };
 }
@@ -95,7 +110,7 @@ const CALLERS = {
    * shared between humans and therefore inherits no individual's reach.
    */
   workspaceKey: {
-    c: ctx({ userId: CREATOR, apiKeyWorkspaceId: "ws-1" }),
+    c: ctx({ userId: CREATOR, apiKeyWorkspaceId: "ws-1", credentialSubjectUserId: null }),
     teamsOf: [] as string[],
   },
   /**
@@ -103,15 +118,18 @@ const CALLERS = {
    * row this grid was missing, and the reason arm 2 could not stay keyed on the
    * lock. It carries the SAME `apiKeyWorkspaceId` as `workspaceKey` above and
    * the OPPOSITE answer on every private row, because it is one human's session
-   * rather than a credential shared between humans. Everything
-   * `containerCopyDraft` makes is `private`, so without this row every "Use in
-   * this channel" copy is invisible to the agent it was made for.
+   * rather than a credential shared between humans. Every PERSONAL template is
+   * `private`, so without this row the operator's own agents cannot see the
+   * identities the operator authored for them. ⚠ **THE ORIGINAL CASE WAS THE
+   * "Use in this channel" COPY, WHICH IS DELETED (2026-09-02, B15)** — the arm
+   * it forced is unchanged and now covers every personal row instead of one
+   * gesture's output.
    */
   containerSession: {
     c: ctx({
       userId: CREATOR,
       apiKeyWorkspaceId: "ws-1",
-      apiKeyWorkspaceLockKind: "container_session",
+      credentialSubjectUserId: CREATOR,
     }),
     teamsOf: [] as string[],
   },
@@ -124,7 +142,7 @@ const CALLERS = {
     c: ctx({
       userId: OUTSIDER,
       apiKeyWorkspaceId: "ws-1",
-      apiKeyWorkspaceLockKind: "container_session",
+      credentialSubjectUserId: OUTSIDER,
     }),
     teamsOf: [] as string[],
   },
