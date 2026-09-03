@@ -248,6 +248,13 @@ export function deriveSlug(input: string, taken: string[]): string {
   return slugify(input, "knowledge-base", taken);
 }
 
+/**
+ * ⚠ **THE IDS TRAVEL WITH THE REFUSAL** (2026-09-03, F-671). The message is what
+ * the caller sees and says no more than it did; the two tenancies and the
+ * subject ride the error for the server log, because this throw is how a child
+ * row stranded on an old tenancy first announces itself and "belongs to a
+ * different workspace" names neither the row nor either workspace.
+ */
 export function assertSameWorkspace(
   rowWorkspaceId: string,
   ctxWorkspaceId: string,
@@ -255,7 +262,10 @@ export function assertSameWorkspace(
 ): void {
   if (rowWorkspaceId !== ctxWorkspaceId) {
     throw new KnowledgeBaseMismatchError(
-      `${description} belongs to a different workspace`
+      `${description} belongs to a different workspace`,
+      rowWorkspaceId,
+      ctxWorkspaceId,
+      description
     );
   }
 }
