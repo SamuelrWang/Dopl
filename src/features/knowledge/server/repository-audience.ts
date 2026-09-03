@@ -142,6 +142,16 @@ export const AUDIENCE_GRANT_LIMIT = 500;
  * fences the agent out of every base, the fail-closed direction. A PostgREST
  * `.in()` on an empty array is a syntax hazard, and "no channels" is a real
  * state (a container mid-creation), not an error.
+ *
+ * ⚠ THE TABLE IS `resource_grants` SINCE 2026-09-02 (F-460, wave B batch 3).
+ * This was the LAST reader of `channel_resource_grants`, which is why that table,
+ * its mirror trigger and its enforcement trigger could only be dropped once this
+ * statement moved (`20260923130000_drop_channel_resource_grants.sql`). The slice
+ * of the one table is pinned on BOTH halves — `scope_type='channel'` beside
+ * `resource_type='knowledge_base'` — for the reason
+ * `repository-channel-grants.ts › CHANNEL_KNOWLEDGE_GRANT` states: without the
+ * scope term this read would count a TEAM's grants as a channel's and widen the
+ * ceiling it exists to impose.
  */
 export async function listGrantedBaseIdsForChannels(
   db: SupabaseClient,
@@ -150,11 +160,12 @@ export async function listGrantedBaseIdsForChannels(
 ): Promise<string[]> {
   if (channelIds.length === 0) return [];
   const { data, error } = await db
-    .from("channel_resource_grants")
+    .from("resource_grants")
     .select("resource_id")
     .eq("workspace_id", workspaceId)
+    .eq("scope_type", "channel")
     .eq("resource_type", "knowledge_base")
-    .in("channel_id", channelIds)
+    .in("scope_id", channelIds)
     .limit(AUDIENCE_GRANT_LIMIT);
   if (error) throw error;
   return [

@@ -150,7 +150,35 @@ export function tableIsLive(table: string): boolean {
  * `RAISE … ;` inside would otherwise truncate it two lines in.
  */
 export function liveFunctionBody(name: string): string | null {
-  let body: string | null = null;
+  return replayFunction(name, (sql, at) => {
+    const tag = /AS\s+(\$[A-Za-z_]*\$)/.exec(sql.slice(at));
+    if (!tag || tag.index === undefined) return undefined;
+    const open = at + tag.index + tag[0].length;
+    const close = sql.indexOf(tag[1], open);
+    return close === -1 ? sql.slice(open) : sql.slice(open, close);
+  });
+}
+
+/**
+ * Replay every `CREATE OR REPLACE` / `DROP FUNCTION` for `name` in apply order
+ * and return what `read` made of the LAST surviving create — or `null` if a
+ * `DROP` came after it.
+ *
+ * ⚠ **SHARED BECAUSE THE TWO READERS DISAGREED (2026-09-02, F-661).**
+ * `liveFunctionHeader` scanned only for creates, so a function this wave
+ * DROPPED still reported a header and every "is it gone" assertion written
+ * against it was green by construction. The create/drop ordering is the whole
+ * of "as the replay leaves it" and there must be one copy of it.
+ *
+ * ⚠ `read` returning `undefined` means *"this create is unreadable"* — the
+ * previous answer stands. Returning `null` is not available to it: only a DROP
+ * retires a function.
+ */
+function replayFunction(
+  name: string,
+  read: (sql: string, at: number) => string | undefined
+): string | null {
+  let live: string | null = null;
   const create = new RegExp(
     String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?:public\.)?${name}\s*\(`,
     "gi"
@@ -170,17 +198,13 @@ export function liveFunctionBody(name: string): string | null {
     events.sort((a, b) => a.at - b.at);
     for (const e of events) {
       if (e.kind === "drop") {
-        body = null;
+        live = null;
         continue;
       }
-      const tag = /AS\s+(\$[A-Za-z_]*\$)/.exec(sql.slice(e.at));
-      if (!tag || tag.index === undefined) continue;
-      const open = e.at + tag.index + tag[0].length;
-      const close = sql.indexOf(tag[1], open);
-      body = close === -1 ? sql.slice(open) : sql.slice(open, close);
+      live = read(sql, e.at) ?? live;
     }
   }
-  return body;
+  return live;
 }
 
 /**
@@ -192,22 +216,18 @@ export function liveFunctionBody(name: string): string | null {
  * type all live out here, so the body scan cannot see them — and a `CREATE OR
  * REPLACE` in a later migration that dropped `SECURITY DEFINER` would leave
  * every body assertion green.
+ *
+ * ⚠ **AND IT IGNORED `DROP FUNCTION` UNTIL 2026-09-02 (F-661)** — it scanned
+ * for creates alone, so a dropped function still reported the header of its
+ * last create and `expect(liveFunctionHeader(fn)).toBeNull()` could not fail.
+ * Both readers share {@link replayFunction} now, which is the only copy of the
+ * ordering rule.
  */
 export function liveFunctionHeader(name: string): string | null {
-  let header: string | null = null;
-  const create = new RegExp(
-    String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?:public\.)?${name}\s*\(`,
-    "gi"
-  );
-  for (const { sql } of FILES) {
-    for (const m of sql.matchAll(create)) {
-      if (m.index === undefined) continue;
-      const tag = /AS\s+\$[A-Za-z_]*\$/.exec(sql.slice(m.index));
-      header =
-        tag && tag.index !== undefined
-          ? sql.slice(m.index, m.index + tag.index)
-          : sql.slice(m.index);
-    }
-  }
-  return header;
+  return replayFunction(name, (sql, at) => {
+    const tag = /AS\s+\$[A-Za-z_]*\$/.exec(sql.slice(at));
+    return tag && tag.index !== undefined
+      ? sql.slice(at, at + tag.index)
+      : sql.slice(at);
+  });
 }

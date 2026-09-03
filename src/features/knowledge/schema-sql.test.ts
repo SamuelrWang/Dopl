@@ -225,37 +225,45 @@ describe("the retired tables are gone, and the one left behind is unchanged", ()
     expect(livePolicies("agent_template_teams").size).toBe(0);
   });
 
-  it("🔒 `channel_resource_grants` is STILL LIVE, and now READ-ONLY (F-581)", () => {
-    // ⚠ Deliberate, and batch 3's to remove: `repository-audience.ts` still
-    // reads it, so `20260914120000` mirrors into it instead of dropping it.
-    expect(tableIsLive("channel_resource_grants")).toBe(true);
-    const old = livePolicies("channel_resource_grants");
-    // 🔒 THE MIRROR IS NOT A WRITE SURFACE. `20260828120000`'s `FOR ALL` write
-    // policy was correct while this table WAS the grant table; once
-    // `20260914120000` made it a mirror that one reader still trusts, an admin
-    // reaching PostgREST could file a grant that never met
-    // `enforce_resource_grant()`. `20260921130000` drops it — the only writers
-    // left are the two SECURITY DEFINER trigger functions.
-    expect([...old.keys()].sort()).toEqual(["channel_resource_grants_member_select"]);
-    expect(old.get("channel_resource_grants_member_select")).toMatch(/level\s*=\s*'visible'/i);
-    // The read stays as narrow as `20260828120000` made it: admin sees all,
-    // everyone else only `visible`, and the `admin` arm is what makes a second
-    // admin-SELECT policy pure duplication rather than a replacement.
-    expect(old.get("channel_resource_grants_member_select")).toMatch(
-      /is_current_workspace_member\(\s*workspace_id\s*,\s*'admin'\s*\)/i
-    );
+  it("🔒 `channel_resource_grants` IS GONE, and so is every function that served it (F-460)", () => {
+    // ⚠ **THIS CASE SAID "STILL LIVE, AND NOW READ-ONLY" UNTIL 2026-09-02.**
+    // `20260914120000` kept the table as a MIRROR because one reader outside
+    // its ownership still selected from it (`repository-audience.ts ›
+    // listGrantedBaseIdsForChannels`); `20260921130000` then took its write
+    // policy away. The reader moved onto `resource_grants` at the batch-3
+    // integration and `20260923130000` drops the table, both triggers and all
+    // three functions. **The read-only shape is not weakened here, it has no
+    // table left to describe** — which is why the assertions about it are
+    // deleted rather than relaxed.
+    expect(tableIsLive("channel_resource_grants")).toBe(false);
+    // …and nothing is left pointing at it, which is what would make the drop
+    // fail on apply rather than at review.
+    expect(livePolicies("channel_resource_grants").size).toBe(0);
+    for (const fn of [
+      "mirror_channel_resource_grant",
+      "enforce_channel_resource_grant",
+      "drop_channel_resource_grants_for_kb",
+    ]) {
+      expect(liveFunctionHeader(fn), fn).toBeNull();
+    }
   });
 
-  it("🔒 both mirror writers are SECURITY DEFINER, or the read-only table loses its writes (F-581)", () => {
-    // The policy drop and these two are ONE change: an invoker-rights mirror
-    // would refuse its own INSERT under the narrowed table and take the LEGAL
-    // `resource_grants` write down with it, and an invoker-rights GC would
-    // silently delete zero rows (RLS filters, it does not raise).
-    for (const fn of ["mirror_channel_resource_grant", "drop_channel_resource_grants_for_kb"]) {
-      const header = liveFunctionHeader(fn);
-      expect(header, fn).not.toBeNull();
-      expect(header, fn).toMatch(/SECURITY\s+DEFINER/i);
-    }
+  it("🔒 the drop proves the mirror was exact before it removes it", () => {
+    // A drop that cannot lose anything is still worth proving: a mirror that
+    // had silently stopped tracking would take real grants with it, and
+    // `DROP TABLE` reports nothing. The file RAISEs on any old row absent from
+    // `resource_grants`.
+    const drop = FILES.find((f) =>
+      f.name.startsWith("20260923130000_drop_channel_resource_grants")
+    );
+    expect(drop, "the drop migration").toBeDefined();
+    expect(drop!.sql).toMatch(/RAISE\s+EXCEPTION[\s\S]*?the mirror is not exact/i);
+    // ⚠ ORDER IS LOAD-BEARING: the WRITER goes before the table. A mirror whose
+    // target has been dropped aborts every legal `resource_grants` write.
+    const mirrorAt = drop!.sql.indexOf("DROP FUNCTION IF EXISTS public.mirror_channel_resource_grant");
+    const tableAt = drop!.sql.indexOf("DROP TABLE IF EXISTS public.channel_resource_grants");
+    expect(mirrorAt).toBeGreaterThan(-1);
+    expect(tableAt).toBeGreaterThan(mirrorAt);
   });
 
   /**
@@ -273,12 +281,24 @@ describe("the retired tables are gone, and the one left behind is unchanged", ()
    * two slices share a directory and the last moment before replay.
    */
   it("🔒 no migration AFTER the drop mentions a dropped table (F-468)", () => {
-    const DROPPED = ["team_resource_access", "agent_template_teams"];
-    const AFTER = "20260916120000_drop_team_resource_access.sql";
-    const offenders = FILES.filter((f) => f.name > AFTER).flatMap(({ name, sql }) =>
-      DROPPED.filter((t) => new RegExp(String.raw`\b${t}\b`).test(sql)).map(
-        (t) => `${name} → ${t}`
-      )
+    // ⚠ **THE BOUNDARY IS PER TABLE SINCE 2026-09-02, NOT ONE SHARED CUTOFF.**
+    // `channel_resource_grants` outlived the other two by nine versions (it was
+    // the mirror one reader still trusted, F-460), so a single `AFTER` would
+    // either miss the files between the two drops or flag the drop's own
+    // statements. Each entry is the file that removes the table; the scan
+    // starts strictly after it.
+    const DROPPED: ReadonlyArray<[string, string]> = [
+      ["team_resource_access", "20260916120000_drop_team_resource_access.sql"],
+      ["agent_template_teams", "20260916120000_drop_team_resource_access.sql"],
+      [
+        "channel_resource_grants",
+        "20260923130000_drop_channel_resource_grants.sql",
+      ],
+    ];
+    const offenders = FILES.flatMap(({ name, sql }) =>
+      DROPPED.filter(
+        ([t, after]) => name > after && new RegExp(String.raw`\b${t}\b`).test(sql)
+      ).map(([t]) => `${name} → ${t}`)
     );
     // The fix is never to re-create the table: repoint the reader at
     // `resource_grants` with its `scope_type` term, which is what the fold is
@@ -317,16 +337,16 @@ describe("the retired tables are gone, and the one left behind is unchanged", ()
     expect(collisions).toEqual([]);
   });
 
-  it("the mirror is one trigger and one function — not a second write path", () => {
-    const mirror = liveFunctionBody("mirror_channel_resource_grant");
-    expect(mirror).not.toBeNull();
-    // It only ever writes the OLD table, and only for the one slice that table
-    // can hold. A mirror that read back would be a source of truth.
-    expect(mirror).toMatch(/INSERT\s+INTO\s+channel_resource_grants/i);
-    expect(mirror).not.toMatch(/INSERT\s+INTO\s+resource_grants/i);
-    expect(mirror).toMatch(/scope_type\s*=\s*'channel'/i);
-    // 🔒 Cross-container rows are SKIPPED: the old table's own trigger cannot
-    // hold them, and mirroring one would RAISE inside a legal write.
-    expect(mirror).toMatch(/channel_ws\s+IS\s+DISTINCT\s+FROM\s+NEW\.workspace_id/i);
+  it("the hard-delete GC survives the mirror it shared a table with", () => {
+    // ⚠ **THIS CASE PINNED THE MIRROR UNTIL 2026-09-02** — one trigger, one
+    // function, writing only the old table. Both are dropped by
+    // `20260923130000` and the property they carried (a KB's grants die with
+    // the KB, since `resource_id` can hold no FK) is `20260914120000`'s
+    // parameterised GC, which was always the successor.
+    const gc = liveFunctionBody("drop_resource_grants_for_resource");
+    expect(gc).not.toBeNull();
+    expect(gc).toMatch(/DELETE\s+FROM\s+resource_grants/i);
+    expect(gc).toMatch(/resource_type\s*=\s*TG_ARGV\[0\]/i);
+    expect(liveFunctionBody("mirror_channel_resource_grant")).toBeNull();
   });
 });
