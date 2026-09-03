@@ -6128,3 +6128,58 @@ here and did not ship, for two structural reasons recorded in F-493: the slice h
 migration, named for the default responder, and the field's only possible WRITER is the desktop —
 which belongs to two other slices. A column with no writer would have made the ledger read as
 enforced. The measurement G20 asks for has to land with the machine that can take it.
+
+## 2026-09-02 — The window that had to close as a SENTENCE: retiring an op, and deleting a mailbox that was a copy
+
+Wave B batch 3, slice **B16** — the second half of ruling B9 (*"retire the old channel op names after
+one release"*), ruling B8's ping fold, and the `await` op's disappearance from everything except its
+transport.
+
+**A compatibility window is not free to close.** B8 collapsed `dopl_channel` from twenty-three ops to
+five and kept the twenty-two retired names PARSING for one release, each answering one line naming
+its replacement, because zod refuses an unknown enum member with `-32602 invalid enum value` — an
+error with no content, arriving before any handler can say anything. That is the failure the window
+existed to prevent. **So deleting the window naively re-creates it one release later**: the redirect
+goes away and the caller pinned to an older desktop gets exactly the opaque refusal the whole
+exercise was avoiding, just further from the change that caused it.
+
+**The answer is that the REFUSAL carries the sentence.** `z.enum(CHANNEL_OPS, { error })` puts
+`channel-schema.ts › unknownOpRefusal` — *"dopl_channel has no op `post` — it takes "send", "read",
+"status", "manage" or "rooms". Nothing was done."* — into the validation failure itself. The same
+function is the registrar's exhaustive `default`, so the two answers cannot drift, and the whole
+compatibility surface is now one line instead of a module, a type, a map and an arm. **What a
+migration notice has to do is name the replacement; it never had to be a successful call.**
+
+**A retired name is dead vocabulary, and dead vocabulary has a home.** The twenty-two moved into
+`law-removed-vocabulary.ts › RETIRED_CHANNEL_OPS` — the one module the shipped-string scan skips,
+because it literally contains the strings it forbids. **And the scan learned the lesson the fact key
+taught it**: `law-scan.test.ts` matched `op="await"`, which the send lane's `await=since:<seq>`
+result field never wrote, so a served string had been naming the retired lane on every write since
+the collapse. The key is `hold=` now and the WORD is banned outright, measured absent first.
+
+**Two mailboxes, one of which was a copy of a delivery.** The ping lane existed because an agent that
+FINISHED had no instrument: an unaddressed post starts nobody (the loop brake), and an addressed one
+triggers a whole room. Ruling B8's answer was that a directed `send` already IS that instrument — it
+names one recipient, the server resolves it, and `delivery=` is the acknowledgement the ping row was
+standing in for. What made the deletion safe rather than merely smaller is that **the signal is
+DERIVABLE**: *"addressed to me and unanswered"* is `metadata.to_user_id = me` with no later message
+of my own in that channel, which `repository-account.ts` already computed for `op="status"`. A
+derived answer cannot drift from the message it points at; a second table can, and this one would
+have — its migration was never applied in any environment, so for a wave the whole lane was code
+against storage that did not exist.
+
+**The three ping kinds did NOT become message kinds, and refusing them is the same ruling twice.**
+The brief asked for `done | question | blocked` on the replacement card; §2.1 refuses them (*"a value
+with no distinct behaviour is prose wearing a schema"*) and F-491 had already settled it once. The
+card shows `isEscalation` instead — a fact about the stored message rather than a sender's
+self-report, which is the property those three never had (F-651).
+
+**What was NOT done, and why the row was left undone rather than deferred quietly.** B16's spec row
+also said to delete the five `canSee*` predicates, *"one at a time, each behind its own green redteam
+test"*. Its condition is unmet twice: `RLS_PHASE_2` is default-OFF over migrations no database has,
+and the `rls-redteam` job — which exists precisely because two waves of behavioural RLS cases were
+green having executed no statement — has never run. Every repository still reads `supabaseAdmin()`,
+so the TS predicate is the only live fence, and deleting one would replace a fence with a policy that
+is off, on a table that does not exist, proved by a job that has not run. **A conditional row whose
+condition is unmet is not a row you execute carefully; it is a row you do not execute.** F-650 states
+the two preconditions so the next slice can check them instead of re-deriving the argument.

@@ -75,7 +75,7 @@ const ABANDONED_MS = 12 * 60 * 60 * 1000; // 12 hours
 //     before this process's own client aborts it. The watchdog must sit ABOVE it, or a
 //     launch could be declared dead while the transport's own abort was still the thing
 //     about to unstick it.
-//   `mcp-config.AWAIT_HOLD_MARGIN_MS` = 60s — this repo's own price for "auth + MCP boot +
+//   `mcp-config.HOLD_MARGIN_MS` = 60s — this repo's own price for "auth + MCP boot +
 //     the workspace handshake", i.e. exactly the work between spawning the child and
 //     `system/init`. Five minutes is 5x that, so a slow-but-healthy first turn (cold model
 //     start behind a slow handshake) can never trip it.

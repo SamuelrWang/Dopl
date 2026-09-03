@@ -124,14 +124,14 @@ test("…and its derivation still CITES the headless answer it was matched to", 
 });
 
 test("…and it is many times the repo's own price for the handshake it is waiting on", () => {
-  // AWAIT_HOLD_MARGIN_MS is documented as what the MCP route needs for "auth + MCP boot + the
+  // HOLD_MARGIN_MS is documented as what the MCP route needs for "auth + MCP boot + the
   // workspace handshake" — precisely the work between spawning the child and `system/init`.
   const BUDGET = readFileSync(
-    join(HERE, "..", "..", "packages", "mcp-server", "src", "tools", "channel-await-budget.ts"),
+    join(HERE, "..", "..", "packages", "mcp-server", "src", "tools", "channel-hold-budget.ts"),
     "utf8"
   );
-  const m = /export const AWAIT_HOLD_MARGIN_MS = ([\d_]+);/.exec(BUDGET);
-  assert.ok(m, "AWAIT_HOLD_MARGIN_MS not found");
+  const m = /export const HOLD_MARGIN_MS = ([\d_]+);/.exec(BUDGET);
+  assert.ok(m, "HOLD_MARGIN_MS not found");
   const margin = Number(m[1].replace(/_/g, ""));
   assert.ok(LAUNCHING_MS >= 5 * margin, `${LAUNCHING_MS} should be well above ${margin}`);
 });
@@ -145,7 +145,7 @@ test("…and it is comfortably UNDER the idle TTL, so the two can never be confu
 test("the bound is documented where it is defined, not left as a bare literal", () => {
   const at = STATE.indexOf("const LAUNCHING_MS");
   const preamble = STATE.slice(Math.max(0, at - 1800), at);
-  for (const cited of ["MCP_CLIENT_TIMEOUT_MS", "AWAIT_HOLD_MARGIN_MS", "MAX_RUNTIME_MS"]) {
+  for (const cited of ["MCP_CLIENT_TIMEOUT_MS", "HOLD_MARGIN_MS", "MAX_RUNTIME_MS"]) {
     assert.ok(preamble.includes(cited), `the derivation must cite ${cited}`);
   }
 });

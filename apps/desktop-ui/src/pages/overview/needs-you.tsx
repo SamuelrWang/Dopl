@@ -38,15 +38,29 @@ export interface NeedsYouRow extends AccountWaitingItem {
 }
 
 /**
- * The card's rows, oldest first.
+ * The card's rows for ONE workspace, oldest first.
+ *
+ * ⚠ **NARROWED TO `workspaceId`, AND THAT IS A SCOPE THE READ DOES NOT HAVE.**
+ * The lane this replaced was `withWorkspaceAuth` and answered for one container;
+ * `GET /api/channels/account/status` is USER-scoped and answers for every
+ * container the caller is in, because it exists to serve an orchestrator's
+ * one-call check-in. Rendering it whole on a WORKSPACE overview would silently
+ * widen the panel — items from other workspaces, and from home channels,
+ * appearing under this workspace's heading. ⚠ The cost is that most of the
+ * payload is discarded here; a workspace-scoped projection is the fix, filed as
+ * a finding rather than guessed at.
  *
  * ⚠ **OLDEST FIRST ACROSS THE WHOLE LIST**, not per channel: the one that has
  * been waiting longest is the one to read first, and a reader scanning this card
  * is asking "what have I left hanging", never "what happened in build".
  */
-export function needsYouRows(status: AccountStatus | undefined): NeedsYouRow[] {
+export function needsYouRows(
+  status: AccountStatus | undefined,
+  workspaceId: string,
+): NeedsYouRow[] {
   if (!status) return [];
   return status.channels
+    .filter((channel) => channel.workspaceId === workspaceId)
     .flatMap((channel) =>
       channel.waiting.map((item) => ({ ...item, channelSlug: channel.channelSlug }))
     )

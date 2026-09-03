@@ -50,7 +50,9 @@ function mount(rows: NeedsYouRow[]) {
 
 afterEach(cleanup);
 
-describe("needsYouRows — the payload, flattened", () => {
+const WS = "11111111-2222-3333-4444-555555555555";
+
+describe("needsYouRows — the payload, narrowed and flattened", () => {
   it("joins each waiting item to its channel and orders OLDEST first", () => {
     const status = {
       channels: [
@@ -58,7 +60,7 @@ describe("needsYouRows — the payload, flattened", () => {
           channelId: CH,
           channelName: "Build",
           channelSlug: "build",
-          workspaceId: "w1",
+          workspaceId: WS,
           lastSeq: 30,
           lastMessageAt: null,
           unread: null,
@@ -69,7 +71,7 @@ describe("needsYouRows — the payload, flattened", () => {
           channelId: "c2",
           channelName: "Ops",
           channelSlug: "ops",
-          workspaceId: "w1",
+          workspaceId: WS,
           lastSeq: 12,
           lastMessageAt: null,
           unread: null,
@@ -81,16 +83,44 @@ describe("needsYouRows — the payload, flattened", () => {
       since: null,
       truncated: { channels: false, unread: false, waiting: false },
     } as AccountStatus;
-    expect(needsYouRows(status).map((r) => [r.messageId, r.channelSlug])).toEqual([
+    expect(
+      needsYouRows(status, WS).map((r) => [r.messageId, r.channelSlug])
+    ).toEqual([
       ["a", "ops"],
       ["b", "build"],
     ]);
   });
 
+  it("🔒 drops every channel outside THIS workspace", () => {
+    // ⚠ The read is USER-scoped and answers for every container the caller is
+    // in; the panel sits on a WORKSPACE overview. Rendering the payload whole
+    // would put another workspace's — or a home channel's — open requests under
+    // this workspace's heading.
+    const status = {
+      channels: [
+        {
+          channelId: "c9",
+          channelName: "Elsewhere",
+          channelSlug: "elsewhere",
+          workspaceId: "another-container",
+          lastSeq: 9,
+          lastMessageAt: null,
+          unread: null,
+          sessions: [],
+          waiting: [item({ messageId: "x", seq: 1 })],
+        },
+      ],
+      operatorOnline: true,
+      since: null,
+      truncated: { channels: false, unread: false, waiting: false },
+    } as AccountStatus;
+    expect(needsYouRows(status, WS)).toEqual([]);
+  });
+
   it("answers an empty list before the read lands, never throws", () => {
     // ⚠ The card is deliberately OUTSIDE the page's paint gate, so it renders
     // against `undefined` on the first frame.
-    expect(needsYouRows(undefined)).toEqual([]);
+    expect(needsYouRows(undefined, WS)).toEqual([]);
   });
 });
 

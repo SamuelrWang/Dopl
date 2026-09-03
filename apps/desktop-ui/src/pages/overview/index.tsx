@@ -134,7 +134,10 @@ function OverviewSurface({
             onMetricChange={setMetric}
             days={series.data.days}
           />
-          <NeedsYou rows={needsYouRows(waiting.data)} segment={segment} />
+          <NeedsYou
+            rows={needsYouRows(waiting.data, workspaceId)}
+            segment={segment}
+          />
           {/* 48/52 split, matching the reference's uneven bottom row. */}
           <div className="grid grid-cols-[48fr_52fr] gap-3">
             <RecentActivity rows={overview.data.activity} />

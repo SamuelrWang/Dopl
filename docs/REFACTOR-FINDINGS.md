@@ -7846,3 +7846,38 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **THE SHAPE.** `node --test` with no glob collects `*-test.js` by default, so the headless Electron smoke script was run as a test, launched no Electron, and failed — permanently, one failure, on every bare run. `npm test` passes `test/**/*.mjs` and never saw it, **so the two invocations of the same suite disagreed and the by-hand one was always red by one**. A red that means nothing trains a reader to skip the red that means something, which is the cost, not the failure itself.
 - Resolution: renamed to `scripts/smoke.js` — the file is an Electron entry point and its NAME was the whole defect. `npm run smoke` and the three docs that name it move with it. Bare `node --test` is now 3,016 / 0.
 - Status: FIXED.
+
+### F-650 — 🔒 the five `canSee*` TS predicates are NOT deleted, and the deletion is deferred to RLS phase 3 (2026-09-02, DEFERRED BY RULING)
+
+- Location: the five predicates the pair gate enumerates. Re-derive: `npx tsx scripts/check-rls-pair-gate.ts`, then `grep -rn 'export function canSee' src/ --include='*.ts'`.
+- Found during: Wave B batch 3, slice **B16**, whose spec row (`docs/specs/mcp-v2-wave-b.md` §5) says *"delete the TS predicates RLS now holds, one at a time, each behind its own green redteam test"*.
+- **WHY THE ROW WAS NOT EXECUTED, AND IT IS NOT A SCHEDULING PREFERENCE.** The row's own condition is unmet twice over, and the two failures compound:
+  1. **`RLS_PHASE_2` IS DEFAULT-OFF and no migration in the covering set has been applied** (INVARIANTS §12 records THIRTEEN pending, replay never run). A policy behind an unset flag over a table in no database fences nothing.
+  2. **THE `rls-redteam` CI JOB HAS NEVER RUN.** It landed in the batch-2 review (D2) precisely because every behavioural RLS case in two waves had been green while executing no statement, and the machine it landed on has no Docker. **The "green redteam test" the spec row makes each deletion conditional on does not exist yet in the only form that means anything.**
+- ⚠ **SO THE TS PREDICATES ARE THE ONLY LIVE FENCE TODAY**, and every repository still reads `supabaseAdmin()` (§10) — the service role, which RLS does not apply to at all. Deleting a predicate now removes the fence and replaces it with a policy that is off, on a table that does not exist, proved by a job that has not run.
+- **THE TWO PRECONDITIONS, so the next slice can check them rather than re-derive the argument:** (a) the flag is DEFAULT-ON and has run one release; (b) `rls-redteam` is green in CI, per predicate, against a real database. ⚠ And the third, already recorded at **F-524**: `service-audience.ts › audienceAdmits` is a per-request BOUND and not a property of a row, so it is covered by no policy and must NOT be deleted with `canSeeBase` however adjacent the two look.
+- Status: **DEFERRED to RLS phase 3.** Nothing was changed. B16 delivered the other four halves of its row.
+
+### F-651 — the "Needs you" card was asked for `done | question | blocked`, which the spec refuses (2026-09-02, RESOLVED AS A DISAGREEMENT)
+
+- Location: `apps/desktop-ui/src/pages/overview/needs-you.tsx`, against `docs/specs/mcp-v2-wave-b.md` §2.1 and **F-491**.
+- Found during: Wave B batch 3, slice B16 — the brief for the ping-lane deletion asked that the card switch to directed sends *"with kind done|question|blocked read via `read`/`status`"*, which are the three PING kinds carried over.
+- **THE DISAGREEMENT.** The spec refuses those three values on `send`'s `kind` — *"a value with no distinct behaviour is prose wearing a schema"* — and F-491 settled it in the spec's favour at the batch-1 integration, explicitly recording that **nothing was done to the kind enum**. `channel_messages.kind` is `message | system | task_started | task_progress | task_finished | task_failed`, held in both directions by `scripts/check-message-kind-drift.ts` against the column `CHECK`. Adopting the three would have meant a migration, a drift-gate change, and reopening a ruling B16 does not own.
+- **WHAT SHIPPED INSTEAD.** The card renders the distinction the surface actually makes: `AccountWaitingItem.isEscalation` — a decision card with option buttons, waiting on a PRESS — against an ordinary request, waiting on a REPLY. It is a fact about the stored message rather than a sender's self-report, which is the property the three kinds never had.
+- Status: **RESOLVED AS A DISAGREEMENT, the spec is the authority** — the same resolution F-491 took. Reopen only with a ruling that also moves the `CHECK` and the drift gate.
+
+### F-652 — "Needs you" now reads an ACCOUNT-wide endpoint and throws most of it away (2026-09-02, OPEN)
+
+- Location: `apps/desktop-ui/src/pages/overview/needs-you.tsx › needsYouRows`, over `GET /api/channels/account/status`. Re-derive: `grep -n 'ACCOUNT_STATUS_PATH\|workspaceId ===' apps/desktop-ui/src/pages/overview/needs-you.tsx`.
+- Found during: Wave B batch 3, slice B16 — deleting the ping lane took `GET /api/pings` with it, which was `withWorkspaceAuth` and answered for ONE container.
+- **THE SHAPE.** The replacement read is USER-scoped by design: it exists so an orchestrator can check in across every workspace and home container in one call. The panel sits on a WORKSPACE overview, so the rows are filtered client-side on `channel.workspaceId` — correct, and the alternative (rendering it whole) would silently put another container's open requests under this workspace's heading. What it costs is a payload most of which is discarded, on a page that also pays for `overview`, `overview-series` and `billing/status`.
+- Proposed resolution: a workspace-scoped projection — either a `waiting` block on `…/overview` (whose service already fans over that workspace's channels) or a `workspace=` narrowing on the account read. ⚠ **NOT a second `waiting` implementation**: the rule is `repository-account.ts › listAddressedToMe` + `listMyLatestSeqByChannel`, and a second copy is a second opinion about what "unanswered" means.
+- Status: **OPEN.** Correct today, wasteful today.
+
+### F-653 — `await` survives in the ROUTE and the SDK method, and that is the last of it (2026-09-02, OPEN, deliberate)
+
+- Location: `src/app/api/channels/[channelId]/await/route.ts`, `src/app/api/channels/await/route.ts`, `@dopl/client › awaitChannelMessages` / `awaitWorkspaceMessages`, `src/features/channels/server/service-await*.ts`, and the desktop's `main/session-profiles.js › AWAIT_OP` / `isAwaitOp`.
+- Found during: Wave B batch 3, slice B16, which renamed the whole MCP-side lane to HOLD and banned the word from every shipped string (`law-removed-vocabulary.ts`).
+- **THE SHAPE, AND WHY IT WAS LEFT.** These are TRANSPORT, not the retired op: the hold rides them and nothing publishes their names to a model. Renaming them is a route move plus an SDK rename on a frozen public surface plus the desktop's live route checks — a change whose whole benefit is vocabulary, in a slice whose job was to delete a lane. ⚠ **The desktop GATE is already keyed on the new shape and was verified**: `isAwaitOp` tests `op === "read" && wait_ms != null` (T85 — a desktop-run session refuses the hold), so what is stale is the NAME and not the rule.
+- Proposed resolution: rename with the next change that already touches those routes; the SDK half needs a `client-surface.test.ts › PUBLIC_SURFACE` edit and is the only part with a compatibility question.
+- Status: **OPEN, deliberate.** No behaviour depends on it.
