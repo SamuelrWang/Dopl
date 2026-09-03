@@ -1,6 +1,10 @@
 # MCP tool descriptions — the ten-question audit
 
-**Measured 2026-09-02, slice A14, over the 13 tools this server serves.**
+**Measured 2026-09-02, slice A14, and RE-MEASURED the same day at slice B13, over the
+11 tools this server serves.** ⚠ Three meta tools became one: `list_workspaces`,
+`current_workspace` and `dopl_home` are deleted and `dopl_workspaces` answers for all three
+(B10 — there is no default workspace to report, so a container is one more container the
+caller is in and is LISTED with its kind).
 
 ⚠ **RE-DERIVE, DO NOT QUOTE.** Every yes/no below is read off the surface **as
 served** through a real `Client.listTools()`. The mechanically checkable rows
@@ -52,10 +56,8 @@ under the table.
 
 | Tool | served | Q1 | Q2 | Q3 | Q4 | Q5 | Q6 | Q7 | Q8 | Q9 | Q10 |
 |---|---:|---|---|---|---|---|---|---|---|---|---|
-| `list_workspaces` | 429 | yes | yes | n/a¹ | n/a² | yes | n/a³ | n/a⁴ | yes | yes | yes |
-| `current_workspace` | 450 | yes | yes | n/a¹ | n/a² | yes | n/a³ | n/a⁴ | yes | yes | yes |
-| `dopl_home` | 977 | yes | yes | n/a¹ | yes | yes | yes | n/a⁴ | yes | yes | yes |
-| `dopl_status` | 609 | yes | yes | n/a¹ | n/a² | yes | yes | yes | yes | yes | yes |
+| `dopl_workspaces` | 373 | yes | yes | n/a¹ | n/a² | yes | n/a³ | n/a⁴ | yes | yes | yes |
+| `dopl_status` | 593 | yes | yes | n/a¹ | n/a² | yes | yes | yes | yes | yes | yes |
 | `dopl_kb` | 1,947 | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
 | `dopl_skill` | 1,593 | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
 | `dopl_chats` | 1,699 | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
@@ -63,23 +65,23 @@ under the table.
 | `dopl_map` | 560 | yes | yes | n/a¹ | n/a² | yes | yes | n/a⁴ | yes | yes | yes |
 | `dopl_search` | 912 | yes | yes | n/a¹ | yes | yes | yes | yes | yes | yes | yes |
 | `dopl_ontology` | 1,924 | yes | yes | yes | n/a² | yes | yes | **FIX B** | yes | yes | yes |
-| `dopl_channel` | 1,591 | yes | yes | yes | n/a⁵ | yes | yes | yes | yes | yes | yes |
-| `dopl_agent` | 1,948 | yes | yes | n/a¹ | yes | yes | yes | **FIX C** | yes | yes | yes |
+| `dopl_channel` | 1,587 | yes | yes | yes | n/a⁵ | yes | yes | yes | yes | yes | yes |
+| `dopl_agent` | 1,941 | yes | yes | n/a¹ | yes | yes | yes | **FIX C** | yes | yes | yes |
 
 Measured through `listTools()` on 2026-09-02. **Served** is the whole description
 — hand-written prose plus the generated `Limits:` / `Errors:` / `e.g.` tail.
 
 - **n/a¹** — nothing must be called first. The tool either takes no input
-  (`list_workspaces`, `dopl_map`), or every input is a value the caller already
+  (`dopl_workspaces`), or every input is a value the caller already
   has. Where a prerequisite IS real it is stated as *call X first — because Y*:
   `dopl_kb` (a `read_file` Version token, because `write_file` 412s without
   one), `dopl_skill` (`op="authoring_guide"` before `op="create"`),
-  `dopl_ontology` (`op="map"` first — it routes), `dopl_channel` (`op="help"`
-  for the law, and `dopl_home` for a container id published nowhere else).
+  `dopl_ontology` (`op="map"` first — it routes), `dopl_channel` (`action="help"`
+  for the law, and `dopl_workspaces` for a container id published nowhere else).
 - **n/a²** — the tool declares no zod bound worth stating. `renderLimits`
   renders nothing rather than inventing a limit, and `tool-style.test.ts` fails
   a `Limits:` line naming a bound the published schema does not enforce.
-- **n/a³** — no refusal path of its own. Both meta tools are how a lost agent
+- **n/a³** — no refusal path of its own. The orientation tool is how a lost agent
   finds out where it is; they are uncharged, take no workspace, and the only
   failures they can surface are the cross-cutting ones the briefing states once.
 - **n/a⁴** — one page, no rows to narrow and no body to clip. A knob here would
@@ -126,14 +128,14 @@ where a knob would pay and does not exist yet.
 existed.** They are recorded here rather than in a commit message because each
 is a rule, not an edit.
 
-1. **Q6 was NO on thirteen of thirteen.** No description named a single error
+1. **Q6 was NO on thirteen of thirteen** (the surface was thirteen when this was measured; it is eleven since B13). No description named a single error
    code, and no refusal led with one. Both halves now come from
    `packages/mcp-server/src/tools/tool-errors.ts` — `refusal()` writes the wire
    and `renderErrors()` writes the description, so the literal an agent matches
    on is produced once. Slack's whole reliability trick is one clause (*"If
    'channel_not_found', try slack_search_channels first"*) and it works only
    because the two strings are the same characters.
-2. **Q5 was NO on thirteen of thirteen.** Not one description carried a call
+2. **Q5 was NO on thirteen of thirteen** (same caveat). Not one description carried a call
    shape. `notion-get-users` teaches its entire surface in six lines of JSON;
    prose describing a shape is a shape the model has to reconstruct.
 3. **Q7 was NO except where a `limit` happened to exist.** The three knobs are
