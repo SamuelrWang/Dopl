@@ -18,6 +18,7 @@
  * ⚠ MUTATION-VERIFIED — counts in the milestone report.
  */
 
+import { NO_GRANTS } from "@/shared/tenancy/resource-grant-reach";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import type { KnowledgeBase, KnowledgeContext } from "@/features/knowledge/types";
@@ -336,32 +337,32 @@ describe("🔒 the M-10 gates a SHARED credential lights up", () => {
     // The rule the gate encodes: a credential that may be passed between humans
     // must not read one person's private draft. An absent subject is exactly
     // that, and it is the fail-closed direction.
-    expect(canSeeBase(ctx("ws-container"), privateOwn)).toBe(false);
+    expect(canSeeBase(ctx("ws-container"), privateOwn, NO_GRANTS)).toBe(false);
   });
 
   it("🔒 ALLOWS it when the SUBJECT is the caller — F-336, and the whole ruling", async () => {
     // Same container, same workspace, same user id. The subject axis is the
     // only difference, and it is the difference between "a credential passed
     // between humans" and "the operator's own session, narrowed".
-    expect(canSeeBase(ctx("ws-container", "u-1"), privateOwn)).toBe(true);
+    expect(canSeeBase(ctx("ws-container", "u-1"), privateOwn, NO_GRANTS)).toBe(true);
   });
 
   it("still allows a SHARED base either way", async () => {
-    expect(canSeeBase(ctx("ws-container"), shared)).toBe(true);
-    expect(canSeeBase(ctx("ws-container", "u-1"), shared)).toBe(true);
+    expect(canSeeBase(ctx("ws-container"), shared, NO_GRANTS)).toBe(true);
+    expect(canSeeBase(ctx("ws-container", "u-1"), shared, NO_GRANTS)).toBe(true);
   });
 
   it("is unchanged for an UNFENCED credential — the caller's own private base is visible", async () => {
-    expect(canSeeBase(ctx(null, "u-1"), privateOwn)).toBe(true);
+    expect(canSeeBase(ctx(null, "u-1"), privateOwn, NO_GRANTS)).toBe(true);
   });
 
   // 🔒 THE MUTATION THAT MATTERS: the container axis must move NOTHING here.
   it("the container axis alone changes no answer, in either position", async () => {
-    expect(canSeeBase(ctx("ws-container", "u-1"), privateOwn)).toBe(
-      canSeeBase(ctx(null, "u-1"), privateOwn),
+    expect(canSeeBase(ctx("ws-container", "u-1"), privateOwn, NO_GRANTS)).toBe(
+      canSeeBase(ctx(null, "u-1"), privateOwn, NO_GRANTS),
     );
-    expect(canSeeBase(ctx("ws-container", null), privateOwn)).toBe(
-      canSeeBase(ctx(null, null), privateOwn),
+    expect(canSeeBase(ctx("ws-container", null), privateOwn, NO_GRANTS)).toBe(
+      canSeeBase(ctx(null, null), privateOwn, NO_GRANTS),
     );
   });
 });

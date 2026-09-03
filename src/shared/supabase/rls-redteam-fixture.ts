@@ -131,23 +131,57 @@ export async function makeTeam(workspaceId: string, userId: string): Promise<str
  * `scope_type` term in `dopl_teams_mode_visible()`, a channel or container grant
  * on the same resource would answer a workspace-wide read (F-468).
  */
-export async function grantToScope(args: {
+export interface GrantRef {
   workspaceId: string;
   scopeType: "team" | "container" | "channel";
   scopeId: string;
   resourceType: "knowledge_base" | "skill" | "chat" | "agent_template";
   resourceId: string;
-  createdBy: string;
-}): Promise<void> {
+}
+
+export async function grantToScope(
+  args: GrantRef & {
+    createdBy: string;
+    /**
+     * ⚠ **TWO VOCABULARIES, ONE COLUMN, AND THE CHECK KNOWS WHICH**
+     * (`20260914120000`): `container`/`team` take `read | edit`, `channel` takes
+     * `agent_only | visible`. The default is the team/container one because
+     * that is what every case predating 2026-09-02 wanted; a CHANNEL case must
+     * name its level, and naming the wrong one is a `23514` rather than a
+     * silently mis-scoped row.
+     */
+    level?: "read" | "edit" | "agent_only" | "visible";
+  }
+): Promise<void> {
   const { error } = await admin().from("resource_grants").insert({
     workspace_id: args.workspaceId,
     scope_type: args.scopeType,
     scope_id: args.scopeId,
     resource_type: args.resourceType,
     resource_id: args.resourceId,
-    level: "read",
+    level: args.level ?? "read",
     created_by: args.createdBy,
   });
+  if (error) throw error;
+}
+
+/**
+ * Take the grant back. ⚠ **THE REVOKE CASE IS HALF THE EVIDENCE** — a policy
+ * that admits a granted row proves nothing about the grant unless removing the
+ * row removes the reach, which is the difference between "the arm works" and
+ * "the arm is `true`".
+ */
+export async function revokeFromScope(ref: GrantRef): Promise<void> {
+  const { error } = await admin()
+    .from("resource_grants")
+    .delete()
+    .match({
+      workspace_id: ref.workspaceId,
+      scope_type: ref.scopeType,
+      scope_id: ref.scopeId,
+      resource_type: ref.resourceType,
+      resource_id: ref.resourceId,
+    });
   if (error) throw error;
 }
 

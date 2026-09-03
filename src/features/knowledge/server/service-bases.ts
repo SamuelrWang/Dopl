@@ -17,6 +17,7 @@ import {
   assertBaseVisible,
   assertSameWorkspace,
   canSeeBase,
+  baseGrantsFor,
   filterTeamVisibleBases,
 } from "./service-shared";
 import { seedWorkspace } from "./service-seed";
@@ -111,9 +112,12 @@ export async function listBases(
   // rather than instead of them: an agent in a shared container gets the
   // intersection of "what this caller could see anyway" and "what was granted
   // into this container's channels". Neither gate is a substitute for the other.
-  const audience = await resolveAgentAudience(ctx);
+  const [audience, granted] = await Promise.all([
+    resolveAgentAudience(ctx),
+    baseGrantsFor(ctx, all),
+  ]);
   const visible = (
-    await filterTeamVisibleBases(ctx, all.filter((b) => canSeeBase(ctx, b)))
+    await filterTeamVisibleBases(ctx, all.filter((b) => canSeeBase(ctx, b, granted)))
   ).filter((b) => audienceAdmits(audience, b.id));
   if (visible.length > 0) return visible;
   // 🔒 A NARROWED READ STOPS HERE — see the docblock. `all` is this SHELF's
@@ -137,8 +141,12 @@ export async function listBases(
   ) {
     await seedWorkspace(ctx);
     const seeded = await repo.listBasesForWorkspace(ctx.workspaceId, false);
+    const seededGrants = await baseGrantsFor(ctx, seeded);
     return (
-      await filterTeamVisibleBases(ctx, seeded.filter((b) => canSeeBase(ctx, b)))
+      await filterTeamVisibleBases(
+        ctx,
+        seeded.filter((b) => canSeeBase(ctx, b, seededGrants))
+      )
     ).filter((b) => audienceAdmits(audience, b.id));
   }
   return visible;

@@ -20,6 +20,7 @@ import {
   assertBaseWritable,
   assertSameWorkspace,
   canSeeBase,
+  baseGrantsFor,
   filterTeamVisibleBases,
 } from "./service-shared";
 import { getBaseById, readBaseById } from "./service-bases";
@@ -181,11 +182,14 @@ export async function resolveEntryRefs(
   if (entries.length === 0) return [];
   const baseIds = [...new Set(entries.map((e) => e.knowledgeBaseId))];
   const bases = await repo.listBasesByIds(ctx.workspaceId, baseIds);
-  const audience = await resolveAgentAudience(ctx);
+  const [audience, granted] = await Promise.all([
+    resolveAgentAudience(ctx),
+    baseGrantsFor(ctx, bases),
+  ]);
   const readable = (
     await filterTeamVisibleBases(
       ctx,
-      bases.filter((b) => b.deletedAt === null && canSeeBase(ctx, b))
+      bases.filter((b) => b.deletedAt === null && canSeeBase(ctx, b, granted))
     )
   ).filter((b) => audienceAdmits(audience, b.id));
   const nameByBaseId = new Map(readable.map((b) => [b.id, b.name]));

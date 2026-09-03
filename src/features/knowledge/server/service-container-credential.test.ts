@@ -21,8 +21,23 @@
  * fence was confirmed red with that fence removed.
  */
 
+import { NO_GRANTS } from "@/shared/tenancy/resource-grant-reach";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext } from "../types";
+
+// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
+// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
+// batch precompute is the one part of this seam that talks to Postgres. Every
+// case in this file is about the OTHER arms, so the grant set is empty — which
+// is also the pre-2026-09-02 behaviour, and therefore the right default for a
+// suite that predates the arm. The cases that exercise a GRANT live in
+// `service-shared-grant-arm.test.ts` and the redteam suites.
+vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/shared/tenancy/resource-grant-reach")
+  >()),
+  grantedResourceIds: vi.fn(async () => new Set<string>()),
+}));
 
 vi.mock("@/shared/supabase/admin", () => ({
   supabaseAdmin: () => ({ __marker: "admin-client" }),
@@ -113,27 +128,28 @@ beforeEach(() => {
 
 describe("canSeeBase — the SUBJECT axis, not the container axis", () => {
   it("a container session sees its OPERATOR's private base", () => {
-    expect(canSeeBase(containerSession(), privateBase("kb"))).toBe(true);
+    expect(canSeeBase(containerSession(), privateBase("kb"), NO_GRANTS)).toBe(true);
   });
 
   it("a container session does NOT see a PEER's private base", () => {
     const peers = { ...privateBase("kb"), createdBy: "u-peer" };
-    expect(canSeeBase(containerSession(), peers)).toBe(false);
+    expect(canSeeBase(containerSession(), peers, NO_GRANTS)).toBe(false);
   });
 
   it("a SHARED credential sees no private base at all — M-10 unchanged", () => {
-    expect(canSeeBase(sharedKey(), privateBase("kb"))).toBe(false);
+    expect(canSeeBase(sharedKey(), privateBase("kb"), NO_GRANTS)).toBe(false);
   });
 
   it("the container axis alone decides NOTHING here — only the subject moves it", () => {
     // 🔒 THE F-336 MUTATION, PINNED. These two contexts differ in exactly one
     // field. If a predicate ever reads the container axis as an audience again,
     // the first of these flips to false and this line fails.
-    expect(canSeeBase(containerSession(), privateBase("kb"))).toBe(true);
+    expect(canSeeBase(containerSession(), privateBase("kb"), NO_GRANTS)).toBe(true);
     expect(
       canSeeBase(
         containerSession({ credentialSubjectUserId: null }),
         privateBase("kb"),
+        NO_GRANTS,
       ),
     ).toBe(false);
   });
@@ -142,12 +158,12 @@ describe("canSeeBase — the SUBJECT axis, not the container axis", () => {
     // The other half of the same independence: dropping the container fence
     // must not buy an anonymous credential a private row.
     const ctx = sharedKey({ apiKeyWorkspaceId: null });
-    expect(canSeeBase(ctx, privateBase("kb"))).toBe(false);
+    expect(canSeeBase(ctx, privateBase("kb"), NO_GRANTS)).toBe(false);
   });
 
   it("public is public for every credential", () => {
     const pub = { ...privateBase("kb"), visibility: "public" as const };
-    expect(canSeeBase(sharedKey(), pub)).toBe(true);
+    expect(canSeeBase(sharedKey(), pub, NO_GRANTS)).toBe(true);
   });
 });
 

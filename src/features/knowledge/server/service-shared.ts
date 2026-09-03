@@ -1,5 +1,9 @@
 import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
+import {
+  grantedResourceIds,
+  type GrantedResourceIds,
+} from "@/shared/tenancy/resource-grant-reach";
 import { slugify } from "@/shared/lib/slug/slugify";
 import type { Role } from "@/features/workspaces/types";
 import {
@@ -88,11 +92,63 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
  * `skills › canSeeSkill`, `agent-templates › canSeeTemplate` and
  * `agent-templates › canSeeBaseRow`. All five moved together in this change;
  * splitting them is how the rule drifts.
+ *
+ * 🔒 ⚠ **ARM 4 IS THE GRANT, ADDED 2026-09-02 (F-604), AND IT SITS BELOW THE
+ * SHARED-CREDENTIAL REFUSAL ON PURPOSE.** B11 replaced the copy ops with grants,
+ * and until this arm existed the lent row was refused in the scope it was lent
+ * to — the write door wrote a correct row nothing read. It is LAST because
+ * every arm above it is cheaper and because a grant may only ever WIDEN: a row
+ * arm 1 already admits does not need it, and a SHARED credential stands for
+ * nobody, so it has no membership of the granted scope to read the grant
+ * through (M-10, arm 2). ⚠ The set comes from
+ * `shared/tenancy/resource-grant-reach.ts › grantedResourceIds`, whose SQL twin
+ * `dopl_grant_admits()` is the arm the policy gained in the same change.
  */
-export function canSeeBase(ctx: KnowledgeContext, base: KnowledgeBase): boolean {
+export function canSeeBase(
+  ctx: KnowledgeContext,
+  base: KnowledgeBase,
+  granted: GrantedResourceIds
+): boolean {
   if (base.visibility === "public") return true;
   if (isSharedCredential(ctx)) return false;
-  return base.createdBy === ctx.userId;
+  return base.createdBy === ctx.userId || granted.has(base.id);
+}
+
+/**
+ * Rows whose answer arm 4 could still CHANGE — the negation of arms 1-3.
+ *
+ * ⚠ **IT IS A DELIBERATE MIRROR OF THE ARMS ABOVE, AND IT IS PINNED AS ONE.**
+ * `shared/tenancy/grant-read-arm.test.ts` drives every (credential × visibility ×
+ * author) combination through both and fails if a row this says NO about would
+ * have had its answer moved by a grant. The mirror buys the thing that matters
+ * on a list path: a workspace of public rows, or a caller's own shelf, asks the
+ * grant table NOTHING.
+ */
+export function needsGrantArm(
+  ctx: KnowledgeContext,
+  base: KnowledgeBase
+): boolean {
+  return (
+    base.visibility !== "public" &&
+    !isSharedCredential(ctx) &&
+    base.createdBy !== ctx.userId
+  );
+}
+
+/**
+ * The grant set for a row set — {@link grantedResourceIds} bound to this
+ * feature's resource type and narrowed by {@link needsGrantArm}, so no caller
+ * has to remember either which string it is or which rows can still move.
+ */
+export function baseGrantsFor(
+  ctx: KnowledgeContext,
+  bases: readonly KnowledgeBase[]
+): Promise<GrantedResourceIds> {
+  return grantedResourceIds(
+    ctx.userId,
+    "knowledge_base",
+    bases.filter((b) => needsGrantArm(ctx, b)).map((b) => b.id)
+  );
 }
 
 /** Single-base read gate: M-10 rules + team scoping. Teams-mode base is 404
@@ -101,7 +157,12 @@ export async function assertBaseVisible(
   ctx: KnowledgeContext,
   base: KnowledgeBase
 ): Promise<void> {
-  if (!canSeeBase(ctx, base)) throw new KnowledgeBaseNotFoundError(base.id);
+  // ⚠ ONE base, so the grant read is done here rather than pushed onto every
+  // caller: the list paths batch it, and a single-row door that made its own
+  // callers precompute would be four more places to forget it.
+  if (!canSeeBase(ctx, base, await baseGrantsFor(ctx, [base]))) {
+    throw new KnowledgeBaseNotFoundError(base.id);
+  }
   if (base.accessMode !== "teams") return;
   const level = await effectiveResourceAccess(
     ctx.userId,

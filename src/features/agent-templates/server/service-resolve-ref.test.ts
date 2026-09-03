@@ -21,6 +21,20 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
+// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
+// batch precompute is the one part of this seam that talks to Postgres. Every
+// case in this file is about the OTHER arms, so the grant set is empty — which
+// is also the pre-2026-09-02 behaviour, and therefore the right default for a
+// suite that predates the arm. The cases that exercise a GRANT live in
+// `service-shared-grant-arm.test.ts` and the redteam suites.
+vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/shared/tenancy/resource-grant-reach")
+  >()),
+  grantedResourceIds: vi.fn(async () => new Set<string>()),
+}));
+
 vi.mock("./repository", () => ({
   findTemplateById: vi.fn(),
   listTemplatesForWorkspace: vi.fn(),

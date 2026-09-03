@@ -35,6 +35,7 @@ import {
   makeUser,
   makeWorkspace,
   readableIds,
+  revokeFromScope,
 } from "@/shared/supabase/rls-redteam-fixture";
 
 const POLICIES = livePolicies();
@@ -66,6 +67,34 @@ describe("REDTEAM agent_templates — the policy alone", () => {
     expect(fn).toMatch(
       /NOT\s+public\.dopl_credential_is_shared\(\)[\s\S]*t\.created_by\s*=\s*\(\s*SELECT auth\.uid\(\)\s*\)/i
     );
+  });
+
+  it("🔒 carries the GRANT arm, at the TOP and not inside the membership branch (F-604)", () => {
+    // ⚠ THE POSITION IS THE ASSERTION. A grantee is typically NOT a member of
+    // the resource's container, so an arm nested under
+    // `is_current_workspace_member` would be unreachable and the write door
+    // B15 shipped would go on writing rows nothing reads.
+    const fn = liveFunction(READABLE);
+    // It is OR-ed onto a CLOSED membership group…
+    expect(fn).toMatch(/\)\s*OR\s+public\.dopl_grant_admits\(\s*'agent_template'/i);
+    // …and never AND-ed, which is the nesting failure mode: an arm conjoined
+    // with the membership test can only ever narrow, so the grant would do
+    // nothing for the caller it is written for.
+    expect(fn).not.toMatch(/AND\s+public\.dopl_grant_admits/i);
+  });
+
+  it("🔒 `dopl_grant_admits` answers CHANNEL and CONTAINER, and refuses `team`", () => {
+    // ⚠ `team` is FALSE here BY DESIGN, not by omission: it is already an arm of
+    // `dopl_teams_mode_visible()`, and two rules for one grant is how the second
+    // rots. Ruling B4 made team a scope, not a second mechanism.
+    const admits = liveFunction("dopl_grant_admits");
+    expect(admits).toMatch(/WHEN\s+'container'\s+THEN[\s\S]*?is_current_workspace_member\(\s*g\.scope_id,\s*'viewer'\s*\)/i);
+    expect(admits).toMatch(/WHEN\s+'channel'\s+THEN[\s\S]*?level\s*=\s*'visible'[\s\S]*?is_channel_member\(\s*g\.scope_id\s*\)/i);
+    expect(admits).toMatch(/ELSE\s+false/i);
+    // 🔒 NO `workspace_id` TERM. The row is filed under the RESOURCE's
+    // container and the caller reaches it through the SCOPE's — a tenancy term
+    // here would refuse exactly the cross-container lend it exists to honour.
+    expect(admits).not.toMatch(/g\.workspace_id/i);
   });
 
   it("keeps the ADMIN arm inside the `team` branch — private means private, admins included", () => {
@@ -113,6 +142,7 @@ describe.skipIf(!liveRedteamEnabled)(
     let adminId = "";
     let teammateId = "";
     let workspaceId = "";
+    let outsiderContainerId = "";
     let teamId = "";
     let workspaceTemplateId = "";
     let privateTemplateId = "";
@@ -142,6 +172,10 @@ describe.skipIf(!liveRedteamEnabled)(
       await addMember(workspaceId, adminId, "admin");
       await addMember(workspaceId, teammateId, "member");
       teamId = await makeTeam(workspaceId, teammateId);
+      // The BORROWING container: the outsider owns it, and the grantor is a
+      // member so the validity trigger will accept a grant into it.
+      outsiderContainerId = await makeWorkspace(outsiderId);
+      await addMember(outsiderContainerId, ownerId, "member");
 
       workspaceTemplateId = await seed("workspace");
       privateTemplateId = await seed("private");
@@ -158,6 +192,7 @@ describe.skipIf(!liveRedteamEnabled)(
 
     afterAll(async () => {
       await deleteWorkspace(workspaceId);
+      await deleteWorkspace(outsiderContainerId);
       await deleteUsers([ownerId, outsiderId, adminId, teammateId]);
     }, 60_000);
 
@@ -185,6 +220,32 @@ describe.skipIf(!liveRedteamEnabled)(
       expect(await readableIds(teammateId, "agent_templates", workspaceId)).toContain(
         teamTemplateId
       );
+    });
+
+    it("🔒 GRANTED INTO A CONTAINER → visible to that container's members; REVOKED → invisible (F-604)", async () => {
+      // The whole of ruling B11 in one case: a `private` template in the
+      // owner's workspace, lent to a container the OUTSIDER is a member of.
+      // Before the grant that reader is the "sees zero rows" case above.
+      const ref = {
+        workspaceId,
+        scopeType: "container" as const,
+        scopeId: outsiderContainerId,
+        resourceType: "agent_template" as const,
+        resourceId: privateTemplateId,
+      };
+      // ⚠ THE GRANTOR IS IN BOTH ROOMS, because `enforce_resource_grant` says
+      // so — cross-container reach requires a NAMED grantor who could lend it
+      // OUT and lend it IN (`20260914120000` rule 4).
+      await grantToScope({ ...ref, createdBy: ownerId });
+      expect(
+        await readableIds(outsiderId, "agent_templates", workspaceId)
+      ).toEqual([privateTemplateId]);
+
+      // 🔒 AND THE OTHER HALF, WHICH IS WHERE A `true` PREDICATE WOULD SHOW.
+      await revokeFromScope(ref);
+      expect(
+        await readableIds(outsiderId, "agent_templates", workspaceId)
+      ).toHaveLength(0);
     });
   }
 );

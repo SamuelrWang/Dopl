@@ -36,8 +36,11 @@ import {
   deleteWorkspace,
   liveRedteamEnabled,
   makeUser,
+  addMember,
+  grantToScope,
   makeWorkspace,
   readableIds,
+  revokeFromScope,
 } from "@/shared/supabase/rls-redteam-fixture";
 
 const POLICIES = livePolicies();
@@ -61,6 +64,28 @@ const DENY_ALL_UNTIL_PHASE_3 = "knowledge_entry_chunks";
 
 /** "May the caller read this base?" — the rule, written once (STEP 4). */
 const READABLE = "dopl_knowledge_base_readable";
+
+describe("REDTEAM knowledge — the GRANT arm (F-604)", () => {
+  it("🔒 is OR-ed onto a CLOSED membership group, never AND-ed into one", () => {
+    // ⚠ THE POSITION IS THE ASSERTION. A grantee is typically NOT a member of
+    // the base's container, so an arm conjoined with `is_current_workspace_member`
+    // could only ever narrow — the write door B15 shipped would go on writing
+    // rows nothing reads.
+    const fn = liveFunction(READABLE);
+    expect(fn).toMatch(/\)\s*OR\s+public\.dopl_grant_admits\(\s*'knowledge_base'/i);
+    expect(fn).not.toMatch(/AND\s+public\.dopl_grant_admits/i);
+  });
+
+  it("🔒 the child policies inherit it by asking about the PARENT, not by restating it", () => {
+    // The 2026-08-26 incident's shape, kept closed: a child policy that stated
+    // its own rule would be a second place the grant arm has to be added.
+    for (const table of ["knowledge_folders", "knowledge_entries"]) {
+      const policy = POLICIES.get(SELECT_POLICY[table as keyof typeof SELECT_POLICY]) ?? "";
+      expect(policy, table).toContain(`${READABLE}(knowledge_base_id)`);
+      expect(policy, table).not.toMatch(/dopl_grant_admits/i);
+    }
+  });
+});
 
 describe("the read rule is stated ONCE", () => {
   it("every table's SELECT policy defers to the same function", () => {
@@ -192,6 +217,7 @@ describe.skipIf(!liveRedteamEnabled)(
     let ownerId = "";
     let outsiderId = "";
     let workspaceId = "";
+    let outsiderContainerId = "";
     let privateBaseId = "";
     let publicBaseId = "";
 
@@ -199,6 +225,10 @@ describe.skipIf(!liveRedteamEnabled)(
       ownerId = await makeUser("owner");
       outsiderId = await makeUser("outsider");
       workspaceId = await makeWorkspace(ownerId);
+      // The BORROWING container: the outsider owns it, and the grantor is a
+      // member so `enforce_resource_grant` will accept a grant into it.
+      outsiderContainerId = await makeWorkspace(outsiderId);
+      await addMember(outsiderContainerId, ownerId, "member");
 
       // Seeded through the repository's own inserts — writes stay service-role,
       // so the fixture cannot be shaped by the fence it is testing.
@@ -238,6 +268,7 @@ describe.skipIf(!liveRedteamEnabled)(
 
     afterAll(async () => {
       await deleteWorkspace(workspaceId);
+      await deleteWorkspace(outsiderContainerId);
       await deleteUsers([ownerId, outsiderId]);
     }, 60_000);
 
@@ -268,5 +299,30 @@ describe.skipIf(!liveRedteamEnabled)(
         expect(await rows(ownerId, table, true)).toHaveLength(0);
       }
     );
+
+    it("🔒 GRANTED INTO A CONTAINER → visible to that container's members; REVOKED → invisible (F-604)", async () => {
+      // Ruling B11 end to end: a `private` base lent to a container the
+      // OUTSIDER belongs to. The "%s: a NON-MEMBER sees zero rows" case above
+      // is the same reader with no grant, so this pair is the arm's whole
+      // evidence — and the REVOKE half is where a `true` predicate would show.
+      const ref = {
+        workspaceId,
+        scopeType: "container" as const,
+        scopeId: outsiderContainerId,
+        resourceType: "knowledge_base" as const,
+        resourceId: privateBaseId,
+      };
+      await grantToScope({ ...ref, createdBy: ownerId });
+      expect(await rows(outsiderId, "knowledge_bases")).toEqual([privateBaseId]);
+      // 🔒 AND THE CHILDREN FOLLOW THE PARENT, which is the property both child
+      // policies are built on — they ask `dopl_knowledge_base_readable` about
+      // the base, so a grant reaches the folder and the entry without either
+      // policy learning what a grant is.
+      expect(await rows(outsiderId, "knowledge_entries")).toHaveLength(1);
+
+      await revokeFromScope(ref);
+      expect(await rows(outsiderId, "knowledge_bases")).toHaveLength(0);
+      expect(await rows(outsiderId, "knowledge_entries")).toHaveLength(0);
+    });
   }
 );
