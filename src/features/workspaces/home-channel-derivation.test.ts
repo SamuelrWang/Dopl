@@ -62,18 +62,24 @@ const OPEN_SITES: Record<string, string> = {
   // ⚠ Not in ANY slice's `Owns` column, and the migration header says so. It
   // needs assigning before either half of F-564 can be called finished.
   "packages/mcp-server/src/tools/confirm-token.ts":
-    "UNASSIGNED — needs an owner before B13/B15 can close F-564",
-  "packages/mcp-server/src/factory.ts": "B13 — the `workspace=` retirement repoints it",
-  "packages/mcp-server/src/meta-tools.ts": "B13 — same",
-  "packages/mcp-server/src/server.ts": "B13 — same",
-  "packages/mcp-server/src/tools/home-scopes.ts": "B13 DELETES the file with `dopl_home`",
+    "UNASSIGNED — needs an owner before B15 can close F-564",
   "packages/mcp-server/src/tools/copy-target.ts": "B15 DELETES the file with the copy ops",
   // ⚠ The refusal is RIGHT for a personal container (nobody may be added to
   // one); the SENTENCE is what mislabels it. A fix here is a copy change, not a
   // fence change.
   "src/features/workspaces/server/authz.ts":
-    "B13/B15 — the refusal holds, the sentence names the wrong kind",
+    "B15 — the refusal holds, the sentence names the wrong kind",
 };
+
+/**
+ * ⚠ **B13 CLOSED ITS FOUR AND THE RECORD LEAVES WITH THEM**, which is what the
+ * "EQUALS, not INCLUDES" rule above is for. `factory.ts`, `meta-tools.ts` and
+ * `server.ts` now ask `workspace-directory.ts › containerKind`, a positive
+ * `switch` on `kind` with a `default` arm that answers "workspace" — so an
+ * unknown kind is never advertised as somebody's room. `tools/home-scopes.ts`
+ * is DELETED with `dopl_home`; its lock narrowing and leg list moved into
+ * `workspace-directory.ts` and derive the label the same way.
+ */
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
