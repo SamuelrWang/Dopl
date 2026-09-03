@@ -6,6 +6,7 @@ import {
 } from "@/shared/auth/credential-audience";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { findPersonalContainerId } from "./personal-container";
+import { grantedResourceIds } from "./resource-grant-reach";
 
 /**
  * 🔒 **AN ID RESOLVES ITS OWN TENANCY** — the one read in the tree that looks
@@ -354,8 +355,70 @@ async function findResources(
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as unknown as ResourceRow[];
-  return rows.map((row) =>
-    toResolved(type, spec, row, containers, caller.userId)
+  if (rows.length > 0 || !("id" in ref)) {
+    return rows.map((row) =>
+      toResolved(type, spec, row, containers, caller.userId)
+    );
+  }
+  return findGrantedResource(caller, type, spec, ref.id);
+}
+
+/** ⚠ A grantee holds no membership of the row's container, so the map they are
+ *  resolved against is empty and {@link toResolved} takes its fail-closed floor.
+ *  Shared and frozen — it is the same empty answer every time. */
+const NO_MEMBERSHIPS: ReadonlyMap<string, Role> = new Map();
+
+/**
+ * 🔒 **A ROW LENT TO A SCOPE THE CALLER IS IN IS NAMEABLE BY THEM — CLAUSE 4's
+ * THIRD ARM, AND IT LIVES IN ITS OWN QUERY** (F-662, 2026-09-03).
+ *
+ * ⚠ **THE TS SIDE WAS THE NARROW HALF, WHICH IS WHY THIS IS A REPAIR AND NOT A
+ * WIDENING.** `dopl_grant_admits()` has been an arm of
+ * `dopl_knowledge_base_readable()` and `can_current_user_read_agent_template()`
+ * since `20260923140000`, and `canSeeBase` / `canSeeTemplate` gained the same
+ * arm — so the policy and the visibility matrix both admit a lent row while the
+ * NAMING lane refused it. `resource-grant-reach.ts` recorded the gap in its own
+ * header ("it widens visibility, never the candidate set… widening the fetch is
+ * a TENANCY change"); this is that change, and it is exactly one arm wide.
+ *
+ * ⚠ **A SECOND QUERY, NOT A THIRD ARM ON THE FIRST ONE.** The main query is
+ * fenced by `.in(workspace_id, …)` AND the two-arm `.or()`, and a grantee fails
+ * BOTH by construction: they are not a member of the resource's container, and
+ * the row is private and somebody else's. An arm added inside that group would
+ * be unreachable — the same mistake `20260923140000` §3b had to undo on the
+ * knowledge child policies, where the grant arm sat under a membership term.
+ *
+ * ⚠ **IT RUNS ONLY ON A MISS, AND ONLY FOR AN ID.** A name is not a global
+ * handle — resolving one here would scan every container in the product for a
+ * label — and a grant is always written against an id (`dopl_kb(op="grant")`).
+ * An id lookup that degraded into a name lookup is the fallback this module
+ * forbids in its header.
+ *
+ * 🔒 **AND IT IS NOT AN EXISTENCE ORACLE.** `grantedResourceIds` answers from
+ * `resource_grants` joined to the CALLER's own memberships, so an id with no
+ * grant reaching this caller returns `null` exactly as a nonexistent one does,
+ * with no read of the row at all.
+ */
+async function findGrantedResource(
+  caller: ResourceCaller,
+  type: ResourceType,
+  spec: ResourceTable,
+  id: string
+): Promise<ResolvedResource[]> {
+  const granted = await grantedResourceIds(caller.userId, type, [id]);
+  if (!granted.has(id)) return [];
+  // ⚠ NO CONTAINER FILTER AND NO `.or()`: the grant IS the standing, and both
+  // of those are the fence the grant is reached AROUND. The soft-delete filter
+  // stays — a trashed row is listable by nobody, grantee included.
+  let query = supabaseAdmin()
+    .from(spec.table)
+    .select(selectList(spec))
+    .eq("id", id);
+  if (spec.deletedColumn) query = query.is(spec.deletedColumn, null);
+  const { data, error } = await query;
+  if (error) throw error;
+  return ((data ?? []) as unknown as ResourceRow[]).map((row) =>
+    toResolved(type, spec, row, NO_MEMBERSHIPS, caller.userId)
   );
 }
 
@@ -392,7 +455,7 @@ function toResolved(
   type: ResourceType,
   spec: ResourceTable,
   row: ResourceRow,
-  containers: Map<string, Role>,
+  containers: ReadonlyMap<string, Role>,
   callerUserId: string
 ): ResolvedResource {
   const container = Array.isArray(row.workspace)

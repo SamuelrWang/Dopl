@@ -119,11 +119,10 @@ export async function resolveAgentAudience(
     ctx.workspaceId
   );
   const channelIds = narrowToSessionChannel(containerChannelIds, ctx.sessionId);
-  const baseIds = await listGrantedBaseIdsForChannels(
-    db,
-    ctx.workspaceId,
-    channelIds
-  );
+  // ⚠ NO CONTAINER ARGUMENT (F-662). `channelIds` came from THIS container and
+  // is the fence; a grant row is filed under the RESOURCE's container, so
+  // naming the caller's would refuse the cross-container lend.
+  const baseIds = await listGrantedBaseIdsForChannels(db, channelIds);
   return { kind: "granted", baseIds: new Set(baseIds), channelIds };
 }
 
