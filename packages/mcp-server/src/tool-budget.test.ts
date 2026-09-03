@@ -211,12 +211,12 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // A16's last three knobs, recorded as shipped and absent from the tree
   // (F-591): `fields=` (+242), `response_format` (+279), `max_chars` (+215).
   // ⚠ 4,145 → 4,025 (B15): `shelf` + `to_workspace` out, three grant args in
-  dopl_agent: 4128,
+  dopl_agent: 4024,
   // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
   dopl_channel: 8677,
   dopl_chats: 3553,
-  // ⚠ 5,347 → 5,142 (B15), same trade
-  dopl_kb: 5330,
+  // ⚠ 5,347 → 5,141 (B15), same trade
+  dopl_kb: 5141,
   dopl_map: 250,
   dopl_members: 845,
   dopl_ontology: 2816,
@@ -225,10 +225,17 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // ⚠ THESE THREE EACH FELL BY 7 AND ROSE BY 1, BOTH EDITS IN OTHER FILES —
   // `response-size.ts › RESPONSE_FORMAT_FIELD` and `shelf.ts › SHELF_ARG_DESCRIPTION`.
   dopl_status: 787,
-  // ⚠ THE ONE THAT REPLACED THREE (B13): no arguments, so 114 is the empty
-  // object the SDK renders — `current_workspace`'s 720 and `dopl_home`'s 440
-  // are gone with the ops they described.
-  dopl_workspaces: 114,
+  // ⚠ THE ONE THAT REPLACED THREE (B13): `current_workspace`'s 720 and
+  // `dopl_home`'s 440 are gone with the ops they described.
+  // ⚠ **114 → 364 AT THE BATCH-3 INTEGRATION (F-621), AND IT IS A RISE ON THE
+  // ONE LICENCE THIS FILE ACCEPTS: A NEW OP.** 114 was the empty object the SDK
+  // renders for a tool with no arguments; `dopl_home(op="create_channel")` was
+  // retired with no successor, which is a wire-visible deletion of a capability
+  // rather than a rename, so the mint moved here as
+  // `op="create_home_channel"` with a `name`. **The two together cost 250 and
+  // replaced 1,160** — `dopl_home`'s own schema was 440 and its description 440
+  // more. The DESCRIPTION did not rise: it still fits the 450-char READ cap.
+  dopl_workspaces: 364,
 };
 
 /**
@@ -265,7 +272,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // `list_workspaces` → `dopl_workspaces`), the injected `workspace` contract lost
 // 5 chars × 9 tools, and the briefing fell 56. **B15 then took the copy ops, the
 // `shelf` axis and its two labels out and put the grant op and its three args in.**
-const SERVED_TOTAL_CEILING = 47_021; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review) → 47,021 (B13) → re-measured at batch-3 integration
+const SERVED_TOTAL_CEILING = 46_857; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review) → 46,857 (batch 3, MEASURED whole at the integration: B13's three-tools-into-one and B15's shelf-for-grant trade, less F-621's 250-char mint)
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
