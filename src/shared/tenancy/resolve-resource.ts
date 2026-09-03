@@ -5,6 +5,7 @@ import {
   type CredentialAxes,
 } from "@/shared/auth/credential-audience";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { findPersonalContainerId } from "./personal-container";
 
 /**
  * 🔒 **AN ID RESOLVES ITS OWN TENANCY** — the one read in the tree that looks
@@ -30,8 +31,10 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  *      {@link CONTAINER_READ_FLOOR}. A pending invitation is not a membership
  *      and a revoked one is not either.
  *   3. **the credential's own workspace lock**, when it carries one — a locked
- *      credential resolves inside its lock and nowhere else (§4 layer B1). ⚠
- *      This module NARROWS on the lock; it never widens and never removes it.
+ *      credential resolves inside its lock, **plus its own operator's PERSONAL
+ *      container**, and nowhere else (§4 layer B1 + rulings B10/#18). ⚠ This
+ *      module NARROWS on the lock; it never widens it past that one container
+ *      and never removes it. See {@link lockedCandidates}.
  *   4. **the caller could already list the row for themselves** — `created_by`
  *      is the caller, or the row is visible to every member of its container.
  *
@@ -251,7 +254,10 @@ async function listContainersForCaller(
   // inside it the caller may see. That second question is clause 1's SUBJECT
   // axis (F-333/F-336: reading one off the other is the defect).
   if (caller.apiKeyWorkspaceId) {
-    query = query.eq("workspace_id", caller.apiKeyWorkspaceId);
+    query = query.in(
+      "workspace_id",
+      await lockedCandidates(caller.apiKeyWorkspaceId, caller.userId)
+    );
   }
   const { data, error } = await query;
   if (error) throw error;
@@ -265,6 +271,45 @@ async function listContainersForCaller(
     containers.set(row.workspace_id, row.role);
   }
   return containers;
+}
+
+/**
+ * 🔒 **THE CONTAINERS A LOCKED CREDENTIAL MAY STILL NAME ROWS IN: ITS LOCK, AND
+ * THE OPERATOR'S OWN PERSONAL CONTAINER.**
+ *
+ * ⚠ **FOUND IN THE 1.26.0 SMOKE (2026-09-03).** The clause narrowed to the lock
+ * ALONE, so an agent running on a home channel's `container_session` credential
+ * answered `base_not_found` for a base on its own operator's shelf. That
+ * contradicts the ruling the shelf-as-a-tenancy exists to serve (B10 / #18,
+ * `personal-container.ts`): *"what lets a personal template or KB be used from
+ * ANY container the user is in — the id resolves its own container."* With the
+ * shelf a `WHERE` inside a workspace the operator was already in, the lock never
+ * had to name it; the moment it became a CONTAINER of its own, the lock fenced
+ * the operator out of their own notes.
+ *
+ * ⚠ **AND IT WIDENS BY EXACTLY ONE CONTAINER, WHICH IS WHY IT IS A LIST AND NOT A
+ * SECOND QUERY.** The ids go into the SAME `workspace_members` read, so clause 2
+ * still decides: a personal container with no ACTIVE owner membership admits
+ * nothing, and clause 4 still refuses every row the caller could not already
+ * list. Every OTHER container stays fenced — the lock is narrowed, never lifted.
+ *
+ * ⚠ **A SHARED CREDENTIAL REACHES THIS NOWHERE, AND CLAUSE 1 IS WHY** — a
+ * credential that may be passed between humans points at no one person's shelf,
+ * so {@link findResources} has already returned `[]` before a query is built.
+ * The refusal is stated ONCE, where it is decided; restating it here would be a
+ * second copy of the arm the two axes exist to keep apart (F-333/F-336).
+ *
+ * ⚠ ONE INDEXED PROBE (`workspaces_personal_owner_uidx`), and only on the LOCKED
+ * lane: an unfenced credential never asks.
+ */
+async function lockedCandidates(
+  lockedWorkspaceId: string,
+  userId: string
+): Promise<string[]> {
+  const personal = await findPersonalContainerId(userId);
+  return personal === null || personal === lockedWorkspaceId
+    ? [lockedWorkspaceId]
+    : [lockedWorkspaceId, personal];
 }
 
 /**

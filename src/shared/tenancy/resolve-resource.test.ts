@@ -30,37 +30,57 @@ import {
 const ME = "22222222-3333-4444-5555-666666666666";
 const WS_A = "11111111-2222-3333-4444-555555555555";
 const WS_B = "99999999-8888-7777-6666-555555555555";
+/** The caller's own `kind='personal'` container. */
+const WS_P = "77777777-7777-7777-7777-777777777777";
 const T1 = "44444444-4444-4444-4444-444444444444";
 
 type Call = { table: string; op: string; args: unknown[] };
 
-/** A recording query builder. `results` is keyed by table, so the membership
- *  read and the resource read answer independently and every filter either
- *  query applied is inspectable afterwards. */
+/**
+ * A recording query builder. `results` is keyed by table, so each read answers
+ * independently and every filter it applied is inspectable afterwards.
+ *
+ * ⚠ **ONE BUILDER PER `.from()`, EXACTLY AS POSTGREST GIVES YOU** — a single
+ * shared builder with a mutable `table` answered the MEMBERSHIP query out of
+ * whichever table was named LAST, which the personal-container probe (issued
+ * between building that query and awaiting it) is the first caller to notice.
+ */
 function makeAdmin(results: Record<string, unknown[]>) {
   const calls: Call[] = [];
-  let table = "";
-  const builder: Record<string, unknown> = {};
-  const rec = (op: string, args: unknown[]) => {
-    calls.push({ table, op, args });
+  const newBuilder = (table: string) => {
+    const builder: Record<string, unknown> = {};
+    const rec = (op: string, args: unknown[]) => {
+      calls.push({ table, op, args });
+      return builder;
+    };
+    const rows = () => results[table] ?? [];
+    Object.assign(builder, {
+      select: (c: string) => rec("select", [c]),
+      eq: (c: string, v: unknown) => rec("eq", [c, v]),
+      in: (c: string, v: unknown) => rec("in", [c, v]),
+      or: (f: string) => rec("or", [f]),
+      is: (c: string, v: unknown) => rec("is", [c, v]),
+      ilike: (c: string, v: unknown) => rec("ilike", [c, v]),
+      // `findPersonalContainerId` ends its chain here — at most one row.
+      maybeSingle: () =>
+        Promise.resolve({ data: rows()[0] ?? null, error: null }),
+      then: (resolve: (r: { data: unknown[]; error: null }) => void) =>
+        resolve({ data: rows(), error: null }),
+    });
     return builder;
   };
-  Object.assign(builder, {
+  vi.mocked(supabaseAdmin).mockReturnValue({
     from: (t: string) => {
-      table = t;
-      return rec("from", [t]);
+      calls.push({ table: t, op: "from", args: [t] });
+      return newBuilder(t);
     },
-    select: (c: string) => rec("select", [c]),
-    eq: (c: string, v: unknown) => rec("eq", [c, v]),
-    in: (c: string, v: unknown) => rec("in", [c, v]),
-    or: (f: string) => rec("or", [f]),
-    is: (c: string, v: unknown) => rec("is", [c, v]),
-    ilike: (c: string, v: unknown) => rec("ilike", [c, v]),
-    then: (resolve: (r: { data: unknown[]; error: null }) => void) =>
-      resolve({ data: results[table] ?? [], error: null }),
-  });
-  vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
+  } as never);
   return calls;
+}
+
+/** The row `findPersonalContainerId` reads, when the caller has a container. */
+function personalContainer(id = WS_P) {
+  return { id };
 }
 
 /** Every filter one of the two queries applied, as `op(col=value)` strings. */
@@ -174,28 +194,110 @@ describe("🔒 only containers the caller ACTIVELY belongs to, at the viewer flo
 // ── CLAUSE 3 ──────────────────────────────────────────────────────────────
 
 describe("🔒 the container lock is honoured, and narrows", () => {
+  const locked = {
+    userId: ME,
+    credentialSubjectUserId: ME,
+    apiKeyWorkspaceId: WS_A,
+  };
+
   it("asks only about the locked container, never the caller's other ones", async () => {
     const calls = makeAdmin({
       workspace_members: [member(WS_A)],
       agent_templates: [],
     });
-    await resolveResource(
-      {
-        userId: ME,
-        credentialSubjectUserId: ME,
-        apiKeyWorkspaceId: WS_A,
-      },
-      "agent_template",
-      T1
-    );
+    await resolveResource(locked, "agent_template", T1);
     // ⚠ MUTATION CHECK. Without this the membership set is the caller's WHOLE
     // reach and a locked credential resolves ids outside its own lock — a
     // workspace fence (§4 layer B1) quietly stepped over by a read.
+    // ⚠ A caller with NO personal container gets the lock and nothing else, so
+    // the admission below cannot be a blanket widening in disguise.
     expect(filters(calls, "workspace_members")).toEqual([
       `eq("user_id"=${JSON.stringify(ME)})`,
       `eq("status"="active")`,
-      `eq("workspace_id"=${JSON.stringify(WS_A)})`,
+      `in("workspace_id"=${JSON.stringify([WS_A])})`,
     ]);
+  });
+
+  it("🔒 ALSO admits the caller's OWN PERSONAL container", async () => {
+    // 🔒 Rulings B10 / #18: the personal shelf is reachable from every
+    // container the user is in. It stopped being reachable the moment it became
+    // a container of its own — the 1.26.0 smoke's `base_not_found`.
+    const calls = makeAdmin({
+      workspaces: [personalContainer()],
+      workspace_members: [member(WS_P, "owner")],
+      knowledge_bases: [
+        {
+          id: T1,
+          name: "Orchestration Guidelines",
+          workspace_id: WS_P,
+          created_by: ME,
+          workspace: { name: "Personal", kind: "personal" },
+        },
+      ],
+    });
+    const resolved = await resolveResource(locked, "knowledge_base", T1);
+    expect(resolved).toMatchObject({
+      containerId: WS_P,
+      containerKind: "personal",
+      ownedByCaller: true,
+    });
+    expect(filters(calls, "workspace_members")).toContain(
+      `in("workspace_id"=${JSON.stringify([WS_A, WS_P])})`
+    );
+  });
+
+  it("🔒 looks that container up BY OWNER, so it is never somebody else's", async () => {
+    // ⚠ MUTATION CHECK, and it is the whole reason the admission is safe: the
+    // probe is keyed on the CALLER's id and on `kind='personal'`. Key it on
+    // anything a caller supplies and the lock becomes a door into any shelf.
+    const calls = makeAdmin({
+      workspaces: [personalContainer()],
+      workspace_members: [member(WS_A)],
+      agent_templates: [],
+    });
+    await resolveResource(locked, "agent_template", T1);
+    expect(filters(calls, "workspaces")).toEqual([
+      `eq("owner_id"=${JSON.stringify(ME)})`,
+      `eq("kind"="personal")`,
+    ]);
+  });
+
+  it("names the lock ONCE when the lock IS the personal container", async () => {
+    const calls = makeAdmin({
+      workspaces: [personalContainer(WS_A)],
+      workspace_members: [member(WS_A, "owner")],
+      agent_templates: [],
+    });
+    await resolveResource(locked, "agent_template", T1);
+    expect(filters(calls, "workspace_members")).toContain(
+      `in("workspace_id"=${JSON.stringify([WS_A])})`
+    );
+  });
+
+  it("🔒 a SHARED credential's lock admits no shelf — it never asks for one", async () => {
+    // Clause 1 refuses before a query is built, so the personal probe is not
+    // issued either: a credential that may be passed between humans points at
+    // nobody's shelf. ⚠ MUTATION CHECK for moving the admission ABOVE clause 1.
+    const calls = makeAdmin({ workspaces: [personalContainer()] });
+    expect(
+      await resolveResource(
+        { ...locked, credentialSubjectUserId: null },
+        "knowledge_base",
+        T1
+      )
+    ).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("does not probe for a shelf when the credential carries NO lock", async () => {
+    // ⚠ The probe is the locked lane's cost alone; an ordinary session already
+    // spans every container it belongs to.
+    const calls = makeAdmin({
+      workspace_members: [member(WS_A)],
+      agent_templates: [],
+    });
+    await resolveResource(caller, "agent_template", T1);
+    expect(calls.some((c) => c.table === "workspaces")).toBe(false);
   });
 });
 
