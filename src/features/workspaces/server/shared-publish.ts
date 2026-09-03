@@ -6,8 +6,9 @@ import { countActiveMembers } from "./repository-overview";
  * 🔒 **PUBLISHING INTO A PEER'S ROOM IS A SERVER PRECONDITION, NOT A DIALOG**
  * (G16; `docs/specs/mcp-v2-architecture.md` A11).
  *
- * THE GAP THIS CLOSES. "This shares a copy into this channel — everyone here
- * will see it" (`apps/desktop-ui/src/pages/home/agent-copy.tsx › describe`) and
+ * THE GAP THIS CLOSES. "…everyone here will see it" — the /home confirm step,
+ * now `apps/desktop-ui/src/pages/home/agent-share.tsx › describe` (it was the
+ * copy dialog's until B15 replaced the copy with a grant) — and
  * the MCP confirm-token preview (`packages/mcp-server/src/tools/
  * confirm-token.ts`) were the ONLY things standing between a caller and a row
  * published into a `kind='link'` container a second person is standing in. Both

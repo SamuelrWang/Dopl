@@ -35,10 +35,10 @@ import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
  *     `[]` for both "nothing starred" and a degraded read — an unreadable star means an unstarred
  *     card, never a missing one.
  *   - `homeScopedBaseIds` (2026-08-28): which of the listed bases sit on the caller's PERSONAL
- *     (/home) shelf. 🔒 A SIBLING KEY PRECISELY BECAUSE `home_scoped` MUST NOT BE PROJECTED ONTO
- *     THE ROW — the column stays out of `server/dto.ts › KNOWLEDGE_BASE_COLS` so no client can
- *     re-implement the shelf FENCE, and out of the SDK-mirrored `KnowledgeBase` so
- *     `check-knowledge-type-drift` has nothing new to compare. `[]` for both "none on the personal
+ *     (/home) shelf. 🔒 A SIBLING KEY, AND IT SURVIVED THE COLUMN IT WAS NAMED FOR: since
+ *     2026-09-02 (slice B15) the shelf is a TENANCY — the caller's own `kind='personal'` container —
+ *     so the question is "is this row in my container" and there is no flag to project. The key
+ *     shape and the `?? []` rule are unchanged. `[]` for both "none on the personal
  *     shelf" and a degraded read: an unreadable flag means an UNLABELLED card, never a mislabelled
  *     one — and never a card that vanishes.
  *     ⚠ Only ever a SUBSET of the ids in `bases`, so a consumer can index straight into the list.

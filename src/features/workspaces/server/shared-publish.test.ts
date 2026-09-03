@@ -65,7 +65,6 @@ vi.mock("@/features/knowledge/server/repository", () => ({
 }));
 vi.mock("@/features/knowledge/server/service-base-gates", () => ({
   assertCreatorCanReadItBack: vi.fn().mockResolvedValue(undefined),
-  resolveHomeScope: vi.fn().mockResolvedValue(false),
 }));
 vi.mock("@/features/knowledge/server/service-shared", () => ({
   assertAgentCanDelete: vi.fn(),

@@ -1,12 +1,14 @@
 /**
  * 🔒 THE TWO SHELVES, FOR TEMPLATES — Samuel's ruling 2026-08-27 (converge the
- * Agents face on the Knowledge one), schema
- * `20260901120000_agent_template_home_scoped.sql`.
+ * Agents face on the Knowledge one). ⚠ **A TENANCY SINCE 2026-09-02 (slice B15,
+ * ruling B10)**: `20260901120000`'s column is dropped by
+ * `20260923120000_drop_home_scoped.sql`, and the personal shelf is the caller's
+ * own `kind='personal'` container.
  *
- * The sibling of `features/knowledge/server/service-shelf.test.ts`, and the
- * same four properties: the shelf reaches the QUERY (not a post-filter);
- * absent means BOTH; and the create fence's three conditions each refuse
- * separately.
+ * The sibling of `features/knowledge/server/service-shelf.test.ts`: the shelf
+ * reaches the QUERY (not a post-filter) and absent means BOTH.
+ * ⚠ **THE CREATE FENCE'S THREE CONDITIONS LEFT ON 2026-09-02 (slice B15)** with
+ * `resolveTemplateHomeScope` and the column — see the write block below.
  *
  * 🔒 ⚠ THE ORTHOGONALITY PIN IS THE ONE THAT IS NEW HERE. `canSeeTemplate`'s
  * arm 2 (`isSharedCredential`, F-333/F-336) and this column answer DIFFERENT
@@ -36,21 +38,13 @@ vi.mock("./repository", () => ({
   listKnowledgeLinksForTemplates: vi.fn(),
 }));
 
-vi.mock("@/features/workspaces/server/repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn(),
-}));
-
 import * as repo from "./repository";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
 import { listTemplates } from "./service-reads";
 import { createTemplate } from "./service-writes";
-import { TemplateHomeScopeForbiddenError } from "./errors";
 
 const mockRepo = vi.mocked(repo);
-const mockDefaultWorkspace = vi.mocked(findDefaultWorkspaceForUser);
 
 const HOME_WS = "ws-home";
-const OTHER_WS = "ws-other";
 const USER = "u-operator";
 
 /** A signed-in person in their own default standard workspace. */
@@ -97,7 +91,6 @@ beforeEach(() => {
   mockRepo.findTemplateById.mockImplementation((_ws, id) =>
     Promise.resolve(tpl({ id })) as never
   );
-  mockDefaultWorkspace.mockResolvedValue({ id: HOME_WS } as never);
   mockRepo.insertTemplate.mockImplementation(
     (args) => Promise.resolve(tpl({ name: args.name, visibility: args.visibility })) as never
   );
@@ -152,67 +145,30 @@ describe("listing one shelf", () => {
   });
 });
 
-describe("creating onto the home shelf", () => {
-  it("marks the row when a person creates a PRIVATE template in their own home workspace", async () => {
+describe("creating onto the personal shelf", () => {
+  // ⚠ **FIVE CASES BECAME TWO ON 2026-09-02 (slice B15)** — the twin of the trim
+  // in `knowledge/server/service-shelf.test.ts`, and for once the two files
+  // agreeing is the assertion rather than the risk. `resolveTemplateHomeScope`
+  // is deleted; the one surviving condition is pinned against BOTH tables at
+  // once in `shared/tenancy/personal-shelf-repositories.test.ts`.
+  //
+  // ⚠ **THE `private`-IS-TERMINAL CASE IS GONE AND ITS ARGUMENT IS WORTH
+  // KEEPING**: a template had no grant table and one consumer per row, so
+  // `private` was the entire audience statement, where a KB's `private` was a
+  // floor. Both stopped mattering when the shelf became a container with exactly
+  // one member — and a template HAS a grant table now (`resource_grants` at
+  // `resource_type='agent_template'`, B1), which is what `op="grant"` lends.
+
+  it("passes the caller's own flag straight through, unchanged", async () => {
     await createTemplate(personCtx(), { name: "Shelf agent", homeScoped: true });
     expect(mockRepo.insertTemplate).toHaveBeenCalledWith(
       expect.objectContaining({ homeScoped: true, visibility: "private" })
     );
   });
 
-  it("leaves the row UNMARKED when nobody asked — every pre-existing caller", async () => {
+  it("passes NOTHING through when nobody asked — every pre-existing caller", async () => {
     await createTemplate(personCtx(), { name: "Ordinary" });
-    expect(mockRepo.insertTemplate).toHaveBeenCalledWith(
-      expect.objectContaining({ homeScoped: false })
-    );
-  });
-
-  it("REFUSES when the target is not the caller's own default standard workspace", async () => {
-    // A link CONTAINER fails this, and so does a second workspace the caller
-    // owns. `findDefaultWorkspaceForUser` is the same lookup `POST /api/boot`
-    // runs, so the fence and the /home surface cannot disagree about "home".
-    mockDefaultWorkspace.mockResolvedValue({ id: OTHER_WS } as never);
-
-    await expect(
-      createTemplate(personCtx(), { name: "Elsewhere", homeScoped: true })
-    ).rejects.toBeInstanceOf(TemplateHomeScopeForbiddenError);
-    expect(mockRepo.insertTemplate).not.toHaveBeenCalled();
-  });
-
-  it("REFUSES a `workspace`-visible template on the shelf", async () => {
-    // ⚠ A template has NO grant table and one consumer per row, so `private` is
-    // TERMINAL — it is the entire audience statement, which is what makes it
-    // the right condition for a shelf the UI calls "yours alone". (Knowledge's
-    // equivalent fence treats `private` as a FLOOR, because a KB can still
-    // reach a channel through a grant. Same word, different force.)
-    await expect(
-      createTemplate(personCtx(), {
-        name: "Announcement",
-        visibility: "workspace",
-        homeScoped: true,
-      })
-    ).rejects.toBeInstanceOf(TemplateHomeScopeForbiddenError);
-    expect(mockRepo.insertTemplate).not.toHaveBeenCalled();
-  });
-
-  it("REFUSES a SHARED credential — a workspace key has no personal shelf", async () => {
-    // ⚠ And it is refused on the CREDENTIAL, before the visibility branch above
-    // has any say: `createTemplate` defaults a shared credential to `workspace`,
-    // so a fence that only looked at visibility would refuse it for the wrong
-    // reason and would let a shared credential through the day that default
-    // changed.
-    await expect(
-      createTemplate(
-        personCtx({
-          source: "agent",
-          apiKeyWorkspaceId: HOME_WS,
-          credentialSubjectUserId: null,
-        }),
-        {
-        name: "From a key",
-        homeScoped: true,
-      })
-    ).rejects.toBeInstanceOf(TemplateHomeScopeForbiddenError);
-    expect(mockRepo.insertTemplate).not.toHaveBeenCalled();
+    const args = mockRepo.insertTemplate.mock.calls[0][0];
+    expect(args.homeScoped).toBeUndefined();
   });
 });

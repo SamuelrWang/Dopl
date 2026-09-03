@@ -6,20 +6,25 @@
  * ⚠ ONE FILE FOR TWO FEATURES ON PURPOSE. `knowledge_bases` and
  * `agent_templates` are hand mirrors of each other on the shelf axis — same
  * column, same three functions, same fence — and every previous divergence
- * between them (F-342, the two `resolveHomeScope` copies that disagree about
- * private-terminal vs private-floor) happened because their tests could not see
- * each other. Asserting the pair side by side is what makes a one-sided edit
- * fail.
+ * between them (F-342, and the two `resolveHomeScope` copies that disagreed
+ * about private-terminal vs private-floor — both DELETED in slice B15) happened
+ * because their tests could not see each other. Asserting the pair side by side
+ * is what makes a one-sided edit fail.
+ *
+ * ⚠ **THE SHELF AXIS IS A TENANCY SINCE 2026-09-02 (slice B15)**, so every case
+ * that drove `TENANCY_PERSONAL_CONTAINER` or asserted a `home_scoped` filter is
+ * gone with the flag and the column. What is left is the same pair, asked the
+ * new way: the personal shelf is ONE container, the workspace shelf is the
+ * calling workspace, and the write REFUSES rather than falling back.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 vi.mock("@/shared/supabase/caller-scope", () => ({ getCallerScope: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getCallerScope } from "@/shared/supabase/caller-scope";
-import { TENANCY_PERSONAL_CONTAINER_ENV } from "./personal-container";
 import {
   insertBase,
   listBasesForWorkspace,
@@ -97,7 +102,6 @@ function primeSupabase() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
   containerId = CONTAINER;
   primeSupabase();
   vi.mocked(getCallerScope).mockReturnValue({
@@ -107,96 +111,64 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
-  delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
-});
-
-describe("the personal shelf is addressed by CONTAINER, on both tables", () => {
-  it("flag OFF spans both containers and still asks for `home_scoped`", async () => {
+describe("the personal shelf is ONE container, on both tables", () => {
+  it("reads the caller's container and nothing else, on both tables", async () => {
     await listBasesForWorkspace(WORKSPACE, false, "home");
     await listTemplatesForWorkspace(WORKSPACE, "home");
     for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toEqual([
-        WORKSPACE,
-        CONTAINER,
-      ]);
-      expect(filterFor(table, "home_scoped"), table).toBe(true);
+      expect(filterFor(table, "workspace_id"), table).toEqual([CONTAINER]);
+      // ⚠ MUTATION CHECK ACROSS THE DROP: a surviving `home_scoped` predicate
+      // would 42703 the whole query the day the column goes.
+      expect(
+        rowQueries().some((q) => q.filters.some(([c]) => c === "home_scoped")),
+        `${table} still filters a dropped column`
+      ).toBe(false);
     }
   });
 
-  it("🔒 flag ON asks BOTH too — the flip strands nothing (F-590)", async () => {
-    // ⚠ It used to ask the container and nothing else, which HID every personal
-    // row written in the migrated-but-flag-off window: the one-time move in
-    // `20260920120000` §5 had already run and never runs again. `home_scoped`
-    // survives the move, so one filter over both containers finds all of them.
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    await listBasesForWorkspace(WORKSPACE, false, "home");
-    await listTemplatesForWorkspace(WORKSPACE, "home");
-    for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toEqual([WORKSPACE, CONTAINER]);
-      expect(filterFor(table, "home_scoped"), table).toBe(true);
+  it("the WORKSPACE shelf and an ABSENT shelf are the calling workspace, and ask nothing", async () => {
+    for (const shelf of ["workspace", undefined] as const) {
+      queries = [];
+      primeSupabase();
+      await listBasesForWorkspace(WORKSPACE, false, shelf);
+      await listTemplatesForWorkspace(WORKSPACE, shelf);
+      expect(filterFor("knowledge_bases", "workspace_id")).toEqual([WORKSPACE]);
+      expect(filterFor("agent_templates", "workspace_id")).toEqual([WORKSPACE]);
+      expect(
+        queries.some((q) => q.table === "workspaces"),
+        "a non-personal shelf must not look for a container"
+      ).toBe(false);
     }
-  });
-
-  it("the WORKSPACE shelf does not move in this slice", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    await listBasesForWorkspace(WORKSPACE, false, "workspace");
-    await listTemplatesForWorkspace(WORKSPACE, "workspace");
-    for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toEqual([WORKSPACE]);
-      expect(filterFor(table, "home_scoped"), table).toBe(false);
-    }
-  });
-
-  it("an ABSENT shelf is byte-identical to today: this workspace, no shelf filter", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    await listBasesForWorkspace(WORKSPACE);
-    await listTemplatesForWorkspace(WORKSPACE);
-    for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toEqual([WORKSPACE]);
-      expect(filterFor(table, "home_scoped"), table).toBeUndefined();
-    }
-    expect(queries.some((q) => q.table === "workspaces")).toBe(false);
   });
 });
 
 describe("the LABEL asks what the LIST asked", () => {
-  it("flag ON: the sibling-key fold reads what the list reads, so a listed row is still labelled", async () => {
-    // ⚠ THE BUG THIS CLOSES. `listHomeScoped*Ids` used to hardcode
-    // `workspace_id = <the request's workspace>`; once the rows live in the
-    // container, that filter matches nothing and the `· personal` marker
-    // silently disappears from every row it is supposed to mark. The fold and
-    // the list ask through the SAME `resolveShelfScope`, which is the property
-    // being pinned — not the particular id set it answers with today.
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
+  it("the sibling-key fold reads the same container the list reads", async () => {
     await listHomeScopedBaseIds(WORKSPACE, ["kb-1"]);
-    await listHomeScopedTemplateIds(WORKSPACE, ["tpl-1"]);
+    await listHomeScopedTemplateIds(WORKSPACE, ["t-1"]);
     for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toContain(CONTAINER);
-      expect(filterFor(table, "workspace_id"), table).toEqual([WORKSPACE, CONTAINER]);
-    }
-  });
-
-  it("flag OFF: the fold spans both containers, exactly as the list does", async () => {
-    await listHomeScopedBaseIds(WORKSPACE, ["kb-1"]);
-    await listHomeScopedTemplateIds(WORKSPACE, ["tpl-1"]);
-    for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toEqual([
-        WORKSPACE,
-        CONTAINER,
-      ]);
-      expect(filterFor(table, "home_scoped"), table).toBe(true);
+      expect(filterFor(table, "workspace_id"), table).toEqual([CONTAINER]);
     }
   });
 
   it("an empty id set still costs nothing", async () => {
-    await listHomeScopedBaseIds(WORKSPACE, []);
-    await listHomeScopedTemplateIds(WORKSPACE, []);
+    expect(await listHomeScopedBaseIds(WORKSPACE, [])).toEqual([]);
+    expect(await listHomeScopedTemplateIds(WORKSPACE, [])).toEqual([]);
     expect(queries).toEqual([]);
+  });
+
+  it("🔒 with no container, the fold is EMPTY and asks nothing", async () => {
+    // ⚠ Without the early return this would `.in("workspace_id", [])`, which is
+    // harmless — and the round trip is not. The label is a fold over ids the
+    // caller was already shown; there is nothing to fold against.
+    containerId = null;
+    expect(await listHomeScopedBaseIds(WORKSPACE, ["kb-1"])).toEqual([]);
+    expect(await listHomeScopedTemplateIds(WORKSPACE, ["t-1"])).toEqual([]);
+    expect(rowQueries()).toEqual([]);
   });
 });
 
-describe("the dual-WRITE", () => {
+describe("the personal WRITE", () => {
   const baseArgs = {
     workspaceId: WORKSPACE,
     name: "Notes",
@@ -205,7 +177,7 @@ describe("the dual-WRITE", () => {
   };
   const templateArgs = {
     workspaceId: WORKSPACE,
-    name: "Scout",
+    name: "Researcher",
     description: null,
     instructions: null,
     model: null,
@@ -214,62 +186,53 @@ describe("the dual-WRITE", () => {
     createdBy: USER,
   };
 
-  it("flag ON files a personal row in the container AND keeps `home_scoped`", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    await insertBase({ ...baseArgs, homeScoped: true, visibility: "private" });
+  it("files a personal row in the container, and writes no shelf column", async () => {
+    await insertBase({ ...baseArgs, homeScoped: true });
     await insertTemplate({ ...templateArgs, homeScoped: true });
     for (const table of ["knowledge_bases", "agent_templates"]) {
-      const row = rowQueries().find((q) => q.table === table)?.inserted;
-      // ⚠ BOTH, which is what "dual-write" means: the column still carries the
-      // truth for a flag-off reader while the container carries the address.
-      expect(row?.workspace_id, table).toBe(CONTAINER);
-      expect(row?.home_scoped, table).toBe(true);
-    }
-  });
-
-  it("flag OFF writes exactly where it writes today", async () => {
-    await insertBase({ ...baseArgs, homeScoped: true, visibility: "private" });
-    await insertTemplate({ ...templateArgs, homeScoped: true });
-    for (const table of ["knowledge_bases", "agent_templates"]) {
-      const row = rowQueries().find((q) => q.table === table)?.inserted;
-      expect(row?.workspace_id, table).toBe(WORKSPACE);
-      expect(row?.home_scoped, table).toBe(true);
+      const row = rowQueries().find((q) => q.table === table)?.inserted ?? {};
+      expect(row.workspace_id, table).toBe(CONTAINER);
+      // 🔒 MUTATION CHECK: the flag routes the row and nothing stores it.
+      expect("home_scoped" in row, `${table} still writes a dropped column`).toBe(
+        false
+      );
     }
   });
 
   it("a WORKSPACE-shelf insert is untouched, and asks no container question", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
     await insertBase(baseArgs);
     await insertTemplate(templateArgs);
     for (const table of ["knowledge_bases", "agent_templates"]) {
-      const row = rowQueries().find((q) => q.table === table)?.inserted;
-      expect(row?.workspace_id, table).toBe(WORKSPACE);
-      expect(row?.home_scoped, table).toBe(false);
+      expect(
+        rowQueries().find((q) => q.table === table)?.inserted?.workspace_id,
+        table
+      ).toBe(WORKSPACE);
     }
     expect(queries.some((q) => q.table === "workspaces")).toBe(false);
   });
 
-  it("🔒 what the flag ON wrote, the flag OFF still finds", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    await insertBase({ ...baseArgs, homeScoped: true, visibility: "private" });
-    const wrote = rowQueries()[0].inserted?.workspace_id;
+  it("🔒 REFUSES on both tables when there is no container, rather than landing in the workspace", async () => {
+    // ⚠ THE PAIR IS THE POINT: a one-sided fallback is exactly the divergence
+    // this file exists to catch, and it is invisible from either feature alone.
+    containerId = null;
+    await expect(insertBase({ ...baseArgs, homeScoped: true })).rejects.toMatchObject(
+      { code: "PERSONAL_CONTAINER_MISSING" }
+    );
+    await expect(
+      insertTemplate({ ...templateArgs, homeScoped: true })
+    ).rejects.toMatchObject({ code: "PERSONAL_CONTAINER_MISSING" });
+    expect(
+      rowQueries(),
+      "nothing may be inserted before the refusal"
+    ).toEqual([]);
+  });
 
-    delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
+  it("🔒 what the write lands in, the list looks in", async () => {
+    await insertBase({ ...baseArgs, homeScoped: true });
+    const wrote = rowQueries()[0]?.inserted?.workspace_id;
+    queries = [];
     primeSupabase();
     await listBasesForWorkspace(WORKSPACE, false, "home");
-    expect(filterFor("knowledge_bases", "workspace_id")).toContain(wrote);
-  });
-});
-
-describe("before the migration, nothing moves", () => {
-  it("with no container minted, every path is today's path", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    containerId = null;
-    await listBasesForWorkspace(WORKSPACE, false, "home");
-    await listTemplatesForWorkspace(WORKSPACE, "home");
-    for (const table of ["knowledge_bases", "agent_templates"]) {
-      expect(filterFor(table, "workspace_id"), table).toEqual([WORKSPACE]);
-      expect(filterFor(table, "home_scoped"), table).toBe(true);
-    }
+    expect(filterFor("knowledge_bases", "workspace_id")).toEqual([wrote]);
   });
 });

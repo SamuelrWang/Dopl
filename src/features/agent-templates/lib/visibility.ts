@@ -91,9 +91,9 @@ export const SECTIONS_CONTAINER: ReadonlyArray<TemplateSectionDef> = [
  * the word above a section and the value in a column are different things and
  * must not be conflated in a predicate or a grep.
  *
- * ⚠ ITS ROWS ARE ALSO `home_scoped` — the visibility field here is the audience
- * axis, and the SHELF axis is a server filter the client never sees
- * (`../types.ts › TemplateShelf`).
+ * ⚠ ITS ROWS ALSO LIVE IN THE CALLER'S PERSONAL CONTAINER — the visibility field
+ * here is the AUDIENCE axis, and the SHELF axis is a tenancy the client never
+ * sees on a row (`../types.ts › TemplateShelf`).
  */
 export const SECTION_PRIVATE_EVERYWHERE: TemplateSectionDef = {
   visibility: "private",

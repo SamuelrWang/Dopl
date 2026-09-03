@@ -48,12 +48,10 @@ import {
  * omits it means the whole workspace: the launch picker, `resolveTemplateRef`,
  * and MCP all ride the unfiltered path.
  *
- * ⚠ `home_scoped` IS FILTERED ON BUT NEVER SELECTED — it is absent from
- * `AGENT_TEMPLATE_COLS` on purpose (`../types.ts › TemplateShelf` holds the
- * argument). Postgres does not require a column to be projected to filter on it.
- *
- * ⚠ WHICH CONTAINER `shelf="home"` MEANS IS DECIDED BY
- * `shared/tenancy/personal-container.ts › resolveShelfScope` (B11), not here.
+ * ⚠ **THE SHELF IS A TENANCY, NOT A `WHERE` (2026-09-02, slice B15)** — the
+ * sibling of `knowledge/server/repository-bases.ts › listBasesForWorkspace`,
+ * which carries the argument. `shelf="home"` is the caller's PERSONAL CONTAINER,
+ * decided by `shared/tenancy/personal-container.ts › resolveShelfScope`.
  */
 export async function listTemplatesForWorkspace(
   workspaceId: string,
@@ -61,7 +59,7 @@ export async function listTemplatesForWorkspace(
 ): Promise<AgentTemplate[]> {
   const db = readClient();
   const scope = await resolveShelfScope(workspaceId, shelf);
-  let query = db
+  const { data, error } = await db
     .from("agent_templates")
     .select(AGENT_TEMPLATE_COLS)
     .in("workspace_id", scope.workspaceIds)
@@ -69,10 +67,6 @@ export async function listTemplatesForWorkspace(
     // order: the client groups by visibility and renders alphabetically inside
     // each group, so the server hands back the order it will display in.
     .order("name", { ascending: true });
-  if (scope.homeScoped !== undefined) {
-    query = query.eq("home_scoped", scope.homeScoped);
-  }
-  const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as unknown as AgentTemplateRow[]).map((r) =>
     mapAgentTemplateRow(r)
@@ -80,39 +74,33 @@ export async function listTemplatesForWorkspace(
 }
 
 /**
- * WHICH of `templateIds` live on the /home SHELF — the fold behind
+ * WHICH of `templateIds` are on the caller's PERSONAL shelf — the fold behind
  * `GET /api/agent-templates › homeScopedTemplateIds` (2026-08-28).
  *
- * 🔒 ⚠ **IT SELECTS `home_scoped` AND NOTHING ELSE.** The column stays out of
- * `AGENT_TEMPLATE_COLS` on purpose (`../types.ts › TemplateShelf`); this returns
- * a set of ids the caller was ALREADY shown, labelled — not a new column on the
- * row. ⚠ THIS WAS "THE ONLY PLACE THE COLUMN IS SELECTED" UNTIL 2026-09-01;
- * `shared/tenancy/resolve-resource.ts › ResolvedResource` is the second and
- * last, and it keeps the same bargain — the boolean becomes a tenancy LABEL and
- * never reaches a DTO.
+ * ⚠ **A TENANCY QUESTION SINCE 2026-09-02 (slice B15).** It selected the
+ * `home_scoped` flag; the column is dropped and the question is "is this row in
+ * my personal container". The answer set and the sibling key are unchanged — ids
+ * the caller was ALREADY shown, labelled, never a new column on the row.
  *
  * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. This applies no `canSeeTemplate`
  * of its own; the id set IS the fence, the same contract
  * `knowledge/server/repository-bases.ts › listHomeScopedBaseIds` keeps.
+ *
+ * ⚠ THE SAME RESOLVER THE LIST USES: a second spelling of "is this row personal"
+ * is how a label comes to disagree with the list it labels.
  */
 export async function listHomeScopedTemplateIds(
   workspaceId: string,
   templateIds: string[]
 ): Promise<string[]> {
   if (templateIds.length === 0) return [];
-  const db = readClient();
-  // ⚠ THE SAME RESOLVER THE LIST USES: a second spelling of "is this row
-  // personal" is how a label comes to disagree with the list it labels.
   const scope = await resolveShelfScope(workspaceId, "home");
-  let query = db
+  if (scope.workspaceIds.length === 0) return [];
+  const { data, error } = await readClient()
     .from("agent_templates")
     .select("id")
     .in("workspace_id", scope.workspaceIds)
     .in("id", templateIds);
-  if (scope.homeScoped !== undefined) {
-    query = query.eq("home_scoped", scope.homeScoped);
-  }
-  const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as unknown as Array<{ id: string }>).map((r) => r.id);
 }
@@ -143,17 +131,18 @@ export interface InsertTemplateArgs {
   fields: TemplateField[];
   visibility: TemplateVisibility;
   /**
-   * WHICH SHELF (`../types.ts › TemplateShelf`). `false` if omitted, matching
-   * the DB column default, so every existing caller lands on the WORKSPACE
-   * shelf without naming it. ⚠ Only `createTemplate` ever passes `true`, and
-   * only behind its three-part fence.
+   * WHICH SHELF (`../types.ts › TemplateShelf`). ⚠ **A ROUTING FLAG, NOT A
+   * COLUMN, SINCE 2026-09-02 (slice B15)** — it decides the row's `workspace_id`
+   * and nothing stores it. Absent = the container the call is in, so every
+   * existing caller is unchanged; only `createTemplate` ever passes `true`.
    */
   homeScoped?: boolean;
   createdBy: string | null;
 }
 
 /**
- * ⚠ THE DUAL-WRITE (B11), the sibling of `repository-bases.ts › insertBase`.
+ * 🔒 THE PERSONAL WRITE LANDS IN THE CONTAINER OR IT REFUSES (B15) — the sibling
+ * of `repository-bases.ts › insertBase`, which carries the argument.
  * ⚠ Resolved BEFORE the chain, never inline in the insert literal — an `await`
  * between `.from()` and `.insert()` interleaves a second query into the builder.
  */
@@ -172,7 +161,6 @@ export async function insertTemplate(
       model: args.model,
       fields: args.fields,
       visibility: args.visibility,
-      home_scoped: args.homeScoped ?? false,
       created_by: args.createdBy,
     })
     .select(AGENT_TEMPLATE_COLS)

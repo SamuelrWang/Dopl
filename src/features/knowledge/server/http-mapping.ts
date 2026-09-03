@@ -13,7 +13,6 @@ import {
   KnowledgeBaseSlugConflictError,
   KnowledgePathConflictError,
   KnowledgeStaleVersionError,
-  HomeScopeForbiddenError,
   PathTraversalError,
   ScopeChangeForbiddenError,
   TeamScopeForbiddenError,
@@ -58,9 +57,6 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   }
   if (err instanceof WorkspaceKeyPrivateVisibilityError) {
     return new HttpError(403, "WORKSPACE_KEY_PRIVATE_VISIBILITY", err.message);
-  }
-  if (err instanceof HomeScopeForbiddenError) {
-    return new HttpError(403, "HOME_SCOPE_FORBIDDEN", err.message);
   }
   if (err instanceof TeamScopeForbiddenError) {
     return new HttpError(403, "TEAM_SCOPE_FORBIDDEN", err.message);

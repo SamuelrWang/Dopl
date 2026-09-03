@@ -71,27 +71,6 @@ export class TemplateWriteForbiddenError extends Error {
 }
 
 /**
- * A create asked for the /home SHELF (`homeScoped: true`) without standing
- * where that shelf is. → 403.
- *
- * 🔒 REFUSE, NEVER DOWNGRADE — the sibling of
- * `features/knowledge/server/errors.ts › HomeScopeForbiddenError`, and for the
- * same reason: quietly creating on the other shelf produces a template the
- * surface that created it cannot find, with no error anywhere.
- *
- * ⚠ The `reason` names a property of the REQUEST (not private, not the home
- * workspace, shared credential) and never the id or name of a workspace the
- * caller may not know about.
- */
-export class TemplateHomeScopeForbiddenError extends Error {
-  readonly code = "TEMPLATE_HOME_SCOPE_FORBIDDEN";
-  constructor(reason: string) {
-    super(`This agent cannot be created on your home shelf — ${reason}.`);
-    this.name = "TemplateHomeScopeForbiddenError";
-  }
-}
-
-/**
  * Workspace-scoped API key tried to create or own a private template. Mirrors
  * `WorkspaceKeyPrivateSkillError` — such a key may be shared between humans, so
  * it must not be able to mint content only "it" can see.

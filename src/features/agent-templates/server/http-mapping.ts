@@ -6,7 +6,6 @@ import {
   TemplateKnowledgeBaseNotFoundError,
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
-  TemplateHomeScopeForbiddenError,
   TemplateTeamScopeAgentForbiddenError,
   WorkspaceKeyPrivateTemplateError,
 } from "./errors";
@@ -41,9 +40,6 @@ export function mapAgentTemplateError(err: unknown): HttpError | null {
   }
   if (err instanceof WorkspaceKeyPrivateTemplateError) {
     return new HttpError(403, "WORKSPACE_KEY_PRIVATE_VISIBILITY", err.message);
-  }
-  if (err instanceof TemplateHomeScopeForbiddenError) {
-    return new HttpError(403, "TEMPLATE_HOME_SCOPE_FORBIDDEN", err.message);
   }
   if (err instanceof TemplateTeamScopeAgentForbiddenError) {
     return new HttpError(403, "TEMPLATE_TEAM_SCOPE_AGENT_FORBIDDEN", err.message);

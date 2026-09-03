@@ -83,8 +83,8 @@ export async function resolveTemplateForDirective(
       // `visibility: 'workspace'`, while a container SESSION carries its
       // operator's id and sees what the operator sees. Dropping the subject
       // line puts `AGENT_TEMPLATE_NOT_FOUND` on every private template a
-      // session names — including every "Use in this channel" copy, which
-      // `containerCopyDraft` forces to `private` (F-333).
+      // session names — which is every template on the operator's personal
+      // shelf (F-333).
       apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
       credentialSubjectUserId: ctx.credentialSubjectUserId,
     },

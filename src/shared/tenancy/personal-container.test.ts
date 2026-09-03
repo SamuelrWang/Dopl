@@ -1,20 +1,22 @@
 /**
- * THE PERSONAL CONTAINER'S 2x2, pinned in both directions.
+ * THE PERSONAL CONTAINER'S FENCE AND ITS ONE READ, pinned in both directions.
  *
- * The migration and the deploy move independently, so all four combinations of
- * (containers minted?) x (`TENANCY_PERSONAL_CONTAINER` on?) are real states a
- * production request lands in. What is asserted here is the property that makes
- * them safe: **every combination reads back every row the others wrote**, and
- * turning the flag OFF is a rollback rather than a data loss — which is the
- * whole of "rollback fails closed, never open".
+ * ⚠ **THIS FILE WAS THE 2x2 UNTIL 2026-09-02 (slice B15).** It drove all four
+ * combinations of (containers minted?) x (`TENANCY_PERSONAL_CONTAINER` on?) and
+ * the union read that made every one of them safe. **`home_scoped` was what made
+ * the union possible AND what made it necessary** — every personal row carried
+ * the boolean wherever it lived — and `20260923120000_drop_home_scoped.sql`
+ * removes it. There is one place a personal row can be now, so the flag, the
+ * union and every fallback are gone, and what replaces the 2x2 is a MIGRATION
+ * PRECONDITION stated in that file's header (P2) rather than a runtime branch.
  *
- * ⚠ THE INTERESTING CASE IS THE FLAG-OFF READ, NOT THE FLAG-ON ONE. Flag on is
- * the target model and is easy; flag off has to span TWO containers, and a test
- * that only drove the happy direction would pass on a resolver that stranded
- * every row written during the flag's ON window.
+ * ⚠ **THE INTERESTING CASE IS THE MISSING CONTAINER, and it changed direction.**
+ * Every old fallback answered `[workspaceId]`; each of those now writes or reads
+ * the SHARED shelf under a request for the personal one, with no marker left to
+ * tell them apart. The read fails to EMPTY and the write REFUSES.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 vi.mock("@/shared/supabase/caller-scope", () => ({ getCallerScope: vi.fn() }));
@@ -22,9 +24,8 @@ vi.mock("@/shared/supabase/caller-scope", () => ({ getCallerScope: vi.fn() }));
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getCallerScope } from "@/shared/supabase/caller-scope";
 import {
-  TENANCY_PERSONAL_CONTAINER_ENV,
+  PersonalContainerMissingError,
   findPersonalContainerId,
-  personalContainerWritesEnabled,
   personalWriteWorkspaceId,
   resolveShelfScope,
 } from "./personal-container";
@@ -67,32 +68,8 @@ function callerIs(userId: string | null, sharedCredential = false) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
   primeContainer(CONTAINER);
   callerIs(USER);
-});
-
-afterEach(() => {
-  delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
-});
-
-describe("the flag", () => {
-  it("is off unless it is an explicit spelling of on", () => {
-    const on = ["1", "true", "on", "TRUE", " On "];
-    const off = [undefined, "", "0", "false", "yes", "off", "enabled"];
-    for (const v of on) {
-      expect(
-        personalContainerWritesEnabled({ [TENANCY_PERSONAL_CONTAINER_ENV]: v }),
-        `${v} should read as ON`
-      ).toBe(true);
-    }
-    for (const v of off) {
-      expect(
-        personalContainerWritesEnabled({ [TENANCY_PERSONAL_CONTAINER_ENV]: v }),
-        `${String(v)} should read as OFF`
-      ).toBe(false);
-    }
-  });
 });
 
 describe("findPersonalContainerId", () => {
@@ -114,136 +91,65 @@ describe("findPersonalContainerId", () => {
   });
 });
 
-describe("resolveShelfScope — the 2x2", () => {
-  it("an ABSENT shelf is unchanged in both flag states: this workspace, no shelf filter", async () => {
-    for (const flag of [undefined, "1"]) {
-      if (flag) process.env[TENANCY_PERSONAL_CONTAINER_ENV] = flag;
-      else delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
-      expect(await resolveShelfScope(WORKSPACE, undefined)).toEqual({
+describe("resolveShelfScope — one container, or none", () => {
+  it("every NON-personal shelf is this workspace, and costs no round trip", async () => {
+    // ⚠ ABSENT and "workspace" are the same SCOPE and stay two spellings: they
+    // are two questions, and a third shelf would separate them again.
+    for (const shelf of [undefined, "workspace"] as const) {
+      expect(await resolveShelfScope(WORKSPACE, shelf)).toEqual({
         workspaceIds: [WORKSPACE],
-        homeScoped: undefined,
       });
     }
+    expect(tables, "neither may ask for a container").toEqual([]);
   });
 
-  it("the WORKSPACE shelf is unchanged in both flag states, and keeps excluding personal rows", async () => {
-    // ⚠ The `home_scoped = false` predicate is redundant ONCE every row has
-    // moved and load-bearing until then: a row the migration has not reached
-    // must not surface on the shared shelf because a flag went on.
-    for (const flag of [undefined, "1"]) {
-      if (flag) process.env[TENANCY_PERSONAL_CONTAINER_ENV] = flag;
-      else delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
-      expect(await resolveShelfScope(WORKSPACE, "workspace")).toEqual({
-        workspaceIds: [WORKSPACE],
-        homeScoped: false,
-      });
-    }
+  it("the PERSONAL shelf is the caller's container and nothing else", async () => {
+    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
+      workspaceIds: [CONTAINER],
+    });
+    expect(filters).toEqual([
+      ["owner_id", USER],
+      ["kind", "personal"],
+    ]);
   });
 
-  it("flag OFF, no container minted: exactly today's read", async () => {
+  it("🔒 FAILS TO EMPTY with no container, never back to the calling workspace", async () => {
+    // ⚠ THE DIRECTION THAT CHANGED (B15). Every arm of the old 2x2 fell back to
+    // `[workspaceId]`, which was safe only because `home_scoped` was still there
+    // to narrow it. Without the column that fallback answers a request for the
+    // PERSONAL shelf with the SHARED workspace's rows — the widening direction,
+    // and silent.
     primeContainer(null);
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [WORKSPACE],
-      homeScoped: true,
+      workspaceIds: [],
     });
   });
 
-  it("flag OFF, container minted: reads BOTH, so a row written under the flag is never stranded", async () => {
-    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [WORKSPACE, CONTAINER],
-      homeScoped: true,
-    });
-  });
-
-  it("🔒 flag ON reads the SAME UNION — the flip strands nothing (F-590)", async () => {
-    // ⚠ THE WINDOW THIS EXISTS FOR: the migration mints containers and the flag
-    // flips later, so between the two every new personal row lands in `W` — and
-    // `20260920120000` §5's one-time move has already run and never runs again.
-    // An ON read of `C` alone HID all of them: no error, no log, a shelf that
-    // silently lost the window's work. `home_scoped` is not cleared by the move,
-    // so one predicate over both containers finds every personal row.
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [WORKSPACE, CONTAINER],
-      homeScoped: true,
-    });
-  });
-
-  it("🔒 OFF→ON: what the flag OFF wrote, the flag ON still reads (F-590)", async () => {
-    // The other direction of the rollback property this module already pins,
-    // and the one that was false. Driven, not argued.
-    delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
-    const wrote = await personalWriteWorkspaceId({
-      workspaceId: WORKSPACE,
-      createdBy: USER,
-      homeScoped: true,
-    });
-    expect(wrote).toBe(WORKSPACE);
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    const scope = await resolveShelfScope(WORKSPACE, "home");
-    expect(scope.workspaceIds).toContain(wrote);
-    // …and the row is still `home_scoped`, which is why one filter serves both.
-    expect(scope.homeScoped).toBe(true);
-  });
-
-  it("flag ON with no container minted falls back to today rather than reading nothing", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    primeContainer(null);
-    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [WORKSPACE],
-      homeScoped: true,
-    });
-  });
-
-  it("🔒 a SHARED credential has no personal shelf, so it never reaches a container", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
+  it("🔒 a SHARED credential has no personal shelf, and does not even ask", async () => {
     callerIs(USER, true);
-    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [WORKSPACE],
-      homeScoped: true,
-    });
-    expect(tables, "a shared credential must not even ask").toEqual([]);
-  });
-
-  it("outside a request there is no caller, and the read stays on today's path", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    callerIs(null);
-    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [WORKSPACE],
-      homeScoped: true,
-    });
+    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({ workspaceIds: [] });
     expect(tables).toEqual([]);
   });
 
-  it("neither non-personal shelf costs a round trip", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    await resolveShelfScope(WORKSPACE, undefined);
-    await resolveShelfScope(WORKSPACE, "workspace");
+  it("outside a request there is no caller, and no personal shelf either", async () => {
+    callerIs(null);
+    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({ workspaceIds: [] });
     expect(tables).toEqual([]);
   });
 });
 
-describe("personalWriteWorkspaceId — the dual-write's other half", () => {
+describe("personalWriteWorkspaceId — refuse, never downgrade", () => {
   const base = { workspaceId: WORKSPACE, createdBy: USER };
 
-  it("leaves a WORKSPACE-shelf insert alone, flag or no flag", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
+  it("leaves a WORKSPACE-shelf insert alone, and does not ask", async () => {
     expect(await personalWriteWorkspaceId(base)).toBe(WORKSPACE);
     expect(await personalWriteWorkspaceId({ ...base, homeScoped: false })).toBe(
-      WORKSPACE
-    );
-    expect(tables, "a workspace-shelf insert must not ask").toEqual([]);
-  });
-
-  it("flag OFF writes exactly where it writes today", async () => {
-    expect(await personalWriteWorkspaceId({ ...base, homeScoped: true })).toBe(
       WORKSPACE
     );
     expect(tables).toEqual([]);
   });
 
-  it("flag ON files a personal row in the AUTHOR's container", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
+  it("files a personal row in the AUTHOR's container", async () => {
     expect(await personalWriteWorkspaceId({ ...base, homeScoped: true })).toBe(
       CONTAINER
     );
@@ -255,25 +161,29 @@ describe("personalWriteWorkspaceId — the dual-write's other half", () => {
     ]);
   });
 
-  it("flag ON with an unknown author, or no container yet, falls back rather than guessing", async () => {
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
-    expect(
-      await personalWriteWorkspaceId({ ...base, homeScoped: true, createdBy: null })
-    ).toBe(WORKSPACE);
+  it("🔒 REFUSES rather than falling back, on both missing halves", async () => {
+    // ⚠ **THE OLD BEHAVIOUR WAS TO FALL BACK, AND IT WAS RIGHT THEN.** The row
+    // still carried `home_scoped = true`, so the shelf could find it wherever it
+    // landed. With the column dropped a fallback writes a row that is on the
+    // SHARED shelf and listed nowhere the operator asked — so the fence is the
+    // refusal, and it is the only condition of the two deleted `resolveHomeScope`
+    // copies that survives.
+    await expect(
+      personalWriteWorkspaceId({ ...base, homeScoped: true, createdBy: null })
+    ).rejects.toBeInstanceOf(PersonalContainerMissingError);
     primeContainer(null);
-    expect(await personalWriteWorkspaceId({ ...base, homeScoped: true })).toBe(
-      WORKSPACE
-    );
+    await expect(
+      personalWriteWorkspaceId({ ...base, homeScoped: true })
+    ).rejects.toMatchObject({ status: 403, code: "PERSONAL_CONTAINER_MISSING" });
   });
 
-  it("🔒 what the flag ON writes, the flag OFF still reads", async () => {
-    // The rollback property, driven rather than argued: write under ON, read
-    // under OFF, and the row's container is still in the answer.
-    process.env[TENANCY_PERSONAL_CONTAINER_ENV] = "1";
+  it("🔒 what the write lands in, the read looks in", async () => {
+    // The round trip, driven rather than argued — the surviving half of the
+    // rollback property the 2x2 existed to hold.
     const wrote = await personalWriteWorkspaceId({ ...base, homeScoped: true });
-    delete process.env[TENANCY_PERSONAL_CONTAINER_ENV];
-    const scope = await resolveShelfScope(WORKSPACE, "home");
-    expect(scope.workspaceIds).toContain(wrote);
+    expect((await resolveShelfScope(WORKSPACE, "home")).workspaceIds).toEqual([
+      wrote,
+    ]);
   });
 });
 

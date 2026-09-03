@@ -104,9 +104,12 @@ const CALLERS = {
    * row this grid was missing, and the reason arm 2 could not stay keyed on the
    * lock. It carries the SAME `apiKeyWorkspaceId` as `workspaceKey` above and
    * the OPPOSITE answer on every private row, because it is one human's session
-   * rather than a credential shared between humans. Everything
-   * `containerCopyDraft` makes is `private`, so without this row every "Use in
-   * this channel" copy is invisible to the agent it was made for.
+   * rather than a credential shared between humans. Every PERSONAL template is
+   * `private`, so without this row the operator's own agents cannot see the
+   * identities the operator authored for them. ⚠ **THE ORIGINAL CASE WAS THE
+   * "Use in this channel" COPY, WHICH IS DELETED (2026-09-02, B15)** — the arm
+   * it forced is unchanged and now covers every personal row instead of one
+   * gesture's output.
    */
   containerSession: {
     c: ctx({
