@@ -35,7 +35,7 @@
  * interchangeable.
  *
  * ⚠ AND IT DOES NOT TOUCH THE WAKE SURFACES. `channel-framing.ts ›
- * UNTRUSTED_BODY_HEADER` still fronts the two await lanes, the account read and
+ * UNTRUSTED_BODY_HEADER` still fronts the two hold lanes, the account read and
  * the ping inbox — **F-407's ruling stands**, and the reason it is not fenced
  * instead is that a wake surface interleaves MANY short bodies from many
  * authors with this server's own narration, where one fence per body is noise

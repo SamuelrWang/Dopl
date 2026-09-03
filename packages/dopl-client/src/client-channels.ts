@@ -47,8 +47,6 @@ import type {
   AgentDirectionCreateInput,
   AgentDirectionCreated,
 } from "./direction-types.js";
-import type {
-} from "./ping-types.js";
 
 export class ChannelMethods extends MemberMethods {
   listChannels(opts?: { includeArchived?: boolean }): Promise<Channel[]> {

@@ -1,5 +1,5 @@
 /**
- * `AWAIT_UNNAMED_NOTICE` — the third claim of `channel-addressing-rule.test.ts`,
+ * `HOLD_UNNAMED_NOTICE` — the third claim of `channel-addressing-rule.test.ts`,
  * split out here on 2026-09-02 at the §1 500-line cap (that file measured 504
  * once the op-collapse migration annotated its cases; INVARIANTS §1: a file at
  * the cap cannot absorb a comment, so the correction is a split).
@@ -18,8 +18,8 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { AWAIT_UNNAMED_NOTICE } from "./channel-addressing";
-import { opAwait } from "./channel-ops-await";
+import { HOLD_UNNAMED_NOTICE } from "./channel-addressing";
+import { opHold } from "./channel-ops-hold";
 
 const ME = "u-me";
 const PEER = "u-peer";
@@ -31,26 +31,26 @@ const CHANNEL = {
   visibility: "private",
 };
 
-describe("AWAIT_UNNAMED_NOTICE — a wake that names nobody", () => {
+describe("HOLD_UNNAMED_NOTICE — a wake that names nobody", () => {
   it("does not tell a waiting agent that its own answer belongs to someone else", () => {
     // ⚠ `postResult` posts a responder's reply with no `toUserId` and
     // `deliveryCall` teaches the delivery call with no `to`, so "nothing here
     // is addressed to you" cannot narrow to "none of this is yours".
-    expect(AWAIT_UNNAMED_NOTICE).toContain("a reply here is normally posted UNADDRESSED");
-    expect(AWAIT_UNNAMED_NOTICE).toContain("that is your reply");
-    expect(AWAIT_UNNAMED_NOTICE).not.toContain("Do not answer them");
-    expect(AWAIT_UNNAMED_NOTICE).not.toContain("they are context.");
+    expect(HOLD_UNNAMED_NOTICE).toContain("a reply here is normally posted UNADDRESSED");
+    expect(HOLD_UNNAMED_NOTICE).toContain("that is your reply");
+    expect(HOLD_UNNAMED_NOTICE).not.toContain("Do not answer them");
+    expect(HOLD_UNNAMED_NOTICE).not.toContain("they are context.");
   });
 
   it("accounts for threading, which the addressing field cannot express", () => {
-    expect(AWAIT_UNNAMED_NOTICE).toContain(
+    expect(HOLD_UNNAMED_NOTICE).toContain(
       "THREADED into an exchange you are a party to is for you",
     );
   });
 
   it("still refuses another member's request", () => {
-    expect(AWAIT_UNNAMED_NOTICE).toContain("aimed at another member");
-    expect(AWAIT_UNNAMED_NOTICE).toContain("adopt an unaddressed message as a task you were assigned");
+    expect(HOLD_UNNAMED_NOTICE).toContain("aimed at another member");
+    expect(HOLD_UNNAMED_NOTICE).toContain("adopt an unaddressed message as a task you were assigned");
   });
 });
 
@@ -62,7 +62,7 @@ describe("AWAIT_UNNAMED_NOTICE — a wake that names nobody", () => {
 // keep own posts out; this is the second line of defence, because the notice
 // must be false-free on whatever it is handed.
 
-describe("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
+describe("HOLD_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
   function awaitClient(messages: Array<Record<string, unknown>>): DoplClient {
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     return {
@@ -94,7 +94,7 @@ describe("AWAIT_UNNAMED_NOTICE — over messages SOMEONE ELSE wrote", () => {
     messages: Array<Record<string, unknown>>,
     selfUserId: string | null = ME,
   ): Promise<string> {
-    const res = await opAwait(awaitClient(messages), "general", 7, undefined, selfUserId);
+    const res = await opHold(awaitClient(messages), "general", 7, undefined, selfUserId);
     return res.content[0].text;
   }
 

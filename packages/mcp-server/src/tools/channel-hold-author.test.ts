@@ -28,8 +28,8 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { AWAIT_HOLD_DEFAULT_MS } from "./channel-await-budget";
-import { opAwait } from "./channel-ops-await";
+import { HOLD_DEFAULT_MS } from "./channel-hold-budget";
+import { opHold } from "./channel-ops-hold";
 
 /**
  * ⚠ THE CASES BELOW ASK FOR THE HOLD EXPLICITLY where they assert more than one
@@ -37,7 +37,7 @@ import { opAwait } from "./channel-ops-await";
  * "for every poll" assertion over a single call proves much less than it reads
  * as.
  */
-const HOLD = AWAIT_HOLD_DEFAULT_MS;
+const HOLD = HOLD_DEFAULT_MS;
 
 const ME = "user-me";
 const MY_SESSION = "chan-1:aaaa1111";
@@ -110,7 +110,7 @@ describe("a SIBLING session on the same account is visible (F-405)", () => {
   it("sends NO excludeAuthor once this session can name itself", async () => {
     const awaitChannelMessages = quietHold();
 
-    await opAwait(
+    await opHold(
       stubClient({ awaitChannelMessages }),
       "general",
       7,
@@ -145,7 +145,7 @@ describe("a SIBLING session on the same account is visible (F-405)", () => {
       return { messages: visible, timedOut: visible.length === 0 };
     });
 
-    const res = await opAwait(
+    const res = await opHold(
       stubClient({ awaitChannelMessages }),
       "general",
       853,
@@ -173,7 +173,7 @@ describe("a SIBLING session on the same account is visible (F-405)", () => {
         : { messages: [], timedOut: true };
     });
 
-    const res = await opAwait(
+    const res = await opHold(
       stubClient({ awaitChannelMessages }),
       "general",
       899,
@@ -199,7 +199,7 @@ describe("a SIBLING session on the same account is visible (F-405)", () => {
         : { messages: [], timedOut: true };
     });
 
-    await opAwait(
+    await opHold(
       stubClient({ awaitChannelMessages }),
       "general",
       899,
@@ -223,7 +223,7 @@ describe("a SIBLING session on the same account is visible (F-405)", () => {
       timedOut: false,
     }));
 
-    const res = await opAwait(
+    const res = await opHold(
       stubClient({ awaitChannelMessages }),
       "general",
       900,
@@ -258,7 +258,7 @@ describe("an unstamped caller sees its own account's agents", () => {
   it("sends NO author filter, on every poll", async () => {
     const awaitChannelMessages = quietHold();
 
-    await opAwait(stubClient({ awaitChannelMessages }), "general", 7, HOLD, ME);
+    await opHold(stubClient({ awaitChannelMessages }), "general", 7, HOLD, ME);
 
     expect(awaitChannelMessages.mock.calls.length).toBeGreaterThan(1);
     for (const [, opts] of awaitChannelMessages.mock.calls) {
@@ -283,7 +283,7 @@ describe("an unstamped caller sees its own account's agents", () => {
       return { messages: visible, timedOut: visible.length === 0 };
     });
 
-    const res = await opAwait(
+    const res = await opHold(
       stubClient({ awaitChannelMessages }),
       "general",
       853,
@@ -303,7 +303,7 @@ describe("an unstamped caller sees its own account's agents", () => {
       timedOut: false,
     }));
 
-    const res = await opAwait(
+    const res = await opHold(
       stubClient({ awaitChannelMessages }),
       "general",
       899,
@@ -320,7 +320,7 @@ describe("an unstamped caller sees its own account's agents", () => {
   it("passes NOTHING when selfUserId is null (boot handshake could not name the caller)", async () => {
     const awaitChannelMessages = quietHold();
 
-    await opAwait(stubClient({ awaitChannelMessages }), "general", 7, undefined, null);
+    await opHold(stubClient({ awaitChannelMessages }), "general", 7, undefined, null);
 
     for (const [, opts] of awaitChannelMessages.mock.calls) {
       expect(opts).not.toHaveProperty("excludeAuthor");
@@ -330,7 +330,7 @@ describe("an unstamped caller sees its own account's agents", () => {
   it("passes NOTHING when selfUserId is omitted entirely", async () => {
     const awaitChannelMessages = quietHold();
 
-    await opAwait(stubClient({ awaitChannelMessages }), "general", 7);
+    await opHold(stubClient({ awaitChannelMessages }), "general", 7);
 
     for (const [, opts] of awaitChannelMessages.mock.calls) {
       expect(opts).not.toHaveProperty("excludeAuthor");
@@ -343,7 +343,7 @@ describe("an unstamped caller sees its own account's agents", () => {
       timedOut: false,
     }));
 
-    const res = await opAwait(
+    const res = await opHold(
       stubClient({ awaitChannelMessages }),
       "general",
       8,

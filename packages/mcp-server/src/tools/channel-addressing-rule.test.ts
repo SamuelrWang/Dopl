@@ -11,9 +11,9 @@
  *     before `classify` (listener-messages.js) and none reads `to_user_id`: a
  *     first-class thread tag feeds the counterparty's live session directly.
  *
- * ⚠ THE THIRD CLAIM — the `AWAIT_UNNAMED_NOTICE`, which must not tell a
+ * ⚠ THE THIRD CLAIM — the `HOLD_UNNAMED_NOTICE`, which must not tell a
  * requester its own answer is somebody else's traffic — moved to
- * `channel-addressing-await-notice.test.ts` on 2026-09-02, at the §1 cap. The
+ * `channel-addressing-hold-notice.test.ts` on 2026-09-02, at the §1 cap. The
  * seam is SUBJECT: what a WRITE reports about who it reached stays here; what a
  * HOLD says about a page somebody else wrote is over there.
  */

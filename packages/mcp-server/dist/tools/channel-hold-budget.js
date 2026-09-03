@@ -1,13 +1,14 @@
+"use strict";
 /**
  * THE DEADLINE CHAIN for `dopl_channel(op="read" with wait_ms)` — every clock that can end
  * one hold, and the numbers chosen to sit under them. The op lives in
- * `channel-ops-await.ts`.
+ * `channel-ops-hold.ts`.
  *
  * The chain, innermost first:
- *   1. {@link AWAIT_POLL_MS} 50s — one inner long-poll asked of the route.
+ *   1. {@link HOLD_POLL_MS} 50s — one inner long-poll asked of the route.
  *   2. `@dopl/client` AWAIT_TIMEOUT_MS 55s — the network read timeout on it.
  *   3. `/api/channels/[id]/await` `maxDuration = 60` — the route's own ceiling.
- *   4. the ASSEMBLED hold ({@link resolveAwaitHoldMs}) — polls 1-3 re-issued
+ *   4. the ASSEMBLED hold ({@link resolveHoldMs}) — polls 1-3 re-issued
  *      with the same cursor until messages land or the budget is spent.
  *   5. `/api/mcp` `maxDuration = 300` ({@link MCP_ROUTE_MAX_DURATION_MS}) — the
  *      function running the whole op, boot handshake included.
@@ -25,9 +26,15 @@
  * a single default has to fail one of them — and it failed layer 6, silently:
  * an external `await` at the default returned a RAW TRANSPORT TIMEOUT carrying
  * none of the teaching, which is the one outcome this whole chain exists to
- * prevent. {@link awaitHoldMs} picks per caller from the one thing the server
+ * prevent. {@link holdMsFor} picks per caller from the one thing the server
  * can observe about which side of layer 6 it is on — the runtime stamp.
  */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HOLD_SHORT_MS = exports.HOLD_MAX_POLLS = exports.HOLD_MIN_POLL_MS = exports.HOLD_POLL_MS = exports.HOLD_MARGIN_MS = exports.MCP_ROUTE_MAX_DURATION_MS = exports.HOLD_EXTERNAL_DEFAULT_MS = exports.HOLD_EXTERNAL_MARGIN_MS = exports.EXTERNAL_CLIENT_ABORT_MS = exports.HOLD_DEFAULT_MS = exports.HOLD_CAP_MS = void 0;
+exports.resolveHoldMs = resolveHoldMs;
+exports.resolveHoldCeilingMs = resolveHoldCeilingMs;
+exports.holdMsFor = holdMsFor;
+const identity_1 = require("./identity");
 /**
  * Hard ceiling for ONE `await` op — the WAKE primitive. A Claude Code session
  * auto-backgrounds an MCP call still pending after ~2 min and delivers the
@@ -37,23 +44,23 @@
  *
  * ⚠ This is the ceiling for an EXPLICIT `timeout_ms`, a hold a caller can
  * actually get — so it must clear {@link MCP_ROUTE_MAX_DURATION_MS} by
- * {@link AWAIT_HOLD_MARGIN_MS}, same as the DEFAULT. A margin asserted only
+ * {@link HOLD_MARGIN_MS}, same as the DEFAULT. A margin asserted only
  * against the default lets an explicit `timeout_ms` walk past the guard into
  * the platform's clock; the relation is pinned against BOTH numbers.
  *
  * ⚠ `channel.ts` reads this for the schema's `.max()` and the number the tool
  * description advertises — the three cannot drift.
  */
-export declare const AWAIT_HOLD_CAP_MS = 230000;
+exports.HOLD_CAP_MS = 230_000;
 /**
  * DEFAULT hold for a DESKTOP-RUN session — BELOW the cap so the graceful result
- * wins its race with the surrounding deadlines. {@link AWAIT_HOLD_MARGIN_MS}
+ * wins its race with the surrounding deadlines. {@link HOLD_MARGIN_MS}
  * under the route ceiling, pinned by a test, so a platform clamp cannot turn
  * every await into an opaque transport error carrying none of the re-arm
  * teaching.
  *
  * ⚠ **IT IS NOT THE DEFAULT FOR AN EXTERNAL CALLER — see
- * {@link AWAIT_HOLD_EXTERNAL_DEFAULT_MS}.** It was, and it made `await`
+ * {@link HOLD_EXTERNAL_DEFAULT_MS}.** It was, and it made `await`
  * unusable from every external MCP client: 215s against a ~60s client abort is
  * not a long hold, it is a guaranteed transport error.
  *
@@ -63,9 +70,9 @@ export declare const AWAIT_HOLD_CAP_MS = 230000;
  * clients that do background.
  *
  * Incident lever: `DOPL_AWAIT_HOLD_MS=55000` shortens BOTH defaults (it is a
- * ceiling, {@link resolveAwaitHoldCeilingMs}) at the cost of the wake.
+ * ceiling, {@link resolveHoldCeilingMs}) at the cost of the wake.
  */
-export declare const AWAIT_HOLD_DEFAULT_MS = 215000;
+exports.HOLD_DEFAULT_MS = 215_000;
 /**
  * THE CALLER'S OWN MCP CLIENT, MEASURED — Claude Code wraps every non-GET fetch
  * to a `type: "http"` MCP server in an AbortController firing `TimeoutError`
@@ -74,7 +81,7 @@ export declare const AWAIT_HOLD_DEFAULT_MS = 215000;
  * ⚠ A HAND-MEASURED PROPERTY OF SOMEONE ELSE'S CLIENT, so it is a FLOOR to
  * design under, never a promise: another client may be tighter, and a caller
  * that knows its own is looser passes an explicit `timeout_ms`, which
- * {@link awaitHoldMs} honours up to {@link AWAIT_HOLD_CAP_MS}.
+ * {@link holdMsFor} honours up to {@link HOLD_CAP_MS}.
  *
  * ⚠ It covers TIME-TO-RESPONSE-HEADERS, which is why `/api/mcp` must keep
  * STREAMING (SSE) and must NOT set `enableJsonResponse: true` — that withholds
@@ -82,16 +89,16 @@ export declare const AWAIT_HOLD_DEFAULT_MS = 215000;
  * EVERY op (not just `await`) would die at exactly 60.0s. Shortening the hold
  * does not fix that; only streaming does.
  */
-export declare const EXTERNAL_CLIENT_ABORT_MS = 60000;
+exports.EXTERNAL_CLIENT_ABORT_MS = 60_000;
 /**
  * ⚠ How far under {@link EXTERNAL_CLIENT_ABORT_MS} an unstamped caller's hold
- * must sit. Same class of cost as {@link AWAIT_HOLD_MARGIN_MS} and the same
+ * must sit. Same class of cost as {@link HOLD_MARGIN_MS} and the same
  * reason — `/api/mcp` authenticates, boots the MCP server and runs a workspace
  * handshake before the op starts, all inside the client's clock — scaled to the
  * smaller budget: a hold sized AT the abort loses that race and hands back the
  * transport error instead of the result.
  */
-export declare const AWAIT_HOLD_EXTERNAL_MARGIN_MS = 15000;
+exports.HOLD_EXTERNAL_MARGIN_MS = 15_000;
 /**
  * DEFAULT hold when the request carried NO desktop runtime stamp (T03).
  *
@@ -104,12 +111,18 @@ export declare const AWAIT_HOLD_EXTERNAL_MARGIN_MS = 15000;
  * ⚠ An unstamped caller may still BE a desktop session (an older build), which
  * loses nothing but hold length — it is told what its cursor is either way.
  */
-export declare const AWAIT_HOLD_EXTERNAL_DEFAULT_MS: number;
+exports.HOLD_EXTERNAL_DEFAULT_MS = exports.EXTERNAL_CLIENT_ABORT_MS - exports.HOLD_EXTERNAL_MARGIN_MS;
+/**
+ * ⚠ Floor for the env override. Below ~50s a hold is shorter than ONE inner
+ * poll and can never cross the two-minute backgrounding mark — an incident
+ * lever must shorten the hold, not silently disable the wake primitive.
+ */
+const HOLD_FLOOR_MS = 50_000;
 /**
  * `/api/mcp`'s function ceiling (`maxDuration = 300`, s → ms). ⚠ Mirrored so
  * the margin is a checkable relation; the suite pins it against the route source.
  */
-export declare const MCP_ROUTE_MAX_DURATION_MS = 300000;
+exports.MCP_ROUTE_MAX_DURATION_MS = 300_000;
 /**
  * ⚠ How far under {@link MCP_ROUTE_MAX_DURATION_MS} any reachable hold must sit
  * — default AND explicit-`timeout_ms` cap. The route authenticates, boots the
@@ -117,40 +130,62 @@ export declare const MCP_ROUTE_MAX_DURATION_MS = 300000;
  * platform clock; a hold sized to the ceiling loses that race and the caller
  * gets a transport error instead of the graceful re-arm result.
  */
-export declare const AWAIT_HOLD_MARGIN_MS = 60000;
+exports.HOLD_MARGIN_MS = 60_000;
 /**
  * One INNER long-poll — `/api/channels/[id]/await` holds at most ~50s
  * (maxDuration 60). ⚠ Re-issued with the SAME `since` cursor: no cursor
  * advances until messages arrive, so a re-issue can neither skip nor
  * double-count.
  */
-export declare const AWAIT_POLL_MS = 50000;
+exports.HOLD_POLL_MS = 50_000;
 /**
  * The default hold, parsed from `DOPL_AWAIT_HOLD_MS` (integer milliseconds),
- * clamped to [{@link AWAIT_HOLD_FLOOR_MS}, {@link AWAIT_HOLD_CAP_MS}]. Anything
+ * clamped to [{@link HOLD_FLOOR_MS}, {@link HOLD_CAP_MS}]. Anything
  * unparseable — unset, blank, non-numeric, float, negative — falls back to
- * {@link AWAIT_HOLD_DEFAULT_MS}.
+ * {@link HOLD_DEFAULT_MS}.
  *
  * Env knob because this package ships as committed `dist/`: shortening the hold
  * during an incident would otherwise mean a rebuild + redeploy of the whole app.
  */
-export declare function resolveAwaitHoldMs(raw: string | undefined): number;
+function resolveHoldMs(raw) {
+    const text = (raw ?? "").trim();
+    if (!/^\d+$/.test(text))
+        return exports.HOLD_DEFAULT_MS;
+    const ms = Number.parseInt(text, 10);
+    if (!Number.isFinite(ms))
+        return exports.HOLD_DEFAULT_MS;
+    return Math.min(exports.HOLD_CAP_MS, Math.max(HOLD_FLOOR_MS, ms));
+}
 /**
- * Ceiling for an EXPLICIT `timeout_ms` — normally {@link AWAIT_HOLD_CAP_MS}.
+ * Ceiling for an EXPLICIT `timeout_ms` — normally {@link HOLD_CAP_MS}.
  * ⚠ When the env lever IS set it becomes the lever's value: the lever exists to
  * shorten holds during an incident, and a caller-supplied `timeout_ms` must not
  * route around it.
  */
-export declare function resolveAwaitHoldCeilingMs(raw: string | undefined): number;
+function resolveHoldCeilingMs(raw) {
+    return /^\d+$/.test((raw ?? "").trim())
+        ? resolveHoldMs(raw)
+        : exports.HOLD_CAP_MS;
+}
+// ── THE ASSEMBLED HOLD, resolved once per server process ─────────────────
+//
+// ⚠ ONE STATEMENT, SHARED BY BOTH LANES. `channel-ops-hold.ts` and
+// `channel-ops-hold-workspace.ts` are siblings by design (their RESULT
+// vocabularies differ), but every clock below is the same clock in both, and
+// each used to re-declare it. A hold constant that exists twice is a hold
+// constant that gets retuned once.
+/** Read once at module load — one value per server process, no per-call env read. */
+const ENV_HOLD_MS = resolveHoldMs(process.env.DOPL_AWAIT_HOLD_MS);
+const ENV_CEILING_MS = resolveHoldCeilingMs(process.env.DOPL_AWAIT_HOLD_MS);
 /** Don't re-issue an inner poll for a sliver of the remaining budget. */
-export declare const AWAIT_MIN_POLL_MS = 1000;
+exports.HOLD_MIN_POLL_MS = 1_000;
 /**
  * ⚠ Spin brake, NOT the bound — elapsed wall-clock ends the hold. Bites only
  * when the server answers instantly (route error path, clamped timeout), where
  * the elapsed check alone lets the loop hammer it. Tripping returns the
  * ordinary timed-out result.
  */
-export declare const AWAIT_MAX_POLLS: number;
+exports.HOLD_MAX_POLLS = Math.ceil(ENV_CEILING_MS / exports.HOLD_POLL_MS) + 2;
 /**
  * A hold ending this far under the ASK did not hold — something cut it short
  * (platform function clamp, route answering instantly, inner failure). ⚠
@@ -159,7 +194,7 @@ export declare const AWAIT_MAX_POLLS: number;
  * wake. Half the ask, capped at 60s, so a deliberately SHORT hold is not warned
  * about getting one.
  */
-export declare const AWAIT_SHORT_HOLD_MS = 60000;
+exports.HOLD_SHORT_MS = 60_000;
 /**
  * THE HOLD THIS CALL GETS. ⚠ Two rules, and the order between them is the whole
  * fix (T03):
@@ -182,4 +217,10 @@ export declare const AWAIT_SHORT_HOLD_MS = 60000;
  * ⚠ `Math.min` against `ENV_HOLD_MS` on the external arm, not a bare constant:
  * the incident lever must be able to shorten EVERY default, including this one.
  */
-export declare function awaitHoldMs(timeoutMs: number | undefined, runtime: string | null): number;
+function holdMsFor(timeoutMs, runtime) {
+    if (timeoutMs !== undefined)
+        return Math.min(timeoutMs, ENV_CEILING_MS);
+    return (0, identity_1.isDesktopRuntime)(runtime)
+        ? ENV_HOLD_MS
+        : Math.min(ENV_HOLD_MS, exports.HOLD_EXTERNAL_DEFAULT_MS);
+}

@@ -244,7 +244,7 @@ describe("the result reports the card it filed, not what a card is", () => {
     // operative half of "where the answer arrives" and costs eight characters.
     // Without it an agent taught by `manage(action="launch")`'s bullet polls a surface that
     // has nothing to give it, forever.
-    expect(text).toContain("await=since:42");
+    expect(text).toContain("hold=since:42");
   });
 });
 

@@ -109,7 +109,7 @@ const READ_OPS: Record<string, string[]> = {
   // `rooms` is four reads and four writes, so this list names the four reads and
   // `gating.ts › WRITE_OPS` names the four writes.
   dopl_channel: [
-    // `opRead` / `opReadAccount` / `opAwait` call only read endpoints. ⚠ The HOLD
+    // `opRead` / `opReadAccount` / `opHold` call only read endpoints. ⚠ The HOLD
     // is the same op with `wait_ms` and is the same classification: a long-poll
     // is a read that waits, and it was refused to a read-only token by nothing
     // when it was its own op either.

@@ -4,8 +4,8 @@
  * ⚠ `channel-` filename prefix required by the parity split-scan
  * (parity.test.ts).
  *
- * ⚠ **A SIBLING OF `channel-ops-await.ts`, NOT A BRANCH INSIDE IT.** The two
- * share every CLOCK (`channel-await-budget.ts`) and every rule about what a hold
+ * ⚠ **A SIBLING OF `channel-ops-hold.ts`, NOT A BRANCH INSIDE IT.** The two
+ * share every CLOCK (`channel-hold-budget.ts`) and every rule about what a hold
  * may CLAIM (`channel-wake-guidance.ts`), and they deliberately do not share a
  * function: the per-channel op's whole result vocabulary is written around ONE
  * named channel — its re-arm call, its not-found, its stop rule all splice
@@ -33,7 +33,7 @@ import { type ToolResponse } from "./respond";
  * The re-arm stop rule for a WORKSPACE hold.
  *
  * ⚠ **IT IS DELIBERATELY DIFFERENT FROM THE PER-CHANNEL ONE, AND THE DIFFERENCE
- * IS THE WHOLE POINT.** `channel-ops-await.ts › rearmStopRule` says to judge
+ * IS THE WHOLE POINT.** `channel-ops-hold.ts › rearmStopRule` says to judge
  * liveness ONLY on the member you addressed, because in a busy channel other
  * members' traffic is not evidence your exchange is alive. A workspace hold
  * makes that trap strictly worse — EVERY channel's traffic now wakes you — so
@@ -46,13 +46,14 @@ import { type ToolResponse } from "./respond";
  */
 export declare function workspaceRearmStopRule(): string;
 /**
- * LONG-HOLD workspace await. One call holds for `awaitHoldMs(timeoutMs,
- * runtime)` by re-issuing the ~50s inner long-poll on the same `since` cursor.
+ * THE WORKSPACE-WIDE HOLD. One call holds for `holdMsFor(waitMs, runtime)` by
+ * re-issuing the ~50s inner long-poll on the same cursor
+ * (`channel-hold-loop.ts › runHold`).
  *
  * ⚠ Four results, never a thrown error once the hold is underway: messages,
- * timed-out, FAILED-MID-HOLD, CUT SHORT — the same four the per-channel op has,
- * for the same reasons.
+ * timed-out, FAILED-MID-HOLD, CUT SHORT — the same four the per-channel lane
+ * has, for the same reasons.
  * ⚠ NO not-found branch, because there is no ref to resolve: a caller with no
  * memberships gets a page with `channelCount: 0` and a result that says so.
  */
-export declare function opAwaitWorkspace(client: DoplClient, since: number, timeoutMs?: number, selfUserId?: string | null, runtime?: string | null, selfSessionId?: string | null): Promise<ToolResponse>;
+export declare function opHoldWorkspace(client: DoplClient, since: number, waitMs?: number, selfUserId?: string | null, runtime?: string | null, selfSessionId?: string | null): Promise<ToolResponse>;

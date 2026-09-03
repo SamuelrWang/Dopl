@@ -18,7 +18,7 @@ import type { DoplClient } from "@dopl/client";
 // ⚠ T12 — every "NOT ADDRESSED" pin below is now a pair: the paragraph is out
 // of the result, and the rule it stated is still shipped, from one place.
 import { CHANNEL_DOCTRINE, DOCTRINE_POINTER } from "./channel-doctrine";
-import { opAwait } from "./channel-ops-await";
+import { opHold } from "./channel-ops-hold";
 import { opListThreads, opRead } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
 
@@ -181,7 +181,7 @@ describe("await — a wake that is not for you", () => {
       msg({ seq: 7, authorUserId: "u-a", metadata: { to_user_id: "u-b" } }),
     ]);
 
-    const text = (await opAwait(client, "general", 6, 1, ME)).content[0].text;
+    const text = (await opHold(client, "general", 6, 1, ME)).content[0].text;
 
     expect(text).toContain("NONE of the messages above NAMES you");
     // ⚠ Another member's request is still not yours to adopt.
@@ -196,7 +196,7 @@ describe("await — a wake that is not for you", () => {
       msg({ seq: 8, metadata: { to_user_id: ME } }),
     ]);
 
-    const text = (await opAwait(client, "general", 6, 1, ME)).content[0].text;
+    const text = (await opHold(client, "general", 6, 1, ME)).content[0].text;
 
     expect(text).not.toContain("NONE of the messages above");
     expect(text).toContain("· to you");
@@ -205,7 +205,7 @@ describe("await — a wake that is not for you", () => {
   it("never claims 'none of this is for you' without knowing who you are", async () => {
     const client = awaited([msg({ seq: 7, metadata: { to_user_id: "u-b" } })]);
 
-    const text = (await opAwait(client, "general", 6, 1)).content[0].text;
+    const text = (await opHold(client, "general", 6, 1)).content[0].text;
 
     expect(text).not.toContain("NONE of the messages above");
   });
@@ -215,7 +215,7 @@ describe("await — a wake that is not for you", () => {
     // activity keeps me waiting") never stops in a busy channel.
     const client = awaited([msg({ seq: 7, metadata: { to_user_id: ME } })]);
 
-    const text = (await opAwait(client, "general", 6, 1, ME)).content[0].text;
+    const text = (await opHold(client, "general", 6, 1, ME)).content[0].text;
 
     expect(text).toContain("the member you are waiting on");
     expect(text).toContain("traffic between THEM is not evidence");

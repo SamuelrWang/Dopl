@@ -1,6 +1,6 @@
 /**
  * The `await` op as a WAKE PRIMITIVE. Pinned here:
- *   - opAwait ASSEMBLES one long hold from repeated ~50s inner polls, all
+ *   - opHold ASSEMBLES one long hold from repeated ~50s inner polls, all
  *     re-issued on the SAME cursor, returning the instant anything lands;
  *   - a transient inner failure MID-HOLD degrades to the timed-out RESULT, not
  *     an error, which would carry none of the teaching;
@@ -17,9 +17,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import {
-  AWAIT_HOLD_CAP_MS,
-  AWAIT_HOLD_DEFAULT_MS,
-} from "./channel-await-budget";
+  HOLD_CAP_MS,
+  HOLD_DEFAULT_MS,
+} from "./channel-hold-budget";
 import { DESKTOP_SESSION_RUNTIME } from "./identity";
 import { opCreateThread } from "./channel-ops-threads";
 import { CHANNEL_DESCRIPTION } from "./channel-description";
@@ -28,7 +28,7 @@ import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 // closed with four paragraphs of it; the result is one fact line now, so the
 // paragraphs are re-pinned HERE — moved, never dropped.
 import { CHANNEL_DOCTRINE } from "./channel-doctrine";
-import { opAwait } from "./channel-ops-await";
+import { opHold } from "./channel-ops-hold";
 
 const CHANNEL = {
   id: "chan-1",
@@ -57,9 +57,9 @@ const desktopAwait = (
   ref: string,
   since: number,
   timeoutMs?: number,
-) => opAwait(client, ref, since, timeoutMs, null, DESKTOP_SESSION_RUNTIME);
+) => opHold(client, ref, since, timeoutMs, null, DESKTOP_SESSION_RUNTIME);
 
-describe("opAwait — long hold (WAKE-V1)", () => {
+describe("opHold — long hold (WAKE-V1)", () => {
   /**
    * Virtual clock — `Date.now()` moves only when a poll "holds", so a long hold
    * runs in microseconds and the elapsed bound is asserted exactly. Advances by
@@ -119,7 +119,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
 
     // ⚠ Explicit ask, not the default: the assertions below read the UNSTAMPED
     // result text, and an unstamped caller's default is one poll long (T03).
-    const res = await opAwait(client, "general", 7, AWAIT_HOLD_DEFAULT_MS);
+    const res = await opHold(client, "general", 7, HOLD_DEFAULT_MS);
 
     expect(res.isError).toBeFalsy();
     expect(awaitChannelMessages).toHaveBeenCalledTimes(3);
@@ -147,7 +147,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       return { messages: [], timedOut: true };
     });
 
-    await opAwait(stubClient({ awaitChannelMessages }), "general", 7, 60_000);
+    await opHold(stubClient({ awaitChannelMessages }), "general", 7, 60_000);
     expect(clock.elapsedFrom(start)).toBe(60_000);
     // Last poll asks only for what is left.
     expect(awaitChannelMessages.mock.calls.map(([, o]) => o.timeoutMs)).toEqual([
@@ -156,8 +156,8 @@ describe("opAwait — long hold (WAKE-V1)", () => {
 
     awaitChannelMessages.mockClear();
     const capStart = clock.now;
-    await opAwait(stubClient({ awaitChannelMessages }), "general", 7, 600_000);
-    expect(clock.elapsedFrom(capStart)).toBe(AWAIT_HOLD_CAP_MS);
+    await opHold(stubClient({ awaitChannelMessages }), "general", 7, 600_000);
+    expect(clock.elapsedFrom(capStart)).toBe(HOLD_CAP_MS);
   });
 
   it("does one immediate check when the caller asks for no hold", async () => {
@@ -167,7 +167,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       timedOut: true,
     }));
 
-    await opAwait(stubClient({ awaitChannelMessages }), "general", 7, 0);
+    await opHold(stubClient({ awaitChannelMessages }), "general", 7, 0);
 
     expect(awaitChannelMessages).toHaveBeenCalledTimes(1);
     // ⚠ 1, not 0 — the route's query schema rejects a non-positive timeout.
@@ -182,7 +182,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       timedOut: true,
     }));
 
-    const res = await opAwait(stubClient({ awaitChannelMessages }), "general", 7);
+    const res = await opHold(stubClient({ awaitChannelMessages }), "general", 7);
 
     expect(awaitChannelMessages.mock.calls.length).toBeLessThanOrEqual(10);
     expect(res.content[0].text).toContain("timed out");
@@ -194,7 +194,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       throw { status: 404 };
     });
 
-    const res = await opAwait(stubClient({ awaitChannelMessages }), "ghost", 7);
+    const res = await opHold(stubClient({ awaitChannelMessages }), "ghost", 7);
 
     expect(res.isError).toBe(true);
     expect(awaitChannelMessages).toHaveBeenCalledTimes(1);
@@ -258,7 +258,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     });
 
     await expect(
-      opAwait(stubClient({ awaitChannelMessages }), "general", 7),
+      opHold(stubClient({ awaitChannelMessages }), "general", 7),
     ).rejects.toThrow("dns failure");
     expect(awaitChannelMessages).toHaveBeenCalledTimes(1);
   });
@@ -274,7 +274,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       timedOut: true,
     }));
 
-    const res = await opAwait(stubClient({ awaitChannelMessages }), "general", 7);
+    const res = await opHold(stubClient({ awaitChannelMessages }), "general", 7);
 
     const text = res.content[0].text;
     expect(text).toContain("timed out");
@@ -314,7 +314,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     });
 
     const text = (
-      await opAwait(stubClient({ awaitChannelMessages }), "general", 7, 60_000)
+      await opHold(stubClient({ awaitChannelMessages }), "general", 7, 60_000)
     ).content[0].text;
     expect(text).not.toContain("CUT SHORT");
     expect(text).toContain("re-arm the wait NOW");
@@ -328,14 +328,14 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       clock.advance(opts.timeoutMs ?? 0);
       return { messages: [], timedOut: true };
     });
-    const timedOut = (await opAwait(stubClient({ awaitChannelMessages: empty }), "general", 7))
+    const timedOut = (await opHold(stubClient({ awaitChannelMessages: empty }), "general", 7))
       .content[0].text;
     const arrived = vi.fn<AwaitSpy>(async () => {
       clock.advance(1_000);
       return { messages: [message(42)], timedOut: false };
     });
     const withMessages = (
-      await opAwait(stubClient({ awaitChannelMessages: arrived }), "general", 7)
+      await opHold(stubClient({ awaitChannelMessages: arrived }), "general", 7)
     ).content[0].text;
 
     for (const text of [timedOut, withMessages]) {
@@ -364,7 +364,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
       clock.advance(opts.timeoutMs ?? 0);
       return { messages: [], timedOut: true };
     });
-    const text = (await opAwait(stubClient({ awaitChannelMessages: empty }), "general", 7))
+    const text = (await opHold(stubClient({ awaitChannelMessages: empty }), "general", 7))
       .content[0].text;
 
     // ⚠ Unconditional instruction stays "re-arm now" — the count only triggers
@@ -384,7 +384,7 @@ describe("opAwait — long hold (WAKE-V1)", () => {
     });
 
     const text = (
-      await opAwait(stubClient({ awaitChannelMessages }), "general", 7)
+      await opHold(stubClient({ awaitChannelMessages }), "general", 7)
     ).content[0].text;
 
     // ⚠ THE POSITION IS THE ASSERTION, not the presence. T11 dropped this
@@ -434,10 +434,10 @@ describe("opCreateThread — the hold cursor rides back (WAKE-V1)", () => {
       )
     ).content[0].text;
 
-    // ⚠ THE CURSOR IS NOW A TOKEN, AND IT IS THE SAME CURSOR. `await=since:41`
+    // ⚠ THE CURSOR IS NOW A TOKEN, AND IT IS THE SAME CURSOR. `hold=since:41`
     // is what `since=41` was — pre-computed off the seq this write produced, so
     // the next call needs no read to find it.
-    expect(text).toContain("await=since:41");
+    expect(text).toContain("hold=since:41");
     expect(text).toContain("seq=41");
     expect(text).toContain("thread=thread-1");
     // ⚠ Teaching a follow-up read costs a round-trip AND races the peer: a
@@ -481,7 +481,7 @@ describe("opCreateThread — the hold cursor rides back (WAKE-V1)", () => {
     // ⚠ BOTH ABSENCES ARE RENDERED, and as `-` rather than as a missing key: a
     // dash says the server looked and there was nothing.
     expect(text).toContain("seq=-");
-    expect(text).toContain("await=-");
+    expect(text).toContain("hold=-");
     expect(text).not.toContain("since:");
     expect(text).not.toContain("since=null");
     expect(text).not.toContain("since=undefined");

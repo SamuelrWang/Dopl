@@ -615,14 +615,14 @@ COMMIT;
 - Status: open (rule holding; **5-file backlog, down from 10**; the desktop cluster is now the worse half)
 
 ### F-096: Stale prose still describes the deleted `main/mcp-cli-entry.js` as live — and it SHIPS — ✅ RESOLVED 2026-08-30
-- Location: `packages/mcp-server/src/tools/channel-await-budget.ts:71`, its byte-identical committed build output `packages/mcp-server/dist/tools/channel-await-budget.js:74` and `.d.ts:69`, and `src/app/api/mcp/route.ts:171`
+- Location: `packages/mcp-server/src/tools/channel-hold-budget.ts › HOLD_CAP_MS`, its byte-identical committed build output `packages/mcp-server/dist/tools/channel-hold-budget.js` and `.d.ts:69`, and `src/app/api/mcp/route.ts:171`
 - Found during: Q9 follow-up (2026-07-31)
 - Severity: smell (prose that ships as part of the server)
 - Description: `main/mcp-cli-entry.js` rewrote the operator's own `~/.claude.json` — a file holding their `oauthAccount` credential block — to add a per-server `timeout`. Deleted 2026-07-31 for four reasons recorded in ENGINEERING §18. **The module is confirmed absent** and `dopl-desktop-app/test/sdk-mcp-token.test.mjs:264` asserts it. What remains is prose describing it as live, in one source file plus its `dist/` twins, which ship with the SERVER.
 - **Line numbers re-measured 2026-08-08 (all four had drifted).** Other surviving mentions are DELIBERATE and must not be "cleaned up": `dopl-desktop-app/main/mcp-config.js:13` and `main/mcp-cli-add.js:11` explain the removal; `test/sdk-mcp-token.test.mjs:251,257,260,264` assert it; `docs/ENGINEERING.md:567` records the reasoning.
-- Proposed resolution: fix-now — one sentence in `channel-await-budget.ts` plus one in the route, then `npm run build:packages`.
+- Proposed resolution: fix-now — one sentence in `channel-hold-budget.ts` plus one in the route, then `npm run build:packages`.
 - Status: open (prose only; rides the next build + push)
-- ⚠ **CLOSED 2026-08-30 — superseded:** the prose sweep shipped. `mcp-cli-entry` no longer appears anywhere in `packages/` (source or `dist/`) or `src/`, and `packages/mcp-server/src/tools/channel-await-budget.ts › AWAIT_HOLD_CAP_MS` states the CLI abort floor generically. The only surviving mentions are the four DELIBERATE ones this entry itself listed — `dopl-desktop-app/main/mcp-config.js › MCP_CLIENT_TIMEOUT_MS`, `main/mcp-cli-add.js`, `test/sdk-mcp-token.test.mjs`, `docs/ENGINEERING.md`.
+- ⚠ **CLOSED 2026-08-30 — superseded:** the prose sweep shipped. `mcp-cli-entry` no longer appears anywhere in `packages/` (source or `dist/`) or `src/`, and `packages/mcp-server/src/tools/channel-hold-budget.ts › HOLD_CAP_MS` states the CLI abort floor generically. The only surviving mentions are the four DELIBERATE ones this entry itself listed — `dopl-desktop-app/main/mcp-config.js › MCP_CLIENT_TIMEOUT_MS`, `main/mcp-cli-add.js`, `test/sdk-mcp-token.test.mjs`, `docs/ENGINEERING.md`.
 
 ### F-097: `POST` and `DELETE` on `/api/auth/mcp-device-token` disagree about an invalid `label`
 - Location: `src/app/api/auth/mcp-device-token/route.ts:24-32` (`readLabel`) vs `:87-92` (`RevokeSchema.safeParse`)
@@ -682,7 +682,7 @@ COMMIT;
 - Status: open (residual)
 
 ### F-105: Nothing ever closes a thread, and three mechanisms that key on thread status degrade as open threads pile up
-- Location: `src/features/channels/server/service-tasks.ts` (`closeTask`, the only writer of `status='closed'`); `server/repository-tasks.ts:71-82` (`listTasksByChannel` — no status filter, no limit); `server/service-writes-metadata.ts:135` (`candidates.length === 1`) and `:448` (the `taskMode` stamp, read at `dopl-desktop-app/main/trigger.js:289` and `main/session-dispatch.js:200`); the four copies of the await stop-rule — `packages/mcp-server/src/tools/channel-ops-write.ts:342`, `channel-description.ts:61`, `channel-ops-await.ts:122`, `channel-ops-threads.ts:194`
+- Location: `src/features/channels/server/service-tasks.ts` (`closeTask`, the only writer of `status='closed'`); `server/repository-tasks.ts:71-82` (`listTasksByChannel` — no status filter, no limit); `server/service-writes-metadata.ts:135` (`candidates.length === 1`) and `:448` (the `taskMode` stamp, read at `dopl-desktop-app/main/trigger.js:289` and `main/session-dispatch.js:200`); the four copies of the await stop-rule — `packages/mcp-server/src/tools/channel-ops-write.ts:342`, `channel-description.ts:61`, `channel-ops-hold.ts`, `channel-ops-threads.ts:194`
 - Found during: live observation, 2026-07-31 — ONE DM channel holding SIX open threads
 - Severity: bug (the accumulation is silent, and past two open threads in a pair it changes ROUTING, not just tidiness)
 - **All four surviving consequences re-verified line by line 2026-08-08; every line number in this entry is fresh.**
@@ -725,7 +725,7 @@ COMMIT;
 - Status: open
 
 ### F-109: The two-agent information-loss round — the five accepted residuals
-- Location: `src/features/channels/**`, `packages/mcp-server/src/tools/channel-ops-await.ts`, `scripts/dopl-channel-wait.sh`, `dopl-desktop-app/main/queued-notice.js`
+- Location: `src/features/channels/**`, `packages/mcp-server/src/tools/channel-ops-hold.ts`, `scripts/dopl-channel-wait.sh`, `dopl-desktop-app/main/queued-notice.js`
 - Found during: a live two-agent cross-machine stress test (2026-07-31)
 - Severity: bug (all six defects fixed)
 - **Rewritten down to the residuals 2026-08-08.** The fixes — `?thread=<id>` as a FILTER on the message read (deliberately moving NO read watermark, because the watermark is content-derived and monotonic so a filtered read would mark unrelated older messages seen); `closeTask` returning `{ thread, echoSeq }` as an ADDITIVE ENVELOPE KEY; the corrected `seq` documentation (the identity sequence is on the TABLE, so a channel's seqs are gappy — an agent reading a range as a count concludes it lost messages); and the background-shell wake — are in ENGINEERING §8.
@@ -6382,7 +6382,7 @@ Renumbered before merge. Ids are never reused; two entries under one id makes bo
 `dopl_channel(op="await", since=853)` returned "nothing" twice while seq 856 — an agent post in that
 channel, on the caller's own account — sat in the table. `op="read"` showed it plainly.
 
-`channel-ops-await.ts` passed `excludeAuthor = <the account>`, and every post is stamped
+`channel-ops-hold.ts` passed `excludeAuthor = <the account>`, and every post is stamped
 `author_user_id = ctx.userId` (`channels/server/service-writes.ts › postMessage`) whether a human or
 an agent wrote it. One operator runs many concurrent sessions, so **an orchestrator and its worker
 are the same author id.** The filter removed the row from BOTH the page and the existence probe
@@ -6406,7 +6406,7 @@ caller gives up instead is bounded and self-inflicted — it may wake on a post 
 blocked inside the call so in practice only an older desktop build can trip that. A noisy wake is
 recoverable; a silent hold is not.
 
-⚠ `channel-await-author.test.ts` ASSERTED THIS BUG — it pinned `excludeAuthor === ME` on every poll,
+⚠ `channel-hold-author.test.ts` ASSERTED THIS BUG — it pinned `excludeAuthor === ME` on every poll,
 which is the behaviour that hid the counterparty. A test can hold a defect in place as firmly as it
 holds an invariant.
 
@@ -6419,10 +6419,10 @@ The default hold is 215s. Claude Code wraps every non-GET fetch to an `http` MCP
 AbortController firing after `max(server.timeout ?? MCP_TOOL_TIMEOUT, 60_000)` ms. So at the default,
 an external caller did not get a long wait — it got a **raw transport `TimeoutError` carrying no
 cursor, no session block and none of the re-arm teaching**, which is the exact outcome the deadline
-chain in `channel-await-budget.ts` exists to prevent. The chain documented the client cap as layer 6
+chain in `channel-hold-budget.ts` exists to prevent. The chain documented the client cap as layer 6
 and then sized layer 4 as though only layer 5 existed.
 
-**Resolved:** `channel-await-budget.ts › awaitHoldMs` is the one resolver both lanes call. An
+**Resolved:** `channel-hold-budget.ts › holdMsFor` is the one resolver both lanes call. An
 explicit `timeout_ms` is honoured EXACTLY (clamped only by the cap and the `DOPL_AWAIT_HOLD_MS`
 incident lever); the DEFAULT branches on the caller's runtime stamp — desktop keeps the wake-length
 hold, everything else gets `EXTERNAL_CLIENT_ABORT_MS - AWAIT_HOLD_EXTERNAL_MARGIN_MS`.
@@ -6476,7 +6476,7 @@ of a finished state to wait for — and the mechanism lecture is still taught wh
   as itself under framing that says what it is", with the indent as the stated
   fallback.
 - Measure it: `grep -n UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`
-  and compare `channel-ops-read.ts › opRead` with `channel-ops-await.ts › opAwait`.
+  and compare `channel-ops-read.ts › opRead` with `channel-ops-hold.ts › opHold`.
 
 #### ⚠ EXTENDED 2026-09-02 (review) — the boundary is WAKE, not `await`, and the LISTING half is filed too
 

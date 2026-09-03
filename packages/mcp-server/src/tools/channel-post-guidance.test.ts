@@ -356,11 +356,11 @@ describe("chat + a thread tag — the branch that never read landedThread", () =
 
   it("…and it is handed a cursor rather than told to repeat itself as a request", async () => {
     // ⚠ The cost of the old line: an agent that believes nothing landed repeats
-    // itself as a request, against work already running. `await=` is that remedy
+    // itself as a request, against work already running. `hold=` is that remedy
     // pre-computed off this write's own seq — a stronger instruction than a
     // paragraph telling the reader to go and find one.
     const text = await chatResult(THREAD);
-    expect(text).toContain("await=since:9");
+    expect(text).toContain("hold=since:9");
     expect(text).not.toContain("do NOT repeat it as a request");
     // ⚠ RE-POINTED: `THE LOOP:` was the AWAITING block's heading, deleted by
     // ruling (wave B §4, `docs/specs/mcp-v2-wave-b.md:280`). The loop's one

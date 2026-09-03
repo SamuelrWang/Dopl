@@ -14,8 +14,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opAwaitWorkspace } from "./channel-ops-await-workspace";
-import { opAwait } from "./channel-ops-await";
+import { opHoldWorkspace } from "./channel-ops-hold-workspace";
+import { opHold } from "./channel-ops-hold";
 
 const ME = "11111111-1111-1111-1111-111111111111";
 
@@ -38,7 +38,7 @@ function message(over: Record<string, unknown> = {}) {
 }
 
 /**
- * ⚠ THE INNER POLL SLEEPS, AND IT HAS TO. `opAwaitWorkspace` treats a hold that
+ * ⚠ THE INNER POLL SLEEPS, AND IT HAS TO. `opHoldWorkspace` treats a hold that
  * returns far under its ask as CUT SHORT — the platform-clamp branch, which
  * deliberately tells the agent NOT to re-arm. An instant mock trips it every
  * time, so a case testing the ordinary TIMEOUT result would be testing the clamp
@@ -57,7 +57,7 @@ function wsClient(result: Record<string, unknown>): DoplClient {
 }
 
 const text = async (c: DoplClient, since = 5, timeout?: number) =>
-  (await opAwaitWorkspace(c, since, timeout, ME)).content[0].text as string;
+  (await opHoldWorkspace(c, since, timeout, ME)).content[0].text as string;
 
 describe("a workspace page names the channel every message came from", () => {
   it("groups by channel and heads each group with a usable ref", async () => {
@@ -202,14 +202,14 @@ describe("counterparty bodies are FRAMED before they are rendered", () => {
  * ⚠ THE SUPPRESSION IS SESSION-SCOPED, AND THERE IS NO ACCOUNT FALLBACK (F-405).
  * Across a whole workspace the account filter hid most of what an orchestrator
  * waits for, and ALL of it from an unstamped external client — see
- * `channel-await-author.test.ts` for the per-channel repro and the full
+ * `channel-hold-author.test.ts` for the per-channel repro and the full
  * argument. This block used to assert `excludeAuthor === ME`, i.e. the bug.
  */
 describe("the caller's own posts never end its own workspace hold", () => {
   it("sends NO author filter, stamped or not", async () => {
     for (const self of [ME, null]) {
       const client = wsClient({});
-      await opAwaitWorkspace(client, 5, HOLD_MS, self);
+      await opHoldWorkspace(client, 5, HOLD_MS, self);
       const call = vi.mocked(client.awaitWorkspaceMessages).mock.calls[0][0];
       expect(call).not.toHaveProperty("excludeAuthor");
     }
@@ -221,7 +221,7 @@ describe("the caller's own posts never end its own workspace hold", () => {
       timedOut: false,
     });
 
-    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, null, "chan-9:mine"))
+    const out = (await opHoldWorkspace(client, 5, HOLD_MS, ME, null, "chan-9:mine"))
       .content[0].text as string;
 
     expect(out).toContain("the parser is done");
@@ -233,7 +233,7 @@ describe("the caller's own posts never end its own workspace hold", () => {
       timedOut: false,
     });
 
-    const out = (await opAwaitWorkspace(client, 5, HOLD_MS, ME, null, "chan-9:mine"))
+    const out = (await opHoldWorkspace(client, 5, HOLD_MS, ME, null, "chan-9:mine"))
       .content[0].text as string;
 
     expect(out).not.toContain("the parser is done");
@@ -324,7 +324,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
         timedOut: false,
       })),
     } as unknown as DoplClient;
-    const noBlock = (await opAwait(bare, "general", 5, 40_000, ME)).content[0]
+    const noBlock = (await opHold(bare, "general", 5, 40_000, ME)).content[0]
       .text as string;
     expect(noBlock).not.toContain("Your agents");
 
@@ -336,7 +336,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
         sessions: [session],
       })),
     } as unknown as DoplClient;
-    const block = (await opAwait(withSessions, "general", 5, 40_000, ME))
+    const block = (await opHold(withSessions, "general", 5, 40_000, ME))
       .content[0].text as string;
     expect(block).toContain("### Your agents — 1");
   });
@@ -355,7 +355,7 @@ describe("the `sessions` block is ADDITIVE on both holds", () => {
         return { messages: [], timedOut: true, sessions: [session] };
       }),
     } as unknown as DoplClient;
-    const out = (await opAwait(client, "general", 5, HOLD_MS, ME)).content[0]
+    const out = (await opHold(client, "general", 5, HOLD_MS, ME)).content[0]
       .text as string;
     expect(out).toContain("### Your agents — 1");
   }, 30_000);

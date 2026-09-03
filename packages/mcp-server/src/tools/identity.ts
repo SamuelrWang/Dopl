@@ -67,14 +67,14 @@ export interface CallerIdentity {
   /**
    * WHICH SESSION this connection is, from `X-Dopl-Session-Id` — the same value
    * the loopback stamps onto every post this session makes
-   * (`service-writes-metadata.ts` fold 6b), so it is what lets an await tell its
+   * (`service-writes-metadata.ts` fold 6b), so it is what lets a hold tell its
    * OWN lines apart from a SIBLING session's.
    *
    * ⚠ THIS IS THE ONLY FIELD THAT CAN DO THAT, and the reason is F-405: one
    * account runs many concurrent agents and every post is authored by the
    * ACCOUNT, so `userId` cannot distinguish "my own echo" from "the other
    * worker answering me". Excluding on `userId` made a same-account
-   * counterparty permanently invisible to `op="await"`.
+   * counterparty permanently invisible to a hold.
    *
    * ⚠ A LABEL, NOT A LOCK (`shared/auth/session-header.ts`) — nothing may GATE
    * on it. Suppressing one's own echo is presentation, not authorization, which
@@ -99,7 +99,7 @@ export const UNKNOWN_CALLER: CallerIdentity = {
 /**
  * DID THE REQUEST CARRY THE DESKTOP'S RUNTIME STAMP? ⚠ The ONE statement of that
  * comparison — `channel-wake-guidance.ts` (what the hold may CLAIM) and
- * `channel-await-budget.ts` (how long the hold may BE) both branch on it, and a
+ * `channel-hold-budget.ts` (how long the hold may BE) both branch on it, and a
  * second copy is how the two answers drift into disagreeing about one request.
  *
  * ⚠ An OBSERVATION, and it gates nothing (`src/shared/auth/runtime-header.ts`

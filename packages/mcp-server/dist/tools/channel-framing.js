@@ -76,7 +76,7 @@ exports.UNTRUSTED_ROSTER_HEADER = exports.UNTRUSTED_THREAD_HEADER = exports.UNTR
  * SURFACE" RATHER THAN "IS THIS AN await"** (docblock corrected 2026-09-02; it
  * had said "the two await lanes only" while naming four). Re-derive:
  * `grep -rln UNTRUSTED_BODY_HEADER packages/mcp-server/src/tools/*.ts`.
- *   - `channel-ops-await.ts` and `channel-ops-await-workspace.ts` — the two holds.
+ *   - `channel-ops-hold.ts` and `channel-ops-hold-workspace.ts` — the two holds.
  *   - `channel-ops-account.ts` — the CROSS-CHANNEL read (T21). ⚠ **IT KEEPS THE
  *     BANNER, AND THAT IS A DECISION, NOT AN OVERSIGHT.** It is the surface an
  *     orchestrator arms INSTEAD of N per-channel holds, so it carries bodies from

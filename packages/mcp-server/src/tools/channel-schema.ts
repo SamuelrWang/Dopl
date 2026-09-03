@@ -49,7 +49,7 @@
 import { z } from "zod";
 import { RESPONSE_FORMAT_FIELD } from "./response-size";
 import { DOCTRINE_SECTION_NAMES } from "./channel-doctrine";
-import { AWAIT_HOLD_CAP_MS } from "./channel-await-budget";
+import { HOLD_CAP_MS } from "./channel-hold-budget";
 
 /**
  * THE FIVE OPS AN AGENT SEES, and the only five it may pick from.
@@ -344,13 +344,13 @@ export const CHANNEL_INPUT_SHAPE = {
   // server to hold for a message. Both are "how long may this call take before
   // it comes back with nothing", both cap server-side, and two names for one
   // knob is how a caller learns to guess. ⚠ The published cap is the HOLD's
-  // (`AWAIT_HOLD_CAP_MS`); the directive lane clamps to its own, which it has
+  // (`HOLD_CAP_MS`); the directive lane clamps to its own, which it has
   // always done in code (`channel-ops-launch.ts › WAIT_CAP_MS`).
   wait_ms: z.coerce
     .number()
     .int()
     .min(0)
-    .max(AWAIT_HOLD_CAP_MS)
+    .max(HOLD_CAP_MS)
     .optional()
     .describe(
       'Optional HOLD. op="read": long-poll for messages after `since` instead of returning a page. op="manage": how long to hold for your operator\'s desktop to accept or refuse — a timeout is NOT a failure, the request stays PENDING.',

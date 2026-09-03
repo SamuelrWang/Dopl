@@ -42,7 +42,7 @@
  * states only what holds at every size.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AWAIT_UNNAMED_NOTICE = exports.GROUP_CHANNEL_MIN_MEMBERS = void 0;
+exports.HOLD_UNNAMED_NOTICE = exports.GROUP_CHANNEL_MIN_MEMBERS = void 0;
 exports.rosterAddressingRule = rosterAddressingRule;
 /**
  * Where a channel stops being a pair and becomes a room. ⚠ HAND-COPIED from
@@ -116,7 +116,7 @@ function rosterAddressingRule(ref, memberCount) {
     return `\n${how} With two members an UNADDRESSED, UNTHREADED post still reaches no one's agent — the size buys you nothing. Name the other member and the post becomes a request.`;
 }
 /**
- * The `await` wake notice — said when nothing that arrived NAMES the caller.
+ * The HOLD's wake notice — said when nothing that arrived NAMES the caller.
  *
  * ⚠ Must NOT tell the agent to ignore what it got: THE CANONICAL REPLY IN THIS
  * PRODUCT IS UNADDRESSED. `channel-post.js › postResult` posts a responder's
@@ -127,4 +127,4 @@ function rosterAddressingRule(ref, memberCount) {
  * does (2026-08-18), so the answer a requester waits on names nobody there
  * either — which makes this notice MORE load-bearing, not less.
  */
-exports.AWAIT_UNNAMED_NOTICE = `NONE of the messages above NAMES you as its addressee. That is not the same as "none of this is yours": a reply here is normally posted UNADDRESSED (a responding agent answers without a \`to\`), and a message THREADED into an exchange you are a party to is for you whatever its addressing says — read the "· thread <id>" tags above. So: if you were waiting on someone and one of these came from them, that is your reply, and you should handle it. What you must NOT do is adopt an unaddressed message as a task you were assigned, or answer one aimed at another member. If you were not waiting on anyone, all of it is context — stop here.`;
+exports.HOLD_UNNAMED_NOTICE = `NONE of the messages above NAMES you as its addressee. That is not the same as "none of this is yours": a reply here is normally posted UNADDRESSED (a responding agent answers without a \`to\`), and a message THREADED into an exchange you are a party to is for you whatever its addressing says — read the "· thread <id>" tags above. So: if you were waiting on someone and one of these came from them, that is your reply, and you should handle it. What you must NOT do is adopt an unaddressed message as a task you were assigned, or answer one aimed at another member. If you were not waiting on anyone, all of it is context — stop here.`;

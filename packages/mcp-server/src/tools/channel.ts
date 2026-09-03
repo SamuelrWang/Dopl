@@ -57,11 +57,11 @@ import {
   isRoomsAction,
 } from "./channel-dispatch-rooms";
 import { opRead } from "./channel-ops-read";
-import { opAwait } from "./channel-ops-await";
-// ⚠ WORKSPACE-WIDE hold is a SIBLING handler, not a branch inside `opAwait`:
+import { opHold } from "./channel-ops-hold";
+// ⚠ WORKSPACE-WIDE hold is a SIBLING handler, not a branch inside `opHold`:
 // the per-channel result vocabulary splices `ref` into every sentence, and
 // threading an absent ref through it would produce guidance with a hole in it.
-import { opAwaitWorkspace } from "./channel-ops-await-workspace";
+import { opHoldWorkspace } from "./channel-ops-hold-workspace";
 // ⚠ G14's cap travels WITH the lane it bounds — the seam enforces it, the
 // send lane owns the number and the sentence.
 import { decisionRefusal, milestoneRefusal, opPost } from "./channel-ops-write";
@@ -248,7 +248,7 @@ export function registerChannelTool(
             const missHold = missingParams("read (holding)", args, ["since"]);
             if (missHold) return missHold;
             return scoped
-              ? opAwait(
+              ? opHold(
                   client,
                   args.channel as string,
                   args.since as number,
@@ -257,7 +257,7 @@ export function registerChannelTool(
                   runtime,
                   selfSessionId,
                 )
-              : opAwaitWorkspace(
+              : opHoldWorkspace(
                   client,
                   args.since as number,
                   args.wait_ms,

@@ -99,7 +99,7 @@ export declare const GROUP_CHANNEL_MIN_MEMBERS = 3;
  */
 export declare function rosterAddressingRule(ref: string, memberCount: number): string;
 /**
- * The `await` wake notice — said when nothing that arrived NAMES the caller.
+ * The HOLD's wake notice — said when nothing that arrived NAMES the caller.
  *
  * ⚠ Must NOT tell the agent to ignore what it got: THE CANONICAL REPLY IN THIS
  * PRODUCT IS UNADDRESSED. `channel-post.js › postResult` posts a responder's
@@ -110,4 +110,4 @@ export declare function rosterAddressingRule(ref: string, memberCount: number): 
  * does (2026-08-18), so the answer a requester waits on names nobody there
  * either — which makes this notice MORE load-bearing, not less.
  */
-export declare const AWAIT_UNNAMED_NOTICE = "NONE of the messages above NAMES you as its addressee. That is not the same as \"none of this is yours\": a reply here is normally posted UNADDRESSED (a responding agent answers without a `to`), and a message THREADED into an exchange you are a party to is for you whatever its addressing says \u2014 read the \"\u00B7 thread <id>\" tags above. So: if you were waiting on someone and one of these came from them, that is your reply, and you should handle it. What you must NOT do is adopt an unaddressed message as a task you were assigned, or answer one aimed at another member. If you were not waiting on anyone, all of it is context \u2014 stop here.";
+export declare const HOLD_UNNAMED_NOTICE = "NONE of the messages above NAMES you as its addressee. That is not the same as \"none of this is yours\": a reply here is normally posted UNADDRESSED (a responding agent answers without a `to`), and a message THREADED into an exchange you are a party to is for you whatever its addressing says \u2014 read the \"\u00B7 thread <id>\" tags above. So: if you were waiting on someone and one of these came from them, that is your reply, and you should handle it. What you must NOT do is adopt an unaddressed message as a task you were assigned, or answer one aimed at another member. If you were not waiting on anyone, all of it is context \u2014 stop here.";

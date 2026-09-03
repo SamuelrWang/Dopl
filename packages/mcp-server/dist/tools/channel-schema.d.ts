@@ -9,14 +9,14 @@
  * every declared param must be referenced by some handler in the `channel-*`
  * group, and no handler may read an arg not declared here.
  *
- * ⚠ **FIVE OPS SINCE 2026-09-02 (MCP v2 wave B slice B8, Samuel's ruling B9).**
- * `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three. The
- * other twenty-two names still PARSE for one release and answer one line naming
- * their replacement (`channel-retired-ops.ts`) — and they are **absent from the
- * published enum**, because a retired name a model can see is a name a model
- * will call. The runtime enum is the union; `.meta({ enum: CHANNEL_OPS })`
- * overrides what `z.toJSONSchema` publishes, which is the exact conversion the
- * MCP SDK renders for `tools/list`.
+ * ⚠ **FIVE OPS SINCE 2026-09-02 (MCP v2 wave B slice B8, Samuel's ruling B9),
+ * AND FIVE AT RUNTIME TOO SINCE SLICE B16.** `send` · `read` · `status` ·
+ * `manage` · `rooms`, down from twenty-three. The other twenty-two names parsed
+ * for one release and answered a one-line redirect; that window is CLOSED, so
+ * the runtime enum and the published one are the same five and a retired name is
+ * refused by schema validation with {@link unknownOpRefusal}'s line. The names
+ * are kept as dead vocabulary in `law-removed-vocabulary.ts ›
+ * RETIRED_CHANNEL_OPS`, which is what stops a shipped string teaching one.
  *
  * ⚠ **EVERY `.describe()` HERE IS PUSHED ON EVERY CONNECTION, EXACTLY LIKE THE
  * TOOL DESCRIPTION, AND IS BUDGETED LIKE ONE** (A6, 2026-09-02). It was 20,844
@@ -54,6 +54,22 @@ import { z } from "zod";
  */
 export declare const CHANNEL_OPS: readonly ["send", "read", "status", "manage", "rooms"];
 export type ChannelOp = (typeof CHANNEL_OPS)[number];
+/**
+ * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice
+ * (slice B16): the schema's own zod error, and `channel.ts`'s exhaustive
+ * `default` for a build where that validation did not run.
+ *
+ * ⚠ **WITHOUT IT, RETIREMENT IS A `-32602 invalid enum value`** — the opaque
+ * failure B8's one-release redirect window existed to prevent, arriving one
+ * release later. ⚠ **ONE LINE, AND IT NAMES THE FIVE**, because the replacement
+ * for any retired name is one of five words; anything longer is the doctrine,
+ * and `rooms(action="help")` is where that lives.
+ *
+ * ⚠ The caller's own word is echoed BOUNDED AND ON ONE LINE — it is the only
+ * part of this sentence they wrote, and an unbounded multi-line echo is
+ * structure a caller can forge inside our narration.
+ */
+export declare function unknownOpRefusal(op: unknown): string;
 /**
  * THE SUB-VERBS, per dispatching op.
  *
@@ -105,33 +121,11 @@ export declare const CHANNEL_INPUT_SHAPE: {
         detailed: "detailed";
     }>>;
     op: z.ZodEnum<{
-        open: "open";
-        set_agent_mode: "set_agent_mode";
         read: "read";
-        list: "list";
-        update: "update";
         status: "status";
-        members: "members";
         send: "send";
         manage: "manage";
-        ping: "ping";
         rooms: "rooms";
-        post: "post";
-        milestone: "milestone";
-        escalate: "escalate";
-        pings: "pings";
-        create_thread: "create_thread";
-        invite: "invite";
-        list_threads: "list_threads";
-        set_thread_mode: "set_thread_mode";
-        help: "help";
-        await: "await";
-        launch_agent: "launch_agent";
-        end_agent: "end_agent";
-        rename_agent: "rename_agent";
-        direct_agent: "direct_agent";
-        read_directions: "read_directions";
-        read_sessions: "read_sessions";
     }>;
     action: z.ZodOptional<z.ZodEnum<{
         [x: string]: string;

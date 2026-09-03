@@ -1,7 +1,7 @@
 /**
  * `dopl_channel` READ op handlers: list, read, list_threads, members. All
  * non-mutating, all ONE round-trip rendered — except a THREAD-SCOPED `read`,
- * which is two. `await` lives in `channel-ops-await.ts` (the only looping op).
+ * which is two. The HOLD lives in `channel-ops-hold.ts` (the only looping shape).
  *
  * ⚠ **`op="get_thread"` WAS FOLDED INTO `read(thread=)` ON 2026-09-02 (C15).**
  * Two ops answered one noun — "what is this exchange" — and the split cost 200

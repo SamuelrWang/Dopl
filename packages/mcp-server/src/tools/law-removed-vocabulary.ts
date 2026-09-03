@@ -84,6 +84,17 @@ export const REMOVED_VOCABULARY: ReadonlyArray<[string, RegExp]> = [
   // The columns survive as legacy storage; the surface must not report them,
   // because reporting a state is how an agent learns to wait on it.
   ["thread status / outcome vocabulary", /\bthread('s)?\s+(status|outcome)\b|\boutcome summar(y|ies)\b/i],
+  // ── THE `await` OP, retired 2026-09-02 (B8) and DELETED at slice B16 ──────
+  // The hold is `op="read"` carrying `wait_ms`, and the verb this surface means
+  // is HOLD. ⚠ **A BANNED WORD RATHER THAN A ROW IN `RETIRED_CHANNEL_OPS`,
+  // BECAUSE THE OP-POSITION SCAN WAS NOT ENOUGH**: the send lane shipped a
+  // `await=since:<seq>` FACT KEY on every write, which names the retired lane
+  // without ever writing `op="await"`. That key is `hold=` now, and the word is
+  // measured absent from every shipped string in this directory — which is what
+  // makes the ban enforceable rather than aspirational.
+  // ⚠ It is a rule about SHIPPED STRINGS only; the `await` KEYWORD is on nearly
+  // every line of this package and is not a literal, so the scan cannot see it.
+  ["the await op", /\bawait\b/i],
 ];
 
 /**

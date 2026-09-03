@@ -204,7 +204,7 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
     expect(text.split("\n")).toHaveLength(1);
     expect(text.length, text).toBeLessThanOrEqual(WRITE_RESULT_MAX_CHARS);
     expect(text).toContain(`thread=${THREAD_ID}`);
-    expect(text).toContain("await=since:861");
+    expect(text).toContain("hold=since:861");
     expect(text).not.toContain("Now WATCH FOR THE REPLY");
   });
 

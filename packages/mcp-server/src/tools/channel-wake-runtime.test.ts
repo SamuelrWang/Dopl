@@ -16,7 +16,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import type { RegisterTool } from "./respond";
 import { DESKTOP_SESSION_RUNTIME } from "./identity";
-import { opAwait } from "./channel-ops-await";
+import { opHold } from "./channel-ops-hold";
 import { opPost } from "./channel-ops-write";
 import { opCreateThread } from "./channel-ops-threads";
 import { registerChannelTool } from "./channel";
@@ -24,7 +24,7 @@ import { registerChannelTool } from "./channel";
 // `create_thread` used to close with three paragraphs each — the hold, the stop
 // rule, the skip clause. All three are standing doctrine and are re-pinned on
 // CHANNEL_DOCTRINE below; what SURVIVES in a write result is the one thing that
-// is a fact about the call, the `await=` branch off the observed runtime.
+// is a fact about the call, the `hold=` branch off the observed runtime.
 import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
 import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 
@@ -129,13 +129,13 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     ).content[0].text;
 
     expectNoFalsePromise(text);
-    // ⚠ `await=skip` IS THE WHOLE OF "DO NOT ARM", and it is the ONE thing on
+    // ⚠ `hold=skip` IS THE WHOLE OF "DO NOT ARM", and it is the ONE thing on
     // this decision that is a FACT about the call rather than standing doctrine:
     // only the server saw whether THIS request carried the desktop's stamp.
-    expect(text).toContain("await=skip");
+    expect(text).toContain("hold=skip");
     // ⚠ AND NO CURSOR IS OFFERED. Handing a stamped session a `since:` to arm
     // from is the whole failure this branch exists to prevent.
-    expect(text).not.toContain("await=since:");
+    expect(text).not.toContain("hold=since:");
     expect(text).not.toContain("since=12");
     // ⚠ Arming instruction GONE — not softened, not conditional.
     expect(text).not.toContain("Expecting a reply?");
@@ -168,8 +168,8 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     ).content[0].text;
 
     expectNoFalsePromise(text);
-    expect(text).toContain("await=skip");
-    expect(text).not.toContain("await=since:");
+    expect(text).toContain("hold=skip");
+    expect(text).not.toContain("hold=since:");
     // ⚠ THE ADDRESSEE IS A FACT, THE LABEL WAS NOT. "Bob" was the caller's own
     // argument one line ago; `addressed=yes` is what the server established —
     // that the member RESOLVED and the thread has a second party who may post
@@ -182,7 +182,7 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
 
   it("a timed-out await tells it to stop, not to re-arm", async () => {
     const text = (
-      await opAwait(quietClient(), "general", 7, undefined, "u-me", DESKTOP_SESSION_RUNTIME)
+      await opHold(quietClient(), "general", 7, undefined, "u-me", DESKTOP_SESSION_RUNTIME)
     ).content[0].text;
 
     expectNoFalsePromise(text);
@@ -193,7 +193,7 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
 
   it("an await that RETURNED messages still advances the cursor and stops", async () => {
     const text = (
-      await opAwait(
+      await opHold(
         arrivingClient(),
         "general",
         7,
@@ -227,8 +227,8 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // is pre-computed off the seq this write just produced, so arming costs no
     // extra read. ⚠ `since:12`, never `since:0`: awaiting from 0 replays the
     // channel.
-    expect(text).toContain("await=since:12");
-    expect(text).not.toContain("await=skip");
+    expect(text).toContain("hold=since:12");
+    expect(text).not.toContain("hold=skip");
     // ⚠ THE THREE PARAGRAPHS ARE GONE FROM THE RESULT AND MUST STAY GONE...
     expect(text).not.toContain("Expecting a reply?");
     expect(text).not.toContain("RETURNS INSIDE your current turn");
@@ -265,8 +265,8 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     expectNoFalsePromise(text);
     // ⚠ SAME BRANCH, SAME TOKEN, off the OPENING message's seq — so the reply
     // is the very next message the armed await returns.
-    expect(text).toContain("await=since:41");
-    expect(text).not.toContain("await=skip");
+    expect(text).toContain("hold=since:41");
+    expect(text).not.toContain("hold=skip");
     expect(text).not.toContain("Now WATCH FOR THE REPLY");
     // ⚠ **PIN RETIRED: the AWAITING block is deleted BY RULING**, not by drift
     // — wave B §4 (`docs/specs/mcp-v2-wave-b.md:280`) lists `AWAITING (3,914)`
@@ -288,7 +288,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
    * call, and the stop rule INVARIANTS §10 requires of any re-arm instruction.
    */
   it("a timed-out await re-arms compactly, cursor first, nothing promised", async () => {
-    const text = (await opAwait(quietClient(), "general", 7, undefined, "u-me"))
+    const text = (await opHold(quietClient(), "general", 7, undefined, "u-me"))
       .content[0].text;
 
     expectNoFalsePromise(text);
@@ -309,7 +309,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
   });
 
   it("an await that RETURNED messages re-arms on the new cursor", async () => {
-    const text = (await opAwait(arrivingClient(), "general", 7, undefined, "u-me"))
+    const text = (await opHold(arrivingClient(), "general", 7, undefined, "u-me"))
       .content[0].text;
 
     expectNoFalsePromise(text);
@@ -332,7 +332,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // (T10/T12); the pattern itself is unchanged and is asserted on the doctrine
     // below, so this is a move rather than a removal.
     const armingSurfaces = [
-      (await opAwait(arrivingClient(), "general", 7, undefined, "u-me")).content[0].text,
+      (await opHold(arrivingClient(), "general", 7, undefined, "u-me")).content[0].text,
     ];
 
     for (const text of armingSurfaces) {
@@ -353,7 +353,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // stripped the timeout, T10/T12 stripped the writes) and this is the union:
     // the pattern is asserted on the doctrine below, so nothing was removed.
     const writeSurfaces = [
-      (await opAwait(quietClient(), "general", 7, undefined, "u-me")).content[0].text,
+      (await opHold(quietClient(), "general", 7, undefined, "u-me")).content[0].text,
       (await opPost(stubClient(), "general", "please do X", { to: "bob@x.com" }))
         .content[0].text,
       (
@@ -364,8 +364,8 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
       expectNoFalsePromise(text);
       expect(text).not.toContain("background shell tasks");
       // ...but each still hands back the CURSOR that makes the poll possible —
-      // `await=since:<seq>` on a write, a bare `cursor=<seq>` on the timeout.
-      expect(text).toMatch(/await=since:|cursor=\d+/);
+      // `hold=since:<seq>` on a write, a bare `cursor=<seq>` on the timeout.
+      expect(text).toMatch(/hold=since:|cursor=\d+/);
     }
     // ⚠ **PIN RETIRED: the background-task OFFER went with the AWAITING block**
     // (wave B §4, `docs/specs/mcp-v2-wave-b.md:280`). It was harness advice, and
@@ -381,7 +381,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
 
   it("does NOT offer it to a desktop session, which is already fed replies", async () => {
     const text = (
-      await opAwait(quietClient(), "general", 7, undefined, "u-me", DESKTOP_SESSION_RUNTIME)
+      await opHold(quietClient(), "general", 7, undefined, "u-me", DESKTOP_SESSION_RUNTIME)
     ).content[0].text;
 
     expect(text).not.toContain("background shell tasks");
@@ -402,7 +402,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // What a Dopl-driven Codex session sends: the same custody stamp. The
     // vendor rides `X-Dopl-Vendor` and never reaches this argument.
     const text = (
-      await opAwait(quietClient(), "general", 7, undefined, "u-me", DESKTOP_SESSION_RUNTIME)
+      await opHold(quietClient(), "general", 7, undefined, "u-me", DESKTOP_SESSION_RUNTIME)
     ).content[0].text;
 
     expect(text).toContain("Do NOT re-arm");
@@ -414,7 +414,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // custody enum with a vendor word, this is what those sessions would get.
     for (const vendorWord of ["codex", "cursor", "claude"]) {
       const text = (
-        await opAwait(quietClient(), "general", 7, undefined, "u-me", vendorWord)
+        await opHold(quietClient(), "general", 7, undefined, "u-me", vendorWord)
       ).content[0].text;
       expect(text).toContain("re-arm the wait NOW");
       expect(text).not.toContain("Do NOT re-arm");
@@ -425,7 +425,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // ⚠ Only the EXACT recognized value counts — a near-miss falls to the
     // honest branch, never to the desktop one.
     const text = (
-      await opAwait(quietClient(), "general", 7, undefined, "u-me", "desktop_session")
+      await opHold(quietClient(), "general", 7, undefined, "u-me", "desktop_session")
     ).content[0].text;
 
     expect(text).toContain("re-arm the wait NOW");

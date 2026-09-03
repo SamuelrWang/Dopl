@@ -13,7 +13,7 @@
  * CARRIED the stamp; absence is `unstamped`, usually an external client but
  * also how a desktop spawn on an older build looks. Never "external".
  *   - stamped   → a session this product spawned, fed replies as new turns.
- *                 Awaiting is the wrong primitive, so the wake promise is
+ *                 Holding is the wrong primitive, so the wake promise is
  *                 DROPPED and the caller is told not to arm.
  *   - unstamped → nothing promised. The hold is described as what it provably
  *                 is — a synchronous wait returning in this turn — plus the
@@ -24,7 +24,7 @@
  * (`rearmStopRule` and siblings), dropped only where nobody is told to re-arm.
  */
 
-import { AWAIT_HOLD_EXTERNAL_DEFAULT_MS } from "./channel-await-budget";
+import { HOLD_EXTERNAL_DEFAULT_MS } from "./channel-hold-budget";
 // ⚠ ONE statement of the runtime comparison, in `identity.ts` — the hold's
 // LENGTH branches on the same answer this file's CLAIMS do.
 import { isDesktopRuntime } from "./identity";
@@ -37,20 +37,20 @@ import { isDesktopRuntime } from "./identity";
  * so no line here ever states the desktop hold — quoting the desktop's 215s to
  * the one population that cannot get it is how this number was wrong before.
  */
-const HOLD_SECONDS = Math.round(AWAIT_HOLD_EXTERNAL_DEFAULT_MS / 1000);
+const HOLD_SECONDS = Math.round(HOLD_EXTERNAL_DEFAULT_MS / 1000);
 
 /** The observation, said as an observation. Reused so it reads identically. */
 const DESKTOP_OBSERVED = `This request carried the Dopl desktop's runtime stamp: a desktop-run session, which is fed the counterparty's replies as new turns.`;
 
 /**
  * The wake an EXTERNAL session can build for itself — ⚠ one CONDITIONAL
- * sentence, no more. `await` returns inside the turn it was armed in, so being
+ * sentence, no more. A HOLD returns inside the turn it was armed in, so being
  * woken depends on an unobservable client behaviour; a harness with background
  * shell tasks already delivers completion as a wake, so the poll can move OUT
  * of the MCP call. Promises nothing about THIS call, and names a script rather
  * than implying the server provides one.
  */
-const BACKGROUND_TASK_HINT = `If your harness can run background shell tasks, a stronger pattern is to run the channel-wait poll there (scripts/dopl-channel-wait.sh in the Dopl repo, or any loop on the await route) and END your turn — the task's completion is a wake your client already delivers.`;
+const BACKGROUND_TASK_HINT = `If your harness can run background shell tasks, a stronger pattern is to run the channel-wait poll there (scripts/dopl-channel-wait.sh in the Dopl repo, or any loop on the hold route) and END your turn — the task's completion is a wake your client already delivers.`;
 
 /**
  * What the hold ACTUALLY does for a caller whose client we cannot see. ⚠ Every
@@ -59,7 +59,7 @@ const BACKGROUND_TASK_HINT = `If your harness can run background shell tasks, a 
  * client-side conditional it is. {@link BACKGROUND_TASK_HINT} rides on the end
  * so every unstamped branch gets it from ONE place.
  */
-const HOLD_FACT = `That call HOLDS until a reply arrives or ~${HOLD_SECONDS}s passes, and it RETURNS INSIDE your current turn — a pending call keeps a turn alive, it cannot end one. Some MCP clients background a call still pending past ~2 minutes and deliver its result as a wake: if yours does, an armed await can wake you later; if it does not, the await is a synchronous wait, so re-arm it while the exchange is alive. ${BACKGROUND_TASK_HINT}`;
+const HOLD_FACT = `That call HOLDS until a reply arrives or ~${HOLD_SECONDS}s passes, and it RETURNS INSIDE your current turn — a pending call keeps a turn alive, it cannot end one. Some MCP clients background a call still pending past ~2 minutes and deliver its result as a wake: if yours does, an armed hold can wake you later; if it does not, the hold is a synchronous wait, so re-arm it while the exchange is alive. ${BACKGROUND_TASK_HINT}`;
 
 /**
  * WHAT A WRITE RESULT SAYS ABOUT WAITING — ⚠ ONE TOKEN, and it is the only thing
@@ -71,20 +71,20 @@ const HOLD_FACT = `That call HOLDS until a reply arrives or ~${HOLD_SECONDS}s pa
  * call and now live once in `channel-doctrine.ts`. What is NOT derivable by the
  * caller is the branch below — whether THIS request carried the desktop's
  * runtime stamp — so that survives:
- *   - `await=skip`        — a desktop-run session, fed the counterparty's
+ *   - `hold=skip`        — a desktop-run session, fed the counterparty's
  *                           replies as new turns. Arming is simply wrong here.
- *   - `await=since:<seq>` — everyone else: the cursor to arm from, pre-computed
+ *   - `hold=since:<seq>` — everyone else: the cursor to arm from, pre-computed
  *                           off the seq this write just produced, so the next
  *                           call needs no read to find it.
  *   - absent (`-`)        — the write produced no seq to arm from. ⚠ `0` is NOT
- *                           a substitute: awaiting from 0 replays the channel.
+ *                           a substitute: holding from 0 replays the channel.
  *
  * ⚠ IT STAYS AN OBSERVATION. An UNSTAMPED caller may still BE a desktop session
  * on an older build, which is why the unstamped branch offers a cursor rather
  * than an instruction, and why the doctrine states the wake as the client-side
  * conditional it is.
  */
-export function awaitFact(
+export function holdFact(
   runtime: string | null,
   seq: number | null,
 ): string | undefined {
@@ -93,7 +93,7 @@ export function awaitFact(
 }
 
 /**
- * `await` CAME BACK EMPTY — ⚠ ONE LINE, cursor-first (T03).
+ * THE HOLD CAME BACK EMPTY — ⚠ ONE LINE, cursor-first (T03).
  *
  * ⚠ **THE TIMEOUT IS THE HOTTEST RESULT ON THIS SURFACE AND CARRIES THE LEAST
  * NEWS.** An external orchestrator polling a quiet exchange reads this text
@@ -115,7 +115,7 @@ export function awaitFact(
  * ⚠ Desktop branch UNCHANGED — it is already one line, and it says the opposite
  * thing (do not re-arm at all).
  */
-export function awaitTimedOutLines(
+export function holdTimedOutLines(
   ref: string,
   since: number,
   runtime: string | null,
@@ -132,12 +132,12 @@ export function awaitTimedOutLines(
 
 /**
  * The same compression for the WORKSPACE hold's timeout. ⚠ A sibling line, not
- * a shared one, for the reason `channel-ops-await-workspace.ts` gives in full:
+ * a shared one, for the reason `channel-ops-hold-workspace.ts` gives in full:
  * the workspace stop rule is a DIFFERENT rule (any channel's traffic wakes you,
  * so a wake is not news), and collapsing the two would restate the per-channel
  * trap where the worse one applies.
  */
-export function workspaceAwaitTimedOutLines(
+export function workspaceHoldTimedOutLines(
   since: number,
   runtime: string | null,
 ): string[] {
@@ -151,8 +151,8 @@ export function workspaceAwaitTimedOutLines(
   ];
 }
 
-/** `await` returned messages: advance the cursor, then re-arm — or don't. */
-export function awaitArrivedLines(
+/** The HOLD returned messages: advance the cursor, then re-arm — or don't. */
+export function holdArrivedLines(
   ref: string,
   lastSeq: number,
   runtime: string | null,

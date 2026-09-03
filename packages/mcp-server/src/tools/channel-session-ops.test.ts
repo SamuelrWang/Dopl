@@ -392,14 +392,14 @@ describe('send thread="new" handoff (rollback §3.5)', () => {
     // `do NOT arm op="await" yet` (the hold is `read` + `wait_ms` now), and an
     // external session obeyed it: nothing
     // opened, nobody watched the thread, and the peer's reply was read by no
-    // one. `await=since:41` is that instruction AND the cursor in one token — a
+    // one. `hold=since:41` is that instruction AND the cursor in one token — a
     // stronger form than the sentences it replaces ("you must arm the wait
     // yourself", "NOBODY is watching this thread"), which said the same thing in
     // words and charged every caller for them.
     // ⚠ PINNED ON THE INSTRUCTION, NOT ON THE OP NAME (B8): the hold moved onto
     // `read`, so the copy that would re-break this would spell it differently.
     expect(text).not.toContain("do NOT arm");
-    expect(text).toContain("await=since:41");
+    expect(text).toContain("hold=since:41");
     // ⚠ Nothing may tell the agent the desktop has it, in any wording.
     expect(text).not.toContain("A full session is opening");
     expect(text).not.toContain("You are done with this thread");
@@ -424,10 +424,10 @@ describe('send thread="new" handoff (rollback §3.5)', () => {
     // where something else picks the thread up, so "how to notice that nothing
     // did" is not a branch any more — the await is simply what happens next, and
     // it is stated first rather than as a contingency.
-    // ⚠ It is the `await=` FIELD rather than the words of a re-arm since T10:
+    // ⚠ It is the `hold=` FIELD rather than the words of a re-arm since T10:
     // one token carries the instruction AND the REAL cursor, so taking it still
     // cannot start past the peer's reply.
-    expect(text).toContain("await=since:41");
+    expect(text).toContain("hold=since:41");
     expect(text).not.toContain("IF NOTHING PICKS IT UP");
     // ⚠ AND THE CAPABILITY THE CALLER ACTUALLY WANTED IS NAMED. Without this the
     // result closes a door and opens none, which is how an agent invents a
@@ -462,7 +462,7 @@ describe('send thread="new" handoff (rollback §3.5)', () => {
     expect(text).not.toContain("since=undefined");
     expect(text).not.toContain("since:null");
     expect(text).toContain("seq=-");
-    expect(text).toContain("await=-");
+    expect(text).toContain("hold=-");
     // ⚠ "Go and read the cursor yourself" left the result with every other
     // standing sentence; the dash is this call's statement that there is nothing
     // to take, and the doctrine still names the op that takes it.
@@ -489,6 +489,6 @@ describe('send thread="new" handoff (rollback §3.5)', () => {
     // absence. The await instruction is identical on both branches.
     expect(text).toContain("handoff=-");
     expect(text).not.toContain("handoff=ignored");
-    expect(text).toContain("await=since:41");
+    expect(text).toContain("hold=since:41");
   });
 });

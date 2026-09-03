@@ -57,7 +57,7 @@ exports.UNKNOWN_CALLER = {
 /**
  * DID THE REQUEST CARRY THE DESKTOP'S RUNTIME STAMP? ⚠ The ONE statement of that
  * comparison — `channel-wake-guidance.ts` (what the hold may CLAIM) and
- * `channel-await-budget.ts` (how long the hold may BE) both branch on it, and a
+ * `channel-hold-budget.ts` (how long the hold may BE) both branch on it, and a
  * second copy is how the two answers drift into disagreeing about one request.
  *
  * ⚠ An OBSERVATION, and it gates nothing (`src/shared/auth/runtime-header.ts`

@@ -147,7 +147,7 @@ describe("Q1 write · a hostile channel NAME", () => {
     expectNoForgedStructure(text);
     // ⚠ Wake teaching is a CURSOR now, not a sentence after the name — so there
     // is no line for a forged one to be pushed off in the first place.
-    expect(text).toContain("await=since:3");
+    expect(text).toContain("hold=since:3");
   });
 
   it("opPost's 400 mapping cannot be forged by the name", async () => {
@@ -301,7 +301,7 @@ describe('Q1 write · rooms(action="thread_mode") and send(thread="new")', () =>
     // message an await returns; a caller left to derive one arms the wait past
     // the reply it is waiting for.
     expect(text).toContain("seq=4");
-    expect(text).toContain("await=since:4");
+    expect(text).toContain("hold=since:4");
   });
 
   it('send(thread="new")\'s 400 mapping cannot be forged by the name or the addressee', async () => {

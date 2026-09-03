@@ -10,7 +10,7 @@
  *                          heading (the card `op="get_thread"` rendered until
  *                          C15 folded it in here, 2026-09-02); a
  *                          waiting agent calls this every ~3 empty holds.
- *   D. `opRead`/`opAwait`— `profiles.display_name`, with NO length, charset or
+ *   D. `opRead`/`opHold`— `profiles.display_name`, with NO length, charset or
  *                          newline validation anywhere in the product — the one
  *                          field outside BOTH the header's disclaimer and the
  *                          body's 2-space indent.
