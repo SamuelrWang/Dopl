@@ -148,17 +148,30 @@ export async function listChannelIdsForWorkspace(
  * `repository-channel-grants.ts › CHANNEL_KNOWLEDGE_GRANT` states: without the
  * scope term this read would count a TEAM's grants as a channel's and widen the
  * ceiling it exists to impose.
+ *
+ * 🔒 ⚠ **AND THE `workspace_id` TERM IS GONE (2026-09-03, F-662).** A grant row
+ * is filed under the RESOURCE's container (`20260914120000` rule 3) while the
+ * caller reaches it through the SCOPE's, so an `.eq("workspace_id", …)` here
+ * refused precisely the cross-container lend a grant exists to be — a base on
+ * the operator's personal shelf, shared into a home channel, was invisible to
+ * the agent in that room even though the grant row was written and correct.
+ * `dopl_grant_admits()` has no such term and says so in its own header, and
+ * `resource-grant-reach.ts › grantedResourceIds` drops it for the same reason;
+ * this was the third lane over the one table and the only one still carrying it.
+ * ⚠ **NOTHING WIDENS: `channelIds` IS THE FENCE AND IT ALWAYS WAS.** The caller
+ * passes the channels of the container it is acting in
+ * (`service-audience.ts › listChannelIdsForWorkspace`, then the session
+ * narrowing), so the tenancy is already stated by the scope. The dropped term
+ * only ever removed rows whose SCOPE had already been proved.
  */
 export async function listGrantedBaseIdsForChannels(
   db: SupabaseClient,
-  workspaceId: string,
   channelIds: string[]
 ): Promise<string[]> {
   if (channelIds.length === 0) return [];
   const { data, error } = await db
     .from("resource_grants")
     .select("resource_id")
-    .eq("workspace_id", workspaceId)
     .eq("scope_type", "channel")
     .eq("resource_type", "knowledge_base")
     .in("scope_id", channelIds)

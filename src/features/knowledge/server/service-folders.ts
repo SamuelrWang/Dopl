@@ -23,7 +23,7 @@ import {
   assertBaseWritable,
   assertSameWorkspace,
 } from "./service-shared";
-import { getBaseById } from "./service-bases";
+import { getBaseById, readBaseInContext } from "./service-bases";
 
 /** Folder reads + writes, plus `getBaseTree` — the snapshot shared by REST and
  *  the MCP get_tree op. */
@@ -32,7 +32,8 @@ export async function listFolders(
   ctx: KnowledgeContext,
   baseId: string
 ): Promise<KnowledgeFolder[]> {
-  const base = await getBaseById(ctx, baseId);
+  // 🔒 A READ BY ID, so it follows the id — see {@link getBaseTree}.
+  const { value: base } = await readBaseInContext(ctx, baseId);
   return repo.listFoldersForBase(base.id, false);
 }
 
@@ -56,7 +57,13 @@ export async function getBaseTree(
   entryTotal?: number;
   nextEntryCursor?: string | null;
 }> {
-  const base = await getBaseById(ctx, baseId);
+  // 🔒 **A READ BY ID FOLLOWS THE ID (B2), AND EVERYTHING UNDER IT IS KEYED ON
+  // `base.id` RATHER THAN ON A WORKSPACE** — so the snapshot is the base's own,
+  // wherever it lives. Until this, `GET .../tree` and `dopl_kb(op="get_tree")`
+  // answered `KNOWLEDGE_BASE_MISMATCH` for an id `GET /api/knowledge/bases/<id>`
+  // resolves perfectly well, which is the wave's headline claim being untrue on
+  // every door but one (F-470).
+  const { value: base } = await readBaseInContext(ctx, baseId);
   const [folders, entries, entryTotal] = await Promise.all([
     repo.listFoldersForBase(base.id, false),
     repo.listEntriesForBase(base.id, {

@@ -1,6 +1,9 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { readResourceById } from "@/shared/tenancy/read-resource";
+import {
+  readResourceById,
+  type ContainerRead,
+} from "@/shared/tenancy/read-resource";
 import type {
   KbShelf,
   KnowledgeBase,
@@ -262,9 +265,26 @@ export async function readBaseById(
   ctx: KnowledgeContext,
   id: string
 ): Promise<KnowledgeBase> {
+  return (await readBaseInContext(ctx, id)).value;
+}
+
+/**
+ * 🔒 **THE SAME READ, PLUS THE CONTAINER IT LANDED IN.**
+ *
+ * ⚠ **A BASE'S CONTENTS ARE WORKSPACE-KEYED, SO A CALLER THAT FOLLOWED AN ID AND
+ * THEN COMPOSED AGAINST THE ORIGINAL CONTEXT READS THE ROW FROM ONE CONTAINER
+ * AND ITS ENTRIES FROM ANOTHER** — `read-resource.ts › ContainerRead` says so in
+ * its own docblock, and `service-paths.ts › readFileByPath` is the caller that
+ * needs it. Exported rather than inlined there for the reason
+ * {@link readBaseById} exists at all: one composition, not two.
+ */
+export async function readBaseInContext(
+  ctx: KnowledgeContext,
+  id: string
+): Promise<ContainerRead<KnowledgeContext, KnowledgeBase>> {
   const hit = await readResourceById(ctx, "knowledge_base", id, loadVisibleBase);
   if (!hit) throw new KnowledgeBaseNotFoundError(id);
-  return hit.value;
+  return hit;
 }
 
 /**

@@ -141,11 +141,34 @@ export class FolderCycleError extends Error {
   }
 }
 
-/** Entry/folder not in the base its parent claims. Defensive — unreachable
- *  while RLS + FKs hold; guards mis-routed service calls. */
+/**
+ * A row whose tenancy disagrees with the context reading it.
+ *
+ * ⚠ **IT IS TWO DIFFERENT EVENTS WEARING ONE NAME, AND THE SECOND IS A BUG.**
+ * On the id lane it is CONTROL FLOW — `service-bases.ts › loadVisibleBase`
+ * catches it to mean "not in this container, follow the id" — and it is not
+ * logged, because a follow is the normal path. Anything that reaches a RESPONSE
+ * is the other kind: a child row left on a tenancy its parent no longer has
+ * (F-664), which is a server invariant violation and not a caller's mistake.
+ *
+ * ⚠ **SO IT CARRIES THE TWO IDS.** Until 2026-09-03 it carried a sentence
+ * ("entry belongs to a different workspace") and the mapper answered 400 with
+ * it, so the one thing an operator needed — WHICH row and WHICH two tenancies —
+ * existed nowhere, and the class of defect was undiagnosable from logs alone.
+ * ⚠ The ids are for the SERVER LOG (`http-mapping.ts`); the client still gets
+ * the sentence, because naming a workspace the caller cannot see is an oracle.
+ */
 export class KnowledgeBaseMismatchError extends Error {
   readonly code = "KNOWLEDGE_BASE_MISMATCH";
-  constructor(message: string) {
+  constructor(
+    message: string,
+    /** The row's own `workspace_id`. */
+    readonly rowWorkspaceId: string | null = null,
+    /** The tenancy the read was running in. */
+    readonly contextWorkspaceId: string | null = null,
+    /** What the row is, and its id where the caller supplied one. */
+    readonly subject: string | null = null
+  ) {
     super(message);
     this.name = "KnowledgeBaseMismatchError";
   }

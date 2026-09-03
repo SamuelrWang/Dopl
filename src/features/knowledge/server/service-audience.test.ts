@@ -150,7 +150,7 @@ describe("resolveAgentAudience — the narrowed branch", () => {
     expect(audienceAdmits(audience, "kb-granted")).toBe(true);
     expect(audienceAdmits(audience, "kb-also-granted")).toBe(true);
     expect(audienceAdmits(audience, "kb-private")).toBe(false);
-    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), "ws-container", [
+    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), [
       CHANNEL_A,
     ]);
   });
@@ -188,7 +188,7 @@ describe("resolveAgentAudience — §4.3, the session-id narrowing", () => {
 
     await resolveAgentAudience(ctx({ sessionId: null }));
 
-    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), "ws-container", [
+    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), [
       CHANNEL_A,
       CHANNEL_B,
     ]);
@@ -202,7 +202,7 @@ describe("resolveAgentAudience — §4.3, the session-id narrowing", () => {
 
     await resolveAgentAudience(ctx({ sessionId: `${CHANNEL_B}:task-1:agent-1` }));
 
-    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), "ws-container", [
+    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), [
       CHANNEL_B,
     ]);
   });
@@ -218,7 +218,7 @@ describe("resolveAgentAudience — §4.3, the session-id narrowing", () => {
 
     await resolveAgentAudience(ctx({ sessionId: `${CHANNEL_OUTSIDE}:t:a` }));
 
-    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), "ws-container", [
+    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), [
       CHANNEL_A,
     ]);
   });
@@ -231,7 +231,7 @@ describe("resolveAgentAudience — §4.3, the session-id narrowing", () => {
 
     await resolveAgentAudience(ctx({ sessionId: "not-a-uuid:tail" }));
 
-    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), "ws-container", [
+    expect(mockGrants).toHaveBeenCalledWith(expect.anything(), [
       CHANNEL_A,
       CHANNEL_B,
     ]);
@@ -246,7 +246,10 @@ describe("resolveAgentAudience — §4.3, the session-id narrowing", () => {
     const narrowed = await resolveAgentAudience(
       ctx({ sessionId: `${CHANNEL_B}:t` })
     );
-    const [, , narrowedChannels] = mockGrants.mock.calls[0];
+    // ⚠ TWO ARGUMENTS SINCE F-662 — the container term is gone from this
+    // read, because a grant row is filed under the RESOURCE's container and
+    // `channelIds` is already the fence.
+    const [, narrowedChannels] = mockGrants.mock.calls[0];
 
     expect(narrowedChannels).toEqual([CHANNEL_B]);
     expect(narrowed.kind === "granted" && narrowed.channelIds).toEqual([

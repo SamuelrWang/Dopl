@@ -323,6 +323,17 @@ channel_default_responder …0336 · rls_helpers_and_caller_scope …0337 ·
 workspace_kind_personal …0340 · channel_resource_grants_read_only …0343 ·
 resource_grant_trigger_arms …0344. Snapshot 58/172/73/571 → 59/184/74/618.
 
+**Found in the 1.26.0 smoke (2026-09-03), fixed on `fix/personal-container-through-lock`:** a
+personal-shelf base was unreachable from a home channel — `base_not_found`, then
+`KNOWLEDGE_BASE_MISMATCH` — through four independently-correct fences composing
+to a refusal (F-470 the id doors and the MCP ref resolver, F-662 the grant lanes
+filtering by the caller's container, F-664 `20260920120000` moving parents
+without their children). The last is a DATA defect in an applied migration and is
+repaired by `20260924120000_personal_container_child_rows.sql`, with
+`scripts/check-tenancy-move-gate.ts` as the class fix. ⚠ `20260924120000` is
+PHASE 2 — it must run after `20260920120000`, which it repairs. Nothing was
+applied to production from that branch.
+
 **Two corrections to §1/§2, found live:**
 1. **`20260921120000_rls_phase2_policies` belongs to PHASE 2, after
    `20260915120000`.** Its end-check requires every SELECT policy on

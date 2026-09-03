@@ -45,6 +45,8 @@ import * as audience from "./service-audience";
 import * as tenancy from "@/shared/tenancy/resolve-resource";
 import type { ResolvedResource } from "@/shared/tenancy/resolve-resource";
 import { getBaseById, readBaseById } from "./service-bases";
+import { listDirByPath, readFileByPath, writeFileByPath } from "./service-paths";
+import { getBaseTree, listFolders } from "./service-folders";
 import { KnowledgeBaseMismatchError, KnowledgeBaseNotFoundError } from "./errors";
 
 const ME = "user-me";
@@ -172,6 +174,94 @@ describe("🔒 the WRITE gate did not move", () => {
     await expect(getBaseById(ctx(), BASE)).rejects.toBeInstanceOf(
       KnowledgeBaseMismatchError
     );
+    expect(tenancy.resolveResource).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 🔒 **THE SECONDARY READ DOORS FOLLOW THE ID TOO (F-470).**
+ *
+ * ⚠ **THE CLAIM WAS TRUE FOR ONE DOOR AND FALSE FOR THE REST, WHICH IS WORSE
+ * THAN FALSE FOR ALL OF THEM.** `GET /api/knowledge/bases/<id>` resolved an id
+ * to its own container from A12/B2 onward; `.../tree`, `.../files?path=` and
+ * `.../folders` composed the WORKSPACE-KEYED `getBaseById` instead, so the same
+ * id that opened a base answered `KNOWLEDGE_BASE_MISMATCH` for its contents —
+ * F-604's shape ("a base you could open and could not read") one layer up, and
+ * the reason `dopl_kb read_file` failed on a personal-shelf base in the 1.26.0
+ * smoke.
+ */
+describe("🔒 every by-id READ door names the id's own container", () => {
+  beforeEach(() => {
+    vi.mocked(repo.findBaseById).mockResolvedValue(base());
+    vi.mocked(tenancy.resolveResource).mockResolvedValue(resolvedIn(THERE));
+    vi.mocked(repo.listFoldersForBase).mockResolvedValue([]);
+    vi.mocked(repo.listEntriesForBase).mockResolvedValue([]);
+    vi.mocked(repo.findActiveFolderByName).mockResolvedValue(null);
+  });
+
+  it("read_file resolves the path in the container the base lives in", async () => {
+    // ⚠ MUTATION CHECK. Put `getBaseById` back and this is a
+    // `KnowledgeBaseMismatchError` — and if only the BASE lookup follows while
+    // `resolvePath` keeps the original context, it is one anyway, from the
+    // entry's own `assertSameWorkspace`.
+    vi.mocked(repo.findActiveEntryByTitle).mockResolvedValue({
+      id: "e1",
+      workspaceId: THERE,
+      knowledgeBaseId: BASE,
+      title: "protocol.md",
+    } as never);
+    await expect(
+      readFileByPath(ctx(), BASE, "protocol.md")
+    ).resolves.toMatchObject({ id: "e1" });
+  });
+
+  it("get_tree reads the snapshot of a base in another container", async () => {
+    await expect(getBaseTree(ctx(), BASE)).resolves.toMatchObject({
+      base: { id: BASE, workspaceId: THERE },
+    });
+  });
+
+  it("list_dir lists the root of a base in another container", async () => {
+    await expect(listDirByPath(ctx(), BASE, "")).resolves.toMatchObject({
+      folder: null,
+    });
+  });
+
+  it("list_folders takes the same lane", async () => {
+    await expect(listFolders(ctx(), BASE)).resolves.toEqual([]);
+  });
+
+  it("🔒 and every one of them still refuses what the matrix refuses", async () => {
+    // ⚠ MUTATION CHECK. The follow re-runs `getBaseById` in the container the id
+    // named, so somebody else's private row is the same single 404 on every door
+    // — the address is not the authorisation.
+    vi.mocked(repo.findBaseById).mockResolvedValue(base({ createdBy: OTHER }));
+    await expect(readFileByPath(ctx(), BASE, "x.md")).rejects.toBeInstanceOf(
+      KnowledgeBaseNotFoundError
+    );
+    await expect(getBaseTree(ctx(), BASE)).rejects.toBeInstanceOf(
+      KnowledgeBaseNotFoundError
+    );
+    await expect(listDirByPath(ctx(), BASE, "")).rejects.toBeInstanceOf(
+      KnowledgeBaseNotFoundError
+    );
+  });
+});
+
+/**
+ * ⚠ **THE WRITE DOORS DID NOT MOVE, AND THE OMISSION IS DELIBERATE.** A write
+ * that followed an id across a tenancy boundary is a ruling nobody has made
+ * (INVARIANTS §T35), so `write_file`, the folder writes and the base PATCH all
+ * keep `getBaseById`. Stated as a test so the next reader cannot mistake it for
+ * a door somebody forgot.
+ */
+describe("🔒 the by-id WRITE doors stay workspace-keyed", () => {
+  it("write_file still refuses a base in another container", async () => {
+    vi.mocked(repo.findBaseById).mockResolvedValue(base());
+    vi.mocked(tenancy.resolveResource).mockResolvedValue(resolvedIn(THERE));
+    await expect(
+      writeFileByPath(ctx(), BASE, "x.md", { body: "hi" })
+    ).rejects.toBeInstanceOf(KnowledgeBaseMismatchError);
     expect(tenancy.resolveResource).not.toHaveBeenCalled();
   });
 });

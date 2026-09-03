@@ -38,7 +38,24 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
     return new HttpError(409, "KNOWLEDGE_FOLDER_CYCLE", err.message);
   }
   if (err instanceof KnowledgeBaseMismatchError) {
-    return new HttpError(400, "KNOWLEDGE_BASE_MISMATCH", err.message);
+    // 🔒 **500, NOT 400, AND IT CHANGED ON 2026-09-03 (F-664).** A mismatch that
+    // reaches a RESPONSE is never something the caller did: the id lane catches
+    // this error as control flow (`service-bases.ts › loadVisibleBase`), so what
+    // is left is a row whose tenancy disagrees with its parent's — the state
+    // `20260924120000_personal_container_child_rows.sql` repairs and
+    // `check-tenancy-move-gate.ts` prevents. Answering 4xx told an operator the
+    // request was malformed and put the incident in nobody's error budget.
+    // ⚠ THE IDS GO TO THE LOG AND NOT TO THE BODY. Naming a workspace the caller
+    // cannot see would make the refusal an oracle; the sentence is unchanged.
+    console.error(
+      "[knowledge] tenancy mismatch — a row disagrees with its parent's workspace:",
+      {
+        subject: err.subject,
+        rowWorkspaceId: err.rowWorkspaceId,
+        contextWorkspaceId: err.contextWorkspaceId,
+      }
+    );
+    return new HttpError(500, "KNOWLEDGE_BASE_MISMATCH", err.message);
   }
   if (err instanceof KnowledgeBaseSlugConflictError) {
     return new HttpError(409, "KNOWLEDGE_BASE_SLUG_CONFLICT", err.message);

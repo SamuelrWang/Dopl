@@ -21,7 +21,7 @@ import {
 import * as repo from "./repository";
 import { scheduleEntryEmbedding } from "./embeddings";
 import { assertAgentCanDelete, assertBaseWritable, errorCode } from "./service-shared";
-import { getBaseById } from "./service-bases";
+import { getBaseById, readBaseInContext } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
 
 /**
@@ -49,8 +49,17 @@ export async function readFileByPath(
   baseId: string,
   path: string
 ): Promise<KnowledgeEntry> {
-  const base = await getBaseById(ctx, baseId);
-  const resolved = await resolvePath(ctx, base.id, path);
+  // 🔒 **THE ONE PATH OP THAT FOLLOWS THE ID (B2), AND IT MUST RESOLVE THE
+  // PATH IN THE CONTAINER THE FOLLOW LANDED IN.** `readBaseById`'s door already
+  // let `GET /api/knowledge/bases/<id>` name a base on the caller's personal
+  // shelf from any container they are in (rulings B10/#18); this read composed
+  // the WORKSPACE-KEYED lookup instead, so the same id answered
+  // `KNOWLEDGE_BASE_MISMATCH` here — a base you could open and could not read,
+  // F-604's shape one layer up. ⚠ **READ ONLY**: every write below keeps
+  // `getBaseById`, because a write that follows an id across a tenancy boundary
+  // is a ruling nobody has made (INVARIANTS §T35).
+  const { ctx: baseCtx, value: base } = await readBaseInContext(ctx, baseId);
+  const resolved = await resolvePath(baseCtx, base.id, path);
   if (resolved.kind === "not_found") {
     throwIfIntermediateMissing(path, resolved);
     throw new EntryNotFoundError(path);
@@ -341,11 +350,12 @@ export async function listDirByPath(
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
 }> {
-  const base = await getBaseById(ctx, baseId);
+  // 🔒 A READ, so it follows the id — see {@link readFileByPath}.
+  const { ctx: baseCtx, value: base } = await readBaseInContext(ctx, baseId);
   let parentId: string | null = null;
   let folder: KnowledgeFolder | null = null;
   if (path) {
-    const resolved = await resolvePath(ctx, base.id, path);
+    const resolved = await resolvePath(baseCtx, base.id, path);
     if (resolved.kind === "entry") {
       throw new KnowledgePathConflictError(
         `Cannot list contents of an entry: "${path}"`

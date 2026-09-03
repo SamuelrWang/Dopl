@@ -5,6 +5,8 @@ import {
   type CredentialAxes,
 } from "@/shared/auth/credential-audience";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { findPersonalContainerId } from "./personal-container";
+import { grantedResourceIds } from "./resource-grant-reach";
 
 /**
  * 🔒 **AN ID RESOLVES ITS OWN TENANCY** — the one read in the tree that looks
@@ -30,8 +32,10 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  *      {@link CONTAINER_READ_FLOOR}. A pending invitation is not a membership
  *      and a revoked one is not either.
  *   3. **the credential's own workspace lock**, when it carries one — a locked
- *      credential resolves inside its lock and nowhere else (§4 layer B1). ⚠
- *      This module NARROWS on the lock; it never widens and never removes it.
+ *      credential resolves inside its lock, **plus its own operator's PERSONAL
+ *      container**, and nowhere else (§4 layer B1 + rulings B10/#18). ⚠ This
+ *      module NARROWS on the lock; it never widens it past that one container
+ *      and never removes it. See {@link lockedCandidates}.
  *   4. **the caller could already list the row for themselves** — `created_by`
  *      is the caller, or the row is visible to every member of its container.
  *
@@ -251,7 +255,10 @@ async function listContainersForCaller(
   // inside it the caller may see. That second question is clause 1's SUBJECT
   // axis (F-333/F-336: reading one off the other is the defect).
   if (caller.apiKeyWorkspaceId) {
-    query = query.eq("workspace_id", caller.apiKeyWorkspaceId);
+    query = query.in(
+      "workspace_id",
+      await lockedCandidates(caller.apiKeyWorkspaceId, caller.userId)
+    );
   }
   const { data, error } = await query;
   if (error) throw error;
@@ -265,6 +272,39 @@ async function listContainersForCaller(
     containers.set(row.workspace_id, row.role);
   }
   return containers;
+}
+
+/**
+ * 🔒 **THE CONTAINERS A LOCKED CREDENTIAL MAY STILL NAME ROWS IN: ITS LOCK, AND
+ * THE OPERATOR'S OWN PERSONAL CONTAINER** (found in the 1.26.0 smoke).
+ *
+ * ⚠ The clause narrowed to the lock ALONE, so an agent on a home channel's
+ * `container_session` credential answered `base_not_found` for a base on its own
+ * operator's shelf — against the ruling the shelf-as-a-tenancy exists to serve
+ * (B10 / #18): *"what lets a personal template or KB be used from ANY container
+ * the user is in — the id resolves its own container."* While the shelf was a
+ * `WHERE` inside a workspace the operator was already in, the lock never had to
+ * name it; the moment it became a CONTAINER, the lock fenced the operator out of
+ * their own notes.
+ *
+ * ⚠ **IT WIDENS BY EXACTLY ONE CONTAINER, WHICH IS WHY IT IS A LIST AND NOT A
+ * SECOND QUERY.** The ids go into the SAME `workspace_members` read, so clause 2
+ * still decides and clause 4 still refuses; every OTHER container stays fenced.
+ * ⚠ **A SHARED CREDENTIAL REACHES THIS NOWHERE, AND CLAUSE 1 IS WHY** — it
+ * points at no one person's shelf, so {@link findResources} has already returned
+ * `[]`. Restating the refusal here would be a second copy of the arm the two
+ * axes exist to keep apart (F-333/F-336).
+ * ⚠ ONE INDEXED PROBE (`workspaces_personal_owner_uidx`), on the LOCKED lane
+ * only: an unfenced credential never asks.
+ */
+async function lockedCandidates(
+  lockedWorkspaceId: string,
+  userId: string
+): Promise<string[]> {
+  const personal = await findPersonalContainerId(userId);
+  return personal === null || personal === lockedWorkspaceId
+    ? [lockedWorkspaceId]
+    : [lockedWorkspaceId, personal];
 }
 
 /**
@@ -309,8 +349,59 @@ async function findResources(
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as unknown as ResourceRow[];
-  return rows.map((row) =>
-    toResolved(type, spec, row, containers, caller.userId)
+  if (rows.length > 0 || !("id" in ref)) {
+    return rows.map((row) =>
+      toResolved(type, spec, row, containers, caller.userId)
+    );
+  }
+  return findGrantedResource(caller, type, spec, ref.id);
+}
+
+/** ⚠ A grantee holds no membership of the row's container, so the map they are
+ *  resolved against is empty and {@link toResolved} takes its fail-closed floor.
+ *  Shared and frozen — it is the same empty answer every time. */
+const NO_MEMBERSHIPS: ReadonlyMap<string, Role> = new Map();
+
+/**
+ * 🔒 **A ROW LENT TO A SCOPE THE CALLER IS IN IS NAMEABLE BY THEM — CLAUSE 4's
+ * THIRD ARM** (F-662).
+ *
+ * ⚠ **THE TS SIDE WAS THE NARROW HALF, SO THIS IS A REPAIR AND NOT A WIDENING.**
+ * `dopl_grant_admits()` has been an arm of `dopl_knowledge_base_readable()` and
+ * `can_current_user_read_agent_template()` since `20260923140000`, and
+ * `canSeeBase` / `canSeeTemplate` carry the same arm — policy and matrix both
+ * admitted a lent row while the NAMING lane refused it.
+ * `resource-grant-reach.ts` recorded the gap in its own header.
+ *
+ * ⚠ **A SECOND QUERY, NOT A THIRD ARM ON THE FIRST.** A grantee fails the
+ * container `.in()` AND both `.or()` arms by construction, so an arm inside that
+ * group is unreachable — the mistake `20260923140000` §3b had to undo on the
+ * knowledge child policies.
+ * ⚠ **ON A MISS, AND FOR AN ID ONLY.** A name is not a global handle, and an id
+ * lookup that degraded into a name lookup is the fallback this module forbids.
+ * 🔒 **NOT AN EXISTENCE ORACLE**: `grantedResourceIds` answers from the CALLER's
+ * own memberships, so an ungranted id returns `null` with no read of the row.
+ */
+async function findGrantedResource(
+  caller: ResourceCaller,
+  type: ResourceType,
+  spec: ResourceTable,
+  id: string
+): Promise<ResolvedResource[]> {
+  const granted = await grantedResourceIds(caller.userId, type, [id]);
+  if (!granted.has(id)) return [];
+  // ⚠ NO CONTAINER FILTER AND NO `.or()`: the grant IS the standing, and both
+  // of those are the fence the grant is reached AROUND. The soft-delete filter
+  // stays — a trashed row is listable by nobody, grantee included.
+  let query = supabaseAdmin()
+    .from(spec.table)
+    .select(selectList(spec))
+    .eq("id", id);
+  if (spec.deletedColumn) query = query.is(spec.deletedColumn, null);
+  const { data, error } = await query;
+  if (error) throw error;
+  return ((data ?? []) as unknown as ResourceRow[]).map((row) =>
+    toResolved(type, spec, row, NO_MEMBERSHIPS, caller.userId)
   );
 }
 
@@ -347,7 +438,7 @@ function toResolved(
   type: ResourceType,
   spec: ResourceTable,
   row: ResourceRow,
-  containers: Map<string, Role>,
+  containers: ReadonlyMap<string, Role>,
   callerUserId: string
 ): ResolvedResource {
   const container = Array.isArray(row.workspace)
