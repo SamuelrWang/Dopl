@@ -475,6 +475,49 @@ precondition was unsatisfiable), F-633 (a gate's name is part of its scope).
 
 ---
 
+### Batch 3 landed — 2026-09-02, branch `v2/wave-b` (integration record)
+
+Merged `--no-ff` onto the batch-2 review fixes at `d7e1b2ed`. **Not pushed. No migration applied.
+No KB sync.** Four merges + five integration commits; 429 files, +11,818 / **−15,297**. Full
+record: `docs/MCP-V2-WAVE-B-BATCH3-2026-09-02.md`.
+
+⚠ **THE ROW ABOVE SAYS "only after batch 2 has run one release" AND THAT IS NOT WHAT HAPPENED.**
+Samuel ruled on 2026-09-02 to proceed straight on. The condition it was protecting — a released
+batch 2 to attribute a regression to — is unmet, so **the whole wave is one attribution boundary
+rather than three**. Recorded here because the row is still there and reads as satisfied.
+
+| # | Slice | Branch | Slice commits | Merge | Status |
+|---|---|---|---|---|---|
+| 1 | **B14** default workspace off | `v2/b-default-workspace-off` | `0ae9277c..933b0fb3` (4) | `1119d993` | DONE — clean |
+| 2 | **B13** `workspace=` off | `v2/b-workspace-arg-off` | `90589264..e8e66c5d` (7) | `13e539fc` | DONE — 4 conflicts, all B13×B14 on the same three files |
+| 3 | **B16** old ops + fences off | `v2/b-old-ops-off` | `4a0b5c4e..3254c075` (4) | `5640a530` | DONE — findings union only |
+| 4 | **B15** copies off | `v2/b-copies-off` | `fb55e3dc..db7369f5` (6) | `8c00bb92` | DONE — 14 conflicts; the two shelf fences resolved to B15's DELETION |
+
+**B14 BEFORE B13 was the integrator's order and it is the one the brief required**: B13's
+server-side `WORKSPACE_REQUIRED` hand-off only makes sense once B14 has removed the producer.
+Verified after both: **no server path emits it**, which is what let the constant be deleted (2h).
+
+**Cross-slice work the integration owned** (five commits; each names its slices):
+
+| Commit | What | Slices |
+|---|---|---|
+| `c0ccf1f3` | **F-460** — the audience ceiling reads `resource_grants`; `20260923130000` drops the mirror, its two triggers and all three functions. **F-661** found doing it: `liveFunctionHeader` ignored `DROP FUNCTION` | B1 × B15 × B16 |
+| `d89270b8` | 🔒 **F-604, THE HEADLINE** — a grant is READ back. One lookup + one SQL twin (`20260923140000`), OR-ed onto a closed membership group in both readable predicates. **F-662** files the boundary | B11 × B12 × B15 × B16 |
+| `6549ae67` | **F-621** `create_home_channel` on `dopl_workspaces`; **F-564** closed and its map deleted; **F-466** the retired-type filter deleted; **2h** the dead error constants | B13 × B14 × B15 × B16 |
+| `233cfefe` | every ratchet re-measured — served **49,790 → 46,857** | B13 × B15 |
+| `e90843b2` | the desktop's KB read-op parity parse reads `KB_OPS`, not the `.enum([…])` literal B15 made a spread | B13 × B15 × B6 |
+
+**Rulings taken here, each reversible and each recorded in the findings log:** F-602 (the grant
+door stays agent-usable — the owner-only fence is what makes it safe, and `sessionOnly` would be a
+regression wearing the conservative choice), F-621's shape and its UNCHARGED mint, F-663 (the grant
+op is `channel|container`; `team` stays off MCP per A8), and **F-620 attempted and NOT taken** —
+it needs a NAME route, and "refuse on >1 match, listing the containers" contradicts
+`classifyMissingTemplateRef`'s shipped *"names a tenancy, never a roster"* (T35/A12).
+
+**Corrections to this document, made at integration:** none. B13's and B15's rows describe what
+shipped; what they did NOT name is `dopl_home(op="create_channel")`'s successor, which is F-621.
+
+
 **Sequence, and why.** id-resolution (B2) → credential-axis split (B3) → `workspace=` removal (B13),
 per tenancy risk 4. RLS made real per table behind a flag (B7, B12) **before** any TS fence is deleted
 (B16), per risk 1. Ops collapse with redirects (B8) **before** retirement (B16). Team retirement (B1)
@@ -493,7 +536,7 @@ production before those are, and `20260907130000` may never be applied at all.
 
 | Metric | After Wave A (A14, measured) | Target after Wave B | Pinned by |
 |---|---:|---:|---|
-| **Served per external connection** | 51,996 ch | **≤30,000** | `tool-budget.test.ts` ratchets, lowered in the commit that earns them |
+| **Served per external connection** | 51,996 ch | **≤30,000** — ⚠ **MEASURED 46,857 AT THE BATCH-3 INTEGRATION; 16,857 SHORT, AND IT IS FIELDS** (F-577) | `tool-budget.test.ts` ratchets, lowered in the commit that earns them |
 | ↳ 13 descriptions | 16,092 | ≤8,000 (11 tools) | description ratchet |
 | ↳ 13 input schemas | 34,053 | ≤19,000 | schema ratchet |
 | ↳ `dopl_channel` desc / schema | ~1,120 / 11,609 | **620 / 3,000** | schema ratchet |
@@ -506,6 +549,7 @@ production before those are, and `20260907130000` may never be applied at all.
 | **Wake / tool turn** | ~60,700 / ~15.2k | **≤46,000 / ~11.5k** | same |
 | **RLS-covered tables** — read caller-scoped, with a redteam test proving a non-member gets zero rows | **0** (all 406 reads via `supabaseAdmin()`) | **7** (`knowledge_bases`, `knowledge_entries`, `knowledge_folders`, `skills`, `agent_templates`, `chats`, `resource_grants`) | one redteam test per table + the `canSee*`↔policy pair gate |
 | Prompt-only guardrails NONE/PARTIAL | 6 | **1** — G18's web residual, kept by ruling | one test per closed row |
+| ↳ ⚠ **MEASURED AT THE BATCH-3 INTEGRATION: TWO, NOT ONE.** G18 is prose BY RULING; **G20/F-450 is prose BY DEFAULT** — the eighth session-health field was never added and no slice's `Owns` column carried it (`npx tsx scripts/check-session-health-drift.ts` measures SEVEN). Land it or retire the guardrail | 6 | **2** | — |
 | **Lines deleted (net)** | ~900 in Wave A | **≥3,000** | `size-check` + a per-slice deletion ledger in each commit body |
 | Drift gates | 5 + `check-css-token-drift` | 3 + CSS — `check-knowledge-type-drift`'s shelf family (9 sites) and `check-role-drift`'s `dist/` arm retire with their subjects | the gates' own mutation tests |
 
