@@ -102,6 +102,12 @@ async function handle(request: Request): Promise<Response> {
       vendor: callerVendor ?? null,
       credentialKind: credential_info.kind,
       credentialLabel: credential_info.label,
+      // 🔒 THE CREDENTIAL'S CONTAINER LOCK, and the ONE thing on `caller` that
+      // gates: it rides the token row rather than a header, and only
+      // `mcp-container-token.ts` sets it — for a container SESSION the desktop
+      // spawned. `@dopl/mcp-server › identity.ts › isDesktopRun` reads it as
+      // the second mark of a desktop-run caller, beside the runtime stamp.
+      containerId: apiKeyWorkspaceId,
       // ⚠ WHICH SESSION, not just which account (F-405). `op="await"` needs it
       // to suppress its OWN echo without also suppressing a SIBLING session on
       // the same account — one operator runs many concurrent agents and every

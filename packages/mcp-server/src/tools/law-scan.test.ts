@@ -22,6 +22,7 @@ import { describe, it, expect } from "vitest";
 import {
   REMOVED_VOCABULARY,
   RETIRED_CHANNEL_OPS,
+  VERBATIM_QUOTES,
 } from "./law-removed-vocabulary";
 
 /**
@@ -116,6 +117,16 @@ describe("no SHIPPED STRING in the channel tool teaches removed vocabulary", () 
     expect(shippedStrings("channel-post-linkage.ts").length).toBeGreaterThan(3);
   });
 
+  it("🔒 the exemption is EXACT, so it cannot widen into a substring hole", () => {
+    // ⚠ A whitelist is only as narrow as its comparison. The quoted sentence
+    // passes; the same sentence with anything appended does not, which is what
+    // stops the exemption from covering prose that merely contains it.
+    const [quote] = [...VERBATIM_QUOTES];
+    expect(REMOVED_VOCABULARY.some(([, re]) => re.test(quote))).toBe(true);
+    expect(VERBATIM_QUOTES.has(quote)).toBe(true);
+    expect(VERBATIM_QUOTES.has(`${quote} Re-arm instead.`)).toBe(false);
+  });
+
   it("the scan can SEE the defect it was written for", () => {
     // Red proof: a scan that cannot fail is not a guard.
     const shipped =
@@ -166,6 +177,8 @@ describe("no SHIPPED STRING in the channel tool teaches removed vocabulary", () 
     it(`${file} ships no removed vocabulary`, () => {
       const found: string[] = [];
       for (const { text, line } of shippedStrings(file)) {
+        // ⚠ ONE declared exemption, matched WHOLE — see `VERBATIM_QUOTES`.
+        if (VERBATIM_QUOTES.has(text)) continue;
         for (const [label, re] of REMOVED_VOCABULARY) {
           if (re.test(text)) {
             found.push(`${file}:${line} [${label}] ${JSON.stringify(text.slice(0, 120))}`);

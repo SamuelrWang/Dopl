@@ -73,7 +73,8 @@ import { opEscalate } from "./channel-ops-escalate";
 // vocabulary splices one `ref`, and its scope is one room.
 import { opReadAccount } from "./channel-ops-account";
 import { opStatus } from "./channel-ops-status";
-import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
+import { isDesktopRun, UNKNOWN_CALLER, type CallerIdentity } from "./identity";
+import { DESKTOP_HOLD_REFUSAL } from "./channel-hold-budget";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
 
 /**
@@ -245,6 +246,11 @@ export function registerChannelTool(
           const scoped =
             args.channel !== undefined && args.channel.trim() !== "";
           if (args.wait_ms !== undefined) {
+            // 🔒 THE HOLD IS EXTERNAL-ONLY, FENCED HERE AND NOT ONLY IN THE
+            // DESKTOP'S PERMISSION GATE (T85). Ahead of the missing-`since`
+            // check: a desktop-run caller may not have the hold at all, so
+            // asking it for a cursor first would teach it to retry.
+            if (isDesktopRun(caller)) return err(DESKTOP_HOLD_REFUSAL);
             const missHold = missingParams("read (holding)", args, ["since"]);
             if (missHold) return missHold;
             return scoped

@@ -86,6 +86,32 @@ test("T85: the deny carries its OWN reason code and its own sentence", () => {
     "the refusal must not cost more than the call it refuses");
 });
 
+test("T85: the SERVER refuses it too, in the same words — the join has no shared module", () => {
+  // 🔒 THE PERMISSION GATE IS NOT THE FENCE, IT IS ONE OF TWO (2026-09-02 review, finding 8).
+  // This gate covers the runtime it runs in; another vendor's runtime, a raw loopback and a
+  // `full`-profile shell all reach `/api/mcp` without passing through it, and until the server
+  // grew its own branch each of them got the whole wake-length hold. `@dopl/mcp-server ›
+  // tools/channel.ts` now refuses on `identity.ts › isDesktopRun` — the runtime stamp, or the
+  // credential's container lock, which rides the token row and no agent can drop.
+  //
+  // ⚠ AND IT SAYS EXACTLY THIS SENTENCE. Two refusals for one bound, worded differently, read
+  // to an agent as two different problems. `packages/*` cannot import this CommonJS main, so
+  // the literals agree or they do not — the join `runtime-stamp-literals.test.mjs` established,
+  // read from BOTH sources so a change on either side fails here.
+  const permissions = require(M("session-permissions.js"));
+  const server = readFileSync(
+    join(HERE, "..", "..", "packages", "mcp-server", "src", "tools", "channel-hold-budget.ts"),
+    "utf8"
+  );
+  const quoted = /export const DESKTOP_HOLD_REFUSAL =\s*\n?\s*"([^"]+)";/.exec(server);
+  assert.ok(quoted, "the server's refusal constant moved — this join needs re-pinning");
+  assert.equal(
+    quoted[1],
+    permissions.AWAIT_DENY_MESSAGE,
+    "the server and this machine refuse the same call with different words"
+  );
+});
+
 test("T85: the classifier still calls it a read — the deny is policy, not a classification hole", () => {
   // ⚠ THE OP IS GONE, THE REFUSAL IS NOT (2026-09-02, F-578). A hold is `read` carrying
   // `wait_ms`, so what is denied is a SHAPE of a member of the read set — which is exactly the
