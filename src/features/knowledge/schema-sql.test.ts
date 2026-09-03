@@ -313,27 +313,39 @@ describe("the retired tables are gone, and the one left behind is unchanged", ()
    * next free slot in the directory IT can see. It happened on 2026-09-02, when
    * two files landed at `20260907120000` and the collision was found by hand and
    * recorded as a BLOCKER (`docs/MCP-EFFICIENCY-WAVE-2026-09-01.md`) — and it is
-   * live in the tree AGAIN at `20260901120000`, where two APPLIED migrations
-   * share a prefix (F-526).
+   * lived in the tree AGAIN at `20260901120000`, where two APPLIED migrations
+   * shared a prefix (F-526).
    *
-   * ⚠ SO THIS IS A RATCHET, NOT A CLEAN ASSERTION. The one live collision is
-   * named and allowed, because both of its files are already applied and
-   * renaming an applied migration is how a replay diverges from production. What
-   * the case forbids is a SECOND one — which is the only half a gate can still
-   * protect, and the half that was going to be found by hand again.
+   * ⚠ **NO LONGER A RATCHET — THE COLLISION IS GONE AND THE ASSERTION IS CLEAN
+   * (2026-09-03).** The carve-out here used to allow `20260901120000` on the
+   * reasoning that "renaming an applied migration is how a replay diverges from
+   * production". That reasoning rested on a premise that turned out to be FALSE:
+   * production versions are **auto-stamped at apply time and have not matched
+   * repo filenames since ~2026-08-23** — `credit_usage_events` is applied there
+   * as `20260901193049`, `agent_template_home_scoped` as `20260827135014`.
+   * Production is matched by migration NAME, never by filename version, so the
+   * repo prefix was never the thing keeping the two histories aligned and
+   * renaming the file diverges nothing.
+   *
+   * ⚠ AND THE COLLISION WAS NOT COSMETIC. `db reset` stamps `schema_migrations`
+   * from the filename, so two files at one version is a duplicate primary key:
+   * the CI replay died on `schema_migrations_pkey` (23505) the first time it
+   * ever ran, before reaching a single migration. **The carve-out was hiding the
+   * one defect that made the replay impossible.** `credit_usage_events` is now
+   * `20260901130000`, which keeps its chronological truth (production applied it
+   * AFTER `agent_template_home_scoped`).
    */
-  it("🔒 no TWO migrations share a version, except the one already applied (F-526)", () => {
-    const APPLIED_COLLISION = ["20260901120000"];
+  it("🔒 no TWO migrations share a version (F-526)", () => {
     const byVersion = new Map<string, string[]>();
     for (const { name } of FILES) {
       const v = name.slice(0, 14);
       byVersion.set(v, [...(byVersion.get(v) ?? []), name]);
     }
     const collisions = [...byVersion.entries()]
-      .filter(([v, names]) => names.length > 1 && !APPLIED_COLLISION.includes(v))
+      .filter(([, names]) => names.length > 1)
       .map(([v, names]) => `${v}: ${names.join(" + ")}`);
-    // The fix is to RENAME the UNAPPLIED file to the next free version — never to
-    // rename an applied one, and never to bless the collision by adding it above.
+    // The fix is ALWAYS to rename a file to the next free version. Do not
+    // re-introduce a carve-out: the last one cost the replay its first run.
     expect(collisions).toEqual([]);
   });
 

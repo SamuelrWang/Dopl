@@ -27,7 +27,7 @@
 
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PERSONAL_CONTAINER_PLACEHOLDER_NAME } from "./server/service";
 
@@ -92,8 +92,13 @@ describe("🔒 B10 — nothing in B14's surface names a default workspace", () =
     // returning empty — so the risk this covers is a scope that shrank to one
     // trivial file.
     expect(FILES.length).toBeGreaterThan(60);
-    expect(FILES.some((f) => f.endsWith("server/service.ts"))).toBe(true);
-    expect(FILES.some((f) => f.endsWith("server/credits-service.ts"))).toBe(true);
+    // ⚠ **NORMALISED BEFORE THE SUFFIX TEST.** `FILES` holds native absolute
+    // paths, so on Windows these end `server\\service.ts` and both suffix
+    // checks failed there while passing everywhere else — a gate that reported
+    // "the scan reaches no real files" about a scan that had read all of them.
+    const posix = FILES.map((f) => f.split(sep).join("/"));
+    expect(posix.some((f) => f.endsWith("server/service.ts"))).toBe(true);
+    expect(posix.some((f) => f.endsWith("server/credits-service.ts"))).toBe(true);
   });
 
   it("the pattern SEES every spelling it claims to", () => {

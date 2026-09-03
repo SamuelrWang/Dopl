@@ -145,8 +145,9 @@ describe("ordering", () => {
       .map((f) => f.slice(0, 14))
       .filter((v) => v < "20260920120000");
     expect(Math.max(...versions.map(Number))).toBeLessThan(20260920120000);
-    // ⚠ Two APPLIED migrations already share version `20260901120000` (F-526).
-    // A duplicate here would be the third and the first avoidable one.
+    // ⚠ F-526: the `20260901120000` collision was repaired on 2026-09-03
+    // (`credit_usage_events` -> `20260901130000`), so `schema-sql.test.ts` now
+    // forbids duplicates outright. A duplicate here would be the first since.
     const mine = readdirSync(MIGRATIONS).filter((f) => f.startsWith("20260920120000"));
     expect(mine).toEqual([NAME]);
   });

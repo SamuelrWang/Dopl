@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync } from "fs";
-import { resolve } from "path";
+import { resolve, sep } from "path";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -103,8 +103,12 @@ function declarationSites(name: string): string[] {
   const re = new RegExp(
     `(?:export\\s+)?(?:declare\\s+)?(?:type\\s+${name}\\s*=(?!\\s*\\{?\\s*$)|interface\\s+${name}\\s*\\{)`
   );
+  // ⚠ **POSIX SEPARATORS, ALWAYS.** Every expectation below spells its paths
+  // with `/`, so returning the platform's own separator made all 22 of them
+  // fail on the Windows runner and nowhere else — the census read the same
+  // files and reported them under names no assertion could match.
   return FILES.filter((f) => re.test(readFileSync(f, "utf8"))).map((f) =>
-    f.slice(REPO_ROOT.length + 1)
+    f.slice(REPO_ROOT.length + 1).split(sep).join("/")
   );
 }
 

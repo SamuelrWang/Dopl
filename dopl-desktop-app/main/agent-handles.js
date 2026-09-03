@@ -221,7 +221,19 @@ function handleIndexFor(agentIds, nameFor) {
     try {
       displayName = resolve(agentId) || '';
     } catch (err) {
-      require('./diag').diag('agent-handles: name lookup failed', err && err.message);
+      // ⚠ **THE DIAGNOSTIC MUST NOT BECOME THE FAILURE.** `diag` is electron-backed, and
+      // this catch exists precisely for contexts where the electron side is absent — the
+      // default `nameFor` above requires `agent-names`, which requires `electron-store`.
+      // Where that throws, `require('./diag')` throws too (it requires `electron`), so the
+      // handler re-raised out of the block and took down THE ROUTING PATH THE CATCH EXISTS
+      // TO PROTECT — the exact failure the header two comments up forbids. It fired in CI
+      // (`delivery-composed.test.ts`, ubuntu, where the desktop's deps are not installed)
+      // and would fire in any packaged context missing either module.
+      try {
+        require('./diag').diag('agent-handles: name lookup failed', err && err.message);
+      } catch (_) {
+        /* no diag sink reachable here — resolving FEWER handles is the documented answer */
+      }
     }
     entries.push({ agentId: agentId, displayName: displayName });
   }
