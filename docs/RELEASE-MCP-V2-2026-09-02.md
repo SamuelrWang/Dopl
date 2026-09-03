@@ -212,6 +212,55 @@ expand set and one-way for the contract set.**
 
 ---
 
+## §4b — F-604: A REAL DEFECT, FOUND BY THE FIRST LIVE REPLAY
+
+**Classification: a genuine defect in shipped SQL, not a fixture bug — and it
+was found only because the replay finally ran.**
+
+`20260923140000_grant_read_arm.sql` added the grant arm to
+`dopl_knowledge_base_readable`, so a base lent into a container became visible to
+that container's members. Its **folders and entries did not.** Both child
+policies (`20260919120000` §2) read
+
+```sql
+is_current_workspace_member(workspace_id,'viewer')
+  AND dopl_knowledge_base_readable(knowledge_base_id)
+```
+
+and a grantee is **by definition not a member of the base's container** —
+reaching it through the scope's container is what a grant *is*. The conjunct
+re-closed the group the grant arm had just opened. It is the same
+"AND-ed into a closed membership group" shape the wave's own first redteam case
+forbids for the base predicate; it survived on the children because nothing
+asserted it there.
+
+Measured against a live Postgres, as the granted outsider:
+
+| | bases | folders | entries |
+|---|---|---|---|
+| before | 1 | **0** | **0** |
+| after | 1 | 1 | 1 |
+| after, SHARED credential | 0 | 0 | 0 |
+
+So the symptom was a base you could open and could not read, and the P25
+shared-credential refusal is untouched by the fix.
+
+**Fixed in the unapplied migration** (§3b of `20260923140000`): both child
+policies now defer to `dopl_knowledge_base_readable` alone, which already carries
+the membership arm over the **base's** container, the shared-credential refusal
+and the teams gate. A child is visible exactly when its base is. The migration's
+verification block now refuses either child policy naming
+`is_current_workspace_member`, and the TS twin asserts the same.
+
+⚠ **This is the argument for not shipping until the replay is green.** The defect
+is invisible to every offline test — the SQL is correct-looking, the base-level
+case passes, and only reading a granted base's *contents* exposes it. Four
+further defects sat behind it, all in a harness that had never executed: a
+`public_id` NOT NULL omission, an illegal `chats.format` value, a grant on a
+resource that was never created (`enforce_resource_grant` requires it to exist,
+missing FK notwithstanding), an `id` projection on a composite-keyed table, and a
+`Date.now()` uniqueness key that collided across parallel workers.
+
 ## §5 — VERIFY QUERIES
 
 After phase 1:

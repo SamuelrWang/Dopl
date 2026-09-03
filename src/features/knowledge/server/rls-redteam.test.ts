@@ -218,10 +218,23 @@ describe.each([
 ] as const)("REDTEAM %s — the policy alone", (table, key) => {
   const policy = () => POLICIES.get(key) ?? "";
 
-  it("refuses a NON-MEMBER: the workspace arm is on the row itself", () => {
-    expect(policy()).toMatch(
-      /is_current_workspace_member\(workspace_id, 'viewer'::text\)/i
-    );
+  it("refuses a NON-MEMBER — through the BASE's container, not the row's own", () => {
+    // ⚠ **THIS CASE USED TO PIN `is_current_workspace_member(workspace_id, …)`
+    // ON THE CHILD ROW, AND THAT CONJUNCT WAS A DEFECT** (fixed 2026-09-03 in
+    // `20260923140000_grant_read_arm.sql` §3b). A GRANTEE is by definition not a
+    // member of the base's container — reaching it through the SCOPE's is what a
+    // grant IS — so the term closed the group the grant arm had just opened, and
+    // closed it silently: the live case below saw 1 base, 0 folders, 0 entries.
+    //
+    // The PROPERTY it was defending is untouched and is asserted here directly:
+    // a non-member is still refused, because `dopl_knowledge_base_readable`
+    // carries the membership arm over the BASE's container — the one that
+    // governs — along with the shared-credential refusal and the teams gate.
+    // ⚠ So the assertion is now "defers to the predicate, and adds no membership
+    // term of its own"; the live `%s: a NON-MEMBER sees zero rows` case is the
+    // behavioural half and must stay green beside it.
+    expect(policy()).toContain(`${READABLE}(knowledge_base_id)`);
+    expect(policy()).not.toMatch(/is_current_workspace_member/i);
   });
 
   it(`refuses a row whose BASE the caller cannot read — the 2026-08-26 entry-body leak, in the database`, () => {

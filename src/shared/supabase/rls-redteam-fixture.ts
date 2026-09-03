@@ -65,10 +65,24 @@ export function scopeFor(userId: string, shared = false): CallerScope {
 
 const admin = () => supabaseAdmin();
 
+/**
+ * A uniqueness suffix that survives PARALLELISM.
+ *
+ * ⚠ **`Date.now()` ALONE IS NOT UNIQUE HERE.** Vitest runs these five suites in
+ * separate workers at the same time, and they all mint the same handful of tags
+ * — "owner", "outsider" — so two files entering `beforeAll` within the same
+ * millisecond asked GoTrue for the SAME email and got
+ * `Database error creating new user` (a unique violation, reported as a generic
+ * 500). Each suite passed alone and three of five failed together, which is
+ * exactly how this reads in CI. The random half is what makes the key a key.
+ */
+const uniq = () =>
+  `${Date.now()}-${process.pid}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+
 export async function makeUser(tag: string): Promise<string> {
   const { data, error } = await admin().auth.admin.createUser({
-    email: `rls-redteam-${tag}-${Date.now()}@example.test`,
-    password: `redteam-${tag}-${Date.now()}`,
+    email: `rls-redteam-${tag}-${uniq()}@example.test`,
+    password: `redteam-${tag}-${uniq()}`,
     email_confirm: true,
   });
   if (error || !data.user) throw error ?? new Error("no user");
@@ -92,7 +106,7 @@ export async function makeWorkspace(ownerId: string): Promise<string> {
     .insert({
       owner_id: ownerId,
       name: "RLS redteam",
-      slug: `rls-redteam-${Date.now()}`,
+      slug: `rls-redteam-${uniq()}`,
       public_id: generatePublicId(),
     })
     .select("id")
@@ -125,7 +139,7 @@ export async function addMember(
 export async function makeTeam(workspaceId: string, userId: string): Promise<string> {
   const { data, error } = await admin()
     .from("teams")
-    .insert({ workspace_id: workspaceId, name: `redteam-${Date.now()}` })
+    .insert({ workspace_id: workspaceId, name: `redteam-${uniq()}` })
     .select("id")
     .single();
   if (error || !data) throw error ?? new Error("no team");
@@ -135,6 +149,39 @@ export async function makeTeam(workspaceId: string, userId: string): Promise<str
     .insert({ workspace_id: workspaceId, team_id: teamId, user_id: userId });
   if (member.error) throw member.error;
   return teamId;
+}
+
+/**
+ * A real `skills` row, because a grant needs one.
+ *
+ * ⚠ **`resource_grants.resource_id` HAS NO FOREIGN KEY, AND THAT IS NOT THE SAME
+ * AS "THE RESOURCE NEED NOT EXIST".** `enforce_resource_grant()`
+ * (`20260914120000`, shipped in this same wave) resolves the resource to find
+ * its container and raises `resource_grants: skill <id> does not exist` when it
+ * cannot. The resource-grants suite used to pass a TEAM id as a skill id on the
+ * strength of the missing FK; it 23514'd on the first live run (2026-09-03).
+ */
+export async function makeSkill(workspaceId: string, createdBy: string): Promise<string> {
+  const tag = uniq();
+  const { data, error } = await admin()
+    .from("skills")
+    .insert({
+      workspace_id: workspaceId,
+      slug: `redteam-skill-${tag}`,
+      name: "RLS redteam skill",
+      description: "fixture",
+      when_to_use: "fixture",
+      connectors: [],
+      status: "draft",
+      last_edited_source: "user",
+      public_id: `rtskill${tag}`.slice(0, 24),
+      visibility: "private",
+      created_by: createdBy,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw error ?? new Error("no skill");
+  return data.id as string;
 }
 
 /**
@@ -202,12 +249,20 @@ export async function readableIds(
   userId: string,
   table: string,
   workspaceId: string,
-  opts: { shared?: boolean } = {}
+  opts: { shared?: boolean; idColumn?: string } = {}
 ): Promise<string[]> {
+  // ⚠ **NOT EVERY TABLE HAS AN `id`.** `resource_grants` is keyed by the
+  // composite `(scope_type, scope_id, resource_type, resource_id)` — asking it
+  // for `id` is a PostgREST 42703, not an empty read, and it took the three
+  // grant-visibility cases down on this suite's first live run (2026-09-03).
+  // The column is only ever counted, so any NOT NULL column of the row does.
+  const column = opts.idColumn ?? "id";
   const { data, error } = await callerScopedClient(scopeFor(userId, opts.shared ?? false))
     .from(table)
-    .select("id")
+    .select(column)
     .eq("workspace_id", workspaceId);
   if (error) throw error;
-  return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+  // ⚠ `as unknown` first: a dynamic `.select(column)` widens PostgREST's row
+  // type to `GenericStringError[]`, which does not overlap a plain record.
+  return ((data ?? []) as unknown as Array<Record<string, string>>).map((r) => r[column]);
 }

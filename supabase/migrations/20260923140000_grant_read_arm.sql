@@ -215,6 +215,49 @@ AS $function$
 $function$;
 
 
+
+-- ── 3b. THE CHILDREN MUST FOLLOW THE PARENT ──────────────────────────────────
+--
+-- 🔒 **THE GRANT ARM WAS HALF-DEAD WITHOUT THIS, AND THE HALF THAT WORKED WAS
+-- THE HALF THAT LOOKED RIGHT.** Section 3 put the grant arm inside
+-- `dopl_knowledge_base_readable`, so a lent base BECAME visible. Its folders and
+-- entries did NOT, because both child policies read
+--
+--     is_current_workspace_member(workspace_id,'viewer')
+--       AND dopl_knowledge_base_readable(knowledge_base_id)
+--
+-- (`20260919120000` §2) and a GRANTEE IS BY DEFINITION NOT A MEMBER of the
+-- base's container — reaching it through the SCOPE's is the whole point of a
+-- grant. The conjunct is exactly the "AND-ed into a closed membership group"
+-- shape this wave's own first redteam case forbids for the base predicate; it
+-- survived on the children because nothing asserted it there.
+--
+-- The visible symptom was a base you could open and could not read: one row in
+-- `knowledge_bases`, zero folders, zero entries. Caught by
+-- `rls-redteam.test.ts › "GRANTED INTO A CONTAINER"` on the FIRST live run of
+-- that suite (2026-09-03) — the run the duplicate `20260901120000` version had
+-- been preventing since the case was written.
+--
+-- ⚠ **DROPPING THE MEMBERSHIP TERM WIDENS NOTHING.** It is not a second gate:
+-- `dopl_knowledge_base_readable` already carries the membership arm
+-- (`is_current_workspace_member(kb.workspace_id,'viewer') AND
+-- dopl_can_see_visibility(...)`), the shared-credential refusal, and the teams
+-- gate — over the BASE's container, which is the one that governs. A child is
+-- now visible exactly when its base is, which is the stated model: the child
+-- policies still do not learn what a grant is.
+-- ⚠ Verified against a live Postgres before shipping: with the term, a granted
+-- outsider saw 1 base / 0 folders / 0 entries; without it, 1 / 1 / 1 — and a
+-- SHARED credential still saw 0, so P25 is untouched.
+DROP POLICY IF EXISTS knowledge_folders_member_select ON public.knowledge_folders;
+CREATE POLICY knowledge_folders_member_select ON public.knowledge_folders
+  FOR SELECT
+  USING (public.dopl_knowledge_base_readable(knowledge_base_id));
+
+DROP POLICY IF EXISTS knowledge_entries_member_select ON public.knowledge_entries;
+CREATE POLICY knowledge_entries_member_select ON public.knowledge_entries
+  FOR SELECT
+  USING (public.dopl_knowledge_base_readable(knowledge_base_id));
+
 -- ── 4. Verification (INVARIANTS §12) ─────────────────────────────────────────
 DO $$
 BEGIN
@@ -233,5 +276,27 @@ BEGIN
                          'can_current_user_read_agent_template')
          AND prosrc LIKE '%dopl_grant_admits%') <> 2 THEN
     RAISE EXCEPTION 'a readable predicate does not call dopl_grant_admits';
+  END IF;
+
+  -- 🔒 A child policy that still names workspace membership re-closes the group
+  -- the grant arm exists to open, and does it silently: the base stays visible
+  -- and its contents vanish.
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+     WHERE schemaname = 'public'
+       AND tablename IN ('knowledge_folders', 'knowledge_entries')
+       AND policyname IN ('knowledge_folders_member_select',
+                          'knowledge_entries_member_select')
+       AND qual LIKE '%is_current_workspace_member%'
+  ) THEN
+    RAISE EXCEPTION
+      'a knowledge child policy still AND-s workspace membership — a granted base would read as empty';
+  END IF;
+  IF (SELECT count(*) FROM pg_policies
+       WHERE schemaname = 'public'
+         AND tablename IN ('knowledge_folders', 'knowledge_entries')
+         AND qual LIKE '%dopl_knowledge_base_readable%') <> 2 THEN
+    RAISE EXCEPTION
+      'a knowledge child policy no longer defers to dopl_knowledge_base_readable';
   END IF;
 END $$;

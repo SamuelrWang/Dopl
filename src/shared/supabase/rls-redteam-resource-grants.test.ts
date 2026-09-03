@@ -34,6 +34,7 @@ import {
   grantToScope,
   liveRedteamEnabled,
   makeTeam,
+  makeSkill,
   makeUser,
   makeWorkspace,
   readableIds,
@@ -100,6 +101,7 @@ describe.skipIf(!liveRedteamEnabled)(
     let teammateId = "";
     let workspaceId = "";
     let teamId = "";
+    let skillId = "";
 
     beforeAll(async () => {
       ownerId = await makeUser("owner");
@@ -110,15 +112,16 @@ describe.skipIf(!liveRedteamEnabled)(
       await addMember(workspaceId, guestId, "guest");
       await addMember(workspaceId, teammateId, "member");
       teamId = await makeTeam(workspaceId, teammateId);
+      // ⚠ A REAL skill. The missing foreign key on `resource_id` is not
+      // permission to invent one: `enforce_resource_grant()` resolves the
+      // resource to find its container and refuses when it cannot.
+      skillId = await makeSkill(workspaceId, ownerId);
       await grantToScope({
         workspaceId,
         scopeType: "team",
         scopeId: teamId,
-        // ⚠ A grant row carries a POLYMORPHIC `resource_id` with no foreign key,
-        // so the fixture does not need the resource to exist to test the grant
-        // table's own policy.
         resourceType: "skill",
-        resourceId: teamId,
+        resourceId: skillId,
         createdBy: ownerId,
       });
     }, 60_000);
@@ -129,15 +132,15 @@ describe.skipIf(!liveRedteamEnabled)(
     }, 60_000);
 
     it("a NON-MEMBER sees zero grant rows", async () => {
-      expect(await readableIds(outsiderId, "resource_grants", workspaceId)).toHaveLength(0);
+      expect(await readableIds(outsiderId, "resource_grants", workspaceId, { idColumn: "resource_id" })).toHaveLength(0);
     });
 
     it("a MEMBER sees the team grant — the row the teams axis resolves through", async () => {
-      expect(await readableIds(teammateId, "resource_grants", workspaceId)).toHaveLength(1);
+      expect(await readableIds(teammateId, "resource_grants", workspaceId, { idColumn: "resource_id" })).toHaveLength(1);
     });
 
     it("a GUEST sees zero — the guest arm admits CHANNEL scopes only", async () => {
-      expect(await readableIds(guestId, "resource_grants", workspaceId)).toHaveLength(0);
+      expect(await readableIds(guestId, "resource_grants", workspaceId, { idColumn: "resource_id" })).toHaveLength(0);
     });
   }
 );

@@ -128,7 +128,11 @@ describe.skipIf(!liveRedteamEnabled)(
           visibility,
           access_mode: accessMode,
           title: `${visibility}/${accessMode}`,
-          format: "markdown",
+          // ⚠ `ExportFormat` is summarized | verbatim | mixed (`chats_format_check`).
+          // "markdown" was never legal and every insert here 23514'd — invisible
+          // until this suite's first live run (2026-09-03). `summarized` matches
+          // the message shape below: a summary, no verbatim.
+          format: "summarized",
         },
         [{ role: "user", summary: "hello", verbatim: null }]
       );
