@@ -188,7 +188,6 @@ export async function issueTokens(input: {
    *  forward by rotateRefreshToken so reuse detection can revoke the chain. */
   familyId?: string;
 }): Promise<IssuedTokens> {
-  const db = supabaseAdmin();
   const accessToken = randToken(ACCESS_PREFIX);
   const refreshToken = randToken(REFRESH_PREFIX);
   const now = Date.now();

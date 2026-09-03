@@ -187,10 +187,10 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
  * common — so the ratchet's MISSING half refuses a tool that declares none,
  * which is what stops a NEW tool joining the surface unbudgeted.
  *
- * ⚠ `dopl_channel` IS 41% OF THE WHOLE SERVED SURFACE ON ITS OWN (21,778 of
- * 53,581) — 24 ops and 37 params, most of the weight in `.describe()` prose
- * that is doctrine wearing a schema. A6 moves it; this number is what proves it
- * moved rather than being redistributed.
+ * ⚠ `dopl_channel` WAS 41% OF THE WHOLE SERVED SURFACE ON ITS OWN (21,778 of
+ * 53,581) — 24 ops and 37 params of `.describe()` prose that was doctrine
+ * wearing a schema. A6 and B8 moved it; this number is what proves it moved
+ * rather than being redistributed.
  */
 const SCHEMA_CEILINGS: Record<string, number> = {
   // ⚠ **RE-MEASURED WHOLE ON 2026-09-02 AT SLICE A14**, through the real
@@ -198,32 +198,19 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   //
   // ⚠ **FOUR OF THESE ROSE, AND EVERY CHARACTER OF THE RISE IS A RESPONSE-SIZE
   // KNOB** (`response-size.ts`): `response_format` on `dopl_status`,
-  // `dopl_search`, `dopl_channel` and `dopl_kb`, plus `max_chars` on the one op
-  // that returns a whole document. **That is a PARAMETER, not prose, and it is
-  // licensed on `dopl_skill`'s `confirm_token` precedent** — a required or
+  // `dopl_search`, `dopl_channel` and `dopl_kb`, plus `max_chars`. **A PARAMETER,
+  // not prose, licensed on `dopl_skill`'s `confirm_token` precedent** — a
   // published argument cannot move into a pulled document, and trimming its
-  // description into uselessness would buy the number by making the knob
-  // unusable.
+  // description into uselessness buys the number by making the knob unusable.
   //
   // ⚠ **AND IT IS THE ONE RISE ON THIS SURFACE THAT PAYS FOR ITSELF PER CALL.**
-  // Every other figure here is a fixed cost per CONNECTION; these four buy a
-  // recurring saving per RESULT — `concise` drops ~750 chars of scope note from
-  // every `dopl_search`, a two-line legend from every `dopl_status` (the call an
-  // orchestrator makes most), and the timestamp and session tag from every
-  // message on every `read`. One connection's worth of characters against an
-  // orchestrator loop's.
-  //
-  // ⚠ **AND THREE MORE ROSE ON 2026-09-02 IN THE BATCH-2 REVIEW, FOR THE SAME
-  // REASON AND WITH THE SAME LICENCE** — A16's last three knobs, which the
-  // wave-B spec's §5 B8 row claimed shipped and which were absent from the
-  // tree: `fields=` on `dopl_members` (+242), `response_format` on
-  // `dopl_ontology` (+279), `max_chars` on `dopl_agent(op="get")` (+215). Same
-  // argument, same precedent: a published PARAMETER cannot move into a pulled
-  // document, and a knob nobody can find is not a knob. 736 chars of
-  // per-connection cost against a per-RESULT saving on three of the widest
-  // renders on the surface — a roster row is six fields wide, an ontology
-  // object carries a Version line and two legends, and a template's
-  // INSTRUCTIONS block is up to 32 KB.
+  // Every other figure here is a fixed cost per CONNECTION; these buy a recurring
+  // saving per RESULT — `concise` drops ~750 chars of scope note from every
+  // `dopl_search` and a two-line legend from every `dopl_status`, the call an
+  // orchestrator makes most. One connection's characters against a loop's.
+  // ⚠ **AND THREE MORE ROSE IN THE BATCH-2 REVIEW (2026-09-02), SAME LICENCE** —
+  // A16's last three knobs, recorded as shipped and absent from the tree
+  // (F-591): `fields=` (+242), `response_format` (+279), `max_chars` (+215).
   current_workspace: 720,
   dopl_agent: 4145,
   // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.

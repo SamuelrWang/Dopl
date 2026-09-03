@@ -5,10 +5,10 @@ import { recordDeliveryAcks, weakerOrEqual } from "./service-writes-delivery";
 import type { ChannelContext } from "./service-shared";
 
 vi.mock("./repository");
-vi.mock("./repository-messages");
+vi.mock("./repository-delivery");
 
 import * as repo from "./repository";
-import * as repoMessages from "./repository-messages";
+import * as repoDelivery from "./repository-delivery";
 
 /**
  * **THE WAKE ACK** (2026-09-02, A9) — what a machine did with a message, and the
@@ -50,12 +50,12 @@ const ack = (over: Partial<{ sessionKey: string; channelId: string; seq: number;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(repo.findMembership).mockResolvedValue({ role: "member" } as never);
-  vi.mocked(repoMessages.stampDelivery).mockResolvedValue(true);
+  vi.mocked(repoDelivery.stampDelivery).mockResolvedValue(true);
   // ⚠ THE SERVER'S OWN ANSWER TO "WHO WAS THIS FOR" — fence (3), F-593.
   // `null` is the DEFERRING value ("the server did not resolve the agent half"),
   // which is the default here because most cases below are about the other two
   // fences and must not be filtered by this one.
-  vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(null);
+  vi.mocked(repoDelivery.findRecipientAgentIds).mockResolvedValue(null);
 });
 
 describe("weakerOrEqual — the one ranking of the outcome vocabulary", () => {
@@ -90,7 +90,7 @@ describe("recordDeliveryAcks", () => {
     // the monotonic filter AND the workspace fence — the two arguments that make
     // the write safe — so the case would stay green over a stamp that clobbered
     // a stronger receipt in another tenant's row.
-    expect(vi.mocked(repoMessages.stampDelivery).mock.calls[0]).toEqual([
+    expect(vi.mocked(repoDelivery.stampDelivery).mock.calls[0]).toEqual([
       "ws-1",
       CHAN,
       42,
@@ -106,7 +106,7 @@ describe("recordDeliveryAcks", () => {
     await expect(
       recordDeliveryAcks(CTX, [ack()], reported(OTHER_KEY))
     ).resolves.toEqual({ stamped: 0 });
-    expect(vi.mocked(repoMessages.stampDelivery)).not.toHaveBeenCalled();
+    expect(vi.mocked(repoDelivery.stampDelivery)).not.toHaveBeenCalled();
     // ⚠ AND IT DOES NOT EVEN ASK ABOUT MEMBERSHIP — a receipt bound to nothing
     // is refused before it costs a read.
     expect(vi.mocked(repo.findMembership)).not.toHaveBeenCalled();
@@ -118,7 +118,7 @@ describe("recordDeliveryAcks", () => {
     await expect(
       recordDeliveryAcks(CTX, [ack({ channelId: OTHER })], reported(KEY))
     ).resolves.toEqual({ stamped: 0 });
-    expect(vi.mocked(repoMessages.stampDelivery)).not.toHaveBeenCalled();
+    expect(vi.mocked(repoDelivery.stampDelivery)).not.toHaveBeenCalled();
   });
 
   it("SKIPS a receipt for a channel the caller is not in — it does not throw", async () => {
@@ -133,7 +133,7 @@ describe("recordDeliveryAcks", () => {
     await expect(
       recordDeliveryAcks(CTX, [ack({ seq: 1 })], reported(KEY))
     ).resolves.toEqual({ stamped: 0 });
-    expect(vi.mocked(repoMessages.stampDelivery)).not.toHaveBeenCalled();
+    expect(vi.mocked(repoDelivery.stampDelivery)).not.toHaveBeenCalled();
   });
 
   it("asks for membership ONCE per distinct channel", async () => {
@@ -155,7 +155,7 @@ describe("recordDeliveryAcks", () => {
   it("counts only the rows that actually moved", async () => {
     // A stamp the rank refused reports `false`; the caller is told what landed,
     // not what it asked for.
-    vi.mocked(repoMessages.stampDelivery)
+    vi.mocked(repoDelivery.stampDelivery)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
     expect(
@@ -224,15 +224,15 @@ describe("🔒 fence (3) — the message was FOR this session (F-593)", () => {
     // Fences (1) and (2) say "you hold a live session in that room"; they say
     // nothing about the MESSAGE. `woken` is the top of the monotonic rank, so
     // the machine that really handled it can never correct the stamp.
-    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(["z9y8x7w6"]);
+    vi.mocked(repoDelivery.findRecipientAgentIds).mockResolvedValue(["z9y8x7w6"]);
     expect(
       await recordDeliveryAcks(CTX, [ack()], reported(KEY))
     ).toEqual({ stamped: 0 });
-    expect(repoMessages.stampDelivery).not.toHaveBeenCalled();
+    expect(repoDelivery.stampDelivery).not.toHaveBeenCalled();
   });
 
   it("stamps a receipt from an agent the message DID address", async () => {
-    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue([
+    vi.mocked(repoDelivery.findRecipientAgentIds).mockResolvedValue([
       "z9y8x7w6",
       "a1b2c3d4",
     ]);
@@ -247,8 +247,8 @@ describe("🔒 fence (3) — the message was FOR this session (F-593)", () => {
     // kind also stores. Refusing on either would break the lanes the desktop
     // legitimately delivers on its own.
     for (const stored of [null, []]) {
-      vi.mocked(repoMessages.stampDelivery).mockClear();
-      vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(stored);
+      vi.mocked(repoDelivery.stampDelivery).mockClear();
+      vi.mocked(repoDelivery.findRecipientAgentIds).mockResolvedValue(stored);
       expect(
         await recordDeliveryAcks(CTX, [ack()], reported(KEY)),
         JSON.stringify(stored)
@@ -257,7 +257,7 @@ describe("🔒 fence (3) — the message was FOR this session (F-593)", () => {
   });
 
   it("skips a receipt for a seq that has NO ROW — a receipt for nothing", async () => {
-    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(undefined);
+    vi.mocked(repoDelivery.findRecipientAgentIds).mockResolvedValue(undefined);
     expect(await recordDeliveryAcks(CTX, [ack()], reported(KEY))).toEqual({
       stamped: 0,
     });
@@ -268,7 +268,7 @@ describe("🔒 fence (3) — the message was FOR this session (F-593)", () => {
     // fences (1) and (2), which is exactly what it had before this fence
     // existed — a degrade, never a new refusal aimed at it.
     const legacy = `${CHAN}:`;
-    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(["z9y8x7w6"]);
+    vi.mocked(repoDelivery.findRecipientAgentIds).mockResolvedValue(["z9y8x7w6"]);
     expect(
       await recordDeliveryAcks(
         CTX,
@@ -279,12 +279,12 @@ describe("🔒 fence (3) — the message was FOR this session (F-593)", () => {
   });
 
   it("asks ONCE per message, however many receipts name it", async () => {
-    vi.mocked(repoMessages.findRecipientAgentIds).mockResolvedValue(null);
+    vi.mocked(repoDelivery.findRecipientAgentIds).mockResolvedValue(null);
     await recordDeliveryAcks(
       CTX,
       [ack(), ack({ delivery: "idle" }), ack({ seq: 43 })],
       reported(KEY)
     );
-    expect(vi.mocked(repoMessages.findRecipientAgentIds).mock.calls).toHaveLength(2);
+    expect(vi.mocked(repoDelivery.findRecipientAgentIds).mock.calls).toHaveLength(2);
   });
 });

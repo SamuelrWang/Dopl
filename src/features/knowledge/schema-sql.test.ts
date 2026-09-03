@@ -41,13 +41,15 @@
  * member-floored policy sat there granting writes. Files are read in FILENAME
  * order, which is apply order.
  *
+ * ⚠ **THE VALIDITY TRIGGER LEFT ON 2026-09-02** — `resource-grant-trigger.test.ts`,
+ * split at the 500-line cap when the batch-2 review repaired two of its arms.
+ * The seam is the one the code has: this file pins who may READ a grant row;
+ * that one pins whether the row may EXIST.
+ *
  * ⚠ MUTATION-VERIFIED. Each of these turns an assertion below red: restoring the
  * dropped `channel_resource_grants_admin_write` policy or taking `SECURITY
  * DEFINER` off either mirror writer; lowering `'admin'` back to `'member'`;
- * removing the `level = 'visible'` filter; deleting the `may not share into
- * container` branch of `enforce_resource_grant()`, its unattributed-cross-
- * container branch, its `dopl_user_may_share_resource` call, its `'member'`
- * rank or its de-attribution skip; restating the teams axis inside
+ * removing the `level = 'visible'` filter; restating the teams axis inside
  * `dopl_teams_mode_visible` instead of delegating; dropping the
  * `scope_type = 'team'` term from a chats policy or from
  * `can_current_user_read_agent_template()`; and re-creating either retired
@@ -64,190 +66,17 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const MIGRATIONS = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "supabase",
-  "migrations"
-);
-
-function stripLineComments(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => {
-      const at = line.indexOf("--");
-      return at === -1 ? line : line.slice(0, at);
-    })
-    .join("\n");
-}
-
-/** Every migration, filename-sorted (= apply order), comments removed. */
-const FILES = readdirSync(MIGRATIONS)
-  .filter((f) => f.endsWith(".sql"))
-  .sort()
-  .map((name) => ({
-    name,
-    sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")),
-  }));
-
-/** The statement starting at `from`, up to the first `;` at paren depth 0. */
-function statementAt(sql: string, from: number): string {
-  let depth = 0;
-  for (let i = from; i < sql.length; i++) {
-    if (sql[i] === "(") depth++;
-    else if (sql[i] === ")") depth--;
-    else if (sql[i] === ";" && depth === 0) return sql.slice(from, i + 1);
-  }
-  return sql.slice(from);
-}
-
-/**
- * REPLAY the migrations and answer with the policies LIVE on `table` at the end
- * — `CREATE POLICY` inserts, `DROP POLICY` removes, `DROP TABLE` takes them all,
- * later wins. That is the only reading that can tell "tightened" from
- * "tightened, and the loose one left behind beside it".
- *
- * ⚠ THE `DROP TABLE` ARM IS NOT A DETAIL: a policy is a dependency of its table
- * and dies with it silently. Without that arm this function reports the policies
- * of a table that no longer exists, which is the exact reading that would let a
- * dropped table look guarded.
- */
-function livePolicies(table: string): Map<string, string> {
-  const live = new Map<string, string>();
-  const create = new RegExp(
-    String.raw`CREATE\s+POLICY\s+(\w+)\s+ON\s+(?:public\.)?${table}\b`,
-    "gi"
-  );
-  const drop = new RegExp(
-    String.raw`DROP\s+POLICY\s+(?:IF\s+EXISTS\s+)?(\w+)\s+ON\s+(?:public\.)?${table}\b`,
-    "gi"
-  );
-  const dropTable = new RegExp(
-    String.raw`DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?${table}\b`,
-    "gi"
-  );
-  for (const { sql } of FILES) {
-    // Order matters WITHIN a file too: a tightening migration drops and
-    // re-creates the same policy name in one file.
-    const events: Array<{ at: number; kind: "create" | "drop" | "dropTable"; name: string }> = [];
-    for (const m of sql.matchAll(create)) {
-      if (m.index !== undefined) events.push({ at: m.index, kind: "create", name: m[1] });
-    }
-    for (const m of sql.matchAll(drop)) {
-      if (m.index !== undefined) events.push({ at: m.index, kind: "drop", name: m[1] });
-    }
-    for (const m of sql.matchAll(dropTable)) {
-      if (m.index !== undefined) events.push({ at: m.index, kind: "dropTable", name: "" });
-    }
-    events.sort((a, b) => a.at - b.at);
-    for (const e of events) {
-      if (e.kind === "dropTable") live.clear();
-      else if (e.kind === "drop") live.delete(e.name);
-      else live.set(e.name, statementAt(sql, e.at));
-    }
-  }
-  return live;
-}
-
-/** Does `table` exist at the end of the replay? */
-function tableIsLive(table: string): boolean {
-  let live = false;
-  const create = new RegExp(
-    String.raw`CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?${table}\b`,
-    "gi"
-  );
-  const drop = new RegExp(
-    String.raw`DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?${table}\b`,
-    "gi"
-  );
-  for (const { sql } of FILES) {
-    const events: Array<{ at: number; alive: boolean }> = [];
-    for (const m of sql.matchAll(create)) {
-      if (m.index !== undefined) events.push({ at: m.index, alive: true });
-    }
-    for (const m of sql.matchAll(drop)) {
-      if (m.index !== undefined) events.push({ at: m.index, alive: false });
-    }
-    events.sort((a, b) => a.at - b.at);
-    for (const e of events) live = e.alive;
-  }
-  return live;
-}
-
-/**
- * The body of the LAST `CREATE OR REPLACE FUNCTION <name>` in apply order, or
- * `null` if a later `DROP FUNCTION` retired it. ⚠ The body is dollar-quoted, so
- * it is delimited by its own opening tag rather than by the first `;` — a
- * `RAISE … ;` inside would otherwise truncate it two lines in.
- */
-function liveFunctionBody(name: string): string | null {
-  let body: string | null = null;
-  const create = new RegExp(
-    String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?:public\.)?${name}\s*\(`,
-    "gi"
-  );
-  const drop = new RegExp(
-    String.raw`DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?(?:public\.)?${name}\s*\(`,
-    "gi"
-  );
-  for (const { sql } of FILES) {
-    const events: Array<{ at: number; kind: "create" | "drop" }> = [];
-    for (const m of sql.matchAll(create)) {
-      if (m.index !== undefined) events.push({ at: m.index, kind: "create" });
-    }
-    for (const m of sql.matchAll(drop)) {
-      if (m.index !== undefined) events.push({ at: m.index, kind: "drop" });
-    }
-    events.sort((a, b) => a.at - b.at);
-    for (const e of events) {
-      if (e.kind === "drop") {
-        body = null;
-        continue;
-      }
-      const tag = /AS\s+(\$[A-Za-z_]*\$)/.exec(sql.slice(e.at));
-      if (!tag || tag.index === undefined) continue;
-      const open = e.at + tag.index + tag[0].length;
-      const close = sql.indexOf(tag[1], open);
-      body = close === -1 ? sql.slice(open) : sql.slice(open, close);
-    }
-  }
-  return body;
-}
-
-/**
- * The DECLARATION of `name` as the replay leaves it — everything between
- * `CREATE OR REPLACE FUNCTION` and the body's opening dollar-quote.
- *
- * ⚠ A DIFFERENT QUESTION FROM {@link liveFunctionBody}, which answers only what
- * is INSIDE the quotes. `SECURITY DEFINER`, `SET search_path` and the return
- * type all live out here, so the body scan cannot see them — and a `CREATE OR
- * REPLACE` in a later migration that dropped `SECURITY DEFINER` would leave
- * every body assertion green.
- */
-function liveFunctionHeader(name: string): string | null {
-  let header: string | null = null;
-  const create = new RegExp(
-    String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+(?:public\.)?${name}\s*\(`,
-    "gi"
-  );
-  for (const { sql } of FILES) {
-    for (const m of sql.matchAll(create)) {
-      if (m.index === undefined) continue;
-      const tag = /AS\s+\$[A-Za-z_]*\$/.exec(sql.slice(m.index));
-      header =
-        tag && tag.index !== undefined
-          ? sql.slice(m.index, m.index + tag.index)
-          : sql.slice(m.index);
-    }
-  }
-  return header;
-}
+// ⚠ THE REPLAY IS A SHARED MODULE SINCE 2026-09-02 (§1's 500-line cap): both this
+// suite and `resource-grant-trigger.test.ts` read the same directory the same way,
+// and a second copy of "how to replay a migration set" is how two suites come to
+// disagree about what the final state IS.
+import {
+  FILES,
+  livePolicies,
+  liveFunctionBody,
+  liveFunctionHeader,
+  tableIsLive,
+} from "./migration-replay";
 
 const GRANTS = livePolicies("resource_grants");
 
@@ -312,129 +141,6 @@ describe("resource_grants — the replayed RLS state", () => {
       "resource_grants_admin_write",
       "resource_grants_member_select",
     ]);
-  });
-});
-
-describe("🔒 enforce_resource_grant — 'the grantor may share this'", () => {
-  const BODY = liveFunctionBody("enforce_resource_grant");
-
-  it("is the live validity trigger, and its predecessors are gone", () => {
-    expect(BODY).not.toBeNull();
-    // The five-migration `CREATE OR REPLACE` chain and the channel trigger it
-    // replaces: one is dropped, the other is left standing only for the
-    // compatibility mirror on the old table.
-    expect(liveFunctionBody("assert_team_grant_workspace")).toBeNull();
-    expect(liveFunctionBody("assert_agent_template_team_workspace")).toBeNull();
-  });
-
-  it("files the row under the RESOURCE's container, and refuses any other", () => {
-    // ⚠ One canonical tenancy per row: every `workspace_id`-filtered read in the
-    // app depends on this, and it is the ONE equality the fold kept.
-    expect(BODY).toMatch(/res_ws\s*<>\s*NEW\.workspace_id/i);
-    expect(BODY).toMatch(/resource workspace mismatch/i);
-  });
-
-  it("🔒 asserts the grantor reaches BOTH containers — the whole of ruling B4", () => {
-    // Deleting either branch is the mutation that turns the trigger back into a
-    // workspace-equality check with extra steps, and it would not fail any
-    // application test: the service gate would still refuse the cases it knows
-    // about, and PostgREST would not.
-    expect(BODY).toMatch(
-      /NOT\s+is_workspace_member\(\s*res_ws\s*,\s*NEW\.created_by/i
-    );
-    expect(BODY).toMatch(
-      /NOT\s+is_workspace_member\(\s*scope_ws\s*,\s*NEW\.created_by/i
-    );
-    expect(BODY).toMatch(/may not share into container/i);
-  });
-
-  it("🔒 the RESOURCE side is a RANK and the resource's own test, not membership (F-583)", () => {
-    // ⚠ `'viewer'` here was the defect: it asked "is the grantor in this
-    // container at all", so a read-only member could lend out a `private` base
-    // they cannot read, or a `teams`-mode skill no team of theirs holds — and
-    // `resource_grants` IS the fence the readers of those consult.
-    expect(BODY).toMatch(
-      /is_workspace_member\(\s*res_ws\s*,\s*NEW\.created_by\s*,\s*'member'\s*\)/i
-    );
-    expect(BODY).toMatch(/is not edit-capable/i);
-    expect(BODY).toMatch(
-      /dopl_user_may_share_resource\(\s*NEW\.created_by\s*,\s*NEW\.resource_type\s*,\s*NEW\.resource_id\s*\)/i
-    );
-    // The scope side is deliberately NOT raised: lending INTO a room you can
-    // see is not an edit to that room.
-    expect(BODY).toMatch(
-      /is_workspace_member\(\s*scope_ws\s*,\s*NEW\.created_by\s*,\s*'viewer'\s*\)/i
-    );
-  });
-
-  it("🔒 the share test answers per resource type, and `false` for an unknown one (F-583)", () => {
-    const SHARE = liveFunctionBody("dopl_user_may_share_resource");
-    expect(SHARE).not.toBeNull();
-    // The five `canSee*` matrices, asked about a NAMED user — including the two
-    // owner columns that are not `created_by`.
-    for (const table of ["knowledge_bases", "skills", "chats", "chat_folders", "agent_templates"]) {
-      expect(SHARE, table).toMatch(new RegExp(String.raw`FROM\s+public\.${table}\b`, "i"));
-    }
-    expect(SHARE).toMatch(/r\.owner_id\s*=\s*p_user_id/i);
-    expect(SHARE).toMatch(/r\.user_id\s*=\s*p_user_id/i);
-    // An unknown type must REFUSE, not skip: a NULL would make the trigger's
-    // `NOT …` term unknown and let the arm fall through.
-    expect(SHARE).toMatch(/ELSE\s+false/i);
-    // The rank is inside the test too, so no branch can answer `true` for a
-    // grantor who is only a viewer.
-    expect(SHARE?.match(/is_workspace_member\([^)]*'member'\)/gi)?.length).toBe(5);
-  });
-
-  it("🔒 de-attribution by ON DELETE SET NULL is not re-validated (F-584)", () => {
-    // Without this the trigger RAISEs on a legal cross-container grant when its
-    // grantor's account is deleted, and the DELETE fails — the account becomes
-    // undeletable. The skip is narrow: UPDATE, NOT NULL → NULL, every other
-    // column identical, so a de-attribute-and-move is still a re-grant.
-    expect(BODY).toMatch(/TG_OP\s*=\s*'UPDATE'/i);
-    expect(BODY).toMatch(/OLD\.created_by\s+IS\s+NOT\s+NULL/i);
-    expect(BODY).toMatch(/IS\s+NOT\s+DISTINCT\s+FROM/i);
-    expect(BODY).toMatch(/OLD\.guest_write/i);
-  });
-
-  it("🔒 keeps the OLD same-container rule for an unattributed row", () => {
-    // `created_by` is ON DELETE SET NULL and the backfilled team rows never had
-    // one, so reach across containers has to be bought with an audit trail.
-    // Without this branch a NULL grantor would silently pass both checks above.
-    expect(BODY).toMatch(/NEW\.created_by\s+IS\s+NULL/i);
-    expect(BODY).toMatch(/scope_ws\s*<>\s*res_ws/i);
-    expect(BODY).toMatch(/unattributed grant may not cross containers/i);
-  });
-
-  it("🔒 the backfill carries a DEPARTED grantor as unattributed, not verbatim (F-582)", () => {
-    // ⚠ A BACKFILL RAISE ABORTS THE MIGRATION. `created_by` outlives a
-    // MEMBERSHIP — `ON DELETE SET NULL` clears it only when the auth user is
-    // deleted — so a historical row whose grantor merely LEFT would have met
-    // the arm above and taken the whole apply down on the first such row.
-    // Nulling loses nothing the table enforces: every row reaching those
-    // statements is same-container by construction.
-    const file = FILES.find((f) => f.name.startsWith("20260914120000"))!;
-    const backfills = file.sql.match(
-      /CASE WHEN is_workspace_member\(\s*\w+\.workspace_id,\s*\w+\.(?:created_by|granted_by),\s*'viewer'\)\s*\n?\s*THEN \w+\.(?:created_by|granted_by) END/g
-    );
-    // Both attributed backfills: the channel grants and the template teams.
-    expect(backfills?.length).toBe(2);
-  });
-
-  it("resolves all three scopes and all five resource types, or RAISEs", () => {
-    for (const scope of ["channels", "workspaces", "teams"]) {
-      expect(BODY).toMatch(new RegExp(String.raw`FROM\s+${scope}\b`, "i"));
-    }
-    for (const table of [
-      "knowledge_bases",
-      "agent_templates",
-      "skills",
-      "chats",
-      "chat_folders",
-    ]) {
-      expect(BODY).toMatch(new RegExp(String.raw`FROM\s+${table}\b`, "i"));
-    }
-    expect(BODY).toMatch(/unsupported scope_type/i);
-    expect(BODY).toMatch(/unsupported resource_type/i);
   });
 });
 

@@ -2,7 +2,7 @@ import "server-only";
 import type { ChannelDelivery } from "../types";
 import type { DeliveryAckInput } from "../schema-sessions";
 import * as repo from "./repository";
-import * as repoMessages from "./repository-messages";
+import * as repoDelivery from "./repository-delivery";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -168,7 +168,7 @@ export async function recordDeliveryAcks(
     const key = `${channelId}:${seq}`;
     const held = recipients.get(key);
     if (held) return held;
-    const asked = repoMessages.findRecipientAgentIds(ctx.workspaceId, channelId, seq);
+    const asked = repoDelivery.findRecipientAgentIds(ctx.workspaceId, channelId, seq);
     recipients.set(key, asked);
     return asked;
   };
@@ -191,7 +191,7 @@ export async function recordDeliveryAcks(
     ) {
       continue;
     }
-    const moved = await repoMessages.stampDelivery(
+    const moved = await repoDelivery.stampDelivery(
       ctx.workspaceId,
       ack.channelId,
       ack.seq,

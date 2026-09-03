@@ -165,3 +165,92 @@ harness's third method) and added `wake-routing.test.mjs`.
    service role and is in no slice's `Owns` column; two `skill_files` WRITE policies still take the
    caller-supplied user id; the skills KB picker has no service-side visibility filter (mitigated
    only with the flag ON).
+
+## Review fixes (2026-09-02) — 1 BLOCKER, 14 MAJOR, 11 MINOR, 4 NITs
+
+An Opus review of batches 1–2 at `2e277622`, applied on the same branch. **Still
+not pushed, still no migration applied, still no KB sync.** Nineteen commits.
+
+⚠ **THE FIXES ADDED TWO MIGRATIONS AND EDITED FIVE UNAPPLIED ONES.** The rule
+taken, and it is worth stating because the two halves look inconsistent: a
+migration that has **already applied** can only be corrected by a NEW file
+(`20260921130000`, `20260921140000`); one that is **pending in this branch** is
+still a draft, and a follow-up file re-stating a function it defines four
+versions earlier is a second copy of a rule, which is what this wave spent B12
+removing. So `20260914120000`, `20260917120000`, `20260919120000`,
+`20260920120000` and `20260921120000` were edited in place, and the two new
+files exist only where the object they change is live.
+
+| Finding | Fix |
+|---|---|
+| 🔴 **BLOCKER** `service-writes.ts` — `authorKind` from the request body, so an agent credential could take RR3's channel-wide arm | `e8bdff10` — the claim ESCALATES ONLY (F-580) |
+| `20260828120000` — the grant MIRROR kept a `FOR ALL` write policy | `37fcfe7a` — `20260921130000` drops it; both trigger writers become SECURITY DEFINER (F-581) |
+| `enforce_resource_grant` — grantor arm asked membership, never the resource | `14389ce8` — `20260921140000`: edit-capable rank + `dopl_user_may_share_resource` (F-583) |
+| …and the same arm made `ON DELETE SET NULL` undeletable | same commit — de-attribution is not a re-grant (F-584) |
+| …and the backfill copied a departed grantor into a trigger that refuses one | same commit — carried as unattributed (F-582) |
+| `20260921120000` — `knowledge_entry_chunks` deny-all → viewer-readable, flag or no flag | `f26ab450` — **D1**, the arm is withdrawn; F-575 returns to OPEN |
+| `check-rls-pair-gate.ts` — asserted a policy NAME survived, and nothing else | `ee074b26` — four checks, `DROP TABLE`-aware replay (F-585) |
+| …and its first run found a policy written for a table dropped in July 2026 | same commit — the `skill_files` block would have aborted the apply (F-586) |
+| `rls-redteam-fixture.ts` — 26 behavioural cases skipped in every environment | `03a2d30e` — **D2**, the `rls-redteam` CI job. ⚠ **NOT RUN HERE** — this machine has no Docker, which is the reason it exists |
+| three token minters wrote neither credential axis | `004b4caa` — **D4**, plus the subject-axis CHECK that makes `NULL/NULL` unrepresentable (F-587) |
+| `errors-recipient.ts` — a mistyped `to=` returned every member's email | `8d3d4215` — the entitlement rule `channel-render.ts` already states (F-588) |
+| RR2 keyed on a caller-supplied agent stamp, unchecked | same commit — checked against `ownLiveAgentIds` (F-589) |
+| `personal-container.ts` — flipping the flag ON HID every row written before it | `d7758ae3` — the read stops asking the flag (F-590) |
+| A16's three response-size knobs recorded as shipped, absent from the tree | `175db662` — **D3**, all three wired (F-591) |
+| `law-scan.test.ts` globbed one tool; five strings routed to retired ops | `7708499a` — every non-test module, plus a retired-op check (F-592) |
+| four doc claims measured against the tree | `162a599b` — the retired-op count, G20/F-450, `default_workspace_of`, `shelf.ts`'s refusal |
+| the delivery ack proved the session, never that the message was FOR it | `b6f5dadb` — fence (3) (F-593) |
+| Cursor's frozen table fell through to `full` for the profile it refuses | same commit (F-594) |
+| a bare `node --test` failed permanently on an Electron entry point | same commit — `scripts/smoke.js` (F-595) |
+| `agentIdsInChannel` dead since B9 | same commit — F-579 CLOSED |
+| three NITs: a bare `i.op`, a stale `read_directions` sentence, two missing `SET search_path` | `752f1399` |
+| F-564's precondition was prose, and its count disagreed with its own `grep` | `6fbd4c9a` — a gate; **the migration may be applied when its map is empty** |
+| five "who will this reach" implementations, none agreeing with another | `cdfe4965` — one fixture table for the two that matter (F-551 part-paid) |
+| `types.ts` "stale" | `7a6fa6be` — it is generated from the DEPLOYED database and is correct about it; the header says when it stops being |
+
+### The five decisions, as taken
+
+**Desktop Agent defaults. Samuel may reverse any of them.**
+
+- **D1 — `knowledge_entry_chunks` stays DENY-ALL.** Every other arm of
+  `20260921120000` narrows; that one widened a table from "nobody" to "every
+  viewer", **regardless of `RLS_PHASE_2`, because a policy is not behind a
+  flag.** The F-575 trap is directional — the cost of no policy is an EMPTY
+  search the day a chunk read moves, never a leak — so the policy belongs in
+  phase 3, with the reader it unblocks. **Covered tables: 11 → 9** (the other
+  one is F-586's).
+- **D2 — the live redteam runs in CI.** `supabase start && db reset` on an
+  ubuntu runner, then the five files with `RLS_REDTEAM_LIVE=1`. `db reset` makes
+  it the REPLAY gate §12 has been recording as owed. **It has not run; its first
+  CI run is where these suites are proved.** The local skip-with-reason stays.
+- **D3 — the three knobs ship.** `fields=` (with `id` outside it by
+  construction), `response_format`, `max_chars`. Three ceilings rise 736 chars;
+  the licence is the four earlier knobs'.
+- **D4 — all three minters write both axes**, and the subject axis is pinned to
+  the legacy pair by CHECK, so `NULL/NULL` — the one shape whose fallback reads
+  as the account owner — cannot be stored while both lanes exist.
+- **D5 — the grantor arm is a rank AND the resource's own test**, and the
+  `ON DELETE SET NULL` transition skips it.
+
+### Contested
+
+- **"`channel-retired-ops.ts:6` / `channel-schema.ts:126` say eighteen"** —
+  CONTESTED. Both source files have always said **twenty-two**
+  (`channel-retired-ops.ts:5`, `channel-schema.ts:14`). The wrong number was in
+  three DOCS only, and `23 − 5 = 18` is where it came from: that is the net
+  change in what the enum SHOWS, not a count of retirements. Docs corrected.
+- **"three served strings route to retired ops"** — CONTESTED AS AN UNDERCOUNT.
+  There are **five**, and one of them had a green test holding it in place.
+
+### Needs Samuel
+
+1. **F-576 — ratification requested.** `direct_agent` → `manage(action="direct")`
+   is permanent, against the spec's row that retires the op outright. The
+   reviewer judges it acceptable; it is a surface decision and wants his word.
+2. **G20 / F-450 did not become code.** The eighth session-health field was
+   never added. Land it in batch 3, or retire the guardrail.
+3. **The migration set is now THIRTEEN**, none applied. `20260921130000` and
+   `20260921140000` join the eleven, both after `…0921` and both before batch
+   3's reserved `20260922120000`.
+4. **F-583's six behavioural probes (P15–P20) are owed** with F-461's and
+   F-563's. The `rls-redteam` job is the first thing that can pay any of them.
