@@ -70,17 +70,13 @@ vi.mock("./stripe", async (importOriginal) => {
 vi.mock("./seats", () => ({ syncSeatQuantity: vi.fn() }));
 vi.mock("./subscriptions", () => ({ getUserByStripeCustomer: vi.fn() }));
 vi.mock("@/features/workspaces/server/repository", () => ({
-  findDefaultWorkspaceForUser: vi.fn(),
-  countWorkspacesOwnedBy: vi.fn(),
+  findSoleOwnedStandardWorkspace: vi.fn(),
 }));
 
 import * as repo from "./workspace-billing";
 import { syncSeatQuantity } from "./seats";
 import { getUserByStripeCustomer } from "./subscriptions";
-import {
-  countWorkspacesOwnedBy,
-  findDefaultWorkspaceForUser,
-} from "@/features/workspaces/server/repository";
+import { findSoleOwnedStandardWorkspace } from "@/features/workspaces/server/repository";
 import { processStripeEvent } from "./webhook-handler";
 
 const mockRepo = vi.mocked(repo);
@@ -682,41 +678,70 @@ describe("idempotency claim (atomic)", () => {
   });
 });
 
-describe("grandfather mapping warnings", () => {
-  it("warns when the user owns multiple workspaces (ambiguous)", async () => {
+/**
+ * 🔒 THE GRANDFATHER PATH REFUSES ON AMBIGUITY (B10, spec §7 (a)). It used to
+ * route the legacy subscription to the OLDEST owned workspace and `console.warn`
+ * that it had guessed — a real payment applied to a workspace nobody named, with
+ * a log line as its only trace. There is no derived answer left to appeal to, so
+ * the mapping has exactly one answer or none.
+ */
+describe("grandfather mapping", () => {
+  function unmappedCustomer() {
     mockRepo.findWorkspaceIdByStripeCustomer.mockResolvedValue(null);
     mockRepo.findWorkspaceIdByStripeSubscription.mockResolvedValue(null);
     vi.mocked(getUserByStripeCustomer).mockResolvedValue("user-1");
-    vi.mocked(findDefaultWorkspaceForUser).mockResolvedValue({
-      id: WS,
+    return vi.spyOn(console, "error").mockImplementation(() => {});
+  }
+
+  it("maps the SOLE owned standard workspace", async () => {
+    unmappedCustomer().mockRestore();
+    vi.mocked(findSoleOwnedStandardWorkspace).mockResolvedValue({
+      workspace: { id: WS },
+      count: 1,
     } as never);
-    vi.mocked(countWorkspacesOwnedBy).mockResolvedValue(2);
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await processStripeEvent(
       event("customer.subscription.updated", sub({ metadata: {} }))
     );
 
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Ambiguous"));
-    warn.mockRestore();
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({ plan: "team" })
+    );
   });
 
-  it("warns when the subscription maps to no workspace (money paid, no Pro)", async () => {
-    mockRepo.findWorkspaceIdByStripeCustomer.mockResolvedValue(null);
-    mockRepo.findWorkspaceIdByStripeSubscription.mockResolvedValue(null);
-    vi.mocked(getUserByStripeCustomer).mockResolvedValue("user-1");
-    vi.mocked(findDefaultWorkspaceForUser).mockResolvedValue(null);
-    vi.mocked(countWorkspacesOwnedBy).mockResolvedValue(0);
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("🔒 REFUSES when the user owns multiple workspaces — nothing is guessed", async () => {
+    const err = unmappedCustomer();
+    vi.mocked(findSoleOwnedStandardWorkspace).mockResolvedValue({
+      workspace: null,
+      count: 2,
+    } as never);
 
     await processStripeEvent(
       event("customer.subscription.updated", sub({ metadata: {} }))
     );
 
-    expect(warn).toHaveBeenCalledWith(
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("is ambiguous"));
+    // ⚠ THE REVERT DETECTOR: the old shape WROTE a billing row here.
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+    err.mockRestore();
+  });
+
+  it("alerts when the subscription maps to no workspace (money paid, no Pro)", async () => {
+    const err = unmappedCustomer();
+    vi.mocked(findSoleOwnedStandardWorkspace).mockResolvedValue({
+      workspace: null,
+      count: 0,
+    } as never);
+
+    await processStripeEvent(
+      event("customer.subscription.updated", sub({ metadata: {} }))
+    );
+
+    expect(err).toHaveBeenCalledWith(
       expect.stringContaining("could not be mapped")
     );
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
-    warn.mockRestore();
+    err.mockRestore();
   });
 });

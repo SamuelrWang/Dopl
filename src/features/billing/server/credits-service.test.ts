@@ -324,9 +324,10 @@ describe("credit usage ledger", () => {
     const container = "ws-link-1";
     const workspaces = await import("@/features/workspaces/server/repository");
     vi.spyOn(workspaces, "findActiveOwnerUserId").mockResolvedValue("owner-1");
-    vi.spyOn(workspaces, "findDefaultWorkspaceForUser").mockResolvedValue({
-      id: payer,
-    } as Awaited<ReturnType<typeof workspaces.findDefaultWorkspaceForUser>>);
+    vi.spyOn(workspaces, "findSoleOwnedStandardWorkspace").mockResolvedValue({
+      workspace: { id: payer },
+      count: 1,
+    } as Awaited<ReturnType<typeof workspaces.findSoleOwnedStandardWorkspace>>);
 
     await consumeMcpCredits(container, { userId: "guest-1", workspaceKind: "link" });
 

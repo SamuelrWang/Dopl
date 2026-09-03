@@ -54,7 +54,7 @@ vi.mock("@/features/workspaces/server/repository", () => ({
   findWorkspaceById: vi.fn(),
   findMembership: vi.fn(),
   findActiveOwnerUserId: vi.fn(),
-  findDefaultWorkspaceForUser: vi.fn(),
+  findSoleOwnedStandardWorkspace: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/last-seen", () => ({
   touchLastSeen: vi.fn(),
@@ -139,9 +139,10 @@ beforeEach(() => {
   state.userId = GUEST;
   warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   mockRepo.findActiveOwnerUserId.mockResolvedValue(OWNER);
-  mockRepo.findDefaultWorkspaceForUser.mockResolvedValue(
-    workspace(OWNER_WS, "standard")
-  );
+  mockRepo.findSoleOwnedStandardWorkspace.mockResolvedValue({
+    workspace: workspace(OWNER_WS, "standard"),
+    count: 1,
+  });
   mockBilling.getWorkspaceBilling.mockResolvedValue(null);
   mockBilling.countActiveMembers.mockResolvedValue(1);
   mockBilling.consumeWorkspaceCredits.mockResolvedValue({
@@ -170,8 +171,8 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
     expect(mockRepo.findActiveOwnerUserId).toHaveBeenCalledWith(CONTAINER);
     // ⚠ THE LOAD-BEARING ASSERTION. The pre-fix code asked for the CALLER's
     // default workspace; asserting only "the RPC ran" stayed green through that.
-    expect(mockRepo.findDefaultWorkspaceForUser).toHaveBeenCalledWith(OWNER);
-    expect(mockRepo.findDefaultWorkspaceForUser).not.toHaveBeenCalledWith(GUEST);
+    expect(mockRepo.findSoleOwnedStandardWorkspace).toHaveBeenCalledWith(OWNER);
+    expect(mockRepo.findSoleOwnedStandardWorkspace).not.toHaveBeenCalledWith(GUEST);
     expect(mockBilling.consumeWorkspaceCredits).toHaveBeenCalledWith(
       OWNER_WS,
       expect.any(String),
@@ -189,9 +190,13 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
   it("2b. a guest who owns a workspace of their own still does not pay for it", async () => {
     // The guest is not workspace-less — the reroute must pick the OWNER anyway,
     // which is the case a "does it fall back to the caller" bug reads as fine.
-    mockRepo.findDefaultWorkspaceForUser.mockImplementation(async (userId) =>
-      userId === OWNER ? workspace(OWNER_WS, "standard") : workspace(GUEST_WS, "standard")
-    );
+    mockRepo.findSoleOwnedStandardWorkspace.mockImplementation(async (userId) => ({
+      workspace:
+        userId === OWNER
+          ? workspace(OWNER_WS, "standard")
+          : workspace(GUEST_WS, "standard"),
+      count: 1,
+    }));
     await consumeAs("guest");
     expect(mockBilling.consumeWorkspaceCredits).toHaveBeenCalledWith(
       OWNER_WS,
@@ -223,7 +228,7 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
     const { res } = await consumeAs("member", OWNER_WS, "standard");
     expect(res.status).toBe(200);
     expect(mockRepo.findActiveOwnerUserId).not.toHaveBeenCalled();
-    expect(mockRepo.findDefaultWorkspaceForUser).not.toHaveBeenCalled();
+    expect(mockRepo.findSoleOwnedStandardWorkspace).not.toHaveBeenCalled();
     expect(mockBilling.consumeWorkspaceCredits).toHaveBeenCalledWith(
       OWNER_WS,
       expect.any(String),
@@ -235,7 +240,10 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
 
 describe("the owner has no billing workspace — fail OPEN, and say so", () => {
   it("4. allowed + stamped degraded, nothing charged anywhere", async () => {
-    mockRepo.findDefaultWorkspaceForUser.mockResolvedValue(null);
+    mockRepo.findSoleOwnedStandardWorkspace.mockResolvedValue({
+      workspace: null,
+      count: 0,
+    });
     const { res, body } = await consumeAs("guest");
 
     expect(res.status).toBe(200);
@@ -246,7 +254,10 @@ describe("the owner has no billing workspace — fail OPEN, and say so", () => {
   });
 
   it("4b. LOGS the reason — silence here is indistinguishable from the bug", async () => {
-    mockRepo.findDefaultWorkspaceForUser.mockResolvedValue(null);
+    mockRepo.findSoleOwnedStandardWorkspace.mockResolvedValue({
+      workspace: null,
+      count: 0,
+    });
     await consumeAs("guest");
 
     // Assert the CONTENT, not that something was logged: the reason and the
@@ -267,7 +278,7 @@ describe("the owner has no billing workspace — fail OPEN, and say so", () => {
 
     expect(res.status).toBe(200);
     expect(body.degraded).toBe(true);
-    expect(mockRepo.findDefaultWorkspaceForUser).not.toHaveBeenCalled();
+    expect(mockRepo.findSoleOwnedStandardWorkspace).not.toHaveBeenCalled();
     expect(warn.mock.calls.map((c: unknown[]) => String(c[0])).join("\n")).toContain(
       "container-has-no-active-owner"
     );

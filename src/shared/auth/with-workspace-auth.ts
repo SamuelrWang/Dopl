@@ -104,14 +104,17 @@ interface Options {
  * Composes `withUserAuth`, additionally resolving the active workspace and
  * verifying membership + role.
  *
- * ⚠ Resolution priority is FAIL-CLOSED, no default fallback:
+ * ⚠ Resolution priority, most explicit first:
  *   1. Workspace-scoped API key's `workspace_id`. A contradicting requested
  *      target 403s — one key must never be used cross-workspace.
  *   2. Else `X-Workspace-Id` header (UUID only; blank/non-UUID → 400
  *      WORKSPACE_INVALID). With `workspaceIdFromQuery`, `?workspaceId=` slots in
  *      at the same priority (header wins).
- *   3. Else active memberships: exactly one auto-targets; zero or 2+ → 400
- *      WORKSPACE_REQUIRED (`resolveActiveWorkspace`).
+ *   3. Else **the caller's own personal container** (`resolveActiveWorkspace`),
+ *      minted on first ask. ⚠ Ruling B10: there is no derivation left here, so
+ *      there is no membership count, no auto-target and no refusal to render —
+ *      an unnamed request lands on a container the caller is the only member of,
+ *      which is why removing the refusal does not widen anything.
  *
  * Per-workspace routes use this; user-global routes (settings, billing, global
  * entry KB, admin) keep `withUserAuth`.

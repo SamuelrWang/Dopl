@@ -10,7 +10,7 @@ import type {
   AgentTemplateCreateInput,
   AgentTemplateUpdateInput,
 } from "../schema";
-import { findDefaultWorkspaceForUser } from "@/features/workspaces/server/repository";
+import { isOwnPersonalContainer } from "@/features/workspaces/server/service";
 // 🔒 G16 — the ONE statement of the publish-into-a-peer's-room precondition,
 // shared with `knowledge/server/service-base-writes.ts`. Two copies of a
 // tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
@@ -64,12 +64,12 @@ import {
  *      grant table and exactly one consumer per row, so `private` is TERMINAL —
  *      it is the entire audience statement, which is precisely what makes it the
  *      right condition for a personal shelf.
- *   3. **THE CALLER'S OWN DEFAULT STANDARD WORKSPACE.**
- *      `findDefaultWorkspaceForUser` is the same lookup `getBootState` runs to
- *      answer `POST /api/boot`'s `workspace`, which is what the /home pane
- *      hands its editor — so the fence and the surface cannot disagree about
- *      what "home" means. A link CONTAINER fails this, and so does a second
- *      workspace the caller owns.
+ *   3. **THE CALLER'S OWN PERSONAL CONTAINER.** `isOwnPersonalContainer` is
+ *      the same answer `getBootState` gives `POST /api/boot`'s `workspace`,
+ *      which is what the /home pane hands its editor — so the fence and the
+ *      surface cannot disagree about what "home" means. A link CONTAINER fails
+ *      this, and so does any workspace the caller merely belongs to. ⚠ Ruling
+ *      B10: home is a CONSTANT per user, not a lookup.
  *
  * ⚠ THE DEFAULT IS FALSE AND SILENT. Only an explicit `homeScoped: true` is
  * examined, so MCP and every other existing caller keep writing workspace-shelf
@@ -91,9 +91,8 @@ async function resolveTemplateHomeScope(
       "the home shelf holds private agents only"
     );
   }
-  const home = await findDefaultWorkspaceForUser(ctx.userId);
-  if (home === null || home.id !== ctx.workspaceId) {
-    throw new TemplateHomeScopeForbiddenError("it is not your home workspace");
+  if (!(await isOwnPersonalContainer(ctx.userId, ctx.workspaceId))) {
+    throw new TemplateHomeScopeForbiddenError("it is not your home");
   }
   return true;
 }

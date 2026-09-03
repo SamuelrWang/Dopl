@@ -81,7 +81,7 @@ vi.mock("@/features/workspaces/server/repository", () => ({
   listWorkspacesWithRoleForUser: vi.fn(),
   findWorkspaceById: vi.fn(),
   findMembership: vi.fn(),
-  findDefaultWorkspaceForUser: vi.fn(),
+  ensurePersonalContainerRow: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/last-seen", () => ({ touchLastSeen: vi.fn() }));
 vi.mock("@/features/workspaces/server/seed-workspace", () => ({
@@ -98,6 +98,8 @@ const mockRepo = vi.mocked(repo);
 
 const UUID_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const UUID_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+/** The caller's personal container — never one of the granted memberships. */
+const UUID_HOME = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
 function wsWithRole(id: string, slug: string, role: Role): WorkspaceWithRole {
   return {
@@ -154,6 +156,30 @@ function grantMemberships(entries: Array<{ id: string; slug: string; role: Role 
   });
 }
 
+/**
+ * The caller's HOME, which is what a header-less request now resolves to
+ * (ruling B10). ⚠ It is NOT one of `grantMemberships`' entries on purpose: a
+ * fixture where the container is also a listed membership cannot tell "answered
+ * the container" from "auto-targeted a workspace".
+ */
+function grantOwnContainer(role: Role = "owner") {
+  const container = { ...workspace(UUID_HOME, "personal"), kind: "personal" as const };
+  mockRepo.ensurePersonalContainerRow.mockResolvedValue({
+    workspace: container,
+    created: false,
+  });
+  const byId = mockRepo.findWorkspaceById.getMockImplementation();
+  const byMembership = mockRepo.findMembership.getMockImplementation();
+  mockRepo.findWorkspaceById.mockImplementation(async (id: string) =>
+    id === UUID_HOME ? container : ((await byId?.(id)) ?? null)
+  );
+  mockRepo.findMembership.mockImplementation(async (id: string, userId: string) =>
+    id === UUID_HOME
+      ? membership(UUID_HOME, role)
+      : ((await byMembership?.(id, userId)) ?? null)
+  );
+}
+
 /** Echo handler — surfaces the resolved context for assertions. */
 const echo = withWorkspaceAuth(async (_req, ctx) =>
   NextResponse.json({ workspaceId: ctx.workspaceId, role: ctx.role })
@@ -194,15 +220,16 @@ describe("workspaceIdFromQuery — export download regression (A1)", () => {
     expect(await res.json()).toEqual({ workspaceId: UUID_A });
   });
 
-  it("ignores ?workspaceId= when the option is OFF (falls back to membership resolution)", async () => {
-    // Ambiguous ⇒ 400, proving the query param never participated by default.
-    mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([
-      wsWithRole(UUID_A, "acme", "member"),
-      wsWithRole(UUID_B, "beta", "member"),
-    ]);
+  it("ignores ?workspaceId= when the option is OFF (falls through to the caller's home)", async () => {
+    // The named workspace is reachable — so answering the CONTAINER instead is
+    // the proof that the query param never participated by default. (This used
+    // to be proven by a 400 on an ambiguous membership set; there is no such
+    // refusal any more, and the positive form is the stronger assertion.)
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    grantOwnContainer();
     const res = await echo(req(`/api/x?workspaceId=${UUID_A}`), { params: Promise.resolve({}) });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("WORKSPACE_REQUIRED");
+    expect(res.status).toBe(200);
+    expect((await res.json()).workspaceId).toBe(UUID_HOME);
   });
 
   it("the header wins over the query param when both are present", async () => {
@@ -283,20 +310,17 @@ describe("the credential workspace lock (LIVE since Home Knowledge Panels M5)", 
 });
 
 describe("resolution outcomes surfaced by the wrapper", () => {
-  it("auto-targets the sole membership with no header", async () => {
-    mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([
-      wsWithRole(UUID_A, "acme", "admin"),
-    ]);
-    grantMemberships([{ id: UUID_A, slug: "acme", role: "admin" }]);
+  it("no header resolves the caller's own container", async () => {
+    grantOwnContainer("owner");
     const res = await echo(req("/api/x"), { params: Promise.resolve({}) });
-    expect(await res.json()).toEqual({ workspaceId: UUID_A, role: "admin" });
+    expect(await res.json()).toEqual({ workspaceId: UUID_HOME, role: "owner" });
   });
 
-  it("403 WORKSPACE_FORBIDDEN when the auto-targeted role is below minRole", async () => {
-    mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([
-      wsWithRole(UUID_A, "acme", "viewer"),
-    ]);
-    grantMemberships([{ id: UUID_A, slug: "acme", role: "viewer" }]);
+  it("403 WORKSPACE_FORBIDDEN when the container role is below minRole", async () => {
+    // ⚠ Unreachable in production — a container's only member is its owner —
+    // and pinned anyway: the role floor must run on the resolved membership
+    // whatever resolved it, not only on a named workspace.
+    grantOwnContainer("viewer");
     const guarded = withWorkspaceAuth(
       async (_req, ctx) => NextResponse.json({ workspaceId: ctx.workspaceId }),
       { minRole: "member" }
@@ -306,22 +330,23 @@ describe("resolution outcomes surfaced by the wrapper", () => {
     expect((await res.json()).error.code).toBe("WORKSPACE_FORBIDDEN");
   });
 
-  it("400 WORKSPACE_REQUIRED (flat envelope) for 2+ memberships with no header", async () => {
+  it("🔒 N memberships and no header is NOT a refusal any more — it is home", async () => {
+    // ⚠ THE REVERT DETECTOR FOR B10. This was a 400 `WORKSPACE_REQUIRED`
+    // carrying a `workspaces: [...]` list to pick from; the count that produced
+    // it is gone, so the busiest account and the emptiest take one path.
     mockRepo.listWorkspacesWithRoleForUser.mockResolvedValue([
       wsWithRole(UUID_A, "acme", "owner"),
       wsWithRole(UUID_B, "beta", "member"),
     ]);
+    grantMemberships([
+      { id: UUID_A, slug: "acme", role: "owner" },
+      { id: UUID_B, slug: "beta", role: "member" },
+    ]);
+    grantOwnContainer();
     const res = await echo(req("/api/x"), { params: Promise.resolve({}) });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body).toEqual({
-      error: "WORKSPACE_REQUIRED",
-      message: expect.any(String),
-      workspaces: [
-        { name: "acme ws", slug: "acme", role: "owner" },
-        { name: "beta ws", slug: "beta", role: "member" },
-      ],
-    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).workspaceId).toBe(UUID_HOME);
+    expect(mockRepo.listWorkspacesWithRoleForUser).not.toHaveBeenCalled();
   });
 
   it("400 WORKSPACE_INVALID (flat envelope) for a non-UUID header", async () => {

@@ -68,12 +68,12 @@ export interface InvitationStatus {
 
 /**
  * THE shared kind predicate — every UI list, navigation menu, membership count
- * and implicit default-resolution site filters through this and nothing else.
+ * and every implicit listing site filters through this and nothing else.
  *
  * ⚠ POSITIVE FORM, and that is the point: `=== "standard"`, never `!== "link"`.
  * The negative spelling admits every kind that has not been invented yet — the
  * NEXT kind added to the union would be silently standard in the rail, in the
- * switcher, in `list_workspaces` and in default resolution, with no error
+ * switcher and in `list_workspaces`, with no error
  * anywhere. A listing predicate must let a value IN, not merely fail to keep
  * one out.
  *

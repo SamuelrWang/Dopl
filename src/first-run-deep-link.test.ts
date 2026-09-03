@@ -54,7 +54,7 @@ vi.mock("@/features/analytics/server/conversion-events", () => ({
   hasFiredEvent: vi.fn(async () => false),
 }));
 vi.mock("@/features/workspaces/server/service", () => ({
-  ensureDefaultWorkspace: vi.fn(async () => ({ id: "ws-1", slug: "default" })),
+  ensurePersonalContainer: vi.fn(async () => ({ id: "ws-1", slug: "personal" })),
 }));
 vi.mock("@/features/onboarding/server/service", () => ({
   isOnboarded: vi.fn(async () => state.onboarded),

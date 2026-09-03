@@ -1,7 +1,7 @@
 import "server-only";
 import {
   findActiveOwnerUserId,
-  findDefaultWorkspaceForUser,
+  findSoleOwnedStandardWorkspace,
 } from "@/features/workspaces/server/repository";
 import {
   isStandardWorkspace,
@@ -45,7 +45,11 @@ export interface CreditCaller {
 /** Why a burn found no counter to move. Never silent — `consumeMcpCredits` logs it. */
 export type UnmeteredReason =
   | "container-has-no-active-owner"
-  | "container-owner-has-no-billing-workspace";
+  | "container-owner-has-no-billing-workspace"
+  /** ⚠ THE REFUSAL THAT REPLACED A GUESS (B10, spec §7 (a)). The owner owns 2+
+   *  standard workspaces and no rule says which one pays; charging the oldest
+   *  was the old answer and it is a charge nobody chose. */
+  | "container-owner-has-ambiguous-billing-workspace";
 
 /** Which counter a burn moves, and whose allowance that is. */
 export interface BillingTarget {
@@ -67,26 +71,34 @@ export interface BillingTarget {
  *
  * 🔒 **A CONTAINER'S BURN IS CHARGED TO THE OPERATOR — THE CONTAINER'S OWNER —
  * WHOEVER MADE THE CALL (Samuel, 2026-08-26: "charge MCP calls from a guest to
- * the user").** A `link` container is a relationship, not a tenant, and has no
- * plan; the person who minted the link is the one who invited the traffic, so
- * the guest's (or any peer's) tool calls land on the OWNER's oldest-owned
- * STANDARD workspace. `findDefaultWorkspaceForUser` is sanctioned here — its
- * third sanctioned use, alongside signup-bootstrap and the billing grandfather
- * (INVARIANTS §4).
+ * the user").** A `link` container is a relationship and a `personal` container
+ * is a shelf; neither is a tenant and neither carries a plan. The person who
+ * minted the container is the one who invited the traffic, so the guest's (or
+ * any peer's) tool calls land on the OWNER's SOLE owned STANDARD workspace.
+ *
+ * 🔒 **AND IT REFUSES ON AMBIGUITY RATHER THAN GUESSING (B10, spec §7's answer
+ * (a) — the one option that changes nobody's bill).** The lookup this used to
+ * call answered "the oldest owned" and called it the default; with no default
+ * left to derive, an owner of two workspaces has no rule saying which one pays.
+ * A refusal is an unmetered call somebody can read in a log; a guess is a charge
+ * against a workspace nobody chose, and it is silent. One function reverses
+ * this, which is why the choice lives in `findSoleOwnedStandardWorkspace` and
+ * not in three branches here.
  *
  * ⚠ THIS REPLACES "each side spends their own allowance" (the 2026-08-23
- * PROVISIONAL wiring). That version resolved `findDefaultWorkspaceForUser(
- * caller.userId)` — the CALLER's own workspace — which for a guest was either
- * their unrelated workspace or nothing at all, and in practice was nothing:
- * the route floor 403'd every guest and the registrar failed open, so guest
- * traffic was free (F-325). Owner-resolution is the half that makes the lowered
- * floor mean something; reverting it silently re-bills the wrong party.
+ * PROVISIONAL wiring). That version resolved the CALLER's own workspace, which
+ * for a guest was either their unrelated workspace or nothing at all, and in
+ * practice was nothing: the route floor 403'd every guest and the registrar
+ * failed open, so guest traffic was free (F-325). Owner-resolution is the half
+ * that makes the lowered floor mean something; reverting it silently re-bills
+ * the wrong party.
  *
  * ⚠ FOR THE OWNER'S OWN CALLS IN THEIR OWN SOLO CONTAINER — the overwhelmingly
- * common case — the answer is byte-identical to the old one: owner === caller.
+ * common case, and the only shape 15 accounts have — the answer is identical to
+ * the old one: owner === caller, one owned workspace, no ambiguity to refuse.
  *
  * ⚠ COSTS ONE EXTRA ROUND TRIP on the container path only (owner, then the
- * owner's default workspace). The standard path still asks nothing.
+ * owner's workspaces). The standard path still asks nothing.
  */
 export async function resolveBillingTarget(
   workspaceId: string,
@@ -103,14 +115,16 @@ export async function resolveBillingTarget(
       reason: "container-has-no-active-owner",
     };
   }
-  const owned = await findDefaultWorkspaceForUser(ownerUserId);
-  return owned
-    ? { workspaceId: owned.id, payerUserId: ownerUserId }
-    : {
-        workspaceId: null,
-        payerUserId: ownerUserId,
-        reason: "container-owner-has-no-billing-workspace",
-      };
+  const { workspace, count } = await findSoleOwnedStandardWorkspace(ownerUserId);
+  if (workspace) return { workspaceId: workspace.id, payerUserId: ownerUserId };
+  return {
+    workspaceId: null,
+    payerUserId: ownerUserId,
+    reason:
+      count === 0
+        ? "container-owner-has-no-billing-workspace"
+        : "container-owner-has-ambiguous-billing-workspace",
+  };
 }
 
 /** The charge target alone. Kept as the narrow accessor for callers that do not
@@ -195,8 +209,8 @@ export async function summarizeCredits(
  * then the RPC. Do NOT reintroduce `getWorkspaceEntitlements` here — it fans
  * out to a `COUNT(*)` over `ontology_objects` for a cap this path never
  * consults, plus a second `workspace_billing` read. This runs once per MCP
- * tool call. (A `link` container adds the owner + default-workspace reads on
- * top; the standard path is unchanged.)
+ * tool call. (A container adds the owner + owned-workspaces reads on top; the
+ * standard path is unchanged.)
  */
 export async function consumeMcpCredits(
   workspaceId: string,

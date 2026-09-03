@@ -46,7 +46,7 @@ export type MembershipStatus = "pending" | "active" | "revoked";
 /**
  * "standard" = a real user-facing workspace. "link" = a hidden home-channel
  * container holding ONE or TWO members and exactly one channel — never shown in
- * the rail/switcher, never a default-resolution candidate, and **bills to the
+ * the rail/switcher, never an implicit target, and **bills to the
  * CONTAINER OWNER's plan whoever makes the call** (Samuel, 2026-08-26 —
  * `billing/server/credits-service.ts › resolveBillingTarget`; it billed each
  * side's own plan until then).

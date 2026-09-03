@@ -161,7 +161,7 @@ export class EntitlementError extends Error {
  * entry points cannot drift apart.
  *
  * Workspace-agnostic on purpose: these builders are reached with only an id,
- * no SEGMENT, and `/billing` resolves the caller's DEFAULT workspace.
+ * no SEGMENT, and `/billing` resolves or asks for one on arrival.
  */
 export function upgradeUrl(): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
