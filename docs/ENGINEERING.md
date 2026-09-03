@@ -5078,7 +5078,9 @@ route that answers the whole account and cannot narrow, because the lock is a pr
 CONNECTION and not of the credential.
 
 So `WorkspaceDirectory` gained `lockedWorkspaceId()`, with exactly one reader:
-`tools/home-scopes.ts › narrowToLock`. **The alternative was each tool restating the rule, and a
+`workspace-directory.ts › narrowToLock` (⚠ **it lived in a `tools/` home-scopes module until
+2026-09-02, when B13 deleted that file with `dopl_home`**). **The alternative was each tool
+restating the rule, and a
 restated fence is the one that drifts.** The pin is in `container-lock.test.ts` and it drives the
 REAL registered tool through `bootServer` — a lock asserted on the helper stays green when a tool
 stops calling the helper, which is the failure mode this suite already exists to catch for

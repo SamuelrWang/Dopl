@@ -131,12 +131,10 @@ function expectRatchet(
  * SECURITY sentence, the OPS named and glossed, and the arguments that are not
  * self-describing from their own `.describe()`.
  *
- *   • `current_workspace` and `dopl_status` grew on prose that RESTATED their
- *     own schema descriptions — the `since` cursor, which of "set"/"clear" does
- *     what, that a home-channel container is a legal target. A description and
- *     its arg descriptions are BOTH pushed on every connection, so that is the
- *     same fact paid for twice. Both were trimmed and both now fit 1,200 with
- *     no entry added here.
+ *   • The two meta tools grew on prose that RESTATED their own schema
+ *     descriptions. A description and its arg descriptions are BOTH pushed on
+ *     every connection, so that is one fact paid for twice. Both were trimmed
+ *     and both fit 1,200 with no entry added here.
  *   • `dopl_kb`, `dopl_agent` and `dopl_channel` grew on NEW OPS. An op a model
  *     never sees is an op it cannot pick, and `parity.test.ts` requires every
  *     enum op to appear as a quoted `"op_name"` with a bullet
@@ -168,7 +166,8 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   dopl_agent: 1941,
   // ⚠ 1,591 → 1,596 (B8): barely moved while the string changed completely — 23
   // op names fell to 5, and a generated `Limits:` block took it back.
-  dopl_channel: 1596,
+  // ⚠ 1,596 → 1,587 (B13): the discovery sentence names `dopl_workspaces`.
+  dopl_channel: 1587,
   dopl_chats: 1699,
   dopl_kb: 1947,
   dopl_members: 1453,
@@ -211,22 +210,23 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   // ⚠ **AND THREE MORE ROSE IN THE BATCH-2 REVIEW (2026-09-02), SAME LICENCE** —
   // A16's last three knobs, recorded as shipped and absent from the tree
   // (F-591): `fields=` (+242), `response_format` (+279), `max_chars` (+215).
-  current_workspace: 720,
-  dopl_agent: 4145,
+  dopl_agent: 4128,
   // ⚠ 11,609 → 8,678 (B8), every character from a param or an op LEAVING; F-577 records the gap to the 3,000 target.
-  dopl_channel: 8678,
-  dopl_chats: 3554,
-  dopl_home: 440,
-  dopl_kb: 5347,
-  dopl_map: 251,
-  dopl_members: 846,
-  dopl_ontology: 2817,
-  dopl_search: 1081,
-  dopl_skill: 3059,
+  dopl_channel: 8677,
+  dopl_chats: 3553,
+  dopl_kb: 5330,
+  dopl_map: 250,
+  dopl_members: 845,
+  dopl_ontology: 2816,
+  dopl_search: 1080,
+  dopl_skill: 3058,
   // ⚠ THESE THREE EACH FELL BY 7 AND ROSE BY 1, BOTH EDITS IN OTHER FILES —
   // `response-size.ts › RESPONSE_FORMAT_FIELD` and `shelf.ts › SHELF_ARG_DESCRIPTION`.
   dopl_status: 787,
-  list_workspaces: 114,
+  // ⚠ THE ONE THAT REPLACED THREE (B13): no arguments, so 114 is the empty
+  // object the SDK renders — `current_workspace`'s 720 and `dopl_home`'s 440
+  // are gone with the ops they described.
+  dopl_workspaces: 114,
 };
 
 /**
@@ -250,26 +250,19 @@ const SCHEMA_CEILINGS: Record<string, number> = {
  * claims a win.
  */
 // ⚠ **54,934 → 51,996 ON 2026-09-02 (SLICE A14), A FALL OF 2,938.** Re-derived
-// whole through the real `listTools()`. Where it came from, and it is two moves
-// pulling opposite ways:
-//   • DESCRIPTIONS −4,466 (20,558 → 16,092, −22%). Every one of the thirteen is
-//     RENDERED now (`tool-style.ts › composeDescription`) rather than written,
-//     and most of the fall is one rule: a description carries nothing its own
-//     arg descriptions already say. `dopl_kb` −1,412, `dopl_agent` −489,
-//     `dopl_ontology` −397, `dopl_status` −583, `list_workspaces` −375.
-//   • SCHEMAS +1,526, and ALL of it is the response-size knobs — see
-//     {@link SCHEMA_CEILINGS}, which argues why that rise is the one on this
-//     surface that pays for itself per call rather than per connection.
-//   • The briefing +2, and that number is worth reading twice: the contract LOST
-//     the 230-char paragraph explaining where to find the caller's id, and the
-//     per-connection IDENTITY block that replaced it gives the id itself. This
-//     boot supplies no transport identity, so it measures the FALLBACK; a real
-//     desktop connection renders ~130 more and deletes a `current_workspace` /
-//     `whoami` / `dopl_home` / `dopl_status` round trip from the start of every
-//     run. See `instructions.ts › ConnectionIdentity`.
+// whole through the real `listTools()`, and it was two moves pulling opposite
+// ways: DESCRIPTIONS −4,466 (every one is RENDERED now, and a description
+// carries nothing its own arg descriptions already say), SCHEMAS +1,526 — all
+// of it the response-size knobs, the one rise here that pays for itself per
+// CALL rather than per connection — and the briefing +2, which bought the
+// per-connection IDENTITY block that deletes a round trip from every run.
 // ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** Every figure a doc has carried
 // about this surface has gone stale inside a day (F-422).
-const SERVED_TOTAL_CEILING = 49_790; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review)
+// ⚠ **49,790 → 47,021 (B13), A FALL OF 2,769, AND IT IS ALMOST ALL TOOL COUNT:**
+// three meta tools became one (`dopl_home`, `current_workspace`,
+// `list_workspaces` → `dopl_workspaces`), the injected `workspace` contract lost
+// 5 chars × 9 tools, and the briefing fell 56.
+const SERVED_TOTAL_CEILING = 47_021; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review)
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -287,7 +280,10 @@ const SERVED_TOTAL_CEILING = 49_790; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A
  */
 // ⚠ **1,851 → 1,857 (B8): A RISE, RECORDED.** Both op names the briefing spells
 // moved — six characters, against the FIRST string an agent reads being wrong.
-const INSTRUCTIONS_CEILING = 1_857;
+// ⚠ **1,857 → 1,801 (B13):** the membership-count branch and the home-channel
+// count both left — nothing is refused for want of a workspace, and containers
+// are LISTED by the orientation tool rather than counted here.
+const INSTRUCTIONS_CEILING = 1_801;
 
 /**
  * ⚠ THE PULLED SIDE, AND IT IS BUDGETED SEPARATELY ON PURPOSE (principle 7).

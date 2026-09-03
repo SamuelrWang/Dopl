@@ -7,7 +7,7 @@
  *                          (`buildInstructions`, re-exported below because
  *                          `factory.ts` and four suites import it from HERE).
  *   workspace-directory.ts membership cache, `workspace=` resolution, the
- *                          fail-closed no-default refusal.
+ *                          container lock, and the search fan-out's legs.
  *   gating.ts              THE FOUR GATES + their tables. ⚠ Read that file's
  *                          header before touching either registration path.
  *   delete-policy.ts       the app-only-deletion rule: the refusal, and the
@@ -15,7 +15,7 @@
  *   registrar.ts           `registerTool` / `registerMetaTool`, workspace arg,
  *                          `strictInput`, ALS routing.
  *   status-footer.ts       the `_dopl_status` footer.
- *   meta-tools.ts          `list_workspaces` + `current_workspace`.
+ *   meta-tools.ts          `dopl_workspaces` — the one orientation tool.
  *   resources.ts           the MCP RESOURCES — today the channels doctrine,
  *                          which is where the prose the tool descriptions and
  *                          write results used to repeat now lives.
@@ -36,14 +36,18 @@ export declare function createServer(client: DoplClient, options?: {
      */
     userId?: string | null;
     /**
-     * ⚠ THE ONE identity record. `_dopl_status`, `current_workspace`,
+     * ⚠ THE ONE identity record. `_dopl_status`, `dopl_workspaces`,
      * `dopl_members` and `dopl_ontology` all render FROM THIS — three surfaces
      * answering "who am I" from three sources can disagree within one
      * connection. Defaults to `UNKNOWN_CALLER`, which renders "unresolved"
      * everywhere rather than a confident guess.
      */
     caller?: CallerIdentity;
-    /** Session default workspace resolved at boot, or null (0/2+ memberships). */
+    /**
+     * The container this connection is BOUND to (`X-Workspace-Id`), or null.
+     * ⚠ Null is ORDINARY since B13 and is never a refusal — the server resolves
+     * the caller's own container when a call names none.
+     */
     workspace?: WorkspaceSummary | null;
     role?: WorkspaceRole | null;
     /**
@@ -68,18 +72,11 @@ export declare function createServer(client: DoplClient, options?: {
      */
     lockedTo?: WorkspaceListItem | null;
     /**
-     * How `workspace` was chosen at boot — `header pin` (X-Workspace-Id), the
-     * agent's own `session pin` (`session-pin.ts`), or `sole membership`. Null
-     * when there is no session default. Drives the footer source label.
+     * How `workspace` was chosen at boot — `header pin` (X-Workspace-Id) is the
+     * only way since B13. Null when the connection is unbound. Drives the
+     * footer source label.
      */
     workspaceSource?: WorkspaceSource | null;
-    /**
-     * 🔒 OPAQUE SESSION KEY for the workspace pin — see
-     * `factory.ts › BootOptions.sessionKey`. Threaded to the meta-tools, which
-     * are its only writers. Absent ⇒ `current_workspace(op="set")` REFUSES
-     * rather than reporting a pin nothing stored.
-     */
-    sessionKey?: string;
     /**
      * OAuth scopes for this session. Present and lacking `dopl.write` ⇒
      * write ops gated.

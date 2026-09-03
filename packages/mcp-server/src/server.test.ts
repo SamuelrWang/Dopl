@@ -105,43 +105,56 @@ beforeEach(() => {
 
 describe("buildInstructions (M-2)", () => {
   it("0 memberships → tells the agent it has none", () => {
-    expect(buildInstructions([])).toContain("not an active member of any workspace");
+    expect(buildInstructions([])).toContain("not an active member of any container");
   });
 
-  it("1 membership → may omit workspace=, bakes the workspace in", () => {
-    const out = buildInstructions([WS1]);
-    expect(out).toContain("one workspace, so every call targets it");
-    expect(out).toMatch(/omit .*workspace=/);
-    expect(out).toContain("`alpha`");
+  /**
+   * ⚠ **NO SENTENCE ABOUT A DEFAULT WORKSPACE SURVIVES B10, IN EITHER
+   * DIRECTION.** The briefing used to branch on the membership COUNT — one
+   * workspace "so every call targets it", 2+ and "`workspace=` REQUIRED on
+   * EVERY call, a no-arg call is refused". Both sentences described the same
+   * deleted mechanism, so the count stops appearing at all: what an agent needs
+   * is whether THIS connection is bound to a container.
+   */
+  it("names no default and demands nothing, whatever the membership count", () => {
+    for (const dir of [[WS1], [WS1, WS2]]) {
+      const out = buildInstructions(dir);
+      expect(out).toContain("This connection names no container");
+      expect(out).not.toMatch(/default workspace|REQUIRED on EVERY call/);
+    }
   });
 
-  it("2+ memberships → MUST pass workspace= on every call, lists all with descriptions", () => {
+  it("lists every container it was given, with descriptions", () => {
     const out = buildInstructions([WS1, WS2]);
-    expect(out).toContain("You are in 2 workspaces and this connection has NO default");
-    expect(out).toContain("REQUIRED on EVERY call");
     expect(out).toContain("`alpha`");
     expect(out).toContain("`beta`");
     expect(out).toContain("second ws");
   });
 
-  it("2+ memberships WITH a resolved pin → says pinned-by-default, not 'pass on every call'", () => {
+  it("a bound connection says WHERE it is, once", () => {
     const out = buildInstructions([WS1, WS2], {
       pin: { name: "Beta", slug: "beta" },
     });
-    expect(out).toContain("pinned to `Beta`");
-    expect(out).toContain("no-arg tool call targets it");
-    expect(out).not.toContain("NO default");
+    expect(out).toContain("This connection is in `Beta`");
+    expect(out).toContain("every call lands there unless it names another");
   });
 
   it("0 memberships with a transient load failure → 'couldn't load', not 'you have none'", () => {
     const out = buildInstructions([], { directoryLoadFailed: true });
     expect(out).toContain("did not load");
-    expect(out).not.toContain("not an active member of any workspace");
+    expect(out).not.toContain("not an active member of any container");
   });
 });
 
-describe("no-arg call (M-3 wrapper enforcement)", () => {
-  it("2+ memberships, no default → refuses and lists the workspaces (handler never runs)", async () => {
+describe("a no-arg call is ANSWERED, never refused (B10)", () => {
+  /**
+   * ⚠ **THE M-3 REFUSAL IS DELETED, AND THAT IS THE WHOLE OF B10 AT THIS
+   * LAYER.** A caller in 2+ workspaces used to be told "this connection has no
+   * default workspace … pick one" before the handler ran. There is no default
+   * to lack: the call goes through with no `X-Workspace-Id`, and the SERVER
+   * answers with the caller's own container.
+   */
+  it("2+ memberships, nothing bound → RUNS the handler rather than refusing", async () => {
     const { map, client } = build({
       directory: [WS1, WS2],
       workspace: null,
@@ -149,39 +162,37 @@ describe("no-arg call (M-3 wrapper enforcement)", () => {
       workspaceSource: null,
     });
     const res = await map({});
-    expect(res.isError).toBe(true);
-    const text = textOf(res);
-    expect(text).toContain("no default workspace");
-    expect(text).toContain("`alpha`");
-    expect(text).toContain("`beta`");
-    expect(client.listKbBases).not.toHaveBeenCalled();
+    expect(res.isError).toBeFalsy();
+    expect(client.listKbBases).toHaveBeenCalled();
   });
 
-  it("0 memberships, no default → refuses with a 'not a member' message", async () => {
+  it("0 memberships → still runs; there is nothing here that can refuse", async () => {
     const { map } = build({
       directory: [],
       workspace: null,
       role: null,
       workspaceSource: null,
     });
-    const res = await map({});
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain("not an active member of any workspace");
+    expect((await map({})).isError).toBeFalsy();
   });
 
-  it("sole membership → runs and footers `sole membership`", async () => {
-    const { map, client } = build({
-      directory: [WS1],
-      workspace: WS1,
-      role: "owner",
-      workspaceSource: "sole membership",
+  /**
+   * ⚠ The footer is the ONE line riding every successful response, and the
+   * briefing tells every agent to read its `caller:` key. An unbound connection
+   * has no workspace to name and must not lose its identity with it.
+   */
+  it("an unbound connection still footers the CALLER, with no workspace lines", async () => {
+    const { map } = build({
+      directory: [WS1, WS2],
+      workspace: null,
+      role: null,
+      workspaceSource: null,
+      caller: CALLER,
     });
-    const res = await map({});
-    expect(res.isError).toBeFalsy();
-    expect(client.listKbBases).toHaveBeenCalled();
-    const text = textOf(res);
-    expect(text).toContain("active_workspace: `Alpha`");
-    expect(text).toContain("workspace_source: sole membership");
+    const text = textOf(await map({}));
+    expect(text).toContain("caller: id=`u-me`");
+    expect(text).not.toContain("active_workspace:");
+    expect(text).not.toContain("workspace_source:");
   });
 
   it("header pin → footers `header pin`", async () => {
@@ -266,7 +277,7 @@ describe("_dopl_status — the caller line", () => {
       directory: [WS1],
       workspace: WS1,
       role: "owner",
-      workspaceSource: "sole membership",
+      workspaceSource: "header pin",
       caller: CALLER,
     });
     expect(textOf(await map({}))).toContain("caller: id=`u-me` · runtime=desktop-session");
@@ -288,7 +299,7 @@ describe("_dopl_status — the caller line", () => {
       directory: [WS1],
       workspace: WS1,
       role: "owner",
-      workspaceSource: "sole membership",
+      workspaceSource: "header pin",
       caller: CALLER,
     });
     const text = textOf(await map({}));
@@ -300,7 +311,7 @@ describe("_dopl_status — the caller line", () => {
       directory: [WS1],
       workspace: WS1,
       role: "owner",
-      workspaceSource: "sole membership",
+      workspaceSource: "header pin",
     });
     expect(textOf(await map({}))).toContain("caller: id=(unresolved");
   });
@@ -311,22 +322,22 @@ describe("_dopl_status — the caller line", () => {
       directory: [WS1],
       workspace: WS1,
       role: "owner",
-      workspaceSource: "sole membership",
+      workspaceSource: "header pin",
       caller: CALLER,
     });
     expect(textOf(await map({}))).not.toContain("mbp.local");
   });
 });
 
-describe("current_workspace — the tool an agent reaches for when it is lost", () => {
+describe("dopl_workspaces — the tool an agent reaches for when it is lost", () => {
   /**
-   * ⚠ The 2+-membership branch needs this most: `appendDoplStatus` skips the
-   * footer entirely when there is no effective workspace, so without a body
-   * line it carries no identity AND prints slugs with no workspace ids.
+   * ⚠ An unbound connection needs this most: `appendDoplStatus` has no
+   * workspace to name, so without a body line the answer would print slugs with
+   * no ids and no identity at all.
    */
-  it("states the caller and the workspace IDS when there is no auto-target", async () => {
+  it("states the caller and the container IDS when nothing is bound", async () => {
     build({ directory: [WS1, WS2], workspace: null, role: null, workspaceSource: null, caller: CALLER });
-    const text = textOf(await tool("current_workspace")({}));
+    const text = textOf(await tool("dopl_workspaces")({}));
     expect(text).toContain("caller: id=`u-me` · runtime=desktop-session");
     expect(text).toContain("id: `id-1`");
     expect(text).toContain("id: `id-2`");
@@ -334,32 +345,53 @@ describe("current_workspace — the tool an agent reaches for when it is lost", 
 
   it("names the credential this session acts through", async () => {
     build({ directory: [WS1, WS2], workspace: null, role: null, workspaceSource: null, caller: CALLER });
-    const text = textOf(await tool("current_workspace")({}));
+    const text = textOf(await tool("dopl_workspaces")({}));
     expect(text).toContain("a device token");
     expect(text).toContain("mbp.local");
   });
 
   /**
-   * ⚠ On the auto-target branch the footer fires and carries the caller, so the
-   * body must NOT restate it — ONE caller line per response.
+   * ⚠ When the connection IS bound the footer fires and carries the caller, so
+   * the body must NOT restate it — ONE caller line per response.
    */
-  it("states the caller exactly once on the auto-target branch", async () => {
-    build({
-      directory: [WS1],
-      workspace: WS1,
-      role: "owner",
-      workspaceSource: "sole membership",
-      caller: CALLER,
-    });
-    const text = textOf(await tool("current_workspace")({}));
-    expect(text).toContain("A no-`workspace=` call targets");
-    expect(text.split("\n").filter((l) => l.includes("caller: id="))).toHaveLength(1);
+  it("states the caller exactly once whether or not a container is bound", async () => {
+    for (const bound of [true, false]) {
+      build({
+        directory: [WS1, WS2],
+        workspace: bound ? WS1 : null,
+        role: bound ? "owner" : null,
+        workspaceSource: bound ? "header pin" : null,
+        caller: CALLER,
+      });
+      const text = textOf(await tool("dopl_workspaces")({}));
+      expect(text.split("\n").filter((l) => l.includes("caller: id="))).toHaveLength(1);
+    }
   });
 
-  it("states the caller exactly once on the no-auto-target branch too", async () => {
-    build({ directory: [WS1, WS2], workspace: null, role: null, workspaceSource: null, caller: CALLER });
-    const text = textOf(await tool("current_workspace")({}));
-    expect(text.split("\n").filter((l) => l.includes("caller: id="))).toHaveLength(1);
+  it("marks the bound container, and says so plainly when there is none", async () => {
+    build({ directory: [WS1, WS2], workspace: WS1, role: "owner", workspaceSource: "header pin" });
+    expect(textOf(await tool("dopl_workspaces")({}))).toContain(
+      "← this connection's container",
+    );
+    build({ directory: [WS1, WS2], workspace: null, role: null, workspaceSource: null });
+    expect(textOf(await tool("dopl_workspaces")({}))).toContain(
+      "This connection names no container",
+    );
+  });
+
+  /**
+   * 🔒 §4A, kept by RENDERING rather than by hiding. B10 lists containers
+   * beside workspaces; what must never happen is one being CALLED a workspace,
+   * or its slug published as an address.
+   */
+  it("lists a home-channel container by KIND and by id, never by slug", async () => {
+    const container = wsItem("id-3", "room-seg", "With Dana", "owner");
+    container.kind = "link";
+    build({ directory: [WS1, container], workspace: null, role: null, workspaceSource: null });
+    const text = textOf(await tool("dopl_workspaces")({}));
+    expect(text).toContain("`With Dana` — home channel (id: `id-3`");
+    expect(text).not.toContain("slug: `room-seg`");
+    expect(text).toContain("`Alpha` — workspace (slug: `alpha`");
   });
 });
 
@@ -404,12 +436,12 @@ describe("buildInstructions — identity is taught before the first tool call", 
 const WORKSPACE_ARG_MAX_CHARS = 96;
 
 /**
- * The meta tools. ⚠ `registerMetaTool` injects NO `workspace` arg — a
- * membership lookup is user-scoped — so they are the complement of the set that
- * must carry the injected string, and deriving the expectation that way keeps
- * this case honest as domain tools are added or deleted.
+ * The meta tools. ⚠ `registerMetaTool` injects NO `workspace` arg — an
+ * account-wide lookup is user-scoped — so they are the complement of the set
+ * that must carry the injected string, and deriving the expectation that way
+ * keeps this case honest as domain tools are added or deleted.
  */
-const META_TOOLS = ["current_workspace", "list_workspaces", "dopl_home", "dopl_status"];
+const META_TOOLS = ["dopl_workspaces", "dopl_status"];
 
 /** The `workspace` arg's served description, read off the registered schema. */
 function workspaceArgOf(schema: unknown): string | undefined {
@@ -423,7 +455,7 @@ describe("the injected `workspace` arg (C9)", () => {
       directory: [WS1],
       workspace: WS1,
       role: "owner",
-      workspaceSource: "sole membership",
+      workspaceSource: "header pin",
     });
   });
 
@@ -433,16 +465,19 @@ describe("the injected `workspace` arg (C9)", () => {
     // that deletes either half makes the shorter string a wrong string.
     expect(WORKSPACE_ARG_DESCRIPTION).toContain("home-channel container");
     expect(WORKSPACE_ARG_DESCRIPTION).toContain("omit");
+    // ⚠ THE RETIREMENT CLAUSE IS PART OF THE CONTRACT (B13). Without it the arg
+    // is a promise the registrar no longer keeps on most ops.
+    expect(WORKSPACE_ARG_DESCRIPTION).toContain("Ignored");
   });
 
   it("does not restate what `instructions.ts` states once", () => {
-    // ⚠ Discovery (`list_workspaces` / `dopl_home(op="list_channels")`) and the
-    // 0/2+-membership requirement are the instructions' job. Naming them here
-    // pays for them once per domain tool, which is the defect C9 names.
-    expect(WORKSPACE_ARG_DESCRIPTION).not.toMatch(/list_workspaces|list_channels|REQUIRED/);
+    // ⚠ Discovery (`dopl_workspaces`) and the targeting rule are the
+    // instructions' job. Naming them here pays for them once per domain tool,
+    // which is the defect C9 names.
+    expect(WORKSPACE_ARG_DESCRIPTION).not.toMatch(/dopl_workspaces|REQUIRED/);
   });
 
-  it("is the byte-identical string on every domain tool — 14 of them today", () => {
+  it("is the byte-identical string on every domain tool — 9 of them today", () => {
     const carrying = [...registry.schemas]
       .filter(([, schema]) => workspaceArgOf(schema) === WORKSPACE_ARG_DESCRIPTION)
       .map(([name]) => name);
@@ -453,13 +488,12 @@ describe("the injected `workspace` arg (C9)", () => {
     );
   });
 
-  it("is NOT injected onto the meta path, whose own `workspace` arg differs", () => {
-    // `current_workspace` declares its own; the two must not converge silently,
-    // or the meta path has quietly grown the domain path's routing contract.
-    expect(workspaceArgOf(registry.schemas.get("current_workspace"))).toBeDefined();
-    expect(workspaceArgOf(registry.schemas.get("current_workspace"))).not.toBe(
-      WORKSPACE_ARG_DESCRIPTION,
-    );
-    expect(workspaceArgOf(registry.schemas.get("list_workspaces"))).toBeUndefined();
+  it("is NOT injected onto the meta path — neither meta tool carries one", () => {
+    // ⚠ The meta path must never grow the domain path's routing contract: an
+    // account-wide answer cannot be scoped to one container, so an argument
+    // saying it could would only ever be wrong.
+    for (const name of META_TOOLS) {
+      expect(workspaceArgOf(registry.schemas.get(name)), name).toBeUndefined();
+    }
   });
 });

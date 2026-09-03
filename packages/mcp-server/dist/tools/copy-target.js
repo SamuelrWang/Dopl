@@ -44,11 +44,11 @@ const NO_NAME = "`(unnamed)`";
  * The `to_workspace` arg's schema description, worded ONCE for both tools.
  *
  * ⚠ It names the CONTAINER form explicitly, because a home channel is the one
- * target an agent cannot discover from `list_workspaces` — §4A keeps containers
- * out of every listing, and `dopl_home(op="list_channels")` is the only surface
+ * target an agent can discover from `dopl_workspaces`, which since B10 lists
+ * containers beside workspaces — the tool
  * that publishes their ids.
  */
-exports.TO_WORKSPACE_ARG_DESCRIPTION = `Where the COPY is created: a workspace slug or UUID, or a home-channel CONTAINER id from dopl_home(op="list_channels"). Required for the copy ops, and the SOURCE must be one you created. It must be somewhere you are a member — an id that does not resolve for you refuses and creates nothing, and there is no fallback to the current workspace. The copy always lands PRIVATE to you, and it is a STRANGER to the original: editing one never touches the other.`;
+exports.TO_WORKSPACE_ARG_DESCRIPTION = `Where the COPY is created: a workspace slug or UUID, or a home-channel CONTAINER id from dopl_workspaces. Required for the copy ops, and the SOURCE must be one you created. It must be somewhere you are a member — an id that does not resolve for you refuses and creates nothing, and there is no fallback to the current workspace. The copy always lands PRIVATE to you, and it is a STRANGER to the original: editing one never touches the other.`;
 /**
  * 🔒 **R2 — A COPY IS OF SOMETHING THE OPERATOR OWNS, NOT OF ANYTHING THEY CAN
  * READ** (Desktop Agent default 2026-09-02; Samuel may loosen).
@@ -101,7 +101,7 @@ async function resolveCopyTarget(directory, ref) {
     const needle = ref.trim();
     const target = needle === "" ? null : await directory.resolveWorkspaceRef(needle);
     if (!target) {
-        return (0, respond_js_1.err)(`\`to_workspace\` ${(0, narration_js_1.inlineOr)(ref, "`(unreadable ref)`")} does not resolve for you, so NOTHING was read and nothing was created — this op never falls back to the workspace you are calling from. Either there is no such workspace or it is not one you can act in; those are one answer here on purpose. List the workspaces you can target with \`list_workspaces\`, and your home channels — whose CONTAINER id is the handle to pass — with \`dopl_home(op="list_channels")\`.`);
+        return (0, respond_js_1.err)(`\`to_workspace\` ${(0, narration_js_1.inlineOr)(ref, "`(unreadable ref)`")} does not resolve for you, so NOTHING was read and nothing was created — this op never falls back to the workspace you are calling from. Either there is no such workspace or it is not one you can act in; those are one answer here on purpose. List every container you can target — workspaces and home channels alike — with \`dopl_workspaces\`.`);
     }
     return target;
 }
@@ -126,8 +126,8 @@ createOp) {
  * The `workspace=` handle a follow-up call addresses the copy with.
  *
  * ⚠ SLUG FOR A WORKSPACE, ID FOR A CONTAINER — the same split
- * `home-scopes.ts › SearchLeg` renders. §4A keeps a container's slug off every
- * agent-facing surface; its id is what `dopl_home` publishes and what
+ * `workspace-directory.ts › SearchLeg` renders. §4A keeps a container's slug off every
+ * agent-facing surface; its id is what `dopl_workspaces` publishes and what
  * `resolveWorkspaceRef` takes.
  */
 function workspaceHandle(ws) {

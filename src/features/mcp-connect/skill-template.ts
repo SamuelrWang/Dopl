@@ -64,9 +64,11 @@ The workspace beats local files as source of truth; flag drift.
   rules live there.
 - Archive this conversation → \`dopl_chats(op:'export')\` (read
   \`op:'guide'\` first); recall past sessions → \`dopl_chats(op:'list'|'get')\`.
-- Workspace targeting → \`list_workspaces\` (or \`current_workspace\`) to
-  discover slugs, then a \`workspace=<slug>\` arg on each call. With 2+
-  workspaces there's no default — pass \`workspace=\` every time.
+- Workspace targeting → \`dopl_workspaces\` for every container you are in
+  (workspaces and home channels alike), then a \`workspace=<id_or_slug>\`
+  arg when you LIST or CREATE somewhere other than the one this
+  connection is in. On any other op it is ignored — the id you pass
+  resolves its own container.
 
 ## You cannot delete anything
 

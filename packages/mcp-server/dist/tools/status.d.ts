@@ -13,11 +13,11 @@
  * `workspace=` argument and REFUSES a no-arg call from a caller with 0 or 2+
  * standard memberships — which is exactly the orchestrator this answers for. A
  * `workspace=` on this tool could only ever be wrong, because the question spans
- * every workspace at once; that is `dopl_home`'s argument for the same
+ * every workspace at once; that is the same argument the orientation tool
  * placement, reached from the other direction.
  *
- * ⚠ **CHARGED, like `dopl_home` and unlike the two orientation tools** (Samuel's
- * ruling Q2 (b) applied): `current_workspace` / `list_workspaces` are how a lost
+ * ⚠ **CHARGED, AND SINCE B13 IT IS THE ONLY CHARGED META TOOL** (Samuel's
+ * ruling Q2 (b) applied): `dopl_workspaces` is how a lost
  * agent finds out where it is and are metered nowhere; this reads
  * content-adjacent data — names, previews, telemetry — across the account, so it
  * pays like a domain tool. The charge is written explicitly in

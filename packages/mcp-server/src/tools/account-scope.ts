@@ -11,7 +11,7 @@
  * the credential.
  *
  * ⚠ **SO THE NARROWING LIVES HERE, ONCE, AND IT DELEGATES TO
- * `home-scopes.ts › narrowToLock`.** That module's header states the rule this
+ * `workspace-directory.ts › narrowToLock`.** That function's docblock states the rule this
  * one obeys: there is ONE reader of `WorkspaceDirectory.lockedWorkspaceId()`,
  * and a second reader has rebuilt the enumeration oracle B3 denies. A caller
  * that reaches `client.getAccountStatus()` directly has done exactly that — it
@@ -33,7 +33,7 @@ import type {
   DoplClient,
 } from "@dopl/client";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
-import { narrowToLock } from "./home-scopes.js";
+import { narrowToLock } from "../workspace-directory.js";
 
 /**
  * The caller's account-wide channel status, NARROWED to the container lock.

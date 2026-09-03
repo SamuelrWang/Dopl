@@ -50,9 +50,6 @@ describe("tool capture", () => {
         // hidden: registrars, op handlers and descriptions are gone. The rule
         // they advertised is `sessionOnly` on the REST routes now.
         "dopl_agent",
-        // Wave B: `dopl_home` registers on the META path and is captured anyway —
-        // it has an op enum, a WRITE op and a charge (see `parity-harness.ts`).
-        "dopl_home",
         "dopl_channel",
         "dopl_chats",
         "dopl_kb",
@@ -96,9 +93,6 @@ const READ_OPS: Record<string, string[]> = {
   // `opList` calls only `listAgentTemplates`; `opGet` resolves a ref through
   // the same list and then `getAgentTemplate`. Neither writes.
   dopl_agent: ["list", "get"],
-  // `opListChannels` calls only `getHomeChannels` (through the lock narrower).
-  // ⚠ `create_channel` is NOT here — it is in `WRITE_OPS`.
-  dopl_home: ["list_channels"],
   // `members` is a roster READ: `opMembers` calls only `listChannelMembers` and
   // renders it. Membership changes via op="invite" (gated as a write) and the
   // web UI. ⚠ "who may call it" and "does it write" are different questions —

@@ -12,7 +12,7 @@ exports.pingMcpStatus = pingMcpStatus;
 const enc = encodeURIComponent;
 async function listWorkspaces(t) {
     return t.request("/api/workspaces", {
-        toolName: "list_workspaces",
+        toolName: "dopl_workspaces",
     });
 }
 async function getWorkspace(t, slug) {

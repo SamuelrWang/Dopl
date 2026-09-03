@@ -86,12 +86,6 @@ const DOPL_SAFE_TOOLS = [
   // the exfil surface is `dopl_channel`, which stays out (and denied). Authoring a
   // template starts no agent either: that is `dopl_channel(op="manage", action="launch")`.
   'mcp__dopl__dopl_agent',
-  // HOME CHANNELS (2026-08-28, wave B). ⚠ SAFE-LIST placement by the same rule
-  // as `dopl_kb`: it authors rows the caller could author anyway and POSTS
-  // NOTHING. Its one write makes a room the caller is ALONE in — it cannot
-  // invite anybody, because minting the link that reaches a person is
-  // `sessionOnly` and unreachable over MCP for every role and token.
-  'mcp__dopl__dopl_home',
   // THE ORCHESTRATOR'S CHECK-IN (2026-09-01, agent-efficiency wave T20). ⚠ SAFE-LIST
   // placement, and the rule it sits under is the strictest one on this list: it is a
   // READ that POSTS NOTHING. It answers with the caller's OWN memberships, their OWN
@@ -100,8 +94,15 @@ const DOPL_SAFE_TOOLS = [
   // ~10 calls per check-in). It starts no agent, writes no row, and reaches no other
   // member's side. The exfil surface is still `dopl_channel`, which stays out and denied.
   'mcp__dopl__dopl_status',
-  'mcp__dopl__current_workspace',
-  'mcp__dopl__list_workspaces',
+  // ORIENTATION (v2 wave B, B13, 2026-09-02). ⚠ ONE NAME WHERE THREE STOOD:
+  // `current_workspace`, `list_workspaces` and `dopl_home` are deleted
+  // server-side. It is a pure READ that posts nothing and writes nothing — the
+  // strictest safe-list rule, the same one `dopl_status` sits under.
+  // ⚠ THE THREE NAMES ARE SIMPLY REMOVED, NOT MOVED TO THE DENY FLOOR. A name
+  // in no list GATES, and the floor is for tools whose DENY must outlive them
+  // (the destructive ones); an orientation read is not that. Same move B8 made
+  // for the twenty-two retired channel ops.
+  'mcp__dopl__dopl_workspaces',
 ];
 
 // Destructive admin companions that the server registers TODAY. EMPTY since 2026-09-02:

@@ -85,7 +85,7 @@ export const MISSING_PARAMS: ToolError = {
 export const WORKSPACE_REQUIRED: ToolError = {
   reason: "workspace_required",
   meaning: "no workspace resolved for this call",
-  retry: "list_workspaces",
+  retry: "dopl_workspaces",
 };
 
 export const READ_ONLY_SESSION: ToolError = {

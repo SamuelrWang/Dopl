@@ -70,15 +70,19 @@ beforeEach(() => {
 });
 
 describe("bootServer workspace resolution", () => {
-  it("single membership → auto-targets it on the wire (setWorkspaceId with its id)", async () => {
+  it("single membership → binds NOTHING; the server resolves it (B10)", async () => {
+    // ⚠ **THE AUTO-TARGET IS DELETED, NOT MOVED.** It was a second copy of the
+    // rule `with-workspace-auth.ts › resolveActiveWorkspace` applies anyway, so
+    // a one-membership caller lands in exactly the same workspace — from one
+    // rule instead of two that could disagree.
     const client = mockClient({ directory: [WS1], pin: null });
     const res = await bootServer(client);
-    expect(client.setWorkspaceId).toHaveBeenCalledWith("id-1");
-    expect(res.activeWorkspace).toMatchObject({ id: "id-1", slug: "alpha" });
+    expect(client.setWorkspaceId).toHaveBeenCalledWith(null);
+    expect(res.activeWorkspace).toBeNull();
     expect(res.directoryLoadFailed).toBe(false);
   });
 
-  it("2+ memberships, no pin → no default (setWorkspaceId null)", async () => {
+  it("2+ memberships, no pin → nothing bound (setWorkspaceId null)", async () => {
     const client = mockClient({ directory: [WS1, WS2], pin: null });
     const res = await bootServer(client);
     expect(client.setWorkspaceId).toHaveBeenCalledWith(null);
@@ -105,11 +109,13 @@ describe("bootServer workspace resolution", () => {
     );
   });
 
-  it("invalid pin with a sole membership → falls back to sole-membership auto-target", async () => {
+  it("invalid pin with a sole membership → still nothing bound", async () => {
+    // ⚠ A dropped pin used to fall back to the sole membership. There is no
+    // fallback left to take, and the caller is not refused for it either.
     const client = mockClient({ directory: [WS1], pin: "ghost" });
     const res = await bootServer(client);
-    expect(client.setWorkspaceId).toHaveBeenCalledWith("id-1");
-    expect(res.activeWorkspace).toMatchObject({ id: "id-1" });
+    expect(client.setWorkspaceId).toHaveBeenCalledWith(null);
+    expect(res.activeWorkspace).toBeNull();
   });
 
   it("listWorkspaces throws → directoryLoadFailed surfaced, no default", async () => {

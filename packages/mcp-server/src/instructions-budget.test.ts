@@ -89,10 +89,10 @@ describe("the briefing fits the prefix the model is handed", () => {
     // call an agent can actually make — and this string is the first one it
     // reads, so a retired name here is a `-32602` on the first hop.
     expect(out).toContain('dopl_channel(op="rooms", action="list")');
-    expect(out).toContain("WORKSPACES: You are in 40 workspaces");
+    expect(out).toContain("WORKSPACES: This connection names no container");
     // ⚠ And the rows that did not fit are ANNOUNCED with the tool that lists
     // them — a silently short directory reads as a complete one.
-    expect(out).toMatch(/…and \d+ more — `list_workspaces`/);
+    expect(out).toMatch(/…and \d+ more — `dopl_workspaces`/);
     expect(out).not.toContain("product-engineering-40");
   });
 });
@@ -134,7 +134,7 @@ describe("what the budget buys back is still stated", () => {
 
   it("states the `workspace=` targeting rule once, here", () => {
     // ⚠ The paragraph 14 tool schemas used to carry a byte-identical copy of.
-    expect(buildInstructions(directoryOf(2))).toContain("`workspace=<slug_or_id>`");
+    expect(buildInstructions(directoryOf(2))).toContain("`workspace=<id_or_slug>`");
   });
 });
 
@@ -186,20 +186,24 @@ describe("the briefing answers who this connection is before it asks", () => {
   const ONE = [ws(1)];
   const identity = {
     userId: "user-77",
-    homeChannels: 3,
     boundChannelId: "33333333-3333-3333-3333-333333333333",
     liveAgents: ["abcdefgh", "@agent-bcdefghi"],
     posture: "full/full chain=on",
   };
 
-  it("carries the caller id, the default workspace and the home-channel COUNT", () => {
+  /**
+   * ⚠ **THE HOME-CHANNEL COUNT LEFT WITH THE TOOL THAT ANSWERED IT** (B13). It
+   * was on this line because a container's id was what `list_workspaces`
+   * deliberately did not advertise, so the briefing could say how many existed
+   * and name a second tool to list them. `dopl_workspaces` lists them, so the
+   * count is a round trip the briefing no longer deletes — which is this
+   * block's only test for keeping a field.
+   */
+  it("carries the caller id and where this connection is", () => {
     const text = buildInstructions(ONE, { pin: null, identity });
     expect(text).toContain("id=`user-77`");
-    expect(text).toContain("default workspace `product-engineering-1`");
-    // ⚠ A COUNT, never the rooms: a container's id is what `list_workspaces`
-    // deliberately does not advertise (§4A), and the names are peer-typed.
-    expect(text).toContain("3 home channels");
-    expect(text).toContain('dopl_home(op="list_channels")');
+    expect(text).toContain("in no named container");
+    expect(text).not.toContain("home channels —");
   });
 
   it("normalizes both handle spellings and never prints an unparseable one", () => {
@@ -229,9 +233,15 @@ describe("the briefing answers who this connection is before it asks", () => {
     expect(text).not.toContain("@agent-ffffffff");
   });
 
-  it("names no default when the caller has 2+ memberships and no pin", () => {
-    const text = buildInstructions([ws(1), ws(2)], { pin: null, identity });
-    expect(text).toContain("no default workspace — pass `workspace=`");
+  it("says the same thing whatever the membership count — there is no default", () => {
+    // ⚠ It used to branch: one membership named it as the default, 2+ said
+    // "pass `workspace=` on every call". B10 deletes the concept both halves
+    // described, so the count stops changing the sentence at all.
+    for (const dir of [[ws(1)], [ws(1), ws(2)]]) {
+      expect(buildInstructions(dir, { pin: null, identity })).toContain(
+        "in no named container — one is resolved for you",
+      );
+    }
   });
 
   it("says UNRESOLVED rather than inventing an id", () => {

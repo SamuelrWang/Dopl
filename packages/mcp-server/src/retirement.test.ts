@@ -96,7 +96,7 @@ function build(over: Partial<Parameters<typeof createServer>[1]> = {}) {
     directory: [WS],
     workspace: WS,
     role: "owner",
-    workspaceSource: "sole membership",
+    workspaceSource: "header pin",
     ...over,
   });
   return client;
@@ -134,6 +134,16 @@ const RETIRED = [
   "dopl_chats_admin",
   "dopl_ontology_admin",
   "dopl_agent_admin",
+  // ⚠ **THE THREE B13 RETIRED (2026-09-02), AND THEY ARE ONE DECISION.**
+  // `current_workspace` and `list_workspaces` answered "where am I" and "what
+  // can I reach"; `dopl_home` existed because a container was hidden from the
+  // second. B10 removes the default workspace, so nothing is silently picked,
+  // so a container is just a container — one tool, `dopl_workspaces`, answers
+  // all three. ⚠ `dopl_home(op="create_channel")` is NOT re-homed: minting a
+  // room is an app act, exactly as its invite half already was.
+  "current_workspace",
+  "list_workspaces",
+  "dopl_home",
 ];
 
 describe("retired tools never register (D1/D2)", () => {
@@ -159,14 +169,12 @@ describe("retired tools never register (D1/D2)", () => {
       "dopl_search",
       "dopl_channel",
       "dopl_agent",
-      "dopl_home",
       // ⚠ THE SECOND CHARGED META TOOL (2026-09-01, T20). It is on this list for
       // the same reason every other name is: a tool that stops registering is
       // invisible to `tools/list` and to every agent, and nothing else in this
       // suite would notice.
       "dopl_status",
-      "list_workspaces",
-      "current_workspace",
+      "dopl_workspaces",
     ]) {
       expect(registry.tools.has(name), `${name} is missing from the registry`).toBe(true);
     }

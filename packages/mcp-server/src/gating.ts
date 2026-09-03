@@ -116,10 +116,8 @@ const DOPL_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "dopl_ontology",
   "dopl_chats",
   "dopl_agent",
-  "dopl_home",
   "dopl_status",
-  "current_workspace",
-  "list_workspaces",
+  "dopl_workspaces",
 ]);
 
 /**
@@ -250,11 +248,6 @@ export const WRITE_OPS: Record<string, Set<string>> = {
   // it out of the confirm class, and that is a statement about AUDIENCE and not
   // about whether it writes.
   dopl_agent: new Set(["create", "update", "copy"]),
-  // ⚠ `dopl_home` REGISTERS ON THE META PATH AND IS STILL GATED HERE, because
-  // `opRefusal` is called explicitly on BOTH registration paths — which is the
-  // whole reason the gates were hoisted out of the domain wrapper. A read-only
-  // token lists home channels and creates none.
-  dopl_home: new Set(["create_channel"]),
   dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder"]),
   // ⚠ **SIX ENTRIES OVER FIVE OPS, AND TWO OF THE FIVE ARE ABSENT** (v2 wave B
   // slice B8, 2026-09-02). `read` and `status` only read. `send` and `manage`

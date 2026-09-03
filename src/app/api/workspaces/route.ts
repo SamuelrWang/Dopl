@@ -9,8 +9,8 @@ import {
   listMyWorkspacesWithRole,
 } from "@/features/workspaces/server/service";
 
-/** GET — every workspace the caller actively belongs to, with their role. The MCP
- *  `list_workspaces` tool reads this directly. */
+/** GET — every container the caller actively belongs to, with their role. The MCP
+ *  `dopl_workspaces` tool reads this directly. */
 export const GET = withUserAuth(async (_request, { userId }) => {
   try {
     const workspaces = await listMyWorkspacesWithRole(userId);

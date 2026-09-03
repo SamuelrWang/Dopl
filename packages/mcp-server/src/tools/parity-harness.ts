@@ -29,7 +29,6 @@ import { registerSearchTool } from "./search.js";
 import { registerOntologyTool } from "./ontology.js";
 import { registerChannelTool } from "./channel.js";
 import { registerAgentTools } from "./agent.js";
-import { registerHomeTool } from "./home.js";
 
 // ── Capture every registered domain tool ─────────────────────────────
 
@@ -47,7 +46,7 @@ export const REGISTRARS: Array<{
 }> = [
   // ⚠ Both take a `directory` their registrars REQUIRE (it resolves the copy
   // ops' `to_workspace`); the harness passes the same stub `channel.ts` and
-  // `home.ts` get, because capture never runs a handler.
+  // `channel.ts` gets, because capture never runs a handler.
   {
     file: "knowledge.ts",
     register: (r, c) => registerKnowledgeTools(r, c, undefined, STUB_DIRECTORY),
@@ -59,7 +58,7 @@ export const REGISTRARS: Array<{
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
   // ⚠ It takes a `directory` its registrar REQUIRES (the container lock for the
-  // two account-wide reads); the harness passes the same stub `home.ts` gets,
+  // two account-wide reads); the harness passes the same stub `knowledge.ts` gets,
   // because capture never runs a handler.
   {
     file: "channel.ts",
@@ -70,19 +69,12 @@ export const REGISTRARS: Array<{
     file: "agent.ts",
     register: (r, c) => registerAgentTools(r, c, undefined, STUB_DIRECTORY),
   },
-  // ⚠ **THE ONE META TOOL IN THIS CAPTURE, AND IT EARNS ITS PLACE** (2026-08-28).
-  // `current_workspace` / `list_workspaces` are deliberately absent: they carry
-  // no `op`, no write and no charge, so every suite below would be vacuous over
-  // them. `dopl_home` has all three — an `op` enum, a WRITE op in `WRITE_OPS`,
-  // and an explicit credit charge — so leaving it out would mean its enum is
-  // never checked against the write-gate table, which is exactly the
-  // read-only-token hole `parity.test.ts` exists to close.
-  // ⚠ It takes a `directory` its registrar needs; the harness passes a stub,
-  // because capture never runs a handler.
-  {
-    file: "home.ts",
-    register: (r, c) => registerHomeTool(r, c, STUB_DIRECTORY),
-  },
+  // ⚠ **NO META TOOL IS CAPTURED SINCE B13** (2026-09-02). `dopl_home` was the
+  // one that earned a place here — it had an `op` enum, a WRITE op in
+  // `WRITE_OPS` and a charge, so leaving it out would have meant its enum was
+  // never checked against the write-gate table. It is deleted, and the two meta
+  // tools that remain (`dopl_workspaces`, `dopl_status`) carry no `op` and no
+  // write, so every suite below would be vacuous over them.
 ];
 
 /** Capture never invokes a handler, so the directory is never read. ⚠ The lock
@@ -90,7 +82,6 @@ export const REGISTRARS: Array<{
 const STUB_DIRECTORY = {
   getWorkspaceList: async () => [],
   resolveWorkspaceRef: async () => null,
-  noWorkspaceError: async () => ({ content: [], isError: true }),
   lockedWorkspaceId: () => null,
 };
 

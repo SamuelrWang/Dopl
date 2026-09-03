@@ -105,7 +105,7 @@ function statusLines(status, now = Date.now(), format) {
     if (channels.length === 0) {
         return [
             "No channels. You are not a member of any channel in any workspace, and you have no home channels — so there is nothing to check in on and no cursor to advance.",
-            'Open a room with dopl_channel(op="rooms", action="open", name=…), or a home channel with dopl_home(op="create_channel", name="…").',
+            'Open a room with dopl_channel(op="rooms", action="open", name=…).',
         ];
     }
     const sessionCount = channels.reduce((n, c) => n + c.sessions.length, 0);

@@ -60,13 +60,13 @@ const BASE = "https://api.example.test";
         const client = new client_js_1.DoplClient(BASE, "k");
         await client.listWorkspaces();
         const headers = mock.calls[0].init.headers;
-        (0, vitest_1.expect)(headers["X-MCP-Tool"]).toBe("list_workspaces");
+        (0, vitest_1.expect)(headers["X-MCP-Tool"]).toBe("dopl_workspaces");
     });
     (0, vitest_1.it)("uses a custom tool header name", async () => {
         const client = new client_js_1.DoplClient(BASE, "k", { toolHeaderName: "X-Dopl-Cli" });
         await client.listWorkspaces();
         const headers = mock.calls[0].init.headers;
-        (0, vitest_1.expect)(headers["X-Dopl-Cli"]).toBe("list_workspaces");
+        (0, vitest_1.expect)(headers["X-Dopl-Cli"]).toBe("dopl_workspaces");
         (0, vitest_1.expect)(headers["X-MCP-Tool"]).toBeUndefined();
     });
 });

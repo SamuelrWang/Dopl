@@ -103,7 +103,7 @@ function build(opts: { sole: boolean }) {
     directory,
     workspace: opts.sole ? WS1 : null,
     role: opts.sole ? "owner" : null,
-    workspaceSource: opts.sole ? "sole membership" : null,
+    workspaceSource: opts.sole ? "header pin" : null,
   });
   const map = registry.tools.get("dopl_map");
   if (!map) throw new Error("dopl_map was not registered");
@@ -285,15 +285,9 @@ describe("fail direction", () => {
 });
 
 describe("what is NOT charged", () => {
-  it("meta-tools are exempt — `current_workspace` costs nothing", async () => {
+  it("the orientation meta tool is exempt — `dopl_workspaces` costs nothing", async () => {
     const { client } = build({ sole: true });
-    await tool("current_workspace")({});
-    expect(client.consumeCredits).not.toHaveBeenCalled();
-  });
-
-  it("`list_workspaces` is exempt too", async () => {
-    const { client } = build({ sole: true });
-    await tool("list_workspaces")({});
+    await tool("dopl_workspaces")({});
     expect(client.consumeCredits).not.toHaveBeenCalled();
   });
 
@@ -312,11 +306,18 @@ describe("what is NOT charged", () => {
     expect(client.consumeCredits).not.toHaveBeenCalled();
   });
 
-  it("a call refused for having no default workspace (M-3) is not charged", async () => {
+  /**
+   * ⚠ **THE M-3 REFUSAL IS GONE, AND WITH IT THE ONE CALL THAT WAS FREE FOR
+   * BEING REFUSED** (B10/B13). An unbound connection is now answered, so it is
+   * also METERED — against the first container the session may list, which is
+   * `registrar.ts › billingTarget` and the same rule the meta path uses.
+   */
+  it("an UNBOUND connection is answered, and is charged the first listable container", async () => {
     const { map, client } = build({ sole: false });
     const res = await map({});
-    expect(res.isError).toBe(true);
-    expect(client.consumeCredits).not.toHaveBeenCalled();
+    expect(res.isError).toBeFalsy();
+    expect(client.consumeCredits).toHaveBeenCalledTimes(1);
+    expect(client.consumeCredits).toHaveBeenCalledWith("id-1");
   });
 
   it("a blank `workspace=` is refused before any charge", async () => {

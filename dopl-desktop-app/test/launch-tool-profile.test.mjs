@@ -11,7 +11,7 @@
 // ⚠ AND `read_only` IS NOT "GATED", IT IS ABSENT. `session-profiles.js ›
 // buildSessionToolConfig('read_only').disallowedTools` carries the whole of `DOPL_SAFE_TOOLS`, so
 // `dopl_map` / `dopl_members` / `dopl_kb` / `dopl_search` / `dopl_skill` / `dopl_ontology` /
-// `dopl_chats` / `current_workspace` / `list_workspaces` never reach `grantDecision` at all — they
+// `dopl_chats` / `dopl_workspaces` never reach `grantDecision` at all — they
 // are not offered to the model. A hard-denied name cannot be opened by any Axis-A floor.
 //
 // ⚠ THE PEER LANE WAS ALWAYS RIGHT, WHICH IS THE WHOLE POINT. `trigger.js ›
@@ -296,7 +296,7 @@ test("`read_only` REMOVES the Dopl read tools from context — it does not gate 
   // The stakes, pinned so the entry above cannot drift into folklore. A hard-denied name never
   // reaches `grantDecision`, so no Axis-A floor can reopen it: the agent simply does not have
   // `dopl_map`, `dopl_members`, `dopl_kb`, `dopl_search`, `dopl_skill`, `dopl_ontology`,
-  // `dopl_chats`, `current_workspace` or `list_workspaces`.
+  // `dopl_chats` or `dopl_workspaces`.
   const ro = buildSessionToolConfig("read_only");
   for (const name of DOPL_SAFE_TOOLS) {
     assert.ok(ro.disallowedTools.includes(name), `read_only hard-denies ${name}`);

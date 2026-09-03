@@ -16,7 +16,7 @@ import { partialRead } from "./partial-read";
 import { isConcise, RESPONSE_FORMAT_FIELD } from "./response-size";
 import { SEARCH_ERRORS } from "./tool-errors";
 import { composeDescription, READ_DESCRIPTION_MAX_CHARS } from "./tool-style";
-import { searchLegs } from "./home-scopes";
+import { searchLegs } from "../workspace-directory";
 import { fanOut, MAX_SCOPES } from "./search-everywhere";
 import { ok, type RegisterTool, type ToolResponse } from "./respond";
 
@@ -179,7 +179,7 @@ export function registerSearchTool(
 
       // ── scope="everywhere": N ordinary fenced searches, one per scope ──
       if (args.scope === "everywhere" && directory && charge) {
-        const { legs, homeReadFailed } = await searchLegs(client, directory);
+        const legs = await searchLegs(directory);
         // ⚠ The leg the REGISTRAR already charged for, matched by id — the
         // resolved workspace is not always the first leg.
         const alreadyCharged =
@@ -199,12 +199,12 @@ export function registerSearchTool(
           `# Search: ${inlineOr(args.query, "`(unreadable query)`")} — everywhere`,
           "",
         ];
-        const foot = [
-          homeReadFailed
-            ? `_⚠ YOUR HOME CHANNELS COULD NOT BE READ, so none of them was searched and none is named above. What follows covers your workspaces only._`
-            : "",
-          `_${fan.coverage} ${SCOPE_AXIS_NOTE}_`,
-        ].filter(Boolean);
+        // ⚠ **THE PARTIAL-READ FOOTNOTE LEFT WITH ITS FAILURE MODE** (B13). It
+        // warned that a second read — `GET /api/home/channels` — had failed and
+        // that the home legs were therefore missing. There is no second read:
+        // `searchLegs` derives every leg from the one narrowed directory, so a
+        // leg list that arrives is complete or the call has already thrown.
+        const foot = [`_${fan.coverage} ${SCOPE_AXIS_NOTE}_`];
         return ok([...head, ...fan.lines, ...foot].join("\n"));
       }
 
