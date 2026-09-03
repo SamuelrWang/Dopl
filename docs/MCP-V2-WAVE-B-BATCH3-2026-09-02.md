@@ -1,13 +1,13 @@
 # MCP / architecture v2 — WAVE B, BATCH 3 (2026-09-02)
 
 Branch `v2/wave-b`, continued from the batch-2 review fixes at `d7e1b2ed`. **Not pushed. No
-migration applied. No KB sync.** Four `--no-ff` merges + five integration commits; 429 files,
-+11,818 / **−15,297**. Slice→commit→merge table: `docs/specs/mcp-v2-wave-b.md` §5, *"Batch 3
+migration applied. No KB sync.** Four `--no-ff` merges + eight integration commits; 430 files,
++12,065 / **−15,299**. Slice→commit→merge table: `docs/specs/mcp-v2-wave-b.md` §5, *"Batch 3
 landed"*.
 
 ## What shipped
 
-**Deletion was the batch, and the ledger is net −3,479 lines.** `workspace=` is a list-and-create
+**Deletion was the batch, and the ledger is net −3,234 lines.** `workspace=` is a list-and-create
 argument; there is no default workspace; the copy ops, the `shelf` axis and `home_scoped` are gone;
 the 22 redirect aliases, the `await` lane and the ping lane are retired. Thirteen tools became
 **eleven**.
@@ -53,7 +53,7 @@ ratchet fails on a SHRINK as well as a growth, so every figure below **is** the 
 | Tools served | 17 | 13 | 13 | **11** | 11 ✅ |
 | `dopl_channel` ops / params | 23 / 35 | 23 / 35 | 5 / 23 | **5 / 23** | 5 / ≤20 ✅ / — |
 | RLS-covered tables | 0 | 3 | 9 | **9** | 7 ✅ |
-| Net lines | — | — | — | **−3,479 this batch** | ≥3,000 ✅ |
+| Net lines | — | — | — | **−3,234 this batch** | ≥3,000 ✅ |
 
 ⚠ **95,174 IS THE WAVE-A-START FIGURE AND IT IS NOT COMPARABLE ROW BY ROW** — it was measured over
 seventeen tools before A3 recomposed the surface, so only the TOTAL is a like-for-like. Five of the

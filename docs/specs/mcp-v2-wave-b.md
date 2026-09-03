@@ -478,7 +478,7 @@ precondition was unsatisfiable), F-633 (a gate's name is part of its scope).
 ### Batch 3 landed — 2026-09-02, branch `v2/wave-b` (integration record)
 
 Merged `--no-ff` onto the batch-2 review fixes at `d7e1b2ed`. **Not pushed. No migration applied.
-No KB sync.** Four merges + five integration commits; 429 files, +11,818 / **−15,297**. Full
+No KB sync.** Four merges + eight integration commits; 430 files, +12,065 / **−15,299**. Full
 record: `docs/MCP-V2-WAVE-B-BATCH3-2026-09-02.md`.
 
 ⚠ **THE ROW ABOVE SAYS "only after batch 2 has run one release" AND THAT IS NOT WHAT HAPPENED.**
@@ -497,7 +497,7 @@ rather than three**. Recorded here because the row is still there and reads as s
 server-side `WORKSPACE_REQUIRED` hand-off only makes sense once B14 has removed the producer.
 Verified after both: **no server path emits it**, which is what let the constant be deleted (2h).
 
-**Cross-slice work the integration owned** (five commits; each names its slices):
+**Cross-slice work the integration owned** (five CODE commits, plus three doc commits; each names its slices):
 
 | Commit | What | Slices |
 |---|---|---|
