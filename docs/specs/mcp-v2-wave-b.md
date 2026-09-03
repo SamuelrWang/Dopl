@@ -240,8 +240,14 @@ migration rolls back OPEN):
 2. **Dual-write release.** Writes set BOTH `home_scoped` and `workspace_id`; reads prefer
    `workspace_id` behind `TENANCY_PERSONAL_CONTAINER` (default off, flipped per environment). The 3
    `home_scoped` rows are moved by a data step inside step 1, so the flag flip is read-only.
-3. `20260923120000_drop_home_scoped.sql` — drop both columns, drop `ensure_default_workspace`, drop
-   `default_workspace_kind_guard`'s function body, drop the `slug='default'` relic.
+3. `20260923120000_drop_home_scoped.sql` — drop both columns. ⚠ **CORRECTED AT B15 (2026-09-02):
+   this row also promised to drop `ensure_default_workspace`, `default_workspace_kind_guard`'s
+   function body and the `slug='default'` relic. Those are the DEFAULT WORKSPACE's, which is
+   §3's removal map and belongs to B14** — B15 owns `home_scoped` and nothing else in this file.
+   🔒 **AND IT CARRIES TWO PRECONDITIONS, STATED IN ITS OWN HEADER.** P1: step 1 has run. P2: the
+   flag has been DEFAULT-ON for a full release. P2 is not implied by P1 — step 1's move ran ONCE
+   and the flag decided where writes landed afterwards, so a flag-off window leaves rows on the
+   shared shelf that the drop would publish. §1 of the migration RAISEs rather than trusting it.
 
 **Rollback.** Step 1 is additive (a new kind value, a new function, 15 new rows) — reverting is a
 `DELETE ... WHERE kind='personal'` plus a `DROP FUNCTION`, and no read depends on it while the flag is
@@ -436,7 +442,7 @@ went over the 500-line cap as a result (F-562, split below). Every other conflic
 |---|---|---|---|---|---|
 | **B13** `workspace=` off | `v2/b-workspace-arg-off` | `packages/mcp-server/src/{registrar,factory,server,workspace-directory,meta-tools,instructions,session-pin,status-footer}.ts`, `tools/{home,home-scopes}.ts` | B2: `workspace=` on `list`/`create` only. Delete `session-pin.ts`, `home-scopes.ts`, `noWorkspaceError`, the auto-target, both pin ops. `dopl_home` deleted; `current_workspace`+`list_workspaces` → one `dopl_workspaces`. **13 tools → 11** | F-580..589 | — |
 | **B14** default workspace off | `v2/b-default-workspace-off` | `src/features/workspaces/server/{repository,service,segment}.ts`, `src/features/billing/server/{webhook-handler,credits-service}.ts`, `src/app/billing/page.tsx`, `src/app/api/workspaces/ensure-default/route.ts`, `src/app/auth/callback/route.ts`, `src/shared/auth/with-workspace-auth.ts`, `packages/contracts/src/workspaces.ts`, `scripts/check-role-drift.ts` | §3 rows 1–17 | F-590..599 | `20260922120000_drop_default_workspace_rpc` |
-| **B15** copies off | `v2/b-copies-off` | `packages/mcp-server/src/tools/{knowledge-ops-copy,agent-ops-copy,copy-target,shelf}.ts` + the two enums, `src/features/agent-templates/lib/template-draft.ts`, `apps/desktop-ui/src/pages/home/agent-copy.tsx` | B11: delete the copy ops (681 MCP lines + 490 draft/UI); drop `home_scoped`; delete `shelf.ts` and both `resolveHomeScope` | F-600..609 | `20260923120000_drop_home_scoped` |
+| **B15** copies off ✅ **DONE** | as planned, **plus** `src/shared/grants/**`, `src/app/api/resource-grants/route.ts`, `packages/dopl-client/src/grant{s,-types}.ts`, `src/shared/tenancy/{personal-container,resolve-resource}.ts` and both features' repositories/services — the `home_scoped` drop reaches every reader of the column | B11: copy ops deleted (681 MCP lines, exact) and REPLACED by `op="grant"` over `resource_grants`, which had no door; `home_scoped` dropped; the MCP shelf module and both `resolveHomeScope` deleted. ⚠ **THE "490 draft/UI" IS WRONG — 240 (F-600)**: `agent-copy.tsx` went whole (194), `containerCopyDraft` came out of `template-draft.ts` (~46), and that module's other 250 lines are the shared editor draft three components import. ⚠ **`team` IS NOT OFFERED ON THE MCP GRANT** (A8's zero-live-rows rule); the table and the app keep it. ⚠ **THE GRANT'S READ HALF IS NOT BUILT — F-604, owed by B16** | F-600..605 | `20260923120000_drop_home_scoped` (two preconditions, see §4) |
 | **B16** old ops + TS fences off | `v2/b-old-ops-off` | `packages/mcp-server/src/tools/channel-ops-await*.ts`, `channel-ops-ping.ts`, `channel-doctrine.ts`, `src/features/channels/server/{service-await*,service-pings*}.ts`, `src/app/api/pings/**`, `supabase/migrations/20260907130000_channel_pings.sql`, the five `canSee*` → one `src/shared/` predicate | Retire the redirects; delete the `await` lane (AWAITING 3,914 + two handlers + the budget module) and the ping lane; **delete `20260907130000` unapplied** (B8); delete the TS predicates RLS now holds, one at a time, each behind its own green redteam test | F-610..619 | — |
 
 **Sequence, and why.** id-resolution (B2) → credential-axis split (B3) → `workspace=` removal (B13),
