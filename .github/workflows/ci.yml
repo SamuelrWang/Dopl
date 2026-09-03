@@ -288,3 +288,84 @@ jobs:
             git diff --stat -- 'packages/*/dist'
             exit 1
           fi
+
+  # 🔒 THE LIVE HALF OF THE RLS REDTEAM SUITES — the only thing that can say
+  # POSTGRES agrees (2026-09-02, review of wave-B batch 2).
+  #
+  # ⚠ WHY THIS JOB EXISTS. Every behavioural case in the five redteam suites is
+  # `skipIf(!liveRedteamEnabled)`, and `RLS_REDTEAM_LIVE` was set NOWHERE — not
+  # in CI, not on the authoring machine, where Docker has been down for two full
+  # waves. So twenty-six cases were green having never executed a statement, and
+  # every claim about a policy in this wave is read out of SQL TEXT. **A
+  # structural assertion is not a behavioural one (F-523):** the scan proves a
+  # rule is WRITTEN once and names every arm; only a database can say what a
+  # policy admits. The gap was not theoretical — the same replay-only reading is
+  # what let a policy be written for a table dropped in July 2026 (F-586).
+  #
+  # ⚠ UBUNTU RUNNERS HAVE DOCKER, which is the whole reason this is possible in
+  # CI and not on the machine the wave was written on. `supabase db reset` also
+  # REPLAYS every migration against a real Postgres, so this job is simultaneously
+  # the replay gate that INVARIANTS §12 has been recording as OWED — a migration
+  # that cannot apply fails here before any assertion runs.
+  #
+  # ⚠ THE LOCAL SKIP STAYS. `liveRedteamEnabled` still requires a LOOPBACK
+  # Supabase URL as well as the flag, because the fixture writes auth users and
+  # rows and cannot tell a staging project from a local one.
+  rls-redteam:
+    name: RLS redteam (live, against a real Postgres)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `db reset` applies every migration in `supabase/migrations` in filename
+      # order. It is the gate as much as the setup: a migration that cannot
+      # apply — a policy on a dropped table, a function referencing one — fails
+      # the job here, with the SQL error, instead of on a production apply.
+      - name: Start Supabase and replay every migration
+        run: |
+          supabase start
+          supabase db reset
+
+      # The keys are the local stack's own, read back rather than hardcoded:
+      # `supabase start` prints them and they are not secrets — the stack is
+      # loopback-only and dies with the runner.
+      - name: Export the local stack's credentials
+        run: |
+          set -eu
+          status=$(supabase status -o json)
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$status" | jq -r .API_URL)"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$status" | jq -r .ANON_KEY)"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(echo "$status" | jq -r .SERVICE_ROLE_KEY)"
+            echo "SUPABASE_JWT_SECRET=$(echo "$status" | jq -r .JWT_SECRET)"
+          } >> "$GITHUB_ENV"
+
+      # ⚠ NAMED FILES, NOT A GLOB. `RLS_REDTEAM_LIVE=1` changes the behaviour of
+      # exactly these five suites; running the whole root suite under it would
+      # spend ten minutes to re-run 5,600 tests that do not read the flag.
+      - name: Run the redteam suites with the live half ARMED
+        env:
+          RLS_REDTEAM_LIVE: "1"
+        run: >-
+          npx vitest run
+          src/features/knowledge/server/rls-redteam.test.ts
+          src/features/skills/server/rls-redteam.test.ts
+          src/features/chats/server/rls-redteam.test.ts
+          src/features/agent-templates/server/rls-redteam.test.ts
+          src/shared/supabase/rls-redteam-resource-grants.test.ts
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup

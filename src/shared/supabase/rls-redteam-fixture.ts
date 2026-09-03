@@ -7,11 +7,19 @@ import type { CallerScope } from "./caller-scope";
  * the grant rows every RLS redteam case needs, so a per-table suite states only
  * what is different about its table.
  *
- * ⚠ SKIPPED-WITH-REASON EVERYWHERE, and the reason is a MEASUREMENT about the
- * authoring machine rather than a claim about the tree: Docker is down
- * (`docker info` fails), so `supabase start` cannot run, so no migration in
- * `supabase/migrations` has been applied and NOTHING here has ever executed.
- * {@link liveRedteamEnabled} is `false` in CI and on that machine alike.
+ * ⚠ SKIPPED-WITH-REASON ON THE AUTHORING MACHINE, and the reason is a
+ * MEASUREMENT about that machine rather than a claim about the tree: Docker is
+ * down (`docker info` fails), so `supabase start` cannot run and nothing here
+ * has ever executed there.
+ *
+ * ⚠ **BUT NO LONGER IN CI (2026-09-02).** `ci.yml`'s `rls-redteam` job starts
+ * the stack on an ubuntu runner, runs `supabase db reset` — which is the
+ * migration replay INVARIANTS §12 has been recording as owed — and runs the five
+ * suites with `RLS_REDTEAM_LIVE=1`. Until that job had run once, **every
+ * behavioural case in this wave was green having never executed a statement**,
+ * which is F-523's distinction: the SQL scan proves a rule is WRITTEN once, and
+ * only a database says what a policy admits. Any doc that calls a redteam claim
+ * "proved" must name which half proved it.
  *
  * To run a suite, against a LOCAL stack only:
  *

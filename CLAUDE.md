@@ -71,7 +71,7 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and NINE non-suite gates** (nine since 2026-09-02) — the full table is
+**Five suites, TWO lints, TWO typechecks, and TEN non-suite gates** (ten since 2026-09-02) — the full table is
 docs/INVARIANTS.md §14. Red CI is a P0.
 
 ⚠ **THE COUNT HAS BEEN WRONG THREE TIMES AND THE TWO ERRORS ARE OPPOSITE ONES — read both before
@@ -84,11 +84,11 @@ command. ⚠ **AND IT IS EIGHT SINCE 2026-09-02**, when `check-session-health-dr
 `check-message-kind-drift`, then the committed-`dist` check landed — all three shipped WITH their
 doc rows, in the same change, which is the whole remedy this warning has been asking for. Three in
 one day makes it the convention rather than the exception. ⚠ **AND NINE SINCE LATER THE SAME DAY**,
-when Wave B's B7 added `check-rls-pair-gate` — also with its rows, here and in §14. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
+when Wave B's B7 added `check-rls-pair-gate` — also with its rows, here and in §14. ⚠ **AND TEN SINCE THE BATCH-2 REVIEW THE SAME DAY**, when the `rls-redteam` job landed — the fifth in two days to ship with its rows. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
 many non-suite gates there are"** — the first item is on it precisely because it is a typecheck
 nobody remembers to run, and it is NOT one of the five.
 
-The ten things that are routinely forgotten (NINE non-suite gates since 2026-09-02, plus the
+The eleven things that are routinely forgotten (TEN non-suite gates since 2026-09-02, plus the
 second typecheck):
 
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
@@ -145,6 +145,17 @@ second typecheck):
     to do so. It does NOT claim the predicate and the policy AGREE — that is what the per-table
     redteam suites prove, one table at a time. ⚠ Since B12 it also checks the covered tables
     that have NO predicate to hang a twin on (the child tables, and `resource_grants`).
+    ⚠ **AND IT CHECKS FOUR THINGS SINCE THE BATCH-2 REVIEW, NOT ONE (F-585)**: it had asserted
+    that a policy NAME survived, so `USING (true)`, a second permissive policy, `DISABLE ROW
+    LEVEL SECURITY` and a `FOR SELECT` → `FOR INSERT` flip all passed. It now replays
+    `DROP TABLE`, asserts RLS is on per table, asserts the live SELECT set EQUALS the declared
+    set, and asserts each policy is `FOR SELECT` and reaches its predicate.
+11. 🔒 **the `rls-redteam` CI job** — the only gate that starts a database, and therefore the only
+    one that can say POSTGRES agrees. `supabase start && supabase db reset`, then
+    `RLS_REDTEAM_LIVE=1 vitest run` over the five redteam files. Before it, every behavioural RLS
+    case in two waves was green having never executed a statement, because the flag was set
+    nowhere. `db reset` makes it the migration REPLAY gate too. ⚠ It cannot run on a machine
+    without Docker; the local skip-with-reason stays.
 
 ⚠ **`npm run test:all` chains the first four SUITES and nothing else. It is not the definition of
 green.** The two lint steps differ: the ROOT one runs `npm run lint -- --max-warnings 0`, so a new
