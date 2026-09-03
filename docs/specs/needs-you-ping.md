@@ -1,6 +1,14 @@
 # The `ping` primitive — "Needs you"
 
-**Status:** design, written 2026-09-01, ahead of the code in the same branch.
+**Status: SUPERSEDED AND THE LANE IS DELETED (2026-09-02, Samuel's ruling B8; deleted at Wave B
+slice B16).** Written 2026-09-01 as design ahead of the code in the same branch. ⚠ **KEPT AS THE
+ARGUMENT, NOT AS A CONTRACT** — the problem statement below is still the real problem, and the
+answer taken instead is a directed `send`: it names one recipient, the server resolves it, and the
+result's `delivery=` is the acknowledgement the ping row existed to be. *"What is addressed to me
+and unanswered"* is DERIVED from the transcript by
+`src/features/channels/server/service-account.ts › getAccountStatus` (`AccountChannelStatus.waiting`)
+rather than kept in a second mailbox, so it cannot drift from the message it points at. The table
+this document specifies was NEVER APPLIED in any environment. See `docs/INVARIANTS.md` §10.
 **Problem.** When an agent finishes, has a question, or is blocked, nothing reaches the person or
 the external session that has to act. A channel post is the wrong instrument: THE LOOP BRAKE means
 an agent-authored unaddressed post starts nobody, and an addressed one fans out to a room. So an

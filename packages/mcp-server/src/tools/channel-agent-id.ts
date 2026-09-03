@@ -28,9 +28,9 @@ export function bareAgentId(raw: string): string {
 
 /**
  * THE AGENT-ID GRAMMAR — `dopl-desktop-app/main/agent-id.js › AGENT_ID_RE`'s,
- * the same one `schema-ping.ts` and `schema-direction.ts` hand-mirror and the
- * same one the `channel_pings` / `channel_launch_directives` column CHECKs
- * enforce. ⚠ **RESTATED HERE FOR THE REASON THE WHOLE FILE EXISTS**: this
+ * the same one `schema-direction.ts` hand-mirrors and the same one the
+ * `channel_launch_directives` column CHECK enforces. ⚠ There was a third mirror
+ * in the ping lane's schema until slice B16 deleted that lane whole. ⚠ **RESTATED HERE FOR THE REASON THE WHOLE FILE EXISTS**: this
  * package cannot import from `src/`, and the alternative is a fourth copy in
  * whichever op needs it next.
  *

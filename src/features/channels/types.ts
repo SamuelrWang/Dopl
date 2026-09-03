@@ -392,10 +392,15 @@ export type {
 
 export type { DirectionRefusalReason, AgentDirection } from "./types-direction";
 
-// THE "NEEDS YOU" SIGNAL (2026-09-01) — the direct lane's sibling, and off
-// `channel_messages` for the same reasons plus a third: it needs its OWN cursor,
-// because the session holding it is not reading the channel.
-export type { PingKind, PingRecipientKind, ChannelPing } from "./types-ping";
+// THE ACCOUNT-WIDE STATUS ANSWER — the shape `op="status"` renders and the
+// Overview "Needs you" card reads. ⚠ A `types-*.ts` rather than the service's
+// own export because the service is `server-only`; see that file's header.
+export type {
+  AccountChannelStatus,
+  AccountStatus,
+  AccountStatusClips,
+  AccountWaitingItem,
+} from "./types-account";
 
 // OUTBOUND CONSENT (§6) — same arrangement, same reason (§1 split, 2026-09-02).
 export type {

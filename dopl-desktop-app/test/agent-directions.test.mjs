@@ -157,13 +157,12 @@ test("CONSENT: a disarm really drops the handler, so a stale frame reaches nothi
   const calls = [];
   const chan = { on: (...a) => { calls.push(a); return chan; } };
   mailboxes.applyBindings(chan, WS);
-  // ⚠ TWO SINCE 2026-09-01, and the second one is not a consent: `channel_pings` is bound
-  // UNCONDITIONALLY (`realtime-mailboxes.js › applyBindings` states why — a ping buys an
-  // external agent no compute and opens no private turn, so it has no toggle and therefore
-  // never has to be flipped). What this case is about is the DIRECTIONS table, so it asserts
-  // on that table by name rather than on the count of everything riding the socket.
+  // ⚠ **ONE AGAIN SINCE 2026-09-02 (slice B16).** It was TWO from 2026-09-01: `channel_pings`
+  // rode the socket UNCONDITIONALLY, the one binding with no consent flag. That lane is
+  // deleted, so every binding is behind a flag again — and this case asserts on the DIRECTIONS
+  // table BY NAME rather than on a count, so a third mailbox arriving does not fail it.
   const armedTables = calls.map((c) => c[1].table);
-  assert.deepEqual(armedTables, ["channel_agent_directions", "channel_pings"]);
+  assert.deepEqual(armedTables, ["channel_agent_directions"]);
   calls[0][2]({ new: row() });
   assert.equal(seen.length, 1, "and the handler receives the raw row");
 

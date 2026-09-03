@@ -57,8 +57,6 @@ const CANONICAL = [
   "LaunchDirectiveKind",
   "LaunchToolMode",
   "LaunchMessageMode",
-  "PingKind",
-  "PingRecipientKind",
   "WorkspaceRole",
   "MembershipStatus",
   "WorkspaceKind",

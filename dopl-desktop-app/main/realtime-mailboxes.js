@@ -26,8 +26,6 @@ let bindDirectives = false;
 let bindDirections = false;
 let onDirectiveCb = null;
 let onDirectionCb = null;
-// ⚠ NO `bindPings` FLAG BESIDE THESE, DELIBERATELY — see `setPingHandler`.
-let onPingCb = null;
 
 /**
  * Chain this socket's extra bindings on, before `.subscribe()`.
@@ -51,17 +49,12 @@ function applyBindings(ch, wsId) {
       (payload) => onDirection(wsId, payload)
     );
   }
-  // ⚠ **UNCONDITIONAL, AND IT IS THE ONE MAILBOX THAT MAY BE.** The other two are gated on an
-  // operator consent because they let an external agent BUY COMPUTE or open a running agent's
-  // private turn. A ping does neither: it writes one `listener.log` line and, at most, feeds a
-  // line into a session this operator started on a channel they are in. Binding it always is
-  // what lets it need no flag, and therefore no rejoin — which matters because a rejoin costs
-  // every workspace's socket.
-  out = out.on(
-    'postgres_changes',
-    { event: 'INSERT', schema: 'public', table: 'channel_pings', filter: `workspace_id=eq.${wsId}` },
-    (payload) => onPing(wsId, payload)
-  );
+  // ⚠ **A THIRD BINDING STOOD HERE UNTIL 2026-09-02 (slice B16) AND IT WAS THE ONLY
+  // UNCONDITIONAL ONE**: `channel_pings`, bound with no consent flag because a ping bought an
+  // external agent neither COMPUTE nor a private turn. The lane is deleted — ruling B8 folded
+  // it into a directed `send` — and the table it watched was never applied in any environment.
+  // ⚠ **SO EVERY BINDING IS BEHIND A FLAG AGAIN, AND THAT IS THE INVARIANT TO KEEP:** a
+  // machine that never opts in names no table on the wire.
   return out;
 }
 
@@ -81,24 +74,6 @@ function onDirection(wsId, payload) {
     onDirectionCb(wsId, row);
   } catch (_) {
     /* one direction must not kill the socket */
-  }
-}
-
-/**
- * A PING ARRIVED (2026-09-01).
- *
- * ⚠ NO `diag` HERE, unlike its two neighbours, and the omission is deliberate: the filter is
- * workspace-wide, so this fires for OTHER members' pings too, and a line per frame would put
- * other people's traffic in this operator's log. `pings.js › handle` logs AFTER the recipient
- * re-check, which is the first point at which the row is this operator's to write down.
- */
-function onPing(wsId, payload) {
-  const row = payload && payload.new;
-  if (!row || !onPingCb) return;
-  try {
-    onPingCb(row, wsId);
-  } catch (_) {
-    /* one ping must not kill the socket */
   }
 }
 
@@ -138,25 +113,12 @@ function setDirectives(on, handler, rejoin) {
   if (typeof rejoin === 'function') rejoin();
 }
 
-/**
- * REGISTER (or drop) THE PING HANDLER.
- *
- * ⚠ **NO REJOIN, BECAUSE THERE IS NO FLAG TO FLIP.** The binding is applied at every join
- * unconditionally (see `applyBindings`), so arming is purely "who receives the frames" — which
- * is a plain assignment, safe at any time, and costs no socket churn. That is the whole reason
- * this mailbox is shaped differently from the other two rather than an oversight.
- */
-function setPingHandler(handler) {
-  onPingCb = typeof handler === 'function' ? handler : null;
-}
-
 /** A full stop: every mailbox off, every handler dropped. Called from `realtime.js › stop`. */
 function reset() {
   bindDirectives = false;
   bindDirections = false;
   onDirectiveCb = null;
   onDirectionCb = null;
-  onPingCb = null;
 }
 
-module.exports = { applyBindings, setDirectives, setDirections, setPingHandler, reset };
+module.exports = { applyBindings, setDirectives, setDirections, reset };

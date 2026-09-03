@@ -70,8 +70,6 @@ export type {
   LaunchMessageMode,
 } from "./directives.js";
 
-export type { PingKind, PingRecipientKind } from "./pings.js";
-
 export type {
   WorkspaceRole,
   MembershipStatus,

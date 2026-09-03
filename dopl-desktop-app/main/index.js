@@ -37,7 +37,6 @@ const triggerOutcomes = require('./trigger-outcomes'); // the engine's lifecycle
 const agentRetention = require('./agent-retention'); // 2026-08-22: the ended-agent 7-day sweep
 const launchDirectives = require('./launch-directives'); // 2026-08-22: the orchestrator launch lane
 const agentDirections = require('./agent-directions');
-const pings = require('./pings'); // 2026-08-31: the PRIVATE DIRECT lane
 // Phase-4 prerequisite: the server-authoritative minimum-version gate. Policy in
 // min-version.js, shell in version-gate.js, screen in update-required-window.js.
 const versionGate = require('./version-gate');
@@ -369,22 +368,10 @@ if (!gotLock) {
       });
     } catch (err) { diag('agentDirections.start error', err && err.message); }
 
-    // THE "NEEDS YOU" SIGNAL (2026-09-01). ⚠ NO CONSENT TOGGLE, unlike the two mailboxes
-    // above, and the difference is what each one buys an external agent: a launch buys
-    // COMPUTE, a direction opens a running agent's PRIVATE turn, and a ping buys neither —
-    // one log line, and at most one line fed to a session this operator already started on a
-    // channel they are in. `pings.js`' header states the argument in full.
-    try {
-      pings.start({
-        getUserId: () => (authTokens.getAuthState() || {}).userId || null,
-        // ⚠ THE EXISTING BELT, not a second wake path: `feedInbound` is where the
-        // `@agent-<id>` fan-out door terminates, so a ping is subject to the same inbound
-        // gate every other addressed message is.
-        listLiveSessions: () => require('./session-engine').listLiveSessions(),
-        feedInbound: (a) => require('./session-engine').feedInbound(a),
-      });
-    } catch (err) { diag('pings.start error', err && err.message); }
-
+    // ⚠ **A THIRD MAILBOX STOOD HERE UNTIL 2026-09-02 (slice B16): THE "NEEDS YOU" PING.**
+    // It is not "not started yet" — the LANE IS GONE. Ruling B8 folded it into a directed
+    // `send`, which arrives on the ordinary message path and terminates at the same
+    // `feedInbound` door this used to borrow, so nothing here has to reach a recipient twice.
     // Feature E: ensure the Claude CLI has the Dopl MCP configured (best-effort;
     // no-ops when signed out or the CLI/endpoint isn't available).
     mcpConfig.ensureMcpConfig().catch((err) => diag('mcp-config startup error', err && err.message));
