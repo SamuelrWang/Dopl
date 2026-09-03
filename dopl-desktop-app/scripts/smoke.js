@@ -9,8 +9,8 @@
  * picked up as a test, launched no Electron, and failed. **PERMANENTLY, ONE
  * FAILURE, ON EVERY BARE RUN**, which is the worst possible shape for a suite:
  * a red that means nothing trains a reader to skip the red that means
- * something. `npm test` passes an explicit `test/**/*.mjs` glob and never saw
- * it, so the two invocations of the same suite disagreed.
+ * something. `npm test` passes an explicit glob under `test/` and never saw it,
+ * so the two invocations of the same suite disagreed.
  *
  * ⚠ Loads the LOCAL `renderer/app/index.html`, never a remote URL — accurate and offline.
  * ⚠ NEEDS A BUILT SPA (`npm run build:ui` from the repo root); a tree that never built one
