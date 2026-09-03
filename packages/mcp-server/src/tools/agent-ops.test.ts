@@ -189,7 +189,10 @@ describe("op=create", () => {
       homeScoped: undefined,
     });
     expect(text).toContain("Created agent template");
-    expect(text).toContain('dopl_channel(op="launch_agent"');
+    // ⚠ THE LIVE SPELLING, and it changed at B8: `launch_agent` retired into
+    // `manage(action="launch")`. A result line naming the old one teaches a
+    // caller to spend a one-release redirect (F-592).
+    expect(text).toContain('dopl_channel(op="manage", action="launch"');
   });
 
   it('shelf="personal" sends homeScoped AND an explicit private visibility', async () => {

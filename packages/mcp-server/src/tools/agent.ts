@@ -204,7 +204,7 @@ const AGENT_DESCRIPTION = composeDescription({
   headline: `Read and author AGENT TEMPLATES: the persistent identities (name, instructions, model, fields, attached bases) a session is spawned FROM — it starts and lists no RUNNING agent.`,
   policy: `Reads plus creates and updates; no delete op — deletion is app-only.`,
   routing: [
-    `Use dopl_channel(op="read_sessions") for agents RUNNING in a channel, and op="launch_agent" to start one.`,
+    `Use dopl_channel(op="status") for agents RUNNING in a channel; manage(action="launch") starts one.`,
     `Use dopl_kb for the knowledge bases a template attaches.`,
   ],
   body: [

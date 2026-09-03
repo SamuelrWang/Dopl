@@ -200,7 +200,7 @@ export async function opCreate(
   return ok(
     [
       `Created agent template ${inlineOr(template.name, NO_NAME)} ${where} (id: \`${template.id}\`). ${audience}`,
-      `Launch it into a channel with dopl_channel(op="launch_agent", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
+      `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"),
   );
 }

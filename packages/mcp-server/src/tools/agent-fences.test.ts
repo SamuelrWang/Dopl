@@ -226,13 +226,16 @@ describe("what this surface will not do", () => {
     );
     // ⚠ BOTH ROUTES, not both spellings (A14, 2026-09-02). The house style
     // renders routing as ONE `Use <tool>(op=…)` sentence that may name a second
-    // op on the same tool without repeating the tool — *"Use
-    // dopl_channel(op=\"read_sessions\") for agents RUNNING in a channel, and
-    // op=\"launch_agent\" to start one"*. What Samuel's ruling Q7 requires is
-    // that BOTH destinations are named and that the tool carrying them is
-    // `dopl_channel`; a second `dopl_channel(` prefix is characters pushed on
-    // every connection to repeat a word one clause away.
-    expect(description).toContain('dopl_channel(op="read_sessions")');
-    expect(description).toContain('op="launch_agent"');
+    // op on the same tool without repeating the tool. What Samuel's ruling Q7
+    // requires is that BOTH destinations are named and that the tool carrying
+    // them is `dopl_channel`; a second `dopl_channel(` prefix is characters
+    // pushed on every connection to repeat a word one clause away.
+    //
+    // ⚠ **THE TWO OP NAMES CHANGED AT B8 AND THIS CASE HAD NOT (F-592)**: it
+    // pinned `read_sessions` and `launch_agent`, both of which retired into the
+    // five-op surface, so the assertion was holding the description ON the
+    // retired spelling. The DESTINATIONS are what the ruling is about.
+    expect(description).toContain('dopl_channel(op="status")');
+    expect(description).toContain('manage(action="launch")');
   });
 });

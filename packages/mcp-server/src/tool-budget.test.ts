@@ -165,7 +165,7 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // FENCE (`untrusted-fence.ts`), not prose. A fence cannot move into a pulled
   // doctrine, because the agent that has not read the doctrine is exactly the
   // one that needs it. Both descriptions FELL by hundreds in the same change.
-  dopl_agent: 1948,
+  dopl_agent: 1941,
   // ⚠ 1,591 → 1,596 (B8): barely moved while the string changed completely — 23
   // op names fell to 5, and a generated `Limits:` block took it back.
   dopl_channel: 1596,
@@ -282,7 +282,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 //     run. See `instructions.ts › ConnectionIdentity`.
 // ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** Every figure a doc has carried
 // about this surface has gone stale inside a day (F-422).
-const SERVED_TOTAL_CEILING = 49_793; // ⚠ 51,996 → 49,057 (B8) → 49,793 (A16's last three knobs, batch-2 review)
+const SERVED_TOTAL_CEILING = 49_790; // ⚠ 51,996 → 49,057 (B8) → 49,790 (A16's last three knobs +736, the retired-op re-spellings −3, batch-2 review)
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
