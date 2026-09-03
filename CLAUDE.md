@@ -131,7 +131,9 @@ second typecheck):
    trusting it — it has been wrong twice and the command takes one second:
    `grep -n 'run:' .github/workflows/ci.yml`.**
 9. 🔒 **the committed-`dist` check** — `npm run build:packages`, then
-   `git status --porcelain -- 'packages/*/dist'`. **The committed `dist/` is what the app LOADS**
+   `git status --porcelain -- 'packages/*/dist/*'` (⚠ **the trailing `/*` IS the gate** — a git
+   pathspec glob must match the WHOLE path, so `packages/*/dist` matched nothing and the check
+   reported every stale build as clean from the day it landed; fixed 2026-09-02). **The committed `dist/` is what the app LOADS**
    (`next.config.ts › serverExternalPackages` keeps both packages external), and until 2026-09-02
    nothing asserted it was the build of `src/`. The A10 branch shipped a `dist/` that predated its
    own source change and every gate stayed green: the suites import `src/`, both typechecks read

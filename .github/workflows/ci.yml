@@ -281,7 +281,19 @@ jobs:
           # ⚠ SCOPED TO dist/, not to `packages`: a clean checkout plus a build
           # can only dirty generated output, and widening it would make an
           # unrelated stray file read as a stale build.
-          DIRTY=$(git status --porcelain -- 'packages/*/dist')
+          #
+          # 🔒 ⚠ THE PATHSPEC ENDS `/*` AND THAT IS THE WHOLE GATE (fixed
+          # 2026-09-02, batch-3 review). It read `packages/*/dist`, which
+          # matches NOTHING: git applies leading-directory matching only to
+          # LITERAL pathspecs, and a glob has to match the whole path — so
+          # `packages/dopl-client/dist/channel.js` was never a match and
+          # `git ls-files -- 'packages/*/dist'` answers 0 against 286 tracked
+          # files. This job has been reporting a stale `dist/` as clean since
+          # the day it landed, which is F-661's shape a second time: a gate
+          # that cannot fail is worse than no gate, because it is counted.
+          # `*` does NOT stop at `/` in a git pathspec, so one `/*` covers
+          # `dist/tools/*.js` as well.
+          DIRTY=$(git status --porcelain -- 'packages/*/dist/*')
           if [ -n "$DIRTY" ]; then
             echo "::error::packages/*/dist is stale — run 'npm run build:packages' and commit the result."
             echo "$DIRTY"
