@@ -380,12 +380,37 @@ describe("postMessage — addressing + author derivation", () => {
     expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
   });
 
-  it("an explicit authorKind wins in BOTH directions (it is a claim, not a derivation)", async () => {
-    // ⚠ `authorKind` is NOT derived from the credential — the desktop peer-post
-    // path depends on the caller's value winning. Both directions pinned so a
-    // "harden this" edit cannot turn the `??` into a hard derive (F-082).
+  it("an AGENT CREDENTIAL cannot claim authorKind='user' (F-580)", async () => {
+    // ⚠ THE CLAIM ESCALATES ONLY. It used to win in both directions, and the
+    // downgrade direction was a cross-account wake: `authorKind` is what splits
+    // RR2 (the agent's own reciprocal party) from RR3 (`freshChannelSessions`,
+    // CHANNEL-WIDE, every operator's agents in the room). An agent token that
+    // said "user" bought itself the arm Samuel's same-account carve closes.
+    // The credential is `auth.agentTokenId` and outranks anything in the body.
     await postMessage(agentCtx, "general", { body: "hi", authorKind: "user" });
-    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("user");
+    expect(vi.mocked(repoMessages.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
+  });
+
+  it("the downgrade claim does not buy RR3's channel-wide wake (F-580)", async () => {
+    // ⚠ THE ROUTING HALF, and the one that made this a BLOCKER rather than a
+    // mislabel. A live agent belonging to ANOTHER operator sits in the room, so
+    // RR3 has a candidate: an unaddressed post that reaches RR3 wakes it. The
+    // agent credential asks to be treated as a person; the verdict must still be
+    // the agent one (RR2, which answers `null` here with no reciprocal party).
+    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
+      {
+        name: "k3v7d2mq",
+        user_id: "user-2",
+        channel_id: "chan-1",
+        updated_at: new Date().toISOString(),
+      } as never,
+    ]);
+    vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
+
+    await postMessage(agentCtx, "general", { body: "status?", authorKind: "user" });
+    const row = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
+    expect(row.wake_verdict).not.toBe("responder");
+    expect(row.recipient_agent_ids ?? []).not.toContain("k3v7d2mq");
   });
 
   it("never lets the caller move authorship off ctx.userId", async () => {

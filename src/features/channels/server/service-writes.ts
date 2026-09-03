@@ -403,8 +403,27 @@ export async function postMessage(
   // wrote it, and the credential is what answers that. Reading it after would
   // mean the resolver guessing from the body, which is the whole class of defect
   // this file's A9 note is about.
+  //
+  // ⚠ **THE CLAIM MAY ONLY ESCALATE, NEVER DOWNGRADE (2026-09-02, F-580).** It
+  // was `input.authorKind ?? (ctx.source === "agent" ? …)` — a plain `??`, so an
+  // AGENT CREDENTIAL could post `authorKind: "user"` and be routed as a person.
+  // That is not a cosmetic label: the verdict splits RR2 from RR3 on it, and RR3
+  // is the arm that reaches `freshChannelSessions` — CHANNEL-WIDE, every
+  // operator's agents, the one door Samuel's same-account carve closes. That
+  // file's own note says *"no path from an agent author reaches this function"*,
+  // and the `??` was the path.
+  //
+  // So the two directions are NOT symmetric, and each has its own reason:
+  //   - `ctx.source === "agent"` ⇒ `agent`, unconditionally. The credential is
+  //     `auth.agentTokenId` (`service-shared.ts`), which nothing a caller sends
+  //     can forge, and it is the stronger fact.
+  //   - a COOKIE session may still CLAIM `agent`, and must: the desktop posts
+  //     its agents' thread results over the operator's own Supabase session
+  //     (`main/channel-post.js`), and that lane is the one this parameter exists
+  //     for. Claiming `agent` only ever narrows the wake (RR2 over RR3), so it
+  //     is safe in a way the reverse is not.
   const authorKind =
-    input.authorKind ?? (ctx.source === "agent" ? "agent" : "user");
+    ctx.source === "agent" || input.authorKind === "agent" ? "agent" : "user";
 
   const wake = await resolveWakeVerdict(ctx, channel, input, metadata, {
     authorKind,
