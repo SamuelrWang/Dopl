@@ -20,108 +20,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
-import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   resolveResource,
   resolveResourcesByName,
   type ResourceCaller,
 } from "./resolve-resource";
+import {
+  caller,
+  filters,
+  makeAdmin,
+  member,
+  ME,
+  personalContainer,
+  templateRow,
+  T1,
+  WS_A,
+  WS_B,
+  WS_P,
+} from "./resolve-resource-fixture";
 
-const ME = "22222222-3333-4444-5555-666666666666";
-const WS_A = "11111111-2222-3333-4444-555555555555";
-const WS_B = "99999999-8888-7777-6666-555555555555";
-/** The caller's own `kind='personal'` container. */
-const WS_P = "77777777-7777-7777-7777-777777777777";
-const T1 = "44444444-4444-4444-4444-444444444444";
 
-type Call = { table: string; op: string; args: unknown[] };
 
-/**
- * A recording query builder. `results` is keyed by table, so each read answers
- * independently and every filter it applied is inspectable afterwards.
- *
- * ⚠ **ONE BUILDER PER `.from()`, EXACTLY AS POSTGREST GIVES YOU** — a single
- * shared builder with a mutable `table` answered the MEMBERSHIP query out of
- * whichever table was named LAST, which the personal-container probe (issued
- * between building that query and awaiting it) is the first caller to notice.
- */
-function makeAdmin(
-  results: Record<string, unknown[]>,
-  /**
-   * ⚠ **RESULT SETS CONSUMED IN ORDER, PER TABLE — AND THE GRANT LANE IS WHY
-   * THIS EXISTS.** The builder applies no filters, so a table with ONE result
-   * set answers both of `findResources`' queries identically and a case meant
-   * to prove the SECOND one passes on the first. A sequence makes the two
-   * queries distinguishable: `[[], [row]]` is "nameable by no clause, reached
-   * by a grant". ⚠ Exhausting it falls back to `results[table]`.
-   */
-  sequences: Record<string, unknown[][]> = {}
-) {
-  const calls: Call[] = [];
-  const pending = new Map<string, unknown[][]>(
-    Object.entries(sequences).map(([t, sets]) => [t, [...sets]])
-  );
-  const newBuilder = (table: string) => {
-    const builder: Record<string, unknown> = {};
-    const rec = (op: string, args: unknown[]) => {
-      calls.push({ table, op, args });
-      return builder;
-    };
-    const rows = () => pending.get(table)?.shift() ?? results[table] ?? [];
-    Object.assign(builder, {
-      select: (c: string) => rec("select", [c]),
-      eq: (c: string, v: unknown) => rec("eq", [c, v]),
-      in: (c: string, v: unknown) => rec("in", [c, v]),
-      or: (f: string) => rec("or", [f]),
-      is: (c: string, v: unknown) => rec("is", [c, v]),
-      ilike: (c: string, v: unknown) => rec("ilike", [c, v]),
-      // The grant lane bounds its fan-out (`GRANT_REACH_LIMIT`).
-      limit: (n: number) => rec("limit", [n]),
-      // `findPersonalContainerId` ends its chain here — at most one row.
-      maybeSingle: () =>
-        Promise.resolve({ data: rows()[0] ?? null, error: null }),
-      then: (resolve: (r: { data: unknown[]; error: null }) => void) =>
-        resolve({ data: rows(), error: null }),
-    });
-    return builder;
-  };
-  vi.mocked(supabaseAdmin).mockReturnValue({
-    from: (t: string) => {
-      calls.push({ table: t, op: "from", args: [t] });
-      return newBuilder(t);
-    },
-  } as never);
-  return calls;
-}
-
-/** The row `findPersonalContainerId` reads, when the caller has a container. */
-function personalContainer(id = WS_P) {
-  return { id };
-}
-
-/** Every filter one of the two queries applied, as `op(col=value)` strings. */
-function filters(calls: Call[], table: string): string[] {
-  return calls
-    .filter((c) => c.table === table && c.op !== "from" && c.op !== "select")
-    .map((c) => `${c.op}(${c.args.map((a) => JSON.stringify(a)).join("=")})`);
-}
-
-function member(workspaceId: string, role = "member") {
-  return { workspace_id: workspaceId, role };
-}
-
-function templateRow(over: Record<string, unknown> = {}) {
-  return {
-    id: T1,
-    name: "Code Auditor",
-    workspace_id: WS_B,
-    created_by: ME,
-    workspace: { name: "Acme", kind: "standard" },
-    ...over,
-  };
-}
-
-const caller: ResourceCaller = { userId: ME, credentialSubjectUserId: ME };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -536,142 +455,3 @@ describe("the 1:1 embed is flattened, whichever way PostgREST types it", () => {
   });
 });
 
-// ── CLAUSE 4, THIRD ARM: A GRANT ─────────────────────────────────────────
-
-/**
- * 🔒 **A ROW LENT TO A SCOPE THE CALLER IS IN IS NAMEABLE BY THEM** (F-662).
- *
- * ⚠ **THE TS SIDE WAS THE NARROW HALF.** `dopl_grant_admits()` has been an arm
- * of `dopl_knowledge_base_readable()` since `20260923140000`, and `canSeeBase`
- * gained the same arm — so the policy admitted a lent row and the NAMING lane
- * refused it, which made the grant a recorded intent for every cross-container
- * lend. `resource-grant-reach.ts` recorded the gap in its own header.
- */
-describe("🔒 a GRANT names a row in a container the caller is not in", () => {
-  const CH = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-
-  function grantedTo(channelId: string, level = "visible") {
-    return {
-      resource_grants: [
-        {
-          scope_type: "channel",
-          scope_id: channelId,
-          resource_id: T1,
-          level,
-        },
-      ],
-      channel_members: [{ channel_id: channelId }],
-    };
-  }
-
-  it("resolves a base lent into a channel the caller is a member of", async () => {
-    // ⚠ MUTATION CHECK. Drop the grant lane and this is `null` — a base the
-    // operator deliberately shared into the room, unreadable in the room.
-    const calls = makeAdmin(
-      { workspace_members: [member(WS_A)], ...grantedTo(CH) },
-      {
-        // 🔒 The fenced query finds NOTHING — the caller is not a member of
-        // `WS_B` and the row is private and somebody else's, so it fails the
-        // `.in()` and both arms of the `.or()`. Only the grant lane can answer.
-        knowledge_bases: [
-          [],
-          [
-            {
-              id: T1,
-              name: "Runbooks",
-              workspace_id: WS_B,
-              created_by: "someone-else",
-              workspace: { name: "Acme", kind: "standard" },
-            },
-          ],
-        ],
-      }
-    );
-    expect(await resolveResource(caller, "knowledge_base", T1)).toMatchObject({
-      containerId: WS_B,
-      // 🔒 A grantee holds no membership, so the floor is the answer — never a
-      // borrowed role from the container they came from.
-      containerRole: "viewer",
-      ownedByCaller: false,
-    });
-    // ⚠ The second query carries NO container filter and NO `.or()`: a grantee
-    // fails both by construction, so an arm inside that group is unreachable.
-    const applied = filters(calls, "knowledge_bases");
-    expect(applied.slice(-2)).toEqual([
-      `eq("id"="${T1}")`,
-      `is("deleted_at"=null)`,
-    ]);
-    // ⚠ MUTATION CHECK. ONE `in` and ONE `or` across BOTH queries — i.e. the
-    // second carries neither. Add them and the grant lane is unreachable, which
-    // is the mistake `20260923140000` §3b had to undo on the child policies.
-    expect(applied.filter((f) => f.startsWith("in(")).length).toBe(1);
-    expect(applied.filter((f) => f.startsWith("or(")).length).toBe(1);
-  });
-
-  it("answers NULL when nothing grants the id to this caller", async () => {
-    makeAdmin({
-      workspace_members: [member(WS_A)],
-      knowledge_bases: [],
-      resource_grants: [],
-    });
-    expect(await resolveResource(caller, "knowledge_base", T1)).toBeNull();
-  });
-
-  it("🔒 an `agent_only` CHANNEL grant does not name it for a PERSON", async () => {
-    // Two AUDIENCES, not a high/low pair: `agent_only` says "my agent may read
-    // this here", and a person reading it is strictly more.
-    makeAdmin({
-      workspace_members: [member(WS_A)],
-      knowledge_bases: [],
-      ...grantedTo(CH, "agent_only"),
-    });
-    expect(await resolveResource(caller, "knowledge_base", T1)).toBeNull();
-  });
-
-  it("🔒 a grant to a channel the caller is NOT in names nothing", async () => {
-    makeAdmin({
-      workspace_members: [member(WS_A)],
-      knowledge_bases: [],
-      resource_grants: grantedTo(CH).resource_grants,
-      channel_members: [],
-    });
-    expect(await resolveResource(caller, "knowledge_base", T1)).toBeNull();
-  });
-
-  it("🔒 a NAME never takes the grant lane", async () => {
-    // A name is not a global handle — resolving one here would scan every
-    // container in the product for a label.
-    const calls = makeAdmin({
-      workspace_members: [member(WS_A)],
-      knowledge_bases: [],
-      ...grantedTo(CH),
-    });
-    expect(
-      await resolveResourcesByName(caller, "knowledge_base", "Runbooks")
-    ).toEqual([]);
-    expect(calls.some((c) => c.table === "resource_grants")).toBe(false);
-  });
-
-  it("costs no grant query when the row was nameable anyway", async () => {
-    const calls = makeAdmin({
-      workspace_members: [member(WS_B)],
-      agent_templates: [templateRow()],
-    });
-    expect(await resolveResource(caller, "agent_template", T1)).not.toBeNull();
-    expect(calls.some((c) => c.table === "resource_grants")).toBe(false);
-  });
-
-  it("🔒 a SHARED credential is not widened by a grant either", async () => {
-    // Arm 2 travels with the grant, exactly as the SQL twin states it:
-    // `NOT dopl_credential_is_shared() AND dopl_grant_admits(…)`.
-    const calls = makeAdmin(grantedTo(CH));
-    expect(
-      await resolveResource(
-        { userId: ME, credentialSubjectUserId: null },
-        "knowledge_base",
-        T1
-      )
-    ).toBeNull();
-    expect(calls).toEqual([]);
-  });
-});

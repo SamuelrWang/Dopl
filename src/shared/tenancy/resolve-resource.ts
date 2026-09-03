@@ -276,32 +276,26 @@ async function listContainersForCaller(
 
 /**
  * 🔒 **THE CONTAINERS A LOCKED CREDENTIAL MAY STILL NAME ROWS IN: ITS LOCK, AND
- * THE OPERATOR'S OWN PERSONAL CONTAINER.**
+ * THE OPERATOR'S OWN PERSONAL CONTAINER** (found in the 1.26.0 smoke).
  *
- * ⚠ **FOUND IN THE 1.26.0 SMOKE (2026-09-03).** The clause narrowed to the lock
- * ALONE, so an agent running on a home channel's `container_session` credential
- * answered `base_not_found` for a base on its own operator's shelf. That
- * contradicts the ruling the shelf-as-a-tenancy exists to serve (B10 / #18,
- * `personal-container.ts`): *"what lets a personal template or KB be used from
- * ANY container the user is in — the id resolves its own container."* With the
- * shelf a `WHERE` inside a workspace the operator was already in, the lock never
- * had to name it; the moment it became a CONTAINER of its own, the lock fenced
- * the operator out of their own notes.
+ * ⚠ The clause narrowed to the lock ALONE, so an agent on a home channel's
+ * `container_session` credential answered `base_not_found` for a base on its own
+ * operator's shelf — against the ruling the shelf-as-a-tenancy exists to serve
+ * (B10 / #18): *"what lets a personal template or KB be used from ANY container
+ * the user is in — the id resolves its own container."* While the shelf was a
+ * `WHERE` inside a workspace the operator was already in, the lock never had to
+ * name it; the moment it became a CONTAINER, the lock fenced the operator out of
+ * their own notes.
  *
- * ⚠ **AND IT WIDENS BY EXACTLY ONE CONTAINER, WHICH IS WHY IT IS A LIST AND NOT A
+ * ⚠ **IT WIDENS BY EXACTLY ONE CONTAINER, WHICH IS WHY IT IS A LIST AND NOT A
  * SECOND QUERY.** The ids go into the SAME `workspace_members` read, so clause 2
- * still decides: a personal container with no ACTIVE owner membership admits
- * nothing, and clause 4 still refuses every row the caller could not already
- * list. Every OTHER container stays fenced — the lock is narrowed, never lifted.
- *
- * ⚠ **A SHARED CREDENTIAL REACHES THIS NOWHERE, AND CLAUSE 1 IS WHY** — a
- * credential that may be passed between humans points at no one person's shelf,
- * so {@link findResources} has already returned `[]` before a query is built.
- * The refusal is stated ONCE, where it is decided; restating it here would be a
- * second copy of the arm the two axes exist to keep apart (F-333/F-336).
- *
- * ⚠ ONE INDEXED PROBE (`workspaces_personal_owner_uidx`), and only on the LOCKED
- * lane: an unfenced credential never asks.
+ * still decides and clause 4 still refuses; every OTHER container stays fenced.
+ * ⚠ **A SHARED CREDENTIAL REACHES THIS NOWHERE, AND CLAUSE 1 IS WHY** — it
+ * points at no one person's shelf, so {@link findResources} has already returned
+ * `[]`. Restating the refusal here would be a second copy of the arm the two
+ * axes exist to keep apart (F-333/F-336).
+ * ⚠ ONE INDEXED PROBE (`workspaces_personal_owner_uidx`), on the LOCKED lane
+ * only: an unfenced credential never asks.
  */
 async function lockedCandidates(
   lockedWorkspaceId: string,
@@ -370,34 +364,23 @@ const NO_MEMBERSHIPS: ReadonlyMap<string, Role> = new Map();
 
 /**
  * 🔒 **A ROW LENT TO A SCOPE THE CALLER IS IN IS NAMEABLE BY THEM — CLAUSE 4's
- * THIRD ARM, AND IT LIVES IN ITS OWN QUERY** (F-662, 2026-09-03).
+ * THIRD ARM** (F-662).
  *
- * ⚠ **THE TS SIDE WAS THE NARROW HALF, WHICH IS WHY THIS IS A REPAIR AND NOT A
- * WIDENING.** `dopl_grant_admits()` has been an arm of
- * `dopl_knowledge_base_readable()` and `can_current_user_read_agent_template()`
- * since `20260923140000`, and `canSeeBase` / `canSeeTemplate` gained the same
- * arm — so the policy and the visibility matrix both admit a lent row while the
- * NAMING lane refused it. `resource-grant-reach.ts` recorded the gap in its own
- * header ("it widens visibility, never the candidate set… widening the fetch is
- * a TENANCY change"); this is that change, and it is exactly one arm wide.
+ * ⚠ **THE TS SIDE WAS THE NARROW HALF, SO THIS IS A REPAIR AND NOT A WIDENING.**
+ * `dopl_grant_admits()` has been an arm of `dopl_knowledge_base_readable()` and
+ * `can_current_user_read_agent_template()` since `20260923140000`, and
+ * `canSeeBase` / `canSeeTemplate` carry the same arm — policy and matrix both
+ * admitted a lent row while the NAMING lane refused it.
+ * `resource-grant-reach.ts` recorded the gap in its own header.
  *
- * ⚠ **A SECOND QUERY, NOT A THIRD ARM ON THE FIRST ONE.** The main query is
- * fenced by `.in(workspace_id, …)` AND the two-arm `.or()`, and a grantee fails
- * BOTH by construction: they are not a member of the resource's container, and
- * the row is private and somebody else's. An arm added inside that group would
- * be unreachable — the same mistake `20260923140000` §3b had to undo on the
- * knowledge child policies, where the grant arm sat under a membership term.
- *
- * ⚠ **IT RUNS ONLY ON A MISS, AND ONLY FOR AN ID.** A name is not a global
- * handle — resolving one here would scan every container in the product for a
- * label — and a grant is always written against an id (`dopl_kb(op="grant")`).
- * An id lookup that degraded into a name lookup is the fallback this module
- * forbids in its header.
- *
- * 🔒 **AND IT IS NOT AN EXISTENCE ORACLE.** `grantedResourceIds` answers from
- * `resource_grants` joined to the CALLER's own memberships, so an id with no
- * grant reaching this caller returns `null` exactly as a nonexistent one does,
- * with no read of the row at all.
+ * ⚠ **A SECOND QUERY, NOT A THIRD ARM ON THE FIRST.** A grantee fails the
+ * container `.in()` AND both `.or()` arms by construction, so an arm inside that
+ * group is unreachable — the mistake `20260923140000` §3b had to undo on the
+ * knowledge child policies.
+ * ⚠ **ON A MISS, AND FOR AN ID ONLY.** A name is not a global handle, and an id
+ * lookup that degraded into a name lookup is the fallback this module forbids.
+ * 🔒 **NOT AN EXISTENCE ORACLE**: `grantedResourceIds` answers from the CALLER's
+ * own memberships, so an ungranted id returns `null` with no read of the row.
  */
 async function findGrantedResource(
   caller: ResourceCaller,
