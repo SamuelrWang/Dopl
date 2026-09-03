@@ -367,8 +367,10 @@ describe("chat + a thread tag — the branch that never read landedThread", () =
     // surviving contract — re-arm from the seq you were handed, stop when the
     // exchange is done — is what makes the cursor on this result usable, which
     // is exactly what this case pairs it with.
+    // ⚠ RE-POINTED (2026-09-03): the stop rule is the `waiting` section's now,
+    // stated once for both hold lanes and pointed at by every result.
     expect(CHANNEL_DOCTRINE).toContain(
-      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
   });
 

@@ -110,7 +110,11 @@ describe("the channels doctrine is published as an MCP resource", () => {
       // unchanged — only the words it is written in moved.
       ["main-room etiquette", "REPLY WHERE YOU WERE ASKED"],
       ["the five zero-tag causes", "WHY A TAG RESOLVES TO NOBODY"],
-      ["the await stop rule", "stop when the exchange is done"],
+      // ⚠ RE-SPELLED AGAIN (2026-09-03): the stop rule left the READ section and
+      // became the `waiting` section's own clause, which is the whole of what
+      // every hold result now points at instead of restating.
+      ["the hold stop rule", "STOP when nothing has come from the MEMBER YOU ADDRESSED"],
+      ["hold, not poll", "WAITING — A HOLD, NOT A POLL"],
       ["the agent-handle limits", "it reaches no server, is invisible to every other member and is never addressable from here"],
       ["the refusal words", "A REFUSAL IS A NORMAL ANSWER"],
       ["the session columns", 'op="status" reads your own machine\'s live sessions'],

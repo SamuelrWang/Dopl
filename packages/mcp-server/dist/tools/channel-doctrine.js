@@ -32,7 +32,7 @@
  * from the description side; do not give it one.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CHANNEL_DOCTRINE = exports.DOCTRINE_SECTION_NAMES = exports.DOCTRINE_SECTIONS = exports.CHANNEL_LAW = exports.DOCTRINE_POINTER = exports.DOCTRINE_URI = exports.TENANCY_FIX = exports.TENANCY_RULE = void 0;
+exports.CHANNEL_DOCTRINE = exports.DOCTRINE_SECTION_NAMES = exports.DOCTRINE_SECTIONS = exports.WAITING_MAX_CHARS = exports.CHANNEL_LAW = exports.DOCTRINE_POINTER = exports.DOCTRINE_URI = exports.TENANCY_FIX = exports.TENANCY_RULE = void 0;
 exports.doctrineSection = doctrineSection;
 exports.TENANCY_RULE = "A template resolves ONLY in the container the channel lives in — and a home channel IS its own container, so one in your personal container or in a standard workspace does not resolve there however visible it is to you.";
 /**
@@ -91,8 +91,45 @@ WHAT HAPPENS ON THE RECEIVING SIDE IS NOT THAT you wait on them: a send simply N
 /** The one read op, and the hold that used to be an op of its own. */
 const READ = `op="read" — THE TRANSCRIPT, AND THE HOLD.
 \`since=<seq>\` returns only messages after that cursor; with none you get the newest page, and older ones are absent rather than reported.
-\`wait_ms\` turns the page into a HOLD and needs \`since\`. ⚠ EXTERNAL SESSIONS ONLY: a session your operator's own Dopl app runs is woken by the MESSAGE ITSELF, so that machine REFUSES the hold outright. Re-arm from the highest seq you were handed and stop when the exchange is done — an empty return is the budget expiring, not an answer.
+\`wait_ms\` turns the page into a HOLD and needs \`since\`. An empty return is the budget expiring, not an answer. HOW TO WAIT IS ITS OWN SECTION — read \`waiting\` before you arm one, and before you ever re-read on a timer.
 \`thread=<id>\` narrows to one exchange and renders that thread's card above it; it hands back NO cursor, so take yours from an unscoped read.`;
+/**
+ * ⚠ **THE ONE CANONICAL STATEMENT OF "HOLD, NEVER POLL"** (Samuel's ruling,
+ * 2026-09-03), and the reason it is a SECTION rather than a paragraph on every
+ * hold result: it is standing doctrine — true before the call and true after —
+ * so a result that repeats it pays for it once per empty hold, forever, to say
+ * nothing new. `channel-wake-guidance.ts` now spends ONE line pointing here.
+ *
+ * ⚠ **THE ECONOMICS ARE THE ARGUMENT AND MUST STAY IN IT.** An agent told "hold
+ * rather than poll" with no reason reads it as a style preference and polls
+ * anyway; told that every wake re-sends its whole context, it can derive the
+ * rest. That sentence is the one clause here that is not an instruction.
+ *
+ * ⚠ **BOTH SHAPES, BECAUSE A CLIENT WITHOUT BACKGROUND TASKS IS NOT AN EDGE
+ * CASE.** The background-task form is the only one that actually ends the turn;
+ * the synchronous form is what every other client has, and omitting it would
+ * leave that half with a rule and no way to keep it.
+ *
+ * ⚠ **THE STOP RULE LIVES HERE NOW AND NOWHERE ELSE.** It used to ride every
+ * re-arm instruction (`rearmStopRule`, ~700 chars per hold result); INVARIANTS
+ * §10's "every re-arm instruction carries a stop condition" is satisfied by the
+ * POINTER those results carry, not by a copy of the rule inside them.
+ *
+ * ⚠ Capped at {@link WAITING_MAX_CHARS}, tighter than the per-section budget,
+ * because this is the section most likely to grow back one honest sentence at a
+ * time — it is the destination every deleted re-arm paragraph now points at.
+ */
+const WAITING = `WAITING — A HOLD, NOT A POLL.
+Every wake re-sends a session's whole context: a timer pays that per tick; a hold pays once, on arrival.
+WITH BACKGROUND TASKS: run the hold in one (skill \`dopl-channels-wait\`), END your turn — finishing it is the wake.
+WITHOUT: dopl_channel(op="read", channel=<ref>, since=<cursor>, wait_ms=<ms>), re-armed on the SAME cursor each turn.
+STOP when nothing has come from the MEMBER YOU ADDRESSED — not the room — for ~30 min; LOOK before each re-arm. No thread ever closes; silence is the only stop signal.
+A DESKTOP-RUN SESSION MAY NOT HOLD: the message wakes it.`;
+/**
+ * ⚠ The budget for {@link WAITING} alone. Six lines is the whole rule; a
+ * seventh means answering which of the six stopped being one.
+ */
+exports.WAITING_MAX_CHARS = 600;
 /**
  * The own-agent contract and the refusal vocabulary, as a table.
  *
@@ -136,6 +173,7 @@ exports.DOCTRINE_SECTIONS = {
     model: MODEL,
     send: SEND,
     read: READ,
+    waiting: WAITING,
     manage: MANAGE,
     rooms: ROOMS,
     fields: FIELDS,

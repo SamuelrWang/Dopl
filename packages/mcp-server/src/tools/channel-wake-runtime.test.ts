@@ -147,10 +147,11 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
     // fed session not to arm; the collapse made it a contract — that machine
     // REFUSES the hold outright rather than being asked to skip it. Same rule,
     // now unskippable.
+    // ⚠ RE-POINTED (2026-09-03): the desktop clause left READ for `waiting`.
     expect(CHANNEL_DOCTRINE).toContain(
-      "a session your operator's own Dopl app runs is woken by the MESSAGE ITSELF",
+      "A DESKTOP-RUN SESSION MAY NOT HOLD: the message wakes it.",
     );
-    expect(CHANNEL_DOCTRINE).toContain("REFUSES the hold outright");
+    expect(CHANNEL_DOCTRINE).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
   });
 
   it('send thread="new" tells it not to arm, and says the thread was addressed', async () => {
@@ -187,7 +188,7 @@ describe("desktop-session runtime — no wake promise, and do NOT await", () => 
 
     expectNoFalsePromise(text);
     expect(text).toContain("Do NOT re-arm");
-    expect(text).not.toContain("re-arm the wait NOW");
+    expect(text).not.toContain("hold, never poll");
     expect(text).toContain("report that to your operator");
   });
 
@@ -242,13 +243,14 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // `read(since=, wait_ms=)`. Its ONE surviving contract is the stop rule,
     // which is the load-bearing half this pair was ever about, and it is what
     // the doctrine end of the pair now holds.
+    // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
     expect(CHANNEL_DOCTRINE).toContain(
-      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
     expect(CHANNEL_DOCTRINE).toContain(
-      "an empty return is the budget expiring, not an answer",
+      "An empty return is the budget expiring, not an answer",
     );
-    expect(CHANNEL_DOCTRINE).toContain("REFUSES the hold outright");
+    expect(CHANNEL_DOCTRINE).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
   });
 
   it('send thread="new" does the same, keeping the opening-seq cursor', async () => {
@@ -274,8 +276,9 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // `read(since=, wait_ms=)`. Its ONE surviving contract is the stop rule,
     // which is the load-bearing half this pair was ever about, and it is what
     // the doctrine end of the pair now holds.
+    // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
     expect(CHANNEL_DOCTRINE).toContain(
-      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
   });
 
@@ -293,14 +296,18 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
 
     expectNoFalsePromise(text);
     expect(text).toContain("cursor=7");
-    expect(text).toContain("re-arm the wait NOW");
+    expect(text).toContain("hold, never poll");
     expect(text).toContain("since=7");
     // ⚠ Stop rule rides with EVERY re-arm instruction — and since thread
     // closing was removed (wiring plan Phase 4, 2026-08-18) it is the
     // addressee's silence, said out loud as the ONLY signal there is.
-    expect(text).toContain("Keep re-arming while something came from that member");
-    expect(text).toContain("no finished STATE to wait for");
-    expect(text).toContain("STOP and report to your operator");
+    // ⚠ STILL REQUIRED OF EVERY RE-ARM INSTRUCTION (INVARIANTS §10), NOW BY A
+    // POINTER RATHER THAN A COPY — the ~700 chars are not paid per empty hold.
+    expect(text).toContain(`${DOCTRINE_URI} › Waiting`);
+    expect(CHANNEL_DOCTRINE).toContain(
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
+    );
+    expect(CHANNEL_DOCTRINE).toContain("No thread ever closes");
     // ⚠ Pinned as ABSENCES: the mechanism lecture is taught where it is NEW
     // (post, create_thread, and the hold that returned), not re-read on every
     // empty hold of a poll loop.
@@ -313,10 +320,11 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
       .content[0].text;
 
     expectNoFalsePromise(text);
-    expect(text).toContain("Advance your cursor to seq 42");
+    expect(text).toContain("cursor=42");
     expect(text).toContain("since=42");
-    expect(text).toContain("RETURNS INSIDE your current turn");
-    expect(text).toContain("STOP and report");
+    // ⚠ ABSENCES NOW: a hold that RETURNED is the same reader, mid-loop.
+    expect(text).not.toContain("RETURNS INSIDE your current turn");
+    expect(text).toContain(`${DOCTRINE_URI} › Waiting`);
   });
 
   // The wake an external session can build for itself: `await` returns inside
@@ -325,7 +333,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
   // call. ⚠ Stated ONCE, conditionally, and only where we cannot see the
   // caller — a desktop session is fed replies and must not build a second
   // delivery path for them.
-  it("offers the background-task poll on every unstamped surface that ARMS", async () => {
+  it("points every unstamped ARMING surface at the background-task shape", async () => {
     // ⚠ THE OFFER RODE FOUR SURFACES AND NOW RIDES TWO — the `await` results,
     // which are the ones a caller reads while DECIDING whether to keep holding.
     // The two WRITE results dropped it with the rest of their standing prose
@@ -337,13 +345,14 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
 
     for (const text of armingSurfaces) {
       expectNoFalsePromise(text);
-      // ⚠ CONDITIONAL on a capability we cannot observe — never a promise. ⚠ And
-      // it NAMES A SCRIPT rather than implying the server provides one.
-      expect(text).toContain("If your harness can run background shell tasks");
-      expect(text).toContain("scripts/dopl-channel-wait.sh");
-      expect(text).toContain("END your turn");
-      expect(text).toContain("a wake your client already delivers");
+      // ⚠ A POINTER NOW: 246 chars of harness advice per hold became a move,
+      // and the shape it describes is asserted on the doctrine below.
+      expect(text).toContain(`${DOCTRINE_URI} › Waiting`);
+      expect(text).not.toContain("background shell tasks");
     }
+    // ⚠ CONDITIONAL on a capability the server cannot observe, never a promise.
+    expect(CHANNEL_DOCTRINE).toContain("WITH BACKGROUND TASKS: run the hold in one");
+    expect(CHANNEL_DOCTRINE).toContain("END your turn");
 
     // ⚠ AND THE TIMED-OUT HOLD IS ON THE SILENT SIDE, WITH THE TWO WRITES. It is
     // the ONE result an orchestrator reads over and over — every ~45s on a quiet
@@ -373,8 +382,9 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     // asserted above and is untouched: every arming surface still hands back the
     // CURSOR that makes any poll possible, and none of them promises a wake.
     // The one rule that outlived the offer is the stop rule.
+    // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
     expect(CHANNEL_DOCTRINE).toContain(
-      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
     expect(CHANNEL_DOCTRINE).not.toContain("background shell tasks");
   });
@@ -406,7 +416,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
     ).content[0].text;
 
     expect(text).toContain("Do NOT re-arm");
-    expect(text).not.toContain("re-arm the wait NOW");
+    expect(text).not.toContain("hold, never poll");
   });
 
   it("...and a VENDOR word in the runtime slot falls to unstamped, as it must", async () => {
@@ -416,7 +426,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
       const text = (
         await opHold(quietClient(), "general", 7, undefined, "u-me", vendorWord)
       ).content[0].text;
-      expect(text).toContain("re-arm the wait NOW");
+      expect(text).toContain("hold, never poll");
       expect(text).not.toContain("Do NOT re-arm");
     }
   });
@@ -428,7 +438,7 @@ describe("unstamped runtime — the wake is the CLIENT's, and is stated as one",
       await opHold(quietClient(), "general", 7, undefined, "u-me", "desktop_session")
     ).content[0].text;
 
-    expect(text).toContain("re-arm the wait NOW");
+    expect(text).toContain("hold, never poll");
     expect(text).not.toContain("Do NOT re-arm");
   });
 });
@@ -469,11 +479,12 @@ describe("CHANNEL_DESCRIPTION — runtime-neutral and honest", () => {
     // IS, what it needs, and when to stop; it no longer speculates about the
     // caller's harness.
     expect(CHANNEL_DOCTRINE).toContain("`wait_ms` turns the page into a HOLD and needs `since`");
+    // ⚠ RE-POINTED (2026-09-03): the stop rule is `waiting`'s, once, both lanes.
     expect(CHANNEL_DOCTRINE).toContain(
-      "Re-arm from the highest seq you were handed and stop when the exchange is done",
+      "STOP when nothing has come from the MEMBER YOU ADDRESSED",
     );
     // ...and the desktop-session escape hatch, which the static text CAN state
     // conditionally because it addresses every caller at once.
-    expect(CHANNEL_DOCTRINE).toContain("REFUSES the hold outright");
+    expect(CHANNEL_DOCTRINE).toContain("A DESKTOP-RUN SESSION MAY NOT HOLD");
   });
 });

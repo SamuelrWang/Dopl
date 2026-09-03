@@ -52,7 +52,7 @@ describe("the server instructions route 'ask X's agent' to dopl_channel", () => 
 
   it("says Dopl carries channels at all", () => {
     expect(OUT).toContain("CHANNELS");
-    expect(OUT).toContain("member-to-member and agent-to-agent messaging");
+    expect(OUT).toContain("CHANNELS (member and agent messaging)");
   });
 
   it("names dopl_channel as the tool for reaching another member", () => {

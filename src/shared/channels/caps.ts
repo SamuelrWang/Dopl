@@ -38,3 +38,39 @@
  * with no recent counterparty actually is.
  */
 export const RESILIENCE_WINDOW_MS = 15 * 60_000;
+
+/**
+ * **HOW MANY EMPTY, CURSOR-IDENTICAL, `wait_ms`-LESS READS COUNT AS A POLL** —
+ * the strike count and the window the POLL DETECTOR judges over
+ * (`packages/mcp-server/src/tools/channel-poll-detector.ts`).
+ *
+ * ⚠ **A POLL IS NOT A RATE PROBLEM, WHICH IS WHY THIS IS NOT A RATE LIMIT.** An
+ * external session that re-reads a quiet channel every 30s is nowhere near any
+ * rate ceiling; what it spends is the CALLER'S OWN CONTEXT — every wake of an
+ * LLM session re-sends the whole of it — so the cost is paid off-server and no
+ * request-per-minute bound can see it. What the server CAN see is the shape:
+ * the same credential, the same channel, the SAME cursor, no `wait_ms`, and
+ * nothing new to report. Three of those inside ten minutes is not a read
+ * pattern, it is a timer.
+ *
+ * ⚠ **THREE, AND THE THIRD IS THE ONE THAT TRIPS** — two empty reads on one
+ * cursor are an ordinary check-in (read, do something, check again), and
+ * refusing those would break the legitimate use of the page. The bound is on
+ * the LOOP, not on the second look.
+ *
+ * ⚠ **TEN MINUTES IS DELIBERATELY NOT {@link RESILIENCE_WINDOW_MS}, AND THEY
+ * ARE NOT TO BE WIRED TOGETHER.** That one asks how long an ADDRESS stays warm;
+ * this one asks how long ago a read still counts as part of the same loop. Same
+ * neighbourhood, different question — exactly the relationship that module
+ * records about `launch-budget.js`, and the reason both are typed out rather
+ * than derived from each other.
+ *
+ * ⚠ **HAND-COPIED INTO `packages/mcp-server`, WHICH CANNOT IMPORT THIS FILE**
+ * (its tsconfig `rootDir` is its own `src`). `src/shared/channels/caps.test.ts`
+ * reads both sources and fails from either side — the join
+ * `runtime-stamp-literals.test.mjs` established for the desktop tree.
+ */
+export const POLL_STRIKE_LIMIT = 3;
+
+/** @see POLL_STRIKE_LIMIT — the window those strikes have to land inside. */
+export const POLL_STRIKE_WINDOW_MS = 10 * 60_000;

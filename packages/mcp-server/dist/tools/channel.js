@@ -69,6 +69,11 @@ const channel_ops_escalate_1 = require("./channel-ops-escalate");
 const channel_ops_account_1 = require("./channel-ops-account");
 const channel_ops_status_1 = require("./channel-ops-status");
 const identity_1 = require("./identity");
+// 🔒 THE POLL GUARDRAIL. The subject is resolved ONCE per call, here, so the
+// read handlers take a string and never a whole identity — and so the
+// external-only fence (`pollSubject` returns null for a desktop-run caller)
+// has exactly one statement.
+const channel_poll_detector_1 = require("./channel-poll-detector");
 const channel_hold_budget_1 = require("./channel-hold-budget");
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
@@ -222,6 +227,11 @@ directory) {
                     const missHold = (0, respond_1.missingParams)("read (holding)", args, ["since"]);
                     if (missHold)
                         return missHold;
+                    // 🔒 A HOLD IS NEVER A POLL, SO IT CLEARS THE STRIKES — the caller
+                    // did the one thing the rule asks. ⚠ Recorded BEFORE the hold runs
+                    // and not after: a hold can occupy the whole function budget, and
+                    // credit for arming it must not depend on it returning.
+                    (0, channel_poll_detector_1.noteHold)((0, channel_poll_detector_1.pollSubject)(caller), scoped ? args.channel : channel_poll_detector_1.ACCOUNT_SCOPE);
                     return scoped
                         ? (0, channel_ops_hold_1.opHold)(client, args.channel, args.since, args.wait_ms, selfUserId, runtime, selfSessionId)
                         : (0, channel_ops_hold_workspace_1.opHoldWorkspace)(client, args.since, args.wait_ms, selfUserId, runtime, selfSessionId);
@@ -232,12 +242,12 @@ directory) {
                     ]);
                     if (missAcct)
                         return missAcct;
-                    return (0, channel_ops_account_1.opReadAccount)(client, directory, args.since, args.limit, selfUserId);
+                    return (0, channel_ops_account_1.opReadAccount)(client, directory, args.since, args.limit, selfUserId, (0, channel_poll_detector_1.pollSubject)(caller));
                 }
                 return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId, 
                 // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
                 // ids are real `metadata.taskId` values and must stay filterable.
-                args.thread, args.response_format);
+                args.thread, args.response_format, (0, channel_poll_detector_1.pollSubject)(caller));
             }
             // ⚠ `channel` is an OPTIONAL filter; own-scoped in the service, and the
             // transport credential IS the caller, so no identity is passed.

@@ -41,8 +41,22 @@ import {
  * fails too. ⚠ The largest section is now the LAW, which is the one section
  * whose size is capped for a second reason in `channel-law.test.ts`.
  */
-const DOCTRINE_MAX_CHARS = 8_960;
-const DOCTRINE_SECTION_MAX_CHARS = 2_870;
+// ⚠ **8,960 → 9,446 (2026-09-03), A RISE, AND HERE IS THE TRADE THAT LICENSES
+// IT.** The `waiting` section (600 chars, its own tighter cap in
+// `channel-doctrine.ts › WAITING_MAX_CHARS`) is where the ~1.4k of re-arm
+// doctrine that used to ride EVERY hold result now lives — pulled once instead
+// of pushed per empty hold, forever, to say nothing new. **A rise of 600 here
+// against ~1,400 off every hold result is the design**; the READ section paid
+// ~130 of it back by deleting the hold prose the new section states properly.
+// A rise with no matching fall is prose laundering, and this is the gate for it.
+const DOCTRINE_MAX_CHARS = 9_446;
+// ⚠ **2,870 → 2,879 (2026-09-03): +9 ON EVERY SECTION, AND NOT ONE OF THEM
+// GREW.** `SECTION_INDEX` names every section and rides every pull, so adding
+// `waiting` to the table lengthened what a caller receives for `send`, `law`
+// and the rest by the nine characters of the new name. The alternative was to
+// cut nine characters out of the largest section to pay for a name that is not
+// its own — a trade that would make the budget lie about where the cost is.
+const DOCTRINE_SECTION_MAX_CHARS = 2_879;
 
 describe("the pulled doctrine is budgeted too, and by section", () => {
   it(`the whole document is at most ${DOCTRINE_MAX_CHARS} chars`, () => {

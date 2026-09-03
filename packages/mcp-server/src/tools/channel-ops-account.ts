@@ -45,6 +45,14 @@ import {
 import { UNTRUSTED_BODY_HEADER } from "./channel-framing";
 import { sessionIsStale, sessionLegend } from "./channel-session-render";
 import { SESSION_TABLE_HEAD, sessionRow } from "./channel-session-table";
+// 🔒 The account-wide page is pollable in exactly the same way the per-channel
+// one is, so it is counted under the same detector, at its own scope key.
+import {
+  ACCOUNT_SCOPE,
+  notePollingRead,
+  pollingDetectedLine,
+} from "./channel-poll-detector";
+import { waitingLine, workspaceHoldCall } from "./channel-wake-guidance";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed channel)";
@@ -80,14 +88,32 @@ export async function opReadAccount(
   since: number,
   limit: number | undefined,
   selfUserId: string | null = null,
+  /** @see opRead — the credential this read is counted under, or `null`. */
+  subject: string | null = null,
 ): Promise<ToolResponse> {
   const page = await accountMessages(client, directory, { since, limit });
   if (page.messages.length === 0) {
+    // 🔒 Same strike, same rule — see `opRead`. ⚠ The scope note SURVIVES the
+    // refusal: "you are a member of nothing" is a fact about why the page is
+    // empty, not doctrine, and withholding it would leave the caller reading a
+    // polling complaint over a cursor that can never advance.
+    if (notePollingRead(subject, ACCOUNT_SCOPE, since)) {
+      return ok(
+        [
+          pollingDetectedLine(workspaceHoldCall(since), since),
+          accountScopeNote(page.channelCount),
+          waitingLine(workspaceHoldCall(since), since),
+        ].join("\n"),
+      );
+    }
     return ok(
       [
         `No new messages anywhere since seq ${since}.`,
         accountScopeNote(page.channelCount),
-        `Check again with dopl_channel(op="read", since=${since}) — or, to be WOKEN rather than to poll, hold with dopl_channel(op="read", since=${since}, wait_ms=<ms>), which watches one workspace at a time.`,
+        // ⚠ The hold this points at watches ONE WORKSPACE, not the account —
+        // the scopes differ, and saying so is the fact this line carries that
+        // the shared waiting line cannot.
+        `${waitingLine(workspaceHoldCall(since), since)} — that hold watches one workspace at a time.`,
       ].join("\n"),
     );
   }

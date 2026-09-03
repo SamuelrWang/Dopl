@@ -280,7 +280,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     expect(readChannelMessages).toHaveBeenCalledTimes(1);
     // ⚠ RE-POINTED: the hold is a KNOB on the read now, not an op of its own.
     expect(text).toContain(
-      'dopl_channel(op="read" with wait_ms, channel="general", since=44)',
+      'dopl_channel(op="read", channel="general", since=44, wait_ms=<ms>)',
     );
   });
 
@@ -295,7 +295,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
     expect(text).toContain("No messages tagged with thread `thread-9`");
     expect(text).toContain("comes back empty rather than as an error");
     expect(text).toContain('op="rooms", action="threads"');
-    expect(text).toContain("a HOLD is channel-wide and takes no thread");
+    expect(text).toContain("A HOLD is channel-wide and takes no thread");
   });
 
   it("leaves the UNFILTERED read exactly as it was", async () => {
@@ -307,7 +307,7 @@ describe('opRead — thread= scopes the transcript to one exchange', () => {
 
     expect(text).toContain("## general — 2 messages\n");
     expect(text).toContain(
-      '\nHighest seq shown: 4. Watch for newer messages with dopl_channel(op="read" with wait_ms, channel="general", since=4).',
+      '\ncursor=4 · hold, never poll: dopl_channel(op="read", channel="general", since=4, wait_ms=<ms>)',
     );
     expect(text).not.toContain("ONE exchange");
     expect(text).not.toContain("takes no thread");

@@ -33,29 +33,16 @@ import { describeFailure, runHold, wasCutShort } from "./channel-hold-loop";
 import { HOLD_UNNAMED_NOTICE } from "./channel-addressing";
 // ⚠ Whether a pending call may be promised to outlive the turn is ONE decision
 // in ONE module, from the caller's observed runtime.
-import { holdArrivedLines, holdTimedOutLines } from "./channel-wake-guidance";
+import {
+  channelHoldCall,
+  holdArrivedLines,
+  holdTimedOutLines,
+  waitingLine,
+} from "./channel-wake-guidance";
 // ⚠ The session block and every rule inside it (the staleness hedge, the
 // operator-only telemetry, `undefined` vs `[]`) have ONE statement, shared with
 // `op="status"` — see channel-session-table.ts.
 import { sessionBlockLines } from "./channel-session-table";
-
-/**
- * ⚠ Stop condition is scoped to the MEMBER the caller addressed, not to channel
- * activity: a five-member channel always has someone posting, so "any activity
- * in the last 30 minutes" keeps an agent re-arming forever over an exchange its
- * own counterparty abandoned.
- *
- * ⚠ AND IT IS NOW THE ONLY STOP CONDITION. It used to have a second half —
- * "stop when the thread is closed or failed" — which was the CHEAP exit, a state
- * the server would eventually show. Thread closing was removed (wiring plan
- * Phase 4, 2026-08-18), `get_thread` no longer reports a status, and a stop rule
- * naming a state that can never arrive is a rule to re-arm forever. Say the
- * absence out loud rather than dropping the clause: an agent that has been
- * taught to wait for a close will otherwise keep waiting for one.
- */
-export function rearmStopRule(ref: string): string {
-  return `Keep waiting while the exchange is alive — an agent working a real task can be silent for a long stretch. Every ~3 empty holds in a row, check before re-arming: dopl_channel(op="read", channel="${ref}", since=<your cursor>) for signs of life (a working agent posts task_progress milestones). Judge that ONLY on the member you are waiting on — the one you addressed. In a channel with other members, traffic between THEM is not evidence your exchange is alive. Keep re-arming while something came from that member in roughly the last 30 minutes. STOP and report to your operator when nothing at all has come from that member for ~30+ minutes. There is no finished STATE to wait for — a thread never closes — so silence from the member you addressed is the only stop signal there is.`;
-}
 
 /**
  * THE PER-CHANNEL HOLD. One call holds for `holdMsFor(waitMs, runtime)` by
@@ -119,9 +106,12 @@ export async function opHold(
       return ok(
         [
           `The wait on **${ref}** ended early, after about ${seconds}s: an inner poll failed — ${describeFailure(held.pollError)}.`,
-          `Nothing was missed, so re-arm NOW, before you end your turn — dopl_channel(op="read", channel="${ref}", since=${cursor}, wait_ms=<ms>).`,
+          // ⚠ Nothing was missed — the cursor did not move — so the ORDINARY
+          // waiting line is the whole remedy. The extra sentence is the one
+          // fact this branch has that the doctrine cannot: a SECOND failure of
+          // the same shape is not a hold to re-arm, it is an outage to report.
+          `Nothing was missed, so re-arm before you end your turn. ${waitingLine(channelHoldCall(ref, cursor), cursor)}`,
           `If the very next hold fails the same way, stop re-arming and report it to your operator; read the channel with dopl_channel(op="read", channel="${ref}", since=${cursor}) instead.`,
-          rearmStopRule(ref),
         ].join("\n"),
       );
     }
@@ -180,7 +170,7 @@ export async function opHold(
       lines.push(`\n${HOLD_UNNAMED_NOTICE}`);
     }
   }
-  lines.push(...holdArrivedLines(ref, lastSeq, runtime, rearmStopRule(ref)));
+  lines.push(...holdArrivedLines(ref, lastSeq, runtime));
   // ⚠ AFTER the messages and after the re-arm guidance — a block of server
   // narration spliced between counterparty bodies would let a body's last line
   // read as the start of this section.

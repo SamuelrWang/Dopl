@@ -145,7 +145,7 @@ exports.CHANNEL_ACTION_NAMES = [
 // because the concept each named already had a field: a recipient is `to`, an
 // intent is `summary`, a goal is `body`, a hold is `wait_ms`. Eighteen op names
 // left the published enum. A cut a re-worded sentence cannot make twice.
-exports.SCHEMA_MAX_CHARS = 8_410;
+exports.SCHEMA_MAX_CHARS = 8_405; // ⚠ 8,410 → 8,405 ON 2026-09-03: `section=`'s enum gained `waiting` (the hold-not-poll doctrine is unreachable without a name to pull it by) and that field's own `.describe()` more than paid for it. It still only ever moves DOWN.
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
  * can absorb one 900-character paragraph by trimming nine short fields; this
@@ -358,7 +358,7 @@ exports.CHANNEL_INPUT_SHAPE = {
     section: zod_1.z
         .enum(channel_doctrine_1.DOCTRINE_SECTION_NAMES)
         .optional()
-        .describe('op="rooms" action="help" (optional): return ONE section instead of the whole document. Omit it for everything, including the index of section names.'),
+        .describe('op="rooms" action="help" (optional): ONE section instead of the whole document. Omit for everything, index of section names included.'),
     // ── op="manage" action="launch" ──────────────────────────────────────────
     model: zod_1.z
         .string()

@@ -106,7 +106,7 @@ export type RoomsAction = (typeof CHANNEL_ACTIONS.rooms)[number];
  * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
  * growing past it, and shrinking below it without lowering the number.
  */
-export declare const SCHEMA_MAX_CHARS = 8410;
+export declare const SCHEMA_MAX_CHARS = 8405;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
  * can absorb one 900-character paragraph by trimming nine short fields; this
@@ -176,6 +176,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
         manage: "manage";
         law: "law";
         model: "model";
+        waiting: "waiting";
         rooms: "rooms";
     }>>;
     model: z.ZodOptional<z.ZodString>;

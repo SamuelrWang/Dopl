@@ -17,7 +17,11 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 // ⚠ T12 — every "NOT ADDRESSED" pin below is now a pair: the paragraph is out
 // of the result, and the rule it stated is still shipped, from one place.
-import { CHANNEL_DOCTRINE, DOCTRINE_POINTER } from "./channel-doctrine";
+import {
+  CHANNEL_DOCTRINE,
+  DOCTRINE_POINTER,
+  DOCTRINE_URI,
+} from "./channel-doctrine";
 import { opHold } from "./channel-ops-hold";
 import { opListThreads, opRead } from "./channel-ops-read";
 import { opPost } from "./channel-ops-write";
@@ -213,13 +217,18 @@ describe("await — a wake that is not for you", () => {
   it("scopes the re-arm stop rule to the member being waited on", async () => {
     // ⚠ A rule keyed on "the peer" is undefined at N, and read loosely ("any
     // activity keeps me waiting") never stops in a busy channel.
+    // ⚠ **THE RULE MOVED, THE SCOPING DID NOT (2026-09-03).** It used to be
+    // ~700 characters at the foot of every hold result; it is one clause of
+    // `dopl://doctrine/channels › Waiting` now, and the result points there.
+    // BOTH halves are asserted, because dropping either one is how a pointer
+    // becomes a pointer to nothing.
     const client = awaited([msg({ seq: 7, metadata: { to_user_id: ME } })]);
 
     const text = (await opHold(client, "general", 6, 1, ME)).content[0].text;
 
-    expect(text).toContain("the member you are waiting on");
-    expect(text).toContain("traffic between THEM is not evidence");
-    expect(text).not.toContain("the peer has shown nothing");
+    expect(text).toContain(`${DOCTRINE_URI} › Waiting`);
+    expect(CHANNEL_DOCTRINE).toContain("the MEMBER YOU ADDRESSED — not the room");
+    expect(CHANNEL_DOCTRINE).not.toContain("the peer has shown nothing");
   });
 });
 
