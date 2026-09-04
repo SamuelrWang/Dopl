@@ -18,16 +18,36 @@ const state = vi.hoisted(() => ({
   exchangeError: null as { message: string } | null,
   user: { id: "user-1" } as { id: string } | null,
   onboarded: true,
+  session: {
+    access_token: "at-1",
+    refresh_token: "rt-1",
+    expires_in: 3600,
+    expires_at: 1_800_000_000,
+  } as Record<string, unknown> | null,
+  /** WHICH factory the handler reached for — the 2026-09-04 sign-out turns on this. */
+  clientKind: null as "web" | "desktop" | null,
 }));
 
 vi.mock("next/headers", () => ({ cookies: async () => ({}) }));
-vi.mock("@/shared/supabase/admin", () => ({
-  createServerSupabaseClient: () => ({
+const supabaseStub = (kind: "web" | "desktop") => {
+  state.clientKind = kind;
+  return {
     auth: {
-      exchangeCodeForSession: async () => ({ error: state.exchangeError }),
+      exchangeCodeForSession: async () => ({
+        data: { session: state.exchangeError ? null : state.session },
+        error: state.exchangeError,
+      }),
       getUser: async () => ({ data: { user: state.user } }),
     },
-  }),
+  };
+};
+vi.mock("@/shared/supabase/admin", () => ({
+  createServerSupabaseClient: () => supabaseStub("web"),
+  // ⚠ THE DESKTOP LEG MUST NOT REACH THE WRITING CLIENT (2026-09-04). A browser copy of the
+  // session the app is about to adopt is a SECOND holder of one refresh-token family, and
+  // Supabase revokes the whole family the moment the stale copy is refreshed. Field evidence
+  // and the desktop-side pin: `dopl-desktop-app/test/desktop-handoff-one-family.test.mjs`.
+  createDesktopHandoffSupabaseClient: () => supabaseStub("desktop"),
 }));
 vi.mock("@/features/analytics/server/conversion-events", () => ({
   logConversionEvent: vi.fn(async () => {}),
@@ -55,7 +75,19 @@ beforeEach(() => {
   state.exchangeError = null;
   state.user = { id: "user-1" };
   state.onboarded = true;
+  state.session = {
+    access_token: "at-1",
+    refresh_token: "rt-1",
+    expires_in: 3600,
+    expires_at: 1_800_000_000,
+  };
+  state.clientKind = null;
 });
+
+/** The whole redirect, fragment included — `destinationOf` deliberately drops the hash. */
+async function responseOf(query: string) {
+  return GET(new NextRequest(`http://localhost/auth/callback${query}`));
+}
 
 describe("a plain web sign-in", () => {
   it("lands on the download page", async () => {
@@ -101,6 +133,43 @@ describe("the DESKTOP flow is untouched", () => {
     expect(await destinationOf("?code=abc&desktop=1&state=n&redirectTo=%2Fcanvas")).toBe(
       "/auth/desktop-handoff?state=n"
     );
+  });
+});
+
+describe("ONE FAMILY, ONE HOLDER — the desktop leg leaves no session in the browser", () => {
+  it("exchanges the code with the READ-ONLY client, and the web leg with the writing one", async () => {
+    await destinationOf("?code=abc&desktop=1&state=n");
+    expect(state.clientKind).toBe("desktop");
+    await destinationOf("?code=abc");
+    expect(state.clientKind).toBe("web");
+  });
+
+  it("hands the session over in the FRAGMENT, which no server ever receives", async () => {
+    const res = await responseOf("?code=abc&desktop=1&state=n");
+    const location = new URL(res.headers.get("location")!);
+    expect(location.pathname).toBe("/auth/desktop-handoff");
+    expect(location.searchParams.get("state")).toBe("n");
+    const fragment = new URLSearchParams(location.hash.replace(/^#/, ""));
+    expect(fragment.get("access_token")).toBe("at-1");
+    expect(fragment.get("refresh_token")).toBe("rt-1");
+    expect(fragment.get("expires_in")).toBe("3600");
+    // …and the query carries NOTHING of the session: a query string reaches every proxy,
+    // access log and Referer header on the way.
+    expect(location.search).not.toContain("rt-1");
+    expect(location.search).not.toContain("at-1");
+  });
+
+  it("sets no auth cookie on the way out", async () => {
+    const res = await responseOf("?code=abc&desktop=1&state=n");
+    const written = res.cookies.getAll().map((c) => c.name);
+    expect(written.filter((n) => n.endsWith("-auth-token"))).toEqual([]);
+  });
+
+  it("falls back to /login when the exchange returns no session", async () => {
+    // A missing session must never be answered by retrying through the WRITING client —
+    // that is the fix undone.
+    state.session = null;
+    expect(await destinationOf("?code=abc&desktop=1&state=n")).toBe("/login");
   });
 });
 
