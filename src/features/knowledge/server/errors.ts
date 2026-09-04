@@ -257,3 +257,27 @@ export class KnowledgeStaleVersionError extends Error {
     this.actual = actual;
   }
 }
+
+/**
+ * A `section=` argument that names TWO headings in one entry. → 409; the caller
+ * disambiguates or edits the whole body.
+ *
+ * ⚠ **A REFUSAL RATHER THAN A FIRST-MATCH, AND ONLY ON THE WRITE PATH IT IS
+ * FATAL.** A read can hand back both positions and let the agent choose; a
+ * write that picked one would overwrite a section the caller did not name, and
+ * there is no trash to recover it from. The positions travel in `details` so
+ * the answer carries its own remedy.
+ */
+export class KnowledgeSectionAmbiguousError extends Error {
+  readonly code = "KNOWLEDGE_SECTION_AMBIGUOUS";
+  readonly heading: string;
+  readonly lines: number[];
+  constructor(heading: string, lines: number[]) {
+    super(
+      `"${heading}" names ${lines.length} headings in this entry (lines ${lines.join(", ")}) — rename one, or write the whole body.`
+    );
+    this.name = "KnowledgeSectionAmbiguousError";
+    this.heading = heading;
+    this.lines = lines;
+  }
+}

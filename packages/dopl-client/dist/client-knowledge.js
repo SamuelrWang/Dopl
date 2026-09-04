@@ -84,6 +84,9 @@ class KnowledgeMethods extends client_workspaces_js_1.WorkspaceMethods {
     readKbFileByPath(baseId, path) {
         return kb.readKbFileByPath(this.transport, baseId, path);
     }
+    readKbFilePart(baseId, path, opts = {}) {
+        return kb.readKbFilePart(this.transport, baseId, path, opts);
+    }
     writeKbFileByPath(baseId, path, input = {}, expectedVersion) {
         return kb.writeKbFileByPath(this.transport, baseId, path, input, expectedVersion);
     }

@@ -9,9 +9,14 @@ import {
   EntryNotFoundError,
   FolderCycleError,
   KnowledgePathConflictError,
+  KnowledgeSectionAmbiguousError,
   KnowledgeStaleVersionError,
   PathTraversalError,
 } from "./errors";
+import {
+  appendSection,
+  replaceSection,
+} from "@/shared/knowledge/markdown-sections";
 import {
   ensureFolderPath,
   parsePath,
@@ -37,6 +42,28 @@ export interface WriteFileByPathInput {
   /** Optimistic-concurrency precondition. Only applies when path resolves to
    *  an existing entry; stale value → 412. */
   expectedUpdatedAt?: string;
+  /**
+   * Replace ONE `#`/`##`/`###` section instead of the whole document — `body`
+   * is then that section's new content.
+   *
+   * ⚠ **THE MERGE IS SERVER-SIDE AND UNDER THE SAME PRECONDITION.** It reads
+   * the stored body, splices, and writes — all against the row
+   * `expectedUpdatedAt` was just checked on, so a sectioned write is exactly as
+   * safe as a whole-body one and no safer. A caller that merged client-side
+   * would be merging onto a body it fetched in a different request.
+   *
+   * ⚠ **A HEADING THAT DOES NOT EXIST IS APPENDED, NOT REFUSED**, at `##`, and
+   * the result says so ({@link WriteFileByPathResult.sectionCreated}). An
+   * AMBIGUOUS heading refuses: overwriting the wrong section is unrecoverable.
+   */
+  section?: string;
+}
+
+export interface WriteFileByPathResult {
+  entry: KnowledgeEntry;
+  base: KnowledgeBase;
+  /** `true` when `section` named no existing heading and one was appended. */
+  sectionCreated?: boolean;
 }
 
 /**
@@ -95,7 +122,7 @@ export async function writeFileByPath(
   baseId: string,
   path: string,
   input: WriteFileByPathInput = {}
-): Promise<{ entry: KnowledgeEntry; base: KnowledgeBase }> {
+): Promise<WriteFileByPathResult> {
   const base = await getBaseById(ctx, baseId);
   await assertBaseWritable(ctx, base);
 
@@ -124,13 +151,17 @@ export async function writeFileByPath(
         resolved.entry.updatedAt
       );
     }
+    // ⚠ THE SECTION MERGE HAPPENS HERE, between the precondition and the
+    // storage gate: it is the merged body that gets written, so it is the
+    // merged body the gate has to weigh.
+    const merged = mergeSection(resolved.entry.body, input);
     // Storage gate on NET delta, before write. `body === undefined` preserves
     // column ⇒ no delta; shrink is negative and always allowed.
-    if (input.body !== undefined) {
+    if (merged.body !== undefined) {
       await assertStorageHeadroom(
         ctx,
         base,
-        bodyBytes(input.body) - bodyBytes(resolved.entry.body)
+        bodyBytes(merged.body) - bodyBytes(resolved.entry.body)
       );
     }
     let saved;
@@ -139,7 +170,7 @@ export async function writeFileByPath(
         resolved.entry.id,
         {
           title: input.title,
-          body: input.body,
+          body: merged.body,
           // As-is: undefined skips column, null clears.
           excerpt: input.excerpt,
           lastEditedBy: ctx.userId,
@@ -164,10 +195,10 @@ export async function writeFileByPath(
         fresh?.updatedAt ?? "concurrent"
       );
     }
-    if (input.title !== undefined || input.body !== undefined) {
+    if (input.title !== undefined || merged.body !== undefined) {
       scheduleEntryEmbedding(saved);
     }
-    return { entry: saved, base };
+    return { entry: saved, base, sectionCreated: merged.created };
   }
 
   // Not found + precondition ⇒ target vanished concurrently. Refuse rather
@@ -176,9 +207,17 @@ export async function writeFileByPath(
     throw new KnowledgeStaleVersionError(input.expectedUpdatedAt, "deleted");
   }
 
+  // ⚠ A `section` on a CREATE writes an entry that IS that one section — the
+  // heading included, so the document the caller goes on to address by heading
+  // is the document that was made.
+  const createdBody =
+    input.section === undefined
+      ? input.body
+      : appendSection("", input.section, input.body ?? "");
+
   // ⚠ Storage gate BEFORE mkdir -p: refusing after creating parents leaves
   // empty scaffolding for a write that never landed.
-  await assertStorageHeadroom(ctx, base, bodyBytes(input.body));
+  await assertStorageHeadroom(ctx, base, bodyBytes(createdBody));
 
   const parentFolder = await ensureFolderPath(ctx, base.id, parentSegments);
   let created;
@@ -189,7 +228,7 @@ export async function writeFileByPath(
       folderId: parentFolder?.id ?? null,
       title: input.title ?? leafName,
       excerpt: input.excerpt ?? null,
-      body: input.body ?? "",
+      body: createdBody ?? "",
       createdBy: ctx.userId,
       source: ctx.source,
     });
@@ -204,7 +243,37 @@ export async function writeFileByPath(
     throw err;
   }
   scheduleEntryEmbedding(created);
-  return { entry: created, base };
+  return {
+    entry: created,
+    base,
+    sectionCreated: input.section === undefined ? undefined : true,
+  };
+}
+
+/**
+ * Splice `input.body` into ONE section of `current`, or leave the write whole.
+ *
+ * ⚠ **`section` WITHOUT `body` IS A NO-OP, NOT AN ERASURE.** `body: undefined`
+ * already means "leave the column alone" on this path (it is how a title-only
+ * rename works), and a section argument must not change what an absent body
+ * means.
+ */
+function mergeSection(
+  current: string,
+  input: WriteFileByPathInput
+): { body: string | undefined; created?: boolean } {
+  if (input.section === undefined || input.body === undefined) {
+    return { body: input.body };
+  }
+  const spliced = replaceSection(current, input.section, input.body);
+  if (spliced.ok) return { body: spliced.body, created: false };
+  if (spliced.reason === "SECTION_AMBIGUOUS") {
+    throw new KnowledgeSectionAmbiguousError(
+      input.section,
+      spliced.matches.map((m) => m.line)
+    );
+  }
+  return { body: appendSection(current, input.section, input.body), created: true };
 }
 
 /**

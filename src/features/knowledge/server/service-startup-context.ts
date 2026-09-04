@@ -90,6 +90,19 @@ export interface StartupContext {
   /** Body characters actually included, i.e. the sum over `items`. */
   chars: number;
   /**
+   * Body characters of everything PINNED, `omitted` included — what the curated
+   * set costs, as against what a launch is handed.
+   *
+   * ⚠ **THE TWO NUMBERS DIVERGE ON PURPOSE, AND THE GAP IS THE WHOLE WARNING.**
+   * `chars` is bounded by {@link STARTUP_CONTEXT_CHAR_CAP} and can never report
+   * a problem, because past the cap the payload simply ships pointers; this one
+   * keeps rising, so it is the number a pin can be judged against
+   * (`shared/knowledge/caps.ts › KB_PIN_WARN_CHARS`). ⚠ Bounded in its own right
+   * by {@link STARTUP_CONTEXT_ENTRY_LIMIT}, so it is a floor once
+   * `truncated` is set for the row reason.
+   */
+  pinnedChars: number;
+  /**
    * ⚠ LOAD-BEARING (INVARIANTS §9). A clipped read that renders like an
    * exhausted one is the bug, not the cap. `true` means "there is pinned
    * content you were not given" — either because the character cap was reached
@@ -105,6 +118,7 @@ const EMPTY: StartupContext = {
   items: [],
   omitted: [],
   chars: 0,
+  pinnedChars: 0,
   truncated: false,
 };
 
@@ -188,11 +202,13 @@ function assemble(
   const items: StartupContextItem[] = [];
   const omitted: StartupContextPointer[] = [];
   let chars = 0;
+  let pinnedChars = 0;
   for (const entry of entries) {
     const base = baseById.get(entry.knowledgeBaseId);
     // Unreachable while `baseIds` fences the read; dropped rather than rendered
     // under an invented base name if the fence ever moves.
     if (!base) continue;
+    pinnedChars += entry.body.length;
     const path = pathOf(entry);
     const head = {
       baseId: base.id,
@@ -211,7 +227,13 @@ function assemble(
     chars += entry.body.length;
     items.push({ ...head, baseName: base.name, body: entry.body });
   }
-  return { items, omitted, chars, truncated: clipped || omitted.length > 0 };
+  return {
+    items,
+    omitted,
+    chars,
+    pinnedChars,
+    truncated: clipped || omitted.length > 0,
+  };
 }
 
 /**

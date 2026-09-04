@@ -232,7 +232,7 @@ describe("findSection", () => {
     const found = findSection(body, "Notes");
     expect(found.ok).toBe(false);
     if (found.ok) throw new Error("unreachable");
-    expect(found.reason).toBe("SECTION_AMBIGUOUS");
+    if (found.reason !== "SECTION_AMBIGUOUS") throw new Error("unreachable");
     expect(found.matches.map((m) => [m.line, m.start])).toEqual([
       [1, 0],
       [3, 15],

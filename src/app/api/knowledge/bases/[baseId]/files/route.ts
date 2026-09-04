@@ -14,6 +14,10 @@ import {
   NAME_RE,
   NAME_INVALID_MESSAGE,
 } from "@/features/knowledge/schema";
+import {
+  outlinePayload,
+  projectFile,
+} from "@/features/knowledge/server/service-sections";
 
 /** Path-based file CRUD for `kb_read_file` / `kb_write_file` + the CLI.
  *  ID-based equivalents live under `/api/knowledge/entries/...`. */
@@ -42,6 +46,9 @@ const WriteFileSchema = z.object({
   title: z.string().min(1).max(300).regex(NAME_RE, NAME_INVALID_MESSAGE).optional(),
   // Agent-facing summary (≤300 chars) shown in get_tree / list_dir. `null` clears; omit keeps.
   excerpt: z.string().max(DESCRIPTION_MAX).nullable().optional(),
+  // Replace ONE heading's section instead of the whole document; `body` is that
+  // section's new content. Bounded like a title — a heading is one line.
+  section: z.string().min(1).max(300).optional(),
 });
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
@@ -50,7 +57,13 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const path = requirePathParam(request);
     const ctx = buildKnowledgeContext(auth);
     const entry = await readFileByPath(ctx, baseId, path);
-    return NextResponse.json({ entry });
+    // ⚠ **ABSENT BOTH ARGUMENTS, THE RESPONSE IS BYTE-FOR-BYTE WHAT IT ALWAYS
+    // WAS.** The web app, the CLI and every older client read `{ entry }`, and
+    // a key they do not know about must not appear on the call they already
+    // make — `outline` and `section` are additive and opt-in (INVARIANTS §8).
+    const section = request.nextUrl.searchParams.get("section") ?? undefined;
+    const outline = request.nextUrl.searchParams.get("outline") === "1";
+    return NextResponse.json(projectFile(entry, { section, outline }));
   } catch (err) {
     return toKnowledgeErrorResponse(err);
   }
@@ -63,13 +76,22 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildKnowledgeContext(auth);
     // Precondition on the resolved entry's updated_at. Mismatch → 412 KNOWLEDGE_STALE_VERSION.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
-    const { entry } = await writeFileByPath(ctx, baseId, input.path, {
+    const { entry, sectionCreated } = await writeFileByPath(ctx, baseId, input.path, {
       body: input.body,
       title: input.title,
       excerpt: input.excerpt,
+      section: input.section,
       expectedUpdatedAt,
     });
-    return NextResponse.json({ entry });
+    // ⚠ THE OUTLINE OF WHAT WAS SAVED, ON EVERY WRITE. It is what lets the
+    // agent surface answer "and here is how to read this back in parts" without
+    // a second call, and what lets it notice an entry that grew past
+    // `KB_SECTION_NUDGE_CHARS` with no headings at all.
+    return NextResponse.json({
+      entry,
+      outline: outlinePayload(entry.body ?? ""),
+      ...(sectionCreated === undefined ? {} : { sectionCreated }),
+    });
   } catch (err) {
     return toKnowledgeErrorResponse(err);
   }

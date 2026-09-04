@@ -15,6 +15,7 @@ exports.setKbBasePinned = setKbBasePinned;
 exports.setKbEntryPinned = setKbEntryPinned;
 exports.getKbStartupContext = getKbStartupContext;
 exports.readKbFileByPath = readKbFileByPath;
+exports.readKbFilePart = readKbFilePart;
 exports.writeKbFileByPath = writeKbFileByPath;
 exports.listKbDirByPath = listKbDirByPath;
 exports.createKbFolderByPath = createKbFolderByPath;
@@ -111,6 +112,22 @@ async function getKbStartupContext(t) {
 async function readKbFileByPath(t, baseId, path) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/files?path=${enc(path)}`, { toolName: "kb_read_file" });
     return data.entry;
+}
+/**
+ * A PART of an entry: one `section=`, or the outline alone.
+ *
+ * ⚠ **A SEPARATE METHOD RATHER THAN AN OPTION ON {@link readKbFileByPath}**,
+ * because the two answer different shapes and the whole-document read is on
+ * every existing caller's path. ⚠ **THE NARROWING IS A QUERY PARAMETER, NOT A
+ * POST-FILTER**: the body that did not match never crosses the wire.
+ */
+async function readKbFilePart(t, baseId, path, opts = {}) {
+    const params = new URLSearchParams({ path });
+    if (opts.section !== undefined)
+        params.set("section", opts.section);
+    if (opts.outline)
+        params.set("outline", "1");
+    return t.request(`/api/knowledge/bases/${enc(baseId)}/files?${params.toString()}`, { toolName: "kb_read_file" });
 }
 async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
     // Optimistic concurrency, tri-state on `expectedVersion`:
