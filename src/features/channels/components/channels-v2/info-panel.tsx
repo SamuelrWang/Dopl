@@ -16,7 +16,7 @@
  * rehomed out of it** — there was nothing in it.
  *
  * ⚠ THE COLUMN IS THREAD-SCOPED WHILE A THREAD IS OPEN (Samuel, 2026-08-21).
- * THREE things change and nothing else does: THREADS leaves the row (`tabsFor` —
+ * THREE things change and nothing else does: THREADS leaves the row (`channelPaneTabs` —
  * it is the one control here that navigates away from what the reader is looking
  * at), INFO renders the THREAD's facts instead of the channel's
  * (`thread-info-tab.tsx`), and SETTINGS becomes the THREAD's — mode and delete
@@ -64,7 +64,7 @@ const TABS = [
   { key: "settings", label: "Settings" },
 ] as const;
 
-type TabKey = (typeof TABS)[number]["key"];
+export type TabKey = (typeof TABS)[number]["key"];
 
 /**
  * THE ROW IS SHORTER IN THREAD VIEW (Samuel, 2026-08-21).
@@ -87,7 +87,7 @@ type TabKey = (typeof TABS)[number]["key"];
  * is as true inside one exchange as outside it, and the tab is the one place
  * the guest can read what was shared with them.
  */
-function tabsFor(
+export function channelPaneTabs(
   threadView: boolean,
   knowledge: boolean
 ): ReadonlyArray<(typeof TABS)[number]> {
@@ -164,6 +164,7 @@ export function ChannelsV2InfoPanel({
   onOpenMention,
   onMarkAllMentionsRead,
   knowledge = false,
+  fullTab,
   infoTab,
   settings,
 }: {
@@ -225,12 +226,25 @@ export function ChannelsV2InfoPanel({
   onMarkAllMentionsRead: () => void;
   /**
    * Draw the KNOWLEDGE tab (`ChannelSurfaceCapabilities.knowledge`). Default
-   * `false` — see {@link tabsFor} for why this one capability defaults CLOSED
+   * `false` — see {@link channelPaneTabs} for why this one capability defaults CLOSED
    * where the column's others default to the workspace page's behaviour.
    * ⚠ The tab's reads mount with the tab, so `false` is not just a hidden
    * control: nothing is requested at all.
    */
   knowledge?: boolean;
+  /**
+   * SINGLE-COLUMN MODE (Samuel, 2026-09-04 — the WEB channel page). Render ONE
+   * tab's body as the main area, full width, with NO tab row: the face is chosen
+   * by the header's dropdown instead (`channel-single-column.tsx`).
+   *
+   * ⚠ THE BODY IS THE SAME BODY. This is a layout answer, not a second surface:
+   * `Info` is still `info-tab.tsx`, `Agents` still the desktop's agent cards. A
+   * fork here is how the phone and the desktop come to disagree about what a
+   * channel's Info tab says.
+   *
+   * ⚠ ABSENT IS THE COLUMN — the two-pane surface every desktop mount renders.
+   */
+  fullTab?: TabKey;
   /**
    * REPLACES the INFO tab's body in channel view — an account-level 1:1 shows a
    * person card where a workspace channel shows `info-tab.tsx`. Absent is the
@@ -258,7 +272,7 @@ export function ChannelsV2InfoPanel({
   const [tab, setTab] = useState<TabKey>("info");
   const openThreadId = openThread?.id ?? null;
   const threadView = openThread !== null;
-  const options = tabsFor(threadView, knowledge);
+  const options = channelPaneTabs(threadView, knowledge);
 
   // ⚠ THE DEAD-SELECTION FALLBACK. Opening a thread while the Threads tab is
   // showing removes the very tab that is selected, and a `value` matching no
@@ -298,65 +312,10 @@ export function ChannelsV2InfoPanel({
           openThreadId
         );
 
-  return (
-    <aside
-      aria-label="Channel info"
-      className="flex w-[380px] shrink-0 flex-col border-l border-border-default"
-    >
-      {/* ⚠ A FIFTH TAB IS OVER THE ROW'S WIDTH BUDGET, AND THE BUDGET IS A
-          MEASUREMENT, NOT A TASTE (Home Knowledge Panels M4). `SegmentedControl`'s
-          trackless `lg` form takes its 12px side pad BECAUSE the four options with
-          two count badges overflowed 15px at the 340px this column then was
-          (docs/DESIGN-SYSTEM.md, 2026-08-25); the column is 380px now, so the four
-          leave roughly 55px spare and "Knowledge" wants ~90. Two things are done
-          about it and neither touches the shared primitive: the row TIGHTENS
-          (`gap-1`, and the header drops to `px-2`) only while the fifth tab is
-          present, and whatever remains SCROLLS rather than clipping — a tab pushed
-          past the edge with no way to reach it is the failure, a 6px discreet bar
-          is not.
-          ⚠ RULED 2026-08-27 (F-340, Samuel): the DESKTOP host stopped passing the
-          capability, so /home is back to FOUR tabs and none of this engages there.
-          **It still engages on the GUEST lane**, which keeps the tab because it is a
-          guest's only way to read a base granted into the channel — so the tightening
-          and the scroll stay, and this comment with them.
-          ⚠ AND DO NOT "FIX" THE GUEST ROW BY SHORTENING THE LABEL: "Knowledge" is what
-          the product calls the thing on every other surface, and a tab named something
-          else to fit is a worse answer than a tab that scrolls. */}
-      <div
-        className={cn(
-          "flex h-[56px] shrink-0 items-center border-b border-border-default",
-          options.length > 4 ? "px-2" : "px-3"
-        )}
-      >
-        <SegmentedControl
-          options={options.map((t) => ({
-            ...t,
-            count: tabCount(t.key, threads, agentCount),
-          }))}
-          value={activeTab}
-          onChange={setTab}
-          // ⚠ THE 36px CONTROL SCALE (Samuel, 2026-08-25) — the same height as the page
-          // header's buttons, so a switcher does not read as a smaller class of control than
-          // the things beside it.
-          size="lg"
-          // Layout only, which is all `className` may carry here (the primitive's
-          // own contract). See the width-budget note above.
-          className={cn(
-            "min-w-0 flex-1 overflow-x-auto",
-            options.length > 4 && "gap-1"
-          )}
-        />
-      </div>
-
-      {/* THE TAB BODY SWAPS, THE TABS DO NOT MOVE (Samuel, 2026-08-24) — the
-          same gesture as /home's record pane, so it is the same primitive.
-          ⚠ RENDERED FROM `shown`, NOT `activeTab`: `Crossfade` hands back the
-          tab that is still on screen for one fade, and reading `activeTab` here
-          would swap the content out from under it and fade in what is already
-          there. A count ticking on the OPEN tab passes through unfaded — only a
-          tab change is a swap. */}
-      <Crossfade token={activeTab} className="flex min-h-0 flex-1 flex-col">
-        {(shown) =>
+  /** THE TAB BODIES — one definition, rendered by both layouts below. */
+  // ⚠ `string`, not `TabKey` — `Crossfade` hands back the token ON SCREEN and
+  // types it as the plain string it stores; every branch below is a comparison.
+  const body = (shown: string) =>
           shown === "info" ? (
             openThread ? (
               <ThreadInfoTab
@@ -422,8 +381,84 @@ export function ChannelsV2InfoPanel({
             />
           ) : (
             settings
-          )
-        }
+          );
+
+  /* ⚠ SINGLE COLUMN — THE WEB CHANNEL PAGE (Samuel, 2026-09-04). One face, full
+     width, and the tab row is NOT drawn: the header's dropdown is the switcher,
+     so a second one under it would be two controls for one choice. `Crossfade`
+     stays — the swap is the same gesture at a different width. */
+  if (fullTab) {
+    return (
+      <section
+        aria-label="Channel info"
+        className="flex min-w-0 flex-1 flex-col"
+      >
+        <Crossfade token={fullTab} className="flex min-h-0 flex-1 flex-col">
+          {body}
+        </Crossfade>
+      </section>
+    );
+  }
+
+  return (
+    <aside
+      aria-label="Channel info"
+      className="flex w-[380px] shrink-0 flex-col border-l border-border-default"
+    >
+      {/* ⚠ A FIFTH TAB IS OVER THE ROW'S WIDTH BUDGET, AND THE BUDGET IS A
+          MEASUREMENT, NOT A TASTE (Home Knowledge Panels M4). `SegmentedControl`'s
+          trackless `lg` form takes its 12px side pad BECAUSE the four options with
+          two count badges overflowed 15px at the 340px this column then was
+          (docs/DESIGN-SYSTEM.md, 2026-08-25); the column is 380px now, so the four
+          leave roughly 55px spare and "Knowledge" wants ~90. Two things are done
+          about it and neither touches the shared primitive: the row TIGHTENS
+          (`gap-1`, and the header drops to `px-2`) only while the fifth tab is
+          present, and whatever remains SCROLLS rather than clipping — a tab pushed
+          past the edge with no way to reach it is the failure, a 6px discreet bar
+          is not.
+          ⚠ RULED 2026-08-27 (F-340, Samuel): the DESKTOP host stopped passing the
+          capability, so /home is back to FOUR tabs and none of this engages there.
+          **It still engages on the GUEST lane**, which keeps the tab because it is a
+          guest's only way to read a base granted into the channel — so the tightening
+          and the scroll stay, and this comment with them.
+          ⚠ AND DO NOT "FIX" THE GUEST ROW BY SHORTENING THE LABEL: "Knowledge" is what
+          the product calls the thing on every other surface, and a tab named something
+          else to fit is a worse answer than a tab that scrolls. */}
+      <div
+        className={cn(
+          "flex h-[56px] shrink-0 items-center border-b border-border-default",
+          options.length > 4 ? "px-2" : "px-3"
+        )}
+      >
+        <SegmentedControl
+          options={options.map((t) => ({
+            ...t,
+            count: tabCount(t.key, threads, agentCount),
+          }))}
+          value={activeTab}
+          onChange={setTab}
+          // ⚠ THE 36px CONTROL SCALE (Samuel, 2026-08-25) — the same height as the page
+          // header's buttons, so a switcher does not read as a smaller class of control than
+          // the things beside it.
+          size="lg"
+          // Layout only, which is all `className` may carry here (the primitive's
+          // own contract). See the width-budget note above.
+          className={cn(
+            "min-w-0 flex-1 overflow-x-auto",
+            options.length > 4 && "gap-1"
+          )}
+        />
+      </div>
+
+      {/* THE TAB BODY SWAPS, THE TABS DO NOT MOVE (Samuel, 2026-08-24) — the
+          same gesture as /home's record pane, so it is the same primitive.
+          ⚠ RENDERED FROM `shown`, NOT `activeTab`: `Crossfade` hands back the
+          tab that is still on screen for one fade, and reading `activeTab` here
+          would swap the content out from under it and fade in what is already
+          there. A count ticking on the OPEN tab passes through unfaded — only a
+          tab change is a swap. */}
+      <Crossfade token={activeTab} className="flex min-h-0 flex-1 flex-col">
+        {body}
       </Crossfade>
     </aside>
   );

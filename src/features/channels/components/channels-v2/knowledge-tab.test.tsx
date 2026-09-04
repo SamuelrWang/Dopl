@@ -447,8 +447,18 @@ describe("the capability, per host", () => {
   const codeOf = (rel: string): string =>
     stripComments(readFileSync(join(ROOT, rel), "utf8"));
 
-  it("the GUEST lane passes `knowledge: true` — it is the guest's only surface", () => {
-    expect(codeOf("src/app/c/[workspaceId]/guest-channel.tsx")).toMatch(/knowledge:\s*true/);
+  /**
+   * 🔒 **NO HOST PASSES IT ANY MORE (Samuel, 2026-09-04).** The guest lane was the LAST one, on
+   * the F-340 argument that the tab is a guest's only way to read a base granted into the
+   * channel. The web channel page's ruling overrides it in as many words: *"There should be no
+   * Knowledge tab at all for the web: just Info, Threads, and Agents."* The lane
+   * (`knowledge-lane.ts`) and this tab component are untouched and still guest-floored — what is
+   * gone is the FACE, on the one host that drew it. **Re-adding it needs Samuel's word.**
+   */
+  it("the GUEST lane does NOT pass it (Samuel, 2026-09-04 — the web dropdown)", () => {
+    expect(codeOf("src/app/c/[workspaceId]/guest-channel.tsx")).not.toMatch(
+      /knowledge:\s*true/
+    );
   });
 
   it("the /home record pane does NOT (Samuel, 2026-08-27 — F-340)", () => {

@@ -99,21 +99,39 @@ describe("the mount", () => {
    * two-person roster; `selfManagement` is rulings R2/R3 (2026-08-25) — a guest
    * runs no agent, and leaving is a one-way exit from their only Dopl surface.
    *
-   * ⚠ AND `knowledge: true` IS THE ONE THAT OPENS SOMETHING (M4, 2026-08-26).
-   * It draws the Knowledge tab — the bases the operator granted INTO this
-   * channel — and it is safe here for a reason that is not "it is only a tab":
-   * every read behind it is on the guest-floored channel lane, which
-   * `channels-v2/guest-surface-reads.test.tsx` pins against the routes
-   * themselves. This assertion is where the guest's whole capability posture is
-   * stated in one place, so an ADDITION lands here as loudly as a removal.
+   * ⚠ `knowledge: true` STOOD HERE FROM M4 (2026-08-26) AND IS GONE (Samuel,
+   * 2026-09-04). It drew the Knowledge tab — the bases the operator granted INTO
+   * this channel — and the argument for it was that this tab is a guest's only
+   * way to read one. The web channel page's ruling overrides that in as many
+   * words: *"There should be no Knowledge tab at all for the web: just Info,
+   * Threads, and Agents."* ⚠ THE LANE IS UNTOUCHED and still guest-floored
+   * (`channels-v2/guest-surface-reads.test.tsx` pins it against the routes
+   * themselves); what is gone is the FACE. This assertion is where the guest's
+   * whole capability posture is stated in one place, so an ADDITION lands here
+   * as loudly as a removal — including a re-addition of that flag.
    */
-  it("states the guest's whole capability posture — two off, knowledge on", async () => {
+  it("states the guest's whole capability posture — two off, nothing on", async () => {
     await mount();
     expect(mocks.surfaceProps?.capabilities).toEqual({
       memberManagement: false,
       selfManagement: false,
-      knowledge: true,
     });
+  });
+
+  /**
+   * 🔒 **THE ONE-COLUMN LAYOUT IS THE HOST'S DECISION (Samuel, 2026-09-04).** The
+   * surface renders two columns without it, which is the desktop app's shape and
+   * the wrong one on a phone. ⚠ The STATE is asserted here, not the rendering:
+   * this page is the only place that owns it, and a host that stopped passing it
+   * would ship the slide-out pane back to the web with nothing failing.
+   */
+  it("hands the surface the web's view state — one column, faces in the URL", async () => {
+    await mount();
+    const webView = mocks.surfaceProps?.webView as
+      | { view: string; setView: unknown }
+      | undefined;
+    expect(webView?.view).toBe("channel");
+    expect(typeof webView?.setView).toBe("function");
   });
 
   it("passes NO `role` — the least-privilege default is the narrowing", async () => {
