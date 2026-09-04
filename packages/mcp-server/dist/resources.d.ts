@@ -1,6 +1,6 @@
 /**
- * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. One today: the
- * channels doctrine.
+ * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. Two: the channels
+ * doctrine, and the knowledge one.
  *
  * ⚠ WHY A RESOURCE AND NOT A LONGER DESCRIPTION (T10/T82, 2026-09-02). A tool
  * description is PUSHED — every connected client pays for it on every

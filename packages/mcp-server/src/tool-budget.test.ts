@@ -339,7 +339,7 @@ const INSTRUCTIONS_CEILING = 1_801; // ⚠ **UNMOVED ON 2026-09-03, AND THAT IS 
 // ⚠ **32,551 → 8,960 (B8), THE LARGEST SINGLE FALL HERE.** The doctrine was
 // where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
 // narrative, 3,914 on a hold that is now a knob on `read`.
-const DOCTRINE_CEILING = 9_446; // ⚠ **8,960 → 9,446 (2026-09-03): A RISE, RECORDED HERE BECAUSE THIS IS THE GATE THAT WOULD OTHERWISE ABSORB IT.** ~490 pulled once against ~1,400 pushed per empty hold — `channel-doctrine-budget.test.ts` states the trade in full.
+const DOCTRINE_CEILING = 9_923; // ⚠ **9,446 → 9,923 (2026-09-03, +477): A SECOND RESOURCE, `dopl://doctrine/knowledge`, AND THE WHOLE OF IT IS THE RISE.** It is 477 characters against the channels doctrine's ~9,000, because a knowledge base has a filesystem where a channel has a protocol — what no argument could carry is the ORDER (excerpt → outline → section → body) and the write duty that makes the order possible. ⚠ **THE PUSHED SIDE ROSE IN THE SAME WAVE (`SERVED_TOTAL_CEILING` +618), SO THIS IS NOT A LAUNDERING** — the routing sentence is deliberately in BOTH, because several clients read no resources at all, and the saving is on neither ledger: it is per READ. `knowledge-doctrine-budget.test.ts` bounds this document on its own so the cheap one cannot become where evicted paragraphs land. ⚠ **8,960 → 9,446 (2026-09-03): A RISE, RECORDED HERE BECAUSE THIS IS THE GATE THAT WOULD OTHERWISE ABSORB IT.** ~490 pulled once against ~1,400 pushed per empty hold — `channel-doctrine-budget.test.ts` states the trade in full.
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",

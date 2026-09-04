@@ -1,6 +1,6 @@
 /**
- * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. One today: the
- * channels doctrine.
+ * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. Two: the channels
+ * doctrine, and the knowledge one.
  *
  * ⚠ WHY A RESOURCE AND NOT A LONGER DESCRIPTION (T10/T82, 2026-09-02). A tool
  * description is PUSHED — every connected client pays for it on every
@@ -25,6 +25,10 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./tools/channel-doctrine.js";
+import {
+  KNOWLEDGE_DOCTRINE,
+  KNOWLEDGE_DOCTRINE_URI,
+} from "./tools/knowledge-doctrine.js";
 
 /**
  * Publish every resource onto a session's server. ⚠ Called from
@@ -47,6 +51,31 @@ export function registerResources(server: McpServer): void {
           uri: uri.href,
           mimeType: "text/markdown",
           text: CHANNEL_DOCTRINE,
+        },
+      ],
+    }),
+  );
+
+  // ⚠ **500 CHARACTERS AGAINST ~9,000, AND THE ASYMMETRY IS THE ARGUMENT.** A
+  // channel has a protocol, a lifecycle and an etiquette; a knowledge base has
+  // a filesystem, and `dopl_kb`'s arguments already describe it. What no
+  // argument can carry is the ORDER to read in and the duty that makes the
+  // order possible — see `knowledge-doctrine.ts`.
+  server.registerResource(
+    "knowledge-doctrine",
+    KNOWLEDGE_DOCTRINE_URI,
+    {
+      title: "Dopl knowledge — sections",
+      description:
+        "How to spend fewer characters on a knowledge entry: the read order (excerpt → outline → section → body) and the write duty that makes it possible (## headings, one topic each).",
+      mimeType: "text/markdown",
+    },
+    (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/markdown",
+          text: KNOWLEDGE_DOCTRINE,
         },
       ],
     }),
