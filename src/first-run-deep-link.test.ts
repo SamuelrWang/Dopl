@@ -41,13 +41,21 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("next/headers", () => ({ cookies: async () => ({}) }));
+// `vi.hoisted`: `vi.mock` factories run at IMPORT time, ahead of ordinary top-level consts.
+const supabaseStub = vi.hoisted(() => () => ({
+  auth: {
+    exchangeCodeForSession: async () => ({
+      data: { session: { access_token: "at-1", refresh_token: "rt-1", expires_in: 3600 } },
+      error: null,
+    }),
+    getUser: async () => ({ data: { user: { id: "user-1" } } }),
+  },
+}));
 vi.mock("@/shared/supabase/admin", () => ({
-  createServerSupabaseClient: () => ({
-    auth: {
-      exchangeCodeForSession: async () => ({ error: null }),
-      getUser: async () => ({ data: { user: { id: "user-1" } } }),
-    },
-  }),
+  createServerSupabaseClient: supabaseStub,
+  // The desktop leg exchanges with a client that writes NO cookie (2026-09-04 — one
+  // refresh-token family, one holder). Same stub: this walk is about DESTINATIONS.
+  createDesktopHandoffSupabaseClient: supabaseStub,
 }));
 vi.mock("@/features/analytics/server/conversion-events", () => ({
   logConversionEvent: vi.fn(async () => {}),
