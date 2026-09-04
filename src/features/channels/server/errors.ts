@@ -47,7 +47,10 @@ export class ChannelAddresseeNotMemberError extends ChannelError {
 // SPLIT, 2026-09-02) AND IS RE-EXPORTED HERE**, because this file was AT the
 // 500-line cap. `errors.ts` stays the ONE import path for every channel error —
 // same arrangement `types.ts` has with `types-delivery.ts`.
-export { ChannelRecipientUnresolvedError } from "./errors-recipient";
+export {
+  ChannelAgentHandleAmbiguousError,
+  ChannelRecipientUnresolvedError,
+} from "./errors-recipient";
 
 /** Would leave the channel with no owner — transfer ownership first. */
 export class ChannelLastOwnerError extends ChannelError {

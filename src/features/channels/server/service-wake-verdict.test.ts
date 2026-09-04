@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SESSION_PROJECTION_FRESH_MS } from "../constants";
-import type { SessionStateRow } from "./collab-dto";
-import { ownLiveAgentIds, resolveWakeVerdict } from "./service-wake-verdict";
-import type { ChannelContext } from "./service-shared";
-import type { ChannelRow, ChannelMessageRow } from "./dto";
+import { ownLiveAgentIds } from "./service-wake-verdict";
 
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 
-import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
+import {
+  CTX,
+  NOW,
+  lastAddress,
+  projection,
+  resolve,
+  roomProjection,
+  sessionRow,
+} from "./service-wake-verdict-harness";
 
 /**
  * **THE SERVER'S OWN ANSWER TO "WHO IS THIS FOR, AND DID IT WAKE ANYBODY"**
@@ -20,105 +25,11 @@ import * as repoSessions from "./repository-sessions";
  * and `"none"` (addresses nobody) are three different answers, and collapsing
  * any two of them either silences an agent the desktop can see or reports a
  * delivery that never happened.
+ *
+ * ⚠ **THE HANDLE DOOR'S OWN SUITE IS `service-wake-verdict-handles.test.ts`** —
+ * whose agent a handle may name, and what an ambiguous one does. This file is
+ * PRECEDENCE: which door wins, and what the outcome is called.
  */
-
-const NOW = Date.parse("2026-09-02T12:00:00Z");
-const CTX: ChannelContext = {
-  userId: "user-1",
-  workspaceId: "ws-1",
-} as ChannelContext;
-
-function sessionRow(over: Partial<SessionStateRow>): SessionStateRow {
-  return {
-    id: "s-1",
-    channel_id: "chan-1",
-    workspace_id: "ws-1",
-    user_id: "user-1",
-    session_key: "chan-1:task-1:k3v7d2mq",
-    task_id: null,
-    name: "k3v7d2mq",
-    state: "working",
-    channel_name: null,
-    thread_title: null,
-    created_at: new Date(NOW).toISOString(),
-    updated_at: new Date(NOW - 1_000).toISOString(),
-    detail: null,
-    tool_label: null,
-    model: null,
-    context_used: null,
-    context_window: null,
-    tokens_spent: null,
-    started_at: null,
-    last_activity_at: null,
-    display_name: null,
-    template_name: null,
-    turns: null,
-    tokens_delta: null,
-    stale: null,
-    denied_calls: null,
-    last_denied_tool: null,
-    last_wake_seq: null,
-    last_wake_at: null,
-    ...over,
-  } as SessionStateRow;
-}
-
-/** The CALLER'S OWN live sessions — the own-scoped door the body parse reads. */
-function projection(...rows: SessionStateRow[]): void {
-  vi.mocked(repoSessions.listSessionStates).mockResolvedValue(rows);
-}
-
-/** EVERY member's sessions in the room — RR3's candidate set. ⚠ A DIFFERENT
- *  read from {@link projection}, and asserting on the wrong one is how the
- *  same-account carve would appear to hold while being widened. */
-function roomProjection(...rows: SessionStateRow[]): void {
-  vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(rows);
-}
-
-/** RR2's one read — the last main-room row addressed to this agent. */
-function lastAddress(row: Partial<ChannelMessageRow> | null): void {
-  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(
-    row === null ? null : ({ seq: 7, author_user_id: "user-2", ...row } as ChannelMessageRow)
-  );
-}
-
-function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
-  return { id: "chan-1", workspace_id: "ws-1", ...over } as ChannelRow;
-}
-
-interface ResolveOpts {
-  kind?: "message" | "task_progress";
-  authorKind?: string;
-  toAgentId?: string | null;
-  threadTagStripped?: boolean;
-  clientMsgId?: string;
-  channel?: Partial<ChannelRow>;
-}
-
-/** One post, resolved. `metadata` is the fold's OUTPUT, which is what the
- *  resolver reads — never the caller's raw input. */
-function resolve(
-  body: string,
-  metadata: Record<string, unknown> = {},
-  opts: ResolveOpts = {}
-) {
-  return resolveWakeVerdict(
-    CTX,
-    channelRow(opts.channel),
-    {
-      body,
-      kind: opts.kind ?? "message",
-      clientMsgId: opts.clientMsgId,
-    } as Parameters<typeof resolveWakeVerdict>[2],
-    metadata,
-    {
-      authorKind: opts.authorKind ?? "user",
-      toAgentId: opts.toAgentId ?? null,
-      threadTagStripped: opts.threadTagStripped,
-    },
-    NOW
-  );
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -265,17 +176,6 @@ describe("resolveWakeVerdict — the recipient", () => {
     ]);
   });
 
-  it("fails CLOSED on an ambiguous slug — two agents, one name, neither resolves", async () => {
-    projection(
-      sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
-      sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" })
-    );
-    // ⚠ NOT `[]`: the tokens are real and this server cannot say who they mean,
-    // so the machine — which can — is left to decide.
-    const out = await resolve("@bot go");
-    expect(out.recipientAgentIds).toBeNull();
-    expect(out.delivery).toBe("unreachable");
-  });
 
   it("prefers the AGENT over the member when a post does both", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));
@@ -353,6 +253,9 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
     // check would be invisible in every other case here.
     await resolve("plain words", { to_user_id: "user-2" });
     expect(vi.mocked(repoSessions.listSessionStates)).not.toHaveBeenCalled();
+    expect(
+      vi.mocked(repoSessions.listChannelSessionStates)
+    ).not.toHaveBeenCalled();
   });
 
   it("does not resolve agents for a non-`message` kind", async () => {
@@ -362,6 +265,9 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
     // filter), so resolving one here would promise a wake that cannot happen.
     expect(out.recipientAgentIds).toBeNull();
     expect(vi.mocked(repoSessions.listSessionStates)).not.toHaveBeenCalled();
+    expect(
+      vi.mocked(repoSessions.listChannelSessionStates)
+    ).not.toHaveBeenCalled();
   });
 
   it("a non-`message` kind is NOT `unreachable` — it never asked the agent half", async () => {
@@ -393,13 +299,22 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
     expect(out.delivery).toBe("unreachable");
   });
 
-  it("scopes the projection read to the caller and this channel", async () => {
+  it("scopes an AGENT author's projection read to the caller and this channel", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));
-    await resolve("@agent-k3v7d2mq go");
+    await resolve("@agent-k3v7d2mq go", { session_id: "chan-1::a1b2c3d4" }, {
+      authorKind: "agent",
+    });
     expect(vi.mocked(repoSessions.listSessionStates).mock.calls).toEqual([
       ["user-1", "ws-1", "chan-1"],
     ]);
+    // 🔒 THE CARVE, AS AN ASSERTION ON THE READ ITSELF. An agent author must
+    // never reach the channel-wide door — that is the one path Samuel's
+    // same-account carve closes, and it is closed by which function is called.
+    expect(
+      vi.mocked(repoSessions.listChannelSessionStates)
+    ).not.toHaveBeenCalled();
   });
+
 
   it("does not resolve the escalation-answer door — that agent is not the author's", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));

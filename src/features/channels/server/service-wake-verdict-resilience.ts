@@ -39,15 +39,18 @@ import type { ChannelContext } from "./service-shared";
  * the LIST a `delivery=none` reports.
  *
  * ⚠ **CHANNEL-WIDE, AND THAT IS NOT THE CROSS-ACCOUNT WAKE THE CARVE FORBIDS.**
- * It is reached ONLY from RR3, whose gate is that a PERSON wrote the message —
- * and an unaddressed human post already reaches every machine's agents in the
- * room today, each machine feeding its own. The carve is about what an
- * AGENT-authored message may start, and no path from an agent author reaches
- * this function. ⚠ The two agent doors an agent author CAN take are both
- * own-scoped by construction: {@link resolveAgentRecipients} (the body parse)
- * and `service-writes-metadata-recipient.ts › liveAgentHandles` (the `to=`
- * resolver). There is deliberately no `authorKind` test inside this function; a
- * second spelling of the fence is what the desktop's three-module version cost.
+ * Both its callers are gated on a PERSON having written the message — RR3, and
+ * (since 2026-09-04) `service-wake-verdict.ts › resolveAgentRecipients`'s human
+ * arm. An unaddressed human post already reaches every machine's agents in the
+ * room today, each machine feeding its own; a human post that TYPED a handle is
+ * asking for strictly less than that. The carve is about what an AGENT-authored
+ * message may start, and no path from an agent author reaches this function: the
+ * two doors an agent author CAN take stay own-scoped by construction
+ * (`resolveAgentRecipients`'s agent arm, and
+ * `service-writes-metadata-recipient.ts › liveAgentHandles` for `to=`).
+ * ⚠ There is deliberately no `authorKind` test INSIDE this function; a second
+ * spelling of the fence is what the desktop's three-module version cost. The
+ * gate lives at each call site, where the credential is already in hand.
  *
  * ⚠ FRESH ONLY, on {@link isFresh}'s asymmetric rule: a fresh row is evidence
  * enough to WAKE, a stale one is not evidence of absence. Here dropping a stale

@@ -3,6 +3,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   ChannelAddresseeNotMemberError,
+  ChannelAgentHandleAmbiguousError,
   ChannelChatAddressedError,
   ChannelRecipientUnresolvedError,
   ChannelForbiddenError,
@@ -66,6 +67,13 @@ function mapChannelError(err: unknown): HttpError | null {
   // `delivery=none`. The message carries the live handles and the roster, which
   // is what the MCP side renders (`channel-errors.ts`).
   if (err instanceof ChannelRecipientUnresolvedError) {
+    return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
+  }
+  // ⚠ THE SAME CODE, DELIBERATELY. An ambiguous `@<name>` and a `to=` that
+  // named nobody are one fact to the caller — nothing was written and the
+  // address needs fixing — and the error's own message carries the candidates
+  // that tell the two apart. A second code buys a client nothing.
+  if (err instanceof ChannelAgentHandleAmbiguousError) {
     return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
   }
   if (err instanceof ChannelTaskNotInChannelError) {

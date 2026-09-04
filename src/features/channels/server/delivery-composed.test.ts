@@ -191,16 +191,33 @@ async function post(
   return { verdict, desktop };
 }
 
+/**
+ * THE ROOM'S LIVE SESSIONS — seeded into BOTH projection reads.
+ *
+ * ⚠ **ONE TABLE, TWO FENCES, AND A FIXTURE THAT SEEDS ONLY ONE DESCRIBES A
+ * DATABASE THAT CANNOT EXIST.** `listSessionStates` is the caller's own rows and
+ * `listChannelSessionStates` is the room's; the first is a subset of the second.
+ * Since 2026-09-04 a HUMAN's body parse reads the channel-wide door and an
+ * AGENT's reads the own-scoped one, so a fixture that seeded only the own read
+ * would leave every human case here resolving against an empty index.
+ * ⚠ A case that needs the two to DIVERGE — a PEER's agent — sets
+ * `listChannelSessionStates` on its own, after this.
+ */
+function liveHere(rows: SessionStateRow[]): void {
+  vi.mocked(repoSessions.listSessionStates).mockResolvedValue(rows);
+  vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(rows);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
+  liveHere([]);
   vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([]);
   vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
 });
 
 describe("the server decides, the machine executes", () => {
   it("a resolved `@agent-<id>` wakes exactly that agent, and only it", async () => {
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([
+    liveHere([
       sessionRow(A1),
       sessionRow(A2),
     ]);
@@ -217,7 +234,7 @@ describe("the server decides, the machine executes", () => {
   });
 
   it("a resolved SLUG reaches the renamed agent — one handle rule, two trees", async () => {
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([
+    liveHere([
       sessionRow(A1, "Research Bot"),
     ]);
     const { verdict, desktop } = await post("@research-bot go", [agent(A1)]);
@@ -230,7 +247,7 @@ describe("the server decides, the machine executes", () => {
     // nobody by design (it is a MEMBER tag, not an agent one), so `[]` is a complete answer.
     // A machine reading it with `||` would fall through to its own parse and could wake an
     // agent the server said nothing about.
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([sessionRow(A1)]);
+    liveHere([sessionRow(A1)]);
     const { verdict, desktop } = await post("morning all", [agent(A1)]);
     expect(verdict.recipientAgentIds).toEqual([]);
     // ⚠ THE VERDICT IS `thread` — a threaded post naming nobody reaches the sessions already
@@ -312,7 +329,7 @@ describe("the server decides, the machine executes", () => {
   });
 
   it("a dormant agent nobody named is fed nothing, and the machine says so", async () => {
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([
+    liveHere([
       sessionRow(A1),
       sessionRow(A2),
     ]);
@@ -334,7 +351,7 @@ describe("the server decides, the machine executes", () => {
     // sessions were fed; this one says the same thing about the shape of the change — a desktop
     // that widened `planFor` back toward the fan-out (dropping the `!named && !plan.context`
     // skip, say) feeds A2 here and every narrowed case above goes red with it.
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([sessionRow(A1), sessionRow(A2)]);
+    liveHere([sessionRow(A1), sessionRow(A2)]);
     const { desktop } = await post(`@agent-${A1} only you`, [agent(A1), agent(A2)]);
     expect(desktop.fed.map((f) => f.agentId)).not.toContain(A2);
     expect(desktop.acked.map((a) => a[5])).toEqual([`${CHAN}::${A1}`]);
@@ -343,7 +360,7 @@ describe("the server decides, the machine executes", () => {
 
 describe("the receipt says what the machine actually did", () => {
   it("reports `woken` for a wake, against the seq the server stored", async () => {
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([sessionRow(A1)]);
+    liveHere([sessionRow(A1)]);
     const { desktop } = await post(`@agent-${A1} go`, [
       agent(A1, { awaitingDirective: true }),
     ]);
@@ -356,13 +373,13 @@ describe("the receipt says what the machine actually did", () => {
   it("reports `delivered` when the named agent was ALREADY running", async () => {
     // ⚠ A different fact from `woken`, and an orchestrator acts on it differently: nothing was
     // started, the turn is queued behind whatever that agent is doing.
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([sessionRow(A1)]);
+    liveHere([sessionRow(A1)]);
     const { desktop } = await post(`@agent-${A1} go`, [agent(A1)]);
     expect(desktop.acked[0][3]).toBe("delivered");
   });
 
   it("reports `idle` for a thread post that reached running sessions and named none", async () => {
-    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([sessionRow(A1)]);
+    liveHere([sessionRow(A1)]);
     const { desktop } = await post("status?", [agent(A1), agent(A2)]);
     // ⚠ ONE RECEIPT PER FED SESSION SINCE B9, each carrying that session's own outcome; the
     // BUFFER collapses them to one per (operator, channel, seq) and only ever strengthens.
