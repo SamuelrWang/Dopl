@@ -126,6 +126,10 @@ export function agentDisplayName(session: {
  * is no longer where it lives.**
  */
 export { parseAgentPostStamp } from "../../lib/agent-post-stamp";
+/** ⚠ AND ITS COMPANION, RE-EXPORTED THROUGH THE SAME DOOR (2026-09-04). A post that carried its
+ *  own `client_msg_id` has NO stamp, and this reads the server's `metadata.session_id` instead —
+ *  see `lib/agent-post-stamp.ts › authorAgentIdOf` for why that is the stronger fact. */
+export { authorAgentIdOf } from "../../lib/agent-post-stamp";
 
 /**
  * THE STABLE IDENTITY OF ONE AGENT, and the id the open-agent state holds.

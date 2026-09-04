@@ -22,7 +22,7 @@ import {
   lifecycleReceiptStatus,
   type ReceiptStatus,
 } from "../../lib/message-receipt";
-import { parseAgentPostStamp } from "./agents-model";
+import { authorAgentIdOf } from "./agents-model";
 import {
   fanoutGroupOf,
   labelFor,
@@ -254,8 +254,10 @@ function isContinuation(
   // pick the stamp shape must not be able to split their own run.
   if (message.authorKind !== "agent") return true;
   return (
-    parseAgentPostStamp(previous.clientMsgId) ===
-    parseAgentPostStamp(message.clientMsgId)
+    // ⚠ THE SESSION KEY COUNTS TOO (2026-09-04). Keyed on the STAMP alone, every post an agent
+    // gave its own `client_msg_id` answered `null` — so two of an operator's agents alternating
+    // read as one continuous speaker, which is the exact collapse this predicate exists to stop.
+    authorAgentIdOf(previous) === authorAgentIdOf(message)
   );
 }
 
@@ -279,10 +281,14 @@ function toMessageRow(
     // ⚠ ONLY ON AN AGENT ROW. A human post can carry any `client_msg_id` the
     // client chose, including one shaped like the stamp, and reading it here
     // unconditionally would let a caller hang an agent id off their own words.
+    // ⚠ THE SERVER'S `metadata.session_id` IS THE SECOND DOOR AND THE SAFER ONE (2026-09-04).
+    // `client_msg_id` is caller-chosen and the desktop never overwrites one an agent supplied,
+    // so keying on the stamp alone printed the bare noun "Agent" over every post a named session
+    // wrote with its own idempotency key (`attribution-pill.tsx › attributionName`'s last
+    // branch) — a rename the operator had made and could not see. `session_id` is stripped from
+    // caller input and re-stamped server-side, so it cannot be posed either.
     agentId:
-      message.authorKind === "agent"
-        ? parseAgentPostStamp(message.clientMsgId)
-        : null,
+      message.authorKind === "agent" ? authorAgentIdOf(message) : null,
     author: personFor(message, index),
     authorLabel: labelFor(message, index),
     time: formatTime(message.createdAt),
