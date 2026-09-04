@@ -10,11 +10,19 @@ import { inlineOr, isForeignAuthored } from "./narration";
 import { ok, type ToolResponse } from "./respond";
 import { isErr, resolveBaseOr } from "./knowledge-shared";
 import {
-  clipToMaxChars,
   isConcise,
+  windowBody,
   type ResponseFormat,
 } from "./response-size";
 import { fenceBody } from "./untrusted-fence";
+import {
+  outlineHeading,
+  renderOutline,
+  sectionAmbiguous,
+  sectionMiss,
+  KB_SECTION_NUDGE_CHARS,
+  type Outline,
+} from "./knowledge-sections";
 
 /**
  * ⚠ WHAT IS AND ISN'T NEUTRALIZED IN A KNOWLEDGE READ. A published base is
@@ -177,6 +185,53 @@ export async function opListDir(client: DoplClient, ref: string, path?: string):
   return ok(lines.join("\n"));
 }
 
+/**
+ * THE OUTLINE OP — every heading in one entry, with what each costs to read.
+ *
+ * ⚠ **IT IS A READ THAT DELIBERATELY DOES NOT RETURN THE DOCUMENT.** The body
+ * is emptied server-side, so an agent deciding WHETHER to read an entry pays a
+ * few dozen characters instead of a few thousand. That is the whole trade, and
+ * it is why the routing line names this before `read_file`.
+ */
+export async function opOutline(
+  client: DoplClient,
+  ref: string,
+  path: string,
+): Promise<ToolResponse> {
+  const base = await resolveBaseOr(client, ref);
+  if (isErr(base)) return base;
+  const read = await client.readKbFilePart(base.id, path, { outline: true });
+  const outline = read.outline;
+  if (!outline || outline.sections.length === 0) {
+    // ⚠ NOT AN ERROR, AND IT MUST NOT READ AS ONE. An entry with no headings is
+    // the ordinary state of a short note; what the caller needs is the SIZE, so
+    // it can decide whether reading the whole thing is cheap.
+    return ok(
+      [
+        `## ${inlineOr(read.entry.title, NO_NAME)} — no headings`,
+        `Path: \`${path}\` · ${outline?.totalChars ?? 0} chars whole.`,
+        "",
+        `Nothing to address by section — read it with op="read_file". Entries over ${KB_SECTION_NUDGE_CHARS} chars should carry \`##\` headings, one topic each.`,
+      ].join("\n"),
+    );
+  }
+  return ok(
+    [
+      outlineHeading(read.entry.title, outline),
+      `Path: \`${path}\` · Version: \`${read.entry.updatedAt}\``,
+      "",
+      ...renderOutline(outline),
+    ].join("\n"),
+  );
+}
+
+/**
+ * ⚠ **THREE WAYS TO SPEND LESS ON ONE DOCUMENT, AND THEY COMPOSE IN ONE ORDER.**
+ * `section` picks WHAT (server-side — the rest never crosses the wire), then
+ * `offset` and `max_chars` pick how much of that to render. A `section` that
+ * does not resolve returns the OUTLINE rather than the document, so the retry
+ * costs no round trip.
+ */
 export async function opReadFile(
   client: DoplClient,
   ref: string,
@@ -186,11 +241,36 @@ export async function opReadFile(
   callerUserId: string | null = null,
   format?: ResponseFormat,
   maxChars?: number,
+  section?: string,
+  offset?: number,
 ): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
-  const entry = await client.readKbFileByPath(base.id, path);
-  const { body, notice } = clipToMaxChars(entry.body, maxChars);
+  let outline: Outline | undefined;
+  let sectionLine: string | null = null;
+  let entry;
+  if (section === undefined) {
+    entry = await client.readKbFileByPath(base.id, path);
+  } else {
+    const read = await client.readKbFilePart(base.id, path, { section });
+    entry = read.entry;
+    outline = read.outline;
+    const found = read.section;
+    if (found && found.ok === false) {
+      const lines =
+        found.reason === "SECTION_AMBIGUOUS"
+          ? sectionAmbiguous(section, found.matches)
+          : sectionMiss(section, outline, entry.title);
+      // ⚠ `ok`, NOT `err`: the READ succeeded and the heading did not resolve.
+      // An `isError` here would make a client that retries on error retry a
+      // call that can only answer the same way.
+      return ok(lines.join("\n"));
+    }
+    if (found && found.ok) {
+      sectionLine = `Section: \`${"#".repeat(Math.min(3, found.level))} ${inlineOr(found.heading, "(unnamed)")}\` · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
+    }
+  }
+  const { body, notice } = windowBody(entry.body, offset, maxChars);
   const terse = isConcise(format);
   const lines = [
     // ⚠ `concise` KEEPS THE VERSION TOKEN AND DROPS THE REST OF THE METADATA.
@@ -205,6 +285,7 @@ export async function opReadFile(
           `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
           `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
         ]),
+    ...(sectionLine ? [sectionLine] : []),
     ...(notice ? ["", notice] : []),
     "",
     "---",

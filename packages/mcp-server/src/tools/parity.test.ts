@@ -85,7 +85,9 @@ describe("tool capture", () => {
 // read (here); an op in neither fails the completeness test, and that failure
 // IS the security review for the new op. Human-audit against the sources.
 const READ_OPS: Record<string, string[]> = {
-  dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "search"],
+  // ⚠ `outline` is a READ that deliberately returns no body — `opOutline` calls
+  // only `readKbFilePart({outline:true})`, whose response the server empties.
+  dopl_kb: ["list_bases", "get_tree", "list_dir", "outline", "read_file", "search"],
   dopl_skill: ["list", "get", "read", "authoring_guide"],
   dopl_chats: ["list", "get", "folders", "guide"],
   dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],

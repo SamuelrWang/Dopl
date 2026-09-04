@@ -90,3 +90,27 @@ export declare function clipToMaxChars(body: string, maxChars: number | undefine
     body: string;
     notice: string | null;
 };
+/**
+ * ⚠ THE ONE `.describe()` FOR THE RESUME KNOB. It pairs with `max_chars`: the
+ * clip says where it stopped, and this is where the next call starts.
+ */
+export declare const OFFSET_FIELD: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+/**
+ * A WINDOW onto a body: `offset` characters in, `maxChars` long.
+ *
+ * ⚠ **IT ALWAYS SAYS WHAT IT DID, AND IT ALWAYS NAMES THE RESUME POINT.** The
+ * rule {@link clipToMaxChars} states — a prefix that renders like a whole is the
+ * bug — gets sharper with an offset: a MIDDLE that renders like a whole is
+ * worse, because nothing about the text hints that something preceded it. So a
+ * window that starts late says so, and a window that stops early prints the
+ * `offset` that continues it, which is the argument the caller needs and cannot
+ * derive from a rendered page.
+ *
+ * ⚠ **AN OFFSET PAST THE END IS NOT AN ERROR.** It is what a caller that paged
+ * to the last character gets, and answering it with a refusal would make the
+ * final page indistinguishable from a mistake. Empty, and it says why.
+ */
+export declare function windowBody(body: string, offset: number | undefined, maxChars: number | undefined): {
+    body: string;
+    notice: string | null;
+};

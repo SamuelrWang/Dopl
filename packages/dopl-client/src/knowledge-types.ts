@@ -179,6 +179,16 @@ export interface StartupContext {
   /** Body characters actually included, i.e. the sum over `items`. */
   chars: number;
   /**
+   * Body characters of everything PINNED, `omitted` included — what the curated
+   * set costs, as against what a launch is handed.
+   *
+   * ⚠ **OPTIONAL, AND READ AS `?? chars` (INVARIANTS §8).** An older server
+   * sends no such key and this response is cached; `chars` is bounded by the
+   * server's 8k delivery cap, so the fallback is a FLOOR and can only ever
+   * under-report — the safe direction for a number a pin is refused on.
+   */
+  pinnedChars?: number;
+  /**
    * ⚠ LOAD-BEARING (INVARIANTS §9): a clipped read that renders like an
    * exhausted one is the bug. `true` means there IS pinned content this payload
    * does not carry — say so, rather than presenting `items` as the whole of what

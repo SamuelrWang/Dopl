@@ -81,6 +81,15 @@ const BASE = "https://api.example.test";
  *        mailbox. ⚠ **THE NUMBER GOING DOWN IS THE POINT** — this list has only
  *        ever grown by a capability arriving, so a shrink is a capability
  *        leaving, and it must be argued for exactly like an arrival.
+ *   81 — PLUS ONE with SECTION READS (2026-09-03): `readKbFilePart`.
+ *        ⚠ ONE, NOT TWO, AND NOT A FLAG ON `readKbFileByPath`. The whole-entry
+ *        read is on every existing caller's path and answers a different SHAPE
+ *        (an entry, not an entry-plus-outline), so widening it would have made
+ *        every caller handle a key it did not ask for. ⚠ And there is no
+ *        `outlineKbFile`: an outline is `readKbFilePart(…, {outline: true})`, a
+ *        query PARAMETER over one resource rather than a second endpoint — the
+ *        rule `getAccountStatus({view:"sessions"})` states one lane over
+ *        (INVARIANTS §9).
  */
 const PUBLIC_SURFACE = [
     "appendChatMessages",
@@ -193,6 +202,8 @@ const PUBLIC_SURFACE = [
     "readAccountMessages",
     "readChannelMessages",
     "readKbFileByPath",
+    // SECTION READS (2026-09-03) — one section, or the outline alone.
+    "readKbFilePart",
     "readSkillBody",
     "searchKb",
     "setChannelThreadMode",
