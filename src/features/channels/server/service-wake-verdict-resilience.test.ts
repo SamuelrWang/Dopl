@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
 import { SESSION_PROJECTION_FRESH_MS } from "../constants";
-import type { SessionStateRow } from "./collab-dto";
-import { resolveWakeVerdict } from "./service-wake-verdict";
-import type { ChannelContext } from "./service-shared";
-import type { ChannelRow, ChannelMessageRow } from "./dto";
 
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 
 import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
+import {
+  NOW,
+  lastAddress,
+  projection,
+  resolve,
+  roomProjection,
+  sessionRow,
+} from "./service-wake-verdict-harness";
 
 /**
  * **THE THREE RESILIENCE ARMS (B1)** — Samuel's ruling: narrowing the fan-out to
@@ -20,114 +24,16 @@ import * as repoSessions from "./repository-sessions";
  * ⚠ **ITS OWN FILE BECAUSE `service-wake-verdict.test.ts` REACHED THE 500-LINE
  * CAP**, and the seam matches the one the source took: that file measures the
  * PRECEDENCE between explicit addressing and repair, this one measures the
- * three repair rules. The harness below is deliberately the same shape as its
- * sibling's — two projections, one last-address read — because a second way of
- * driving one resolver is how two suites come to disagree about what they are
- * testing.
+ * three repair rules. ⚠ **THE HARNESS IS SHARED, NOT COPIED**
+ * (`service-wake-verdict-harness.ts`, 2026-09-04): it was a near-verbatim
+ * duplicate with a note saying it had to stay one, and a second way of driving
+ * one resolver is how two suites come to disagree about what they are testing.
  *
  * ⚠ **EVERY CASE HERE IS PAIRED WITH ITS DEGENERATE ONE**, because each arm's
  * failure mode is silent: an arm that never fires looks exactly like a room
  * where nobody was addressed, and an arm that fires too eagerly looks exactly
  * like a delivery. Only the pair distinguishes them.
  */
-
-const NOW = Date.parse("2026-09-02T12:00:00Z");
-const CTX: ChannelContext = {
-  userId: "user-1",
-  workspaceId: "ws-1",
-} as ChannelContext;
-
-function sessionRow(over: Partial<SessionStateRow>): SessionStateRow {
-  return {
-    id: "s-1",
-    channel_id: "chan-1",
-    workspace_id: "ws-1",
-    user_id: "user-1",
-    session_key: "chan-1:task-1:k3v7d2mq",
-    task_id: null,
-    name: "k3v7d2mq",
-    state: "working",
-    channel_name: null,
-    thread_title: null,
-    created_at: new Date(NOW).toISOString(),
-    updated_at: new Date(NOW - 1_000).toISOString(),
-    detail: null,
-    tool_label: null,
-    model: null,
-    context_used: null,
-    context_window: null,
-    tokens_spent: null,
-    started_at: null,
-    last_activity_at: null,
-    display_name: null,
-    template_name: null,
-    turns: null,
-    tokens_delta: null,
-    stale: null,
-    denied_calls: null,
-    last_denied_tool: null,
-    last_wake_seq: null,
-    last_wake_at: null,
-    ...over,
-  } as SessionStateRow;
-}
-
-/** The CALLER'S OWN live sessions — the own-scoped door the body parse reads. */
-function projection(...rows: SessionStateRow[]): void {
-  vi.mocked(repoSessions.listSessionStates).mockResolvedValue(rows);
-}
-
-/** EVERY member's sessions in the room — RR3's candidate set. ⚠ A DIFFERENT
- *  read from {@link projection}, and asserting on the wrong one is how the
- *  same-account carve would appear to hold while being widened. */
-function roomProjection(...rows: SessionStateRow[]): void {
-  vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(rows);
-}
-
-/** RR2's one read — the last main-room row addressed to this agent. */
-function lastAddress(row: Partial<ChannelMessageRow> | null): void {
-  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(
-    row === null ? null : ({ seq: 7, author_user_id: "user-2", ...row } as ChannelMessageRow)
-  );
-}
-
-function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
-  return { id: "chan-1", workspace_id: "ws-1", ...over } as ChannelRow;
-}
-
-interface ResolveOpts {
-  kind?: "message" | "task_progress";
-  authorKind?: string;
-  toAgentId?: string | null;
-  threadTagStripped?: boolean;
-  clientMsgId?: string;
-  channel?: Partial<ChannelRow>;
-}
-
-/** One post, resolved. `metadata` is the fold's OUTPUT, which is what the
- *  resolver reads — never the caller's raw input. */
-function resolve(
-  body: string,
-  metadata: Record<string, unknown> = {},
-  opts: ResolveOpts = {}
-) {
-  return resolveWakeVerdict(
-    CTX,
-    channelRow(opts.channel),
-    {
-      body,
-      kind: opts.kind ?? "message",
-      clientMsgId: opts.clientMsgId,
-    } as Parameters<typeof resolveWakeVerdict>[2],
-    metadata,
-    {
-      authorKind: opts.authorKind ?? "user",
-      toAgentId: opts.toAgentId ?? null,
-      threadTagStripped: opts.threadTagStripped,
-    },
-    NOW
-  );
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -298,12 +204,95 @@ describe("RR2 — an unaddressed agent post in the main room goes back to whoeve
     expect(out).toMatchObject({ verdict: "none", delivery: "none" });
   });
 
-  it("DEGENERATE: an UNSTAMPED agent post cannot say which agent it is — no arm, no read", async () => {
-    // `null` from `parseAgentPostStamp` is "cannot say", never "some other
-    // agent". Guessing would aim somebody's reply at the wrong conversation.
+  it("DEGENERATE: an agent post with NEITHER key cannot say which agent it is — no arm, no read", async () => {
+    // `null` from `authorAgentIdOf` is "cannot say", never "some other agent".
+    // Guessing would aim somebody's reply at the wrong conversation.
     const out = await resolve("no key", {}, { authorKind: "agent" });
     expect(out.verdict).toBe("none");
     expect(vi.mocked(repoMessages.findLastRoomAddressToAgent)).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **AN AGENT THAT SUPPLIED ITS OWN `client_msg_id` IS NOT ANONYMOUS**
+   * (2026-09-04, follow-up 2 to the self-wake investigation).
+   *
+   * ⚠ **THE ARM KEYED ON THE STAMP ALONE, AND THE STAMP IS THE HALF AN AGENT CAN
+   * OVERWRITE.** `main/session-outbound-tag.js › threadTagFor` deliberately never
+   * replaces a `client_msg_id` an agent chose, so `parseAgentPostStamp` answered
+   * `null` for every such post: no arm fired, `resilience` stayed null, and the
+   * verdict's `unreachable` term fired instead. Rows #963, #965, #969 and #973
+   * were stamped `delivery=unreachable` for a failure that never happened — and
+   * `delivery=` is the one ack an orchestrator acts on.
+   *
+   * ⚠ **`metadata.session_id` IS THE STRONGER FACT, NOT A WEAKER FALLBACK.** It
+   * is stripped from caller input and re-stamped from `X-Dopl-Session-Id`
+   * (`service-writes-metadata.ts` fold 6b), so it cannot be posed — where the
+   * stamp can. The F-589 own-scope check still runs over both.
+   */
+  describe("the author's identity comes off the session stamp too", () => {
+    const OWN_SESSION = { session_id: "chan-1::k3v7d2mq" };
+
+    it("fires for a post that supplied its own key — the #963 / #965 / #969 / #973 rows", async () => {
+      lastAddress({ author_user_id: "user-9" });
+      const out = await resolve("here is the answer", OWN_SESSION, {
+        authorKind: "agent",
+        clientMsgId: "reply-2",
+      });
+      expect(out).toMatchObject({
+        verdict: "reciprocal",
+        recipientUserIds: ["user-9"],
+        delivery: "delivered",
+      });
+    });
+
+    it("🔒 and therefore never reports `unreachable` for a delivery that happened", async () => {
+      // ⚠ THE PRODUCTION SHAPE, EXACTLY. The body names a PEER's agent, which an
+      // AGENT author cannot resolve (the carve), so `recipientAgentIds` is
+      // `null` — and with no arm firing, the verdict's `unreachable` term is
+      // what an orchestrator reads about a message that was delivered.
+      lastAddress({ author_user_id: "user-9" });
+      const out = await resolve("done — over to @agent-deynelz3", OWN_SESSION, {
+        authorKind: "agent",
+        clientMsgId: "my-own-idempotency-key",
+      });
+      // ⚠ `[]` HERE, NOT `null`: a repaired address is stored in the same two
+      // columns as a written one, so the arm firing IS what replaces the null
+      // the `unreachable` term keys on.
+      expect(out.recipientAgentIds).toEqual([]);
+      expect(out.delivery).not.toBe("unreachable");
+      expect(out.delivery).toBe("delivered");
+    });
+
+    it("the STAMP still wins when both are present — it is the older form and some rows carry it alone", async () => {
+      lastAddress({ author_user_id: "user-9" });
+      await resolve("x", { session_id: "chan-1::m8q1zzzz" }, {
+        authorKind: "agent",
+        clientMsgId: "agent-k3v7d2mq-4",
+      });
+      expect(
+        vi.mocked(repoMessages.findLastRoomAddressToAgent).mock.calls[0][1]
+      ).toBe("k3v7d2mq");
+    });
+
+    it("🔒 F-589 STILL APPLIES to the session door — a key naming a peer's agent resolves nothing", async () => {
+      // The projection holds only `k3v7d2mq`, so a session key claiming
+      // `peerpeer` fails the own-scope check exactly as a forged stamp does.
+      lastAddress({ author_user_id: "user-9" });
+      const out = await resolve("summary", { session_id: "chan-1::peerpeer" }, {
+        authorKind: "agent",
+        clientMsgId: "reply-2",
+      });
+      expect(out).toMatchObject({ verdict: "none", delivery: "none" });
+      expect(
+        vi.mocked(repoMessages.findLastRoomAddressToAgent)
+      ).not.toHaveBeenCalled();
+    });
+
+    it("a PERSON's cookie session_id starts no reciprocal arm — a person is not an agent", async () => {
+      lastAddress({ author_user_id: "user-9" });
+      const out = await resolve("morning", OWN_SESSION, { authorKind: "user" });
+      expect(out.verdict).not.toBe("reciprocal");
+    });
   });
 
   it("DEGENERATE: a MACHINE-level courtesy stamp is not an agent stamp", async () => {

@@ -2,7 +2,7 @@ import "server-only";
 import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
 import type { ChannelMessageCreateInput } from "../schema";
 import { resolveDefaultResponder } from "../lib/agent-mentions";
-import { parseAgentPostStamp } from "../lib/agent-post-stamp";
+import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import type { SessionStateRow } from "./collab-dto";
 import type { ChannelRow } from "./dto";
 import * as repoMessages from "./repository-messages";
@@ -125,12 +125,26 @@ export function threadOtherParty(
  * 2026-08-31 carve forbids, and it would do it through a rule the author never
  * wrote.
  *
- * ⚠ **THE AUTHOR'S OWN AGENT ID COMES OFF `client_msg_id`, THE ONE PARSER**
- * (`lib/agent-post-stamp.ts`, already the server's source for the escalation
- * answer's wake key). `null` there is "cannot say", never "some other agent" —
- * an unstamped agent post (a main older than the stamp, or one that supplied its
- * own key) gets NO reciprocal arm and answers `delivery=none`. Guessing which
- * agent wrote it would aim somebody's reply at the wrong conversation.
+ * ⚠ **THE AUTHOR'S OWN AGENT ID COMES OFF `lib/agent-post-stamp.ts ›
+ * authorAgentIdOf`, THE ONE PARSER** — the `client_msg_id` stamp, else the
+ * server's own `metadata.session_id`. `null` there is "cannot say", never "some
+ * other agent": an agent post that carries neither gets NO reciprocal arm and
+ * answers `delivery=none`. Guessing which agent wrote it would aim somebody's
+ * reply at the wrong conversation.
+ *
+ * ⚠ **IT KEYED ON THE STAMP ALONE UNTIL 2026-09-04, AND THAT STAMPED
+ * `delivery=unreachable` OVER A FAILURE THAT NEVER HAPPENED.**
+ * `main/session-outbound-tag.js › threadTagFor` deliberately never overwrites a
+ * `client_msg_id` an agent supplied, so `parseAgentPostStamp` was `null` for
+ * every such post — no arm fired, `resilience` stayed null, and the verdict's
+ * `unreachable` term (the one an orchestrator ACTS on) fired instead: rows #963,
+ * #965, #969 and #973 of the Mobile Command Center incident all reported a
+ * delivery failure for messages that were delivered. `metadata.session_id` is
+ * stripped from caller input and re-stamped from `X-Dopl-Session-Id`
+ * (`service-writes-metadata.ts` fold 6b), so it is present on every
+ * desktop-session post and cannot be posed — the STRONGER fact, not a fallback.
+ * ⚠ The F-589 own-scope check below is unchanged and still applies to both
+ * doors: the `client_msg_id` half remains caller-supplied.
  *
  * 🔒 ⚠ **AND `client_msg_id` IS CALLER-SUPPLIED, SO THE STAMP IS A CLAIM AND IS
  * CHECKED (2026-09-02, F-589).** It was not. Agent ids are not secret — the
@@ -160,12 +174,19 @@ export function threadOtherParty(
 export async function reciprocalParty(
   channelId: string,
   input: ChannelMessageCreateInput,
+  /** The metadata fold's OUTPUT — `session_id` is the server's own stamp, so
+   *  the caller's copy has already been stripped. */
+  metadata: Record<string, unknown>,
   now: number,
   /** The agent ids the AUTHOR'S OWN fresh sessions answer to, from
-   *  `service-wake-verdict.ts › ownLiveAgentIds`. The stamp must name one. */
+   *  `service-wake-verdict-handles.ts › ownLiveAgentIds`. The claim must name
+   *  one. */
   ownAgentIds: readonly string[]
 ): Promise<string | null> {
-  const authorAgentId = parseAgentPostStamp(input.clientMsgId);
+  const authorAgentId = authorAgentIdOf({
+    clientMsgId: input.clientMsgId,
+    metadata,
+  });
   if (authorAgentId === null) return null;
   if (!ownAgentIds.includes(authorAgentId)) return null;
   const sinceIso = new Date(now - RESILIENCE_WINDOW_MS).toISOString();
