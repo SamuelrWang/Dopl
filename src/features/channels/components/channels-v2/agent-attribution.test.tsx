@@ -35,7 +35,7 @@ import { agentAccent } from "./bits";
 import { attributionName } from "./attribution-pill";
 import { indexMembers } from "./view-model";
 import { threadRows } from "./view-model-rows";
-import { parseAgentPostStamp } from "./agents-model";
+import { authorAgentIdOf, parseAgentPostStamp } from "./agents-model";
 import { agentSentMessages } from "./agent-panel";
 import { ME, PEER, member, message } from "./test-fixtures";
 
@@ -84,6 +84,95 @@ function renderThread(messages: ReturnType<typeof message>[]) {
 /** The `<article data-message-id>` a body landed in. */
 const rowFor = (body: string) =>
   screen.getByText(body).closest("article") as HTMLElement;
+
+/**
+ * **THE MOBILE COMMAND CENTER ROW (2026-09-04).** An agent that supplies its own
+ * `client_msg_id` is UNSTAMPED, and the desktop deliberately never overwrites the key it
+ * chose — so for four minutes of live traffic the pill read the bare noun "agent" over a
+ * session its operator had renamed "1", and the rows collapsed into one run. The server's
+ * `metadata.session_id` names the session on every one of those rows.
+ */
+describe("authorAgentIdOf — the second door, for a post that brought its own key", () => {
+  it("takes the stamp when there is one", () => {
+    expect(authorAgentIdOf({ clientMsgId: `agent-${A}-3`, metadata: {} })).toBe(A);
+  });
+
+  it("falls back to the SERVER's session key when the agent supplied its own id", () => {
+    // The live shape: `<channelId>::<agentId>`, middle segment legitimately empty.
+    expect(
+      authorAgentIdOf({
+        clientMsgId: "anthony-hello-reply-2",
+        metadata: { session_id: `4249c58a-34b9-4c8e-b48f-6a1647bcb176::${A}` },
+      })
+    ).toBe(A);
+    // And the three-segment form a first-class thread carries.
+    expect(
+      authorAgentIdOf({
+        clientMsgId: "my-own-key",
+        metadata: { session_id: `chan-1:t-1:${B}` },
+      })
+    ).toBe(B);
+  });
+
+  it("prefers the STAMP when the two disagree — the older form still wins its own rows", () => {
+    expect(
+      authorAgentIdOf({
+        clientMsgId: `agent-${A}-1`,
+        metadata: { session_id: `chan-1::${B}` },
+      })
+    ).toBe(A);
+  });
+
+  it("still answers 'cannot say' when neither door names an agent", () => {
+    expect(authorAgentIdOf({ clientMsgId: null, metadata: {} })).toBeNull();
+    expect(authorAgentIdOf({ clientMsgId: "k", metadata: { session_id: 42 } })).toBeNull();
+    // ⚠ A UUID-ONLY KEY NAMES NO AGENT. The charset is anchored per segment, so a channel id
+    // alone cannot pose as one — the same discriminator the courtesy form needs.
+    expect(
+      authorAgentIdOf({
+        clientMsgId: "k",
+        metadata: { session_id: "4249c58a-34b9-4c8e-b48f-6a1647bcb176" },
+      })
+    ).toBeNull();
+  });
+
+  it("names the pill and breaks the run for an unstamped post — the incident, end to end", () => {
+    const rows = threadRows(
+      [
+        message({
+          id: "m-1",
+          seq: 1,
+          body: "FIRST",
+          authorUserId: ME,
+          authorKind: "agent",
+          metadata: { taskId: "t-1", session_id: `chan-1::${A}` },
+          clientMsgId: "anthony-hello-reply-1",
+        }),
+        message({
+          id: "m-2",
+          seq: 2,
+          body: "SECOND",
+          authorUserId: ME,
+          authorKind: "agent",
+          metadata: { taskId: "t-1", session_id: `chan-1::${B}` },
+          clientMsgId: "anthony-hello-reply-2",
+        }),
+      ],
+      "t-1",
+      INDEX,
+      formatChannelTimestamp
+    );
+    const messageRows = rows.filter((row) => row.kind === "message");
+    expect(messageRows.map((row) => row.agentId)).toEqual([A, B]);
+    // Two different agents ⇒ the second row keeps its own pill.
+    expect(messageRows[1].continuation).toBe(false);
+    // And the pill prints an identity rather than the bare noun.
+    expect(attributionName({ agent: true, agentId: A, authorLabel: "Sam Wang" })).toBe(`#${A}`);
+    expect(
+      attributionName({ agent: true, agentId: A, authorLabel: "Sam Wang", agentName: "1" })
+    ).toBe("1");
+  });
+});
 
 describe("parseAgentPostStamp — the one reader of the wire format", () => {
   it("takes the id out of a per-instance stamp", () => {

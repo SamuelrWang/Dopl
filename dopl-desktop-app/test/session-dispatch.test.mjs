@@ -143,6 +143,60 @@ test("feed: a session is NEVER fed its own post back", async () => {
   assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A2], "the author is excluded, the sibling is not");
 });
 
+/**
+ * **THE MOBILE COMMAND CENTER SELF-WAKE (2026-09-04).** `ownPostIds` holds the stamps this
+ * machine MINTS, and `session-outbound-tag.js › threadTagFor` deliberately never overwrites a
+ * `client_msg_id` an agent supplied — so an agent that passes its own idempotency key posts a
+ * row this machine never recorded, and it was fed (and woken on) its own words. The server's
+ * `metadata.session_id` IS this machine's slot key and names the author exactly.
+ */
+test("feed: a session is never fed a post its own SESSION KEY authored, whatever the client_msg_id", async () => {
+  const h = harness({ agents: [agent(A1), agent(A2)] });
+  const own = peerMsg({
+    authorUserId: ME,
+    authorKind: "agent",
+    clientMsgId: "anthony-hello-reply-2", // the agent's own key — no stamp to read
+    metadata: { session_id: `c1:${TASK}:${A1}` },
+    recipientAgentIds: [A1], // and the server had stored the self-wake
+    wakeVerdict: "agent",
+  });
+  await h.feedLiveSession(entry, own, ME);
+  assert.deepEqual(
+    h.calls.feedInbound.map((c) => c.agentId),
+    [],
+    "the author is excluded even though the stored verdict named it"
+  );
+});
+
+test("feed: the session-key belt names ONE session — a sibling's post still lands", async () => {
+  const h = harness({ agents: [agent(A1), agent(A2)] });
+  const fromSibling = peerMsg({
+    authorUserId: ME,
+    authorKind: "agent",
+    clientMsgId: "sibling-own-key",
+    metadata: { session_id: `c1:${TASK}:${A2}` },
+    recipientAgentIds: [A1],
+    wakeVerdict: "agent",
+  });
+  await h.feedLiveSession(entry, fromSibling, ME);
+  assert.deepEqual(
+    h.calls.feedInbound.map((c) => c.agentId),
+    [A1],
+    "A2 wrote it, A1 was addressed and is fed"
+  );
+});
+
+test("feed: a session_id that is absent, malformed or another machine's changes nothing", async () => {
+  for (const metadata of [undefined, {}, { session_id: "" }, { session_id: 7 }, { session_id: "c1:other:zzzzzzzz" }]) {
+    const one = harness({ agents: [agent(A1)] });
+    assert.equal(
+      await one.feedLiveSession(entry, peerMsg({ metadata }), ME),
+      true,
+      JSON.stringify(metadata ?? null)
+    );
+  }
+});
+
 test("feed: an unstamped post is fed to everyone — a duplicate turn, never a lost one", async () => {
   const h = harness({ agents: [agent(A1, ["agent-a1b2c3d4-3"])] });
   for (const clientMsgId of [null, undefined, ""]) {

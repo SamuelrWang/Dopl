@@ -306,6 +306,30 @@ function wroteIt(s, m) {
   return s.ownPostIds.has(String(id));
 }
 
+// THE SAME QUESTION, ASKED OF THE SERVER'S STAMP — `metadata.session_id`, whose value IS this
+// machine's slot key (`session-store.js › sessionKey`; the server re-stamps it from
+// `X-Dopl-Session-Id` and strips any caller copy).
+//
+// ⚠ **IT EXISTS BECAUSE {@link wroteIt} HAS A HOLE AND THE HOLE IS BY DESIGN** (2026-09-04, the
+// Mobile Command Center incident). `ownPostIds` holds the stamps this machine MINTS, and
+// `session-outbound-tag.js › threadTagFor` deliberately NEVER OVERWRITES a `client_msg_id` an
+// agent supplied — so a session that passes its own idempotency key posts a row whose id this
+// machine never recorded, `wroteIt` answers false, and the session is fed its own words back.
+// Three turns of a 1M-context session went that way in one four-minute stretch.
+// ⚠ **IT IS A SECOND KEY, NOT A REPLACEMENT.** `client_msg_id` still answers first because it is
+// the older form and rows predate the stamp; this answers for everything that supplied its own.
+// ⚠ **AND IT IS THE BELT UNDER THE SERVER'S BRACE.** `service-wake-verdict.ts` now drops the
+// author's own session before it stores a recipient — but a stored verdict is only as new as the
+// server, and the body-parse fallback has no such structure. One machine-side predicate that
+// holds whatever the row was written by.
+function authoredBySession(s, m) {
+  const meta = m && m.metadata;
+  const stamped = meta && typeof meta === 'object' ? meta.session_id : null;
+  if (typeof stamped !== 'string' || !stamped) return false;
+  const key = String((s && s.key) || '');
+  return !!key && key === stamped;
+}
+
 // TRUE iff this session is a SPAWN-IDLE agent nobody has directed yet. ⚠ `=== true` ONLY, so a
 // session object that predates the flag — or any shape that simply does not carry it — keeps the
 // plain feed behaviour. A wake rule that fails toward "feed it" is the safe direction here:
@@ -406,7 +430,8 @@ function feedLiveSession(entry, m, myUserId) {
   let held = 0; // dormant agents this message named but could not wake
   let skipped = 0; // sessions this message was never for — the narrowing, counted
   for (const s of live) {
-    if (wroteIt(s, m)) continue; // never feed a session its own post back
+    // never feed a session its own post back — by the minted stamp OR the server's session key
+    if (wroteIt(s, m) || authoredBySession(s, m)) continue;
     const named = plan.ids.indexOf(String(s.agentId || '')) !== -1;
     // ⚠ NOT A REFUSAL AND NOT A HOLD. Nothing was aimed at this session, so nothing was
     // declined — filing a `refused` receipt here would report a decision the machine never made.
@@ -462,6 +487,7 @@ module.exports = {
   storedVerdict,
   planFor,
   addressingFor,
+  authoredBySession,
   mayFeed,
   mayWake,
   dormant,

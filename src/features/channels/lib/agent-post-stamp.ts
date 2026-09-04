@@ -35,3 +35,66 @@ export function parseAgentPostStamp(
   if (typeof clientMsgId !== "string") return null;
   return AGENT_POST_STAMP_RE.exec(clientMsgId)?.[1] ?? null;
 }
+
+/**
+ * WHICH AGENT INSTANCE WROTE THIS POST, FROM THE SERVER'S OWN STAMP —
+ * `metadata.session_id`, whose LAST segment is the agent id.
+ *
+ * ⚠ **IT EXISTS BECAUSE {@link parseAgentPostStamp} ANSWERS `null` FOR EVERY
+ * POST THAT CARRIES ITS OWN IDEMPOTENCY KEY** (2026-09-04, the Mobile Command
+ * Center incident). `client_msg_id` is CALLER-SUPPLIED and
+ * `main/session-outbound-tag.js › threadTagFor` deliberately NEVER OVERWRITES
+ * one an agent chose — so an agent that passes `client_msg_id: "reply-2"` is
+ * anonymous to every reader that keys on the stamp: the desktop fed the session
+ * its own post back (`main/session-dispatch.js › wroteIt`), and the transcript
+ * pill printed the bare noun "Agent" for a named session
+ * (`attribution-pill.tsx › attributionName`).
+ *
+ * ⚠ **AND IT IS THE STRONGER FACT, NOT A WEAKER FALLBACK.** `client_msg_id` is
+ * whatever the caller sent; `metadata.session_id` is stripped from caller input
+ * unconditionally and re-stamped from the `X-Dopl-Session-Id` header
+ * (`server/service-writes-metadata.ts` fold 6b), so it cannot be posed. The
+ * stamp is tried first only because it is the older form and some rows carry it
+ * alone.
+ *
+ * ⚠ **THE KEY SHAPE IS `main/session-store.js › sessionKey`,
+ * `<channelId>:<taskId>:<agentId>`, AND THE MIDDLE SEGMENT IS LEGITIMATELY
+ * EMPTY** for a session with no first-class thread (`chan::deynelz3` is the
+ * ordinary room shape). So it reads from the END and walks back rather than
+ * counting segments — the same rule `packages/mcp-server/src/tools/
+ * channel-render.ts › sessionTail` states for the same key, in the tree that
+ * cannot import this one.
+ */
+export function agentIdOfSessionKey(
+  sessionId: string | null | undefined
+): string | null {
+  if (typeof sessionId !== "string") return null;
+  const parts = sessionId.split(":");
+  for (let i = parts.length - 1; i >= 0; i -= 1) {
+    const part = parts[i].trim().toLowerCase();
+    if (AGENT_ID_RE.test(part)) return part;
+  }
+  return null;
+}
+
+/**
+ * ⚠ THE AGENT CHARSET, ONE SPELLING — `main/agent-id.js`'s, restated by
+ * {@link AGENT_POST_STAMP_RE} above and by `session-dispatch.js`'s anchored
+ * mention regex. Anchoring it is what keeps a channel UUID's first segment from
+ * reading as an agent id.
+ */
+const AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
+
+/**
+ * THE AGENT THAT WROTE ONE ROW — the post stamp, else the session key.
+ * `null` is "cannot say", never "some other agent" (INVARIANTS §11).
+ */
+export function authorAgentIdOf(row: {
+  clientMsgId?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): string | null {
+  const stamped = parseAgentPostStamp(row.clientMsgId);
+  if (stamped !== null) return stamped;
+  const sessionId = row.metadata?.session_id;
+  return agentIdOfSessionKey(typeof sessionId === "string" ? sessionId : null);
+}

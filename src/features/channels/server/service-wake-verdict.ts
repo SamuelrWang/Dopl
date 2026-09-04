@@ -6,6 +6,7 @@ import {
   buildAgentMentionIndex,
   resolveAgentHandle,
 } from "../lib/agent-mentions";
+import { agentIdOfSessionKey } from "../lib/agent-post-stamp";
 import { mentionHandleOf, mentionTokensOf } from "../lib/mentions";
 import type { SessionStateRow } from "./collab-dto";
 import type { ChannelRow } from "./dto";
@@ -158,7 +159,10 @@ async function resolveAgentRecipients(
   ctx: ChannelContext,
   channelId: string,
   body: string,
-  now: number
+  now: number,
+  /** The session that WROTE this body, from {@link selfAgentIdOf}. Dropped from
+   *  the answer — see the docblock's self-address rule. */
+  selfAgentId: string | null
 ): Promise<string[] | null> {
   const handles = mentionTokensOf(body)
     .map(mentionHandleOf)
@@ -170,12 +174,49 @@ async function resolveAgentRecipients(
     rows.map((row) => ({ agentId: row.name, displayName: row.display_name }))
   );
   const out: string[] = [];
+  // ⚠ **"SOMETHING RESOLVED" IS TRACKED SEPARATELY FROM "SOMETHING IS LEFT".**
+  // A body whose only handle named the AUTHOR resolved perfectly well; what it
+  // named is not an addressee. Answering `null` there would send the desktop to
+  // its own body parse, which would resolve the very same self-tag against its
+  // live ids and feed the session its own post — the defect this drop exists to
+  // close, re-introduced one layer down.
+  let resolvedAny = false;
   for (const handle of handles) {
     const id =
       resolveAgentHandle(handle, index) ?? resolveAgentHandle(bareId(handle), index);
-    if (id !== null && !out.includes(id)) out.push(id);
+    if (id === null) continue;
+    resolvedAny = true;
+    if (id === selfAgentId) continue;
+    if (!out.includes(id)) out.push(id);
   }
-  return out.length > 0 ? out : null;
+  if (out.length > 0) return out;
+  return resolvedAny ? [] : null;
+}
+
+/**
+ * **THE SESSION THAT WROTE THIS POST** — `metadata.session_id`'s agent segment,
+ * or `null` when a person wrote it (2026-09-04).
+ *
+ * ⚠ **IT IS READ OFF THE SERVER'S OWN STAMP AND NOT OFF `client_msg_id`.** The
+ * stamp door (`lib/agent-post-stamp.ts › parseAgentPostStamp`) is blank for every
+ * post that carried its own idempotency key, which is exactly the class of post
+ * that self-woke in the Mobile Command Center incident: `metadata.session_id` is
+ * stripped from caller input and re-stamped from the session header
+ * (`service-writes-metadata.ts` fold 6b), so it is both unforgeable and always
+ * present on a desktop-session post.
+ *
+ * ⚠ **GATED ON `authorKind`.** A member's cookie session also carries a
+ * `session_id`, and a person is not an agent — reading it unconditionally would
+ * invent an author agent for a human post and quietly withdraw that agent from
+ * its own room's addressing.
+ */
+function selfAgentIdOf(
+  metadata: Record<string, unknown>,
+  authorKind: string
+): string | null {
+  if (authorKind !== "agent") return null;
+  const sessionId = metadata.session_id;
+  return agentIdOfSessionKey(typeof sessionId === "string" ? sessionId : null);
 }
 
 /**
@@ -303,12 +344,33 @@ export async function resolveWakeVerdict(
   // With one recipient per send (`assertOneRecipientField`), a body handle
   // beside an explicit `to` cannot be a second addressee and must not become
   // one.
+  // ⚠ **AN AGENT IS NEVER A RECIPIENT OF ITS OWN POST** (2026-09-04, Samuel's
+  // report). Both agent doors resolve against the AUTHOR'S OWN fresh sessions —
+  // which is the same-account carve working — and the author's own session is in
+  // that set, so a session that wrote its own handle (or its own rename) in prose
+  // resolved to ITSELF, was stored as `recipient_agent_ids`, and the desktop
+  // executed the stored answer and woke it on its own words. It cost three turns
+  // of a 1M-context session in one four-minute stretch, and the loop is
+  // unbounded: the reply it wakes for can name the same handle again.
+  // ⚠ IT IS A DROP AT THE DOOR, NOT AN `authorKind` BRANCH AROUND THE WAKE. The
+  // rule is about ONE identity, not about agent-authored posts in general: two of
+  // an operator's agents may still wake each other, which is what makes
+  // `launch_agent` a capability.
+  const selfAgentId = selfAgentIdOf(metadata, wakeCtx.authorKind);
+  // ⚠ THE `to=` DOOR TAKES THE SAME DROP, AND IT IS TAKEN FIRST. Its resolver is
+  // own-scoped too (`service-writes-metadata-recipient.ts › liveAgentHandles`),
+  // so an agent can name itself there as readily as in prose. Dropping it BEFORE
+  // the body gate is what makes the post behave like the unaddressed post it
+  // actually is: the prose is read, and the resilience arms get their turn.
+  const toAgentId =
+    wakeCtx.toAgentId !== null && wakeCtx.toAgentId === selfAgentId
+      ? null
+      : wakeCtx.toAgentId;
   const bodyAgentIds =
-    wakeCtx.toAgentId === null && isMessage
-      ? await resolveAgentRecipients(ctx, channelId, input.body, now)
+    toAgentId === null && isMessage
+      ? await resolveAgentRecipients(ctx, channelId, input.body, now, selfAgentId)
       : null;
-  const namedAgentIds =
-    wakeCtx.toAgentId !== null ? [wakeCtx.toAgentId] : bodyAgentIds;
+  const namedAgentIds = toAgentId !== null ? [toAgentId] : bodyAgentIds;
 
   const addressed =
     (namedAgentIds !== null && namedAgentIds.length > 0) || toUserId !== null;
@@ -347,7 +409,11 @@ export async function resolveWakeVerdict(
       channel,
       await freshChannelSessions(ctx, channelId, now)
     );
-    if (responder !== null) {
+    // ⚠ AND THE DEFAULT RESPONDER IS NEVER THE AUTHOR EITHER — belt over the
+    // door above. RR3's gate is that a PERSON wrote the message, so `selfAgentId`
+    // is null here today; stating it keeps the one-live-agent room correct if the
+    // arm's gate ever widens, which is the room this incident happened in.
+    if (responder !== null && responder !== selfAgentId) {
       resilience = { verdict: "responder", userIds: [], agentIds: [responder] };
     }
   }
@@ -406,7 +472,7 @@ export async function resolveWakeVerdict(
     delivery:
       isMessage &&
       bodyAgentIds === null &&
-      wakeCtx.toAgentId === null &&
+      toAgentId === null &&
       verdict !== "member" &&
       resilience === null
         ? "unreachable"

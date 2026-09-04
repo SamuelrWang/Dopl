@@ -127,6 +127,103 @@ beforeEach(() => {
   lastAddress(null);
 });
 
+/**
+ * **AN AGENT IS NEVER A RECIPIENT OF ITS OWN POST** (2026-09-04, Samuel's report
+ * from Mobile Command Center).
+ *
+ * ⚠ **THE DOOR IS THE OWN-SCOPE, WHICH IS OTHERWISE THE CARVE WORKING.** Both
+ * agent doors resolve against the AUTHOR'S OWN fresh sessions — and the author's
+ * own session is in that set. A session that wrote its own handle in prose (or,
+ * after a rename, its own NAME) resolved to itself, the row stored
+ * `recipient_agent_ids: [self]`, and the desktop executed the stored answer and
+ * woke it on its own words. Three turns of a 1M-context session went that way in
+ * one four-minute stretch, and the loop is unbounded — the reply it wakes for can
+ * name the same handle again.
+ *
+ * ⚠ **`[]` AND `null` ARE STILL DIFFERENT ANSWERS AND THE DROP MUST NOT COLLAPSE
+ * THEM.** A body that named ONLY the author resolved fine; it just named no
+ * addressee, so the answer is `[]`. `null` would send the desktop to its own body
+ * parse, which would resolve the same self-tag against its live ids and feed the
+ * session its own post — the same defect, one layer down.
+ */
+describe("resolveWakeVerdict — the author's own session is never a recipient", () => {
+  const SELF = { session_id: "chan-1::k3v7d2mq" };
+
+  it("drops the author's own handle from the body parse — the #976 row", async () => {
+    projection(sessionRow({ name: "k3v7d2mq" }));
+    const out = await resolve(
+      "@anthony Hello — tag @agent-k3v7d2mq to be explicit.",
+      SELF,
+      { authorKind: "agent" }
+    );
+    expect(out.recipientAgentIds).toEqual([]);
+    expect(out.verdict).not.toBe("agent");
+    expect(out.delivery).not.toBe("woken");
+  });
+
+  it("drops the author's own RENAME too — the #979 row, which carried no id", async () => {
+    // The live case: the operator renamed the session "1", so `@1` was a real
+    // handle in its OWN index — and the agent quoting `"@1"` in prose woke itself.
+    projection(sessionRow({ name: "k3v7d2mq", display_name: "1" }));
+    const out = await resolve('"@1" still resolves to nobody as a tag', SELF, {
+      authorKind: "agent",
+    });
+    expect(out.recipientAgentIds).toEqual([]);
+    expect(out.verdict).not.toBe("agent");
+  });
+
+  it("answers `[]`, not `null` — the desktop must not re-resolve the self-tag", async () => {
+    projection(sessionRow({ name: "k3v7d2mq" }));
+    const out = await resolve("@agent-k3v7d2mq", SELF, { authorKind: "agent" });
+    expect(out.recipientAgentIds).not.toBeNull();
+  });
+
+  it("still reaches the operator's OTHER agent — the drop is one identity, not a branch", async () => {
+    projection(
+      sessionRow({ name: "k3v7d2mq" }),
+      sessionRow({ id: "s-2", name: "a1b2c3d4" })
+    );
+    const out = await resolve("@agent-k3v7d2mq @agent-a1b2c3d4 go", SELF, {
+      authorKind: "agent",
+    });
+    expect(out).toMatchObject({
+      verdict: "agent",
+      recipientAgentIds: ["a1b2c3d4"],
+      delivery: "woken",
+    });
+  });
+
+  it("drops a `to=` that named the author itself", async () => {
+    projection(sessionRow({ name: "k3v7d2mq" }));
+    const out = await resolve("anything", SELF, {
+      authorKind: "agent",
+      toAgentId: "k3v7d2mq",
+    });
+    expect(out.recipientAgentIds).toEqual([]);
+    expect(out.verdict).not.toBe("agent");
+  });
+
+  it("leaves a PERSON's post alone — a member's session_id names no agent", async () => {
+    // ⚠ A cookie session carries a `session_id` too, and a person is not an agent.
+    projection(sessionRow({ name: "k3v7d2mq" }));
+    const out = await resolve("@agent-k3v7d2mq take this", SELF, {
+      authorKind: "user",
+    });
+    expect(out).toMatchObject({
+      verdict: "agent",
+      recipientAgentIds: ["k3v7d2mq"],
+    });
+  });
+
+  it("leaves an UNSTAMPED agent post alone — 'cannot say' is not 'the author'", async () => {
+    projection(sessionRow({ name: "k3v7d2mq" }));
+    const out = await resolve("@agent-k3v7d2mq take this", {}, {
+      authorKind: "agent",
+    });
+    expect(out.recipientAgentIds).toEqual(["k3v7d2mq"]);
+  });
+});
+
 describe("resolveWakeVerdict — the recipient", () => {
   it("resolves a `to=` member to `member`, and the id is the SERVER'S stamp", async () => {
     // ⚠ It reads `metadata.to_user_id`, not `input.toUserId`: the anti-spoof
