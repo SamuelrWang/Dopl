@@ -55,18 +55,25 @@
 // for it, with its own parity pin.
 const KNOWLEDGE_TOOL = 'mcp__dopl__dopl_kb';
 
-// ⚠ THE READ OPS, AS OF 2026-08-22, DERIVED BY SUBTRACTION AND PINNED BY TEST.
-//   enum      list_bases get_tree list_dir create_base update_base create_folder move_folder
-//             read_file write_file move_file search set_visibility           (knowledge.ts)
-//   WRITE_OPS create_base update_base create_folder move_folder write_file move_file
-//             set_visibility                                                 (gating.ts)
-//   ⇒ reads   list_bases get_tree list_dir read_file search
+// ⚠ THE READ OPS, AS OF 2026-09-03, DERIVED BY SUBTRACTION AND PINNED BY TEST.
+//   enum      list_bases get_tree list_dir create_base update_base grant create_folder
+//             move_folder outline read_file write_file move_file search set_visibility
+//             pin unpin                                                     (knowledge.ts)
+//   WRITE_OPS create_base update_base grant create_folder move_folder write_file move_file
+//             set_visibility pin unpin                                      (gating.ts)
+//   ⇒ reads   list_bases get_tree list_dir outline read_file search
+//
+// ⚠ `outline` JOINED ON 2026-09-03 (headings as addresses). It is the CHEAPEST read on this
+// tool — one entry's headings and what each costs, with the body emptied server-side — so a
+// windowless agent that may read an attached base must be able to make it. Denying it would
+// leave `read_file` as the only door and put the whole document through the gate this list
+// exists to keep narrow.
 //
 // ⚠ `search` IS A READ AND IT IS NOT `dopl_channel op="rooms", action="list"`. The reason that one is kept OFF
 // `OWN_CHANNEL_READ_OPS` is that it enumerates OTHER PEOPLE'S channels and DMs; `dopl_kb`
 // op="search" is server-side filtered to bases this caller may already read, so it discloses
 // nothing a `list_bases` would not. Both are the caller's own reach, never a peer's.
-const KNOWLEDGE_READ_OPS = ['list_bases', 'get_tree', 'list_dir', 'read_file', 'search'];
+const KNOWLEDGE_READ_OPS = ['list_bases', 'get_tree', 'list_dir', 'outline', 'read_file', 'search'];
 
 /**
  * Is THIS CALL a knowledge READ? Takes the CANONICAL tool name and the tool input.

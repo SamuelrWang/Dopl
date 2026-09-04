@@ -179,6 +179,16 @@ export interface StartupContext {
   /** Body characters actually included, i.e. the sum over `items`. */
   chars: number;
   /**
+   * Body characters of everything PINNED, `omitted` included — what the curated
+   * set costs, as against what a launch is handed.
+   *
+   * ⚠ **OPTIONAL, AND READ AS `?? chars` (INVARIANTS §8).** An older server
+   * sends no such key and this response is cached; `chars` is bounded by the
+   * server's 8k delivery cap, so the fallback is a FLOOR and can only ever
+   * under-report — the safe direction for a number a pin is refused on.
+   */
+  pinnedChars?: number;
+  /**
    * ⚠ LOAD-BEARING (INVARIANTS §9): a clipped read that renders like an
    * exhausted one is the bug. `true` means there IS pinned content this payload
    * does not carry — say so, rather than presenting `items` as the whole of what
@@ -246,10 +256,64 @@ export interface KnowledgeWriteFileInput {
   /** Agent-facing summary (≤300 chars) shown in get_tree / list_dir. `null`
    *  clears; omitting leaves the existing excerpt. */
   excerpt?: string | null;
+  /**
+   * Replace ONE `#`/`##`/`###` section — `body` is that section's new content,
+   * spliced server-side under the same `expectedVersion` precondition. A
+   * heading that does not exist is APPENDED at `##`; an ambiguous one refuses
+   * (409 `KNOWLEDGE_SECTION_AMBIGUOUS`).
+   */
+  section?: string;
+}
+
+/** One heading, as an address. */
+export interface KnowledgeOutlineRow {
+  heading: string;
+  /** 1, 2 or 3. */
+  level: number;
+  /** What reading this section costs — a parent's count CONTAINS its children's. */
+  chars: number;
+  /** Char offset of the heading, which is where `offset=` resumes. */
+  start: number;
+  /** 1-based line of the heading. */
+  line: number;
+}
+
+export interface KnowledgeOutline {
+  sections: KnowledgeOutlineRow[];
+  /** The whole entry's length. */
+  totalChars: number;
+}
+
+/**
+ * What a `section=` read resolved to.
+ *
+ * ⚠ **A MISS IS A 200, NOT A 404** — the entry resolved and the heading did
+ * not, so the answer carries the outline and the retry needs no second call.
+ */
+export type KnowledgeSectionOutcome =
+  | { ok: true; heading: string; level: number; start: number; end: number; chars: number }
+  | { ok: false; reason: "SECTION_NOT_FOUND" }
+  | { ok: false; reason: "SECTION_AMBIGUOUS"; matches: KnowledgeOutlineRow[] };
+
+/**
+ * A PART read: the entry with `body` narrowed to the section asked for (empty
+ * on a miss and on an outline-only read), plus the outline of the whole.
+ */
+export interface KnowledgeReadFileResult {
+  entry: KnowledgeEntry;
+  outline?: KnowledgeOutline;
+  section?: KnowledgeSectionOutcome;
 }
 
 export interface KnowledgeWriteFileResult {
   entry: KnowledgeEntry;
+  /**
+   * The outline of what was SAVED. ⚠ `?? undefined` at every reader (INVARIANTS
+   * §8): an older server sends no such key and this response is cached.
+   */
+  outline?: KnowledgeOutline;
+  /** `true` when `section` named no existing heading and one was appended. */
+  sectionCreated?: boolean;
 }
 
 export interface KnowledgePathOpResult {

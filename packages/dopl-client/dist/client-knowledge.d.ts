@@ -6,7 +6,7 @@
  * resolves to folder/entry rows.
  */
 import { WorkspaceMethods } from "./client-workspaces.js";
-import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult, StartupContext } from "./knowledge-types.js";
+import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeReadFileResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult, StartupContext } from "./knowledge-types.js";
 export declare class KnowledgeMethods extends WorkspaceMethods {
     listKbBases(opts?: {
         shelf?: KbShelf;
@@ -33,6 +33,10 @@ export declare class KnowledgeMethods extends WorkspaceMethods {
      *  `omitted` — see {@link StartupContext}. */
     getKbStartupContext(): Promise<StartupContext>;
     readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry>;
+    readKbFilePart(baseId: string, path: string, opts?: {
+        section?: string;
+        outline?: boolean;
+    }): Promise<KnowledgeReadFileResult>;
     writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
     listKbDirByPath(baseId: string, path?: string): Promise<KnowledgeDirListing>;
     createKbFolderByPath(baseId: string, path: string, description?: string | null): Promise<KnowledgeFolder>;

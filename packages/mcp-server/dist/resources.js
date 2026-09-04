@@ -1,7 +1,7 @@
 "use strict";
 /**
- * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. One today: the
- * channels doctrine.
+ * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. Two: the channels
+ * doctrine, and the knowledge one.
  *
  * ⚠ WHY A RESOURCE AND NOT A LONGER DESCRIPTION (T10/T82, 2026-09-02). A tool
  * description is PUSHED — every connected client pays for it on every
@@ -26,6 +26,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerResources = registerResources;
 const channel_doctrine_js_1 = require("./tools/channel-doctrine.js");
+const knowledge_doctrine_js_1 = require("./tools/knowledge-doctrine.js");
 /**
  * Publish every resource onto a session's server. ⚠ Called from
  * `server.ts › createServer` beside the tool registrars, so "what this server
@@ -42,6 +43,24 @@ function registerResources(server) {
                 uri: uri.href,
                 mimeType: "text/markdown",
                 text: channel_doctrine_js_1.CHANNEL_DOCTRINE,
+            },
+        ],
+    }));
+    // ⚠ **500 CHARACTERS AGAINST ~9,000, AND THE ASYMMETRY IS THE ARGUMENT.** A
+    // channel has a protocol, a lifecycle and an etiquette; a knowledge base has
+    // a filesystem, and `dopl_kb`'s arguments already describe it. What no
+    // argument can carry is the ORDER to read in and the duty that makes the
+    // order possible — see `knowledge-doctrine.ts`.
+    server.registerResource("knowledge-doctrine", knowledge_doctrine_js_1.KNOWLEDGE_DOCTRINE_URI, {
+        title: "Dopl knowledge — sections",
+        description: "How to spend fewer characters on a knowledge entry: the read order (excerpt → outline → section → body) and the write duty that makes it possible (## headings, one topic each).",
+        mimeType: "text/markdown",
+    }, (uri) => ({
+        contents: [
+            {
+                uri: uri.href,
+                mimeType: "text/markdown",
+                text: knowledge_doctrine_js_1.KNOWLEDGE_DOCTRINE,
             },
         ],
     }));

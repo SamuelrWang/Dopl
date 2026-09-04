@@ -169,7 +169,7 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ⚠ 1,596 → 1,587 (B13): the discovery sentence names `dopl_workspaces`.
   dopl_channel: 1587,
   dopl_chats: 1699,
-  dopl_kb: 1937, // ⚠ 1,947 → 1,937 (B15) — the copy bullet, minus the grant one
+  dopl_kb: 1986, // ⚠ **1,947 → 1,937 (B15); 1,937 → 1,986 (2026-09-03, +49): ONE OP AND TWO ROUTING SENTENCES.** `op="outline"` must be glossed (`parity.test.ts`), and the sentences are the routing this wave teaches — *excerpt → outline → section → body*, and *entries over ~1.5k chars carry ## headings*. ⚠ **A ROUTING LINE CANNOT MOVE INTO THE PULLED DOCTRINE**, on the fence's own argument: the agent that has not read `dopl://doctrine/knowledge` is the one still reading whole documents. ⚠ **49 IS WHAT SURVIVED A TRIM OF 233** — bullets, the headline's duplicate "never deletes" and one call shape paid the rest. Against it, per READ: 839 chars for one section of a 2,559-char entry against 2,760 whole.
   dopl_members: 1453,
   dopl_ontology: 1924,
   dopl_skill: 1593,
@@ -215,7 +215,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   dopl_channel: 8672, // ⚠ 8,677 → 8,672 (2026-09-03): `section=`'s enum gained `waiting` (+10 — a section a model cannot name is a section it cannot pull) and that field's own `.describe()` paid for it twice over (−15).
   dopl_chats: 3553,
   // ⚠ 5,347 → 5,141 (B15), same trade
-  dopl_kb: 5138,
+  dopl_kb: 5707, // ⚠ **5,138 → 5,707 (2026-09-03, +569): TWO PARAMETERS PLUS AN OP NAME — the one licence this file accepts.** `section` and `offset` are what make a heading an address; a published argument cannot move into a pulled document, and trimming its describe into uselessness buys the number by making the knob unusable — the argument `response_format` and `max_chars` rode. ⚠ **AND IT PAYS FOR ITSELF PER CALL, NOT PER CONNECTION**: 569 once, against 1,921 saved by ONE sectioned read of a 2,559-char entry.
   dopl_map: 250,
   dopl_members: 845,
   dopl_ontology: 2816,
@@ -267,7 +267,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // `list_workspaces` → `dopl_workspaces`), the injected `workspace` contract lost
 // 5 chars × 9 tools, and the briefing fell 56. **B15 then took the copy ops, the
 // `shelf` axis and its two labels out and put the grant op and its three args in.**
-const SERVED_TOTAL_CEILING = 46_846; // ⚠ **46,851 → 46,846 (2026-09-03): THE HOLD-NOT-POLL WAVE MADE THIS SURFACE SMALLER.** The `section=` enum gained `waiting` (+10) and that field's `.describe()` paid for it (−15); the briefing's new WAIT sentence cost nothing here because it was paid for by trimming the contract around it. What the ten characters buy is a caller that HOLDS instead of re-reading on a timer — and a timed poll re-sends that caller's whole context per tick, a cost this ceiling cannot see. Per-call, the hold results fell ~1,400 EACH (`channel-result-budget.test.ts`).
+const SERVED_TOTAL_CEILING = 47_464; // ⚠ **46,846 → 47,464 (2026-09-03, +618): THE HEADINGS-AS-ADDRESSES WAVE MADE THIS SURFACE BIGGER, AND SAID SO.** `dopl_kb`'s schema +569 (`section`, `offset`, one op name) and its description +49, against a trim of 233 inside the same description. ⚠ **THIS IS THE ONE CEILING THAT CANNOT SEE THE SAVING, WHICH IS WHY THE RISE IS RECORDED RATHER THAN ABSORBED.** It counts what a connection costs before it has done anything; what these characters buy is per READ — an agent that outlines a 2,559-char entry and pulls one section spends 1,158 (319 outline + 839 section) where it used to spend 2,760, and the ratio only improves with the document. Six such reads pay the rise back. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** ⚠ **46,851 → 46,846 (2026-09-03): THE HOLD-NOT-POLL WAVE MADE THIS SURFACE SMALLER.** The `section=` enum gained `waiting` (+10) and that field's `.describe()` paid for it (−15); the briefing's new WAIT sentence cost nothing here because it was paid for by trimming the contract around it. What the ten characters buy is a caller that HOLDS instead of re-reading on a timer — and a timed poll re-sends that caller's whole context per tick, a cost this ceiling cannot see. Per-call, the hold results fell ~1,400 EACH (`channel-result-budget.test.ts`).
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
@@ -317,7 +317,7 @@ const INSTRUCTIONS_CEILING = 1_801; // ⚠ **UNMOVED ON 2026-09-03, AND THAT IS 
 // ⚠ **32,551 → 8,960 (B8), THE LARGEST SINGLE FALL HERE.** The doctrine was
 // where every evicted paragraph landed: 5,765 of refusals, 4,873 of own-agent
 // narrative, 3,914 on a hold that is now a knob on `read`.
-const DOCTRINE_CEILING = 9_446; // ⚠ **8,960 → 9,446 (2026-09-03): A RISE, RECORDED HERE BECAUSE THIS IS THE GATE THAT WOULD OTHERWISE ABSORB IT.** ~490 pulled once against ~1,400 pushed per empty hold — `channel-doctrine-budget.test.ts` states the trade in full.
+const DOCTRINE_CEILING = 9_923; // ⚠ **9,446 → 9,923 (2026-09-03, +477): A SECOND RESOURCE, `dopl://doctrine/knowledge`, AND THE WHOLE OF IT IS THE RISE.** It is 477 characters against the channels doctrine's ~9,000, because a knowledge base has a filesystem where a channel has a protocol — what no argument could carry is the ORDER (excerpt → outline → section → body) and the write duty that makes the order possible. ⚠ **THE PUSHED SIDE ROSE IN THE SAME WAVE (`SERVED_TOTAL_CEILING` +618), SO THIS IS NOT A LAUNDERING** — the routing sentence is deliberately in BOTH, because several clients read no resources at all, and the saving is on neither ledger: it is per READ. `knowledge-doctrine-budget.test.ts` bounds this document on its own so the cheap one cannot become where evicted paragraphs land. ⚠ **8,960 → 9,446 (2026-09-03): A RISE, RECORDED HERE BECAUSE THIS IS THE GATE THAT WOULD OTHERWISE ABSORB IT.** ~490 pulled once against ~1,400 pushed per empty hold — `channel-doctrine-budget.test.ts` states the trade in full.
 
 const WS: WorkspaceListItem = {
   id: "11111111-1111-1111-1111-111111111111",

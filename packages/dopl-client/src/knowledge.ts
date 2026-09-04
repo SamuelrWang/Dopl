@@ -14,6 +14,7 @@ import type {
   KnowledgeDirListing,
   KnowledgeEntry,
   KnowledgePathOpResult,
+  KnowledgeReadFileResult,
   KnowledgeSearchHit,
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
@@ -189,6 +190,29 @@ export async function readKbFileByPath(
     { toolName: "kb_read_file" }
   );
   return data.entry;
+}
+
+/**
+ * A PART of an entry: one `section=`, or the outline alone.
+ *
+ * ⚠ **A SEPARATE METHOD RATHER THAN AN OPTION ON {@link readKbFileByPath}**,
+ * because the two answer different shapes and the whole-document read is on
+ * every existing caller's path. ⚠ **THE NARROWING IS A QUERY PARAMETER, NOT A
+ * POST-FILTER**: the body that did not match never crosses the wire.
+ */
+export async function readKbFilePart(
+  t: DoplTransport,
+  baseId: string,
+  path: string,
+  opts: { section?: string; outline?: boolean } = {}
+): Promise<KnowledgeReadFileResult> {
+  const params = new URLSearchParams({ path });
+  if (opts.section !== undefined) params.set("section", opts.section);
+  if (opts.outline) params.set("outline", "1");
+  return t.request<KnowledgeReadFileResult>(
+    `/api/knowledge/bases/${enc(baseId)}/files?${params.toString()}`,
+    { toolName: "kb_read_file" }
+  );
 }
 
 export async function writeKbFileByPath(

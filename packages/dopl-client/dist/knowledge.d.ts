@@ -3,7 +3,7 @@
  * `DoplTransport`; the class-side method group is `client-knowledge.ts`.
  */
 import type { DoplTransport } from "./transport.js";
-import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult, StartupContext } from "./knowledge-types.js";
+import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseListPayload, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgePathOpResult, KnowledgeReadFileResult, KnowledgeSearchHit, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult, StartupContext } from "./knowledge-types.js";
 /**
  * The bases this caller may READ, optionally narrowed to one shelf.
  *
@@ -62,6 +62,18 @@ export declare function setKbEntryPinned(t: DoplTransport, entryId: string, pinn
  */
 export declare function getKbStartupContext(t: DoplTransport): Promise<StartupContext>;
 export declare function readKbFileByPath(t: DoplTransport, baseId: string, path: string): Promise<KnowledgeEntry>;
+/**
+ * A PART of an entry: one `section=`, or the outline alone.
+ *
+ * ⚠ **A SEPARATE METHOD RATHER THAN AN OPTION ON {@link readKbFileByPath}**,
+ * because the two answer different shapes and the whole-document read is on
+ * every existing caller's path. ⚠ **THE NARROWING IS A QUERY PARAMETER, NOT A
+ * POST-FILTER**: the body that did not match never crosses the wire.
+ */
+export declare function readKbFilePart(t: DoplTransport, baseId: string, path: string, opts?: {
+    section?: string;
+    outline?: boolean;
+}): Promise<KnowledgeReadFileResult>;
 export declare function writeKbFileByPath(t: DoplTransport, baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
 export declare function listKbDirByPath(t: DoplTransport, baseId: string, path?: string): Promise<KnowledgeDirListing>;
 export declare function createKbFolderByPath(t: DoplTransport, baseId: string, path: string, description?: string | null): Promise<import("./knowledge-types.js").KnowledgeFolder>;

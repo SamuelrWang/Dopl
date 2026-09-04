@@ -9,7 +9,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.opCreateBase = opCreateBase;
 exports.opUpdateBase = opUpdateBase;
 exports.opSetVisibility = opSetVisibility;
-exports.opPin = opPin;
 exports.opCreateFolder = opCreateFolder;
 exports.opMoveFolder = opMoveFolder;
 exports.opWriteFile = opWriteFile;
@@ -19,6 +18,7 @@ const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
 const confirm_token_1 = require("./confirm-token");
+const knowledge_sections_1 = require("./knowledge-sections");
 const grant_1 = require("./grant");
 /**
  * ⚠ Write confirmations read back the STORED value, not the argument (a
@@ -218,53 +218,6 @@ async function opSetVisibility(client, callerUserId, ref, visibility, confirmTok
     }
     return (0, respond_1.ok)(`Published knowledge base ${(0, narration_1.inlineOr)(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide.`);
 }
-/**
- * PINNED STARTUP CONTEXT (T81) — put a base (or one entry of it) into what every
- * agent session launched in this workspace is handed at startup, or take it out.
- *
- * ⚠ ONE HANDLER, TWO OPS, AND THE BOOLEAN IS THE ONLY DIFFERENCE. `pin` and
- * `unpin` are separate ops rather than one op with a flag for the reason the
- * REST routes are two verbs: a request that states the END STATE is safe to
- * retry after an ambiguous failure, where a toggle silently un-does a write that
- * landed. On workspace-wide state that un-do changes what every session started
- * afterwards begins with.
- *
- * ⚠ `path` IS WHAT PICKS THE TARGET, and the two are different objects: with a
- * path this pins ONE ENTRY, without it the WHOLE BASE. The result says which,
- * because an agent that believes it pinned a base when it pinned one document
- * will not pin the rest.
- *
- * ⚠ THE ENTRY LOOKUP IS A READ THROUGH THE ORDINARY PATH RESOLVER, so an
- * unreadable base or a path that names a FOLDER refuses before anything is
- * written — the server's own gates (`service-pins.ts › pinEntry` chases the
- * entry up to its base) are what actually refuse; this only makes the refusal
- * legible.
- */
-async function opPin(client, ref, path, pinned) {
-    const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
-        return base;
-    const verb = pinned ? "Pinned" : "Unpinned";
-    try {
-        if (path === undefined || path === "") {
-            await client.setKbBasePinned(base.id, pinned);
-            return (0, respond_1.ok)(`${verb} knowledge base ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${pinned ? "Every entry in it is now included in the startup context of agent sessions launched in this workspace." : "Its entries are no longer included in the startup context of new agent sessions."}`);
-        }
-        const entry = await client.readKbFileByPath(base.id, path);
-        await client.setKbEntryPinned(entry.id, pinned);
-        return (0, respond_1.ok)(`${verb} ${(0, narration_1.inlineOr)(path, NO_PATH)} in ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (entry id: \`${entry.id}\`). ${pinned ? "This ONE entry is now included in the startup context of agent sessions launched in this workspace — the rest of the base is not." : "It is no longer included on its own; if its BASE is pinned it still arrives with the base."}`);
-    }
-    catch (e) {
-        // Read-only-to-agents base — clean message, not a raw dump.
-        const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
-        if ((0, respond_1.isNotFound)(e)) {
-            return (0, respond_1.err)(`No entry at ${(0, narration_1.inlineOr)(path, NO_PATH)} in ${(0, narration_1.inlineOr)(base.name, NO_NAME)}, so nothing was ${pinned ? "pinned" : "unpinned"}. Paths must resolve to an ENTRY, not a folder — check dopl_kb(op="get_tree", base) for the exact path, or omit \`path\` to ${pinned ? "pin" : "unpin"} the whole base.`);
-        }
-        throw e;
-    }
-}
 async function opCreateFolder(client, ref, path, description) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))
@@ -303,16 +256,36 @@ async function opMoveFolder(client, ref, from_path, to_path) {
     }
     return (0, respond_1.ok)(`Folder moved: ${(0, narration_1.inlineOr)(from_path, NO_PATH)} → ${(0, narration_1.inlineOr)(to_path, NO_PATH)}.`);
 }
-async function opWriteFile(client, ref, path, body, title, expected_version, force, excerpt) {
+/**
+ * ⚠ **`section` MAKES THIS A READ-MODIFY-WRITE, AND THE SERVER DOES ALL THREE.**
+ * The splice happens against the row `expected_version` was just checked on, so
+ * a sectioned write is exactly as safe as a whole-body one — where a caller
+ * merging locally would be merging onto a body it fetched in an earlier request.
+ *
+ * ⚠ **THE RESULT ALWAYS ENDS WITH THE OUTLINE OF WHAT WAS SAVED**, which is the
+ * addresses the next read can use, and it LEADS with `reason=UNSECTIONED` when a
+ * long body carries no headings at all. **The write lands either way** (Samuel's
+ * ruling): refusing would refuse the user's content over our formatting taste.
+ */
+async function opWriteFile(client, ref, path, body, title, expected_version, force, excerpt, section) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))
         return base;
     let entry;
+    let outline;
+    let sectionCreated;
     try {
-        const res = await client.writeKbFileByPath(base.id, path, { body, title, excerpt }, force ? null : expected_version);
+        const res = await client.writeKbFileByPath(base.id, path, { body, title, excerpt, section }, force ? null : expected_version);
         entry = res.entry;
+        outline = res.outline;
+        sectionCreated = res.sectionCreated;
     }
     catch (e) {
+        // ⚠ THE ONE REFUSAL `section` ADDS, and it is a refusal rather than a
+        // first-match because the write it would have made is unrecoverable.
+        if ((0, respond_1.isApiError)(e, 409, "KNOWLEDGE_SECTION_AMBIGUOUS")) {
+            return (0, respond_1.err)(`reason=SECTION_AMBIGUOUS · ${(0, respond_1.apiMessage)(e) ?? "that heading names more than one section."} · retry=none, they have the same name\n\nNOTHING was written. Rename one of them, or drop \`section\` and write the whole body.`);
+        }
         if ((0, respond_1.isConflict)(e)) {
             return (0, respond_1.err)(`${(0, narration_1.inlineOr)(path, NO_PATH)} changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`);
         }
@@ -337,7 +310,20 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
     const note = canonicalPath !== path
         ? ` Address future reads/moves with path ${(0, narration_1.inlineOr)(canonicalPath, NO_PATH)}.`
         : "";
-    return (0, respond_1.ok)(`Wrote ${(0, narration_1.inlineOr)(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}`);
+    // ⚠ THE NUDGE LEADS, because a `reason=` line read after the success sentence
+    // is a line an agent has already decided it does not need.
+    const unsectioned = entry.body.length > knowledge_sections_1.KB_SECTION_NUDGE_CHARS &&
+        (outline?.sections.length ?? 0) === 0;
+    const sectionNote = section === undefined
+        ? ""
+        : sectionCreated
+            ? ` Section ${(0, narration_1.inlineOr)(section, "`(unreadable)`")} did not exist and was APPENDED at \`##\` level.`
+            : ` Replaced section ${(0, narration_1.inlineOr)(section, "`(unreadable)`")}; the rest of the entry is untouched.`;
+    return (0, respond_1.ok)([
+        ...(unsectioned ? [(0, knowledge_sections_1.unsectionedNudge)(), ""] : []),
+        `Wrote ${(0, narration_1.inlineOr)(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}${sectionNote}`,
+        ...[(0, knowledge_sections_1.outlineFooter)(outline)].filter((l) => l !== null),
+    ].join("\n"));
 }
 async function opMoveFile(client, ref, from_path, to_path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);

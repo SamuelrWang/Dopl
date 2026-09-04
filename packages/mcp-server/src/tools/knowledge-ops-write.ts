@@ -7,7 +7,7 @@
 
 import type { DoplClient } from "@dopl/client";
 import { inlineOr } from "./narration";
-import { ok, err, isConflict, isAlreadyExists, isNotFound, type ToolResponse } from "./respond";
+import { ok, err, isConflict, isAlreadyExists, isApiError, apiMessage, type ToolResponse } from "./respond";
 import {
   agentWriteDenied,
   isErr,
@@ -21,6 +21,11 @@ import {
   RECONFIRM_REMEDY,
 } from "./confirm-token";
 import type { WorkspaceDirectory } from "../workspace-directory";
+import {
+  KB_SECTION_NUDGE_CHARS,
+  outlineFooter,
+  unsectionedNudge,
+} from "./knowledge-sections";
 import {
   grantedLine,
   isGrantRefusal,
@@ -258,62 +263,6 @@ export async function opSetVisibility(
   );
 }
 
-/**
- * PINNED STARTUP CONTEXT (T81) — put a base (or one entry of it) into what every
- * agent session launched in this workspace is handed at startup, or take it out.
- *
- * ⚠ ONE HANDLER, TWO OPS, AND THE BOOLEAN IS THE ONLY DIFFERENCE. `pin` and
- * `unpin` are separate ops rather than one op with a flag for the reason the
- * REST routes are two verbs: a request that states the END STATE is safe to
- * retry after an ambiguous failure, where a toggle silently un-does a write that
- * landed. On workspace-wide state that un-do changes what every session started
- * afterwards begins with.
- *
- * ⚠ `path` IS WHAT PICKS THE TARGET, and the two are different objects: with a
- * path this pins ONE ENTRY, without it the WHOLE BASE. The result says which,
- * because an agent that believes it pinned a base when it pinned one document
- * will not pin the rest.
- *
- * ⚠ THE ENTRY LOOKUP IS A READ THROUGH THE ORDINARY PATH RESOLVER, so an
- * unreadable base or a path that names a FOLDER refuses before anything is
- * written — the server's own gates (`service-pins.ts › pinEntry` chases the
- * entry up to its base) are what actually refuse; this only makes the refusal
- * legible.
- */
-export async function opPin(
-  client: DoplClient,
-  ref: string,
-  path: string | undefined,
-  pinned: boolean,
-): Promise<ToolResponse> {
-  const base = await resolveBaseOr(client, ref);
-  if (isErr(base)) return base;
-  const verb = pinned ? "Pinned" : "Unpinned";
-  try {
-    if (path === undefined || path === "") {
-      await client.setKbBasePinned(base.id, pinned);
-      return ok(
-        `${verb} knowledge base ${inlineOr(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${pinned ? "Every entry in it is now included in the startup context of agent sessions launched in this workspace." : "Its entries are no longer included in the startup context of new agent sessions."}`,
-      );
-    }
-    const entry = await client.readKbFileByPath(base.id, path);
-    await client.setKbEntryPinned(entry.id, pinned);
-    return ok(
-      `${verb} ${inlineOr(path, NO_PATH)} in ${inlineOr(base.name, NO_NAME)} (entry id: \`${entry.id}\`). ${pinned ? "This ONE entry is now included in the startup context of agent sessions launched in this workspace — the rest of the base is not." : "It is no longer included on its own; if its BASE is pinned it still arrives with the base."}`,
-    );
-  } catch (e) {
-    // Read-only-to-agents base — clean message, not a raw dump.
-    const denied = agentWriteDenied(e);
-    if (denied) return denied;
-    if (isNotFound(e)) {
-      return err(
-        `No entry at ${inlineOr(path, NO_PATH)} in ${inlineOr(base.name, NO_NAME)}, so nothing was ${pinned ? "pinned" : "unpinned"}. Paths must resolve to an ENTRY, not a folder — check dopl_kb(op="get_tree", base) for the exact path, or omit \`path\` to ${pinned ? "pin" : "unpin"} the whole base.`,
-      );
-    }
-    throw e;
-  }
-}
-
 export async function opCreateFolder(client: DoplClient, ref: string, path: string, description?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
@@ -350,19 +299,41 @@ export async function opMoveFolder(client: DoplClient, ref: string, from_path: s
   return ok(`Folder moved: ${inlineOr(from_path, NO_PATH)} → ${inlineOr(to_path, NO_PATH)}.`);
 }
 
-export async function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string): Promise<ToolResponse> {
+/**
+ * ⚠ **`section` MAKES THIS A READ-MODIFY-WRITE, AND THE SERVER DOES ALL THREE.**
+ * The splice happens against the row `expected_version` was just checked on, so
+ * a sectioned write is exactly as safe as a whole-body one — where a caller
+ * merging locally would be merging onto a body it fetched in an earlier request.
+ *
+ * ⚠ **THE RESULT ALWAYS ENDS WITH THE OUTLINE OF WHAT WAS SAVED**, which is the
+ * addresses the next read can use, and it LEADS with `reason=UNSECTIONED` when a
+ * long body carries no headings at all. **The write lands either way** (Samuel's
+ * ruling): refusing would refuse the user's content over our formatting taste.
+ */
+export async function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string, section?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   let entry;
+  let outline;
+  let sectionCreated;
   try {
     const res = await client.writeKbFileByPath(
       base.id,
       path,
-      { body, title, excerpt },
+      { body, title, excerpt, section },
       force ? null : expected_version
     );
     entry = res.entry;
+    outline = res.outline;
+    sectionCreated = res.sectionCreated;
   } catch (e) {
+    // ⚠ THE ONE REFUSAL `section` ADDS, and it is a refusal rather than a
+    // first-match because the write it would have made is unrecoverable.
+    if (isApiError(e, 409, "KNOWLEDGE_SECTION_AMBIGUOUS")) {
+      return err(
+        `reason=SECTION_AMBIGUOUS · ${apiMessage(e) ?? "that heading names more than one section."} · retry=none, they have the same name\n\nNOTHING was written. Rename one of them, or drop \`section\` and write the whole body.`,
+      );
+    }
     if (isConflict(e)) {
       return err(
         `${inlineOr(path, NO_PATH)} changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`
@@ -390,8 +361,23 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
     canonicalPath !== path
       ? ` Address future reads/moves with path ${inlineOr(canonicalPath, NO_PATH)}.`
       : "";
+  // ⚠ THE NUDGE LEADS, because a `reason=` line read after the success sentence
+  // is a line an agent has already decided it does not need.
+  const unsectioned =
+    entry.body.length > KB_SECTION_NUDGE_CHARS &&
+    (outline?.sections.length ?? 0) === 0;
+  const sectionNote =
+    section === undefined
+      ? ""
+      : sectionCreated
+        ? ` Section ${inlineOr(section, "`(unreadable)`")} did not exist and was APPENDED at \`##\` level.`
+        : ` Replaced section ${inlineOr(section, "`(unreadable)`")}; the rest of the entry is untouched.`;
   return ok(
-    `Wrote ${inlineOr(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}`
+    [
+      ...(unsectioned ? [unsectionedNudge(), ""] : []),
+      `Wrote ${inlineOr(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}${sectionNote}`,
+      ...[outlineFooter(outline)].filter((l): l is string => l !== null),
+    ].join("\n")
   );
 }
 

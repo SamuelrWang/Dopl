@@ -18,6 +18,7 @@ import type {
   KnowledgeEntry,
   KnowledgeFolder,
   KnowledgePathOpResult,
+  KnowledgeReadFileResult,
   KnowledgeSearchHit,
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
@@ -83,6 +84,14 @@ export class KnowledgeMethods extends WorkspaceMethods {
 
   readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry> {
     return kb.readKbFileByPath(this.transport, baseId, path);
+  }
+
+  readKbFilePart(
+    baseId: string,
+    path: string,
+    opts: { section?: string; outline?: boolean } = {}
+  ): Promise<KnowledgeReadFileResult> {
+    return kb.readKbFilePart(this.transport, baseId, path, opts);
   }
 
   writeKbFileByPath(

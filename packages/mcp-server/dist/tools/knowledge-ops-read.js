@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.opListBases = opListBases;
 exports.opGetTree = opGetTree;
 exports.opListDir = opListDir;
+exports.opOutline = opOutline;
 exports.opReadFile = opReadFile;
 exports.opSearch = opSearch;
 const narration_1 = require("./narration");
@@ -16,6 +17,7 @@ const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
 const response_size_1 = require("./response-size");
 const untrusted_fence_1 = require("./untrusted-fence");
+const knowledge_sections_1 = require("./knowledge-sections");
 /**
  * ⚠ WHAT IS AND ISN'T NEUTRALIZED IN A KNOWLEDGE READ. A published base is
  * workspace-visible, so every name, description, title and excerpt can be
@@ -161,15 +163,80 @@ async function opListDir(client, ref, path) {
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opReadFile(client, ref, path, 
-// ⚠ Only the FRAMING reads this — readability is the server's decision and
-// it already ran.
-callerUserId = null, format, maxChars) {
+/**
+ * THE OUTLINE OP — every heading in one entry, with what each costs to read.
+ *
+ * ⚠ **IT IS A READ THAT DELIBERATELY DOES NOT RETURN THE DOCUMENT.** The body
+ * is emptied server-side, so an agent deciding WHETHER to read an entry pays a
+ * few dozen characters instead of a few thousand. That is the whole trade, and
+ * it is why the routing line names this before `read_file`.
+ */
+async function opOutline(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))
         return base;
-    const entry = await client.readKbFileByPath(base.id, path);
-    const { body, notice } = (0, response_size_1.clipToMaxChars)(entry.body, maxChars);
+    const read = await client.readKbFilePart(base.id, path, { outline: true });
+    const outline = read.outline;
+    if (!outline || outline.sections.length === 0) {
+        // ⚠ NOT AN ERROR, AND IT MUST NOT READ AS ONE. An entry with no headings is
+        // the ordinary state of a short note; what the caller needs is the SIZE, so
+        // it can decide whether reading the whole thing is cheap.
+        return (0, respond_1.ok)([
+            `## ${(0, narration_1.inlineOr)(read.entry.title, NO_NAME)} — no headings`,
+            `Path: \`${path}\` · ${outline?.totalChars ?? 0} chars whole.`,
+            "",
+            `Nothing to address by section — read it with op="read_file". Entries over ${knowledge_sections_1.KB_SECTION_NUDGE_CHARS} chars should carry \`##\` headings, one topic each.`,
+        ].join("\n"));
+    }
+    return (0, respond_1.ok)([
+        (0, knowledge_sections_1.outlineHeading)(read.entry.title, outline),
+        `Path: \`${path}\` · Version: \`${read.entry.updatedAt}\``,
+        "",
+        ...(0, knowledge_sections_1.renderOutline)(outline),
+    ].join("\n"));
+}
+/**
+ * ⚠ **THREE WAYS TO SPEND LESS ON ONE DOCUMENT, AND THEY COMPOSE IN ONE ORDER.**
+ * `section` picks WHAT (server-side — the rest never crosses the wire), then
+ * `offset` and `max_chars` pick how much of that to render. A `section` that
+ * does not resolve returns the OUTLINE rather than the document, so the retry
+ * costs no round trip.
+ */
+async function opReadFile(client, ref, path, 
+// ⚠ Only the FRAMING reads this — readability is the server's decision and
+// it already ran.
+callerUserId = null, format, maxChars, section, offset) {
+    const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
+    if ((0, knowledge_shared_1.isErr)(base))
+        return base;
+    let outline;
+    let sectionLine = null;
+    let entry;
+    if (section === undefined) {
+        entry = await client.readKbFileByPath(base.id, path);
+    }
+    else {
+        const read = await client.readKbFilePart(base.id, path, { section });
+        entry = read.entry;
+        outline = read.outline;
+        const found = read.section;
+        if (found && found.ok === false) {
+            const lines = found.reason === "SECTION_AMBIGUOUS"
+                ? (0, knowledge_sections_1.sectionAmbiguous)(section, found.matches)
+                : (0, knowledge_sections_1.sectionMiss)(section, outline, entry.title);
+            // ⚠ `ok`, NOT `err`: the READ succeeded and the heading did not resolve.
+            // An `isError` here would make a client that retries on error retry a
+            // call that can only answer the same way.
+            return (0, respond_1.ok)(lines.join("\n"));
+        }
+        if (found && found.ok) {
+            // ⚠ NO OUTER BACKTICKS: `inlineOr` already renders a VALUE as code, and
+            // wrapping its output again produced ``` ``Errors`` ``` — a heading an
+            // agent cannot copy back into `section=`.
+            sectionLine = `Section: ${"#".repeat(Math.min(3, found.level))} ${(0, narration_1.inlineOr)(found.heading, "(unnamed)")} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
+        }
+    }
+    const { body, notice } = (0, response_size_1.windowBody)(entry.body, offset, maxChars);
     const terse = (0, response_size_1.isConcise)(format);
     const lines = [
         // ⚠ `concise` KEEPS THE VERSION TOKEN AND DROPS THE REST OF THE METADATA.
@@ -184,6 +251,7 @@ callerUserId = null, format, maxChars) {
                 `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
                 `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
             ]),
+        ...(sectionLine ? [sectionLine] : []),
         ...(notice ? ["", notice] : []),
         "",
         "---",

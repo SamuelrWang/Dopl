@@ -96,6 +96,7 @@ describe("the visibility fence", () => {
       items: [],
       omitted: [],
       chars: 0,
+      pinnedChars: 0,
       truncated: false,
     });
     expect(mockRepo.listPinnedEntriesForBases).not.toHaveBeenCalled();
@@ -110,6 +111,7 @@ describe("the empty case", () => {
       items: [],
       omitted: [],
       chars: 0,
+      pinnedChars: 0,
       truncated: false,
     });
   });

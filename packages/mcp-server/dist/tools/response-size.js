@@ -27,10 +27,11 @@
  * the agent's, and would put a knob on a contract two clients mirror.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MAX_CHARS_FIELD = exports.FIELDS_FIELD = exports.RESPONSE_FORMAT_FIELD = void 0;
+exports.OFFSET_FIELD = exports.MAX_CHARS_FIELD = exports.FIELDS_FIELD = exports.RESPONSE_FORMAT_FIELD = void 0;
 exports.isConcise = isConcise;
 exports.fieldFilter = fieldFilter;
 exports.clipToMaxChars = clipToMaxChars;
+exports.windowBody = windowBody;
 const zod_1 = require("zod");
 /**
  * ⚠ THE ONE `.describe()` FOR THE KNOB, SHARED BY EVERY TOOL THAT TAKES IT.
@@ -116,6 +117,52 @@ function clipToMaxChars(body, maxChars) {
     }
     return {
         body: body.slice(0, maxChars),
-        notice: `⚠ CLIPPED to max_chars=${maxChars} of ${body.length} characters — this is a PREFIX, not the document. Raise \`max_chars\` or omit it for the whole body.`,
+        notice: `⚠ CLIPPED to max_chars=${maxChars} of ${body.length} characters — this is a PREFIX, not the document. Raise \`max_chars\`, omit it for the whole body, or continue with offset=${maxChars}.`,
+    };
+}
+/**
+ * ⚠ THE ONE `.describe()` FOR THE RESUME KNOB. It pairs with `max_chars`: the
+ * clip says where it stopped, and this is where the next call starts.
+ */
+exports.OFFSET_FIELD = zod_1.z.coerce
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('op="read_file": start the BODY at this character offset — the number a clipped read prints. Pairs with max_chars; prefer `section` when the entry has headings.');
+/**
+ * A WINDOW onto a body: `offset` characters in, `maxChars` long.
+ *
+ * ⚠ **IT ALWAYS SAYS WHAT IT DID, AND IT ALWAYS NAMES THE RESUME POINT.** The
+ * rule {@link clipToMaxChars} states — a prefix that renders like a whole is the
+ * bug — gets sharper with an offset: a MIDDLE that renders like a whole is
+ * worse, because nothing about the text hints that something preceded it. So a
+ * window that starts late says so, and a window that stops early prints the
+ * `offset` that continues it, which is the argument the caller needs and cannot
+ * derive from a rendered page.
+ *
+ * ⚠ **AN OFFSET PAST THE END IS NOT AN ERROR.** It is what a caller that paged
+ * to the last character gets, and answering it with a refusal would make the
+ * final page indistinguishable from a mistake. Empty, and it says why.
+ */
+function windowBody(body, offset, maxChars) {
+    const from = Math.min(Math.max(0, Math.floor(offset ?? 0)), body.length);
+    if (from === 0)
+        return clipToMaxChars(body, maxChars);
+    if (from >= body.length) {
+        return {
+            body: "",
+            notice: `⚠ EMPTY — offset=${from} is at or past the end of this ${body.length}-character body. There is nothing after it.`,
+        };
+    }
+    const rest = body.slice(from);
+    const clipped = clipToMaxChars(rest, maxChars);
+    const shown = clipped.body.length;
+    const tail = from + shown < body.length
+        ? ` Resume with offset=${from + shown}.`
+        : " This runs to the end of the entry.";
+    return {
+        body: clipped.body,
+        notice: `⚠ WINDOW — characters ${from}–${from + shown} of ${body.length}. This is a MIDDLE, not the document: everything before offset=${from} is missing.${tail}`,
     };
 }
