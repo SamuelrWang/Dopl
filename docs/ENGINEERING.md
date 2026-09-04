@@ -6356,3 +6356,76 @@ clobbers an operator's edit — a `.dopl-installed.json` sidecar records a sha25
 untouched older copy upgrades, an edited one is left alone, and a directory with no sidecar is never
 touched. That check is the one `docs/M5-M6-M10-AUDIT-FINDINGS.md` records the previous generation of
 this idea shipping without.
+
+## 2026-09-03 — Headings as addresses: making a knowledge entry readable in parts
+
+**The problem was that an entry had exactly one address.** `dopl_kb(op="read_file", base, path)`
+returned the document, whole, every time — so an agent that wanted the four lines about a 412 paid
+for the deploy runbook. Notion's answer to this is a stored block tree, which is a data model, a
+migration and a second editor. Ours is the markdown the user already wrote: `#`/`##`/`###` headings,
+**split at READ time**, so nothing is stored, nothing is migrated, and an entry written a year before
+this shipped becomes addressable the moment somebody adds a heading to it.
+
+**One implementation, and it lives in the app tree.** `src/shared/knowledge/markdown-sections.ts` is
+pure and import-free: `outlineOf` (headings + offsets + per-section costs), `sliceSection`,
+`replaceSection`, `appendSection`. The cases that make it worth testing exhaustively are the ones a
+real knowledge base is full of — a `# comment` inside a ```` ``` ```` fence is not a heading (a
+runbook of shell snippets would otherwise be all sections), a setext underline IS one, YAML
+frontmatter is skipped whole (its closing `---` sits under a `key: value` line, which is exactly the
+shape of a setext heading), `####` stays inside its `###` parent, and every offset indexes the
+original body, CRLF and all.
+
+**The interesting decision was WHERE the split runs.** `response-size.ts` states a rule this package
+has followed for a wave: a size knob is applied in the RENDERER, never on the wire, because the
+loopback payload is internal and costs the agent nothing. By that rule `section=` belongs in the
+renderer. It does not, and the reason is that `section` is not a projection — it SELECTS which part
+of a document to fetch, the way `path` selects which document — so it sits on the request, and the
+body that never matched never crosses the wire either. The practical half of the same argument
+settles it: **`packages/mcp-server` cannot import `src/`** (its tsconfig `rootDir` is its own `src`),
+so a renderer-side split would have meant a hand-copied markdown parser — a second opinion about what
+a heading is, drifting silently. `offset` DID stay in the renderer, because it is a window over a
+payload already fetched, exactly like `max_chars`. The three caps could not avoid the hand-copy and
+are joined by a source-read test (`src/shared/knowledge/caps.test.ts`), the same seam
+`channel-poll-detector.ts` rides.
+
+**A miss had to be cheaper than a hit.** An unknown heading answers `200` with the OUTLINE inline —
+not a 404, because the entry resolved and the heading did not, and not `isError`, because a client
+that retries on error would retry a call that can only ever answer the same way. The retry therefore
+costs no round trip, which is the only way a refusal is cheaper than the read it refused. An
+AMBIGUOUS heading is different in kind on the WRITE path and refuses (409, both line numbers): there
+is no trash, so overwriting the wrong section is unrecoverable.
+
+**The write half is a nudge, and Samuel's ruling was that it may never become a refusal.** A body
+over 1,500 characters with no headings lands, and the result LEADS with `reason=UNSECTIONED ·
+retry=none`. The alternative refuses the user's content over our formatting taste, and the agent that
+cannot guess the taste is exactly the one being refused. Every write result ends with a one-line
+outline, so the addresses arrive with the confirmation rather than a call later.
+
+**The pin grew a budget because its cost is paid by somebody who is not the caller.** Pinned content
+is prepended to every session the workspace launches. Past 4,000 characters a pin lands with
+`reason=PIN_LARGE` and the per-launch number; past 12,000 it is REVERTED and refused. It is measured
+AFTER the write rather than predicted — a base pin's cost is the sum of every entry in it, which the
+MCP process cannot know without reading them all — and the revert fires only when the write changed
+something, so re-pinning what is already pinned can never un-pin it. The number it judges is a new
+`StartupContext.pinnedChars`: the existing `chars` is bounded by the 8k delivery cap and can
+therefore never report a problem, because past the cap the payload silently ships POINTERS instead of
+content. That is also the honest content of the warning — past ~8,000 a pin does not add what it
+looks like it adds.
+
+**What was measured and NOT built: `sections=N` on `get_tree` / `list_dir`.** Both strip bodies by
+construction, so counting headings there means fetching up to 400 bodies — ~1 MB on a base of
+2.6k-char entries, against ~80 kB of metadata — to add ~12 rendered characters per row. The only
+cheap form is a stored `section_count`, which is a schema change plus a backfill whose SQL would have
+to agree with the TS parser about code fences: a drift seam, for a hint. The routing line is what
+tells an agent where the outline is, which is the one call the count would have saved.
+
+**And what was verified rather than changed: `op="search"` already returns snippets.**
+`search_knowledge_hybrid` builds them in SQL — `ts_headline(… MaxWords=20, MaxFragments=2)` for a
+keyword hit, `left(<nearest chunk>, 240)` for a semantic one — so a hit is ~240–250 characters and a
+body has never reached the wire. Nothing was capped because nothing needed capping.
+
+**The arithmetic, measured through the real renderers.** A 2,559-char sectioned entry: whole read
+2,760 rendered characters; `op="outline"` 319; one section 839. Outline-then-section is 1,158 — 58%
+less than the whole, and 70% less if the agent already knows the heading. Against that, the served
+surface rose 618 characters per CONNECTION (two params, an op name, two routing sentences, after a
+trim of 233 inside the same description) and the pulled doctrine 477. Six section reads pay it back.

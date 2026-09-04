@@ -161,8 +161,8 @@ const KB_INPUT_SHAPE = {
 // LINE CANNOT MOVE INTO THE PULLED DOCTRINE**, on the same argument the fence
 // rides: the agent that has not read `dopl://doctrine/knowledge` is exactly the
 // one still reading whole documents. Against the rise, one section read of a
-// 2,612-char entry costs ~640 rendered characters where the whole entry costs
-// ~2,750 — the description is paid once per connection, the saving per read.
+// 2,559-char entry costs 839 rendered characters where the whole entry costs
+// 2,760 — the description is paid once per connection, the saving per read.
 const KB_PROSE_BUDGET = 1_586; // ⚠ 16 ops glossed for parity.test.ts, plus the fence
 
 /**

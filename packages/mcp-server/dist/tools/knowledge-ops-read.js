@@ -230,7 +230,10 @@ callerUserId = null, format, maxChars, section, offset) {
             return (0, respond_1.ok)(lines.join("\n"));
         }
         if (found && found.ok) {
-            sectionLine = `Section: \`${"#".repeat(Math.min(3, found.level))} ${(0, narration_1.inlineOr)(found.heading, "(unnamed)")}\` · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
+            // ⚠ NO OUTER BACKTICKS: `inlineOr` already renders a VALUE as code, and
+            // wrapping its output again produced ``` ``Errors`` ``` — a heading an
+            // agent cannot copy back into `section=`.
+            sectionLine = `Section: ${"#".repeat(Math.min(3, found.level))} ${(0, narration_1.inlineOr)(found.heading, "(unnamed)")} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
         }
     }
     const { body, notice } = (0, response_size_1.windowBody)(entry.body, offset, maxChars);

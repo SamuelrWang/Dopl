@@ -24,8 +24,8 @@
  * costs about what an outline plus one section costs, so the headings buy
  * nothing; above it a section read is a fraction of the document, and the ratio
  * only improves. Measured against real entries at the 2026-09-03 wave: a
- * 2,612-char entry reads whole at ~2,750 rendered characters and reads one
- * section at ~640.
+ * 2,559-char entry reads whole at 2,760 rendered characters and reads one
+ * section at 839, with a 319-char outline in between.
  */
 export const KB_SECTION_NUDGE_CHARS = 1_500;
 

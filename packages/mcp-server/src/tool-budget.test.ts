@@ -169,20 +169,7 @@ const OVER_BUDGET_CEILINGS: Record<string, number> = {
   // ⚠ 1,596 → 1,587 (B13): the discovery sentence names `dopl_workspaces`.
   dopl_channel: 1587,
   dopl_chats: 1699,
-  // ⚠ **1,937 → 1,986 ON 2026-09-03, A RISE OF 49 FOR ONE OP AND TWO ROUTING
-  // SENTENCES** (headings-as-addresses). `op="outline"` has to be glossed —
-  // `parity.test.ts` requires a quoted `"op_name"` per op — and the two
-  // sentences are the ROUTING this wave exists to teach: *read the excerpt
-  // (get_tree) → outline → section → body*, and *entries over ~1.5k chars carry
-  // ## headings*. ⚠ **A ROUTING LINE CANNOT MOVE INTO THE PULLED DOCTRINE**, on
-  // the same argument the fence rides: the agent that has not read
-  // `dopl://doctrine/knowledge` is exactly the one still reading whole
-  // documents. ⚠ **AND 49 IS WHAT SURVIVED A TRIM OF 233** — the bullets, the
-  // headline's duplicate "never deletes", and one call-shape example paid for
-  // the rest, because a description that grows by everything it adds is one
-  // nobody edits. Against it: one section of a 2,612-char entry renders at ~640
-  // characters where the whole entry renders at ~2,750, per READ.
-  dopl_kb: 1986,
+  dopl_kb: 1986, // ⚠ **1,947 → 1,937 (B15); 1,937 → 1,986 (2026-09-03, +49): ONE OP AND TWO ROUTING SENTENCES.** `op="outline"` must be glossed (`parity.test.ts`), and the sentences are the routing this wave teaches — *excerpt → outline → section → body*, and *entries over ~1.5k chars carry ## headings*. ⚠ **A ROUTING LINE CANNOT MOVE INTO THE PULLED DOCTRINE**, on the fence's own argument: the agent that has not read `dopl://doctrine/knowledge` is the one still reading whole documents. ⚠ **49 IS WHAT SURVIVED A TRIM OF 233** — bullets, the headline's duplicate "never deletes" and one call shape paid the rest. Against it, per READ: 839 chars for one section of a 2,559-char entry against 2,760 whole.
   dopl_members: 1453,
   dopl_ontology: 1924,
   dopl_skill: 1593,
@@ -228,16 +215,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
   dopl_channel: 8672, // ⚠ 8,677 → 8,672 (2026-09-03): `section=`'s enum gained `waiting` (+10 — a section a model cannot name is a section it cannot pull) and that field's own `.describe()` paid for it twice over (−15).
   dopl_chats: 3553,
   // ⚠ 5,347 → 5,141 (B15), same trade
-  // ⚠ **5,138 → 5,707 ON 2026-09-03 (+569), AND IT IS TWO PARAMETERS PLUS AN OP
-  // NAME — THE ONE LICENCE THIS FILE ACCEPTS.** `section` and `offset` are the
-  // knobs that make a heading an address; a published argument cannot move into
-  // a pulled document, and trimming its description into uselessness buys the
-  // number by making the knob unusable (the argument `response_format` and
-  // `max_chars` were licensed on). ⚠ **AND IT IS THE SECOND RISE HERE THAT PAYS
-  // FOR ITSELF PER CALL RATHER THAN PER CONNECTION.** 569 characters are spent
-  // once per connection; a single sectioned read of a 2,612-char entry saves
-  // ~2,100, and an `op="outline"` before it saves the rest of the document.
-  dopl_kb: 5707,
+  dopl_kb: 5707, // ⚠ **5,138 → 5,707 (2026-09-03, +569): TWO PARAMETERS PLUS AN OP NAME — the one licence this file accepts.** `section` and `offset` are what make a heading an address; a published argument cannot move into a pulled document, and trimming its describe into uselessness buys the number by making the knob unusable — the argument `response_format` and `max_chars` rode. ⚠ **AND IT PAYS FOR ITSELF PER CALL, NOT PER CONNECTION**: 569 once, against 1,921 saved by ONE sectioned read of a 2,559-char entry.
   dopl_map: 250,
   dopl_members: 845,
   dopl_ontology: 2816,
@@ -289,7 +267,7 @@ const SCHEMA_CEILINGS: Record<string, number> = {
 // `list_workspaces` → `dopl_workspaces`), the injected `workspace` contract lost
 // 5 chars × 9 tools, and the briefing fell 56. **B15 then took the copy ops, the
 // `shelf` axis and its two labels out and put the grant op and its three args in.**
-const SERVED_TOTAL_CEILING = 47_464; // ⚠ **46,846 → 47,464 (2026-09-03, +618): THE HEADINGS-AS-ADDRESSES WAVE MADE THIS SURFACE BIGGER, AND SAID SO.** `dopl_kb`'s schema +569 (`section`, `offset`, one op name) and its description +49, against a trim of 233 inside the same description. ⚠ **THIS IS THE ONE CEILING THAT CANNOT SEE THE SAVING, WHICH IS WHY THE RISE IS RECORDED RATHER THAN ABSORBED.** It counts what a connection costs before it has done anything; what these characters buy is per READ — an agent that outlines a 2,612-char entry and pulls one section spends ~640 where it used to spend ~2,750, and the ratio only improves with the document. Six such reads pay the rise back. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** ⚠ **46,851 → 46,846 (2026-09-03): THE HOLD-NOT-POLL WAVE MADE THIS SURFACE SMALLER.** The `section=` enum gained `waiting` (+10) and that field's `.describe()` paid for it (−15); the briefing's new WAIT sentence cost nothing here because it was paid for by trimming the contract around it. What the ten characters buy is a caller that HOLDS instead of re-reading on a timer — and a timed poll re-sends that caller's whole context per tick, a cost this ceiling cannot see. Per-call, the hold results fell ~1,400 EACH (`channel-result-budget.test.ts`).
+const SERVED_TOTAL_CEILING = 47_464; // ⚠ **46,846 → 47,464 (2026-09-03, +618): THE HEADINGS-AS-ADDRESSES WAVE MADE THIS SURFACE BIGGER, AND SAID SO.** `dopl_kb`'s schema +569 (`section`, `offset`, one op name) and its description +49, against a trim of 233 inside the same description. ⚠ **THIS IS THE ONE CEILING THAT CANNOT SEE THE SAVING, WHICH IS WHY THE RISE IS RECORDED RATHER THAN ABSORBED.** It counts what a connection costs before it has done anything; what these characters buy is per READ — an agent that outlines a 2,559-char entry and pulls one section spends 1,158 (319 outline + 839 section) where it used to spend 2,760, and the ratio only improves with the document. Six such reads pay the rise back. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** ⚠ **46,851 → 46,846 (2026-09-03): THE HOLD-NOT-POLL WAVE MADE THIS SURFACE SMALLER.** The `section=` enum gained `waiting` (+10) and that field's `.describe()` paid for it (−15); the briefing's new WAIT sentence cost nothing here because it was paid for by trimming the contract around it. What the ten characters buy is a caller that HOLDS instead of re-reading on a timer — and a timed poll re-sends that caller's whole context per tick, a cost this ceiling cannot see. Per-call, the hold results fell ~1,400 EACH (`channel-result-budget.test.ts`).
 
 /**
  * ⚠ THE BRIEFING IS WRITTEN ONCE AND PUSHED ONCE. It was 17,067 chars — 18% of
