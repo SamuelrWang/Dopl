@@ -303,9 +303,13 @@ describe("addressed= / landed= — what the note became", () => {
     expect(rosterAddressingRule("general", 2)).toContain(
       "routes the post into the session already working it",
     );
-    // ⚠ RE-POINTED: the trailing "whatever its addressing says" was compressed out.
+    // ⚠ RE-POINTED TWICE. The trailing "whatever its addressing says" was
+    // compressed out; the MODEL's restatement went on 2026-09-04, when that line
+    // was rewritten to carry the new arrow vocabulary and the responder rule.
+    // The claim lives in the LAW, which is where it always belonged — MODEL was
+    // saying it a second time.
     expect(CHANNEL_DOCTRINE).toContain(
-      "anything threaded into an exchange you are a party to is yours",
+      "messages in a THREAD you are a party to",
     );
   });
 

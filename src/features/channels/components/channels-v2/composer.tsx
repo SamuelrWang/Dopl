@@ -79,6 +79,7 @@ import type { ChannelMember } from "../../types";
 /** ⚠ A STABLE EMPTY ARRAY, not `[]` at the call site: an agents prop that is a fresh object every
  *  render re-derives the whole @-picker shortlist on a surface that has no sessions read. */
 const EMPTY_LIVE_AGENTS: readonly LiveAgentSession[] = [];
+const EMPTY_RECENT: readonly string[] = [];
 
 export function ChannelsV2Composer({
   channelId,
@@ -93,6 +94,7 @@ export function ChannelsV2Composer({
   newThreadSignal = 0,
   liveAgents = EMPTY_LIVE_AGENTS,
   defaultResponderAgentName = null,
+  recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
 }: {
   /** ⚠ CAPTURED AT SUBMIT into every draft — never re-read from the selection
@@ -129,6 +131,8 @@ export function ChannelsV2Composer({
   /** The channel's nominated responder (`channels.default_responder_agent_name`) — what RR3 arm 1
    *  reads, and what the recipient line names when the draft tags nobody. */
   defaultResponderAgentName?: string | null;
+  /** RR3 arm 3's input — the room's recent agent posters, newest first. */
+  recentAgentIds?: readonly string[];
   /** RR1's answer for a thread composer: the exchange's OTHER party. `null` in the main room. */
   threadOtherParty?: ChannelMember | null;
 }) {
@@ -461,6 +465,7 @@ export function ChannelsV2Composer({
               sessions={liveAgents}
               currentUserId={currentUserId}
               defaultResponderAgentName={defaultResponderAgentName}
+              recentAgentIds={recentAgentIds}
               threadOtherParty={threadOtherParty}
             />
           )}

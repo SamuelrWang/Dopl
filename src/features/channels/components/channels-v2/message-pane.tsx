@@ -91,6 +91,10 @@ export interface ScrollTarget {
  * page argument and no deeper read (the same shape the two clip notes are in —
  * INVARIANTS §9). It states what happened and stops.
  */
+/** ⚠ ONE REFERENCE for the default — the composer's recipient line memoizes on
+ *  it, and a fresh `[]` per render would re-run that memo forever. */
+const EMPTY_RECENT_AGENT_IDS: readonly string[] = [];
+
 export const SCROLL_TARGET_MISSING_NOTE =
   "That message is older than the loaded history, so the transcript did not move.";
 
@@ -114,6 +118,7 @@ export function ChannelsV2MessagePane({
   channelName,
   thread,
   rows,
+  recentAgentIds = EMPTY_RECENT_AGENT_IDS,
   index,
   members,
   loading,
@@ -149,6 +154,10 @@ export function ChannelsV2MessagePane({
   /** The open thread, or `null` for the channel view. */
   thread: ChannelThread | null;
   rows: TranscriptRow[];
+  /** RR3 arm 3's input for the composer's recipient line: the agents that have
+   *  posted in this room lately, most recent first. Handed down rather than
+   *  re-derived — one answer per page (`derivations.ts`). */
+  recentAgentIds?: readonly string[];
   index: AuthorIndex;
   members: ChannelMember[];
   loading: boolean;
@@ -431,6 +440,7 @@ export function ChannelsV2MessagePane({
         currentUserId={index.currentUserId}
         liveAgents={liveAgents}
         defaultResponderAgentName={defaultResponderAgentName}
+        recentAgentIds={recentAgentIds}
         // ⚠ RR1's ANSWER, COMPUTED FROM THE THREAD ROW THIS PANE IS ALREADY RENDERING — an
         // unaddressed reply in a thread goes to the exchange's OTHER party, and the composer must
         // not re-derive that pair. `null` in channel view, where there is no exchange.

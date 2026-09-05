@@ -429,6 +429,14 @@ export async function postMessage(
     authorKind,
     toAgentId,
   });
+  // ⚠ **WHY THIS AGENT, STORED BESIDE WHICH ONE** (2026-09-04). RR3 now CHOOSES
+  // between several live agents when a person names nobody (Samuel's B1 — a
+  // forgotten `@` must never stall), and a choice the author did not make has to
+  // be sayable: the read renders `→ @<name> (most recent)` off it. Written HERE
+  // rather than in the metadata fold because only the verdict knows it, which is
+  // why that fold STRIPS it. ⚠ ABSENT, never `null`, on an address the author
+  // wrote: a key on every row would make the pick unreadable.
+  const stored = wake.reason ? { ...metadata, wake_reason: wake.reason } : metadata;
 
   let row;
   try {
@@ -439,7 +447,7 @@ export async function postMessage(
       author_kind: authorKind,
       kind: input.kind ?? "message",
       body: input.body,
-      metadata,
+      metadata: stored,
       client_msg_id: input.clientMsgId ?? null,
       wake_verdict: wake.verdict,
       recipient_user_ids: wake.recipientUserIds,

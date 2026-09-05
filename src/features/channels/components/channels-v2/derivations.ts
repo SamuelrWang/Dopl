@@ -20,6 +20,8 @@
 import { useMemo } from "react";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { agentIndexFromKey, agentIndexKey, indexAgents, indexMembers } from "./view-model";
+import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
+import { recentAgentPosters } from "../../lib/agent-post-stamp";
 import { channelRows, threadRows } from "./view-model-rows";
 import { sidebarThreads } from "./view-model-requested";
 import type { AuthorIndex } from "./view-model";
@@ -38,6 +40,9 @@ export interface ChannelsV2Derivations {
   treeThreads: ChannelThread[];
   /** The center pane's rows — the thread's own transcript, or the channel's. */
   rows: TranscriptRow[];
+  /** RR3 arm 3's input for the composer's recipient line: the agents that have
+   *  posted in this room lately, most recent first. */
+  recentAgentIds: string[];
 }
 
 /**
@@ -156,5 +161,30 @@ export function useChannelsV2Derivations({
     [messages, threads, openThread, index]
   );
 
-  return { index, openThread, treeThreads, rows };
+  /**
+   * **WHO SPOKE HERE LAST — RR3 ARM 3's INPUT, DERIVED ONCE FOR THE PANE**
+   * (2026-09-04).
+   *
+   * ⚠ **THE SAME FUNCTION THE SERVER'S ARM RUNS**
+   * (`lib/agent-post-stamp.ts › recentAgentPosters`), over the transcript this
+   * page has already read rather than a second fetch. The server asks it of a
+   * bounded `channel_messages` query; both sort by `seq` and both drop threaded
+   * rows, so the composer's recipient line names the agent the stored verdict
+   * will name.
+   *
+   * ⚠ **THE CLOCK IS THE HELPER'S OWN DEFAULT, NOT A READ AT THIS CALL SITE** —
+   * a component may not read `Date.now()` during render and a model may, which
+   * is the arrangement `agents-model.ts` is already in. The WINDOW is the shared
+   * constant, so the two trees bound it identically.
+   *
+   * ⚠ **IT IS NOT SCOPED TO THE OPEN THREAD**, on purpose: a thread composer
+   * predicts RR1, which needs none of this, and the helper drops threaded rows
+   * itself.
+   */
+  const recentAgentIds = useMemo(
+    () => recentAgentPosters(messages, { windowMs: RESILIENCE_WINDOW_MS }),
+    [messages]
+  );
+
+  return { index, openThread, treeThreads, rows, recentAgentIds };
 }

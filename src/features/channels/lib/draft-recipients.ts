@@ -26,6 +26,13 @@
  * thread arm and {@link draftReach} is told about it through
  * `threadOtherParty` rather than re-deriving a thread's parties.
  *
+ * ⚠ **RR3 IS ALL FOUR OF ITS ARMS SINCE 2026-09-04, INCLUDING THE TWO THAT
+ * CHOOSE.** "Two live agents and no setting" used to answer `nobody` on both
+ * sides; it now names the agent that spoke here last, else the one launched
+ * last, and the LINE says which — `reason`. A composer that kept saying
+ * `nobody` for a post the server is about to route would be worse than no line
+ * at all, which is the whole standard this file is held to.
+ *
  * ⚠ **WHAT IT DELIBERATELY DOES NOT MODEL: the bare `@<id>` form** the desktop
  * routes on and the web index does not claim (**F-448**, and
  * `service-wake-verdict.ts › bareId` is the server's own normalisation for it).
@@ -48,6 +55,7 @@ import {
   resolveAgentHandle,
   resolveDefaultResponder,
   type AgentMentionCandidate,
+  type ResponderReason,
 } from "./agent-mentions";
 import { mentionHandleOf, mentionTokensOf, resolveMentions } from "./mentions";
 import type { ChannelMember } from "../types";
@@ -105,9 +113,18 @@ export type DraftReachVia = "tagged" | "responder" | "thread" | "none";
 export interface DraftReach {
   recipients: DraftRecipient[];
   via: DraftReachVia;
+  /**
+   * WHY RR3 picked this agent — `null` for every other arm, exactly as the
+   * server's `WakeVerdictResult.reason` is (2026-09-04).
+   *
+   * ⚠ It exists because RR3 now CHOOSES between several live agents, and a
+   * choice a person did not make has to be sayable. The line renders it as its
+   * one-word chip.
+   */
+  reason: ResponderReason | null;
 }
 
-const NOBODY: DraftReach = { recipients: [], via: "none" };
+const NOBODY: DraftReach = { recipients: [], via: "none", reason: null };
 
 /**
  * The prediction. Pure, and given everything it needs — no clock, no fetch, no
@@ -120,15 +137,30 @@ export function draftReach({
   sessions,
   currentUserId,
   defaultResponderAgentName,
+  recentAgentIds = [],
   threadOtherParty = null,
 }: {
   body: string;
   members: readonly ChannelMember[];
+  /**
+   * The room's live agents. ⚠ **IN THE ORDER THE CALLER HOLDS THEM, AND THE
+   * ORDER IS LOAD-BEARING** — RR3's last arm is "the first candidate", which the
+   * server resolves as *most recently launched*. The peer projection arrives
+   * newest-change-first, which is this surface's closest answer to that.
+   */
   sessions: readonly LiveAgentSession[];
   /** ⚠ Dropped from the recipients: you do not tag yourself, and the server
    *  excludes the author from the stamped set. */
   currentUserId: string;
   defaultResponderAgentName?: string | null;
+  /**
+   * RR3 arm 3's answer — the agents that have posted in this room lately, most
+   * recent first, from `lib/agent-post-stamp.ts › recentAgentPosters` over the
+   * transcript this pane is already rendering. ⚠ **THE SERVER ASKS THE SAME
+   * FUNCTION OF A BOUNDED `channel_messages` READ**, so the two agree by
+   * construction rather than by coincidence; `[]` degrades to arm 4.
+   */
+  recentAgentIds?: readonly string[];
   /** RR1's answer, when the composer is inside a thread. `null` in the main
    *  room, and `null` for a thread whose other party is unknown. */
   threadOtherParty?: ChannelMember | null;
@@ -152,7 +184,7 @@ export function draftReach({
     if (!member) continue;
     recipients.push({ kind: "member", userId, label: memberLabel(member) });
   }
-  if (recipients.length > 0) return { recipients, via: "tagged" };
+  if (recipients.length > 0) return { recipients, via: "tagged", reason: null };
 
   // ── RR1 — a thread reply with no address goes to the other party. ──────────
   if (threadOtherParty !== null) {
@@ -165,13 +197,22 @@ export function draftReach({
         },
       ],
       via: "thread",
+      reason: null,
     };
   }
 
-  // ── RR3 — the channel's default responder, else its one live agent. ────────
-  const responder = resolveDefaultResponder(defaultResponderAgentName, candidates);
+  // ── RR3 — the channel's responder, its one live agent, else who spoke last. ─
+  const responder = resolveDefaultResponder(
+    defaultResponderAgentName,
+    candidates,
+    recentAgentIds
+  );
   if (responder === null) return NOBODY;
-  return { recipients: [agentRecipient(responder, byId.get(responder))], via: "responder" };
+  return {
+    recipients: [agentRecipient(responder.agentId, byId.get(responder.agentId))],
+    via: "responder",
+    reason: responder.reason,
+  };
 }
 
 /**

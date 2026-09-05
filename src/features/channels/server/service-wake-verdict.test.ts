@@ -11,6 +11,7 @@ import {
   NOW,
   lastAddress,
   projection,
+  recentAgentPosts,
   resolve,
   roomProjection,
   sessionRow,
@@ -36,6 +37,7 @@ beforeEach(() => {
   projection();
   roomProjection();
   lastAddress(null);
+  recentAgentPosts();
 });
 
 /**
@@ -318,15 +320,13 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
 
   it("does not resolve the escalation-answer door — that agent is not the author's", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));
-    // ⚠ TWO live agents and no default responder, so RR3 answers NOBODY and the
-    // case still measures what it was written to measure: the server does not
-    // reach for `escalationAnswer.agentId`. With one live agent RR3 arm 2 would
-    // resolve that same handle for an unrelated reason and the assertion would
-    // pass by coincidence.
-    roomProjection(
-      sessionRow({ id: "s-1", name: "k3v7d2mq" }),
-      sessionRow({ id: "s-2", name: "m8q1zzzz" })
-    );
+    // ⚠ AN EMPTY ROOM, so RR3 answers NOBODY and the case still measures what it
+    // was written to measure: the server does not reach for
+    // `escalationAnswer.agentId`. With ANY live agent RR3 would now resolve one
+    // for an unrelated reason and the assertion would pass by coincidence —
+    // which is what TWO live agents bought until 2026-09-04, when that arm
+    // stopped answering nobody.
+    roomProjection();
     const out = await resolve("option two", {
       escalationAnswer: { agentId: "k3v7d2mq" },
     });

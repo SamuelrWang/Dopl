@@ -90,6 +90,32 @@ export function roomProjection(...rows: SessionStateRow[]): void {
   vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(rows);
 }
 
+/**
+ * RR3 ARM 3's ONE READ — the room's recent AGENT posts, newest first.
+ *
+ * ⚠ SEEDED EMPTY BY DEFAULT AND NEVER LEFT UNSEEDED: `vi.mock` automocks it to
+ * `undefined`, and the arm is reached by every multi-agent room with no
+ * configured responder — a suite that forgot it would fail on a TypeError
+ * rather than on the rule it was measuring.
+ */
+export function recentAgentPosts(
+  ...rows: Array<Partial<ChannelMessageRow>>
+): void {
+  vi.mocked(repoMessages.listRecentRoomAgentPosts).mockResolvedValue(
+    rows.map(
+      (row, i) =>
+        ({
+          seq: 100 + i,
+          created_at: new Date(NOW - 1_000).toISOString(),
+          author_kind: "agent",
+          client_msg_id: null,
+          metadata: {},
+          ...row,
+        }) as ChannelMessageRow
+    )
+  );
+}
+
 /** RR2's one read — the last main-room row addressed to this agent. */
 export function lastAddress(row: Partial<ChannelMessageRow> | null): void {
   vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(

@@ -98,3 +98,54 @@ export function authorAgentIdOf(row: {
   const sessionId = row.metadata?.session_id;
   return agentIdOfSessionKey(typeof sessionId === "string" ? sessionId : null);
 }
+
+/**
+ * **WHICH AGENTS HAVE SPOKEN IN THIS ROOM LATELY, MOST RECENT FIRST** — RR3
+ * arm 3's input (2026-09-04, Samuel's B1: a forgotten `@` must never stall).
+ *
+ * ⚠ **ONE RULE, TWO TREES, AND THAT IS THE WHOLE REASON IT IS HERE.** The server
+ * asks it of a bounded `channel_messages` read and the composer asks it of the
+ * transcript it is already rendering; a second spelling would let the recipient
+ * LINE name one agent and the stored verdict name another, which is the class of
+ * defect the delivery keystone exists to end.
+ *
+ * ⚠ **ORDERED BY `seq`, DESCENDING, AND NOT BY THE CALLER'S ARRAY ORDER.** `seq`
+ * is unique per channel and monotonic on commit, so the ordering is TOTAL and no
+ * tie is representable — the same argument `findLastRoomAddressToAgent` makes.
+ * Sorting here rather than trusting the caller is what lets one ascending
+ * transcript and one descending query answer identically.
+ *
+ * ⚠ **MAIN-ROOM ROWS ONLY.** A post tagged into a thread belongs to that
+ * exchange (RR1's business); counting it here would let a private thread decide
+ * who answers the room.
+ *
+ * ⚠ **AN UNPARSEABLE OR OUT-OF-WINDOW TIMESTAMP IS SKIPPED, NEVER GUESSED.** The
+ * arm exists to name the agent the conversation is already with; an undated row
+ * says nothing about that, and falling through to arm 4 is the honest answer.
+ */
+export function recentAgentPosters(
+  rows: readonly {
+    seq: number;
+    createdAt: string;
+    authorKind?: string | null;
+    clientMsgId?: string | null;
+    metadata?: Record<string, unknown> | null;
+  }[],
+  /** ⚠ `now` DEFAULTS HERE RATHER THAN AT THE CALL SITE, the same arrangement
+   *  `components/channels-v2/agents-model.ts` uses for the same reason: a
+   *  component may not read a clock during render, and a model may. The SERVER
+   *  passes its own write-time clock explicitly. */
+  opts: { now?: number; windowMs: number }
+): string[] {
+  const now = opts.now ?? Date.now();
+  const out: string[] = [];
+  for (const row of [...rows].sort((a, b) => b.seq - a.seq)) {
+    if (row.authorKind !== "agent") continue;
+    if (typeof row.metadata?.taskId === "string") continue;
+    const at = Date.parse(row.createdAt);
+    if (!Number.isFinite(at) || now - at > opts.windowMs) continue;
+    const id = authorAgentIdOf(row);
+    if (id !== null && !out.includes(id)) out.push(id);
+  }
+  return out;
+}

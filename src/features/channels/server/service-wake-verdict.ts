@@ -10,10 +10,12 @@ import {
   resolveAgentRecipients,
   selfAgentIdOf,
 } from "./service-wake-verdict-handles";
+import type { ResponderReason } from "../lib/agent-mentions";
 import {
   defaultResponder,
   freshChannelSessions,
   reciprocalParty,
+  recentRoomAgents,
   threadOtherParty,
 } from "./service-wake-verdict-resilience";
 import type { ChannelContext } from "./service-shared";
@@ -67,6 +69,16 @@ export interface WakeVerdictResult {
   /** The server's write-time answer to "what happened". A prediction until the
    *  machine acks. */
   delivery: ChannelDelivery;
+  /**
+   * **WHY THIS AGENT AND NOT ANOTHER**, when the server CHOSE one the author did
+   * not name — RR3's arm, as a word (2026-09-04).
+   *
+   * ⚠ `null` FOR EVERY ADDRESS THE AUTHOR WROTE, and that is the distinction it
+   * exists to carry: a reason beside a handle somebody typed would invite a
+   * reader to think the server had picked. It is stamped into
+   * `metadata.wake_reason` on the write path and rendered by the read.
+   */
+  reason: ResponderReason | null;
 }
 
 /**
@@ -238,7 +250,12 @@ export async function resolveWakeVerdict(
   // Reached only when the author addressed NOBODY. Each answers a member id, an
   // agent id, or nothing; `resilience` stays null when no arm applies.
   let resilience:
-    | { verdict: ChannelWakeVerdict; userIds: string[]; agentIds: string[] }
+    | {
+        verdict: ChannelWakeVerdict;
+        userIds: string[];
+        agentIds: string[];
+        reason?: ResponderReason;
+      }
     | null = null;
   const repairable =
     !addressed && isMessage && wakeCtx.threadTagStripped !== true;
@@ -265,16 +282,22 @@ export async function resolveWakeVerdict(
     }
   } else if (repairable) {
     // RR3 — the channel's default responder, or its one live agent.
-    const responder = defaultResponder(
+    const responder = await defaultResponder(
       channel,
-      await freshChannelSessions(ctx, channelId, now)
+      await freshChannelSessions(ctx, channelId, now),
+      () => recentRoomAgents(channelId, now)
     );
     // ⚠ AND THE DEFAULT RESPONDER IS NEVER THE AUTHOR EITHER — belt over the
     // door above. RR3's gate is that a PERSON wrote the message, so `selfAgentId`
     // is null here today; stating it keeps the one-live-agent room correct if the
     // arm's gate ever widens, which is the room this incident happened in.
-    if (responder !== null && responder !== selfAgentId) {
-      resilience = { verdict: "responder", userIds: [], agentIds: [responder] };
+    if (responder !== null && responder.agentId !== selfAgentId) {
+      resilience = {
+        verdict: "responder",
+        userIds: [],
+        agentIds: [responder.agentId],
+        reason: responder.reason,
+      };
     }
   }
 
@@ -305,6 +328,7 @@ export async function resolveWakeVerdict(
     verdict,
     recipientUserIds,
     recipientAgentIds,
+    reason: resilience?.reason ?? null,
     // ⚠ **`unreachable` IS AN OUTCOME THE VERDICT ENUM CANNOT EXPRESS, WHICH IS
     // WHY THE TWO ARE SEPARATE FIELDS.** The BODY named an agent and nothing this
     // server can see answers to it. Reporting the verdict's own outcome instead

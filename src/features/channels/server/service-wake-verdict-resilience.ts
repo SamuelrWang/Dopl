@@ -1,8 +1,11 @@
 import "server-only";
 import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
 import type { ChannelMessageCreateInput } from "../schema";
-import { resolveDefaultResponder } from "../lib/agent-mentions";
-import { authorAgentIdOf } from "../lib/agent-post-stamp";
+import {
+  resolveDefaultResponder,
+  type ResponderChoice,
+} from "../lib/agent-mentions";
+import { authorAgentIdOf, recentAgentPosters } from "../lib/agent-post-stamp";
 import type { SessionStateRow } from "./collab-dto";
 import type { ChannelRow } from "./dto";
 import * as repoMessages from "./repository-messages";
@@ -204,7 +207,9 @@ export async function reciprocalParty(
  *
  *   1. the channel's configured **default responder**, if that handle is live;
  *   2. else **exactly one** live agent in the channel → it;
- *   3. else nobody — `delivery=none`, and the caller is handed the live handles.
+ *   3. else, with several live, the one that POSTED here most recently;
+ *   4. else the one that LAUNCHED most recently.
+ *   Nobody at all is answered only when the room holds NO live agent.
  *
  * ⚠ **ARM 1 DEGRADES INTO ARM 2 RATHER THAN FAILING.** The setting stores a
  * HANDLE and nothing enforces that it names a live session (the migration says
@@ -216,14 +221,24 @@ export async function reciprocalParty(
  * › tierFor` collapses to `n === 1 ? SOLO : NONE`, and RR3 arm 2 IS solo —
  * computed here, once, for free, from the projection the server already holds.
  *
- * ⚠ **ARM 3 IS NOT A FAILURE AND MUST NOT BECOME A REFUSAL.** Nobody was named,
- * so nothing was mis-addressed: this is a person talking to a room that has not
- * been told who answers. The refusal (`CHANNEL_RECIPIENT_UNRESOLVED`) belongs to
- * a `to` that named somebody who is not there — a different fact with a
- * different remedy.
+ * ⚠ **AN EMPTY ROOM IS NOT A FAILURE AND MUST NOT BECOME A REFUSAL.** Nobody was
+ * named, so nothing was mis-addressed: this is a person talking to a room with
+ * no agent in it. The refusal (`CHANNEL_RECIPIENT_UNRESOLVED`) belongs to a `to`
+ * that named somebody who is not there — a different fact with a different
+ * remedy.
  *
- * ⚠ TWO LIVE AGENTS AND NO SETTING IS DELIBERATELY ARM 3, not a pick. Choosing
- * between them is the guess the whole slice exists to delete.
+ * ⚠ **TWO LIVE AGENTS AND NO SETTING WAS "DELIBERATELY NOBODY" UNTIL 2026-09-04,
+ * AND THAT WAS THE COMMON CASE WEARING AN EDGE CASE'S CLOTHES.** Row #966: a
+ * person wrote in a room with two live agents and no default, the post stored
+ * `verdict=none`, fed 0 of 2, and he re-sent it with a tag. Two live agents is
+ * the ordinary shape of a multiplayer channel, and Samuel's ruling in the same
+ * breath as the fan-out narrowing is that a forgotten `@` must never stall a
+ * conversation. Arms 3 and 4 answer it, and the REASON is stamped so the
+ * transcript can say why — see {@link ResponderReason}.
+ *
+ * ⚠ **ARM 3's READ IS LAZY.** Arms 1 and 2 settle the overwhelming majority of
+ * rooms with no round trip at all; only a multi-agent room with no configured
+ * responder pays for `listRecentRoomAgentPosts`.
  */
 /**
  * ⚠ **THE RULE ITSELF MOVED TO `lib/agent-mentions.ts › resolveDefaultResponder`
@@ -233,12 +248,80 @@ export async function reciprocalParty(
  * trees can read them and WHEN they are asked stays here. Nothing about the
  * behaviour changed; this function's own tests still drive it.
  */
-export function defaultResponder(
+export async function defaultResponder(
   channel: ChannelRow,
-  sessions: readonly SessionStateRow[]
-): string | null {
+  sessions: readonly SessionStateRow[],
+  /** Arm 3's input, fetched only if arms 1, 2 and 4's ordering leave it needed.
+   *  A thunk rather than a value because the read is the arm's whole cost. */
+  recent: () => Promise<string[]>
+): Promise<ResponderChoice | null> {
+  const candidates = launchOrder(sessions).map((row) => ({
+    agentId: row.name,
+    displayName: row.display_name,
+  }));
+  const settled = resolveDefaultResponder(
+    channel.default_responder_agent_name,
+    candidates
+  );
+  // ⚠ `most recently launched` IS THE ONLY ANSWER ARM 3 CAN IMPROVE ON — every
+  // other reason means the room settled it without needing to know who spoke
+  // last, so the read is not issued at all.
+  if (settled === null || settled.reason !== "most recently launched") {
+    return settled;
+  }
   return resolveDefaultResponder(
     channel.default_responder_agent_name,
-    sessions.map((row) => ({ agentId: row.name, displayName: row.display_name }))
+    candidates,
+    await recent()
+  );
+}
+
+/**
+ * THE ROOM'S LIVE SESSIONS, **MOST RECENTLY LAUNCHED FIRST** — arm 4's ordering,
+ * supplied here because {@link resolveDefaultResponder} deliberately orders
+ * nothing itself.
+ *
+ * ⚠ **`started_at` IS THE DESKTOP'S OWN REPORT OF WHEN THE SESSION BEGAN, AND
+ * `created_at` IS THE FALLBACK** — the row's first push, which is the closest
+ * thing the server has for a build that reports no start. An unparseable or
+ * absent pair sorts LAST rather than first: a session that cannot say when it
+ * launched must not win a tie-break about which launched most recently.
+ */
+function launchOrder(
+  sessions: readonly SessionStateRow[]
+): readonly SessionStateRow[] {
+  const at = (row: SessionStateRow): number => {
+    const parsed = Date.parse(row.started_at ?? row.created_at ?? "");
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  };
+  return [...sessions].sort((a, b) => at(b) - at(a));
+}
+
+/**
+ * ARM 3's ANSWER — the agents that have posted in this room inside
+ * {@link RESILIENCE_WINDOW_MS}, most recent first.
+ *
+ * ⚠ **THE RULE IS `lib/agent-post-stamp.ts › recentAgentPosters`, IMPORTED**:
+ * the composer asks the same question of the transcript it is rendering, and a
+ * second spelling here is how the recipient LINE comes to name one agent and the
+ * stored verdict another.
+ */
+export async function recentRoomAgents(
+  channelId: string,
+  now: number
+): Promise<string[]> {
+  const rows = await repoMessages.listRecentRoomAgentPosts(
+    channelId,
+    new Date(now - RESILIENCE_WINDOW_MS).toISOString()
+  );
+  return recentAgentPosters(
+    rows.map((row) => ({
+      seq: Number(row.seq),
+      createdAt: row.created_at,
+      authorKind: row.author_kind,
+      clientMsgId: row.client_msg_id,
+      metadata: (row.metadata ?? null) as Record<string, unknown> | null,
+    })),
+    { now, windowMs: RESILIENCE_WINDOW_MS }
   );
 }

@@ -11,6 +11,7 @@ import {
   NOW,
   lastAddress,
   projection,
+  recentAgentPosts,
   resolve,
   roomProjection,
   sessionRow,
@@ -40,6 +41,7 @@ beforeEach(() => {
   projection();
   roomProjection();
   lastAddress(null);
+  recentAgentPosts();
 });
 
 describe("RR1 — a thread reply with no `to` goes to the thread's other party", () => {
@@ -384,22 +386,10 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
     expect(out.recipientAgentIds).toEqual(["k3v7d2mq"]);
   });
 
-  it("arm 3: TWO live agents and no setting answer NOBODY — the pick is the guess this deletes", async () => {
-    roomProjection(
-      sessionRow({ id: "s-1", name: "k3v7d2mq" }),
-      sessionRow({ id: "s-2", name: "m8q1zzzz" })
-    );
-    const out = await resolve("morning");
-    expect(out).toMatchObject({
-      verdict: "none",
-      recipientAgentIds: [],
-      delivery: "none",
-    });
-  });
-
-  it("arm 3: no live agent at all is `none` too", async () => {
+  it("arm 3: no live agent at all is `none` — an empty room is still an answer", async () => {
     const out = await resolve("morning");
     expect(out).toMatchObject({ verdict: "none", delivery: "none" });
+    expect(out.reason).toBeNull();
   });
 
   it("a STALE room row is not a live agent — freshness gates the wake", async () => {

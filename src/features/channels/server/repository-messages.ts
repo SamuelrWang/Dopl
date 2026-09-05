@@ -439,6 +439,47 @@ export async function findLastRoomAddressToAgent(
   return ((data ?? [])[0] as ChannelMessageRow | undefined) ?? null;
 }
 
+/**
+ * **RR3 ARM 3's ONE READ** (2026-09-04): the newest MAIN-ROOM messages in this
+ * channel written by an AGENT, inside the resilience window — the raw material
+ * `lib/agent-post-stamp.ts › recentAgentPosters` turns into "who spoke here
+ * last".
+ *
+ * ⚠ **ISSUED LAZILY AND ALMOST NEVER** — only when a PERSON addressed nobody,
+ * the room holds MORE THAN ONE live agent, and the channel has no configured
+ * responder; the settled cases return before `defaultResponder` asks for it.
+ * ⚠ **PROJECTED TO THE FIVE COLUMNS THE RULE READS**, not `*`: bodies are the
+ * large half of this table and the answer is an id list. Bounded at
+ * {@link RECENT_AGENT_POSTS_LIMIT} — the window bounds it in TIME, and a busy
+ * room can still put thousands of rows inside 15 minutes.
+ * ⚠ **`thread IS NULL` IS SPELLED `metadata->>taskId IS NULL`**, the expression
+ * `findLastRoomAddressToAgent` and `listMessages` already use.
+ */
+const RECENT_AGENT_POSTS_LIMIT = 50;
+
+export type RecentAgentPostRow = Pick<
+  ChannelMessageRow,
+  "seq" | "created_at" | "author_kind" | "client_msg_id" | "metadata"
+>;
+
+export async function listRecentRoomAgentPosts(
+  channelId: string,
+  sinceIso: string
+): Promise<RecentAgentPostRow[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("seq, created_at, author_kind, client_msg_id, metadata")
+    .eq("channel_id", channelId)
+    .eq("author_kind", "agent")
+    .is("metadata->>taskId", null)
+    .gt("created_at", sinceIso)
+    .order("seq", { ascending: false })
+    .limit(RECENT_AGENT_POSTS_LIMIT);
+  if (error) throw error;
+  return (data ?? []) as RecentAgentPostRow[];
+}
+
 export async function lastMessages(
   channelIds: string[]
 ): Promise<Map<string, string>> {

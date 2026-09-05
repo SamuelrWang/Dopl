@@ -291,6 +291,13 @@ export async function resolvePostMetadata(
   // ⚠ Stripped UNCONDITIONALLY: a caller able to set this could attribute its
   // own post to somebody else's session — the forensic question the key answers.
   delete metadata.session_id;
+  // ⚠ THE SERVER'S OWN VOICE ABOUT ITS OWN CHOICE (2026-09-04). `wake_reason`
+  // says WHY an agent nobody named was picked (RR3's arm), and the read renders
+  // it beside the recipient. A caller able to set it could narrate a repair that
+  // never happened — "→ @x (most recent)" over a post that reached nobody. Never
+  // re-stamped here: `service-writes.ts` writes it from the VERDICT, after the
+  // fold, because only the verdict knows the answer.
+  delete metadata.wake_reason;
   // ⚠ Desktop reads `handoff` to decide whether to OPEN A WINDOW, so a
   // caller-set value could open a session on the operator's machine without
   // going through validated `create_thread`. Re-stamped only from `opts` below.

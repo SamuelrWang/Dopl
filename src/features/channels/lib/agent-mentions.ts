@@ -112,8 +112,32 @@ export function resolveAgentHandle(
 }
 
 /**
- * **THE CHANNEL'S DEFAULT RESPONDER, RESOLVED — RR3 ARM 1 AND ARM 2, AS ONE PURE
- * FUNCTION** (2026-09-02, v2 wave B slice B10).
+ * WHY THIS AGENT AND NOT ANOTHER — the one word a surface prints beside a name
+ * the author did not type.
+ *
+ * ⚠ **A CLOSED SET, SHARED BY BOTH TREES**, because it is stored (the server
+ * stamps it into `metadata.wake_reason`) and rendered (the MCP read line, the
+ * composer's chip). A free-form sentence here would be a second vocabulary the
+ * renderers would each narrow differently.
+ */
+export type ResponderReason =
+  /** The channel's configured `default_responder_agent_name`. */
+  | "default"
+  /** Exactly one agent is live in the room. */
+  | "only agent"
+  /** Several are live; this one posted here most recently. */
+  | "most recent"
+  /** Several are live and none has posted lately; this one launched last. */
+  | "most recently launched";
+
+export interface ResponderChoice {
+  agentId: string;
+  reason: ResponderReason;
+}
+
+/**
+ * **THE CHANNEL'S DEFAULT RESPONDER, RESOLVED — ALL OF RR3, AS ONE PURE
+ * FUNCTION** (2026-09-02, v2 wave B slice B10; arms 3a/3b added 2026-09-04).
  *
  * ⚠ **IT LIVES HERE BECAUSE TWO TREES ASK IT AND ONLY ONE OF THEM MAY IMPORT
  * `server-only`.** The rule was written for `server/service-wake-verdict-resilience.ts
@@ -123,12 +147,38 @@ export function resolveAgentHandle(
  * not have woken. `defaultResponder` is now a two-line adapter over this, so
  * there is one declaration and the server's own tests still drive it.
  *
- * THE TWO ARMS, IN ORDER:
+ * THE ARMS, IN ORDER:
  *   1. the CONFIGURED handle (`channels.default_responder_agent_name`), if it is
  *      live in this room — tried as written and as its `agent-<id>` form, because
  *      the setting stores a handle and an operator may have typed either;
- *   2. else the room's ONE live agent. **Exactly one** — two agents and nobody is
- *      the default, which is arm 3 (`null`) rather than a guess.
+ *   2. else the room's ONE live agent;
+ *   3. else, with several live: the one that POSTED here most recently
+ *      (`recentAgentIds`, most-recent-first);
+ *   4. else the FIRST candidate in the order the caller supplied — see the
+ *      ordering note below.
+ *
+ * ⚠ **ARMS 3 AND 4 ARE SAMUEL'S B1 RULING APPLIED TO THE CASE IT HAD BEEN LEFT
+ * OUT OF** (2026-09-04). "Two live agents and no setting" answered `null`, on the
+ * argument that choosing between them is a guess — and the ruling in the same
+ * breath is that **a forgotten `@` must never stall a conversation**. Row #966 is
+ * what that costs: a person wrote in a room with two live agents and no default,
+ * the post stored `verdict=none` and fed 0 of 2, and he had to send it again with
+ * a tag. Two agents is the ordinary shape of a multiplayer channel, so the
+ * "deliberately nobody" arm was the common case, not the edge.
+ * ⚠ **AND IT IS NOT A GUESS, WHICH IS WHY IT IS SAYABLE.** "The one that spoke
+ * here last" is the conversation's own answer to who is being talked to, and the
+ * choice is STAMPED ({@link ResponderReason}) so the transcript can say why — the
+ * thing a silent pick would not have.
+ * ⚠ **THE CONFIGURED RESPONDER STILL WINS**, so an operator who has said who
+ * answers is never second-guessed by recency.
+ *
+ * ⚠ **NOTHING HERE ORDERS THE CANDIDATES AND NOTHING SHOULD.** Arm 4 means "the
+ * caller's first", and each caller documents its own ordering as its best
+ * available answer to *most recently launched*: the server sorts by
+ * `started_at` (`service-wake-verdict-resilience.ts › launchOrder`), the composer
+ * passes the peer projection's own newest-first order. Baking a sort in would
+ * give one caller a rule it did not ask for — the same argument the freshness
+ * note below makes.
  *
  * ⚠ **NOTHING HERE FILTERS FOR FRESHNESS AND NOTHING SHOULD.** The caller decides
  * what "live" means: the server passes `freshChannelSessions` (F-418's asymmetric
@@ -137,15 +187,24 @@ export function resolveAgentHandle(
  */
 export function resolveDefaultResponder(
   configured: string | null | undefined,
-  candidates: readonly AgentMentionCandidate[]
-): string | null {
+  candidates: readonly AgentMentionCandidate[],
+  /** Agent ids that have POSTED in this room lately, MOST RECENT FIRST
+   *  (`lib/agent-post-stamp.ts › recentAgentPosters`). Empty is a complete
+   *  answer — arm 3 then falls to the caller's own ordering. */
+  recentAgentIds: readonly string[] = []
+): ResponderChoice | null {
   if (typeof configured === "string" && configured.length > 0) {
     const index = buildAgentMentionIndex(candidates);
     const hit =
       resolveAgentHandle(configured, index) ??
       resolveAgentHandle(agentIdHandle(configured), index);
-    if (hit !== null) return hit;
+    if (hit !== null) return { agentId: hit, reason: "default" };
   }
   const ids = [...new Set(candidates.map((c) => c.agentId))];
-  return ids.length === 1 ? ids[0] : null;
+  if (ids.length === 0) return null;
+  if (ids.length === 1) return { agentId: ids[0], reason: "only agent" };
+  for (const id of recentAgentIds) {
+    if (ids.includes(id)) return { agentId: id, reason: "most recent" };
+  }
+  return { agentId: ids[0], reason: "most recently launched" };
 }

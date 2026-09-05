@@ -57,7 +57,12 @@ function member(userId: string, name: string): ChannelMember {
 
 const MEMBERS = [member(ME, "me"), member(PEER, "ada")];
 
-function sessionRow(name: string, displayName: string | null = null): SessionStateRow {
+function sessionRow(
+  name: string,
+  displayName: string | null = null,
+  /** When the session LAUNCHED — RR3 arm 4's ordering on the server side. */
+  startedAt: number = NOW
+): SessionStateRow {
   return {
     id: `s-${name}`,
     channel_id: CHAN,
@@ -66,6 +71,8 @@ function sessionRow(name: string, displayName: string | null = null): SessionSta
     name,
     display_name: displayName,
     updated_at: new Date(NOW).toISOString(),
+    created_at: new Date(startedAt).toISOString(),
+    started_at: new Date(startedAt).toISOString(),
   } as SessionStateRow;
 }
 
@@ -85,6 +92,10 @@ interface Case {
    *  what lets one fixture drive both. */
   sessions: SessionStateRow[];
   defaultResponder?: string | null;
+  /** RR3 arm 3's input — the agents that posted here lately, most recent first.
+   *  The client is handed it directly; the server derives it from the messages
+   *  read this fixture stands in for. */
+  recentAgentIds?: string[];
   /** RR1: the composer is inside a thread whose other party is this member. */
   threadOtherParty?: ChannelMember | null;
   /** What BOTH sides must answer. */
@@ -93,6 +104,9 @@ interface Case {
     verdict: "agent" | "member" | "thread_peer" | "responder" | "none";
     agentIds: string[];
     userIds: string[];
+    /** ⚠ THE ARM, NOT JUST THE NAME. Two arms can name the same agent for
+     *  different reasons, and the surfaces PRINT the reason. */
+    reason?: string | null;
   };
 }
 
@@ -110,10 +124,39 @@ const CASES: Case[] = [
     expect: { via: "responder", verdict: "responder", agentIds: ["k3v7d2mq"], userIds: [] },
   },
   {
-    name: "TWO live agents and no setting — deliberately nobody, never a pick",
+    // ⚠ THE #966 CASE. Both sides answered "nobody" until 2026-09-04 and the
+    // post reached nobody — in the ORDINARY shape of a multiplayer channel.
+    // Samuel's B1: a forgotten `@` must never stall.
+    name: "TWO live agents and no setting — RR3 arm 3, the one that spoke here last",
     body: "can someone look at the build?",
     sessions: [sessionRow("k3v7d2mq"), sessionRow("m8q1zzzz")],
-    expect: { via: "none", verdict: "none", agentIds: [], userIds: [] },
+    recentAgentIds: ["m8q1zzzz"],
+    expect: {
+      via: "responder",
+      verdict: "responder",
+      agentIds: ["m8q1zzzz"],
+      userIds: [],
+      reason: "most recent",
+    },
+  },
+  {
+    // ⚠ ARM 4, AND THE ORDERING IS THE ANSWER. Neither has posted, so both sides
+    // take the FIRST candidate in the order they hold them — the server sorts by
+    // `started_at`, the composer takes the projection's own order, and the
+    // fixture hands them the same list.
+    name: "TWO live agents, neither has spoken — RR3 arm 4, the newest launched",
+    body: "can someone look at the build?",
+    sessions: [
+      sessionRow("m8q1zzzz", null, NOW),
+      sessionRow("k3v7d2mq", null, NOW - 60_000),
+    ],
+    expect: {
+      via: "responder",
+      verdict: "responder",
+      agentIds: ["m8q1zzzz"],
+      userIds: [],
+      reason: "most recently launched",
+    },
   },
   {
     name: "TWO live agents and a configured responder — RR3 arm 1",
@@ -158,9 +201,13 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
       sessions: c.sessions.map((s) => ({ name: s.name, displayName: s.display_name })),
       currentUserId: ME,
       defaultResponderAgentName: c.defaultResponder ?? null,
+      recentAgentIds: c.recentAgentIds ?? [],
       threadOtherParty: c.threadOtherParty ?? null,
     });
     expect(client.via, "client `via`").toBe(c.expect.via);
+    if (c.expect.reason !== undefined) {
+      expect(client.reason, "client reason").toBe(c.expect.reason);
+    }
     expect(
       client.recipients.filter((r) => r.kind === "agent").map((r) => r.agentId).sort(),
       "client agents"
@@ -173,6 +220,21 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
     // ── the SERVER half, over the same rows ───────────────────────────────
     vi.mocked(repoSessions.listSessionStates).mockResolvedValue(c.sessions);
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(c.sessions);
+    // ⚠ THE SERVER GETS THE SAME RECENCY FACT AS ROWS, NOT AS THE ANSWER — its
+    // half runs `recentAgentPosters` over these, which is the whole point of the
+    // pair: one rule, two inputs, one answer.
+    vi.mocked(repoMessages.listRecentRoomAgentPosts).mockResolvedValue(
+      (c.recentAgentIds ?? []).map(
+        (id, i) =>
+          ({
+            seq: 100 - i,
+            created_at: new Date(NOW - 1_000).toISOString(),
+            author_kind: "agent",
+            client_msg_id: `agent-${id}-1`,
+            metadata: {},
+          }) as never
+      )
+    );
     // ⚠ RR1 reaches the server through the fold's OWN stamps, not through a
     // thread row — the client cannot see those and asks the pane instead. The
     // two answers must still match, which is what this case pair proves.
@@ -190,6 +252,9 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
       NOW
     );
     expect(server.verdict, "server verdict").toBe(c.expect.verdict);
+    if (c.expect.reason !== undefined) {
+      expect(server.reason, "server reason").toBe(c.expect.reason);
+    }
     expect([...(server.recipientAgentIds ?? [])].sort(), "server agents").toEqual(
       [...c.expect.agentIds].sort()
     );

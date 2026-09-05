@@ -8,6 +8,7 @@ import { ChannelAgentHandleAmbiguousError } from "./errors-recipient";
 import {
   lastAddress,
   projection,
+  recentAgentPosts,
   resolve,
   roomProjection,
   sessionRow,
@@ -32,6 +33,7 @@ beforeEach(() => {
   projection();
   roomProjection();
   lastAddress(null);
+  recentAgentPosts();
 });
 
 describe("resolveAgentRecipients — the scope a body handle resolves against", () => {
