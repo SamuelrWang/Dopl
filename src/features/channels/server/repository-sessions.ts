@@ -210,6 +210,49 @@ export async function listChannelSessionStates(
 }
 
 /**
+ * **THE OPERATOR-GIVEN NAME BEHIND AN AGENT ID** — `channel_sessions
+ * .display_name`, for the read path's author labels (2026-09-04).
+ *
+ * ⚠ **ONE JOIN, PROJECTED TO TWO COLUMNS, FOR A WHOLE PAGE.** The MCP read
+ * printed `agent for <operator>` and a bare id tail for a session its operator
+ * had NAMED, so a reader could not tell one of an operator's agents from
+ * another by the name everybody uses for them. The alternative to this read is a
+ * name on every message row, which would be a stored copy of a value the
+ * operator renames.
+ *
+ * ⚠ **A NAME IS PEER-TYPED AND IS NEUTRALIZED AT EVERY RENDER** — nothing here
+ * validates it (the column CHECK bounds its LENGTH, not its charset), and
+ * `packages/mcp-server/src/tools/channel-render.ts` states the rule for the
+ * surface that splices it.
+ *
+ * ⚠ **NEWEST ROW WINS.** An agent id is minted per machine and is not a
+ * database key, so two rows can in principle carry one — the same
+ * `updated_at DESC` order every other session read takes, and the freshest
+ * report is the current name.
+ *
+ * ⚠ **WORKSPACE-FENCED**, and the caller passes the set: a page can span
+ * channels (the workspace hold) or workspaces (the account-wide read), and an
+ * unfenced read over `name` alone would answer with rows from tenancies the
+ * caller never proved.
+ */
+export async function agentDisplayNames(
+  workspaceIds: readonly string[],
+  agentIds: readonly string[]
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (workspaceIds.length === 0 || agentIds.length === 0) return out;
+  const rows = await sessionRowsWhere((q) =>
+    q.in("workspace_id", [...workspaceIds]).in("name", [...agentIds])
+  );
+  for (const row of rows) {
+    const name = row.display_name?.trim() ?? "";
+    if (name.length === 0 || out.has(row.name)) continue;
+    out.set(row.name, name);
+  }
+  return out;
+}
+
+/**
  * DROP EVERY member's session-state row that targets ONE thread — the thread
  * cascade's session step (`service-tasks-delete.ts › deleteTask`).
  *

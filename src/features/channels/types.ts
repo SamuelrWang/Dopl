@@ -256,6 +256,20 @@ export type ChannelMessage = {
   /** Hydrated author display (UI convenience); null for system rows. */
   authorName: string | null;
   authorAvatarUrl: string | null;
+  /**
+   * **THE OPERATOR'S NAME FOR THE AGENT THAT WROTE THIS ROW** — one field,
+   * joined from `channel_sessions.display_name` at read time (2026-09-04).
+   *
+   * ⚠ **JOINED, NEVER STORED.** A name is renamed; a copy on the message row
+   * would be a second answer that stops agreeing the moment it is.
+   * ⚠ **ABSENT AND `null` BOTH MEAN "NOT ANSWERED HERE"** — an older server, a
+   * page this read did not resolve names for, a human author, or an agent whose
+   * session row has been swept. Every renderer falls back to the `agent-<id>`
+   * handle, which is minted once and never recycled.
+   * ⚠ **PEER-TYPED.** Nothing validates its charset, so every surface that
+   * splices it neutralizes it.
+   */
+  authorAgentName?: string | null;
   // ── THE DELIVERY KEYSTONE (2026-09-02, A9; `types-delivery.ts`) ─────────
   // ⚠ **OPTIONAL *AND* NULLABLE, AND BOTH MEAN "NOT ANSWERED HERE".** `undefined`
   // is what a message this tree BUILDS rather than READS carries (an optimistic
@@ -284,7 +298,25 @@ export type ChannelMessage = {
  * alias survives so the write path keeps a name distinct from the READ shape;
  * a future post-time notice goes here rather than into `metadata`.
  */
-export type ChannelMessagePosted = ChannelMessage;
+export type ChannelMessagePosted = ChannelMessage & {
+  /**
+   * **THIS CALL WROTE NOTHING — THE `clientMsgId` HAD ALREADY LANDED**
+   * (2026-09-04).
+   *
+   * ⚠ **THE ACK USED TO BE BYTE-IDENTICAL TO A FIRST POST**, which is why the
+   * agent's own transcript in the Mobile Command Center incident showed the 3:48
+   * PM message posted twice over ONE row (seq 963): the idempotency
+   * short-circuit returned the stored message with a success shape and nothing
+   * anywhere said the write had converged. An orchestrator reading two `posted`
+   * acks has no way to tell one message from two.
+   *
+   * ⚠ **PRESENT ONLY ON A REPLAY, never `false`.** It is a NOTICE about this
+   * CALL, not a property of the row — the same message read back tomorrow
+   * carries no such key — and this alias exists precisely so a post-time notice
+   * has somewhere to go that is not `metadata`.
+   */
+  replayed?: true;
+};
 
 /**
  * ONE ROW OF THE TAGS (MENTIONS) INBOX — a message of this channel whose

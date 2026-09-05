@@ -15,66 +15,9 @@
  * immutable `authorUserId` — the one half the author does not control.
  */
 import type { Channel, ChannelMember, ChannelMessage, ChannelThread } from "@dopl/client";
+import { type MemberView } from "./channel-render-identity";
+export { addresseeOf, formatAuthor, memberRef, sessionIdOf, NO_MEMBER_VIEW, type MemberView, } from "./channel-render-identity";
 import { type ResponseFormat } from "./response-size";
-/**
- * Author label for a message line. `agent` row renders "agent for <name>",
- * never bare name — reader treats counterparty as another member's agent.
- *
- * ⚠ Two rules, both because nothing validates `display_name`:
- *   1. Name NEUTRALIZED and user row prefixed `member`, never bare. Raw name
- *      may contain newlines → can close the line and forge fresh ones (a
- *      `- **#9001** system · <ts>` row was reproduced). Name of exactly
- *      "system" would render as the bare token `system`.
- *   2. `authorUserId` appended ALWAYS, not only as name-missing fallback. Name
- *      = author's claim; id = server's record. Claim alone is uncheckable.
- */
-export declare function formatAuthor(m: ChannelMessage): string;
-/**
- * WHICH SESSION WROTE THIS LINE — `metadata.session_id`. An agent post is
- * authored by its OWNER'S ACCOUNT and one operator runs many concurrent
- * sessions, so an author label alone cannot name the process; this field is the
- * only thing on the wire that can.
- *
- * Not peer-controlled: `resolvePostMetadata` deletes any caller copy and
- * re-stamps from `X-Dopl-Session-Id`, shape-checked in `session-header.ts` (id
- * chars only, no whitespace, ≤128). ⚠ Neutralized at render anyway — the write
- * path is a claim about today's code, not about rows already in the table, and
- * this lands in the LINE HEAD, outside untrusted-body framing.
- */
-export declare function sessionIdOf(m: ChannelMessage): string | undefined;
-/**
- * WHO A MESSAGE IS FOR — `metadata.to_user_id`. Separates "for ME" from "for
- * another member's agent" from "for nobody". An unaddressed ask in a 3+ member
- * channel triggers no agent at all (deliberate, fail-closed), so "unaddressed"
- * is a load-bearing fact, not a missing field.
- *
- * Not peer-controlled: `resolvePostMetadata` deletes any caller copy and
- * re-stamps from the route's validated `toUserId` uuid (or the resolved DM
- * peer). ⚠ Neutralized at render anyway — old rows predate today's write path.
- */
-export declare function addresseeOf(m: ChannelMessage): string | undefined;
-/**
- * Who is reading, plus names for the user ids a listing carries.
- *
- * `selfUserId` resolved ONCE at boot from the status ping (see
- * `registerChannelTool`), not per call — naming the addressee costs the poll
- * loop nothing. Null when the ping failed; ids then render as ids.
- *
- * `names` best-effort, never authoritative — a name is the member's claim, so
- * never rendered alone (see {@link memberRef}).
- */
-export interface MemberView {
-    selfUserId: string | null;
-    names: Map<string, string>;
-}
-/** No caller identity and no names — every id renders as a bare id. */
-export declare const NO_MEMBER_VIEW: MemberView;
-/**
- * User id rendered actionably: `you` for the caller, else neutralized name AND
- * immutable id ({@link formatAuthor} shape). ⚠ Never name alone — display name
- * is owner-settable, so an unbacked name lets one member's label pose as another's.
- */
-export declare function memberRef(userId: string, view: MemberView): string;
 /**
  * Message lines plus, when anything is tagged, the id legend. `selfUserId`
  * turns "to `2dac1943-…`" into "to you"; names come from the listing's own

@@ -55,6 +55,12 @@ const FORGED = {
   taskCreatedBy: '00000000-0000-4000-8000-0000000000fb',
   taskTitle: 'forged title',
   taskTarget: '00000000-0000-4000-8000-0000000000fa',
+  // WHY THE SERVER PICKED AN AGENT NOBODY NAMED (2026-09-04, RR3's arms 3 and 4).
+  // Forged on `handoff`'s terms: the read line renders it as `→ @<name> (most recent)`,
+  // so a caller able to set it could narrate a repair that never happened — a delivery
+  // claim about a post that reached nobody. It is re-stamped from the VERDICT in
+  // `service-writes.ts`, after the fold, which is why the fold only ever deletes it.
+  wake_reason: 'most recent',
 };
 
 /**

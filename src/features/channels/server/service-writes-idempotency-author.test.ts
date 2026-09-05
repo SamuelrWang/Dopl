@@ -234,6 +234,30 @@ describe("postMessage's short-circuit belongs to the author, not the room", () =
     expect(out.seq).toBe(41);
   });
 
+  /**
+   * **AND THE ACK SAYS SO** (2026-09-04).
+   *
+   * ⚠ **THE SHORT-CIRCUIT'S ANSWER WAS BYTE-IDENTICAL TO A FIRST POST**, which
+   * is how one row (seq 963) read as two messages in an agent's own transcript
+   * in the Mobile Command Center incident. "Did my message land once or twice"
+   * cannot be answered from the row — same id, same seq, both calls `ok` — so
+   * the notice has to ride the CALL.
+   */
+  it("a converged retry is FLAGGED, not silently identical to a first post", async () => {
+    const { postMessage } = await import("./service-writes");
+    vi.mocked(repoMessages.findOwnMessageByClientId).mockResolvedValue(storedRow());
+    const out = await postMessage(ctx, "general", { body: "the answer", clientMsgId: KEY });
+    expect(out.replayed).toBe(true);
+  });
+
+  it("a FIRST post carries no such key — present only on a replay, never `false`", async () => {
+    const { postMessage } = await import("./service-writes");
+    const out = await postMessage(ctx, "general", { body: "the answer", clientMsgId: KEY });
+    expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
+    expect(out.replayed).toBeUndefined();
+    expect("replayed" in out).toBe(false);
+  });
+
   it("the LOST-RACE repair answers on the same scope, or rethrows", async () => {
     const { postMessage } = await import("./service-writes");
     vi.mocked(repo.pgErrorCode).mockReturnValue("23505");
@@ -242,9 +266,12 @@ describe("postMessage's short-circuit belongs to the author, not the room", () =
     vi.mocked(repoMessages.findOwnMessageByClientId)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(storedRow());
+    // ⚠ THE SAME NOTICE ON THIS DOOR TOO: it IS the short-circuit reached a
+    // second way, so an ack without `replayed` would tell the caller its
+    // concurrent retry had written a row.
     await expect(
       postMessage(ctx, "general", { body: "the answer", clientMsgId: KEY })
-    ).resolves.toMatchObject({ id: "msg-stored" });
+    ).resolves.toMatchObject({ id: "msg-stored", replayed: true });
 
     // ⚠ AND IT DOES NOT REACH FOR A WIDER READ TO AVOID THROWING. A `23505` this
     // author cannot account for is a real error; answering it with somebody

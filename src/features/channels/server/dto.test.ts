@@ -300,6 +300,72 @@ describe("mapMessageRow", () => {
 
     expect(mapMessageRow(messageRow(), undefined).authorName).toBeNull();
   });
+
+  /**
+   * **THE AGENT BEHIND AN AGENT-AUTHORED ROW, BY THE NAME ITS OPERATOR GAVE IT**
+   * (2026-09-04).
+   *
+   * ⚠ **JOINED PER PAGE, NEVER STORED.** The MCP read printed `agent for
+   * <operator>` and a bare id tail for a session its operator had renamed, so a
+   * reader had the operator's name and eight characters of id and no way to join
+   * them. A copy on the message row would stop agreeing the first time the
+   * operator renames.
+   */
+  describe("authorAgentName", () => {
+    const NAMES = new Map([["k3v7d2mq", "Mobile Main"]]);
+
+    it("resolves off the client_msg_id STAMP", () => {
+      const dto = mapMessageRow(
+        messageRow({ author_kind: "agent", client_msg_id: "agent-k3v7d2mq-4" }),
+        undefined,
+        NAMES
+      );
+      expect(dto.authorAgentName).toBe("Mobile Main");
+    });
+
+    it("resolves off the server's own SESSION stamp — the post that chose its own key", () => {
+      const dto = mapMessageRow(
+        messageRow({
+          author_kind: "agent",
+          client_msg_id: "my-own-key",
+          metadata: { session_id: "chan-1::k3v7d2mq" },
+        }),
+        undefined,
+        NAMES
+      );
+      expect(dto.authorAgentName).toBe("Mobile Main");
+    });
+
+    it("🔒 is null for a PERSON — a cookie session carries a session_id too", () => {
+      const dto = mapMessageRow(
+        messageRow({
+          author_kind: "user",
+          metadata: { session_id: "chan-1::k3v7d2mq" },
+        }),
+        undefined,
+        NAMES
+      );
+      expect(dto.authorAgentName).toBeNull();
+    });
+
+    it("is null for an unnamed agent, and for a page with no join at all", () => {
+      // ⚠ THREE SITUATIONS, ONE ANSWER, and every renderer falls back to the
+      // `agent-<id>` handle: no name reported, no id derivable, no map passed.
+      expect(
+        mapMessageRow(
+          messageRow({ author_kind: "agent", client_msg_id: "agent-zzzzzzzz-1" }),
+          undefined,
+          NAMES
+        ).authorAgentName
+      ).toBeNull();
+      expect(
+        mapMessageRow(
+          messageRow({ author_kind: "agent", client_msg_id: "agent-k3v7d2mq-4" }),
+          undefined
+        ).authorAgentName
+      ).toBeNull();
+    });
+  });
 });
 
 describe("mapTaskRow", () => {

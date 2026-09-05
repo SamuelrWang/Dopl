@@ -42,12 +42,35 @@ import type { ChannelMember } from "../../types";
  */
 export const REACH_NOBODY = "nobody";
 
+/** ⚠ MODULE-LEVEL so the default is one REFERENCE, not a fresh `[]` per render —
+ *  the memo below has it in its dependency list. */
+const EMPTY_RECENT: readonly string[] = [];
+
 /** The one-word tell for an address the SERVER supplied. ⚠ Both are real
  *  resilience arms (RR3 / RR1), not guesses — but the author did not type them,
  *  and a line that cannot tell the two apart teaches that tagging is optional. */
 const VIA_NOTE: Partial<Record<DraftReach["via"], string>> = {
   responder: "default",
   thread: "thread",
+};
+
+/**
+ * THE WORD FOR RR3's ARM, when the server chose between several live agents
+ * (2026-09-04).
+ *
+ * ⚠ **ARMS 1 AND 2 KEEP SAYING `default`, WHICH IS WHAT THEY SAID BEFORE.** A
+ * configured responder and a room with one agent are both "the room's standing
+ * answer", and re-labelling them would churn a line that had not changed.
+ * ⚠ **ARMS 3 AND 4 GET THEIR OWN WORDS BECAUSE THEY ARE A PICK.** Several agents
+ * are live and the server named one; a reader who is not told why reads it as
+ * arbitrary. It is the same string the stored `metadata.wake_reason` carries and
+ * the MCP read line prints, so the three surfaces say one thing.
+ */
+const REASON_NOTE: Record<NonNullable<DraftReach["reason"]>, string> = {
+  default: "default",
+  "only agent": "default",
+  "most recent": "most recent",
+  "most recently launched": "newest agent",
 };
 
 /**
@@ -62,6 +85,7 @@ export function ComposerRecipients({
   sessions,
   currentUserId,
   defaultResponderAgentName = null,
+  recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
 }: {
   body: string;
@@ -69,6 +93,9 @@ export function ComposerRecipients({
   sessions: readonly LiveAgentSession[];
   currentUserId: string;
   defaultResponderAgentName?: string | null;
+  /** RR3 arm 3's input, derived once from the transcript this pane already
+   *  holds (`derivations.ts`). ⚠ A STABLE reference — see {@link EMPTY_RECENT}. */
+  recentAgentIds?: readonly string[];
   threadOtherParty?: ChannelMember | null;
 }) {
   const reach: DraftReach = useMemo(
@@ -79,11 +106,20 @@ export function ComposerRecipients({
         sessions,
         currentUserId,
         defaultResponderAgentName,
+        recentAgentIds,
         threadOtherParty,
       }),
-    [body, members, sessions, currentUserId, defaultResponderAgentName, threadOtherParty]
+    [
+      body,
+      members,
+      sessions,
+      currentUserId,
+      defaultResponderAgentName,
+      recentAgentIds,
+      threadOtherParty,
+    ]
   );
-  const note = VIA_NOTE[reach.via];
+  const note = reach.reason ? REASON_NOTE[reach.reason] : VIA_NOTE[reach.via];
   return (
     <p
       role="status"

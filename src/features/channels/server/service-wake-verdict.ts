@@ -1,24 +1,26 @@
 import "server-only";
 import type { ChannelDelivery, ChannelWakeVerdict } from "../types";
 import type { ChannelMessageCreateInput } from "../schema";
-import {
-  agentIdHandle,
-  buildAgentMentionIndex,
-  resolveAgentHandle,
-} from "../lib/agent-mentions";
-import { agentIdOfSessionKey } from "../lib/agent-post-stamp";
-import { mentionHandleOf, mentionTokensOf } from "../lib/mentions";
-import type { SessionStateRow } from "./collab-dto";
 import type { ChannelRow } from "./dto";
-import { isFresh } from "./service-wake-freshness";
+// ⚠ THE AGENT-HANDLE DOOR IS `service-wake-verdict-handles.ts` (§1 split,
+// 2026-09-04) — one place decides which agent a handle names and whose sessions
+// it may look through. This file decides PRECEDENCE and nothing else about it.
+import {
+  ownLiveAgentIds,
+  resolveAgentRecipients,
+  selfAgentIdOf,
+} from "./service-wake-verdict-handles";
+import type { ResponderReason } from "../lib/agent-mentions";
 import {
   defaultResponder,
   freshChannelSessions,
   reciprocalParty,
+  recentRoomAgents,
   threadOtherParty,
 } from "./service-wake-verdict-resilience";
-import * as repoSessions from "./repository-sessions";
 import type { ChannelContext } from "./service-shared";
+
+export { ownLiveAgentIds } from "./service-wake-verdict-handles";
 
 /**
  * **WHO A MESSAGE IS FOR, AND WHETHER IT WOKE ANYBODY — DECIDED ON THE SERVER,
@@ -67,6 +69,16 @@ export interface WakeVerdictResult {
   /** The server's write-time answer to "what happened". A prediction until the
    *  machine acks. */
   delivery: ChannelDelivery;
+  /**
+   * **WHY THIS AGENT AND NOT ANOTHER**, when the server CHOSE one the author did
+   * not name — RR3's arm, as a word (2026-09-04).
+   *
+   * ⚠ `null` FOR EVERY ADDRESS THE AUTHOR WROTE, and that is the distinction it
+   * exists to carry: a reason beside a handle somebody typed would invite a
+   * reader to think the server had picked. It is stamped into
+   * `metadata.wake_reason` on the write path and rendered by the read.
+   */
+  reason: ResponderReason | null;
 }
 
 /**
@@ -89,159 +101,6 @@ const DELIVERY_FOR: Record<ChannelWakeVerdict, ChannelDelivery> = {
   responder: "woken",
 };
 
-/**
- * THE AUTHOR'S OWN LIVE SESSIONS IN THIS CHANNEL, **FRESH ONLY**.
- *
- * ⚠ **OWN-SCOPED, AND THAT IS THE SAME-ACCOUNT CARVE GETTING ENFORCED FOR
- * FREE.** Every agent posts under its OPERATOR'S account (INVARIANTS §11), so
- * "sessions belonging to the author" is exactly the set Samuel's 2026-08-31 carve
- * permits an agent-authored message to wake. A peer's agent is not in it, cannot
- * be resolved here, and is therefore left to the machine that owns it —
- * `recipientAgentIds: null`, and the desktop's own parse decides. That is a
- * strictly weaker server answer, never a wrong one.
- *
- * ⚠ **FRESHNESS IS THE F-418 RULE AND IT IS ASYMMETRIC.** `channel_sessions` is
- * a PROJECTION the desktop pushes on state change; a quiet row means nobody said
- * anything, not that nothing is running. So a fresh row is evidence enough to
- * RESOLVE, and a stale one is not evidence of ABSENCE — which is why a body with
- * unresolvable handles answers `null` (defer to the machine) rather than `[]`
- * (nobody). {@link SESSION_PROJECTION_FRESH_MS} carries the window.
- */
-async function freshOwnSessions(
-  ctx: ChannelContext,
-  channelId: string,
-  now: number
-): Promise<SessionStateRow[]> {
-  const rows = await repoSessions.listSessionStates(
-    ctx.userId,
-    ctx.workspaceId,
-    channelId
-  );
-  return rows.filter((row) => isFresh(row.updated_at, now));
-}
-
-/**
- * **EVERY AGENT ID THE CALLER'S OWN FRESH SESSIONS ANSWER TO, IN THIS CHANNEL**
- * — the id door (`@agent-<id>` / `@<id>`) and the name door (`@<slug>`), through
- * the one index builder both web surfaces already use.
- *
- * ⚠ EXPORTED FOR `service-directions.ts`, WHICH ASKS THE SAME QUESTION ABOUT A
- * BARE ID RATHER THAN A BODY (G3 / F-418). One projection read, one freshness
- * rule, one place that decides what "a live agent of mine" means.
- */
-export async function ownLiveAgentIds(
-  ctx: ChannelContext,
-  channelId: string,
-  now = Date.now()
-): Promise<{ ids: string[]; projectionFresh: boolean }> {
-  const rows = await freshOwnSessions(ctx, channelId, now);
-  return {
-    ids: rows.map((row) => row.name).filter((name) => name.length > 0),
-    // ⚠ "THE PROJECTION HAS SOMETHING RECENT TO SAY", not "the agent is there".
-    // A caller may only refuse on the strength of this being TRUE.
-    projectionFresh: rows.length > 0,
-  };
-}
-
-/**
- * The agent ids a body names, or `null` when the server cannot answer.
- *
- * THREE OUTCOMES, AND THE THIRD IS THE ONE THAT MATTERS:
- *   - no handles at all      → `[]`. A complete answer: this body names no agent.
- *   - handles that resolve   → the ids. Authoritative; the desktop executes it.
- *   - handles that DO NOT    → `null`. The token may name a PEER's agent (whose
- *     id is minted on their machine and known to no server) or one whose row has
- *     not been pushed yet. Answering `[]` here would tell the desktop "nobody",
- *     and it would stop feeding an agent it can see. `null` means "you decide",
- *     which is today's behaviour exactly.
- */
-async function resolveAgentRecipients(
-  ctx: ChannelContext,
-  channelId: string,
-  body: string,
-  now: number,
-  /** The session that WROTE this body, from {@link selfAgentIdOf}. Dropped from
-   *  the answer — see the docblock's self-address rule. */
-  selfAgentId: string | null
-): Promise<string[] | null> {
-  const handles = mentionTokensOf(body)
-    .map(mentionHandleOf)
-    .filter((handle): handle is string => handle !== null);
-  if (handles.length === 0) return [];
-
-  const rows = await freshOwnSessions(ctx, channelId, now);
-  const index = buildAgentMentionIndex(
-    rows.map((row) => ({ agentId: row.name, displayName: row.display_name }))
-  );
-  const out: string[] = [];
-  // ⚠ **"SOMETHING RESOLVED" IS TRACKED SEPARATELY FROM "SOMETHING IS LEFT".**
-  // A body whose only handle named the AUTHOR resolved perfectly well; what it
-  // named is not an addressee. Answering `null` there would send the desktop to
-  // its own body parse, which would resolve the very same self-tag against its
-  // live ids and feed the session its own post — the defect this drop exists to
-  // close, re-introduced one layer down.
-  let resolvedAny = false;
-  for (const handle of handles) {
-    const id =
-      resolveAgentHandle(handle, index) ?? resolveAgentHandle(bareId(handle), index);
-    if (id === null) continue;
-    resolvedAny = true;
-    if (id === selfAgentId) continue;
-    if (!out.includes(id)) out.push(id);
-  }
-  if (out.length > 0) return out;
-  return resolvedAny ? [] : null;
-}
-
-/**
- * **THE SESSION THAT WROTE THIS POST** — `metadata.session_id`'s agent segment,
- * or `null` when a person wrote it (2026-09-04).
- *
- * ⚠ **IT IS READ OFF THE SERVER'S OWN STAMP AND NOT OFF `client_msg_id`.** The
- * stamp door (`lib/agent-post-stamp.ts › parseAgentPostStamp`) is blank for every
- * post that carried its own idempotency key, which is exactly the class of post
- * that self-woke in the Mobile Command Center incident: `metadata.session_id` is
- * stripped from caller input and re-stamped from the session header
- * (`service-writes-metadata.ts` fold 6b), so it is both unforgeable and always
- * present on a desktop-session post.
- *
- * ⚠ **GATED ON `authorKind`.** A member's cookie session also carries a
- * `session_id`, and a person is not an agent — reading it unconditionally would
- * invent an author agent for a human post and quietly withdraw that agent from
- * its own room's addressing.
- */
-function selfAgentIdOf(
-  metadata: Record<string, unknown>,
-  authorKind: string
-): string | null {
-  if (authorKind !== "agent") return null;
-  const sessionId = metadata.session_id;
-  return agentIdOfSessionKey(typeof sessionId === "string" ? sessionId : null);
-}
-
-/**
- * `@<id>` → the `agent-<id>` handle the index claims.
- *
- * ⚠ **THE PREFIX IS OPTIONAL ON THE MACHINE AND MANDATORY IN THE WEB INDEX, AND
- * THAT DISAGREEMENT IS REAL — see F-448.** `main/session-dispatch.js ›
- * mentionedAgentIds` matches `@(?:agent-)?([a-z][a-z0-9]{7})` because *"the bare
- * `@<id>` form is what every message written before [2026-08-27] carries"*, while
- * `lib/agent-mentions.ts › buildAgentMentionIndex` claims only `agent-<id>` and
- * the slug. A server that resolved only the index's forms would answer
- * `unreachable` for a bare id the desktop routes happily, which is a WORSE lie
- * than the one this slice exists to remove.
- *
- * ⚠ **IT IS A NORMALISATION, NOT A SECOND PARSER.** The token still comes from
- * `mentionTokensOf`/`mentionHandleOf` and the lookup is still the one index; all
- * this does is try the canonical spelling of a handle that is already a
- * well-formed agent id. The fix belongs in the index (so the transcript TINTS
- * the form it routes on) and is filed rather than taken, because that is a
- * rendering change and this slice is not a rendering slice.
- */
-const BARE_AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
-function bareId(handle: string): string | null {
-  return BARE_AGENT_ID_RE.test(handle) ? agentIdHandle(handle) : null;
-}
 
 /** What the write path knows that the metadata fold does not. */
 export interface WakeVerdictContext {
@@ -309,7 +168,12 @@ export interface WakeVerdictContext {
  * here, `liveAgentHandles` in the `to=` resolver), and RR2 resolves a MEMBER by
  * construction. There is deliberately no `authorKind === "agent"` test guarding
  * a wake: a second spelling of the loop fence is exactly what the desktop's
- * three-module version cost. `authorKind` appears once, to SPLIT RR2 from RR3.
+ * three-module version cost.
+ * ⚠ `authorKind` appears TWICE and only twice — to SPLIT RR2 from RR3, and to
+ * choose the body parse's candidate set (2026-09-04). The second use is the
+ * fence itself expressed as a scope rather than as a guard: an agent author
+ * reads its OWN fresh sessions, a person reads the ROOM's. Both remain single
+ * statements of the carve, in the two places that resolve an agent id.
  *
  * ⚠ **THE ESCALATION-ANSWER DOOR IS NOT RESOLVED HERE, DELIBERATELY.**
  * `metadata.escalationAnswer.agentId` names the agent that ASKED, which belongs
@@ -368,7 +232,14 @@ export async function resolveWakeVerdict(
       : wakeCtx.toAgentId;
   const bodyAgentIds =
     toAgentId === null && isMessage
-      ? await resolveAgentRecipients(ctx, channelId, input.body, now, selfAgentId)
+      ? await resolveAgentRecipients(
+          ctx,
+          channelId,
+          input.body,
+          now,
+          selfAgentId,
+          wakeCtx.authorKind
+        )
       : null;
   const namedAgentIds = toAgentId !== null ? [toAgentId] : bodyAgentIds;
 
@@ -379,7 +250,12 @@ export async function resolveWakeVerdict(
   // Reached only when the author addressed NOBODY. Each answers a member id, an
   // agent id, or nothing; `resilience` stays null when no arm applies.
   let resilience:
-    | { verdict: ChannelWakeVerdict; userIds: string[]; agentIds: string[] }
+    | {
+        verdict: ChannelWakeVerdict;
+        userIds: string[];
+        agentIds: string[];
+        reason?: ResponderReason;
+      }
     | null = null;
   const repairable =
     !addressed && isMessage && wakeCtx.threadTagStripped !== true;
@@ -391,30 +267,37 @@ export async function resolveWakeVerdict(
     }
   } else if (repairable && wakeCtx.authorKind === "agent") {
     // RR2 — whoever last addressed this agent in this room, inside the window.
-    // ⚠ THE AUTHOR'S OWN LIVE AGENT IDS GO WITH IT (F-589): the arm keys on a
-    // `client_msg_id` stamp, which is CALLER-SUPPLIED and names a public id, so
-    // the claim "I am agent X" is checked against the projection before it is
-    // allowed to select a recipient. Resolved HERE because {@link
-    // ownLiveAgentIds} is this file's, and `service-wake-verdict-resilience.ts`
-    // cannot import it without a cycle — one definition of "a live agent of
-    // mine", handed over rather than restated.
+    // ⚠ THE AUTHOR'S OWN LIVE AGENT IDS GO WITH IT (F-589): one half of the arm's
+    // key is the `client_msg_id` stamp, which is CALLER-SUPPLIED and names a
+    // public id, so the claim "I am agent X" is checked against the projection
+    // before it is allowed to select a recipient. Handed over rather than
+    // restated — one definition of "a live agent of mine".
+    // ⚠ THE METADATA GOES WITH IT TOO (2026-09-04): the arm's OTHER key is
+    // `metadata.session_id`, the server's own stamp, which is what makes it fire
+    // for a post that supplied its own idempotency key. See `reciprocalParty`.
     const { ids } = await ownLiveAgentIds(ctx, channelId, now);
-    const party = await reciprocalParty(channelId, input, now, ids);
+    const party = await reciprocalParty(channelId, input, metadata, now, ids);
     if (party !== null) {
       resilience = { verdict: "reciprocal", userIds: [party], agentIds: [] };
     }
   } else if (repairable) {
     // RR3 — the channel's default responder, or its one live agent.
-    const responder = defaultResponder(
+    const responder = await defaultResponder(
       channel,
-      await freshChannelSessions(ctx, channelId, now)
+      await freshChannelSessions(ctx, channelId, now),
+      () => recentRoomAgents(channelId, now)
     );
     // ⚠ AND THE DEFAULT RESPONDER IS NEVER THE AUTHOR EITHER — belt over the
     // door above. RR3's gate is that a PERSON wrote the message, so `selfAgentId`
     // is null here today; stating it keeps the one-live-agent room correct if the
     // arm's gate ever widens, which is the room this incident happened in.
-    if (responder !== null && responder !== selfAgentId) {
-      resilience = { verdict: "responder", userIds: [], agentIds: [responder] };
+    if (responder !== null && responder.agentId !== selfAgentId) {
+      resilience = {
+        verdict: "responder",
+        userIds: [],
+        agentIds: [responder.agentId],
+        reason: responder.reason,
+      };
     }
   }
 
@@ -445,6 +328,7 @@ export async function resolveWakeVerdict(
     verdict,
     recipientUserIds,
     recipientAgentIds,
+    reason: resilience?.reason ?? null,
     // ⚠ **`unreachable` IS AN OUTCOME THE VERDICT ENUM CANNOT EXPRESS, WHICH IS
     // WHY THE TWO ARE SEPARATE FIELDS.** The BODY named an agent and nothing this
     // server can see answers to it. Reporting the verdict's own outcome instead

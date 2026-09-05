@@ -201,7 +201,19 @@ async function opPost(client, channelRef, body, opts = {}) {
             ? opts.metadata.taskId
             : undefined));
     const mentions = (0, channel_post_guidance_1.postMentionFacts)(body, message);
-    return (0, respond_1.ok)((0, channel_facts_1.factsLine)(opts.resultHead ?? "posted", {
+    // ⚠ **A CONVERGED RETRY OPENS WITH THE FACT THAT NOTHING WAS WRITTEN**
+    // (2026-09-04). The server's idempotency short-circuit returns the STORED row
+    // and writes nothing; the ack was byte-identical to a first post, which is why
+    // one row (seq 963) read as two messages in an agent's own transcript. It is
+    // the HEAD rather than a field because "posted" is the claim that is wrong —
+    // a caller that scans the first word must not read a replay as a send.
+    // ⚠ THE SEQ IS IN IT, and repeating it in `seq=` costs nothing worth saving:
+    // the head is prose a reader takes at a glance and the fields are what a
+    // parser reads, and neither should have to consult the other.
+    const head = message.replayed
+        ? `already posted as #${message.seq} (idempotent replay — not re-sent)`
+        : (opts.resultHead ?? "posted");
+    return (0, respond_1.ok)((0, channel_facts_1.factsLine)(head, {
         seq: message.seq,
         msg: message.id,
         thread: landing.thread,

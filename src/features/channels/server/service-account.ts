@@ -23,6 +23,7 @@ import { mapOwnSessionStateRow } from "./collab-dto";
 import { mapMessageRow, type ChannelMessageRow, type ProfileRef } from "./dto";
 import * as accountRepo from "./repository-account";
 import { fetchProfiles } from "./repository-workspace";
+import { agentNamesFor } from "./service-shared";
 
 /**
  * **THE ACCOUNT-WIDE CHANNEL READS** — one answer across EVERY workspace and
@@ -223,11 +224,21 @@ export async function readAccountMessages(
     opts.limit ?? accountRepo.ACCOUNT_MESSAGE_LIMIT,
     userId
   );
-  const profiles = await profilesFor(page.rows);
+  // ⚠ THE NAME JOIN IS FENCED ON EVERY WORKSPACE THIS PAGE PROVED, not on the
+  // agent ids alone — this read is the ACCOUNT-wide one, so its rows legitimately
+  // span tenancies and an unfenced lookup would answer from one the caller never
+  // reached (`service-shared.ts › agentNamesFor`).
+  const [profiles, agentNames] = await Promise.all([
+    profilesFor(page.rows),
+    agentNamesFor(
+      refs.map((r) => (r as accountRepo.AccountChannelRef).workspaceId),
+      page.rows
+    ),
+  ]);
   const messages = page.rows.map((row) => {
     const ref = byId.get(row.channel_id);
     return {
-      ...mapMessageRow(row, profiles.get(row.author_user_id ?? "")),
+      ...mapMessageRow(row, profiles.get(row.author_user_id ?? ""), agentNames),
       // ⚠ Non-null by construction — the read was fenced by `byId`'s key set.
       channelName: (ref as accountRepo.AccountChannelRef).name,
       channelSlug: (ref as accountRepo.AccountChannelRef).slug,

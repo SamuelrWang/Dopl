@@ -29,3 +29,41 @@ export class ChannelRecipientUnresolvedError extends ChannelError {
     );
   }
 }
+
+
+/**
+ * **A HANDLE IN THE BODY NAMES MORE THAN ONE LIVE AGENT IN THIS CHANNEL**
+ * (2026-09-04, the peer-tag slice).
+ *
+ * ⚠ **IT EXISTS BECAUSE THE AGENT NAMESPACE STOPPED BEING ONE OPERATOR'S.** A
+ * human's `@<name>` now resolves against every machine's fresh sessions in the
+ * room, and two operators may each have renamed an agent `Main`. `agent-<id>` is
+ * unique by construction and cannot reach this; only a slugged DISPLAY NAME can.
+ *
+ * ⚠ **A REFUSAL, AND NEVER A PICK** — `lib/agent-mentions.ts ›
+ * buildAgentMentionIndex` already fails closed for the TINT, and any collision
+ * rule (mine wins, newest wins) wakes an identity the author did not choose and
+ * says nothing about it. Same ruling `LaunchTemplateAmbiguousError` carries.
+ *
+ * ⚠ **IT CARRIES THE CANDIDATES, AND THEY DISCLOSE NOTHING NEW.** Every handle
+ * listed is already readable through `op="read_sessions"` for any member of this
+ * channel, and the list is what makes the remedy — address one by its id form —
+ * something the caller can act on without a second call.
+ *
+ * ⚠ **IT ANSWERS ON `CHANNEL_RECIPIENT_UNRESOLVED`'s CODE** (`http-mapping.ts`),
+ * because the caller-visible fact is the same one: nothing was written, and the
+ * address has to be fixed. A second 400 code would be a second thing every
+ * client has to learn for one remedy.
+ */
+export class ChannelAgentHandleAmbiguousError extends ChannelError {
+  constructor(
+    public readonly handle: string,
+    public readonly candidates: readonly string[]
+  ) {
+    const listed = candidates.map((h) => `@${h}`).join(", ") || "none";
+    super(
+      `"@${handle}" names more than one live agent in this channel. ` +
+        `Address one by its id handle: ${listed}.`
+    );
+  }
+}

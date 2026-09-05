@@ -49,7 +49,14 @@ import {
 // against ~1,400 off every hold result is the design**; the READ section paid
 // ~130 of it back by deleting the hold prose the new section states properly.
 // A rise with no matching fall is prose laundering, and this is the gate for it.
-const DOCTRINE_MAX_CHARS = 9_446;
+// ⚠ **9,446 → 9,428 (2026-09-04, −18): THE ADDRESSING LINE SAYS MORE AND COSTS
+// LESS.** MODEL's "WHO A MESSAGE IS FOR" now carries the READ line's new arrow
+// vocabulary AND the rule that a person who names nobody is still answered
+// (RR3's arms 3 and 4) — paid for by deleting its restatement of "anything
+// threaded into an exchange you are a party to is yours", which the LAW block
+// already says as "ACT ON ... messages in a THREAD you are a party to".
+// **A rule that had two homes now has one, and the second was the expensive one.**
+const DOCTRINE_MAX_CHARS = 9_428;
 // ⚠ **2,870 → 2,879 (2026-09-03): +9 ON EVERY SECTION, AND NOT ONE OF THEM
 // GREW.** `SECTION_INDEX` names every section and rides every pull, so adding
 // `waiting` to the table lengthened what a caller receives for `send`, `law`

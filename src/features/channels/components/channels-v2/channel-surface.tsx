@@ -220,6 +220,7 @@ export function ChannelSurface({
     index,
     openThread,
     rows,
+    recentAgentIds,
     gate,
   } = data;
   // 🔒 THE HEADER NAME, AND `peerNamedHeader: false` IS THE /home ANSWER — see
@@ -248,6 +249,9 @@ export function ChannelSurface({
       channelName={channelName}
       thread={openThread}
       rows={rows}
+      // RR3 arm 3's input for the composer's recipient line — derived once in
+      // `derivations.ts` from the transcript this page has already read.
+      recentAgentIds={recentAgentIds}
       index={index}
       members={members}
       loading={data.messagesLoading}

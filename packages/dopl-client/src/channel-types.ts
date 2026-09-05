@@ -138,6 +138,14 @@ export interface ChannelMessage {
    */
   authorName?: string | null;
   authorAvatarUrl?: string | null;
+  /**
+   * The OPERATOR'S NAME for the agent that wrote this row, joined from the live
+   * session at read time (2026-09-04). ⚠ Absent and `null` both mean "not
+   * answered here" — a human author, an older server, or a session row that has
+   * been swept; fall back to the `agent-<id>` handle, which is never recycled.
+   * ⚠ PEER-TYPED: neutralize it before splicing it into any narration.
+   */
+  authorAgentName?: string | null;
   // ── THE DELIVERY KEYSTONE (2026-09-02, A9; `delivery-types.ts`) ─────────
   // ⚠ **OPTIONAL *AND* NULLABLE, AND BOTH MEAN "NOT ANSWERED HERE"** — an older
   // server omits the key, a newer one sends `null` for a row it could not
@@ -163,7 +171,16 @@ export interface ChannelMessage {
  * `openingSeq`; this alias keeps the write result named apart from the read
  * shape so a future post-time notice has somewhere to go.
  */
-export type ChannelMessagePosted = ChannelMessage;
+export type ChannelMessagePosted = ChannelMessage & {
+  /**
+   * **THIS CALL WROTE NOTHING — the `clientMsgId` had already landed**
+   * (2026-09-04). ⚠ PRESENT ONLY ON A REPLAY, never `false`: it is a notice
+   * about this CALL, not a property of the row. The ack was byte-identical to a
+   * first post until then, which is how one row read as two messages in an
+   * agent's own transcript. The server's own note is on the twin.
+   */
+  replayed?: true;
+};
 
 export interface ChannelMember {
   channelId: string;

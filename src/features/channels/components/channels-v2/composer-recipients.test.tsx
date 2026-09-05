@@ -158,12 +158,24 @@ describe("the recipient line — always on, whatever the draft says", () => {
     expect(line()).toContain("default");
   });
 
-  it("🔒 says `nobody` when the draft would wake nobody — two live agents and no nomination", () => {
-    // ⚠ RR3 arm 2 is EXACTLY ONE live agent. Two and no setting is arm 3, not a
-    // pick — choosing between them is the guess the server refuses to make.
+  it("🔒 names an agent with TWO live and no nomination — the line must not say `nobody` for a post that will route", () => {
+    // ⚠ THIS SAID `nobody` UNTIL 2026-09-04, and so did the server (row #966).
+    // Samuel's B1 is that a forgotten `@` must never stall, so RR3 now answers
+    // with the agent that spoke here last — else the one launched last, which is
+    // the first candidate in the order this surface holds them.
     const body = mount({ liveAgents: [PEER_AGENT, BARE_AGENT] });
     type(body, "who is around");
-    expect(line()).toContain(REACH_NOBODY);
+    expect(line()).not.toContain(REACH_NOBODY);
+    expect(line()).toContain("@research-bot");
+  });
+
+  it("🔒 and it names the agent that POSTED here last, over the ordering", () => {
+    const body = mount({
+      liveAgents: [PEER_AGENT, BARE_AGENT],
+      recentAgentIds: [BARE_AGENT.name],
+    });
+    type(body, "who is around");
+    expect(line()).toContain("@agent-z9q1w4er");
   });
 
   it("says `nobody` in an empty room, and renders BEFORE anything is typed", () => {
@@ -215,14 +227,32 @@ describe("the rule itself", () => {
     expect(out.recipients.map((r) => r.label)).toEqual(["Diana Taylor"]);
   });
 
-  it("a nomination whose agent is not running degrades to arm 2, then arm 3", () => {
-    expect(draftReach({
+  it("a nomination whose agent is not running degrades to the room's own answer", () => {
+    // ⚠ IT DEGRADES, IT DOES NOT DANGLE — and since 2026-09-04 the degraded
+    // answer is a real one rather than `none`. The setting stores a HANDLE and
+    // nothing enforces that it names a live session.
+    const out = draftReach({
       body: "hello",
       members: MEMBERS,
       sessions: [PEER_AGENT, BARE_AGENT],
       currentUserId: ME,
       defaultResponderAgentName: "gone-agent",
-    }).via).toBe("none");
+      recentAgentIds: [BARE_AGENT.name],
+    });
+    expect(out.via).toBe("responder");
+    expect(out.reason).toBe("most recent");
+    expect(out.recipients.map((r) => r.label)).toEqual(["@agent-z9q1w4er"]);
+  });
+
+  it("an EMPTY room is still `nobody` — the arm that answers nothing is the one with nothing to answer with", () => {
+    expect(
+      draftReach({
+        body: "hello",
+        members: MEMBERS,
+        sessions: [],
+        currentUserId: ME,
+      })
+    ).toMatchObject({ via: "none", reason: null });
   });
 
   it("threadOtherPartyOf answers null for a thread the author is not in", () => {
