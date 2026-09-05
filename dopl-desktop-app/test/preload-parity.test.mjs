@@ -438,6 +438,30 @@ const APP_OPS = [
   //     blocking version floor, a full window budget. Nothing here starts a query, wakes a
   //     shell, grants a tool or posts anything.
   "threads.openWindow",
+  // ⚠ TWO JOINED HERE ON 2026-09-05 (task 9b; Samuel's #1098 via #1101 item 4b, ruled (a) in
+  // #1177): `turnCap.get` / `turnCap.set`, the machine's LOOP-SAFETY BRAKE. The pin failed on the
+  // ADD, which is the review this comment records:
+  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
+  //     registers `settings:getTurnCap` / `settings:setTurnCap` under the same `appWindowOnly()`
+  //     sender binding as every op above, and both are enumerated in `_ipc-ops-table.mjs`. There
+  //     is NO id to UUID-gate: the subject is the MACHINE, the fourth op family here with that
+  //     shape after the two `orchestrator*` pairs and `claude.signIn`, so the sender binding is
+  //     the only guard on them. Storage is `main/settings.js › sessionTurnCap`, whose `setTurnCap`
+  //     is the ONE writer of that key in the app.
+  //   • ⚠ THIS ONE CAN REMOVE A SAFETY BOUND, WHICH THE OTHERS CANNOT. `set(0)` means unlimited:
+  //     the cap is what ends a runaway session (`session-reducer.js`, reason `turn_cap`), and
+  //     without it a loop between two agents has no local stop. That is why there is no route, no
+  //     MCP op and no `workspace_settings` column for it — a SERVER-writable version would let an
+  //     agent holding this operator's device token (§6) unbound itself on every Mac they own.
+  //   • FORGED FROM AN APP-WINDOW TOP FRAME, the worst case is the operator's own machine running
+  //     with a cap they did not choose. It starts no turn, grants no tool, opens no window, posts
+  //     nothing and reaches no other machine — and it applies to NEW sessions only, because a
+  //     running session read its cap at launch and re-reads nothing (#1177: the reducer owns every
+  //     transition, so a live re-read is a reducer event and a build of its own).
+  //   • Both are feature-probed by the SPA; an older main has no turn-cap concept, which reads as
+  //     NO ROW rather than an inert one.
+  "turnCap.get",
+  "turnCap.set",
 ];
 
 test("the app preload exposes exactly its pinned surface, on `dopl`", () => {

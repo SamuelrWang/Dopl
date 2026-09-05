@@ -253,60 +253,6 @@ export async function scanCreditEvents(
   return clipped((data ?? []) as CreditEventScanRow[], limit);
 }
 
-export interface ThreadActivityRow {
-  id: string;
-  workspace_id: string;
-  channel_id: string;
-  title: string;
-  status: string;
-  last_activity_at: string | null;
-  closed_at: string | null;
-}
-
-/**
- * The most RECENTLY ACTIVE threads across the fence.
- *
- * ⚠ **OFF `channel_tasks_activity`, ORDERED BY `last_activity_at`** — the view
- * that already exists for exactly this question, and the same one
- * `channels/server/repository-tasks.ts › listTasksByChannel` was moved onto
- * (INVARIANTS §9). Ordering the base table by `updated_at` would answer "last
- * TOUCHED", which a status change or a rename satisfies without anybody saying
- * anything in the thread.
- *
- * ⚠ NAMED COLUMNS, NEVER `*`: the view carries `outcome_summary` and
- * `client_msg_id`, neither of which this list renders, and a summary is content
- * on the wire for a row that shows a title (§9).
- *
- * ⚠ NULLS LAST. A thread that has never had activity has a NULL
- * `last_activity_at`; sorting it to the top would put the quietest rows in a
- * list whose entire premise is recency.
- *
- * ⚠ **`sinceIso` IS A HARD FLOOR, ADDED 2026-09-01 (Samuel: "threads active
- * within the last X minutes").** The panel is about NOW, so a thread quiet for
- * two hours does not belong in it even when the list would otherwise be empty —
- * an empty "recent" panel is the honest answer to a quiet afternoon, and
- * back-filling it with stale rows is how a glance surface starts lying about
- * activity. ⚠ The filter is `gte`, which DROPS the null-activity rows the sort
- * above pushes last; that is consistent — a thread with no activity has had none
- * in the window either.
- */
-export async function listRecentThreads(
-  workspaceIds: string[],
-  limit: number,
-  sinceIso: string
-): Promise<Scan<ThreadActivityRow>> {
-  if (workspaceIds.length === 0) return { rows: [], truncated: false };
-  const { data, error } = await supabaseAdmin()
-    .from("channel_tasks_activity")
-    .select("id, workspace_id, channel_id, title, status, last_activity_at, closed_at")
-    .in("workspace_id", workspaceIds)
-    .gte("last_activity_at", sinceIso)
-    .order("last_activity_at", { ascending: false, nullsFirst: false })
-    .limit(limit);
-  if (error) throw error;
-  return clipped((data ?? []) as ThreadActivityRow[], limit);
-}
-
 export interface RunningSessionRow {
   id: string;
   workspace_id: string;

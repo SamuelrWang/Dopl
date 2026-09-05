@@ -292,18 +292,32 @@ describe("Tools — every profile says what it means, in a few words", () => {
 });
 
 describe("the Agent folder row", () => {
+  /**
+   * ⚠ THE DEFAULT IS NOW A REAL DIRECTORY, NOT A WORD THIS TREE OWNS (2026-09-05,
+   * task 15). `label` was `null` here and the row printed "Sandbox (default)" over
+   * it — naming a place that does not exist, on the one row that claims to say
+   * where the operator's agent runs. Main answers the EFFECTIVE folder always
+   * (`channel-dirs.js › resolvedDirLabel`, read through the same function that
+   * produces the spawn cwd), and `custom` carries the question the null was
+   * standing in for. ⚠ Do not reintroduce a literal default label in this file: an
+   * assertion this suite can spell is one the renderer could invent again.
+   */
   const folder = {
-    label: null as string | null,
+    label: "~/Downloads" as string | null,
+    custom: false,
     busy: false,
     onChoose: noop,
     onClear: noop,
   };
 
-  it("names the default folder and offers only Change on it", () => {
+  it("names the EFFECTIVE default folder and offers only Change on it", () => {
     const text = copy({ folder: { ...folder } });
     expect(text).toContain("Agent folder");
-    expect(text).toContain("Sandbox (default)");
+    expect(text).toContain("~/Downloads");
+    expect(text).not.toContain("Sandbox");
     expect(row("Change folder…")).not.toBeNull();
+    // ⚠ GATED ON `custom`, NOT on having a label to show — the reset must not be
+    // offered on a channel that is already on the default.
     expect(row("Use default")).toBeNull();
   });
 
@@ -313,7 +327,13 @@ describe("the Agent folder row", () => {
     const onChoose = vi.fn();
     const onClear = vi.fn();
     const { container } = agentView({
-      folder: { ...folder, label: "~/Downloads/repo", onChoose, onClear },
+      folder: {
+        ...folder,
+        label: "~/Downloads/repo",
+        custom: true,
+        onChoose,
+        onClear,
+      },
     });
     expect(container.textContent).toContain("~/Downloads/repo");
     fireEvent.click(row("Change folder…")!);
@@ -323,7 +343,7 @@ describe("the Agent folder row", () => {
   });
 
   it("says the picker is open rather than looking idle", () => {
-    agentView({ folder: { ...folder, label: "~/repo", busy: true } });
+    agentView({ folder: { ...folder, label: "~/repo", custom: true, busy: true } });
     expect(row("Opening picker…")).not.toBeNull();
     expect(disabled(row("Opening picker…")!)).toBe(true);
   });
@@ -350,7 +370,13 @@ describe("a settings panel, not documentation", () => {
   /** The whole agent half with both desktop-only groups present. */
   const fullTab = () =>
     agentView({
-      folder: { label: "~/repo", busy: false, onChoose: noop, onClear: noop },
+      folder: {
+        label: "~/repo",
+        custom: true,
+        busy: false,
+        onChoose: noop,
+        onClear: noop,
+      },
       orchestrator: { on: false, busy: false, onToggle: noop },
     }).container;
 

@@ -5,12 +5,11 @@ import {
   resolveDefaultResponder,
   type ResponderChoice,
 } from "../lib/agent-mentions";
-import { authorAgentIdOf, recentAgentPosters } from "../lib/agent-post-stamp";
+import { authorAgentIdOf, recentAgentsAddressedBy } from "../lib/agent-post-stamp";
 import type { SessionStateRow } from "./collab-dto";
 import type { ChannelRow } from "./dto";
 import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
-import { isFresh } from "./service-wake-freshness";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -55,21 +54,47 @@ import type { ChannelContext } from "./service-shared";
  * spelling of the fence is what the desktop's three-module version cost. The
  * gate lives at each call site, where the credential is already in hand.
  *
- * ⚠ FRESH ONLY, on {@link isFresh}'s asymmetric rule: a fresh row is evidence
- * enough to WAKE, a stale one is not evidence of absence. Here dropping a stale
- * row costs nothing — RR3 falls through to `delivery=none` and lists what it can
- * see, which is the honest answer rather than a wake aimed at a dead session.
+ * ⚠ **PRESENCE, NOT RECENCY — LIVENESS IS MEMBERSHIP (Samuel, 2026-08-22).** The
+ * push is a FULL-SET REPLACE keyed on `(user, workspace)` and
+ * `main/session-state-push.js › liveForWire` drops ended rows before they are
+ * sent, so a session that has gone away is deleted BY OMISSION: a row in this
+ * read is a session that has not gone away. That is the whole test.
+ *
+ * ⚠ **THE WALL-CLOCK FRESHNESS FILTER IS DELETED HERE, AND ITS GRAVE IS THIS
+ * BLOCK.** It stood until 2026-09-05 and it read `updated_at` as a HEARTBEAT,
+ * which that column has never been — the push fires on state CHANGE only, so
+ * *"an agent thinking for four minutes writes nothing at all"* and one idle for
+ * an hour writes nothing either. Filtering on it collapsed
+ * `service-wake-freshness.ts › isFresh`'s own asymmetry at the exact point that
+ * docblock forbids: a filtered-out row is indistinguishable from a row that is
+ * not there, so STALE was read as ABSENT. Rows #1080, #1081 and #1092 of the
+ * Mobile Command Center are the bill — three agents deliberately idle on a
+ * verification hold, every row aged past the window, candidate list EMPTY, and
+ * every untagged post by the operator stored `verdict=none` while three agents
+ * sat listening in the room.
+ * ⚠ **THIS IS SAMUEL'S 2026-08-22 AGENTS-TAB RULING, REACHING THE SURFACE THAT
+ * NEVER TOOK IT** — *"the card STAYS until the session actually goes away"*. See
+ * `components/channels-v2/agents-model.ts › peerCardsFor`, which deleted the
+ * identical guard for the identical reason and states the argument in full. A
+ * liveness rule built on a stamp that is not a heartbeat cannot be tuned; it has
+ * to go.
+ * ⚠ **`isFresh` SURVIVES ONLY WHERE IT LICENSES A REFUSAL** — `ownLiveAgentIds`'s
+ * `projectionFresh`, which a caller may act on only when TRUE. Resolving is the
+ * other direction and does not need it.
+ *
+ * ⚠ **A NAMELESS ROW IS STILL DROPPED, AND THAT IS NOT A FRESHNESS RULE.**
+ * `name` IS the agent id every door addresses; a row that carries none names
+ * nobody and could not be woken if it were picked.
  */
-export async function freshChannelSessions(
+export async function liveChannelSessions(
   ctx: ChannelContext,
-  channelId: string,
-  now: number
+  channelId: string
 ): Promise<SessionStateRow[]> {
   const rows = await repoSessions.listChannelSessionStates(
     ctx.workspaceId,
     channelId
   );
-  return rows.filter((row) => isFresh(row.updated_at, now) && row.name.length > 0);
+  return rows.filter((row) => row.name.length > 0);
 }
 
 /**
@@ -166,8 +191,16 @@ export function threadOtherParty(
  * one. A second spelling of the own-scope rule is exactly what the desktop's
  * three-module version cost, so the caller resolves it and hands it over.
  * ⚠ A STALE PROJECTION THEREFORE ANSWERS `null`, not "trust the stamp": this arm
- * RESOLVES a recipient, and {@link isFresh}'s asymmetry says a fresh row is
- * evidence enough to resolve while a stale one is not evidence of anything.
+ * RESOLVES a recipient off a CALLER-SUPPLIED claim, and `service-wake-freshness.ts
+ * › isFresh`'s asymmetry says a fresh row is evidence enough to resolve while a
+ * stale one is not evidence of anything.
+ * ⚠ **THAT IS A DIFFERENT QUESTION FROM {@link liveChannelSessions}'S, WHICH
+ * DROPPED ITS FRESHNESS FILTER ON 2026-09-05.** Here freshness gates a stamp
+ * whose subject the CALLER named and could have posed (F-589); there it decided
+ * whether an agent EXISTS, which the projection's full-set replace already
+ * answers. The own-scoped read behind `ownAgentIds` still filters — see this
+ * file's report of 2026-09-05 for why that half was left to a ruling rather than
+ * taken in the same pass.
  *
  * ⚠ **NO ROW ⇒ `delivery=none`, AND THAT IS THE RULE RATHER THAN A GAP.** An
  * agent talking to the room with nobody having addressed it inside the window is
@@ -298,28 +331,41 @@ function launchOrder(
 }
 
 /**
- * ARM 3's ANSWER — the agents that have posted in this room inside
- * {@link RESILIENCE_WINDOW_MS}, most recent first.
+ * ARM 3's ANSWER — **the agents THIS AUTHOR has addressed in this room** inside
+ * {@link RESILIENCE_WINDOW_MS}, most recent first (Samuel, 2026-09-04).
  *
- * ⚠ **THE RULE IS `lib/agent-post-stamp.ts › recentAgentPosters`, IMPORTED**:
- * the composer asks the same question of the transcript it is rendering, and a
- * second spelling here is how the recipient LINE comes to name one agent and the
- * stored verdict another.
+ * ⚠ **IT WAS "who posted here last" UNTIL 2026-09-04, AND THAT IS THE BUG IT FIXES.** One agent
+ * addressing another re-pointed the room's default responder, so the operator saw the answer wander
+ * with nothing they had done. The rule is now stickiness PER PERSON: the agent you last tagged is
+ * the one you are probably still talking to.
+ *
+ * ⚠ **THE RULE IS `lib/agent-post-stamp.ts › recentAgentsAddressedBy`, IMPORTED** — the composer
+ * asks the same question of the transcript it is rendering, and a second spelling here is how the
+ * recipient LINE comes to name one agent and the stored verdict another.
+ *
+ * ⚠ **THE WALK DOES NOT FILTER FOR LIVENESS AND MUST NOT.** It answers "who did they address"; the
+ * resolver below intersects that with the live candidates, so an ENDED agent cannot eat the pick —
+ * it is simply not a candidate and the next id in this list is tried. One rule in the resolver
+ * rather than two half-rules in both places.
  */
 export async function recentRoomAgents(
   channelId: string,
+  /** The author whose habit is being read — the routed message's own author. */
+  authorUserId: string,
   now: number
 ): Promise<string[]> {
-  const rows = await repoMessages.listRecentRoomAgentPosts(
+  const rows = await repoMessages.listRecentRoomTagsBy(
     channelId,
+    authorUserId,
     new Date(now - RESILIENCE_WINDOW_MS).toISOString()
   );
-  return recentAgentPosters(
+  return recentAgentsAddressedBy(
+    authorUserId,
     rows.map((row) => ({
       seq: Number(row.seq),
       createdAt: row.created_at,
-      authorKind: row.author_kind,
-      clientMsgId: row.client_msg_id,
+      authorUserId: row.author_user_id,
+      recipientAgentIds: row.recipient_agent_ids ?? null,
       metadata: (row.metadata ?? null) as Record<string, unknown> | null,
     })),
     { now, windowMs: RESILIENCE_WINDOW_MS }

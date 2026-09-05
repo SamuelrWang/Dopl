@@ -44,6 +44,8 @@ export function AuthoredRow({
   agent,
   agentId = null,
   agentName = null,
+  routedTo = null,
+  routedTitle,
   continuation,
   flash,
   onOpenAgent,
@@ -60,6 +62,24 @@ export function AuthoredRow({
   /** ⚠ ITS CURRENT NAME, RESOLVED BY THE CALLER from `AuthorIndex.agents` and passed in — this
    *  shell takes no index. Never a field on the row (2026-08-27). */
   agentName?: string | null;
+  /**
+   * THE TAG THE SERVER RESOLVED for a post that named nobody — already FACED by
+   * the caller (Samuel, 2026-09-05: *"it should still auto-add the agent tag
+   * before the message"*, so looking back does not read as unaddressed).
+   *
+   * ⚠ **A LABEL THIS SHELL DRAWS, NOT A FACT IT DERIVES** — the same contract
+   * `agentName` above is under, and for the same reason: this file takes no index
+   * and must not learn to resolve one. `null` renders nothing at all.
+   * ⚠ **IT IS NOT PART OF THE BODY AND MUST NEVER BE CONFUSED FOR IT.** The
+   * stored body is untouched everywhere; this line is the transcript reporting a
+   * stamped routing decision, which is why it is drawn as chrome (muted, small)
+   * rather than as text inside the message block.
+   */
+  routedTo?: string | null;
+  /** The raw address behind {@link routedTo} — `@agent-<id>`, on hover, the same
+   *  arrangement `message-markdown.tsx › MentionText` uses so the id is never
+   *  more than a hover from the name. */
+  routedTitle?: string;
   continuation: boolean;
   flash: boolean;
   /** ⚠ ALREADY GATED BY THE CALLER — see `Message`. This shell takes no index either. */
@@ -92,6 +112,20 @@ export function AuthoredRow({
       {/* ⚠ `w-full` so the column is the row's full width whatever the article's
           align-items says — the pill hugs its content, the bodies must not. */}
       <div className={cn("flex w-full min-w-0 flex-col gap-1.5", mine && "items-end")}>
+        {/* ⚠ ABOVE THE BODY, BECAUSE IT IS AN ADDRESS AND AN ADDRESS COMES
+            FIRST — and INSIDE the body column rather than beside the pill, so it
+            sits on the writer's own side and truncates with the column instead
+            of widening the row. ⚠ IT SURVIVES A CONTINUATION on purpose: the
+            pill is dropped for a RUN by one author, but who a message reached is
+            a fact about THAT message. */}
+        {routedTo !== null && (
+          <p
+            className="max-w-full truncate text-micro text-text-muted"
+            title={routedTitle}
+          >
+            → {routedTo}
+          </p>
+        )}
         {children}
       </div>
     </article>

@@ -123,6 +123,119 @@ export function authorAgentIdOf(row: {
  * arm exists to name the agent the conversation is already with; an undated row
  * says nothing about that, and falling through to arm 4 is the honest answer.
  */
+/**
+ * **DID THE AUTHOR OF THIS ROW TYPE THE TAG THEMSELVES** — the one predicate RR3's arm 3 turns on
+ * (Samuel, 2026-09-04: *"it should be the most recent agent that the USER addressed"*).
+ *
+ * ⚠ **TWO CONDITIONS, AND THE SECOND ONE IS THE WHOLE POINT.** `recipient_agent_ids` alone says
+ * "this message reached an agent" — but the server's OWN arm-3 pick is stored there too, so a rule
+ * that read recipients alone would feed on its own output: it picks an agent once, every later read
+ * sees that agent "addressed", and it re-picks it forever. That is self-reinforcing drift, and it
+ * is indistinguishable from the bug this change exists to fix.
+ * ⚠ `wake_reason` IS WHAT TELLS THEM APART. The server stamps it ONLY when it chose for itself
+ * (`service-writes-metadata.ts` strips any caller-set value first, so it cannot be forged). Present
+ * ⇒ the server picked. Absent ⇒ the author typed it. **Evidence must be the human's own act.**
+ *
+ * ⚠ **A ROW WITH NEITHER FIELD IS "NO TAG HERE", NEVER AN ERROR.** Rows written before these
+ * stamps existed simply do not testify; the walk continues past them (INVARIANTS §11 — UNKNOWN is
+ * not EMPTY, and neither is a reason to stop).
+ */
+export function isAuthorTypedAgentTag(row: {
+  recipientAgentIds?: readonly string[] | null;
+  metadata?: Record<string, unknown> | null;
+}): boolean {
+  const named = row.recipientAgentIds;
+  if (!Array.isArray(named) || named.length === 0) return false;
+  return typeof row.metadata?.wake_reason !== "string";
+}
+
+/**
+ * **WHO THE SERVER AIMED THIS ROW AT WHEN NOBODY TYPED A TAG** — the agent ids RR3 resolved, for
+ * the transcript to FACE (Samuel, 2026-09-05: *"it should still auto-add the agent tag… it's
+ * confusing for someone looking back that there was no tag"*).
+ *
+ * ⚠ **IT IS THE EXACT COMPLEMENT OF {@link isAuthorTypedAgentTag}, AND THAT IS WHY IT LIVES
+ * HERE.** Both turn on the same two fields and they partition the same set: recipients present
+ * with NO `wake_reason` is the author's own act (arm 3's evidence), recipients present WITH one is
+ * the server's own pick (this). Writing this rule anywhere else would be a second answer to
+ * "who addressed whom", which is the F-266 shape this file exists to prevent — and the two would
+ * drift into a transcript that displays one agent and a router that woke another.
+ *
+ * ⚠ **`wake_reason` IS SERVER-STAMPED AND UNFORGEABLE** (`service-writes-metadata.ts` strips any
+ * caller-set value first), which is what makes it safe to render as an ADDRESS. A rule reading
+ * recipients alone would also face the tags the author typed, doubling every explicit mention.
+ *
+ * ⚠ **DISPLAY ONLY, AND IT REWRITES NOTHING.** The stored body is never touched: what the author
+ * typed stays what they typed, on every surface that reads the row (MCP, notifications, quotes),
+ * and this is the transcript saying out loud what the server already decided and stored. A body
+ * rewrite would put words in somebody's mouth and would have to be undone by hand if the rule
+ * ever changed.
+ *
+ * ⚠ **EMPTY IS THE ORDINARY ANSWER.** Old rows predate both stamps, a typed tag has no
+ * `wake_reason`, and an unrouted post has no recipients; all three are "nothing to face here",
+ * never an error (INVARIANTS §11 — UNKNOWN is not EMPTY, and neither is a reason to shout).
+ */
+export function serverRoutedAgentIds(row: {
+  recipientAgentIds?: readonly string[] | null;
+  metadata?: Record<string, unknown> | null;
+}): string[] {
+  const named = row.recipientAgentIds;
+  if (!Array.isArray(named) || named.length === 0) return [];
+  if (typeof row.metadata?.wake_reason !== "string") return [];
+  return named.filter((id): id is string => typeof id === "string" && id.length > 0);
+}
+
+/**
+ * **WHICH AGENTS THIS AUTHOR HAS ADDRESSED IN THIS ROOM, MOST RECENT FIRST** — RR3 arm 3's feed
+ * since 2026-09-04, replacing "whoever posted last".
+ *
+ * ⚠ **WHY IT CHANGED.** Arm 3 used to name the agent that POSTED most recently, so one agent
+ * addressing another re-pointed the room's default responder and the operator watched it wander
+ * with nothing they did. Samuel's rule is stickiness per PERSON: the agent you last spoke to is the
+ * one you are probably still speaking to.
+ * ⚠ **SCOPED TO ONE AUTHOR AND ONE ROOM.** The server keys on the routed message's author, the
+ * composer on the current user; two people in a channel each keep their own thread of address, which
+ * is what "intuitive" means here — my default must not move because a colleague tagged someone else.
+ * ⚠ **MAIN-ROOM ROWS ONLY**, `seq`-descending, window-bounded: {@link recentAgentPosters}'s rules
+ * verbatim, and for its reasons — a threaded post is RR1's business, `seq` is a total order so no
+ * tie is representable, and an undated row testifies to nothing.
+ * ⚠ **IT DOES NOT FILTER FOR LIVENESS AND MUST NOT.** This answers "who did they address"; whether
+ * that agent still exists is the caller's question, asked against the live candidate set at pick
+ * time (`lib/agent-mentions.ts › resolveDefaultResponder`). An ended agent therefore cannot eat the
+ * pick — it is simply not in the candidates, and the next id here is tried.
+ * ⚠ **EMPTY IS A COMPLETE ANSWER.** An author who has never typed a tag falls through to the
+ * arms that already exist; absence degrades, it never blocks.
+ */
+export function recentAgentsAddressedBy(
+  /** The person whose habit is being read. `null` answers `[]` rather than everybody's. */
+  authorUserId: string | null,
+  rows: readonly {
+    seq: number;
+    createdAt: string;
+    authorUserId?: string | null;
+    recipientAgentIds?: readonly string[] | null;
+    metadata?: Record<string, unknown> | null;
+  }[],
+  opts: { now?: number; windowMs: number }
+): string[] {
+  if (authorUserId === null) return [];
+  const now = opts.now ?? Date.now();
+  const out: string[] = [];
+  for (const row of [...rows].sort((a, b) => b.seq - a.seq)) {
+    if (row.authorUserId !== authorUserId) continue;
+    if (typeof row.metadata?.taskId === "string") continue;
+    const at = Date.parse(row.createdAt);
+    if (!Number.isFinite(at) || now - at > opts.windowMs) continue;
+    if (!isAuthorTypedAgentTag(row)) continue;
+    // ⚠ ORDER WITHIN ONE ROW IS THE STORED ORDER. A message naming two agents addressed both, and
+    // nothing in the row ranks them; the caller's liveness check decides which survives.
+    for (const id of row.recipientAgentIds ?? []) {
+      if (typeof id === "string" && id.length > 0 && !out.includes(id)) out.push(id);
+    }
+  }
+  return out;
+}
+
 export function recentAgentPosters(
   rows: readonly {
     seq: number;

@@ -108,6 +108,8 @@ export function SurfaceInfoPanel({
     <ChannelsV2InfoPanel
       channel={channel}
       channelName={channelName}
+      activityBins={data.activityBins}
+      activityLoading={data.activityLoading}
       members={members}
       threads={threads}
       threadsTruncated={data.threadsTruncated}

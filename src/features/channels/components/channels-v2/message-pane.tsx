@@ -271,7 +271,11 @@ export function ChannelsV2MessagePane({
   const releasePin = useStickToBottom(
     scrollerRef,
     `${channelId}:${thread?.id ?? ""}`,
-    rows.length
+    rows.length,
+    // ⚠ THE NEWEST ROW — `rows` is ASCENDING, so the last one is what just arrived. It is what the
+    // pin smooth-scrolls to the START of; absent (an empty transcript) the hook falls back to the
+    // plain jump-to-bottom it always did.
+    rows[rows.length - 1]?.id ?? null
   );
   // ⚠ DECLARED SECOND, BETWEEN THE PIN AND THE SCROLL-TARGET EFFECT BELOW.
   // Effects run in declaration order: on a commit that both prepends a page and

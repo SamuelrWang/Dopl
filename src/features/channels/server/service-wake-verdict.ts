@@ -13,7 +13,7 @@ import {
 import type { ResponderReason } from "../lib/agent-mentions";
 import {
   defaultResponder,
-  freshChannelSessions,
+  liveChannelSessions,
   reciprocalParty,
   recentRoomAgents,
   threadOtherParty,
@@ -236,7 +236,6 @@ export async function resolveWakeVerdict(
           ctx,
           channelId,
           input.body,
-          now,
           selfAgentId,
           wakeCtx.authorKind
         )
@@ -284,8 +283,14 @@ export async function resolveWakeVerdict(
     // RR3 — the channel's default responder, or its one live agent.
     const responder = await defaultResponder(
       channel,
-      await freshChannelSessions(ctx, channelId, now),
-      () => recentRoomAgents(channelId, now)
+      // ⚠ PRESENCE-KEYED SINCE 2026-09-05, not freshness-keyed: an idle agent is
+      // still a live addressee. See `liveChannelSessions`' own grave block.
+      await liveChannelSessions(ctx, channelId),
+      // ⚠ THE AUTHOR'S OWN HABIT, WHICH IS WHY `ctx.userId` IS THE KEY (Samuel, 2026-09-04).
+      // RR3's gate is that a PERSON wrote this message, so the author IS the person whose last
+      // tag we are reading — and two people in one room each keep their own default rather than
+      // overwriting each other's.
+      () => recentRoomAgents(channelId, ctx.userId, now)
     );
     // ⚠ AND THE DEFAULT RESPONDER IS NEVER THE AUTHOR EITHER — belt over the
     // door above. RR3's gate is that a PERSON wrote the message, so `selfAgentId`

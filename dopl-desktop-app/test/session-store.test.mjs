@@ -148,10 +148,15 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // acquires — so a record without it resumed onto the DEFAULT adapter, which would be asked to
     // continue ANOTHER PLATFORM's conversation id, in another platform's tool vocabulary, against
     // another credential. Not a cosmetic revert and not silent data loss: a broken resume.
+    // "turnCap" (2026-09-05, task 9a) is the FIFTH, and it joined for the reason the cap became
+    // issuer-keyed: the default is now 200 for an operator-launched session and 24 for an
+    // agent-issued one, keyed on a `launchDepth` a recreate deliberately does NOT resurrect. So
+    // without the cap beside the counters it bounds, a 200-turn session that crashed at turn 80
+    // would resume capped at 24 with 80 spent and end on its first `result`.
     "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
     "counterpartyName", "direct", "key", "mode", "model", "ownPostSeq", "phase", "profile",
     "runtimeId", "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "taskTitle",
-    "templateName", "turns", "workspaceId",
+    "templateName", "turnCap", "turns", "workspaceId",
   ]);
   assert.equal(rec.ownPostSeq, 11);
   assert.equal(rec.templateName, "Code Auditor");
@@ -216,6 +221,22 @@ test("durableSessionRecord persists the cap counters (FIX #9) and coerces bad va
   const bad = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "parked", turns: "x", costUsd: NaN });
   assert.equal(bad.turns, 0);
   assert.equal(bad.costUsd, 0);
+});
+
+test("…and the CAP those counters are measured against (9a), with 0 meaning 'read the default'", () => {
+  // ⚠ THE POINT OF PERSISTING IT: the default is issuer-keyed and a recreate carries no issuer,
+  // so the number a session was LAUNCHED under has to travel with the budget it bounds.
+  const rec = durableSessionRecord({ key: "c1:t1", channelId: "c1", phase: "parked", turnCap: 200, turns: 80 });
+  assert.equal(rec.turnCap, 200, "an operator-launched session resumes at the cap it was launched under");
+  // A legacy record (written before this field) reads 0, which `session-engine.js › readCaps`
+  // treats as absent and falls through to the issuer-keyed default — never as a cap of zero.
+  assert.equal(durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" }).turnCap, 0);
+  // Coerced like `ownPostSeq`, HARDER than turns/costUsd: `Number(x) || 0` would let Infinity
+  // through as a cap, i.e. a hand-edited store handing a session no bound at all.
+  for (const junk of [undefined, null, "x", NaN, {}, 0, -5, 1 / 0]) {
+    assert.equal(durableSessionRecord({ turnCap: junk }).turnCap, 0, JSON.stringify(junk));
+  }
+  assert.equal(durableSessionRecord({ turnCap: "24" }).turnCap, 24, "a numeric string is still a number");
 });
 
 test("durableSessionRecord defaults counterpartyId -> null when absent", () => {

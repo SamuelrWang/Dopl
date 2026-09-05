@@ -25,7 +25,17 @@
 // ⚠ THE FIXTURES STAY IN THE HARNESS. This module is the TABLE; `CH` / `PRESET` /
 // `POPOUT_PAYLOAD` are boot machinery both IPC suites share, and a second copy here is how
 // two suites come to drive two different programs — the very drift the harness exists to stop.
+import { createRequire } from "node:module";
 import { CH, PRESET, POPOUT_PAYLOAD } from "./_ipc-harness.mjs";
+
+// ⚠ THE TWO CAPS ARE IMPORTED, NOT TYPED (2026-09-05). `settings:getTurnCap`'s refusal carries the
+// documented defaults, so this row would otherwise be a THIRD statement of 200 / 24 — the exact
+// thing `turn-cap-issuer.test.mjs` pins to one. `main/session-state.js` is pure, so requiring it
+// here costs nothing and cannot drift from what the handler answers.
+// ⚠ RE-EXPORTED so the suites' own stubs answer the SAME two numbers this table expects back.
+// A stub with its own literals would be the retyping the line above exists to avoid, and it would
+// fail in the confusing direction: a green binding test, red on an unrelated constant.
+export const { OPERATOR_TURN_CAP, DEFAULT_TURN_CAP } = createRequire(import.meta.url)("../main/session-state.js");
 
 // name -> [payload, the value a REFUSED call must return]
 export const OPS = [
@@ -74,6 +84,17 @@ export const OPS = [
   // lane; launching buys a process). Both refusals are indistinguishable from a genuine "off".
   ["orchestrator:getDirectEnabled", undefined, { enabled: false }],
   ["orchestrator:setDirectEnabled", { enabled: true }, { ok: false }],
+  // ⚠ TWO JOINED 2026-09-05 (task 9b, Samuel's #1098 via #1101 4b, ruled in #1177): the TURN-CAP
+  // control. The FOURTH machine-wide subject in this census, after the two orchestrator pairs and
+  // `claude:signIn` — no channelId, so the sender binding is again the only guard. It is not a
+  // preference like the others: the turn cap is the LOOP-SAFETY BRAKE, and `set` can remove it
+  // (0 = unlimited), which is why it is bound at least as tightly as the toggles it sits beside.
+  // ⚠ THE REFUSED `get` IS BYTE-IDENTICAL TO AN UNSET MACHINE — `cap: null` plus the two
+  // compile-time defaults — so it discloses neither the operator's setting nor which window the
+  // caller is in. The defaults are not secrets; the SETTING is what a refusal must not leak.
+  ["settings:getTurnCap", undefined,
+    { cap: null, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP }],
+  ["settings:setTurnCap", { cap: 50 }, { ok: false }],
   // ⚠ JOINED 2026-08-22 (Samuel's ended-agent ruling): the desktop half of the thread-delete
   // cascade. Main cannot see the SERVER's cascade, so an ended agent's frozen 7-day history
   // would outlive the thread it worked. It drops LOCAL stores only — never a `channel_message`,
@@ -196,6 +217,15 @@ export const NO_BAD_PAYLOAD = new Set([
   "orchestrator:getDirectEnabled",
   "orchestrator:setDirectEnabled",
   "claude:signIn",
+  // ⚠ THE TURN-CAP PAIR JOINED THEM 2026-09-05, for the orchestrator pair's exact reason. `get`
+  // takes no argument at all. `set`'s only field is a VALUE, and its whole contract is that an
+  // unrecognised value COERCES rather than throws — junk writes nothing and answers the surviving
+  // cap (`main/settings.js › normalizeTurnCapInput`). So there is no id-shaped rejection for a
+  // refusal to be indistinguishable FROM, and the sender binding is the entire guard — which is
+  // why they are named here rather than quietly passing the shared loop. The bad-SENDER half
+  // still runs for both, and for these two it is the half that matters.
+  "settings:getTurnCap",
+  "settings:setTurnCap",
   // ⚠ IT READS NO PAYLOAD AT ALL (2026-08-27), so there is no bad one to build: it answers
   // eight CSPRNG characters to any bound caller and the sender binding is the entire gate.
   // Listed here rather than given a fourth-slot payload, because a "corrupted" call to this op

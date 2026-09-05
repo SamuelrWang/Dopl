@@ -6,17 +6,42 @@
  */
 /**
  * Per-channel working-directory bridge (`window.dopl.channels`), present ONLY in
- * the desktop shell. ⚠ Every method resolves to the ABBREVIATED display label
- * ("~/Downloads/repo") or null — the raw absolute path never crosses into the
- * web page.
+ * the desktop shell. ⚠ Every method resolves to ABBREVIATED display labels
+ * ("~/Downloads/repo") — the raw absolute path never crosses into the web page.
  */
+
+/**
+ * WHERE THIS CHANNEL'S AGENT ACTUALLY RUNS (2026-09-05, task 15).
+ *
+ * ⚠ TWO FIELDS BECAUSE THE ROW ASKS TWO QUESTIONS, and one nullable label doing
+ * double duty is what made the Settings row invent a place that does not exist.
+ * The label used to be null whenever no per-channel dir was set, and the renderer
+ * printed "Sandbox (default)" over that null — but there is no sandbox: the
+ * desktop default is `~/Downloads`, or the homedir when that is missing.
+ */
+export interface ChannelFolderAnswer {
+  /**
+   * THE EFFECTIVE WORKING DIRECTORY, abbreviated, and NEVER empty. Main derives
+   * it through the same function that produces the spawn cwd
+   * (`main/channel-dirs.js › resolvedDirLabel` → `sessionSpawnDir`), so this
+   * cannot disagree with where the agent really starts.
+   */
+  label: string;
+  /** Whether a PER-CHANNEL dir is set — the reset control's question, which is
+   *  not the same question as the label's. False = the desktop's own default. */
+  custom: boolean;
+}
+
 export interface DoplChannelsBridge {
-  /** Current label for a channel, or null when it uses the sandbox default. */
-  getFolderLabel: (channelId: string) => Promise<string | null>;
-  /** Open the native folder picker (user-driven); resolves the new label. */
-  chooseFolder: (channelId: string) => Promise<string | null>;
-  /** Reset the channel to the sandbox default; resolves null. */
-  clearFolder: (channelId: string) => Promise<string | null>;
+  /** The channel's folder answer. ⚠ `null` only when main REFUSED the call (a
+   *  non-app-window sender, a bad channel id) — never "no folder". */
+  getFolderLabel: (channelId: string) => Promise<ChannelFolderAnswer | null>;
+  /** Open the native folder picker (user-driven); resolves the fresh answer.
+   *  ⚠ On cancel the stored dir is unchanged, so the prior answer comes back. */
+  chooseFolder: (channelId: string) => Promise<ChannelFolderAnswer | null>;
+  /** Drop the per-channel dir; resolves the answer for the DEFAULT the channel
+   *  just landed on, so the row can still say where that is. */
+  clearFolder: (channelId: string) => Promise<ChannelFolderAnswer | null>;
 }
 
 /**

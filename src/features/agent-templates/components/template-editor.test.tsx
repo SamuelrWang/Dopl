@@ -372,8 +372,9 @@ describe("no concave surfaces", () => {
    * The Overview face's credit bar was built as an approximation of the billing
    * surface's — a hand-rolled track with a raised fill — precisely BECAUSE of
    * the no-concave rule. Samuel's correction is that the reference IS the spec:
-   * the bar must be `billing/components/billing-usage-pane.tsx`'s "MCP credits"
-   * meter, which is `shared/ui/usage-meter.tsx › UsageMeter`, which is a
+   * the bar must be `billing/components/billing-usage-pane.tsx`'s "Credits"
+   * meter (labelled "MCP credits" until the 2026-09-05 rename), which is
+   * `shared/ui/usage-meter.tsx › UsageMeter`, which is a
    * `.concave-track`. A design reference cloned exactly beats a local surface
    * rule, and he said so after seeing the approximation.
    *

@@ -6,7 +6,7 @@ import type { SessionStateRow } from "./collab-dto";
 import { ChannelAgentHandleAmbiguousError } from "./errors-recipient";
 import * as repoSessions from "./repository-sessions";
 import { isFresh } from "./service-wake-freshness";
-import { freshChannelSessions } from "./service-wake-verdict-resilience";
+import { liveChannelSessions } from "./service-wake-verdict-resilience";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -34,7 +34,8 @@ import type { ChannelContext } from "./service-shared";
  */
 
 /**
- * THE AUTHOR'S OWN LIVE SESSIONS IN THIS CHANNEL, **FRESH ONLY**.
+ * THE AUTHOR'S OWN SESSIONS IN THIS CHANNEL — **PRESENT ONLY, which is every
+ * one of them**.
  *
  * ⚠ **OWN-SCOPED, AND THAT IS THE SAME-ACCOUNT CARVE GETTING ENFORCED FOR
  * FREE.** Every agent posts under its OPERATOR'S account (INVARIANTS §11), so
@@ -43,47 +44,69 @@ import type { ChannelContext } from "./service-shared";
  * be resolved here, and is therefore left to the machine that owns it —
  * `recipientAgentIds: null`, and the desktop's own parse decides. That is a
  * strictly weaker server answer, never a wrong one.
+ * ⚠ **SCOPE IS NOW THE ONLY THING THIS FENCE ENFORCES**, and that is the point:
+ * the carve is about WHOSE machine may be woken, never about how recently it
+ * spoke.
  *
- * ⚠ **FRESHNESS IS THE F-418 RULE AND IT IS ASYMMETRIC.** `channel_sessions` is
- * a PROJECTION the desktop pushes on state change; a quiet row means nobody said
- * anything, not that nothing is running. So a fresh row is evidence enough to
- * RESOLVE, and a stale one is not evidence of ABSENCE — which is why a body with
- * unresolvable handles answers `null` (defer to the machine) rather than `[]`
- * (nobody). {@link SESSION_PROJECTION_FRESH_MS} carries the window.
+ * ⚠ **THE FRESHNESS FILTER LEFT ON 2026-09-05 AND THE DOCTRINE IT LEFT UNDER IS
+ * ONE LINE: PRESENCE LICENSES RESOLUTION, FRESHNESS LICENSES ONLY REFUSAL.** It
+ * read `updated_at` as a heartbeat. `channel_sessions` is a PROJECTION pushed on
+ * state CHANGE — *"an agent thinking for four minutes writes nothing at all"* —
+ * so a quiet row means nobody said anything, and filtering on it made a live
+ * agent that had been idle five minutes unaddressable BY ITS OWN OPERATOR'S
+ * AGENTS. Absence is carried by the push being a FULL-SET REPLACE, not by age.
+ * Same ruling, same day, same reason as
+ * `service-wake-verdict-resilience.ts › liveChannelSessions`; see that grave
+ * block and Samuel's 2026-08-22 original (`agents-model.ts › peerCardsFor`).
+ * ⚠ **WHERE `isFresh` STILL LIVES IS {@link ownLiveAgentIds}'s `projectionFresh`**
+ * — the half that licenses a REFUSAL, which may only ever stand on positive
+ * evidence. The two answers now come off the same rows and say different things,
+ * which is exactly what F-418's asymmetry always claimed and what a single
+ * filter could not express.
  */
-async function freshOwnSessions(
+async function ownSessions(
   ctx: ChannelContext,
-  channelId: string,
-  now: number
+  channelId: string
 ): Promise<SessionStateRow[]> {
-  const rows = await repoSessions.listSessionStates(
-    ctx.userId,
-    ctx.workspaceId,
-    channelId
-  );
-  return rows.filter((row) => isFresh(row.updated_at, now));
+  return repoSessions.listSessionStates(ctx.userId, ctx.workspaceId, channelId);
 }
 
 /**
- * **EVERY AGENT ID THE CALLER'S OWN FRESH SESSIONS ANSWER TO, IN THIS CHANNEL**
+ * **EVERY AGENT ID THE CALLER'S OWN LIVE SESSIONS ANSWER TO, IN THIS CHANNEL**
  * — the id door (`@agent-<id>` / `@<id>`) and the name door (`@<slug>`), through
  * the one index builder both web surfaces already use.
  *
  * ⚠ EXPORTED FOR `service-directions.ts`, WHICH ASKS THE SAME QUESTION ABOUT A
  * BARE ID RATHER THAN A BODY (G3 / F-418). One projection read, one freshness
  * rule, one place that decides what "a live agent of mine" means.
+ *
+ * ⚠ **TWO ANSWERS OFF ONE READ, AND THEY ARE DIFFERENT CLAIMS (2026-09-05).**
+ * `ids` is PRESENCE — who is running — and licenses RESOLUTION.
+ * `projectionFresh` is FRESHNESS — whether the projection has said anything
+ * lately — and is the ONLY half a caller may REFUSE on. They used to be one
+ * filtered list, which forced the weaker claim onto the stronger one: an
+ * operator's own agent went unaddressable after five quiet minutes because the
+ * set that answers "who is here" was being computed by the rule that answers "is
+ * this evidence recent enough to turn somebody away".
+ * ⚠ **F-589 IS UNTOUCHED.** The stamp check is `ids.includes(claim)` and `ids`
+ * is still OWN-SCOPED by the read's fence; nothing cross-operator widens. What
+ * changes is only that a quiet agent of MINE still counts as mine.
  */
 export async function ownLiveAgentIds(
   ctx: ChannelContext,
   channelId: string,
   now = Date.now()
 ): Promise<{ ids: string[]; projectionFresh: boolean }> {
-  const rows = await freshOwnSessions(ctx, channelId, now);
+  const rows = await ownSessions(ctx, channelId);
   return {
     ids: rows.map((row) => row.name).filter((name) => name.length > 0),
     // ⚠ "THE PROJECTION HAS SOMETHING RECENT TO SAY", not "the agent is there".
     // A caller may only refuse on the strength of this being TRUE.
-    projectionFresh: rows.length > 0,
+    // ⚠ `some(isFresh)` RATHER THAN `rows.length > 0` SINCE 2026-09-05 — the
+    // rows are no longer pre-filtered, so the freshness test that used to happen
+    // upstream happens here, on the one answer that still needs it. The claim it
+    // makes is byte-for-byte the old one.
+    projectionFresh: rows.some((row) => isFresh(row.updated_at, now)),
   };
 }
 
@@ -123,7 +146,6 @@ export async function resolveAgentRecipients(
   ctx: ChannelContext,
   channelId: string,
   body: string,
-  now: number,
   /** The session that WROTE this body, from {@link selfAgentIdOf}. Dropped from
    *  the answer — see the docblock's self-address rule. */
   selfAgentId: string | null,
@@ -135,10 +157,17 @@ export async function resolveAgentRecipients(
     .filter((handle): handle is string => handle !== null);
   if (handles.length === 0) return [];
 
+  // ⚠ **BOTH DOORS ARE PRESENCE-KEYED SINCE 2026-09-05, AND THE ONLY DIFFERENCE
+  // LEFT BETWEEN THEM IS SCOPE — which is the only difference there was ever
+  // supposed to be.** Freshness used to sit on both and it was answering a
+  // question neither asked: this function RESOLVES, and an agent idle for five
+  // minutes is not an agent that has gone away. See `ownSessions` and
+  // `liveChannelSessions` for the ruling; `now` survives on this signature for
+  // nothing else and is therefore gone.
   const rows =
     authorKind === "agent"
-      ? await freshOwnSessions(ctx, channelId, now)
-      : await freshChannelSessions(ctx, channelId, now);
+      ? await ownSessions(ctx, channelId)
+      : await liveChannelSessions(ctx, channelId);
   const index = buildAgentMentionIndex(
     rows.map((row) => ({ agentId: row.name, displayName: row.display_name }))
   );

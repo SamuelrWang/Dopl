@@ -81,6 +81,13 @@ const channelPrefs = require('./channel-prefs');
 const channelRuntime = require('./channel-runtime');
 const runtimeRegistry = require('./runtime');
 const sessionIpcOps = require('./session-ipc-ops');
+// 2026-09-05 (task 9b): the turn-cap control's two ends. `settings.js` owns the key and every
+// rule about writing it; `session-state.js` is where the two documented defaults are DECLARED —
+// imported, never retyped, because the row has to name them and this tree pins each number to one
+// statement (`test/turn-cap-issuer.test.mjs`). Both are cheap: session-state is pure, and settings
+// is electron-store only.
+const settings = require('./settings');
+const { OPERATOR_TURN_CAP, DEFAULT_TURN_CAP } = require('./session-state');
 const { diag } = require('./diag');
 
 // ── THE POSTURE APPLIES TO THE ROOM, NOT JUST TO THE NEXT SPAWN ──────────────────────────────
@@ -161,14 +168,44 @@ function register(opts = {}) {
     return fn(event, ...args);
   };
 
-  // Read the current abbreviated label. Label only — never the absolute path.
+  // ── ⚠ THE FOLDER ANSWER IS A PAIR, AND IT IS TWO FACTS BECAUSE THE ROW ASKS TWO QUESTIONS
+  // (2026-09-05, task 15; Samuel's ruling is the ABBREVIATED form).
+  //
+  //   label   WHAT THE AGENT WILL ACTUALLY RUN IN, always a real short-form and NEVER null.
+  //           `channel-dirs.js › resolvedDirLabel` reads THROUGH `sessionSpawnDir`, the same
+  //           function that produces the spawn cwd, so the label and the cwd cannot disagree.
+  //   custom  WHETHER A PER-CHANNEL DIR IS SET — the reset control's question, and NOT the same
+  //           question as the label's.
+  //
+  // ⚠ IT REPLACED A SINGLE NULLABLE LABEL, AND THE NULL WAS THE BUG. `liveChannelDirLabel`
+  // answers null when no per-channel dir is set, and the renderer INVENTED a word for that null:
+  // `settings-desktop-rows.tsx` printed "Sandbox (default)". There is no sandbox — the default is
+  // `~/Downloads`, or the homedir when that is missing — so the one row that claims to say where
+  // the agent runs was the one row naming a place that does not exist. One nullable field doing
+  // double duty is what forced the renderer to guess; two fields is the fix.
+  //
+  // ⚠ IT WIDENS NO DISCLOSURE. Both members are `abbreviateHome` output, which is the label this
+  // op has always returned and is what the H3 sheet above already lists it for. **The raw
+  // absolute path still never crosses back**, and the header's rule stands untouched — moving to
+  // the raw path is a separate ruling with that rule explicitly on the table, never a default
+  // anyone backs into.
+  //
+  // ⚠ A PAYLOAD WIDENING, NOT A NEW OP: same three op names, same `appWindowOnly` binding, same
+  // UUID gate, and the refusal value is still `null` — the shape a bad channel id already
+  // returns, so a hostile page still learns nothing from the difference.
+  const folderAnswer = (channelId) => ({
+    label: channelDirs.resolvedDirLabel(channelId),
+    custom: channelDirs.liveChannelDirLabel(channelId) !== null,
+  });
+
+  // Read the current folder answer. Labels only — never the absolute path.
   ipcMain.handle('channels:getFolderLabel', appWindowOnly('getFolderLabel', null, (_event, channelId) => {
     if (!isUuid(channelId)) return null;
-    return channelDirs.liveChannelDirLabel(channelId);
+    return folderAnswer(channelId);
   }));
 
-  // Open the native picker (user-driven), store the pick, return the fresh label.
-  // On cancel the stored dir is unchanged, so the prior label is returned.
+  // Open the native picker (user-driven), store the pick, return the fresh answer.
+  // On cancel the stored dir is unchanged, so the prior answer is returned.
   ipcMain.handle('channels:chooseFolder', appWindowOnly('chooseFolder', null, async (_event, channelId) => {
     if (!isUuid(channelId)) return null;
     try {
@@ -177,15 +214,16 @@ function register(opts = {}) {
       diag('channel-dir ipc choose error', err && err.message);
     }
     onChanged();
-    return channelDirs.liveChannelDirLabel(channelId); // label only
+    return folderAnswer(channelId); // labels only
   }));
 
-  // Reset to the sandbox default; there is no custom label afterwards.
+  // Drop the per-channel dir. ⚠ IT ANSWERS THE DEFAULT'S REAL NAME rather than `null`: the reset
+  // lands the channel somewhere specific, and the row must be able to say where.
   ipcMain.handle('channels:clearFolder', appWindowOnly('clearFolder', null, (_event, channelId) => {
     if (!isUuid(channelId)) return null;
     channelDirs.clearChannelDir(channelId);
     onChanged();
-    return null;
+    return folderAnswer(channelId);
   }));
 
   // ── THE DURABLE LAUNCH POSTURE (2026-08-20) ─────────────────────────────────
@@ -362,6 +400,65 @@ function register(opts = {}) {
     try { require('./agent-directions').refresh(); }
     catch (err) { diag('orchestrator direct toggle: could not re-arm the direction lane —', err && err.message); }
     return got === want ? { ok: true, enabled: got } : { ok: false, reason: 'store', enabled: got };
+  }));
+
+  // ── ⚠ THE TURN-CAP CONTROL (2026-09-05, task 9b; Samuel's #1098 via #1101 4b, ruled #1177) ──
+  //
+  // THE THIRD MACHINE-WIDE PAIR IN THIS FILE, and it is here for the two orchestrator toggles'
+  // exact reason: this is the `appWindowOnly` surface, and a second IPC module for one pair would
+  // be a second place to forget the binding. No `channelId`, so nothing to UUID-gate.
+  //
+  // ⚠ THE BINDING IS THE WHOLE SECURITY PROPERTY, and it is the same CLASS as the toggles above
+  // rather than a weaker one. The toggles are standing consent for another agent to spend this
+  // Mac's compute; an UNBOUNDED turn cap is standing consent for one session to spend it without
+  // end — the loop-safety brake, set from a page. There is no route, no MCP op and no column for
+  // this key, deliberately: an agent holding this operator's device token (§6) must not be able
+  // to remove the bound that stops it.
+  // ⚠ AND `get` DISCLOSES A MACHINE SETTING, which is why the read is bound too.
+  //
+  // ⚠ THE ANSWER IS MAIN'S OWN VALUE, RE-READ, NEVER AN ECHO OF THE REQUEST — the rule
+  // `sessions:setMode`, `sessions:setModel` and both toggles above follow. `set` reports
+  // `{ok:false}` when the store did not end up holding what was asked for, which is what lets an
+  // optimistic SPA stamp REVERT rather than show a cap nothing is enforcing.
+  //
+  // ⚠ `cap` IS THE OPERATOR'S SETTING, NOT THE EFFECTIVE CAP, and the difference is the control's
+  // honesty: `null` = unset (the issuer-keyed defaults below apply), `0` = unlimited, a positive
+  // integer = that cap for every session on this machine. `settings.js › getTurnCap` collapses
+  // unset and a typed number into one number, so a row rendering IT could not tell them apart.
+  // ⚠ THE TWO DEFAULTS RIDE THE READ because the SPA is a separate bundle that cannot require
+  // `session-state.js`, and a row that RETYPED 200 / 24 would be the second statement of a
+  // constant this tree pins to one (`test/turn-cap-issuer.test.mjs`). They are compile-time
+  // numbers and disclose nothing.
+  // ⚠ THE REFUSAL IS BYTE-IDENTICAL TO A MACHINE THAT HAS SET NOTHING — `cap: null` plus the same
+  // two constants — so a hostile page learns nothing from the difference, exactly as the toggles'
+  // `{enabled:false}` is indistinguishable from a lane that was never armed.
+  const turnCapRead = () => ({
+    cap: settings.readTurnCapSetting(),
+    operatorDefault: OPERATOR_TURN_CAP,
+    agentDefault: DEFAULT_TURN_CAP,
+  });
+  ipcMain.handle('settings:getTurnCap', appWindowOnly('getTurnCap', {
+    cap: null, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP,
+  }, () => turnCapRead()));
+  // ⚠ THE PAYLOAD'S `cap` IS PASSED THROUGH UNCOERCED, ON PURPOSE. Every rule about what is
+  // writable lives in `settings.js` (null / '' delete, 0 writes unlimited, positive floors,
+  // anything else writes nothing) and a second validator here would be a second answer to the same
+  // question — the two-copies shape that file's header records. So the boundary ASKS: it calls
+  // `normalizeTurnCapInput` to learn what was requested and compares that to what the store now
+  // holds. What this boundary owns is the SENDER, checked before the value is looked at.
+  // ⚠ AN ABSENT `cap` IS NOT A CLEAR. `{}` from a half-built caller must not silently unset the
+  // operator's cap, so it lands on the junk arm — `{ok:false}` and nothing written — while an
+  // EXPLICIT `null` is the control's real "back to default" and does delete.
+  ipcMain.handle('settings:setTurnCap', appWindowOnly('setTurnCap', { ok: false }, (_event, payload) => {
+    const want = (payload || {}).cap;
+    const asked = settings.normalizeTurnCapInput(want);
+    const got = settings.setTurnCap(want);
+    // The write "took" when the store now holds what was asked for. Junk asked for nothing, so it
+    // can never be ok; either way the answer carries the cap really in force, which is the
+    // control's cue to put back the number the machine is actually running on.
+    return asked !== undefined && got === asked
+      ? { ok: true, ...turnCapRead() }
+      : { ok: false, reason: 'store', ...turnCapRead() };
   }));
 
   // ⚠ ONE REGISTRATION ENTRY POINT. The session + window ops take the SAME registry accessor

@@ -65,11 +65,13 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
     );
   }
 
-  it("arm 3: routes to the agent that POSTED here most recently — the #966 row", async () => {
+  it("arm 3: routes to the agent THIS AUTHOR tagged most recently — the #966 row", async () => {
     twoLive();
+    // ⚠ THE EVIDENCE CHANGED ON 2026-09-04 (Samuel): it was "who posted here last", which let one
+    // agent tagging another move every member's default responder. It is the author's OWN tags now.
     recentAgentPosts(
-      { seq: 42, client_msg_id: "agent-k3v7d2mq-3" },
-      { seq: 41, client_msg_id: "agent-m8q1zzzz-1" }
+      { seq: 42, recipient_agent_ids: ["k3v7d2mq"] },
+      { seq: 41, recipient_agent_ids: ["m8q1zzzz"] }
     );
     const out = await resolve("morning");
     expect(out).toMatchObject({
@@ -80,14 +82,26 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
     });
   });
 
-  it("arm 3 reads the SESSION stamp too — a post that chose its own key still counts", async () => {
+  /**
+   * ⚠ **REPLACES "arm 3 reads the SESSION stamp too"** (2026-09-04). That case measured how the
+   * old evidence — an agent's own POST — was attributed to an agent when the post carried its own
+   * `client_msg_id`. Arm 3 no longer reads posts at all, so the case measured a path that is gone;
+   * `authorAgentIdOf` still owns stamp-vs-session-key attribution and is still tested where RR2
+   * uses it. What replaces it is the rule that took its place: **a row the SERVER aimed is not
+   * evidence of what the author addressed**, without which the arm feeds on its own picks.
+   */
+  it("🔒 a row the SERVER aimed is not evidence — only the author's own tag counts", async () => {
     twoLive();
-    recentAgentPosts({
-      seq: 42,
-      client_msg_id: "my-own-key",
-      metadata: { session_id: "chan-1::k3v7d2mq" },
-    });
-    expect((await resolve("morning")).recipientAgentIds).toEqual(["k3v7d2mq"]);
+    recentAgentPosts(
+      // Newest, but the server chose it: `wake_reason` is present, so it must be ignored.
+      {
+        seq: 42,
+        recipient_agent_ids: ["k3v7d2mq"],
+        metadata: { wake_reason: "most recent" },
+      },
+      { seq: 41, recipient_agent_ids: ["m8q1zzzz"] }
+    );
+    expect((await resolve("morning")).recipientAgentIds).toEqual(["m8q1zzzz"]);
   });
 
   it("arm 4: nobody posted inside the window → the most recently LAUNCHED", async () => {
@@ -118,13 +132,15 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
     const out = await resolve("morning");
     expect(out.reason).toBe("only agent");
     expect(
-      vi.mocked(repoMessages.listRecentRoomAgentPosts)
+      vi.mocked(repoMessages.listRecentRoomTagsBy)
     ).not.toHaveBeenCalled();
   });
 
-  it("a stale agent poster that is no longer live cannot be the answer", async () => {
+  it("a stale agent the author tagged, no longer live, cannot be the answer", async () => {
     twoLive();
-    recentAgentPosts({ seq: 42, client_msg_id: "agent-deadbeef-1" });
+    // ⚠ THE ROW IS THE AUTHOR'S OWN TAG SINCE 2026-09-04 — `recipient_agent_ids`, not a post
+    // stamp. The agent it names has since ended.
+    recentAgentPosts({ seq: 42, recipient_agent_ids: ["deadbeef"] });
     // The recency list names an agent the room no longer holds, so arm 3 skips
     // it and arm 4 answers — never a wake aimed at a session that is gone.
     expect((await resolve("morning")).recipientAgentIds).toEqual(["m8q1zzzz"]);

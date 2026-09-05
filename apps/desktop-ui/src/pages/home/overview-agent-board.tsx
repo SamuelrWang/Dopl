@@ -1,7 +1,7 @@
 import { Bot } from "lucide-react";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import type { HomeAgentRow } from "@/features/home/overview-types";
-import type { OpenActivity } from "./overview-activity";
+import type { OpenActivity } from "./use-activity-jump";
 
 /**
  * /home Overview — **ACTIVE AGENTS**, a board with one COLUMN PER CHANNEL

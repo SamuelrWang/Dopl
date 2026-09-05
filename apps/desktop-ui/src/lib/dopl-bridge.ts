@@ -18,6 +18,11 @@ import type {
   DesktopNarrationEntry,
   DesktopSessionSummary,
 } from "@/shared/lib/spa-bridge";
+// ⚠ SAME RULE, SECOND MODULE (2026-09-05, task 15): the folder answer's shape is declared once
+// in the shared tree and imported here rather than re-spelled, for the reason stated above — a
+// copy is a third thing to keep in step, and this one has a `custom` flag whose meaning a drifted
+// copy would quietly invert. `import type` only, so nothing is bundled.
+import type { ChannelFolderAnswer } from "@/shared/lib/desktop";
 
 /** Wire response for `dopl:api-request`. Main parses the body; `./api.ts` owns
  *  `{ error: { code, message } }` envelope decoding, so BOTH transports feed
@@ -142,11 +147,24 @@ export interface DoplBridge {
    * disagree — and adding an op is still a FOUR-file change plus the pin.
    */
   channels?: {
-    /** Abbreviated display label ("~/Downloads/repo") or null. ⚠ The raw absolute
-     *  path never crosses into the renderer. */
-    getFolderLabel(channelId: string): Promise<string | null>;
-    chooseFolder(channelId: string): Promise<string | null>;
-    clearFolder(channelId: string): Promise<string | null>;
+    /**
+     * WHERE THIS CHANNEL'S AGENT RUNS — `{ label, custom }` (2026-09-05, task 15).
+     * ⚠ Abbreviated display labels ("~/Downloads/repo") only; the raw absolute path
+     * never crosses into the renderer.
+     *
+     * `label` is the EFFECTIVE working directory and is never empty — main derives it
+     * through the same function that produces the spawn cwd, so it cannot disagree
+     * with where the agent really starts. `custom` is whether a PER-CHANNEL dir is
+     * set, which is the reset control's question and not the label's.
+     *
+     * ⚠ IT WAS A BARE `string | null`, AND THE NULL WAS THE BUG: it meant "no custom
+     * dir", the renderer printed "Sandbox (default)" over it, and there is no sandbox.
+     * ⚠ `null` NOW MEANS MAIN REFUSED (non-app-window sender, bad channel id), which
+     * is the same refusal shape every op in this family returns.
+     */
+    getFolderLabel(channelId: string): Promise<ChannelFolderAnswer | null>;
+    chooseFolder(channelId: string): Promise<ChannelFolderAnswer | null>;
+    clearFolder(channelId: string): Promise<ChannelFolderAnswer | null>;
     /**
      * THE DURABLE LAUNCH POSTURE — the two axes the operator's OWN agent starts on
      * when they press Launch. ⚠ NOT THE ARM: no TTL, spent by nothing, read at

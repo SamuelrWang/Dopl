@@ -144,10 +144,16 @@ describe("RR2 — an unaddressed agent post in the main room goes back to whoeve
     expect(vi.mocked(repoMessages.findLastRoomAddressToAgent)).not.toHaveBeenCalled();
   });
 
-  it("🔒 a STALE projection is not evidence either — the arm resolves on freshness only", async () => {
-    // `isFresh`'s asymmetry, applied in the direction that matters here: this
-    // arm RESOLVES a recipient, so it needs positive evidence. A stale row is
-    // not evidence of presence and must not stand in for one.
+  it("a STALE but PRESENT own row still answers the arm — the check is WHOSE, not how recent (2026-09-05)", async () => {
+    // ⚠ **THIS CASE ASSERTED `none` UNTIL 2026-09-05, AND FLIPPING IT WEAKENS
+    // NOTHING.** F-589's lock is the test ABOVE — a stamp naming an agent the
+    // author does not run is refused, and it is refused on `ownAgentIds`
+    // MEMBERSHIP, which is fenced by the read's `user_id`. Age was never the
+    // security property; it was a freshness filter sitting on the same list, and
+    // it meant an agent that had been quiet five minutes could not answer the
+    // person who had just written to it — the same defect as RR3's empty
+    // candidate set, one arm along. Presence licenses resolution; freshness
+    // licenses only refusal, and RR2 refuses on identity instead.
     projection(
       sessionRow({
         name: "k3v7d2mq",
@@ -159,7 +165,10 @@ describe("RR2 — an unaddressed agent post in the main room goes back to whoeve
       authorKind: "agent",
       clientMsgId: "agent-k3v7d2mq-4",
     });
-    expect(out.verdict).toBe("none");
+    expect(out).toMatchObject({
+      verdict: "reciprocal",
+      recipientUserIds: ["user-9"],
+    });
   });
 
   it("resolves the AUTHOR of the last row addressed to this agent, inside the window", async () => {
@@ -392,13 +401,38 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
     expect(out.reason).toBeNull();
   });
 
-  it("a STALE room row is not a live agent — freshness gates the wake", async () => {
+  it("🔒 THE ASYMMETRY: a STALE but PRESENT room row IS a live agent and IS woken (2026-09-05)", async () => {
+    // ⚠ **THE CASE THIS ARM EXISTS FOR, AND IT ASSERTED THE OPPOSITE UNTIL
+    // 2026-09-05.** It is paired, deliberately, with "no live agent at all is
+    // `none`" above: STALE must resolve and ABSENT must not, because a filter
+    // makes the two indistinguishable and a rule that cannot tell them apart
+    // reads a quiet agent as a dead one. That is what emptied RR3's candidate
+    // list while three agents sat idle on a verification hold — rows #1080,
+    // #1081 and #1092 stored `verdict=none` and the operator's untagged posts
+    // reached nobody. Samuel's 2026-08-22 ruling (`agents-model.ts ›
+    // peerCardsFor`, same guard, deleted for the same reason): *"the card STAYS
+    // until the session actually goes away."*
+    // ⚠ `updated_at` IS NOT A HEARTBEAT: `session-state-push.js` writes on state
+    // CHANGE only and forbids a timer, so age measures silence, never absence.
+    // Absence is carried by the push being a FULL-SET REPLACE.
     roomProjection(
       sessionRow({
         name: "k3v7d2mq",
         updated_at: new Date(NOW - SESSION_PROJECTION_FRESH_MS - 1).toISOString(),
       })
     );
+    expect(await resolve("morning")).toMatchObject({
+      verdict: "responder",
+      recipientAgentIds: ["k3v7d2mq"],
+      delivery: "woken",
+    });
+  });
+
+  it("a room row with NO agent id is still dropped — that was never a freshness rule", async () => {
+    // `name` IS the agent id every door addresses. A row carrying none names
+    // nobody and could not be woken if it were picked, which is why this filter
+    // outlived the one beside it.
+    roomProjection(sessionRow({ name: "" }));
     expect((await resolve("morning")).verdict).toBe("none");
   });
 

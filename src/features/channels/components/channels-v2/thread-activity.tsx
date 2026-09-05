@@ -92,9 +92,21 @@ export function activityLevels(bins: readonly ActivityBin[]): number[] {
 export function ActivityCells({
   levels,
   label,
+  titles,
 }: {
   levels: readonly number[];
   label: string;
+  /**
+   * PER-SQUARE HOVER TEXT — the day and its count (Samuel, 2026-09-05).
+   *
+   * ⚠ OPTIONAL, AND COMPOSED BY THE CALLER THAT HAS THE BINS. This component is
+   * handed LEVELS precisely so it cannot pass invented counts off as measured
+   * ones, and reading a date back out of a shade is not possible — so the only
+   * caller that can title a square honestly is the one holding the series.
+   * ⚠ A MISSING ENTRY IS `undefined`, so the square simply has no tooltip. An
+   * invented "0 messages" would be the same lie the fixture was.
+   */
+  titles?: readonly string[];
 }) {
   return (
     <div
@@ -105,6 +117,7 @@ export function ActivityCells({
       {levels.map((level, i) => (
         <span
           key={i}
+          title={titles?.[i]}
           className={cn(
             "h-3.5 w-3.5 rounded-[4px]",
             level < 0
@@ -148,6 +161,12 @@ export function ThreadActivityStrip({
     <ActivityCells
       levels={activityLevels(bins)}
       label={`${metricLabel} in this channel per day, ${bins.length} days to ${bins[bins.length - 1].date}`}
+      // ⚠ THE DATE AND THE COUNT, because a shade alone cannot be read back to
+      // either. The count is the MEASURED number rather than the quantised
+      // step: the squares are relative to the busiest day, so two identical
+      // shades are routinely different numbers and a tooltip that repeated the
+      // shade would say nothing the eye had not already got wrong.
+      titles={bins.map((bin) => `${bin.date}: ${bin.count}`)}
     />
   );
 }

@@ -7,8 +7,12 @@
  * assert that the mocks were called rather than that the numbers are right. What
  * IS pinned here is every decision the payload's honesty rests on: an
  * unrecognised range is a refusal, a person with no account is dropped rather
- * than bucketed, a quiet channel keeps its row, and the attention lanes are
- * ordered by URGENCY rather than by clock.
+ * than bucketed, and a quiet channel keeps its row.
+ *
+ * ⚠ **THE `mapAttention` BLOCK WENT WITH ITS PANEL ON 2026-09-05.** The
+ * urgency-ordering cases lived here because **Waiting on you** rendered them;
+ * the panel, its three reads and the mapper were all cut together, so the cases
+ * were deleted rather than left asserting a function nothing calls.
  */
 
 import { describe, expect, it } from "vitest";
@@ -25,12 +29,7 @@ import {
 // when the activity sections took the service past the 500-line cap. It does no
 // IO, which is why almost every case in this file can import it directly and
 // mock nothing.
-import {
-  mapAttention,
-  tallyChannels,
-  tallyCreditPeople,
-  tallyTools,
-} from "./overview-tally";
+import { tallyChannels, tallyCreditPeople, tallyTools } from "./overview-tally";
 import {
   roleKey,
   type CreditEventScanRow,
@@ -314,121 +313,3 @@ describe("tallyChannels", () => {
   });
 });
 
-describe("mapAttention", () => {
-  const names = new Map([[WS_A, "Q3 Fundraise"]]);
-
-  /**
-   * 🔒 **ORDER IS BY KIND FIRST, RECENCY SECOND, AND THAT IS A JUDGEMENT ABOUT
-   * URGENCY.** A consent request is an agent STOPPED waiting for a decision; a
-   * mention is a message nobody has read. Sorting purely by clock would bury a
-   * blocked agent under an hour-old @-mention — which is exactly what this
-   * fixture would do if the rank were dropped.
-   */
-  it("orders consent, then permission, then mention — never by clock alone", () => {
-    const items = mapAttention(
-      [
-        {
-          id: "c1",
-          workspace_id: WS_A,
-          channel_id: "chan",
-          summary: "Send the summary",
-          created_at: "2026-09-01T08:00:00.000Z",
-        },
-      ],
-      [
-        {
-          id: "s1",
-          workspace_id: WS_A,
-          task_id: "task-1",
-          name: "flint",
-          display_name: null,
-          thread_title: "Renewals",
-          updated_at: "2026-09-01T09:00:00.000Z",
-        },
-      ],
-      [
-        {
-          id: "m1",
-          workspace_id: WS_A,
-          channel_id: "chan",
-          body: "ping",
-          created_at: "2026-09-01T12:00:00.000Z",
-        },
-      ],
-      names,
-      10
-    );
-    expect(items.map((item) => item.kind)).toEqual([
-      "consent",
-      "permission",
-      "mention",
-    ]);
-    expect(items.every((item) => item.channelName === "Q3 Fundraise")).toBe(true);
-  });
-
-  /** ⚠ A mention has NO thread — `channel_messages` has no `task_id` — so the
-   *  jump opens the channel rather than inventing one. */
-  it("gives a mention no thread, and a held session its task", () => {
-    const items = mapAttention(
-      [],
-      [
-        {
-          id: "s1",
-          workspace_id: WS_A,
-          task_id: "task-9",
-          name: "flint",
-          display_name: "Flint",
-          thread_title: null,
-          updated_at: "2026-09-01T09:00:00.000Z",
-        },
-      ],
-      [
-        {
-          id: "m1",
-          workspace_id: WS_A,
-          channel_id: "chan",
-          body: "  hello\n  there  ",
-          created_at: "2026-09-01T12:00:00.000Z",
-        },
-      ],
-      names,
-      10
-    );
-    expect(items[0]).toMatchObject({ threadId: "task-9", title: "Flint" });
-    // ⚠ Flattened and trimmed on the SERVER — the panel renders one line, and a
-    // mention body is arbitrary user text.
-    expect(items[1]).toMatchObject({ threadId: null, title: "hello there" });
-  });
-
-  /** ⚠ An empty summary falls back to words rather than rendering a blank row,
-   *  which reads as a bug. */
-  it("falls back when the source text is empty", () => {
-    const items = mapAttention(
-      [
-        {
-          id: "c1",
-          workspace_id: WS_A,
-          channel_id: "chan",
-          summary: "   ",
-          created_at: "2026-09-01T08:00:00.000Z",
-        },
-      ],
-      [],
-      [],
-      names,
-      10
-    );
-    expect(items[0]?.title).toBe("Agent wants to send a message");
-  });
-
-  it("caps the list at the caller's limit", () => {
-    const mentions = Array.from({ length: 5 }, (_, i) => ({
-      id: `m${i}`,
-      workspace_id: WS_A,
-      channel_id: "chan",
-      body: `m${i}`,
-      created_at: "2026-09-01T12:00:00.000Z",
-    }));
-    expect(mapAttention([], [], mentions, names, 2)).toHaveLength(2);
-  });
-});

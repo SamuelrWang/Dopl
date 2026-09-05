@@ -224,7 +224,7 @@ describe("the web channel page — one column", () => {
   it("shows Info as the MAIN AREA, not as a pane beside the chat", async () => {
     mountWeb();
     await pickFace("Info");
-    expect(screen.getByText("Main info")).toBeTruthy();
+    expect(screen.getByText("Channel info")).toBeTruthy();
     // The transcript is REPLACED, which is the whole point of one column.
     expect(screen.queryByText("on the record")).toBeNull();
     expect(document.querySelector(".channel-info-slide")).toBeNull();
@@ -296,7 +296,7 @@ describe("the web channel page — the URL keeps the face", () => {
   it("follows the hash changing under it — the back gesture", async () => {
     mountWeb();
     await pickFace("Info");
-    expect(screen.getByText("Main info")).toBeTruthy();
+    expect(screen.getByText("Channel info")).toBeTruthy();
     window.location.hash = "view=channel";
     fireEvent(window, new HashChangeEvent("hashchange"));
     expect(await screen.findByText("on the record")).toBeTruthy();

@@ -68,7 +68,7 @@ export interface PlanDef {
 
 /** The credits line, worded once for all three cards. */
 const creditsFeature = (plan: PlanId) =>
-  `${planNumber(MONTHLY_MCP_CREDITS[plan])} MCP credits / month`;
+  `${planNumber(MONTHLY_MCP_CREDITS[plan])} Credits / month`;
 
 export const PLANS: ReadonlyArray<PlanDef> = [
   {

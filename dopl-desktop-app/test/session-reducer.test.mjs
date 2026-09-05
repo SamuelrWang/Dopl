@@ -285,7 +285,11 @@ test("result at the turn cap ends the session (turn_cap) + P3 calm capped lifecy
   const lc = findEff(r.effects, "lifecycle");
   assert.equal(lc.kind, "task_failed");
   assert.deepEqual(lc.extra, { capped: true }, "turn cap rides extra:{capped:true}");
-  assert.equal(lc.body, "Turn limit reached");
+  // ⚠ AND IT NAMES THE NUMBER (2026-09-05, task 9(c)). The cap is read off the ENDED RECORD —
+  // `state.turnCap`, the cap this session really counted against — never re-derived from
+  // `settings.getTurnCap()`, which since task 9(a) answers a default that depends on WHO
+  // launched and would name the wrong tier on the one card that exists to explain the end.
+  assert.equal(lc.body, "Turn limit reached (2 turns)");
   const ended = r.effects.filter((e) => e.type === "emit").find((e) => e.payload.type === "ended");
   assert.equal(ended.payload.reason, "turn_cap");
   assert.equal(findEff(r.effects, "settle").outcome, "ended");

@@ -69,6 +69,81 @@ export function agentMentionHandle(candidate: AgentMentionCandidate): string {
 export type AgentMentionIndex = ReadonlyMap<string, string | null>;
 
 /**
+ * WHAT A RESOLVED AGENT TAG SHOWS A HUMAN — the agent's current name, or `null` when there is
+ * none to show (Samuel, 2026-09-04: *"the UI should never make a human read @agent-h1anog51"*).
+ *
+ * ⚠ **IT IS A FACE, AND IT CHANGES NOTHING ABOUT THE ADDRESS.** The id stays the stored form, the
+ * wire form and what the desktop routes on (`main/session-dispatch.js › mentionedAgentIds`); this
+ * is read at RENDER time off the live identity map, which is why a rename re-faces every existing
+ * mention on the next push without touching a single stored body.
+ *
+ * ⚠ **`null` IS THE ORDINARY ANSWER AND THE CALLER MUST RENDER THE RAW TOKEN FOR IT.** An agent
+ * that was never renamed has no name; so does one that has ENDED, because the identity map is
+ * built from the LIVE feed plus the peer projection and both drop a session when it stops. An old
+ * message mentioning a dead agent therefore reads as the id again — degradation, not breakage, and
+ * the id is always true. Making it permanent needs a stored name, which is a server change.
+ *
+ * ⚠ **A SHARED NAME IS DISAMBIGUATED, NEVER GUESSED AT.** Two agents CAN each be called "Bug
+ * Reviewer" — names are per-machine, operator-set and deliberately not unique — so when the name
+ * this id carries is also worn by another agent in the map, the id rides along on the face:
+ * `Bug Reviewer #k3v7d2mq`. **Resolution is always id → name and never name → id**, so a collision
+ * costs clarity on the label and can never misroute or mislabel WHICH agent was tagged.
+ * ⚠ Case- and space-insensitive, because "bug reviewer" and "Bug Reviewer" are one name to a
+ * reader and a collision the eye cannot see is the one worth catching.
+ */
+export function agentMentionFace(
+  agentId: string,
+  /** id -> what its operator calls it. Satisfied by `view-model.ts › AuthorIndex.agents` without
+   *  this module importing that type. */
+  identities: ReadonlyMap<string, { displayName?: string | null }>
+): string | null {
+  const name = (identities.get(agentId)?.displayName ?? "").trim();
+  if (name.length === 0) return null;
+  const same = name.toLowerCase();
+  for (const [otherId, other] of identities) {
+    if (otherId === agentId) continue;
+    if ((other.displayName ?? "").trim().toLowerCase() === same) {
+      return `${name} #${agentId}`;
+    }
+  }
+  return name;
+}
+
+/**
+ * **THE TAG THE SERVER RESOLVED, SPELLED FOR A READER** — the face a routed-but-untagged row
+ * shows above its body, and the raw address that rides on its `title` (Samuel, 2026-09-05).
+ *
+ * ⚠ **ONE PLACE DECIDES HOW A RESOLVED TAG IS SPELLED**, which is why this is here beside
+ * {@link agentMentionFace} rather than inline in the transcript: the row and its hover text have
+ * to agree, a thread card will want the same line, and a component cannot be unit-tested for a
+ * string as cheaply as a function can.
+ * ⚠ **IT REUSES {@link agentMentionFace} RATHER THAN RE-READING THE MAP**, so a routed tag and a
+ * TYPED one are faced identically — same name, same `Name #id` collision form, same fallback to
+ * the raw handle for an agent that has ended. Two spellings of one address is how a reader comes
+ * to think two different agents were involved.
+ * ⚠ **`null` FOR AN EMPTY LIST, NOT AN EMPTY STRING** — the caller renders NOTHING for a row the
+ * server aimed at nobody, and "" would draw an arrow pointing at whitespace.
+ * ⚠ **THE TITLE IS ALWAYS THE IDS**, never the faces: a hover exists to show the thing the face
+ * replaced, and an agent with no name would otherwise hover to a copy of itself.
+ */
+export function routedTagLabel(
+  agentIds: readonly string[],
+  identities: ReadonlyMap<string, { displayName?: string | null }>
+): { face: string; title: string } | null {
+  if (agentIds.length === 0) return null;
+  const address = (id: string) => `@${agentIdHandle(id)}`;
+  return {
+    face: agentIds
+      .map((id) => {
+        const named = agentMentionFace(id, identities);
+        return named === null ? address(id) : `@${named}`;
+      })
+      .join(" "),
+    title: agentIds.map(address).join(" "),
+  };
+}
+
+/**
  * Live agents -> handle index. ⚠ BUILT FROM THE MACHINE'S OWN FEED, so it holds only agents this
  * operator is running: a peer's agent has no entry, cannot be tinted, and could not be addressed
  * anyway (their ids are minted on their machine and known to no server).
@@ -181,9 +256,11 @@ export interface ResponderChoice {
  * note below makes.
  *
  * ⚠ **NOTHING HERE FILTERS FOR FRESHNESS AND NOTHING SHOULD.** The caller decides
- * what "live" means: the server passes `freshChannelSessions` (F-418's asymmetric
- * rule), the composer passes what the peer projection last answered. Baking a
- * clock in would give one caller a rule it did not ask for.
+ * what "live" means: the server passes `liveChannelSessions` (PRESENCE — the
+ * projection's full-set replace, Samuel's 2026-08-22 ruling), the composer passes
+ * what the peer projection last answered. Baking a clock in would give one caller
+ * a rule it did not ask for — and until 2026-09-05 the server's caller baked one
+ * in for itself, which is how an idle agent stopped being addressable at all.
  */
 export function resolveDefaultResponder(
   configured: string | null | undefined,

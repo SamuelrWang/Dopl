@@ -17,6 +17,7 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useAuthUserState } from "@/shared/auth/use-auth-user-core";
 import {
   getDesktopChannelFolders,
+  type ChannelFolderAnswer,
   type DoplChannelsBridge,
 } from "@/shared/lib/desktop";
 import type { WorkspaceMemberView } from "@/features/members/types";
@@ -71,7 +72,12 @@ export function CreateChannelDialog({
   const [folderBridge, setFolderBridge] = useState<DoplChannelsBridge | null>(
     null
   );
-  const [folderLabel, setFolderLabel] = useState<string | null>(null);
+  /** ⚠ THE PAIR, NOT A LABEL (2026-09-05, task 15). This held `string | null` and
+   *  printed "Sandbox (default)" over the null — a place that does not exist. Main
+   *  now answers the EFFECTIVE directory plus whether it is a per-channel pick. */
+  const [folderAnswer, setFolderAnswer] = useState<ChannelFolderAnswer | null>(
+    null
+  );
   const [folderBusy, setFolderBusy] = useState(false);
 
   // Feature-detect the desktop bridge after mount so SSR and first client
@@ -115,7 +121,7 @@ export function CreateChannelDialog({
     setSubmitting(false);
     setPhase("form");
     setCreatedChannel(null);
-    setFolderLabel(null);
+    setFolderAnswer(null);
     setFolderBusy(false);
   }
 
@@ -166,7 +172,14 @@ export function CreateChannelDialog({
       if (folderBridge) {
         // Desktop: keep the popup open for the optional folder step.
         setCreatedChannel(channel);
-        setFolderLabel(null);
+        // ⚠ ASK, rather than starting from a null this file would have to name. A
+        // fresh channel already HAS an effective folder — the desktop default — and
+        // main is the only thing that knows which one it is.
+        setFolderAnswer(null);
+        void folderBridge
+          .getFolderLabel(channel.id)
+          .then(setFolderAnswer)
+          .catch(() => setFolderAnswer(null));
         setPhase("folder");
       } else {
         // Plain browser: nothing more to do.
@@ -186,9 +199,9 @@ export function CreateChannelDialog({
     setFolderBusy(true);
     try {
       const next = await folderBridge.chooseFolder(createdChannel.id);
-      setFolderLabel(next);
+      setFolderAnswer(next);
     } catch {
-      // Cancelled / failed picker — keep the current label.
+      // Cancelled / failed picker — keep the current answer.
     } finally {
       setFolderBusy(false);
     }
@@ -198,16 +211,17 @@ export function CreateChannelDialog({
     if (!folderBridge || !createdChannel || folderBusy) return;
     setFolderBusy(true);
     try {
-      await folderBridge.clearFolder(createdChannel.id);
-      setFolderLabel(null);
+      // ⚠ ADOPT THE REPLY. The reset lands on a REAL default and main names it;
+      // blanking the state here is what forced the invented label downstream.
+      setFolderAnswer(await folderBridge.clearFolder(createdChannel.id));
     } catch {
-      // Keep the current label if the reset failed.
+      // Keep the current answer if the reset failed.
     } finally {
       setFolderBusy(false);
     }
   }
 
-  const hasCustomFolder = !!folderLabel;
+  const hasCustomFolder = folderAnswer?.custom ?? false;
 
   return (
     <ModalShell open={open} onClose={close} label="New channel" size="narrow">
@@ -380,7 +394,10 @@ export function CreateChannelDialog({
               Folder
             </span>
             <div className="truncate rounded-[9px] border border-border-subtle bg-bg-inset px-3 py-2 text-body text-text-secondary">
-              {hasCustomFolder ? folderLabel : "Sandbox (default)"}
+              {/* ⚠ THE EFFECTIVE FOLDER, whatever it is, and NOTHING INVENTED while
+                  the answer is outstanding — an empty box for one frame is honest
+                  where "Sandbox (default)" never was (INVARIANTS §11). */}
+              {folderAnswer?.label ?? ""}
             </div>
             <div className="flex items-center gap-2">
               <button

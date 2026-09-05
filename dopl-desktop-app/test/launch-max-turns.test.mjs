@@ -36,8 +36,14 @@ const shipped = (src, name) => {
   return Number(m[1]);
 };
 
-const SESSION_MAX_TURNS = shipped(SPEC, "SESSION_MAX_TURNS");
+// ⚠ THE BRAKE IS DERIVED SINCE 2026-09-05 (task 9a), so this reads its two FACTORS out of the
+// shipped source and multiplies them here — the same "read it, never restate it" rule, one level
+// down. The Dopl cap is issuer-keyed now (`defaultTurnCap`: OPERATOR_TURN_CAP at depth 0,
+// DEFAULT_TURN_CAP above it), and the brake is sized against the wider of the two.
+const MAX_TURNS_FACTOR = shipped(SPEC, "MAX_TURNS_FACTOR");
+const OPERATOR_TURN_CAP = shipped(STATE, "OPERATOR_TURN_CAP");
 const DEFAULT_TURN_CAP = shipped(STATE, "DEFAULT_TURN_CAP");
+const SESSION_MAX_TURNS = MAX_TURNS_FACTOR * OPERATOR_TURN_CAP;
 
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
@@ -97,9 +103,20 @@ test("it is a RUNAWAY BACKSTOP: far above the cap the reducer actually enforces"
   // another `result` event — and the SDK's answer when it fires is `error_max_turns`, a DEAD
   // session rather than a paused one. A value near the reducer's cap would start killing long
   // sessions for a bound nobody asked for.
+  // ⚠ AND IT IS MEASURED AGAINST THE WIDEST DEFAULT, NOT THE NARROWEST (task 9a). The cap is
+  // issuer-keyed, so a literal sized against the 24 would sit 5× above the 200 an operator-
+  // launched session gets — close enough to fire first under the `AgentDefinition.maxTurns`
+  // reading, which is the one failure this bound must never be the cause of.
   assert.ok(
-    SESSION_MAX_TURNS > DEFAULT_TURN_CAP * 10,
-    `SESSION_MAX_TURNS (${SESSION_MAX_TURNS}) must stay well above DEFAULT_TURN_CAP (${DEFAULT_TURN_CAP})`
+    SESSION_MAX_TURNS > OPERATOR_TURN_CAP * 10,
+    `SESSION_MAX_TURNS (${SESSION_MAX_TURNS}) must stay well above OPERATOR_TURN_CAP (${OPERATOR_TURN_CAP})`
+  );
+  assert.ok(SESSION_MAX_TURNS > DEFAULT_TURN_CAP * 10, "…and above the agent-issued default too");
+  // ⚠ DERIVED, NOT RESTATED: a future edit that pins it back to a literal silently re-breaks the
+  // ratio the moment either default moves, which is exactly how it broke here.
+  assert.match(
+    SPEC, /const SESSION_MAX_TURNS = MAX_TURNS_FACTOR \* OPERATOR_TURN_CAP;/,
+    "the brake stopped being derived from the widest Dopl cap"
   );
 });
 

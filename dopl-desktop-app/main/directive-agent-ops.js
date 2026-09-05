@@ -188,7 +188,12 @@ function renameAgent(d) {
     // ⚠ THE ONE RENAME WRITE, shared with `sessions:rename` and the in-process
     // tool. Lazy require: `agent-names.js` opens an electron-store the moment it
     // is loaded, and this module is required at watcher arm time.
-    res = agentOps.applyRenameTo(require('./agent-names'), d.targetAgentId, d.targetName);
+    // ⚠ COMMITTED THROUGH `agent-identity-commit.js` SINCE 2026-09-05 — the wrapper writes the
+    // store AND flushes the summary, which is what carries the name to the server and so to the
+    // @-picker every OTHER member sees. This path is where the gap bit hardest: an external
+    // directive renames an agent on a machine where nothing else may be happening, so there was
+    // no unrelated engine event to piggyback a push on and the new name sat local until restart.
+    res = require('./agent-identity-commit').commitRename(d.targetAgentId, d.targetName);
   } catch (err) {
     diag('directive-agent-ops: rename', d.targetAgentId, '— store write threw:',
       (err && err.message) || String(err));

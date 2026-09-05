@@ -129,6 +129,29 @@ test("the OTHER terminals are untouched — the caps stay terminal, on purpose",
   assert.equal(endLifecycle("idle_timeout"), null, "an idle PARK is not terminal and posts nothing");
 });
 
+test("a TURN cap end names the number it hit, off the ended record (task 9c)", () => {
+  // ⚠ WHY THE SENTENCE ALONE STOPPED BEING ENOUGH. Since task 9(a) the default is ISSUER-KEYED,
+  // so "Turn limit reached" means 200 on an operator-launched session and 24 on an agent-issued
+  // one, and a set cap means neither. The card exists to explain the end; a card that cannot say
+  // which limit fired explains nothing an operator can act on.
+  assert.equal(endLifecycle("turn_cap", { turnCap: 24 }).body, "Turn limit reached (24 turns)");
+  assert.equal(endLifecycle("turn_cap", { turnCap: 200 }).body, "Turn limit reached (200 turns)");
+  assert.equal(endLifecycle("turn_cap", { turnCap: 1 }).body, "Turn limit reached (1 turn)", "singular");
+  // ⚠ IT IS THE SESSION'S OWN CAP, NOT TODAY'S SETTING. `state.turnCap` is what `readCaps`
+  // resolved at launch and PREFERS across a resume, so a session that crashed at turn 80 reports
+  // the cap it was really counting against rather than what the store says now.
+  assert.equal(endLifecycle("turn_cap", { turnCap: 80 }).body, "Turn limit reached (80 turns)");
+  // ⚠ AND A RECORD WITH NO USABLE CAP FALLS BACK TO A TRUE SENTENCE, never to a wrong number.
+  // An unlimited session cannot reach this branch at all (the cap is Infinity), but a legacy or
+  // hand-mangled record must not render "reached (Infinity turns)".
+  for (const state of [undefined, {}, { turnCap: Infinity }, { turnCap: 0 }, { turnCap: "24" }, { turnCap: NaN }]) {
+    assert.equal(endLifecycle("turn_cap", state).body, "Turn limit reached", JSON.stringify(state));
+  }
+  // The COST cap is untouched — it is a different number in a different unit, and #1101 4c
+  // ordered the turn cap. Named here so the absence reads as a decision.
+  assert.equal(endLifecycle("cost_cap", { turnCap: 24 }).body, "Cost limit reached");
+});
+
 // ── 1. THE 12h ABANDONMENT ───────────────────────────────────────────────────────────
 
 test("ABANDONMENT: the common silent path now tells the person still waiting", () => {

@@ -61,9 +61,29 @@ export function useStickToBottom(
   scrollerRef: RefObject<HTMLDivElement | null>,
   /** Channel + thread — the identity of the VIEW, so a switch is one change. */
   viewKey: string,
-  rowCount: number
+  rowCount: number,
+  /**
+   * THE NEWEST ROW'S id — what rule 2 SMOOTH-SCROLLS TO the START of (Samuel, 2026-09-04).
+   *
+   * ⚠ OPTIONAL, AND ABSENT IS THE OLD BEHAVIOUR EXACTLY: a jump to `scrollHeight`. Every caller
+   * that knows nothing about row ids (the tests that mount the pane on a fixed list) is unchanged.
+   * ⚠ IT IS MATCHED AGAINST `data-message-id`, the same hook the mention jump queries — one
+   * attribute, two readers, so a row kind that stopped rendering it would break both visibly
+   * rather than one of them silently.
+   */
+  lastRowId: string | null = null
 ) {
   const pinned = useRef(true);
+  /**
+   * HAS THIS VIEW ALREADY LANDED — the flag that keeps rule 1 and rule 2 from disagreeing.
+   *
+   * ⚠ IT EXISTS BECAUSE THE SMOOTH SCROLL MUST NOT APPLY TO THE FIRST PAINT. Opening a channel
+   * whose newest message is TALLER than the pane would otherwise animate to that message's START
+   * — leaving the reader above the newest words in the room, on a view that has no reading
+   * position to preserve. Rule 1 is explicit that a switch lands at the BOTTOM; this is what makes
+   * rule 2 agree with it instead of overriding it one commit later.
+   */
+  const landed = useRef(false);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -82,6 +102,8 @@ export function useStickToBottom(
     const el = scrollerRef.current;
     if (!el) return;
     pinned.current = true;
+    // ⚠ AND THE VIEW HAS NOT LANDED YET, so rule 2's first run on this view is the INSTANT one.
+    landed.current = false;
     el.scrollTop = el.scrollHeight;
   }, [scrollerRef, viewKey]);
 
@@ -93,8 +115,43 @@ export function useStickToBottom(
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el || !pinned.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [scrollerRef, rowCount]);
+    // FIRST LANDING ON THIS VIEW — instant, and to the very bottom. See `landed`.
+    if (!landed.current) {
+      landed.current = true;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    /**
+     * ⚠ THE TARGET IS THE NEW MESSAGE'S START, NOT THE END OF THE TRANSCRIPT (Samuel, 2026-09-04).
+     * For an ordinary short message the two are the same place and this reads as a smooth scroll to
+     * bottom. For a message TALLER than the pane they are not, and jumping to `scrollHeight` lands
+     * the reader on its last line — past the sender pill, mid-sentence, with no way to know they
+     * are looking at the end of something. Aligning its top edge to the pane's puts the pill under
+     * the top bound and the message reads from its beginning.
+     * ⚠ CLAMPED TO THE SCROLLER'S OWN MAXIMUM, which is what makes the short case fall out for
+     * free rather than needing a height test: a short row's desired offset is past the end, and
+     * `min` turns it back into "the bottom".
+     * ⚠ MEASURED WITH RECTS, NOT `offsetTop`, which is relative to the nearest POSITIONED ancestor
+     * and silently wrong the moment a row wrapper gains `relative`.
+     */
+    const row = lastRowId
+      ? el.querySelector(`[data-message-id="${lastRowId}"]`)
+      : null;
+    if (!row) {
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    // ⚠ THE READER'S OWN SETTING WINS, the same rule the mention jump follows.
+    const reduceMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const desired =
+      el.scrollTop + (row.getBoundingClientRect().top - el.getBoundingClientRect().top);
+    el.scrollTo({
+      top: Math.min(desired, el.scrollHeight - el.clientHeight),
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, [scrollerRef, rowCount, lastRowId]);
 
   return useCallback(() => {
     pinned.current = false;

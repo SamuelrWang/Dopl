@@ -9,11 +9,12 @@ import type {
  * The /home Overview face's RANK RAILS — the four comparison lists.
  *
  * ⚠ **THE ACTIVITY SECTIONS LEFT THIS FILE ON 2026-09-01.** Recent threads and
- * running agents are their own panels now (`overview-activity.tsx` and
- * `overview-agent-board.tsx`), because Samuel made them top-of-page surfaces
- * with their own shapes — a list and a kanban board — rather than two more
- * rails. What is left here is the one thing these four share: a name, a bar and
- * a figure on one line.
+ * running agents became their own panels, because Samuel made them top-of-page
+ * surfaces with their own shapes — a list and a kanban board — rather than two
+ * more rails. ⚠ Recent threads was then CUT ENTIRELY on 2026-09-05, so the only
+ * survivor is `overview-agent-board.tsx`; do not restore a thread rail here on
+ * the strength of this note. What is left in this file is the one thing its four
+ * rails share: a name, a bar and a figure on one line.
  *
  * ⚠ **TWO OF THE FOUR CHANGED WHAT THEY MEASURE IN THE SAME CHANGE.** "MCP
  * calls by channel" became **credits** by channel and "MCP calls by person"

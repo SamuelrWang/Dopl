@@ -225,14 +225,14 @@ describe("StandaloneChannelSurface — the header's identity", () => {
 describe("StandaloneChannelSurface — the host's two knobs", () => {
   it("renders the channels page's own Info tab when no slot is given", () => {
     mount();
-    expect(screen.getByText("Main info")).toBeTruthy();
+    expect(screen.getByText("Channel info")).toBeTruthy();
   });
 
   it("REPLACES the Info tab's body with the slot, keeping the tab row", () => {
     mount({ slots: { infoTab: () => <p>Diana Taylor, since March</p> } });
     expect(screen.getByText("Diana Taylor, since March")).toBeTruthy();
     // The channel's own body is GONE, not merely pushed below the card.
-    expect(screen.queryByText("Main info")).toBeNull();
+    expect(screen.queryByText("Channel info")).toBeNull();
     expect(screen.getByRole("tab", { name: /^Info/ })).toBeTruthy();
   });
 

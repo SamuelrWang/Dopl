@@ -66,6 +66,7 @@ import {
   resolveMentionToken,
 } from "../../lib/mentions";
 import {
+  agentMentionFace,
   buildAgentMentionIndex,
   resolveAgentHandle,
   type AgentMentionIndex,
@@ -454,9 +455,32 @@ function MentionText({ text, ctx }: { text: string; ctx: BodyContext }) {
             ? resolveAgentHandle(mentionHandleOf(part), ctx.agentHandles)
             : null;
         if (!userId && !agentId) return <span key={i}>{part}</span>;
+        // ⚠ AN AGENT TAG WEARS THE AGENT'S NAME, NOT ITS ID (Samuel, 2026-09-04). The id is the
+        // ADDRESS — stored, on the wire, and what the desktop routes on — but nobody should have
+        // to read `@agent-h1anog51` to know who was tagged. The face is resolved live off the
+        // identity map, so a rename re-faces every existing mention with no stored body touched.
+        // ⚠ THE RAW TOKEN IS THE `title`, so the address is one hover away and never lost.
+        // ⚠ `null` FACE ⇒ THE TOKEN RENDERS EXACTLY AS IT ALWAYS DID — an agent that was never
+        // named, and any agent that has ENDED (the identity map is the LIVE feed plus the peer
+        // projection, and both drop a stopped session). Fallback, not failure.
+        // ⚠ MEMBERS ARE UNTOUCHED: `face` is only ever computed on the agent arm.
+        const face = agentId ? agentMentionFace(agentId, ctx.index.agents) : null;
+        // ⚠ THE TRAILING RUN COMES BACK VERBATIM. `mentionHandleOf` strips punctuation and markup
+        // off the END of the token (`@agent-h1anog51,` → `agent-h1anog51`), so swapping the whole
+        // `part` for the face would silently eat the author's comma. The handle is a PREFIX of the
+        // token by construction — both strips are end-anchored — so its length is where the face
+        // stops and the prose resumes.
+        const handle = face !== null ? mentionHandleOf(part) : null;
+        const shown =
+          face !== null && handle !== null
+            ? `@${face}${part.slice(1 + handle.length)}`
+            : part;
         return (
           <span
             key={i}
+            // ⚠ ONLY WHERE A FACE REPLACED SOMETHING. A `title` equal to the visible text is
+            // noise the browser still renders on hover.
+            title={face !== null ? part : undefined}
             className={cn(
               "font-medium text-link",
               // ⚠ BOTH halves required: the stamp says this message tags me,
@@ -468,7 +492,7 @@ function MentionText({ text, ctx }: { text: string; ctx: BodyContext }) {
                 "rounded-[4px] bg-link/10 px-0.5"
             )}
           >
-            {part}
+            {shown}
           </span>
         );
       })}

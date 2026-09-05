@@ -199,9 +199,17 @@ test("modelArg is the argv gate: null for 'default', the bare alias otherwise, j
 // out of the shipped SOURCE rather than restated — the discipline
 // `sdk-mcp-token.test.mjs` follows for mcp-config's timeout, so this harness can
 // never drift from the number that ships.
-const MAX_TURNS_SRC = /const SESSION_MAX_TURNS = (\d+);/.exec(SPEC);
-assert.ok(MAX_TURNS_SRC, "launch-spec.js no longer declares SESSION_MAX_TURNS");
-const SHIPPED_MAX_TURNS = Number(MAX_TURNS_SRC[1]);
+// ⚠ DERIVED SINCE 2026-09-05 (task 9a): the brake is `MAX_TURNS_FACTOR * OPERATOR_TURN_CAP`,
+// not a literal, so a regex for a literal threw and took this whole file down with it. Both
+// factors are read off the shipping source and multiplied here — same "read it, never restate
+// it" rule, one level down, exactly as `launch-max-turns.test.mjs` already does.
+const shippedNum = (src, name) => {
+  const m = new RegExp(`const ${name} = (\\d+);`).exec(src);
+  if (!m) throw new Error(`${name} is no longer a literal declaration in the shipped source`);
+  return Number(m[1]);
+};
+const SHIPPED_MAX_TURNS =
+  shippedNum(SPEC, "MAX_TURNS_FACTOR") * shippedNum(M("session-state.js"), "OPERATOR_TURN_CAP");
 
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;

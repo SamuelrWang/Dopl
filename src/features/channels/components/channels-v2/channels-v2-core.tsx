@@ -169,6 +169,9 @@ export function ChannelsV2Core({
   // WRITE path around prefix invalidation for exactly this reason.
   const data = useChannelSurfaceData({
     workspaceId,
+    // The Info tab's activity strip is channel-scoped and the route is
+    // segment-addressed — see `channel-surface-data.ts`'s series read.
+    workspaceSlug,
     channel,
     currentUserId,
     openThreadId: sel.requestedThreadId,

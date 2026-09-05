@@ -136,15 +136,18 @@ export function PeerCards({
               <span className="min-w-0 truncate">
                 {ownerName}&apos;s agent
                 {peer.threadTitle ? ` · ${peer.threadTitle}` : ""}
-                {/* ⚠ THE ONE CLAUSE A DIMMED CARD EARNS, and it is a FACT rather
-                    than an explanation: when this row last moved. No "may be
-                    offline" copy — the surface does not know that, and a guess
-                    is what the deleted freshness guard was (INVARIANTS §5,
-                    minimal copy). Absent stamp → `formatRelativeTime` answers
-                    "" and the clause is simply not there. */}
-                {stale && peer.updatedAt
-                  ? ` · last update ${formatRelativeTime(peer.updatedAt)}`
-                  : ""}
+                {/* ⚠ NO TIMESTAMP ON A PEER CARD (Samuel, 2026-09-04): *"the
+                    profile image of the user they belong to, plus status only —
+                    thinking / working / idle / ended. No timestamp, no other
+                    metadata."* This carried ` · last update 40 minutes ago` on a
+                    DIMMED row from 2026-08-22 to that ruling.
+                    ⚠ THE DIMMING STAYS AND SO DOES `peerRowStale`. The ruling is
+                    about what the card SAYS, not about what it knows: a row whose
+                    desktop crashed still outlives its run (`session-state-push.js`'s
+                    KNOWN GAP), and `opacity-60` is the treatment that keeps a quiet
+                    card legible without printing a stamp. What is gone is the
+                    CLAUSE, not the signal — do not re-derive one from `updatedAt`
+                    here. */}
               </span>
             </div>
           </div>

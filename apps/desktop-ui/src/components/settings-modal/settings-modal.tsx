@@ -12,6 +12,7 @@ import { useApiQuery } from "#/hooks/use-api-query";
 import { invalidateWorkspaceReads } from "#/lib/workspace-cache";
 import { AccountActions } from "./account-actions";
 import { BillingPane } from "./billing-pane";
+import { TurnCapRow } from "./turn-cap-row";
 
 interface Props {
   open: boolean;
@@ -93,6 +94,10 @@ export function SettingsModal({
       }
       accountPane={
         <AccountSectionCore
+          // ⚠ MACHINE-SCOPED, so it is bound here and not in the core: this
+          // modal is the DESKTOP binding, and the row hides itself when main
+          // has no turn-cap ops (`./use-turn-cap`).
+          machineSection={<TurnCapRow />}
           dangerZone={<AccountActions workspaceSegment={workspaceSegment} />}
         />
       }

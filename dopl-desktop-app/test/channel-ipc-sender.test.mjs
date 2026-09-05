@@ -159,7 +159,7 @@ test("the guard FAILS CLOSED on a missing sender, a missing event, or a non-nume
 });
 
 
-import { OPS, NO_BAD_PAYLOAD } from "./_ipc-ops-table.mjs";
+import { OPS, NO_BAD_PAYLOAD, OPERATOR_TURN_CAP, DEFAULT_TURN_CAP } from "./_ipc-ops-table.mjs";
 
 
 test("every privileged op in the file is registered", () => {
@@ -201,12 +201,19 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
     // handler reads them on the SUCCESS path these cases must never reach.
     if (id === "./channel-runtime") return { getChannelRuntime: () => "", setChannelRuntime: () => "" };
     if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude" };
-    if (id === "./channel-dirs") return { liveChannelDirLabel: () => "x", promptAndSetChannelDir: async () => {}, clearChannelDir: () => {} };
+    // ⚠ `resolvedDirLabel` joined 2026-09-05 (task 15): the folder ops answer `{label, custom}`
+    // now. Present only so the module loads — every call below is on an UNBOUND surface, so the
+    // success path it backs is exactly what must never be reached.
+    if (id === "./channel-dirs") return { liveChannelDirLabel: () => "x", resolvedDirLabel: () => "y", promptAndSetChannelDir: async () => {}, clearChannelDir: () => {} };
     if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
     if (id === "./deep-link-target") return { isSafeSegment: () => true };
     if (id === "./version-gate") return { isBlocked: () => false };
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
     if (id === "./diag") return { diag: () => {} };
+    // 2026-09-05 (the turn-cap pair): present only so the module loads — every call below is on
+    // an UNBOUND surface, so the success path these back is exactly what must never be reached.
+    if (id === "./settings") return { readTurnCapSetting: () => 7, setTurnCap: () => 7, normalizeTurnCapInput: () => undefined };
+    if (id === "./session-state") return { OPERATOR_TURN_CAP, DEFAULT_TURN_CAP };
     if (id === "./ipc-guards") return guards;
     if (id === "./agent-id") return agentId;
     if (id === "./session-ipc-ops") return ops;
@@ -231,7 +238,12 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
   for (const which of ["shell", "popout"]) {
     const ipc = bootIpc();
     const sender = ipc[which];
-    assert.equal(await ipc.handlers["channels:getFolderLabel"](sender, CH), "~/Downloads/secret-repo", which);
+    // ⚠ A PAIR SINCE 2026-09-05 (task 15): the EFFECTIVE working directory, which is never
+    // null, plus whether a per-channel dir is set. The single nullable label it replaced is
+    // what made the Settings row print "Sandbox (default)" over a channel using ~/Downloads.
+    // Both members are still abbreviations — the raw absolute path still never crosses.
+    assert.deepEqual(await ipc.handlers["channels:getFolderLabel"](sender, CH),
+      { label: "~/Downloads/effective-repo", custom: true }, which);
     // ⚠ REPOINTED FROM THE ARM'S OPS TO THE POSTURE'S (2026-08-20). This drove
     // `channels:get/setPermissionPreset` — the two most privileged ops in the file at the
     // time — precisely BECAUSE they were the worst case: a widening that admitted a window
@@ -288,6 +300,59 @@ test("a refusal is INDISTINGUISHABLE from a bad-payload rejection", async () => 
   const clean = bootIpc();
   await clean.handlers["orchestrator:setLaunchEnabled"](clean.foreign, { enabled: true });
   assert.deepEqual(clean.writes, [], "an unbound sender cannot arm the launch lane");
+});
+
+// ── The turn cap's own gates (2026-09-05, task 9b) ───────────────────────────
+
+test("an UNBOUND sender cannot move the turn cap — the brake has one writer", async () => {
+  // ⚠ THE ASSERTION THE PAIR ACTUALLY EXISTS FOR, and a harder one than the toggles' because
+  // `set(0)` REMOVES the loop-safety bound rather than arming a lane. `main/settings.js` is the
+  // only writer of `sessionTurnCap` and this bridge is the only caller of it; a page that is not
+  // a registered window's top frame must reach neither.
+  {
+    for (const forged of ["foreign", "iframe"]) {
+      for (const payload of [{ cap: 0 }, { cap: 5000 }, { cap: null }]) {
+        const ipc = bootIpc();
+        assert.deepEqual(await ipc.handlers["settings:setTurnCap"](ipc[forged], payload), { ok: false });
+        assert.deepEqual(ipc.writes, [], `${forged} ${JSON.stringify(payload)} reached the store`);
+      }
+      // …and the READ discloses nothing either: `cap: null` is what an unset machine answers,
+      // so a rejected caller cannot tell this Mac's cap from a Mac that has never set one.
+      const ipc = bootIpc();
+      assert.deepEqual(await ipc.handlers["settings:getTurnCap"](ipc[forged]),
+        { cap: null, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP });
+    }
+  }
+});
+
+test("a BOUND sender gets main's OWN value back, never an echo of the request", async () => {
+  // ⚠ THE PROPERTY AN OPTIMISTIC CONTROL DEPENDS ON. Every answer carries the cap the store
+  // really holds, so a rejected write puts the operator's box back to what is in force instead
+  // of leaving a number on screen that nothing is enforcing.
+  const ipc = bootIpc();
+  assert.deepEqual(await ipc.handlers["settings:getTurnCap"](ipc.shell),
+    { cap: 7, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP });
+
+  assert.deepEqual(await ipc.handlers["settings:setTurnCap"](ipc.shell, { cap: 50 }),
+    { ok: true, cap: 50, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP });
+  // 0 is a REAL request and the machine really is unbounded afterwards — not a failed write.
+  assert.deepEqual(await ipc.handlers["settings:setTurnCap"](ipc.shell, { cap: 0 }),
+    { ok: true, cap: 0, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP });
+  // …and `null` clears it, which is the only way back to the issuer-keyed defaults.
+  assert.deepEqual(await ipc.handlers["settings:setTurnCap"](ipc.shell, { cap: null }),
+    { ok: true, cap: null, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP });
+});
+
+test("junk answers ok:FALSE and leaves the cap where it was — it is not a silent unset", async () => {
+  // ⚠ AN ABSENT `cap` IS THE ONE THAT MATTERS. A half-built caller sending `{}` must not clear
+  // the operator's brake; only an EXPLICIT null does that, and the two are different requests.
+  const ipc = bootIpc();
+  await ipc.handlers["settings:setTurnCap"](ipc.shell, { cap: 30 });
+  for (const payload of [{ cap: "x" }, { cap: -3 }, { cap: false }, { cap: {} }, {}, undefined]) {
+    assert.deepEqual(await ipc.handlers["settings:setTurnCap"](ipc.shell, payload),
+      { ok: false, reason: "store", cap: 30, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP },
+      JSON.stringify(payload));
+  }
 });
 
 // ── The pop-out op's own gates ───────────────────────────────────────────────

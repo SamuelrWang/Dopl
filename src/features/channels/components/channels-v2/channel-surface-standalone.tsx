@@ -98,6 +98,7 @@ export function StandaloneChannelSurface({
   });
   const data = useChannelSurfaceData({
     workspaceId,
+    workspaceSlug,
     channel,
     currentUserId,
     openThreadId: sel.requestedThreadId,

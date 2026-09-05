@@ -172,21 +172,40 @@ test("END: a directive naming a DIFFERENT agent than the live one is refused, ne
 
 // ── 3. RENAME — DISPLAY ONLY, AND THE ONE WRITE ──────────────────────────────────────────
 
-test("RENAME: goes through `agent-self-ops.js › applyRenameTo`, the ONE rename write", async () => {
+test("RENAME: goes through `agent-identity-commit.js › commitRename`, write PLUS flush", async () => {
   const h = boot({});
   await h.api.handle(renameRow("Research"), WS);
   assert.deepEqual(h.names, [{ op: "rename", agentId: "a1b2c3d4", name: "Research" }]);
   assert.deepEqual(decided(h), [{ directiveId: DID, status: "done" }]);
+  // ⚠ AND THE FLUSH, WATCHED (2026-09-05, first terminal run). The title of this test said
+  // "write PLUS flush" while nothing here could see a flush — the whole point of the wrapper is
+  // that the store write and the `session-summary.touch()` that carries the new name to the
+  // server cannot come apart, and an unflushed rename is exactly the bug this lane was built to
+  // fix: the name changes locally and the @-picker keeps offering the old one until a restart.
+  assert.equal(h.flushes.length, 1, "the rename was announced, not just stored");
   // ⚠ THE SHARING IS THE TEST. Three callers now — this lane, `sessions:rename` and the
   // in-process tool — and a third statement of "empty means clear" is how one surface quietly
   // loses the only gesture that undoes a rename.
+  // ⚠ THE ASSERTED SYMBOL MOVED ON 2026-09-05 AND THIS GUARD DID NOT, so it had been failing
+  // (and, worse, pinning a call none of the three lanes still make). The write moved BEHIND
+  // `agent-identity-commit.js › commitRename`, which does the `applyRenameTo` store write AND
+  // the `session-summary.touch()` flush that carries the new name to the server. Pinning
+  // `applyRenameTo(` here would now be satisfied by a lane that writes the store and never
+  // flushes — which is EXACTLY Samuel's reported bug — so the wrapper is what must be pinned.
   for (const [file, label] of [
     [join(MAIN, "directive-agent-ops.js"), "the directive lane"],
     [join(MAIN, "session-ipc-ops.js"), "sessions:rename"],
     [join(MAIN, "runtime", "claude", "axis-b.js"), "the in-process tool"],
   ]) {
-    assert.match(readFileSync(file, "utf8"), /applyRenameTo\(/, label);
+    assert.match(readFileSync(file, "utf8"), /commitRename\(/, label);
   }
+  // ⚠ AND THE CHAIN'S FAR END: the wrapper is still the ONE place the store write lives, so
+  // "three lanes, one write" stays a claim this test can see rather than one it assumes.
+  assert.match(
+    readFileSync(join(MAIN, "agent-identity-commit.js"), "utf8"),
+    /applyRenameTo\(/,
+    "the wrapper still owns the one rename write"
+  );
 });
 
 test("RENAME: an EMPTY name CLEARS — it is a legal value, not a missing one", async () => {

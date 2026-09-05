@@ -45,6 +45,7 @@ import { AuthoredRow } from "./authored-row";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
+import { routedTagLabel } from "../../lib/agent-mentions";
 import type { AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, TranscriptRow } from "./view-model-rows";
 
@@ -309,6 +310,13 @@ function Message({
     onOpenAgent && agentId && index.agents.has(agentId)
       ? () => onOpenAgent(agentId)
       : undefined;
+  // ⚠ THE STORED VERDICT, FACED AT RENDER (Samuel, 2026-09-05). A post that named
+  // nobody and was routed anyway read back as unaddressed, which is a lie the
+  // transcript was telling about its own history. The ids come off the row's
+  // SERVER stamps (`view-model-rows.ts › routedAgentIds`) and the name off the
+  // live index, exactly like the sender pill's — so a rename re-faces old rows
+  // and no body is ever rewritten.
+  const routed = routedTagLabel(row.routedAgentIds, index.agents);
   return (
     <AuthoredRow
       id={row.id}
@@ -321,6 +329,8 @@ function Message({
       // ⚠ RESOLVED AT RENDER from the live feed, never read off the row (2026-08-27). A rename
       // reaches every message an agent has ever posted the moment main pushes the next summary.
       agentName={row.agentId ? (index.agents.get(row.agentId)?.displayName ?? null) : null}
+      routedTo={routed?.face ?? null}
+      routedTitle={routed?.title}
       continuation={row.continuation}
       flash={flash}
       onOpenAgent={openAgent}

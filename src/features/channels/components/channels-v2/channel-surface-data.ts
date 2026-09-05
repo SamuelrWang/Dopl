@@ -44,6 +44,17 @@ import { useChannelsV2Derivations } from "./derivations";
 import { escalationOf, viewerPerson } from "./view-model";
 import { newClientMsgId } from "../../lib/optimistic-cache";
 import { useInlineConsent } from "./use-inline-consent";
+// ⚠ **THE ONE CROSS-FEATURE READ ON THIS SURFACE, AND IT IS MOUNTED HERE ON
+// PURPOSE (F-316, 2026-09-05).** §7's rule is that the HOST fetches and the
+// panes render — `surface-info-panel.tsx` says "IT FETCHES NOTHING" in its own
+// docblock — so the series is read at the one place every other read on this
+// surface is read, and travels down as the STRUCTURAL `ActivityBin[]`. That is
+// what keeps §9 intact: `thread-activity.tsx` still imports nothing from
+// `features/workspaces`, and the structural type IS the designed seam rather
+// than a workaround for one. A channels-side copy of this fetcher was the
+// alternative and is exactly the second client the route already warns about.
+import { useOverviewSeries } from "@/features/workspaces/hooks/use-overview-series";
+import type { ActivityBin } from "./thread-activity";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelsV2Derivations } from "./derivations";
@@ -109,10 +120,19 @@ export interface ChannelSurfaceData extends ChannelsV2Derivations {
   answerEscalation: (escalationMessageId: string, optionIndex: number) => void;
   /** An answer is in flight — the double-submit guard, not a capability. */
   answerBusy: boolean;
+  /**
+   * THE INFO TAB'S ACTIVITY STRIP — real messages-per-day for THIS channel
+   * (F-316 closed, 2026-09-05). Empty until the host supplies a workspace
+   * segment, and empty is the honest answer: the strip renders NOTHING for it
+   * rather than 31 measured-looking zeroes.
+   */
+  activityBins: ActivityBin[];
+  activityLoading: boolean;
 }
 
 export function useChannelSurfaceData({
   workspaceId,
+  workspaceSlug,
   channel,
   currentUserId,
   openThreadId,
@@ -120,6 +140,14 @@ export function useChannelSurfaceData({
   onDoorbell,
 }: {
   workspaceId: string;
+  /**
+   * `{slug}-{publicId}` — the SEGMENT the `[workspaceSlug]` routes address by,
+   * which is the same value this tree already builds
+   * `/api/workspaces/${…}/members` from.
+   * ⚠ OPTIONAL, so every existing caller compiles and the surfaces that have no
+   * segment (the pop-out, the tests) simply do not ask for a series.
+   */
+  workspaceSlug?: string;
   /** `null` while the host is showing something other than a channel. */
   channel: Channel | null;
   currentUserId: string;
@@ -319,6 +347,27 @@ export function useChannelSurfaceData({
     [messages, escalationWrites.answer, channelId]
   );
 
+  // ⚠ THE ACTIVITY SERIES (F-316, closed 2026-09-05). It was a fixture on this
+  // page for a stated COST reason — 31 counted bins on every channel selection —
+  // and Samuel's 2026-09-05 ruling accepts that price with the query cache
+  // carrying it: `useApiQuery` keys on the PATH, so the channel id is part of
+  // the key, one series per channel is fetched once and re-selection is a cache
+  // hit rather than a re-count.
+  // ⚠ ENABLED ONLY WITH BOTH COORDINATES. No segment (the pop-out, a test) or no
+  // open channel means no read at all, rather than a workspace-wide series
+  // rendered under one channel's heading.
+  const activity = useOverviewSeries({
+    workspaceSegment: workspaceSlug ?? "",
+    metric: "messages",
+    channelId: channel?.id ?? null,
+    enabled: Boolean(workspaceSlug) && channel !== null,
+  });
+  // ⚠ STRUCTURAL, NOT `OverviewSeriesPoint`. The pane's type is `ActivityBin`
+  // (`date` + `count`) and the workspaces type is assignable to it, so the
+  // channels tree below this line never learns the other feature's shape.
+  const activityBins: ActivityBin[] = activity.days;
+  const activityLoading = activity.loading;
+
   // The thread view's outbound send box — `use-inline-consent.ts`.
   const { outboundByThread, decideOutbound, consentBusy } = useInlineConsent({
     messages,
@@ -342,6 +391,8 @@ export function useChannelSurfaceData({
     mentions,
     mentionsTruncated,
     mentionsLoading,
+    activityBins,
+    activityLoading,
     requests,
     agentSessions,
     refreshAgents,

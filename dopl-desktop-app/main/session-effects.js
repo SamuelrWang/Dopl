@@ -127,8 +127,27 @@ function terminalBody(extra) {
   return undefined;
 }
 
-function endLifecycle(reason) {
-  if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Turn limit reached' };
+// ⚠ A CAP END NAMES THE NUMBER IT HIT (2026-09-05, task 9(c); #1101 item 4c). "Turn limit
+// reached" told the operator a limit existed and not which one, and as of task 9(a) that is
+// genuinely ambiguous: the default is ISSUER-KEYED, so the same sentence means 200 on a session
+// the operator launched and 24 on one an agent launched, and a set cap means neither.
+// ⚠ THE NUMBER IS READ OFF THE ENDED RECORD, NEVER RE-DERIVED (#1179). `state.turnCap` is the cap
+// this session actually ran under — `session-engine.js › readCaps` resolved it at launch and
+// PREFERS the persisted value across a resume, so a session that crashed at turn 80 and came back
+// still reports the cap it was really counting against. Calling `settings.getTurnCap()` here
+// would answer today's setting for a default tier this session may not be in, and would name the
+// wrong number on the one card that exists to explain the end.
+// ⚠ AND IT DEGRADES TO THE OLD SENTENCE rather than to a wrong one. An unlimited session cannot
+// reach this branch at all (`UNLIMITED_TURN_CAP` is Infinity), but a legacy or hand-mangled
+// record with no finite cap still gets a true line instead of "reached (Infinity turns)".
+function turnCapBody(state) {
+  const n = state && state.turnCap;
+  if (!Number.isFinite(n) || n <= 0) return 'Turn limit reached';
+  return `Turn limit reached (${n} turn${n === 1 ? '' : 's'})`;
+}
+
+function endLifecycle(reason, state) {
+  if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: turnCapBody(state) };
   if (reason === 'cost_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Cost limit reached' };
   if (reason === 'operator') return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: 'Session ended' };
   // C-5: the 12h abandonment and the launch watchdog (C-4). ⚠ "and the LRU eviction" stood
@@ -146,7 +165,7 @@ function endLifecycle(reason) {
 // drained SDK tail from waking the session, and `settle` still denies every pending permission,
 // closes the iterator, aborts the query and drops the map entry.
 function endEffects(state, outcome, reason, summary) {
-  const lc = endLifecycle(reason);
+  const lc = endLifecycle(reason, state);
   return [{ type: 'abortQuery' }].concat(lc ? [lc] : [],
     [endedEmit(state, outcome, reason, summary),
       { type: 'settle', outcome: outcome, keepWindow: reason === 'abandoned' }]);

@@ -194,23 +194,6 @@ export interface HomeToolUsage {
 }
 
 /**
- * One recently-active thread. Ordered by `channel_tasks_activity.last_activity_at`
- * — "last SAID something in", not "last touched".
- */
-export interface HomeThreadRow {
-  id: string;
-  /** The container the thread lives in, so a cross-channel list can say WHERE. */
-  workspaceId: string;
-  channelName: string;
-  title: string;
-  /** `open` / `closed` — `channel_tasks.status`. */
-  status: string;
-  /** ISO instant, or `null` when the thread has never had activity. ⚠ NULL is
-   *  "never", not "now": a row with no activity sorts LAST and renders no time. */
-  lastActivityAt: string | null;
-}
-
-/**
  * One live agent session.
  *
  * 🔒 **PUBLIC COLUMNS ONLY, AND THE OMISSIONS ARE THE CONTRACT.** There is no
@@ -252,36 +235,6 @@ export interface HomeAgentRow {
 }
 
 /**
- * One thing blocked on the operator — a row of the **Waiting on you** panel.
- *
- * 🔒 **THREE KINDS, AND EACH IS A DIFFERENT TABLE ANSWERING A DIFFERENT
- * QUESTION** (`repository-attention.ts` holds the reads and their fences):
- *   - `consent`    — an agent drafted a send and cannot post until this person
- *                    decides (`channel_consent_requests`, `status='pending'`,
- *                    `operator_user_id = caller`). The strongest signal here.
- *   - `permission` — one of the CALLER'S OWN agents is sitting on a tool gate
- *                    (`channel_sessions.detail = 'permission'`). ⚠ The server
- *                    knows THAT, never WHAT: the prompt lives in the desktop.
- *   - `mention`    — a message tagged this person and they have not read it.
- *                    ⚠ An APPROXIMATION of "an agent asked you something":
- *                    there is no question KIND on `channel_messages`, so an
- *                    untagged question is invisible and no read recovers it.
- */
-export interface HomeAttentionItem {
-  id: string;
-  kind: "consent" | "permission" | "mention";
-  /** The container — the jump's channel. */
-  workspaceId: string;
-  channelName: string;
-  /** One line naming the thing, already clipped by the service. */
-  title: string;
-  /** Where clicking lands, or `null` to open the channel with no thread
-   *  raised. ⚠ `mention` is ALWAYS null: `channel_messages` has no `task_id`. */
-  threadId: string | null;
-  at: string;
-}
-
-/**
  * Payload of `GET /api/home/overview` — one round trip for a whole face.
  *
  * ⚠ **CROSS-CHANNEL, FULL STOP (Samuel, 2026-09-01).** The `scope` field and the
@@ -302,15 +255,9 @@ export interface HomeOverview {
   people: HomePersonUsage[];
   /** Descending by `calls`, capped. */
   tools: HomeToolUsage[];
-  /** Most recently active first, capped. ⚠ Window-scoped since 2026-09-01 — the
-   *  panel is "threads active recently" and `RECENT_THREAD_MINUTES` is its
-   *  window, which is NOT the page's range. */
-  threads: HomeThreadRow[];
   /** Live agent sessions, newest activity first, capped. ⚠ NOT window-scoped —
    *  a session row is live STATE, not an event. */
   agents: HomeAgentRow[];
-  /** Everything blocked on the caller, strongest kind first. */
-  attention: HomeAttentionItem[];
   /**
    * Rows the per-channel / per-person / per-tool SCANS covered.
    *
@@ -340,6 +287,4 @@ export const EMPTY_SERIES: readonly HomeSeriesPoint[] = Object.freeze([]);
 export const EMPTY_CHANNEL_USAGE: readonly HomeChannelUsage[] = Object.freeze([]);
 export const EMPTY_PERSON_USAGE: readonly HomePersonUsage[] = Object.freeze([]);
 export const EMPTY_TOOL_USAGE: readonly HomeToolUsage[] = Object.freeze([]);
-export const EMPTY_THREADS: readonly HomeThreadRow[] = Object.freeze([]);
 export const EMPTY_AGENTS: readonly HomeAgentRow[] = Object.freeze([]);
-export const EMPTY_ATTENTION: readonly HomeAttentionItem[] = Object.freeze([]);

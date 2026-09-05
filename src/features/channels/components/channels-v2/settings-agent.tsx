@@ -166,6 +166,7 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
         folder.bridge
           ? {
               label: folder.label,
+              custom: folder.custom,
               busy: folder.busy,
               onChoose: () => void folder.choose(),
               onClear: () => void folder.clear(),
@@ -205,10 +206,14 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
 
 /** The desktop-only folder half, or null outside the desktop shell. */
 export interface AgentFolderState {
-  /** Abbreviated label, or null for the desktop's default folder. ⚠ The bridge
-   *  only ever hands back an abbreviation — the absolute path never reaches
-   *  this page. */
+  /** THE EFFECTIVE working directory, abbreviated — where this channel's agent
+   *  actually runs, null only before the first answer lands. ⚠ The bridge only
+   *  ever hands back an abbreviation — the absolute path never reaches this page.
+   *  ⚠ It no longer doubles as "is a custom folder set"; that is `custom`, and the
+   *  conflation is what had this row printing "Sandbox (default)" over the null. */
   label: string | null;
+  /** A per-channel folder is set. Gates the reset control, and nothing else. */
+  custom: boolean;
   /** True while the native picker (or a reset) is in flight. */
   busy: boolean;
   onChoose: () => void;

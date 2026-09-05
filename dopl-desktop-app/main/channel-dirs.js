@@ -191,6 +191,13 @@ module.exports = {
   abbreviateHome, // same
   clearChannelDir,
   liveChannelDirLabel,
+  // ⚠ RE-EXPORTED 2026-09-05 (task 15), and it is the ANSWER to "show the actual effective
+  // working directory" rather than a widening of what may cross the bridge. It reads THROUGH
+  // `sessionSpawnDir`, so the label the operator sees and the cwd the agent gets cannot
+  // disagree; it is still §H-9 label-only, and the absolute path still never leaves main.
+  // Its counterpart `liveChannelDirLabel` stays the CUSTOM-vs-default signal — null there is
+  // "no per-channel dir", which is a different question from "what will it run in".
+  resolvedDirLabel,
   sessionSpawnDir,
   promptAndSetChannelDir,
 };

@@ -167,7 +167,7 @@ contextBridge.exposeInMainWorld('dopl', {
           // as when I press Launch — but it grants nothing and reaches no gate. Main validates it
           // against `session-model.js › MODEL_IDS` and an unknown value is simply ABSENT (the SDK
           // default), where an unknown value on either AXIS rejects the whole write.
-          model: asMode(preset && preset.model),
+          ...(preset && preset.model !== undefined ? { model: asMode(preset.model) } : {}), // ⚠ THE KEY IS FORWARDED ONLY WHEN THE CALLER SUPPLIED ONE — a SPREAD, not `asMode(...)` unconditionally (2026-09-05) — for the RUNTIME's exact reason one line below, on the axis the runtime copied it from. `''` is a REAL VALUE here too: it is the "Default" row, which CLEARS the channel's pick. Coercing an ABSENT field into it made every posture write from a surface that does not carry a model — an older SPA, a Permissions-only or Sends-only control, anything that predates this field — silently clear the pick, so the operator's chosen model stopped reaching the launch with nothing anywhere saying so. A launch sends NO model unless one was explicitly picked, and an absent key must never be how a pick disappears. Main's own-key test is the other half of the same rule (`main/channel-prefs.js › postureInto` carries the stored model through a write that does not mention it); the two must agree or the rule has a hole at whichever end forgets.
           ...(preset && preset.runtime !== undefined ? { runtime: asMode(preset.runtime) } : {}), // ⚠ 2026-08-31 (port wave D) — WHICH AGENT RUNTIME this channel's agents launch on. It rides this record for the MODEL's exact reason and with the model's exact discipline: same decision (what MY agent starts as when I press Launch), grants nothing, reaches no gate, and an id main does not have REGISTERED clears the key rather than being stored (`main/channel-runtime.js › normalizeRuntimeId`) — where an unknown value on either AXIS rejects the whole write. The read answers `runtime` + the frozen `runtimes` descriptor table, so the SPA feature-probes an OWN KEY exactly as it does for `model` and renders NO row on a desktop that has no runtime concept. ⚠ THE KEY IS FORWARDED ONLY WHEN THE CALLER SUPPLIED ONE — a SPREAD, not `asMode(...)` unconditionally — because `''` is a REAL VALUE here (reset to the default runtime) and coercing an absent field into it would make every posture write from a surface that does not know about runtimes silently clear the channel's pick. Main's own-key test is the other half of the same rule; the two must agree or the rule has a hole at whichever end forgets.
         },
       }),
@@ -204,6 +204,38 @@ contextBridge.exposeInMainWorld('dopl', {
   orchestratorDirect: {
     get: () => ipcRenderer.invoke('orchestrator:getDirectEnabled'),
     set: (e) => ipcRenderer.invoke('orchestrator:setDirectEnabled', { enabled: e === true }),
+  },
+
+  // ── ⚠ THE TURN CAP (2026-09-05, task 9b; Samuel's #1098 via #1101 4b, ruled in #1177) ──────
+  // The loop-safety brake, per machine: how many turns a session may take before it ends itself.
+  // ⚠ ITS OWN NAMESPACE FOR THE TOGGLES' REASON — it takes no channel. One operator, one Mac,
+  // one answer. Both members are FEATURE-PROBED, and an older main simply has no turn-cap
+  // concept, which the SPA reads as no row rather than as an inert one.
+  // ⚠ THIS BRIDGE IS THE ONLY WAY THE VALUE MOVES, and that is security content, not storage:
+  // `set(0)` REMOVES the brake, so a server-stored version of this key could be flipped by an
+  // agent holding the operator's own device token (§6) to give itself unbounded turns on this
+  // Mac. There is no route, no MCP op and no column for it, deliberately.
+  // ⚠ THREE STATES, AND THEY ARE NOT INTERCHANGEABLE — a control that flattens them lies:
+  //     cap === null → UNSET. The documented defaults apply, and WHICH one depends on the
+  //                    issuer: `operatorDefault` for a session the operator launched,
+  //                    `agentDefault` for one an agent launched.
+  //     cap === 0    → UNLIMITED. No cap at all, on either kind of session.
+  //     cap > 0      → that many turns, for EVERY session on this machine, either kind.
+  // ⚠ THE TWO DEFAULTS RIDE THE READ rather than being retyped in the SPA: they are declared once
+  // in `main/session-state.js` and the tree pins each to a single statement
+  // (`test/turn-cap-issuer.test.mjs`). Render them, do not restate them.
+  // ⚠ IT APPLIES TO NEW SESSIONS. A running session read its cap at launch and re-reads nothing;
+  // the label must say so, or the control claims an effect it does not have.
+  // ⚠ `set` ANSWERS MAIN'S OWN VALUE, never an echo — `{ok, cap, operatorDefault, agentDefault}`,
+  // with `cap` the value the store really holds either way. `ok:false` means the write did not
+  // take (an unrecognised value writes NOTHING), so an optimistic box reverts to `cap` rather
+  // than displaying a number nothing is enforcing.
+  // ⚠ `null` IS A REAL REQUEST AND MEANS "CLEAR IT" — the only way back to unset. An ABSENT
+  // argument is not: `set()` sends `null` explicitly, so there is no shape here that means
+  // "clear" by accident.
+  turnCap: {
+    get: () => ipcRenderer.invoke('settings:getTurnCap'),
+    set: (cap) => ipcRenderer.invoke('settings:setTurnCap', { cap: cap === undefined ? null : cap }),
   },
 
   // ── ⚠ SIGN IN TO CLAUDE CODE, FROM INSIDE THE APP (2026-08-25) ───────────────────────────

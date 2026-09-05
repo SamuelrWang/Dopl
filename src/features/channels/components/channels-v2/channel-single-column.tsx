@@ -134,6 +134,11 @@ export function ChannelSingleColumn({
           shape here would make the page appear to navigate. */}
       <PaneHeader
         channelName={channelName}
+        // ⚠ ONE FACE ONLY. The info face carries its own "Name" row now, so the
+        // crumb above it was the same string twice; every other face here —
+        // conversation included — still needs the crumb to say which room this
+        // is. In a thread the prop is ignored: that crumb is the way back out.
+        hideChannelCrumb={view === "info"}
         threadTitle={threadTitle}
         favorited={favorited}
         chrome="page"

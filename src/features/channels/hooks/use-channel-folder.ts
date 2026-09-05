@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getDesktopChannelFolders,
+  type ChannelFolderAnswer,
   type DoplChannelsBridge,
 } from "@/shared/lib/desktop";
 
@@ -14,8 +15,24 @@ export interface ChannelFolderState {
    * only exists in the desktop shell.
    */
   bridge: DoplChannelsBridge | null;
-  /** The channel's abbreviated folder label; null = the desktop default folder. */
+  /**
+   * THE EFFECTIVE WORKING DIRECTORY, abbreviated — where this channel's agent will
+   * actually run. `null` only before the first answer lands, and forever in a plain
+   * browser; on the desktop it is always a real directory (2026-09-05, task 15).
+   *
+   * ⚠ IT NO LONGER MEANS "IS A CUSTOM FOLDER SET" — that is {@link custom}. This
+   * field carried both facts, and the consumer had to invent a name for the null:
+   * the Settings row printed "Sandbox (default)", naming a place that does not
+   * exist. Main answers where the agent really runs; nothing here guesses.
+   */
   label: string | null;
+  /**
+   * A PER-CHANNEL FOLDER IS SET, as opposed to the desktop's own default. It gates
+   * the reset control, which is the only question that ever needed the old null.
+   * ⚠ False until the first answer lands — failing toward "no reset offered" is the
+   * correct direction while the answer is outstanding.
+   */
+  custom: boolean;
   /** True while the native picker (or a reset) is in flight. */
   busy: boolean;
   /** Open the native picker and adopt the chosen folder's label. */
@@ -50,7 +67,10 @@ export interface ChannelFolderState {
  */
 export function useChannelFolder(channelId: string): ChannelFolderState {
   const [bridge, setBridge] = useState<DoplChannelsBridge | null>(null);
-  const [label, setLabel] = useState<string | null>(null);
+  /** ⚠ ONE PIECE OF STATE FOR THE PAIR, never two: `label` and `custom` are two
+   *  halves of one answer main computes together, and splitting them into two
+   *  setters is how a row comes to show one folder's name over the other's flag. */
+  const [answer, setAnswer] = useState<ChannelFolderAnswer | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Feature-detect after mount (window-only) so SSR and first client render agree.
@@ -65,10 +85,10 @@ export function useChannelFolder(channelId: string): ChannelFolderState {
     bridge
       .getFolderLabel(channelId)
       .then((next) => {
-        if (alive) setLabel(next);
+        if (alive) setAnswer(next);
       })
       .catch(() => {
-        if (alive) setLabel(null);
+        if (alive) setAnswer(null);
       });
     return () => {
       alive = false;
@@ -80,9 +100,9 @@ export function useChannelFolder(channelId: string): ChannelFolderState {
     setBusy(true);
     try {
       const next = await bridge.chooseFolder(channelId);
-      setLabel(next);
+      setAnswer(next);
     } catch {
-      // Cancelled / failed picker — leave the shown label as-is.
+      // Cancelled / failed picker — leave the shown answer as-is.
     } finally {
       setBusy(false);
     }
@@ -92,14 +112,25 @@ export function useChannelFolder(channelId: string): ChannelFolderState {
     if (!bridge || busy) return;
     setBusy(true);
     try {
-      await bridge.clearFolder(channelId);
-      setLabel(null);
+      // ⚠ ADOPT THE ANSWER, NEVER ASSUME IT. This set `label` to null and called it
+      // done, which is exactly the assumption that made the row print an invented
+      // name: a reset lands the channel on a REAL default, and main is the only
+      // thing that knows which one (`~/Downloads`, or the homedir when that is
+      // missing). The reply now says so; taking it is how the row stays true.
+      setAnswer(await bridge.clearFolder(channelId));
     } catch {
-      // No-op: keep the current label if the reset failed.
+      // No-op: keep the current answer if the reset failed.
     } finally {
       setBusy(false);
     }
   }, [bridge, busy, channelId]);
 
-  return { bridge, label, busy, choose, clear };
+  return {
+    bridge,
+    label: answer?.label ?? null,
+    custom: answer?.custom ?? false,
+    busy,
+    choose,
+    clear,
+  };
 }

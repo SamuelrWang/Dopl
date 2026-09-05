@@ -59,9 +59,7 @@ const OVERVIEW: HomeOverview = {
   channels: [],
   people: [],
   tools: [],
-  threads: [],
   agents: [],
-  attention: [],
   scanned: 12,
   truncated: false,
 };

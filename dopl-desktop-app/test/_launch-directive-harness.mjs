@@ -49,6 +49,7 @@ export const CALLS_SRC = readFileSync(join(MAIN, "launch-directive-calls.js"), "
 // `launch-directive-wire.js`. What IS stubbed is `session-engine.js` (the live registry) and
 // `agent-names.js` (an electron-store), which is the same seam `./targeting` is stubbed at.
 export const AGENT_OPS_SRC = readFileSync(join(MAIN, "directive-agent-ops.js"), "utf8");
+export const IDENTITY_COMMIT_SRC = readFileSync(join(MAIN, "agent-identity-commit.js"), "utf8");
 // ⚠ `spawn` MOVED OUT OF `launch-directives.js` ON 2026-09-01 (T24, the §1 cap) and is
 // evaluated here the same way `directive-agent-ops.js` is: through the SAME stub `require`, so
 // the containment inputs every case in this suite asserts are the real ones.
@@ -107,6 +108,7 @@ export function boot(over = {}) {
   const logged = [];
   const controls = []; // every `session-engine.controlByTask` call the lane made
   const names = [];    // every `agent-names` write the lane made
+  const flushes = [];  // every `session-summary.touch()` the commit wrapper announced
   const modes = [];    // every `session-engine.setModeByTask` call the lane made (2026-09-01)
   const resolves = [];
   const stub = (id) => {
@@ -264,8 +266,27 @@ export function boot(over = {}) {
           return cfg.renameAnswer !== undefined ? cfg.renameAnswer : String(name);
         },
         clear: (agentId) => { names.push({ op: "clear", agentId }); },
+        describe: (agentId, value) => {
+          names.push({ op: "describe", agentId, value });
+          return cfg.describeAnswer !== undefined ? cfg.describeAnswer : String(value);
+        },
       };
     }
+    // ⚠ THE COMMIT WRAPPER, REAL (2026-09-05). The rename lane stopped calling `agent-names`
+    // directly and went behind `agent-identity-commit.js › commitRename`, which does the store
+    // write AND the `session-summary.touch()` flush. The harness was never taught the module, so
+    // the lazy require threw inside the lane, the throw was swallowed as a refusal, and every
+    // RENAME case went green-to-red against an empty `names`. Evaluated with the SAME stub, so
+    // the write still lands on the `./agent-names` recorder below and the flush lands on
+    // `flushes` — which is what makes "write PLUS flush" a claim these tests can see.
+    if (id === "./agent-identity-commit") {
+      const m = { exports: {} };
+      new Function("require", "module", "exports", IDENTITY_COMMIT_SRC)(stub, m, m.exports);
+      return m.exports;
+    }
+    // The flush half of that wrapper, stubbed at its seam: the real one is an electron-store
+    // push, driven for real in the desktop's own summary tests.
+    if (id === "./session-summary") return { touch: () => { flushes.push(true); } };
     if (id === "./diag") return { diag: (...p) => logged.push(p.join(" ")) };
     throw new Error(`unexpected require: ${id}`);
   };
@@ -281,7 +302,7 @@ export function boot(over = {}) {
   // ⚠ THE FRAME IS RECORDED BEFORE IT IS HANDED IN, so the claim stub above can grant the row it
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
-  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names, modes };
+  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names, flushes, modes };
 }
 
 /**

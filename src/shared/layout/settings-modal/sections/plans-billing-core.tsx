@@ -276,7 +276,7 @@ function BillingSummary({
       {/* Outside the plan branch on purpose: credits are metered on EVERY plan,
           unlike the object cap (capped free workspaces only). */}
       <UsageMeter
-        label="MCP credits"
+        label="Credits"
         used={ent.credits.used}
         limit={ent.credits.limit}
         over={ent.credits.remaining === 0 && ent.credits.limit > 0}

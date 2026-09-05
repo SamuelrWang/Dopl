@@ -55,6 +55,16 @@ const TRUE_BOTTOM = SCROLL_HEIGHT - CLIENT_HEIGHT;
 
 const tops = new WeakMap<Element, number>();
 const scrollIntoView = vi.fn();
+/**
+ * ⚠ THE FOLLOW IS A `scrollTo` CALL SINCE 2026-09-04 (Samuel's smooth-scroll ruling), and jsdom's
+ * own `Element.prototype.scrollTo` is a silent no-op that never moves the stubbed `scrollTop`. So
+ * the follow cases assert the CALL, exactly as the mention cases already assert `scrollIntoView` —
+ * which is what this file's header says these tests are for.
+ * ⚠ AND THE `top` IS NOT WORTH ASSERTING: jsdom's `getBoundingClientRect` is all zeros, so the
+ * row-start offset the real rule computes collapses to the current position here. What IS
+ * meaningful, and what these cases pin, is WHETHER a follow happened and that it is SMOOTH.
+ */
+const scrollTo = vi.fn();
 
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
@@ -75,11 +85,14 @@ beforeAll(() => {
     },
   });
   Element.prototype.scrollIntoView = scrollIntoView;
+  Element.prototype.scrollTo = scrollTo as unknown as Element["scrollTo"];
 });
 
 beforeEach(() => {
   scrollIntoView.mockReset();
   scrollIntoView.mockImplementation(() => {});
+  scrollTo.mockReset();
+  scrollTo.mockImplementation(() => {});
 });
 afterEach(cleanup);
 
@@ -154,31 +167,45 @@ describe("the transcript sticks to the bottom", () => {
     expect(scroller.scrollTop).toBe(SCROLL_HEIGHT);
   });
 
-  it("follows a new message while the reader is AT the bottom", () => {
+  it("follows a new message SMOOTHLY while the reader is AT the bottom", () => {
+    // ⚠ IT IS A SMOOTH `scrollTo` NOW, NOT A `scrollTop` JUMP (Samuel, 2026-09-04) — and the
+    // target is the new message's START, so a message taller than the pane opens on its sender
+    // pill instead of on its last line. See `use-stick-to-bottom.ts` for the whole rule.
     const { scroller, rerender } = mount();
     userScrollsTo(scroller, TRUE_BOTTOM); // gap 0 — still pinned
-    scroller.scrollTop = 0; // ...and something moved it, so a follow is visible
     rerender({ rows: rowsOf(messages(4)) });
-    expect(scroller.scrollTop).toBe(SCROLL_HEIGHT);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo.mock.calls[0][0]).toMatchObject({ behavior: "smooth" });
   });
 
   it("does NOT yank a reader who has scrolled up into history", () => {
     // ⚠ THE ONE RULE THAT IS NOT A RESTORATION. The retired page followed
     // unconditionally, so a message arriving mid-scrollback threw the reader
     // back to the end of the conversation.
+    // ⚠ AND IT MOVES NOTHING AT ALL — no jump AND no animation. A smooth scroll the reader did
+    // not ask for is the same failure, more politely.
     const { scroller, rerender } = mount();
     userScrollsTo(scroller, 0);
     rerender({ rows: rowsOf(messages(4)) });
     expect(scroller.scrollTop).toBe(0);
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
   it("still follows a reader hovering just inside the slack", () => {
     // Drifted a line, not reading history: still following the conversation.
     const { scroller, rerender } = mount();
     userScrollsTo(scroller, TRUE_BOTTOM - 32);
-    scroller.scrollTop = 0;
     rerender({ rows: rowsOf(messages(4)) });
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it("lands the FIRST paint at the bottom instantly, with no animation", () => {
+    // ⚠ THE `landed` GUARD (2026-09-04). Rule 1 says a view switch lands at the BOTTOM; without
+    // this, opening a channel whose newest message is taller than the pane would animate to that
+    // message's START and leave the reader above the newest words in the room.
+    const { scroller } = mount();
     expect(scroller.scrollTop).toBe(SCROLL_HEIGHT);
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
   it("jumps to the bottom on a THREAD switch, however far up the reader was", () => {

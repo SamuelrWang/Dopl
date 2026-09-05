@@ -261,7 +261,10 @@ function bootIpc() {
     }
     if (id === "./channel-dirs") {
       return {
+        // A channel with NO per-channel dir — so `custom` is false and the folder ops still
+        // answer a real effective directory, which is the whole of task 15 (2026-09-05).
         liveChannelDirLabel: () => null,
+        resolvedDirLabel: () => "~/Downloads",
         promptAndSetChannelDir: async () => ({ cancelled: true }),
         clearChannelDir: () => {},
       };
@@ -283,6 +286,26 @@ function bootIpc() {
     // resolve; this section drives none of its ops, and it is built with the SAME stub so a
     // typo in one of its registration paths still surfaces here.
     if (id === "./session-ipc-ops") return ops;
+    // ⚠ THE TURN-CAP PAIR'S BACKEND (2026-09-05, task 9b). `channel-dir-ipc.js` requires
+    // `./settings` at module scope for `settings:getTurnCap` / `settings:setTurnCap`. This
+    // section drives neither op, so the stub only has to RESOLVE — but it answers the real
+    // shapes (a tri-state cap, a `{ok, cap}` write) rather than empty objects, so a case that
+    // ever does reach one fails on the answer instead of on a missing member.
+    // ⚠ AND THE TWO DECLARED DEFAULTS the same pair ships over the wire. Read off the shipping
+    // source, never restated here — `session-state.js` is where they are DECLARED and
+    // `test/turn-cap-issuer.test.mjs` pins each to one statement; a literal in this harness
+    // would be the second copy that rule exists to prevent.
+    if (id === "./session-state") {
+      const src = M("session-state.js");
+      const num = (name) => Number(new RegExp(`const ${name} = (\\d+);`).exec(src)[1]);
+      return { OPERATOR_TURN_CAP: num("OPERATOR_TURN_CAP"), DEFAULT_TURN_CAP: num("DEFAULT_TURN_CAP") };
+    }
+    if (id === "./settings") return {
+      readTurnCapSetting: () => null,
+      normalizeTurnCapInput: (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.floor(Number(v)) : null),
+      setTurnCap: () => ({ ok: true, cap: null }),
+      getTurnCap: () => 24,
+    };
     throw new Error("unexpected require: " + id);
   };
   // The REAL guard block, sliced (the module is electron-free, so this is a plain evaluate).

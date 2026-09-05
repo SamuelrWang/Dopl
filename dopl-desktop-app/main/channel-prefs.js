@@ -192,14 +192,35 @@ function effectivePosture(map, channelId) {
 function postureInto(map, channelId, raw) {
   const preset = normalizePreset(raw);
   if (!map || !channelId || !preset) return { ok: false };
+  // ── ⚠ THE MODEL IS CARRIED THROUGH A WRITE THAT DOES NOT MENTION IT (2026-09-05) ───────────
+  // THE KEY'S PRESENCE IS THE SIGNAL, NOT ITS VALUE — the RUNTIME's rule
+  // (`channel-dir-ipc.js › channels:setLaunchPosture` branches on `hasOwnProperty`), applied on
+  // the axis the runtime copied it FROM. `''` is a real supplied value here (the "Default" row:
+  // clear the pick, the SDK's own model), and so is an unrecognised id, which validates SOFT to
+  // the same absence — both are the caller SAYING something and both still clear. What must not
+  // clear is a write that never carried the field: this record is rewritten whole on every
+  // posture change, so a Permissions or Sends pick from a surface with no model concept dropped
+  // the operator's stored model on the floor, and the next launch quietly ran the SDK default
+  // with the Settings row still reading Opus. Absent now means UNCHANGED (INVARIANTS §11 —
+  // UNKNOWN is not EMPTY), which is what makes "launches send no model unless one was explicitly
+  // picked" a statement about the PICK rather than about who happened to write last.
+  const model = Object.prototype.hasOwnProperty.call(raw, 'model')
+    ? preset.model
+    : (readPostureFrom(map, channelId) || {}).model;
   // ⚠ WRITTEN FIELD BY FIELD, never `{...preset}`: this is the boundary that guarantees nothing
   // but the validated members is ever stored, and a spread would carry whatever `normalizePreset`
   // grew next. `model` is omitted when absent (see above) so the stored shape is unchanged for
   // every channel that has not chosen one.
-  map[channelId] = preset.model
-    ? { tools: preset.tools, messages: preset.messages, model: preset.model }
+  // ⚠ AND THE CARRIED VALUE IS RE-VALIDATED BY CONSTRUCTION: it can only have come from
+  // `readPostureFrom`, which is `normalizePreset` on the stored record, so nothing reaches the
+  // store that did not pass the same frozen id list on its way in.
+  const next = model
+    ? { tools: preset.tools, messages: preset.messages, model: model }
     : { tools: preset.tools, messages: preset.messages };
-  return { ok: true, preset: preset };
+  map[channelId] = next;
+  // ⚠ THE ANSWER IS WHAT WAS STORED, not what was asked for — a caller that omitted the model is
+  // told which one survived, rather than being handed back its own silence to log.
+  return { ok: true, preset: next };
 }
 
 // ─── END CHANNEL-PREFS-VALIDATE ─────

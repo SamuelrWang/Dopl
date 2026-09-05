@@ -324,11 +324,23 @@ test("a RECREATE lands at the cap; an ordinary park+resume keeps the stamp", () 
   // survives going idle. `startResume` rebuilds the spec from the DURABLE RECORD — which does not
   // carry this field — so a crash recreate comes back at the cap, exactly as it comes back with a
   // fail-restrictive profile. Neither needs a rule; this pins that neither grew one.
-  const park = read("session-park.js");
+  // ⚠ THIS GUARD READS CODE, NOT PROSE (2026-09-05, first terminal run). It was written as a raw
+  // regex over the file text, so the 9a comments that EXPLAIN why the recreate passes no
+  // `launchDepth` reddened the very invariant they document. Comments are stripped before the
+  // assertion, and the record slice is bounded by the next top-level function rather than by a
+  // marker string that no longer exists — an `indexOf` miss returned -1 and silently widened the
+  // slice to most of the file, so this was pinning far more than `baseRecord`.
+  const stripComments = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const park = stripComments(read("session-park.js"));
   assert.ok(!/launchDepth/.test(park), "the recreate must not resurrect a depth it cannot verify");
   assert.match(park, /function resumeParked\(s\)/, "the in-place resume still exists");
   const io = read("session-io.js");
-  const record = io.slice(io.indexOf("function baseRecord(s) {"), io.indexOf("// The canUseTool bridge"));
+  const from = io.indexOf("function baseRecord(s) {");
+  const to = io.indexOf("\nfunction ", from + 1);
+  assert.ok(from >= 0 && to > from, "baseRecord is still a top-level function in session-io.js");
+  const record = stripComments(io.slice(from, to));
   assert.ok(record.length > 0 && !/launchDepth/.test(record),
     "the durable projection carries no launch depth — that is WHY a recreate is capped");
 });

@@ -36,7 +36,11 @@ import { authorMarker } from "@/features/agent-templates/components/template-pic
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { cn } from "@/shared/lib/utils";
-import { AGENT_MODEL_OPTIONS } from "../../lib/agent-models";
+import {
+  AGENT_MODEL_DEFAULT,
+  AGENT_MODEL_OPTIONS,
+  agentModelLabel,
+} from "../../lib/agent-models";
 import { IconButton } from "./bits";
 import {
   FIELD_INPUT,
@@ -70,6 +74,18 @@ export interface LaunchTemplateOption {
   id: string;
   name: string;
   marker: string | null;
+  /**
+   * THE TEMPLATE'S OWN DEFAULT MODEL, and it is here to be NAMED rather than to be sent
+   * (2026-09-05). Nothing on this panel writes it: the launch already sends no model unless the
+   * operator picked one (`use-agent-launch.ts` — `AGENT_MODEL_DEFAULT` becomes `undefined`, never
+   * an id), and main's chain reads the template itself. What the panel could not do until now is
+   * SAY which model that silence resolves to, and a template's model OUTRANKS the channel's pick
+   * (`main/session-launch-op.js`'s precedence), so a label computed without it would name the
+   * channel's model on a launch that will not use it.
+   * ⚠ OPTIONAL, AND ABSENT IS "THIS BUILD WAS NOT TOLD" rather than "no model" — the row then
+   * names the next link down instead of claiming the SDK default (INVARIANTS §11).
+   */
+  model?: string | null;
 }
 
 /** The blank-agent option's value. ⚠ `""` because `SelectMenu` is `<T extends string>`; it maps
@@ -94,6 +110,7 @@ export function AgentLaunchPanelView({
   runtimes = EMPTY_RUNTIMES,
   channelRuntime = "",
   defaultRuntime = "",
+  channelModel = "",
 }: {
   panel: AgentLaunchPanel;
   /** The channel's templates. ⚠ READ-ONLY here — this surface authors none. */
@@ -108,6 +125,13 @@ export function AgentLaunchPanelView({
   /** The channel's durable pick, `''` for the default adapter. */
   channelRuntime?: string;
   defaultRuntime?: string;
+  /**
+   * THE CHANNEL'S DURABLE MODEL PICK, `''` when it has none (2026-09-05, task 12b).
+   * ⚠ IT IS FOR THE EMPTY ROW'S LABEL AND FOR NOTHING ELSE. It is never sent and never
+   * pre-selected: pre-selecting it would turn the channel's setting into a per-spawn pick that
+   * then stops following the setting, which is the failure the durable record exists to end.
+   */
+  channelModel?: string;
 }) {
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(descriptionRef, panel.description);
@@ -126,6 +150,36 @@ export function AgentLaunchPanelView({
   // goes inert — and a control that vanishes with no reason is one the operator works around.
   // The launch surface is where they can still choose differently, so it is where it is said.
   const stopWarning = runtimes.length ? interruptRefusal(effective) : null;
+  /**
+   * WHAT THE EMPTY MODEL ROW ACTUALLY RESOLVES TO — read off the chain, never a hardcoded label
+   * (2026-09-05, Samuel's #1076(b): "read it from wherever the machine really resolves it").
+   *
+   * ⚠ THE ROW'S `''` HAS THE RUNTIME ROW'S MEANING, NOT THE SETTINGS ROW'S, and that is the
+   * defect this replaces. Both rows above already state it: on the DURABLE record `''` clears the
+   * channel's pick, while HERE it means the operator expressed no per-spawn preference and
+   * `main/session-launch-op.js`'s chain falls through — template, then the channel, then the
+   * CLI's own. Labelling that "Default" claimed the launch would take the SDK default on a
+   * channel that has chosen Opus, which is a row naming something the launch will not do.
+   *
+   * ⚠ THE ORDER IS MAIN'S, LINK FOR LINK. A template's model outranks the channel's pick, so a
+   * label that read the channel first would be wrong on exactly the launches a template is for.
+   * ⚠ AND THE LAST LINK STAYS UNNAMED ON PURPOSE. When neither link carries a model the answer is
+   * the bundled CLI's own choice, and this build genuinely cannot say which it is —
+   * `main/session-model.js` states that naming it needs a LIVE query, which by construction there
+   * is not one of on a panel where nothing has started. "Default" is then the honest word: the
+   * same fact the Settings row's own Default states, on a row with no setting to contradict.
+   */
+  const modelOptions = useMemo(() => {
+    const fromTemplate = templates.find((t) => t.id === panel.templateId)?.model;
+    const label = fromTemplate
+      ? `Template default (${agentModelLabel(fromTemplate)})`
+      : channelModel
+        ? `Channel default (${agentModelLabel(channelModel)})`
+        : "Default";
+    return AGENT_MODEL_OPTIONS.map((option) =>
+      option.value === AGENT_MODEL_DEFAULT ? { ...option, label } : option
+    );
+  }, [templates, panel.templateId, channelModel]);
   const templateOptions = [
     // ⚠ FIRST, AND NOT A PLACEHOLDER. A blank agent is a real configuration — it is what the Bot
     // icon spawned in one click for a year — so it is an option, not an empty state.
@@ -230,11 +284,13 @@ export function AgentLaunchPanelView({
         <PanelField label="Model:" as="div" center line={false}>
           {/* ⚠ `AGENT_MODEL_OPTIONS`, NOT `agentModelOptionsFor`. That one widens the roster with
             whatever a LIVE agent is already running; nothing is running yet, so the list here is
-            the plain vocabulary and "Default" means the launch chain decides
-            (`session-launch-op.js`'s precedence block). */}
+            the plain vocabulary and the empty row means the launch chain decides
+            (`session-launch-op.js`'s precedence block). ⚠ SINCE 2026-09-05 that row NAMES what
+            the chain resolves to rather than reading "Default" over a channel that has picked —
+            see `modelOptions` above, which is the roster with that ONE label re-worded. */}
           <SelectMenu
             value={panel.model}
-            options={AGENT_MODEL_OPTIONS}
+            options={modelOptions}
             onChange={panel.setModel}
             ariaLabel="Agent model"
             variant="raisedField"
@@ -321,6 +377,10 @@ export function ComposerLaunch({
         id: t.id,
         name: t.name,
         marker: authorMarker(t, currentUserId, memberNames),
+        // ⚠ CARRIED FOR THE MODEL ROW'S LABEL, not for the launch — the template's model reaches
+        // the spawn through MAIN's own chain, and sending it from here would make this panel a
+        // second authority on a precedence it only describes.
+        model: t.model,
       })),
     [templates, currentUserId, memberNames]
   );
@@ -344,6 +404,15 @@ export function ComposerLaunch({
             runtimes={posture.runtimeSupported ? posture.runtimes : EMPTY_RUNTIMES}
             channelRuntime={posture.runtime}
             defaultRuntime={posture.defaultRuntime}
+            // ⚠ GATED ON THE CAPABILITY PROBE, exactly as the runtime family above is. On a
+            // desktop with no model concept `posture.model` is null and stays null, and the row
+            // then reads plain "Default" — which is the truth there — rather than naming a
+            // channel pick this build cannot see.
+            // ⚠ THE MODEL IS ON THE PRESET, NOT HOISTED (2026-09-05). `runtime` is lifted onto
+            // the state object; `model` is deliberately not — `permission-modes.ts ›
+            // PermissionPreset.model` is where it lives, and `modelSupported` is its detector.
+            // This line read `posture.model` and did not compile.
+            channelModel={posture.modelSupported ? posture.posture.model ?? "" : ""}
           />
         </div>
       </div>

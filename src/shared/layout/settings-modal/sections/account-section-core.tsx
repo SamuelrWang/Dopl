@@ -20,8 +20,22 @@ const PROFILE_PATH = "/api/user/profile";
  * email/avatar. Next-free core: everything below the form is platform-specific
  * (web deletes in place via Supabase + `next/navigation`; desktop signs out
  * over the bridge and links out), so it arrives as the `dangerZone` slot.
+ *
+ * ⚠ **`machineSection` IS THE SAME SLOT ARGUMENT FOR A SECOND REASON (2026-09-05):
+ * SOME SETTINGS BELONG TO A MACHINE, AND THE WEB HAS NONE.** The desktop binding
+ * fills it with per-machine controls held in `electron-store` behind
+ * `appWindowOnly` IPC — deliberately not workspace columns, so no server-side
+ * actor can reach them. Web passes nothing and renders nothing. ⚠ It sits ABOVE
+ * `dangerZone` because the danger zone is by convention last.
  */
-export function AccountSectionCore({ dangerZone }: { dangerZone?: React.ReactNode }) {
+export function AccountSectionCore({
+  machineSection,
+  dangerZone,
+}: {
+  /** Desktop-only per-machine controls. Absent on web. */
+  machineSection?: React.ReactNode;
+  dangerZone?: React.ReactNode;
+}) {
   const queryClient = useQueryClient();
   const query = useApiQuery<ProfileData>(PROFILE_PATH);
   const profile = query.data ?? null;
@@ -112,6 +126,7 @@ export function AccountSectionCore({ dangerZone }: { dangerZone?: React.ReactNod
         </button>
       </div>
 
+      {machineSection}
       {dangerZone}
     </SectionShell>
   );

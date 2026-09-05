@@ -67,7 +67,7 @@ import type { ChannelMember } from "../types";
  *
  * ⚠ **`name` IS THE AGENT ID, and that is the server's own reading of this
  * column** — `service-writes-metadata-recipient.ts › liveAgentHandles` and
- * `service-wake-verdict-resilience.ts › freshChannelSessions` both map
+ * `service-wake-verdict-resilience.ts › liveChannelSessions` both map
  * `row.name` into `agentId`. Spelling it differently here is how the picker
  * comes to offer a token the resolver does not accept.
  */

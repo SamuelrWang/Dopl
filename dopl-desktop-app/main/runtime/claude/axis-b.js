@@ -90,13 +90,18 @@ function axisBTools(_session) {
 // routing shape; answers a CallToolResult either way. ⚠ THE ANSWER IS MAIN'S OWN STORED
 // VALUE, never an echo — `sessions:rename`'s rule, kept here for the same reason.
 function applyRename(target, value) {
-  const names = require('../../agent-names'); // lazy: opens an electron-store on require
   // ⚠ THE WRITE ITSELF MOVED TO `agent-self-ops.js › applyRenameTo` ON 2026-09-01,
   // when the external `rename_agent` DIRECTIVE became its third caller. What
   // stayed here is the SENTENCE — the split every wire value on this lane takes,
   // and for the same reason: prose belongs to the reader, and a rule shared by
   // three surfaces belongs to one function.
-  const res = agentOps.applyRenameTo(names, target, value);
+  // ⚠ AND IT COMMITS THROUGH `agent-identity-commit.js` SINCE 2026-09-05, which writes the store
+  // AND flushes the summary — the flush is what carries the new name to the server and so to
+  // every other member's @-picker. All THREE rename paths had the same missing flush; fixing only
+  // the one Samuel happened to use would have left the other two broken in a way nobody would
+  // notice for weeks. That module's header carries the argument, and the lazy require (the store
+  // opens an electron-store) moved in there with the write.
+  const res = require('../../agent-identity-commit').commitRename(target, value);
   if (!res.ok) {
     return agentOps.refuse('Name refused: 1-60 visible characters on one line; control, zero-width and bidi characters are rejected, not stripped.');
   }

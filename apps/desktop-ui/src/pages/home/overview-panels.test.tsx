@@ -9,10 +9,15 @@ import { HOME_OVERVIEW, renderHome, routes } from "./home-test-harness";
  * the same day after Samuel's live review).
  *
  * ⚠ WHAT THIS SUITE OWNS is the STRUCTURE Samuel asked for, not the arithmetic:
- * the page OPENS on this face, it renders exactly ONE of each section, the three
- * activity panels sit where the stat tiles used to, the agent board groups by
- * channel, and every activity row jumps. The tallies are pinned server-side in
- * `src/features/home/server/service-overview.test.ts`.
+ * the page OPENS on this face, it renders exactly ONE of each section, the agent
+ * board groups by channel, and every activity row jumps. The tallies are pinned
+ * server-side in `src/features/home/server/service-overview.test.ts`.
+ *
+ * ⚠ **`Waiting on you` AND `Recent threads` WERE CUT ON 2026-09-05** (Samuel:
+ * Activity carries running agents and nothing else). Their cases are gone and
+ * two REGRESSIONS stand in their place — the headings must not come back, and
+ * the Activity panel must FOLD AWAY rather than stand empty, which is what those
+ * two cards used to hide.
  *
  * ⚠ THE CHANNEL SURFACE IS STUBBED, like every other suite on this page.
  */
@@ -38,10 +43,12 @@ const overviewCalls = () =>
     call.path.startsWith("/api/home/overview?")
   );
 
-/** A PANEL by its heading — the face has exactly two, `Activity` and `Usage`,
- *  each a dense grid of bento cards (Samuel's layout ruling, 2026-09-01). ⚠ A
- *  panel exists from the FIRST paint (it renders its own ghost), so awaiting one
- *  proves the face is up and nothing more. */
+/** A PANEL by its heading (Samuel's layout ruling, 2026-09-01).
+ *  ⚠ **`Activity` IS NO LONGER A FIRST-PAINT GATE.** `Usage` and `All channels`
+ *  still draw their own ghost, but Activity lost its skeleton with its two cards
+ *  on 2026-09-05 and now renders only once the payload has landed AND an agent is
+ *  running — so awaiting it proves DATA, not that the face is up. Use
+ *  {@link loadedFace} for the latter. */
 const panel = (name: string) => screen.findByRole("region", { name });
 
 /** A CARD inside a panel, by its heading. */
@@ -107,12 +114,7 @@ describe("home overview face", () => {
     for (const region of ["Activity", "Usage", "All channels"]) {
       expect(screen.getAllByRole("region", { name: region })).toHaveLength(1);
     }
-    for (const heading of [
-      "Waiting on you",
-      "Recent threads",
-      "Active agents",
-      "Credits used",
-    ]) {
+    for (const heading of ["Active agents", "Credits used"]) {
       expect(screen.getAllByRole("heading", { name: heading })).toHaveLength(1);
     }
     // The rails, too — these were the visibly doubled ones.
@@ -130,7 +132,7 @@ describe("home overview face", () => {
    *  other half of the duplicate render. */
   it("never sends a workspaceId, and asks for the month", async () => {
     renderHome();
-    await panel("Activity");
+    await loadedFace();
     await waitFor(() => expect(overviewCalls().length).toBeGreaterThan(0));
 
     expect(
@@ -145,7 +147,7 @@ describe("home overview face", () => {
    *  it is cross-channel, so its pane token carries no row. */
   it("does NOT re-read when the left list's selection moves", async () => {
     renderHome();
-    await panel("Activity");
+    await loadedFace();
     await waitFor(() => expect(overviewCalls()).toHaveLength(1));
 
     fireEvent.click(await screen.findByText("Link out"));
@@ -158,7 +160,7 @@ describe("home overview face", () => {
   /** ⚠ THE STAT TILES ARE GONE ENTIRELY (Samuel) — not hidden, not collapsed. */
   it("shows no stat tiles", async () => {
     renderHome();
-    await panel("Activity");
+    await loadedFace();
 
     for (const label of ["Agent sessions", "Tokens", "Active channels"]) {
       expect(screen.queryByText(label)).toBeNull();
@@ -168,31 +170,42 @@ describe("home overview face", () => {
   });
 
   /**
-   * 🔒 **THE THREE KINDS ARE MARKED, NOT MERGED.** "An agent cannot send until
-   * you decide", "an agent is on a tool gate" and "somebody tagged you" are
-   * different obligations, and the server orders them that way.
+   * 🔒 **THE TWO PANES ARE GONE ENTIRELY (Samuel, 2026-09-05)** — not hidden and
+   * not collapsed, exactly as the stat tiles above. Activity carries running
+   * agents and nothing else.
    */
-  it("marks each kind in Waiting on you", async () => {
+  it("shows no Waiting on you and no Recent threads", async () => {
     renderHome();
     await loadedFace();
-    const waiting = await card("Waiting on you");
 
-    expect(within(waiting).getByText("Approve")).toBeInTheDocument();
-    expect(within(waiting).getByText("Permission")).toBeInTheDocument();
-    expect(within(waiting).getByText("Mention")).toBeInTheDocument();
-    expect(
-      within(waiting).getByText("Send the renewal summary")
-    ).toBeInTheDocument();
+    for (const heading of ["Waiting on you", "Recent threads"]) {
+      expect(screen.queryByRole("heading", { name: heading })).toBeNull();
+    }
   });
 
-  it("lists recent threads and marks closed ones rather than hiding them", async () => {
+  /**
+   * 🔒 **AN EMPTY ACTIVITY PANEL DOES NOT RENDER AT ALL** (Samuel's ruling on
+   * the cut, 2026-09-05). The board was already `null` for an empty lane set;
+   * with the two cards gone there is nothing else in the panel, so the guard is
+   * on the `SectionPanel` itself. ⚠ The alternative — a heading over an empty box
+   * — is the exact defect the first Overview attempt was rejected for, and this
+   * is the test that stops it coming back the next time something is added here.
+   */
+  it("hides the whole Activity panel when no agent is running", async () => {
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
+      path.split("?")[0] === "/api/home/overview"
+        ? Promise.resolve(ok({ ...HOME_OVERVIEW, agents: [] }))
+        : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
+    );
     renderHome();
     await loadedFace();
-    const threads = await card("Recent threads");
 
-    expect(within(threads).getByText("Q3 renewals")).toBeInTheDocument();
-    expect(within(threads).getByText("Pricing review")).toBeInTheDocument();
-    expect(within(threads).getByText("Closed")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Activity" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Active agents" })).toBeNull();
+    // ⚠ AND THE REST OF THE FACE IS UNTOUCHED — the panel folds away on its own,
+    // it does not take the page with it.
+    expect(await panel("Usage")).toBeInTheDocument();
+    expect(await panel("All channels")).toBeInTheDocument();
   });
 
   /**
@@ -274,19 +287,6 @@ describe("home overview face", () => {
     ).toBeInTheDocument();
   });
 
-  it("jumps from a recent thread to that thread", async () => {
-    renderHome();
-    await loadedFace();
-    const threads = await card("Recent threads");
-
-    fireEvent.click(within(threads).getByRole("button", { name: /Q3 renewals/ }));
-
-    expect(await screen.findByTestId("channel-surface")).toHaveAttribute(
-      "data-thread",
-      "task-1"
-    );
-  });
-
   /**
    * ⚠ A jump into a container the left list does not hold RAISES NO THREAD —
    * `use-activity-jump.ts` keys the held thread by ROW, and a row that is not in
@@ -306,23 +306,6 @@ describe("home overview face", () => {
     );
   });
 
-  /** ⚠ A mention has no thread — `channel_messages` has no `task_id` — so the
-   *  jump degrades to opening the channel rather than inventing one. */
-  it("opens the channel with no thread for a mention", async () => {
-    renderHome();
-    await loadedFace();
-    const waiting = await card("Waiting on you");
-
-    fireEvent.click(
-      within(waiting).getByRole("button", { name: /confirm the numbers/ })
-    );
-
-    expect(await screen.findByTestId("channel-surface")).toHaveAttribute(
-      "data-thread",
-      ""
-    );
-  });
-
   /**
    * The capacity bar is a PERIOD TOTAL with its denominator and its reset date,
    * read from the shared billing endpoint — no second credits read.
@@ -334,7 +317,7 @@ describe("home overview face", () => {
     // ⚠ THE BILLING METER'S OWN FORMAT — `UsageMeter` prints `used / limit`.
     // This face uses that component, so it prints what the billing pane prints.
     expect(await within(credits).findByText("320 / 500")).toBeInTheDocument();
-    expect(within(credits).getByText("MCP credits")).toBeInTheDocument();
+    expect(within(credits).getByText("Credits")).toBeInTheDocument();
     expect(within(credits).getByText("180 left")).toBeInTheDocument();
     // ⚠ THE BILLING PANE'S OWN LINE AND ITS OWN FORMATTER (`formatDate`), so
     // the assertion is on the SENTENCE rather than on a date string this suite
@@ -359,7 +342,7 @@ describe("home overview face", () => {
     await loadedFace();
     const usage = await panel("Usage");
 
-    expect(within(usage).getByText("MCP credits")).toBeInTheDocument();
+    expect(within(usage).getByText("Credits")).toBeInTheDocument();
     expect(
       within(usage).getByRole("heading", { name: "Credits used" })
     ).toBeInTheDocument();

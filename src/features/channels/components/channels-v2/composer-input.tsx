@@ -167,7 +167,17 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
         // the composer over what it sits under; Shift+Enter still breaks the line and it scrolls.
         // ⚠ `items-center` ON THE ROW ABOVE IS WHAT ALIGNS THE ARROW to the field — the channel
         // composer used `items-start`, which is why the two buttons sat at different heights.
-        className="h-[30px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-[4px] text-lead leading-[22px] text-text-primary outline-none placeholder:text-text-muted"
+        // ⚠ `pointer-coarse:text-[16px]` IS THE NO-ZOOM RULE, NOT A TYPE CHOICE (Samuel,
+        // 2026-09-04). iOS Safari auto-zooms the page on focusing ANY field whose computed
+        // font-size is under 16px, and `text-lead` is 13px — so tapping this box zoomed the
+        // whole app and dragged the panelling with it. 16px at focus size is the ONLY thing
+        // that turns that off; `maximum-scale`/`user-scalable=no` would do it by disabling
+        // pinch-zoom for everyone, which is an accessibility regression, not a fix.
+        // ⚠ THE BOX DOES NOT MOVE: `leading-[22px]` + `py-[4px]` still sum to the row's
+        // `h-[30px]`, so 16px text lands in the same 30px object the send button is aligned
+        // to. ⚠ COARSE POINTERS ONLY — a mouse never triggers the zoom, so the desktop face
+        // keeps `text-lead` exactly as drawn.
+        className="h-[30px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-[4px] text-lead leading-[22px] text-text-primary outline-none pointer-coarse:text-[16px] placeholder:text-text-muted"
       />
       {/* ⚠ THE ARROW IS IN THIS ROW ONLY WHERE THIS ROW IS THE WHOLE BOX. Main's card has a
           toolbar row under this one and the arrow lives at the end of it (Samuel, live review

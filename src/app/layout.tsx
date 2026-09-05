@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Geist_Mono, Space_Grotesk, JetBrains_Mono, Newsreader, Inter } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/shared/api/query-provider";
@@ -92,6 +92,31 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [OG_CARD],
   },
+};
+
+/**
+ * THE VIEWPORT, AND IT EXISTS FOR ONE LINE OF IT (Samuel, 2026-09-04).
+ *
+ * `width`/`initialScale` are Next's own defaults restated only because declaring the export
+ * replaces them — nothing about the desktop or marketing render changes.
+ *
+ * ⚠ `interactiveWidget: "resizes-content"` IS THE ASK: when the soft keyboard opens it must
+ * SHRINK THE LAYOUT VIEWPORT and push the page up by exactly its own height, rather than
+ * overlaying the page (the `resizes-visual` default) and leaving the browser to scroll the
+ * content up on its own. The app shell is `position: fixed; inset: 0`
+ * (`app-shell.module.css › .root`), so a shrinking layout viewport is what re-lays the shell
+ * above the keyboard — the composer rides up with it and the panelling stays whole.
+ * ⚠ NOTHING COMPENSATES IN JS, deliberately. No `visualViewport` listener, no keyboard-height
+ * padding, no scroll offset: any of those add movement ON TOP of the browser's own and that
+ * doubled shift is what tore the layout. The declaration is the whole mechanism.
+ * ⚠ NO `maximumScale` / `userScalable: false` here. Focus-zoom is killed at the FIELD, by
+ * giving it a ≥16px font size on coarse pointers (`channels-v2/composer-input.tsx`); killing
+ * it here would take pinch-zoom away from every reader on every page.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

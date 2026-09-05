@@ -67,8 +67,25 @@ let lifecycle = { onLaunched: null, onEnded: null };
 let selfUserId = null; // operator's own user id (item 1: the self avatar); set by channel-listener
 function setSelfIdentity(id) { selfUserId = id || null; }
 
-function readCaps() {
-  return settings ? { turnCap: settings.getTurnCap(), idleMs: settings.getIdleTtlMs(), costCapUsd: settings.getCostCapUsd() } : {};
+// ⚠ TAKES THE SPEC, FOR TWO REASONS, AND BOTH ARE ABOUT THE TURN CAP (2026-09-05, task 9a).
+// (1) ISSUER: `spec.launchDepth` keys which documented default applies when the operator has set
+// no cap — 0 is the New Agent button (200), anything else, absent included, is the agent number
+// (24). Forwarded, never invented, exactly as the launch funnel forwards it.
+// (2) REHYDRATE: a recreate / crash resume passes NO depth (the guard is explicit that a recreate
+// must not resurrect a depth it cannot verify), so without this a 200-turn operator session that
+// crashed at turn 80 would come back capped at 24 with 80 already spent and end on its first
+// `result`. `spec.turnCap` is the cap that session was launched under, persisted beside the turn
+// and cost counters it bounds (FIX #9's argument, one field wider), and it wins here for the same
+// reason those two do. A fresh launch carries none and reads the setting.
+function readCaps(spec) {
+  if (!settings) return {};
+  const s = spec || {};
+  const resumed = Number(s.turnCap);
+  return {
+    turnCap: Number.isFinite(resumed) && resumed > 0 ? Math.floor(resumed) : settings.getTurnCap(s.launchDepth),
+    idleMs: settings.getIdleTtlMs(),
+    costCapUsd: settings.getCostCapUsd(),
+  };
 }
 
 // Rebuild the tray after a session is hidden / reopened / settled. Lazy-required so the engine holds no top-level tray dependency (tray requires nothing back).
@@ -269,7 +286,7 @@ async function startSession(spec, rt) {
   const startModes = armedModes && (!spec.parkedShell || operatorArmed)
     ? { toolMode: armedModes.tools, messageMode: armedModes.messages }
     : {};
-  const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(), ...startModes });
+  const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(spec), ...startModes });
   // ⚠ THE WINDOWLESS MESSAGE FLOOR, AT THE ONE CONSTRUCTION SITE (2026-08-22, F-236's last hole).
   // Both LAUNCH lanes already derive their message axis through `channel-prefs.js ›
   // windowlessMessageMode`, so for them this is a no-op. What it fixes is every shape that hands

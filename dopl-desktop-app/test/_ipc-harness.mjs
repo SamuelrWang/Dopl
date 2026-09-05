@@ -18,12 +18,17 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const req = createRequire(import.meta.url);
 // `main/agent-id.js` is pure (crypto only), so the boundary suites drive the REAL charset
 // predicate rather than a fake that would accept ids main refuses.
 const realAgentId = req(join(HERE, "..", "main", "agent-id.js"));
+// ⚠ REAL FOR THE SAME REASON (2026-09-05, the turn-cap pair): `main/session-state.js` is pure (no
+// requires of its own) and it DECLARES the two documented caps the read hands the SPA. A fake
+// would let the refusal shape below assert numbers main does not actually answer with.
+const realState = req(join(HERE, "..", "main", "session-state.js"));
 export const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 export const SRC = M("channel-dir-ipc.js");
 export const OPS_SRC = M("session-ipc-ops.js");
@@ -86,8 +91,23 @@ export function bootIpc({ blocked = false } = {}) {
   const reopens = [];
   const popouts = [];
   const approvals = [];
+  // ⚠ NON-NULL ON PURPOSE (2026-09-05), for `getOrchestratorLaunch: () => true`'s stated reason:
+  // the refusal cases assert a rejected sender reads `cap: null`, and a fake that started at null
+  // would pass them whether the binding worked or not.
+  let turnCap = 7;
   const stubRequire = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
+    // ⚠ ONE BRANCH PER MODULE ID, AND THAT IS A RULE NOW (2026-09-05). This stub carried THREE
+    // duplicated ids — `./channel-prefs`, `./agent-id` and `./channel-runtime` — each declared
+    // twice with DIFFERENT members. A `stubRequire` is a lookup chain, so the FIRST branch always
+    // won and the second was dead code that read like coverage: the live `./channel-prefs` was
+    // missing `approveTemplate`, `isTemplateApproved`, `getLaunchModel`, `getOrchestratorDirect`,
+    // `getAgentChain` and `setAgentChain` outright. Every handler behind those would have THROWN
+    // on a success path, and the suites never noticed because they drive almost only refusals —
+    // the fail-OPEN shape, where a guard passes for a reason unrelated to what it claims to pin.
+    // ⚠ Merged as a strict SUPERSET, so no case's inputs changed. Where the two copies disagreed
+    // (`launchStartModes` answered a real pair here and `{}` there) the REAL pair survives: a
+    // fake that answers less than main does is how a success path passes without being exercised.
     if (id === "./channel-prefs") {
       // ⚠ THE ARM'S THREE ENTRIES ARE GONE (2026-08-20): `getPermissionPreset`,
       // `armPermissionPreset`, `clearPermissionPreset`. What remains is the DURABLE posture
@@ -98,25 +118,55 @@ export function bootIpc({ blocked = false } = {}) {
         getLaunchPosture: () => ({ tools: "bypass", messages: "auto_both" }),
         setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
+        getLaunchModel: () => "",
         getAutoSend: () => false,
         setAutoSend: (channelId, on) => { writes.push({ channelId, on }); return true; },
+        // ⚠ 2026-08-31, the per-channel AGENT-CHAINING setting. `get` answers TRUE for the reason
+        // the orchestrator getter does: a fake answering the fail-closed value would pass the
+        // refusal cases whether the binding worked or not.
+        getAgentChain: () => true,
+        setAgentChain: (channelId, on) => { writes.push({ channelId, agentChain: on }); return on === true; },
         // ⚠ 2026-08-22, the ORCHESTRATOR LAUNCH TOGGLE. The getter answers TRUE deliberately:
         // the refusal cases assert a rejected sender reads `{enabled:false}`, and a fake that
         // answered false would pass those whether the binding worked or not. `set` records into
         // the SAME `writes` ledger as every other writer here, for the reason stated above.
         getOrchestratorLaunch: () => true,
         setOrchestratorLaunch: (on) => { writes.push({ orchestratorLaunch: on }); return on === true; },
+        // 2026-08-31, the PRIVATE DIRECT lane's own consent — same shape, separate grant. It was
+        // absent from the live stub entirely, so `orchestrator:getDirectEnabled` would have
+        // thrown on any bound call.
+        getOrchestratorDirect: () => true,
+        setOrchestratorDirect: (on) => { writes.push({ orchestratorDirect: on }); return on === true; },
+        // The MACHINE-LOCAL template approval store. `approveTemplate` records and answers true;
+        // `isTemplateApproved` answers false, which is the default-deny state a fresh Mac is in.
+        approveTemplate: (templateId) => { approvals.push(templateId); return true; },
+        isTemplateApproved: () => false,
       };
     }
     // 2026-08-31 (port wave D) — the channel's RUNTIME pick and the adapter registry. They ride
     // the EXISTING posture pair rather than growing a fourth op (see `channel-dir-ipc.js`), so
     // there is no new row in the OPS table; what they need here is only to exist, because the
     // handler reads them on the SUCCESS path these cases must never reach.
-    if (id === "./channel-runtime") return { getChannelRuntime: () => "", setChannelRuntime: () => "" };
+    // ⚠ `normalizeRuntimeId` is the REAL character rule, merged in from the dead second copy:
+    // answering `''` is the DEFAULT adapter, which is what every launch resolved to before the
+    // port, so the specs the suites assert stay byte-identical to the ones that shipped.
+    if (id === "./channel-runtime") {
+      return {
+        getChannelRuntime: () => "",
+        setChannelRuntime: () => "",
+        normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""),
+      };
+    }
     if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude" };
     if (id === "./channel-dirs") {
       return {
         liveChannelDirLabel: () => "~/Downloads/secret-repo",
+        // ⚠ THE EFFECTIVE-DIR HALF (2026-09-05, task 15). The folder ops answer a PAIR now —
+        // `{label, custom}` — and `custom` is derived from `liveChannelDirLabel` being non-null.
+        // ⚠ A DISTINCT VALUE FROM THE ONE ABOVE, deliberately: they are two different questions
+        // (where it RUNS vs is a per-channel dir SET), and a stub answering the same string for
+        // both would let a handler that read the wrong one pass.
+        resolvedDirLabel: () => "~/Downloads/effective-repo",
         promptAndSetChannelDir: async () => { dialogs.push(1); },
         clearChannelDir: () => { writes.push({ cleared: true }); },
       };
@@ -134,40 +184,55 @@ export function bootIpc({ blocked = false } = {}) {
       return { openThreadWindow: (t) => { popouts.push(t); return { ok: true }; } };
     }
     if (id === "./diag") return { diag: () => {} };
+    // ⚠ 2026-09-05, THE TURN-CAP PAIR. `main/settings.js` opens an electron-store, so it is
+    // stubbed at its seam like `./channel-prefs` — and the getter answers a NON-NULL cap
+    // deliberately, for `getOrchestratorLaunch`'s stated reason: the refusal cases assert a
+    // rejected sender reads `cap: null`, and a fake that answered null would pass them whether
+    // the binding worked or not. `setTurnCap` records into the SAME `writes` ledger as every
+    // other writer here, so a forged write cannot pass unseen.
+    // `normalizeTurnCapInput` is the REAL rule, sliced from the shipped source: the boundary
+    // compares against it, and a permissive fake would let it report `ok` on a value main
+    // refuses to write.
+    if (id === "./settings") {
+      return {
+        readTurnCapSetting: () => turnCap,
+        setTurnCap: (v) => {
+          writes.push({ turnCap: v });
+          const w = realNormalizeTurnCapInput(v);
+          if (w === null) turnCap = null;
+          else if (w !== undefined) turnCap = w;
+          return turnCap;
+        },
+        normalizeTurnCapInput: realNormalizeTurnCapInput,
+      };
+    }
+    if (id === "./session-state") return realState;
     // ⚠ THE REAL GUARDS, NOT A FAKE — `isAppWindowSender` IS what is under test, and `isUuid`
     // is the anti-probe gate every op leans on. The split half is built with this SAME stub,
     // so both register into one `handlers` map and both are driven by every case below.
     if (id === "./ipc-guards") return realGuards;
-    // The REAL id predicate, for the reason stated where `realAgentId` is loaded: a
-    // permissive fake would accept ids `session-launch-op.js` refuses.
-    if (id === "./agent-id") return realAgentId;
-    // ⚠ THE REAL ID PREDICATE, on `ipc-guards`' terms. `asAgentId` is the third coordinate's
-    // boundary clamp (2026-08-21) and a permissive fake would let every op below accept an
-    // agent id shape main really refuses.
+    // The REAL id predicate, for the reason stated where `realAgentId` is loaded: a permissive
+    // fake would accept ids `session-launch-op.js` refuses. ⚠ It is also the third coordinate's
+    // boundary clamp (`asAgentId`, 2026-08-21), which is why a fake here would let every op
+    // below accept an agent id shape main really refuses. (Both sentences stood as two identical
+    // branches until 2026-09-05; the reasons are merged, the branch is one.)
     if (id === "./agent-id") return realAgentId;
     if (id === "./session-launch-op") return launchOpModule;
     if (id === "./session-delete-op") return deleteOpModule;
-    // The MACHINE-LOCAL template approval store. `approveTemplate` records and answers true;
-    // `isTemplateApproved` answers false, which is the default-deny state a fresh Mac is in.
-    if (id === "./channel-prefs") {
-      return {
-        approveTemplate: (id2) => { approvals.push(id2); return true; },
-        isTemplateApproved: () => false,
-        launchStartModes: () => ({}),
-        getLaunchModel: () => '',
-      };
-    }
     if (id === "./session-ipc-ops") return opsModule;
-    // 2026-08-31 (port wave D) — WHICH RUNTIME this channel's agents launch on. ⚠ Stubbed at its
-    // seam like `./channel-prefs` above (the real module opens an electron-store), and answering
-    // `''` is the DEFAULT adapter, which is what every launch resolved to before the port — so
-    // the specs this file asserts stay byte-identical to the ones that shipped.
-    if (id === "./channel-runtime") {
-      return { normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""), getChannelRuntime: () => "" };
-    }
+    // ⚠ A SECOND `./channel-prefs` AND A SECOND `./channel-runtime` STOOD HERE AND ARE DELETED
+    // (2026-09-05). Both were UNREACHABLE — the branches above match first — so the members only
+    // they declared (the template-approval pair, `normalizeRuntimeId`) were never in the stub at
+    // all, and every handler that reads one would have thrown the moment a case drove its success
+    // path. They are merged into the single branch for each id above, which is why this file now
+    // holds exactly one per module.
     throw new Error("unexpected require: " + id);
   };
   const realGuards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
+  // Sliced rather than required, because `main/settings.js` cannot be loaded here (electron-store).
+  const realNormalizeTurnCapInput = new Function(
+    `${fnOf(M("settings.js"), "normalizeTurnCapInput")}\n return normalizeTurnCapInput;`
+  )();
   const launchOpModule = evalModule(LAUNCH_OP_SRC, stubRequire);
   const deleteOpModule = evalModule(DELETE_OP_SRC, stubRequire);
   const opsModule = evalModule(OPS_SRC, stubRequire);

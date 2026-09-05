@@ -47,15 +47,7 @@
  */
 
 import { useRef, useState } from "react";
-import {
-  AtSign,
-  Bot,
-  MessageSquarePlus,
-  Mic,
-  Paperclip,
-  Smile,
-  Zap,
-} from "lucide-react";
+import { AtSign, Bot, MessageSquarePlus, Mic, Smile } from "lucide-react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./bits";
@@ -71,6 +63,7 @@ import { TemplateApprovalDialog } from "@/features/agent-templates/components/te
 import { ComposerLaunch } from "./composer-launch-panel";
 import { useAgentLaunch, useLaunchRunner } from "./use-agent-launch";
 import { useAutoGrow } from "./use-auto-grow";
+import { useDictation } from "./use-dictation";
 import { composerSubmitState } from "./composer-submit-state";
 import { useThreadWrites } from "../../hooks/use-thread-writes";
 import { newClientMsgId } from "../../lib/optimistic-cache";
@@ -162,6 +155,24 @@ export function ChannelsV2Composer({
 
   // THE @-PICKER — `use-composer-mentions.ts` (the §1 split at the cap, 2026-08-27).
   const mentions = useComposerMentions({ draft, setDraft, members, sessions: liveAgents, currentUserId });
+
+  /**
+   * DICTATION — the Mic glyph's engine (`use-dictation.ts`, which owns every rule about it).
+   *
+   * ⚠ IT ONLY EVER APPENDS, WHICH IS WHAT MAKES "the text stays" TRUE BY CONSTRUCTION. There is no
+   * stop path anywhere that clears the draft, because nothing here can: the hook hands over
+   * finished phrases and this closure adds them to the end of whatever the operator has.
+   * ⚠ THE FUNCTIONAL UPDATE IS LOAD-BEARING. A phrase can land while the operator is still typing,
+   * and reading `draft` from this render's closure would overwrite the characters typed since.
+   * ⚠ ONE SPACE, NEVER TWO, and none at all into an empty box — dictation should read as if it
+   * were typed there.
+   */
+  const dictation = useDictation((text) =>
+    setDraft((prev) => {
+      const kept = prev.replace(/\s+$/, "");
+      return kept.length === 0 ? text : `${kept} ${text}`;
+    })
+  );
 
   const body = draft.trim();
   /**
@@ -298,6 +309,34 @@ export function ChannelsV2Composer({
         </div>
 
         <div className="flex flex-col gap-2">
+          {/* WHO THIS DRAFT REACHES (2026-09-02, slice B10, Samuel's ruling) — `→ @handle`,
+              `→ <the default responder>` or `→ nobody`, restated on every keystroke.
+              ⚠ IT IS THE CARD'S FIRST ROW, HARD RIGHT (Samuel, 2026-09-04: top-left first, then
+              corrected to TOP-RIGHT — the correction is the call). It sat UNDER the toolbar, at
+              the card's bottom-left, from the day it shipped. The right edge is where this line
+              belongs because it is a REPORT rather than a control: the bottom-left of the card is
+              the toolbar's territory — glyphs the operator clicks, reading left to right — and a
+              status line sitting first in that run read as another one of them.
+              ⚠ THE ALIGNMENT IS THE COMPONENT'S OWN (`composer-recipients.tsx`, `justify-end`),
+              not a wrapper here. This file states WHERE the line sits in the column and nothing
+              about how it draws, which is the same rule the send arrow's slot follows.
+              ⚠ ON THE SAME `!panelOpen` CONDITION THE CHAT FIELD ITSELF FOLLOWS. With a panel up
+              there is no chat draft on screen, and a line reporting the reach of an invisible
+              one would describe a message the operator is not writing — the same misfire the `@`
+              glyph was gated for on 2026-08-28. A PANEL states its own addressing
+              (`composer-request-panel.tsx › AgentRequestPanel`). */}
+          {!panelOpen && (
+            <ComposerRecipients
+              body={body}
+              members={members}
+              sessions={liveAgents}
+              currentUserId={currentUserId}
+              defaultResponderAgentName={defaultResponderAgentName}
+              recentAgentIds={recentAgentIds}
+              threadOtherParty={threadOtherParty}
+            />
+          )}
+
           {/* ⚠ THE CHAT DRAFT IS NOT ON SCREEN WHILE THE PANEL IS. One edit
               surface at a time (Samuel, 2026-08-26) — the request's own
               description field is inside the panel, and a second box under it
@@ -405,10 +444,37 @@ export function ChannelsV2Composer({
             {/* ⚠ NO "EXPAND COMPOSER" GLYPH — DELETED (Samuel, live review 2026-08-28). It
                 carried no `onClick` at all, so nothing became unreachable and there is no
                 expanded editor to reach; §5 forbade it standing there in the first place. */}
-            <IconButton icon={Zap} label="Shortcuts" size={15} className="h-6 w-6" />
+            {/* ⚠ SHORTCUTS (Zap) AND ATTACH (Paperclip) ARE DELETED, NOT HIDDEN (Samuel,
+                2026-09-04) — the same ruling and the same reason as the expand glyph above them:
+                neither ever carried an `onClick`, so nothing became unreachable, and §5's
+                interaction-completeness rule forbids a control that cannot act. ⚠ THE MUTATION
+                THIS COMMENT EXISTS TO STOP is somebody "completing" the toolbar by putting one
+                back on the way to wiring it. Bring the glyph back WITH its feature, not before.
+                ⚠ EMOJI IS STILL INERT AND STILL HERE: it was not in the ruling, and deleting a
+                third control on my own initiative is a product decision nobody made. */}
             <IconButton icon={Smile} label="Emoji" size={15} className="h-6 w-6" />
-            <IconButton icon={Paperclip} label="Attach file" size={15} className="h-6 w-6" />
-            <IconButton icon={Mic} label="Record audio" size={15} className="h-6 w-6" />
+            {/* DICTATION — the browser's own `SpeechRecognition`, no key and no dependency
+                (`use-dictation.ts`, which carries the whole rationale).
+                ⚠ ABSENT WHERE THE BROWSER HAS NO ENGINE (Firefox), never disabled — the
+                feature-detection rule every affordance in this family follows.
+                ⚠ RED IS "CAPTURING RIGHT NOW", set from the engine's own `onstart`, so a refused
+                microphone leaves the glyph exactly as it was.
+                ⚠ THE LABEL SAYS WHICH WAY THE CLICK GOES, because the glyph does not change. */}
+            {dictation.supported && (
+              <IconButton
+                icon={Mic}
+                label={dictation.listening ? "Stop dictation" : "Dictate"}
+                size={15}
+                active={dictation.listening}
+                onClick={dictation.toggle}
+                className={cn(
+                  "h-6 w-6",
+                  // ⚠ BOTH HALVES: the hover would otherwise repaint the red on the way to the
+                  // second click, which is the click that STOPS it.
+                  dictation.listening && "text-danger hover:text-danger"
+                )}
+              />
+            )}
             <span className="flex-1" />
             {/* ⚠ ONLY WHEN THERE IS SOMETHING TO DISCARD (Samuel, 2026-08-27). It rendered
                 always, which put a dead control beside the send button on an empty composer. */}
@@ -450,25 +516,6 @@ export function ChannelsV2Composer({
               <ComposerSend onSend={submit} sendDisabled={!canSend} sendTitle={hint} sendLabel={sendState.label} />
             )}
           </div>
-
-          {/* WHO THIS DRAFT REACHES (2026-09-02, slice B10, Samuel's ruling) — `→ @handle`,
-              `→ <the default responder>` or `→ nobody`, restated on every keystroke.
-              ⚠ ON THE SAME `!panelOpen` CONDITION THE CHAT FIELD ITSELF FOLLOWS. With a panel up
-              there is no chat draft on screen, and a line reporting the reach of an invisible
-              one would describe a message the operator is not writing — the same misfire the `@`
-              glyph was gated for on 2026-08-28. A PANEL states its own addressing
-              (`composer-request-panel.tsx › AgentRequestPanel`). */}
-          {!panelOpen && (
-            <ComposerRecipients
-              body={body}
-              members={members}
-              sessions={liveAgents}
-              currentUserId={currentUserId}
-              defaultResponderAgentName={defaultResponderAgentName}
-              recentAgentIds={recentAgentIds}
-              threadOtherParty={threadOtherParty}
-            />
-          )}
 
           {/* ⚠ A REFUSED LAUNCH IS SAID OUT LOUD, HERE, because nothing else
               will: main answering `{ok:false}` changes nothing on its side, so

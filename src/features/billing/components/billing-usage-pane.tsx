@@ -11,7 +11,7 @@ import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
  * payload (`useWorkspaceEntitlements`) — no second endpoint, no write, no
  * Stripe; legible to every member, unlike the admin-gated Billing tab.
  *
- * Order = order things run out: MCP credits (only meter every plan has),
+ * Order = order things run out: Credits (only meter every plan has),
  * ontology objects (capped only on multi-member free; paid says "Unlimited"
  * rather than an empty track), then members/seats and chat window as lines.
  */
@@ -35,7 +35,7 @@ export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
 
         <UsageMeter
           className="mt-4"
-          label="MCP credits"
+          label="Credits"
           used={ent.credits.used}
           limit={ent.credits.limit}
           over={creditsExhausted}

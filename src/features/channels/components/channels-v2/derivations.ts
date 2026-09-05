@@ -21,7 +21,7 @@ import { useMemo } from "react";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { agentIndexFromKey, agentIndexKey, indexAgents, indexMembers } from "./view-model";
 import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
-import { recentAgentPosters } from "../../lib/agent-post-stamp";
+import { recentAgentsAddressedBy } from "../../lib/agent-post-stamp";
 import { channelRows, threadRows } from "./view-model-rows";
 import { sidebarThreads } from "./view-model-requested";
 import type { AuthorIndex } from "./view-model";
@@ -162,15 +162,23 @@ export function useChannelsV2Derivations({
   );
 
   /**
-   * **WHO SPOKE HERE LAST — RR3 ARM 3's INPUT, DERIVED ONCE FOR THE PANE**
-   * (2026-09-04).
+   * **WHO THIS PERSON LAST ADDRESSED — RR3 ARM 3's INPUT, DERIVED ONCE FOR THE
+   * PANE** (2026-09-04).
+   *
+   * ⚠ **IT WAS "who spoke here last" FOR ONE DAY, AND THAT WAS THE BUG** (Samuel):
+   * an agent addressing another agent re-pointed the room's default responder, so
+   * the recipient line wandered with nothing the operator did. The rule is
+   * stickiness per PERSON now — the agent YOU last tagged — and it reads only
+   * rows this user authored whose tag the user typed themselves
+   * (`lib/agent-post-stamp.ts › isAuthorTypedAgentTag`: recipients present,
+   * `wake_reason` absent, so the server's OWN picks are not evidence).
    *
    * ⚠ **THE SAME FUNCTION THE SERVER'S ARM RUNS**
-   * (`lib/agent-post-stamp.ts › recentAgentPosters`), over the transcript this
-   * page has already read rather than a second fetch. The server asks it of a
-   * bounded `channel_messages` query; both sort by `seq` and both drop threaded
-   * rows, so the composer's recipient line names the agent the stored verdict
-   * will name.
+   * (`lib/agent-post-stamp.ts › recentAgentsAddressedBy`), over the transcript
+   * this page has already read rather than a second fetch. The server asks it of a
+   * bounded `channel_messages` query keyed on the same author; both sort by `seq`
+   * and both drop threaded rows, so the composer's recipient line names the agent
+   * the stored verdict will name.
    *
    * ⚠ **THE CLOCK IS THE HELPER'S OWN DEFAULT, NOT A READ AT THIS CALL SITE** —
    * a component may not read `Date.now()` during render and a model may, which
@@ -182,8 +190,11 @@ export function useChannelsV2Derivations({
    * itself.
    */
   const recentAgentIds = useMemo(
-    () => recentAgentPosters(messages, { windowMs: RESILIENCE_WINDOW_MS }),
-    [messages]
+    () =>
+      recentAgentsAddressedBy(currentUserId, messages, {
+        windowMs: RESILIENCE_WINDOW_MS,
+      }),
+    [currentUserId, messages]
   );
 
   return { index, openThread, treeThreads, rows, recentAgentIds };

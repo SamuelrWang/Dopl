@@ -273,7 +273,7 @@ describe("thread view's tab row", () => {
     expect(selected("Info")).toBe(true);
     // And the body that landed is the THREAD's info, not the channel's.
     expect(screen.getByText("Thread info")).toBeTruthy();
-    expect(screen.queryByText("Main info")).toBeNull();
+    expect(screen.queryByText("Channel info")).toBeNull();
   });
 
   it("leaves a NON-threads selection alone when a thread opens", () => {
@@ -287,7 +287,7 @@ describe("thread view's tab row", () => {
 describe("the Info tab's two scopes", () => {
   it("renders the CHANNEL's info in channel view", () => {
     renderPanel();
-    expect(screen.getByText("Main info")).toBeTruthy();
+    expect(screen.getByText("Channel info")).toBeTruthy();
     expect(screen.queryByText("Thread info")).toBeNull();
   });
 
@@ -297,7 +297,7 @@ describe("the Info tab's two scopes", () => {
     expect(screen.getByText("Alpha audit")).toBeTruthy();
     // ⚠ The channel's own sections must be GONE, not merely pushed down: this
     // column is about one exchange while a thread is open.
-    expect(screen.queryByText("Main info")).toBeNull();
+    expect(screen.queryByText("Channel info")).toBeNull();
     expect(screen.queryByText("Thread activity")).toBeNull();
   });
 });

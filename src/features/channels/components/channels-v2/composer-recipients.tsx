@@ -124,7 +124,11 @@ export function ComposerRecipients({
     <p
       role="status"
       aria-label="Recipients"
-      className="flex min-w-0 items-center gap-1 px-0.5 text-caption text-text-muted"
+      // ⚠ `justify-end` — THE LINE PACKS RIGHT, and that is half of the top-right placement
+      // Samuel called on 2026-09-04 (`composer.tsx` owns the other half, which row it is).
+      // The element still stretches the card's full width, so `min-w-0` + the `truncate`
+      // below keep a long recipient list shrinking rather than pushing the card wider.
+      className="flex min-w-0 items-center justify-end gap-1 px-0.5 text-caption text-text-muted"
     >
       <span aria-hidden>→</span>
       {reach.recipients.length === 0 ? (

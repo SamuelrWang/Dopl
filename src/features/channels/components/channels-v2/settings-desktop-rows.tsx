@@ -10,7 +10,10 @@
  *   ⚠ FOR DEVELOPERS, and no longer printed (Samuel, 2026-08-19): CONTEXT, NOT
  *   A SANDBOX. The tool profile applies on top whatever the cwd is
  *   (`main/tool-profiles.js`), so changing the folder never changes what the
- *   agent may do; an unset or vanished path falls back to the isolated sandbox.
+ *   agent may do. ⚠ An unset or vanished path falls back to the DESKTOP DEFAULT —
+ *   `~/Downloads`, or the homedir when that is missing — and this sentence said
+ *   "the isolated sandbox" until 2026-09-05, which is the same fiction the row
+ *   below was printing. There is no sandbox anywhere in this feature.
  * - **Auto-send** (Samuel, 2026-08-20; live since 2026-08-31) — the durable
  *   posture for this channel's OWN-agent replies. OFF: the draft waits in the
  *   thread view's send box; ON: it posts on its own. ⚠ Read LIVE at the gate
@@ -30,8 +33,22 @@
 import { Switch } from "@/shared/ui/switch";
 import type { AgentFolderState } from "./settings-agent";
 
-/** The desktop's own folder when the channel names none. */
-const FOLDER_DEFAULT_LABEL = "Sandbox (default)";
+/**
+ * ⚠ `FOLDER_DEFAULT_LABEL = "Sandbox (default)"` STOOD HERE AND IS DELETED
+ * (2026-09-05, task 15; Samuel's ruling is the ABBREVIATED form).
+ *
+ * It was rendered whenever `folder.label` was null, and that null meant "no
+ * per-channel folder is set" — not "no folder". So the one row on this tab that
+ * claims to say where the operator's agent runs was naming **a place that does not
+ * exist**: there is no sandbox, and the desktop's default is `~/Downloads`, or the
+ * homedir when that is missing (`main/channel-dirs.js › defaultSessionDir`).
+ *
+ * The bridge now answers the EFFECTIVE directory always, derived through the same
+ * function that produces the spawn cwd, so this file no longer invents a name for
+ * anything — and the reset control reads `custom`, which is the question the null
+ * was standing in for. Do not reintroduce a constant here: a label this file can
+ * spell is a label main did not agree to.
+ */
 
 export function AgentFolderRows({
   folder,
@@ -44,7 +61,7 @@ export function AgentFolderRows({
     <>
       <SettingName>Agent folder</SettingName>
       <p className="truncate rounded-[8px] border border-border-subtle bg-bg-inset px-2.5 py-1.5 text-body text-text-primary">
-        {folder.label ?? FOLDER_DEFAULT_LABEL}
+        {folder.label}
       </p>
       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
         <button
@@ -55,7 +72,10 @@ export function AgentFolderRows({
         >
           {folder.busy ? "Opening picker…" : "Change folder…"}
         </button>
-        {folder.label && (
+        {/* ⚠ `custom`, NOT the label. The label is now always present, so gating on
+            it would offer "Use default" on a channel already using the default —
+            the control's question was never "is there a name to show". */}
+        {folder.custom && (
           <button
             type="button"
             onClick={folder.onClear}

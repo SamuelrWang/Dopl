@@ -21,7 +21,38 @@
 
 // Loop-safety defaults (contract §A.2). turn cap bounds a two-agent exchange; idle TTL parks a
 // stalled session (task stays open, resumable); cost cap is opt-in (0 => disabled).
-const DEFAULT_TURN_CAP = 24;
+//
+// ⚠ THE TURN CAP IS ISSUER-KEYED (2026-09-05, task 9a), AND BOTH NUMBERS ARE DECLARED HERE, ONCE
+// EACH. 24 was sized for the runaway a CHAIN produces — an agent that spawned an agent, the two
+// of them talking with nobody watching — and it was then applied to every spawn shape, the one a
+// human starts and sits in front of included. That is the observed failure: long operator
+// sessions ending mid-analysis at 24 with the work half done.
+// THE ISSUER KEY IS `launchDepth`, and it is not a new field: `session-launch-op.js` is the ONLY
+// lane that may set 0 (the New Agent button, a human at the keyboard), everything above it is
+// agent-issued through `session-own-launch.js › MAX_LAUNCH_DEPTH`, and a guard already stops any
+// other lane copying the 0.
+// ⚠ ABSENT IS THE AGENT NUMBER — the same fail-closed direction the launch bound reads this field
+// in ("absent is the cap"). A resume, a recreate and the peer-triggered responder all pass no
+// depth, and the responder is precisely the two-agent exchange 24 exists for. Only a strict
+// `=== 0` widens; "0" the string does not.
+const DEFAULT_TURN_CAP = 24; // agent-issued (depth > 0) — and every lane that names no issuer
+const OPERATOR_TURN_CAP = 200; // depth 0 — the operator's own button lane, a human in front of it
+function defaultTurnCap(launchDepth) {
+  return launchDepth === 0 ? OPERATOR_TURN_CAP : DEFAULT_TURN_CAP;
+}
+
+// ⚠ WHAT "UNLIMITED" IS, AND WHY IT IS `Infinity` AND NOT 0 (2026-09-05, task 9b). The operator's
+// setting spells no-cap as 0 (`settings.js`), because that is what a person types into a box and
+// what an empty store key coerces from. It CANNOT be 0 in here: `turnCapReached` is
+// `turns >= turnCap`, so a 0 in the state would end every session on its first result — the
+// strictest possible cap wearing the word "unlimited". `Infinity` is the same comparison read
+// honestly, needs no branch at the enforcement site, and cannot be reached by a counter.
+// ⚠ IT IS NOT DURABLE, ON PURPOSE. `JSON.stringify(Infinity)` is `null`, so
+// `session-store.js › durableSessionRecord` coerces it to 0 = "no stored cap" and a resume
+// re-reads the setting — which is still unlimited if the operator has not changed it, and is the
+// operator's NEW answer if they have. The setting is the authority; a persisted copy of a
+// non-number would only ever be a second, staler one.
+const UNLIMITED_TURN_CAP = Infinity;
 const DEFAULT_IDLE_MS = 15 * 60 * 1000; // 15 minutes
 const DEFAULT_COST_CAP_USD = 0; // 0 => disabled
 
@@ -102,7 +133,11 @@ function coerceMode(list, value) {
 // back to the documented defaults on an absent or invalid value.
 function initialSessionState(opts) {
   const o = opts || {};
-  const turnCap = Number.isFinite(o.turnCap) && o.turnCap > 0 ? o.turnCap : DEFAULT_TURN_CAP;
+  // 9b: UNLIMITED passes through as itself — it is the one non-finite value this coercion may
+  // accept, and only by identity, so a NaN or a hand-edited "Infinity" string still lands on the
+  // documented default like every other piece of junk.
+  const turnCap = o.turnCap === UNLIMITED_TURN_CAP ? UNLIMITED_TURN_CAP
+    : Number.isFinite(o.turnCap) && o.turnCap > 0 ? o.turnCap : DEFAULT_TURN_CAP;
   const costCapUsd = Number.isFinite(o.costCapUsd) && o.costCapUsd > 0 ? o.costCapUsd : DEFAULT_COST_CAP_USD;
   const idleMs = Number.isFinite(o.idleMs) && o.idleMs > 0 ? o.idleMs : DEFAULT_IDLE_MS;
   return {
@@ -207,6 +242,10 @@ function costCapReached(state) {
 
 module.exports = {
   DEFAULT_TURN_CAP,
+  OPERATOR_TURN_CAP, // 9a: the depth-0 default; also what the SDK runaway backstop is sized against
+  defaultTurnCap, // 9a: issuer -> default cap. `settings.js › getTurnCap` is still the authority
+  UNLIMITED_TURN_CAP, // 9b: what the operator's 0 means INSIDE the engine (never on disk)
+
   DEFAULT_IDLE_MS,
   DEFAULT_COST_CAP_USD,
   AWAITING_PEER_IDLE_MS, // M1: the bound a turn that posted waits under

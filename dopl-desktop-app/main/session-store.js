@@ -184,6 +184,13 @@ function durableSessionRecord(rec) {
     // finite number so a hand-edited store can never inject NaN into the reducer.
     turns: Number(r.turns) || 0,
     costUsd: Number(r.costUsd) || 0,
+    // 9a (2026-09-05) — THE CAP THOSE COUNTERS ARE MEASURED AGAINST, whitelisted for the same
+    // rehydrate. Since the default is issuer-keyed and a recreate carries no issuer, the number a
+    // session was launched under has to survive with the budget or the resume reads the narrow
+    // default with a spent counter. ⚠ COERCED LIKE `ownPostSeq`, NOT LIKE `turns`: 0 here means
+    // "no stored cap, read the default", so a hand-edited NaN / Infinity / negative must land on
+    // 0 rather than pass through as a cap.
+    turnCap: Number.isFinite(Number(r.turnCap)) && Number(r.turnCap) > 0 ? Math.floor(Number(r.turnCap)) : 0,
     // 2026-08-22 — THE OUTBOUND POST COUNTER, and it is whitelisted for an IDEMPOTENCY reason
     // rather than a budget one. `session-outbound-tag.js › nextOwnPostId` stamps every post this
     // instance makes `agent-<agentId>-<n>`; the AGENT ID is persisted just above and re-used by

@@ -73,7 +73,7 @@ const COMPARE_ROWS: {
     // truth, and asked the next person to "sync this row AND `plans.ts ›
     // PLANS.features`" by hand. Three hand-synced statements of a PUBLIC PRICE,
     // with nothing that could go red — so the duplicate is deleted instead.
-    label: "MCP credits",
+    label: "Credits",
     free: { main: planNumber(MONTHLY_MCP_CREDITS.free), sub: "/ month" },
     solo: { main: planNumber(MONTHLY_MCP_CREDITS.solo), sub: "/ month" },
     team: { main: planNumber(MONTHLY_MCP_CREDITS.team), sub: "/ month" },

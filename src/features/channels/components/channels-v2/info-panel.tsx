@@ -141,6 +141,8 @@ function tabCount(
 export function ChannelsV2InfoPanel({
   channel,
   channelName,
+  activityBins = [],
+  activityLoading = false,
   members,
   threads,
   threadsTruncated,
@@ -170,6 +172,14 @@ export function ChannelsV2InfoPanel({
 }: {
   channel: Channel;
   channelName: string;
+  /**
+   * REAL messages-per-day for this channel, mounted by the HOST
+   * (`channel-surface-data.ts`) and passed through — this column fetches
+   * nothing. ⚠ DEFAULTS TO EMPTY so a host with no workspace segment renders no
+   * strip at all; an empty series is NOT a run of measured zeroes.
+   */
+  activityBins?: readonly { date: string; count: number }[];
+  activityLoading?: boolean;
   members: ChannelMember[];
   /** THE WHOLE bounded list, in the server's activity order — the Threads tab
    *  lists everything, unlike the sidebar's 24h window. */
@@ -331,6 +341,8 @@ export function ChannelsV2InfoPanel({
               <InfoTab
                 channel={channel}
                 channelName={channelName}
+                activityBins={activityBins}
+                activityLoading={activityLoading}
                 members={members}
                 threadCount={threads.length}
                 mentions={mentions}

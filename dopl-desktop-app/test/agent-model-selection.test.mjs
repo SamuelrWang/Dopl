@@ -131,6 +131,60 @@ test("DURABLE: extra properties are still dropped whole", () => {
   assert.deepEqual(Object.keys(map[CH_A]).sort(), ["messages", "model", "tools"]);
 });
 
+// ── ⚠ ABSENT IS UNCHANGED; SUPPLIED IS OBEYED. THE OTHER SEAM. ──────────────────────────────
+//
+// The cases above are all about a write that MENTIONS the model. This one is about a write that
+// does not, and the two ends of it are a preload and a validator that must agree.
+//
+// THE FAILURE: the durable record is rewritten WHOLE on every posture change, and the preload
+// coerced `model` unconditionally (`asMode(preset && preset.model)`), so a write from any surface
+// that does not carry the field — a Permissions-only or Sends-only control, an older SPA, any
+// caller that predates 2026-08-22 — arrived as `model: ''`, stored no key, and silently dropped
+// the operator's pick. The Settings row still read Opus and every launch after it ran the SDK
+// default. That is the RUNTIME's own bug, on the axis the runtime copied its rule FROM
+// (`app-preload.js`: "the key is forwarded only when the caller supplied one … main's own-key
+// test is the other half of the same rule").
+//
+// ⚠ IT DOES NOT CONTRADICT THE `JUNK` CASE ABOVE. `{ model: undefined }` HAS the own key, so it
+// is a caller SAYING "no model" and still clears; what survives is a `raw` with no `model` key at
+// all. Absent and present-but-junk are different facts (INVARIANTS §11).
+test("SUPPLIED-ONLY: a write that never mentions the model leaves the stored pick alone", () => {
+  const map = {};
+  prefs.postureInto(map, CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
+  // The Permissions row moves; this payload carries no `model` key at all.
+  const res = prefs.postureInto(map, CH_A, { tools: "manual", messages: "ask" });
+  assert.equal(res.ok, true);
+  assert.deepEqual(map[CH_A], { tools: "manual", messages: "ask", model: "claude-opus-5" },
+    "the axes moved and the pick survived");
+  assert.deepEqual(res.preset, map[CH_A], "…and the reply states what was STORED, not what was asked");
+});
+
+test("SUPPLIED-ONLY: an explicit '' still CLEARS it — the Default row is a real pick", () => {
+  const map = {};
+  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "claude-opus-5" });
+  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "" });
+  assert.equal("model" in map[CH_A], false, "supplied absence is absence, and storage omits the key");
+  // …and an UNRECOGNISED id is a supplied value too: it validates SOFT to the same absence, which
+  // is the 2026-08-22 rule and is deliberately not what a MISSING key does.
+  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "claude-opus-5" });
+  prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: "claude-opus-4-5" });
+  assert.equal("model" in map[CH_A], false, "an unknown id clears; only a MISSING key preserves");
+});
+
+test("SUPPLIED-ONLY: the two ends agree — the preload spreads, the validator probes the key", () => {
+  // ⚠ SOURCE-ASSERTED BECAUSE THE HOLE IS AT AN END, NOT IN THE MIDDLE. Either half alone leaves
+  // the rule broken at whichever end forgot, and neither end can drive the other in-process: the
+  // preload needs `electron`, and the validator is sliced pure. The RUNTIME's pair carries the
+  // identical two-sided assertion, one line below this one in the same preload block.
+  const PRELOAD = readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8");
+  assert.match(PRELOAD, /\.\.\.\(preset && preset\.model !== undefined \? \{ model: asMode\(preset\.model\) \} : \{\}\)/,
+    "the preload forwards the key ONLY when the caller supplied one");
+  assert.ok(!/model: asMode\(preset && preset\.model\)/.test(PRELOAD),
+    "…and the unconditional coercion is gone, not merely shadowed by a second spelling");
+  assert.match(read("channel-prefs.js"), /hasOwnProperty\.call\(raw, 'model'\)/,
+    "…and main tells a missing key from a supplied one, which is the other half");
+});
+
 // ── 2. TWO READERS, AND WHY ──────────────────────────────────────────────────────────────────
 
 test("READERS: the model has its OWN reader, so H2's posture census stays honest", () => {

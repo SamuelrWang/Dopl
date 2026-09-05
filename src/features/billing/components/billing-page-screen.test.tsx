@@ -121,7 +121,7 @@ describe("which tab a URL opens on", () => {
 
   it("renders ONE pane — the tabs are exclusive, not a stacked page", () => {
     const usage = screen({ initialTab: "usage" });
-    expect(usage).toContain("MCP credits");
+    expect(usage).toContain("Credits");
     expect(usage).not.toContain("Plans and Billing");
     expect(usage).not.toContain("Delete account");
 
@@ -135,9 +135,9 @@ describe("the Usage tab", () => {
   const usage = (status: WorkspaceEntitlementsStatus) =>
     screen({ initialTab: "usage" }, status);
 
-  it("meters MCP credits on a FREE workspace and says when they reset", () => {
+  it("meters Credits on a FREE workspace and says when they reset", () => {
     const markup = usage(FREE);
-    expect(markup).toContain("MCP credits");
+    expect(markup).toContain("Credits");
     expect(markup).toContain("120");
     expect(markup).toContain("500");
     expect(markup).toContain("Resets Sep 1, 2026");

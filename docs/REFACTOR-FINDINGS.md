@@ -3243,7 +3243,20 @@ constraint moves, and nothing connects the two.
 
 ---
 
-## F-316 — the channels page's "Thread activity" is still a fixture; /home's is wired, and the two now share only the pixels (2026-08-25)
+## F-316 — the channels page's "Thread activity" is still a fixture; /home's is wired, and the two now share only the pixels (2026-08-25) — ✅ RESOLVED 2026-09-05
+
+- **Resolution (2026-09-05, Samuel's ruling).** The channels page is wired to the SAME
+  `overview-series?metric=messages&channelId=` read — no new endpoint, no new index, no second
+  client. The cost this finding recorded (31 counted bins per channel selection) is accepted and
+  carried by the query cache, which keys on the PATH: the channel id is in the path, so
+  re-selecting a channel is a cache hit. The read is mounted by the HOST
+  (`channel-surface-data.ts`, per §7 — `surface-info-panel.tsx` fetches nothing) and passes down as
+  the structural `ActivityBin[]`, so `thread-activity.tsx` still imports nothing from
+  `features/workspaces` and INVARIANTS §9 holds. `info-tab.tsx` now renders
+  `ThreadActivityStrip` rather than `ActivityCells` + `HARDCODED_THREAD_ACTIVITY`, the heading
+  follows the surface ("Channel activity"), and each square hovers `date: count`.
+- ⚠ **The two strips now share the DATA as well as the pixels**, which is what this finding asked
+  for: one route, one quantiser, one ramp.
 
 - Location: `src/features/channels/components/channels-v2/info-tab.tsx` (fed from
   `› fixtures.ts › HARDCODED_THREAD_ACTIVITY`) against
@@ -7715,7 +7728,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 - Location: `src/features/channels/server/service-writes.ts › postMessage`, the `authorKind` derivation. Re-derive: `grep -n 'ctx.source === "agent" || input.authorKind' src/features/channels/server/service-writes.ts`.
 - Found during: the wave-B batch-1/2 review.
-- **THE SHAPE.** It read `input.authorKind ?? (ctx.source === "agent" ? "agent" : "user")` — the caller's value won unconditionally, pinned in both directions by a test that called it *"a claim, not a derivation"*. B4 then made the verdict BRANCH on that value: `service-wake-verdict.ts` splits RR2 (the agent's own reciprocal party, own-scoped) from RR3 (`service-wake-verdict-resilience.ts › freshChannelSessions`, CHANNEL-WIDE — every operator's live agents in the room) on `authorKind === "agent"`. So an agent credential posting `authorKind: "user"` took the human arm and could wake another account's agent, which is exactly the cross-account wake Samuel's 2026-08-31 same-account carve closes. `freshChannelSessions`' own header asserts *"no path from an agent author reaches this function"*; the `??` was the path.
+- **THE SHAPE.** It read `input.authorKind ?? (ctx.source === "agent" ? "agent" : "user")` — the caller's value won unconditionally, pinned in both directions by a test that called it *"a claim, not a derivation"*. B4 then made the verdict BRANCH on that value: `service-wake-verdict.ts` splits RR2 (the agent's own reciprocal party, own-scoped) from RR3 (`service-wake-verdict-resilience.ts › liveChannelSessions`, CHANNEL-WIDE — every operator's live agents in the room) on `authorKind === "agent"`. So an agent credential posting `authorKind: "user"` took the human arm and could wake another account's agent, which is exactly the cross-account wake Samuel's 2026-08-31 same-account carve closes. `freshChannelSessions`' own header asserts *"no path from an agent author reaches this function"*; the `??` was the path.
 - ⚠ **THE TWO DIRECTIONS ARE NOT SYMMETRIC, WHICH IS WHY THE FIX IS NOT "DERIVE IT".** A COOKIE session must still be able to claim `agent`: the desktop posts its agents' thread results over the operator's own Supabase session (`dopl-desktop-app/main/channel-post.js`, `authorKind: 'agent'`), and that lane is what the parameter exists for. Claiming `agent` only ever NARROWS the wake (RR2 over RR3). Claiming `user` from an agent token widens it.
 - Resolution: the claim ESCALATES ONLY — `ctx.source === "agent" || input.authorKind === "agent"`. `ctx.source` is `auth.agentTokenId` (`service-shared.ts`), which no request body can forge. Two tests in `service-writes.test.ts` pin both halves: the label, and the verdict RR3 would otherwise have produced.
 - Status: FIXED. `dopl-desktop-app/main/session-dispatch.js` already told its readers `author_kind` *"is derived server-side from the caller's credential"* — it now is.

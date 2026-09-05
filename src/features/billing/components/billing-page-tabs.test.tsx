@@ -107,7 +107,13 @@ describe("the switcher while checkout is mounted", () => {
     });
 
     expect(view.getByTestId("embedded-checkout")).toBeTruthy();
-    expect(view.queryByText("MCP credits")).toBeNull();
+    // ⚠ ANCHORED ON THE PANE'S HEADING, NOT ON THE METER'S LABEL (2026-09-05).
+    // This asserted `queryByText("MCP credits")`, which was distinctive; the
+    // meter is labelled "Credits" now, and a bare "Credits" is a word the plan
+    // cards on this very screen can also render exactly — the assertion would
+    // have started passing or failing for the wrong reason. "Usage this period"
+    // belongs to `billing-usage-pane.tsx` alone, which is what this test means.
+    expect(view.queryByText("Usage this period")).toBeNull();
   });
 
   it("is live again once checkout is left", async () => {

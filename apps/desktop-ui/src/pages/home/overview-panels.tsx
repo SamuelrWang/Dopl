@@ -3,11 +3,9 @@ import { Skeleton } from "@/shared/ui/skeleton";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import {
   EMPTY_AGENTS,
-  EMPTY_ATTENTION,
   EMPTY_CHANNEL_USAGE,
   EMPTY_PERSON_USAGE,
   EMPTY_SERIES,
-  EMPTY_THREADS,
   EMPTY_TOOL_USAGE,
   HOME_OVERVIEW_DEFAULT_METRIC,
   HOME_OVERVIEW_DEFAULT_RANGE,
@@ -24,11 +22,7 @@ import {
   PeopleRail,
   ToolRail,
 } from "./overview-rails";
-import {
-  RecentThreads,
-  WaitingOnYou,
-  type OpenActivity,
-} from "./overview-activity";
+import type { OpenActivity } from "./use-activity-jump";
 import { ActiveAgentBoard } from "./overview-agent-board";
 
 /**
@@ -47,9 +41,10 @@ import { ActiveAgentBoard } from "./overview-agent-board";
  * (Samuel, 2026-09-01, live review: "this looks so bad, the other one looked so
  * much better").** The first rebuild gave every section its own full-width
  * `SectionPanel`, so the page became five giant boxes with holes where the empty
- * ones were. **The grid is the spec**: ACTIVITY is a two-up row of cards with
- * the agent board under it; USAGE is the capacity bar beside the chart over two
- * rows of rails. Cards are sized to content and empty ones say so in one line.
+ * ones were. **The grid is the spec**: ACTIVITY is the agent board alone (its
+ * two cards were cut 2026-09-05 and the panel now folds away with them when no
+ * agent is running); USAGE is the capacity bar beside the chart over two rows of
+ * rails. Cards are sized to content and empty ones say so in one line.
  * ⚠ **The panel is the GROUPING, the card is the surface.** A section that
  * wants to be a full-width strip needs a reason that is not "it has a heading".
  *
@@ -104,39 +99,34 @@ export function HomeOverviewPanels({
   return (
     <div className="min-w-0 flex-1 overflow-y-auto p-3">
       <div className="flex flex-col gap-3">
-        <SectionPanel id="home-overview-activity" label="Activity">
-          {data ? (
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <WaitingOnYou
-                  rows={data.attention ?? EMPTY_ATTENTION}
-                  onOpen={onOpenActivity}
-                />
-                <RecentThreads
-                  rows={data.threads ?? EMPTY_THREADS}
-                  onOpen={onOpenActivity}
-                />
-              </div>
-              {/* ⚠ THE BOARD FOLDS AWAY ENTIRELY WHEN NOTHING IS RUNNING. It
-                  renders `null` for an empty lane set, and this guard keeps the
-                  heading from standing over it — an empty state must not cost a
-                  full-width strip (Samuel). */}
-              {agents.length > 0 && (
-                // ⚠ A `<section>`, not a `<div>`: the board's heading has to
-                // BOUND it, or a query scoped to "Active agents" widens to the
-                // whole panel and picks up the cards above.
-                <section className="flex flex-col gap-2">
-                  <h3 className="px-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
-                    Active agents
-                  </h3>
-                  <ActiveAgentBoard rows={agents} onOpen={onOpenActivity} />
-                </section>
-              )}
-            </div>
-          ) : (
-            <ActivityGhost />
-          )}
-        </SectionPanel>
+        {/* ⚠ **THE WHOLE PANEL FOLDS AWAY WHEN NOTHING IS RUNNING (Samuel,
+            2026-09-05).** **Waiting on you** and **Recent threads** were CUT
+            from this pane — the ruling is that Activity carries running agents
+            and nothing else — and the board was already the only other thing in
+            it. So the guard moved OUT to the `SectionPanel`: with the cards gone
+            an `agents.length === 0` render would have been a heading over an
+            empty box, which is the exact defect the first Overview attempt was
+            rejected for ("five giant boxes with holes where the empty ones
+            were"). An empty state must not cost a full-width strip.
+            ⚠ **AND THERE IS NO SKELETON HERE ANY MORE.** The two-card
+            `ActivityGhost` was sized to the deleted cards, and a ghost for a
+            panel that may legitimately not render at all is a promise the data
+            need not keep — it would flash a box and then remove it for every
+            operator with no agents running. This section renders NOTHING until
+            the payload lands. */}
+        {agents.length > 0 && (
+          <SectionPanel id="home-overview-activity" label="Activity">
+            {/* ⚠ A `<section>`, not a `<div>`: the board's heading has to BOUND
+                it, so a query scoped to "Active agents" cannot widen to the
+                whole panel. */}
+            <section className="flex flex-col gap-2">
+              <h3 className="px-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
+                Active agents
+              </h3>
+              <ActiveAgentBoard rows={agents} onOpen={onOpenActivity} />
+            </section>
+          </SectionPanel>
+        )}
 
         {/* 🔒 **THE LAYERING IS THE PAGE'S, NOT THIS PANEL'S OWN (Samuel,
             verbatim: "White panel background, then there's the gray background,
@@ -225,17 +215,6 @@ function CreditsChart() {
       loading={series.isPending}
       truncated={series.data?.truncated ?? false}
     />
-  );
-}
-
-/** The Activity panel's first frame — two cards, the shape that resolves. */
-function ActivityGhost() {
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {Array.from({ length: 2 }).map((_, index) => (
-        <Skeleton key={index} className="h-[176px] rounded-[14px]" />
-      ))}
-    </div>
   );
 }
 

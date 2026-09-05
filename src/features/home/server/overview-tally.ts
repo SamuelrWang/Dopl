@@ -1,28 +1,20 @@
 import type { Role } from "@/features/workspaces/types";
 import type {
   HomeAgentRow,
-  HomeAttentionItem,
   HomeChannelUsage,
   HomePersonUsage,
-  HomeThreadRow,
   HomeToolUsage,
 } from "../overview-types";
-import type {
-  ConsentRequestRow,
-  HeldSessionRow,
-  MentionRow,
-} from "./repository-attention";
 import {
   roleKey,
   type CreditEventScanRow,
   type McpCallScanRow,
   type RunningSessionRow,
-  type ThreadActivityRow,
 } from "./repository-overview";
 
 /**
  * The /home Overview face's PURE half — the tallies over scanned rows and the
- * two row→payload mappers.
+ * agent row→payload mapper.
  *
  * ⚠ SPLIT OUT OF `service-overview.ts` ON 2026-09-01, when the thread and agent
  * sections took that file past the 500-line cap (§1 —
@@ -191,108 +183,6 @@ export function tallyChannels(
         a.name.localeCompare(b.name)
     )
     .slice(0, CHANNEL_ROWS);
-}
-
-/** One line on an attention row. ⚠ Clipped HERE, on the server: a mention body
- *  is arbitrary user text and the panel renders one line. */
-const ATTENTION_TITLE_MAX = 120;
-
-function oneLine(raw: string, fallback: string): string {
-  const flat = raw.replace(/\s+/g, " ").trim();
-  if (!flat) return fallback;
-  return flat.length > ATTENTION_TITLE_MAX
-    ? `${flat.slice(0, ATTENTION_TITLE_MAX - 1)}…`
-    : flat;
-}
-
-/**
- * The three attention lanes → ONE ordered list.
- *
- * ⚠ **ORDER IS BY KIND FIRST, RECENCY SECOND, AND THAT IS A JUDGEMENT ABOUT
- * URGENCY rather than about time.** A consent request is an agent STOPPED
- * waiting for a decision; a permission hold is the same thing one layer down; a
- * mention is a message somebody has not read. Sorting the three purely by
- * timestamp would bury a blocked agent under an hour-old @-mention.
- *
- * ⚠ THE CHANNEL NAME COMES FROM THE FENCE'S MAP, not from any of the three rows
- * — none of them carries one, and the panel is cross-channel so it has to say
- * WHERE.
- */
-export function mapAttention(
-  consent: ConsentRequestRow[],
-  held: HeldSessionRow[],
-  mentions: MentionRow[],
-  names: Map<string, string>,
-  limit: number
-): HomeAttentionItem[] {
-  const channelName = (workspaceId: string) => names.get(workspaceId) ?? "";
-  const items: HomeAttentionItem[] = [
-    ...consent.map((row) => ({
-      id: `consent:${row.id}`,
-      kind: "consent" as const,
-      workspaceId: row.workspace_id,
-      channelName: channelName(row.workspace_id),
-      title: oneLine(row.summary, "Agent wants to send a message"),
-      // ⚠ NO THREAD: `channel_consent_requests` carries a channel, not a task.
-      threadId: null,
-      at: row.created_at,
-    })),
-    ...held.map((row) => ({
-      id: `permission:${row.id}`,
-      kind: "permission" as const,
-      workspaceId: row.workspace_id,
-      channelName: channelName(row.workspace_id),
-      // The agent's own handle is the useful noun — the operator is being asked
-      // to unblock a named agent, not an abstract session.
-      title: oneLine(
-        row.display_name || row.name,
-        "An agent is waiting on permission"
-      ),
-      threadId: row.task_id,
-      at: row.updated_at,
-    })),
-    ...mentions.map((row) => ({
-      id: `mention:${row.id}`,
-      kind: "mention" as const,
-      workspaceId: row.workspace_id,
-      channelName: channelName(row.workspace_id),
-      title: oneLine(row.body, "Mentioned you"),
-      // ⚠ ALWAYS NULL — `channel_messages` has no `task_id` column, so the jump
-      // opens the channel. Inventing one would land the operator in a thread the
-      // message is not in.
-      threadId: null,
-      at: row.created_at,
-    })),
-  ];
-  const rank: Record<HomeAttentionItem["kind"], number> = {
-    consent: 0,
-    permission: 1,
-    mention: 2,
-  };
-  return items
-    .sort((a, b) => rank[a.kind] - rank[b.kind] || b.at.localeCompare(a.at))
-    .slice(0, limit);
-}
-
-/**
- * Rows → the thread section's shape.
- *
- * ⚠ THE CHANNEL NAME COMES FROM THE FENCE'S MAP, not from the row: a thread
- * carries no channel name, and the cross-channel list has to say WHERE without
- * a second read.
- */
-export function mapThreads(
-  rows: ThreadActivityRow[],
-  names: Map<string, string>
-): HomeThreadRow[] {
-  return rows.map((row) => ({
-    id: row.id,
-    workspaceId: row.workspace_id,
-    channelName: names.get(row.workspace_id) ?? "",
-    title: row.title,
-    status: row.status,
-    lastActivityAt: row.last_activity_at,
-  }));
 }
 
 /**

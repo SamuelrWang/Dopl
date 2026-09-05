@@ -92,9 +92,10 @@ interface Case {
    *  what lets one fixture drive both. */
   sessions: SessionStateRow[];
   defaultResponder?: string | null;
-  /** RR3 arm 3's input — the agents that posted here lately, most recent first.
-   *  The client is handed it directly; the server derives it from the messages
-   *  read this fixture stands in for. */
+  /** RR3 arm 3's input — **the agents THIS AUTHOR tagged here lately, most recent first**
+   *  (2026-09-04; it was "the agents that posted here" for one day, and an agent tagging another
+   *  agent moved everyone's default). The client is handed it directly; the server derives it from
+   *  the author's own rows this fixture stands in for. */
   recentAgentIds?: string[];
   /** RR1: the composer is inside a thread whose other party is this member. */
   threadOtherParty?: ChannelMember | null;
@@ -127,7 +128,7 @@ const CASES: Case[] = [
     // ⚠ THE #966 CASE. Both sides answered "nobody" until 2026-09-04 and the
     // post reached nobody — in the ORDINARY shape of a multiplayer channel.
     // Samuel's B1: a forgotten `@` must never stall.
-    name: "TWO live agents and no setting — RR3 arm 3, the one that spoke here last",
+    name: "TWO live agents and no setting — RR3 arm 3, the one THIS AUTHOR tagged last",
     body: "can someone look at the build?",
     sessions: [sessionRow("k3v7d2mq"), sessionRow("m8q1zzzz")],
     recentAgentIds: ["m8q1zzzz"],
@@ -221,16 +222,20 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
     vi.mocked(repoSessions.listSessionStates).mockResolvedValue(c.sessions);
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(c.sessions);
     // ⚠ THE SERVER GETS THE SAME RECENCY FACT AS ROWS, NOT AS THE ANSWER — its
-    // half runs `recentAgentPosters` over these, which is the whole point of the
-    // pair: one rule, two inputs, one answer.
-    vi.mocked(repoMessages.listRecentRoomAgentPosts).mockResolvedValue(
+    // half runs `recentAgentsAddressedBy` over these, which is the whole point of
+    // the pair: one rule, two inputs, one answer.
+    // ⚠ THE ROWS ARE THE AUTHOR'S OWN TAGS SINCE 2026-09-04 (Samuel's ruling), not agent POSTS:
+    // `author_user_id: ME`, the addressed agent in `recipient_agent_ids`, and — load-bearing — NO
+    // `wake_reason`, because a row the SERVER aimed is not evidence of what the author addressed.
+    // The case below with a `wake_reason` row is what pins that half.
+    vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue(
       (c.recentAgentIds ?? []).map(
         (id, i) =>
           ({
             seq: 100 - i,
             created_at: new Date(NOW - 1_000).toISOString(),
-            author_kind: "agent",
-            client_msg_id: `agent-${id}-1`,
+            author_user_id: ME,
+            recipient_agent_ids: [id],
             metadata: {},
           }) as never
       )
@@ -284,6 +289,59 @@ describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)",
       "RR2 is an agent author's arm and no browser holds an agent credential"
     );
     expect(src).not.toMatch(/reciprocalParty/);
+  });
+
+  /**
+   * 🔒 **THE SERVER'S OWN PICK IS NOT EVIDENCE** (Samuel, 2026-09-04) — the case the whole
+   * stored-metadata route exists for.
+   *
+   * ⚠ **THE BUG THIS CATCHES IS SELF-REINFORCEMENT.** RR3's pick is stored in
+   * `recipient_agent_ids` exactly like a typed tag, so a rule that read recipients alone would
+   * feed on its own output: pick an agent once, and every later read sees it "addressed" and picks
+   * it again forever. `wake_reason` is present ONLY when the server chose, which is what tells the
+   * two apart (`lib/agent-post-stamp.ts › isAuthorTypedAgentTag`).
+   *
+   * The fixture: the NEWEST row aimed `k3v7d2mq` and carries a `wake_reason`, so it is the
+   * server's own doing and must be ignored; the older row is the author's own tag of `m8q1zzzz`.
+   * A rule reading recency alone answers `k3v7d2mq`. The right answer is `m8q1zzzz`.
+   */
+  it("🔒 ignores a row the SERVER aimed, and takes the author's own older tag", async () => {
+    vi.mocked(repoSessions.listSessionStates).mockResolvedValue([
+      sessionRow("k3v7d2mq"),
+      sessionRow("m8q1zzzz"),
+    ]);
+    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
+      sessionRow("k3v7d2mq"),
+      sessionRow("m8q1zzzz"),
+    ]);
+    vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue([
+      {
+        seq: 200,
+        created_at: new Date(NOW - 1_000).toISOString(),
+        author_user_id: ME,
+        recipient_agent_ids: ["k3v7d2mq"],
+        // ⚠ THE SERVER'S VOICE — this row was aimed by RR3, not typed by the author.
+        metadata: { wake_reason: "most recent" },
+      },
+      {
+        seq: 199,
+        created_at: new Date(NOW - 2_000).toISOString(),
+        author_user_id: ME,
+        recipient_agent_ids: ["m8q1zzzz"],
+        metadata: {},
+      },
+    ] as never);
+
+    const server = await resolveWakeVerdict(
+      CTX,
+      { id: CHAN, workspace_id: WS, default_responder_agent_name: null } as ChannelRow,
+      { body: "can someone look at the build?", kind: "message" } as ChannelMessageCreateInput,
+      {},
+      { authorKind: "user", toAgentId: null },
+      NOW
+    );
+    expect(server.recipientAgentIds ?? []).toEqual(["m8q1zzzz"]);
+    expect(server.reason).toBe("most recent");
   });
 
   it("and the server's RR2 answers where the client would have said `none`", async () => {

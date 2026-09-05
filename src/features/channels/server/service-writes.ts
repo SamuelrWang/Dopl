@@ -407,7 +407,7 @@ export async function postMessage(
   // was `input.authorKind ?? (ctx.source === "agent" ? …)` — a plain `??`, so an
   // AGENT CREDENTIAL could post `authorKind: "user"` and be routed as a person.
   // That is not a cosmetic label: the verdict splits RR2 from RR3 on it, and RR3
-  // is the arm that reaches `freshChannelSessions` — CHANNEL-WIDE, every
+  // is the arm that reaches `liveChannelSessions` — CHANNEL-WIDE, every
   // operator's agents, the one door Samuel's same-account carve closes. That
   // file's own note says *"no path from an agent author reaches this function"*,
   // and the `??` was the path.

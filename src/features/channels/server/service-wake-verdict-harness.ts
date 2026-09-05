@@ -91,24 +91,32 @@ export function roomProjection(...rows: SessionStateRow[]): void {
 }
 
 /**
- * RR3 ARM 3's ONE READ — the room's recent AGENT posts, newest first.
+ * RR3 ARM 3's ONE READ — **the rows where THIS AUTHOR tagged an agent here**, newest first
+ * (2026-09-04, Samuel's ruling; it was "the room's recent agent POSTS" until then, and an agent
+ * tagging another agent moved every member's default responder).
  *
  * ⚠ SEEDED EMPTY BY DEFAULT AND NEVER LEFT UNSEEDED: `vi.mock` automocks it to
  * `undefined`, and the arm is reached by every multi-agent room with no
  * configured responder — a suite that forgot it would fail on a TypeError
  * rather than on the rule it was measuring.
+ *
+ * ⚠ THE DEFAULTS ARE AN AUTHOR-TYPED TAG: `author_user_id` is the caller, and `metadata` is EMPTY
+ * so no `wake_reason` rides along. A case that wants the other half — a row the SERVER aimed,
+ * which must NOT count as evidence — passes `metadata: { wake_reason: … }` explicitly.
  */
 export function recentAgentPosts(
   ...rows: Array<Partial<ChannelMessageRow>>
 ): void {
-  vi.mocked(repoMessages.listRecentRoomAgentPosts).mockResolvedValue(
+  vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue(
     rows.map(
       (row, i) =>
         ({
           seq: 100 + i,
           created_at: new Date(NOW - 1_000).toISOString(),
-          author_kind: "agent",
-          client_msg_id: null,
+          // ⚠ `CTX.userId` — the arm reads the ROUTED MESSAGE'S AUTHOR, and every case here
+          // resolves as that context. A row authored by anyone else is correctly invisible.
+          author_user_id: CTX.userId,
+          recipient_agent_ids: [],
           metadata: {},
           ...row,
         }) as ChannelMessageRow

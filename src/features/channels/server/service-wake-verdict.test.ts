@@ -219,21 +219,20 @@ describe("resolveWakeVerdict — the three-way distinction", () => {
     expect(out.delivery).toBe("unreachable");
   });
 
-  it("a STALE projection row resolves nothing — a quiet row is not an absent agent", async () => {
+  it("🔒 THE ASYMMETRY, HUMAN DOOR: a STALE but PRESENT row RESOLVES (2026-09-05)", async () => {
+    // ⚠ THIS CASE ASSERTED THE OPPOSITE UNTIL 2026-09-05, AND THE OPPOSITE WAS
+    // THE BUG. It read `updated_at` as a heartbeat; the push fires on state
+    // CHANGE only, so an agent idle for six minutes is stale by that measure and
+    // perfectly alive. Filtering on it made STALE indistinguishable from ABSENT
+    // — the exact collapse `service-wake-freshness.ts`'s own docblock forbids —
+    // and it is what stored `verdict=none` on rows #1080/#1081/#1092 with three
+    // agents listening in the room. Samuel's 2026-08-22 ruling
+    // (`agents-model.ts › peerCardsFor`) is the precedent: the session stays
+    // until it actually goes away.
     projection(
       sessionRow({
         name: "k3v7d2mq",
         updated_at: new Date(NOW - SESSION_PROJECTION_FRESH_MS - 1).toISOString(),
-      })
-    );
-    expect((await resolve("@agent-k3v7d2mq go")).recipientAgentIds).toBeNull();
-  });
-
-  it("a row on the freshness boundary still counts", async () => {
-    projection(
-      sessionRow({
-        name: "k3v7d2mq",
-        updated_at: new Date(NOW - SESSION_PROJECTION_FRESH_MS + 1).toISOString(),
       })
     );
     expect((await resolve("@agent-k3v7d2mq go")).recipientAgentIds).toEqual([
@@ -241,9 +240,38 @@ describe("resolveWakeVerdict — the three-way distinction", () => {
     ]);
   });
 
-  it("an unparseable stamp is STALE, not fresh", async () => {
-    projection(sessionRow({ name: "k3v7d2mq", updated_at: "not-a-date" }));
+  it("🔒 …and its OTHER half is unchanged: an ABSENT row resolves NOTHING", async () => {
+    // The pair is the whole rule. Presence resolves; absence defers to the
+    // machine (`null`, never `[]`). A test that only pinned the first half would
+    // pass just as happily if the read stopped fencing on the channel at all.
+    projection();
     expect((await resolve("@agent-k3v7d2mq go")).recipientAgentIds).toBeNull();
+  });
+
+  it("the AGENT-AUTHOR door is presence-keyed too — a stale but present OWN row resolves", async () => {
+    // ⚠ THE RULING IS ONE LINE AND IT COVERS BOTH DOORS: presence licenses
+    // RESOLUTION, freshness licenses only REFUSAL. Filtering here made an
+    // operator's own quiet agent unaddressable by that operator's own agents.
+    projection(
+      sessionRow({
+        name: "k3v7d2mq",
+        updated_at: new Date(NOW - SESSION_PROJECTION_FRESH_MS - 1).toISOString(),
+      })
+    );
+    const out = await resolve("@agent-k3v7d2mq go", {}, { authorKind: "agent" });
+    expect(out.recipientAgentIds).toEqual(["k3v7d2mq"]);
+  });
+
+  it("🔒 …and SCOPE is the only thing that door still fences: a PEER's row resolves nothing", async () => {
+    // ⚠ THE SAME-ACCOUNT CARVE (F-589, Samuel 2026-08-31), and the case that
+    // proves dropping the freshness filter did not widen it. The own read is
+    // EMPTY and the room read has the agent, so a human would resolve it here
+    // and an agent author must not: `null` hands the question to the machine
+    // that owns the session rather than answering for it.
+    projection();
+    roomProjection(sessionRow({ name: "k3v7d2mq", user_id: "user-9" }));
+    const out = await resolve("@agent-k3v7d2mq go", {}, { authorKind: "agent" });
+    expect(out.recipientAgentIds).toBeNull();
   });
 });
 
@@ -346,7 +374,16 @@ describe("ownLiveAgentIds — the shared projection read (G3 / F-418)", () => {
     });
   });
 
-  it("reports `projectionFresh: false` when every row is stale — NOT that the agent is gone", async () => {
+  it("🔒 THE PAIR: a stale row still REPORTS ITS ID and only `projectionFresh` goes false", async () => {
+    // ⚠ **THE TWO FIELDS ARE DIFFERENT CLAIMS AND THIS CASE IS THE WHOLE
+    // DOCTRINE (2026-09-05).** It asserted `ids: []` until then, which forced
+    // the refusal rule onto the resolution answer: an operator's own agent, idle
+    // five minutes, stopped being one of "my live agents" — so RR2's F-589 stamp
+    // check rejected its own operator's post and a typed handle for it resolved
+    // to nothing. `ids` answers WHO IS HERE (presence: the push is a full-set
+    // replace, absence is deletion). `projectionFresh` answers WHETHER THE
+    // PROJECTION HAS SPOKEN LATELY, and remains the only half a caller may
+    // REFUSE on — see `service-directions.ts`, which is unchanged.
     projection(
       sessionRow({
         name: "k3v7d2mq",
@@ -354,15 +391,43 @@ describe("ownLiveAgentIds — the shared projection read (G3 / F-418)", () => {
       })
     );
     expect(await ownLiveAgentIds(CTX, "chan-1", NOW)).toEqual({
-      ids: [],
+      ids: ["k3v7d2mq"],
       projectionFresh: false,
     });
   });
 
-  it("reports `projectionFresh: false` for an empty projection", async () => {
-    expect((await ownLiveAgentIds(CTX, "chan-1", NOW)).projectionFresh).toBe(
-      false
+  it("a row on the freshness boundary still counts as FRESH", async () => {
+    projection(
+      sessionRow({
+        name: "k3v7d2mq",
+        updated_at: new Date(NOW - SESSION_PROJECTION_FRESH_MS + 1).toISOString(),
+      })
     );
+    expect((await ownLiveAgentIds(CTX, "chan-1", NOW)).projectionFresh).toBe(true);
+  });
+
+  it("an unparseable stamp is STALE, not fresh — and still PRESENT", async () => {
+    // ⚠ THE FAIL-SAFE DIRECTION IS NOW EXPRESSIBLE ON ONE AXIS INSTEAD OF BOTH:
+    // an undated row cannot license a refusal, and is still a session that has
+    // not gone away.
+    projection(sessionRow({ name: "k3v7d2mq", updated_at: "not-a-date" }));
+    expect(await ownLiveAgentIds(CTX, "chan-1", NOW)).toEqual({
+      ids: ["k3v7d2mq"],
+      projectionFresh: false,
+    });
+  });
+
+  it("🔒 an EMPTY projection answers both-empty — the other half of the pair", async () => {
+    // ⚠ WIDENED FROM `projectionFresh` ALONE ON 2026-09-05, and the added
+    // assertion is the one that matters now that `ids` has its own rule: a
+    // refusal may only stand on `projectionFresh` being TRUE, and there must be
+    // nothing to resolve either. Absent is the one state where both halves agree,
+    // which is exactly why it is the case that pins them apart from the stale
+    // one above.
+    expect(await ownLiveAgentIds(CTX, "chan-1", NOW)).toEqual({
+      ids: [],
+      projectionFresh: false,
+    });
   });
 });
 

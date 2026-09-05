@@ -480,6 +480,49 @@ export async function listRecentRoomAgentPosts(
   return (data ?? []) as RecentAgentPostRow[];
 }
 
+/**
+ * **THE ROWS WHERE THIS AUTHOR TAGGED AN AGENT IN THIS ROOM** — RR3 arm 3's read since
+ * 2026-09-04, replacing {@link listRecentRoomAgentPosts}.
+ *
+ * ⚠ **THE ARM CHANGED FROM "who posted" TO "who THIS PERSON addressed"** (Samuel): an agent
+ * addressing another agent used to re-point the room's default responder, so the operator watched
+ * it wander with nothing they did. The predicate that reads these rows is
+ * `lib/agent-post-stamp.ts › isAuthorTypedAgentTag`, and it needs `recipient_agent_ids` (who the
+ * row reached) AND `metadata` (whether `wake_reason` is present, i.e. whether the SERVER chose
+ * rather than the author) — which is why the projection carries both.
+ * ⚠ **`author_user_id`, NOT `author_kind`.** The old read filtered to agent authors; this one
+ * filters to ONE PERSON, because the rule is per-author stickiness.
+ * ⚠ Same bound, same window, same `thread IS NULL` expression and same 50-row limit as the read it
+ * replaces — none of those reasons changed.
+ *
+ * ⚠ {@link listRecentRoomAgentPosts} IS LEFT IN PLACE DELIBERATELY, and is now unused by the arm.
+ * Its own tests still drive it; deleting it is a follow-up for whoever runs the suite green, not a
+ * blind edit from a session that cannot run one.
+ */
+export type RecentAuthorTagRow = Pick<
+  ChannelMessageRow,
+  "seq" | "created_at" | "author_user_id" | "recipient_agent_ids" | "metadata"
+>;
+
+export async function listRecentRoomTagsBy(
+  channelId: string,
+  authorUserId: string,
+  sinceIso: string
+): Promise<RecentAuthorTagRow[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("seq, created_at, author_user_id, recipient_agent_ids, metadata")
+    .eq("channel_id", channelId)
+    .eq("author_user_id", authorUserId)
+    .is("metadata->>taskId", null)
+    .gt("created_at", sinceIso)
+    .order("seq", { ascending: false })
+    .limit(RECENT_AGENT_POSTS_LIMIT);
+  if (error) throw error;
+  return (data ?? []) as RecentAuthorTagRow[];
+}
+
 export async function lastMessages(
   channelIds: string[]
 ): Promise<Map<string, string>> {

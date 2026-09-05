@@ -39,7 +39,8 @@ import { BarSeries, type BarPoint } from "#/components/charts/bar-series";
  * as well").** The reference is
  * `src/features/billing/components/billing-usage-pane.tsx › BillingUsagePane`,
  * the "Usage this period" card: a `shared/ui/usage-meter.tsx › UsageMeter`
- * labelled **MCP credits** over the same `used`/`limit` pair, with a
+ * labelled **Credits** (renamed from "MCP credits" 2026-09-05) over the same
+ * `used`/`limit` pair, with a
  * `Resets {formatDate(periodEnd)}` line beneath. Everything visual comes from
  * that shared primitive — the label row, the recessed `.concave-track` well
  * that gives the bar its pressed-in 3D face, the bare `h-1.5 rounded-full` fill
@@ -74,7 +75,7 @@ export function CreditCapacityBar({
     <div className="w-full">
       <UsageMeter
         className=""
-        label="MCP credits"
+        label="Credits"
         used={credits.used}
         limit={credits.limit}
         over={exhausted}

@@ -39,12 +39,9 @@ import {
   StatusPill,
 } from "./bits";
 import { MemberRoster } from "./member-roster";
-import { ActivityCells } from "./thread-activity";
+import { ThreadActivityStrip, type ActivityBin } from "./thread-activity";
 import { MentionsList } from "./mentions-list";
-import {
-  HARDCODED_LINKED_THREADS,
-  HARDCODED_THREAD_ACTIVITY,
-} from "./fixtures";
+import { HARDCODED_LINKED_THREADS } from "./fixtures";
 import { memberPerson, type AuthorIndex } from "./view-model";
 import { memberLabel } from "../../lib/channel-display";
 import type { Channel, ChannelMember, ChannelMention } from "../../types";
@@ -52,6 +49,8 @@ import type { Channel, ChannelMember, ChannelMention } from "../../types";
 export function InfoTab({
   channel,
   channelName,
+  activityBins = [],
+  activityLoading = false,
   members,
   threadCount,
   mentions,
@@ -63,6 +62,9 @@ export function InfoTab({
 }: {
   channel: Channel;
   channelName: string;
+  /** Measured messages-per-day, host-mounted. Empty renders no strip. */
+  activityBins?: readonly ActivityBin[];
+  activityLoading?: boolean;
   members: ChannelMember[];
   threadCount: number;
   /** MY mentions in this channel, server-ordered. */
@@ -85,8 +87,23 @@ export function InfoTab({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-      <PanelHeading title="Main info" />
+      {/* ⚠ "Channel info", NOT "Main info" (Samuel, 2026-09-05). The old title
+          said where the block sat rather than what it was about, which is the
+          same complaint the NAME row below answers: this pane is about ONE
+          channel and never said which. */}
+      <PanelHeading title="Channel info" />
       <div className="px-2">
+        {/* ⚠ FIRST, ABOVE CREATOR — the subject before its facts, and the row
+            the pane was missing. ⚠ IT IS `channelName`, THE DERIVED ONE, never
+            `channel.name`: a 1:1 is titled after the other member
+            (`peerNamedHeader` decides it, upstream), so reading the stored
+            column here would name a DM after nobody. */}
+        <MetaRow icon={Hash} label="Name">
+          <span className="truncate text-body text-text-primary">
+            {channelName}
+          </span>
+        </MetaRow>
+        <MetaRowDivider />
         <MetaRow icon={UserRound} label="Creator">
           {creator ? (
             <>
@@ -183,19 +200,30 @@ export function InfoTab({
         ))}
       </div>
 
-      <PanelHeading title="Thread activity" />
-      {/* ⚠ STILL HARDCODED HERE, AND THE ACCOUNT SURFACE'S IS NOT (F-316,
-          2026-08-25). /home feeds the identical squares from a real
-          channel-scoped daily series; this page would need that read threaded
-          down through `channel-surface-data.ts` and would pay 31 counted bins
-          on every channel selection, which is a cost nobody has asked for yet.
-          ⚠ The SQUARES are now `thread-activity.tsx › ActivityCells` and the
-          ramp is its `ACTIVITY_SHADE`, so the two strips cannot look different
-          while only one of them is wired. What is fixture here is the LEVELS
-          and nothing else. */}
-      <ActivityCells
-        levels={HARDCODED_THREAD_ACTIVITY}
-        label="Thread activity over the last 31 slices"
+      {/* ⚠ THE LABEL FOLLOWS THE SURFACE (Samuel, 2026-09-05). This tab is the
+          CHANNEL's info, so the strip counts the channel; a thread's own strip
+          says "Thread activity" on the thread's tab. The heading said "Thread"
+          here while measuring nothing at all, which is two wrongs that hid each
+          other. */}
+      <PanelHeading title="Channel activity" />
+      {/* ⚠ **WIRED 2026-09-05 — F-316 CLOSED.** This block read "STILL HARDCODED
+          HERE, AND THE ACCOUNT SURFACE'S IS NOT", and named the price: the read
+          threaded down through `channel-surface-data.ts`, 31 counted bins per
+          channel selection, "a cost nobody has asked for yet". Samuel asked, and
+          accepted the price with the query cache carrying it — the series is
+          keyed by PATH, so the channel id is in the key and re-selection is a
+          cache hit rather than a re-count.
+          ⚠ NO NEW ENDPOINT AND NO NEW INDEX: it is the same
+          `overview-series?metric=messages&channelId=` the account surface has
+          fed these identical squares from since 2026-08-25.
+          ⚠ THE STRIP DECIDES WHAT NOTHING LOOKS LIKE, not this file: it renders
+          NOTHING while the read is in flight, because an empty well here means a
+          MEASURED zero and painting 31 of them would state a quiet month the
+          server has not answered for. */}
+      <ThreadActivityStrip
+        bins={activityBins}
+        loading={activityLoading}
+        metricLabel="Messages"
       />
 
       <PanelHeading

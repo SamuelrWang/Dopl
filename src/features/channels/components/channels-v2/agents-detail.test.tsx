@@ -231,15 +231,19 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
   });
 
   /** ⚠ …DIMMED, which is the whole of what the deleted guard was really for.
-   *  `data-stale` is the hook; `opacity-60` is the shade. */
-  it("dims the quiet card and says when it last moved", () => {
+   *  `data-stale` is the hook; `opacity-60` is the shade.
+   *  ⚠ IT NO LONGER SAYS WHEN (Samuel, 2026-09-04: a peer card is the owner's
+   *  avatar plus the status word, *"no timestamp, no other metadata"*). The
+   *  assertion FLIPPED rather than being deleted, because the mutation that
+   *  matters now is a stamp coming BACK onto a colleague's card. */
+  it("dims the quiet card WITHOUT printing when it last moved", () => {
     const card = renderPeer(
       peerRow({ updatedAt: new Date(Date.now() - 60 * 60_000).toISOString() })
     );
     const stale = card.closest("[data-stale]") as HTMLElement;
     expect(stale).not.toBeNull();
     expect(stale.className).toContain("opacity-60");
-    expect(screen.getByText(/last update/)).toBeTruthy();
+    expect(screen.queryByText(/last update/)).toBeNull();
   });
 
   it("leaves a FRESH card at full strength, with no timing clause", () => {

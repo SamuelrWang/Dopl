@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { channelRowId } from "./home-rows";
-import type { OpenActivity } from "./overview-activity";
 
 /**
  * JUMPING FROM AN OVERVIEW ACTIVITY ROW TO THE THING IT NAMES (2026-09-01).
@@ -24,8 +23,23 @@ import type { OpenActivity } from "./overview-activity";
  * operator saying "take me to this channel", not "take me back to that thread";
  * leaving the jump armed would re-raise it every time the pane remounted.
  */
+/**
+ * What an Overview activity row DOES when it is clicked.
+ *
+ * ⚠ **THE TYPE LIVES WITH THE HOOK, NOT WITH A CARD (2026-09-05).** It moved
+ * here when **Waiting on you** and **Recent threads** were cut and
+ * `overview-activity.tsx` went with them: it describes the JUMP, and the jump is
+ * this hook's argument — parking it on whichever component happens to render a
+ * row is how it ended up outliving one.
+ */
+export type OpenActivity = (
+  workspaceId: string,
+  /** `null` opens the channel with no thread raised. */
+  threadId: string | null
+) => void;
+
 export interface ActivityJump {
-  /** Hand to `HomeOverviewPanels` — see `overview-activity.tsx › OpenActivity`. */
+  /** Hand to `HomeOverviewPanels` — see {@link OpenActivity}. */
   open: OpenActivity;
   /** The thread to raise when THIS row's record pane mounts, or `null`. */
   threadFor: (rowId: string) => string | null;

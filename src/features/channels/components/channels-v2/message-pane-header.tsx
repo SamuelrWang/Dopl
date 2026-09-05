@@ -17,6 +17,7 @@ import { IconButton } from "./bits";
 
 export function PaneHeader({
   channelName,
+  hideChannelCrumb = false,
   threadTitle,
   infoOpen = false,
   favorited,
@@ -28,6 +29,21 @@ export function PaneHeader({
   onExitThread,
 }: {
   channelName: string;
+  /**
+   * SUPPRESS THE VISIBLE CHANNEL CRUMB (Samuel, 2026-09-05) — for the face that
+   * now names the channel itself, the single-column INFO face and its "Name"
+   * row. Printing it twice, six pixels apart, is what he was looking at.
+   *
+   * ⚠ **SCOPED TO ONE FACE, NEVER THE HEADER WHOLESALE.** This same header
+   * serves the conversation, and there the crumb is the only thing saying which
+   * room you are typing into.
+   * ⚠ **VISIBLE TEXT ONLY.** The bookmark's accessible name still says WHICH
+   * channel it bookmarks — a control that reads "Bookmark" with no object is a
+   * regression for exactly the readers who cannot see the pane it sits on.
+   * ⚠ **IGNORED IN A THREAD**, where the crumb's first half is the way BACK out
+   * of the thread and deleting it would strand the reader.
+   */
+  hideChannelCrumb?: boolean;
   threadTitle: string | null;
   infoOpen?: boolean;
   favorited: boolean;
@@ -64,9 +80,11 @@ export function PaneHeader({
       <Hash size={14} className="shrink-0 text-text-muted" />
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
         {threadTitle === null ? (
-          <span className="truncate text-body font-semibold text-text-primary">
-            {channelName}
-          </span>
+          hideChannelCrumb ? null : (
+            <span className="truncate text-body font-semibold text-text-primary">
+              {channelName}
+            </span>
+          )
         ) : (
           <>
             <button

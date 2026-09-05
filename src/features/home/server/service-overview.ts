@@ -16,7 +16,6 @@ import {
 import {
   countMetricInWindow,
   listContainerRoles,
-  listRecentThreads,
   listRunningSessions,
   scanCreditEvents,
   scanMcpCalls,
@@ -25,14 +24,7 @@ import {
   type HomeWindow,
 } from "./repository-overview";
 import {
-  listPendingConsent,
-  listPermissionHeldSessions,
-  listUnreadMentions,
-} from "./repository-attention";
-import {
   mapAgents,
-  mapAttention,
-  mapThreads,
   tallyChannels,
   tallyCreditPeople,
   tallyTools,
@@ -74,27 +66,8 @@ import { HOME_CHANNEL_LIMIT } from "./service-reads";
 /** Bars in a `24h` series — one per hour, ending on the current hour. */
 export const HOURS_IN_DAY = 24;
 
-/**
- * How far back the **Recent threads** panel looks.
- *
- * ⚠ **A MINUTES WINDOW, NOT THE PAGE'S RANGE (Samuel, 2026-09-01: "threads
- * active within the last X minutes").** The panel answers "what is happening
- * right now", which is a different question from the month the rails describe —
- * tying it to the range would have made it a duplicate of a month-long thread
- * list. 90 minutes is a working session's worth of context: long enough that a
- * coffee break does not empty the panel, short enough that "recent" is not a
- * euphemism for "today".
- */
-export const RECENT_THREAD_MINUTES = 90;
-
-/** How many recently-active threads the panel lists. */
-const THREAD_ROWS = 8;
-
 /** How many live agent sessions the board carries, across all channels. */
 const AGENT_ROWS = 24;
-
-/** How many blocked items the attention panel lists. */
-const ATTENTION_ROWS = 8;
 
 /** Bins, and the width of one, for each window. */
 const RANGE_SHAPE: Record<
@@ -335,32 +308,13 @@ export async function getHomeOverview(
 ): Promise<HomeOverview> {
   const { ids, names } = await resolveScope(userId);
   const since = rangeSince(range, now);
-  const threadsSince = new Date(
-    now.getTime() - RECENT_THREAD_MINUTES * 60_000
-  ).toISOString();
 
-  const [
-    credits,
-    calls,
-    msgChannels,
-    roles,
-    recentThreads,
-    liveAgents,
-    consent,
-    held,
-    mentions,
-  ] = await Promise.all([
+  const [credits, calls, msgChannels, roles, liveAgents] = await Promise.all([
     scanCreditEvents(ids, since),
     scanMcpCalls(ids, since),
     scanMessageChannels(ids, since),
     listContainerRoles(ids),
-    // ⚠ WINDOWED SINCE 2026-09-01 — the panel is "threads active in the last
-    // RECENT_THREAD_MINUTES", which is its own question and its own window.
-    listRecentThreads(ids, THREAD_ROWS, threadsSince),
     listRunningSessions(ids, AGENT_ROWS),
-    listPendingConsent(ids, userId),
-    listPermissionHeldSessions(ids, userId),
-    listUnreadMentions(ids, userId),
   ]);
 
   const people = await resolvePeople(credits.rows, roles);
@@ -371,9 +325,7 @@ export async function getHomeOverview(
     channels: tallyChannels(names, credits.rows, msgChannels.rows),
     people,
     tools: tallyTools(calls.rows),
-    threads: mapThreads(recentThreads.rows, names),
     agents: mapAgents(liveAgents.rows, names, userId),
-    attention: mapAttention(consent, held, mentions, names, ATTENTION_ROWS),
     // ⚠ THE DENOMINATOR IS THE LARGEST SCAN'S, because the breakdowns that can
     // be clipped are read off one of the three.
     scanned: Math.max(

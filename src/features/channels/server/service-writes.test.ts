@@ -388,7 +388,7 @@ describe("postMessage — addressing + author derivation", () => {
   it("an AGENT CREDENTIAL cannot claim authorKind='user' (F-580)", async () => {
     // ⚠ THE CLAIM ESCALATES ONLY. It used to win in both directions, and the
     // downgrade direction was a cross-account wake: `authorKind` is what splits
-    // RR2 (the agent's own reciprocal party) from RR3 (`freshChannelSessions`,
+    // RR2 (the agent's own reciprocal party) from RR3 (`liveChannelSessions`,
     // CHANNEL-WIDE, every operator's agents in the room). An agent token that
     // said "user" bought itself the arm Samuel's same-account carve closes.
     // The credential is `auth.agentTokenId` and outranks anything in the body.

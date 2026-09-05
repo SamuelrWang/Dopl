@@ -17,6 +17,9 @@
  */
 
 import { mentionedUserIdsOf } from "../../lib/mentions";
+// ⚠ THE `lib/` COPY, NOT A LOCAL ONE: the same module the SERVER's arm 3 reads,
+// so the tag this transcript faces and the agent the router woke are one answer.
+import { serverRoutedAgentIds } from "../../lib/agent-post-stamp";
 import {
   RECEIPT_LABEL,
   lifecycleReceiptStatus,
@@ -135,6 +138,22 @@ export interface MessageRow {
    * and absent from the inbox (or the reverse).
    */
   mentionsMe: boolean;
+  /**
+   * THE AGENTS THE SERVER AIMED THIS ROW AT WHEN THE AUTHOR TYPED NO TAG —
+   * `lib/agent-post-stamp.ts › serverRoutedAgentIds` (Samuel, 2026-09-05:
+   * history must not read as addressed to nobody when it was not).
+   *
+   * ⚠ **IDS, NOT NAMES, AND THE ROW CARRIES NO FACE.** The same rule
+   * {@link MessageRow.agentId} follows, for the same reason: a display name is
+   * peer-set and renamed at will, so it is resolved AT RENDER off
+   * `AuthorIndex.agents` and never frozen into a row (2026-08-27).
+   *
+   * ⚠ **EMPTY ON EVERY ORDINARY ROW**, including every row carrying a tag the
+   * author TYPED — those already show their tag, in the body, where the author
+   * put it. This is only the rows that would otherwise read as addressed to
+   * nobody.
+   */
+  routedAgentIds: string[];
 }
 
 /** A `system` row (joins, topic changes) — no side, no avatar, no author. */
@@ -302,6 +321,13 @@ function toMessageRow(
     mentionsMe: mentionedUserIdsOf(message.metadata).includes(
       index.currentUserId
     ),
+    // ⚠ THE STORED VERDICT, FACED — never a re-derivation. The server already
+    // decided who an untagged post reached and stamped both halves of the
+    // evidence on the row; asking the transcript to work it out again from the
+    // body would be a second router, and the two would disagree the first time
+    // the rule changed. `serverRoutedAgentIds` is the complement of the
+    // predicate RR3's own arm 3 turns on, spelled once, in `lib/`.
+    routedAgentIds: serverRoutedAgentIds(message),
   };
 }
 

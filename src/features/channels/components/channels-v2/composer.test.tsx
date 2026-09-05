@@ -386,12 +386,15 @@ describe("the composer's footer", () => {
     // ⚠ SAME PARENT **AND** AFTER — either alone is satisfied by a mutation the other catches:
     // an arrow re-parented back into the input row still follows the icons in document order,
     // and an arrow moved to the row's LEFT end is still in the row.
+    // ⚠ ANCHORED ON EMOJI SINCE 2026-09-04. It was "Attach file", which Samuel's toolbar ruling
+    // DELETED along with Shortcuts — this case is about the ARROW'S POSITION relative to the icon
+    // run, so it needs any surviving icon and not that one in particular.
     const c = mount();
     const send = screen.getByRole("button", { name: "Send" });
-    const attach = screen.getByRole("button", { name: "Attach file" });
-    expect(send.parentElement).toBe(attach.parentElement);
+    const icon = screen.getByRole("button", { name: "Emoji" });
+    expect(send.parentElement).toBe(icon.parentElement);
     expect(
-      attach.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING
+      icon.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     // And it is OUT of the field's own row — the input row is the field and nothing else here.
     expect(c.body.parentElement?.contains(send)).toBe(false);

@@ -1,4 +1,4 @@
-import { parseAgentPostStamp } from "../lib/agent-post-stamp";
+import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import { mentionedUserIdsOf } from "../lib/mentions";
 import {
   ESCALATION_ANSWER_METADATA_KEY,
@@ -97,13 +97,31 @@ export function escalationAnswerers(row: ChannelMessageRow): string[] {
  * strip produces here is the exact one this feature exists to remove: a button
  * that reports success over an answer that reached nobody.
  *
- * ⚠ `agentId` IS DERIVED, NEVER ACCEPTED. It comes off the ESCALATION's own
- * `client_msg_id` stamp, so an answer cannot name an agent the escalation was
- * not written by — otherwise this key would be a wake primitive aimed anywhere.
- * `null` is the ordinary answer for an escalation filed by an EXTERNAL MCP
- * session (no desktop stamped it) and the answer is still an ordinary visible
- * message, so `main/session-dispatch.js › feedLiveSession` still delivers it to
- * every live agent on the thread.
+ * ⚠ `agentId` IS DERIVED, NEVER ACCEPTED. It comes off the ESCALATION ROW's own
+ * authorship, so an answer cannot name an agent the escalation was not written
+ * by — otherwise this key would be a wake primitive aimed anywhere.
+ *
+ * ⚠ **BOTH DOORS, SINCE 2026-09-05 — `lib/agent-post-stamp.ts › authorAgentIdOf`,
+ * NOT `parseAgentPostStamp` ALONE.** The stamp answers `null` for every post that
+ * carried its own idempotency key, because `main/session-outbound-tag.js ›
+ * threadTagFor` deliberately never overwrites one an agent chose. So an agent
+ * that filed its decision card with `client_msg_id: "ask-2"` was ANONYMOUS here:
+ * the card stamped `agentId: null`, and the press that answered it named nobody
+ * to wake. That is this feature's own failure mode restated — a button reporting
+ * success over an answer that reached no one — and it fired on exactly the
+ * careful callers who set an idempotency key before retrying.
+ *
+ * ⚠ **AND THE SECOND DOOR IS THE STRONGER FACT, SO THE DERIVED-NEVER-ACCEPTED
+ * PROPERTY IS WIDENED RATHER THAN LOOSENED.** `client_msg_id` is whatever the
+ * caller sent; `metadata.session_id` is stripped from caller input
+ * unconditionally and re-stamped from the `X-Dopl-Session-Id` header
+ * (`service-writes-metadata.ts` fold 6b), so it cannot be posed at all. Reading
+ * it names FEWER forgeable things than the stamp did, not more.
+ *
+ * `null` is still the ordinary answer for an escalation filed by an EXTERNAL MCP
+ * session (nothing stamped it and it carries no desktop session key) and the
+ * answer is still an ordinary visible message, so `main/session-dispatch.js ›
+ * feedLiveSession` still delivers it to every live agent on the thread.
  *
  * ⚠ ONE ANSWER PER ESCALATION IS ENFORCED AT REST, not here — the partial unique
  * index on `(metadata->'escalationAnswer'->>'escalationMessageId')` surfaces a
@@ -137,6 +155,9 @@ export async function resolveEscalationAnswer(
   metadata[ESCALATION_ANSWER_METADATA_KEY] = {
     escalationMessageId: row.id,
     optionIndex: answer.optionIndex,
-    agentId: parseAgentPostStamp(row.client_msg_id),
+    agentId: authorAgentIdOf({
+      clientMsgId: row.client_msg_id,
+      metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    }),
   };
 }

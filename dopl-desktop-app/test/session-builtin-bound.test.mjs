@@ -137,6 +137,16 @@ test("A5 touched NEITHER restricted profile", () => {
 // drives is the shipping profile table through the shipping assembly.
 
 const SPEC = readFileSync(join(MAIN, "runtime", "claude", "launch-spec.js"), "utf8");
+// ⚠ DERIVED SINCE 2026-09-05 (task 9a): the brake is `MAX_TURNS_FACTOR * OPERATOR_TURN_CAP`,
+// not a literal, so a regex for a literal threw and took this whole file down with it. Both
+// factors are read off the shipping source and multiplied here — same "read it, never restate
+// it" rule, one level down, exactly as `launch-max-turns.test.mjs` already does.
+const shippedNum = (src, name) => {
+  const m = new RegExp(`const ${name} = (\\d+);`).exec(src);
+  if (!m) throw new Error(`${name} is no longer a literal declaration in the shipped source`);
+  return Number(m[1]);
+};
+
 const DEPS = {
   tools: TOOLS,
   loader: {
@@ -165,11 +175,8 @@ const DEPS = {
   // (G19's loop brake) landed after this harness was written. READ OFF THE
   // SHIPPING SOURCE, never a literal: `launch-max-turns.test.mjs` owns the value
   // and a second copy here would be the hand-mirror class this repo gates.
-  SESSION_MAX_TURNS: (() => {
-    const m = /const SESSION_MAX_TURNS = (\d+);/.exec(SPEC);
-    if (!m) throw new Error("SESSION_MAX_TURNS is no longer declared in launch-spec.js");
-    return Number(m[1]);
-  })(),
+  SESSION_MAX_TURNS: shippedNum(SPEC, "MAX_TURNS_FACTOR")
+    * shippedNum(readFileSync(join(MAIN, "session-state.js"), "utf8"), "OPERATOR_TURN_CAP"),
 };
 const buildOptions = new Function(
   ...Object.keys(DEPS),

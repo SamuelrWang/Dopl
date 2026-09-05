@@ -68,26 +68,6 @@ export const HOME_OVERVIEW: HomeOverview = {
     { tool: "channel", op: "list", calls: 319 },
     { tool: "kb", op: "read_file", calls: 52 },
   ],
-  // ⚠ ONE OPEN AND ONE CLOSED thread: a closed thread is MARKED and kept, never
-  // dropped, so the fixture that proves it has to contain one.
-  threads: [
-    {
-      id: "task-1",
-      workspaceId: LINK_WORKSPACE_ID,
-      channelName: "Priya Shah",
-      title: "Q3 renewals",
-      status: "open",
-      lastActivityAt: "2026-09-01T09:50:00.000Z",
-    },
-    {
-      id: "task-2",
-      workspaceId: LINK_WORKSPACE_ID,
-      channelName: "Priya Shah",
-      title: "Pricing review",
-      status: "closed",
-      lastActivityAt: "2026-09-01T09:20:00.000Z",
-    },
-  ],
   /**
    * ⚠ THREE SESSIONS ACROSS **TWO** CHANNELS, on purpose: the board groups by
    * channel, so a fixture confined to one container could not tell a board from
@@ -130,38 +110,6 @@ export const HOME_OVERVIEW: HomeOverview = {
       threadTitle: "Deck review",
       mine: true,
       updatedAt: "2026-09-01T08:40:00.000Z",
-    },
-  ],
-  /** ⚠ ALL THREE KINDS, in the order the server emits them (consent, then
-   *  permission, then mention) — a fixture with one kind could not prove the
-   *  panel marks them apart. */
-  attention: [
-    {
-      id: "consent:c-1",
-      kind: "consent",
-      workspaceId: LINK_WORKSPACE_ID,
-      channelName: "Priya Shah",
-      title: "Send the renewal summary",
-      threadId: null,
-      at: "2026-09-01T10:02:00.000Z",
-    },
-    {
-      id: "permission:sess-4",
-      kind: "permission",
-      workspaceId: SECOND_WORKSPACE_ID,
-      channelName: "Q3 Fundraise",
-      title: "quill",
-      threadId: "task-9",
-      at: "2026-09-01T09:58:00.000Z",
-    },
-    {
-      id: "mention:m-1",
-      kind: "mention",
-      workspaceId: LINK_WORKSPACE_ID,
-      channelName: "Priya Shah",
-      title: "can you confirm the numbers?",
-      threadId: null,
-      at: "2026-09-01T09:30:00.000Z",
     },
   ],
   scanned: 476,

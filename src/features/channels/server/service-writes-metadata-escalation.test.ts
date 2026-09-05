@@ -126,7 +126,10 @@ function insertedRow(
  * THE STORED ESCALATION an answer names.
  *
  * `clientMsgId` carries the per-instance stamp `main/session-outbound-tag.js ›
- * nextOwnPostId` mints, which is where the derived `agentId` comes from.
+ * nextOwnPostId` mints — ONE of the two doors the derived `agentId` comes from.
+ * ⚠ The other is `metadata.session_id`, and a row may carry either or both; see
+ * the BOTH-doors describe below for why reading only this one made every agent
+ * that chose its own idempotency key anonymous.
  */
 function storedEscalation(
   over: Partial<ChannelMessageRow> = {},
@@ -234,6 +237,72 @@ describe("the escalation payload is RESERVED", () => {
     await postMessage(ctx, "room", { body: "hello" });
     expect(has(capturedMetadata(), ESCALATION_METADATA_KEY)).toBe(false);
     expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+});
+
+describe("the derived agentId — BOTH doors, so a careful caller is not anonymous", () => {
+  /**
+   * ⚠ THE BUG THIS IS FOR (2026-09-05, task 13a). `agentId` came off
+   * `parseAgentPostStamp(row.client_msg_id)` alone, and the stamp is absent from
+   * every post that carried its OWN idempotency key — `main/session-outbound-tag.js
+   * › threadTagFor` never overwrites one an agent chose. So an agent that filed its
+   * decision card with `client_msg_id: "ask-2"` stamped `agentId: null`, and the
+   * press that answered it named nobody to wake: this feature's own failure mode, a
+   * button reporting success over an answer that reached no one, firing on exactly
+   * the callers careful enough to set a key before retrying.
+   */
+  it("a card whose client_msg_id is the CALLER's own key still resolves an agent", async () => {
+    vi.mocked(repoMessages.findMessageById).mockResolvedValue(
+      storedEscalation(
+        { client_msg_id: "ask-2" },
+        // ⚠ THE SERVER'S OWN STAMP, and the STRONGER fact: `session_id` is stripped
+        // from caller input unconditionally and re-stamped from the
+        // `X-Dopl-Session-Id` header (`service-writes-metadata.ts` fold 6b), so
+        // reading it names FEWER forgeable things than the stamp did.
+        { session_id: "chan::k3wpf7c5" }
+      )
+    );
+    await postMessage(ctx, "room", {
+      body: "Ship now",
+      escalationAnswer: { escalationMessageId: ESC_ID, optionIndex: 0 },
+    });
+    expect(capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY]).toEqual({
+      escalationMessageId: ESC_ID,
+      optionIndex: 0,
+      agentId: "k3wpf7c5",
+    });
+  });
+
+  it("the STAMP still wins where a row carries one — the older form is unmoved", async () => {
+    vi.mocked(repoMessages.findMessageById).mockResolvedValue(
+      storedEscalation({}, { session_id: "chan::zzzzzzzz" })
+    );
+    await postMessage(ctx, "room", {
+      body: "Ship now",
+      escalationAnswer: { escalationMessageId: ESC_ID, optionIndex: 0 },
+    });
+    expect(
+      (capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as { agentId: string })
+        .agentId
+    ).toBe("k3wpf7c5");
+  });
+
+  it("an EXTERNAL MCP escalation still answers null — cannot say, never a guess", async () => {
+    // Nothing stamped it and it carries no desktop session key. The answer is still
+    // an ordinary visible message, so `feedLiveSession` delivers it to every live
+    // agent on the thread; `null` here removes no delivery (INVARIANTS §11).
+    vi.mocked(repoMessages.findMessageById).mockResolvedValue(
+      storedEscalation({ client_msg_id: "mcp-1" })
+    );
+    await postMessage(ctx, "room", {
+      body: "Ship now",
+      escalationAnswer: { escalationMessageId: ESC_ID, optionIndex: 0 },
+    });
+    expect(capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY]).toEqual({
+      escalationMessageId: ESC_ID,
+      optionIndex: 0,
+      agentId: null,
+    });
   });
 });
 

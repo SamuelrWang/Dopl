@@ -415,8 +415,12 @@ function register(opts = {}) {
     // ONE statement of "empty CLEARS, else sanitize, and a sanitizer refusal is a
     // refusal rather than a silent strip", now shared with the in-process tool and
     // the external rename directive. What stays here is the IPC ANSWER SHAPE.
-    const res = require('./agent-self-ops')
-      .applyRenameTo(require('./agent-names'), agentId, p.name);
+    // ⚠ AND IT COMMITS THROUGH `agent-identity-commit.js` SINCE 2026-09-05, which writes the
+    // store AND flushes the summary. Writing `agent-names` directly here is the bug Samuel
+    // reported: the local store moved, the summary digest did not, so the push never fired and
+    // the @-picker — which reads the SERVER's projection, not this machine — offered the old
+    // name until an app restart. That module's header carries the whole argument.
+    const res = require('./agent-identity-commit').commitRename(agentId, p.name);
     if (!res.ok) return { ok: false, reason: res.reason };
     return { ok: true, displayName: res.name };
   }));
@@ -428,7 +432,11 @@ function register(opts = {}) {
     const p = payload || {};
     const agentId = asAgentId(p.agentId);
     if (!agentId) return { ok: false };
-    const stored = require('./agent-names').describe(agentId, p.description);
+    // ⚠ SAME COMMIT PATH AS ITS TWIN, AND IT HAD THE SAME MISSING FLUSH (2026-09-05). A
+    // description never reaches a PEER — `channel_sessions` carries no such column, on purpose —
+    // but it does ride this machine's own summary onto its own cards, so a describe that never
+    // flushed left the card stale on the very machine that set it.
+    const stored = require('./agent-identity-commit').commitDescribe(agentId, p.description);
     if (stored === null) return { ok: false, reason: 'bad-description' };
     return { ok: true, description: stored || null };
   }));
