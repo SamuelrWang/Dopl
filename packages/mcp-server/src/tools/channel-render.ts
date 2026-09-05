@@ -21,7 +21,31 @@ import type {
   ChannelMessage,
   ChannelThread,
 } from "@dopl/client";
-import { inlineOr, metaString, neutralizeInline } from "./channel-shared";
+import { deliveryFact } from "./channel-facts";
+import { inlineOr, neutralizeInline } from "./channel-shared";
+// ⚠ **WHO WROTE IT AND WHO IT REACHED IS `channel-render-identity.ts`** (§1
+// split, 2026-09-04) — one place decides how an author, a recipient and an
+// addressing clause read. Re-exported below so no importer of this module moved.
+import {
+  addressTag,
+  agentNamesFromMessages,
+  formatAuthor,
+  memberRef,
+  namesFromMessages,
+  NO_MEMBER_VIEW,
+  sessionIdOf,
+  sessionTail,
+  type MemberView,
+} from "./channel-render-identity";
+
+export {
+  addresseeOf,
+  formatAuthor,
+  memberRef,
+  sessionIdOf,
+  NO_MEMBER_VIEW,
+  type MemberView,
+} from "./channel-render-identity";
 import { isConcise, type ResponseFormat } from "./response-size";
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
@@ -32,46 +56,6 @@ import {
   threadLegend,
   threadTagOf,
 } from "./channel-render-threads";
-
-
-/**
- * Author label for a message line. `agent` row renders "agent for <name>",
- * never bare name — reader treats counterparty as another member's agent.
- *
- * ⚠ Two rules, both because nothing validates `display_name`:
- *   1. Name NEUTRALIZED and user row prefixed `member`, never bare. Raw name
- *      may contain newlines → can close the line and forge fresh ones (a
- *      `- **#9001** system · <ts>` row was reproduced). Name of exactly
- *      "system" would render as the bare token `system`.
- *   2. `authorUserId` appended ALWAYS, not only as name-missing fallback. Name
- *      = author's claim; id = server's record. Claim alone is uncheckable.
- */
-export function formatAuthor(m: ChannelMessage): string {
-  const id = m.authorUserId ? `\`${m.authorUserId}\`` : null;
-  // `system` is a server-controlled enum, not user text; `PostableAuthorKindSchema`
-  // blocks a caller minting one. Only label here with no untrusted half.
-  if (m.authorKind === "system") return id ? `system ${id}` : "system";
-  const named = m.authorName ? neutralizeInline(m.authorName) : null;
-  const who = named && id ? `${named} (${id})` : (named ?? id);
-  if (m.authorKind === "agent") return who ? `agent for ${who}` : "an agent";
-  return who ? `member ${who}` : "a member";
-}
-
-/**
- * WHICH SESSION WROTE THIS LINE — `metadata.session_id`. An agent post is
- * authored by its OWNER'S ACCOUNT and one operator runs many concurrent
- * sessions, so an author label alone cannot name the process; this field is the
- * only thing on the wire that can.
- *
- * Not peer-controlled: `resolvePostMetadata` deletes any caller copy and
- * re-stamps from `X-Dopl-Session-Id`, shape-checked in `session-header.ts` (id
- * chars only, no whitespace, ≤128). ⚠ Neutralized at render anyway — the write
- * path is a claim about today's code, not about rows already in the table, and
- * this lands in the LINE HEAD, outside untrusted-body framing.
- */
-export function sessionIdOf(m: ChannelMessage): string | undefined {
-  return metaString(m, "session_id");
-}
 
 /**
  * THE SESSION THAT ENDED — `metadata.session_ended`, and it rides a
@@ -93,96 +77,6 @@ export function sessionIdOf(m: ChannelMessage): string | undefined {
  */
 function sessionEnded(m: ChannelMessage): boolean {
   return (m.metadata as Record<string, unknown> | undefined)?.session_ended === true;
-}
-
-/**
- * WHO A MESSAGE IS FOR — `metadata.to_user_id`. Separates "for ME" from "for
- * another member's agent" from "for nobody". An unaddressed ask in a 3+ member
- * channel triggers no agent at all (deliberate, fail-closed), so "unaddressed"
- * is a load-bearing fact, not a missing field.
- *
- * Not peer-controlled: `resolvePostMetadata` deletes any caller copy and
- * re-stamps from the route's validated `toUserId` uuid (or the resolved DM
- * peer). ⚠ Neutralized at render anyway — old rows predate today's write path.
- */
-export function addresseeOf(m: ChannelMessage): string | undefined {
-  return metaString(m, "to_user_id");
-}
-
-/**
- * Who is reading, plus names for the user ids a listing carries.
- *
- * `selfUserId` resolved ONCE at boot from the status ping (see
- * `registerChannelTool`), not per call — naming the addressee costs the poll
- * loop nothing. Null when the ping failed; ids then render as ids.
- *
- * `names` best-effort, never authoritative — a name is the member's claim, so
- * never rendered alone (see {@link memberRef}).
- */
-export interface MemberView {
-  selfUserId: string | null;
-  names: Map<string, string>;
-}
-
-/** No caller identity and no names — every id renders as a bare id. */
-export const NO_MEMBER_VIEW: MemberView = {
-  selfUserId: null,
-  names: new Map(),
-};
-
-/**
- * User id rendered actionably: `you` for the caller, else neutralized name AND
- * immutable id ({@link formatAuthor} shape). ⚠ Never name alone — display name
- * is owner-settable, so an unbacked name lets one member's label pose as another's.
- */
-export function memberRef(userId: string, view: MemberView): string {
-  if (view.selfUserId !== null && userId === view.selfUserId) return "you";
-  const id = inlineOr(userId, UNREADABLE_ID);
-  const name = view.names.get(userId);
-  const safeName = name ? neutralizeInline(name) : null;
-  return safeName ? `${safeName} (${id})` : id;
-}
-
-/**
- * Names harvested from the listing itself — API already hydrates `authorName`,
- * so anyone who SPOKE in the window is named free; silent addressees render by
- * id. ⚠ No round-trip: `read`/`await` are the hot path.
- */
-function namesFromMessages(messages: ChannelMessage[]): Map<string, string> {
-  const names = new Map<string, string>();
-  for (const m of messages) {
-    if (m.authorUserId && m.authorName && !names.has(m.authorUserId)) {
-      names.set(m.authorUserId, m.authorName);
-    }
-  }
-  return names;
-}
-
-/**
- * THE SLOT-KEY SEGMENT THAT NAMES A SESSION. `metadata.session_id` is the
- * desktop's slot key, `<channelId>:<taskId>:<agentId>`
- * (`main/session-store.js › sessionKey`), and the AGENT id is the only segment
- * that distinguishes one session from another on the SAME thread — which is the
- * whole point of multiplayer.
- *
- * ⚠ IT USED TO SLICE AFTER THE FIRST COLON, and that predates the third segment
- * (fixed 2026-08-22). The key was `<channel>:<agent-or-thread>` when this was
- * written, so the slice was the tail; against a three-segment key it renders
- * `<thread>:<agent>` — an identity that is not a session, that repeats the
- * thread already tagged two clauses away, and that is long enough to bury the
- * one part a reader needs.
- *
- * ⚠ BOTH SHAPES STILL ARRIVE, so it reads from the END rather than counting
- * segments: rows written before the widening carry two, and a mid-wave record
- * can carry an EMPTY agent segment (the middle one is legitimately empty for a
- * responder with no first-class thread). The `|| ` fallbacks walk back rather
- * than rendering an empty span. ⚠ The agent charset (`^[a-z][a-z0-9]{7}$`)
- * carries no colon, so the last segment is unambiguous.
- */
-function sessionTail(sessionId: string): string {
-  const parts = sessionId.split(":");
-  if (parts.length < 2) return sessionId;
-  return parts[parts.length - 1] || parts[parts.length - 2] || sessionId;
 }
 
 /**
@@ -283,9 +177,16 @@ function formatMessage(
   const sessionTag = session
     ? ` · session ${inlineOr(sessionSlotRef(sessionTail(session)), UNREADABLE_ID)}`
     : "";
-  const to = addresseeOf(m);
-  const memberTag = to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
-  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${terse ? "" : ` · ${m.createdAt}`}`;
+  const memberTag = addressTag(m, view);
+  // ⚠ **THE ACK, BESIDE THE ADDRESS IT IS AN ACK FOR.** `delivery` alone is the
+  // server's write-time PREDICTION and `deliveryAt` is what turns it into a
+  // receipt; `deliveryFact` carries that one-character distinction (`woken?` vs
+  // `woken`) and is the SAME renderer the write result uses, so a caller reads
+  // one vocabulary on both sides of a send. Absent when this server computes no
+  // verdict — which is not `none`.
+  const ack = deliveryFact(m.delivery, m.deliveryAt);
+  const deliveryTag = ack ? ` · ${ack}` : "";
+  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${terse ? "" : ` · ${m.createdAt}`}`;
   return `- ${head}${clipBody(m, ref, clip)}`;
 }
 
@@ -305,7 +206,11 @@ export function formatMessages(
   selfUserId: string | null = null,
   format?: ResponseFormat,
 ): string[] {
-  const view: MemberView = { selfUserId, names: namesFromMessages(messages) };
+  const view: MemberView = {
+    selfUserId,
+    names: namesFromMessages(messages),
+    agentNames: agentNamesFromMessages(messages),
+  };
   const anyThreaded = messages.some((m) => threadIdOf(m) !== undefined);
   const clip = messages.length > 1;
   const terse = isConcise(format);

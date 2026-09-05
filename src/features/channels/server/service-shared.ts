@@ -6,7 +6,9 @@ import { narrowSessionId } from "@/shared/auth/session-header";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { ChannelNotFoundError } from "./errors";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
+import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import * as repo from "./repository";
+import * as repoSessions from "./repository-sessions";
 
 /**
  * Shared internals for the channels service: the `ChannelContext`
@@ -235,6 +237,47 @@ export function canManageChannel(
   membership: ChannelMemberRow | null
 ): boolean {
   return membership?.role === "owner" || isWorkspaceAdmin(ctx);
+}
+
+/**
+ * **THE OPERATOR-GIVEN AGENT NAMES A PAGE OF MESSAGES NEEDS** — agent id → name,
+ * one read for the whole page (2026-09-04).
+ *
+ * ⚠ **THE ANALOGUE OF {@link profilesById}, AND IT IS DELIBERATELY SHAPED LIKE
+ * IT.** Every read path that hydrates author DISPLAY already resolves profiles
+ * this way; a name for the agent BEHIND an agent-authored row is the same
+ * question about the other half of the identity, and giving it a second shape is
+ * how one of the three read paths comes to answer it and the others not to.
+ *
+ * ⚠ **WORKSPACE IDS ARE THE CALLER'S**, because a page can span channels (the
+ * workspace hold) or workspaces (the account-wide read), and a read fenced on
+ * agent id alone would answer with rows from tenancies nobody proved.
+ *
+ * ⚠ **NO IDS ⇒ NO READ.** A page of purely human messages pays nothing, which is
+ * most pages.
+ */
+export async function agentNamesFor(
+  workspaceIds: readonly string[],
+  rows: readonly {
+    author_kind: string;
+    client_msg_id: string | null;
+    metadata: unknown;
+  }[]
+): Promise<Map<string, string>> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.author_kind !== "agent") continue;
+    const id = authorAgentIdOf({
+      clientMsgId: row.client_msg_id,
+      metadata:
+        row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+          ? (row.metadata as Record<string, unknown>)
+          : null,
+    });
+    if (id !== null) ids.add(id);
+  }
+  if (ids.size === 0) return new Map();
+  return repoSessions.agentDisplayNames([...new Set(workspaceIds)], [...ids]);
 }
 
 export async function profilesById(

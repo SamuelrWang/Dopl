@@ -26,6 +26,7 @@ import * as collab from "./repository-collab";
 import * as workspaceRepo from "@/features/workspaces/server/repository";
 import type { MemberPresence } from "./dto";
 import {
+  agentNamesFor,
   loadVisibleChannel,
   mayReadPublicChannels,
   profilesById,
@@ -201,15 +202,30 @@ export async function listChannelMembers(
   );
 }
 
+/**
+ * ⚠ **TWO PAGE-WIDE JOINS, IN PARALLEL, AND NEITHER IS PER-ROW.** The profile
+ * read answers who an agent acts FOR; `agentNamesFor` answers WHICH of that
+ * operator's agents wrote the row, which is the half the MCP read printed as a
+ * bare id tail until 2026-09-04. A page of purely human messages pays for the
+ * second read not at all.
+ */
 async function hydrateMessages(
-  rows: Awaited<ReturnType<typeof repoMessages.listMessages>>
+  rows: Awaited<ReturnType<typeof repoMessages.listMessages>>,
+  workspaceId: string
 ): Promise<ChannelMessage[]> {
   const authorIds = rows
     .map((r) => r.author_user_id)
     .filter((id): id is string => id !== null);
-  const profiles = await profilesById(authorIds);
+  const [profiles, agentNames] = await Promise.all([
+    profilesById(authorIds),
+    agentNamesFor([workspaceId], rows),
+  ]);
   return rows.map((row) =>
-    mapMessageRow(row, row.author_user_id ? profiles.get(row.author_user_id) : undefined)
+    mapMessageRow(
+      row,
+      row.author_user_id ? profiles.get(row.author_user_id) : undefined,
+      agentNames
+    )
   );
 }
 
@@ -243,7 +259,7 @@ export async function readMessages(
     limit: query.limit,
     threadId: query.thread,
   });
-  const messages = await hydrateMessages(rows);
+  const messages = await hydrateMessages(rows, ctx.workspaceId);
   if (
     membership &&
     query.thread === undefined &&
@@ -332,6 +348,7 @@ export async function hasNewMessages(
  */
 export async function pollChannelMessages(
   channelId: string,
+  workspaceId: string,
   since: number | undefined,
   excludeAuthor?: string
 ): Promise<ChannelMessage[]> {
@@ -340,7 +357,7 @@ export async function pollChannelMessages(
     limit: 200,
     excludeAuthor,
   });
-  return hydrateMessages(rows);
+  return hydrateMessages(rows, workspaceId);
 }
 
 /**

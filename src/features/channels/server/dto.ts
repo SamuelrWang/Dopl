@@ -20,6 +20,7 @@ import type {
   ThreadStatus,
 } from "../types";
 import type { Role } from "@/features/workspaces/types";
+import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import { parseInfoCard } from "../info-card";
 
 /**
@@ -291,9 +292,31 @@ export function mapChannelRow(
   };
 }
 
+/** The joined name for a row's author agent, or `null`. ⚠ Gated on
+ *  `author_kind`: a person's cookie session carries a `session_id` too, and a
+ *  member is not an agent. */
+function agentNameOf(
+  row: ChannelMessageRow,
+  agentNames: ReadonlyMap<string, string> | undefined
+): string | null {
+  if (!agentNames || row.author_kind !== "agent") return null;
+  const id = authorAgentIdOf({
+    clientMsgId: row.client_msg_id,
+    metadata: isRecord(row.metadata) ? row.metadata : null,
+  });
+  return id === null ? null : (agentNames.get(id) ?? null);
+}
+
 export function mapMessageRow(
   row: ChannelMessageRow,
-  profile: ProfileRef | undefined
+  profile: ProfileRef | undefined,
+  /**
+   * Agent id → the operator's name for it, for THIS page
+   * (`service-shared.ts › agentNamesFor`). ⚠ OPTIONAL, and a miss is `null`
+   * rather than a guess: the write path builds a message with no page to join
+   * against, and every renderer already falls back to the `agent-<id>` handle.
+   */
+  agentNames?: ReadonlyMap<string, string>
 ): ChannelMessage {
   return {
     id: row.id,
@@ -308,6 +331,12 @@ export function mapMessageRow(
     createdAt: row.created_at,
     authorName: profile?.display_name || profile?.email || null,
     authorAvatarUrl: profile?.avatar_url ?? null,
+    // ⚠ THE ONE PARSER decides WHICH agent wrote the row (`lib/agent-post-stamp
+    // .ts › authorAgentIdOf` — the stamp, else the server's own session key);
+    // this only looks the answer up. `null` for a human, for an unnameable row
+    // and for a page nobody resolved names for — three situations every
+    // renderer answers the same way, with the `agent-<id>` handle.
+    authorAgentName: agentNameOf(row, agentNames),
     // ⚠ PASSED THROUGH, NEVER RE-DERIVED. The verdict was computed ONCE, on the
     // write, by `service-wake-verdict.ts`; a mapper that recomputed it would be
     // the second reader this whole slice exists to delete. `?? null` normalizes

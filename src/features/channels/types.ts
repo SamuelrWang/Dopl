@@ -256,6 +256,20 @@ export type ChannelMessage = {
   /** Hydrated author display (UI convenience); null for system rows. */
   authorName: string | null;
   authorAvatarUrl: string | null;
+  /**
+   * **THE OPERATOR'S NAME FOR THE AGENT THAT WROTE THIS ROW** — one field,
+   * joined from `channel_sessions.display_name` at read time (2026-09-04).
+   *
+   * ⚠ **JOINED, NEVER STORED.** A name is renamed; a copy on the message row
+   * would be a second answer that stops agreeing the moment it is.
+   * ⚠ **ABSENT AND `null` BOTH MEAN "NOT ANSWERED HERE"** — an older server, a
+   * page this read did not resolve names for, a human author, or an agent whose
+   * session row has been swept. Every renderer falls back to the `agent-<id>`
+   * handle, which is minted once and never recycled.
+   * ⚠ **PEER-TYPED.** Nothing validates its charset, so every surface that
+   * splices it neutralizes it.
+   */
+  authorAgentName?: string | null;
   // ── THE DELIVERY KEYSTONE (2026-09-02, A9; `types-delivery.ts`) ─────────
   // ⚠ **OPTIONAL *AND* NULLABLE, AND BOTH MEAN "NOT ANSWERED HERE".** `undefined`
   // is what a message this tree BUILDS rather than READS carries (an optimistic

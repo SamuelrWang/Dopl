@@ -11,7 +11,11 @@ import {
   listWorkspaceMessagesAfter,
   type MemberChannelRef,
 } from "./repository-await-workspace";
-import { profilesById, type ChannelContext } from "./service-shared";
+import {
+  agentNamesFor,
+  profilesById,
+  type ChannelContext,
+} from "./service-shared";
 
 /**
  * THE **WORKSPACE-WIDE** AWAIT HOLD — `op="await"` with no `channel`: block until
@@ -193,11 +197,18 @@ export async function awaitWorkspaceMessages(
   const authorIds = rows
     .map((r) => r.author_user_id)
     .filter((id): id is string => id !== null);
-  const profiles = await profilesById(authorIds);
+  // ⚠ TWO PAGE-WIDE JOINS, IN PARALLEL — the second names the AGENT behind an
+  // agent-authored row (`service-shared.ts › agentNamesFor`), so a hold's page
+  // labels its authors exactly as `read`'s does. One workspace, by construction.
+  const [profiles, agentNames] = await Promise.all([
+    profilesById(authorIds),
+    agentNamesFor([ctx.workspaceId], rows),
+  ]);
   const messages: WorkspaceChannelMessage[] = rows.map((row) => {
     const base = mapMessageRow(
       row,
-      row.author_user_id ? profiles.get(row.author_user_id) : undefined
+      row.author_user_id ? profiles.get(row.author_user_id) : undefined,
+      agentNames
     );
     const ref = byChannel.get(row.channel_id);
     // ⚠ `null` WHEN THE CHANNEL COULD NOT BE RESOLVED, never an empty string: a

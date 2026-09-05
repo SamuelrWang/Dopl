@@ -138,6 +138,14 @@ export interface ChannelMessage {
    */
   authorName?: string | null;
   authorAvatarUrl?: string | null;
+  /**
+   * The OPERATOR'S NAME for the agent that wrote this row, joined from the live
+   * session at read time (2026-09-04). ⚠ Absent and `null` both mean "not
+   * answered here" — a human author, an older server, or a session row that has
+   * been swept; fall back to the `agent-<id>` handle, which is never recycled.
+   * ⚠ PEER-TYPED: neutralize it before splicing it into any narration.
+   */
+  authorAgentName?: string | null;
   // ── THE DELIVERY KEYSTONE (2026-09-02, A9; `delivery-types.ts`) ─────────
   // ⚠ **OPTIONAL *AND* NULLABLE, AND BOTH MEAN "NOT ANSWERED HERE"** — an older
   // server omits the key, a newer one sends `null` for a row it could not

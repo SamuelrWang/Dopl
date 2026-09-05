@@ -123,7 +123,7 @@ export async function awaitNewMessages(
   };
 
   counters.polls += 1;
-  let messages = await pollChannelMessages(channelId, since, excludeAuthor);
+  let messages = await pollChannelMessages(channelId, ctx.workspaceId, since, excludeAuthor);
 
   while (
     messages.length === 0 &&
@@ -144,7 +144,7 @@ export async function awaitNewMessages(
     // who lost it since the last recheck.
     await verifyAccess();
     counters.polls += 1;
-    const found = await pollChannelMessages(channelId, since, excludeAuthor);
+    const found = await pollChannelMessages(channelId, ctx.workspaceId, since, excludeAuthor);
     // ⚠ An existence hit that reads back empty must keep HOLDING — never return
     // `{messages: [], timedOut: false}`, which reads as "delivered nothing".
     if (found.length > 0) messages = found;
