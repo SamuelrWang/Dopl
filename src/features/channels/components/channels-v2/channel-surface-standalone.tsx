@@ -30,13 +30,14 @@
 import { cn } from "@/shared/lib/utils";
 import type { Role } from "@/features/workspaces/types";
 import { ChannelSurface } from "./channel-surface";
-import { ChannelsV2AgentPanel } from "./agent-panel";
+import { SurfaceAgentView } from "./surface-agent-view";
 import { useChannelSurfaceData } from "./channel-surface-data";
 import { useChannelsV2Selection } from "./use-channels-v2-selection";
 import type {
   ChannelSurfaceCapabilities,
   ChannelSurfaceSlots,
 } from "./channel-surface";
+import type { ChannelWebView } from "./use-channel-web-view";
 import type { Channel } from "../../types";
 
 export function StandaloneChannelSurface({
@@ -49,6 +50,7 @@ export function StandaloneChannelSurface({
   onDeleted,
   slots,
   capabilities,
+  webView,
   className,
 }: {
   workspaceId: string;
@@ -78,6 +80,16 @@ export function StandaloneChannelSurface({
   onDeleted?: () => void;
   slots?: ChannelSurfaceSlots;
   capabilities?: ChannelSurfaceCapabilities;
+  /**
+   * THE **WEB** CHANNEL PAGE'S ONE-COLUMN LAYOUT (Samuel, 2026-09-04) — passed
+   * only by `src/app/c/[workspaceId]/guest-channel.tsx`, which owns the state
+   * because it lives in the URL. Absent is every desktop mount.
+   *
+   * ⚠ IT MOVES THE AGENT VIEW INSIDE THE SURFACE. On one column the agent
+   * REPLACES the main area under the shared header, so the surface renders it;
+   * the overlay below is the two-column answer and would cover that header.
+   */
+  webView?: ChannelWebView;
   className?: string;
 }) {
   const sel = useChannelsV2Selection({
@@ -112,35 +124,20 @@ export function StandaloneChannelSurface({
         onDeselect={onDeleted}
         slots={slots}
         capabilities={capabilities}
+        webView={webView}
       />
-      {/* ⚠ The Sent lane reads the OPEN CHANNEL's transcript, so the panel takes
-          `messages` rather than fetching: one read, and the panel cannot show a
-          message the transcript beside it does not have. On the workspace page
-          this same panel is `overlays.tsx`, beside the create dialogs it has no
-          use for here. */}
-      <ChannelsV2AgentPanel
-        openAgent={sel.openAgent}
-        sessions={data.agentSessions}
-        messages={data.messages}
-        // ⚠ THE POINT OF THE INLINE CARD, ON THIS HOST ESPECIALLY (Samuel,
-        // 2026-08-25). A solo /home channel has no tree and never had the
-        // consent Inbox beside it, so before the card a draft its agent held
-        // could not be posted from ANYWHERE. The rows are the surface's own
-        // read — no second fetch.
-        pendingPosts={data.requests}
-        onPostPending={(id) => data.decideOutbound(id, "allow")}
-        // ANSWERING AN ESCALATION FROM THE AGENT PANE (2026-08-31). ⚠ THE SAME
-        // MUTATION the transcript's own cards use — one write, one fence, one
-        // cache patch. A second path here is how the two panes come to disagree
-        // about whether a question was answered.
-        onAnswerEscalation={data.answerEscalation}
-        answerBusy={data.answerBusy}
-        postBusy={data.consentBusy}
-        currentUserId={currentUserId}
-        workspaceSlug={workspaceSlug}
-        onClose={() => sel.setOpenAgent(null)}
-        onRefreshSessions={data.refreshAgents}
-      />
+      {/* THE AGENT VIEW AS A 380px OVERLAY — the two-column answer, and the
+          `webView` docblock above says why the one-column layout renders its
+          own instead of this one. */}
+      {!webView && (
+        <SurfaceAgentView
+          data={data}
+          openAgent={sel.openAgent}
+          onClose={() => sel.setOpenAgent(null)}
+          currentUserId={currentUserId}
+          workspaceSlug={workspaceSlug}
+        />
+      )}
     </div>
   );
 }

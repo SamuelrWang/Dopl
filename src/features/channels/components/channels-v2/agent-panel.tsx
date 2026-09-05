@@ -174,6 +174,7 @@ export function ChannelsV2AgentPanel({
   answerBusy,
   currentUserId,
   workspaceSlug = "",
+  full = false,
   onClose,
   onRefreshSessions,
 }: {
@@ -206,6 +207,13 @@ export function ChannelsV2AgentPanel({
    *  the panel unchanged; main degrades an unusable segment rather than
    *  refusing. */
   workspaceSlug?: string;
+  /**
+   * RENDER AS THE MAIN AREA, not as the 380px overlay (Samuel, 2026-09-04 — the
+   * WEB channel page). The phone has one column, so an agent's view REPLACES the
+   * conversation under the header's dropdown instead of sliding over a tab
+   * column that is not there. ⚠ Content-identical: only the geometry moves.
+   */
+  full?: boolean;
   onClose: () => void;
   /** Re-read the desktop's session feed. Called ONLY when main refuses a stop
    *  verb, which is the one state change no push announces. */
@@ -289,7 +297,13 @@ export function ChannelsV2AgentPanel({
         // gray-against-white Samuel is pointing at. **Read the level, not the history**: if this
         // pane ever looks like a different surface from the transcript beside it, the ground it
         // sits on moved and this token is what has to follow.
-        "absolute inset-y-0 right-0 z-20 flex w-[380px] flex-col bg-[var(--home-card)]",
+        "z-20 flex flex-col bg-[var(--home-card)]",
+        // ⚠ TWO GEOMETRIES, ONE PANE — see `full`. The column form is the
+        // 380px overlay this file was written for; `full` is the same pane AS
+        // the main area, with no column beside it to divide from.
+        full
+          ? "min-h-0 min-w-0 flex-1"
+          : "absolute inset-y-0 right-0 w-[380px]",
         // ⚠ THE DIVIDER IS `border-l border-border-default` — THE SAME CLASS THIS PANE'S OTHER
         // LINES ALREADY CARRY, and that is the whole point. Its header rule is
         // `border-b border-border-default`; on /home BOTH are recoloured to the account palette's
@@ -301,9 +315,9 @@ export function ChannelsV2AgentPanel({
         // ⚠ 2px COMES FROM THE SAME MODULE, not from a number here: `.frame :global(.border-l
         // .border-border-default)` widens exactly this shape. On the workspace channels page it
         // stays a neutral hairline, which is that page's own idiom.
-        "border-l border-border-default",
-        "transition-transform duration-200 ease-out motion-reduce:transition-none",
-        open ? "translate-x-0" : "pointer-events-none translate-x-full"
+        !full && "border-l border-border-default",
+        !full && "transition-transform duration-200 ease-out motion-reduce:transition-none",
+        !full && (open ? "translate-x-0" : "pointer-events-none translate-x-full")
       )}
     >
       {agent && (

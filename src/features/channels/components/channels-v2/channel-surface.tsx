@@ -23,24 +23,23 @@
  * passes neither gets the surface the channels page has always rendered.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { Role } from "@/features/workspaces/types";
 import { channelDisplayName } from "../../lib/channel-display";
-import { ChannelsV2SettingsSlot } from "./settings-slot";
 import { ChannelsV2MessagePane } from "./message-pane";
-import { ChannelsV2InfoPanel } from "./info-panel";
 import { PopOutThreadButton } from "./pop-out";
 import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
+import { ChannelSingleColumn } from "./channel-single-column";
+import { SurfaceAgentView } from "./surface-agent-view";
+import { SurfaceInfoPanel } from "./surface-info-panel";
+import { useInfoSlide } from "./use-info-slide";
+import type { TabKey } from "./info-panel";
+import type { ChannelWebView } from "./use-channel-web-view";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 import type { ChannelSurfaceData } from "./channel-surface-data";
 import type { ChannelsV2Selection } from "./use-channels-v2-selection";
-import type { Channel, ChannelMention } from "../../types";
-
-/** The info column stays mounted this long after close so its slide can run.
- *  ⚠ Keep in sync with `.channel-info-slide`'s transition (globals.css + the
- *  desktop `kit.css` copy). */
-const INFO_SLIDE_MS = 200;
+import type { Channel } from "../../types";
 
 /**
  * What this surface hands an injected Info tab.
@@ -186,6 +185,18 @@ export interface ChannelSurfaceProps {
   onDeselect?: () => void;
   slots?: ChannelSurfaceSlots;
   capabilities?: ChannelSurfaceCapabilities;
+  /**
+   * SINGLE COLUMN, AND WHICH FACE IS ON IT — the **WEB** channel page (Samuel,
+   * 2026-09-04). Present swaps this surface's two columns for one full-width
+   * main area with the faces behind a header dropdown; see
+   * `channel-single-column.tsx` for the layout and `use-channel-web-view.ts` for
+   * why the HOST owns the state (it is in the URL, and this file is router-free
+   * by construction).
+   *
+   * ⚠ ABSENT IS EVERY DESKTOP MOUNT, byte for byte — the transcript with the
+   * Info / Threads / Agents / Settings column sliding beside it.
+   */
+  webView?: ChannelWebView;
 }
 
 export function ChannelSurface({
@@ -200,11 +211,10 @@ export function ChannelSurface({
   onDeselect,
   slots,
   capabilities,
+  webView,
 }: ChannelSurfaceProps) {
   const {
     members,
-    threads,
-    mentions,
     agentSessions,
     agentsPanel,
     index,
@@ -219,167 +229,175 @@ export function ChannelSurface({
       ? channel.name
       : channelDisplayName(channel, members, currentUserId);
   // ⚠ THE PANEL OUTLIVES `infoOpen` BY ONE TRANSITION, so the closing slide has
-  // something to clip; the shell it sits in is always rendered (see the JSX).
-  // Presentation only — `sel.infoOpen` stays the single source of truth for the
-  // toggle, and the OR below means this can never hold the column open, only
-  // briefly populated. Same shape as `Popover`'s exit phase.
-  //
-  // ⚠ THE ONLY setState IS INSIDE THE TIMER, and OPENING schedules a 0ms one it
-  // does not need — because mounting is already handled by the OR. Both are
-  // deliberate: `react-hooks/set-state-in-effect` (error, not warning) rejects a
-  // synchronous setState in an effect body, and a 0ms timer is how the same
-  // machine serves the open direction and the reduced-motion escape, where the
-  // kit turns the transition off and nothing may wait for it.
-  const [infoTrailing, setInfoTrailing] = useState(sel.infoOpen);
-  useEffect(() => {
-    if (infoTrailing === sel.infoOpen) return;
-    const instant =
-      sel.infoOpen ||
-      (typeof window !== "undefined" &&
-        typeof window.matchMedia === "function" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const timer = setTimeout(
-      () => setInfoTrailing(sel.infoOpen),
-      instant ? 0 : INFO_SLIDE_MS
+  // something to clip — `use-info-slide.ts` owns the timer and the reasons.
+  const infoMounted = useInfoSlide(sel.infoOpen);
+
+  // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is rendering —
+  // never a flip inside the mutation. Two fast clicks send `true` then `false`
+  // and converge; a toggle verb would race. Named because BOTH layouts' headers
+  // fire it and a second copy is a second answer.
+  const toggleFavorite = () =>
+    data.favorite.mutate({
+      channelId: channel.id,
+      favorite: channel.myFavoritedAt == null,
+    });
+  const messagePane = (viewSelect?: ReactNode) => (
+    <ChannelsV2MessagePane
+      channelId={channel.id}
+      workspaceId={workspaceId}
+      channelName={channelName}
+      thread={openThread}
+      rows={rows}
+      index={index}
+      members={members}
+      loading={data.messagesLoading}
+      outboundAsk={openThread ? (data.outboundByThread.get(openThread.id) ?? null) : null}
+      outboundBusy={data.consentBusy}
+      onDecideOutbound={data.decideOutbound}
+      scrollTarget={sel.scrollTarget}
+      // The Threads tab's "New thread", arriving from the OTHER column
+      // (2026-08-24). It travels through the selection hook because that is
+      // where cross-surface asks live, and because both hosts of this surface
+      // then get it without a second wiring.
+      newThreadSignal={sel.newThreadSignal}
+      infoOpen={sel.infoOpen}
+      favorited={channel.myFavoritedAt != null}
+      onToggleFavorite={toggleFavorite}
+      gate={gate}
+      // THE @-PICKER'S AND THE RECIPIENT LINE'S FACTS (2026-09-02, slice B10): every member's
+      // live sessions in this room, off the poll the Agents tab already makes, plus the
+      // channel's nominated responder. Both handed down for `newAgent`'s reason — a second
+      // mount of that hook is a second poll of an unpublished table.
+      liveAgents={agentsPanel.peerSessions}
+      defaultResponderAgentName={channel.defaultResponderAgentName}
+      // The composer's New Agent icon (2026-08-21) — handed down whole,
+      // never re-mounted: a second `useAgentsPanel` is a second peer poll.
+      newAgent={agentsPanel}
+      // THE POP-OUT (Phase 10). Rendered only with a thread open, and it
+      // hides ITSELF outside the desktop shell (feature detection), so the
+      // web tree gets no affordance for a window it cannot open.
+      popOut={
+        openThread ? (
+          <PopOutThreadButton
+            workspaceSlug={workspaceSlug}
+            channelId={channel.id}
+            threadId={openThread.id}
+          />
+        ) : null
+      }
+      // ⚠ MY OWN agents mid-turn, off the SAME bridge feed this surface
+      // already reads (`data.agentSessions` — no new read, no poll). Rendered
+      // in CHANNEL view as well as thread view, and scoped by `ownAgentsFor`
+      // so it always tracks the composer's own target: a channel-level
+      // composer shows every agent in the channel, a thread-scoped one shows
+      // that thread's. `null` sessions ("could not ask") render nothing.
+      agentActivity={
+        <AgentActivityRows
+          agents={ownAgentsWorking(
+            agentSessions,
+            channel.id,
+            openThread?.id ?? null
+          )}
+        />
+      }
+      // "Anthony's agent is working…", off the peer projection the Agents tab
+      // already polls. Thread view only — the row is about ONE exchange.
+      peerActivity={
+        openThread ? (
+          <PeerActivityRow
+            peers={peerWorkingOn(
+              agentsPanel.peerSessions,
+              currentUserId,
+              openThread.id
+            )}
+            byUser={index.byId}
+            currentUserId={currentUserId}
+          />
+        ) : null
+      }
+      // SCROLL-UP PAGING — the three values `use-channel-messages.ts` returns
+      // for it, handed down whole. The pane owns the trigger and the anchor;
+      // the hook owns the cursor.
+      hasOlder={data.hasOlderMessages}
+      loadingOlder={data.loadingOlderMessages}
+      onLoadOlder={data.loadOlderMessages}
+      viewSelect={viewSelect}
+      onToggleInfo={sel.toggleInfo}
+      onExitThread={() => sel.openThread(null)}
+      // AN AGENT'S SENDER PILL OPENS THAT AGENT'S PANE (Samuel, 2026-08-28).
+      // ⚠ THE AGENTS TAB'S OWN OPEN MECHANISM, NOT A SECOND ONE — literally the
+      // function handed to `onOpenAgent` twenty lines below, so the card's Open
+      // button and the transcript's pill cannot come to mean different things.
+      // Safe on BOTH hosts of this surface: each one mounts the pane this moves
+      // (`overlays.tsx` on the workspace page, the panel inside
+      // `channel-surface-standalone.tsx` everywhere else).
+      onOpenAgent={sel.setOpenAgent}
+      // ANSWER AN ESCALATION — the transcript's one WRITE, and the only place
+      // an option button can reach a mutation. `message-pane.tsx` passes it
+      // straight down; the pop-out hands none, so a card there is read-only.
+      onAnswerEscalation={data.answerEscalation}
+      answerBusy={data.answerBusy}
+      onOpenThread={sel.openThread}
+    />
+  );
+
+  /** The tab column, or — with `fullTab` — ONE of its faces as the main area.
+   *  ⚠ `surface-info-panel.tsx` owns the wiring; this file owns which pane. */
+  const infoPanel = (fullTab?: TabKey) => (
+    <SurfaceInfoPanel
+      channel={channel}
+      channelName={channelName}
+      workspaceId={workspaceId}
+      workspaceSlug={workspaceSlug}
+      currentUserId={currentUserId}
+      role={role}
+      data={data}
+      selection={sel}
+      slots={slots}
+      capabilities={capabilities}
+      onDeselect={onDeselect}
+      onRosterChanged={onRosterChanged}
+      webView={webView}
+      fullTab={fullTab}
+    />
+  );
+
+  // ⚠ ONE COLUMN ON THE WEB, TWO ON THE DESKTOP — see the `webView` prop. The
+  // slide-out shell is not merely closed in the first branch, it is NOT
+  // RENDERED: a column reserving width is what kept the chat off the page edge.
+  if (webView) {
+    return (
+      <ChannelSingleColumn
+        channelName={channelName}
+        threadTitle={openThread?.title ?? null}
+        threadView={openThread !== null}
+        favorited={channel.myFavoritedAt != null}
+        onToggleFavorite={toggleFavorite}
+        view={webView.view}
+        onSelectView={webView.setView}
+        openAgent={sel.openAgent}
+        sessions={agentSessions}
+        onCloseAgent={() => sel.setOpenAgent(null)}
+        onExitThread={() => sel.openThread(null)}
+        messagePane={messagePane}
+        tabBody={webView.view === "channel" ? null : infoPanel(webView.view)}
+        agentView={
+          <SurfaceAgentView
+            data={data}
+            openAgent={sel.openAgent}
+            onClose={() => sel.setOpenAgent(null)}
+            currentUserId={currentUserId}
+            workspaceSlug={workspaceSlug}
+            full
+          />
+        }
+      />
     );
-    return () => clearTimeout(timer);
-  }, [sel.infoOpen, infoTrailing]);
-  const infoMounted = sel.infoOpen || infoTrailing;
-
-  // The Tags inbox's click: mark read, land the center pane on the right
-  // transcript, then signal the scroll. The scroll effect runs POST-render, so
-  // the swapped transcript is in the DOM before it looks for the message row.
-  //
-  // ⚠ The mark-read is OPTIMISTIC (`use-mention-writes.ts`), which is what makes
-  // the badge drop in the same frame as the navigation. The nonced scroll signal
-  // is `use-channels-v2-selection.ts › jumpToMessage`.
-  const openMention = (mention: ChannelMention) => {
-    if (!mention.read) {
-      data.markRead.mutate({
-        channelId: channel.id,
-        messageIds: [mention.messageId],
-      });
-    }
-    sel.jumpToMessage(mention.threadId, mention.messageId);
-  };
-
-  // ⚠ MARK-ALL SENDS THE IDS IT IS DISPLAYING, never a flag. The list is
-  // bounded and says when it clipped, so "all" can only honestly mean the page
-  // — and naming the ids makes that true by construction rather than by comment
-  // (INVARIANTS §9). Already-read rows are filtered out so a no-op click sends
-  // no request at all.
-  const markAllMentionsRead = () => {
-    const unread = mentions.filter((m) => !m.read).map((m) => m.messageId);
-    if (unread.length === 0) return;
-    data.markRead.mutate({ channelId: channel.id, messageIds: unread });
-  };
+  }
 
   return (
     <>
-      <ChannelsV2MessagePane
-        channelId={channel.id}
-        workspaceId={workspaceId}
-        channelName={channelName}
-        thread={openThread}
-        rows={rows}
-        index={index}
-        members={members}
-        loading={data.messagesLoading}
-        outboundAsk={openThread ? (data.outboundByThread.get(openThread.id) ?? null) : null}
-        outboundBusy={data.consentBusy}
-        onDecideOutbound={data.decideOutbound}
-        scrollTarget={sel.scrollTarget}
-        // The Threads tab's "New thread", arriving from the OTHER column
-        // (2026-08-24). It travels through the selection hook because that is
-        // where cross-surface asks live, and because both hosts of this surface
-        // then get it without a second wiring.
-        newThreadSignal={sel.newThreadSignal}
-        infoOpen={sel.infoOpen}
-        // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is
-        // rendering — never a flip inside the mutation. Two fast clicks send
-        // `true` then `false` and converge; a toggle verb would race.
-        favorited={channel.myFavoritedAt != null}
-        onToggleFavorite={() =>
-          data.favorite.mutate({
-            channelId: channel.id,
-            favorite: channel.myFavoritedAt == null,
-          })
-        }
-        gate={gate}
-        // THE @-PICKER'S AND THE RECIPIENT LINE'S FACTS (2026-09-02, slice B10): every member's
-        // live sessions in this room, off the poll the Agents tab already makes, plus the
-        // channel's nominated responder. Both handed down for `newAgent`'s reason — a second
-        // mount of that hook is a second poll of an unpublished table.
-        liveAgents={agentsPanel.peerSessions}
-        defaultResponderAgentName={channel.defaultResponderAgentName}
-        // The composer's New Agent icon (2026-08-21) — handed down whole,
-        // never re-mounted: a second `useAgentsPanel` is a second peer poll.
-        newAgent={agentsPanel}
-        // THE POP-OUT (Phase 10). Rendered only with a thread open, and it
-        // hides ITSELF outside the desktop shell (feature detection), so the
-        // web tree gets no affordance for a window it cannot open.
-        popOut={
-          openThread ? (
-            <PopOutThreadButton
-              workspaceSlug={workspaceSlug}
-              channelId={channel.id}
-              threadId={openThread.id}
-            />
-          ) : null
-        }
-        // ⚠ MY OWN agents mid-turn, off the SAME bridge feed this surface
-        // already reads (`data.agentSessions` — no new read, no poll). Rendered
-        // in CHANNEL view as well as thread view, and scoped by `ownAgentsFor`
-        // so it always tracks the composer's own target: a channel-level
-        // composer shows every agent in the channel, a thread-scoped one shows
-        // that thread's. `null` sessions ("could not ask") render nothing.
-        agentActivity={
-          <AgentActivityRows
-            agents={ownAgentsWorking(
-              agentSessions,
-              channel.id,
-              openThread?.id ?? null
-            )}
-          />
-        }
-        // "Anthony's agent is working…", off the peer projection the Agents tab
-        // already polls. Thread view only — the row is about ONE exchange.
-        peerActivity={
-          openThread ? (
-            <PeerActivityRow
-              peers={peerWorkingOn(
-                agentsPanel.peerSessions,
-                currentUserId,
-                openThread.id
-              )}
-              byUser={index.byId}
-              currentUserId={currentUserId}
-            />
-          ) : null
-        }
-        // SCROLL-UP PAGING — the three values `use-channel-messages.ts` returns
-        // for it, handed down whole. The pane owns the trigger and the anchor;
-        // the hook owns the cursor.
-        hasOlder={data.hasOlderMessages}
-        loadingOlder={data.loadingOlderMessages}
-        onLoadOlder={data.loadOlderMessages}
-        onToggleInfo={sel.toggleInfo}
-        onExitThread={() => sel.openThread(null)}
-        // AN AGENT'S SENDER PILL OPENS THAT AGENT'S PANE (Samuel, 2026-08-28).
-        // ⚠ THE AGENTS TAB'S OWN OPEN MECHANISM, NOT A SECOND ONE — literally the
-        // function handed to `onOpenAgent` twenty lines below, so the card's Open
-        // button and the transcript's pill cannot come to mean different things.
-        // Safe on BOTH hosts of this surface: each one mounts the pane this moves
-        // (`overlays.tsx` on the workspace page, the panel inside
-        // `channel-surface-standalone.tsx` everywhere else).
-        onOpenAgent={sel.setOpenAgent}
-        // ANSWER AN ESCALATION — the transcript's one WRITE, and the only place
-        // an option button can reach a mutation. `message-pane.tsx` passes it
-        // straight down; the pop-out hands none, so a card there is read-only.
-        onAnswerEscalation={data.answerEscalation}
-        answerBusy={data.answerBusy}
-        onOpenThread={sel.openThread}
-      />
+      {messagePane()}
       {/* THE INFO COLUMN SLIDES (Samuel, 2026-08-24). The shell is ALWAYS
           rendered — a column that mounts at its open width has no 0-width start
           state to animate from — and the panel inside mounts on open and stays
@@ -389,88 +407,7 @@ export function ChannelSurface({
         data-open={sel.infoOpen}
         aria-hidden={!sel.infoOpen}
       >
-      {infoMounted && (
-        <ChannelsV2InfoPanel
-          channel={channel}
-          channelName={channelName}
-          members={members}
-          threads={threads}
-          threadsTruncated={data.threadsTruncated}
-          threadsLoading={data.threadsLoading}
-          index={index}
-          openThread={openThread}
-          onOpenThread={sel.openThread}
-          onNewThread={sel.requestNewThread}
-          agentSessions={agentSessions}
-          peerSessions={agentsPanel.peerSessions}
-          canLaunchAgent={
-            agentsPanel.canLaunch &&
-            !!openThread &&
-            (openThread.createdBy === currentUserId ||
-              openThread.targetUserId === currentUserId)
-          }
-          launchBusy={agentsPanel.launchBusy}
-          launchError={agentsPanel.launchError}
-          // ⚠ THE PROMISE IS HANDED THROUGH, not voided (2026-08-22). The
-          // template picker inside the tab AWAITS this to learn whether main
-          // asked for a first-use approval; a `void` wrapper here would make
-          // every picker launch look like a build with no bridge.
-          onLaunchAgent={(id, templateId, overrides) =>
-            agentsPanel.launchAgent(id, templateId, overrides)
-          }
-          onApproveTemplate={agentsPanel.approveTemplate}
-          openAgent={sel.openAgent}
-          onOpenAgent={sel.setOpenAgent}
-          mentions={mentions}
-          mentionsTruncated={data.mentionsTruncated}
-          mentionsLoading={data.mentionsLoading}
-          onOpenMention={openMention}
-          onMarkAllMentionsRead={markAllMentionsRead}
-          // THE KNOWLEDGE TAB (M4) — opt-in, see `ChannelSurfaceCapabilities`.
-          knowledge={capabilities?.knowledge}
-          // ⚠ CALLED, not passed. The tab is a render function so it can be
-          // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
-          infoTab={slots?.infoTab?.({ gate })}
-          // THE SETTINGS TAB (Samuel, 2026-08-19). This cluster hung off the
-          // pane HEADER until then; the header keeps only the info toggle.
-          // ⚠ THREAD-SCOPED WHILE A THREAD IS OPEN (2026-08-21) — the branch
-          // is `settings-slot.tsx`, which owns why it lives at the MOUNT.
-          settings={
-            <ChannelsV2SettingsSlot
-              channel={channel}
-              workspaceId={workspaceId}
-              workspaceSlug={workspaceSlug}
-              currentUserId={currentUserId}
-              role={role}
-              members={members}
-              thread={openThread}
-              agentSessions={agentSessions}
-              gate={gate}
-              memberManagement={capabilities?.memberManagement}
-              selfManagement={capabilities?.selfManagement}
-              onDeselect={() => {
-                sel.selectChannel(null);
-                onDeselect?.();
-              }}
-              // ⚠ THIS SLOT'S `onExitThread` FIRES ON A THREAD DELETE AND
-              // NOTHING ELSE (`settings-slot.tsx` wires it to `onDeleted`), so
-              // it is where the scroll-back window is told. The query cache's
-              // half of the same cascade is the optimistic patch in
-              // `use-thread-lifecycle-writes.ts`; the window is not in that
-              // cache, and a reader scrolled back through history would
-              // otherwise keep rendering the deleted rows.
-              onExitThread={() => {
-                if (openThread) data.dropThreadFromHistory(openThread.id);
-                sel.openThread(null);
-              }}
-              onRosterChanged={() => {
-                onRosterChanged?.();
-                data.refetchMembers();
-              }}
-            />
-          }
-        />
-      )}
+        {infoMounted && infoPanel()}
       </div>
     </>
   );

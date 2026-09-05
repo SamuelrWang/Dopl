@@ -123,6 +123,7 @@ export function ChannelsV2MessagePane({
   scrollTarget,
   newThreadSignal,
   infoOpen = false,
+  viewSelect,
   favorited = false,
   gate,
   liveAgents,
@@ -163,6 +164,9 @@ export function ChannelsV2MessagePane({
   newThreadSignal?: number;
   /** `"page"` chrome only — the info toggle's pressed state. */
   infoOpen?: boolean;
+  /** THE WEB'S VIEW DROPDOWN — handed straight to `PaneHeader`, where it takes
+   *  the info toggle's place. See that file for the ruling. */
+  viewSelect?: ReactNode;
   /** `"page"` chrome only — the viewer has favourited THIS CHANNEL
    *  (`Channel.myFavoritedAt != null`, computed by the caller). Drives the
    *  bookmark's fill and its `aria-pressed`. */
@@ -332,6 +336,7 @@ export function ChannelsV2MessagePane({
         channelName={channelName}
         threadTitle={thread?.title ?? null}
         infoOpen={infoOpen}
+        viewSelect={viewSelect}
         favorited={favorited}
         popOut={popOut}
         chrome={chrome}

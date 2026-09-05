@@ -18,21 +18,30 @@ import { IconButton } from "./bits";
 export function PaneHeader({
   channelName,
   threadTitle,
-  infoOpen,
+  infoOpen = false,
   favorited,
   popOut,
   chrome,
+  viewSelect,
   onToggleInfo,
   onToggleFavorite,
   onExitThread,
 }: {
   channelName: string;
   threadTitle: string | null;
-  infoOpen: boolean;
+  infoOpen?: boolean;
   favorited: boolean;
   popOut?: ReactNode;
   chrome: "page" | "window";
-  onToggleInfo: () => void;
+  /**
+   * THE WEB'S VIEW DROPDOWN, IN THE INFO TOGGLE'S SPOT (Samuel, 2026-09-04).
+   * The phone has no room for a column beside the transcript, so the five faces
+   * that column carried become one dropdown here and the toggle has nothing left
+   * to toggle. ⚠ PRESENT REPLACES THE TOGGLE, it does not sit beside it: two
+   * controls for one choice is the confusion this replaced.
+   */
+  viewSelect?: ReactNode;
+  onToggleInfo?: () => void;
   onToggleFavorite: () => void;
   onExitThread: () => void;
 }) {
@@ -112,13 +121,15 @@ export function PaneHeader({
           (`pages/home/home.module.css`, keyed on this exact label), which is
           deleted: one control with one face on both surfaces, rather than a
           shared component and a per-page override of it. */}
-      <IconButton
-        icon={PanelRight}
-        label="Channel info"
-        bare
-        active={infoOpen}
-        onClick={onToggleInfo}
-      />
+      {viewSelect ?? (
+        <IconButton
+          icon={PanelRight}
+          label="Channel info"
+          bare
+          active={infoOpen}
+          onClick={onToggleInfo}
+        />
+      )}
     </header>
   );
 }
