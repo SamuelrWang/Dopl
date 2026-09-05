@@ -253,3 +253,56 @@ describe("a caller that sent no key sees a byte-identical result", () => {
     expect(out).not.toContain("retry=existing");
   });
 });
+
+/**
+ * **`op="send"` — A CONVERGED RETRY OPENS BY SAYING NOTHING WAS WRITTEN**
+ * (2026-09-04, follow-up 4 to the self-wake investigation).
+ *
+ * ⚠ **THE SEND LANE HAD NO SUCH NOTICE AT ALL.** `service-writes.ts`'s
+ * idempotency short-circuit returns the STORED row and writes nothing, with an
+ * ack byte-identical to a first post — which is why the agent's own transcript
+ * in the Mobile Command Center incident showed the 3:48 PM message posted twice
+ * over ONE row (seq 963). The launch and direct lanes above have carried
+ * `retry=existing` since A10; this is the same fact on the op every agent calls
+ * most.
+ *
+ * ⚠ **IT IS THE HEAD, NOT A FIELD, AND THAT IS THE ONE DIFFERENCE FROM THOSE
+ * LANES.** The word `posted` is itself the wrong claim on a replay, and a caller
+ * that reads no further than the first word must not take one for the other.
+ */
+describe('op="send" — a replayed post says so in its first words', () => {
+  const posted = (over: Record<string, unknown> = {}) =>
+    ({
+      listChannels: vi.fn(async () => [CHANNEL]),
+      listChannelMembers: vi.fn(async () => []),
+      postChannelMessage: vi.fn(async () => ({
+        id: "m1",
+        seq: 963,
+        kind: "message",
+        metadata: {},
+        authorUserId: "u1",
+        ...over,
+      })),
+    }) as unknown as DoplClient;
+
+  const send = { op: "send", channel: "general", body: "the answer" };
+
+  it("names the seq the FIRST call wrote, and that it was not re-sent", async () => {
+    const text = await run(posted({ replayed: true }), { ...send, client_msg_id: KEY });
+    expect(text).toContain("already posted as #963 (idempotent replay — not re-sent)");
+    expect(text.startsWith("posted ")).toBe(false);
+  });
+
+  it("a FIRST post is untouched — no caller grows a field it never had", async () => {
+    const text = await run(posted(), { ...send, client_msg_id: KEY });
+    expect(text.startsWith("posted ")).toBe(true);
+    expect(text).not.toContain("idempotent replay");
+  });
+
+  it("an OLDER SERVER that sends no `replayed` key reads as a fresh post", async () => {
+    // ⚠ ABSENT IS "not reported", never "it was a replay" — the same rule the
+    // launch lane's own older-server case pins.
+    const text = await run(posted({ replayed: undefined }), send);
+    expect(text).not.toContain("idempotent replay");
+  });
+});

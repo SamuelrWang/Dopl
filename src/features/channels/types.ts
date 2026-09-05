@@ -284,7 +284,25 @@ export type ChannelMessage = {
  * alias survives so the write path keeps a name distinct from the READ shape;
  * a future post-time notice goes here rather than into `metadata`.
  */
-export type ChannelMessagePosted = ChannelMessage;
+export type ChannelMessagePosted = ChannelMessage & {
+  /**
+   * **THIS CALL WROTE NOTHING — THE `clientMsgId` HAD ALREADY LANDED**
+   * (2026-09-04).
+   *
+   * ⚠ **THE ACK USED TO BE BYTE-IDENTICAL TO A FIRST POST**, which is why the
+   * agent's own transcript in the Mobile Command Center incident showed the 3:48
+   * PM message posted twice over ONE row (seq 963): the idempotency
+   * short-circuit returned the stored message with a success shape and nothing
+   * anywhere said the write had converged. An orchestrator reading two `posted`
+   * acks has no way to tell one message from two.
+   *
+   * ⚠ **PRESENT ONLY ON A REPLAY, never `false`.** It is a NOTICE about this
+   * CALL, not a property of the row — the same message read back tomorrow
+   * carries no such key — and this alias exists precisely so a post-time notice
+   * has somewhere to go that is not `metadata`.
+   */
+  replayed?: true;
+};
 
 /**
  * ONE ROW OF THE TAGS (MENTIONS) INBOX — a message of this channel whose

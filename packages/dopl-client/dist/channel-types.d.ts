@@ -109,7 +109,16 @@ export interface ChannelMessage {
  * `openingSeq`; this alias keeps the write result named apart from the read
  * shape so a future post-time notice has somewhere to go.
  */
-export type ChannelMessagePosted = ChannelMessage;
+export type ChannelMessagePosted = ChannelMessage & {
+    /**
+     * **THIS CALL WROTE NOTHING — the `clientMsgId` had already landed**
+     * (2026-09-04). ⚠ PRESENT ONLY ON A REPLAY, never `false`: it is a notice
+     * about this CALL, not a property of the row. The ack was byte-identical to a
+     * first post until then, which is how one row read as two messages in an
+     * agent's own transcript. The server's own note is on the twin.
+     */
+    replayed?: true;
+};
 export interface ChannelMember {
     channelId: string;
     userId: string;

@@ -1,6 +1,6 @@
 import "server-only";
 import { slugify } from "@/shared/lib/slug/slugify";
-import type { Channel, ChannelMessage, ChannelMessagePosted } from "../types";
+import type { Channel, ChannelMessagePosted } from "../types";
 import type {
   ChannelCreateInput,
   ChannelMessageCreateInput,
@@ -24,7 +24,7 @@ import {
   assertLifecycleKindIsServerOwned,
   type PostMessageOptions,
 } from "./service-writes-lifecycle";
-import { mapMessageRow, type ChannelMessageRow } from "./dto";
+import { hydrateOne, replayOf } from "./service-writes-ack";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import { getChannel } from "./service-reads";
@@ -35,7 +35,6 @@ import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   canManageChannel,
   loadVisibleChannel,
-  profilesById,
   stripNulDeep,
   UNIQUE_VIOLATION,
   type ChannelContext,
@@ -376,7 +375,7 @@ export async function postMessage(
       ctx.userId,
       input.clientMsgId
     );
-    if (existing) return hydrateOne(existing);
+    if (existing) return replayOf(await hydrateOne(existing));
   }
 
   // Addressing, the reserved-key anti-spoof fold and
@@ -484,17 +483,14 @@ export async function postMessage(
         ctx.userId,
         input.clientMsgId
       );
-      if (raced) return hydrateOne(raced);
+      // ⚠ THE SAME NOTICE ON BOTH DOORS. This IS the short-circuit, reached a
+      // second way, so an ack that omitted `replayed` here would tell a caller
+      // its concurrent retry had written a row.
+      if (raced) return replayOf(await hydrateOne(raced));
     }
     throw err;
   }
 
   await repo.touchChannel(ctx.workspaceId, channel.id);
   return hydrateOne(row);
-}
-
-async function hydrateOne(row: ChannelMessageRow): Promise<ChannelMessage> {
-  if (!row.author_user_id) return mapMessageRow(row, undefined);
-  const profiles = await profilesById([row.author_user_id]);
-  return mapMessageRow(row, profiles.get(row.author_user_id));
 }
