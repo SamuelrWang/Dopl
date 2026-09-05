@@ -143,7 +143,6 @@ export function ChannelsV2InfoPanel({
   channelName,
   activityBins = [],
   activityLoading = false,
-  showNameRow = false,
   members,
   threads,
   threadsTruncated,
@@ -181,8 +180,6 @@ export function ChannelsV2InfoPanel({
    */
   activityBins?: readonly { date: string; count: number }[];
   activityLoading?: boolean;
-  /** Forwarded to {@link InfoTab}; see the note on its Name row. */
-  showNameRow?: boolean;
   members: ChannelMember[];
   /** THE WHOLE bounded list, in the server's activity order — the Threads tab
    *  lists everything, unlike the sidebar's 24h window. */
@@ -346,7 +343,6 @@ export function ChannelsV2InfoPanel({
                 channelName={channelName}
                 activityBins={activityBins}
                 activityLoading={activityLoading}
-                showNameRow={showNameRow}
                 members={members}
                 threadCount={threads.length}
                 mentions={mentions}

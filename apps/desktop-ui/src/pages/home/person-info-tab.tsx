@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarDays, Clock3, type LucideIcon } from "lucide-react";
+import { CalendarDays, Clock3, Hash, type LucideIcon } from "lucide-react";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import {
@@ -173,26 +173,32 @@ export function PersonInfoTab({
           with membership was the defect; a face that does not vary is a
           decoration this panel does not need, and initials minted from a
           channel name read as a person who does not exist. */}
-      <div className="px-3.5 pt-4">
-        <div className="truncate text-title font-semibold text-text-primary">
-          {name}
-        </div>
-      </div>
-
+      {/* ⚠ NO NAME HEADING ABOVE THE CARD (Samuel, 2026-09-05, live review of THIS pane).
+          The channel's name is a FIELD of the card — the first row under "Channel info",
+          the subject before its facts — not a title floating over it. This block used to
+          print the name in title type here; the same ruling had already landed on the
+          workspace channels page (`channels-v2/info-tab.tsx`) and not here, because the two
+          panes are separate compositions of the same rows. ⚠ THEY ARE MEANT TO MATCH: a
+          ruling on this card applies to both unless Samuel says which one it is for. */}
       {/* ⚠ "Channel info", NOT "Main info" (Samuel, live review 2026-08-28). The card is about
           THIS CHANNEL — its dates, its curated rows — and "Main" named a position on the tab
           rather than a subject. ⚠ THE STORED SHAPE IS UNTOUCHED: `info-card.ts › hidden` keys and
           the `channels.info_card` column still say what they said, so this is a label change and
-          not a migration. The workspace channels page's own `channels-v2/info-tab.tsx` keeps its
-          heading — a different tab, not renamed here. */}
+          not a migration. */}
       <PanelHeading title="Channel info" />
       {/* ⚠ THE SECTION WRAPS THE ROWS AND NOT THE HEADING — the add affordance's
           hover is keyed to this element, and a wrapper that included the title
           would reveal the control from a hover that never entered the list. */}
       <InfoCardSection className="px-2">
-        {builtIns.map((row, i) => (
+        {/* ⚠ FIRST, ABOVE EVERY BUILT-IN — and FIXED: no × on this row, because a card
+            with its subject removed is a card about nobody. It is `channelTitle`'s
+            answer, the same derived name the rows list and the tabs use. */}
+        <MetaRow icon={Hash} label="Name">
+          <span className="truncate text-body text-text-primary">{name}</span>
+        </MetaRow>
+        {builtIns.map((row) => (
           <div key={row.key}>
-            {i > 0 && <MetaRowDivider />}
+            <MetaRowDivider />
             <MetaRow
               icon={row.icon}
               label={row.label}

@@ -21,9 +21,10 @@ import { useOverviewSeries } from "@/features/workspaces/hooks/use-overview-seri
  * parameter), and it is fenced against the channels feature's own visibility
  * statement before any service-role count runs.
  *
- * ⚠ IT COUNTS MESSAGES, AND THE LABEL SAYS SO. "Thread activity" is the
- * section's NAME; a picture must state its unit, and every message in this
- * channel belongs to its threads. The `threads` metric was the other candidate
+ * ⚠ IT COUNTS MESSAGES, AND THE LABEL FOLLOWS THE SURFACE (Samuel, 2026-09-05).
+ * This pane shows a CHANNEL, so the heading says "Channel activity"; a thread's
+ * own pane says "Thread activity". It said "Thread" here for a channel until
+ * this ruling. The `threads` metric was the other candidate
  * and was rejected as a MEASUREMENT rather than as a taste: it counts threads
  * OPENED per day, which on a two-person relationship is zero almost every day
  * and would paint an empty strip over a busy channel.
@@ -51,7 +52,7 @@ export function PersonThreadActivity({
 
   return (
     <>
-      <PanelHeading title="Thread activity" />
+      <PanelHeading title="Channel activity" />
       {/* ⚠ THE STRIP RENDERS NOTHING RATHER THAN EMPTY WELLS while the read is
           in flight or when a stale cache entry cannot answer — an empty well
           means a MEASURED zero here, so a full row of them would state 31 quiet

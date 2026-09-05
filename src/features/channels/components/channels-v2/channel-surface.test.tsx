@@ -26,7 +26,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { channel, member, message, thread, ME, PEER, WS } from "./test-fixtures";
 
@@ -156,10 +156,15 @@ afterEach(() => {
   live.mockClear();
 });
 
+/** THE CHAT HEADER'S CRUMB, and only it. The channel's name also sits in the Info tab's
+ *  Name row at every width (Samuel, 2026-09-05), so a page-wide text query finds two; these
+ *  cases are about what the HEADER says. `PaneHeader` wraps the crumb in a labelled nav. */
+const header = () => within(screen.getByRole("navigation", { name: "Breadcrumb" }));
+
 describe("StandaloneChannelSurface — mounted outside the channels page", () => {
   it("renders the channel's own header, transcript and tab column", () => {
     mount();
-    expect(screen.getByText(CHANNEL.name)).toBeTruthy();
+    expect(header().getByText(CHANNEL.name)).toBeTruthy();
     expect(screen.getByText("on the record")).toBeTruthy();
     // The tab ROW is the column's design and is never a slot — all four.
     for (const tab of ["Info", "Threads", "Agents", "Settings"]) {
@@ -208,13 +213,13 @@ describe("StandaloneChannelSurface — the header's identity", () => {
 
   it("names a direct channel after its peer by DEFAULT — the workspace page's behaviour", () => {
     mount({ channel: DM });
-    expect(screen.getByText("Priya Shah")).toBeTruthy();
+    expect(header().getByText("Priya Shah")).toBeTruthy();
     expect(screen.queryByText("Q3 Fundraise")).toBeNull();
   });
 
   it("pins the header to the channel's own name under `peerNamedHeader: false`", () => {
     mount({ channel: DM, capabilities: { peerNamedHeader: false } });
-    expect(screen.getByText("Q3 Fundraise")).toBeTruthy();
+    expect(header().getByText("Q3 Fundraise")).toBeTruthy();
     // ⚠ THE ABSENCE IS THE ASSERTION: the roster is still loaded and the
     // Members list still names her — what must not happen is the CHANNEL being
     // named after her.

@@ -116,11 +116,6 @@ export function SurfaceInfoPanel({
       threadsLoading={data.threadsLoading}
       index={index}
       openThread={openThread}
-      // ⚠ THE NAME ROW IS THE FULL-TAB FACE'S ONLY TITLE. At this width the
-      // single column has hidden its header crumb, so the row inside the pane is
-      // what names the channel; in the two-column tab column the header above is
-      // still showing it and a second copy is the duplicate Samuel reported.
-      showNameRow={fullTab === "info"}
       fullTab={fullTab}
       onOpenThread={(id) => {
         sel.openThread(id);

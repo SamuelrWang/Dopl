@@ -394,15 +394,28 @@ describe("Members", () => {
 
 
 describe("section order", () => {
-  it("is header → Channel info → Thread activity → Members", async () => {
+  it("is Channel info → Name → Channel activity → Members, with no name heading above", async () => {
     renderHome();
     await openChannelRecord();
     const main = await screen.findByText("Channel info");
-    const activity = screen.getByText("Thread activity");
+    const activity = screen.getByText("Channel activity");
     const members = screen.getByText("Members");
     // ⚠ Samuel corrected this order on the day it shipped — Members had been
     // second. Document position is the only thing that can hold it: both
     // sections render identically wherever they sit.
+    // ⚠ AND THE NAME IS A FIELD, NOT A TITLE (Samuel, 2026-09-05, live review of
+    // this pane). It is the first row UNDER "Channel info" and nothing above the
+    // heading prints it — the bold title that used to sit there is what he
+    // reported as the duplicate. The activity heading says "Channel" because
+    // this pane shows a channel.
+    const nameLabel = screen.getByText("Name");
+    expect(
+      main.compareDocumentPosition(nameLabel) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      nameLabel.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.queryByText("Thread activity")).toBeNull();
     expect(
       main.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();

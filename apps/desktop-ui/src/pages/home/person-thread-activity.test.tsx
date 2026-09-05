@@ -61,7 +61,7 @@ beforeEach(() => {
   });
 });
 
-describe("Thread activity", () => {
+describe("Channel activity", () => {
   /**
    * ⚠ THE VISUAL IS THE CHANNELS PAGE'S DENSITY STRIP AND THE NUMBERS ARE REAL
    * (Samuel, 2026-08-25 — this replaces the plain thread LIST the first pass
@@ -71,7 +71,7 @@ describe("Thread activity", () => {
   it("draws the strip from the channel-scoped series", async () => {
     renderHome();
     await openChannelRecord();
-    expect(await screen.findByText("Thread activity")).toBeInTheDocument();
+    expect(await screen.findByText("Channel activity")).toBeInTheDocument();
 
     const strip = await screen.findByRole("img", { name: /Messages in this channel/i });
     expect(strip.children).toHaveLength(SERIES.days.length);
@@ -112,7 +112,7 @@ describe("Thread activity", () => {
     );
     renderHome();
     await openChannelRecord();
-    expect(await screen.findByText("Thread activity")).toBeInTheDocument();
+    expect(await screen.findByText("Channel activity")).toBeInTheDocument();
     expect(
       screen.queryByRole("img", { name: /Messages in this channel/i })
     ).toBeNull();
