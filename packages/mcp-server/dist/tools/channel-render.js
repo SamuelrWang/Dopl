@@ -16,61 +16,29 @@
  * immutable `authorUserId` — the one half the author does not control.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NO_MEMBER_VIEW = void 0;
-exports.formatAuthor = formatAuthor;
-exports.sessionIdOf = sessionIdOf;
-exports.addresseeOf = addresseeOf;
-exports.memberRef = memberRef;
+exports.NO_MEMBER_VIEW = exports.sessionIdOf = exports.memberRef = exports.formatAuthor = exports.addresseeOf = void 0;
 exports.formatMessages = formatMessages;
 exports.formatChannelLine = formatChannelLine;
 exports.formatThreadLine = formatThreadLine;
 exports.formatThreadDetail = formatThreadDetail;
 exports.formatMemberLine = formatMemberLine;
 exports.groupByChannel = groupByChannel;
+const channel_facts_1 = require("./channel-facts");
 const channel_shared_1 = require("./channel-shared");
+// ⚠ **WHO WROTE IT AND WHO IT REACHED IS `channel-render-identity.ts`** (§1
+// split, 2026-09-04) — one place decides how an author, a recipient and an
+// addressing clause read. Re-exported below so no importer of this module moved.
+const channel_render_identity_1 = require("./channel-render-identity");
+var channel_render_identity_2 = require("./channel-render-identity");
+Object.defineProperty(exports, "addresseeOf", { enumerable: true, get: function () { return channel_render_identity_2.addresseeOf; } });
+Object.defineProperty(exports, "formatAuthor", { enumerable: true, get: function () { return channel_render_identity_2.formatAuthor; } });
+Object.defineProperty(exports, "memberRef", { enumerable: true, get: function () { return channel_render_identity_2.memberRef; } });
+Object.defineProperty(exports, "sessionIdOf", { enumerable: true, get: function () { return channel_render_identity_2.sessionIdOf; } });
+Object.defineProperty(exports, "NO_MEMBER_VIEW", { enumerable: true, get: function () { return channel_render_identity_2.NO_MEMBER_VIEW; } });
 const response_size_1 = require("./response-size");
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
 const channel_render_threads_1 = require("./channel-render-threads");
-/**
- * Author label for a message line. `agent` row renders "agent for <name>",
- * never bare name — reader treats counterparty as another member's agent.
- *
- * ⚠ Two rules, both because nothing validates `display_name`:
- *   1. Name NEUTRALIZED and user row prefixed `member`, never bare. Raw name
- *      may contain newlines → can close the line and forge fresh ones (a
- *      `- **#9001** system · <ts>` row was reproduced). Name of exactly
- *      "system" would render as the bare token `system`.
- *   2. `authorUserId` appended ALWAYS, not only as name-missing fallback. Name
- *      = author's claim; id = server's record. Claim alone is uncheckable.
- */
-function formatAuthor(m) {
-    const id = m.authorUserId ? `\`${m.authorUserId}\`` : null;
-    // `system` is a server-controlled enum, not user text; `PostableAuthorKindSchema`
-    // blocks a caller minting one. Only label here with no untrusted half.
-    if (m.authorKind === "system")
-        return id ? `system ${id}` : "system";
-    const named = m.authorName ? (0, channel_shared_1.neutralizeInline)(m.authorName) : null;
-    const who = named && id ? `${named} (${id})` : (named ?? id);
-    if (m.authorKind === "agent")
-        return who ? `agent for ${who}` : "an agent";
-    return who ? `member ${who}` : "a member";
-}
-/**
- * WHICH SESSION WROTE THIS LINE — `metadata.session_id`. An agent post is
- * authored by its OWNER'S ACCOUNT and one operator runs many concurrent
- * sessions, so an author label alone cannot name the process; this field is the
- * only thing on the wire that can.
- *
- * Not peer-controlled: `resolvePostMetadata` deletes any caller copy and
- * re-stamps from `X-Dopl-Session-Id`, shape-checked in `session-header.ts` (id
- * chars only, no whitespace, ≤128). ⚠ Neutralized at render anyway — the write
- * path is a claim about today's code, not about rows already in the table, and
- * this lands in the LINE HEAD, outside untrusted-body framing.
- */
-function sessionIdOf(m) {
-    return (0, channel_shared_1.metaString)(m, "session_id");
-}
 /**
  * THE SESSION THAT ENDED — `metadata.session_ended`, and it rides a
  * `task_progress`, not a terminal kind.
@@ -91,78 +59,6 @@ function sessionIdOf(m) {
  */
 function sessionEnded(m) {
     return m.metadata?.session_ended === true;
-}
-/**
- * WHO A MESSAGE IS FOR — `metadata.to_user_id`. Separates "for ME" from "for
- * another member's agent" from "for nobody". An unaddressed ask in a 3+ member
- * channel triggers no agent at all (deliberate, fail-closed), so "unaddressed"
- * is a load-bearing fact, not a missing field.
- *
- * Not peer-controlled: `resolvePostMetadata` deletes any caller copy and
- * re-stamps from the route's validated `toUserId` uuid (or the resolved DM
- * peer). ⚠ Neutralized at render anyway — old rows predate today's write path.
- */
-function addresseeOf(m) {
-    return (0, channel_shared_1.metaString)(m, "to_user_id");
-}
-/** No caller identity and no names — every id renders as a bare id. */
-exports.NO_MEMBER_VIEW = {
-    selfUserId: null,
-    names: new Map(),
-};
-/**
- * User id rendered actionably: `you` for the caller, else neutralized name AND
- * immutable id ({@link formatAuthor} shape). ⚠ Never name alone — display name
- * is owner-settable, so an unbacked name lets one member's label pose as another's.
- */
-function memberRef(userId, view) {
-    if (view.selfUserId !== null && userId === view.selfUserId)
-        return "you";
-    const id = (0, channel_shared_1.inlineOr)(userId, channel_render_threads_1.UNREADABLE_ID);
-    const name = view.names.get(userId);
-    const safeName = name ? (0, channel_shared_1.neutralizeInline)(name) : null;
-    return safeName ? `${safeName} (${id})` : id;
-}
-/**
- * Names harvested from the listing itself — API already hydrates `authorName`,
- * so anyone who SPOKE in the window is named free; silent addressees render by
- * id. ⚠ No round-trip: `read`/`await` are the hot path.
- */
-function namesFromMessages(messages) {
-    const names = new Map();
-    for (const m of messages) {
-        if (m.authorUserId && m.authorName && !names.has(m.authorUserId)) {
-            names.set(m.authorUserId, m.authorName);
-        }
-    }
-    return names;
-}
-/**
- * THE SLOT-KEY SEGMENT THAT NAMES A SESSION. `metadata.session_id` is the
- * desktop's slot key, `<channelId>:<taskId>:<agentId>`
- * (`main/session-store.js › sessionKey`), and the AGENT id is the only segment
- * that distinguishes one session from another on the SAME thread — which is the
- * whole point of multiplayer.
- *
- * ⚠ IT USED TO SLICE AFTER THE FIRST COLON, and that predates the third segment
- * (fixed 2026-08-22). The key was `<channel>:<agent-or-thread>` when this was
- * written, so the slice was the tail; against a three-segment key it renders
- * `<thread>:<agent>` — an identity that is not a session, that repeats the
- * thread already tagged two clauses away, and that is long enough to bury the
- * one part a reader needs.
- *
- * ⚠ BOTH SHAPES STILL ARRIVE, so it reads from the END rather than counting
- * segments: rows written before the widening carry two, and a mid-wave record
- * can carry an EMPTY agent segment (the middle one is legitimately empty for a
- * responder with no first-class thread). The `|| ` fallbacks walk back rather
- * than rendering an empty span. ⚠ The agent charset (`^[a-z][a-z0-9]{7}$`)
- * carries no colon, so the last segment is unambiguous.
- */
-function sessionTail(sessionId) {
-    const parts = sessionId.split(":");
-    if (parts.length < 2)
-        return sessionId;
-    return parts[parts.length - 1] || parts[parts.length - 2] || sessionId;
 }
 /**
  * HOW MUCH OF ONE BODY A MULTI-MESSAGE PAGE RENDERS (2026-08-22, Samuel).
@@ -228,7 +124,7 @@ function clipBody(m, ref, clip) {
  * label, this one is the reason a waiting agent should stop waiting.
  */
 function formatMessage(m, anyThreaded, view, ref, clip, terse) {
-    const author = formatAuthor(m);
+    const author = (0, channel_render_identity_1.formatAuthor)(m);
     const ended = sessionEnded(m);
     const kindTag = ended
         ? " · SESSION ENDED"
@@ -249,13 +145,20 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse) {
     // addressee and the BODY are what the page is for and none of them moves —
     // see `response-size.ts`, where that guarantee is the reason the knob is
     // usable at all.
-    const session = terse ? null : sessionIdOf(m);
+    const session = terse ? null : (0, channel_render_identity_1.sessionIdOf)(m);
     const sessionTag = session
-        ? ` · session ${(0, channel_shared_1.inlineOr)((0, channel_render_threads_1.sessionSlotRef)(sessionTail(session)), channel_render_threads_1.UNREADABLE_ID)}`
+        ? ` · session ${(0, channel_shared_1.inlineOr)((0, channel_render_threads_1.sessionSlotRef)((0, channel_render_identity_1.sessionTail)(session)), channel_render_threads_1.UNREADABLE_ID)}`
         : "";
-    const to = addresseeOf(m);
-    const memberTag = to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
-    const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${terse ? "" : ` · ${m.createdAt}`}`;
+    const memberTag = (0, channel_render_identity_1.addressTag)(m, view);
+    // ⚠ **THE ACK, BESIDE THE ADDRESS IT IS AN ACK FOR.** `delivery` alone is the
+    // server's write-time PREDICTION and `deliveryAt` is what turns it into a
+    // receipt; `deliveryFact` carries that one-character distinction (`woken?` vs
+    // `woken`) and is the SAME renderer the write result uses, so a caller reads
+    // one vocabulary on both sides of a send. Absent when this server computes no
+    // verdict — which is not `none`.
+    const ack = (0, channel_facts_1.deliveryFact)(m.delivery, m.deliveryAt);
+    const deliveryTag = ack ? ` · ${ack}` : "";
+    const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${terse ? "" : ` · ${m.createdAt}`}`;
     return `- ${head}${clipBody(m, ref, clip)}`;
 }
 /**
@@ -269,7 +172,11 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse) {
  * marker names stops working and there is no other way to read a long body.
  */
 function formatMessages(messages, ref, selfUserId = null, format) {
-    const view = { selfUserId, names: namesFromMessages(messages) };
+    const view = {
+        selfUserId,
+        names: (0, channel_render_identity_1.namesFromMessages)(messages),
+        agentNames: (0, channel_render_identity_1.agentNamesFromMessages)(messages),
+    };
     const anyThreaded = messages.some((m) => (0, channel_render_threads_1.threadIdOf)(m) !== undefined);
     const clip = messages.length > 1;
     const terse = (0, response_size_1.isConcise)(format);
@@ -317,7 +224,7 @@ function formatChannelLine(c) {
  * Names BOTH parties: a thread is writable only by creator and target, so those
  * two ids tell a reader whether a listed thread is theirs to post into.
  */
-function formatThreadLine(t, view = exports.NO_MEMBER_VIEW) {
+function formatThreadLine(t, view = channel_render_identity_1.NO_MEMBER_VIEW) {
     const bits = [`\`${t.id}\``, `${t.mode} mode`];
     // ⚠ THE SORT KEY, RENDERED. The listing is ordered by this, so printing it is
     // what makes the order legible instead of arbitrary — and it is the only
@@ -326,8 +233,8 @@ function formatThreadLine(t, view = exports.NO_MEMBER_VIEW) {
     // derives no activity clock and therefore claims none.
     if (t.lastActivityAt)
         bits.push(`last activity ${t.lastActivityAt}`);
-    bits.push(`by ${memberRef(t.createdBy, view)}`);
-    bits.push(t.targetUserId ? `for ${memberRef(t.targetUserId, view)}` : "unaddressed");
+    bits.push(`by ${(0, channel_render_identity_1.memberRef)(t.createdBy, view)}`);
+    bits.push(t.targetUserId ? `for ${(0, channel_render_identity_1.memberRef)(t.targetUserId, view)}` : "unaddressed");
     return `- **${(0, channel_shared_1.inlineOr)(t.title, "(untitled)")}** (${bits.join(" · ")})`;
 }
 /**
@@ -341,14 +248,14 @@ function formatThreadLine(t, view = exports.NO_MEMBER_VIEW) {
  * An agent reading a state it can neither change nor wait for treats it as a
  * signal, and `list_threads`'s own line dropped the same fields.
  */
-function formatThreadDetail(t, view = exports.NO_MEMBER_VIEW) {
+function formatThreadDetail(t, view = channel_render_identity_1.NO_MEMBER_VIEW) {
     const lines = [
         `## Thread ${(0, channel_shared_1.inlineOr)(t.title, "(untitled)")}`,
         ``,
         `- id: \`${t.id}\``,
         `- mode: ${t.mode}`,
-        `- created by: ${memberRef(t.createdBy, view)}`,
-        `- addressed to: ${t.targetUserId ? memberRef(t.targetUserId, view) : "(unaddressed)"}`,
+        `- created by: ${(0, channel_render_identity_1.memberRef)(t.createdBy, view)}`,
+        `- addressed to: ${t.targetUserId ? (0, channel_render_identity_1.memberRef)(t.targetUserId, view) : "(unaddressed)"}`,
         `- created: ${t.createdAt}`,
         `- updated: ${t.updatedAt}`,
     ];

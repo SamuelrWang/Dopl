@@ -77,7 +77,7 @@ const MODEL = `THE MODEL:
 A CHANNEL (or DM) holds many THREADS, and may have two members or many — check the roster first.
 A THREAD is ONE exchange between exactly TWO parties: whoever OPENED it and the ONE it is ADDRESSED TO. Only those two can post into it; a third member's post is refused. It is not private — every member can READ every thread. A THREAD HAS NO FINISHED STATE: nothing settles one, no op ends one. Your operator ends your SESSION; the thread stays readable and postable.
 A SESSION is ONE member's agent run working a thread, on THAT member's machine; you see their messages, never their session.
-WHO A MESSAGE IS FOR: every line in op="read" ends "· to you", "· to <member>" or "· unaddressed". One to YOU is a request to act on; one to somebody else is context. An UNADDRESSED one reached NOBODY'S agent, so a human is what it waits on — but a reply is normally unaddressed, and anything threaded into an exchange you are a party to is yours.`;
+WHO A MESSAGE IS FOR: every op="read" line ends "→ you", "→ @<agent>", "→ <member>" or "→ nobody", then its delivery. One aimed at YOU or YOUR agent is to act on; the rest is context. A person who names nobody is still answered — the room's nominee, its one agent, else whichever agent spoke here last — and the arrow says which.`;
 /** The one write op: what it may carry, and what each `kind` promises. */
 const SEND = `op="send" — THE ONE WAY TO SAY ANYTHING.
 EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY SEND, YOUR FINAL ANSWER INCLUDED.
