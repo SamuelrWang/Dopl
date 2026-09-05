@@ -53,6 +53,7 @@ import dynamic from "next/dynamic";
 import { MessageSquareOff, TriangleAlert } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useChannels } from "@/features/channels/hooks/use-channels";
+import { useChannelWebView } from "@/features/channels/components/channels-v2/use-channel-web-view";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { DetailPaneSkeleton, TranscriptSkeleton } from "@/shared/ui/skeleton";
 import type { HomeChannel } from "@/features/home/types";
@@ -79,6 +80,13 @@ export function GuestChannel({
    * into the same ending by a slower, flickering route.
    */
   const [deleted, setDeleted] = useState(false);
+  /**
+   * WHICH FACE THE PAGE IS SHOWING — Channel, Info, Threads, Agents or Settings
+   * (Samuel, 2026-09-04). ⚠ MOUNTED HERE, NOT INSIDE THE SURFACE: the answer
+   * lives in the URL hash so reload and the phone's back gesture keep it, and
+   * the surface tree is router-free by construction.
+   */
+  const webView = useChannelWebView();
   const { channels, loading, error, refetch } = useChannels(
     homeChannel.workspaceId,
     false
@@ -134,14 +142,22 @@ export function GuestChannel({
           workspaceSlug={homeChannel.workspaceSegment}
           channel={channel}
           currentUserId={currentUserId}
-          // ⚠ `knowledge: true` — the guest READS the bases the operator granted
-          // into this channel, and edits one only where the grant says so. The
-          // tab is on the guest-floored lane, so this adds no request the guest
-          // would be refused on (`channels-v2/guest-surface-reads.test.tsx`).
+          // ⚠ ONE COLUMN, AND THE FIVE FACES BEHIND A HEADER DROPDOWN (Samuel,
+          // 2026-09-04). The desktop app shows the tab column beside the
+          // transcript; a phone cannot, so the chat area is the whole page and
+          // the column's faces become dropdown options.
+          webView={webView}
+          // ⚠ NO `knowledge` CAPABILITY ANY MORE (Samuel, 2026-09-04): *"There
+          // should be no Knowledge tab at all for the web: just Info, Threads,
+          // and Agents."* It was passed here from M4 on the argument that this
+          // tab is a guest's only way to read a base granted into the channel —
+          // that argument lost, and the ruling is the reason. The lane itself
+          // (`knowledge-lane.ts`) is untouched and still guest-floored; what is
+          // gone is the FACE. Re-adding it needs Samuel's word, not a reading of
+          // the M4 plan.
           capabilities={{
             memberManagement: false,
             selfManagement: false,
-            knowledge: true,
           }}
           onDeleted={onDeleted}
         />

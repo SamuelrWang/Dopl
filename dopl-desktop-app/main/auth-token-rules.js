@@ -117,6 +117,30 @@ function mayRefreshNow(nowMs, notBeforeMs) {
 function shouldRepairAuth(status, alreadyRetried) {
   return status === 401 && !alreadyRetried;
 }
+
+// WHY A 400 HAPPENED, IN ONE SAFE WORD (2026-09-04). The refresh 400 was logged as
+// "HTTP 400" and nothing else, so three field sign-outs could not be told apart from
+// the log alone: `refresh_token_not_found` (the family is gone) and
+// `refresh_token_already_used` (SOMEONE ELSE holds this family and rotated it) are
+// completely different bugs with the same status code. It took an auth.refresh_tokens
+// dump and the GoTrue request log to learn it was the second one.
+//
+// ⚠ I11 — NOTHING FROM THE BODY IS LOGGED VERBATIM. GoTrue's error body is
+// `{"code":400,"error_code":"…","msg":"…"}`; only `error_code`/`error` is taken (a short
+// machine enum, never a credential) and it is passed through an ALLOWLIST-shaped filter:
+// letters, digits and underscores, capped. A body that is not JSON, or whose code is not
+// that shape, yields '' — an unrecognised body is never echoed into the log.
+function refreshFailureCode(bodyText) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(bodyText || ""));
+  } catch (_) {
+    return "";
+  }
+  if (!parsed || typeof parsed !== "object") return "";
+  const raw = parsed.error_code || parsed.error || "";
+  return /^[a-z0-9_]{1,64}$/i.test(String(raw)) ? String(raw) : "";
+}
 // ─── END AUTH-TOKENS-PURE ───────────────────────────────────────────────────
 
 module.exports = {
@@ -135,4 +159,5 @@ module.exports = {
   retryDelayMs,
   mayRefreshNow,
   shouldRepairAuth,
+  refreshFailureCode,
 };

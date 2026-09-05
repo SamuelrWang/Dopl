@@ -373,7 +373,10 @@ async function refreshInner() {
       }
     );
     if (!res.ok) {
-      authFail('refresh failed', `HTTP ${res.status}`);
+      // The CODE, not just the status — see auth-token-rules.js › refreshFailureCode for why
+      // "HTTP 400" alone cost a three-incident investigation, and for the no-token guarantee.
+      const code = require('./auth-token-rules').refreshFailureCode(await res.text().catch(() => ''));
+      authFail('refresh failed', `HTTP ${res.status}${code ? ` (${code})` : ''}`);
       // BOUNDED DROP (Phase 2). This used to be `if (res.status === 400)
       // clearSession()` — a real sign-out from ONE bad response. It was only ever
       // survivable because the cookie jar was a second source; the bearer path
