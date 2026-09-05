@@ -299,8 +299,12 @@ describe("agent mentions", () => {
     // ⚠ ONE SLUGGER (`lib/mentions.ts › mentionSlug`), so "Research Bot" spells the same way a
     // roster name does. A second `.replace(/\s+/g, "-")` anywhere is how the two would drift.
     expect(tinted("ping @research-bot please", "Research Bot")).toEqual(["@research-bot"]);
-    // ⚠ AND THE ID FORM IS NEVER WITHDRAWN BY A RENAME — an address already written keeps working.
-    expect(tinted(`ping @agent-${AGENT}`, "Research Bot")).toEqual([`@agent-${AGENT}`]);
+    // ⚠ AND THE ID FORM WEARS THE SAME SLUGGED FACE (Samuel, 2026-09-05) — the whole point of
+    // facing a mention is that nobody should have to read `@agent-h1anog51` to know who was
+    // tagged. The ADDRESS is not withdrawn by this or by a rename: the raw token stays in the
+    // stored body and on the element's `title`, and both forms still resolve. Only the spelling
+    // a reader SEES changes, and it is the one they could retype.
+    expect(tinted(`ping @agent-${AGENT}`, "Research Bot")).toEqual(["@research-bot"]);
   });
 
   it("leaves an unknown agent handle as plain prose", () => {

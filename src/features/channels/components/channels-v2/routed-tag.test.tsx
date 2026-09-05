@@ -71,10 +71,14 @@ function routed(body: string, agentIds: string[]) {
   });
 }
 
+// ⚠ FACES ARE SLUGGED (Samuel, 2026-09-05): a routed tag is spelled by `agentMentionFace`,
+// the same function the typed tags use, and it now answers lower-case-with-dashes so every
+// tag a reader sees is one they could retype. "Dopl Worker" reads `@dopl-worker`. The raw
+// address is unchanged and still rides on `title`.
 describe("the resolved tag on a message that named nobody", () => {
   it("faces the agent the server picked, by NAME", () => {
     renderWith(routed("ship it", [A]));
-    expect(screen.getByText("→ @Dopl Worker")).toBeTruthy();
+    expect(screen.getByText("→ @dopl-worker")).toBeTruthy();
   });
 
   it("keeps the raw address one hover away", () => {
@@ -83,7 +87,7 @@ describe("the resolved tag on a message that named nobody", () => {
     // id is the address — stored, on the wire, what the desktop routes on — and
     // it must never become unreachable just because it is unpleasant to read.
     renderWith(routed("ship it", [A]));
-    expect(screen.getByText("→ @Dopl Worker").getAttribute("title")).toBe(
+    expect(screen.getByText("→ @dopl-worker").getAttribute("title")).toBe(
       "@agent-k3v7d2mq"
     );
   });
@@ -98,7 +102,7 @@ describe("the resolved tag on a message that named nobody", () => {
 
   it("names BOTH when the server resolved two", () => {
     renderWith(routed("ship it", [A, B]));
-    expect(screen.getByText("→ @Dopl Worker @agent-h1anog51")).toBeTruthy();
+    expect(screen.getByText("→ @dopl-worker @agent-h1anog51")).toBeTruthy();
   });
 });
 
@@ -144,6 +148,6 @@ describe("the stored body", () => {
     // stored stays stored; this is the transcript reporting a decision.
     renderWith(routed("ship it", [A]));
     expect(screen.getByText("ship it")).toBeTruthy();
-    expect(screen.queryByText(/@Dopl Worker ship it/)).toBeNull();
+    expect(screen.queryByText(/@dopl-worker ship it/)).toBeNull();
   });
 });

@@ -85,9 +85,9 @@ export type AgentMentionIndex = ReadonlyMap<string, string | null>;
  *
  * ⚠ **A SHARED NAME IS DISAMBIGUATED, NEVER GUESSED AT.** Two agents CAN each be called "Bug
  * Reviewer" — names are per-machine, operator-set and deliberately not unique — so when the name
- * this id carries is also worn by another agent in the map, the id rides along on the face:
- * `Bug Reviewer #k3v7d2mq`. **Resolution is always id → name and never name → id**, so a collision
- * costs clarity on the label and can never misroute or mislabel WHICH agent was tagged.
+ * this id carries is also worn by another agent in the map, this answers `null` and the caller
+ * falls back to the raw token. **Resolution is always id → name and never name → id**, so a
+ * collision costs the label and can never misroute or mislabel WHICH agent was tagged.
  * ⚠ Case- and space-insensitive, because "bug reviewer" and "Bug Reviewer" are one name to a
  * reader and a collision the eye cannot see is the one worth catching.
  */
@@ -103,10 +103,21 @@ export function agentMentionFace(
   for (const [otherId, other] of identities) {
     if (otherId === agentId) continue;
     if ((other.displayName ?? "").trim().toLowerCase() === same) {
-      return `${name} #${agentId}`;
+      // ⚠ A COLLISION FACES NOTHING (Samuel, 2026-09-05). The old answer was
+      // `Bug Reviewer #k3v7d2mq`, which carries a SPACE — and a tag a reader cannot retype is
+      // the misfire this whole rule exists to prevent. `null` hands the caller the raw token,
+      // which for the id form IS the unambiguous address and for a typed name form is exactly
+      // what the writer wrote. Disambiguation by falling back to the address, never by
+      // inventing a handle that resolves to nobody.
+      return null;
     }
   }
-  return name;
+  // ⚠ SLUGGED, ALWAYS (Samuel, 2026-09-05): lower case, spaces as dashes. A face is a TAG a
+  // reader may retype, so it has to be spelled the way the resolver spells it — "Research Bot"
+  // renders `@research-bot`, never `@Research Bot`. `mentionSlug` is the ONE slugger this tree
+  // has (`lib/mentions.ts`); a second `.replace(/\s+/g, "-")` here is how the composer's insert
+  // and the transcript's tint would come to disagree about what a handle is.
+  return mentionSlug(name);
 }
 
 /**

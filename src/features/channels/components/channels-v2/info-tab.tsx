@@ -51,6 +51,7 @@ export function InfoTab({
   channelName,
   activityBins = [],
   activityLoading = false,
+  showNameRow = false,
   members,
   threadCount,
   mentions,
@@ -65,6 +66,8 @@ export function InfoTab({
   /** Measured messages-per-day, host-mounted. Empty renders no strip. */
   activityBins?: readonly ActivityBin[];
   activityLoading?: boolean;
+  /** Render the Name row. True only where the pane header hides its crumb. */
+  showNameRow?: boolean;
   members: ChannelMember[];
   threadCount: number;
   /** MY mentions in this channel, server-ordered. */
@@ -98,12 +101,24 @@ export function InfoTab({
             `channel.name`: a 1:1 is titled after the other member
             (`peerNamedHeader` decides it, upstream), so reading the stored
             column here would name a DM after nobody. */}
-        <MetaRow icon={Hash} label="Name">
-          <span className="truncate text-body text-text-primary">
-            {channelName}
-          </span>
-        </MetaRow>
-        <MetaRowDivider />
+        {/* ⚠ ONLY WHERE THE HEADER IS NOT ALREADY SAYING IT (Samuel, 2026-09-05).
+            The pane header carries the channel name at every width EXCEPT the
+            single-column info face, which hides its crumb (`hideChannelCrumb`)
+            because the info surface has taken the screen. Rendering the row at
+            both widths printed the name twice on the desktop, one line apart.
+            The row is not deleted: on the phone's info screen it is the only
+            thing that says which channel this pane is about, which is the
+            complaint it was added to answer. */}
+        {showNameRow ? (
+          <>
+            <MetaRow icon={Hash} label="Name">
+              <span className="truncate text-body text-text-primary">
+                {channelName}
+              </span>
+            </MetaRow>
+            <MetaRowDivider />
+          </>
+        ) : null}
         <MetaRow icon={UserRound} label="Creator">
           {creator ? (
             <>

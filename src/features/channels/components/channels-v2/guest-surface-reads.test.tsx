@@ -88,6 +88,14 @@ vi.mock("../../hooks/use-escalation-writes", () => ({
 vi.mock("../../hooks/use-consent-inbox", () => ({
   useConsentInbox: vi.fn(() => ({ requests: [], outbound: [], refetch: vi.fn() })),
 }));
+// The channel ACTIVITY strip's series (2026-09-05, the heatmap wiring). ⚠ Stubbed for the same
+// reason as the writes above — it is a `useQuery` and this suite deliberately mounts no
+// `QueryClientProvider` — and NOT because a guest must not have it: Samuel ruled 2026-09-05 that
+// the strip is CHANNEL data and anyone in the channel may read it, guest included. That makes it
+// silent on the question this file exists to answer, which is whose CONSENT INBOX mounts.
+vi.mock("@/features/workspaces/hooks/use-overview-series", () => ({
+  useOverviewSeries: () => ({ data: undefined, isLoading: false }),
+}));
 vi.mock("./live", () => ({ useChannelsV2Live: () => ({ gate: {} }) }));
 vi.mock("./use-desktop-sessions", () => ({
   useDesktopSessions: () => ({ sessions: null, refresh: vi.fn() }),
