@@ -147,10 +147,17 @@ export function useStickToBottom(
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const desired =
       el.scrollTop + (row.getBoundingClientRect().top - el.getBoundingClientRect().top);
-    el.scrollTo({
-      top: Math.min(desired, el.scrollHeight - el.clientHeight),
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
+    const top = Math.min(desired, el.scrollHeight - el.clientHeight);
+    // ⚠ `scrollTo` IS NOT ASSUMED TO EXIST (2026-09-05). Every other move in this hook assigns
+    // `scrollTop`, which is a plain property; this is the one call, and an environment without
+    // it threw straight out of an effect — which React escalates to the nearest error boundary,
+    // so the whole message pane unmounted and the transcript rendered as an error page rather
+    // than as a missing animation. The fallback is the same destination without the easing.
+    if (typeof el.scrollTo === "function") {
+      el.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
+    } else {
+      el.scrollTop = top;
+    }
   }, [scrollerRef, rowCount, lastRowId]);
 
   return useCallback(() => {

@@ -88,9 +88,20 @@ function bridge(opts: { present?: boolean; ok?: boolean; folder?: boolean } = {}
     posture.value = next;
     return Promise.resolve({ ok: true });
   });
-  const getFolderLabel = vi.fn(() => Promise.resolve<string | null>("~/Downloads/repo"));
-  const chooseFolder = vi.fn(() => Promise.resolve<string | null>("~/code/dopl"));
-  const clearFolder = vi.fn(() => Promise.resolve());
+  // ⚠ THE PAIR, NOT A LABEL (2026-09-05, task 15). All three ops answer
+  // `{label, custom}`: `label` is the EFFECTIVE directory and `custom` is whether it is this
+  // channel's own pick. A double that answered a bare string made the row render nothing at
+  // all, and the case below asserted "Sandbox (default)" — a place that does not exist, which
+  // is the fiction the pair was introduced to kill.
+  const getFolderLabel = vi.fn(() =>
+    Promise.resolve({ label: "~/Downloads/repo", custom: true })
+  );
+  const chooseFolder = vi.fn(() =>
+    Promise.resolve({ label: "~/code/dopl", custom: true })
+  );
+  const clearFolder = vi.fn(() =>
+    Promise.resolve({ label: "~/Downloads", custom: false })
+  );
   const channels: Record<string, unknown> = {};
   if (opts.present !== false) {
     channels.getLaunchPosture = getLaunchPosture;
@@ -253,9 +264,11 @@ describe("the Agent folder row", () => {
     fireEvent.click(screen.getByRole("button", { name: "Use default" }));
     await waitFor(() => expect(b.clearFolder).toHaveBeenCalledWith(CHANNEL));
     // ⚠ Back to the default folder — and "Use default" goes with it, because
-    // there is nothing left to reset.
+    // there is nothing left to reset. ⚠ THE DEFAULT IS NAMED, NOT INVENTED
+    // (2026-09-05): main answers the real directory it will run in, and the row prints that.
+    // It said "Sandbox (default)" until this ruling, naming a place that does not exist.
     await waitFor(() =>
-      expect(screen.getByText("Sandbox (default)")).toBeInTheDocument()
+      expect(screen.getByText("~/Downloads")).toBeInTheDocument()
     );
     expect(screen.queryByRole("button", { name: "Use default" })).toBeNull();
   });
