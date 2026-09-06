@@ -85,6 +85,7 @@ const RESOLVED = {
   ],
   knowledgeBases: [{ id: "kb-1", name: "Handbook" }],
   authoredByCaller: true,
+  unreachableKnowledgeBaseCount: 0,
 };
 
 function req(): NextRequest {
@@ -149,6 +150,7 @@ describe("the launch payload", () => {
       fields: [],
       knowledgeBases: [],
       authoredByCaller: false,
+      unreachableKnowledgeBaseCount: 0,
     });
     const body = await GET(req(), { params: Promise.resolve({}) }).then((r) => r.json());
     expect(body).toEqual({
@@ -158,6 +160,7 @@ describe("the launch payload", () => {
       fields: [],
       knowledgeBases: [],
       authoredByCaller: false,
+      unreachableKnowledgeBaseCount: 0,
     });
   });
 });
