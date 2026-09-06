@@ -92,6 +92,8 @@ const BASE = "https://api.example.test";
  *        (INVARIANTS §9).
  */
 const PUBLIC_SURFACE = [
+    // ⚠ +3 on 2026-09-06 (artifacts wave): readChannelArtifact, readChannelTranscript,
+    // writeChannelArtifact — new client ops for the artifact feature; a sanctioned pin move.
     "appendChatMessages",
     "awaitChannelMessages",
     // WORKSPACE-WIDE hold (2026-08-22) — one cursor across every channel the
@@ -206,7 +208,9 @@ const PUBLIC_SURFACE = [
     // ACCOUNT-WIDE cross-channel page (2026-09-01, T21) — one cursor, every
     // channel, because seq is a TABLE-WIDE identity.
     "readAccountMessages",
+    "readChannelArtifact",
     "readChannelMessages",
+    "readChannelTranscript",
     "readKbFileByPath",
     // SECTION READS (2026-09-03) — one section, or the outline alone.
     "readKbFilePart",
@@ -226,6 +230,7 @@ const PUBLIC_SURFACE = [
     "updateOntologyCluster",
     "updateOntologyObject",
     "updateSkill",
+    "writeChannelArtifact",
     "writeKbFileByPath",
     "writeSkillBody",
 ];
