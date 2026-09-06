@@ -102,7 +102,7 @@ beforeEach(() => {
 });
 
 describe("the launch payload", () => {
-  it("is EXACTLY {name, instructions, model, fields, knowledgeBases, authoredByCaller} — flat, no envelope", async () => {
+  it("is EXACTLY {name, instructions, model, fields, knowledgeBases, authoredByCaller, unreachableKnowledgeBaseCount} — flat, no envelope", async () => {
     const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -116,6 +116,9 @@ describe("the launch payload", () => {
       "knowledgeBases",
       "model",
       "name",
+      // ⚠ THE SEVENTH KEY (2026-09-05 type, pin moved 2026-09-06): how many attached
+      // bases this launch cannot reach. Predicted at #1461; the pin follows the type.
+      "unreachableKnowledgeBaseCount",
     ]);
   });
 
