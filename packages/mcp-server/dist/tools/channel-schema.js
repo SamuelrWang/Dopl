@@ -49,15 +49,22 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHANNEL_INPUT_SHAPE = exports.PARAM_DESCRIPTION_MAX_CHARS = exports.SCHEMA_MAX_CHARS = exports.CHANNEL_ACTION_NAMES = exports.CHANNEL_ACTIONS = exports.CHANNEL_OPS = void 0;
 exports.unknownOpRefusal = unknownOpRefusal;
+exports.unknownActionRefusal = unknownActionRefusal;
 const zod_1 = require("zod");
 const response_size_1 = require("./response-size");
 const channel_doctrine_1 = require("./channel-doctrine");
 const channel_hold_budget_1 = require("./channel-hold-budget");
 /**
- * THE FIVE OPS AN AGENT SEES, and the only five it may pick from.
+ * THE SIX OPS AN AGENT SEES, and the only six it may pick from.
  *
  * ⚠ THE ORDER IS THE READING ORDER a model skims: the one write it makes most,
- * the two reads, then the two dispatchers.
+ * the two reads, then the three dispatchers.
+ *
+ * ⚠ **`artifact` IS THE SIXTH, ADDED 2026-09-06 (design #1220 §5, accepted at
+ * #1222), AND IT IS AN OP RATHER THAN A `send` KIND** — it writes no message. It
+ * folds messages that ALREADY EXIST into one card, which is a different verb on
+ * a different row, and hanging it off the send lane would have put a
+ * non-delivery on the one op whose whole contract is that it delivers.
  */
 exports.CHANNEL_OPS = [
     "send",
@@ -65,6 +72,7 @@ exports.CHANNEL_OPS = [
     "status",
     "manage",
     "rooms",
+    "artifact",
 ];
 /**
  * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice
@@ -73,9 +81,9 @@ exports.CHANNEL_OPS = [
  *
  * ⚠ **WITHOUT IT, RETIREMENT IS A `-32602 invalid enum value`** — the opaque
  * failure B8's one-release redirect window existed to prevent, arriving one
- * release later. ⚠ **ONE LINE, AND IT NAMES THE FIVE**, because the replacement
- * for any retired name is one of five words; anything longer is the doctrine,
- * and `rooms(action="help")` is where that lives.
+ * release later. ⚠ **ONE LINE, AND IT NAMES THE WHOLE VOCABULARY** — six words
+ * since `artifact` landed (A4, 2026-09-06), derived from {@link CHANNEL_OPS} and
+ * never counted here; anything longer is `rooms(action="help")`'s doctrine.
  *
  * ⚠ The caller's own word is echoed BOUNDED AND ON ONE LINE — it is the only
  * part of this sentence they wrote, and an unbounded multi-line echo is
@@ -94,11 +102,17 @@ function unknownOpRefusal(op) {
 /**
  * THE SUB-VERBS, per dispatching op.
  *
- * ⚠ **THE TWO VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts
+ * ⚠ **THE THREE VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts
  * it: one flat `action` enum is what a client introspects, so an overlapping
  * word would make the same string mean two things one op apart. Disjointness is
  * also what lets `gating.ts › WRITE_OPS` name a single write action
  * (`rooms.open`) without the pair ever being ambiguous.
+ *
+ * ⚠ **THE THIRD LIST ARRIVED WITH `artifact` (2026-09-06) AND THE DISJOINTNESS
+ * RULE IS WHY ITS WORDS ARE WHAT THEY ARE.** `create` was the obvious name for
+ * opening a room too, and `open` for a card; both were rejected here rather than
+ * disambiguated later, because the pairing refusals below can only say "that
+ * word belongs to <op>" while every word belongs to exactly one.
  *
  * ⚠ **`rooms` CARRIES BOTH READS AND WRITES, AND THAT IS WHY THE WRITE GATE IS
  * PER-ACTION.** Classifying the whole op as a write would refuse a read-only
@@ -117,12 +131,48 @@ exports.CHANNEL_ACTIONS = {
         "update",
         "help",
     ],
+    // ⚠ FOUR ACTS, AND `dissolve` IS NOT A DELETE — it clears the column from
+    // every member and retires the card, leaving every body, author and `seq`
+    // exactly where it was. That is what keeps a fold reversible, and it is why
+    // this op sits inside the tool's published "no delete op" policy.
+    artifact: ["create", "add", "remove", "dissolve"],
 };
 /** Every action name, as the published enum. ⚠ Derived, never restated. */
 exports.CHANNEL_ACTION_NAMES = [
     ...exports.CHANNEL_ACTIONS.manage,
     ...exports.CHANNEL_ACTIONS.rooms,
+    ...exports.CHANNEL_ACTIONS.artifact,
 ];
+/**
+ * THE ONE REFUSAL FOR A WORD THAT BELONGS TO ANOTHER OP — written once here,
+ * used by all three dispatch arms in `channel.ts`.
+ *
+ * ⚠ **IT WAS TWO HAND-WRITTEN SENTENCES UNTIL 2026-09-06, AND THE THIRD
+ * VOCABULARY IS WHY IT IS DERIVED NOW.** Each arm said "that word belongs to"
+ * and then NAMED the other op, which is a claim only true while there are
+ * exactly two lists: the moment `artifact` arrived, `manage(action="create")`
+ * would have told the caller to try `rooms`, confidently and wrongly. The owner
+ * is looked up in the same table the enum is built from, so a fourth
+ * vocabulary cannot make this sentence lie.
+ *
+ * ⚠ The offered list is the op's OWN vocabulary, joined with "or" — the same
+ * shape as {@link unknownOpRefusal}, and the one thing a caller cannot read off
+ * a flat `action` enum that publishes all three lists as one.
+ */
+function unknownActionRefusal(op, action) {
+    const shown = action.replace(/\s+/g, " ").slice(0, 40);
+    const owner = Object.keys(exports.CHANNEL_ACTIONS).find((candidate) => candidate !== op &&
+        exports.CHANNEL_ACTIONS[candidate].includes(action));
+    // ⚠ THE OWNER CLAUSE IS OMITTED RATHER THAN GUESSED when no vocabulary has
+    // the word. Unreachable through the published schema — `action` is an enum
+    // over all three lists — and kept for the same reason `channel.ts` keeps its
+    // exhaustive default: a build where that validation did not run must refuse,
+    // and must not invent an op to send the caller to.
+    const belongs = owner ? ` — that word belongs to op="${owner}"` : "";
+    const quoted = exports.CHANNEL_ACTIONS[op].map((a) => `"${a}"`);
+    const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
+    return `op="${op}" has no action "${shown}"${belongs}. Nothing was done. op="${op}" takes ${offered}.`;
+}
 /**
  * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's
  * (A6, 2026-09-02). A tool's `inputSchema` is PUSHED on every connection
@@ -179,11 +229,18 @@ exports.CHANNEL_INPUT_SHAPE = {
     action: zod_1.z
         .enum(exports.CHANNEL_ACTION_NAMES)
         .optional()
-        .describe('op="manage" (required): "launch", "end", "rename", "posture" or "direct" — all on YOUR OWN operator\'s machine. op="rooms" (required): "list", "open", "invite", "members", "threads", "thread_mode", "update" or "help".'),
+        .describe('op="manage" (required): "launch", "end", "rename", "posture" or "direct" — all on YOUR OWN operator\'s machine. op="rooms" (required): "list", "open", "invite", "members", "threads", "thread_mode", "update" or "help". op="artifact" (required): "create", "add", "remove" or "dissolve".'),
     channel: zod_1.z
         .string()
         .optional()
-        .describe('Channel slug or id. Required everywhere except op="rooms" action="list" / "open" / "help"; on op="read" and op="status" omitting it WIDENS the call to every channel you are in, across every workspace and home container.'),
+        .describe(
+    // ⚠ THE WIDER-READ RULE IS THE DOCTRINE'S (`FIELDS › OMITTING \`channel\`
+    // IS A WIDER READ`), which states the scope this sentence used to repeat —
+    // every channel you are in, across every workspace and home container.
+    // What stays is the CONTRACT: which calls require it, and what omitting it
+    // does. `channel-schema-budget.test.ts` pins the doctrine line, so the fact
+    // is relocated rather than dropped.
+    'Channel slug or id. Required except on op="rooms" action="list" / "open" / "help"; omitting it WIDENS op="read" and op="status".'),
     // ⚠ **ONE RECIPIENT PARAM FOR THE WHOLE SURFACE** (B8). It replaced `to`,
     // `member`, `recipient` and `agent_id` — four spellings of "the one party this
     // call is about", each with its own resolution story. The server resolves the
@@ -195,13 +252,24 @@ exports.CHANNEL_INPUT_SHAPE = {
         .trim()
         .min(1)
         .optional()
-        .describe('The ONE party this call is about — a member (email or user id) or an agent (`@agent-<id>` or its handle). op="send": who it is FOR, which triggers their side; op="manage": which of your own operator\'s agents; op="rooms": the member to "invite", or the one to open a 1:1 with.'),
+        .describe(
+    // ⚠ "which triggers their side" IS THE LAW'S SENTENCE, not this field's:
+    // `CHANNEL_LAW` states that addressing a person asks for their machine and
+    // that THEIR side decides what runs. The per-op meanings stay, because they
+    // are what a caller cannot derive from the type.
+    'The ONE party this call is about — a member (email or user id) or an agent (`@agent-<id>` or its handle). op="send": who it is FOR; op="manage": which of your own operator\'s agents; op="rooms": the member to "invite", or the one to open a 1:1 with.'),
     body: zod_1.z
         .string()
         .min(1)
         .max(16000)
         .optional()
-        .describe('op="send" (required): the message text — ONE LINE on kind="milestone", the context a person needs on kind="decision". op="manage" (required on "launch" and "direct"): the agent\'s opening instruction, or the private message.'),
+        .describe(
+    // ⚠ WHAT `body` MEANS PER `kind` IS THE DOCTRINE'S `send` SECTION, which
+    // states both in full ("kind=\"milestone\": ONE line marking a step…",
+    // "kind=\"decision\": … `body` what they need to know"). A field's describe
+    // carries which ops take it and what it is; the per-kind shape is the op's
+    // contract and is pulled with the op.
+    'op="send" (required): the message text. op="manage" (required on "launch" and "direct"): the agent\'s opening instruction, or the private message.'),
     // ⚠ THREE VALUES, EACH WITH A FENCE (spec §2.1). `milestone` stores
     // `task_progress` and keeps G14's one-line cap; `decision` stores `message`
     // plus the validated escalation payload, and it MUST stay `message` or
@@ -211,17 +279,35 @@ exports.CHANNEL_INPUT_SHAPE = {
     kind: zod_1.z
         .enum(["message", "milestone", "decision"])
         .optional()
-        .describe('op="send" (optional, default "message"): "milestone" marks a step on a thread and addresses nobody; "decision" posts a card a person answers with one press, and needs `summary`, `options` and — almost always — `recommendation`.'),
+        .describe(
+    // ⚠ WHICH FIELDS A DECISION NEEDS IS SAID BY THOSE FIELDS AND BY THE
+    // DOCTRINE, not a third time here: `options`' own describe says REQUIRED on
+    // kind="decision", `recommendation`'s says "almost always right", and the
+    // doctrine's `send` section lists the four parts of a card together. This
+    // one keeps what the VALUES mean, which is the enum's own contract.
+    'op="send" (optional, default "message"): "milestone" marks a step on a thread and addresses nobody; "decision" posts a card a person answers with one press.'),
     thread: zod_1.z
         .string()
         .optional()
-        .describe('A thread id, or the legacy `task-<channel>-<seq>` label. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; on op="read" it narrows to its metadata header plus only that exchange.'),
+        .describe(
+    // ⚠ THE LEGACY `task-<channel>-<seq>` LABEL IS STILL ACCEPTED — the doctrine's
+    // `send` section is where it is explained now, with the consequence this
+    // sentence never carried (no thread row behind it, so a send onto one
+    // reports `landed=adhoc`). ⚠ "its metadata header plus only that exchange"
+    // is PINNED by `channel-law.test.ts` against ARG_PROSE; it stays verbatim.
+    'A thread id. ⚠ "new" on op="send" OPENS one and returns its id, with `summary` as its title. Required on op="send" kind="milestone" and on op="rooms" action="thread_mode"; on op="read" it narrows to its metadata header plus only that exchange.'),
     summary: zod_1.z
         .string()
         .trim()
         .max(200)
         .optional()
-        .describe('The one-line intent. ALWAYS set it on op="send" — it becomes the notification the receiving member sees; on thread="new" it is the thread TITLE, on kind="decision" it is the QUESTION the card asks, and on op="rooms" action="open" it is the channel topic.'),
+        .describe(
+    // ⚠ THE THREAD-TITLE CLAUSE CAME OFF UNDER THIS FILE'S OWN NO-FACT-TWICE
+    // RULE, the one the `name` field applied in 2026-09-06: `thread`'s describe
+    // already says thread="new" opens one "with `summary` as its title", and
+    // both strings are pushed on the same connection. The other three meanings
+    // have no second home and stay.
+    'The one-line intent. ALWAYS set it on op="send" — it becomes the notification the receiving member sees; on kind="decision" it is the QUESTION the card asks, on op="rooms" action="open" it is the channel topic, and on op="artifact" it is what the folded run was about.'),
     // ⚠ ONE SENTENCE, BECAUSE THERE IS NOW ONE RULE (2026-09-02, C14). Both routes
     // dedupe PER-AUTHOR: `channel_messages` on
     // `(channel_id, client_msg_id, author_user_id)` and `channel_tasks` on
@@ -234,7 +320,14 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(200)
         .optional()
-        .describe('op="send" / op="manage" (optional): an idempotency key. Send one BEFORE you might need to retry — a retried call with NO key starts a SECOND agent or writes a second row, while a re-sent key hands back YOUR first call\'s. The dedupe is PER-AUTHOR on every op.'),
+        .describe(
+    // ⚠ THE COST OF RETRYING WITHOUT ONE IS STATED WHERE IT BITES: the doctrine's
+    // `manage` section ("re-issuing without the SAME `client_msg_id` starts a
+    // SECOND agent" — pinned by four suites) and its `fields` section
+    // ("`client_msg_id` IS WHAT MAKES A RETRY SAFE", pinned by
+    // `channel-schema-budget.test.ts`). ⚠ PER-AUTHOR and both op names are
+    // PINNED here by `channel-schema-caps.test.ts` and stay verbatim.
+    'op="send" / op="manage" / op="artifact" (optional): an idempotency key; a re-sent key hands back YOUR first call\'s result instead of acting twice. The dedupe is PER-AUTHOR on every op.'),
     // ── kind="decision" ──────────────────────────────────────────────────────
     // ⚠ TWO SEPARATE PARAMS RATHER THAN ONE `escalation` OBJECT, deliberately.
     // The whole point of the kind is that an agent has to SAY these things; a
@@ -261,7 +354,12 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(2)
         .max(6)
         .optional()
-        .describe('op="send" with kind="decision" (required): 2-6 things a person could decide, each with the consequence of choosing it. One option is not a question.'),
+        .describe(
+    // ⚠ "One option is not a question" WAS THE PROSE COPY OF `.min(2)`, which
+    // the published schema enforces and states as `minItems`. The doctrine's
+    // `send` section carries the shape of a card ("`options` 2-6 choices each
+    // with its consequence"), so the rule is both enforced and taught.
+    'op="send" with kind="decision" (required): 2-6 things a person could decide, each with the consequence of choosing it.'),
     recommendation: zod_1.z
         .object({
         index: zod_1.z
@@ -272,7 +370,58 @@ exports.CHANNEL_INPUT_SHAPE = {
         why: zod_1.z.string().trim().min(1).max(200).describe("ONE line for why."),
     })
         .optional()
-        .describe('op="send" with kind="decision" (optional but almost always right): which option you would take and why. `index` MUST be inside `options` — an out-of-range one refuses the whole call.'),
+        .describe(
+    // ⚠ ITS OWN TWO PROPERTIES SAY WHAT IT IS — `index` "the one you would
+    // take", `why` "ONE line for why" — and both are pushed on the same
+    // connection as this line was. What only the parent can say is the
+    // cross-field rule, which is what is left.
+    'op="send" with kind="decision" (optional but almost always right): `index` MUST be inside `options` — an out-of-range one refuses the whole call.'),
+    // ── op="artifact" ────────────────────────────────────────────────────────
+    // ⚠ TWO FIELDS FOR FOUR ACTIONS, and the name+summary+key they also need are
+    // the ones this surface already has. An artifact is named like a room, summed
+    // up like a thread and retried like a send; three more params would have been
+    // three more spellings for fields already declared above.
+    // ⚠ **NO `.uuid()`, AND THE REASON IS A PUBLISHED-SCHEMA RULE RATHER THAN A
+    // LOOSER CONTRACT** (2026-09-06). Zod 4 renders `.uuid()` as BOTH `format` and
+    // a `pattern` keyword, and `tool-style.test.ts › the reference's anti-patterns`
+    // refuses ANY `pattern` on a published property: a regex is a rule the agent has
+    // to reverse-engineer from a character class, and breaking it costs an opaque
+    // -32602 instead of a sentence naming the argument. The remedy is the one that
+    // test names — say the shape in the describe and let the handler answer with a
+    // code — and the describe below does exactly that by pointing at where the id
+    // comes from, which is more useful to a caller than the alphabet it is drawn
+    // from. A malformed id now reaches `channel-ops-artifact.ts` and is refused
+    // there by name.
+    // ⚠ IT IS THE ONLY PROPERTY ON THIS SURFACE THAT PUBLISHED ONE: the other
+    // `.uuid()` uses sit inside ARRAY ITEMS, where the keyword lands on the item
+    // schema rather than on the property, which is why nothing caught them and why
+    // this is not a licence to add one there.
+    artifact: zod_1.z
+        .string()
+        .optional()
+        .describe('op="artifact" (required on "add", "remove" and "dissolve"): the artifact id, exactly as action="create" returned it.'),
+    // ⚠ **ONE PARAM, AND THE "EXACTLY ONE" RULE IS A SEAM CHECK RATHER THAN A
+    // SECOND FIELD** (`channel-ops-artifact.ts › oneMessage`). A singular
+    // `message` beside this would be the same field with a different bound, which
+    // is how a caller learns to guess which spelling an action wants — the same
+    // argument that made `to` one param for four namespaces.
+    // ⚠ MESSAGES ARE NAMED BY `seq`, not by id: `seq` is what a read PRINTS and
+    // what a citation quotes, so resolving ids first would be a second addressing
+    // scheme for the same rows. Cap hand-mirrors
+    // `src/features/channels/schema-artifacts.ts › ARTIFACT_CREATE_MAX_MESSAGES`.
+    messages: zod_1.z
+        .array(zod_1.z.coerce.number().int().positive())
+        .min(1)
+        .max(200)
+        .optional()
+        .describe(
+    // ⚠ **THE LAST 11, TAKEN AS FILLER RATHER THAN AS A FACT** (budget wave
+    // fix-up): "this call is about" said nothing the clause after the dash does
+    // not say precisely — the whole set on one action, exactly one on the other
+    // two. Every fact, every quoted action and the `seq` addressing rule are
+    // untouched, and the handler states the same bound at the point of refusal
+    // (`channel-ops-artifact.ts › oneMessage`). Nothing greps this string.
+    'op="artifact" (required on "create", "add" and "remove"): the message `seq`s — the whole set on "create", exactly ONE on "add" and "remove".'),
     // ── op="read" ────────────────────────────────────────────────────────────
     // ⚠ coerce: MCP clients sometimes send numbers as strings, and strict
     // z.number() rejects those with an opaque -32602.
@@ -281,7 +430,14 @@ exports.CHANNEL_INPUT_SHAPE = {
         .int()
         .min(0)
         .optional()
-        .describe('op="read" (optional, and REQUIRED with `wait_ms`): the last MESSAGE seq you have processed; only higher ones come back. A seq is TABLE-WIDE, so one cursor covers every channel — but a THREAD-SCOPED read hands back none.'),
+        .describe(
+    // ⚠ THE TABLE-WIDE CLAUSE IS THE DOCTRINE'S `fields` LINE ("ONE CURSOR
+    // SPACE, ONE `since` — `seq` is table-wide, so one cursor covers every
+    // channel"), which `channel-schema-budget.test.ts` pins. ⚠ BOTH HALVES OF
+    // THE JOIN STAY VERBATIM: "THREAD-SCOPED read" and "hands back none" are
+    // pinned twice over, by `channel-schema-caps.test.ts` AND
+    // `channel-thread-scope.test.ts`, which reads them against the result line.
+    'op="read" (optional, and REQUIRED with `wait_ms`): the last MESSAGE seq you have processed; only higher ones come back. A THREAD-SCOPED read hands back none.'),
     limit: zod_1.z.coerce
         .number()
         .int()
@@ -302,7 +458,14 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(0)
         .max(channel_hold_budget_1.HOLD_CAP_MS)
         .optional()
-        .describe('Optional HOLD. op="read": long-poll for messages after `since` instead of returning a page. op="manage": how long to hold for your operator\'s desktop to accept or refuse — a timeout is NOT a failure, the request stays PENDING.'),
+        .describe(
+    // ⚠ THE TIMEOUT RULE IS THE DOCTRINE'S, AND IN ITS STRONGER FORM: "A
+    // TIMEOUT IS NOT A FAILURE: the request stays PENDING, and re-issuing
+    // without the SAME `client_msg_id` starts a SECOND agent" — one sentence
+    // carrying the consequence this copy left out, and pinned verbatim by
+    // `channel-directions`, `channel-ops-agent-mode` and
+    // `channel-ops-agent-doctrine`. Deleting the weaker copy loses nothing.
+    'Optional HOLD. op="read": long-poll for messages after `since` instead of returning a page. op="manage": how long to hold for your operator\'s desktop to answer.'),
     // ── op="rooms" ───────────────────────────────────────────────────────────
     // ⚠ `name` SERVES TWO ACTIONS AND THEY ARE BOTH LABELS, which is why one field
     // can carry them: a channel's name and an agent's display label are the same
@@ -310,7 +473,14 @@ exports.CHANNEL_INPUT_SHAPE = {
     name: zod_1.z
         .string()
         .optional()
-        .describe('op="rooms" action="open" (required for a NAMED channel; omit it and pass `to` for a 1:1): the channel name. op="manage" action="rename" (required): a DISPLAY ONLY label for that agent — 1-60 visible characters on ONE line, or "" to clear it — `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server.'),
+        .describe(
+    // ⚠ THE 1:1 CLAUSE CAME OFF ON 2026-09-06 TO PAY FOR THE ARTIFACT ONE,
+    // under this file's own no-fact-twice rule: `to`'s describe already says
+    // op="rooms" takes it for "the one to open a 1:1 with", and both strings
+    // are pushed on the same connection. The three pinned facts about a
+    // rename (DISPLAY ONLY, the handle is the only address, it reaches no
+    // server) are untouched.
+    'op="rooms" action="open" (required for a NAMED channel): the channel name. op="manage" action="rename" (required): a DISPLAY ONLY label for that agent — 1-60 visible characters on ONE line, or "" to clear it — `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server. op="artifact" action="create" (required): the card\'s name.'),
     visibility: zod_1.z
         .enum(["private", "public"])
         .optional()
@@ -376,7 +546,14 @@ exports.CHANNEL_INPUT_SHAPE = {
         .min(1)
         .max(120)
         .optional()
-        .describe('op="manage" action="launch" (optional): the AGENT TEMPLATE the new agent runs as — its id, or its exact name. It resolves in THIS CHANNEL\'S container under THE OPERATOR\'S visibility, and a name matching more than one is refused with every id listed. Omit it to start a blank agent.'),
+        .describe(
+    // ⚠ THE AMBIGUITY REFUSAL MOVED TO THE DOCTRINE'S `manage` SECTION, beside
+    // the rest of the launch contract and the refusal table it belongs to. It
+    // is the one genuine MOVE in this slice — the sentence had no second home,
+    // so it was WRITTEN there before it was cut here.
+    // ⚠ "THIS CHANNEL'S container" IS PINNED on this describe by
+    // `channel-ops-launch-body.test.ts:232` and stays verbatim.
+    'op="manage" action="launch" (optional): the AGENT TEMPLATE the new agent runs as — its id, or its exact name. It resolves in THIS CHANNEL\'S container under THE OPERATOR\'S visibility. Omit it to start a blank agent.'),
     // ── ⚠ THE PERMISSION AXES, IN ONE OBJECT (B8; 2026-09-01's T24 axes) ───────
     //
     // ⚠ **ONE PARAM BECAUSE THE CODE ALREADY TREATS THEM AS ONE THING** —

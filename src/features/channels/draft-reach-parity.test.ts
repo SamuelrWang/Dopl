@@ -228,12 +228,18 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
     // `author_user_id: ME`, the addressed agent in `recipient_agent_ids`, and — load-bearing — NO
     // `wake_reason`, because a row the SERVER aimed is not evidence of what the author addressed.
     // The case below with a `wake_reason` row is what pins that half.
+    // ⚠ THE ROWS ARE DELIBERATELY TWO HOURS OLD SINCE 2026-09-06 (Samuel's ruling: author
+    // stickiness has NO time window). They were `NOW - 1_000`, which sat inside the old 15-minute
+    // bound and so proved nothing about it; aged past it, the SERVER half fails if the window ever
+    // returns while the CLIENT half — handed the ids directly, with no clock of its own — keeps
+    // answering. That asymmetry is exactly what the parity table is for, and nothing is loosened:
+    // every case still demands the same answer from both ends.
     vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue(
       (c.recentAgentIds ?? []).map(
         (id, i) =>
           ({
             seq: 100 - i,
-            created_at: new Date(NOW - 1_000).toISOString(),
+            created_at: new Date(NOW - 2 * 60 * 60_000).toISOString(),
             author_user_id: ME,
             recipient_agent_ids: [id],
             metadata: {},

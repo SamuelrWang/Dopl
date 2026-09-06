@@ -57,10 +57,11 @@ export {
   getChannelTask,
   readMessages,
   // THE FOLDED READ (2026-09-06, artifacts #1220 §4). ⚠ `readTranscript` is the
-  // ROUTE's read — page plus its folded rendering; `readEntries` is the entries
-  // alone, for a caller that renders nothing else. Both compose the same body as
+  // ROUTE's read — page plus its folded rendering. It composes the same body as
   // `readMessages`, so there is still ONE cursor read and ONE watermark rule.
-  readEntries,
+  // ⚠ `readEntries` — the entries alone — was exported here beside it and is
+  // DELETED (2026-09-06): the row above was its only reference, which is the
+  // no-importer case line 46 already refuses.
   readTranscript,
   resolveReadableChannelId,
 } from "./service-reads";

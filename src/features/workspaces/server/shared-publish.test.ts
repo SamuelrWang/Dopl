@@ -64,7 +64,6 @@ vi.mock("@/features/knowledge/server/repository", () => ({
   listBaseSlugsForWorkspace: vi.fn(),
 }));
 vi.mock("@/features/knowledge/server/service-base-gates", () => ({
-  assertCreatorCanReadItBack: vi.fn().mockResolvedValue(undefined),
   // ⚠ `service-base-writes.ts` HAS CALLED THIS SINCE THE PERSONAL-SHELF WORK
   // (task 11), and a module mock that omits it is not a narrower test — it is
   // `undefined is not a function` inside the create, which is how both

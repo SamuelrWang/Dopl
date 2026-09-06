@@ -136,14 +136,48 @@ export declare const RECONFIRM_REMEDY = "Re-issue the SAME call WITHOUT `confirm
  *   - not publishing, no token   → proceed
  *   - not publishing, with token → refuse (stray token)
  *   - publishing, not a shared container → proceed (nobody else is in the room)
- *   - publishing into a shared container, no token → PREVIEW + a fresh token
+ *   - publishing into a shared container, no token → PRECHECK, then PREVIEW + a
+ *     fresh token — or the precheck's refusal, and NO token
  *   - publishing into a shared container, token    → verify, then proceed
  *     WITH `acknowledgedShared: true` — which the caller must put on the write
  *     body as `acknowledgeShared`, or the server refuses it (G16).
+ *
+ * 🔒 **`precheck` — A PREVIEW MUST NEVER ISSUE A TOKEN FOR AN ACT THE CONFIRMED
+ * CALL WOULD REFUSE** (task 11, the pin the create side shipped without).
+ *
+ * ⚠ **THE HOLE IT CLOSES WAS LIVE AND WAS OBSERVED.** `dopl_kb
+ * op="create_base" visibility="public"` in a shared home channel previewed,
+ * handed back a `confirm_token`, and the echoed call was then refused by the
+ * server's create gate. Everything in this module is decided from what THIS
+ * process can see — the room's kind and its member count — and the gates that
+ * actually refuse live in the server, so the preview was confidently describing
+ * an act that could not happen. A token for an impossible act is worse than no
+ * preview: the caller reads "re-issue with this token" as permission.
+ *
+ * ⚠ **IT IS THE CALLER'S CALLBACK BECAUSE THE GATE IS THE CALLER'S**, and this
+ * module must not learn what a knowledge base is. `knowledge-ops-write.ts`
+ * passes one that asks the SERVER to run the create's own gate chain with the
+ * body the confirmed call will send (`dryRunKbBase`), so parity is the server's
+ * one function rather than a rule two processes both promise to keep.
+ *
+ * ⚠ **IT RUNS ONLY WHERE A TOKEN WOULD BE MINTED.** Not on the private arm, not
+ * in a standard workspace, and not on the confirm echo — where the real call
+ * runs the real gate a moment later and refuses honestly on its own. So an
+ * ordinary create pays nothing for it.
+ *
+ * ⚠ **IT REFUSES, IT NEVER PROCEEDS.** Returning a response halts; returning
+ * `null` means "no objection", which is the only thing a precheck may say in
+ * the permissive direction. It cannot mint, cannot spend and cannot widen the
+ * class — an act that is not audience-changing never reaches it.
  */
 export declare function confirmGate(client: DoplClient, act: ConfirmAct, opts: {
     publishes: boolean;
     token?: string;
+    /** Asked once, immediately before a token is minted. A response HALTS with
+     *  it; `null` proceeds to the preview. ⚠ It may THROW, and a throw is not
+     *  swallowed here: "I could not tell whether this would be refused" must
+     *  never resolve into a minted token. */
+    precheck?: () => Promise<ToolResponse | null>;
 }): Promise<ConfirmVerdict>;
 /** ⚠ TEST-ONLY. Nothing in the server calls it; the store is process-lifetime
  *  state and a suite that cannot clear it tests the previous suite's leftovers. */

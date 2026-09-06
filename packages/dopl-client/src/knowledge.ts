@@ -96,6 +96,32 @@ export async function createKbBase(
   return data.base;
 }
 
+/**
+ * 🔒 **THE CREATE'S GATES, RUN WITHOUT THE CREATE** — `POST
+ * /api/knowledge/bases?dryRun=1`. Resolves when the same body would be
+ * ACCEPTED; throws the create's own error when it would be refused. Nothing is
+ * written either way, and there is no row to return.
+ *
+ * ⚠ **A SECOND METHOD OVER ONE ENDPOINT, LIKE `listKbBases` /
+ * `listKbBasesPayload`** — not a second endpoint, and not a flag on
+ * {@link createKbBase}. A flag would make that method answer `KnowledgeBase |
+ * null`, and a caller reading the null as "created, row unavailable" is the
+ * mistake this whole slice exists to stop.
+ *
+ * ⚠ **SEND THE BODY YOU WOULD SEND**, `acknowledgeShared` included: the answer
+ * is only about the body it was asked with.
+ */
+export async function dryRunKbBase(
+  t: DoplTransport,
+  input: KnowledgeBaseCreateInput
+): Promise<void> {
+  await t.request<{ dryRun: true }>("/api/knowledge/bases?dryRun=1", {
+    method: "POST",
+    body: input,
+    toolName: "kb_create_base",
+  });
+}
+
 export async function updateKbBase(
   t: DoplTransport,
   baseId: string,

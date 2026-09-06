@@ -131,6 +131,145 @@ describe("dopl_kb — the create write", () => {
 });
 
 
+// ── 🔒 THE PREVIEW RUNS THE SAME GATE AS THE CONFIRMED CALL ──────────
+//
+// ⚠ **THE HOLE, AS OBSERVED LIVE ON 2026-09-06.** `create_base
+// visibility="public"` in a shared home channel previewed, handed back a
+// `confirm_token` — and the echoed call was refused by the server's create
+// gate. Everything this module decides comes from what the MCP process can see
+// (the room's kind, its member count); the gates that refuse read grant rows and
+// arming rows it cannot. So the preview was confidently describing an act that
+// could not happen, and the caller reads "re-issue with this token" as
+// permission.
+//
+// ⚠ **THE FIX IS TO ASK THE SERVER, NOT TO GUESS BETTER HERE.** The precheck
+// runs the create's OWN gate chain (`assertCreateBaseAllowed` behind
+// `?dryRun=1`) with the body the confirmed call will send. These cases pin the
+// asking — WHAT it sends, WHEN it does not send it, and that a refusal produces
+// no token — because a version that re-decided locally would satisfy every
+// answer-shaped assertion below while drifting from the gate on the next commit.
+describe("🔒 no token is ever minted for a create the confirm would refuse", () => {
+  /** The server's create refusal, duck-typed exactly as the mapper reads it. */
+  const gateRefusal = Object.assign(new Error("forbidden"), {
+    status: 403,
+    code: "AGENT_WRITE_DISABLED",
+    apiMessage:
+      "An agent cannot create a knowledge base inside a shared home channel.",
+  });
+
+  it("asks the server FIRST, with the body the confirmed call will send", async () => {
+    const dryRunKbBase = vi.fn(async () => undefined);
+    const create = vi.fn(async () => BASE);
+
+    const res = await opCreateBase(
+      stub({ ...sharedContainer(), dryRunKbBase, createKbBase: create }) as DoplClient,
+      ME,
+      { name: "Notes", visibility: "public" },
+    );
+
+    // 🔒 `acknowledgeShared: true` — the confirmed call carries it from the
+    // spent token, so asking without it would refuse on the missing
+    // acknowledgement: the answer would be "no" to a question nobody asked.
+    expect(dryRunKbBase).toHaveBeenCalledWith({
+      name: "Notes",
+      description: undefined,
+      visibility: "public",
+      acknowledgeShared: true,
+    });
+    // No objection → the preview happens exactly as before. The precheck
+    // decides whether a token MAY be minted, never what the preview says.
+    expect(textOf(res)).toContain("NOTHING WAS CREATED");
+    expect(tokenIn(textOf(res))).toBeTruthy();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("REGRESSION: a refused create previews NOTHING and mints NO token", async () => {
+    const dryRunKbBase = vi.fn(async () => {
+      throw gateRefusal;
+    });
+    const create = vi.fn(async () => BASE);
+
+    const text = textOf(
+      await opCreateBase(
+        stub({ ...sharedContainer(), dryRunKbBase, createKbBase: create }) as DoplClient,
+        ME,
+        { name: "Notes", visibility: "public" },
+      ),
+    );
+
+    // The SERVER'S sentence, which names the room, the cause and the remedy —
+    // and is true of a dry run word for word: nothing was created.
+    expect(text).toContain("shared home channel");
+    expect(text).toContain("Nothing was created");
+    // 🔒 THE PIN ITSELF. A token here is the surface promising an act the gate
+    // forbids; there must not be one to echo.
+    expect(text).not.toContain("confirm_token=");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("does NOT ask on the private arm — an ordinary create pays nothing", async () => {
+    const dryRunKbBase = vi.fn(async () => undefined);
+    const create = vi.fn(async () => BASE);
+
+    await opCreateBase(
+      stub({ ...sharedContainer(), dryRunKbBase, createKbBase: create }) as DoplClient,
+      ME,
+      { name: "Notes" },
+    );
+
+    // ⚠ A round trip on every create would be a real cost for a class that
+    // fires on one act. Nothing is previewed here, so there is nothing to
+    // promise.
+    expect(dryRunKbBase).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalled();
+  });
+
+  it("does NOT ask in a standard workspace, where the class never fires", async () => {
+    const dryRunKbBase = vi.fn(async () => undefined);
+    const create = vi.fn(async () => BASE);
+
+    await opCreateBase(
+      stub({
+        ...workspaceStub("standard", 3),
+        dryRunKbBase,
+        createKbBase: create,
+      }) as DoplClient,
+      ME,
+      { name: "Notes", visibility: "public" },
+    );
+
+    expect(dryRunKbBase).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalled();
+  });
+
+  it("asks ONCE — the confirm echo runs the real gate, not a second dry run", async () => {
+    const dryRunKbBase = vi.fn(async () => undefined);
+    const create = vi.fn(async () => BASE);
+    const client = stub({
+      ...sharedContainer(),
+      dryRunKbBase,
+      createKbBase: create,
+    }) as DoplClient;
+
+    const token = tokenIn(
+      textOf(await opCreateBase(client, ME, { name: "Notes", visibility: "public" })),
+    );
+    await opCreateBase(client, ME, {
+      name: "Notes",
+      visibility: "public",
+      confirm_token: token,
+    });
+
+    // ⚠ The acting call IS the gate: it runs the same chain for real and
+    // refuses on its own if the room changed underneath. A second dry run would
+    // be a second opinion and a second round trip.
+    expect(dryRunKbBase).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ acknowledgeShared: true }),
+    );
+  });
+});
+
 // ── B. The confirm class ─────────────────────────────────────────────
 
 describe("the confirm class fires only where the audience changes", () => {
@@ -325,6 +464,11 @@ describe("the knowledge half of the confirm class", () => {
     const create = vi.fn(async () => ({ ...BASE, visibility: "public" as const }));
     const client = stub({
       ...sharedContainer(),
+      // ⚠ THE DOUBLE MOVED, THE ASSERTION DID NOT (2026-09-06). This op now asks
+      // the SERVER whether the create would be refused before it mints a token,
+      // so the stub has to be able to answer; an ALLOWING answer is the world
+      // this case was always written in, and every line below is unchanged.
+      dryRunKbBase: vi.fn(async () => undefined),
       createKbBase: create,
     }) as DoplClient;
     const args = { name: "Notes", visibility: "public" as const };

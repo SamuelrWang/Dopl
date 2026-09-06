@@ -140,6 +140,24 @@ export interface PostMetadataResult {
    * reject real posts from the field.
    */
   threadTagStripped: boolean;
+  /**
+   * **THIS SERVER GUESSED THE `escalationAnswer` KEY OFF THE BODY** (fold 11b),
+   * rather than the caller sending it (2026-09-06).
+   *
+   * ⚠ **THE READER IS THE INSERT, AND IT EXISTS SO A RACE CANNOT FAIL A PLAIN
+   * SENTENCE.** The typed door's "most recent OPEN card" is a read; the one
+   * answer per escalation is enforced by a partial unique index at commit. A
+   * press landing in between makes this member's ordinary message 23505 —
+   * 11b's own docblock promises it "can only ever ADD a stamp, never refuse a
+   * post", and without this flag the write could not keep that promise.
+   * `service-writes.ts` drops the key and re-inserts, silently, exactly as
+   * every other near miss is silent.
+   *
+   * ⚠ **NEVER TRUE FOR A PRESSED ANSWER.** `input.escalationAnswer` is the
+   * caller's own decision and a lost race there is a 409 with a sentence — the
+   * two doors differ here on purpose, because only one of them was a guess.
+   */
+  typedEscalationAnswer: boolean;
 }
 
 /**
@@ -277,6 +295,7 @@ export async function resolvePostMetadata(
 ): Promise<PostMetadataResult> {
   const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
   let threadTagStripped = false;
+  let typedEscalationAnswer = false;
   // ⚠ ONE roster read per post, AT MOST, and only if something asks. Two folds
   // want `channel_members` — thread inheritance (3) and mention resolution (9)
   // — and neither runs on the common post. Memoized on the PROMISE so two
@@ -469,7 +488,10 @@ export async function resolvePostMetadata(
     // ⚠ AND NEVER ON A POST THAT IS ITSELF A CARD: an escalation's own body is
     // the render of its options, so a two-option card whose body begins with a
     // label could otherwise answer the card before it.
-    await resolveTypedEscalationAnswer(
+    // ⚠ REPORTED, not merely done — see {@link
+    // PostMetadataResult.typedEscalationAnswer}. The insert has to be able to
+    // tell a key this server guessed from one the caller pressed.
+    typedEscalationAnswer = await resolveTypedEscalationAnswer(
       channel.id,
       ctx.userId,
       input.body,
@@ -477,5 +499,5 @@ export async function resolvePostMetadata(
     );
   }
 
-  return { metadata, threadTagStripped };
+  return { metadata, threadTagStripped, typedEscalationAnswer };
 }

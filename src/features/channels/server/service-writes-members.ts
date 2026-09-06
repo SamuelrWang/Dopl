@@ -13,6 +13,7 @@ import {
   canManageChannel,
   loadVisibleChannel,
   profilesById,
+  requireMemberChannel,
   UNIQUE_VIOLATION,
   type ChannelContext,
 } from "./service-shared";
@@ -161,10 +162,11 @@ export async function updateMyMemberSettings(
     favorite?: boolean;
   }
 ): Promise<ChannelMember> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("update settings for this channel");
-  }
+  const { channel } = await requireMemberChannel(
+    ctx,
+    ref,
+    "update settings for this channel"
+  );
   const dbPatch: {
     agent_tool_profile?: string;
     favorited_at?: string | null;

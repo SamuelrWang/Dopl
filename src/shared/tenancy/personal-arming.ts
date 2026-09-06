@@ -112,7 +112,7 @@ export async function armChannelForPersonalShelf(
   // 🔒 THE MEMBERSHIP FENCE, mirroring `*_insert_own`. ⚠ BEFORE the write, and
   // its refusal is the 404 — a caller who is not in the room learns nothing
   // about whether it exists.
-  await assertActiveMember(caller.userId, channelId);
+  await assertChannelMemberRow(caller.userId, channelId);
   const { error } = await supabaseAdmin()
     .from("channel_personal_arming")
     .upsert(
@@ -160,13 +160,22 @@ function assertHumanOwner(caller: PersonalArmingCaller): void {
 }
 
 /**
- * Membership of the room, as the insert policy asks it. ⚠ **THE ROW'S EXISTENCE
- * IS THE MEMBERSHIP** — `channel_members` carries no status column (see
- * `20260725120000_channels.sql`), so "active" here means "there is a row", which
- * is exactly what `*_insert_own`'s `EXISTS` tests. If that table ever grows a
- * status, this read and the policy both have to learn it, in the same change.
+ * **IS THERE A `channel_members` ROW FOR THIS PAIR** — membership of the room,
+ * as the insert policy asks it.
+ *
+ * ⚠ **IT WAS CALLED `assertActiveMember` AND THE NAME PROMISED A CHECK THAT DOES
+ * NOT EXIST** (renamed 2026-09-06). `channel_members` carries NO STATUS COLUMN
+ * (see `20260725120000_channels.sql`), so there is no active/inactive to test:
+ * the row's existence IS the membership, which is exactly what `*_insert_own`'s
+ * `EXISTS` tests. A reader who took "active" at face value would look for a
+ * predicate that was never here, or add a second one — and the sibling that
+ * really does test aliveness, `repository.isActiveWorkspaceMember`, reads a
+ * DIFFERENT table for a different fact. The name now says the row and the table.
+ *
+ * ⚠ If `channel_members` ever grows a status, this read and the policy both have
+ * to learn it, in the same change.
  */
-async function assertActiveMember(
+async function assertChannelMemberRow(
   userId: string,
   channelId: string
 ): Promise<void> {

@@ -9,6 +9,7 @@ exports.listKbBases = listKbBases;
 exports.getKbBase = getKbBase;
 exports.getKbTree = getKbTree;
 exports.createKbBase = createKbBase;
+exports.dryRunKbBase = dryRunKbBase;
 exports.updateKbBase = updateKbBase;
 exports.deleteKbBase = deleteKbBase;
 exports.setKbBasePinned = setKbBasePinned;
@@ -63,6 +64,28 @@ async function getKbTree(t, baseId, opts) {
 async function createKbBase(t, input) {
     const data = await t.request("/api/knowledge/bases", { method: "POST", body: input, toolName: "kb_create_base" });
     return data.base;
+}
+/**
+ * 🔒 **THE CREATE'S GATES, RUN WITHOUT THE CREATE** — `POST
+ * /api/knowledge/bases?dryRun=1`. Resolves when the same body would be
+ * ACCEPTED; throws the create's own error when it would be refused. Nothing is
+ * written either way, and there is no row to return.
+ *
+ * ⚠ **A SECOND METHOD OVER ONE ENDPOINT, LIKE `listKbBases` /
+ * `listKbBasesPayload`** — not a second endpoint, and not a flag on
+ * {@link createKbBase}. A flag would make that method answer `KnowledgeBase |
+ * null`, and a caller reading the null as "created, row unavailable" is the
+ * mistake this whole slice exists to stop.
+ *
+ * ⚠ **SEND THE BODY YOU WOULD SEND**, `acknowledgeShared` included: the answer
+ * is only about the body it was asked with.
+ */
+async function dryRunKbBase(t, input) {
+    await t.request("/api/knowledge/bases?dryRun=1", {
+        method: "POST",
+        body: input,
+        toolName: "kb_create_base",
+    });
 }
 async function updateKbBase(t, baseId, patch) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}`, { method: "PATCH", body: patch, toolName: "kb_update_base" });

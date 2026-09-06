@@ -1,6 +1,5 @@
 import "server-only";
 import {
-  ChannelForbiddenError,
   TaskForbiddenError,
   TaskNotFoundError,
 } from "./errors";
@@ -8,7 +7,7 @@ import * as repoCollab from "./repository-collab";
 import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
 import * as repoTasks from "./repository-tasks";
-import { canManageChannel, loadVisibleChannel } from "./service-shared";
+import { canManageChannel, requireMemberChannel } from "./service-shared";
 import type { ChannelContext } from "./service-shared";
 
 /**
@@ -125,10 +124,11 @@ export async function deleteTask(
   ref: string,
   taskId: string
 ): Promise<void> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("delete a thread in this channel");
-  }
+  const { channel, membership } = await requireMemberChannel(
+    ctx,
+    ref,
+    "delete a thread in this channel"
+  );
   // ⚠ Channel-scoped load: a thread that is not in THIS channel is a 404, so the
   // id cannot be probed across rooms (the same collapse `getChannelTask` makes).
   const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);

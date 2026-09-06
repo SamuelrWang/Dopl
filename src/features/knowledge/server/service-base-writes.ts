@@ -34,11 +34,14 @@ import {
   listSlugs,
 } from "./service-shared";
 import { getBaseById } from "./service-bases";
-// ⚠ THE TWO PRE-WRITE GATES, SPLIT OUT AT THE §1 CAP (2026-09-02). Read that
-// module's header for the seam. `assertCreatorCanReadItBack` asks the SAME
-// ceiling question `listBases` / `getBaseBySlug` will ask a millisecond later,
-// or this writes rows nobody can reach.
-import { resolveCreateDestination } from "./service-base-gates";
+// ⚠ THE PRE-WRITE GATE, SPLIT OUT AT THE §1 CAP (2026-09-02). Read that
+// module's header for the seam. It asks the SAME ceiling question `listBases` /
+// `getBaseBySlug` will ask a millisecond later, or this writes rows nobody can
+// reach.
+import {
+  resolveCreateDestination,
+  type CreateDestination,
+} from "./service-base-gates";
 import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 /**
@@ -48,13 +51,56 @@ import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 const SLUG_RETRY_MAX = 3;
 
-export async function createBase(
+/** What {@link assertCreateBaseAllowed} decided, and {@link createBase} then
+ *  writes with. ⚠ Every field is a DECISION, not an echo of the input: the
+ *  destination is resolved by owner, and the visibility is the value the row
+ *  LANDS at after the teams branch has had its say. */
+export interface CreateBasePreconditions {
+  destination: CreateDestination;
+  visibility: "public" | "private";
+  teamGrants: NonNullable<KnowledgeBaseCreateInput["teamGrants"]>;
+}
+
+/**
+ * 🔒 **EVERY PRE-WRITE GATE OF {@link createBase}, AS ONE FUNCTION — SO A DRY
+ * RUN CAN RUN THE GATE THE CONFIRMED CALL RUNS.**
+ *
+ * ⚠ **THE PIN IT EXISTS FOR: A PREVIEW MUST NEVER HAND OUT A TOKEN FOR A CREATE
+ * THE CONFIRMED CALL WOULD REFUSE.** The MCP confirm class
+ * (`packages/mcp-server/src/tools/confirm-token.ts`) previews an audience
+ * -changing create and mints a token the acting call echoes back. That preview
+ * is minted in a DIFFERENT PROCESS from the gates, so it knew nothing about
+ * them: `create_base` with `visibility:"public"` in an unarmed shared home
+ * channel previewed happily, issued a token, and then the confirmed call was
+ * refused by {@link resolveCreateDestination}. A preview that promises what the
+ * gate forbids is worse than no preview — it is the surface telling the caller
+ * the act was available.
+ *
+ * ⚠ **PARITY IS STRUCTURAL, NOT A SECOND LIST.** The dry run does not
+ * re-implement, re-order or approximate these gates; it calls THIS function,
+ * which is the same call `createBase` makes and the only place the chain is
+ * written. A gate added below is inherited by the preview on the same commit,
+ * which is the one property a hand-mirrored copy could never keep.
+ *
+ * ⚠ **IT STOPS EXACTLY WHERE THE WRITES BEGIN**, and that boundary is the
+ * contract: everything here answers a question about the CALLER and touches no
+ * row, so running it twice — once for the preview, once for the act — costs
+ * reads and changes nothing. The slug read is deliberately BELOW the line: it
+ * reads a container the caller may not be allowed to create in yet, and a dry
+ * run must not report a slug collision against a base that nobody may see.
+ *
+ * ⚠ **A DRY RUN MUST SEND THE BODY THE CONFIRMED CALL WILL SEND**, including
+ * `acknowledgeShared` — see the G16 call below. Previewing without it would
+ * refuse on the missing acknowledgement, which is the very thing the preview
+ * exists to obtain: the answer would be "no" to a question nobody asked.
+ */
+export async function assertCreateBaseAllowed(
   ctx: KnowledgeContext,
   input: KnowledgeBaseCreateInput,
-): Promise<KnowledgeBase> {
+): Promise<CreateBasePreconditions> {
   // 🔒 THE AUDIENCE CEILING, ASKED BEFORE THE INSERT rather than only by the
   // reads afterwards (F-323's authoring half) — see
-  // `assertCreatorCanReadItBack`. ⚠ FIRST, before any other validation and
+  // `service-base-gates.ts`. ⚠ FIRST, before any other validation and
   // before the slug derivation's read: a caller that may not create here should
   // spend no round trips finding out, and must not be told about a slug
   // collision with a row it cannot see.
@@ -62,7 +108,7 @@ export async function createBase(
   // 🔒 **AND IT IS NOW THE SAME CALL THAT DECIDES WHERE THE ROW LANDS** (gap 2
   // of #1077 — the asking seam). `resolveCreateDestination` composes that
   // ceiling question with the personal-shelf fence and answers WHICH CONTAINER;
-  // it still refuses in every case `assertCreatorCanReadItBack` refused, and the
+  // it still refuses in every case the standalone read-back gate refused, and the
   // one thing it adds is that an agent whose operator has ARMED this room
   // creates on that operator's own shelf instead of being turned away.
   // ⚠ `wantsTeams` is read here rather than below because a teams create names
@@ -90,14 +136,19 @@ export async function createBase(
   // operator's agent publish into the room the PEER is standing in — the
   // opposite of what this branch is for.
   const fromWorkspaceKey = isSharedCredential(ctx);
-  let resolvedVisibility = input.visibility;
+  // ⚠ ANNOTATED, NOT INFERRED, since this function now ANSWERS with it: the
+  // inferred type carried `undefined` from `input.visibility`, and a caller
+  // reading "undefined" as "whatever the server defaults to" is exactly the
+  // credential-dependent guess `knowledge-ops-write.ts › opCreateBase` refuses
+  // to make.
+  let resolvedVisibility: "public" | "private";
   if (fromWorkspaceKey) {
-    if (resolvedVisibility === "private") {
+    if (input.visibility === "private") {
       throw new WorkspaceKeyPrivateVisibilityError();
     }
-    resolvedVisibility = resolvedVisibility ?? "public";
+    resolvedVisibility = input.visibility ?? "public";
   } else {
-    resolvedVisibility = resolvedVisibility ?? "private";
+    resolvedVisibility = input.visibility ?? "private";
   }
 
   // Teams mode is human-only; non-admin creators may only grant teams they
@@ -139,6 +190,23 @@ export async function createBase(
     acknowledged: input.acknowledgeShared,
     noun: "knowledge base",
   });
+
+  return { destination, visibility: resolvedVisibility, teamGrants };
+}
+
+export async function createBase(
+  ctx: KnowledgeContext,
+  input: KnowledgeBaseCreateInput,
+): Promise<KnowledgeBase> {
+  // 🔒 EVERY GATE, IN ONE CALL — and it is the SAME call the dry run makes, so
+  // the MCP preview and this write can never disagree about whether the create
+  // is allowed. See {@link assertCreateBaseAllowed} for why that is structural
+  // rather than a promise.
+  const {
+    destination,
+    visibility: resolvedVisibility,
+    teamGrants,
+  } = await assertCreateBaseAllowed(ctx, input);
 
   let attempt = 0;
   let baseSlug =

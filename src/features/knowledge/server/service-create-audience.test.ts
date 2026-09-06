@@ -64,7 +64,7 @@ import {
 } from "./repository-audience";
 import * as repo from "./repository";
 import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
-import { createBase } from "./service-base-writes";
+import { assertCreateBaseAllowed, createBase } from "./service-base-writes";
 import { getBaseBySlug, listBases } from "./service-bases";
 import { AgentWriteDisabledError } from "./errors";
 
@@ -273,6 +273,97 @@ describe("🔒 an ARMED room sends the create to its OWNER instead of refusing",
       } as never)
     ).rejects.toBeInstanceOf(AgentWriteDisabledError);
     expect(mockRepo.insertBase).not.toHaveBeenCalled();
+  });
+});
+
+// ── 🔒 THE DRY RUN ANSWERS WHAT THE CONFIRMED CALL ANSWERS ───────────
+//
+// ⚠ **THE PIN: A PREVIEW MUST NEVER PROMISE A CREATE THE CONFIRM WOULD REFUSE.**
+// Observed live on 2026-09-06, before this: `dopl_kb op="create_base"
+// visibility="public"` in a shared home channel PREVIEWED, handed back a
+// `confirm_token` — and the echoed call was refused by the gate above. The
+// preview is minted in the MCP process, which cannot see a grant row or an
+// arming row, so it was describing an act the server would not perform.
+//
+// ⚠ **PARITY IS ASSERTED THROUGH BOTH DOORS ON ONE WORLD, which is the only
+// form of it worth having.** `assertCreateBaseAllowed` is not tested here for
+// what it says on its own — it is tested for saying the SAME thing `createBase`
+// says, in the same world, with the same input. A suite that checked the dry run
+// against its own expectations would keep passing on the day the two diverge,
+// which is exactly the bug.
+describe("🔒 the dry run runs the SAME gate, and writes nothing", () => {
+  /** The owner has armed this room for their personal shelf (#1077 gap 2). */
+  function armed() {
+    mockReach.mockResolvedValue({ kind: "open", containerId: PERSONAL });
+  }
+
+  it("REFUSES where the create refuses — the unarmed shared room", async () => {
+    sharedContainer([]);
+
+    await expect(
+      assertCreateBaseAllowed(agentCtx(), { name: "Notes" } as never)
+    ).rejects.toBeInstanceOf(AgentWriteDisabledError);
+    await expect(
+      createBase(agentCtx(), { name: "Notes" } as never)
+    ).rejects.toBeInstanceOf(AgentWriteDisabledError);
+  });
+
+  it("...with the SAME SENTENCE, so a preview cannot soften the refusal", async () => {
+    // ⚠ ONE MESSAGE, TWO DOORS. A preview that refused in gentler words would
+    // read as "not yet" and send the agent back to try the real call.
+    sharedContainer([]);
+    const fail = (p: Promise<unknown>) => p.then(() => null, (e: Error) => e.message);
+
+    expect(
+      await fail(assertCreateBaseAllowed(agentCtx(), { name: "Notes" } as never))
+    ).toBe(await fail(createBase(agentCtx(), { name: "Notes" } as never)));
+  });
+
+  it("ALLOWS where the create lands, and names the same destination", async () => {
+    sharedContainer([]);
+    armed();
+
+    const preconditions = await assertCreateBaseAllowed(agentCtx(), {
+      name: "Notes",
+    } as never);
+    const created = await createBase(agentCtx(), { name: "Notes" } as never);
+
+    // 🔒 THE SAME CONTAINER, ASKED TWICE. The preview's "this would be created"
+    // is a claim about WHERE as much as WHETHER.
+    expect(preconditions.destination.workspaceId).toBe(PERSONAL);
+    expect(created.workspaceId).toBe(PERSONAL);
+  });
+
+  it("is a GATE, not a create: no row, no slug read, nothing rolled back", async () => {
+    // ⚠ THE WHOLE JUSTIFICATION FOR RUNNING IT ON THE PREVIEW PATH. If the dry
+    // run wrote anything, every previewed create would leave a row behind for
+    // an act the operator has not confirmed yet.
+    sharedContainer([]);
+    armed();
+
+    await assertCreateBaseAllowed(agentCtx(), { name: "Notes" } as never);
+
+    expect(mockRepo.insertBase).not.toHaveBeenCalled();
+    expect(mockRepo.hardDeleteBase).not.toHaveBeenCalled();
+    // ⚠ AND NO SLUG READ — a dry run must never report a collision against a
+    // base the caller cannot see, and it must not be a way to probe a
+    // container's names one create body at a time.
+    expect(mockRepo.listBaseSlugsForWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("answers the RESOLVED visibility, which is what the preview describes", async () => {
+    // ⚠ The visibility the row LANDS at, not the one the caller typed: an
+    // absent `visibility` resolves to private for a session caller, and a
+    // preview that said "public" about it would state the wrong audience in the
+    // one line a person uses to decide.
+    soloContainer();
+
+    const preconditions = await assertCreateBaseAllowed(agentCtx(), {
+      name: "Notes",
+    } as never);
+
+    expect(preconditions.visibility).toBe("private");
+    expect(preconditions.destination.workspaceId).toBe(CONTAINER);
   });
 });
 

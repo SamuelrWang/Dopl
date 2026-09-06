@@ -11,7 +11,7 @@
  * op, by re-issuing with the same cursor.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelArtifact, ChannelArtifactAction, ChannelArtifactResult, ChannelCreateInput, ChannelUpdateInput, ChannelMember, ChannelMessage, ChannelReadEntry, ChannelMessageInput, ChannelMessagePosted, ChannelSessionsPage, ChannelThread, ChannelThreadCreated, ChannelThreadCreateInput, ChannelThreadPage, ReadMessagesOptions, WorkspaceAwaitResult, ThreadMode } from "./channel-types.js";
 import type { AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
 /** Network read-timeout for the long-poll — above the server cap.
@@ -34,6 +34,37 @@ export declare function listChannels(t: DoplTransport, opts?: {
 export declare function getChannel(t: DoplTransport, channelId: string): Promise<Channel>;
 export declare function listChannelMembers(t: DoplTransport, channelId: string): Promise<ChannelMember[]>;
 export declare function readMessages(t: DoplTransport, channelId: string, opts?: ReadMessagesOptions): Promise<ChannelMessage[]>;
+/**
+ * THE SAME READ, KEEPING THE FOLD — messages plus `entries` when the page
+ * actually folded something (#1220 §4).
+ *
+ * ⚠ **`entries: null` MEANS "NOTHING ON THIS PAGE IS IN AN ARTIFACT", AND SO
+ * DOES AN OLDER SERVER THAT OMITS THE KEY.** Both collapse to the same handling
+ * — render the messages — which is why one nullable field is enough and no
+ * version probe is needed.
+ * ⚠ **`readMessages` ABOVE IS UNCHANGED AND STAYS.** Every installed caller is
+ * artifact-unaware; this is the additive twin for one that is not.
+ */
+export declare function readTranscript(t: DoplTransport, channelId: string, opts?: ReadMessagesOptions): Promise<{
+    messages: ChannelMessage[];
+    entries: ChannelReadEntry[] | null;
+}>;
+/**
+ * `op="artifact"` — create / add / remove / dissolve, one POST.
+ *
+ * ⚠ **THERE IS NO `delete`, AND THAT IS THE WHOLE SAFETY ARGUMENT.**
+ * `dissolve` clears the column from every member and retires the card; nothing
+ * is deleted, so every action on this surface is reversible in the way the rest
+ * of this client's writes are.
+ */
+export declare function writeArtifact(t: DoplTransport, channelId: string, input: ChannelArtifactAction): Promise<ChannelArtifactResult>;
+/** OPEN ONE CARD — its members verbatim, in seq order, unfolded (#1220 §4).
+ *  ⚠ `truncated` says the member list hit its ceiling; never drop it. */
+export declare function readArtifact(t: DoplTransport, channelId: string, artifactId: string): Promise<{
+    artifact: ChannelArtifact;
+    messages: ChannelMessage[];
+    truncated: boolean;
+}>;
 export declare function awaitMessages(t: DoplTransport, channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
 /**
  * WORKSPACE-WIDE long-poll — the `channel`-less await. Holds across every channel

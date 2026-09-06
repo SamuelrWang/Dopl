@@ -556,6 +556,77 @@ describe("a TYPED answer presses the same button", () => {
     expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
   });
 
+  /**
+   * LABEL FIRST, NUMBER AS THE FALLBACK (ruled 2026-09-06).
+   *
+   * The digit arm used to run first, so an option whose FACE is a number could
+   * never be answered by typing that face — the digits were spent reading a
+   * position before anything looked at the labels, and `matchTypedOption`'s own
+   * docblock ("the whole body equal to one option's whole label") was false for
+   * exactly that shape.
+   */
+  describe("precedence: a label beats the position it happens to look like", () => {
+    /** A card whose SECOND option is faced with a number. */
+    function numericFacedCard(): void {
+      openCard({
+        metadata: {
+          [ESCALATION_METADATA_KEY]: {
+            ...ESCALATION,
+            options: [
+              { label: "Ship now", consequence: "Live in ten minutes." },
+              { label: "2026", consequence: "Slip to next year." },
+            ],
+            recommendation: null,
+          },
+        },
+      });
+    }
+
+    it("answers a NUMERICALLY-FACED option by typing its face", async () => {
+      // ⚠ THE GAP THIS CLOSES. Under digits-first, "2026" was read as position
+      // 2026, fell off the end of a two-option card, and stamped nothing — the
+      // one label on the card that could not be typed was the one printed on
+      // the button.
+      numericFacedCard();
+      await postMessage(ctx, "room", { body: "2026" });
+      expect(
+        (capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as { optionIndex: number })
+          .optionIndex
+      ).toBe(1);
+    });
+
+    it("still resolves a bare number BY POSITION when no label matches it", async () => {
+      // ⚠ THE FALLBACK IS INTACT, and this is the common card: "2" is what the
+      // render prints beside the second option, and typing it must keep working.
+      openCard();
+      await postMessage(ctx, "room", { body: "2" });
+      expect(
+        (capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as { optionIndex: number })
+          .optionIndex
+      ).toBe(1);
+    });
+
+    it("refuses two options sharing a NUMERIC face, without falling through to the position", async () => {
+      // ⚠ AMBIGUITY STOPS, it does not get a second chance. Reading "2" as a
+      // position after two options called "2" already refused would be the guess
+      // this function exists not to make, taken one step later.
+      openCard({
+        metadata: {
+          [ESCALATION_METADATA_KEY]: {
+            ...ESCALATION,
+            options: [
+              { label: "2", consequence: "One of them." },
+              { label: "2", consequence: "The other." },
+            ],
+            recommendation: null,
+          },
+        },
+      });
+      await postMessage(ctx, "room", { body: "2" });
+      expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+    });
+  });
+
   it("does not answer an ALREADY-ANSWERED card", async () => {
     openCard();
     vi.mocked(repoMessages.listAnsweredEscalationIds).mockResolvedValue(
@@ -632,6 +703,32 @@ describe("a TYPED answer presses the same button", () => {
       postMessage(ctx, "room", { body: "Ship now" })
     ).resolves.toBeDefined();
     expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("drops the guessed stamp and still posts when a press wins the race", async () => {
+    // ⚠ **THE PROMISE IS ABOUT THE WRITE, NOT ONLY THE FOLD** (2026-09-06).
+    // "Most recent OPEN card" is a read; one-answer-per-escalation is a partial
+    // unique index enforced at COMMIT. A press landing in between made this
+    // member's ordinary sentence 23505 and fail to send — the exact outcome 11b
+    // chose silence to avoid. The honest answer is the message WITHOUT the key.
+    openCard();
+    vi.mocked(repo.pgErrorCode).mockReturnValue("23505");
+    vi.mocked(repoMessages.insertMessage).mockRejectedValueOnce(
+      new Error("duplicate key value violates unique constraint")
+    );
+
+    await expect(
+      postMessage(ctx, "room", { body: "Ship now" })
+    ).resolves.toBeDefined();
+
+    // The first attempt DID carry the guess — this is a retry, not a fold that
+    // quietly stopped matching.
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(true);
+    const retried = vi.mocked(repoMessages.insertMessage).mock.calls[1][0];
+    expect(has(retried.metadata, ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+    // ⚠ AND THE MEMBER'S WORDS ARE UNTOUCHED. Dropping the stamp must never
+    // edit what they wrote.
+    expect(retried.body).toBe("Ship now");
   });
 
   it("reads nothing at all for a body no label could be", async () => {

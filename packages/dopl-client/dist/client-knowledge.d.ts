@@ -22,6 +22,11 @@ export declare class KnowledgeMethods extends WorkspaceMethods {
         entryCursor?: string;
     }): Promise<KnowledgeTreeSnapshot>;
     createKbBase(input: KnowledgeBaseCreateInput): Promise<KnowledgeBase>;
+    /** 🔒 {@link createKbBase}'s gates without its write — resolves if that body
+     *  would be accepted, throws the create's own error if it would not. The
+     *  confirm class asks this BEFORE minting a token, so a preview cannot
+     *  promise a create the confirmed call refuses. */
+    dryRunKbBase(input: KnowledgeBaseCreateInput): Promise<void>;
     updateKbBase(baseId: string, patch: KnowledgeBaseUpdateInput): Promise<KnowledgeBase>;
     deleteKbBase(baseId: string): Promise<void>;
     /** Pin/unpin a base for the WORKSPACE's agent launches (T81). ⚠ `pinned`

@@ -30,10 +30,31 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./service-shared", () => ({
-  loadVisibleChannel: vi.fn(),
-  hydrateMessages: vi.fn(),
-}));
+// ⚠ **`requireMemberChannel` IS THE REAL BODY OVER THE MOCKED READ** (2026-09-06,
+// when the gate moved to `service-shared.ts` as one copy of nine). It is not a
+// bare `vi.fn()`: every write test below drives its refusal through
+// `seeChannel(null)` — the public-channel reader the write arm must turn away —
+// and a stub that resolved would silently pass every one of those cases. So the
+// double keeps ONE double, `loadVisibleChannel`, and the membership `if` runs
+// for real on top of it, exactly as it does in production.
+vi.mock("./service-shared", async () => {
+  const { ChannelForbiddenError } = await import("./errors");
+  const loadVisibleChannel = vi.fn();
+  return {
+    loadVisibleChannel,
+    hydrateMessages: vi.fn(),
+    requireMemberChannel: vi.fn(
+      async (ctx: unknown, ref: string, action: string) => {
+        const { channel, membership } = (await loadVisibleChannel(
+          ctx as never,
+          ref
+        )) as { channel: unknown; membership: unknown };
+        if (!membership) throw new ChannelForbiddenError(action);
+        return { channel, membership };
+      }
+    ),
+  };
+});
 vi.mock("./repository-artifacts", () => ({
   ARTIFACT_MEMBER_LIMIT: 200,
   insertArtifact: vi.fn(),

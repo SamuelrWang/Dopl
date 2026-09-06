@@ -3,12 +3,11 @@ import { createHash } from "node:crypto";
 import type { TaskFanOutInput } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
-  ChannelForbiddenError,
   TaskSelfTargetError,
 } from "./errors";
 import * as repo from "./repository";
 import { createTask, type TaskCreateResult } from "./service-tasks";
-import { loadVisibleChannel, type ChannelContext } from "./service-shared";
+import { requireMemberChannel, type ChannelContext } from "./service-shared";
 
 /**
  * THE REQUEST BROADCAST — N addressees, N threads, ONE card.
@@ -192,10 +191,11 @@ export async function createTaskFanOut(
 
   // ⚠ Resolves the ref ONCE and refuses the caller's own non-membership here,
   // so the pre-flight tests the same channel every `createTask` below will.
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("create a task in this channel");
-  }
+  const { channel } = await requireMemberChannel(
+    ctx,
+    ref,
+    "create a task in this channel"
+  );
   await assertAddresseesAreReachable(ctx, channel.id, addressees);
 
   for (const toUserId of addressees) {

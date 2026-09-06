@@ -453,13 +453,34 @@ describe("the floors guard a real gate, not just a list", () => {
     // A floor lowered to guest is only safe because the SERVICE refuses a
     // non-member. If these fences ever move, the floor becomes the gate — so pin
     // that the refusal still lives where §2B says it does.
+    //
+    // ⚠ THE FENCE MOVED 2026-09-06 and this pin FOLLOWS IT, without loosening.
+    // The dedupe wave put both inline `throw new ChannelForbiddenError(...)`
+    // calls behind `requireMemberChannel(ctx, ref, action)` in
+    // `service-shared.ts`, so the two call sites now name the ACTION STRING at
+    // the helper instead of at a throw. The two site pins therefore match the
+    // helper call carrying that exact action (multi-line at the fanout, hence
+    // `[\s\S]*?` and not `[^)]*`), and the last pin reads the helper itself so
+    // the pair still proves a REFUSAL exists rather than just a function call.
+    //
+    // ⚠ `service-tasks-broadcast.ts` NO LONGER NAMES `loadVisibleChannel` — the
+    // dedupe took it out with the throw, so its old belt is asserted on the
+    // helper it now calls: `requireMemberChannel` must both RESOLVE through
+    // `loadVisibleChannel` and THROW on a null membership. Nothing was relaxed;
+    // the same two facts are pinned one level in.
     const featureRoot = join(import.meta.dirname, "..", "..", "..", "features", "channels", "server");
     const writes = readFileSync(join(featureRoot, "service-writes.ts"), "utf8");
     const fanout = readFileSync(join(featureRoot, "service-tasks-broadcast.ts"), "utf8");
+    const shared = readFileSync(join(featureRoot, "service-shared.ts"), "utf8");
     expect(writes).toMatch(/loadVisibleChannel/);
-    expect(writes).toMatch(/ChannelForbiddenError\("post to this channel"\)/);
-    expect(fanout).toMatch(/loadVisibleChannel/);
-    expect(fanout).toMatch(/ChannelForbiddenError\("create a task in this channel"\)/);
+    expect(writes).toMatch(/requireMemberChannel\([\s\S]*?"post to this channel"\s*\)/);
+    expect(fanout).toMatch(/requireMemberChannel\([\s\S]*?"create a task in this channel"\s*\)/);
+    expect(shared).toMatch(
+      /function requireMemberChannel[\s\S]*?loadVisibleChannel\(ctx, ref\)/
+    );
+    expect(shared).toMatch(
+      /function requireMemberChannel[\s\S]*?throw new ChannelForbiddenError\(action\)/
+    );
   });
 
   it("the KNOWLEDGE lane REQUIRES a membership row, rather than inheriting the public arm", () => {

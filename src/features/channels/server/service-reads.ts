@@ -252,10 +252,10 @@ export async function readMessages(
 
 /**
  * THE READ, WITH THE CHANNEL ID IT RESOLVED — the one body behind both
- * {@link readMessages} and {@link readEntries}.
+ * {@link readMessages} and {@link readTranscript}.
  *
  * ⚠ **ONE GATE READ, ONE HYDRATE, ONE WATERMARK RULE.** The fold needs the
- * channel id, and the alternative — `readEntries` calling `readMessages` and
+ * channel id, and the alternative — `readTranscript` calling `readMessages` and
  * then re-resolving the ref — would run the visibility gate twice per read and
  * give the watermark a second place to be decided. This is a refactor of the
  * body, not a change to it: `readMessages`'s signature and behaviour are
@@ -303,13 +303,12 @@ async function readMessagePage(
 }
 
 /**
- * **THE SAME READ, AS ENTRIES** — messages with any artifact run collapsed to
- * one card (design #1220 §4, accepted #1222).
+ * THE TRANSCRIPT AS THE WIRE CARRIES IT: the page, plus its folded rendering
+ * **only when something actually folded**.
  *
  * ⚠ **THE FOLD IS A RENDERING OF THE PAGE, NOT A FILTER ON IT.** The read above
  * runs unchanged — same gate, same rows, same watermark — and `foldPage` then
- * decides what a reader is shown. So the two callers cannot diverge on what is
- * IN the page, only on how it is presented.
+ * decides what a reader is shown.
  *
  * ⚠ **IT FOLDS ONLY THE DEFAULT PAGE**, and `foldPage` is where that is decided
  * (`readNamesMessages`): a thread-scoped read and a bounded `since`+`before`
@@ -318,23 +317,12 @@ async function readMessagePage(
  *
  * ⚠ **AN ORDINARY TRANSCRIPT PAYS NOTHING.** A page with no folded row does no
  * extra read at all.
- */
-export async function readEntries(
-  ctx: ChannelContext,
-  ref: string,
-  query: MessageReadQuery
-): Promise<ChannelReadEntry[]> {
-  const { channelId, messages } = await readMessagePage(ctx, ref, query);
-  return foldPage(channelId, messages, {
-    since: query.since,
-    before: query.before,
-    thread: query.thread,
-  });
-}
-
-/**
- * THE TRANSCRIPT AS THE WIRE CARRIES IT: the page, plus its folded rendering
- * **only when something actually folded**.
+ *
+ * ⚠ **`readEntries` — the entries WITHOUT the page — STOOD BESIDE THIS AND IS
+ * DELETED (2026-09-06).** It was born for "a caller that renders nothing else",
+ * and that caller never arrived: the route reads this one, and the barrel row
+ * was its only reference. A second name for a read nobody makes is exactly what
+ * `service.ts`'s own rule at its head refuses to carry.
  *
  * ⚠ **`entries === null` MEANS "NOTHING ON THIS PAGE IS IN AN ARTIFACT", NOT
  * "THIS SERVER CANNOT FOLD".** It is the one distinction this shape has to make,

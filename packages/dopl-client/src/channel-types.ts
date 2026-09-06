@@ -215,6 +215,16 @@ export interface ChannelArtifactResult {
   artifact: ChannelArtifact;
   requested: number[];
   folded: number[];
+  /**
+   * The member list behind `folded` hit the server's ceiling (2026-09-06). Only
+   * an IDEMPOTENT-CREATE convergence can set it: that path re-reads the card's
+   * members, and a clipped list that renders like an exhausted one is the bug
+   * `read`'s own `truncated` exists to prevent.
+   *
+   * ⚠ OPTIONAL because older servers omit it — treat `undefined` as "not
+   * clipped", never "unknown", the same reading `OntologyMap.truncated` takes.
+   */
+  truncated?: boolean;
 }
 
 /** `create` / `add` / `remove` / `dissolve` — the wire shape is `{action, …}`. */

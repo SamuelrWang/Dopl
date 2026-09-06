@@ -17,6 +17,7 @@ import { HomeKnowledgeBaseView } from "./knowledge-base-view";
 import { HomeKnowledgePanelsSkeleton } from "./home-skeleton";
 import { CreateButton } from "./panel-buttons";
 import { PersonalArmingControl } from "./personal-arming-control";
+import { PersonalReachBackfillNotice } from "./personal-reach-notice";
 import {
   BaseCell,
   EmptyLine,
@@ -326,6 +327,16 @@ export function HomeKnowledgePanels({
         // `px-4` and lined up with nothing.
         caption="Yours alone. To share knowledge in a channel, create it there."
       >
+        {/* 🔒 THE FAIL-CLOSED BACKFILL, TOLD ONCE (task 11 ruling (c)). ⚠ ABOVE
+            the list and OUTSIDE its three states, because the state it explains
+            is the empty one: a shelf that looks empty to an agent because this
+            room is unarmed. It renders nothing in an armed room, nothing once
+            dismissed, and nothing before the read lands. */}
+        <PersonalReachBackfillNotice
+          channelId={channel.channelId}
+          workspaceId={channel.workspaceId}
+          userId={currentUserId}
+        />
         {homeWorkspaceId === null ? (
           <EmptyLine>Finish setting up your workspace to keep bases here.</EmptyLine>
         ) : personalPending ? (

@@ -37,6 +37,12 @@ export {
 
 export {
   createBase,
+  // 🔒 THE CREATE'S GATE CHAIN WITHOUT THE WRITE — what `POST
+  // /api/knowledge/bases?dryRun=1` runs, so the MCP confirm-class PREVIEW is
+  // answered by the same gates the confirmed call passes. ⚠ A barrel row WITH
+  // an importer (the route); see `service-base-writes.ts` for why parity here
+  // is structural rather than a second list.
+  assertCreateBaseAllowed,
   updateBase,
   deleteBase,
 } from "./service-base-writes";

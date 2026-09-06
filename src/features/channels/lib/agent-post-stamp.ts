@@ -196,13 +196,32 @@ export function serverRoutedAgentIds(row: {
  * ⚠ **SCOPED TO ONE AUTHOR AND ONE ROOM.** The server keys on the routed message's author, the
  * composer on the current user; two people in a channel each keep their own thread of address, which
  * is what "intuitive" means here — my default must not move because a colleague tagged someone else.
- * ⚠ **MAIN-ROOM ROWS ONLY**, `seq`-descending, window-bounded: {@link recentAgentPosters}'s rules
- * verbatim, and for its reasons — a threaded post is RR1's business, `seq` is a total order so no
- * tie is representable, and an undated row testifies to nothing.
+ * ⚠ **MAIN-ROOM ROWS ONLY**, `seq`-descending: {@link recentAgentPosters}'s rules on those two
+ * points and for its reasons — a threaded post is RR1's business, and `seq` is a total order so no
+ * tie is representable.
+ *
+ * ⚠ **NO TIME WINDOW, AND THAT IS THE RULE RATHER THAN A DEFAULT** (Samuel, 2026-09-06). It was
+ * bounded by `RESILIENCE_WINDOW_MS` until then, and that was the bug: fifteen minutes after you
+ * tagged an agent your default silently became *the most recently LAUNCHED* one, so the room
+ * answered in a different voice with nothing you had done. Author stickiness has no clock —
+ * **the agent you last addressed stays the default until you address a different live agent, or
+ * that agent ends**, and an ended agent falls out at pick time (see the liveness note below), so
+ * the next-most-recent tag wins. `windowMs` survives as an OPTIONAL argument for a caller that
+ * genuinely wants a bounded look-back; omitted, the walk is unbounded and the only bound left is
+ * how many rows the caller handed in.
+ * ⚠ **THE TIMESTAMP IS READ ONLY WHEN A WINDOW IS PASSED.** Ordering is `seq`'s job, so an undated
+ * or unparseable row is no longer evidence of nothing — it is an ordinary row with a typed tag on
+ * it (INVARIANTS §11: UNKNOWN is not EMPTY). It is still skipped when a caller asks for a window,
+ * because a row that cannot say when it happened cannot be shown to be inside one.
+ * ⚠ **THIS IS NOT `recentAgentPosters`' CLOCK.** That one still takes a required `windowMs` and
+ * the unaddressed-post arm still passes `RESILIENCE_WINDOW_MS` to it: "who spoke here lately" is a
+ * FRESHNESS question and goes stale, "who did this person address" is a habit and does not.
  * ⚠ **IT DOES NOT FILTER FOR LIVENESS AND MUST NOT.** This answers "who did they address"; whether
  * that agent still exists is the caller's question, asked against the live candidate set at pick
  * time (`lib/agent-mentions.ts › resolveDefaultResponder`). An ended agent therefore cannot eat the
- * pick — it is simply not in the candidates, and the next id here is tried.
+ * pick — it is simply not in the candidates, and the next id here is tried. **That intersection is
+ * the whole of the "or that agent ends" half of the ruling**, and it is why removing the window
+ * cannot resurrect a dead session.
  * ⚠ **EMPTY IS A COMPLETE ANSWER.** An author who has never typed a tag falls through to the
  * arms that already exist; absence degrades, it never blocks.
  */
@@ -216,16 +235,24 @@ export function recentAgentsAddressedBy(
     recipientAgentIds?: readonly string[] | null;
     metadata?: Record<string, unknown> | null;
   }[],
-  opts: { now?: number; windowMs: number }
+  /** ⚠ `windowMs` OMITTED MEANS UNBOUNDED, which is what both real callers pass. `now` still
+   *  defaults here rather than at a call site, for {@link recentAgentPosters}' reason: a component
+   *  may not read a clock during render and a model may. */
+  opts: { now?: number; windowMs?: number } = {}
 ): string[] {
   if (authorUserId === null) return [];
-  const now = opts.now ?? Date.now();
+  const windowMs = opts.windowMs;
+  // ⚠ THE CLOCK IS NOT READ AT ALL WITHOUT A WINDOW — not merely unused. The composer asks this
+  // during render and the answer must not depend on the moment it was asked.
+  const now = windowMs === undefined ? 0 : (opts.now ?? Date.now());
   const out: string[] = [];
   for (const row of [...rows].sort((a, b) => b.seq - a.seq)) {
     if (row.authorUserId !== authorUserId) continue;
     if (typeof row.metadata?.taskId === "string") continue;
-    const at = Date.parse(row.createdAt);
-    if (!Number.isFinite(at) || now - at > opts.windowMs) continue;
+    if (windowMs !== undefined) {
+      const at = Date.parse(row.createdAt);
+      if (!Number.isFinite(at) || now - at > windowMs) continue;
+    }
     if (!isAuthorTypedAgentTag(row)) continue;
     // ⚠ ORDER WITHIN ONE ROW IS THE STORED ORDER. A message naming two agents addressed both, and
     // nothing in the row ranks them; the caller's liveness check decides which survives.

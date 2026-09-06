@@ -46,6 +46,10 @@ import {
   type LiveAgentSession,
 } from "../../lib/draft-recipients";
 import { buildAgentMentionIndex, resolveAgentHandle } from "../../lib/agent-mentions";
+// ⚠ THE FEED THE PANE DERIVES (`derivations.ts › recentAgentIds`), asked directly: the line's
+// input is where the composer's half of the 15-minute expiry lived, and the component takes the
+// ids already resolved.
+import { recentAgentsAddressedBy } from "../../lib/agent-post-stamp";
 import { channel as channelFixture, member, CHANNEL_ID, ME, PEER } from "./test-fixtures";
 
 const MEMBERS = [
@@ -169,7 +173,9 @@ describe("the recipient line — always on, whatever the draft says", () => {
     expect(line()).toContain("@research-bot");
   });
 
-  it("🔒 and it names the agent that POSTED here last, over the ordering", () => {
+  // ⚠ TITLE CORRECTED 2026-09-06: it names the agent this user last ADDRESSED, not the one that
+  // posted last — the arm changed feed on 2026-09-04 and the name here never followed.
+  it("🔒 and it names the agent this user ADDRESSED last, over the ordering", () => {
     const body = mount({
       liveAgents: [PEER_AGENT, BARE_AGENT],
       recentAgentIds: [BARE_AGENT.name],
@@ -240,6 +246,36 @@ describe("the rule itself", () => {
       recentAgentIds: [BARE_AGENT.name],
     });
     expect(out.via).toBe("responder");
+    expect(out.reason).toBe("most recent");
+    expect(out.recipients.map((r) => r.label)).toEqual(["@agent-z9q1w4er"]);
+  });
+
+  /**
+   * 🔒 **THE COMPOSER'S HALF OF "NO WINDOW"** (Samuel, 2026-09-06). The line took its ids from
+   * `recentAgentsAddressedBy` bounded by `RESILIENCE_WINDOW_MS`, so fifteen minutes after you
+   * tagged an agent the line quietly began naming a different one — and since the server was
+   * bounded the same way, both ends moved together and neither looked wrong. Asked over a
+   * TWO-HOUR-OLD tag, the feed must still answer, and the line must still name that agent over the
+   * ordering that would otherwise pick `PEER_AGENT`.
+   */
+  it("🔒 a two-hour-old tag still feeds the line — no expiry on the composer side either", () => {
+    const recent = recentAgentsAddressedBy(ME, [
+      {
+        seq: 10,
+        createdAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+        authorUserId: ME,
+        recipientAgentIds: [BARE_AGENT.name],
+        metadata: {},
+      },
+    ]);
+    expect(recent).toEqual([BARE_AGENT.name]);
+    const out = draftReach({
+      body: "who is around",
+      members: MEMBERS,
+      sessions: [PEER_AGENT, BARE_AGENT],
+      currentUserId: ME,
+      recentAgentIds: recent,
+    });
     expect(out.reason).toBe("most recent");
     expect(out.recipients.map((r) => r.label)).toEqual(["@agent-z9q1w4er"]);
   });

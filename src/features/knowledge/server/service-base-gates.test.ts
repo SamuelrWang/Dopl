@@ -246,9 +246,8 @@ describe("🔒 a RESTRICTED audience follows its OWNER when the room is armed", 
     // 🔒 GAP 2 ITSELF (#1077): *"a create with no valid container in a shared
     // room should go to the caller's own personal container, not refuse —
     // personal-visibility creates resolve their container by OWNER, never by
-    // call site."* ⚠ The only creates this moves are the ones
-    // `assertCreatorCanReadItBack` was already refusing outright, so no working
-    // path changes.
+    // call site."* ⚠ The only creates this moves are the ones the read-back
+    // gate was already refusing outright, so no working path changes.
     restricted();
     open();
 

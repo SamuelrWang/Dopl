@@ -104,7 +104,100 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
     expect((await resolve("morning")).recipientAgentIds).toEqual(["m8q1zzzz"]);
   });
 
-  it("arm 4: nobody posted inside the window → the most recently LAUNCHED", async () => {
+  /**
+   * 🔒 **AUTHOR STICKINESS HAS NO CLOCK** (Samuel, 2026-09-06) — the case that flips the one this
+   * file pinned by omission.
+   *
+   * ⚠ **THE BUG WAS THAT THE RULE HUNG ON THE WRONG CLOCK, NOT THAT IT WAS WRONG.** The walk and
+   * the read under it were both bounded by `RESILIENCE_WINDOW_MS`, so at fifteen minutes and one
+   * second the author's own tag stopped being evidence and arm 4 answered instead — the room
+   * changing voice on a timer, with nothing the operator did. **The tag below is TWO HOURS OLD and
+   * must still win**, over `m8q1zzzz`, which is the agent arm 4 would name (it launched last, per
+   * `twoLive`). If a window ever comes back, this is the case that goes red.
+   */
+  it("🔒 a TWO-HOUR-OLD tag still resolves — the author rule has no window", async () => {
+    twoLive();
+    recentAgentPosts({
+      seq: 42,
+      created_at: new Date(NOW - 2 * 60 * 60_000).toISOString(),
+      recipient_agent_ids: ["k3v7d2mq"],
+    });
+    const out = await resolve("morning");
+    expect(out).toMatchObject({
+      recipientAgentIds: ["k3v7d2mq"],
+      reason: "most recent",
+    });
+  });
+
+  /**
+   * 🔒 **AND A NEW TAG SUPERSEDES AN OLD ONE — the other half of "no window"**. Without this,
+   * removing the clock could be read as "the first agent you ever tagged is the default forever".
+   * The ruling is *last-addressed*, so the newer row wins on `seq` however old either one is.
+   */
+  it("🔒 the NEWER tag wins over an older one, both far outside the old window", async () => {
+    twoLive();
+    recentAgentPosts(
+      {
+        seq: 41,
+        created_at: new Date(NOW - 5 * 60 * 60_000).toISOString(),
+        recipient_agent_ids: ["k3v7d2mq"],
+      },
+      {
+        seq: 42,
+        created_at: new Date(NOW - 2 * 60 * 60_000).toISOString(),
+        recipient_agent_ids: ["m8q1zzzz"],
+      }
+    );
+    expect((await resolve("morning")).recipientAgentIds).toEqual(["m8q1zzzz"]);
+  });
+
+  /**
+   * 🔒 **"…OR THAT AGENT ENDS" — the ruling's own exit, and the only one.** The newest tag names an
+   * agent that has since ended, so the pick falls to the NEXT-MOST-RECENT TAG rather than to arm 4:
+   * stickiness ends with the session, not with a stopwatch. Both rows are hours old, which is what
+   * makes this the aged sibling of the stale-agent case below.
+   */
+  it("🔒 an ENDED agent is skipped and the next TAG wins — not arm 4", async () => {
+    twoLive();
+    recentAgentPosts(
+      {
+        seq: 41,
+        created_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+        recipient_agent_ids: ["k3v7d2mq"],
+      },
+      {
+        seq: 42,
+        created_at: new Date(NOW - 60 * 60_000).toISOString(),
+        // Tagged, then ended: never in the room projection `twoLive` seeds.
+        recipient_agent_ids: ["deadbeef"],
+      }
+    );
+    const out = await resolve("morning");
+    expect(out).toMatchObject({
+      recipientAgentIds: ["k3v7d2mq"],
+      reason: "most recent",
+    });
+  });
+
+  /**
+   * 🔒 **THE READ IS BOUNDED BY THE PAGE, NOT BY A TIME** (2026-09-06). The rule above cannot be
+   * unbounded if the query underneath it still drops everything older than fifteen minutes — that
+   * was the bug's read half — so this pins the ARGUMENTS: channel and author, and nothing else.
+   * `repository-messages-recent.ts › RECENT_AGENT_POSTS_LIMIT` is the bound that remains, asserted
+   * from its own module rather than re-typed here.
+   */
+  it("🔒 arm 3's read is passed NO `since` bound — channel and author only", async () => {
+    twoLive();
+    recentAgentPosts({ seq: 42, recipient_agent_ids: ["k3v7d2mq"] });
+    await resolve("morning");
+    expect(vi.mocked(repoMessages.listRecentRoomTagsBy).mock.calls).toEqual([
+      ["chan-1", "user-1"],
+    ]);
+  });
+
+  // ⚠ TITLE CORRECTED 2026-09-06: there is no window on this arm any more, and the condition was
+  // never "inside" one — arm 4 answers when this author has tagged NOBODY who is still live.
+  it("arm 4: this author has tagged nobody → the most recently LAUNCHED", async () => {
     twoLive();
     recentAgentPosts();
     const out = await resolve("morning");

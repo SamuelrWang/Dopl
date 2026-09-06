@@ -20,7 +20,9 @@
 import { useMemo } from "react";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { agentIndexFromKey, agentIndexKey, indexAgents, indexMembers } from "./view-model";
-import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
+// ⚠ `RESILIENCE_WINDOW_MS` IS DELIBERATELY NOT IMPORTED HERE ANY MORE (2026-09-06):
+// the author-stickiness rule below has no time window, and the constant still bounds
+// the arms that ask a FRESHNESS question rather than a habit one.
 import { recentAgentsAddressedBy } from "../../lib/agent-post-stamp";
 import { channelRows, threadRows } from "./view-model-rows";
 import { unfoldedMessages, withArtifactCards } from "./view-model-artifacts";
@@ -240,20 +242,30 @@ export function useChannelsV2Derivations({
    * and both drop threaded rows, so the composer's recipient line names the agent
    * the stored verdict will name.
    *
+   * ⚠ **THERE IS NO WINDOW, AND THAT IS THE 2026-09-06 FIX** (Samuel's ruling).
+   * This passed `RESILIENCE_WINDOW_MS` until then, so fifteen minutes after you
+   * tagged an agent the line stopped naming it and quietly moved to whichever
+   * session launched last — the operator's default wandering on a clock instead
+   * of on something they did. Author stickiness has no expiry: the agent you last
+   * addressed holds until you address a different LIVE agent, or that agent ends
+   * and drops out of the candidate set (`lib/agent-mentions.ts ›
+   * resolveDefaultResponder` intersects, so an ended id cannot eat the pick).
+   * ⚠ **THE SERVER DROPPED THE SAME ARGUMENT IN THE SAME BREATH**
+   * (`server/service-wake-verdict-resilience.ts › recentRoomAgents`) — the two
+   * halves must bound the walk identically or the line predicts one agent and the
+   * stored verdict names another, which is the defect the parity suite exists for.
    * ⚠ **THE CLOCK IS THE HELPER'S OWN DEFAULT, NOT A READ AT THIS CALL SITE** —
    * a component may not read `Date.now()` during render and a model may, which
-   * is the arrangement `agents-model.ts` is already in. The WINDOW is the shared
-   * constant, so the two trees bound it identically.
+   * is the arrangement `agents-model.ts` is already in. With no window nothing
+   * here reads it at all, and the bound that remains is the transcript this pane
+   * holds.
    *
    * ⚠ **IT IS NOT SCOPED TO THE OPEN THREAD**, on purpose: a thread composer
    * predicts RR1, which needs none of this, and the helper drops threaded rows
    * itself.
    */
   const recentAgentIds = useMemo(
-    () =>
-      recentAgentsAddressedBy(currentUserId, messages, {
-        windowMs: RESILIENCE_WINDOW_MS,
-      }),
+    () => recentAgentsAddressedBy(currentUserId, messages),
     [currentUserId, messages]
   );
 

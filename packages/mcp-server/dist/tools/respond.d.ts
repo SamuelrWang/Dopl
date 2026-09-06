@@ -69,7 +69,7 @@ export declare function apiMessage(e: unknown): string | null;
 /** True for a 409 (name/title/slug already-exists collision). */
 export declare function isAlreadyExists(e: unknown): boolean;
 /**
- * MCP credit allowance spent for the billing period. ⚠ ONE wording for both
+ * Credit allowance spent for the billing period. ⚠ ONE wording for both
  * surfaces: the registrar's up-front refusal (reading `allowed: false` off the
  * consume response, not an error) and `entitlementDenied` below.
  */

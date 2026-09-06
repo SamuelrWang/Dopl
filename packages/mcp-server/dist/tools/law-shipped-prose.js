@@ -1,3 +1,4 @@
+"use strict";
 /**
  * **THE SHIPPED PROSE OF `dopl_channel`, IN ONE PLACE** — the description a
  * client is PUSHED on connection, the doctrine it PULLS, and the argument
@@ -20,14 +21,11 @@
  * OTHER `*.ts` in this directory, and the parity split-scan wants the prefix
  * only on files that carry a HANDLER. This one carries none.
  */
-
-import type { DoplClient } from "@dopl/client";
-import type { RegisterTool } from "./respond";
-import { registerChannelTool } from "./channel";
-import type { WorkspaceDirectory } from "../workspace-directory";
-import { CHANNEL_DOCTRINE } from "./channel-doctrine";
-import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
-
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ARG_PROSE = exports.SHIPPED_PROSE = exports.DESCRIPTION = void 0;
+const channel_1 = require("./channel");
+const channel_doctrine_1 = require("./channel-doctrine");
+const channel_schema_1 = require("./channel-schema");
 /**
  * The description the tool ACTUALLY REGISTERS.
  *
@@ -36,25 +34,25 @@ import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
  * client is served. (`law-description-pointer.test.ts` pins the two as equal;
  * that is the assertion which makes reading the registered string safe here.)
  */
-function registeredDescription(): string {
-  let text = "";
-  const cap: RegisterTool = ((name: string, d: string) => {
-    if (name === "dopl_channel") text = d;
-  }) as RegisterTool;
-  // ⚠ FIVE ARGUMENTS, NOT TWO (2026-09-06). `registerChannelTool` grew a REQUIRED
-  // fifth parameter — the container lock, `directory` — and this call kept the old
-  // shape. vitest never noticed (it does not typecheck) but `tsc` did: the package
-  // build was red, `build:packages` runs first in the root `build`, so `next build`
-  // never ran and Vercel refused the 1.29.0 deploy. Capture runs no handler, so an
-  // empty stub is exactly as honest as the `{} as DoplClient` beside it — the same
-  // reasoning `parity-harness.ts` records for its STUB_DIRECTORY.
-  registerChannelTool(cap, {} as DoplClient, undefined, false, {} as WorkspaceDirectory);
-  if (!text) throw new Error("dopl_channel was not registered");
-  return text;
+function registeredDescription() {
+    let text = "";
+    const cap = ((name, d) => {
+        if (name === "dopl_channel")
+            text = d;
+    });
+    // ⚠ FIVE ARGUMENTS, NOT TWO (2026-09-06). `registerChannelTool` grew a REQUIRED
+    // fifth parameter — the container lock, `directory` — and this call kept the old
+    // shape. vitest never noticed (it does not typecheck) but `tsc` did: the package
+    // build was red, `build:packages` runs first in the root `build`, so `next build`
+    // never ran and Vercel refused the 1.29.0 deploy. Capture runs no handler, so an
+    // empty stub is exactly as honest as the `{} as DoplClient` beside it — the same
+    // reasoning `parity-harness.ts` records for its STUB_DIRECTORY.
+    (0, channel_1.registerChannelTool)(cap, {}, undefined, false, {});
+    if (!text)
+        throw new Error("dopl_channel was not registered");
+    return text;
 }
-
-export const DESCRIPTION = registeredDescription();
-
+exports.DESCRIPTION = registeredDescription();
 /**
  * EVERY WORD THIS TOOL SHIPS AS PROSE — the description a client is PUSHED on
  * connection, and the doctrine it PULLS. ⚠ **BOTH, BECAUSE THE SCANS THAT READ
@@ -64,9 +62,8 @@ export const DESCRIPTION = registeredDescription();
  * opens it has asked for the rules — so scanning only the pointer would let
  * 22,000 characters say whatever they liked.
  */
-export const SHIPPED_PROSE = `${DESCRIPTION}\n${CHANNEL_DOCTRINE}`;
-
+exports.SHIPPED_PROSE = `${exports.DESCRIPTION}\n${channel_doctrine_1.CHANNEL_DOCTRINE}`;
 /** The argument `.describe()` text, which is prose a client reads too. */
-export const ARG_PROSE = Object.values(CHANNEL_INPUT_SHAPE)
-  .map((arg) => arg.description ?? "")
-  .join("\n");
+exports.ARG_PROSE = Object.values(channel_schema_1.CHANNEL_INPUT_SHAPE)
+    .map((arg) => arg.description ?? "")
+    .join("\n");

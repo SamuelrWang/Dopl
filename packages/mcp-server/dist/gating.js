@@ -247,9 +247,10 @@ exports.WRITE_OPS = {
     // defaults to the READ: `opRefusal` returns null for an ABSENT op, so a
     // write-by-default would be a write this table never sees (F-621).
     dopl_workspaces: new Set(["create_home_channel"]),
-    // ⚠ **SIX ENTRIES OVER FIVE OPS, AND TWO OF THE FIVE ARE ABSENT** (v2 wave B
-    // slice B8, 2026-09-02). `read` and `status` only read. `send` and `manage`
-    // only write. `rooms` does BOTH, so it is gated PER ACTION — see
+    // ⚠ **SEVEN ENTRIES OVER SIX OPS, AND TWO OF THE SIX ARE ABSENT** (v2 wave B
+    // slice B8, 2026-09-02; `artifact` added 2026-09-06). `read` and `status` only
+    // read. `send`, `manage` and `artifact` only write — the last two coarsely,
+    // one entry each. `rooms` does BOTH, so it is gated PER ACTION — see
     // {@link isWriteOp} for the dotted key and for why a bare `rooms` fails
     // CLOSED. Classifying the whole op as a write would refuse a `dopl.read`
     // token the four calls it exists to make (list, members, threads, help);
@@ -281,6 +282,20 @@ exports.WRITE_OPS = {
         "rooms.invite",
         "rooms.thread_mode",
         "rooms.update",
+        // ⚠ `artifact` TAKES THE COARSE GRAIN, LIKE `manage` AND UNLIKE `rooms`,
+        // because ALL FOUR of its actions write: create folds existing messages into
+        // a new card, add and remove move a message across that card, and dissolve
+        // retires it. There is no read action in the vocabulary
+        // (`channel-schema.ts › CHANNEL_ACTIONS.artifact`), so a bare entry is the
+        // honest statement rather than a shortcut — and it is the FAIL-CLOSED one: a
+        // fifth action added tomorrow is refused to a read-only token until somebody
+        // classifies it, instead of arriving as an un-gated write.
+        // ⚠ NON-DESTRUCTIVE DOES NOT MEAN READ-ONLY, and dissolve is the one easiest
+        // to wave through on that reasoning: it leaves every body, author and seq
+        // where it was, which is why it sits inside the tool's no-delete policy — but
+        // it still retires a card every member of the room sees, so a `dopl.read`
+        // token must be refused it.
+        "artifact",
     ]),
 };
 /**

@@ -54,6 +54,14 @@ export class KnowledgeMethods extends WorkspaceMethods {
     return kb.createKbBase(this.transport, input);
   }
 
+  /** 🔒 {@link createKbBase}'s gates without its write — resolves if that body
+   *  would be accepted, throws the create's own error if it would not. The
+   *  confirm class asks this BEFORE minting a token, so a preview cannot
+   *  promise a create the confirmed call refuses. */
+  dryRunKbBase(input: KnowledgeBaseCreateInput): Promise<void> {
+    return kb.dryRunKbBase(this.transport, input);
+  }
+
   updateKbBase(
     baseId: string,
     patch: KnowledgeBaseUpdateInput

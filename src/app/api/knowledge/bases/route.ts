@@ -4,6 +4,7 @@ import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
+  assertCreateBaseAllowed,
   buildKnowledgeContext,
   createBase,
   listBaseOwnerNames,
@@ -204,6 +205,22 @@ function readShelf(request: NextRequest): KbShelf | undefined {
  * in `features/knowledge/server/service-channel-grants.ts ›
  * setChannelKnowledgeGrant` instead, which is the one place BOTH doors pass
  * through; see its docblock for why it moved there on 2026-08-27.
+ *
+ * 🔒 **`?dryRun=1` — THE SAME CALL, GATED AND NOT WRITTEN.** It runs
+ * `assertCreateBaseAllowed`, which IS the gate chain `createBase` runs, and
+ * answers `{dryRun:true}` (200, never 201: nothing was created) or the create's
+ * own error. It exists for the MCP confirm class, which previewed an
+ * audience-changing create in a different process from the gates and so handed
+ * out a `confirm_token` for a create the confirmed call then refused.
+ *
+ * ⚠ **A PARAMETER ON THE CREATE, NOT A SECOND ENDPOINT** (INVARIANTS §9, the
+ * `?shelf=` precedent one function up). A `/bases/dry-run` sibling is a second
+ * door onto one act, and a second door is how the preview and the write stopped
+ * agreeing in the first place.
+ *
+ * ⚠ **THE CHANNEL FENCE RUNS FIRST ON BOTH ARMS**, so a dry run cannot be used
+ * to ask whether a channel exists — it answers the same 404 the create does,
+ * before any gate has an opinion.
  */
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
@@ -222,11 +239,30 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
         { status: 404 }
       );
     }
+    if (readDryRun(request)) {
+      await assertCreateBaseAllowed(ctx, input);
+      return NextResponse.json({ dryRun: true });
+    }
     const base = await createBase(ctx, input);
     return NextResponse.json({ base }, { status: 201 });
   } catch (err) {
     return toKnowledgeErrorResponse(err);
   }
+}
+
+/**
+ * `?dryRun=1` — gate the create and write nothing.
+ *
+ * 🔒 AN UNRECOGNISED VALUE IS A 400, NOT AN IGNORED PARAM, and the direction is
+ * the opposite of {@link readShelf}'s for the same reason: a misspelled
+ * `?dryRun=yes` silently dropped would CREATE THE BASE the caller was only
+ * asking about. Fail loud, and never toward the write.
+ */
+function readDryRun(request: NextRequest): boolean {
+  const raw = request.nextUrl.searchParams.get("dryRun");
+  if (raw === null) return false;
+  if (raw === "1") return true;
+  throw new HttpError(400, "VALIDATION_FAILED", "dryRun must be '1' or absent");
 }
 
 export const GET = withWorkspaceAuth(handleGet);

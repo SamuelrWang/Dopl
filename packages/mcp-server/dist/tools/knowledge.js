@@ -129,7 +129,35 @@ const KB_INPUT_SHAPE = {
 // one still reading whole documents. Against the rise, one section read of a
 // 2,559-char entry costs 839 rendered characters where the whole entry costs
 // 2,760 — the description is paid once per connection, the saving per read.
+// ⚠ **2026-09-06: THE SERVED DESCRIPTION WAS 2,028 AND `HARD_DESCRIPTION_CEILING`
+// IS 2,000, SO THIS TOOL THREW AT MODULE LOAD AND TOOK THE WHOLE SERVER WITH IT.**
+// The prose half was inside its cap; the tail (`Limits:`/`Errors:`/`e.g.`) is what
+// carried it over, and a generated tail cannot be trimmed by hand — so the relief
+// had to come out of the prose.
+// ⚠ **WHAT LEFT WAS DUPLICATION, NOT DISCLOSURE, AND THE RULE IS THIS FILE'S OWN**
+// (see the paragraph above on what left in A14): a description carries nothing its
+// own `.describe()` already says, because both are pushed on the SAME connection.
+// Three glosses were exactly that — `read_file`'s (`section`, `offset`, `max_chars`
+// and `expected_version` each describe their own half), `grant`'s scope list
+// (`scope`'s and `level`'s own describes), and `pin`/`unpin`'s target rule (VERBATIM
+// in `path`'s describe). The op NAMES all stayed quoted, which is what
+// `parity.test.ts` reads.
+// ⚠ **NOTHING PINNED WAS TOUCHED, AND THAT WAS THE CONSTRAINT RATHER THAN A
+// PREFERENCE.** `tool-scope-claims.test.ts` greps the DESCRIPTION for the three
+// filtered-op bullets — `list_bases` (can READ / private / no grant on), `get_tree`
+// (ENTRIES are paged / 400 / entry_cursor) and `search` (you can read / not an
+// exhaustive scan / not proof of absence) — so those bullets stay here whole; a
+// sentence a pin greps for cannot move into a pulled document. The SECURITY line,
+// the fence and BOTH routing sentences (the read order, and the write duty in
+// `write_file`'s gloss) stayed for the reasons the paragraphs above give.
+// ⚠ **THE CEILING IN `tool-budget.test.ts` IS NOW STALE BY CONSTRUCTION and must be
+// LOWERED to the measured size in this same change — never raised.** That ratchet
+// fails on a SHRINK as loudly as on a growth, which is how the win gets banked.
 const KB_PROSE_BUDGET = 1_586; // ⚠ 16 ops glossed for parity.test.ts, plus the fence
+// ⚠ THE COMMENT BLOCK ABOVE NARRATES A RISE TO 1,760 THAT THIS CONSTANT NEVER TOOK —
+// it reads 1,586, and the prose has fitted under it the whole time. Left as measured
+// rather than "corrected" upward: raising a budget to match a comment is exactly the
+// move these ratchets exist to refuse.
 /**
  * ⚠ RENDERED, NOT WRITTEN (A14, 2026-09-02) — `tool-style.ts › composeDescription`
  * holds the house order (what it returns and what it does NOT, the capability
@@ -169,9 +197,9 @@ const KB_DESCRIPTION = (0, tool_style_1.composeDescription)({
 - "list_bases" — bases you can READ, by slug; ones private to another member, or you have no grant on, are absent.
 - "get_tree" — the tree, metadata only. Folders whole; ENTRIES are paged, 400 a call, entry_cursor for more.
 - "search" — over the BODIES of bases you can read: a ranked SAMPLE, not an exhaustive scan (default 20), so zero hits is not proof of absence.
-- "outline" (headings + what each costs, no body), "read_file" (body + Version; \`section\`/\`offset\` read a PART), "list_dir", "write_file" (upsert — entries over ~1.5k chars carry ## headings, one topic each), "move_file", "create_folder" (mkdir -p), "move_folder".
-- "create_base", "update_base", "set_visibility" (publish, one-way), "grant" (lend one YOU created into a channel or container — ONE row, so an edit reaches everyone).
-- "pin"/"unpin" — the STARTUP CONTEXT every session launched here gets; \`path\` picks base-or-entry.`,
+- "outline" (headings + what each costs, no body), "read_file", "list_dir", "write_file" (upsert — entries over ~1.5k chars carry ## headings, one topic each), "move_file", "create_folder" (mkdir -p), "move_folder".
+- "create_base", "update_base", "set_visibility" (publish, one-way), "grant" (lend one YOU created — ONE row, so an edit reaches everyone).
+- "pin"/"unpin" — the STARTUP CONTEXT every session launched here gets.`,
     ],
     limits: { shape: KB_INPUT_SHAPE, only: ["limit", "entry_limit"] },
     errors: tool_errors_1.KB_ERRORS,

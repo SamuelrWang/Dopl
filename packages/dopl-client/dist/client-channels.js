@@ -84,6 +84,22 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     postChannelMessage(channelId, input) {
         return channel.postMessage(this.transport, channelId, input);
     }
+    /**
+     * THE FOLDED READ (#1220 §4, 2026-09-06). ⚠ `entries === null` means nothing
+     * on the page is in an artifact — the same handling an older server gets.
+     * {@link readChannelMessages} is unchanged and is what artifact-unaware
+     * callers keep using.
+     */
+    readChannelTranscript(channelId, opts) {
+        return channel.readTranscript(this.transport, channelId, opts);
+    }
+    /** ⚠ `folded` may be SHORTER than `requested`; report it, never a count. */
+    writeChannelArtifact(channelId, input) {
+        return channel.writeArtifact(this.transport, channelId, input);
+    }
+    readChannelArtifact(channelId, artifactId) {
+        return channel.readArtifact(this.transport, channelId, artifactId);
+    }
     awaitChannelMessages(channelId, opts) {
         return channel.awaitMessages(this.transport, channelId, opts);
     }

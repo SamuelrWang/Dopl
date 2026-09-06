@@ -113,7 +113,49 @@ export async function opCreateBase(
         visibility,
       },
     },
-    { publishes: visibility === "public", token: input.confirm_token },
+    {
+      publishes: visibility === "public",
+      token: input.confirm_token,
+      // 🔒 **THE PREVIEW RUNS THE SAME GATE AS THE CONFIRMED CALL** (task 11's
+      // missing pin). Observed live: this op previewed a public create in a
+      // shared home channel, handed back a token, and the echoed call was then
+      // refused by the server's create gate — the preview promised an act the
+      // gate forbids.
+      //
+      // ⚠ **THE SERVER ANSWERS, BECAUSE THE SERVER REFUSES.** Whether a create
+      // may land depends on the audience ceiling and on whether the operator
+      // has armed this room for their personal shelf — grant rows and arming
+      // rows this process cannot see. So the precheck asks the create's OWN
+      // gate chain (`assertCreateBaseAllowed` behind `?dryRun=1`) rather than
+      // re-deciding here, which is the only version of "the same gate" that
+      // stays true after the next gate is added.
+      //
+      // ⚠ **THE BODY IS THE ONE THE CONFIRM WILL SEND**, `acknowledgeShared`
+      // included: the confirmed call carries it from the spent token, and
+      // asking without it would refuse on the missing acknowledgement — the
+      // very thing this preview exists to obtain.
+      precheck: async () => {
+        try {
+          await client.dryRunKbBase({
+            name: input.name,
+            description: input.description,
+            visibility,
+            acknowledgeShared: true,
+          });
+        } catch (e) {
+          // The server's own sentence, which already names the room, the cause
+          // and the remedy — and it is TRUE of a dry run word for word:
+          // nothing was created, no slug taken.
+          const ceiling = agentCreateForbidden(e);
+          if (ceiling) return err(ceiling);
+          // ⚠ ANYTHING ELSE RETHROWS RATHER THAN MINTING. "I could not check"
+          // is not "it is allowed", and the caller loses nothing by retrying:
+          // no row was written and no token was spent.
+          throw e;
+        }
+        return null;
+      },
+    },
   );
   if (verdict.kind === "halt") return verdict.response;
 
@@ -132,7 +174,7 @@ export async function opCreateBase(
     // ⚠ THE AUDIENCE CEILING'S CREATE REFUSAL, RENDERED AS A REFUSAL rather
     // than rethrown as a transport-shaped error (F-323's authoring half). The
     // server's message already names the room, the cause and the remedy —
-    // `knowledge/server/service-base-writes.ts › assertCreatorCanReadItBack` —
+    // `knowledge/server/service-base-gates.ts › resolveCreateDestination` —
     // and this is the one path where an agent MUST be able to act on it without
     // opening the repo, because the alternative it used to get was a SUCCESS
     // string over a row it could never see again.

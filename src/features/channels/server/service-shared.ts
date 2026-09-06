@@ -4,7 +4,7 @@ import { narrowAppVersion } from "@/shared/auth/app-version-header";
 import { narrowRuntime, type DoplRuntime } from "@/shared/auth/runtime-header";
 import { narrowSessionId } from "@/shared/auth/session-header";
 import { isUuid } from "@/shared/lib/id/uuid";
-import { ChannelNotFoundError } from "./errors";
+import { ChannelForbiddenError, ChannelNotFoundError } from "./errors";
 import {
   mapMessageRow,
   type ChannelMemberRow,
@@ -235,6 +235,52 @@ export async function loadVisibleChannel(
     // non-member, so a guest cannot use the refusal to enumerate the container.
     throw new ChannelNotFoundError(ref);
   }
+  return { channel, membership };
+}
+
+/**
+ * 🔒 **THE SAME GATE, PLUS "AND YOU ARE IN THE ROOM"** — resolve a channel the
+ * caller may read, then refuse a caller with no `channel_members` row.
+ *
+ * ⚠ **ONE COPY, PROMOTED 2026-09-06 FROM NINE.** `loadVisibleChannel` followed
+ * by `if (!membership) throw new ChannelForbiddenError(…)` was written out at
+ * nine write sites across seven files, identical but for the action noun. Nine
+ * copies of a fence are nine places for one of them to be edited alone, and the
+ * public-channel arm is exactly the subtlety that makes the omission silent:
+ * `membership: null` is NOT a refusal from `loadVisibleChannel`, so a site that
+ * forgets this line admits a public channel's non-member to a WRITE.
+ *
+ * ⚠ **`action` IS THE NOUN THE REFUSAL SAYS**, and it is a parameter rather
+ * than one sentence for all nine because the message reaches a person: "post to
+ * this channel" and "delete a thread in this channel" are what makes a 403
+ * legible. It is server-written text at every call site — never caller input.
+ *
+ * ⚠ **IT RETURNS THE MEMBERSHIP, NON-NULL**, because two callers need the row
+ * itself (`service-tasks-delete.ts`'s deleter check) and a helper that threw the
+ * proof away would send them back to the raw gate — which is how the ninth copy
+ * appeared.
+ *
+ * ⚠ **NOT THE MANAGEMENT GATE.** {@link canManageChannel} answers a different
+ * question (owner-or-admin) and the two sites that ask it — `updateChannel`,
+ * `deleteChannel` — deliberately do not use this.
+ *
+ * ⚠ **PROMOTING A SITE ONTO THIS HELPER CAN REACH `supabaseAdmin` FROM A TEST,
+ * SILENTLY.** Several suites mock this module with `importOriginal` and a spread
+ * (`{ ...actual, loadVisibleChannel: vi.fn() }`): they get the REAL
+ * `requireMemberChannel`, which resolves `loadVisibleChannel` through the
+ * module's own binding and therefore calls the REAL one — their double is never
+ * consulted. A site moved onto this helper thus stops honouring the very stub
+ * its test set up, and hits the live client instead of failing loudly. Check the
+ * suites covering any site you promote, and double THIS function where they
+ * doubled `loadVisibleChannel`.
+ */
+export async function requireMemberChannel(
+  ctx: ChannelContext,
+  ref: string,
+  action: string
+): Promise<{ channel: ChannelRow; membership: ChannelMemberRow }> {
+  const { channel, membership } = await loadVisibleChannel(ctx, ref);
+  if (!membership) throw new ChannelForbiddenError(action);
   return { channel, membership };
 }
 

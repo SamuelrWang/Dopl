@@ -119,6 +119,12 @@ describe("dopl_kb — a spent token acknowledges the audience", () => {
     const create = vi.fn(async () => BASE);
     const client = stub({
       ...sharedContainer(),
+      // ⚠ THE DOUBLE MOVED, THE ASSERTION DID NOT (2026-09-06). `create_base`
+      // now asks the SERVER whether the create would be refused before minting
+      // a token, so the stub must be able to answer. An ALLOWING answer is the
+      // world this case was written in — G16's flag is the subject here, not the
+      // create gate — so nothing below changes.
+      dryRunKbBase: vi.fn(async () => undefined),
       createKbBase: create,
     }) as DoplClient;
     const input = { name: "Notes", visibility: "public" as const };

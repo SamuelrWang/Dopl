@@ -3,7 +3,6 @@ import type { ChannelThread, ThreadMode } from "../types";
 import type { TaskCreateInput } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
-  ChannelForbiddenError,
   TaskForbiddenError,
   TaskNotFoundError,
   TaskSelfTargetError,
@@ -14,7 +13,7 @@ import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
 import {
-  loadVisibleChannel,
+  requireMemberChannel,
   stripNulDeep,
   UNIQUE_VIOLATION,
   type ChannelContext,
@@ -186,10 +185,11 @@ export async function createTask(
   opts: TaskCreateOptions = {}
 ): Promise<TaskCreateResult> {
   const input = stripNulDeep(rawInput);
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("create a task in this channel");
-  }
+  const { channel } = await requireMemberChannel(
+    ctx,
+    ref,
+    "create a task in this channel"
+  );
   // ⚠ Target must be a channel member AND an ACTIVE workspace member.
   // `channel_members` is never swept on workspace-leave, so a departed teammate
   // stays addressable: create succeeds, the opener posts, `openingSeq` returns,
@@ -281,10 +281,11 @@ export async function setTaskMode(
   taskId: string,
   mode: ThreadMode
 ): Promise<ChannelThread> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("change a task's mode in this channel");
-  }
+  const { channel } = await requireMemberChannel(
+    ctx,
+    ref,
+    "change a task's mode in this channel"
+  );
   const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
   if (!task) throw new TaskNotFoundError(taskId);
   if (task.created_by !== ctx.userId) {

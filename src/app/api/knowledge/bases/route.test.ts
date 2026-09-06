@@ -36,6 +36,12 @@ vi.mock("@/features/knowledge/server/service", () => ({
     userId: auth.userId,
   }),
   createBase: vi.fn(),
+  // 🔒 THE CREATE'S GATE CHAIN WITHOUT ITS WRITE — what `?dryRun=1` runs, so the
+  // MCP preview is answered by the gates the confirmed call passes (2026-09-06).
+  // ⚠ AN UNMOCKED EXPORT HERE IS THE TRAP THIS FILE ALREADY RECORDS TWICE: the
+  // route BINDS it at import, so vitest throws before any case runs, not on the
+  // one path that calls it.
+  assertCreateBaseAllowed: vi.fn(),
   listBases: vi.fn(),
   listBaseOwnerNames: vi.fn(),
   listBaseStats: vi.fn(),
@@ -63,8 +69,10 @@ vi.mock("@/features/workspaces/server/service-overview", () => ({
   isChannelVisibleTo: vi.fn(),
 }));
 
-import { GET } from "./route";
+import { GET, POST } from "./route";
 import {
+  assertCreateBaseAllowed,
+  createBase,
   listBaseOwnerNames,
   listBaseStats,
   listBases,
@@ -89,6 +97,8 @@ const mockPinned = vi.mocked(listPinnedBaseIds);
 const mockGrantMap = vi.mocked(getChannelGrantMap);
 const mockShared = vi.mocked(listSharedIntoChannelBaseIds);
 const mockChannelVisible = vi.mocked(isChannelVisibleTo);
+const mockGate = vi.mocked(assertCreateBaseAllowed);
+const mockCreate = vi.mocked(createBase);
 
 function base(id: string, createdBy: string | null): KnowledgeBase {
   return { id, createdBy } as unknown as KnowledgeBase;
@@ -407,3 +417,77 @@ describe("GET /api/knowledge/bases?channelId= — the scope-A grant map", () => 
  * to narrow, and it would look like it worked. There is no client-side fallback
  * filter to catch it: `home_scoped` is deliberately never projected.
  */
+
+/**
+ * 🔒 **`POST …?dryRun=1` — THE CREATE'S GATES, RUN WITHOUT THE CREATE**
+ * (2026-09-06, task 11's missing preview-parity pin).
+ *
+ * ⚠ **WHY THE ROUTE OWNS A TEST FOR THIS.** The MCP confirm class previews an
+ * audience-changing create in a DIFFERENT PROCESS from the gates, so it was
+ * minting a `confirm_token` for a create the confirmed call then refused. The
+ * repair is that the preview asks the server, and this is the door it asks
+ * through: the arm must run the gate, must NOT write, and must not become a
+ * second create path that drifts from the first.
+ */
+describe("POST /api/knowledge/bases?dryRun=1", () => {
+  function postReq(query = ""): NextRequest {
+    return new NextRequest(`http://localhost/api/knowledge/bases${query}`, {
+      method: "POST",
+      body: JSON.stringify({ name: "Notes" }),
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  it("runs the GATE and creates NOTHING", async () => {
+    mockGate.mockResolvedValue({
+      destination: { homeScoped: true, workspaceId: "ws-personal" },
+      visibility: "private",
+      teamGrants: [],
+    });
+
+    const res = await POST(postReq("?dryRun=1"), { params: Promise.resolve({}) });
+
+    // 200, never 201 — nothing was created, and a created-shaped status is how
+    // a caller learns the wrong lesson from a dry run.
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ dryRun: true });
+    expect(mockGate).toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("answers the create's OWN refusal, through the same envelope", async () => {
+    // ⚠ The preview must be refused in the SERVER'S words: that sentence names
+    // the room, the cause and the remedy, and the MCP renders it verbatim.
+    mockGate.mockRejectedValue(new Error("gate says no"));
+
+    const res = await POST(postReq("?dryRun=1"), { params: Promise.resolve({}) });
+
+    expect(res.status).toBe(500);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("without the param it CREATES, exactly as before", async () => {
+    mockCreate.mockResolvedValue(base("kb-new", "user-1"));
+
+    const res = await POST(postReq(), { params: Promise.resolve({}) });
+
+    expect(res.status).toBe(201);
+    expect(mockCreate).toHaveBeenCalled();
+    // ⚠ The gate still runs — inside `createBase`, which is the whole point of
+    // the parity. This arm just does not run it twice.
+    expect(mockGate).not.toHaveBeenCalled();
+  });
+
+  it("🔒 400s an unrecognised value instead of falling through to the WRITE", async () => {
+    // ⚠ THE DIRECTION IS THE OPPOSITE OF `?shelf=`'s AND FOR A HARDER REASON: a
+    // silently dropped `?dryRun=yes` would CREATE the base the caller was only
+    // asking about. Fail loud, and never toward the write.
+    const res = await POST(postReq("?dryRun=yes"), {
+      params: Promise.resolve({}),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockGate).not.toHaveBeenCalled();
+  });
+});

@@ -318,9 +318,13 @@ export interface ResponderChoice {
 export function resolveDefaultResponder(
   configured: string | null | undefined,
   candidates: readonly AgentMentionCandidate[],
-  /** Agent ids that have POSTED in this room lately, MOST RECENT FIRST
-   *  (`lib/agent-post-stamp.ts › recentAgentPosters`). Empty is a complete
-   *  answer — arm 3 then falls to the caller's own ordering. */
+  /** Agent ids the ASKING PERSON has ADDRESSED in this room, MOST RECENT FIRST
+   *  (`lib/agent-post-stamp.ts › recentAgentsAddressedBy`; it credited
+   *  `recentAgentPosters` until 2026-09-06, stale since the arm changed feed on
+   *  2026-09-04). ⚠ **UNBOUNDED IN TIME** since 2026-09-06 — this loop's
+   *  intersection with the live candidates is what ends the stickiness when an
+   *  agent ends. Empty is a complete answer: arm 3 then falls to the caller's own
+   *  ordering. */
   recentAgentIds: readonly string[] = []
 ): ResponderChoice | null {
   if (typeof configured === "string" && configured.length > 0) {

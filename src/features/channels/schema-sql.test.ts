@@ -273,7 +273,8 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // next case, not this one. ⚠ A grant is deliberately NOT kept when its channel
   // goes: it is a share INTO that channel, meaningless without it.
   // ⚠ THIRTEEN SINCE 2026-09-06, all three from the artifacts/personal-reach
-  // wave and all three UNAPPLIED: `channel_personal_arming.channel_id`
+  // wave and all three APPLIED TO PROD 2026-09-05 (the "UNAPPLIED" this comment
+  // carried was true only while it was being written): `channel_personal_arming.channel_id`
   // (`20260925120000`) and `channel_artifacts.channel_id` (`20260926120000`),
   // which CASCADE for the ordinary reason — an arming row and an artifact are
   // statements ABOUT that room and are meaningless without it — and

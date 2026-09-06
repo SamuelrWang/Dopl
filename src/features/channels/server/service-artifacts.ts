@@ -18,6 +18,7 @@ import * as repoArtifacts from "./repository-artifacts";
 import {
   hydrateMessages,
   loadVisibleChannel,
+  requireMemberChannel,
   type ChannelContext,
 } from "./service-shared";
 
@@ -67,6 +68,20 @@ export interface ArtifactWriteResult {
   artifact: ChannelArtifact;
   requested: number[];
   folded: number[];
+  /**
+   * ⚠ **THE MEMBER LIST BEHIND `folded` WAS CLIPPED** — the same signal
+   * {@link readArtifact} carries, and required here for the same reason
+   * (INVARIANTS §9): at the ceiling is indistinguishable from over it, so a
+   * clipped list that renders like an exhausted one is the bug.
+   *
+   * ⚠ Only the IDEMPOTENT-CREATE converge path can ever set it true. Every
+   * other write reports what one statement returned — a fold bounded by the
+   * seqs asked for, an un-box of one, a dissolve of all — and none of those
+   * reads `ARTIFACT_MEMBER_LIMIT`. It is stated as `false` at those sites
+   * rather than left off, because an absent flag is how "we did not check"
+   * comes to read as "it is complete".
+   */
+  truncated: boolean;
 }
 
 /**
@@ -78,13 +93,14 @@ export interface ArtifactWriteResult {
  * writing a view decision onto somebody else's room — a stronger power than the
  * reading it was derived from. So the four write actions need a membership row
  * and `op=read, artifact=<id>` does not. If Samuel wants the looser reading, it
- * is one predicate here and nowhere else.
+ * is one predicate — `service-shared.ts › requireMemberChannel`, which the four
+ * writes below call and `readArtifact` deliberately does not.
+ *
+ * ⚠ The gate itself WAS spelled out here, and moved to `service-shared.ts` on
+ * 2026-09-06 as the ninth copy of one idiom. The ruling above is unchanged; only
+ * the `if` is shared now, and the action noun still comes from this file.
  */
-async function requireMemberChannel(ctx: ChannelContext, ref: string) {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) throw new ChannelForbiddenError("change artifacts in this channel");
-  return channel;
-}
+const ARTIFACT_WRITE_ACTION = "change artifacts in this channel";
 
 /**
  * CREATE — fold a set of messages into a new card.
@@ -106,7 +122,7 @@ export async function createArtifact(
   input: Extract<ArtifactActionInput, { action: "create" }>,
   authorAgentId: string | null = null
 ): Promise<ArtifactWriteResult> {
-  const channel = await requireMemberChannel(ctx, ref);
+  const { channel } = await requireMemberChannel(ctx, ref, ARTIFACT_WRITE_ACTION);
   const requested = [...new Set(input.messages)].sort((a, b) => a - b);
 
   if (input.clientMsgId) {
@@ -116,6 +132,13 @@ export async function createArtifact(
       input.clientMsgId
     );
     if (existing) {
+      // ⚠ **BOUNDED READ, SO THE CLIP HAS TO RIDE OUT WITH IT** (2026-09-06).
+      // `memberSeqs` stops at `ARTIFACT_MEMBER_LIMIT`, so a retry converging on
+      // an artifact of 200+ messages used to answer a short `folded` with
+      // nothing saying it was short — the exact failure `readArtifact` spends a
+      // whole field avoiding, on the one path where the answer is also the
+      // caller's proof of what its first call boxed.
+      const members = await memberSeqs(channel.id, existing.id);
       return {
         artifact: mapArtifactRow(existing),
         requested,
@@ -135,7 +158,8 @@ export async function createArtifact(
         // so the honest answer to "what does your artifact hold" is nothing.
         // Filtering the probe instead would mint a SECOND card under a key that
         // already has one, which is the failure the key exists to prevent.
-        folded: await memberSeqs(channel.id, existing.id),
+        folded: members.seqs,
+        truncated: members.truncated,
       };
     }
   }
@@ -154,13 +178,33 @@ export async function createArtifact(
     row.id,
     requested
   );
-  return { artifact: mapArtifactRow(row), requested, folded: folded.sort((a, b) => a - b) };
+  return {
+    artifact: mapArtifactRow(row),
+    requested,
+    folded: folded.sort((a, b) => a - b),
+    // ⚠ A FRESH FOLD CANNOT CLIP: `folded` is what one UPDATE matched among the
+    // seqs this call named, and nothing here reads `ARTIFACT_MEMBER_LIMIT`.
+    truncated: false,
+  };
 }
 
-/** The member seqs of one artifact, in order. Bounded like every other read. */
-async function memberSeqs(channelId: string, artifactId: string): Promise<number[]> {
+/**
+ * The member seqs of one artifact, in order — AND WHETHER THE READ CLIPPED.
+ *
+ * ⚠ **THE FLAG IS RETURNED WITH THE ROWS, NOT LEFT FOR THE CALLER TO REDERIVE**,
+ * because the ceiling is the repository's and only this function sees the row
+ * count it was applied to. `readArtifact` states the same rule against the same
+ * constant; two readers, one bound.
+ */
+async function memberSeqs(
+  channelId: string,
+  artifactId: string
+): Promise<{ seqs: number[]; truncated: boolean }> {
   const rows = await repoArtifacts.listMessagesByArtifact(channelId, artifactId);
-  return rows.map((r) => Number(r.seq));
+  return {
+    seqs: rows.map((r) => Number(r.seq)),
+    truncated: rows.length >= repoArtifacts.ARTIFACT_MEMBER_LIMIT,
+  };
 }
 
 /**
@@ -174,7 +218,7 @@ async function memberSeqs(channelId: string, artifactId: string): Promise<number
  * id is unknown, because the caller can plainly see the card.
  */
 async function loadWritableArtifact(ctx: ChannelContext, ref: string, artifactId: string) {
-  const channel = await requireMemberChannel(ctx, ref);
+  const { channel } = await requireMemberChannel(ctx, ref, ARTIFACT_WRITE_ACTION);
   const row = await repoArtifacts.findArtifactByChannelAndId(channel.id, artifactId);
   if (!row) throw new ArtifactNotFoundError(artifactId);
   if (row.dissolved_at !== null) {
@@ -202,7 +246,16 @@ export async function addToArtifact(
   const folded = await repoArtifacts.foldMessagesIntoArtifact(channel.id, row.id, [
     input.message,
   ]);
-  return { artifact: mapArtifactRow(row), requested: [input.message], folded };
+  // ⚠ SORTED LIKE `create`'s (2026-09-06). One statement returns at most one seq
+  // here, so the sort is a no-op TODAY — it is written anyway because the shape
+  // is the contract: every `folded` this file answers is ascending, and a caller
+  // that may not assume it for one action cannot assume it for any.
+  return {
+    artifact: mapArtifactRow(row),
+    requested: [input.message],
+    folded: folded.sort((a, b) => a - b),
+    truncated: false,
+  };
 }
 
 /**
@@ -233,7 +286,12 @@ export async function removeFromArtifact(
     }
   }
   const folded = await repoArtifacts.unfoldMessage(channel.id, row.id, input.message);
-  return { artifact: mapArtifactRow(row), requested: [input.message], folded };
+  return {
+    artifact: mapArtifactRow(row),
+    requested: [input.message],
+    folded: folded.sort((a, b) => a - b),
+    truncated: false,
+  };
 }
 
 /**
@@ -256,6 +314,19 @@ export async function dissolveArtifact(
   if (row.created_by !== ctx.userId) {
     throw new ChannelForbiddenError("dissolve an artifact you did not create");
   }
+  // ⚠ **`requested` IS THE MEMBERSHIP READ BEFORE THE UN-FOLD, NOT THE UN-FOLD'S
+  // OWN ANSWER** (2026-09-06). It was `requested: released, folded: released` —
+  // the same array twice — which made the interface's contract at :60-65
+  // ("`folded` MAY BE SHORTER THAN `requested`, AND SAYING SO IS THE CONTRACT")
+  // vacuous on this action: the two could not differ, so a caller comparing them
+  // learned nothing. Reading the members FIRST is the smallest honest fix — it
+  // costs one bounded read and makes the comparison mean here what it means
+  // everywhere else: what this call SET OUT to release, against what it did. A
+  // concurrent `remove` landing in between is exactly the case that separates
+  // them. ⚠ The alternative, `requested: []`, is cheaper and also true (dissolve
+  // names no seqs) but would leave `folded` LONGER than `requested`, inverting
+  // the one comparison the field exists for.
+  const before = await memberSeqs(channel.id, row.id);
   // ⚠ ORDER MATTERS: un-fold FIRST, retire SECOND. A crash between them leaves
   // an un-folded set and a live card — visibly empty, and fixable by dissolving
   // again. The reverse order would leave messages folded into a retired card,
@@ -264,8 +335,12 @@ export async function dissolveArtifact(
   const retired = await repoArtifacts.markArtifactDissolved(channel.id, row.id);
   return {
     artifact: mapArtifactRow(retired ?? row),
-    requested: released,
-    folded: released,
+    requested: before.seqs,
+    folded: released.sort((a, b) => a - b),
+    // ⚠ THE CLIP IS THE `requested` READ'S, and it rides out for the reason the
+    // field exists: past the ceiling, `requested` is short while `released` is
+    // whole, so the two disagreeing is the BOUND rather than a lost message.
+    truncated: before.truncated,
   };
 }
 

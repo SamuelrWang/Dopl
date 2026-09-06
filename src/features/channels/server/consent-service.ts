@@ -3,7 +3,6 @@ import type { ChannelConsentRequest, ConsentDecisionSurface } from "../types";
 import type { ConsentCreateInput, ConsentStatusFilter } from "../schema";
 import { CONSENT_TTL_MS } from "../constants";
 import {
-  ChannelForbiddenError,
   ConsentAlreadyDecidedError,
   ConsentNotFoundError,
 } from "./errors";
@@ -11,8 +10,8 @@ import { mapConsentRow, type ConsentRequestRow } from "./collab-dto";
 import * as repo from "./repository";
 import * as collab from "./repository-collab";
 import {
-  loadVisibleChannel,
   profilesById,
+  requireMemberChannel,
   stripNulDeep,
   UNIQUE_VIOLATION,
   type ChannelContext,
@@ -111,10 +110,11 @@ export async function createConsentRequest(
   rawInput: ConsentCreateInput
 ): Promise<ChannelConsentRequest> {
   const input = stripNulDeep(rawInput);
-  const { channel, membership } = await loadVisibleChannel(ctx, input.channelId);
-  if (!membership) {
-    throw new ChannelForbiddenError("raise consent for this channel");
-  }
+  const { channel } = await requireMemberChannel(
+    ctx,
+    input.channelId,
+    "raise consent for this channel"
+  );
 
   // ⚠ Sweep BEFORE the de-dupe read — an elapsed row must read as 'expired',
   // never come back as a live 'pending' prompt the desktop waits on.

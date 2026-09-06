@@ -192,8 +192,22 @@ function stampEscalationAnswer(
  * PRESSES A BUTTON THE PERSON DID NOT PRESS — worse than the gap this closes,
  * and unrecoverable through a UI that has no unpress.
  *
- * ⚠ THE NUMBER IS 1-BASED IN, 0-BASED OUT. It is read off what the operator SEES
- * (the rendered list), never off `options` directly; "0" is therefore not an
+ * ⚠ **THE LABEL IS TRIED FIRST AND THE NUMBER IS THE FALLBACK** (ruled
+ * 2026-09-06). The digit arm used to run first, which made the sentence above
+ * FALSE for one shape: an option faced `"2"` or `"2026"` could never be answered
+ * by typing its own face, because the digits were spent reading a POSITION
+ * before anything looked at the labels. There is no card on which that reading
+ * was the only available one — the person is typing what they SEE, and a label
+ * is the more specific thing to have seen. So: whole-label match wins, and the
+ * 1-based index answers only when NO label matched.
+ *
+ * ⚠ **AMBIGUITY DOES NOT FALL THROUGH TO THE NUMBER.** Two options sharing a
+ * face is `null` and STOPS there. Reading "2" as a position after two options
+ * called "2" refused would be the guess this function exists not to make, taken
+ * one step later.
+ *
+ * ⚠ THE NUMBER IS STILL 1-BASED IN, 0-BASED OUT. It is read off what the operator
+ * SEES (the rendered list), never off `options` directly; "0" is therefore not an
  * answer, and neither is "3" on a two-option card.
  */
 export function matchTypedOption(
@@ -203,20 +217,26 @@ export function matchTypedOption(
   const typed = body.trim();
   if (!typed) return null;
 
-  if (/^\d+$/.test(typed)) {
-    const index = Number(typed) - 1;
-    return index >= 0 && index < escalation.options.length ? index : null;
-  }
-
   const wanted = typed.toLowerCase();
   const hit = escalation.options.reduce<number[]>((acc, option, i) => {
     if (option.label.trim().toLowerCase() === wanted) acc.push(i);
     return acc;
   }, []);
+  if (hit.length === 1) return hit[0];
   // ⚠ TWO MATCHES IS NO MATCH. A card may legally carry two options with the
   // same face, and "the person meant one of them" is not something this may
-  // guess.
-  return hit.length === 1 ? hit[0] : null;
+  // guess — nor may the digit arm below guess it for us, which is why this
+  // returns rather than breaking.
+  if (hit.length > 1) return null;
+
+  // NO LABEL MATCHED — now the bare number may speak, and on an ordinary card
+  // (no numeric faces) it reaches exactly what it always did.
+  if (/^\d+$/.test(typed)) {
+    const index = Number(typed) - 1;
+    return index >= 0 && index < escalation.options.length ? index : null;
+  }
+
+  return null;
 }
 
 /**
@@ -247,21 +267,31 @@ export function matchTypedOption(
  * is strong intent even days later, so there is no time bound; most-recent-only
  * is what stops one label pressing a button on some older card that happened to
  * share it.
+ *
+ * ⚠ **IT ANSWERS WHETHER IT STAMPED, AND THE INSERT NEEDS THAT** (2026-09-06).
+ * "Never refuse a post" is a claim about the WRITE, not only about this
+ * function: the open-card check above is a read, the unique index over the
+ * answered escalation id is enforced at COMMIT, and a second answer landing in
+ * between turns this member's plain sentence into a failed send with a 23505.
+ * `service-writes.ts` drops the stamp and re-inserts on exactly that race, and
+ * this boolean is how it knows the key was ITS OWN guess rather than the
+ * caller's `escalationAnswer` — which must still 409, because a PRESS that lost
+ * the race is a decision that did not take.
  */
 export async function resolveTypedEscalationAnswer(
   channelId: string,
   callerUserId: string,
   body: string,
   metadata: Record<string, unknown>
-): Promise<void> {
+): Promise<boolean> {
   const typed = body.trim();
   // ⚠ THE FREE PRUNE, AND IT IS WHY THE POST PATH DOES NOT PAY FOR THIS. Every
   // message in every channel reaches this fold, and two reads on each would be a
   // real cost for a rare event. An option label is a `safeLabel` — single line,
   // ≤ 80 chars — so anything longer or multi-line CANNOT equal one, and ordinary
   // prose is refused here without touching the database.
-  if (!typed || typed.length > ESCALATION_OPTION_LABEL_MAX) return;
-  if (typed.includes("\n")) return;
+  if (!typed || typed.length > ESCALATION_OPTION_LABEL_MAX) return false;
+  if (typed.includes("\n")) return false;
 
   // ⚠ THE LOOKUP MAY FAIL AND THE POST MAY NOT. This fold can only ever ADD a
   // stamp (see above), so the honest behaviour when the candidate reads cannot
@@ -283,26 +313,27 @@ export async function resolveTypedEscalationAnswer(
     answerable = recent.filter((row) =>
       escalationAnswerers(row).includes(callerUserId)
     );
-    if (answerable.length === 0) return;
+    if (answerable.length === 0) return false;
     answered = await repoMessages.listAnsweredEscalationIds(
       channelId,
       answerable.map((row) => row.id)
     );
   } catch {
-    return;
+    return false;
   }
   // `listRecentEscalations` is `seq` DESC and both steps preserve it, so the
   // first survivor IS the most recent open one.
   const open = answerable.find((row) => !answered.has(row.id));
-  if (!open) return;
+  if (!open) return false;
 
   const escalation = parseEscalation(
     ((open.metadata ?? {}) as Record<string, unknown>)[ESCALATION_METADATA_KEY]
   );
-  if (!escalation) return;
+  if (!escalation) return false;
 
   const optionIndex = matchTypedOption(escalation, typed);
-  if (optionIndex === null) return;
+  if (optionIndex === null) return false;
 
   stampEscalationAnswer(open, optionIndex, metadata);
+  return true;
 }

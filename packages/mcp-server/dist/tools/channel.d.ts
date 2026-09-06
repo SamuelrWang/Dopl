@@ -7,12 +7,15 @@
  * replies. Every message has a monotonic `seq` cursor, so a listener can ask
  * for "everything after seq N" (`op="read"`, `since=`).
  *
- * ⚠ **FIVE OPS SINCE 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9)** —
- * `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three. The
- * other twenty-two names parsed for one release and answered ONE line naming
- * their replacement; slice B16 closed that window, so the enum is five words
- * wide at runtime as well as in the published schema and a retired name is
- * refused by `channel-schema.ts › unknownOpRefusal`.
+ * ⚠ **SIX OPS** — `send` · `read` · `status` · `manage` · `rooms` · `artifact`.
+ * Five of them since 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9), down
+ * from twenty-three: the other twenty-two names parsed for one release and
+ * answered ONE line naming their replacement, and slice B16 closed that window,
+ * so the enum is exactly as wide at runtime as in the published schema and a
+ * retired name is refused by `channel-schema.ts › unknownOpRefusal`. ⚠ `artifact`
+ * joined on 2026-09-06 (design #1220 §5, accepted #1222) — the collapse was
+ * about twenty-three names for the work of five, not a promise never to grow;
+ * this one folds EXISTING messages into a card and belongs to no other op.
  *
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`        — ref resolution + the ONE neutralizer every
@@ -26,6 +29,8 @@
  *   - `channel-ops-status.ts`    — sessions + the direction mailbox
  *   - `channel-dispatch-agents.ts` — op="manage"
  *   - `channel-dispatch-rooms.ts`  — op="rooms"
+ *   - `channel-ops-artifact.ts`    — op="artifact" (dispatch AND render, for
+ *                                    the reason in its own header)
  *   - `channel-render.ts`        — read renderers + untrusted-content headers
  *
  * ⚠ A channel reaches PEOPLE. `to` names ONE party — a member, or one of the

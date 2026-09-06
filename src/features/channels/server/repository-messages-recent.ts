@@ -6,10 +6,14 @@ import type { ChannelMessageRow } from "./dto";
  * THE TWO BOUNDED "WHAT HAPPENED RECENTLY IN THIS ROOM" READS, split out of
  * `repository-messages.ts` on 2026-09-05 for the 500-line cap (ENGINEERING.md §2).
  *
- * ⚠ THEY ARE ONE FAMILY AND THAT IS WHY THEY MOVED TOGETHER: same window, same limit, same
- * `thread IS NULL` expression, and they are read by the same caller — the wake verdict's arm 3.
+ * ⚠ THEY ARE ONE FAMILY AND THAT IS WHY THEY MOVED TOGETHER: same limit, same `thread IS NULL`
+ * expression, same `seq` ordering, and they are read by the same caller — the wake verdict's arm 3.
  * One answers "which agents POSTED", the other "which agents this AUTHOR tagged"; the second
  * replaced the first as arm 3's feed and the first survives for its other reader.
+ *
+ * ⚠ **THEY NO LONGER SHARE A WINDOW, AND THE DIFFERENCE IS THE POINT** (2026-09-06). The POSTS
+ * read is still time-bounded because freshness is what it measures; the TAGS read is bounded by
+ * the row limit alone, because author stickiness has no expiry (Samuel's ruling — see below).
  */
 
 /**
@@ -65,8 +69,19 @@ export async function listRecentRoomAgentPosts(
  * rather than the author) — which is why the projection carries both.
  * ⚠ **`author_user_id`, NOT `author_kind`.** The old read filtered to agent authors; this one
  * filters to ONE PERSON, because the rule is per-author stickiness.
- * ⚠ Same bound, same window, same `thread IS NULL` expression and same 50-row limit as the read it
- * replaces — none of those reasons changed.
+ *
+ * ⚠ **NO `sinceIso`, AND THE PARAMETER IS GONE RATHER THAN DEFAULTED** (Samuel, 2026-09-06).
+ * It took `now - RESILIENCE_WINDOW_MS` until then, which is the read half of the bug: the rule
+ * above it has no expiry, so a read that dropped everything older than fifteen minutes made the
+ * rule expire anyway, invisibly and from underneath. An optional argument would have left the
+ * window a call site away from coming back; there is nothing to pass now.
+ * ⚠ **{@link RECENT_AGENT_POSTS_LIMIT} IS THE WHOLE BOUND, AND IT IS THE RIGHT SHAPE OF ONE.**
+ * The rows are ONE PERSON'S OWN main-room posts, newest `seq` first, and the walk stops at the
+ * first tag naming an agent that is still live — so fifty is deep enough for any real stickiness,
+ * and an author whose last fifty room posts named no live agent has none to honour. A TIME bound
+ * could not make that promise: it drops rows the rule needs while keeping rows it does not.
+ * ⚠ Same projection, same `thread IS NULL` expression, same 50-row limit and same `seq` ordering
+ * as the read it replaces — only the time bound changed.
  *
  * ⚠ {@link listRecentRoomAgentPosts} IS LEFT IN PLACE DELIBERATELY, and is now unused by the arm.
  * Its own tests still drive it; deleting it is a follow-up for whoever runs the suite green, not a
@@ -79,8 +94,7 @@ export type RecentAuthorTagRow = Pick<
 
 export async function listRecentRoomTagsBy(
   channelId: string,
-  authorUserId: string,
-  sinceIso: string
+  authorUserId: string
 ): Promise<RecentAuthorTagRow[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -89,7 +103,6 @@ export async function listRecentRoomTagsBy(
     .eq("channel_id", channelId)
     .eq("author_user_id", authorUserId)
     .is("metadata->>taskId", null)
-    .gt("created_at", sinceIso)
     .order("seq", { ascending: false })
     .limit(RECENT_AGENT_POSTS_LIMIT);
   if (error) throw error;

@@ -8,12 +8,15 @@
  * replies. Every message has a monotonic `seq` cursor, so a listener can ask
  * for "everything after seq N" (`op="read"`, `since=`).
  *
- * ⚠ **FIVE OPS SINCE 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9)** —
- * `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three. The
- * other twenty-two names parsed for one release and answered ONE line naming
- * their replacement; slice B16 closed that window, so the enum is five words
- * wide at runtime as well as in the published schema and a retired name is
- * refused by `channel-schema.ts › unknownOpRefusal`.
+ * ⚠ **SIX OPS** — `send` · `read` · `status` · `manage` · `rooms` · `artifact`.
+ * Five of them since 2026-09-02 (v2 wave B slice B8, Samuel's ruling B9), down
+ * from twenty-three: the other twenty-two names parsed for one release and
+ * answered ONE line naming their replacement, and slice B16 closed that window,
+ * so the enum is exactly as wide at runtime as in the published schema and a
+ * retired name is refused by `channel-schema.ts › unknownOpRefusal`. ⚠ `artifact`
+ * joined on 2026-09-06 (design #1220 §5, accepted #1222) — the collapse was
+ * about twenty-three names for the work of five, not a promise never to grow;
+ * this one folds EXISTING messages into a card and belongs to no other op.
  *
  * Thin registrar: owns the single tool schema + op routing, delegating to
  *   - `channel-shared.ts`        — ref resolution + the ONE neutralizer every
@@ -27,6 +30,8 @@
  *   - `channel-ops-status.ts`    — sessions + the direction mailbox
  *   - `channel-dispatch-agents.ts` — op="manage"
  *   - `channel-dispatch-rooms.ts`  — op="rooms"
+ *   - `channel-ops-artifact.ts`    — op="artifact" (dispatch AND render, for
+ *                                    the reason in its own header)
  *   - `channel-render.ts`        — read renderers + untrusted-content headers
  *
  * ⚠ A channel reaches PEOPLE. `to` names ONE party — a member, or one of the
@@ -51,6 +56,10 @@ const channel_schema_1 = require("./channel-schema");
 // group is one lane and why its parameter list is as narrow as it is.
 const channel_dispatch_agents_1 = require("./channel-dispatch-agents");
 const channel_dispatch_rooms_1 = require("./channel-dispatch-rooms");
+// ⚠ THE THIRD VOCABULARY (design #1220 §5). Its dispatch and its render sit in
+// ONE file where the other two split, because all four of its actions share one
+// result shape and therefore one renderer — see that module's header.
+const channel_ops_artifact_1 = require("./channel-ops-artifact");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_hold_1 = require("./channel-ops-hold");
 // ⚠ WORKSPACE-WIDE hold is a SIBLING handler, not a branch inside `opHold`:
@@ -257,21 +266,28 @@ directory) {
                     agent: args.to,
                     format: args.response_format,
                 });
-            // ── THE TWO DISPATCHERS ───────────────────────────────────────────
+            // ── THE THREE DISPATCHERS ─────────────────────────────────────────
             //
             // ⚠ `action` IS REQUIRED AND THE PAIRING IS CHECKED, because it is ONE
-            // flat enum over two disjoint vocabularies: the schema cannot express
+            // flat enum over three disjoint vocabularies: the schema cannot express
             // "this word belongs to that op", so `manage(action="open")` has to be
             // refused HERE rather than dispatched into a switch that has no arm for
             // it. The refusal names the op that does take the word, which is the one
             // thing the caller cannot read off the schema.
+            //
+            // ⚠ **THE SENTENCE IS DERIVED SINCE 2026-09-06, AND THAT IS WHAT THE
+            // THIRD VOCABULARY COST.** Each arm used to NAME the other op in a
+            // hand-written string — correct while there were two lists, and a
+            // confident lie the moment there were three (`manage(action="create")`
+            // would have sent the caller to `rooms`). `unknownActionRefusal` looks
+            // the owner up in the table the enum is built from.
             case "manage": {
                 const missA = (0, respond_1.missingParams)("manage", args, ["action"]);
                 if (missA)
                     return missA;
                 const action = args.action;
                 if (!(0, channel_dispatch_agents_1.isManageAction)(action)) {
-                    return (0, respond_1.err)(`op="manage" has no action "${action}" — that word belongs to op="rooms". Nothing was done. op="manage" takes "launch", "end", "rename", "posture" or "direct".`);
+                    return (0, respond_1.err)((0, channel_schema_1.unknownActionRefusal)("manage", action));
                 }
                 return (0, channel_dispatch_agents_1.dispatchManageAction)(action, args, client);
             }
@@ -281,9 +297,25 @@ directory) {
                     return missA;
                 const action = args.action;
                 if (!(0, channel_dispatch_rooms_1.isRoomsAction)(action)) {
-                    return (0, respond_1.err)(`op="rooms" has no action "${action}" — that word belongs to op="manage". Nothing was done. op="rooms" takes "list", "open", "invite", "members", "threads", "thread_mode", "update" or "help".`);
+                    return (0, respond_1.err)((0, channel_schema_1.unknownActionRefusal)("rooms", action));
                 }
                 return (0, channel_dispatch_rooms_1.dispatchRoomsAction)(action, args, client, selfUserId, isAdmin);
+            }
+            // ⚠ THE FOLD, AND IT WRITES NO MESSAGE. It re-files rows that already
+            // exist under one card, so it is neither a send nor a read: `send`'s
+            // whole contract is that it delivers, and this delivers nothing and
+            // addresses nobody. ⚠ NON-DESTRUCTIVE, `dissolve` included — the column
+            // is cleared, no body is touched, which is what keeps the tool's
+            // published "no delete op" policy true.
+            case "artifact": {
+                const missA = (0, respond_1.missingParams)("artifact", args, ["action"]);
+                if (missA)
+                    return missA;
+                const action = args.action;
+                if (!(0, channel_ops_artifact_1.isArtifactAction)(action)) {
+                    return (0, respond_1.err)((0, channel_schema_1.unknownActionRefusal)("artifact", action));
+                }
+                return (0, channel_ops_artifact_1.dispatchArtifactAction)(action, args, client);
             }
             // ── THE BELT ──────────────────────────────────────────────────────
             //

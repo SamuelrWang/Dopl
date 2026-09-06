@@ -119,6 +119,12 @@ const PUBLIC_SURFACE = [
     "createSkill",
     "deleteChat",
     "deleteChatFolder",
+    // 🔒 THE CREATE'S GATES WITHOUT ITS WRITE (2026-09-06) — one more method over
+    // the SAME endpoint (`?dryRun=1`), the `listKbBases`/`listKbBasesPayload`
+    // shape, so the MCP confirm class can ask the server whether a create would
+    // be accepted BEFORE it mints a token promising one. ⚠ NOT a flag on
+    // `createKbBase`: that would make it answer `KnowledgeBase | null`.
+    "dryRunKbBase",
     "deleteKbBase",
     "deleteKbByPath",
     "deleteOntologyCluster",

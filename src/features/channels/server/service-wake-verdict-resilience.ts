@@ -331,8 +331,23 @@ function launchOrder(
 }
 
 /**
- * ARM 3's ANSWER — **the agents THIS AUTHOR has addressed in this room** inside
- * {@link RESILIENCE_WINDOW_MS}, most recent first (Samuel, 2026-09-04).
+ * ARM 3's ANSWER — **the agents THIS AUTHOR has addressed in this room**, most recent first
+ * (Samuel, 2026-09-04), **with no time window at all** (Samuel, 2026-09-06).
+ *
+ * ⚠ **THE WINDOW WAS THE SECOND BUG, AND IT OUTLIVED THE FIRST BY TWO DAYS.** Both this walk and
+ * the read under it were bounded by {@link RESILIENCE_WINDOW_MS}, so fifteen minutes after a person
+ * tagged an agent their default fell through to arm 4 — *the most recently launched* — and the room
+ * answered in a different voice with nothing they had done. The ruling: author stickiness has NO
+ * expiry. The agent you last addressed stays the default until you address a different live agent,
+ * or that agent ends; then the next-most-recent tag wins, and only then the arms below.
+ * ⚠ **THE ONLY BOUND LEFT IS THE PAGE** — `RECENT_AGENT_POSTS_LIMIT` (50) rows of this author's own
+ * main-room messages, newest `seq` first. It suffices because the walk stops at the FIRST id that
+ * is still live: fifty of one person's own room posts is far more than the handful it takes to find
+ * their last surviving tag, and a person whose last fifty room posts named no live agent has no
+ * stickiness to honour — falling to arm 4 there is the correct answer, not a truncation.
+ * ⚠ **THE WINDOW STILL BOUNDS THE OTHER ARMS.** RR2's `findLastRoomAddressToAgent` above keeps
+ * `RESILIENCE_WINDOW_MS`, and so does `recentAgentPosters`: "who spoke here lately" is freshness
+ * and goes stale; "who did this person address" is a habit and does not.
  *
  * ⚠ **IT WAS "who posted here last" UNTIL 2026-09-04, AND THAT IS THE BUG IT FIXES.** One agent
  * addressing another re-pointed the room's default responder, so the operator saw the answer wander
@@ -354,11 +369,7 @@ export async function recentRoomAgents(
   authorUserId: string,
   now: number
 ): Promise<string[]> {
-  const rows = await repoMessages.listRecentRoomTagsBy(
-    channelId,
-    authorUserId,
-    new Date(now - RESILIENCE_WINDOW_MS).toISOString()
-  );
+  const rows = await repoMessages.listRecentRoomTagsBy(channelId, authorUserId);
   return recentAgentsAddressedBy(
     authorUserId,
     rows.map((row) => ({
@@ -368,6 +379,8 @@ export async function recentRoomAgents(
       recipientAgentIds: row.recipient_agent_ids ?? null,
       metadata: (row.metadata ?? null) as Record<string, unknown> | null,
     })),
-    { now, windowMs: RESILIENCE_WINDOW_MS }
+    // ⚠ NO `windowMs` — see the header. `now` is still handed in rather than read, so the walk
+    // stays a pure function of the write's own clock even though nothing bounds it by time.
+    { now }
   );
 }

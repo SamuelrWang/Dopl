@@ -154,11 +154,17 @@ export function draftReach({
   currentUserId: string;
   defaultResponderAgentName?: string | null;
   /**
-   * RR3 arm 3's answer — the agents that have posted in this room lately, most
-   * recent first, from `lib/agent-post-stamp.ts › recentAgentPosters` over the
-   * transcript this pane is already rendering. ⚠ **THE SERVER ASKS THE SAME
-   * FUNCTION OF A BOUNDED `channel_messages` READ**, so the two agree by
-   * construction rather than by coincidence; `[]` degrades to arm 4.
+   * RR3 arm 3's answer — **the agents THIS USER has ADDRESSED in this room, most recent first**,
+   * from `lib/agent-post-stamp.ts › recentAgentsAddressedBy` over the transcript this pane is
+   * already rendering.
+   * ⚠ **IT CREDITED `recentAgentPosters` UNTIL 2026-09-06 AND THAT WAS STALE BY TWO DAYS.** The arm
+   * stopped reading "who posted here lately" on 2026-09-04 (an agent tagging another agent moved
+   * every member's default); it reads the caller's own typed tags now.
+   * ⚠ **AND THERE IS NO TIME WINDOW ON IT** (Samuel, 2026-09-06): the agent you last addressed
+   * holds until you address a different live agent or that one ends. Liveness is settled below,
+   * against the sessions the caller passes — an ended agent is simply not a candidate.
+   * ⚠ **THE SERVER ASKS THE SAME FUNCTION OF A BOUNDED `channel_messages` READ**, so the two agree
+   * by construction rather than by coincidence; `[]` degrades to arm 4.
    */
   recentAgentIds?: readonly string[];
   /** RR1's answer, when the composer is inside a thread. `null` in the main

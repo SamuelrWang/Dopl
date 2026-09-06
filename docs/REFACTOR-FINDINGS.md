@@ -3565,10 +3565,12 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   it will not be able to read back"* — and that is what `dopl_kb(op="create_base")` did in a
   two-member container: two SUCCESS strings ("Created knowledge base … Private to you"), a
   `list_bases` that never showed it, a slug that would not resolve, two orphaned rows each holding a
-  slug the next attempt would collide with. `service-base-writes.ts › assertCreatorCanReadItBack`
-  now runs `resolveAgentAudience` BEFORE the insert and refuses the `granted` branch, so a create
-  either writes a base its creator can immediately list and resolve, or returns an error naming the
-  room, the cause and the remedy. **Refusal is the only available answer**, not the cautious one:
+  slug the next attempt would collide with. `service-base-gates.ts › resolveCreateDestination`
+  now asks `resolveAgentAudience` BEFORE the insert and answers the `granted` branch, so a create
+  either writes a base its creator can immediately list and resolve — on that caller's own personal
+  container, when the create does not name the room and the room is ARMED (gap 2 of #1077) — or
+  returns an error naming the room, the cause and the remedy. **For a create that must land in the
+  room, refusal is the only available answer**, not the cautious one:
   what would make the base reachable is a channel grant, and `setChannelKnowledgeGrant` refuses
   `ctx.source === "agent"` outright because that grant decides what the PEER may read — so the
   create-and-share path was already a refusal, just one that inserted the row and hard-deleted it

@@ -170,7 +170,7 @@ describe("readTranscript — `entries` is null unless the page actually folded",
     // `messages` would be the read path losing rows, which is the failure the
     // additive design exists to prevent.
     expect(messages.map((m) => m.seq)).toEqual([10, 11]);
-    // THE COST CLAIM, ASSERTED RATHER THAN COMMENTED (`readEntries`' docblock:
+    // THE COST CLAIM, ASSERTED RATHER THAN COMMENTED (`readTranscript`'s docblock:
     // "an ordinary transcript pays nothing"). `foldPage` short-circuits before
     // both reads when no row carries an `artifact_id`.
     expect(repoArtifacts.listArtifactsByIds).not.toHaveBeenCalled();

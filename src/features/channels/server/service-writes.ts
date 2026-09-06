@@ -19,6 +19,9 @@ import {
   INFO_CARD_MAX_BYTES,
   infoCardTextBytes,
 } from "../info-card";
+// ⚠ The one key the insert may DROP and retry without — fold 11b's guess, never
+// a pressed answer. See the 23505 branch in {@link postMessage}.
+import { ESCALATION_ANSWER_METADATA_KEY } from "../escalation";
 // Who may post a LIFECYCLE marker, and the server-internal options answering it.
 import {
   assertLifecycleKindIsServerOwned,
@@ -35,6 +38,7 @@ import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   canManageChannel,
   loadVisibleChannel,
+  requireMemberChannel,
   stripNulDeep,
   UNIQUE_VIOLATION,
   type ChannelContext,
@@ -302,10 +306,7 @@ export async function postMessage(
   opts: PostMessageOptions = {}
 ): Promise<ChannelMessagePosted> {
   const raw = stripNulDeep(rawInput);
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("post to this channel");
-  }
+  const { channel } = await requireMemberChannel(ctx, ref, "post to this channel");
 
   // ⚠ Beside the membership check because both must precede the idempotency
   // short-circuit — a contradictory post has to fail on the retry too.
@@ -381,10 +382,15 @@ export async function postMessage(
   // Addressing, the reserved-key anti-spoof fold and
   // task-key stamping all live in `service-writes-metadata.ts` — ONE place
   // decides what a caller may put in `metadata`.
-  const { metadata } = await resolvePostMetadata(ctx, channel, input, {
-    handoff: opts.handoff,
-    fanoutGroupId: opts.fanoutGroupId,
-  });
+  const { metadata, typedEscalationAnswer } = await resolvePostMetadata(
+    ctx,
+    channel,
+    input,
+    {
+      handoff: opts.handoff,
+      fanoutGroupId: opts.fanoutGroupId,
+    }
+  );
 
   // ⚠ **WHO THIS IS FOR AND WHAT IT DID — DECIDED HERE, ONCE** (2026-09-02, A9).
   // It runs AFTER the metadata fold and reads that fold's output rather than the
@@ -437,16 +443,18 @@ export async function postMessage(
   // wrote: a key on every row would make the pick unreadable.
   const stored = wake.reason ? { ...metadata, wake_reason: wake.reason } : metadata;
 
-  let row;
-  try {
-    row = await repoMessages.insertMessage({
+  // ⚠ THE INSERT, PARAMETERISED ON ITS METADATA FOR ONE REASON: the typed
+  // escalation answer below has to be droppable and the row written anyway.
+  // Nothing else about the write varies.
+  const insertWith = (meta: Record<string, unknown>) =>
+    repoMessages.insertMessage({
       channel_id: channel.id,
       workspace_id: ctx.workspaceId,
       author_user_id: ctx.userId,
       author_kind: authorKind,
       kind: input.kind ?? "message",
       body: input.body,
-      metadata: stored,
+      metadata: meta,
       client_msg_id: input.clientMsgId ?? null,
       wake_verdict: wake.verdict,
       recipient_user_ids: wake.recipientUserIds,
@@ -457,6 +465,10 @@ export async function postMessage(
       // says now.
       delivery: wake.delivery,
     });
+
+  let row;
+  try {
+    row = await insertWith(stored);
   } catch (err) {
     // ⚠ Lost an idempotency race — the short-circuit reached a second way, so
     // it must answer identically, and therefore on the SAME scope. The unique
@@ -487,6 +499,42 @@ export async function postMessage(
       // second way, so an ack that omitted `replayed` here would tell a caller
       // its concurrent retry had written a row.
       if (raced) return replayOf(await hydrateOne(raced));
+    }
+    // ⚠ **THE TYPED DOOR LOSES THE SAME RACE AND MUST NOT FAIL THE POST**
+    // (2026-09-06). Fold 11b GUESSED this key off the body — the member typed a
+    // sentence, not a decision — and its contract is that every near miss
+    // leaves an ordinary message, silently. The open-card read cannot see a
+    // press that commits after it, so the index refuses the stamp here; the
+    // honest answer is the message WITHOUT it, which is what the member wrote.
+    // Refusing instead would be the one outcome 11b exists to prevent, and
+    // converging like an idempotency retry would report somebody else's
+    // decision as this caller's.
+    //
+    // ⚠ **LAST OF THE THREE BRANCHES, AND THE ORDER IS LOAD-BEARING.** After the
+    // pressed door, because only a GUESSED key may be dropped — a press that
+    // lost the race is a decision that did not take, and it still 409s. After
+    // the idempotency converge, because a `client_msg_id` collision is answered
+    // by returning the stored row: retrying the insert on THAT one would only
+    // hit the same index again and turn a clean replay into a throw.
+    //
+    // ⚠ **AND ONE PATH FALLS THROUGH THE CONVERGE INTO HERE**: `clientMsgId`
+    // set, but the raced row NOT FOUND. That branch only returns when it reads
+    // the row back, so control arrives here with the key still on `stored` — the
+    // retry re-inserts the SAME `client_msg_id`, hits the SAME index, and the
+    // un-caught second failure surfaces. That is the correct answer, not a hole:
+    // a collision whose row cannot be read back a moment later is a real defect
+    // (or a row deleted mid-flight), and reporting it is better than dropping the
+    // caller's key to force the insert through.
+    if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && typedEscalationAnswer) {
+      // ⚠ A COPY: `stored` may BE the fold's own object, and the retry must not
+      // edit metadata anything else still holds.
+      const plain = { ...stored };
+      delete plain[ESCALATION_ANSWER_METADATA_KEY];
+      // ⚠ ONE retry, un-caught: a second failure is a real defect, and it must
+      // surface rather than loop.
+      row = await insertWith(plain);
+      await repo.touchChannel(ctx.workspaceId, channel.id);
+      return hydrateOne(row);
     }
     throw err;
   }
