@@ -32,11 +32,15 @@ const SESSION: CallerScope = {
   userId: "11111111-1111-4111-8111-111111111111",
   sharedCredential: false,
   credentialWorkspaceId: null,
+  source: null,
 };
 const SHARED: CallerScope = {
   userId: SESSION.userId,
   sharedCredential: true,
   credentialWorkspaceId: "22222222-2222-4222-8222-222222222222",
+  // ⚠ The client this suite builds carries the two AXES into the JWT; `source`
+  // is a TS-side reach input and no claim is minted from it.
+  source: "agent",
 };
 
 afterEach(() => {

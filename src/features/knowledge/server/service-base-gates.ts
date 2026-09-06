@@ -1,4 +1,6 @@
 import "server-only";
+import { personalShelfRefusal } from "@/shared/tenancy/personal-container";
+import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
 import type { KnowledgeContext } from "../types";
 import { AgentWriteDisabledError } from "./errors";
 import { resolveAgentAudience } from "./service-audience";
@@ -77,14 +79,128 @@ export async function assertCreatorCanReadItBack(
 ): Promise<void> {
   const audience = await resolveAgentAudience(ctx);
   if (audience.kind === "unrestricted") return;
-  throw new AgentWriteDisabledError(
+  throw personalShelfUnreachableInRoom();
+}
+
+/** ⚠ ONE MESSAGE, TWO CALLERS — {@link assertCreatorCanReadItBack} and the
+ *  closed arm of {@link resolveCreateDestination}. Two copies of a refusal is
+ *  two refusals that stop agreeing about the remedy. */
+function personalShelfUnreachableInRoom(): AgentWriteDisabledError {
+  return new AgentWriteDisabledError(
     "(new)",
     "An agent cannot create a knowledge base inside a shared home channel. " +
       "In a container with another member in it, an agent reaches only the bases " +
       "the operator has SHARED into one of that channel's knowledge grants — and a " +
       "base you just created carries no grant, so it would be invisible to you from " +
       "your very next call. Sharing one into a channel is a human-only setting. " +
-      "Ask your operator to create the base here and share it into the channel, or " +
+      "Ask your operator to create the base here and share it into the channel, to " +
+      "arm this channel for their personal shelf so your creates land there, or " +
       "create it in a workspace of your own instead.",
   );
+}
+
+/**
+ * 🔒 **WHERE A CREATE LANDS — GAP 2 OF #1077, AND THE ASKING SEAM THE ROUTER
+ * WAS ALWAYS WAITING FOR.**
+ *
+ * `personal-container.ts › personalWriteWorkspaceId` has routed a create BY
+ * AUTHOR since B15; what was missing is anything that ASKS it in a shared room.
+ * The refusal above was the whole answer there, and #1077 calls that conclusion
+ * wrong for a PERSONAL resource: *"a create with no valid container in a shared
+ * room should go to the caller's own personal container, not refuse — personal
+ * -visibility creates resolve their container by OWNER, never by call site."*
+ *
+ * ── The seam, in the order it decides ───────────────────────────────────────
+ * ```
+ * asked for the shelf (homeScoped)  → the fence answers; open lands personal,
+ *                                     closed REFUSES (never downgrades)
+ * audience unrestricted             → the calling container, exactly as today
+ * audience restricted + reachable   → the caller's own personal container
+ * audience restricted + closed      → today's refusal, with the new remedy
+ * ```
+ *
+ * ⚠ **IT CHANGES NOTHING THAT WORKS TODAY.** The only creates it re-routes are
+ * the ones `assertCreatorCanReadItBack` was already refusing outright — an agent
+ * in a room with somebody else in it — so no working path moves and no row that
+ * lands in the calling container today lands anywhere else tomorrow.
+ *
+ * 🔒 **IT HALF-OPENS NOTHING, AND A4 INHERITS THIS.** The personal destination
+ * is available only when `personal-reach.ts` answers OPEN, which in a shared
+ * room means the owner has armed it. An unarmed room still refuses. The fence is
+ * asked here rather than re-implemented, so an artifact create that adopts this
+ * function inherits the same answer rather than a second opinion.
+ *
+ * ⚠ **THE READ-BACK QUESTION IS ANSWERED AT THE DESTINATION, WHICH IS THE WHOLE
+ * REPAIR.** `assertCreatorCanReadItBack` asks it of `ctx.workspaceId` — the room
+ * — and a personal row does not land there. In the caller's own container the
+ * answer is `unrestricted` by construction (one member, no grant filter), so an
+ * OPEN fence IS the read-back guarantee for that row rather than a way around
+ * the gate.
+ *
+ * ⚠ **REFUSING LOUDLY HERE IS NOT THE ORACLE THE FENCE FORBIDS.** That rule is
+ * about READS: an unarmed room must answer what an empty one answers, or arming
+ * state becomes readable through the surfaces it gates. A WRITE has no silent
+ * form — "refuse, never downgrade" is `personal-container.ts`'s own rule — and
+ * the only person who learns anything here is the OWNER, about their OWN shelf
+ * and their OWN room. Nothing tells a peer anything.
+ *
+ * ⚠ **NOTHING HERE RE-GROWS THE GUESSED-CONTAINER FALLBACK B14 DELETED**
+ * (invariant 1 of #1077; the concept is named nowhere on purpose —
+ * `workspaces/b10-no-derived-default.test.ts` scans this file's prose too).
+ * Nothing is guessed: the destination is the caller's own container, resolved by
+ * owner, and it is the ONLY container a personal row can live in. A create that
+ * cannot land there is refused, never widened.
+ *
+ * ⚠ **`shareToChannelId` AND TEAM GRANTS ARE NEVER RE-ROUTED.** Both name the
+ * room in as many words — a channel grant and a team live in the calling
+ * container — so a create carrying either keeps today's refusal instead of
+ * quietly landing its row somewhere its grant cannot follow.
+ */
+export interface CreateDestination {
+  /** ⚠ THE ROUTING FLAG, PASSED STRAIGHT TO THE REPOSITORY — the router is what
+   *  resolves the container, so this function and `personalWriteWorkspaceId`
+   *  cannot disagree about the id: both ask `findPersonalContainerId` for the
+   *  same owner. */
+  homeScoped: boolean;
+  /** WHERE the row lands, for the callers that must know before the insert —
+   *  the slug read and the rollback. Equal to `ctx.workspaceId` unless the row
+   *  is personal. */
+  workspaceId: string;
+}
+
+export async function resolveCreateDestination(
+  ctx: KnowledgeContext,
+  input: {
+    homeScoped?: boolean;
+    shareToChannelId?: string;
+    wantsTeams?: boolean;
+  },
+): Promise<CreateDestination> {
+  const room: CreateDestination = {
+    homeScoped: false,
+    workspaceId: ctx.workspaceId,
+  };
+  if (input.homeScoped === true) {
+    const reach = await resolvePersonalReach(ctx);
+    if (reach.kind === "open") {
+      return { homeScoped: true, workspaceId: reach.containerId };
+    }
+    // ⚠ REFUSE, NEVER DOWNGRADE — the caller asked for their shelf by name and
+    // the workspace shelf is a different audience, not a lesser one.
+    // ⚠ THE SENTENCE IS `personal-container.ts`'s, not this file's: the router
+    // and the agent-templates twin throw the same three, and a hand-mirrored
+    // copy is how two refusals stop agreeing about the remedy.
+    throw personalShelfRefusal(reach.refusal);
+  }
+
+  const audience = await resolveAgentAudience(ctx);
+  if (audience.kind === "unrestricted") return room;
+  // The population `assertCreatorCanReadItBack` refuses. A create that names
+  // the ROOM keeps that refusal; anything else may follow its owner.
+  if (input.shareToChannelId !== undefined || input.wantsTeams === true) {
+    throw personalShelfUnreachableInRoom();
+  }
+  const reach = await resolvePersonalReach(ctx);
+  if (reach.kind === "closed") throw personalShelfUnreachableInRoom();
+  return { homeScoped: true, workspaceId: reach.containerId };
 }

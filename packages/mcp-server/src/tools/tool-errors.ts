@@ -96,7 +96,11 @@ export const DELETE_IS_APP_ONLY: ToolError = {
 
 export const CREDITS_EXHAUSTED: ToolError = {
   reason: "credits_exhausted",
-  meaning: "this workspace is out of MCP credits for this billing period",
+  // ⚠ "CREDITS", NEVER "MCP CREDITS" (Samuel, 2026-09-05: "it's not MCP
+  // credits, it's credits"). This meaning is READ BY AGENTS — it ships inside
+  // the served tool descriptions as well as the refusal — so the wording rule
+  // binds here first.
+  meaning: "this workspace is out of credits for this billing period",
   retry: "no",
 };
 

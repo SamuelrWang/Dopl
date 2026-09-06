@@ -102,6 +102,23 @@ export interface AgentTemplate {
   /** Attached KBs. ⚠ Only the ones the READING caller may see — the DTO is
    *  viewer-filtered, so two callers can get different lists for one row. */
   knowledgeBases: TemplateKnowledgeBaseRef[];
+  /**
+   * HOW MANY ATTACHMENTS THE VIEWER FILTER DROPPED — a COUNT and nothing else
+   * (Samuel's ruling, 2026-09-05).
+   *
+   * 🔒 ⚠ **A NUMBER IS THE WHOLE DISCLOSURE, AND THAT IS THE POINT.** The
+   * dropped bases' ids, names, workspace and container are exactly what the
+   * viewer filter exists to withhold, so none of them may ride here; what the
+   * caller learns is only that THIS ROLE NAMES SOMETHING IT CANNOT REACH, which
+   * is a fact about the caller's own session rather than about the base.
+   * ⚠ **IT IS NOT PROBED FOR.** It is arithmetic over the junction rows the
+   * decoration already read minus the ones the filter kept — no second query,
+   * and nothing anywhere asks where a missing base actually lives.
+   * ⚠ **OPTIONAL BECAUSE THE DECORATION IS**: a row that never went through
+   * `decorateWithKnowledgeBases` has no answer, and `0` would be a claim.
+   * Consumers read `?? 0`, which is the honest reading of "not decorated".
+   */
+  unreachableKnowledgeBaseCount?: number;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -120,6 +137,22 @@ export interface ResolvedAgentTemplate {
   model: string | null;
   fields: TemplateField[];
   knowledgeBases: TemplateKnowledgeBaseRef[];
+  /**
+   * THE SEVENTH KEY (2026-09-05): how many attached bases this launch CANNOT
+   * reach. Always a number here — the launch payload has one producer, so
+   * "not decorated" cannot arrive and `0` is a real answer.
+   *
+   * ⚠ **IT EXISTS SO THE AGENT CAN SAY SO.** A base attached in one container
+   * and launched in another simply vanished from `knowledgeBases`, and an agent
+   * cannot report a gap it was never told about — it read a role that named no
+   * knowledge and behaved as though none was attached. With this the desktop's
+   * ROLE block tells it to say *"I don't have access to this knowledge base in
+   * this channel"*, which is the whole of the ruling.
+   * ⚠ **A COUNT, NEVER A LOCATION.** See {@link AgentTemplate} for the argument;
+   * the launch payload is the one place a leak would land in prompt text.
+   * ⚠ **IT NEVER BLOCKS A LAUNCH.** The agent starts, minus the base.
+   */
+  unreachableKnowledgeBaseCount: number;
   /**
    * Did the RESOLVING caller write this template? (G-1, 2026-08-22.)
    *

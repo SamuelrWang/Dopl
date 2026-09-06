@@ -5,6 +5,7 @@ import type {
   ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
+  ChannelReadEntry,
   ChannelThread,
 } from "../types";
 import type { MessageReadQuery } from "../schema";
@@ -27,11 +28,16 @@ import * as workspaceRepo from "@/features/workspaces/server/repository";
 import type { MemberPresence } from "./dto";
 import {
   agentNamesFor,
+  hydrateMessages,
   loadVisibleChannel,
   mayReadPublicChannels,
   profilesById,
   type ChannelContext,
 } from "./service-shared";
+// ⚠ ONE-WAY, AND THE DIRECTION IS THE POINT: this file reads the artifact
+// service; the artifact service must never read this one back. Both take the
+// hydrator from `service-shared.ts`, which is what keeps that true.
+import { foldPage } from "./service-artifacts";
 
 /**
  * Read-side channels service: visibility-filtered list, single-channel header,
@@ -209,25 +215,14 @@ export async function listChannelMembers(
  * bare id tail until 2026-09-04. A page of purely human messages pays for the
  * second read not at all.
  */
-async function hydrateMessages(
-  rows: Awaited<ReturnType<typeof repoMessages.listMessages>>,
-  workspaceId: string
-): Promise<ChannelMessage[]> {
-  const authorIds = rows
-    .map((r) => r.author_user_id)
-    .filter((id): id is string => id !== null);
-  const [profiles, agentNames] = await Promise.all([
-    profilesById(authorIds),
-    agentNamesFor([workspaceId], rows),
-  ]);
-  return rows.map((row) =>
-    mapMessageRow(
-      row,
-      row.author_user_id ? profiles.get(row.author_user_id) : undefined,
-      agentNames
-    )
-  );
-}
+/**
+ * ⚠ **THE HYDRATOR MOVED DOWN INTO `service-shared.ts`** (2026-09-06, A4 second
+ * slice) and is imported from there by this file and by `service-artifacts.ts`
+ * alike. It lived here, exported, for exactly one slice; wiring the fold INTO
+ * the read below would have made this file import the artifact service that
+ * imports this one. Moving the hydrator down was the remedy `service-artifacts`
+ * documented in advance — the arrow was NOT reversed.
+ */
 
 /**
  * Cursor-based message read — forward from `since`, BACKWARD from `before`, or
@@ -252,6 +247,26 @@ export async function readMessages(
   ref: string,
   query: MessageReadQuery
 ): Promise<ChannelMessage[]> {
+  return (await readMessagePage(ctx, ref, query)).messages;
+}
+
+/**
+ * THE READ, WITH THE CHANNEL ID IT RESOLVED — the one body behind both
+ * {@link readMessages} and {@link readEntries}.
+ *
+ * ⚠ **ONE GATE READ, ONE HYDRATE, ONE WATERMARK RULE.** The fold needs the
+ * channel id, and the alternative — `readEntries` calling `readMessages` and
+ * then re-resolving the ref — would run the visibility gate twice per read and
+ * give the watermark a second place to be decided. This is a refactor of the
+ * body, not a change to it: `readMessages`'s signature and behaviour are
+ * untouched, which matters because the pollers, the hold and the desktop all
+ * call it.
+ */
+async function readMessagePage(
+  ctx: ChannelContext,
+  ref: string,
+  query: MessageReadQuery
+): Promise<{ channelId: string; messages: ChannelMessage[] }> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   const rows = await repoMessages.listMessages(channel.id, {
     since: query.since,
@@ -284,7 +299,71 @@ export async function readMessages(
       }
     }
   }
-  return messages;
+  return { channelId: channel.id, messages };
+}
+
+/**
+ * **THE SAME READ, AS ENTRIES** — messages with any artifact run collapsed to
+ * one card (design #1220 §4, accepted #1222).
+ *
+ * ⚠ **THE FOLD IS A RENDERING OF THE PAGE, NOT A FILTER ON IT.** The read above
+ * runs unchanged — same gate, same rows, same watermark — and `foldPage` then
+ * decides what a reader is shown. So the two callers cannot diverge on what is
+ * IN the page, only on how it is presented.
+ *
+ * ⚠ **IT FOLDS ONLY THE DEFAULT PAGE**, and `foldPage` is where that is decided
+ * (`readNamesMessages`): a thread-scoped read and a bounded `since`+`before`
+ * window return their messages, always. Callers must not second-guess it — one
+ * answer to "does this read name messages" is the whole point of the pin.
+ *
+ * ⚠ **AN ORDINARY TRANSCRIPT PAYS NOTHING.** A page with no folded row does no
+ * extra read at all.
+ */
+export async function readEntries(
+  ctx: ChannelContext,
+  ref: string,
+  query: MessageReadQuery
+): Promise<ChannelReadEntry[]> {
+  const { channelId, messages } = await readMessagePage(ctx, ref, query);
+  return foldPage(channelId, messages, {
+    since: query.since,
+    before: query.before,
+    thread: query.thread,
+  });
+}
+
+/**
+ * THE TRANSCRIPT AS THE WIRE CARRIES IT: the page, plus its folded rendering
+ * **only when something actually folded**.
+ *
+ * ⚠ **`entries === null` MEANS "NOTHING ON THIS PAGE IS IN AN ARTIFACT", NOT
+ * "THIS SERVER CANNOT FOLD".** It is the one distinction this shape has to make,
+ * and it is why the null is returned rather than an entries array that always
+ * mirrors the messages: an envelope that carried both in full would double the
+ * bytes of every ordinary transcript read to describe a feature the page does
+ * not use. A page with no folded row costs exactly what it did before this
+ * feature existed.
+ *
+ * ⚠ **`messages` STAYS COMPLETE, AND THAT IS DELIBERATE.** Design §4 warns the
+ * fold is "honestly breaking for artifact-unaware clients"; keeping the full
+ * page beside the entries means an installed desktop or an older web build shows
+ * the run exactly as it did yesterday instead of losing rows, while a
+ * card-aware renderer reads `entries` and shows the card. When every renderer
+ * reads entries, `messages` is what gets dropped — not the other way round.
+ */
+export async function readTranscript(
+  ctx: ChannelContext,
+  ref: string,
+  query: MessageReadQuery
+): Promise<{ messages: ChannelMessage[]; entries: ChannelReadEntry[] | null }> {
+  const { channelId, messages } = await readMessagePage(ctx, ref, query);
+  const entries = await foldPage(channelId, messages, {
+    since: query.since,
+    before: query.before,
+    thread: query.thread,
+  });
+  const folded = entries.some((entry) => entry.type === "artifact");
+  return { messages, entries: folded ? entries : null };
 }
 
 /**

@@ -99,6 +99,50 @@ export interface TemplateEditorProps {
   onDelete: () => void;
 }
 
+/**
+ * "SOME OF THIS ROLE'S KNOWLEDGE IS NOT HERE" — a COUNT, under the chips
+ * (ruled 2026-09-06 under Samuel's delegation; the launch payload's own
+ * discipline, one surface earlier).
+ *
+ * 🔒 **A NUMBER IS THE WHOLE DISCLOSURE.** The id, the name, the workspace and
+ * the container of a base this caller cannot see are exactly what
+ * `service-knowledge-decoration.ts › decorateWithKnowledgeBases` withholds, so
+ * none of them may be written here and none may be inferred out loud — the same
+ * rule the desktop's ROLE block keeps in
+ * `prompt-framing-template.js › unreachableKnowledgeLines`. What the operator
+ * learns is a fact about THEIR OWN view: this role names something this view
+ * cannot resolve.
+ *
+ * ⚠ **NO SECOND READ AND NO PROBE.** The count rides in on the template row the
+ * editor was already handed (`types.ts › AgentTemplate`), which is arithmetic
+ * the list read did over junction rows it had already fetched. Asking "which
+ * ones" anywhere is the query the no-location rule forbids.
+ *
+ * ⚠ **IT DESCRIBES THE SAVED ROW, NEVER THE DRAFT**, and it cannot go stale
+ * against the chips above it: an unreachable link is absent from
+ * `draft.knowledgeBaseIds` by construction (`template-draft.ts ›
+ * draftFromTemplate` maps the VISIBLE refs), so editing the visible set never
+ * changes this number.
+ *
+ * ⚠ **NOTHING IS BLOCKED AND NOTHING IS OFFERED.** There is no fix-it control
+ * here on purpose — the operator cannot be shown the base to detach it, and a
+ * button that silently dropped an attachment they cannot see would be a
+ * destructive act performed blind.
+ *
+ * ⚠ ZERO RENDERS NOTHING. "0 bases unreachable" is a line every well-formed
+ * template would carry forever (INVARIANTS §5: labels, not explainers).
+ */
+function UnreachableBasesRow({ count }: { count: number }) {
+  if (count <= 0) return null;
+  const subject = count === 1 ? "1 attached base" : `${count} attached bases`;
+  return (
+    <p className="mt-1.5 text-caption text-text-muted">
+      {subject} {count === 1 ? "isn't" : "aren't"} reachable from here, so{" "}
+      {count === 1 ? "it isn't" : "they aren't"} listed above.
+    </p>
+  );
+}
+
 export function TemplateEditor({
   open,
   session,
@@ -260,6 +304,7 @@ export function TemplateEditor({
           detachVerb="Detach"
           emptyLine="No knowledge bases yet."
         />
+        <UnreachableBasesRow count={template?.unreachableKnowledgeBaseCount ?? 0} />
       </Field>
 
       {error && (

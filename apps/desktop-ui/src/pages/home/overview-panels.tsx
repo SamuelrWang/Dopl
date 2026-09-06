@@ -11,10 +11,11 @@ import {
   HOME_OVERVIEW_DEFAULT_RANGE,
   type HomeOverview,
   type HomeOverviewSeries,
+  type HomeSeriesPoint,
 } from "@/features/home/overview-types";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError } from "#/components/page-states";
-import { CreditCapacityBar, UsageChart } from "./overview-sections";
+import { CreditCapacityBar, UsageChart, seriesTotal } from "./overview-sections";
 import {
   ChannelMessageRail,
   ChannelRail,
@@ -24,6 +25,7 @@ import {
 } from "./overview-rails";
 import type { OpenActivity } from "./use-activity-jump";
 import { ActiveAgentBoard } from "./overview-agent-board";
+import { TokenSpendPanel } from "./overview-token-spend";
 
 /**
  * /home → Overview — the account surface's analytics face (2026-09-01, Samuel).
@@ -146,11 +148,16 @@ export function HomeOverviewPanels({
             under it, both inside that one card. A rail, a note or a total goes
             in the panel below. */}
         <SectionPanel id="home-overview-usage" label="Usage">
-          <section className="bento flex flex-col gap-4 p-3.5">
-            <CreditsBar homeWorkspaceId={homeWorkspaceId} />
-            <CreditsChart />
-          </section>
+          <UsageCard homeWorkspaceId={homeWorkspaceId} />
         </SectionPanel>
+
+        {/* ⚠ **TOKEN SPEND IS ITS OWN PANEL, NOT A THIRD THING IN THE USAGE
+            CARD** (2026-09-06, Samuel #1326). That card is the CREDITS story —
+            one billing period, exact counts — and this is a different ledger
+            with a different accuracy story (a floor, and a 31-day window rather
+            than the credit period). The panel folds itself away when no agent
+            has ever spent anything, exactly as Activity does. */}
+        <TokenSpendPanel />
 
         {/* The comparison rails — OUTSIDE Usage, same card styling as before. */}
         <SectionPanel id="home-overview-breakdown" label="All channels">
@@ -176,44 +183,95 @@ export function HomeOverviewPanels({
 }
 
 /**
+ * THE USAGE CARD — the bar over the histogram, and **ONE READ BEHIND BOTH**
+ * (Samuel's ruling #10, 2026-09-06).
+ *
+ * 🔒 **THE SERIES IS FETCHED HERE, NOT IN THE CHART, BECAUSE THE BAR'S SPENT
+ * FIGURE IS THE SERIES' OWN SUM.** The bar used to print the PAYER's period
+ * counter while the plot under it summed the attribution ledger, so one card
+ * showed two numbers for one month — and on a reading whose payer never resolved
+ * the bar said "Not counted this period" over a plot full of bars. Hoisting the
+ * read makes them the same array through `seriesTotal`, which is agreement by
+ * construction; two components reading the same cache key would only be
+ * agreement by coincidence.
+ * ⚠ **IT IS NOT A SECOND READ.** This is the request `CreditsChart` was already
+ * making, moved up one level — same path, same key, same `keepPreviousData`. No
+ * new endpoint and no second summing query on the server: the histogram's read
+ * path is the whole source (`service-overview.ts › getHomeOverviewSeries`).
+ *
+ * 🔒 **PINNED TO `credits` — THERE IS NO METRIC STATE AND NO SWITCHER**
+ * (Samuel: "I explicitly said not to do MCP calls but credits"). The page asks
+ * for exactly one series. `HOME_OVERVIEW_DEFAULT_METRIC` is that pin; the ROUTE
+ * still validates all three metrics, because it is a general endpoint with its
+ * own tests.
+ */
+function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
+  const series = useApiQuery<HomeOverviewSeries>(
+    `/api/home/overview-series?range=${HOME_OVERVIEW_DEFAULT_RANGE}&metric=${HOME_OVERVIEW_DEFAULT_METRIC}`,
+    { keepPreviousData: true }
+  );
+  // ⚠ `?? EMPTY_SERIES` INLINE (§8): an IndexedDB-persisted entry written by an
+  // older bundle can lack `points`, and the reduce below would throw on it.
+  const points = series.data?.points ?? EMPTY_SERIES;
+  return (
+    <section className="bento flex flex-col gap-4 p-3.5">
+      <CreditsBar
+        homeWorkspaceId={homeWorkspaceId}
+        points={points}
+        ledgerPending={series.isPending && !series.data}
+      />
+      <UsageChart
+        points={points}
+        bucket={series.data?.bucket ?? "day"}
+        loading={series.isPending}
+        truncated={series.data?.truncated ?? false}
+      />
+    </section>
+  );
+}
+
+/**
  * The allowance bar, at the top of the Usage panel and across its full width.
  *
  * ⚠ **ITS OWN COMPONENT BECAUSE IT HAS ITS OWN READ** — `GET /api/billing/status`
  * through the SAME hook the settings modal's billing pane uses, so one cache
  * entry serves both and the bar costs no second credits read. Keeping it here
  * means its loading state does not gate the plot under it.
+ * ⚠ **THE SPEND ARRIVES AS A PROP** — see `UsageCard`. That read is the plot's,
+ * and this component must not start a second one.
  */
-function CreditsBar({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
+function CreditsBar({
+  homeWorkspaceId,
+  points,
+  ledgerPending,
+}: {
+  homeWorkspaceId: string | null;
+  points: readonly HomeSeriesPoint[];
+  /** The ledger read has not landed AND there is no previous series to stand
+   *  in — see the ghost below. */
+  ledgerPending: boolean;
+}) {
   const credits = useWorkspaceEntitlements(homeWorkspaceId ?? undefined);
-  // ⚠ A GHOST OF THE BAR'S OWN HEIGHT while the billing read is in flight, and
-  // when the caller has no workspace yet — never a zeroed bar, which would claim
-  // a spent allowance nobody measured.
-  if (credits.loading || !homeWorkspaceId) {
+  // ⚠ A GHOST OF THE BAR'S OWN HEIGHT while either read is in flight, and when
+  // the caller has no workspace yet — never a zeroed bar, which would claim a
+  // spent allowance nobody measured. ⚠ THE LEDGER READ IS NOW ONE OF THOSE
+  // GATES, and it has to be: the spend comes from it, so rendering ahead of it
+  // would paint a confident `0 of 500 credits spent` and then jump. A KEPT
+  // previous series is not pending by this test, so a refetch never re-ghosts a
+  // bar that already has a figure — the same trade the plot makes when it dims
+  // instead of blanking.
+  if (credits.loading || !homeWorkspaceId || ledgerPending) {
     return <Skeleton className="h-[54px] w-full rounded-lg" />;
   }
-  return <CreditCapacityBar credits={credits.credits} />;
-}
-
-/**
- * The month histogram.
- *
- * 🔒 **PINNED TO `credits` — THERE IS NO METRIC STATE AND NO SWITCHER**
- * (Samuel: "I explicitly said not to do MCP calls but credits"). The page asks
- * for exactly one series. `HOME_OVERVIEW_DEFAULT_METRIC` is that pin; the ROUTE
- * still validates all three metrics, because it is a general endpoint with its
- * own tests — see the report's flagged item.
- */
-function CreditsChart() {
-  const series = useApiQuery<HomeOverviewSeries>(
-    `/api/home/overview-series?range=${HOME_OVERVIEW_DEFAULT_RANGE}&metric=${HOME_OVERVIEW_DEFAULT_METRIC}`,
-    { keepPreviousData: true }
-  );
+  // ⚠ THE PLAN RIDES ALONG BECAUSE THE BAR'S DENOMINATOR NEEDS IT: a reading
+  // whose payer never resolved carries `limit: 0`, and the plan's allowance is
+  // what stands in for it (`overview-sections.tsx › CreditCapacityBar`). Same
+  // payload, same read — it costs nothing extra.
   return (
-    <UsageChart
-      points={series.data?.points ?? EMPTY_SERIES}
-      bucket={series.data?.bucket ?? "day"}
-      loading={series.isPending}
-      truncated={series.data?.truncated ?? false}
+    <CreditCapacityBar
+      credits={credits.credits}
+      plan={credits.plan}
+      spent={seriesTotal(points)}
     />
   );
 }

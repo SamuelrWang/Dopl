@@ -2,6 +2,10 @@ import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getCallerScope } from "@/shared/supabase/caller-scope";
+import {
+  resolvePersonalReach,
+  type PersonalReachRefusal,
+} from "./personal-reach";
 
 /**
  * THE PERSONAL CONTAINER — one `kind='personal'` workspace per user, and the
@@ -94,6 +98,46 @@ export class PersonalContainerMissingError extends HttpError {
 }
 
 /**
+ * 🔒 **ONE REFUSAL SENTENCE PER REASON, AND ONE PLACE IT IS WRITTEN** — the
+ * argument `service-base-gates.ts › personalShelfUnreachableInRoom` makes for
+ * its own message, applied to the reason half: *two copies of a refusal is two
+ * refusals that stop agreeing about the remedy.*
+ *
+ * ⚠ **IT EXISTS BECAUSE THERE ARE THREE CALLERS NOW, NOT TWO.** The router
+ * below throws two of these inline, `knowledge/server/service-base-gates.ts ›
+ * resolveCreateDestination` mapped all three by hand, and the AGENT-TEMPLATES
+ * twin (`agent-templates/server/service-write-gates.ts`) is the third. Three
+ * hand-mirrored copies of a tenancy sentence is the shape that produced the
+ * divergent shelf fence this module's header retires by name.
+ *
+ * ⚠ **DIAGNOSTIC-TO-THE-OWNER ONLY, AND ONLY ON A WRITE.** `unarmed_room` names
+ * the remedy, which is safe here for the reason `resolveCreateDestination`
+ * states: a WRITE has no silent form, and the only person who learns anything is
+ * the OWNER, about their OWN shelf in their OWN room. ⚠ It must never be
+ * rendered on a READ path — there, an unarmed room answers what an empty one
+ * answers, or arming state becomes the oracle `personal-reach.ts` closes.
+ */
+export function personalShelfRefusal(
+  refusal: PersonalReachRefusal
+): PersonalContainerMissingError {
+  switch (refusal) {
+    case "shared_credential":
+      return new PersonalContainerMissingError(
+        "a shared credential has no personal shelf"
+      );
+    case "no_container":
+      return new PersonalContainerMissingError(
+        "your personal container has not been created yet"
+      );
+    case "unarmed_room":
+      return new PersonalContainerMissingError(
+        "this channel is not armed for your personal shelf. Arming it is a " +
+          "human-only act, taken by its owner in the channel's Personal section"
+      );
+  }
+}
+
+/**
  * The user's personal container, or `null` when the migration has not run.
  *
  * ⚠ SYSTEM READ, service role on purpose, and NOT a leak: it answers "where is
@@ -130,10 +174,33 @@ export async function findPersonalContainerId(
  * ingestion, a script) finds no scope and gets `null`, which is the correct
  * answer for a system path — it has no personal shelf either.
  */
-async function callerPersonalContainerId(): Promise<string | null> {
+async function callerPersonalContainerId(
+  callingWorkspaceId: string
+): Promise<string | null> {
   const scope = getCallerScope();
   if (scope === null || scope.sharedCredential) return null;
-  return findPersonalContainerId(scope.userId);
+  // 🔒 TASK 11: THE SHELF IS NOW REACHABLE OR NOT, AND THIS IS WHERE BOTH SHELF
+  // READS ASK. `personal-reach.ts` is the one fence (#1077 clause (a), approved
+  // #1080): a person always reaches their own shelf, an agent in a shared room
+  // reaches it only once that room is armed.
+  //
+  // ⚠ **THE PROXY IS GONE (task 11 continuation).** This read used to infer
+  // "agent" from the credential being CONTAINER-LOCKED, because `CallerScope`
+  // carried no `source` — true only while `issueContainerToken` was the sole
+  // minter of a lock, and a fact about the LOCK axis standing in for a fact
+  // about the ASKER (the F-336 shape). `with-auth-scope.ts` now states it beside
+  // `sharedCredential`, off the credential FAMILY the wrapper already
+  // discriminated, so this reads the fact rather than deriving it.
+  const reach = await resolvePersonalReach({
+    userId: scope.userId,
+    credentialSubjectUserId: scope.userId,
+    // ⚠ THE ROOM IS THE LOCK WHERE THERE IS ONE. An agent credential is fenced
+    // to the container it acts in, and that DB fact is the room half of
+    // (room, owner); an unlocked session is standing in the container it named.
+    workspaceId: scope.credentialWorkspaceId ?? callingWorkspaceId,
+    source: scope.source,
+  });
+  return reach.kind === "open" ? reach.containerId : null;
 }
 
 /** Where a shelf-scoped read looks, resolved once per query. */
@@ -160,13 +227,35 @@ export async function resolveShelfScope(
   workspaceId: string,
   shelf: PersonalShelf | undefined
 ): Promise<ShelfScope> {
-  if (shelf !== "home") return { workspaceIds: [workspaceId] };
-  const containerId = await callerPersonalContainerId();
-  // ⚠ EMPTY, NOT `[workspaceId]`. Falling back to the calling workspace would
-  // answer a request for the personal shelf with the SHARED one's rows, which is
-  // the widening direction — and it is what the `home_scoped` filter used to
-  // stop from happening by accident.
-  return { workspaceIds: containerId === null ? [] : [containerId] };
+  if (shelf === "workspace") return { workspaceIds: [workspaceId] };
+  const containerId = await callerPersonalContainerId(workspaceId);
+  if (shelf === "home") {
+    // ⚠ EMPTY, NOT `[workspaceId]`. Falling back to the calling workspace would
+    // answer a request for the personal shelf with the SHARED one's rows, which
+    // is the widening direction — and it is what the `home_scoped` filter used
+    // to stop from happening by accident. ⚠ It is also the answer when the
+    // shelf is OUT OF REACH (an unarmed shared room): no rows, never a refusal,
+    // so arming state is not an oracle.
+    return { workspaceIds: containerId === null ? [] : [containerId] };
+  }
+  // 🔒 **GAP 1 OF #1077 — AN UNFILTERED READ NOW SEES BOTH SHELVES.**
+  // Enumeration was container-scoped while RESOLUTION already crossed
+  // containers, so an operator could read a personal base from another room if
+  // they knew its id and could not FIND it from there. That is the "my builder
+  // agent's KB is invisible everywhere else" report, and it was a LISTING
+  // failure, not a permission one. Every enumerating surface asks through this
+  // function, so adding the caller's own container here is the whole fix — the
+  // rows are labelled personal by `listHomeScopedBaseIds`, which asks this same
+  // function for the same set, so the label cannot disagree with the list.
+  //
+  // ⚠ **NOT A RE-GROWN DEFAULT-WORKSPACE FALLBACK** (MCP-2, invariant 1 of
+  // #1077). Nothing is guessed and no call lands somewhere it did not name: the
+  // calling container is read as it always was, and the caller's OWN container
+  // is read IN ADDITION, by owner. Deleting this as a fallback would restore the
+  // defect it repairs.
+  return containerId === null || containerId === workspaceId
+    ? { workspaceIds: [workspaceId] }
+    : { workspaceIds: [workspaceId, containerId] };
 }
 
 /** The two fields of an insert this decision reads. ⚠ Both features' insert
@@ -194,16 +283,15 @@ export async function personalWriteWorkspaceId(
   args: ShelfBoundInsert
 ): Promise<string> {
   if (args.homeScoped !== true) return args.workspaceId;
+  // ⚠ THE SAME TWO SENTENCES THE GATES THROW, from the one place they are
+  // written ({@link personalShelfRefusal}) — a caller that hits the ROUTER's
+  // copy of a refusal must not read differently from one the gate turned away.
   if (args.createdBy === null) {
-    throw new PersonalContainerMissingError(
-      "a shared credential has no personal shelf"
-    );
+    throw personalShelfRefusal("shared_credential");
   }
   const containerId = await findPersonalContainerId(args.createdBy);
   if (containerId === null) {
-    throw new PersonalContainerMissingError(
-      "your personal container has not been created yet"
-    );
+    throw personalShelfRefusal("no_container");
   }
   return containerId;
 }

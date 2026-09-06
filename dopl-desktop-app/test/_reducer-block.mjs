@@ -53,7 +53,7 @@ export function loadReducer() {
   return new Function(
     `${BLOCK}
      return { initialSessionState, sessionReducer, nextIdleMs, turnCapReached, costCapReached,
-              gatePhase, gateActivity, endedEmit, endLifecycle, endEffects, modesEmit, parkEffects,
+              gatePhase, gateActivity, endedEmit, endLifecycle, endedStatusText, endEffects, modesEmit, parkEffects,
               postureWasReset, POSTURE_RESET_NOTE, INACTIVE_NOTE,
               wakeEffects, inboundAutoAccepted, feedInboundEffects, coerceMode,
               nextAbandonMs, idleTimeout, AWAITING_PEER_IDLE_MS, ABANDONED_MS, LAUNCHING_MS,

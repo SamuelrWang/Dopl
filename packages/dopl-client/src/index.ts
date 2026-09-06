@@ -123,6 +123,13 @@ export type {
   AwaitMessagesOptions,
   AwaitResult,
   Channel,
+  // THE ARTIFACT TYPES (#1220, 2026-09-06) — hand mirrors of
+  // `src/features/channels/types.ts`; both halves move in ONE change.
+  ChannelArtifact,
+  ChannelArtifactAction,
+  ChannelArtifactResult,
+  ChannelFoldedArtifact,
+  ChannelReadEntry,
   ChannelAuthorKind,
   ChannelCreateInput,
   ChannelDelivery,

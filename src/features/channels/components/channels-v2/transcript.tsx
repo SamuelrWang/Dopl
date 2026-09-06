@@ -41,6 +41,7 @@
  */
 
 import { cn } from "@/shared/lib/utils";
+import { ArtifactCard } from "./artifact-card";
 import { AuthoredRow } from "./authored-row";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
@@ -148,6 +149,26 @@ export function Transcript({
               launchBusy={launchBusy}
               onLaunch={() => onLaunchAgent?.(row.openThreadId)}
               onOpen={() => onOpenThread(row.openThreadId)}
+            />
+          );
+        }
+        // ⚠ ONE CARD PER ARTIFACT PER PAGE, and it arrives already built
+        // (`view-model-artifacts.ts`) — this branch renders it and decides
+        // nothing. A row of this kind exists only where the server folded, so a
+        // page with `entries === null` never reaches here and renders exactly as
+        // it did before artifacts existed (the envelope is still additive).
+        if (row.kind === "artifact") {
+          return (
+            <ArtifactCard
+              key={row.id}
+              id={row.id}
+              name={row.name}
+              summary={row.summary}
+              count={row.count}
+              firstSeq={row.firstSeq}
+              lastSeq={row.lastSeq}
+              members={row.members}
+              flash={row.id === flashId}
             />
           );
         }

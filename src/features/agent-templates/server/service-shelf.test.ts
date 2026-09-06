@@ -38,13 +38,36 @@ vi.mock("./repository", () => ({
   listKnowledgeLinksForTemplates: vi.fn(),
 }));
 
+// ⚠ **NEW ON THE A2 CLEANUP SLICE, AND IT IS WHY THE WRITE BLOCK BELOW MOVED.**
+// `createTemplate` now RESOLVES where the row lands before inserting it
+// (`service-write-gates.ts`), and that decision asks the personal fence. Mocked
+// OPEN here so this file keeps measuring the SERVICE — every direction of the
+// fence itself is `shared/tenancy/personal-reach.test.ts`, and the seam's own
+// arms are `service-write-gates.test.ts`.
+vi.mock("@/shared/tenancy/personal-reach", () => ({
+  resolvePersonalReach: vi.fn(async () => ({
+    kind: "open",
+    containerId: "ws-personal",
+  })),
+  personalShelfContainerIds: vi.fn(async () => []),
+}));
+
+// ⚠ A create that LEFT the calling container is re-read through the A12
+// resolving read, whose FOLLOW is another module's job and is tested there.
+vi.mock("@/shared/tenancy/read-resource", () => ({
+  readResourceById: vi.fn(),
+}));
+
 import * as repo from "./repository";
+import { readResourceById } from "@/shared/tenancy/read-resource";
 import { listTemplates } from "./service-reads";
 import { createTemplate } from "./service-writes";
 
 const mockRepo = vi.mocked(repo);
+const mockFollow = vi.mocked(readResourceById);
 
 const HOME_WS = "ws-home";
+const PERSONAL_WS = "ws-personal";
 const USER = "u-operator";
 
 /** A signed-in person in their own default standard workspace. */
@@ -93,6 +116,10 @@ beforeEach(() => {
   );
   mockRepo.insertTemplate.mockImplementation(
     (args) => Promise.resolve(tpl({ name: args.name, visibility: args.visibility })) as never
+  );
+  // The A12 follow, for a row that landed outside the calling container.
+  mockFollow.mockImplementation(
+    async () => ({ value: tpl({ workspaceId: PERSONAL_WS }) }) as never
   );
 });
 
@@ -159,16 +186,51 @@ describe("creating onto the personal shelf", () => {
   // one member — and a template HAS a grant table now (`resource_grants` at
   // `resource_type='agent_template'`, B1), which is what `op="grant"` lends.
 
-  it("passes the caller's own flag straight through, unchanged", async () => {
+  // ⚠ **"PASSES THE FLAG STRAIGHT THROUGH" IS RETIRED ON THE A2 CLEANUP SLICE,
+  // AND ITS REVERSAL IS THE POINT.** Straight through was the DEFECT: the flag
+  // reached `personalWriteWorkspaceId` with nothing having asked whether this
+  // caller may touch that shelf from this room, so an agent in an unarmed
+  // shared room could write onto its operator's personal container while
+  // `personal-reach.ts` refused it even to LIST the same rows. The twin pin in
+  // `knowledge/server/service-shelf.test.ts` moved for the same reason, and the
+  // two files agreeing is again the assertion rather than the risk.
+
+  it("resolves the asked-for shelf to a container, and the two AGREE", async () => {
+    // 🔒 THE FLAG AND THE ID TOGETHER: the router resolves the container from
+    // the flag by OWNER and the gate resolved it through the fence by the same
+    // owner, so the insert cannot land somewhere the junctions and the re-read
+    // are not looking.
     await createTemplate(personCtx(), { name: "Shelf agent", homeScoped: true });
     expect(mockRepo.insertTemplate).toHaveBeenCalledWith(
-      expect.objectContaining({ homeScoped: true, visibility: "private" })
+      expect.objectContaining({
+        homeScoped: true,
+        workspaceId: PERSONAL_WS,
+        visibility: "private",
+      })
     );
   });
 
-  it("passes NOTHING through when nobody asked — every pre-existing caller", async () => {
+  it("🔒 re-reads a row that LEFT the room through the resolving read", async () => {
+    // 🔒 THE 404-AFTER-A-SUCCESSFUL-CREATE, CLOSED. The response re-read was
+    // keyed to `ctx.workspaceId` while the row had just been routed into the
+    // personal container, so `findTemplateById(room, id)` answered null and the
+    // caller got `AgentTemplateNotFoundError` for a create that had landed.
+    await createTemplate(personCtx(), { name: "Shelf agent", homeScoped: true });
+
+    expect(mockFollow).toHaveBeenCalledTimes(1);
+    expect(mockRepo.findTemplateById).not.toHaveBeenCalled();
+  });
+
+  it("🔒 invents NO shelf when nobody asked — the calling container, still", async () => {
+    // ⚠ THE ASSERTION MOVED FROM `undefined` TO `false` AND THE BEHAVIOUR DID
+    // NOT: the router tests `homeScoped !== true`, so absent and `false` are
+    // one instruction. 🔒 The load-bearing halves are the CONTAINER — a create
+    // nobody re-routed must land exactly where it always did — and the re-read
+    // staying on the gated in-tenancy path, which costs no extra query.
     await createTemplate(personCtx(), { name: "Ordinary" });
     const args = mockRepo.insertTemplate.mock.calls[0][0];
-    expect(args.homeScoped).toBeUndefined();
+    expect(args.homeScoped).toBe(false);
+    expect(args.workspaceId).toBe(HOME_WS);
+    expect(mockFollow).not.toHaveBeenCalled();
   });
 });

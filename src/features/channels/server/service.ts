@@ -56,8 +56,27 @@ export {
   listChannelTasks,
   getChannelTask,
   readMessages,
+  // THE FOLDED READ (2026-09-06, artifacts #1220 §4). ⚠ `readTranscript` is the
+  // ROUTE's read — page plus its folded rendering; `readEntries` is the entries
+  // alone, for a caller that renders nothing else. Both compose the same body as
+  // `readMessages`, so there is still ONE cursor read and ONE watermark rule.
+  readEntries,
+  readTranscript,
   resolveReadableChannelId,
 } from "./service-reads";
+// THE ARTIFACT WRITES + the single-card read (design #1220 §5). ⚠ On the barrel
+// because the artifact ROUTE and the MCP surface are outside this directory;
+// `foldPage` / `foldEntries` / `readNamesMessages` are NOT — their only caller is
+// `service-reads.ts`, and a handler that reached for the fold itself would be
+// deciding the addressing pin a second time.
+export {
+  createArtifact,
+  addToArtifact,
+  removeFromArtifact,
+  dissolveArtifact,
+  readArtifact,
+  ArtifactNotFoundError,
+} from "./service-artifacts";
 // `revalidateAwaitAccess` / `pollChannelMessages` / `hasNewMessages` are NOT re-exported.
 // Their one consumer is `service-await.ts`, which imports them from `./service-reads`
 // directly; a second name for a long-poll internal only invites a handler to call one.
@@ -149,6 +168,17 @@ export {
 // because it writes `channel_messages`, which the session projection never
 // touches: one file, one reason to change.
 export { recordDeliveryAcks } from "./service-writes-delivery";
+
+// TOKEN SPEND (2026-09-06, Samuel #1326) — the DURABLE copy of the lifetime
+// token figure, riding the same session push. Its own module because
+// `channel_sessions` is a live projection deleted when the pill leaves, and
+// this outlives it: one file, one reason to change, and the same argument the
+// wake ack above makes for itself.
+export { readTokenSpend, recordSessionTokenSpend } from "./service-token-spend";
+export type {
+  TokenSpendMarkPoint,
+  TokenSpendReport,
+} from "./service-token-spend";
 
 // LAUNCH-OVER-MCP (Samuel, 2026-08-22) — an operator's external agent asking
 // that operator's OWN desktop to start an agent. ⚠ Its own module because it is

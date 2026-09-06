@@ -78,10 +78,19 @@ export type AgentMentionIndex = ReadonlyMap<string, string | null>;
  * mention on the next push without touching a single stored body.
  *
  * ⚠ **`null` IS THE ORDINARY ANSWER AND THE CALLER MUST RENDER THE RAW TOKEN FOR IT.** An agent
- * that was never renamed has no name; so does one that has ENDED, because the identity map is
- * built from the LIVE feed plus the peer projection and both drop a session when it stops. An old
- * message mentioning a dead agent therefore reads as the id again — degradation, not breakage, and
- * the id is always true. Making it permanent needs a stored name, which is a server change.
+ * that was never renamed has no name, and the caller renders what the author typed.
+ *
+ * ⚠ **AN ENDED AGENT IS STILL FACED HERE, AND THAT IS DELIBERATE** (corrected 2026-09-06). This
+ * paragraph used to say a dead agent faces `null` "because the identity map is the LIVE feed plus
+ * the peer projection and both drop a session when it stops" — **false about the LOCAL feed**, and
+ * the assumption behind a real defect: `main/session-summary.js › reportList` is live sessions PLUS
+ * `retainedEnded()` for seven days, each row carrying a real `agentId` and a live `displayName`, so
+ * the operator's own ended agent stayed in the map and its tag went on tinting blue as if it could
+ * be reached. The fix narrows the HANDLE namespace ({@link addressableAgents}), never this map:
+ * ATTRIBUTION must keep naming a dead agent on its own past messages. So a resolved tag still wears
+ * a name — an ended agent simply no longer resolves.
+ * ⚠ A PEER's ended agent was always faceless and still is, for the reason this used to claim for
+ * both: the server projection drops stopped rows (`session-state-push.js › liveForWire`).
  *
  * ⚠ **A SHARED NAME IS DISAMBIGUATED, NEVER GUESSED AT.** Two agents CAN each be called "Bug
  * Reviewer" — names are per-machine, operator-set and deliberately not unique — so when the name
@@ -155,9 +164,42 @@ export function routedTagLabel(
 }
 
 /**
+ * **THE AGENTS THAT MAY STILL CLAIM A HANDLE — the identity map narrowed to the REACHABLE**
+ * (Samuel, 2026-09-06). An ENDED agent is dropped: nothing can reach it, so its tag must not
+ * tint, and the missing highlight IS the signal that the name addresses nobody.
+ *
+ * ⚠ **THIS IS THE ONLY NARROWING, AND IT IS NOT THE IDENTITY MAP.** Callers pass
+ * `AuthorIndex.agents` WHOLE everywhere else — attribution names the author of a past message,
+ * and a session that has stopped still wrote what it wrote. Filtering the map itself would blank
+ * the name on every message a dead agent ever sent, which is the failure this fix must not trade
+ * for the one it repairs.
+ *
+ * ⚠ **THE MAP'S TYPE IS STRUCTURAL, NOT IMPORTED**, on the same rule as {@link agentMentionFace}:
+ * this module answers a question ABOUT the identity map without depending on `view-model.ts`.
+ * ⚠ **ABSENT `ended` IS LIVE**, so a host that reports no session state (the peer projection,
+ * which drops stopped rows before they ever arrive) is unchanged and is not double-handled.
+ */
+export function addressableAgents(
+  agents: ReadonlyMap<string, { displayName?: string | null; ended?: boolean }>
+): AgentMentionCandidate[] {
+  const out: AgentMentionCandidate[] = [];
+  for (const [agentId, identity] of agents) {
+    if (identity.ended === true) continue;
+    out.push({ agentId, displayName: identity.displayName ?? null });
+  }
+  return out;
+}
+
+/**
  * Live agents -> handle index. ⚠ BUILT FROM THE MACHINE'S OWN FEED, so it holds only agents this
  * operator is running: a peer's agent has no entry, cannot be tinted, and could not be addressed
  * anyway (their ids are minted on their machine and known to no server).
+ *
+ * ⚠ IT CLAIMS A HANDLE FOR EVERY CANDIDATE IT IS GIVEN AND DOES NOT ASK WHETHER ONE IS STILL
+ * RUNNING — the CALLER decides who is eligible ({@link addressableAgents} for the transcript,
+ * `lib/draft-recipients.ts › liveAgentCandidates` for the composer's picker). Baking a liveness
+ * rule in here would silently re-answer `resolveDefaultResponder`'s arm 1, whose candidates are
+ * the server's own live set.
  */
 export function buildAgentMentionIndex(
   candidates: readonly AgentMentionCandidate[]

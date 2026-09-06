@@ -127,9 +127,19 @@ export const HOME_SERIES: HomeOverviewSeries = {
   truncated: false,
 };
 
-/** The credit bar's read — the SAME endpoint the settings modal's billing pane
- *  uses, so one cache entry serves both in the app. */
-const BILLING_STATUS = {
+/**
+ * The credit bar's read — the SAME endpoint the settings modal's billing pane
+ * uses, so one cache entry serves both in the app.
+ *
+ * ⚠ **`credits.used` (320) IS DELIBERATELY NOT `HOME_SERIES`'s SUM (210).** The
+ * bar's spent figure comes from the LEDGER now (ruling #10, 2026-09-06), and two
+ * fixtures that happened to agree would let the payer's counter creep back onto
+ * that card without a single test turning red.
+ *
+ * ⚠ EXPORTED so a case can degrade ONE field of it — a suite hand-rolling a
+ * whole status body is a second fixture that stops matching the endpoint.
+ */
+export const BILLING_STATUS = {
   plan: "free",
   status: "free",
   memberCount: 1,

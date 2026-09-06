@@ -65,6 +65,16 @@ vi.mock("@/features/knowledge/server/repository", () => ({
 }));
 vi.mock("@/features/knowledge/server/service-base-gates", () => ({
   assertCreatorCanReadItBack: vi.fn().mockResolvedValue(undefined),
+  // ⚠ `service-base-writes.ts` HAS CALLED THIS SINCE THE PERSONAL-SHELF WORK
+  // (task 11), and a module mock that omits it is not a narrower test — it is
+  // `undefined is not a function` inside the create, which is how both
+  // knowledge arms here went red. The stub is the REAL function's non-personal
+  // arm, byte for byte: this suite never asks for a shelf, so any other answer
+  // would be inventing behaviour to make an assertion pass.
+  resolveCreateDestination: vi.fn(async (ctx: { workspaceId: string }) => ({
+    homeScoped: false,
+    workspaceId: ctx.workspaceId,
+  })),
 }));
 vi.mock("@/features/knowledge/server/service-shared", () => ({
   assertAgentCanDelete: vi.fn(),

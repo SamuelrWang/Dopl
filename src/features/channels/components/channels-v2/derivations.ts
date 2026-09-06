@@ -23,12 +23,14 @@ import { agentIndexFromKey, agentIndexKey, indexAgents, indexMembers } from "./v
 import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
 import { recentAgentsAddressedBy } from "../../lib/agent-post-stamp";
 import { channelRows, threadRows } from "./view-model-rows";
+import { unfoldedMessages, withArtifactCards } from "./view-model-artifacts";
 import { sidebarThreads } from "./view-model-requested";
 import type { AuthorIndex } from "./view-model";
 import type { TranscriptRow } from "./view-model-rows";
 import type {
   ChannelMember,
   ChannelMessage,
+  ChannelReadEntry,
   ChannelThread,
 } from "../../types";
 
@@ -59,6 +61,7 @@ export function useChannelsV2Derivations({
   members,
   currentUserId,
   messages,
+  entries = null,
   threads,
   openThreadId,
   agentSessions = null,
@@ -67,6 +70,31 @@ export function useChannelsV2Derivations({
   members: ChannelMember[];
   currentUserId: string;
   messages: ChannelMessage[];
+  /**
+   * THE PAGE'S FOLDED RENDERING, when the read produced one (artifacts #1220 §4).
+   *
+   * ⚠ **`null` IS THE ORDINARY CASE AND MEANS "NOTHING HERE IS IN AN ARTIFACT"**,
+   * never "this build cannot fold". The envelope is ADDITIVE: `messages` stays
+   * complete and authoritative, and a host that never passes this renders exactly
+   * what it rendered before artifacts existed. Dropping `messages` is the breaking
+   * flip, and it is a human decision that has not been made.
+   *
+   * 🔒 **`entries` MUST BE TOTAL OVER THE `messages` ARRAY IT IS PASSED BESIDE.**
+   * Every message in that array is either a `message` arm here or a member of an
+   * `artifact` arm here — never neither. It is not a nicety: the rows below are
+   * built from `unfoldedMessages(entries)` ALONE when this is non-null, so a
+   * message the envelope does not account for is a row the reader never sees, and
+   * nothing fails while it happens.
+   *
+   * ⚠ **THE SERVER GUARANTEES IT PER PAGE, WHICH IS NOT THE SAME PROMISE.**
+   * `readTranscript` folds the page it just read; the transcript renders that page
+   * plus every scrolled-back history page plus every optimistic patch. Passing one
+   * page's envelope beside the merged array is the hazard, and
+   * `lib/message-window.ts › mergeEntries` is the ONE place allowed to build this
+   * value for a channel view — every merge and every patch above it exists to
+   * preserve this paragraph.
+   */
+  entries?: ChannelReadEntry[] | null;
   threads: ChannelThread[];
   /** The thread the operator asked for; resolved against `threads` below. */
   openThreadId: string | null;
@@ -74,11 +102,18 @@ export function useChannelsV2Derivations({
    * THIS MACHINE'S OWN AGENTS, for the names the transcript renders (2026-08-27).
    * ⚠ `null` IS "no desktop feed" (a plain browser, the pop-out) and is not an error — the index
    * then holds no agents and every agent row reads `#<id>`, exactly as before.
+   *
+   * ⚠ **`state` IS READ, AND ONLY FOR "HAS IT ENDED"** (2026-09-06). This feed is live sessions
+   * PLUS seven days of RETAINED ENDED ones (`main/session-summary.js › reportList`), which is why
+   * a dead agent's tag used to tint blue as though it could still be reached. `indexAgents` turns
+   * it into the terminal `AgentIdentity.ended` flag; nothing here filters the feed, because the
+   * ended rows are exactly what ATTRIBUTION needs.
    */
   agentSessions?: ReadonlyArray<{
     agentId?: string | null;
     displayName?: string | null;
     description?: string | null;
+    state?: string | null;
   }> | null;
   /**
    * THE OTHER MEMBERS' AGENTS, from the server's peer projection (2026-08-31, Samuel's ruling;
@@ -129,6 +164,9 @@ export function useChannelsV2Derivations({
         indexAgents([
           // ⚠ PEERS FIRST, OWN LAST — `indexAgents` is last-write-wins per id, and the local
           // feed's name for the operator's own agent is fresher than its last server push.
+          // ⚠ AND SO IS ITS LIVENESS: a peer row carries no `state` (the projection drops ended
+          // rows before they reach the wire), so an agent this machine reports as ENDED settles
+          // as ended even if a stale projection still listed it.
           ...(peerSessions ?? []).map((p) => ({
             agentId: p.name,
             displayName: p.displayName,
@@ -153,12 +191,34 @@ export function useChannelsV2Derivations({
   // the inbound lane (`view-model-requested.ts › sidebarThreads` says why).
   const treeThreads = useMemo(() => sidebarThreads(threads), [threads]);
 
+  // ⚠ **THE THREAD VIEW NEVER FOLDS, AND IT DOES NOT DECIDE THAT HERE.** The
+  // server already refuses to fold a read that NAMES messages
+  // (`server/service-artifacts.ts › readNamesMessages`: a `thread` query is a
+  // named subset), so a thread page arrives with `entries === null` and this arm
+  // is the same code it always was. One answer to "does this read fold", on the
+  // server, is the whole point of that pin — a second one here could disagree.
   const rows = useMemo(
     () =>
       openThread
         ? threadRows(messages, openThread.id, index, formatChannelTimestamp)
-        : channelRows(messages, threads, index, formatChannelTimestamp),
-    [messages, threads, openThread, index]
+        : entries
+          ? // ⚠ THE ORDINARY ROWS COME FROM THE UNFOLDED ARMS ONLY — handing the
+            // full page to `channelRows` would draw every folded message again,
+            // underneath the card that folded it.
+            withArtifactCards(
+              channelRows(
+                unfoldedMessages(entries),
+                threads,
+                index,
+                formatChannelTimestamp
+              ),
+              entries,
+              messages,
+              index,
+              formatChannelTimestamp
+            )
+          : channelRows(messages, threads, index, formatChannelTimestamp),
+    [messages, entries, threads, openThread, index]
   );
 
   /**

@@ -8,6 +8,14 @@ export {
   type RecentAgentPostRow,
   type RecentAuthorTagRow,
 } from "./repository-messages-recent";
+// ⚠ SAME SPLIT, SAME REASON (2026-09-05, task 13b): the two reads that find the
+// typist's most recent OPEN decision card. Re-exported so the service layer
+// keeps one `repoMessages.*` namespace and existing mocks keep covering them.
+export {
+  listRecentEscalations,
+  listAnsweredEscalationIds,
+  ESCALATION_SCAN_LIMIT,
+} from "./repository-messages-escalations";
 
 /**
  * Pure data access for `channel_messages` — per-channel `seq` ordering, the

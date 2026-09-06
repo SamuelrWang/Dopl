@@ -23,12 +23,23 @@ vi.mock("@/shared/api/api-client", () => ({ apiRequest: vi.fn() }));
 
 import { apiRequest } from "@/shared/api/api-client";
 import { CHANNEL_TRANSCRIPT_PAGE_SIZE } from "../constants";
+import { channelMessagesParams, channelMessagesPath } from "../client/query-keys";
+import { appendPendingMessage, buildPendingMessage } from "../lib/optimistic-cache";
 import { useChannelMessages } from "./use-channel-messages";
-import type { ChannelMessage } from "../types";
+import type {
+  ChannelFoldedArtifact,
+  ChannelMessage,
+  ChannelReadEntry,
+} from "../types";
 
 const WORKSPACE = "ws-1";
 const CHANNEL = "c-1";
 const OTHER = "c-2";
+
+/** ⚠ BUILT, never retyped: `[path, workspaceId, query]` is the tuple the read
+ *  registers and the writes patch, and one differing element is a silent no-op. */
+const cacheKey = () =>
+  [channelMessagesPath(CHANNEL), WORKSPACE, channelMessagesParams()] as const;
 
 function msg(seq: number, over: Partial<ChannelMessage> = {}): ChannelMessage {
   return {
@@ -78,13 +89,22 @@ const settle = () =>
   });
 
 /** Publishes from an effect — a render-phase write trips `react-hooks/immutability`. */
-async function mount(channelId: string | null = CHANNEL) {
+async function mount(
+  channelId: string | null = CHANNEL,
+  /**
+   * A cache entry written BEFORE this mount — the §8 case. It is the RAW response
+   * body, because that is what `useApiQuery` stores and what the optimistic
+   * writes patch.
+   */
+  seed?: Record<string, unknown>
+) {
   // ⚠ ONE client for the whole mount. Minting it inside a `wrapper` component
   // makes a fresh cache on every rerender, which reads as a query that never
   // resolves.
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  if (seed) client.setQueryData(cacheKey(), seed);
   const holder: { value: Hook | null } = { value: null };
   function Probe({ id }: { id: string | null }) {
     const state = useChannelMessages(id, WORKSPACE);
@@ -102,6 +122,7 @@ async function mount(channelId: string | null = CHANNEL) {
   await settle();
   return {
     holder,
+    client,
     read: () => holder.value as Hook,
     async select(next: string | null) {
       view.rerender(tree(next));
@@ -273,6 +294,152 @@ describe("the window's two resets", () => {
 
     expect(h.read().messages).toHaveLength(5);
     expect(h.read().hasOlder).toBe(true);
+  });
+});
+
+/**
+ * THE ARTIFACT ENVELOPE, THROUGH THE REAL HOOK — the wire that makes the card
+ * visible, and the two hazards that stopped it being one prop.
+ *
+ * ⚠ The pure rules are pinned without React in `lib/message-window.test.ts ›
+ * mergeEntries`. What is only testable HERE is the composition: a query cache
+ * entry, a bare `before` fetch and an optimistic patch are three different
+ * mechanisms, and the invariant has to survive all three at once.
+ */
+function foldedFixture(id: string): ChannelFoldedArtifact {
+  return {
+    artifact: {
+      id,
+      channelId: CHANNEL,
+      workspaceId: WORKSPACE,
+      name: `artifact ${id}`,
+      summary: "a summary",
+      createdBy: "u-1",
+      createdByAgent: null,
+      dissolvedAt: null,
+      createdAt: "2026-08-31T00:00:00.000Z",
+    },
+    count: 2,
+    firstSeq: 51,
+    lastSeq: 52,
+  };
+}
+
+function envelopeFixture(
+  unfolded: ChannelMessage[],
+  cards: ChannelFoldedArtifact[]
+): ChannelReadEntry[] {
+  return [
+    ...unfolded.map((message) => ({ type: "message", message }) as const),
+    ...cards.map((card) => ({ type: "artifact", folded: card }) as const),
+  ];
+}
+
+function armSeqs(entries: ChannelReadEntry[] | null): number[] {
+  return (entries ?? [])
+    .filter((e) => e.type === "message")
+    .map((e) => (e.type === "message" ? e.message.seq : -1));
+}
+
+describe("the artifact envelope", () => {
+  it("is NULL on an ordinary channel — byte-identical to before artifacts", async () => {
+    vi.mocked(apiRequest).mockResolvedValue({ messages: page(50, 50) });
+    const h = await mount();
+    expect(h.read().entries).toBeNull();
+  });
+
+  it("HAZARD A: a card on the newest page loses no history row", async () => {
+    // The newest page folds two of its three rows; then the reader scrolls back
+    // through fifty rows the envelope has never heard of.
+    const folded = foldedFixture("a-1");
+    vi.mocked(apiRequest)
+      .mockResolvedValueOnce({
+        messages: [
+          msg(51, { artifactId: "a-1" }),
+          msg(52, { artifactId: "a-1" }),
+          msg(53),
+        ],
+        entries: envelopeFixture([msg(53)], [folded]),
+      })
+      .mockResolvedValueOnce({ messages: page(50, 50) }); // 1..50, unfolded
+
+    const h = await mount();
+    expect(armSeqs(h.read().entries)).toEqual([53]);
+
+    await h.loadOlder();
+    // ⚠ THE ASSERTION THE WHOLE SLICE EXISTS FOR. Fifty history rows plus the one
+    // unfolded row of the newest page: nothing dropped, the folded pair still
+    // folded exactly once.
+    expect(armSeqs(h.read().entries)).toHaveLength(51);
+    expect(h.read().messages).toHaveLength(53);
+  });
+
+  it("keeps the `entries` key the `before` fetch used to DISCARD", async () => {
+    // A lone `before` folds on the server exactly as the newest page does, so a
+    // card whose members are all in history has to survive the fetch that
+    // previously read `body.messages` and threw the rest away.
+    vi.mocked(apiRequest)
+      .mockResolvedValueOnce({ messages: page(60, 50) })
+      .mockResolvedValueOnce({
+        messages: [msg(9, { artifactId: "a-1" }), msg(10)],
+        entries: envelopeFixture([msg(10)], [foldedFixture("a-1")]),
+      });
+
+    const h = await mount();
+    expect(h.read().entries).toBeNull();
+
+    await h.loadOlder();
+    const cards = (h.read().entries ?? []).filter((e) => e.type === "artifact");
+    expect(cards).toHaveLength(1);
+    // The folded row is gone from the arms and still present in `messages` —
+    // the additive envelope, both halves.
+    expect(armSeqs(h.read().entries)).not.toContain(9);
+    expect(h.read().messages.some((m) => m.seq === 9)).toBe(true);
+  });
+
+  it("HAZARD B: a just-typed pending row renders while the envelope is non-null", async () => {
+    // ⚠ THE REAL OPTIMISTIC PATCH, not a hand-built cache. `appendPendingMessage`
+    // patches `{ messages }` and knows no `entries` key at all; the row still has
+    // to reach the screen the frame after the click.
+    vi.mocked(apiRequest).mockResolvedValue({
+      messages: [msg(51, { artifactId: "a-1" }), msg(52)],
+      entries: envelopeFixture([msg(52)], [foldedFixture("a-1")]),
+    });
+    const h = await mount();
+
+    await act(async () => {
+      h.client.setQueryData(
+        cacheKey(),
+        (cache: { messages: ChannelMessage[] } | undefined) =>
+          appendPendingMessage(
+            cache,
+            buildPendingMessage(cache, {
+              channelId: CHANNEL,
+              clientMsgId: "abc",
+              body: "just typed",
+              authorUserId: "u-1",
+            })
+          )
+      );
+    });
+    await settle();
+
+    const arms = h.read().entries ?? [];
+    expect(
+      arms.some((e) => e.type === "message" && e.message.id === "pending:abc")
+    ).toBe(true);
+  });
+
+  it("survives a cache entry written BEFORE `entries` existed", async () => {
+    // ⚠ §8, and the fixture has the key DELETED — not `null`, not `[]`. The query
+    // cache is IndexedDB-persisted with a 24h gcTime, so the first paint after an
+    // upgrade reads a body the previous bundle wrote. The refetch is made to FAIL
+    // so the stale entry is what renders, which is the moment being pinned.
+    vi.mocked(apiRequest).mockRejectedValue(new Error("offline"));
+    const h = await mount(CHANNEL, { messages: page(50, 50) });
+
+    expect(h.read().messages).toHaveLength(50);
+    expect(h.read().entries).toBeNull();
   });
 });
 

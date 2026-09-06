@@ -137,7 +137,15 @@ function dispatch(s, event) {
 
 function runEffect(s, eff) {
   switch (eff.type) {
-    case 'emit': emit(s, eff.payload); break;
+    // ⚠ THE ENDED LINE IS MINTED HERE, NOT IN `emit` (2026-09-06, A9). `emit` returns early on a
+    // windowless session (`claimGate`) and on a destroyed window, and the work stream must still
+    // record WHY the session ended: the ring is frozen into the 7-day history by the `settle`
+    // that follows, and that history is what an ended agent's window is served from. Putting it
+    // inside `emit` would lose the line on exactly the sessions nobody was watching.
+    case 'emit':
+      if (eff.payload && eff.payload.type === 'ended') sessionNarration.noteEnded(s, eff.payload);
+      emit(s, eff.payload);
+      break;
     // FIX #9: a park saves the FULL record (cap counters); other flips set the phase only. The EFFECT's
     // phase is authoritative — s.state.phase reads 'awaiting_inbound' when a park lands with a message
     // still held (FIX #6), which would look LIVE on the next boot.

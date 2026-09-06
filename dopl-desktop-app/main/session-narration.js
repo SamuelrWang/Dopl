@@ -45,6 +45,11 @@
 // retention argument `session-summary.js` makes for an ended pill.
 
 const appWindows = require('./app-windows');
+// A9 (2026-09-06): the operator-facing copy for an ended session. ⚠ REQUIRED ABOVE THE SENTINEL
+// like `appWindows`, and used only in the live half below it — the pure block must stay free of
+// `require`, and `endedStatusText` is not called from inside it. session-effects.js is pure and
+// requires nothing back, so this cannot cycle.
+const sessionEffects = require('./session-effects');
 // 2026-08-22: is the turn this entry belongs to a PRIVATE (1:1) one? `session-private.js` owns
 // the window; this lane only asks. Required above the sentinel like `appWindows`, so it is a
 // free var the source-extraction test injects.
@@ -265,8 +270,13 @@ function entryFor(event, now) {
   // explain a silence (parked, ended, blocked on a gate).
   if (type === 'idle_timeout') return { at: now, kind: 'status', text: 'Paused — idle' };
   if (type === 'interrupt') return { at: now, kind: 'status', text: 'Paused by you' };
-  if (type === 'end') return { at: now, kind: 'status', text: 'Ended by you' };
-  if (type === 'inactive') return { at: now, kind: 'status', text: 'Ended — inactive' };
+  // ⚠ THE TWO `end` ARMS MOVED TO {@link noteEnded} (2026-09-06, A9) — they are not deleted, and
+  // this is not a widening. They keyed off the ACTION type, which can only ever see two of the
+  // five ways a session ends: a turn or cost cap is reached INSIDE a `result` action and an
+  // abandonment is a timer, so those three ended in silence no matter what this switch said. The
+  // `ended` EMIT carries the reason for all five, so the line is minted from that instead and
+  // there is exactly one table (`session-effects.js › endedStatusText`) for it. Re-adding an arm
+  // here would put a second line under the same ending.
   if (type === 'permission_request') {
     // ⚠ AN OUTBOUND POST GATE GETS NO LINE OF ITS OWN (2026-08-25). The gate that holds a
     // channel post raises `payload.type === 'outbound_gate'` (`session-io.js`), and the `post`
@@ -389,6 +399,33 @@ function note(s, event) {
   schedule();
 }
 
+/**
+ * A session ENDED. Say why, in the operator's own window (2026-09-06, A9; filed at #1209).
+ *
+ * ⚠ FED THE `ended` EMIT, NOT A DISPATCH ACTION, which is the whole reason it is a second entry
+ * point rather than another arm of `entryFor`. Two of the five ends have no action type to key
+ * off: a turn or cost cap is reached inside a `result` (`session-reducer.js` :239/:242). The emit
+ * is the one place every end already knows its own reason.
+ *
+ * ⚠ IT RUNS BEFORE `settle`, AND THE EFFECT ORDER IS WHAT GUARANTEES IT. `endEffects` returns
+ * `[abortQuery, lifecycle, emit, settle]`, so the engine pushes this line while the session
+ * object is still live and `settle` then freezes the ring into the 7-day history
+ * (`agent-history.js`). A line appended after the settle would be written to a ring nobody reads
+ * again. `session-inactive-notice.test.mjs` already pins that order for its own reason.
+ *
+ * ⚠ THE FLUSH IS ASYNC AND THAT IS FINE. `schedule()` coalesces, so the window may well be gone
+ * before the frame goes out — the ENTRY is what matters, because `narrationFor` serves an ended
+ * agent's window out of the frozen history rather than out of a live ring.
+ */
+function noteEnded(s, payload) {
+  if (!s || !s.key || !payload) return;
+  const text = sessionEffects.endedStatusText(payload.reason, s.state);
+  if (!text) return; // a reason-less end says nothing rather than inventing a cause
+  push(s, { at: Date.now(), kind: 'status', text: text });
+  dirty.set(String(s.key), true);
+  schedule();
+}
+
 /** The ring for one session, newest last. `[]` for a session with nothing said yet — a
  *  DIFFERENT answer from the renderer's "could not ask", which is its own to make. */
 function ringFor(s) {
@@ -459,5 +496,6 @@ module.exports = {
   bind,
   start,
   note,
+  noteEnded, // A9: minted from the `ended` EMIT, which is the only thing that knows why
   ringFor,
 };

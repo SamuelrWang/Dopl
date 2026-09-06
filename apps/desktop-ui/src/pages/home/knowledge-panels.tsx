@@ -16,6 +16,7 @@ import { PageError } from "#/components/page-states";
 import { HomeKnowledgeBaseView } from "./knowledge-base-view";
 import { HomeKnowledgePanelsSkeleton } from "./home-skeleton";
 import { CreateButton } from "./panel-buttons";
+import { PersonalArmingControl } from "./personal-arming-control";
 import {
   BaseCell,
   EmptyLine,
@@ -300,12 +301,22 @@ export function HomeKnowledgePanels({
         id="home-kb-personal"
         label="Personal"
         action={
-          <CreateButton
-            disabled={homeTarget === null}
-            onClick={() => setCreateOpen("home")}
-          >
-            New knowledge base
-          </CreateButton>
+          // ⚠ TWO CONTROLS, ONE ROW — the create, and the switch that decides
+          // whether this room's AGENT sessions can reach the shelf the create
+          // writes to (task 11, `./personal-arming-control.tsx`). They sit
+          // together because the second one explains an empty first one.
+          <div className="flex items-center gap-3">
+            <PersonalArmingControl
+              channelId={channel.channelId}
+              workspaceId={channel.workspaceId}
+            />
+            <CreateButton
+              disabled={homeTarget === null}
+              onClick={() => setCreateOpen("home")}
+            >
+              New knowledge base
+            </CreateButton>
+          </div>
         }
         // ⚠ ONE CAPTION LINE, and it is the RULING, not an explainer (minimal
         // UI copy). It says where this shelf is NOT: sharing happens in the

@@ -60,7 +60,7 @@ const SEARCH_SHAPE = {
     .enum(["here", "everywhere"])
     .optional()
     .describe(
-      `Which scopes to search: "here" (DEFAULT) = the one workspace this call resolved to; "everywhere" = every workspace AND home channel you can reach, one fenced search each under per-scope headings, capped at ${MAX_SCOPES} scopes at ONE MCP CREDIT PER SCOPE, with the truncation named in the result.`,
+      `Which scopes to search: "here" (DEFAULT) = the one workspace this call resolved to; "everywhere" = every workspace AND home channel you can reach, one fenced search each under per-scope headings, capped at ${MAX_SCOPES} scopes at ONE CREDIT PER SCOPE, with the truncation named in the result.`,
     ),
 };
 
@@ -70,7 +70,7 @@ const SEARCH_SHAPE = {
  * budgeted at {@link READ_DESCRIPTION_MAX_CHARS}: no `op` enum, one job.
  *
  * ⚠ **THE `scope="everywhere"` PARAGRAPH LEFT, AND IT IS NOT A DELETION.** It
- * said the fan-out is capped, costs one MCP credit per scope and names its own
+ * said the fan-out is capped, costs one credit per scope and names its own
  * truncation — every word of which `scope`'s own `.describe()` below already
  * says. A description and its arg descriptions are BOTH pushed on every
  * connection, so that was one fact paid for twice, and the copy that goes is

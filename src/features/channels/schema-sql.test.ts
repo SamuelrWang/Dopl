@@ -9,8 +9,11 @@
  *      half of close/reopen — live product state. Every `DELETE FROM channels`
  *      must carry the `is_direct = false` guard, and `20260807110000` must keep
  *      excluding channels entirely.
- *   3. The purge's one `DELETE` is atomic-and-complete only because all six
- *      child FKs into `channels` are `ON DELETE CASCADE`.
+ *   3. The purge's one `DELETE` is atomic-and-complete only because every child
+ *      FK into `channels` is `ON DELETE CASCADE` — with ONE named exemption,
+ *      `workspace_token_spend.channel_id`, ruled by Samuel on 2026-09-06: a
+ *      spend record outlives the room it was spent in. The exemption is by
+ *      name, so any OTHER non-cascading child still fails the case.
  *   4. ⚠ `role` is PUBLIC, `agent_tool_profile` is NOT. The column grant is the
  *      only thing enforcing that for PostgREST *and* CDC; a future
  *      `GRANT SELECT ON channel_members` silently undoes it.
@@ -269,13 +272,87 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // one statement (INVARIANTS §5). A new child that does not cascade fails the
   // next case, not this one. ⚠ A grant is deliberately NOT kept when its channel
   // goes: it is a share INTO that channel, meaningless without it.
-  it("finds all ten child FKs", () => {
-    expect(refs.length).toBe(10);
+  // ⚠ THIRTEEN SINCE 2026-09-06, all three from the artifacts/personal-reach
+  // wave and all three UNAPPLIED: `channel_personal_arming.channel_id`
+  // (`20260925120000`) and `channel_artifacts.channel_id` (`20260926120000`),
+  // which CASCADE for the ordinary reason — an arming row and an artifact are
+  // statements ABOUT that room and are meaningless without it — and
+  // `workspace_token_spend.channel_id` (`20260927120000`), which is `ON DELETE
+  // SET NULL` and is therefore caught by the NEXT case, deliberately: the
+  // number moving is not a verdict on it. ⚠ That thirteenth edge was an OPEN
+  // collision until 2026-09-06, when SAMUEL RULED (b): the spend record SURVIVES
+  // the channel. It is now the one NAMED exemption below — not a loosening of
+  // the case, which still fails for any other child that forgets to cascade.
+  it("finds all thirteen child FKs", () => {
+    expect(refs.length).toBe(13);
   });
 
-  it("each one cascades — none is SET NULL or RESTRICT", () => {
-    for (const m of refs) {
-      expect(m[1], `REFERENCES channels(id)${m[1]}`).toMatch(/ON DELETE CASCADE/i);
+  /**
+   * The CASCADE rule's ONE exemption, by exact `table.column`, with the argument
+   * that earned it. ⚠ Adding a name here is a RULING, not a fix: it says the
+   * child is a RECORD OF SOMETHING THAT HAPPENED, whose truth does not depend on
+   * the room still existing. Everything that is a statement ABOUT a room — an
+   * arming row, an artifact, a direction — cascades.
+   */
+  const CASCADE_EXEMPT = new Map<string, string>([
+    [
+      "workspace_token_spend.channel_id",
+      // Samuel, Mobile Command Center 2026-09-06, ruling (b): "deleting a room
+      // must not destroy the record that tokens were spent." The spend happened;
+      // the channel merely no longer exists to attribute it to. Same class as
+      // `channel_messages.artifact_id`'s own SET NULL — a view decision must not
+      // destroy history. ⚠ This costs the purge nothing: SET NULL leaves no row
+      // referencing the deleted channel, so the one DELETE stays complete.
+      "ON DELETE SET NULL",
+    ],
+  ]);
+
+  /** The `CREATE TABLE` an offset falls inside — the nearest one before it. */
+  function owningTable(index: number): string {
+    const seen = [
+      ...ALL_SQL.slice(0, index).matchAll(
+        /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?([a-z_]+)/gi
+      ),
+    ].pop();
+    return seen ? seen[1] : "";
+  }
+
+  /**
+   * The column an inline FK hangs off — the identifier just before `REFERENCES`.
+   * ⚠ FAIL-CLOSED on purpose: all thirteen are inline `<col> uuid [NOT NULL]`
+   * declarations, and anything this cannot read returns "", which matches no
+   * exemption and is therefore held to CASCADE.
+   */
+  function owningColumn(index: number): string {
+    const m = /([a-z_]+)\s+uuid(?:\s+NOT\s+NULL)?\s*$/i.exec(
+      ALL_SQL.slice(Math.max(0, index - 80), index)
+    );
+    return m ? m[1] : "";
+  }
+
+  const edges = refs.map((m) => ({
+    name: `${owningTable(m.index!)}.${owningColumn(m.index!)}`,
+    tail: m[1],
+  }));
+
+  it("each one cascades — none is SET NULL or RESTRICT, bar the named exemption", () => {
+    for (const edge of edges) {
+      if (CASCADE_EXEMPT.has(edge.name)) continue;
+      expect(edge.tail, `${edge.name} — REFERENCES channels(id)${edge.tail}`)
+        .toMatch(/ON DELETE CASCADE/i);
+    }
+  });
+
+  it("the exempt edge is SET NULL and nothing else — an exemption is not a blank cheque", () => {
+    for (const [name, action] of CASCADE_EXEMPT) {
+      const edge = edges.find((e) => e.name === name);
+      // ⚠ If this ever fails as "not found", the exemption has gone STALE — the
+      // column was renamed or dropped — and the right move is to DELETE the
+      // entry, not to widen the lookup.
+      expect(edge, `${name} is exempted but no such FK into channels exists`).toBeTruthy();
+      expect(edge!.tail, `${name} may only be ${action}`).toMatch(
+        new RegExp(action.replace(/\s+/g, "\\s+"), "i")
+      );
     }
   });
 

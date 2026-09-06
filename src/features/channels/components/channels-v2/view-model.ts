@@ -121,6 +121,24 @@ export interface AuthorIndex {
 export interface AgentIdentity {
   displayName: string | null;
   description: string | null;
+  /**
+   * HAS THIS SESSION STOPPED — the one fact that decides whether its handle still TINTS
+   * (Samuel, 2026-09-06: an un-highlighted tag is how a reader learns nobody is there).
+   *
+   * ⚠ **THE ROW STAYS IN THIS MAP EITHER WAY, AND THAT IS THE POINT.** Ended agents are kept
+   * for ATTRIBUTION — the transcript must still name the author of its own past messages, and
+   * `transcript.tsx`'s openable gate is `index.agents.has(...)` over the retained card. Only
+   * the HANDLE namespace narrows: {@link addressableAgents} in `lib/agent-mentions.ts`.
+   *
+   * ⚠ **A BOOLEAN, NEVER THE THREE-VALUED `state`, BECAUSE THIS RIDES THE MEMO KEY.**
+   * `working` ⇄ `idle` flips constantly on a running agent; both are "not ended", so the key
+   * below does not move on that churn and the 2026-08-28 re-render fix stands. Ending is
+   * terminal, so this moves once per agent, ever.
+   *
+   * ⚠ **ABSENT IS NOT ENDED.** A host with no `state` on its rows (the peer projection, which
+   * drops stopped sessions server-side; the marketing demo) reads live, which is what it is.
+   */
+  ended?: boolean;
 }
 
 /** ⚠ ONE EMPTY MAP, not a fresh `new Map()` per call: `AuthorIndex` is a `useMemo` dependency of
@@ -158,7 +176,15 @@ export function agentIndexKey(agents: ReadonlyMap<string, AgentIdentity>): strin
   const parts: string[] = [];
   for (const [agentId, identity] of agents) {
     parts.push(
-      [agentId, identity.displayName ?? "", identity.description ?? ""].join(KEY_FIELD_SEP)
+      [
+        agentId,
+        identity.displayName ?? "",
+        identity.description ?? "",
+        // ⚠ IT MUST RIDE THE KEY OR THE ROUND TRIP DROPS IT, and a dropped flag is a dead
+        // agent's tag tinting again — the map the transcript reads is rebuilt FROM this string.
+        // Safe for churn for the reason {@link AgentIdentity.ended} states: it is terminal.
+        identity.ended ? "1" : "",
+      ].join(KEY_FIELD_SEP)
     );
   }
   return parts.join(KEY_ROW_SEP);
@@ -180,11 +206,12 @@ export function agentIndexFromKey(key: string): ReadonlyMap<string, AgentIdentit
   if (key === "") return NO_AGENTS;
   const out = new Map<string, AgentIdentity>();
   for (const row of key.split(KEY_ROW_SEP)) {
-    const [agentId, displayName, description] = row.split(KEY_FIELD_SEP);
+    const [agentId, displayName, description, ended] = row.split(KEY_FIELD_SEP);
     if (!agentId) continue;
     out.set(agentId, {
       displayName: displayName || null,
       description: description || null,
+      ended: ended === "1",
     });
   }
   return out;
@@ -201,6 +228,9 @@ export function indexAgents(
     agentId?: string | null;
     displayName?: string | null;
     description?: string | null;
+    /** The pill (`spa-bridge-shapes.ts › DesktopSessionSummary.state`), read ONLY for
+     *  {@link AgentIdentity.ended}. Optional on the same widened-local-type rule as the rest. */
+    state?: string | null;
   }> | null
 ): ReadonlyMap<string, AgentIdentity> {
   if (!sessions || sessions.length === 0) return NO_AGENTS;
@@ -211,6 +241,7 @@ export function indexAgents(
     out.set(id, {
       displayName: session.displayName?.trim() || null,
       description: session.description?.trim() || null,
+      ended: session.state === "ended",
     });
   }
   return out;

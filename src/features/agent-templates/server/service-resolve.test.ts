@@ -178,7 +178,16 @@ describe("authoredByCaller (G-1)", () => {
 });
 
 describe("the payload, and the door it comes through", () => {
-  it("carries EXACTLY the six launch keys — no id, no visibility, no ownership", async () => {
+  // ⚠ SEVEN SINCE 2026-09-05, not six: `unreachableKnowledgeBaseCount` joined
+  // the launch contract (`service-reads.ts › resolveTemplateForLaunch`, and the
+  // route's own header). The pin MOVED to the new truth rather than being
+  // widened — this case is a CLOSED set, and what it exists to catch is an id,
+  // a visibility or an ownership fact riding a launch payload, which the two
+  // `not.toHaveProperty` lines below still state. ⚠ The seventh is a COUNT and
+  // nothing else: the base's id, name and container are withheld on purpose
+  // (`service-knowledge-decoration.ts`), so a key that ever arrives beside it
+  // must fail here.
+  it("carries EXACTLY the seven launch keys — no id, no visibility, no ownership", async () => {
     mockRepo.findTemplateById.mockResolvedValue(template());
     const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
     expect(Object.keys(resolved).sort()).toEqual([
@@ -188,6 +197,7 @@ describe("the payload, and the door it comes through", () => {
       "knowledgeBases",
       "model",
       "name",
+      "unreachableKnowledgeBaseCount",
     ]);
     expect(resolved).not.toHaveProperty("createdBy");
     expect(resolved).not.toHaveProperty("description");

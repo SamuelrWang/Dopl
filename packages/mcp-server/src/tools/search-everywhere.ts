@@ -233,7 +233,7 @@ export async function fanOut(
   if (truncation.kind === "cap") {
     coverage += ` ⚠ TRUNCATED at the ${MAX_SCOPES}-scope cap: ${total - searched} scope(s) were NOT searched and nothing here says anything about them. Narrow with \`workspace=\` and scope="here" to reach one directly.`;
   } else if (truncation.kind === "credits") {
-    coverage += ` ⚠ TRUNCATED — the fan-out stopped when this workspace ran out of MCP credits, so ${total - searched} scope(s) were NOT searched. What is above was searched and paid for; the rest is unknown, not empty.`;
+    coverage += ` ⚠ TRUNCATED — the fan-out stopped when this workspace ran out of credits, so ${total - searched} scope(s) were NOT searched. What is above was searched and paid for; the rest is unknown, not empty.`;
   }
   if (searched === 0) {
     coverage = `NOTHING was searched — no scope was reached, so this result says nothing about what exists. ${coverage}`;

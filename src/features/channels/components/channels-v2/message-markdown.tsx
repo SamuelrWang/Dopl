@@ -63,6 +63,7 @@ import {
   buildMentionIndex,
 } from "../../lib/mentions";
 import {
+  addressableAgents,
   buildAgentMentionIndex,
 } from "../../lib/agent-mentions";
 import type { AuthorIndex } from "./view-model";
@@ -91,12 +92,11 @@ export function MessageMarkdown({
     handles: buildMentionIndex([...index.byId.values()]),
     // ⚠ FROM THE LIVE FEED, so a rename re-tints the same token under a new spelling on the next
     // push. Empty wherever there is no desktop (the web tree, the pop-out) — no tint, no error.
-    agentHandles: buildAgentMentionIndex(
-      [...index.agents.entries()].map(([agentId, identity]) => ({
-        agentId,
-        displayName: identity.displayName,
-      }))
-    ),
+    // ⚠ **REACHABLE AGENTS ONLY** (Samuel, 2026-09-06). The local feed retains ENDED agents for
+    // seven days so their cards survive, and while they sat in this index a dead agent's tag
+    // tinted exactly like a live one's. `index` itself stays WHOLE — attribution below still
+    // names an ended author on its own messages; only the handle namespace narrows.
+    agentHandles: buildAgentMentionIndex(addressableAgents(index.agents)),
     index,
     mentionsMe,
     block: blockClassName,

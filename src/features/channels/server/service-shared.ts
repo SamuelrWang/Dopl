@@ -5,7 +5,14 @@ import { narrowRuntime, type DoplRuntime } from "@/shared/auth/runtime-header";
 import { narrowSessionId } from "@/shared/auth/session-header";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { ChannelNotFoundError } from "./errors";
-import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
+import {
+  mapMessageRow,
+  type ChannelMemberRow,
+  type ChannelMessageRow,
+  type ChannelRow,
+  type ProfileRef,
+} from "./dto";
+import type { ChannelMessage } from "../types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
@@ -286,4 +293,45 @@ export async function profilesById(
   const unique = [...new Set(userIds)];
   const profiles = await repo.fetchProfiles(unique);
   return new Map(profiles.map((p) => [p.id, p]));
+}
+
+/**
+ * **ROWS → MESSAGE DTOs, WITH BOTH HALVES OF THE AUTHOR RESOLVED** — the profile
+ * read answers who an agent acts FOR, `agentNamesFor` answers WHICH of that
+ * operator's agents wrote the row. Two page-wide joins, in parallel, neither
+ * per-row; a page of purely human messages pays for the second not at all.
+ *
+ * ⚠ **IT LIVES HERE, ONE LEVEL DOWN, AND THAT PLACEMENT IS THE CYCLE FIX**
+ * (2026-09-06, A4 second slice). It was `service-reads.ts`'s, exported for
+ * `service-artifacts.ts`; then the fold was wired INTO the read and
+ * `service-reads` had to import the artifact service back — a cycle between the
+ * read service and the artifact service. `service-artifacts.ts` documented the
+ * remedy at both ends before it could happen: **move the hydrator DOWN into
+ * `service-shared.ts`, do NOT reverse the arrow.** Both services now depend on
+ * this file and neither on the other, which is the shape `service-shared`
+ * already had for `loadVisibleChannel`.
+ *
+ * ⚠ **STILL EXACTLY ONE HYDRATOR.** A second one would be a second answer to
+ * "who wrote this row", which is the drift `agentNamesFor` was centralized to
+ * stop — so the members of an artifact and the transcript they came out of
+ * produce byte-identical DTOs.
+ */
+export async function hydrateMessages(
+  rows: ChannelMessageRow[],
+  workspaceId: string
+): Promise<ChannelMessage[]> {
+  const authorIds = rows
+    .map((r) => r.author_user_id)
+    .filter((id): id is string => id !== null);
+  const [profiles, agentNames] = await Promise.all([
+    profilesById(authorIds),
+    agentNamesFor([workspaceId], rows),
+  ]);
+  return rows.map((row) =>
+    mapMessageRow(
+      row,
+      row.author_user_id ? profiles.get(row.author_user_id) : undefined,
+      agentNames
+    )
+  );
 }

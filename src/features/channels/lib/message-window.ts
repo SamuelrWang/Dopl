@@ -1,4 +1,8 @@
-import type { ChannelMessage } from "../types";
+import type {
+  ChannelFoldedArtifact,
+  ChannelMessage,
+  ChannelReadEntry,
+} from "../types";
 
 /**
  * THE TRANSCRIPT'S SCROLL-BACK WINDOW, as pure data — what "the newest page plus
@@ -25,6 +29,14 @@ import type { ChannelMessage } from "../types";
  * (`optimistic-cache.ts › dropThreadMessages`), so {@link dropThreadFromWindow}
  * exists and the delete write calls it. Anything else added to that family needs
  * the same treatment or it will be half-applied.
+ *
+ * ⚠ **AND SINCE 2026-09-06 IT ALSO CARRIES THE ARTIFACT ENVELOPE'S CLIENT-SIDE
+ * INVARIANT: `entries` MUST BE TOTAL OVER THE `messages` ARRAY IT IS PASSED
+ * BESIDE** ({@link mergeEntries}). The server guarantees that PER PAGE —
+ * `readTranscript` folds the page it just read — and this file is where the
+ * guarantee is re-established over an array the server never saw: the newest
+ * page, plus N pages of history, plus whatever the optimistic writes have
+ * patched in. Read {@link mergeEntries} before touching anything here.
  */
 
 /**
@@ -33,6 +45,9 @@ import type { ChannelMessage } from "../types";
  * on every keystroke in the composer.
  */
 const NO_MESSAGES: readonly ChannelMessage[] = Object.freeze([]);
+
+/** The same trick, for the same reason, on {@link MessageWindow.artifacts}. */
+const NO_ARTIFACTS: readonly ChannelFoldedArtifact[] = Object.freeze([]);
 
 export interface MessageWindow {
   /** Pages older than {@link boundarySeq}, ascending, oldest page first. */
@@ -47,12 +62,25 @@ export interface MessageWindow {
   readonly boundarySeq: number | null;
   /** A page came back SHORT: the channel's oldest message is loaded. */
   readonly exhausted: boolean;
+  /**
+   * EVERY FOLDED ARTIFACT THE HISTORY PAGES DESCRIBED, deduped by artifact id.
+   *
+   * ⚠ **THE CARDS ARE KEPT AND THE PAGES' MESSAGE ARMS ARE NOT, AND THAT
+   * ASYMMETRY IS THE WHOLE TOTALIZING RULE** ({@link mergeEntries}). A card is a
+   * fact about the CHANNEL — `count`, `firstSeq` and `lastSeq` are channel-wide
+   * by `ChannelFoldedArtifact`'s own contract, never per page — so one page's
+   * copy is interchangeable with another's and survives a merge unchanged. A
+   * message arm is a fact about ONE page's array and cannot survive being stood
+   * beside another page's at all.
+   */
+  readonly artifacts: readonly ChannelFoldedArtifact[];
 }
 
 export const EMPTY_MESSAGE_WINDOW: MessageWindow = Object.freeze({
   older: NO_MESSAGES,
   boundarySeq: null,
   exhausted: false,
+  artifacts: NO_ARTIFACTS,
 });
 
 /** The lowest `seq` in an ascending page, or `null` for an empty one. */
@@ -129,18 +157,149 @@ export function mergeWindow(
  *
  * ⚠ `exhausted` LATCHES. A page shorter than what was asked for means the
  * channel ran out; a later page cannot un-run-out.
+ *
+ * ⚠ `entries` IS THE PAGE'S ENVELOPE AND DEFAULTS TO `null`, which is both the
+ * ordinary answer ("nothing on this page is folded") and the answer from a build
+ * that cannot fold at all. Only its CARDS are kept — see
+ * {@link MessageWindow.artifacts}.
  */
 export function appendOlderPage(
   window: MessageWindow,
   page: readonly ChannelMessage[],
   requestedBefore: number,
-  limit: number
+  limit: number,
+  entries: readonly ChannelReadEntry[] | null = null
 ): MessageWindow {
   return {
     older: page.length === 0 ? window.older : [...page, ...window.older],
     boundarySeq: window.boundarySeq ?? requestedBefore,
     exhausted: window.exhausted || page.length < limit,
+    artifacts: addArtifacts(window.artifacts, foldedArtifactsOf(entries)),
   };
+}
+
+/**
+ * The CARDS out of one page's envelope, in order — `null` in, nothing out.
+ *
+ * ⚠ RETURNS THE SHARED EMPTY when nothing folded, so an ordinary channel hands
+ * {@link mergeEntries} the same array identity on every render and the memo above
+ * it never moves. That is the common case and it must stay free.
+ */
+export function foldedArtifactsOf(
+  entries: readonly ChannelReadEntry[] | null
+): readonly ChannelFoldedArtifact[] {
+  if (entries === null) return NO_ARTIFACTS;
+  const out: ChannelFoldedArtifact[] = [];
+  for (const entry of entries) {
+    if (entry.type === "artifact") out.push(entry.folded);
+  }
+  return out.length === 0 ? NO_ARTIFACTS : out;
+}
+
+/**
+ * Fold a page's cards into the ones already held, FIRST COPY WINNING.
+ *
+ * ⚠ Returns the SAME array when nothing is new, for `dropThreadFromWindow`'s
+ * identity reason: the entry merge downstream is memoised on it.
+ */
+function addArtifacts(
+  held: readonly ChannelFoldedArtifact[],
+  incoming: readonly ChannelFoldedArtifact[]
+): readonly ChannelFoldedArtifact[] {
+  if (incoming.length === 0) return held;
+  const seen = new Set(held.map((f) => f.artifact.id));
+  const added = incoming.filter((f) => !seen.has(f.artifact.id));
+  return added.length === 0 ? held : [...held, ...added];
+}
+
+/**
+ * 🔒 **THE ENVELOPE FOR THE MERGED TRANSCRIPT — the one function that makes
+ * `entries` TOTAL over the `messages` array it is passed beside** (A4, ruled
+ * option (a): totalize and dedupe).
+ *
+ * The server folds ONE page and its `entries` describes exactly that page. The
+ * transcript renders the newest page PLUS every scrolled-back history page PLUS
+ * whatever the optimistic writes have patched in, and
+ * `channels-v2/derivations.ts` builds its ordinary rows from the message arms
+ * ALONE. So handing it any single page's envelope beside that array drops every
+ * row the envelope does not mention. This rebuilds the envelope over the array
+ * that is actually being rendered.
+ *
+ * ⚠ **THE MESSAGE ARMS ARE SYNTHESIZED FROM `messages`, NEVER CARRIED FROM A
+ * PAGE, AND THAT IS THE DEVIATION FROM THE RULING WORTH RATIFYING.** The ruled
+ * rule was per-page `entries ?? messages.map(→ message arm)` concatenated, with
+ * the optimistic patch family maintaining the newest page's arms. That family is
+ * BIGGER than the calls the ruling named — `appendPendingMessage`,
+ * `reconcileMessage`, `retagPendingMessage` and `dropThreadMessages` in
+ * `optimistic-cache.ts`, plus `use-escalation-writes.ts › reconcileAnswer`, a
+ * local copy outside that file entirely — so maintaining the arms means five
+ * places that must each stay in step forever, and the fifth is outside this
+ * slice's scope. Synthesizing them instead makes the invariant hold BY
+ * CONSTRUCTION for any `messages` array whatsoever, including one no patch
+ * author remembered this rule existed for. Same output on a page the server
+ * folded; no halves to keep in step.
+ *
+ * ⚠ **THE DEDUPE IS SAFE FOR A REASON THAT MUST BE RECORDED RATHER THAN
+ * ASSUMED** (the ruling's own instruction): two pages' `ChannelFoldedArtifact`
+ * for one artifact are IDENTICAL — `count`, `firstSeq` and `lastSeq` are
+ * channel-wide by that type's contract, "never over the page" — and
+ * `view-model-artifacts.ts › artifactRowFor` recomputes the card's MEMBERS off
+ * the merged `messages` anyway. So this is a de-duplication, not a
+ * reconciliation, and there is nothing for a first-copy-wins rule to lose.
+ *
+ * ⚠ **A MESSAGE IS FOLDED IFF ITS `artifactId` NAMES A CARD WE ACTUALLY HOLD** —
+ * never merely because the field is set. That is the server's own DEGRADE rule
+ * (`server/service-artifacts.ts`: a span whose card row is missing degrades to a
+ * message, never to a dropped row) restated on the client, and it is why a page
+ * that arrives with `entries: null` while its rows carry `artifactId` renders
+ * every one of them as an ordinary message.
+ *
+ * ⚠ **`null` OUT MEANS "NOTHING HERE IS FOLDED" AND IS THE ORDINARY CASE**, byte
+ * for byte the behaviour that shipped before artifacts existed. It is also the
+ * answer when every member of every known card has left `messages` — a thread
+ * delete taking the last one with it — which is how the delete reaches BOTH
+ * halves of the state without the patch family learning a second key: no member,
+ * no card, no ghost.
+ */
+export function mergeEntries(
+  messages: readonly ChannelMessage[],
+  windowArtifacts: readonly ChannelFoldedArtifact[],
+  pageArtifacts: readonly ChannelFoldedArtifact[]
+): ChannelReadEntry[] | null {
+  if (windowArtifacts.length === 0 && pageArtifacts.length === 0) return null;
+  const byId = new Map<string, ChannelFoldedArtifact>();
+  for (const folded of windowArtifacts) {
+    if (!byId.has(folded.artifact.id)) byId.set(folded.artifact.id, folded);
+  }
+  for (const folded of pageArtifacts) {
+    if (!byId.has(folded.artifact.id)) byId.set(folded.artifact.id, folded);
+  }
+
+  // ⚠ THE CARD'S POSITION IS ITS LOWEST MEMBER ON THE MERGED ARRAY, which is the
+  // same rule `artifactRowFor` applies and the reason the card does not park at
+  // the top of a back-page. Entry ORDER is not load-bearing for the card itself
+  // (`withArtifactCards` re-sorts by seq), but it IS for the message arms, which
+  // `unfoldedMessages` hands to `channelRows` in the order it finds them.
+  const anchors = new Map<string, number>();
+  const arms: Array<{ seq: number; entry: ChannelReadEntry }> = [];
+  for (const message of messages) {
+    const id = message.artifactId ?? null;
+    const folded = id === null ? undefined : byId.get(id);
+    if (folded === undefined) {
+      arms.push({ seq: message.seq, entry: { type: "message", message } });
+      continue;
+    }
+    const anchored = anchors.get(id as string);
+    if (anchored === undefined || message.seq < anchored) {
+      anchors.set(id as string, message.seq);
+    }
+  }
+  if (anchors.size === 0) return null;
+  for (const [id, seq] of anchors) {
+    const folded = byId.get(id) as ChannelFoldedArtifact;
+    arms.push({ seq, entry: { type: "artifact", folded } });
+  }
+  return arms.sort((a, b) => a.seq - b.seq).map((arm) => arm.entry);
 }
 
 /**
@@ -158,6 +317,11 @@ export function appendOlderPage(
  *
  * ⚠ Returns the SAME window when nothing matched, so a delete in an unrelated
  * thread does not invalidate the merge memo.
+ *
+ * ⚠ **IT DOES NOT PRUNE `artifacts`, AND IT MUST NOT.** A card whose last member
+ * left the transcript stops being emitted by {@link mergeEntries} on its own —
+ * the card is derived from members PRESENT, not from a list kept in step — so
+ * pruning here would be a second rule saying the same thing, free to disagree.
  */
 export function dropThreadFromWindow(
   window: MessageWindow,

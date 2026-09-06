@@ -307,28 +307,11 @@ describe("home overview face", () => {
   });
 
   /**
-   * The capacity bar is a PERIOD TOTAL with its denominator and its reset date,
-   * read from the shared billing endpoint — no second credits read.
+   * ⚠ **THE BAR'S OWN THREE CASES MOVED OUT ON 2026-09-06** — what it says, what
+   * it reads and its degraded arm now live in `./overview-credit-bar.test.tsx`,
+   * which carries why. What stays here is STRUCTURAL: the bar and the plot are
+   * in the Usage panel and the rails are not.
    */
-  it("shows the credit allowance, what is left, and when it resets", async () => {
-    renderHome();
-    const credits = await panel("Usage");
-
-    // ⚠ THE BILLING METER'S OWN FORMAT — `UsageMeter` prints `used / limit`.
-    // This face uses that component, so it prints what the billing pane prints.
-    expect(await within(credits).findByText("320 / 500")).toBeInTheDocument();
-    expect(within(credits).getByText("Credits")).toBeInTheDocument();
-    expect(within(credits).getByText("180 left")).toBeInTheDocument();
-    // ⚠ THE BILLING PANE'S OWN LINE AND ITS OWN FORMATTER (`formatDate`), so
-    // the assertion is on the SENTENCE rather than on a date string this suite
-    // would otherwise be re-implementing.
-    expect(within(credits).getByText(/^Resets /)).toBeInTheDocument();
-    expect(
-      bridgeCalls(apiRequest).filter((call) =>
-        call.path.startsWith("/api/billing/status")
-      ).length
-    ).toBeGreaterThan(0);
-  });
 
   /**
    * 🔒 **THE USAGE PANEL HOLDS EXACTLY TWO THINGS — THE BAR, THEN THE

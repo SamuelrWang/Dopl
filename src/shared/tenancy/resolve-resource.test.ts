@@ -39,8 +39,8 @@ import {
   WS_P,
 } from "./resolve-resource-fixture";
 
-
-
+/** A channel of the locked room, armed by its owner (task 11). */
+const CH = "88888888-8888-4888-8888-888888888888";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -233,6 +233,111 @@ describe("🔒 the container lock is honoured, and narrows", () => {
     });
     await resolveResource(caller, "agent_template", T1);
     expect(calls.some((c) => c.table === "workspaces")).toBe(false);
+  });
+});
+
+// ── CLAUSE 3, THE TASK 11 NARROWING ───────────────────────────────────────
+
+/**
+ * 🔒 **THE WIDENING IS CONDITIONAL SINCE TASK 11** (#1077 gap 3, ruling (a),
+ * approved #1080) — and this block is the only place the REVERSAL is pinned on
+ * the resolve lane.
+ *
+ * ⚠ **WHAT IT REVERSES IS SHIPPED BEHAVIOUR, NOT A HYPOTHETICAL.** Clause 3 let
+ * ANY locked credential resolve inside its lock plus its operator's personal
+ * container, so an agent session in a room with somebody ELSE in it could read
+ * its operator's personal bases with no human in the loop. The cases above still
+ * pass because a caller that states no `source` is a PERSON; these are the agent
+ * lanes, where the room decides.
+ *
+ * ⚠ **A CLOSED ANSWER IS A `[lock]` LIST, NEVER A REFUSAL.** The id then
+ * resolves to nothing and takes the same 404-never-403 path another member's
+ * private row takes — which is what keeps arming state from being an oracle. A
+ * test that expected a throw here would be pinning the leak.
+ */
+describe("🔒 an AGENT's lock widens onto the shelf only from a room that is armed", () => {
+  const agent = {
+    userId: ME,
+    credentialSubjectUserId: ME,
+    apiKeyWorkspaceId: WS_A,
+    source: "agent",
+  };
+
+  it("does NOT admit the shelf from an unarmed shared room", async () => {
+    const calls = makeAdmin({
+      workspaces: [personalContainer()],
+      workspace_members: [member(WS_A)],
+      channel_personal_arming: [],
+      knowledge_bases: [],
+    });
+    expect(await resolveResource(agent, "knowledge_base", T1)).toBeNull();
+    // 🔒 THE LOCK ALONE. ⚠ MUTATION CHECK: restore the unconditional widening
+    // and this reads `[WS_A, WS_P]` again — the exact reach ruling (a) closed.
+    expect(filters(calls, "workspace_members")).toContain(
+      `in("workspace_id"=${JSON.stringify([WS_A])})`
+    );
+  });
+
+  it("admits it once the owner has armed a channel of that room", async () => {
+    const calls = makeAdmin({
+      workspaces: [personalContainer()],
+      workspace_members: [member(WS_P, "owner")],
+      channel_personal_arming: [{ channel_id: CH }],
+      knowledge_bases: [
+        {
+          id: T1,
+          name: "Orchestration Guidelines",
+          workspace_id: WS_P,
+          created_by: ME,
+          workspace: { name: "Personal", kind: "personal" },
+        },
+      ],
+    });
+    expect(
+      await resolveResource(agent, "knowledge_base", T1)
+    ).toMatchObject({ containerId: WS_P, containerKind: "personal" });
+    expect(filters(calls, "workspace_members")).toContain(
+      `in("workspace_id"=${JSON.stringify([WS_A, WS_P])})`
+    );
+  });
+
+  it("admits it in a container the operator is ALONE in, unarmed", async () => {
+    // Today's behaviour, deliberately unchanged: nobody else can read the
+    // output, so there is no second audience to bound.
+    const calls = makeAdmin(
+      {
+        workspaces: [personalContainer()],
+        workspace_members: [member(WS_A)],
+        agent_templates: [],
+      },
+      {},
+      { workspace_members: 1 }
+    );
+    await resolveResource(agent, "agent_template", T1);
+    expect(filters(calls, "workspace_members")).toContain(
+      `in("workspace_id"=${JSON.stringify([WS_A, WS_P])})`
+    );
+    expect(
+      calls.some((c) => c.table === "channel_personal_arming"),
+      "a solo container never probes the arming table"
+    ).toBe(false);
+  });
+
+  it("🔒 THE ROOM IS THE LOCK, never a container the caller asked about", async () => {
+    // ⚠ MUTATION CHECK. A locked credential acts in exactly one container, so
+    // the room half of (room, owner) is a DB fact off the token row. Read it
+    // off anything caller-supplied and arming one room would open every room.
+    const calls = makeAdmin({
+      workspaces: [personalContainer()],
+      workspace_members: [member(WS_A)],
+      channel_personal_arming: [],
+      agent_templates: [],
+    });
+    await resolveResource(agent, "agent_template", T1);
+    expect(filters(calls, "channel_personal_arming")).toEqual([
+      `eq("owner_id"=${JSON.stringify(ME)})`,
+      `eq("channels.workspace_id"=${JSON.stringify(WS_A)})`,
+    ]);
   });
 });
 

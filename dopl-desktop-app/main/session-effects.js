@@ -158,6 +158,44 @@ function endLifecycle(reason, state) {
   return null;
 }
 
+// ── ⚠ THE SAME END, SAID TO THE OPERATOR'S OWN WINDOW (2026-09-06, A9; filed at #1209) ────────
+//
+// THE DEFECT. `endedEmit` has always carried `reason`, and NOTHING read it. The work stream got a
+// line for exactly two of the five ends, minted from the DISPATCH ACTION's type rather than from
+// the reason — so a turn cap, a cost cap and an abandonment ended the session in silence. The
+// turn cap is the one that cost Samuel real time: an agent stops at 24 turns and its own window
+// never says why.
+//
+// ⚠ WHY THE REASON AND NOT THE ACTION. A cap is reached INSIDE the `result` action
+// (`session-reducer.js` :239/:242), so it HAS no action type of its own and `entryFor` can never
+// see it. The `ended` emit is the one place all five converge already knowing which it was.
+//
+// ⚠ THIS IS A SECOND AUDIENCE, NOT A SECOND COPY OF `endLifecycle`. That table writes to the
+// CHANNEL, where the peer reads it, and it deliberately says one calm thing for both
+// `abandoned` and `inactive` — which of the two it was is a fact about the operator's machine
+// and none of a counterparty's business (see the header). This table writes to the operator's
+// OWN window, where that privacy argument does not apply and the distinction is the whole
+// value, so the two ends are named apart here and only here.
+//
+// ⚠ THE CAP LINE IS `turnCapBody`, CALLED NOT COPIED, so the window and the peer's card can
+// never name two different numbers for one ending. That was the point of reading the cap off the
+// ended record (#1179); a second literal here would undo it the first time the default moved.
+// ⚠ AN UNKNOWN REASON RENDERS ITSELF rather than nothing. A reason this table has not learned yet
+// is still more than the silence A9 is about, and a future `endEffects` caller that forgets to
+// add its copy here degrades to a visible raw word instead of vanishing.
+// ⚠ NO EM DASH (Samuel's copy rule). The line it replaces, `'Ended — inactive'`, carried one.
+function endedStatusText(reason, state) {
+  if (!reason || typeof reason !== 'string') return null;
+  if (reason === 'turn_cap') return turnCapBody(state);
+  if (reason === 'cost_cap') return 'Cost limit reached';
+  if (reason === 'operator') return 'Ended by you';
+  if (reason === 'inactive') return 'Ended after going inactive';
+  // ⚠ NOT "after 12 hours": the bound is `ABANDONED_MS` and a number spelled here is a second
+  // place to change, which is how the cap line went wrong before #1179.
+  if (reason === 'abandoned') return 'Ended after being left parked';
+  return reason;
+}
+
 // ⚠ AN ABANDONMENT KEEPS ITS WINDOW. Every other end is something the operator watched happen;
 // an abandonment fires hours later with nobody present, and destroying the window makes a
 // transcript vanish from the desktop of someone who stepped away — indistinguishable from a
@@ -252,6 +290,7 @@ module.exports = {
   TERMINAL_BODIES,
   endedEmit,
   endLifecycle,
+  endedStatusText, // A9: the same end, worded for the operator's own window
   endEffects,
   modesEmit,
   parkEffects,

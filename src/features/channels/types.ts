@@ -287,7 +287,83 @@ export type ChannelMessage = {
   /** ⚠ Without {@link deliveryAt} this is the server's write-time PREDICTION. */
   delivery?: ChannelDelivery | null;
   deliveryAt?: string | null;
+  /**
+   * The artifact this message is folded into, or `null`/absent for the ordinary
+   * case (#1220 §2). ⚠ OPTIONAL for the same reason the three fields above are:
+   * a message this tree BUILDS rather than reads carries no key at all, and the
+   * type stays byte-identical to the SDK's hand-maintained mirror.
+   */
+  artifactId?: string | null;
 };
+
+/**
+ * AN ARTIFACT — a THREAD FORMED AFTER THE FACT (design #1220, accepted #1222).
+ *
+ * ⚠ **IT IS NOT AN EDIT AND NOT A DELETE.** Every message it folds keeps its
+ * body, its author, its metadata and its `seq`; folding is a view decision
+ * recorded on `channel_messages.artifact_id` and it is reversible without loss.
+ * That is the property the rest of the design rests on.
+ *
+ * ⚠ NO MEMBER LIST HERE. Membership is the column, which is what makes "one
+ * artifact per message, no nesting" a schema property rather than a rule
+ * something has to enforce.
+ */
+export type ChannelArtifact = {
+  id: string;
+  channelId: string;
+  workspaceId: string;
+  name: string;
+  summary: string;
+  createdBy: string;
+  /** The agent INSTANCE id that made it, or `null` for a person acting directly. */
+  createdByAgent: string | null;
+  /** ⚠ RETIRED, NEVER DELETED — a dissolved artifact still resolves, so an old
+   *  citation gets an honest answer instead of a 404. */
+  dissolvedAt: string | null;
+  createdAt: string;
+};
+
+/**
+ * THE FOLDED CARD — one synthetic entry standing in for a run of messages on a
+ * default read (design §4).
+ *
+ * ⚠ **THE SPAN IS LOAD-BEARING, NOT DECORATION.** A reader holding an old
+ * citation (`#1119` quoted in some other message) can tell from `firstSeq` /
+ * `lastSeq` WHICH artifact holds it without opening anything, and `count`
+ * beside the span says honestly whether the artifact is a solid run or a
+ * selection out of one. Dropping the span saves nothing measurable and costs
+ * exactly that property (#1220 §7, fork 3).
+ *
+ * ⚠ **COUNT AND SPAN ARE OVER THE WHOLE ARTIFACT, NEVER OVER THE PAGE.** A
+ * count that meant "of the members that happen to be on this page" would answer
+ * a different question every time the page moved.
+ */
+export type ChannelFoldedArtifact = {
+  artifact: ChannelArtifact;
+  /** Total members, channel-wide. */
+  count: number;
+  /** Lowest and highest member `seq`. ⚠ The card renders at `firstSeq`. */
+  firstSeq: number;
+  lastSeq: number;
+};
+
+/**
+ * ONE ENTRY ON A DEFAULT READ: either a message, or a card standing in for a
+ * folded run.
+ *
+ * ⚠ **THIS IS THE ONE GENUINELY BREAKING PART OF THE DESIGN AND IT IS STATED
+ * RATHER THAN SOFTENED** (#1220 §4). A client that does not know about
+ * artifacts gets a card where it expected messages. There is no version of
+ * "saves context" that is also invisible to existing readers: the saving IS the
+ * substitution. It is introduced knowing that, not discovered.
+ *
+ * ⚠ THE DISCRIMINATOR IS `type`, PRESENT ON BOTH ARMS. A renderer that tested
+ * for the ABSENCE of a message field would silently treat a future entry shape
+ * as a card.
+ */
+export type ChannelReadEntry =
+  | { type: "message"; message: ChannelMessage }
+  | { type: "artifact"; folded: ChannelFoldedArtifact };
 
 /**
  * A message the caller just POSTED.

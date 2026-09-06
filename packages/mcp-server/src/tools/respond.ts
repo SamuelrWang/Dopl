@@ -124,14 +124,14 @@ export function isAlreadyExists(e: unknown): boolean {
 }
 
 /**
- * MCP credit allowance spent for the billing period. ⚠ ONE wording for both
+ * Credit allowance spent for the billing period. ⚠ ONE wording for both
  * surfaces: the registrar's up-front refusal (reading `allowed: false` off the
  * consume response, not an error) and `entitlementDenied` below.
  */
 export const CREDITS_EXHAUSTED_CODE = CREDITS_EXHAUSTED.reason;
 
 // ⚠ THE `reason=` PREFIX IS ADDITIVE AND THE SENTENCE IS NOT REPEATED (A14).
-// `credits.test.ts` pins "out of MCP credits", which the CODE's own meaning now
+// `credits.test.ts` pins "out of credits", which the CODE's own meaning now
 // carries — so the detail adds only what the meaning does not say, rather than
 // restating it a second time on the same line.
 const CREDITS_EXHAUSTED_MESSAGE = refusal(

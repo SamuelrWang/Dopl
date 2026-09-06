@@ -37,6 +37,7 @@ import type {
 import HomePage from "./index";
 
 export {
+  BILLING_STATUS,
   HOME_OVERVIEW,
   HOME_SERIES,
   SECOND_WORKSPACE_ID,

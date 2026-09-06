@@ -60,6 +60,10 @@ export function scopeFor(userId: string, shared = false): CallerScope {
     userId,
     sharedCredential: shared,
     credentialWorkspaceId: FOREIGN_CONTAINER,
+    // ⚠ These cases drive POLICIES, and no policy reads `source` — it is a
+    // TS-side reach fence. `null` keeps the fixture on the human lane, which is
+    // the one every red-team case means to impersonate.
+    source: null,
   };
 }
 

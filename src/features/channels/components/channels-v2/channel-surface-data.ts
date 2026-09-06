@@ -170,6 +170,10 @@ export function useChannelSurfaceData({
 }): ChannelSurfaceData {
   const {
     messages,
+    // THE ARTIFACT ENVELOPE, and it travels with `messages` or not at all
+    // (`lib/message-window.ts › mergeEntries`): it is TOTAL over that array, so
+    // the pair is one value and only this hook may produce it.
+    entries: messageEntries,
     loading: messagesLoading,
     refetch: refetchMessages,
     hasOlder: hasOlderMessages,
@@ -303,6 +307,11 @@ export function useChannelSurfaceData({
     members,
     currentUserId,
     messages,
+    // ⚠ **THE WIRE THAT MAKES THE ARTIFACT CARD VISIBLE** (A4, 2026-09-06). It is
+    // `null` on every channel with nothing folded, which is byte-for-byte the
+    // behaviour that shipped before artifacts existed — the envelope is ADDITIVE
+    // and `messages` stays authoritative beside it.
+    entries: messageEntries,
     threads,
     openThreadId,
     // ⚠ THE SAME FEED THE AGENTS TAB READS — no new read, no second poll. It carries what each

@@ -574,12 +574,36 @@
    whose full height came from being a flex ITEM of the surface row; wrapping it
    in a block shell collapsed it to its content height and the divider down its
    left edge stopped partway (Samuel, 2026-08-24). A flex shell stretches it
-   again. */
+   again.
+
+   ⚠ `position: relative` + `z-index: 1` ARE THE NARROW-WINDOW FIX (Samuel,
+   2026-09-06: "when I decrease the width of the window the main area starts to
+   cover the right panel"). ⚠ THIS COPY IS THE ONE HIS DESKTOP ACTUALLY RENDERS
+   — the F-074 drift rule above is why it is not enough to fix globals.css.
+   THE TRACK WAS NEVER THE PROBLEM: `flex: 0 0 auto` plus the panel's own
+   `w-[380px] shrink-0` already make this column unshrinkable, and the transcript
+   beside it already carries `min-w-0` (`channels-v2/message-pane.tsx › section`),
+   so the BOX MATH is right at every width — the main area takes all of the
+   shrinking, exactly as ruled. What went wrong was PAINT ORDER. The transcript's
+   own children are POSITIONED (the composer and its popovers, the sticky
+   chrome), and a positioned descendant paints in CSS step 8 — above the in-flow,
+   NON-positioned content of a LATER sibling, which is what this shell was. So
+   once the main area narrowed past its content's natural width, its children
+   spilled right and were painted OVER a column still exactly 380px wide
+   underneath them. A positioned layer here puts the column back on top of that
+   spill. ⚠ THE REMEDY IS NOT `min-w-0` on the surface root — see
+   `channel-surface-standalone.tsx`'s root docblock for why that is worse. */
 .channel-info-slide {
   display: flex;
   flex: 0 0 auto;
   width: 0;
   overflow: hidden;
+  /* ⚠ The panel's own stacking layer — see the paint-order note above. `relative`
+     with no offsets moves nothing; it only buys the layer. `overflow: hidden`
+     above already guarantees this column paints NOTHING outside its own track,
+     so the layer cannot cover the transcript in return. */
+  position: relative;
+  z-index: 1;
   transition: width 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .channel-info-slide[data-open="true"] {

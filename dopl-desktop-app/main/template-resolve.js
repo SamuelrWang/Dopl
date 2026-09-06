@@ -85,7 +85,26 @@ function label(value, max) {
 }
 
 /**
- * Narrow the wire payload to the six keys the ROLE BLOCK reads, and nothing else.
+ * A COUNT OFF THE WIRE — a non-negative integer or 0, never NaN and never a float.
+ *
+ * ⚠ 0 IS THE FAIL DIRECTION ON PURPOSE. An older server does not send the key, a proxy may drop
+ * it, and a garbled one must not become a prompt line claiming knowledge is missing. A wrong
+ * guess here costs a sentence the agent did not say; the opposite would be a role block telling
+ * an agent it has been denied something nobody attached.
+ */
+function count(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(Math.floor(n), MAX_BASES);
+}
+
+/**
+ * Narrow the wire payload to the seven keys the ROLE BLOCK reads, and nothing else.
+ *
+ * ⚠ THE SEVENTH IS `unreachableKnowledgeBaseCount` (2026-09-05), and it is a COUNT BY CONTRACT.
+ * The server withholds the id, the name and the container of a base this operator cannot reach;
+ * this narrow is the second gate on that — anything the server ever added beside the number would
+ * be dropped here rather than reaching `knowledgeLines`, which writes prompt text.
  *
  * ⚠ A LITERAL WHITELIST, NOT A SPREAD, for the reason `session-launch.js › launch` gives for its
  * own: a key this list omits is DROPPED, so a field the server adds later cannot arrive on a
@@ -109,6 +128,9 @@ function narrow(body) {
     knowledgeBases: bases
       .filter((k) => k && typeof k === 'object')
       .map((k) => ({ id: label(k.id, MAX_BASE_LABEL), name: label(k.name, MAX_BASE_LABEL) })),
+    // ⚠ HOW MANY ATTACHMENTS THIS OPERATOR CANNOT REACH HERE — see `count` above and
+    // `prompt-framing-template.js › knowledgeLines`, its one consumer.
+    unreachableKnowledgeBaseCount: count(b.unreachableKnowledgeBaseCount),
     // ⚠ G-1, AND IT FAILS FOREIGN. `authoredByCaller` decides which SECURITY HEADER the role
     // block wears, so anything that is not an explicit `true` — an older server that does not
     // send the field, a malformed body, a proxy that dropped it — gets the STRONGER header.

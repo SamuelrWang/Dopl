@@ -226,7 +226,7 @@ describe("truncation is named, never silent", () => {
   it("RUNNING OUT OF CREDITS stops the fan-out, keeps the hits, and says so", async () => {
     const denial: ToolResponse = {
       isError: true,
-      content: [{ type: "text", text: "out of MCP credits" }],
+      content: [{ type: "text", text: "out of credits" }],
     };
     const text = await search(
       clientStub({ getWorkspaceId: () => "ws-a" }),
@@ -239,7 +239,7 @@ describe("truncation is named, never silent", () => {
     expect(text).toContain("acme workspace");
     expect(text).toContain("beta workspace");
     expect(text).toContain("Searched 2 scopes of 3");
-    expect(text).toContain("ran out of MCP credits");
+    expect(text).toContain("ran out of credits");
     expect(text).toContain("unknown, not empty");
   });
 
@@ -248,7 +248,7 @@ describe("truncation is named, never silent", () => {
     // and must not be replaced by an error that discards them.
     const denial: ToolResponse = {
       isError: true,
-      content: [{ type: "text", text: "out of MCP credits" }],
+      content: [{ type: "text", text: "out of credits" }],
     };
     const text = await search(
       clientStub({ getWorkspaceId: () => "nothing-matches" }),
@@ -256,7 +256,7 @@ describe("truncation is named, never silent", () => {
       async () => denial,
       { query: "ship", scope: "everywhere" },
     );
-    expect(text).toBe("out of MCP credits");
+    expect(text).toBe("out of credits");
   });
 });
 

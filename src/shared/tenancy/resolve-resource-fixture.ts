@@ -40,7 +40,16 @@ export function makeAdmin(
    * queries distinguishable: `[[], [row]]` is "nameable by no clause, reached
    * by a grant". ⚠ Exhausting it falls back to `results[table]`.
    */
-  sequences: Record<string, unknown[][]> = {}
+  sequences: Record<string, unknown[][]> = {},
+  /**
+   * ⚠ **THE `head:true` COUNT, PER TABLE — the task 11 fence is why this
+   * exists.** `personal-reach.ts` counts a container's active members off the
+   * SAME `workspace_members` table the membership read uses, and PostgREST
+   * returns that on `count` with no rows. ⚠ ABSENT IS `null`, NOT ZERO, and
+   * that is the fail-closed reading the fence depends on: "I could not count
+   * the people in this room" must never pass for "there is one".
+   */
+  counts: Record<string, number | null> = {}
 ) {
   const calls: Call[] = [];
   const pending = new Map<string, unknown[][]>(
@@ -65,8 +74,13 @@ export function makeAdmin(
       // `findPersonalContainerId` ends its chain here — at most one row.
       maybeSingle: () =>
         Promise.resolve({ data: rows()[0] ?? null, error: null }),
-      then: (resolve: (r: { data: unknown[]; error: null }) => void) =>
-        resolve({ data: rows(), error: null }),
+      then: (
+        resolve: (r: {
+          data: unknown[];
+          count: number | null;
+          error: null;
+        }) => void
+      ) => resolve({ data: rows(), count: counts[table] ?? null, error: null }),
     });
     return builder;
   };

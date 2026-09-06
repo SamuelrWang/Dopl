@@ -171,7 +171,11 @@ describe("exhaustion", () => {
     const res = await map({});
     expect(res.isError).toBe(true);
     const text = textOf(res);
-    expect(text).toContain("out of MCP credits");
+    // ⚠ THE PIN MOVED ON PURPOSE, 2026-09-05 (Samuel: "it's not MCP credits,
+    // it's credits" — the agent should read "out of credits"). Every assertion
+    // in this file that quoted "out of MCP credits" was re-pointed at the new
+    // true text; the SENTENCE is what changed, not the refusal it proves.
+    expect(text).toContain("out of credits");
     expect(text).toContain(`Upgrade to continue: ${UPGRADE}`);
     expect(client.listKbBases).not.toHaveBeenCalled();
   });
@@ -182,7 +186,7 @@ describe("exhaustion", () => {
 
     const res = await map({ workspace: "beta" });
     expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain("out of MCP credits");
+    expect(textOf(res)).toContain("out of credits");
     expect(client.listKbBases).not.toHaveBeenCalled();
   });
 
@@ -191,7 +195,7 @@ describe("exhaustion", () => {
     client.consumeCredits.mockResolvedValue({ ...exhausted(), upgradeUrl: "" });
 
     const text = textOf(await map({}));
-    expect(text).toContain("out of MCP credits");
+    expect(text).toContain("out of credits");
     expect(text).not.toContain("Upgrade to continue:");
   });
 });
@@ -227,7 +231,7 @@ describe("fail direction", () => {
 
     const res = await map({});
     expect(res.isError).toBeFalsy();
-    expect(textOf(res)).not.toContain("out of MCP credits");
+    expect(textOf(res)).not.toContain("out of credits");
     expect(client.listKbBases).toHaveBeenCalled();
   });
 
@@ -246,7 +250,7 @@ describe("fail direction", () => {
 
     const res = await map({});
     expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain("out of MCP credits");
+    expect(textOf(res)).toContain("out of credits");
     expect(client.listKbBases).not.toHaveBeenCalled();
   });
 
@@ -277,7 +281,7 @@ describe("fail direction", () => {
 
     const res = await map({});
     expect(res.isError).toBeFalsy();
-    expect(textOf(res)).not.toContain("out of MCP credits");
+    expect(textOf(res)).not.toContain("out of credits");
     expect(client.listKbBases).toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();

@@ -19,6 +19,7 @@ import {
 import {
   resolveEscalation,
   resolveEscalationAnswer,
+  resolveTypedEscalationAnswer,
 } from "./service-writes-metadata-escalation";
 import type { ChannelContext } from "./service-shared";
 
@@ -260,6 +261,13 @@ export interface PostMetadataOptions {
  *    checks live in `service-writes-metadata-escalation.ts`, which is a §1 split
  *    rather than a fold here because it READS ANOTHER ROW and enforces an
  *    authorization.
+ * 11b. **A TYPED escalation answer** (2026-09-05, task 13b). A HUMAN post that is
+ *    not itself a card, whose whole body IS an option's label (or its 1-based
+ *    number) on the typist's most recent OPEN card in this channel, stamps the
+ *    same key the same way a button press does. ⚠ It can only ever ADD the
+ *    stamp: every near miss — partial text, two candidates, no open card, a
+ *    lookup that failed — leaves an ORDINARY MESSAGE, silently, because a wrong
+ *    match presses a button the person did not press.
  */
 export async function resolvePostMetadata(
   ctx: ChannelContext,
@@ -445,6 +453,26 @@ export async function resolvePostMetadata(
       channel.id,
       ctx.userId,
       input.escalationAnswer,
+      metadata
+    );
+  } else if (!input.escalation && ctx.source !== "agent") {
+    // 11b — THE TYPED ANSWER (task 13b). A member who TYPES an option's label
+    // instead of pressing it has answered the card, and until now that message
+    // tied to nothing and woke nobody.
+    //
+    // ⚠ HUMAN SOURCES ONLY, and that is a FENCE rather than a scoping accident.
+    // An agent posts as its operator's user id, so an agent that happens to
+    // write "Ship now" would otherwise press its own operator's open card — a
+    // button nobody touched, which is the exact failure #1085 chose silence to
+    // avoid. The credential answers it, never the body, like mentions above.
+    //
+    // ⚠ AND NEVER ON A POST THAT IS ITSELF A CARD: an escalation's own body is
+    // the render of its options, so a two-option card whose body begins with a
+    // label could otherwise answer the card before it.
+    await resolveTypedEscalationAnswer(
+      channel.id,
+      ctx.userId,
+      input.body,
       metadata
     );
   }

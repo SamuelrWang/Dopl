@@ -3,7 +3,9 @@ import { mentionedUserIdsOf } from "../lib/mentions";
 import {
   ESCALATION_ANSWER_METADATA_KEY,
   ESCALATION_METADATA_KEY,
+  ESCALATION_OPTION_LABEL_MAX,
   parseEscalation,
+  type ChannelEscalation,
   type ChannelEscalationAnswerInput,
 } from "../escalation";
 import {
@@ -152,12 +154,155 @@ export async function resolveEscalationAnswer(
     throw new EscalationForbiddenError();
   }
 
+  stampEscalationAnswer(row, answer.optionIndex, metadata);
+}
+
+/**
+ * THE ONE PLACE THE ANSWER KEY IS WRITTEN — both doors end here.
+ *
+ * ⚠ THAT IS THE POINT, NOT A TIDY-UP (#1085 ›3): "when the typed match fires,
+ * stamp `escalationAnswer` identically to a button press, so the wake verdict
+ * never learns there were two entrances." A second stamping site is how the two
+ * entrances drift — one of them keeping the weaker `agentId` reader, say, which
+ * is precisely the bug task 13a just repaired.
+ */
+function stampEscalationAnswer(
+  row: ChannelMessageRow,
+  optionIndex: number,
+  metadata: Record<string, unknown>
+): void {
   metadata[ESCALATION_ANSWER_METADATA_KEY] = {
     escalationMessageId: row.id,
-    optionIndex: answer.optionIndex,
+    optionIndex,
     agentId: authorAgentIdOf({
       clientMsgId: row.client_msg_id,
       metadata: (row.metadata ?? {}) as Record<string, unknown>,
     }),
   };
+}
+
+/**
+ * THE TYPED DOOR — which option, if any, this body IS.
+ *
+ * ⚠ EXACT, AND EVERY LOOSER RULE WAS REFUSED ON PURPOSE (#1085 ›2). The whole
+ * body, trimmed, case-insensitively equal to ONE option's whole label; or the
+ * bare 1-based number the body render already prints beside it
+ * (`escalationBody`: "1. **Ship now** — …"). Partial text, a label inside a
+ * sentence, and two options that match are all `null`, because a wrong match
+ * PRESSES A BUTTON THE PERSON DID NOT PRESS — worse than the gap this closes,
+ * and unrecoverable through a UI that has no unpress.
+ *
+ * ⚠ THE NUMBER IS 1-BASED IN, 0-BASED OUT. It is read off what the operator SEES
+ * (the rendered list), never off `options` directly; "0" is therefore not an
+ * answer, and neither is "3" on a two-option card.
+ */
+export function matchTypedOption(
+  escalation: ChannelEscalation,
+  body: string
+): number | null {
+  const typed = body.trim();
+  if (!typed) return null;
+
+  if (/^\d+$/.test(typed)) {
+    const index = Number(typed) - 1;
+    return index >= 0 && index < escalation.options.length ? index : null;
+  }
+
+  const wanted = typed.toLowerCase();
+  const hit = escalation.options.reduce<number[]>((acc, option, i) => {
+    if (option.label.trim().toLowerCase() === wanted) acc.push(i);
+    return acc;
+  }, []);
+  // ⚠ TWO MATCHES IS NO MATCH. A card may legally carry two options with the
+  // same face, and "the person meant one of them" is not something this may
+  // guess.
+  return hit.length === 1 ? hit[0] : null;
+}
+
+/**
+ * FOLD 11b — THE TYPED ANSWER (2026-09-05, task 13b, rulings #1081–#1085).
+ *
+ * The gap it closes: Samuel answered a card by typing "Approve the package" as
+ * an ordinary message. It carried no `escalationAnswer`, so it tied to no card
+ * and woke nobody — and #1084's finding is that this was never a regression,
+ * the typed path was never built at all.
+ *
+ * ⚠ IT IS AN ANSWER WRITE, NOT A WAKE VERDICT, and it touches no routing. It
+ * stamps the same key a press stamps and then gets out of the way; everything
+ * downstream — who is woken, how the answer is delivered — is unchanged and
+ * cannot tell the two doors apart.
+ *
+ * ⚠ EVERY NEAR MISS IS SILENT. No error, no hint, no "did you mean". The message
+ * is simply an ordinary message, which is what it already was: the feature can
+ * only ever ADD a stamp, never refuse a post. That is why nothing here throws,
+ * unlike {@link resolveEscalationAnswer} — a hostile caller cannot reach this
+ * path with a forged id, so there is nothing to refuse, and a throw here would
+ * turn a member's ordinary sentence into a failed send.
+ *
+ * ⚠ AUTHORIZATION IS THE CANDIDATE FILTER, not a separate check. A card is a
+ * candidate only if {@link escalationAnswerers} names the typist, so the typed
+ * door can never answer a card the button would have refused with a 403.
+ *
+ * ⚠ MOST RECENT **OPEN** ONE, never "any open card" (#1085 ›2). A verbatim label
+ * is strong intent even days later, so there is no time bound; most-recent-only
+ * is what stops one label pressing a button on some older card that happened to
+ * share it.
+ */
+export async function resolveTypedEscalationAnswer(
+  channelId: string,
+  callerUserId: string,
+  body: string,
+  metadata: Record<string, unknown>
+): Promise<void> {
+  const typed = body.trim();
+  // ⚠ THE FREE PRUNE, AND IT IS WHY THE POST PATH DOES NOT PAY FOR THIS. Every
+  // message in every channel reaches this fold, and two reads on each would be a
+  // real cost for a rare event. An option label is a `safeLabel` — single line,
+  // ≤ 80 chars — so anything longer or multi-line CANNOT equal one, and ordinary
+  // prose is refused here without touching the database.
+  if (!typed || typed.length > ESCALATION_OPTION_LABEL_MAX) return;
+  if (typed.includes("\n")) return;
+
+  // ⚠ THE LOOKUP MAY FAIL AND THE POST MAY NOT. This fold can only ever ADD a
+  // stamp (see above), so the honest behaviour when the candidate reads cannot
+  // answer — a database blip, a timeout — is the SAME silence every near miss
+  // gets: the message is ordinary prose, which is what it already was. The
+  // alternative is a member's ordinary sentence failing to send because an
+  // optional convenience could not run, and that trade is not close.
+  //
+  // ⚠ NARROW ON PURPOSE: it covers the two READS and nothing else. The match and
+  // the stamp below are pure and total, so a throw from either would be a real
+  // defect and must not be swallowed here.
+  // ⚠ Initialized rather than declared: the `catch` returns, so nothing reads a
+  // default — it only spares the reader (and the compiler's definite-assignment
+  // analysis) a question about a variable assigned inside a `try`.
+  let answerable: ChannelMessageRow[] = [];
+  let answered: Set<string> = new Set<string>();
+  try {
+    const recent = await repoMessages.listRecentEscalations(channelId);
+    answerable = recent.filter((row) =>
+      escalationAnswerers(row).includes(callerUserId)
+    );
+    if (answerable.length === 0) return;
+    answered = await repoMessages.listAnsweredEscalationIds(
+      channelId,
+      answerable.map((row) => row.id)
+    );
+  } catch {
+    return;
+  }
+  // `listRecentEscalations` is `seq` DESC and both steps preserve it, so the
+  // first survivor IS the most recent open one.
+  const open = answerable.find((row) => !answered.has(row.id));
+  if (!open) return;
+
+  const escalation = parseEscalation(
+    ((open.metadata ?? {}) as Record<string, unknown>)[ESCALATION_METADATA_KEY]
+  );
+  if (!escalation) return;
+
+  const optionIndex = matchTypedOption(escalation, typed);
+  if (optionIndex === null) return;
+
+  stampEscalationAnswer(open, optionIndex, metadata);
 }

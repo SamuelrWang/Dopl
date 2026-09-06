@@ -50,7 +50,7 @@
  * "guest" }` off an allowed GET, or raise an allowed POST back to `"member"`)
  * removes it from the discovered set → set A fails on that entry AND set B's
  * equality fails. Adding `guest` to any other route fails set B (both halves).
- * Breaking the parser fails set D. 19 entries.
+ * Breaking the parser fails set D. 24 entries.
  * MEASURED 2026-08-26 — 4 reverts, 4 failures, 0 vacuous: parser loses the
  * re-export branch (4 red); loses the function-declaration branch (1 red); stops
  * stripping comments (1 red); B2 back to comparing FILE NAMES while a SECOND
@@ -67,7 +67,7 @@
  *   - a lane route naming `loadVisibleChannel` itself            : 1 red
  *     (a second, hand-rolled copy of the fence — the copy is what drifts)
  *
- * ⚠ EIGHTEEN OF THE NINETEEN ARE CHANNEL ROUTES; THE NINETEENTH IS A METER
+ * ⚠ TWENTY-THREE OF THE TWENTY-FOUR ARE CHANNEL ROUTES; THE OTHER IS A METER
  * (2026-08-26). `mcp/credits/consume` sits at `guest` so a guest's tool calls
  * are BILLED — the registrar fails open on the 403 the `viewer` default
  * produced, so that floor made guest traffic free rather than refusing it
@@ -75,13 +75,13 @@
  * file's contract is "nothing anywhere is at `guest` unless it is listed", and
  * that contract is worth more than the list staying channel-only.
  *
- * ⚠ FOUR OF THE EIGHTEEN ARE NOT CHANNEL CONTENT AT ALL (Home Knowledge Panels
- * M2, 2026-08-26). `…/[channelId]/knowledge/**` serves KNOWLEDGE through a
- * channel-scoped door, and it is the first time a guest floor sits in front of
- * a payload the channel does not own. The floor is worth even less here than
- * elsewhere: what admits the caller is a `(knowledge_base, channel)` grant row
- * at `visible`, and the membership fence in front of it is REQUIRED rather than
- * inherited — see the last describe in this file, and INVARIANTS §4A.
+ * ⚠ SEVEN OF THEM ARE NOT CHANNEL CONTENT AT ALL: the four knowledge-lane pairs
+ * (Home Knowledge Panels M2, 2026-08-26) serve KNOWLEDGE through a
+ * channel-scoped door — admitted by a `(knowledge_base, channel)` grant at
+ * `visible`, with the membership fence REQUIRED rather than inherited — and the
+ * three personal-arming verbs (2026-09-06) are the caller's OWN shelf switch,
+ * which is a row keyed `(channel, caller)` and no reach into the room at all.
+ * See the last describe in this file, and INVARIANTS §4A.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -198,6 +198,17 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // container's burn to the container's OWNER. Raising it back re-opens the free
   // lane; it closes nothing.
   ["mcp/credits/consume/route.ts", "POST"],
+  // ⚠ ARTIFACTS (2026-09-06, #1220) — folds messages a guest already reads and
+  // posts: the messages route's floor, behind the same service fence.
+  [`${CHANNELS_REL}/[channelId]/artifacts/route.ts`, "GET"],
+  [`${CHANNELS_REL}/[channelId]/artifacts/route.ts`, "POST"],
+  // ⚠ PERSONAL ARMING (2026-09-06, task 11) — the CALLER'S OWN shelf switch: a
+  // row keyed `(channel, caller)`, no owner in path or body. GET/PUT require
+  // membership. 🔒 THE DELETE TAKES NO CHANNEL READ, RULED (leaving a room must
+  // not strand an armed row); it 404s a non-uuid and deletes the caller's row.
+  [`${CHANNELS_REL}/[channelId]/personal-arming/route.ts`, "GET"],
+  [`${CHANNELS_REL}/[channelId]/personal-arming/route.ts`, "PUT"],
+  [`${CHANNELS_REL}/[channelId]/personal-arming/route.ts`, "DELETE"],
 ];
 
 const ALLOWED_KEYS = new Set(GUEST_ALLOWED.map(([f, m]) => `${f}#${m}`));
@@ -226,15 +237,13 @@ const KNOWN_FLOORS: ReadonlyArray<readonly [string, string, string]> = [
 ];
 
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 19 entries (pins the size against a silent add/drop)", () => {
-    // 15 until Home Knowledge Panels M2 (2026-08-26) added the four
-    // `…/[channelId]/knowledge/**` pairs. ⚠ ENTRIES, NOT FILES: FOUR files carry
-    // two guest-floored methods each (`messages` GET+POST, `tasks` GET+POST,
-    // `mentions` GET+POST, and now `knowledge/entries` GET+PUT), so 19 entries
-    // live in 15 files — which is exactly why B2 counts occurrences rather than
-    // comparing file names. Re-derive both, never quote:
+  it("has 24 entries (pins the size against a silent add/drop)", () => {
+    // 19 until 2026-09-06 (artifacts ×2, personal-arming ×3, reasons above); 15
+    // until Home Knowledge Panels M2. ⚠ ENTRIES, NOT FILES: 24 live in 17, which
+    // is why B2 counts occurrences. The number blesses nothing; set B proves the
+    // tree. Re-derive both, never quote:
     //   grep -rc 'minRole: "guest"' $(grep -rl 'minRole: "guest"' src/app/api)
-    expect(ALLOWED_KEYS.size).toBe(19);
+    expect(ALLOWED_KEYS.size).toBe(24);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {

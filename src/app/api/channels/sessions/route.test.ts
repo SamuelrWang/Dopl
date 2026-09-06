@@ -41,12 +41,18 @@ vi.mock("@/features/channels/server/service", () => ({
   reportSessionStates: vi.fn(),
   // THE WAKE ACK (2026-09-02, A9) rides this lane beside the projection.
   recordDeliveryAcks: vi.fn(),
+  // ⚠ AND THE DURABLE TOKEN LEDGER SINCE 2026-09-06 (Samuel #1326). A partial
+  // mock of a module the route composes is not a smaller test, it is an
+  // `undefined is not a function` inside the handler surfacing as a 500 — which
+  // is exactly how this file went red. Every export the route imports is stubbed.
+  recordSessionTokenSpend: vi.fn(),
 }));
 
 import { GET, POST } from "./route";
 import {
   listSessionStates,
   recordDeliveryAcks,
+  recordSessionTokenSpend,
   reportSessionStates,
 } from "@/features/channels/server/service";
 
@@ -88,6 +94,11 @@ beforeEach(() => {
     operatorOnline: false,
   });
   vi.mocked(recordDeliveryAcks).mockResolvedValue({ stamped: 0 });
+  // ⚠ `null` IS THE NO-LEDGER DEFAULT, and it is why every body asserted above
+  // stayed byte-identical when this lane landed: the route OMITS the key on
+  // null. The two cases at the bottom pin that distinction rather than leaving
+  // it to this default.
+  vi.mocked(recordSessionTokenSpend).mockResolvedValue(null);
 });
 
 describe("GET — the read", () => {
@@ -264,5 +275,45 @@ describe("POST — the wake ack rides this lane (2026-09-02, A9)", () => {
       acks: [{ channelId: CHAN, seq: 7, delivery: "woken" }],
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST — the durable token ledger rides it too (2026-09-06, #1326)", () => {
+  it("reports what the ledger took, beside the projection", async () => {
+    vi.mocked(recordSessionTokenSpend).mockResolvedValue(2);
+    const res = await post({ sessions: [entry()] });
+    expect(await res.json()).toEqual({
+      stored: 1,
+      changed: 1,
+      removed: 0,
+      stamped: 0,
+      spendRecorded: 2,
+    });
+    // ⚠ The SAME reported set the projection got, and no identity beside it —
+    // the service keys the ledger on `ctx` alone.
+    expect(recordSessionTokenSpend).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-1", workspaceId: "ws-1" }),
+      [entry()]
+    );
+  });
+
+  it("OMITS the key rather than zeroing it where there is no ledger", async () => {
+    // ⚠ 0 means the ledger took nothing new; `null` means the migration is not
+    // applied here. Flattening the two claims a store that did not happen —
+    // `service-token-spend.ts`'s own rule, and the reason this is a case.
+    vi.mocked(recordSessionTokenSpend).mockResolvedValue(null);
+    expect(await (await post({ sessions: [entry()] })).json()).not.toHaveProperty(
+      "spendRecorded"
+    );
+  });
+
+  it("never costs the projection: the ledger throwing is still a 500, after the store", async () => {
+    // ⚠ The order is the contract (route header): projection, ack, ledger. The
+    // caller's retry re-sends the same cumulative figures and the merge is
+    // GREATEST, so the retry stores the same thing rather than adding it twice.
+    vi.mocked(recordSessionTokenSpend).mockRejectedValue(new Error("no relation"));
+    const res = await post({ sessions: [entry()] });
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(reportSessionStates).toHaveBeenCalled();
   });
 });

@@ -38,7 +38,7 @@ import { getBaseById } from "./service-bases";
 // module's header for the seam. `assertCreatorCanReadItBack` asks the SAME
 // ceiling question `listBases` / `getBaseBySlug` will ask a millisecond later,
 // or this writes rows nobody can reach.
-import { assertCreatorCanReadItBack } from "./service-base-gates";
+import { resolveCreateDestination } from "./service-base-gates";
 import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 /**
@@ -58,7 +58,21 @@ export async function createBase(
   // before the slug derivation's read: a caller that may not create here should
   // spend no round trips finding out, and must not be told about a slug
   // collision with a row it cannot see.
-  await assertCreatorCanReadItBack(ctx);
+  //
+  // 🔒 **AND IT IS NOW THE SAME CALL THAT DECIDES WHERE THE ROW LANDS** (gap 2
+  // of #1077 — the asking seam). `resolveCreateDestination` composes that
+  // ceiling question with the personal-shelf fence and answers WHICH CONTAINER;
+  // it still refuses in every case `assertCreatorCanReadItBack` refused, and the
+  // one thing it adds is that an agent whose operator has ARMED this room
+  // creates on that operator's own shelf instead of being turned away.
+  // ⚠ `wantsTeams` is read here rather than below because a teams create names
+  // the calling container and must never be re-routed — see the gate.
+  const wantsTeams = input.accessMode === "teams";
+  const destination = await resolveCreateDestination(ctx, {
+    homeScoped: input.homeScoped,
+    shareToChannelId: input.shareToChannelId,
+    wantsTeams,
+  });
 
   // No per-base agent-write gate on CREATE — that toggle is per-base and the
   // base doesn't exist yet. Slug unique per workspace keeps MCP `kb_*` slug
@@ -87,8 +101,8 @@ export async function createBase(
   }
 
   // Teams mode is human-only; non-admin creators may only grant teams they
-  // belong to.
-  const wantsTeams = input.accessMode === "teams";
+  // belong to. ⚠ `wantsTeams` is resolved at the top of this function now — the
+  // destination gate needs it before any read.
   const teamGrants = wantsTeams ? (input.teamGrants ?? []) : [];
   if (wantsTeams) {
     if (ctx.source === "agent") {
@@ -115,7 +129,12 @@ export async function createBase(
   // rewrite publish unacknowledged.
   // ⚠ BEFORE THE SLUG LOOP, so a refusal costs no slug and cannot half-land.
   await assertSharedPublishAcknowledged({
-    workspaceId: ctx.workspaceId,
+    // ⚠ THE CONTAINER THE ROW LANDS IN, not the one the call stands in. G16 asks
+    // whether this publishes into the room a PEER is standing in; a personal row
+    // lands on a shelf with one member, so asking about the room would demand an
+    // acknowledgement for an audience the row never reaches. Identical to
+    // `ctx.workspaceId` for every non-personal create.
+    workspaceId: destination.workspaceId,
     publishes: resolvedVisibility === "public",
     acknowledged: input.acknowledgeShared,
     noun: "knowledge base",
@@ -123,12 +142,17 @@ export async function createBase(
 
   let attempt = 0;
   let baseSlug =
-    input.slug ?? deriveSlug(input.name, await listSlugs(ctx.workspaceId));
+    input.slug ?? deriveSlug(input.name, await listSlugs(destination.workspaceId));
   let base: KnowledgeBase;
   while (true) {
     try {
       base = await repo.insertBase({
-        workspaceId: ctx.workspaceId,
+        // 🔒 THE DESTINATION, and the flag beside it cannot disagree with it:
+        // both resolve the personal container by OWNER through
+        // `findPersonalContainerId`. The ROUTER still owns the write — this
+        // names the same place so the slug read above and the rollback below
+        // look where the row actually lands.
+        workspaceId: destination.workspaceId,
         name: input.name,
         slug: baseSlug,
         description: input.description ?? null,
@@ -140,7 +164,7 @@ export async function createBase(
         // 🔒 A ROUTING FLAG, NOT A COLUMN (B15): it decides the row's
         // `workspace_id`, and `personalWriteWorkspaceId` REFUSES rather than
         // falling back when the caller has no personal container.
-        homeScoped: input.homeScoped,
+        homeScoped: destination.homeScoped,
         createdBy: ctx.userId,
       });
       break;
@@ -148,7 +172,7 @@ export async function createBase(
       const code = errorCode(err);
       if (code === "23505" && attempt < SLUG_RETRY_MAX) {
         attempt += 1;
-        baseSlug = deriveSlug(input.name, await listSlugs(ctx.workspaceId));
+        baseSlug = deriveSlug(input.name, await listSlugs(destination.workspaceId));
         continue;
       }
       if (code === "23505") {
@@ -172,7 +196,7 @@ export async function createBase(
         );
       }
     } catch (err) {
-      await repo.hardDeleteBase(ctx.workspaceId, base.id).catch(() => {});
+      await repo.hardDeleteBase(destination.workspaceId, base.id).catch(() => {});
       throw err;
     }
   }
@@ -207,7 +231,7 @@ export async function createBase(
         guestWrite: false,
       });
     } catch (err) {
-      await repo.hardDeleteBase(ctx.workspaceId, base.id).catch(() => {});
+      await repo.hardDeleteBase(destination.workspaceId, base.id).catch(() => {});
       throw err;
     }
   }

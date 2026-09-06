@@ -56,7 +56,7 @@ import {
 // threaded into an exchange you are a party to is yours", which the LAW block
 // already says as "ACT ON ... messages in a THREAD you are a party to".
 // **A rule that had two homes now has one, and the second was the expensive one.**
-const DOCTRINE_MAX_CHARS = 9_428;
+const DOCTRINE_MAX_CHARS = 9_502; // ⚠ 9,428 → 9,502 (+74, 2026-09-06): the pulled half of the artifacts-wave trade — the pushed schema fell 762 in the same change.
 // ⚠ **2,870 → 2,879 (2026-09-03): +9 ON EVERY SECTION, AND NOT ONE OF THEM
 // GREW.** `SECTION_INDEX` names every section and rides every pull, so adding
 // `waiting` to the table lengthened what a caller receives for `send`, `law`

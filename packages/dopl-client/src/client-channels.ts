@@ -20,12 +20,16 @@ import type {
   AwaitMessagesOptions,
   AwaitResult,
   Channel,
+  ChannelArtifact,
+  ChannelArtifactAction,
+  ChannelArtifactResult,
   ChannelCreateInput,
   ChannelUpdateInput,
   ChannelMember,
   ChannelMessage,
   ChannelMessageInput,
   ChannelMessagePosted,
+  ChannelReadEntry,
   ChannelSessionsPage,
   ChannelThread,
   ChannelThreadCreated,
@@ -103,6 +107,38 @@ export class ChannelMethods extends MemberMethods {
     input: ChannelMessageInput
   ): Promise<ChannelMessagePosted> {
     return channel.postMessage(this.transport, channelId, input);
+  }
+
+  /**
+   * THE FOLDED READ (#1220 §4, 2026-09-06). ⚠ `entries === null` means nothing
+   * on the page is in an artifact — the same handling an older server gets.
+   * {@link readChannelMessages} is unchanged and is what artifact-unaware
+   * callers keep using.
+   */
+  readChannelTranscript(
+    channelId: string,
+    opts?: ReadMessagesOptions
+  ): Promise<{ messages: ChannelMessage[]; entries: ChannelReadEntry[] | null }> {
+    return channel.readTranscript(this.transport, channelId, opts);
+  }
+
+  /** ⚠ `folded` may be SHORTER than `requested`; report it, never a count. */
+  writeChannelArtifact(
+    channelId: string,
+    input: ChannelArtifactAction
+  ): Promise<ChannelArtifactResult> {
+    return channel.writeArtifact(this.transport, channelId, input);
+  }
+
+  readChannelArtifact(
+    channelId: string,
+    artifactId: string
+  ): Promise<{
+    artifact: ChannelArtifact;
+    messages: ChannelMessage[];
+    truncated: boolean;
+  }> {
+    return channel.readArtifact(this.transport, channelId, artifactId);
   }
 
   awaitChannelMessages(

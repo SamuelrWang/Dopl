@@ -22,7 +22,11 @@ import {
   WorkspaceKeyPrivateTemplateError,
 } from "./errors";
 import * as repo from "./repository";
-import { getTemplateById } from "./service-reads";
+import { getTemplateById, readTemplateById } from "./service-reads";
+// 🔒 THE ASKING SEAM, SPLIT OUT LIKE ITS KNOWLEDGE TWIN (`knowledge/server/
+// service-base-gates.ts`). Read that module's header for why it is NOT the same
+// function, and for what was open before it existed.
+import { resolveTemplateCreateDestination } from "./service-write-gates";
 import {
   isWorkspaceAdmin,
   resolveVisibleKnowledgeBases,
@@ -75,6 +79,21 @@ export async function createTemplate(
     visibility = input.visibility ?? "private";
   }
 
+  // 🔒 **WHERE THE ROW LANDS, DECIDED BEFORE ANYTHING IS WRITTEN OR READ** —
+  // gap 2 of #1077's template half, and the fence `personal-reach.ts` was
+  // missing on this side. Until this call, `input.homeScoped` went straight to
+  // the repository, so an agent in an UNARMED shared room could write onto its
+  // operator's personal shelf by naming a flag — a shelf the same fence forbids
+  // it to even enumerate. See `service-write-gates.ts` for why this is a twin
+  // rather than a call into the knowledge gate.
+  // ⚠ FIRST, and it takes the RESOLVED visibility: `team` names the calling
+  // container and must never be re-routed, and `input.visibility` is not the
+  // landing value for a caller that named nothing.
+  const destination = await resolveTemplateCreateDestination(ctx, {
+    homeScoped: input.homeScoped,
+    visibility,
+  });
+
   // ⚠ VALIDATE BEFORE INSERTING. Both checks can reject, and a template that
   // exists with the wrong sharing (or with attachments silently dropped) is
   // worse than one that was never created — there is no transaction across
@@ -93,15 +112,24 @@ export async function createTemplate(
   // visibility, for the same reason the shelf fence reads it: the row's landing
   // value is the audience, and `input.visibility` is not it for a caller that
   // named nothing.
+  // ⚠ THE CONTAINER THE ROW LANDS IN, not the one the call stands in — the same
+  // correction the knowledge create carries. G16 asks whether this publishes
+  // into the room a PEER is standing in; a personal row lands on a shelf with
+  // one member, so asking about the ROOM would demand an acknowledgement for an
+  // audience the row never reaches. Identical to `ctx.workspaceId` for every
+  // non-personal create.
   await assertSharedPublishAcknowledged({
-    workspaceId: ctx.workspaceId,
+    workspaceId: destination.workspaceId,
     publishes: visibility === "workspace",
     acknowledged: input.acknowledgeShared,
     noun: "agent",
   });
 
   const template = await repo.insertTemplate({
-    workspaceId: ctx.workspaceId,
+    // 🔒 THE DESTINATION, and the flag beside it cannot disagree with it: both
+    // resolve the personal container by OWNER through `findPersonalContainerId`
+    // — the gate via the fence, the router via `personalWriteWorkspaceId`.
+    workspaceId: destination.workspaceId,
     name: stripNullBytes(input.name),
     description: normalizeProse(input.description),
     instructions: normalizeProse(input.instructions),
@@ -109,16 +137,30 @@ export async function createTemplate(
     fields: normalizeFieldsInput(input.fields),
     visibility,
     // 🔒 A ROUTING FLAG, NOT A COLUMN (B15) — see `insertTemplate`.
-    homeScoped: input.homeScoped,
+    homeScoped: destination.homeScoped,
     createdBy: ctx.userId,
   });
 
+  // 🔒 **BOTH JUNCTIONS FOLLOW THE ROW, NOT THE CALL.** `resource_grants` and
+  // `agent_template_knowledge_bases` each carry a `workspace_id` and each READ
+  // filters on it (`listTeamLinksForTemplates`,
+  // `listKnowledgeLinksForTemplates`), so a link filed under the ROOM for a row
+  // that lives in the CONTAINER is a link nothing ever reads back — the
+  // template would come back with an empty attachment list and no team.
+  // ⚠ `teamIds` is empty by construction on a personal create (the gate refuses
+  // `team` there), so this line is the workspace path unchanged; it names the
+  // destination anyway, because the pair must not be able to drift.
   if (teamIds.length > 0) {
-    await repo.replaceTeamLinks(ctx.workspaceId, template.id, teamIds, ctx.userId);
+    await repo.replaceTeamLinks(
+      destination.workspaceId,
+      template.id,
+      teamIds,
+      ctx.userId
+    );
   }
   if (knowledgeBaseIds.length > 0) {
     await repo.replaceKnowledgeLinks(
-      ctx.workspaceId,
+      destination.workspaceId,
       template.id,
       knowledgeBaseIds,
       ctx.userId
@@ -126,7 +168,21 @@ export async function createTemplate(
   }
   // Re-read through the gated path so the response is the same shape a GET
   // returns — including the viewer-filtered attachment list.
-  return getTemplateById(ctx, template.id);
+  //
+  // ⚠ **THE ID-RESOLVING READ, AND ONLY WHEN THE ROW LEFT THE CALLING
+  // CONTAINER.** `getTemplateById` is keyed to `ctx.workspaceId` and is the
+  // WRITE GATE, which is why create/update/delete funnel through it — but this
+  // call is not a gate, it is the response shaper for a row THIS CALLER JUST
+  // WROTE, and keyed to the room it answered 404 for a create that had just
+  // succeeded onto the personal shelf. `readTemplateById` is the sanctioned
+  // follow (A12): strictly narrower than `canSeeTemplate`, re-based context and
+  // role handled by `shared/tenancy/read-resource.ts`, same 404 and never a 403.
+  // ⚠ The workspace path is byte-identical — `destination.workspaceId` equals
+  // `ctx.workspaceId` for every non-personal create, and the resolving read
+  // costs its two extra reads ONLY on a miss in this tenancy.
+  return destination.workspaceId === ctx.workspaceId
+    ? getTemplateById(ctx, template.id)
+    : readTemplateById(ctx, template.id);
 }
 
 // ─── Update ─────────────────────────────────────────────────────────────

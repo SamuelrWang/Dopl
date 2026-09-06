@@ -34,9 +34,19 @@ const SOURCE = "api/home/overview-series";
  * holds nothing for the window, because there is no history behind the
  * migration.
  *
- * ⚠ **STILL NO `tokens` METRIC**: `channel_sessions.tokens_spent` is a live
- * per-session snapshot the desktop overwrites in place, so any timestamp on that
- * row bins a running total at one instant. Absent, not zeroed.
+ * ⚠ **STILL NO `tokens` METRIC HERE, AND IT IS NO LONGER BECAUSE THE DATA
+ * CANNOT EXIST** (corrected 2026-09-06, Samuel #1326). The old reason —
+ * `channel_sessions.tokens_spent` is a live per-session snapshot the desktop
+ * overwrites in place, so any timestamp on that row bins a running total at one
+ * instant — was true of that table and is still true of it. The durable ledger
+ * beside it (`workspace_token_spend`, migration 20260927120000) keys one row per
+ * session RUN and so bins honestly. It has its OWN route,
+ * `/api/home/token-spend`, rather than a fourth `metric` here: this endpoint's
+ * three metrics all sum `credit_usage_events`, and a metric reading a different
+ * table through the same `parseMetric` door would make one signature answer for
+ * two ledgers with two accuracy stories. ⚠ Tokens are a FLOOR (quantized, and
+ * an ended run's last stretch is never pushed); credits are exact. Those do not
+ * belong on one axis without a label saying so.
  *
  * 🔒 **NO `workspaceId` — the face is cross-channel** (see `./overview`, which
  * carries why the param was removed).

@@ -48,12 +48,18 @@ function refusalFor(op: string): string {
   return parsed.error!.issues.map((i) => i.message).join(" ");
 }
 
-describe("the runtime enum and the published enum are the SAME five", () => {
-  it("publishes exactly the five ops, in order", () => {
+describe("the runtime enum and the published enum are the SAME set", () => {
+  // ⚠ **"FIVE" BECAME "THE SET" ON 2026-09-06, AND THE ASSERTIONS DID NOT
+  // MOVE.** Every check here was already DERIVED from `CHANNEL_OPS` — the
+  // property is that the runtime enum and the published one are the same list,
+  // not that the list has five entries — so `artifact` arriving changed the
+  // titles and nothing else. A count hard-typed into a title is exactly the
+  // pin that goes stale while passing.
+  it("publishes exactly the ops it parses, in order", () => {
     expect(publishedOps()).toEqual([...CHANNEL_OPS]);
   });
 
-  it("parses exactly the five, and no sixth word", () => {
+  it("parses every published op, and no word outside the set", () => {
     for (const op of CHANNEL_OPS) {
       expect(CHANNEL_INPUT_SHAPE.op.safeParse(op).success, op).toBe(true);
     }
@@ -69,7 +75,7 @@ describe("the runtime enum and the published enum are the SAME five", () => {
   });
 });
 
-describe("every retired name is REFUSED, in a sentence that names the five", () => {
+describe("every retired name is REFUSED, in a sentence that names the live ops", () => {
   it("covers the twenty-two the collapse retired, and no more", () => {
     expect(RETIRED_CHANNEL_OPS).toHaveLength(22);
     expect(new Set(RETIRED_CHANNEL_OPS).size).toBe(22);
@@ -80,7 +86,9 @@ describe("every retired name is REFUSED, in a sentence that names the five", () 
       const message = refusalFor(name);
       expect(message).toBe(unknownOpRefusal(name));
       // ⚠ ONE LINE, and it names every live op — a caller pinned to an older
-      // desktop can pick its replacement off this sentence alone.
+      // desktop can pick its replacement off this sentence alone. ⚠ The loop
+      // below is over `CHANNEL_OPS`, so the sixth op is covered the day it
+      // lands rather than the day somebody remembers this file.
       expect(message.split("\n")).toHaveLength(1);
       for (const op of CHANNEL_OPS) expect(message).toContain(`"${op}"`);
     });

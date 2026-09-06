@@ -4,23 +4,54 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { CHANNEL_TRANSCRIPT_PAGE_SIZE } from "../constants";
-import type { ChannelMessage } from "../types";
+import type { ChannelMessage, ChannelReadEntry } from "../types";
 import {
   appendOlderPage,
   dropThreadFromWindow,
   EMPTY_MESSAGE_WINDOW,
+  foldedArtifactsOf,
   isContiguous,
+  mergeEntries,
   mergeWindow,
   oldestSeq,
   type MessageWindow,
 } from "../lib/message-window";
 import { channelMessagesParams, channelMessagesPath } from "../client/query-keys";
 
-const selectMessages = (body: { messages: ChannelMessage[] }) =>
-  body.messages ?? [];
+/** The transcript route's body — `entries` is the ADDITIVE artifact envelope. */
+interface TranscriptBody {
+  messages: ChannelMessage[];
+  entries?: ChannelReadEntry[] | null;
+}
 
-/** Shared frozen empty — a fresh `[]` per render would move the merge memo. */
-const NO_MESSAGES: ChannelMessage[] = [];
+/** What one page IS once both keys are defaulted. */
+interface TranscriptPage {
+  messages: ChannelMessage[];
+  entries: ChannelReadEntry[] | null;
+}
+
+/**
+ * ⚠ **BOTH KEYS DEFAULTED HERE, AND `entries` IS THE §8 CASE, NOT A TIDY-UP.**
+ * The query cache is IndexedDB-persisted with a 24h `gcTime`, so an entry written
+ * by the PREVIOUS bundle — one that had never heard of artifacts — is read by
+ * this one on the first paint after an upgrade, with the key simply ABSENT.
+ * `?? null` is the same fallback the route's own live payload gets a few lines
+ * down, spelled at the read, inline, where a reviewer sees it.
+ *
+ * ⚠ MODULE-LEVEL AND STABLE ON PURPOSE. TanStack memoises a `select` result on
+ * the pair (data, select fn), so a selector minted per render would hand back a
+ * new object every time and move every memo below it.
+ */
+const selectPage = (body: TranscriptBody): TranscriptPage => ({
+  messages: body.messages ?? [],
+  entries: body.entries ?? null,
+});
+
+/** Shared frozen empty — a fresh one per render would move the merge memo. */
+const NO_PAGE: TranscriptPage = Object.freeze({
+  messages: Object.freeze([]) as readonly ChannelMessage[] as ChannelMessage[],
+  entries: null,
+});
 
 /**
  * The scroll-back window plus the channel it belongs to, as ONE state value.
@@ -82,12 +113,12 @@ export function useChannelMessages(
   channelId: string | null,
   workspaceId: string
 ) {
-  const query = useApiQuery<{ messages: ChannelMessage[] }, ChannelMessage[]>(
+  const query = useApiQuery<TranscriptBody, TranscriptPage>(
     channelId ? channelMessagesPath(channelId) : null,
     {
       workspaceId,
       query: channelMessagesParams(),
-      select: selectMessages,
+      select: selectPage,
       keepPreviousData: true,
       // EXPLICIT, and it is a correctness requirement, not a preference
       // (F-163). The realtime signal refetches only the SELECTED channel's
@@ -100,7 +131,15 @@ export function useChannelMessages(
       staleTime: 0,
     }
   );
-  const page = query.data ?? NO_MESSAGES;
+  const data = query.data ?? NO_PAGE;
+  const page = data.messages;
+  // ⚠ MEMOISED ON THE ENVELOPE, not recomputed per render: `mergeEntries` below
+  // is memoised on this array's identity, and an ordinary channel gets the shared
+  // empty back (`foldedArtifactsOf`), so the common case never moves at all.
+  const pageArtifacts = useMemo(
+    () => foldedArtifactsOf(data.entries),
+    [data.entries]
+  );
 
   const [state, setState] = useState<WindowState>(IDLE);
   // ⚠ DERIVED, NOT RESET. See {@link WindowState} — a switch to another channel
@@ -114,6 +153,21 @@ export function useChannelMessages(
     : EMPTY_MESSAGE_WINDOW;
 
   const messages = useMemo(() => mergeWindow(window, page), [window, page]);
+
+  /**
+   * THE ARTIFACT ENVELOPE FOR THE MERGED ARRAY — `lib/message-window.ts ›
+   * mergeEntries` carries the whole argument.
+   *
+   * ⚠ IT IS REBUILT OVER `messages`, NOT FORWARDED FROM THE NEWEST PAGE. The
+   * route describes the page it read; this hook renders that page plus every
+   * loaded history page plus every optimistic patch, and the consumer builds its
+   * ordinary rows from the message arms ALONE. Forwarding one page's envelope
+   * beside this array is how history silently disappears.
+   */
+  const entries = useMemo(
+    () => mergeEntries(messages, window.artifacts, pageArtifacts),
+    [messages, window.artifacts, pageArtifacts]
+  );
 
   // ⚠ THE CURSOR IS THE OLDEST ROW LOADED, taken off the MERGED list so page N+1
   // continues from page N rather than re-reading the same block. Pending rows
@@ -151,13 +205,10 @@ export function useChannelMessages(
       inFlight.current = false;
       setState({ channelId, window: next, loading: false });
     };
-    void apiRequest<{ messages: ChannelMessage[] }>(
-      channelMessagesPath(channelId),
-      {
-        workspaceId,
-        query: { ...channelMessagesParams(), before: cursor },
-      }
-    )
+    void apiRequest<TranscriptBody>(channelMessagesPath(channelId), {
+      workspaceId,
+      query: { ...channelMessagesParams(), before: cursor },
+    })
       .then((body) =>
         settle(
           appendOlderPage(
@@ -168,7 +219,12 @@ export function useChannelMessages(
             // scroll handler.
             body.messages ?? [],
             cursor,
-            CHANNEL_TRANSCRIPT_PAGE_SIZE
+            CHANNEL_TRANSCRIPT_PAGE_SIZE,
+            // ⚠ THE KEY THIS FETCH USED TO DISCARD. A history page folds too —
+            // `readTranscript` folds a lone `before` exactly as it folds the
+            // newest page — and a card whose members are all in history is the
+            // whole reason scroll-back was the hazard.
+            body.entries ?? null
           )
         )
       )
@@ -193,6 +249,13 @@ export function useChannelMessages(
 
   return {
     messages,
+    /**
+     * THE FOLDED RENDERING OF `messages`, or `null` for "nothing here is folded".
+     * ⚠ TOTAL OVER `messages` BY CONSTRUCTION — the two are one value and must
+     * travel together; a consumer that takes one from here and the other from
+     * anywhere else has broken the invariant this hook exists to hold.
+     */
+    entries,
     loading: channelId !== null && query.isPending,
     /** True while the rendered messages belong to the PREVIOUS channel. */
     stale: query.isPlaceholderData,

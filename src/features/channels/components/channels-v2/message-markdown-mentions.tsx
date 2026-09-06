@@ -62,8 +62,13 @@ export function MentionText({ text, ctx }: { text: string; ctx: BodyContext }) {
         // identity map, so a rename re-faces every existing mention with no stored body touched.
         // ⚠ THE RAW TOKEN IS THE `title`, so the address is one hover away and never lost.
         // ⚠ `null` FACE ⇒ THE TOKEN RENDERS EXACTLY AS IT ALWAYS DID — an agent that was never
-        // named, and any agent that has ENDED (the identity map is the LIVE feed plus the peer
-        // projection, and both drop a stopped session). Fallback, not failure.
+        // named. Fallback, not failure.
+        // ⚠ AN ENDED AGENT NEVER REACHES THIS LINE, and not for the reason this comment used to
+        // give (corrected 2026-09-06: the LOCAL feed retains ended sessions for seven days, so
+        // they were resolving and tinting). It fails at `resolveAgentHandle` above, because
+        // `message-markdown.tsx` builds `agentHandles` from the REACHABLE agents only
+        // (`lib/agent-mentions.ts › addressableAgents`) — the tag renders as plain prose, which
+        // is the signal that it addresses nobody. `ctx.index.agents` stays whole for attribution.
         // ⚠ MEMBERS ARE UNTOUCHED: `face` is only ever computed on the agent arm.
         const face = agentId ? agentMentionFace(agentId, ctx.index.agents) : null;
         // ⚠ THE TRAILING RUN COMES BACK VERBATIM. `mentionHandleOf` strips punctuation and markup

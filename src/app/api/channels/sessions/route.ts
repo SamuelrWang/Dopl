@@ -13,6 +13,7 @@ import {
   buildChannelContext,
   listSessionStates,
   recordDeliveryAcks,
+  recordSessionTokenSpend,
   reportSessionStates,
 } from "@/features/channels/server/service";
 
@@ -77,7 +78,24 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
     // ORDER IS FIXED (review D3): a receipt may only name a session this push
     // just reconciled, so the projection has to have landed first.
     const acks = await recordDeliveryAcks(ctx, input.acks ?? [], input.sessions);
-    return NextResponse.json({ ...result, ...acks });
+    // ⚠ **THE DURABLE TOKEN LEDGER RIDES THIS LANE TOO (2026-09-06, Samuel
+    // #1326), LAST AND FOR THE SAME REASON THE ACK IS NOT FIRST.** The
+    // projection is what an entire MCP op reads; this is a durable COPY of one
+    // number already on it, so it may never be the half that costs the
+    // projection. If it throws, the projection has landed and the desktop's
+    // retry re-sends the same cumulative figures — the merge is
+    // `GREATEST(stored, reported)`, so a retry stores the same thing rather
+    // than adding it twice (`service-token-spend.ts` carries the argument).
+    // ⚠ **`spendRecorded` IS OMITTED, NOT ZEROED, WHEN THERE IS NO LEDGER.**
+    // `null` means the migration is not applied here; 0 means it took nothing
+    // new. A response that flattened the two would claim a store that did not
+    // happen, which is the one thing this whole write path refuses to do.
+    const spendRecorded = await recordSessionTokenSpend(ctx, input.sessions);
+    return NextResponse.json({
+      ...result,
+      ...acks,
+      ...(spendRecorded === null ? {} : { spendRecorded }),
+    });
   } catch (err) {
     return toChannelErrorResponse(err);
   }

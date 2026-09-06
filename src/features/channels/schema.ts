@@ -427,6 +427,18 @@ export type {
   MessageReadQuery,
 } from "./schema-reads";
 
+/**
+ * The ARTIFACT write schema — `op="artifact"`'s create / add / remove /
+ * dissolve (design #1220, accepted #1222) — lives in `schema-artifacts.ts`,
+ * re-exported here for the reason every block above is: this file is the
+ * barrel, so there is still no second path to a symbol.
+ */
+export {
+  ARTIFACT_CREATE_MAX_MESSAGES,
+  ArtifactActionSchema,
+} from "./schema-artifacts";
+export type { ArtifactActionInput } from "./schema-artifacts";
+
 
 /**
  * Session-state schemas live in `schema-sessions.ts`, and the CONSENT / TRUST /

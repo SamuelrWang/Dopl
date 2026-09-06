@@ -8,7 +8,7 @@ import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-r
 import {
   buildChannelContext,
   postMessage,
-  readMessages,
+  readTranscript,
 } from "@/features/channels/server/service";
 import {
   ChannelMessageCreateSchema,
@@ -29,8 +29,19 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       "thread",
     ]);
     const ctx = buildChannelContext(auth);
-    const messages = await readMessages(ctx, requireChannelId(auth.params), query);
-    return NextResponse.json({ messages });
+    // ⚠ **`entries` RIDES BESIDE `messages`, AND IS ABSENT UNLESS THE PAGE
+    // ACTUALLY FOLDED** (artifacts #1220 §4, 2026-09-06). `messages` is
+    // unchanged and complete, so an artifact-unaware client — an installed
+    // desktop, an older web build — renders the run exactly as it did before
+    // instead of losing rows to a card it cannot draw. A card-aware renderer
+    // reads `entries` when present. `null` here means "nothing on this page is
+    // in an artifact", never "this server cannot fold".
+    const { messages, entries } = await readTranscript(
+      ctx,
+      requireChannelId(auth.params),
+      query
+    );
+    return NextResponse.json(entries === null ? { messages } : { messages, entries });
   } catch (err) {
     return toChannelErrorResponse(err);
   }

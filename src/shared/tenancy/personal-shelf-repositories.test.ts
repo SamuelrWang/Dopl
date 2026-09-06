@@ -108,6 +108,9 @@ beforeEach(() => {
     userId: USER,
     sharedCredential: false,
     credentialWorkspaceId: null,
+    // ⚠ A PERSON, stated. `personal-reach.ts` gates only the literal `"agent"`,
+    // and every case in this file is a human surface listing its own shelves.
+    source: null,
   });
 });
 
@@ -126,19 +129,40 @@ describe("the personal shelf is ONE container, on both tables", () => {
     }
   });
 
-  it("the WORKSPACE shelf and an ABSENT shelf are the calling workspace, and ask nothing", async () => {
-    for (const shelf of ["workspace", undefined] as const) {
-      queries = [];
-      primeSupabase();
-      await listBasesForWorkspace(WORKSPACE, false, shelf);
-      await listTemplatesForWorkspace(WORKSPACE, shelf);
-      expect(filterFor("knowledge_bases", "workspace_id")).toEqual([WORKSPACE]);
-      expect(filterFor("agent_templates", "workspace_id")).toEqual([WORKSPACE]);
-      expect(
-        queries.some((q) => q.table === "workspaces"),
-        "a non-personal shelf must not look for a container"
-      ).toBe(false);
+  it("the WORKSPACE shelf is the calling workspace, and asks nothing", async () => {
+    await listBasesForWorkspace(WORKSPACE, false, "workspace");
+    await listTemplatesForWorkspace(WORKSPACE, "workspace");
+    expect(filterFor("knowledge_bases", "workspace_id")).toEqual([WORKSPACE]);
+    expect(filterFor("agent_templates", "workspace_id")).toEqual([WORKSPACE]);
+    expect(
+      queries.some((q) => q.table === "workspaces"),
+      "an explicit workspace shelf must not look for a container"
+    ).toBe(false);
+  });
+
+  it("🔒 an ABSENT shelf now reads BOTH shelves, on both tables — gap 1 of #1077", async () => {
+    // 🔒 **THE REVERSAL, AND IT IS THE PAIR THAT MATTERS.** This used to assert
+    // the absent shelf was the calling workspace alone, which is precisely the
+    // LISTING failure #1077 found: an id already resolved across containers
+    // while every enumerating surface stopped at the room, so a personal base
+    // was readable-if-known and findable nowhere. A one-sided repair here is
+    // the F-342 shape all over again, so both tables are asserted side by side.
+    await listBasesForWorkspace(WORKSPACE, false, undefined);
+    await listTemplatesForWorkspace(WORKSPACE, undefined);
+    for (const table of ["knowledge_bases", "agent_templates"]) {
+      expect(filterFor(table, "workspace_id"), table).toEqual([
+        WORKSPACE,
+        CONTAINER,
+      ]);
     }
+  });
+
+  it("🔒 with no container an unfiltered read is the calling workspace, never wider", async () => {
+    // ⚠ MUTATION CHECK. The widening adds ONE container, by owner; a missing
+    // one must subtract rather than fall back to something guessed.
+    containerId = null;
+    await listBasesForWorkspace(WORKSPACE, false, undefined);
+    expect(filterFor("knowledge_bases", "workspace_id")).toEqual([WORKSPACE]);
   });
 });
 

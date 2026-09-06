@@ -24,7 +24,15 @@ import type { CallerScope } from "@/shared/supabase/caller-scope";
  * always was.
  */
 export function sessionCallerScope(userId: string): CallerScope {
-  return { userId, sharedCredential: false, credentialWorkspaceId: null };
+  // ⚠ `source: null` IS THE PERSON ANSWER AND IT IS STATED, not defaulted — a
+  // session is a human at a screen, which is what lets `personal-reach.ts` open
+  // their own shelf from any container ungated.
+  return {
+    userId,
+    sharedCredential: false,
+    credentialWorkspaceId: null,
+    source: null,
+  };
 }
 
 /**
@@ -52,5 +60,13 @@ export function tokenCallerScope(tok: {
       credentialSubjectUserId: tok.subjectUserId ?? null,
     }),
     credentialWorkspaceId: tok.containerId ?? null,
+    // 🔒 **THE AGENT LANE, STATED ONCE.** This function is reached only from
+    // `with-auth.ts`'s `dopl_at_` branch — the same branch that sets
+    // `agentTokenId` and stamps writes `source: "agent"` — so the credential
+    // FAMILY answers it and no lock shape has to be read. ⚠ It is a THIRD axis,
+    // not a spelling of either of the other two: an agent credential may be
+    // unfenced (an ordinary device token) and a locked one may be shared, so
+    // deriving this from `containerId` is the F-336 mistake in a new place.
+    source: "agent",
   };
 }

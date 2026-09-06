@@ -189,6 +189,14 @@ beforeEach(() => {
   vi.mocked(repoMessages.findMessageById).mockResolvedValue(
     storedEscalation()
   );
+  // ⚠ THE TYPED DOOR'S TWO READS, EMPTY BY DEFAULT (2026-09-05, task 13b). Fold
+  // 11b runs on every HUMAN post that is not itself a card, so an unstubbed file
+  // measures a typed door that found nothing — which is the right default here:
+  // every case above is about the BUTTON, and no card should be open under it.
+  vi.mocked(repoMessages.listRecentEscalations).mockResolvedValue([]);
+  vi.mocked(repoMessages.listAnsweredEscalationIds).mockResolvedValue(
+    new Set<string>()
+  );
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
@@ -444,5 +452,193 @@ describe("the wake key is DERIVED, never accepted", () => {
       (capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as { agentId: null })
         .agentId
     ).toBeNull();
+  });
+});
+
+/**
+ * THE TYPED DOOR (task 13b, rulings #1081–#1085).
+ *
+ * The gap: Samuel answered a card by TYPING "Approve the package". The post
+ * carried no `escalationAnswer`, tied to no card and woke nobody — and #1084's
+ * finding is that this was never a regression, the path was never built.
+ *
+ * ⚠ EVERY NEGATIVE CASE ASSERTS **SILENCE**, not an error. A near miss is an
+ * ordinary message, which is what it already was; the feature may only ever ADD
+ * a stamp. A rejects.toThrow anywhere in this describe would be the bug.
+ */
+describe("a TYPED answer presses the same button", () => {
+  function openCard(
+    over: Partial<ChannelMessageRow> = {},
+    meta: Record<string, unknown> = {}
+  ): void {
+    vi.mocked(repoMessages.listRecentEscalations).mockResolvedValue([
+      storedEscalation(over, meta),
+    ]);
+  }
+
+  it("stamps the answer when the body IS an option's label", async () => {
+    openCard();
+    await postMessage(ctx, "room", { body: "Ship now" });
+    expect(capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY]).toEqual({
+      escalationMessageId: ESC_ID,
+      optionIndex: 0,
+      agentId: "k3wpf7c5",
+    });
+  });
+
+  it("matches case-insensitively and trims, so real typing counts", async () => {
+    openCard();
+    await postMessage(ctx, "room", { body: "  wAiT  " });
+    expect(
+      (capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as { optionIndex: number })
+        .optionIndex
+    ).toBe(1);
+  });
+
+  it("accepts the BARE NUMBER the card's own body prints", async () => {
+    // `escalationBody` renders "2. **Wait** — …", so "2" is 1-BASED in and
+    // 0-based out. It is read off what the operator SEES.
+    openCard();
+    await postMessage(ctx, "room", { body: "2" });
+    expect(
+      (capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as { optionIndex: number })
+        .optionIndex
+    ).toBe(1);
+  });
+
+  it("stamps the SAME shape a press does — one path downstream", async () => {
+    // ⚠ #1085 ›3: the wake verdict must never learn there were two entrances.
+    // Same derived `agentId`, off the STRONGER door, for a card that carried its
+    // own idempotency key — the 13a repair reached through the typed path too.
+    openCard({ client_msg_id: "ask-2" }, { session_id: "chan::k3wpf7c5" });
+    await postMessage(ctx, "room", { body: "Ship now" });
+    expect(capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY]).toEqual({
+      escalationMessageId: ESC_ID,
+      optionIndex: 0,
+      agentId: "k3wpf7c5",
+    });
+  });
+
+  it("leaves PARTIAL text as ordinary prose, silently", async () => {
+    // ⚠ THE WHOLE FAIL-CLOSED RULING. A wrong match presses a button the person
+    // did not press, through a UI that has no unpress.
+    openCard();
+    await postMessage(ctx, "room", { body: "I think we should ship now" });
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("leaves an out-of-range number as ordinary prose", async () => {
+    openCard();
+    await postMessage(ctx, "room", { body: "5" });
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("treats '0' as prose — the render has no option zero", async () => {
+    openCard();
+    await postMessage(ctx, "room", { body: "0" });
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("refuses to guess when TWO options share a label", async () => {
+    openCard({
+      metadata: {
+        [ESCALATION_METADATA_KEY]: {
+          ...ESCALATION,
+          options: [
+            { label: "Ship now", consequence: "Live in ten minutes." },
+            { label: "Ship now", consequence: "Live tomorrow." },
+          ],
+          recommendation: null,
+        },
+      },
+    });
+    await postMessage(ctx, "room", { body: "Ship now" });
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("does not answer an ALREADY-ANSWERED card", async () => {
+    openCard();
+    vi.mocked(repoMessages.listAnsweredEscalationIds).mockResolvedValue(
+      new Set([ESC_ID])
+    );
+    await postMessage(ctx, "room", { body: "Ship now" });
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("does not answer a card the typist could not have PRESSED", async () => {
+    // ⚠ AUTHORIZATION IS THE CANDIDATE FILTER. The typed door must never answer a
+    // card the button path would refuse with a 403 — here, a peer's card that
+    // tagged somebody else.
+    openCard({ author_user_id: PEER }, { [MENTIONS_METADATA_KEY]: [PEER] });
+    await postMessage(thirdCtx, "room", { body: "Ship now" });
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("answers the MOST RECENT open card, never an older one", async () => {
+    const older = storedEscalation({ id: "older-card", seq: 3 });
+    // `listRecentEscalations` is `seq` DESC; the newest survivor wins.
+    vi.mocked(repoMessages.listRecentEscalations).mockResolvedValue([
+      storedEscalation(),
+      older,
+    ]);
+    await postMessage(ctx, "room", { body: "Ship now" });
+    expect(
+      (capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as {
+        escalationMessageId: string;
+      }).escalationMessageId
+    ).toBe(ESC_ID);
+  });
+
+  it("skips the ANSWERED newest and takes the most recent OPEN one", async () => {
+    vi.mocked(repoMessages.listRecentEscalations).mockResolvedValue([
+      storedEscalation(),
+      storedEscalation({ id: "older-card", seq: 3 }),
+    ]);
+    vi.mocked(repoMessages.listAnsweredEscalationIds).mockResolvedValue(
+      new Set([ESC_ID])
+    );
+    await postMessage(ctx, "room", { body: "Ship now" });
+    expect(
+      (capturedMetadata()[ESCALATION_ANSWER_METADATA_KEY] as {
+        escalationMessageId: string;
+      }).escalationMessageId
+    ).toBe("older-card");
+  });
+
+  it("an AGENT's post never presses its operator's card", async () => {
+    // ⚠ THE FENCE. An agent posts as its operator's user id, so without this an
+    // agent writing "Ship now" would press a button nobody touched.
+    openCard();
+    await postMessage(agentCtx, "room", { body: "Ship now" });
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("a post that IS a card does not answer the card before it", async () => {
+    openCard();
+    await postMessage(agentCtx, "room", {
+      body: "Ship now",
+      escalation: ESCALATION,
+    });
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("does not fail the POST when the lookup itself fails", async () => {
+    // ⚠ THIS FOLD MAY ONLY EVER ADD A STAMP. A member's ordinary sentence must
+    // not fail to send because an optional convenience could not run.
+    vi.mocked(repoMessages.listRecentEscalations).mockRejectedValue(
+      new Error("db is having a day")
+    );
+    await expect(
+      postMessage(ctx, "room", { body: "Ship now" })
+    ).resolves.toBeDefined();
+    expect(has(capturedMetadata(), ESCALATION_ANSWER_METADATA_KEY)).toBe(false);
+  });
+
+  it("reads nothing at all for a body no label could be", async () => {
+    // The free prune: an option label is a single-line `safeLabel` ≤ 80 chars, so
+    // ordinary prose is refused without touching the database — every message on
+    // the post path pays this fold's cost.
+    await postMessage(ctx, "room", { body: "x".repeat(200) });
+    expect(repoMessages.listRecentEscalations).not.toHaveBeenCalled();
   });
 });

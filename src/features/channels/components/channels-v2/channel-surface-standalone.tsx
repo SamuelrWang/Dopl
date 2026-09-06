@@ -113,6 +113,20 @@ export function StandaloneChannelSurface({
     // `relative` is the agent view's containing block — it is absolutely
     // positioned against this surface, and without a positioned ancestor here it
     // escapes to whatever the host page happens to have.
+    //
+    // ⚠ NO `min-w-0` HERE, AND THAT IS THE DECISION, NOT AN OMISSION (Samuel's
+    // narrow-window report, 2026-09-06). As a flex ITEM this div keeps the
+    // default `min-width: auto`, so its floor is its own min-content width: the
+    // transcript contributes 0 (it carries `min-w-0`) and the info column
+    // contributes its fixed 380px. That floor is what KEEPS the right panel at
+    // 380px when the desktop window narrows — the main area absorbs every pixel
+    // of the shrink, which is the ruled behaviour. Adding `min-w-0` lets this row
+    // shrink BELOW 380px, at which point the panel (`shrink-0`, by design) hangs
+    // out of the row and is clipped away by the host's own `overflow-hidden`
+    // (`apps/desktop-ui/src/pages/home/index.tsx › the record frame`) — the right
+    // panel would start DISAPPEARING instead of merely being overdrawn. The
+    // overdraw was a PAINT-ORDER bug and is fixed where it lived, on
+    // `.channel-info-slide` in `src/app/globals.css`.
     <div className={cn("relative flex min-h-0 flex-1", className)}>
       <ChannelSurface
         workspaceId={workspaceId}

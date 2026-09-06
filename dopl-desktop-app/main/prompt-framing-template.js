@@ -164,6 +164,41 @@ function fieldLines(fields) {
 // `UNTRUSTED_ENTRY_BODY_HEADER` — the tool telling the agent to treat as DATA the very document
 // the role told it to load as context. That is correct and stays; saying so in advance is what
 // stops the agent reporting it as a contradiction.
+// THE ATTACHMENTS THIS SESSION CANNOT REACH — Samuel's ruling, 2026-09-05.
+//
+// ⚠ **THE ROLE MAY NAME A BASE THIS OPERATOR CANNOT OPEN, AND UNTIL TODAY THAT WAS SILENT.** A
+// shared base attached to a PERSONAL template resolves against the launching operator's own
+// visibility (`service-reads.ts › decorateWithKnowledgeBases`), so launching it in a channel that
+// cannot see the base dropped it from the payload — and the agent, told nothing, read a role with
+// no knowledge in it and behaved as though none had been attached. It is the same argument the
+// `read_only` block above already makes: UNKNOWN IS NOT EMPTY (INVARIANTS §11).
+//
+// 🔒 ⚠ **A COUNT IS ALL THAT ARRIVES AND ALL THAT MAY.** No id, no name, no workspace, no
+// container — the server withholds them deliberately (`resolve/route.ts`) and
+// `template-resolve.js › narrow` drops anything else. So these lines say the AGENT lacks access
+// and never say where the thing it lacks lives; "in this channel" is a fact about this session,
+// which is what makes it sayable at all.
+// ⚠ **THE SENTENCE IS QUOTED SO IT IS REPEATED, NOT PARAPHRASED.** The operator asked for one
+// wording, and an agent improvising "the base ws-2/ops-notes is missing" out of a count it never
+// received is the leak this block is shaped to prevent.
+// ⚠ **IT NEVER STOPS A LAUNCH.** The agent runs with everything it does reach; this is the part
+// of the role that tells it what to say when the gap comes up.
+function unreachableKnowledgeLines(unreachable) {
+  const n = Number.isFinite(unreachable) && unreachable > 0 ? Math.floor(unreachable) : 0;
+  if (!n) return [];
+  const subject = n === 1 ? 'One knowledge base' : `${n} knowledge bases`;
+  const it = n === 1 ? 'it' : 'them';
+  return [
+    '',
+    'ATTACHED KNOWLEDGE YOU CANNOT REACH:',
+    `- ${subject} attached to this role ${n === 1 ? 'is' : 'are'} not available to this session.`,
+    `You were given no id and no name for ${it}, and there is nowhere to look ${it} up. Do not`,
+    'guess, do not search for a substitute, and do not say where it might live.',
+    'If the work needs it, say exactly this and carry on with what you do have:',
+    '"I don\'t have access to this knowledge base in this channel."',
+  ];
+}
+
 function knowledgeLines(bases, profile) {
   const list = (Array.isArray(bases) ? bases : [])
     // ⚠ THE ID GOES THROUGH `idToken`, NOT `sanitizeName`. It is spliced into a tool call the
@@ -245,6 +280,10 @@ function templateRoleFraming(ctx, nonce) {
   lines.push(
     ...fieldLines(t.fields),
     ...knowledgeLines(t.knowledgeBases, ctx && ctx.profile),
+    // ⚠ A SECTION OF ITS OWN, AFTER the reachable one. The two say different things to the agent
+    // — here is what to open, and here is what to say when something is missing — and folding the
+    // second into the first would put a refusal sentence under a heading listing live bases.
+    ...unreachableKnowledgeLines(t.unreachableKnowledgeBaseCount),
     end,
     ''
   );

@@ -16,6 +16,7 @@ import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import { StreamProse } from "./agent-stream-prose";
 import { TAB_ACTION } from "./bits";
+import { useOverflowMeasure } from "./use-overflow-measure";
 
 /**
  * WHAT THE BANNER SAYS BEFORE A POST HAS LEFT THE MACHINE, and what it says when
@@ -27,6 +28,106 @@ import { TAB_ACTION } from "./bits";
 export const POST_PENDING_LABEL = "Pending";
 export const POST_NOT_SENT_LABEL = "Not sent";
 export const POST_ACTION_LABEL = "Post";
+
+/** The collapse control's two faces. ⚠ THE LOG LANE'S WORDS, DELIBERATELY
+ *  (`agent-stream-log.tsx` › `LogLine`): one stream, one verb for "there is more
+ *  of this than you are being shown". Exported for the tests. */
+export const POST_EXPAND_LABEL = "Show more";
+export const POST_COLLAPSE_LABEL = "Show less";
+
+/**
+ * HOW MUCH OF A POSTED BODY SHOWS BEFORE THE OPERATOR ASKS FOR THE REST
+ * (task 10, #1058/#1059).
+ *
+ * ⚠ THE CLAMP IS A HEIGHT, NOT A SLICE, and that is the whole difference between
+ * this lane and the log's. `agent-stream-prose.tsx` rule 4 states it: the body is
+ * MARKDOWN, a slice cuts a fence or a link mid-token and renders the wreckage,
+ * and `line-clamp` is a `-webkit-box` rule that does not clamp a container of
+ * sibling blocks. Bounding the CONTAINER touches neither the string nor the
+ * renderer — every character is still in the DOM and one press shows it.
+ */
+export const COLLAPSED_BODY_LINES = 6;
+
+/**
+ * ⚠ READ IN `em`, AGAINST `text-caption`, SO A TOKEN CHANGE MOVES THE CLAMP WITH
+ * IT. The clip box below carries `text-caption`, so `1em` is
+ * `--text-caption` (11.5px today) rather than whatever the card inherits; `1.5`
+ * is `leading-normal` from the body's own `textClassName`, and the `18px` is
+ * `StreamProse`'s `py-[9px]` top and bottom. Change either of those two on the
+ * body and change them here — that pairing is why the numbers are spelled out
+ * instead of being one magic pixel count.
+ */
+const COLLAPSED_BODY_MAX_HEIGHT = `calc(${COLLAPSED_BODY_LINES} * 1.5em + 18px)`;
+
+/**
+ * THE BODY, BOUNDED — and the control appears ONLY on a card that is actually
+ * taller than the bound (#1059, in those words).
+ *
+ * ⚠ THE MEASUREMENT IS `use-overflow-measure.ts`, SHARED WITH THE ARTIFACT CARD
+ * (extracted 2026-09-06; the two were byte-identical copies). Why it measures at
+ * all rather than reading the CSS, why the observer watches the inner content,
+ * and why it runs only while collapsed are all recorded there. This card keeps
+ * its own constants, its own labels and its own clip-box markup.
+ *
+ * ⚠ `text` IS THIS CARD'S RE-MEASURE TRIGGER, and it is deliberately NOT the
+ * artifact card's `members.length`: the `post` frame is pushed as the agent calls
+ * the tool and this body GROWS while it streams, so a one-shot measure on mount
+ * would leave the control missing on exactly the long cards it exists for. It
+ * also re-measures where `ResizeObserver` is absent (jsdom, old hosts).
+ *
+ * ⚠ `collapsible` IS THE HOOK'S `enabled`: a body still under review is rendered
+ * whole and asks nothing.
+ *
+ * ⚠ IT WRAPS `StreamProse`, IT DOES NOT REACH INTO IT (Samuel, 2026-08-31): same
+ * renderer, same props, same string as the transcript one pane over. The banner,
+ * the four faces, the Post button and the expiry rule are untouched — the §6 seam
+ * this card owns does not move for a render bound.
+ */
+function SentBody({ text, collapsible }: { text: string; collapsible: boolean }) {
+  const {
+    open,
+    setOpen,
+    overflows,
+    clipRef,
+    contentRef,
+    boxId: bodyId,
+  } = useOverflowMeasure({ enabled: collapsible, remeasureOn: text });
+
+  const prose = (
+    <StreamProse
+      text={text}
+      className="px-3 py-[9px]"
+      textClassName="text-caption leading-normal text-text-primary"
+    />
+  );
+  if (!collapsible) return prose;
+
+  return (
+    <>
+      <div
+        ref={clipRef}
+        id={bodyId}
+        className="min-w-0 overflow-hidden text-caption"
+        style={open ? undefined : { maxHeight: COLLAPSED_BODY_MAX_HEIGHT }}
+      >
+        <div ref={contentRef}>{prose}</div>
+      </div>
+      {overflows && (
+        <div className="flex px-3 pb-2.5">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls={bodyId}
+            className="text-micro font-medium text-link"
+          >
+            {open ? POST_COLLAPSE_LABEL : POST_EXPAND_LABEL}
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
 
 /**
  * WHAT THE AGENT POSTED INTO THE CHANNEL — **the v1 session window's outbound
@@ -148,11 +249,16 @@ export function SentToChannelBox({
           one message wearing two faces. ⚠ THE §6 SEAM IS UNTOUCHED: the banner,
           the four faces, the Post button and the expiry rule are what this card
           owns, and none of them moved — only the body's renderer did. */}
-      <StreamProse
-        text={text}
-        className="px-3 py-[9px]"
-        textClassName="text-caption leading-normal text-text-primary"
-      />
+      {/* ⚠ ONLY THE SETTLED FACES COLLAPSE — `Sent to <thread>` and `Posted to
+          channel`. A body still under review is the one an operator is deciding
+          about, and hiding two thirds of it behind a control that sits beside
+          the Post button would be this card asking for a press on words it had
+          folded away. `pending` covers {@link POST_NOT_SENT_LABEL} too: an
+          expired draft is the last chance to read what never went, whole.
+          ⚠ THAT ALSO KEEPS THE TWO CONTROLS APART BY CONSTRUCTION — `canPost`
+          requires `pending`, so the Post button and the collapse control can
+          never contend for the card's last row. */}
+      <SentBody text={text} collapsible={!pending} />
       {/* ⚠ THE ACTION IS ON THE LAST ROW, RIGHT-ALIGNED — the position every card
           in this tree keeps (`bits.tsx › CARD_BUTTON`), so the eye finds the same
           control in the same corner. `TAB_ACTION`'s geometry: a 36px dark pill.

@@ -5,7 +5,7 @@ import {
   type CredentialAxes,
 } from "@/shared/auth/credential-audience";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { findPersonalContainerId } from "./personal-container";
+import { resolvePersonalReach } from "./personal-reach";
 import { grantedResourceIds } from "./resource-grant-reach";
 
 /**
@@ -33,9 +33,11 @@ import { grantedResourceIds } from "./resource-grant-reach";
  *      and a revoked one is not either.
  *   3. **the credential's own workspace lock**, when it carries one — a locked
  *      credential resolves inside its lock, **plus its own operator's PERSONAL
- *      container**, and nowhere else (§4 layer B1 + rulings B10/#18). ⚠ This
- *      module NARROWS on the lock; it never widens it past that one container
- *      and never removes it. See {@link lockedCandidates}.
+ *      container WHEN THAT SHELF IS IN REACH FROM THE ROOM IT IS STANDING IN**,
+ *      and nowhere else (§4 layer B1 + rulings B10/#18, NARROWED by task 11 /
+ *      #1077 clause (a), approved #1080). ⚠ This module NARROWS on the lock; it
+ *      never widens it past that one container and never removes it. See
+ *      {@link lockedCandidates}.
  *   4. **the caller could already list the row for themselves** — `created_by`
  *      is the caller, or the row is visible to every member of its container.
  *
@@ -153,6 +155,19 @@ export interface ResourceCaller extends CredentialAxes {
   /** WHICH CONTAINER the credential is fenced to (`mcp_tokens.container_id`);
    *  `null`/absent = unfenced. Clause 3 narrows on it and never widens. */
   apiKeyWorkspaceId?: string | null;
+  /**
+   * WHO is asking — the two fields `personal-reach.ts` needs to decide whether
+   * clause 3's personal-container half is in reach from this room.
+   *
+   * ⚠ **OPTIONAL BECAUSE THE CONTEXTS ALREADY CARRY THEM UNDER THESE NAMES**
+   * (`KnowledgeContext.source` / `.sessionId` and their four siblings), so every
+   * agent lane states them by construction and no call site changed. ⚠ ABSENT
+   * READS AS A PERSON, which is the ungated answer BY RULING and the one place
+   * this pair does not fail closed — see `personal-reach.ts ›
+   * PersonalReachCaller.source` for why, and do not "fix" it into a refusal.
+   */
+  source?: string | null;
+  sessionId?: string | null;
 }
 
 /**
@@ -257,7 +272,7 @@ async function listContainersForCaller(
   if (caller.apiKeyWorkspaceId) {
     query = query.in(
       "workspace_id",
-      await lockedCandidates(caller.apiKeyWorkspaceId, caller.userId)
+      await lockedCandidates(caller, caller.apiKeyWorkspaceId)
     );
   }
   const { data, error } = await query;
@@ -296,15 +311,36 @@ async function listContainersForCaller(
  * axes exist to keep apart (F-333/F-336).
  * ⚠ ONE INDEXED PROBE (`workspaces_personal_owner_uidx`), on the LOCKED lane
  * only: an unfenced credential never asks.
+ *
+ * 🔒 ⚠ **AND SINCE TASK 11 THE WIDENING IS CONDITIONAL — THIS IS THE CLAUSE-3
+ * NARROWING SAMUEL APPROVED AT #1080 (option 1), AND IT REVERSES SHIPPED
+ * BEHAVIOUR.** The paragraph above is still true of the operator standing in
+ * their OWN room; what it also did, until now, was let an agent session in a
+ * room with somebody ELSE in it resolve its operator's personal bases with no
+ * human in the loop. `personal-reach.ts` is the one fence that decides, so a
+ * person is unaffected, a solo room is unaffected, and a SHARED room widens only
+ * once its owner has armed it. ⚠ A closed answer must stay a `[lock]` list and
+ * never a refusal: the id then resolves to nothing and takes the same
+ * 404-never-403 path another member's private row takes, which is what keeps
+ * arming state from becoming an oracle.
  */
 async function lockedCandidates(
-  lockedWorkspaceId: string,
-  userId: string
+  caller: ResourceCaller,
+  lockedWorkspaceId: string
 ): Promise<string[]> {
-  const personal = await findPersonalContainerId(userId);
-  return personal === null || personal === lockedWorkspaceId
-    ? [lockedWorkspaceId]
-    : [lockedWorkspaceId, personal];
+  const reach = await resolvePersonalReach({
+    userId: caller.userId,
+    credentialSubjectUserId: caller.credentialSubjectUserId,
+    // 🔒 THE ROOM IS THE LOCK. A locked credential acts in exactly one
+    // container, so the room half of (room, owner) is a DB fact off the token
+    // row — never a header, and never the container the caller asked about.
+    workspaceId: lockedWorkspaceId,
+    source: caller.source,
+    sessionId: caller.sessionId,
+  });
+  return reach.kind === "open" && reach.containerId !== lockedWorkspaceId
+    ? [lockedWorkspaceId, reach.containerId]
+    : [lockedWorkspaceId];
 }
 
 /**

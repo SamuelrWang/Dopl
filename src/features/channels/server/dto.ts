@@ -1,6 +1,7 @@
 import type {
   AgentToolProfile,
   Channel,
+  ChannelArtifact,
   ChannelDelivery,
   ChannelDirectPeer,
   ChannelMember,
@@ -161,6 +162,32 @@ export type ChannelMessageRow = {
   recipient_agent_ids?: string[] | null;
   delivery?: string | null;
   delivery_at?: string | null;
+  // ── ARTIFACT MEMBERSHIP (20260926120000) ────────────────────────────────
+  // ⚠ OPTIONAL IN THE TYPE, NULLABLE IN THE COLUMN, and both spellings mean the
+  // same thing to every reader: not folded. Optional because a build whose
+  // database has not run the migration yet still type-checks against rows that
+  // lack the key — the same accommodation `wake_verdict` and the delivery
+  // columns make one block up.
+  artifact_id?: string | null;
+};
+
+/**
+ * A `channel_artifacts` row — the card, never its members. Membership lives on
+ * `channel_messages.artifact_id` and is read separately
+ * (`repository-artifacts.ts`), because a list on the artifact is the shape the
+ * design deliberately did NOT choose (#1220 §2).
+ */
+export type ChannelArtifactRow = {
+  id: string;
+  channel_id: string;
+  workspace_id: string;
+  name: string;
+  summary: string;
+  created_by: string;
+  created_by_agent: string | null;
+  dissolved_at: string | null;
+  client_msg_id: string | null;
+  created_at: string;
 };
 
 export type ProfileRef = {
@@ -347,6 +374,34 @@ export function mapMessageRow(
     recipientAgentIds: row.recipient_agent_ids ?? null,
     delivery: (row.delivery ?? null) as ChannelDelivery | null,
     deliveryAt: row.delivery_at ?? null,
+    // ⚠ CARRIED THROUGH EVEN THOUGH THE DEFAULT READ FOLDS THESE ROWS AWAY, and
+    // the reason is the design's addressing PIN (#1220 §3): a read that NAMES a
+    // message returns the MESSAGE. Such a read hands back a member row, and the
+    // renderer still has to be able to say which box it belongs to — a citation
+    // that resolved to a body with no way back to its artifact would be the
+    // "it is in that box somewhere" failure the pin exists to prevent.
+    artifactId: row.artifact_id ?? null,
+  };
+}
+
+/**
+ * Artifact row → DTO. ⚠ COUNT AND SPAN ARE NOT HERE, deliberately: they are an
+ * aggregate over `channel_messages` (`repository-artifacts.ts › artifactSpans`),
+ * not columns, so a mapper that invented zeroes for them would render a card
+ * claiming an artifact was empty. The folded entry is assembled in
+ * `service-artifacts.ts`, which has both halves in hand.
+ */
+export function mapArtifactRow(row: ChannelArtifactRow): ChannelArtifact {
+  return {
+    id: row.id,
+    channelId: row.channel_id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    summary: row.summary,
+    createdBy: row.created_by,
+    createdByAgent: row.created_by_agent,
+    dissolvedAt: row.dissolved_at,
+    createdAt: row.created_at,
   };
 }
 

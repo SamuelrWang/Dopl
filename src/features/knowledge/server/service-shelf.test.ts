@@ -66,6 +66,21 @@ vi.mock("./repository", () => ({
 
 vi.mock("./service-seed", () => ({ seedWorkspace: vi.fn() }));
 
+// ⚠ **NEW ON THE A2 SLICE, AND IT IS WHY THE WRITE BLOCK BELOW MOVED.**
+// `createBase` now resolves WHERE the row lands before inserting it
+// (`service-base-gates.ts › resolveCreateDestination`), and that decision asks
+// the personal fence. Mocked OPEN here so this file keeps measuring the SERVICE
+// rather than the fence — `shared/tenancy/personal-reach.test.ts` owns every
+// direction of the fence itself, and `service-base-gates.test.ts` owns the four
+// arms of the seam.
+vi.mock("@/shared/tenancy/personal-reach", () => ({
+  resolvePersonalReach: vi.fn(async () => ({
+    kind: "open",
+    containerId: "ws-personal",
+  })),
+  personalShelfContainerIds: vi.fn(async () => []),
+}));
+
 vi.mock("@/features/teams/server/repository", () => ({
   deleteGrantRow: vi.fn(),
   deleteGrantsForResource: vi.fn(),
@@ -195,22 +210,46 @@ describe("creating onto the personal shelf", () => {
   // against BOTH tables at once, which is where the two copies should always
   // have been compared); the other two died with the concepts they guarded.
   //
-  // ⚠ **WHAT THIS BLOCK ASSERTS NOW IS THAT THE SERVICE DOES NOT RE-DECIDE.**
-  // `homeScoped` is a routing flag the repository reads; a service that
-  // resolved, defaulted or rewrote it would be a second fence with no test.
+  // ⚠ **THE "DOES NOT RE-DECIDE" PIN IS RETIRED ON THE A2 SLICE (gap 2 of
+  // #1077), AND ITS REVERSAL IS THE FEATURE.** It read: *"`homeScoped` is a
+  // routing flag the repository reads; a service that resolved, defaulted or
+  // rewrote it would be a second fence with no test."* The service DOES resolve
+  // it now — `service-base-gates.ts › resolveCreateDestination` is exactly that
+  // second fence, and it is no longer without a test
+  // (`service-base-gates.test.ts` drives all four of its arms).
+  //
+  // ⚠ WHAT SURVIVES THE REVERSAL IS THE HALF THAT WAS REALLY AT RISK: the
+  // service must not invent a shelf nobody asked for, and the flag it hands the
+  // repository must agree with the CONTAINER it hands it beside. Those are the
+  // two cases below, restated against the destination rather than against the
+  // input.
 
-  it("passes the caller's own flag straight through, unchanged", async () => {
+  it("resolves the asked-for shelf to a container, and the two AGREE", async () => {
+    // 🔒 THE FLAG AND THE ID TOGETHER, or the slug read, the insert and the
+    // rollback disagree about where the row went. Both resolve the personal
+    // container by OWNER — the router through `personalWriteWorkspaceId`, the
+    // gate through the fence — so they cannot answer differently.
     await createBase(personCtx(), { name: "Shelf note", homeScoped: true });
     expect(mockRepo.insertBase).toHaveBeenCalledWith(
-      expect.objectContaining({ homeScoped: true, visibility: "private" })
+      expect.objectContaining({
+        homeScoped: true,
+        workspaceId: "ws-personal",
+        visibility: "private",
+      })
     );
   });
 
-  it("passes NOTHING through when nobody asked — every pre-existing caller", async () => {
-    // ⚠ ABSENT, not `false`. The two mean the same thing to the repository and
-    // an explicit `false` would suggest to a reader that it is examined.
+  it("🔒 invents NO shelf when nobody asked — the calling container, still", async () => {
+    // ⚠ THE ASSERTION MOVED FROM `undefined` TO `false` AND THE BEHAVIOUR DID
+    // NOT: the router tests `homeScoped !== true`, so absent and `false` are
+    // one instruction. The destination is one SHAPE with both fields always
+    // present, which is what stops a caller reading a missing flag as a hint.
+    // 🔒 The load-bearing half is the container: a person creating in their own
+    // workspace must still land THERE, never on a shelf the seam went looking
+    // for on their behalf.
     await createBase(personCtx(), { name: "Ordinary" });
     const args = mockRepo.insertBase.mock.calls[0][0];
-    expect(args.homeScoped).toBeUndefined();
+    expect(args.homeScoped).toBe(false);
+    expect(args.workspaceId).toBe(HOME_WS);
   });
 });

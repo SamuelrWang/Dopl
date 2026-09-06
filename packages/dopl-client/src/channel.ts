@@ -16,10 +16,14 @@ import type {
   AwaitMessagesOptions,
   AwaitResult,
   Channel,
+  ChannelArtifact,
+  ChannelArtifactAction,
+  ChannelArtifactResult,
   ChannelCreateInput,
   ChannelUpdateInput,
   ChannelMember,
   ChannelMessage,
+  ChannelReadEntry,
   ChannelMessageInput,
   ChannelMessagePosted,
   ChannelSessionStateOwn,
@@ -118,6 +122,72 @@ export async function readMessages(
     { toolName: "channel_read" }
   );
   return data.messages;
+}
+
+/**
+ * THE SAME READ, KEEPING THE FOLD — messages plus `entries` when the page
+ * actually folded something (#1220 §4).
+ *
+ * ⚠ **`entries: null` MEANS "NOTHING ON THIS PAGE IS IN AN ARTIFACT", AND SO
+ * DOES AN OLDER SERVER THAT OMITS THE KEY.** Both collapse to the same handling
+ * — render the messages — which is why one nullable field is enough and no
+ * version probe is needed.
+ * ⚠ **`readMessages` ABOVE IS UNCHANGED AND STAYS.** Every installed caller is
+ * artifact-unaware; this is the additive twin for one that is not.
+ */
+export async function readTranscript(
+  t: DoplTransport,
+  channelId: string,
+  opts: ReadMessagesOptions = {}
+): Promise<{ messages: ChannelMessage[]; entries: ChannelReadEntry[] | null }> {
+  const params = new URLSearchParams();
+  if (opts.since !== undefined) params.set("since", String(opts.since));
+  if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+  if (opts.thread !== undefined) params.set("thread", opts.thread);
+  const qs = params.toString();
+  const data = await t.request<{
+    messages: ChannelMessage[];
+    entries?: ChannelReadEntry[];
+  }>(`/api/channels/${enc(channelId)}/messages${qs ? `?${qs}` : ""}`, {
+    toolName: "channel_read",
+  });
+  return { messages: data.messages, entries: data.entries ?? null };
+}
+
+/**
+ * `op="artifact"` — create / add / remove / dissolve, one POST.
+ *
+ * ⚠ **THERE IS NO `delete`, AND THAT IS THE WHOLE SAFETY ARGUMENT.**
+ * `dissolve` clears the column from every member and retires the card; nothing
+ * is deleted, so every action on this surface is reversible in the way the rest
+ * of this client's writes are.
+ */
+export async function writeArtifact(
+  t: DoplTransport,
+  channelId: string,
+  input: ChannelArtifactAction
+): Promise<ChannelArtifactResult> {
+  return t.request<ChannelArtifactResult>(
+    `/api/channels/${enc(channelId)}/artifacts`,
+    { method: "POST", body: input, toolName: "channel_artifact" }
+  );
+}
+
+/** OPEN ONE CARD — its members verbatim, in seq order, unfolded (#1220 §4).
+ *  ⚠ `truncated` says the member list hit its ceiling; never drop it. */
+export async function readArtifact(
+  t: DoplTransport,
+  channelId: string,
+  artifactId: string
+): Promise<{
+  artifact: ChannelArtifact;
+  messages: ChannelMessage[];
+  truncated: boolean;
+}> {
+  return t.request(
+    `/api/channels/${enc(channelId)}/artifacts?artifact=${enc(artifactId)}`,
+    { toolName: "channel_artifact_read" }
+  );
 }
 
 export async function awaitMessages(

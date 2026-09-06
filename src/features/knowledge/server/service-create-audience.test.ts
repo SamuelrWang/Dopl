@@ -45,6 +45,17 @@ vi.mock("./repository", () => ({
   hardDeleteBase: vi.fn(),
 }));
 
+// ⚠ **THE A2 SLICE PUT A SECOND FENCE UNDER THIS SUITE'S SUBJECT.** `createBase`
+// no longer refuses a restricted audience outright — it asks
+// `personal-reach.ts` whether the caller's own shelf is reachable from this
+// room, and follows the OWNER when it is (gap 2 of #1077). Defaulted CLOSED
+// here, which is an UNARMED room and therefore the exact world every case below
+// was written in: the refusals are unchanged facts, not survivals.
+vi.mock("@/shared/tenancy/personal-reach", () => ({
+  resolvePersonalReach: vi.fn(),
+  personalShelfContainerIds: vi.fn(async () => []),
+}));
+
 import {
   countActiveWorkspaceMembers,
   findWorkspaceKind,
@@ -52,6 +63,7 @@ import {
   listGrantedBaseIdsForChannels,
 } from "./repository-audience";
 import * as repo from "./repository";
+import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
 import { createBase } from "./service-base-writes";
 import { getBaseBySlug, listBases } from "./service-bases";
 import { AgentWriteDisabledError } from "./errors";
@@ -107,9 +119,17 @@ function soloContainer() {
   mockCount.mockResolvedValue(1);
 }
 
+const mockReach = vi.mocked(resolvePersonalReach);
+/** The operator's OWN personal container. ⚠ Never the room. */
+const PERSONAL = "33333333-3333-4333-8333-333333333333";
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockRepo.listBaseSlugsForWorkspace.mockResolvedValue([]);
+  // ⚠ UNARMED IS THE DEFAULT WORLD OF THIS FILE, and it is the fail-closed one:
+  // an agent in a room its operator has not armed reaches no shelf, so every
+  // refusal below is measured under exactly the conditions it was written for.
+  mockReach.mockResolvedValue({ kind: "closed", refusal: "unarmed_room" });
   mockRepo.insertBase.mockImplementation(
     async (args: { workspaceId: string; slug: string }) =>
       base("kb-new", args.slug, args.workspaceId)
@@ -198,6 +218,61 @@ describe("createBase refuses where the creator could not read it back", () => {
     ).rejects.toBeInstanceOf(AgentWriteDisabledError);
     expect(mockRepo.insertBase).not.toHaveBeenCalled();
     expect(mockRepo.hardDeleteBase).not.toHaveBeenCalled();
+  });
+});
+
+// ── ARMED: the refusal becomes a RE-ROUTE, and only then ─────────────
+
+describe("🔒 an ARMED room sends the create to its OWNER instead of refusing", () => {
+  /** The owner has armed this room for their personal shelf (#1077 gap 2). */
+  function armed() {
+    mockReach.mockResolvedValue({ kind: "open", containerId: PERSONAL });
+  }
+
+  it("writes the base into the caller's OWN container, not the room", async () => {
+    // 🔒 THE READ-BACK GUARANTEE MOVED TO THE DESTINATION, which is the whole
+    // repair: the premise at the top of this file is about the ROOM's ceiling,
+    // and a personal row does not land there. In a container with one member
+    // the audience is `unrestricted` by construction, so an OPEN fence IS the
+    // guarantee rather than a way around the gate.
+    sharedContainer([]);
+    armed();
+
+    const created = await createBase(agentCtx(), { name: "Notes" } as never);
+
+    expect(created.workspaceId).toBe(PERSONAL);
+    expect(mockRepo.insertBase).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: PERSONAL, homeScoped: true })
+    );
+  });
+
+  it("🔒 and the slug is read in the DESTINATION, never in the room", async () => {
+    // ⚠ MUTATION CHECK. A slug read against the room would collide the new row
+    // against names it will never share a container with, and — worse — report
+    // a conflict with a base the caller cannot see.
+    sharedContainer([]);
+    armed();
+
+    await createBase(agentCtx(), { name: "Notes" } as never);
+
+    expect(mockRepo.listBaseSlugsForWorkspace).toHaveBeenCalledWith(PERSONAL);
+  });
+
+  it("🔒 an ARMED room still refuses create-AND-SHARE — the room is named", async () => {
+    // 🔒 A GRANT CANNOT FOLLOW A ROW OUT OF ITS CONTAINER. `shareToChannelId`
+    // names a channel of THIS room, so a personal destination would leave the
+    // grant pointing at a container the base does not live in. Arming widens
+    // where a row may LAND; it does not make a channel grant portable.
+    sharedContainer([]);
+    armed();
+
+    await expect(
+      createBase(agentCtx(), {
+        name: "Notes",
+        shareToChannelId: CHANNEL_A,
+      } as never)
+    ).rejects.toBeInstanceOf(AgentWriteDisabledError);
+    expect(mockRepo.insertBase).not.toHaveBeenCalled();
   });
 });
 

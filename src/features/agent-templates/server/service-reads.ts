@@ -4,14 +4,16 @@ import type {
   AgentTemplate,
   AgentTemplateContext,
   ResolvedAgentTemplate,
-  TemplateKnowledgeBaseRef,
   TemplateShelf,
 } from "../types";
 import { AgentTemplateNotFoundError } from "./errors";
 import * as repo from "./repository";
+// ⚠ THE KB DECORATION MOVED OUT ON 2026-09-05 at the §2 cap — same seam
+// `repository-knowledge-links.ts` was cut on. This file owns which rows a caller
+// may SEE; that one owns what their attachments RESOLVE TO.
+import { decorateWithKnowledgeBases } from "./service-knowledge-decoration";
 import {
   canSeeTemplate,
-  resolveVisibleKnowledgeBases,
   shareCtxForTemplates,
   withSharingSet,
 } from "./service-shared";
@@ -221,48 +223,14 @@ export async function resolveTemplateForLaunch(
     model: template.model,
     fields: template.fields,
     knowledgeBases: template.knowledgeBases,
+    // ⚠ CARRIED, NOT RECOMPUTED, and `?? 0` reads "the decoration did not run",
+    // which on this door cannot happen — `readTemplateById` always decorates.
+    // The coalesce is the honest default rather than a claim of reachability:
+    // saying "1 unreachable" on a row nobody counted would be an invention, and
+    // saying nothing is what the launch already did before today.
+    unreachableKnowledgeBaseCount: template.unreachableKnowledgeBaseCount ?? 0,
     authoredByCaller:
       template.createdBy !== null && template.createdBy === ctx.userId,
   };
 }
 
-/**
- * Side-load KB refs onto a visible row set — ONE junction query plus the
- * visibility resolution, regardless of row count.
- * ⚠ Filtered through the SAME `resolveVisibleKnowledgeBases` the attach gate
- * uses, so a base that was attachable when it was attached and has since gone
- * private simply disappears from the payload rather than leaking its name.
- */
-async function decorateWithKnowledgeBases(
-  ctx: AgentTemplateContext,
-  templates: AgentTemplate[]
-): Promise<AgentTemplate[]> {
-  if (templates.length === 0) return [];
-  const links = await repo.listKnowledgeLinksForTemplates(
-    ctx.workspaceId,
-    templates.map((t) => t.id)
-  );
-  if (links.length === 0) return templates;
-  const visible = await resolveVisibleKnowledgeBases(
-    ctx,
-    links.map((l) => l.knowledgeBaseId)
-  );
-  const byId = new Map<string, TemplateKnowledgeBaseRef>(
-    visible.map((kb) => [kb.id, kb])
-  );
-  const byTemplate = new Map<string, TemplateKnowledgeBaseRef[]>();
-  for (const link of links) {
-    const ref = byId.get(link.knowledgeBaseId);
-    if (!ref) continue;
-    byTemplate.set(link.templateId, [
-      ...(byTemplate.get(link.templateId) ?? []),
-      ref,
-    ]);
-  }
-  return templates.map((t) => ({
-    ...t,
-    knowledgeBases: (byTemplate.get(t.id) ?? []).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    ),
-  }));
-}

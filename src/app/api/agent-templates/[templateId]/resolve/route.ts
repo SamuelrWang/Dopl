@@ -19,7 +19,8 @@ import {
  * flattened payload it needs to start an agent, and nothing else:
  *
  *   200 → { name, instructions, model, fields: [{key,value}],
- *           knowledgeBases: [{id,name}], authoredByCaller }
+ *           knowledgeBases: [{id,name}], authoredByCaller,
+ *           unreachableKnowledgeBaseCount }
  *   404 → { error: { code: "AGENT_TEMPLATE_NOT_FOUND", message } }
  *
  * ⚠ THE MECHANISM, CORRECTED 2026-08-22 (G-2). This said the desktop calls it
@@ -64,6 +65,17 @@ import {
  *   2. `knowledgeBases` is VIEWER-FILTERED, so two people resolving the SAME
  *      template can legitimately get different arrays. A shared template cannot
  *      be used to hand someone a pointer to a base they cannot read.
+ *
+ * ⚠ `unreachableKnowledgeBaseCount` IS THE SEVENTH KEY, ADDED 2026-09-05
+ * (Samuel's ruling). The filter in consequence 2 used to be SILENT: an agent
+ * launched where an attached base is out of reach read a role naming no
+ * knowledge at all, and could not tell anyone that something was missing. The
+ * count is what lets the desktop's ROLE block say *"I don't have access to this
+ * knowledge base in this channel"*.
+ * 🔒 ⚠ **A COUNT, NEVER A LOCATION.** Not the id, not the name, not the
+ * container — those are exactly what consequence 2 withholds, and this key must
+ * never grow into a way of asking where a base lives. It also does not gate the
+ * launch: the agent starts, minus the base, and says so.
  *
  * `viewer` is enough: resolving is a read.
  */

@@ -40,6 +40,7 @@ import {
   escalationRowFor,
   type EscalationRow,
 } from "./view-model-escalation";
+import type { ArtifactRow } from "./view-model-artifacts";
 import type { ChannelMessage, ChannelThread } from "../../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
@@ -236,7 +237,10 @@ export type TranscriptRow =
   | SystemRow
   | ThreadCardRow
   | ReceiptRow
-  | EscalationRow;
+  | EscalationRow
+  // ⚠ TYPE-ONLY, AND THE ARROW IS ONE-WAY: `view-model-artifacts.ts` builds this
+  // row and never imports this file back, so the union can widen without a cycle.
+  | ArtifactRow;
 
 /**
  * Same author, same agent-claim AND same agent INSTANCE as the row above → a

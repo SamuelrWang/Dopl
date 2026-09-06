@@ -131,6 +131,63 @@ describe("the app frame is ONE ground", () => {
 
 });
 
+/**
+ * THE CHANNEL INFO COLUMN KEEPS ITS TRACK WHEN THE WINDOW NARROWS (Samuel,
+ * 2026-09-06: "when I decrease the width of the window it starts to cover the
+ * right panel").
+ *
+ * ⚠ THIS IS A SOURCE PIN, NOT A LAYOUT TEST, AND THAT IS THE HONEST CHOICE.
+ * jsdom computes no layout and paints nothing: a "render at 700px and assert the
+ * panel is 380 wide" case passes whatever the CSS says, including the broken
+ * CSS it is supposed to catch. What CAN fail is the rule text itself — the two
+ * properties that make the column unshrinkable, and the layer that stops the
+ * transcript being painted over it.
+ *
+ * ⚠ BOTH COPIES, WHICH IS HALF THE POINT (F-074). `kit.css` is a hand-copy of
+ * the web `globals.css` kit, and the DESKTOP renders the copy — a fix that lands
+ * only on the web file is invisible to the app Samuel filed this from.
+ */
+describe("the channel info column is fixed-width, and paints above the transcript", () => {
+  it.each([
+    ["web", WEB_KIT_CSS],
+    ["desktop", KIT_CSS],
+  ])("%s: the shell cannot shrink and owns a stacking layer", (_host, file) => {
+    const body = rule(code(read(file)), "\n.channel-info-slide {");
+    // The TRACK: `flex: 0 0 auto` is what makes the MAIN area absorb every pixel
+    // of a narrowing window. Change it and the panel starts shrinking instead.
+    expect(body, "the column became shrinkable").toContain("flex: 0 0 auto");
+    // The LAYER: the transcript's positioned children (composer, popovers) paint
+    // in CSS step 8 and would otherwise cover a later, non-positioned sibling.
+    expect(body, "the paint-order fix is gone").toContain("position: relative");
+    expect(body, "the paint-order fix is gone").toMatch(/z-index:\s*1\b/);
+    // ⚠ And it must stay CLIPPED, or the layer covers the transcript in return.
+    expect(body, "the layer without the clip is a new bug").toContain(
+      "overflow: hidden"
+    );
+  });
+
+  it("stays UNDER the agent overlay — the pane that is meant to cover it", () => {
+    // ⚠ `agent-panel.tsx` is `z-20` and absolutely positioned against the same
+    // right edge. The column's z-index is 1 ON PURPOSE: high enough to beat the
+    // transcript's `auto`, low enough that opening an agent still covers this.
+    // A future bump here silently puts the info column over the agent pane.
+    expect(
+      code(read("src/features/channels/components/channels-v2/agent-panel.tsx"))
+    ).toContain("z-20");
+  });
+
+  it("the open width still matches the agent panel's, on both copies", () => {
+    // The pairing `agent-panel.tsx` names in as many words — a mismatch makes
+    // the divider jump sideways the moment an agent view opens.
+    for (const file of [WEB_KIT_CSS, KIT_CSS]) {
+      expect(
+        rule(code(read(file)), '\n.channel-info-slide[data-open="true"] {'),
+        `${file} drifted off 380px`
+      ).toContain("width: 380px");
+    }
+  });
+});
+
 describe("ONE gray panel, with the page floating inside it", () => {
   const shellTsx = code(read(SHELL_TSX));
 
