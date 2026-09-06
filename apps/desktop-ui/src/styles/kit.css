@@ -602,6 +602,13 @@
      with no offsets moves nothing; it only buys the layer. `overflow: hidden`
      above already guarantees this column paints NOTHING outside its own track,
      so the layer cannot cover the transcript in return. */
+  /* ⚠ RECORD CORRECTION (2026-09-06, measured live): the paint-order reading above
+     was wrong for the case it was written for. The "spill" was the SURFACE row
+     itself sized to its min-content (1809px in a 656px viewport) because one long
+     `<pre>` line propagated up — `min-w-0` on the transcript never zeroed that
+     contribution. The real fix is `contain: inline-size` on
+     `channels-v2/message-pane.tsx › section`. This layer is left in place: it is
+     harmless and still correct paint order, but it fixed nothing on its own. */
   position: relative;
   z-index: 1;
   transition: width 200ms cubic-bezier(0.22, 0.61, 0.36, 1);

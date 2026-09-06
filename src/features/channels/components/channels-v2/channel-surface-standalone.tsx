@@ -117,8 +117,13 @@ export function StandaloneChannelSurface({
     // ⚠ NO `min-w-0` HERE, AND THAT IS THE DECISION, NOT AN OMISSION (Samuel's
     // narrow-window report, 2026-09-06). As a flex ITEM this div keeps the
     // default `min-width: auto`, so its floor is its own min-content width: the
-    // transcript contributes 0 (it carries `min-w-0`) and the info column
-    // contributes its fixed 380px. That floor is what KEEPS the right panel at
+    // transcript contributes 0 and the info column contributes its fixed 380px.
+    // ⚠ CORRECTED 2026-09-06: it contributes 0 because `message-pane.tsx › section`
+    // carries `contain: inline-size` — NOT because of its `min-w-0`, which this
+    // comment previously claimed. `min-w-0` lifts an item's own minimum and leaves its
+    // min-content CONTRIBUTION intact, so before containment one 1343px code line in
+    // a transcript floored this row at 1809px and pushed the open panel off-screen
+    // (measured in the running app; the "overdraw" below was that, mis-read). That floor is what KEEPS the right panel at
     // 380px when the desktop window narrows — the main area absorbs every pixel
     // of the shrink, which is the ruled behaviour. Adding `min-w-0` lets this row
     // shrink BELOW 380px, at which point the panel (`shrink-0`, by design) hangs

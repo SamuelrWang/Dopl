@@ -344,7 +344,20 @@ export function ChannelsV2MessagePane({
   }, [scrollTarget, loading, releasePin]);
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col">
+    // ⚠ `contain: inline-size` IS WHAT MAKES THIS COLUMN CONTRIBUTE ZERO WIDTH TO ITS
+    // PARENT, AND `min-w-0` ALONE NEVER DID (measured live 2026-09-06). `min-w-0` only
+    // lifts a flex item's own automatic minimum; the item still hands its full
+    // min-content width up as its CONTRIBUTION to the parent's intrinsic size. So one
+    // fenced code line of 1343px in the Dopl channel made this column's min-content
+    // 1429px, the surface root (min-width: auto, by design — see
+    // `channel-surface-standalone.tsx`) floored at 1429 + 380, the whole surface ran to
+    // 1809px in a 656px viewport and the OPEN info column sat at x=1777, off-screen.
+    // Other channels rendered fine because they had no such line: content-driven.
+    // Containment severs that propagation without clipping — popovers and sticky
+    // chrome are positioned descendants and are unaffected; the `<pre>` keeps its
+    // `overflow-x-auto` and now scrolls inside a column that is always the row's
+    // width. ⚠ NOT `overflow-x-hidden`: that would clip the composer's popovers.
+    <section className="flex min-w-0 flex-1 flex-col [contain:inline-size]">
       <PaneHeader
         channelName={channelName}
         threadTitle={thread?.title ?? null}

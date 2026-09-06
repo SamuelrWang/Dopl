@@ -63,10 +63,10 @@ function build({ onHome, getWindow } = {}) {
           click: () => { const n = nav(); if (n && n.canGoForward()) n.goForward(); },
         },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
+        // ⚠ NO ZOOM ROLES (Samuel, 2026-09-06): the desktop's sizing and spacing are
+        // fixed; ⌘+ / ⌘− / ⌘0 must do nothing. The three Electron roles that stood
+        // here (`resetZoom`, `zoomIn`, `zoomOut`) were the only thing binding those
+        // keys, so removing them removes the capability rather than hiding it.
         { role: 'togglefullscreen' },
         { role: 'toggleDevTools' },
       ],
