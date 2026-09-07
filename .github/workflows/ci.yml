@@ -29,7 +29,12 @@ jobs:
         # Node 20 dropped 2026-08-09: the desktop's `node --test 'test/**/*.mjs'`
         # glob needs >=22, and GitHub is deprecating node 20 runner images.
         node: [22]
-        os: [ubuntu-latest, windows-latest]
+        # macOS ONLY (Samuel, 2026-09-07: "ignore windows and ubuntu, we're only
+        # focusing on macos from now on"). Dopl ships one platform, and the
+        # Windows leg only ever produced flakes that cost reruns. Tooling jobs
+        # below (lint, size cap, drift, RLS) stay on ubuntu: they test no
+        # platform, the RLS job needs Docker, and macOS minutes bill at 10x.
+        os: [macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +83,8 @@ jobs:
       matrix:
         # Node 20 dropped 2026-08-09: `node --test` glob expansion needs >=22.
         node: [22]
-    runs-on: ubuntu-latest
+    # The macOS app's own tests run on macOS (Samuel, 2026-09-07 — see build-test).
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: dopl-desktop-app
