@@ -310,9 +310,15 @@ describe("scheduleLatestReleaseRefresh", () => {
   });
 
   it("honours an injected clock, so the TTL is testable without a timer stub", async () => {
+    // ⚠ Take the clock BEFORE the refresh. The cache stamps its own Date.now()
+    // once the fetch resolves, so a probe built from a LATER Date.now() is due
+    // after 1ms of drift — which a loaded CI runner supplies (Windows,
+    // 2026-09-07). `before + TTL - 1` is strictly inside the window no matter
+    // how long the refresh took; the stale probe below is safe either way.
+    const before = Date.now();
     await refreshLatestRelease();
     const spy = serve("version: 1.9.0\n");
-    scheduleLatestReleaseRefresh(Date.now() + LATEST_RELEASE_TTL_MS - 1);
+    scheduleLatestReleaseRefresh(before + LATEST_RELEASE_TTL_MS - 1);
     expect(spy).not.toHaveBeenCalled();
     scheduleLatestReleaseRefresh(Date.now() + LATEST_RELEASE_TTL_MS + 1);
     await waitForCache(() => expect(cachedLatestRelease()).toBe("1.9.0"));
