@@ -287,3 +287,97 @@ the code.
    solo** (a live solo row that grew a second member, `entitlements.ts › paidEntitlement`) and a
    canceled row rendering Starter as current — which is what the workspace is actually entitled to.
    The verdict decides the card, exactly as it decides the allowance.
+
+## 11. v2.1 — $8.99 everywhere, and a personal PRO tier (Samuel, 2026-09-08, verbatim)
+
+> "Team seats are 799, and normal pro seats are also 799 … I think we should make it 899 … This
+> will be for both individual and team. For individual, 899. The free tier gives you 500 credits a
+> month. 899 gives you, let's say, 5,000 credits a month. … Personal free is 500, seat free is 100,
+> pro individual is 5,000, and team individual is also 5,000."
+
+| Wallet | Free | Paid ($8.99 / month) |
+|---|---|---|
+| `personal` (home space) | 500 | **5,000 — plan `pro`, NEW** |
+| `seat` (per active member of a standard workspace) | 100 | 5,000 — plan `team`, $8.99 **per seat** |
+
+Supersedes A5 (personal paid tier now exists) and A7 ($8.99, not $8). Stripe prices ALREADY
+CREATED (live, 2026-09-08, by the Desktop Agent, idempotent):
+`price_1UD9QwPyqrLgRVbyEN3fx4H9` = Team seat monthly $8.99 on the existing seat product;
+`price_1UD9QxPyqrLgRVbyPW8hO660` = Personal Pro monthly $8.99 on the old Solo product. The old
+$7.99 seat price (`price_1Tu13pPyqrLgRVbyMRxbCnLH`) carries ONE live subscription and is left
+alone (Samuel decides whether it moves). Env after this wave: `STRIPE_PRO_SEAT_PRICE_ID` = the new
+$8.99 seat id, `STRIPE_PERSONAL_PRO_PRICE_ID` = the personal id, `STRIPE_LEGACY_SEAT_PRICE_ID` =
+the old $7.99 seat id (recognition only), `STRIPE_SOLO_PRICE_ID` unchanged (legacy recognition).
+
+### 11.1 Design — the personal container IS the billing row (no second Stripe pipeline)
+
+A `kind='personal'` container is a real `workspaces` row, one per user, owner = its only member.
+Its Pro subscription lives in **`workspace_billing` keyed by that container id**, so checkout,
+webhook (metadata `workspace_id` = the container), watermark, claim, portal, invoices, payment
+method and cancel/resume all work UNCHANGED. The only new SQL is widening the plan CHECK.
+
+- `PlanId = "free" | "solo" | "team" | "pro"`. `pro` is sold ONLY on a personal container; `team`
+  ONLY on a standard one; `solo` legacy-only (never sold). `CheckoutPlan = "team" | "pro"`.
+- Migration `20260930130000_workspace_billing_plan_pro.sql`: drop/re-add
+  `workspace_billing_plan_check` as `CHECK (plan IN ('free','solo','team','pro'))` (constraint
+  name from `20260719000000_workspace_billing_plan_taxonomy_v2.sql`). Header in the house style.
+- `credits.ts`: `PERSONAL_MONTHLY_CREDITS: Record<"free" | "pro", number> = { free: 500, pro: 5_000 }`,
+  `personalCreditsForPlan(verdict)`. `SEAT_MONTHLY_CREDITS` unchanged (`pro` key = 5_000 for the
+  Record type; it never applies to a seat).
+- NEW pure `billing/prices.ts` (no React, no `"use client"`): `PRO_PRICE = 8.99`,
+  `TEAM_SEAT_PRICE = 8.99`, `SOLO_PRICE = 5.99` (legacy label), `formatMoney`. `plans.ts` and
+  `use-workspace-entitlements.ts` import from it — closes F-672 (the `$8.00` literal goes).
+- `plans.ts`: `WORKSPACE_PLANS` (Starter 100 per member; Team $8.99 per seat, 5,000 per member,
+  unlimited members) and `PERSONAL_PLANS` (Free 500 per month; Pro $8.99 per month, 5,000 per
+  month, full chat history). `plansForKind(kind)`. Keep the name `PLANS` as an alias of
+  `WORKSPACE_PLANS` only if a test still imports it — prefer renaming the importers.
+- `entitlements.ts › paidEntitlement`: `pro` + live → `"pro"` (no member condition — a personal
+  container has one member by construction, F-673). `entitledPlanFor` returns the widened union.
+  `getWorkspaceEntitlements` on a personal container: `objectCap` null, `chatsWindowDays` pro → null,
+  free → `FREE_CHATS_WINDOW_DAYS` as today, `seatCount` null.
+- `seats.ts › syncSeatQuantity`: `pro` is flat like `solo` — never resize. `listReconcilableTeamWorkspaceIds` unchanged.
+- `stripe.ts`: `getPersonalProPriceId()` (`STRIPE_PERSONAL_PRO_PRICE_ID`), `getLegacySeatPriceId()`
+  (`STRIPE_LEGACY_SEAT_PRICE_ID`, optional). `createWorkspaceCheckoutSession({ plan: "team" | "pro" })`:
+  pro → personal price, quantity 1; team → seat price at member count. `selectSeatItem` prefers
+  seat, then legacy seat, then personal pro, then solo, then first item. Webhook `derivePlan`:
+  seat OR legacy-seat price → `team`; personal pro price → `pro`; solo → `solo`; else metadata
+  (`team` | `pro` | `solo`), else `team`.
+- Checkout route: body `plan` ∈ {team, pro}; `pro` requires `workspaceKind === "personal"`, `team`
+  requires standard; mismatch → 400 `PLAN_NOT_FOR_CONTAINER`; `solo` → 400 `PLAN_RETIRED` (keep).
+  `minRole: "admin"` + `sessionOnly` unchanged (the personal owner is `owner`).
+- `url.ts`: `parseCheckoutPlan` accepts `team` | `pro`. `entitlements.ts › upgradeUrl(plan?)`:
+  `plan: "pro"` appends `plan=pro`. Segment-less `/billing` page: with `?plan=pro`, forward to the
+  caller's PERSONAL container segment (resolve via the existing personal-container read in
+  `workspaces/server/repository.ts`; it exists for every user since `20260920120000`); otherwise
+  the standard-workspace forward/picker as today, plus a "Personal" row at the top of the picker
+  linking to that segment.
+- Credits service: personal wallet limit and period now depend on the OWNER's personal billing row.
+  `workspace-billing.ts › getPersonalBilling(ownerUserId)` = ONE PostgREST query
+  (`workspaces` filtered `owner_id` + `kind='personal'`, embedding `workspace_billing(<BILLING_COLS>)`)
+  → `{ containerId, billing | null }`. Addressed `kind='personal'` → `getWorkspaceBilling(workspaceId)`
+  directly (no owner lookup). Verdict = `entitledPlanFor(billing, 1)`; limit =
+  `personalCreditsForPlan(verdict)`; period = `resolveCreditPeriod(anchor, verdict)` (pro → Stripe
+  anchor; free → calendar month; `personalCreditPeriod()` stays as the free/no-row arm).
+  **Budget (re-pinned): seat 3 / personal 2 / link 3.** `upgradeUrl` non-empty for seat-on-free
+  (team) AND personal-on-free (`upgradeUrl("pro")`); empty on any paid verdict.
+- Status payload: add `containerKind: WorkspaceKind` (client fallback `"standard"`); `plan` on a
+  personal container is `pro` | `free`. Client hook: `isPro`, `isPaid` includes pro,
+  `monthlyTotal` = `PRO_PRICE` when pro, `containerKind` exposed.
+- Registrar refusal (packages, cannot import src — F-668 stands, add the second literal):
+  personal free: `Your personal credits are used up for this month ({used}/{limit}). Resets {date}.\n\nUpgrade to Pro for 5,000 credits a month: {upgradeUrl}`;
+  personal paid: no upgrade line. Seat lines unchanged. Older server (no `wallet`): unchanged.
+- UI: `PlansBillingCore` renders `plansForKind(ent.containerKind)`; personal cards = Free / Pro
+  with "Upgrade to Pro" → `onUpgrade("pro")`; legacy-solo note only on standard. Usage pane:
+  personal container hides the Members line and the seat wording. Upgrade modal: kind-aware
+  (personal → Pro; standard → Team; `add-member` variant is standard-only). Embedded checkout:
+  plan name from the plan. `/pricing`: TWO groups — "Personal" (Free 500 / Pro $8.99, 5,000) and
+  "Workspaces" (Starter 100 per member / Team $8.99 per seat, 5,000 per member); Pro CTA →
+  `billingPath({ intent: "upgrade", plan: "pro" })`. Desktop Home: the credit bar's denominator is
+  `credits.limit` (already); when `plan === "free"` on the home container show a one-word
+  "Upgrade" text action that opens the existing settings modal on its billing section
+  (`home-settings-control.tsx` owns the modal — lift a `openSettings(section)` callback only if it
+  is a small change; otherwise report and skip). Minimal-copy ruling applies everywhere.
+- Docs: INVARIANTS §10/§4A/§3 (pro), ENGINEERING addendum to the 2026-09-07 stratum, findings:
+  F-670 RESOLVED, F-672 RESOLVED, F-669 updated (prices flipped; one $7.99 sub remains), F-673 note.
+- After review: the Desktop Agent applies BOTH migrations to prod by name via the Supabase MCP,
+  updates `.env.local`, and hands Samuel the two Vercel env vars to set. Nothing else is deployed.
