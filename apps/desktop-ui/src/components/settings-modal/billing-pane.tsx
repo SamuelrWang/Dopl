@@ -12,12 +12,14 @@ interface Props {
 
 /**
  * Plans & Billing — the DESKTOP binding of `PlansBillingCore`. Renders in
- * full — the same two cards (Starter, free, 100 credits per member per month;
- * Team, $8 per seat, 5,000 per member per month) and the same legacy-Pro note,
- * because the copy lives in the shared core and this file adds no words of its
- * own about plans. Only the two Stripe-shaped actions differ, because the
- * packaged CSP (`script-src 'self'`, `connect-src 'none'`) refuses Stripe and
- * all origins:
+ * full — the same two cards the core picks for the container it was handed
+ * (`plans.ts › plansForKind`, 2026-09-08): a STANDARD workspace gets Starter
+ * (free, 100 credits per member per month) and Team ($8.99 per seat, 5,000 per
+ * member) plus the legacy-Pro note; a `kind='personal'` container gets Free
+ * (500 credits a month) and **Pro** ($8.99 a month, 5,000). The copy lives in
+ * the shared core and this file adds no words of its own about plans. Only the
+ * two Stripe-shaped actions differ, because the packaged CSP
+ * (`script-src 'self'`, `connect-src 'none'`) refuses Stripe and all origins:
  *
  *   - Upgrade/checkout — web mounts Embedded Checkout in-pane; here it opens
  *     the same workspace's web billing surface in the browser.
@@ -56,7 +58,10 @@ export function BillingPane({ workspaceSegment, workspaceId, role }: Props) {
         role={role}
         workspaceId={workspaceId}
         // The chosen plan rides to the browser, so the billing page opens on
-        // that checkout instead of re-asking (`features/billing/url.ts`).
+        // that checkout instead of re-asking (`features/billing/url.ts`). ⚠ The
+        // plan is `team` OR `pro` since 2026-09-08 and `billingPath` already
+        // takes the union — the segment is whichever container's settings are
+        // open, which is the container the core offered that plan for.
         onUpgrade={(plan) => openInBrowser(billingPath(workspaceSegment, plan))}
         onManage={handleManage}
         portalLoading={portalLoading}

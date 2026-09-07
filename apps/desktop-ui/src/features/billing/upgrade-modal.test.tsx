@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { SEAT_MONTHLY_CREDITS } from "@/features/billing/credits";
 import { planNumber } from "@/features/billing/plans";
+import { formatMoney, TEAM_SEAT_PRICE } from "@/features/billing/prices";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeResponse } from "#/lib/dopl-bridge";
 import { SEGMENT, WORKSPACE_ID, installBridge } from "#/test-utils/bridge";
@@ -80,7 +81,13 @@ describe("UpgradeModal in the desktop SPA", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue to checkout" }));
 
     expect(await screen.findByText("Subscribe to Team")).toBeInTheDocument();
-    expect(screen.getByText("1 seat · $8.00 / month")).toBeInTheDocument();
+    // ⚠ BUILT FROM THE CONSTANT (2026-09-08). It was the literal `$8.00`, which
+    // is exactly the drift `prices.ts` exists to delete — a price change would
+    // have left this suite red for the right reason and the page wrong for a
+    // reader.
+    expect(
+      screen.getByText(`1 seat · ${formatMoney(TEAM_SEAT_PRICE)} / month`)
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Continue in your browser" }));
 

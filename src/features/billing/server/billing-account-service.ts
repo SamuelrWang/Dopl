@@ -21,9 +21,17 @@ import {
 } from "./workspace-billing";
 
 /**
- * The workspace's Stripe ACCOUNT — card on file, invoice history,
+ * The CONTAINER's Stripe ACCOUNT — card on file, invoice history,
  * cancel/resume. Logic between the three routes and the two data sources
  * (`./stripe.ts`, `./workspace-billing.ts`).
+ *
+ * ⚠ **CONTAINER, NOT "WORKSPACE", SINCE 2026-09-08 (spec §11.1)** — and the
+ * word is the only thing that changed. A personal container's Pro subscription
+ * is a `workspace_billing` row keyed by that container's id, so every function
+ * here already worked on one: they take a `workspaceId` and none of them asks
+ * what KIND it is. ⚠ Do not add a kind filter — cancel, resume, invoices and
+ * the payment method are the same three questions on either kind, and a filter
+ * here would strand a personal subscriber with no way to stop paying.
  *
  * ONE GUARD, SPELLED ONCE: nothing here is reachable without a Stripe secret
  * key AND a `stripe_customer_id`. Both READS answer EMPTY on that path — "never

@@ -309,7 +309,15 @@ export function ListPane({
 /** Upgrade affordance pinned at the list bottom: free workspaces hide chats
  *  older than the retention window (never deleted). ⚠ Role-aware — non-admins
  *  get an "ask an admin" note, not a CTA, because /pricing checkout 403s for
- *  them. */
+ *  them.
+ *
+ *  ⚠ **THE REASON NAMES TEAM, AND IT STAYS TEAM (checked 2026-09-08).** The
+ *  personal `pro` plan is not offered here because this strip cannot reach a
+ *  home space: `ChatsView` has one mount, the WORKSPACE route
+ *  `/:workspaceSegment/chats` (`apps/desktop-ui/src/pages/chats/index.tsx`), and
+ *  /home's own faces render no chat list. `UpgradeModal` is kind-aware anyway
+ *  (`billing/components/upgrade-modal.tsx`), so only this `reason` sentence
+ *  would need changing if that ever stopped being true. */
 function RetentionStrip({
   hiddenCount,
   workspaceId,

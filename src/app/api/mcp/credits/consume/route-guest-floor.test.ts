@@ -73,6 +73,11 @@ vi.mock("@/features/analytics/server/mcp-tool-calls", () => ({
 }));
 vi.mock("@/features/billing/server/workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
+  // ⚠ THE PAYER'S OWN PERSONAL CONTAINER (2026-09-08). A home burn's LIMIT now
+  // comes off the owner's `kind='personal'` row, so this read is on the guest
+  // path too — and leaving it unmocked makes the route FAIL OPEN, which looks
+  // like a 200 with `allowed: true` and charges nobody.
+  getPersonalBilling: vi.fn(),
   countActiveMembers: vi.fn(),
   countOntologyObjects: vi.fn(),
 }));
@@ -99,6 +104,8 @@ const CONTAINER = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 const OWNER_WS = "0000ffff-0000-ffff-0000-ffffffffffff";
 const OWNER = "operator-user";
 const GUEST = "guest-user";
+/** The OWNER's own `kind='personal'` container — where their home plan lives. */
+const OWNER_PERSONAL = "0000aaaa-0000-aaaa-0000-aaaaaaaaaaaa";
 
 function workspace(id: string, kind: "standard" | "link"): Workspace {
   return {
@@ -154,6 +161,11 @@ beforeEach(() => {
   warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   mockRepo.findActiveOwnerUserId.mockResolvedValue(OWNER);
   mockBilling.getWorkspaceBilling.mockResolvedValue(null);
+  // The OWNER's home space, free — a container that exists and has no sub.
+  mockBilling.getPersonalBilling.mockResolvedValue({
+    containerId: OWNER_PERSONAL,
+    billing: null,
+  });
   mockBilling.countActiveMembers.mockResolvedValue(1);
   mockBilling.countOntologyObjects.mockResolvedValue(0);
   mockWallets.consumeUserCredits.mockResolvedValue({ allowed: true, used: 3 });
@@ -196,6 +208,41 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
     // would be the pooled model coming back through the wrong door.
     expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
     expect(body.wallet).toBe("personal");
+  });
+
+  it("2c. the LIMIT comes off the OWNER's personal row, never the guest's", async () => {
+    // ⚠ **THE 2026-09-08 HALF OF THE SAME RULING.** Who pays was settled
+    // 2026-08-26; what they are entitled to is new, and a version that resolved
+    // the tier from the CALLER would charge the owner's counter against the
+    // guest's plan — the owner's Pro allowance silently capped at the guest's
+    // free 500.
+    mockBilling.getPersonalBilling.mockResolvedValue({
+      containerId: OWNER_PERSONAL,
+      billing: {
+        workspaceId: OWNER_PERSONAL,
+        plan: "pro",
+        status: "active",
+        stripeCustomerId: "cus_1",
+        stripeSubscriptionId: "sub_1",
+        stripePriceId: "price_personal_pro",
+        seatCount: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        lastStripeEventCreated: null,
+      },
+    });
+
+    const { body } = await consumeAs("guest");
+
+    expect(mockBilling.getPersonalBilling).toHaveBeenCalledWith(OWNER);
+    expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
+      OWNER,
+      expect.any(String),
+      1,
+      5_000
+    );
+    expect(body.limit).toBe(5_000);
   });
 
   it("2b. a guest with a home space of their own still does not spend it", async () => {

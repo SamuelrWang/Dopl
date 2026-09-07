@@ -124,13 +124,25 @@ describe("what the page reads back off the URL", () => {
     expect(parseBillingIntent(null)).toBeNull();
   });
 
-  it("accepts Team and nothing else — the only plan still on sale", () => {
+  it("accepts Team and Pro — the two plans on sale — and nothing else", () => {
     expect(parseCheckoutPlan("team")).toBe("team");
+    // Personal Pro, $8.99/month on a `kind='personal'` container (2026-09-08,
+    // spec §11). Which CONTAINER may buy it is the checkout route's fence, not
+    // this parser's: a URL is read before any workspace is resolved.
+    expect(parseCheckoutPlan("pro")).toBe("pro");
     // "free" is a plan but not a CHECKOUT — no such price exists.
     expect(parseCheckoutPlan("free")).toBeNull();
     expect(parseCheckoutPlan("enterprise")).toBeNull();
     expect(parseCheckoutPlan(null)).toBeNull();
     expect(parseCheckoutPlan(undefined)).toBeNull();
+  });
+
+  it("carries `plan=pro` through the builder with no segment — the personal forward", () => {
+    // The seller (a 402 envelope, /pricing) holds no personal-container
+    // segment; `/billing` resolves it and must still see the plan.
+    expect(billingPath({ intent: "upgrade", plan: "pro" })).toBe(
+      "/billing?billing=upgrade&plan=pro"
+    );
   });
 
   it("REFUSES `plan=solo` — a retired price must not open a checkout", () => {

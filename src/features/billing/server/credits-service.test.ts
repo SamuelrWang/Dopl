@@ -2,10 +2,10 @@
  * INVARIANT SUITE — MCP credit consume path (runs ONCE PER TOOL CALL), part 1 of
  * two: WHICH WALLET a burn lands on, and WHAT IT COSTS IN ROUND TRIPS. Pins:
  *   1. QUERY BUDGET, PER WALLET — seat = 3 round trips (billing row, member
- *      count, RPC); link = 2 (owner lookup, RPC); personal = 1 (RPC alone).
- *      NO `COUNT(*)` over `ontology_objects`, NO second `workspace_billing`
- *      read, and NO billing read at all on the personal arm. Mock CALL COUNTS
- *      are the only way to state that.
+ *      count, RPC); personal = 2 (the container's own billing row, RPC); link =
+ *      3 (owner lookup, the owner's personal billing row, RPC). NO `COUNT(*)`
+ *      over `ontology_objects` and NO second `workspace_billing` read on any of
+ *      them. Mock CALL COUNTS are the only way to state that.
  *   2. WHICH WALLET, AND WHOSE — the addressed container's kind decides
  *      (`credits-service.ts › resolveBillingTarget`'s table).
  *   3. THE SEAT LIMIT IS PER MEMBER and comes from the ENTITLEMENT VERDICT.
@@ -21,6 +21,13 @@
  * numbers here were 500 / 10,000 / 25,000 POOLED PER WORKSPACE, and the budget
  * was "three round trips" full stop. Both moved; the reasoning did not.
  *
+ * ⚠ **AND RE-PINNED 2026-09-08 (the personal Pro tier).** The superseded budget
+ * was `link` 2 / `personal` 1, with a case asserting NO BILLING READ AT ALL on
+ * the personal arm. A personal wallet has a plan now, billed on the owner's own
+ * container, so both personal arms cost one read more — the numbers moved
+ * rather than the assertions being loosened, and the old ones are quoted where
+ * they stood so a revert reads as a revert.
+ *
  * ⚠ Repositories mocked; `entitlements.ts` is REAL, so the lean verdict helper
  * is proven to be the same `paidEntitlement` logic, not a copy.
  */
@@ -35,6 +42,11 @@ vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
 
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
+  // ⚠ THE PERSONAL WALLET'S OWN READ (2026-09-08). `personal-wallet.ts` is
+  // REAL in this suite — only the repository is mocked — so the tier, the
+  // window and the limit are computed by the code under test from the row this
+  // mock hands back, exactly as they are in production.
+  getPersonalBilling: vi.fn(),
   countActiveMembers: vi.fn(),
   countOntologyObjects: vi.fn(),
 }));
@@ -96,9 +108,18 @@ function setup(opts: {
   members: number;
   allowed?: boolean;
   used?: number;
+  /** The OWNER's personal container row, reached only from a link container.
+   *  ⚠ DELIBERATELY SEPARATE FROM `billing`: a test that fed one fixture to
+   *  both would pass against a version that meters a home burn off the
+   *  ADDRESSED container's plan. */
+  personalBilling?: WorkspaceBillingRow | null;
 }) {
   mockRepo.getWorkspaceBilling.mockResolvedValue(opts.billing);
   mockRepo.countActiveMembers.mockResolvedValue(opts.members);
+  mockRepo.getPersonalBilling.mockResolvedValue({
+    containerId: PERSONAL,
+    billing: opts.personalBilling ?? null,
+  });
   const outcome = { allowed: opts.allowed ?? true, used: opts.used ?? 1 };
   mockWallets.consumeMemberCredits.mockResolvedValue(outcome);
   mockWallets.consumeUserCredits.mockResolvedValue(outcome);
@@ -200,25 +221,46 @@ describe("consumeMcpCredits — the query budget, per wallet", () => {
     expect(mockRepo.countOntologyObjects).toHaveBeenCalledTimes(0);
   });
 
-  it("LINK is two: the owner lookup, then the RPC", async () => {
+  it("LINK is three: the owner lookup, the owner's personal row, then the RPC", async () => {
     setup({ billing: billing(), members: 3 });
     await consumeMcpCredits(CONTAINER, linkCaller);
     expect(mockOwner).toHaveBeenCalledTimes(1);
+    // ⚠ ONE QUERY, NOT TWO. `getPersonalBilling` embeds the billing row in the
+    // container lookup (`workspace-billing.ts`); splitting it back into
+    // "find container, then read its row" is what this count forbids.
+    expect(mockRepo.getPersonalBilling).toHaveBeenCalledTimes(1);
+    expect(mockRepo.getPersonalBilling).toHaveBeenCalledWith(OWNER);
     expect(mockWallets.consumeUserCredits).toHaveBeenCalledTimes(1);
-    // ⚠ NO BILLING ROW ON THE PERSONAL ARM. One tier, one constant, no anchor —
-    // reading a plan here would double the cost of the commonest burn in the
-    // product for an answer that has one value.
+    // ⚠ NOTHING SEAT-SHAPED. The ADDRESSED link container carries no plan, so
+    // reading its billing row or counting its members would be answering a
+    // question about the wrong tenant.
     expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledTimes(0);
     expect(mockRepo.countActiveMembers).toHaveBeenCalledTimes(0);
   });
 
-  it("PERSONAL is ONE: the RPC alone — the owner IS the caller", async () => {
-    setup({ billing: billing(), members: 3 });
+  it("PERSONAL is two: the container's own billing row, then the RPC", async () => {
+    setup({ billing: null, members: 1 });
     await consumeMcpCredits(PERSONAL, personalCaller);
+    // 🔒 THE CONTAINER **IS** THE BILLING ROW (spec §11.1), so the owner →
+    // container hop never happens: one read, addressed by the container's own
+    // id, and `getPersonalBilling` is not called at all.
+    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledTimes(1);
+    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(PERSONAL);
+    expect(mockRepo.getPersonalBilling).toHaveBeenCalledTimes(0);
     expect(mockWallets.consumeUserCredits).toHaveBeenCalledTimes(1);
     expect(mockOwner).toHaveBeenCalledTimes(0);
-    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledTimes(0);
     expect(mockRepo.countActiveMembers).toHaveBeenCalledTimes(0);
+  });
+
+  it("🔒 a LINK burn never reads the ADDRESSED container's billing row", async () => {
+    // ⚠ THE REVERT DETECTOR FOR THE OBVIOUS WRONG FIX. "The personal wallet
+    // needs a billing row" is satisfied just as well by
+    // `getWorkspaceBilling(addressedContainerId)` — which always answers `null`
+    // for a link container, so every Pro operator is charged 500 and every test
+    // that only checks the FREE case stays green.
+    setup({ billing: billing(), members: 3 });
+    await consumeMcpCredits(CONTAINER, linkCaller);
+    expect(mockRepo.getWorkspaceBilling).not.toHaveBeenCalledWith(CONTAINER);
   });
 
   it("NEVER counts ontology objects on any wallet — that cap is not on this path", async () => {
@@ -326,12 +368,130 @@ describe("consumeMcpCredits — the PERSONAL wallet", () => {
     );
   });
 
-  it("🔒 a paid workspace's anchor never reaches the personal wallet", async () => {
+  it("🔒 a paid WORKSPACE's anchor never reaches the personal wallet", async () => {
     // The owner is on a live Team plan with a mid-month anchor; their HOME spend
-    // still rolls on the 1st, because the wallet has no subscription.
-    setup({ billing: billing(), members: 3 });
+    // still rolls on the 1st, because that subscription is not this wallet's.
+    // ⚠ `billing` here is the ADDRESSED container's fixture and the owner's
+    // PERSONAL row is null — the separation is the assertion.
+    setup({ billing: billing(), members: 3, personalBilling: null });
     expect((await consumeMcpCredits(CONTAINER, linkCaller)).periodStart).toBe(
       CALENDAR_START
     );
+  });
+});
+
+/**
+ * 🔒 THE PERSONAL **PRO** TIER (Samuel, 2026-09-08). The limit and the window
+ * both come off the payer's own `kind='personal'` container's billing row, and
+ * every case below is red under the one-tier model this replaced.
+ */
+describe("consumeMcpCredits — a PRO personal wallet", () => {
+  const PRO = (overrides: Partial<WorkspaceBillingRow> = {}) =>
+    billing({
+      workspaceId: PERSONAL,
+      plan: "pro",
+      status: "active",
+      seatCount: null,
+      stripePriceId: "price_personal_pro",
+      ...overrides,
+    });
+
+  it("charges the OWNER against 5,000 on their SUBSCRIPTION window, from a link container", async () => {
+    setup({ billing: null, members: 1, personalBilling: PRO() });
+    const res = await consumeMcpCredits(CONTAINER, linkCaller);
+    expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
+      OWNER,
+      "2026-07-21T09:30:00.000Z",
+      1,
+      5_000
+    );
+    expect(res).toMatchObject({
+      wallet: "personal",
+      limit: 5_000,
+      periodStart: "2026-07-21T09:30:00.000Z",
+    });
+  });
+
+  it("charges the CALLER against 5,000 in their own personal container", async () => {
+    setup({ billing: PRO(), members: 1 });
+    const res = await consumeMcpCredits(PERSONAL, personalCaller);
+    expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
+      CALLER,
+      "2026-07-21T09:30:00.000Z",
+      1,
+      5_000
+    );
+    expect(res.limit).toBe(5_000);
+  });
+
+  it("past_due keeps the Pro allowance (grace), like every other entitlement", async () => {
+    setup({ billing: PRO({ status: "past_due" }), members: 1 });
+    expect((await consumeMcpCredits(PERSONAL, personalCaller)).limit).toBe(5_000);
+  });
+
+  it("🔒 a CANCELED Pro row drops to 500 AND to the calendar month — no lockout", async () => {
+    // ⚠ THE SAME SELF-HEAL THE SEAT WALLET HAS. A canceled row keeps a
+    // future-ending anchor: honouring it would charge the first free call to a
+    // key already spent to 5,000 against a fresh 500 limit — locked out of MCP
+    // until the anchor lapses. The FREE verdict ignores the anchor.
+    setup({ billing: PRO({ status: "canceled" }), members: 1 });
+    const res = await consumeMcpCredits(PERSONAL, personalCaller);
+    expect(res.limit).toBe(500);
+    expect(res.periodStart).toBe(CALENDAR_START);
+    expect(res.periodEnd).toBe(CALENDAR_END);
+  });
+
+  it("🔒 a stray `team` row on a personal container gets the FREE personal figure", async () => {
+    // Cannot happen (nothing sells Team on a container), and the answer must be
+    // the SMALL one anyway: reading it as paid would hand a free home space
+    // 5,000 credits nobody bought.
+    setup({ billing: PRO({ plan: "team" }), members: 1 });
+    expect((await consumeMcpCredits(PERSONAL, personalCaller)).limit).toBe(500);
+  });
+
+  it("🔒 a `pro` row NEVER routes through the SEAT map", async () => {
+    // `SEAT_MONTHLY_CREDITS.pro` is 5,000 too, so a wrong route agrees on the
+    // number — what separates them is the COUNTER. A seat RPC here would key
+    // the burn on (workspace, user) and leave the personal counter untouched.
+    setup({ billing: PRO(), members: 1 });
+    await consumeMcpCredits(PERSONAL, personalCaller);
+    expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⚠ A PAYER WITH NO PERSONAL CONTAINER cannot exist after
+ * `20260920120000_workspace_kind_personal.sql` — but the READ can still answer
+ * null, and a burn has to be charged to something.
+ */
+describe("consumeMcpCredits — the owner has no personal container", () => {
+  it("falls to the FREE tier on the calendar month, and SAYS SO", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setup({ billing: null, members: 1 });
+    mockRepo.getPersonalBilling.mockResolvedValue(null);
+
+    const res = await consumeMcpCredits(CONTAINER, linkCaller);
+
+    expect(res).toMatchObject({
+      wallet: "personal",
+      allowed: true,
+      limit: 500,
+      periodStart: CALENDAR_START,
+    });
+    // ⚠ FREE, NOT UNMETERED. The burn is real and lands on a real counter; what
+    // is missing is only the row that could have made it Pro.
+    expect(res.degraded).toBeUndefined();
+    expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
+      OWNER,
+      CALENDAR_START,
+      1,
+      500
+    );
+    // Assert the CONTENT: a silent free-tier fallback for a paying customer has
+    // no user-visible symptom until the refusal lands.
+    const line = warn.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
+    expect(line).toContain(OWNER);
+    expect(line).toContain("no kind='personal' container");
+    warn.mockRestore();
   });
 });

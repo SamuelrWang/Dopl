@@ -40,9 +40,20 @@ describe("the header carries what an operator needs before applying it", () => {
     expect(sql).toContain("JOIN ON THE\n-- NAME");
   });
 
+  /**
+   * ⚠ **THE ASSERTION IS "FILENAME ORDER + THE TWO DEPENDENCIES", NOT THE WORD
+   * `LAST` (corrected 2026-09-08 in review).** It read `APPLY ORDER: LAST`,
+   * which was true for one day: `20260930130000_workspace_billing_plan_pro.sql`
+   * ships in the same wave and sorts after this file. Pinning a SUPERLATIVE
+   * made the next migration in the directory a test failure with no bug behind
+   * it — and, worse, the way to make it pass again was to leave a false
+   * sentence in an unapplied migration's header. What an operator needs is the
+   * RULE and the dependencies; those are what this case holds.
+   */
   it("states the apply order and the two files it depends on", () => {
     const prose = sql.replace(/\n--\s*/g, " ");
-    expect(prose).toContain("APPLY ORDER: LAST");
+    expect(prose).toMatch(/APPLY ORDER:/);
+    expect(prose).toContain("in FILENAME order");
     expect(prose).toContain("20260920120000_workspace_kind_personal.sql");
     expect(prose).toContain("20260901130000_credit_usage_events.sql");
   });
@@ -288,13 +299,53 @@ describe("🔒 the pooled counter is retired from writes and NOT dropped", () =>
 });
 
 describe("ordering", () => {
-  it("sorts after every migration in the tree, and its version is unique", () => {
+  it("has a unique version and sorts after every file it depends on", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
     expect(files.filter((f) => f.startsWith("20260930120000"))).toEqual([NAME]);
-    const later = files.filter((f) => f.slice(0, 14) > "20260930120000");
     // ⚠ Not a style rule: this file ALTERs `credit_usage_events` and reads the
-    // `personal` workspace kind, so anything landing before it in filename
-    // order is a replay failure, not a merge conflict.
-    expect(later).toEqual([]);
+    // `personal` workspace kind, so anything it depends on must land BEFORE it
+    // in filename order or the replay fails.
+    for (const dependency of [
+      "20260901130000_credit_usage_events.sql",
+      "20260920120000_workspace_kind_personal.sql",
+      "20260811130000_mcp_credits.sql",
+    ]) {
+      expect(files).toContain(dependency);
+      expect(dependency.slice(0, 14) < "20260930120000").toBe(true);
+    }
+  });
+
+  it("🔒 the only file after it is the plan-CHECK widening, which touches nothing here", () => {
+    // ⚠ **THIS CASE ASSERTED `later` WAS EMPTY UNTIL 2026-09-08.** It is not a
+    // rule that nothing may follow — it is a rule that nothing following may
+    // undo this file's subjects. `20260930130000_workspace_billing_plan_pro.sql`
+    // adds `pro` to `workspace_billing`'s plan CHECK and touches neither the
+    // wallet tables, the RPCs, nor `credit_usage_events`, so it is allowed to
+    // sort after; the assertion is NAMED rather than loosened to "anything
+    // goes", because a blanket allowance is how the next migration silently
+    // drops one of these tables.
+    const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
+    const later = files.filter((f) => f.slice(0, 14) > "20260930120000");
+    expect(later).toEqual(["20260930130000_workspace_billing_plan_pro.sql"]);
+    // ⚠ COMMENTS STRIPPED. Every migration in this directory carries the
+    // house deploy-state note, which NAMES `credit_usage_events` as its example
+    // of a version that does not match its filename — an unstripped scan reads
+    // that sentence as a statement about the table.
+    const laterSql = read(later[0]!)
+      .split("\n")
+      .map((line) => {
+        const at = line.indexOf("--");
+        return at === -1 ? line : line.slice(0, at);
+      })
+      .join("\n");
+    for (const subject of [
+      "user_credit_usage",
+      "workspace_member_credit_usage",
+      "consume_user_credits",
+      "consume_member_credits",
+      "credit_usage_events",
+    ]) {
+      expect(laterSql).not.toContain(subject);
+    }
   });
 });

@@ -3,10 +3,16 @@
  * when it cannot sell it.
  *
  * The property with teeth since 2026-09-07 (Samuel's per-seat ruling, spec A6):
- * **Solo/"Pro" is retired from sale**, so a body still asking for it is a 400
- * `PLAN_RETIRED` — REFUSED, never quietly upgraded to an $8.00-per-seat Team
+ * **the flat Solo plan is retired from sale**, so a body still asking for it is
+ * a 400 `PLAN_RETIRED` — REFUSED, never quietly upgraded to a per-seat Team
  * subscription the caller did not ask for. The `SOLO_REQUIRES_SINGLE_MEMBER`
  * 409 that used to guard the Solo path went with the sale.
+ *
+ * 🔒 And the one with teeth since 2026-09-08 (spec §11): **a plan and a
+ * container KIND must agree.** Team ($8.99/seat) is a standard workspace's,
+ * Pro ($8.99 flat) is a personal container's, and this route is the only place
+ * the two can be told apart before the money moves — downstream they are one
+ * `workspace_billing` row keyed by container id.
  *
  * Everything else here is the pre-existing contract, re-pinned because a
  * retirement is exactly the kind of edit that quietly loosens a gate: the
@@ -23,6 +29,9 @@ import { NextRequest } from "next/server";
 import type { WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import type { WorkspaceBillingRow } from "@/features/billing/server/workspace-billing";
 
+/** ⚠ MUTATED per test (`asContainer`) and restored in `beforeEach` — the gate
+ *  mock closes over this object, so the KIND is how a case says which container
+ *  it is standing in. */
 const AUTH: WorkspaceAuthContext = {
   userId: "user-1",
   credentialSubjectUserId: "user-1",
@@ -31,7 +40,16 @@ const AUTH: WorkspaceAuthContext = {
   workspacePublicId: "ab12cd34ef56",
   role: "admin",
   apiKeyWorkspaceId: null,
+  workspaceKind: "standard",
 };
+
+/** Stand the route in a container of another kind for one case. */
+function asContainer(kind: "personal" | "link", id = "personal-1") {
+  AUTH.workspaceKind = kind;
+  AUTH.workspaceId = id;
+  AUTH.workspaceSlug = kind === "personal" ? "personal" : "link";
+  AUTH.workspacePublicId = "ff00ff00ff00";
+}
 
 interface GateOptions {
   minRole?: string;
@@ -124,6 +142,10 @@ beforeEach(() => {
     "https://billing.stripe.com/p/s_1"
   );
   profile.row = { email: "payer@acme.test" };
+  AUTH.workspaceKind = "standard";
+  AUTH.workspaceId = "ws-1";
+  AUTH.workspaceSlug = "acme";
+  AUTH.workspacePublicId = "ab12cd34ef56";
 });
 
 describe("the gates", () => {
@@ -151,14 +173,14 @@ describe("which plan may be bought", () => {
     );
   });
 
-  it("defaults an absent plan to Team", async () => {
+  it("answers an absent plan with Team on a standard workspace", async () => {
     expect((await call({})).status).toBe(200);
     expect(mockStripe.createWorkspaceCheckoutSession).toHaveBeenCalledWith(
       expect.objectContaining({ plan: "team" })
     );
   });
 
-  it("defaults a body that is not JSON at all to Team", async () => {
+  it("answers a body that is not JSON at all the same way", async () => {
     // The parse has always been forgiving here — the desktop Upgrade button
     // POSTs no body. Pinned so the refusal below is read as deliberate.
     expect((await call()).status).toBe(200);
@@ -167,19 +189,21 @@ describe("which plan may be bought", () => {
     );
   });
 
-  it("400s `plan: \"solo\"` with PLAN_RETIRED and the price that replaced it", async () => {
+  it("400s `plan: \"solo\"` with PLAN_RETIRED and both prices that replaced it", async () => {
     const res = await call({ plan: "solo" });
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({
-      error: "PLAN_RETIRED",
-      message: "Pro is no longer sold. Team is $8.00 per seat per month.",
-    });
+    const body = await res.json();
+    expect(body.error).toBe("PLAN_RETIRED");
+    // ⚠ Both live prices are named because the retired plan has no single
+    // successor: a workspace goes to Team, a person to Pro.
+    expect(body.message).toContain("$8.99 per seat");
+    expect(body.message).toContain("$8.99 a month");
   });
 
   it("MINTS NOTHING on a retired plan — not a Solo session, and not a Team one", async () => {
     // ⚠ The failure this guards is the tempting one: silently coercing `solo`
-    // to `team` would charge $8.00 per seat to somebody who clicked a $5.99
-    // flat plan on a stale page.
+    // to `team` would charge per seat to somebody who clicked a $5.99 flat
+    // plan on a stale page.
     await call({ plan: "solo" });
     expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
   });
@@ -204,6 +228,66 @@ describe("which plan may be bought", () => {
     expect(mockStripe.createWorkspaceCheckoutSession).toHaveBeenCalledWith(
       expect.objectContaining({ quantity: 7 })
     );
+  });
+});
+
+describe("🔒 which CONTAINER may buy which plan", () => {
+  it("sells Pro on a personal container, flat at quantity 1", async () => {
+    asContainer("personal");
+    const res = await call({ plan: "pro" });
+    expect(res.status).toBe(200);
+    expect(mockStripe.createWorkspaceCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "personal-1",
+        plan: "pro",
+        quantity: 1,
+      })
+    );
+    // ⚠ A personal container has one member by construction; asking Postgres
+    // how many is a read that can only produce a wrong seat count.
+    expect(mockRepo.countActiveMembers).not.toHaveBeenCalled();
+  });
+
+  it("400s PLAN_NOT_FOR_CONTAINER for Pro on a standard workspace, and mints nothing", async () => {
+    const res = await call({ plan: "pro" });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("PLAN_NOT_FOR_CONTAINER");
+    expect(body.message).toContain("personal space");
+    expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("400s PLAN_NOT_FOR_CONTAINER for Team on a personal container, and mints nothing", async () => {
+    // ⚠ The other direction matters just as much: both plans are $8.99, and a
+    // per-seat subscription on a one-member container bills correctly TODAY
+    // and grows a seat count nobody can change.
+    asContainer("personal");
+    const res = await call({ plan: "team" });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("PLAN_NOT_FOR_CONTAINER");
+    expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("sells NOTHING on a link container — it carries no plan of any kind", async () => {
+    asContainer("link", "link-1");
+    expect((await call({ plan: "team" })).status).toBe(400);
+    expect((await call({ plan: "pro" })).status).toBe(400);
+    expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("answers an ABSENT plan from the container: Pro on personal", async () => {
+    // The desktop Upgrade button POSTs no body, and it is right in both places.
+    asContainer("personal");
+    expect((await call()).status).toBe(200);
+    expect(mockStripe.createWorkspaceCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({ plan: "pro" })
+    );
+  });
+
+  it("releases the claim after a container refusal", async () => {
+    asContainer("personal");
+    await call({ plan: "team" });
+    expect(mockRepo.releaseWorkspaceCheckout).toHaveBeenCalledWith("personal-1");
   });
 });
 

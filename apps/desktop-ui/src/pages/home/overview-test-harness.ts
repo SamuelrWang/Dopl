@@ -142,6 +142,11 @@ export const HOME_SERIES: HomeOverviewSeries = {
 export const BILLING_STATUS = {
   plan: "free",
   status: "free",
+  // ⚠ /home IS the home space: the container that answers here is the reader's
+  // own `kind='personal'` one (`workspaces/server/segment.ts › getBootState`),
+  // which is what makes the wallet below personal and the Upgrade affordance on
+  // the credit bar sell `pro` rather than a seat.
+  containerKind: "personal" as const,
   memberCount: 1,
   seatCount: null,
   objectCap: null,

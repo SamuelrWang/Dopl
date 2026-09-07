@@ -1,10 +1,7 @@
 "use client";
 
-import {
-  formatMoney,
-  TEAM_SEAT_PRICE,
-  useWorkspaceEntitlements,
-} from "./use-workspace-entitlements";
+import { formatMoney, TEAM_SEAT_PRICE } from "../prices";
+import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
  * The paywall's shared blocks — the add-member variant plus the three notes
@@ -19,7 +16,12 @@ import {
  * notes. The imports run one way, parts ← modal, so there is no cycle.
  *
  * ⚠ NOTHING HERE MENTIONS A PRICE OR AN ALLOWANCE AS A LITERAL — `plans.ts`'s
- * G4 rule. `TEAM_SEAT_PRICE` is the one source.
+ * G4 rule. `prices.ts › TEAM_SEAT_PRICE` is the one source.
+ *
+ * ⚠ **`AddMemberBlocked` IS STANDARD-WORKSPACE-ONLY (2026-09-08)** and the caller
+ * enforces it (`./upgrade-modal.tsx › showAddMember`). Everything it says —
+ * seats, "invite your team", the legacy single-member limit — is about a roster,
+ * and a personal container has none.
  */
 
 export type Ent = ReturnType<typeof useWorkspaceEntitlements>;
@@ -188,6 +190,12 @@ export function PlanOption({
   );
 }
 
+/**
+ * ⚠ THE SUBJECT IS THE CONTAINER, NOT ALWAYS A WORKSPACE (2026-09-08): a
+ * personal container is the reader's own space, so it is addressed in the
+ * second person and named `Pro`. `isSolo` still labels the retired flat
+ * WORKSPACE plan, which is a different product from the personal `pro`.
+ */
 export function AlreadyPaidNote({
   ent,
   onClose,
@@ -198,7 +206,11 @@ export function AlreadyPaidNote({
   return (
     <div className="mt-5">
       <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
-        This workspace is already on {ent.isSolo ? "the legacy Pro plan" : "Team"}.
+        {ent.containerKind === "personal"
+          ? "You're already on Pro."
+          : `This workspace is already on ${
+              ent.isSolo ? "the legacy Pro plan" : "Team"
+            }.`}
       </p>
       <CloseButton onClose={onClose} />
     </div>

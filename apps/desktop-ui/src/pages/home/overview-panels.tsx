@@ -15,6 +15,7 @@ import {
 } from "@/features/home/overview-types";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError } from "#/components/page-states";
+import { openHomeSettings } from "./home-settings-control";
 import { CreditCapacityBar, UsageChart, seriesTotal } from "./overview-sections";
 import {
   ChannelMessageRail,
@@ -267,7 +268,23 @@ function CreditsBar({
   // reading, but /home spends the reader's PERSONAL wallet, whose allowance is
   // one constant and no plan's — `overview-sections.tsx › CreditCapacityBar`
   // reads `credits.ts › PERSONAL_MONTHLY_CREDITS` itself.
-  return <CreditCapacityBar credits={credits.credits} spent={seriesTotal(points)} />;
+  // ⚠ **`!isPaid`, NOT `plan === "free"` (2026-09-08).** The question the button
+  // answers is *is there something to buy*, and `isPaid` is the only field that
+  // answers it from the payload ALONE: it reads the plan and the STATUS
+  // together, so a cached or hand-built row whose plan still says `pro` while
+  // its status does not say active/past_due is offered the upgrade rather than
+  // silently denied it. A `past_due` payer has `isPaid` true and gets no button
+  // — they need the portal, not a second checkout. Same rule the plan cards use
+  // for their Free arm (`plan-cards.tsx › isCurrentPlan`).
+  return (
+    <CreditCapacityBar
+      credits={credits.credits}
+      spent={seriesTotal(points)}
+      onUpgrade={
+        credits.isPaid ? undefined : () => openHomeSettings("billing")
+      }
+    />
+  );
 }
 
 function RailsGhost() {

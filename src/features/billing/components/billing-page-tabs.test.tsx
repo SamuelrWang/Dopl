@@ -28,6 +28,7 @@ type Status = import("./use-workspace-entitlements").WorkspaceEntitlementsStatus
 const FREE: Status = {
   plan: "free",
   status: "free",
+  containerKind: "standard",
   memberCount: 3,
   seatCount: null,
   objectCap: 100,

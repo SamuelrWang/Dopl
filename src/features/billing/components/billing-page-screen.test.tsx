@@ -17,7 +17,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { BillingPageScreen } from "./billing-page-screen";
-import { SEAT_MONTHLY_CREDITS } from "../credits";
+import { PERSONAL_MONTHLY_CREDITS, SEAT_MONTHLY_CREDITS } from "../credits";
+import { PRO_PRICE } from "../prices";
+import { planNumber } from "../plans";
 import { resolveBillingTab } from "../billing-tabs";
 import {
   BILLING_STATUS_PATH,
@@ -27,6 +29,7 @@ import {
 const FREE: WorkspaceEntitlementsStatus = {
   plan: "free",
   status: "free",
+  containerKind: "standard",
   memberCount: 3,
   seatCount: null,
   objectCap: 100,
@@ -75,6 +78,40 @@ const LEGACY_SOLO: WorkspaceEntitlementsStatus = {
   plan: "solo",
   memberCount: 1,
   seatCount: 1,
+};
+
+/**
+ * The SAME page addressed at a `kind='personal'` container — one person's home
+ * space (spec §11.1). ⚠ Every "workspace" fact is dropped rather than set to a
+ * small number: one member is a fact about the schema, not about a plan, and
+ * the object cap is a multi-member rule that cannot apply here.
+ */
+const PERSONAL_FREE: WorkspaceEntitlementsStatus = {
+  ...FREE,
+  containerKind: "personal",
+  memberCount: 1,
+  objectCap: null,
+  credits: {
+    ...FREE.credits,
+    wallet: "personal" as const,
+    limit: PERSONAL_MONTHLY_CREDITS.free,
+    remaining: PERSONAL_MONTHLY_CREDITS.free - 42,
+  },
+};
+
+/** The personal PAID tier — $8.99 flat, 5,000 credits (Samuel, 2026-09-08). */
+const PERSONAL_PRO: WorkspaceEntitlementsStatus = {
+  ...PERSONAL_FREE,
+  plan: "pro",
+  status: "active",
+  chatsWindowDays: null,
+  credits: {
+    ...PERSONAL_FREE.credits,
+    limit: PERSONAL_MONTHLY_CREDITS.pro,
+    remaining: PERSONAL_MONTHLY_CREDITS.pro - 42,
+  },
+  subscription_period_end: "2026-09-04T12:00:00.000Z",
+  has_stripe_customer: true,
 };
 
 /** Seeds billing-status cache; `useApiQuery` key = `[path, workspaceId, query]`. */
@@ -306,6 +343,92 @@ describe("the Billing tab", () => {
 
   it("passes the chosen plan straight through to checkout", () => {
     expect(screen({ initialCheckoutPlan: "team" })).toContain("Subscribe to Team");
+  });
+});
+
+/**
+ * 🔒 **THE SAME ROUTE SERVES A PERSONAL CONTAINER SINCE PRO WENT ON SALE
+ * (2026-09-08, spec §11.1).** Its Pro subscription lives in `workspace_billing`
+ * keyed by that container, so checkout, portal, invoices and cancel are the
+ * ones already here — what changes is every word that assumed a roster.
+ */
+describe("addressed at a personal container", () => {
+  const usage = (status: WorkspaceEntitlementsStatus) =>
+    screen({ initialTab: "usage" }, status);
+
+  it("names the space rather than calling it a workspace", () => {
+    const markup = screen({}, PERSONAL_FREE);
+    expect(markup).toContain("Acme");
+    expect(markup).toContain("Personal space");
+    // The browser-payment explainer is a workspace-surface note; §5 minimal
+    // copy leaves a personal space with a label and no paragraph.
+    expect(markup).not.toContain("Payment lives in your browser");
+  });
+
+  it("meters the PERSONAL wallet and drops the roster", () => {
+    const markup = usage(PERSONAL_FREE);
+    expect(markup).toContain("Personal credits");
+    expect(markup).toContain(String(PERSONAL_MONTHLY_CREDITS.free));
+    // ⚠ BOTH DIRECTIONS. The Members line and the section title that framed it
+    // are the two places a home space was called a workspace.
+    expect(markup).not.toContain("Members");
+    expect(markup).not.toContain("Workspace limits");
+    expect(markup).toContain("Limits");
+    // Chat history survives — it is a real limit on a personal container.
+    expect(markup).toContain("Last 90 days");
+  });
+
+  it("never says seat on the usage pane", () => {
+    const markup = usage(PERSONAL_PRO);
+    expect(markup).toContain(planNumber(PERSONAL_MONTHLY_CREDITS.pro));
+    expect(markup).not.toContain("billable seat");
+  });
+
+  it("sells Free and Pro — never Starter, Team or a seat price", () => {
+    const markup = screen({}, PERSONAL_FREE);
+    expect(markup).toContain("Upgrade to Pro");
+    expect(markup).toContain(`$${PRO_PRICE.toFixed(2)}`);
+    // 🔒 The two groups are never concatenated: `team` on a personal container
+    // answers 400 `PLAN_NOT_FOR_CONTAINER`, so offering it would be selling a
+    // checkout that refuses.
+    expect(markup).not.toContain("Starter");
+    expect(markup).not.toContain("/ seat / month");
+    expect(markup).not.toContain("Upgrade to Team");
+  });
+
+  it("badges the current plan in BOTH directions", () => {
+    // Free container: the free card is current and Pro is on offer.
+    const free = screen({}, PERSONAL_FREE);
+    expect(free).toContain("Current plan");
+    expect(free).toContain("Upgrade to Pro");
+    // Pro container: Pro is current, and nothing offers to sell it again.
+    const pro = screen({}, PERSONAL_PRO);
+    expect(pro).toContain("Current plan");
+    expect(pro).not.toContain("Upgrade to Pro");
+    expect(pro).toContain("Manage subscription");
+  });
+
+  /**
+   * 🔒 **THE STRIPE GATE HAS NO PLAN TEST, AND THIS IS THE CASE THAT SAYS SO.**
+   * `hasStripeAccount` is `canManage && isPaid && has_stripe_customer`
+   * (`billing-plans-pane.tsx`); a `plan === "team"` anywhere in it would strand
+   * every Pro payer with no way to change a card or read an invoice.
+   */
+  it("gives a Pro payer the card, invoices and cancel sections", () => {
+    const markup = screen({}, PERSONAL_PRO);
+    expect(markup).toContain("Payment method");
+    expect(markup).toContain("Invoices");
+    expect(markup).toContain("Cancel plan");
+    // And a FREE personal container gets none of them — no customer exists.
+    const free = screen({}, PERSONAL_FREE);
+    expect(free).not.toContain("Payment method");
+    expect(free).not.toContain("Invoices");
+  });
+
+  it("opens Pro's checkout when the URL named it", () => {
+    expect(
+      screen({ initialCheckoutPlan: "pro" }, PERSONAL_FREE)
+    ).toContain("Subscribe to Pro");
   });
 });
 

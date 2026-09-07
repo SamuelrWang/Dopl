@@ -6,7 +6,6 @@ import {
 } from "@/features/workspaces/types";
 import {
   CREDITS_PER_MCP_CALL,
-  PERSONAL_MONTHLY_CREDITS,
   personalCreditPeriod,
   resolveCreditPeriod,
   seatCreditsForPlan,
@@ -23,6 +22,11 @@ import {
 import { recordCreditUsageEvent } from "./credit-ledger";
 import { entitledPlanFor, upgradeUrl } from "./entitlements";
 import {
+  personalWalletTier,
+  readPersonalBilling,
+  type PersonalWalletTier,
+} from "./personal-wallet";
+import {
   countActiveMembers,
   getWorkspaceBilling,
   type WorkspaceBillingRow,
@@ -38,17 +42,26 @@ import {
  * workspace's entitled per-member allowance; a home-space container charges the
  * container OWNER'S PERSONAL wallet. Every path implements the same table:
  *
- *   | addressed kind | wallet     | payer            | limit                    | period                  |
- *   |----------------|------------|------------------|--------------------------|-------------------------|
- *   | `standard`     | `seat`     | the caller       | `seatCreditsForPlan(…)`  | `resolveCreditPeriod`   |
- *   | `personal`     | `personal` | the caller (= owner) | `PERSONAL_MONTHLY_CREDITS` | `personalCreditPeriod` |
- *   | `link`         | `personal` | the container OWNER  | `PERSONAL_MONTHLY_CREDITS` | `personalCreditPeriod` |
- *   | no active owner| —          | —                | unmetered, logged        | —                       |
+ *   | addressed kind | wallet     | payer                | limit                       | period                |
+ *   |----------------|------------|----------------------|-----------------------------|-----------------------|
+ *   | `standard`     | `seat`     | the caller           | `seatCreditsForPlan(…)`     | `resolveCreditPeriod` |
+ *   | `personal`     | `personal` | the caller (= owner) | `personalCreditsForPlan(…)` | `resolveCreditPeriod` |
+ *   | `link`         | `personal` | the container OWNER  | `personalCreditsForPlan(…)` | `resolveCreditPeriod` |
+ *   | no active owner| —          | —                    | unmetered, logged           | —                     |
  *
  * ⚠ The plan is the ENTITLEMENT VERDICT, never `workspace_billing.plan` — a
  * solo sub that grew a second member is degraded to free by
  * `entitlements.ts › paidEntitlement`, and the raw column would hand every one
  * of its members the paid allowance.
+ *
+ * 🔒 **AND THE PERSONAL WALLET HAS A PLAN SINCE 2026-09-08** (Samuel's $8.99
+ * ruling; spec §11.1). ⚠ **THE SUPERSEDED ROWS SAID `PERSONAL_MONTHLY_CREDITS`
+ * AND `personalCreditPeriod` — ONE CONSTANT AND THE CALENDAR MONTH, NO ROW
+ * READ AT ALL.** The personal Pro tier is billed on the owner's own
+ * `kind='personal'` container, so both personal rows now resolve a billing row
+ * exactly as the seat row does, through `./personal-wallet.ts`. That costs the
+ * personal arm one round trip it did not pay before, and the budget below is
+ * re-pinned to say so rather than to hide it.
  */
 
 /** Who is burning the credit. ⚠ REQUIRED since 2026-09-07: the seat wallet is
@@ -164,8 +177,12 @@ export interface CreditConsumeResult extends CreditsSummary {
 
 /**
  * Credit window for a billing row (null row = calendar month). SEAT wallets
- * only — a personal wallet has no subscription to anchor to and uses
- * `personalCreditPeriod()`.
+ * only — not because the rule differs, but because the personal wallet reaches
+ * the SAME `resolveCreditPeriod` through `./personal-wallet.ts ›
+ * personalWalletTier`, which resolves its verdict and its window together.
+ * ⚠ THE SUPERSEDED LINE SAID "a personal wallet has no subscription to anchor
+ * to" — true only while that wallet had one tier (2026-09-07). A `pro` wallet
+ * has a Stripe anchor and uses it.
  *
  * ⚠ `entitledPlan` is the VERDICT, not `billing.plan`: a free verdict ignores
  * the subscription anchor outright, which un-sticks a workspace canceled
@@ -186,15 +203,25 @@ export function creditPeriodFor(
 }
 
 /**
- * ⚠ A SEAT ON A FREE-VERDICT WORKSPACE IS THE ONLY THING WITH SOMETHING TO BUY.
- * A personal wallet has no paid tier this wave (`PERSONAL_MONTHLY_CREDITS` is
- * one constant), and a seat on a live paid plan is already on the best
- * allowance there is — pointing either at a checkout is an upsell to nowhere,
- * and the MCP refusal renders the url literally when it is non-empty
- * (`tools/respond.ts › creditsExhausted`).
+ * Where an exhausted wallet is sent, or `""` when there is nothing to buy.
+ *
+ * ⚠ **A FREE VERDICT ON EITHER WALLET HAS AN OFFER SINCE 2026-09-08, AND THEY
+ * ARE DIFFERENT OFFERS.** The superseded rule was "a seat on a free workspace
+ * is the ONLY thing with something to buy", true only while the personal wallet
+ * had no paid tier. A free HOME space is now sold Pro — and it must be sold
+ * `?plan=pro`, not the bare upgrade link, because segment-less `/billing`
+ * resolves a STANDARD workspace by default and would land a home-space upsell
+ * on a workspace the caller may not even have.
+ *
+ * ⚠ **ANY PAID VERDICT OFFERS NOTHING**, on both wallets: Team and Pro are each
+ * the best allowance their wallet has. The MCP refusal renders this url
+ * literally when it is non-empty (`tools/respond.ts › creditsExhausted`), so an
+ * upsell to nowhere is worse than no link at all.
  */
 function upgradeUrlFor(wallet: WalletKind | null, plan: PlanId | null): string {
-  return wallet === "seat" && plan === "free" ? upgradeUrl() : "";
+  if (plan !== "free") return "";
+  if (wallet === "seat") return upgradeUrl();
+  return wallet === "personal" ? upgradeUrl("pro") : "";
 }
 
 /**
@@ -202,6 +229,16 @@ function upgradeUrlFor(wallet: WalletKind | null, plan: PlanId | null): string {
  * plus the billing row and member count rather than re-reading them, because
  * its one caller has just paid for those reads (`getWorkspaceEntitlements`
  * alone is three queries).
+ *
+ * ⚠ **ON THE PERSONAL ARM `billing` IS THE PAYER'S PERSONAL ROW, NOT THE
+ * ADDRESSED CONTAINER'S** (2026-09-08). Those are the same row when the caller
+ * addressed their own personal container and DIFFERENT rows inside a link
+ * container, where the addressed container has no billing row at all. Handing
+ * this the link container's `null` would meter every Pro operator's home space
+ * at the free 500 while enforcement charged them against 5,000 — a meter that
+ * cannot explain the refusal, which is the exact failure the "same verdict on
+ * both sides" rule exists to prevent. `status-service.ts › callerCredits`
+ * resolves it through `personal-wallet.ts › readPersonalBilling`.
  */
 export async function summarizeCredits(
   target: BillingTarget,
@@ -210,14 +247,15 @@ export async function summarizeCredits(
 ): Promise<CreditsSummary> {
   if (target.wallet === null) return unmeteredSummary();
   if (target.wallet === "personal") {
-    const period = personalCreditPeriod();
-    const used = await getUserCreditsUsed(target.payerUserId, period.periodStart);
+    const tier = personalWalletTier(billing);
+    const used = await getUserCreditsUsed(target.payerUserId, tier.periodStart);
     return {
-      ...period,
+      periodStart: tier.periodStart,
+      periodEnd: tier.periodEnd,
       wallet: "personal",
       used,
-      limit: PERSONAL_MONTHLY_CREDITS,
-      remaining: Math.max(0, PERSONAL_MONTHLY_CREDITS - used),
+      limit: tier.limit,
+      remaining: Math.max(0, tier.limit - used),
     };
   }
   const plan = entitledPlanFor(billing, memberCount);
@@ -249,14 +287,23 @@ export async function summarizeCredits(
  * ⚠ **THE ROUND-TRIP BUDGET IS PER WALLET, AND EVERY NUMBER IS PINNED BY MOCK
  * CALL COUNTS** in `credits-service.test.ts`:
  *   * SEAT — billing row + member count (concurrent), then the RPC: **3**.
- *   * `link` — the owner lookup, then the RPC: **2**.
- *   * `personal` — the RPC alone: **1**. The owner IS the caller.
+ *   * `personal` — the container's own billing row, then the RPC: **2**. The
+ *     owner IS the caller, so no owner lookup, and the container IS the billing
+ *     row, so no owner → container hop.
+ *   * `link` — the owner lookup, the owner's personal billing row (ONE embedded
+ *     query, `workspace-billing.ts › getPersonalBilling`), then the RPC: **3**.
  * Do NOT reintroduce `getWorkspaceEntitlements` on any of them: it fans out to a
  * `COUNT(*)` over `ontology_objects` for a cap this path never consults, plus a
  * second `workspace_billing` read. This runs once per MCP tool call.
- * ⚠ **THE PERSONAL ARM READS NO BILLING ROW AT ALL** — one tier, one constant,
- * no anchor. Adding a read there to "check the plan" would double the cost of
- * the most common burn in the product for an answer that has one value.
+ *
+ * ⚠ **RE-PINNED 2026-09-08, AND THE PERSONAL ARMS EACH COST ONE MORE THAN THEY
+ * DID.** The superseded budget was `link` 2 / `personal` 1, with the note "THE
+ * PERSONAL ARM READS NO BILLING ROW AT ALL — one tier, one constant, no
+ * anchor". That was correct and is now false: the personal wallet has a Pro
+ * tier billed on the owner's own container, so its limit and its window both
+ * come off a row. The read is not optional and the numbers moved rather than
+ * the rule bending — a "check the plan" that skipped the read would charge a
+ * paying customer 500.
  */
 export async function consumeMcpCredits(
   workspaceId: string,
@@ -276,7 +323,13 @@ export async function consumeMcpCredits(
 
   const spend =
     target.wallet === "personal"
-      ? await spendPersonal(target.payerUserId)
+      ? await spendPersonal(
+          target.payerUserId,
+          // ⚠ THE ADDRESSED CONTAINER IS THE BILLING ROW **ONLY** WHEN IT IS
+          // `kind='personal'`. A link container has none, so passing its id
+          // would read nothing and bill a Pro operator at the free tier.
+          caller.workspaceKind === "personal" ? target.workspaceId : null
+        )
       : await spendSeat(target.workspaceId, target.payerUserId);
 
   if (spend.outcome.allowed) {
@@ -317,22 +370,43 @@ export async function consumeMcpCredits(
 interface WalletSpend {
   period: CreditPeriod;
   limit: number;
-  /** The entitled plan, on the seat arm only — a personal wallet has none, and
-   *  `upgradeUrlFor` reads the distinction. */
-  plan: PlanId | null;
+  /** The entitled plan. ⚠ NON-NULL ON BOTH WALLETS SINCE 2026-09-08 — it was
+   *  `null` on the personal arm while that wallet had no tier to be on, and
+   *  `upgradeUrlFor` read the `null` as "nothing to sell". Now the VERDICT
+   *  decides, on both wallets, exactly as it decides the allowance. */
+  plan: PlanId;
   outcome: { allowed: boolean; used: number };
 }
 
-/** Personal wallet: one round trip, one constant, no billing row. */
-async function spendPersonal(payerUserId: string): Promise<WalletSpend> {
-  const period = personalCreditPeriod();
+/**
+ * Personal wallet: the payer's own billing row decides the tier, the tier
+ * decides both the window and the limit, then the RPC. TWO round trips.
+ *
+ * `addressedPersonalContainerId` is the addressed container's id when the
+ * caller addressed their OWN personal container (it IS the billing row, so the
+ * owner → container hop is skipped) and `null` inside a link container.
+ */
+async function spendPersonal(
+  payerUserId: string,
+  addressedPersonalContainerId: string | null
+): Promise<WalletSpend> {
+  const billing = await readPersonalBilling(
+    payerUserId,
+    addressedPersonalContainerId
+  );
+  const tier: PersonalWalletTier = personalWalletTier(billing);
   const outcome = await consumeUserCredits(
     payerUserId,
-    period.periodStart,
+    tier.periodStart,
     CREDITS_PER_MCP_CALL,
-    PERSONAL_MONTHLY_CREDITS
+    tier.limit
   );
-  return { period, limit: PERSONAL_MONTHLY_CREDITS, plan: null, outcome };
+  return {
+    period: { periodStart: tier.periodStart, periodEnd: tier.periodEnd },
+    limit: tier.limit,
+    plan: tier.verdict,
+    outcome,
+  };
 }
 
 /** Seat wallet: the billing row and member count decide the verdict, the

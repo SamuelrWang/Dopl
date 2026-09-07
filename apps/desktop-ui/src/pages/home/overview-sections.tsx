@@ -73,8 +73,13 @@ import { BarSeries, type BarPoint } from "#/components/charts/bar-series";
  * a CONSTANT and is known either way, so it stands in. ⚠ **NEVER A LITERAL
  * HERE** — it is imported, so a retune in `credits.ts` moves this bar with it.
  *
- * 🔒 **AND THE CONSTANT IS THE *PERSONAL* WALLET'S, NOT A WORKSPACE PLAN'S
- * (2026-09-07).** /home is the HOME SPACE: every call this face charges lands on
+ * 🔒 **AND THE CONSTANT IS THE *PERSONAL* WALLET'S FREE TIER, NOT A WORKSPACE
+ * PLAN'S (2026-09-07; `.free` since 2026-09-08).** ⚠ `PERSONAL_MONTHLY_CREDITS`
+ * became a two-key map when the personal Pro tier landed, and FREE is the right
+ * key for a STAND-IN: this arm only runs when the payload's own `limit` is 0,
+ * i.e. nothing was measured, and quoting the paid allowance to someone who may
+ * not pay is the direction that misleads. A Pro reader's real 5,000 arrives on
+ * `credits.limit` and never reaches this line. /home is the HOME SPACE: every call this face charges lands on
  * the reader's own personal wallet, whose allowance is
  * `billing/credits.ts › PERSONAL_MONTHLY_CREDITS` — one tier, no plan to look
  * up. It used to fall back to `monthlyCreditsForPlan(plan)`, the WORKSPACE
@@ -123,13 +128,22 @@ import { BarSeries, type BarPoint } from "#/components/charts/bar-series";
 export function CreditCapacityBar({
   credits,
   spent,
+  onUpgrade,
 }: {
   credits: WorkspaceCreditsStatus;
   /** This period's spend, summed from the histogram's own series. */
   spent: number;
+  /**
+   * Opens the settings modal on its billing section. ⚠ **ABSENT MEANS THERE IS
+   * NOTHING TO SELL** — the caller passes it only on a FREE home container
+   * (`overview-panels.tsx › CreditsBar`), so this component never has to know
+   * what a plan is. Minimal copy (INVARIANTS §5): the affordance is one word.
+   */
+  onUpgrade?: () => void;
 }) {
   const exhausted = credits.remaining === 0 && credits.limit > 0;
-  const limit = credits.limit > 0 ? credits.limit : PERSONAL_MONTHLY_CREDITS;
+  const limit =
+    credits.limit > 0 ? credits.limit : PERSONAL_MONTHLY_CREDITS.free;
   // ⚠ Derived from the limit ABOVE, not `credits.remaining`: on a degraded row
   // the payload's remaining is a zero against a zero, and pairing it with the
   // constant would read as a spent allowance nobody measured.
@@ -158,6 +172,15 @@ export function CreditCapacityBar({
             period bounds are blank on the degraded fallback status, and a date
             nobody measured must not be invented here. */}
         {credits.periodEnd && <span>Resets {formatDate(credits.periodEnd)}</span>}
+        {onUpgrade && (
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="cursor-pointer font-semibold text-text-primary underline-offset-2 hover:underline"
+          >
+            Upgrade
+          </button>
+        )}
       </div>
     </div>
   );

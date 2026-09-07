@@ -18,6 +18,12 @@
  * branches are DELETED**: every user has exactly one personal wallet, so nothing
  * can be missing and nothing can be ambiguous.
  *
+ * ⚠ **AND THE PERSONAL WALLET GAINED A PLAN ON 2026-09-08** (Samuel's $8.99
+ * ruling): a home burn's limit and window come off the OWNER's own
+ * `kind='personal'` container's billing row, so "which row" is now as
+ * load-bearing as "whose wallet". The claims below are unchanged; two cases are
+ * added for the row.
+ *
  * Five claims, each red under a different single revert:
  *   1. STANDARD target → the CALLER's own seat, asking nobody who owns it. This
  *      is also the migration-unapplied case (`workspaceKind` absent).
@@ -39,6 +45,11 @@ import type { WorkspaceBillingRow } from "./workspace-billing";
 vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
+  // ⚠ THE PERSONAL WALLET'S OWN READ (2026-09-08). `personal-wallet.ts` is
+  // REAL in this suite — only the repository is mocked — so the tier, the
+  // window and the limit are computed by the code under test from the row this
+  // mock hands back, exactly as they are in production.
+  getPersonalBilling: vi.fn(),
   countActiveMembers: vi.fn(),
   countOntologyObjects: vi.fn(),
 }));
@@ -67,6 +78,9 @@ const PERSONAL_WS = "ws-personal";
 const OWNER_WS = "ws-owner";
 const OWNER = "user-operator";
 const GUEST = "user-guest";
+
+/** The OWNER's own personal container — where their home-space plan lives. */
+const PERSONAL_OF_OWNER = "ws-personal-of-owner";
 
 function billing(): WorkspaceBillingRow {
   return {
@@ -98,6 +112,14 @@ beforeEach(() => {
   warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   mockFindOwner.mockResolvedValue(OWNER);
   mockRepo.getWorkspaceBilling.mockResolvedValue(billing());
+  // ⚠ THE OWNER'S HOME SPACE IS FREE BY DEFAULT HERE, WHILE THE STANDARD
+  // WORKSPACE FIXTURE ABOVE IS A LIVE TEAM ROW. The two being different is what
+  // makes every case below able to tell "read the payer's personal row" from
+  // "read whatever billing row was lying around".
+  mockRepo.getPersonalBilling.mockResolvedValue({
+    containerId: PERSONAL_OF_OWNER,
+    billing: null,
+  });
   mockRepo.countActiveMembers.mockResolvedValue(1);
   mockRepo.countOntologyObjects.mockResolvedValue(0);
   mockWallets.consumeUserCredits.mockResolvedValue({ allowed: true, used: 7 });
@@ -218,6 +240,27 @@ describe("consumeMcpCredits — home containers", () => {
     expect(res).toMatchObject({ allowed: true, limit: 500, wallet: "personal" });
   });
 
+  it("2c. the limit comes off the OWNER's PERSONAL row, not the addressed container's", async () => {
+    // 🔒 The addressed link container has NO billing row; the standard-workspace
+    // fixture in `beforeEach` is a live TEAM plan that belongs to neither. A
+    // version reading either one charges this Pro operator 500.
+    mockRepo.getPersonalBilling.mockResolvedValue({
+      containerId: PERSONAL_OF_OWNER,
+      billing: { ...billing(), workspaceId: PERSONAL_OF_OWNER, plan: "pro" },
+    });
+
+    const res = await consumeMcpCredits(LINK_WS, guestCaller);
+
+    expect(mockRepo.getPersonalBilling).toHaveBeenCalledWith(OWNER);
+    expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
+      OWNER,
+      expect.any(String),
+      1,
+      5_000
+    );
+    expect(res).toMatchObject({ wallet: "personal", limit: 5_000 });
+  });
+
   it("2b. the OWNER's own burn in their own container spends the same wallet", async () => {
     const res = await consumeMcpCredits(LINK_WS, ownerCaller);
     expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
@@ -286,6 +329,46 @@ describe("getWorkspaceBillingStatus — the caller's own meter", () => {
       remaining: 458,
     });
     expect(status.credits.degraded).toBeUndefined();
+  });
+
+  it("the OWNER's PRO home space meters at 5,000, read off their personal row", async () => {
+    // ⚠ THE METER'S OWN COPY OF THE 2c CLAIM. Enforcement and the meter resolve
+    // the row through the same helper; if only one of them did, the settings
+    // pane would show 500 for a wallet the agent is being charged 5,000
+    // against.
+    mockRepo.getPersonalBilling.mockResolvedValue({
+      containerId: PERSONAL_OF_OWNER,
+      billing: { ...billing(), workspaceId: PERSONAL_OF_OWNER, plan: "pro" },
+    });
+    mockWallets.getUserCreditsUsed.mockResolvedValue(1_000);
+
+    const status = await getWorkspaceBillingStatus(LINK_WS, ownerCaller);
+
+    expect(status.credits).toMatchObject({
+      wallet: "personal",
+      used: 1_000,
+      limit: 5_000,
+      remaining: 4_000,
+    });
+  });
+
+  it("stamps the addressed container's KIND on the payload", async () => {
+    // ⚠ NO RENDERER CAN PICK A PLAN LIST FROM `plan` ALONE — `free` is a value
+    // on both taxonomies (`plans.ts › plansForKind`).
+    expect((await getWorkspaceBillingStatus(LINK_WS, ownerCaller)).containerKind).toBe(
+      "link"
+    );
+    expect(
+      (await getWorkspaceBillingStatus(OWNER_WS, { userId: GUEST })).containerKind
+    ).toBe("standard");
+    expect(
+      (
+        await getWorkspaceBillingStatus(PERSONAL_WS, {
+          userId: OWNER,
+          workspaceKind: "personal",
+        })
+      ).containerKind
+    ).toBe("personal");
   });
 
   it("a PEER gets the unmetered posture — the owner's wallet is never read", async () => {

@@ -8,6 +8,13 @@
  * (free 500 / solo 10,000 / team 25,000 workspace-wide) — and a case asserting
  * that team was FLAT and deliberately not a multiple of solo. Both are gone
  * with the map: the allowance is per MEMBER now and multiplies by the roster.
+ *
+ * ⚠ **AND EXTENDED 2026-09-08 FOR THE PERSONAL PRO TIER.** Two cases INVERTED
+ * rather than being added beside their predecessors, and they are called out
+ * because a suite that keeps both spellings of a superseded rule is green under
+ * either: `PERSONAL_MONTHLY_CREDITS` was pinned as `toBe(500)` and as
+ * `typeof === "number"` with the comment "the home space has no plan". It is a
+ * two-key MAP now and the home space does have a plan.
  */
 
 import { describe, it, expect } from "vitest";
@@ -16,6 +23,7 @@ import {
   PERSONAL_MONTHLY_CREDITS,
   SEAT_MONTHLY_CREDITS,
   personalCreditPeriod,
+  personalCreditsForPlan,
   resolveCreditPeriod,
   seatCreditsForPlan,
 } from "./credits";
@@ -28,7 +36,27 @@ describe("allowances", () => {
   });
 
   it("pins the PER-MEMBER seat allowance (Samuel, 2026-09-07: 100 free / 5,000 paid)", () => {
-    expect(SEAT_MONTHLY_CREDITS).toEqual({ free: 100, solo: 5_000, team: 5_000 });
+    expect(SEAT_MONTHLY_CREDITS).toEqual({
+      free: 100,
+      solo: 5_000,
+      team: 5_000,
+      pro: 5_000,
+    });
+  });
+
+  it("🔒 carries a `pro` key that NO seat ever reads — it is there for the Record type", () => {
+    // ⚠ `pro` is sold only on a `kind='personal'` container, which has no seats.
+    // The key exists so `Record<PlanId, number>` stays exhaustive and the NEXT
+    // plan id is a compile error here rather than a silent `undefined`; the
+    // credits SERVICE never routes a seat burn through it
+    // (`server/credits-service.test.ts`).
+    expect(SEAT_MONTHLY_CREDITS.pro).toBe(5_000);
+    expect(Object.keys(SEAT_MONTHLY_CREDITS).sort()).toEqual([
+      "free",
+      "pro",
+      "solo",
+      "team",
+    ]);
   });
 
   it("resolves a per-member allowance per plan id", () => {
@@ -52,16 +80,58 @@ describe("allowances", () => {
     expect(seatCreditsForPlan("team")).toBe(SEAT_MONTHLY_CREDITS.team);
   });
 
-  it("pins the PERSONAL wallet allowance — one tier this wave", () => {
-    expect(PERSONAL_MONTHLY_CREDITS).toBe(500);
+  it("pins the PERSONAL wallet allowance — TWO tiers (Samuel, 2026-09-08: 500 free / 5,000 Pro)", () => {
+    expect(PERSONAL_MONTHLY_CREDITS).toEqual({ free: 500, pro: 5_000 });
   });
 
-  it("🔒 the personal allowance is NOT a plan lookup — the home space has no plan", () => {
-    // It is a bare constant on purpose (A5): Samuel gave workspace figures and
-    // no personal one, so this holds the status-quo free allowance rather than
-    // inventing a price. A map here would imply a tier that cannot be bought.
-    expect(typeof PERSONAL_MONTHLY_CREDITS).toBe("number");
-    expect(PERSONAL_MONTHLY_CREDITS).not.toBe(SEAT_MONTHLY_CREDITS.free);
+  it("🔒 the personal allowance IS a plan lookup now — the home space has a plan", () => {
+    // ⚠ THE REVERT DETECTOR FOR THE ONE-TIER MODEL. The superseded case asserted
+    // `typeof PERSONAL_MONTHLY_CREDITS === "number"` with the comment "a map
+    // here would imply a tier that cannot be bought" — true until Samuel priced
+    // it at $8.99. A revert to the bare constant fails this AND every
+    // `.free`/`.pro` read in the tree.
+    expect(typeof PERSONAL_MONTHLY_CREDITS).toBe("object");
+    expect(Object.keys(PERSONAL_MONTHLY_CREDITS).sort()).toEqual(["free", "pro"]);
+  });
+
+  it("🔒 free PERSONAL (500) is NOT free SEAT (100) — different things, different numbers", () => {
+    // A free seat is one of many inside somebody's workspace; a free personal
+    // wallet is a person's entire home space. Collapsing them cuts every
+    // existing user's allowance by 80% with no ruling behind it.
+    expect(PERSONAL_MONTHLY_CREDITS.free).toBe(500);
+    expect(PERSONAL_MONTHLY_CREDITS.free).not.toBe(SEAT_MONTHLY_CREDITS.free);
+  });
+
+  it("🔒 Pro buys the SAME 5,000 a paid seat gets (Samuel: \"team individual is also 5,000\")", () => {
+    expect(PERSONAL_MONTHLY_CREDITS.pro).toBe(SEAT_MONTHLY_CREDITS.team);
+  });
+});
+
+/**
+ * 🔒 THE PERSONAL LIMIT IS A VERDICT LOOKUP, AND EVERYTHING THAT IS NOT `pro`
+ * IS FREE. The verdict comes from `server/entitlements.ts › entitledPlanFor`,
+ * so a canceled Pro row arrives here as `free` and gets 500 — not the 5,000 it
+ * stopped paying for.
+ */
+describe("personalCreditsForPlan", () => {
+  it("gives a `pro` verdict 5,000 and a `free` verdict 500", () => {
+    expect(personalCreditsForPlan("pro")).toBe(5_000);
+    expect(personalCreditsForPlan("free")).toBe(500);
+  });
+
+  it("🔒 answers FREE for a workspace plan that cannot be on a personal container", () => {
+    // ⚠ THE SAFE DIRECTION. `team` and `solo` are standard-workspace plans and
+    // cannot be the verdict here; if a bad row produced one anyway, reading it
+    // as paid would hand a free home space 5,000 credits nobody bought. A
+    // `SEAT_MONTHLY_CREDITS`-style lookup keyed on the whole taxonomy would do
+    // exactly that, which is why this function is not one.
+    expect(personalCreditsForPlan("team")).toBe(PERSONAL_MONTHLY_CREDITS.free);
+    expect(personalCreditsForPlan("solo")).toBe(PERSONAL_MONTHLY_CREDITS.free);
+  });
+
+  it("reads the map, so retuning the map retunes the answer", () => {
+    expect(personalCreditsForPlan("pro")).toBe(PERSONAL_MONTHLY_CREDITS.pro);
+    expect(personalCreditsForPlan("free")).toBe(PERSONAL_MONTHLY_CREDITS.free);
   });
 });
 
@@ -103,10 +173,13 @@ describe("personalCreditPeriod", () => {
     );
   });
 
-  it("🔒 IGNORES a subscription anchor because it takes none — no anchor branch exists", () => {
-    // `personalCreditPeriod` accepts only a clock. If a future personal PAID
-    // tier lands, it grows `resolveCreditPeriod`'s anchor branch rather than a
-    // second copy of it (`credits.ts`).
+  it("🔒 STILL takes no anchor — the Pro window grew `resolveCreditPeriod`, not a copy of it", () => {
+    // ⚠ THE PREDICTION THIS CASE MADE CAME TRUE ON 2026-09-08. It said a future
+    // personal PAID tier would grow `resolveCreditPeriod`'s anchor branch
+    // "rather than a second copy of it". Pro landed and did exactly that
+    // (`server/personal-wallet.ts › personalWalletTier`), so this function is
+    // still clock-only — it is the FREE / no-row arm now, not the whole rule.
+    // A second anchor branch appearing here is the regression.
     expect(personalCreditPeriod.length).toBe(0);
   });
 });
@@ -132,6 +205,16 @@ describe("resolveCreditPeriod — subscription anchor", () => {
 
   it("anchors a solo subscription the same way", () => {
     expect(resolveCreditPeriod(LIVE_ANCHOR, "solo", NOW)).toEqual({
+      periodStart: "2026-07-21T09:30:00.000Z",
+      periodEnd: "2026-08-21T09:30:00.000Z",
+    });
+  });
+
+  it("anchors a PERSONAL `pro` subscription the same way (2026-09-08)", () => {
+    // ⚠ THE PERSONAL WALLET IS NOT SPECIAL-CASED. Its window is this same
+    // function, so a Pro home space rolls on its Stripe date and NOT on the
+    // 1st — otherwise the payer gets a second month's 5,000 early, every month.
+    expect(resolveCreditPeriod(LIVE_ANCHOR, "pro", NOW)).toEqual({
       periodStart: "2026-07-21T09:30:00.000Z",
       periodEnd: "2026-08-21T09:30:00.000Z",
     });

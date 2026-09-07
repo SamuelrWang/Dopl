@@ -5,9 +5,19 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * Single billing repository: `workspace_billing` plus the two counts the
  * entitlements layer needs (active members, live ontology objects). Keeps
  * `entitlements.ts` unit-testable by mocking this module.
+ *
+ * ⚠ **A `workspace_billing` ROW IS NOT ALWAYS A WORKSPACE'S SINCE 2026-09-08.**
+ * The personal Pro tier is billed on the `kind='personal'` CONTAINER's own row
+ * (spec §11.1) — same table, same columns, same webhook — so every function
+ * here answers for containers too and `getPersonalBilling` is the one lookup
+ * that goes owner → container → row.
  */
 
-export type WorkspaceBillingPlan = "free" | "solo" | "team";
+/** ⚠ MIRRORS `workspace_billing_plan_check` IN THE DATABASE
+ *  (`20260930130000_workspace_billing_plan_pro.sql`) and `../plans.ts › PlanId`.
+ *  A value this union has and the CHECK lacks is a `23514` raised inside the
+ *  Stripe webhook, which Stripe then retries forever. */
+export type WorkspaceBillingPlan = "free" | "solo" | "team" | "pro";
 export type WorkspaceBillingStatus =
   | "free"
   | "active"
@@ -96,6 +106,56 @@ export async function getWorkspaceBilling(
     .maybeSingle();
   if (error) throw error;
   return data ? mapBillingRow(data as BillingRowShape) : null;
+}
+
+/**
+ * The caller's PERSONAL container and its billing row, in ONE round trip.
+ *
+ * 🔒 **ONE QUERY, AND THE EMBED IS WHY THIS FUNCTION EXISTS AT ALL.** It is on
+ * the MCP credit path, which runs once per tool call: the naive form is
+ * "find the personal container, then read its billing row", two sequential
+ * round trips because the second needs the first's id. PostgREST's embedded
+ * select answers both from one request over the `workspace_billing.workspace_id`
+ * → `workspaces.id` foreign key. ⚠ The per-wallet budget in
+ * `credits-service.ts` is pinned by MOCK CALL COUNTS — splitting this back into
+ * two reads fails `credits-service.test.ts`, which is the intended alarm.
+ *
+ * `null` = the user has no personal container. ⚠ **THAT CANNOT HAPPEN AND THE
+ * BRANCH STAYS**: `20260920120000_workspace_kind_personal.sql` backfills one
+ * per user and `ensure_personal_container` mints one on demand, so this is the
+ * answer to a state the database says is impossible — exactly the kind of read
+ * that must return rather than throw on the hottest path in the product.
+ * `{ containerId, billing: null }` is the DIFFERENT answer: the container
+ * exists and has never been billed, i.e. a free home space.
+ */
+export async function getPersonalBilling(
+  ownerUserId: string
+): Promise<{ containerId: string; billing: WorkspaceBillingRow | null } | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("workspaces")
+    .select(`id, workspace_billing(${BILLING_COLS})`)
+    .eq("owner_id", ownerUserId)
+    .eq("kind", "personal")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as { id: string; workspace_billing: unknown };
+  return { containerId: row.id, billing: mapEmbeddedBillingRow(row.workspace_billing) };
+}
+
+/**
+ * The embedded `workspace_billing` of a `workspaces` row → the mapped row.
+ *
+ * ⚠ **AN EMBEDDED 1:1 ARRIVES AS AN OBJECT OR AS A ONE-ELEMENT ARRAY, AND
+ * WHICH ONE IS NOT OURS TO DECIDE.** PostgREST returns an object when it can
+ * prove the relationship is to-one from the constraints and an array when it
+ * cannot, and that inference has changed across releases — so a reader that
+ * handles only the shape it saw in dev reads `undefined` in production and
+ * quietly reports every Pro home space as free. Both shapes, one mapper.
+ */
+function mapEmbeddedBillingRow(embedded: unknown): WorkspaceBillingRow | null {
+  const row = Array.isArray(embedded) ? embedded[0] : embedded;
+  return row ? mapBillingRow(row as BillingRowShape) : null;
 }
 
 /** Insert-or-update a billing row. Stamps `updated_at`; `created_at` comes

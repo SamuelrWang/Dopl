@@ -272,8 +272,10 @@ export interface CreditConsumeResponse {
   periodEnd: string;
   /**
    * Where an exhausted caller is sent. **Empty when there is nothing to buy** —
-   * the personal wallet (no paid tier this wave) and a seat on an
-   * already-paid workspace — and empty when the server failed open.
+   * a wallet already on its paid tier — and empty when the server failed open.
+   * ⚠ **NON-EMPTY ON EITHER WALLET'S FREE VERDICT, INCLUDING `personal`**: a
+   * personal PRO tier exists since 2026-09-08, so a reader must not treat
+   * `wallet === "personal"` as proof that there is no link.
    */
   upgradeUrl: string;
   degraded?: boolean;

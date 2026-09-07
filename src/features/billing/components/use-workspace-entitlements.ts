@@ -3,18 +3,25 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
+import type { WorkspaceKind } from "@/features/workspaces/types";
 import type { PlanId, BillingStatus } from "../plans";
 import { PERSONAL_MONTHLY_CREDITS, type WalletKind } from "../credits";
+import { PRO_PRICE, SOLO_PRICE, TEAM_SEAT_PRICE, formatMoney } from "../prices";
 
 /**
  * Client mirror of `/api/billing/status` (see `server/entitlements.ts`) — THE
  * single billing read for every surface. Omitting `workspaceId` lets the
  * endpoint resolve the caller's own container.
  *
- * Team = $8 per seat per month, and each member gets their own fixed credit
- * allocation (Samuel, 2026-09-07). ⚠ Pro/Solo — flat $5.99, one member — is
- * RETIRED FROM SALE; `SOLO_PRICE` and `isSolo` survive to LABEL the rows that
- * are still on it, and nothing here offers it.
+ * TWO PAID PLANS, ON TWO DIFFERENT KINDS OF CONTAINER (Samuel, 2026-09-08):
+ * **Team** — per seat, per month, on a standard workspace, each member with
+ * their own fixed non-pooled allocation; **Pro** — flat, per month, on the
+ * caller's `kind='personal'` container, for their home space. `containerKind`
+ * says which one this payload is even about.
+ *
+ * ⚠ Pro/Solo — flat $5.99, one member, a STANDARD workspace — is RETIRED FROM
+ * SALE and is NOT the `pro` plan; `SOLO_PRICE` and `isSolo` survive to LABEL
+ * the rows still on it, and nothing here offers it.
  */
 
 /** Aliases of the canonical taxonomy (plans.ts) — public names here so
@@ -48,6 +55,10 @@ export interface WorkspaceCreditsStatus {
 export interface WorkspaceEntitlementsStatus {
   plan: WorkspacePlan;
   status: BillingStatus;
+  /** Workspace or home space — which plan list and which wording apply.
+   *  ⚠ Shipped 2026-09-08; a cached row from before it has NO such key, hence
+   *  the field-wise fallback below (INVARIANTS §8). */
+  containerKind: WorkspaceKind;
   memberCount: number;
   /** Live Stripe seat quantity; null when not on a paid plan. */
   seatCount: number | null;
@@ -64,23 +75,27 @@ export interface WorkspaceEntitlementsStatus {
   has_stripe_customer: boolean;
 }
 
-/** Pro — flat monthly price, single-member workspaces only. ⚠ LEGACY ROWS ONLY
- *  since 2026-09-07: nothing sells this plan, and the constant exists to label
- *  a workspace that is already on it. */
-export const SOLO_PRICE = 5.99;
 /**
- * Team — per seat per month, seats sync with membership.
- *
- * ⚠ **$8.00 SINCE 2026-09-07 (Samuel's ruling), AND STRIPE DOES NOT AGREE
- * YET.** The live price under `STRIPE_PRO_SEAT_PRICE_ID` is still 7.99; Samuel
- * creates the $8 price and flips the env, and no client code touches a Stripe
- * price. Deploy state is a measurement — read the env, not this line.
+ * ⚠ **DEFINED IN `../prices.ts`, RE-EXPORTED HERE (2026-09-08, F-672
+ * RESOLVED).** These three and `formatMoney` used to be DECLARED in this file —
+ * a `"use client"` React module — so `../plans.ts` could not import them and
+ * wrote `"$8.00"` as a string literal on the public pricing card instead. They
+ * moved to a pure module both sides can read; the re-export keeps every
+ * existing importer (`shared/layout/settings-modal/sections/*`,
+ * `components/upgrade-modal*.tsx`, `marketing/components/pricing-content.tsx`)
+ * and every `vi.mock` of this module working unchanged, and there is now
+ * exactly one definition of each number.
  */
-export const TEAM_SEAT_PRICE = 8;
+export { PRO_PRICE, SOLO_PRICE, TEAM_SEAT_PRICE, formatMoney };
 
 const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
   plan: "free",
   status: "free",
+  // ⚠ `standard` matches `workspaces/types.ts › isStandardWorkspace`'s default
+  // for an absent kind, and is the conservative pre-response guess: a workspace
+  // renderer on a home space shows one card too many, the reverse hides the
+  // Team card from a workspace admin who came to buy it.
+  containerKind: "standard",
   memberCount: 1,
   seatCount: null,
   objectCap: null,
@@ -98,8 +113,12 @@ const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
     // workspace number to somebody who is not in one.
     wallet: null,
     used: 0,
-    limit: PERSONAL_MONTHLY_CREDITS,
-    remaining: PERSONAL_MONTHLY_CREDITS,
+    // ⚠ `.free` SINCE 2026-09-08: `PERSONAL_MONTHLY_CREDITS` became a map when
+    // the personal Pro tier landed. FREE is the right key for a default — this
+    // renders before any response says whether the viewer pays, and showing a
+    // paid allowance to a free user is the direction that misleads.
+    limit: PERSONAL_MONTHLY_CREDITS.free,
+    remaining: PERSONAL_MONTHLY_CREDITS.free,
     periodStart: "",
     periodEnd: "",
   },
@@ -107,11 +126,6 @@ const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
   subscription_period_end: null,
   has_stripe_customer: false,
 };
-
-/** `$23.97` — monthly total, no trailing `.00` stripping. */
-export function formatMoney(amount: number): string {
-  return `$${amount.toFixed(2)}`;
-}
 
 /** Exported so the billing-status cache key can be targeted for invalidation
  *  (see `useInvalidateBillingStatus`). */
@@ -133,6 +147,10 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
   const raw = query.data ?? DEFAULT_STATUS;
   const data: WorkspaceEntitlementsStatus = {
     ...raw,
+    // ⚠ A row cached before 2026-09-08 has no `containerKind`. `standard` is
+    // the same default the server stamps for an absent workspace kind, so a
+    // replayed row renders the workspace surfaces it was captured on.
+    containerKind: raw.containerKind ?? "standard",
     credits: raw.credits
       ? // ⚠ FIELD-WISE INSIDE `credits` TOO. A row cached before `wallet`
         // shipped replays with the object present and the key missing, which
@@ -145,8 +163,10 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
 
   const isSolo = data.plan === "solo";
   const isTeam = data.plan === "team";
+  /** The PERSONAL paid tier — flat, on the caller's own home container. */
+  const isPro = data.plan === "pro";
   const isPaid =
-    (isSolo || isTeam) &&
+    (isSolo || isTeam || isPro) &&
     (data.status === "active" || data.status === "past_due");
   const isPastDue = data.status === "past_due";
   const isCapped = data.objectCap !== null;
@@ -154,14 +174,23 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
 
   // Live Stripe quantity when present, else member count (upgrade start).
   const billableSeats = data.seatCount ?? data.memberCount;
-  // Solo flat; Team per-seat; Free projects a Team upgrade's cost.
-  const monthlyTotal = isSolo ? SOLO_PRICE : billableSeats * TEAM_SEAT_PRICE;
+  // ⚠ TWO FLAT PLANS AND ONE PER-SEAT ONE. Solo (legacy) and Pro (personal) are
+  // one price however many rows the container has; Team multiplies. A FREE
+  // container projects a TEAM upgrade's cost, which is only meaningful on a
+  // standard workspace — the personal surfaces render `PRO_PRICE` directly and
+  // never this figure (`containerKind` says which surface is which).
+  const monthlyTotal = isPro
+    ? PRO_PRICE
+    : isSolo
+      ? SOLO_PRICE
+      : billableSeats * TEAM_SEAT_PRICE;
 
   return {
     ...data,
     isPaid,
     isSolo,
     isTeam,
+    isPro,
     isPastDue,
     isCapped,
     overCap,

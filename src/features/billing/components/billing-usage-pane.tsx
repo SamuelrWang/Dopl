@@ -25,12 +25,20 @@ import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
  * that used to sit under "Usage this period" is DELETED — a meter that prints
  * `used / limit` and a reset date does not need a paragraph telling the reader
  * what a meter is.
+ *
+ * ⚠ **A PERSONAL CONTAINER HAS NO ROSTER AND NO SEATS (2026-09-08).** It is one
+ * person's home space with exactly one member by construction, so the Members
+ * line and every "billable seat" phrase are dropped there rather than printed
+ * as `1` — a count that can only ever be 1 is a fact about the schema, not
+ * about the reader's plan. The section is titled for the container it is
+ * describing for the same reason.
  */
 export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
   const ent = useWorkspaceEntitlements(workspaceId);
 
   if (ent.loading) return <UsageSkeleton />;
 
+  const isPersonal = ent.containerKind === "personal";
   const creditsExhausted = ent.credits.remaining === 0 && ent.credits.limit > 0;
 
   return (
@@ -77,22 +85,24 @@ export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
 
       <section className="bento px-6 py-5">
         <h2 className="text-title font-semibold tracking-tight text-text-primary">
-          Workspace limits
+          {isPersonal ? "Limits" : "Workspace limits"}
         </h2>
         <div className="mt-3 divide-y divide-border-subtle">
+          {!isPersonal && (
+            <UsageLine
+              className="py-2 first:pt-0"
+              label="Members"
+              value={
+                ent.isTeam
+                  ? `${ent.memberCount} · ${ent.billableSeats} billable ${
+                      ent.billableSeats === 1 ? "seat" : "seats"
+                    }`
+                  : `${ent.memberCount}`
+              }
+            />
+          )}
           <UsageLine
             className="py-2 first:pt-0"
-            label="Members"
-            value={
-              ent.isTeam
-                ? `${ent.memberCount} · ${ent.billableSeats} billable ${
-                    ent.billableSeats === 1 ? "seat" : "seats"
-                  }`
-                : `${ent.memberCount}`
-            }
-          />
-          <UsageLine
-            className="py-2"
             label="Chat history"
             value={
               ent.chatsWindowDays

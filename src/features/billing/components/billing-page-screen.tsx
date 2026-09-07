@@ -8,6 +8,7 @@ import type { BillingTab } from "../billing-tabs";
 import type { CheckoutPlan } from "../url";
 import { BillingPlansPane } from "./billing-plans-pane";
 import { BillingUsagePane } from "./billing-usage-pane";
+import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 import styles from "./billing-page.module.css";
 
 /**
@@ -64,6 +65,11 @@ export function BillingPageScreen({
   initialTab,
 }: BillingPageScreenProps) {
   const [tab, setTab] = useState<BillingTab>(initialTab);
+  // ⚠ NOT A FOURTH REQUEST. Same path + same `workspaceId` as both panes, so
+  // this is the one cached billing-status read they already share — the shell
+  // needs it only to name what `[segment]` resolved to.
+  const ent = useWorkspaceEntitlements(workspaceId);
+  const isPersonal = ent.containerKind === "personal";
   // Reported up by `PlansBilling` while Stripe's card form is mounted;
   // switcher inert while true.
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -99,9 +105,17 @@ export function BillingPageScreen({
         <h1 className="mt-1 text-display font-semibold tracking-tight text-text-primary">
           {workspaceName}
         </h1>
+        {/* ⚠ **THE SUB-LABEL NAMES WHAT `[segment]` RESOLVED TO (2026-09-08).**
+            `/billing/[segment]` serves a `kind='personal'` container as well as
+            a standard workspace since Pro went on sale, and the page's own copy
+            was the last place still calling every container a workspace. A
+            personal space is one person's — so it gets a LABEL, not the
+            browser-payment explainer, which is a note about card handling on a
+            surface a solo payer reached from their own settings. */}
         <p className="mt-1.5 text-caption text-text-secondary">
-          Payment lives in your browser — the desktop app never handles card
-          details. Everything else about Dopl is in the app.
+          {isPersonal
+            ? "Personal space"
+            : "Payment lives in your browser — the desktop app never handles card details. Everything else about Dopl is in the app."}
         </p>
         {/* ⚠ Inert while checkout is mounted: tabs are exclusive, so a click
             unmounts Stripe's card form, half-typed details and the session,

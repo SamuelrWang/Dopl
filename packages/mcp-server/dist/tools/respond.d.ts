@@ -97,7 +97,15 @@ export interface CreditsOutcome {
  * (Samuel, 2026-09-07). A `seat` refusal is about the caller's OWN allocation
  * inside that workspace — telling them "this workspace is out" would send them
  * to an admin who cannot help — and a `personal` refusal is about their home
- * space, where there is nothing to buy and therefore no link to offer.
+ * space.
+ *
+ * ⚠ **THE UPGRADE LINE IS DECIDED BY THE URL, NEVER BY THE WALLET** (Samuel,
+ * 2026-09-08: a personal PRO tier exists now). BOTH wallets carry an upsell on
+ * a FREE verdict and neither carries one on a PAID one, so an empty
+ * `upgradeUrl` is the server saying there is nothing to buy — the only fact
+ * this package can know. A wallet-keyed "personal never upgrades" rule was
+ * true for one day, and it would hide the paid tier on the product's primary
+ * agent surface while the server was handing this function the link.
  *
  * ⚠ **A MISSING `wallet` FALLS BACK, IT DOES NOT GUESS.** An older server omits
  * the field entirely and `null` is the unmetered posture; both render the

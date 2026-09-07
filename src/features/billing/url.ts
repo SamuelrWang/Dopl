@@ -13,11 +13,17 @@ import type { PlanId } from "./plans";
  */
 
 /**
- * The plans a checkout may be opened for. **Team, and only Team** (2026-09-07,
- * Samuel's per-seat ruling — spec A6): Solo/"Pro" is RETIRED FROM SALE, so no
- * URL, envelope or button may still ask for it. Live `solo` rows keep billing
- * (`PlanId` still carries the value) until they cancel or upgrade in place via
- * `POST /api/billing/upgrade-to-team`.
+ * The plans a checkout may be opened for. **Team and Pro** (2026-09-08, spec
+ * §11 — Samuel's `$8.99` ruling): `team` is the per-seat plan of a STANDARD
+ * workspace, `pro` the flat personal plan of a `kind='personal'` container. The
+ * two are never interchangeable — which container a plan may be bought for is
+ * fenced by `POST /api/billing/checkout` (400 `PLAN_NOT_FOR_CONTAINER`), and
+ * this type only says which plans have a price at all.
+ *
+ * ⚠ Solo/"Pro" — the RETIRED $5.99 flat WORKSPACE plan — is still not here and
+ * is a different thing from `pro` despite the label it once wore in the UI
+ * (2026-09-07, spec A6). `PlanId` carries `solo` for the live legacy rows;
+ * nothing may open a checkout for it.
  *
  * ⚠ SPELLED AS AN EXPLICIT LITERAL, DELIBERATELY, and the constraint below is
  * the "a fourth plan cannot silently become checkout-able" intent this line
@@ -25,13 +31,13 @@ import type { PlanId } from "./plans";
  * subtraction WIDENS: adding `"enterprise"` to `PlanId` would have grown
  * `CheckoutPlan` to `"team" | "enterprise"` on its own, with no edit here and
  * no type error anywhere — a new plan made checkout-able by the act of naming
- * it. Written out, a new plan reaches checkout only when a human types it here.
- * `PlanIdSubset`'s constraint keeps the other half of the derivation honest at
- * ZERO runtime cost: retire or rename `team` in the taxonomy and this line
- * stops compiling.
+ * it. `pro` reaching this line by a human typing it, one wave after `PlanId`
+ * grew, is the shape working. `PlanIdSubset`'s constraint keeps the other half
+ * of the derivation honest at ZERO runtime cost: retire or rename `team` or
+ * `pro` in the taxonomy and this line stops compiling.
  */
 type PlanIdSubset<T extends PlanId> = T;
-export type CheckoutPlan = PlanIdSubset<"team">;
+export type CheckoutPlan = PlanIdSubset<"team" | "pro">;
 
 /**
  * `?billing=` param. ⚠ Values are verbatim-frozen — Stripe sessions and 402
@@ -45,8 +51,9 @@ export type CheckoutPlan = PlanIdSubset<"team">;
  */
 export type BillingIntent = "upgrade" | "success" | "return";
 
-/** Segment-less `/billing` is legal — it forwards when the caller owns exactly
- *  one standard workspace and otherwise asks them to pick
+/** Segment-less `/billing` is legal — with `?plan=pro` it forwards to the
+ *  caller's PERSONAL container, otherwise it forwards when they own exactly one
+ *  standard workspace and asks them to pick when they do not
  *  (`src/app/billing/page.tsx`). */
 export const BILLING_SURFACE_ROOT = "/billing";
 
@@ -68,7 +75,9 @@ export interface BillingPathOptions {
   sessionId?: string | null;
 }
 
-/** `/billing/acme-ab12cd34ef56?billing=upgrade&plan=team` — path only. */
+/** `/billing/acme-ab12cd34ef56?billing=upgrade&plan=team` — path only.
+ *  ⚠ `plan=pro` with NO segment is the personal-container forward: the seller
+ *  rarely holds that segment, and `/billing` resolves it (`page.tsx`). */
 export function billingPath({
   segment,
   intent,
@@ -129,13 +138,18 @@ export function parseBillingIntent(
 }
 
 /**
- * `?plan=` → a checkout to open on arrival. ⚠ `team` is the ONLY accepted
- * value since 2026-09-07: a stale `?plan=solo` link (an old 402 envelope, a
- * bookmark, a sign-in bounce) parses to `null`, so the payer lands on the plan
- * list rather than in a checkout for a price that is no longer sold.
+ * `?plan=` → a checkout to open on arrival. ⚠ `team` and `pro` are the ONLY
+ * accepted values (`pro` added 2026-09-08, spec §11): a stale `?plan=solo` link
+ * (an old 402 envelope, a bookmark, a sign-in bounce) parses to `null`, so the
+ * payer lands on the plan list rather than in a checkout for a price that is no
+ * longer sold.
+ *
+ * ⚠ IT DOES NOT CHECK THE CONTAINER, and cannot — a URL is parsed before any
+ * workspace is resolved. `plan=pro` on a standard workspace's billing page is a
+ * well-formed request the CHECKOUT ROUTE refuses (400 `PLAN_NOT_FOR_CONTAINER`).
  */
 export function parseCheckoutPlan(
   raw: string | null | undefined
 ): CheckoutPlan | null {
-  return raw === "team" ? raw : null;
+  return raw === "team" || raw === "pro" ? raw : null;
 }

@@ -12,12 +12,16 @@
 -- (INVARIANTS §12, F-304). "Is `20260930120000` applied?" is not a question the
 -- version column can answer.
 --
--- ⚠ **APPLY ORDER: LAST.** Every pending file in `supabase/migrations` goes
--- first, in FILENAME order — this one sorts after all of them and depends on
--- two of their subjects (`workspaces.kind = 'personal'` from
--- `20260920120000_workspace_kind_personal.sql`, and `credit_usage_events` from
--- `20260901130000_credit_usage_events.sql`). ADDITIVE ONLY: it edits no applied
--- file, drops no table, and drops no function.
+-- ⚠ **APPLY ORDER: SECOND-TO-LAST.** Every other pending file in
+-- `supabase/migrations` goes first, in FILENAME order — this one sorts after
+-- all of them and depends on two of their subjects (`workspaces.kind =
+-- 'personal'` from `20260920120000_workspace_kind_personal.sql`, and
+-- `credit_usage_events` from `20260901130000_credit_usage_events.sql`).
+-- ⚠ **THIS LINE READ "LAST" UNTIL 2026-09-08**, and it was true for one day:
+-- `20260930130000_workspace_billing_plan_pro.sql` (the v2.1 plan CHECK) sorts
+-- after it and ships in the same wave. Filename order still decides; only the
+-- superlative was wrong. ADDITIVE ONLY: it edits no applied file, drops no
+-- table, and drops no function.
 --
 -- ⚠ **DEPLOY ORDER: THIS FILE FIRST, THE SERVER SECOND — AND BOTH FAILURE
 -- MODES OF GETTING IT WRONG ARE SILENT.** The wave's server calls

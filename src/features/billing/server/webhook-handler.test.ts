@@ -69,8 +69,14 @@ vi.mock("./stripe", async (importOriginal) => {
 
 vi.mock("./seats", () => ({ syncSeatQuantity: vi.fn() }));
 vi.mock("./subscriptions", () => ({ getUserByStripeCustomer: vi.fn() }));
+// ⚠ `findWorkspaceById` is `webhook-plan.ts › reportPlanContainerMismatch`'s
+// read (2026-09-08). Undefined here = "workspace not found" = no report, which
+// is the right default for every case in this file: none of them is about the
+// plan/container-kind check. That check has its own suite,
+// `webhook-plan.test.ts`.
 vi.mock("@/features/workspaces/server/repository", () => ({
   findSoleOwnedStandardWorkspace: vi.fn(),
+  findWorkspaceById: vi.fn(),
 }));
 
 import * as repo from "./workspace-billing";

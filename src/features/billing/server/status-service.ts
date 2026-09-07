@@ -1,5 +1,7 @@
 import "server-only";
+import type { WorkspaceKind } from "@/features/workspaces/types";
 import { getWorkspaceEntitlements } from "./entitlements";
+import { readPersonalBilling } from "./personal-wallet";
 import { getWorkspaceBilling } from "./workspace-billing";
 import {
   resolveBillingTarget,
@@ -23,10 +25,33 @@ import {
  *
  * ⚠ `subscription_period_end` / `has_stripe_customer` keep their snake/flat
  * legacy names: already on the wire, read by shipped clients.
+ *
+ * ⚠ **`containerKind` LANDED 2026-09-08** with the personal Pro tier: two plan
+ * taxonomies now exist (`../plans.ts › plansForKind`) and no renderer can pick
+ * between them from `plan` alone — `free` is a value on both lists.
  */
 export interface WorkspaceBillingStatusPayload {
+  /**
+   * The ENTITLED plan of the addressed container. ⚠ On a `kind='personal'`
+   * container this is `pro` or `free` and NEVER `team` (2026-09-08) — the two
+   * taxonomies do not overlap, and a surface that renders plan cards must pick
+   * the list by `containerKind`, not by guessing from this value.
+   */
   plan: string;
   status: string;
+  /**
+   * WHICH KIND OF CONTAINER these entitlements describe — the field that tells
+   * a renderer whether it is looking at a workspace (seats, members, Team) or
+   * somebody's home space (flat, one member, Pro).
+   *
+   * ⚠ **NEW 2026-09-08, SO THE CLIENT MIRROR NEEDS A FALLBACK.** The query
+   * cache is IndexedDB-persisted with a 24h gcTime (INVARIANTS §8): a row
+   * stored before this field shipped replays after it, with the key absent.
+   * `use-workspace-entitlements.ts` defaults it to `"standard"` — the same
+   * default `workspaces/types.ts › isStandardWorkspace` takes for an absent
+   * kind — and a stale-cache case pins it.
+   */
+  containerKind: WorkspaceKind;
   memberCount: number;
   seatCount: number | null;
   objectCap: number | null;
@@ -79,6 +104,11 @@ export async function getWorkspaceBillingStatus(
   return {
     plan: entitlements.plan,
     status: entitlements.status,
+    // ⚠ FROM THE AUTH CONTEXT, NOT A FOURTH READ. `withWorkspaceAuth` already
+    // resolved the row this request was authorized against; asking the database
+    // again would be paying for an answer the caller handed us. Absent = the
+    // `standard` default (a row read before `20260920120000` applied).
+    containerKind: caller.workspaceKind ?? "standard",
     memberCount: entitlements.memberCount,
     seatCount: entitlements.seatCount,
     objectCap: entitlements.objectCap,
@@ -112,5 +142,21 @@ async function callerCredits(
   // non-owner asking about it gets the same stamped zeroes the consume path
   // reports, never a reading of somebody else's allowance.
   if (resolved.payerUserId !== caller.userId) return unmeteredSummary();
+  if (resolved.wallet === "personal") {
+    // ⚠ **THE METER MUST READ THE SAME ROW ENFORCEMENT CHARGES AGAINST**, and
+    // for a personal wallet that is the PAYER'S PERSONAL CONTAINER — which is
+    // the addressed container only when the caller addressed their own home
+    // shelf. In a link container the row above is `null` (containers carry no
+    // billing), so metering with it would show a Pro operator 500 while the
+    // consume path charged them against 5,000. Same helper, same answer, one
+    // extra read only on the arm that needs it.
+    const personal =
+      caller.workspaceKind === "personal"
+        ? billing
+        : await readPersonalBilling(resolved.payerUserId, null);
+    // ⚠ MEMBER COUNT 1: a personal container holds its owner and nobody else,
+    // so the addressed container's roster is not the payer's wallet's business.
+    return summarizeCredits(resolved, personal, 1);
+  }
   return summarizeCredits(resolved, billing, entitlements.memberCount);
 }

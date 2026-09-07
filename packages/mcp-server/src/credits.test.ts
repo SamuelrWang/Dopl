@@ -60,6 +60,10 @@ const WS1 = wsItem("id-1", "alpha", "Alpha");
 const WS2 = wsItem("id-2", "beta", "Beta");
 
 const UPGRADE = "https://www.usedopl.com/billing?billing=upgrade";
+/** ⚠ A DIFFERENT LINK, HENCE A SEPARATE CONSTANT — `upgradeUrlFor` appends
+ *  `plan=pro` for a FREE personal wallet; reusing the seat URL would leave the
+ *  two arms indistinguishable and the pin would survive a swap. */
+const UPGRADE_PRO = `${UPGRADE}&plan=pro`;
 
 function allowed(used = 1) {
   return {
@@ -356,7 +360,11 @@ describe("what is NOT charged", () => {
  * allocation is per person and "not pooled"). A member whose SEAT ran out is
  * told about their seat — "this workspace is out of credits" would send them to
  * an admin with nothing to refill — and a home-space caller is told about their
- * personal wallet, where there is nothing to buy and so no link to offer.
+ * personal wallet.
+ *
+ * ⚠ **AND THE UPGRADE LINE FOLLOWS THE URL, NOT THE WALLET** (Samuel,
+ * 2026-09-08: a personal PRO tier exists). Both wallets upsell on a FREE verdict
+ * and neither on a PAID one, so these pins are a 2×2 over wallet × `upgradeUrl`.
  *
  * ⚠ The `wallet`-less case is not a leftover: a client always outlives some
  * servers, and the field is OPTIONAL on the wire for exactly that release
@@ -398,27 +406,31 @@ describe("which wallet the refusal names", () => {
     expect(text).not.toContain("Upgrade");
   });
 
-  it("the PERSONAL wallet — its own sentence, and never an upgrade link", async () => {
+  /**
+   * 🔒 **THE HOME SPACE HAS SOMETHING TO SELL SINCE 2026-09-08 (Samuel's Pro
+   * ruling), AND THESE TWO ARE THE PINS THAT SAY SO.** The arm dropped the link
+   * unconditionally for one wave, on the surface where most agents run — so an
+   * EMPTY url here means ALREADY ON PRO, exactly as it does on a seat, and a
+   * non-empty one names **Pro** and the PERSONAL link, never Team's.
+   */
+  it.each([
+    ["on PRO (no url)", "", 5000, ""],
+    [
+      "on FREE",
+      UPGRADE_PRO,
+      500,
+      `\n\nUpgrade to Pro for 5,000 credits a month: ${UPGRADE_PRO}`,
+    ],
+  ])("a PERSONAL wallet %s", async (_label, upgradeUrl, spent, tail) => {
     const { map, client } = build({ sole: true });
     client.consumeCredits.mockResolvedValue(
-      exhaustedOn("personal", { upgradeUrl: "" }),
+      exhaustedOn("personal", { used: spent, limit: spent, upgradeUrl }),
     );
 
-    const text = textOf(await map({}));
-    expect(text).toBe(
-      "Your personal credits are used up for this month (500/500). Resets 2026-09-01.",
+    const n = (spent as number).toLocaleString("en-US");
+    expect(textOf(await map({}))).toBe(
+      `Your personal credits are used up for this month (${n}/${n}). Resets 2026-09-01.${tail}`,
     );
-  });
-
-  /** ⚠ Even when the server sends one — the personal wallet has no paid tier
-   *  this wave, so the sentence carries no link whatever arrives on the wire. */
-  it("the PERSONAL wallet ignores an upgrade url the server still sent", async () => {
-    const { map, client } = build({ sole: true });
-    client.consumeCredits.mockResolvedValue(exhaustedOn("personal"));
-
-    const text = textOf(await map({}));
-    expect(text).not.toContain(UPGRADE);
-    expect(text).toContain("Your personal credits are used up for this month");
   });
 
   it("an OLDER SERVER sends no `wallet` — the generic sentence, with the url it did send", async () => {

@@ -2,8 +2,11 @@
  * INVARIANT SUITE — MCP credit consume path, part 2 of two: WHICH PERIOD KEY a
  * burn is charged under, and WHAT THE ANSWER SAYS. Pins:
  *   1. THE WINDOW — the verdict is read FIRST, and a FREE verdict ignores a
- *      subscription anchor (the self-heal for a mid-period cancellation); the
- *      personal wallet is always the UTC calendar month.
+ *      subscription anchor (the self-heal for a mid-period cancellation). ⚠
+ *      **ON BOTH WALLETS SINCE 2026-09-08**: the superseded clause here said
+ *      "the personal wallet is always the UTC calendar month", true only while
+ *      that wallet had no subscription. A Pro home space rolls on its Stripe
+ *      date.
  *   2. THE METER AND ENFORCEMENT AGREE — same wallet, same window, same limit.
  *      A meter reading a different key shows a used/limit pair that does not
  *      explain the refusal the agent just got.
@@ -31,6 +34,11 @@ vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
 
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
+  // ⚠ THE PERSONAL WALLET'S OWN READ (2026-09-08). `personal-wallet.ts` is
+  // REAL in this suite — only the repository is mocked — so the tier, the
+  // window and the limit are computed by the code under test from the row this
+  // mock hands back, exactly as they are in production.
+  getPersonalBilling: vi.fn(),
   countActiveMembers: vi.fn(),
   countOntologyObjects: vi.fn(),
 }));
@@ -99,9 +107,16 @@ function setup(opts: {
   members: number;
   allowed?: boolean;
   used?: number;
+  /** The OWNER's personal container row — separate from `billing` on purpose. */
+  personalBilling?: WorkspaceBillingRow | null;
 }) {
   mockRepo.getWorkspaceBilling.mockResolvedValue(opts.billing);
   mockRepo.countActiveMembers.mockResolvedValue(opts.members);
+  // The OWNER's personal container, free by default — the arm a LINK burn takes.
+  mockRepo.getPersonalBilling.mockResolvedValue({
+    containerId: PERSONAL,
+    billing: opts.personalBilling ?? null,
+  });
   const outcome = { allowed: opts.allowed ?? true, used: opts.used ?? 1 };
   mockWallets.consumeMemberCredits.mockResolvedValue(outcome);
   mockWallets.consumeUserCredits.mockResolvedValue(outcome);
@@ -242,6 +257,43 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
     expect(mockWallets.getMemberCreditsUsed).not.toHaveBeenCalled();
   });
 
+  it("and for a PRO personal wallet — same 5,000 and same subscription window", async () => {
+    // 🔒 **THE METER MUST BE FED THE PAYER'S PERSONAL ROW, NOT THE ADDRESSED
+    // CONTAINER'S.** A link container has no billing row at all, so a meter
+    // handed `null` there reports 500 on the calendar month while enforcement
+    // charges 5,000 on the Stripe anchor — a used/limit pair that cannot
+    // explain the refusal the agent just got. `status-service.ts ›
+    // callerCredits` resolves it through `personal-wallet.ts`.
+    const pro = billing({
+      workspaceId: PERSONAL,
+      plan: "pro",
+      status: "active",
+      seatCount: null,
+    });
+    setup({ billing: null, members: 1, personalBilling: pro });
+    mockWallets.getUserCreditsUsed.mockResolvedValue(120);
+
+    const charged = await consumeMcpCredits(CONTAINER, linkCaller);
+    const metered = await summarizeCredits(
+      { wallet: "personal", workspaceId: CONTAINER, payerUserId: OWNER },
+      pro,
+      1
+    );
+
+    expect(charged).toMatchObject({
+      limit: 5_000,
+      periodStart: "2026-07-21T09:30:00.000Z",
+    });
+    expect(metered).toMatchObject({
+      wallet: "personal",
+      used: 120,
+      limit: 5_000,
+      remaining: 4_880,
+      periodStart: charged.periodStart,
+      periodEnd: charged.periodEnd,
+    });
+  });
+
   it("never reports negative remaining, even if usage overshot the limit", async () => {
     mockWallets.getUserCreditsUsed.mockResolvedValue(600);
     const metered = await summarizeCredits(
@@ -309,11 +361,37 @@ describe("consumeMcpCredits — refusal and the upgrade url", () => {
     expect((await consumeMcpCredits(WS, seatCaller)).upgradeUrl).toBe("");
   });
 
-  it("a PERSONAL wallet offers nothing — there is no personal paid tier", async () => {
+  it("a FREE PERSONAL wallet offers PRO — and the link carries `plan=pro`", async () => {
+    // ⚠ **INVERTED 2026-09-08.** The superseded case asserted `""` here with the
+    // reason "there is no personal paid tier"; Samuel priced one at $8.99.
+    // ⚠ `plan=pro` IS LOAD-BEARING, NOT DECORATION: segment-less `/billing`
+    // resolves a STANDARD workspace by default, so a bare upgrade link would
+    // land a home-space upsell on a workspace the caller may not even have.
     setup({ billing: null, members: 1, allowed: false, used: 500 });
     const res = await consumeMcpCredits(PERSONAL, personalCaller);
     expect(res.allowed).toBe(false);
-    expect(res.upgradeUrl).toBe("");
+    expect(res.upgradeUrl).toMatch(/\/billing\?billing=upgrade&plan=pro$/);
+  });
+
+  it("a PRO personal wallet offers nothing — it is already on the best allowance", async () => {
+    setup({
+      billing: billing({ plan: "pro", status: "active", seatCount: null }),
+      members: 1,
+      allowed: false,
+      used: 5_000,
+    });
+    expect((await consumeMcpCredits(PERSONAL, personalCaller)).upgradeUrl).toBe("");
+  });
+
+  it("🔒 the two free offers are DIFFERENT urls — a seat is never sold Pro", async () => {
+    // A single shared `upgradeUrl()` for both wallets passes every "non-empty"
+    // assertion above and sends a workspace member to a personal checkout.
+    setup({ billing: null, members: 1, allowed: false, used: 100 });
+    const seat = await consumeMcpCredits(WS, seatCaller);
+    setup({ billing: null, members: 1, allowed: false, used: 500 });
+    const personal = await consumeMcpCredits(PERSONAL, personalCaller);
+    expect(seat.upgradeUrl).not.toBe(personal.upgradeUrl);
+    expect(seat.upgradeUrl).not.toContain("plan=");
   });
 });
 

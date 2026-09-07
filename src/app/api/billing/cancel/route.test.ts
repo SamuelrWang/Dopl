@@ -22,7 +22,13 @@ const AUTH: WorkspaceAuthContext = {
   workspacePublicId: "pub-1",
   role: "admin",
   apiKeyWorkspaceId: null,
+  workspaceKind: "standard",
 };
+
+/** The caller's `kind='personal'` container. ⚠ AUTH is mutated in place by the
+ *  personal-container case and restored in `beforeEach` — the gate mock closes
+ *  over the object. */
+const PERSONAL_ID = "personal-1";
 
 interface GateOptions {
   minRole?: string;
@@ -102,6 +108,8 @@ beforeEach(() => {
   stripeCalls.updated = null;
   stripeCalls.canceledImmediately = false;
   mockRepo.getWorkspaceBilling.mockResolvedValue(billing());
+  AUTH.workspaceId = "ws-1";
+  AUTH.workspaceKind = "standard";
 });
 
 describe("the gates", () => {
@@ -215,5 +223,27 @@ describe("the body", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
     expect(stripeCalls.updated).toBeNull();
+  });
+});
+
+describe("a PERSONAL container passes through unchanged", () => {
+  it("cancels a Pro subscription on the container id, with no kind arm", async () => {
+    // 2026-09-08, spec §11.1: a personal container's Pro subscription lives in
+    // `workspace_billing` keyed by that container's id, so cancel/resume needed
+    // no arm for it — the pin is that nobody ADDS a kind filter later.
+    AUTH.workspaceId = PERSONAL_ID;
+    AUTH.workspaceKind = "personal";
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ workspaceId: PERSONAL_ID, plan: "pro", seatCount: 1 })
+    );
+    const res = await POST(request({}), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(PERSONAL_ID);
+    expect(stripeCalls.updated).toMatchObject({
+      params: { cancel_at_period_end: true },
+    });
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(PERSONAL_ID, {
+      cancelAtPeriodEnd: true,
+    });
   });
 });

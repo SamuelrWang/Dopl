@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  formatMoney,
-  TEAM_SEAT_PRICE,
-  useWorkspaceEntitlements,
-} from "@/features/billing/components/use-workspace-entitlements";
+import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
+import { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } from "@/features/billing/prices";
 import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
 import { useBillingPortal } from "@/features/billing/components/use-billing-portal";
 import type { Role } from "@/features/workspaces/types";
@@ -18,9 +15,11 @@ import styles from "../settings-modal.module.css";
  * pane for Stripe embedded checkout in place, and redirect this tab to the
  * Stripe-hosted portal.
  *
- * ⚠ TEAM IS THE ONLY THING CHECKOUT SELLS (2026-09-07) — `CheckoutPlan` is a
- * one-member union, so there is no plan branch here to keep in step with
- * `plans.ts`. The seat price and seat count are interpolated, never restated.
+ * ⚠ CHECKOUT SELLS TWO PLANS SINCE 2026-09-08 — `team` on a standard workspace,
+ * `pro` on a personal container (`features/billing/url.ts › CheckoutPlan`) — so
+ * the confirmation line above the card form branches on the PLAN IT WAS HANDED,
+ * never on the container: the plan is what the session will be created for.
+ * Prices and seat counts are interpolated, never restated.
  */
 export function PlansBilling({
   billingReturn = null,
@@ -72,11 +71,15 @@ export function PlansBilling({
         >
           ← Back to plans
         </button>
-        <h2 className={styles.paneTitle}>Subscribe to Team</h2>
+        <h2 className={styles.paneTitle}>
+          Subscribe to {checkoutPlan === "pro" ? "Pro" : "Team"}
+        </h2>
         <p className="mb-4 text-caption text-text-secondary">
-          {`${ent.billableSeats} ${
-            ent.billableSeats === 1 ? "seat" : "seats"
-          } · ${formatMoney(ent.billableSeats * TEAM_SEAT_PRICE)} / month`}
+          {checkoutPlan === "pro"
+            ? `${formatMoney(PRO_PRICE)} / month`
+            : `${ent.billableSeats} ${
+                ent.billableSeats === 1 ? "seat" : "seats"
+              } · ${formatMoney(ent.billableSeats * TEAM_SEAT_PRICE)} / month`}
         </p>
         <EmbeddedCheckoutForm workspaceId={workspaceId} plan={checkoutPlan} />
       </div>

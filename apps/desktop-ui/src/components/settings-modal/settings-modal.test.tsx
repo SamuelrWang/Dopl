@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { formatMoney, TEAM_SEAT_PRICE } from "@/features/billing/prices";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { SEGMENT, WORKSPACE_ID, installBridge } from "#/test-utils/bridge";
@@ -217,7 +218,7 @@ describe("settings modal", () => {
     expect(screen.getByText("40 / 100")).toBeInTheDocument();
 
     // ⚠ TWO CARDS SINCE 2026-09-07, AND THE DESKTOP RENDERS THE SAME ONES —
-    // the pane is `PlansBillingCore` over `plans.ts › PLANS`, so this asserts
+    // the pane is `PlansBillingCore` over `plans.ts › plansForKind`, so this asserts
     // the shared list reached the packaged renderer intact, not a second copy
     // of it. Scoped to the dialog: the sidebar behind it carries plan words too.
     const pane = within(screen.getByRole("dialog", { name: "Settings" }));
@@ -240,7 +241,11 @@ describe("settings modal", () => {
     await openBilling();
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Upgrade — $8.00/seat" })
+      // ⚠ Built from `billing/prices.ts`, never a literal: the seat price is
+      // one constant now and a suite that re-pins it goes red on a retune.
+      await screen.findByRole("button", {
+        name: `Upgrade — ${formatMoney(TEAM_SEAT_PRICE)}/seat`,
+      })
     );
 
     // Standalone billing page, plan included (`lib/open-in-browser.ts`).

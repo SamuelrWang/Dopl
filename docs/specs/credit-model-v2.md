@@ -1,8 +1,12 @@
 # Credit model v2 — personal wallets + per-seat workspace allocations
 
-**Status:** **BUILT** (2026-09-08, branch `feat/credit-model-v2` — ⚠ **UNMERGED, and migration
-`20260930120000_credit_wallets.sql` is WRITTEN AND NOT APPLIED**; deploy state is a measurement, so
-re-derive with `supabase migration list` joined ON THE NAME, never on the filename prefix). Samuel's
+**Status:** **BUILT through v2.1** (2026-09-08, branch `feat/credit-model-v2` — ⚠ **UNMERGED, and
+TWO migrations are WRITTEN AND NOT APPLIED**: `20260930120000_credit_wallets.sql` then
+`20260930130000_workspace_billing_plan_pro.sql`, in that filename order, the plan CHECK LAST;
+deploy state is a measurement, so re-derive with `supabase migration list` joined ON THE NAME,
+never on the filename prefix. ⚠ Apply `…130000` BEFORE deploying the server: the webhook writes
+`plan = 'pro'`, which raises `23514` against the three-value CHECK and makes Stripe retry an event
+the database will never accept). Samuel's
 ruling, verbatim intent, then the contract every slice built against. **The code now outranks this
 document** (CLAUDE.md's precedence: code > INVARIANTS > ENGINEERING > a spec) — read
 `src/features/billing/credits.ts` and `server/credits-service.ts` for what is true, this file for
@@ -381,3 +385,61 @@ method and cancel/resume all work UNCHANGED. The only new SQL is widening the pl
   F-670 RESOLVED, F-672 RESOLVED, F-669 updated (prices flipped; one $7.99 sub remains), F-673 note.
 - After review: the Desktop Agent applies BOTH migrations to prod by name via the Supabase MCP,
   updates `.env.local`, and hands Samuel the two Vercel env vars to set. Nothing else is deployed.
+
+
+## 11.2 Deviations landed (v2.1, 2026-09-08)
+
+Seven differences between §11 and the tree, all reported by the builders rather than improvised.
+None changes the model; §10's rule applies — a spec read after the fact is otherwise a lie about the
+code.
+
+1. **`webhook-plan.ts` is a NEW module, split out of `webhook-handler.ts`.** §11 wrote the plan
+   rules as edits to the handler. `derivePlan` moved there with a new sibling,
+   `reportPlanContainerMismatch`, which needs a `findWorkspaceById` read the handler otherwise has
+   no reason to make — and the pair together pushed that file at the 500-line cap (INVARIANTS §1).
+   The seam is real: one function asks *which plan is this subscription*, the other *may this
+   container hold that plan*, and only the first is on the mint path.
+
+2. **`personal-wallet.ts` is a NEW module, split out of `credits-service.ts`** (§1's "split, do not
+   squeeze": `credits-service.ts` measured 490 lines AFTER the split — ⚠ `wc -l`, 2026-09-08, do not
+   quote — so the ~80 lines of tier logic could not have stayed). `credits-service.ts` answers WHICH
+   wallet a burn lands on and WHOSE; `personal-wallet.ts` answers WHAT THAT WALLET IS ENTITLED TO —
+   a question that did not exist while the personal allowance was one constant with no row behind
+   it. `readPersonalBilling` + `personalWalletTier`; `status-service.ts › callerCredits` reads the
+   same helper so the meter and enforcement cannot resolve different rows.
+
+3. **`PLANS` was DELETED, not aliased.** §11 said "keep the name as an alias of `WORKSPACE_PLANS`
+   only if a test still imports it — prefer renaming the importers". The importers were renamed; the
+   alias does not exist. Same argument as `MONTHLY_MCP_CREDITS` in wave 1: an alias lets a caller
+   keep asking the one-group question and get one group's answer on a page that now has two.
+
+4. **`MemberLimitError` was GENERALISED rather than duplicated.** §11 asked only for a new refusal.
+   The existing class hard-coded `SOLO_MEMBER_LIMIT`; it now takes the code as a parameter and
+   `assertCanAddMember` throws `PERSONAL_SINGLE_MEMBER` with an EMPTY `upgrade_url` on a live `pro`
+   container. Same 402, same flat plan-gate envelope, different code and different sentence —
+   because the two refusals have different answers ("buy Team" vs "make a workspace").
+   ⚠ No renderer keys on the new code yet (**F-674**).
+
+5. **`launch-metrics.ts` reads the price PER ROW, where §11 did not mention it at all.** The $8.99
+   flip is the day F-669's prediction came true: one seat constant cannot describe an estate holding
+   both prices. `monthlyUsd(row)` picks the amount from `workspace_billing.stripe_price_id` against
+   `STRIPE_LEGACY_SEAT_PRICE_ID`, and `pro` joined the `.in("plan", …)` filter in the same edit —
+   a paid plan missing from that list is revenue reported as zero. ⚠ It still maps price IDS to
+   hardcoded amounts rather than reading `unit_amount`, so F-669 is **narrowed, not resolved**.
+
+6. **The desktop credit bar's "Upgrade" uses a one-slot module registry, not a lifted callback.**
+   §11 allowed exactly this: *"lift a `openSettings(section)` callback only if it is a small change;
+   otherwise report and skip"*. It was not small — `apps/desktop-ui/src/pages/home/index.tsx`
+   measured **499 lines** against the 500-line cap on the day (⚠ `wc -l` it; do not quote), so the
+   hoist needed an unrelated page split first. `home-settings-control.tsx › openHomeSettings` is
+   registered in an effect, cleared on unmount, and a no-op when nothing is mounted. Sound because
+   /home mounts exactly one of these; a second mount would make the last to mount win.
+
+7. **`/pricing` ships TWO comparison tables, one per group, and the reason is MOBILE.**
+   §11 asked for two card groups and said nothing about the compare table. `.lp-compare-table`
+   carries `min-width: 560px` inside its own `overflow-x: auto` scroller, so a 3-cell row scrolls
+   inside the card and the PAGE never scrolls sideways; a 5-cell row needs roughly 900px and would
+   put the reader on a horizontal drag to reach the last price, on a page whose whole job is
+   comparing prices. `PERSONAL_ROWS` / `WORKSPACE_ROWS` replace the single `COMPARE_ROWS`.
+   ⚠ The live-subscription badge is the WORKSPACES group's only: reflecting a current plan on the
+   Personal group would need the caller's personal-container id, which this public page never holds.

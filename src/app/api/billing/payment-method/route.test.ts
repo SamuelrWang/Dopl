@@ -20,7 +20,13 @@ const AUTH: WorkspaceAuthContext = {
   workspacePublicId: "pub-1",
   role: "admin",
   apiKeyWorkspaceId: null,
+  workspaceKind: "standard",
 };
+
+/** The caller's `kind='personal'` container. ⚠ AUTH is mutated in place by the
+ *  personal-container case and restored in `beforeEach` — the gate mock closes
+ *  over the object. */
+const PERSONAL_ID = "personal-1";
 
 /** The wrapper's option bag is not exported; this is the half asserted on. */
 interface GateOptions {
@@ -106,6 +112,8 @@ beforeEach(() => {
   stripeCalls.cards = [];
   stripeCalls.listedFor = null;
   mockRepo.getWorkspaceBilling.mockResolvedValue(billing({}));
+  AUTH.workspaceId = "ws-1";
+  AUTH.workspaceKind = "standard";
 });
 
 describe("who may read the card", () => {
@@ -173,5 +181,23 @@ describe("when there is no Stripe account", () => {
     const res = await GET(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect((await res.json()).paymentMethod).toBeNull();
+  });
+});
+
+describe("a PERSONAL container passes through unchanged", () => {
+  it("keys on the container id like any other workspace id", async () => {
+    // 2026-09-08, spec §11.1: a personal container's Pro subscription lives in
+    // `workspace_billing` keyed by that container's id, so this route needed no
+    // arm for it — the pin is that nobody ADDS a kind filter later.
+    AUTH.workspaceId = PERSONAL_ID;
+    AUTH.workspaceKind = "personal";
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ workspaceId: PERSONAL_ID, plan: "pro", seatCount: 1 })
+    );
+    stripeCalls.cards = [card("4242")];
+    const res = await GET(request(), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(PERSONAL_ID);
+    expect((await res.json()).paymentMethod).toMatchObject({ last4: "4242" });
   });
 });

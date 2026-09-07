@@ -44,10 +44,11 @@ import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } fro
  * ⚠ **THE REFUSAL NAMES THE WALLET THAT STOPPED, SO THE WHOLE OUTCOME GOES TO
  * `creditsExhausted`, NOT ITS URL** (Samuel, 2026-09-07: allocations are
  * per-person and never pooled). A `seat` refusal is the caller's own allocation
- * inside that workspace and carries the upgrade link only when there is
- * something to buy; a `personal` one is their home space and never does. A
- * server that sends no `wallet` gets the generic sentence — this layer does not
- * infer one.
+ * inside that workspace; a `personal` one is their home space. ⚠ **EITHER ONE
+ * CARRIES THE UPGRADE LINK WHEN THE SERVER SENT ONE** — a personal PRO tier
+ * exists since 2026-09-08, so "nothing to buy" is `upgradeUrl === ""` and is
+ * never inferred from the wallet. A server that sends no `wallet` gets the
+ * generic sentence — this layer does not infer one.
  *
  * ⚠ **ONE CHARGE FUNCTION, THREE EXPLICIT CALL SITES** (2026-08-28). It was
  * private to `createCreditedRunner` while the domain wrapper was the only meter;

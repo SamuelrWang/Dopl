@@ -117,6 +117,50 @@ describe("syncSeatQuantity — guards", () => {
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  /**
+   * 🔒 THE PERSONAL PRO TIER IS FLAT (2026-09-08). A Pro subscription is one
+   * price at quantity 1 on a `kind='personal'` container and has no seat item
+   * at all — falling through to the Team path would call
+   * `subscriptionItems.update` on it with a member count, which is a BILLED
+   * proration against the wrong subscription.
+   */
+  it("never resizes a flat personal PRO subscription", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "pro", seatCount: null })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+    await syncSeatQuantity(WS);
+    expect(retrieve).not.toHaveBeenCalled();
+    expect(updateItem).not.toHaveBeenCalled();
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+  });
+
+  it("still refuses to resize a PRO container in past_due grace", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "pro", status: "past_due", seatCount: null })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+    await syncSeatQuantity(WS);
+    expect(updateItem).not.toHaveBeenCalled();
+  });
+
+  it("warns but does not resize a PRO container that somehow has 2+ members", async () => {
+    // Cannot happen (`entitlements.ts › assertCanAddMember` refuses), which is
+    // exactly why the anomaly is worth a line rather than a silent resize.
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "pro", seatCount: null })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(2);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await syncSeatQuantity(WS);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("personal Pro container")
+    );
+    expect(updateItem).not.toHaveBeenCalled();
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });
 
 describe("syncSeatQuantity — reconcile", () => {
