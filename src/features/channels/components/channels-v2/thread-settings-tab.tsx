@@ -89,6 +89,7 @@ export function ChannelsV2ThreadSettingsTab({
             </span>
             <span className="flex min-w-0 flex-1 justify-end">
               <SelectMenu<ThreadMode>
+                variant="text"
                 value={thread.mode}
                 options={MODE_OPTIONS}
                 onChange={onSetMode}

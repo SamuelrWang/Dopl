@@ -192,6 +192,7 @@ export function AgentLaunchPostureRows({
           this control (item 8). */}
       <SettingRow name="Messaging">
         <SelectMenu<MessageMode>
+          variant="text"
           value={posture.messages}
           options={MESSAGE_OPTIONS}
           onChange={(messages) => onChange({ messages })}
@@ -223,6 +224,7 @@ export function AgentLaunchPostureRows({
       {modelSupported && (
         <SettingRow name="Model">
           <SelectMenu<string>
+            variant="text"
             value={agentModelSelection(posture.model)}
             options={agentModelOptionsFor(posture.model)}
             onChange={(model) => onChange({ model })}
@@ -290,6 +292,7 @@ export function AgentRuntimeRow({
   return (
     <SettingRow name="Runtime">
       <SelectMenu<string>
+        variant="text"
         value={runtime}
         options={options}
         onChange={onChange}
@@ -355,6 +358,7 @@ export function AgentToolModeRows({
           infer. */}
       <SettingRow name="Tool use">
         <SelectMenu<string>
+          variant="text"
           value={value ?? ""}
           options={options}
           onChange={onChange}

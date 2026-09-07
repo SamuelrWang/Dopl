@@ -102,6 +102,7 @@ export function ChannelAgentsSettings({
             this tab whose scope a reader could otherwise mistake for the room's. */}
         <SettingRow name="Answers my unaddressed messages">
           <SelectMenu<UnaddressedResponderSetting>
+            variant="text"
             value={value}
             options={RESPONDER_OPTIONS}
             onChange={onSetUnaddressedResponder}

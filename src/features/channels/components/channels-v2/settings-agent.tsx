@@ -377,6 +377,7 @@ export function ChannelAgentSettingsView({
             warning this tab owes. */}
         <SettingRow name="Tool access">
           <SelectMenu<AgentToolProfile>
+            variant="text"
             value={profile}
             options={TOOL_ACCESS_OPTIONS}
             onChange={(next) => {

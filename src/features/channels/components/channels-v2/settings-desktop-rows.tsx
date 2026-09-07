@@ -220,6 +220,7 @@ export function LaunchAgentsRow({
   return (
     <SettingRow name="Launch agents">
       <SelectMenu<LaunchAgentsValue>
+        variant="text"
         value={value}
         options={LAUNCH_AGENTS_OPTIONS}
         onChange={(next) => {

@@ -9,7 +9,9 @@
  * inside scrolling, overflow-clipping panes (channel transcript, `.page-float`)
  * where an anchored panel renders as a clipped sliver.
  *
- * ⚠ TWO TRIGGER FACES, AND EACH OWNS ITS WHOLE FACE (`variant`). `flat` is the
+ * ⚠ THREE TRIGGER FACES (four strings — `raisedField` is `raised` at row height), AND EACH
+ * OWNS ITS WHOLE FACE (`variant`). `text` is the settings-row face: no pill, the label
+ * underlined plus the chevron (Samuel, 2026-09-06). `flat` is the
  * inset pill this control has always worn — right on a settings row, beside
  * other flat chrome. `raised` is the kit's white RAISED button
  * (`.auth-btn-3d-light`), which is what every dropdown inside a
@@ -51,6 +53,22 @@ const TRIGGER_FACE = {
    * with the card's padding left intact.
    */
   raisedField: "auth-btn-3d-light h-6 px-2 text-small text-text-primary",
+  /**
+   * NO PILL AT ALL (Samuel, 2026-09-06): "the dropdowns aren't pills anymore but just the text
+   * and an arrow, and an underline." This is what every dropdown on a SETTINGS row wears —
+   * Agent Settings, the channel's agent rows, the thread settings tab. The value reads as a
+   * link-shaped control: the current label, underlined, with the chevron as the only hint of
+   * a menu. No border, no fill, no padding, so it sits on the row's own baseline beside the
+   * Working Folder's underlined name and the two read as one vocabulary.
+   *
+   * ⚠ Settings rows ONLY. Composer panels and dialogs keep `raised`/`raisedField`: there the
+   * control sits on a card, not a row, and a bare underline reads as a link out of the card.
+   */
+  text: cn(
+    "rounded-none px-0 py-0 text-body text-text-primary",
+    "underline decoration-border-strong decoration-1 underline-offset-[3px]",
+    "transition-colors hover:decoration-text-primary"
+  ),
 } as const;
 
 export function SelectMenu<T extends string>({
