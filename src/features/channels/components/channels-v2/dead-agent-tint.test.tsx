@@ -142,6 +142,60 @@ describe("a PEER's agent is not double-handled", () => {
   });
 });
 
+/**
+ * ⚠ THE CASE EVERY TEST ABOVE LEAVES OUT (2026-09-06): a token that names NO agent that ever
+ * existed. Everything else in this file is ended-vs-live, which assumes the handle was real
+ * once. `@prime` never was — and the same absence of blue has to mean "this addresses nobody"
+ * for a name that was never minted as it does for one that has stopped, or the signal only
+ * works for readers who know which agents used to exist.
+ *
+ * ⚠ AND IT IS NOT A BLOCKLIST ON A WORD. The rule is "resolves to nobody", so the last case
+ * here asserts the flip side: an agent its operator actually named "Prime" tints `@prime`
+ * exactly like any other handle. A fix that special-cased the string would pass the first four
+ * of these and silently make a legitimately named agent unaddressable.
+ */
+describe("a handle that names NO agent tints nothing", () => {
+  it("does not tint a bare word nobody answers to", () => {
+    expect(tinted("ok @prime take this", [])).toEqual([]);
+  });
+
+  it("does not tint it in a room where another agent IS live", () => {
+    // ⚠ THE GUARD ON THE CASE ABOVE. An empty result proves nothing if the renderer tinted
+    // nothing at all; the live handle in the same string is what shows the arm ran.
+    expect(
+      tinted(`@prime is nobody, @agent-${LIVE} is here`, [
+        { agentId: LIVE, displayName: null, description: null, state: "working" },
+      ])
+    ).toEqual([`@agent-${LIVE}`]);
+  });
+
+  it("does not tint the ID FORM of an id that was never minted", () => {
+    // The `agent-<id>` form is claimed by construction for agents that EXIST; it is not a
+    // pattern that tints on sight.
+    expect(tinted("@agent-prime are you there", [])).toEqual([]);
+  });
+
+  it("does not tint a NEAR MISS on a live agent's handle", () => {
+    // ⚠ RESOLUTION IS EXACT EQUALITY, NEVER A PREFIX (`lib/mentions.ts`). The picker suggests on
+    // a substring and a HUMAN confirms; the tint may not, or a half-typed handle would read as
+    // addressed while the message reached nobody.
+    const feed = [
+      { agentId: LIVE, displayName: "Research Bot", description: null, state: "working" },
+    ];
+    expect(tinted(`@agent-${LIVE.slice(0, -1)} hello`, feed)).toEqual([]);
+    cleanup();
+    expect(tinted("@research hello", feed)).toEqual([]);
+  });
+
+  it("DOES tint when an agent is actually named Prime — the rule is 'nobody', not the word", () => {
+    expect(
+      tinted("ok @prime take this", [
+        { agentId: LIVE, displayName: "Prime", description: null, state: "working" },
+      ])
+    ).toEqual(["@prime"]);
+  });
+});
+
 describe("the flag survives the memo key — the silent regression path", () => {
   it("round-trips, so the rebuilt map still knows the agent ended", () => {
     expect(identities([{ agentId: AGENT, displayName: "Research Bot", state: "ended" }]).get(AGENT))

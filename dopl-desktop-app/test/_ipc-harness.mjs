@@ -91,10 +91,7 @@ export function bootIpc({ blocked = false } = {}) {
   const reopens = [];
   const popouts = [];
   const approvals = [];
-  // ⚠ NON-NULL ON PURPOSE (2026-09-05), for `getOrchestratorLaunch: () => true`'s stated reason:
-  // the refusal cases assert a rejected sender reads `cap: null`, and a fake that started at null
-  // would pass them whether the binding worked or not.
-  let turnCap = 7;
+  // ⚠ `let turnCap = 7` STOOD HERE AND IS DELETED (2026-09-07) with the `./settings` stub below.
   const stubRequire = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     // ⚠ ONE BRANCH PER MODULE ID, AND THAT IS A RULE NOW (2026-09-05). This stub carried THREE
@@ -119,8 +116,10 @@ export function bootIpc({ blocked = false } = {}) {
         setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
         getLaunchModel: () => "",
-        getAutoSend: () => false,
-        setAutoSend: (channelId, on) => { writes.push({ channelId, on }); return true; },
+        // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8). The fakes go WITH the
+        // real functions: a harness that still offers a method `channel-prefs.js` no longer
+        // exports would let a handler reading it pass here and throw in production — which is
+        // the inversion this whole fixture exists to prevent.
         // ⚠ 2026-08-31, the per-channel AGENT-CHAINING setting. `get` answers TRUE for the reason
         // the orchestrator getter does: a fake answering the fail-closed value would pass the
         // refusal cases whether the binding worked or not.
@@ -193,19 +192,12 @@ export function bootIpc({ blocked = false } = {}) {
     // `normalizeTurnCapInput` is the REAL rule, sliced from the shipped source: the boundary
     // compares against it, and a permissive fake would let it report `ok` on a value main
     // refuses to write.
-    if (id === "./settings") {
-      return {
-        readTurnCapSetting: () => turnCap,
-        setTurnCap: (v) => {
-          writes.push({ turnCap: v });
-          const w = realNormalizeTurnCapInput(v);
-          if (w === null) turnCap = null;
-          else if (w !== undefined) turnCap = w;
-          return turnCap;
-        },
-        normalizeTurnCapInput: realNormalizeTurnCapInput,
-      };
-    }
+    // 🔒 THE `./settings` STUB IS DELETED (2026-09-07, Samuel: "Remove the turn/cost limit").
+    // ⚠ IT COULD NOT HAVE SURVIVED THE DELETION EVEN AS DEAD WEIGHT: it sliced
+    // `normalizeTurnCapInput` out of the SHIPPED `main/settings.js`, and that function is gone
+    // with the caps — so the slice would have thrown at harness construction and taken every
+    // suite in this file down with it, not just the turn-cap cases. Slicing real source is what
+    // makes this harness honest and is also what makes it fail loudly when the source retires.
     if (id === "./session-state") return realState;
     // ⚠ THE REAL GUARDS, NOT A FAKE — `isAppWindowSender` IS what is under test, and `isUuid`
     // is the anti-probe gate every op leans on. The split half is built with this SAME stub,
@@ -229,10 +221,10 @@ export function bootIpc({ blocked = false } = {}) {
     throw new Error("unexpected require: " + id);
   };
   const realGuards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
-  // Sliced rather than required, because `main/settings.js` cannot be loaded here (electron-store).
-  const realNormalizeTurnCapInput = new Function(
-    `${fnOf(M("settings.js"), "normalizeTurnCapInput")}\n return normalizeTurnCapInput;`
-  )();
+  // 🔒 THE `normalizeTurnCapInput` SLICE IS DELETED (2026-09-07) with the caps. It was sliced
+  // rather than required because `main/settings.js` opens an electron-store — and the function it
+  // sliced no longer exists in that file, so this line was the one that would have thrown at
+  // construction and failed every case in this harness, not only the turn-cap ones.
   const launchOpModule = evalModule(LAUNCH_OP_SRC, stubRequire);
   const deleteOpModule = evalModule(DELETE_OP_SRC, stubRequire);
   const opsModule = evalModule(OPS_SRC, stubRequire);

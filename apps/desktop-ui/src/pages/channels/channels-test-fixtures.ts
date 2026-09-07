@@ -17,7 +17,8 @@
  */
 
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
-import { EMPTY_AGENT_POSTURE } from "@/features/channels/lib/agent-posture";
+// ⚠ `EMPTY_AGENT_POSTURE` no longer imported (2026-09-07) — `Channel.agentPosture` is deleted
+// with the channel ceiling (items 12, 13, 14) and this was its last reference here.
 import type {
   Channel,
   ChannelConsentRequest,
@@ -52,8 +53,11 @@ export const baseChannel: Channel = {
   myAgentToolProfile: "full",
   myFavoritedAt: null,
   infoCard: EMPTY_INFO_CARD,
-  agentPosture: EMPTY_AGENT_POSTURE,
-  defaultResponderAgentName: null,
+  // ⚠ `agentPosture` (2026-09-06, items 12/13/14) and `defaultResponderAgentName` (2026-09-07,
+  // items 10/11) BOTH LEFT THIS FIXTURE with their fields. This file was still setting them
+  // after `Channel` stopped declaring them, which typechecks only because an object literal
+  // assigned through a cast does not get excess-property checking — so the fixture outlived
+  // the fields silently. Removed rather than left as harmless noise.
   onlineMemberCount: 1,
 };
 

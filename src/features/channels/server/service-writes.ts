@@ -152,21 +152,24 @@ const MANAGED_CHANNEL_FIELDS = [
   "topic",
   "visibility",
   "archived",
-  // ⚠ **THE POSTURE CEILING IS MANAGED, NOT MEMBER-GATED (2026-09-02, A9 —
-  // G6/G7)**, which is the OPPOSITE call from `infoCard` one field along. The
-  // card is a shared scratch surface about a relationship; this decides how much
-  // room somebody else's agent gets in this room, and widening it is a
-  // permission change. It is listed here rather than left to the subtraction
-  // below because the default this list produces — MANAGED — is the one it
-  // wants, and stating it is what keeps that from looking accidental.
-  "agentPosture",
-  // ⚠ **MANAGED FOR `agentPosture`'s REASON, ONE STEP SHARPER (2026-09-02, B4 —
-  // ruling B6).** The ceiling decides how much room somebody else's agent gets
-  // here; this decides WHOSE agent the room's unaddressed work lands on, which
-  // is a statement about a machine the setter does not own. ⚠ **THE SERVER IS
-  // THE GATE.** The Settings control is an affordance — a UI that hid the row
-  // would change nothing about who may write the field.
-  "defaultResponderAgentName",
+  // ⚠ **`agentPosture` IS DELETED FROM THIS LIST AND FROM THE PRODUCT (2026-09-06,
+  // Samuel's rulings on items 12, 13 and 14).** It was MANAGED rather than
+  // member-gated because it decided how much room somebody ELSE's agent got in
+  // this room, which made widening it a permission change. That whole class of
+  // control is gone: no room bounds a peer's agent on any axis now, so there is
+  // no field here to gate. The argument is preserved in
+  // `settings-channel-agents.tsx`, where the rows were, and in the migration.
+  // ⚠ **`defaultResponderAgentName` IS DELETED FROM THIS LIST AND FROM THE PRODUCT
+  // (2026-09-07, items 10 and 11).** It was MANAGED because it was a statement about a machine
+  // the setter does not own — which agent the room's unaddressed work lands on. Its
+  // replacement makes that gate unnecessary rather than merely moving it: a member may only
+  // ever set their OWN row, so there is no longer a decision here that reaches anybody else.
+  //
+  // ⚠ WHAT THE MOVE DOES *NOT* LOSE, because it is the obvious thing to fear: the old field
+  // was also `sessionOnly` at the route (an agent credential could otherwise nominate ITSELF
+  // and route the room's unaddressed work to its own session). `PATCH /members` — where the
+  // replacement is written — is `sessionOnly: true` for the WHOLE METHOD already, for
+  // `agentToolProfile`'s containment reason. The protection is inherited, not dropped.
 ] as const satisfies ReadonlyArray<keyof ChannelUpdateInput>;
 
 export async function updateChannel(
@@ -227,21 +230,23 @@ export async function updateChannel(
     }
     dbPatch.info_card = patch.infoCard;
   }
-  // ⚠ **PER AXIS, AND `null` IS A VALUE.** Absent means "no opinion, leave it";
-  // `null` means "this channel records no ceiling on that axis any more", which
-  // is the only way a recorded ceiling can be removed. Collapsing the two —
-  // `patch.agentPosture.tools ?? undefined` — would make a ceiling permanent.
-  if (patch.agentPosture) {
-    const p = patch.agentPosture;
-    if (p.tools !== undefined) dbPatch.agent_tool_ceiling = p.tools;
-    if (p.messages !== undefined) dbPatch.agent_message_ceiling = p.messages;
-    if (p.chain !== undefined) dbPatch.agent_chain_allowed = p.chain;
-  }
-  // ⚠ **`null` IS A VALUE HERE TOO** — see the posture note above. `undefined`
-  // leaves the nomination alone; `null` withdraws it.
-  if (patch.defaultResponderAgentName !== undefined) {
-    dbPatch.default_responder_agent_name = patch.defaultResponderAgentName;
-  }
+  // ⚠ **THE `agentPosture` WRITE IS DELETED (2026-09-06, items 12, 13, 14)** along with the
+  // three columns it fanned out to. Its per-axis rule — absent means "leave it", `null` means
+  // "record no ceiling on that axis" — was the only way a recorded ceiling could be removed,
+  // and it is preserved below for `defaultResponderAgentName`, which still needs it.
+  // ⚠ **NOTHING MIGRATES THE OLD VALUES.** A channel whose row still carries a ceiling simply
+  // has it read by nobody; the migration is non-destructive and the columns stay. Writing a
+  // clearing UPDATE across every channel would be a destructive backfill nobody ruled, and it
+  // would also be pointless — an unread column bounds nothing.
+  // ⚠ **AND THE `defaultResponderAgentName` WRITE IS DELETED WITH IT (2026-09-07, items 10 and
+  // 11).** It was the last field carrying the per-axis `null`-is-the-clear rule on this patch;
+  // the rule is not lost, it simply has nothing left here to govern. `infoCard` above is a
+  // whole-object replace and the other four are plain values.
+  //
+  // ⚠ **THE COLUMN IS NOT CLEARED, ONLY UNWRITTEN.** `20260928130000` retires
+  // `channels.default_responder_agent_name` non-destructively; a room that still carries a
+  // stored handle simply has it read by nobody. Writing a clearing UPDATE across every channel
+  // would be a destructive backfill nobody ruled — the same call the ceiling made.
 
   await repo.updateChannel(ctx.workspaceId, channel.id, dbPatch);
   return getChannel(ctx, channel.id);
@@ -382,7 +387,7 @@ export async function postMessage(
   // Addressing, the reserved-key anti-spoof fold and
   // task-key stamping all live in `service-writes-metadata.ts` — ONE place
   // decides what a caller may put in `metadata`.
-  const { metadata, typedEscalationAnswer } = await resolvePostMetadata(
+  const { metadata, memberHandles, typedEscalationAnswer } = await resolvePostMetadata(
     ctx,
     channel,
     input,
@@ -433,6 +438,12 @@ export async function postMessage(
   const wake = await resolveWakeVerdict(ctx, channel, input, metadata, {
     authorKind,
     toAgentId,
+    // ⚠ **MEMBERS OUTRANK AGENTS, AND THIS LINE IS THE WHOLE OF IT ON THE SERVER** (2026-09-07,
+    // Samuel's suffix ruling). The handles are the metadata fold's own leftover — derived from
+    // the roster and profiles it read for `mentionedUserIds`, on this same request — so the
+    // agent index now mints `@diana-1` for an agent named after a member exactly as the
+    // composer's line already predicted. Zero extra reads; the fold pays or nobody does.
+    reservedHandles: memberHandles,
   });
   // ⚠ **WHY THIS AGENT, STORED BESIDE WHICH ONE** (2026-09-04). RR3 now CHOOSES
   // between several live agents when a person names nobody (Samuel's B1 — a

@@ -33,7 +33,7 @@ import {
   errorCode,
   listSlugs,
 } from "./service-shared";
-import { getBaseById } from "./service-bases";
+import { getBaseById, getBaseForWrite } from "./service-bases";
 // ⚠ THE PRE-WRITE GATE, SPLIT OUT AT THE §1 CAP (2026-09-02). Read that
 // module's header for the seam. It asks the SAME ceiling question `listBases` /
 // `getBaseBySlug` will ask a millisecond later, or this writes rows nobody can
@@ -312,7 +312,10 @@ export async function updateBase(
   patch: KnowledgeBaseUpdateInput,
   expectedUpdatedAt?: string,
 ): Promise<KnowledgeBase> {
-  const base = await getBaseById(ctx, id);
+  // 🔓 THE ID NAMES ITS OWN CONTAINER ON A WRITE TOO (2026-09-06, §T35). ⚠ EVERY
+  // workspace-keyed call below takes `baseCtx` — role, slugs, grants, publish
+  // precondition, writability — or the gate and the write are in two containers.
+  const { ctx: baseCtx, value: base } = await getBaseForWrite(ctx, id);
   // Agents can never flip the toggle itself, whatever its current state.
   // Other writes (name, description, slug) honor it when off.
   if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
@@ -344,7 +347,7 @@ export async function updateBase(
         "Sharing scope is a human-only setting — an agent can only publish (make public) a base it created.",
       );
     }
-    const isAdmin = meetsMinRole(ctx.role, "admin");
+    const isAdmin = meetsMinRole(baseCtx.role, "admin");
     const isCreator = base.createdBy === ctx.userId;
     // Agent publish is creator-only — no admin override, an agent acts only
     // on its own resources. Human path keeps creator-or-admin.
@@ -360,7 +363,7 @@ export async function updateBase(
     // ⚠ AFTER the creator/admin check above and BEFORE any grant upsert, so a
     // refusal leaves neither a row nor a grant behind.
     await assertSharedPublishAcknowledged({
-      workspaceId: ctx.workspaceId,
+      workspaceId: baseCtx.workspaceId,
       publishes: patch.visibility === "public",
       acknowledged: patch.acknowledgeShared,
       noun: "knowledge base",
@@ -384,7 +387,7 @@ export async function updateBase(
     } else if (targetMode === "teams") {
       // `teamGrants` is the declarative FULL set; diff against current rows.
       const current = await listGrantsForResource(
-        ctx.workspaceId,
+        baseCtx.workspaceId,
         "knowledge_base",
         base.id,
       );
@@ -403,7 +406,7 @@ export async function updateBase(
       // Non-admins may add/raise only their own teams; removal always OK.
       if (!isAdmin && addedOrRaised.length > 0) {
         const myTeams = new Set(
-          await listTeamIdsForUser(ctx.workspaceId, ctx.userId),
+          await listTeamIdsForUser(baseCtx.workspaceId, ctx.userId),
         );
         if (addedOrRaised.some(([teamId]) => !myTeams.has(teamId))) {
           throw new TeamScopeForbiddenError();
@@ -412,7 +415,7 @@ export async function updateBase(
 
       for (const [teamId, level] of addedOrRaised) {
         await upsertGrant(
-          ctx.workspaceId,
+          baseCtx.workspaceId,
           teamId,
           "knowledge_base",
           base.id,
@@ -432,12 +435,12 @@ export async function updateBase(
     resolvedAccessMode = targetMode;
   }
 
-  await assertBaseWritable(ctx, base);
+  await assertBaseWritable(baseCtx, base);
   if (expectedUpdatedAt && base.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, base.updatedAt);
   }
   if (patch.slug && patch.slug !== base.slug) {
-    const taken = await repo.listBaseSlugsForWorkspace(ctx.workspaceId);
+    const taken = await repo.listBaseSlugsForWorkspace(baseCtx.workspaceId);
     if (taken.includes(patch.slug)) {
       throw new KnowledgeBaseSlugConflictError(patch.slug);
     }
@@ -460,7 +463,7 @@ export async function updateBase(
     if (saved !== null) {
       if (dropAllGrants) {
         await deleteGrantsForResource(
-          ctx.workspaceId,
+          baseCtx.workspaceId,
           "knowledge_base",
           base.id,
         );
@@ -471,7 +474,7 @@ export async function updateBase(
       }
     }
     if (saved === null) {
-      const fresh = await getBaseById(ctx, id);
+      const fresh = await getBaseById(baseCtx, id);
       throw new KnowledgeStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
     }
     return saved;
@@ -485,7 +488,7 @@ export async function updateBase(
 
 /**
  * PERMANENT delete of a base and everything in it. Gates: caller must SEE the
- * base (`getBaseById`), agents can't delete an `agent_write_enabled=false` base
+ * base (`getBaseForWrite`), agents can't delete an `agent_write_enabled=false` base
  * (F-10), caller needs `edit`.
  *
  * ⚠ Team grants NOT cleared here on purpose — `team_resource_access` has a
@@ -497,10 +500,10 @@ export async function deleteBase(
   ctx: KnowledgeContext,
   id: string,
 ): Promise<void> {
-  const base = await getBaseById(ctx, id);
+  const { ctx: baseCtx, value: base } = await getBaseForWrite(ctx, id);
   // F-10: agent-read-only base is undeletable by an agent even its own
   // creator — destructive path honors `agent_write_enabled` like writes do.
   assertAgentCanDelete(ctx, base);
-  await assertBaseWritable(ctx, base);
-  await repo.hardDeleteBase(ctx.workspaceId, id);
+  await assertBaseWritable(baseCtx, base);
+  await repo.hardDeleteBase(baseCtx.workspaceId, id);
 }

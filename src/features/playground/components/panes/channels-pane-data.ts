@@ -159,7 +159,9 @@ export function toDemoChannel(
 ): DemoChannel {
   return {
     id: c.id,
-    name: c.isDirect ? (c.directPeer?.displayName ?? c.name) : c.name,
+    // ⚠ `||`, NOT `??` (2026-09-07): an empty-string display name is not a resolved name, and
+    // `??` let it through as the label. Same defect class as `lib/channel-display.ts`.
+    name: c.isDirect ? c.directPeer?.displayName || c.name : c.name,
     isDirect: c.isDirect,
     visibility: c.visibility,
     memberCount: c.memberCount,
@@ -170,7 +172,7 @@ export function toDemoChannel(
     members: c.directPeer
       ? [{
           userId: c.directPeer.userId,
-          displayName: c.directPeer.displayName ?? "Member",
+          displayName: c.directPeer.displayName || "Member",
           online: c.onlineMemberCount > 0,
         }]
       : [],

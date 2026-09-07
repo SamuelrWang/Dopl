@@ -16,8 +16,6 @@ import { PageError } from "#/components/page-states";
 import { HomeKnowledgeBaseView } from "./knowledge-base-view";
 import { HomeKnowledgePanelsSkeleton } from "./home-skeleton";
 import { CreateButton } from "./panel-buttons";
-import { PersonalArmingControl } from "./personal-arming-control";
-import { PersonalReachBackfillNotice } from "./personal-reach-notice";
 import {
   BaseCell,
   EmptyLine,
@@ -302,22 +300,15 @@ export function HomeKnowledgePanels({
         id="home-kb-personal"
         label="Personal"
         action={
-          // ⚠ TWO CONTROLS, ONE ROW — the create, and the switch that decides
-          // whether this room's AGENT sessions can reach the shelf the create
-          // writes to (task 11, `./personal-arming-control.tsx`). They sit
-          // together because the second one explains an empty first one.
-          <div className="flex items-center gap-3">
-            <PersonalArmingControl
-              channelId={channel.channelId}
-              workspaceId={channel.workspaceId}
-            />
-            <CreateButton
-              disabled={homeTarget === null}
-              onClick={() => setCreateOpen("home")}
-            >
-              New knowledge base
-            </CreateButton>
-          </div>
+          // ⚠ THE PERSONAL-ARMING SWITCH WAS REMOVED HERE (2026-09-06, Samuel's
+          // reversal of task 11): agent sessions reach their operator's personal
+          // shelf by default now, so there is no per-room switch to offer.
+          <CreateButton
+            disabled={homeTarget === null}
+            onClick={() => setCreateOpen("home")}
+          >
+            New knowledge base
+          </CreateButton>
         }
         // ⚠ ONE CAPTION LINE, and it is the RULING, not an explainer (minimal
         // UI copy). It says where this shelf is NOT: sharing happens in the
@@ -327,16 +318,9 @@ export function HomeKnowledgePanels({
         // `px-4` and lined up with nothing.
         caption="Yours alone. To share knowledge in a channel, create it there."
       >
-        {/* 🔒 THE FAIL-CLOSED BACKFILL, TOLD ONCE (task 11 ruling (c)). ⚠ ABOVE
-            the list and OUTSIDE its three states, because the state it explains
-            is the empty one: a shelf that looks empty to an agent because this
-            room is unarmed. It renders nothing in an armed room, nothing once
-            dismissed, and nothing before the read lands. */}
-        <PersonalReachBackfillNotice
-          channelId={channel.channelId}
-          workspaceId={channel.workspaceId}
-          userId={currentUserId}
-        />
+        {/* ⚠ THE FAIL-CLOSED BACKFILL NOTICE WAS REMOVED HERE (2026-09-06
+            reversal of task 11): there is no arming regression to explain now
+            that personal reach is default-on. */}
         {homeWorkspaceId === null ? (
           <EmptyLine>Finish setting up your workspace to keep bases here.</EmptyLine>
         ) : personalPending ? (

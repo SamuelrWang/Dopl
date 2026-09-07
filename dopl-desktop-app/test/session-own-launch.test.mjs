@@ -201,7 +201,10 @@ test("an admitted launch carries its OWN diag code — it is not narrated as a m
   assert.ok(GATE_REASONS.includes(v.reason));
   // The question an audit asks is "what left this machine with no click?" — and a launch is not
   // an answer to "what did my agent SAY", so it may not borrow an outbound code.
-  for (const outboundCode of ["auto-outbound", "auto-outbound-marker", "auto-outbound-thread-open"]) {
+  // ⚠ THE LIST IS EVERY OUTBOUND ALLOW CODE, AND IT GREW ON 2026-08-31 AND 2026-09-06. A launch
+  // may borrow none of them: nothing left this machine as CONTENT.
+  for (const outboundCode of ["auto-outbound", "auto-outbound-marker", "auto-outbound-thread-open",
+    "auto-outbound-escalate", "auto-outbound-artifact"]) {
     assert.notEqual(v.reason, outboundCode);
   }
 });

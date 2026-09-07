@@ -46,7 +46,9 @@
  *
  * ⚠ NO `role="menu"` IDIOMS. The old panel used checked menu items for
  * everything because a menu may only own menu items; inline, the launch posture
- * is two `SelectMenu`s and Tools is a real radiogroup.
+ * is two `SelectMenu`s, and Tool access became a third on 2026-09-06 (item 6) —
+ * it was a real radiogroup until then, which was the right answer while its three
+ * options stood on the tab carrying a containment line each.
  *
  * ⚠ MINIMAL COPY — SAMUEL, 2026-08-19 (third ruling of the day, and it
  * SUPERSEDES the explain-it-in-the-UI half of the two above). The first inline
@@ -71,17 +73,20 @@
  * either axis can be the flip.
  */
 
-import { Check } from "lucide-react";
-import { useChannelAutoSend } from "../../hooks/use-channel-auto-send";
+// ⚠ `Check` / `cn` LEFT WITH THE RADIOGROUP (2026-09-06, item 6). The selected
+// state is the `SelectMenu`'s own now, so this file draws no tick and composes no
+// conditional class; an import kept "in case" is how a deleted recipe comes back.
+import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+// ⚠ `useChannelAutoSend` IS NO LONGER READ HERE (2026-09-06, item 8) — the hook file
+// still exists and is next in the teardown, but nothing on this tab may keep reading
+// a record the gate has stopped consulting.
 import { useChannelAgentChain } from "../../hooks/use-channel-agent-chain";
 import { useOrchestratorLaunch } from "../../hooks/use-orchestrator-launch";
-import {
-  AgentChainRows,
-  AgentFolderRows,
-  AutoSendRows,
-  OrchestratorLaunchRows,
-} from "./settings-desktop-rows";
-import { cn } from "@/shared/lib/utils";
+// ⚠ THREE ROW COMPONENTS BECAME ONE (2026-09-06, items 8 and 9). `AutoSendRows`,
+// `AgentChainRows` and `OrchestratorLaunchRows` are deleted; `LaunchAgentsRow` is the
+// single control over the two launch records. `settings-desktop-rows.tsx` carries the
+// tombstone for each.
+import { AgentFolderRows, LaunchAgentsRow } from "./settings-desktop-rows";
 import { AGENT_TOOL_PROFILE_LABELS } from "../../constants";
 import { type PermissionPreset } from "../../lib/permission-modes";
 import type { RuntimeDescriptor } from "../../lib/runtime-capability";
@@ -90,11 +95,15 @@ import { useChannelFolder } from "../../hooks/use-channel-folder";
 import { PanelHeading } from "./bits";
 import { usePostureWarning, type PosturePatch } from "./posture-warning";
 import { AgentLaunchPostureRows } from "./settings-agent-launch-rows";
-import {
-  GroupLabel,
-  SettingName,
-  TOOL_PROFILE_OPTIONS,
-} from "./settings-agent-rows";
+// ⚠ `GroupLabel` IS NO LONGER IMPORTED (2026-09-06, item 2): all three group
+// headings on this tab are deleted, so nothing here renders one. The RECIPE stays
+// exported from `settings-agent-rows.tsx` — `settings-channel-agents.tsx` still uses
+// it — and only this tab stopped calling it.
+// ⚠ `SettingName` IS NO LONGER IMPORTED (2026-09-06). It was the standalone-name
+// recipe for the three rows whose control sat UNDER the name; every row on this tab
+// is a one-line `SettingRow` now, so nothing renders a bare name. The recipe stays
+// exported — it is not this tab's to delete.
+import { SettingRow, TOOL_PROFILE_OPTIONS } from "./settings-agent-rows";
 import type { AgentToolProfile, ChannelMember } from "../../types";
 
 // ⚠ `TOOL_PROFILE_OPTIONS` AND ITS DOCBLOCK MOVED TO `settings-agent-rows.tsx` ON
@@ -141,7 +150,6 @@ export interface ChannelAgentSettingsProps {
 export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
   const launchPosture = useChannelLaunchPosture(props.channelId);
   const folder = useChannelFolder(props.channelId);
-  const autoSend = useChannelAutoSend(props.channelId);
   // ⚠ PER CHANNEL, unlike the machine-wide toggle below it (Samuel, 2026-08-31).
   const agentChain = useChannelAgentChain(props.channelId);
   // ⚠ NO `channelId` — this one is per-MACHINE (`use-orchestrator-launch.ts`).
@@ -170,15 +178,6 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
               busy: folder.busy,
               onChoose: () => void folder.choose(),
               onClear: () => void folder.clear(),
-            }
-          : null
-      }
-      autoSend={
-        autoSend.bridge
-          ? {
-              on: autoSend.on,
-              busy: autoSend.busy,
-              onToggle: (next) => void autoSend.update(next),
             }
           : null
       }
@@ -265,8 +264,10 @@ export interface ChannelAgentSettingsViewProps {
   modelSupported?: boolean;
   /** The working folder, or null outside the desktop shell (row absent). */
   folder: AgentFolderState | null;
-  /** Auto-send (2026-08-20), or null outside the desktop shell (row absent). */
-  autoSend?: { on: boolean; busy: boolean; onToggle: (on: boolean) => void } | null;
+  // ⚠ `autoSend` IS DELETED FROM THIS CONTRACT (2026-09-06, item 8). It was the
+  // Replies row's bridge; the row is gone and `effectiveMessageMode` reads Messaging
+  // instead. A prop kept for shape would be a value this view could render nothing
+  // with.
   /**
    * AGENT CHAINING (Samuel, 2026-08-31), or null outside the desktop shell (row
    * absent — the no-dead-rows rule). ⚠ PER CHANNEL, unlike `orchestrator` below:
@@ -307,7 +308,6 @@ export function ChannelAgentSettingsView({
   runtimes = EMPTY_RUNTIMES,
   descriptor = null,
   folder,
-  autoSend = null,
   agentChain = null,
   orchestrator = null,
 }: ChannelAgentSettingsViewProps) {
@@ -326,7 +326,10 @@ export function ChannelAgentSettingsView({
 
   return (
     <>
-      <PanelHeading title="Agent" />
+      {/* ⚠ "Agent" → "Agent Settings" (2026-09-06, item 1). The tab is reached from
+          an Agents surface, so the bare noun read as a label for the AGENT rather
+          than for what this panel does. */}
+      <PanelHeading title="Agent Settings" />
       <div className="flex flex-col gap-1 px-3.5">
         {/* THE DURABLE LAUNCH POSTURE — the runtime, both permission axes and
             the model, as ONE group. Absent entirely in a plain browser: no
@@ -355,84 +358,93 @@ export function ChannelAgentSettingsView({
           />
         )}
 
-        {/* THE DURABLE GROUP. Tools is the containment control, so its options
-            keep a few-word line where the posture rows above carry none — no
-            hover, no drill-in, and no paragraph either (Samuel, 2026-08-19). */}
-        <GroupLabel>For every session on this channel</GroupLabel>
-        <SettingName>Tools</SettingName>
-        <div
-          role="radiogroup"
-          aria-label="Tools"
-          className="flex flex-col gap-1 pt-0.5"
-        >
-          {TOOL_PROFILE_OPTIONS.map((option) => {
-            const selected = option.value === profile;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                disabled={toolProfileBusy}
-                onClick={() => {
-                  if (!selected) warning.setToolProfile(option.value);
-                }}
-                className={cn(
-                  "flex w-full items-start gap-2 rounded-[10px] border px-2.5 py-2 text-left transition-colors disabled:opacity-60",
-                  // ⚠ The resting tint is on the NOT-selected branch: `.raised-tab`
-                  // supplies the fill from the kit layer and a utility `bg-*`
-                  // would flatten it (docs/DESIGN-SYSTEM.md § `.raised-tab`).
-                  selected
-                    ? "raised-tab border-transparent"
-                    : "border-border-subtle hover:bg-surface-raised-1"
-                )}
-              >
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-body font-medium text-text-primary">
-                    {AGENT_TOOL_PROFILE_LABELS[option.value]}
-                  </span>
-                  <span className="text-caption leading-snug text-text-secondary">
-                    {option.description}
-                  </span>
-                </span>
-                {selected && (
-                  <Check
-                    size={13}
-                    aria-hidden
-                    className="mt-0.5 shrink-0 text-text-primary"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {/* ⚠ THE "For every session on this channel" GROUP LABEL IS DELETED
+            (2026-09-06, item 2). Its scope statement did not stop being true — it
+            stopped being RENDERED, exactly as `LAUNCH_POSTURE_HEADING` did. The
+            per-row eye popover carries it now.
+
+            ⚠ AND TOOLS IS A DROPDOWN NAMED "Tool access" (item 6). It was a
+            three-option `role="radiogroup"` whose options each carried a
+            few-word containment line — the ONLY descriptions left on this tab
+            after the 2026-08-19 minimal-copy ruling. Those lines are NOT lost:
+            they ride `TOOL_PROFILE_OPTIONS.description` into the `SelectMenu`
+            dropdown, which is where this tab already keeps per-option copy
+            ("where a person reads them while choosing"), and the eye popover
+            carries the same words for a reader who is not choosing.
+            ⚠ IT STILL ROUTES THROUGH THE POSTURE WARNING. `warning.setToolProfile`
+            is the commit, unchanged: `full` is one half of the `auto_both` + `full`
+            + a-peer dialog, and a control that wrote around it would delete the one
+            warning this tab owes. */}
+        <SettingRow name="Tool access">
+          <SelectMenu<AgentToolProfile>
+            value={profile}
+            options={TOOL_ACCESS_OPTIONS}
+            onChange={(next) => {
+              if (next !== profile) warning.setToolProfile(next);
+            }}
+            ariaLabel="Tool access for agents on this channel"
+            disabled={toolProfileBusy}
+          />
+        </SettingRow>
 
         {/* The two DESKTOP-ONLY groups — each vanishes whole without its
             bridge (no dead rows); `settings-desktop-rows.tsx` owns both. */}
-        {folder && <AgentFolderRows folder={folder} SettingName={SettingName} />}
-        {autoSend && <AutoSendRows autoSend={autoSend} SettingName={SettingName} />}
-        {/* ⚠ IN THE PER-CHANNEL GROUP, under "For every session on this channel"
-            — which is exactly its scope: a session started in this room carries
-            the room's chaining stamp. The MACHINE-scoped switch below keeps its
-            own heading for the opposite reason. */}
-        {agentChain && <AgentChainRows agentChain={agentChain} SettingName={SettingName} />}
-
-        {/* ⚠ THE MACHINE-SCOPED GROUP, LAST AND UNDER ITS OWN LABEL. It is
-            deliberately NOT folded into the durable per-channel group above:
-            everything there answers "on this channel", this answers "on this
-            Mac", and one heading cannot honestly cover both. Same no-dead-rows
-            rule — absent whole, heading included, without its own bridge. */}
-        {orchestrator && (
-          <OrchestratorLaunchRows
-            orchestrator={orchestrator}
-            GroupLabel={GroupLabel}
-          />
+        {folder && <AgentFolderRows folder={folder} />}
+        {/* ⚠ THE "Replies / Send automatically" ROW IS DELETED (2026-09-06, item 8).
+            It set the SAME axis as Messaging and disagreed with it by construction —
+            Messaging was frozen at launch, this was read live at the gate, and it
+            FORCED the out half on over whatever Messaging said. `Messaging` is now
+            the one control and `main/session-private.js › effectiveMessageMode` is
+            still the one gate read, sourced from it and still LIVE, so the property
+            that mattered ("it applies to every agent in this channel immediately")
+            is preserved exactly. The popover for Messaging states the asymmetry.
+            ⚠ THE RECORD AND ITS WHOLE BRIDGE ARE TORN DOWN TOO (same change):
+            `useChannelAutoSend` is a tombstone, `channel-prefs.getAutoSend` /
+            `setAutoSend`, the two `channels:*AutoSend` IPC handlers, their preload
+            methods and their `dopl-bridge.ts` declarations are deleted, and their
+            rows left `test/_ipc-ops-table.mjs`. Nothing reads the old key; rows left
+            on disk are inert by design — see the hook's tombstone for why they are
+            deliberately NOT migrated. */}
+        {/* ⚠ ONE ROW OVER BOTH LAUNCH RECORDS (item 9). It needs BOTH bridges and
+            renders without neither: a dropdown that could set only one of the two
+            would offer picks that silently do half of what they say — worse than the
+            no-dead-rows rule it would otherwise satisfy. The two records stay
+            separate underneath (per-channel chaining, per-machine orchestrator);
+            `settings-desktop-rows.tsx › LaunchAgentsRow` is the only place the
+            mapping between them and the three picks is written. */}
+        {agentChain && orchestrator && (
+          <LaunchAgentsRow agentChain={agentChain} orchestrator={orchestrator} />
         )}
       </div>
       {warning.dialog}
     </>
   );
 }
+
+/**
+ * "TOOL ACCESS" — the containment pick, as `SelectMenu` options (2026-09-06, item 6).
+ *
+ * ⚠ IT IS DERIVED FROM `TOOL_PROFILE_OPTIONS`, NEVER RE-LISTED. That table is the
+ * one place the three profiles and their containment lines live, and its docblock
+ * is the review that bought each line's wording; a second list here would be the
+ * two-readers-one-fact defect with a CONTAINMENT CLAIM as the thing that drifts.
+ * The LABEL half comes from `AGENT_TOOL_PROFILE_LABELS` for the same reason.
+ *
+ * ⚠ MODULE-LEVEL, so the options are one identity for every render — the rule the
+ * two empty arrays below already follow, and it matters more here because the
+ * value is compared against the list on each open.
+ *
+ * ⚠ THE DESCRIPTIONS SURVIVE THE CONVERSION, and that is deliberate rather than
+ * incidental. Tools was the one control on this tab the 2026-08-19 minimal-copy
+ * ruling let keep per-option copy, because it is the CONTAINMENT pick; a dropdown
+ * is exactly where this tab already says such copy belongs.
+ */
+const TOOL_ACCESS_OPTIONS: ReadonlyArray<SelectMenuOption<AgentToolProfile>> =
+  TOOL_PROFILE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: AGENT_TOOL_PROFILE_LABELS[option.value],
+    description: option.description,
+  }));
 
 /** ⚠ Module-level, so an unpassed roster is the SAME array every render rather
  *  than a fresh identity the warning would have to re-derive from. */

@@ -121,6 +121,13 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
   "isOwnMachineDirect", "directLaneVerdict",
+  // ⚠ 2026-09-06: `channelOpKey` WAS MISSING FROM THIS LIST SINCE F-578 (2026-09-02), and it is a
+  // free variable inside the block — `isOwnChannelReadCall` calls it. It did not throw only
+  // because `grantDecision` short-circuits (`autoInboundMode(...) && isOwnChannelRead(...)`) and
+  // no case in THIS file sets an inbound posture, so the call was never made. That is a latent
+  // ReferenceError one test case away, and the harness's whole claim is that it evaluates what
+  // ships. Injected REAL, like every other predicate.
+  "channelOpKey",
   // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
   // a fake would let the harness agree with itself while the shipped gate did something else.
   "containerOnlyDenies", "isDoplToolName", "runtimeFor", "EDIT_TOOLS",
@@ -134,6 +141,7 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
   DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
+  require(join(HERE, "..", "main", "channel-op-key.js")).channelOpKey,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
   RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(null)));
 const { isOwnChannelMarker, OWN_CHANNEL_MARKER_KIND } = OUT;

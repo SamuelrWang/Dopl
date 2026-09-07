@@ -312,17 +312,17 @@ async function listContainersForCaller(
  * ⚠ ONE INDEXED PROBE (`workspaces_personal_owner_uidx`), on the LOCKED lane
  * only: an unfenced credential never asks.
  *
- * 🔒 ⚠ **AND SINCE TASK 11 THE WIDENING IS CONDITIONAL — THIS IS THE CLAUSE-3
- * NARROWING SAMUEL APPROVED AT #1080 (option 1), AND IT REVERSES SHIPPED
- * BEHAVIOUR.** The paragraph above is still true of the operator standing in
- * their OWN room; what it also did, until now, was let an agent session in a
- * room with somebody ELSE in it resolve its operator's personal bases with no
- * human in the loop. `personal-reach.ts` is the one fence that decides, so a
- * person is unaffected, a solo room is unaffected, and a SHARED room widens only
- * once its owner has armed it. ⚠ A closed answer must stay a `[lock]` list and
- * never a refusal: the id then resolves to nothing and takes the same
- * 404-never-403 path another member's private row takes, which is what keeps
- * arming state from becoming an oracle.
+ * 🔓 ⚠ **THE WIDENING IS UNCONDITIONAL AGAIN (2026-09-06, Samuel's reversal of
+ * task 11).** The task-11 package briefly made this conditional on the owner
+ * having armed the shared room; that narrowing is undone. `personal-reach.ts` is
+ * the one fence that decides and it is now DEFAULT-ON, so a locked agent
+ * credential in ANY room — shared or solo — widens by its operator's personal
+ * container, exactly as a person does. The confidentiality of that shelf's
+ * contents is held by the session's prompt framing, not by refusing to resolve
+ * here. ⚠ A closed answer (a shared credential, or an operator with no personal
+ * container) still stays a `[lock]` list and never a refusal: the id then
+ * resolves to nothing and takes the same 404-never-403 path another member's
+ * private row takes.
  */
 async function lockedCandidates(
   caller: ResourceCaller,

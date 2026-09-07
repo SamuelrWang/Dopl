@@ -43,6 +43,7 @@ import {
   draftReach,
   liveAgentCandidates,
   threadOtherPartyOf,
+  viewerUnaddressedResponder,
   type LiveAgentSession,
 } from "../../lib/draft-recipients";
 import { buildAgentMentionIndex, resolveAgentHandle } from "../../lib/agent-mentions";
@@ -50,7 +51,7 @@ import { buildAgentMentionIndex, resolveAgentHandle } from "../../lib/agent-ment
 // input is where the composer's half of the 15-minute expiry lived, and the component takes the
 // ids already resolved.
 import { recentAgentsAddressedBy } from "../../lib/agent-post-stamp";
-import { channel as channelFixture, member, CHANNEL_ID, ME, PEER } from "./test-fixtures";
+import { member, CHANNEL_ID, ME, PEER } from "./test-fixtures";
 
 const MEMBERS = [
   member({ userId: ME, displayName: "Sam Wang", email: "sam@example.com" }),
@@ -152,14 +153,25 @@ describe("the recipient line — always on, whatever the draft says", () => {
     expect(line()).toContain("Diana Taylor");
   });
 
-  it("🔒 falls to the DEFAULT RESPONDER when nothing is tagged, and says so", () => {
+  /**
+   * 🔒 **THE VIEWER'S OWN "No one" IS HONOURED BY THE LINE** (2026-09-07, items 10 and 11).
+   *
+   * ⚠ This REPLACED a test that set the channel's `defaultResponderAgentName` and expected the
+   * line to name it — RR3's configured arm, deleted with the room-wide field. The case worth
+   * pinning in its place is the opposite one: a member who chose "No one" must see `nobody`
+   * even in a room with agents live, because the server will wake none of them. A line that
+   * still named one here would be OVERSTATING reach, which this file calls worse than no line.
+   *
+   * ⚠ It is set on the ROSTER, not on a prop, which is the other half of the change: the
+   * composer reads the viewer's own membership row rather than being handed a channel value.
+   */
+  it("🔒 says `nobody` when the VIEWER chose No one, with two agents live", () => {
     const body = mount({
       liveAgents: [PEER_AGENT, BARE_AGENT],
-      defaultResponderAgentName: "research-bot",
+      members: [{ ...MEMBERS[0], unaddressedResponder: "none" }, MEMBERS[1]],
     });
     type(body, "who is around");
-    expect(line()).toContain("@research-bot");
-    expect(line()).toContain("default");
+    expect(line()).toContain(REACH_NOBODY);
   });
 
   it("🔒 names an agent with TWO live and no nomination — the line must not say `nobody` for a post that will route", () => {
@@ -204,12 +216,16 @@ describe("the recipient line — always on, whatever the draft says", () => {
 });
 
 describe("the rule itself", () => {
+  // ⚠ `unaddressedResponder` IS REQUIRED ON `draftReach` SINCE 2026-09-07 and stated here once
+  // rather than defaulted, for the reason the parameter is required at all: an omission would
+  // land on `last_addressed` and OVERSTATE the reach for a member who chose "No one".
   const reach = (body: string, over = {}) =>
     draftReach({
       body,
       members: MEMBERS,
       sessions: [PEER_AGENT],
       currentUserId: ME,
+      unaddressedResponder: "last_addressed",
       ...over,
     });
 
@@ -225,29 +241,49 @@ describe("the rule itself", () => {
     expect(out.via).toBe("responder");
   });
 
-  it("an explicit tag OUTRANKS the default responder", () => {
-    const out = reach("@diana-taylor over to you", {
-      defaultResponderAgentName: "research-bot",
-    });
+  it("an explicit tag OUTRANKS RR3 entirely", () => {
+    const out = reach("@diana-taylor over to you");
     expect(out.via).toBe("tagged");
     expect(out.recipients.map((r) => r.label)).toEqual(["Diana Taylor"]);
   });
 
-  it("a nomination whose agent is not running degrades to the room's own answer", () => {
-    // ⚠ IT DEGRADES, IT DOES NOT DANGLE — and since 2026-09-04 the degraded
-    // answer is a real one rather than `none`. The setting stores a HANDLE and
-    // nothing enforces that it names a live session.
+  /**
+   * 🔒 **`"none"` KILLS EVERY ARM, NOT JUST RECENCY** (2026-09-07, items 10 and 11).
+   *
+   * ⚠ This REPLACED "a nomination whose agent is not running degrades to the room's own
+   * answer" — the arm-1 degradation case, deleted with the stored handle it degraded from.
+   * The case that matters now is the reverse: with an agent live AND a recent address to it,
+   * every arm below would have answered, so this is the assertion that the short-circuit is on
+   * the FIRST line rather than gating recency alone. A single-agent room under "No one" going
+   * on auto-answering is the exact complaint the setting came from.
+   */
+  it("🔒 `none` answers `nobody` even with a live agent this author just addressed", () => {
     const out = draftReach({
       body: "hello",
       members: MEMBERS,
       sessions: [PEER_AGENT, BARE_AGENT],
       currentUserId: ME,
-      defaultResponderAgentName: "gone-agent",
+      unaddressedResponder: "none",
       recentAgentIds: [BARE_AGENT.name],
     });
-    expect(out.via).toBe("responder");
-    expect(out.reason).toBe("most recent");
-    expect(out.recipients.map((r) => r.label)).toEqual(["@agent-z9q1w4er"]);
+    expect(out).toMatchObject({ via: "none", reason: null });
+    expect(out.recipients).toEqual([]);
+  });
+
+  /**
+   * 🔒 **AN UNLOADED ROSTER READS AS THE DEFAULT, NEVER AS "No one"** (2026-09-07).
+   * The fail-safe direction is the ruling: `"none"` means this person's untagged messages
+   * reach nobody, so a roster that has not arrived must not be rendered as a choice they made.
+   */
+  it("🔒 viewerUnaddressedResponder fails to the default, not to `none`", () => {
+    expect(viewerUnaddressedResponder([], ME)).toBe("last_addressed");
+    // ⚠ A PEER's row is `null` — "not yours to see" — and must not be read as a setting.
+    expect(
+      viewerUnaddressedResponder([{ ...MEMBERS[1], unaddressedResponder: null }], PEER)
+    ).toBe("last_addressed");
+    expect(
+      viewerUnaddressedResponder([{ ...MEMBERS[0], unaddressedResponder: "none" }], ME)
+    ).toBe("none");
   });
 
   /**
@@ -274,6 +310,7 @@ describe("the rule itself", () => {
       members: MEMBERS,
       sessions: [PEER_AGENT, BARE_AGENT],
       currentUserId: ME,
+      unaddressedResponder: "last_addressed",
       recentAgentIds: recent,
     });
     expect(out.reason).toBe("most recent");
@@ -287,6 +324,7 @@ describe("the rule itself", () => {
         members: MEMBERS,
         sessions: [],
         currentUserId: ME,
+        unaddressedResponder: "last_addressed",
       })
     ).toMatchObject({ via: "none", reason: null });
   });
@@ -297,35 +335,62 @@ describe("the rule itself", () => {
   });
 });
 
-describe("🔒 the settings panel and the composer agree on one handle", () => {
-  it("what Settings STORES is what the line NAMES", () => {
-    // The round trip, across the two surfaces this slice touches: pick the
-    // responder in the manage-gated panel, and the handle it sends is the one
-    // an untagged draft reports.
-    const stored = vi.fn();
+/**
+ * 🔒 **THE SETTINGS CONTROL AND THE COMPOSER'S LINE ANSWER THE SAME QUESTION** (2026-09-07,
+ * items 10 and 11).
+ *
+ * ⚠ **WHAT THIS SUITE USED TO PROVE WAS A HANDLE ROUND TRIP** — pick an agent in the
+ * manage-gated panel, and the handle it stores is the one an untagged draft reports. There is
+ * no handle any more: the setting is a two-valued RULE, because agents are ephemeral and a
+ * pinned handle decays into naming nothing.
+ *
+ * ⚠ **SO THE PAIRING TO PIN IS THE ONE THAT REPLACED IT**: both surfaces read the viewer's own
+ * roster row through `viewerUnaddressedResponder`, and a member who picks "No one" must see
+ * the line stop naming anybody. If the control and the line ever read different sources, a
+ * person would be shown a setting the server does not honour and have no way to tell.
+ */
+describe("🔒 the settings control and the composer read one source", () => {
+  it("choosing No one is what the line then reports", () => {
+    const chosen = vi.fn();
     render(
       <ChannelAgentsSettings
-        channel={{ ...channelFixture(), defaultResponderAgentName: null }}
-        sessions={[{ userId: PEER, ...PEER_AGENT }] as never}
-        onSetDefaultResponder={stored}
-        onSetCeiling={(() => {}) as never}
+        members={MEMBERS}
+        currentUserId={ME}
+        onSetUnaddressedResponder={chosen}
       />
     );
     fireEvent.click(
-      screen.getByLabelText("Agent that answers unaddressed messages in this channel")
+      screen.getByLabelText("Who answers my unaddressed messages in this channel")
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: /Research Bot/ }));
-    expect(stored).toHaveBeenCalledWith("research-bot");
+    fireEvent.click(screen.getByRole("menuitem", { name: /No one/ }));
+    expect(chosen).toHaveBeenCalledWith("none");
 
+    // The roster as it stands AFTER that write settles — which is exactly what the optimistic
+    // patch paints (`optimistic-cache.ts › setUnaddressedResponder`).
     render(
       <ComposerRecipients
         body="anyone there"
-        members={MEMBERS}
+        members={[
+          { ...MEMBERS[0], unaddressedResponder: chosen.mock.calls[0][0] },
+          MEMBERS[1],
+        ]}
         sessions={[PEER_AGENT, BARE_AGENT]}
         currentUserId={ME}
-        defaultResponderAgentName={stored.mock.calls[0][0]}
       />
     );
-    expect(screen.getByLabelText("Recipients").textContent).toContain("@research-bot");
+    expect(screen.getByLabelText("Recipients").textContent).toContain(REACH_NOBODY);
+  });
+
+  it("the default renders as Last Agent Addressed, and the line still names an agent", () => {
+    render(
+      <ChannelAgentsSettings
+        members={MEMBERS}
+        currentUserId={ME}
+        onSetUnaddressedResponder={vi.fn()}
+      />
+    );
+    expect(
+      screen.getByLabelText("Who answers my unaddressed messages in this channel").textContent
+    ).toContain("Last Agent Addressed");
   });
 });

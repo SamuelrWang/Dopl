@@ -91,6 +91,9 @@ vi.mock("../../hooks/use-channel-preference-writes", () => ({
     favorite: { mutate: () => {} },
     consent: { mutate: () => {}, pending: false },
     toolProfile: { mutate: () => {}, pending: false },
+    // 2026-09-07 (items 10/11): `channel-manage.tsx` reads `.pending` off this one, so a double
+    // without the key throws where the real hook cannot.
+    unaddressedResponder: { mutate: () => {}, pending: false },
   }),
 }));
 vi.mock("../../hooks/use-channel-lifecycle-writes", () => ({

@@ -9,7 +9,23 @@ import type { ChannelRow } from "./dto";
 
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
+/**
+ * ⚠ **PARTIAL, AND THAT IS LOAD-BEARING** (2026-09-07, items 10 and 11). RR3 grew a third input —
+ * the AUTHOR's own `channel_members.unaddressed_responder`, read through `./repository` — and a
+ * flat module mock would replace every other real read alongside it.
+ *
+ * ⚠ **AND IT IS NOT OPTIONAL, THOUGH THE SUITE WOULD "PASS" WITHOUT IT.**
+ * `unaddressedResponderFor` SWALLOWS a read error and answers the default, so an UNMOCKED
+ * repository reaches for a database that is not there — every case in this file timed out on that
+ * read — and, had it failed fast instead, the cases would have gone green by way of the catch
+ * block rather than by way of the setting. The harness seeds it in `beforeEach`.
+ */
+vi.mock("./repository", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository")>()),
+  findUnaddressedResponder: vi.fn(),
+}));
 
+import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
 
@@ -213,6 +229,14 @@ beforeEach(() => {
   liveHere([]);
   vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([]);
   vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
+  // RR3's third input since 2026-09-07: the AUTHOR's own membership setting. Seeded to the
+  // default, which is what a member who never opened Settings has.
+  vi.mocked(repo.findUnaddressedResponder).mockResolvedValue("last_addressed");
+  // ⚠ AND RR3's ARM-3 READ. It was unreachable from this file while the channel's nominee
+  // short-circuited RR3 (arm 1, retired 2026-09-06); with the pin gone the arms below it run, and
+  // an unmocked read here answers `undefined` rather than an empty list — a TypeError inside the
+  // verdict, not a missing fixture.
+  vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue([]);
 });
 
 describe("the server decides, the machine executes", () => {
@@ -259,10 +283,16 @@ describe("the server decides, the machine executes", () => {
 
   it("RR3 repairs a forgotten `@` and the machine wakes exactly the responder", async () => {
     // 🔒 **THE ARM THE FAN-OUT NARROWING DEPENDS ON.** A person says something in
-    // the main room and names nobody; two agents are live; the channel nominates
-    // one. The server stores that repair, and the machine wakes THAT agent and
-    // not its sibling — which is the behaviour `b-fanout-narrow` will make the
-    // only one, and is already the only WAKE today.
+    // the main room and names nobody; two agents are live; RR3 picks ONE. The
+    // server stores that repair, and the machine wakes THAT agent and not its
+    // sibling — which is the behaviour `b-fanout-narrow` will make the only one,
+    // and is already the only WAKE today.
+    // ⚠ **IT WAS THE CHANNEL'S NOMINEE UNTIL 2026-09-06 AND IS NOW THE RULE'S OWN ANSWER.**
+    // This case passed `channel: { default_responder_agent_name: 'agent-<A2>' }` — a manager's
+    // room-wide pin, retired with items 10/11. With nobody pinned and no recent tag by this
+    // author, RR3 answers its last arm (the most recently launched of the live agents). What
+    // this case is about is unchanged and is the part that would regress silently: ONE agent is
+    // woken and its sibling hears nothing.
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
       sessionRow(A1),
       sessionRow(A2),
@@ -270,13 +300,13 @@ describe("the server decides, the machine executes", () => {
     const { verdict, desktop } = await post("can someone look at the build?", [
       agent(A1),
       agent(A2),
-    ], false, { channel: { default_responder_agent_name: `agent-${A2}` } });
+    ], false);
     expect(verdict.verdict).toBe("responder");
-    expect(verdict.recipientAgentIds).toEqual([A2]);
+    expect(verdict.recipientAgentIds).toEqual([A1]);
     expect(verdict.delivery).toBe("woken");
     // 🔒 **THE REPAIR IS THE WHOLE DELIVERY.** The body names nobody, so a machine that parsed it
     // would feed nobody; the nominee is fed and woken, and its sibling hears nothing.
-    expect(desktop.fed).toEqual([{ agentId: A2, wake: true }]);
+    expect(desktop.fed).toEqual([{ agentId: A1, wake: true }]);
   });
 
   it("RR1 repairs a threaded reply to a MEMBER, and wakes no agent at all", async () => {
@@ -313,19 +343,37 @@ describe("the server decides, the machine executes", () => {
     ]);
   });
 
-  it("an UNRESOLVED handle falls back to the machine's own parse — nothing is silenced", async () => {
-    // ⚠ THE CASE THAT MAKES THE WHOLE CHANGE SAFE. The projection is empty (a session pushed
-    // nothing yet), so the server answers `null` and `delivery=unreachable`; the machine still
-    // knows this agent and still wakes it. An `[]` here would have silenced a live agent.
+  it("an UNRESOLVED handle on a verdict-bearing row is NOT re-parsed by the machine", async () => {
+    // ⚠ **REWRITTEN 2026-09-07, AND THE OLD PIN IS THE POINT OF THE REWRITE.** It read "falls back
+    // to the machine's own parse — nothing is silenced": the projection is empty (a session that
+    // has pushed nothing yet), the server answers `null` with `delivery=unreachable`, and the
+    // machine parsed the body itself and WOKE the agent it knew.
+    //
+    // ⚠ **THAT FALLBACK UNBOUGHT THE CODE AND MARKUP MASKS.** The server reads handles through
+    // `lib/mentions.ts › mentionTokensOf`, which masks them — a backticked handle tags NOBODY
+    // (rules 6 and 7, bought after two agents writing documentation about @-tagging tagged both
+    // operators for real). `session-dispatch.js › mentionedAgentIds` masks nothing, so a body
+    // quoting a live handle in backticks alongside one dead handle made the server answer `null`,
+    // fell through to the unmasked regex, and woke the fenced agent. Porting the masks into the
+    // desktop tree would be the second copy of the token rule that `lib/mentions.ts` spends its
+    // header forbidding, so the parse is narrowed instead: it now runs ONLY on a row no server
+    // ruled on (an older build's message, which carries no verdict at all).
+    //
+    // ⚠ **WHAT IT COSTS IS REAL AND IS WHAT THIS CASE NOW MEASURES:** the agent the server could
+    // not resolve goes unwoken. It is the smaller harm — an unwoken agent is visible and
+    // retryable, a code fence that wakes one is neither — and the verdict still routes the row.
     const { verdict, desktop } = await post(`@agent-${A1} urgent`, [
       agent(A1, { awaitingDirective: true }),
       agent(A2),
     ]);
     expect(verdict.recipientAgentIds).toBeNull();
     expect(verdict.delivery).toBe("unreachable");
-    // ⚠ AND THE PARSE NARROWS EXACTLY AS A VERDICT DOES: the fallback answers the AGENT half only.
-    // The verdict still routes the rest, so the sibling is not swept in with it.
-    expect(desktop.fed).toEqual([{ agentId: A1, wake: true }]);
+    // `thread`: nobody was resolved, but the row carries a thread tag, so the sessions already
+    // working that thread hear it as CONTEXT and none of them is woken. A1 is spawn-idle
+    // (`awaitingDirective`), which is fed nothing it was not ADDRESSED by, so only its sibling
+    // hears it — and neither is woken by a handle the server declined to resolve.
+    expect(verdict.verdict).toBe("thread");
+    expect(desktop.fed).toEqual([{ agentId: A2, wake: false }]);
   });
 
   it("a dormant agent nobody named is fed nothing, and the machine says so", async () => {

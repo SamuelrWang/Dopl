@@ -325,7 +325,13 @@ describe("channels page", () => {
     ).toBeInTheDocument();
 
     // Nothing channel-scoped is on the header any more — not even mounted.
-    expect(screen.queryByRole("radiogroup", { name: "Tools" })).toBeNull();
+    // ⚠ THE CONTROL IS A `SelectMenu`, NOT A RADIOGROUP, SINCE 2026-09-06 (item 6):
+    // Tool access carried a containment line per option, and those lines moved into
+    // the dropdown rather than standing on the tab. Queried by its accessible name,
+    // which is the idiom `settings-tab.test.tsx` and `settings-agent.test.tsx` use.
+    expect(
+      screen.queryByLabelText("Tool access for agents on this channel")
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
 
@@ -334,7 +340,10 @@ describe("channels page", () => {
     // and its controls are inline, so the entry point to look for is the
     // control, not a button that opens one. The kebab's four items are rows.
     // ⚠ `findBy`: the body crossfades (2026-08-24) — tab flips now, contents a fade later.
-    expect(await screen.findByRole("radiogroup", { name: "Tools" })).toBeInTheDocument();
+    // ⚠ A `SelectMenu` SINCE 2026-09-06 (item 6) — see the query above the tab click.
+    expect(
+      await screen.findByLabelText("Tool access for agents on this channel")
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add members" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make public" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();

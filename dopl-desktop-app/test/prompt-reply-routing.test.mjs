@@ -110,9 +110,12 @@ test("ROUTING: the block lives in the TEXT module, with the other fixed blocks",
   // is one nobody finds when the copy is what needs correcting.
   const text = readFileSync(join(MAIN, "prompt-framing-text.js"), "utf8");
   assert.match(text, /const REPLY_ROUTING = \[/);
-  assert.match(text, /REPLY_ROUTING };/, "and it is exported");
+  assert.match(text, /module\.exports = \{[^}]*\bREPLY_ROUTING\b/, "and it is exported");
   const framing = readFileSync(join(MAIN, "prompt-framing.js"), "utf8");
-  assert.match(framing, /REPLY_ROUTING \} = require\('\.\/prompt-framing-text'\)/);
+  // ⚠ MATCHED INSIDE THE DESTRUCTURE, NOT AT ITS END (2026-09-07): the list grows, and a pin on
+  // "REPLY_ROUTING is the last name before the brace" fails on the next block that joins it —
+  // reporting a missing import that is right there.
+  assert.match(framing, /const \{[^}]*\bREPLY_ROUTING\b[^}]*\} = require\('\.\/prompt-framing-text'\)/);
   assert.equal(
     (framing.match(/\.\.\.REPLY_ROUTING,/g) || []).length,
     4,

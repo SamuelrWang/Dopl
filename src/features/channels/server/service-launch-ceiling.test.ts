@@ -91,50 +91,43 @@ beforeEach(() => {
   );
 });
 
-describe("G6 — the posture is clamped at creation, and the resolution is stored", () => {
-  it("narrows a request wider than the channel's ceiling", async () => {
+/**
+ * ── ⚠ **G6 AND G7 ARE RETIRED (2026-09-06, Samuel's rulings on items 12, 13 and 14)** ──────
+ *
+ * The channel ceiling is deleted end to end, so there is no clamp to pin and no refusal to
+ * pin. These cases REPLACE the old G6/G7 suites and assert the opposite property: **a
+ * directive gets exactly the posture it asked for, whatever the channel row still carries.**
+ *
+ * ⚠ **THEY DRIVE A ROW THAT STILL HAS THE OLD COLUMNS ON PURPOSE.** The migration is
+ * non-destructive — the three `agent_*` columns remain and old values are not cleared — so
+ * "a row carrying a ceiling no longer clamps" is the real production case, not a synthetic
+ * one. A suite that only tested ceiling-free rows would pass without proving the removal.
+ *
+ * ⚠ **WHAT WAS LOST IS NAMED HERE RATHER THAN JUST DELETED.** G7 refused where G6 clamped,
+ * because a clamped chain hands back an agent that hits a bound mid-run after its caller gave
+ * it work assuming workers. Both are gone; no room bounds a peer's agent on any axis. The
+ * OPERATOR's own clamp (`main/launch-posture.js`) is untouched and is a different thing.
+ */
+describe("the channel ceiling is retired — a request is no longer narrowed", () => {
+  it("does NOT narrow a request that the old ceiling would have clamped", async () => {
     withCeiling({ agent_tool_ceiling: "accept_edits", agent_message_ceiling: "ask" });
     await createLaunchDirective(ctx, { channel: CHAN, tools: "bypass", messages: "auto_both" });
     expect(inserted()).toMatchObject({
-      // ⚠ THE REQUEST IS RECORDED VERBATIM. `start_*` is a faithful record of what
-      // was asked and is never rewritten — rewriting it would destroy the evidence
-      // that a clamp happened at all.
+      // ⚠ `start_*` STILL RECORDS THE REQUEST VERBATIM, unchanged by this wave.
       start_tool_mode: "bypass",
       start_message_mode: "auto_both",
-      resolved_tool_mode: "accept_edits",
-      resolved_message_mode: "ask",
+      // …and `resolved_*` is now the same thing, because nothing narrows it.
+      resolved_tool_mode: "bypass",
+      resolved_message_mode: "auto_both",
     });
   });
 
-  it("passes a request NARROWER than the ceiling straight through", async () => {
-    withCeiling({ agent_tool_ceiling: "bypass" });
-    await createLaunchDirective(ctx, { channel: CHAN, tools: "manual" });
-    expect(inserted().resolved_tool_mode).toBe("manual");
-  });
-
-  it("a request that named NO posture resolves to the CEILING — G6's non-null half", async () => {
-    // 🔒 REVIEW D4 (2026-09-02). This used to assert `null`, which made `resolved_*`
-    // say "the server permitted nothing in particular" about a launch it had a
-    // recorded ceiling for — so the guardrails ledger's "resolved* non-null" was
-    // false, and an orchestrator could not tell "no ceiling exists" from "nobody
-    // asked". ⚠ It is PARITY, not a new opinion: `main/launch-posture.js ›
-    // resolvePosture` spells it `narrowTo(...) || max.tools`, so the machine has
-    // always substituted its own ceiling for an unasked axis. And it only ever
-    // NARROWS — the machine's clamp still runs, so the launch lands at
-    // min(channel ceiling, operator's own posture).
+  it("a request that named NO posture resolves to NULL, never to a stored ceiling", async () => {
+    // ⚠ THIS IS THE CASE REVIEW D4 INVERTED, AND THE INVERSION IS THE RULING. D4 made an
+    // unasked axis resolve to the CHANNEL'S ceiling so an orchestrator could tell "no ceiling
+    // exists" from "nobody asked". There is no ceiling to substitute now, so `null` means the
+    // only thing it can mean: the server states no opinion.
     withCeiling({ agent_tool_ceiling: "manual", agent_message_ceiling: "ask" });
-    await createLaunchDirective(ctx, { channel: CHAN });
-    expect(inserted()).toMatchObject({
-      resolved_tool_mode: "manual",
-      resolved_message_mode: "ask",
-    });
-  });
-
-  it("…and stays NULL where the channel records no ceiling at all", async () => {
-    // ⚠ THE OTHER HALF, AND IT IS WHY "never null" CANNOT BE A CONSTRAINT. `null`
-    // means "this server has no ceiling to state" — F-449: every channel today,
-    // because the columns have no editing surface. A NOT NULL here would 500 every
-    // insert rather than record anything.
     await createLaunchDirective(ctx, { channel: CHAN });
     expect(inserted()).toMatchObject({
       resolved_tool_mode: null,
@@ -142,67 +135,33 @@ describe("G6 — the posture is clamped at creation, and the resolution is store
     });
   });
 
-  it("an UNRECORDED ceiling clamps nothing — today's behaviour, exactly", async () => {
-    await createLaunchDirective(ctx, { channel: CHAN, tools: "bypass", messages: "auto_both" });
-    expect(inserted()).toMatchObject({
-      resolved_tool_mode: "bypass",
-      resolved_message_mode: "auto_both",
-    });
-  });
-
-  it("clamps each axis against its OWN ceiling, independently", async () => {
-    withCeiling({ agent_tool_ceiling: "manual" });
-    await createLaunchDirective(ctx, { channel: CHAN, tools: "bypass", messages: "auto_both" });
-    expect(inserted()).toMatchObject({
-      resolved_tool_mode: "manual",
-      resolved_message_mode: "auto_both",
-    });
-  });
-});
-
-describe("G7 — `chain` is REFUSED, never clamped", () => {
-  it("400s when the channel forbids chaining, and names the setting", async () => {
-    // ⚠ A clamped chain produces an agent that hits a bound it was told it did not
-    // have, mid-run, after the orchestrator handed it work assuming workers. That
-    // is why this is the one axis that refuses.
+  it("a chain:true directive is GRANTED even where the channel forbade it", async () => {
+    // ⚠ THE SHARPEST DELETION IN THE WAVE, PINNED SO IT CANNOT REGRESS SILENTLY. This used to
+    // throw `ChannelAgentChainForbiddenError` and insert nothing.
     withCeiling({ agent_chain_allowed: false });
-    const err = await createLaunchDirective(ctx, { channel: CHAN, chain: true }).catch(
-      (e) => e
-    );
-    expect(err).toBeInstanceOf(ChannelAgentChainForbiddenError);
-    expect(String(err.message)).toContain("channelAgentChain");
-    expect(vi.mocked(launchRepo.insertLaunchDirective)).not.toHaveBeenCalled();
-  });
-
-  it("`chain: false` is ALWAYS granted — it can only ever narrow", async () => {
-    withCeiling({ agent_chain_allowed: false });
-    await createLaunchDirective(ctx, { channel: CHAN, chain: false });
-    expect(inserted().resolved_chain).toBe(false);
-  });
-
-  it("`chain: false` WINS over a channel set to ON — that is the point of sending it", async () => {
-    withCeiling({ agent_chain_allowed: true });
-    await createLaunchDirective(ctx, { channel: CHAN, chain: false });
-    expect(inserted().resolved_chain).toBe(false);
-  });
-
-  it("not asking resolves to the ceiling where the channel allows it", async () => {
-    // ⚠ REVIEW D4, the chain axis. `null` used to cover both "the channel allows
-    // it and nobody asked" and "no ceiling recorded", which are different facts.
-    withCeiling({ agent_chain_allowed: true });
-    await createLaunchDirective(ctx, { channel: CHAN });
-    expect(inserted().resolved_chain).toBe(true);
-  });
-
-  it("not asking resolves to FALSE where the channel forbids it — never a refusal", async () => {
-    withCeiling({ agent_chain_allowed: false });
-    await createLaunchDirective(ctx, { channel: CHAN });
-    expect(inserted().resolved_chain).toBe(false);
-  });
-
-  it("an UNRECORDED chain ceiling refuses nothing — the desktop toggle answers", async () => {
     await createLaunchDirective(ctx, { channel: CHAN, chain: true });
+    expect(vi.mocked(launchRepo.insertLaunchDirective)).toHaveBeenCalledTimes(1);
     expect(inserted().resolved_chain).toBe(true);
+  });
+
+  it("nothing throws the retired refusal any more, on any row shape", async () => {
+    // ⚠ ASSERTED ON THE ERROR CLASS ITSELF, because the class still EXISTS in `errors.ts` and
+    // an import that still resolves is exactly how a deleted refusal comes back unnoticed.
+    for (const row of [{ agent_chain_allowed: false }, { agent_chain_allowed: true }, {}]) {
+      vi.clearAllMocks();
+      withCeiling(row);
+      vi.mocked(launchRepo.findLaunchDirectiveByClientMsgId).mockResolvedValue(null);
+      const err = await createLaunchDirective(ctx, { channel: CHAN, chain: true }).catch((e) => e);
+      expect(err).not.toBeInstanceOf(ChannelAgentChainForbiddenError);
+    }
+  });
+
+  it("`chain: false` still means false — the CALLER may always narrow itself", async () => {
+    // ⚠ NOT A CEILING, AND THAT DISTINCTION SURVIVES THE WAVE. What died is one member
+    // bounding another; a caller declining chaining for its own agent is untouched.
+    withCeiling({ agent_chain_allowed: true });
+    await createLaunchDirective(ctx, { channel: CHAN, chain: false });
+    expect(inserted().resolved_chain).toBe(false);
   });
 });
 
@@ -254,15 +213,19 @@ describe("G8 — the model is ECHOED, never refused", () => {
 });
 
 describe("the ceiling is decided in the right ORDER", () => {
-  it("refuses a forbidden chain even when the operator is OFFLINE", async () => {
-    // ⚠ `offline` is a 200 saying "nothing was asked". Answering a forbidden chain
-    // with "your machine is asleep" makes the caller fix the wrong thing and ask
-    // again a minute later for the real refusal.
+  it("an OFFLINE operator gets the offline answer — the retired ceiling has no say", async () => {
+    // ⚠ **REWRITTEN 2026-09-06 WITH THE CEILING ITSELF.** This read "refuses a forbidden chain
+    // even when the operator is OFFLINE" and pinned an ORDER: the refusal had to beat the
+    // `offline` 200, because answering a forbidden chain with "your machine is asleep" makes the
+    // caller fix the wrong thing and ask again a minute later for the real refusal. There is no
+    // refusal to order any more — `agent_chain_allowed` is dropped and nothing throws
+    // `ChannelAgentChainForbiddenError` (the case above pins that on every row shape) — so what
+    // is left to state is that the retired column changes nothing about the offline path either.
     withCeiling({ agent_chain_allowed: false });
     vi.mocked(collab.presenceForWorkspace).mockResolvedValue(new Map() as never);
-    await expect(
-      createLaunchDirective(ctx, { channel: CHAN, chain: true })
-    ).rejects.toBeInstanceOf(ChannelAgentChainForbiddenError);
+    const out = await createLaunchDirective(ctx, { channel: CHAN, chain: true });
+    expect(out).toMatchObject({ offline: true });
+    expect(vi.mocked(launchRepo.insertLaunchDirective)).not.toHaveBeenCalled();
   });
 
   it("a converged idempotent retry is NOT re-decided against today's ceiling", async () => {

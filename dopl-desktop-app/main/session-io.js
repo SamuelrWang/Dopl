@@ -222,11 +222,9 @@ function baseRecord(s) {
     // FIX #9: the running cap counters, so a P2 recreate rehydrates a turn/cost-capped (or
     turns: s.state.turns, // parked) session's budget instead of resetting it to a fresh one.
     costUsd: s.state.costUsd,
-    // 9a (2026-09-05): …and the CAP those counters are measured against, for the reason the cap
-    // is now issuer-keyed. A recreate passes no `launchDepth` (it may not resurrect one it cannot
-    // verify), so a 200-turn operator session would otherwise reopen at the 24 default with its
-    // spent turns intact and die on the first `result`. The bound travels with the budget.
-    turnCap: s.state.turnCap,
+    // 2026-09-07: `turnCap` travelled here so a resumed session kept the bound its spent counters
+    // were measured against. There is no bound now, so there is nothing to carry: the counters
+    // above are reported for display and nothing compares them to anything.
     // 2026-08-22: the OUTBOUND POST COUNTER, so a crash resume does not re-mint client_msg_ids the
     // server already stored under this instance's (persisted, re-used) agent id — `session-store.js
     // › resumedPostSeq`. NOT reducer state: it lives on the session object, bumped by

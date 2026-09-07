@@ -2,6 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
+/**
+ * ⚠ **PARTIAL, AND THAT IS LOAD-BEARING** (2026-09-07, items 10 and 11). RR3 grew a third input —
+ * the AUTHOR's own `channel_members.unaddressed_responder`, read through `./repository` — and a
+ * flat module mock would replace every other real read alongside it.
+ *
+ * ⚠ **AND IT IS NOT OPTIONAL, THOUGH THE SUITE WOULD "PASS" WITHOUT IT.**
+ * `unaddressedResponderFor` SWALLOWS a read error and answers the default, so an UNMOCKED
+ * repository reaches for a database that is not there — every case in this file timed out on that
+ * read — and, had it failed fast instead, the cases would have gone green by way of the catch
+ * block rather than by way of the setting. The harness seeds it in `beforeEach`.
+ */
+vi.mock("./repository", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository")>()),
+  findUnaddressedResponder: vi.fn(),
+}));
 
 import * as repoMessages from "./repository-messages";
 import {
@@ -10,6 +25,7 @@ import {
   projection,
   recentAgentPosts,
   resolve,
+  unaddressedResponder,
   roomProjection,
   sessionRow,
 } from "./service-wake-verdict-harness";
@@ -30,6 +46,7 @@ beforeEach(() => {
   roomProjection();
   lastAddress(null);
   recentAgentPosts();
+  unaddressedResponder();
 });
 
 describe("RR3 — several live agents, and a person who named nobody", () => {
@@ -208,17 +225,12 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
     });
   });
 
-  it("the CONFIGURED responder still wins — an operator is never second-guessed by recency", async () => {
-    twoLive();
-    recentAgentPosts({ seq: 42, client_msg_id: "agent-k3v7d2mq-3" });
-    const out = await resolve("morning", {}, {
-      channel: { default_responder_agent_name: "agent-m8q1zzzz" },
-    });
-    expect(out).toMatchObject({
-      recipientAgentIds: ["m8q1zzzz"],
-      reason: "default",
-    });
-  });
+  // 🔒 "the CONFIGURED responder still wins — an operator is never second-guessed by recency"
+  // STOOD HERE AND IS DELETED (2026-09-06, Samuel's ruling on items 10/11). It pinned the
+  // channel's room-wide `default_responder_agent_name` beating the recency arm below it. There is
+  // no configured handle any more and no `reason: "default"`: the room-wide pin is replaced by the
+  // ASKING PERSON's own setting, which is two-valued and either lets these arms run or turns them
+  // all off (`'none'`), rather than naming an agent that outranks them.
 
   it("🔒 the arm-3 READ IS LAZY — a settled room pays for no round trip", async () => {
     roomProjection(sessionRow({ name: "k3v7d2mq" }));

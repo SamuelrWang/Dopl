@@ -1,148 +1,111 @@
 "use client";
 
 /**
- * **THE CHANNEL'S OWN AGENT SETTINGS — the DEFAULT RESPONDER and the POSTURE
- * CEILING, in ONE manage-gated panel** (2026-09-02, v2 wave B slice B4 —
- * Samuel's rulings B1/B6, and F-449).
+ * **WHO ANSWERS *MY* UNADDRESSED MESSAGES IN THIS CHANNEL** — one per-member control
+ * (2026-09-07, Samuel's ruling on items 10 and 11; was the channel's agent panel, B4).
  *
- * ⚠ **TWO SETTINGS, ONE PANEL, ONE GATE — DELIBERATELY, NOT FOR TIDINESS.** The
- * ceiling (`channels.agent_*`) has had a server clamp since A9 and NO EDITING
- * SURFACE AT ALL, which is F-449: a clamp that is armed and unarmed at once,
- * because every channel's ceiling is NULL and nothing can set one. The default
- * responder arrives with the same shape — a channel property, manage-gated,
- * about somebody else's machine. A second surface for the second setting would
- * be the thing to avoid.
+ * ⚠ **IT IS A DIFFERENT SETTING FROM THE ONE THIS FILE USED TO HOLD, NOT A RESTYLED ONE.** The
+ * panel carried a room MANAGER's pin of ONE specific agent to answer EVERY member's untagged
+ * messages, plus the three posture-ceiling rows. His reasoning for killing the pin, verbatim:
+ * *"if there's another member in the room, their last agent address would be different from my
+ * last agent address."* One room cannot hold one answer to a per-person question.
  *
- * ⚠ **THE SERVER IS THE GATE, THIS IS AN AFFORDANCE.**
- * `service-writes.ts › MANAGED_CHANNEL_FIELDS` floors both fields at the
- * channel's manage role; hiding the rows here changes nothing about who may
- * write them. The rows are absent rather than disabled for a non-manager, which
- * is the NO DEAD ROWS rule this tab already keeps.
+ * ⚠ **SO THE GATE CHANGED WITH IT, AND THAT IS THE LOAD-BEARING PART OF THIS FILE.** The old
+ * panel was MANAGE-gated because it decided something about somebody else's machine. This one
+ * writes the CALLER'S OWN `channel_members` row and reaches nobody else, so it is gated on
+ * MEMBERSHIP. Leaving it behind `canManage` would have hidden a personal setting from every
+ * non-manager in the room while the server went on honouring it — a control that shows half of
+ * what it governs, which is the defect class this wave exists to remove.
  *
- * ⚠ **NO EXPLAINER COPY** (Samuel's minimal-UI ruling, INVARIANTS §5): a row is
- * a label and a control. The per-option second lines come from the shared
- * `TOOL_OPTIONS` / `MESSAGE_OPTIONS`, which is where that vocabulary already
- * lives, and this file adds no sentence of its own.
+ * ⚠ **TWO OPTIONS, AND DELIBERATELY NO "PIN A SPECIFIC AGENT".** Agents are EPHEMERAL — they
+ * end, and their ids are minted per launch — so a stored handle decays into naming nothing.
+ * That decay is the defect the old column had, not an implementation detail of it. It is why
+ * this control needs no live-sessions read at all: the old picker had to offer the room's
+ * running agents (plus the stored value, marked "Not running", so a blank trigger could not be
+ * mistaken for "nobody nominated"), and there is no agent to name here.
  *
- * ⚠ **THE RESPONDER PICKER OFFERS THE ROOM'S LIVE AGENTS, PLUS THE STORED VALUE
- * WHEN IT IS NOT AMONG THEM.** `SelectMenu` renders BLANK for a value matching
- * no option, so a nomination whose agent is not running right now would look
- * like "nobody is nominated" — and clearing a setting by accident is the failure
- * this control most has to avoid. The stored handle is therefore always an
- * option, marked as not running.
+ * ⚠ **"Last Agent Addressed" IS THE DEFAULT AND THAT IS A STANDING RULING, NOT A PREFERENCE.**
+ * B1 (2026-09-04): a forgotten `@` must never stall a conversation, made off a live incident —
+ * a person wrote in a room with two live agents and no default, the post fed 0 of 2, and he had
+ * to send it again with a tag. So a member who never opens this panel is answered.
+ *
+ * ⚠ **"No one" KILLS EVERY FALLBACK, NOT JUST RECENCY** (`lib/agent-mentions.ts ›
+ * resolveDefaultResponder` short-circuits on its first line): a room with exactly one live
+ * agent does not auto-answer either. That is the whole content of the option, and it is why
+ * the composer's recipient line reads `nobody` under it.
+ *
+ * ⚠ **NO EXPLAINER COPY** (Samuel's minimal-UI ruling, INVARIANTS §5): a row is a label and a
+ * control. The two option labels carry their own meaning and this file adds no sentence.
  */
 
 import { SelectMenu } from "@/shared/ui/select-menu";
-import { agentIdHandle, agentMentionHandle } from "../../lib/agent-mentions";
-import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";
-import type { MessageMode, ToolMode } from "../../lib/permission-modes";
+import { viewerUnaddressedResponder } from "../../lib/draft-recipients";
+import {
+  UNADDRESSED_RESPONDER_DEFAULT,
+  type UnaddressedResponderSetting,
+} from "../../lib/agent-mentions";
 import { GroupLabel, SettingRow } from "./settings-agent-rows";
-import type { Channel } from "../../types";
-import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
+import type { ChannelMember } from "../../types";
 
-/** ⚠ THE SENTINEL FOR "NO OPINION". `SelectMenu` is a closed set of STRINGS, so
- *  `null` — which is what the wire carries and what clears the setting — has to
- *  be spelled as one of them. It is a value no handle can be: the grammar
- *  (`^[a-z][a-z0-9-]{1,30}$`) forbids the leading `-`. */
-const NONE = "-none-";
-
-const CHAIN_OPTIONS = [
-  { value: NONE, label: "No ceiling" },
-  { value: "yes", label: "Allowed" },
-  { value: "no", label: "Not allowed" },
-] as const;
+/**
+ * ⚠ **THE CLOSED SET, RENDERED — AND `UNADDRESSED_RESPONDER_DEFAULT` IS NOT RE-SPELLED HERE.**
+ * The default is imported rather than written as `"last_addressed"` a second time, because
+ * which value is the default is a ruling and the shared module owns it.
+ *
+ * ⚠ **THERE IS NO "NO OPINION" SENTINEL, UNLIKE THE PICKER THIS REPLACED.** That control needed
+ * a `-none-` string because `null` — "nobody nominated" — was a third state `SelectMenu` could
+ * not spell. The column is `NOT NULL` with two values now, so the unconfigured member simply
+ * reads as the default, and there is no clear to express.
+ */
+const RESPONDER_OPTIONS: {
+  value: UnaddressedResponderSetting;
+  label: string;
+}[] = [
+  { value: "none", label: "No one" },
+  { value: UNADDRESSED_RESPONDER_DEFAULT, label: "Last Agent Addressed" },
+];
 
 export interface ChannelAgentsSettingsProps {
-  channel: Channel;
-  /** Every member's live sessions in this room — the Agents tab's own read. */
-  sessions: readonly ChannelPeerSession[];
+  /**
+   * ⚠ **THE ROSTER, NOT THE CHANNEL** (2026-09-07). The setting is a fact about the viewer's own
+   * membership row, and this surface already holds the roster for the members list. Passing
+   * `channel` would suggest a room-wide value, which is exactly the reading that was ruled out.
+   */
+  members: readonly ChannelMember[];
+  currentUserId: string;
   busy?: boolean;
-  /** `null` withdraws the nomination. */
-  onSetDefaultResponder: (handle: string | null) => void;
-  /** ⚠ PER AXIS, and `null` is a VALUE: it removes the ceiling on that axis.
-   *  Collapsing it with "unchanged" would make a ceiling permanent — the same
-   *  distinction `service-writes.ts › updateChannel` keeps. */
-  onSetCeiling: (patch: {
-    tools?: ToolMode | null;
-    messages?: MessageMode | null;
-    chain?: boolean | null;
-  }) => void;
+  onSetUnaddressedResponder: (setting: UnaddressedResponderSetting) => void;
+  // ⚠ `sessions` REMOVED 2026-09-07: the old picker offered the room's live agents as options
+  // and this control names no agent, so the panel no longer justifies a peer poll of its own.
+  // ⚠ `onSetCeiling` REMOVED 2026-09-06 (items 12, 13, 14) with the channel posture ceiling.
 }
 
 export function ChannelAgentsSettings({
-  channel,
-  sessions,
+  members,
+  currentUserId,
   busy,
-  onSetDefaultResponder,
-  onSetCeiling,
+  onSetUnaddressedResponder,
 }: ChannelAgentsSettingsProps) {
-  const stored = channel.defaultResponderAgentName;
-  const live = sessions
-    .filter((s) => s.name.length > 0)
-    .map((s) => ({
-      value: agentMentionHandle({ agentId: s.name, displayName: s.displayName }),
-      label: s.displayName ?? agentIdHandle(s.name),
-    }));
-  const seen = new Set(live.map((o) => o.value));
-  const responderOptions = [
-    { value: NONE, label: "No one" },
-    ...live,
-    // ⚠ THE STORED VALUE, ALWAYS — see the header. A blank trigger reads as
-    // "nobody is nominated" and one click away is clearing it for real.
-    ...(stored !== null && !seen.has(stored)
-      ? [{ value: stored, label: stored, description: "Not running" }]
-      : []),
-  ];
-
-  const posture = channel.agentPosture;
+  // ⚠ **THE SAME FUNCTION THE RECIPIENT LINE USES, DELIBERATELY** (`lib/draft-recipients.ts ›
+  // viewerUnaddressedResponder`). If this control and the composer's line disagreed about which
+  // row is "mine" or what an unloaded roster means, the panel would report a setting the line
+  // does not predict — and a person would have no way to tell which one the server believed.
+  // ⚠ It fails to the DEFAULT, never to `"none"`: a roster still loading must not render as
+  // "you chose nobody", which is a claim, not an absence.
+  const value = viewerUnaddressedResponder(members, currentUserId);
 
   return (
     <>
-      <GroupLabel>Channel agents</GroupLabel>
+      <GroupLabel>Agents</GroupLabel>
       <div className="flex flex-col gap-1 px-2">
-        <SettingRow name="Answers unaddressed messages">
-          <SelectMenu<string>
-            value={stored ?? NONE}
-            options={responderOptions}
-            onChange={(next) =>
-              onSetDefaultResponder(next === NONE ? null : next)
-            }
-            ariaLabel="Agent that answers unaddressed messages in this channel"
-            disabled={busy}
-          />
-        </SettingRow>
-        <SettingRow name="Tools ceiling">
-          <SelectMenu<string>
-            value={posture.tools ?? NONE}
-            options={[{ value: NONE, label: "No ceiling" }, ...TOOL_OPTIONS]}
-            onChange={(next) =>
-              onSetCeiling({ tools: next === NONE ? null : (next as ToolMode) })
-            }
-            ariaLabel="Widest tool mode an agent launched in this channel may run"
-            disabled={busy}
-          />
-        </SettingRow>
-        <SettingRow name="Messages ceiling">
-          <SelectMenu<string>
-            value={posture.messages ?? NONE}
-            options={[{ value: NONE, label: "No ceiling" }, ...MESSAGE_OPTIONS]}
-            onChange={(next) =>
-              onSetCeiling({
-                messages: next === NONE ? null : (next as MessageMode),
-              })
-            }
-            ariaLabel="Widest message mode an agent launched in this channel may run"
-            disabled={busy}
-          />
-        </SettingRow>
-        <SettingRow name="Launching more agents">
-          <SelectMenu<string>
-            value={posture.chain === null ? NONE : posture.chain ? "yes" : "no"}
-            options={CHAIN_OPTIONS}
-            onChange={(next) =>
-              onSetCeiling({ chain: next === NONE ? null : next === "yes" })
-            }
-            ariaLabel="May an agent launched in this channel launch further agents"
+        {/* ⚠ THE LABEL SAYS "MY", because the row above it does not: this is the one control on
+            this tab whose scope a reader could otherwise mistake for the room's. */}
+        <SettingRow name="Answers my unaddressed messages">
+          <SelectMenu<UnaddressedResponderSetting>
+            value={value}
+            options={RESPONDER_OPTIONS}
+            onChange={onSetUnaddressedResponder}
+            ariaLabel="Who answers my unaddressed messages in this channel"
             disabled={busy}
           />
         </SettingRow>
@@ -150,3 +113,20 @@ export function ChannelAgentsSettings({
     </>
   );
 }
+
+// ⚠ **THE POSTURE CEILING'S THREE ROWS WERE DELETED FROM THIS FILE ON 2026-09-06** (Samuel's
+// rulings on items 12, 13 and 14; *"Make sure all the logic is deleted."* Tools: *"all agents
+// launched should just inherit the original tools' permissions."*). The argument is kept here
+// rather than left to be inferred from an absence, because all three were CONTAINMENT controls
+// and he was told so before ruling: they were a room MANAGER's clamps over EVERY member's
+// agents in this channel — the widest tool mode a launch here could run, how freely those
+// agents could auto-send, and whether they could launch further agents (`agent_chain_allowed`
+// REFUSED at creation rather than clamping, because a clamped chain hits a bound mid-run).
+//
+// ⚠ NONE OF THEM DUPLICATED THE OPERATOR'S OWN TAB, which governs the operator's OWN agents on
+// their OWN machine; these governed everybody's. **So this room no longer bounds a peer's agent
+// on any axis** — a member's agents here run at whatever that member set on their own machine.
+//
+// ⚠ AND WITH THE RESPONDER PIN GONE TOO (2026-09-07), THIS PANEL NO LONGER DECIDES ANYTHING
+// ABOUT ANOTHER MEMBER'S MACHINE AT ALL. That is why it moved off the manage gate; a reader
+// finding `canManage` restored around it should treat that as a regression, not a tightening.

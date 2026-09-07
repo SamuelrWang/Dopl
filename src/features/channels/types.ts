@@ -26,11 +26,13 @@ import type { ChannelInfoCard } from "./info-card";
 // ⚠ THE DELIVERY CONTRACT AND THE CEILING LIVE IN `types-delivery.ts` (§1 split,
 // 2026-09-02) and are re-exported at the foot of this file with the other four
 // type modules — this file is the barrel.
-import type {
-  ChannelAgentPosture,
-  ChannelDelivery,
-  ChannelWakeVerdict,
-} from "./types-delivery";
+// ⚠ `ChannelAgentPosture` LEFT THIS IMPORT ON 2026-09-06 with the field it typed.
+import type { ChannelDelivery, ChannelWakeVerdict } from "./types-delivery";
+// ⚠ THE SECOND TYPE THIS FILE IMPORTS RATHER THAN DECLARES, for `ChannelInfoCard`'s reason
+// exactly (2026-09-07). `UnaddressedResponderSetting` and its coercion are ONE statement in
+// `lib/agent-mentions.ts`, because BOTH TREES ask the same question of it and the migration's
+// CHECK is already its twin in SQL. A third spelling here is how the closed set comes apart.
+import type { UnaddressedResponderSetting } from "./lib/agent-mentions";
 import type { Role } from "@/features/workspaces/types";
 
 /**
@@ -224,21 +226,27 @@ export type Channel = {
    * card loaded.
    */
   infoCard: ChannelInfoCard;
-  /** **THE POSTURE CEILING THE SERVER CAN SEE** (A9 — G6/G7). ⚠ `null` on any
-   *  axis is "NOT RECORDED", never "unrestricted"; see `types-delivery.ts`. */
-  agentPosture: ChannelAgentPosture;
-  /**
-   * **WHO ANSWERS WHEN NOBODY IS NAMED** (2026-09-02, B4 — Samuel's ruling B6):
-   * the agent handle RR3 hands an unaddressed HUMAN message to when more than
-   * one agent is live in the room. `null` = not configured, which is not "nobody
-   * answers": one live agent still answers by itself, and two or more answer not
-   * at all.
-   *
-   * ⚠ A HANDLE, never a template id — the migration records why (an FK to
-   * `agent_templates` would be a cross-visibility reference from a row members
-   * can read), and it is why this degrades quietly instead of dangling.
-   */
-  defaultResponderAgentName: string | null;
+  // ⚠ **`agentPosture` IS DELETED (2026-09-06, Samuel's rulings on items 12, 13
+  // and 14).** It was the posture CEILING the server could see — the widest tool
+  // mode, the widest message mode, and whether chaining was permitted — set by a
+  // room MANAGER over EVERY member's agents in the channel. All three are gone,
+  // with the containment loss stated to him before he ruled: *"all agents
+  // launched should just inherit the original tools' permissions"*, and *"make
+  // sure all the logic is deleted"*.
+  //
+  // ⚠ NO ROOM BOUNDS A PEER'S AGENT ON ANY AXIS NOW. A member's agents here run
+  // at whatever that member set on their own machine. The argument lives beside
+  // each deleted control (`settings-channel-agents.tsx`) and in the migration.
+  // ⚠ **`defaultResponderAgentName` IS DELETED (2026-09-07, Samuel's ruling on items 10 and
+  // 11).** It was the room-wide pin of ONE agent to answer EVERY member's unaddressed
+  // messages, set by a channel MANAGER. His reasoning, verbatim: *"if there's another member
+  // in the room, their last agent address would be different from my last agent address."*
+  // One room cannot hold one answer to a per-person question.
+  //
+  // ⚠ IT IS NOT ON `Channel` AT ALL NOW, AND DELIBERATELY NOT AS A `my*` FIELD EITHER. The
+  // replacement is `ChannelMember.unaddressedResponder`, read off the VIEWER'S OWN roster row
+  // — one client-side source, so the composer's line and the Settings control cannot come
+  // apart. A second projection here would be the drift shape, not a convenience.
 };
 
 export type ChannelMessage = {
@@ -447,6 +455,35 @@ export type ChannelMember = {
   notifyScope: NotifyScope | null;
   /** ⚠ Private preference — present ONLY on the caller's own row. */
   agentToolProfile: AgentToolProfile | null;
+  /**
+   * **WHO ANSWERS THIS MEMBER'S UNTAGGED MESSAGES HERE** (2026-09-07, Samuel's ruling on items
+   * 10 and 11) — the per-person replacement for the room-wide `defaultResponderAgentName`.
+   *
+   * ⚠ **PRIVATE — PRESENT ONLY ON THE CALLER'S OWN ROW**, on `agentToolProfile`'s precedent and
+   * enforced twice: scrubbed in `server/dto.ts › mapMemberRow`, and column-privileged in
+   * `20260928130000` so it never rides a peer's realtime change feed either.
+   *
+   * ⚠ **`null` MEANS "NOT YOUR ROW", NEVER `"none"`.** The two readings are opposite — one is
+   * "I may not see this", the other is "this person's untagged messages reach nobody" — so a
+   * renderer must never collapse them. Your OWN row is always one of the two settings, because
+   * the column is `NOT NULL` and the mapper coerces an absent one to the default.
+   *
+   * ⚠ **THIS IS THE ONE CLIENT-SIDE SOURCE.** The composer's recipient line and the Settings
+   * control both read it from the roster this surface already loads
+   * (`lib/draft-recipients.ts`, `settings-channel-agents.tsx`); there is no `Channel.my*`
+   * twin, on purpose.
+   *
+   * ⚠ **OPTIONAL BECAUSE THE CACHE IS A DIFFERENT MOMENT (§8, the standing 2026-08-25 rule).**
+   * The members payload is IndexedDB-persisted with a 24h `gcTime`, so the first paint after
+   * this ships renders rows minted BEFORE the field existed. The server always sending it does
+   * not make it present in that entry, and a type saying it is present is the lie that crashes
+   * the screen. So `undefined` is a THIRD reading — "this row predates the field" — and every
+   * reader takes an explicit fallback: `lib/draft-recipients.ts › viewerUnaddressedResponder`
+   * spells it `?? undefined` into `normalizeUnaddressedResponder`, which answers the default.
+   * Absent therefore degrades to the same answer an unopened Settings tab gives, never to a
+   * crash and never to `'none'` (which would silently stop a room answering).
+   */
+  unaddressedResponder?: UnaddressedResponderSetting | null;
   /** ⚠ Private preference — present ONLY on the caller's own row. The
    *  favourite-toggle PATCH echoes it back; the sidebar reads
    *  `Channel.myFavoritedAt` instead, off a list it already has. */
@@ -491,8 +528,9 @@ export type {
 
 // THE DELIVERY KEYSTONE (2026-09-02, A9) — the `delivery=` verdict, the recipient
 // resolution behind it, and the channel posture CEILING a launch is clamped to.
+// ⚠ `ChannelAgentPosture` IS NO LONGER RE-EXPORTED (2026-09-06). The type itself is
+// deleted at its source in `types-delivery.ts`; this barrel simply stopped naming it.
 export type {
-  ChannelAgentPosture,
   ChannelDelivery,
   ChannelWakeVerdict,
   MachineDelivery,

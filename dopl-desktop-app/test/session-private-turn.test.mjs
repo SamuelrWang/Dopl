@@ -12,11 +12,24 @@
 // operator's private question answered in public, and there is no recall. That is the failure
 // every case below is about.
 //
-// ⚠ SCOPE SINCE 2026-08-31 (Samuel's ruling, stated at `session-private.js ›
-// autoSendMessageMode`): the withdrawal stands while the channel's AUTO-SEND toggle is OFF —
-// which is this process's permanent condition (`channelAutoSend` cannot load its store here and
-// answers false), so every case below drives the toggle-off arm. The toggle-ON arm, where the
-// channel-wide consent overrides this gate, is `test/session-autosend-live.test.mjs`'s to pin.
+// ⚠ SCOPE SINCE 2026-09-06 (Samuel's full-auto ruling) — THE CARVE-OUT MOVED FROM A TOGGLE TO A
+// POSTURE, AND IT IS STILL A CARVE-OUT. From 2026-08-31 the withdrawal stood only while the
+// channel's AUTO-SEND toggle was OFF. That toggle is deleted (item 8: it was a second control
+// over the same axis as the launch posture's `messages`, and won over it by force), and the
+// carve-out is now the OUT HALF OF THE POSTURE ITSELF: *"If the user puts auto let's just have it
+// full auto."* An `auto_outbound` / `auto_both` channel defeats this gate; `ask` and
+// `auto_inbound` do not.
+//
+// ⚠ SO EVERY CASE BELOW DRIVES THE NON-AUTO ARM, exactly as it drove the toggle-off arm before —
+// and on a BETTER footing than it had. What made these cases pass was an accident of environment
+// (`channel-prefs` cannot load its store in plain node, so the live read answered false); what
+// makes them pass now is the rule, because a session whose frozen mode is `ask` or `auto_inbound`
+// withdraws whatever the store says. The cases themselves did not change.
+//
+// ⚠ THE AUTO ARM IS `test/session-autosend-live.test.mjs`'s TO PIN, unchanged in that division of
+// labour: it owns the channel-wide consent that OVERRIDES this gate, and it pins both halves —
+// that an out-half posture defeats the withdrawal, and that the ruling is narrow enough that
+// `ask` and `auto_inbound` still reach the cases below.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

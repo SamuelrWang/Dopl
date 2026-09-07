@@ -273,7 +273,6 @@ export function ChannelSurface({
       // channel's nominated responder. Both handed down for `newAgent`'s reason — a second
       // mount of that hook is a second poll of an unpublished table.
       liveAgents={agentsPanel.peerSessions}
-      defaultResponderAgentName={channel.defaultResponderAgentName}
       // The composer's New Agent icon (2026-08-21) — handed down whole,
       // never re-mounted: a second `useAgentsPanel` is a second peer poll.
       newAgent={agentsPanel}

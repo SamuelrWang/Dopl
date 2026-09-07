@@ -7,7 +7,8 @@
 // correctable, which is the same reason session-grant-keys.js was split out (2026-08-02) and
 // session-preset-census.test.mjs before it.
 //
-// PURE, and with NO require at all: two frozen op lists and one scope rule over them.
+// PURE: op lists, one scope rule over them, and the ONE key spelling (`channel-op-key.js`) every
+// classifier in this tree matches through — no electron, no state, no I/O.
 // session-profiles.js requires this at its module head and RE-EXPORTS everything here, so no
 // caller moved; the two harness tests that slice the SESSION-PROFILE TABLE inject these names
 // exactly as they already inject `makeGrantKeyFor` / `isKnowledgeReadCall`.
@@ -47,7 +48,13 @@
 // admitting it here would hand every windowless agent an unprompted launch under a message
 // posture. It lives in `session-own-launch.js`, gated on BOTH axes and on a depth bound.
 //
-// ⚠ THE BAR THE TWO SHARE, AND IT IS THE ONE TO KEEP: ANYTHING THAT SETTLES SHARED STATE NEVER
+//   artifact.*     ⚠ 2026-09-06, AND IT IS NOT A `send` AT ALL — the first member of this lane
+//                  that is not. Four actions, `<op>.<action>`-keyed, admitted on `create_thread`'s
+//                  argument and clearing the same bar. The whole argument is written beside the
+//                  list below, where the keys are; this line exists so a reader counting the
+//                  lane's members from this block does not come away with three.
+//
+// ⚠ THE BAR THEY SHARE, AND IT IS THE ONE TO KEEP: ANYTHING THAT SETTLES SHARED STATE NEVER
 // QUALIFIED. `close_thread` was deliberately never on this list, and `propose_close` — the
 // marker's original sibling — left the MCP enum entirely with thread closing (wiring plan
 // Phase 4, 2026-08-18). A thread OPEN is not a settle: nothing about it is terminal, a thread
@@ -104,26 +111,72 @@ const OWN_CHANNEL_THREAD_NEW = 'new';
 // prevent. It rides an ordinary `send` and hits `isOwnChannelPost`'s gate like any other.
 const OWN_CHANNEL_ESCALATE_KIND = 'decision';
 
-// The OP every outbound shape above now spells. ⚠ ONE ENTRY, AND IT IS THE SAME OP
+// The OP every SEND-shaped outbound shape above spells. ⚠ ONE ENTRY, AND IT IS THE SAME OP
 // `isOwnChannelPost` matches: under the collapse a marker, a thread open and a decision card ARE
 // posts, told apart by their arguments. The two `grantDecision` branches therefore reach the
 // same verdict for the same call, which is what makes this refactor a no-op on the allow set.
 const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the ONE spelling (F-578)
 
-const OWN_CHANNEL_OUTBOUND_OPS = ['send'];
+const OWN_CHANNEL_SEND_OPS = ['send'];
+
+// ── THE ARTIFACT FOLD — THE FOURTH ADMISSION, AND THE FIRST THAT IS NOT A `send` ─────────────
+//
+// ⚠ 2026-09-06. `op="artifact"` (`create` · `add` · `remove` · `dissolve`) shipped with the
+// artifacts wave and was admitted to NO LANE AT ALL, so it fell to the unclassified fail-safe:
+// `gate` in EVERY posture, `bypass` included — and on a windowless session a gate the operator
+// never answers is a DENY. THAT IS F-320 AND F-321'S DEFECT FOR THE THIRD TIME, and this module
+// is where the pattern is supposed to be caught: an op ships on the tool's surface, the desktop
+// has no entry for it, and the agent is refused something no setting can grant. The two
+// paragraphs above already say it about `create_thread` and about `escalate`; the rule they
+// imply — WHEN AN OP JOINS THE TOOL'S ENUM, IT EARNS A LANE OR IT IS DELIBERATELY LEFT TO
+// GATE, AND EITHER WAY IT IS WRITTEN DOWN HERE — is the one that was not applied.
+//
+// ⚠ WHY IT EARNS THE OUTBOUND LANE. On `create_thread`'s argument, not `milestone`'s: a fold is
+// not "less powerful than the post beside it", it is an ACT ON THIS SESSION'S OWN CHANNEL, in a
+// room the operator already bound this session to, governed by the OUTBOUND half of the message
+// axis exactly as a post into that room is.
+//
+// ⚠ AND IT CLEARS THE BAR THAT KEEPS `close_thread` OUT — the only bar this lane has ever had.
+// A fold SETTLES NO SHARED STATE. `dissolve` reverses it in one call, no message is edited, no
+// message is deleted, and a read returns a CARD where the folded run was rather than a gap
+// (`packages/mcp-server/src/tools/channel-ops-artifact.ts`). Nothing about it is terminal and
+// there is nothing for a second party to be bound by, which is precisely what `close_thread` —
+// still not here, and still not admissible — is not.
+//
+// ⚠ ALL FOUR ACTIONS, AND THE SET IS DELIBERATELY WHOLE. `dissolve` is the UNDO of `create`, so
+// admitting the fold and gating the unfold would leave an agent able to hide a run of messages
+// and unable to put it back — the one asymmetry that could turn a reversible act into a
+// standing one. `add` / `remove` move ONE seq each by the op's own design.
+//
+// ⚠ KEYED `<op>.<action>`, WHICH IS THE POINT OF THE DOTTED KEY (F-578). The server gates this
+// op at the COARSE grain (`gating.ts › WRITE_OPS` carries a bare `artifact`, because all four
+// actions write), but this is an ALLOW list and the wide direction is the dangerous one here: a
+// bare `artifact` entry would admit every action the op grows LATER, unread and unargued. Four
+// names, four decisions.
+const OWN_CHANNEL_ARTIFACT_OPS = [
+  'artifact.create',
+  'artifact.add',
+  'artifact.remove',
+  'artifact.dissolve',
+];
+
+// The UNION — the one list `grantDecision`'s Axis-B branch and the explainer ask.
+// ⚠ IT IS NO LONGER A LIST OF ONE, so `scopedToOwnChannel`'s warning about reading a bare `i.op`
+// is now LIVE rather than prophylactic: `artifact` alone would match all four actions and every
+// action added after them. Every membership test in this tree goes through `channelOpKey`.
+const OWN_CHANNEL_OUTBOUND_OPS = OWN_CHANNEL_SEND_OPS.concat(OWN_CHANNEL_ARTIFACT_OPS);
 
 // THE ONE SCOPE RULE, shared by every predicate below so two of them can never disagree about
 // what "my own channel" means. Same shape and same safe failure as
 // `session-profiles.js › isOwnChannelPost`: target unset or exactly the session's channel ID.
 function scopedToOwnChannel(ops, input, sessionChannelId) {
   const i = input || {};
-  // ⚠ `channelOpKey`, NOT A BARE `i.op` (2026-09-02, F-578's spelling applied here too). The
-  // outbound set is `['send']`, which carries no action, so today the two agree exactly — this is
-  // a NO-OP that removes the last place a classifier reads the op alone. The moment an
-  // action-bearing op joins this list, a bare read would match EVERY action of it, and every list
-  // in this tree is an ALLOW list: the wide direction. Four other classifiers already ask through
-  // this module; a fifth spelling of "which call is this" is how a gate and the sentence
-  // describing it come to disagree.
+  // ⚠ `channelOpKey`, NOT A BARE `i.op` (2026-09-02, F-578's spelling applied here too), AND THE
+  // ACTION-BEARING OP THIS ANTICIPATED HAS NOW ARRIVED (2026-09-06): `artifact` joined the union
+  // above with four named actions. A bare read would match EVERY action of it — including any
+  // added later — and every list in this tree is an ALLOW list, so that is the wide direction.
+  // Four other classifiers already ask through this module; a fifth spelling of "which call is
+  // this" is how a gate and the sentence describing it come to disagree.
   if (ops.indexOf(channelOpKey(i)) === -1) return false;
   const target = i.channel;
   if (target == null || target === '') return true; // no explicit target -> own channel
@@ -134,9 +187,15 @@ function scopedToOwnChannel(ops, input, sessionChannelId) {
 // non-string `kind` is the DEFAULT (`message`) and matches neither named kind, which is the same
 // fail-safe `scopedToOwnChannel` takes on the channel — an unmatched shape is an ordinary post
 // and is answered by the post branch, never by a marker's allow.
+// ⚠ IT ASKS `OWN_CHANNEL_SEND_OPS`, NOT THE UNION (2026-09-06). The three shape predicates below
+// tell SENDS apart by `kind` / `thread`, and an `artifact` call carries neither in its schema —
+// but it is model input, so it CAN carry one. Handing them the union would let
+// `artifact(action="create", kind="milestone")` answer `isOwnChannelMarker`, which changes no
+// verdict (the union allows both) and DOES mislabel the audit line. A reason code that names the
+// wrong act is the defect this whole module's three-names paragraph exists to prevent.
 function isSendKind(kind, input, sessionChannelId) {
   const i = input || {};
-  return scopedToOwnChannel(OWN_CHANNEL_OUTBOUND_OPS, i, sessionChannelId) && i.kind === kind;
+  return scopedToOwnChannel(OWN_CHANNEL_SEND_OPS, i, sessionChannelId) && i.kind === kind;
 }
 
 /** An own-channel milestone marker. Used by the gate REASON, to say which allow this was. */
@@ -149,7 +208,7 @@ function isOwnChannelMarker(input, sessionChannelId) {
  *  `permission_request`. */
 function isOwnChannelThreadOpen(input, sessionChannelId) {
   const i = input || {};
-  return scopedToOwnChannel(OWN_CHANNEL_OUTBOUND_OPS, i, sessionChannelId)
+  return scopedToOwnChannel(OWN_CHANNEL_SEND_OPS, i, sessionChannelId)
     && i.thread === OWN_CHANNEL_THREAD_NEW;
 }
 
@@ -158,18 +217,45 @@ function isOwnChannelEscalate(input, sessionChannelId) {
   return isSendKind(OWN_CHANNEL_ESCALATE_KIND, input, sessionChannelId);
 }
 
+/** An own-channel ARTIFACT fold — one of the four actions, in this session's own channel by id.
+ *  Used by the gate REASON, to say which allow this was (2026-09-06). */
+function isOwnChannelArtifact(input, sessionChannelId) {
+  return scopedToOwnChannel(OWN_CHANNEL_ARTIFACT_OPS, input, sessionChannelId);
+}
+
 /** Any of them — the single question `grantDecision`'s Axis-B branch asks. */
 function isOwnChannelOutbound(input, sessionChannelId) {
   return scopedToOwnChannel(OWN_CHANNEL_OUTBOUND_OPS, input, sessionChannelId);
+}
+
+/**
+ * The MEMBERSHIP half of {@link isOwnChannelOutbound}, without the channel scope — the twin of
+ * `session-profiles.js › isOwnChannelReadCall`, and it exists for the same reason that one does.
+ *
+ * ⚠ 2026-09-06, AND IT CLOSES A LIVE MISREPORT RATHER THAN TIDYING ONE.
+ * `session-gate-reason.js › channelReason` asked this question by indexing the union with a BARE
+ * `input.op`. That was true while the union was `['send']` and became FALSE the moment
+ * `artifact.*` joined it: a SLUG-addressed fold would have missed the `cross-channel-post` arm
+ * and been narrated `channel-op-approval-required` — "message approval does not cover this
+ * operation" — sending an operator to widen a posture when the actual fix is to address their own
+ * channel by id. The read half already learned this lesson at F-578; the outbound half learns it
+ * here, and neither may index a dotted list with a bare op again.
+ */
+function isOwnChannelOutboundCall(input) {
+  return OWN_CHANNEL_OUTBOUND_OPS.indexOf(channelOpKey(input)) !== -1;
 }
 
 module.exports = {
   OWN_CHANNEL_MARKER_KIND,
   OWN_CHANNEL_THREAD_NEW,
   OWN_CHANNEL_ESCALATE_KIND,
-  OWN_CHANNEL_OUTBOUND_OPS,
+  OWN_CHANNEL_SEND_OPS, // 2026-09-06: the `send` half alone — what the three SHAPE predicates ask
+  OWN_CHANNEL_ARTIFACT_OPS, // ...and the fold's four dotted keys
+  OWN_CHANNEL_OUTBOUND_OPS, // ...and their union, which is what the gate asks
   isOwnChannelMarker,
   isOwnChannelThreadOpen,
   isOwnChannelEscalate,
+  isOwnChannelArtifact,
   isOwnChannelOutbound,
+  isOwnChannelOutboundCall,
 };

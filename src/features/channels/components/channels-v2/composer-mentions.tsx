@@ -20,10 +20,14 @@
  * the resolver accepts BY CONSTRUCTION. The two rules no longer have to be
  * kept in step; the insert is derived from the resolver's own index.
  *
- * ⚠ A CANDIDATE WITH NO INSERTABLE HANDLE IS NOT OFFERED. Ambiguity fails
+ * ⚠ A MEMBER WITH NO INSERTABLE HANDLE IS NOT OFFERED. Ambiguity fails
  * closed in the parser (rule 5), so a member every one of whose handles is
  * contested has no token that would reach them — listing them would be the
  * inert control all over again, one row deep.
+ * ⚠ AN AGENT IS NEVER IN THAT POSITION AND SINCE 2026-09-07 IS NEVER DROPPED FOR IT. Its
+ * namespace MINTS a suffix rather than contesting, and the id form is claimed for every
+ * candidate before any name is read, so every agent holds a spelling — the row offers the one
+ * the index says is THIS agent's, which is not always the one its name suggests.
  */
 
 import { Bot } from "lucide-react";
@@ -31,7 +35,8 @@ import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { memberLabel } from "../../lib/channel-display";
 import { buildMentionIndex, insertableHandle } from "../../lib/mentions";
-import { agentMentionHandle, buildAgentMentionIndex } from "../../lib/agent-mentions";
+import { insertableAgentHandle } from "../../lib/agent-mentions";
+import { draftAgentIndex } from "../../lib/draft-recipients";
 import { agentDisplayName } from "./agents-model";
 import { memberPerson } from "./view-model";
 import type { ChannelMember } from "../../types";
@@ -129,14 +134,27 @@ export function mentionSuggestions({
   }
   // ⚠ AGENTS AFTER MEMBERS, and sharing the same cap. A person is the commoner intent, and a
   // picker whose first rows move as an unrelated agent starts is a picker you cannot type through.
-  const agentIndex = buildAgentMentionIndex(agents);
+  // ⚠ **THE INDEX IS THE CARD'S, NOT THIS FUNCTION'S, SINCE 2026-09-07** —
+  // `lib/draft-recipients.ts › draftAgentIndex`, the same builder the recipient line and the
+  // live tint use. It was `buildAgentMentionIndex(agents)` with NO reserved set, so an agent an
+  // operator named "Diana" was OFFERED `@diana` while the line beside it had already minted that
+  // agent `diana-1` and given the bare tag back to the member: the picker inserted a token that
+  // tagged a PERSON and woke nobody. Members outrank agents in one place now.
+  const agentIndex = draftAgentIndex(agents, members);
   for (const agent of agents) {
     if (out.length >= MAX_SUGGESTIONS) break;
     const label = agentDisplayName({ agentId: agent.agentId, displayName: agent.displayName });
-    const handle = agentMentionHandle(agent);
-    // ⚠ THE SAME FAIL-CLOSED RULE MEMBERS GET: a handle two agents claim resolves to neither, so
-    // offering it would insert a token that reaches nobody.
-    if (agentIndex.get(handle) !== agent.agentId) continue;
+    // ⚠ **THE SPELLING THIS AGENT ACTUALLY WON, READ BACK OFF THE INDEX** (`insertableAgentHandle`,
+    // the agent-side twin of `insertableHandle`). `agentMentionHandle` was wrong here the moment
+    // suffixes existed: it is per-candidate and knows nothing of the room, so two agents both
+    // named "Coder" were each offered `@coder` — one of which reaches the OTHER agent.
+    // ⚠ **AND THE FAIL-CLOSED SKIP IS GONE WITH IT, BECAUSE THE CASE IT GUARDED IS GONE.** It
+    // dropped any agent whose preferred handle was contested, which under minting silently hid
+    // the second "Coder" from the picker while it sat perfectly addressable at `@coder-1`. An
+    // agent always holds at least its id form, so there is no longer such a thing as an agent
+    // with no insertable handle — the member arm above keeps its `null` check because a member
+    // can genuinely run out of spellings.
+    const handle = insertableAgentHandle(agent, agentIndex);
     if (!label.toLowerCase().includes(query) && !handle.includes(query)) continue;
     out.push({ kind: "agent", agentId: agent.agentId, label, handle });
   }

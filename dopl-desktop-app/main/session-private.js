@@ -52,7 +52,17 @@
 // approval. It is bounded to that single turn, the operator is by definition at the keyboard,
 // and the alternative failure is a private answer posted in public.
 
-const { privateTurnMessageMode } = require('./session-profiles');
+// ⚠ `floorWindowlessMessage` JOINED ON 2026-09-06 (item 8) — the SAME function
+// `channel-prefs.js` applies at launch, asked here rather than re-spelled, because the live
+// read of the channel's Messaging value gets an UNFLOORED posture and a windowless session
+// cannot run on one. Two spellings of one floor is how one lane starts holding messages the
+// other lane releases (`session-profiles.js`'s own warning over that function).
+// ⚠ `autoOutboundMode` JOINED ON 2026-09-06 (Samuel's full-auto ruling) — the SAME predicate
+// `grantDecision` asks about the out half, so "does this posture consent to posting" has one
+// answer on both sides of the gate rather than a local re-spelling here.
+const {
+  privateTurnMessageMode, floorWindowlessMessage, autoOutboundMode,
+} = require('./session-profiles');
 
 // ─── BEGIN SESSION-PRIVATE-PURE (pure; unit-tested via source extraction) ────────
 
@@ -152,9 +162,17 @@ function isPrivateTurn(s) {
  * ⚠ IN-HALF PRESERVED, JUNK FAIL-CLOSED: an unknown mode maps to `auto_outbound`, whose IN half
  * is `ask` — the toggle's whole meaning is the OUT half and it must not smuggle inbound consent.
  */
-function autoSendMessageMode(mode) {
-  return (mode === 'auto_inbound' || mode === 'auto_both') ? 'auto_both' : 'auto_outbound';
-}
+// ⚠ **`autoSendMessageMode` IS DELETED (2026-09-06, item 8), WITH THE RECORD IT SERVED.**
+//
+// It forced Axis B's OUT half on over whatever the stored posture said — the mechanism by which
+// the auto-send toggle overrode Messaging. There is nothing left to force: Messaging IS the
+// posture now, so an operator who wants the out half picks it, and `effectiveMessageMode` reads
+// that pick live. A function that widens a posture the operator did not choose is exactly what
+// this item removed, and keeping it "for the tests" would leave the mechanism one call away.
+//
+// Deleted alongside `channel-prefs.getAutoSend` / `setAutoSend`, the two `channels:*AutoSend`
+// IPC handlers and the web hook. `test/session-autosend-live.test.mjs` is rewritten against
+// `effectiveMessageMode`'s live read of Messaging in the same change.
 
 /**
  * AXIS B AS THE GATE SHOULD SEE IT for this session, right now.
@@ -172,9 +190,83 @@ function autoSendMessageMode(mode) {
  * turn shape at once, ON and OFF alike. `channelAutoSend` is the live half below the pure
  * block; in an environment with no store it answers false, which is not a grant.
  */
+/**
+ * ── ⚠ 2026-09-06: THE AUTO-SEND TOGGLE IS GONE AND **MESSAGING** IS THE LIVE READ ──────────
+ *
+ * (Samuel's settings overhaul, item 8: the separate Replies toggle is removed and folds into
+ * the Messaging control.) The LIVE-read seam this function is built on is UNCHANGED — that is
+ * the whole point of the fold, and it is why the fold is safe: the 2026-08-31 ruling's real
+ * content was *"if a user toggles auto-send, that goes into effect for ALL their agents in that
+ * channel, IMMEDIATELY"*, and that property belonged to the READ SITE, not to the record. So the
+ * record changes and the site does not.
+ *
+ * ⚠ WHY THE TWO CONTROLS COULD NOT BOTH SURVIVE. They set the same axis and disagreed by
+ * construction: Messaging was frozen into `state.messageMode` at launch, auto-send was read here
+ * at decision time, and `autoSendMessageMode` FORCED the out half on over whatever Messaging
+ * said. An operator could set Messaging to `ask` and still have agents posting unattended, with
+ * nothing on the tab explaining which one was in force.
+ *
+ * ⚠ THE STORED CHANNEL VALUE IS READ FIRST, AND `state.messageMode` IS THE FALLBACK, NOT THE
+ * OTHER WAY ROUND. The stored value is what the operator can see and change RIGHT NOW; the
+ * frozen one is a snapshot of what they had set when this session spawned. Preferring the
+ * snapshot would re-introduce the four silent ways this function's own header lists for a
+ * setting to not be in effect (a reopened shell drops its startModes, a crash resume floors
+ * them, a running session never re-reads the store). An unreadable store falls back to the
+ * frozen value rather than to a grant.
+ *
+ * ── ⚠ **AUTO MEANS FULL AUTO — SAMUEL'S RULING, 2026-09-06** ────────────────────────────────
+ *
+ * *"If the user puts auto let's just have it full auto."*
+ *
+ * An OUT-half posture (`auto_outbound` / `auto_both`) DEFEATS the 2026-08-22 private-turn
+ * withdrawal, exactly as the deleted auto-send toggle did. A reply drafted inside a private panel
+ * turn leaves the machine with no Send click.
+ *
+ * ⚠ THIS OVERTURNS THE FOLD'S OWN FIRST DRAFT, AND THE ARGUMENT AGAINST IT IS RECORDED RATHER
+ * THAN DELETED — it is a real cost and a later reader is owed it. Item 8 shipped for one day with
+ * the withdrawal applying ALWAYS, on the reasoning that the operator's own private words leaving
+ * the machine unclicked is the narrowest consent point there is, and that the LEGIBILITY argument
+ * behind the 2026-08-31 trade was spent once there was a single live control. Samuel weighed that
+ * and ruled the other way: a posture that says "auto" and then holds a draft is the surprise, and
+ * the surprise is worse than the exposure. The setting is explicit, it is the operator's own, and
+ * it is one control now — so "auto" means what it says on every lane.
+ *
+ * ⚠ WHAT IS *NOT* WIDENED, AND THIS IS WHY THE RULING IS NARROW RATHER THAN A REPEAL. Only the
+ * OUT half defeats the withdrawal. `ask` and `auto_inbound` carry no out-half consent, so a
+ * private turn on those postures still withdraws exactly as 2026-08-22 wrote it — and the IN half
+ * is preserved on every path, so an agent asked a private question about a thread can still go
+ * and look at it.
+ */
 function effectiveMessageMode(s) {
-  const mode = (s && s.state && s.state.messageMode) || 'ask';
-  if (channelAutoSend(s && s.channelId)) return autoSendMessageMode(mode);
+  const frozen = (s && s.state && s.state.messageMode) || 'ask';
+  const stored = channelMessageMode(s && s.channelId);
+  // ⚠ **THE WINDOWLESS FLOOR IS RE-APPLIED HERE, AND LEAVING IT OFF WOULD HAVE BEEN F-236
+  // REACHED FROM THE OTHER END.** The stored value is the operator's PICK and carries no floor;
+  // the frozen value had one applied at launch (`channel-prefs.js › windowlessMessageMode`).
+  // A windowless session has no Accept surface, so an un-floored `ask` here would gate its
+  // own-channel READS — and in a windowless session a gated read is a DENIED read. Reading the
+  // store live without re-flooring would therefore have made every windowless agent unable to
+  // look at the thread it was answering, on channels whose posture is `ask`, which is the
+  // default. ⚠ ONE STATEMENT OF THE FLOOR: `session-profiles.js › floorWindowlessMessage` is
+  // the same function `channel-prefs.js` applies at launch, asked here rather than re-spelled
+  // (`test/session-mode-floor.test.mjs` pins the two lanes against each other).
+  const live = stored && s && s.windowless ? floorWindowlessMessage(stored) : stored;
+  const mode = live || frozen;
+  // ⚠ SAMUEL'S RULING, 2026-09-06 — *"If the user puts auto let's just have it full auto."* An
+  // OUT-half posture is the operator's explicit, visible, channel-wide consent to their agents
+  // posting with no click, so it defeats the private-turn withdrawal below. See the block above
+  // for the argument this overturned and why it is recorded rather than deleted.
+  //
+  // ⚠ **IT IS THE CHANNEL'S LIVE VALUE THAT DEFEATS THE WITHDRAWAL, NOT THE RESOLVED MODE**, and
+  // the difference is a grant. `live` is the setting the operator can SEE and change — the same
+  // channel-wide consent the deleted auto-send toggle was, read at the same decision point.
+  // `mode` may be the session's FROZEN snapshot, reached only when the store answered nothing:
+  // an unreadable store, or a channel nobody has configured. Testing `mode` here would let an
+  // unreadable store hand a private turn FULL AUTO — the one thing this whole function's header
+  // rules out ("an unreadable store falls back to the frozen value rather than to a grant"), and
+  // the exposure the 2026-08-22 withdrawal exists to prevent. So the carve-out needs the consent
+  // to be present, not merely inherited.
+  if (live && autoOutboundMode(live)) return mode;
   return isPrivateTurn(s) ? privateTurnMessageMode(mode) : mode;
 }
 
@@ -187,12 +279,42 @@ function effectiveMessageMode(s) {
  * plain-node tests that must keep working. A failed require answers `false` — an unreadable
  * store is not a grant, the same rule every reader of that store follows.
  */
-function channelAutoSend(channelId) {
-  if (!channelId) return false;
+/**
+ * THE LIVE HALF — the channel's durable MESSAGING value, read at DECISION time, or `''` when
+ * there is none to read (2026-09-06, item 8; successor to `channelAutoSend`).
+ *
+ * ⚠ LAZY-REQUIRED for its predecessor's reason, unchanged: `channel-prefs.js` instantiates an
+ * electron-store at load and this module is required by plain-node tests that must keep working.
+ *
+ * ⚠ **IT ANSWERS `''`, NOT A MODE, WHEN IT CANNOT READ.** An unreadable store, an absent channel
+ * id and a channel that has never been configured are all "no opinion", and the caller falls back
+ * to the session's frozen value. Answering a MODE here would make an unreadable store into a
+ * posture — and the narrowest mode would be just as wrong as the widest, because it would
+ * silently gag a correctly-configured channel the moment the store hiccuped.
+ *
+ * ⚠ IT IS COERCED BY THE STORE, NOT HERE. `channel-prefs.js › normalizePreset` validates the
+ * axis against the frozen `MESSAGE_MODES` list on WRITE, so what comes back is already a member
+ * or nothing. A second coercion here would be the two-readers-one-fact defect with a PERMISSION
+ * AXIS as the thing that drifts.
+ */
+function channelMessageMode(channelId) {
+  if (!channelId) return '';
   try {
-    return require('./channel-prefs').getAutoSend(channelId) === true;
+    // ⚠ **PRESENCE FIRST, AND WITHOUT IT THIS FUNCTION CANNOT KEEP ITS OWN CONTRACT.**
+    // `getLaunchPosture` NEVER ANSWERS NULL — it answers the stored pair or the RESTRICTIVE
+    // DEFAULT (`channel-prefs.js`: "a durable setting that is absent IS manual/ask, and saying
+    // so is the truth"), which is right for the Settings tab and wrong here. Read alone it makes
+    // an UNCONFIGURED channel indistinguishable from one the operator deliberately set to `ask`,
+    // so the default would win over the session's frozen launch posture on every channel nobody
+    // has opened Settings for — the frozen value would be dead code and a session launched at
+    // `auto_both` would gate. That is why the presence check comes first: it is the deleted
+    // `getAutoSend`'s "no row = no opinion" property, restored on the record that replaced it.
+    if (!require('./channel-prefs').hasLaunchPosture(channelId)) return '';
+    const preset = require('./channel-prefs').getLaunchPosture(channelId);
+    const mode = preset && preset.messages;
+    return typeof mode === 'string' && mode ? mode : '';
   } catch (_err) {
-    return false;
+    return '';
   }
 }
 
@@ -202,6 +324,7 @@ module.exports = {
   closePrivateTurn,
   resetPrivateTurn, // 2026-08-22: a torn-down query owes no results — the window closes with it
   isPrivateTurn,
-  autoSendMessageMode, // 2026-08-31: the toggle's OUT-half widening, one spelling
+  // ⚠ `autoSendMessageMode` REMOVED 2026-09-06 (item 8) — see the block above it.
   effectiveMessageMode,
+  channelMessageMode, // 2026-09-06: the live read of the channel's Messaging value, for the suite
 };

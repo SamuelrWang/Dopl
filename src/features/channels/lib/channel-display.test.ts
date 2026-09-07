@@ -5,7 +5,7 @@ import {
   channelDisplayPeerPerson,
 } from "./channel-display";
 import { EMPTY_INFO_CARD } from "../info-card";
-import { EMPTY_AGENT_POSTURE } from "./agent-posture";
+// ⚠ `EMPTY_AGENT_POSTURE` no longer imported (2026-09-06) — see `test-fixtures.ts`.
 import type { Channel, ChannelDirectPeer, ChannelMember } from "../types";
 
 const ME = "me";
@@ -37,8 +37,7 @@ function chan(over: Partial<Channel> = {}): Channel {
     myFavoritedAt: null,
     onlineMemberCount: 0,
     infoCard: EMPTY_INFO_CARD,
-    agentPosture: EMPTY_AGENT_POSTURE,
-    defaultResponderAgentName: null,
+    // ⚠ `defaultResponderAgentName` left this fixture on 2026-09-07 with the field.
     ...over,
   };
 }

@@ -52,11 +52,11 @@ export const BLOCK = [
 export function loadReducer() {
   return new Function(
     `${BLOCK}
-     return { initialSessionState, sessionReducer, nextIdleMs, turnCapReached, costCapReached,
+     return { initialSessionState, sessionReducer, nextIdleMs,
               gatePhase, gateActivity, endedEmit, endLifecycle, endedStatusText, endEffects, modesEmit, parkEffects,
               postureWasReset, POSTURE_RESET_NOTE, INACTIVE_NOTE,
               wakeEffects, inboundAutoAccepted, feedInboundEffects, coerceMode,
               nextAbandonMs, idleTimeout, AWAITING_PEER_IDLE_MS, ABANDONED_MS, LAUNCHING_MS,
-              DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD };`
+              DEFAULT_IDLE_MS };`
   )();
 }

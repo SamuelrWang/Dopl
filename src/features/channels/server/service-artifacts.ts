@@ -43,8 +43,8 @@ import {
  * is channel-scoped — it folds rows in `channel_messages`, which the room's own
  * membership already governs. Adding a container question to a channel read
  * would be the second authority §8 warns about. Nothing in this file weakens a
- * pin in `personal-reach.test.ts`, `personal-arming.test.ts` or the
- * resolve-resource tests; none of those paths is reached.
+ * pin in `personal-reach.test.ts` or the resolve-resource tests; none of those
+ * paths is reached.
  */
 
 /** The artifact ref did not resolve INSIDE this channel. ⚠ Never leaks whether

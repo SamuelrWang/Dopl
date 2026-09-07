@@ -39,6 +39,7 @@ import {
   postureSends,
   postureTools,
 } from "./settings-agent-harness";
+import { SETTINGS_HELP } from "./settings-help";
 
 afterEach(cleanup);
 
@@ -73,9 +74,18 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     // rows sat among durable settings, so the operator read them as one, picked
     // Bypass, and got manual/ask on every session after the first.
     // The rows are DURABLE now, so the honest heading names the ACT.
+    // ⚠ **AND BOTH GROUP HEADINGS ARE DELETED (2026-09-06, item 2), SO THIS CASE PINS
+    // WHERE THEIR SCOPE WENT RATHER THAN THAT THEY RENDER.** "When you launch an agent"
+    // and "For every session on this channel" carried scope for the rows beneath them;
+    // they stopped being RENDERED, and `settings-help.tsx › SETTINGS_HELP` carries each
+    // sentence on the row's own eye popover instead. The heading constant survives
+    // (`settings-agent-rows.tsx › LAUNCH_POSTURE_HEADING`) as the source of that copy.
+    // ⚠ THE ASSERTION THAT MATTERS IS UNCHANGED AND IS BELOW: the ARM's heading must not
+    // appear. A tab that stopped stating scope entirely is the regression this guards.
     const text = copy();
-    expect(text).toContain("When you launch an agent");
-    expect(text).toContain("For every session on this channel");
+    expect(text).not.toContain("When you launch an agent");
+    expect(text).not.toContain("For every session on this channel");
+    expect(SETTINGS_HELP["Tool use"].body).toContain("an agent you launch here");
     // ⚠ The arm's heading must NOT appear here — and since 2026-08-20 there is no
     // surface it could belong to instead: the arm is DELETED (F-233, Samuel's
     // ruling). This assertion outlived its subject on purpose, because the
@@ -167,8 +177,12 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
     expect(text).not.toContain("When you launch an agent");
     expect(screen.queryByText("Permissions")).toBeNull();
     expect(screen.queryByText("Sends")).toBeNull();
-    // The durable control survives — it is not desktop-gated.
-    expect(screen.getByRole("radio", { name: /Full access/ })).toBeTruthy();
+    // The durable control survives — it is not desktop-gated. ⚠ A `SelectMenu` since
+    // 2026-09-06 (item 6), so the check is its accessible name rather than a `radio`
+    // option: the three options exist only while the dropdown is open.
+    expect(
+      screen.getByLabelText("Tool access for agents on this channel")
+    ).toBeTruthy();
   });
 });
 

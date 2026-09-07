@@ -22,7 +22,11 @@ import {
   WorkspaceKeyPrivateTemplateError,
 } from "./errors";
 import * as repo from "./repository";
-import { getTemplateById, readTemplateById } from "./service-reads";
+import {
+  getTemplateById,
+  getTemplateForWrite,
+  readTemplateById,
+} from "./service-reads";
 // 🔒 THE ASKING SEAM, SPLIT OUT LIKE ITS KNOWLEDGE TWIN (`knowledge/server/
 // service-base-gates.ts`). Read that module's header for why it is NOT the same
 // function, and for what was open before it existed.
@@ -194,8 +198,12 @@ export async function updateTemplate(
 ): Promise<AgentTemplate> {
   // ⚠ 404 for an invisible template happens HERE, before the write gate, so a
   // 403 can only ever be returned for a row the caller already knew about.
-  const existing = await getTemplateById(ctx, id);
-  assertMayWrite(ctx, existing, "edit");
+  // 🔓 THE ID NAMES ITS OWN CONTAINER ON A WRITE (2026-09-06). `tplCtx` is where
+  // the row lives, with the caller's real role there; the row update, BOTH
+  // junction replacements, the grantable-teams check and the attachable-bases
+  // check all take it, because every one of them is workspace-keyed.
+  const { ctx: tplCtx, value: existing } = await getTemplateForWrite(ctx, id);
+  assertMayWrite(tplCtx, existing, "edit");
 
   const nextVisibility = patch.visibility ?? existing.visibility;
 
@@ -237,7 +245,7 @@ export async function updateTemplate(
   // already seen by the room, and making a rename acknowledge an audience it
   // did not touch would be a gate on the wrong verb.
   await assertSharedPublishAcknowledged({
-    workspaceId: ctx.workspaceId,
+    workspaceId: tplCtx.workspaceId,
     publishes: patch.visibility === "workspace",
     acknowledged: patch.acknowledgeShared,
     noun: "agent",
@@ -257,7 +265,7 @@ export async function updateTemplate(
     teamIds =
       nextVisibility === "team"
         ? await assertGrantableTeams(
-            ctx,
+            tplCtx,
             patch.teamIds ?? existing.teamIds,
             existing.teamIds
           )
@@ -267,7 +275,7 @@ export async function updateTemplate(
   const knowledgeBaseIds =
     patch.knowledgeBaseIds === undefined
       ? null
-      : await assertAttachableKnowledgeBases(ctx, patch.knowledgeBaseIds);
+      : await assertAttachableKnowledgeBases(tplCtx, patch.knowledgeBaseIds);
 
   // ⚠ A JUNCTION-ONLY PATCH TOUCHES NO SCALAR COLUMN, so it must not reach the
   // row write at all (F-404, 2026-09-02). `knowledgeBaseIds`-only and
@@ -298,24 +306,27 @@ export async function updateTemplate(
     visibility: patch.visibility,
   };
   if (Object.values(rowPatch).some((value) => value !== undefined)) {
-    await repo.updateTemplateRow(ctx.workspaceId, id, rowPatch);
+    await repo.updateTemplateRow(tplCtx.workspaceId, id, rowPatch);
   }
 
   // ⚠ REPLACE-SET, and it runs even for the empty set: leaving a template's
   // team links behind when it goes `private` would leave rows that come back to
   // life the moment somebody re-shares it to a different set of teams.
   if (teamIds !== null) {
-    await repo.replaceTeamLinks(ctx.workspaceId, id, teamIds, ctx.userId);
+    await repo.replaceTeamLinks(tplCtx.workspaceId, id, teamIds, ctx.userId);
   }
   if (knowledgeBaseIds !== null) {
     await repo.replaceKnowledgeLinks(
-      ctx.workspaceId,
+      tplCtx.workspaceId,
       id,
       knowledgeBaseIds,
       ctx.userId
     );
   }
-  return getTemplateById(ctx, id);
+  // ⚠ Re-read in the container the write landed in — keyed to the calling room
+  // it would 404 the RESPONSE for an edit that had just succeeded, which is the
+  // exact tell `createTemplate` above already had to fix on the create path.
+  return getTemplateById(tplCtx, id);
 }
 
 // ─── Delete ─────────────────────────────────────────────────────────────
@@ -330,9 +341,9 @@ export async function deleteTemplate(
   ctx: AgentTemplateContext,
   id: string
 ): Promise<void> {
-  const existing = await getTemplateById(ctx, id);
-  assertMayWrite(ctx, existing, "delete");
-  await repo.hardDeleteTemplate(ctx.workspaceId, id);
+  const { ctx: tplCtx, value: existing } = await getTemplateForWrite(ctx, id);
+  assertMayWrite(tplCtx, existing, "delete");
+  await repo.hardDeleteTemplate(tplCtx.workspaceId, id);
 }
 
 // ─── Gates ──────────────────────────────────────────────────────────────

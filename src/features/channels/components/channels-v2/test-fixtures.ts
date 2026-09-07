@@ -8,7 +8,9 @@
  */
 
 import { EMPTY_INFO_CARD } from "../../info-card";
-import { EMPTY_AGENT_POSTURE } from "../../lib/agent-posture";
+// ⚠ `EMPTY_AGENT_POSTURE` no longer imported (2026-09-06) — `Channel.agentPosture` is
+// deleted with the channel ceiling (items 12, 13, 14). The constant still EXISTS: it is
+// used by `lib/agent-posture-parity.test.ts`, which pins the desktop clamp.
 import type {
   Channel,
   ChannelMember,
@@ -49,8 +51,8 @@ export function channel(over: Partial<Channel> = {}): Channel {
     myFavoritedAt: null,
     onlineMemberCount: 1,
     infoCard: EMPTY_INFO_CARD,
-    agentPosture: EMPTY_AGENT_POSTURE,
-    defaultResponderAgentName: null,
+    // ⚠ `defaultResponderAgentName` LEFT THIS FIXTURE ON 2026-09-07 with the field (items 10
+    // and 11). The per-member replacement is on the MEMBER fixture, not this one.
     ...over,
   };
 }
@@ -64,6 +66,11 @@ export function member(over: Partial<ChannelMember> = {}): ChannelMember {
     lastReadAt: null,
     notifyScope: null,
     agentToolProfile: "full",
+    /** ⚠ THE VIEWER'S OWN ROW BY DEFAULT, so this reads as the setting rather than as the
+     *  privacy scrub — and it defaults to `last_addressed` because that is B1's ruling for a
+     *  member who never opened Settings. A PEER's row is `unaddressedResponder: null`
+     *  ("not yours to see"), which suites asserting the scrub must set explicitly. */
+    unaddressedResponder: "last_addressed",
     favoritedAt: null,
     agentOnline: true,
     lastSeenAt: new Date().toISOString(),

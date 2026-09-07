@@ -278,9 +278,13 @@ describe("H-3 write-gate coverage", () => {
       path.join(API_ROOT, "channels/[channelId]/route.ts"),
       "utf8"
     );
-    expect(src).toMatch(
-      /SESSION_ONLY_FIELDS\s*=\s*\[\s*"visibility",\s*"agentPosture",\s*"defaultResponderAgentName",?\s*\]/
-    );
+    // ⚠ ONE FIELD AGAIN SINCE 2026-09-07. `agentPosture` (items 12/13/14) and
+    // `defaultResponderAgentName` (items 10/11) both left this list because the FIELDS were
+    // deleted, NOT because either gate was relaxed — and the second one's protection is
+    // inherited rather than dropped: its per-member replacement is written through
+    // `PATCH /members`, which is `sessionOnly` for the whole method. The route's own docblock
+    // records both arguments in full so a reader cannot mistake a deletion for a widening.
+    expect(src).toMatch(/SESSION_ONLY_FIELDS\s*=\s*\[\s*"visibility",?\s*\]/);
     expect(src).toMatch(/auth\.agentTokenId/);
     expect(src).toMatch(/SESSION_REQUIRED/);
   });
@@ -296,29 +300,19 @@ describe("H-3 write-gate coverage", () => {
    * that decision cannot be skipped. (A pin on a symbol is not a pin — INVARIANTS
    * §14 — so it reads the schema's own shape.)
    */
-  it("ChannelUpdateSchema's fields are EXACTLY the seven gated ones", () => {
+  it("ChannelUpdateSchema's fields are EXACTLY the five gated ones", () => {
     // zod 4: `.refine()` adds a check to the same object type, so `.shape` is the
     // object's own field map (no ZodEffects wrapper to unwrap).
     expect(Object.keys(ChannelUpdateSchema.shape).sort()).toEqual(
-      // ⚠ `agentPosture` JOINED ON 2026-09-02 (A9 — G6/G7) AND THIS GATE IS WHY
-      // THE DECISION WAS MADE RATHER THAN INHERITED. It is SESSION-ONLY: it is
-      // the CEILING on what a launched agent may be granted here, so an agent
-      // credential able to raise it could widen its own successors' posture.
-      // ⚠ `defaultResponderAgentName` JOINED ON 2026-09-02 (B4 — ruling B6) AND
-      // IT IS SESSION-ONLY FOR `agentPosture`'s REASON, SHARPENED: it names the
-      // agent that answers every UNADDRESSED human message in the room, so an
-      // agent credential able to set it could nominate ITSELF and route the
-      // room's unaddressed work to its own session. The gate made the decision
-      // rather than letting it be inherited, which is what this case is for.
-      [
-        "agentPosture",
-        "archived",
-        "defaultResponderAgentName",
-        "infoCard",
-        "name",
-        "topic",
-        "visibility",
-      ].sort()
+      // ⚠ **IT WAS SEVEN AND IT IS FIVE (2026-09-06 and 2026-09-07).** `agentPosture` and
+      // `defaultResponderAgentName` are DELETED FIELDS, not ungated ones — the two settings
+      // this schema carried about OTHER members' agents are gone from the product, and both
+      // arguments for their gates are preserved verbatim in the route's docblock so a reader
+      // finding either name in history is not left guessing whether it was relaxed.
+      // ⚠ THE POINT OF THIS CASE IS UNCHANGED: a SIXTH field added to `ChannelUpdateSchema`
+      // would silently inherit the loose (member) gate unless somebody decides otherwise, and
+      // this assertion is what stops that decision being skipped.
+      ["archived", "infoCard", "name", "topic", "visibility"].sort()
     );
   });
 });

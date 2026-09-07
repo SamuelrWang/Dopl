@@ -4,6 +4,21 @@ import { SESSION_PROJECTION_FRESH_MS } from "../constants";
 
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
+/**
+ * ⚠ **PARTIAL, AND THAT IS LOAD-BEARING** (2026-09-07, items 10 and 11). RR3 grew a third input —
+ * the AUTHOR's own `channel_members.unaddressed_responder`, read through `./repository` — and a
+ * flat module mock would replace every other real read alongside it.
+ *
+ * ⚠ **AND IT IS NOT OPTIONAL, THOUGH THE SUITE WOULD "PASS" WITHOUT IT.**
+ * `unaddressedResponderFor` SWALLOWS a read error and answers the default, so an UNMOCKED
+ * repository reaches for a database that is not there — every case in this file timed out on that
+ * read — and, had it failed fast instead, the cases would have gone green by way of the catch
+ * block rather than by way of the setting. The harness seeds it in `beforeEach`.
+ */
+vi.mock("./repository", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository")>()),
+  findUnaddressedResponder: vi.fn(),
+}));
 
 import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
@@ -15,6 +30,7 @@ import {
   resolve,
   roomProjection,
   sessionRow,
+  unaddressedResponder,
 } from "./service-wake-verdict-harness";
 
 /**
@@ -42,6 +58,7 @@ beforeEach(() => {
   roomProjection();
   lastAddress(null);
   recentAgentPosts();
+  unaddressedResponder();
 });
 
 describe("RR1 — a thread reply with no `to` goes to the thread's other party", () => {
@@ -334,43 +351,17 @@ describe("RR2 — an unaddressed agent post in the main room goes back to whoeve
 });
 
 describe("RR3 — an unaddressed human message is answered by one agent", () => {
-  it("arm 1: the channel's configured DEFAULT RESPONDER wins", async () => {
-    roomProjection(
-      sessionRow({ id: "s-1", name: "k3v7d2mq" }),
-      sessionRow({ id: "s-2", name: "m8q1zzzz" })
-    );
-    const out = await resolve("can someone look at the build?", {}, {
-      channel: { default_responder_agent_name: "agent-m8q1zzzz" },
-    });
-    expect(out).toMatchObject({
-      verdict: "responder",
-      recipientAgentIds: ["m8q1zzzz"],
-      recipientUserIds: [],
-      delivery: "woken",
-    });
-  });
-
-  it("arm 1: the setting accepts the BARE handle too, through the one index", async () => {
-    roomProjection(
-      sessionRow({ id: "s-1", name: "k3v7d2mq" }),
-      sessionRow({ id: "s-2", name: "m8q1zzzz" })
-    );
-    const out = await resolve("hello", {}, {
-      channel: { default_responder_agent_name: "m8q1zzzz" },
-    });
-    expect(out.recipientAgentIds).toEqual(["m8q1zzzz"]);
-  });
-
-  it("arm 1: a renamed responder resolves by its SLUG", async () => {
-    roomProjection(
-      sessionRow({ id: "s-1", name: "k3v7d2mq" }),
-      sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Build Bot" })
-    );
-    const out = await resolve("hello", {}, {
-      channel: { default_responder_agent_name: "build-bot" },
-    });
-    expect(out.recipientAgentIds).toEqual(["m8q1zzzz"]);
-  });
+  // 🔒 **ARM 1 IS DELETED AND SO ARE ITS THREE CASES** (2026-09-06, Samuel's ruling on items 10
+  // and 11; INVARIANTS §5). They drove `channels.default_responder_agent_name` — a manager's
+  // ROOM-WIDE pin of one agent for everybody — through this resolver: that the pin won, that it
+  // accepted the bare handle as well as the `agent-<id>` form, and that a RENAMED agent resolved
+  // by its slug. The column is retired (`20260928130000`), it is off `ChannelRow`, and
+  // `lib/agent-mentions.ts › resolveDefaultResponder` has no arm that reads a handle at all.
+  // ⚠ WHAT REPLACED IT IS NOT A NARROWER PIN BUT A DIFFERENT QUESTION: the ASKING PERSON's own
+  // two-valued setting (`channel_members.unaddressed_responder`), read by
+  // `unaddressedResponderFor` and pinned in the `'none'` cases in this file — *"if there's
+  // another member in the room, their last agent address would be different from my last agent
+  // address"*. A repaired pin on the pin would be fake coverage.
 
   it("arm 2: exactly ONE live agent answers by itself — no setting needed", async () => {
     // ⚠ THIS IS WHY THE LLM TRIAGE LOOP GOES (B6). `tierFor` collapses to
@@ -384,16 +375,12 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
     });
   });
 
-  it("arm 2: a responder that is NOT LIVE degrades into the sole agent", async () => {
-    // The setting stores a handle and nothing enforces that it names a live
-    // session — an FK to `agent_templates` would be a cross-visibility
-    // reference. It degrades; it does not dangle.
-    roomProjection(sessionRow({ name: "k3v7d2mq" }));
-    const out = await resolve("morning", {}, {
-      channel: { default_responder_agent_name: "agent-gone1234" },
-    });
-    expect(out.recipientAgentIds).toEqual(["k3v7d2mq"]);
-  });
+  // 🔒 "arm 2: a responder that is NOT LIVE degrades into the sole agent" STOOD HERE AND IS
+  // DELETED with arm 1 (2026-09-06). It pinned that the configured handle DEGRADED rather than
+  // dangled — nothing enforced that the stored handle named a live session, deliberately, because
+  // an FK to `agent_templates` would have been a cross-visibility reference. No handle is stored
+  // any more, so there is nothing left to dangle; the sole-agent answer it degraded INTO is the
+  // case immediately above, which now stands on its own.
 
   it("arm 3: no live agent at all is `none` — an empty room is still an answer", async () => {
     const out = await resolve("morning");

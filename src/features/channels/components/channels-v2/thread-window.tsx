@@ -218,9 +218,14 @@ export function ChannelsV2ThreadWindow({
         scrollTarget={null}
         // ⚠ THE SAME POLL THIS WINDOW ALREADY MAKES for the peer-activity row, handed on so the
         // pop-out's composer offers the same @-chips the main pane does (2026-09-02, slice B10).
-        // ⚠ NO `defaultResponderAgentName`: this surface reads a THREAD, never the channel row, so
-        // it cannot state arm 1 and the recipient line falls to arm 2 (the room's one live agent).
-        // Understating the reach is the safe direction; a second channel read for one string is not.
+        // ⚠ **THIS SURFACE'S RECIPIENT LINE IS EXACT AGAIN AS OF 2026-09-07 (items 10 and 11).**
+        // It used to state one arm fewer than the main pane: it reads a THREAD and never the
+        // channel row, so it could not pass `defaultResponderAgentName` and RR3's configured arm
+        // was simply invisible here. Understating was the safe direction and the gap was
+        // accepted. The replacement setting is PER MEMBER and lives on the roster this window
+        // already loads (`useChannelMembers`), so there is nothing to hand over and nothing left
+        // to understate — and had it stayed a prop, the omission would now OVERSTATE, naming a
+        // responder for a member who had chosen "No one".
         liveAgents={peerSessions}
         peerActivity={
           <PeerActivityRow

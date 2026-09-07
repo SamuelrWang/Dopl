@@ -254,9 +254,17 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
     /aliasForModelId\(channelPrefs\.getLaunchModel\(entry\.channel\.id\)\)/, "the peer-triggered lane");
 });
 
-test("LAUNCH: an unknown stored model degrades to the CLI's own pick, never to argv", () => {
+test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to argv", () => {
   // Driven rather than asserted from source: the whole chain, id -> alias -> argv.
-  for (const junk of JUNK) assert.equal(model.modelArg(model.aliasForModelId(junk)), null, JSON.stringify(junk));
+  // ⚠ THE DEGRADATION TARGET MOVED 2026-09-06 (Samuel's back-fill ruling). This read "degrades to
+  // the CLI's own pick" and asserted `null` — no `--model` option at all — which stopped being
+  // true when "Default" was removed as an option and an unpicked channel was ruled to launch
+  // `LAUNCH_MODEL_FALLBACK`. What the case is really about is unchanged and is what still fails
+  // here: the junk itself must never reach argv.
+  const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
+  for (const junk of JUNK) {
+    assert.equal(model.modelArg(model.aliasForModelId(junk)), fallback, JSON.stringify(junk));
+  }
   for (const id of model.MODEL_IDS) {
     const arg = model.modelArg(model.aliasForModelId(id));
     assert.match(arg, /^[a-z]+$/, id);
@@ -302,14 +310,19 @@ test("LIVE: the SDK is told, and the pick is RECORDED for the next assembly", ()
   });
 });
 
-test("LIVE: an unknown value CLEARS the override rather than being refused", () => {
-  // "Let the CLI choose" is a legitimate thing to ask for, and is what an unset channel already
-  // does. `setModel(undefined)` is the SDK's own way to spell it.
+test("LIVE: an unknown value RESETS to the product default rather than being refused", () => {
+  // ⚠ THIS READ "CLEARS the override" AND PINNED `setModel(undefined)` — no `--model` option at
+  // all, the CLI's own pick. Samuel removed "Default" as an option on 2026-09-06 and ruled that
+  // an unpicked channel runs `LAUNCH_MODEL_FALLBACK`, so there is nothing left to clear TO: the
+  // live switch now hands the SDK the same model a fresh launch would spend. The property the
+  // case exists for is untouched — an unknown value is ACCEPTED and normalized, never refused —
+  // and `s.model` still records `'default'`, which is "no explicit pick", not a model name.
   const seen = [];
   const h = live({ query: { setModel: async (m) => { seen.push(m); } } });
   return h.fn({ ...address, model: "claude-opus-4-5" }).then((res) => {
     assert.deepEqual(res, { ok: true, model: "default" });
-    assert.deepEqual(seen, [undefined], "no --model option at all");
+    assert.deepEqual(seen, [model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK)],
+      "the product fallback, which is what an unpicked channel launches");
     assert.equal(h.s.model, "default");
   });
 });

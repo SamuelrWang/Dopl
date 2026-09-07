@@ -151,8 +151,25 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   // ⚠ ONE OP CARRIES ALL THREE NOW, the same one `isOwnChannelPost` matches: a marker, a thread
   // open and a decision card ARE posts, told apart by their arguments. The three CONSTANTS
   // survive because the three gate-diag ALLOW codes do.
-  assert.deepEqual(profiles.OWN_CHANNEL_OUTBOUND_OPS, ["send"]);
+  // ⚠ **AND A FOURTH MEMBER JOINED ON 2026-09-06 THAT IS NOT A `send` — THE ARTIFACT FOLD.** The
+  // union is no longer a list of one, which is why the SHAPE predicates ask the `send` half alone
+  // (`OWN_CHANNEL_SEND_OPS`) while the GATE asks the union. Pinned as two halves plus their
+  // concatenation so a name can never appear in the union without appearing in a half — that is
+  // how an op joins the allow set without an argument being written for it.
+  assert.deepEqual(profiles.OWN_CHANNEL_SEND_OPS, ["send"]);
+  assert.deepEqual(profiles.OWN_CHANNEL_ARTIFACT_OPS,
+    ["artifact.create", "artifact.add", "artifact.remove", "artifact.dissolve"]);
+  assert.deepEqual(profiles.OWN_CHANNEL_OUTBOUND_OPS,
+    profiles.OWN_CHANNEL_SEND_OPS.concat(profiles.OWN_CHANNEL_ARTIFACT_OPS));
   assert.ok(!READS.includes("send"), "the outbound op is not a read");
+  // ⚠ THE FOLD IS NOT A READ EITHER, and it is DOTTED for the reason `rooms` is: a bare
+  // `artifact` entry anywhere would carry every action the op grows later, unread and unargued.
+  for (const key of profiles.OWN_CHANNEL_ARTIFACT_OPS) {
+    assert.ok(!READS.includes(key), `${key} writes`);
+    assert.ok(key.startsWith("artifact."), `${key} is keyed <op>.<action>`);
+  }
+  assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("artifact"),
+    "the bare dispatcher is not on the lane — four named actions are");
 });
 
 test("M3: an own-channel read is ALLOWED under auto_inbound / auto_both and GATES under ask", () => {

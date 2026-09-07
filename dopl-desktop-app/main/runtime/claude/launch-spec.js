@@ -42,9 +42,6 @@ const sessionAuth = require('../../session-auth');
 const sessionOutbound = require('../../session-outbound');
 const sessionModel = require('../../session-model');
 const sessionCredential = require('../../session-credential');
-// 9a: the WIDEST default Dopl cap, imported rather than retyped — the brake below is derived from
-// it. `session-state.js` is pure (no requires of its own), so this cannot cycle.
-const { OPERATOR_TURN_CAP } = require('../../session-state');
 const { diag } = require('../../diag');
 
 // ── THE LOOP BRAKE — ⚠ ONE CONSTANT, EVERY PROFILE, EVERY SPAWN SHAPE ────────
@@ -79,22 +76,34 @@ const { diag } = require('../../diag');
 // budget's clothes — a `read_only` session that hit a lower ceiling would end
 // with a message about turns for a reason that was really about tools.
 //
-// ⚠ **THE 40× IS A RATIO, SO IT IS NOW WRITTEN AS ONE** (2026-09-05, task 9a).
-// It was the literal 1000 sized against a single 24-turn cap. The cap is now
-// issuer-keyed (`session-state.js › defaultTurnCap`: 200 at depth 0, 24 above
-// it), and a literal left at 1000 would have inverted the design stated above —
-// at the operator default that is 5 round-trips per Dopl turn, so under the
-// SECOND reading of `maxTurns` this BACKSTOP would start firing FIRST, killing
-// long sessions with `error_max_turns` (a dead session, not a paused one) for a
-// bound nobody asked for. Deriving it keeps the written property — ~40
-// round-trips per Dopl turn, cannot fire in an ordinary session — true at both
-// tiers, in one statement.
+// ⚠ **IT IS A LITERAL AGAIN, AND THE REASON IS THE WHOLE POINT OF THIS COMMENT**
+// (2026-09-07). It was `MAX_TURNS_FACTOR * OPERATOR_TURN_CAP` — 40 round-trips
+// per Dopl turn, derived so the ratio stayed true at both cap tiers. Samuel then
+// ruled the operator-facing turn and cost caps DELETED, which removes
+// `OPERATOR_TURN_CAP` from `session-state.js` entirely. Left derived, this line
+// would have evaluated to `NaN`, and `maxTurns: NaN` is NO BOUND AT ALL: the one
+// brake the ruling deliberately kept would have been deleted by the deletion,
+// silently, with nothing failing to say so.
+//
+// ⚠ **THIS IS NOT THE CAP THAT WAS REMOVED, AND THE DISTINCTION IS NOW THE ONLY
+// ONE LEFT.** Dopl's operator-visible ceiling is gone — nothing ends a session on
+// turn count or spend any more, by ruling. This is the runaway backstop for the
+// case the reducer never could see: a query that stops producing `result` events.
+// It is not settable, it is not per profile, and it is not a budget. Do not
+// re-expose it as one; the ceiling was removed on purpose and re-adding a knob
+// here would restore it under a different name.
+//
+// ⚠ **8000 IS WHAT THE DERIVATION EVALUATED TO** (40 × the old 200-turn operator
+// default), kept rather than re-picked so the ruling changed exactly one thing.
+// The sizing argument above still holds at this number: ~40 round-trips per Dopl
+// turn under one reading of `maxTurns`, far out of reach under the other, so it
+// cannot fire in an ordinary session. A smaller value would be a guess that kills
+// long sessions with `error_max_turns` — a dead session, not a paused one — which
+// is precisely the harm the deletion was meant to end.
 // ⚠ STILL ONE NUMBER ON EVERY SPAWN SHAPE, NOT A PER-SESSION VALUE: that is what
 // keeps "a park cannot shed the brake" and "every profile gets the same number"
-// true. It is sized against the WIDEST default cap this app hands out, so a
-// 24-cap session carries more headroom than it can spend.
-const MAX_TURNS_FACTOR = 40; // round-trips per Dopl turn (both readings, above)
-const SESSION_MAX_TURNS = MAX_TURNS_FACTOR * OPERATOR_TURN_CAP;
+// true.
+const SESSION_MAX_TURNS = 8000;
 
 function buildOptions(s, dispatch, emitQuiet) {
   const cfg = tools.buildSessionToolConfig(s.profile);

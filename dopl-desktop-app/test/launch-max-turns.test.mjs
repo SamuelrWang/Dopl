@@ -1,10 +1,19 @@
 // THE LOOP BRAKE — `maxTurns` on every spawn (2026-09-02, MCP/architecture v2 slice A10, G19).
 //
+// 🔒 **THIS FILE OUTLIVED ITS SIBLINGS ON PURPOSE, AND HERE IS WHY** (2026-09-07). Samuel ruled
+// the operator-facing turn and cost caps DELETED, and `turn-cap-issuer.test.mjs` went with them —
+// a repaired pin on a deleted feature is fake coverage. This one stays because the brake it pins
+// is NOT that cap: it is the SDK runaway backstop, the only bound left in this app, and the only
+// thing that now stops a looping agent at all. Deleting it alongside its siblings would be the
+// NaN trap with a one-refactor delay — the brake would sit unpinned until somebody tidied it away
+// and nothing failed. If you are here to remove a cap test, this is not one.
+//
 // ⚠ WHAT WAS BROKEN. "Respond and loop until the goal is met, then STOP" was in every turn
 // framing this app writes and was enforced by NOTHING: the SDK exposes `maxTurns` and this
 // runtime set it nowhere, so a query that stopped producing `result` events had no ceiling at
-// all. Dopl's own cap (`main/session-state.js › DEFAULT_TURN_CAP`) is counted by the REDUCER at
-// each `result`, which is exactly the event such a session never reaches.
+// all. Dopl's own cap was counted by the REDUCER at each `result`, which is exactly the event
+// such a session never reaches — and that cap is now gone, so this bound no longer has anything
+// firing ahead of it.
 //
 // ⚠ THE PROPERTY IS "ON EVERY SPAWN SHAPE", not "on a launch". A fresh launch, a parked resume,
 // a recreated shell and the post-sign-in relaunch ALL re-enter `buildOptions`, so proving it
@@ -28,7 +37,19 @@ const require = createRequire(import.meta.url);
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
 const SPEC = M("runtime/claude/launch-spec.js");
-const STATE = M("session-state.js");
+
+// ⚠ THE SOURCE ASSERTIONS BELOW READ **CODE**, NOT PROSE (2026-09-07). This file's own tombstones
+// name `OPERATOR_TURN_CAP` and `DEFAULT_TURN_CAP` — that is the record of why the brake is a
+// literal again, and it belongs in `launch-spec.js`'s header. A raw-source `doesNotMatch` cannot
+// tell a citation from a reference and failed on the comment that explains the very deletion it
+// is checking for, which would have been "fixed" by deleting the explanation. So the comments come
+// off first and the assertion keeps its full strength over everything that executes.
+const stripComments = (src) => src
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .split("\n")
+  .map((line) => line.replace(/(^|\s)\/\/.*$/, "$1"))
+  .join("\n");
+const SPEC_CODE = stripComments(SPEC);
 
 const shipped = (src, name) => {
   const m = new RegExp(`const ${name} = (\\d+);`).exec(src);
@@ -36,14 +57,12 @@ const shipped = (src, name) => {
   return Number(m[1]);
 };
 
-// ⚠ THE BRAKE IS DERIVED SINCE 2026-09-05 (task 9a), so this reads its two FACTORS out of the
-// shipped source and multiplies them here — the same "read it, never restate it" rule, one level
-// down. The Dopl cap is issuer-keyed now (`defaultTurnCap`: OPERATOR_TURN_CAP at depth 0,
-// DEFAULT_TURN_CAP above it), and the brake is sized against the wider of the two.
-const MAX_TURNS_FACTOR = shipped(SPEC, "MAX_TURNS_FACTOR");
-const OPERATOR_TURN_CAP = shipped(STATE, "OPERATOR_TURN_CAP");
-const DEFAULT_TURN_CAP = shipped(STATE, "DEFAULT_TURN_CAP");
-const SESSION_MAX_TURNS = MAX_TURNS_FACTOR * OPERATOR_TURN_CAP;
+// ⚠ READ OUT OF THE SHIPPED SOURCE, STILL — the rule survives the deletion even though the value
+// is a literal again. It was `MAX_TURNS_FACTOR * OPERATOR_TURN_CAP` and is now `8000`, because
+// `OPERATOR_TURN_CAP` no longer exists: left derived, the brake would have evaluated to `NaN`,
+// and `maxTurns: NaN` is no bound at all. Reading it here rather than restating it is what keeps
+// this file honest about whatever ships.
+const SESSION_MAX_TURNS = shipped(SPEC, "SESSION_MAX_TURNS");
 
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
@@ -96,27 +115,31 @@ test("EVERY PROFILE gets the same number — a tool profile is not a turn budget
   }
 });
 
-test("it is a RUNAWAY BACKSTOP: far above the cap the reducer actually enforces", () => {
-  // ⚠ THE ORDERING IS THE WHOLE DESIGN. `session-reducer.js` ends a session with `turn_cap` at
-  // DEFAULT_TURN_CAP and tells the operator so; that stays the real, visible limit and fires
-  // first. This one exists only for the case the reducer cannot see — a query that never reaches
-  // another `result` event — and the SDK's answer when it fires is `error_max_turns`, a DEAD
-  // session rather than a paused one. A value near the reducer's cap would start killing long
-  // sessions for a bound nobody asked for.
-  // ⚠ AND IT IS MEASURED AGAINST THE WIDEST DEFAULT, NOT THE NARROWEST (task 9a). The cap is
-  // issuer-keyed, so a literal sized against the 24 would sit 5× above the 200 an operator-
-  // launched session gets — close enough to fire first under the `AgentDefinition.maxTurns`
-  // reading, which is the one failure this bound must never be the cause of.
+test("it is a RUNAWAY BACKSTOP and not a ceiling — nothing fires ahead of it now", () => {
+  // ⚠ THE ORDERING USED TO BE THE WHOLE DESIGN, AND THE ORDER IS NOW A LIST OF ONE. The reducer
+  // ended a session at the Dopl cap and told the operator so; that was the real, visible limit
+  // and it fired first. It is deleted (2026-09-07), so this bound is no longer the second line of
+  // defence — it is the only one, and the SDK's answer when it fires is `error_max_turns`, a DEAD
+  // session rather than a paused one.
+  // ⚠ WHICH IS WHY THE FLOOR MATTERS MORE THAN IT USED TO. A value low enough to be reached in
+  // ordinary work would now kill long sessions with nothing having warned them, and the deletion
+  // was RULED precisely to stop marathon workers being killed by a ceiling. 8000 is what the old
+  // derivation evaluated to (40 × the retired 200-turn default), kept rather than re-picked.
   assert.ok(
-    SESSION_MAX_TURNS > OPERATOR_TURN_CAP * 10,
-    `SESSION_MAX_TURNS (${SESSION_MAX_TURNS}) must stay well above OPERATOR_TURN_CAP (${OPERATOR_TURN_CAP})`
+    SESSION_MAX_TURNS >= 2000,
+    `SESSION_MAX_TURNS (${SESSION_MAX_TURNS}) is low enough to fire in ordinary work`
   );
-  assert.ok(SESSION_MAX_TURNS > DEFAULT_TURN_CAP * 10, "…and above the agent-issued default too");
-  // ⚠ DERIVED, NOT RESTATED: a future edit that pins it back to a literal silently re-breaks the
-  // ratio the moment either default moves, which is exactly how it broke here.
+  // ⚠ A LITERAL, AND THE TEST SAYS SO OUT LOUD. It was derived, and the derivation's factor was
+  // deleted with the caps — so this asserts the shape that ships rather than the one that used
+  // to. If somebody re-derives it from a constant that no longer exists, this fails instead of
+  // the app silently launching with `maxTurns: NaN`.
   assert.match(
-    SPEC, /const SESSION_MAX_TURNS = MAX_TURNS_FACTOR \* OPERATOR_TURN_CAP;/,
-    "the brake stopped being derived from the widest Dopl cap"
+    SPEC_CODE, /const SESSION_MAX_TURNS = \d+;/,
+    "the brake must be a self-contained literal — see this file's header"
+  );
+  assert.doesNotMatch(
+    SPEC_CODE, /OPERATOR_TURN_CAP|DEFAULT_TURN_CAP/,
+    "the brake must not reference a deleted cap constant"
   );
 });
 

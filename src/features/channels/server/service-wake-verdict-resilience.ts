@@ -2,13 +2,22 @@ import "server-only";
 import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
 import type { ChannelMessageCreateInput } from "../schema";
 import {
+  normalizeUnaddressedResponder,
   resolveDefaultResponder,
+  UNADDRESSED_RESPONDER_DEFAULT,
   type ResponderChoice,
+  // 2026-09-06 (items 10/11): the per-member setting that replaced the room-wide pin.
+  type UnaddressedResponderSetting,
 } from "../lib/agent-mentions";
 import { authorAgentIdOf, recentAgentsAddressedBy } from "../lib/agent-post-stamp";
 import type { SessionStateRow } from "./collab-dto";
-import type { ChannelRow } from "./dto";
+// ⚠ `ChannelRow` LEFT THIS IMPORT ON 2026-09-07 with the room-wide pin that was its only
+// reader (see `defaultResponder`'s docblock below, which keeps the record of the parameter).
 import * as repoMessages from "./repository-messages";
+// 2026-09-06 (items 10/11): `findUnaddressedResponder` — the author's own setting, read on the
+// RR3 branch only. The channel repository owns `channel_members`; there is no members-only
+// module and this change was not the place to mint one.
+import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 import type { ChannelContext } from "./service-shared";
 
@@ -282,31 +291,78 @@ export async function reciprocalParty(
  * behaviour changed; this function's own tests still drive it.
  */
 export async function defaultResponder(
-  channel: ChannelRow,
+  /**
+   * ⚠ **THE ASKING MEMBER'S OWN SETTING, NOT THE CHANNEL'S** (2026-09-06, Samuel's ruling on
+   * items 10 and 11). This parameter was `channel: ChannelRow`, read for its room-wide
+   * `default_responder_agent_name`. The question is per-person now — *"if there's another
+   * member in the room, their last agent address would be different from my last agent
+   * address"* — so the caller supplies the AUTHOR's `channel_members.unaddressed_responder`.
+   *
+   * ⚠ **THE CALLER COERCES; THIS SIGNATURE TAKES NO NULL.** `normalizeUnaddressedResponder`
+   * exists so "I could not read the column" cannot arrive here spelled as "this member chose
+   * nobody" — the two are opposite answers and only one of them silences a person.
+   *
+   * ⚠ **THE CHANNEL ROW IS NO LONGER NEEDED AT ALL** — nothing else here read it.
+   */
+  setting: UnaddressedResponderSetting,
   sessions: readonly SessionStateRow[],
-  /** Arm 3's input, fetched only if arms 1, 2 and 4's ordering leave it needed.
-   *  A thunk rather than a value because the read is the arm's whole cost. */
+  /** Arm 3's input, fetched only if the earlier arms leave it needed. A thunk rather than a
+   *  value because the read is the arm's whole cost. */
   recent: () => Promise<string[]>
 ): Promise<ResponderChoice | null> {
+  // ⚠ **"No one" COSTS NOTHING AND TOUCHES NOTHING.** `resolveDefaultResponder` short-circuits
+  // on its own first line too, so this is belt-and-braces — but it also means a member who has
+  // opted out never pays for `launchOrder` or the session mapping, and can never reach the
+  // lazy read below. The cheap path and the honoured-selection path are the same path.
+  if (setting === "none") return null;
   const candidates = launchOrder(sessions).map((row) => ({
     agentId: row.name,
     displayName: row.display_name,
   }));
-  const settled = resolveDefaultResponder(
-    channel.default_responder_agent_name,
-    candidates
-  );
+  const settled = resolveDefaultResponder(setting, candidates);
   // ⚠ `most recently launched` IS THE ONLY ANSWER ARM 3 CAN IMPROVE ON — every
-  // other reason means the room settled it without needing to know who spoke
-  // last, so the read is not issued at all.
+  // other reason means the room settled it without needing to know who the author
+  // addressed last, so the read is not issued at all.
   if (settled === null || settled.reason !== "most recently launched") {
     return settled;
   }
-  return resolveDefaultResponder(
-    channel.default_responder_agent_name,
-    candidates,
-    await recent()
-  );
+  return resolveDefaultResponder(setting, candidates, await recent());
+}
+
+/**
+ * **THE ASKING MEMBER'S OWN "unaddressed messages" SETTING** (2026-09-06, Samuel's ruling on
+ * items 10 and 11) — one keyed lookup on `(channel_id, user_id)`.
+ *
+ * ⚠ **IT LIVES HERE, WITH THE OTHER RESILIENCE READS**, because it is one of them: RR3's inputs
+ * are the room's live sessions, the author's recent tags, and now the author's own setting.
+ * Putting it in the verdict file would split one rule's reads across two modules.
+ *
+ * ⚠ **IT FAILS TO THE DEFAULT, NEVER TO `"none"`, AND THAT DIRECTION IS THE WHOLE POINT.** The
+ * reflex is that the narrow answer is the safe one; here it is the opposite. `"none"` means
+ * "this person's untagged messages reach nobody", so a missing row, an unreadable column or a
+ * transient database error would SILENTLY STOP ANSWERING a member who never chose that — and
+ * they would have no way to tell, because the failure looks exactly like the setting working.
+ * `normalizeUnaddressedResponder` owns the coercion; this function must not grow a second one.
+ *
+ * ⚠ **A MISSING ROW IS NOT AN ERROR HERE.** RR3 only runs for a post that was accepted, so the
+ * author is a member — but a race (a member removed between the write and the verdict) must not
+ * throw on the post path. Absent reads as the default, which is what a member who never opened
+ * Settings has anyway.
+ */
+export async function unaddressedResponderFor(
+  channelId: string,
+  userId: string
+): Promise<UnaddressedResponderSetting> {
+  try {
+    return normalizeUnaddressedResponder(
+      await repo.findUnaddressedResponder(channelId, userId)
+    );
+  } catch {
+    // ⚠ SWALLOWED DELIBERATELY, AND ONLY HERE. The post has already been written; failing the
+    // verdict over a settings read would turn a degraded lookup into a lost message. The
+    // fail-safe is the default, per the block above.
+    return UNADDRESSED_RESPONDER_DEFAULT;
+  }
 }
 
 /**

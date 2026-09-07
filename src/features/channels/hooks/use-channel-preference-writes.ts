@@ -16,9 +16,12 @@ import {
   dropConsentRequest,
   setFavorite,
   setToolProfile,
+  setUnaddressedResponder,
   type ChannelsCache,
   type ConsentCache,
+  type MembersCache,
 } from "../lib/optimistic-cache";
+import type { UnaddressedResponderSetting } from "../lib/agent-mentions";
 import type {
   AgentToolProfile,
   ChannelConsentRequest,
@@ -77,6 +80,18 @@ function failed(err: unknown, fallback: string) {
 export interface ToolProfileDraft {
   channelId: string;
   profile: AgentToolProfile;
+}
+/**
+ * ⚠ **NO MEMBER IN THE DRAFT, ON `FavoriteDraft`'s TERMS** (2026-09-07, items 10 and 11): the
+ * route writes `ctx.userId`'s row and `ChannelMemberSelfUpdateSchema` carries no member field,
+ * so there is nothing here for a caller to point somewhere else — and the optimistic patch
+ * finds the viewer's row through the DTO's own privacy scrub rather than an id.
+ *
+ * ⚠ **THE DESIRED STATE, never a toggle verb** — two clicks racing must converge.
+ */
+export interface UnaddressedResponderDraft {
+  channelId: string;
+  setting: UnaddressedResponderSetting;
 }
 export interface ConsentDraft {
   id: string;
@@ -144,6 +159,41 @@ export function useChannelPreferenceWrites({
   );
 
   /**
+   * **WHO ANSWERS THE CALLER'S OWN UNADDRESSED MESSAGES HERE** (2026-09-07, Samuel's ruling on
+   * items 10 and 11) — the per-member replacement for the room-wide default responder.
+   *
+   * ⚠ **IT IS ON `PATCH /members` RATHER THAN `PATCH /channels/[id]`, WHICH IS THE RULING AND
+   * NOT A ROUTING CHOICE.** The old field was a MANAGER's decision about everybody; this one is
+   * a member's decision about themselves, so it rides the route whose schema carries no member
+   * identifier at all. ⚠ It also inherits that route's `sessionOnly: true` — the protection the
+   * deleted field had as a `SESSION_ONLY_FIELDS` entry is kept, not dropped: an agent
+   * credential still cannot set who answers its operator's untagged messages.
+   *
+   * ⚠ **IT PATCHES THE ROSTER, NOT THE CHANNEL LIST**, unlike the two writes above — the value
+   * lives on the member row, and it is the roster the composer's recipient line reads. That is
+   * also why the paint is worth having: the line must stop naming an agent the instant "No one"
+   * is chosen, or the control and the prediction contradict each other on screen.
+   */
+  const unaddressedResponder = useApiMutationWith<
+    UnaddressedResponderDraft,
+    { member: ChannelMember }
+  >(channelRequest, {
+    request: (draft) => ({
+      path: channelMembersPath(draft.channelId),
+      method: "PATCH",
+      workspaceId,
+      body: { unaddressedResponder: draft.setting },
+    }),
+    optimistic: (draft) =>
+      patchCache<MembersCache>(channelKeys.members(draft.channelId).all, (cache) =>
+        setUnaddressedResponder(cache, draft.setting)
+      ),
+    invalidate: (draft) => [channelKeys.members(draft.channelId).all],
+    settleWith: gate,
+    onError: (err) => failed(err, "Couldn't update who answers you"),
+  });
+
+  /**
    * SEND OR CANCEL an outbound draft — the CAS'd `PATCH /consent/[id]`.
    *
    * ⚠ ITS INBOUND CALLERS ARE GONE (Samuel, 2026-08-22). The transcript card's
@@ -181,5 +231,6 @@ export function useChannelPreferenceWrites({
     onError: (err) => failed(err, "Couldn't record decision"),
   });
 
-  return { toolProfile, favorite, consent };
+  // ⚠ THE COUNT IS FOUR SINCE 2026-09-07 — read the return, not the header paragraph.
+  return { toolProfile, favorite, unaddressedResponder, consent };
 }

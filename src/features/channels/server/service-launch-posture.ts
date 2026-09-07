@@ -1,9 +1,11 @@
 import "server-only";
 import { resolveAgentModelId } from "../lib/agent-models";
-import { chainRefused, clampPosture, resolveChain } from "../lib/agent-posture";
+// ⚠ 2026-09-06 (items 12, 13, 14): `chainRefused` / `clampPosture` / `resolveChain` and
+// `mapAgentPosture` are no longer imported, and `ChannelAgentChainForbiddenError` is no longer
+// thrown from anywhere. See the note over `resolveDirectivePosture` — including why the three
+// `lib/agent-posture.ts` helpers are left in place rather than deleted from inside this ticket.
 import type { LaunchMessageMode, LaunchToolMode } from "../types";
-import { mapAgentPosture, type ChannelRow } from "./dto";
-import { ChannelAgentChainForbiddenError } from "./errors";
+import { type ChannelRow } from "./dto";
 
 /**
  * **THE CREATE'S FIFTH GATE: WHAT THE SERVER PERMITS A LAUNCH TO ASK FOR**
@@ -38,11 +40,32 @@ export interface DirectivePosture {
 }
 
 /**
- * ⚠ **CHAIN IS CHECKED BEFORE THE CLAMP**, so a refusal is never reported as a
- * narrowing — and it REFUSES where the two mode axes CLAMP. That asymmetry is the
- * desktop's own: a clamped posture still produces a working agent under more
- * supervision, while a clamped chain produces one that hits a bound it was told it
- * did not have, mid-run, after the caller handed it work assuming workers.
+ * ── ⚠ **THE CLAMP AND THE CHAIN REFUSAL ARE DELETED (2026-09-06, Samuel's rulings on items
+ * 12, 13 and 14 — *"make sure all the logic is deleted"*).** ──────────────────────────────
+ *
+ * WHAT THIS FUNCTION USED TO DO, because the absence should not have to be reconstructed:
+ * it read the channel's three ceiling columns and (1) THREW `ChannelAgentChainForbiddenError`
+ * when a directive asked for `chain: true` in a room whose manager had forbidden it, and
+ * (2) CLAMPED the requested tool and message modes down to the room's recorded maxima.
+ *
+ * ⚠ **CHAIN WAS CHECKED BEFORE THE CLAMP, AND IT REFUSED WHERE THE MODES NARROWED.** That
+ * asymmetry was the desktop's own and is worth preserving in the record: a clamped posture
+ * still produces a working agent under more supervision, while a clamped chain produces one
+ * that hits a bound it was told it did not have, mid-run, after its caller handed it work
+ * assuming workers. Both behaviours are gone; a directive now gets exactly the posture it
+ * asked for.
+ *
+ * ⚠ **THE PARITY PAIR IS BROKEN ON PURPOSE AND SOMEBODY MUST FINISH IT.** `lib/agent-posture.ts`
+ * held the SECOND COPY of the desktop's clamp — `clampPosture`, `chainRefused`, `resolveChain`
+ * — and `lib/agent-posture-parity.test.ts` drove both implementations over every pair, because
+ * neither tree can import the other. With this call site gone those three functions have no
+ * server reader. They are NOT deleted here: the desktop half still exists, and removing one
+ * side of a pinned pair from inside the other side's ticket is how a parity test becomes a
+ * tautology. Flagged in the report rather than done quietly.
+ *
+ * ⚠ **WHAT SURVIVES IS G8 — THE MODEL ECHO — AND IT IS NOT A GATE.** It never clamped
+ * anything; it tells the caller which model this server recognised while the raw value still
+ * reaches the machine. None of the three rulings touched it.
  */
 export function resolveDirectivePosture(
   channel: ChannelRow,
@@ -53,13 +76,18 @@ export function resolveDirectivePosture(
     model?: string;
   }
 ): DirectivePosture {
-  const ceiling = mapAgentPosture(channel);
-  if (chainRefused(input.chain, ceiling)) throw new ChannelAgentChainForbiddenError();
-  const { tools, messages } = clampPosture(input, ceiling);
+  // ⚠ `channel` IS NOW UNREAD, AND THE PARAMETER STAYS. Every caller has the row in hand and
+  // the signature is the create's fifth gate; dropping it would churn call sites for a
+  // function that may well need the row again. Named with a leading underscore would be the
+  // alternative, and this file's own convention is to keep the name and say why.
+  void channel;
   return {
-    tools,
-    messages,
-    chain: resolveChain(input.chain, ceiling),
+    // ⚠ THE REQUEST, UNNARROWED. `null` here means "this server records no opinion", which is
+    // now the only answer it can give — and it is exactly what a channel with no ceiling
+    // written has always produced, so the shape on the wire is unchanged.
+    tools: input.tools ?? null,
+    messages: input.messages ?? null,
+    chain: input.chain ?? null,
     model: resolveAgentModelId(input.model),
   };
 }

@@ -126,14 +126,34 @@ describe("the agent namespace", () => {
     });
   });
 
-  it("an AMBIGUOUS slug fails closed — two agents, one name, neither resolves", async () => {
+  // ⚠ **THIS PINNED THE OPPOSITE UNTIL 2026-09-07** — *"an AMBIGUOUS slug fails closed — two
+  // agents, one name, neither resolves"* — and the red WAS the ruling arriving. Samuel, verbatim:
+  // *"if coder exists, then other slugs will be coder-1, coder-2, coder-3"*. Failing closed cost
+  // an address a RENAME could take from an agent that was never renamed, and across members:
+  // the server builds this index over the room's live rows whoever runs them, so one member
+  // could withdraw another's agent from addressing by naming their own agent after it. The rule
+  // and its argument live in `lib/agent-mentions.ts › buildAgentMentionIndex` PASS 2, pinned in
+  // `lib/agent-handle-shadowing.test.ts`; this is the SERVER end of the same contract.
+  it("a contested slug MINTS rather than failing closed — first claimant keeps it, second wears `-1`", async () => {
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
       sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
       sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" }),
     ]);
-    await expect(resolveToRecipient(HUMAN, CHANNEL, "@bot")).rejects.toBeInstanceOf(
-      ChannelRecipientUnresolvedError
-    );
+    // ⚠ CLAIM ORDER IS THE CALLER'S, which here is the session-row order the repository answered.
+    expect(await resolveToRecipient(HUMAN, CHANNEL, "@bot")).toEqual({
+      kind: "agent",
+      agentId: "k3v7d2mq",
+    });
+    expect(await resolveToRecipient(HUMAN, CHANNEL, "@bot-1")).toEqual({
+      kind: "agent",
+      agentId: "m8q1zzzz",
+    });
+    // ⚠ AND THE ID FORM IS UNMOVED — pass 1 claims it before any name is looked at, so neither
+    // agent can lose the handle that "cannot stop working".
+    expect(await resolveToRecipient(HUMAN, CHANNEL, "@agent-m8q1zzzz")).toEqual({
+      kind: "agent",
+      agentId: "m8q1zzzz",
+    });
   });
 });
 
@@ -229,12 +249,20 @@ describe("🔒 the refusal lists what the caller can actually reach", () => {
     expect(all.members).toEqual(["ada@example.com", "me@example.com"]);
   });
 
-  it("lists the ID form, never a contested slug — a refusal must not teach a second refusal", async () => {
+  // ⚠ **THE HANDLE THAT DRIVES THIS CHANGED ON 2026-09-07, THE ASSERTION DID NOT.** It used to
+  // ask `@bot` over two agents both named "Bot", because a contested slug REFUSED; it now mints
+  // (`@bot` / `@bot-1`, pinned above), so a contested name no longer produces a refusal to
+  // inspect. The invariant this case exists for is untouched and still worth its own test —
+  // **a refusal lists the ID FORM, never a slug** — so it is driven by a handle that genuinely
+  // reaches nobody, with the same two agents live. ⚠ The id form is the only spelling safe to
+  // suggest: it is permanent, whereas a `-1` suffix is positional over the live set.
+  it("lists the ID form, never a slug — a refusal must not teach a second refusal", async () => {
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
       sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
       sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" }),
     ]);
-    const err = await resolveToRecipient(HUMAN, CHANNEL, "@bot").catch((e) => e);
+    const err = await resolveToRecipient(HUMAN, CHANNEL, "@nobody").catch((e) => e);
+    expect(err).toBeInstanceOf(ChannelRecipientUnresolvedError);
     expect(err.liveHandles).toEqual(["agent-k3v7d2mq", "agent-m8q1zzzz"]);
   });
 

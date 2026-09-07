@@ -81,6 +81,18 @@ function isOutboundPost(name, input, sessionChannelId) {
 // windowless far more often than not — and without this predicate a gated one raises the dock's
 // `permission_request`, which `claimGate` denies outright. The agent would be told "this session
 // has no surface to show one on" about the one call whose entire purpose is to reach a surface.
+// ⚠ **THE ARTIFACT FOLD IS ON THE OUTBOUND LANE AND IS DELIBERATELY NOT HERE (2026-09-06).** It
+// joined `OWN_CHANNEL_OUTBOUND_OPS` in the same change, so the symmetry is inviting and it is
+// wrong: this payload is a DRAFTED REPLY the operator reads and SENDS — it carries `text:
+// input.body` and `consent.notifyOutbound` says "Your agent drafted a reply: …" over a Send
+// button. An `artifact` call has no `body` in its schema at all, so routing one here would raise
+// an empty draft with a Send button that posts nothing, which is a worse surface than the dock's
+// and a false statement about what the agent asked for. A gated fold correctly takes the
+// `permission_request` path, which since 2026-08-31 HOLDS behind a banner with an Allow rather
+// than denying (`session-windowless.js › bridgeToolGate`) — so the F-321 harm this predicate
+// exists to prevent does not apply to it. ⚠ That path's own weakness (the banner is the only
+// decision surface it has) is a SEPARATE, still-open defect; see the report accompanying this
+// change. Do not close it by adding a bodyless op to this list.
 function outboundConsentShape(name, input, sessionChannelId) {
   if (!isChannelTool(name)) return false;
   return isOutboundPost(name, input, sessionChannelId)

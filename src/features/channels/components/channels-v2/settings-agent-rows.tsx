@@ -24,6 +24,11 @@
  */
 
 import type { ReactNode } from "react";
+// ⚠ 2026-09-06 (item 15). This file is still the ROW VOCABULARY and still decides
+// nothing — the eye is a rendering concern like every other recipe here, and its
+// COPY lives in `settings-help.tsx` so the table and the components that use it
+// change on one clock.
+import { SETTINGS_HELP, SettingHelp } from "./settings-help";
 import type { AgentToolProfile } from "../../types";
 
 /**
@@ -125,10 +130,24 @@ export function SettingRow({
   name: string;
   children: ReactNode;
 }) {
+  // ⚠ THE EYE IS LOOKED UP, NOT PASSED (2026-09-06, item 15). Keying on the row's
+  // own rendered NAME means every row built from this recipe gets its explanation
+  // for free and a renamed row loses its eye VISIBLY — an omission you can see —
+  // rather than keeping a stale sentence under a new label. A row with no entry
+  // renders no eye at all, which is the same no-dead-rows direction this tab takes
+  // everywhere else.
+  const help = SETTINGS_HELP[name];
   return (
     <div className="flex min-h-[32px] items-center gap-2">
-      <span className="shrink-0 text-body font-medium text-text-primary">
-        {name}
+      <span className="flex shrink-0 items-center gap-1">
+        <span className="text-body font-medium text-text-primary">{name}</span>
+        {/* ⚠ BESIDE THE NAME, NOT FLOATED OVER THE ROW. Samuel asked for "a little
+            eye in the top right of it" — of the ITEM. These rows are ONE LINE
+            (`settings-agent-rows.tsx › SettingRow`: the 380px panel is why the
+            control sits beside the name), so the item's own top-right IS the end of
+            its label; floating it against the row's right rail would put it on top
+            of the control instead. */}
+        {help && <SettingHelp name={name} copy={help} />}
       </span>
       <span className="flex min-w-0 flex-1 justify-end">{children}</span>
     </div>

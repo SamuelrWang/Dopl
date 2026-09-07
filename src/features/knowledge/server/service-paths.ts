@@ -26,7 +26,7 @@ import {
 import * as repo from "./repository";
 import { scheduleEntryEmbedding } from "./embeddings";
 import { assertAgentCanDelete, assertBaseWritable, errorCode } from "./service-shared";
-import { getBaseById, readBaseInContext } from "./service-bases";
+import { getBaseForWrite, readBaseInContext } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
 
 /**
@@ -83,8 +83,8 @@ export async function readFileByPath(
   // the WORKSPACE-KEYED lookup instead, so the same id answered
   // `KNOWLEDGE_BASE_MISMATCH` here — a base you could open and could not read,
   // F-604's shape one layer up. ⚠ **READ ONLY**: every write below keeps
-  // `getBaseById`, because a write that follows an id across a tenancy boundary
-  // is a ruling nobody has made (INVARIANTS §T35).
+  // `getBaseForWrite`, which follows the same id and hands back the same landed
+  // context — the write half of the ruling, made 2026-09-06 (INVARIANTS §T35).
   const { ctx: baseCtx, value: base } = await readBaseInContext(ctx, baseId);
   const resolved = await resolvePath(baseCtx, base.id, path);
   if (resolved.kind === "not_found") {
@@ -123,15 +123,20 @@ export async function writeFileByPath(
   path: string,
   input: WriteFileByPathInput = {}
 ): Promise<WriteFileByPathResult> {
-  const base = await getBaseById(ctx, baseId);
-  await assertBaseWritable(ctx, base);
+  // 🔓 THE WRITE FOLLOWS THE ID (2026-09-06). `baseCtx` is the base's own
+  // container: the path walk, the storage gate, the folder scaffolding and the
+  // insert are ALL workspace-keyed, so every one of them takes it. Resolving the
+  // path against `ctx` after gating on a followed base would look up the tree in
+  // a container the base is not in and read an empty one.
+  const { ctx: baseCtx, value: base } = await getBaseForWrite(ctx, baseId);
+  await assertBaseWritable(baseCtx, base);
 
   const segments = parsePath(path);
   if (segments.length === 0) {
     throw new KnowledgePathConflictError(path);
   }
 
-  const resolved = await resolvePath(ctx, base.id, path);
+  const resolved = await resolvePath(baseCtx, base.id, path);
   if (resolved.kind === "folder" || resolved.kind === "root") {
     throw new KnowledgePathConflictError(path);
   }
@@ -159,7 +164,7 @@ export async function writeFileByPath(
     // column ⇒ no delta; shrink is negative and always allowed.
     if (merged.body !== undefined) {
       await assertStorageHeadroom(
-        ctx,
+        baseCtx,
         base,
         bodyBytes(merged.body) - bodyBytes(resolved.entry.body)
       );
@@ -217,13 +222,13 @@ export async function writeFileByPath(
 
   // ⚠ Storage gate BEFORE mkdir -p: refusing after creating parents leaves
   // empty scaffolding for a write that never landed.
-  await assertStorageHeadroom(ctx, base, bodyBytes(createdBody));
+  await assertStorageHeadroom(baseCtx, base, bodyBytes(createdBody));
 
-  const parentFolder = await ensureFolderPath(ctx, base.id, parentSegments);
+  const parentFolder = await ensureFolderPath(baseCtx, base.id, parentSegments);
   let created;
   try {
     created = await repo.insertEntry({
-      workspaceId: ctx.workspaceId,
+      workspaceId: baseCtx.workspaceId,
       knowledgeBaseId: base.id,
       folderId: parentFolder?.id ?? null,
       title: input.title ?? leafName,
@@ -289,20 +294,20 @@ export async function createFolderByPath(
   path: string,
   description?: string | null
 ): Promise<KnowledgeFolder> {
-  const base = await getBaseById(ctx, baseId);
-  await assertBaseWritable(ctx, base);
+  const { ctx: baseCtx, value: base } = await getBaseForWrite(ctx, baseId);
+  await assertBaseWritable(baseCtx, base);
 
   const segments = parsePath(path);
   if (segments.length === 0) {
     throw new KnowledgePathConflictError(path);
   }
 
-  const resolved = await resolvePath(ctx, base.id, path);
+  const resolved = await resolvePath(baseCtx, base.id, path);
   if (resolved.kind === "entry") {
     throw new KnowledgePathConflictError(path);
   }
 
-  const folder = await ensureFolderPath(ctx, base.id, segments);
+  const folder = await ensureFolderPath(baseCtx, base.id, segments);
   if (!folder) throw new KnowledgePathConflictError(path);
   // Only when supplied, so plain mkdir-p re-call never clobbers a description.
   if (description !== undefined) {
@@ -321,11 +326,11 @@ export async function deleteByPath(
   baseId: string,
   path: string
 ): Promise<{ kind: "folder" | "entry"; id: string }> {
-  const base = await getBaseById(ctx, baseId);
+  const { ctx: baseCtx, value: base } = await getBaseForWrite(ctx, baseId);
   // F-10: block agent deletes in a base read-only to agents.
   assertAgentCanDelete(ctx, base);
-  await assertBaseWritable(ctx, base);
-  const resolved = await resolvePath(ctx, base.id, path);
+  await assertBaseWritable(baseCtx, base);
+  const resolved = await resolvePath(baseCtx, base.id, path);
   if (resolved.kind === "root") {
     throw new KnowledgePathConflictError("Cannot delete the base root.");
   }
@@ -333,10 +338,10 @@ export async function deleteByPath(
     throw new PathTraversalError(path, resolved.missingSegment);
   }
   if (resolved.kind === "folder") {
-    await repo.hardDeleteFolder(ctx.workspaceId, resolved.folder.id);
+    await repo.hardDeleteFolder(baseCtx.workspaceId, resolved.folder.id);
     return { kind: "folder", id: resolved.folder.id };
   }
-  await repo.hardDeleteEntry(ctx.workspaceId, resolved.entry.id);
+  await repo.hardDeleteEntry(baseCtx.workspaceId, resolved.entry.id);
   return { kind: "entry", id: resolved.entry.id };
 }
 
@@ -348,10 +353,10 @@ export async function moveByPath(
   fromPath: string,
   toPath: string
 ): Promise<{ kind: "folder" | "entry"; id: string }> {
-  const base = await getBaseById(ctx, baseId);
-  await assertBaseWritable(ctx, base);
+  const { ctx: baseCtx, value: base } = await getBaseForWrite(ctx, baseId);
+  await assertBaseWritable(baseCtx, base);
 
-  const fromResolved = await resolvePath(ctx, base.id, fromPath);
+  const fromResolved = await resolvePath(baseCtx, base.id, fromPath);
   if (fromResolved.kind === "root") {
     throw new KnowledgePathConflictError("Cannot move the base root.");
   }
@@ -365,7 +370,7 @@ export async function moveByPath(
   }
   const toLeafName = toSegments[toSegments.length - 1];
   const toParentSegments = toSegments.slice(0, -1);
-  const toParent = await ensureFolderPath(ctx, base.id, toParentSegments);
+  const toParent = await ensureFolderPath(baseCtx, base.id, toParentSegments);
   const toParentId = toParent?.id ?? null;
 
   if (fromResolved.kind === "folder") {

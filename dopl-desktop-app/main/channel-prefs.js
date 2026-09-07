@@ -237,24 +237,30 @@ function postureInto(map, channelId, raw) {
 // crash resumes, private and directed turns included — ON and OFF alike. It is deliberately
 // NOT folded into any launch-time mode any more (see `windowlessMessageMode`): one live
 // reader, zero frozen copies.
-const AUTO_SEND_KEY = 'channelAutoSend'; // { [channelId]: true }
-
-function getAutoSend(channelId) {
-  if (!channelId) return false;
-  const map = store.get(AUTO_SEND_KEY);
-  return !!(map && typeof map === 'object' && map[channelId] === true);
-}
-
-function setAutoSend(channelId, on) {
-  if (!channelId) return false;
-  const map = store.get(AUTO_SEND_KEY);
-  const next = map && typeof map === 'object' && !Array.isArray(map) ? { ...map } : {};
-  if (on === true) next[channelId] = true;
-  else delete next[channelId];
-  store.set(AUTO_SEND_KEY, next);
-  diag('channel-prefs: autoSend', String(channelId).slice(0, 8), on === true ? 'on' : 'off');
-  return on === true;
-}
+// ── ⚠ AUTO-SEND IS DELETED (2026-09-06, Samuel's settings overhaul, item 8) ──────────────────
+//
+// It was a SECOND control over the SAME axis as the launch posture's `messages`, and the two
+// disagreed by construction: `messages` was frozen into a session at launch, this was read live
+// at the gate, and `session-private.js › autoSendMessageMode` FORCED the out half on over
+// whatever `messages` said. An operator could set Messaging to `ask` and still have agents
+// posting unattended, with nothing on the tab saying which one was in force.
+//
+// ⚠ WHAT SURVIVED IS THE READ SITE, NOT THE RECORD, AND THAT IS THE WHOLE POINT. The 2026-08-31
+// ruling's content was *"if a user toggles auto-send, that goes into effect for ALL their agents
+// in that channel, IMMEDIATELY"* — a property of WHERE it was read, not of what it was stored in.
+// `effectiveMessageMode` still reads live at every Axis-B decision; it reads `getLaunchPosture`'s
+// `messages` now. So a Messaging change still applies to running sessions, reopened shells, crash
+// resumes and directed turns at once, exactly as the toggle did.
+//
+// ⚠ THE STORED KEY IS DELIBERATELY NOT MIGRATED, AND NOT READ ONE LAST TIME. `channelAutoSend`
+// rows left on disk are inert: a machine that had the toggle ON now follows whatever that
+// channel's Messaging value says, which is the value its operator can SEE. Reading the old key to
+// "preserve" the setting would be the opposite of this item — it would restore, invisibly, the
+// second authority the fold exists to remove. The key is not re-registered anywhere; a future
+// store cleanup may drop it.
+//
+// ⚠ IF SOMETHING STILL NEEDS THIS: it wants `getLaunchPosture(channelId).messages`. There is no
+// separate send flag any more, on purpose.
 
 // ── ⚠ AGENT CHAINING (2026-08-31, Samuel's ruling) — THE ONE-GENERATION BOUND, MADE A SETTING ──
 //
@@ -353,6 +359,25 @@ function getLaunchPosture(channelId) {
 }
 
 /**
+ * ⚠ **HAS THIS CHANNEL BEEN CONFIGURED AT ALL?** (2026-09-07) — presence, never a posture.
+ *
+ * `getLaunchPosture` cannot answer this and must not learn to: it answers the restrictive
+ * DEFAULT for a channel nobody has set, which is the truth the Settings tab needs. But a LIVE
+ * reader needs the other fact. `session-private.js › channelMessageMode` is the live Axis-B read
+ * and its whole contract is that `''` means NO OPINION — an unconfigured channel included — so
+ * the caller falls back to the session's own frozen launch posture. Without this distinction the
+ * default `ask` reads as a channel-wide PICK and silently narrows every running session on every
+ * channel the operator has never opened Settings for, which is most of them.
+ *
+ * ⚠ IT DISCLOSES NO POSTURE, only whether one was written, so it is not a second reader of the
+ * permission pair in the sense the H2 census is about (`channel-runtime.test.mjs`,
+ * `agent-model-selection.test.mjs`): nothing can widen a launch with a boolean.
+ */
+function hasLaunchPosture(channelId) {
+  return readPostureFrom(getAllPostures(), channelId) !== null;
+}
+
+/**
  * Persist the channel's launch posture. { ok: true } only when BOTH axes
  * validated; an unknown value on either writes NOTHING.
  * ⚠ SPENT BY NOTHING. There is no consume twin on purpose — that is what makes
@@ -431,8 +456,9 @@ function getLaunchModel(channelId) {
 }
 
 module.exports = {
-  getAutoSend,
-  setAutoSend,
+  // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8) — see the block above. The one
+  // live reader was `session-private.js › effectiveMessageMode`, which reads `getLaunchPosture`
+  // now; the IPC ops and the web hook went in the same change.
   // 2026-08-31 (Samuel's ruling): the per-channel AGENT-CHAINING setting — the one-generation
   // launch bound, made toggleable. Default OFF = today's bound. The block above states what it
   // lifts, what it does not, and what stands in for a generation count when it is on.
@@ -460,6 +486,7 @@ module.exports = {
   effectivePosture, // 2026-08-22: the WIRE shape — the pair plus an always-present `model`
   postureInto,
   getLaunchPosture,
+  hasLaunchPosture, // 2026-09-07: presence only — see the block above and `session-private.js`
   setLaunchPosture,
   windowlessMessageMode,
   launchStartModes,

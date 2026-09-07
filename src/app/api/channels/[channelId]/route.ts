@@ -27,31 +27,37 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 /**
  * ⚠ FIELD-LEVEL `sessionOnly` — pinned by `src/shared/auth/write-gate-coverage.test.ts`.
  *
- * §9's granularity is per-METHOD, which is wrong HERE: this PATCH is SIX writes behind one verb
- * (`name`, `topic`, `visibility`, `archived`, `infoCard`, `agentPosture`) and they do not share a
- * gate. Gating the whole method would spend an agent capability for nothing.
+ * §9's granularity is per-METHOD, which is wrong HERE: this PATCH is FIVE writes behind one verb
+ * (`name`, `topic`, `visibility`, `archived`, `infoCard`) and they do not share a gate. Gating
+ * the whole method would spend an agent capability for nothing. ⚠ IT WAS SIX UNTIL 2026-09-06
+ * and SEVEN until 2026-09-07 — read the array, not this paragraph.
  *
  * - `visibility` is the SESSION-ONLY field gated HERE: an agent (`dopl_at_*`) may not change it at
  *   all. private→public exposes the entire channel AND its history to every workspace member. BOTH
  *   directions are gated because it is simpler and costs nothing — no MCP op or desktop call reaches
  *   this field (`@dopl/client` has no channel-update method), and direction-free means no read of the
  *   current row.
- * - `agentPosture` IS THE SECOND SESSION-ONLY FIELD (2026-09-02, A9 — G6/G7), and it is the
- *   sharpest one on the list: it is the CEILING on what a launched agent may be granted in this
- *   room. An agent credential able to raise it could widen its own successors' posture, which is
- *   the self-authorizing lane the §6 threat model exists to prevent — and `main/launch-posture.js`
- *   refuses the same carve-out for the same reason ("every caller on this lane IS the operator's
- *   own account", so an exception is not narrow, it is the whole set). BOTH directions are gated,
- *   on `visibility`'s argument: direction-free costs nothing and needs no read of the current row.
- * - `defaultResponderAgentName` IS THE THIRD SESSION-ONLY FIELD (2026-09-02, B4 — ruling B6), on
- *   `agentPosture`'s argument exactly: it names the agent that answers every UNADDRESSED human
- *   message in this room (RR3). An agent credential able to set it could nominate ITSELF and
- *   route the room's unaddressed work to its own session — self-authorizing reach, which is the
- *   same lane `agentPosture` is gated for. BOTH directions, including the withdrawal: an agent
- *   able to CLEAR somebody else's nomination silences that agent just as effectively.
- * - `name` / `topic` / `archived` stay MANAGE-gated in the service (`canManageChannel`), and
- *   `agentPosture` is manage-gated THERE as well — the two fences answer different questions
- *   (which CREDENTIAL, and which ROLE) and neither substitutes for the other.
+ * - ⚠ **`agentPosture` AND `defaultResponderAgentName` BOTH LEFT THIS LIST — the FIELDS are
+ *   deleted (2026-09-06 items 12/13/14, and 2026-09-07 items 10/11), so the list is one field
+ *   again.** Neither gate was weakened and neither argument is retracted, so both are recorded
+ *   here rather than deleted with the code:
+ *     · `agentPosture` was the CEILING on what a launched agent could be granted in this room.
+ *       An agent credential able to raise it could widen its own successors' posture — the
+ *       self-authorizing lane §6 exists to prevent. No room bounds a peer's agent on any axis
+ *       now, so there is no ceiling to raise.
+ *     · `defaultResponderAgentName` named the agent answering every UNADDRESSED human message
+ *       here, so an agent credential able to set it could nominate ITSELF and route the room's
+ *       unaddressed work to its own session — the same self-authorizing reach, including the
+ *       WITHDRAWAL, since clearing somebody else's nomination silences that agent as
+ *       effectively as taking it.
+ *   ⚠ **AND THE SECOND PROTECTION IS INHERITED, NOT DROPPED.** Its per-member replacement,
+ *   `channel_members.unaddressed_responder`, is written through `PATCH /members` — a route that
+ *   is `sessionOnly: true` for the WHOLE METHOD (`agentToolProfile`'s containment argument), and
+ *   whose schema carries no member identifier at all. So an agent credential still cannot reach
+ *   it, and cannot reach anybody else's row even with a session.
+ * - `name` / `topic` / `archived` stay MANAGE-gated in the service (`canManageChannel`) — the
+ *   two fences answer different questions (which CREDENTIAL, and which ROLE) and neither
+ *   substitutes for the other.
  * - `infoCard` is intentionally AGENT-WRITABLE and gated on MEMBERSHIP, not session (Samuel,
  *   2026-08-25): a home channel is "a relationship, not a tenancy", the card is its shared scratch
  *   surface, and it changes no visibility, roster, lifecycle or fact — so it is NOT in
@@ -61,11 +67,7 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
  * Session callers are untouched: cookie (web + desktop main) and Supabase-JWT (SPA) callers never
  * set `agentTokenId`, so `components/go-public-dialog.tsx` is unaffected.
  */
-const SESSION_ONLY_FIELDS = [
-  "visibility",
-  "agentPosture",
-  "defaultResponderAgentName",
-] as const;
+const SESSION_ONLY_FIELDS = ["visibility"] as const;
 
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {

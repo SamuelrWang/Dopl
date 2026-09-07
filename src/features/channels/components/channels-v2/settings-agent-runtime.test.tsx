@@ -74,7 +74,10 @@ describe("a desktop with NO runtime key renders no runtime row at all", () => {
     expect(screen.queryByLabelText(RUNTIME_ROW)).toBeNull();
   });
 
-  it("still renders Dopl's own four on the Permissions row", () => {
+  // ⚠ THE ROW IS CALLED "Tool use" SINCE 2026-09-06 (item 5) — a RENAME ONLY. It is
+  // still Axis A, still the effective runtime's own vocabulary, still the same write.
+  // `postureTools()` is repointed in the harness; nothing about this case moved.
+  it("still renders Dopl's own four on the Tool use row", () => {
     // The pre-port behaviour, byte for byte — `permission-preset-row.tsx ›
     // TOOL_OPTIONS`, whose per-option copy a security review bought.
     agentView({ posture: { tools: "auto", messages: "ask" } });
@@ -194,7 +197,7 @@ describe("Axis A renders each runtime's OWN vocabulary and nothing else's", () =
 describe("the SECOND axis exists only where the platform declares one", () => {
   it("Claude renders NO sandbox row — no placeholder, no disabled control", () => {
     withRuntime("claude");
-    // ⚠ The Permissions row is asserted PRESENT in the same case, so the absence
+    // ⚠ The Tool use row is asserted PRESENT in the same case, so the absence
     // above is Claude declaring no secondary axis and not a render that did nothing.
     expect(postureTools()).toBeTruthy();
     expect(screen.queryByText("Sandbox")).toBeNull();

@@ -9,11 +9,13 @@ import type {
   ChannelMessageKind,
   ChannelRole,
   ChannelThread,
-  ChannelAgentPosture,
+  // ⚠ `ChannelAgentPosture` LEFT THIS IMPORT ON 2026-09-07 — it is deleted at its
+  // source (`types-delivery.ts`, items 12/13/14) and this import was the last
+  // dangling reference to it in the tree. ⚠ `LaunchMessageMode` / `LaunchToolMode`
+  // LEFT IT THE SAME DAY: the posture ceiling was their only reader here, so they
+  // outlived it as unused imports (a `--max-warnings 0` red, not a type error).
   ChannelVisibility,
   ChannelWakeVerdict,
-  LaunchMessageMode,
-  LaunchToolMode,
   MessageAuthorKind,
   NotifyScope,
   ThreadMode,
@@ -22,6 +24,10 @@ import type {
 } from "../types";
 import type { Role } from "@/features/workspaces/types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
+// ⚠ THE ONE COERCION, IMPORTED RATHER THAN REPEATED (2026-09-07). The rule that junk and
+// absence land on the DEFAULT and never on `"none"` is a ruling, and a mapper with its own
+// `as` cast would be a second place it lived — the shape this wave has now found four times.
+import { normalizeUnaddressedResponder } from "../lib/agent-mentions";
 import { parseInfoCard } from "../info-card";
 
 /**
@@ -48,16 +54,15 @@ export type ChannelRow = {
   agent_tool_ceiling?: string | null;
   agent_message_ceiling?: string | null;
   agent_chain_allowed?: boolean | null;
-  /**
-   * **RR3's DEFAULT RESPONDER** (`20260918120000`, B4 — Samuel's ruling B6): the
-   * agent HANDLE that answers an unaddressed human message in this room.
-   *
-   * ⚠ OPTIONAL ON THE TYPE for the three ceilings' reason — a server reading a
-   * database whose migration has not landed sees no such key. `undefined` and
-   * `null` are one answer here ("not configured"), and neither is "nobody
-   * answers": one live agent still answers by itself (RR3 arm 2).
-   */
-  default_responder_agent_name?: string | null;
+  // ⚠ **`default_responder_agent_name` IS OFF THIS ROW TYPE (2026-09-07, Samuel's ruling on
+  // items 10 and 11).** It was the room-wide pin of ONE agent to answer EVERY member's
+  // untagged messages; the question is per-person now and its answer lives on
+  // `channel_members.unaddressed_responder` ({@link ChannelMemberRow}).
+  //
+  // ⚠ THE COLUMN IS STILL ON THE TABLE and this is not an oversight: `20260928130000` retires
+  // it non-destructively so the previous release stays runnable. Taking it off the ROW TYPE is
+  // the reader's half of that fence — a mapper that still reached for it would be a live read
+  // of a value the product no longer has a meaning for.
   archived_at: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -129,6 +134,23 @@ export type ChannelMemberRow = {
   last_read_at: string | null;
   notify_scope: string;
   agent_tool_profile: string;
+  /**
+   * **WHO ANSWERS THIS MEMBER'S UNTAGGED MESSAGES IN THIS CHANNEL**
+   * (`20260928130000` — Samuel's ruling on items 10 and 11). `'none'` or
+   * `'last_addressed'`; the column is `NOT NULL DEFAULT 'last_addressed'`.
+   *
+   * ⚠ OPTIONAL ON THE TYPE, on the `info_card` / ceiling precedent: these row shapes are CAST
+   * from PostgREST results, so a server reading a database whose migration has not landed sees
+   * no such key at all. ⚠ **AND ABSENT MEANS THE DEFAULT, NEVER `'none'`** — that direction is
+   * the ruling (`lib/agent-mentions.ts › normalizeUnaddressedResponder`), because `'none'`
+   * silences a member who never chose it and the failure looks exactly like the setting working.
+   *
+   * ⚠ **A PRIVATE PER-MEMBER SETTING — same class as `agent_tool_profile`, scrubbed by the same
+   * rule in {@link mapMemberRow}, and in NO GRANT list** (the migration's whole §"IT IS
+   * PRIVATE"). Typed `string` rather than the union for `info_card`'s reason: the database's
+   * only promise is text, and the CHECK is enforced there, not here. The mapper coerces.
+   */
+  unaddressed_responder?: string | null;
   /** When this member favourited this channel; null = not favourited
    *  (`20260819120000`). A PRIVATE per-member preference — same class as
    *  `agent_tool_profile`, and scrubbed by the same rule in
@@ -262,13 +284,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * read three columns would be a second read of a fact already in hand. One
  * reader of the columns, two callers.
  */
-export function mapAgentPosture(row: ChannelRow): ChannelAgentPosture {
-  return {
-    tools: (row.agent_tool_ceiling ?? null) as LaunchToolMode | null,
-    messages: (row.agent_message_ceiling ?? null) as LaunchMessageMode | null,
-    chain: row.agent_chain_allowed ?? null,
-  };
-}
+// ⚠ **`mapAgentPosture` IS DELETED (2026-09-06, Samuel's rulings on items 12, 13 and 14).**
+//
+// The three columns it read — `agent_tool_ceiling`, `agent_message_ceiling`,
+// `agent_chain_allowed` — were a room MANAGER's clamps over EVERY member's agents in the
+// channel. All three are removed, with the containment loss stated to him before he ruled:
+// *"all agents launched should just inherit the original tools' permissions"*, and *"make sure
+// all the logic is deleted"*.
+//
+// ⚠ ITS ONE OTHER CALLER WENT WITH IT. This function was exported for `service-launch.ts`,
+// which held the ROW and not the DTO and used it to build the launch clamp. There is no clamp
+// now, so there is no second reader and nothing to export.
+//
+// ⚠ THE COLUMNS ARE LEFT ON THE TABLE, dropped by a NON-DESTRUCTIVE migration that stops
+// reading them rather than by a `DROP COLUMN` — this repo's standing posture. Nothing here maps
+// them, so a row that still carries values is simply not looked at.
 
 export function mapChannelRow(
   row: ChannelRow,
@@ -311,11 +341,11 @@ export function mapChannelRow(
     // degrade to the card as shipped, because the facts under the card are
     // still there and a channel that cannot render is the worse answer.
     infoCard: parseInfoCard(row.info_card),
-    agentPosture: mapAgentPosture(row),
-    // ⚠ `?? null` IS THE STALE-CACHE FALLBACK THE INVARIANT ASKS FOR: a payload
-    // cached before this field existed reads `undefined`, and every consumer is
-    // written against `null` meaning "not configured".
-    defaultResponderAgentName: row.default_responder_agent_name ?? null,
+    // ⚠ **`agentPosture` AND `defaultResponderAgentName` ARE BOTH OFF THIS MAPPER
+    // (2026-09-07).** The first went with the posture ceiling (items 12/13/14) and the second
+    // with the room-wide responder (items 10/11); both were still being mapped here after
+    // their fields left `Channel`, which is the shape a half-finished deletion takes. The
+    // per-member replacement is on the MEMBER row, not this one — see {@link mapMemberRow}.
   };
 }
 
@@ -407,9 +437,13 @@ export function mapArtifactRow(row: ChannelArtifactRow): ChannelArtifact {
 
 /**
  * Member row → DTO. The privacy scrub lives HERE, not at each caller:
- * `notify_scope`, `agent_tool_profile` and `favorited_at` are the member's own
- * preferences and are nulled for everyone but the viewer, so the roster read AND
+ * `notify_scope`, `agent_tool_profile`, `favorited_at` and `unaddressed_responder` are the
+ * member's own preferences and are nulled for everyone but the viewer, so the roster read AND
  * the single-row returns from addMember / updateMyMemberSettings all get it.
+ *
+ * ⚠ `unaddressed_responder` (`20260928130000`) JOINED THAT LIST ON 2026-09-07 and followed the
+ * standing instruction below to the letter: scrubbed here, and absent from every GRANT — which
+ * is what keeps it out of a peer's realtime change FEED, not merely out of this response.
  * Presence IS public to the workspace — you need it to know whether the agent
  * you are addressing is live.
  *
@@ -452,6 +486,19 @@ export function mapMemberRow(
       ? ((row.agent_tool_profile as AgentToolProfile) ?? "full")
       : null,
     favoritedAt: isSelf ? (row.favorited_at ?? null) : null,
+    // ⚠ **VIEWER-ONLY, ON `agentToolProfile`'S PRECEDENT EXACTLY** (2026-09-07, items 10/11).
+    // It is nobody else's business whether a given member's agents auto-answer them: the roster
+    // says WHO is here, this would say how somebody works. `null` on a peer's row therefore
+    // means "not yours to see" and NEVER "that member chose nobody" — the two readings are
+    // opposite, which is why the type below is `Setting | null` rather than a bare setting.
+    //
+    // ⚠ NORMALISED, NOT CAST. `agent_tool_profile` above can get away with `as` + `?? "full"`
+    // because its fallback is the widest value; here the fallback direction is a RULING, so the
+    // shared coercion owns it (`normalizeUnaddressedResponder`) and an absent column — a
+    // pre-migration read — lands on `last_addressed`, per B1.
+    unaddressedResponder: isSelf
+      ? normalizeUnaddressedResponder(row.unaddressed_responder)
+      : null,
     agentOnline: presence?.online ?? false,
     lastSeenAt: presence?.lastSeenAt ?? null,
     addedBy: row.added_by,

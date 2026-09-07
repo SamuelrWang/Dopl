@@ -189,7 +189,11 @@ describe("the header slot", () => {
       "Channel actions",
       "Channel settings",
       "Add members",
-      "Agent folder",
+      // ⚠ RENAMED 2026-09-06 (settings overhaul, item 4): "Agent folder" →
+      // "Working Folder". This list is about the message pane NOT growing the
+      // Settings tab's controls, so what it needs is the CURRENT name — the old
+      // string would pass for the wrong reason forever.
+      "Working Folder",
     ]) {
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
     }

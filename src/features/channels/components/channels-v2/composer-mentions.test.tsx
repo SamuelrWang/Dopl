@@ -342,13 +342,27 @@ describe("who the picker offers", () => {
     expect(rows.map((r) => r.handle)).toEqual(["research-bot", "agent-zzzzzzzz"]);
   });
 
-  it("drops an agent whose name is contested — fail closed, as members do", () => {
+  // ⚠ **THIS PINNED `[]` — "drops an agent whose name is contested, fail closed, as members do" —
+  // UNTIL 2026-09-07**, and the red was Samuel's ruling arriving: *"if coder exists, then other
+  // slugs will be coder-1, coder-2, coder-3"*. Agents and MEMBERS deliberately differ here now:
+  // a member can genuinely run out of spellings, an agent cannot, because the id form is claimed
+  // before any name is looked at. See `lib/agent-mentions.ts › buildAgentMentionIndex`.
+  it("offers BOTH agents of a contested name — the suffix is a real address", () => {
     const agents = [
       { agentId: "k3v7d2mq", displayName: "Twin" },
       { agentId: "zzzzzzzz", displayName: "Twin" },
     ];
     const rows = mentionSuggestions({ members: [], agents, currentUserId: ME, query: "twin" });
-    expect(rows).toEqual([]);
+    // ⚠ THE PICKER INSERTS WHAT THE INDEX SAYS THIS AGENT WON, never `agentMentionHandle` —
+    // that function answers `twin` for BOTH, so inserting it would tag the OTHER agent (F-210
+    // in the agent namespace). Claim order is the caller's, so the first keeps the bare slug.
+    expect(rows.map((r) => r.handle)).toEqual(["twin", "twin-1"]);
+    // ⚠ NARROWED ON `kind` RATHER THAN CAST: `agentId` is on the agent arm of
+    // `MentionSuggestion` only, and asserting the arm is part of the claim.
+    expect(rows.map((r) => (r.kind === "agent" ? r.agentId : null))).toEqual([
+      "k3v7d2mq",
+      "zzzzzzzz",
+    ]);
   });
 });
 

@@ -59,9 +59,13 @@
 
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";
+// ⚠ 2026-09-06: `AGENT_MODEL_DEFAULT` / `AGENT_MODEL_OPTIONS` are no longer read
+// HERE. The row asks `agentModelSelection` what to SHOW for a stored value and
+// `agentModelOptionsFor` which options to offer — the second because a main running
+// a model this build predates must still render it rather than blank.
 import {
-  AGENT_MODEL_DEFAULT,
-  AGENT_MODEL_OPTIONS,
+  agentModelOptionsFor,
+  agentModelSelection,
 } from "../../lib/agent-models";
 import type {
   MessageMode,
@@ -77,7 +81,12 @@ import {
   toolModeOptions,
   type RuntimeDescriptor,
 } from "../../lib/runtime-capability";
-import { GroupLabel, LAUNCH_POSTURE_HEADING, SettingRow } from "./settings-agent-rows";
+// ⚠ `GroupLabel` / `LAUNCH_POSTURE_HEADING` ARE NO LONGER IMPORTED (2026-09-06,
+// item 2): this group renders no standing heading any more. The constant still
+// EXISTS and is still exported — it is the sentence the eye popover for these rows
+// carries — but nothing in this file renders it, and importing an unused symbol
+// would be the dead-code shape the tab's own no-dead-rows rule refuses.
+import { SettingRow } from "./settings-agent-rows";
 
 /** What the group needs, and every desktop-only half of it separately gated. */
 export interface AgentLaunchPostureRowsProps {
@@ -147,7 +156,14 @@ export function AgentLaunchPostureRows({
 }: AgentLaunchPostureRowsProps) {
   return (
     <>
-      <GroupLabel>{LAUNCH_POSTURE_HEADING}</GroupLabel>
+      {/* ⚠ THE GROUP LABEL IS DELETED (2026-09-06, Samuel's settings overhaul, item 2).
+          `LAUNCH_POSTURE_HEADING` — "When you launch an agent" — is retained as an
+          EXPORTED CONSTANT with its argument intact, because that argument is still
+          true and is what the eye popover for these rows says; what changed is that
+          it is no longer RENDERED as a standing heading. Do not read the deleted
+          heading as a changed scope: this group still governs only the launches the
+          OPERATOR starts, and an inbound request a peer triggered still carries no
+          tool posture at all. */}
       {runtimeSupported && (
         <AgentRuntimeRow
           runtime={runtime}
@@ -169,12 +185,17 @@ export function AgentLaunchPostureRows({
         }
         busy={busy}
       />
-      <SettingRow name="Sends">
+      {/* ⚠ "Sends" → "Messaging" (2026-09-06, Samuel's pick, item 7). A RENAME ONLY:
+          the field, the enum and the write are `posture.messages` exactly as before.
+          The new name is the axis's own — it covers BOTH directions, which "Sends"
+          did not, and that matters now that the separate Replies toggle folds into
+          this control (item 8). */}
+      <SettingRow name="Messaging">
         <SelectMenu<MessageMode>
           value={posture.messages}
           options={MESSAGE_OPTIONS}
           onChange={(messages) => onChange({ messages })}
-          ariaLabel="Sends for agents you launch"
+          ariaLabel="Messaging for agents you launch"
           disabled={busy}
         />
       </SettingRow>
@@ -186,14 +207,25 @@ export function AgentLaunchPostureRows({
           ⚠ ABSENT ON A MAIN THAT HAS NO MODEL FIELD, never disabled — such a
           build DROPS the value on write, so a greyed row would be the mild
           version of the failure and a live one the loud version.
-          ⚠ "Default" IS A REAL PICK and writes NO id. `lib/agent-models.ts` owns
-          the roster and is the ONE place an id becomes a label. */}
+          ⚠ **"Default" IS GONE (2026-09-06, Samuel's ruling)** — the list is real
+          models only and the row always holds an actual selection. A channel that
+          never chose SHOWS the fallback (`agentModelSelection`) and STORES nothing
+          until the operator picks; the first pick writes a real id.
+          ⚠ THE WRITE NO LONGER SPELLS `|| null`. That mapped the deleted "Default"
+          option back to the wire's absent state, and with no option able to produce
+          an empty string it would now only be able to fire on a malformed one —
+          silently clearing the channel's model instead of refusing. Every option's
+          value is a real id, so the id is what is written.
+          ⚠ ABSENT ON A MAIN THAT HAS NO MODEL FIELD, never disabled — such a build
+          DROPS the value on write, so a greyed row would be the mild version of the
+          failure and a live one the loud version. That gate is what keeps the
+          back-fill honest: this row cannot write into a build that discards it. */}
       {modelSupported && (
         <SettingRow name="Model">
           <SelectMenu<string>
-            value={posture.model ?? AGENT_MODEL_DEFAULT}
-            options={AGENT_MODEL_OPTIONS}
-            onChange={(model) => onChange({ model: model || null })}
+            value={agentModelSelection(posture.model)}
+            options={agentModelOptionsFor(posture.model)}
+            onChange={(model) => onChange({ model })}
             ariaLabel="Model for agents you launch"
             disabled={busy}
           />
@@ -315,12 +347,18 @@ export function AgentToolModeRows({
 
   return (
     <>
-      <SettingRow name="Permissions">
+      {/* ⚠ "Permissions" → "Tool use" (2026-09-06, item 5). A RENAME ONLY — same
+          axis, same options, same write, and still the EFFECTIVE RUNTIME'S OWN
+          vocabulary off the descriptor. The new name is the narrower and truer one:
+          this row was never "permissions" in general, it is Axis A, and the row now
+          named "Tool access" below it is the other half a reader used to have to
+          infer. */}
+      <SettingRow name="Tool use">
         <SelectMenu<string>
           value={value ?? ""}
           options={options}
           onChange={onChange}
-          ariaLabel="Permissions for agents you launch"
+          ariaLabel="Tool use for agents you launch"
           disabled={busy}
         />
       </SettingRow>

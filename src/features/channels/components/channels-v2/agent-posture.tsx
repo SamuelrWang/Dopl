@@ -15,7 +15,7 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { MESSAGE_OPTIONS, TOOL_OPTIONS } from "../permission-preset-row";
 import type { MessageMode, ToolMode } from "../../lib/permission-modes";
 import {
-  AGENT_MODEL_DEFAULT,
+  agentModelSelection,
   agentModelOptionsFor,
 } from "../../lib/agent-models";
 import {
@@ -132,13 +132,18 @@ export function PostureControls({
   if (!canPosture && !stats) return null;
 
   // ⚠ MAIN'S VALUE, LIKE BOTH AXES. Absent means this build does not report a
-  // running model, and the select then shows Default rather than a guess.
+  // running model.
   // ⚠ THE EFFECTIVE MODEL IS FREE-FORM AND MAY NOT BE ONE OF THE FOUR PICKABLE
   // IDS (`spa-bridge.ts › DesktopSessionSummary.model`: a dated id, a `[1m]`
   // variant). `agentModelOptionsFor` appends it so the control SHOWS what the
   // agent is on — a `SelectMenu` whose value matches no option renders blank,
   // which is the surface saying nothing where it has an answer.
-  const model = agentRunningModel(agent) ?? AGENT_MODEL_DEFAULT;
+  // ⚠ AND ABSENCE NOW BACK-FILLS RATHER THAN SPELLING ITSELF `''` (2026-09-06,
+  // Samuel's ruling): "Default" left `AGENT_MODEL_OPTIONS`, so `''` matches no
+  // option and the select would have silently rendered `options[0]` — reporting
+  // "Fable 5" as the running model on a build that reported none.
+  // `agentModelSelection` is the one place that back-fill lives.
+  const model = agentModelSelection(agentRunningModel(agent));
   const modelOptions = agentModelOptionsFor(model);
 
   const apply = (axis: "tools" | "messages", mode: string) => {

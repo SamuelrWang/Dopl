@@ -17,6 +17,9 @@ import {
   reciprocalParty,
   recentRoomAgents,
   threadOtherParty,
+  // 2026-09-06 (items 10/11): the AUTHOR's own per-member setting, replacing the channel's
+  // room-wide pin. Lives beside the other resilience reads because it is one of them.
+  unaddressedResponderFor,
 } from "./service-wake-verdict-resilience";
 import type { ChannelContext } from "./service-shared";
 
@@ -114,6 +117,20 @@ export interface WakeVerdictContext {
   /** A legacy thread tag the poster was not entitled to was dropped
    *  (`service-writes-metadata.ts › PostMetadataResult.threadTagStripped`). */
   threadTagStripped?: boolean;
+  /**
+   * **THE MEMBER HANDLES THIS ROOM ALREADY OCCUPIES**, so the agent namespace mints around them
+   * (2026-09-07 — members outrank agents, Samuel's suffix ruling).
+   *
+   * ⚠ **IT IS THE METADATA FOLD'S LEFTOVER, WHICH IS WHY IT ARRIVES ON THIS CONTEXT RATHER THAN
+   * BEING READ.** `resolveBodyMentions` resolves the MEMBER namespace over this same body one
+   * fold earlier, off a roster read this request has already paid for
+   * (`PostMetadataResult.memberHandles`). Handing the derived handles down is what makes the
+   * server's precedence match the client's at zero extra reads; asking for it here would be two
+   * reads on the hot write path, which is a different decision and not this one.
+   *
+   * ⚠ **ABSENT IS TODAY'S BEHAVIOUR, NOT A FAILURE** — see `resolveAgentRecipients`.
+   */
+  reservedHandles?: readonly string[];
 }
 
 /**
@@ -237,7 +254,11 @@ export async function resolveWakeVerdict(
           channelId,
           input.body,
           selfAgentId,
-          wakeCtx.authorKind
+          wakeCtx.authorKind,
+          // ⚠ MEMBERS OUTRANK AGENTS ON THIS DOOR TOO SINCE 2026-09-07. The handles come from
+          // the metadata fold's own roster read, so this closes the client/server parity gap
+          // without adding a query — see the field's note on {@link WakeVerdictContext}.
+          wakeCtx.reservedHandles ?? []
         )
       : null;
   const namedAgentIds = toAgentId !== null ? [toAgentId] : bodyAgentIds;
@@ -280,16 +301,37 @@ export async function resolveWakeVerdict(
       resilience = { verdict: "reciprocal", userIds: [party], agentIds: [] };
     }
   } else if (repairable) {
-    // RR3 — the channel's default responder, or its one live agent.
+    // RR3 — who answers an untagged message, now **the AUTHOR'S OWN setting** (2026-09-06,
+    // Samuel's ruling on items 10 and 11). It was the channel's room-wide pin.
+    //
+    // ⚠ **THE READ IS FIRST, AND THAT ORDER IS THE POINT.** `unaddressedResponderFor` is one
+    // keyed lookup on `(channel_id, user_id)`; doing it BEFORE `liveChannelSessions` means a
+    // member who chose "No one" costs **zero** extra reads on this path rather than one — the
+    // session read is skipped entirely. The alternative order would have made the opted-out
+    // case the most expensive one, which is the wrong way round for a setting whose whole
+    // meaning is "do less".
+    //
+    // ⚠ **AND IT IS A NEW READ ON THE POST PATH — SAID PLAINLY.** It sits inside the
+    // `repairable` branch only, which already issues `liveChannelSessions` and sometimes
+    // `recentRoomAgents`, so it is not a new class of cost; but it is one more round trip on
+    // messages that reach RR3, and it is not free. The author's membership is NOT in scope
+    // here — `resolveWakeVerdict` takes `ctx` and the channel ROW, never a membership — so the
+    // options were this read or threading a membership through four call sites for one field.
+    //
+    // ⚠ COERCED AT THE BOUNDARY, so an unreadable row lands on the DEFAULT and never on
+    // `"none"`: a database hiccup must not silently stop answering somebody who never chose
+    // that (`normalizeUnaddressedResponder`).
+    const setting = await unaddressedResponderFor(channelId, ctx.userId);
     const responder = await defaultResponder(
-      channel,
+      setting,
       // ⚠ PRESENCE-KEYED SINCE 2026-09-05, not freshness-keyed: an idle agent is
       // still a live addressee. See `liveChannelSessions`' own grave block.
-      await liveChannelSessions(ctx, channelId),
+      setting === "none" ? [] : await liveChannelSessions(ctx, channelId),
       // ⚠ THE AUTHOR'S OWN HABIT, WHICH IS WHY `ctx.userId` IS THE KEY (Samuel, 2026-09-04).
       // RR3's gate is that a PERSON wrote this message, so the author IS the person whose last
       // tag we are reading — and two people in one room each keep their own default rather than
-      // overwriting each other's.
+      // overwriting each other's. ⚠ THAT RULING IS WHY ITEMS 10/11 WERE A CONTROL CHANGE AND
+      // NOT A SEMANTICS ONE: the per-person read already shipped here on 2026-09-04.
       () => recentRoomAgents(channelId, ctx.userId, now)
     );
     // ⚠ AND THE DEFAULT RESPONDER IS NEVER THE AUTHOR EITHER — belt over the

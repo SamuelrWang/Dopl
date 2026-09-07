@@ -39,8 +39,8 @@
 //
 //   setLaunchPosture     sets the DURABLE execution posture for MY OWN launches
 //   getLaunchPosture     discloses that posture
-//   setAutoSend          decides whether my agent's replies leave without me
-//   getAutoSend          discloses that setting
+//   (setAutoSend / getAutoSend were here until 2026-09-06 — item 8 folded that axis into the
+//    launch posture's `messages`; both handlers are deleted, not just unused.)
 //   setAgentChain        decides whether an agent I launched may launch MORE of my agents
 //   getAgentChain        discloses that setting
 //   chooseFolder         pops a native OS dialog on demand (UI-jacking / nagging)
@@ -81,13 +81,10 @@ const channelPrefs = require('./channel-prefs');
 const channelRuntime = require('./channel-runtime');
 const runtimeRegistry = require('./runtime');
 const sessionIpcOps = require('./session-ipc-ops');
-// 2026-09-05 (task 9b): the turn-cap control's two ends. `settings.js` owns the key and every
-// rule about writing it; `session-state.js` is where the two documented defaults are DECLARED —
-// imported, never retyped, because the row has to name them and this tree pins each number to one
-// statement (`test/turn-cap-issuer.test.mjs`). Both are cheap: session-state is pure, and settings
-// is electron-store only.
-const settings = require('./settings');
-const { OPERATOR_TURN_CAP, DEFAULT_TURN_CAP } = require('./session-state');
+// 2026-09-07: `session-state.js` and `settings.js` were required here for the turn-cap control —
+// its two documented defaults and its store. The constants, the store keys and both routes are
+// deleted with the caps, and nothing else in this file reads either module, so both imports go
+// too. A require kept "just in case" is a stub every IPC harness must keep answering.
 const { diag } = require('./diag');
 
 // ── THE POSTURE APPLIES TO THE ROOM, NOT JUST TO THE NEXT SPAWN ──────────────────────────────
@@ -299,18 +296,14 @@ function register(opts = {}) {
     return Object.assign({}, res, { applied: applyPostureToLive(p.channelId, res.preset), runtime });
   }));
 
-  // AUTO-SEND (2026-08-20) — the durable per-channel send posture (channel-prefs.js
-  // owns storage + the default-off rule). Boolean in, boolean out, UUID-gated like
-  // every op here; a bad id reads false and writes nothing.
-  ipcMain.handle('channels:getAutoSend', appWindowOnly('getAutoSend', false, (_event, channelId) => {
-    if (!isUuid(channelId)) return false;
-    return channelPrefs.getAutoSend(channelId);
-  }));
-  ipcMain.handle('channels:setAutoSend', appWindowOnly('setAutoSend', { ok: false }, (_event, payload) => {
-    const p = payload || {};
-    if (!isUuid(p.channelId)) return { ok: false };
-    return { ok: true, on: channelPrefs.setAutoSend(p.channelId, p.on === true) };
-  }));
+  // ⚠ `channels:getAutoSend` / `channels:setAutoSend` ARE DELETED (2026-09-06, item 8).
+  // Auto-send was a second control over the same axis as the launch posture's `messages`;
+  // `channel-prefs.js` carries the full argument and `session-private.js ›
+  // effectiveMessageMode` — still the one live Axis-B read — sources that axis now.
+  // ⚠ DELETED, NOT LEFT REGISTERED-BUT-UNUSED. An op nobody calls is still an op a hostile
+  // page can call, and this file's whole H3 header is about the caller rather than the
+  // payload. The two rows left `test/_ipc-ops-table.mjs` in the same change, which is what
+  // keeps `every privileged op in the file is registered` honest in both directions.
 
   // ── ⚠ AGENT CHAINING (2026-08-31, Samuel's ruling) — THE ONE-GENERATION LAUNCH BOUND, AS A
   // PER-CHANNEL SETTING. Boolean in, boolean out, UUID-gated and `appWindowOnly` like every op
@@ -421,45 +414,13 @@ function register(opts = {}) {
   // `{ok:false}` when the store did not end up holding what was asked for, which is what lets an
   // optimistic SPA stamp REVERT rather than show a cap nothing is enforcing.
   //
-  // ⚠ `cap` IS THE OPERATOR'S SETTING, NOT THE EFFECTIVE CAP, and the difference is the control's
-  // honesty: `null` = unset (the issuer-keyed defaults below apply), `0` = unlimited, a positive
-  // integer = that cap for every session on this machine. `settings.js › getTurnCap` collapses
-  // unset and a typed number into one number, so a row rendering IT could not tell them apart.
-  // ⚠ THE TWO DEFAULTS RIDE THE READ because the SPA is a separate bundle that cannot require
-  // `session-state.js`, and a row that RETYPED 200 / 24 would be the second statement of a
-  // constant this tree pins to one (`test/turn-cap-issuer.test.mjs`). They are compile-time
-  // numbers and disclose nothing.
-  // ⚠ THE REFUSAL IS BYTE-IDENTICAL TO A MACHINE THAT HAS SET NOTHING — `cap: null` plus the same
-  // two constants — so a hostile page learns nothing from the difference, exactly as the toggles'
-  // `{enabled:false}` is indistinguishable from a lane that was never armed.
-  const turnCapRead = () => ({
-    cap: settings.readTurnCapSetting(),
-    operatorDefault: OPERATOR_TURN_CAP,
-    agentDefault: DEFAULT_TURN_CAP,
-  });
-  ipcMain.handle('settings:getTurnCap', appWindowOnly('getTurnCap', {
-    cap: null, operatorDefault: OPERATOR_TURN_CAP, agentDefault: DEFAULT_TURN_CAP,
-  }, () => turnCapRead()));
-  // ⚠ THE PAYLOAD'S `cap` IS PASSED THROUGH UNCOERCED, ON PURPOSE. Every rule about what is
-  // writable lives in `settings.js` (null / '' delete, 0 writes unlimited, positive floors,
-  // anything else writes nothing) and a second validator here would be a second answer to the same
-  // question — the two-copies shape that file's header records. So the boundary ASKS: it calls
-  // `normalizeTurnCapInput` to learn what was requested and compares that to what the store now
-  // holds. What this boundary owns is the SENDER, checked before the value is looked at.
-  // ⚠ AN ABSENT `cap` IS NOT A CLEAR. `{}` from a half-built caller must not silently unset the
-  // operator's cap, so it lands on the junk arm — `{ok:false}` and nothing written — while an
-  // EXPLICIT `null` is the control's real "back to default" and does delete.
-  ipcMain.handle('settings:setTurnCap', appWindowOnly('setTurnCap', { ok: false }, (_event, payload) => {
-    const want = (payload || {}).cap;
-    const asked = settings.normalizeTurnCapInput(want);
-    const got = settings.setTurnCap(want);
-    // The write "took" when the store now holds what was asked for. Junk asked for nothing, so it
-    // can never be ok; either way the answer carries the cap really in force, which is the
-    // control's cue to put back the number the machine is actually running on.
-    return asked !== undefined && got === asked
-      ? { ok: true, ...turnCapRead() }
-      : { ok: false, reason: 'store', ...turnCapRead() };
-  }));
+  // 🔒 `settings:getTurnCap` AND `settings:setTurnCap` STOOD HERE AND ARE DELETED (2026-09-07,
+  // Samuel's ruling). Both routes are unregistered, not stubbed: an IPC channel that answers is a
+  // surface a page can still call, and one that answers `{ok:true}` about a cap nothing enforces
+  // would be the honest-controls defect in its purest form. A caller now gets the same "no such
+  // channel" any other unknown route gets.
+  // ⚠ THE PRELOAD BINDING AND THE SETTINGS ROW GO WITH THEM. A bound method over a missing route
+  // is a control that throws on click rather than one that is absent.
 
   // ⚠ ONE REGISTRATION ENTRY POINT. The session + window ops take the SAME registry accessor
   // and the same binding; splitting the file did not split the wiring, because a second

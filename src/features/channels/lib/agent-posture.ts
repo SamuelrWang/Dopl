@@ -1,8 +1,54 @@
 import { LAUNCH_TOOL_MODES } from "../schema-launch";
-import type { ChannelAgentPosture } from "../types";
 import type { LaunchMessageMode, LaunchToolMode } from "../types-launch";
 
 /**
+ * ⚠ **DECLARED HERE SINCE 2026-09-06, BECAUSE THE SHARED TYPE IS DELETED.** This was
+ * `ChannelAgentPosture` from `../types` — the channel ceiling — and it went with the three
+ * columns behind it (items 12, 13, 14).
+ *
+ * ⚠ IT IS RE-DECLARED RATHER THAN THE MODULE BEING DELETED FOR THE REASON IN THE HEADER: this
+ * file is the pinned twin of the DESKTOP's clamp, which is still live and still needs a
+ * cross-tree proof. The shape is the desktop's argument shape, so keeping it local is honest —
+ * it describes what `launch-posture.js` accepts, not a record this tree stores any more.
+ *
+ * ⚠ THE PARITY TEST DRIVES BOTH SIDES OVER THIS SHAPE, so it must keep matching the desktop's
+ * pure block. It is not a place to add a field.
+ */
+type ChannelAgentPosture = {
+  tools: LaunchToolMode | null;
+  messages: LaunchMessageMode | null;
+  chain: boolean | null;
+};
+
+/**
+ * ── ⚠⚠ **NO SERVER READER SINCE 2026-09-06 — THIS MODULE IS A DOCUMENTED SENTINEL, NOT LIVE
+ * CODE, AND IT IS KEPT ON PURPOSE.** ────────────────────────────────────────────────────────
+ *
+ * Samuel's rulings on items 12, 13 and 14 deleted the CHANNEL CEILING — the three
+ * `channels.agent_*` columns a room MANAGER set over EVERY member's agents — so
+ * `server/service-launch-posture.ts › resolveDirectivePosture` no longer clamps or refuses
+ * anything, and `clampPosture` / `chainRefused` / `resolveChain` below have no caller on this
+ * side of the tree.
+ *
+ * ⚠ **WHY IT IS NOT DELETED: THE DESKTOP HALF IS STILL LIVE, AND THIS IS ITS ONLY CROSS-TREE
+ * PROOF.** `dopl-desktop-app/main/launch-posture.js` still clamps — that one is the OPERATOR'S
+ * OWN bound on their OWN machine, which none of the three rulings touched; they were about a
+ * room bounding OTHER MEMBERS' agents. `agent-posture-parity.test.ts` drives THIS module and
+ * the desktop's PURE block over one table. Deleting this copy would take the parity test with
+ * it and leave the desktop's clamp with no pin at all — a guard nobody asked to weaken, removed
+ * as a side effect of a different ticket. Deleting only the copy and keeping the test would be
+ * worse: the test would keep passing, over nothing.
+ *
+ * ⚠ **WHEN TO DELETE IT: when the DESKTOP clamp itself is ruled away, and not before.** That
+ * question is open and is nobody's to answer inside this ticket. Until then, dead code that
+ * says exactly why it is dead is worth more than a tidy absence.
+ *
+ * ⚠ **DO NOT "RESTORE" A SERVER CALLER FROM THIS FILE.** If a future ticket wants a server-side
+ * clamp again it needs a ceiling to clamp AGAINST, and the columns behind that are unread by
+ * design (`types-delivery.ts` carries the full argument).
+ *
+ * ── the original header follows, and every word of it still describes the DESKTOP half ──────
+ *
  * **"A LAUNCH MAY ASK, AND IT MAY NEVER WIDEN" — SAID ON THE SERVER** (2026-09-02,
  * A9; guardrails G6 and G7).
  *

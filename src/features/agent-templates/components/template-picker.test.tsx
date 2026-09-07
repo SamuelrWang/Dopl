@@ -307,16 +307,22 @@ describe("the launch sheet", () => {
     );
   });
 
-  it("names the empty model option 'Template default', never 'Default'", async () => {
-    templates = [template({ id: "tpl-9" })];
+  /** ⚠ **PINNED THE EMPTY OPTION'S WORDING ("Template default") UNTIL 2026-09-06.**
+   *  Samuel removed the option, so the sheet opens on the template's OWN model instead
+   *  — and `overridesFor` sends nothing for a pick equal to the template's own value. */
+  it("opens on the template's own model, with no empty option to word", async () => {
+    templates = [template({ id: "tpl-9", model: "claude-opus-5" })];
     mount();
     fireEvent.click(
       screen.getByRole("menuitem", { name: "Launch options for Code auditor" })
     );
     await screen.findByRole("dialog");
+    expect(
+      screen.getByRole("button", { name: "Model" }).textContent
+    ).toContain("Opus 5");
     fireEvent.click(screen.getByRole("button", { name: "Model" }));
-    expect(screen.getByRole("menuitem", { name: /^Template default/ })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: /^Default/ })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /^(Template )?[Dd]efault/ })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: /^Opus 5/ })).toBeTruthy();
   });
 
   it("shows instructions read-only, collapsed, and expandable", async () => {

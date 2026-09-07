@@ -81,6 +81,7 @@ vi.mock("../../hooks/use-consent-inbox", () => ({
 vi.mock("../../hooks/use-channel-preference-writes", () => ({
   useChannelPreferenceWrites: () => ({
     consent: { mutate: consentMutate, pending: false },
+    unaddressedResponder: { mutate: () => {}, pending: false },
   }),
 }));
 

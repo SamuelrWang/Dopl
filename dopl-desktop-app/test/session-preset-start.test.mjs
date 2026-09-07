@@ -420,12 +420,26 @@ test("H2: nothing in the session path ever WRITES a posture back", () => {
     .filter((f) => f.endsWith(".js") && f !== "channel-prefs.js")
     .filter((f) => /channelPrefs\.setLaunchPosture\(|\.setLaunchPosture\(/.test(stripComments(read(f))))
     .sort();
+  // ⚠ `channel-runtime.js` JOINED 2026-09-07 AND THE RULE IS UNCHANGED, which is why it is
+  // admitted by NAME with its reachability asserted rather than by loosening the census. It
+  // clears the channel's stored MODEL stamp when the operator switches that channel's runtime
+  // (`clearLaunchModelForRuntimeSwitch`) and it writes through `setLaunchPosture` precisely
+  // because the record has one validating writer. The rule this case pins is "nothing on the
+  // SESSION path re-arms its own future", and that holds: its only entry point is
+  // `setChannelRuntime`, which no session-path module calls — the assertion below is what keeps
+  // that true rather than merely stated.
   assert.deepEqual(
     writers,
-    ["channel-dir-ipc.js"],
-    "exactly ONE writer, and it is the Settings tab's own control (`channels:setLaunchPosture`) " +
-      "— a posture written from anywhere on the SESSION path is a session re-arming its own future"
+    ["channel-dir-ipc.js", "channel-runtime.js"],
+    "the Settings tab's own control (`channels:setLaunchPosture`) and the runtime switch's model " +
+      "clear — a posture written from anywhere on the SESSION path is a session re-arming its own future"
   );
+  const runtimeCallers = readdirSync(MAIN)
+    .filter((f) => f.endsWith(".js") && f !== "channel-runtime.js")
+    .filter((f) => /\.setChannelRuntime\(/.test(stripComments(read(f))))
+    .sort();
+  assert.deepEqual(runtimeCallers, ["channel-dir-ipc.js"],
+    "the runtime switch is reachable only from the same bound-sender IPC surface, never from a session");
   // The one writer is behind the app-window sender gate, not reachable from a session at all.
   const handler = read("channel-dir-ipc.js");
   assert.match(handler, /ipcMain\.handle\('channels:setLaunchPosture', appWindowOnly\(/,

@@ -139,49 +139,53 @@ function mountAgent(over: Partial<Parameters<typeof ChannelAgentSettings>[0]> = 
 
 // The SETTINGS TAB's two selects. ⚠ They read the DURABLE posture since
 // 2026-08-20; the arm's labels below belong to the REQUEST CARD alone.
-const permissions = () => screen.getByLabelText("Permissions for agents you launch");
-const sends = () => screen.getByLabelText("Sends for agents you launch");
+// ⚠ THE ACCESSIBLE NAMES MOVED 2026-09-06 (settings overhaul): "Permissions" →
+// "Tool use" (item 5), "Sends" → "Messaging" (item 7). Renames only — same axes,
+// same options, same writes. The LOCAL helper names are kept: they are named for
+// the records they read, which did not move.
+const permissions = () => screen.getByLabelText("Tool use for agents you launch");
+const sends = () => screen.getByLabelText("Messaging for agents you launch");
 const queryPermissions = () =>
-  screen.queryByLabelText("Permissions for agents you launch");
+  screen.queryByLabelText("Tool use for agents you launch");
 // ⚠ `armTools()` STOOD HERE — the request card's ARM select, reached by the label
 // "What this thread's agent may do". The arm is deleted (2026-08-20, F-233) and the
 // label belongs to nothing; the two selects this file drives are both above.
 const item = (name: RegExp | string) => screen.getByRole("menuitem", { name });
 
 describe("the posture section exists only where the bridge does", () => {
-  it("shows Permissions and Sends inside the desktop shell", async () => {
+  it("shows Tool use and Messaging inside the desktop shell", async () => {
     bridge();
     mountAgent();
     await waitFor(() => expect(queryPermissions()).not.toBeNull());
     expect(sends()).toBeInTheDocument();
-    // ⚠ THE HEADING NAMES THE ACT, NOT A TIME WINDOW (2026-08-20). It read
-    // "For the next request you allow" — the ARM's heading — while these rows
-    // wrote the arm, and it was carrying the whole single-use disclosure on its
-    // own. It could not: the rows sit among durable settings, so the operator
-    // read them as one. The rows are durable now and the arm's heading belongs
-    // to the request card alone.
-    expect(screen.getByText("When you launch an agent")).toBeInTheDocument();
+    // ⚠ **THE HEADING IS DELETED (2026-09-06, item 2)** — along with every other
+    // group heading on this tab. The 2026-08-20 argument it carried is NOT retired:
+    // this group still governs only the launches the OPERATOR starts, and an inbound
+    // request a peer triggered still carries no tool posture at all. That sentence
+    // moved into the rows' eye popovers (`settings-help.tsx`), which is why the
+    // constant `LAUNCH_POSTURE_HEADING` still exists and is still exported while
+    // nothing renders it. ⚠ The ARM's heading stays asserted ABSENT: it named a time
+    // window over durable rows, and no popover may bring it back.
+    expect(screen.queryByText("When you launch an agent")).toBeNull();
     expect(screen.queryByText("For the next request you allow")).toBeNull();
     expect(screen.queryByText(/expires after 30 minutes/)).toBeNull();
   });
 
-  it("shows neither in a plain browser, and still shows Tools", async () => {
+  it("shows neither in a plain browser, and still shows Tool access", async () => {
+    // ⚠ TOOL ACCESS IS A DROPDOWN SINCE 2026-09-06 (item 6), not a radiogroup: the
+    // three containment lines ride into the `SelectMenu` rather than standing on the
+    // tab. It is still the CLOUD write, so it is present with or without a bridge.
     mountAgent();
-    await waitFor(() =>
-      expect(screen.getByRole("radiogroup", { name: "Tools" })).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText("Tool access")).toBeInTheDocument());
+    expect(screen.queryByRole("radiogroup", { name: "Tools" })).toBeNull();
     expect(queryPermissions()).toBeNull();
-    expect(screen.queryByLabelText("Sends for agents you launch")).toBeNull();
-    // ⚠ No heading over nothing either.
-    expect(screen.queryByText("When you launch an agent")).toBeNull();
+    expect(screen.queryByLabelText("Messaging for agents you launch")).toBeNull();
   });
 
   it("shows neither on a desktop build without the posture API", async () => {
     bridge({ present: false });
     mountAgent();
-    await waitFor(() =>
-      expect(screen.getByRole("radiogroup", { name: "Tools" })).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText("Tool access")).toBeInTheDocument());
     expect(queryPermissions()).toBeNull();
   });
 });
@@ -209,7 +213,11 @@ describe("choosing, inline", () => {
   it("writes the tool PROFILE through the caller's cloud mutation, not the bridge", async () => {
     const b = bridge();
     const { onSetToolProfile } = mountAgent();
-    fireEvent.click(screen.getByRole("radio", { name: /Read only/ }));
+    // ⚠ A DROPDOWN SINCE 2026-09-06 (item 6), so the options exist only while it is
+    // open. What this case pins is unchanged and is the important half: the profile
+    // is a CLOUD write and must never touch the desktop's posture bridge.
+    fireEvent.click(screen.getByLabelText("Tool access for agents on this channel"));
+    fireEvent.click(item(/Read only/));
     expect(onSetToolProfile).toHaveBeenCalledWith("read_only");
     expect(b.setLaunchPosture).not.toHaveBeenCalled();
   });
@@ -242,13 +250,21 @@ describe("choosing, inline", () => {
   });
 });
 
-describe("the Agent folder row", () => {
+describe("the Working Folder row", () => {
   it("is absent without the folder half of the bridge", async () => {
     bridge();
     mountAgent();
     await waitFor(() => expect(queryPermissions()).not.toBeNull());
-    expect(screen.queryByText("Agent folder")).toBeNull();
+    // ⚠ RENAMED 2026-09-06 (item 4), and the separate picker button is DELETED —
+    // the folder NAME is the button now. Both absences are asserted: the row's name
+    // and the control that used to sit under it.
+    expect(screen.queryByText("Working Folder")).toBeNull();
     expect(screen.queryByRole("button", { name: "Change folder…" })).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: "Change the working folder for this channel's agents",
+      })
+    ).toBeNull();
   });
 
   it("shows the bridge's abbreviated label and drives both actions", async () => {
@@ -257,7 +273,13 @@ describe("the Agent folder row", () => {
     await waitFor(() =>
       expect(screen.getByText("~/Downloads/repo")).toBeInTheDocument()
     );
-    fireEvent.click(screen.getByRole("button", { name: "Change folder…" }));
+    // ⚠ THE NAME IS THE PICKER. `aria-label` names the ACT because the visible text
+    // is a path and cannot describe what clicking it does.
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Change the working folder for this channel's agents",
+      })
+    );
     await waitFor(() => expect(b.chooseFolder).toHaveBeenCalledWith(CHANNEL));
     await waitFor(() => expect(screen.getByText("~/code/dopl")).toBeInTheDocument());
 
@@ -312,14 +334,14 @@ describe("ONE record, two readers — the merge rule, end to end", () => {
       </>
     );
     await waitFor(() =>
-      expect(screen.getAllByLabelText("Permissions for agents you launch")).toHaveLength(2)
+      expect(screen.getAllByLabelText("Tool use for agents you launch")).toHaveLength(2)
     );
-    const [firstTools] = screen.getAllByLabelText("Permissions for agents you launch");
+    const [firstTools] = screen.getAllByLabelText("Tool use for agents you launch");
     fireEvent.click(firstTools);
     fireEvent.click(item(/^Bypass/));
     await waitFor(() => expect(b.setLaunchPosture).toHaveBeenCalledTimes(1));
 
-    const [, secondSends] = screen.getAllByLabelText("Sends for agents you launch");
+    const [, secondSends] = screen.getAllByLabelText("Messaging for agents you launch");
     fireEvent.click(secondSends);
     fireEvent.click(item(/^Automatic/));
 
@@ -351,13 +373,13 @@ describe("ONE record, two readers — the merge rule, end to end", () => {
       </>
     );
     await waitFor(() =>
-      expect(screen.getAllByLabelText("Permissions for agents you launch")).toHaveLength(2)
+      expect(screen.getAllByLabelText("Tool use for agents you launch")).toHaveLength(2)
     );
-    const [firstTools] = screen.getAllByLabelText("Permissions for agents you launch");
+    const [firstTools] = screen.getAllByLabelText("Tool use for agents you launch");
     fireEvent.click(firstTools);
     fireEvent.click(item(/^Bypass/));
     await waitFor(() => {
-      const [, second] = screen.getAllByLabelText("Permissions for agents you launch");
+      const [, second] = screen.getAllByLabelText("Tool use for agents you launch");
       expect(second.textContent).toContain("Bypass");
     });
   });

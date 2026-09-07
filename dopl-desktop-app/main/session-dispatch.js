@@ -273,11 +273,44 @@ function escalationAnswerAgentIds(m, liveIds) {
  * working the thread hear it), and the OLD-SERVER fallback, which is ruling 4 preserved whole.
  * Everything else — a message for a peer, a message for nobody — feeds nothing at all.
  */
+// ⚠ THE BODY PARSE RUNS ONLY ON A ROW NO SERVER EVER RULED ON (2026-09-07). It used to run
+// whenever `recipientAgentIds` was absent, and that quietly unbought the CODE AND MARKUP MASKS.
+// The server reads handles through `mentionTokensOf`, which masks them (`lib/mentions.ts` rules 6
+// and 7) — code is quoted text and tags NOBODY, a rule bought after two agents writing
+// documentation about @-tagging put backticked handles in their bodies and tagged both operators
+// for real (channel seqs 647 / 653, 2026-08-21). `mentionedAgentIds` above masks nothing. So a
+// body carrying a live agent's handle INSIDE BACKTICKS plus any handle that did not resolve made
+// the server answer `null`, fell through to the unmasked regex, and woke the fenced agent. A
+// message about addressing that quotes one live agent and names one dead one is ordinary traffic,
+// not a contrived shape.
+//
+// ⚠ AND NO, DO NOT PORT THE MASKS INTO THIS TREE. That is the first thing the next reader of that
+// regex will reach for, and it is the drift `lib/mentions.ts` spends its header forbidding: the
+// masks would exist twice, in two languages, and the copies would come apart the moment either
+// changed — which is the ORIGINAL defect (a private copy of the token rule) in a new place. The
+// narrowing costs no second copy because it needs no mask: a row the server ruled on is already
+// masked, authoritatively, by the one parser.
+//
+// ⚠ THE DISTINCTION IS `wakeVerdict`, AND IT IS THE LOAD-BEARING BIT. "This build stored no
+// verdict" (an old row — `storedVerdict` answers '') and "the server ran and named nobody" are
+// different facts, and only the first is what the fallback was ever justified by.
+//
+// ⚠ WHAT THIS TRADES, STATED PLAINLY BECAUSE IT IS A REAL LOSS. `server/…-handles.ts` documents
+// `null` as "you decide", not "nobody": the token may name an agent whose session row has not
+// been PUSHED yet, and answering `[]` there would stop this machine feeding an agent it can see.
+// That case now goes unfed on a verdict-bearing row. It is accepted here as the smaller harm —
+// an unwoken agent is visible and retryable, a code fence that wakes one is neither — and the
+// repair that gets it back WITHOUT a second masker is for the server to stamp the token set it
+// actually saw, so this parse can intersect with it rather than re-derive it. Pinned both ways in
+// `test/session-dispatch-mask-fallback.test.mjs`.
 function planFor(m, liveIds, myUserId) {
   const verdict = storedVerdict(m);
+  const resolved = serverAddressed(m, liveIds);
   const ids =
-    serverAddressed(m, liveIds) ??
-    mentionedAgentIds(m.body, liveIds, agentHandles.handleIndexFor(liveIds));
+    resolved ??
+    (verdict === ''
+      ? mentionedAgentIds(m.body, liveIds, agentHandles.handleIndexFor(liveIds))
+      : []);
   for (const id of escalationAnswerAgentIds(m, liveIds)) {
     if (ids.indexOf(id) === -1) ids.push(id);
   }

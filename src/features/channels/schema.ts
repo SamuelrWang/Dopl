@@ -15,9 +15,9 @@ import type {
 // ⚠ THE RETIRED PARAMETERS LIVE IN THEIR OWN MODULE (§1 split, 2026-08-25) —
 // they are the one block here scheduled to STOP existing, and that file carries
 // the delete-me clock. Nothing about their behaviour moved.
-// ⚠ FROM THE LAUNCH SCHEMA, not a second declaration: the ceiling and the request
-// it clamps must be the same two ORDERED enums (the comparison is an index).
-import { ChannelAgentPostureSchema } from "./schema-launch";
+// ⚠ `ChannelAgentPostureSchema` IS NO LONGER IMPORTED (2026-09-06). The ceiling and the
+// request it clamped had to share two ORDERED enums because the comparison was an index;
+// there is no comparison now.
 import {
   REMOVED_PARTICIPANTS,
   REMOVED_THREAD_CLOSE,
@@ -125,30 +125,29 @@ export const ChannelUpdateSchema = z
     visibility: VisibilitySchema.optional(),
     archived: z.boolean().optional(),
     infoCard: ChannelInfoCardSchema.optional(),
-    /** **THE POSTURE CEILING A LAUNCH IS CLAMPED TO** (A9 — G6/G7). ⚠ MANAGE-gated
-     *  (`service-writes.ts › MANAGED_CHANNEL_FIELDS`), the OPPOSITE call from
-     *  `infoCard` one field up: a card is a shared scratch surface, and this is
-     *  how much room somebody else's agent gets here. Widening is a permission
-     *  change. */
-    agentPosture: ChannelAgentPostureSchema.optional(),
-    /**
-     * **RR3's DEFAULT RESPONDER** (2026-09-02, B4 — ruling B6). ⚠ The grammar is
-     * `channel_sessions.name`'s VERBATIM and `20260918120000`'s CHECK is its
-     * twin: a third spelling of "what an agent handle looks like" is how this
-     * comes to name something no session can be. ⚠ `.nullable()` is the CLEAR,
-     * on `agentPosture`'s terms — absent leaves it, `null` withdraws it, and
-     * without the pair a nomination is permanent. ⚠ MANAGED, not member-gated
-     * (`MANAGED_CHANNEL_FIELDS`): it decides whose machine the room's
-     * unaddressed work lands on.
-     */
-    defaultResponderAgentName: z
-      .string()
-      .trim()
-      .regex(/^[a-z][a-z0-9-]{1,30}$/, {
-        error: "Agent handle must match ^[a-z][a-z0-9-]{1,30}$",
-      })
-      .nullable()
-      .optional(),
+    // ⚠ **`agentPosture` IS DELETED (2026-09-06, items 12, 13, 14).** It was the posture
+    // CEILING a launch was clamped to, MANAGE-gated because it decided how much room
+    // somebody else's agent got in this room. The field is off
+    // `MANAGED_CHANNEL_FIELDS` as well, so it is not merely unvalidated here — it is
+    // unwritable. ⚠ AN OLD CLIENT SENDING IT IS IGNORED, not refused: this object is
+    // not `.strict()`, and a peer on a previous build patching a name should not have
+    // its whole write rejected over a field nothing reads.
+    // ⚠ **`defaultResponderAgentName` IS DELETED (2026-09-07, Samuel's ruling on items 10
+    // and 11).** It was a room MANAGER pinning ONE specific agent to answer EVERY member's
+    // untagged messages. Two things killed it: *"if there's another member in the room, their
+    // last agent address would be different from my last agent address"* — one room cannot
+    // hold one answer to a per-person question — and the STORED HANDLE ITSELF, because agents
+    // are ephemeral and a pinned handle decays into naming nothing.
+    //
+    // ⚠ ITS REPLACEMENT IS NOT IN THIS SCHEMA AND MUST NOT BE ADDED HERE. It is a PER-MEMBER
+    // setting, so it is written through `ChannelMemberSelfUpdateSchema`
+    // (`schema-members.ts`) against the caller's OWN `channel_members` row — a schema that
+    // carries no member identifier at all, which is the self-only guarantee. Putting it back
+    // on the CHANNEL patch would restore one member's ability to decide who answers ANOTHER
+    // member's messages, which is a scope change and not a convenience.
+    //
+    // ⚠ AN OLD CLIENT SENDING IT IS IGNORED, not refused — this object is not `.strict()`,
+    // exactly as for `agentPosture` above.
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
 export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
@@ -480,7 +479,8 @@ export {
   // ⚠ THE AGENT-MANAGEMENT HALF (2026-09-01) rides the SAME file and the same
   // barrel: `end` / `rename` are kinds of directive, not a second lane.
   AgentDirectiveCreateSchema,
-  ChannelAgentPostureSchema,
+  // ⚠ `ChannelAgentPostureSchema` IS NO LONGER RE-EXPORTED (2026-09-06) — it is deleted
+  // at its source in `schema-launch.ts` with the ceiling it validated.
   LaunchClaimSchema,
   LaunchCreateSchema,
   LaunchDecideSchema,
@@ -488,7 +488,7 @@ export {
 } from "./schema-launch";
 export type {
   AgentDirectiveCreateInput,
-  ChannelAgentPostureInput,
+  // ⚠ `ChannelAgentPostureInput` went with its schema (2026-09-06).
   LaunchClaimInput,
   LaunchCreateInput,
   LaunchDecideInput,

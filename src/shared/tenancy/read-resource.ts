@@ -35,10 +35,36 @@ import {
  * lane would make the same row answer two ways depending on which door the
  * caller came through — the confusion this whole slice removes.
  *
- * ⚠ **READS ONLY. `workspace=` IS STILL THE KEY ON A WRITE** (INVARIANTS §T35):
- * a PATCH that followed an id across a tenancy boundary is a ruling nobody has
- * made, so every feature keeps its workspace-keyed gate for writes and composes
- * this for the read door alone.
+ * 🔓 **WRITES FOLLOW THE ADDRESS TOO — SAMUEL'S RULING, 2026-09-06** (INVARIANTS
+ * §T35, rewritten). This docblock used to end "READS ONLY: a PATCH that followed
+ * an id across a tenancy boundary is a ruling nobody has made". It has now been
+ * made, and the reason it had to be is the shape the read half left behind: an
+ * agent (or a person) could OPEN a base or a template on its own operator's
+ * personal shelf from any container, and then could not EDIT the thing it was
+ * looking at — `KNOWLEDGE_BASE_MISMATCH` / `AGENT_TEMPLATE_NOT_FOUND` for a row
+ * the very same session had just rendered. A fence that opens the read and
+ * closes the write on the SAME row is not a fence, it is a half-migration.
+ *
+ * ⚠ **WHAT THE RULING DOES NOT CHANGE, AND THIS IS THE WHOLE SAFETY ARGUMENT:**
+ *   1. **BOTH FENCES STILL RUN, IN ORDER.** The resolver is strictly narrower
+ *      than any feature's matrix, and `load` — the feature's own
+ *      visibility-checked read — runs AGAIN in the container the id named, with
+ *      the caller's REAL role there. Following an id authorises nothing.
+ *   2. **THE EDIT GATE IS UNTOUCHED.** `assertBaseWritable` / `assertMayWrite` /
+ *      `agent_write_enabled` all still have to pass, and they now pass or refuse
+ *      in the row's OWN container instead of in a container the row is not in.
+ *   3. **THE WRITE LANDS WHERE THE ROW IS.** A write gate returns the re-based
+ *      {@link ContainerRead} and every workspace-keyed call after it — slugs,
+ *      grants, junctions, `hardDelete*`, path resolution — takes THAT context.
+ *      A caller that followed an id and then composed against the ORIGINAL ctx
+ *      would gate in one container and write in another, which is worse than
+ *      the refusal it replaces. That is why the gates hand back a context
+ *      instead of a row.
+ *
+ * ⚠ **A FEATURE OPTS IN BY MIGRATING ITS CALL SITES, NOT BY FLIPPING A FLAG.**
+ * Every write gate that has NOT been given the re-based context keeps its
+ * workspace-keyed lookup and keeps refusing, because rule 3 is the dangerous
+ * half and it cannot be applied from here.
  */
 
 /**

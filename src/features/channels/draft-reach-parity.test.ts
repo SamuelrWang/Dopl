@@ -20,6 +20,13 @@
  * over. **This file is the assertion that the sharing is real.** Folding the two
  * callers into one resolver stays F-551's, in the slice that owns both files.
  *
+ * ⚠ **RR3 LOST ITS CONFIGURED ARM ON 2026-09-07 AND GAINED A GATE IN FRONT OF THE REST**
+ * (Samuel's ruling on items 10 and 11). The room-wide `default_responder_agent_name` is
+ * deleted; what both sides now consult first is the ASKING PERSON's own two-valued setting,
+ * and `"none"` short-circuits every remaining arm. The two ends reach that value by different
+ * routes — the client off its roster row, the server off `channel_members` keyed on the author
+ * — which is exactly the kind of split this file exists to hold together.
+ *
  * ⚠ **RR2 IS PREDICTED NOWHERE, AND THAT IS RECORDED RATHER THAN FIXED.** It is
  * an AGENT author's arm and no browser holds an agent credential, so this
  * surface cannot reach it — but that also means the one arm with no client
@@ -32,9 +39,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./server/repository-sessions");
 vi.mock("./server/repository-messages");
+/**
+ * ⚠ **PARTIAL, AND THAT IS LOAD-BEARING** (2026-09-07, items 10 and 11). RR3 grew a third
+ * input — the AUTHOR's own `channel_members.unaddressed_responder` — and it is read through
+ * `server/repository.ts`, a module this file also needs whole. Mocking the module flat would
+ * have replaced `hasMembership` and every other real read alongside it.
+ *
+ * ⚠ **AND THE MOCK IS NOT OPTIONAL HERE, THOUGH THE SUITE WOULD PASS WITHOUT IT.**
+ * `unaddressedResponderFor` SWALLOWS a read error and returns the default, so an unmocked
+ * repository would throw against no database and the fixture cases would still be green — by
+ * way of the fail-safe rather than by way of the setting. That is a suite proving the catch
+ * block works and nothing else, and it would have gone on "passing" no matter what the
+ * setting did. Stubbing it makes the parameter real on the server side.
+ */
+vi.mock("./server/repository", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./server/repository")>()),
+  findUnaddressedResponder: vi.fn(),
+}));
 
 import * as repoSessions from "./server/repository-sessions";
 import * as repoMessages from "./server/repository-messages";
+import * as repo from "./server/repository";
+import type { UnaddressedResponderSetting } from "./lib/agent-mentions";
 import { draftReach } from "./lib/draft-recipients";
 import { resolveWakeVerdict } from "./server/service-wake-verdict";
 import type { ChannelContext } from "./server/service-shared";
@@ -91,7 +117,17 @@ interface Case {
    *  that read an own-scoped set and a channel-wide one then coincide, which is
    *  what lets one fixture drive both. */
   sessions: SessionStateRow[];
-  defaultResponder?: string | null;
+  /**
+   * **THE AUTHOR'S OWN SETTING** (2026-09-07, items 10 and 11) — it replaced `defaultResponder`,
+   * the channel's room-wide pin of one agent for everybody.
+   *
+   * ⚠ **THE TWO SIDES REACH IT BY DIFFERENT ROUTES, WHICH IS THE WHOLE POINT OF THE PAIR**: the
+   * client is handed the value it read off its own roster row, the server reads the same column
+   * through `findUnaddressedResponder` keyed on `(channel, author)`. Absent means neither side
+   * was configured, so both take `last_addressed` — B1's answer for a member who never opened
+   * Settings, and NOT `"none"`.
+   */
+  unaddressedResponder?: UnaddressedResponderSetting;
   /** RR3 arm 3's input — **the agents THIS AUTHOR tagged here lately, most recent first**
    *  (2026-09-04; it was "the agents that posted here" for one day, and an agent tagging another
    *  agent moved everyone's default). The client is handed it directly; the server derives it from
@@ -160,18 +196,23 @@ const CASES: Case[] = [
     },
   },
   {
-    name: "TWO live agents and a configured responder — RR3 arm 1",
+    // ⚠ **THE TWO ARM-1 CASES THAT STOOD HERE ARE DELETED (2026-09-07, items 10 and 11)** —
+    // "a configured responder wins" and "a responder that is NOT live degrades to arm 2". Both
+    // were about a stored HANDLE, and there is no handle: agents are ephemeral, so a pin decays
+    // into naming nothing. This case replaces both, and it is the sharper one — it is the arm
+    // the OLD design could not express at all.
+    //
+    // ⚠ **`"none"` MUST KILL EVERY ARM ON BOTH SIDES.** One live agent, so arm 2 alone would
+    // answer; the author has also addressed it lately, so arm 3 would too. If either end tested
+    // only the recency arm, this case is where the two would come apart — and the composer
+    // would name an agent the server is about to wake nobody for. OVERSTATED reach, which this
+    // pair exists to make impossible.
+    name: "the author chose No one — every arm is off, on BOTH sides",
     body: "can someone look at the build?",
-    sessions: [sessionRow("k3v7d2mq"), sessionRow("m8q1zzzz")],
-    defaultResponder: "agent-m8q1zzzz",
-    expect: { via: "responder", verdict: "responder", agentIds: ["m8q1zzzz"], userIds: [] },
-  },
-  {
-    name: "a responder that is NOT live degrades to arm 2 rather than failing",
-    body: "anyone?",
     sessions: [sessionRow("k3v7d2mq")],
-    defaultResponder: "agent-nothere",
-    expect: { via: "responder", verdict: "responder", agentIds: ["k3v7d2mq"], userIds: [] },
+    unaddressedResponder: "none",
+    recentAgentIds: ["k3v7d2mq"],
+    expect: { via: "none", verdict: "none", agentIds: [], userIds: [], reason: null },
   },
   {
     name: "no agents at all — `none` is an ANSWER, not a failure",
@@ -201,7 +242,11 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
       members: MEMBERS,
       sessions: c.sessions.map((s) => ({ name: s.name, displayName: s.display_name })),
       currentUserId: ME,
-      defaultResponderAgentName: c.defaultResponder ?? null,
+      // ⚠ THE CLIENT IS HANDED THE COERCED VALUE, as every real caller is
+      // (`lib/draft-recipients.ts › viewerUnaddressedResponder` does the coercion off the
+      // roster). The parameter takes no null, so "unset" is spelled as the default HERE rather
+      // than reaching the rule as an absence it would have to interpret.
+      unaddressedResponder: c.unaddressedResponder ?? "last_addressed",
       recentAgentIds: c.recentAgentIds ?? [],
       threadOtherParty: c.threadOtherParty ?? null,
     });
@@ -254,9 +299,19 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
         ? { taskId: "t-1", taskCreatedBy: ME, taskTarget: c.threadOtherParty.userId }
         : {};
 
+    // ⚠ **THE SERVER READS THE SETTING OFF THE AUTHOR'S MEMBERSHIP ROW, NOT OFF THE CHANNEL** —
+    // the change items 10 and 11 are. The stub answers the RAW COLUMN, because that is what the
+    // repository returns and the coercion is the caller's; handing it the coerced value would
+    // move `normalizeUnaddressedResponder` out of the path this pair is meant to drive.
+    vi.mocked(repo.findUnaddressedResponder).mockResolvedValue(
+      c.unaddressedResponder ?? "last_addressed"
+    );
+
     const server = await resolveWakeVerdict(
       CTX,
-      { id: CHAN, workspace_id: WS, default_responder_agent_name: c.defaultResponder ?? null } as ChannelRow,
+      // ⚠ `default_responder_agent_name` LEFT THIS ROW ON 2026-09-07 with the column's last
+      // reader. `resolveWakeVerdict` still takes the channel row for everything else it decides.
+      { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: c.body, kind: "message" } as ChannelMessageCreateInput,
       metadata,
       { authorKind: "user", toAgentId: null },
@@ -340,7 +395,7 @@ describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)",
 
     const server = await resolveWakeVerdict(
       CTX,
-      { id: CHAN, workspace_id: WS, default_responder_agent_name: null } as ChannelRow,
+      { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: "can someone look at the build?", kind: "message" } as ChannelMessageCreateInput,
       {},
       { authorKind: "user", toAgentId: null },

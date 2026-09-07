@@ -77,6 +77,20 @@ const GATE_REASONS = [
   //                             question. Its own code because "the agent asked for a decision"
   //                             is a different answer to "what left with no click?" than a
   //                             milestone or a thread open.
+  'auto-outbound-artifact', //   2026-09-06: the same outbound half on an own-channel
+  //                             `artifact` fold (create / add / remove / dissolve). ITS OWN CODE,
+  //                             for the reason each of the three above has one: "the agent folded
+  //                             part of the transcript into a card" is not the same answer to
+  //                             "what left this machine with no click?" as a message, a marker or
+  //                             a decision — and it is the ONLY one of the four that changed how
+  //                             the room READS rather than adding to what it says.
+  //                             ⚠ ONE CODE FOR FOUR ACTIONS, deliberately: they share a single
+  //                             admission argument (a fold settles nothing, `dissolve` reverses
+  //                             it), and this list's grain is the ARGUMENT, not the verb. WHICH
+  //                             action ran is already on the same diag line — `session-gate-
+  //                             bridge.js › channelOpLabel` prints `op=artifact.dissolve` — so a
+  //                             second code per verb would duplicate a field the line has and
+  //                             split one ruling across four names nobody could grep as one.
   'auto-outbound-thread-open', //2026-08-24 (Samuel's ruling): the same outbound half on an
   //                             own-channel `create_thread`. ITS OWN CODE, for the reason the
   //                             marker has one: the question an audit asks is "what left this
@@ -120,7 +134,6 @@ function makeGateReason(deps) {
     // message setting would send the operator to widen a posture that is already wide enough.
     // A launch naming ANOTHER channel is not this case and falls through, as a post's does.
     if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'launch-posture-required';
-    const op = a.input && a.input.op;
     // A SLUG lands here too, and that is the single most confusing gate in the product: the
     // agent addressed its own channel by name, isOwnChannelPost compares against the ID, and the
     // safe classification is "another channel". The renderer's copy names the fix (use the id).
@@ -131,7 +144,15 @@ function makeGateReason(deps) {
     // list this reads is the UNION, so a slug-addressed `create_thread` lands here too.)
     // (2026-09-02, F-578: the collapse made every outbound shape `op="send"`, so the union this
     // reads is a list of one and the `post` disjunct it used to need is gone with the op.)
-    if ((d.OWN_CHANNEL_OUTBOUND_OPS || []).indexOf(op) !== -1) return 'cross-channel-post';
+    // ⚠ **ASKED THROUGH THE MEMBERSHIP PREDICATE SINCE 2026-09-06, NOT BY INDEXING THE LIST WITH
+    // A BARE `input.op`** — the identical correction the READ arm below took at F-578, arriving
+    // here one op late. The union stopped being a list of one when `artifact.*` joined it, and a
+    // bare `'artifact'` matches none of the four dotted keys: a SLUG-addressed fold would have
+    // fallen past this arm to `channel-op-approval-required`, telling the operator their message
+    // posture does not cover the operation when the real fix is "address your own channel by id".
+    // The predicate is `session-own-outbound.js`'s, injected like every other, so the explainer
+    // still cannot hold its own copy of the rule.
+    if (d.isOwnChannelOutboundCall && d.isOwnChannelOutboundCall(a.input)) return 'cross-channel-post';
     // M3: a READ op that got here named a channel this session is not bound to (or a slug),
     // which is a DIFFERENT fact from "reads are never auto-run" and now says so.
     // ⚠ ASKED THROUGH THE GATE'S OWN MEMBERSHIP PREDICATE, not by indexing the list: since the
@@ -215,6 +236,14 @@ function makeGateReason(deps) {
       if (d.isOwnChannelThreadOpen(a.input, a.channelId)) return 'auto-outbound-thread-open';
       if (d.isOwnChannelEscalate(a.input, a.channelId)) return 'auto-outbound-escalate';
       if (d.isOwnChannelMarker(a.input, a.channelId)) return 'auto-outbound-marker';
+      // ⚠ 2026-09-06: the FOLD takes the same treatment as the three above — its own code, and
+      // asked here rather than absorbed by the `auto-outbound` fall-through below. That
+      // fall-through means "the agent sent a message into its own channel", which an artifact
+      // call is not; letting it answer would make every fold in the field indistinguishable from
+      // a post in `listener.log`. ⚠ ITS PREDICATE IS DISJOINT FROM ALL THREE ABOVE (they match
+      // `op="send"` only, `isSendKind`'s note), so the order among the four buys nothing and is
+      // kept alphabetical-by-nothing: it mirrors the order the arguments were ruled in.
+      if (d.isOwnChannelArtifact && d.isOwnChannelArtifact(a.input, a.channelId)) return 'auto-outbound-artifact';
       return 'auto-outbound';
     }
     if (decision !== 'gate') return null; // an unknown verdict explains nothing, honestly

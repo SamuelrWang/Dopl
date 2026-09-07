@@ -29,7 +29,12 @@
  */
 
 import { useMemo } from "react";
-import { draftReach, type DraftReach, type LiveAgentSession } from "../../lib/draft-recipients";
+import {
+  draftReach,
+  viewerUnaddressedResponder,
+  type DraftReach,
+  type LiveAgentSession,
+} from "../../lib/draft-recipients";
 import type { ChannelMember } from "../../types";
 
 /**
@@ -84,7 +89,6 @@ export function ComposerRecipients({
   members,
   sessions,
   currentUserId,
-  defaultResponderAgentName = null,
   recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
 }: {
@@ -92,7 +96,6 @@ export function ComposerRecipients({
   members: ChannelMember[];
   sessions: readonly LiveAgentSession[];
   currentUserId: string;
-  defaultResponderAgentName?: string | null;
   /** RR3 arm 3's input, derived once from the transcript this pane already
    *  holds (`derivations.ts`). ⚠ A STABLE reference — see {@link EMPTY_RECENT}. */
   recentAgentIds?: readonly string[];
@@ -105,7 +108,13 @@ export function ComposerRecipients({
         members,
         sessions,
         currentUserId,
-        defaultResponderAgentName,
+        // ⚠ **DERIVED HERE, FROM THE ROSTER THIS COMPONENT ALREADY TAKES** (2026-09-07, items
+        // 10 and 11) — the setting is PER MEMBER now, so it is a fact about the viewer's own
+        // membership row rather than a property of the channel. That is why it arrives on no
+        // prop: `defaultResponderAgentName` had to be threaded down four components from the
+        // channel row, and every surface that forgot it (the thread pop-out did) silently got
+        // a different answer from the server's.
+        unaddressedResponder: viewerUnaddressedResponder(members, currentUserId),
         recentAgentIds,
         threadOtherParty,
       }),
@@ -114,7 +123,6 @@ export function ComposerRecipients({
       members,
       sessions,
       currentUserId,
-      defaultResponderAgentName,
       recentAgentIds,
       threadOtherParty,
     ]

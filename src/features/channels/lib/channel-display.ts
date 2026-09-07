@@ -25,8 +25,20 @@ import type { Channel, ChannelDirectPeer, ChannelMember } from "../types";
  * change independently (and a mention that inserts a different string than the
  * picker shows is a user-visible mismatch, not a cosmetic one).
  */
+/**
+ * ⚠ TRIMMED, AND THE TRIM IS A PARITY FIX RATHER THAN A TIDY-UP (2026-09-07).
+ *
+ * `||` already caught the empty string, but NOT a display name that is only whitespace — and the
+ * HANDLE side of this same picker has trimmed since it was written: `lib/mentions.ts › handlesOf`
+ * does `(source ?? "").trim()` and skips a source that empties, so a whitespace-named member
+ * already claims their EMAIL handles and nothing else. The two sides had therefore already
+ * diverged: the row rendered blank while {@link import("./mentions").insertableHandle} inserted a
+ * working email handle under it. Trimming here is what closes that, not what risks opening it —
+ * the picker's label and the token it inserts now come from sources that agree about what counts
+ * as a name. Pinned in `blank-name-fallback.test.ts`.
+ */
 export function memberLabel(m: ChannelMember): string {
-  return m.displayName || m.email || m.userId;
+  return (m.displayName ?? "").trim() || (m.email ?? "").trim() || m.userId;
 }
 
 /** The other member of a direct channel, from the roster; null when unknown. */
@@ -52,7 +64,15 @@ export function channelDisplayName(
   if (c.isDirect) {
     if (c.directPeer?.displayName) return c.directPeer.displayName;
     const peer = rosterPeer(members, currentUserId);
-    return peer?.displayName ?? peer?.email ?? "Direct message";
+    // ⚠ `memberLabel`, NOT A SECOND FALLBACK CHAIN (2026-09-07). This line read
+    // `peer?.displayName ?? peer?.email ?? "Direct message"`, and `??` falls back only on null
+    // and undefined — so a peer whose display name is the EMPTY STRING returned "", and the DM
+    // rendered with no name at all in the sidebar and the header. That is the exact invariant
+    // {@link memberLabel} exists to hold ("so a row is never blank", eleven lines up), restated
+    // here in a weaker operator: the same drift-into-a-private-copy this file's own docblock
+    // warns about. The literal stays for the case it was actually written for — a peer that
+    // cannot be resolved from either source.
+    return peer ? memberLabel(peer) : "Direct message";
   }
   return c.name;
 }

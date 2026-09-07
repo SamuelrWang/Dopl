@@ -12,7 +12,9 @@ import { useApiQuery } from "#/hooks/use-api-query";
 import { invalidateWorkspaceReads } from "#/lib/workspace-cache";
 import { AccountActions } from "./account-actions";
 import { BillingPane } from "./billing-pane";
-import { TurnCapRow } from "./turn-cap-row";
+// ⚠ `TurnCapRow` NO LONGER IMPORTED (2026-09-07, Samuel: "Remove the turn/cost limit"). Its
+// module (`turn-cap-row.tsx`), its hook (`use-turn-cap.ts`) and its suite are deleted in the same
+// change, along with the `settings:*TurnCap` IPC pair and the preload bindings behind them.
 
 interface Props {
   open: boolean;
@@ -94,10 +96,12 @@ export function SettingsModal({
       }
       accountPane={
         <AccountSectionCore
-          // ⚠ MACHINE-SCOPED, so it is bound here and not in the core: this
-          // modal is the DESKTOP binding, and the row hides itself when main
-          // has no turn-cap ops (`./use-turn-cap`).
-          machineSection={<TurnCapRow />}
+          // ⚠ `machineSection={<TurnCapRow />}` STOOD HERE AND IS DELETED (2026-09-07, Samuel:
+          // "Remove the turn/cost limit"). ⚠ THE SLOT ITSELF IS LEFT ALONE and that is a
+          // decision, not an oversight: `machineSection` is a GENERIC per-machine slot in a
+          // shared file ("some settings belong to a machine, and the web has none"), not a
+          // turn-cap affordance. It now has zero fillers on either platform. Removing it would
+          // be editing a shared layout on the strength of one deleted row.
           dangerZone={<AccountActions workspaceSegment={workspaceSegment} />}
         />
       }

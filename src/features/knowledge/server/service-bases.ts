@@ -226,13 +226,19 @@ export async function listBaseStats(
 }
 
 /**
- * 🔒 ⚠ **KEYED TO `ctx.workspaceId`, AND IT MUST STAY THAT WAY — IT IS THE WRITE
- * GATE.** `service-base-writes.ts`, `service-entries.ts`, `service-folders.ts`,
- * `service-paths.ts`, `service-pins.ts` and `service-stars.ts` all funnel
- * through it, so the tenancy it reads in is the tenancy those writes land in.
- * The ID-RESOLVING read is {@link readBaseById}; the split is A12's, restated
- * for this feature — a PATCH that followed an id into another container would be
- * `workspace=` becoming ignorable on a WRITE, which nobody has ruled.
+ * 🔒 ⚠ **KEYED TO `ctx.workspaceId`: ONE CONTAINER, BOTH GATES.** It is the
+ * in-container load every other door in this file is built from — the follow
+ * ({@link loadVisibleBase}) calls it once per container, and the write gate
+ * ({@link getBaseForWrite}) is the follow plus the landed context.
+ *
+ * ⚠ **IT IS NO LONGER "THE WRITE GATE" AND MUST NOT BE USED AS ONE FOR A ROW THE
+ * CALLER MAY NAME ELSEWHERE** (2026-09-06). Call sites still on it — `service-
+ * pins.ts`, `service-stars.ts`, the channel-grants route — keep today's
+ * workspace-keyed refusal on a cross-container id, which is correct-but-narrow
+ * rather than wrong: they have not been given the re-based context their own
+ * workspace-keyed follow-up calls would need. Migrating one means switching it
+ * to {@link getBaseForWrite} AND passing the returned `ctx` to everything after
+ * it, never just the first half.
  */
 export async function getBaseById(
   ctx: KnowledgeContext,
@@ -285,6 +291,31 @@ export async function readBaseInContext(
   const hit = await readResourceById(ctx, "knowledge_base", id, loadVisibleBase);
   if (!hit) throw new KnowledgeBaseNotFoundError(id);
   return hit;
+}
+
+/**
+ * 🔓 **THE WRITE GATE (2026-09-06, Samuel's ruling — see `shared/tenancy/
+ * read-resource.ts`).** The same row, the same two gates, the same 404 — but the
+ * id names its own container on a WRITE as it already did on a read, and the
+ * caller gets the container back so the write lands in it.
+ *
+ * ⚠ **IT IS {@link readBaseInContext} AND NOT A SECOND COMPOSITION.** The follow
+ * is one mechanic; a write-flavoured copy of it would be the copy that stops
+ * matching the read (F-278). What makes this a WRITE gate is not extra
+ * resolution, it is the obligation the return type puts on the caller: the
+ * `ctx` it hands back is the one every workspace-keyed call downstream must use.
+ *
+ * ⚠ **IT AUTHORISES NOTHING BY ITSELF.** `assertBaseWritable`,
+ * `assertAgentCanDelete` and the sharing/creator checks are still the caller's
+ * to run — and they must be run against the RETURNED ctx, so an `edit` grant is
+ * weighed in the container the base actually lives in, with the caller's real
+ * role there.
+ */
+export async function getBaseForWrite(
+  ctx: KnowledgeContext,
+  id: string
+): Promise<ContainerRead<KnowledgeContext, KnowledgeBase>> {
+  return readBaseInContext(ctx, id);
 }
 
 /**

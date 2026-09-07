@@ -87,6 +87,7 @@ vi.mock("../../hooks/use-channel-preference-writes", () => ({
   useChannelPreferenceWrites: () => ({
     favorite: { mutate: () => {} },
     consent: { mutate: () => {}, pending: false },
+    unaddressedResponder: { mutate: () => {}, pending: false },
   }),
 }));
 // The escalation card's answer write (2026-08-31) — mocked for the same reason

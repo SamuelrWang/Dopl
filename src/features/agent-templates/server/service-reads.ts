@@ -1,5 +1,8 @@
 import "server-only";
-import { readResourceById } from "@/shared/tenancy/read-resource";
+import {
+  readResourceById,
+  type ContainerRead,
+} from "@/shared/tenancy/read-resource";
 import type {
   AgentTemplate,
   AgentTemplateContext,
@@ -83,12 +86,16 @@ export async function listHomeScopedTemplateIds(
  * is exactly the oracle the visibility matrix is there to close. Same rule as
  * `getSkillBySlug`.
  *
- * 🔒 ⚠ **THIS ONE IS KEYED TO `ctx.workspaceId` AND MUST STAY THAT WAY — IT IS
- * THE WRITE GATE.** `service-writes.ts` funnels create, update and delete
- * through it, so the tenancy it reads in is the tenancy those writes land in.
- * The ID-RESOLVING read is {@link readTemplateById}, and the split is the whole
- * reason A12 is a READ pilot: a PATCH that followed an id into another container
- * would be `workspace=` becoming ignorable on a WRITE, which nobody has ruled.
+ * 🔒 ⚠ **KEYED TO `ctx.workspaceId`: ONE CONTAINER, ONE MATRIX.** It is the
+ * in-container load the other two doors are built from — {@link readTemplateById}
+ * follows an id with it, and {@link getTemplateForWrite} is that follow plus the
+ * container it landed in.
+ *
+ * ⚠ **IT IS NO LONGER "THE WRITE GATE"** (2026-09-06, Samuel's ruling — see
+ * `shared/tenancy/read-resource.ts`). A caller still on it refuses a
+ * cross-container id, which is narrow rather than wrong; making one follow the
+ * id means switching it to {@link getTemplateForWrite} AND giving every
+ * workspace-keyed call after it the returned context.
  */
 export async function getTemplateById(
   ctx: AgentTemplateContext,
@@ -131,6 +138,20 @@ export async function readTemplateById(
   ctx: AgentTemplateContext,
   id: string
 ): Promise<AgentTemplate> {
+  return (await readTemplateInContext(ctx, id)).value;
+}
+
+/**
+ * 🔒 **THE SAME READ, PLUS THE CONTAINER IT LANDED IN** — the twin of
+ * `knowledge/server/service-bases.ts › readBaseInContext`, and for the same
+ * reason: a template's TEAM LINKS, KNOWLEDGE LINKS and row update are all
+ * workspace-keyed, so a caller that followed an id and then composed against the
+ * original context would gate on one container and write junctions into another.
+ */
+export async function readTemplateInContext(
+  ctx: AgentTemplateContext,
+  id: string
+): Promise<ContainerRead<AgentTemplateContext, AgentTemplate>> {
   const hit = await readResourceById(
     ctx,
     "agent_template",
@@ -138,7 +159,23 @@ export async function readTemplateById(
     loadVisibleTemplate
   );
   if (!hit) throw new AgentTemplateNotFoundError(id);
-  return hit.value;
+  return hit;
+}
+
+/**
+ * 🔓 **THE WRITE GATE (2026-09-06, Samuel's ruling).** An id names its own
+ * container on a PATCH and a DELETE exactly as it already did on a GET, and the
+ * caller gets that container back so the write lands in it.
+ *
+ * ⚠ **IT AUTHORISES NOTHING.** `assertMayWrite`, the shared-credential fence and
+ * the team-scope checks are still the caller's to run — against the RETURNED
+ * ctx, so the caller's role is the one they hold where the row lives.
+ */
+export async function getTemplateForWrite(
+  ctx: AgentTemplateContext,
+  id: string
+): Promise<ContainerRead<AgentTemplateContext, AgentTemplate>> {
+  return readTemplateInContext(ctx, id);
 }
 
 /** The read every door shares: one row, in ONE named container, through the

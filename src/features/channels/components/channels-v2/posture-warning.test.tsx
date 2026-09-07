@@ -62,6 +62,22 @@ function inputs(over: Partial<PostureWarningInputs> = {}): PostureWarningInputs 
   };
 }
 
+
+/**
+ * PICK A TOOL PROFILE.
+ *
+ * ⚠ **TOOL ACCESS IS A `SelectMenu`, NOT A RADIOGROUP, SINCE 2026-09-06 (item 6).** These cases
+ * clicked `role="radio"` directly because all three options stood on the tab, each carrying a
+ * few-word containment line — the only per-option copy the 2026-08-19 minimal-copy ruling left.
+ * Those lines moved INTO the dropdown, so the options now exist only while it is open and the
+ * click is two steps. What every case here pins is unchanged: which write the transition makes,
+ * and whether the dialog fires.
+ */
+const pickToolAccess = (name: RegExp) => {
+  fireEvent.click(screen.getByLabelText("Tool access for agents on this channel"));
+  fireEvent.click(screen.getByRole("menuitem", { name }));
+};
+
 describe("warrantsPostureWarning — the three conjuncts, each falsified alone", () => {
   it("is TRUE only for auto_both + full + somebody else on the roster", () => {
     expect(warrantsPostureWarning(inputs())).toBe(true);
@@ -226,7 +242,7 @@ describe("the DIALOG fires on the transition, from EITHER axis", () => {
       profile: "dopl_only",
       posture: { tools: "manual", messages: "auto_both" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /Full access/ }));
+    pickToolAccess(/Full access/);
     expect(await screen.findByText(POSTURE_WARNING_TITLE)).toBeTruthy();
     expect(onSetToolProfile).not.toHaveBeenCalled();
   });
@@ -274,7 +290,7 @@ describe("the DIALOG does NOT fire on anything else", () => {
       profile: "full",
       posture: { tools: "manual", messages: "auto_both" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /Read only/ }));
+    pickToolAccess(/Read only/);
     await waitFor(() => expect(onSetToolProfile).toHaveBeenCalledWith("read_only"));
     expect(screen.queryByText(POSTURE_WARNING_TITLE)).toBeNull();
   });
@@ -293,7 +309,7 @@ describe("the DIALOG does NOT fire on anything else", () => {
 
   it("stays silent with no posture to read at all (no bridge)", async () => {
     const { onSetToolProfile } = mount({ profile: "dopl_only", posture: null });
-    fireEvent.click(screen.getByRole("radio", { name: /Full access/ }));
+    pickToolAccess(/Full access/);
     await waitFor(() => expect(onSetToolProfile).toHaveBeenCalledWith("full"));
     expect(screen.queryByText(POSTURE_WARNING_TITLE)).toBeNull();
   });
@@ -340,7 +356,7 @@ describe("what the two answers do", () => {
       profile: "dopl_only",
       posture: { tools: "manual", messages: "auto_both" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /Full access/ }));
+    pickToolAccess(/Full access/);
     fireEvent.click(await screen.findByText(POSTURE_WARNING_CONFIRM));
     await waitFor(() => expect(onSetToolProfile).toHaveBeenCalledWith("full"));
     expect(onSetToolProfile).toHaveBeenCalledTimes(1);

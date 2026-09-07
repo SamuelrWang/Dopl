@@ -127,11 +127,45 @@ function chainModel(value) {
   return alias === 'default' ? '' : alias;
 }
 
+// ── ⚠ THE PRODUCT'S DEFAULT MODEL (2026-09-06, Samuel's back-fill ruling) ────────────────────
+//
+// ⚠ **IT IS THE DESKTOP'S HALF OF A PINNED TWIN.** The web declares the same id as
+// `src/features/channels/lib/agent-models.ts › AGENT_MODEL_FALLBACK`, and the two trees cannot
+// import each other — the exact situation `agent-models.ts › AGENT_MODEL_ALIASES` already
+// restates `MODEL_CHOICES` / `ID_TO_ALIAS` for. `test/session-model.test.mjs` pins them against
+// each other by READING the web file, so a change to one that misses the other fails rather than
+// ships. Do not "simplify" either side to a literal at a call site.
+//
+// ⚠ **WHY IT EXISTS: A DROPDOWN MUST NOT NAME A MODEL THE LAUNCH WILL NOT PASS.** Samuel removed
+// the "Default" option and ruled that every channel behaves as though set to a real model. The
+// web half alone would have made the Settings row DISPLAY Sonnet while an unpicked channel still
+// launched with no `--model` at all — a control stating a fact it does not cause. This is the
+// launch half, so display and launch agree by construction.
+//
+// ⚠ **THIS IS A PRODUCT CHOICE, NOT A FACT ABOUT THE CLI.** "Default" never named a model; it
+// meant no `--model` argument, i.e. whatever the bundled CLI picks, which nothing here knows and
+// which can move without this tree shipping. So this pins a channel to Sonnet rather than to
+// "whatever the CLI does today", and that cost was accepted explicitly.
+const LAUNCH_MODEL_FALLBACK = 'claude-sonnet-5';
+
 // The value that may become `--model <argv>`, or null for "set no model option at all".
 // It re-normalizes rather than trusting its caller, because this is the last gate.
+//
+// ⚠ **`'default'` NOW RESOLVES TO THE PRODUCT FALLBACK RATHER THAN TO `null`** (2026-09-06). A
+// chain that ended with no opinion used to spend the CLI's own pick; it spends Sonnet now.
+//
+// ⚠ THE `null` RETURN IS NOT DELETED, AND THAT IS DELIBERATE. It is still what a caller gets for
+// a value that cannot resolve at all, and `buildSdkOptions` still reads it as "set no model
+// option" — the shape that lets a runtime with no model concept launch. What changed is which
+// INPUTS reach it, not what it means.
+//
+// ⚠ `chainModel` IS UNCHANGED AND MUST STAY UNCHANGED. It answers `''` for `'default'` so a link
+// with no opinion STEPS ASIDE and the lower links get their turn (F-285). Resolving the fallback
+// there instead would end every chain at its first link, so a channel's stored model could never
+// beat a template's — the precedence order would silently invert.
 function modelArg(value) {
   const choice = normalizeModel(value);
-  return choice === 'default' ? null : choice;
+  return choice === 'default' ? aliasForModelId(LAUNCH_MODEL_FALLBACK) : choice;
 }
 
 // ── CONTEXT WINDOWS ─────────────────────────────────────────────────────────
@@ -262,6 +296,10 @@ module.exports = {
   normalizeModel,
   chainModel, // 2026-08-23: one link of a launch's model precedence chain ('' = keep going)
   modelArg,
+  // 2026-09-06 (Samuel's back-fill ruling): the PRODUCT's default model — the desktop half of a
+  // twin the web declares as `AGENT_MODEL_FALLBACK`. Exported so the pin test can read it;
+  // nothing else should, because `modelArg` is where it is spent.
+  LAUNCH_MODEL_FALLBACK,
   contextWindowFor,
   promptTokens,
   sessionTokens,

@@ -132,7 +132,6 @@ export function ChannelsV2MessagePane({
   favorited = false,
   gate,
   liveAgents,
-  defaultResponderAgentName = null,
   newAgent,
   popOut,
   agentActivity,
@@ -189,9 +188,11 @@ export function ChannelsV2MessagePane({
    * unpublished table. A host with no such read hands none and the picker offers members only.
    */
   liveAgents?: readonly LiveAgentSession[];
-  /** `channels.default_responder_agent_name` — who answers an untagged message (RR3 arm 1).
-   *  ⚠ Absent is not "nobody": the composer's line still falls to the room's one live agent. */
-  defaultResponderAgentName?: string | null;
+  // ⚠ **`defaultResponderAgentName` IS OFF THIS SURFACE (2026-09-07, items 10 and 11)** — the
+  // room-wide nomination is deleted, and its per-member replacement is read from the ROSTER
+  // this pane already passes down (`members`), not handed in by a host. The pop-out thread
+  // window is why that matters: it never had a channel row to read the old field from, so its
+  // recipient line stated one arm fewer than the main pane's. Both are now exact.
   /**
    * The page's launch controls (`use-agents-panel.ts › AgentLaunchControls`),
    * for the composer's New Agent icon. ⚠ PASSED DOWN, never mounted here: a
@@ -461,7 +462,6 @@ export function ChannelsV2MessagePane({
         members={members}
         currentUserId={index.currentUserId}
         liveAgents={liveAgents}
-        defaultResponderAgentName={defaultResponderAgentName}
         recentAgentIds={recentAgentIds}
         // ⚠ RR1's ANSWER, COMPUTED FROM THE THREAD ROW THIS PANE IS ALREADY RENDERING — an
         // unaddressed reply in a thread goes to the exchange's OTHER party, and the composer must

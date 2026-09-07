@@ -11,8 +11,8 @@ import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.cs
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { cn } from "@/shared/lib/utils";
 import {
-  AGENT_MODEL_DEFAULT,
   agentModelOptionsFor,
+  agentModelSelection,
 } from "@/features/channels/lib/agent-models";
 import type { AgentTemplate, TemplateField } from "../client/types";
 import {
@@ -51,27 +51,33 @@ import { Field, RAISED_INPUT } from "./template-editor-rows";
 
 /** The sheet's own working copy. Discarded on close — see the module header. */
 interface SheetDraft {
-  /** `""` = the template's own default, which is what the first option says. */
+  /** Always a real roster id — `draftFor` back-fills the template's own model. */
   model: string;
   fields: TemplateField[];
 }
 
 function draftFor(template: AgentTemplate): SheetDraft {
+  // ⚠ THE TEMPLATE'S OWN MODEL, BACK-FILLED — not `AGENT_MODEL_DEFAULT` (2026-09-06, Samuel's
+  // ruling). `AGENT_MODEL_OPTIONS` no longer carries an empty option, and a `SelectMenu` whose
+  // `value` matches none of its options renders `options[0]`: the sheet READ "Fable 5" over a
+  // launch that sent no model. A template that carries one now preselects it (and `overridesFor`
+  // sends nothing, because a pick equal to the template's own is not an override); a template
+  // that carries none preselects `AGENT_MODEL_FALLBACK` and the launch says so out loud.
   return {
-    model: AGENT_MODEL_DEFAULT,
+    model: agentModelSelection(template.model),
     fields: template.fields.map((field) => ({ ...field })),
   };
 }
 
 /**
- * The roster, with the empty option RE-WORDED for this surface.
+ * The roster a template's sheet may show.
  *
- * ⚠ "Template default", not "Default" (`agent-models.ts › AGENT_MODEL_OPTIONS`
- * says the latter). Same wire value, different FACT: on the Settings row the
- * empty string means "let the SDK choose", and here it means "let the TEMPLATE
- * choose" — and the template may well carry a model, in which case "Default"
- * would name the wrong thing. The mapping lives here and only here, exactly as
- * `../lib/visibility.ts` owns "Public" over `workspace`.
+ * ⚠ **THE "Template default" RE-WORDING IS GONE WITH THE OPTION IT RE-WORDED**
+ * (2026-09-06, Samuel's ruling): `AGENT_MODEL_OPTIONS` lists only real models, so
+ * there is no empty row left to rename. What the empty row said is now said by
+ * the SELECTION instead — `draftFor` preselects the template's own model, so the
+ * sheet opens on the model the template would have used rather than on a word
+ * for it.
  *
  * ⚠ `agentModelOptionsFor` rather than the bare roster: a template may store a
  * model id THIS build has never heard of (the roster is the SDK's and moves
@@ -79,11 +85,7 @@ function draftFor(template: AgentTemplate): SheetDraft {
  * renders BLANK — the surface saying nothing where it has an answer.
  */
 function modelOptions(template: AgentTemplate) {
-  return agentModelOptionsFor(template.model).map((option) =>
-    option.value === AGENT_MODEL_DEFAULT
-      ? { ...option, label: "Template default" }
-      : option
-  );
+  return agentModelOptionsFor(template.model);
 }
 
 export function TemplateLaunchSheet({

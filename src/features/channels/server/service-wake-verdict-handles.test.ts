@@ -4,8 +4,9 @@ vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 
 import * as repoSessions from "./repository-sessions";
-import { ChannelAgentHandleAmbiguousError } from "./errors-recipient";
+import { resolveAgentRecipients } from "./service-wake-verdict-handles";
 import {
+  CTX,
   lastAddress,
   projection,
   recentAgentPosts,
@@ -45,23 +46,83 @@ describe("resolveAgentRecipients — the scope a body handle resolves against", 
     ]);
   });
 
-  it("REFUSES an ambiguous slug and lists the id handles that still reach each", async () => {
-    // ⚠ IT USED TO ANSWER `null` AND LET THE MACHINE DECIDE, and that was right
-    // while the index was one operator's. Channel-wide (2026-09-04) the
-    // collision is between two DIFFERENT machines, so there is no machine that
-    // can decide it — and a `null` there is a post that quietly reaches nobody.
+});
+
+/**
+ * **A SHARED NAME MINTS A SUFFIX — IT NO LONGER REFUSES THE POST** (2026-09-07, Samuel,
+ * verbatim: *"if coder exists, then other slugs will be coder-1, coder-2, coder-3"*).
+ *
+ * ⚠ **THESE CASES REPLACE THE AMBIGUITY REFUSAL, AND THE REPLACEMENT IS THE RULING, NOT A
+ * RELAXATION.** The old answer threw `ChannelAgentHandleAmbiguousError` over a slug two agents
+ * claimed, listing the claimants AS THEIR ID FORMS — so the refusal told the writer to retry
+ * with a handle it had just refused, and channel-wide resolution made the collision the ordinary
+ * case rather than the exotic one. What is measured now is that BOTH agents keep an address.
+ *
+ * ⚠ **THE THROW IS GONE FROM THE SOURCE, NOT MERELY UNREACHED**, so there is no refusal left to
+ * pin: `AgentMentionIndex` is `ReadonlyMap<string, string>` and no handle maps to two agents by
+ * construction. `errors-recipient.ts` keeps the error CLASS — a wire-visible code is retired on
+ * its own schedule — and nothing here should resurrect a driver for it.
+ */
+describe("resolveAgentRecipients — a contested handle is minted, not refused", () => {
+  it("gives the FIRST claimant the bare slug", async () => {
     projection(
       sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
       sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" })
     );
-    await expect(resolve("@bot go")).rejects.toThrow(
-      ChannelAgentHandleAmbiguousError
-    );
-    await expect(resolve("@bot go")).rejects.toThrow(
-      /@agent-k3v7d2mq, @agent-m8q1zzzz/
-    );
+    const out = await resolve("@bot go");
+    expect(out).toMatchObject({ verdict: "agent", recipientAgentIds: ["k3v7d2mq"] });
   });
 
+  it("keeps the SECOND addressable at `-1` rather than resolving to neither", async () => {
+    // ⚠ THIS IS THE HALF THE OLD BEHAVIOUR HAD NO ANSWER FOR. A rename could take a working
+    // handle away from an agent that was never renamed; the second claimant now simply wears a
+    // different spelling and is still reachable.
+    projection(
+      sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
+      sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" })
+    );
+    const out = await resolve("@bot-1 go");
+    expect(out).toMatchObject({ verdict: "agent", recipientAgentIds: ["m8q1zzzz"] });
+  });
+
+  it("🔒 never outbids an ID FORM — a name that spells one is minted around it", async () => {
+    // ⚠ THE PERMANENT HANDLE IS THE ONE THAT CANNOT STOP WORKING (`lib/agent-mentions.ts`
+    // header). Pass 1 claims every id form before any name is looked at, so an agent an operator
+    // named "Agent K3v7d2mq" cannot withdraw ANOTHER member's agent from addressing.
+    projection(
+      sessionRow({ id: "s-1", name: "k3v7d2mq" }),
+      sessionRow({ id: "s-2", name: "m4x8p1qr", display_name: "Agent K3v7d2mq" })
+    );
+    const owner = await resolve("@agent-k3v7d2mq go");
+    expect(owner.recipientAgentIds).toEqual(["k3v7d2mq"]);
+    const namer = await resolve("@agent-k3v7d2mq-1 go");
+    expect(namer.recipientAgentIds).toEqual(["m4x8p1qr"]);
+  });
+
+  /**
+   * ⚠ **DRIVEN DIRECTLY RATHER THAN THROUGH `resolve`, ON PURPOSE.** The reserved set arrives on
+   * `WakeVerdictContext` from the metadata fold's own roster read, and a body whose only tag
+   * names a MEMBER resolves no agent — which sends the verdict into the resilience arms and
+   * measures RR3 instead of the precedence this case is about.
+   */
+  it("🔒 a MEMBER keeps the bare tag and the agent named after them is minted `-1`", async () => {
+    projection(sessionRow({ name: "k3v7d2mq", display_name: "Diana" }));
+    expect(
+      await resolveAgentRecipients(CTX, "chan-1", "@diana hello", null, "user", ["diana"])
+    ).toBeNull();
+    expect(
+      await resolveAgentRecipients(CTX, "chan-1", "@diana-1 hello", null, "user", ["diana"])
+    ).toEqual(["k3v7d2mq"]);
+  });
+
+  it("reserves nothing when the caller passes no roster — the pre-2026-09-07 answer", async () => {
+    // ⚠ ABSENT MEANS "NO MEMBER NAMESPACE TO RESPECT", NOT "NO MEMBERS". Every caller without a
+    // roster in hand is unchanged, which is what makes the parameter safe to default.
+    projection(sessionRow({ name: "k3v7d2mq", display_name: "Diana" }));
+    expect(
+      await resolveAgentRecipients(CTX, "chan-1", "@diana hello", null, "user")
+    ).toEqual(["k3v7d2mq"]);
+  });
 });
 
 /**

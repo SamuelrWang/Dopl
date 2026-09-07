@@ -17,8 +17,7 @@ import { loadReducer, REDUCER_SRC } from "./_reducer-block.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 // §2 SPLIT (H1): the pure block now spans session-effects.js + session-reducer.js;
 // test/_reducer-block.mjs slices BOTH sentinel pairs and evaluates them as one program.
-const { initialSessionState, sessionReducer, nextIdleMs, turnCapReached, costCapReached,
-        DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD } = loadReducer();
+const { initialSessionState, sessionReducer, nextIdleMs, DEFAULT_IDLE_MS } = loadReducer();
 
 // Convenience: a fresh running state, past `launched`.
 const running = (opts) => {
@@ -37,9 +36,10 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   assert.equal(s.side, "responder");
   assert.equal(s.turns, 0);
   assert.equal(s.costUsd, 0);
-  assert.equal(s.turnCap, DEFAULT_TURN_CAP);
   assert.equal(s.idleMs, DEFAULT_IDLE_MS);
-  assert.equal(s.costCapUsd, DEFAULT_COST_CAP_USD);
+  // 2026-09-07: the caps are DELETED. The two fields are not merely defaulted, they are absent.
+  assert.equal(s.turnCap, undefined);
+  assert.equal(s.costCapUsd, undefined);
   assert.deepEqual(s.pendingPermissions, []);
   assert.deepEqual(s.allowForTask, []);
   // v2.9 THE TWO AXES both start at their MOST RESTRICTIVE value (fail-closed).
@@ -53,18 +53,18 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   assert.equal(s.postedThisTurn, false);
 });
 
-test("initialSessionState honors mode/side and valid caps, rejects invalid caps", () => {
+test("initialSessionState honors mode/side and the idle TTL, ignores a persisted cap", () => {
   const s = initialSessionState({ mode: "autonomous", side: "requester", turnCap: 8, idleMs: 1000, costCapUsd: 2.5 });
   assert.equal(s.mode, "autonomous");
   assert.equal(s.side, "requester");
-  assert.equal(s.turnCap, 8);
   assert.equal(s.idleMs, 1000);
-  assert.equal(s.costCapUsd, 2.5);
-  // Invalid values fall back to defaults (a hand-edited store can never inject NaN).
+  // 2026-09-07: an OLDER PERSISTED RECORD may still carry turnCap/costCapUsd. They are dropped,
+  // never migrated, because nothing reads them any more.
+  assert.equal(s.turnCap, undefined);
+  assert.equal(s.costCapUsd, undefined);
+  // An invalid idle TTL falls back to the default (a hand-edited store can never inject NaN).
   const bad = initialSessionState({ turnCap: 0, idleMs: -5, costCapUsd: NaN });
-  assert.equal(bad.turnCap, DEFAULT_TURN_CAP);
   assert.equal(bad.idleMs, DEFAULT_IDLE_MS);
-  assert.equal(bad.costCapUsd, DEFAULT_COST_CAP_USD);
   // An unknown mode/side normalizes to the safe default.
   const norm = initialSessionState({ mode: "wild", side: "sideways" });
   assert.equal(norm.mode, "interactive");
@@ -274,43 +274,17 @@ test("result WITH a post this turn -> awaiting_peer; WITHOUT -> idle; postedThis
   assert.deepEqual(findEff(idle.effects, "emit").payload, { type: "status", phase: "running", activity: "idle" });
 });
 
-test("result at the turn cap ends the session (turn_cap) + P3 calm capped lifecycle", () => {
-  const s = { ...running({ turnCap: 2 }), turns: 1 };
-  const r = sessionReducer(s, { type: "result", turnCostUsd: 0.01 });
-  assert.equal(r.state.turns, 2);
-  assert.equal(r.state.phase, "ended");
-  // P3: a real cap end now posts a calm lifecycle BEFORE settling. No usage emit (item 6).
-  assert.deepEqual(effTypes(r.effects), ["abortQuery", "lifecycle", "emit", "settle"]);
-  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "usage"), "no usage emit at the cap");
-  const lc = findEff(r.effects, "lifecycle");
-  assert.equal(lc.kind, "task_failed");
-  assert.deepEqual(lc.extra, { capped: true }, "turn cap rides extra:{capped:true}");
-  // ⚠ AND IT NAMES THE NUMBER (2026-09-05, task 9(c)). The cap is read off the ENDED RECORD —
-  // `state.turnCap`, the cap this session really counted against — never re-derived from
-  // `settings.getTurnCap()`, which since task 9(a) answers a default that depends on WHO
-  // launched and would name the wrong tier on the one card that exists to explain the end.
-  assert.equal(lc.body, "Turn limit reached (2 turns)");
-  const ended = r.effects.filter((e) => e.type === "emit").find((e) => e.payload.type === "ended");
-  assert.equal(ended.payload.reason, "turn_cap");
-  assert.equal(findEff(r.effects, "settle").outcome, "ended");
-});
-
-test("result crossing the cost cap ends (cost_cap) + P3 calm capped lifecycle", () => {
-  const s = running({ turnCap: 99, costCapUsd: 0.05 });
-  const r = sessionReducer(s, { type: "result", turnCostUsd: 0.06 });
-  assert.equal(r.state.phase, "ended");
-  assert.deepEqual(effTypes(r.effects), ["abortQuery", "lifecycle", "emit", "settle"]);
-  const lc = findEff(r.effects, "lifecycle");
-  assert.deepEqual(lc.extra, { capped: true });
-  assert.equal(lc.body, "Cost limit reached");
-  const ended = r.effects.find((e) => e.type === "emit" && e.payload.type === "ended");
-  assert.equal(ended.payload.reason, "cost_cap");
-});
-
-test("cost cap of 0 is disabled — a large turn cost does not end the session", () => {
-  const s = running({ costCapUsd: 0 });
-  const r = sessionReducer(s, { type: "result", turnCostUsd: 999 });
-  assert.equal(r.state.phase, "running");
+// 2026-09-07 — THE CAP ENDS ARE DELETED. Three cases stood here: "result at the turn cap ends
+// the session (turn_cap)", "result crossing the cost cap ends (cost_cap)" and "cost cap of 0 is
+// disabled". Nothing ends a session on turns or cost any more (session-state.js's header), so
+// what is pinned instead is the ABSENCE: a huge turn count and a huge cost keep running.
+test("result never ends the session on turns or cost (the caps are deleted)", () => {
+  const many = sessionReducer({ ...running(), turns: 9_999 }, { type: "result", turnCostUsd: 999 });
+  assert.equal(many.state.phase, "running");
+  assert.equal(many.state.turns, 10_000, "still COUNTED — the context meter reads it");
+  assert.equal(many.state.costUsd, 999, "still counted; it simply ends nothing");
+  assert.deepEqual(effTypes(many.effects), ["emit", "scheduleIdle"]);
+  assert.ok(!many.effects.some((e) => e.type === "settle"), "no cap settle");
 });
 
 // ── inbound: the universal gate + its two auto-accept bypasses (v2.5 D1/D4) ──────
@@ -431,13 +405,14 @@ test("close_task is no longer an event: it changes nothing and emits nothing", (
   assert.deepEqual(r.effects, [], "no closeTask, no lifecycle, no settle");
 });
 
-test("cost_cap event ends the session directly (reason cost_cap) + capped lifecycle", () => {
+// 2026-09-07: `cost_cap` was an EVENT too — the externally-dispatched twin of the reducer's own
+// crossing — and it ended the session with a capped lifecycle. Deleted with the caps. Pinned the
+// same way `close_task` is: the arm is gone, so a stale dispatcher sending it changes nothing.
+test("cost_cap is no longer an event: it changes nothing and emits nothing", () => {
   const s = running();
   const r = sessionReducer(s, { type: "cost_cap" });
-  assert.equal(r.state.phase, "ended");
-  assert.deepEqual(findEff(r.effects, "lifecycle").extra, { capped: true });
-  const ended = r.effects.find((e) => e.type === "emit" && e.payload.type === "ended");
-  assert.equal(ended.payload.reason, "cost_cap");
+  assert.equal(r.state.phase, "running", "the session is untouched");
+  assert.deepEqual(r.effects, [], "no lifecycle, no ended emit, no settle");
 });
 
 // NOTE: P1 idle-park + lazy-resume reducer transitions live in the sibling
@@ -477,12 +452,9 @@ test("a settled (ended) session ignores every later event — no re-emit, no re-
 
 // ── pure helpers ─────────────────────────────────────────────────────────────────
 
-test("nextIdleMs returns the state's idleMs; cap predicates read turns/cost", () => {
-  const s = initialSessionState({ idleMs: 12345, turnCap: 3, costCapUsd: 1 });
+// 2026-09-07: the `turnCapReached` / `costCapReached` predicates were exercised here. Deleted
+// with the caps; `nextIdleMs` is the one pure reader left on this state.
+test("nextIdleMs returns the state's idleMs", () => {
+  const s = initialSessionState({ idleMs: 12345 });
   assert.equal(nextIdleMs(s), 12345);
-  assert.equal(turnCapReached({ ...s, turns: 2 }), false);
-  assert.equal(turnCapReached({ ...s, turns: 3 }), true);
-  assert.equal(costCapReached({ ...s, costUsd: 0.5 }), false);
-  assert.equal(costCapReached({ ...s, costUsd: 1 }), true);
-  assert.equal(costCapReached({ ...s, costCapUsd: 0, costUsd: 999 }), false, "cost cap 0 is disabled");
 });

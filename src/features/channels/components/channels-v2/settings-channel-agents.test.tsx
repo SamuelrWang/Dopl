@@ -1,52 +1,68 @@
 // @vitest-environment jsdom
 /**
- * **THE CHANNEL'S OWN AGENT SETTINGS** — the default responder (ruling B6) and
- * the posture ceiling F-449 records as having no editing surface at all
- * (2026-09-02, v2 wave B slice B4).
+ * **WHO ANSWERS *MY* UNADDRESSED MESSAGES IN THIS CHANNEL** — the per-member control
+ * (2026-09-07, Samuel's ruling on items 10 and 11).
  *
- * The properties that fail QUIETLY, which is what this file is for:
+ * ⚠ **THIS SUITE WAS REPLACED WHOLESALE, NOT EDITED, AND THE REASON IS WORTH KEEPING.** It
+ * tested a room MANAGER's picker of ONE specific agent, plus the three posture-ceiling rows.
+ * Both settings are deleted from the product — the ceiling on 2026-09-06 (items 12/13/14), the
+ * responder pin here — so every property it pinned is about behaviour that no longer exists.
+ * Rewriting the assertions to "pass" against the new control would have been the worst of both:
+ * a suite that looks like coverage and asserts nothing anybody ruled.
  *
- *  - **A NOMINATION MUST NOT LOOK CLEARED WHEN ITS AGENT IS ASLEEP.**
- *    `SelectMenu` renders BLANK for a value matching no option, and one click
- *    away from a blank trigger is clearing the setting for real.
- *  - **`null` IS A VALUE, NOT AN ABSENCE.** Withdrawing a nomination and
- *    removing a ceiling are the only ways either setting can be undone; a
- *    handler that sent `undefined` would make both permanent.
- *  - **NO DEAD ROWS.** A reader who cannot write these must not be shown them —
- *    and the server, not this component, is the gate.
+ * ⚠ **WHAT THE OLD SUITE PROVED, AND WHY NONE OF IT SURVIVES:**
+ *  - *A nomination must not look cleared when its agent is asleep* — there is no nomination.
+ *    The setting is a two-value RULE precisely because agents are EPHEMERAL and a stored handle
+ *    decays into naming nothing; that decay was the defect, not an implementation detail.
+ *  - *`null` is a value, not an absence* — there is no clear. The column is `NOT NULL` with two
+ *    values, and `last_addressed` IS the unconfigured answer (B1, 2026-09-04), so "no opinion"
+ *    is not a state a member can be in.
+ *  - *No dead rows* — SURVIVES, and it is the one property below that carries over, because the
+ *    audience changed: the slot is gated on MEMBERSHIP now, not on manage.
+ *
+ * The properties that fail QUIETLY, which is what this file is for now:
+ *
+ *  - **THE CONTROL AND THE COMPOSER'S LINE MUST READ ONE SOURCE.** Both ask
+ *    `viewerUnaddressedResponder` of the roster; a control that read the setting differently
+ *    would show a person something the server does not honour, with no way to tell.
+ *  - **AN UNLOADED ROSTER RENDERS AS THE DEFAULT, NEVER AS "No one".** The fail-safe direction
+ *    is the ruling: `"none"` is a claim that this person's untagged messages reach nobody.
+ *  - **A PEER'S SCRUBBED `null` IS NOT A SETTING.** `mapMemberRow` nulls the field on every row
+ *    but the viewer's; reading one as "they chose nobody" is the privacy scrub being mistaken
+ *    for data.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ChannelAgentsSettings } from "./settings-channel-agents";
 import { ChannelsV2SettingsTab } from "./settings-tab";
-import { channel as channelFixture } from "./test-fixtures";
-import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
+import { channel as channelFixture, member, ME, PEER } from "./test-fixtures";
+import type { ChannelMember } from "../../types";
 
 afterEach(cleanup);
 
-const session = (over: Partial<ChannelPeerSession>): ChannelPeerSession =>
-  ({ userId: "user-1", name: "k3v7d2mq", displayName: null, ...over }) as ChannelPeerSession;
+const CONTROL = "Who answers my unaddressed messages in this channel";
 
-function panel(over: {
-  responder?: string | null;
-  sessions?: ChannelPeerSession[];
-  posture?: { tools?: string | null; messages?: string | null; chain?: boolean | null };
-  onSetDefaultResponder?: (h: string | null) => void;
-  onSetCeiling?: (p: Record<string, unknown>) => void;
-} = {}) {
-  const base = channelFixture();
-  const channel = {
-    ...base,
-    defaultResponderAgentName: over.responder ?? null,
-    agentPosture: { ...base.agentPosture, ...over.posture },
-  } as typeof base;
+/** ⚠ The viewer's row FIRST and a peer's row after it, because the control must pick the
+ *  viewer's by user id rather than by position — the bug a one-row fixture cannot catch. */
+function roster(mine: Partial<ChannelMember> = {}): ChannelMember[] {
+  return [
+    member({ userId: PEER, displayName: "Diana Taylor", unaddressedResponder: null }),
+    member({ userId: ME, ...mine }),
+  ];
+}
+
+function panel(
+  over: {
+    members?: ChannelMember[];
+    onSetUnaddressedResponder?: (s: "none" | "last_addressed") => void;
+  } = {}
+) {
   render(
     <ChannelAgentsSettings
-      channel={channel}
-      sessions={over.sessions ?? []}
-      onSetDefaultResponder={over.onSetDefaultResponder ?? (() => {})}
-      onSetCeiling={(over.onSetCeiling ?? (() => {})) as never}
+      members={over.members ?? roster()}
+      currentUserId={ME}
+      onSetUnaddressedResponder={over.onSetUnaddressedResponder ?? (() => {})}
     />
   );
 }
@@ -57,106 +73,43 @@ function open(ariaLabel: string): HTMLElement[] {
   return screen.getAllByRole("menuitem");
 }
 
-describe("the default responder", () => {
-  it("offers every live agent in the room, plus 'No one'", () => {
-    panel({
-      sessions: [
-        session({ name: "k3v7d2mq" }),
-        session({ name: "m8q1zzzz", userId: "user-9" }),
-      ],
-    });
-    const labels = open(
-      "Agent that answers unaddressed messages in this channel"
-    ).map((el) => el.textContent);
-    expect(labels.some((l) => l?.includes("No one"))).toBe(true);
-    expect(labels.some((l) => l?.includes("agent-k3v7d2mq"))).toBe(true);
-    // ⚠ A PEER'S AGENT IS OFFERED. The setting names who the ROOM's unaddressed
-    // work goes to, and every member's machine is a candidate — the same set the
-    // Agents tab already shows.
-    expect(labels.some((l) => l?.includes("agent-m8q1zzzz"))).toBe(true);
-  });
-
-  it("🔒 keeps a STORED handle whose agent is not running, marked as such", () => {
-    // Without this the trigger renders blank and reads as "nobody nominated".
-    panel({ responder: "agent-gone1234", sessions: [session({})] });
-    const labels = open(
-      "Agent that answers unaddressed messages in this channel"
-    ).map((el) => el.textContent);
-    expect(labels.some((l) => l?.includes("agent-gone1234"))).toBe(true);
-    expect(labels.some((l) => l?.includes("Not running"))).toBe(true);
-  });
-
-  it("does not offer the stored handle TWICE when its agent is live", () => {
-    panel({ responder: "agent-k3v7d2mq", sessions: [session({})] });
-    const labels = open(
-      "Agent that answers unaddressed messages in this channel"
-    ).map((el) => el.textContent ?? "");
-    expect(labels.filter((l) => l.includes("agent-k3v7d2mq"))).toHaveLength(1);
-  });
-
-  it("🔒 sends `null` to WITHDRAW — never `undefined`, which would mean 'unchanged'", () => {
-    const onSetDefaultResponder = vi.fn();
-    panel({ responder: "agent-k3v7d2mq", sessions: [session({})], onSetDefaultResponder });
-    const items = open("Agent that answers unaddressed messages in this channel");
-    fireEvent.click(items.find((el) => el.textContent?.includes("No one"))!);
-    expect(onSetDefaultResponder).toHaveBeenCalledWith(null);
-  });
-
-  it("sends the HANDLE the picker showed — the same grammar the column stores", () => {
-    const onSetDefaultResponder = vi.fn();
-    panel({ sessions: [session({ name: "m8q1zzzz" })], onSetDefaultResponder });
-    const items = open("Agent that answers unaddressed messages in this channel");
-    fireEvent.click(items.find((el) => el.textContent?.includes("agent-m8q1zzzz"))!);
-    expect(onSetDefaultResponder).toHaveBeenCalledWith("agent-m8q1zzzz");
-  });
-
-  it("offers a RENAMED agent by its slug, through the one handle rule", () => {
-    panel({ sessions: [session({ name: "k3v7d2mq", displayName: "Build Bot" })] });
-    const items = open("Agent that answers unaddressed messages in this channel");
-    fireEvent.click(items.find((el) => el.textContent?.includes("Build Bot"))!);
-    // No assertion on the callback here — the point is the VALUE the picker
-    // carries is the slug the resolver accepts, asserted below by its absence
-    // of `agent-` framing.
-    expect(screen.queryByText("agent-k3v7d2mq")).toBeNull();
-  });
-});
-
-describe("the posture ceiling — F-449's missing surface", () => {
-  it("offers 'No ceiling' on every axis, and that is what `null` means", () => {
+describe("the per-member responder rule", () => {
+  it("offers EXACTLY two options, and no way to name an agent", () => {
     panel();
-    for (const label of [
-      "Widest tool mode an agent launched in this channel may run",
-      "Widest message mode an agent launched in this channel may run",
-      "May an agent launched in this channel launch further agents",
-    ]) {
-      expect(open(label).some((el) => el.textContent?.includes("No ceiling"))).toBe(
-        true
-      );
-      fireEvent.keyDown(document, { key: "Escape" });
-      cleanup();
-      panel();
-    }
+    const labels = open(CONTROL).map((el) => el.textContent ?? "");
+    expect(labels).toHaveLength(2);
+    expect(labels.some((l) => l.includes("No one"))).toBe(true);
+    expect(labels.some((l) => l.includes("Last Agent Addressed"))).toBe(true);
   });
 
-  it("🔒 removes a ceiling with `null` PER AXIS, leaving the others unchanged", () => {
-    const onSetCeiling = vi.fn();
-    // ⚠ START FROM A RECORDED CEILING. Picking the value already showing is a
-    // no-op the control correctly swallows, so a test that cleared an already
-    // empty axis would assert nothing.
-    panel({ posture: { tools: "auto", messages: "auto_both" }, onSetCeiling });
-    const items = open("Widest tool mode an agent launched in this channel may run");
-    fireEvent.click(items.find((el) => el.textContent?.includes("No ceiling"))!);
-    // ⚠ ONLY the axis that was touched. A patch naming all three would rewrite
-    // two settings the operator did not open.
-    expect(onSetCeiling).toHaveBeenCalledWith({ tools: null });
+  it("🔒 shows the VIEWER's row, not the first row or a peer's", () => {
+    // ⚠ The peer's row sorts first and carries the scrubbed `null`. Reading position 0 would
+    // render the default here and look correct — which is why the viewer's choice is `none`.
+    panel({ members: roster({ unaddressedResponder: "none" }) });
+    expect(screen.getByLabelText(CONTROL).textContent).toContain("No one");
   });
 
-  it("sends the chain axis as a BOOLEAN, not the picker's string", () => {
-    const onSetCeiling = vi.fn();
-    panel({ onSetCeiling });
-    const items = open("May an agent launched in this channel launch further agents");
-    fireEvent.click(items.find((el) => el.textContent?.includes("Not allowed"))!);
-    expect(onSetCeiling).toHaveBeenCalledWith({ chain: false });
+  it("🔒 an unloaded roster renders the DEFAULT, never 'No one'", () => {
+    // The failure this forbids is silent and invisible to its victim: a person who never opened
+    // this panel being shown, and then treated as, having opted out.
+    panel({ members: [] });
+    expect(screen.getByLabelText(CONTROL).textContent).toContain("Last Agent Addressed");
+  });
+
+  it("sends the SETTING, not a handle and not null", () => {
+    const onSetUnaddressedResponder = vi.fn();
+    panel({ onSetUnaddressedResponder });
+    const items = open(CONTROL);
+    fireEvent.click(items.find((el) => el.textContent?.includes("No one"))!);
+    expect(onSetUnaddressedResponder).toHaveBeenCalledWith("none");
+  });
+
+  it("sends `last_addressed` for the default option, spelled as the shared constant", () => {
+    const onSetUnaddressedResponder = vi.fn();
+    panel({ members: roster({ unaddressedResponder: "none" }), onSetUnaddressedResponder });
+    const items = open(CONTROL);
+    fireEvent.click(items.find((el) => el.textContent?.includes("Last Agent Addressed"))!);
+    expect(onSetUnaddressedResponder).toHaveBeenCalledWith("last_addressed");
   });
 });
 
@@ -177,9 +130,35 @@ describe("NO DEAD ROWS — the tab shows the panel only when it is given one", (
     expect(screen.getByText("channel agent settings")).toBeTruthy();
   });
 
-  it("a non-manager with nothing else to manage still gets the EMPTY STATE", () => {
-    // ⚠ `channelAgents` is `null` for them (`channel-manage.tsx` gates it), and
-    // the empty state must not become a heading over nothing.
+  /**
+   * 🔒 **A NON-MANAGER MEMBER NOW GETS THIS PANEL, AND THAT IS THE RULING.**
+   *
+   * ⚠ The slot was `null` for a non-manager until 2026-09-07, correctly: it held decisions
+   * about OTHER members' agents. It holds a personal setting now, so gating it on manage would
+   * hide it from every non-manager in the room while the server went on honouring the value —
+   * a control that shows half of what it governs. `channel-manage.tsx` gates on
+   * `channel.isMember`; this asserts the tab renders what that gate passes it.
+   */
+  it("🔒 renders for a non-manager MEMBER — the gate is membership, not manage", () => {
+    render(
+      <ChannelsV2SettingsTab
+        channel={{ ...channelFixture(), role: "member" }}
+        canManage={false}
+        channelAgents={<div>channel agent settings</div>}
+        onInvite={() => {}}
+        onToggleVisibility={() => {}}
+        onToggleArchive={() => {}}
+        onRequestDelete={() => {}}
+        onRequestLeave={() => {}}
+      />
+    );
+    expect(screen.getByText("channel agent settings")).toBeTruthy();
+  });
+
+  it("a NON-MEMBER with nothing else to manage still gets the EMPTY STATE", () => {
+    // ⚠ `channelAgents` is `null` for them (`channel-manage.tsx` gates it on `isMember`: there
+    // is no membership row to set anything on), and the empty state must not become a heading
+    // over nothing.
     render(
       <ChannelsV2SettingsTab
         channel={{ ...channelFixture(), isMember: false, role: null }}

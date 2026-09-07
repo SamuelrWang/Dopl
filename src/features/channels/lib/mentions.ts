@@ -133,10 +133,23 @@ export const MENTION_TOKEN_RE = /(@[^\s@]+)/g;
  *
  * ⚠ THE RESIDUAL IS A HANDLE WHOSE LAST CHARACTER IS ONE OF THESE — `@diana_`
  * clips to `diana`. That is a PRE-EXISTING class, not a new one: a display name
- * ending in `!` or `.` has always clipped the same way, and `insertableHandle`
- * has always been able to offer such a handle. `_` is legal INSIDE a handle and
- * is untouched (`@diana_taylor` resolves whole — pinned in `mentions.test.ts`),
- * which is the case the finding asked to verify before adding it.
+ * ending in `!` or `.` has always clipped the same way. `_` is legal INSIDE a
+ * handle and is untouched (`@diana_taylor` resolves whole — pinned in
+ * `mentions.test.ts`), which is the case the finding asked to verify before
+ * adding it.
+ *
+ * ⚠ **THIS NOTE USED TO END "AND `insertableHandle` HAS ALWAYS BEEN ABLE TO OFFER SUCH A HANDLE",
+ * OFFERED AS REASSURANCE. IT WAS THE DEFECT, WRITTEN AS A FEATURE** (corrected 2026-09-07). Being
+ * pre-existing made the clipping survivable for a handle somebody TYPES — they see no tint and
+ * retype it. It made nothing survivable for a handle the PICKER inserts: the index is keyed on the
+ * raw slug, so "Diana Taylor Jr." claimed `diana-taylor-jr.`, the picker inserted it, this class
+ * stripped the `.` before the lookup, and the message tagged NOBODY. A row that shows a name and
+ * lands on no one is F-210 exactly, reached through punctuation instead of through the label —
+ * and the sentence that was supposed to reassure a reader is what stopped anyone checking.
+ * `insertableHandle` now round-trips every handle through {@link mentionHandleOf} before offering
+ * it (`insertable-handle-round-trip.test.ts`). **The clipping itself is unchanged and is not a
+ * bug**; what was wrong was concluding that a rule this parser applies to every token could be
+ * ignored by the one function whose whole job is to emit tokens it accepts.
  */
 const TRAILING_PUNCTUATION = /[.,:;!?'"`)\]}>*_~]+$/;
 
@@ -211,6 +224,30 @@ function handlesOf(candidate: MentionCandidate): string[] {
 }
 
 /**
+ * **EVERY HANDLE THE MEMBER NAMESPACE OCCUPIES IN THIS ROOM** — the reserved set
+ * `lib/agent-mentions.ts › buildAgentMentionIndex` mints agent suffixes around (2026-09-07,
+ * Samuel's suffix ruling).
+ *
+ * ⚠ **IT IS THE WHOLE SET, NOT THE INSERTABLE ONE, AND THE DIFFERENCE IS THE POINT.** A member
+ * answers to several spellings and old bodies use all of them; an agent that claimed any one of
+ * them would silently re-point a tag somebody already wrote. Reserving only the preferred
+ * spelling would leave `@dianataylor` and `@diana` available to an agent while `@diana-taylor`
+ * was protected — a fence with two thirds of its gate missing.
+ *
+ * ⚠ **CONTESTED MEMBER HANDLES ARE RESERVED TOO.** A handle two members claim resolves to
+ * nobody, but it is still THEIRS: handing it to an agent would turn a deliberate
+ * ambiguity-fails-closed into a live agent address, which is the opposite of what rule 5 says
+ * that token means.
+ */
+export function memberHandlesOf(
+  candidates: readonly MentionCandidate[]
+): string[] {
+  const out: string[] = [];
+  for (const candidate of candidates) out.push(...handlesOf(candidate));
+  return out;
+}
+
+/**
  * Roster -> handle index. ⚠ A handle two members claim is mapped to `null`
  * rather than dropped, so {@link resolveMentionToken} can tell "no such handle"
  * from "this handle names more than one person" if a surface ever wants to say
@@ -263,7 +300,22 @@ export function insertableHandle(
   index: MentionIndex
 ): string | null {
   for (const handle of handlesOf(candidate)) {
-    if (index.get(handle) === candidate.userId) return handle;
+    if (index.get(handle) !== candidate.userId) continue;
+    // ⚠ AND IT MUST SURVIVE THE TOKEN STRIP, WHICH IS THE OTHER HALF OF "BY CONSTRUCTION"
+    // (2026-09-07). The index is keyed on the RAW slug, so a display name ending in punctuation
+    // claims a handle ending in punctuation — "Diana Taylor Jr." claims `diana-taylor-jr.` — and
+    // {@link mentionHandleOf} strips that trailing run off the token before it ever reaches the
+    // index. The picker therefore INSERTED `@diana-taylor-jr.`, the resolver looked up
+    // `diana-taylor-jr`, and the message tagged NOBODY: F-210's exact defect, a row that shows a
+    // name and lands on no one, reached through the punctuation class instead of through the
+    // label. The TRAILING_PUNCTUATION note calls this residual pre-existing, which it is, and
+    // harmless, which it is not.
+    // ⚠ THE ROUND TRIP IS THE TEST, NOT A PUNCTUATION LIST. Asking the real parser what this
+    // token resolves to is what keeps this correct when that class next changes — a second copy
+    // of the rule here is how the two come apart again. The member stays reachable through their
+    // remaining handles (the first word, the email forms), exactly as the ambiguity fallback
+    // already works; `null` still means "offer them nothing", which the caller honours.
+    if (mentionHandleOf(`@${handle}`) === handle) return handle;
   }
   return null;
 }

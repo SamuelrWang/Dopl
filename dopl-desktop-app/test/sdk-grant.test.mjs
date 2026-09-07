@@ -78,10 +78,18 @@ const { grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
-  "OWN_CHANNEL_MARKER_OPS", "OWN_CHANNEL_THREAD_OPS", "OWN_CHANNEL_OUTBOUND_OPS",
+  // ⚠ 2026-09-06 — TWO OF THESE NAMES HAD NOT EXISTED SINCE F-578 (2026-09-02).
+  // `OWN_CHANNEL_MARKER_OPS` / `OWN_CHANNEL_THREAD_OPS` became `..._KIND` / `..._NEW` when the
+  // three outbound ops collapsed into SHAPES of `send`, so `OUT.<old name>` had been injecting
+  // `undefined` under a name the block does not reference — a harness silently agreeing with
+  // itself. Corrected to the REAL exports, and `channelOpKey` added: it is a free variable inside
+  // the block (`isOwnChannelReadCall` calls it) that was never injected, and only the
+  // `autoInboundMode(...) &&` short-circuit kept it from throwing.
+  "OWN_CHANNEL_MARKER_KIND", "OWN_CHANNEL_THREAD_NEW", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
   "isOwnMachineDirect", "directLaneVerdict",
+  "channelOpKey",
   // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
   // a fake would let the harness agree with itself while the shipped gate did something else.
   "containerOnlyDenies", "isDoplToolName", "runtimeFor", "EDIT_TOOLS",
@@ -90,10 +98,11 @@ const { grantDecision, grantKeyFor } = new Function(
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey,
   KEYS.makeGrantKeyFor, KEYS.POST_GRANT, KEYS.postFieldsOk, NAMES.mcpShortName, NAMES.canonicalDoplName,
   KB_OPS.isKnowledgeReadCall,
-  OUT.OWN_CHANNEL_MARKER_OPS, OUT.OWN_CHANNEL_THREAD_OPS, OUT.OWN_CHANNEL_OUTBOUND_OPS,
+  OUT.OWN_CHANNEL_MARKER_KIND, OUT.OWN_CHANNEL_THREAD_NEW, OUT.OWN_CHANNEL_OUTBOUND_OPS,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
   DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
+  require(join(HERE, "..", "main", "channel-op-key.js")).channelOpKey,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
   RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(null)));
 

@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  memberHandlesOf,
   mentionTokensOf,
   resolveMentions,
   type MentionCandidate,
@@ -78,16 +79,50 @@ import { profilesById } from "./service-shared";
  * channel resolves to nobody, so a mention can never reach outside the room it
  * was written in.
  */
+export interface BodyMentions {
+  /** The stamped set — every roster member this body tags. */
+  userIds: string[];
+  /**
+   * **EVERY HANDLE THE MEMBER NAMESPACE OCCUPIES IN THIS ROOM** — handed on so the AGENT
+   * namespace can mint around it (2026-09-07, Samuel's suffix ruling: members outrank agents).
+   *
+   * ⚠ **IT IS RETURNED RATHER THAN RE-DERIVED BECAUSE THE READS ARE ALREADY PAID FOR HERE.**
+   * The handles come off the display names and email local parts this function has just loaded
+   * for its own resolution; the agent door (`service-wake-verdict-handles.ts ›
+   * resolveAgentRecipients`) runs later on the SAME request and had no roster at all, which is
+   * why the server's precedence disagreed with the client's. Threading the derived set down
+   * costs zero extra queries — asking for it at the agent door would have cost two on the hot
+   * write path (INVARIANTS §12), and that would have been a different decision.
+   *
+   * ⚠ **EMPTY WHENEVER THE ROSTER WAS NOT READ, WHICH IS EXACTLY WHEN NOTHING NEEDS IT.** Both
+   * doors gate on `mentionTokensOf`, so a body with no tag reserves nothing and resolves no
+   * agent handle either. Empty reads as "no member namespace to respect" downstream, which is
+   * the pre-2026-09-07 behaviour rather than a new hazard.
+   */
+  memberHandles: string[];
+}
+
+/** ⚠ ONE FROZEN VALUE FOR BOTH CHEAP EXITS — a body nobody tags and a room with no roster are
+ *  the same answer, and two object literals would invite them to drift apart. */
+const NO_MENTIONS: BodyMentions = Object.freeze({
+  // ⚠ **THE ELEMENT TYPE IS ANNOTATED, NOT INFERRED, AND WITHOUT IT THIS DOES NOT COMPILE.**
+  // A bare `Object.freeze([])` is `readonly never[]`, which `as string[]` cannot assert away
+  // (TS2352 — the two types do not sufficiently overlap); annotating the literal first makes it
+  // `readonly string[]`, and only THAT is a legal assertion back to the mutable field type.
+  userIds: Object.freeze([] as string[]) as string[],
+  memberHandles: Object.freeze([] as string[]) as string[],
+});
+
 export async function resolveBodyMentions(
   body: string,
   authorUserId: string,
   roster: () => Promise<ChannelMemberRow[]>,
   authorIsAgent = false
-): Promise<string[]> {
-  if (mentionTokensOf(body).length === 0) return [];
+): Promise<BodyMentions> {
+  if (mentionTokensOf(body).length === 0) return NO_MENTIONS;
 
   const members = await roster();
-  if (members.length === 0) return [];
+  if (members.length === 0) return NO_MENTIONS;
   const profiles = await profilesById(members.map((m) => m.user_id));
   const candidates: MentionCandidate[] = members.map((member) => {
     const profile = profiles.get(member.user_id);
@@ -99,7 +134,14 @@ export async function resolveBodyMentions(
   });
 
   const resolved = resolveMentions(body, candidates);
-  return authorIsAgent
-    ? resolved
-    : resolved.filter((id) => id !== authorUserId);
+  return {
+    userIds: authorIsAgent
+      ? resolved
+      : resolved.filter((id) => id !== authorUserId),
+    // ⚠ THE WHOLE SET, NOT THE RESOLVED ONE, AND NOT THE AUTHOR-FILTERED ONE. It answers "which
+    // spellings belong to people", which is true of every member's every handle whether or not
+    // this body used one — including the author's own, and including handles two members contest
+    // (`memberHandlesOf` says why the contested ones are still theirs).
+    memberHandles: memberHandlesOf(candidates),
+  };
 }

@@ -179,18 +179,15 @@ function durableSessionRecord(rec) {
     // another member's prompt text on disk to answer a question nobody asks after spawn.
     // ⚠ 120, NOT THE 80 DEFAULT: this is an identity, bounded by the column's own CHECK.
     templateName: durableName(r.templateName, 120),
-    // FIX #9: the running cap counters, whitelisted so a P2 recreate rehydrates the
-    // budget (a turn/cost-capped session must not reopen with a fresh cap). Coerced to a
-    // finite number so a hand-edited store can never inject NaN into the reducer.
+    // FIX #9, now a DISPLAY rehydrate rather than a budget one (2026-09-07): these two counters
+    // survive a recreate so a reopened session shows what it has already spent. They bound
+    // nothing — the caps are deleted — and they are still coerced to a finite number so a
+    // hand-edited store cannot inject NaN into the reducer.
     turns: Number(r.turns) || 0,
     costUsd: Number(r.costUsd) || 0,
-    // 9a (2026-09-05) — THE CAP THOSE COUNTERS ARE MEASURED AGAINST, whitelisted for the same
-    // rehydrate. Since the default is issuer-keyed and a recreate carries no issuer, the number a
-    // session was launched under has to survive with the budget or the resume reads the narrow
-    // default with a spent counter. ⚠ COERCED LIKE `ownPostSeq`, NOT LIKE `turns`: 0 here means
-    // "no stored cap, read the default", so a hand-edited NaN / Infinity / negative must land on
-    // 0 rather than pass through as a cap.
-    turnCap: Number.isFinite(Number(r.turnCap)) && Number(r.turnCap) > 0 ? Math.floor(Number(r.turnCap)) : 0,
+    // 2026-09-07: `turnCap` was whitelisted here so the bound survived with the budget. Deleted
+    // with the caps. A record written by an older build still carries the field; it is dropped on
+    // read rather than migrated, because nothing downstream asks for it.
     // 2026-08-22 — THE OUTBOUND POST COUNTER, and it is whitelisted for an IDEMPOTENCY reason
     // rather than a budget one. `session-outbound-tag.js › nextOwnPostId` stamps every post this
     // instance makes `agent-<agentId>-<n>`; the AGENT ID is persisted just above and re-used by

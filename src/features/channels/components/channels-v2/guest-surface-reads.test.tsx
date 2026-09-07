@@ -70,7 +70,11 @@ vi.mock("../../hooks/use-mention-writes", () => ({
   useMentionWrites: () => ({ markRead: vi.fn() }),
 }));
 vi.mock("../../hooks/use-channel-preference-writes", () => ({
-  useChannelPreferenceWrites: () => ({ favorite: vi.fn(), consent: vi.fn() }),
+  useChannelPreferenceWrites: () => ({
+    favorite: vi.fn(),
+    consent: vi.fn(),
+    unaddressedResponder: { mutate: vi.fn(), pending: false },
+  }),
 }));
 // The escalation card's ANSWER write (2026-08-31). ⚠ Mocked for the reason the
 // two writes above are, and for one more that matters to THIS file: it is the

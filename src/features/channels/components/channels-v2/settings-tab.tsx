@@ -71,10 +71,13 @@ export interface ChannelsV2SettingsTabProps {
    * the `agent` slot's terms (2026-09-02, B4): it needs the room's live sessions
    * and two write handlers, all of which live in `channel-manage.tsx`.
    *
-   * ⚠ **`null` FOR A NON-MANAGER, AND THAT IS THE NO-DEAD-ROWS RULE, NOT THE
-   * GATE.** `service-writes.ts › MANAGED_CHANNEL_FIELDS` floors both settings at
-   * the channel's manage role on the server; this slot only decides whether a
-   * reader is shown controls they cannot use.
+   * ⚠ **`null` FOR A NON-MEMBER SINCE 2026-09-07 (items 10 and 11) — IT WAS `null` FOR A
+   * NON-MANAGER UNTIL THEN, AND THE CHANGE IS THE RULING.** The slot used to hold a MANAGER's
+   * decisions about everybody's agents (the responder pin and the posture ceiling), floored on
+   * the server by `MANAGED_CHANNEL_FIELDS`. Both are deleted; what is left is the member's own
+   * rule for their own untagged messages, written to their own membership row. The
+   * NO-DEAD-ROWS reading is unchanged — the slot still only decides whether a reader is shown
+   * a control they can use — but the audience it computes is now every MEMBER.
    *
    * ⚠ IT COUNTS TOWARD `hasContent` BELOW, so a manager whose lifecycle rows are
    * all suppressed still gets the panel rather than the empty state.
@@ -169,9 +172,11 @@ export function ChannelsV2SettingsTab({
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
       {agent}
 
-      {/* ⚠ THE CHANNEL'S OWN AGENT SETTINGS, ABOVE THE LIFECYCLE ROWS AND BELOW
-          THE VIEWER'S OWN. The column reads outward: my agent here, then this
-          room's rule for everyone's agents, then the room itself. */}
+      {/* ⚠ ABOVE THE LIFECYCLE ROWS AND BELOW THE VIEWER'S OWN AGENT SETTINGS. The column used
+          to read outward — my agent here, then this room's rule for everyone's agents, then the
+          room itself — and the middle step is gone (2026-09-07): this slot now holds another
+          of the VIEWER'S own settings, so the two personal groups sit together and the room
+          follows. Position unchanged, reason different. */}
       {channelAgents}
 
       {hasActions && (

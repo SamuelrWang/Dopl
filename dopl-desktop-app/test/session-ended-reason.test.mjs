@@ -40,14 +40,17 @@ const running = (opts) =>
 
 // ── THE COPY ─────────────────────────────────────────────────────────────────────────
 
-test("every reason `endEffects` can be called with has a face — none of the five is silent", () => {
-  // Discovered from the SOURCE, so a sixth reason added later fails here rather than shipping a
+test("every reason `endEffects` can be called with has a face — none of them is silent", () => {
+  // Discovered from the SOURCE, so a reason added later fails here rather than shipping a
   // session that ends without saying why. That is the exact defect this file exists about.
+  // ⚠ THE COUNT WAS FIVE AND IS NOW THREE (2026-09-07): `turn_cap` and `cost_cap` went with the
+  // caps themselves. The floor is kept — an EMPTY discovery would make this case vacuous, which
+  // is the failure mode a hard-coded five was guarding against in the first place.
   const reasons = new Set();
   for (const src of [M("session-reducer.js"), M("session-effects.js")]) {
     for (const m of src.matchAll(/endEffects\([^)]*?,\s*'[a-z_]+',\s*'([a-z_]+)'/g)) reasons.add(m[1]);
   }
-  assert.ok(reasons.size >= 5, `expected the known ends, found ${[...reasons].join(", ")}`);
+  assert.ok(reasons.size >= 3, `expected the known ends, found ${[...reasons].join(", ")}`);
   for (const reason of reasons) {
     const text = endedStatusText(reason, { turnCap: 24 });
     assert.ok(text && typeof text === "string", `${reason} ends in silence`);
@@ -55,55 +58,19 @@ test("every reason `endEffects` can be called with has a face — none of the fi
   }
 });
 
-test("the caps name the limit, and the turn cap names the NUMBER it actually hit", () => {
-  assert.equal(endedStatusText("turn_cap", { turnCap: 24 }), "Turn limit reached (24 turns)");
-  assert.equal(endedStatusText("turn_cap", { turnCap: 200 }), "Turn limit reached (200 turns)");
-  assert.equal(endedStatusText("turn_cap", { turnCap: 1 }), "Turn limit reached (1 turn)", "singular");
-  assert.equal(endedStatusText("cost_cap", { turnCap: 24 }), "Cost limit reached");
-});
-
-test("the window and the PEER'S CARD can never name two different numbers", () => {
-  // ⚠ THE POINT OF CALLING `turnCapBody` RATHER THAN RESTATING IT (#1179). A literal here would
-  // drift the first time the issuer-keyed default moved, and the two surfaces explaining one
-  // ending would disagree about which limit fired.
-  for (const turnCap of [24, 200, 1, 80]) {
-    assert.equal(endedStatusText("turn_cap", { turnCap }), endLifecycle("turn_cap", { turnCap }).body, String(turnCap));
-  }
-  // …including the degraded shapes, so the agreement is not just true on the happy path.
-  for (const state of [undefined, {}, { turnCap: Infinity }, { turnCap: 0 }, { turnCap: "24" }]) {
-    assert.equal(endedStatusText("turn_cap", state), endLifecycle("turn_cap", state).body, JSON.stringify(state));
-  }
-});
-
-test("`abandoned` and `inactive` are told APART here, and stay merged on the wire", () => {
-  const abandoned = endedStatusText("abandoned");
-  const inactive = endedStatusText("inactive");
-  assert.notEqual(abandoned, inactive, "the operator's own window is where the difference is useful");
-  // The peer still gets ONE calm sentence for both — the privacy rule in session-effects.js's
-  // header is untouched by this change, and this is what proves it was not widened.
-  assert.equal(endLifecycle("abandoned").body, endLifecycle("inactive").body);
-});
-
-test("an UNKNOWN reason renders itself; a missing one says nothing at all", () => {
-  // A reason this table has not learned is still more than silence, and it is visibly raw rather
-  // than dressed as copy — which is what makes the gap findable.
-  assert.equal(endedStatusText("some_new_terminal"), "some_new_terminal");
-  // But nothing is invented for an end that carries no reason: no cause, no blame.
-  for (const empty of [undefined, null, "", 0, {}]) assert.equal(endedStatusText(empty), null, JSON.stringify(empty));
-});
-
-test("the copy obeys the house rules: no em dash, no blame, no diagnosis", () => {
-  for (const reason of ["turn_cap", "cost_cap", "operator", "abandoned", "inactive"]) {
-    const text = endedStatusText(reason, { turnCap: 24 });
-    assert.ok(!/—/.test(text), `em dash in ${reason}: ${text}`);
-    assert.ok(!/error|crash|sorry|problem/i.test(text), `${reason}: ${text}`);
-  }
-  // ⚠ THE LINE THIS REPLACED CARRIED ONE: `'Ended — inactive'` sat in entryFor since it was
-  // written. Pinned so the fix is not quietly reverted to the old string.
-  assert.ok(!/Ended — inactive/.test(M("session-narration.js")), "the em-dashed line must not come back");
-});
-
-// ── THE WIRING ───────────────────────────────────────────────────────────────────────
+// 🔒 TWO CASES STOOD HERE AND ARE DELETED WITH THE CAPS (2026-09-07, Samuel's ruling):
+//   · "the caps name the limit, and the turn cap names the NUMBER it actually hit" — it pinned
+//     `endedStatusText('turn_cap', {turnCap})` -> "Turn limit reached (N turns)", singular
+//     included, and `('cost_cap')` -> "Cost limit reached".
+//   · "the window and the PEER'S CARD can never name two different numbers" — it pinned
+//     `endedStatusText` and `endLifecycle` against each other for `turn_cap` across the sane and
+//     the degraded shapes, so the two surfaces explaining one ending could not disagree (#1179).
+// Neither reason can be produced any more: `turnCapBody` and both arms of both tables are gone
+// (`session-effects.js`), and nothing ends a session on turns or cost. A repaired pin on a
+// deleted feature is fake coverage, so these are removed rather than re-pointed. The RULE they
+// served — one ending, one number, said the same way to both audiences — survives in the
+// `abandoned` / `inactive` cases below, which are what the two tables still disagree about on
+// purpose.
 
 test("there is exactly ONE end line: the action arms are gone, so nothing double-posts", () => {
   const narration = M("session-narration.js");
@@ -121,7 +88,10 @@ test("the engine mints it off the EMIT, before the settle that freezes the ring"
   // ⚠ ORDER IS THE CORRECTNESS ARGUMENT, and it is asserted rather than assumed: the line has to
   // land while the session is live, because `settle` freezes the ring into the 7-day history that
   // an ended agent's window is served from. A line appended after it is written to nothing.
-  const effects = endEffects(running(), "ended", "turn_cap").map((e) => e.type);
+  // 2026-09-07: driven on `operator` — `turn_cap` was the reason here until the caps were
+  // deleted, and this case is about the ORDER, which is the same for every reason that carries a
+  // lifecycle.
+  const effects = endEffects(running(), "ended", "operator").map((e) => e.type);
   assert.deepEqual(effects, ["abortQuery", "lifecycle", "emit", "settle"]);
 });
 

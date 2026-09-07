@@ -26,12 +26,18 @@
  */
 
 /**
- * ⚠ ABSENCE IS "DEFAULT", AND IT IS A REAL PICK RATHER THAN A MISSING ONE. There
- * is no `"default"` id: the operator choosing Default means the posture record
- * carries NO model and the SDK's own default applies at spawn. Minting a sentinel
- * id for it would put a value on the wire that main has to special-case, and
- * would make "never chosen" and "chose the default" indistinguishable the moment
- * the SDK default moved.
+ * ⚠ ABSENCE IS STILL "NO PICK ON THE WIRE" — but it is no longer OFFERED (2026-09-06,
+ * Samuel's ruling). There is still no `"default"` id, and the posture record still
+ * carries NO model when nothing has been chosen; what changed is that the operator
+ * can no longer SELECT that state. His reasoning: *"why can't we just set a value
+ * and when the user launches the agent it would just be set to that value unless
+ * they change it."*
+ *
+ * ⚠ SO THIS CONSTANT IS NOW AN INTERNAL SENTINEL, NOT AN OPTION. It is what the
+ * WIRE spells for "unset", and {@link AGENT_MODEL_OPTIONS} no longer contains it.
+ * Keep it: `normalizeAgentModel` and the back-fill below both need a word for the
+ * absent state, and a bare `""` scattered at call sites is how that state stops
+ * being recognisable.
  */
 export const AGENT_MODEL_DEFAULT = "" as const;
 
@@ -54,7 +60,36 @@ const AGENT_MODELS: ReadonlyArray<{
 ];
 
 /**
- * The `SelectMenu` options, Default included.
+ * ⚠ **THE MODEL THE ABSENT STATE RESOLVES TO — THE BACK-FILL TARGET** (2026-09-06,
+ * Samuel's ruling).
+ *
+ * ⚠ **THIS IS A PRODUCT DECISION WRITTEN DOWN, NOT A FACT THIS TREE CAN DERIVE, AND
+ * THAT DISTINCTION IS THE WHOLE RISK OF THE ITEM.** "Default" never named a model:
+ * it meant NO `--model` argument, i.e. whatever the bundled CLI picks
+ * (`main/session-model.js`: *"'default' … sets NO `model` option at all, i.e. the
+ * CLI's own pick"*). Nothing on either side of the wire knows what that resolves to,
+ * and the CLI can move it without this tree shipping. So a back-fill CANNOT be
+ * "whatever default resolves to" — it can only be a value somebody CHOSE, and the
+ * cost of choosing is that a channel pinned here stops tracking the CLI if it moves.
+ * Samuel accepted that cost explicitly; this constant is where the choice lives so
+ * it is one edit rather than a literal spread across surfaces.
+ *
+ * ⚠ **SONNET, AND IT IS THE CONVENTIONAL DEFAULT RATHER THAN A MEASURED ONE.** It
+ * wants one word of confirmation from Samuel or one reading of the CLI's own
+ * resolution; it is deliberately NOT the most capable member, because a back-fill
+ * that silently upgraded every unset channel's spend would be the loud version of
+ * this change.
+ */
+export const AGENT_MODEL_FALLBACK = "claude-sonnet-5" as const;
+
+/**
+ * The `SelectMenu` options. ⚠ **"Default" IS GONE (2026-09-06, Samuel's ruling)** —
+ * the dropdown lists only real models and always holds an actual selection.
+ *
+ * ⚠ THE WIRE'S ABSENT STATE DID NOT GO WITH IT. A channel that never chose still
+ * stores no model; what this list guarantees is that the operator cannot ARRIVE at
+ * that state through the UI. {@link agentModelSelection} is where an absent stored
+ * value becomes a rendered one.
  *
  * ⚠ NO PER-OPTION DESCRIPTION, deliberately, and it is the minimal-copy ruling
  * rather than an oversight (INVARIANTS §5). The permission axes carry a
@@ -65,10 +100,26 @@ const AGENT_MODELS: ReadonlyArray<{
 export const AGENT_MODEL_OPTIONS: ReadonlyArray<{
   value: string;
   label: string;
-}> = [
-  { value: AGENT_MODEL_DEFAULT, label: "Default" },
-  ...AGENT_MODELS.map(({ id, label }) => ({ value: id, label })),
-];
+}> = AGENT_MODELS.map(({ id, label }) => ({ value: id, label }));
+
+/**
+ * WHAT THE MODEL ROW SHOWS for a stored value — the back-fill, as a pure function.
+ *
+ * ⚠ IT RESOLVES FOR DISPLAY AND DOES NOT WRITE. The row renders this; the operator's
+ * first explicit pick is what actually stores an id. So a channel that never chose
+ * SHOWS Sonnet and STORES nothing until somebody touches the control, which is the
+ * narrowest reading of Samuel's ruling that still satisfies it: the dropdown always
+ * holds an actual selection, and no channel's stored posture changes underneath it
+ * without a human acting.
+ *
+ * ⚠ AN UNKNOWN STORED ID IS RETURNED AS ITSELF, never replaced by the fallback — a
+ * newer main may run a model this build predates ({@link normalizeAgentModel}'s own
+ * rule), and `agentModelOptionsFor` already appends it so the row can render it.
+ */
+export function agentModelSelection(stored: string | null | undefined): string {
+  const trimmed = typeof stored === "string" ? stored.trim() : "";
+  return trimmed || AGENT_MODEL_FALLBACK;
+}
 
 /**
  * THE OPTIONS A LIVE SELECTOR MAY SHOW, given what the agent is ACTUALLY on.

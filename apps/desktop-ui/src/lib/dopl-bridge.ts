@@ -178,14 +178,16 @@ export interface DoplBridge {
       channelId: string,
       preset: { tools: string; messages: string; model?: string }
     ): Promise<{ ok: boolean }>;
-    /** AUTO-SEND — the durable per-channel out-half. Default OFF (ask first); ON
-     *  maps the windowless session's message axis to `auto_both` and the agent's
-     *  reply posts itself. */
-    getAutoSend?(channelId: string): Promise<boolean>;
-    setAutoSend?(
-      channelId: string,
-      on: boolean
-    ): Promise<{ ok: boolean; on?: boolean }>;
+    // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8). Auto-send was a
+    // SECOND control over the same axis as the launch posture's `messages`, and the
+    // two disagreed by construction. The axis is `setLaunchPosture({ messages })`
+    // now, and `main/session-private.js › effectiveMessageMode` — still the single
+    // live Axis-B read — sources it from there.
+    // ⚠ DECLARING THEM OPTIONAL AGAIN "FOR AN OLDER MAIN" WOULD BE WRONG HERE. These
+    // are optional on this interface because a main may PREDATE a method; these two
+    // POSTDATE nothing — the handlers are deleted, so every main from this build on
+    // rejects the invoke, and a caller guarded by `typeof fn === "function"` would
+    // see the method and call into a channel nobody registered.
   };
   /** `reopen`: open the AGENT WINDOW for this thread's session — the agent
    *  view's way in. Opens a window only, starts no query. Web tree

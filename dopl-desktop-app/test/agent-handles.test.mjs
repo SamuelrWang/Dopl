@@ -203,16 +203,21 @@ test("WIRING: feedLiveSession builds the index off the rename store and passes i
   // answer; the local parse is the FALLBACK for a row the server did not resolve — a peer's
   // agent, an older message, a session projection that had not been pushed. The index must
   // still be built from THIS thread's live ids on that path, which is what this asserts.
+  // ⚠ AND IT MOVED AGAIN ON 2026-09-07 (the mask fallback): the parse is now reached only on a
+  // row no server ruled on, so it sits inside a `verdict === ''` conditional rather than directly
+  // after the `??`. The pin follows the property, which is unchanged — wherever the fallback
+  // runs, its index is built from THIS thread's live ids — rather than the exact line shape.
   assert.match(
     src,
-    /serverAddressed\(m, liveIds\) \?\?\s*\n\s*mentionedAgentIds\(m\.body, liveIds, agentHandles\.handleIndexFor\(liveIds\)\);/,
+    /mentionedAgentIds\(m\.body, liveIds, agentHandles\.handleIndexFor\(liveIds\)\)/,
     "the fan-out's FALLBACK must build the slug index from THIS thread's live ids"
   );
+  assert.match(src, /resolved\s*\?\?/, "and it is reached through the server's answer, not around it");
   // ⚠ `??` AND NOT `||`, PINNED. An EMPTY array is the server saying "this body names no
   // agent", and `||` would fall through to the local parse on it — re-deriving an answer that
   // was already given, which is the whole defect A9 removes.
   assert.ok(
-    !/serverAddressed\(m, liveIds\) \|\|/.test(src),
+    !/serverAddressed\(m, liveIds\) \|\||resolved \|\|/.test(src),
     "the server's empty answer must not fall through to the local parse"
   );
 });

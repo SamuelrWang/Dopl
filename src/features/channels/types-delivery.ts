@@ -9,7 +9,10 @@
  * barrel and there is no second import path to any of these symbols.**
  */
 
-import type { LaunchMessageMode, LaunchToolMode } from "./types-launch";
+// ⚠ 2026-09-07: `LaunchMessageMode` / `LaunchToolMode` were imported here for
+// `ChannelAgentPosture`'s two mode axes. Deleted with it (see the block below) —
+// nothing else in this file names either type, and an import kept "just in case"
+// is how a deleted feature grows a second root.
 
 /**
  * **WHO THE SERVER RESOLVED A MESSAGE FOR**, computed once at write time by
@@ -99,17 +102,24 @@ export type MachineDelivery = Extract<
   "delivered" | "woken" | "idle" | "refused"
 >;
 
-/**
- * ⚠ **THREE INDEPENDENT AXES, EACH NULLABLE ON ITS OWN.** A channel may record
- * a chain rule and no mode ceiling, and the server must clamp what it knows
- * without inventing the rest.
- */
-export type ChannelAgentPosture = {
-  tools: LaunchToolMode | null;
-  messages: LaunchMessageMode | null;
-  /** May an agent launched here launch further agents? ⚠ `false` REFUSES a
-   *  `chain: true` request at creation (G7); a clamped chain would produce an
-   *  agent that hits a bound mid-run, after the caller handed it work assuming
-   *  workers. `null` = not recorded; the desktop's toggle answers. */
-  chain: boolean | null;
-};
+// ── ⚠ **`ChannelAgentPosture` IS DELETED (2026-09-06, Samuel's rulings on items 12, 13 and
+// 14 — *"make sure all the logic is deleted"*).** ────────────────────────────────────────────
+//
+// It declared THREE INDEPENDENT AXES a room MANAGER could set over EVERY member's agents in the
+// channel: the widest tool mode a launch here could run, the widest message mode, and whether
+// those agents could launch further agents. Each was nullable on its own so the server could
+// clamp what it knew without inventing the rest.
+//
+// ⚠ THE SHARPEST OF THE THREE IS WORTH NAMING, BECAUSE IT DID NOT CLAMP. `chain: false` REFUSED
+// a `chain: true` request at CREATION (G7) rather than quietly lowering it, on the reasoning
+// that a clamped chain produces an agent which hits a bound mid-run, after its caller has
+// already handed it work assuming workers. That refusal is gone too.
+//
+// ⚠ **SO NO ROOM BOUNDS A PEER'S AGENT ON ANY AXIS.** A member's agents in a channel run at
+// whatever that member set on their own machine. Samuel was told this before he ruled; it is
+// recorded here, beside each deleted control, and in the migration, so it cannot be mistaken
+// later for an oversight.
+//
+// ⚠ THE THREE COLUMNS REMAIN ON `channels` and are read by nothing — the migration is
+// non-destructive and no backfill clears them, because clearing values nothing reads is
+// destruction with no beneficiary.

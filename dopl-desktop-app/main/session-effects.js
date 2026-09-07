@@ -127,28 +127,15 @@ function terminalBody(extra) {
   return undefined;
 }
 
-// ⚠ A CAP END NAMES THE NUMBER IT HIT (2026-09-05, task 9(c); #1101 item 4c). "Turn limit
-// reached" told the operator a limit existed and not which one, and as of task 9(a) that is
-// genuinely ambiguous: the default is ISSUER-KEYED, so the same sentence means 200 on a session
-// the operator launched and 24 on one an agent launched, and a set cap means neither.
-// ⚠ THE NUMBER IS READ OFF THE ENDED RECORD, NEVER RE-DERIVED (#1179). `state.turnCap` is the cap
-// this session actually ran under — `session-engine.js › readCaps` resolved it at launch and
-// PREFERS the persisted value across a resume, so a session that crashed at turn 80 and came back
-// still reports the cap it was really counting against. Calling `settings.getTurnCap()` here
-// would answer today's setting for a default tier this session may not be in, and would name the
-// wrong number on the one card that exists to explain the end.
-// ⚠ AND IT DEGRADES TO THE OLD SENTENCE rather than to a wrong one. An unlimited session cannot
-// reach this branch at all (`UNLIMITED_TURN_CAP` is Infinity), but a legacy or hand-mangled
-// record with no finite cap still gets a true line instead of "reached (Infinity turns)".
-function turnCapBody(state) {
-  const n = state && state.turnCap;
-  if (!Number.isFinite(n) || n <= 0) return 'Turn limit reached';
-  return `Turn limit reached (${n} turn${n === 1 ? '' : 's'})`;
-}
+// 🔒 `turnCapBody` STOOD HERE AND IS DELETED (2026-09-07, Samuel's ruling), along with the
+// `turn_cap` and `cost_cap` arms of both tables below. This is the completion of the deletion
+// rather than tidying after it: these lines are how the app SAYS a session was capped, and an
+// app that can no longer cap one must not keep the sentence. A dead branch that renders "Turn
+// limit reached" is a message waiting for a bug to make it reachable again.
+// ⚠ THE `capped: true` LIFECYCLE EXTRA GOES WITH THEM. It was the peer-visible half — a card on
+// the counterparty's thread saying this side stopped at a limit — and no producer sets it now.
 
 function endLifecycle(reason, state) {
-  if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: turnCapBody(state) };
-  if (reason === 'cost_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Cost limit reached' };
   if (reason === 'operator') return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: 'Session ended' };
   // C-5: the 12h abandonment and the launch watchdog (C-4). ⚠ "and the LRU eviction" stood
   // here until 2026-08-20; there is no eviction (see the header).
@@ -166,9 +153,11 @@ function endLifecycle(reason, state) {
 // turn cap is the one that cost Samuel real time: an agent stops at 24 turns and its own window
 // never says why.
 //
-// ⚠ WHY THE REASON AND NOT THE ACTION. A cap is reached INSIDE the `result` action
-// (`session-reducer.js` :239/:242), so it HAS no action type of its own and `entryFor` can never
-// see it. The `ended` emit is the one place all five converge already knowing which it was.
+// ⚠ WHY THE REASON AND NOT THE ACTION. The argument was written for the CAPS — reached inside the
+// `result` action, so they had no action type of their own and `entryFor` could never see them.
+// The caps are deleted (2026-09-07) and the argument outlives them: the `ended` emit is still the
+// one place every end converges already knowing which it was, which is what keeps a new end from
+// having to invent a second route to the same window.
 //
 // ⚠ THIS IS A SECOND AUDIENCE, NOT A SECOND COPY OF `endLifecycle`. That table writes to the
 // CHANNEL, where the peer reads it, and it deliberately says one calm thing for both
@@ -177,17 +166,13 @@ function endLifecycle(reason, state) {
 // OWN window, where that privacy argument does not apply and the distinction is the whole
 // value, so the two ends are named apart here and only here.
 //
-// ⚠ THE CAP LINE IS `turnCapBody`, CALLED NOT COPIED, so the window and the peer's card can
-// never name two different numbers for one ending. That was the point of reading the cap off the
-// ended record (#1179); a second literal here would undo it the first time the default moved.
 // ⚠ AN UNKNOWN REASON RENDERS ITSELF rather than nothing. A reason this table has not learned yet
 // is still more than the silence A9 is about, and a future `endEffects` caller that forgets to
 // add its copy here degrades to a visible raw word instead of vanishing.
 // ⚠ NO EM DASH (Samuel's copy rule). The line it replaces, `'Ended — inactive'`, carried one.
 function endedStatusText(reason, state) {
   if (!reason || typeof reason !== 'string') return null;
-  if (reason === 'turn_cap') return turnCapBody(state);
-  if (reason === 'cost_cap') return 'Cost limit reached';
+  // 2026-09-07: `turn_cap` and `cost_cap` arms deleted with the caps.
   if (reason === 'operator') return 'Ended by you';
   if (reason === 'inactive') return 'Ended after going inactive';
   // ⚠ NOT "after 12 hours": the bound is `ABANDONED_MS` and a number spelled here is a second

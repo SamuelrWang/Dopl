@@ -13,8 +13,11 @@ export const APP_OPS = [
   "beginSignIn",
   "channels.chooseFolder",
   "channels.clearFolder",
-  // ⚠ TWO OPS JOINED HERE ON 2026-08-20 (the auto-send posture): the pin failed on the
-  // ADD, which is the review this comment records:
+  // ⚠ THE 2026-08-20 AUTO-SEND ADD REVIEW STOOD HERE AND IS RETIRED WITH THE OPS IT REVIEWED
+  // (2026-09-06, item 8). It is not deleted silently: the REMOVAL review is on
+  // `channels.getAutoSend`'s former line below, which is where a reader looking for these two
+  // ops will go. Its original text, kept because a retired review still explains what the
+  // surface once carried:
   //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
   //     registers `channels:getAutoSend` / `channels:setAutoSend`, both `appWindowOnly`,
   //     both UUID-gating `channelId`, storage in `main/channel-prefs.js › get/setAutoSend`
@@ -41,7 +44,19 @@ export const APP_OPS = [
   //     `setLaunchPosture` below, which fans out live, and it is deliberate: that one widens
   //     SUPERVISION, this one is CONTAINMENT.
   "channels.getAgentChain",
-  "channels.getAutoSend",
+  // ⚠ `channels.getAutoSend` LEFT ON 2026-09-06 (settings overhaul, item 8), and its twin
+  // `channels.setAutoSend` with it. The pin failed on the REMOVAL, which is the review this
+  // comment records — the same discipline the two ADD reviews above follow:
+  //   • The main-process handlers ARE GONE, checked first: `main/channel-dir-ipc.js` no longer
+  //     registers `channels:getAutoSend` / `channels:setAutoSend`, and `main/channel-prefs.js`
+  //     no longer exports `getAutoSend` / `setAutoSend`. Leaving these pinned would assert a
+  //     bridge to nowhere — the exact failure the two deleted consent ops below record.
+  //   • NOTHING WIDENED. The axis they set is the launch posture's `messages`, whose two ops
+  //     are already pinned here; the surface shrank by two ops and gained none.
+  //   • THE SETTING DID NOT DIE, THE SECOND AUTHORITY DID. Auto-send and the posture's
+  //     `messages` were two controls over one axis, and auto-send won by force
+  //     (`session-private.js › autoSendMessageMode`, also deleted). The operator's pick now
+  //     stands, read live at the same single Axis-B decision point.
   "channels.getFolderLabel",
   // ⚠ TWO MORE JOINED HERE ON 2026-08-20 (the arm-vs-durable-posture split): the pin failed
   // on the ADD, which is the review this comment records:
@@ -77,7 +92,8 @@ export const APP_OPS = [
   // nothing could reach them. The main-process handlers are gone with them, so leaving them
   // pinned would assert a bridge to nowhere.
   "channels.setAgentChain", // 2026-08-31 — the review is on `channels.getAgentChain` above
-  "channels.setAutoSend",
+  // ⚠ `channels.setAutoSend` LEFT 2026-09-06 — the removal review is on `channels.getAutoSend`
+  // above, where its twin's used to be.
   "channels.setLaunchPosture",
   // ⚠ ONE JOINED HERE ON 2026-08-25: `claude.signIn`, the ONE entry into the Claude Code auth
   // recovery flow. The pin failed on the ADD, which is the review this comment records:
@@ -373,6 +389,10 @@ export const APP_OPS = [
   //     transition, so a live re-read is a reducer event and a build of its own).
   //   • Both are feature-probed by the SPA; an older main has no turn-cap concept, which reads as
   //     NO ROW rather than an inert one.
-  "turnCap.get",
-  "turnCap.set",
+  // 🔒 `turnCap.get` / `turnCap.set` STOOD HERE AND ARE DELETED (2026-09-07, Samuel: "Remove the
+  // turn/cost limit"). ⚠ THIS LIST IS THE REASON THE DEFECT WAS FINDABLE AT ALL: it is the pin
+  // that the PRELOAD offers exactly these ops, so it went on asserting two bindings whose
+  // main-process handlers had already been unregistered — the list agreeing with the preload
+  // while both disagreed with main. A preload op with no handler REJECTS on invoke, which the
+  // SPA row's catch rendered as "unset": a control showing a posture nothing enforced.
 ];

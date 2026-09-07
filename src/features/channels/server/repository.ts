@@ -207,21 +207,22 @@ type ChannelPatch = Partial<{
   /** The curated Main-info card, already validated by
    *  `info-card.ts › ChannelInfoCardSchema` at the route boundary. */
   info_card: ChannelInfoCardInput;
-  /**
-   * **THE POSTURE CEILING** (2026-09-02, A9 — G6/G7), already held to the two
-   * ordered enums by `schema-launch.ts › ChannelAgentPostureSchema`.
-   *
-   * ⚠ `| null` ON EACH IS THE CLEAR, not an absence: `Partial<>` above already
-   * expresses "not in this patch", and these three have to be settable BACK to
-   * "no ceiling recorded" or a channel could never drop one.
-   */
-  agent_tool_ceiling: string | null;
-  agent_message_ceiling: string | null;
-  agent_chain_allowed: boolean | null;
-  /** **RR3's DEFAULT RESPONDER** (`20260918120000`, B4). `null` is the CLEAR, on
-   *  the ceiling trio's terms. Held to the handle grammar by
-   *  `ChannelUpdateSchema` and again by `channels_default_responder_check`. */
-  default_responder_agent_name: string | null;
+  // ⚠ **THE POSTURE CEILING IS DELETED FROM THIS PATCH (2026-09-06, items 12, 13, 14)** —
+  // `agent_tool_ceiling`, `agent_message_ceiling`, `agent_chain_allowed`. Nothing writes them
+  // and nothing reads them; the COLUMNS remain on the table under a non-destructive migration,
+  // because clearing values nothing reads is destruction with no beneficiary.
+  //
+  // ⚠ REMOVING THEM FROM THIS TYPE IS PART OF THE FENCE, NOT TIDYING. `ChannelPatch` is what
+  // `updateChannel` accepts; a field left here would let a future caller write a ceiling that
+  // no reader would ever honour — a value in the database that means nothing, which is worse
+  // than either keeping the feature or removing it.
+  //
+  // ⚠ **`default_responder_agent_name` IS OFF THIS PATCH TOO (2026-09-07, items 10 and 11)**,
+  // and for the fence's reason above rather than for tidiness: nothing reads the column any
+  // more, so leaving it settable would let a future caller store a nomination no resolver will
+  // ever honour. That is the same "value in the database that means nothing" the ceiling trio
+  // was removed to prevent. The per-member replacement is written through
+  // `updateMemberPrefs`, against `channel_members`, and never through this type.
 }>;
 
 export async function updateChannel(
@@ -346,6 +347,44 @@ export async function findMembership(
     .maybeSingle();
   if (error) throw error;
   return (data as ChannelMemberRow | null) ?? null;
+}
+
+/**
+ * **ONE MEMBER'S "unaddressed messages" SETTING** (2026-09-06, Samuel's ruling on items 10
+ * and 11) — the raw column, uncoerced.
+ *
+ * ⚠ **NARROW ON PURPOSE, ON `hasMembership`'S PRECEDENT.** {@link findMembership} would answer
+ * this from its `select("*")`, and reusing it would be one fewer function — but this runs on
+ * the MESSAGE-POSTING path (`service-wake-verdict.ts`, the RR3 branch), and that is the one
+ * place a whole-row read for a single `TEXT` column is worth avoiding. The recheck above made
+ * the same trade for the same reason.
+ *
+ * ⚠ **IT COERCES NOTHING.** The caller owns that
+ * (`lib/agent-mentions.ts › normalizeUnaddressedResponder`), because the fail-safe direction is
+ * a RULING — an unreadable value must land on the default and never on `"none"` — and a
+ * repository that quietly applied its own default would be a second place that decision lives.
+ *
+ * ⚠ **`supabaseAdmin()` (service_role), WHOSE COLUMN GRANTS ARE UNTOUCHED** by
+ * `20260928130000`'s deliberate omission of `authenticated` / `anon`. Grants are per-role; this
+ * read is exactly why the column can stay private and still be usable.
+ *
+ * ⚠ A MISSING ROW ANSWERS `null` rather than throwing — see the caller for why a race between
+ * the write and the verdict must not fail a post that is already stored.
+ */
+export async function findUnaddressedResponder(
+  channelId: string,
+  userId: string
+): Promise<string | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_members")
+    .select("unaddressed_responder")
+    .eq("channel_id", channelId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as { unaddressed_responder?: string | null } | null;
+  return row?.unaddressed_responder ?? null;
 }
 
 /**
@@ -475,6 +514,11 @@ export async function updateMemberPrefs(
     notify_scope?: string;
     agent_tool_profile?: string;
     favorited_at?: string | null;
+    /** ⚠ NOT nullable, unlike `favorited_at` above: the column is `NOT NULL DEFAULT
+     *  'last_addressed'` and `'last_addressed'` IS the unconfigured answer, so there is no
+     *  clear to express (`20260928130000`). Held to the closed set by the zod enum at the
+     *  route and by `channel_members_unaddressed_responder_check` here. */
+    unaddressed_responder?: string;
   }
 ): Promise<ChannelMemberRow> {
   const db = supabaseAdmin();

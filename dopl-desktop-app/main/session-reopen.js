@@ -335,7 +335,13 @@ async function setModelByTask(a) {
   const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   const alias = sessionModel.aliasForModelId(a && a.model);
-  const arg = sessionModel.modelArg(alias); // null == 'default' == clear the override
+  // ⚠ 2026-09-06: `modelArg` no longer answers null for `'default'` — it answers the PRODUCT
+  // fallback, because "Default" stopped being an option an operator can pick (`session-model.js ›
+  // LAUNCH_MODEL_FALLBACK`). So an unrecognised value RESETS this session to the model a fresh
+  // launch would spend rather than clearing the override. The `|| undefined` below is kept for
+  // the shape `modelArg` still documents — a value that cannot resolve at all — and is what a
+  // runtime with no model concept relies on.
+  const arg = sessionModel.modelArg(alias);
   try {
     if (s.query && typeof s.query.setModel === 'function') await s.query.setModel(arg || undefined);
   } catch (_) {

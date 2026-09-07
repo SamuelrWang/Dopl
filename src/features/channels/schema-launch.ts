@@ -67,26 +67,31 @@ export const LAUNCH_MESSAGE_MODES = [
 const ToolModeSchema = closedEnum<LaunchToolMode>()(LAUNCH_TOOL_MODES);
 const MessageModeSchema = closedEnum<LaunchMessageMode>()(LAUNCH_MESSAGE_MODES);
 
-/**
- * **THE CHANNEL'S POSTURE CEILING** (2026-09-02, A9 — G6/G7), edited through the
- * ordinary channel PATCH and manage-gated there like the rest of the header.
- *
- * ⚠ **`null` IS A VALUE AND MEANS "CLEAR THE CEILING", which is why every axis
- * is `.nullable()` as well as `.optional()`.** Absent means "no opinion, leave
- * it"; `null` means "this channel records no ceiling any more". Collapsing the
- * two would make a recorded ceiling impossible to remove — the same
- * absent-vs-null distinction `mapChannelRow` reads back out.
- *
- * ⚠ IT REUSES THE TWO ORDERED ENUMS ABOVE rather than restating them. The
- * ceiling and the request must agree about what "wider" means, and `narrowTo`'s
- * comparison is an INDEX into those arrays.
- */
-export const ChannelAgentPostureSchema = z.object({
-  tools: ToolModeSchema.nullable().optional(),
-  messages: MessageModeSchema.nullable().optional(),
-  chain: z.boolean().nullable().optional(),
-});
-export type ChannelAgentPostureInput = z.infer<typeof ChannelAgentPostureSchema>;
+// ── ⚠ **`ChannelAgentPostureSchema` AND `ChannelAgentPostureInput` ARE DELETED**
+// (2026-09-06, Samuel's rulings on items 12, 13 and 14) ──────────────────────────────────────
+//
+// They validated THE CHANNEL'S POSTURE CEILING — the three `channels.agent_*` columns a room
+// MANAGER set over EVERY member's agents — edited through the ordinary channel PATCH and
+// manage-gated there. The whole record is gone: the columns are unread, the field is off
+// `MANAGED_CHANNEL_FIELDS`, and `service-launch-posture.ts` no longer clamps or refuses.
+//
+// ⚠ **THE TWO ORDERED ENUMS ABOVE STAY, AND THE DIFFERENCE MATTERS.** This schema reused
+// `LAUNCH_TOOL_MODES` / `LAUNCH_MESSAGE_MODES` rather than restating them because the CEILING
+// and the REQUEST had to agree about what "wider" means — the clamp's comparison was an INDEX
+// into those arrays. That coupling reason is dead with the clamp. **The ORDER is not**: the
+// arrays are still ordered narrowest-first, `LaunchCreateSchema` below still validates a
+// request against them, and `dopl-desktop-app/main/launch-posture.js` still clamps the
+// operator's own posture by index on its own side. Do not "simplify" either array to an
+// unordered set on the grounds that nothing compares them any more — one thing still does, and
+// it is in the other tree where this file's reader cannot see it.
+//
+// ⚠ The `null`-is-the-clear rule this block used to state was rehomed on
+// `ChannelUpdateSchema.defaultResponderAgentName` — and THAT field is deleted too (2026-09-07,
+// items 10 and 11), so the rule now has no channel-agent field left to govern. It survives on
+// `infoCard` and `archived`, where `undefined` still means "not in this patch". ⚠ Its successor
+// setting deliberately has NO clear: `channel_members.unaddressed_responder` is `NOT NULL` with
+// two values, and `'last_addressed'` IS the unconfigured answer, so a nullable spelling there
+// would mint the third state the migration refused.
 
 export const LaunchCreateSchema = z.object({
   /** Channel slug or id. ⚠ Not `.uuid()` — a slug is a legal ref everywhere else

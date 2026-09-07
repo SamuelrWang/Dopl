@@ -59,9 +59,10 @@ const store = new Store();
 
 // electron-store keys — `sessionIdleTtlMs` / `sessionCostCapUsd` are READ-ONLY (see above);
 // `sessionTurnCap` is written by `setTurnCap` and by nothing else in this app.
-const TURN_CAP_KEY = 'sessionTurnCap'; // number; unset -> DEFAULT_TURN_CAP
+// 2026-09-07: `sessionTurnCap` and `sessionCostCapUsd` are no longer read or written by anything.
+// The key names are recorded here rather than as constants so a machine's existing values can
+// still be found by hand, and so a future restore knows what it was called.
 const IDLE_TTL_KEY = 'sessionIdleTtlMs'; // number ms; unset -> DEFAULT_IDLE_TTL_MS
-const COST_CAP_KEY = 'sessionCostCapUsd'; // number USD; unset / <=0 -> no cap
 
 // ⚠ ONE STATEMENT OF EACH DEFAULT, IMPORTED RATHER THAN RETYPED (2026-08-20). These were
 // SECOND copies: `session-state.js` declares `DEFAULT_TURN_CAP = 24`, `DEFAULT_IDLE_MS`
@@ -75,10 +76,7 @@ const COST_CAP_KEY = 'sessionCostCapUsd'; // number USD; unset / <=0 -> no cap
 // ceiling that survives is `session-windowless.js › MAX_CONCURRENT_SESSIONS`, which is about
 // running sessions rather than open windows.
 const {
-  defaultTurnCap,
-  UNLIMITED_TURN_CAP,
   DEFAULT_IDLE_MS: DEFAULT_IDLE_TTL_MS,
-  DEFAULT_COST_CAP_USD,
 } = require('./session-state');
 
 // ── Loop-safety caps (read by the session engine) ────────────────────────────
@@ -112,20 +110,14 @@ const {
 // ⚠ AND THE COERCION IS WRITTEN ONCE. Re-deriving "what did they set" in the IPC layer, or in the
 // setter, is the two-copies bug this file's header already records once — in a worse shape, since
 // the two copies would be a reader and a writer of the same key.
-function readTurnCapSetting() {
-  const raw = store.get(TURN_CAP_KEY);
-  const n = typeof raw === 'number' ? raw
-    : typeof raw === 'string' && raw.trim() !== '' ? Number(raw)
-      : NaN;
-  if (n === 0) return 0;
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
-}
-
-function getTurnCap(launchDepth) {
-  const set = readTurnCapSetting();
-  if (set === 0) return UNLIMITED_TURN_CAP;
-  return set === null ? defaultTurnCap(launchDepth) : set;
-}
+// 🔒 `readTurnCapSetting` AND `getTurnCap` STOOD HERE AND ARE DELETED (2026-09-07, Samuel's
+// ruling). With them go the two-halves split, the issuer-keyed fallback and the 0-means-unlimited
+// translation: there is no cap to read, so there is nothing for a control to render and nothing
+// for the engine to apply.
+// ⚠ THE STORE KEY IS NOT MIGRATED, DELIBERATELY. A machine that has `sessionTurnCap` set keeps
+// the number on disk, inert — nothing reads it. Deleting operator data to tidy up a removed
+// feature is a worse default than leaving a dead key, and if the ceiling is ever restored the
+// operator's own answer is still there.
 
 // ⚠ THE ONE WRITER. It MIRRORS the read above rather than validating in its own vocabulary, so
 // what goes in is what comes back out:
@@ -156,37 +148,18 @@ function getTurnCap(launchDepth) {
 //   null   → clear the key (unset)
 //   int≥0  → write exactly this
 //   undefined → NOT A REQUEST AT ALL. Junk, and distinct from `null`, which IS a request.
-function normalizeTurnCapInput(value) {
-  const v = typeof value === 'string' ? value.trim() : value;
-  if (v === null || v === '') return null;
-  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
-}
+// 2026-09-07: `normalizeTurnCapInput` stood here — the one coercion the setter and the IPC
+// boundary shared. Deleted with the caps, along with both of its callers.
 
-function setTurnCap(value) {
-  const want = normalizeTurnCapInput(value);
-  if (want === null) store.delete(TURN_CAP_KEY);
-  else if (want !== undefined) store.set(TURN_CAP_KEY, want);
-  return readTurnCapSetting();
-}
+// 2026-09-07: `setTurnCap` (the one writer) and `getCostCapUsd` stood here. Deleted with the caps.
 
 function getIdleTtlMs() {
   const n = Number(store.get(IDLE_TTL_KEY));
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_IDLE_TTL_MS;
 }
 
-// 0 (or unset / non-positive) means NO cost cap. A positive value caps a session's
-// cumulative cost; the engine ends the session (task stays open) when it is crossed.
-function getCostCapUsd() {
-  const n = Number(store.get(COST_CAP_KEY));
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_COST_CAP_USD;
-}
-
 module.exports = {
-  getTurnCap,
-  readTurnCapSetting, // what the OPERATOR set (null | 0 | positive) — the control's read
-  setTurnCap, // …and the only writer of that key
-  normalizeTurnCapInput, // …and what the boundary asks so it never re-reads the same rules
+  // 2026-09-07: getTurnCap, readTurnCapSetting, setTurnCap, normalizeTurnCapInput and
+  // getCostCapUsd were exported here. All five are deleted with the caps.
   getIdleTtlMs,
-  getCostCapUsd,
 };

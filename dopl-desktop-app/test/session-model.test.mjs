@@ -76,7 +76,9 @@ test("the frozen tables evaluate standalone, with nothing in scope but themselve
   const pure = new Function(`${block}
     return { MODEL_CHOICES, normalizeModel, modelArg, contextWindowFor, promptTokens, contextEvent };`)();
   assert.deepEqual(pure.MODEL_CHOICES, model.MODEL_CHOICES);
-  assert.equal(pure.modelArg("rm -rf /"), null);
+  // 2026-09-06: `modelArg` resolves an unresolvable value through 'default' to the PRODUCT
+  // fallback, so what a shell-shaped string reaches argv as is Sonnet's alias — never itself.
+  assert.equal(pure.modelArg("rm -rf /"), model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK));
   assert.equal(pure.contextWindowFor("claude-opus-5"), 1000000);
   assert.deepEqual(pure.contextEvent(0, "claude-opus-5"), null, "nothing measured, nothing said");
 });
@@ -146,18 +148,82 @@ test("an ID still cannot reach argv as itself — the alias is what argv gets", 
   }
 });
 
-test("modelArg is the argv gate: null for 'default', the bare alias otherwise, junk NEVER", () => {
-  assert.equal(model.modelArg("default"), null, "no model option at all — the CLI's own pick");
+test("modelArg is the argv gate: the PRODUCT FALLBACK for 'default', the bare alias otherwise", () => {
+  // ⚠ **REPOINTED 2026-09-06 (Samuel's back-fill ruling). THIS CASE ASSERTED `null` — "no model
+  // option at all, the CLI's own pick" — AND THAT IS EXACTLY WHAT THE RULING CHANGED.** With
+  // "Default" gone from the dropdown, every channel behaves as though set to a real model; a
+  // chain that ends with no opinion now spends the product's fallback instead of the CLI's.
+  // ⚠ THE OLD ASSERTION IS NAMED RATHER THAN DELETED, because `null` is still reachable (see the
+  // junk case below) and a reader finding one `null` here would otherwise think the ruling only
+  // half-landed.
+  const fallbackAlias = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
+  assert.equal(model.modelArg("default"), fallbackAlias, "no opinion resolves to the fallback");
   assert.equal(model.modelArg("opus"), "opus");
   assert.equal(model.modelArg("fable"), "fable");
+  // ⚠ JUNK STILL RESOLVES TO THE FALLBACK, NOT TO `null`, and that is the same statement: junk
+  // normalizes to 'default' and 'default' now names a model. What must never happen is junk
+  // reaching argv as ITSELF, which the shape guard below is for.
   for (const junk of JUNK) {
-    assert.equal(model.modelArg(junk), null, JSON.stringify(junk));
+    assert.equal(model.modelArg(junk), fallbackAlias, JSON.stringify(junk));
   }
   // A shell-shaped string can never come back out, whatever went in.
   for (const m of model.MODEL_CHOICES) {
     const arg = model.modelArg(m);
     if (arg !== null) assert.match(arg, /^[a-z]+$/, "an alias is one lowercase word or it is nothing");
   }
+  assert.match(fallbackAlias, /^[a-z]+$/, "the fallback reaches argv as an alias, never as an id");
+});
+
+test("chainModel is UNCHANGED by the fallback — a link with no opinion still steps aside", () => {
+  // ⚠ THE ONE THING THE BACK-FILL RULING MUST NOT BREAK (F-285). Every launch lane spells its
+  // precedence as `chainModel(a) || chainModel(b) || …`. If `'default'` resolved to the fallback
+  // HERE as well as at the argv gate, the first link would always be truthy and every lower link
+  // would be unreachable — a channel's stored model could never beat a template's, and the
+  // precedence order would invert silently. The fallback belongs at the END of the chain, which
+  // is `modelArg`, and nowhere else.
+  assert.equal(model.chainModel("default"), "", "no opinion keeps going");
+  assert.equal(model.chainModel(""), "", "and so does absent");
+  assert.equal(model.chainModel("opus"), "opus", "a real pick ends the chain");
+  // The end-to-end statement, as a lane spells it: nothing anywhere still lands on the fallback.
+  const resolved = model.chainModel("") || model.chainModel("default") || "";
+  assert.equal(resolved, "", "the chain itself resolves to nothing…");
+  assert.equal(
+    model.modelArg(resolved),
+    model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK),
+    "…and the argv gate is where that becomes a model"
+  );
+});
+
+test("⚠ THE PINNED TWIN: the desktop's fallback and the web's are the same id", () => {
+  // ⚠ TWO TREES, ONE FACT, AND THEY CANNOT IMPORT EACH OTHER — the situation
+  // `src/features/channels/lib/agent-models.ts › AGENT_MODEL_ALIASES` already restates
+  // `MODEL_CHOICES` / `ID_TO_ALIAS` for. The web's `AGENT_MODEL_FALLBACK` decides what the
+  // Settings dropdown SHOWS for an unpicked channel; this file's `LAUNCH_MODEL_FALLBACK` decides
+  // what that channel actually LAUNCHES with. If they drift, the control names one model and
+  // spends another — which is precisely the defect this pair was built to close, reappearing as
+  // a typo instead of as a design.
+  //
+  // ⚠ READ FROM SOURCE, NOT IMPORTED. The web tree is TypeScript and outside this suite's reach;
+  // the same technique every other cross-tree pin in this file uses.
+  const WEB = readFileSync(
+    join(HERE, "..", "..", "src", "features", "channels", "lib", "agent-models.ts"),
+    "utf8"
+  );
+  const match = WEB.match(/AGENT_MODEL_FALLBACK\s*=\s*"([^"]+)"/);
+  assert.ok(match, "the web declares AGENT_MODEL_FALLBACK as a string literal");
+  assert.equal(
+    match[1],
+    model.LAUNCH_MODEL_FALLBACK,
+    "the model the dropdown SHOWS must be the model the launch SPENDS"
+  );
+  // ⚠ AND IT MUST BE A MODEL THIS BUILD CAN ACTUALLY SPEND — agreement alone is not enough. A
+  // pinned pair that agreed on an id NEITHER side knew would pass the check above and still be
+  // broken: `aliasForModelId` fails closed to `'default'`, so `modelArg` would hand argv the
+  // literal string `default` as though it were an alias. The guard is membership, not spelling.
+  assert.notEqual(model.normalizeModelId(model.LAUNCH_MODEL_FALLBACK), "",
+    "the fallback is a member of MODEL_IDS");
+  assert.notEqual(model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK), "default",
+    "…so it resolves to a real alias rather than the fail-closed one");
 });
 
 // ── ⚠ 2. THE FOUR-COPY PIN ENDED HERE — 2026-08-20, F-228 ────────────────────
@@ -199,17 +265,16 @@ test("modelArg is the argv gate: null for 'default', the bare alias otherwise, j
 // out of the shipped SOURCE rather than restated — the discipline
 // `sdk-mcp-token.test.mjs` follows for mcp-config's timeout, so this harness can
 // never drift from the number that ships.
-// ⚠ DERIVED SINCE 2026-09-05 (task 9a): the brake is `MAX_TURNS_FACTOR * OPERATOR_TURN_CAP`,
-// not a literal, so a regex for a literal threw and took this whole file down with it. Both
-// factors are read off the shipping source and multiplied here — same "read it, never restate
-// it" rule, one level down, exactly as `launch-max-turns.test.mjs` already does.
+// ⚠ A LITERAL AGAIN SINCE 2026-09-07: the brake was `MAX_TURNS_FACTOR * OPERATOR_TURN_CAP`
+// until the operator-facing caps were deleted, which took `OPERATOR_TURN_CAP` with them.
+// `SESSION_MAX_TURNS` is now declared as one number in the shipped source. Still READ off
+// that source, never restated here — the rule the derivation followed, one level up.
 const shippedNum = (src, name) => {
   const m = new RegExp(`const ${name} = (\\d+);`).exec(src);
   if (!m) throw new Error(`${name} is no longer a literal declaration in the shipped source`);
   return Number(m[1]);
 };
-const SHIPPED_MAX_TURNS =
-  shippedNum(SPEC, "MAX_TURNS_FACTOR") * shippedNum(M("session-state.js"), "OPERATOR_TURN_CAP");
+const SHIPPED_MAX_TURNS = shippedNum(SPEC, "SESSION_MAX_TURNS");
 
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
@@ -261,17 +326,24 @@ test("the launch spec carries it on a RESUME too — one assembly point, so park
   assert.equal(opts.resume, "sdk-1", "and the resume is still the only field that differs");
 });
 
-test("'default' sets NO model field at all, so the CLI keeps its own pick", () => {
+// ⚠ REWRITTEN 2026-09-07. This pinned "'default' sets NO model field at all, so the CLI keeps
+// its own pick". Samuel removed the "Default" option and ruled that an unpicked channel launches
+// the PRODUCT fallback (`LAUNCH_MODEL_FALLBACK`), so an absent pick now assembles a real model
+// — which is the whole point of the back-fill: the row and the launch state the same fact.
+test("'default' / absent assembles the PRODUCT fallback, not an unset option", () => {
+  const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
   for (const s of [session({ model: "default" }), session({ model: null }), session({})]) {
-    assert.ok(!("model" in s ? Object.prototype.hasOwnProperty.call(assembled(s), "model") : false),
-      "an absent or default pick leaves the option unset");
-    assert.equal(assembled(s).model, undefined);
+    assert.equal(assembled(s).model, fallback);
   }
 });
 
 test("the launch spec re-coerces: a hostile s.model can never reach argv", () => {
+  // 2026-09-07: junk used to assemble to `undefined` (no option). It now lands on the product
+  // fallback — the coercion is what this case is about, and it is unchanged: what argv gets is
+  // NEVER the caller's string.
+  const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
   for (const junk of JUNK) {
-    assert.equal(assembled(session({ model: junk })).model, undefined, JSON.stringify(junk));
+    assert.equal(assembled(session({ model: junk })).model, fallback, JSON.stringify(junk));
   }
 });
 
@@ -308,10 +380,11 @@ test("a HOSTILE stored value coerces to 'default' on the way out of the projecti
   }
 });
 
-test("a record written BEFORE this field existed reopens on the CLI default, not on undefined", () => {
+test("a record written BEFORE this field existed reopens on 'default', not on undefined", () => {
   const old = durable({ key: "c1:t1", channelId: "c1", phase: "parked" });
   assert.equal(old.model, "default");
-  assert.equal(model.modelArg(old.model), null, "which assembles to no model option at all");
+  // 2026-09-06: 'default' is no longer "no model option" — it spends the product fallback.
+  assert.equal(model.modelArg(old.model), model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK));
 });
 
 test("the record-driven resume hands the stored pick back to startSession", () => {

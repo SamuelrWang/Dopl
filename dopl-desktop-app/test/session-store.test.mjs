@@ -148,16 +148,19 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // acquires — so a record without it resumed onto the DEFAULT adapter, which would be asked to
     // continue ANOTHER PLATFORM's conversation id, in another platform's tool vocabulary, against
     // another credential. Not a cosmetic revert and not silent data loss: a broken resume.
-    // "turnCap" (2026-09-05, task 9a) is the FIFTH, and it joined for the reason the cap became
-    // issuer-keyed: the default is now 200 for an operator-launched session and 24 for an
-    // agent-issued one, keyed on a `launchDepth` a recreate deliberately does NOT resurrect. So
-    // without the cap beside the counters it bounds, a 200-turn session that crashed at turn 80
-    // would resume capped at 24 with 80 spent and end on its first `result`.
+    // "turnCap" (2026-09-05, task 9a) was the FIFTH and is DELETED FROM THIS LIST (2026-09-07,
+    // Samuel's ruling) with the cap itself. It joined because the default had become issuer-keyed
+    // and a recreate does not resurrect `launchDepth`, so a 200-turn session that crashed at turn
+    // 80 would have resumed capped at 24. Nothing bounds turns now, so persisting the bound would
+    // be persisting a number with no reader — and this list is exactly where such a field goes
+    // unnoticed. Its ABSENCE is pinned here rather than merely untested.
     "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
     "counterpartyName", "direct", "key", "mode", "model", "ownPostSeq", "phase", "profile",
     "runtimeId", "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "taskTitle",
-    "templateName", "turnCap", "turns", "workspaceId",
+    "templateName", "turns", "workspaceId",
   ]);
+  assert.equal("turnCap" in durableSessionRecord({ turnCap: 200 }), false,
+    "a record written by an OLDER build carries a cap; the whitelist must drop it, not carry it");
   assert.equal(rec.ownPostSeq, 11);
   assert.equal(rec.templateName, "Code Auditor");
   // ⚠ AT THE COLUMN'S OWN 120, NOT `durableName`'s 80 DISPLAY DEFAULT (F-287): a template name is
@@ -223,21 +226,13 @@ test("durableSessionRecord persists the cap counters (FIX #9) and coerces bad va
   assert.equal(bad.costUsd, 0);
 });
 
-test("…and the CAP those counters are measured against (9a), with 0 meaning 'read the default'", () => {
-  // ⚠ THE POINT OF PERSISTING IT: the default is issuer-keyed and a recreate carries no issuer,
-  // so the number a session was LAUNCHED under has to travel with the budget it bounds.
-  const rec = durableSessionRecord({ key: "c1:t1", channelId: "c1", phase: "parked", turnCap: 200, turns: 80 });
-  assert.equal(rec.turnCap, 200, "an operator-launched session resumes at the cap it was launched under");
-  // A legacy record (written before this field) reads 0, which `session-engine.js › readCaps`
-  // treats as absent and falls through to the issuer-keyed default — never as a cap of zero.
-  assert.equal(durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" }).turnCap, 0);
-  // Coerced like `ownPostSeq`, HARDER than turns/costUsd: `Number(x) || 0` would let Infinity
-  // through as a cap, i.e. a hand-edited store handing a session no bound at all.
-  for (const junk of [undefined, null, "x", NaN, {}, 0, -5, 1 / 0]) {
-    assert.equal(durableSessionRecord({ turnCap: junk }).turnCap, 0, JSON.stringify(junk));
-  }
-  assert.equal(durableSessionRecord({ turnCap: "24" }).turnCap, 24, "a numeric string is still a number");
-});
+// 🔒 "…and the CAP those counters are measured against (9a)" STOOD HERE AND IS DELETED
+// (2026-09-07, Samuel's ruling). It pinned `turnCap` as a DURABLE field — persisted because the
+// default was issuer-keyed and a recreate carries no issuer, coerced harder than turns/costUsd so
+// a hand-edited store could not hand a session `Infinity` (no bound at all). The caps are gone,
+// the field is off the state and off the record, and the whitelist case above now pins its
+// ABSENCE. `turns` and `costUsd` are still durable: they are the context meter's numbers, and the
+// case above them still owns their coercion.
 
 test("durableSessionRecord defaults counterpartyId -> null when absent", () => {
   const rec = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" });

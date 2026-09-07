@@ -99,7 +99,14 @@ export const disabled = (el: HTMLElement) => (el as HTMLButtonElement).disabled;
 // ARM until the split; they write the DURABLE LAUNCH POSTURE now, and the arm went
 // back to the request card — the only surface that can honestly show a fuse.
 // `use-channel-launch-posture.ts` states the split.
+// ⚠ THE ACCESSIBLE NAMES MOVED 2026-09-06 (settings overhaul, items 5 and 7):
+// "Permissions" → "Tool use", "Sends" → "Messaging". The HELPERS keep their names —
+// they are named for the RECORD they read (`posture.tools` / `posture.messages`),
+// which did not change, and renaming them to follow a label is how a helper stops
+// describing what it reads. `postureSends` is the one to watch: its row is called
+// Messaging now precisely because the axis covers BOTH directions, and a future
+// reader must not take the helper's name as evidence that it is outbound-only.
 export const postureTools = () =>
-  screen.getByLabelText("Permissions for agents you launch");
+  screen.getByLabelText("Tool use for agents you launch");
 export const postureSends = () =>
-  screen.getByLabelText("Sends for agents you launch");
+  screen.getByLabelText("Messaging for agents you launch");

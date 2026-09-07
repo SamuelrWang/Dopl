@@ -118,7 +118,10 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
     const channels: ChannelGrantChannelRef[] = visible.map((c) => ({
       id: c.id,
       // A DM's own `name` is internal plumbing; the peer is what a human reads.
-      name: c.isDirect ? (c.directPeer?.displayName ?? c.name) : c.name,
+      // ⚠ `||`, NOT `??` (2026-09-07): a peer whose display name is the EMPTY STRING is not a
+      // resolved name, and `??` passed it straight through as the channel's label — a blank row
+      // in the grant picker. Same defect class as `lib/channel-display.ts`, same day.
+      name: c.isDirect ? c.directPeer?.displayName || c.name : c.name,
       isDirect: c.isDirect,
     }));
     const grants: Record<string, ChannelResourceGrant> = {};

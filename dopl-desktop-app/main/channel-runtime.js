@@ -93,6 +93,7 @@ function getChannelRuntime(channelId) {
 function setChannelRuntime(channelId, raw) {
   if (!channelId) return '';
   const id = normalizeRuntimeId(raw);
+  const before = getChannelRuntime(channelId);
   try {
     const map = allRuntimes();
     const next = { ...map };
@@ -104,7 +105,60 @@ function setChannelRuntime(channelId, raw) {
     return getChannelRuntime(channelId);
   }
   diag('channel-runtime:', String(channelId).slice(0, 8), id || '(default)');
+  // ⚠ **A RUNTIME SWITCH CLEARS THE CHANNEL'S MODEL STAMP** (2026-09-06, z5ztx9ts's audit).
+  //
+  // MODEL ROSTERS ARE PER-RUNTIME. A channel stamped `claude-sonnet-5` that later switches to
+  // codex or cursor is carrying an id THAT RUNTIME HAS NEVER HEARD OF — and this is not a
+  // cosmetic mismatch, because `channel-prefs.js › getLaunchModel` sits ABOVE the SDK default in
+  // the launch precedence chain. The stale id would WIN instead of stepping aside, so the new
+  // runtime would be asked for a model that does not exist there rather than falling back to its
+  // own default.
+  //
+  // ⚠ IT BECAME REACHABLE WITH SAMUEL'S BACK-FILL RULING THE SAME DAY. Before it, an unset
+  // channel stored NO model and had nothing to go stale; now every channel the operator touches
+  // carries a real id, so "switched runtime while stamped" is the ordinary path rather than an
+  // edge case. The ruling stands — this only keeps it honest across a switch.
+  //
+  // ⚠ CLEARED, NOT TRANSLATED. There is no mapping between one vendor's roster and another's, and
+  // inventing one would be this file claiming to know which of Codex's models "is" Sonnet. Absent
+  // is a state the chain already handles: the new runtime's own default applies, and the operator
+  // picks again from a list that is actually its.
+  //
+  // ⚠ ONLY ON A REAL CHANGE, and only after the write LANDED. Re-selecting the same runtime must
+  // not wipe a deliberate pick, and a failed write returns above without reaching this line.
+  if (id !== before) clearLaunchModelForRuntimeSwitch(channelId, before, id);
   return id;
+}
+
+/**
+ * Drop the channel's stored launch model after its runtime changed. Best-effort and never in the
+ * way of the switch itself.
+ *
+ * ⚠ LAZY-REQUIRED, the idiom this tree uses at every module edge that touches `channel-prefs.js`
+ * (`session-private.js › channelMessageMode` states it): that module instantiates an
+ * electron-store at load, and plain-node callers of this file must keep working.
+ *
+ * ⚠ IT WRITES THROUGH `setLaunchPosture`, NOT INTO THE STORE. The posture record validates BOTH
+ * axes on write and refuses the whole thing on an unknown value; reaching around it to delete one
+ * field would be a second writer of a record whose whole design is that it has one.
+ */
+function clearLaunchModelForRuntimeSwitch(channelId, before, after) {
+  try {
+    const prefs = require('./channel-prefs');
+    const posture = prefs.getLaunchPosture(channelId);
+    if (!posture || !posture.model) return; // nothing stamped — nothing to go stale
+    prefs.setLaunchPosture(channelId, {
+      tools: posture.tools,
+      messages: posture.messages,
+      model: null,
+    });
+    diag('channel-runtime: cleared the model stamp on a runtime switch',
+      String(channelId).slice(0, 8), (before || '(default)') + ' -> ' + (after || '(default)'));
+  } catch (err) {
+    // ⚠ A FAILURE HERE COSTS A STALE STAMP, NEVER THE SWITCH. Loud in the log, silent to the
+    // caller: the operator asked to change runtime and that has already happened.
+    diag('channel-runtime: could not clear the model stamp —', (err && err.message) || String(err));
+  }
 }
 
 module.exports = {

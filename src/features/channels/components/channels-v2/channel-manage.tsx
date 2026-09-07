@@ -59,7 +59,8 @@ import { CreateChannelDialog } from "../create-channel-dialog";
 import { DirectMessageDialog } from "../direct-message-dialog";
 import { GoPublicDialog, needsGoPublicConfirm } from "../go-public-dialog";
 import { InviteDialog } from "../invite-dialog";
-import { useChannelAgentSessions } from "../../hooks/use-channel-agent-sessions";
+// ⚠ `useChannelAgentSessions` LEFT THIS FILE ON 2026-09-07 with the responder PICKER that was
+// its only consumer here — see the deleted read below the `canManage` line.
 import { ChannelAgentSettings } from "./settings-agent";
 import { ChannelAgentsSettings } from "./settings-channel-agents";
 import { ChannelsV2SettingsTab } from "./settings-tab";
@@ -133,14 +134,13 @@ export function ChannelsV2ManageActions({
   });
 
   const canManage = channel.role === "owner";
-  // ⚠ **READ ONLY FOR A MANAGER**, because only a manager is shown the picker it
-  // feeds — and this read POLLS while mounted (`channel_sessions` is deliberately
-  // unpublished, INVARIANTS §7). A member who cannot set the responder must not
-  // pay for a poll to render nothing. `null` is what stops it.
-  const { sessions } = useChannelAgentSessions(
-    canManage ? channel.id : null,
-    workspaceId
-  );
+  // ⚠ **THE PEER-SESSIONS POLL IS DELETED FROM THIS SURFACE (2026-09-07, items 10 and 11).**
+  // It existed for ONE consumer: the old responder PICKER, whose options were the room's live
+  // agents. The replacement control names no agent — it is a two-value rule, because agents are
+  // ephemeral and a stored handle decays into naming nothing — so there is nothing here for a
+  // session read to feed. `channel_sessions` is deliberately unpublished (INVARIANTS §7), so
+  // this was a real interval poll and not a subscription; leaving it mounted would be paying
+  // for a read whose only reader is gone.
   const displayName = channelDisplayName(channel, members, currentUserId);
   const peerName =
     displayName === "Direct message" ? "your teammate" : displayName;
@@ -194,18 +194,26 @@ export function ChannelsV2ManageActions({
             />
           ) : null
         }
-        // ⚠ THE CHANNEL'S OWN AGENT SETTINGS — the default responder (ruling
-        // B6) and the posture ceiling F-449 records as having no surface at all.
-        // ONE panel, two settings, one manage gate, per the wave-B spec; the
-        // SERVER gate is `MANAGED_CHANNEL_FIELDS`, and this is the affordance.
+        // ⚠ **GATED ON MEMBERSHIP, NOT MANAGE, SINCE 2026-09-07 (items 10 and 11) — AND THAT
+        // IS THE RULING, NOT A LOOSENING.** This slot used to hold a room MANAGER's decisions
+        // about everybody's agents: the responder pin and the posture ceiling. Both are
+        // deleted. What is left is the member's OWN rule for their OWN untagged messages,
+        // written to their OWN `channel_members` row — so gating it behind `canManage` would
+        // hide a personal setting from every non-manager while the server went on honouring
+        // it. ⚠ `channel.isMember` matches the `agent` slot above: a non-member reading a
+        // public channel has no membership row to set anything on.
         channelAgents={
-          canManage ? (
+          channel.isMember ? (
             <ChannelAgentsSettings
-              channel={channel}
-              sessions={sessions}
-              busy={lifecycle.agentSettingsPending}
-              onSetDefaultResponder={lifecycle.setDefaultResponder}
-              onSetCeiling={lifecycle.setAgentCeiling}
+              members={members}
+              currentUserId={currentUserId}
+              busy={prefs.unaddressedResponder.pending}
+              onSetUnaddressedResponder={(setting) =>
+                prefs.unaddressedResponder.mutate({
+                  channelId: channel.id,
+                  setting,
+                })
+              }
             />
           ) : null
         }

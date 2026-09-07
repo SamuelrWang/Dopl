@@ -32,6 +32,20 @@ vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
   grantedResourceIds: vi.fn(async () => new Set<string>()),
 }));
 
+// 🔓 **THE WRITE GATE FOLLOWS THE ID SINCE 2026-09-06** (Samuel's ruling;
+// `shared/tenancy/read-resource.ts`), so update/delete compose the resolver on a
+// MISS in the calling tenancy — and an unmocked resolver reaches Supabase and
+// hangs, exactly as the G16 reads above do. ⚠ `null` IS THE RIGHT DEFAULT FOR
+// THIS FILE: "nameable nowhere else" is what every case here assumes, and it is
+// what keeps the 404-never-403 assertions honest. The cases that exercise a real
+// follow live in `service-writes-tenancy.test.ts`.
+vi.mock("@/shared/tenancy/resolve-resource", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/shared/tenancy/resolve-resource")
+  >()),
+  resolveResource: vi.fn(async () => null),
+}));
+
 vi.mock("@/features/workspaces/server/repository", () => ({
   findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
   findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),

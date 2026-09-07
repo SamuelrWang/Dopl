@@ -62,8 +62,10 @@ function toPaneMember(
   const isSelf = selfId !== null && m.userId === selfId;
   // The guest auth row has no profile and a synthetic undeliverable email —
   // "Guest" (the demo's own name for the visitor) beats showing either.
-  const displayName =
-    m.displayName ?? (isSelf ? "Guest" : m.email ?? "Member");
+  // ⚠ `||` THROUGHOUT (2026-09-07): with `??`, a profile carrying the EMPTY STRING rendered
+  // blank and never reached the fallback this comment describes — the guest row silently lost
+  // its "Guest".
+  const displayName = m.displayName || (isSelf ? "Guest" : m.email || "Member");
   const activity = formatLastActive(m.lastSeenAt, m.status, m.invitedAt);
   return {
     person: {

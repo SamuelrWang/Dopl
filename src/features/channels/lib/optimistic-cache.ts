@@ -1,10 +1,12 @@
 import type {
   Channel,
   ChannelConsentRequest,
+  ChannelMember,
   ChannelMessage,
   ChannelThread,
   AgentToolProfile,
 } from "../types";
+import type { UnaddressedResponderSetting } from "./agent-mentions";
 
 /**
  * The pure half of the channels optimistic layer: what a not-yet-saved row LOOKS
@@ -275,6 +277,58 @@ export function patchChannel(
     ...cache,
     channels: cache.channels.map((c) =>
       c.id === channelId ? { ...c, ...patch } : c
+    ),
+  };
+}
+
+/** The channel ROSTER cache (`channelKeys.members(channelId)`). ⚠ A separate cache from
+ *  {@link ChannelsCache}: the per-member responder setting lives on the member row, not the
+ *  channel row, so its optimistic patch has a different target from every other write here. */
+export interface MembersCache {
+  members: ChannelMember[];
+}
+
+/**
+ * **THE PER-MEMBER RESPONDER SETTING, PAINTED AT ONCE** (2026-09-07, Samuel's ruling on items
+ * 10 and 11).
+ *
+ * ⚠ **IT PATCHES THE ROSTER, AND THAT IS WHY IT IS OPTIMISTIC AT ALL.** The composer's
+ * recipient line reads this same roster (`lib/draft-recipients.ts › viewerUnaddressedResponder`),
+ * so choosing "No one" and watching the line go on naming an agent until a refetch settled would
+ * be the control and the prediction disagreeing on screen — the exact confusion the line exists
+ * to end. Invalidate-only was the cheaper option and it is the wrong one here.
+ *
+ * ⚠ **IT TAKES NO USER ID, AND FINDS THE VIEWER'S ROW BY THE SCRUB ITSELF.** `mapMemberRow`
+ * nulls this field on every row but the viewer's, so *a non-null value IS the marker for "this
+ * row is mine"* — the same fact the privacy rule already guarantees, used instead of a second
+ * copy of the caller's identity. That is not cleverness for its own sake: this hook deleted
+ * `currentUserId` from its shape on 2026-08-22 with the standing note *"a hook that takes an
+ * identity it does not use invites a caller to point a write at somebody else"*, and an
+ * optimistic paint is precisely where a mis-aimed id would be invisible.
+ *
+ * ⚠ **A ROSTER THAT HAS NOT LOADED PAINTS NOTHING**, which is correct rather than a gap: there
+ * is no line on screen reading it yet, and the mutation's reconcile settles the value from the
+ * server's own answer.
+ *
+ * ⚠ **AND `undefined` IS NOT `null` HERE, WHICH `!== null` GOT WRONG** (fixed 2026-09-07). The
+ * field is OPTIONAL on `ChannelMember` for the §8 stale-cache reason — a roster entry minted
+ * before it existed carries no key at all — and `undefined !== null` is TRUE. So a stale roster
+ * failed the marker test in the widest possible direction: every member row looked like the
+ * viewer's, and this stamped the viewer's own private setting onto all of them. A peer's row must
+ * read `null`, "not yours to see", on every cache generation. Both absences are excluded
+ * explicitly rather than by a truthiness test, because `'none'` is a real, falsy-looking setting.
+ */
+export function setUnaddressedResponder(
+  cache: MembersCache | undefined,
+  unaddressedResponder: UnaddressedResponderSetting
+): MembersCache | undefined {
+  if (!cache) return cache;
+  return {
+    ...cache,
+    members: cache.members.map((m) =>
+      m.unaddressedResponder !== null && m.unaddressedResponder !== undefined
+        ? { ...m, unaddressedResponder }
+        : m
     ),
   };
 }

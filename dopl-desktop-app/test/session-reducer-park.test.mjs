@@ -15,8 +15,8 @@ import { loadReducer, REDUCER_SRC } from "./_reducer-block.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 // §2 SPLIT (H1): the pure block now spans session-effects.js + session-reducer.js;
 // test/_reducer-block.mjs slices BOTH sentinel pairs and evaluates them as one program.
-const { initialSessionState, sessionReducer, nextIdleMs, idleTimeout, turnCapReached, costCapReached,
-        DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD, ABANDONED_MS,
+const { initialSessionState, sessionReducer, nextIdleMs, idleTimeout,
+        DEFAULT_IDLE_MS, ABANDONED_MS,
         AWAITING_PEER_IDLE_MS, INACTIVE_NOTE } = loadReducer();
 
 const running = (opts) =>

@@ -82,9 +82,21 @@ vi.mock("@/features/knowledge/server/service-shared", () => ({
   errorCode: () => undefined,
   listSlugs: vi.fn().mockResolvedValue([]),
 }));
-vi.mock("@/features/knowledge/server/service-bases", () => ({
-  getBaseById: vi.fn(),
-}));
+vi.mock("@/features/knowledge/server/service-bases", () => {
+  const getBaseById = vi.fn();
+  return {
+    getBaseById,
+    // 🔓 **THE WRITE GATE IS THAT READ PLUS THE CONTAINER IT LANDED IN**
+    // (2026-09-06 — `shared/tenancy/read-resource.ts`). Every case in this file
+    // is single-container, so the fake hands back the caller's OWN ctx and the
+    // row `getBaseById` was primed with: one `mockResolvedValue` still drives
+    // both doors, and no case here has to care that a follow exists.
+    getBaseForWrite: vi.fn(async (ctx: unknown, id: string) => ({
+      ctx,
+      value: await getBaseById(ctx, id),
+    })),
+  };
+});
 
 vi.mock("@/features/skills/server/repository", () => ({
   insertSkill: vi.fn(),

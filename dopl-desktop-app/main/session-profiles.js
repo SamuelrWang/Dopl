@@ -51,7 +51,9 @@ const { isKnowledgeReadCall } = require('./knowledge-ops');
 // below, and injected into the extracted table by the two harness tests like the two above.
 const {
   OWN_CHANNEL_MARKER_KIND, OWN_CHANNEL_THREAD_NEW, OWN_CHANNEL_ESCALATE_KIND, OWN_CHANNEL_OUTBOUND_OPS,
+  OWN_CHANNEL_SEND_OPS, OWN_CHANNEL_ARTIFACT_OPS, // 2026-09-06: the union's two halves, named
   isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
+  isOwnChannelArtifact, isOwnChannelOutboundCall, // ...the fold, and the union's membership half
 } = require('./session-own-outbound');
 const { channelOpKey } = require('./channel-op-key'); // <op>.<action>, the ONE spelling every classifier here asks (F-578)
 const { isOwnMachineLaunch, launchLaneVerdict } = require('./session-own-launch'); // THE OWN-MACHINE LAUNCH LANE (Samuel's ruling, 2026-08-25; F-320) — its own §2 file, on F-301's precedent
@@ -388,10 +390,13 @@ function grantDecision(args) {
     // auto_outbound / auto_both: ONLY an own-channel post — everything else is the exfil
     // surface and gates.
     if (autoOutboundMode(a.messageMode) && isOwnChannelPost(a.input, a.channelId)) return 'allow';
-    // Own-channel MARKERS and THREAD OPENS, same outbound half (OWN_CHANNEL_OUTBOUND_OPS —
-    // `milestone`, and `create_thread` since Samuel's ruling of 2026-08-24). Both are outbound
-    // CONTENT into this session's own channel, which is what the outbound half consents to; a
+    // Own-channel MARKERS, THREAD OPENS, DECISION CARDS and — since 2026-09-06 — ARTIFACT FOLDS,
+    // all on the same outbound half (`OWN_CHANNEL_OUTBOUND_OPS`, the union). Every one of them
+    // acts into THIS session's own channel, which is what the outbound half consents to; a
     // slug-addressed one classifies cross-channel and gates, exactly like a post.
+    // ⚠ THE ARGUMENT EACH WAS ADMITTED ON IS IN `session-own-outbound.js`, NOT HERE, and the fold
+    // is the FOURTH time this line has been the fix for a live windowless DENY. Read that module
+    // before a fifth op joins.
     if (autoOutboundMode(a.messageMode) && isOwnChannelOutbound(a.input, a.channelId)) return 'allow';
     // ⚠ THE OWN-MACHINE LAUNCH LANE, WHICH IS NOT A MEMBER OF THE OUTBOUND SET ABOVE: it needs
     // BOTH axes and a DEPTH BOUND, and `session-own-launch.js` carries all three arguments.
@@ -437,6 +442,7 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, isOwnChannelReadCall, normalizeToolMode, isAwaitOp, // 2026-09-01 (T85): the await refusal
   canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
+  isOwnChannelArtifact, isOwnChannelOutboundCall, // 2026-09-06: the fold's ALLOW code, and the membership half its CROSS-channel arm asks
   OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, isOwnMachineDirect, // 2026-08-25 (F-320): the own-machine launch lane; 2026-08-31: its direct twin
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
   // every other predicate here, so the explainer cannot grow its own copy of the rule.
@@ -461,6 +467,11 @@ module.exports = {
   // `thread` literals that tell them apart rather than three retired op names.
   isOwnChannelMarker, OWN_CHANNEL_MARKER_KIND, isOwnChannelThreadOpen, OWN_CHANNEL_THREAD_NEW,
   isOwnChannelEscalate, OWN_CHANNEL_ESCALATE_KIND,
+  // 2026-09-06: the ARTIFACT FOLD — the fourth member of the lane and the first that is not a
+  // `send`. Its four `<op>.<action>` keys, the predicate, and the two halves of the union named
+  // separately: the SHAPE predicates above ask `OWN_CHANNEL_SEND_OPS`, the gate asks the union.
+  isOwnChannelArtifact, OWN_CHANNEL_ARTIFACT_OPS, OWN_CHANNEL_SEND_OPS,
+  isOwnChannelOutboundCall, // ...and its membership half, keyed <op>.<action> like the read twin
   isOwnChannelOutbound, OWN_CHANNEL_OUTBOUND_OPS, // the union grantDecision's Axis-B branch asks
   isKnowledgeReadCall, // 2026-08-22 (OQ-1): re-exported from knowledge-ops, the op-scoped kb read
   DOPL_READ_REFERENCE, // the member the knowledge branch asks "where does a Dopl read resolve?"
@@ -483,6 +494,12 @@ module.exports = {
   EDIT_TOOLS, ESCALATION_TOOLS, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS,
   DOPL_READ_TOOLS, DOPL_WRITE_TOOLS, // re-exported from session-dopl-tools.js (§2 SPLIT 2026-08-31)
   normalizeToolMode, normalizeMessageMode, toolModeAllows, isClassifiedTool, autoInboundMode,
+  // ⚠ `autoOutboundMode` IS EXPORTED SINCE 2026-09-06 (Samuel's full-auto ruling). Its INBOUND
+  // twin has been exported since M3; this one had no reader outside the gate until
+  // `session-private.js › effectiveMessageMode` had to ask the same question. Exported rather
+  // than re-spelled there: "does this posture consent to posting" must have ONE answer, or the
+  // gate and the private-turn rule can disagree about a mode.
+  autoOutboundMode,
   floorWindowlessMessage, // AXIS B's windowless floor — one statement, two lanes (F-236)
   floorWindowlessTool, // ...and AXIS A's, now the RUNTIME's (§0.1b) — applied at the READ (session-io.js › grantArgs)
   windowlessFloorRefusal, // D1: and the LAUNCH refusal when that floor cannot be ordered

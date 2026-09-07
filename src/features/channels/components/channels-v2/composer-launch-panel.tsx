@@ -37,9 +37,8 @@ import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { cn } from "@/shared/lib/utils";
 import {
-  AGENT_MODEL_DEFAULT,
-  AGENT_MODEL_OPTIONS,
-  agentModelLabel,
+  agentModelOptionsFor,
+  agentModelSelection,
 } from "../../lib/agent-models";
 import { IconButton } from "./bits";
 import {
@@ -154,32 +153,31 @@ export function AgentLaunchPanelView({
    * WHAT THE EMPTY MODEL ROW ACTUALLY RESOLVES TO — read off the chain, never a hardcoded label
    * (2026-09-05, Samuel's #1076(b): "read it from wherever the machine really resolves it").
    *
-   * ⚠ THE ROW'S `''` HAS THE RUNTIME ROW'S MEANING, NOT THE SETTINGS ROW'S, and that is the
-   * defect this replaces. Both rows above already state it: on the DURABLE record `''` clears the
-   * channel's pick, while HERE it means the operator expressed no per-spawn preference and
-   * `main/session-launch-op.js`'s chain falls through — template, then the channel, then the
-   * CLI's own. Labelling that "Default" claimed the launch would take the SDK default on a
-   * channel that has chosen Opus, which is a row naming something the launch will not do.
+   * ⚠ **THERE IS NO "Default" OPTION ANY MORE (2026-09-06, Samuel's ruling), SO THIS RESOLVES
+   * THE ROW'S VALUE INSTEAD OF RE-WORDING AN EMPTY ONE.** `AGENT_MODEL_OPTIONS` lists only real
+   * models; a `SelectMenu` whose `value` matches none of them silently renders `options[0]`, so
+   * an unpicked panel READ "Fable 5" while the launch carried no model at all — the control and
+   * the launch disagreeing on screen, which is the defect the re-worded label existed to prevent.
    *
-   * ⚠ THE ORDER IS MAIN'S, LINK FOR LINK. A template's model outranks the channel's pick, so a
-   * label that read the channel first would be wrong on exactly the launches a template is for.
-   * ⚠ AND THE LAST LINK STAYS UNNAMED ON PURPOSE. When neither link carries a model the answer is
-   * the bundled CLI's own choice, and this build genuinely cannot say which it is —
-   * `main/session-model.js` states that naming it needs a LIVE query, which by construction there
-   * is not one of on a panel where nothing has started. "Default" is then the honest word: the
-   * same fact the Settings row's own Default states, on a row with no setting to contradict.
+   * ⚠ THE ORDER IS MAIN'S, LINK FOR LINK (`main/session-launch-op.js`): the operator's own pick,
+   * then the TEMPLATE's model, then the CHANNEL's. A resolution that read the channel first would
+   * be wrong on exactly the launches a template is for.
+   *
+   * ⚠ AND THE LAST LINK IS NOW NAMED RATHER THAN LEFT BLANK. When no link carries a model,
+   * `agentModelSelection` answers `AGENT_MODEL_FALLBACK` (Sonnet) — the back-fill target Samuel
+   * ruled when he removed "Default" (*"why can't we just set a value … unless they change it"*).
+   * The row therefore always holds a real option and always names a real model.
    */
-  const modelOptions = useMemo(() => {
+  const effectiveModel = useMemo(() => {
     const fromTemplate = templates.find((t) => t.id === panel.templateId)?.model;
-    const label = fromTemplate
-      ? `Template default (${agentModelLabel(fromTemplate)})`
-      : channelModel
-        ? `Channel default (${agentModelLabel(channelModel)})`
-        : "Default";
-    return AGENT_MODEL_OPTIONS.map((option) =>
-      option.value === AGENT_MODEL_DEFAULT ? { ...option, label } : option
-    );
-  }, [templates, panel.templateId, channelModel]);
+    return agentModelSelection(panel.model || fromTemplate || channelModel);
+  }, [panel.model, templates, panel.templateId, channelModel]);
+  // ⚠ `agentModelOptionsFor`, not the bare roster: a template or a channel may carry an id this
+  // build predates, and an option list without it would render the control blank.
+  const modelOptions = useMemo(
+    () => agentModelOptionsFor(effectiveModel),
+    [effectiveModel]
+  );
   const templateOptions = [
     // ⚠ FIRST, AND NOT A PLACEHOLDER. A blank agent is a real configuration — it is what the Bot
     // icon spawned in one click for a year — so it is an option, not an empty state.
@@ -282,14 +280,14 @@ export function AgentLaunchPanelView({
         )}
 
         <PanelField label="Model:" as="div" center line={false}>
-          {/* ⚠ `AGENT_MODEL_OPTIONS`, NOT `agentModelOptionsFor`. That one widens the roster with
-            whatever a LIVE agent is already running; nothing is running yet, so the list here is
-            the plain vocabulary and the empty row means the launch chain decides
-            (`session-launch-op.js`'s precedence block). ⚠ SINCE 2026-09-05 that row NAMES what
-            the chain resolves to rather than reading "Default" over a channel that has picked —
-            see `modelOptions` above, which is the roster with that ONE label re-worded. */}
+          {/* ⚠ THE VALUE IS RESOLVED, NOT `panel.model` — see `effectiveModel` above. There is no
+            "Default" option since 2026-09-06, so an unpicked `panel.model` (`''`) matches no
+            option and a `SelectMenu` in that state renders `options[0]`: the row would read
+            "Fable 5" over a launch that carries no model. The row now names what
+            `session-launch-op.js`'s chain will actually resolve — the operator's pick, else the
+            template's, else the channel's, else the Sonnet back-fill. */}
           <SelectMenu
-            value={panel.model}
+            value={effectiveModel}
             options={modelOptions}
             onChange={panel.setModel}
             ariaLabel="Agent model"

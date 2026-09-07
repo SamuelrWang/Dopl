@@ -108,6 +108,28 @@ const THREAD_OPENS = [{ op: "send", thread: "new" }];
 // operator's own machine — and a windowless session answers a gate with `deny`, so the op the
 // tool's protocol tells a stuck agent to reach for would be auto-refused in EVERY posture.
 const ESCALATES = [{ op: "send", kind: "decision" }];
+// ⚠ REQUIREMENT CHANGE, 2026-09-06: `artifact` is the FOURTH member of the OUTBOUND half and the
+// FIRST that is not a `send`. Four `<op>.<action>` shapes, kept as their own name for the reason
+// the three above are — one argument, one gate-diag ALLOW code (`auto-outbound-artifact`).
+//
+// It is admitted on `create_thread`'s argument. A fold is not "less powerful than the post beside
+// it"; it is an ACT ON THIS SESSION'S OWN CHANNEL, in a room the operator already bound the
+// session to, which is exactly what the outbound half consents to. The bar that keeps
+// `close_thread` out is cleared the way a thread open clears it: a fold SETTLES NOTHING —
+// `dissolve` reverses it in one call, no message is edited, none is deleted, and a read returns a
+// CARD where the run was rather than a gap.
+//
+// WHAT LEAVING IT UNCLASSIFIED COST IS F-320 AND F-321'S DEFECT FOR THE THIRD TIME, and this time
+// it was observed rather than reasoned about: the op was in NO lane, so the unclassified
+// fail-safe gated it in EVERY posture (`bypass` included) and a windowless session turned that
+// gate into a DENY the operator was never shown. The four actions are named individually and the
+// BARE dispatcher is deliberately absent — see the fail-safe case at the bottom of this file.
+const ARTIFACTS = [
+  { op: "artifact", action: "create", name: "Wave 3", summary: "the fold", messages: [1, 2, 3] },
+  { op: "artifact", action: "add", artifact: "a-1", messages: [4] },
+  { op: "artifact", action: "remove", artifact: "a-1", messages: [4] },
+  { op: "artifact", action: "dissolve", artifact: "a-1" },
+];
 
 // ── THIS FILE IS THE OUTBOUND HALF ────────────────────────────────────────────────
 //
@@ -244,6 +266,142 @@ test("M4: isOwnChannelMarker scopes by channel exactly as isOwnChannelPost does"
   assert.equal(profiles.isOwnChannelMarker({ op: 7 }, CH), false, "a non-string op is not an op");
   // The marker predicate did NOT widen to take a thread open — only the UNION answers the gate.
   assert.equal(profiles.isOwnChannelMarker({ op: "send", thread: "new", channel: CH }, CH), false);
+});
+
+// ── 2026-09-06: the ARTIFACT FOLD rides the SAME outbound half ─────────────────────
+//
+// ⚠ THE DEFECT IT CLOSES IS A DENY THE OPERATOR NEVER SAW. `op="artifact"` shipped with the
+// artifacts wave in NO allow lane, so the unclassified fail-safe gated it in every posture —
+// and on a windowless session `session-windowless.js` resolves an unanswered gate with `deny`.
+// The agent was refused an op the tool publishes, with nothing on either axis that could grant
+// it. That is `create_thread` (F-320) and `escalate` (F-321) a third time.
+
+test("FOLD: an own-channel artifact op is ALLOWED under auto_outbound / auto_both", () => {
+  for (const shape of ARTIFACTS) {
+    for (const channel of [undefined, CH]) { // absent means this session's own channel, as for a post
+      const input = { ...shape, channel };
+      const at = (m) => decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode: m });
+      assert.equal(at("auto_both"), "allow", `${shape.action} @ auto_both`);
+      assert.equal(at("auto_outbound"), "allow", `${shape.action} @ auto_outbound`);
+      // It ACTS on the channel, so the INBOUND half does not answer it, and `ask` asks. A fold is
+      // not a read even though it changes what a read RETURNS.
+      assert.equal(at("auto_inbound"), "gate", `${shape.action} @ auto_inbound`);
+      assert.equal(at("ask"), "gate", `${shape.action} @ ask`);
+    }
+  }
+});
+
+test("FOLD: a CROSS-channel or SLUG-addressed artifact op keeps gating, in every posture", () => {
+  // The containment argument is the lane's, unchanged: scoped to THIS session's channel by ID, so
+  // folding a run of messages in a room the operator never bound this session to still costs a
+  // decision. A slug is another channel, exactly as for a post.
+  for (const shape of ARTIFACTS) {
+    for (const channel of ["OTHER", "my-slug", "other-id"]) {
+      const away = { ...shape, channel };
+      for (const messageMode of profiles.MESSAGE_MODES) {
+        assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: away, messageMode }), "gate",
+          `${shape.action} -> ${channel} @ ${messageMode}`);
+      }
+    }
+    // THE INVARIANT: Axis A never answers a message operation, folds included.
+    for (const toolMode of profiles.TOOL_MODES) {
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { ...shape, channel: CH }, toolMode }),
+        "gate", `toolMode=${toolMode} must not answer an artifact op`);
+    }
+  }
+});
+
+test("FOLD: the diag names the fold as its own ALLOW, and says the right thing when it stops", () => {
+  // ⚠ ITS OWN ALLOW CODE. "The agent folded part of the transcript into a card" is not the same
+  // answer to "what left this machine with no click?" as "the agent sent a message" — and it is
+  // the only one of the four outbound shapes that changed how the room READS rather than adding
+  // to what it says. Under `auto-outbound` it would be unfindable in listener.log.
+  for (const shape of ARTIFACTS) {
+    assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { ...shape, channel: CH }, messageMode: "auto_both" }),
+      { decision: "allow", reason: "auto-outbound-artifact" }, shape.action);
+  }
+  // ONE code for four actions: they share ONE admission argument, and WHICH action ran is already
+  // on the same diag line as `op=artifact.<action>` (`session-gate-bridge.js › channelOpLabel`).
+  const dissolve = { ...ARTIFACTS[3], channel: CH };
+  assert.equal(profiles.channelOpKey(dissolve), "artifact.dissolve",
+    "the diag line is built from this key, so it already carries the verb and the code need not");
+  // …and the GATE codes are SHARED with a post's, deliberately: the fact that stopped it and the
+  // operator's fix are identical, and a code nobody can act on differently should not exist.
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: dissolve, messageMode: "ask" }),
+    { decision: "gate", reason: "message-approval-required" });
+  // ⚠ AND THE SLUG CASE IS THE ONE THAT WAS BROKEN BY CONSTRUCTION UNTIL 2026-09-06: the
+  // explainer's cross-channel arm indexed the outbound union with a BARE `input.op`, which
+  // matches none of the four DOTTED keys — so a slug-addressed fold would have been narrated
+  // `channel-op-approval-required` ("widen your posture") when the real fix is "address your own
+  // channel by id". It asks the membership predicate now, exactly as the read arm does.
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { ...dissolve, channel: "my-slug" }, messageMode: "auto_both" }),
+    { decision: "gate", reason: "cross-channel-post" });
+});
+
+test("FOLD: the four predicates stay disjoint — a fold is not a marker, an open or an escalation", () => {
+  // ⚠ THE SHAPE PREDICATES ASK THE `send` HALF ALONE, and this is what that buys. `kind` and
+  // `thread` are model input and an `artifact` call CAN carry either; if the three send-shape
+  // predicates read the whole union, a fold wearing `kind="milestone"` would answer
+  // `isOwnChannelMarker` — the same verdict, but a LIE on the audit line.
+  const smuggled = { op: "artifact", action: "create", channel: CH, kind: "milestone", thread: "new", messages: [1] };
+  assert.equal(profiles.isOwnChannelMarker(smuggled, CH), false, "a fold is not a marker");
+  assert.equal(profiles.isOwnChannelThreadOpen(smuggled, CH), false, "a fold is not a thread open");
+  assert.equal(profiles.isOwnChannelEscalate({ ...smuggled, kind: "decision" }, CH), false, "a fold is not an escalation");
+  assert.equal(profiles.isOwnChannelArtifact(smuggled, CH), true);
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: smuggled, messageMode: "auto_both" }),
+    { decision: "allow", reason: "auto-outbound-artifact" }, "and the code says what it really was");
+  // …and the reverse: no `send` shape is ever a fold.
+  for (const shape of MARKERS.concat(THREAD_OPENS, ESCALATES, [{ op: "send", body: "x" }])) {
+    assert.equal(profiles.isOwnChannelArtifact({ ...shape, channel: CH }, CH), false, JSON.stringify(shape));
+  }
+});
+
+test("FOLD: isOwnChannelArtifact scopes by channel exactly as the send shapes do", () => {
+  const A = { op: "artifact", action: "dissolve", artifact: "a-1" };
+  assert.equal(profiles.isOwnChannelArtifact(A, CH), true, "no target means own channel");
+  assert.equal(profiles.isOwnChannelArtifact({ ...A, channel: CH }, CH), true);
+  assert.equal(profiles.isOwnChannelArtifact({ ...A, channel: "" }, CH), true);
+  assert.equal(profiles.isOwnChannelArtifact({ ...A, channel: "OTHER" }, CH), false);
+  assert.equal(profiles.isOwnChannelArtifact({}, CH), false);
+  assert.equal(profiles.isOwnChannelArtifact(undefined, CH), false);
+  assert.equal(profiles.isOwnChannelArtifact({ op: 7, action: "create" }, CH), false, "a non-string op is not an op");
+  assert.equal(profiles.isOwnChannelArtifact({ op: "artifact", action: 7 }, CH), false, "nor is a non-string action");
+});
+
+test("FOLD: the BARE dispatcher and any UNKNOWN action are on NO lane, in every posture", () => {
+  // ⚠ THE FAIL-SAFE, EXERCISED BY THE FIRST OP ON THIS LANE THAT CAN EXERCISE IT. `channelOpKey`
+  // answers the BARE op when no action is named, every list in this tree is an ALLOW list, and an
+  // unmatched key gates. So a fifth artifact action arrives GATING — which is the direction it has
+  // to arrive from, until somebody writes its argument down beside the other four.
+  for (const action of [undefined, "", "publish", "delete", "CREATE", 7]) {
+    const input = { op: "artifact", action, channel: CH };
+    assert.equal(profiles.isOwnChannelOutbound(input, CH), false, `artifact.${String(action)}`);
+    assert.equal(profiles.isOwnChannelRead(input, CH), false, `artifact.${String(action)} is not a read either`);
+    for (const messageMode of profiles.MESSAGE_MODES) {
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, messageMode }), "gate",
+        `artifact.${String(action)} @ ${messageMode}`);
+    }
+  }
+  // ⚠ AND THE ALLOW-LIST ITSELF CARRIES NO BARE ENTRY. Asserted on the list rather than only
+  // through the predicate, because a bare `artifact` added here would silently admit every action
+  // the op ever grows — the exact widening the dotted key exists to refuse (F-578).
+  assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("artifact"));
+});
+
+test("FOLD: an artifact grant stays OP-SCOPED — it authorizes no send", () => {
+  const foldKey = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, { op: "artifact", action: "create" }, CH);
+  const held = { toolName: DOPL_CHANNEL_TOOL, allowForTask: [foldKey] };
+  assert.equal(decide({ ...held, input: { op: "artifact", action: "create" } }), "allow");
+  assert.equal(decide({ ...held, input: { op: "send", body: "hi" } }), "gate");
+  assert.equal(decide({ ...held, input: { op: "rooms", action: "invite" } }), "gate");
+  // ⚠ A KNOWN LIMIT, PINNED SO IT IS NOT MISTAKEN FOR A GUARANTEE: `session-grant-keys.js ›
+  // grantKeyFor` keys a non-`send` channel call on the BARE op, so ONE "Allow for this task" on a
+  // fold covers all four actions. It is not a widening introduced here — `rooms` and `manage` have
+  // carried the same coarseness since F-578 dotted the CLASSIFIERS and not the KEYS — and on this
+  // lane it is harmless (all four are auto-allowed together by argument). It is recorded because
+  // the same key shape is what would let one granted `rooms.threads` cover `rooms.invite`.
+  assert.equal(decide({ ...held, input: { op: "artifact", action: "dissolve" } }), "allow",
+    "one grant covers the op's four actions — see session-grant-keys.js, not a fix for this lane");
 });
 
 test("THREAD OPEN: isOwnChannelThreadOpen scopes by channel exactly as isOwnChannelMarker does", () => {

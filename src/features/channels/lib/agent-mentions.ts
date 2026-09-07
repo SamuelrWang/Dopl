@@ -31,12 +31,43 @@
  * across both namespaces (Samuel: same convention as the roster's); a second `.replace(/\s+/g,
  * "-")` here is how the two come to spell one name two ways.
  *
- * ⚠ AMBIGUITY FAILS CLOSED, exactly as rule 5 does for members. Two agents an operator has given
- * the same name both claim one slug, and a slug two agents claim resolves to NEITHER. The id form
- * is unambiguous by construction and is what still reaches each of them.
+ * ⚠ **AMBIGUITY NO LONGER FAILS CLOSED — IT MINTS A SUFFIX** (2026-09-07, Samuel, verbatim: *"if
+ * coder exists, then other slugs will be coder-1, coder-2, coder-3"*). Two agents an operator has
+ * given the same name used to contest one slug and it resolved to NEITHER, so a rename could take
+ * a working handle away from an agent that was never renamed. The first claimant keeps `coder`
+ * and the second is minted `coder-1`; both stay addressable, and no handle in this index maps to
+ * `null` any more — {@link AgentMentionIndex} carries no `null` at all, which is where that is
+ * proved rather than asserted.
+ *
+ * ⚠ **THE PRECEDENCE, IN ONE LINE: ID FORMS, THEN MEMBERS, THEN AGENTS BY CLAIM ORDER.** Ids are
+ * claimed first and can never be outbid (pass 1); the MEMBER namespace is reserved against this
+ * one, so an agent named after a person gets `-1` and the person keeps the bare tag; agent
+ * against agent is decided by the order the caller supplies, which is launch order at every real
+ * call site.
+ *
+ * ⚠ **THIS IS AN AGENT RULE AND MUST NOT BE COPIED TO MEMBERS.** `lib/mentions.ts` still fails
+ * ambiguity closed, correctly: a member's handles come from their real name and email, and
+ * `@diana-1` would be a handle no human agreed to wear. An agent's name is machine-local and
+ * operator-set, which is exactly what makes a minted suffix honest for it.
  */
 
-import { mentionSlug } from "./mentions";
+import { mentionHandleOf, mentionSlug } from "./mentions";
+
+/**
+ * **DOES THIS HANDLE SURVIVE THE TOKEN STRIP?** — the agent-side half of the round trip
+ * `lib/mentions.ts › insertableHandle` runs for members (2026-09-07).
+ *
+ * ⚠ **THE SAME DEFECT LIVES IN BOTH NAMESPACES BECAUSE BOTH SLUG A FREE-TEXT NAME.** An operator
+ * may call an agent "Bot!", which slugs to `bot!` — and {@link mentionHandleOf} strips the `!` off
+ * any token before it is looked up, so `@bot!` asks for `bot` and reaches nobody. Anything that
+ * OFFERS or SHOWS that spelling is handing a reader a tag that cannot work.
+ * ⚠ **ASKED OF THE REAL PARSER, NEVER RE-DERIVED.** A punctuation list copied here is how this
+ * comes apart the next time that class changes — the argument this module's header already makes
+ * about the slugger, applied to the strip.
+ */
+function retypable(handle: string): boolean {
+  return handle.length > 0 && mentionHandleOf(`@${handle}`) === handle;
+}
 
 /** An agent reduced to what the handle rule reads — satisfied by the desktop's session summary
  *  without this module importing the bridge type. */
@@ -61,12 +92,30 @@ export function agentIdHandle(agentId: string): string {
  */
 export function agentMentionHandle(candidate: AgentMentionCandidate): string {
   const named = mentionSlug(candidate.displayName ?? "");
-  return named.length > 0 ? named : agentIdHandle(candidate.agentId);
+  // ⚠ AND IT MUST BE RETYPABLE (2026-09-07). A name that slugs to something the token strip eats
+  // — "Bot!" → `bot!` — is a handle the picker would INSERT and the resolver would never see; the
+  // id form is the fallback that always works, which is the whole reason it is never withdrawn.
+  return retypable(named) ? named : agentIdHandle(candidate.agentId);
 }
 
-/** Handle -> the agent id it names, or `null` when two agents claim it (ambiguity fails closed,
- *  the same answer `lib/mentions.ts › buildMentionIndex` gives for members). */
-export type AgentMentionIndex = ReadonlyMap<string, string | null>;
+/**
+ * Handle -> the agent id it names.
+ *
+ * ⚠ **NO `| null` SINCE 2026-09-07, AND THE TYPE IS THE PROOF** (Samuel's suffix ruling: *"if
+ * coder exists, then other slugs will be coder-1, coder-2, coder-3"*). This map used to carry
+ * `null` for a contested handle — ambiguity failing closed, the answer
+ * `lib/mentions.ts › buildMentionIndex` still gives for members. {@link buildAgentMentionIndex}
+ * now MINTS a suffix instead of contesting, so it never writes a handle twice and there is no
+ * value left for `null` to describe. Narrowing the type is what makes that unrepresentable
+ * rather than merely unreached — a comment claiming "this cannot happen" is the claim nothing
+ * checks.
+ *
+ * ⚠ **THE MEMBER INDEX IS DELIBERATELY NOT CHANGED WITH IT.** A member's handles come from
+ * their real name and email and are not the app's to mint; `@diana-1` would be a handle no
+ * human agreed to wear. An agent's name is machine-local and operator-set, which is exactly why
+ * a suffix is honest there and not here.
+ */
+export type AgentMentionIndex = ReadonlyMap<string, string>;
 
 /**
  * WHAT A RESOLVED AGENT TAG SHOWS A HUMAN — the agent's current name, or `null` when there is
@@ -126,7 +175,14 @@ export function agentMentionFace(
   // renders `@research-bot`, never `@Research Bot`. `mentionSlug` is the ONE slugger this tree
   // has (`lib/mentions.ts`); a second `.replace(/\s+/g, "-")` here is how the composer's insert
   // and the transcript's tint would come to disagree about what a handle is.
-  return mentionSlug(name);
+  // ⚠ AND THE SAME SENTENCE DECIDES THE PUNCTUATION CASE (2026-09-07). "A face is a TAG a reader
+  // may retype" is only true if the spelling survives the strip: an agent named "Bot!" faced
+  // `@bot!`, which asks the resolver for `bot` and reaches nobody — a tag rendered as reachable
+  // that no reader could ever make work. `null` here is the documented ordinary answer and the
+  // caller renders the RAW token, which for the id form IS the address. Attribution is untouched:
+  // this is the face on a TAG, not the name on a card.
+  const slug = mentionSlug(name);
+  return retypable(slug) ? slug : null;
 }
 
 /**
@@ -202,26 +258,152 @@ export function addressableAgents(
  * the server's own live set.
  */
 export function buildAgentMentionIndex(
-  candidates: readonly AgentMentionCandidate[]
+  candidates: readonly AgentMentionCandidate[],
+  /**
+   * **HANDLES THE AGENT NAMESPACE MAY NOT TAKE — the MEMBER handles for this room**
+   * (2026-09-07, Samuel's suffix ruling).
+   *
+   * ⚠ **MEMBERS OUTRANK AGENTS, AND THIS IS WHERE THAT IS ENFORCED.** The two namespaces are
+   * resolved by different functions over one body (`resolveMentions` for people,
+   * this index for agents), so an agent an operator names "Diana" would otherwise claim
+   * `@diana` in ITS namespace while the member kept it in THEIRS — one token, two different
+   * answers, and which one wins decided by whichever caller asked. The member keeps the bare
+   * tag; the agent is minted `diana-1` and stays addressable there.
+   *
+   * ⚠ **OPTIONAL, AND ABSENT MEANS "NO MEMBER NAMESPACE TO RESPECT", NOT "NO MEMBERS".** A
+   * caller that has no roster in hand (the desktop's own body parse) is unchanged, and the
+   * fail-safe direction is the harmless one: it may mint a bare slug a member also wears, which
+   * is exactly today's behaviour rather than a new hazard.
+   */
+  reservedHandles: Iterable<string> = []
 ): AgentMentionIndex {
-  const index = new Map<string, string | null>();
+  const index = new Map<string, string>();
+  const reserved = new Set<string>();
+  for (const handle of reservedHandles) {
+    const trimmed = handle.trim().toLowerCase();
+    if (trimmed.length > 0) reserved.add(trimmed);
+  }
+  const taken = (handle: string) => index.has(handle) || reserved.has(handle);
   const claim = (handle: string, agentId: string) => {
-    if (handle.length === 0) return;
-    if (!index.has(handle)) {
-      index.set(handle, agentId);
-      return;
-    }
-    const held = index.get(handle);
-    if (held !== null && held !== agentId) index.set(handle, null);
+    if (handle.length === 0 || taken(handle)) return;
+    index.set(handle, agentId);
   };
+  /**
+   * **THE SUFFIX MINT** — `coder`, else `coder-1`, `coder-2`, `coder-3` … (Samuel, verbatim).
+   *
+   * ⚠ **IT IS BOUNDED BY THE CANDIDATE COUNT AND CANNOT SPIN.** At most one handle per
+   * candidate is minted here, so `n` candidates can occupy at most `n` slots in any one family
+   * — the loop therefore finds a free slot in at most `n + reserved` steps and the guard below
+   * is a statement of that fact, not a hope.
+   *
+   * ⚠ **THE SUFFIXED FORM MUST ITSELF BE RETYPABLE**, checked rather than assumed: the base is
+   * already a slug and `-1` adds only characters `mentionHandleOf` keeps, but this is the round
+   * trip that says so instead of a second copy of the punctuation class.
+   */
+  const mint = (base: string): string | null => {
+    if (!taken(base) && retypable(base)) return base;
+    for (let n = 1; n <= candidates.length + reserved.size + 1; n += 1) {
+      const suffixed = `${base}-${n}`;
+      if (!taken(suffixed) && retypable(suffixed)) return suffixed;
+    }
+    return null;
+  };
+  // ⚠ TWO PASSES SINCE 2026-09-07, AND THE SPLIT IS WHAT MAKES THE HEADER'S PROMISE TRUE.
+  // It used to be one loop claiming `agent-<id>` then the name per candidate, which reads like
+  // "the id form first" but is not: the id form is only claimed before THAT candidate's own
+  // name, not before every other candidate's. So an agent its operator had named, literally,
+  // `Agent K3v7d2mq` slugged to `agent-k3v7d2mq` and CONTESTED the permanent id handle of the
+  // agent whose id that is — two claimants, ambiguity fails closed, and the id form resolved to
+  // NOBODY. That is precisely the outcome this module's header forbids ("it is the handle that
+  // cannot stop working, so it is never withdrawn"), reachable by a rename, and reachable ACROSS
+  // MEMBERS: the server builds this index over the room's live rows whoever runs them
+  // (`server/service-wake-verdict-handles.ts`), so one member could withdraw another member's
+  // agent from addressing by naming their own agent after it.
+  // ⚠ AND THE REFUSAL IT PRODUCED WAS A LOOP, which is why this is a defect and not a curiosity.
+  // `ChannelAgentHandleAmbiguousError` lists the claimants AS THEIR ID FORMS — so the error told
+  // the writer to retry with `@agent-k3v7d2mq`, the exact handle that had just been refused.
+  // PASS 1 — every id form, before any name is looked at. Ids are minted unique and never
+  // recycled, so these cannot contest each other.
+  // ⚠ THE `idForms` SET IS GONE (2026-09-07): pass 2 used it to DROP a colliding name, and a
+  // collision is now a mint. The index itself is the only record of what is taken, which is one
+  // fewer thing to keep in step with it.
   for (const candidate of candidates) {
     const id = candidate.agentId.trim().toLowerCase();
     if (id.length === 0) continue;
-    // ⚠ THE ID FORM FIRST, so an agent whose NAME is contested still holds an unambiguous handle.
     claim(agentIdHandle(id), id);
-    claim(mentionSlug(candidate.displayName ?? ""), id);
+  }
+  // PASS 2 — NAMES, WHICH NOW MINT A SUFFIX INSTEAD OF LOSING (2026-09-07, Samuel: *"if coder
+  // exists, then other slugs will be coder-1, coder-2, coder-3"*).
+  //
+  // ⚠ **WHAT THIS REPLACES, IN BOTH DIRECTIONS, BECAUSE BOTH OLD ANSWERS LOST AN ADDRESS.**
+  //   · A name colliding with an ID FORM was DROPPED — the namer kept only their own id form,
+  //     and their chosen name reached nobody at all. It is minted `-1` now.
+  //   · Two agents sharing a NAME CONTESTED the slug and it resolved to NEITHER, so a rename
+  //     could take a working handle away from an agent that was never renamed. The first
+  //     claimant keeps the bare slug and the second is minted `-1`.
+  //
+  // ⚠ **CLAIM ORDER DECIDES WHO KEEPS THE BARE SLUG, AND IT IS THE CALLER'S ORDER.** That is
+  // launch order at every real call site (the server sorts by `started_at`, the composer passes
+  // the peer projection's own order), so the agent that has worn `@coder` longest goes on
+  // wearing it. ⚠ **AND THE SUFFIXES ARE POSITIONAL, NOT DURABLE — this is the honest caveat.**
+  // If the agent holding `@coder` ENDS, it leaves the candidate set and the next one moves up,
+  // so `@coder-1` can come to name a different agent than it did an hour ago. Only the ID FORM
+  // is permanent, which is precisely what this module's header has always claimed for it and
+  // why pass 1 can never be outbid. A suffix is a convenience over a live set, not an address
+  // to write down.
+  //
+  // ⚠ **AN UNMINTABLE NAME IS DROPPED, WHICH IS THE OLD BEHAVIOUR KEPT FOR THE ONE CASE THAT
+  // DESERVES IT**: a name that cannot survive the token strip in any spelling. The agent is
+  // still reachable by the id form pass 1 gave it — the fallback that never fails.
+  for (const candidate of candidates) {
+    const id = candidate.agentId.trim().toLowerCase();
+    if (id.length === 0) continue;
+    const named = mentionSlug(candidate.displayName ?? "");
+    if (named.length === 0) continue;
+    // ⚠ `idForms.has(named)` IS NO LONGER A DROP, ONLY A COLLISION — `mint` sees the id form
+    // sitting in the index and moves to `-1`. The id form is still untouchable because `claim`
+    // refuses an occupied handle rather than overwriting one.
+    const handle = mint(named);
+    if (handle !== null) claim(handle, id);
   }
   return index;
+}
+
+/**
+ * **THE HANDLE A PICKER SHOULD INSERT FOR A CHOSEN AGENT** — the agent-side twin of
+ * `lib/mentions.ts › insertableHandle`, and it exists for that function's exact reason
+ * (2026-09-07, with the suffix ruling).
+ *
+ * ⚠ **{@link agentMentionHandle} IS NOT SAFE TO INSERT ONCE SUFFIXES EXIST, AND THIS IS THE
+ * WHOLE POINT.** That function is per-candidate and knows nothing of the room: given two agents
+ * both named "Coder" it answers `coder` for BOTH, so a picker using it would insert a token
+ * that reaches the OTHER agent — a row that shows one name and tags somebody else, which is
+ * F-210 in the agent namespace. Only the index knows which spelling this agent actually won.
+ *
+ * ⚠ **IT ASKS THE INDEX AND NEVER RE-DERIVES THE SUFFIX.** Recomputing "it was second, so it
+ * must be `-1`" here would be a second copy of the mint, stale the moment the candidate order
+ * or the reserved set changes. The index is the answer; this reads it back.
+ *
+ * ⚠ **THE ID FORM IS THE FALLBACK AND IT CANNOT FAIL**, which is why this returns a string and
+ * not `string | null` as the member version does: pass 1 claims `agent-<id>` for every
+ * candidate before any name is looked at, so an agent always has at least that handle. A member
+ * can genuinely run out of spellings; an agent cannot.
+ */
+export function insertableAgentHandle(
+  candidate: AgentMentionCandidate,
+  index: AgentMentionIndex
+): string {
+  const id = candidate.agentId.trim().toLowerCase();
+  const named = mentionSlug(candidate.displayName ?? "");
+  if (named.length > 0) {
+    // ⚠ THE BARE SLUG FIRST, THEN ITS SUFFIXED FORMS, so a picker shows the shortest spelling
+    // this agent actually holds. The scan is bounded by the index rather than by a guess.
+    if (index.get(named) === id) return named;
+    for (const [handle, holder] of index) {
+      if (holder === id && handle.startsWith(`${named}-`)) return handle;
+    }
+  }
+  return agentIdHandle(id);
 }
 
 /**
@@ -249,14 +431,70 @@ export function resolveAgentHandle(
  * renderers would each narrow differently.
  */
 export type ResponderReason =
-  /** The channel's configured `default_responder_agent_name`. */
+  // ⚠ `"default"` IS RETIRED (2026-09-06, Samuel's ruling on items 10 and 11). It named the
+  // channel's configured `default_responder_agent_name` — a ROOM-WIDE pin of one specific
+  // agent, set by a manager. His reasoning for killing it: *"if there's another member in the
+  // room, their last agent address would be different from my last agent address."* One room
+  // cannot hold one answer to a per-person question. ⚠ THE MEMBER OF THIS UNION IS KEPT so a
+  // stored `metadata.wake_reason` written before today still renders as something rather than
+  // as an unknown code; nothing produces it any more.
   | "default"
   /** Exactly one agent is live in the room. */
   | "only agent"
-  /** Several are live; this one posted here most recently. */
+  /** Several are live; this one the ASKING PERSON addressed most recently. */
   | "most recent"
-  /** Several are live and none has posted lately; this one launched last. */
+  /** Several are live and none was addressed lately; this one launched last. */
   | "most recently launched";
+
+/**
+ * **WHO ANSWERS THIS PERSON'S UNADDRESSED MESSAGES** — the per-user setting (2026-09-06,
+ * Samuel's ruling on items 10 and 11).
+ *
+ * ⚠ **TWO OPTIONS, AND DELIBERATELY NO "PIN A SPECIFIC AGENT".** Agents are ephemeral — they
+ * end, and their ids are minted per launch — so a pinned handle is a setting that decays into
+ * naming nothing. That is the defect the room-wide `default_responder_agent_name` had, and it
+ * is why the replacement is a RULE rather than a NAME.
+ *
+ * ⚠ **PER USER, NOT PER ROOM, AND THAT IS THE WHOLE RULING.** *"If there's another member in
+ * the room, their last agent address would be different from my last agent address."*
+ *
+ * ⚠ **`"none"` MUST KILL EVERY FALLBACK, NOT JUST THE RECENCY ONE.** See
+ * {@link resolveDefaultResponder} — arms 2, 3 and 4 all fire without anyone configuring
+ * anything, so gating only the recency arm would leave a single-agent room still
+ * auto-answering under "No one", which is the selection not being honoured.
+ */
+export type UnaddressedResponderSetting =
+  /** Nobody answers this person's untagged messages. No agent is woken. */
+  | "none"
+  /** The agent this person addressed most recently in this room, if it is still live. */
+  | "last_addressed";
+
+/**
+ * ⚠ **THE DEFAULT IS `last_addressed`, AND IT IS SAMUEL'S OWN STANDING RULING RATHER THAN A
+ * PREFERENCE.** B1 (2026-09-04) says a forgotten `@` must never stall a conversation, and he
+ * made that call off a live incident (row #966: a person wrote in a room with two live agents
+ * and no default, the post stored `verdict=none`, fed 0 of 2, and he had to send it again with
+ * a tag). Defaulting to `"none"` would silently reverse that for every room whose members
+ * never open Settings — and silently reversing his rulings is the defect class this whole wave
+ * exists to remove. `"none"` stays available as a deliberate act.
+ */
+export const UNADDRESSED_RESPONDER_DEFAULT: UnaddressedResponderSetting = "last_addressed";
+
+/**
+ * Coerce a stored / wire value to the closed set, fail-safe to the default.
+ *
+ * ⚠ **JUNK LANDS ON THE DEFAULT, NOT ON `"none"`.** The narrow answer looks like the safe one
+ * and is not: `"none"` means "this person's untagged messages reach nobody", so an unreadable
+ * column would silently stop answering a member who never chose that. Absent means "never
+ * configured", which B1 already answers.
+ */
+export function normalizeUnaddressedResponder(
+  raw: unknown
+): UnaddressedResponderSetting {
+  return raw === "none" || raw === "last_addressed"
+    ? raw
+    : UNADDRESSED_RESPONDER_DEFAULT;
+}
 
 export interface ResponderChoice {
   agentId: string;
@@ -316,7 +554,22 @@ export interface ResponderChoice {
  * in for itself, which is how an idle agent stopped being addressable at all.
  */
 export function resolveDefaultResponder(
-  configured: string | null | undefined,
+  /**
+   * ⚠ **THIS PARAMETER REPLACED `configured` ON 2026-09-06** (Samuel's ruling, items 10/11).
+   * It was the channel's room-wide `default_responder_agent_name` — a manager pinning ONE
+   * specific agent for EVERYBODY. It is now the ASKING PERSON's own two-valued setting.
+   *
+   * ⚠ **`"none"` SHORT-CIRCUITS EVERYTHING BELOW.** Not just the recency arm: arms 2, 3 and 4
+   * all fire with nothing configured, so a single-agent room would otherwise go on
+   * auto-answering under "No one" — the selection not being honoured, which is the complaint
+   * this item came from.
+   *
+   * ⚠ **AN ABSENT VALUE IS THE DEFAULT, NOT `"none"`** — see
+   * {@link UNADDRESSED_RESPONDER_DEFAULT}. Callers pass the coerced value; this signature does
+   * not accept `null` precisely so "I could not read the setting" cannot be spelled as "the
+   * user chose nobody".
+   */
+  setting: UnaddressedResponderSetting,
   candidates: readonly AgentMentionCandidate[],
   /** Agent ids the ASKING PERSON has ADDRESSED in this room, MOST RECENT FIRST
    *  (`lib/agent-post-stamp.ts › recentAgentsAddressedBy`; it credited
@@ -327,13 +580,16 @@ export function resolveDefaultResponder(
    *  ordering. */
   recentAgentIds: readonly string[] = []
 ): ResponderChoice | null {
-  if (typeof configured === "string" && configured.length > 0) {
-    const index = buildAgentMentionIndex(candidates);
-    const hit =
-      resolveAgentHandle(configured, index) ??
-      resolveAgentHandle(agentIdHandle(configured), index);
-    if (hit !== null) return { agentId: hit, reason: "default" };
-  }
+  // ⚠ **THE WHOLE FUNCTION IS OFF WHEN THE PERSON SAID NOBODY.** First line, before any
+  // candidate is looked at, so there is no arm below that can be reached with `"none"` set —
+  // which is the only way "must not fire ANYWHERE" is enforceable rather than remembered.
+  if (setting === "none") return null;
+  // ⚠ **ARM 1 IS DELETED (2026-09-06).** It resolved the channel's configured handle against
+  // the mention index, tried as written and as its `agent-<id>` form, and answered
+  // `reason: "default"`. It was the room-wide pin; the setting above replaces it with a rule.
+  // ⚠ NOTE WHAT WENT WITH IT: this was `buildAgentMentionIndex`'s ONLY call inside this
+  // function, so the two-pass claim order (z5ztx9ts, 2026-09-07) is untouched by this change
+  // and has one fewer caller to satisfy, not one more.
   const ids = [...new Set(candidates.map((c) => c.agentId))];
   if (ids.length === 0) return null;
   if (ids.length === 1) return { agentId: ids[0], reason: "only agent" };

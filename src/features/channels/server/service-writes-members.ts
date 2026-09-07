@@ -1,5 +1,6 @@
 import "server-only";
 import type { AgentToolProfile, ChannelMember } from "../types";
+import type { UnaddressedResponderSetting } from "../lib/agent-mentions";
 import {
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
@@ -160,6 +161,12 @@ export async function updateMyMemberSettings(
   patch: {
     agentToolProfile?: AgentToolProfile;
     favorite?: boolean;
+    /**
+     * ⚠ **THE PER-MEMBER RESPONDER RULE** (2026-09-07, items 10 and 11). Not nullable and not
+     * clearable: the column is `NOT NULL DEFAULT 'last_addressed'` and `'last_addressed'` IS
+     * the unconfigured answer, so "unset it" is not a thing a member can ask for.
+     */
+    unaddressedResponder?: UnaddressedResponderSetting;
   }
 ): Promise<ChannelMember> {
   const { channel } = await requireMemberChannel(
@@ -170,9 +177,19 @@ export async function updateMyMemberSettings(
   const dbPatch: {
     agent_tool_profile?: string;
     favorited_at?: string | null;
+    unaddressed_responder?: string;
   } = {};
   if (patch.agentToolProfile !== undefined) {
     dbPatch.agent_tool_profile = patch.agentToolProfile;
+  }
+  // ⚠ **WRITTEN VERBATIM, NOT NORMALISED** (2026-09-07, items 10 and 11), and that is the
+  // opposite of the READ path on purpose. `normalizeUnaddressedResponder` exists so an
+  // UNREADABLE stored value cannot be mistaken for a choice; coercing on the way IN would do
+  // the reverse — turn a client's junk into a silent write of the default, so a member who
+  // meant `'none'` and hit a typo'd build would be told they had chosen it. The zod enum
+  // refuses instead (400), and `channel_members_unaddressed_responder_check` refuses again.
+  if (patch.unaddressedResponder !== undefined) {
+    dbPatch.unaddressed_responder = patch.unaddressedResponder;
   }
   if (patch.favorite !== undefined) {
     // ⚠ Stamped by the SERVER, never taken from the caller: the column records

@@ -87,7 +87,26 @@ function mount(over: Partial<Channel>, canManage: boolean, handlers = {}) {
 }
 
 const row = (name: string) => screen.queryByRole("button", { name });
-const option = (name: RegExp | string) => screen.getByRole("radio", { name });
+/** The Working Folder picker. ⚠ By `aria-label`: its visible text is a path, so the
+ *  accessible name states the act instead (`settings-desktop-rows.tsx`). */
+const folderPicker = () =>
+  screen.getByLabelText("Change the working folder for this channel's agents");
+
+/**
+ * ⚠ TOOL ACCESS IS A DROPDOWN SINCE 2026-09-06 (item 6), SO ITS OPTIONS ONLY EXIST
+ * WHILE THE MENU IS OPEN. This helper opens it first, which is also what a person
+ * does — and it is the reason the three cases below could not simply be repointed
+ * from `role="radio"` to `role="menuitem"`: the old radiogroup rendered all three
+ * options standing on the tab, and the whole point of item 6 is that they no longer
+ * do. A helper that hid the open step would let a case pass against a control that
+ * never opens.
+ */
+const toolAccessTrigger = () =>
+  screen.getByLabelText("Tool access for agents on this channel");
+const openToolAccess = () => {
+  fireEvent.click(toolAccessTrigger());
+};
+const option = (name: RegExp | string) => screen.getByRole("menuitem", { name });
 
 describe("the DM has no Leave", () => {
   it("offers the non-owner DM peer Delete conversation, never Leave channel", () => {
@@ -171,17 +190,30 @@ describe("no dead rows, and nothing behind a click", () => {
     // nothing is a heading over an empty right-hand side; jsdom has no
     // `window.dopl`, so this is the plain-browser case.
     mount({ role: "owner" }, true);
-    expect(screen.queryByText("Agent folder")).toBeNull();
+    // ⚠ NAMES REPOINTED 2026-09-06 (settings overhaul): "Agent folder" → "Working
+    // Folder", "Permissions" → "Tool use", "Sends" → "Messaging". Renames only —
+    // what this case pins is that a bridgeless browser renders NONE of them.
+    expect(screen.queryByText("Working Folder")).toBeNull();
     expect(screen.queryByText("For the next request you allow")).toBeNull();
-    expect(screen.queryByText("Permissions")).toBeNull();
-    expect(screen.queryByText("Sends")).toBeNull();
-    // ⚠ AND THE MACHINE-SCOPED GROUP (2026-08-22) — heading included. Its
-    // bridge is `dopl.orchestratorLaunch`, absent here, so a browser must not
-    // be shown a switch that grants a capability nothing can store.
+    expect(screen.queryByText("Tool use")).toBeNull();
+    expect(screen.queryByText("Messaging")).toBeNull();
+    // ⚠ THE MACHINE-SCOPED SWITCH AND THE PER-CHANNEL CHAINING SWITCH ARE BOTH
+    // DELETED (item 9) — one "Launch agents" dropdown replaces them, and it needs
+    // BOTH bridges, so a plain browser renders nothing here either. The old
+    // group heading went with item 2.
     expect(screen.queryByText("Orchestrator launches")).toBeNull();
     expect(screen.queryByText("On this Mac, every channel")).toBeNull();
-    // The DURABLE half is a cloud write and is there either way.
-    expect(screen.getByRole("radiogroup", { name: "Tools" })).toBeTruthy();
+    expect(screen.queryByText("Launch agents")).toBeNull();
+    // ⚠ AND THE REPLIES ROW IS GONE FOR GOOD (item 8), not merely bridgeless: its
+    // axis is Messaging's now, and its whole record was deleted.
+    expect(screen.queryByText("Replies")).toBeNull();
+    expect(screen.queryByText("Send automatically")).toBeNull();
+    // The DURABLE half is a cloud write and is there either way. ⚠ IT IS A
+    // DROPDOWN NAMED "Tool access" SINCE 2026-09-06 (item 6), not a radiogroup:
+    // the three containment lines ride into the `SelectMenu` rather than sitting
+    // under the row, which is where this tab already keeps per-option copy.
+    expect(screen.getByText("Tool access")).toBeTruthy();
+    expect(screen.queryByRole("radiogroup", { name: "Tools" })).toBeNull();
   });
 
   it("says so, rather than heading an empty tab, for a non-member", () => {
@@ -210,18 +242,30 @@ describe("no dead rows, and nothing behind a click", () => {
   });
 });
 
-describe("Tools — every profile says what it means, in a few words", () => {
+describe("Tool access — every profile says what it means, in a few words", () => {
+  // ⚠ 2026-09-06 (item 6): the row is a DROPDOWN named "Tool access" now. The three
+  // containment lines are NOT lost — they ride `TOOL_PROFILE_OPTIONS.description` into
+  // the `SelectMenu`, which is where this tab already says per-option copy belongs
+  // ("where a person reads them while choosing"). The eye popover carries the same
+  // words for a reader who is not choosing. This case still asserts the lines are
+  // present and still cross-checks them against what each profile actually grants.
   it("shows all three with their short lines, and matches what each is granted", () => {
-    const text = copy();
+    // ⚠ THE MENU IS OPENED FIRST, because the lines live INSIDE it now. Asserting
+    // them against the closed tab would be asserting the thing item 6 removed.
+    const { container } = agentView();
+    openToolAccess();
     for (const label of ["Full access", "Dopl only", "Read only"]) {
-      expect(screen.getByRole("radio", { name: new RegExp(label) })).toBeTruthy();
+      expect(screen.getByRole("menuitem", { name: new RegExp(label) })).toBeTruthy();
     }
-    // ⚠ Never a bare enum name.
+    const text = document.body.textContent ?? "";
+    // ⚠ Never a bare enum name — asserted on the TAB, not the open menu, because the
+    // menu's own `value` attributes are not rendered text and never were.
     for (const value of ["full", "dopl_only", "read_only"]) {
-      expect(text).not.toContain(value);
+      expect(container.textContent ?? "").not.toContain(value);
     }
-    // ⚠ THE ONLY DESCRIPTIONS LEFT ON THE TAB, ≤5 words each (Samuel,
-    // 2026-08-19) — Tools keeps one because it is the CONTAINMENT pick.
+    // ⚠ THE ONLY PER-OPTION DESCRIPTIONS LEFT IN THE PRODUCT, ≤5 words each
+    // (Samuel, 2026-08-19). Tool access keeps them because it is the CONTAINMENT
+    // pick, and they now sit where a person reads them while choosing.
     expect(text).toContain("Everything, including connected apps");
     expect(text).toContain("Files, web, and Dopl");
     expect(text).toContain("Local files only");
@@ -267,17 +311,37 @@ describe("Tools — every profile says what it means, in a few words", () => {
       /function normalizeProfile[\s\S]*?return 'read_only';/
     );
     agentView({ profile: UNRESOLVED_TOOL_PROFILE });
-    expect(option(/Read only/).getAttribute("aria-checked")).toBe("true");
-    expect(option(/Full access/).getAttribute("aria-checked")).toBe("false");
-    expect(option(/Dopl only/).getAttribute("aria-checked")).toBe("false");
+    // ⚠ THE TRIGGER IS THE STATEMENT NOW, not three standing options: a closed
+    // dropdown names exactly one profile, which is a stronger version of "marks
+    // exactly one checked" than three `aria-checked` reads were.
+    expect(toolAccessTrigger().textContent).toContain("Read only");
+    // ⚠ **THE THREE `aria-checked` READS ARE DELETED, NOT REPAIRED (2026-09-07).** They were
+    // `role="radio"` semantics and this control is a `SelectMenu`: `popover-menu.tsx › MenuItem`
+    // renders `role="menuitem"` with NO `aria-checked` at all — it marks the active option with a
+    // check glyph and a selected background — so all three reads returned `null` and the case was
+    // asserting against a property this menu has never had. The comment above already says what
+    // replaced them, and it is the stronger claim: a CLOSED dropdown names exactly one profile,
+    // which is "exactly one is checked" stated where the operator actually reads it.
+    // ⚠ WHAT IS KEPT is that the roster is not silently narrowed — the pick must still be
+    // reachable, and a menu that dropped an option would leave the trigger telling the truth.
+    openToolAccess();
+    expect(option(/Read only/)).toBeTruthy();
+    expect(option(/Full access/)).toBeTruthy();
+    expect(option(/Dopl only/)).toBeTruthy();
   });
 
   it("picks through the caller's cloud mutation, and refuses a re-pick", () => {
     const onSetToolProfile = vi.fn();
     agentView({ onSetToolProfile });
+    openToolAccess();
     fireEvent.click(option(/Read only/));
     expect(onSetToolProfile).toHaveBeenCalledWith("read_only");
-    // Already-selected is a no-op, not a second write.
+    // Already-selected is a no-op, not a second write. ⚠ `full` is the fixture's
+    // profile, so re-picking it must write nothing — the guard lives in the row's
+    // own `onChange` as well as in `SelectMenu`, deliberately: this write routes
+    // through the posture WARNING, and firing that dialog for a no-op pick would
+    // train the operator to dismiss it.
+    openToolAccess();
     fireEvent.click(option(/Full access/));
     expect(onSetToolProfile).toHaveBeenCalledTimes(1);
   });
@@ -285,13 +349,17 @@ describe("Tools — every profile says what it means, in a few words", () => {
   it("goes inert while the durable write is in flight", () => {
     const onSetToolProfile = vi.fn();
     agentView({ toolProfileBusy: true, onSetToolProfile });
-    expect(disabled(option(/Read only/))).toBe(true);
-    fireEvent.click(option(/Read only/));
+    // ⚠ THE TRIGGER IS WHAT GOES INERT — a disabled dropdown never opens, so there
+    // is no option to click. That is a stricter refusal than the old disabled
+    // radios, which were still in the tree and still clickable by a test.
+    expect(disabled(toolAccessTrigger())).toBe(true);
+    fireEvent.click(toolAccessTrigger());
+    expect(screen.queryByRole("menuitem", { name: /Read only/ })).toBeNull();
     expect(onSetToolProfile).not.toHaveBeenCalled();
   });
 });
 
-describe("the Agent folder row", () => {
+describe("the Working Folder row", () => {
   /**
    * ⚠ THE DEFAULT IS NOW A REAL DIRECTORY, NOT A WORD THIS TREE OWNS (2026-09-05,
    * task 15). `label` was `null` here and the row printed "Sandbox (default)" over
@@ -310,12 +378,22 @@ describe("the Agent folder row", () => {
     onClear: noop,
   };
 
-  it("names the EFFECTIVE default folder and offers only Change on it", () => {
+  it("names the EFFECTIVE default folder, and the NAME is the picker button", () => {
+    // ⚠ 2026-09-06 (item 4): the separate "Change folder…" button is DELETED and the
+    // folder name itself — underlined text, a real `<button>` — opens the picker. The
+    // row is a NAME and a CONTROL on one line, which is the shape this tab states.
+    // What this case pinned before is unchanged: the label is a real directory, never
+    // a word this tree invented.
     const text = copy({ folder: { ...folder } });
-    expect(text).toContain("Agent folder");
+    expect(text).toContain("Working Folder");
     expect(text).toContain("~/Downloads");
     expect(text).not.toContain("Sandbox");
-    expect(row("Change folder…")).not.toBeNull();
+    expect(row("Change folder…")).toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: "Change the working folder for this channel's agents",
+      })
+    ).toBeTruthy();
     // ⚠ GATED ON `custom`, NOT on having a label to show — the reset must not be
     // offered on a channel that is already on the default.
     expect(row("Use default")).toBeNull();
@@ -336,7 +414,13 @@ describe("the Agent folder row", () => {
       },
     });
     expect(container.textContent).toContain("~/Downloads/repo");
-    fireEvent.click(row("Change folder…")!);
+    // ⚠ 2026-09-06 (item 4): the folder NAME is the picker button now. "Use default"
+    // is unchanged and still gated on `custom` — kept deliberately, since it is the
+    // only way back to the desktop default once a folder is set.
+    // ⚠ THE PICKER IS NAMED BY ITS `aria-label`, NOT BY ITS TEXT, and that is deliberate:
+    // the visible content is a PATH, so the accessible name states the ACT instead
+    // (`settings-desktop-rows.tsx`). Querying it by the path found nothing.
+    fireEvent.click(folderPicker());
     fireEvent.click(row("Use default")!);
     expect(onChoose).toHaveBeenCalledTimes(1);
     expect(onClear).toHaveBeenCalledTimes(1);
@@ -344,8 +428,9 @@ describe("the Agent folder row", () => {
 
   it("says the picker is open rather than looking idle", () => {
     agentView({ folder: { ...folder, label: "~/repo", custom: true, busy: true } });
-    expect(row("Opening picker…")).not.toBeNull();
-    expect(disabled(row("Opening picker…")!)).toBe(true);
+    // ⚠ Named by the ACT, worded by the STATE — see the case above.
+    expect(folderPicker().textContent).toContain("Opening picker…");
+    expect(disabled(folderPicker())).toBe(true);
   });
 });
 
@@ -429,52 +514,121 @@ describe("a settings panel, not documentation", () => {
  * it is a heading rather than an explainer sentence the minimal-copy bound above
  * would (rightly) reject.
  */
-describe("Orchestrator launches — a machine-scoped group, labelled as one", () => {
-  const row = (over: { on?: boolean; busy?: boolean; onToggle?: (on: boolean) => void } = {}) =>
+/**
+ * ⚠ **REWRITTEN 2026-09-06 (settings overhaul, item 9): THE TWO SWITCHES ARE ONE
+ * DROPDOWN.** The docblock above is kept because its WARNING is unchanged and is
+ * now what this suite exists to hold: an operator who reads a machine-wide control
+ * as per-channel has handed an external session their whole machine.
+ *
+ * The old correction was a GROUP LABEL. Item 2 deleted every group label on this
+ * tab, so that correction had to move or die — and it moved into the OPTION LABELS
+ * themselves ("In this channel" / "In every channel"), which is a stronger place
+ * for it: the scope is now the thing the operator PICKS rather than a heading above
+ * the thing they pick. The verbatim machine-wide sentence also rides the row's eye
+ * popover by ruling (`settings-help.tsx › SETTINGS_HELP["Launch agents"]`).
+ */
+describe("Launch agents — one control, two records, scope in the options", () => {
+  const view = (
+    over: {
+      chain?: boolean;
+      orch?: boolean;
+      busy?: boolean;
+      onChain?: (on: boolean) => void;
+      onOrch?: (on: boolean) => void;
+    } = {}
+  ) =>
     agentView({
-      orchestrator: { on: false, busy: false, onToggle: noop, ...over },
+      agentChain: {
+        on: over.chain ?? false,
+        busy: over.busy ?? false,
+        onToggle: over.onChain ?? noop,
+      },
+      orchestrator: {
+        on: over.orch ?? false,
+        busy: over.busy ?? false,
+        onToggle: over.onOrch ?? noop,
+      },
     });
 
-  it("renders the switch under a label naming the MACHINE scope", () => {
-    row();
-    expect(screen.getByText("Orchestrator launches")).toBeTruthy();
-    // ⚠ The scope statement. If this heading ever goes, the control starts
-    // reading as per-channel and the group is a trap.
-    expect(screen.getByText("On this Mac, every channel")).toBeTruthy();
+  const trigger = () =>
+    screen.getByLabelText("Whether agents may launch further agents, and where");
+
+  it("is ONE row, and the deleted switches are gone for good", () => {
+    view();
+    expect(screen.getByText("Launch agents")).toBeTruthy();
+    expect(screen.queryByText("Orchestrator launches")).toBeNull();
+    expect(screen.queryByText("May launch agents")).toBeNull();
+    expect(screen.queryByText("On this Mac, every channel")).toBeNull();
   });
 
-  it("is OFF by default and mirrors the stored value", () => {
-    const { container } = row();
-    expect(
-      container.querySelector('[aria-label="Orchestrator launches on this Mac"]')
-        ?.getAttribute("aria-checked")
-    ).toBe("false");
+  it("derives its value from BOTH records, asking the machine-wide one first", () => {
+    // ⚠ THE ORDER IS THE HONEST ONE AND IS THE POINT OF THIS CASE. While the
+    // machine-wide flag is on, launching IS possible here whatever the per-channel
+    // flag says — so reporting "Cannot launch agents" over an armed machine would be
+    // the control lying about the machine's actual state.
+    view();
+    expect(trigger().textContent).toContain("Cannot launch agents");
     cleanup();
-    const on = row({ on: true }).container;
-    expect(
-      on.querySelector('[aria-label="Orchestrator launches on this Mac"]')
-        ?.getAttribute("aria-checked")
-    ).toBe("true");
+    view({ chain: true });
+    expect(trigger().textContent).toContain("In this channel");
+    cleanup();
+    view({ chain: true, orch: true });
+    expect(trigger().textContent).toContain("In every channel");
+    cleanup();
+    // ⚠ THE INCOHERENT PAIR: chaining off, machine armed. It must NOT read "Cannot".
+    view({ chain: false, orch: true });
+    expect(trigger().textContent).toContain("In every channel");
   });
 
-  it("reports the operator's intent and writes nothing itself", () => {
-    const onToggle = vi.fn();
-    row({ onToggle });
-    fireEvent.click(
-      screen.getByLabelText("Orchestrator launches on this Mac")
-    );
-    expect(onToggle).toHaveBeenCalledWith(true);
+  it("EVERY pick writes both records, and neither write is a no-op", () => {
+    // ⚠ A CONTROL THAT DOES NOT FULLY DETERMINE WHAT IT CLAIMS TO SET is the
+    // illegibility defect item 8 removed, in the other lane. Picking "Cannot" over an
+    // armed machine must disarm the machine, or the label is false.
+    const onChain = vi.fn();
+    const onOrch = vi.fn();
+    view({ chain: true, orch: true, onChain, onOrch });
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByText("Cannot launch agents"));
+    expect(onChain).toHaveBeenCalledWith(false);
+    expect(onOrch).toHaveBeenCalledWith(false);
   });
 
-  /** ⚠ A second click landing on top of an unsettled write is the case worth
-   *  refusing — this grants a capability, so the last word must be main's. */
-  it("goes inert while the write is in flight, and says so", () => {
-    const onToggle = vi.fn();
-    row({ busy: true, onToggle });
-    expect(screen.getByText("Saving…")).toBeTruthy();
-    fireEvent.click(
-      screen.getByLabelText("Orchestrator launches on this Mac")
-    );
-    expect(onToggle).not.toHaveBeenCalled();
+  it("writes only what actually changes", () => {
+    // The two records are separate stores with separate in-flight states, so writing
+    // a value that is already set spends a round-trip and flickers the row for nothing.
+    const onChain = vi.fn();
+    const onOrch = vi.fn();
+    view({ chain: true, orch: false, onChain, onOrch });
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByText("In every channel"));
+    expect(onChain).not.toHaveBeenCalled(); // already on
+    expect(onOrch).toHaveBeenCalledWith(true);
+  });
+
+  /** ⚠ A second pick landing on top of an unsettled write is the case worth
+   *  refusing — this grants a capability, so the last word must be main's.
+   *  ⚠ EITHER record being in flight disables the row: one control now stands for
+   *  both, so it cannot be half-live. */
+  it("goes inert while EITHER write is in flight", () => {
+    for (const busy of [{ chainBusy: true }, { orchBusy: true }]) {
+      const onChain = vi.fn();
+      agentView({
+        agentChain: { on: false, busy: !!busy.chainBusy, onToggle: onChain },
+        orchestrator: { on: false, busy: !!busy.orchBusy, onToggle: noop },
+      });
+      expect(disabled(trigger())).toBe(true);
+      cleanup();
+    }
+  });
+
+  it("renders NOTHING without both bridges — a half-wired dropdown is worse than none", () => {
+    // ⚠ THE ONE PLACE THIS TAB DEPARTS FROM "hide what has no bridge, show the rest".
+    // A dropdown that could set only one of the two records would offer picks that
+    // silently do half of what they say.
+    agentView({ agentChain: { on: true, busy: false, onToggle: noop }, orchestrator: null });
+    expect(screen.queryByText("Launch agents")).toBeNull();
+    cleanup();
+    agentView({ agentChain: null, orchestrator: { on: true, busy: false, onToggle: noop } });
+    expect(screen.queryByText("Launch agents")).toBeNull();
   });
 });

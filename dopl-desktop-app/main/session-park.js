@@ -341,11 +341,8 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // session that burned 23 of 24 turns, crashed and was resumed starts again at zero, so
     // every crash+resume mints a fresh turn AND cost budget.
     turns: rec.turns, costUsd: rec.costUsd,
-    // ⚠ AND THE CAP THEY ARE MEASURED AGAINST (9a, 2026-09-05). This lane passes no `launchDepth`
-    // on purpose — a recreate must not resurrect a depth it cannot verify — so the issuer-keyed
-    // default would answer 24 here for a session the operator launched at 200, with its turns
-    // already spent. 0 / absent (a legacy record) reads the default, as before.
-    turnCap: rec.turnCap,
+    // 2026-09-07: the cap those counters were measured against travelled here too. Deleted with
+    // the caps — a resumed session now carries its spent counters and no bound at all.
     // ⚠ AND THE OUTBOUND POST COUNTER, for the same class of reason and a different symptom
     // (2026-08-22). `session-outbound-tag.js › nextOwnPostId` stamps every post
     // `agent-<agentId>-<n>` and `n` counts from `s.ownPostSeq` — which `startSession` used to

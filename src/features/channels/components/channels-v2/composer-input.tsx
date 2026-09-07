@@ -39,6 +39,14 @@
  * ⚠ `.raised-tab` SUPPLIES THE FILL, so no `bg-*` utility may ride along: the utility layer
  * outranks the kit layer and a stray background flattens the gradient to nothing.
  *
+ * ⚠ THE ONE OTHER THING A CALLER MAY HAND THIS ROW IS `highlight`, AND IT IS A CONTENT MODE ON
+ * `face`'s terms (2026-09-07, the composer tint). A textarea cannot hold a coloured run, so the
+ * tinted draft is painted as a MIRROR behind a transparent field; the caller decides what is
+ * worth tinting and decides nothing about how the row looks. Everything that could put the two
+ * layers on different glyph positions is one constant they share ({@link FIELD_TEXT}) and one
+ * scroll handler that ties them together — which is this file's own argument about two trees,
+ * applied to two layers of one field.
+ *
  * ⚠ THE SEND BUTTON IS `shared/ui/send-button.tsx` WITH NO PER-MOUNT PROPS beyond its wiring —
  * one size, one colour, one alignment, from one place. The channel composer used to pass it an
  * `ml-1` and an opacity of its own, which is how the two mounts came to look different.
@@ -52,7 +60,7 @@
  * the last three times and the one `composer-input.test.ts` pins.
  */
 
-import type { KeyboardEvent, RefObject } from "react";
+import { useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { cn } from "@/shared/lib/utils";
 import { SendButton } from "@/shared/ui/send-button";
 
@@ -88,6 +96,24 @@ const ROW_GEOMETRY = "flex items-center gap-2";
  * main the CARD is the box and the CARD pays it — see the header.
  */
 const PILL_FACE = "raised-tab rounded-[10px] p-1.5 pl-3";
+
+/**
+ * **EVERY TYPOGRAPHIC FACT THAT DECIDES WHERE A CHARACTER LANDS** — worn by the field AND by the
+ * mirror layer beneath it, from this one string (2026-09-07, with the composer tint).
+ *
+ * ⚠ **IT IS EXTRACTED BECAUSE TWO ELEMENTS NOW HAVE TO AGREE TO THE PIXEL, NOT BECAUSE IT READS
+ * TIDIER.** {@link ComposerInputRowProps.highlight} paints the draft a second time UNDER a
+ * transparent textarea; if the two disagree about size, leading or vertical inset by even a
+ * fraction, the tint slides off the words it is tinting — and the header's own lesson is that
+ * two hand-built trees cannot be equalised by handing them the same strings, so here they are
+ * handed the SAME STRING and are not two trees.
+ * ⚠ **`pointer-coarse:text-[16px]` IS IN IT AND MUST BE**: the no-zoom rule changes the field's
+ * font size on touch devices, so a mirror without it would be correct on a desktop and wrong on
+ * every phone — the class of bug nobody sees until a guest opens the room.
+ * ⚠ **NOTHING ABOUT COLOUR IS IN HERE.** The two layers differ in exactly that, which is the
+ * whole mechanism.
+ */
+const FIELD_TEXT = "py-[4px] text-lead leading-[22px] pointer-coarse:text-[16px]";
 
 /** THE ARROW'S WIRING — what it does, never how it looks. */
 export type ComposerSendWiring = {
@@ -126,6 +152,25 @@ type ComposerInputRowProps = {
   ariaLabel: string;
   disabled?: boolean;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
+  /**
+   * **THE DRAFT, PAINTED A SECOND TIME UNDERNEATH — the composer tint** (2026-09-07, Samuel:
+   * blue means *"will route to an agent"*).
+   *
+   * ⚠ **A textarea CANNOT HOLD A COLOURED RUN**, which is why this is a MIRROR and not a class:
+   * the field's text goes transparent, its caret does not, and this function renders the same
+   * string as spans directly behind it. Everything that decides glyph position is shared
+   * ({@link FIELD_TEXT}) and the scroll offsets are wired together below, so the two layers
+   * cannot drift.
+   *
+   * ⚠ **IT IS A CONTENT MODE, NOT A STYLE HOOK — the same standing this file grants `face` and
+   * denies everything else.** The caller supplies the RULE for what is worth tinting
+   * (`composer-tint.tsx`, which owns that policy and resolves it against the real parsers); it
+   * supplies no size, no colour and no geometry, and there is still no `className` here.
+   *
+   * ⚠ **ABSENT MEANS AN ORDINARY FIELD**, opaque text and no layer at all — the agent bar's own
+   * mount passes none, and adding one must never be the price of using this row.
+   */
+  highlight?: (value: string) => ReactNode;
 } & (
   /**
    * WHICH BOX THIS ROW IS IN — see the header.
@@ -149,11 +194,45 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
     ariaLabel,
     disabled = false,
     inputRef,
+    highlight,
   } = props;
+  // ⚠ THE MIRROR'S OWN REF, HELD HERE RATHER THAN PASSED IN: the only thing anybody does with it
+  // is keep its scroll offset equal to the field's, which is this component's business and not a
+  // caller's. A field scrolled to line 3 over a layer still at line 1 is the tint on the wrong
+  // words — the one failure mode of a mirror that a static test would never catch.
+  const mirrorRef = useRef<HTMLDivElement>(null);
   return (
     <div className={cn(ROW_GEOMETRY, face === "pill" && PILL_FACE)}>
+      {/* ⚠ THE FIELD SITS IN A POSITIONED BOX IN BOTH MODES, UNBRANCHED. The mirror is absolute
+          against it, and a wrapper that appeared only for the tinted mount would be the second
+          tree this file exists to prevent — so the box is always here and pays nothing when
+          nothing is painted in it. `min-w-0 flex-1` moved here off the textarea, unchanged in
+          effect: the box now stretches and the field fills it. */}
+      <div className="relative min-w-0 flex-1">
+        {highlight && (
+          <div
+            ref={mirrorRef}
+            // ⚠ HIDDEN FROM ASSISTIVE TECH AND FROM THE POINTER. It is the same characters the
+            // field already exposes; a screen reader meeting them twice would read the draft
+            // twice, and a pointer meeting them first could not place a caret.
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-text-primary",
+              FIELD_TEXT
+            )}
+          >
+            {highlight(value)}
+          </div>
+        )}
       <textarea
         ref={inputRef}
+        // ⚠ SCROLL IS MIRRORED IMPERATIVELY, NOT THROUGH STATE. It fires per animation frame
+        // while a wheel is moving; routing it through React would re-render the whole composer
+        // for a number nothing else reads.
+        onScroll={(e) => {
+          const mirror = mirrorRef.current;
+          if (mirror) mirror.scrollTop = e.currentTarget.scrollTop;
+        }}
         rows={1}
         value={value}
         disabled={disabled}
@@ -177,8 +256,20 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
         // `h-[30px]`, so 16px text lands in the same 30px object the send button is aligned
         // to. ⚠ COARSE POINTERS ONLY — a mouse never triggers the zoom, so the desktop face
         // keeps `text-lead` exactly as drawn.
-        className="h-[30px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-[4px] text-lead leading-[22px] text-text-primary outline-none pointer-coarse:text-[16px] placeholder:text-text-muted"
+        // ⚠ THE TYPOGRAPHY IS `FIELD_TEXT` AND IS NOT SPELLED HERE — the mirror wears the same
+        // constant, which is what keeps the two layers on the same glyph positions.
+        className={cn(
+          "h-[30px] w-full resize-none overflow-y-auto bg-transparent outline-none placeholder:text-text-muted",
+          FIELD_TEXT,
+          // ⚠ THE TEXT GOES TRANSPARENT ONLY WHERE SOMETHING IS PAINTED UNDER IT, AND THE CARET
+          // NEVER DOES. `caret-text-primary` is the one thing that must stay opaque: it is the
+          // only part of a transparent field the operator steers by. ⚠ THE PLACEHOLDER KEEPS ITS
+          // OWN COLOUR — an empty draft mirrors nothing, so a transparent placeholder would be a
+          // box with no prompt in it.
+          highlight ? "text-transparent caret-text-primary" : "text-text-primary"
+        )}
       />
+      </div>
       {/* ⚠ THE ARROW IS IN THIS ROW ONLY WHERE THIS ROW IS THE WHOLE BOX. Main's card has a
           toolbar row under this one and the arrow lives at the end of it (Samuel, live review
           2026-08-28), mounted from the SAME {@link ComposerSend} — a lifted slot, not a second

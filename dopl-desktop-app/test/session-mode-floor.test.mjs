@@ -193,19 +193,22 @@ test("LIVE: a session that is NOT windowless is left alone", () => {
 
 test("the LAUNCH lane and the LIVE lane agree, mode for mode", () => {
   // ⚠ TWO SPELLINGS OF ONE FLOOR IS HOW ONE LANE STARTS HOLDING MESSAGES THE OTHER RELEASES.
-  // `channel-prefs.js › windowlessMessageMode` is the launch-time derivation: it takes the
-  // channel's durable auto-send setting AND a picked mode, and its `picked` half must land on
-  // exactly what the live clamp lands on. Driven through the real sliced function with
-  // auto-send OFF, which is the input that isolates the `picked` half.
+  // `channel-prefs.js › windowlessMessageMode` is the launch-time derivation: it takes a picked
+  // mode and must land on exactly what the live clamp lands on.
+  // ⚠ IT NO LONGER TAKES AN AUTO-SEND SETTING (2026-09-06, item 8) — there is no such setting,
+  // so there is no arm to isolate and the whole domain is now driven below.
   const prefs = read("channel-prefs.js");
   const body = prefs.slice(
     prefs.indexOf("function windowlessMessageMode("),
     prefs.indexOf("function launchStartModes(")
   );
+  // ⚠ THE INJECTED `getAutoSend` IS GONE (2026-09-06, item 8): `windowlessMessageMode` reads no
+  // send toggle any more, because there is no send toggle — the axis is the launch posture's
+  // `messages`, which this function already receives. The slice is built with NO free variables,
+  // which is the stronger statement: the launch-time floor depends on the mode alone.
   const windowlessMessageMode = new Function(
-    "getAutoSend",
     `${body}\n return windowlessMessageMode;`
-  )(() => false);
+  )();
 
   for (const mode of MESSAGE_MODES) {
     assert.equal(
@@ -213,6 +216,34 @@ test("the LAUNCH lane and the LIVE lane agree, mode for mode", () => {
       floorWindowlessMessage(mode),
       `the two lanes disagree about ${mode}`
     );
+  }
+});
+
+test("2026-09-06: the GATE lane is a THIRD application of the same floor, and it agrees too", () => {
+  // ⚠ THE THIRD SITE ARRIVED WITH ITEM 8, AND IT IS THE ONE THAT WOULD HAVE SHIPPED BROKEN.
+  // `session-private.js › effectiveMessageMode` now reads the channel's Messaging value LIVE at
+  // the gate. That stored value is the operator's PICK and carries NO floor, while the value it
+  // replaced (`state.messageMode`) had one applied at launch. Without re-flooring, a windowless
+  // session on an `ask` channel — the DEFAULT — would gate its own-channel READS, and a gated
+  // read in a windowless session is a DENIED read: the agent could not look at the thread it was
+  // answering. That is F-236 reached from the other end.
+  const priv = require(M("session-private.js"));
+  const src = read("session-private.js");
+  // It asks for the SHARED rule rather than re-spelling it — the same statement the live lane
+  // makes below, and the reason this file exists at all.
+  assert.match(src, /floorWindowlessMessage/, "the gate lane calls the shared floor");
+  assert.equal(/function floorWindowlessMessage\s*\(/.test(src), false,
+    "session-private.js must not re-declare the floor");
+  // ⚠ AND IT AGREES MODE FOR MODE, driven through the REAL exported function. A windowless
+  // session is floored; a windowed one is not, so the operator's pick stands as written.
+  for (const mode of MESSAGE_MODES) {
+    const windowless = { channelId: CH, windowless: true, state: { messageMode: mode } };
+    const windowed = { channelId: CH, state: { messageMode: mode } };
+    // ⚠ NO STORE IN THIS PROCESS, so the live read answers `''` and the FROZEN value is used —
+    // which is already floored at launch. What this pins is that the two lanes cannot disagree
+    // about a mode, whichever one supplied it.
+    assert.equal(priv.effectiveMessageMode(windowless), mode, `windowless ${mode}`);
+    assert.equal(priv.effectiveMessageMode(windowed), mode, `windowed ${mode}`);
   }
 });
 

@@ -23,6 +23,7 @@ import {
   retagPendingMessage,
   setFavorite,
   setToolProfile,
+  setUnaddressedResponder,
   upsertThread,
   type MessagesCache,
 } from "./optimistic-cache";
@@ -298,5 +299,60 @@ describe("the writes that used to be hand-rolled overrides", () => {
       "r1"
     );
     expect(next?.requests.map((r) => r.id)).toEqual(["r2"]);
+  });
+});
+
+/**
+ * 🔒 **THE STALE-CACHE PIN FOR `unaddressedResponder`** (INVARIANTS §8, and it is
+ * the reason the field is OPTIONAL on `ChannelMember` rather than required).
+ *
+ * ⚠ **THE MARKER IS THE SCRUB, WHICH MAKES ABSENCE THE DANGEROUS VALUE.**
+ * `dto.ts › mapMemberRow` nulls this field on every row but the viewer's, so a
+ * NON-NULL value is how this patch recognises "this row is mine" — no user id is
+ * taken, deliberately. A roster payload cached BEFORE the field shipped carries
+ * no key at all, and `undefined !== null` is TRUE: the original `!== null` test
+ * therefore matched EVERY row on a stale cache and stamped the viewer's own
+ * private setting onto all of their peers. Fixed 2026-09-07; this is the case
+ * that fails if the check is ever simplified back to one comparison.
+ *
+ * ⚠ **AND `'none'` IS WHY IT IS NOT A TRUTHINESS TEST EITHER** — it is a real
+ * setting whose whole job is to be selected, and `!m.unaddressedResponder` would
+ * exclude the viewer's own row on exactly the pick the control exists to make.
+ */
+describe("setUnaddressedResponder — the viewer's row only, on every cache generation", () => {
+  const roster = (members: unknown[]) => ({ members }) as never;
+
+  it("paints the viewer's row, found by the non-null marker", () => {
+    const next = setUnaddressedResponder(
+      roster([
+        { userId: ME, unaddressedResponder: "last_addressed" },
+        { userId: "peer", unaddressedResponder: null },
+      ]),
+      "none"
+    );
+    expect(next?.members.map((m) => m.unaddressedResponder)).toEqual([
+      "none",
+      null,
+    ]);
+  });
+
+  it("🔒 paints NOTHING on a payload cached before the field existed", () => {
+    const stale = roster([{ userId: ME }, { userId: "peer" }]);
+    const next = setUnaddressedResponder(stale, "none");
+    expect(
+      next?.members.map((m) => m.unaddressedResponder)
+    ).toEqual([undefined, undefined]);
+  });
+
+  it("keeps painting a viewer's row whose setting is the falsy-looking `none`", () => {
+    const next = setUnaddressedResponder(
+      roster([{ userId: ME, unaddressedResponder: "none" }]),
+      "last_addressed"
+    );
+    expect(next?.members[0].unaddressedResponder).toBe("last_addressed");
+  });
+
+  it("leaves an unloaded roster alone", () => {
+    expect(setUnaddressedResponder(undefined, "none")).toBeUndefined();
   });
 });

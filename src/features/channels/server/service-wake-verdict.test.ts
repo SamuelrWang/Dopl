@@ -4,6 +4,19 @@ import { ownLiveAgentIds } from "./service-wake-verdict";
 
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
+/**
+ * ⚠ **RR3's THIRD INPUT SINCE 2026-09-07 (items 10 and 11): the AUTHOR'S OWN
+ * `channel_members.unaddressed_responder`, read through `./repository`.** Unmocked, that read
+ * reaches for a database that is not here and EVERY case in this file times out — which is how
+ * it failed, at exactly 7s a case, until this mock landed. ⚠ PARTIAL, never flat: this suite
+ * needs the rest of `./repository` whole, and `importOriginal` is what keeps it. ⚠ And it must
+ * not fail FAST either — the cases would then go green through `unaddressedResponderFor`'s catch
+ * rather than through the setting, which is fake coverage. The harness seeds it in `beforeEach`.
+ */
+vi.mock("./repository", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository")>()),
+  findUnaddressedResponder: vi.fn(),
+}));
 
 import * as repoSessions from "./repository-sessions";
 import {
@@ -15,6 +28,7 @@ import {
   resolve,
   roomProjection,
   sessionRow,
+  unaddressedResponder,
 } from "./service-wake-verdict-harness";
 
 /**
@@ -38,6 +52,8 @@ beforeEach(() => {
   roomProjection();
   lastAddress(null);
   recentAgentPosts();
+  // RR3's per-member setting, seeded at its default — see the `./repository` mock above.
+  unaddressedResponder();
 });
 
 /**

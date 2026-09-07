@@ -141,6 +141,20 @@ export interface PostMetadataResult {
    */
   threadTagStripped: boolean;
   /**
+   * **THE MEMBER HANDLES FOLD 9 ALREADY DERIVED**, carried out for the agent door to mint
+   * around (2026-09-07, Samuel's suffix ruling: members outrank agents).
+   *
+   * ⚠ **THE READER IS THE VERDICT, AND IT IS HERE FOR THE SAME REASON `threadTagStripped` IS.**
+   * `service-wake-verdict.ts` runs after this fold and reads its output; the member namespace is
+   * a fact this fold established off reads this request has already paid for, and re-deriving it
+   * one function later would mean a second `channel_members` + `profiles` pair on the hot write
+   * path for a body that already loaded both.
+   *
+   * ⚠ **EMPTY FOR EVERY POST THAT TAGS NOBODY**, which is the common one and the one that reads
+   * no roster at all — see `service-writes-metadata-mentions.ts › BodyMentions`.
+   */
+  memberHandles: string[];
+  /**
    * **THIS SERVER GUESSED THE `escalationAnswer` KEY OFF THE BODY** (fold 11b),
    * rather than the caller sending it (2026-09-06).
    *
@@ -455,13 +469,18 @@ export async function resolvePostMetadata(
   // tagging its own operator is that agent's escalation path, a human tagging
   // themselves is not an inbox item. The credential answers it, never the body —
   // see `service-writes-metadata-mentions.ts`.
-  const mentioned = await resolveBodyMentions(
+  // ⚠ TWO ANSWERS OFF ONE RESOLUTION SINCE 2026-09-07: the STAMPED id set, and the member
+  // HANDLES the agent door mints around. See `PostMetadataResult.memberHandles` — the second is
+  // carried rather than re-derived because the reads behind it are already spent.
+  const mentions = await resolveBodyMentions(
     input.body,
     ctx.userId,
     roster,
     ctx.source === "agent"
   );
-  if (mentioned.length > 0) metadata[MENTIONS_METADATA_KEY] = mentioned;
+  if (mentions.userIds.length > 0) {
+    metadata[MENTIONS_METADATA_KEY] = mentions.userIds;
+  }
 
   // ESCALATION (10) and its ANSWER (11). ⚠ The answer runs LAST because it is
   // the only fold that can THROW an authorization error, and a post refused
@@ -499,5 +518,10 @@ export async function resolvePostMetadata(
     );
   }
 
-  return { metadata, threadTagStripped, typedEscalationAnswer };
+  return {
+    metadata,
+    threadTagStripped,
+    memberHandles: mentions.memberHandles,
+    typedEscalationAnswer,
+  };
 }

@@ -179,10 +179,11 @@ async function callerPersonalContainerId(
 ): Promise<string | null> {
   const scope = getCallerScope();
   if (scope === null || scope.sharedCredential) return null;
-  // 🔒 TASK 11: THE SHELF IS NOW REACHABLE OR NOT, AND THIS IS WHERE BOTH SHELF
-  // READS ASK. `personal-reach.ts` is the one fence (#1077 clause (a), approved
-  // #1080): a person always reaches their own shelf, an agent in a shared room
-  // reaches it only once that room is armed.
+  // 🔓 THE SHELF IS REACHABLE OR NOT, AND THIS IS WHERE BOTH SHELF READS ASK.
+  // `personal-reach.ts` is the one fence, DEFAULT-ON since the 2026-09-06 reversal
+  // of task 11: a person always reaches their own shelf, and an agent reaches its
+  // operator's shelf from any room (shared or solo). The confidentiality of that
+  // shelf's contents is held by the session's prompt framing, not by a refusal.
   //
   // ⚠ **THE PROXY IS GONE (task 11 continuation).** This read used to infer
   // "agent" from the credential being CONTAINER-LOCKED, because `CallerScope`

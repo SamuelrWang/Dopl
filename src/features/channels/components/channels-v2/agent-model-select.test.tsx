@@ -32,9 +32,11 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import {
   AGENT_MODEL_DEFAULT,
+  AGENT_MODEL_FALLBACK,
   AGENT_MODEL_OPTIONS,
   agentModelLabel,
   agentModelOptionsFor,
+  agentModelSelection,
   agentModelShortLabel,
   normalizeAgentModel,
 } from "../../lib/agent-models";
@@ -87,21 +89,35 @@ function stubBridge(over: Record<string, unknown> = {}) {
 }
 
 describe("the model vocabulary — one map, four surfaces", () => {
-  it("carries Default plus the four models, Default first", () => {
+  /**
+   * ⚠ **THIS PINNED "Default first, then the four" UNTIL 2026-09-06** (Samuel's
+   * ruling: *"why can't we just set a value and when the user launches the agent
+   * it would just be set to that value unless they change it"*). The empty option
+   * is OFF the list, and the property that replaces it is the one the deletion put
+   * at risk: a `SelectMenu` whose `value` matches no option renders `options[0]`,
+   * so a list still carrying `""` would have let every unpicked surface read
+   * "Fable 5" over a launch that carried no model at all.
+   */
+  it("carries the four real models and NO empty option", () => {
     expect(AGENT_MODEL_OPTIONS.map((o) => o.value)).toEqual([
-      AGENT_MODEL_DEFAULT,
       "claude-fable-5",
       "claude-opus-5",
       "claude-sonnet-5",
       "claude-haiku-4-5-20251001",
     ]);
-    expect(AGENT_MODEL_OPTIONS[0].label).toBe("Default");
+    expect(
+      AGENT_MODEL_OPTIONS.some((o) => o.value === AGENT_MODEL_DEFAULT)
+    ).toBe(false);
   });
 
-  /** ⚠ THE DEFAULT WRITES NO ID. A sentinel would be a value main has to
-   *  special-case, and would make "never chosen" and "chose the default"
-   *  indistinguishable the moment the SDK default moved. */
-  it("spells Default as the ABSENCE of an id, never as a sentinel", () => {
+  /**
+   * ⚠ THE ABSENT STATE STILL WRITES NO ID — it is just no longer OFFERED. A
+   * sentinel would be a value main has to special-case, and would make "never
+   * chosen" and "chose the default" indistinguishable the moment the SDK default
+   * moved. What CHANGED is that every picker back-fills it for DISPLAY through
+   * {@link agentModelSelection} rather than showing it as a pick.
+   */
+  it("spells the absent state as the ABSENCE of an id, never as a sentinel", () => {
     expect(AGENT_MODEL_DEFAULT).toBe("");
     expect(normalizeAgentModel("")).toBeNull();
     expect(normalizeAgentModel("   ")).toBeNull();
@@ -157,10 +173,38 @@ describe("the model vocabulary — one map, four surfaces", () => {
 
   /** ⚠ It appends the CURRENT VALUE and nothing else — the four the desktop
    *  accepts stay the four an operator can PICK. */
-  it("adds nothing for a known id, for Default, or for an absent model", () => {
+  it("adds nothing for a known id, for the absent state, or for no model", () => {
     expect(agentModelOptionsFor("claude-opus-5")).toBe(AGENT_MODEL_OPTIONS);
     expect(agentModelOptionsFor(AGENT_MODEL_DEFAULT)).toBe(AGENT_MODEL_OPTIONS);
     expect(agentModelOptionsFor(null)).toBe(AGENT_MODEL_OPTIONS);
+  });
+
+  /**
+   * 🔒 **THE BACK-FILL IS WHAT REPLACED THE "Default" OPTION, SO IT IS THE PIN THAT
+   * MATTERS NOW** (2026-09-06). Every surface that used to render the empty option
+   * — the launch panel, the template sheet, the live posture strip — resolves its
+   * value through this instead, and the invariant all three need is the same one:
+   * **the answer is always a value `SelectMenu` can match.** An absent model
+   * answers `AGENT_MODEL_FALLBACK`; an id this build predates answers AS ITSELF,
+   * because `agentModelOptionsFor` appends it and replacing it with Sonnet would
+   * report a real model as the wrong one.
+   */
+  it("back-fills an absent model to the fallback, and never to `''`", () => {
+    expect(agentModelSelection(AGENT_MODEL_DEFAULT)).toBe(AGENT_MODEL_FALLBACK);
+    expect(agentModelSelection(null)).toBe(AGENT_MODEL_FALLBACK);
+    expect(agentModelSelection(undefined)).toBe(AGENT_MODEL_FALLBACK);
+    expect(agentModelSelection("   ")).toBe(AGENT_MODEL_FALLBACK);
+    expect(AGENT_MODEL_FALLBACK).toBe("claude-sonnet-5");
+    expect(
+      AGENT_MODEL_OPTIONS.some((o) => o.value === AGENT_MODEL_FALLBACK)
+    ).toBe(true);
+  });
+
+  it("returns a stored id unchanged, known or not", () => {
+    expect(agentModelSelection("claude-opus-5")).toBe("claude-opus-5");
+    expect(agentModelSelection("claude-opus-4-5-20251101")).toBe(
+      "claude-opus-4-5-20251101"
+    );
   });
 });
 
@@ -251,10 +295,17 @@ describe("the DURABLE model row on the Settings tab", () => {
     expect(modelSelect()).toBeNull();
   });
 
-  it("shows Default for an unset model and the full label for a set one", () => {
+  /**
+   * ⚠ **THIS READ "shows Default for an unset model" UNTIL 2026-09-06.** The empty
+   * option is deleted (Samuel's ruling), so an unset channel BACK-FILLS through
+   * `agentModelSelection` and the row names the model it will actually get rather
+   * than a word for the absence. The record still stores nothing until somebody
+   * picks — that half is pinned by the write case below.
+   */
+  it("back-fills an unset model to Sonnet, and shows the full label for a set one", () => {
     view({ modelSupported: true });
     expect(screen.getByLabelText("Model for agents you launch").textContent).toContain(
-      "Default"
+      "Sonnet 5"
     );
     cleanup();
     view({
@@ -266,8 +317,14 @@ describe("the DURABLE model row on the Settings tab", () => {
     );
   });
 
-  /** ⚠ Default writes `null`, never `""` — the record carries no id. */
-  it("writes an id for a model and null for Default", () => {
+  /**
+   * ⚠ **THE `null` HALF OF THIS CASE IS DELETED WITH THE "Default" OPTION**
+   * (2026-09-06). There is no menu item that clears the record any more — every
+   * option is a real model — so what is left to pin is that picking one writes
+   * its id. `normalizeAgentModel` still answers `null` for an absent value and is
+   * pinned above; nothing on this surface can reach that state by clicking.
+   */
+  it("writes an id for the model the operator picks", () => {
     const onChangePosture = vi.fn();
     view({
       modelSupported: true,
@@ -282,9 +339,12 @@ describe("the DURABLE model row on the Settings tab", () => {
     onChangePosture.mockClear();
     fireEvent.click(screen.getByLabelText("Model for agents you launch"));
     act(() => {
-      fireEvent.click(screen.getByRole("menuitem", { name: /^Default/ }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /^Sonnet 5/ }));
     });
-    expect(onChangePosture).toHaveBeenCalledWith({ model: null });
+    expect(onChangePosture).toHaveBeenCalledWith({ model: "claude-sonnet-5" });
+    // 🔒 AND NO OPTION CLEARS THE RECORD. The menu is the four real models; a
+    // "Default" item here would be the sentinel the ruling removed, back as a pick.
+    expect(screen.queryByRole("menuitem", { name: /^Default/ })).toBeNull();
   });
 
   /** The posture write is one flight for all three controls. */
@@ -383,7 +443,13 @@ describe("the LIVE model selector on a running agent", () => {
     cleanup();
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
     render(<PostureControls agent={summary()} channelId={CHANNEL_ID} taskId="t-1" />);
-    expect(screen.getByLabelText("Model for this agent").textContent).toContain("Default");
+    // ⚠ **"Default" UNTIL 2026-09-06.** A build that reports no running model now
+    // back-fills like every other picker rather than matching no option at all —
+    // an unmatched `value` renders `options[0]`, which would have claimed the agent
+    // was on Fable. See `agent-posture.tsx`'s note at the `agentModelSelection` call.
+    expect(screen.getByLabelText("Model for this agent").textContent).toContain(
+      "Sonnet 5"
+    );
   });
 });
 

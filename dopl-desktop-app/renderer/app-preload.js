@@ -171,9 +171,7 @@ contextBridge.exposeInMainWorld('dopl', {
           ...(preset && preset.runtime !== undefined ? { runtime: asMode(preset.runtime) } : {}), // ⚠ 2026-08-31 (port wave D) — WHICH AGENT RUNTIME this channel's agents launch on. It rides this record for the MODEL's exact reason and with the model's exact discipline: same decision (what MY agent starts as when I press Launch), grants nothing, reaches no gate, and an id main does not have REGISTERED clears the key rather than being stored (`main/channel-runtime.js › normalizeRuntimeId`) — where an unknown value on either AXIS rejects the whole write. The read answers `runtime` + the frozen `runtimes` descriptor table, so the SPA feature-probes an OWN KEY exactly as it does for `model` and renders NO row on a desktop that has no runtime concept. ⚠ THE KEY IS FORWARDED ONLY WHEN THE CALLER SUPPLIED ONE — a SPREAD, not `asMode(...)` unconditionally — because `''` is a REAL VALUE here (reset to the default runtime) and coercing an absent field into it would make every posture write from a surface that does not know about runtimes silently clear the channel's pick. Main's own-key test is the other half of the same rule; the two must agree or the rule has a hole at whichever end forgets.
         },
       }),
-    // AUTO-SEND (2026-08-20): the DURABLE per-channel posture for the operator's own agent's replies — unlike the single-use arm above. A boolean over the wire, nothing else.
-    getAutoSend: (channelId) => ipcRenderer.invoke('channels:getAutoSend', asId(channelId)),
-    setAutoSend: (channelId, on) => ipcRenderer.invoke('channels:setAutoSend', { channelId: asId(channelId), on: on === true }),
+    // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8): the axis they set is the launch posture's `messages` now, reachable through `getLaunchPosture` / `setLaunchPosture` above. The main-process handlers are deleted too, so a bridge method left here would invoke an unregistered channel and reject.
     // AGENT CHAINING (2026-08-31, Samuel's ruling): may an agent launched in this channel launch MORE agents? Default and fail-closed answer are both FALSE — the one-generation bound that shipped. Same boolean-only wire as auto-send; it lifts a DEPTH bound and grants nothing (`main/channel-prefs.js › getAgentChain`).
     getAgentChain: (channelId) => ipcRenderer.invoke('channels:getAgentChain', asId(channelId)),
     setAgentChain: (channelId, on) => ipcRenderer.invoke('channels:setAgentChain', { channelId: asId(channelId), on: on === true }),
@@ -206,37 +204,22 @@ contextBridge.exposeInMainWorld('dopl', {
     set: (e) => ipcRenderer.invoke('orchestrator:setDirectEnabled', { enabled: e === true }),
   },
 
-  // ── ⚠ THE TURN CAP (2026-09-05, task 9b; Samuel's #1098 via #1101 4b, ruled in #1177) ──────
-  // The loop-safety brake, per machine: how many turns a session may take before it ends itself.
-  // ⚠ ITS OWN NAMESPACE FOR THE TOGGLES' REASON — it takes no channel. One operator, one Mac,
-  // one answer. Both members are FEATURE-PROBED, and an older main simply has no turn-cap
-  // concept, which the SPA reads as no row rather than as an inert one.
-  // ⚠ THIS BRIDGE IS THE ONLY WAY THE VALUE MOVES, and that is security content, not storage:
-  // `set(0)` REMOVES the brake, so a server-stored version of this key could be flipped by an
-  // agent holding the operator's own device token (§6) to give itself unbounded turns on this
-  // Mac. There is no route, no MCP op and no column for it, deliberately.
-  // ⚠ THREE STATES, AND THEY ARE NOT INTERCHANGEABLE — a control that flattens them lies:
-  //     cap === null → UNSET. The documented defaults apply, and WHICH one depends on the
-  //                    issuer: `operatorDefault` for a session the operator launched,
-  //                    `agentDefault` for one an agent launched.
-  //     cap === 0    → UNLIMITED. No cap at all, on either kind of session.
-  //     cap > 0      → that many turns, for EVERY session on this machine, either kind.
-  // ⚠ THE TWO DEFAULTS RIDE THE READ rather than being retyped in the SPA: they are declared once
-  // in `main/session-state.js` and the tree pins each to a single statement
-  // (`test/turn-cap-issuer.test.mjs`). Render them, do not restate them.
-  // ⚠ IT APPLIES TO NEW SESSIONS. A running session read its cap at launch and re-reads nothing;
-  // the label must say so, or the control claims an effect it does not have.
-  // ⚠ `set` ANSWERS MAIN'S OWN VALUE, never an echo — `{ok, cap, operatorDefault, agentDefault}`,
-  // with `cap` the value the store really holds either way. `ok:false` means the write did not
-  // take (an unrecognised value writes NOTHING), so an optimistic box reverts to `cap` rather
-  // than displaying a number nothing is enforcing.
-  // ⚠ `null` IS A REAL REQUEST AND MEANS "CLEAR IT" — the only way back to unset. An ABSENT
-  // argument is not: `set()` sends `null` explicitly, so there is no shape here that means
-  // "clear" by accident.
-  turnCap: {
-    get: () => ipcRenderer.invoke('settings:getTurnCap'),
-    set: (cap) => ipcRenderer.invoke('settings:setTurnCap', { cap: cap === undefined ? null : cap }),
-  },
+  // 🔒 `turnCap.get` / `turnCap.set` STOOD HERE AND ARE DELETED (2026-09-07, Samuel's ruling:
+  // "Remove the turn/cost limit"). They were the machine-wide loop-safety brake — one operator,
+  // one Mac, one answer — in their own channel-less namespace, with a three-state value (unset /
+  // 0 = unlimited / N) and the two issuer-keyed defaults riding the read.
+  //
+  // ⚠ THEY WERE A LIVE DEFECT FOR THE LENGTH OF ONE PASS, and that is the reason this teardown is
+  // its own item rather than tidying: the main-process handlers `settings:getTurnCap` /
+  // `settings:setTurnCap` were unregistered in `main/channel-dir-ipc.js` while these two bindings
+  // stayed — so the SPA's row could still call them, and an `invoke` with no registered handler
+  // REJECTS. The row's own catch turned that into "reads as unset", i.e. a control that silently
+  // showed a posture nothing enforced.
+  //
+  // ⚠ NO DECLARED-OPTIONAL STUB IN THEIR PLACE, which is the auto-send teardown's discipline: the
+  // SPA feature-probed this bridge member and rendered NO ROW when it was absent, so absence was
+  // already the designed answer. A method left here answering `null` would be an op that exists
+  // to say it does nothing. The SPA's row, its hook and its suite are deleted in the same change.
 
   // ── ⚠ SIGN IN TO CLAUDE CODE, FROM INSIDE THE APP (2026-08-25) ───────────────────────────
   //

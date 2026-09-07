@@ -9,7 +9,8 @@ import {
   renderWithProviders,
 } from "#/test-utils/bridge";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
-import { EMPTY_AGENT_POSTURE } from "@/features/channels/lib/agent-posture";
+// ⚠ `EMPTY_AGENT_POSTURE` no longer imported (2026-09-07) — `Channel.agentPosture` is deleted
+// with the channel ceiling (items 12, 13, 14) and this was its last reference here.
 import type {
   Channel,
   ChannelMember,
@@ -155,8 +156,8 @@ export const CHANNEL: Channel = {
   // The card as shipped — nothing hidden, nothing added. Suites that exercise
   // the × or the add row override it (`person-info-tab.test.tsx`).
   infoCard: EMPTY_INFO_CARD,
-  agentPosture: EMPTY_AGENT_POSTURE,
-  defaultResponderAgentName: null,
+  // ⚠ `agentPosture` (2026-09-06, items 12/13/14) and `defaultResponderAgentName` (2026-09-07,
+  // items 10/11) BOTH LEFT THIS FIXTURE with their fields.
 };
 
 /** The container's roster, as `GET /api/channels/{id}/members` answers it — the

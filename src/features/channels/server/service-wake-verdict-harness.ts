@@ -3,6 +3,7 @@ import type { SessionStateRow } from "./collab-dto";
 import { resolveWakeVerdict } from "./service-wake-verdict";
 import type { ChannelContext } from "./service-shared";
 import type { ChannelRow, ChannelMessageRow } from "./dto";
+import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
 
@@ -146,6 +147,25 @@ export interface ResolveOpts {
 
 /** One post, resolved. `metadata` is the fold's OUTPUT, which is what the
  *  resolver reads — never the caller's raw input. */
+/**
+ * **THE AUTHOR'S OWN `channel_members.unaddressed_responder`** — RR3's third input since
+ * 2026-09-07 (Samuel's ruling on items 10 and 11), read through `./repository`.
+ *
+ * ⚠ **IT ANSWERS THE RAW COLUMN, NOT THE COERCED VALUE**, because that is what the repository
+ * returns and `normalizeUnaddressedResponder` is the caller's job — seeding the coerced value
+ * would lift the coercion out of the path these suites drive.
+ *
+ * ⚠ **EACH SUITE STILL DECLARES ITS OWN `vi.mock("./repository", …)`, PARTIAL**, for the reason
+ * the other two mocks are declared per suite (hoisting) and for one more: `./repository` is a
+ * module these suites also need whole, so a flat mock would replace every other read with it.
+ * Without the mock the read reaches for a database that is not there and every case in the file
+ * TIMES OUT — and if it failed fast instead, the cases would go green through
+ * `unaddressedResponderFor`'s catch rather than through the setting, which is worse.
+ */
+export function unaddressedResponder(value: string | null = "last_addressed"): void {
+  vi.mocked(repo.findUnaddressedResponder).mockResolvedValue(value);
+}
+
 export function resolve(
   body: string,
   metadata: Record<string, unknown> = {},

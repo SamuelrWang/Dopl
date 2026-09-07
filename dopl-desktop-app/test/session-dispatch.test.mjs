@@ -443,15 +443,23 @@ test("the three MEMBER verdicts route on WHOSE machine this is", () => {
   }
 });
 
-test("an UNRESOLVED agent half falls back to the body parse — nothing is silenced", () => {
-  // ⚠ **`null` IS NOT `[]`** (INVARIANTS §5). The server names handles it could not resolve — a
-  // PEER's agent, or a projection row not yet pushed — and answers `null`; this machine knows the
-  // agent and still routes to it. `[]` there would silence a live agent, and the verdict's own
-  // word (`thread`) would have fed the sibling as well.
+test("an UNRESOLVED agent half on a VERDICT-BEARING row no longer re-parses the body", () => {
+  // ⚠ REWRITTEN 2026-09-07, AND THE OLD PIN IS WORTH STATING. It read "an UNRESOLVED agent half
+  // falls back to the body parse — nothing is silenced": `null` is not `[]` (INVARIANTS §5), the
+  // server names handles it could not resolve, and this machine parsed the body and woke the
+  // agent it knew. That fallback ran on ANY row whose agent half was unresolved, and it unbought
+  // the code and markup MASKS — `mentionedAgentIds` masks nothing, so a body quoting a live
+  // handle inside backticks alongside one dead handle made the server answer `null` and woke the
+  // fenced agent. The parse is now reached only on a row NO SERVER RULED ON (`storedVerdict` ===
+  // ''), which needs no second copy of the masks. `session-dispatch-mask-fallback.test.mjs` owns
+  // both directions of that narrowing and `session-dispatch.js › planFor` states what it costs.
   const h = harness({ agents: both() });
   h.feedLiveSession(entry, verdictMsg("thread", { recipientAgentIds: null, body: `@agent-${A1} urgent` }), ME);
-  assert.deepEqual(fedIds(h), [A1], "the parse answered, and it narrowed exactly as a verdict does");
-  assert.equal(h.calls.feedInbound[0].wake, true);
+  // The VERDICT still routes it: `thread` is "the sessions already working this thread hear it",
+  // so both are fed as CONTEXT and — the part that matters — neither is woken by an unmasked
+  // regex reading a handle the server declined to resolve.
+  assert.deepEqual(fedIds(h), [A1, A2], "the verdict's own word routes it, not a local re-parse");
+  assert.deepEqual(h.calls.feedInbound.map((c) => c.wake), [false, false], "and nobody is woken");
 });
 
 test("the server's EMPTY answer is executed, never re-derived", () => {

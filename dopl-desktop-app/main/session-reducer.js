@@ -16,8 +16,11 @@
 // with no `require` in scope, exactly as before the splits.
 const { gatePhase, gateActivity, endedEmit, endEffects, modesEmit, parkEffects, terminalBody } = require('./session-effects');
 const {
-  DEFAULT_TURN_CAP, DEFAULT_IDLE_MS, DEFAULT_COST_CAP_USD, TOOL_MODES, MESSAGE_MODES,
-  coerceMode, initialSessionState, nextIdleMs, idleTimeout, turnCapReached, costCapReached,
+  DEFAULT_IDLE_MS, TOOL_MODES, MESSAGE_MODES,
+  // 2026-09-07: `DEFAULT_TURN_CAP`, `DEFAULT_COST_CAP_USD`, `turnCapReached` and `costCapReached`
+  // were imported here and enforced at every `result` event. Deleted with the caps — see
+  // `session-state.js`'s header.
+  coerceMode, initialSessionState, nextIdleMs, idleTimeout,
 } = require('./session-state');
 
 // ─── BEGIN SESSION-REDUCER (pure; unit-tested via source extraction) ─────────
@@ -235,12 +238,11 @@ function sessionReducer(state, event) {
     // that a live switch never produces. Absent (an older event) keeps what we had.
     const model = typeof event.model === 'string' && event.model ? event.model : state.model;
     const ns = clone(state, { turns: turns, costUsd: costUsd, model: model, postedThisTurn: false, postedToolUseIds: [] });
-    if (turnCapReached(ns)) {
-      return { state: clone(ns, { phase: 'ended' }), effects: endEffects(ns, 'ended', 'turn_cap') };
-    }
-    if (costCapReached(ns)) {
-      return { state: clone(ns, { phase: 'ended' }), effects: endEffects(ns, 'ended', 'cost_cap') };
-    }
+    // 🔒 THE TWO CAP CHECKS STOOD HERE AND ARE DELETED (2026-09-07, Samuel's ruling). A `result`
+    // event no longer ends a session for turn count or spend; it only updates the counters and
+    // arms the idle timer. Nothing below this line bounds a looping agent — the SDK's
+    // `maxTurns` backstop in `runtime/claude/launch-spec.js` is the only remaining stop, and it
+    // is a crash guard rather than a ceiling.
     // Item 3: a turn that POSTED is waiting on a reply; otherwise idle. This REPLACES the usage emit.
     const activity = state.postedThisTurn ? 'awaiting_peer' : 'idle';
     return {
@@ -453,9 +455,8 @@ function sessionReducer(state, event) {
     return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'inactive') };
   }
 
-  if (type === 'cost_cap') {
-    return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'cost_cap') };
-  }
+  // 2026-09-07: a `cost_cap` ACTION ended the session here — the externally-dispatched twin of
+  // the `result`-path check. Deleted with the caps; no producer dispatches it any more.
 
   if (type === 'crash') {
     // FIX #1a: PARK is the only path that aborts the query WITHOUT settling, so the torn-down
@@ -488,13 +489,11 @@ function sessionReducer(state, event) {
 // ─── END SESSION-REDUCER ─────────────────────────────────────────────────────
 
 module.exports = {
-  DEFAULT_TURN_CAP,
+  // 2026-09-07: DEFAULT_TURN_CAP, DEFAULT_COST_CAP_USD, turnCapReached and costCapReached were
+  // re-exported here for the engine and the dispatch. All four are deleted with the caps.
   DEFAULT_IDLE_MS,
-  DEFAULT_COST_CAP_USD,
   initialSessionState,
   sessionReducer,
   nextIdleMs,
   idleTimeout, // M2: the ONE timer decision (bound + event), re-exported for session-engine
-  turnCapReached,
-  costCapReached,
 };

@@ -77,15 +77,15 @@ function setSelfIdentity(id) { selfUserId = id || null; }
 // `result`. `spec.turnCap` is the cap that session was launched under, persisted beside the turn
 // and cost counters it bounds (FIX #9's argument, one field wider), and it wins here for the same
 // reason those two do. A fresh launch carries none and reads the setting.
-function readCaps(spec) {
+// 🔒 2026-09-07: this read THREE settings and now reads ONE. The turn cap and the cost cap are
+// deleted (Samuel's ruling), so there is nothing to resume, nothing to key on `launchDepth`, and
+// no reason for a launched session to carry either number. The rehydrate argument above applied
+// to a cap that no longer exists; the idle TTL never had it, because parking is not ending.
+// ⚠ THE FUNCTION IS KEPT RATHER THAN INLINED so the one remaining read still has a named home and
+// the next setting to arrive has somewhere obvious to go.
+function readCaps(spec) { // eslint-disable-line no-unused-vars -- `spec` kept: see above
   if (!settings) return {};
-  const s = spec || {};
-  const resumed = Number(s.turnCap);
-  return {
-    turnCap: Number.isFinite(resumed) && resumed > 0 ? Math.floor(resumed) : settings.getTurnCap(s.launchDepth),
-    idleMs: settings.getIdleTtlMs(),
-    costCapUsd: settings.getCostCapUsd(),
-  };
+  return { idleMs: settings.getIdleTtlMs() };
 }
 
 // Rebuild the tray after a session is hidden / reopened / settled. Lazy-required so the engine holds no top-level tray dependency (tray requires nothing back).

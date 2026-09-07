@@ -26,7 +26,7 @@
 
 // ⚠ FIXED TEXT BLOCKS live in prompt-framing-text.js: what the agent is TOLD changes on a
 // different clock from how a turn is ASSEMBLED. Nothing is interpolated into any of them.
-const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING } = require('./prompt-framing-text');
+const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY } = require('./prompt-framing-text');
 // The id charset, so a value that is not one is never printed as though it were an address.
 const { AGENT_ID_RE } = require('./agent-id');
 
@@ -401,6 +401,8 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
       ``,
       ...CONCISION,
       ``,
+      ...PERSONAL_KNOWLEDGE_CONFIDENTIALITY,
+      ``,
       ...deliverySection('requester', ctx),
       milestoneGuidance({ hasPostingTool: true }),
       ``,
@@ -447,6 +449,8 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
     ``,
     ...CONCISION,
     ``,
+    ...PERSONAL_KNOWLEDGE_CONFIDENTIALITY,
+    ``,
     ...counterpartyFraming(ctx),
     ``,
     ...deliverySection('responder', ctx),
@@ -475,4 +479,5 @@ module.exports = {
   PROSE_RULE, // prose is a message, final answer included — asserted on every branch
   VOCABULARY, // the kinds are not an interchangeable list (prompt-framing-text.js)
   CONCISION, // 2026-08-21: the standing style default (Samuel's ruling)
+  PERSONAL_KNOWLEDGE_CONFIDENTIALITY, // 2026-09-06: read your operator's shelf, never leak it
 };

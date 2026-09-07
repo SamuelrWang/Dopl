@@ -117,59 +117,23 @@ function failed(err: unknown, fallback: string) {
   toast({ title: err instanceof ChannelApiError ? err.message : fallback });
 }
 
-/**
- * **THE TWO CHANNEL-AGENT SETTINGS** (2026-09-02, v2 wave B slice B4 — rulings
- * B1/B6 and F-449): the default responder and the posture ceiling.
- *
- * ⚠ **ONE DRAFT AND ONE CONFIG FOR BOTH**, because they are one PATCH to one
- * row behind one manage gate. Two configs would be two writes racing the same
- * cache entry for a panel whose controls sit two rows apart.
- *
- * ⚠ **`null` IS A VALUE ON EVERY FIELD HERE AND `undefined` IS "UNCHANGED"** —
- * the distinction `service-writes.ts › updateChannel` keeps, restated because
- * this is where it would be lost: a draft that collapsed the two could never
- * REMOVE a ceiling or withdraw a nomination.
- *
- * ⚠ **NO OPTIMISTIC PATCH.** The other configs in this file patch the list cache
- * because a header pill reads the value; nothing renders these two outside the
- * panel that just set them, and the PATCH answers with the caller-relative
- * channel, so the reconcile below IS the update. An optimistic stamp here would
- * be a claim about a manage gate this client cannot evaluate.
- */
-export interface ChannelAgentSettingsDraft {
-  channelId: string;
-  defaultResponderAgentName?: string | null;
-  agentPosture?: {
-    tools?: string | null;
-    messages?: string | null;
-    chain?: boolean | null;
-  };
-}
-
-export function channelAgentSettingsConfig(
-  deps: LifecycleWriteDeps
-): UseApiMutationConfig<ChannelAgentSettingsDraft, { channel: Channel }> {
-  return {
-    request: (draft) => {
-      const { channelId, ...patch } = draft;
-      return {
-        path: channelPath(channelId),
-        method: "PATCH",
-        workspaceId: deps.workspaceId,
-        body: patch,
-      };
-    },
-    reconcile: (data) =>
-      patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
-        patchChannel(cache, data.channel.id, data.channel)
-      ),
-    invalidate: () => [channelKeys.list().all],
-    settleWith: deps.gate,
-    // ⚠ The server's own sentence, not a generic one: a refusal here is a
-    // MANAGE refusal or a handle-grammar 400, and both name what to do.
-    onError: (err) => failed(err, "Couldn't update the channel"),
-  };
-}
+// ⚠ **`ChannelAgentSettingsDraft` AND `channelAgentSettingsConfig` ARE DELETED (2026-09-07,
+// Samuel's ruling on items 10 and 11).** They were the ONE draft and ONE config behind BOTH
+// channel-agent settings, held together because the two were one PATCH to one row behind one
+// manage gate. Neither setting survives on the channel:
+//
+//   · `agentPosture` — the posture CEILING — went on 2026-09-06 (items 12, 13, 14). No room
+//     bounds a peer's agent on any axis now.
+//   · `defaultResponderAgentName` — the room-wide responder pin — goes here. The question is
+//     PER MEMBER (*"if there's another member in the room, their last agent address would be
+//     different from my last agent address"*), so its write is a `PATCH /members` against the
+//     caller's own row and lives with the other per-member preferences in
+//     `use-channel-preference-writes.ts`, not in this lifecycle hook.
+//
+// ⚠ WHAT THE DELETION MUST NOT TAKE WITH IT is the rule this docblock stated, because the rest
+// of the file still keeps it: **`null` is a VALUE on every field and `undefined` is
+// "unchanged"** (`service-writes.ts › updateChannel`). It survives on `infoCard` and on
+// `archived`, and a draft that collapsed the two could not express a removal at all.
 
 export function archiveConfig(
   deps: LifecycleWriteDeps
@@ -380,10 +344,9 @@ export function useChannelLifecycleWrites({
     channelRequest,
     leaveConfig(deps)
   );
-  const agentSettings = useApiMutationWith<
-    ChannelAgentSettingsDraft,
-    { channel: Channel }
-  >(channelRequest, channelAgentSettingsConfig(deps));
+  // ⚠ THE `agentSettings` MUTATION IS DELETED (2026-09-07, items 10 and 11) — its last field
+  // went with the room-wide responder, and a mutation whose draft is only a `channelId` is a
+  // PATCH with nothing to say.
 
   return {
     toggleArchive: () => {
@@ -421,28 +384,20 @@ export function useChannelLifecycleWrites({
         visibility: channel.visibility,
       });
     },
-    /** RR3's nomination. `null` withdraws it. */
-    setDefaultResponder: (handle: string | null) => {
-      if (!channel) return;
-      agentSettings.mutate({
-        channelId: channel.id,
-        defaultResponderAgentName: handle,
-      });
-    },
-    /** The channel's posture CEILING, per axis (F-449's missing surface). */
-    setAgentCeiling: (patch: NonNullable<ChannelAgentSettingsDraft["agentPosture"]>) => {
-      if (!channel) return;
-      agentSettings.mutate({ channelId: channel.id, agentPosture: patch });
-    },
-    /** True while a channel-agent setting is being written. */
-    agentSettingsPending: agentSettings.pending,
+    // ⚠ `setDefaultResponder` AND `agentSettingsPending` REMOVED 2026-09-07 (items 10 and 11),
+    // together with the whole `agentSettings` mutation — see the deleted config above. The
+    // responder question is PER MEMBER now, so its write is a `PATCH /members` and lives with
+    // the other per-member preferences in `use-channel-preference-writes.ts`. Nothing about it
+    // belongs to a CHANNEL LIFECYCLE any more, which is what this hook is for.
+    // ⚠ `setAgentCeiling` REMOVED 2026-09-06 (items 12, 13, 14). It was F-449's missing
+    // surface — the channel ceiling had a server clamp and no editor — and it existed for
+    // four days. The ceiling is deleted end to end now, so the surface has nothing to edit.
     /** True while any lifecycle write is in flight. */
     pending:
       archive.pending ||
       visibility.pending ||
       remove.pending ||
       joinChannel.pending ||
-      leaveChannel.pending ||
-      agentSettings.pending,
+      leaveChannel.pending,
   };
 }

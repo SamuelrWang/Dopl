@@ -56,6 +56,7 @@ import { AgentRequestPanel } from "./composer-request-panel";
 import { useThreadRequest } from "./use-thread-request";
 import { MentionPopover } from "./composer-mentions";
 import { ComposerRecipients } from "./composer-recipients";
+import { ComposerTint } from "./composer-tint";
 import { useComposerMentions } from "./use-composer-mentions";
 import type { LiveAgentSession } from "../../lib/draft-recipients";
 import type { AgentLaunchControls } from "./use-agents-panel";
@@ -86,7 +87,6 @@ export function ChannelsV2Composer({
   openThreadId = null,
   newThreadSignal = 0,
   liveAgents = EMPTY_LIVE_AGENTS,
-  defaultResponderAgentName = null,
   recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
 }: {
@@ -121,9 +121,11 @@ export function ChannelsV2Composer({
    * sessions read; the picker then offers members only.
    */
   liveAgents?: readonly LiveAgentSession[];
-  /** The channel's nominated responder (`channels.default_responder_agent_name`) — what RR3 arm 1
-   *  reads, and what the recipient line names when the draft tags nobody. */
-  defaultResponderAgentName?: string | null;
+  // ⚠ **`defaultResponderAgentName` IS GONE FROM THIS PROP CHAIN (2026-09-07, items 10 and
+  // 11).** It was the channel's room-wide nomination, threaded down from the channel row so
+  // the recipient line could state RR3 arm 1. The question is PER MEMBER now, so
+  // `ComposerRecipients` reads it off the VIEWER'S OWN roster row — a roster this surface
+  // already passes for the @-picker — and no host has to remember to hand it over.
   /** RR3 arm 3's input — the room's recent agent posters, newest first. */
   recentAgentIds?: readonly string[];
   /** RR1's answer for a thread composer: the exchange's OTHER party. `null` in the main room. */
@@ -155,6 +157,23 @@ export function ChannelsV2Composer({
 
   // THE @-PICKER — `use-composer-mentions.ts` (the §1 split at the cap, 2026-08-27).
   const mentions = useComposerMentions({ draft, setDraft, members, sessions: liveAgents, currentUserId });
+
+  /**
+   * THE TINT (2026-09-07, Samuel: blue = *"will route to an agent"*) — the SAME question
+   * `ComposerRecipients` answers in words one row down, asked per token and answered in place.
+   * Same roster, same live agents, same index (`lib/draft-recipients.ts › draftAgentIndex`), so
+   * the line and the colour cannot disagree about who a draft reaches. The RULE is
+   * `composer-tint.tsx`'s; this file states only that the field wears it.
+   *
+   * ⚠ **NAMED HERE RATHER THAN INLINED AT THE PROP, AND NOT FOR TIDINESS.**
+   * `composer-input.test.ts` pins the bare mount by matching `<ComposerInputRow …/>` up to the
+   * FIRST `/>`, so a self-closing element written inside that JSX truncates the slice the
+   * assertion reads — the pin would still pass while covering less than it claims to. A function
+   * reference keeps the element's own props the only thing between those two tags.
+   */
+  const tintDraft = (value: string) => (
+    <ComposerTint text={value} members={members} sessions={liveAgents} />
+  );
 
   /**
    * DICTATION — the Mic glyph's engine (`use-dictation.ts`, which owns every rule about it).
@@ -331,7 +350,6 @@ export function ChannelsV2Composer({
               members={members}
               sessions={liveAgents}
               currentUserId={currentUserId}
-              defaultResponderAgentName={defaultResponderAgentName}
               recentAgentIds={recentAgentIds}
               threadOtherParty={threadOtherParty}
             />
@@ -368,6 +386,7 @@ export function ChannelsV2Composer({
               onKeyDown={(e) => mentions.keyDown(e, submit)}
               placeholder="Write a message"
               ariaLabel="Message"
+              highlight={tintDraft}
             />
           )}
 

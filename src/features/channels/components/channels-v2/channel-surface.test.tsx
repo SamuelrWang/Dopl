@@ -106,6 +106,9 @@ vi.mock("../../hooks/use-channel-preference-writes", () => ({
     favorite: { mutate: () => {} },
     consent: { mutate: () => {}, pending: false },
     toolProfile: { mutate: () => {}, pending: false },
+    // 2026-09-07 (items 10/11): `channel-manage.tsx` reads `.pending` off this one, so a double
+    // without the key throws where the real hook cannot.
+    unaddressedResponder: { mutate: () => {}, pending: false },
   }),
 }));
 vi.mock("../../hooks/use-channel-lifecycle-writes", () => ({
@@ -365,19 +368,43 @@ describe("StandaloneChannelSurface — the viewer's own stake", () => {
     expect(screen.queryByTestId("agent-settings")).toBeNull();
   });
 
-  it("the guest preset's empty Settings tab speaks to a MEMBER, not a joiner", async () => {
-    // Both flags off is the guest lane whole. The tab falls to its empty
-    // state, and the description must not tell a member to "join" — that
-    // sentence belongs to a non-member browsing a public channel.
+  /**
+   * ⚠ **THIS ASSERTED THE EMPTY STATE FOR A MEMBER UNTIL 2026-09-07, AND A MEMBER
+   * CANNOT REACH IT ANY MORE** (Samuel's ruling on items 10 and 11).
+   *
+   * The guest preset — both management flags off — used to leave the Settings tab with
+   * nothing in it, and the case pinned that the empty state's copy said "no settings for
+   * you to change" rather than telling a member to "join". What changed is that the tab
+   * is no longer empty for a member: `channel_members.unaddressed_responder` is the
+   * member's OWN rule for their OWN untagged messages, so `channel-manage.tsx` gates it
+   * on `channel.isMember` and NOT on either management flag — *"gating it behind
+   * `canManage` would hide a personal setting from every non-member while the server went
+   * on honouring it."*
+   *
+   * ⚠ SO THE CASE NOW PINS THE RULING ITSELF: the guest lane keeps the member's personal
+   * control while taking every management affordance away. That is the assertion worth
+   * having — a regression here is a setting the server honours and the tab hides.
+   */
+  it("the guest preset keeps the member's OWN responder rule, and no management", async () => {
     mount({
       ...asMember,
       capabilities: { memberManagement: false, selfManagement: false },
     });
     fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
-    expect(await screen.findByText("Nothing to manage")).toBeTruthy();
+    // The personal control survives both flags being off.
     expect(
-      screen.getByText("This channel has no settings for you to change.")
+      await screen.findByLabelText(
+        "Who answers my unaddressed messages in this channel"
+      )
     ).toBeTruthy();
+    // ...and the tab is therefore NOT the empty state any more.
+    expect(screen.queryByText("Nothing to manage")).toBeNull();
+    // Management is still gone, which is what the guest preset is for.
+    expect(screen.queryByText("Add members")).toBeNull();
+    expect(screen.queryByTestId("agent-settings")).toBeNull();
+    // ⚠ AND THE JOINER SENTENCE STILL BELONGS TO A NON-MEMBER ONLY. It is the half of
+    // the original case that survives the ruling, and it is a false sentence to show a
+    // member however the tab is populated.
     expect(screen.queryByText(/Join this channel/)).toBeNull();
   });
 });

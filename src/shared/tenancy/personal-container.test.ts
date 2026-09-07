@@ -39,9 +39,11 @@ const CONTAINER = "33333333-3333-4333-8333-333333333333";
 let filters: Array<[string, unknown]>;
 let tables: string[];
 
-/** ⚠ The AGENT lanes reach `personal-reach.ts`, which awaits two more reads —
- *  the member count and the arming probe. Both answer off this builder so the
- *  fence runs for real rather than being mocked past. */
+/** ⚠ RETIRED READS, KEPT TOLERATED (2026-09-06 reversal). `personal-reach.ts`
+ *  no longer probes the member count or the arming table — reach is default-on —
+ *  so no test drives these now. The builder still answers them harmlessly, so a
+ *  regression that re-issues either read shows up as a table in `tables` rather
+ *  than as a throw. */
 let memberCount: number | null;
 let armedChannels: string[];
 
@@ -202,60 +204,38 @@ describe("resolveShelfScope — one container, or none", () => {
 });
 
 /**
- * 🔒 **BOTH SHELF READS ASK `personal-reach.ts`, AND THIS IS WHERE THAT SHOWS.**
+ * 🔓 **BOTH SHELF READS ASK `personal-reach.ts`, AND THIS IS WHERE THAT SHOWS.**
  * The fence's own directions are driven in `personal-reach.test.ts`; what is
- * pinned here is that the shelf reads GO THROUGH IT — a caller-scope field, not
- * a credential shape, decides, and a closed answer is EMPTY rows rather than a
- * refusal, so arming state is never an oracle.
+ * pinned here is that the shelf reads GO THROUGH IT. Since the 2026-09-06
+ * reversal the fence is DEFAULT-ON: an agent reaches its operator's shelf from
+ * any room, and the confidentiality of that shelf's contents is a prompt rule,
+ * not a refusal — so these reads never probe `channel_personal_arming`.
  */
-describe("🔒 an AGENT's shelf reads are gated by the room", () => {
+describe("🔓 an AGENT's shelf reads are open from any room (default-on)", () => {
   const inRoom = { source: "agent" as const, credentialWorkspaceId: WORKSPACE };
 
-  it("closes the personal shelf in an unarmed shared room — no rows, no refusal", async () => {
+  it("opens the personal shelf in a shared room — no member count, no arming probe", async () => {
     callerIs(USER, false, inRoom);
-    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [],
-    });
-    // ⚠ The SAME answer a caller with no container gets. That identity is the
-    // 404-never-403 property, driven rather than argued.
-    expect(tables).toContain("channel_personal_arming");
-  });
-
-  it("closes the WIDENING too, so an unarmed room enumerates the room alone", async () => {
-    // 🔒 GAP 1 OVER GAP 3, in the order #1077 requires: widening enumeration
-    // over an open clause 3 turns a latent reach into a discoverable one.
-    callerIs(USER, false, inRoom);
-    expect(await resolveShelfScope(WORKSPACE, undefined)).toEqual({
-      workspaceIds: [WORKSPACE],
-    });
-  });
-
-  it("opens both reads once the owner has armed the room", async () => {
-    callerIs(USER, false, inRoom);
-    armedChannels = ["66666666-6666-4666-8666-666666666666"];
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
       workspaceIds: [CONTAINER],
     });
+    // ⚠ MUTATION CHECK: re-growing the task-11 narrowing would put these reads
+    // back on the shelf lane.
+    expect(tables).not.toContain("channel_personal_arming");
+    expect(tables).not.toContain("workspace_members");
+  });
+
+  it("widens enumeration to include the shelf, from a shared room", async () => {
+    callerIs(USER, false, inRoom);
     expect(await resolveShelfScope(WORKSPACE, undefined)).toEqual({
       workspaceIds: [WORKSPACE, CONTAINER],
     });
   });
 
-  it("leaves a SOLO container open, which is today's behaviour unchanged", async () => {
-    callerIs(USER, false, inRoom);
-    memberCount = 1;
-    expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
-      workspaceIds: [CONTAINER],
-    });
-    expect(tables, "a solo room never probes the arming table").not.toContain(
-      "channel_personal_arming"
-    );
-  });
-
   it("🔒 reads the ASKER off the scope, not off the lock", async () => {
     // ⚠ MUTATION CHECK FOR THE RETIRED PROXY. This module used to infer "agent"
-    // from `credentialWorkspaceId` being set; a locked HUMAN session must now
-    // reach their own shelf, and an UNLOCKED agent must still be gated.
+    // from `credentialWorkspaceId` being set. A locked HUMAN session reaches
+    // their own shelf and pays for exactly one read.
     callerIs(USER, false, { source: null, credentialWorkspaceId: WORKSPACE });
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
       workspaceIds: [CONTAINER],
