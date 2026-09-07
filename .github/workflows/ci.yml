@@ -350,9 +350,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ⚠ PINNED, NOT `latest`. Resolving "latest" is an unauthenticated GitHub
+      # API call inside the action, and it fails the whole job with "rate limit
+      # exceeded" before a single test runs (2026-09-07 on 3171593b). The pin
+      # is the version CI was already resolving to; bump it deliberately.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.116.0
 
       # `db reset` applies every migration in `supabase/migrations` in filename
       # order. It is the gate as much as the setup: a migration that cannot
