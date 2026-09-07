@@ -204,6 +204,14 @@ export async function isOwnPersonalContainer(
  * refuse to name a fresh container or overwrite one a user already named.
  */
 export const PERSONAL_CONTAINER_PLACEHOLDER_NAME = "Personal";
+/**
+ * What the personal container is called once onboarding lands and the user
+ * typed nothing. "Home" is the word the product already uses for this space
+ * (the Home pane, home channels, `/home`); a name shaped like a workspace
+ * ("<First>'s Workspace") was read by agents as one (Samuel, 2026-09-06).
+ * Existing rows were backfilled to it the same day.
+ */
+export const PERSONAL_CONTAINER_DEFAULT_NAME = "Home";
 
 /**
  * Onboarding helper: name the caller's home, + optional description.

@@ -126,6 +126,14 @@ export declare function createWorkspaceDirectory(client: DoplClient, options?: W
  * containers (B10) without ever calling one a workspace.
  */
 export type ContainerKind = "workspace" | "home channel" | "personal";
+/**
+ * How a kind is RENDERED in a directory row. The personal container is the one
+ * an agent keeps mistaking for a workspace (Samuel, 2026-09-06: "Samuel's
+ * Workspace" read as the home space, and the home space read as a workspace),
+ * so its label says what it serves as, in words that cannot be read as a
+ * second workspace: it is the caller's default, and it is not a workspace.
+ */
+export declare function containerKindLabel(kind: ContainerKind): string;
 export declare function containerKind(row: {
     kind?: WorkspaceKind;
 }): ContainerKind;

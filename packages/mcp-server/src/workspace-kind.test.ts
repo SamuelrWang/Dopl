@@ -31,7 +31,11 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 }));
 
 import { bootServer } from "./factory.js";
-import { containerKind, createWorkspaceDirectory } from "./workspace-directory.js";
+import {
+  containerKind,
+  containerKindLabel,
+  createWorkspaceDirectory,
+} from "./workspace-directory.js";
 
 function wsItem(
   id: string,
@@ -131,6 +135,18 @@ describe("WorkspaceDirectory — listing vs resolution", () => {
     expect(containerKind(LINK_A)).toBe("home channel");
     expect(containerKind({ kind: "personal" })).toBe("personal");
     expect(containerKind({ kind: "vault" as never })).toBe("workspace");
+  });
+
+  it("renders the personal container as the caller's home space, never as a workspace (Samuel, 2026-09-06)", () => {
+    // The row is what an agent reads to pick a container. "personal" alone was
+    // skipped over, and a workspace-shaped NAME beside it was read as a second
+    // workspace — so the label says what the container serves as, and says
+    // what it is not.
+    const label = containerKindLabel("personal");
+    expect(label).toBe("home space (your default; a personal container, not a workspace)");
+    expect(label).toMatch(/not a workspace/);
+    expect(containerKindLabel("workspace")).toBe("workspace");
+    expect(containerKindLabel("home channel")).toBe("home channel");
   });
 });
 

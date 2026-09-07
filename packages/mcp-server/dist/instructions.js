@@ -99,7 +99,7 @@ function directoryRow(w, withDescription) {
     // container's slug is not an address.
     const kind = (0, workspace_directory_js_1.containerKind)(w);
     const address = kind === "workspace" ? `slug: \`${w.slug}\`` : `id: \`${w.id}\``;
-    return `- ${(0, narration_js_1.inlineOr)(w.name, exports.UNNAMED_WORKSPACE)} — ${kind} (${address}, role: ${w.role})${desc}`;
+    return `- ${(0, narration_js_1.inlineOr)(w.name, exports.UNNAMED_WORKSPACE)} — ${(0, workspace_directory_js_1.containerKindLabel)(kind)} (${address}, role: ${w.role})${desc}`;
 }
 /**
  * The directory, rendered into `budget` characters or not at all.

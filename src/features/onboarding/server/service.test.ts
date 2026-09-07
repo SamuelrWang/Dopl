@@ -22,6 +22,7 @@ vi.mock("@/features/analytics/server/conversion-events", () => ({
   hasFiredEvent: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/service", () => ({
+  PERSONAL_CONTAINER_DEFAULT_NAME: "Home",
   renamePersonalContainerIfPlaceholder: vi.fn(),
 }));
 vi.mock("./repository", () => ({
@@ -79,6 +80,17 @@ describe("completeOnboarding redirect target", () => {
       name: "Acme",
     });
     expect(redirectPath).toBe(`/acme-a1b2c3d4e5f6/${spaWorkspaceHomePath()}`);
+  });
+
+  it("names an unnamed home space \"Home\", never after the user (Samuel, 2026-09-06)", async () => {
+    // "<First>'s Workspace" was read by agents as a second workspace. The
+    // personal container is the default space, and its default name says so.
+    await completeOnboarding("user-1", { mcpConnected: false });
+    expect(renamePersonalContainerIfPlaceholder).toHaveBeenCalledWith(
+      "user-1",
+      "Home",
+      undefined
+    );
   });
 
   it("routes to a page the SPA actually has (not the catch-all)", async () => {

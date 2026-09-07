@@ -35,7 +35,7 @@
 
 import type { WorkspaceListItem } from "@dopl/client";
 import { inlineOr } from "./tools/narration.js";
-import { containerKind } from "./workspace-directory.js";
+import { containerKind, containerKindLabel } from "./workspace-directory.js";
 import { isAgentId, bareAgentId } from "./tools/channel-agent-id.js";
 
 /** The container this connection is bound to (`X-Workspace-Id`). */
@@ -112,7 +112,7 @@ function directoryRow(w: WorkspaceListItem, withDescription: boolean): string {
   // container's slug is not an address.
   const kind = containerKind(w);
   const address = kind === "workspace" ? `slug: \`${w.slug}\`` : `id: \`${w.id}\``;
-  return `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — ${kind} (${address}, role: ${w.role})${desc}`;
+  return `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — ${containerKindLabel(kind)} (${address}, role: ${w.role})${desc}`;
 }
 
 /**

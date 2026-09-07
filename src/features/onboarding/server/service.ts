@@ -1,14 +1,15 @@
 import "server-only";
-import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   logConversionEvent,
   hasFiredEvent,
 } from "@/features/analytics/server/conversion-events";
-import { renamePersonalContainerIfPlaceholder } from "@/features/workspaces/server/service";
+import {
+  PERSONAL_CONTAINER_DEFAULT_NAME,
+  renamePersonalContainerIfPlaceholder,
+} from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { OnboardingStatus, SurveySubmission } from "../types";
 import {
-  findDisplayName,
   findOnboardedAt,
   hasActiveMcpToken,
   markOnboarded,
@@ -46,8 +47,10 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
 /**
  * Finish onboarding: name the caller's HOME — their personal container, which
  * is what ruling B10 leaves for a first-run survey to name — stamp
- * onboarded_at, return the URL to land on. Blank name →
- * "{FirstName}'s Workspace". ⚠ Every step idempotent so a retry after partial
+ * onboarded_at, return the URL to land on. Blank name → "Home" (Samuel,
+ * 2026-09-06: the personal container is every user's default space and must
+ * never carry a name that reads as a workspace — "{FirstName}'s Workspace"
+ * was mistaken for one). ⚠ Every step idempotent so a retry after partial
  * failure converges.
  */
 export async function completeOnboarding(
@@ -57,13 +60,7 @@ export async function completeOnboarding(
   const typedName = opts.name?.trim();
   const description = opts.description?.trim() || undefined;
 
-  let workspaceName: string;
-  if (typedName) {
-    workspaceName = typedName;
-  } else {
-    const firstName = await resolveFirstName(userId);
-    workspaceName = firstName ? `${firstName}'s Workspace` : "My Workspace";
-  }
+  const workspaceName = typedName || PERSONAL_CONTAINER_DEFAULT_NAME;
 
   const workspace = await renamePersonalContainerIfPlaceholder(
     userId,
@@ -86,31 +83,4 @@ export async function completeOnboarding(
 /** Re-export for the auth-callback gate — keeps repository out of it. */
 export async function isOnboarded(userId: string): Promise<boolean> {
   return (await findOnboardedAt(userId)) !== null;
-}
-
-/**
- * First name for workspace title: profiles.display_name →
- * user_metadata.full_name → user_metadata.name, first whitespace token.
- * ⚠ Never the email local-part — worse than the "My Workspace" fallback.
- */
-async function resolveFirstName(userId: string): Promise<string | null> {
-  const displayName = await findDisplayName(userId);
-  let candidate = displayName?.trim();
-
-  if (!candidate) {
-    try {
-      const { data } = await supabaseAdmin().auth.admin.getUserById(userId);
-      const meta = data.user?.user_metadata as
-        | Record<string, unknown>
-        | undefined;
-      const fullName = meta?.full_name ?? meta?.name;
-      if (typeof fullName === "string") candidate = fullName.trim();
-    } catch {
-      // Best-effort; fall through to the generic name.
-    }
-  }
-
-  if (!candidate) return null;
-  const first = candidate.split(/\s+/)[0];
-  return first || null;
 }

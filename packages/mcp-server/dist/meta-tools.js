@@ -147,7 +147,7 @@ function registerWorkspaceMetaTools(registerMetaTool, { directory, activeWorkspa
                 ? `slug: \`${w.slug}\` · id: \`${w.id}\``
                 : `id: \`${w.id}\``;
             const here = w.id === activeWorkspace?.id ? " ←" : "";
-            lines.push(`- ${(0, narration_js_1.inlineOr)(w.name, instructions_js_1.UNNAMED_WORKSPACE)} — ${kind} (${address}, role: ${w.role})${here}`);
+            lines.push(`- ${(0, narration_js_1.inlineOr)(w.name, instructions_js_1.UNNAMED_WORKSPACE)} — ${(0, workspace_directory_js_1.containerKindLabel)(kind)} (${address}, role: ${w.role})${here}`);
         }
         lines.push("");
         lines.push(activeWorkspace

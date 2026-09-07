@@ -16,6 +16,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createWorkspaceDirectory = createWorkspaceDirectory;
+exports.containerKindLabel = containerKindLabel;
 exports.containerKind = containerKind;
 exports.narrowToLock = narrowToLock;
 exports.searchLegs = searchLegs;
@@ -75,6 +76,18 @@ function createWorkspaceDirectory(client, options = {}) {
         resolveWorkspaceRef,
         lockedWorkspaceId: () => lockedTo?.id ?? null,
     };
+}
+/**
+ * How a kind is RENDERED in a directory row. The personal container is the one
+ * an agent keeps mistaking for a workspace (Samuel, 2026-09-06: "Samuel's
+ * Workspace" read as the home space, and the home space read as a workspace),
+ * so its label says what it serves as, in words that cannot be read as a
+ * second workspace: it is the caller's default, and it is not a workspace.
+ */
+function containerKindLabel(kind) {
+    return kind === "personal"
+        ? "home space (your default; a personal container, not a workspace)"
+        : kind;
 }
 function containerKind(row) {
     switch (row.kind ?? "standard") {

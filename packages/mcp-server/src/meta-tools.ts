@@ -54,6 +54,7 @@ import type { DoplClient } from "@dopl/client";
 import { UNNAMED_WORKSPACE, UNTRUSTED_DIRECTORY_NOTE } from "./instructions.js";
 import {
   containerKind,
+  containerKindLabel,
   type ActiveWorkspaceState,
   type WorkspaceDirectory,
 } from "./workspace-directory.js";
@@ -183,7 +184,7 @@ export function registerWorkspaceMetaTools(
           : `id: \`${w.id}\``;
       const here = w.id === activeWorkspace?.id ? " ←" : "";
       lines.push(
-        `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — ${kind} (${address}, role: ${w.role})${here}`,
+        `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — ${containerKindLabel(kind)} (${address}, role: ${w.role})${here}`,
       );
     }
     lines.push("");
