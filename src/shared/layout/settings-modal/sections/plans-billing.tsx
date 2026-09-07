@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   formatMoney,
-  SOLO_PRICE,
   TEAM_SEAT_PRICE,
   useWorkspaceEntitlements,
 } from "@/features/billing/components/use-workspace-entitlements";
@@ -18,6 +17,10 @@ import styles from "../settings-modal.module.css";
  * `./plans-billing-core`; this file adds the two browser-only moves: swap the
  * pane for Stripe embedded checkout in place, and redirect this tab to the
  * Stripe-hosted portal.
+ *
+ * ⚠ TEAM IS THE ONLY THING CHECKOUT SELLS (2026-09-07) — `CheckoutPlan` is a
+ * one-member union, so there is no plan branch here to keep in step with
+ * `plans.ts`. The seat price and seat count are interpolated, never restated.
  */
 export function PlansBilling({
   billingReturn = null,
@@ -69,15 +72,11 @@ export function PlansBilling({
         >
           ← Back to plans
         </button>
-        <h2 className={styles.paneTitle}>
-          {checkoutPlan === "solo" ? "Subscribe to Pro" : "Subscribe to Team"}
-        </h2>
+        <h2 className={styles.paneTitle}>Subscribe to Team</h2>
         <p className="mb-4 text-caption text-text-secondary">
-          {checkoutPlan === "solo"
-            ? `${formatMoney(SOLO_PRICE)} / month — flat, single member`
-            : `${ent.billableSeats} ${ent.billableSeats === 1 ? "seat" : "seats"} · ${formatMoney(
-                ent.billableSeats * TEAM_SEAT_PRICE
-              )} / month`}
+          {`${ent.billableSeats} ${
+            ent.billableSeats === 1 ? "seat" : "seats"
+          } · ${formatMoney(ent.billableSeats * TEAM_SEAT_PRICE)} / month`}
         </p>
         <EmbeddedCheckoutForm workspaceId={workspaceId} plan={checkoutPlan} />
       </div>

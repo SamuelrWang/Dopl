@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
+import { SEAT_MONTHLY_CREDITS } from "@/features/billing/credits";
+import { planNumber } from "@/features/billing/plans";
 import { createQueryClient } from "#/lib/query-client";
 import type { BridgeResponse } from "#/lib/dopl-bridge";
 import { SEGMENT, WORKSPACE_ID, installBridge } from "#/test-utils/bridge";
@@ -20,7 +22,10 @@ const apiRequest = vi.hoisted(() => vi.fn());
 const openExternal = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true })));
 
 
-/** Free, single member — the state that offers both Pro and Team checkout. */
+/** Free, single member — the state that offers checkout. ⚠ IT USED TO BE "the
+ *  state that offers BOTH Pro and Team": Pro is retired from sale (2026-09-07)
+ *  and member count no longer changes what a workspace can buy, so this is now
+ *  simply the un-paid state. */
 const FREE_STATUS = {
   plan: "free",
   status: "free",
@@ -65,12 +70,17 @@ describe("UpgradeModal in the desktop SPA", () => {
   it("keeps the plan pitch and hands checkout to the browser, scoped to this workspace", async () => {
     renderModal();
 
-    // Pitch unchanged — only the payment leg differs.
-    expect(await screen.findByRole("button", { name: "Choose Pro" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Choose Pro" }));
+    // Pitch unchanged — only the payment leg differs. ⚠ ONE OPTION NOW: the
+    // modal used to offer "Choose Pro" beside "Choose Team" to a single-member
+    // workspace, and Pro is retired from sale.
+    expect(
+      await screen.findByRole("button", { name: "Continue to checkout" })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Choose Pro" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Continue to checkout" }));
 
-    expect(await screen.findByText("Subscribe to Pro")).toBeInTheDocument();
-    expect(screen.getByText("$5.99 / month — flat, single member")).toBeInTheDocument();
+    expect(await screen.findByText("Subscribe to Team")).toBeInTheDocument();
+    expect(screen.getByText("1 seat · $8.00 / month")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Continue in your browser" }));
 
@@ -78,17 +88,31 @@ describe("UpgradeModal in the desktop SPA", () => {
     // straight into that checkout.
     await waitFor(() =>
       expect(openExternal).toHaveBeenCalledWith(
-        `https://www.usedopl.com/billing/${SEGMENT}?billing=upgrade&plan=solo`
+        `https://www.usedopl.com/billing/${SEGMENT}?billing=upgrade&plan=team`
       )
     );
     // ⚠ Origin is the preload constant, never the file:// document.
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("quotes the per-member allowance, not a pooled workspace figure", async () => {
+    // 🔒 Samuel, 2026-09-07: "each person gets 5,000 credits". The unlock list
+    // read "10,000+ Credits every month" — a number from the retired pooled
+    // model — so it is interpolated from `credits.ts` now.
+    renderModal();
+    expect(
+      await screen.findByText(
+        `${planNumber(SEAT_MONTHLY_CREDITS.team)} credits per member every month`
+      )
+    ).toBeInTheDocument();
+  });
+
   it("mounts no Stripe checkout and never dead-ends on its error card", async () => {
     renderModal();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Choose Team" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Continue to checkout" })
+    );
 
     expect(await screen.findByText("Subscribe to Team")).toBeInTheDocument();
     expect(screen.queryByText("Checkout couldn't load")).not.toBeInTheDocument();
@@ -99,7 +123,7 @@ describe("UpgradeModal in the desktop SPA", () => {
     ).not.toContain("/api/billing/checkout");
   });
 
-  it("the in-place Solo→Team switch is untouched — it is pure API", async () => {
+  it("the in-place legacy-Pro→Team switch is untouched — it is pure API", async () => {
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/billing/status") {
         return Promise.resolve(

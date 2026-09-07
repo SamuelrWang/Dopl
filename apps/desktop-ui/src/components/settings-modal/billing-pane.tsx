@@ -12,8 +12,12 @@ interface Props {
 
 /**
  * Plans & Billing — the DESKTOP binding of `PlansBillingCore`. Renders in
- * full; only the two Stripe-shaped actions differ, because the packaged CSP
- * (`script-src 'self'`, `connect-src 'none'`) refuses Stripe and all origins:
+ * full — the same two cards (Starter, free, 100 credits per member per month;
+ * Team, $8 per seat, 5,000 per member per month) and the same legacy-Pro note,
+ * because the copy lives in the shared core and this file adds no words of its
+ * own about plans. Only the two Stripe-shaped actions differ, because the
+ * packaged CSP (`script-src 'self'`, `connect-src 'none'`) refuses Stripe and
+ * all origins:
  *
  *   - Upgrade/checkout — web mounts Embedded Checkout in-pane; here it opens
  *     the same workspace's web billing surface in the browser.

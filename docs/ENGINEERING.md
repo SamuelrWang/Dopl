@@ -157,7 +157,7 @@ Tracked as **F-093** (this said F-041 until 2026-08-11; F-041 was deleted on 202
 | `packages/dopl-client/src/client.ts` | **34** | ✅ **UNDER CAP as of 2026-08-08 — was 720, the longest-running row this table has ever carried, and it is closed by the exact split the row kept scheduling.** History worth keeping, because the row spent its whole life recording growth instead of buying it back: 592 → 696 → 698 → 699 → 731, then DOWN to **701** on 2026-08-07 when the trash/restore removal took the knowledge (`listKbTrash` + three `restoreKb*`), ontology-cluster and chats trash methods with it — deletion, not extraction — then back UP to **720** inside the same night as the launch-P0 wave gave +19 back. `DoplClient` is still ONE flat class; its methods were declared across a **ten-link `client-<domain>.ts` chain** at the split (order in `client-base.ts`) with three new transport modules beside the ones that already existed (`workflows.ts` 186, `workspaces.ts` 70, `clusters.ts` 66). ⚠ **The public API is frozen and `client-surface.test.ts` pinned 85 methods — but that was the POST-TEARDOWN surface, not the pre-split one.** HEAD declared 92; the seven trash methods left in a SEPARATE change that landed in the same working tree. Two edits, one diff: the split moved methods between files and removed none. **A THIRD edit has since landed: 2026-08-11 deleted the clusters and workflows links plus their transports — chain 10 → 8, surface 85 → 67.** `listWorkflowTrash` / `restoreWorkflow` had deliberately SURVIVED the trash teardown (D3), which is why the purge migration's workflows step is destructive — see that migration's header; they went with everything else. |
 | `src/features/knowledge/server/seed-fixtures-data.ts` | 670 | **Exempt by §2 carve-out** — pure data table. |
 | `src/features/channels/components/channels-view-core.tsx` | ⛔ **RETIRED 2026-08-18** (file DELETED at the Phase 12 cutover with the two-pane page; the shipping surface is `components/channels-v2/channels-v2-core.tsx`, INVARIANTS §5) | ✅ **UNDER CAP — was 588. ⚠ AND IT KEEPS DRIFTING BACK UP: 436 at the end of the split, 447 on 2026-08-08, 474 on 2026-08-11** — three consecutive remeasures, three higher numbers, +38 since the split. **Margin is 26 lines.** The 2026-08-08 attribution below (F-174's three-control popover wiring and F-178's `pending` threading, same night). `eslint.config.mjs`'s removal comment says "439", which was never right at any measurement — do not trust either number without a `wc -l`. Margin is **26** lines as of 2026-08-11 (it read 53 against the 2026-08-08 measurement, and 64 before that). This one is a SPLIT, not a deletion. The mutation-layer wave (F-159) moved every write out into three hooks — `hooks/use-thread-writes.ts` (292), `hooks/use-channel-preference-writes.ts` (168), `hooks/use-channel-lifecycle-writes.ts` (105) — on the seam §2 asks for: one file per reason to change. Roughly a third of the reduction is not extraction at all but DELETION, which is the part worth copying: four hand-rolled `useState` optimistic override records (and the two lens memos that read them) stopped existing when those writes started patching the query cache every reader already reads. **✅ Its `eslint.config.mjs` exemption was DELETED 2026-08-07** — third of three closed in one pass. |
-| `src/features/billing/components/upgrade-modal.tsx` | 570 | Was `506` and described as "just over"; it is 64 lines further over. Split scheduled. |
+| `src/features/billing/components/upgrade-modal.tsx` | ⛔ **OFF THE TABLE 2026-09-07** — was 570 here and 551 at the split; now **353**, with `upgrade-modal-parts.tsx` at 235 (`wc -l`, credit model v2). Retiring Solo deleted the single-member branch and the second `PlanOption`; the rest moved on a real seam. **Its `eslint.config.mjs` exemption was DELETED, not moved** — the sixth row to leave that way. | ✅ It carried "split scheduled" from 2026-07-31, the longest-standing row this table has held; what moved it was a behavioural requirement landing on the file, not the line count. |
 | `src/features/billing/server/webhook-handler.test.ts` | 542 | Test file; split by event kind when next edited. |
 | `src/features/ontology/server/repository.ts` | **488** | ✅ **UNDER CAP — was 538.** Not a split: the trash removal deleted the restore/purge read paths outright. **It landed at 454 mid-wave, was recorded at 483 at the end of that wave, and measured 488 on 2026-08-08** — so the margin is 12 lines, not 46, and it has drifted upward at every single measurement. Treat it as at-risk, not as solved. **✅ Its `eslint.config.mjs` exemption was DELETED 2026-08-07** (the `plans-billing.tsx` precedent: removed, not moved). |
 | `src/features/workspaces/server/invitations.ts` | **404** | ✅ **UNDER CAP as of 2026-08-10 — was 534, and it had been "split scheduled (F-041)" since 2026-07-20 without moving.** What finally split it was not the line count: C-20 made `removeMember` answerable for what a workspace departure costs inside **another feature** (`channels`), which is a different reason-to-change from minting and redeeming an invite. Split on that seam into `membership-admin.ts` (**209** — `updateMemberRole`, `removeMember`, `countActiveOwners`), which is deliberately **not** the seam F-041 scoped ("extract the accept/join sub-flows"). The original keeps the two-name **re-export** every caller already imports, so no importer moved — the same barrel shape `teams/server/repository.ts` kept through its own split. **✅ Its `eslint.config.mjs` exemption was DELETED** (removed, not moved — the `plans-billing.tsx` precedent, fourth time). **The transferable observation: a split scheduled on a line count waits indefinitely; a split scheduled by a new reason-to-change lands the same day it arrives.** |
@@ -644,7 +644,7 @@ Billing is **workspace-level**, not per-user. The per-user 24h trial, `DEMO_PAYW
 - **Client read:** `useWorkspaceEntitlements` (features/billing/components) is the single client-side billing read (TanStack-cached `GET /api/billing/status`); do not add parallel fetch hooks.
 - **THE BILLING SURFACE IS A PAGE, AND ITS URL HAS ONE BUILDER (2026-08-05, plan decision D1).** `/billing/{segment}` (`src/app/billing/[segment]/page.tsx`) is the standalone billing + account page, and `/billing` with no segment resolves the caller's default workspace and forwards. It is the ONE product-shaped page the website retirement keeps, because checkout is `ui_mode: "elements"` — our own React `PaymentElement` form — which the packaged renderer's CSP (`script-src 'self'`, `connect-src 'none'`) can never mount. It renders the shipped `PlansBilling` + `DeleteAccount` sections and **must not import `@/shared/layout/app-shell` or the `(app)` layout's providers**: one such import puts the rail, sidebar, tour and graph engine back in the KEEP set and Stage D stops being a deletion. Pinned by `features/billing/components/billing-page-screen.test.tsx`.
   - **Every billing URL comes from `features/billing/url.ts`** — `billingPath` / `billingUrl` / `billingSelfPath` and the three parsers. Six sites used to hand-write `/{segment}/canvas?billing=…`: both Stripe `return_url`s, `upgradeUrl()` (402/403 envelopes, shared with chats retention), the desktop billing + account handoffs (`apps/desktop-ui/src/lib/open-in-browser.ts`), the SPA upgrade modal, and `/pricing`. The module is PURE (no `next/*`, no `server-only`, no browser globals) so the SPA, the Stripe server modules and the RSCs share one definition. Do not build one of these strings inline.
-  - **Query contract:** `?billing=success|return` is the ONLY thing that arms `plans-billing-core`'s 20×1s post-checkout poll (`billingReturn`) — a surface that drops it shows a customer who just paid their old plan. `?billing=upgrade&plan=solo|team` opens that plan's checkout at mount; a bare `?billing=upgrade` (all the 402 envelopes can say) lands on the plan list. Stripe's `{CHECKOUT_SESSION_ID}` must stay UNENCODED, which is why the builder concatenates the query instead of using `URLSearchParams`.
+  - **Query contract:** `?billing=success|return` is the ONLY thing that arms `plans-billing-core`'s 20×1s post-checkout poll (`billingReturn`) — a surface that drops it shows a customer who just paid their old plan. `?billing=upgrade&plan=team` opens that checkout at mount; a bare `?billing=upgrade` (all the 402 envelopes can say) lands on the plan list. ⚠ **This read `plan=solo|team` until 2026-09-07** — Solo is retired from sale, `url.ts › parseCheckoutPlan` accepts only `team`, and a stale `?plan=solo` link (an old envelope, a bookmark, a sign-in bounce) parses to `null` so the payer lands on the plan list rather than in a checkout for a price nobody sells. Stripe's `{CHECKOUT_SESSION_ID}` must stay UNENCODED, which is why the builder concatenates the query instead of using `URLSearchParams`.
   - **Stripe returns carry the segment.** `withWorkspaceAuth` already provides `workspaceSlug` + `workspacePublicId`; compose them and pass `segment` to `createWorkspaceCheckoutSession` / `createPortalSession`, or a multi-workspace admin is returned to their DEFAULT workspace's billing state after upgrading a different one.
 - **Instrumentation:** `withWorkspaceAuth` logs every MCP-authenticated op to `mcp_tool_calls` (insert-only, service role; admin SELECT). This feeds future usage analytics — keep the write fire-and-forget.
 
@@ -3927,7 +3927,8 @@ closed had already named the one-line patch: lower `POST /api/mcp/credits/consum
 
 ### The two halves were in different files and only one of them was in the finding
 
-`credits-service.ts › resolveBillingWorkspaceId` rerouted a container's burn to
+`resolveBillingWorkspaceId` — a narrow accessor in `credits-service.ts`, **deleted 2026-09-07** with
+the whole standard-workspace reroute (Samuel's per-seat + personal-wallet ruling) — sent a container's burn to
 `findDefaultWorkspaceForUser(caller.userId)` — **the CALLER's** own oldest-owned standard workspace.
 That was written in 2026-08-23 under a different ruling ("each side spends their own allowance"),
 when the only caller anybody pictured was one of two peers with a workspace each. Lowering the floor
@@ -6429,3 +6430,95 @@ body has never reached the wire. Nothing was capped because nothing needed cappi
 less than the whole, and 70% less if the agent already knows the heading. Against that, the served
 surface rose 618 characters per CONNECTION (two params, an op name, two routing sentences, after a
 trim of 233 inside the same description) and the pulled doctrine 477. Six section reads pay it back.
+
+## 2026-09-07 — Credit model v2: personal wallets and per-seat allocations
+
+**Samuel's ruling, verbatim excerpt, because every decision below is downstream of it:**
+
+> "in the home space, an individual user gets charged credits according to what their own agent
+> spent in terms of MCP calls … separate billing for workspaces … one person is in charge of paying
+> for the entire workspace's spend, and that is based off of seats … free to make workspaces …
+> unlimited users in the workspace, but each user gets a limited number of credits … a fixed credit
+> allocation, so I don't think it should be pooled … Free: each person gets 100 credits. Paid: each
+> person gets 5,000 credits for an $8-per-seat kind of tier."
+
+**What the pooled model got wrong was not the numbers.** It had three tiers on sale, one FLAT
+allowance per WORKSPACE per period, and one counter row per (workspace, period) to hold it. No
+arithmetic on one row can express "each member has their own fixed allocation": divide the pool by
+the seat count and it is pooled with extra steps, because the first member to spend it still spends
+everybody's. And the shape had a second failure that had nothing to do with pooling. A home-space
+burn has no workspace to charge, so it was REROUTED onto the owner's *sole* owned standard
+workspace — and when the owner owned none, or owned two, the resolver refused with
+`container-owner-has-no-billing-workspace` / `…-ambiguous-billing-workspace`, ran the call
+unmetered, and logged. That refusal aged in exactly the wrong direction: by 2026-08-24 a solo
+container had become the operator's *primary* agent surface, so the population most likely to be
+ambiguous — anyone running two workspaces — was running their main agent surface for free. The
+reroute was answering "which tenant pays for this person's work", and the honest answer turned out
+to be that no tenant does.
+
+**So the payer became a PERSON, and there are two wallets.** `personal`, one per user, spent by
+every call in that user's home space — their `kind='personal'` container and every `kind='link'`
+container they own. `seat`, one per (standard workspace, active member), spent by that member's
+calls there. The key of each counter table now contains the payer, which is the entire mechanical
+content of "not pooled". Two consequences fell out for free, and both are worth more than the
+tables: the ambiguity refusal became **unrepresentable** — every user has exactly one personal
+wallet, so `findSoleOwnedStandardWorkspace` left the credit path entirely — and the guest ruling
+(2026-08-26, "charge MCP calls from a guest to the user") survived unedited, because *who* pays was
+never the thing that was wrong. Only the counter moved.
+
+**`workspace_id` on the ledger changed meaning, and that was the cheapest of three bad options.**
+`credit_usage_events.workspace_id` was the PAYER — for a home burn, the owner's separate standard
+workspace. With a person as the payer, the column had nothing to hold. The options were (a) make it
+nullable and put the payer in a new column, (b) keep a payer workspace by looking one up, (c)
+redefine the column as the ADDRESSED container and add `payer_user_id` beside it. (a) breaks a
+`NOT NULL` FK and every reader that joins on it. (b) reintroduces the lookup this wave deleted,
+plus a round trip, on the hottest write path in the product. (c) costs a comment on a column and
+nothing else: the addressed container is already in hand at the insert, `/home`'s overview reads by
+`origin_workspace_id` and is untouched, and the value is now equal to origin on every row this build
+writes. A semantic change to a live column is still a real cost — which is why it is recorded in the
+migration header, in the column `COMMENT`, and in the ledger's own docblock, in all three places a
+reader can arrive from.
+
+**Solo was retired from SALE and not from the BOOKS, and that distinction is load-bearing.** Two
+tiers go on sale (Starter, Team), so there is no Solo card, no `solo` checkout, and a body still
+asking for it answers 400 `PLAN_RETIRED` — refused rather than quietly upgraded, because a caller
+who asked for a $5.99 flat plan must not be handed an $8.00-per-seat subscription the server chose
+for them. But live `solo` rows keep billing until they cancel or move to Team in place, so the id
+stays on `PlanId`, the seat allowance still answers for it at the paid figure, `entitlements.ts`'s
+verdict is deliberately untouched, and the webhook still derives `solo` from the legacy price. **A
+plan you cannot buy is not the same as a plan nobody is on**, and conflating the two is how a paying
+customer loses their entitlements on a deploy.
+
+**Two numbers were assumptions rather than rulings, and both are flagged rather than hidden.** The
+personal free allowance is the status-quo free figure, 500 (spec A5): Samuel gave workspace numbers
+and no personal one, so the choice was between inventing a price and not cutting a live user's
+allowance overnight, and only the second is reversible. And the **$8.00 seat price is DISPLAY
+ONLY** — Stripe's price object under `STRIPE_PRO_SEAT_PRICE_ID` still holds $7.99, Samuel creates
+the new price and flips the env, and no code here touches a Stripe price (spec A7). Deploy state is
+a measurement, which is also why `analytics/server/launch-metrics.ts` did **not** move to 8: it
+measures what Stripe CHARGES, and the pricing page states what we ASK. The two answer different
+questions and the day they are made to agree by hand is the day MRR is wrong.
+
+**One number is duplicated on purpose, and it is the one that will rot.** `packages/mcp-server`
+cannot import `src/features/billing/credits.ts` — separate build, own tsconfig, shipped as its own
+package — so the seat refusal's "Upgrade to Team for 5,000 credits per member" sentence holds a
+literal. Interpolating it would mean putting the figure on the wire, which is a protocol change to
+save a string. It is a second retune site, and it is filed as one rather than dressed up as a
+coincidence.
+
+**The size cap closed its oldest row as a side effect, which is the lesson that table keeps
+recording.** `billing/components/upgrade-modal.tsx` had read "split scheduled" since 2026-07-31 —
+the longest-standing exemption in `eslint.config.mjs`. Retiring Solo DELETED the single-member
+branch, the second `PlanOption` and the solo arms of the checkout header; the remainder went to
+`upgrade-modal-parts.tsx` on a real seam (this file owns the SELL, that one owns the BLOCKED
+add-member path and the terminal notes). The exemption was **removed, not moved**. Same as
+`invitations.ts`: what finally splits a file is a behavioural requirement landing on it, not the
+line count that has been scheduling it for five weeks.
+
+**One function left the hot path without leaving the tree.** `workspaces/server/repository.ts ›
+findSoleOwnedStandardWorkspace` was on every container tool call — the reroute's "which standard
+workspace pays" question — and its `listWorkspacesOwnedBy` ceiling (`OWNED_WORKSPACE_LIMIT`) was
+argued as a hot-path bound. Both callers left with the wallet model: the credit path no longer asks
+the question, and what remains is the Stripe grandfather mapping in `webhook-handler.ts` and the
+segment-less `/billing` forwarder. The ceiling stays, now as a cold-path bound, and the docblocks
+say so (2026-09-07, wave-2 review) — the argument moved; the number did not.

@@ -15,6 +15,12 @@ import {
  * Upgrade a live Solo workspace to Team in place. Admin/owner only. Swaps the item's price to the
  * per-seat Team price with quantity = active member count, so the user keeps ONE subscription (no
  * cancel + re-checkout).
+ *
+ * ⚠ THIS ROUTE EXISTS FOR LEGACY ROWS AND ITS BEHAVIOUR IS UNCHANGED BY THE 2026-09-07 RETIREMENT
+ * (spec A6). Solo/"Pro" is off SALE — `POST /api/billing/checkout` refuses it with 400
+ * `PLAN_RETIRED` — but the subscriptions already on it keep billing, and this is their one way
+ * off it without a cancel-and-repurchase. It is the LAST route that may still read `plan ===
+ * "solo"`: when the final legacy row is gone this file goes with it, not before.
  * ⚠ Do NOT stamp `lastStripeEventCreated` here — the authoritative
  * `customer.subscription.updated` webhook carries its own watermark.
  */

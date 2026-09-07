@@ -90,7 +90,8 @@ function strictInput<S extends ZodRawShape>(shape: S): z.ZodObject<S> {
  *
  * ⚠ ORDERING, non-negotiable: AFTER `gates.opRefusal` (delete refusal stays
  * first and unconditional — a refused delete costs zero round trips), AFTER
- * workspace resolution (credits are per-workspace), BEFORE the handler.
+ * workspace resolution (the ADDRESSED CONTAINER decides which wallet pays),
+ * BEFORE the handler.
  *
  * ⚠ NOT in `withWorkspaceAuth` beside `logMcpToolCall` — that fires per
  * LOOPBACK request, and one tool call makes 0..N of them.
@@ -99,14 +100,22 @@ function strictInput<S extends ZodRawShape>(shape: S): z.ZodObject<S> {
  * Spend one credit for `workspaceId`. Returns the refusal, or null to proceed.
  *
  * ⚠ FAIL OPEN on anything that is not an honest "out of credits" — refusing on a
- * transient loopback blip bricks every agent and reads to the operator as "out
- * of credits" for a workspace that is not.
+ * transient loopback blip bricks every agent and reads to the operator as an
+ * exhausted wallet that is not exhausted.
  *
  * ⚠ ONLY `allowed === false` REFUSES, not "not truthy". A 200 missing `allowed`
  * (proxy error page, shape change, partial response) leaves it undefined, and a
  * truthiness test reads that as a refusal — fail-open for a THROWN error,
  * silently inverted for a malformed answer, which is the more likely of the two.
  * A body that does not say "no" is not a no.
+ *
+ * ⚠ **THE REFUSAL NAMES THE WALLET THAT STOPPED, SO THE WHOLE OUTCOME GOES TO
+ * `creditsExhausted`, NOT ITS URL** (Samuel, 2026-09-07: allocations are
+ * per-person and never pooled). A `seat` refusal is the caller's own allocation
+ * inside that workspace and carries the upgrade link only when there is
+ * something to buy; a `personal` one is their home space and never does. A
+ * server that sends no `wallet` gets the generic sentence — this layer does not
+ * infer one.
  *
  * ⚠ **ONE CHARGE FUNCTION, THREE EXPLICIT CALL SITES** (2026-08-28). It was
  * private to `createCreditedRunner` while the domain wrapper was the only meter;
@@ -124,9 +133,9 @@ function createCharger(client: DoplClient): ChargeCredit {
   ): Promise<ToolResponse | null> {
     try {
       const outcome = await client.consumeCredits(workspaceId);
-      return outcome?.allowed === false
-        ? creditsExhausted(outcome.upgradeUrl)
-        : null;
+      // ⚠ THE WHOLE OUTCOME, not just the URL: which WALLET stopped decides the
+      // sentence, and the counters + reset date are on the same answer.
+      return outcome?.allowed === false ? creditsExhausted(outcome) : null;
     } catch (err) {
       console.error(
         `[credits] consume call failed for workspace ${workspaceId}; allowing the tool call: ${

@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import { BILLING_STATUS, renderHome, routes } from "./home-test-harness";
@@ -78,10 +79,8 @@ describe("the /home credit capacity bar", () => {
     // has to be left of the figure printed beside it.
     expect(within(credits).getByText("290 left")).toBeInTheDocument();
     // 🔒 THE REFERENCE NUMBER IN WORDS (Samuel, 2026-09-05: "it should show 416
-    // out of 25k credits spent"). ⚠ The denominator is the PLAN'S allowance —
-    // 500 here is Starter's, off `billing/credits.ts › MONTHLY_MCP_CREDITS`,
-    // and the assertion is on the fixture's plan rather than on a literal this
-    // suite chose.
+    // out of 25k credits spent"). The denominator here is the payload's own
+    // measured `limit`; the fallback case below is what pins the constant.
     expect(
       within(credits).getByText("210 of 500 credits spent")
     ).toBeInTheDocument();
@@ -135,18 +134,26 @@ describe("the /home credit capacity bar", () => {
    * `credits-service.ts › unmetered` answers `used: 0, limit: 0, degraded: true`
    * — which printed **Not counted this period** over a month of real bars. The
    * spend comes from the ledger now, so the sentence has a number in it and the
-   * denominator falls back to the PLAN's allowance.
+   * denominator falls back to a constant.
+   *
+   * 🔒 **AND THE CONSTANT IS THE *PERSONAL* WALLET'S (2026-09-07).** /home is
+   * the home space: every call it charges lands on the reader's own personal
+   * wallet, so the fallback is `billing/credits.ts › PERSONAL_MONTHLY_CREDITS`
+   * and NEVER a workspace plan's allowance, which is a different meter. ⚠ The
+   * expectation is BUILT from the constant, so a literal re-pinned here would
+   * survive a retune and this case would not notice.
    *
    * ⚠ The period bounds are blank on that payload and the reset line stays
    * withheld — a date nobody measured must still not be invented.
    */
-  it("shows the ledger's spend when the payer never resolved", async () => {
+  it("falls back to the PERSONAL wallet allowance when the payer never resolved", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
       path.split("?")[0] === "/api/billing/status"
         ? Promise.resolve(
             ok({
               ...BILLING_STATUS,
               credits: {
+                wallet: null,
                 used: 0,
                 limit: 0,
                 remaining: 0,
@@ -162,9 +169,15 @@ describe("the /home credit capacity bar", () => {
     const credits = await panel("Usage");
 
     expect(
-      await within(credits).findByText("210 of 500 credits spent")
+      await within(credits).findByText(
+        `210 of ${PERSONAL_MONTHLY_CREDITS.toLocaleString()} credits spent`
+      )
     ).toBeInTheDocument();
-    expect(within(credits).getByText("290 left")).toBeInTheDocument();
+    expect(
+      within(credits).getByText(
+        `${(PERSONAL_MONTHLY_CREDITS - 210).toLocaleString()} left`
+      )
+    ).toBeInTheDocument();
     // ⚠ THE SENTENCE THAT MUST NOT COME BACK.
     expect(within(credits).queryByText("Not counted this period")).toBeNull();
     expect(within(credits).queryByText(/^Resets /)).toBeNull();

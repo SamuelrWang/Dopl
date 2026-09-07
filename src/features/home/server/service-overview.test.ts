@@ -46,7 +46,8 @@ function call(over: Partial<McpCallScanRow> = {}): McpCallScanRow {
 }
 
 /** One `credit_usage_events` row, as the ledger scan hands it over. ⚠ The
- *  channel dimension is `origin_workspace_id` — never the payer. */
+ *  channel dimension is `origin_workspace_id` — never `workspace_id`, and never
+ *  the payer, which has been a PERSON (`payer_user_id`) since 2026-09-07. */
 function burn(over: Partial<CreditEventScanRow> = {}): CreditEventScanRow {
   return {
     origin_workspace_id: WS_A,

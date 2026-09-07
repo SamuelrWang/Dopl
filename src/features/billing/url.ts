@@ -12,9 +12,26 @@ import type { PlanId } from "./plans";
  * desktop SPA, the `server-only` Stripe modules and RSC pages all import it.
  */
 
-/** Derived from the taxonomy so a fourth plan cannot silently become
- *  checkout-able. */
-export type CheckoutPlan = Exclude<PlanId, "free">;
+/**
+ * The plans a checkout may be opened for. **Team, and only Team** (2026-09-07,
+ * Samuel's per-seat ruling — spec A6): Solo/"Pro" is RETIRED FROM SALE, so no
+ * URL, envelope or button may still ask for it. Live `solo` rows keep billing
+ * (`PlanId` still carries the value) until they cancel or upgrade in place via
+ * `POST /api/billing/upgrade-to-team`.
+ *
+ * ⚠ SPELLED AS AN EXPLICIT LITERAL, DELIBERATELY, and the constraint below is
+ * the "a fourth plan cannot silently become checkout-able" intent this line
+ * used to CLAIM while doing the opposite. It was `Exclude<PlanId, "free">`, and
+ * subtraction WIDENS: adding `"enterprise"` to `PlanId` would have grown
+ * `CheckoutPlan` to `"team" | "enterprise"` on its own, with no edit here and
+ * no type error anywhere — a new plan made checkout-able by the act of naming
+ * it. Written out, a new plan reaches checkout only when a human types it here.
+ * `PlanIdSubset`'s constraint keeps the other half of the derivation honest at
+ * ZERO runtime cost: retire or rename `team` in the taxonomy and this line
+ * stops compiling.
+ */
+type PlanIdSubset<T extends PlanId> = T;
+export type CheckoutPlan = PlanIdSubset<"team">;
 
 /**
  * `?billing=` param. ⚠ Values are verbatim-frozen — Stripe sessions and 402
@@ -51,7 +68,7 @@ export interface BillingPathOptions {
   sessionId?: string | null;
 }
 
-/** `/billing/acme-ab12cd34ef56?billing=upgrade&plan=solo` — path only. */
+/** `/billing/acme-ab12cd34ef56?billing=upgrade&plan=team` — path only. */
 export function billingPath({
   segment,
   intent,
@@ -111,8 +128,14 @@ export function parseBillingIntent(
   return raw === "upgrade" || raw === "success" || raw === "return" ? raw : null;
 }
 
+/**
+ * `?plan=` → a checkout to open on arrival. ⚠ `team` is the ONLY accepted
+ * value since 2026-09-07: a stale `?plan=solo` link (an old 402 envelope, a
+ * bookmark, a sign-in bounce) parses to `null`, so the payer lands on the plan
+ * list rather than in a checkout for a price that is no longer sold.
+ */
 export function parseCheckoutPlan(
   raw: string | null | undefined
 ): CheckoutPlan | null {
-  return raw === "solo" || raw === "team" ? raw : null;
+  return raw === "team" ? raw : null;
 }

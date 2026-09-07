@@ -11,12 +11,15 @@ import {
  * count. Best-effort, after a member is added or removed.
  *
  * No-ops when: Stripe isn't configured (tests/preview — never touch the API);
- * no active Team subscription (Solo is flat, quantity always 1); or the seat
- * count already matches (avoid proration churn).
+ * no active Team subscription (legacy Solo is flat, quantity always 1); or the
+ * seat count already matches (avoid proration churn).
  *
- * ⚠ A live Solo workspace with 2+ active members is a race/bug — we do NOT
- * resize its flat quantity (the entitlements backstop degrades it to free
+ * ⚠ A live legacy Solo workspace with 2+ active members is a race/bug — we do
+ * NOT resize its flat quantity (the entitlements backstop degrades it to free
  * multi-member rules) but we warn so the anomaly is visible.
+ *
+ * ⚠ UNCHANGED BY THE 2026-09-07 SOLO RETIREMENT (spec A6): Solo is off sale,
+ * so this branch can gain no NEW rows, and the ones it has still need it.
  *
  * Proration uses Stripe's account default.
  */
@@ -33,8 +36,8 @@ export async function syncSeatQuantity(workspaceId: string): Promise<void> {
     const members = await countActiveMembers(workspaceId);
     if (members > 1) {
       console.warn(
-        `[seats] Solo workspace ${workspaceId} has ${members} active members; ` +
-          `Solo is single-member and flat. Not resizing Stripe quantity ` +
+        `[seats] legacy Solo workspace ${workspaceId} has ${members} active members; ` +
+          `legacy Solo is single-member and flat. Not resizing Stripe quantity ` +
           `(entitlements backstop degrades it to free multi-member rules).`
       );
     }

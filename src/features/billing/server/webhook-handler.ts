@@ -22,7 +22,11 @@ import {
  *
  * Plan derivation: item price → plan (Solo price → 'solo', per-seat Team price
  * → 'team'). Unknown/legacy price falls back to subscription metadata,
- * then 'team'.
+ * then 'team'. ⚠ The 'solo' arm is LEGACY-ONLY since 2026-09-07 (spec A6) and
+ * is UNCHANGED by the retirement: Solo is off sale, so no NEW subscription can
+ * arrive on that price, but every live one still sends events here and must
+ * still be mapped to 'solo' — dropping the arm would silently re-plan a paying
+ * Solo workspace as Team on its next invoice event.
  *
  * ⚠ ORDERING: Stripe delivers at-least-once, unordered. Every applied event
  * stamps `event.created` as a freshness watermark; `created` <= the stored
@@ -61,7 +65,9 @@ function mapStatus(stripeStatus: Stripe.Subscription.Status): WorkspaceBillingSt
 }
 
 /** Item price is authoritative; inconclusive (unknown/legacy price, or price
- *  envs unset here) falls back to subscription metadata, then 'team'. */
+ *  envs unset here) falls back to subscription metadata, then 'team'.
+ *  ⚠ UNCHANGED by the 2026-09-07 Solo retirement — see the module docblock:
+ *  off sale is not off the books. */
 function derivePlan(subscription: Stripe.Subscription): "solo" | "team" {
   const soloPriceId = getSoloPriceId();
   const seatPriceId = getSeatPriceId();

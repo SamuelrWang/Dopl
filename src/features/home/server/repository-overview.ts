@@ -196,12 +196,17 @@ export interface CreditEventScanRow {
  * (2026-09-01, closing F-328's UI half).
  *
  * ⚠ **FENCED ON `origin_workspace_id`, NOT `workspace_id`, AND THE DIFFERENCE
- * IS THE WHOLE POINT.** `workspace_id` on this table is the PAYER — for a home
- * container that is the owner's billing workspace, which is not a channel and
- * is not in this page's fence. `origin_workspace_id` is WHERE the call was
- * made, i.e. the container, and a container holds exactly one channel
- * (`repository-containers.ts › listContainerChannels`). Fencing on the payer
- * would show the operator their workspace's whole burn under a channel heading.
+ * IS THE WHOLE POINT.** `origin_workspace_id` is WHERE the call was made, i.e.
+ * the container, and a container holds exactly one channel
+ * (`repository-containers.ts › listContainerChannels`).
+ * ⚠ **`workspace_id` USED TO BE THE PAYER AND STOPPED BEING ONE ON 2026-09-07**
+ * (Samuel's per-seat + personal-wallet ruling; `20260930120000_credit_wallets.sql`
+ * §4). The payer is a PERSON now and rides `payer_user_id`; `workspace_id` holds
+ * the ADDRESSED CONTAINER, so on every row this build writes it EQUALS the
+ * origin. **This read is unaffected either way** — which is exactly why it fences
+ * on the origin: it never depended on what the other column meant. ⚠ Legacy rows
+ * predating the wave still carry a rerouted payer in `workspace_id`, so fencing
+ * on it would haul one operator's whole workspace burn under a channel heading.
  *
  * ⚠ **A SUM WITH NO `SUM`.** PostgREST cannot aggregate, so this hauls the
  * window's rows and the service adds them up — the sanctioned haul-and-tally

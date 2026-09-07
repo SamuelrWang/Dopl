@@ -1,20 +1,27 @@
 /**
  * Plan definitions — single source for the Plans & Billing pane and /pricing.
- * Plans are WORKSPACE-level. Checkout sells solo (flat, quantity 1) and team
- * (per-seat) against their live Stripe prices.
+ * Plans are WORKSPACE-level and there are TWO of them: Starter (free) and Team
+ * ($8 per seat). Checkout sells `team` only.
+ *
+ * 🔒 **THE SOLO CARD IS GONE, THE `solo` PLAN ID IS NOT (2026-09-07, Samuel's
+ * two-tier ruling).** Pro/Solo — flat $5.99, one member — is RETIRED FROM SALE:
+ * no card here, no checkout, no upgrade copy. Live `solo` rows keep working as a
+ * legacy paid workspace until they cancel or switch, so `PlanId` still carries
+ * the value and `SEAT_MONTHLY_CREDITS` still answers for it. A plan you cannot
+ * buy is not the same as a plan nobody is on.
  *
  * ⚠ THE FEATURE STRINGS ARE INTERPOLATED, NOT TYPED (2026-08-30, G4). They
- * restated `credits.ts › MONTHLY_MCP_CREDITS` and the free caps in prose, in
- * TWO more places (`marketing/components/pricing-content.tsx › COMPARE_ROWS`
- * was the third), and drift there is PUBLIC PRICING MISREPRESENTATION that no
- * test could see — a string is a string. Interpolating deletes the duplicate
- * rather than gating it, which is the cheaper of the two fixes.
+ * restated the credit allowance and the free caps in prose, in TWO more places
+ * (`marketing/components/pricing-content.tsx › COMPARE_ROWS` was the third), and
+ * drift there is PUBLIC PRICING MISREPRESENTATION that no test could see — a
+ * string is a string. Interpolating deletes the duplicate rather than gating it,
+ * which is the cheaper of the two fixes.
  * `server/entitlements.ts › entitlementDeniedBody` already did this.
  */
 
 // ⚠ NOT A CYCLE. `credits.ts` reaches back for `PlanId` with `import type`,
 // which is erased — the only runtime edge is this one, plans → credits.
-import { MONTHLY_MCP_CREDITS } from "./credits";
+import { SEAT_MONTHLY_CREDITS } from "./credits";
 
 export type PlanId = "free" | "solo" | "team";
 
@@ -66,10 +73,22 @@ export interface PlanDef {
   features: string[];
 }
 
-/** The credits line, worded once for all three cards. */
+/**
+ * The credits line, worded once for both cards.
+ *
+ * ⚠ **"per member" IS LOAD-BEARING COPY, NOT DECORATION.** The allowance is a
+ * fixed per-person allocation, not a workspace pool (`credits.ts ›
+ * SEAT_MONTHLY_CREDITS`), and a card that said "5,000 credits / month" beside
+ * "Unlimited members" would read as the pool it is not.
+ */
 const creditsFeature = (plan: PlanId) =>
-  `${planNumber(MONTHLY_MCP_CREDITS[plan])} Credits / month`;
+  `${planNumber(SEAT_MONTHLY_CREDITS[plan])} credits per member / month`;
 
+/**
+ * ⚠ TWO CARDS SINCE 2026-09-07, AND `PLANS.length` IS A CONTRACT SOME SURFACE
+ * RENDERS. The Solo/Pro card is deleted (retired from sale); the id survives on
+ * `PlanId` for legacy rows only, and nothing here offers it.
+ */
 export const PLANS: ReadonlyArray<PlanDef> = [
   {
     id: "free",
@@ -78,6 +97,7 @@ export const PLANS: ReadonlyArray<PlanDef> = [
     priceNote: "",
     features: [
       "Every feature included — no gates",
+      "Unlimited members",
       "Unlimited ontology objects while you work solo",
       `Teams of 2+: up to ${planNumber(FREE_MULTI_MEMBER_OBJECT_CAP)} ontology objects`,
       `${FREE_CHATS_WINDOW_DAYS} days of chat history`,
@@ -86,24 +106,16 @@ export const PLANS: ReadonlyArray<PlanDef> = [
     ],
   },
   {
-    id: "solo",
-    name: "Pro",
-    priceMonthly: "$5.99",
-    priceNote: "/ month",
-    features: [
-      "Unlimited ontology objects",
-      "Full chat history",
-      creditsFeature("solo"),
-      "Priority support",
-      "Single-member workspace — upgrade to Team anytime",
-    ],
-  },
-  {
     id: "team",
     name: "Team",
-    priceMonthly: "$7.99",
+    // ⚠ DISPLAY ONLY, AND STRIPE DOES NOT AGREE YET. The live per-seat price
+    // under `STRIPE_PRO_SEAT_PRICE_ID` is still $7.99; Samuel creates the $8
+    // price and flips the env, and no code here touches a Stripe price. Deploy
+    // state is a measurement (CLAUDE.md): read the env, do not trust this line.
+    priceMonthly: "$8.00",
     priceNote: "/ seat / month",
     features: [
+      "Unlimited members",
       "Unlimited ontology objects for the whole workspace",
       "Full chat history for everyone",
       creditsFeature("team"),

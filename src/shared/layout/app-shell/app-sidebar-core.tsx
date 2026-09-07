@@ -139,7 +139,7 @@ export function AppSidebarCore({
 
       <div className={styles.wordsCard}>
         <div className={styles.wcTitle}>
-          <b>Pro</b> unlocks more
+          <b>Team</b> unlocks more
         </div>
         <div className={styles.wcDesc}>
           Unlimited knowledge bases, skills, and agent access across your team.
@@ -149,7 +149,7 @@ export function AppSidebarCore({
           className={styles.upgradeBtn}
           onClick={() => onOpenSettings("billing")}
         >
-          Upgrade to Pro
+          Upgrade to Team
         </button>
       </div>
 

@@ -1,8 +1,13 @@
 /**
  * INVARIANT SUITE — GET /api/billing/status. Feeds every billing surface, so the pins are about
- * the wire shape: `credits` present for EVERY plan (not just capped free ones); computed from the
- * SAME plan verdict and period helpers the consume path uses, so the meter cannot disagree with
- * enforcement; no usage row reads 0, not an error; `cancelAtPeriodEnd` rides the same payload.
+ * the wire shape: `credits` present for EVERY plan (not just capped free ones); it is THE CALLER'S
+ * OWN meter, computed from the SAME plan verdict and period helpers the consume path uses, so the
+ * meter cannot disagree with enforcement; no usage row reads 0, not an error; `cancelAtPeriodEnd`
+ * rides the same payload.
+ *
+ * ⚠ **THE METER IS PER MEMBER SINCE 2026-09-07** (Samuel's per-seat + personal-wallet ruling). It
+ * read one POOLED workspace counter against 500/10,000/25,000; it now reads the CALLER'S OWN SEAT
+ * against 100/5,000, and the payload carries `credits.wallet` saying which counter that was.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -31,13 +36,21 @@ vi.mock("@/features/billing/server/workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   countActiveMembers: vi.fn(),
   countOntologyObjects: vi.fn(),
-  getWorkspaceCreditsUsed: vi.fn(),
+}));
+
+vi.mock("@/features/billing/server/credit-wallets", () => ({
+  consumeUserCredits: vi.fn(),
+  consumeMemberCredits: vi.fn(),
+  getUserCreditsUsed: vi.fn(),
+  getMemberCreditsUsed: vi.fn(),
 }));
 
 import { GET } from "./route";
 import * as repo from "@/features/billing/server/workspace-billing";
+import * as wallets from "@/features/billing/server/credit-wallets";
 
 const mockRepo = vi.mocked(repo);
+const mockWallets = vi.mocked(wallets);
 
 function billing(overrides: Partial<WorkspaceBillingRow>): WorkspaceBillingRow {
   return {
@@ -63,24 +76,40 @@ beforeEach(() => {
   mockRepo.getWorkspaceBilling.mockResolvedValue(null);
   mockRepo.countActiveMembers.mockResolvedValue(1);
   mockRepo.countOntologyObjects.mockResolvedValue(3);
-  mockRepo.getWorkspaceCreditsUsed.mockResolvedValue(0);
+  mockWallets.getMemberCreditsUsed.mockResolvedValue(0);
+  mockWallets.getUserCreditsUsed.mockResolvedValue(0);
 });
 
 describe("GET /api/billing/status — credits", () => {
-  it("carries a credits meter on a FREE workspace", async () => {
-    mockRepo.getWorkspaceCreditsUsed.mockResolvedValue(42);
+  it("carries the CALLER'S OWN seat meter on a FREE workspace", async () => {
+    mockWallets.getMemberCreditsUsed.mockResolvedValue(42);
     const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
-    expect(body.credits).toMatchObject({ used: 42, limit: 500, remaining: 458 });
+    expect(body.credits).toMatchObject({
+      wallet: "seat",
+      used: 42,
+      limit: 100,
+      remaining: 58,
+    });
     expect(body.credits.periodStart).toMatch(/^\d{4}-\d{2}-01T00:00:00\.000Z$/);
+    // ⚠ THE READ IS KEYED ON THE MEMBER. A pooled `(workspace, period)` read is
+    // what this wave replaced, and it would report the whole roster's spend as
+    // the caller's own.
+    expect(mockWallets.getMemberCreditsUsed).toHaveBeenCalledWith(
+      "ws-1",
+      "user-1",
+      expect.any(String)
+    );
   });
 
   it("carries one on a TEAM workspace too — every plan is metered", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "team", status: "active", seatCount: 4 })
     );
+    mockRepo.countActiveMembers.mockResolvedValue(4);
     const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.plan).toBe("team");
-    expect(body.credits).toMatchObject({ used: 0, limit: 25_000, remaining: 25_000 });
+    // ⚠ NOT 4 × 5,000. The allocation is fixed per member and is not pooled.
+    expect(body.credits).toMatchObject({ used: 0, limit: 5_000, remaining: 5_000 });
   });
 
   it("reads a DEGRADED solo against the free allowance, like the consume path", async () => {
@@ -89,7 +118,7 @@ describe("GET /api/billing/status — credits", () => {
     );
     mockRepo.countActiveMembers.mockResolvedValue(2);
     const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
-    expect(body.credits.limit).toBe(500);
+    expect(body.credits.limit).toBe(100);
   });
 
   it("reads the usage row for the SUBSCRIPTION period when one is live", async () => {
@@ -102,17 +131,25 @@ describe("GET /api/billing/status — credits", () => {
       })
     );
     const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
-    expect(mockRepo.getWorkspaceCreditsUsed).toHaveBeenCalledWith(
+    expect(mockWallets.getMemberCreditsUsed).toHaveBeenCalledWith(
       "ws-1",
+      "user-1",
       "2099-03-04T00:00:00.000Z"
     );
     expect(body.credits.periodEnd).toBe("2099-04-04T00:00:00.000Z");
   });
 
   it("never reports negative remaining, even if usage overshot the limit", async () => {
-    mockRepo.getWorkspaceCreditsUsed.mockResolvedValue(600);
+    mockWallets.getMemberCreditsUsed.mockResolvedValue(600);
     const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
     expect(body.credits.remaining).toBe(0);
+  });
+
+  it("🔒 never reads the PERSONAL wallet for a standard workspace", async () => {
+    // The two wallets are separate counters; reading the wrong one puts a
+    // number on the meter that no refusal in this workspace can explain.
+    await GET(request(), { params: Promise.resolve({}) });
+    expect(mockWallets.getUserCreditsUsed).not.toHaveBeenCalled();
   });
 
   it("surfaces cancelAtPeriodEnd, defaulting to false with no billing row", async () => {

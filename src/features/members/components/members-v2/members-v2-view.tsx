@@ -30,7 +30,7 @@ type Selection = { kind: "member"; id: string } | { kind: "team"; id: string };
 
 interface Props {
   workspaceSlug: string;
-  /** Scopes the Solo member-limit upgrade modal. */
+  /** Scopes the legacy-Pro member-limit upgrade modal. */
   workspaceId?: string;
   currentUserId: string;
   myRole: MemberRole;
@@ -128,8 +128,10 @@ export function MembersV2View({
     role: AssignableRole
   ) => {
     joinRequests.resolve(id, action, role).catch((err: unknown) => {
-      // Solo is single-member, so approval is blocked server-side — offer the
-      // in-place Team upgrade rather than a dead-end toast.
+      // A legacy Pro row is single-member, so approval is blocked
+      // server-side — offer the in-place Team upgrade rather than a dead-end
+      // toast. ⚠ Pro is retired from sale (2026-09-07); this 402 can only come
+      // from a workspace that already holds one, so the branch stays.
       if (err instanceof ApiError && err.code === "SOLO_MEMBER_LIMIT" && workspaceId) {
         setUpgradeOpen(true);
         return;

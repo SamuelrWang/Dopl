@@ -138,6 +138,54 @@ describe("nothing else has to change for a personal container to work", () => {
   });
 });
 
+/**
+ * 🔒 THE BILLING CLAIM IN THIS FILE'S HEADER, AND ITS INVERSION.
+ *
+ * `20260920120000`'s "what does NOT change" list carries a bullet about
+ * billing, because a new workspace KIND that no billing path knew about would
+ * charge somebody the wrong way. The bullet was true and is now true for a
+ * different reason: until 2026-09-07 a container burn was REROUTED onto the
+ * owner's standard workspace, and Samuel's per-seat + personal-wallet ruling
+ * replaced that with the owner's PERSONAL WALLET
+ * (`20260930120000_credit_wallets.sql`).
+ *
+ * ⚠ **THIS PIN IS INVERTED, NOT DELETED.** A header that still promised the
+ * standard-workspace reroute would send the next reader to a code path that no
+ * longer exists, on the one file whose whole job is to say what a `personal`
+ * container does NOT break.
+ */
+describe("the billing bullet describes the WALLET, not a workspace reroute", () => {
+  it("states the standard-workspace reroute as HISTORY, never as the rule", () => {
+    // ⚠ MATCHED ACROSS THE COMMENT WRAP. The claim spans two lines with a `--`
+    // between them, so a single-line search finds nothing and passes vacuously.
+    const prose = sql.replace(/\n--\s*/g, " ");
+    // The phrase may appear ONCE, and only inside the sentence that retires it.
+    // ⚠ Deleting the history is not the fix either: an operator who applied an
+    // older copy of this file needs to know which claim they were given.
+    expect(prose).toContain(
+      'This bullet said the burn "lands on the owner\'s STANDARD WORKSPACE'
+    );
+    expect(prose).toContain("that reroute is DELETED");
+    expect(prose.match(/lands on the owner's STANDARD WORKSPACE/gi)?.length).toBe(1);
+  });
+
+  it("names the personal wallet, its table, and the migration that introduced it", () => {
+    const prose = sql.replace(/\n--\s*/g, " ");
+    expect(prose).toContain("PERSONAL WALLET (`user_credit_usage`)");
+    expect(prose).toContain("20260930120000_credit_wallets.sql");
+  });
+
+  it("🔒 the wallet migration exists, sorts AFTER this one, and is written not applied", () => {
+    const wallets = read("20260930120000_credit_wallets.sql");
+    expect("20260930120000" > NAME.slice(0, 14)).toBe(true);
+    // ⚠ It DEPENDS on this file: the personal container is what the personal
+    // wallet is spent from. Apply order is filename order, and the header says
+    // so rather than leaving an operator to infer it.
+    expect(wallets).toContain("WRITTEN, NOT APPLIED");
+    expect(wallets).toContain("20260920120000_workspace_kind_personal.sql");
+  });
+});
+
 describe("ordering", () => {
   it("sorts after every migration this slice was cut from", () => {
     const versions = readdirSync(MIGRATIONS)

@@ -63,7 +63,7 @@ interface Props {
     scope: ChatScope,
     teamIds: string[]
   ) => Promise<void>;
-  /** Chats hidden by the free-plan retention window (0 on Pro). */
+  /** Chats hidden by the free-plan retention window (0 on Team). */
   hiddenCount: number;
   /** The list read hit its ceiling — see {@link CHATS_CLIPPED_NOTE}. */
   truncated: boolean;
@@ -350,7 +350,7 @@ function RetentionStrip({
         onOpenChange={setUpgradeOpen}
         workspaceId={workspaceId}
         canManageBilling
-        reason="Starter workspaces hide chats older than the retention window. Nothing is deleted — upgrade to Pro to restore full history."
+        reason="Starter workspaces hide chats older than the retention window. Nothing is deleted — upgrade to Team to restore full history."
       />
     </>
   );

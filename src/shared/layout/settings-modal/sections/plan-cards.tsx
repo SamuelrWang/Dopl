@@ -1,12 +1,23 @@
 "use client";
 
 import { Check } from "lucide-react";
-import type { WorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
+import {
+  formatMoney,
+  TEAM_SEAT_PRICE,
+  type WorkspaceEntitlements,
+} from "@/features/billing/components/use-workspace-entitlements";
 import type { PlanDef } from "@/features/billing/plans";
+import type { CheckoutPlan } from "@/features/billing/url";
 import { cn } from "@/shared/lib/utils";
 
-/** The two paid plans checkout can sell. */
-export type CheckoutPlan = "solo" | "team";
+/**
+ * ⚠ THE PLAN UNION IS `features/billing/url.ts › CheckoutPlan`, RE-EXPORTED,
+ * NEVER RE-DECLARED (2026-09-07). This file used to own a second
+ * `"solo" | "team"` union; when Solo was retired from sale that copy would have
+ * kept selling a plan checkout answers 400 for. `url.ts` is pure (no `next/*`,
+ * no `server-only`), so the desktop binding can import it too.
+ */
+export type { CheckoutPlan };
 
 /** Entitlements + whether the caller may act + the three actions (two owned by
  *  the app binding — see `./plans-billing-core`). */
@@ -20,8 +31,25 @@ export interface PlanActions {
   onSwitchToTeam: () => void;
 }
 
+/**
+ * A live LEGACY Pro (`solo`) subscription — retired from sale 2026-09-07, still
+ * billed for the rows that hold one. `isSolo` alone is the plan COLUMN, which a
+ * cancelled row keeps; the workspace is only legacy-paid while a subscription
+ * is live.
+ */
+export function isLegacySolo(ent: WorkspaceEntitlements): boolean {
+  return ent.isSolo && ent.isPaid;
+}
+
+/**
+ * ⚠ STARTER'S ARM IS `!ent.isPaid`, NEVER `!ent.isTeam` — and with the Solo card
+ * gone that is an easy simplification to reach for. `PLANS` holds two cards now,
+ * so a live LEGACY Pro row matches neither, and `!ent.isTeam` would badge
+ * STARTER as the current plan of a workspace being charged every month.
+ * Deliberately, a CANCELLED solo row does land on Starter: `isPaid` is false
+ * there and Starter is what that workspace is actually on.
+ */
 function isCurrentPlan(plan: PlanDef, ent: WorkspaceEntitlements): boolean {
-  if (plan.id === "solo") return ent.isSolo;
   if (plan.id === "team") return ent.isTeam;
   return !ent.isPaid;
 }
@@ -121,7 +149,7 @@ function PlanCta({
   const muted =
     "flex h-8 w-full items-center justify-center text-small font-medium text-text-muted";
 
-  if (isCurrent && (plan.id === "solo" || plan.id === "team")) {
+  if (isCurrent && plan.id === "team") {
     return canManage ? (
       <button type="button" className={ghost} disabled={portalLoading} onClick={onManage}>
         {portalLoading ? "Loading…" : "Manage subscription"}
@@ -134,24 +162,9 @@ function PlanCta({
     return <div className={current}>Current plan</div>;
   }
 
-  if (plan.id === "solo") {
-    // Solo sells only to free single-member workspaces; no in-product
-    // Team → Solo downgrade (the portal handles cancels).
-    if (ent.isPaid || ent.memberCount >= 2) {
-      return <div className={muted}>Single-member workspaces only</div>;
-    }
-    return canManage ? (
-      <button type="button" className={primary} onClick={() => onUpgrade("solo")}>
-        Upgrade — $5.99/mo
-      </button>
-    ) : (
-      <div className={muted}>Ask an admin</div>
-    );
-  }
-
   if (plan.id === "team") {
-    if (ent.isSolo) {
-      // Live Solo subscription swaps in place — no second checkout.
+    if (isLegacySolo(ent)) {
+      // Live legacy Pro subscription swaps in place — no second checkout.
       return canManage ? (
         <button
           type="button"
@@ -167,7 +180,7 @@ function PlanCta({
     }
     return canManage ? (
       <button type="button" className={primary} onClick={() => onUpgrade("team")}>
-        Upgrade — $7.99/seat
+        Upgrade — {formatMoney(TEAM_SEAT_PRICE)}/seat
       </button>
     ) : (
       <div className={muted}>Ask an admin</div>

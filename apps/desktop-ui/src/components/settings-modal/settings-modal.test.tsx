@@ -216,26 +216,32 @@ describe("settings modal", () => {
     expect(screen.getByText("Ontology objects")).toBeInTheDocument();
     expect(screen.getByText("40 / 100")).toBeInTheDocument();
 
-    // Scoped to the dialog: the sidebar behind it also advertises "Pro".
+    // ⚠ TWO CARDS SINCE 2026-09-07, AND THE DESKTOP RENDERS THE SAME ONES —
+    // the pane is `PlansBillingCore` over `plans.ts › PLANS`, so this asserts
+    // the shared list reached the packaged renderer intact, not a second copy
+    // of it. Scoped to the dialog: the sidebar behind it carries plan words too.
     const pane = within(screen.getByRole("dialog", { name: "Settings" }));
-    for (const name of ["Starter", "Pro", "Team"]) {
+    for (const name of ["Starter", "Team"]) {
       expect(pane.getByText(name)).toBeInTheDocument();
     }
-    expect(screen.getByText("$5.99")).toBeInTheDocument();
-    expect(screen.getByText("$7.99")).toBeInTheDocument();
-    expect(screen.getByText("Full chat history")).toBeInTheDocument();
+    // Pro is retired from sale: no card, no flat price, no "solo only" CTA.
+    expect(screen.queryByText("$5.99")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Single-member workspaces only")
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Full chat history for everyone")).toBeInTheDocument();
     expect(
       screen.getByText("Seats sync automatically as members join or leave")
     ).toBeInTheDocument();
-    // 3 members → Solo not sellable, as on the web.
-    expect(screen.getByText("Single-member workspaces only")).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it("sends an upgrade click to the web billing surface, not to Stripe", async () => {
     await openBilling();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Upgrade — $7.99/seat" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Upgrade — $8.00/seat" })
+    );
 
     // Standalone billing page, plan included (`lib/open-in-browser.ts`).
     expect(openExternal).toHaveBeenCalledWith(

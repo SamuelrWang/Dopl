@@ -223,6 +223,14 @@ export interface PendingStatus {
     recent: PendingIngestItem[];
 }
 /**
+ * Which counter a spend landed on. `personal` = the caller's own home-space
+ * wallet; `seat` = their per-member allocation inside a standard workspace.
+ * ⚠ **NOTHING IS POOLED PER WORKSPACE** — an allocation belongs to ONE person
+ * (Samuel, 2026-09-07), so a refusal is about that person's counter, never
+ * about a shared workspace balance.
+ */
+export type CreditWalletKind = "personal" | "seat";
+/**
  * One MCP credit spend (`POST /api/mcp/credits/consume`).
  *
  * `allowed` is the only field the registrar acts on; counters are for refusal
@@ -231,12 +239,26 @@ export interface PendingStatus {
  */
 export interface CreditConsumeResponse {
     allowed: boolean;
+    /**
+     * Which wallet paid, so the refusal can name it.
+     *
+     * ⚠ **OPTIONAL ON THE WIRE, AND ITS ABSENCE NARROWS NOTHING.** A server that
+     * predates the wallet split omits the key entirely, and `null` is the server
+     * SAYING no wallet was charged (the unmetered/degraded posture). Both must
+     * fall back to the generic refusal wording — reading a missing key as
+     * "personal" would tell a workspace member their PERSONAL credits ran out.
+     */
+    wallet?: CreditWalletKind | null;
     used: number;
     limit: number;
     remaining: number;
     periodStart: string;
     periodEnd: string;
-    /** Where an exhausted caller is sent. Empty when the server failed open. */
+    /**
+     * Where an exhausted caller is sent. **Empty when there is nothing to buy** —
+     * the personal wallet (no paid tier this wave) and a seat on an
+     * already-paid workspace — and empty when the server failed open.
+     */
     upgradeUrl: string;
     degraded?: boolean;
 }

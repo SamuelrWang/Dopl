@@ -31,6 +31,19 @@ describe("entitlementDenied", () => {
     expect(res?.content[0]?.text).toBe("Over the cap.");
   });
 
+  /**
+   * 🔒 **THE FALLBACK SENTENCE NAMES A PLAN THAT IS STILL ON SALE.** With no
+   * `apiMessage` this layer writes the words itself, and it wrote "upgrade to
+   * Pro" — RETIRED FROM SALE 2026-09-07 (`src/features/billing/plans.ts`;
+   * checkout answers 400 `PLAN_RETIRED`). An agent reads this literally.
+   */
+  it("its chat_outside_retention fallback offers TEAM, never the retired Pro", () => {
+    const res = entitlementDenied({ code: "chat_outside_retention" });
+    const text = res?.content[0]?.text ?? "";
+    expect(text).toContain("upgrade to Team");
+    expect(text).not.toMatch(/\bPro\b/);
+  });
+
   it("renders the message + upgrade link for a chat_outside_retention error", () => {
     const res = entitlementDenied({
       status: 403,

@@ -94,7 +94,7 @@ describe("syncSeatQuantity — guards", () => {
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
   });
 
-  it("never resizes a flat Solo subscription (single member)", async () => {
+  it("never resizes a flat legacy Solo subscription (single member)", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "solo", seatCount: 1 })
     );
@@ -105,14 +105,14 @@ describe("syncSeatQuantity — guards", () => {
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
   });
 
-  it("warns but does not resize a Solo workspace with 2+ members", async () => {
+  it("warns but does not resize a legacy Solo workspace with 2+ members", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "solo", seatCount: 1 })
     );
     mockRepo.countActiveMembers.mockResolvedValue(2);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await syncSeatQuantity(WS);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Solo"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("legacy Solo"));
     expect(updateItem).not.toHaveBeenCalled();
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
     warn.mockRestore();

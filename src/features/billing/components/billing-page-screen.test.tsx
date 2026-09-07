@@ -17,6 +17,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { BillingPageScreen } from "./billing-page-screen";
+import { SEAT_MONTHLY_CREDITS } from "../credits";
 import { resolveBillingTab } from "../billing-tabs";
 import {
   BILLING_STATUS_PATH,
@@ -32,10 +33,15 @@ const FREE: WorkspaceEntitlementsStatus = {
   objectsUsed: 12,
   canCreateObjects: true,
   chatsWindowDays: 90,
+  // ⚠ THE METER IS THE READER'S OWN SEAT, NOT A WORKSPACE POOL (2026-09-07).
+  // `wallet` says which counter answered, and the limit is the per-MEMBER
+  // allowance for this plan — built from `credits.ts` so a retune moves the
+  // fixture with the product instead of leaving a stale literal behind.
   credits: {
-    used: 120,
-    limit: 500,
-    remaining: 380,
+    wallet: "seat" as const,
+    used: 42,
+    limit: SEAT_MONTHLY_CREDITS.free,
+    remaining: SEAT_MONTHLY_CREDITS.free - 42,
     periodStart: "2026-08-01T00:00:00.000Z",
     // ⚠ Midday UTC: `formatDate` renders in the RUNNER's timezone; a midnight
     // instant flips a day west of UTC.
@@ -53,9 +59,22 @@ const TEAM: WorkspaceEntitlementsStatus = {
   seatCount: 4,
   objectCap: null,
   chatsWindowDays: null,
-  credits: { ...FREE.credits, limit: 25_000, remaining: 24_880 },
+  credits: {
+    ...FREE.credits,
+    limit: SEAT_MONTHLY_CREDITS.team,
+    remaining: SEAT_MONTHLY_CREDITS.team - 42,
+  },
   subscription_period_end: "2026-09-04T12:00:00.000Z",
   has_stripe_customer: true,
+};
+
+/** A workspace that bought Pro before it was retired from sale (2026-09-07) and
+ *  has not switched or cancelled. Not sellable, still billed. */
+const LEGACY_SOLO: WorkspaceEntitlementsStatus = {
+  ...TEAM,
+  plan: "solo",
+  memberCount: 1,
+  seatCount: 1,
 };
 
 /** Seeds billing-status cache; `useApiQuery` key = `[path, workspaceId, query]`. */
@@ -121,7 +140,7 @@ describe("which tab a URL opens on", () => {
 
   it("renders ONE pane — the tabs are exclusive, not a stacked page", () => {
     const usage = screen({ initialTab: "usage" });
-    expect(usage).toContain("Credits");
+    expect(usage).toContain("Your credits");
     expect(usage).not.toContain("Plans and Billing");
     expect(usage).not.toContain("Delete account");
 
@@ -137,14 +156,47 @@ describe("the Usage tab", () => {
 
   it("meters Credits on a FREE workspace and says when they reset", () => {
     const markup = usage(FREE);
-    expect(markup).toContain("Credits");
-    expect(markup).toContain("120");
-    expect(markup).toContain("500");
+    expect(markup).toContain("42");
+    expect(markup).toContain(String(SEAT_MONTHLY_CREDITS.free));
     expect(markup).toContain("Resets Sep 1, 2026");
   });
 
   it("meters them on a paid workspace too — every plan has an allowance", () => {
-    expect(usage(TEAM)).toContain("25,000");
+    expect(usage(TEAM)).toContain(
+      SEAT_MONTHLY_CREDITS.team.toLocaleString("en-US")
+    );
+  });
+
+  /**
+   * 🔒 **THE LABEL NAMES THE PAYER (2026-09-07).** `/api/billing/status` answers
+   * with the CALLER's own meter — their seat here, their personal wallet in the
+   * home space — and `credits.wallet` says which. A bare "Credits" over a
+   * per-member allocation reads as a workspace pool, which is the one thing
+   * Samuel's ruling says it is not ("fixed … not pooled").
+   *
+   * ⚠ The null arm is the STALE-CACHE arm (§8): an IndexedDB row written before
+   * `wallet` shipped replays without it, and the neutral label claims no payer
+   * rather than guessing one.
+   */
+  it("names whose meter it is, from the wallet the payload declares", () => {
+    expect(usage(FREE)).toContain("Your credits");
+    expect(
+      usage({ ...FREE, credits: { ...FREE.credits, wallet: "personal" } })
+    ).toContain("Personal credits");
+    const stale = usage({
+      ...FREE,
+      credits: { ...FREE.credits, wallet: null },
+    });
+    expect(stale).toContain("Credits");
+    expect(stale).not.toContain("Your credits");
+    expect(stale).not.toContain("Personal credits");
+  });
+
+  it("drops the explainer paragraph — label and control only (§5)", () => {
+    // Minimal-copy ruling: the meter prints `used / limit` and a reset date,
+    // which is the whole explanation.
+    expect(usage(FREE)).not.toContain("Every plan has a monthly MCP allowance");
+    expect(usage(FREE)).toContain("Usage this period");
   });
 
   it("meters ontology objects against the cap only while capped", () => {
@@ -168,6 +220,41 @@ describe("the Billing tab", () => {
     expect(markup).toContain("Plans and Billing");
     expect(markup).toContain("Starter");
     expect(markup).toContain("Team");
+  });
+
+  /**
+   * 🔒 **A LEGACY PRO ROW IS STILL PAYING, AND THE PANE MUST SAY SO
+   * (2026-09-07).** Pro is retired from sale, so there is no Solo card to badge
+   * — and `!ent.isPaid` alone would then badge STARTER as this workspace's
+   * current plan, i.e. tell a customer being charged every month that they are
+   * on the free tier. The row gets a one-line note plus the in-place switch
+   * (`/api/billing/upgrade-to-team`), and nothing offers to sell it Pro again.
+   */
+  it("names a live legacy Pro row without ever selling Pro", () => {
+    const markup = screen({}, LEGACY_SOLO);
+    expect(markup).toContain("On the legacy Pro plan");
+    expect(markup).toContain("Switch to Team");
+    // The retired card and its checkout CTA are both gone.
+    expect(markup).not.toContain("Single-member workspace");
+    expect(markup).not.toContain("Get Pro");
+  });
+
+  it("does NOT badge Starter as the current plan of a paying legacy row", () => {
+    // ⚠ WITH THE SOLO CARD GONE, `!ent.isTeam` is the tempting simplification
+    // for Starter's arm — and it would tell a workspace being charged every
+    // month that it is on the free tier. The right test is `!ent.isPaid`, so a
+    // live legacy row matches NEITHER card and nothing is badged.
+    const markup = screen({}, LEGACY_SOLO);
+    expect(markup).not.toContain("Current plan");
+  });
+
+  it("still badges Starter for a workspace that actually is on it", () => {
+    // The other direction: a guard that never lets Starter be current is just
+    // as wrong. A cancelled legacy row is genuinely on Starter.
+    expect(screen({}, FREE)).toContain("Current plan");
+    expect(screen({}, { ...LEGACY_SOLO, status: "canceled" })).toContain(
+      "Current plan"
+    );
   });
 
   it("carries the account danger zone the desktop app links out to", () => {

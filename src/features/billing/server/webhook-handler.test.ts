@@ -399,7 +399,7 @@ describe("multi-item subscriptions + period end", () => {
 });
 
 describe("price -> plan derivation", () => {
-  it("maps the Solo price to plan 'solo'", async () => {
+  it("maps the legacy Solo price to plan 'solo' — off sale is not off the books", async () => {
     vi.stubEnv("STRIPE_SOLO_PRICE_ID", "price_solo");
     const solo = sub({
       status: "active",
@@ -502,7 +502,7 @@ describe("invoice.payment_failed", () => {
     );
   });
 
-  it("sets past_due on a matching Solo row too", async () => {
+  it("sets past_due on a matching legacy Solo row too", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue({
       plan: "solo",
       stripeSubscriptionId: "sub_1",

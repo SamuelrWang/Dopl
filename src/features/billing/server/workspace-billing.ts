@@ -235,65 +235,19 @@ export async function countActiveMembers(workspaceId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** One atomic credit spend: allowed?, plus the counter AFTER the attempt
- *  (unchanged when refused). */
-export interface CreditConsumeRow {
-  allowed: boolean;
-  used: number;
-}
-
 /**
- * Spend `amount` MCP credits against `(workspaceId, periodStart)`, refusing
- * past `limit`. ⚠ Atomic cross-instance compare-and-set in Postgres
- * (`consume_workspace_credits`, one upsert-CAS statement, no advisory lock), so
- * two concurrent tool calls can never both spend the last credit. Migration
- * 20260811130000_mcp_credits.
+ * ⚠ **THE POOLED CREDIT COUNTER'S TWO ACCESSORS LEFT ON 2026-09-07** —
+ * `consumeWorkspaceCredits` and `getWorkspaceCreditsUsed`, which wrapped
+ * `consume_workspace_credits` and read `workspace_credit_usage`. Samuel's
+ * per-seat + personal-wallet ruling replaced ONE POOLED counter per workspace
+ * with TWO per-payer ones, and they live in `./credit-wallets.ts`.
  *
- * THROWS on a DB error — the caller decides the fail direction, and the MCP
- * path deliberately fails OPEN (`credits-service.ts`).
+ * 🔒 **THE TABLE AND THE RPC ARE STILL THERE** (`20260930120000_credit_wallets.sql`
+ * §5 retires them from writes and drops nothing, so a rollback keeps its
+ * balances). **Deleting the wrappers is what makes "nothing writes the retired
+ * counter" a code fact rather than a comment** — a SQL COMMENT fences no
+ * writer. Do not re-export them for a caller's convenience.
  */
-export async function consumeWorkspaceCredits(
-  workspaceId: string,
-  periodStart: string,
-  amount: number,
-  limit: number
-): Promise<CreditConsumeRow> {
-  const { data, error } = await supabaseAdmin().rpc(
-    "consume_workspace_credits",
-    {
-      p_workspace_id: workspaceId,
-      p_period_start: periodStart,
-      p_amount: amount,
-      p_limit: limit,
-    }
-  );
-  if (error) throw error;
-  // `RETURNS TABLE` comes back as a one-row array.
-  const row = (data as { allowed: boolean; used: number }[] | null)?.[0];
-  if (!row) {
-    throw new Error("consume_workspace_credits returned no row");
-  }
-  return { allowed: row.allowed === true, used: row.used ?? 0 };
-}
-
-/**
- * Credits spent in `(workspaceId, periodStart)`. ⚠ NO ROW MEANS ZERO — the
- * counter row is created by the first consume of a period, so "never called an
- * MCP tool this month" and "used 0" are the same state.
- */
-export async function getWorkspaceCreditsUsed(
-  workspaceId: string,
-  periodStart: string
-): Promise<number> {
-  const { data, error } = await supabaseAdmin()
-    .from("workspace_credit_usage")
-    .select("used")
-    .eq("workspace_id", workspaceId)
-    .eq("period_start", periodStart)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as { used: number } | null)?.used ?? 0;
-}
 
 /** Live (non-trashed) ontology objects — the object cap meter. */
 export async function countOntologyObjects(

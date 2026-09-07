@@ -23,7 +23,8 @@ interface Props {
   workspaceSlug: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Workspace id — scopes the Solo-limit upgrade flow's billing calls. */
+  /** Workspace id — scopes the legacy-Pro member-limit upgrade flow's
+   *  billing calls. */
   workspaceId?: string;
   /** Teams the inviter can pre-assign — invitees auto-join on accept. */
   teams?: TeamView[];
@@ -129,7 +130,7 @@ function parseEmails(raw: string): string[] {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** True when a failed invite is the Solo member-limit gate. ⚠ Check BOTH
+/** True when a failed invite is the legacy Pro member-limit gate. ⚠ Check BOTH
  *  fields: `apiRequest` puts the nested `{error:{code,message}}` on `code`
  *  and the flat `{error:"SOLO_MEMBER_LIMIT"}` on `message`. */
 function isSoloMemberLimit(err: unknown): boolean {
@@ -216,7 +217,7 @@ export function InviteDialog({
       // Partial success: successful invitations exist server-side, so refresh
       // the pending list before surfacing failures or the upgrade.
       if (succeeded.length > 0) onInvited?.(succeeded[0]);
-      // Solo member gate → Team upgrade flow, not a raw error. Dialog keeps
+      // Legacy Pro member gate → Team upgrade flow, not a raw error. Dialog keeps
       // its state so the same invites can be retried after upgrading.
       if (results.some((r) => r.soloBlocked)) {
         setUpgradeOpen(true);
@@ -388,7 +389,7 @@ export function InviteDialog({
       </div>
     </ModalShell>
 
-    {/* Solo member-limit gate — offers the in-place Team upgrade; the
+    {/* Legacy Pro member-limit gate — offers the in-place Team upgrade; the
         invite dialog stays behind with its emails intact for a retry. */}
     <UpgradeModal
       open={upgradeOpen}

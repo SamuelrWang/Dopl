@@ -77,6 +77,18 @@ function exhausted() {
   return { ...allowed(500), allowed: false, remaining: 0 };
 }
 
+/**
+ * An exhausted answer that NAMES ITS WALLET. ⚠ `exhausted()` above deliberately
+ * carries NO `wallet` key — it is the older-server shape, and the pins that use
+ * it are the fallback's own proof.
+ */
+function exhaustedOn(
+  wallet: "personal" | "seat",
+  over: Record<string, unknown> = {},
+) {
+  return { ...exhausted(), wallet, ...over };
+}
+
 function mockClient(directory: WorkspaceListItem[]) {
   return {
     listWorkspaces: vi.fn().mockResolvedValue({ workspaces: directory }),
@@ -336,5 +348,141 @@ describe("what is NOT charged", () => {
     const res = await map({ workspace: "does-not-exist" });
     expect(res.isError).toBe(true);
     expect(client.consumeCredits).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⚠ **THE REFUSAL NAMES WHOSE COUNTER STOPPED** (Samuel, 2026-09-07: an
+ * allocation is per person and "not pooled"). A member whose SEAT ran out is
+ * told about their seat — "this workspace is out of credits" would send them to
+ * an admin with nothing to refill — and a home-space caller is told about their
+ * personal wallet, where there is nothing to buy and so no link to offer.
+ *
+ * ⚠ The `wallet`-less case is not a leftover: a client always outlives some
+ * servers, and the field is OPTIONAL on the wire for exactly that release
+ * window. Guessing a wallet there would tell a workspace member their PERSONAL
+ * credits ran out.
+ */
+describe("which wallet the refusal names", () => {
+  it("a SEAT on a free workspace — names the seat, the counters, the reset, and the upgrade", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(
+      exhaustedOn("seat", { used: 5000, limit: 5000 }),
+    );
+
+    const text = textOf(await map({}));
+    // ⚠ Thousands separators are `toLocaleString("en-US")`, pinned here because
+    // a raw `5000` is the shape a template literal produces by default.
+    expect(text).toContain(
+      "Your seat in this workspace is out of credits for this period (5,000/5,000). Resets 2026-09-01.",
+    );
+    expect(text).toContain(
+      `Upgrade to Team for 5,000 credits per member: ${UPGRADE}`,
+    );
+    expect(client.listKbBases).not.toHaveBeenCalled();
+  });
+
+  /** ⚠ EMPTY URL = NOTHING TO BUY (a seat on an already-paid workspace), not a
+   *  missing link. Offering "upgrade" there sends a paying member to a page that
+   *  has no answer for them. */
+  it("a SEAT on a PAID workspace — same sentence, and NO upgrade line", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(
+      exhaustedOn("seat", { used: 5000, limit: 5000, upgradeUrl: "" }),
+    );
+
+    const text = textOf(await map({}));
+    expect(text).toBe(
+      "Your seat in this workspace is out of credits for this period (5,000/5,000). Resets 2026-09-01.",
+    );
+    expect(text).not.toContain("Upgrade");
+  });
+
+  it("the PERSONAL wallet — its own sentence, and never an upgrade link", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(
+      exhaustedOn("personal", { upgradeUrl: "" }),
+    );
+
+    const text = textOf(await map({}));
+    expect(text).toBe(
+      "Your personal credits are used up for this month (500/500). Resets 2026-09-01.",
+    );
+  });
+
+  /** ⚠ Even when the server sends one — the personal wallet has no paid tier
+   *  this wave, so the sentence carries no link whatever arrives on the wire. */
+  it("the PERSONAL wallet ignores an upgrade url the server still sent", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(exhaustedOn("personal"));
+
+    const text = textOf(await map({}));
+    expect(text).not.toContain(UPGRADE);
+    expect(text).toContain("Your personal credits are used up for this month");
+  });
+
+  it("an OLDER SERVER sends no `wallet` — the generic sentence, with the url it did send", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(exhausted());
+
+    const text = textOf(await map({}));
+    expect(text).toContain("out of credits");
+    expect(text).toContain(`Upgrade to continue: ${UPGRADE}`);
+    expect(text).not.toContain("Your seat");
+    expect(text).not.toContain("Your personal credits");
+  });
+
+  it("`wallet: null` (nothing was metered) reads as the older server does", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue({ ...exhausted(), wallet: null });
+
+    const text = textOf(await map({}));
+    expect(text).toContain("out of credits");
+    expect(text).not.toContain("Your seat");
+    expect(text).not.toContain("Your personal credits");
+  });
+
+  /**
+   * ⚠ **A MISSING OR UNPARSEABLE `periodEnd` OMITS THE SENTENCE, IT DOES NOT
+   * PRINT ONE.** "Resets Invalid Date" / "Resets undefined" is a refusal that
+   * tells an agent to wait for a date that never comes.
+   */
+  it.each([
+    ["absent", undefined],
+    ["not a date", "soon"],
+    ["a plausible shape that is not a real day", "2026-13-45T00:00:00.000Z"],
+  ])("a `periodEnd` that is %s — no Resets sentence, everything else intact", async (
+    _label,
+    periodEnd,
+  ) => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(
+      exhaustedOn("seat", { periodEnd, upgradeUrl: "" }),
+    );
+
+    const text = textOf(await map({}));
+    expect(text).toBe(
+      "Your seat in this workspace is out of credits for this period (500/500).",
+    );
+    expect(text).not.toContain("Resets");
+    expect(text).not.toContain("Invalid");
+    expect(text).not.toContain("undefined");
+  });
+
+  /** ⚠ A degraded-shaped refusal has no usable counters; `(undefined/undefined)`
+   *  is worse than no parenthetical at all. */
+  it("counters the server did not send are omitted, not printed", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue({
+      allowed: false,
+      wallet: "personal",
+      periodEnd: "2026-09-01T00:00:00.000Z",
+      upgradeUrl: "",
+    });
+
+    const text = textOf(await map({}));
+    expect(text).toBe(
+      "Your personal credits are used up for this month. Resets 2026-09-01.",
+    );
   });
 });

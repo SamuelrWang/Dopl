@@ -86,8 +86,8 @@ describe("billingSelfPath — the page's own URL, for the login bounce", () => {
     // First-time payer is signed out: without the query riding along in
     // `redirectTo`, checkout never opens after sign-in.
     expect(
-      billingSelfPath("acme-ab12cd34ef56", { billing: "upgrade", plan: "solo" })
-    ).toBe("/billing/acme-ab12cd34ef56?billing=upgrade&plan=solo");
+      billingSelfPath("acme-ab12cd34ef56", { billing: "upgrade", plan: "team" })
+    ).toBe("/billing/acme-ab12cd34ef56?billing=upgrade&plan=team");
   });
 
   it("drops repeated params (Next hands those over as arrays) and empty queries", () => {
@@ -124,12 +124,21 @@ describe("what the page reads back off the URL", () => {
     expect(parseBillingIntent(null)).toBeNull();
   });
 
-  it("accepts only the two purchasable plans", () => {
-    expect(parseCheckoutPlan("solo")).toBe("solo");
+  it("accepts Team and nothing else — the only plan still on sale", () => {
     expect(parseCheckoutPlan("team")).toBe("team");
     // "free" is a plan but not a CHECKOUT — no such price exists.
     expect(parseCheckoutPlan("free")).toBeNull();
     expect(parseCheckoutPlan("enterprise")).toBeNull();
     expect(parseCheckoutPlan(null)).toBeNull();
+    expect(parseCheckoutPlan(undefined)).toBeNull();
+  });
+
+  it("REFUSES `plan=solo` — a retired price must not open a checkout", () => {
+    // 2026-09-07, spec A6: Solo/"Pro" is retired from sale. Old 402 envelopes,
+    // bookmarks and sign-in bounces still carry `?plan=solo` and are already in
+    // the wild; parsing one to null lands the payer on the plan list instead of
+    // in a checkout for a price nobody may buy. Live `solo` ROWS are untouched
+    // — they upgrade in place via POST /api/billing/upgrade-to-team.
+    expect(parseCheckoutPlan("solo")).toBeNull();
   });
 });

@@ -11,7 +11,11 @@ import {
   planNumber,
   type PlanDef,
 } from "@/features/billing/plans";
-import { MONTHLY_MCP_CREDITS } from "@/features/billing/credits";
+import { SEAT_MONTHLY_CREDITS } from "@/features/billing/credits";
+import {
+  formatMoney,
+  TEAM_SEAT_PRICE,
+} from "@/features/billing/components/use-workspace-entitlements";
 import { billingPath } from "@/features/billing/url";
 import { WEB_POST_AUTH_LANDING } from "@/shared/lib/url/post-auth-landing";
 import { isStandardWorkspace } from "@/features/workspaces/types";
@@ -27,14 +31,17 @@ type WorkspaceWireRow = { id: string; kind?: WorkspaceKind };
  * carries an explicit workspace id.
  */
 
+/**
+ * ⚠ TWO PLANS SINCE 2026-09-07 (Samuel's two-tier ruling). Pro/`solo` is retired
+ * from sale — no summary, no CTA label, no column. `PLANS` holds the same two,
+ * so this page and the in-app pane cannot disagree about what exists.
+ */
 const PLAN_SUMMARY: Record<string, string> = {
   free: "Everything, free forever — caps only start when a second member joins.",
-  solo: "You, uncapped: unlimited objects and full history in your own workspace.",
   team: "Your whole team, uncapped — pay only per seat, synced automatically.",
 };
 
 const SUBSCRIBE_LABEL: Record<string, string> = {
-  solo: "Go Pro",
   team: "Bring your team",
 };
 
@@ -43,7 +50,6 @@ type CompareCell = { main: string; sub?: string };
 const COMPARE_ROWS: {
   label: string;
   free: CompareCell;
-  solo: CompareCell;
   team: CompareCell;
 }[] = [
   {
@@ -52,37 +58,44 @@ const COMPARE_ROWS: {
       main: "Unlimited",
       sub: `${planNumber(FREE_MULTI_MEMBER_OBJECT_CAP)} with 2+ members`,
     },
-    solo: { main: "Unlimited" },
     team: { main: "Unlimited" },
   },
   {
     label: "Chat history",
     free: { main: `${FREE_CHATS_WINDOW_DAYS} days` },
-    solo: { main: "Full" },
     team: { main: "Full" },
   },
   {
+    // ⚠ UNLIMITED ON BOTH, AND THAT IS THE RULING, NOT AN OVERSIGHT (Samuel:
+    // "unlimited users in the workspace … each user gets a limited number of
+    // credits"). Members are free; the ALLOWANCE is what the tier buys.
     label: "Members",
     free: { main: "Unlimited" },
-    solo: { main: "1" },
-    team: { main: "Unlimited", sub: "per seat" },
+    team: { main: "Unlimited" },
   },
   {
     // ⚠ INTERPOLATED SINCE 2026-08-30 (G4). This row said "Copy, not config",
-    // named `features/billing/credits.ts › MONTHLY_MCP_CREDITS` as the source of
-    // truth, and asked the next person to "sync this row AND `plans.ts ›
-    // PLANS.features`" by hand. Three hand-synced statements of a PUBLIC PRICE,
-    // with nothing that could go red — so the duplicate is deleted instead.
+    // named the credits module as the source of truth, and asked the next
+    // person to "sync this row AND `plans.ts › PLANS.features`" by hand. Three
+    // hand-synced statements of a PUBLIC PRICE, with nothing that could go red
+    // — so the duplicate is deleted instead. ⚠ THE SUB-LINE IS "per member",
+    // not "/ month" alone: the allocation is fixed per person and NOT pooled
+    // (`credits.ts › SEAT_MONTHLY_CREDITS`), so a bare figure beside
+    // "Unlimited" members would read as a workspace pool.
     label: "Credits",
-    free: { main: planNumber(MONTHLY_MCP_CREDITS.free), sub: "/ month" },
-    solo: { main: planNumber(MONTHLY_MCP_CREDITS.solo), sub: "/ month" },
-    team: { main: planNumber(MONTHLY_MCP_CREDITS.team), sub: "/ month" },
+    free: {
+      main: planNumber(SEAT_MONTHLY_CREDITS.free),
+      sub: "per member / month",
+    },
+    team: {
+      main: planNumber(SEAT_MONTHLY_CREDITS.team),
+      sub: "per member / month",
+    },
   },
   {
     label: "Price",
     free: { main: "Free" },
-    solo: { main: "$5.99", sub: "/ month" },
-    team: { main: "$7.99", sub: "/ seat / month" },
+    team: { main: formatMoney(TEAM_SEAT_PRICE), sub: "/ seat / month" },
   },
 ];
 
@@ -114,6 +127,8 @@ export function PricingContent() {
   const multiWorkspace = (workspaces?.length ?? 0) >= 2;
 
   // `plan` = "free" | "solo" | "team" — which card is the live subscription.
+  // ⚠ A legacy `solo` row matches NO card now (Pro is retired from sale), so it
+  // simply falls through to the Team CTA, which is the one thing it can buy.
   const statusQuery = useApiQuery<{ status?: string; plan?: string }>(
     "/api/billing/status",
     {
@@ -212,17 +227,12 @@ function PlanCard({
   onManageBilling: () => void;
   onGetStarted: () => void;
 }) {
-  const isFree = plan.id === "free";
   const popular = plan.id === "team";
-  const solo = !isFree && !popular;
 
   return (
     <div className={`lp-plan${popular ? " lp-plan--popular" : ""}`}>
       <div className="lp-plan-top">
         {popular && <span className="lp-plan-badge">Popular</span>}
-        {solo && (
-          <span className="lp-plan-badge lp-plan-badge--soft">Just you</span>
-        )}
       </div>
 
       <h2 className="lp-plan-name">{plan.name}</h2>
@@ -259,8 +269,8 @@ function PlanCard({
       {popular && (
         <p className="lp-plan-guarantee">
           <strong>Only pay for your team</strong>
-          $7.99 per member each month. Seats sync automatically as people join or
-          leave — cancel anytime.
+          {formatMoney(TEAM_SEAT_PRICE)} per member each month. Seats sync
+          automatically as people join or leave — cancel anytime.
         </p>
       )}
     </div>
@@ -320,7 +330,7 @@ function PlanCardCta({
       </button>
     );
   }
-  // Team = highlighted growth path → dark primary; Pro → light.
+  // Team is the only plan on sale → dark primary.
   const primary = plan.id === "team";
   return (
     <button
@@ -345,7 +355,6 @@ function ComparisonTable() {
                 <span className="lp-compare-caption">Compare plans</span>
               </th>
               <th scope="col">Starter</th>
-              <th scope="col">Pro</th>
               <th scope="col" className="lp-compare-col--popular">
                 Team
               </th>
@@ -356,7 +365,6 @@ function ComparisonTable() {
               <tr key={row.label}>
                 <th scope="row">{row.label}</th>
                 <CompareValue cell={row.free} />
-                <CompareValue cell={row.solo} />
                 <CompareValue cell={row.team} popular />
               </tr>
             ))}

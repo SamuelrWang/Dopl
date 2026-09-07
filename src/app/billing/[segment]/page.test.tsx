@@ -101,9 +101,9 @@ describe("the auth gate", () => {
     // Without the query in `redirectTo`, a new payer lands on the plan list and the checkout
     // they already chose never opens.
     mocks.getUser.mockResolvedValue(null);
-    expect(await outcome({ billing: "upgrade", plan: "solo" })).toBe(
+    expect(await outcome({ billing: "upgrade", plan: "team" })).toBe(
       `REDIRECT:/login?redirectTo=${encodeURIComponent(
-        `/billing/${SEGMENT}?billing=upgrade&plan=solo`
+        `/billing/${SEGMENT}?billing=upgrade&plan=team`
       )}`
     );
   });
@@ -165,11 +165,17 @@ describe("what the URL is allowed to do", () => {
 
   it("opens checkout on the plan the caller already chose", async () => {
     expect(
-      (await render({ billing: "upgrade", plan: "solo" })).initialCheckoutPlan
-    ).toBe("solo");
-    expect(
       (await render({ billing: "upgrade", plan: "team" })).initialCheckoutPlan
     ).toBe("team");
+  });
+
+  it("does NOT auto-open checkout for the retired `?plan=solo`", async () => {
+    // 2026-09-07 (spec A6): Solo/"Pro" is off sale. A stale envelope or
+    // bookmark still carrying it must land on the plan list — opening a
+    // checkout for a price nobody may buy is a dead end, not a purchase.
+    expect(
+      (await render({ billing: "upgrade", plan: "solo" })).initialCheckoutPlan
+    ).toBeNull();
   });
 
   it("shows the plan list when the arrival names no plan (the 402 envelopes)", async () => {
@@ -177,7 +183,7 @@ describe("what the URL is allowed to do", () => {
   });
 
   it("refuses to auto-open checkout on a junk or unpurchasable plan", async () => {
-    for (const plan of ["free", "enterprise", "../evil"]) {
+    for (const plan of ["free", "solo", "enterprise", "../evil"]) {
       expect(
         (await render({ billing: "upgrade", plan })).initialCheckoutPlan
       ).toBeNull();
@@ -186,9 +192,9 @@ describe("what the URL is allowed to do", () => {
 
   it("ignores a bare ?plan= with no upgrade intent", async () => {
     // A stray param on a success return must not drop the payer back into checkout.
-    expect((await render({ plan: "solo" })).initialCheckoutPlan).toBeNull();
+    expect((await render({ plan: "team" })).initialCheckoutPlan).toBeNull();
     expect(
-      (await render({ billing: "success", plan: "solo" })).initialCheckoutPlan
+      (await render({ billing: "success", plan: "team" })).initialCheckoutPlan
     ).toBeNull();
   });
 

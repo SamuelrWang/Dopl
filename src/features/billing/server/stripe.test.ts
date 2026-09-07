@@ -36,7 +36,11 @@ vi.mock("stripe", () => ({
   },
 }));
 
-import { createPortalSession, createWorkspaceCheckoutSession } from "./stripe";
+import {
+  createPortalSession,
+  createWorkspaceCheckoutSession,
+  selectSeatItem,
+} from "./stripe";
 
 const SEGMENT = "acme-ab12cd34ef56";
 
@@ -89,6 +93,89 @@ describe("the checkout return", () => {
   it("still uses elements mode — the reason billing needs a web page at all", async () => {
     await checkout(SEGMENT);
     expect(captured.checkout!.ui_mode).toBe("elements");
+  });
+});
+
+describe("what a checkout may be minted for", () => {
+  it("always bills the per-seat Team price at the seat quantity", async () => {
+    // ⚠ 2026-09-07 (spec A6): Solo/"Pro" is retired from sale, so there is no
+    // longer a price BRANCH here — `WorkspaceCheckoutArgs["plan"]` is the
+    // literal "team" and the flat Solo line cannot be minted by anyone. The
+    // route's 400 `PLAN_RETIRED` is the first lock; this is the second.
+    await checkout(SEGMENT);
+    expect(captured.checkout!.line_items).toEqual([
+      { price: "price_seat", quantity: 3 },
+    ]);
+    expect(JSON.stringify(captured.checkout!.line_items)).not.toContain(
+      "price_solo"
+    );
+  });
+
+  it("stamps plan 'team' into BOTH metadata blocks, which is what the webhook reads back", async () => {
+    await checkout(SEGMENT);
+    expect(captured.checkout!.metadata).toEqual({
+      workspace_id: "ws-1",
+      plan: "team",
+    });
+    expect(captured.checkout!.subscription_data!.metadata).toEqual({
+      workspace_id: "ws-1",
+      plan: "team",
+    });
+  });
+
+  it("refuses to mint at all when the seat price is unset, rather than guessing another price", async () => {
+    vi.stubEnv("STRIPE_PRO_SEAT_PRICE_ID", "");
+    await expect(
+      createWorkspaceCheckoutSession({
+        workspaceId: "ws-1",
+        plan: "team",
+        quantity: 3,
+        email: "a@b.com",
+        segment: SEGMENT,
+      })
+    ).rejects.toThrow(/STRIPE_PRO_SEAT_PRICE_ID/);
+    // ⚠ Not "fall back to the Solo price it can still see" — a misconfigured
+    // env must fail loudly, never sell the retired plan by accident.
+    expect(captured.checkout).toBeNull();
+  });
+});
+
+describe("selectSeatItem — the LEGACY Solo arm, which stays", () => {
+  function sub(items: Array<{ id: string; priceId: string }>) {
+    return {
+      items: { data: items.map((i) => ({ id: i.id, price: { id: i.priceId } })) },
+    } as unknown as Stripe.Subscription;
+  }
+
+  it("prefers the per-seat Team price over anything else on the subscription", () => {
+    expect(
+      selectSeatItem(
+        sub([
+          { id: "si_solo", priceId: "price_solo" },
+          { id: "si_seat", priceId: "price_seat" },
+        ])
+      )!.id
+    ).toBe("si_seat");
+  });
+
+  it("still finds the flat Solo item on a LIVE legacy subscription", () => {
+    // ⚠ Solo is off SALE (2026-09-07, spec A6), not off the books. Deleting
+    // this arm would send `upgrade-to-team` and the seat sync at
+    // `items.data[0]` — the wrong line the moment a legacy sub holds two.
+    expect(
+      selectSeatItem(
+        sub([
+          { id: "si_addon", priceId: "price_addon" },
+          { id: "si_solo", priceId: "price_solo" },
+        ])
+      )!.id
+    ).toBe("si_solo");
+  });
+
+  it("falls back to the first item for a subscription on neither known price", () => {
+    expect(selectSeatItem(sub([{ id: "si_legacy20", priceId: "price_20" }]))!.id).toBe(
+      "si_legacy20"
+    );
   });
 });
 

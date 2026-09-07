@@ -42,8 +42,11 @@ const client_home_js_1 = require("./client-home.js");
 const billing = __importStar(require("./billing.js"));
 class BillingMethods extends client_home_js_1.HomeMethods {
     /**
-     * Spend one MCP credit for `workspaceId`. `allowed: false` = out of credits
-     * this period; the caller renders the refusal, this does NOT throw.
+     * Spend one MCP credit for `workspaceId`. `allowed: false` = the PAYER's own
+     * wallet is out of credits this period — the addressed container picks the
+     * wallet (`personal` in a home space, the caller's `seat` in a standard
+     * workspace), nothing is pooled across a workspace. The caller renders the
+     * refusal, this does NOT throw.
      */
     async consumeCredits(workspaceId) {
         return billing.consumeCredits(this.transport, workspaceId);

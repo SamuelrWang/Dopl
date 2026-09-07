@@ -16,7 +16,16 @@ import {
 
 /**
  * THE entitlements contract every gate (enforcement, chats window, UI) builds
- * against. Plans are WORKSPACE-level.
+ * against. Plans are WORKSPACE-level, and since 2026-09-07 there are TWO on
+ * sale — **Free and Team** (`../plans.ts › PLANS`). ⚠ **`solo` IS LEGACY, NOT A
+ * THIRD TIER**: it is retired from sale (no card, no checkout) and every rule
+ * below still applies to the rows that are on it.
+ *
+ * ⚠ **NOTHING IN THIS FILE CHANGED IN THAT WAVE, DELIBERATELY.** The credit
+ * model moved to per-seat and personal wallets (`../credits.ts`), and this
+ * module's verdict — `entitledPlanFor` / `paidEntitlement` — is what the seat
+ * allowance is keyed by. Changing the verdict to match new prices would have
+ * silently re-tiered every live workspace.
  *   - team: entitled while active/past_due; seats sync to active members.
  *   - solo: entitled ONLY while active/past_due AND memberCount === 1. ⚠ A
  *     second member degrades it to free multi-member rules — the backstop lives
@@ -32,7 +41,8 @@ import {
 /** Alias of canonical `PlanId` — contract's public name for the union. */
 export type WorkspacePlan = PlanId;
 
-/** Solo is a single-member plan; adding a member is blocked at this count. */
+/** Solo is a single-member plan; adding a member is blocked at this count.
+ *  ⚠ LEGACY ROWS ONLY — nothing sells solo since 2026-09-07. */
 const SOLO_MAX_MEMBERS = 1;
 
 export interface WorkspaceEntitlements {

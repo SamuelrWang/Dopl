@@ -1,0 +1,419 @@
+/**
+ * INVARIANT SUITE — MCP credit consume path, part 2 of two: WHICH PERIOD KEY a
+ * burn is charged under, and WHAT THE ANSWER SAYS. Pins:
+ *   1. THE WINDOW — the verdict is read FIRST, and a FREE verdict ignores a
+ *      subscription anchor (the self-heal for a mid-period cancellation); the
+ *      personal wallet is always the UTC calendar month.
+ *   2. THE METER AND ENFORCEMENT AGREE — same wallet, same window, same limit.
+ *      A meter reading a different key shows a used/limit pair that does not
+ *      explain the refusal the agent just got.
+ *   3. THE REFUSAL — and that the upgrade url is EMPTY wherever there is
+ *      nothing to buy.
+ *   4. THE LEDGER — one row per SPEND, carrying the caller AND the payer, which
+ *      differ exactly on the guest path.
+ *
+ * ⚠ **SPLIT OUT OF `credits-service.test.ts` AT THE 500-LINE CAP** (§1: "split,
+ * do not squeeze"). That file keeps the ROUTING half — which wallet, whose, and
+ * the per-wallet round-trip budget. Same mocks, same fixtures, deliberately: the
+ * two halves ask different questions of one function.
+ *
+ * ⚠ Repositories mocked; `entitlements.ts` is REAL, so the lean verdict helper
+ * is proven to be the same `paidEntitlement` logic, not a copy.
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { WorkspaceBillingRow } from "./workspace-billing";
+
+// ⚠ THE LEDGER IS MOCKED, NOT LET THROUGH. It is a `supabaseAdmin()` insert on
+// the hottest path in the product, and what this suite pins about it is WHEN it
+// is called and WITH WHAT — never that Supabase was reachable.
+vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
+
+vi.mock("./workspace-billing", () => ({
+  getWorkspaceBilling: vi.fn(),
+  countActiveMembers: vi.fn(),
+  countOntologyObjects: vi.fn(),
+}));
+
+vi.mock("./credit-wallets", () => ({
+  consumeUserCredits: vi.fn(),
+  consumeMemberCredits: vi.fn(),
+  getUserCreditsUsed: vi.fn(),
+  getMemberCreditsUsed: vi.fn(),
+}));
+
+vi.mock("@/features/workspaces/server/repository", () => ({
+  findActiveOwnerUserId: vi.fn(),
+}));
+
+import * as repo from "./workspace-billing";
+import * as wallets from "./credit-wallets";
+import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
+import { recordCreditUsageEvent } from "./credit-ledger";
+import {
+  consumeMcpCredits,
+  creditPeriodFor,
+  summarizeCredits,
+  unmetered,
+} from "./credits-service";
+
+const mockRepo = vi.mocked(repo);
+const mockWallets = vi.mocked(wallets);
+const mockOwner = vi.mocked(findActiveOwnerUserId);
+const mockLedger = vi.mocked(recordCreditUsageEvent);
+
+const WS = "ws-1";
+const CONTAINER = "ws-link-1";
+const PERSONAL = "ws-personal-1";
+const CALLER = "user-caller";
+const OWNER = "user-operator";
+
+/** 2026-08-11, mid-month — anchor fixtures below straddle it. */
+const NOW = new Date("2026-08-11T12:00:00.000Z");
+const CALENDAR_START = "2026-08-01T00:00:00.000Z";
+const CALENDAR_END = "2026-09-01T00:00:00.000Z";
+
+const seatCaller = { userId: CALLER, workspaceKind: "standard" as const };
+const linkCaller = { userId: CALLER, workspaceKind: "link" as const };
+const personalCaller = { userId: CALLER, workspaceKind: "personal" as const };
+
+function billing(overrides: Partial<WorkspaceBillingRow> = {}): WorkspaceBillingRow {
+  return {
+    workspaceId: WS,
+    plan: "team",
+    status: "active",
+    stripeCustomerId: "cus_1",
+    stripeSubscriptionId: "sub_1",
+    stripePriceId: "price_seat",
+    seatCount: 3,
+    currentPeriodStart: "2026-07-21T09:30:00.000Z",
+    currentPeriodEnd: "2026-08-21T09:30:00.000Z",
+    cancelAtPeriodEnd: false,
+    lastStripeEventCreated: null,
+    ...overrides,
+  };
+}
+
+function setup(opts: {
+  billing: WorkspaceBillingRow | null;
+  members: number;
+  allowed?: boolean;
+  used?: number;
+}) {
+  mockRepo.getWorkspaceBilling.mockResolvedValue(opts.billing);
+  mockRepo.countActiveMembers.mockResolvedValue(opts.members);
+  const outcome = { allowed: opts.allowed ?? true, used: opts.used ?? 1 };
+  mockWallets.consumeMemberCredits.mockResolvedValue(outcome);
+  mockWallets.consumeUserCredits.mockResolvedValue(outcome);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  mockOwner.mockResolvedValue(OWNER);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/**
+ * 🔒 THE ATTRIBUTION TABLE (`credits-service.ts`'s docblock), one case per row.
+ * Each wrong answer is a different bill going to a different person.
+ */
+/**
+ * Cancellation lockout, end to end, on the SEAT wallet. A team member spent
+ * 4,000 credits, then the workspace canceled mid-period; the row keeps a
+ * FUTURE-ending anchor. Honouring it charges the next call to a key already at
+ * 4,000 used against a NEW 100 limit. Heals on the next consume — no webhook,
+ * no cron.
+ */
+describe("consumeMcpCredits — a canceled workspace is not locked out (B2b)", () => {
+  const CANCELED = () =>
+    billing({
+      plan: "free",
+      status: "canceled",
+      stripeSubscriptionId: null,
+      seatCount: null,
+      currentPeriodStart: "2026-07-21T09:30:00.000Z",
+      currentPeriodEnd: "2026-08-21T09:30:00.000Z",
+    });
+
+  it("charges the CALENDAR MONTH, not the dead subscription anchor", async () => {
+    setup({ billing: CANCELED(), members: 3 });
+    const res = await consumeMcpCredits(WS, seatCaller);
+    expect(res.periodStart).toBe(CALENDAR_START);
+    expect(res.periodEnd).toBe(CALENDAR_END);
+  });
+
+  it("spends against a FRESH counter key at the free limit — allowed, not refused", async () => {
+    setup({ billing: CANCELED(), members: 3, allowed: true, used: 1 });
+    const res = await consumeMcpCredits(WS, seatCaller);
+    expect(mockWallets.consumeMemberCredits).toHaveBeenCalledWith(
+      WS,
+      CALLER,
+      CALENDAR_START,
+      1,
+      100
+    );
+    expect(res.allowed).toBe(true);
+    expect(res.limit).toBe(100);
+    expect(res.remaining).toBe(99);
+  });
+
+  it("holds even when the sub row was NOT cleaned up (status canceled, plan still team)", async () => {
+    setup({ billing: billing({ plan: "team", status: "canceled" }), members: 3 });
+    const res = await consumeMcpCredits(WS, seatCaller);
+    expect(res.periodStart).toBe(CALENDAR_START);
+    expect(res.limit).toBe(100);
+  });
+
+  it("a still-LIVE paid workspace keeps its own billing-date window", async () => {
+    setup({ billing: billing(), members: 3 });
+    expect((await consumeMcpCredits(WS, seatCaller)).periodStart).toBe(
+      "2026-07-21T09:30:00.000Z"
+    );
+  });
+});
+
+describe("the settings meter resolves the SAME window and wallet as enforcement", () => {
+  it("summarizeCredits and consumeMcpCredits agree for a canceled workspace's seat", async () => {
+    const row = billing({ plan: "team", status: "canceled" });
+    setup({ billing: row, members: 3 });
+    mockWallets.getMemberCreditsUsed.mockResolvedValue(12);
+
+    const charged = await consumeMcpCredits(WS, seatCaller);
+    const metered = await summarizeCredits(
+      { wallet: "seat", workspaceId: WS, payerUserId: CALLER },
+      row,
+      3
+    );
+
+    expect(metered.periodStart).toBe(charged.periodStart);
+    expect(metered.periodEnd).toBe(charged.periodEnd);
+    expect(metered.limit).toBe(charged.limit);
+    expect(metered.wallet).toBe("seat");
+    expect(mockWallets.getMemberCreditsUsed).toHaveBeenCalledWith(
+      WS,
+      CALLER,
+      charged.periodStart
+    );
+  });
+
+  it("and for a live paid workspace", async () => {
+    const row = billing();
+    setup({ billing: row, members: 3 });
+    mockWallets.getMemberCreditsUsed.mockResolvedValue(40);
+
+    const charged = await consumeMcpCredits(WS, seatCaller);
+    const metered = await summarizeCredits(
+      { wallet: "seat", workspaceId: WS, payerUserId: CALLER },
+      row,
+      3
+    );
+
+    expect(metered.periodStart).toBe(charged.periodStart);
+    expect(metered.limit).toBe(charged.limit);
+  });
+
+  it("and for a PERSONAL wallet — the meter reads the owner's counter, not a workspace's", async () => {
+    setup({ billing: billing(), members: 3 });
+    mockWallets.getUserCreditsUsed.mockResolvedValue(9);
+
+    const charged = await consumeMcpCredits(CONTAINER, linkCaller);
+    const metered = await summarizeCredits(
+      { wallet: "personal", workspaceId: CONTAINER, payerUserId: OWNER },
+      null,
+      1
+    );
+
+    expect(metered).toMatchObject({
+      wallet: "personal",
+      used: 9,
+      limit: 500,
+      remaining: 491,
+      periodStart: charged.periodStart,
+    });
+    expect(mockWallets.getUserCreditsUsed).toHaveBeenCalledWith(
+      OWNER,
+      charged.periodStart
+    );
+    expect(mockWallets.getMemberCreditsUsed).not.toHaveBeenCalled();
+  });
+
+  it("never reports negative remaining, even if usage overshot the limit", async () => {
+    mockWallets.getUserCreditsUsed.mockResolvedValue(600);
+    const metered = await summarizeCredits(
+      { wallet: "personal", workspaceId: PERSONAL, payerUserId: CALLER },
+      null,
+      1
+    );
+    expect(metered.remaining).toBe(0);
+  });
+
+  it("a wallet-less target meters the unmetered posture, reading no counter", async () => {
+    const metered = await summarizeCredits(
+      {
+        wallet: null,
+        workspaceId: CONTAINER,
+        payerUserId: null,
+        reason: "container-has-no-active-owner",
+      },
+      null,
+      1
+    );
+    expect(metered).toMatchObject({ wallet: null, used: 0, limit: 0, degraded: true });
+    expect(mockWallets.getUserCreditsUsed).not.toHaveBeenCalled();
+    expect(mockWallets.getMemberCreditsUsed).not.toHaveBeenCalled();
+  });
+});
+
+describe("creditPeriodFor", () => {
+  it("a null row is the calendar month", () => {
+    expect(creditPeriodFor(null, "free")).toEqual({
+      periodStart: CALENDAR_START,
+      periodEnd: CALENDAR_END,
+    });
+  });
+
+  it("a free verdict ignores the row's anchor", () => {
+    expect(creditPeriodFor(billing(), "free").periodStart).toBe(CALENDAR_START);
+  });
+
+  it("a paid verdict honours it", () => {
+    expect(creditPeriodFor(billing(), "team").periodStart).toBe(
+      "2026-07-21T09:30:00.000Z"
+    );
+  });
+});
+
+/**
+ * 🔒 THE UPGRADE URL IS AN OFFER, AND AN OFFER TO NOWHERE IS WORSE THAN NONE.
+ * The MCP refusal renders it literally (`tools/respond.ts › creditsExhausted`),
+ * so a non-empty url on a wallet with nothing to buy sends an exhausted agent
+ * to a checkout that cannot help it.
+ */
+describe("consumeMcpCredits — refusal and the upgrade url", () => {
+  it("a SEAT on a FREE verdict is the only case that offers an upgrade", async () => {
+    setup({ billing: null, members: 1, allowed: false, used: 100 });
+    const res = await consumeMcpCredits(WS, seatCaller);
+    expect(res.allowed).toBe(false);
+    expect(res.used).toBe(100);
+    expect(res.remaining).toBe(0);
+    expect(res.upgradeUrl).toMatch(/\/billing\?billing=upgrade$/);
+  });
+
+  it("a SEAT on a PAID plan offers nothing — it is already on the best allowance", async () => {
+    setup({ billing: billing(), members: 4, allowed: false, used: 5_000 });
+    expect((await consumeMcpCredits(WS, seatCaller)).upgradeUrl).toBe("");
+  });
+
+  it("a PERSONAL wallet offers nothing — there is no personal paid tier", async () => {
+    setup({ billing: null, members: 1, allowed: false, used: 500 });
+    const res = await consumeMcpCredits(PERSONAL, personalCaller);
+    expect(res.allowed).toBe(false);
+    expect(res.upgradeUrl).toBe("");
+  });
+});
+
+describe("the unmetered posture", () => {
+  it("is allowed, stamped, wallet-less, and offers nothing", () => {
+    expect(unmetered()).toMatchObject({
+      wallet: null,
+      allowed: true,
+      used: 0,
+      limit: 0,
+      remaining: 0,
+      upgradeUrl: "",
+      degraded: true,
+    });
+  });
+
+  it("a container with no active owner charges NOTHING and SAYS SO", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockOwner.mockResolvedValue(null);
+
+    const res = await consumeMcpCredits(CONTAINER, linkCaller);
+
+    expect(res.allowed).toBe(true);
+    expect(res.degraded).toBe(true);
+    expect(mockWallets.consumeUserCredits).not.toHaveBeenCalled();
+    expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
+    // Assert the CONTENT, not that something was logged: silence here is
+    // indistinguishable from the 403-and-swallow this path replaced (F-325).
+    const line = warn.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
+    expect(line).toContain("container-has-no-active-owner");
+    expect(line).toContain(CONTAINER);
+    expect(line).toContain(CALLER);
+    warn.mockRestore();
+  });
+
+  it("a real reading carries NO degraded stamp and logs nothing", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setup({ billing: billing(), members: 3 });
+    const res = await consumeMcpCredits(WS, seatCaller);
+    expect(res.degraded).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
+/**
+ * THE ATTRIBUTION LEDGER — one row per SPEND, beside the counter.
+ *
+ * 🔒 **IT IS NOT THE COUNTER AND MUST NEVER GATE ONE.** The wallet RPCs still
+ * decide `allowed`; this write only records WHO, WHERE, WHOSE WALLET and WHICH
+ * ONE — dimensions a one-row-per-period counter cannot carry.
+ */
+describe("credit usage ledger", () => {
+  it("records one row per SPEND, stamped with the period the counter used", async () => {
+    setup({ billing: billing({ plan: "free", status: "free" }), members: 1, used: 7 });
+
+    await consumeMcpCredits(WS, seatCaller);
+
+    expect(mockLedger).toHaveBeenCalledTimes(1);
+    const event = mockLedger.mock.calls[0]?.[0];
+    expect(event).toMatchObject({
+      workspaceId: WS,
+      originWorkspaceId: WS,
+      userId: CALLER,
+      wallet: "seat",
+      payerUserId: CALLER,
+      amount: 1,
+    });
+    // The period the RPC was called with, not one re-derived from the clock.
+    expect(event?.periodStart).toBe(
+      mockWallets.consumeMemberCredits.mock.calls[0]?.[2]
+    );
+  });
+
+  /** ⚠ A REFUSED CONSUME MOVED NO COUNTER, so it has nothing to attribute. */
+  it("writes NOTHING when the consume was refused", async () => {
+    setup({ billing: null, members: 1, allowed: false, used: 100 });
+    await consumeMcpCredits(WS, seatCaller);
+    expect(mockLedger).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 🔒 **THE CALLER AND THE PAYER DIFFER EXACTLY ON THE GUEST PATH, AND THE ROW
+   * MUST SAY BOTH.** A peer's burn in somebody's link container spends the
+   * OWNER's personal wallet; collapsing the two columns makes "who spent my
+   * credits" answer the wrong person.
+   */
+  it("separates the caller from the payer, and names the wallet", async () => {
+    setup({ billing: null, members: 1 });
+
+    await consumeMcpCredits(CONTAINER, linkCaller);
+
+    expect(mockLedger).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: CONTAINER,
+        originWorkspaceId: CONTAINER,
+        userId: CALLER,
+        payerUserId: OWNER,
+        wallet: "personal",
+      })
+    );
+  });
+});

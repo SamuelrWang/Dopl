@@ -4,6 +4,7 @@ import { cn } from "@/shared/lib/utils";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
 import { formatDate } from "@/shared/lib/format-time";
+import type { WalletKind } from "../credits";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
@@ -14,6 +15,16 @@ import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
  * Order = order things run out: Credits (only meter every plan has),
  * ontology objects (capped only on multi-member free; paid says "Unlimited"
  * rather than an empty track), then members/seats and chat window as lines.
+ *
+ * ⚠ THE CREDIT METER IS THE READER'S OWN, NOT THE WORKSPACE'S (2026-09-07).
+ * `/api/billing/status` answers with the caller's seat here, or their personal
+ * home-space wallet, and `credits.wallet` says which — so the label names the
+ * payer instead of implying a pool that does not exist.
+ *
+ * ⚠ MINIMAL COPY (INVARIANTS §5): label + control. The two-sentence explainer
+ * that used to sit under "Usage this period" is DELETED — a meter that prints
+ * `used / limit` and a reset date does not need a paragraph telling the reader
+ * what a meter is.
  */
 export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
   const ent = useWorkspaceEntitlements(workspaceId);
@@ -28,18 +39,14 @@ export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
         <h2 className="text-title font-semibold tracking-tight text-text-primary">
           Usage this period
         </h2>
-        <p className="mt-1 text-caption text-text-secondary">
-          Every plan has a monthly MCP allowance. Running out pauses tool calls
-          until the period rolls — nothing is deleted and the app keeps working.
-        </p>
 
         <UsageMeter
           className="mt-4"
-          label="Credits"
+          label={creditsLabel(ent.credits.wallet)}
           used={ent.credits.used}
           limit={ent.credits.limit}
           over={creditsExhausted}
-          overNote="MCP tool calls are paused until the next billing period. Nothing was deleted — the app keeps working."
+          overNote="Tool calls are paused until the next period."
         />
         {/* The period bounds are blank on the degraded fallback status (see
             `use-workspace-entitlements.ts › DEFAULT_STATUS`), and a date we
@@ -97,6 +104,17 @@ export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
       </section>
     </>
   );
+}
+
+/**
+ * Whose meter this is. `seat` = the reader's own allocation inside this
+ * workspace; `personal` = their home-space wallet (`credits.ts › WalletKind`).
+ * Null is an older cached payload — the neutral label claims no payer.
+ */
+function creditsLabel(wallet: WalletKind | null): string {
+  if (wallet === "seat") return "Your credits";
+  if (wallet === "personal") return "Personal credits";
+  return "Credits";
 }
 
 /** Limit you meet rather than fill — meter row shape, no track. */

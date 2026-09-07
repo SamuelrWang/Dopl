@@ -4,14 +4,17 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { PlanId, BillingStatus } from "../plans";
-import { MONTHLY_MCP_CREDITS } from "../credits";
+import { PERSONAL_MONTHLY_CREDITS, type WalletKind } from "../credits";
 
 /**
  * Client mirror of `/api/billing/status` (see `server/entitlements.ts`) — THE
  * single billing read for every surface. Omitting `workspaceId` lets the
  * endpoint resolve the caller's own container.
  *
- * Pro = flat $5.99/mo, single-member only; Team = $7.99 per seat per month.
+ * Team = $8 per seat per month, and each member gets their own fixed credit
+ * allocation (Samuel, 2026-09-07). ⚠ Pro/Solo — flat $5.99, one member — is
+ * RETIRED FROM SALE; `SOLO_PRICE` and `isSolo` survive to LABEL the rows that
+ * are still on it, and nothing here offers it.
  */
 
 /** Aliases of the canonical taxonomy (plans.ts) — public names here so
@@ -25,15 +28,20 @@ export type { BillingStatus };
  * anchor when paid, UTC calendar month otherwise.
  */
 export interface WorkspaceCreditsStatus {
+  /** WHICH WALLET these numbers came off: `seat` inside a standard workspace,
+   *  `personal` in the caller's home space. ⚠ `null` on a DEGRADED reading and
+   *  on a cached row stored before the field shipped — the fallback below is
+   *  not optional (INVARIANTS §8). */
+  wallet: WalletKind | null;
   used: number;
   limit: number;
   remaining: number;
   periodStart: string;
   periodEnd: string;
-  /** Present only when the zeroes were NOT measured — a link container whose
-   *  OWNER has no billing workspace runs unmetered, and so does the reading a
-   *  NON-PAYER peer gets (`server/credits-service.ts › unmetered`,
-   *  `server/status-service.ts`). */
+  /** Present only when the zeroes were NOT measured — the reading a NON-OWNER
+   *  peer inside somebody's link container gets, a container with no active
+   *  owner, and the route's own fail-open (`server/credits-service.ts ›
+   *  unmetered`, `server/status-service.ts`). */
   degraded?: true;
 }
 
@@ -56,10 +64,19 @@ export interface WorkspaceEntitlementsStatus {
   has_stripe_customer: boolean;
 }
 
-/** Pro — flat monthly price, single-member workspaces only. */
+/** Pro — flat monthly price, single-member workspaces only. ⚠ LEGACY ROWS ONLY
+ *  since 2026-09-07: nothing sells this plan, and the constant exists to label
+ *  a workspace that is already on it. */
 export const SOLO_PRICE = 5.99;
-/** Team — per seat per month, seats sync with membership. */
-export const TEAM_SEAT_PRICE = 7.99;
+/**
+ * Team — per seat per month, seats sync with membership.
+ *
+ * ⚠ **$8.00 SINCE 2026-09-07 (Samuel's ruling), AND STRIPE DOES NOT AGREE
+ * YET.** The live price under `STRIPE_PRO_SEAT_PRICE_ID` is still 7.99; Samuel
+ * creates the $8 price and flips the env, and no client code touches a Stripe
+ * price. Deploy state is a measurement — read the env, not this line.
+ */
+export const TEAM_SEAT_PRICE = 8;
 
 const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
   plan: "free",
@@ -75,9 +92,14 @@ const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
   // measured nothing, and no surface renders credit dates today, so an
   // invented window would be a number with no measurement behind it.
   credits: {
+    // ⚠ THE PERSONAL ALLOWANCE, NOT A PLAN'S. This default is what renders
+    // before the first response lands, and the surface it renders on is most
+    // often the caller's own home space. A seat figure here would show a
+    // workspace number to somebody who is not in one.
+    wallet: null,
     used: 0,
-    limit: MONTHLY_MCP_CREDITS.free,
-    remaining: MONTHLY_MCP_CREDITS.free,
+    limit: PERSONAL_MONTHLY_CREDITS,
+    remaining: PERSONAL_MONTHLY_CREDITS,
     periodStart: "",
     periodEnd: "",
   },
@@ -111,7 +133,13 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
   const raw = query.data ?? DEFAULT_STATUS;
   const data: WorkspaceEntitlementsStatus = {
     ...raw,
-    credits: raw.credits ?? DEFAULT_STATUS.credits,
+    credits: raw.credits
+      ? // ⚠ FIELD-WISE INSIDE `credits` TOO. A row cached before `wallet`
+        // shipped replays with the object present and the key missing, which
+        // `raw.credits ?? …` cannot see — that is the exact shape of the stale
+        // -cache bug the rule above exists for.
+        { ...raw.credits, wallet: raw.credits.wallet ?? null }
+      : DEFAULT_STATUS.credits,
     cancelAtPeriodEnd: raw.cancelAtPeriodEnd ?? false,
   };
 

@@ -48,9 +48,11 @@ export function getSeatPriceId(): string | null {
 }
 
 /**
- * Flat Solo price. May be UNSET in dev/test — null so callers degrade like
- * `getSeatPriceId` (checkout config error; webhook plan mapping falls back to
- * metadata/team).
+ * Flat Solo price. ⚠ LEGACY-ONLY since 2026-09-07 (spec A6): Solo/"Pro" is
+ * retired from sale, so nothing MINTS against this price any more — it stays
+ * because live `solo` subscriptions still bill against it and must still be
+ * recognized (`selectSeatItem`, `webhook-handler.ts › derivePlan`). May be
+ * UNSET in dev/test — null so callers degrade like `getSeatPriceId`.
  */
 export function getSoloPriceId(): string | null {
   return process.env.STRIPE_SOLO_PRICE_ID || null;
@@ -61,6 +63,11 @@ export function getSoloPriceId(): string | null {
  * several items (add-ons, legacy prices), so `items.data[0]` can bill the wrong
  * line. Prefer the per-seat Team price, then flat Solo; fall back to the first
  * item (legacy single-item $20 subs).
+ *
+ * ⚠ THE SOLO ARM STAYS AND IS LEGACY-ONLY (2026-09-07, spec A6). Solo is off
+ * sale, not off the books: the live rows are exactly what this arm is for, and
+ * deleting it would send `upgrade-to-team` and the seat sync at `items.data[0]`
+ * — the wrong line on any Solo sub that ever grew a second item.
  */
 export function selectSeatItem(
   subscription: Stripe.Subscription
@@ -81,9 +88,12 @@ export function selectSeatItem(
 
 export interface WorkspaceCheckoutArgs {
   workspaceId: string;
-  /** Solo is flat (quantity forced to 1); team is per-seat at `quantity`. */
-  plan: "solo" | "team";
-  /** Team seat quantity (= active member count). Ignored for solo. */
+  /** ⚠ `"team"` ONLY (2026-09-07, spec A6) — Solo/"Pro" is retired from sale,
+   *  so the type is what stops a new Solo subscription being minted at all.
+   *  `POST /api/billing/checkout` answers 400 `PLAN_RETIRED` before it gets
+   *  here; this narrowing is the second lock. */
+  plan: "team";
+  /** Team seat quantity (= active member count). */
   quantity: number;
   email: string;
   stripeCustomerId?: string | null;
@@ -93,10 +103,11 @@ export interface WorkspaceCheckoutArgs {
 }
 
 /**
- * Workspace-scoped subscription checkout. Solo → STRIPE_SOLO_PRICE_ID at
- * quantity 1; team → STRIPE_PRO_SEAT_PRICE_ID at `quantity` seats. ⚠ Stamps
- * `{ workspace_id, plan }` into BOTH session and subscription metadata so the
- * webhook can route the subscription back and derive the plan.
+ * Workspace-scoped subscription checkout: STRIPE_PRO_SEAT_PRICE_ID at
+ * `quantity` seats. ⚠ Env name predates the Team rename; the Solo branch is
+ * GONE (retired from sale, 2026-09-07). ⚠ Stamps `{ workspace_id, plan }` into
+ * BOTH session and subscription metadata so the webhook can route the
+ * subscription back and derive the plan.
  *
  * `ui_mode: "elements"` — our own PaymentElement form, not a Stripe iframe.
  * ⚠ Elements mode disallows `custom_text` / `branding_settings`, and
@@ -107,16 +118,14 @@ export async function createWorkspaceCheckoutSession(
 ): Promise<string> {
   const stripe = getStripe();
 
-  const priceId = args.plan === "solo" ? getSoloPriceId() : getSeatPriceId();
+  const priceId = getSeatPriceId();
   if (!priceId) {
     throw new Error(
-      args.plan === "solo"
-        ? "Solo price not configured. Set STRIPE_SOLO_PRICE_ID in env."
-        : "Per-seat Team price not configured. Set STRIPE_PRO_SEAT_PRICE_ID in env."
+      "Per-seat Team price not configured. Set STRIPE_PRO_SEAT_PRICE_ID in env."
     );
   }
 
-  const quantity = args.plan === "solo" ? 1 : Math.max(1, args.quantity);
+  const quantity = Math.max(1, args.quantity);
   const metadata = { workspace_id: args.workspaceId, plan: args.plan };
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     ui_mode: "elements",

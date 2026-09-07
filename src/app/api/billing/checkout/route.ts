@@ -13,11 +13,30 @@ import {
 } from "@/features/billing/server/workspace-billing";
 import { composeSegment } from "@/shared/lib/url/parse-segment";
 
-/** Plan from an optional JSON body; absent/invalid defaults to "team" (per-seat). */
-async function readPlan(request: NextRequest): Promise<"solo" | "team"> {
+/** 400 for a body still asking to buy the retired Solo/"Pro" plan. ⚠ A REFUSAL,
+ *  not a silent upgrade to Team: a caller that asked for a $5.99 flat plan must
+ *  not be handed an $8.00-per-seat subscription because the server decided for
+ *  them. */
+function planRetired() {
+  return NextResponse.json(
+    {
+      error: "PLAN_RETIRED",
+      message: "Pro is no longer sold. Team is $8.00 per seat per month.",
+    },
+    { status: 400 }
+  );
+}
+
+/**
+ * Plan from an optional JSON body. **Team is the only purchasable plan**
+ * (2026-09-07, spec A6) — absent/unrecognized defaults to `"team"`, and an
+ * explicit `"solo"` is REFUSED rather than coerced. Returns `null` to mean
+ * "answer 400", never a plan the caller did not ask for.
+ */
+async function readPlan(request: NextRequest): Promise<"team" | null> {
   try {
     const body = (await request.json()) as { plan?: unknown };
-    if (body?.plan === "solo" || body?.plan === "team") return body.plan;
+    if (body?.plan === "solo") return null;
   } catch {
   }
   return "team";
@@ -31,8 +50,14 @@ function checkoutConflict(portalUrl: string | null) {
 }
 
 /**
- * Subscription checkout for the active workspace. Admin/owner only. Team is per-seat (quantity =
- * active member count, synced by the webhook); Solo is flat and requires a single-member workspace.
+ * Subscription checkout for the active workspace. Admin/owner only. **Team only, per-seat**
+ * (quantity = active member count, synced by the webhook).
+ *
+ * ⚠ SOLO/"PRO" IS RETIRED FROM SALE (2026-09-07, Samuel's per-seat ruling — spec A6). This route
+ * no longer mints a Solo session for anybody: a body asking for it answers 400 `PLAN_RETIRED`.
+ * The `SOLO_REQUIRES_SINGLE_MEMBER` 409 that used to guard it is DELETED with the sale, not
+ * relaxed. Live `solo` rows are untouched — they keep billing until they cancel, or move to Team
+ * in place via `POST /api/billing/upgrade-to-team`.
  */
 export const POST = withWorkspaceAuth(
   async (request, { userId, workspaceId, workspaceSlug, workspacePublicId }) => {
@@ -66,6 +91,7 @@ export const POST = withWorkspaceAuth(
     // so an abandoned or plan-switching checkout is never locked out.
     try {
       const plan = await readPlan(request);
+      if (!plan) return planRetired();
 
       const { data: profile } = await supabaseAdmin()
         .from("profiles")
@@ -80,16 +106,6 @@ export const POST = withWorkspaceAuth(
       }
 
       const quantity = await countActiveMembers(workspaceId);
-      if (plan === "solo" && quantity !== 1) {
-        return NextResponse.json(
-          {
-            error: "SOLO_REQUIRES_SINGLE_MEMBER",
-            message:
-              "Pro is for single-member workspaces. Choose Team to bring others.",
-          },
-          { status: 409 }
-        );
-      }
 
       // Re-read billing before minting: a webhook may have persisted a subscription id since
       // the first read. Defense-in-depth behind the claim.

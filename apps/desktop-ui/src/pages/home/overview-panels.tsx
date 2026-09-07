@@ -263,17 +263,11 @@ function CreditsBar({
   if (credits.loading || !homeWorkspaceId || ledgerPending) {
     return <Skeleton className="h-[54px] w-full rounded-lg" />;
   }
-  // ⚠ THE PLAN RIDES ALONG BECAUSE THE BAR'S DENOMINATOR NEEDS IT: a reading
-  // whose payer never resolved carries `limit: 0`, and the plan's allowance is
-  // what stands in for it (`overview-sections.tsx › CreditCapacityBar`). Same
-  // payload, same read — it costs nothing extra.
-  return (
-    <CreditCapacityBar
-      credits={credits.credits}
-      plan={credits.plan}
-      spent={seriesTotal(points)}
-    />
-  );
+  // ⚠ THE PLAN NO LONGER RIDES ALONG (2026-09-07). It stood in for a `limit: 0`
+  // reading, but /home spends the reader's PERSONAL wallet, whose allowance is
+  // one constant and no plan's — `overview-sections.tsx › CreditCapacityBar`
+  // reads `credits.ts › PERSONAL_MONTHLY_CREDITS` itself.
+  return <CreditCapacityBar credits={credits.credits} spent={seriesTotal(points)} />;
 }
 
 function RailsGhost() {

@@ -4,8 +4,20 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * Launch-metrics aggregations for the admin analytics dashboard. Read-only;
  * admin auth is enforced at the route layer.
  *
- * ⚠ Prices hardcoded so MRR matches what Stripe actually charges — keep in sync
- * or read them from env instead.
+ * ⚠ Prices hardcoded so MRR matches what Stripe actually CHARGES — keep in sync
+ * or read them from env instead. **These are measurements of Stripe, not the
+ * price list**, which is why neither number moved on 2026-09-07 when Solo went
+ * off sale and Team's list price became $8.00 (spec A6/A7):
+ *   • `SOLO_MONTHLY_USD` — LEGACY ROWS ONLY. Nothing may buy Solo any more
+ *     (`POST /api/billing/checkout` answers 400 `PLAN_RETIRED`), but the live
+ *     subscriptions still bill $5.99 and still belong in MRR. The constant and
+ *     the `solo` arm below retire when the last row does, not before.
+ *   • `TEAM_SEAT_MONTHLY_USD` — still $7.99 because Stripe's price object still
+ *     is. Samuel creates the $8.00 price and flips `STRIPE_PRO_SEAT_PRICE_ID`;
+ *     ⚠ existing Team subs KEEP the old price unless migrated, so on the day
+ *     that lands this becomes a per-subscription fact and one constant stops
+ *     being able to express it. Do NOT bump this to 8 on the strength of the
+ *     pricing page — the two answer different questions.
  */
 
 const SOLO_MONTHLY_USD = 5.99;
@@ -25,9 +37,10 @@ export interface LaunchMetrics {
 export async function getLaunchMetrics(): Promise<LaunchMetrics> {
   const supabase = supabaseAdmin();
 
-  // Billing is workspace-level: 'solo' ($5.99 flat), 'team' ($7.99 ×
-  // seat_count). Canceled reverts to plan='free' and past_due keeps
-  // entitlements, so active + past_due are the rows that drive MRR.
+  // Billing is workspace-level: 'solo' ($5.99 flat, LEGACY — off sale since
+  // 2026-09-07, live rows still bill), 'team' ($7.99 × seat_count). Canceled
+  // reverts to plan='free' and past_due keeps entitlements, so active +
+  // past_due are the rows that drive MRR.
   const [{ count: signupsTotal }, { data: paidRows }] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase

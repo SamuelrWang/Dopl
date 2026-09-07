@@ -99,15 +99,55 @@ const ENTITLEMENT_CODES = new Set([
     "kb_storage_full",
     exports.CREDITS_EXHAUSTED_CODE,
 ]);
+/** `2026-09-01T00:00:00.000Z` → `2026-09-01`, or null when it is not a date.
+ *  ⚠ Null OMITS the "Resets …" sentence; printing `Invalid Date` or a raw
+ *  fragment of somebody's shape change is worse than saying nothing. */
+function periodEndDate(periodEnd) {
+    if (typeof periodEnd !== "string")
+        return null;
+    const day = periodEnd.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day))
+        return null;
+    return Number.isNaN(Date.parse(periodEnd)) ? null : day;
+}
+/** `(1,000/5,000)`, or "" when the server sent no usable counters. */
+function usageSpan(used, limit) {
+    if (!Number.isFinite(used) || !Number.isFinite(limit))
+        return "";
+    return ` (${used.toLocaleString("en-US")}/${limit.toLocaleString("en-US")})`;
+}
 /**
  * Credits refusal rendered exactly like an entitlement denial (message +
  * upgrade link) so an agent reads ONE shape for every plan gate. ⚠ URL comes
  * from the server's consume response — this package cannot import
  * `billing/server/entitlements.ts › upgradeUrl`.
+ *
+ * ⚠ **THE SENTENCE NAMES WHOSE COUNTER STOPPED, BECAUSE NOTHING IS POOLED**
+ * (Samuel, 2026-09-07). A `seat` refusal is about the caller's OWN allocation
+ * inside that workspace — telling them "this workspace is out" would send them
+ * to an admin who cannot help — and a `personal` refusal is about their home
+ * space, where there is nothing to buy and therefore no link to offer.
+ *
+ * ⚠ **A MISSING `wallet` FALLS BACK, IT DOES NOT GUESS.** An older server omits
+ * the field entirely and `null` is the unmetered posture; both render the
+ * generic sentence, which is true of every wallet.
  */
-function creditsExhausted(upgradeUrl) {
-    return err(upgradeUrl
-        ? `${CREDITS_EXHAUSTED_MESSAGE}\n\nUpgrade to continue: ${upgradeUrl}`
+function creditsExhausted(o) {
+    const url = typeof o.upgradeUrl === "string" ? o.upgradeUrl : "";
+    const span = usageSpan(o.used, o.limit);
+    const day = periodEndDate(o.periodEnd);
+    const resets = day ? ` Resets ${day}.` : "";
+    if (o.wallet === "seat") {
+        const head = `Your seat in this workspace is out of credits for this period${span}.${resets}`;
+        return err(url
+            ? `${head}\n\nUpgrade to Team for 5,000 credits per member: ${url}`
+            : head);
+    }
+    if (o.wallet === "personal") {
+        return err(`Your personal credits are used up for this month${span}.${resets}`);
+    }
+    return err(url
+        ? `${CREDITS_EXHAUSTED_MESSAGE}\n\nUpgrade to continue: ${url}`
         : CREDITS_EXHAUSTED_MESSAGE);
 }
 /**
@@ -127,7 +167,7 @@ function entitlementDenied(e) {
     const message = typeof rec.apiMessage === "string" && rec.apiMessage
         ? rec.apiMessage
         : code === "chat_outside_retention"
-            ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Pro to restore full chat history."
+            ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Team to restore full chat history."
             : code === exports.CREDITS_EXHAUSTED_CODE
                 ? CREDITS_EXHAUSTED_MESSAGE
                 : code === "kb_storage_full"

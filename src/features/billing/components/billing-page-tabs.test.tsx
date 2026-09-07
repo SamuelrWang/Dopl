@@ -35,9 +35,12 @@ const FREE: Status = {
   canCreateObjects: true,
   chatsWindowDays: 90,
   credits: {
-    used: 120,
-    limit: 500,
-    remaining: 380,
+    // The caller's own seat in this workspace (2026-09-07); the Usage pane's
+    // label is asserted in `./billing-page-screen.test.tsx`.
+    wallet: "seat" as const,
+    used: 42,
+    limit: 100,
+    remaining: 58,
     periodStart: "2026-08-01T00:00:00.000Z",
     periodEnd: "2026-09-01T12:00:00.000Z",
   },

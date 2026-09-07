@@ -146,10 +146,19 @@
 --     two containers being the same, and never on `kind`. The owner of a
 --     personal container is a member of both by construction, so lending a
 --     personal KB into a workspace channel already works.
---   * **Billing already reroutes.** `credits-service.ts › resolveBillingTarget`
---     branches on `isStandardWorkspace(caller.workspaceKind)`, so a burn inside
---     a personal container takes the container path and lands on the owner's
---     standard workspace — the same answer §7 of the spec picks as default (a).
+--   * **Billing already routes a personal container's burn correctly.**
+--     `credits-service.ts › resolveBillingTarget` branches on
+--     `isStandardWorkspace(caller.workspaceKind)`, so a burn inside a personal
+--     container takes the non-standard path.
+--     ⚠ **AND WHERE THAT PATH ENDS CHANGED ON 2026-09-07** (Samuel's per-seat +
+--     personal-wallet ruling, `20260930120000_credit_wallets.sql`). This bullet
+--     said the burn "lands on the owner's STANDARD WORKSPACE — the same answer
+--     §7 of the spec picks as default (a)", and that reroute is DELETED: home
+--     spend now lands on the owner's PERSONAL WALLET (`user_credit_usage`), which
+--     is keyed on the person and needs no workspace at all. The conclusion this
+--     bullet exists to state is unchanged and is now stronger — a personal
+--     container needs no billing arm, because the wallet it spends is the
+--     owner's and the container is only where the call was made.
 --
 -- ── WHAT IS DELIBERATELY *NOT* SEEDED ──────────────────────────────────────
 --
