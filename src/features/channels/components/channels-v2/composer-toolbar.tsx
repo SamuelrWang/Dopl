@@ -41,10 +41,12 @@ import type { AgentLaunchControls } from "./use-agents-panel";
  * ⚠ **THE HOVER FILL IS `IconButton`'s OWN `hover:bg-surface-raised-1`** — the same token the
  * Discard beside them wears — so it is not restated here and cannot drift from either.
  */
-export const TOOLBAR_ICON = "h-[var(--action-h-sm)] w-[var(--action-h-sm)] rounded-full";
+// ⚠ BACK TO THE 24px FACE (Samuel, 2026-09-08: "decrease it back to its original size, but keep
+// the icon on the right") — the 30px trial lasted one look. Order stays Discard · Dictate · Send.
+export const TOOLBAR_ICON = "h-6 w-6 rounded-full";
 
-/** The glyph, scaled with the face: 15 was drawn for a 24px square, this is drawn for 30. */
-export const TOOLBAR_GLYPH = 18;
+/** The glyph for the 24px square. */
+export const TOOLBAR_GLYPH = 15;
 
 export function ComposerToolbar({
   newAgent,

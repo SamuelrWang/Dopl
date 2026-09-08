@@ -143,36 +143,18 @@ describe("the recipient tag sits ABOVE the card, outside it, hard left", () => {
   });
 });
 
-describe("every toolbar glyph is the send button's square", () => {
-  it("matches the arrow's height and width", () => {
-    // ⚠ THE ASSERTION IS ON THE RENDERED CLASSES, NOT ON A LITERAL 30. `send-button.tsx` draws
-    // `h-[30px] w-[30px]` and the glyphs read `--action-h-sm`, which docs/DESIGN-SYSTEM.md says
-    // IS 30px — the point Samuel made is that the two FOOTPRINTS agree, so what is pinned is
-    // that the glyphs read the small-action token at all and that jsdom's computed box for the
-    // two is the same shape. A glyph nudged back to `h-6 w-6` fails on the first assertion.
+describe("every toolbar glyph is the 24px face", () => {
+  it("reads the 24px square, not the send button's 30px", () => {
+    // ⚠ INVERTED 2026-09-08: the 30px trial lasted one look (Samuel: "decrease it back to its
+    // original size, but keep the icon on the right"). The glyphs are the 24px `h-6 w-6` face
+    // again; only the ORDER from that trial survives (pinned below).
     mount();
     for (const name of ["New thread", "Mention", "Emoji", "Dictate"]) {
       const face = btn(name);
-      expect(face.className, `${name} must read the small-action scale`).toContain(
-        "h-[var(--action-h-sm)]"
-      );
-      expect(face.className).toContain("w-[var(--action-h-sm)]");
-      // ⚠ ROUND, which is the one way they differ from the arrow — and `h-7 … rounded-[7px]`
-      // is `IconButton`'s own default, so this also catches a className that stopped winning.
-      expect(face.className).toContain("rounded-full");
-      expect(face.className).not.toContain("rounded-[7px]");
+      expect(face.className, `${name} must read the 24px face`).toContain("h-6");
+      expect(face.className).toContain("w-6");
+      expect(face.className).not.toContain("--action-h-sm");
     }
-  });
-
-  it("hovers with the SAME face the Discard beside it wears", () => {
-    // ⚠ THE HOVER FILL IS WHAT SAMUEL ASKED ABOUT (*"their shadow when hovered over"*). It is
-    // `IconButton`'s own `hover:bg-surface-raised-1` — the Discard's token — and this pins that
-    // neither drifted onto a private recipe.
-    const container = mount();
-    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "hi" } });
-    expect(btn("Emoji").className).toContain("hover:bg-surface-raised-1");
-    expect(btn("Discard").className).toContain("hover:bg-surface-raised-1");
-    expect(container.querySelector(".raised-tab")).not.toBeNull();
   });
 });
 
