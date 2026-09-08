@@ -2,18 +2,18 @@
 /**
  * THE COMPOSER'S LAUNCH PANEL — the Bot icon's whole surface (2026-08-27, Samuel's ruling).
  *
- * ⚠ THE TEMPLATE CHEVRON'S PINS ARE DELETED WITH THE CHEVRON, and that is stated rather than
- * quietly absorbed. Five cases stood here — one-click blank launch, the picker opening from the
- * chevron, the chevron not opening the thread panel, no chevron without the bridge, the chevron
- * disabled mid-launch. **The act they protected did not go away; it moved into the panel**, and
- * every one of them has a replacement below: the blank launch is the Template row's first option,
- * the picker's job is that row, and "three glyphs, three acts" is now two.
+ * ⚠ THE TEMPLATE CHEVRON'S PINS ARE DELETED WITH THE CHEVRON, stated rather than absorbed. Five
+ * cases stood here (one-click blank launch, the picker opening from the chevron, the chevron not
+ * opening the thread panel, no chevron without the bridge, the chevron disabled mid-launch).
+ * **The act they protected moved into the form**, and each has a replacement below.
+ * ⚠ AND THE FORM IS A CENTERED POPUP SINCE 2026-09-08 (`launch-agent-dialog.tsx`). The Bot icon
+ * and the launch lane are unchanged; the submit and the two exits now live in the dialog.
  *
  * The properties this file exists for, all of which fail SILENTLY:
  *
- *  - **THE ID THE PANEL SHOWS IS THE ID THE AGENT GETS.** It is pre-assigned before the spawn
- *    (`sessions.mintAgentId`) and carried on the launch. If the desktop drops it, the operator
- *    reads an address that reaches nobody — so the payload assertion is on the VALUE.
+ *  - **THE ID THE FORM SHOWS IS THE ID THE AGENT GETS.** Pre-assigned before the spawn
+ *    (`sessions.mintAgentId`) and carried on the launch; drop it and the operator reads an
+ *    address that reaches nobody — so the payload assertion is on the VALUE.
  *  - **THE OLD-DESKTOP ARM SHOWS NOTHING RATHER THAN A GUESS.** A build with no `mintAgentId`
  *    cannot honour a pre-assigned id either, and a panel that invented one would be lying about
  *    the one string the operator is meant to quote.
@@ -22,8 +22,7 @@
  *  - **NAME AND DESCRIPTION ARE WRITTEN AFTER THE SPAWN**, keyed to the address main returned.
  *
  * ⚠ `useThreadWrites` and the template read are MOCKED — this file is about the LAUNCH payload
- * and the identity writes, not about the write layer or the templates endpoint.
- */
+ * and the identity writes, not the write layer or the templates endpoint. */
 
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -109,13 +108,10 @@ function launcher(over: Partial<AgentLaunchControls> = {}): AgentLaunchControls 
   };
 }
 
-/**
- * ⚠ MOUNTED UNDER `StrictMode`, AND THAT IS THE WHOLE POINT OF THIS HELPER. The defect it pins is
- * an IMPURE STATE UPDATER — a `mintAgentId()` call inside `setOpen(...)` — and React only
- * double-invokes updaters under StrictMode. Testing-library's plain `render` runs it once, so the
- * ordinary `mount` below reports ONE call whether the code is correct or not.
- * **Measured: with the mint moved back inside the updater, `mount` stays green and this fails.**
- */
+/** ⚠ `StrictMode` IS THE WHOLE POINT OF THIS HELPER. The defect it pins is an IMPURE STATE
+ *  UPDATER — `mintAgentId()` inside `setOpen(...)` — and React double-invokes updaters only
+ *  under StrictMode, so the plain `mount` below reports ONE call either way. **Measured: with
+ *  the mint back inside the updater, `mount` stays green and this fails.** */
 function mountStrict(over: Partial<React.ComponentProps<typeof ChannelsV2Composer>> = {}) {
   render(
     <StrictMode>
@@ -149,16 +145,25 @@ const botIcon = () =>
 const panelOpen = () => botIcon().getAttribute("aria-pressed");
 const nameField = () => screen.getByLabelText("Agent name") as HTMLInputElement;
 const descField = () => screen.getByLabelText("Agent description") as HTMLTextAreaElement;
-/** ⚠ THE COMPOSER'S OWN SEND CONTROL, WEARING "Launch" (Samuel, 2026-08-27). The panel has no
- *  button of its own any more — one submit, context-labeled, exactly as the thread panel's
- *  becomes "Create". Addressing it by that accessible name IS the pin. */
+/** ⚠ THE DIALOG'S OWN SUBMIT SINCE 2026-09-08 — it was the COMPOSER's send control wearing
+ *  "Launch". There is still exactly one on screen, so the accessible name is still the pin. */
 const launchButton = () => screen.getByRole("button", { name: "Launch" }) as HTMLButtonElement;
 
-/** Open the panel and wait for the mint to land in the Name field. */
+/** ⚠ `waitFor` covers TWO async steps since 2026-09-08: the mint AND `ModalShell`'s rAF. */
 async function openPanel() {
   fireEvent.click(botIcon());
   await waitFor(() => expect(nameField().value).toBe(`#${MINTED}`));
 }
+
+/** On a build that pre-assigns NO id there is no prefill to wait on — the wait is the dialog. */
+async function openPanelBare() {
+  fireEvent.click(botIcon());
+  await waitFor(() => expect(nameField()).toBeTruthy());
+}
+
+/** ⚠ `tab`, not `menuitem`: Template/Model/Runtime are `SegmentedControl` rows now, not
+ *  dropdowns (Samuel: *"instead of a dropdown, I think it should be a selector"*). */
+const pill = (name: string | RegExp) => screen.getByRole("tab", { name });
 
 // ── 1. THE CONTROL ───────────────────────────────────────────────────────────
 
@@ -232,12 +237,14 @@ describe("the ID is assigned before the spawn", () => {
     expect(mintAgentId).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the id NOWHERE — Name is the only identity field (Samuel, 2026-08-27)", () => {
+  it("shows the id NOWHERE — Name is the only identity field (Samuel, 2026-08-27)", async () => {
     // ⚠ THE ID DID NOT GO AWAY, THE ROW DID. It is still minted, still forwarded, still what
     // disambiguates two agents an operator gave the same name — it is simply not a field the
     // operator reads. `queryByLabelText` covers a row that comes back wearing a different label.
     mount({ newAgent: launcher() });
-    fireEvent.click(botIcon());
+    // ⚠ AWAITED, NOT FIRED-AND-QUERIED: `ModalShell` mounts on a rAF, so a synchronous query
+    // after the click would pass over a row that is there.
+    await openPanel();
     expect(screen.queryByLabelText(/agent id/i)).toBeNull();
     expect(screen.queryByText(MINTED)).toBeNull();
   });
@@ -262,7 +269,7 @@ describe("the ID is assigned before the spawn", () => {
     const controls = launcher();
     mount({ newAgent: controls });
 
-    fireEvent.click(botIcon());
+    await openPanelBare();
     expect(nameField().value).toBe("");
 
     fireEvent.change(nameField(), { target: { value: "Research" } });
@@ -329,8 +336,7 @@ describe("what Launch puts on the wire", () => {
     mount({ newAgent: controls });
     await openPanel();
 
-    fireEvent.click(screen.getByRole("button", { name: "Agent template" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Code auditor" }));
+    fireEvent.click(pill("Code auditor"));
     fireEvent.click(launchButton());
 
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
@@ -344,8 +350,7 @@ describe("what Launch puts on the wire", () => {
     mount({ newAgent: controls });
     await openPanel();
 
-    fireEvent.click(screen.getByRole("button", { name: "Agent model" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Opus 5" }));
+    fireEvent.click(pill("Opus 5"));
     fireEvent.click(launchButton());
 
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
@@ -447,13 +452,15 @@ describe("the launch panel and the thread panel share one slot", () => {
     ).toBe("false");
   });
 
-  it("takes the chat textarea off screen, and gives the draft back", async () => {
+  it("LEAVES the chat textarea mounted, and leaves the draft in it", async () => {
+    // ⚠ SUPERSEDED BY THE POPUP. "One edit surface at a time" unmounted the textarea because
+    // the form stood ON this card; what it protected — a draft surviving the detour — is here.
     mount({ newAgent: launcher() });
     const body = screen.getByLabelText("Message") as HTMLTextAreaElement;
     fireEvent.change(body, { target: { value: "morning, all" } });
 
     await openPanel();
-    expect(screen.queryByLabelText("Message")).toBeNull();
+    expect(screen.getByLabelText("Message")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Close new agent" }));
     expect((screen.getByLabelText("Message") as HTMLTextAreaElement).value).toBe("morning, all");
@@ -464,15 +471,15 @@ describe("the launch panel and the thread panel share one slot", () => {
     // `title` for exactly this (INVARIANTS §8, rule 4).
     stubBridge({ mintAgentId: undefined });
     mount({ newAgent: launcher() });
-    fireEvent.click(botIcon());
+    await openPanelBare();
 
     expect(launchButton().disabled).toBe(true);
     expect(launchButton().title).toBe("An agent needs a name");
   });
 
-  it("the panel carries NO submit of its own — one control, context-labeled", async () => {
-    // ⚠ TWO SUBMITS ON ONE CARD IS TWO ANSWERS to "what does pressing this do". The composer's
-    // send button IS the launch control; a second button inside the panel is the regression.
+  it("there is exactly ONE Launch on screen — the dialog's", async () => {
+    // ⚠ THE 2026-08-27 RULE ("two submits on ONE CARD is two answers") still holds: the
+    // composer's control went back to "Send" when the form left (`composer.tsx › NO_LAUNCH`).
     mount({ newAgent: launcher() });
     await openPanel();
     expect(screen.getAllByRole("button", { name: "Launch" })).toHaveLength(1);

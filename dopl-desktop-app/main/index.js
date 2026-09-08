@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, session, shell } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 
@@ -23,6 +23,7 @@ const { diag } = require('./diag');
 // v1.9 Session Window: engine seam + window factory / lifecycle echoes + window-mode.
 const sessionEngine = require('./session-engine');
 const spaWindow = require('./spa-window');
+const mediaPermission = require('./media-permission'); // 2026-09-08: the session permission fence
 // Phase 10: the registry of APP-OWNED windows — the shell plus any pop-out thread window.
 // It is what every renderer-reachable ipcMain.handle is bound to, and registration happens
 // only at window creation, in main. See main/app-windows.js's header.
@@ -157,6 +158,12 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    // THE PERMISSION FENCE, FIRST — before any window exists, because Electron's default is to
+    // approve every permission a renderer asks for and a window created ahead of this would carry
+    // that default for the life of its first page. One call on the DEFAULT session covers every
+    // window in the app (`main/media-permission.js` carries the allowlist and the reasoning).
+    mediaPermission.installPermissionFence(session.defaultSession);
+
     // Present a clean Chrome User-Agent (no "Electron/x" or app-name token) so
     // the web app and any third-party widgets don't treat us as an odd client.
     try {

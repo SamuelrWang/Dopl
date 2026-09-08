@@ -1,7 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { HttpError } from "@/shared/lib/http-error";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../constants";
-import type { AgentPresenceStatus } from "../types";
+import type { AgentPresenceStatus, PresencePosture } from "../types";
 import type { MemberPresence } from "./dto";
 import type { ConsentRequestRow, PresenceRow } from "./collab-dto";
 
@@ -301,8 +302,37 @@ export async function upsertPresence(
 export type { MemberPresence } from "./dto";
 
 /**
+ * THE ONLINE RULE, IN ONE PLACE — fresh enough AND not explicitly away.
+ *
+ * ⚠ **`status !== "away"`, NEVER `status === "active"`** (2026-09-08). Only a
+ * desktop on this build sends the posture at all; every older one still sends
+ * `'listening'`, and an allow-list would take every pre-posture machine offline
+ * on deploy day. The `away` word is the only one that suppresses the dot, so a
+ * status this reader has never heard of reads as PRESENT-if-fresh.
+ *
+ * ⚠ An unparseable or absent stamp reads OFFLINE — the fail-safe direction every
+ * presence reader in this tree picks.
+ */
+function derivePresence(
+  lastSeenAt: string | null | undefined,
+  status: string | null | undefined,
+  now: number = Date.now()
+): MemberPresence {
+  if (!lastSeenAt) return { online: false, lastSeenAt: null };
+  const seenAt = Date.parse(lastSeenAt);
+  if (Number.isNaN(seenAt)) return { online: false, lastSeenAt };
+  const fresh = now - seenAt < PRESENCE_ONLINE_WINDOW_MS;
+  return { online: fresh && status !== "away", lastSeenAt };
+}
+
+/**
  * Presence for every workspace member, keyed by user id, `online` derived
  * against PRESENCE_ONLINE_WINDOW_MS. One indexed query for the whole page.
+ *
+ * ⚠ **THE SERVER IS THE ONLY THING THAT DECIDES `online` SINCE 2026-09-08**, and
+ * `status` is read for exactly that reason: a client cannot see it, so a client
+ * that re-derives the boolean from `lastSeenAt` alone is structurally unable to
+ * agree with this function. `view-model.ts › isPresent` now returns THIS flag.
  */
 export async function presenceForWorkspace(
   workspaceId: string
@@ -310,22 +340,73 @@ export async function presenceForWorkspace(
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("agent_presence")
-    .select("user_id, last_seen_at")
+    .select("user_id, last_seen_at, status")
     .eq("workspace_id", workspaceId)
     .limit(PRESENCE_ROWS_LIMIT);
   if (error) throw error;
-  const cutoff = Date.now() - PRESENCE_ONLINE_WINDOW_MS;
+  const now = Date.now();
   const out = new Map<string, MemberPresence>();
   for (const row of (data ?? []) as Array<{
     user_id: string;
     last_seen_at: string;
+    status: string | null;
   }>) {
-    out.set(row.user_id, {
-      online: Date.parse(row.last_seen_at) > cutoff,
-      lastSeenAt: row.last_seen_at,
-    });
+    out.set(row.user_id, derivePresence(row.last_seen_at, row.status, now));
   }
   return out;
+}
+
+/**
+ * ONE STATEMENT, EVERY CONTAINER — the user-scoped heartbeat (2026-09-08).
+ *
+ * ⚠ **THIS EXISTS BECAUSE THE PER-WORKSPACE LOOP DID NOT SCALE WITH MEMBERSHIP
+ * COUNT, AND THAT WAS THE REPORTED BUG.** The desktop posted once per container,
+ * serially, 12 s timeout each, on a 30 s interval — so an operator in 13+
+ * containers could take longer than one interval to finish a cycle, the next
+ * tick was SKIPPED, and the rows at the tail of the loop aged past the online
+ * window while the machine was awake. `main/presence-core.js`'s header carries
+ * the same paragraph from the client end.
+ *
+ * ⚠ **THE RPC IS `SECURITY DEFINER` OVER A CALLER-SUPPLIED SUBJECT AND IS
+ * SERVICE-ROLE-ONLY** (`20260930140000_presence_heartbeat_all.sql`). It is
+ * reached from here and nowhere else; the `userId` handed to it is
+ * server-resolved by `withUserAuth`, never a body field.
+ *
+ * ⚠ **A MISSING FUNCTION IS A 404, NOT A 500.** The migration is written-not-
+ * applied (§12), so a server running ahead of its database must answer something
+ * the desktop can fall back on — `main/presence-core.js` drops to the parallel
+ * per-workspace loop on 404 and on nothing else. PostgREST reports an unknown
+ * function as `PGRST202`; the message check is the belt for a PostgREST that
+ * ever stops setting the code.
+ *
+ * @returns the workspace ids stamped (possibly empty — an operator in zero
+ *   containers is an ANSWER, not a failure).
+ */
+export async function upsertPresenceEverywhere(
+  userId: string,
+  status: PresencePosture
+): Promise<string[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.rpc("presence_heartbeat_all", {
+    p_user_id: userId,
+    p_status: status,
+  });
+  if (error) {
+    if (
+      error.code === "PGRST202" ||
+      /could not find the function/i.test(error.message ?? "")
+    ) {
+      throw new HttpError(
+        404,
+        "PRESENCE_HEARTBEAT_ALL_UNAVAILABLE",
+        "presence_heartbeat_all is not deployed on this database"
+      );
+    }
+    throw error;
+  }
+  return ((data ?? []) as Array<{ workspace_id: string }>).map(
+    (row) => row.workspace_id
+  );
 }
 
 /**
@@ -357,19 +438,17 @@ export async function presenceForUser(
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("agent_presence")
-    .select("last_seen_at")
+    .select("last_seen_at, status")
     .eq("user_id", userId)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error) throw error;
-  const lastSeenAt = (data as { last_seen_at: string } | null)?.last_seen_at;
-  if (!lastSeenAt) return null;
-  const seenAt = Date.parse(lastSeenAt);
-  if (Number.isNaN(seenAt)) return { online: false, lastSeenAt };
-  return {
-    online: Date.now() - seenAt < PRESENCE_ONLINE_WINDOW_MS,
-    lastSeenAt,
-  };
+  const row = data as { last_seen_at: string; status: string | null } | null;
+  if (!row?.last_seen_at) return null;
+  // ⚠ THE SAME `derivePresence` THE WORKSPACE READ USES, for the same reason the
+  // window is the same constant: a second copy of the rule would let the roster
+  // and the session surface disagree about one machine (2026-09-08).
+  return derivePresence(row.last_seen_at, row.status);
 }
 
 /** Member user-ids per channel — pairs with presence for online counts. */

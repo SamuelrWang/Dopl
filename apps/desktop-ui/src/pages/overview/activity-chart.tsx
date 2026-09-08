@@ -5,10 +5,6 @@ import type {
 } from "@/features/workspaces/types";
 import { BarSeries, type BarPoint } from "#/components/charts/bar-series";
 
-/** Label every Nth bar, counted BACK from today so the last bar always gets
- *  one. 31 `31/12`-wide labels at `text-micro` do not fit the plot width. */
-const LABEL_EVERY = 5;
-
 const TITLES: Record<OverviewSeriesMetric, string> = {
   messages: "Messages per day",
   mcp: "MCP calls per day",
@@ -57,11 +53,13 @@ export function ActivityChart({
   return (
     <section className="bento p-3.5">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+        {/* Ink, not gray — Samuel, 2026-09-08: "their font colors are black
+            not gray". The reference's header is one weight of near-black. */}
+        <h2 className="text-label font-semibold uppercase tracking-wide text-text-primary">
           {TITLES[metric]}
         </h2>
         <div className="flex items-center gap-3">
-          <span className="font-mono text-micro tabular-nums text-text-muted">
+          <span className="font-mono text-micro tabular-nums text-text-primary">
             {total.toLocaleString()} in the period
           </span>
           <SegmentedControl<OverviewSeriesMetric>
@@ -72,7 +70,9 @@ export function ActivityChart({
         </div>
       </div>
 
-      <BarSeries points={points} labelEvery={LABEL_EVERY} className="mt-4" />
+      {/* No `labelEvery`: the plot captions EVERY day now (Samuel: "we should
+          be able to fit 30 days"), which is what the −45° slant buys. */}
+      <BarSeries points={points} className="mt-4" />
     </section>
   );
 }

@@ -50,6 +50,7 @@
       "notarize": false,
       "extendInfo": {
         "NSUserNotificationAlertStyle": "alert",
+        "NSMicrophoneUsageDescription": "Dopl uses the microphone to dictate messages into the composer.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "com.dopl.connect",

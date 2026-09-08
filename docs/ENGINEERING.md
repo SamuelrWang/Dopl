@@ -5259,8 +5259,9 @@ retaining socket buffers and TLS state, all of it **native**, all of it invisibl
 The house style leaked it on ~20 branches, and **the leaking branches are the ERROR branches**:
 the success path reads `res.json()` and is fine, while `if (!res.ok) { … return; }` — the path a
 saturated server or a stale cookie puts every caller on at once — drops the body on the floor. The
-steadiest one was `presence.js › beatOnce`, which reads no body on **any** branch, success included,
-once per workspace every 30s forever.
+steadiest one was the presence beat (`presence-core.js › post` since the 2026-09-08 rework split
+the loop out of `presence.js`, where it was called `beatOnce`), which reads no body on **any**
+branch, success included, once every 30s forever.
 
 One shared helper (`api-repair.js › discardBody`, best-effort by construction) now covers the three
 highest-frequency seams. The remaining sites are **F-353**, scoped as its own wave because it is a

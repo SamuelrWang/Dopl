@@ -246,7 +246,14 @@ export function InfoTab({
       {/* ⚠ THE ROSTER IS `member-roster.tsx` SINCE 2026-08-25 — the same
           component /home's Info tab renders. It was module-private here, which
           is how the account surface came to have a roster of its own. */}
-      <MemberRoster members={members} emptyLine />
+      {/* ⚠ `index.currentUserId` IS THE VIEWER, and it is the id this surface
+          already holds — no second resolution (2026-09-08, the self-always-online
+          rule; `view-model.ts › isPresentForViewer`). */}
+      <MemberRoster
+        members={members}
+        emptyLine
+        viewerUserId={index.currentUserId}
+      />
     </div>
   );
 }

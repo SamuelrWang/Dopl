@@ -41,6 +41,45 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
  */
 const DICTATION_MAX_MS = 60_000;
 
+/**
+ * **THE ENGINE'S ERROR CODE, IN THE OPERATOR'S WORDS** (Samuel, 2026-09-08: *"it doesn't really
+ * work, when i click on it, it like shows red for a second then turns off, look into that."*).
+ *
+ * ⚠ **THE BLINK WAS THE BUG REPORT, AND SWALLOWING `onerror` IS WHAT MADE IT ONE.** `onstart`
+ * fires when CAPTURE opens, which is a separate thing from the RECOGNITION SERVICE answering;
+ * the old handler was `engine.onerror = () => stop()`, so a session that opened and then failed
+ * turned the glyph red, then plain, and said nothing at all. **In Electron that is the ONLY
+ * outcome**: `webkitSpeechRecognition` posts to `https://www.google.com/speech-api/full-duplex/v1`
+ * with the Chromium build's Google API key, and Electron ships none — `strings` on its framework
+ * finds Chromium's `dummytoken` placeholder — so the request 403s and `error: "network"` arrives
+ * a beat after `onstart`. **THERE IS NO IN-REPO FIX FOR THAT BACKEND**; what this repo owes is
+ * an honest control, which is this table.
+ *
+ * ⚠ **ONE WORD-ISH EACH, AND NO SENTENCE ANYWHERE** (Samuel's minimal-copy ruling, INVARIANTS §5).
+ * It rides the button's `label`, so it is the tooltip AND the accessible name — never a paragraph
+ * under the card.
+ */
+const DICTATION_FAULT: Record<string, string> = {
+  "not-allowed": "Microphone blocked",
+  "service-not-allowed": "Microphone blocked",
+  "audio-capture": "No microphone",
+  network: "Dictation unavailable",
+};
+
+/**
+ * ⚠ **TWO CODES ARE NOT FAULTS AND MUST NEVER PAINT ONE.** `no-speech` is the engine giving up on
+ * a silent room and `aborted` is OUR OWN `stop()` on the second click, the tab going away or
+ * unmount — reporting either would put a red glyph on the two most ordinary ways a dictation ends.
+ */
+const DICTATION_SILENT = new Set(["no-speech", "aborted"]);
+
+/** Exported for `use-dictation.test.ts`: the mapping is the whole rule, and it is worth pinning
+ *  without driving a fake engine through four events to reach each branch. */
+export function dictationFault(code: string | undefined | null): string | null {
+  if (!code || DICTATION_SILENT.has(code)) return null;
+  return DICTATION_FAULT[code] ?? "Dictation failed";
+}
+
 /** One hypothesis for one phrase. Only the best (`[0]`) is ever read. */
 interface RecognitionAlternative {
   transcript: string;
@@ -104,6 +143,12 @@ export interface Dictation {
   supported: boolean;
   /** The engine is capturing RIGHT NOW. The button's red is this and nothing else. */
   listening: boolean;
+  /**
+   * **WHY THE LAST ATTEMPT STOPPED, or `null`.** ⚠ IT PERSISTS PAST THE STOP ON PURPOSE — a state
+   * cleared on the way out is exactly the one-frame blink Samuel reported. It clears when the next
+   * attempt STARTS, so the control never shows a stale reason for a session that is now running.
+   */
+  error: string | null;
   toggle: () => void;
 }
 
@@ -129,6 +174,7 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
   );
 
   const [listening, setListening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const recognition = useRef<SpeechRecognitionLike | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** ⚠ THE CALLBACK THROUGH A REF so a caller passing an inline closure — which the composer does,
@@ -163,10 +209,15 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
   const start = useCallback(() => {
     const Ctor = recognitionCtor();
     if (Ctor === null || recognition.current !== null) return;
+    // ⚠ CLEARED AT THE START OF AN ATTEMPT, never at its end — see {@link Dictation.error}.
+    setError(null);
     let engine: SpeechRecognitionLike;
     try {
       engine = new Ctor();
     } catch {
+      // A constructor this browser exports but cannot instantiate is the same dead end to the
+      // operator as a refused service, and a silent return here is the blink all over again.
+      setError("Dictation unavailable");
       return;
     }
     engine.continuous = true;
@@ -185,10 +236,16 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
       const trimmed = text.trim();
       if (trimmed.length > 0) phrase.current(trimmed);
     };
-    // ⚠ AN ERROR IS A STOP, NOT A MESSAGE. `not-allowed` (permission refused), `no-speech`,
-    // `network` — the operator's own browser already tells them about the first, and the honest
-    // signal for the rest is the button going quiet. Nothing typed is touched.
-    engine.onerror = () => stop();
+    // ⚠ AN ERROR IS A STOP **AND A STATE** (2026-09-08). This read "an error is a stop, not a
+    // message… the honest signal is the button going quiet", and that was wrong in the one case
+    // that matters: a session that has already gone RED and then fails leaves a glyph that
+    // flashed for no stated reason, which is what Samuel saw. The stop is unchanged; what is new
+    // is that the control says which failure it was ({@link DICTATION_FAULT}). Nothing typed is
+    // touched, on this path or any other.
+    engine.onerror = (event) => {
+      setError(dictationFault(event?.error));
+      stop();
+    };
     // ⚠ THE ENGINE ENDS ON ITS OWN TOO — a `continuous` session still terminates on some engines
     // after a long silence — and the button must follow it rather than lie about a dead mic.
     engine.onend = () => {
@@ -201,6 +258,7 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
     } catch {
       // Already started, or refused outright. Never leave a half-armed engine behind.
       recognition.current = null;
+      setError("Dictation unavailable");
       return;
     }
     timer.current = setTimeout(stop, DICTATION_MAX_MS);
@@ -234,5 +292,5 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
     else start();
   }, [start, stop]);
 
-  return { supported, listening, toggle };
+  return { supported, listening, error, toggle };
 }

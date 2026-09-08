@@ -132,11 +132,15 @@ export function ComposerRecipients({
     <p
       role="status"
       aria-label="Recipients"
-      // ⚠ `justify-end` — THE LINE PACKS RIGHT, and that is half of the top-right placement
-      // Samuel called on 2026-09-04 (`composer.tsx` owns the other half, which row it is).
+      // ⚠ `justify-start` — THE LINE PACKS LEFT, and that is half of the ABOVE-THE-CARD,
+      // top-left placement Samuel called on 2026-09-08 (`composer.tsx` owns the other half,
+      // which is that the line is no longer inside the bordered card at all). It was
+      // `justify-end` for the 2026-09-04 top-RIGHT placement, and the two halves have to move
+      // together: a left-hung caption that still packed right would sit over the card's far
+      // corner with nothing under it.
       // The element still stretches the card's full width, so `min-w-0` + the `truncate`
       // below keep a long recipient list shrinking rather than pushing the card wider.
-      className="flex min-w-0 items-center justify-end gap-1 px-0.5 text-caption text-text-muted"
+      className="flex min-w-0 items-center justify-start gap-1 px-0.5 pb-1 text-caption text-text-muted"
     >
       <span aria-hidden>→</span>
       {reach.recipients.length === 0 ? (

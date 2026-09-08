@@ -157,7 +157,10 @@ export {
   decideConsentRequest,
 } from "./consent-service";
 
-export { heartbeatPresence } from "./presence-service";
+export {
+  heartbeatPresence,
+  heartbeatPresenceEverywhere,
+} from "./presence-service";
 
 export {
   listSessionStates,

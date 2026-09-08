@@ -20,14 +20,17 @@
 import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { cn } from "@/shared/lib/utils";
 import { RolePill } from "./bits";
-import { isPresent, memberPerson } from "./view-model";
+import { isPresentForViewer, memberPerson } from "./view-model";
 import type { ChannelMember } from "../../types";
 
 /**
  * One roster row. Presence is `AvatarWithPresence`'s ring — the kit's recipe,
- * never a standalone dot — and the boolean is CLIENT-SIDE arithmetic over
- * `lastSeenAt` (INVARIANTS §7), so a stale roster reads OFFLINE rather than
- * falsely online.
+ * never a standalone dot — and the boolean is **the SERVER's `agentOnline`**
+ * since 2026-09-08 (INVARIANTS §7). ⚠ THIS COMMENT SAID "CLIENT-SIDE arithmetic
+ * over `lastSeenAt` … so a stale roster reads OFFLINE rather than falsely
+ * online", and reading OFFLINE was the BUG, not the safety property: a live
+ * machine whose roster payload was merely late rendered as gone. The row is
+ * handed a decided boolean and draws it.
  *
  * The subline is the member's email, not a job title: the model has no such
  * field, and the chip beside it states the one role a channel roster actually
@@ -87,13 +90,33 @@ export function MemberRow({
 export function MemberRoster({
   members,
   emptyLine,
+  viewerUserId,
 }: {
   members: ChannelMember[];
   /** Render "No members in this channel." for an empty roster. Default off. */
   emptyLine?: boolean;
+  /**
+   * THE VIEWER, so their own row can render online whenever this desktop app is
+   * running (`view-model.ts › isPresentForViewer`).
+   *
+   * ⚠ **IT COMES FROM `AuthorIndex.currentUserId`** — the id the host already
+   * holds and already attributes transcript rows with (`indexMembers`), never a
+   * second resolution and never a `useSession` this component would have to
+   * mount. ⚠ OPTIONAL, so a surface with no viewer (a fixture, a pop-out with
+   * no index) is unchanged: absent means "no override", not "nobody is online".
+   */
+  viewerUserId?: string | null;
 }) {
-  const online = members.filter((m) => isPresent(m));
-  const offline = members.filter((m) => !isPresent(m));
+  // ⚠ ONE PASS, ONE PREDICATE, ONE `now` — the partition below used to call
+  // `isPresent` twice per member with two different `Date.now()` defaults, so a
+  // member could in principle land in NEITHER list (or both). Harmless while the
+  // answer was arithmetic on a 90s window; not something to leave standing now
+  // that a viewer override is in the predicate.
+  const presence = new Map(
+    members.map((m) => [m.userId, isPresentForViewer(m, viewerUserId)] as const)
+  );
+  const online = members.filter((m) => presence.get(m.userId));
+  const offline = members.filter((m) => !presence.get(m.userId));
 
   return (
     <div className="flex flex-col gap-px px-2">

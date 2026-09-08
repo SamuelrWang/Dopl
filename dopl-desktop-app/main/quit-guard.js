@@ -181,15 +181,27 @@ function orphanRisk() {
 // the (synchronous) kill.
 async function teardown(reason) {
   diag('quit-guard: tearing down —', reason);
-  try { deps.listener.stop(); } catch (err) { diag('quit-guard: listener.stop threw', err && err.message); }
+  // ⚠ `listener.stop()` RETURNS THE FINAL `away` PRESENCE POST since 2026-09-08 (its own 3s
+  // leash). Captured here so the bounded moment below covers it too: without that, quitting left
+  // the operator reading ONLINE for up to four beats on every peer's roster.
+  let awayPost = null;
+  try { awayPost = deps.listener.stop(); } catch (err) { diag('quit-guard: listener.stop threw', err && err.message); }
   let ended = 0;
   try { ended = deps.endLiveSessions(); } catch (err) { diag('quit-guard: endLiveSessions threw', err && err.message); }
   diag('quit-guard: ended', ended, 'session(s) still holding a runtime');
   // THE ROWS. Every ended session has left the projection by now, so this posts the empty set
   // and deletes what this machine was claiming. Raced, never awaited — see the header.
   try {
+    // ⚠ THE TWO ARE RACED TOGETHER AND REPORTED SEPARATELY. `Promise.all`-ing them would let a
+    // hung `away` post make a landed flush report as skipped, which is a lie in the log this
+    // module exists to keep honest. `allSettled` cannot reject, so the deadline is the only
+    // thing that ends this.
+    const both = Promise.allSettled([
+      deps.flushSessionState(),
+      awayPost || Promise.resolve(),
+    ]).then(() => true);
     const flushed = await Promise.race([
-      deps.flushSessionState().then(() => true),
+      both,
       sleep(FLUSH_DEADLINE_MS).then(() => false),
     ]);
     if (!flushed) {

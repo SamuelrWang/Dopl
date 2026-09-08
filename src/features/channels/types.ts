@@ -166,10 +166,36 @@ export type AgentToolProfile = "full" | "dopl_only" | "read_only";
 
 /**
  * Listener state a heartbeat reports. Closed set (schema + DB CHECK).
- * `listening` is the desktop's steady state; rest reserved so richer states
- * need no migration.
+ *
+ * ⚠ **`active` / `away` ARE THE POSTURE; THE OTHER FOUR ARE LEGACY WORDS**
+ * (2026-09-08, Samuel's Slack-parity ruling — `20260930140000`). Today's desktop
+ * sends exactly {@link PresencePosture}: `away` on suspend / lock-screen /
+ * shutdown / quit and on 30 minutes of system idle, `active` otherwise.
+ * `listening` was the ONLY word any desktop ever sent before that date and is
+ * still what an older build sends, so it stays in both this union and the CHECK
+ * — §13's older-peer rule. `busy` / `paused` / `offline` were reserved and never
+ * written by anything.
+ *
+ * ⚠ **ONLY THE LITERAL `away` SUPPRESSES THE DOT.** `repository-collab.ts ›
+ * presenceForWorkspace` tests `status !== "away"`, NOT `status === "active"` —
+ * an older desktop's `listening` beat must keep reading online, and an
+ * allow-list would silently take every pre-1.30 machine offline on deploy day.
  */
-export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
+export type AgentPresenceStatus =
+  | "listening"
+  | "busy"
+  | "paused"
+  | "offline"
+  | PresencePosture;
+
+/**
+ * THE SLACK POSTURE, and the only two words a current desktop sends.
+ *
+ * ACTIVE = the desktop app is open AND the machine is awake/unlocked AND there
+ * was some input within the last 30 minutes. AWAY = anything else. There is no
+ * manual override (deliberately out of scope, 2026-09-08).
+ */
+export type PresencePosture = "active" | "away";
 
 /** List-level channel: header + caller-relative membership + activity. */
 export type Channel = {

@@ -17,6 +17,7 @@
  */
 
 import { PRESENCE_ONLINE_WINDOW_MS } from "../../constants";
+import { isSpaRenderer } from "@/shared/lib/spa-bridge";
 import {
   ESCALATION_ANSWER_METADATA_KEY,
   ESCALATION_METADATA_KEY,
@@ -248,21 +249,87 @@ export function indexAgents(
 }
 
 /**
- * Presence, computed HERE rather than read off the DTO's `agentOnline`.
+ * Presence — **THE SERVER'S VERDICT, READ OFF THE DTO** (2026-09-08, Samuel).
  *
- * `agentOnline` is the server's verdict at READ time and goes stale between
- * refetches; the 90s window over `lastSeenAt` is arithmetic the client can redo
- * on every render (INVARIANTS §7, and the same shape `pages/channels/index.tsx`
- * documents). Fails safe in one direction only: a stale roster reads OFFLINE.
+ * ⚠ **THIS FILE USED TO RE-DERIVE THE BOOLEAN AND THAT WAS ONE OF THE FOUR
+ * CAUSES OF THE REPORTED FLICKER.** The old docblock argued that `agentOnline`
+ * "goes stale between refetches" while the window over `lastSeenAt` is
+ * "arithmetic the client can redo on every render". Both halves were true and
+ * the conclusion was still wrong, for two reasons:
+ *
+ *   1. **`lastSeenAt` GOES STALE AT EXACTLY THE SAME RATE `agentOnline` DOES** —
+ *      they arrive in the same payload, from the same read. Re-deriving does not
+ *      refresh anything; it just re-decides an old fact on a NEWER clock, so the
+ *      answer degrades monotonically toward OFFLINE the longer a refetch is
+ *      late. A roster that is 130s old rendered the viewer offline while their
+ *      own app was running, then snapped back on the next refetch. That is the
+ *      flicker, drawn by the client, from data the server had already judged.
+ *   2. **THE CLIENT CANNOT SEE `status`.** Since the posture landed, `online` is
+ *      *fresh AND not away* — and `away` is never on the wire. A client-side
+ *      derivation is now structurally unable to agree with the server.
+ *
+ * ⚠ **THE `lastSeenAt` ARM SURVIVES FOR EXACTLY ONE CASE: A STALE CACHED PAYLOAD
+ * WITH NO `agentOnline` FIELD** (INVARIANTS §8 — a new cached-payload field
+ * needs an explicit fallback, because TanStack rehydrates yesterday's body into
+ * today's types). It is NOT a second opinion and must never be reached for a row
+ * that HAS the flag: `agentOnline === false` is an answer, not a missing value.
+ *
+ * ⚠ **`now` STAYS A PARAMETER** so the fallback arm is testable without faking a
+ * clock. It has no effect on the primary arm, deliberately.
  */
 export function isPresent(
-  member: Pick<ChannelMember, "lastSeenAt">,
+  /** ⚠ WIDENED LOCAL TYPE, not `Pick<ChannelMember, …>`: `agentOnline` is
+   *  non-optional in the DTO and the whole point of the fallback is the row
+   *  where it is absent at RUNTIME. Typing it as required here would make the
+   *  branch unreachable to the compiler and delete it at the first cleanup. */
+  member: { agentOnline?: boolean | null; lastSeenAt?: string | null },
   now: number = Date.now()
 ): boolean {
+  if (typeof member.agentOnline === "boolean") return member.agentOnline;
+  // ── stale-cache fallback only, per the docblock ──
   if (!member.lastSeenAt) return false;
   const ts = new Date(member.lastSeenAt).getTime();
   if (Number.isNaN(ts)) return false;
   return now - ts < PRESENCE_ONLINE_WINDOW_MS;
+}
+
+/**
+ * PRESENCE FOR ONE ROSTER ROW, WITH THE VIEWER'S OWN ROW FORCED ONLINE IN THE
+ * DESKTOP APP (2026-09-08, Samuel: *"slack's active versus inactive is based on
+ * whether or not the user's desktop app is open and their device is on … we
+ * should mirror that"*).
+ *
+ * ⚠ **THE APP BEING OPEN *IS* THE DEFINITION, SO THE VIEWER'S OWN DOT MUST NOT
+ * BE A NETWORK ROUND TRIP.** If this SPA is rendering, the desktop app is open
+ * and the machine is unlocked — the two facts the posture is made of — so the
+ * viewer asking the server whether they are online is a strictly worse source
+ * than the fact they are holding. It also removes the last window in which the
+ * operator can watch THEMSELF blink: a late refetch, a dropped realtime frame or
+ * a beat lost to a wifi transition can no longer show up on their own row.
+ *
+ * ⚠ **DESKTOP ONLY, AND CAPABILITY-KEYED** (`isSpaRenderer()`, §7's rule — never
+ * a truthiness check on `window.dopl`, whose partial legacy-wrapper form must
+ * take the WEB path). On the web the viewer's browser tab proves nothing about
+ * their desktop app, so their row reads the server flag exactly like everyone
+ * else's.
+ *
+ * ⚠ **IT DOES NOT LIE ABOUT ANYBODY ELSE.** The override is keyed on
+ * `index.currentUserId` — the SAME viewer id the transcript already attributes
+ * rows with — and applies to one row.
+ */
+export function isPresentForViewer(
+  member: {
+    userId: string;
+    agentOnline?: boolean | null;
+    lastSeenAt?: string | null;
+  },
+  viewerUserId: string | null | undefined,
+  now: number = Date.now()
+): boolean {
+  if (viewerUserId && member.userId === viewerUserId && isSpaRenderer()) {
+    return true;
+  }
+  return isPresent(member, now);
 }
 
 /** An `AvatarPerson` for a roster row. */

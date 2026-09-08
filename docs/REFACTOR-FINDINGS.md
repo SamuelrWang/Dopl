@@ -4921,7 +4921,10 @@ saturated server or a stale credential puts every caller on — drops the body o
 `dopl-desktop-app/main/api-repair.js › discardBody`):
 
 - `main/channel-listener.js › channelLoop` — one poll per watched channel, forever;
-- `main/presence.js › beatOnce` — one beat per workspace every 30s, **success branch included**;
+- `main/presence-core.js › post` — one beat every 30s, **success branch included**. ⚠ It was
+  written as `beatOnce`, in `presence.js`; the 2026-09-08 presence rework split the loop out into
+  a pure core and the one request became `post`. The seam is unchanged and
+  `test/listener-auth-repair.test.mjs` still probes it by name;
 - `main/api-repair.js › fetchWithAuthRepair` — the pre-retry 401, under BOTH transports.
 
 **A SECOND BATCH LANDED IN THE 2026-08-30 FAILING-AUTH WAVE**, chosen by measured rate on the
@@ -8099,6 +8102,14 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **NOT OBSERVED IN THE THREE FIELD INCIDENTS**: all three were revoked mid-lifetime (29, 48 and 35 minutes into a 60-minute token), nowhere near either expiry window, and by the browser's frozen SIGN-IN token (`auth.refresh_tokens` 3781 / 3784). The 12 concurrent server-side rotations at `2026-09-04T01:44:45Z` are this seam firing, but they came AFTER the family was already dead and were harmless in themselves — GoTrue's reuse interval makes a same-second burst idempotent.
 - **THE FIX IS ALREADY HALF-BUILT AND IT IS ONE LINE OF POLICY, NOT A NEW MECHANISM.** `src/proxy.ts` returns early for any `/api/**` request carrying an `Authorization` header, and `withUserAuth` verifies a Supabase access JWT locally (ES256 + kid). `auth-tokens.js › getAccessToken` already exists to mint exactly that bearer, and its file header says so. Moving main's API transport from `Cookie` to `Authorization: Bearer` retires the server as a rotator entirely — the server would never again see a refresh token belonging to the app.
 - ⚠ **BLAST RADIUS IS WHY IT IS NOT IN THIS CHANGE**: every route in the `apiFetch` table would flip credential at once, and any route that still needs the cookie session would 401 for every desktop user simultaneously. It wants its own change, with the route inventory checked one at a time.
+### F-679 — the composer's dictation CANNOT work in the desktop app: Electron's Chromium ships no Google speech key (2026-09-08)
+
+- Locations: `src/features/channels/components/channels-v2/use-dictation.ts › recognitionCtor` (and the glyph it feeds, `› composer-toolbar.tsx`), against `dopl-desktop-app/node_modules/electron/dist/Electron.app/…/Electron Framework`.
+- Found during: Samuel's 2026-09-08 composer wave — *"right now, it doesn't really work, when i click on it, it like shows red for a second then turns off, look into that."*
+- **THE MEASUREMENT (2026-09-08).** `strings` on Electron 43's framework finds the recognition endpoint `https://www.google.com/speech-api/full-duplex/v1` and Chromium's `dummytoken` API-key placeholder. `webkitSpeechRecognition` therefore CONSTRUCTS, `onstart` fires (capture opens — this is the red), and the service call 403s a beat later as `onerror: "network"`. **The blink was the whole bug report and it is the runtime, not the app.**
+- **WHAT WAS FIXED IN-REPO, AND IT IS NOT THIS.** The hook swallowed `onerror` into a bare `stop()`; it now maps the code to a word the button wears (`Dictation unavailable` / `Microphone blocked` / `No microphone`), so the control states its own failure. `dopl-desktop-app/main/media-permission.js` closes the unfenced permission default and `NSMicrophoneUsageDescription` + `com.apple.security.device.audio-input` make capture legal in a hardened packaged build — all three were real gaps, and **none of them makes dictation work in Electron.** Recorded here so the next reader does not spend the afternoon on the permission path a second time.
+- ⚠ **WHAT WOULD BE NEEDED**, none of it a config change: build Electron with a Google Speech API key (`GOOGLE_API_KEY` at Chromium build time — a fork of the runtime); OR replace the browser engine with an explicit transcription call from MAIN (a key, a bill and a new dependency, which is exactly what `use-dictation.ts`'s header chose this API to avoid); OR ship an on-device model. **All three are product decisions, not fixes.** The WEB surface is unaffected: Chrome and Safari carry their own engines and dictation works there today.
+- Status: OPEN. Needs Samuel's word on whether the desktop keeps a control that can only report a blocked backend.
 ### F-666 — the channel Knowledge tab has ZERO hosts, so its component, its hook and its four routes have no live caller (2026-09-04)
 
 - Locations: `src/features/channels/components/channels-v2/knowledge-tab.tsx`, `› use-channel-knowledge.ts`, `› knowledge-lane.ts`, `src/app/api/channels/[channelId]/knowledge/**`, against `channel-surface.tsx › ChannelSurfaceCapabilities.knowledge`.

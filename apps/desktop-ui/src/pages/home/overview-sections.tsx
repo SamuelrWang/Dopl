@@ -175,15 +175,6 @@ export function seriesTotal(points: readonly HomeSeriesPoint[]): number {
 }
 
 /**
- * Caption every Nth bin. ⚠ A `month` plot is 28..31 bars, so the divisor is
- * derived rather than looked up: six captions is what fits at `text-micro`.
- */
-function labelEveryFor(bucket: HomeOverviewBucket, bins: number): number {
-  if (bucket === "hour") return 4;
-  return bins <= 7 ? 1 : Math.ceil(bins / 6);
-}
-
-/**
  * `at` → the bin's caption.
  *
  * ⚠ SLICED OUT OF THE ISO STRING, never `new Date().getDate()`: a UTC bin
@@ -236,10 +227,12 @@ export function UsageChart({
   return (
     <section className="min-w-0">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="shrink-0 text-label font-semibold uppercase tracking-wide text-text-secondary">
+        {/* Ink, not gray — Samuel, 2026-09-08: "their font colors are black
+            not gray", over the same reference the plot below now clones. */}
+        <h3 className="shrink-0 text-label font-semibold uppercase tracking-wide text-text-primary">
           Credits used
         </h3>
-        <span className="font-mono text-micro tabular-nums text-text-muted">
+        <span className="font-mono text-micro tabular-nums text-text-primary">
           {total.toLocaleString()}
         </span>
       </div>
@@ -249,9 +242,12 @@ export function UsageChart({
         <p className="mt-3 text-caption text-text-muted">Nothing yet.</p>
       ) : (
         <>
+          {/* ⚠ **NO `labelEvery` SINCE 2026-09-08: EVERY BIN IS CAPTIONED.**
+              The divisor that used to live here existed because horizontal
+              `31/12`s did not fit; the plot slants them −45° now and a month
+              fits whole (Samuel: "we should be able to fit 30 days"). */}
           <BarSeries
             points={bars}
-            labelEvery={labelEveryFor(bucket, bars.length)}
             className={cn("mt-3 transition-opacity", loading && "opacity-60")}
           />
           {/* §9: a clipped read SAYS SO, beside the thing it clipped. */}

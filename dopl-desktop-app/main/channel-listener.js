@@ -490,9 +490,10 @@ function stop() {
   stopLoops();
   // ⚠ `watcher.stop()` went with the consent poll loop (2026-08-22) — there is no second timer
   // family left in this module to tear down.
-  presence.stop(); // Feature 5: stop heartbeating on shutdown
+  const away = presence.stop(); // heartbeat off + a final `away` post (2026-09-08)
   realtime.stop(); // Push transport: close the Realtime WS
   setStatus();
+  return away; // quit-guard races it inside its own flush deadline; every other caller ignores it
 }
 
 module.exports = { start, stop, restart, wake, status, setHandlers, listWatchedChannels, watchedChannel };

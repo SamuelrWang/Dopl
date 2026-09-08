@@ -21,9 +21,13 @@
  * invent one — the channel's Info tab has that row because a CHANNEL is
  * archivable and a thread is not.
  *
- * ⚠ PRESENCE IS CLIENT-SIDE ARITHMETIC over `lastSeenAt`, exactly as the roster
- * does it (`view-model.ts › isPresent`) — never the DTO's server-time verdict, so
- * a stale read fails toward OFFLINE.
+ * ⚠ PRESENCE IS **THE DTO's `agentOnline`**, exactly as the roster does it
+ * (`view-model.ts › isPresentForViewer`), with the viewer's own row forced online
+ * while this desktop app is running. ⚠ THIS PARAGRAPH SAID THE OPPOSITE until
+ * 2026-09-08 — "client-side arithmetic over `lastSeenAt` … so a stale read fails
+ * toward OFFLINE" — and failing toward offline was the reported defect: a party
+ * whose roster payload was merely late rendered as gone and snapped back on the
+ * next refetch.
  *
  * ⚠ THE AGENTS SECTION RUNS THE TAB ROW'S OWN DERIVATIONS (`ownAgentsFor` /
  * `peerCardsFor`) rather than a third filter written here. A second copy of those
@@ -50,7 +54,7 @@ import {
   peerCardsFor,
   type AgentLivenessState,
 } from "./agents-model";
-import { isPresent, memberPerson } from "./view-model";
+import { isPresentForViewer, memberPerson } from "./view-model";
 
 // ⚠ `MODE_LABEL` STOOD HERE and is now `constants.ts › THREAD_MODE_LABELS`
 // (2026-08-21). Same two words; it moved because the thread SETTINGS tab
@@ -117,11 +121,17 @@ export function ThreadInfoTab({
           the channel nor drops a member who left it. */}
       <PanelHeading title="Parties" />
       <div className="flex flex-col gap-px px-2">
-        <PartyRow member={opener} side="Opened by" fallbackIcon={UserRound} />
+        <PartyRow
+          member={opener}
+          side="Opened by"
+          fallbackIcon={UserRound}
+          viewerUserId={currentUserId}
+        />
         <PartyRow
           member={addressee}
           side="Addressed to"
           fallbackIcon={Users}
+          viewerUserId={currentUserId}
           // ⚠ A thread with no `targetUserId` is a real row, not a broken one,
           // and it reads as an ABSENT addressee rather than as a missing person.
           missing={thread.targetUserId ? "Not in this channel" : "No addressee"}
@@ -191,11 +201,15 @@ function PartyRow({
   side,
   missing = "Not in this channel",
   fallbackIcon: Fallback,
+  viewerUserId,
 }: {
   member: ChannelMember | null;
   side: string;
   missing?: string;
   fallbackIcon: typeof UserRound;
+  /** The viewer, so their own party row cannot show them offline while their
+   *  desktop app is open (`view-model.ts › isPresentForViewer`, 2026-09-08). */
+  viewerUserId?: string | null;
 }) {
   if (!member) {
     return (
@@ -208,7 +222,7 @@ function PartyRow({
       </div>
     );
   }
-  const online = isPresent(member);
+  const online = isPresentForViewer(member, viewerUserId);
   return (
     <div
       className={cn(

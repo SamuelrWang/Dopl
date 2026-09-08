@@ -40,6 +40,14 @@ const codeOf = (f: string): string =>
     .join("\n");
 
 const CHANNEL = "composer.tsx";
+/**
+ * ⚠ **MAIN'S TOOLBAR ROW IS ITS OWN FILE SINCE 2026-09-08** (`composer-toolbar.tsx`, the §1 split
+ * Samuel's toolbar wave forced — the card was 561 lines). Nothing about WHERE the arrow hangs
+ * changed; the row it hangs in moved house, and the two cases below read this file instead of
+ * {@link CHANNEL} for that reason. **The property is unchanged and so is its mutation**: main's
+ * card mounts the shared arrow at the end of its own toolbar row, and states no inset there.
+ */
+const CHANNEL_TOOLBAR = "composer-toolbar.tsx";
 const AGENT = "agent-composer.tsx";
 
 describe("one input row, two composers", () => {
@@ -135,7 +143,15 @@ describe("one input row, two composers", () => {
     // mutation this catches is main losing the slot** — an arrow deleted with the input row's
     // send props, leaving a card whose only submit is the panel button.
     const main = codeOf(CHANNEL);
-    expect(main, "main stopped mounting the shared arrow").toMatch(/<ComposerSend[\s/>]/);
+    expect(
+      codeOf(CHANNEL_TOOLBAR),
+      "main stopped mounting the shared arrow"
+    ).toMatch(/<ComposerSend[\s/>]/);
+    // ⚠ AND MAIN'S CARD STILL HAS EXACTLY ONE ROW THAT COULD HOLD IT. A second `<ComposerSend`
+    // left behind in `composer.tsx` by the split would be two submits on one card.
+    expect(main, "the card grew a second arrow beside the toolbar's").not.toMatch(
+      /<ComposerSend[\s/>]/
+    );
     expect(
       codeOf(AGENT),
       "the agent bar lifted its arrow out of its own row"
@@ -160,9 +176,10 @@ describe("one input row, two composers", () => {
     expect(shape, "ROW_GEOMETRY is not a plain string any more").toBeTypeOf("string");
     expect(shape, "an inset came back onto the shape BOTH modes wear").not.toMatch(/\bp[xytblr]?-/);
     // And the toolbar row it must line up with still states no inset of its own either.
-    expect(codeOf(CHANNEL), "the toolbar row grew an inset the field cannot match").toContain(
-      '<div className="flex items-center gap-0.5">'
-    );
+    expect(
+      codeOf(CHANNEL_TOOLBAR),
+      "the toolbar row grew an inset the field cannot match"
+    ).toContain('<div className="flex items-center gap-0.5">');
   });
 
   it("the row owns the face, and no caller can override it", () => {

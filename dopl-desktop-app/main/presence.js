@@ -1,116 +1,80 @@
-// Channels v1.2 — agent presence heartbeat.
+// Channels v1.2 — presence heartbeat. ⚠ WIRING ONLY SINCE 2026-09-08.
 //
-// While the app is running AND signed in, POST /api/channels/presence every ~30s
-// so the web app can show the operator's responding agent as "listening / online"
-// (derived server-side as last_seen_at > now()-90s). This is a Node/HTTP
-// heartbeat (NOT browser Realtime Presence — the desktop has no browser client).
+// The loop, the posture rule, the abort-not-skip contract and every backoff live in
+// `./presence-core.js`, which is pure and injectable so `node --test` can drive it. This file
+// binds that factory to the real transport, the real auth and the real `powerMonitor`, and it
+// exists as a separate module for one reason: requiring `./api` pulls in `./auth` and therefore
+// `electron`, which does not import outside an Electron process. Read the core's header for the
+// bug this replaced (Samuel, 2026-09-08 — "sometimes i see myself go offline").
 //
-// One heartbeat per workspace the listener is watching; the workspace set is
-// pushed in from the listener's reconcile (setWorkspaces) so we do not duplicate
-// its /api/workspaces call. Stops posting when signed out. Endpoint 404 (feature
-// not deployed) → back off for a while and retry, so we never spin against a
-// not-yet-shipped route. Cookie auth via the shared api helper; no tokens logged.
+// WHAT THE HEARTBEAT MEANS, unchanged: while the app is running AND signed in, tell the server
+// this operator is present, so the roster's dot and `read_sessions`' liveness hedge are true.
+// This is a Node/HTTP heartbeat, NOT browser Realtime Presence — the desktop has no browser
+// client. Cookie auth via the shared api helper; no tokens logged.
+//
+// WHAT CHANGED AT THE WIRE: one POST per tick to the USER-SCOPED arm (`/api/channels/presence/all`),
+// which stamps every container the caller is an active member of in one statement. The
+// per-workspace set is still pushed in by the listener's reconcile (`setWorkspaces`) because it
+// is what the FALLBACK loop needs when that arm answers 404 — an older server, or a database
+// that has not had `20260930140000_presence_heartbeat_all.sql` applied yet.
 
 const { apiFetch } = require('./api');
 const { discardBody } = require('./api-repair');
 const auth = require('./auth');
 const { diag } = require('./diag');
+const { createPresence } = require('./presence-core');
 
-const HEARTBEAT_MS = 30 * 1000;
-const UNAVAILABLE_BACKOFF_MS = 5 * 60 * 1000; // when the endpoint 404s
-const HTTP_TIMEOUT_MS = 12000;
-
-let timer = null;
-let workspaceIds = [];
-let unavailableUntil = 0;
-// L: one beat sends a serial request per workspace, each with a 12s timeout. A
-// slow network makes a beat outlast the 30s tick, so ticks pile up and the same
-// workspaces get hammered by overlapping loops. Skip a tick while one is in
-// flight — a heartbeat has no value in duplicate.
-let beating = false;
-
-function setWorkspaces(ids) {
-  workspaceIds = Array.isArray(ids) ? ids.filter(Boolean) : [];
-}
-
-async function beat() {
-  if (beating) {
-    diag('presence: beat still in flight — skipping tick');
-    return;
-  }
-  beating = true;
+// ⚠ LAZY AND GUARDED. `powerMonitor` is only valid after the app is ready, and it throws in a
+// headless/CI Electron — where an unmeasurable idle time must read `active`, not `away` (the
+// core's header states why). Returning null is how "cannot measure" is expressed.
+function idleSeconds() {
   try {
-    await beatOnce();
-  } finally {
-    beating = false;
+    const { powerMonitor } = require('electron');
+    if (!powerMonitor || typeof powerMonitor.getSystemIdleTime !== 'function') return null;
+    return powerMonitor.getSystemIdleTime();
+  } catch (_) {
+    return null;
   }
 }
 
-async function beatOnce() {
-  if (!auth.isSignedIn()) return; // stop on sign-out (no-op tick)
-  if (Date.now() < unavailableUntil) return; // backing off a 404'd endpoint
-  if (!workspaceIds.length) return; // nothing to heartbeat for yet
-  for (const wsId of workspaceIds) {
-    let res;
-    try {
-      res = await apiFetch('/api/channels/presence', {
-        method: 'POST',
-        workspaceId: wsId,
-        body: { status: 'listening' },
-        timeoutMs: HTTP_TIMEOUT_MS,
-        noStore: true,
-      });
-    } catch (err) {
-      diag('presence: beat error', err && err.message);
-      continue;
+const presence = createPresence({
+  apiFetch,
+  discardBody,
+  isSignedIn: () => auth.isSignedIn(),
+  idleSeconds,
+  diag,
+});
+
+/**
+ * Arm the SLEEP half of the posture. ⚠ The WAKE half is `wake.js`, which already owns
+ * `resume` / `unlock-screen` and coalesces the pair — wiring resume here as well would give
+ * this machine two uncoordinated wake paths, which is the shape `wake.js` was split out to end.
+ * These three events have no such owner, so they are wired at the point of use.
+ *
+ * Called once, from `channel-listener.js › start`, after the app is ready.
+ */
+let sleepArmed = false;
+function armSleepEvents() {
+  if (sleepArmed) return;
+  sleepArmed = true;
+  try {
+    const { powerMonitor } = require('electron');
+    // ⚠ `shutdown` is macOS/Linux only and fires BEFORE the app's own quit path, which is why it
+    // is listened for separately from `quit-guard.js › teardown` rather than instead of it.
+    for (const event of ['suspend', 'lock-screen', 'shutdown']) {
+      powerMonitor.on(event, () => { presence.sleep(event).catch(() => {}); });
     }
-    // ⚠ A HEARTBEAT READS NO BODY ON ANY BRANCH — the SUCCESS one included — so every beat
-    // used to abandon an undici response and pin its socket (see `api-repair.js ›
-    // discardBody`). One per workspace every 30s, for the life of the process, is the
-    // steadiest leak in the app precisely because nothing about it ever fails.
-    // (2026-08-30, the 17 GB dev incident.)
-    discardBody(res);
-    if (res.status === 404) {
-      unavailableUntil = Date.now() + UNAVAILABLE_BACKOFF_MS;
-      diag('presence: endpoint 404 (not deployed) — backing off 5m');
-      return;
-    }
-    if (res.status === 401) {
-      diag('presence: 401 (session stale) — skipping this cycle');
-      return;
-    }
-    if (!res.ok) diag('presence: beat failed', res.status, 'ws', String(wsId).slice(0, 8));
+  } catch (err) {
+    // Not fatal, and deliberately not a throw: without these the row simply ages out on the
+    // server's own window instead of going away immediately.
+    console.warn('[presence] powerMonitor sleep wiring failed:', err && err.message);
   }
 }
 
-function start() {
-  if (timer) return;
-  beat().catch(() => {});
-  timer = setInterval(() => beat().catch(() => {}), HEARTBEAT_MS);
-  if (timer.unref) timer.unref();
-  diag('presence: started (30s heartbeat)');
-}
-
-// Wake handler (powerMonitor resume / unlock, via the listener). Sleep can
-// suspend the interval and a wake usually means the network changed, so: fire a
-// beat immediately to re-assert presence within seconds, and re-arm the interval
-// if it was lost. The `beating` guard means an overlapping in-flight beat is a
-// no-op, so this is safe to call on every wake. Only meaningful while started.
-function wake() {
-  if (!timer) {
-    timer = setInterval(() => beat().catch(() => {}), HEARTBEAT_MS);
-    if (timer.unref) timer.unref();
-    diag('presence: re-armed after wake');
-  }
-  beat().catch(() => {});
-}
-
-function stop() {
-  if (timer) {
-    clearInterval(timer);
-    timer = null;
-  }
-  diag('presence: stopped');
-}
-
-module.exports = { start, stop, wake, setWorkspaces };
+module.exports = {
+  start: () => { armSleepEvents(); presence.start(); },
+  stop: () => presence.stop(),
+  wake: () => presence.wake(),
+  sleep: (reason) => presence.sleep(reason),
+  setWorkspaces: (ids) => presence.setWorkspaces(ids),
+};

@@ -69,10 +69,30 @@ export const CONSENT_INBOX_POLL_MS = 30_000;
 export const GROUP_CHANNEL_MIN_MEMBERS = 3;
 
 /**
- * Agent counts as online when its last heartbeat is newer than this.
- * ⚠ In sync with the desktop heartbeat cadence (~30s) — three missed beats.
+ * Agent counts as online when its last heartbeat is newer than this AND its
+ * stored `status` is not the literal `'away'` (`server/repository-collab.ts ›
+ * derivePresence`).
+ *
+ * ⚠ **120s — FOUR BEATS, RAISED FROM 90s (THREE) ON 2026-09-08, AND THE REASON
+ * IS THE FOURTH BEAT AND NOTHING ELSE.** The desktop heartbeat is 30s with a
+ * ±3s jitter (`main/presence-core.js`), so at 90s a run of THREE unlucky beats —
+ * one aborted by its successor, one on a wifi transition, one on a cold undici
+ * pool after wake — put a wide-awake machine offline. That is precisely the
+ * flicker Samuel reported ("*sometimes i see myself go offline, even though my
+ * computer is on and dopl is open*"). A fourth beat costs at most 30 extra
+ * seconds of a genuinely-dead desktop still reading online, which is invisible
+ * next to a live one reading dead.
+ *
+ * ⚠ **DO NOT TUNE THIS TO PAPER OVER A HEARTBEAT BUG.** It was widened once, in
+ * the same change that removed the cause (one user-scoped POST per tick instead
+ * of N serial ones, and abort-not-skip). A future widening with no matching
+ * client fix is the smell this paragraph exists to catch.
+ *
+ * ⚠ It is ALSO `agents-model.ts › peerRowStale`'s window — deliberately one
+ * number, so the roster cannot call a member offline while their session card
+ * reads at full strength (§11).
  */
-export const PRESENCE_ONLINE_WINDOW_MS = 90_000;
+export const PRESENCE_ONLINE_WINDOW_MS = 120_000;
 
 /**
  * A thread is shown in the SIDEBAR TREE when it saw activity inside this window
@@ -94,7 +114,13 @@ export const SIDEBAR_THREAD_ACTIVE_WINDOW_MS = 24 * 60 * 60_000;
 /**
  * Trailing debounce on the presence-driven roster refetch. Listeners heartbeat
  * ~30s apiece, so a busy workspace drips realtime events; the freshness window
- * is 90s, so per-event refetching buys nothing. Coalesce the burst.
+ * is {@link PRESENCE_ONLINE_WINDOW_MS}, so per-event refetching buys nothing.
+ * Coalesce the burst.
+ *
+ * ⚠ **A DEBOUNCE IS NOT A BACKSTOP.** It only fires when an event ARRIVES, so a
+ * dropped realtime frame leaves the roster on whatever it last rendered — which
+ * since 2026-09-08 is the SERVER's `online` flag and therefore frozen rather
+ * than self-correcting. {@link PRESENCE_ROSTER_BACKSTOP_MS} is the other half.
  */
 export const PRESENCE_REFETCH_DEBOUNCE_MS = 10_000;
 
@@ -373,3 +399,16 @@ export const AGENT_DIRECTION_TTL_MS = 600_000;
  * minutes writes nothing at all.
  */
 export const SESSION_PROJECTION_FRESH_MS = 5 * 60_000;
+
+/**
+ * BACKSTOP REFETCH for the roster (2026-09-08). The presence dot is decided
+ * SERVER-side now, so a missed `agent_presence` realtime event can no longer be
+ * corrected by the client's own clock — the rendered boolean simply stays where
+ * it was until something refetches. Two beats.
+ *
+ * ⚠ **IT IS A BACKSTOP, NOT THE MECHANISM.** `usePresenceRealtime` is still what
+ * makes presence feel live; this exists so that a surface which loses its
+ * subscription degrades to "up to 60s late" instead of "wrong until you switch
+ * channels" — the failure with no error shape §7 keeps paying for.
+ */
+export const PRESENCE_ROSTER_BACKSTOP_MS = 60_000;

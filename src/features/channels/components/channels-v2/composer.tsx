@@ -47,11 +47,10 @@
  */
 
 import { useRef, useState } from "react";
-import { AtSign, Bot, MessageSquarePlus, Mic, Smile } from "lucide-react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { cn } from "@/shared/lib/utils";
-import { IconButton } from "./bits";
-import { COMPOSER_BOTTOM, ComposerInputRow, ComposerSend } from "./composer-input";
+import { COMPOSER_BOTTOM, ComposerInputRow } from "./composer-input";
+import { ComposerToolbar } from "./composer-toolbar";
 import { AgentRequestPanel } from "./composer-request-panel";
 import { useThreadRequest } from "./use-thread-request";
 import { MentionPopover } from "./composer-mentions";
@@ -60,9 +59,8 @@ import { ComposerTint } from "./composer-tint";
 import { useComposerMentions } from "./use-composer-mentions";
 import type { LiveAgentSession } from "../../lib/draft-recipients";
 import type { AgentLaunchControls } from "./use-agents-panel";
-import { TemplateApprovalDialog } from "@/features/agent-templates/components/template-approval";
-import { ComposerLaunch } from "./composer-launch-panel";
-import { useAgentLaunch, useLaunchRunner } from "./use-agent-launch";
+import { LaunchAgentDialog } from "./launch-agent-dialog";
+import { useAgentLaunch } from "./use-agent-launch";
 import { useAutoGrow } from "./use-auto-grow";
 import { useDictation } from "./use-dictation";
 import { composerSubmitState } from "./composer-submit-state";
@@ -74,6 +72,12 @@ import type { ChannelMember } from "../../types";
  *  render re-derives the whole @-picker shortlist on a surface that has no sessions read. */
 const EMPTY_LIVE_AGENTS: readonly LiveAgentSession[] = [];
 const EMPTY_RECENT: readonly string[] = [];
+
+/** THE LAUNCH PANEL, AS `composerSubmitState` NOW SEES IT — permanently closed, and a DELIBERATE
+ *  zero rather than a stub. The form is a modal with its own submit since 2026-09-08, so this
+ *  control has TWO acts; deleting the shared function's `launch` arm would touch the thread
+ *  panel's pins for a change that is only about this caller. */
+const NO_LAUNCH = { open: false, ready: false, name: "", description: "" } as const;
 
 export function ChannelsV2Composer({
   channelId,
@@ -142,9 +146,6 @@ export function ChannelsV2Composer({
   // is inside `ComposerLaunch`, which mounts only where a launch is possible (that component's
   // header says why).
   const launch = useAgentLaunch();
-  // ⚠ THE RUNNER SITS HERE, BESIDE THE ONE SUBMIT CONTROL (2026-08-27) — the panel has no button
-  // of its own. It holds no react-query, which is what lets it live above that gated mount.
-  const runner = useLaunchRunner({ newAgent, panel: launch, openThreadId });
 
   const request = useThreadRequest({ members, currentUserId, newThreadSignal });
   const { send, fanOutThreads, pending } = useThreadWrites({
@@ -212,7 +213,9 @@ export function ChannelsV2Composer({
    * ⚠ THE DRAFT ITSELF IS UNTOUCHED, exactly as the unmount already left it: shutting the panel
    * brings back the half-typed message AND its popover, which is the state the operator left.
    */
-  const sendState = composerSubmitState({ pending, body, launch, request });
+  // ⚠ `NO_LAUNCH`, NOT `launch`: the dialog carries its own Launch, so feeding the panel's real
+  // state in would put a SECOND one behind its scrim and unmount the textarea under a modal.
+  const sendState = composerSubmitState({ pending, body, launch: NO_LAUNCH, request });
   const { canSend, panelOpen, hint } = sendState;
 
   const clear = () => {
@@ -228,12 +231,8 @@ export function ChannelsV2Composer({
    */
   const submit = () => {
     if (!canSend) return;
-    // ⚠ THE LAUNCH ARM POSTS NOTHING. It spawns an agent on this machine over the bridge; the
-    // runner owns the three-step act and the foreign-template question.
-    if (launch.open) {
-      runner.launch();
-      return;
-    }
+    // ⚠ THE LAUNCH ARM IS GONE FROM HERE (2026-09-08). The dialog owns the three-step act and
+    // the foreign-template question; this control sends and creates, and nothing else.
     if (request.open) {
       const fanOut = {
         channelId,
@@ -273,6 +272,36 @@ export function ChannelsV2Composer({
       {!panelOpen && mentions.query !== null && (
         <MentionPopover suggestions={mentions.suggestions} active={mentions.active} onPick={mentions.pick} />
       )}
+      {/* WHO THIS DRAFT REACHES (2026-09-02, slice B10, Samuel's ruling) — `→ @handle`,
+          `→ <the default responder>` or `→ nobody`, restated on every keystroke.
+          ⚠ IT IS OUTSIDE THE CARD SINCE 2026-09-08, ABOVE IT AND HARD LEFT (Samuel: *"let's
+          move this: → nobody to be outside the bar, above it, on the top left. instead of
+          right."*). It began at the card's bottom-left, moved to the card's first row hard
+          RIGHT on 2026-09-04, and is now a caption over the box rather than a row inside it —
+          which is the shape that stops it reading as one of the toolbar's controls without
+          spending a line of the card's own height. **Nothing else in the card moved up**: the
+          card's first row is the chat field (or a panel), exactly as it was.
+          ⚠ THE ALIGNMENT IS THE COMPONENT'S OWN (`composer-recipients.tsx`, `justify-start`),
+          not a wrapper here. This file states WHERE the line sits and nothing about how it
+          draws, which is the same rule the send arrow's slot follows.
+          ⚠ `px-0.5` MATCHES THE CARD'S OWN CONTENT INSET as closely as a caption outside a
+          13px-padded box can — the tag's `→` is meant to hang over the card's left edge, not
+          to line up with the field's first character.
+          ⚠ ON THE SAME `!panelOpen` CONDITION THE CHAT FIELD ITSELF FOLLOWS. With a panel up
+          there is no chat draft on screen, and a line reporting the reach of an invisible one
+          would describe a message the operator is not writing — the same misfire the `@` glyph
+          was gated for on 2026-08-28. A PANEL states its own addressing
+          (`composer-request-panel.tsx › AgentRequestPanel`). */}
+      {!panelOpen && (
+        <ComposerRecipients
+          body={body}
+          members={members}
+          sessions={liveAgents}
+          currentUserId={currentUserId}
+          recentAgentIds={recentAgentIds}
+          threadOtherParty={threadOtherParty}
+        />
+      )}
       {/* ⚠ THE CARD WEARS `.raised-tab` — THE WHOLE FACE THE AGENT PILL WEARS, VERBATIM (Samuel,
           live review 2026-08-27). Not `.bento`, and NOT an extracted layer of the raised recipe:
           a lone 1px ring lifted out of it read FLAT beside the agent bar's dimensional material,
@@ -295,15 +324,6 @@ export function ChannelsV2Composer({
         */}
         {/* ⚠ TWO PANELS IN ONE SLOT, AND NEVER BOTH OPEN AT ONCE — the toggles close each other
             below. Same grid-rows 0fr→1fr idiom either way, so neither hardcodes a height. */}
-        {newAgent?.canLaunch && (
-          <ComposerLaunch
-            panel={launch}
-            channelId={channelId}
-            workspaceId={workspaceId}
-            currentUserId={currentUserId}
-            members={members}
-          />
-        )}
         <div
           className={cn(
             "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
@@ -328,32 +348,6 @@ export function ChannelsV2Composer({
         </div>
 
         <div className="flex flex-col gap-2">
-          {/* WHO THIS DRAFT REACHES (2026-09-02, slice B10, Samuel's ruling) — `→ @handle`,
-              `→ <the default responder>` or `→ nobody`, restated on every keystroke.
-              ⚠ IT IS THE CARD'S FIRST ROW, HARD RIGHT (Samuel, 2026-09-04: top-left first, then
-              corrected to TOP-RIGHT — the correction is the call). It sat UNDER the toolbar, at
-              the card's bottom-left, from the day it shipped. The right edge is where this line
-              belongs because it is a REPORT rather than a control: the bottom-left of the card is
-              the toolbar's territory — glyphs the operator clicks, reading left to right — and a
-              status line sitting first in that run read as another one of them.
-              ⚠ THE ALIGNMENT IS THE COMPONENT'S OWN (`composer-recipients.tsx`, `justify-end`),
-              not a wrapper here. This file states WHERE the line sits in the column and nothing
-              about how it draws, which is the same rule the send arrow's slot follows.
-              ⚠ ON THE SAME `!panelOpen` CONDITION THE CHAT FIELD ITSELF FOLLOWS. With a panel up
-              there is no chat draft on screen, and a line reporting the reach of an invisible
-              one would describe a message the operator is not writing — the same misfire the `@`
-              glyph was gated for on 2026-08-28. A PANEL states its own addressing
-              (`composer-request-panel.tsx › AgentRequestPanel`). */}
-          {!panelOpen && (
-            <ComposerRecipients
-              body={body}
-              members={members}
-              sessions={liveAgents}
-              currentUserId={currentUserId}
-              recentAgentIds={recentAgentIds}
-              threadOtherParty={threadOtherParty}
-            />
-          )}
 
           {/* ⚠ THE CHAT DRAFT IS NOT ON SCREEN WHILE THE PANEL IS. One edit
               surface at a time (Samuel, 2026-08-26) — the request's own
@@ -390,151 +384,22 @@ export function ChannelsV2Composer({
             />
           )}
 
-          <div className="flex items-center gap-0.5">
-            {/* NEW AGENT — my own agent, on this machine, over the bridge. It posts nothing
-                and sends no first message: the engine spawns it IDLE and the operator talks to
-                it from there. ⚠ THIS BLOCK STOOD TWICE UNTIL 2026-08-28 — the earlier copy was
-                left behind by the launch-panel change below and still described the click as a
-                spawn; the surviving one is the current rule.
-                ⚠ IT OPENS THE LAUNCH PANEL SINCE 2026-08-27 (Samuel), where it used to spawn a
-                blank agent on the click. **The chevron beside it is DELETED with that change** —
-                its whole function (choose a template, or none) is the panel's Template row, and
-                a second way to pick an identity is how two controls come to mean one thing.
-                ⚠ STILL ONE LANE AND ONE CONTROL: `sessions.launch` is reached from exactly one
-                place, and the panel is where the click that reaches it happens.
-                ⚠ RENDERED ONLY WHERE IT CAN WORK. `canLaunch` is the bridge op's own detection
-                (`agents-controls.ts › canLaunchAgents`), so the web tree and the pop-out get no
-                affordance for a thing they cannot do — never a button that can only refuse
-                (F-212's rule, earned by the agent window's inert composer).
-                ⚠ DISABLED ONLY WHILE ONE IS IN FLIGHT. Every click mints a NEW instance
-                (2026-08-21); agents already standing are not a reason to take the control away. */}
-            {newAgent?.canLaunch && (
-              <IconButton
-                icon={Bot}
-                label="New Agent"
-                size={15}
-                className="h-6 w-6"
-                active={launch.open}
-                disabled={newAgent.launchBusy}
-                // ⚠ THE TWO PANELS ARE MUTUALLY EXCLUSIVE. Both are full-width forms in the same
-                // slot, and two open at once would stack into a composer taller than the pane —
-                // and leave two submit buttons on screen with different meanings.
-                onClick={() => {
-                request.close(); launch.toggle();
-              }}
-              />
-            )}
-            {/* NEW THREAD — moved off the Bot icon, otherwise untouched. */}
-            <IconButton
-              icon={MessageSquarePlus}
-              label="New thread"
-              size={15}
-              className="h-6 w-6"
-              active={request.open}
-              onClick={() => {
-                launch.close(); request.toggle();
-              }}
-            />
-            {/* ⚠ IT OPENS THE PICKER BY WRITING THE `@` (Samuel, 2026-08-27) — it was inert,
-                a glyph beside a working control, which §5's interaction-completeness ruling
-                forbids. There is no second "open the popover" path to keep in step: the popover
-                is a pure function of the draft (`mentionQuery`), so the honest way to open it is
-                to put the token the operator would have typed, then focus the caret after it.
-                ⚠ A SPACE FIRST unless the draft already ends in one, or `@` would weld onto the
-                previous word and `mentionQuery` — which requires a boundary — would answer null. */}
-            {/* ⚠ ABSENT WHILE A PANEL IS OPEN (2026-08-28), on the same `panelOpen` condition
-                the textarea it writes into already follows. It is the one toolbar glyph whose
-                act is on the CHAT DRAFT, and with that draft unmounted the click typed into a
-                box nobody could see and focused a null ref — a control that can only misfire,
-                which §5 forbids as squarely as the inert one this wiring replaced. ABSENT, not
-                disabled: with a panel up there is no chat field to mention into at all. */}
-            {!panelOpen && (
-              <IconButton
-                icon={AtSign}
-                label="Mention"
-                size={15}
-                className="h-6 w-6"
-                onClick={() => {
-                  mentions.openFromButton();
-                  draftRef.current?.focus();
-                }}
-              />
-            )}
-            {/* ⚠ NO "EXPAND COMPOSER" GLYPH — DELETED (Samuel, live review 2026-08-28). It
-                carried no `onClick` at all, so nothing became unreachable and there is no
-                expanded editor to reach; §5 forbade it standing there in the first place. */}
-            {/* ⚠ SHORTCUTS (Zap) AND ATTACH (Paperclip) ARE DELETED, NOT HIDDEN (Samuel,
-                2026-09-04) — the same ruling and the same reason as the expand glyph above them:
-                neither ever carried an `onClick`, so nothing became unreachable, and §5's
-                interaction-completeness rule forbids a control that cannot act. ⚠ THE MUTATION
-                THIS COMMENT EXISTS TO STOP is somebody "completing" the toolbar by putting one
-                back on the way to wiring it. Bring the glyph back WITH its feature, not before.
-                ⚠ EMOJI IS STILL INERT AND STILL HERE: it was not in the ruling, and deleting a
-                third control on my own initiative is a product decision nobody made. */}
-            <IconButton icon={Smile} label="Emoji" size={15} className="h-6 w-6" />
-            {/* DICTATION — the browser's own `SpeechRecognition`, no key and no dependency
-                (`use-dictation.ts`, which carries the whole rationale).
-                ⚠ ABSENT WHERE THE BROWSER HAS NO ENGINE (Firefox), never disabled — the
-                feature-detection rule every affordance in this family follows.
-                ⚠ RED IS "CAPTURING RIGHT NOW", set from the engine's own `onstart`, so a refused
-                microphone leaves the glyph exactly as it was.
-                ⚠ THE LABEL SAYS WHICH WAY THE CLICK GOES, because the glyph does not change. */}
-            {dictation.supported && (
-              <IconButton
-                icon={Mic}
-                label={dictation.listening ? "Stop dictation" : "Dictate"}
-                size={15}
-                active={dictation.listening}
-                onClick={dictation.toggle}
-                className={cn(
-                  "h-6 w-6",
-                  // ⚠ BOTH HALVES: the hover would otherwise repaint the red on the way to the
-                  // second click, which is the click that STOPS it.
-                  dictation.listening && "text-danger hover:text-danger"
-                )}
-              />
-            )}
-            <span className="flex-1" />
-            {/* ⚠ ONLY WHEN THERE IS SOMETHING TO DISCARD (Samuel, 2026-08-27). It rendered
-                always, which put a dead control beside the send button on an empty composer. */}
-            {sendState.hasContent && (
-              <button
-                type="button"
-                onClick={clear}
-                className="flex h-[var(--action-h-sm)] items-center rounded-[8px] px-2.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-              >
-                Discard
-              </button>
-            )}
-            {/* ⚠ TWO FACES, WHICH ONE SHOWS IS THE ACT, AND BOTH HANG HERE — right end of this
-                row, level with the icons (Samuel, live review 2026-08-28). The ARROW used to sit
-                in the input row beside the field, which put the card's one submit at the TOP-right
-                while every other control sat along the bottom. A PANEL's submit is the LABELED
-                button and renders exactly when the input row does not — `panelOpen` is that one
-                condition, so there is never a second submit on screen.
-                ⚠ THE FACE IS STILL NOT BUILT HERE: `ComposerSend` is the shared slot, so this
-                file moved WHERE the arrow hangs and nothing about what it is. A `<SendButton>`
-                at this call site is the regression that made the two composers differ, and
-                `composer-input.test.ts` pins its absence.
-                ⚠ VISIBLE TEXT, NOT A TOOLTIP ON AN ARROW — shipping the verb as a `title` made
-                all three acts look identical. ⚠ DISABLED WITH A REASON (§8, rule 4). */}
-            {panelOpen ? (
-              <button
-                type="button"
-                onClick={submit}
-                disabled={!canSend}
-                title={hint}
-                className={cn(
-                  "auth-btn-3d ml-1 flex h-[var(--action-h-sm)] items-center rounded-[8px] px-3.5 text-caption font-semibold text-text-on-cta",
-                  !canSend && "cursor-not-allowed opacity-60"
-                )}
-              >
-                {sendState.label}
-              </button>
-            ) : (
-              <ComposerSend onSend={submit} sendDisabled={!canSend} sendTitle={hint} sendLabel={sendState.label} />
-            )}
-          </div>
+          <ComposerToolbar
+            newAgent={newAgent}
+            launchOpen={launch.open}
+            onToggleLaunch={() => { request.close(); launch.toggle(); }}
+            requestOpen={request.open}
+            onToggleRequest={() => { launch.close(); request.toggle(); }}
+            panelOpen={panelOpen}
+            onMention={() => { mentions.openFromButton(); draftRef.current?.focus(); }}
+            dictation={dictation}
+            hasContent={sendState.hasContent}
+            onClear={clear}
+            submitLabel={sendState.label}
+            submitHint={hint}
+            submitDisabled={!canSend}
+            onSubmit={submit}
+          />
 
           {/* ⚠ A REFUSED LAUNCH IS SAID OUT LOUD, HERE, because nothing else
               will: main answering `{ok:false}` changes nothing on its side, so
@@ -547,18 +412,22 @@ export function ChannelsV2Composer({
             </p>
           )}
 
-          {/* ⚠ A FOREIGN TEMPLATE'S FIRST RUN ON THIS MACHINE IS A QUESTION, NOT A FAILURE. Main
-              refuses with `template-approval` and hands back what IT resolved; the operator reads
-              those instructions verbatim and answers. Approving stores a MACHINE-LOCAL decision
-              and starts nothing — the relaunch goes back through the runner's own path, so the
-              identity writes are not skipped on the second attempt. */}
-          <TemplateApprovalDialog
-            open={runner.approval !== null}
-            request={runner.approval}
-            busy={newAgent?.launchBusy}
-            onCancel={runner.cancelApproval}
-            onConfirm={runner.confirmApproval}
-          />
+          {/* ⚠ A CENTERED POPUP SINCE 2026-09-08 (Samuel: *"scrap that and unwire it from the
+              text input bar … make it a pop up panel"*). The Bot icon's toggle and the launch
+              lane are unchanged; what moved is WHERE the form is drawn — and with it the
+              Discard/Launch pair and the foreign-template question, which is why neither is on
+              this card any more. `composer-launch-panel.tsx` stays, unreferenced from here. */}
+          {newAgent?.canLaunch && (
+            <LaunchAgentDialog
+              panel={launch}
+              newAgent={newAgent}
+              openThreadId={openThreadId ?? null}
+              channelId={channelId}
+              workspaceId={workspaceId}
+              currentUserId={currentUserId}
+              members={members}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import "server-only";
-import type { AgentPresenceStatus } from "../types";
+import type { AgentPresenceStatus, PresencePosture } from "../types";
 import * as collab from "./repository-collab";
 import type { ChannelContext } from "./service-shared";
 
@@ -36,4 +36,27 @@ export async function heartbeatPresence(
     lastSeenAt: row.last_seen_at,
     status: row.status,
   };
+}
+
+/**
+ * THE USER-SCOPED HEARTBEAT — one call, every container (2026-09-08, Samuel's
+ * Slack-parity ruling).
+ *
+ * ⚠ **IT TAKES A `userId`, NOT A {@link ChannelContext}, AND THAT IS THE POINT.**
+ * There is no workspace in this operation: the subject is the PERSON, and the
+ * set of containers is whatever `workspace_members` says at the instant the
+ * statement runs. A context would carry exactly the one workspace this route
+ * deliberately does not have.
+ *
+ * ⚠ **THE PER-WORKSPACE {@link heartbeatPresence} STAYS AND MUST KEEP WORKING.**
+ * An older desktop beats it once per container and knows nothing about this
+ * route; a current desktop falls back to it, in parallel, when this one 404s
+ * (§13, an older peer is supported — in both directions).
+ */
+export async function heartbeatPresenceEverywhere(
+  userId: string,
+  status: PresencePosture
+): Promise<{ workspaceIds: string[]; status: PresencePosture }> {
+  const workspaceIds = await collab.upsertPresenceEverywhere(userId, status);
+  return { workspaceIds, status };
 }

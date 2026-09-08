@@ -49,6 +49,14 @@
   --color-surface-raised-3: var(--surface-raised-3);
   --color-surface-raised-4: var(--surface-raised-4);
   --color-surface-selected: var(--surface-selected);
+  /* 🔒 THE HISTOGRAM BAR — SOLID, NOT A TINT (Samuel, 2026-09-08, over the
+     reference chart: "their bars are not transparent"). The `surface-raised-*`
+     ramp above is alpha ON PURPOSE, so a bar wearing one picks up whatever card
+     it stands on and reads as a smudge; a chart bar is an OPAQUE OBJECT on the
+     card and needs a flat neutral of its own. Consumer:
+     `apps/desktop-ui/src/components/charts/bar-series.tsx`. Its inked twin is
+     `--surface-cta`, which the highlighted bar already wore. */
+  --color-chart-bar: var(--chart-bar);
   --color-modal-surface: var(--modal-surface);
   --color-scrim: var(--scrim);
 
@@ -235,6 +243,9 @@
   --surface-raised-2: oklch(0 0 0 / 3.5%);
   --surface-raised-3: oklch(0 0 0 / 5%);
   --surface-raised-4: oklch(0 0 0 / 7%);
+  /* The histogram bar's resting fill — flat, opaque, one step darker than the
+     card it stands on (see the `--color-chart-bar` note in the theme block). */
+  --chart-bar: #e8e8e8;
   --surface-selected: oklch(0 0 0 / 8%);
   --modal-surface: #fefefe;
   --scrim: oklch(0 0 0 / 40%);

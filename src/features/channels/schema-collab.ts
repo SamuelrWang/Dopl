@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { closedEnum } from "@/shared/lib/closed-enum";
-import type { AgentPresenceStatus, ConsentDecisionSurface } from "./types";
+import type {
+  AgentPresenceStatus,
+  ConsentDecisionSurface,
+  PresencePosture,
+} from "./types";
 
 /**
  * COLLAB request schemas — consent, trust and presence.
@@ -132,6 +136,27 @@ export const PresenceHeartbeatSchema = z.object({
     "busy",
     "paused",
     "offline",
+    "active",
+    "away",
   ]).optional(),
 });
 export type PresenceHeartbeatInput = z.infer<typeof PresenceHeartbeatSchema>;
+
+/**
+ * POST /presence/all body — the USER-SCOPED heartbeat (2026-09-08, §7).
+ *
+ * ⚠ **`status` IS REQUIRED HERE AND OPTIONAL ON THE PER-WORKSPACE ROUTE, ON
+ * PURPOSE.** The old route's default (`'listening'`) exists to keep pre-posture
+ * desktops working; a caller of THIS route is a build that knows the posture, so
+ * an omitted one would be a bug reported as an ambiguity rather than a 400.
+ *
+ * ⚠ **THE SET IS THE POSTURE, NOT `AgentPresenceStatus`.** The four legacy words
+ * are refused here — nothing may introduce a new writer of them, and admitting
+ * them would let this route re-open the vocabulary the migration is retiring.
+ */
+export const PresenceHeartbeatAllSchema = z.object({
+  status: closedEnum<PresencePosture>()(["active", "away"]),
+});
+export type PresenceHeartbeatAllInput = z.infer<
+  typeof PresenceHeartbeatAllSchema
+>;

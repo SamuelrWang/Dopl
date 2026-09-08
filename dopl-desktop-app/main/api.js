@@ -16,7 +16,7 @@ const { fetchWithAuthRepair } = require('./api-repair');
 const { API_BASE } = require('./config');
 
 async function sendOnce(pathname, opts) {
-  const { method = 'GET', workspaceId, body, headers: extra, timeoutMs, noStore } = opts;
+  const { method = 'GET', workspaceId, body, headers: extra, timeoutMs, noStore, signal } = opts;
   const cookie = await auth.getAuthCookie();
   // Q10: this build's version rides on the TRANSPORT, not on each post site, so a
   // new caller cannot forget it. The server stamps it as the reserved
@@ -28,8 +28,21 @@ async function sendOnce(pathname, opts) {
   if (noStore) headers['Cache-Control'] = 'no-store';
   if (extra) Object.assign(headers, extra);
 
+  // ⚠ TWO ABORT SOURCES, ONE CONTROLLER. The timeout is this transport's own; `opts.signal` is
+  // the CALLER's (presence's abort-not-skip, 2026-09-08 — a tick cancels its predecessor rather
+  // than skipping itself). `AbortSignal.any` is not available on every Electron this app still
+  // runs on, so the caller's signal is FORWARDED with a listener that is always removed —
+  // a retained listener on a long-lived controller is a leak, and `fetchWithAuthRepair` calls
+  // this thunk twice on a 401.
   const ctrl = new AbortController();
   const timer = timeoutMs ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  const forward = () => ctrl.abort();
+  if (signal) {
+    if (signal.aborted) ctrl.abort();
+    else if (typeof signal.addEventListener === 'function') {
+      signal.addEventListener('abort', forward, { once: true });
+    }
+  }
   try {
     return await fetch(`${API_BASE}${pathname}`, {
       method,
@@ -39,6 +52,9 @@ async function sendOnce(pathname, opts) {
     });
   } finally {
     if (timer) clearTimeout(timer);
+    if (signal && typeof signal.removeEventListener === 'function') {
+      signal.removeEventListener('abort', forward);
+    }
   }
 }
 

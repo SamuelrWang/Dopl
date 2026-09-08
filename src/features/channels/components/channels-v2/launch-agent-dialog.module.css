@@ -1,0 +1,110 @@
+/* THE UNDERLINE FIELD — the new-agent popup's Name and Description rows
+ * (2026-09-08, Samuel's popup-panel ruling: *"instead of a box though, it would
+ * be an underline … the user would click on the line, and the line will turn
+ * from gray to black, in an animation that makes it turn color from left to
+ * right"*).
+ *
+ * ⚠ TOKENS ONLY — no hex, no raw font size. Every value here is a `var()` off
+ * `src/app/globals.css`'s `:root` (mirrored in `apps/desktop-ui/src/styles/tokens.css`,
+ * `scripts/check-css-token-drift.ts` is the gate), which is the same discipline
+ * `shared/ui/open-scale-button.module.css` follows.
+ *
+ * ⚠ IT IS A CSS MODULE AND NOT A KIT CLASS, DELIBERATELY. This is Samuel's
+ * EXPERIMENT — *"a new UI im testing … if this looks good for pop up panels,
+ * we'll go across the app to change to match this UI"*. Promoting the recipe
+ * into `globals.css` before that verdict would make a candidate face into the
+ * kit, which is the drift `docs/DESIGN-SYSTEM.md` opens by forbidding. When
+ * Samuel rules it in, this file moves into the kit VERBATIM (the move
+ * `open-scale-button.module.css` records) rather than being copied.
+ */
+
+/* One field row: the label column, then the line. ⚠ A GRID, not a flex gap: the
+ * two labels must share one left edge or the two lines start at different x and
+ * the left→right sweep reads as two different animations. */
+/* STACKED since 2026-09-08 (Samuel: "The text line should be under them, not
+ * to the right of them"): label above, line below, full width. */
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The field's own name. EVERY label is semi-bold (Samuel, 2026-09-08: "All of
+ * the headers … should be bolded") — the weight lives here, not per caller. */
+.label {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* THE LINE'S BOX. The 1px gray rule is the RESTING state and belongs to the
+ * input itself; the black one is this element's `::after`, so the two are
+ * separate layers and the sweep never has to repaint the gray.
+ * ⚠ `position: relative` is what the `::after` measures against. */
+.line {
+  position: relative;
+  display: block;
+}
+
+/* THE BLACK LINE, GROWING FROM THE LEFT (Samuel's own description of it).
+ * ⚠ `transform`, NOT `width`: a width transition lays out every frame, and on
+ * the row it shares with a grid parent that is the difference between a sweep
+ * and a stutter. `transform-origin: left` is the direction. */
+.line::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--text-primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 220ms ease;
+  pointer-events: none;
+}
+
+/* Focus. ⚠ TOGGLED BY A CLASS, NOT BY `:focus-within`, and that is the one
+ * concession this file makes to being pinnable: jsdom loads no stylesheet, so a
+ * pure-CSS focus rule reports the same nothing whether it is there or not
+ * (`shared/ui/open-scale-button.test.tsx` states the same problem and answers it
+ * with a source read). A class the component sets on focus and clears on blur is
+ * the SAME animation and can be asserted on the rendered tree. */
+.lineActive::after {
+  transform: scaleX(1);
+}
+
+/* ⚠ NO ANIMATION, BUT THE STATE STILL SHOWS. Reduced motion removes the sweep,
+ * never the focus indicator — a field that gave no visible answer to a click
+ * would be the accessibility defect this rule exists to avoid. */
+@media (prefers-reduced-motion: reduce) {
+  .line::after {
+    transition: none;
+  }
+}
+
+/* THE FIELD ITSELF — no box and no fill, one hairline along the bottom.
+ * ⚠ `--border-strong` is the gray Samuel named ("the line will turn from gray to
+ * black"); the black is the `::after` above, drawn OVER this one rather than
+ * replacing it, so nothing shifts by a pixel when focus lands. */
+.input {
+  display: block;
+  width: 100%;
+  height: var(--action-h-sm);
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--text-body);
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}

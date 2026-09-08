@@ -466,14 +466,23 @@ test("LEAK: releasing is BEST-EFFORT — an odd or already-read body must not th
 
 test("LEAK: the presence heartbeat releases its body on EVERY branch, success included", () => {
   // ⚠ THE STEADIEST LEAK IN THE APP PRECISELY BECAUSE NOTHING ABOUT IT EVER FAILS: one beat
-  // per workspace every 30s, for the life of the process, and `beatOnce` reads no body on
-  // any branch — it only looks at `res.status` / `res.ok`.
-  const PRESENCE = M("presence.js");
-  const fn = fnOf(PRESENCE, "beatOnce");
+  // every 30s for the life of the process, and the beat reads no body on any branch — it only
+  // looks at `res.status` / `res.ok`.
+  //
+  // ⚠ THE PROBE FOLLOWED THE CODE ON 2026-09-08 AND DID NOT LOOSEN. `presence.js` was split
+  // into a pure loop (`presence-core.js`) plus a wiring adapter, and `beatOnce` — the one
+  // request — became `post`. The old anchor named a function that no longer exists, which this
+  // suite reports as a hard error rather than as a pass, which is the whole point of `fnOf`.
+  const CORE = M("presence-core.js");
+  const fn = fnOf(CORE, "post");
   assert.match(fn, /discardBody\(res\)/, "the beat must release the response it never reads");
   assert.ok(
-    orderOf(fn, "discardBody(res)", "if (res.status === 404)", "beatOnce"),
+    orderOf(fn, "discardBody(res)", "if (res.status === 404)", "post"),
     "released BEFORE the branches that return without reading it"
   );
-  assert.match(PRESENCE, /require\('\.\/api-repair'\)/, "and it uses the ONE shared helper");
+  assert.match(
+    M("presence.js"),
+    /require\('\.\/api-repair'\)/,
+    "and the adapter still hands the ONE shared helper in"
+  );
 });

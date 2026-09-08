@@ -116,8 +116,8 @@ afterEach(() => {
 /**
  * The accessible name of one option row, as a pattern.
  *
- * ⚠ `\s*`, NOT A LITERAL SPACE, AND THAT IS NOT A LOOSENING. `MenuItem` puts the
- * label and the marker in two `display:block` spans; jsdom loads no stylesheet,
+ * ⚠ `\s*`, NOT A LITERAL SPACE, AND THAT IS NOT A LOOSENING. The option button holds
+ * the label and the marker as two sibling nodes; jsdom loads no stylesheet,
  * so the accessible-name algorithm sees them as INLINE and joins them with no
  * separator ("Code auditorby Diana Taylor") where a browser inserts one. The
  * pattern is anchored at both ends, so it still fails on a missing marker, a
@@ -126,7 +126,14 @@ afterEach(() => {
 const NAME_RE = (label: string, marker: string) =>
   new RegExp(`^${label}\\s*${marker}$`);
 
-/** Open the Bot panel and its Template menu; returns nothing — assert on roles. */
+/**
+ * Open the Bot popup; returns nothing — assert on roles.
+ *
+ * ⚠ THERE IS NO MENU TO OPEN SINCE 2026-09-08 (Samuel's popup-panel ruling). Template is a
+ * `SegmentedControl` row, so every option is on screen as a `role="tab"` the moment the dialog
+ * is — which is a STRONGER reading of §5A than the dropdown gave: the marker is now visible
+ * before the operator even reaches for the row, not just before the click.
+ */
 async function openTemplateMenu() {
   render(
     <ChannelsV2Composer
@@ -144,10 +151,9 @@ async function openTemplateMenu() {
       `#${MINTED}`
     )
   );
-  fireEvent.click(screen.getByRole("button", { name: "Agent template" }));
 }
 
-describe("the launch panel's Template row carries the authorship marker", () => {
+describe("the launch popup's Template row carries the authorship marker", () => {
   it("names the AUTHOR of a template this operator did not write", async () => {
     templateList.templates = [
       { id: "tpl-1", name: "Code auditor", workspaceId: "ws-1", createdBy: PEER },
@@ -156,7 +162,7 @@ describe("the launch panel's Template row carries the authorship marker", () => 
 
     // The marker is IN the accessible name, before the choice is made.
     expect(
-      await screen.findByRole("menuitem", { name: NAME_RE("Code auditor", "by Diana Taylor") })
+      await screen.findByRole("tab", { name: NAME_RE("Code auditor", "by Diana Taylor") })
     ).toBeTruthy();
   });
 
@@ -174,7 +180,7 @@ describe("the launch panel's Template row carries the authorship marker", () => 
     await openTemplateMenu();
 
     expect(
-      await screen.findByRole("menuitem", { name: NAME_RE("Release notes", "by another member") })
+      await screen.findByRole("tab", { name: NAME_RE("Release notes", "by another member") })
     ).toBeTruthy();
   });
 
@@ -185,7 +191,7 @@ describe("the launch panel's Template row carries the authorship marker", () => 
     await openTemplateMenu();
 
     expect(
-      await screen.findByRole("menuitem", { name: NAME_RE("Orphan", "by another member") })
+      await screen.findByRole("tab", { name: NAME_RE("Orphan", "by another member") })
     ).toBeTruthy();
   });
 
@@ -198,9 +204,9 @@ describe("the launch panel's Template row carries the authorship marker", () => 
     await openTemplateMenu();
 
     expect(
-      await screen.findByRole("menuitem", { name: /^My auditor$/ })
+      await screen.findByRole("tab", { name: /^My auditor$/ })
     ).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: /by /i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /by /i })).toBeNull();
   });
 
   it("leaves Blank agent unmarked — it is a configuration, not somebody's text", async () => {
@@ -210,7 +216,7 @@ describe("the launch panel's Template row carries the authorship marker", () => 
     await openTemplateMenu();
 
     expect(
-      await screen.findByRole("menuitem", { name: "Blank agent" })
+      await screen.findByRole("tab", { name: "Blank agent" })
     ).toBeTruthy();
   });
 });
