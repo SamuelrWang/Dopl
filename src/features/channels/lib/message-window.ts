@@ -60,7 +60,16 @@ export interface MessageWindow {
    * it never renders. See {@link isContiguous}.
    */
   readonly boundarySeq: number | null;
-  /** A page came back SHORT: the channel's oldest message is loaded. */
+  /**
+   * THE SERVER SAID THERE IS NOTHING OLDER: the channel's oldest message is
+   * loaded.
+   *
+   * ⚠ **DERIVED FROM THE ROUTE'S `hasMore`, NEVER FROM `page.length` (2026-09-08).**
+   * The transcript pages by an ESTIMATED-LINE budget
+   * (`constants.ts › CHANNEL_TRANSCRIPT_LINE_BUDGET`), so a page is SHORT BY
+   * DESIGN and "shorter than we asked for" means nothing at all. See
+   * {@link appendOlderPage}.
+   */
   readonly exhausted: boolean;
   /**
    * EVERY FOLDED ARTIFACT THE HISTORY PAGES DESCRIBED, deduped by artifact id.
@@ -155,8 +164,26 @@ export function mergeWindow(
  * boundary witness on the FIRST page only — later pages extend the window
  * downward and must not move a witness that describes its TOP edge.
  *
- * ⚠ `exhausted` LATCHES. A page shorter than what was asked for means the
- * channel ran out; a later page cannot un-run-out.
+ * ⚠ **`hasMore` IS THE SERVER'S, AND THAT IS THE WHOLE CHANGE OF 2026-09-08.**
+ * This function took a `limit` and set `exhausted` from `page.length < limit`
+ * until the transcript started paging by ESTIMATED LINES
+ * (`lib/transcript-line-budget.ts`), at which point a short page became the
+ * NORMAL page and that test started reporting a channel of long messages as
+ * exhausted after its first screen. The route now says so directly
+ * (`server/service-reads.ts › readTranscript`), and the caller passes it
+ * through with a "maybe more" fallback for a payload written by a build that
+ * predates the key.
+ *
+ * ⚠ **AN EMPTY PAGE EXHAUSTS THE WINDOW WHATEVER `hasMore` SAYS.** The server
+ * never sends that pair — `takeLineBudget` returns at least one row whenever the
+ * query found any, and reports `hasMore: false` when it found none — so this
+ * only fires for a payload from a build that predates the flag, where the `??
+ * true` fallback would otherwise let every later scroll re-ask for the same
+ * empty page forever. Nothing older CAN exist below a page that came back with
+ * no rows at all, so this is not a guess.
+ *
+ * ⚠ `exhausted` LATCHES. Once the server says there is nothing older, a later
+ * page cannot un-run-out.
  *
  * ⚠ `entries` IS THE PAGE'S ENVELOPE AND DEFAULTS TO `null`, which is both the
  * ordinary answer ("nothing on this page is folded") and the answer from a build
@@ -167,13 +194,13 @@ export function appendOlderPage(
   window: MessageWindow,
   page: readonly ChannelMessage[],
   requestedBefore: number,
-  limit: number,
+  hasMore: boolean,
   entries: readonly ChannelReadEntry[] | null = null
 ): MessageWindow {
   return {
     older: page.length === 0 ? window.older : [...page, ...window.older],
     boundarySeq: window.boundarySeq ?? requestedBefore,
-    exhausted: window.exhausted || page.length < limit,
+    exhausted: window.exhausted || !hasMore || page.length === 0,
     artifacts: addArtifacts(window.artifacts, foldedArtifactsOf(entries)),
   };
 }

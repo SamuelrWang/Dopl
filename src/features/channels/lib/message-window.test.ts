@@ -180,34 +180,52 @@ describe("mergeWindow", () => {
 
 describe("appendOlderPage", () => {
   it("prepends the page and records the boundary from the FIRST fetch only", () => {
-    const first = appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(8), msg(9)], 10, 2);
+    const first = appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(8), msg(9)], 10, true);
     expect(first.older.map((m) => m.seq)).toEqual([8, 9]);
     expect(first.boundarySeq).toBe(10);
 
-    const second = appendOlderPage(first, [msg(6), msg(7)], 8, 2);
+    const second = appendOlderPage(first, [msg(6), msg(7)], 8, true);
     expect(second.older.map((m) => m.seq)).toEqual([6, 7, 8, 9]);
     // ⚠ STILL 10. The witness describes the window's TOP edge — where the newest
     // page stood when history began — and later pages extend the BOTTOM.
     expect(second.boundarySeq).toBe(10);
   });
 
-  it("marks the window exhausted on a SHORT page, and the flag latches", () => {
-    const short = appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(1)], 5, 50);
-    expect(short.exhausted).toBe(true);
-    expect(appendOlderPage(short, [], 1, 50).exhausted).toBe(true);
+  it("marks the window exhausted when the SERVER says so, and the flag latches", () => {
+    const done = appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(1)], 5, false);
+    expect(done.exhausted).toBe(true);
+    expect(appendOlderPage(done, [msg(0)], 1, true).exhausted).toBe(true);
   });
 
-  it("does NOT mark exhausted on a full page", () => {
+  it("does NOT mark exhausted while the server says there is more", () => {
     expect(
-      appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(1), msg(2)], 5, 2).exhausted
+      appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(1), msg(2)], 5, true).exhausted
     ).toBe(false);
+  });
+
+  it("exhausts on an EMPTY page even when the flag says otherwise", () => {
+    // Only a pre-2026-09-08 payload can produce that pair (`?? true` over a
+    // missing key). Nothing older can exist below a page with no rows, and
+    // without this latch every later scroll re-asks for the same empty page.
+    expect(
+      appendOlderPage(EMPTY_MESSAGE_WINDOW, [], 5, true).exhausted
+    ).toBe(true);
+  });
+
+  it("is NOT exhausted by a SHORT page the server called non-final", () => {
+    // 🔒 THE 2026-09-08 REGRESSION GUARD. The transcript pages by an ESTIMATED
+    // LINE budget, so a one-row page is the ordinary answer for a channel of
+    // long messages. Deriving `exhausted` from the page's LENGTH — the shape
+    // this function carried until that day — hid every older message behind it.
+    const win = appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(1)], 5, true);
+    expect(win.exhausted).toBe(false);
   });
 
   it("still takes the boundary from an EMPTY first page", () => {
     // An empty page means the channel ended exactly at the cursor. The window
     // must still remember where it stopped or the next newest-page refetch has
     // no witness to check itself against.
-    const win = appendOlderPage(EMPTY_MESSAGE_WINDOW, [], 12, 50);
+    const win = appendOlderPage(EMPTY_MESSAGE_WINDOW, [], 12, false);
     expect(win.boundarySeq).toBe(12);
     expect(win.exhausted).toBe(true);
   });
@@ -420,7 +438,7 @@ describe("appendOlderPage — the artifacts it carries", () => {
       EMPTY_MESSAGE_WINDOW,
       [msg(8, { artifactId: "a-1" })],
       10,
-      2,
+      true,
       envelope([], [folded("a-1")])
     );
     expect(win.artifacts.map((a) => a.artifact.id)).toEqual(["a-1"]);
@@ -431,14 +449,14 @@ describe("appendOlderPage — the artifacts it carries", () => {
       EMPTY_MESSAGE_WINDOW,
       [msg(8, { artifactId: "a-1" })],
       10,
-      2,
+      true,
       envelope([], [folded("a-1")])
     );
     const second = appendOlderPage(
       first,
       [msg(6, { artifactId: "a-1" })],
       8,
-      2,
+      true,
       envelope([], [folded("a-1")])
     );
     expect(second.artifacts.map((a) => a.artifact.id)).toEqual(["a-1"]);
@@ -449,7 +467,7 @@ describe("appendOlderPage — the artifacts it carries", () => {
 
   it("defaults to no envelope, so a caller that passes none is unchanged", () => {
     expect(
-      appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(1)], 5, 50).artifacts
+      appendOlderPage(EMPTY_MESSAGE_WINDOW, [msg(1)], 5, true).artifacts
     ).toEqual([]);
   });
 });

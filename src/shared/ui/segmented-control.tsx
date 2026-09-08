@@ -48,8 +48,11 @@ export function SegmentedControl<K extends string>({
   /** ⚠ Set while a write this control fired is in flight: a second click races
    *  the first, and the loser's rollback restores the winner's value. */
   disabled?: boolean;
-  /** Trackless filter row (default) or the tracked page-header selector. */
-  variant?: "pills" | "track";
+  /** Trackless filter row (default), the tracked page-header selector, or the
+   *  text-only row whose current option wears a black underline (2026-09-08,
+   *  Samuel: "remove the pills … just the text, and the selected tab will just
+   *  have a black underline"). No pill, no track, no hairline of its own. */
+  variant?: "pills" | "track" | "underline";
   /** Compact filter row (default), or the landing nav's 42px header scale. */
   size?: "sm" | "lg";
   /** Layout-only (margins, width) — plus the track's `bg-*` token in the
@@ -57,7 +60,10 @@ export function SegmentedControl<K extends string>({
   className?: string;
 }) {
   const tracked = variant === "track";
-  const option =
+  const underlined = variant === "underline";
+  const option = underlined
+    ? "relative h-9 px-1 text-small"
+    :
     size === "lg"
       ? tracked
         ? "h-[30px] px-[15px] text-small"
@@ -75,7 +81,11 @@ export function SegmentedControl<K extends string>({
     <div
       role="tablist"
       className={cn(
-        tracked ? "seg-track" : "flex items-center gap-1.5",
+        tracked
+          ? "seg-track"
+          : underlined
+            ? "flex items-center gap-5"
+            : "flex items-center gap-1.5",
         className
       )}
     >
@@ -88,13 +98,18 @@ export function SegmentedControl<K extends string>({
           disabled={disabled}
           onClick={() => value !== key && onChange(key)}
           className={cn(
-            "flex items-center justify-center gap-1.5 rounded-full font-medium transition-colors",
+            "flex items-center justify-center gap-1.5 font-medium transition-colors",
+            !underlined && "rounded-full",
             option,
             value === key
-              ? "raised-tab text-text-primary"
+              ? underlined
+                // The underline is the ONLY selected-state mark: 2px, ink
+                // colour, flush with the row's bottom edge.
+                ? "text-text-primary after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-full after:bg-text-primary"
+                : "raised-tab text-text-primary"
               : cn(
                   "text-text-secondary hover:text-text-primary",
-                  !tracked && "seg-pill"
+                  !tracked && !underlined && "seg-pill"
                 ),
             disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
           )}

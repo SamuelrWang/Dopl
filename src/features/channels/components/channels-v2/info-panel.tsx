@@ -438,7 +438,7 @@ export function ChannelsV2InfoPanel({
           else to fit is a worse answer than a tab that scrolls. */}
       <div
         className={cn(
-          "flex h-[56px] shrink-0 items-center border-b border-border-default",
+          "flex h-[56px] shrink-0 items-center",
           options.length > 4 ? "px-2" : "px-3"
         )}
       >
@@ -453,6 +453,7 @@ export function ChannelsV2InfoPanel({
           // header's buttons, so a switcher does not read as a smaller class of control than
           // the things beside it.
           size="lg"
+          variant="underline"
           // Layout only, which is all `className` may carry here (the primitive's
           // own contract). See the width-budget note above.
           className={cn(

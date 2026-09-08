@@ -27,6 +27,9 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       "before",
       "limit",
       "thread",
+      // The UI transcript's ESTIMATED-LINE page budget (2026-09-08). Opt-in:
+      // the MCP / desktop reads send none and page by row exactly as before.
+      "lineBudget",
     ]);
     const ctx = buildChannelContext(auth);
     // ⚠ **`entries` RIDES BESIDE `messages`, AND IS ABSENT UNLESS THE PAGE
@@ -36,12 +39,18 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     // instead of losing rows to a card it cannot draw. A card-aware renderer
     // reads `entries` when present. `null` here means "nothing on this page is
     // in an artifact", never "this server cannot fold".
-    const { messages, entries } = await readTranscript(
+    // ⚠ **`hasMore` IS ALWAYS ON THE WIRE, AND THE CLIENT MUST NOT RE-DERIVE IT**
+    // (2026-09-08). A line-budgeted page is SHORT BY DESIGN, so the usual
+    // `rows.length === pageSize` test would report a channel of long messages as
+    // exhausted on its first page and hide the rest of its history.
+    const { messages, entries, hasMore } = await readTranscript(
       ctx,
       requireChannelId(auth.params),
       query
     );
-    return NextResponse.json(entries === null ? { messages } : { messages, entries });
+    return NextResponse.json(
+      entries === null ? { messages, hasMore } : { messages, entries, hasMore }
+    );
   } catch (err) {
     return toChannelErrorResponse(err);
   }

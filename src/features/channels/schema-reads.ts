@@ -41,19 +41,44 @@ import {
  * `before=0` would mean "everything older than the first row", i.e. an
  * unconditionally empty page — a caller that reaches it has computed a cursor
  * wrong and should hear about it.
+ *
+ * ⚠ **`lineBudget` IS OPT-IN, AND THAT IS WHAT KEEPS THE MCP / DESKTOP READ OUT
+ * OF THIS (2026-09-08).** The UI transcript pages by ESTIMATED RENDERED LINES
+ * (`constants.ts › CHANNEL_TRANSCRIPT_LINE_BUDGET`) because a row is not a unit
+ * a reader experiences; every other caller of this route pages by rows and asks
+ * for no budget, so it gets exactly the page it got yesterday. `limit` still
+ * bounds the read in BOTH cases — the budget only ever returns FEWER rows than
+ * `limit`, never more.
  */
-export const MessageReadQuerySchema = z.object({
-  since: z.coerce.number().int().nonnegative().optional(),
-  before: z.coerce.number().int().positive().optional(),
-  limit: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(MAX_MESSAGE_LIMIT)
-    .optional()
-    .default(DEFAULT_MESSAGE_LIMIT),
-  thread: z.string().trim().min(1).max(200).optional(),
-});
+export const MessageReadQuerySchema = z
+  .object({
+    since: z.coerce.number().int().nonnegative().optional(),
+    before: z.coerce.number().int().positive().optional(),
+    limit: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(MAX_MESSAGE_LIMIT)
+      .optional()
+      .default(DEFAULT_MESSAGE_LIMIT),
+    thread: z.string().trim().min(1).max(200).optional(),
+    // ⚠ NO `.max()`, AND IT NEEDS NONE: `limit` above is the read's bound and
+    // the budget can only shrink a page below it, so an absurd budget asks for
+    // `limit` rows and gets them. A second ceiling here would be a number with
+    // nothing to enforce.
+    lineBudget: z.coerce.number().int().positive().optional(),
+  })
+  // ⚠ **`lineBudget` WITH `since` IS REFUSED, NOT IGNORED** — the same rule
+  // `AccountStatusQuerySchema` applies to `view`+`since`, for the same reason.
+  // The budget keeps the NEWEST rows of the block it read; a forward read
+  // (`since` without `before`) is oldest-first from its cursor, so trimming it
+  // would silently drop the rows nearest the cursor and hand back a page with a
+  // hole at its front. Nothing asks for that combination today, and a 400 is how
+  // it stays that way.
+  .refine((q) => q.lineBudget === undefined || q.since === undefined, {
+    message: "lineBudget is not supported with since (forward reads page by row)",
+    path: ["lineBudget"],
+  });
 export type MessageReadQuery = z.infer<typeof MessageReadQuerySchema>;
 
 /**

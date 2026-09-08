@@ -1,5 +1,8 @@
 import { apiResource, type ApiResourceKeys } from "@/shared/api/query-keys";
-import { CHANNEL_TRANSCRIPT_PAGE_SIZE } from "../constants";
+import {
+  CHANNEL_TRANSCRIPT_LINE_BUDGET,
+  CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS,
+} from "../constants";
 
 /**
  * The channels feature's URLs and the cache keys built from them, in one
@@ -102,7 +105,18 @@ export function channelListParams(includeArchived: boolean) {
  * A `?before=` entry would sit under the SAME prefix key the writes patch
  * (`channelKeys.messages(id).all`), so every send would append its pending row
  * into every page of history it happened to have loaded.
+ *
+ * ⚠ **TWO NUMBERS SINCE 2026-09-08, AND `limit` IS NO LONGER THE PAGE SIZE.**
+ * `lineBudget` is what the page is actually sized by — ESTIMATED RENDERED LINES,
+ * Samuel's ruling that a row is not a unit a reader experiences — and `limit` is
+ * only the hard row cap the budget can never exceed
+ * (`constants.ts › CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS`). Both belong HERE, in the
+ * params the optimistic writes reach: a `before` fetch that sent a different
+ * pair would be reading a differently-sized page than the one on screen.
  */
 export function channelMessagesParams() {
-  return { limit: CHANNEL_TRANSCRIPT_PAGE_SIZE };
+  return {
+    limit: CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS,
+    lineBudget: CHANNEL_TRANSCRIPT_LINE_BUDGET,
+  };
 }

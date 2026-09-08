@@ -105,6 +105,7 @@ export function ChannelsV2ThreadWindow({
   const {
     messages,
     loading: messagesLoading,
+    stale: messagesStale,
     refetch: refetchMessages,
   } = useChannelMessages(channelId, workspaceId);
   const { members, refetch: refetchMembers } = useChannelMembers(
@@ -212,6 +213,9 @@ export function ChannelsV2ThreadWindow({
         index={index}
         members={members}
         loading={messagesLoading}
+        // The scroller's rule 1 — see `use-stick-to-bottom.ts`. This window never switches
+        // channels, so it is all but always false; passing it keeps ONE pane, one contract.
+        stale={messagesStale}
         outboundAsk={thread ? (outboundByThread.get(thread.id) ?? null) : null}
         outboundBusy={consentBusy}
         onDecideOutbound={decideOutbound}

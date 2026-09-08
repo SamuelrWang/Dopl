@@ -91,7 +91,7 @@ export function AgentEndedPill({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded-full border border-border-strong bg-bg-inset px-2 py-px text-micro font-medium text-text-disabled",
+        "shrink-0 rounded-[6px] bg-surface-cta px-2 py-px text-micro font-medium text-text-on-cta",
         className
       )}
     >

@@ -16,7 +16,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { QueryClient } from "@tanstack/react-query";
 import { apiQueryKey } from "@/shared/api/query-keys";
-import { CHANNEL_TRANSCRIPT_PAGE_SIZE } from "../constants";
+import {
+  CHANNEL_TRANSCRIPT_LINE_BUDGET,
+  CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS,
+} from "../constants";
 import {
   CHANNEL_CONSENT_PATH,
   channelKeys,
@@ -77,12 +80,14 @@ describe("channel paths", () => {
     expect(source("../hooks/use-channels.ts")).toContain(
       'includeArchived ? { include: "archived" } : undefined'
     );
-    // ⚠ THE TRANSCRIPT'S PAGE SIZE, NOT `MAX_MESSAGE_LIMIT` (2026-09-01). The
-    // read pages backward with a `before` cursor now, so the newest page is one
-    // page and the ceiling is only the schema's cap. The key CARRIES the limit,
-    // so this number is part of the cache entry the writes patch.
+    // ⚠ THE TRANSCRIPT'S PAGE, AND SINCE 2026-09-08 IT IS TWO NUMBERS: the
+    // ESTIMATED-LINE budget that actually sizes it, plus the hard row cap the
+    // budget can never exceed. The key CARRIES both, so they are part of the
+    // cache entry the writes patch and a `before` fetch cannot ask for a
+    // differently-sized page than the one on screen.
     expect(channelMessagesParams()).toEqual({
-      limit: CHANNEL_TRANSCRIPT_PAGE_SIZE,
+      limit: CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS,
+      lineBudget: CHANNEL_TRANSCRIPT_LINE_BUDGET,
     });
   });
 });
@@ -136,7 +141,10 @@ describe("channelKeys", () => {
     ).toEqual([
       `/api/channels/${CHANNEL}/messages`,
       "ws",
-      { limit: CHANNEL_TRANSCRIPT_PAGE_SIZE },
+      {
+        limit: CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS,
+        lineBudget: CHANNEL_TRANSCRIPT_LINE_BUDGET,
+      },
     ]);
   });
 });

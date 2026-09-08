@@ -150,9 +150,11 @@ describe("the Agents tab with three of mine on one thread", () => {
     expect(screen.getAllByText("Idle")).toHaveLength(1);
   });
 
-  it("says how many of mine share the thread, on every card", () => {
+  // ⚠ INVERTED 2026-09-08 (Samuel: remove "N of yours here" from the card).
+  // The grouping still puts siblings together; the card no longer counts them.
+  it("does not count my sibling agents on the card", () => {
     mount();
-    expect(screen.getAllByText(/3 of yours here/)).toHaveLength(3);
+    expect(screen.queryByText(/of yours here/)).toBeNull();
   });
 });
 

@@ -501,7 +501,7 @@ export function ChannelsV2Composer({
               <button
                 type="button"
                 onClick={clear}
-                className="rounded-[8px] px-2.5 py-1.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+                className="flex h-[var(--action-h-sm)] items-center rounded-[8px] px-2.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
               >
                 Discard
               </button>
@@ -525,7 +525,7 @@ export function ChannelsV2Composer({
                 disabled={!canSend}
                 title={hint}
                 className={cn(
-                  "auth-btn-3d ml-1 rounded-[8px] px-3.5 py-1.5 text-caption font-semibold text-text-on-cta",
+                  "auth-btn-3d ml-1 flex h-[var(--action-h-sm)] items-center rounded-[8px] px-3.5 text-caption font-semibold text-text-on-cta",
                   !canSend && "cursor-not-allowed opacity-60"
                 )}
               >

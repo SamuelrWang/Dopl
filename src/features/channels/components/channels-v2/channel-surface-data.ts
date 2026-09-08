@@ -71,6 +71,13 @@ import type {
 export interface ChannelSurfaceData extends ChannelsV2Derivations {
   messages: ChannelMessage[];
   messagesLoading: boolean;
+  /**
+   * THE RENDERED TRANSCRIPT IS STILL THE PREVIOUS CHANNEL'S — `use-channel-messages.ts ›
+   * stale` (`isPlaceholderData`). ⚠ EXPOSED FOR THE SCROLLER'S RULE 1 (2026-09-08) and read
+   * by nothing else: `messagesLoading` cannot see this window, because `keepPreviousData`
+   * leaves `isPending` false through a switch.
+   */
+  messagesStale: boolean;
   /** More transcript history exists to fetch — `use-channel-messages.ts`. */
   hasOlderMessages: boolean;
   /** A `before` page is in flight. */
@@ -175,6 +182,7 @@ export function useChannelSurfaceData({
     // the pair is one value and only this hook may produce it.
     entries: messageEntries,
     loading: messagesLoading,
+    stale: messagesStale,
     refetch: refetchMessages,
     hasOlder: hasOlderMessages,
     loadingOlder: loadingOlderMessages,
@@ -388,6 +396,7 @@ export function useChannelSurfaceData({
     ...derivations,
     messages,
     messagesLoading,
+    messagesStale,
     hasOlderMessages,
     loadingOlderMessages,
     loadOlderMessages,

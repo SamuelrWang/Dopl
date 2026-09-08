@@ -255,6 +255,9 @@ export function ChannelSurface({
       index={index}
       members={members}
       loading={data.messagesLoading}
+      // ⚠ RULE 1'S OTHER HALF (`use-stick-to-bottom.ts`): through a channel switch these rows
+      // are still the PREVIOUS channel's, and `messagesLoading` is false the whole time.
+      stale={data.messagesStale}
       outboundAsk={openThread ? (data.outboundByThread.get(openThread.id) ?? null) : null}
       outboundBusy={data.consentBusy}
       onDecideOutbound={data.decideOutbound}

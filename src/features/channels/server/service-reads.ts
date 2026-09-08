@@ -38,6 +38,7 @@ import {
 // service; the artifact service must never read this one back. Both take the
 // hydrator from `service-shared.ts`, which is what keeps that true.
 import { foldPage } from "./service-artifacts";
+import { takeLineBudget } from "../lib/transcript-line-budget";
 
 /**
  * Read-side channels service: visibility-filtered list, single-channel header,
@@ -266,14 +267,18 @@ async function readMessagePage(
   ctx: ChannelContext,
   ref: string,
   query: MessageReadQuery
-): Promise<{ channelId: string; messages: ChannelMessage[] }> {
+): Promise<{ channelId: string; messages: ChannelMessage[]; hasMore: boolean }> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  const rows = await repoMessages.listMessages(channel.id, {
+  const fetched = await repoMessages.listMessages(channel.id, {
     since: query.since,
     before: query.before,
     limit: query.limit,
     threadId: query.thread,
   });
+  // ⚠ **ONE QUERY, TRIMMED HERE — keyset untouched**, before hydration so the
+  // page-wide joins pay only for returned rows. Rule, suffix/cursor argument and
+  // `hasMore`: `lib/transcript-line-budget.ts › takeLineBudget`.
+  const { rows, hasMore } = takeLineBudget(fetched, query.limit, query.lineBudget);
   const messages = await hydrateMessages(rows, ctx.workspaceId);
   if (
     membership &&
@@ -299,7 +304,7 @@ async function readMessagePage(
       }
     }
   }
-  return { channelId: channel.id, messages };
+  return { channelId: channel.id, messages, hasMore };
 }
 
 /**
@@ -332,6 +337,12 @@ async function readMessagePage(
  * not use. A page with no folded row costs exactly what it did before this
  * feature existed.
  *
+ * ⚠ **`hasMore` IS THE SERVER'S ANSWER TO "IS THERE OLDER HISTORY", AND THE
+ * CLIENT MAY NOT RE-DERIVE IT (2026-09-08).** A line-budgeted page is SHORT BY
+ * DESIGN, so `rows.length === pageSize` would read "exhausted" on the first page
+ * of a channel of long messages. `lib/transcript-line-budget.ts ›
+ * takeLineBudget` owns the rule; it is reported on every read of this route.
+ *
  * ⚠ **`messages` STAYS COMPLETE, AND THAT IS DELIBERATE.** Design §4 warns the
  * fold is "honestly breaking for artifact-unaware clients"; keeping the full
  * page beside the entries means an installed desktop or an older web build shows
@@ -343,15 +354,19 @@ export async function readTranscript(
   ctx: ChannelContext,
   ref: string,
   query: MessageReadQuery
-): Promise<{ messages: ChannelMessage[]; entries: ChannelReadEntry[] | null }> {
-  const { channelId, messages } = await readMessagePage(ctx, ref, query);
+): Promise<{
+  messages: ChannelMessage[];
+  entries: ChannelReadEntry[] | null;
+  hasMore: boolean;
+}> {
+  const { channelId, messages, hasMore } = await readMessagePage(ctx, ref, query);
   const entries = await foldPage(channelId, messages, {
     since: query.since,
     before: query.before,
     thread: query.thread,
   });
   const folded = entries.some((entry) => entry.type === "artifact");
-  return { messages, entries: folded ? entries : null };
+  return { messages, entries: folded ? entries : null, hasMore };
 }
 
 /**

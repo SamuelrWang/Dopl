@@ -15,127 +15,32 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useEffect, type ReactNode } from "react";
-import { act, cleanup, render } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup } from "@testing-library/react";
 
 vi.mock("@/shared/api/api-client", () => ({ apiRequest: vi.fn() }));
 
 import { apiRequest } from "@/shared/api/api-client";
-import { CHANNEL_TRANSCRIPT_PAGE_SIZE } from "../constants";
-import { channelMessagesParams, channelMessagesPath } from "../client/query-keys";
+// ⚠ FIXTURES AND MOUNT LIVE IN THE HARNESS (split 2026-09-08 at the 500-line
+// cap). Never retype one here — a second `page()` is a second definition of
+// what one transcript page looks like.
+import {
+  cacheKey,
+  CHANNEL,
+  mount,
+  msg,
+  OTHER,
+  page,
+  PAGE_PARAMS,
+  requests,
+  settle,
+  WORKSPACE,
+} from "./use-channel-messages-harness";
 import { appendPendingMessage, buildPendingMessage } from "../lib/optimistic-cache";
-import { useChannelMessages } from "./use-channel-messages";
 import type {
   ChannelFoldedArtifact,
   ChannelMessage,
   ChannelReadEntry,
 } from "../types";
-
-const WORKSPACE = "ws-1";
-const CHANNEL = "c-1";
-const OTHER = "c-2";
-
-/** ⚠ BUILT, never retyped: `[path, workspaceId, query]` is the tuple the read
- *  registers and the writes patch, and one differing element is a silent no-op. */
-const cacheKey = () =>
-  [channelMessagesPath(CHANNEL), WORKSPACE, channelMessagesParams()] as const;
-
-function msg(seq: number, over: Partial<ChannelMessage> = {}): ChannelMessage {
-  return {
-    id: `m-${seq}`,
-    seq,
-    channelId: CHANNEL,
-    authorUserId: "u-1",
-    authorKind: "user",
-    kind: "message",
-    body: `body ${seq}`,
-    metadata: {},
-    clientMsgId: null,
-    createdAt: "2026-08-31T00:00:00.000Z",
-    authorName: null,
-    authorAvatarUrl: null,
-    ...over,
-  };
-}
-
-/** A run of `count` messages ending at `top`, ascending — one server page. */
-function page(top: number, count: number): ChannelMessage[] {
-  return Array.from({ length: count }, (_, i) => msg(top - count + 1 + i));
-}
-
-type Hook = ReturnType<typeof useChannelMessages>;
-
-/** The reads this mount saw, as `{limit, before?}` — the query half alone. */
-function requests(): Array<Record<string, unknown>> {
-  return vi
-    .mocked(apiRequest)
-    .mock.calls.map(([, opts]) => (opts?.query ?? {}) as Record<string, unknown>);
-}
-
-/**
- * ONE MACROTASK. `await act(async () => {})` drains microtasks only, and
- * TanStack schedules its observer notifications on a timer — so a query whose
- * fetch has already resolved still renders its old data until a real tick has
- * passed.
- */
-const settle = () =>
-  act(async () => {
-    // ⚠ TWO, not one: the fetch resolving and the observer notifying are
-    // separate ticks, and `useApiQuery`'s stranded-query nudge adds a third
-    // timer on top of them.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-
-/** Publishes from an effect — a render-phase write trips `react-hooks/immutability`. */
-async function mount(
-  channelId: string | null = CHANNEL,
-  /**
-   * A cache entry written BEFORE this mount — the §8 case. It is the RAW response
-   * body, because that is what `useApiQuery` stores and what the optimistic
-   * writes patch.
-   */
-  seed?: Record<string, unknown>
-) {
-  // ⚠ ONE client for the whole mount. Minting it inside a `wrapper` component
-  // makes a fresh cache on every rerender, which reads as a query that never
-  // resolves.
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  if (seed) client.setQueryData(cacheKey(), seed);
-  const holder: { value: Hook | null } = { value: null };
-  function Probe({ id }: { id: string | null }) {
-    const state = useChannelMessages(id, WORKSPACE);
-    useEffect(() => {
-      holder.value = state;
-    });
-    return null;
-  }
-  const tree = (id: string | null): ReactNode => (
-    <QueryClientProvider client={client}>
-      <Probe id={id} />
-    </QueryClientProvider>
-  );
-  const view = render(tree(channelId));
-  await settle();
-  return {
-    holder,
-    client,
-    read: () => holder.value as Hook,
-    async select(next: string | null) {
-      view.rerender(tree(next));
-      await settle();
-    },
-    async loadOlder() {
-      await act(async () => {
-        holder.value?.loadOlder();
-      });
-      await settle();
-    },
-  };
-}
 
 beforeEach(() => {
   vi.mocked(apiRequest).mockReset();
@@ -148,7 +53,7 @@ describe("the newest page", () => {
 
     const h = await mount();
 
-    expect(requests()).toEqual([{ limit: CHANNEL_TRANSCRIPT_PAGE_SIZE }]);
+    expect(requests()).toEqual([PAGE_PARAMS]);
     expect(h.read().messages).toHaveLength(50);
     expect(h.read().hasOlder).toBe(true);
   });
@@ -168,10 +73,7 @@ describe("scrolling back", () => {
     const h = await mount();
     await h.loadOlder();
 
-    expect(requests()[1]).toEqual({
-      limit: CHANNEL_TRANSCRIPT_PAGE_SIZE,
-      before: 11,
-    });
+    expect(requests()[1]).toEqual({ ...PAGE_PARAMS, before: 11 });
     const seqs = h.read().messages.map((m) => m.seq);
     expect(seqs[0]).toBe(1);
     expect(seqs.at(-1)).toBe(60);
@@ -194,10 +96,10 @@ describe("scrolling back", () => {
     expect(h.read().messages).toHaveLength(150);
   });
 
-  it("STOPS at the oldest message — a short page exhausts the window", async () => {
+  it("STOPS when the SERVER says there is nothing older", async () => {
     vi.mocked(apiRequest)
-      .mockResolvedValueOnce({ messages: page(60, 50) })
-      .mockResolvedValueOnce({ messages: page(10, 3) });
+      .mockResolvedValueOnce({ messages: page(60, 50), hasMore: true })
+      .mockResolvedValueOnce({ messages: page(10, 3), hasMore: false });
 
     const h = await mount();
     await h.loadOlder();
@@ -207,6 +109,38 @@ describe("scrolling back", () => {
     // no-op, because a scroll listener can always fire once more.
     await h.loadOlder();
     expect(requests()).toHaveLength(2);
+  });
+
+  it("🔒 `hasOlder` IS NOT `rows.length === <page size>` (2026-09-08)", async () => {
+    // THE REGRESSION THIS WHOLE CHANGE IS ABOUT. The transcript pages by an
+    // ESTIMATED LINE budget, so a THREE-ROW page against a 200-row cap is the
+    // ordinary answer for a channel of long messages. Every row-count test —
+    // `=== limit`, `< limit`, `=== CHANNEL_TRANSCRIPT_PAGE_SIZE` — calls that
+    // channel exhausted and hides the rest of its history. Only the server's
+    // flag may decide.
+    vi.mocked(apiRequest)
+      .mockResolvedValueOnce({ messages: page(60, 3), hasMore: true })
+      .mockResolvedValueOnce({ messages: page(57, 2), hasMore: true });
+
+    const h = await mount();
+    expect(h.read().messages).toHaveLength(3);
+    expect(h.read().hasOlder).toBe(true);
+
+    await h.loadOlder();
+    expect(h.read().messages).toHaveLength(5);
+    expect(h.read().hasOlder).toBe(true);
+  });
+
+  it("stops on the NEWEST page's own flag, before any scroll", async () => {
+    // A channel shorter than one budget: the server says so on the first read
+    // and the affordance is never offered.
+    vi.mocked(apiRequest).mockResolvedValue({
+      messages: page(3, 3),
+      hasMore: false,
+    });
+    const h = await mount();
+    expect(h.read().messages).toHaveLength(3);
+    expect(h.read().hasOlder).toBe(false);
   });
 
   it("is idempotent against a burst — a scroll listener fires many times a frame", async () => {
@@ -229,7 +163,9 @@ describe("scrolling back", () => {
     // ⚠ STALE-SHAPE FALLBACK (§8's rule, on a live payload): an older build's
     // route answers without the key rather than with an empty array, and
     // `.length` on `undefined` throws inside a scroll handler. The read must
-    // degrade to "no more history", never to a blank transcript.
+    // degrade to "no more history", never to a blank transcript. ⚠ That body
+    // carries no `hasMore` either, so the "maybe more" fallback says keep going
+    // — and `appendOlderPage`'s empty-page latch is what still stops it.
     vi.mocked(apiRequest)
       .mockResolvedValueOnce({ messages: page(60, 50) })
       .mockResolvedValueOnce({});
@@ -239,6 +175,21 @@ describe("scrolling back", () => {
 
     expect(h.read().messages).toHaveLength(50);
     expect(h.read().hasOlder).toBe(false);
+  });
+
+  it("treats a MISSING `hasMore` as maybe-more, never as exhausted", async () => {
+    // §8 on a persisted cache entry written by a build that predates the key.
+    // The two ways to be wrong are not symmetric: `false` hides the channel's
+    // history until the revalidation lands; `true` costs one fetch.
+    vi.mocked(apiRequest)
+      .mockResolvedValueOnce({ messages: page(60, 4) })
+      .mockResolvedValueOnce({ messages: page(56, 4) });
+
+    const h = await mount();
+    expect(h.read().hasOlder).toBe(true);
+    await h.loadOlder();
+    expect(h.read().messages).toHaveLength(8);
+    expect(h.read().hasOlder).toBe(true);
   });
 
   it("keeps the window when the page FAILS, so the next scroll retries", async () => {

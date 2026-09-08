@@ -3,7 +3,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import { CHANNEL_TRANSCRIPT_PAGE_SIZE } from "../constants";
 import type { ChannelMessage, ChannelReadEntry } from "../types";
 import {
   appendOlderPage,
@@ -18,16 +17,19 @@ import {
 } from "../lib/message-window";
 import { channelMessagesParams, channelMessagesPath } from "../client/query-keys";
 
-/** The transcript route's body — `entries` is the ADDITIVE artifact envelope. */
+/** The transcript route's body — `entries` is the ADDITIVE artifact envelope,
+ *  `hasMore` the server's own "is there older history" (2026-09-08). */
 interface TranscriptBody {
   messages: ChannelMessage[];
   entries?: ChannelReadEntry[] | null;
+  hasMore?: boolean;
 }
 
-/** What one page IS once both keys are defaulted. */
+/** What one page IS once every key is defaulted. */
 interface TranscriptPage {
   messages: ChannelMessage[];
   entries: ChannelReadEntry[] | null;
+  hasMore: boolean;
 }
 
 /**
@@ -45,12 +47,22 @@ interface TranscriptPage {
 const selectPage = (body: TranscriptBody): TranscriptPage => ({
   messages: body.messages ?? [],
   entries: body.entries ?? null,
+  // ⚠ **`?? true` MEANS "MAYBE MORE", AND THE DIRECTION IS THE POINT** — the §8
+  // case again, for a key that did not exist before 2026-09-08. A persisted
+  // entry written by the previous bundle has no `hasMore`, and the two ways to
+  // be wrong are not symmetric: falling back to `false` HIDES the channel's
+  // history behind a cached page until the revalidation lands, while `true`
+  // costs at most one fetch that comes back saying otherwise.
+  hasMore: body.hasMore ?? true,
 });
 
 /** Shared frozen empty — a fresh one per render would move the merge memo. */
 const NO_PAGE: TranscriptPage = Object.freeze({
   messages: Object.freeze([]) as readonly ChannelMessage[] as ChannelMessage[],
   entries: null,
+  // No page has been read, so nothing has said there is no history. `cursor`
+  // is `null` in this state and `hasOlder` is false regardless.
+  hasMore: true,
 });
 
 /**
@@ -79,9 +91,16 @@ const IDLE: WindowState = {
  * history the reader has scrolled back through.
  *
  * **The newest page** is the ordinary `useApiQuery` read this hook has always
- * been — `CHANNEL_TRANSCRIPT_PAGE_SIZE` rows, no cursor, so the server returns
- * the newest page and a channel with more than a page of history still shows new
- * posts. Realtime re-runs it via `refetch` (refetch, don't merge), and it is the
+ * been — no cursor, so the server returns the newest page and a channel with
+ * more than a page of history still shows new posts. ⚠ **SINCE 2026-09-08 THE
+ * PAGE IS SIZED IN ESTIMATED RENDERED LINES, NOT IN ROWS** (Samuel: *"a message
+ * can be like 20 lines or it can be 2 lines … lets do 300 as the line chunk"*):
+ * `client/query-keys.ts › channelMessagesParams` sends
+ * `CHANNEL_TRANSCRIPT_LINE_BUDGET` beside `CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS`,
+ * the server trims to the budget, and **a page is therefore SHORT BY DESIGN —
+ * whether more history exists is the SERVER's `hasMore`, never `rows.length`.**
+ *
+ * Realtime re-runs it via `refetch` (refetch, don't merge), and it is the
  * one cache entry the optimistic writes patch. Disabled while no channel is
  * selected; keeps the prior channel's messages on screen through a channel
  * switch to avoid a blank flash.
@@ -173,7 +192,14 @@ export function useChannelMessages(
   // continues from page N rather than re-reading the same block. Pending rows
   // cannot be it: they sort last by construction.
   const cursor = oldestSeq(messages);
-  const hasOlder = !window.exhausted && cursor !== null && channelId !== null;
+  // ⚠ **THREE FACTS, AND NOT ONE OF THEM IS A ROW COUNT (2026-09-08).**
+  // `window.exhausted` is the latched answer from the last `before` page and
+  // `data.hasMore` is the newest page's — both stamped by the SERVER
+  // (`server/service-reads.ts › readTranscript`), because a line-budgeted page
+  // is short by design and `rows.length === pageSize` would report a channel of
+  // long messages as exhausted on its very first screen.
+  const hasOlder =
+    !window.exhausted && data.hasMore && cursor !== null && channelId !== null;
 
   /**
    * FETCH THE PAGE IMMEDIATELY OLDER and prepend it.
@@ -219,7 +245,11 @@ export function useChannelMessages(
             // scroll handler.
             body.messages ?? [],
             cursor,
-            CHANNEL_TRANSCRIPT_PAGE_SIZE,
+            // ⚠ THE SERVER'S FLAG, with the same "maybe more" fallback
+            // `selectPage` gives the newest page: an older build's route answers
+            // without the key, and failing toward another fetch costs one read
+            // while failing the other way hides history behind it.
+            body.hasMore ?? true,
             // ⚠ THE KEY THIS FETCH USED TO DISCARD. A history page folds too —
             // `readTranscript` folds a lone `before` exactly as it folds the
             // newest page — and a card whose members are all in history is the
@@ -260,7 +290,7 @@ export function useChannelMessages(
     /** True while the rendered messages belong to the PREVIOUS channel. */
     stale: query.isPlaceholderData,
     refetch: query.refetch,
-    /** More history exists to fetch (or: no page has come back short yet). */
+    /** The SERVER says more history exists to fetch — never a row count. */
     hasOlder,
     /** A `before` page is in flight. */
     loadingOlder: mine.loading,

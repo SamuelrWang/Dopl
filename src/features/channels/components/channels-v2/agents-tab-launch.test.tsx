@@ -106,7 +106,9 @@ describe("the Launch agent split button", () => {
   // threadless lane (an agent ON THE ROOM, the composer's Bot icon since
   // 2026-08-21) makes that redirect the one surface pretending otherwise. The
   // channel view now launches CHANNEL-LEVEL in one click, `threadId: null`.
-  // The template chevron still needs a thread and still must not render.
+  // ⚠ AND THE CHEVRON CAME WITH IT ON 2026-09-08 (Samuel: *"Same one, that
+  // enables me to launch a template"*). This case asserted the chevron was
+  // ABSENT here — the last piece of the redirect — and the ruling flipped it.
   it("with no thread open, launches CHANNEL-LEVEL — threadId null, one click", () => {
     const onNewThread = vi.fn();
     const { onLaunchAgent } = mountLaunch({ openThreadId: null, onNewThread });
@@ -115,7 +117,15 @@ describe("the Launch agent split button", () => {
     expect(onLaunchAgent).toHaveBeenCalledTimes(1);
     expect(onLaunchAgent).toHaveBeenCalledWith(null);
     expect(onNewThread).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
+  });
+
+  // 🔒 THE WHOLE SPLIT BUTTON IS IN CHANNEL VIEW, NOT HALF OF IT. The face
+  // moved on 2026-08-31 and the chevron stayed behind, so the view most people
+  // arrive in offered a blank launch and no template lane at all.
+  it("renders the chevron with NO open thread — `workspaceId` is the only gate", () => {
+    mountLaunch({ openThreadId: null });
+    expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Launch from template" })).toBeTruthy();
   });
 
   it("still renders WITHOUT a new-thread lane — the launch no longer needs one", () => {
@@ -154,6 +164,37 @@ describe("the Launch agent split button", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
     await waitFor(() =>
       expect(onLaunchAgent).toHaveBeenCalledWith("t-1", "tpl-9", undefined)
+    );
+    templateList.templates = [];
+  });
+
+  // 🔒 A TEMPLATE LAUNCH IN CHANNEL VIEW IS THE SAME LAUNCH, THREADLESS. The
+  // picker's half must read `openThreadId` exactly as the face does — a chevron
+  // that rendered but sent a stale or fabricated thread id would be worse than
+  // the absence it replaced.
+  it("with no thread open, the picker launches the template CHANNEL-LEVEL", async () => {
+    templateList.templates = [
+      {
+        id: "tpl-9",
+        workspaceId: WS,
+        name: "Code auditor",
+        description: null,
+        instructions: null,
+        model: null,
+        fields: [],
+        visibility: "private",
+        teamIds: [],
+        knowledgeBases: [],
+        createdBy: ME,
+        createdAt: "2026-08-01T00:00:00Z",
+        updatedAt: "2026-08-01T00:00:00Z",
+      },
+    ];
+    const { onLaunchAgent } = mountLaunch({ openThreadId: null });
+    fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
+    await waitFor(() =>
+      expect(onLaunchAgent).toHaveBeenCalledWith(null, "tpl-9", undefined)
     );
     templateList.templates = [];
   });

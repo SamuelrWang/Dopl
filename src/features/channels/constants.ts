@@ -230,32 +230,53 @@ export const DEFAULT_MESSAGE_LIMIT = 100;
 export const MAX_MESSAGE_LIMIT = 200;
 
 /**
- * ONE PAGE OF TRANSCRIPT — what the channel surface asks for on open, and what
- * each scroll-up page then adds (`hooks/use-channel-messages.ts`).
+ * ONE PAGE OF TRANSCRIPT, MEASURED IN ESTIMATED RENDERED LINES — what the
+ * channel surface asks for on open, and what each scroll-up page then adds
+ * (`hooks/use-channel-messages.ts`).
  *
- * ⚠ IT REPLACED {@link MAX_MESSAGE_LIMIT} AS THE TRANSCRIPT'S READ SIZE
- * (2026-09-01). The surface used to open on the newest 200 with no way to reach
- * message 201 — bounded, so never the unbounded read §9 forbids, but a hard
- * FLOOR under the channel's history: everything older than the ceiling was
- * simply unreachable from the UI, and the mention jump said so out loud
- * (`message-pane.tsx › SCROLL_TARGET_MISSING_NOTE`). Paging up removes the
- * floor, which is what lets the first paint be a QUARTER of what it was.
+ * ⚠ **IT REPLACED `CHANNEL_TRANSCRIPT_PAGE_SIZE` (50 ROWS) ON 2026-09-08**
+ * (Samuel: *"chunks shouldnt be by messages. Because a message can be like 20
+ * lines or it can be 2 lines. So we should chunk by lines instead … lets do 300
+ * as the line chunk."*). A ROW is not a unit of anything a reader experiences:
+ * fifty two-line acknowledgements are a third of a screen and fifty agent dumps
+ * are a wall. There is NO alias — the old name is gone, so a caller that still
+ * pages by rows is a compile error rather than a silently different page.
+ *
+ * ⚠ **AN ESTIMATE, AND ONLY FOR PAGING** — `lib/transcript-line-budget.ts ›
+ * estimateMessageLines` carries the formula and the reasons it is allowed to be
+ * approximate. Nothing may lay anything out from it.
  *
  * ⚠ **A SMALLER FIRST PAGE IS A SMALLER DERIVATION WINDOW, AND THAT IS THE
- * TRADE.** The channel view's thread cards, the escalation cards and the
- * outbound send-box join are all derived from the messages ON SCREEN
- * (`channel-surface-data.ts`), so a thread whose last activity is older than
- * this page has no card until the reader pages back to it. The Threads tab is
- * the surface that answers "what threads exist" — it has its own read and its
- * own ceiling ({@link CHANNEL_THREAD_LIST_LIMIT}) — so the transcript is not
- * the record of record for that question and does not need to be sized as if it
- * were.
+ * TRADE** — unchanged by the switch to lines. The channel view's thread cards,
+ * the escalation cards and the outbound send-box join are all derived from the
+ * messages ON SCREEN (`components/channels-v2/channel-surface-data.ts`), so a
+ * thread whose last activity is older than this page has no card until the
+ * reader pages back to it. The Threads tab is the surface that answers "what
+ * threads exist" — it has its own read and its own ceiling
+ * ({@link CHANNEL_THREAD_LIST_LIMIT}) — so the transcript is not the record of
+ * record for that question and is not sized as if it were.
  *
- * 50 is a screen and a half at typical row heights, so the reader has somewhere
- * to scroll before the next page is asked for; the page fetch itself is bounded
- * by {@link MAX_MESSAGE_LIMIT} at the schema, not by this.
+ * 300 is roughly two screens of prose at typical row heights, so the reader has
+ * somewhere to scroll before the next page is asked for.
  */
-export const CHANNEL_TRANSCRIPT_PAGE_SIZE = 50;
+export const CHANNEL_TRANSCRIPT_LINE_BUDGET = 300;
+
+/**
+ * HARD ROW CAP ON ONE TRANSCRIPT PAGE — the bound that survives when
+ * {@link CHANNEL_TRANSCRIPT_LINE_BUDGET} cannot bite, i.e. a channel of very
+ * short messages (INVARIANTS §9: every read is bounded, in rows, always).
+ *
+ * ⚠ **IT IS {@link MAX_MESSAGE_LIMIT}, THE SCHEMA'S OWN CEILING, AND NOT THE 50
+ * THE OLD PAGE SIZE USED.** 50 was never a cap — it was the number the hook
+ * happened to request, while `MessageReadQuerySchema` has always refused
+ * anything over 200. Reusing 50 here would mint a second ceiling under the real
+ * one; naming the real one means the request the client sends and the maximum
+ * the route will honour are the same number by construction.
+ *
+ * At the budget's own arithmetic this bites only below ~1.5 estimated lines per
+ * message — 300 lines over 200 rows — which is a page of one-line posts.
+ */
+export const CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS = MAX_MESSAGE_LIMIT;
 
 /** Await long-poll: hard cap on the client-requested timeout (ms). */
 export const MAX_AWAIT_TIMEOUT_MS = 50_000;

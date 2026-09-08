@@ -122,6 +122,7 @@ export function ChannelsV2MessagePane({
   index,
   members,
   loading,
+  stale = false,
   outboundAsk = null,
   outboundBusy = false,
   onDecideOutbound = DECIDE_OUTBOUND_NOOP,
@@ -161,6 +162,15 @@ export function ChannelsV2MessagePane({
   index: AuthorIndex;
   members: ChannelMember[];
   loading: boolean;
+  /**
+   * THE RENDERED ROWS BELONG TO THE PREVIOUS CHANNEL — `use-channel-messages.ts › stale`
+   * (`isPlaceholderData`), handed down for the SCROLL rules alone (2026-09-08). ⚠ NOT
+   * `loading`, and that is the point: `keepPreviousData` keeps the old transcript on screen
+   * with `isPending` FALSE, so a channel open changes `rows.length` TWICE and only this tells
+   * the placeholder commit from the real one — see `use-stick-to-bottom.ts` rule 1. Defaults
+   * to `false`, so a host with no placeholder to show is unchanged.
+   */
+  stale?: boolean;
   /** The OPEN thread's pending outbound review (my agent's draft awaiting my
    *  Send), or null. Caller joins it — `pendingOutboundByThread`. */
   outboundAsk?: ChannelConsentRequest | null;
@@ -276,7 +286,10 @@ export function ChannelsV2MessagePane({
     // ⚠ THE NEWEST ROW — `rows` is ASCENDING, so the last one is what just arrived. It is what the
     // pin smooth-scrolls to the START of; absent (an empty transcript) the hook falls back to the
     // plain jump-to-bottom it always did.
-    rows[rows.length - 1]?.id ?? null
+    rows[rows.length - 1]?.id ?? null,
+    // ⚠ RULE 1'S GATE — "the rows on screen are not this view's yet". Both halves: the read in
+    // flight, and `keepPreviousData` still showing the previous channel's transcript.
+    loading || stale
   );
   // ⚠ DECLARED SECOND, BETWEEN THE PIN AND THE SCROLL-TARGET EFFECT BELOW.
   // Effects run in declaration order: on a commit that both prepends a page and

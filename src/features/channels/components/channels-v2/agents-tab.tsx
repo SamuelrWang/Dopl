@@ -58,7 +58,6 @@ import type { ChannelMember } from "../../types";
 import { AgentCard, PeerCards } from "./agents-tab-cards";
 import {
   agentKey,
-  agentsPerThread,
   ownAgentsFor,
   peerCardsFor,
 } from "./agents-model";
@@ -107,7 +106,9 @@ export function AgentsTab({
   /** EVERY member's session STATE for this channel (the server projection) —
    *  peers render as state-only cards, never openable. */
   peers?: readonly ChannelPeerSession[];
-  /** The New Agent button (thread view only; desktop only). */
+  /** The New Agent button — BOTH views, desktop only (the "thread view only"
+   *  claim died with the redirect on 2026-08-31; the chevron beside it joined
+   *  it on 2026-09-08). */
   canLaunch?: boolean;
   launchBusy?: boolean;
   /** Copy for the last launch main REFUSED, or null. ⚠ A refusal is not a
@@ -180,7 +181,7 @@ export function AgentsTab({
    * and it already has copy.
    */
   async function launchFromPicker(
-    threadId: string,
+    threadId: string | null,
     templateId: string | null,
     overrides?: TemplateLaunchOverrides
   ): Promise<AgentLaunchOutcome> {
@@ -227,6 +228,18 @@ export function AgentsTab({
   // and `use-agents-panel.ts` words it: no counterparty is not a refusal), so
   // the redirect was the one surface still pretending it did not. Both views
   // launch in ONE CLICK now; with no thread open the launch is channel-level.
+  //
+  // ⚠ AND THE CHEVRON FOLLOWED THE FACE ON 2026-09-08 (Samuel: *"this New agent
+  // button … needs to also exist in the agents tab for the main channel view.
+  // Same one, that enables me to launch a template"*). The 08-31 ruling moved
+  // the FACE and left the picker gated on `openThreadId`, so channel view got
+  // half a split button — a blank launch with no template lane. A template
+  // launch is not a different lane, it is the same launch carrying a
+  // `templateId`, and `use-agents-panel.ts › launchAgent` has taken
+  // `(null, templateId)` since the threadless lane existed: `threadId !== null`
+  // guards the no-counterparty refusal, and the payload puts `taskId: null` on
+  // the wire with the template beside it. Nothing below this file needed
+  // widening.
   const launchRow = canLaunch && onLaunchAgent && (
     <div className="mb-3">
       <div className="flex justify-end">
@@ -247,10 +260,17 @@ export function AgentsTab({
             <Plus size={13} aria-hidden />
             {launchBusy ? "Starting\u2026" : "New agent"}
           </button>
-          {/* ⚠ THE CHEVRON NEEDS A THREAD TOO, and unlike the face it has no
-              honest fallback: "launch THIS template" names a target that does
-              not exist yet. It is absent in channel view rather than disabled. */}
-          {workspaceId && openThreadId && (
+          {/* ⚠ THE CHEVRON IS ON BOTH VIEWS SINCE 2026-09-08 (Samuel: *"Same
+              one, that enables me to launch a template"*). It used to be gated
+              on `openThreadId` as well, on the argument that "launch THIS
+              template" named a target that did not exist yet — the LAST piece
+              of the redirect the 2026-08-31 ruling deleted from the face. A
+              template launch is the same lane as a blank one, so it takes the
+              same `openThreadId ?? null`: with no thread open, the template
+              starts on the ROOM. The only gate left is `workspaceId`, which is
+              feature detection over a READ (a picker with no workspace to list
+              can only be empty). */}
+          {workspaceId && (
             <>
               {/* The hairline is what makes the pair read as ONE control with two
                   zones rather than two buttons that happen to touch. */}
@@ -282,7 +302,7 @@ export function AgentsTab({
           {launchError}
         </p>
       )}
-      {workspaceId && openThreadId && (
+      {workspaceId && (
         <TemplateLaunchPicker
           open={picker.open}
           at={picker.at}
@@ -291,8 +311,11 @@ export function AgentsTab({
           currentUserId={currentUserId}
           memberNames={memberNames}
           busy={launchBusy}
+          // ⚠ `openThreadId ?? null` — BYTE-FOR-BYTE THE FACE'S OWN ARGUMENT.
+          // The two halves of the split button must not disagree about where
+          // they launch, so the thread is read the same way on both.
           launch={(templateId, overrides) =>
-            launchFromPicker(openThreadId, templateId, overrides)
+            launchFromPicker(openThreadId ?? null, templateId, overrides)
           }
           approve={onApproveTemplate}
         />
@@ -315,7 +338,6 @@ export function AgentsTab({
   // ⚠ Same one-derivation rule as `peerCards` above — `ownAgentsFor` is what the
   // tab row's badge counts, so the list and the number are one function.
   const mine = ownAgentsFor(sessions, channelId, openThreadId);
-  const perThread = agentsPerThread(mine);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
@@ -333,7 +355,6 @@ export function AgentsTab({
               key={agentKey(agent)}
               agent={agent}
               owner={me}
-              siblings={(perThread.get(agent.taskId) ?? 1) - 1}
               viewing={agentKey(agent) === openAgent}
               onOpen={() => onOpenAgent(agentKey(agent))}
             />

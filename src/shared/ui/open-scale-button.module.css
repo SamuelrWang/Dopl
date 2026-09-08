@@ -1,4 +1,5 @@
-/* THE 26px PILL — the KB card's Open button face.
+/* THE SMALL ACTION PILL — the KB card's Open button face, at
+ * `--action-h-sm` (30px since 2026-09-08).
  *
  * ⚠ MOVED HERE VERBATIM from `knowledge-v2.module.css › .cardOpen`
  * (2026-08-28) — not copied. Samuel ruled that /home's small section buttons
@@ -21,7 +22,11 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 26px;
+  /* 🔒 THE TOKEN, NOT A NUMBER (2026-09-08). `--action-h-sm` is declared in
+     `src/app/globals.css` and mirrored in `apps/desktop-ui/src/styles/tokens.css`
+     (`scripts/check-css-token-drift.ts` is the gate), and the channels composer's
+     Launch / Discard read the same token — three faces, one height, no drift. */
+  height: var(--action-h-sm);
   padding: 0 12px;
   border-radius: 999px;
   font-size: var(--text-small);
@@ -34,7 +39,7 @@
      four callers without this only because every label was ONE WORD — the KB
      card's "Open", /home's create buttons at a width that never squeezed. The
      first multi-word label in a narrow column exposed it, and fixing it at that
-     call site would have left the next caller to rediscover it. A fixed 26px
+     call site would have left the next caller to rediscover it. A fixed `--action-h-sm`
      height with a wrapping label is not a button that looks cramped; it is a
      button whose second line is drawn outside its own face.
      ⚠ `flex-shrink: 0` is the other half: nowrap alone lets a flex parent
@@ -45,7 +50,13 @@
   flex-shrink: 0;
 }
 
-/* THE SAME PILL WITH NO LABEL — a glyph-only control at 1:1 (2026-08-28).
+/* THE SAME PILL WITH NO LABEL — a glyph-only control (2026-08-28).
+ *
+ * ⚠ ITS WIDTH IS STILL THE LITERAL 26px THE PILL WAS UNTIL 2026-09-08, so the
+ * square is 26×30 and NO LONGER 1:1. Deliberately not moved with the height:
+ * Samuel ruled the small ACTION height, and resizing a toolbar glyph he did not
+ * name is a second visual change riding on a token edit. Ask before making this
+ * `var(--action-h-sm)`.
  *
  * ⚠ IT IS `.openScale` PLUS A SQUARE, NOT A SECOND FACE. Height, radius,
  * elevation (`.btn-light`) and ink are the pill's own — this rule adds `width`

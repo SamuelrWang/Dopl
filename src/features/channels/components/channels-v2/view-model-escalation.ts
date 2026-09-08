@@ -64,7 +64,8 @@ export interface EscalationRow {
    * The answer, when one is already in this transcript page.
    *
    * ⚠ `null` MEANS "NOT IN THIS PAGE", NEVER "UNANSWERED". The transcript is a
-   * WINDOW (`constants.ts › CHANNEL_TRANSCRIPT_PAGE_SIZE`, plus whatever history
+   * WINDOW (`constants.ts › CHANNEL_TRANSCRIPT_LINE_BUDGET` — ESTIMATED RENDERED
+   * LINES since 2026-09-08, not a row count — plus whatever history
    * the reader has scrolled back through), so an answer far below its escalation
    * can be off it — the same limitation the fan-out card's grouping has. ⚠ And
    * scroll-up paging does NOT close this: it extends the window DOWNWARD, and an

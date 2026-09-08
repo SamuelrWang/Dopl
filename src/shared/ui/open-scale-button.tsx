@@ -5,7 +5,8 @@ import { cn } from "@/shared/lib/utils";
 import styles from "./open-scale-button.module.css";
 
 /**
- * THE SMALL PILL BUTTON — 26px, `.btn-light` face, stadium ends.
+ * THE SMALL PILL BUTTON — `--action-h-sm` (30px since 2026-09-08),
+ * `.btn-light` face, stadium ends.
  *
  * ⚠ ONE SOURCE, TWO SURFACES (Samuel, 2026-08-28: every /home button wearing
  * the small create-button recipe adopts the KB card Open button's size/UI).
@@ -28,17 +29,30 @@ export function OpenScaleButton({
   className,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className={cn("btn-light", styles.openScale, className)}
-    />
-  );
+  return <button type="button" {...props} className={cn(OPEN_SCALE, className)} />;
 }
 
 /**
- * THE SAME PILL, GLYPH ONLY — `OpenScaleButton` at 1:1 (2026-08-28).
+ * THE PILL AS A CLASS STRING — for a caller that already owns its `<button>`
+ * and cannot swap the element for {@link OpenScaleButton}.
+ *
+ * ⚠ IT IS THE SAME DECLARATION, NOT A SECOND ONE. `OpenScaleButton` renders
+ * this constant, so the component and the string cannot drift; the CSS module
+ * is imported HERE and nowhere else, which is what keeps `.openScale` a single
+ * rule with a single owner. Reach for the COMPONENT first — this exists for
+ * `channels-v2/bits.tsx › CARD_BUTTON`, whose seven call sites are plain
+ * `<button className={…}>` in five files.
+ */
+export const OPEN_SCALE = cn("btn-light", styles.openScale);
+
+/**
+ * THE SAME PILL, GLYPH ONLY — `OpenScaleButton` plus a fixed width (2026-08-28).
+ *
+ * ⚠ **IT WAS 1:1 UNTIL 2026-09-08 AND IS NOT ANY MORE.** The pill's height is
+ * `--action-h-sm` (30px) and `.openScaleIcon`'s width is still the literal 26px
+ * the pill used to be, so the square is 26×30. Left alone on purpose — Samuel
+ * ruled the small ACTION height, not the toolbar glyph's box; the CSS module
+ * carries the same note at the rule.
  *
  * ⚠ NOT A SECOND FACE. It composes the very same `.openScale` rule and adds a
  * square (`.openScaleIcon`), so a toolbar glyph and a labelled create button
@@ -62,7 +76,7 @@ export function OpenScaleIconButton({
 
 /** Glyph size inside the pill — the card Open's `ArrowRight`, and now the
  *  /home create buttons' `Plus`. ONE number: two icons at two sizes in the same
- *  26px pill is the drift in miniature. */
+ *  pill is the drift in miniature. */
 export const OPEN_SCALE_ICON = 12;
 
 /** Glyph size for the SQUARE variant. Bigger than `OPEN_SCALE_ICON` because it

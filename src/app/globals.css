@@ -137,6 +137,9 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-pill: 9999px;
+  /* THE SMALL ACTION HEIGHT — one number, so it cannot drift (2026-09-08, Samuel):
+     Open / Launch / Discard share it; New agent / New channel stay `h-9` (36px). */
+  --action-h-sm: 30px;
 
   /* Header-strip / subtle card surface (see .section-card usage) */
   --color-card-surface-subtle: var(--card-surface-subtle);
@@ -276,7 +279,21 @@
      exist. */
   --home-frame: #2f3542;
   --home-panel: #f1f3f5;
-  --home-panel-line: #e2ecf0;
+  /* ⚠ A NEUTRAL DARK GRAY SINCE 2026-09-08, AND IT IS A FIRST GUESS (Samuel:
+     *"there are lines on the inner panel, the white inner panel, the border
+     lines that split between the panels. It's a light blue color … Instead, I
+     want it to be gray, a dark gray"*). It was `#e2ecf0` — the only cool-tinted
+     LINE in the frame palette, which is what made it read blue against the
+     warm `--home-card` it edges.
+     ⚠ NOTHING IN EITHER TREE WAS ALREADY A DARK GRAY PANEL EDGE, so this value
+     is minted rather than borrowed. The two neighbours to nudge toward, both
+     already in this file: `--raised-light-line` (#d4d4d4, the raised-light
+     face's hairline — the neutral gray line the app already has, but LIGHT) and
+     `--border-active` (#3e3a3b, near-black, a 1px inverted-affordance border
+     that would read as an outline at this token's 2px). Change it HERE and in
+     `apps/desktop-ui/src/styles/tokens.css` — `scripts/check-css-token-drift.ts`
+     fails on one copy. */
+  --home-panel-line: var(--border-default);
   --home-card: #fbfcfc;
   /* ⚠ `--home-frame-ink` / `--home-frame-hover` WERE ADDED AND REMOVED ON
      2026-08-30, both within Samuel's review of the same ruling. They existed so

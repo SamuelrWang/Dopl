@@ -362,12 +362,13 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Status: open
 
 ### F-053: Channel thread has no backward pagination past the latest page
-- Location: `src/features/channels/constants.ts › CHANNEL_TRANSCRIPT_PAGE_SIZE`; `schema-reads.ts › MessageReadQuerySchema`; `server/repository-messages.ts › listMessages`; `hooks/use-channel-messages.ts › useChannelMessages`; `lib/message-window.ts`; `components/channels-v2/use-load-older.ts`
+- Location: `src/features/channels/constants.ts › CHANNEL_TRANSCRIPT_LINE_BUDGET`; `schema-reads.ts › MessageReadQuerySchema`; `server/repository-messages.ts › listMessages`; `hooks/use-channel-messages.ts › useChannelMessages`; `lib/message-window.ts`; `components/channels-v2/use-load-older.ts`
 - Found during: Channels feature build (2026-07-25)
 - Severity: smell (scale)
 - Description: the thread read only the most recent messages with no load-older path, so past the page ceiling the older history was unreachable from the UI. The `seq` cursor already drove incremental FORWARD reads.
 - **Status: RESOLVED 2026-09-01**, along the shape this entry proposed. `MessageReadQuerySchema` takes `before=<seq>`; `listMessages` reads `seq < before` DESC-capped-then-flipped off `channel_messages_channel_seq_idx`; the transcript opens on `CHANNEL_TRANSCRIPT_PAGE_SIZE` (50, down from 200) and pages up on scroll. Two things this entry did not anticipate and that the implementation had to answer:
   - **The history is NOT a query-cache entry.** A `?before=` entry sits under the same prefix key every messages write patches (`use-thread-writes-shared.ts › messagesKey`), so each send would append its pending row into every loaded page of history. It lives in the hook, beside the newest page — `lib/message-window.ts` carries the argument, and `dropThreadFromWindow` is the one write that has to be told about it by hand.
+  - ⚠ **THE PAGE SIZE MOVED AGAIN ON 2026-09-08 AND THE `CHANNEL_TRANSCRIPT_PAGE_SIZE` NAMED ABOVE IS DELETED** (Samuel: a row is not a unit a reader experiences). The transcript pages by ESTIMATED RENDERED LINES — `CHANNEL_TRANSCRIPT_LINE_BUDGET` (300) under `CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS` (200) — and `hasMore` comes from the server rather than from a row count. The Location line above is updated to the live symbol; INVARIANTS §9 carries the current rule.
   - **The newest page can OUTRUN the loaded window.** It is refetched on every doorbell and always returns the newest page, so a burst bigger than one page leaves a gap neither half holds — and `seq` is a table-wide identity, so no arithmetic over the rows can detect it. `message-window.ts › isContiguous` checks a remembered boundary cursor instead and drops the window rather than rendering the hole.
 
 ### F-055: `dopl_channel` invite/post pre-resolve by scanning `listChannels`

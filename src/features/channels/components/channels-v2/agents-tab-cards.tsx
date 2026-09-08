@@ -26,7 +26,6 @@ import { AgentName } from "./agent-rename";
 import { AgentDeleteButton } from "./agent-delete";
 import { Avatar } from "@/shared/ui/avatar";
 import { UsageMeter } from "@/shared/ui/usage-meter";
-import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
@@ -36,7 +35,6 @@ import { CARD_BUTTON, PANEL_CARD } from "./bits";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import {
   agentDisplayName,
-  agentEndedAt,
   agentLiveness,
   agentRunningModel,
   NO_THREAD_LABEL,
@@ -68,13 +66,6 @@ function agentDescription(
 ): string | null {
   const value = typeof session.description === "string" ? session.description.trim() : "";
   return value || null;
-}
-
-/** Absolute epoch ms → the relative phrase the cards use. `formatRelativeTime`
- *  takes an ISO string and answers "" for an absent one, which is the right
- *  degradation: the caller drops the whole clause rather than printing a stub. */
-function relative(at: number | null): string {
-  return at === null ? "" : formatRelativeTime(new Date(at).toISOString());
 }
 
 /**
@@ -173,14 +164,12 @@ export function PeerCards({
 export function AgentCard({
   agent,
   owner = null,
-  siblings,
   viewing,
   onOpen,
 }: {
   agent: DesktopSessionSummary;
   /** The card's owner (me) — every card wears its member's avatar (2026-08-20). */
   owner?: ChannelMember | null;
-  siblings: number;
   viewing: boolean;
   onOpen: () => void;
 }) {
@@ -195,8 +184,6 @@ export function AgentCard({
   const contextUsed = metric(agent.contextUsed);
   const contextWindow = metric(agent.contextWindow);
   const tokensSpent = metric(agent.tokensSpent);
-  const started = relative(metric(agent.startedAt));
-  const lastActivity = relative(metric(agent.lastActivityAt));
   const ended = agent.state === "ended";
   const description = agentDescription(agent);
   // ⚠ WHEN IT ENDED, IN THE LINE THAT ALREADY EXISTS (2026-08-22) — no new
@@ -207,7 +194,6 @@ export function AgentCard({
   // ⚠ NO RETENTION COUNTDOWN. The history is swept on main's own schedule and
   // there is nothing the operator can do about it, so a clock here would be
   // anxiety with no action attached.
-  const endedAt = relative(agentEndedAt(agent));
   // ⚠ THE SESSION'S model, never the CHANNEL's stored pick — a live agent may
   // have been switched mid-run, or spawned before the posture changed.
   const modelLabel = agentModelShortLabel(agentRunningModel(agent));
@@ -224,10 +210,9 @@ export function AgentCard({
   // from the peer projection — a private template's name on a colleague's card is
   // an existence oracle. Do not plumb it into `PeerCards`.
   const templateName = agent.templateName?.trim() || null;
-  const timing = [
-    started && `Started ${started}`,
-    ended ? endedAt && `Ended ${endedAt}` : lastActivity && `Last activity ${lastActivity}`,
-  ].filter(Boolean);
+  // ⚠ NO TIMING LINE AND NO "N of yours here" SINCE 2026-09-08 (Samuel: remove
+  // both). Started/Ended/Last-activity stamps and the sibling count are gone
+  // from the card; the ended PILL still states the one fact that matters.
 
   return (
     // `group/card` is the pencil's hover scope — see `AgentName`.
@@ -261,14 +246,6 @@ export function AgentCard({
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
         <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
         <span className="min-w-0 truncate">{threadTitle}</span>
-        {siblings > 0 && (
-          // Says the shared-thread case out loud. The grouping already puts the
-          // two cards together; this is what tells you the adjacency is the
-          // point rather than a coincidence of ordering.
-          <span className="shrink-0 text-text-muted">
-            · {siblings + 1} of yours here
-          </span>
-        )}
         {/* ⚠ THE EFFECTIVE MODEL, and ONLY when this build reports one
               (2026-08-22). It rides the existing detail line rather than earning
               chrome of its own — minimal copy (INVARIANTS §5), and a fourth pill
@@ -286,10 +263,6 @@ export function AgentCard({
           <span className="shrink-0 text-text-muted">· {modelLabel}</span>
         )}
       </div>
-
-      {timing.length > 0 && (
-        <span className="text-caption text-text-muted">{timing.join(" · ")}</span>
-      )}
 
       {contextUsed !== null && contextWindow !== null && (
         <UsageMeter

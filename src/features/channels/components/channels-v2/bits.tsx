@@ -36,24 +36,41 @@ export { IconButton };
 /**
  * The compact raised action on a card ("Open thread", "Open", "Viewing").
  *
- * ⚠ A PILL, BOTTOM-RIGHT, AT THE APP'S ONE CONTROL SCALE (Samuel, 2026-08-24)
- * — `h-9 px-[15px] text-small`, /home's Invite geometry; there is no smaller
- * "card-sized" variant to drift back to. The POSITION is a contract this
- * constant cannot enforce: every card puts its action on the LAST row, right-
- * aligned, so the eye finds the same control in the same corner every time.
+ * ⚠ IT IS `shared/ui/open-scale-button.tsx › OPEN_SCALE` SINCE 2026-09-08
+ * (Samuel: *"can you make the open button a little thinner, like we have
+ * another button UI. I want to do that instead. Make sure this applies across
+ * the entire product"*) — THE SMALL ACTION PILL (`--action-h-sm`, 30px since
+ * 2026-09-08), `.btn-light` face, stadium ends, the
+ * same one the knowledge card's Open and /home's small buttons already wear.
+ * ⚠ BY REFERENCE, NOT RE-TYPED. The height/pad/radius/ink live in
+ * `open-scale-button.module.css › .openScale` and this constant carries none of
+ * them, so the card action and the pill cannot drift by an edit to either.
+ * ⚠ IT WAS `h-9 px-[15px] text-small font-medium` — Samuel's own 2026-08-24
+ * ruling that there was "no smaller card-sized variant to drift back to". That
+ * is SUPERSEDED, not violated: the smaller variant is not a fork, it is the
+ * app's other shared pill, and the card action joined it rather than minting a
+ * third size. 36px is {@link TAB_ACTION}'s alone now.
+ *
+ * The POSITION is a contract this constant cannot enforce: every card puts its
+ * action on the LAST row, right-aligned, so the eye finds the same control in
+ * the same corner every time.
  */
-export const CARD_BUTTON =
-  "btn-light flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full px-[15px] text-small font-medium text-text-primary";
+// ⚠ TEXT-ONLY SINCE 2026-09-08 (Samuel: "just have it be the word open as the button"); same 30px row as the pill it replaced, ink only.
+export const CARD_BUTTON = "flex h-[var(--action-h-sm)] cursor-pointer items-center justify-center rounded-[8px] px-2.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary disabled:cursor-default disabled:text-text-muted disabled:hover:bg-transparent";
 
 /**
  * THE RIGHT PANEL TAB'S OWN ACTION — top-right of a tab body, above its list
  * (Threads' "New thread", Agents' "Launch agent"; Samuel, 2026-08-24).
  *
- * ⚠ `CARD_BUTTON`'S GEOMETRY, DARK FACE — a tab's action and a card's action
- * are the same size of thing, and only the INK says which starts something new.
- * Weight matches /home's Invite, because this IS that button. It was a 20px
- * light rectangle for one review and read as a chip nobody could find; do not
- * shrink it again.
+ * ⚠ THE APP'S 36px CONTROL SCALE, DARK FACE — `h-9 px-[15px] text-small`,
+ * /home's Invite geometry. Weight matches /home's Invite, because this IS that
+ * button. It was a 20px light rectangle for one review and read as a chip
+ * nobody could find; do not shrink it again.
+ * ⚠ THIS ROW SAID "`CARD_BUTTON`'S GEOMETRY … only the INK says which" UNTIL
+ * 2026-09-08, when Samuel moved the CARD action down to the small action pill
+ * (`--action-h-sm`). The two
+ * now differ in size as well as ink, and the geometry above is stated here
+ * rather than borrowed — a tab action is the only thing left wearing it.
  */
 export const TAB_ACTION =
   "auth-btn-3d flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full px-[15px] text-small font-semibold text-text-on-cta";
