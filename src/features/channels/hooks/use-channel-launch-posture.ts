@@ -63,6 +63,31 @@ import {
  * ⚠ Bridge feature-detected AFTER mount (window-only) so SSR and the first client
  * render agree; null forever in a plain browser, and every consumer renders
  * NOTHING when null.
+ *
+ * ⚠ **THE NEW-AGENT POPUP NO LONGER SURFACES THE CHANNEL'S RUNTIME PICK
+ * (2026-09-08, Samuel: *"for runtime, there shouldn't be a channel default …
+ * Nobody knows what channel default is"*).** The RECORD is untouched and so is
+ * every consumer of it: the Settings tab still writes `runtime` here, and
+ * `main/session-launch-op.js`'s chain still reads it for every launch that
+ * carries none (an MCP launch included). What changed is one FACE —
+ * `channels-v2/launch-agent-dialog.tsx` dropped its "Channel default" option and
+ * now always names a runtime, using this hook's `runtimes` for the roster and
+ * `runtime` only as the PRESELECT when it is among them. ⚠ So a reader looking
+ * for the popup's fall-through arm will not find one; do not "restore" it here.
+ *
+ * ⚠ **AND {@link ChannelLaunchPostureState.connected} IS A CACHED PROBE RESULT,
+ * 60s STALE BY DESIGN (2026-09-08, Samuel's correction).** His words: *"even if
+ * the user does not have codex or cursor connected, I still want them to be
+ * options there so that the user knows that those are options, so they can
+ * connect them … It should just be logged in, like it is just put in their
+ * default, right? I did not say to remove them."* So `runtimes` is still THE
+ * ROSTER — every adapter the desktop registered, never filtered by this field —
+ * and `connected` only says which of them answered `available()` on the last
+ * sweep (`dopl-desktop-app/main/runtime/connectivity.js`: a 1500ms leash per
+ * adapter, cached a minute, a hang reading as absent). ⚠ **NEVER GATE AN ACTION
+ * ON IT.** It is a HINT on a pill; a runtime that connected thirty seconds ago
+ * still reads as absent here, and the refusal an operator can act on comes from
+ * `runtime/index.js › acquire` at spawn.
  */
 
 /**
@@ -108,6 +133,16 @@ export interface LaunchPostureReply extends PermissionPreset {
   runtime?: string;
   runtimes?: unknown;
   defaultRuntime?: string;
+  /**
+   * The ids that answered `available(): ok` on main's last sweep, in registry
+   * order. ⚠ OPTIONAL, AND THE ABSENCE IS A THIRD STATE: every desktop older
+   * than 2026-09-08 omits the key, and reading that as "nothing is connected"
+   * would put "not connected" on every pill of a machine that never said
+   * (INVARIANTS §8 — a new cached-payload field needs its own absent lane).
+   * {@link ChannelLaunchPostureState.connectedKnown} is that lane.
+   * ⚠ `unknown` for `runtimes`' reason — it crossed a process boundary.
+   */
+  connected?: unknown;
 }
 
 /** A posture write. ⚠ OMITTING `runtime` LEAVES THE CHANNEL'S PICK UNTOUCHED —
@@ -183,8 +218,29 @@ export interface ChannelLaunchPostureState {
   runtimeSupported: boolean;
   /** The channel's durable pick, `''` for the DEFAULT adapter. */
   runtime: string;
-  /** Every adapter this desktop registered, in registry order. Empty off-desktop. */
+  /** Every adapter this desktop registered, in registry order. Empty off-desktop.
+   *  ⚠ NEVER FILTERED BY {@link connected} — Samuel's 2026-09-08 correction, quoted in the
+   *  header: an unconnected runtime is still an OPTION, because seeing it is how an operator
+   *  learns it exists. */
   runtimes: ReadonlyArray<RuntimeDescriptor>;
+  /**
+   * WHICH OF {@link runtimes} THIS MAC IS CONNECTED TO — main's cached `available()` sweep, in
+   * registry order. `[]` when the desktop said nothing (see {@link connectedKnown}).
+   *
+   * ⚠ A LABEL, NEVER A GATE. It is 60s stale by design and the probe is bounded, so it is right
+   * for a muted "not connected" hint and wrong for disabling anything: spawn re-asks, and the
+   * refusal it raises is the one an operator can act on.
+   */
+  connected: ReadonlyArray<string>;
+  /**
+   * THIS DESKTOP ANSWERED THE CONNECTIVITY QUESTION AT ALL.
+   *
+   * ⚠ FALSE IS "IT DID NOT SAY", NOT "NOTHING IS CONNECTED", and the two render differently: a
+   * desktop older than 2026-09-08 omits the key, and an unknown-is-empty read would stamp "not
+   * connected" on every pill of a machine running three runtimes perfectly well (INVARIANTS §8,
+   * §11 — UNKNOWN is not EMPTY). Latched to true like the two capability probes above.
+   */
+  connectedKnown: boolean;
   /** The adapter a channel with no pick launches on, `''` when the build says none. */
   defaultRuntime: string;
   /**
@@ -214,6 +270,8 @@ export function useChannelLaunchPosture(
   const [runtime, setRuntime] = useState("");
   const [runtimes, setRuntimes] = useState<RuntimeDescriptor[]>(EMPTY_RUNTIMES);
   const [defaultRuntime, setDefaultRuntime] = useState("");
+  const [connected, setConnected] = useState<string[]>(EMPTY_CONNECTED);
+  const [connectedKnown, setConnectedKnown] = useState(false);
 
   // ⚠ Feature-detect after mount so SSR and first client render agree.
   useEffect(() => {
@@ -264,6 +322,23 @@ export function useChannelLaunchPosture(
         setRuntime(
           normalizeRuntimeId(list, (next as LaunchPostureReply)?.runtime)
         );
+        // ⚠ THE ARRAY'S PRESENCE IS THE CAPABILITY, ITS CONTENTS ARE THE ANSWER — the own-key
+        // idiom two lines up, applied to a field whose EMPTY value is meaningful. An older
+        // desktop sends no key and this branch never runs, so `connectedKnown` stays false and
+        // the row renders no hints at all; a current one sending `[]` is a real "nothing is
+        // connected" and says so. Latched, like every probe here: a later reply that drops the
+        // key is a skew this hook cannot resolve, and un-labelling mid-pick is worse.
+        const reported = (next as LaunchPostureReply)?.connected;
+        if (Array.isArray(reported)) {
+          setConnectedKnown(true);
+          // ⚠ NARROWED to ids this desktop actually REPORTED, for `normalizeRuntimes`' reason:
+          // an id with no descriptor beside it can label nothing, and carrying it would let a
+          // consumer believe in a runtime that is on no roster.
+          const ids = reported.filter(
+            (v): v is string => typeof v === "string" && list.some((d) => d.id === v)
+          );
+          setConnected(ids.length ? ids : EMPTY_CONNECTED);
+        }
       })
       .catch(() => {
         if (alive) setPosture(DEFAULT_PERMISSION_PRESET);
@@ -381,6 +456,8 @@ export function useChannelLaunchPosture(
     runtimeSupported,
     runtime,
     runtimes,
+    connected,
+    connectedKnown,
     defaultRuntime,
     descriptor,
     busy,
@@ -392,3 +469,7 @@ export function useChannelLaunchPosture(
  *  every consumer the SAME empty array rather than a fresh identity per read —
  *  `descriptor` is memoized on it. */
 const EMPTY_RUNTIMES: RuntimeDescriptor[] = [];
+
+/** The same shared identity, for the same reason: the popup memoizes its preselect
+ *  chain on this list, and a fresh `[]` per read would re-run it every render. */
+const EMPTY_CONNECTED: string[] = [];

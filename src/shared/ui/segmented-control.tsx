@@ -59,6 +59,7 @@ export function SegmentedControl<K extends string>({
   size = "sm",
   className,
   ariaLabel,
+  weight,
 }: {
   options: ReadonlyArray<SegmentedOption<K>>;
   value: K;
@@ -100,6 +101,10 @@ export function SegmentedControl<K extends string>({
    *  text is not attached to the tablist, so without this the group is unnamed.
    *  A row that IS the page's only switcher does not need one. */
   ariaLabel?: string;
+  /** `"semibold"` overrides the form's own weight — the /home page switcher
+   *  (Samuel, 2026-09-08: "the switcher pills at the top, the text should be
+   *  bolded"); a `plain` FORM row stays regular. */
+  weight?: "semibold";
 }) {
   const tracked = variant === "track";
   const underlined = variant === "underline";
@@ -148,7 +153,11 @@ export function SegmentedControl<K extends string>({
             // ⚠ `plain` pills are REGULAR weight (Samuel, 2026-09-08: "The text inside
             // the pills should not be bolded"); every other form keeps medium.
             "flex items-center justify-center gap-1.5 transition-colors",
-            variant === "plain" ? "font-normal" : "font-medium",
+            weight === "semibold"
+              ? "font-semibold"
+              : variant === "plain"
+                ? "font-normal"
+                : "font-medium",
             !underlined && "rounded-full",
             option,
             value === key

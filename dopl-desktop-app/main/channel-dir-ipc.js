@@ -260,8 +260,29 @@ function register(opts = {}) {
   // which is the one meaning ("capability absent") that must never be produced by accident.
   // ⚠ IT DISCLOSES NOTHING PRIVILEGED: what a runtime can do, its own mode vocabulary, and the
   // sentences a refusal carries. No path, no credential, no token.
-  ipcMain.handle('channels:getLaunchPosture', appWindowOnly('getLaunchPosture', null, (_event, channelId) => {
+  // ── ⚠ AND SINCE 2026-09-08 IT ALSO SAYS WHICH OF THEM THIS MAC IS CONNECTED TO ──────────────
+  //
+  // Samuel's correction, verbatim, after a pass that narrowed the popup's roster to the connected
+  // ones: *"No, even if the user does not have codex or cursor connected, I still want them to be
+  // options there so that the user knows that those are options, so they can connect them. It
+  // should just be logged in, like it is just put in their default, right? I did not say to remove
+  // them."* So `runtimes` is UNCHANGED — every registered adapter, always — and `connected` is a
+  // FACT ABOUT EACH ENTRY beside it. ⚠ A future reader shortening `runtimes` to `connected` is
+  // undoing this ruling; the roster is what tells an operator that Codex is a thing they could
+  // connect.
+  // ⚠ IT IS A CACHED PROBE AND IT IS 60s STALE BY DESIGN (`runtime/connectivity.js` carries the
+  // whole argument): each adapter's `available()` under a 1500ms leash, a hang reading as ABSENT,
+  // and the sweep standing for a minute so opening a dialog does not spawn three binaries.
+  // ⚠ IT NEVER FAILS THE READ. Every probe failure is "not connected", and the `catch` below is
+  // the belt for a registry that has no such accessor at all — a posture read that threw would
+  // take the Settings tab and the popup with it over a field neither one needs to render.
+  // ⚠ IT DISCLOSES NOTHING PRIVILEGED, on the block above's own terms: three ids the reply already
+  // names, and no path, credential, version or reason string.
+  ipcMain.handle('channels:getLaunchPosture', appWindowOnly('getLaunchPosture', null, async (_event, channelId) => {
     if (!isUuid(channelId)) return null;
+    const connected = await Promise.resolve()
+      .then(() => runtimeRegistry.connectedIds())
+      .catch(() => []);
     return Object.assign({}, channelPrefs.getLaunchPosture(channelId), {
       // The channel's pick, `''` for the default adapter. ⚠ ALWAYS PRESENT ON THE WIRE even when
       // nothing is stored, for `model`'s reason: an OWN-KEY probe is how the SPA tells "this
@@ -269,6 +290,10 @@ function register(opts = {}) {
       runtime: channelRuntime.getChannelRuntime(channelId),
       runtimes: runtimeRegistry.all().map((a) => a.descriptor),
       defaultRuntime: runtimeRegistry.DEFAULT_ID,
+      // ⚠ A PLAIN ARRAY OF IDS, in registry order, and OPTIONAL by contract on the other end: a
+      // desktop older than this change omits it entirely, and the SPA must read that absence as
+      // "this build did not say" rather than as "nothing is connected" (INVARIANTS §8).
+      connected: Array.isArray(connected) ? connected.slice() : [],
     });
   }));
   ipcMain.handle('channels:setLaunchPosture', appWindowOnly('setLaunchPosture', { ok: false }, (_event, payload) => {

@@ -184,7 +184,9 @@ export function seriesTotal(points: readonly HomeSeriesPoint[]): number {
 export function binLabel(at: string, bucket: HomeOverviewBucket): string {
   if (bucket === "hour") return `${at.slice(11, 13)}:00`;
   const [, month = "", day = ""] = at.slice(0, 10).split("-");
-  return `${Number(day)}/${Number(month)}`;
+  // ⚠ `m/d` (Samuel, 2026-09-08: "I'm seeing 29/9, which should be 9/29"). The reference
+  // chart wore `d/m`; the audience is US.
+  return `${Number(month)}/${Number(day)}`;
 }
 
 /**

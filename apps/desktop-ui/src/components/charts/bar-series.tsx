@@ -19,7 +19,7 @@ import { cn } from "@/shared/lib/utils";
  * 🔒 **THE GEOMETRY IS A CLONE OF SAMUEL'S REFERENCE CHART (2026-09-08),
  * measured off it rather than invented:** a bar fills 80% of its day's slot and
  * the gaps share the other 20%; the bar is an opaque stadium pill that is never
- * shorter than it is wide; every day carries a `d/m` caption rotated −45°,
+ * shorter than it is wide; every day carries an `m/d` caption rotated −45°,
  * anchored under its own bar; and the ink is BLACK, not gray (verbatim: *"our
  * bars are too thick/wide … their bars are not transparent … i like the slanted
  * dates, it makes it able to fit. we should be able to fit 30 days … their font

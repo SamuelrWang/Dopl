@@ -373,14 +373,16 @@ export default function HomePage() {
                     onWorkspaceChanged={() => void workspacesQuery.refetch()}
                   />
                 </div>
-                {/* The selector REPLACES the page title — the surface names
-                    itself by which face is raised. */}
+                {/* The selector REPLACES the page title. ⚠ PLAIN PILLS, semibold, 36px
+                    (`lg`) since 2026-09-08 — Samuel: "individual pills … unselected grayed
+                    out … text should be bolded"; not a track any more. */}
                 <SegmentedControl<HomeTab>
                   options={HOME_TABS}
                   value={tab}
                   onChange={setTab}
-                  variant="track"
+                  variant="plain"
                   size="lg"
+                  weight="semibold"
                 />
               </div>
               <div className="flex items-center gap-2.5">

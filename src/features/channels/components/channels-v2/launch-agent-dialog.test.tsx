@@ -41,14 +41,39 @@ vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
   }),
 }));
 
-const posture = vi.hoisted(() => ({ runtimeSupported: false }));
+/**
+ * THE DESKTOP'S OWN ANSWER — enough of it for the popup to MOUNT, and no more.
+ *
+ * ⚠ THE RUNTIME ROW'S OWN CONTRACT MOVED TO `launch-agent-dialog-runtime.test.tsx` (2026-09-08,
+ * Samuel's connectivity correction; the split is the same seam as `launch-agent-dialog-runtime.ts`
+ * and it is what put this file back under the §1 cap). What this fixture still buys HERE is the
+ * two field-list cases in §1 — the row renders when the desktop reported a runtime family and does
+ * not when it did not — plus the payload's runtime argument in §3. Every case that MEANS something
+ * by `only`, `connected` or `connectedKnown` belongs in that file.
+ */
+const posture = vi.hoisted(() => ({
+  runtimeSupported: false,
+  only: null as string | null,
+  stored: "",
+  /** ⚠ THE ROW'S OWN CONTRACT LIVES IN `launch-agent-dialog-runtime.test.tsx` (split out at the
+   *  §1 cap). These two are here only so the dialog mounts; every case that MEANS something by
+   *  them is in that file. */
+  connected: [] as string[],
+  connectedKnown: false,
+}));
 vi.mock("../../hooks/use-channel-launch-posture", () => ({
   useChannelLaunchPosture: () => ({
     posture: { model: null },
     modelSupported: false,
     runtimeSupported: posture.runtimeSupported,
-    runtimes: posture.runtimeSupported ? REAL_DESCRIPTORS : [],
-    runtime: "",
+    runtimes: !posture.runtimeSupported
+      ? []
+      : posture.only
+        ? REAL_DESCRIPTORS.filter((d) => d.id === posture.only)
+        : REAL_DESCRIPTORS,
+    runtime: posture.stored,
+    connected: posture.connected,
+    connectedKnown: posture.connectedKnown,
     defaultRuntime: REAL_DEFAULT_RUNTIME,
   }),
 }));
@@ -101,6 +126,10 @@ beforeEach(() => {
   describe_.mockReset().mockResolvedValue({ ok: true });
   mintAgentId.mockReset().mockResolvedValue({ ok: true, agentId: MINTED });
   posture.runtimeSupported = false;
+  posture.only = null;
+  posture.stored = "";
+  posture.connected = [];
+  posture.connectedKnown = false;
   stubBridge();
 });
 afterEach(() => {
@@ -226,15 +255,15 @@ describe("what the three selectors hold before anybody touches them", () => {
     expect(selected("Agent model")).toBe("Sonnet 5");
   });
 
-  it("Runtime defaults to Channel default — a real pick, not an empty state", async () => {
-    posture.runtimeSupported = true;
-    await open();
-    expect(selected("Agent runtime")).toBe("Channel default");
-    // ⚠ THE PLATFORM'S OWN LABEL beside it, off the real descriptors — Dopl renames no vendor's
-    // product, so a second table of names here would be drift with a product name in it.
-    for (const d of REAL_DESCRIPTORS) expect(pill(d.label)).toBeTruthy();
-  });
 });
+
+// ── 2A. THE RUNTIME ROW — MOVED ─────────────────────────────────────────────
+//
+// ⚠ ITS WHOLE CONTRACT IS `launch-agent-dialog-runtime.test.tsx` NOW (2026-09-08, Samuel's
+// connectivity correction): the roster that is never shortened, the "not connected" hints, and the
+// four-link preselect chain. It left this file at the §1 cap, on the same seam as
+// `launch-agent-dialog-runtime.ts`. ⚠ ADD THE NEXT RUNTIME CASE THERE, not here — the two runtime
+// assertions that remain in this file are about the popup's FIELD LIST (§1), not about the row.
 
 // ── 3. THE PAYLOAD ───────────────────────────────────────────────────────────
 

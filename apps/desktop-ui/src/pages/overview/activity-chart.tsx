@@ -21,7 +21,8 @@ const OPTIONS: ReadonlyArray<{ key: OverviewSeriesMetric; label: string }> = [
  *  as an instant lands on the previous day west of Greenwich. */
 function dayLabel(date: string): string {
   const [, month = "", day = ""] = date.split("-");
-  return `${Number(day)}/${Number(month)}`;
+  // `m/d` (Samuel, 2026-09-08: "I'm seeing 29/9, which should be 9/29").
+  return `${Number(month)}/${Number(day)}`;
 }
 
 /**

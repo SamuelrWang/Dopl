@@ -35,12 +35,50 @@
  *
  * ⚠ **THE RUNTIME ROW SITS UNDER MODEL HERE**, where the slide-out put it between Template and
  * Model on the stated grounds that it *"decides what the two rows under it mean"*. Samuel's
- * ordering for the popup is Name, Description, Template, Model, Runtime, and an ordering ruled
- * for a surface outranks a rationale written for the other one. The precedence chain it feeds is
- * untouched.
+ * ordering for the popup is Name, Description, Template, Model, Runtime.
+ *
+ * ⚠ **THE ROW NO LONGER OFFERS "CHANNEL DEFAULT", AND THIS SPAWN'S RUNTIME IS ALWAYS ON THE WIRE
+ * (2026-09-08, Samuel).** His words: *"for runtime, there shouldn't be a channel default. I don't
+ * even know what the logic behind that is, but can we unwire that? It should just be what the user
+ * is already connected to, right? … Nobody knows what channel default is."* So the options are the
+ * runtimes THIS DESKTOP REPORTED — `use-channel-launch-posture.ts › runtimes`, the descriptor table
+ * `main/channel-dir-ipc.js › channels:getLaunchPosture` puts on the read — and the selection is
+ * always sent. **One reported runtime still RENDERS the row**, holding one selected pill: the
+ * operator sees what will run rather than inferring it.
+ *
+ * ⚠ **EVERY REPORTED RUNTIME IS AN OPTION, CONNECTED OR NOT — AND THAT SUPERSEDES THE PASS THAT
+ * NARROWED THIS ROW TO THE CONNECTED ONES (2026-09-08, Samuel's correction).** Verbatim, because
+ * it is the whole of the rule: *"No, even if the user does not have codex or cursor connected, I
+ * still want them to be options there so that the user knows that those are options, so they can
+ * connect them. It should just be logged in, like it is just put in their default, right? I did not
+ * say to remove them."* So THREE pills on every desktop that registers three adapters. What
+ * connectivity buys is (a) the muted **"not connected"** hint on the ones that would not start
+ * today and (b) the PRESELECT landing on one that would. ⚠ **AN UNCONNECTED PILL STAYS
+ * SELECTABLE** — hide-never-gray's own logic reversed for a reason it does not cover: this is not
+ * a capability the runtime lacks, it is a setup step the operator can go do, and `acquire`'s
+ * spawn-time refusal already explains the failure in the operator's own words.
+ *
+ * ⚠ **THE PRESELECT IS A FOUR-LINK CHAIN AND EACH LINK IS LOAD-BEARING** ({@link pickRuntime}):
+ * the operator's own pick → the channel's stored pick IF it is connected (or if this desktop did
+ * not say) → the first CONNECTED reported runtime → the first reported. Link 2's guard is the
+ * correction's *"it should just be what the user is already connected to"*; link 2's `or` is
+ * INVARIANTS §8's direction — an older desktop that reports no connectivity must behave exactly
+ * as it did before this change rather than having its stored pick silently overruled. Link 4 is
+ * the "nothing is connected" floor: the row still names one runtime, because a launch still runs
+ * on one. `defaultRuntime` is deliberately not consulted — `main/runtime/index.js › DEFAULT_ID` is
+ * the first registered adapter by construction, so it is link 4 already, and a second authority
+ * here could only ever disagree with the pill the operator is looking at.
+ *
+ * ⚠ **NOTHING IS REPORTED ⇒ NO ROW AND NO RUNTIME KEY** — a plain browser, and every desktop older
+ * than the adapter port (`runtimeSupported` false). That is today's omitted-key behaviour,
+ * unchanged, and it is the only lane left where this popup sends no runtime (INVARIANTS §11 —
+ * UNKNOWN is not EMPTY).
+ * ⚠ **THE CHANNEL-LEVEL POSTURE ITSELF IS UNTOUCHED.** The Settings tab still writes it and
+ * `main/session-launch-op.js`'s chain still reads it for every launch that carries no runtime
+ * (MCP's included). This popup stopped OFFERING it; it did not delete it.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
 import { authorMarker } from "@/features/agent-templates/components/template-picker";
 import { TemplateApprovalDialog } from "@/features/agent-templates/components/template-approval";
@@ -48,11 +86,13 @@ import { DialogActions, StandardDialog } from "@/shared/ui/standard-dialog";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { cn } from "@/shared/lib/utils";
 import { useChannelLaunchPosture } from "../../hooks/use-channel-launch-posture";
+import { interruptRefusal } from "../../lib/runtime-capability";
 import {
-  descriptorFor,
-  interruptRefusal,
-  type RuntimeDescriptor,
-} from "../../lib/runtime-capability";
+  EMPTY_CONNECTED,
+  EMPTY_RUNTIMES,
+  pickRuntime,
+  runtimeRowOptions,
+} from "./launch-agent-dialog-runtime";
 import { agentModelOptionsFor, agentModelSelection } from "../../lib/agent-models";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import { useLaunchRunner, type AgentLaunchPanel } from "./use-agent-launch";
@@ -62,16 +102,6 @@ import styles from "./launch-agent-dialog.module.css";
  *  maps to `templateId: null` at the boundary, which is the wire's own spelling of "no
  *  template". Same sentinel `composer-launch-panel.tsx` uses, for the same reason. */
 const BLANK_TEMPLATE = "";
-
-/** "Whatever this channel is set to". ⚠ `''` here means the operator expressed NO per-spawn
- *  preference, which is a different fact from the Settings row's `''` (that one RESETS the
- *  channel to the default adapter). Labelling both "Default" would claim this row can write a
- *  setting it never touches. */
-const CHANNEL_RUNTIME = "";
-const CHANNEL_RUNTIME_LABEL = "Channel default";
-
-/** ⚠ Module-level, so a surface with no runtime concept hands the same array every render. */
-const EMPTY_RUNTIMES: ReadonlyArray<RuntimeDescriptor> = [];
 
 /** Discard — the composer's own text-button face, at `--action-h-sm`. */
 const DISCARD_BTN =
@@ -194,6 +224,9 @@ export function LaunchAgentDialog({
   // ⚠ THE RUNNER LIVES HERE NOW, beside the button that fires it — see the header's note on the
   // submit moving back inside the form. It reaches `launchWithIdentity` unchanged.
   const runner = useLaunchRunner({ newAgent, panel, openThreadId });
+  // ⚠ DESTRUCTURED so the sync effect below can DEPEND on it: `panel` is a fresh object every
+  // render, while `setRuntime` is `useAgentLaunch`'s own setState function and is stable.
+  const { setRuntime } = panel;
 
   const memberNames = useMemo(
     () => new Map(members.map((m) => [m.userId, m.displayName || m.email || ""] as const)),
@@ -203,6 +236,10 @@ export function LaunchAgentDialog({
   // ⚠ EMPTY UNTIL THE PROBE ANSWERS, and empty forever off-desktop — which renders NO runtime
   // row and no warning, the correct direction while the answer is out (INVARIANTS §11).
   const runtimes = posture.runtimeSupported ? posture.runtimes : EMPTY_RUNTIMES;
+  // ⚠ THE ROSTER IS NEVER FILTERED BY THIS (Samuel's correction, quoted in the header). It labels
+  // and it orders the preselect; it removes nothing.
+  const connected = posture.runtimeSupported ? posture.connected : EMPTY_CONNECTED;
+  const connectedKnown = posture.runtimeSupported && posture.connectedKnown;
   const channelModel = posture.modelSupported ? posture.posture.model ?? "" : "";
 
   /**
@@ -243,26 +280,47 @@ export function LaunchAgentDialog({
     [effectiveModel]
   );
 
+  // ⚠ EVERY REPORTED RUNTIME, NOTHING PREPENDED AND NOTHING REMOVED — the roster plus the
+  // "not connected" hints. `launch-agent-dialog-runtime.ts` is the rule and Samuel's correction.
   const runtimeOptions = useMemo(
-    () => [
-      { key: CHANNEL_RUNTIME, label: CHANNEL_RUNTIME_LABEL },
-      // ⚠ THE PLATFORM'S OWN LABEL, off the descriptor — Dopl does not rename a vendor's
-      // product, and a second table of names is the drift `lib/agent-models.ts` forbids.
-      ...runtimes.map((d) => ({ key: d.id, label: d.label })),
-    ],
-    [runtimes]
+    () => runtimeRowOptions(runtimes, connected, connectedKnown),
+    [runtimes, connected, connectedKnown]
   );
 
   /**
-   * WHAT THIS SPAWN WOULD ACTUALLY RUN ON. ⚠ IT MIRRORS MAIN'S PRECEDENCE CHAIN EXACTLY
-   * (`p.runtime > getChannelRuntime > ''`); a warning computed off any other order would name a
-   * refusal belonging to a runtime this launch is not about to use.
+   * WHAT THIS SPAWN WILL RUN ON — one descriptor, and it is the SELECTION, the refusal sentence
+   * and the payload all at once. ⚠ ONE OBJECT ON PURPOSE: a row that selected one runtime while
+   * the warning read another's refusals is the exact failure `runtime-capability.ts › descriptorFor`
+   * exists to prevent, and now that the pick is always sent it would also be a payload nobody saw.
+   * ⚠ THE OPERATOR'S OWN PICK OUTRANKS THE CHANNEL'S, which is main's order (`p.runtime >
+   * getChannelRuntime`) with the fall-through arm removed rather than reordered — and since
+   * Samuel's 2026-09-08 correction the channel's pick yields to CONNECTIVITY when this desktop
+   * reported any. {@link pickRuntime} is the whole chain and the header is its argument.
    */
   const effectiveRuntime = useMemo(
-    () => descriptorFor(runtimes, panel.runtime || posture.runtime, posture.defaultRuntime),
-    [runtimes, panel.runtime, posture.runtime, posture.defaultRuntime]
+    () => pickRuntime(runtimes, panel.runtime, posture.runtime, connected, connectedKnown),
+    [runtimes, panel.runtime, posture.runtime, connected, connectedKnown]
   );
+  /** `''` only where the desktop reported nothing — the no-row, no-key lane. */
+  const selectedRuntime = effectiveRuntime?.id ?? "";
   const stopWarning = runtimes.length ? interruptRefusal(effectiveRuntime) : null;
+
+  /**
+   * THE SELECTION IS WRITTEN BACK INTO THE PANEL, so the pill on screen and the argument on the
+   * wire are ONE value (`use-agent-launch.ts › launchWithIdentity` sends `panel.runtime`).
+   *
+   * ⚠ THIS IS NOT THE MODEL ROW'S FORBIDDEN MOVE, AND THE DIFFERENCE IS THE RULING. The model row
+   * must NOT write its resolved id back, because `''` there means "follow the channel's setting"
+   * and stamping it would freeze a per-spawn copy of a setting the operator never touched. The
+   * runtime row no longer HAS that meaning: Samuel removed the fall-through, so `''` would be a
+   * spawn with no runtime named on a machine that named three.
+   * ⚠ IT RUNS ONLY WHILE OPEN, and `reset()` clears the field on close — a dialog reopened after
+   * the channel's pick moved re-derives rather than remembering the last one.
+   */
+  useEffect(() => {
+    if (!panel.open || !selectedRuntime || panel.runtime === selectedRuntime) return;
+    setRuntime(selectedRuntime);
+  }, [panel.open, panel.runtime, selectedRuntime, setRuntime]);
 
   // ⚠ ESCAPE AND THE BACKDROP ARE DISCARD (Samuel's ruling names two exits and this is the
   // second). `reset` closes AND clears — a dialog that came back holding a half-typed identity
@@ -308,14 +366,19 @@ export function LaunchAgentDialog({
           ariaLabel="Agent model"
         />
 
-        {/* ⚠ NO ROW WHERE THERE IS NO RUNTIME FAMILY — a plain browser, and every desktop older
-            than the adapter port. The same no-dead-rows rule the Settings tab's row follows. */}
+        {/* ⚠ NO ROW WHERE THIS DESKTOP REPORTED NO RUNTIME — a plain browser, and every desktop
+            older than the adapter port. The same no-dead-rows rule the Settings tab's row follows.
+            ⚠ ONE REPORTED RUNTIME STILL RENDERS IT (Samuel, 2026-09-08): a single selected pill is
+            how the operator SEES what their launch will run on.
+            ⚠ AND EVERY REPORTED RUNTIME IS A LIVE, SELECTABLE PILL — the unconnected ones wear the
+            hint and nothing else. NOT `disabled`: an unconnected runtime is a setup step, not a
+            capability the platform lacks, and the launch's own refusal says the rest. */}
         {runtimes.length > 0 && (
           <PillRow
             label="Runtime"
             options={runtimeOptions}
-            value={panel.runtime}
-            onChange={panel.setRuntime}
+            value={selectedRuntime}
+            onChange={setRuntime}
             ariaLabel="Agent runtime"
           />
         )}

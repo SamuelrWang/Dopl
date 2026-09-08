@@ -156,7 +156,11 @@ export function bootIpc({ blocked = false } = {}) {
         normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""),
       };
     }
-    if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude" };
+    // ⚠ `connectedIds` JOINED 2026-09-08 (Samuel's connectivity correction): which registered
+    // adapters this Mac could start right now. It rides the SAME read, and it NARROWS NOTHING —
+    // `all()` is still the roster the popup renders. A registry with no adapters is connected to
+    // none of them, which is what an empty list means here.
+    if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude", connectedIds: async () => [] };
     if (id === "./channel-dirs") {
       return {
         liveChannelDirLabel: () => "~/Downloads/secret-repo",

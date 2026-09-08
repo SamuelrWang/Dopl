@@ -290,3 +290,58 @@ describe("the runtime family", () => {
     expect(b.value!.runtime).toBe("cursor");
   });
 });
+
+/**
+ * WHICH RUNTIMES THIS MAC IS CONNECTED TO — the `connected` key `channels:getLaunchPosture`
+ * started carrying on 2026-09-08 (Samuel's correction: *"even if the user does not have codex or
+ * cursor connected, I still want them to be options there … I did not say to remove them"*).
+ *
+ * ⚠ EVERY CASE HERE IS ABOUT THE THIRD STATE. The field has a meaningful EMPTY value, so
+ * "[] because nothing is connected" and "[] because this desktop never said" cannot be one answer:
+ * the first labels every pill "not connected", and the second must label none of them
+ * (INVARIANTS §8's stale-cache direction, §11's UNKNOWN-is-not-EMPTY). `connectedKnown` is that
+ * separation and it is the only thing keeping a pre-2026-09-08 desktop from reading as offline.
+ */
+describe("the connectivity field", () => {
+  const REPORTED = { ...MANUAL, runtime: "", runtimes: REAL_DESCRIPTORS, defaultRuntime: "claude" };
+
+  it("a reply with NO `connected` key is UNKNOWN, not empty", async () => {
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue(REPORTED);
+    const holder = await mount();
+    expect(holder.value!.connectedKnown).toBe(false);
+    expect(holder.value!.connected).toEqual([]);
+    // ⚠ AND THE ROSTER IS UNAFFECTED: an older desktop still offers every adapter it registered.
+    expect(holder.value!.runtimes).toHaveLength(REAL_DESCRIPTORS.length);
+  });
+
+  it("an EMPTY array is a real answer — nothing is connected, and the desktop said so", async () => {
+    // ⚠ **MUTATION-PROOF: gate `connectedKnown` on the array being NON-empty and only this case
+    // fails** — and the popup would then hint nothing on a machine connected to nothing.
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue({ ...REPORTED, connected: [] });
+    const holder = await mount();
+    expect(holder.value!.connectedKnown).toBe(true);
+    expect(holder.value!.connected).toEqual([]);
+  });
+
+  it("narrows to ids this desktop actually REPORTED, dropping everything else", async () => {
+    // A newer desktop, or a garbled hop. An id with no descriptor beside it can label nothing.
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue({
+      ...REPORTED,
+      connected: ["codex", "gemini", 7, null, "claude"],
+    });
+    const holder = await mount();
+    expect(holder.value!.connected).toEqual(["codex", "claude"]);
+    expect(holder.value!.connectedKnown).toBe(true);
+  });
+
+  it("a non-ARRAY answer is UNKNOWN — narrowed, never asserted into shape", async () => {
+    const bridge = installBridge();
+    bridge.getLaunchPosture.mockResolvedValue({ ...REPORTED, connected: "codex" });
+    const holder = await mount();
+    expect(holder.value!.connectedKnown).toBe(false);
+    expect(holder.value!.connected).toEqual([]);
+  });
+});

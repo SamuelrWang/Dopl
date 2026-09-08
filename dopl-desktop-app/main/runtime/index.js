@@ -18,6 +18,10 @@
 
 const { sealAdapter } = require('./contract');
 const capability = require('./capability');
+// 2026-09-08 (Samuel's connectivity correction): WHICH of the registered adapters this Mac is
+// actually connected to. It lives in its own file because its one reason to change is the caching
+// and leash policy, not the roster — this module stays "the only place an adapter is named".
+const connectivity = require('./connectivity');
 
 const REGISTRY = new Map();
 
@@ -98,8 +102,18 @@ const ids = () => Array.from(REGISTRY.keys());
 /** Every sealed adapter, for the conformance suites. */
 const all = () => Array.from(REGISTRY.values());
 
+/**
+ * The ids of the registered runtimes this Mac is CONNECTED to — `available()`, leashed and cached.
+ *
+ * ⚠ IT NARROWS NOTHING (2026-09-08, Samuel: *"even if the user does not have codex or cursor
+ * connected, I still want them to be options there … I did not say to remove them"*). Every
+ * registered adapter is still offered everywhere; this only says which of them would start today.
+ * ⚠ NOT A SUBSTITUTE FOR `acquire`, which re-asks at spawn and is the refusal an operator reads.
+ */
+const connectedIds = () => connectivity.connectedIds(all());
+
 module.exports = {
-  register, resolve, descriptorFor, runtimeFor, acquire, ids, all,
+  register, resolve, descriptorFor, runtimeFor, acquire, ids, all, connectedIds,
   DEFAULT_ID,
   capability, // re-exported so a consumer needs ONE require to ask a capability question
 };

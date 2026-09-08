@@ -203,7 +203,11 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
     // there is no new row in the OPS table; what they need here is only to exist, because the
     // handler reads them on the SUCCESS path these cases must never reach.
     if (id === "./channel-runtime") return { getChannelRuntime: () => "", setChannelRuntime: () => "" };
-    if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude" };
+    // ⚠ `connectedIds` JOINED 2026-09-08 (Samuel's connectivity correction): which registered
+    // adapters this Mac could start right now. It rides the SAME read, and it NARROWS NOTHING —
+    // `all()` is still the roster the popup renders. A registry with no adapters is connected to
+    // none of them, which is what an empty list means here.
+    if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude", connectedIds: async () => [] };
     // ⚠ `resolvedDirLabel` joined 2026-09-05 (task 15): the folder ops answer `{label, custom}`
     // now. Present only so the module loads — every call below is on an UNBOUND surface, so the
     // success path it backs is exactly what must never be reached.
@@ -258,8 +262,11 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     // carries why, and `renderer/app-preload.js` being at the §1 cap with no split seam is the
     // hard half of it. Asserted as the WHOLE reply rather than a subset, because what this case
     // is about is that a bound sender gets the real one.
+    // ⚠ `connected` JOINED THE REPLY 2026-09-08 (Samuel's connectivity correction) and is
+    // ADDITIVE the same way the three above were: the ids this Mac could start today, beside a
+    // `runtimes` roster it does not shorten. This harness registers no adapters, so it is empty.
     assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH),
-      { ...PRESET, runtime: "", runtimes: [], defaultRuntime: "claude" }, which);
+      { ...PRESET, runtime: "", runtimes: [], defaultRuntime: "claude", connected: [] }, which);
     // ⚠ `applied` (2026-08-25) is the live fan-out's count — see test/channel-posture-live.test.mjs.
     // This harness binds no session engine, so a bound sender's write succeeds with nothing to
     // apply it to; what is being driven HERE is the sender binding, not the fan-out.

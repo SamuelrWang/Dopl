@@ -147,7 +147,17 @@ export function HomeOverviewPanels({
             ⚠ **NOTHING ELSE IN THE PANEL** — the bar on top, the histogram
             under it, both inside that one card. A rail, a note or a total goes
             in the panel below. */}
-        <SectionPanel id="home-overview-usage" label="Usage">
+        {/* ⚠ TRIAL, 2026-09-08 (Samuel: "increase the size of [Usage] … put it
+            in a white panel and remove the gray shade"): THIS panel alone sits
+            on the white card ground with a larger, sentence-case title. It
+            deliberately reverses the three-layer note above for one section;
+            if it stays, the note moves with it. */}
+        <SectionPanel
+          id="home-overview-usage"
+          label="Usage"
+          className="!bg-home-card"
+          titleClassName="text-title normal-case tracking-normal text-text-primary"
+        >
           <UsageCard homeWorkspaceId={homeWorkspaceId} />
         </SectionPanel>
 

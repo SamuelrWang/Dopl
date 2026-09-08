@@ -243,8 +243,8 @@ describe("overview page", () => {
 
     // Bars carry the real date and count; the axis ceiling is a round number
     // above the peak (3100 → 4000, four uniform bands).
-    expect(screen.getByTitle("1/7 · 100")).toBeInTheDocument();
-    expect(screen.getByTitle("31/7 · 3,100")).toBeInTheDocument();
+    expect(screen.getByTitle("7/1 · 100")).toBeInTheDocument();
+    expect(screen.getByTitle("7/31 · 3,100")).toBeInTheDocument();
     expect(screen.getByText("49,600 in the period")).toBeInTheDocument();
     expect(screen.getByText("4,000")).toBeInTheDocument();
     expect(screen.getByText("2,000")).toBeInTheDocument();
@@ -294,7 +294,7 @@ describe("overview page", () => {
     expect(screen.getByText("0 in the period")).toBeInTheDocument();
     // Empty workspace ⇒ the fallback 0–4 axis, still uniform.
     expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByTitle("31/7 · 0")).toBeInTheDocument();
+    expect(screen.getByTitle("7/31 · 0")).toBeInTheDocument();
 
     const bars = screen.getAllByTitle(/·/);
     expect(bars).toHaveLength(31);

@@ -100,8 +100,13 @@ const FAKE_RUNTIMES = Object.freeze([
 // no row, where a present one with an empty value is "nothing chosen, the default applies".
 // Collapsing those two is how a control comes to hide itself from every operator who never used
 // it (INVARIANTS §11 — UNKNOWN is not EMPTY).
+// ⚠ `connected` (2026-09-08, Samuel's connectivity correction) is a FACT ABOUT EACH ENTRY of
+// `runtimes`, never a replacement for it: the popup lists every registered adapter and labels the
+// ones this Mac could not start. The stub reports one of two, so a handler that answered the
+// roster here would fail — see `launch-posture-connected.test.mjs` for the probe's own cases.
 const onWire = (pair) => ({
   ...pair, model: null, runtime: "", runtimes: FAKE_RUNTIMES, defaultRuntime: "claude",
+  connected: ["claude"],
 });
 
 // ── The frozen enums ─────────────────────────────────────────────────────────
@@ -257,7 +262,15 @@ function bootIpc() {
       };
     }
     if (id === "./runtime") {
-      return { all: () => FAKE_RUNTIMES.map((d) => ({ descriptor: d })), DEFAULT_ID: "claude" };
+      // ⚠ `connectedIds` ANSWERS A STRICT SUBSET OF `all()` AND NOT THE WHOLE OF IT (2026-09-08).
+      // A stub that reported every registered adapter as connected would let a handler which
+      // echoed `runtimes` into `connected` pass — and the whole of Samuel's correction is that
+      // those two lists are different questions.
+      return {
+        all: () => FAKE_RUNTIMES.map((d) => ({ descriptor: d })),
+        DEFAULT_ID: "claude",
+        connectedIds: async () => ["claude"],
+      };
     }
     if (id === "./channel-dirs") {
       return {

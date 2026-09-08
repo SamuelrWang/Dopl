@@ -408,8 +408,8 @@ describe("home overview face", () => {
     // ⚠ BY BAR TITLE, not by caption: the axis only captions every Nth bin, so
     // the first day carries no visible label. Every BAR has a `label · value`
     // title, which is what proves all 30 bins are drawn.
-    expect(within(usage).getByTitle("1/9 · 0")).toBeInTheDocument();
-    expect(within(usage).getByTitle("30/9 · 0")).toBeInTheDocument();
+    expect(within(usage).getByTitle("9/1 · 0")).toBeInTheDocument();
+    expect(within(usage).getByTitle("9/30 · 0")).toBeInTheDocument();
   });
 
   /** 🔒 The guest mark survived the swap from calls to credits — it is the
