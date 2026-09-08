@@ -57,7 +57,7 @@ const WORKSPACE = {
  * + me. An un-onboarded caller still gets NO workspace — the provisioning gate
  * moved server-side, it did not disappear.
  */
-function bridgeFor(isOnboarded: boolean) {
+function bridgeFor(isOnboarded: boolean, workspace: typeof WORKSPACE & { kind?: string } = WORKSPACE) {
   return (path: string): Promise<BridgeResponse> => {
     if (path === "/api/boot") {
       return Promise.resolve(
@@ -65,7 +65,7 @@ function bridgeFor(isOnboarded: boolean) {
           isOnboarded,
           surveyCompleted: true,
           userId: "user-1",
-          workspace: isOnboarded ? WORKSPACE : null,
+          workspace: isOnboarded ? workspace : null,
           segment: isOnboarded ? SEGMENT : null,
           needsRedirect: false,
           role: isOnboarded ? "owner" : null,
@@ -82,6 +82,7 @@ function renderBoot(queryClient = createQueryClient()) {
     [
       { path: "/", element: <BootPage /> },
       { path: "/onboarding", element: <div>ONBOARDING ROUTE</div> },
+      { path: "/home", element: <div>HOME ROUTE</div> },
       { path: "/:workspaceSegment", element: <div>WORKSPACE ROUTE</div> },
     ],
     { initialEntries: ["/"] }
@@ -167,6 +168,21 @@ describe("boot page", () => {
       apiRequest.mock.calls.map((c) => (c as unknown[])[0])
     ).toEqual(["/api/boot"]);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("a cold launch that answers the PERSONAL container lands on /home, never the workspace route", async () => {
+    // ⚠ THE GHOST OVERVIEW (Samuel, 2026-09-08). `/api/boot` with no segment
+    // provisions and returns the caller's `kind='personal'` container since the
+    // personal-container wave; routing to `/{segment}` painted a workspace
+    // overview titled "Home" with no rail icon lit. /home is that container's
+    // surface. A standard workspace (or an older server sending no kind) still
+    // takes the workspace route — the G2 case above.
+    apiRequest.mockImplementation((path: string) =>
+      bridgeFor(true, { ...WORKSPACE, kind: "personal", name: "Home", slug: "personal" })(path)
+    );
+    renderBoot();
+    expect(await screen.findByText("HOME ROUTE")).toBeInTheDocument();
+    expect(screen.queryByText("WORKSPACE ROUTE")).toBeNull();
   });
 
   // ⚠ PERSISTED-CACHE HAZARD. Query cache is written to IndexedDB

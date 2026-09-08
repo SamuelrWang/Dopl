@@ -1,5 +1,6 @@
 import { Navigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { HOME_PATH } from "#/components/app-shell/account-rail";
 import { seedBootAnswer } from "#/components/app-shell/use-workspace-route";
 import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "./signed-out-screen";
@@ -78,6 +79,18 @@ export default function BootPage() {
 
   if (!boot.data.isOnboarded) return <Navigate to="/onboarding" replace />;
   if (!boot.data.segment) return <BootCover label="Opening workspace" />;
+
+  // ⚠ A COLD LAUNCH ANSWERS THE PERSONAL CONTAINER, AND THAT IS NOT A WORKSPACE
+  // ROUTE (2026-09-08, Samuel: "a ghost overview page … the workspace is called
+  // Home … none of the icons on the left are selected"). Since the personal-
+  // container wave (`20260920120000`) `/api/boot` with no segment provisions and
+  // returns the caller's `kind='personal'` container; routing to `/{segment}`
+  // rendered the WORKSPACE overview for it. The personal container's surface is
+  // /home. A standard workspace (a routed segment, or an older server that sends
+  // no kind) still lands on its own route.
+  if (boot.data.workspace?.kind === "personal") {
+    return <Navigate to={HOME_PATH} replace />;
+  }
 
   return <Navigate to={`/${boot.data.segment}`} replace />;
 }

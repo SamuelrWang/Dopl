@@ -73,6 +73,16 @@ export function AppShellLayout() {
     navigate(canonicalPath(location.pathname, segment), { replace: true });
   }, [needsRedirect, segment, location.pathname, navigate]);
 
+  // 🔒 THE SHELL NEVER RENDERS A PERSONAL CONTAINER (2026-09-08). Its surface is
+  // /home; a typed or stale `/{personal-segment}` URL — or a cold launch that
+  // slipped past `pages/boot` — otherwise paints a workspace overview titled
+  // "Home" with no rail icon lit (Samuel's "ghost overview page"). `link`
+  // containers are NOT fenced here: guests legitimately render in the shell.
+  useEffect(() => {
+    if (workspace?.kind !== "personal") return;
+    navigate(HOME_PATH, { replace: true });
+  }, [workspace?.kind, navigate]);
+
   /**
    * 🔒 A GUEST AT A WORKSPACE URL GOES TO THEIR CHANNEL (Samuel's ruling,
    * 2026-08-30 — ledger ASK-2, option b).
