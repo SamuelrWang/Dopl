@@ -174,17 +174,19 @@ describe("home page", () => {
     // "All | Links" segmented filter above the rows is DELETED — links are no
     // longer a filterable state — and the rows themselves are untouched: the
     // link row above is still in this list, still chipped. The only tabs left
-    // on the page are the header's four faces, and ORDER is the assertion:
-    // Overview sits LEFT of Channels (Samuel, 2026-09-01).
-    // ⚠ **THE FIRST FOUR, not every tab.** The face row is the page header's and
-    // is first in document order; the OUTGOING Overview pane is still mounted
-    // for one 150ms `Crossfade` fade after the click, and it carries the chart's
-    // metric switcher — which is also `role="tab"`.
+    // on the page are the header's five faces, and ORDER is the assertion:
+    // Overview sits LEFT of Channels (Samuel, 2026-09-01) and Ontology sits to
+    // the RIGHT of Agents (Samuel, 2026-09-09: the ontology page comes in "as a
+    // new tab, to the right of the Agents tab").
+    // ⚠ **THE FIRST FIVE, not every tab** (FOUR until 2026-09-09). The face row
+    // is the page header's and is first in document order; the OUTGOING Overview
+    // pane is still mounted for one 150ms `Crossfade` fade after the click, and
+    // it carries the chart's metric switcher — which is also `role="tab"`.
     expect(screen.queryByRole("tab", { name: /^All/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /^Links/ })).not.toBeInTheDocument();
     expect(
-      screen.getAllByRole("tab").slice(0, 4).map((tab) => tab.textContent)
-    ).toEqual(["Overview", "Channel", "Knowledge", "Agents"]);
+      screen.getAllByRole("tab").slice(0, 5).map((tab) => tab.textContent)
+    ).toEqual(["Overview", "Channel", "Knowledge", "Agents", "Ontology"]);
   });
 
   it("drops link containers from the account rail", async () => {

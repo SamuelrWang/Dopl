@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WorkspaceBillingRow } from "@/features/billing/server/workspace-billing";
 import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
+import type { OntologyContext } from "../types";
 
 vi.mock("@/features/billing/server/workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
@@ -15,7 +16,35 @@ vi.mock("@/features/billing/server/workspace-billing", () => ({
   countOntologyObjects: vi.fn(),
 }));
 
+// ⚠ The AUDIENCE is driven through its OWN repository rather than stubbed: a
+// standard workspace answers `unrestricted`, which is this suite's subject
+// (the object cap and the CRUD contracts) with the ceiling in its
+// today's-behaviour arm. The home-container arms are
+// `service-audience.test.ts` and the block at the foot of this file.
+vi.mock("./repository-shares", () => ({
+  findWorkspaceKind: vi.fn(async () => "standard"),
+  countActiveWorkspaceMembers: vi.fn(async () => 1),
+  listChannelIdsForWorkspace: vi.fn(async () => []),
+  listSharesForChannels: vi.fn(async () => []),
+}));
+
+vi.mock("./repository-projections", () => ({
+  listClusterSlugs: vi.fn(async () => []),
+  listMembershipParents: vi.fn(async () => []),
+  listRelationshipsForSource: vi.fn(async () => []),
+}));
+
+vi.mock("@/shared/tenancy/personal-reach", () => ({
+  personalShelfContainerIds: vi.fn(async () => []),
+}));
+
 vi.mock("./repository", () => ({
+  listClusters: vi.fn(),
+  listMemberships: vi.fn(),
+  listObjectsByIds: vi.fn(),
+  listRelationshipsForSources: vi.fn(),
+  insertCluster: vi.fn(),
+  updateObject: vi.fn(),
   findClusterById: vi.fn(),
   insertObject: vi.fn(),
   countMembershipSiblings: vi.fn(),
@@ -40,7 +69,13 @@ const mockBilling = vi.mocked(billingRepo);
 const mockRepo = vi.mocked(repo);
 
 const WS = "ws-1";
-const CTX = { workspaceId: WS, userId: "user-1" };
+const CTX: OntologyContext = {
+  workspaceId: WS,
+  userId: "user-1",
+  role: "member",
+  source: "user",
+  credentialSubjectUserId: "user-1",
+};
 const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
 
 const CLUSTER_ROW: OntologyClusterRow = {
@@ -51,6 +86,8 @@ const CLUSTER_ROW: OntologyClusterRow = {
   purpose: "",
   layout: {},
   position: 0,
+  created_by: "user-1",
+  agents_may_edit: true,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   deleted_at: null,
@@ -65,6 +102,8 @@ const OBJECT_ROW: OntologyObjectRow = {
   methods: [],
   template: [],
   user_id: null,
+  last_edited_by: null,
+  last_edited_source: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   deleted_at: null,
@@ -168,7 +207,10 @@ describe("updateCluster — layout round-trip", () => {
 
     const cluster = await updateCluster(CTX, CLUSTER_ID, { layout });
 
-    expect(mockRepo.updateCluster).toHaveBeenCalledWith(WS, CLUSTER_ID, { layout });
+    expect(mockRepo.updateCluster).toHaveBeenCalledWith(WS, CLUSTER_ID, { layout }, {
+      userId: "user-1",
+      source: "user",
+    });
     expect(cluster.layout).toEqual(layout);
   });
 

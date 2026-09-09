@@ -39,7 +39,7 @@ import { composeDescription } from "./tool-style";
  * already made for its law: pull the write-op glosses into an MCP resource, so
  * they stop being pushed to every client that only ever reads the graph.
  */
-const ONTOLOGY_PROSE_BUDGET = 1_508;
+const ONTOLOGY_PROSE_BUDGET = 1_506; // ⚠ **1,508 → 1,506 (2026-09-09): BANKED, NOT RAISED.** The home-ontology wave added the FENCE sentence to `policy` (a lend carries a per-channel LEVEL; an agent gets its operator's) and paid for every character of it out of this same description — ten glosses trimmed to what only they say, plus "the result says so" after op="resolve"'s cap, which is a fact the RESULT already carries. The two chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
 
 /**
  * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
@@ -53,16 +53,22 @@ const ONTOLOGY_PROSE_BUDGET = 1_508;
  */
 const ONTOLOGY_DESCRIPTION = composeDescription({
   headline:
-    "The workspace object graph — objects in clusters of columns, with attributes, relationships and actions; it routes rather than inventories.",
+    "The object graph you reach — objects in clusters of columns, with attributes, relationships and actions; it routes rather than inventories.",
+  // ⚠ THE FENCE SENTENCE IS THE POLICY'S THIRD (2026-09-09, home-ontology S5),
+  // NOT A BODY BLOCK OF ITS OWN: a block costs its separator too, and this
+  // description is at its ratchet. It states the two facts an agent cannot
+  // derive — that a lend carries a LEVEL per channel, and that an agent never
+  // exceeds the person it acts for (I1) — and no number and no new op, because
+  // both would be a second copy of something the schema or the service owns.
   policy:
-    "Reads plus writes that edit ONE thing at a time. No delete op — a `remove_*` op strips a field, never the object.",
-  routing: ["Use dopl_map for the workspace-wide routing view."],
+    "Reads plus writes that edit ONE thing at a time. No delete op — `remove_*` strips a field, never the object. A shared ontology reaches you only at the level its channel grants your role, and an agent gets its operator's level.",
+  routing: ["Use dopl_map for the routing view."],
   body: [
     `READ — set \`op\` to:
 - "map" — clusters and their COLUMNS, with each column's direct members. TWO LEVELS ONLY: objects nested deeper, and objects in no column, never appear. Call first.
-- "anchor" — the CALLER's own object; start here for any "my/me" request, at most one.
-- "resolve" — objects whose NAME or SUBTITLE contains the query (case-insensitive substring), capped at 20 matches; the result says so.
-- "get" — one object: attributes, relationships, backlinks, nested objects, actions, a Version token.`,
+- "anchor" — the CALLER's own object; start here for any "my/me" request.
+- "resolve" — objects whose NAME or SUBTITLE contains the query (case-insensitive substring), capped at 20 matches.
+- "get" — one object: attributes, relationships, backlinks, children, actions, a Version token.`,
     // ⚠ GROUPED, NOT ONE LINE PER OP, AND THAT IS THE HARD CEILING TALKING.
     // `parity.test.ts` needs every enum op to appear as a quoted `"op_name"`,
     // not to own a line; eight of these lines were the op name said twice
@@ -71,13 +77,13 @@ const ONTOLOGY_DESCRIPTION = composeDescription({
     // ⚠ The two ops `tool-scope-claims.test.ts` reads as BULLETS — "map" and
     // "resolve" — keep their own lines and must keep them.
     `WRITE — set \`op\` to:
-- "create_cluster" / "update_cluster" — a cluster's name and \`purpose\`.
-- "create_column" — a container; its name says what its objects ARE.
-- "create_object" / "update_object" — born with the parent's template, relationships and actions.
-- "set_template_field" — a DEFAULT field; objects made inside inherit it, empty.
-- "set_attribute" / "set_relationship" / "set_action" — one attribute, one labeled edge (never onto the object itself), or one thing the OBJECT does day to day.
+- "create_cluster" / "update_cluster" — name and \`purpose\`.
+- "create_column" — a container named for what its objects ARE.
+- "create_object" / "update_object" — born with the parent's template, edges and actions.
+- "set_template_field" — a DEFAULT field; new objects inherit it empty.
+- "set_attribute" / "set_relationship" / "set_action" — one attribute, one labeled edge (never onto the object itself), or one thing the OBJECT does.
 - "remove_template_field" / "remove_attribute" / "remove_relationship" / "remove_action" — drop one, by label or name.
-- "claim_anchor" — link the CALLING user to an object as their anchor.`,
+- "claim_anchor" — link the CALLING user to an object.`,
   ],
   errors: ONTOLOGY_ERRORS,
   examples: [

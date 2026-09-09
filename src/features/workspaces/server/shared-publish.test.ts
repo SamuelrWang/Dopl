@@ -55,6 +55,14 @@ vi.mock("@/features/agent-templates/server/repository", () => ({
   replaceKnowledgeLinks: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
+  // ⚠ ADDED 2026-09-09 (review). `service-writes-fixtures.ts › resetRepoMocks`
+  // — which this file imports rather than hand-rolling rows — primes it, and a
+  // factory that does not EXPORT it makes that priming a missing-export throw
+  // rather than a wrong answer. It arrived with the folder/entry attachment
+  // wave (`repository-knowledge-links.ts › listLiveFoldersForBases`, 2026-09-08)
+  // and this mock was the one call site not updated with it.
+  listLiveFoldersForBases: vi.fn(),
+  listLiveEntryRows: vi.fn(),
 }));
 
 vi.mock("@/features/knowledge/server/repository", () => ({

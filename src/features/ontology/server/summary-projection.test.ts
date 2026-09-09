@@ -21,15 +21,26 @@ import type {
   OntologyObjectSummaryRow,
 } from "./dto";
 import { ONTOLOGY_READ_LIMITS } from "./dto";
+import type { OntologyContext } from "../types";
 
 vi.mock("./repository", () => ({
   listMemberships: vi.fn(),
-  listRelationships: vi.fn(),
+  listRelationshipsForSources: vi.fn(),
 }));
 
 vi.mock("./repository-projections", () => ({
   listClusterSummaries: vi.fn(),
-  listObjectSummaries: vi.fn(),
+  listObjectSummariesByIds: vi.fn(),
+}));
+
+// ⚠ The AUDIENCE is mocked at its own repository, not stubbed out: a standard
+// workspace answers `unrestricted`, which is this suite's subject (the
+// projection) with the ceiling in its today's-behaviour arm.
+vi.mock("./repository-shares", () => ({
+  findWorkspaceKind: vi.fn(async () => "standard"),
+  countActiveWorkspaceMembers: vi.fn(async () => 1),
+  listChannelIdsForWorkspace: vi.fn(async () => []),
+  listSharesForChannels: vi.fn(async () => []),
 }));
 
 import * as repo from "./repository";
@@ -39,16 +50,25 @@ import { getSummary } from "./service";
 const mockRepo = vi.mocked(repo);
 const mockNarrow = vi.mocked(narrow);
 
-const CTX = { workspaceId: "ws-1", userId: "user-1" };
+const CTX: OntologyContext = {
+  workspaceId: "ws-1",
+  userId: "user-1",
+  role: "member",
+  source: "user",
+  credentialSubjectUserId: "user-1",
+};
 const CLUSTER = "c-1";
 const COLUMN = "o-col";
 const CARD = "o-card";
 
 const CLUSTER_ROW: OntologyClusterSummaryRow = {
   id: CLUSTER,
+  workspace_id: "ws-1",
   slug: "playbook",
   name: "Dopl Playbook",
   purpose: "How this workspace is meant to be used.",
+  created_by: "user-1",
+  agents_may_edit: true,
 };
 
 const OBJECT_ROWS: OntologyObjectSummaryRow[] = [
@@ -81,7 +101,7 @@ function prime(over: {
   memberships?: OntologyMembershipRow[];
 } = {}) {
   mockNarrow.listClusterSummaries.mockResolvedValue(over.clusters ?? [CLUSTER_ROW]);
-  mockNarrow.listObjectSummaries.mockResolvedValue(over.objects ?? OBJECT_ROWS);
+  mockNarrow.listObjectSummariesByIds.mockResolvedValue(over.objects ?? OBJECT_ROWS);
   mockRepo.listMemberships.mockResolvedValue(over.memberships ?? MEMBERSHIPS);
 }
 
@@ -120,9 +140,9 @@ describe("getSummary — what does NOT cross the wire", () => {
 
   it("never reads the relationships table — three round trips, not four", async () => {
     await getSummary(CTX);
-    expect(mockRepo.listRelationships).not.toHaveBeenCalled();
+    expect(mockRepo.listRelationshipsForSources).not.toHaveBeenCalled();
     expect(mockNarrow.listClusterSummaries).toHaveBeenCalledTimes(1);
-    expect(mockNarrow.listObjectSummaries).toHaveBeenCalledTimes(1);
+    expect(mockNarrow.listObjectSummariesByIds).toHaveBeenCalledTimes(1);
     expect(mockRepo.listMemberships).toHaveBeenCalledTimes(1);
   });
 });
@@ -178,9 +198,12 @@ describe("getSummary — the row ceilings are reported, not silent", () => {
     prime({
       clusters: Array.from({ length: ONTOLOGY_READ_LIMITS.clusters }, (_, i) => ({
         id: `c-${i}`,
+        workspace_id: "ws-1",
         slug: `cluster-${i}`,
         name: `Cluster ${i}`,
         purpose: "",
+        created_by: "user-1",
+        agents_may_edit: true,
       })),
       memberships: [],
     });

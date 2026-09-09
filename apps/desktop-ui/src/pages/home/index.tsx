@@ -1,12 +1,10 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Link2, Search } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { isStandardWorkspace } from "@/features/workspaces/types";
 import { workspaceSegment } from "@/features/workspaces/url";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import type { HomeChannelsPayload } from "@/features/home/types";
@@ -19,13 +17,11 @@ import { bootQueryKey, fetchBoot } from "#/pages/boot/use-boot-state";
 import { AccountRail } from "#/components/app-shell";
 import { HomeHeader } from "./home-header";
 import { RelationshipList } from "./relationship-list";
-import { RelationshipRecord } from "./relationship-record";
-import { PendingLinkCard } from "./link-out-panel";
 import { NewChannelDialog } from "./new-channel-dialog";
 import { HomePageSkeleton } from "./home-skeleton";
-import { HomeKnowledgePanels } from "./knowledge-panels";
-import { HomeAgentPanels } from "./agent-panels";
-import { HomeOverviewPanels } from "./overview-panels";
+// ⚠ THE PANE LEFT THIS FILE ON 2026-09-09 (the fifth face, the 500-line cap) —
+// `home-panes.tsx` holds `paneToken` and every branch it selects.
+import { HomePane, paneToken } from "./home-panes";
 import { useActivityJump } from "./use-activity-jump";
 
 import {
@@ -36,14 +32,7 @@ import {
 } from "./home-rows";
 // ⚠ THE FACE VOCABULARY LIVES IN ITS OWN MODULE (2026-09-01) — see
 // `home-tabs.ts`, which carries the disjointness rule the prefixes rely on.
-import {
-  AGENTS_PANE,
-  EMPTY_PANE,
-  HOME_DEFAULT_TAB,
-  KNOWLEDGE_PANE,
-  OVERVIEW_PANE,
-  type HomeTab,
-} from "./home-tabs";
+import { HOME_DEFAULT_TAB, type HomeTab } from "./home-tabs";
 
 /**
  * /home — the ACCOUNT surface (Samuel, 2026-08-21). Personal, cross-org
@@ -57,11 +46,12 @@ import {
  * `isStandardWorkspace`. A container is a relationship's plumbing; it is not a
  * place anybody navigates to.
  *
- * ⚠ THE PAGE HAS FOUR FACES AND ALL FOUR ARE BUILT — the header's selector
+ * ⚠ THE PAGE HAS FIVE FACES AND ALL FIVE ARE BUILT — the header's selector
  * replaces the old "Home" title. Overview (2026-09-01), Channels, Knowledge
- * (2026-08-26, `docs/specs/home-knowledge-panels.plan.md` M3) and Agents
- * (2026-08-26, `docs/specs/home-agents-tab.plan.md` M2). It is LOCAL state, not
- * a route: nothing links to them.
+ * (2026-08-26, `docs/specs/home-knowledge-panels.plan.md` M3), Agents
+ * (2026-08-26, `docs/specs/home-agents-tab.plan.md` M2) and Ontology
+ * (2026-09-09, `docs/specs/home-ontology.md` S4). It is LOCAL state, not a
+ * route: nothing links to them.
  *
  * ⚠ "CHANNELS" WAS "CHAT" UNTIL 2026-09-01 (Samuel). LABEL AND LOCAL KEY ONLY —
  * `/home` has no per-face route, so there was no URL, no deep link and no
@@ -142,153 +132,6 @@ export default function HomePage() {
   const selected =
     visible.find((row) => row.id === selectedId) ?? visible[0] ?? null;
 
-
-  // 🔒 EVERY FACE THAT RENDERS A CHANNEL IS KEYED BY THE ROW, NOT BY THE TAB
-  // (2026-08-26). Channels always was; Knowledge and then Agents had to become so
-  // the moment they started rendering a CHANNEL's contents. Keyed by the bare
-  // tab name, switching channels leaves the token frozen at `"knowledge"` /
-  // `"agents"` — the crossfade never fires and the pane swaps one channel's
-  // bases (or templates) for another's UNDER a token that says nothing changed,
-  // which is the 150ms wrong-channel flash.
-  const paneToken =
-    tab === "knowledge"
-      ? `${KNOWLEDGE_PANE}${selected?.id ?? EMPTY_PANE}`
-      : tab === "agents"
-        ? `${AGENTS_PANE}${selected?.id ?? EMPTY_PANE}`
-        : tab === "overview"
-          // 🔒 THE OVERVIEW TOKEN CARRIES NO ROW (2026-09-01). Every other face
-          // renders a CHANNEL's contents and so must re-key on the selection;
-          // this one is cross-channel, so keying it by `selected` would remount
-          // and refetch the whole analytics face every time the operator
-          // clicked a different row in the list beside it — a crossfade with
-          // nothing to fade to.
-          ? OVERVIEW_PANE
-          : (selected?.id ?? EMPTY_PANE);
-
-  /** The row a pane token names, or `null`. ⚠ READ OUT OF THE TOKEN, never out
-   *  of `selected` — that is what makes the pane pure in `shown` and lets the
-   *  outgoing channel's panels finish their fade against their own data. */
-  const rowFor = (id: string) =>
-    visible.find((candidate) => candidate.id === id) ?? null;
-
-  /** What the pane shows for one token. ⚠ PURE IN `shown`, because the crossfade
-   *  renders the PREVIOUS token for a beat after the selection moves — reading
-   *  `selected` here instead would swap the content before the fade.
-   *
-   *  ⚠ FIXED BRANCH ORDER, PREFIXED FACES FIRST. The two prefixes are disjoint
-   *  and neither can be a row id (see their docblocks), so no token is claimed
-   *  twice; the order is fixed anyway so that adding a fourth face is a
-   *  one-line insertion above the bare-row fallback rather than a re-reading of
-   *  which branch wins. */
-  const renderPane = (shown: string) => {
-    if (shown === OVERVIEW_PANE) {
-      // ⚠ NO ROW IS READ OUT OF THIS TOKEN and there is none in it — the face is
-      // cross-channel (see `paneToken` above and
-      // `home/server/service-overview.ts`, which carries why the channel-scoped
-      // half was deleted).
-      // ⚠ `homeWorkspaceId` is the SAME boot query the other faces read — the
-      // credit bar is the PAYER's, and a home channel's MCP burn reroutes to
-      // that workspace (`billing/server/credits-service.ts ›
-      // resolveBillingTarget`). NULL until the caller is onboarded.
-      return (
-        <HomeOverviewPanels
-          homeWorkspaceId={identity.data.workspace?.id ?? null}
-          onOpenActivity={jump.open}
-        />
-      );
-    }
-    if (shown.startsWith(AGENTS_PANE)) {
-      const shownRow = rowFor(shown.slice(AGENTS_PANE.length));
-      return (
-        <HomeAgentPanels
-          // 🔒 KEYED BY THE TOKEN — one token, one instance, and it was NOT so
-          // until 2026-08-26 (F-338). `Crossfade` renders `{children(shownToken)}`
-          // with no key of its own and every `agents:<rowId>` token returns this
-          // element at the SAME position, so React reconciled ONE instance across
-          // a channel switch and the panel's held state (`scope`, `editing`,
-          // `copying`) survived while `channel.workspaceId` moved underneath it.
-          // That is not a stale render: the editor and the copy dialog take the
-          // target workspace as a PROP, so a create composed against the old row
-          // POSTed into the NEW container and SUCCEEDED — no 404, no rollback,
-          // the wrong relationship's container. ⚠ AND THE SWITCH NEED NOT BE A
-          // CLICK: `selected` falls back to `visible[0]` whenever the selected
-          // row leaves `visible` (a roster change, an archive, the peer-joins
-          // teardown), so the held row can move with nobody touching the list.
-          // ⚠ THE KEY IS THE TOKEN, NOT THE ROW: keying a face by the same value
-          // its parent swaps on is the whole statement — one token, one
-          // instance — and it stays true for a face keyed by more than a row id.
-          key={shown}
-          channel={shownRow?.kind === "channel" ? shownRow.channel : null}
-          // ⚠ SAME BOOT QUERY AS KNOWLEDGE'S SCOPE C — the home workspace is
-          // `POST /api/boot`'s no-segment answer, so the second template list
-          // costs no extra identity read. NULL until the caller is onboarded.
-          // ⚠ The SEGMENT rides it too and the home-workspace editor needs it
-          // (its teams read is keyed by the segment, not the id); boot's `role`
-          // does NOT go to this face — nothing on it is role-gated.
-          homeWorkspaceId={identity.data.workspace?.id ?? null}
-          homeWorkspaceSegment={identity.data.segment}
-          currentUserId={identity.data.userId}
-        />
-      );
-    }
-    if (shown.startsWith(KNOWLEDGE_PANE)) {
-      const shownRow = rowFor(shown.slice(KNOWLEDGE_PANE.length));
-      return (
-        <HomeKnowledgePanels
-          // 🔒 KEYED BY THE ROW, exactly as the chat branch below is, and it was
-          // NOT until 2026-08-26. `paneToken` fixes the CROSSFADE; it does not
-          // remount, so React reconciled channel B's panels onto channel A's
-          // component instance and the pane's own `useState` survived the
-          // switch. `openBase` is the sharp one: a base opened in channel A
-          // stayed open across the switch and was then mounted against channel
-          // B's `workspaceId`, i.e. a 404 error pane over a base that exists.
-          // `scope` survived too, which is merely wrong rather than broken.
-          // ⚠ `knowledge-tab.tsx` had already solved this on the CHANNEL side;
-          // this is the same fix on the /home side. A pane holding per-channel
-          // state owes itself a key — the token is about the animation.
-          key={shownRow?.id ?? EMPTY_PANE}
-          channel={shownRow?.kind === "channel" ? shownRow.channel : null}
-          // ⚠ ALREADY IN THIS PAGE'S BOOT QUERY — the home workspace is
-          // `POST /api/boot`'s no-segment answer, so scope C costs no second
-          // identity read. NULL until the caller is onboarded; the panel says
-          // so rather than fetching a workspace that does not exist.
-          homeWorkspaceId={identity.data.workspace?.id ?? null}
-          homeWorkspaceSegment={identity.data.segment}
-          homeRole={identity.data.role}
-          currentUserId={identity.data.userId}
-        />
-      );
-    }
-    const row = rowFor(shown);
-    if (row === null) {
-      // ⚠ Two reasons for an empty pane, and they are not the same sentence:
-      // nothing to show, or nothing MATCHING to show.
-      return rows.length > 0 ? (
-        <EmptyState icon={Search} title="No matches" />
-      ) : (
-        <EmptyState
-          icon={Link2}
-          title="No channels yet"
-          description="Create one and launch an agent into it."
-        />
-      );
-    }
-    if (row.kind === "link") return <PendingLinkCard key={row.id} link={row.link} />;
-    return (
-      <RelationshipRecord
-        key={row.id}
-        homeChannel={row.channel}
-        currentUserId={identity.data.userId}
-        // ⚠ KEYED BY THE ROW, so a thread picked in channel A can never be
-        // raised inside channel B — see `use-activity-jump.ts`.
-        initialThreadId={jump.threadFor(row.id)}
-        onDeleted={() => {
-          setSelectedId(null);
-          void channelsQuery.refetch();
-        }}
-      />
-    );
-  };
 
   return (
     // ⚠ `!bg-home-frame` (×3) STOOD HERE AND IS DELETED (Samuel, 2026-08-30).
@@ -424,8 +267,23 @@ export default function HomePage() {
                     conversation (Knowledge and Agents under their own
                     prefixes) — so every swap crossfades and a live message in
                     the open transcript does not. */}
-                <Crossfade token={paneToken} className="flex min-w-0 flex-1">
-                  {(shown) => renderPane(shown)}
+                <Crossfade
+                  token={paneToken(tab, selected?.id ?? null)}
+                  className="flex min-w-0 flex-1"
+                >
+                  {(shown) => (
+                    <HomePane
+                      shown={shown}
+                      rows={rows}
+                      visible={visible}
+                      identity={identity.data}
+                      jump={jump}
+                      onChannelDeleted={() => {
+                        setSelectedId(null);
+                        void channelsQuery.refetch();
+                      }}
+                    />
+                  )}
                 </Crossfade>
               </div>
             </div>

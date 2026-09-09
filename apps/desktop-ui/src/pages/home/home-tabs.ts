@@ -5,12 +5,17 @@
  * THE PAGE CROSSED THE 500-LINE CAP** (`eslint.config.mjs › max-lines`, an
  * error over `apps/*​/src/**`). One file per reason to change (INVARIANTS §1):
  * this changes when a FACE is added or renamed, the page when its layout or its
- * reads do. Nothing else moved — `paneToken` and `renderPane` stay in the page,
- * because they read that page's `selected` row.
+ * reads do.
+ *
+ * ⚠ `paneToken` AND `renderPane` LEFT THE PAGE ON 2026-09-09, one file further
+ * out — `home-panes.tsx`, which carries why. They stayed in `index.tsx` while
+ * there were four faces because they read that page's `selected` row; the FIFTH
+ * face is what made the page too long to hold them (the 500-line cap again),
+ * and the row is a parameter rather than a closure now.
  */
 
 /**
- * The account surface's four faces, all built.
+ * The account surface's FIVE faces, all built.
  *
  * ⚠ `"agents"` here is the TEMPLATE face — the channel info column has a
  * different tab of the same name listing live SESSIONS, and both names stay by
@@ -29,7 +34,12 @@
  * `paneToken` fallback and by four suites, and a key rename buys nothing a
  * label rename already bought. Label ≠ key here, deliberately.
  */
-export type HomeTab = "overview" | "channels" | "knowledge" | "agents";
+export type HomeTab =
+  | "overview"
+  | "channels"
+  | "knowledge"
+  | "agents"
+  | "ontology";
 
 /**
  * ⚠ OVERVIEW IS FIRST **AND** IS NOW THE DEFAULT (Samuel, 2026-09-01). The two
@@ -44,6 +54,11 @@ export const HOME_TABS = [
   { key: "channels", label: "Channel" },
   { key: "knowledge", label: "Knowledge" },
   { key: "agents", label: "Agents" },
+  // ⚠ FIFTH, AND TO THE RIGHT OF AGENTS (Samuel, 2026-09-09: the ontology page
+  // comes in "as a new tab, to the right of the Agents tab"). Position is the
+  // ruling; `HOME_DEFAULT_TAB` below did NOT move with it, because the leftmost
+  // tab and the landing tab are two decisions and this file states them apart.
+  { key: "ontology", label: "Ontology" },
 ] as const satisfies ReadonlyArray<{ key: HomeTab; label: string }>;
 
 /**
@@ -73,8 +88,8 @@ export const EMPTY_PANE = "empty";
  * §4A pins.** Row ids are `rel:`/`link:`-prefixed (`home-rows.ts`), so no
  * bare-row (Channels) token can wear either prefix and `slice` recovers the row
  * id exactly; and neither is a prefix OF the other, so the `startsWith` branches
- * in `index.tsx › renderPane` cannot claim each other's tokens. **A third prefix
- * must satisfy both halves.**
+ * in `home-panes.tsx › HomePane` cannot claim each other's tokens. **A third
+ * prefix must satisfy both halves.**
  */
 export const KNOWLEDGE_PANE = "knowledge:";
 export const AGENTS_PANE = "agents:";
@@ -91,3 +106,18 @@ export const AGENTS_PANE = "agents:";
  * and it is neither of the two prefixes above nor a prefix of them.
  */
 export const OVERVIEW_PANE = "overview:";
+
+/**
+ * Ontology's token — a WHOLE token, for the SAME reason Overview's is
+ * (2026-09-09).
+ *
+ * ⚠ **IT CARRIES NO ROW BECAUSE AN ONTOLOGY IS NOT THE CHANNEL'S.** Samuel's
+ * ruling makes an ontology a PERSONAL item of the home space, lent into channels
+ * by reference; the face therefore lists the same rows whichever channel the
+ * list beside it has selected, and keying it by the selection would remount the
+ * face — closing an open board — every time the operator clicked a row.
+ * ⚠ It cannot collide with anything: row ids are `rel:`/`link:`-prefixed, and
+ * `ontology:` is neither of the two prefixes above nor a prefix of them (nor of
+ * `overview:`, nor it of this).
+ */
+export const ONTOLOGY_PANE = "ontology:";

@@ -284,10 +284,16 @@ Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
 | `apps/desktop-ui/src/pages/home/add-person-dialog.tsx` | CONFIRMATION § | Done |
 | `apps/desktop-ui/src/pages/home/agent-share.tsx` | CONFIRMATION | Done |
 | `apps/desktop-ui/src/pages/home/new-channel-dialog.tsx` | INPUT FORM | Todo |
+| `apps/desktop-ui/src/pages/home/ontology-share.tsx › OntologyShareDialog` | INPUT FORM † | **Done** |
+| `apps/desktop-ui/src/pages/home/ontology-share.tsx › DeleteOntologyConfirm` | CONFIRMATION | Done |
 
-Paths are under `src/features/` unless they start with `apps/`. **14 INPUT FORM (4 done), 18
-CONFIRMATION, 5 MENU** — counted 2026-09-08 over the rows above (re-counted the same day, when the
-template editor and its Add-field dialog landed).
+Paths are under `src/features/` unless they start with `apps/`. **15 INPUT FORM (5 done), 19
+CONFIRMATION, 5 MENU** — re-counted 2026-09-09 over the rows above, when the home-ontology wave
+added the two `ontology-share.tsx` dialogs (the previous count was 14/18/5 on 2026-09-08). ⚠ The
+share dialog is one `FormSection` per home channel, each holding THREE `PillChoice` rows (Members /
+Guests / My agents) — the † case below, three times over — and its Save is `disabled` with a `hint`
+when the server says `canManage` is false, which is rule 4 rather than an exception to it. The
+delete confirm is a `ConfirmDialog` that NAMES the channels the ontology is lent into (spec Q4).
 
 † A modal that collects a CHOICE and no text is still an input form; what it is not is a
 `PillChoice`. That control is a SINGLE choice, and a roster the operator picks one of — or a list

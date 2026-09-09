@@ -1,7 +1,7 @@
 import "server-only";
 import { mergeStoredLayout, type GraphLayout } from "@/shared/graph";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { OntologyObject } from "../types";
+import type { OntologyObject, OntologyWriteSource } from "../types";
 import {
   ONTOLOGY_CLUSTER_COLS,
   ONTOLOGY_MEMBERSHIP_COLS,
@@ -17,6 +17,18 @@ import {
 /**
  * Raw Supabase I/O. Business logic + auth live in service.ts.
  * ⚠ Service-role client bypasses RLS; every method MUST filter workspace_id.
+ *
+ * ⚠ **THE ENUMERATING READS TAKE A workspace SET, NOT AN ID (2026-09-09, home
+ * ontology S2).** A shared ontology is a REFERENCE, never a copy: the row stays
+ * in the LENDER's container while the reader stands in the channel's, so a read
+ * keyed on one id refuses precisely the lend the share row exists to be. The set
+ * is `service-audience.ts › OntologyAudience.workspaceIds`, and it is a READ
+ * SCOPE — never an authorization. Every cluster a widened read returns is still
+ * filtered by `levelForCluster`, and the object reads below take IDS produced by
+ * the membership walk over ALREADY-ADMITTED clusters (Q8), so no object arrives
+ * that no admitted cluster reaches. Dropping either filter hands the caller the
+ * lender's whole shelf. Same shape, same reason, as
+ * `shared/tenancy/personal-container.ts › resolveShelfScope`.
  */
 
 /**
@@ -39,12 +51,15 @@ export function stripNullBytes<T>(value: T): T {
   return value;
 }
 
-export async function listClusters(workspaceId: string): Promise<OntologyClusterRow[]> {
+export async function listClusters(
+  workspaceIds: readonly string[]
+): Promise<OntologyClusterRow[]> {
+  if (workspaceIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_clusters")
     .select(ONTOLOGY_CLUSTER_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", workspaceIds)
     .is("deleted_at", null)
     .order("position")
     .order("created_at")
@@ -54,14 +69,15 @@ export async function listClusters(workspaceId: string): Promise<OntologyCluster
 }
 
 export async function findClusterById(
-  workspaceId: string,
+  workspaceIds: readonly string[],
   id: string
 ): Promise<OntologyClusterRow | null> {
+  if (workspaceIds.length === 0) return null;
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_clusters")
     .select(ONTOLOGY_CLUSTER_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", workspaceIds)
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -70,14 +86,15 @@ export async function findClusterById(
 }
 
 export async function findClusterBySlug(
-  workspaceId: string,
+  workspaceIds: readonly string[],
   slug: string
 ): Promise<OntologyClusterRow | null> {
+  if (workspaceIds.length === 0) return null;
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_clusters")
     .select(ONTOLOGY_CLUSTER_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", workspaceIds)
     .eq("slug", slug)
     .is("deleted_at", null)
     .maybeSingle();
@@ -92,6 +109,9 @@ export async function insertCluster(input: {
   purpose: string;
   position: number;
   createdBy: string;
+  /** Q6 attribution, on the cluster as well as the object — the columns
+   *  `20261001120000` adds to BOTH tables. */
+  source: OntologyWriteSource;
 }): Promise<OntologyClusterRow> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -104,6 +124,8 @@ export async function insertCluster(input: {
         purpose: input.purpose,
         position: input.position,
         created_by: input.createdBy,
+        last_edited_by: input.createdBy,
+        last_edited_source: input.source,
       })
     )
     .select(ONTOLOGY_CLUSTER_COLS)
@@ -137,12 +159,26 @@ async function mergeClusterLayout(
 export async function updateCluster(
   workspaceId: string,
   id: string,
-  patch: { name?: string; purpose?: string; layout?: GraphLayout }
+  patch: {
+    name?: string;
+    purpose?: string;
+    layout?: GraphLayout;
+    /** Samuel's solo toggle. ⚠ Only ever narrows; the service refuses it from
+     *  an agent (a containment control cannot be self-widened). */
+    agentsMayEdit?: boolean;
+  },
+  editor: { userId: string; source: OntologyWriteSource }
 ): Promise<OntologyClusterRow | null> {
   const db = supabaseAdmin();
-  const update: Record<string, unknown> = {};
+  // Q3/Q6 — stamped beside the fields, never in a second statement that an
+  // edit can reorder past the write it describes.
+  const update: Record<string, unknown> = {
+    last_edited_by: editor.userId,
+    last_edited_source: editor.source,
+  };
   if (patch.name !== undefined) update.name = stripNullBytes(patch.name);
   if (patch.purpose !== undefined) update.purpose = stripNullBytes(patch.purpose);
+  if (patch.agentsMayEdit !== undefined) update.agents_may_edit = patch.agentsMayEdit;
   // Non-empty patch SHALLOW-MERGES per node id (two tabs dragging different
   // cards must not clobber). Empty `{}` = reset signal: REPLACES, wiping every
   // stored position back to auto-layout.
@@ -190,12 +226,27 @@ export async function cascadeHardDeleteCluster(
   return (data as number | null) ?? null;
 }
 
-export async function listObjects(workspaceId: string): Promise<OntologyObjectRow[]> {
+/**
+ * The objects of the ADMITTED clusters, addressed by the ids the membership
+ * walk produced.
+ *
+ * ⚠ **BY ID, NOT BY CONTAINER (2026-09-09), AND THE DIFFERENCE IS R1.** The
+ * whole-workspace read this replaces loaded every object in the container and
+ * left the narrowing to whatever assembled the graph afterwards — which is a
+ * fence only for as long as nobody adds a second consumer of the rows. The walk
+ * is the boundary (Q8), so the walk is what the query takes.
+ */
+export async function listObjectsByIds(
+  workspaceIds: readonly string[],
+  ids: readonly string[]
+): Promise<OntologyObjectRow[]> {
+  if (workspaceIds.length === 0 || ids.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_objects")
     .select(ONTOLOGY_OBJECT_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", workspaceIds)
+    .in("id", ids)
     .is("deleted_at", null)
     .limit(ONTOLOGY_READ_LIMITS.objects);
   if (error) throw error;
@@ -203,14 +254,15 @@ export async function listObjects(workspaceId: string): Promise<OntologyObjectRo
 }
 
 export async function findObjectById(
-  workspaceId: string,
+  workspaceIds: readonly string[],
   id: string
 ): Promise<OntologyObjectRow | null> {
+  if (workspaceIds.length === 0) return null;
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_objects")
     .select(ONTOLOGY_OBJECT_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", workspaceIds)
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -218,10 +270,16 @@ export async function findObjectById(
   return data as OntologyObjectRow | null;
 }
 
+/** ⚠ THE ATTRIBUTION STAMP IS NOT OPTIONAL (Q3/Q6). An edit made through a
+ *  share SURVIVES the unshare, attributed to its author and to whether a person
+ *  or an agent made it — the same `('user','agent')` literal the knowledge and
+ *  skills tables carry. Every write path below stamps it; a write that forgets
+ *  leaves a row whose last author is a guess. */
 export async function insertObject(input: {
   workspaceId: string;
   name: string;
   createdBy: string;
+  source: OntologyWriteSource;
   attributes?: OntologyObject["attributes"];
   methods?: OntologyObject["methods"];
 }): Promise<OntologyObjectRow> {
@@ -233,6 +291,8 @@ export async function insertObject(input: {
         workspace_id: input.workspaceId,
         name: input.name,
         created_by: input.createdBy,
+        last_edited_by: input.createdBy,
+        last_edited_source: input.source,
         ...(input.attributes?.length ? { attributes: input.attributes } : {}),
         ...(input.methods?.length ? { methods: input.methods } : {}),
       })
@@ -253,10 +313,16 @@ export async function updateObject(
     methods?: OntologyObject["methods"];
     template?: OntologyObject["template"];
   },
+  editor: { userId: string; source: OntologyWriteSource },
   expectedUpdatedAt?: string
 ): Promise<OntologyObjectRow | null> {
   const db = supabaseAdmin();
-  const update: Record<string, unknown> = {};
+  // Q3/Q6 — stamped on every field patch, beside the fields themselves, so the
+  // attribution cannot be reordered past the write it describes.
+  const update: Record<string, unknown> = {
+    last_edited_by: editor.userId,
+    last_edited_source: editor.source,
+  };
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.subtitle !== undefined) update.subtitle = patch.subtitle;
   if (patch.attributes !== undefined) update.attributes = patch.attributes;
@@ -302,12 +368,15 @@ export async function hardDeleteObject(workspaceId: string, id: string): Promise
   if (error) throw error;
 }
 
-export async function listMemberships(workspaceId: string): Promise<OntologyMembershipRow[]> {
+export async function listMemberships(
+  workspaceIds: readonly string[]
+): Promise<OntologyMembershipRow[]> {
+  if (workspaceIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_memberships")
     .select(ONTOLOGY_MEMBERSHIP_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", workspaceIds)
     .order("position")
     .order("created_at")
     .limit(ONTOLOGY_READ_LIMITS.memberships);
@@ -356,14 +425,21 @@ export async function countMembershipSiblings(
   return count ?? 0;
 }
 
-export async function listRelationships(
-  workspaceId: string
+/** Outbound edges of the WALKED object set. ⚠ Sourced by id for the reason
+ *  {@link listObjectsByIds} is: an edge whose source is an object no admitted
+ *  cluster reaches is not this reader's edge. Targets outside the set are
+ *  dropped during assembly, as they always were. */
+export async function listRelationshipsForSources(
+  workspaceIds: readonly string[],
+  sourceObjectIds: readonly string[]
 ): Promise<OntologyRelationshipRow[]> {
+  if (workspaceIds.length === 0 || sourceObjectIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_relationships")
     .select(ONTOLOGY_RELATIONSHIP_COLS)
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", workspaceIds)
+    .in("source_object_id", sourceObjectIds)
     .order("position")
     .order("created_at")
     .limit(ONTOLOGY_READ_LIMITS.relationships);
@@ -373,15 +449,15 @@ export async function listRelationships(
 
 /** Ids from the input that resolve to live objects in this workspace. */
 export async function filterObjectIds(
-  workspaceId: string,
+  workspaceIds: readonly string[],
   ids: string[]
 ): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
+  if (ids.length === 0 || workspaceIds.length === 0) return new Set();
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_objects")
     .select("id")
-    .eq("workspace_id", workspaceId)
+    .in("workspace_id", workspaceIds)
     .in("id", ids)
     .is("deleted_at", null);
   if (error) throw error;
@@ -413,49 +489,4 @@ export async function replaceRelationshipsForSource(
   if (rows.length === 0) return;
   const { error: insertError } = await db.from("ontology_relationships").insert(rows);
   if (insertError) throw insertError;
-}
-
-/** Point caller's identity anchor at one object. Max one anchor per user per
- *  workspace → previous link cleared first. */
-export async function setAnchor(
-  workspaceId: string,
-  userId: string,
-  objectId: string
-): Promise<OntologyObjectRow | null> {
-  const db = supabaseAdmin();
-  const { error: clearError } = await db
-    .from("ontology_objects")
-    .update({ user_id: null })
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .neq("id", objectId);
-  if (clearError) throw clearError;
-
-  const { data, error } = await db
-    .from("ontology_objects")
-    .update({ user_id: userId })
-    .eq("workspace_id", workspaceId)
-    .eq("id", objectId)
-    .is("deleted_at", null)
-    .select(ONTOLOGY_OBJECT_COLS)
-    .maybeSingle();
-  if (error) throw error;
-  return data as OntologyObjectRow | null;
-}
-
-export async function findAnchorObject(
-  workspaceId: string,
-  userId: string
-): Promise<OntologyObjectRow | null> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("ontology_objects")
-    .select(ONTOLOGY_OBJECT_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data as OntologyObjectRow | null;
 }

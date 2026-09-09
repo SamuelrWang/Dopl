@@ -284,8 +284,17 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // collision until 2026-09-06, when SAMUEL RULED (b): the spend record SURVIVES
   // the channel. It is now the one NAMED exemption below — not a loosening of
   // the case, which still fails for any other child that forgets to cascade.
-  it("finds all thirteen child FKs", () => {
-    expect(refs.length).toBe(13);
+  // ⚠ FOURTEEN SINCE 2026-09-09: `ontology_channel_shares.channel_id`
+  // (`20261001120000_ontology_home_shares.sql`, the home-ontology wave —
+  // ⚠ **WRITTEN, NOT APPLIED**, INVARIANTS §12). It CASCADES for the
+  // `channel_resource_grants` reason, which is the same sentence: a share row
+  // says what THAT channel's people may reach, so it is meaningless without the
+  // channel and must not outlive it. ⚠ The share row is filed under the
+  // ONTOLOGY's container and not the channel's, which is what makes the
+  // cross-container lend work — and is exactly why this cascade has to be
+  // declared rather than inherited from a tenancy column.
+  it("finds all fourteen child FKs", () => {
+    expect(refs.length).toBe(14);
   });
 
   /**

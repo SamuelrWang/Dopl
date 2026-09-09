@@ -1,6 +1,6 @@
 import "server-only";
 import type { GraphLayout } from "@/shared/graph";
-import type { OntologyObject } from "../types";
+import type { OntologyObject, OntologyWriteSource } from "../types";
 
 /**
  * Row interfaces + row→domain mappers. Row shapes mirror the snake_case
@@ -8,11 +8,15 @@ import type { OntologyObject } from "../types";
  * happens in service.ts because it spans tables.
  */
 
+/** ⚠ `created_by` and `agents_may_edit` are AUDIENCE INPUTS, not display
+ *  fields — `service-audience.ts › levelForCluster` reads both off the row, so
+ *  every projection that a gate is applied to must carry them or the gate
+ *  silently answers about a cluster with no owner and no toggle. */
 export const ONTOLOGY_CLUSTER_COLS =
-  "id, workspace_id, slug, name, purpose, layout, position, created_at, updated_at, deleted_at";
+  "id, workspace_id, slug, name, purpose, layout, position, created_by, agents_may_edit, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_OBJECT_COLS =
-  "id, workspace_id, name, subtitle, attributes, methods, template, user_id, created_at, updated_at, deleted_at";
+  "id, workspace_id, name, subtitle, attributes, methods, template, user_id, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_MEMBERSHIP_COLS =
   "id, workspace_id, cluster_id, parent_object_id, child_object_id, position";
@@ -32,7 +36,8 @@ export const ONTOLOGY_RELATIONSHIP_COLS =
  * `position`/`created_at` absent on purpose: PostgREST orders on columns it
  * doesn't have to return.
  */
-export const ONTOLOGY_CLUSTER_SUMMARY_COLS = "id, slug, name, purpose";
+export const ONTOLOGY_CLUSTER_SUMMARY_COLS =
+  "id, workspace_id, slug, name, purpose, created_by, agents_may_edit";
 
 export const ONTOLOGY_OBJECT_SUMMARY_COLS = "id, name, subtitle";
 
@@ -61,6 +66,8 @@ export interface OntologyClusterRow {
   purpose: string;
   layout: GraphLayout | null;
   position: number;
+  created_by: string | null;
+  agents_may_edit: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -75,6 +82,10 @@ export interface OntologyObjectRow {
   methods: OntologyObject["methods"];
   template: OntologyObject["template"];
   user_id: string | null;
+  /** Q3/Q6 ATTRIBUTION — an edit survives an unshare, attributed to its author.
+   *  `null` on rows written before the columns existed. */
+  last_edited_by: string | null;
+  last_edited_source: OntologyWriteSource | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -100,9 +111,14 @@ export interface OntologyRelationshipRow {
 
 export interface OntologyClusterSummaryRow {
   id: string;
+  /** ⚠ AN AUDIENCE INPUT, like `created_by` — `service-shared.ts ›
+   *  canSeeOntology` asks which container the row lives in. */
+  workspace_id: string;
   slug: string;
   name: string;
   purpose: string;
+  created_by: string | null;
+  agents_may_edit: boolean;
 }
 
 export interface OntologyObjectSummaryRow {

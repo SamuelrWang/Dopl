@@ -128,6 +128,53 @@ const COVERED: Record<string, Covered> = {
         "can_current_user_read_agent_template",
     },
   },
+  // ── ontology (2026-09-09, `docs/specs/home-ontology.md` §3.3, slice S1) ────
+  // FIVE rows, and only the parent has a predicate. The three CHILD tables are
+  // workspace-keyed and carry no `cluster_id` (spec R3/R5) — a card's membership
+  // row names a PARENT OBJECT, and only a column's names the cluster — so their
+  // policies reach the cluster through `ontology_memberships`, via
+  // `dopl_ontology_object_clusters()`, and end at the PARENT's function. Hence
+  // `predicates: []` on all three, the `knowledge_folders` / `knowledge_entries`
+  // shape.
+  //
+  // ⚠ EACH KEEPS ITS `is_current_workspace_member(workspace_id,'viewer')` ARM
+  // and gains an OR — this wave only ever WIDENS the policy, because ontology has
+  // been workspace-scoped since `20260706120000` and narrowing here would blank
+  // every standard-workspace board for a feature those boards do not use. The
+  // NARROWING Samuel's matrix asks for is the service's (spec I6/§4).
+  //
+  // ⚠ THE FOUR `*_editor_*` WRITE POLICIES ARE NOT DECLARED AND MUST NOT BE:
+  // check 3 counts only `FOR SELECT` policies, and the two `FOR ALL` ones
+  // (`ontology_memberships_editor_write`, `ontology_relationships_editor_write`)
+  // are the topology `20260720211005`'s closing note deliberately left in place —
+  // their SELECT arm is `'editor'`, provably SUBSUMED by the `'viewer'` arm above.
+  ontology_clusters: {
+    predicates: ["canSeeOntology"],
+    select: { ontology_clusters_member_select: "dopl_ontology_readable" },
+  },
+  ontology_objects: {
+    predicates: [],
+    select: { ontology_objects_member_select: "dopl_ontology_readable" },
+  },
+  ontology_memberships: {
+    predicates: [],
+    select: { ontology_memberships_member_select: "dopl_ontology_readable" },
+  },
+  ontology_relationships: {
+    predicates: [],
+    select: { ontology_relationships_member_select: "dopl_ontology_readable" },
+  },
+  ontology_channel_shares: {
+    // The SHARE ROW is the OWNER's settings, so its own read is the owner's
+    // container — never the channel's. A channel's people need the ONTOLOGY, and
+    // they reach it through `dopl_ontology_readable`, which is SECURITY DEFINER
+    // and reads this table past this policy. `via` therefore names the membership
+    // helper, the `resource_grants` shape.
+    predicates: [],
+    select: {
+      ontology_channel_shares_member_select: "is_current_workspace_member",
+    },
+  },
   resource_grants: {
     // No TS twin, and not for a child table's reason: this is the GRANT table
     // every other policy resolves the teams axis through, and its own read rule

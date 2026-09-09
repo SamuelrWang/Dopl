@@ -4248,8 +4248,11 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 - ⚠ **Id note:** taken as the next free number after re-reading this file fresh (F-337 was the
   highest, and F-335/336/337 are a concurrent wave's). If that wave also claimed 338, renumber this
   one — the earlier claim wins.
-- Location: `apps/desktop-ui/src/pages/home/index.tsx › renderPane` against
-  `src/shared/ui/crossfade.tsx › Crossfade`.
+- Location: `apps/desktop-ui/src/pages/home/home-panes.tsx › HomePane` against
+  `src/shared/ui/crossfade.tsx › Crossfade`. ⚠ **REPOINTED 2026-09-09**: it read
+  that page's own `renderPane`, and that function left the page when the FIFTH face landed — the page
+  was at the 500-line cap, so `paneToken` and `renderPane` moved to `home-panes.tsx` and the closure
+  became parameters. Same code, same fix, same key; only the address moved.
 - **The mechanism.** `Crossfade` renders `{children(shownToken)}` **with no key** — deliberately, it
   is a fade wrapper and not a router. `renderPane` returned `<HomeAgentPanels …>` at the same
   position for every `agents:<rowId>` token, so React reconciled ONE INSTANCE across a channel
@@ -8126,3 +8129,118 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THIS IS NOT A REQUEST TO DELETE IT.** The capability is the surface's ONLY additive flag and the lane behind it is the only per-channel read of granted bases; deleting either forecloses a product answer Samuel has not been asked for (where a guest reads what was shared with them, now that the tab is gone). Recorded so the next reader does not mistake a ruled absence for an oversight — and so a future "unused export" sweep does not take the lane with the face.
 - ⚠ **BOTH DIRECTIONS ARE PINNED**, inverted on the same day: `channels-v2/knowledge-tab.test.tsx › the capability, per host` now asserts that NEITHER host passes the flag, reading each host's source with comments stripped.
 - Status: OPEN (ruled absence, not debt to pay down). Re-adding the face needs Samuel's word.
+
+### F-681 — the ontology PROMPT-FRAMING block has no producer: nothing writes `ctx.ontologies` (2026-09-09)
+
+- Locations: `dopl-desktop-app/main/prompt-framing-ontology.js › ontologyReachLines`, spliced at two
+  sites in `dopl-desktop-app/main/prompt-framing.js › buildFencedTurn`. The missing producer would sit
+  wherever the turn context is assembled (`main/session-seed.js` and the fenced-turn callers), and the
+  data would have to come off `GET /api/ontology` for the session's channel.
+- ⚠ **Id note:** re-derived across every live branch on 2026-09-09 with the command at the top of this
+  file; `F-680` was the highest, so this wave claims `F-681`–`F-684`.
+- **The mechanism.** `ontologyReachLines(ctx)` reads `ctx.ontologies` and returns `[]` when the list is
+  empty — a deliberate contract, so a lane with no ontology is byte-identical to what it was before the
+  module existed. **Nothing in `dopl-desktop-app/main/` ever sets that field** (`grep -rn 'ontologies'
+  dopl-desktop-app/main`), so the block emits nothing on every live turn. The module, its sanitizers and
+  its suite (`test/ontology-reach-framing.test.mjs`, 8 cases) are all real and all exercise a field only
+  the tests supply.
+- ⚠ **THIS IS NOT A FENCE HOLE AND MUST NOT BE READ AS ONE.** The fence is
+  `src/features/ontology/server/service-audience.ts › resolveOntologyAudience`, which runs on every read
+  and every write regardless of what any prompt says; spec §4 site 9 and INVARIANTS §4A both call the
+  framing a COMPENSATING CONTROL. What is lost is that an agent is not TOLD what it reaches and will
+  discover its level by being refused — which is the "sends an agent to grep the repo" failure the
+  refusal messages elsewhere in this wave are written to avoid.
+- **Why it was not wired here.** The producer needs a per-session server read the desktop does not make
+  today (which ontologies reach THIS channel, at what level), i.e. a new endpoint or a field on an
+  existing session payload. That is a slice, not a review fix, and building it inside a review would ship
+  an unreviewed lane.
+- Status: OPEN. The module is correct and tested; it needs a caller.
+
+### F-682 — a lent reader's snapshot shares the LENDER's whole membership budget (2026-09-09)
+
+- Locations: `src/features/ontology/server/repository.ts › listMemberships` called from
+  `src/features/ontology/server/service-reads.ts › getSnapshot` / `› getSummary`, against
+  `src/features/ontology/server/dto.ts › ONTOLOGY_READ_LIMITS`.
+- **The mechanism.** The read is now `.in("workspace_id", audience.workspaceIds)` under ONE
+  `limit(ONTOLOGY_READ_LIMITS.memberships)`, and the scope holds the LENDER's entire container. So a
+  lender with a large personal graph can push the ONE cluster they lent past the ceiling: the rows are
+  clipped by PostgREST in an order nothing here controls, the walk finds no roots for the shared cluster,
+  and the reader sees an ontology with no columns. **It fails in the SAFE direction and it fails
+  SILENTLY**, which is the property `repository-shares.ts › ONTOLOGY_SHARE_LIMIT`'s own comment argues
+  against ("a fence that narrows for reasons nobody can see is one nobody can debug").
+- ⚠ `getSummary` DOES report `truncated` when the membership read is at its ceiling, so `dopl_map` says
+  so; `getSnapshot` carries no such field and the board cannot.
+- **The shape of a fix** is to read memberships per ADMITTED CLUSTER rather than per container — the
+  walk already knows which clusters those are, so the roots could be fetched by `cluster_id` and the
+  descent by `parent_object_id`, each with its own budget. That is a repository change with its own
+  cost argument and it was out of scope for this review.
+- Status: OPEN. Not reachable at today's data sizes (the limits are in the thousands); files before it is.
+
+### F-683 — the ontology audience ceiling fails OPEN on an unknown `workspaces.kind` (2026-09-09)
+
+- Location: `src/features/ontology/server/service-audience.ts › computeAudience`, first arm.
+- **The mechanism.** `if (kind !== "link" && kind !== "personal") return { kind: "unrestricted", … }`.
+  The positive-form test is right (INVARIANTS §4A, F-295) but the DEFAULT is wrong-way-round for a value
+  nobody has designed yet: a third container kind — and a `null`, i.e. a workspace row that vanished
+  mid-request — both answer `unrestricted`, which is `edit` on every cluster in scope.
+- ⚠ **IT IS NOT EXPLOITABLE TODAY AND THE FILE SAYS WHY**: `withWorkspaceAuth` has already proved an
+  active membership of that container before this runs, so a missing row means the row went away and
+  every read underneath answers nothing anyway; and the kind set has been closed at three since
+  `20260823150000`. **The debt is that the safe reading is written as the fallback rather than as the
+  arm** — the inverse of the fail-closed choice the same function makes for the member count six lines
+  down, and of the `ELSE -1` in `dopl_ontology_level_rank`.
+- **The shape of a fix** is to name `standard` positively and give the else-arm `resolved`-reaching-
+  nothing, which requires deciding what a standard-workspace ontology page does when the kind read
+  fails — a product answer, not a refactor.
+- Status: OPEN.
+
+### F-684 — the ontology child SELECT policies do a recursive walk PER ROW, twice on edges (2026-09-09)
+
+- Locations: `supabase/migrations/20261001130000_ontology_readable.sql` — the
+  `ontology_objects_member_select`, `ontology_memberships_member_select` and
+  `ontology_relationships_member_select` policies, against `› dopl_ontology_object_clusters` and
+  `› dopl_ontology_share_level`.
+- **The mechanism.** Each child policy's second arm calls `dopl_ontology_object_clusters(<row column>)`,
+  a `WITH RECURSIVE` walk of `ontology_memberships`, and then `dopl_ontology_readable` per cluster it
+  returns — which is itself a share read joined through `channels` and `workspace_members`. The
+  relationships policy does it TWICE per row (both endpoints, AND-ed, which is correct for Q8 and is
+  what doubles the cost).
+- ⚠ **THE SERVICE PATH DOES NOT PAY IT**: every ontology read runs on the service-role client, which
+  bypasses RLS. **The two callers that DO are realtime** — Supabase evaluates SELECT policies per
+  subscriber per changed row, and `client/realtime.ts › useOntologyRealtime` subscribes per workspace —
+  **and any future read moved to `readClient()`**. The first `OR` arm (`is_current_workspace_member`)
+  short-circuits for everyone in the container, so the cost lands only on a lent reader.
+- **The shape of a fix** is the `dopl_grant_admits` treatment: precompute the caller's readable cluster
+  set once per statement rather than per row. That is a policy rewrite and policy topology is not a
+  review's to move.
+- Status: OPEN. Measure it on the first live `db reset` (CI's `rls-redteam` job) before paying for it.
+
+### F-685 — `guests_level` is stored, read and writable, and NO GUEST CAN REACH AN ONTOLOGY ROUTE (2026-09-09)
+
+- Locations: every route under `src/app/api/ontology/` (measured with
+  `grep -rn 'withWorkspaceAuth(' src/app/api/ontology`), against
+  `supabase/migrations/20261001120000_ontology_home_shares.sql`'s `guests_level` column,
+  `src/features/ontology/server/service-audience.ts › computeAudience` (`ctx.role === "guest"` picks
+  that column) and `supabase/migrations/20261001130000_ontology_readable.sql ›
+  dopl_ontology_share_level` (`CASE WHEN wm.role = 'guest' THEN s.guests_level`).
+- **The mechanism, and it is the INVERTED DEFAULT working exactly as designed.** `withWorkspaceAuth`
+  defaults `minRole` to `"viewer"` and `guest` is the FLOOR role beneath it (INVARIANTS §4A), so
+  `GET /api/ontology` (no `minRole`) and `GET /api/ontology/anchor` reject a guest, and every write is
+  `minRole: "member"`, which is two rungs above one. **A home channel's peer is admitted at the role
+  the LINK grants, and that DEFAULTS TO `guest`** (`home/server/service-claim-bound.ts`, step 4 —
+  "Default `guest`, ceiling `member`"). So the most common peer in the room is the one class of person
+  the share row can describe and no request can exercise: `guestsLevel: "edit"` is a stored word today.
+- ⚠ **IT FAILS CLOSED, WHICH IS WHY IT IS A FINDING AND NOT A P0.** A guest gets LESS than Samuel's
+  matrix promises, never more; nothing leaks. What is broken is the half of the ruling that says *"are
+  guests access/view or edit"* — the control renders in `pages/home/ontology-share.tsx`, the PUT
+  stores what the operator picked, and the answer never reaches anybody.
+- ⚠ **THE FIX IS A RULING, NOT AN EDIT, WHICH IS WHY THIS WAVE DID NOT MAKE IT.** Flooring the two
+  ontology READ routes to `minRole: "guest"` fails `src/app/api/channels/guest-route-floor.test.ts ›
+  GUEST_ALLOWED`, whose set is scoped to `api/channels/**` and goes red on any route outside it doing
+  so. That census is a SECURITY inventory of what the floor role may reach; extending it to a second
+  feature is Samuel's call. `docs/specs/home-ontology.md` §4 site 7 names the same trap and stops
+  there. ⚠ **The writes must NOT move with the reads** — `guests_level: "edit"` would then need
+  `minRole: "guest"` on `POST`/`PATCH` object routes, which hands the floor role a pen on four tables.
+  Read and write are separate rulings.
+- Status: OPEN. Needs Samuel: may a `guest` of a home channel read a shared ontology, and may they
+  write one?

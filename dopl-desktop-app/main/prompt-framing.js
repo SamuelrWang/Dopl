@@ -36,6 +36,9 @@ const { AGENT_ID_RE } = require('./agent-id');
 // ⚠ `sanitizeName` IS RE-EXPORTED BELOW, UNCHANGED. `session-seed.js` reaches it as
 // `framing.sanitizeName`, and a split must not move a caller's import.
 const { sanitizeName, idToken, stripFence } = require('./prompt-sanitize');
+// ⚠ ITS OWN MODULE because it interpolates caller data — `prompt-framing-text.js`
+// is FIXED TEXT only, which is what makes that file safe to lift wholesale.
+const { ontologyReachLines } = require('./prompt-framing-ontology');
 // The TEMPLATE ROLE block (2026-08-22). `[]` when the session carries no template, so every
 // blank launch and the whole responder lane stay byte-identical to what they were before it
 // existed — which `session-identity.test.mjs` asserts outright.
@@ -402,6 +405,10 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
       ...CONCISION,
       ``,
       ...PERSONAL_KNOWLEDGE_CONFIDENTIALITY,
+      // ⚠ BESIDE the confidentiality block: that one says what may LEAVE the
+      // operator's shelf, this says what this session may OPEN. It emits its own
+      // leading blank line, so a session reaching no ontology adds nothing.
+      ...ontologyReachLines(ctx),
       ``,
       ...deliverySection('requester', ctx),
       milestoneGuidance({ hasPostingTool: true }),
@@ -450,6 +457,9 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
     ...CONCISION,
     ``,
     ...PERSONAL_KNOWLEDGE_CONFIDENTIALITY,
+    // ⚠ BOTH SIDES: the fence is per CHANNEL, not per side, so a responder
+    // reaches what its operator's requester does (see the requester branch).
+    ...ontologyReachLines(ctx),
     ``,
     ...counterpartyFraming(ctx),
     ``,
@@ -480,4 +490,5 @@ module.exports = {
   VOCABULARY, // the kinds are not an interchangeable list (prompt-framing-text.js)
   CONCISION, // 2026-08-21: the standing style default (Samuel's ruling)
   PERSONAL_KNOWLEDGE_CONFIDENTIALITY, // 2026-09-06: read your operator's shelf, never leak it
+  ontologyReachLines, // 2026-09-09: which ontologies this session reaches, and at what level
 };

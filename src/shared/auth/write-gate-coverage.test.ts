@@ -163,6 +163,21 @@ describe("H-3 write-gate coverage", () => {
         "knowledge/entries/[entryId]/route.ts",
         "knowledge/folders/[folderId]/route.ts",
         "ontology/clusters/[clusterId]/route.ts",
+        // PUT lends an ontology into a home channel and DELETE takes it back
+        // (2026-09-09, home ontology S3). Taken straight off the
+        // `knowledge/.../channel-grants` row above, which is the same line
+        // crossed over a different resource: a share at `membersLevel:"view"`
+        // puts a whole object graph in front of every member of a channel,
+        // GUESTS INCLUDED at `guestsLevel`, and `edit` hands that person a pen
+        // on the owner's own graph. A `full`-profile session has Bash and its
+        // own `dopl_at_*` bearer, so without this it is one HTTP call from
+        // widening its own operator's audience. ⚠ Per-METHOD: the GET on that
+        // file stays ungated — reading which channels the caller's OWN ontology
+        // already reaches decides nothing. ⚠ AND THE ROUTE GATE IS NOT THE ONLY
+        // COPY: `ontology/server/service-shares.ts › assertHumanShareWrite`
+        // refuses an agent source inside the service too, so this row is the
+        // door and that one is the room.
+        "ontology/clusters/[clusterId]/shares/route.ts",
         "ontology/objects/[objectId]/route.ts",
         "skills/[skillSlug]/route.ts",
         // POST mints a CONTAINER-LOCKED child credential, DELETE revokes one

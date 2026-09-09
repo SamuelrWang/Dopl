@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { graphLayoutSchema } from "@/shared/graph/layout-schema";
 import { safeLabel } from "@/shared/lib/safe-label";
+import { ONTOLOGY_LEVELS } from "./types";
 
 /**
  * Cluster/object names are the ontology's short labels (`dopl_map` and
@@ -61,6 +62,17 @@ export const OntologyClusterUpdateSchema = z.object({
   name: OntologyClusterNameSchema.optional(),
   purpose: z.string().max(1000).optional(),
   layout: graphLayoutSchema.optional(),
+  /**
+   * 🔒 SAMUEL'S SOLO TOGGLE — "a setting where they can toggle it so that their
+   * agents can only view, and not edit". It only ever NARROWS, and it is ALSO
+   * the seed for `ownerAgentsLevel` at first share (Q2).
+   *
+   * ⚠ REFUSED FROM AN AGENT IN THE SERVICE, not by a route field gate. It is a
+   * CONTAINMENT control — a Bash-capable session could otherwise read its own
+   * bearer off disk and durably re-widen itself — and the service refusal covers
+   * the MCP path too, which a route-level `SESSION_ONLY_FIELDS` would not.
+   */
+  agentsMayEdit: z.boolean().optional(),
 });
 export type OntologyClusterUpdateInput = z.infer<typeof OntologyClusterUpdateSchema>;
 
@@ -84,3 +96,25 @@ export const OntologyObjectUpdateSchema = z.object({
   template: z.array(templateFieldSchema).max(100).optional(),
 });
 export type OntologyObjectUpdateInput = z.infer<typeof OntologyObjectUpdateSchema>;
+
+/**
+ * THE SHARE WRITE — one `(ontology, channel)` row, stated as a COMPLETE end
+ * state for all three audiences (I4), so a retry after an ambiguous failure is
+ * idempotent. The `channel-grants` PUT contract, with a LADDER instead of an
+ * audience word.
+ *
+ * ⚠ `ownerAgentsLevel` IS OPTIONAL AND THAT IS Q2, NOT A CONVENIENCE. Absent on
+ * the FIRST share seeds it from the ontology's `agents_may_edit` toggle; absent
+ * on a row that already exists KEEPS the stored value. A share write must never
+ * silently re-decide what the owner already said about their own agents.
+ *
+ * ⚠ UNSHARING IS `DELETE`, never three `none`s (I4): absence is the third state
+ * and it is what the FK cascade (Q4) is written against.
+ */
+export const OntologyShareWriteSchema = z.object({
+  channelId: z.string().uuid(),
+  membersLevel: z.enum(ONTOLOGY_LEVELS),
+  guestsLevel: z.enum(ONTOLOGY_LEVELS),
+  ownerAgentsLevel: z.enum(ONTOLOGY_LEVELS).optional(),
+});
+export type OntologyShareWriteInput = z.infer<typeof OntologyShareWriteSchema>;

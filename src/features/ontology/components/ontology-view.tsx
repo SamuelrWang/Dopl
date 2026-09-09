@@ -19,6 +19,29 @@ interface Props {
   workspaceSegment: string;
   /** Deep-linked cluster (`/[ws]/ontology/[clusterSlug]`); first cluster when omitted. */
   initialClusterSlug?: string;
+  /**
+   * SINGLE-ONTOLOGY MODE — pin the board to ONE cluster (2026-09-09, the /home
+   * Ontology face; `docs/specs/home-ontology.md` §5).
+   *
+   * ⚠ **THE VIEW STILL LOADS THE CONTAINER'S WHOLE GRAPH, and that is not a
+   * fence hole here**: the container is the caller's OWN personal one, so the
+   * snapshot holds nothing they could not open anyway, and the same cache entry
+   * backs the list they arrived from (`hooks/use-ontologies.ts`). This prop is a
+   * SELECTION, never a permission — the fence is the ontology service's (§4).
+   *
+   * ⚠ WHAT IT SUPPRESSES, and why each is the HOST's job rather than a style:
+   * the cluster STRIP (a picker for a board that shows one thing), the New
+   * cluster button beside it, the DELETE button (the /home card's own delete
+   * sits behind a confirm that NAMES the channels the ontology is shared into —
+   * Q4 — which this view cannot know), and the URL write (there is no URL on
+   * /home). Everything below the header — the board, the object panel, the
+   * editors — is untouched.
+   *
+   * ⚠ A PIN THAT NAMES NOTHING RESOLVES TO NOTHING, never to `clusters[0]`.
+   * Falling back would open a DIFFERENT ontology under the name the operator
+   * clicked.
+   */
+  pinnedClusterId?: string;
   /** Admin/owner — controls whether the upgrade prompt offers checkout. */
   canManageBilling?: boolean;
   /** Member+ — viewers read but can't create, so create affordances
@@ -47,6 +70,7 @@ export function OntologyView({
   workspaceId,
   workspaceSegment,
   initialClusterSlug,
+  pinnedClusterId,
   canManageBilling = false,
   canEdit = true,
   replaceUrl = replaceHistoryUrl,
@@ -79,11 +103,14 @@ export function OntologyView({
   );
   const [confirmDeleteCluster, setConfirmDeleteCluster] = useState(false);
 
-  const cluster =
-    graph.clusters.find((c) => c.id === clusterId) ??
-    graph.clusters.find((c) => c.slug === initialClusterSlug) ??
-    graph.clusters[0] ??
-    null;
+  // ⚠ THE PIN OUTRANKS ALL THREE FALLBACKS AND HAS NONE OF ITS OWN — see the
+  // prop's docblock.
+  const cluster = pinnedClusterId
+    ? (graph.clusters.find((c) => c.id === pinnedClusterId) ?? null)
+    : (graph.clusters.find((c) => c.id === clusterId) ??
+      graph.clusters.find((c) => c.slug === initialClusterSlug) ??
+      graph.clusters[0] ??
+      null);
   const selected = selectedId ? (graph.objects[selectedId] ?? null) : null;
   const clusterPending = cluster ? pendingIds.has(cluster.id) : false;
 
@@ -97,7 +124,9 @@ export function OntologyView({
   // BEFORE it has a slug (server mints it, arrives via `CREATE_RESOLVE`). Keyed
   // on slug alone — stable across renames, and an unselected cluster (deep
   // link, first-cluster fallback) leaves the URL untouched.
-  const activeSlug = cluster && cluster.id === clusterId ? cluster.slug : null;
+  // ⚠ NEVER IN PINNED MODE: the host has no URL for the slug to follow.
+  const activeSlug =
+    !pinnedClusterId && cluster && cluster.id === clusterId ? cluster.slug : null;
   useEffect(() => {
     if (activeSlug) replaceUrl(`/${workspaceSegment}/ontology/${activeSlug}`);
   }, [activeSlug, workspaceSegment, replaceUrl]);
@@ -167,6 +196,18 @@ export function OntologyView({
       </Frame>
     );
   }
+  if (pinnedClusterId && !cluster) {
+    // ⚠ ONE LINE, and it is not the empty state below: "there are none" and
+    // "the one you opened is gone" are different answers, and the create button
+    // under the second would make an unrelated ontology.
+    return (
+      <Frame>
+        <p className="m-auto text-lead text-text-secondary">
+          This ontology is no longer here.
+        </p>
+      </Frame>
+    );
+  }
   if (graph.clusters.length === 0) {
     return (
       <Frame>
@@ -198,7 +239,9 @@ export function OntologyView({
           {/* Trackless stadium pills — SegmentedControl language (.seg-pill
               resting, .raised-tab active); hand-composed for the trailing
               new-cluster button + pending states. */}
-          <div className="flex items-center gap-1.5">
+          {/* ⚠ THE STRIP IS THE CLUSTER PICKER, so pinned mode has none. */}
+          {!pinnedClusterId && (
+            <div className="flex items-center gap-1.5">
             {graph.clusters.map((c) => (
               <button
                 key={c.id}
@@ -228,7 +271,8 @@ export function OntologyView({
                 <Plus size={12} />
               </button>
             )}
-          </div>
+            </div>
+          )}
           {/* ⚠ Inert until cluster is real: an edit on a provisional row would
               debounce a PATCH at an id the server has never seen. */}
           <div {...pendingRow(clusterPending, "flex min-w-0 flex-1 items-baseline gap-2")}>
@@ -257,7 +301,7 @@ export function OntologyView({
               placeholder="What this ontology anchors (agents read this to route)…"
             />
           </div>
-          {canEdit && (
+          {canEdit && !pinnedClusterId && (
             <button
               type="button"
               aria-label={`Delete ${cluster.name || "cluster"}`}

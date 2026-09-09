@@ -388,8 +388,11 @@ jobs:
           } >> "$GITHUB_ENV"
 
       # ⚠ NAMED FILES, NOT A GLOB. `RLS_REDTEAM_LIVE=1` changes the behaviour of
-      # exactly these five suites; running the whole root suite under it would
+      # exactly these suites; running the whole root suite under it would
       # spend ten minutes to re-run 5,600 tests that do not read the flag.
+      # ⚠ **SIX SINCE 2026-09-09** — the ontology one joined with the home-share
+      # wave (slice S1). A named list means a new suite that is not added here
+      # has a live half that NEVER EXECUTES, which is F-523's whole lesson.
       - name: Run the redteam suites with the live half ARMED
         env:
           RLS_REDTEAM_LIVE: "1"
@@ -399,6 +402,7 @@ jobs:
           src/features/skills/server/rls-redteam.test.ts
           src/features/chats/server/rls-redteam.test.ts
           src/features/agent-templates/server/rls-redteam.test.ts
+          src/features/ontology/server/rls-redteam.test.ts
           src/shared/supabase/rls-redteam-resource-grants.test.ts
 
       - name: Stop Supabase

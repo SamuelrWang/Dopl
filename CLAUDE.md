@@ -154,7 +154,11 @@ second typecheck):
     set, and asserts each policy is `FOR SELECT` and reaches its predicate.
 11. 🔒 **the `rls-redteam` CI job** — the only gate that starts a database, and therefore the only
     one that can say POSTGRES agrees. `supabase start && supabase db reset`, then
-    `RLS_REDTEAM_LIVE=1 vitest run` over the five redteam files. Before it, every behavioural RLS
+    `RLS_REDTEAM_LIVE=1 vitest run` over the redteam files — **SIX since 2026-09-09**, when the
+    home-ontology wave added `src/features/ontology/server/rls-redteam.test.ts`. ⚠ **THE LIST IN
+    `ci.yml` IS NAMED FILES, NOT A GLOB**, so a suite that is not added there has a live half that
+    never executes — re-derive it rather than trusting this number
+    (`grep -n 'rls-redteam' .github/workflows/ci.yml`). Before the job, every behavioural RLS
     case in two waves was green having never executed a statement, because the flag was set
     nowhere. `db reset` makes it the migration REPLAY gate too. ⚠ It cannot run on a machine
     without Docker; the local skip-with-reason stays.

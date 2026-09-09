@@ -64,7 +64,7 @@ export async function seedWorkspace(
   refs: OntologySeedRefs
 ): Promise<SeedOntologyResult> {
   const seed = buildOntologySeed();
-  const existing = await repo.listClusters(ctx.workspaceId);
+  const existing = await repo.listClusters([ctx.workspaceId]);
   const slug = slugify(seed.clusterSlug, "cluster", existing.map((c) => c.slug));
 
   const idByKey: Record<string, string> = {};
@@ -138,6 +138,9 @@ export async function seedWorkspace(
       purpose: seed.purpose,
       position: existing.length,
       createdBy: ctx.userId,
+      // The signup seed is written on the new owner's behalf by a person's
+      // own signup, never by an agent.
+      source: "user",
     }),
     seedRepo.insertObjects(objects),
   ]);
