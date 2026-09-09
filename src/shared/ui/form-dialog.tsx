@@ -116,6 +116,7 @@ export function UnderlineField({
   id,
   caption,
   multiline = false,
+  minRows = 1,
 }: {
   label: string;
   value: string;
@@ -124,6 +125,10 @@ export function UnderlineField({
   id: string;
   caption?: string;
   multiline?: boolean;
+  /** Starting height in lines for a `multiline` field (Samuel, 2026-09-08: instructions
+   *  "shouldn't be a one line default"). Grows past it with the text; 1 = as tall as a
+   *  one-line field. */
+  minRows?: number;
 }) {
   const [focused, setFocused] = useState(false);
   const shared = {
@@ -139,7 +144,7 @@ export function UnderlineField({
     <FormSection label={label} htmlFor={id} caption={caption}>
       <span className={cn(styles.line, focused && styles.lineActive)}>
         {multiline ? (
-          <textarea {...shared} rows={2} className={cn(styles.input, styles.inputMultiline)} />
+          <textarea {...shared} rows={minRows} className={cn(styles.input, styles.inputMultiline)} />
         ) : (
           <input {...shared} type="text" className={styles.input} />
         )}

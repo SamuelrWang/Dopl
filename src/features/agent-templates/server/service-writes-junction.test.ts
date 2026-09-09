@@ -18,6 +18,14 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// 🔒 THE TEAM-SCOPE CONTAINER CHECK IS A DB READ (Samuel's ruling 2026-09-08,
+// `service-write-gates.ts › assertTeamScopeGrantable`) — unmocked it reaches
+// Supabase and hangs. Every case here is a STANDARD workspace, which is what
+// this suite has always meant by "ws-1".
+vi.mock("@/features/workspaces/server/repository", () => ({
+  findDefaultWorkspaceForUser: vi.fn().mockResolvedValue(null),
+  findWorkspaceById: vi.fn().mockResolvedValue({ id: "ws-1", kind: "standard" }),
+}));
 vi.mock("./repository", () => ({
   listTemplatesForWorkspace: vi.fn(),
   findTemplateById: vi.fn(),

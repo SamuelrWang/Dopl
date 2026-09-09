@@ -273,6 +273,7 @@ export function LaunchAgentDialog({
         <UnderlineField
           id="launch-agent-description"
           label="Description"
+          multiline
           value={panel.description}
           onChange={panel.setDescription}
           ariaLabel="Agent description"

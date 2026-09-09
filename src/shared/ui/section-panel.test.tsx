@@ -5,7 +5,7 @@
  * ⚠ THE SECOND DESCRIBE IS A SOURCE READ. The /home ground is a CSS-module
  * rule, and jsdom loads no stylesheet: a rendered assertion would report the
  * same nothing for a grounded panel and an ungrounded one. Same shape as
- * `features/agent-templates/components/template-editor.test.tsx › no concave
+ * `features/agent-templates/components/template-editor-surface.test.tsx › no concave
  * surfaces`, and it reaches across trees the same way — a `readFileSync` from
  * the repo root, no import and no second config.
  */

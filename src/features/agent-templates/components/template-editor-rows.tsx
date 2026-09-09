@@ -10,13 +10,8 @@ import {
   OpenScaleButton,
   OpenScaleIconButton,
 } from "@/shared/ui/open-scale-button";
-import {
-  DialogActions,
-  DialogField,
-  DIALOG_BTN_PRIMARY,
-  DIALOG_BTN_SECONDARY,
-  StandardDialog,
-} from "@/shared/ui/standard-dialog";
+import { DialogField } from "@/shared/ui/standard-dialog";
+import { FormDialog, UnderlineField } from "@/shared/ui/form-dialog";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import type { TemplateField } from "../client/types";
 
@@ -24,14 +19,20 @@ import type { TemplateField } from "../client/types";
  * The editor's FIELD FURNITURE — the key/value rows and the knowledge-base
  * picker.
  *
- * ⚠ THE INPUT FACE IS `RAISED_WELL`'s `RAISED_INPUT`, THE KIT'S RAISED BLOCK
- * FIELD, and never `FIELD_WELL` / `.concave-field`. Samuel's ruling for this
- * page (2026-08-22): nothing on it is pressed in. Every text control here —
- * including the tall Instructions block — wears the same raised face, which is
- * also the composer's idiom (a `.bento`-class face with a transparent textarea
- * inside it). `template-editor.test.tsx › no concave surfaces` reads these
- * sources and fails on the well's class name, so the rule survives a
- * well-meaning "match the other dialogs" edit.
+ * ⚠ THE INLINE ROWS' INPUT FACE IS `RAISED_WELL`'s `RAISED_INPUT`, THE KIT'S
+ * RAISED BLOCK FIELD, and never `FIELD_WELL` / `.concave-field`. Samuel's ruling
+ * for this page (2026-08-22): nothing on it is pressed in.
+ * `template-editor-surface.test.tsx › no concave surfaces` reads these sources and fails
+ * on the well's class name, so the rule survives a well-meaning "match the other
+ * dialogs" edit.
+ *
+ * ⚠ **THE POPUP FORM'S OWN FIELDS ARE THE UNDERLINE NOW (2026-09-08), AND THAT
+ * SUPERSEDES THE HALF OF THE RULING ABOUT THEM RATHER THAN REVERSING IT.** The
+ * editor's Name/Description/Instructions and this file's Add-field pair are
+ * `shared/ui/form-dialog.tsx › UnderlineField`; `RAISED_INPUT` stays the face of
+ * what is NOT a popup form field — the repeating key/value LIST below, which has
+ * no `FormSection` of its own and is not a box the kit has a recipe for. Neither
+ * face is pressed in, which is the ruling both halves keep.
  *
  * ⚠ **`RAISED_INPUT` AND `Field` WERE PROMOTED OUT OF THIS FILE (2026-08-27)**
  * and are re-exported from here so the feature's other consumers
@@ -52,10 +53,10 @@ import type { TemplateField } from "../client/types";
  * an edit to either. Glyphs are sized with `OPEN_SCALE_ICON` /
  * `OPEN_SCALE_ICON_ONLY` rather than restating 12 and 14.
  *
- * ⚠ THE FOOTER PAIRS ARE NOT IN THAT RULING. `DIALOG_BTN_PRIMARY` /
- * `DIALOG_BTN_SECONDARY` are the `StandardDialog` contract — the rounded pair
- * every dialog in the tree closes with — and a 26px pill in that row would make
- * THIS dialog the one whose Cancel is a different size from every other's.
+ * ⚠ THE FOOTER PAIR IS NOT IN THAT RULING. It is `FormDialog`'s — a text
+ * Discard beside the verb, both at `--action-h-sm` — and a 26px pill in that row
+ * would make THIS dialog the one whose footer is a different size from every
+ * other popup form's.
  */
 export { RAISED_INPUT };
 export { DialogField as Field };
@@ -63,7 +64,8 @@ export { DialogField as Field };
 /**
  * CUSTOM FIELDS — the pairs listed and edited INLINE, added through a dialog.
  *
- * ⚠ **ADDING IS A `StandardDialog` (Samuel, 2026-08-27), REVERSING THE
+ * ⚠ **ADDING IS A DIALOG (Samuel, 2026-08-27) — a `FormDialog` since
+ * 2026-09-08 — REVERSING THE
  * NO-MODAL-IN-MODAL RULING THIS FILE CARRIED.** The old note said a second
  * surface would put the operator two Escapes from their draft; what settled it
  * is that a field is about to be MORE than a key and a value (type, default,
@@ -143,35 +145,41 @@ export function CustomFieldRows({
       </OpenScaleButton>
       {/* ⚠ A DIALOG OVER A DIALOG, and `ModalShell` portals to `document.body`,
           so the card is NOT clipped by the editor's scrolling body. The
-          editor's own `ConfirmDialog` is the precedent. */}
-      <StandardDialog
+          editor's own `ConfirmDialog` is the precedent.
+          ⚠ **THE WHOLE DIALOG IS KEYED NOW, NOT ONLY ITS BODY (2026-09-08).**
+          The kit puts the verb on the SHELL, so the shell is what holds the
+          pair — and `session` still bumps only on the way IN, so the exit fade
+          plays with the typed values still on screen. */}
+      <AddFieldDialog
+        key={session}
         open={adding}
-        onClose={() => setAdding(false)}
-        title="Add field"
-        closeLabel="Close add field"
-      >
-        <AddFieldForm
-          key={session}
-          onClose={() => setAdding(false)}
-          onAdd={(field) => {
-            setAdding(false);
-            onChange([...fields, field]);
-          }}
-        />
-      </StandardDialog>
+        onDiscard={() => setAdding(false)}
+        onAdd={(field) => {
+          setAdding(false);
+          onChange([...fields, field]);
+        }}
+      />
     </div>
   );
 }
 
 /**
- * The dialog's BODY, mounted fresh per open (see `session` above) so the draft
- * pair is state that cannot outlive the surface that collected it.
+ * ADD A FIELD — its own popup form, mounted fresh per open (see `session`
+ * above) so the draft pair is state that cannot outlive the surface that
+ * collected it.
+ *
+ * ⚠ **IT IS A `FormDialog` LIKE EVERY OTHER DIALOG THAT COLLECTS INPUT**
+ * (2026-09-08; `docs/DESIGN-SYSTEM.md` › Popup forms). A `StandardDialog` with
+ * two `RAISED_INPUT` boxes and a Cancel/Add pair was the pre-kit face of the
+ * same two questions.
  */
-function AddFieldForm({
-  onClose,
+function AddFieldDialog({
+  open,
+  onDiscard,
   onAdd,
 }: {
-  onClose: () => void;
+  open: boolean;
+  onDiscard: () => void;
   onAdd: (field: TemplateField) => void;
 }) {
   const [key, setKey] = useState("");
@@ -182,45 +190,36 @@ function AddFieldForm({
   const canAdd = key.trim().length > 0;
 
   return (
-    <>
-      <DialogField label="Key" htmlFor="add-field-key">
-        <input
-          id="add-field-key"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          autoFocus
-          placeholder="e.g. escalation_channel"
-          className={cn(RAISED_INPUT, "h-9 px-3 font-mono text-small")}
-        />
-      </DialogField>
-
-      <DialogField label="Value" hint="(optional)" htmlFor="add-field-value">
-        <input
-          id="add-field-value"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="What this field says"
-          className={cn(RAISED_INPUT, "h-9 px-3")}
-        />
-      </DialogField>
-
-      <DialogActions>
-        <button type="button" className={DIALOG_BTN_SECONDARY} onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className={DIALOG_BTN_PRIMARY}
-          disabled={!canAdd}
-          onClick={() => onAdd({ key: key.trim(), value })}
-        >
-          {/* ⚠ "Add", not "Add field": the TITLE already says which thing, and
-              two buttons reading "Add field" on one screen is an ambiguous
-              accessible name for the operator and for every `getByRole`. */}
-          Add
-        </button>
-      </DialogActions>
-    </>
+    <FormDialog
+      open={open}
+      onDiscard={onDiscard}
+      title="Add field"
+      closeLabel="Close add field"
+      primary={{
+        // ⚠ "Add", not "Add field": the TITLE already says which thing, and
+        // two buttons reading "Add field" on one screen is an ambiguous
+        // accessible name for the operator and for every `getByRole`.
+        label: "Add",
+        onClick: () => onAdd({ key: key.trim(), value }),
+        disabled: !canAdd,
+      }}
+    >
+      <UnderlineField
+        id="add-field-key"
+        label="Key"
+        ariaLabel="Field key"
+        value={key}
+        onChange={setKey}
+      />
+      <UnderlineField
+        id="add-field-value"
+        label="Value"
+        caption="optional"
+        ariaLabel="Field value"
+        value={value}
+        onChange={setValue}
+      />
+    </FormDialog>
   );
 }
 

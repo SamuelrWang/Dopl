@@ -135,7 +135,14 @@
  * a corner grip would drag the field out from under its own underline. */
 .inputMultiline {
   height: auto;
-  min-height: calc(var(--action-h-sm) * 2);
+  /* ⚠ ONE LINE TALL UNTIL THE TEXT NEEDS MORE (Samuel, 2026-09-08: "I want it to
+   * wrap and just increase the height"): `field-sizing: content` grows the box with
+   * its value — no measuring script — and the cap keeps a pasted essay from
+   * pushing the footer off screen; past it the field scrolls. */
+  field-sizing: content;
+  min-height: 0;
+  max-height: 40vh;
+  overflow-y: auto;
   padding: 2px 2px 3px;
   line-height: 1.45;
   resize: none;

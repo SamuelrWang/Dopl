@@ -6,7 +6,7 @@
  * ⚠ CLASS STRINGS, NOT COMPUTED STYLE. jsdom loads no stylesheet, so
  * `getComputedStyle` would report the same nothing for a centered heading and a
  * left-aligned one. Same shape as
- * `features/agent-templates/components/template-editor.test.tsx › no concave
+ * `features/agent-templates/components/template-editor-surface.test.tsx › no concave
  * surfaces`: the recipe IS the assertion.
  */
 

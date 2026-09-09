@@ -55,9 +55,13 @@ vi.mock("./repository", () => ({
 }));
 
 import * as repo from "./repository";
+import { findWorkspaceById } from "@/features/workspaces/server/repository";
 import { resolveResource } from "@/shared/tenancy/resolve-resource";
-import { deleteTemplate, updateTemplate } from "./service";
-import { AgentTemplateNotFoundError } from "./errors";
+import { createTemplate, deleteTemplate, updateTemplate } from "./service";
+import {
+  AgentTemplateNotFoundError,
+  TemplateTeamNotGrantableError,
+} from "./errors";
 import {
   OTHER,
   OWNER,
@@ -68,6 +72,14 @@ import {
 
 const mockRepo = vi.mocked(repo);
 const mockResolve = vi.mocked(resolveResource);
+const mockWorkspace = vi.mocked(findWorkspaceById);
+
+/** What `findWorkspaceById` answers for "ws-1" in one case. */
+function containerKind(kind: string | null) {
+  mockWorkspace.mockResolvedValue(
+    (kind === null ? null : { id: "ws-1", kind }) as never
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -175,5 +187,86 @@ describe("🔓 update and delete name the id's own container", () => {
     await deleteTemplate(ctx(), "tpl-1");
     expect(mockResolve).not.toHaveBeenCalled();
     expect(mockRepo.hardDeleteTemplate).toHaveBeenCalledWith("ws-1", "tpl-1");
+  });
+});
+
+/**
+ * 🔒 **A TEAM SCOPE NEEDS A CONTAINER THAT HAS TEAMS — SAMUEL'S RULING,
+ * 2026-09-08** (`service-write-gates.ts › assertTeamScopeGrantable`, which
+ * carries the argument). Verbatim: *"we should remove the team option, if it's
+ * in the home space, because the team thing is for workspaces."*
+ *
+ * ⚠ **THE SUITE LIVES HERE BECAUSE IT IS A TENANCY QUESTION**: the subject is
+ * the CONTAINER the row lands in, never the room the call stands in.
+ * ⚠ **THE CLIENT'S PILL IS NOT THE FENCE** — `agent-templates/lib/visibility.ts
+ * › visibilityOptions` drops the option, and these cases are what makes that a
+ * courtesy rather than the whole rule (an agent credential reaches the REST
+ * route with no pill in sight).
+ */
+describe("🔒 team visibility outside a standard workspace", () => {
+  it.each(["personal", "link"] as const)(
+    "REFUSES a create landing at `team` in a %s container",
+    async (kind) => {
+      containerKind(kind);
+      await expect(
+        createTemplate(ctx(), { name: "Scout", visibility: "team" })
+      ).rejects.toBeInstanceOf(TemplateTeamNotGrantableError);
+      expect(mockRepo.insertTemplate).not.toHaveBeenCalled();
+    }
+  );
+
+  it("…including the EMPTY team set, which used to pass silently", async () => {
+    // ⚠ THE HOLE THIS CLOSES. `assertGrantableTeams` returns `[]` for an empty
+    // set without asking the repository anything, so a `team` row with no
+    // `teamIds` was written into a room with no teams — visible to nobody,
+    // filed under an audience that cannot exist. A NON-empty set already failed,
+    // but as "Not a team in this workspace: <uuid>", which names the id when the
+    // answer is about the room.
+    containerKind("link");
+    await expect(
+      createTemplate(ctx(), { name: "Scout", visibility: "team", teamIds: [] })
+    ).rejects.toBeInstanceOf(TemplateTeamNotGrantableError);
+  });
+
+  it("REFUSES the PATCH too — a create fence with no update twin is defeated in two calls", async () => {
+    containerKind("personal");
+    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "private" }));
+    await expect(
+      updateTemplate(ctx(), "tpl-1", { visibility: "team" })
+    ).rejects.toBeInstanceOf(TemplateTeamNotGrantableError);
+    expect(mockRepo.updateTemplateRow).not.toHaveBeenCalled();
+    expect(mockRepo.replaceTeamLinks).not.toHaveBeenCalled();
+  });
+
+  it("lets a STANDARD workspace through, on both doors", async () => {
+    // The gate must not be a blanket refusal — this is the case the product has.
+    containerKind("standard");
+    await expect(
+      createTemplate(ctx(), { name: "Scout", visibility: "team" })
+    ).resolves.toBeTruthy();
+    mockRepo.findTemplateById.mockResolvedValue(template({ visibility: "private" }));
+    await expect(
+      updateTemplate(ctx(), "tpl-1", { visibility: "team" })
+    ).resolves.toBeTruthy();
+  });
+
+  it("PASSES on a workspace row that is gone, and says nothing about it", async () => {
+    // ⚠ THE ONLY DIRECTION THIS MAY FAIL OPEN, and it is the reading
+    // `shared-publish.ts` states for its own missing row: `withWorkspaceAuth`
+    // proved an active membership before this ran, so `null` means the row
+    // vanished mid-request and the write underneath is about to fail on its own.
+    containerKind(null);
+    await expect(
+      createTemplate(ctx(), { name: "Scout", visibility: "team" })
+    ).resolves.toBeTruthy();
+  });
+
+  it("asks NOTHING on a lane that is not landing at `team`", async () => {
+    // ⚠ ONE READ, ON ONE LANE — a private create pays nothing. ⚠ `private` and
+    // not `workspace`: G16's own predicate reads the same row for the SHARED
+    // lane (`shared-publish.ts`), so a public create would prove nothing here.
+    containerKind("standard");
+    await createTemplate(ctx(), { name: "Scout", visibility: "private" });
+    expect(mockWorkspace).not.toHaveBeenCalled();
   });
 });

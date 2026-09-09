@@ -1,6 +1,13 @@
 import "server-only";
 import { personalShelfRefusal } from "@/shared/tenancy/personal-container";
 import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
+// ⚠ **IMPORTED, NEVER MIRRORED.** `isStandardWorkspace` is the ONE positive-form
+// kind predicate and `scripts/check-role-drift.ts › checkWorkspaceKind` counts
+// its copies; a fourth would fail that gate, which is exactly what the gate is
+// for. `findWorkspaceById` is the same read `workspaces/server/shared-publish.ts`
+// makes for G16 — this feature already reaches that module, on the same lane.
+import { findWorkspaceById } from "@/features/workspaces/server/repository";
+import { isStandardWorkspace } from "@/features/workspaces/types";
 import type { AgentTemplateContext, TemplateVisibility } from "../types";
 import { TemplateTeamNotGrantableError } from "./errors";
 
@@ -93,4 +100,52 @@ export async function resolveTemplateCreateDestination(
   const reach = await resolvePersonalReach(ctx);
   if (reach.kind === "closed") throw personalShelfRefusal(reach.refusal);
   return { homeScoped: true, workspaceId: reach.containerId };
+}
+
+/**
+ * 🔒 **A TEAM SCOPE NEEDS A CONTAINER THAT HAS TEAMS — SAMUEL'S RULING,
+ * 2026-09-08.** Verbatim: *"we should remove the team option, if it's in the
+ * home space, because the team thing is for workspaces."* That sentence is a UI
+ * instruction and **a sentence telling an operator they are barred earns a
+ * guardrail in the code** — so this is the fence and the pill is the courtesy.
+ *
+ * 🔒 **WHAT WAS OPEN, AND IT WAS OPEN IN TWO PLACES.**
+ * {@link resolveTemplateCreateDestination} above refuses `team` on a PERSONAL
+ * create, and that was the whole of the rule. It left:
+ *   1. **A CREATE DIRECTLY INTO A LINK CONTAINER.** `homeScoped` is absent
+ *      there, so the arm above never runs; `assertGrantableTeams` returns `[]`
+ *      for an EMPTY set without asking anything, so `visibility: 'team'` with no
+ *      `teamIds` was written to a room that has no teams — a row visible to
+ *      nobody, filed under an audience that cannot exist.
+ *   2. **EVERY UPDATE.** A fence with no update twin is a fence defeated in two
+ *      calls (F-289's argument, which this file's sibling already makes about
+ *      `assertTeamScopeIsHuman`): create it `private` on the personal shelf,
+ *      then PATCH it to `team`.
+ * A non-empty `teamIds` did fail in both cases — `filterTeamIdsInWorkspace`
+ * finds no team — but it failed as *"Not a team in this workspace: &lt;uuid&gt;"*,
+ * which names the id when the answer is about the ROOM.
+ *
+ * ⚠ **POSITIVE FORM, AND IT IS THE SHARED PREDICATE.** `isStandardWorkspace`
+ * reads absent `kind` as standard (the column defaults that way, and a narrowed
+ * projection must keep behaving as it does today) and refuses to spell itself
+ * `!== "link"` — a kind nobody has designed yet must not inherit the ability to
+ * hand out team grants.
+ *
+ * ⚠ **A MISSING WORKSPACE ROW PASSES**, for the reason
+ * `shared-publish.ts › assertSharedPublishAcknowledged` states about its own:
+ * `withWorkspaceAuth` proved an active membership before this ran, so `null`
+ * means the row vanished mid-request and the write underneath is about to fail
+ * on its own. This gate must not be the thing that reports that.
+ *
+ * ⚠ **ONE READ, AND ONLY ON THE TEAM LANE.** Callers ask only when the row is
+ * LANDING at `team`, so every private/public write pays nothing.
+ */
+export async function assertTeamScopeGrantable(workspaceId: string): Promise<void> {
+  const workspace = await findWorkspaceById(workspaceId);
+  if (workspace === null || isStandardWorkspace(workspace)) return;
+  throw new TemplateTeamNotGrantableError(
+    "This agent lives outside a workspace, and a team grant belongs to the " +
+      "workspace the team is in. Create it in the workspace and share it there, " +
+      "or keep it here and lend it with a grant."
+  );
 }

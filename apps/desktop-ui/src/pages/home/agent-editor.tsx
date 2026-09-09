@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { agentTemplateErrorMessage } from "@/features/agent-templates/client/api";
+import type { WorkspaceKind } from "@dopl/contracts";
 import type {
   AgentTemplate,
   TemplateShelf,
@@ -21,7 +22,6 @@ import {
   type TemplateSectionDef,
 } from "@/features/agent-templates/lib/visibility";
 import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
-import { useTeams } from "@/features/members/hooks/use-teams";
 
 /**
  * /home → Agents → THE AUTHORING HALF. The workspace page's editor, mounted
@@ -34,19 +34,25 @@ import { useTeams } from "@/features/members/hooks/use-teams";
  * written twice. What differs per surface is only what the mount HANDS it, which
  * is the whole reason this file exists.
  *
- * 🔑 TWO MOUNTS, NOT ONE COMPONENT WITH A FLAG, and the reason is a HOOK:
- * {@link HomeWorkspaceTemplateEditor} reads the workspace's teams and
- * {@link ContainerTemplateEditor} must not — "don't fetch teams for a container"
- * is a rule you cannot express with a conditional `useTeams(…)` call. Split into
- * two components it is not a rule at all, it is the shape of the file, and
- * `agent-authoring.test.tsx › offers TWO visibility scopes in a container, and
- * asks for no teams` pins it from the wire.
+ * 🔑 TWO MOUNTS, NOT ONE COMPONENT WITH A FLAG. ⚠ **THE REASON USED TO BE A
+ * HOOK — `HomeWorkspaceTemplateEditor` read the workspace's teams and
+ * `ContainerTemplateEditor` must not — AND THAT REASON IS GONE (2026-09-08,
+ * Samuel: *"we should remove the team option, if it's in the home space, because
+ * the team thing is for workspaces"*).** NEITHER mount asks for teams now, so
+ * what is left is four facts that differ per surface: the section array, the
+ * default visibility, the SHELF a create lands on, and whether the mount named
+ * the audience (G16). They are still two components because those four travel
+ * together — one component with four flags is the same file with the reader's
+ * job made harder — and `agent-authoring.test.tsx` pins the pair from the wire.
  *
- * ⚠ WHY A CONTAINER HAS NO TEAMS TO ASK FOR: a `kind='link'` container holds ONE
- * OR MORE members and no team rows (INVARIANTS §4A), so `team` is a DEAD
- * visibility there — hence `SECTIONS_CONTAINER` and an empty team list. The home
- * workspace is an ordinary workspace where all three scopes are live, so it gets
- * `SECTIONS` and a real teams read.
+ * 🔒 ⚠ **NEITHER OF THESE SURFACES HAS TEAMS, AND THE SECOND HALF WAS THE BUG.**
+ * A `kind='link'` container holds members and no team rows (INVARIANTS §4A), so
+ * `team` was always dead there. The PERSONAL mount looked different and was not:
+ * `shelf="home"` routes the row into the caller's `kind='personal'` container,
+ * where `server/service-write-gates.ts` has refused `team` since the container
+ * migration — so the third pill was a control whose only outcome was a 403. Both
+ * mounts now declare their `containerKind` and the editor drops the pill
+ * (`agent-templates/lib/visibility.ts › visibilityOptions`).
  * 🔒 ⚠ `SECTIONS_CONTAINER` IS **ONE** OPTION SINCE 2026-08-27, NOT TWO. The
  * /home pane lost its per-channel private section, and a container is not
  * navigable, so a `private` CONTAINER template would be reachable from nowhere —
@@ -54,10 +60,15 @@ import { useTeams } from "@/features/members/hooks/use-teams";
  * closes that door; this mount also passes `defaultVisibility="workspace"`,
  * because `emptyDraft()` starts at `private` and a draft opening on a value the
  * control cannot show is a form with no visible selection.
- * ⚠ A home-workspace template saved as Team or Public LANDS OUTSIDE THE PERSONAL
- * SECTION, which lists `private` + mine on the personal shelf. That is correct, not a
- * bug: the row is in the operator's own workspace and its home is that
- * workspace's Agents page (`/:workspaceSegment/agents`).
+ * ⚠ **A PERSONAL-SHELF TEMPLATE SAVED AS PUBLIC LANDS OUTSIDE THE PERSONAL
+ * SECTION**, which lists `private` + mine. ⚠ **THIS BULLET ALSO SAID "Team" AND
+ * NO LONGER CAN** (2026-09-08) — that value is not offered here and the server
+ * refuses it on this shelf. **The `workspace` half is a REAL open question and
+ * is deliberately left alone rather than quietly closed**: inside a
+ * `kind='personal'` container that value reaches an audience of one (the
+ * operator), and no surface lists such a row — the same write-only shape that
+ * trimmed `SECTIONS_CONTAINER` on 2026-08-27. Samuel ruled on the TEAM option;
+ * dropping a second pill he did not name is his call, not this file's.
  *
  * ⚠ MOUNTED ONLY WHILE OPEN, so `session` is the constant `1`. That prop exists
  * because the workspace page keeps ONE editor mounted and bumps it to reload the
@@ -79,8 +90,8 @@ export interface HomeTemplateEditorProps {
 /**
  * Writing into THIS CHANNEL's link container — the SHARED section.
  *
- * ⚠ NO `useTeams` CALL IN THIS COMPONENT, and that is the assertion. See the
- * module docblock.
+ * ⚠ NO `useTeams` CALL IN THIS COMPONENT — and since 2026-09-08 none in its
+ * sibling either. See the module docblock.
  *
  * ⚠ NO `shelf` EITHER. A shelf is a TENANCY and this container is not the
  * caller's personal one, so `?shelf=` here would be a question with one possible
@@ -98,6 +109,7 @@ export function ContainerTemplateEditor({
       template={template}
       teams={NO_TEAMS}
       sections={SECTIONS_CONTAINER}
+      containerKind="link"
       defaultVisibility="workspace"
       // 🔒 G16 — THIS MOUNT NAMES THE AUDIENCE, SO IT MAY ACKNOWLEDGE IT (A11).
       // `SECTIONS_CONTAINER`'s single option is labelled "Shared in this
@@ -115,26 +127,33 @@ export function ContainerTemplateEditor({
 }
 
 /**
- * Writing into the caller's OWN workspace — scope C.
+ * Writing onto the caller's OWN PERSONAL SHELF — scope C.
  *
- * ⚠ THE TEAMS READ IS WHAT MAKES THE THIRD OPTION HONEST. `Team` is offered
- * here, and `isDraftSavable` refuses a team template that names no team — so a
- * mount that offered the scope without the list would hand the operator a
- * control that can only disable Save.
+ * 🔒 ⚠ **NO TEAMS READ, AND NO TEAM SCOPE (2026-09-08, Samuel's ruling — quoted
+ * in the module docblock).** The old note here said *"the teams read is what
+ * makes the third option honest"*; the third option is gone, so the read that
+ * fed it is dead weight and a control that could only 403 is not honest at any
+ * price. ⚠ **THE SHELF IS WHY, NOT THE WORKSPACE'S OWN KIND**: `shelf="home"`
+ * sends `homeScoped: true`, which routes the row into the caller's
+ * `kind='personal'` container — so `containerKind` names where the row LANDS,
+ * which is the only container whose rules apply to it.
+ * ⚠ `workspaceSegment` STAYS ON THE PROPS. It is the pane's own contract with
+ * `HomeAgentPanels` (boot's `segment`, threaded down beside the id), and taking
+ * it off would be a second change to a second file for a value the caller
+ * already holds.
  */
 export function HomeWorkspaceTemplateEditor({
   workspaceId,
-  workspaceSegment,
   template,
   onClose,
 }: HomeTemplateEditorProps & { workspaceId: string; workspaceSegment: string }) {
-  const { teams } = useTeams(workspaceSegment);
   return (
     <TemplateEditorMount
       workspaceId={workspaceId}
       template={template}
-      teams={teams ?? NO_TEAMS}
+      teams={NO_TEAMS}
       sections={SECTIONS}
+      containerKind="personal"
       // 🔒 THE SHELF THE PERSONAL SECTION READS. It does two things and both
       // are silent when wrong: it sends `homeScoped: true`, which ROUTES the row
       // into the caller's personal container (the shelf this pane lists), and it
@@ -170,6 +189,7 @@ function TemplateEditorMount({
   template,
   teams,
   sections,
+  containerKind,
   defaultVisibility,
   shelf,
   namesSharedAudience,
@@ -178,6 +198,9 @@ function TemplateEditorMount({
   workspaceId: string;
   teams: ReadonlyArray<PickerOption>;
   sections: ReadonlyArray<TemplateSectionDef>;
+  /** 🔒 WHERE THE ROW LANDS, so the editor can drop a scope that container
+   *  cannot hold — never the room the call happens to stand in. */
+  containerKind: WorkspaceKind;
   defaultVisibility?: TemplateVisibility;
   /** 🔒 G16 — this surface's own visibility control states who will see a
    *  shared row, so a save at that visibility may send `acknowledgeShared`.
@@ -266,6 +289,7 @@ function TemplateEditorMount({
       teams={teams}
       knowledgeBases={knowledgeBases}
       sections={sections}
+      containerKind={containerKind}
       saving={writes.create.pending || writes.update.pending}
       deleting={writes.remove.pending}
       error={error}

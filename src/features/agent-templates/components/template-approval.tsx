@@ -39,7 +39,7 @@ import { RAISED_INPUT } from "./template-editor-rows";
  * pair with the body in a bounded, scrolling raised well.
  *
  * ⚠ NO CONCAVE SURFACE — the ruling for this whole feature; swept by
- * `./template-editor.test.tsx › no concave surfaces`.
+ * `./template-editor-surface.test.tsx › no concave surfaces`.
  */
 
 export interface TemplateApprovalRequest {

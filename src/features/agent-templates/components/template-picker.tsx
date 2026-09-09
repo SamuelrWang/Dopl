@@ -58,7 +58,7 @@ import {
  * height and scrolls; a search input appears past {@link SEARCH_THRESHOLD}.
  *
  * ⚠ NO CONCAVE SURFACE (Samuel, 2026-08-22) — swept by
- * `./template-editor.test.tsx › no concave surfaces`, which reads every source
+ * `./template-editor-surface.test.tsx › no concave surfaces`, which reads every source
  * under `features/agent-templates/{components,lib,hooks,client}`.
  */
 

@@ -1,3 +1,4 @@
+import type { WorkspaceKind } from "@dopl/contracts";
 import type { AgentTemplate, TemplateVisibility } from "../client/types";
 
 /**
@@ -129,4 +130,91 @@ export function groupByVisibility(
     if (bucket) bucket.push(template);
   }
   return grouped;
+}
+
+/**
+ * 🔒 **NO TEAM SCOPE OUTSIDE A STANDARD WORKSPACE — SAMUEL'S RULING,
+ * 2026-09-08.** Verbatim, because this function exists for it: *"we should
+ * remove the team option, if it's in the home space, because the team thing is
+ * for workspaces."*
+ *
+ * ⚠ **IT WAS ALREADY BROKEN ON THE WIRE, WHICH IS WHY IT IS A RULE AND NOT A
+ * PREFERENCE.** The /home Agents pane's Personal mount writes with `shelf:
+ * "home"`, which routes the row into the caller's PERSONAL container — and
+ * `server/service-write-gates.ts › resolveTemplateCreateDestination` has
+ * refused `team` on that path since the container migration. So the option was
+ * a control whose only outcome was a 403 the operator could not act on. A link
+ * CONTAINER is the same story from the other side: it holds members and no team
+ * rows (INVARIANTS §4A), so the value has no referent there either.
+ *
+ * ⚠ **POSITIVE FORM — `=== "standard"`, never `!== "link"`.** The negative
+ * spelling admits every kind nobody has designed yet, and a team GRANT is the
+ * wrong thing to hand a future container kind by default (`workspaces/types.ts ›
+ * isStandardWorkspace` states the same rule for the listing predicate; this is a
+ * mirror rather than an import, §1).
+ *
+ * ⚠ **THE CLIENT IS THE SECOND FENCE, NEVER THE ONLY ONE.** The server's is
+ * `server/service-write-gates.ts › assertTeamScopeGrantable`, on the create AND
+ * the update path.
+ */
+export function offersTeamScope(kind: WorkspaceKind): boolean {
+  return kind === "standard";
+}
+
+/** ⚠ A WORD OR TWO, on the STRANDED pill only (INVARIANTS §5, minimal copy). */
+export const TEAM_SCOPE_DEAD_HINT = "workspace only";
+
+/**
+ * A row that is ALREADY `team` inside a container that has no teams.
+ *
+ * 🔒 ⚠ **IT IS NOT REWRITTEN, AND THAT IS THE WHOLE OF THE STATE.** Silently
+ * moving a stored audience to `private` on open would be this editor deciding a
+ * sharing fact nobody asked it to decide (INVARIANTS §11) — and doing it on a
+ * form the operator might close without saving, so the surface and the row would
+ * disagree. It is SHOWN, hinted, and Save is refused until the operator picks a
+ * value the container can hold.
+ */
+export function teamScopeStranded(
+  kind: WorkspaceKind,
+  selected: TemplateVisibility
+): boolean {
+  return selected === "team" && !offersTeamScope(kind);
+}
+
+/** One pill on the editor's Visibility row. */
+export interface VisibilityOption {
+  visibility: TemplateVisibility;
+  /** ⚠ FROM {@link SECTIONS} / {@link SECTIONS_CONTAINER}, never hand-typed. */
+  label: string;
+  hint?: string;
+}
+
+/**
+ * THE VISIBILITY PILLS a mount offers, IN THE SECTION ARRAY'S ORDER.
+ *
+ * ⚠ **THE ARRAY IS STILL THE CONTROL** (the container mount's one option is
+ * `SECTIONS_CONTAINER`, and this function does not second-guess it); what this
+ * adds is the KIND axis, which no array can carry because one array serves a
+ * standard workspace and a personal shelf alike.
+ */
+export function visibilityOptions(
+  sections: ReadonlyArray<TemplateSectionDef>,
+  kind: WorkspaceKind,
+  selected: TemplateVisibility
+): ReadonlyArray<VisibilityOption> {
+  return sections.flatMap((section) => {
+    if (section.visibility !== "team" || offersTeamScope(kind)) {
+      return [{ visibility: section.visibility, label: section.label }];
+    }
+    // The stranded row keeps its pill — see `teamScopeStranded`.
+    return selected === "team"
+      ? [
+          {
+            visibility: section.visibility,
+            label: section.label,
+            hint: TEAM_SCOPE_DEAD_HINT,
+          },
+        ]
+      : [];
+  });
 }

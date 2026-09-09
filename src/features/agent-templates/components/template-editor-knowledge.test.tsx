@@ -4,7 +4,9 @@
  * CANNOT REACH (ruled 2026-09-06 under Samuel's delegation).
  *
  * ⚠ **ITS OWN FILE, AND THE REASON IS THE ONE §1 STATES.**
- * `template-editor.test.tsx` sits at 491 lines against the hard 500
+ * `template-editor.test.tsx` sits close to the hard 500 (`wc -l` is the check;
+ * its SOURCE-READ half moved to `template-editor-surface.test.tsx` on 2026-09-08
+ * for the same reason)
  * (`eslint.config.mjs › max-lines`, `error`, no exemption for this path), so it
  * cannot absorb two cases and their docblocks — and a file that big absorbs a
  * COMMENT badly too. The seam is the same one the server already cut on:

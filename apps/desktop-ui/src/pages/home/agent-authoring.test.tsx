@@ -88,7 +88,7 @@ describe("each section's create writes where its section reads", () => {
     await screen.findByText("Fundraise analyst");
 
     await startNewAgent("Intake triage", SHARED_BUTTON);
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(createCall()).toBeDefined());
     expect(createCall()!.opts.workspaceId).toBe(LINK_WORKSPACE_ID);
@@ -112,7 +112,7 @@ describe("each section's create writes where its section reads", () => {
     await screen.findByText("Fundraise analyst");
 
     await startNewAgent("Deck reviewer");
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(createCall()).toBeDefined());
     expect(createCall()!.opts.workspaceId).toBe(WORKSPACE_ID);
@@ -139,7 +139,7 @@ describe("each section's create writes where its section reads", () => {
     await screen.findByText("Renewal chaser");
 
     await startNewAgent("Intake triage", SHARED_BUTTON);
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(createCall()).toBeDefined());
     expect(createCall()!.opts.body).toMatchObject({
@@ -157,7 +157,7 @@ describe("each section's create writes where its section reads", () => {
     await screen.findByText("Fundraise analyst");
 
     await startNewAgent("Deck reviewer");
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(createCall()).toBeDefined());
     expect(createCall()!.opts.body).not.toHaveProperty("acknowledgeShared");
@@ -171,7 +171,7 @@ describe("each section's create writes where its section reads", () => {
     await screen.findByText("Renewal chaser");
 
     await startNewAgent("Intake triage", SHARED_BUTTON);
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(createCall()).toBeDefined());
     expect(createCall()!.opts.body).not.toHaveProperty("homeScoped");
@@ -234,21 +234,30 @@ describe("what the editor is allowed to ask for", () => {
     ).toHaveLength(0);
   });
 
-  it("offers all THREE in the caller's own workspace, where a team can exist", async () => {
+  it("🔒 offers NO Team scope on the PERSONAL shelf, and asks for no teams either", async () => {
+    // 🔒 SAMUEL'S RULING, 2026-09-08: *"we should remove the team option, if
+    // it's in the home space, because the team thing is for workspaces."*
+    // ⚠ **THIS CASE ASSERTED THE OPPOSITE ("offers all THREE in the caller's own
+    // workspace, where a team can exist") AND IT WAS WRONG ON THE WIRE THE WHOLE
+    // TIME.** This button writes with `shelf: "home"` ⇒ `homeScoped: true`,
+    // which routes the row into the caller's `kind='personal'` container — and
+    // `agent-templates/server/service-write-gates.ts › resolveTemplateCreateDestination`
+    // refuses `team` there. The third pill could only ever produce a 403.
     renderHome();
     await openAgents();
     await screen.findByText("Fundraise analyst");
     await startNewAgent("Deck reviewer");
 
     expect(screen.getByRole("tab", { name: "Private" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Team" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Public" })).toBeTruthy();
-    // The Team scope is only honest if the teams behind it were fetched — the
-    // Save button is disabled for a team template that names none.
-    await waitFor(() =>
-      expect(bridgeCalls(apiRequest).filter((c) => c.path === TEAMS_PATH).length)
-        .toBeGreaterThan(0)
-    );
+    expect(screen.queryByRole("tab", { name: "Team" })).toBeNull();
+
+    // 🔒 AND THE READ THAT FED IT IS GONE. Not "it came back empty" — the mount
+    // has no `useTeams` call at all now, the same claim the container mount has
+    // carried since M3 (`agent-editor.tsx`).
+    expect(
+      bridgeCalls(apiRequest).filter((c) => c.path === TEAMS_PATH)
+    ).toHaveLength(0);
   });
 
   it("attaches the TARGET workspace's knowledge bases, off the PLAIN key", async () => {
@@ -335,7 +344,7 @@ describe("the writes stay in their own workspace", () => {
     await openAgents();
     await screen.findByText("Renewal chaser");
     await startNewAgent("Intake triage", SHARED_BUTTON);
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await screen.findByText("Intake triage");
 
     // ⚠ NO **WRITE** REACHED THE HOME WORKSPACE. It used to assert no call of

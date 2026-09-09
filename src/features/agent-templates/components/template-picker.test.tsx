@@ -457,7 +457,7 @@ describe("the first-use approval modal", () => {
 });
 
 /**
- * ⚠ SOURCE READ, like `./template-editor.test.tsx › no concave surfaces`. jsdom
+ * ⚠ SOURCE READ, like `./template-editor-surface.test.tsx › no concave surfaces`. jsdom
  * loads no stylesheet, so the only honest place to pin a SURFACE ruling is the
  * class strings themselves. That suite already sweeps every file under
  * `features/agent-templates/{components,lib,hooks,client}` — this names THE NEW

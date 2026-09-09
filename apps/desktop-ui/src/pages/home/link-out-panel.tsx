@@ -32,7 +32,7 @@ import { useRevokeHomeLink } from "./home-writes";
  * (Samuel, 2026-08-27), while `add-person-dialog.tsx` renders the SAME BLOCK —
  * the same class tail, the same `displayUrl` + `CopyButton` pair — on
  * `RAISED_WELL` one file over. The sweep that pins that ruling
- * (`agent-templates/components/template-editor.test.tsx`) had a hand-typed
+ * (`agent-templates/components/template-editor-surface.test.tsx`) had a hand-typed
  * five-file list and this file was not on it; the list is derived from the
  * directory now, so the enforcement mechanism covers what the ruling always did.
  */

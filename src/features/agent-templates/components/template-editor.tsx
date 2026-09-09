@@ -1,17 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { WorkspaceKind } from "@dopl/contracts";
 import {
-  DialogActions,
-  DIALOG_BTN_PRIMARY,
-  DIALOG_BTN_SECONDARY,
-  StandardDialog,
-} from "@/shared/ui/standard-dialog";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
-import { SelectMenu } from "@/shared/ui/select-menu";
+  FormDialog,
+  FormSection,
+  PillChoice,
+  UnderlineField,
+} from "@/shared/ui/form-dialog";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { cn } from "@/shared/lib/utils";
-import { agentModelOptionsFor } from "@/features/channels/lib/agent-models";
+import { agentModelLabel, agentModelOptionsFor } from "@/features/channels/lib/agent-models";
 import type { AgentTemplate, TemplateVisibility } from "../client/types";
 import {
   draftFromTemplate,
@@ -19,52 +17,59 @@ import {
   isDraftSavable,
   type TemplateDraft,
 } from "../lib/template-draft";
-import { SECTIONS, type TemplateSectionDef } from "../lib/visibility";
+import {
+  SECTIONS,
+  teamScopeStranded,
+  visibilityOptions,
+  type TemplateSectionDef,
+} from "../lib/visibility";
 import {
   ChipMultiSelect,
   CustomFieldRows,
-  Field,
-  RAISED_INPUT,
   type PickerOption,
 } from "./template-editor-rows";
 
 /**
- * CREATE AND EDIT, in ONE surface — a `StandardDialog`, which is THIS repo's
- * entity-editing idiom (`knowledge/components/base-settings-modal.tsx`,
- * `channels/components/create-channel-dialog.tsx`, every create dialog in the
- * tree). No slide-over precedent exists here, and inventing one would make this
- * the only page whose editor arrives from the side.
+ * CREATE AND EDIT, in ONE surface — and since 2026-09-08 it is a
+ * `shared/ui/form-dialog.tsx › FormDialog`, the POPUP FORM KIT, because Samuel
+ * ruled every input dialog onto it: *"apply the UI styling to the Edit
+ * template/new agent template pop up."*
  *
- * ⚠ THIS WAS THE REFERENCE Samuel standardised the /home dialogs onto
- * (2026-08-27) — its width, its pillow inputs and its uppercase field headers
- * became `shared/ui/standard-dialog.tsx` + `shared/ui/wells.ts › RAISED_INPUT`,
- * and this file now composes them rather than stating them. What CHANGED here
- * in that pass: the heading is centered and uppercased, and both footer buttons
- * are fully rounded.
+ * ⚠ **WHAT THE KIT REPLACED, ITEM FOR ITEM.** The uppercase field headers over
+ * `RAISED_INPUT` "pillow" boxes are the bold label over an UNDERLINE
+ * ({@link UnderlineField}); the Visibility `SegmentedControl` and the Model
+ * `SelectMenu` are both {@link PillChoice} — one 30px `plain`/`md` row apiece —
+ * and the footer is the kit's Discard + verb at `--action-h-sm`. The recipe is
+ * stated ONCE in the kit and in `docs/DESIGN-SYSTEM.md` › Popup forms; nothing
+ * about it is restated here.
+ * ⚠ **THE 2026-08-27 NOTE THAT THIS FILE WAS THE REFERENCE THE /home DIALOGS
+ * STANDARDISED ONTO IS SUPERSEDED, NOT DELETED.** `RAISED_INPUT` is still the
+ * face of every control that is NOT a popup form field — including this
+ * dialog's own inline key/value rows (`./template-editor-rows.tsx`), which are
+ * a repeating LIST and have no `FormSection` of their own.
+ *
+ * ⚠ **THE PAYLOAD DID NOT MOVE, AND THAT IS PINNED RATHER THAN ASSERTED.**
+ * `template-editor.test.tsx › the payload survives the face` was written and
+ * green against the PRE-KIT editor, so its literals are a snapshot of what the
+ * old markup sent. A face change that reaches `draftToCreateBody` /
+ * `draftToPatchBody` fails there.
  *
  * ⚠ ONE COMPONENT FOR BOTH MODES. `template === null` is create; anything else
  * is edit, and the ONLY differences are the heading, the Save verb, and whether
- * Delete exists. A separate create dialog would be a second statement of the
- * same six fields, and the field list is exactly what a template IS.
+ * Delete exists.
  *
- * ⚠ NO CONCAVE SURFACE ANYWHERE (Samuel, 2026-08-22) — see
- * `./template-editor-rows.tsx`. The Visibility control is the kit's
- * `SegmentedControl`, which is TRACKLESS: flat `.seg-pill` options with a
- * `.raised-tab` active face, no `.concave-track` under it.
+ * ⚠ **DELETE MOVED INTO THE BODY, because the kit's footer is a PAIR.**
+ * `FormDialog` owns Discard + the verb and takes no third slot — one exit, one
+ * act. Delete is still ink with no button face (Samuel's older ruling) and
+ * still behind the confirm; what changed is which row it sits on.
  *
- * ⚠ NO LAUNCH CONTROL. Choosing a template AT LAUNCH is a later phase; this page
- * is where templates are authored and nothing else.
+ * ⚠ NO LAUNCH CONTROL. Choosing a template AT LAUNCH is a later phase; this is
+ * where templates are authored and nothing else.
  *
- * ⚠ THE VISIBILITY CONTROL IS DERIVED FROM A SECTION ARRAY THE CALLER NAMES, and
- * inside a link CONTAINER that array has TWO entries (2026-08-26,
- * `docs/specs/home-agents-tab.plan.md` §4.5). A container has no teams (§4A), so
- * `team` there is a scope that can never resolve to anybody — offering it would
- * be this editor inviting a grant nothing could hold. **The labels still come
- * from `../lib/visibility.ts`, never from a literal here**: the container's
- * shared scope reads "Shared in this channel", never "Public", and two arrays in
- * one module cannot drift the way two components hand-typing headings can.
- * ⚠ THE TEAM-CLEARING BRANCH BELOW STAYS EITHER WAY — it guards the WORKSPACE
- * page, where `team` is live, and a container mount simply never reaches it.
+ * ⚠ THE VISIBILITY CONTROL IS DERIVED FROM A SECTION ARRAY THE CALLER NAMES —
+ * **and, since 2026-09-08, from the CONTAINER KIND as well** ({@link
+ * TemplateEditorProps.containerKind}). The labels still come from
+ * `../lib/visibility.ts`, never from a literal here.
  */
 
 export interface TemplateEditorProps {
@@ -78,9 +83,24 @@ export interface TemplateEditorProps {
   /**
    * Which visibility scopes this mount offers, IN ORDER. Defaults to the
    * workspace page's three (`SECTIONS`); the /home Agents face's container mount
-   * passes `SECTIONS_CONTAINER`, which is two.
+   * passes `SECTIONS_CONTAINER`, which is one.
    */
   sections?: ReadonlyArray<TemplateSectionDef>;
+  /**
+   * 🔒 **WHICH KIND OF CONTAINER THIS MOUNT WRITES INTO — Samuel's ruling,
+   * 2026-09-08: *"we should remove the team option, if it's in the home space,
+   * because the team thing is for workspaces."*** `personal` (the /home
+   * Personal shelf) and `link` (a home channel) hold no team rows, so the Team
+   * pill is not offered there — `../lib/visibility.ts › visibilityOptions` is
+   * the rule and `server/service-write-gates.ts › assertTeamScopeGrantable` is
+   * the fence.
+   *
+   * ⚠ **DEFAULTS TO `standard`, WHICH IS THE WORKSPACE AGENTS PAGE.** That page
+   * is reachable only for a standard workspace (`workspaces/types.ts ›
+   * isStandardWorkspace` keeps every other kind off the rail), so the default is
+   * a fact about the route rather than an optimistic guess.
+   */
+  containerKind?: WorkspaceKind;
   /**
    * What a NEW template starts as. Defaults to `emptyDraft()`'s `'private'`,
    * which is right on a workspace page. ⚠ A CONTAINER mount must pass
@@ -99,6 +119,15 @@ export interface TemplateEditorProps {
   onDelete: () => void;
 }
 
+/** ⚠ THE SCHEMA'S OWN BOUNDS (`../schema.ts`), CLAMPED IN THE HANDLER because
+ *  the kit's field takes no `maxLength` — same effect, one keystroke later:
+ *  the value can never exceed the cap, so no save can 400 on length. */
+const MAX_NAME = 120;
+const MAX_DESCRIPTION = 280;
+
+/** The blank model — `""` on the wire, "Default" in front of an operator. */
+const NO_MODEL = "";
+
 /**
  * "SOME OF THIS ROLE'S KNOWLEDGE IS NOT HERE" — a COUNT, under the chips
  * (ruled 2026-09-06 under Samuel's delegation; the launch payload's own
@@ -115,19 +144,14 @@ export interface TemplateEditorProps {
  *
  * ⚠ **NO SECOND READ AND NO PROBE.** The count rides in on the template row the
  * editor was already handed (`types.ts › AgentTemplate`), which is arithmetic
- * the list read did over junction rows it had already fetched. Asking "which
- * ones" anywhere is the query the no-location rule forbids.
+ * the list read did over junction rows it had already fetched.
  *
  * ⚠ **IT DESCRIBES THE SAVED ROW, NEVER THE DRAFT**, and it cannot go stale
  * against the chips above it: an unreachable link is absent from
- * `draft.knowledgeBaseIds` by construction (`template-draft.ts ›
- * draftFromTemplate` maps the VISIBLE refs), so editing the visible set never
- * changes this number.
+ * `draft.knowledgeBaseIds` by construction.
  *
  * ⚠ **NOTHING IS BLOCKED AND NOTHING IS OFFERED.** There is no fix-it control
- * here on purpose — the operator cannot be shown the base to detach it, and a
- * button that silently dropped an attachment they cannot see would be a
- * destructive act performed blind.
+ * here on purpose — the operator cannot be shown the base to detach it.
  *
  * ⚠ ZERO RENDERS NOTHING. "0 bases unreachable" is a line every well-formed
  * template would carry forever (INVARIANTS §5: labels, not explainers).
@@ -150,6 +174,7 @@ export function TemplateEditor({
   teams,
   knowledgeBases,
   sections = SECTIONS,
+  containerKind = "standard",
   defaultVisibility,
   saving,
   deleting,
@@ -158,10 +183,6 @@ export function TemplateEditor({
   onSave,
   onDelete,
 }: TemplateEditorProps) {
-  const visibilityOptions = useMemo(
-    () => sections.map((s) => ({ key: s.visibility, label: s.label })),
-    [sections]
-  );
   // ⚠ DRAFT RESET IS DERIVED FROM `session` DURING RENDER, not from an effect —
   // an effect paints one frame of the PREVIOUS template's values into the new
   // modal, and set-state in an effect body is the cascading render the lint rule
@@ -188,60 +209,121 @@ export function TemplateEditor({
     setLoaded((prev) => ({ ...prev, draft: { ...prev.draft, ...patch } }));
   }
 
+  const scopes = useMemo(
+    () => visibilityOptions(sections, containerKind, draft.visibility),
+    [sections, containerKind, draft.visibility]
+  );
+
+  /**
+   * ⚠ **"Default" IS PREPENDED, AND IT IS THE DRAFT'S OWN VALUE RATHER THAN A
+   * NEW PICK.** `TemplateDraft.model` has always spelled "this template pins no
+   * model" as `""` (the create body OMITS the key, the patch sends `null`), and
+   * `AGENT_MODEL_OPTIONS` stopped carrying that state on 2026-09-06 — so the
+   * retired `SelectMenu` rendered BLANK on every new template and could never be
+   * put back once a model was chosen. A pill row needs one option selected, and
+   * the honest one is the value the draft is actually holding (INVARIANTS §11 —
+   * a back-filled "Sonnet" here would claim a pin the row does not have).
+   * ⚠ `agentModelOptionsFor`, not the bare roster: a stored id this build does
+   * not know is APPENDED rather than dropped, so an older template keeps its
+   * selection instead of showing none.
+   */
+  const models = useMemo(
+    () => [
+      { key: NO_MODEL, label: agentModelLabel(NO_MODEL) },
+      ...agentModelOptionsFor(draft.model).map((o) => ({
+        key: o.value,
+        label: o.label,
+      })),
+    ],
+    [draft.model]
+  );
+
+  // 🔒 A STORED `team` ROW INSIDE A CONTAINER THAT HAS NO TEAMS. Shown, hinted,
+  // and refused at Save — never rewritten on the operator's behalf.
+  const stranded = teamScopeStranded(containerKind, draft.visibility);
   const busy = saving || deleting;
   const heading = template ? "Edit template" : "New template";
 
   return (
-    <StandardDialog
+    <FormDialog
       open={open}
-      onClose={onClose}
+      onDiscard={onClose}
       title={heading}
       closeLabel="Close editor"
+      primary={{
+        label: saving ? "Saving…" : template ? "Save" : "Create",
+        onClick: () => onSave(draft),
+        disabled: !isDraftSavable(draft) || stranded,
+        busy,
+        // ⚠ A DISABLED SUBMIT SAYS WHY (INVARIANTS §8, rule 4) — one short line.
+        hint: stranded ? "Team sharing needs a workspace." : undefined,
+      }}
     >
-      <Field label="Name" htmlFor="agent-template-name">
-        <input
-          id="agent-template-name"
-          value={draft.name}
-          onChange={(e) => edit({ name: e.target.value })}
-          maxLength={120}
-          autoFocus
-          placeholder="e.g. Release captain"
-          className={cn(RAISED_INPUT, "h-9 px-3")}
-        />
-      </Field>
+      <UnderlineField
+        id="agent-template-name"
+        label="Name"
+        ariaLabel="Name"
+        value={draft.name}
+        onChange={(name) => edit({ name: name.slice(0, MAX_NAME) })}
+      />
 
-      <Field
+      <UnderlineField
+        id="agent-template-description"
         label="Description"
-        hint="(optional)"
-        htmlFor="agent-template-description"
-      >
-        <input
-          id="agent-template-description"
-          value={draft.description}
-          onChange={(e) => edit({ description: e.target.value })}
-          maxLength={280}
-          placeholder="What this agent is for"
-          className={cn(RAISED_INPUT, "h-9 px-3")}
-        />
-      </Field>
+        caption="optional"
+        ariaLabel="Description"
+        multiline
+        value={draft.description}
+        onChange={(description) =>
+          edit({ description: description.slice(0, MAX_DESCRIPTION) })
+        }
+      />
 
-      <Field label="Visibility">
-        <SegmentedControl
-          options={visibilityOptions}
-          value={draft.visibility}
-          onChange={(next: TemplateVisibility) =>
-            // ⚠ Leaving the Team scope CLEARS the teams. A stale grant behind
-            // a `private` label is sharing nobody asked for — and the schema
-            // REFUSES a `teamIds` key on a non-team patch, so carrying them
-            // would also be a 400 on the next unrelated edit.
-            edit({ visibility: next, teamIds: next === "team" ? draft.teamIds : [] })
-          }
-          disabled={busy}
-        />
-      </Field>
+      <UnderlineField
+        id="agent-template-instructions"
+        label="Instructions"
+        caption="optional"
+        ariaLabel="Instructions"
+        multiline
+          minRows={6}
+        value={draft.instructions}
+        onChange={(instructions) => edit({ instructions })}
+      />
 
-      {draft.visibility === "team" && (
-        <Field label="Teams">
+      <PillChoice
+        label="Model"
+        ariaLabel="Model"
+        options={models}
+        value={draft.model}
+        onChange={(model) => edit({ model })}
+        className="flex-wrap"
+      />
+
+      <PillChoice
+        label="Visibility"
+        ariaLabel="Visibility"
+        options={scopes.map((s) => ({
+          key: s.visibility,
+          label: s.label,
+          hint: s.hint,
+        }))}
+        value={draft.visibility}
+        onChange={(next: TemplateVisibility) =>
+          // ⚠ Leaving the Team scope CLEARS the teams. A stale grant behind
+          // a `private` label is sharing nobody asked for — and the schema
+          // REFUSES a `teamIds` key on a non-team patch, so carrying them
+          // would also be a 400 on the next unrelated edit.
+          edit({ visibility: next, teamIds: next === "team" ? draft.teamIds : [] })
+        }
+        className="flex-wrap"
+      />
+
+      {/* ⚠ THE PICKER FOLLOWS THE LIVE SCOPE, NOT THE STORED ONE. A stranded
+          `team` row has no teams to offer — the container holds none — so the
+          control that would ask for one is absent and the hint on its pill is
+          the whole of what the surface says. */}
+      {draft.visibility === "team" && !stranded && (
+        <FormSection label="Teams">
           {/* ⚠ MULTI-SELECT, because the server's `teamIds` is a set. */}
           <ChipMultiSelect
             options={teams}
@@ -251,51 +333,17 @@ export function TemplateEditor({
             detachVerb="Remove"
             emptyLine="No teams in this workspace yet."
           />
-        </Field>
+        </FormSection>
       )}
 
-      <Field label="Model">
-        {/* ⚠ `agentModelOptionsFor` appends a stored id this build does not
-              know rather than dropping it — a SelectMenu whose value matches no
-              option renders BLANK, which is the surface saying nothing where it
-              has an answer (INVARIANTS §5). */}
-        {/* ⚠ THE RAISED FACE — every dropdown inside a standard dialog wears
-              it (Samuel, 2026-08-27), so the picker reads as a control of the
-              same family as the fields above it rather than as inset chrome. */}
-        <SelectMenu
-          value={draft.model}
-          options={agentModelOptionsFor(draft.model)}
-          onChange={(model) => edit({ model })}
-          ariaLabel="Model"
-          disabled={busy}
-          variant="raised"
-          className="w-fit"
-        />
-      </Field>
-
-      <Field
-        label="Instructions"
-        hint="(optional)"
-        htmlFor="agent-template-instructions"
-      >
-        <textarea
-          id="agent-template-instructions"
-          value={draft.instructions}
-          onChange={(e) => edit({ instructions: e.target.value })}
-          rows={10}
-          placeholder="How this agent should work"
-          className={cn(RAISED_INPUT, "min-h-[220px] resize-y px-3 py-2 leading-relaxed")}
-        />
-      </Field>
-
-      <Field label="Fields" hint="(optional)">
+      <FormSection label="Fields" caption="optional">
         <CustomFieldRows
           fields={draft.fields}
           onChange={(fields) => edit({ fields })}
         />
-      </Field>
+      </FormSection>
 
-      <Field label="Knowledge bases" hint="(optional)">
+      <FormSection label="Knowledge bases" caption="optional">
         <ChipMultiSelect
           options={knowledgeBases}
           selectedIds={draft.knowledgeBaseIds}
@@ -305,7 +353,7 @@ export function TemplateEditor({
           emptyLine="No knowledge bases yet."
         />
         <UnreachableBasesRow count={template?.unreachableKnowledgeBaseCount ?? 0} />
-      </Field>
+      </FormSection>
 
       {error && (
         <p role="alert" className="text-caption text-danger">
@@ -313,40 +361,21 @@ export function TemplateEditor({
         </p>
       )}
 
-      <DialogActions
-        leading={
-          template && (
-            // ⚠ NO BUTTON FACE. Delete is the one verb here that must not
-            // look as pressable as the two beside it; it is ink and a soft
-            // hover, and the confirm below is the real gate.
-            <button
-              type="button"
-              onClick={() => setConfirmOpen(true)}
-              disabled={busy}
-              className="h-10 rounded-full px-3 text-body font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </button>
-          )
-        }
-      >
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          className={DIALOG_BTN_SECONDARY}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => onSave(draft)}
-          disabled={busy || !isDraftSavable(draft)}
-          className={DIALOG_BTN_PRIMARY}
-        >
-          {saving ? "Saving…" : template ? "Save" : "Create template"}
-        </button>
-      </DialogActions>
+      {template && (
+        // ⚠ NO BUTTON FACE. Delete is the one verb here that must not look as
+        // pressable as the pair in the footer; it is ink and a soft hover, and
+        // the confirm below is the real gate.
+        <div>
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            disabled={busy}
+            className="flex h-[var(--action-h-sm)] items-center rounded-[8px] px-2.5 text-caption font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+      )}
 
       {/* ⚠ HARD DELETE, and the copy says so — the row is gone, not archived. */}
       <ConfirmDialog
@@ -361,6 +390,6 @@ export function TemplateEditor({
           onDelete();
         }}
       />
-    </StandardDialog>
+    </FormDialog>
   );
 }

@@ -108,7 +108,7 @@ to `@/features/agent-templates/components/agent-templates-core.tsx`. Router-free
 - **Editor is a modal, no detail route** → `deep-link-target.js › WORKSPACE_PAGES` wants
   `agents: false`.
 - **No pressed-in surfaces anywhere on this page** (Samuel, 2026-08-22). Flat panel, `.bento`
-  cards, raised wells in the editor. `template-editor.test.tsx › no concave surfaces` enforces it.
+  cards, raised wells in the editor. `template-editor-surface.test.tsx › no concave surfaces` enforces it.
 - An empty section **keeps its header** and says one quiet line.
 - `agent-templates-core.tsx` states it explicitly: **"NO LAUNCH UI. Selecting a template AT LAUNCH
   is a later phase."**

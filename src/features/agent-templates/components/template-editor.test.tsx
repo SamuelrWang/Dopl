@@ -14,10 +14,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import path from "node:path";
 import type { AgentTemplate } from "../client/types";
-import { draftToCreateBody, type TemplateDraft } from "../lib/template-draft";
+import {
+  draftToCreateBody,
+  draftToPatchBody,
+  type TemplateDraft,
+} from "../lib/template-draft";
 import { SECTIONS_CONTAINER } from "../lib/visibility";
 import { TemplateEditor } from "./template-editor";
 
@@ -96,6 +98,33 @@ async function addField(key: string, value: string) {
   fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 }
 
+/** The create verb, in ONE place — the kit conversion shortened the word. */
+const CREATE_VERB = "Create";
+
+/**
+ * ⚠ EVERY PILL LOOKUP IS SCOPED TO ITS ROW. Model and Visibility are both
+ * `PillChoice` now, so `getAllByRole("tab")` spans two controls and a bare
+ * `getByRole("tab", { name })` can match the wrong one.
+ */
+const row = (name: string) =>
+  within(screen.getByRole("tablist", { name }));
+
+/** Pick a MODEL by its full label. */
+function pickModel(label: string) {
+  fireEvent.click(row("Model").getByRole("tab", { name: label }));
+}
+
+/** Pick a VISIBILITY scope by the label `lib/visibility.ts` gives it. */
+function pickScope(label: string) {
+  fireEvent.click(row("Visibility").getByRole("tab", { name: label }));
+}
+
+/** The scope pills on screen, in order, as text. */
+const scopeLabels = () =>
+  row("Visibility")
+    .getAllByRole("tab")
+    .map((t) => t.textContent);
+
 afterEach(cleanup);
 
 describe("what the editor renders", () => {
@@ -104,10 +133,8 @@ describe("what the editor renders", () => {
     expect(field("#agent-template-name")).toBeTruthy();
     expect(field("#agent-template-description")).toBeTruthy();
     expect(field("#agent-template-instructions")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Private" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Team" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Public" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Model" })).toBeTruthy();
+    expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
+    expect(row("Model").getByRole("tab", { name: "Default" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add field" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Attach" })).toBeTruthy();
   });
@@ -139,8 +166,7 @@ describe("what the editor renders", () => {
 describe("the visibility scopes the mount offers", () => {
   it("is the workspace's three by default, in `SECTIONS` order", async () => {
     await open();
-    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["Private", "Team", "Public"]);
+    expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
   });
 
   it("🔒 is ONE inside a link container, and it is not called Public", async () => {
@@ -152,18 +178,17 @@ describe("the visibility scopes the mount offers", () => {
     // container template is now reachable from no surface at all — offering the
     // option would create write-only rows. The array IS the control, so the
     // array is where that door closes (`lib/visibility.ts`).
-    await open({ sections: SECTIONS_CONTAINER });
-    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["Shared in this channel"]);
+    await open({ sections: SECTIONS_CONTAINER, containerKind: "link" });
+    expect(scopeLabels()).toEqual(["Shared in this channel"]);
   });
 
   it("takes its LABELS from `lib/visibility.ts`, never from a literal here", async () => {
     // The point of the prop is that the container's headings and the pane's
     // headings are one array. A component hand-typing "Shared in this channel"
     // would pass every assertion above and drift on the first rename.
-    await open({ sections: SECTIONS_CONTAINER });
+    await open({ sections: SECTIONS_CONTAINER, containerKind: "link" });
     for (const section of SECTIONS_CONTAINER) {
-      expect(screen.getByRole("tab", { name: section.label })).toBeTruthy();
+      expect(row("Visibility").getByRole("tab", { name: section.label })).toBeTruthy();
     }
   });
 });
@@ -173,7 +198,7 @@ describe("the team picker", () => {
     await open();
     // The Team SCOPE is a `tab` and always exists; the PICKER is the "Add team"
     // button and must not, or the editor asks for a grant it will discard.
-    expect(screen.getByRole("tab", { name: "Team" })).toBeTruthy();
+    expect(row("Visibility").getByRole("tab", { name: "Team" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add team" })).toBeNull();
   });
 
@@ -182,11 +207,11 @@ describe("the team picker", () => {
     // would drop every other grant on the next save.
     const { onSave } = await open();
     fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
-    fireEvent.click(screen.getByRole("tab", { name: "Team" }));
+    pickScope("Team");
     fireEvent.click(screen.getByRole("button", { name: "Add team" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Platform" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Growth" }));
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
     const draft = onSave.mock.calls[0][0] as TemplateDraft;
     expect(draftToCreateBody(draft)).toEqual({
@@ -199,12 +224,148 @@ describe("the team picker", () => {
   it("refuses Save while a Team template names no team", async () => {
     await open();
     fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
-    const save = screen.getByRole("button", { name: "Create template" });
+    const save = screen.getByRole("button", { name: CREATE_VERB });
     expect((save as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(screen.getByRole("tab", { name: "Team" }));
+    pickScope("Team");
     expect(
-      (screen.getByRole("button", { name: "Create template" }) as HTMLButtonElement).disabled
+      (screen.getByRole("button", { name: CREATE_VERB }) as HTMLButtonElement).disabled
     ).toBe(true);
+  });
+});
+
+describe("the popup-form kit's anatomy", () => {
+  /**
+   * ⚠ THE PIN IS THE KIT, NOT A COPY OF IT. Every rule below is
+   * `shared/ui/form-dialog.tsx`'s and is asserted here only because THIS dialog
+   * is claimed Done in `docs/DESIGN-SYSTEM.md`'s conformance table — a claim a
+   * later edit could quietly falsify. The recipes themselves are pinned once, in
+   * `channels-v2/launch-agent-dialog.test.tsx`.
+   */
+  it("puts a BOLD label ABOVE every control, from ONE class", async () => {
+    await open();
+    const labels = [
+      "Name",
+      "Description",
+      "Instructions",
+      "Model",
+      "Visibility",
+      "Fields",
+      "Knowledge bases",
+    ].map((t) => screen.getByText(t));
+    // The weight lives in `form-dialog.module.css › .label`, never per caller.
+    for (const el of labels) expect(el.className).not.toMatch(/font-(semibold|medium|normal)/);
+    expect(new Set(labels.map((el) => el.className)).size).toBe(1);
+  });
+
+  it("makes text entry the UNDERLINE, and grows the line on focus", async () => {
+    // ⚠ `.lineActive` is React state, not `:focus-within` — jsdom loads no
+    // stylesheet, so this is the only layer of the sweep a render can assert.
+    await open();
+    const name = field("#agent-template-name");
+    const line = name.parentElement as HTMLElement;
+    expect(line.className).not.toMatch(/lineActive/);
+    fireEvent.focus(name);
+    expect(line.className).toMatch(/lineActive/);
+    fireEvent.blur(name);
+    expect(line.className).not.toMatch(/lineActive/);
+  });
+
+  it("swaps the ELEMENT and nothing else for the long fields", async () => {
+    // Description and Instructions are prose; `multiline` is the whole
+    // difference, so Enter breaks the line instead of submitting.
+    await open();
+    expect(field("#agent-template-name").tagName).toBe("INPUT");
+    expect(field("#agent-template-description").tagName).toBe("TEXTAREA");
+    expect(field("#agent-template-instructions").tagName).toBe("TEXTAREA");
+  });
+
+  it("makes every SINGLE choice a pill row, and closes on the 30px pair", async () => {
+    await open();
+    expect(screen.getByRole("tablist", { name: "Model" })).toBeTruthy();
+    expect(screen.getByRole("tablist", { name: "Visibility" })).toBeTruthy();
+    // ⚠ THE SMALL SCALE. The 36px scale belongs to the PAGE button that opens a
+    // popup; a dialog cut to it is the drift the kit exists to stop.
+    for (const name of ["Discard", CREATE_VERB]) {
+      expect(screen.getByRole("button", { name }).className).toContain(
+        "h-[var(--action-h-sm)]"
+      );
+    }
+  });
+
+  it("keeps the schema's own length caps, which the kit's field cannot state", async () => {
+    // ⚠ `maxLength` went with the boxes; the handler clamps instead, so no save
+    // can 400 on a length the operator could not see.
+    const { onSave } = await open();
+    fireEvent.change(field("#agent-template-name"), {
+      target: { value: "x".repeat(200) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
+    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    expect(draft.name).toHaveLength(120);
+  });
+});
+
+describe("🔒 no Team scope outside a standard workspace", () => {
+  /**
+   * Samuel, 2026-09-08: *"we should remove the team option, if it's in the home
+   * space, because the team thing is for workspaces."* The client half; the
+   * fence is `server/service-write-gates.ts › assertTeamScopeGrantable`.
+   */
+  it("offers all three in a STANDARD workspace", async () => {
+    await open({ containerKind: "standard" });
+    expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
+  });
+
+  it.each(["personal", "link"] as const)(
+    "drops Team in a %s container, and keeps the rest in order",
+    async (kind) => {
+      await open({ containerKind: kind });
+      expect(scopeLabels()).toEqual(["Private", "Public"]);
+      expect(screen.queryByRole("button", { name: "Add team" })).toBeNull();
+    }
+  );
+
+  it("SHOWS a stored `team` row rather than rewriting it, and refuses Save", async () => {
+    // ⚠ NOT REWRITTEN ON OPEN. Moving a stored audience to `private` behind the
+    // operator's back would be this editor deciding a sharing fact (§11) — on a
+    // form they may close without saving.
+    await open({
+      containerKind: "personal",
+      template: template({ visibility: "team", teamIds: ["team-1"] }),
+    });
+    const pill = row("Visibility").getByRole("tab", { name: /^Team/ });
+    expect(pill.getAttribute("aria-selected")).toBe("true");
+    expect(pill.textContent).toContain("workspace only");
+    // …and the picker that would ask for a team it cannot offer is absent.
+    expect(screen.queryByRole("button", { name: "Add team" })).toBeNull();
+
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(save.title).toBe("Team sharing needs a workspace.");
+  });
+
+  it("lets Save through the moment the operator picks a value the container holds", async () => {
+    const { onSave } = await open({
+      containerKind: "personal",
+      template: template({ visibility: "team", teamIds: ["team-1"] }),
+    });
+    pickScope("Private");
+    const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    // ⚠ AND THE GRANTS GO WITH THE SCOPE — the schema refuses a `teamIds` key on
+    // a non-team patch, so carrying them would 400 the next unrelated edit.
+    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    expect(draft).toMatchObject({ visibility: "private", teamIds: [] });
+  });
+
+  it("no longer offers the pill it just dropped, once the row is off Team", async () => {
+    await open({
+      containerKind: "personal",
+      template: template({ visibility: "team", teamIds: ["team-1"] }),
+    });
+    pickScope("Private");
+    expect(scopeLabels()).toEqual(["Private", "Public"]);
   });
 });
 
@@ -212,7 +373,7 @@ describe("the save payload", () => {
   it("is the trimmed name plus the scope, and nothing the operator left empty", async () => {
     const { onSave } = await open();
     fireEvent.change(field("#agent-template-name"), { target: { value: "  Scout  " } });
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
     const draft = onSave.mock.calls[0][0] as TemplateDraft;
     expect(draftToCreateBody(draft)).toEqual({ name: "Scout", visibility: "private" });
   });
@@ -226,7 +387,7 @@ describe("the save payload", () => {
     await addField("repo", "dopl");
     fireEvent.click(screen.getByRole("button", { name: "Attach" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Specs" }));
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
     const draft = onSave.mock.calls[0][0] as TemplateDraft;
     expect(draftToCreateBody(draft)).toEqual({
@@ -248,8 +409,8 @@ describe("the save payload", () => {
     fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
     fireEvent.click(screen.getByRole("button", { name: "Add field" }));
     const dialog = await screen.findByRole("dialog", { name: "Add field" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Discard" }));
+    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
     const draft = onSave.mock.calls[0][0] as TemplateDraft;
     expect(draftToCreateBody(draft).fields).toBeUndefined();
   });
@@ -278,213 +439,60 @@ describe("delete is behind the confirm, and the copy says HARD", () => {
   });
 });
 
-describe("no concave surfaces", () => {
-  // ⚠ SOURCE READ. jsdom loads no stylesheet, so the only honest place to pin a
-  // SURFACE ruling is the class strings themselves.
-  const ROOT = path.join(process.cwd(), "src", "features", "agent-templates");
-  // ⚠ The UI half only. `server/` renders nothing and has no surface to get
-  // wrong; sweeping it would make this suite fail for reasons that are not the
-  // ruling, in a directory this page does not own.
-  const UI_DIRS = ["components", "lib", "hooks", "client"];
-  const FORBIDDEN = [
-    "concave-field",
-    "concave-track",
-    "auth-field-3d",
-    "FIELD_WELL",
-    "SECTION_BOX_INSET",
-    "SectionBox",
-    // ⚠ ADDED 2026-09-01. `shared/ui/usage-meter.tsx › UsageMeter` IS a concave
-    // surface — its whole recipe is a `.concave-track` well — so importing it
-    // was a way to ship one past a sweep that only reads class STRINGS. Naming
-    // the component closes that hole, and the sanctioned exception below is
-    // what keeps the one Samuel ordered.
-    "UsageMeter",
-  ];
-
-  function sources(dir: string): string[] {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) return sources(full);
-      if (!/\.tsx?$/.test(entry.name)) return [];
-      // The rule is about what the feature SHIPS; this file names the strings it
-      // forbids, and a test asserting on itself is a false positive by
-      // construction.
-      if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) return [];
-      return [full];
+/**
+ * 🔒 **THE PAYLOAD IS THE PRE-KIT EDITOR'S, FIELD FOR FIELD** (2026-09-08, the
+ * popup-form conversion). Written and green BEFORE the markup moved onto
+ * `shared/ui/form-dialog.tsx`, so the literals below are a snapshot of what the
+ * `StandardDialog`/`RAISED_INPUT` editor sent — not a restatement of what the
+ * new one happens to send. The two helpers above ({@link pickModel},
+ * {@link pickScope}) are the ONLY things the conversion was allowed to touch:
+ * a face change that reaches `draftToCreateBody` / `draftToPatchBody` fails
+ * here, which is the whole point of pinning it first.
+ */
+describe("the payload survives the face", () => {
+  it("CREATE — every control the editor has, in ONE body", async () => {
+    const { onSave } = await open();
+    fireEvent.change(field("#agent-template-name"), { target: { value: "  Scout  " } });
+    fireEvent.change(field("#agent-template-description"), {
+      target: { value: "  Finds things  " },
     });
-  }
+    fireEvent.change(field("#agent-template-instructions"), {
+      target: { value: "  Search first.  " },
+    });
+    pickModel("Opus 5");
+    pickScope("Public");
+    await addField("repo", "dopl");
+    fireEvent.click(screen.getByRole("button", { name: "Attach" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Specs" }));
+    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
-  /**
-   * ⚠ THE SWEEP REACHES ACROSS TREES, AND IT HAS TO (2026-08-26, Q4 of
-   * `docs/specs/home-agents-tab.plan.md`). The /home Agents face lives in the
-   * SPA — a separate vitest project — but it renders THIS feature's panels and
-   * cards, so a `SectionBox` there breaks the same ruling. This is a
-   * `readFileSync` over SOURCE, not an import: the root project runs with
-   * `process.cwd()` at the repo root, so the files resolve with no module
-   * graph, no alias and no second config. **A mirrored sweep in the SPA suite
-   * was the alternative and is worse** — two lists of forbidden recipes drift,
-   * and the one that matters is whichever the author did not open.
-   *
-   * ⚠ **THE SWEEP IS /home's NOW, NOT JUST THE AGENTS FACE'S (2026-08-27).**
-   * `knowledge-panels.tsx` joined it the day Samuel ruled the Knowledge
-   * sections flat: they were `SectionBox` — a header strip over a CONCAVE inset
-   * body — and are `shared/ui/section-panel.tsx › SectionPanel` on the page's
-   * flat panel gray since. That is the same "nothing here is pressed in" rule
-   * arriving on the second tab, so it is pinned the same way.
-   *
-   * ⚠ **DERIVED FROM THE DIRECTORY SINCE 2026-08-30, AND THE REASON IS A MISS.**
-   * This was a HAND-TYPED LIST OF FIVE, under the sentence "a /home file that
-   * renders a surface belongs in it" — and it did not contain
-   * `pages/home/link-out-panel.tsx`, which renders a surface and was wearing
-   * `FIELD_WELL`, the first entry in `FORBIDDEN`. **The enforcement mechanism
-   * drifted from the ruling, not the ruling from the code**, and a list that
-   * only a human adds to cannot catch the file the human did not think of. The
-   * membership test is now the one the sentence always stated: every `.tsx` in
-   * `pages/home/`, minus an explicit opt-out that has to say why.
-   */
-  const HOME_DIR = path.join(
-    process.cwd(),
-    "apps",
-    "desktop-ui",
-    "src",
-    "pages",
-    "home"
-  );
-
-  /**
-   * ⚠ MAY ONLY EVER SHRINK, and each entry names a reason that is about the
-   * file NOT BEING A SURFACE — never about it being inconvenient to fix.
-   * `.test.tsx` files are excluded by the same rule `sources()` applies in this
-   * tree: the suite names the strings it forbids, so a test asserting on itself
-   * is a false positive by construction.
-   */
-  const HOME_NOT_SURFACES = new Set([
-    // Render MACHINERY for the suites next to it — providers and fixtures, no
-    // surface of its own. Deliberately not a `.test.tsx` name so vitest does
-    // not collect it, which is why the extension filter cannot catch it.
-    "home-test-harness.tsx",
-  ]);
-
-  /**
-   * 🔒 **THE ONE SANCTIONED CONCAVE SURFACE ON /home (Samuel, 2026-09-01), AND
-   * IT IS AN AMENDMENT TO THE RULING RATHER THAN A HOLE IN IT.**
-   *
-   * The Overview face's credit bar was built as an approximation of the billing
-   * surface's — a hand-rolled track with a raised fill — precisely BECAUSE of
-   * the no-concave rule. Samuel's correction is that the reference IS the spec:
-   * the bar must be `billing/components/billing-usage-pane.tsx`'s "Credits"
-   * meter (labelled "MCP credits" until the 2026-09-05 rename), which is
-   * `shared/ui/usage-meter.tsx › UsageMeter`, which is a
-   * `.concave-track`. A design reference cloned exactly beats a local surface
-   * rule, and he said so after seeing the approximation.
-   *
-   * ⚠ **SCOPED TO ONE FILE AND ONE RECIPE.** Every other /home surface is still
-   * swept, and this file is still swept for every OTHER forbidden string — the
-   * exception is the pair, not the file. Widening it needs another ruling.
-   */
-  const HOME_CONCAVE_SANCTIONED: ReadonlyMap<string, string> = new Map([
-    ["overview-sections.tsx", "UsageMeter"],
-  ]);
-
-  const HOME_FILES = readdirSync(HOME_DIR)
-    .filter((name) => name.endsWith(".tsx") && !name.endsWith(".test.tsx"))
-    .filter((name) => !HOME_NOT_SURFACES.has(name))
-    .sort()
-    .map((name) => path.join(HOME_DIR, name));
-
-  const FILES = [...UI_DIRS.flatMap((dir) => sources(path.join(ROOT, dir))), ...HOME_FILES];
-
-  it("finds source files to check (a silent empty sweep would pass forever)", () => {
-    expect(FILES.length).toBeGreaterThan(5);
+    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    expect(draftToCreateBody(draft)).toEqual({
+      name: "Scout",
+      visibility: "workspace",
+      description: "Finds things",
+      instructions: "Search first.",
+      model: "claude-opus-5",
+      fields: [{ key: "repo", value: "dopl" }],
+      knowledgeBaseIds: ["kb-2"],
+    });
   });
 
-  // ⚠ THE DERIVATION ITSELF IS ASSERTED. A scan that answered `[]` — a moved
-  // directory, a changed extension convention — would make every /home case
-  // below vacuously green, which is a quieter version of the miss that caused
-  // the derivation in the first place.
-  it("derives the /home surfaces, and reaches BOTH tabs' files", () => {
-    expect(HOME_FILES.length).toBeGreaterThan(10);
-    for (const name of ["knowledge-panels.tsx", "agent-panels.tsx", "link-out-panel.tsx"]) {
-      expect(HOME_FILES).toContain(path.join(HOME_DIR, name));
-    }
-  });
+  it("EDIT — the PATCH is the CHANGED keys and nothing else", async () => {
+    const row = template();
+    const { onSave } = await open({ template: row });
+    fireEvent.change(field("#agent-template-name"), { target: { value: "Release captain v2" } });
+    fireEvent.change(field("#agent-template-description"), { target: { value: "" } });
+    pickModel("Haiku 4.5");
+    fireEvent.click(screen.getByRole("button", { name: "Detach Runbooks" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-  // …and the opt-out may not outlive its entries: a name that is no longer in
-  // the directory is a comment claiming a fact.
-  it.each([...HOME_NOT_SURFACES])("the opt-out entry %s still exists", (name) => {
-    expect(existsSync(path.join(HOME_DIR, name))).toBe(true);
-  });
-
-  it.each(FILES)("%s wears no pressed-in recipe", (file) => {
-    const source = readFileSync(file, "utf8");
-    // Comments EXPLAIN the ruling by naming the classes it bans, so the check
-    // runs over code lines only.
-    const code = source
-      .split("\n")
-      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-      .join("\n");
-    const sanctioned = HOME_CONCAVE_SANCTIONED.get(path.basename(file));
-    for (const forbidden of FORBIDDEN) {
-      // ⚠ ONE recipe is excused in ONE file, by name — see
-      // `HOME_CONCAVE_SANCTIONED`. Everything else in that file is still swept.
-      if (forbidden === sanctioned) continue;
-      expect(code, `${file} must not use ${forbidden}`).not.toContain(forbidden);
-    }
-  });
-
-  /**
-   * ⚠ **THE EXCEPTION HAS TO BE LOAD-BEARING OR IT IS JUST A HOLE.** If the
-   * credit bar ever stops using the billing meter, the carve-out must go with
-   * it — otherwise the next surface to reach for `UsageMeter` in that file
-   * inherits a permission nobody granted it.
-   */
-  it.each([...HOME_CONCAVE_SANCTIONED])(
-    "the sanctioned concave surface %s really does use %s",
-    (name, recipe) => {
-      const file = path.join(HOME_DIR, name);
-      expect(existsSync(file)).toBe(true);
-      expect(readFileSync(file, "utf8")).toContain(recipe);
-    }
-  );
-
-  /**
-   * ⚠ THE RECIPE MOVED, THE RULE DID NOT (2026-08-27). `RAISED_INPUT` was
-   * promoted out of `template-editor-rows.tsx` into `shared/ui/wells.ts` when
-   * the four /home dialogs standardised onto this page's face, so the assertion
-   * follows it: the SHARED recipe must still be built from `RAISED_WELL`, and
-   * this page's rows must still be wearing that recipe rather than a fork.
-   */
-  it("uses the kit's RAISED well for its inputs", () => {
-    const wells = readFileSync(
-      path.join(process.cwd(), "src", "shared", "ui", "wells.ts"),
-      "utf8"
-    );
-    expect(wells).toContain("export const RAISED_INPUT = `${RAISED_WELL}");
-    const rows = readFileSync(path.join(ROOT, "components", "template-editor-rows.tsx"), "utf8");
-    expect(rows).toContain("RAISED_INPUT");
-  });
-
-  /**
-   * ⚠ THE SAME RULE, ARRIVING ON THE BUTTONS (Samuel, 2026-08-28). The dialog's
-   * in-body controls — Add field, a row's Remove, the chip picker's
-   * Attach/Add-team — hand-wrote THREE different heights and radii for one
-   * class of control; they wear `shared/ui/open-scale-button.tsx`, the KB card
-   * Open scale that /home's section buttons already carry. Source read for the
-   * same reason as the sweep above: the pill is CSS, and jsdom loads none.
-   *
-   * ⚠ **WHAT THIS DELIBERATELY DOES NOT PIN** is the FOOTER. `DIALOG_BTN_*` is
-   * the `StandardDialog` contract for both this dialog's pair and the Add-field
-   * card's, and Delete is ink with no face at all by an older ruling of
-   * Samuel's — a pill in either place would be this dialog closing differently
-   * from every other one in the tree.
-   */
-  it("wears the kit's 26px pill on the buttons inside its body", () => {
-    const rows = readFileSync(path.join(ROOT, "components", "template-editor-rows.tsx"), "utf8");
-    expect(rows).toContain("OpenScaleButton");
-    expect(rows).toContain("OpenScaleIconButton");
-    // A hand-written pill FACE is what the ruling replaced, and the kit's
-    // module is the only place that declaration lives now. The static CHIP
-    // keeps its own rounded badge — it is not a button and never was.
-    expect(rows).not.toContain("btn-light");
+    const draft = onSave.mock.calls[0][0] as TemplateDraft;
+    expect(draftToPatchBody(draft, row)).toEqual({
+      name: "Release captain v2",
+      description: null,
+      model: "claude-haiku-4-5-20251001",
+      knowledgeBaseIds: [],
+    });
   });
 });

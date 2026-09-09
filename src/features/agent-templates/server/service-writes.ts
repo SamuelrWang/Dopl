@@ -30,7 +30,10 @@ import {
 // 🔒 THE ASKING SEAM, SPLIT OUT LIKE ITS KNOWLEDGE TWIN (`knowledge/server/
 // service-base-gates.ts`). Read that module's header for why it is NOT the same
 // function, and for what was open before it existed.
-import { resolveTemplateCreateDestination } from "./service-write-gates";
+import {
+  assertTeamScopeGrantable,
+  resolveTemplateCreateDestination,
+} from "./service-write-gates";
 import {
   isWorkspaceAdmin,
   resolveVisibleKnowledgeBases,
@@ -103,6 +106,9 @@ export async function createTemplate(
   // worse than one that was never created — there is no transaction across
   // these three statements, so the order IS the atomicity story.
   assertTeamScopeIsHuman(ctx, visibility);
+  // 🔒 …AND THE CONTAINER MUST BE ONE THAT HAS TEAMS (Samuel, 2026-09-08). ⚠ THE
+  // DESTINATION, not the calling room: the gate above may have re-routed the row.
+  if (visibility === "team") await assertTeamScopeGrantable(destination.workspaceId);
   const teamIds =
     visibility === "team"
       ? await assertGrantableTeams(ctx, input.teamIds ?? [], [])
@@ -262,6 +268,10 @@ export async function updateTemplate(
     // ⚠ `nextVisibility`, so a `teamIds`-only patch on a row that is ALREADY
     // `team` is refused as well: it MOVES the audience, which is the act.
     assertTeamScopeIsHuman(ctx, nextVisibility);
+    // 🔒 THE UPDATE TWIN of the create's own container check — without it the
+    // create fence is defeated in two calls. ⚠ `tplCtx`, so the question is
+    // asked about the container the ROW LIVES IN.
+    if (nextVisibility === "team") await assertTeamScopeGrantable(tplCtx.workspaceId);
     teamIds =
       nextVisibility === "team"
         ? await assertGrantableTeams(

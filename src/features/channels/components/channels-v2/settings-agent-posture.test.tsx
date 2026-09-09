@@ -210,7 +210,7 @@ describe("the LAUNCH POSTURE renders with its current values, and changes on sel
  * `desktopMainFilesContaining`). The desktop's declaring files are found by
  * scanning `main/`, so a FOURTH copy appearing joins the comparison instead of
  * sitting outside a hand-typed list — which is exactly how `HOME_FILES` in
- * `agent-templates/components/template-editor.test.tsx` missed a file.
+ * `agent-templates/components/template-editor-surface.test.tsx` missed a file.
  */
 describe("the two permission axes agree across both trees", () => {
   /** The string members of `const NAME = [...]` — single or double quoted, TS

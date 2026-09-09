@@ -20,7 +20,7 @@ import type { TemplateSectionDef } from "../lib/visibility";
  * panel is flat, the cards on it are `.bento`, and the editor's fields are the
  * kit's RAISED well. A `.concave-field` / `.concave-track` / `SECTION_BOX_INSET`
  * anywhere under `features/agent-templates/` is a regression with a test behind
- * it (`template-editor.test.tsx › no concave surfaces`) — and since 2026-08-26
+ * it (`template-editor-surface.test.tsx › no concave surfaces`) — and since 2026-08-26
  * that sweep also reaches `apps/desktop-ui/src/pages/home/agent-*.tsx`, because
  * the /home Agents face reuses THIS module rather than growing a second panel
  * recipe (Q4, `home-agents-tab.plan.md` §0.6).

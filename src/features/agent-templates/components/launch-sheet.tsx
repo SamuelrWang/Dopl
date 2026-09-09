@@ -45,8 +45,8 @@ import { Field, RAISED_INPUT } from "./template-editor-rows";
  * (INVARIANTS §5, minimal copy) rather than explaining itself per field.
  *
  * ⚠ NO CONCAVE SURFACE (Samuel, 2026-08-22, the ruling for this whole feature).
- * Every input wears `RAISED_INPUT`; `./template-editor.test.tsx › no concave
- * surfaces` sweeps this file's source and fails on the pressed-in class names.
+ * Every input wears `RAISED_INPUT`; `./template-editor-surface.test.tsx › no
+ * concave surfaces` sweeps this file's source and fails on the pressed-in class names.
  */
 
 /** The sheet's own working copy. Discarded on close — see the module header. */
