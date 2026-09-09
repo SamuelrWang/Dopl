@@ -42,7 +42,16 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; closes
+// F-685). "are guests access/view or edit" — `edit` is half of that ruling, so
+// the object/relationship/membership writes carry the same floor as the reads.
+// ⚠ THE FLOOR IS THE WEAKEST FENCE HERE, not the gate: `service-gates.ts ›
+// requireObject` demands `edit` on EVERY cluster the object belongs to (Q9),
+// resolved from DB facts, and a guest whose share says `view` — or who has no
+// share — gets the same 404 they got before this floor existed. ⚠ The SHARE
+// lane, cluster create/delete and the `agentsMayEdit` toggle deliberately did
+// NOT move: a guest lends nothing and re-widens nobody's agents.
+export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "guest" });
 // 🔒 `sessionOnly` (2026-09-02). `dopl_ontology` advertises this deletion as
 // APP-ONLY — "there is no MCP path to it, for any role or token" — and
 // `packages/mcp-server/src/gating.ts › opRefusal` was the ONLY thing enforcing
@@ -56,6 +65,8 @@ export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
 // redirects an agent to instead.
 // Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
 export const DELETE = withWorkspaceAuth(handleDelete, {
-  minRole: "member",
+  // 🔒 `guest` since 2026-09-09 — see the PATCH above. `sessionOnly` is
+  // UNTOUCHED and is what still keeps this verb app-only for every role.
+  minRole: "guest",
   sessionOnly: true,
 });

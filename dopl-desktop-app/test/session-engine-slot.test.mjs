@@ -142,6 +142,7 @@ function harness(cfg = {}) {
   };
   const api = new Function(
     "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId", "profiles",
+    "ontologyReach",
     `${LAUNCH_SRC}\n${fnOf(ENGINE, "hasLiveSession")}\n${fnOf(ENGINE, "isAuthHeldSession")}\n` +
       ` return { launch, hasLiveSession, isAuthHeldSession };`
   )(
@@ -162,6 +163,16 @@ function harness(cfg = {}) {
       // `opScoped: 'unverified'`, so this really does fire on the shipped tree — which is the
       // point: the predicate had no consumer at all before this.
       axisBOpScopedWarning: (id) => REAL_PROFILES.axisBOpScopedWarning(id),
+    },
+    // ⚠ 2026-09-09 (F-681): the ontology-reach PRODUCER, faked — the real one is an HTTP read
+    // behind a device token this file has neither of. `test/ontology-reach-producer.test.mjs`
+    // pins the real module's promise never to throw; here the point is only that the funnel
+    // AWAITS it and never lets it refuse a launch.
+    {
+      fetchOntologyReach: async () => {
+        if (cfg.reachThrows) throw new Error("reach exploded");
+        return cfg.ontologies || [];
+      },
     }
   );
   return { ...api, sessions, calls };

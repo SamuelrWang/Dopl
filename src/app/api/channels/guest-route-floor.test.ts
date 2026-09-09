@@ -30,13 +30,19 @@
  *   C. NO route in the `withUserAuth` + `resolveApiWorkspace` family opts below
  *      `viewer`.
  *   D. THE PARSER ITSELF is pinned against hand-measured floors and against the
- *      export shapes it must not read as ABSENT.
+ *      export shapes it must not read as ABSENT. ⚠ **SET D MOVED OUT ON
+ *      2026-09-09** — it is `shared/auth/route-floor-parser.test.ts`, beside the
+ *      parser it pins, and it is still REQUIRED: a census over a broken parser
+ *      is green and empty. Sets A, B, B2, B3 and C are what is left here.
  *
  * ⚠ THE PARSER MOVED OUT ON 2026-08-26 — it is `shared/auth/route-floor-parser.ts`,
  * beside the `withWorkspaceAuth` it parses. This file hit the 500-line cap (§1)
- * while the parser was growing the branches set D now pins, and a file that
- * cannot be corrected is worse than one that is an import away. No route imports
- * the parser; its only consumer is this suite.
+ * while the parser was growing the branches set D pins, and a file that
+ * cannot be corrected is worse than one that is an import away. ⚠ **IT HIT THAT
+ * CAP AGAIN ON 2026-09-09** (it measured 520 of 500 at `b5e300e1`, i.e. the root
+ * lint was already red on this branch), which is why set D left too: the SIX
+ * ontology entries below had nowhere to go. No route imports the parser; its
+ * only consumers are this suite and that one.
  *
  * ⚠ THE WORKSPACE FLOOR IS A TRIPWIRE, NOT THE TRUE GATE. The real gate on each
  * of these is the channel-membership fence in the service layer
@@ -91,7 +97,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
-  DEFAULT_FLOOR,
   DYNAMIC,
   METHODS,
   UNPARSED,
@@ -207,42 +212,62 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   [`${CHANNELS_REL}/[channelId]/artifacts/route.ts`, "POST"],
   // ⚠ THREE `personal-arming` ROWS STOOD HERE AND ARE DELETED WITH THE ROUTE
   // (2026-09-07) — see this file's header.
+  //
+  // ⚠ THE ONTOLOGY LANE (2026-09-09, Samuel's home-ontology ruling; closes
+  // F-685). SIX entries, and the FIRST guest floors outside `api/channels/**`
+  // that carry data — this census's contract is "nothing anywhere is at `guest`
+  // unless it is listed", so extending it to a second feature is a widening of
+  // the LIST, never of the file's scope.
+  //
+  // ⚠ **THE FLOOR GRANTS NOTHING HERE. IT ONLY LETS A GUEST BE REFUSED.** A home
+  // channel's peer is admitted at the role the LINK grants and that DEFAULTS to
+  // `guest` (`home/server/service-claim-bound.ts`), so at the `viewer` default
+  // the entire `guests_level` column was a word no request could exercise. The
+  // gate is `ontology/server/service-audience.ts › resolveOntologyAudience` +
+  // `› levelForCluster`, resolved from DB facts on EVERY read and EVERY write: a
+  // guest with no share row reads an empty snapshot and 404s on everything else,
+  // exactly as they did before these floors existed. Behaviourally pinned in
+  // `ontology/server/guest-lane.test.ts`.
+  //
+  // ⚠ **THE WRITES MOVED WITH THE READS, AND THAT IS THE RULING** — "are guests
+  // access/view or edit" — which is why the ONE ⚠ this file's knowledge-lane
+  // block raises (a guest write) is answered here by a LADDER rather than by a
+  // per-grant boolean: `guests_level='edit'` is what admits them, and
+  // `service-gates.ts › requireObject` demands `edit` on EVERY cluster the
+  // object belongs to (Q9).
+  //
+  // ⚠ **WHAT DELIBERATELY DID NOT MOVE**, and each absence is a decision:
+  // `clusters/route.ts` POST + `clusters/[clusterId]/route.ts` PATCH/DELETE (a
+  // guest creates, renames and deletes no ontology, and the PATCH carries the
+  // `agentsMayEdit` toggle — a containment control), the whole
+  // `clusters/[clusterId]/shares/**` lane (a guest lends nothing), and
+  // `objects/[objectId]/anchor/route.ts` POST (the anchor is workspace-scoped
+  // identity, R9). A `grep -rn 'minRole' src/app/api/ontology` is the re-derive.
+  ["ontology/route.ts", "GET"], // the snapshot / `?view=summary`
+  ["ontology/anchor/route.ts", "GET"], // this container's anchor object
+  // ⚠ NOT A CAPABILITY: what THIS session reaches, for the desktop's prompt
+  // framing — a COMPENSATING CONTROL (INVARIANTS §4A), answered by the same
+  // ceiling. A guest with no share gets `[]` (F-681).
+  ["ontology/reach/route.ts", "GET"],
+  ["ontology/objects/route.ts", "POST"], // create an object (a MEMBERSHIP write)
+  ["ontology/objects/[objectId]/route.ts", "PATCH"], // edit one (RELATIONSHIPS ride the body)
+  // ⚠ `sessionOnly` IS UNTOUCHED on this one — the floor says which ROLE may ask,
+  // and `sessionOnly` still says no agent token may, for any role.
+  ["ontology/objects/[objectId]/route.ts", "DELETE"],
 ];
 
 const ALLOWED_KEYS = new Set(GUEST_ALLOWED.map(([f, m]) => `${f}#${m}`));
 
-/**
- * SET D's DATA — floors measured BY HAND against the route sources on
- * 2026-08-26, chosen because every one of them is a shape the previous parser
- * got wrong. Re-measure with `grep -n minRole <file>`; never amend from memory.
- */
-const KNOWN_FLOORS: ReadonlyArray<readonly [string, string, string]> = [
-  // Inline-arrow + trailing options — the six the `");"` slice misread as viewer.
-  ["billing/cancel/route.ts", "POST", "admin"],
-  ["billing/checkout/route.ts", "POST", "admin"],
-  ["billing/invoices/route.ts", "GET", "admin"],
-  ["billing/payment-method/route.ts", "GET", "admin"],
-  ["billing/portal/route.ts", "POST", "admin"],
-  ["billing/upgrade-to-team/route.ts", "POST", "admin"],
-  ["skills/[skillSlug]/duplicate/route.ts", "POST", "member"],
-  ["skills/versions/[versionId]/restore/route.ts", "POST", "member"],
-  // Named-handler shape (the one the old parser DID read) — kept so a "fix" that
-  // breaks the common case is caught too.
-  [`${CHANNELS_REL}/[channelId]/route.ts`, "PATCH", "member"],
-  [`${CHANNELS_REL}/[channelId]/route.ts`, "GET", "guest"],
-  // No options object at all → the wrapper default.
-  [`${CHANNELS_REL}/consent/route.ts`, "GET", "viewer"],
-];
-
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 21 entries (pins the size against a silent add/drop)", () => {
+  it("has 27 entries (pins the size against a silent add/drop)", () => {
     // 19 until 2026-09-06 (artifacts ×2), 24 while the three personal-arming
-    // verbs existed, 21 since they were deleted with the route (2026-09-07); 15
-    // until Home Knowledge Panels M2. ⚠ ENTRIES, NOT FILES, which is why B2
+    // verbs existed, 21 once they were deleted with the route (2026-09-07), 27
+    // since the ontology lane (2026-09-09, F-685); 15 until Home Knowledge
+    // Panels M2. ⚠ ENTRIES, NOT FILES, which is why B2
     // counts occurrences. The number blesses nothing; set B proves the tree.
     // Re-derive both, never quote:
     //   grep -rc 'minRole: "guest"' $(grep -rl 'minRole: "guest"' src/app/api)
-    expect(ALLOWED_KEYS.size).toBe(21);
+    expect(ALLOWED_KEYS.size).toBe(27);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {
@@ -299,116 +324,6 @@ describe("guest route floor — the guest-allowed set is exactly what runs at mi
       }
     }
     expect(bad).toEqual([]);
-  });
-});
-
-describe("D: the parser is pinned against hand-measured floors", () => {
-  it.each(KNOWN_FLOORS)("%s %s is %s", (file, method, expected) => {
-    const src = readFileSync(join(API_ROOT, file), "utf8");
-    expect(workspaceFloor(src, method)).toBe(expected);
-  });
-
-  it("the eight inline-arrow floors are NOT viewer (the exact regression)", () => {
-    // Stated separately and positively: the old parser answered `viewer` for all
-    // eight, so a guest floor on any of them was invisible to sets A and B.
-    for (const [file, method, expected] of KNOWN_FLOORS.slice(0, 8)) {
-      const src = readFileSync(join(API_ROOT, file), "utf8");
-      expect(workspaceFloor(src, method)).not.toBe(DEFAULT_FLOOR);
-      expect(workspaceFloor(src, method)).toBe(expected);
-    }
-  });
-
-  it("an unbalanced wrapper call THROWS rather than answering viewer", () => {
-    expect(() =>
-      workspaceFloor(`export const GET = withWorkspaceAuth(handleGet`, "GET")
-    ).toThrow(/did not parse/);
-  });
-
-  it("a MIXED-wrapper file reads each method's OWN wrapper (2026-08-26)", () => {
-    // `auth/mcp-container-token/route.ts` is the tree's only one: POST resolves
-    // a workspace, DELETE must survive that workspace being deleted, so the two
-    // methods take different wrappers. Before this, DELETE answered `<unparsed>`
-    // because the FILE contained `withWorkspaceAuth` somewhere.
-    // ⚠ The `null` half is the load-bearing one, and it is safe for exactly one
-    // reason: a `withUserAuth` method has no workspace floor to place at guest.
-    const src = `
-      import { withUserAuth } from "@/shared/auth/with-auth";
-      import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
-      export const POST = withWorkspaceAuth(async () => {}, { minRole: "admin" });
-      export const DELETE = withUserAuth(async () => {}, { sessionOnly: true });
-    `;
-    expect(workspaceFloor(src, "POST")).toBe("admin");
-    expect(workspaceFloor(src, "DELETE")).toBeNull();
-  });
-
-  // ⚠ SYNTHETIC ON PURPOSE: none of these shapes exists in `src/app/api` today
-  // (AST-verified 2026-08-26), which is why real sources cannot pin them — and
-  // is how the gap survived.
-  const WRAPPER = `import { withWorkspaceAuth } from "@/shared/auth/with-auth";`;
-
-  it.each([
-    // [label, source, method, expected]
-    [
-      "export { h as GET } follows the alias to the binding's floor",
-      `${WRAPPER}
-       const handleGet = withWorkspaceAuth(async () => null, { minRole: "guest" });
-       export { handleGet as GET };`,
-      "GET",
-      "guest",
-    ],
-    [
-      "…and to a floor ABOVE the default just the same",
-      `${WRAPPER}
-       const handlePost = withWorkspaceAuth(async () => null, { minRole: "admin" });
-       export { handlePost as POST };`,
-      "POST",
-      "admin",
-    ],
-    [
-      "a followed re-export with no options is the wrapper DEFAULT, not absent",
-      `${WRAPPER}
-       const h = withWorkspaceAuth(async () => null);
-       export { h as PATCH };`,
-      "PATCH",
-      DEFAULT_FLOOR,
-    ],
-    [
-      "a re-export from ANOTHER module is <unparsed>, never null",
-      `${WRAPPER}
-       export { GET } from "./elsewhere";`,
-      "GET",
-      UNPARSED,
-    ],
-    [
-      "an exported FUNCTION DECLARATION is <unparsed>, never null",
-      `${WRAPPER}
-       const inner = withWorkspaceAuth(async () => null, { minRole: "guest" });
-       export async function GET(req: Request) { return inner(req); }`,
-      "GET",
-      UNPARSED,
-    ],
-    [
-      "a floor that appears only in a COMMENT is not a floor, even INSIDE the options object",
-      // ⚠ The comment sits AFTER the real key, so `minRoleIn`'s `lastIndexOf`
-      // lands on the prose — this is the case a comment-blind parser reads as
-      // `guest`. `channels/route.ts`'s own docblock is the real-world version.
-      `${WRAPPER}
-       export const POST = withWorkspaceAuth(async () => null, {
-         minRole: "member",
-         // TODO(2026-08-26): consider minRole: "guest" — see §4A.
-       });`,
-      "POST",
-      "member",
-    ],
-  ])("%s", (_label, src, method, expected) => {
-    expect(workspaceFloor(src, method)).toBe(expected);
-  });
-
-  it("a method nobody exports still has no floor, whatever the file contains", () => {
-    const src = `${WRAPPER}
-      const handleGet = withWorkspaceAuth(async () => null, { minRole: "guest" });
-      export { handleGet as GET };`;
-    expect(workspaceFloor(src, "DELETE")).toBeNull();
   });
 });
 

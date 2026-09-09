@@ -26,4 +26,13 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; closes
+// F-685). "are guests access/view or edit" — `edit` is half of that ruling, so
+// the object/relationship/membership writes carry the same floor as the reads.
+// ⚠ THE FLOOR IS THE WEAKEST FENCE HERE, not the gate: `service-gates.ts ›
+// requireObject` demands `edit` on EVERY cluster the object belongs to (Q9),
+// resolved from DB facts, and a guest whose share says `view` — or who has no
+// share — gets the same 404 they got before this floor existed. ⚠ The SHARE
+// lane, cluster create/delete and the `agentsMayEdit` toggle deliberately did
+// NOT move: a guest lends nothing and re-widens nobody's agents.
+export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });

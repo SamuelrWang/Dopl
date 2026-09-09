@@ -451,7 +451,10 @@ test("`context.template` rides the funnel's LITERAL WHITELIST and survives park/
   // resumeParked` operates IN PLACE — it rebuilds the abort controller and the iterator and never
   // touches `s.context`. So a parked agent woken an hour later still carries what was resolved at
   // spawn, and that falls out of the architecture rather than being enforced anywhere.
-  assert.match(read("session-launch.js"), /^\s*context: a\.context,$/m, "the funnel names it");
+  // ⚠ READ `context: a.context,` UNTIL 2026-09-09 (F-681): the funnel builds a LOCAL from it now
+  // so it can add `ontologies`, and it is `a.context` ITSELF when there is none — which keeps an
+  // ontology-less lane byte-identical, `undefined` included. Both halves in `ontology-reach-producer`.
+  assert.match(read("session-launch.js"), /^\s*context,$/m, "the funnel names it");
   assert.match(
     read("session-engine.js"),
     /const context = \{ \.\.\.\(spec\.context \|\| \{\}\), channelId: spec\.channelId/,

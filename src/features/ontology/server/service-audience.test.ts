@@ -231,6 +231,35 @@ describe("the arms that are not matrix rows", () => {
     expect(mockShares.listSharesForChannels).not.toHaveBeenCalled();
   });
 
+  /**
+   * 🔒 F-683 — THE FALLBACK IS `resolved, reaches nothing`, NOT `unrestricted`.
+   * Until 2026-09-09 the first arm was `kind !== "link" && kind !== "personal"
+   * → unrestricted`, so a kind nobody has designed yet, and a workspace row that
+   * vanished mid-request, both answered `edit` on every cluster in scope. Both
+   * directions are pinned: the STANDARD arm still answers `unrestricted` (the
+   * case above), and everything else answers nothing.
+   */
+  for (const [label, kind] of [
+    ["an UNKNOWN kind", "some-future-kind"],
+    ["a MISSING workspace row", null],
+  ] as const) {
+    it(`🔒 ${label} reaches NOTHING — the ceiling fails closed (F-683)`, async () => {
+      prime({ members: 1 });
+      mockShares.findWorkspaceKind.mockResolvedValue(kind);
+      const me = ctx();
+      const audience = await resolveOntologyAudience(me);
+      expect(audience.kind).toBe("resolved");
+      // The READ SCOPE is empty, so no query this service makes can return a row…
+      expect(audience.workspaceIds).toEqual([]);
+      // …and the level answers `none` even for the caller's OWN container, which
+      // `inOwnContainer` would otherwise admit at `view`/`edit`.
+      expect(levelForCluster(me, audience, cluster({ workspace_id: LINK }))).toBe("none");
+      expect(levelForCluster(me, audience, cluster())).toBe("none");
+      // ⚠ And it costs ONE probe: an unreadable kind must not buy a share fan.
+      expect(mockShares.listSharesForChannels).not.toHaveBeenCalled();
+    });
+  }
+
   it("a standard workspace's scope stays its own container — the personal shelf is NOT folded in", async () => {
     prime({ kind: "standard" });
     const audience = await resolveOntologyAudience(ctx());

@@ -118,9 +118,10 @@ export function resolveOntologyAudience(
 
 /**
  * ```
- * workspace kind ∉ {link, personal} → unrestricted  (standard workspaces UNCHANGED — Q5)
+ * workspace kind === standard       → unrestricted  (every board today — Q5, UNCHANGED)
+ * workspace kind ∈ {link, personal} → resolved from the container's share rows
  * shared credential                 → resolved, reaching NOTHING (M-10, fail closed)
- * else                              → resolved from the container's share rows
+ * anything else (unknown kind, null)→ resolved, reaching NOTHING (F-683, fail closed)
  * ```
  *
  * ⚠ THE ORDER IS THE QUERY BUDGET, and the first arm is the hot one: the
@@ -128,15 +129,40 @@ export function resolveOntologyAudience(
  * exactly ONE extra probe and never touches channels, members or shares. Only a
  * caller standing in a home container pays the fan.
  *
- * ⚠ A MISSING WORKSPACE ROW ANSWERS `unrestricted`, and that is not a hole:
- * `withWorkspaceAuth` already proved an active membership before this runs, so
- * `null` means the row vanished mid-request and every read underneath is about
- * to answer nothing anyway.
+ * 🔒 **ALL THREE ARMS ARE POSITIVE AND THE FALLBACK REACHES NOTHING (F-683,
+ * fixed 2026-09-09).** It read `if (kind !== "link" && kind !== "personal")
+ * return unrestricted`, so a THIRD container kind nobody has designed yet — and
+ * a `null`, i.e. a workspace row that vanished mid-request — both answered
+ * `unrestricted`, which is `edit` on every cluster in scope. Not exploitable at
+ * the time (`withWorkspaceAuth` has already proved an active membership, and the
+ * kind set has been closed at three since `20260823150000`), and that is exactly
+ * why it was worth writing the other way round: **the safe reading belongs in
+ * the arm, not in the default** — the choice this same function already makes
+ * for the member count below, and the `ELSE -1` in `dopl_ontology_level_rank`.
+ * A kind added tomorrow now reaches nothing until somebody names it here.
  */
 async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> {
   const kind = await findWorkspaceKind(ctx.workspaceId);
-  if (kind !== "link" && kind !== "personal") {
+  if (kind === "standard") {
     return { kind: "unrestricted", workspaceIds: [ctx.workspaceId] };
+  }
+  if (kind !== "link" && kind !== "personal") {
+    // 🔒 F-683's fail-closed arm. ⚠ The READ SCOPE is EMPTY, not
+    // `[ctx.workspaceId]` — that is what makes it "reaches nothing" rather than
+    // "reaches its own container": every repository read short-circuits on an
+    // empty set, and {@link levelForCluster} answers `none` for one (which is
+    // what closes `service-gates.ts › assertCanCreateCluster`, whose question is
+    // about a row that does not exist yet and therefore never came through a
+    // read).
+    return {
+      kind: "resolved",
+      workspaceIds: [],
+      reach: NO_ONTOLOGY_SHARES,
+      ownerAgents: new Map(),
+      source: ctx.source,
+      userId: null,
+      solo: false,
+    };
   }
 
   if (isSharedCredential(ctx)) {
@@ -266,6 +292,14 @@ export function levelForCluster(
   cluster: AudienceClusterFacts
 ): OntologyLevel {
   if (audience.kind === "unrestricted") return "edit";
+  // 🔒 AN EMPTY READ SCOPE REACHES NOTHING, SAID ONCE HERE (F-683). Every arm
+  // below is sound only because the row was READ THROUGH
+  // {@link OntologyAudience.workspaceIds} (see the docblock's third ⚠), and an
+  // empty set is the one case where no query this service makes can have
+  // returned one — including `inOwnContainer`, which asks about `ctx.workspaceId`
+  // and would otherwise admit the caller's own container to an audience that was
+  // resolved BECAUSE that container's kind could not be trusted.
+  if (audience.workspaceIds.length === 0) return "none";
 
   const scope = { id: cluster.id, workspaceId: cluster.workspace_id };
   const owns =

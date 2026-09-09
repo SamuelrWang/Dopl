@@ -30,6 +30,10 @@ const launchBudget = require('./launch-budget'); // 2026-08-31: the CHAINED-laun
 // is the electron-free module two suites slice standalone, so this pulls nothing new into the
 // funnel and `test/session-engine-slot.test.mjs` injects it like every other module binding.
 const profiles = require('./session-profiles');
+// 2026-09-09 (F-681): the PRODUCER for `context.ontologies`. ⚠ Its own module and lazily-required
+// inside, so this funnel keeps the "no electron at load" property its header claims; it is passed
+// to `test/session-engine-slot.test.mjs`'s slice as an injected handle like `profiles`.
+const ontologyReach = require('./ontology-reach');
 const { diag } = require('./diag');
 
 let deps = { sessions: null, acquireRuntime: null, startSession: null, liveOnThread: null, sessionOn: null };
@@ -157,6 +161,22 @@ async function launch(a) {
   // ⚠ AND IT IS NOT AN `if` AROUND THE LAUNCH. The line goes out and the spawn continues.
   const opScopedWarning = profiles.axisBOpScopedWarning(a.runtime);
   if (opScopedWarning) diag('session-launch: Axis B is not op-scoped on this runtime —', opScopedWarning);
+  // ── ⚠ WHICH ONTOLOGIES THIS SPAWN REACHES (2026-09-09, F-681) ────────────────────────────
+  //
+  // ONE FUNNEL, THREE LANES. The New Agent button, the directive spawn and the peer-triggered
+  // responder all arrive here, so the producer sits here rather than beside any one of them —
+  // the mistake F-510 records for the tool profile, which was spelled at one lane and forgotten
+  // by the other two.
+  // ⚠ IT CANNOT REFUSE THE LAUNCH. `fetchOntologyReach` answers `[]` on every failure and never
+  // throws; its docblock carries the whole argument, and the shape of the difference is the
+  // missing `if (!…) return { skipped }` right here (`launch-directive-spawn.js`'s startup
+  // context makes the same promise for the same reason).
+  // ⚠ AND THE KEY IS ADDED ONLY WHEN THERE IS SOMETHING TO SAY. A lane reaching no ontology
+  // hands `startSession` the caller's context OBJECT ITSELF, unchanged and possibly undefined,
+  // so its turn stays byte-identical to what it was before this module existed — which is
+  // exactly the contract `prompt-framing-ontology.js › ontologyReachLines` makes about its `[]`.
+  const ontologies = await ontologyReach.fetchOntologyReach(a.workspaceId);
+  const context = ontologies.length ? { ...(a.context || {}), ontologies } : a.context;
   const s = await deps.startSession({
     key,
     agentId,
@@ -166,7 +186,7 @@ async function launch(a) {
     side: a.side,
     profile: a.toolProfile,
     mode: a.mode,
-    context: a.context,
+    context,
     counterpartyId: a.counterpartyId, // FIX L1: bind the feed to the task's other party
     direct: a.direct, // H2: the server's is_direct flag, for the outbound card's recipient line
     firstMessage: a.firstMessage, // startSession frames it inside the per-session nonce fence

@@ -26,6 +26,7 @@ import {
   requireObject,
 } from "./service-gates";
 import { mapClusterRow, getSnapshot, getSummary } from "./service-reads";
+import { getReach } from "./service-reach";
 
 /**
  * Ontology business logic — WRITES, their gates, and the anchor. The two graph
@@ -40,7 +41,7 @@ import { mapClusterRow, getSnapshot, getSummary } from "./service-reads";
  * tenancy.
  */
 
-export { getSnapshot, getSummary };
+export { getSnapshot, getSummary, getReach };
 
 interface AuthLike {
   workspaceId: string;
