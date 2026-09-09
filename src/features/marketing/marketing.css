@@ -3218,7 +3218,7 @@
 /* THE COMPOSER'S PANELS wear the page's own panel gray — the recess a panel's
    header sits in reads as the same surface the "New channel" button stands on,
    one card out. ⚠ FILL ONLY: the concave shadow stack is deliberate and stays.
-   Hook: `composer-request-panel.tsx › PANEL_HOOK`. */
+   Hook: `composer-panel-fields.tsx › PANEL_HOOK`. */
 .lp-demo-record [data-composer-panel] {
   background-color: var(--home-panel);
 }

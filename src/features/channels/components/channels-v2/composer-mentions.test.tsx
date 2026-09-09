@@ -367,48 +367,41 @@ describe("who the picker offers", () => {
 });
 
 /**
- * THE PICKER BELONGS TO THE CHAT FIELD AND GOES WHERE IT GOES (2026-08-28).
+ * THE PICKER BELONGS TO THE CHAT FIELD, AND THE FIELD NO LONGER GOES ANYWHERE (2026-09-08).
  *
- * ⚠ TWO WAVES, ONE SURFACE, AND THE SEAM BETWEEN THEM IS WHAT THIS PINS. "One edit surface at a
- * time" (2026-08-26) UNMOUNTS the chat textarea while either panel is open; the @-picker
- * (2026-08-27) is a pure function of the DRAFT (`mentionQuery`), and a draft is state that
- * survives the unmount. So a half-typed `@di` left in the box kept the popover floating over the
- * panel, anchored to a field that was no longer there — and the `@` glyph, which appends its
- * token to that same invisible draft and then focuses a null ref, was a control whose only
- * effect was to summon it.
+ * ⚠ **THIS BLOCK PINNED AN ABSENCE UNTIL 2026-09-08 AND NOW PINS ITS OPPOSITE**, because the
+ * condition it was written for cannot occur. "One edit surface at a time" (2026-08-26) UNMOUNTED
+ * the chat textarea while a composer PANEL was open, and the @-picker (2026-08-27) is a pure
+ * function of the DRAFT (`mentionQuery`) — state the unmount does not clear — so a half-typed
+ * `@di` kept the popover floating over the panel, anchored to a field that was not there. The
+ * fix was to hide the popover and the `@` glyph on `panelOpen`. **Both panels are dialogs now**,
+ * the textarea stays mounted behind their scrims, and `panelOpen` is deleted with the inline
+ * thread panel — so hiding either control would be hiding it for no reason.
  *
- * ⚠ THE PROPERTY IS AN ABSENCE, which is the kind that comes back silently: nothing else in this
- * file or in `composer.test.tsx` fails if the popover starts rendering over a panel again.
- * ⚠ AND THE DRAFT MUST SURVIVE, which is the other half — a fix that CLEARED the draft would
- * make this absence true and throw away the operator's half-typed message to do it.
+ * ⚠ WHAT SURVIVES IS THE HALF THAT WAS ALWAYS THE POINT: **the operator's half-typed message and
+ * its popover come back untouched from the detour.** A fix that CLEARED the draft would have
+ * satisfied the old absence too, which is why that assertion was always paired with this one.
  */
-describe("the picker is gone while a panel is open", () => {
-  const openThreadPanel = () =>
+describe("the picker survives the new-thread popup", () => {
+  const openPopup = () =>
     fireEvent.click(screen.getByRole("button", { name: "New thread" }));
 
-  it("takes the popover down with the field, and brings both back", () => {
+  it("leaves the field, the draft and the popover exactly as they were", async () => {
     const body = mount();
     type(body, "hey @di");
     expect(options().length).toBeGreaterThan(0);
 
-    openThreadPanel();
-    // The field went (the 2026-08-26 rule) — and so must the popover anchored to it.
-    expect(screen.queryByLabelText("Message")).toBeNull();
-    expect(screen.queryByRole("listbox", { name: "Mention a member" })).toBeNull();
-    expect(options()).toEqual([]);
-
-    // ⚠ THE DRAFT IS STILL THERE. Shutting the panel restores the half-typed message AND its
-    // popover — the state the operator left, not a cleared box.
-    fireEvent.click(screen.getByRole("button", { name: "Close new thread" }));
+    openPopup();
+    await screen.findByRole("dialog", { name: "New thread" });
+    // ⚠ NOTHING WENT. The dialog has its own scrim; the card underneath is untouched.
     expect((screen.getByLabelText("Message") as HTMLTextAreaElement).value).toBe("hey @di");
     expect(options().length).toBeGreaterThan(0);
   });
 
-  it("takes the `@` glyph too — a control that could only misfire", () => {
+  it("keeps the `@` glyph too — it was hidden only for a field that had gone", () => {
     mount();
     expect(screen.getByRole("button", { name: "Mention" })).toBeTruthy();
-    openThreadPanel();
-    // ABSENT, not disabled: with a panel up there is no chat field to mention into at all.
-    expect(screen.queryByRole("button", { name: "Mention" })).toBeNull();
+    openPopup();
+    expect(screen.getByRole("button", { name: "Mention" })).toBeTruthy();
   });
 });

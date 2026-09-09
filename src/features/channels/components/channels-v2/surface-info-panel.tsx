@@ -30,6 +30,7 @@ import type {
   ChannelSurfaceSlots,
 } from "./channel-surface";
 import type { Channel, ChannelMention } from "../../types";
+import { launchAllowedInView } from "./launch-view-gate";
 
 export function SurfaceInfoPanel({
   channel,
@@ -127,12 +128,10 @@ export function SurfaceInfoPanel({
       }}
       agentSessions={agentSessions}
       peerSessions={agentsPanel.peerSessions}
-      canLaunchAgent={
-        agentsPanel.canLaunch &&
-        !!openThread &&
-        (openThread.createdBy === currentUserId ||
-          openThread.targetUserId === currentUserId)
-      }
+      // ⚠ CHANNEL VIEW LAUNCHES TOO (fixed 2026-09-08) — `agents-controls.ts ›
+      // launchAllowedInView` carries the rule and its test; it used to require an
+      // open thread, which left channel view with no launch control at all.
+      canLaunchAgent={launchAllowedInView(agentsPanel.canLaunch, openThread, currentUserId)}
       launchBusy={agentsPanel.launchBusy}
       launchError={agentsPanel.launchError}
       // ⚠ THE PROMISE IS HANDED THROUGH, not voided (2026-08-22). The

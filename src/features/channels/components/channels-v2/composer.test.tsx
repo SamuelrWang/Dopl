@@ -4,16 +4,22 @@
  *
  * The properties pinned here are the ones a redesign loses quietly:
  *
- *  - **N pills = N addressees.** One send carries every remaining pill, and
- *    dropping a pill drops that person from the request. "Broadcast" is not a
- *    shape this product has (INVARIANTS §5).
- *  - **Zero pills is NOT SENDABLE**, and the button says why rather than
- *    swallowing the click. ⚠ This is the courtesy half only — the CONTRACT is
- *    `schema.ts › TaskFanOutSchema`, where an empty addressee list is a 400.
- *  - **One BASE idempotency key per Send**, minted here (INVARIANTS §8). The
- *    server derives the per-addressee keys and the group id from it.
  *  - **The plain composer is human chat**, and `intent: "chat"` rides the wire
  *    explicitly — absence reads as `request` server-side.
+ *  - **ONE SUBMIT, ONE ACT, AND IT IS THE ARROW** (2026-09-08). The card carried a second,
+ *    LABELED submit while a form stood on it; both forms are dialogs now, so a labeled button on
+ *    this card is a form that came back.
+ *  - **THREAD CREATION IS A POPUP AND BOTH OPENERS REACH IT** — the Threads tab's nonce and the
+ *    toolbar's `MessageSquarePlus` glyph (Samuel, 2026-09-08: *"look there is an icon in the text
+ *    input bar that is supposed to spawn new threads. Why wasn't that wired in"*).
+ *  - **THE INLINE REQUEST PANEL IS GONE**, and its absence is asserted rather than assumed —
+ *    the `AgentRequestPanel` component, its `useThreadRequest` hook and the composer's
+ *    three-act submit derivation were DELETED, not disarmed.
+ *
+ * ⚠ THE FAN-OUT'S OWN PINS MOVED TO `new-thread-dialog.test.tsx` ON 2026-09-08 — the payload
+ * shape, the one base key, pills → `toUserIds`, and the refusals. They were written here against
+ * the inline panel, which was the only surface that could raise a request through THIS card's
+ * Send; the write is unchanged and its caller moved, so the cases moved with the caller.
  *
  * ⚠ `useThreadWrites` is MOCKED. What this file is about is which DRAFT the
  * composer builds; the write layer's own behaviour (optimistic rows, reconcile,
@@ -21,15 +27,14 @@
  * `hooks/use-thread-writes.test.ts`, which is where it belongs.
  *
  * ⚠ THE BOT ICON AND THE TEMPLATE CHEVRON ARE `composer-launch.test.tsx` SINCE
- * 2026-08-26 — the §1 split at the 500-line cap, which the panel's own
- * description field pushed this file over. **The seam is the subject, not the
- * line count**: this file is about what the composer WRITES (a chat message or
- * a request fan-out); that one is about the BRIDGE SPAWN beside it, which posts
- * nothing and reaches a different layer entirely.
+ * 2026-08-26 — the §1 split at the 500-line cap. **The seam is the subject, not
+ * the line count**: this file is about what the composer WRITES; that one is
+ * about the BRIDGE SPAWN beside it, which posts nothing and reaches a different
+ * layer entirely.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const send = vi.fn();
 const fanOutThreads = vi.fn();
@@ -86,45 +91,18 @@ function mount(over: Partial<React.ComponentProps<typeof ChannelsV2Composer>> = 
     />
   );
   return {
-    // ⚠ CAPTURED AT MOUNT, WHICH IS PANEL-CLOSED. The chat textarea is
-    // UNMOUNTED while the request panel is open (Samuel, 2026-08-26 — one edit
-    // surface), so this reference goes stale on `openPanel`; the request tests
-    // below reach for `title()` / `description()` instead, which is the point.
     body: screen.getByLabelText("Message") as HTMLTextAreaElement,
-    /** The chat textarea if it is on screen at all, else `null`. */
+    /** ⚠ THE CHAT TEXTAREA NEVER GOES ANYWHERE NOW — the popup draws its own scrim. This stayed a
+     *  lazy query because its ABSENCE is what the popup cases assert against. */
     bodyOrNull: () => screen.queryByLabelText("Message") as HTMLTextAreaElement | null,
-    title: () => screen.getByLabelText("Thread title") as HTMLInputElement,
-    description: () =>
-      screen.getByLabelText("Thread description") as HTMLTextAreaElement,
-    openPanel: () =>
-      // ⚠ THE PANEL MOVED OFF THE BOT ICON ON 2026-08-21 (Samuel). `Bot` is New
-      // Agent now — a bridge spawn that posts nothing — and this panel, which
-      // raises a REQUEST at another member over the write layer, opens from its
-      // own "New thread" control. Two acts, two glyphs.
-      fireEvent.click(screen.getByRole("button", { name: "New thread" })),
-    // ⚠ ONE BUTTON, TWO LABELS: "Send" with the panel closed, "Create" with it
-    // open (Samuel, 2026-08-24) — the second act raises a thread, it does not
-    // send a message. Matching both is what keeps this helper honest about
-    // there being ONE submit control.
-    sendButton: () =>
-      screen.getByRole("button", {
-        name: /^(Send|Create)$/,
-      }) as HTMLButtonElement,
+    /** The toolbar's `MessageSquarePlus` — icon-only, and the composer's own thread opener. */
+    glyph: () => screen.getByRole("button", { name: "New thread" }) as HTMLButtonElement,
+    sendButton: () => screen.getByRole("button", { name: "Send" }) as HTMLButtonElement,
   };
 }
 
 function type(field: HTMLTextAreaElement | HTMLInputElement, value: string) {
   fireEvent.change(field, { target: { value } });
-}
-
-/** Title + description, the two halves a request cannot be raised without. */
-function fillRequest(
-  c: ReturnType<typeof mount>,
-  title = "Sweep the docs",
-  description = "start here"
-) {
-  type(c.title(), title);
-  type(c.description(), description);
 }
 
 describe("the plain composer sends CHAT", () => {
@@ -163,7 +141,17 @@ describe("the plain composer sends CHAT", () => {
   });
 });
 
-describe("another surface can open the new-thread POPUP", () => {
+/**
+ * TWO OPENERS, ONE FORM (Samuel, 2026-09-08).
+ *
+ * ⚠ THE GLYPH WAS THE HALF THAT WAS MISSING. The Threads tab's button was pointed at the popup on
+ * the morning of 2026-09-08 and the toolbar's `MessageSquarePlus` was left on the inline panel,
+ * which is the state Samuel found: *"look there is an icon in the text input bar that is supposed
+ * to spawn new threads. Why wasn't that wired in"*.
+ * ⚠ THE TWO NONCES ARE **ADDED**, not chosen between, and that is what the third case is for: a
+ * composer that read one source would leave the other's button dead for the rest of the session.
+ */
+describe("thread creation is a POPUP, and BOTH openers reach it", () => {
   const props = (newThreadSignal: number) => ({
     channelId: CHANNEL_ID,
     workspaceId: "ws-1",
@@ -172,188 +160,95 @@ describe("another surface can open the new-thread POPUP", () => {
     gate: { begin: vi.fn(), end: vi.fn() },
     newThreadSignal,
   });
-  /**
-   * The panel's open state.
-   *
-   * ⚠ THIS READ THE MESSAGE TEXTAREA'S PLACEHOLDER UNTIL 2026-08-26 — the panel
-   * used to swap it to "Describe the request", because the request's body WAS
-   * the chat draft. That surface is gone (the description is now a field inside
-   * the panel), so the tell is the toggle's own `aria-pressed`, which is what a
-   * screen reader reads too and what the sibling describe block already uses.
-   */
-  const panelOpen = () =>
-    screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed");
-
-  /** The POPUP, by its own accessible name. ⚠ NOT the inline panel — see the case below. */
   const popup = () => screen.queryByRole("dialog", { name: "New thread" });
+  /** ⚠ SCOPED TO THE DIALOG. The composer's own toolbar grows a "Discard" the moment the chat
+   *  draft has a character in it, and a bare `getByRole` would find two — see the last case. */
+  const discard = () =>
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "New thread" })).getByRole("button", {
+        name: "Discard",
+      })
+    );
 
-  /**
-   * ⚠ THE SIGNAL IS A COUNTER, so this asserts the SECOND ask lands too — a boolean prop would
-   * open once and then sit `true`, leaving the Threads tab's button dead for the rest of the
-   * session.
-   *
-   * ⚠ **IT OPENS THE POPUP AND NOT THE INLINE PANEL SINCE 2026-09-08** (Samuel: *"i want to make
-   * a pop up for the threads creation as well"*). The panel is still in the tree and still opens
-   * from the toolbar's own glyph — `aria-pressed` staying `"false"` through both asks is the half
-   * of this case that would go silent if the signal were ever re-attached to
-   * `use-thread-request.ts`, giving one button two forms.
-   */
-  it("opens the POPUP on a signal change, and again on the next one — never the panel", async () => {
+  it("opens on ANOTHER SURFACE'S signal, and again on the next one", async () => {
+    // ⚠ THE SIGNAL IS A COUNTER, so this asserts the SECOND ask lands too — a boolean prop would
+    // open once and then sit `true`, leaving the Threads tab's button dead.
     const view = render(<ChannelsV2Composer {...props(0)} />);
     expect(popup()).toBeNull();
-    expect(panelOpen()).toBe("false");
 
     view.rerender(<ChannelsV2Composer {...props(1)} />);
     await waitFor(() => expect(popup()).toBeTruthy());
-    expect(panelOpen()).toBe("false");
 
-    // Dismiss it, then ask again — the second increment must reopen.
-    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    discard();
     await waitFor(() => expect(popup()).toBeNull());
     view.rerender(<ChannelsV2Composer {...props(2)} />);
     await waitFor(() => expect(popup()).toBeTruthy());
   });
-});
 
-/**
- * ONE EDIT SURFACE AT A TIME (Samuel, 2026-08-26: *"the user will solely need to
- * edit the new thread panel"*).
- *
- * ⚠ THE PROPERTY IS AN ABSENCE, which is exactly the kind that comes back
- * silently. The request's body used to be the chat textarea under the panel —
- * one box that changed meaning while the panel was open — and re-rendering it
- * beside the Description field would restore that ambiguity without failing
- * anything else in this file.
- */
-describe("the composer's two edit surfaces", () => {
-  it("takes the chat textarea off screen while the panel is open", () => {
+  it("opens on the TOOLBAR GLYPH, and again after a Discard", async () => {
+    // 🔒 MUTATION-PROOF: point `composer.tsx`'s `onNewThread` at a no-op, or stop adding
+    // `threadDialogNonce` into the dialog's `signal`, and this goes red — which is exactly the
+    // build Samuel was looking at.
     const c = mount();
-    expect(c.bodyOrNull()).not.toBeNull();
+    expect(popup()).toBeNull();
 
-    c.openPanel();
-    expect(c.bodyOrNull()).toBeNull();
-    // ⚠ Not merely "a title field exists": the panel is always MOUNTED inside
-    // the collapsing grid, so both of its fields are queryable either way. What
-    // this pins is that the request's own description is the box on offer.
-    expect(c.description()).toBeTruthy();
+    fireEvent.click(c.glyph());
+    await waitFor(() => expect(popup()).toBeTruthy());
+
+    discard();
+    await waitFor(() => expect(popup()).toBeNull());
+    fireEvent.click(c.glyph());
+    await waitFor(() => expect(popup()).toBeTruthy());
   });
 
-  it("gives the half-typed chat message back when the panel shuts", () => {
-    // ⚠ UNMOUNTED, NOT DISCARDED. `draft` is state in the composer rather than
-    // in the element, and a reader who opens the panel by mistake must not lose
-    // the message they were writing.
+  it("lets the two sources interleave — neither masks the other", async () => {
+    // ⚠ THE MUTATION THIS CATCHES is a composer that picks ONE source (`signal={newThreadSignal}`
+    // or `signal={threadDialogNonce}`) instead of summing them. Either single-source build passes
+    // one of the two cases above and fails here.
+    const view = render(<ChannelsV2Composer {...props(0)} />);
+    fireEvent.click(screen.getByRole("button", { name: "New thread" }));
+    await waitFor(() => expect(popup()).toBeTruthy());
+    discard();
+    await waitFor(() => expect(popup()).toBeNull());
+
+    view.rerender(<ChannelsV2Composer {...props(1)} />);
+    await waitFor(() => expect(popup()).toBeTruthy());
+    discard();
+    await waitFor(() => expect(popup()).toBeNull());
+
+    fireEvent.click(screen.getByRole("button", { name: "New thread" }));
+    await waitFor(() => expect(popup()).toBeTruthy());
+  });
+
+  it("has NO INLINE thread form left on the card", () => {
+    // ⚠ DELETED, NOT HIDDEN (the channels-v2 purge ruling). The panel used to be MOUNTED at all
+    // times inside a `grid-rows-[0fr]` collapse, so its fields were queryable even while shut —
+    // which is why this asserts the fields and the panel's own × by name rather than looking for
+    // something visible. ⚠ AND THE GLYPH CARRIES NO `aria-pressed`: it opens a modal it cannot
+    // close, so a pressed state would be a claim nothing keeps true.
+    const c = mount();
+    expect(screen.queryByLabelText("Thread title")).toBeNull();
+    expect(screen.queryByLabelText("Thread description")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close new thread" })).toBeNull();
+    expect(c.glyph().getAttribute("aria-pressed")).toBeNull();
+    // No second submit on the card either — see the footer block below.
+    expect(screen.queryByRole("button", { name: "Create" })).toBeNull();
+  });
+
+  it("leaves the chat draft alone behind the popup", async () => {
+    // ⚠ THE PROPERTY THE DELETED "one edit surface" CASES PROTECTED, kept. The panel UNMOUNTED
+    // this textarea and the draft survived in composer state; the popup does not have to unmount
+    // anything, so what is pinned now is that it does not — the field and the words are both
+    // still there under the scrim.
     const c = mount();
     type(c.body, "morning, all");
+    fireEvent.click(c.glyph());
+    await waitFor(() => expect(popup()).toBeTruthy());
 
-    c.openPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Close new thread" }));
     expect(c.bodyOrNull()?.value).toBe("morning, all");
-  });
-});
-
-describe("the agent panel sends a REQUEST FAN-OUT", () => {
-  it("addresses every remaining pill, in ONE send with ONE base key", () => {
-    const c = mount();
-    c.openPanel();
-    fillRequest(c);
-    fireEvent.click(c.sendButton());
-
-    expect(fanOutThreads).toHaveBeenCalledTimes(1);
-    const draft = fanOutThreads.mock.calls[0][0];
-    // Every OTHER member — you do not address your own agent.
-    expect(draft.toUserIds).toEqual([PEER, THIRD]);
-    expect(draft.title).toBe("Sweep the docs");
-    expect(draft.body).toBe("start here");
-    // ⚠ ONE base key for the whole send. The per-addressee keys are derived
-    // server-side; minting per pill here would move that rule to the client.
-    expect(typeof draft.clientMsgId).toBe("string");
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  /**
-   * ⚠ THE BODY IS THE PANEL'S DESCRIPTION, NOT THE CHAT DRAFT (2026-08-26). The
-   * wire field is still `body` — what moved is which BOX the operator types it
-   * in — so this is the case that would pass on the OLD wiring too if the
-   * description merely happened to be empty. Typing a chat draft FIRST is what
-   * makes it discriminating: the old composer would have sent that string.
-   */
-  it("takes the body from the panel's description, never the chat draft", () => {
-    const c = mount();
-    type(c.body, "a chat message I was part-way through");
-    c.openPanel();
-    fillRequest(c, "Sweep the docs", "read every §5 bullet");
-    fireEvent.click(c.sendButton());
-
-    expect(fanOutThreads.mock.calls[0][0].body).toBe("read every §5 bullet");
-  });
-
-  it("drops a removed pill from the request rather than sending to them", () => {
-    const c = mount();
-    c.openPanel();
-    fireEvent.click(
-      screen.getByRole("button", { name: /^Remove .*Ada/ })
-    );
-    fillRequest(c);
-    fireEvent.click(c.sendButton());
-
-    expect(fanOutThreads.mock.calls[0][0].toUserIds).toEqual([PEER]);
-  });
-
-  it("clears BOTH panel fields after a send", () => {
-    const c = mount();
-    c.openPanel();
-    fillRequest(c);
-    fireEvent.click(c.sendButton());
-
-    // The panel shuts, and its fields are empty behind it — a second request
-    // must not start pre-loaded with the first one's words.
-    expect(c.title().value).toBe("");
-    expect(c.description().value).toBe("");
-  });
-
-  it("is NOT SENDABLE with no addressee, and says why", () => {
-    const c = mount();
-    c.openPanel();
-    for (const name of [/^Remove .*Diana/, /^Remove .*Ada/]) {
-      fireEvent.click(screen.getByRole("button", { name }));
-    }
-    fillRequest(c);
-
-    // ⚠ The UI refusal is a COURTESY. `schema.ts › TaskFanOutSchema` refuses an
-    // empty `toUserIds` with a 400, which is the rule; this is the affordance.
-    expect(c.sendButton().disabled).toBe(true);
-    expect(c.sendButton().title).toBe(
-      "A request needs a title, a description and at least one agent"
-    );
-    expect(screen.getByText(/reaches nobody/)).toBeTruthy();
-    fireEvent.click(c.sendButton());
-    expect(fanOutThreads).not.toHaveBeenCalled();
-  });
-
-  it("is NOT SENDABLE with no title", () => {
-    const c = mount();
-    c.openPanel();
-    type(c.description(), "start here");
-    expect(c.sendButton().disabled).toBe(true);
-    fireEvent.click(c.sendButton());
-    expect(fanOutThreads).not.toHaveBeenCalled();
-  });
-
-  /** ⚠ THE THIRD REQUIREMENT, and the newest. A title with no description is
-   *  a thread nobody can act on, and before 2026-08-26 the description could
-   *  not be empty because it was the chat draft the Send gate already checked —
-   *  moving it into the panel is exactly what put this case at risk. */
-  it("is NOT SENDABLE with no description", () => {
-    const c = mount();
-    c.openPanel();
-    type(c.title(), "Sweep the docs");
-    expect(c.sendButton().disabled).toBe(true);
-    fireEvent.click(c.sendButton());
-    expect(fanOutThreads).not.toHaveBeenCalled();
-
-    // Whitespace is not a description either.
-    type(c.description(), "   ");
-    expect(c.sendButton().disabled).toBe(true);
+    discard();
+    await waitFor(() => expect(popup()).toBeNull());
+    expect(c.bodyOrNull()?.value).toBe("morning, all");
   });
 });
 
@@ -376,19 +271,19 @@ describe("the composer's footer", () => {
     expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
   });
 
-  it("is ONE submit, and a PANEL's submit wears a VISIBLE word", () => {
-    // ⚠ THE LABEL IS RENDERED TEXT, NOT A `title` ON AN ARROW (Samuel, 2026-08-27, from the
-    // rendered app). Shipping it as a tooltip made all three acts look identical on screen, and
-    // the earlier pin passed because an `aria-label` satisfies `getByRole({ name })` just as text
-    // content does. **Asserting `textContent` is what makes this case see the difference.**
-    const c = mount();
-    // A plain message sends from the kit's ARROW — an icon button, no word on it.
-    expect(screen.getByRole("button", { name: "Send" }).textContent).toBe("");
-
-    c.openPanel();
-    const create = screen.getByRole("button", { name: "Create" });
-    expect(create.textContent).toBe("Create");
-    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+  it("is ONE submit, and it is the ARROW — no labeled button on the card", () => {
+    // ⚠ THE CARD CARRIED A SECOND FACE UNTIL 2026-09-08: a labeled button wearing the open
+    // panel's verb ("Create" / "Launch"), rendered on `panelOpen`. Both forms are dialogs with
+    // their own footer now, so the branch and the button are DELETED. **The mutation this catches
+    // is a labeled submit coming back onto the card**, which is a form coming back with it.
+    // ⚠ `textContent` IS THE ASSERTION, not the accessible name: an `aria-label` satisfies
+    // `getByRole({ name })` exactly as text content does, which is how the 2026-08-27 version of
+    // this case passed over an arrow wearing its verb as a tooltip.
+    mount();
+    const arrow = screen.getByRole("button", { name: "Send" });
+    expect(arrow.textContent).toBe("");
+    expect(screen.getAllByRole("button", { name: "Send" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Launch" })).toBeNull();
   });
 
   it("hangs SEND at the right end of the ICON ROW, not above it", () => {
@@ -421,19 +316,6 @@ describe("the composer's footer", () => {
     mount();
     expect(screen.queryByRole("button", { name: "Expand composer" })).toBeNull();
     expect(screen.queryByRole("button", { name: /expand/i })).toBeNull();
-  });
-});
-
-// ⚠ THE SHARED FIELD KIT'S PINS ARE `panel-field.test.tsx` (2026-08-27) — it is `PanelField`,
-// which BOTH panels mount, and half its cases were landing here and half in the launch suite.
-// ⚠ ONE PROPERTY STAYS HERE because it is the PANEL's and not the kit's: the description starts
-// at one line (`rows={1}`) rather than the three-line box that made the panel tall before a word
-// was typed. The growth itself is `use-auto-grow.ts`, a style mutation jsdom cannot measure.
-describe("the thread panel's description", () => {
-  it("starts at ONE line — it grows as it is typed", () => {
-    const c = mount();
-    c.openPanel();
-    expect(c.description().rows).toBe(1);
   });
 });
 

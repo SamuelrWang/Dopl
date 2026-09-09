@@ -6,11 +6,12 @@
  *
  * What is pinned here is what a redesign of a WORKING form loses quietly:
  *
- *  - **THE WIRE DID NOT MOVE.** `the payload is the panel's, field for field` drives BOTH forms
- *    through the SAME composer with the SAME keystrokes and compares the two drafts. It is the
- *    only case in this file that could not be written after the inline panel is deleted, and it is
- *    the reason the panel is still mounted: a parity assertion with one side missing is a
- *    snapshot of the survivor.
+ *  - **THE WIRE DID NOT MOVE.** ⚠ **THIS WAS A PARITY ASSERTION AGAINST THE INLINE PANEL UNTIL
+ *    2026-09-08**, driving BOTH forms through the SAME composer with the SAME keystrokes. The
+ *    panel is DELETED (Samuel wired its glyph to this popup instead), and a parity case with one
+ *    side missing is a snapshot of the survivor — so the shape it compared is now written out as
+ *    LITERALS: trimmed title, the form's description as `body`, one `toUserIds` entry per pill,
+ *    and NOTHING ELSE on the object. The literals are the panel's, field for field.
  *  - **THE ADDRESSEES ARE A LIST, NOT A `PillChoice`.** `toUserIds` is plural; the kit's
  *    single-choice row is not, and a request reaching one member where the panel reached three
  *    would be a different write wearing the same button.
@@ -89,12 +90,12 @@ async function openPopup() {
 }
 
 /**
- * Every query that could match BOTH forms goes through here.
+ * Scoped to the dialog.
  *
- * ⚠ THE INLINE PANEL IS ALWAYS MOUNTED — it collapses to `grid-rows-[0fr]` and goes `inert`, it
- * does not unmount — so it renders its own copy of every addressee pill at all times. A bare
- * `screen.getByText("Diana's agent")` finds two, and a test that reached for `getAllBy…[0]`
- * would be asserting on whichever form the DOM happens to put first.
+ * ⚠ IT EXISTS BECAUSE THE INLINE PANEL USED TO RENDER ITS OWN COPY OF EVERY PILL — always
+ * mounted, collapsed to `grid-rows-[0fr]` — so a bare `screen.getByText("Diana's agent")` found
+ * two. That panel is deleted, and the scope STAYS: this composer card can mount a second dialog
+ * (New agent) whose own fields must never satisfy an assertion about this one.
  */
 const dialog = () => within(screen.getByRole("dialog", { name: "New thread" }));
 
@@ -163,19 +164,7 @@ describe("the popup renders the request's fields", () => {
 
 // ── 2. THE PAYLOAD, AGAINST THE PANEL IT REPLACED ────────────────────────────
 
-/** Fill and submit the INLINE panel — the composer's own `MessageSquarePlus` glyph, which is the
- *  only opener it has left. Returns the draft `fanOutThreads` received. */
-function draftFromPanel(title: string, body: string) {
-  render(<ChannelsV2Composer {...composerProps(0)} />);
-  fireEvent.click(screen.getByRole("button", { name: "New thread" }));
-  type(screen.getByLabelText("Thread title") as HTMLInputElement, title);
-  type(screen.getByLabelText("Thread description") as HTMLTextAreaElement, body);
-  fireEvent.click(screen.getByRole("button", { name: "Create" }));
-  expect(fanOutThreads).toHaveBeenCalledTimes(1);
-  return fanOutThreads.mock.calls[0][0];
-}
-
-/** The same two fields, the same keystrokes, through the POPUP. */
+/** The two fields, the keystrokes, and the press — through the POPUP. */
 async function draftFromPopup(title: string, body: string) {
   await openPopup();
   type(dialogTitle(), title);
@@ -186,26 +175,22 @@ async function draftFromPopup(title: string, body: string) {
 }
 
 describe("the payload is the panel's, field for field", () => {
-  it("builds the SAME draft from the same inputs", async () => {
-    // ⚠ THE TRAILING SPACE IS THE ASSERTION'S POINT: both surfaces `trim()`, and a popup that
+  it("builds the draft the panel built, from the same inputs", async () => {
+    // ⚠ THE TRAILING SPACE IS THE ASSERTION'S POINT: the panel `trim()`ed, and a popup that
     // forgot to would put a title on the wire the panel never could.
-    const panel = draftFromPanel("  Sweep the docs  ", "  start here  ");
-    cleanup();
-    fanOutThreads.mockClear();
     const popup = await draftFromPopup("  Sweep the docs  ", "  start here  ");
 
     // 🔒 MUTATION-PROOF: drop the `.trim()`, rename `body` to `description`, or send
     // `targets` instead of `addressed` in `new-thread-dialog.tsx` and exactly one of these fails.
-    expect(popup.channelId).toBe(panel.channelId);
-    expect(popup.title).toBe(panel.title);
+    expect(popup.channelId).toBe(CHANNEL_ID);
     expect(popup.title).toBe("Sweep the docs");
-    expect(popup.body).toBe(panel.body);
     expect(popup.body).toBe("start here");
-    expect(popup.toUserIds).toEqual(panel.toUserIds);
     expect(popup.toUserIds).toEqual([PEER, THIRD]);
-    // The KEY SETS must match too — a popup carrying an extra field is a payload the server's
-    // schema has never seen.
-    expect(Object.keys(popup).sort()).toEqual(Object.keys(panel).sort());
+    // ⚠ THE KEY SET IS PART OF THE CLAIM — a draft carrying an extra field is a payload the
+    // server's schema has never seen, and `TaskFanOutSchema` is not a `.passthrough()`.
+    expect(Object.keys(popup).sort()).toEqual(
+      ["body", "channelId", "clientMsgId", "title", "toUserIds"]
+    );
   });
 
   it("mints ONE idempotency key per Create, and a FRESH one each time", async () => {
@@ -305,9 +290,10 @@ function ThreadsTabHarness() {
   );
 }
 
-/** ⚠ TWO CONTROLS ANSWER TO "New thread" while both forms live — the TAB's text button and the
- *  composer's icon glyph. The tab's is the one with the words IN it; the glyph is icon-only and
- *  carries its name on `aria-label`. Picking by index would silently follow a DOM reorder. */
+/** ⚠ TWO CONTROLS ANSWER TO "New thread", AND BOTH OPEN THIS ONE FORM — the TAB's text button
+ *  and the composer's icon glyph. The tab's is the one with the words IN it; the glyph is
+ *  icon-only and carries its name on `aria-label`. Picking by index would silently follow a DOM
+ *  reorder. */
 const tabButton = () =>
   screen
     .getAllByRole("button", { name: "New thread" })
@@ -317,10 +303,10 @@ const composerGlyph = () =>
     .getAllByRole("button", { name: "New thread" })
     .find((el) => el.textContent === "") as HTMLButtonElement;
 
-describe("the Threads tab's New thread button opens the popup", () => {
-  it("opens it, and opens it AGAIN after a Discard", async () => {
-    // 🔒 MUTATION-PROOF: point `composer.tsx`'s `NewThreadDialog signal` back at `0`, or hand the
-    // signal to `useThreadRequest` again, and this goes red.
+describe("both New thread buttons open the one popup", () => {
+  it("opens it from the TAB, and opens it AGAIN after a Discard", async () => {
+    // 🔒 MUTATION-PROOF: point `composer.tsx`'s `NewThreadDialog signal` at `threadDialogNonce`
+    // alone, and this goes red.
     render(<ThreadsTabHarness />);
     const button = tabButton;
     expect(screen.queryByRole("dialog", { name: "New thread" })).toBeNull();
@@ -339,18 +325,33 @@ describe("the Threads tab's New thread button opens the popup", () => {
     await waitFor(() => expect(screen.getByRole("dialog", { name: "New thread" })).toBeTruthy());
   });
 
-  it("leaves the INLINE panel shut — one button, one form", async () => {
-    // ⚠ THE HALF THAT GOES SILENT if the signal is ever re-attached to `use-thread-request.ts`:
-    // one button would then open two forms, and only `aria-pressed` says so.
+  it("opens the SAME form from the COMPOSER GLYPH, and writes the same draft", async () => {
+    // ⚠ THE GLYPH WAS THE MISSING WIRE (Samuel, 2026-09-08: *"look there is an icon in the text
+    // input bar that is supposed to spawn new threads. Why wasn't that wired in"*). It opened an
+    // INLINE panel until this change; that panel is deleted, so what this pins is that the glyph
+    // reaches THIS dialog and that a request raised from it is the same write.
+    // 🔒 MUTATION-PROOF: point `composer.tsx`'s `onNewThread` at a no-op, or drop
+    // `threadDialogNonce` out of the dialog's `signal`, and this goes red.
     render(<ThreadsTabHarness />);
-    fireEvent.click(tabButton());
+    fireEvent.click(composerGlyph());
     await waitFor(() => expect(screen.getByRole("dialog", { name: "New thread" })).toBeTruthy());
-    expect(composerGlyph().getAttribute("aria-pressed")).toBe("false");
-    // ⚠ THE PANEL IS ALWAYS MOUNTED (a `grid-rows` collapse, `inert` while shut), so its ABSENCE
-    // is not assertable and `inert` is what "shut" means here.
-    expect(
-      (screen.getByLabelText("Thread title").closest("[inert]") ??
-        screen.getByLabelText("Thread title").closest("div[inert]")) !== null
-    ).toBe(true);
+
+    type(dialogTitle(), "Sweep the docs");
+    type(dialogBody(), "start here");
+    fireEvent.click(createButton());
+    expect(fanOutThreads).toHaveBeenCalledTimes(1);
+    expect(fanOutThreads.mock.calls[0][0].toUserIds).toEqual([PEER, THIRD]);
+  });
+
+  it("has NO SECOND thread form for either button to reach", () => {
+    // ⚠ DELETED, NOT HIDDEN. The inline panel's fields were queryable even while it was shut —
+    // it collapsed rather than unmounting — so their absence is the assertion that says the
+    // panel is gone rather than merely closed.
+    render(<ThreadsTabHarness />);
+    expect(screen.queryByLabelText("Thread title")).toBeNull();
+    expect(screen.queryByLabelText("Thread description")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close new thread" })).toBeNull();
+    // ⚠ AND THE GLYPH HAS NO PRESSED STATE: it opens a modal it cannot close.
+    expect(composerGlyph().getAttribute("aria-pressed")).toBeNull();
   });
 });

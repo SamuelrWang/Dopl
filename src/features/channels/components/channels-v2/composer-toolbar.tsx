@@ -14,9 +14,15 @@
  * card has one submit and it hangs at the end of this row. Splitting the row into two flex
  * boxes would satisfy neither half.
  *
- * ⚠ **NO STATE LIVES HERE.** The launch panel, the request panel, the @-picker and the
+ * ⚠ **NO STATE LIVES HERE.** The launch dialog, the new-thread dialog, the @-picker and the
  * dictation engine are all the card's; this file is markup plus the two shared geometry
  * constants below.
+ *
+ * ⚠ **NOTHING IN THIS ROW BRANCHES ON A PANEL ANY MORE (2026-09-08).** `panelOpen` — and with it
+ * the hidden `@` glyph and the labeled submit button — went when the INLINE request panel was
+ * deleted; both composer forms are modals with their own footers, so every control here renders
+ * unconditionally and the submit has one face. Restoring a branch here means restoring a form to
+ * the card, which is the thing that was removed.
  */
 
 import { AtSign, Bot, MessageSquarePlus, Mic, Smile } from "lucide-react";
@@ -52,30 +58,27 @@ export function ComposerToolbar({
   newAgent,
   launchOpen,
   onToggleLaunch,
-  requestOpen,
-  onToggleRequest,
-  panelOpen,
+  onNewThread,
   onMention,
   dictation,
   hasContent,
   onClear,
-  submitLabel,
   submitHint,
   submitDisabled,
   onSubmit,
 }: {
   newAgent?: AgentLaunchControls;
+  /** The New agent DIALOG's own open state — the Bot icon's pressed face, nothing else. */
   launchOpen: boolean;
-  /** ⚠ THE TWO PANELS ARE MUTUALLY EXCLUSIVE — the card closes the other one inside these. */
   onToggleLaunch: () => void;
-  requestOpen: boolean;
-  onToggleRequest: () => void;
-  panelOpen: boolean;
+  /** ⚠ **OPEN, NOT TOGGLE** (2026-09-08). Both thread forms are one popup now, and the card
+   *  nonces it; a glyph that could SHUT the dialog from behind its own scrim would be a second
+   *  answer to "how does this form close". The card closes the launch form inside this. */
+  onNewThread: () => void;
   onMention: () => void;
   dictation: Dictation;
   hasContent: boolean;
   onClear: () => void;
-  submitLabel: string;
   submitHint: string;
   submitDisabled: boolean;
   onSubmit: () => void;
@@ -104,33 +107,36 @@ export function ComposerToolbar({
           onClick={onToggleLaunch}
         />
       )}
-      {/* NEW THREAD — moved off the Bot icon, otherwise untouched. */}
+      {/* NEW THREAD — moved off the Bot icon in 2026-08-21, and WIRED TO THE POPUP on 2026-09-08
+          (Samuel: *"there is an icon in the text input bar that is supposed to spawn new threads.
+          Why wasn't that wired in"*). It opened an inline panel on this card until then and that
+          panel is DELETED, so there is no open state for this glyph to press against — the form
+          it asks for draws its own scrim, and `aria-pressed` on a control that cannot also close
+          it would be a claim nothing here can keep true. */}
       <IconButton
         icon={MessageSquarePlus}
         label="New thread"
         size={TOOLBAR_GLYPH}
         className={TOOLBAR_ICON}
-        active={requestOpen}
-        onClick={onToggleRequest}
+        onClick={onNewThread}
       />
       {/* ⚠ IT OPENS THE PICKER BY WRITING THE `@` (Samuel, 2026-08-27) — it was inert, a glyph
           beside a working control, which §5's interaction-completeness ruling forbids. There is
           no second "open the popover" path to keep in step: the popover is a pure function of
           the draft (`mentionQuery`), so the honest way to open it is to put the token the
           operator would have typed, then focus the caret after it.
-          ⚠ ABSENT WHILE A PANEL IS OPEN (2026-08-28), on the same `panelOpen` condition the
-          textarea it writes into already follows. With that draft unmounted the click typed
-          into a box nobody could see and focused a null ref — a control that can only misfire.
-          ABSENT, not disabled: with a panel up there is no chat field to mention into at all. */}
-      {!panelOpen && (
-        <IconButton
-          icon={AtSign}
-          label="Mention"
-          size={TOOLBAR_GLYPH}
-          className={TOOLBAR_ICON}
-          onClick={onMention}
-        />
-      )}
+          ⚠ IT IS UNCONDITIONAL AGAIN SINCE 2026-09-08. It was hidden on `panelOpen` from
+          2026-08-28, because the inline panels unmounted the textarea it writes into and the
+          click then typed into a box nobody could see. Both forms are modals now, the textarea
+          never leaves, and a glyph gated on a condition that can no longer be true is dead
+          branch dressed as a rule. */}
+      <IconButton
+        icon={AtSign}
+        label="Mention"
+        size={TOOLBAR_GLYPH}
+        className={TOOLBAR_ICON}
+        onClick={onMention}
+      />
       {/* ⚠ NO "EXPAND COMPOSER" GLYPH, NO SHORTCUTS (Zap), NO ATTACH (Paperclip) — DELETED,
           not hidden (Samuel, live reviews 2026-08-28 and 2026-09-04). None of the three ever
           carried an `onClick`, so nothing became unreachable, and §5's interaction-completeness
@@ -188,38 +194,25 @@ export function ComposerToolbar({
           )}
         />
       )}
-      {/* ⚠ TWO FACES, WHICH ONE SHOWS IS THE ACT, AND BOTH HANG HERE — right end of this row,
-          level with the icons (Samuel, live review 2026-08-28). The ARROW used to sit in the
-          input row beside the field, which put the card's one submit at the TOP-right while
-          every other control sat along the bottom. A PANEL's submit is the LABELED button and
-          renders exactly when the input row does not — `panelOpen` is that one condition, so
-          there is never a second submit on screen.
+      {/* ⚠ ONE FACE SINCE 2026-09-08, AND IT HANGS HERE — right end of this row, level with the
+          icons (Samuel, live review 2026-08-28). The ARROW used to sit in the input row beside
+          the field, which put the card's one submit at the TOP-right while every other control
+          sat along the bottom.
+          ⚠ THE LABELED-BUTTON FACE IS DELETED, NOT HIDDEN. It rendered on `panelOpen` and wore
+          the panel's verb ("Create" / "Launch"), because a form standing ON this card submitted
+          through this control. Both forms are dialogs with their own footer button now, so this
+          row's submit has exactly one act and the branch could only ever take one side. The
+          2026-08-27 rule it served — *two submits on one card is two answers to "what does
+          pressing this do"* — is what deleting it keeps.
           ⚠ THE FACE IS STILL NOT BUILT HERE: `ComposerSend` is the shared slot. A
           `<SendButton>` at this call site is the regression that made the two composers differ,
-          and `composer-input.test.ts` pins its absence.
-          ⚠ VISIBLE TEXT, NOT A TOOLTIP ON AN ARROW — shipping the verb as a `title` made all
-          three acts look identical. ⚠ DISABLED WITH A REASON (§8, rule 4). */}
-      {panelOpen ? (
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={submitDisabled}
-          title={submitHint}
-          className={cn(
-            "auth-btn-3d ml-1 flex h-[var(--action-h-sm)] items-center rounded-[8px] px-3.5 text-caption font-semibold text-text-on-cta",
-            submitDisabled && "cursor-not-allowed opacity-60"
-          )}
-        >
-          {submitLabel}
-        </button>
-      ) : (
-        <ComposerSend
-          onSend={onSubmit}
-          sendDisabled={submitDisabled}
-          sendTitle={submitHint}
-          sendLabel={submitLabel}
-        />
-      )}
+          and `composer-input.test.ts` pins its absence. ⚠ DISABLED WITH A REASON (§8, rule 4). */}
+      <ComposerSend
+        onSend={onSubmit}
+        sendDisabled={submitDisabled}
+        sendTitle={submitHint}
+        sendLabel="Send"
+      />
     </div>
   );
 }

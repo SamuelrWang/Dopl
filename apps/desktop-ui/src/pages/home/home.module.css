@@ -93,9 +93,9 @@
    point is that binding, not the ~4/255 the two grays differ by today.
 
    ⚠ FILL ONLY. The concave shadow stack is deliberate and stays
-   (`composer-request-panel.tsx`); only the colour under it is /home's.
+   (`composer-panel-fields.tsx`); only the colour under it is /home's.
 
-   The hook is `composer-request-panel.tsx › PANEL_HOOK` — an attribute, like
+   The hook is `composer-panel-fields.tsx › PANEL_HOOK` — an attribute, like
    `[data-attribution-pill]` above, so swapping a utility class in either panel cannot silently
    drop this. */
 .frame :global([data-composer-panel]) {

@@ -25,22 +25,25 @@
  * a shape this product has (INVARIANTS §5), and `schema.ts › TaskFanOutSchema` 400s an empty list,
  * so the button disabling is the courtesy half only.
  *
- * ⚠ **THE OLD PANEL IS STILL IN THE TREE AND STILL REACHABLE.** `composer-request-panel.tsx ›
- * AgentRequestPanel` is unreferenced from the THREADS TAB's "New thread" as of this change — that
- * button's signal opens this dialog — but the composer's own `MessageSquarePlus` glyph still
- * toggles it, and `composer.test.tsx` / `composer-mentions.test.tsx` still drive it that way.
- * **Two thread forms live until Samuel rules on the glyph**; do not let a third appear.
+ * ⚠ **THE OLD PANEL IS DELETED, AND THIS IS THE ONLY THREAD FORM (2026-09-08, Samuel: *"look
+ * there is an icon in the text input bar that is supposed to spawn new threads. Why wasn't that
+ * wired in"*).** The inline `AgentRequestPanel`, its `use-thread-request.ts` hook and
+ * `composer-submit-state.ts` are GONE — not unreferenced, gone — along with the composer's
+ * `panelOpen` branch and the labeled submit face that branch drew. **BOTH entries land here**: the Threads tab's nonce and the composer's
+ * `MessageSquarePlus` glyph, ADDED into one signal (`composer.tsx`). Do not let a second form
+ * appear; the reason the last one survived a week is that it still had an opener.
  *
- * ⚠ **THE ACCESSIBLE NAMES ARE "New thread …", NOT THE PANEL'S "Thread …"**, and the × is
- * "Close new thread form" rather than the panel's "Close new thread". Both forms are mounted at
- * once while the glyph still opens the inline one, and two controls sharing an accessible name are
- * ONE control as far as a screen reader is concerned. The VISIBLE labels are the same words on
- * both, because they are the same two fields.
+ * ⚠ **THE ACCESSIBLE NAMES ARE "New thread …"** and the × is "Close new thread form". They were
+ * prefixed because the inline panel's "Thread title" / "Close new thread" were mounted beside
+ * them and two controls sharing an accessible name are ONE control to a screen reader; with the
+ * panel gone they stay, because they still say WHICH form a reader is inside and renaming an
+ * accessible name is a change to the surface, not a tidy-up. The VISIBLE labels are the plain
+ * words.
  *
- * ⚠ **THE SIGNAL IS A COUNTER AND THE OPEN STATE IS OWNED HERE**, the same shape
- * `use-thread-request.ts` used for the same reason: a boolean prop would be a mirror of state this
- * component owns, and mirrors drift. It is adjusted DURING RENDER (React's "state from a changed
- * prop" idiom) because `react-hooks/set-state-in-effect` is an error in this tree.
+ * ⚠ **THE SIGNAL IS A COUNTER AND THE OPEN STATE IS OWNED HERE**: a boolean prop would be a
+ * mirror of state this component owns, and mirrors drift. ⚠ IT IS A SUM OF TWO NONCES upstream
+ * (`composer.tsx`), so either opener re-opens the form. It is adjusted DURING RENDER (React's
+ * "state from a changed prop" idiom) because `react-hooks/set-state-in-effect` is an error here.
  */
 
 import { useMemo, useState } from "react";
@@ -51,8 +54,9 @@ import { AgentTargetPill } from "./bits";
 import { agentLabel } from "./fixtures";
 import type { ChannelMember } from "../../types";
 
-/** ⚠ THE PANEL'S OWN WORDING, VERBATIM — a request nobody receives is the same fact on both
- *  surfaces, and two spellings of it is how one of them comes to sound optional. */
+/** The deleted panel's wording, kept — a request nobody receives says so at CREATE time.
+ *  ⚠ EXPORTED because INVARIANTS §5 counts the places this rule is stated, and a doc anchor on a
+ *  string literal inside a JSX body is not resolvable. */
 export const NO_ADDRESSEE_NOTE = "No agent addressed — this thread reaches nobody.";
 
 export function NewThreadDialog({
@@ -62,8 +66,9 @@ export function NewThreadDialog({
   currentUserId,
   onCreate,
 }: {
-  /** Nonced ask to OPEN — the Threads tab's "New thread", carried through the composer. Each
-   *  increment is one request; `0` is nobody asking. */
+  /** Nonced ask to OPEN. ⚠ THE SUM OF BOTH OPENERS (`composer.tsx`): the Threads tab's "New
+   *  thread" and the composer toolbar's own glyph. Each increment is one request; `0` is nobody
+   *  asking, and adding rather than choosing is what stops one source masking the other. */
   signal: number;
   /** ⚠ CAPTURED AT SUBMIT into the draft, never re-read while the write is in flight
    *  (INVARIANTS §8, rule 4). */
@@ -89,8 +94,8 @@ export function NewThreadDialog({
     [members, currentUserId]
   );
 
-  // ⚠ RE-OPENING RESETS THE ADDRESSEES TO ALL, which is `use-thread-request.ts`'s rule kept: a
-  // request you dropped everyone from is not a draft worth restoring.
+  // ⚠ RE-OPENING RESETS THE ADDRESSEES TO ALL — the deleted panel's rule, kept: a request you
+  // dropped everyone from is not a draft worth restoring.
   const [seen, setSeen] = useState(signal);
   if (signal !== seen) {
     setSeen(signal);

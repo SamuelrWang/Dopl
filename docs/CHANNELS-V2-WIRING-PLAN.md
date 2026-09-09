@@ -224,8 +224,15 @@ addressees = N `channel_tasks` rows rendered as one card.
 
 **Files/symbols.**
 - `src/features/channels/components/channels-v2/composer.tsx` ← mock
-  `composer.tsx › AgentRequestPanel`; the posted card ← `message-pane.tsx ›
-  ThreadRequestCard` on `bits.tsx › MESSAGE_CARD`.
+  `channels-v2/new-thread-dialog.tsx › NewThreadDialog` (the inline
+  `AgentRequestPanel` this plan named was DELETED on 2026-09-08 — thread creation
+  is a popup, reached from the Threads tab and the composer glyph alike); the
+  posted card ← `channels-v2/thread-card-row.tsx › ThreadCardMessage` on
+  `bits.tsx › MESSAGE_CARD`. ⚠ **This line said `message-pane.tsx ›
+  ThreadRequestCard` until 2026-09-08 and NO SUCH SYMBOL HAS EVER EXISTED IN THIS
+  TREE** — the anchor was split across two lines, which is the one shape
+  `scripts/check-doc-refs.mjs` cannot match, so it went unchecked from the day it
+  was written. Re-flowing the sentence is what exposed it.
 - New service: `channels/server/service-tasks.ts` gains a fan-out entry point that loops
   `› createTask` per addressee. **`createTask` is not modified** — a thread stays one
   requester + one target (INVARIANTS §5), and the fan-out is a caller.

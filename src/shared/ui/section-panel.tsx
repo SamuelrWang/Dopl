@@ -30,7 +30,7 @@ import { cn } from "@/shared/lib/utils";
  * ⚠ `data-section-panel` IS A PAGE-SCOPING HOOK, NOT DECORATION. It is how
  * `apps/desktop-ui/src/pages/home/home.module.css` repaints every panel inside
  * the record pane in one rule, instead of each mount restating the ground — the
- * same attribute idiom `composer-request-panel.tsx › PANEL_HOOK` uses, and for
+ * same attribute idiom `composer-panel-fields.tsx › PANEL_HOOK` uses, and for
  * the same reason: swapping a utility class at a call site cannot silently
  * break an override keyed on an attribute.
  *

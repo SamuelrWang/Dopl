@@ -2,8 +2,10 @@
 
 /**
  * THE COMPOSER'S LAUNCH PANEL — who the new agent is, before it exists (2026-08-27, Samuel's
- * launch-panel ruling). Split from `composer.tsx` on the seam
- * `composer-request-panel.tsx` was split on: that file is about SENDING, this is one FORM.
+ * launch-panel ruling). Split from `composer.tsx` on the seam the composer's deleted inline
+ * thread panel was split on: that file is about SENDING, this is one FORM. ⚠ The field kit both
+ * panels mounted survived that panel's deletion as `composer-panel-fields.tsx`, which is where
+ * this file still takes `PanelField` from.
  *
  * ⚠ IT REPLACED THE TEMPLATE CHEVRON, which is DELETED. The Bot icon had a second glyph beside
  * it opening a template menu; that menu's whole function — pick an identity, or none — is the
@@ -46,7 +48,7 @@ import {
   PANEL_BODY,
   PANEL_HOOK,
   PanelField,
-} from "./composer-request-panel";
+} from "./composer-panel-fields";
 import type { AgentLaunchPanel } from "./use-agent-launch";
 import { useAutoGrow } from "./use-auto-grow";
 
@@ -205,8 +207,9 @@ export function AgentLaunchPanelView({
       )}
     >
       <div className="flex items-center gap-2">
-        {/* Sentence case at normal weight — `text-caption`, for the reason
-            `composer-request-panel.tsx` states over its own header. */}
+        {/* Sentence case at normal weight — `text-caption`. NOT `text-label`, which is the
+            app's UPPERCASE section step and carries `uppercase tracking-wide font-semibold` as
+            part of its contract (Samuel, 2026-08-24). */}
         <span className="text-caption text-text-secondary">New agent</span>
         <span className="flex-1" />
         <IconButton

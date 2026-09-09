@@ -93,8 +93,12 @@
 .input {
   display: block;
   width: 100%;
-  height: var(--action-h-sm);
-  padding: 0 2px;
+  /* ⚠ NOT the 30px action box (Samuel, 2026-09-08: "too much distance between the
+   * line and the word"): the field is as tall as its text, so the hairline sits
+   * 3px under the baseline instead of centring the word in a 30px slot. */
+  height: auto;
+  line-height: 1.4;
+  padding: 2px 2px 3px;
   border: 0;
   border-bottom: 1px solid var(--border-strong);
   border-radius: 0;
@@ -132,7 +136,7 @@
 .inputMultiline {
   height: auto;
   min-height: calc(var(--action-h-sm) * 2);
-  padding: 4px 2px;
+  padding: 2px 2px 3px;
   line-height: 1.45;
   resize: none;
 }

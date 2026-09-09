@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 /**
- * THE COMPOSER PANELS' SHARED FIELD KIT — `composer-request-panel.tsx › PanelField`.
+ * THE COMPOSER PANELS' SHARED FIELD KIT — `composer-panel-fields.tsx › PanelField`.
+ * ⚠ THE FILE WAS `composer-request-panel.tsx` UNTIL 2026-09-08, when the inline new-thread panel
+ * it was named for was deleted and the kit — mounted by `composer-launch-panel.tsx` — survived.
  *
  * ⚠ ITS OWN FILE SINCE 2026-08-27, at the 500-line cap. **The seam is the SUBJECT** (§1): the kit
  * is shared by BOTH panels, so its pins were landing half in `composer.test.tsx` (the thread
@@ -26,7 +28,7 @@
 import { describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach } from "vitest";
-import { PanelField } from "./composer-request-panel";
+import { PanelField } from "./composer-panel-fields";
 
 afterEach(cleanup);
 

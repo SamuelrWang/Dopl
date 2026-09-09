@@ -8,8 +8,9 @@
  * reason-to-change**, not the count that forced the question: that file is about SENDING — a
  * draft, a request, a launch — and this is the PICKER, which moved twice in one day (agents
  * joined the list, the `@` glyph learned to open it) while nothing about sending changed. Same
- * seam its siblings took: `use-thread-request.ts` holds the request form, `use-agent-launch.ts`
- * the launch panel.
+ * seam its siblings took: `use-agent-launch.ts` holds the launch form's state. ⚠ **THE THIRD
+ * SIBLING, `use-thread-request.ts`, IS DELETED (2026-09-08)** — thread creation is a popup that
+ * owns its own state (`new-thread-dialog.tsx`), so there is no hook left to name here.
  *
  * ⚠ IT OWNS NO DRAFT. The text belongs to the composer — it is what gets SENT — so this takes a
  * setter and never a second copy. Two states holding one string is how a picker inserts into a

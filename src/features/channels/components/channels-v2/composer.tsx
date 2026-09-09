@@ -2,42 +2,43 @@
 
 /**
  * Channels v2 — the composer card, with the @-mention autocomplete floating
- * above its left edge and the "New thread" panel recessed inside it.
+ * above its left edge.
  *
- * ⚠ TWO SENDS, ONE BUTTON, AND THEY ARE DIFFERENT WRITES. With the panel CLOSED
- * Send posts a plain chat message (`intent:"chat"` — the wire value is
- * load-bearing, it is what tells the receiving side this reaches nobody's
- * agent). With the panel OPEN it raises a REQUEST: the title becomes the thread
- * title, every remaining pill becomes an addressee, and the fan-out writes one
- * `channel_tasks` row per pill (INVARIANTS §5 — a thread is one requester + one
- * target) which the transcript renders as ONE card
- * (`transcript.tsx › ThreadCardMessage`).
+ * ⚠ ONE SEND, ONE ACT, SINCE 2026-09-08. This card posts a plain chat message
+ * (`intent:"chat"` — the wire value is load-bearing, it is what tells the
+ * receiving side this reaches nobody's agent) and does nothing else. **THREAD
+ * CREATION LEFT THE CARD:** both entries — the Threads tab's "New thread" and
+ * this toolbar's `MessageSquarePlus` glyph — open {@link NewThreadDialog}, a
+ * modal carrying its own Create. The INLINE request panel and
+ * `use-thread-request.ts` are DELETED rather than disarmed (Samuel, 2026-09-08:
+ * *"look there is an icon in the text input bar that is supposed to spawn new
+ * threads. Why wasn't that wired in"*).
  *
- * ⚠ TWO SENDS, TWO EDIT SURFACES, AND ONLY ONE IS EVER SHOWING (Samuel, 2026-08-26: *"the user
- * will solely need to edit the new thread panel"*). The request's BODY used to be this chat
- * textarea wearing a "Describe the request" placeholder; it is now the panel's own Description
- * field (`use-thread-request.ts`), and the textarea is UNMOUNTED while a panel is open rather
- * than disabled — a greyed box under a form is still a box the eye has to rule out. ⚠ THE CHAT
- * DRAFT SURVIVES: `draft` is state here, not in the element.
+ * ⚠ TWO SOURCES, ONE DIALOG, AND THEY ARE ADDED. `newThreadSignal` is the
+ * Threads tab's nonce and `threadDialogNonce` is this glyph's; their SUM is what
+ * the dialog watches, so either source re-opens the form and neither can shut
+ * the other's.
  *
- * ⚠ N PILLS = N ADDRESSEES, AND ZERO PILLS IS NOT SENDABLE. "Broadcast" is not
- * a shape this product has. The button disables at zero as a courtesy; the
- * CONTRACT is `schema.ts › TaskFanOutSchema`, where an empty addressee list is
- * a 400 — a UI-only refusal would be a rule that exists until somebody writes a
- * second client.
+ * ⚠ THE CHAT TEXTAREA IS ALWAYS MOUNTED NOW, and that is the popup's doing. "One
+ * edit surface at a time" (Samuel, 2026-08-26) unmounted it because the request
+ * form stood ON this card; a dialog draws its own scrim, so the draft is simply
+ * left alone behind it. **Nothing on this card branches on a panel any more** —
+ * `panelOpen`, the `!panelOpen` unmounts and `composer-submit-state.ts`'s
+ * three-act derivation all went with the panel, and the submit has one face.
  *
- * ⚠ THE BASE IDEMPOTENCY KEY IS MINTED HERE, at submit, exactly once per Send.
- * The server derives one key per addressee from it plus the group id the card
- * is drawn from, so a retry converges thread-by-thread instead of raising the
- * request twice (INVARIANTS §8).
+ * ⚠ THE FAN-OUT WRITE IS STILL THIS FILE'S. `fanOutThreads` lives here and the
+ * dialog is its CALLER — it hands over a finished draft, one `channel_tasks` row
+ * per addressee (INVARIANTS §5 — a thread is one requester + one target) which
+ * the transcript renders as ONE card (`transcript.tsx › ThreadCardMessage`), and
+ * the base idempotency key is minted at the press inside the dialog (§8).
  *
- * ⚠ THE BOT ICON AND THE THREAD PANEL ARE TWO CONTROLS SINCE 2026-08-21
+ * ⚠ THE BOT ICON AND THE THREAD GLYPH ARE TWO CONTROLS SINCE 2026-08-21
  * (Samuel). One glyph used to mean both "start an agent" and "open the
- * thread-creation panel", which are not the same act and do not even hit the
- * same layer — the panel raises a REQUEST at another member over the write
- * layer; the Bot icon spawns MY OWN agent on THIS machine over the bridge, and
- * nothing is posted. **`MessageSquarePlus` ("New thread") now toggles the panel,
- * unchanged in every other respect, and `Bot` is New Agent.**
+ * thread-creation form", which are not the same act and do not even hit the same
+ * layer — a thread raises a REQUEST at another member over the write layer; the
+ * Bot icon spawns MY OWN agent on THIS machine over the bridge, and nothing is
+ * posted. **`MessageSquarePlus` ("New thread") opens the popup, and `Bot` is New
+ * Agent.**
  *
  * ⚠ THE BOT ICON IS CONTEXT-SENSITIVE and takes its target from the OPEN THREAD:
  * in thread view the agent lands on that exchange; in channel view it is a
@@ -51,9 +52,7 @@ import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { cn } from "@/shared/lib/utils";
 import { COMPOSER_BOTTOM, ComposerInputRow } from "./composer-input";
 import { ComposerToolbar } from "./composer-toolbar";
-import { AgentRequestPanel } from "./composer-request-panel";
 import { NewThreadDialog } from "./new-thread-dialog";
-import { useThreadRequest } from "./use-thread-request";
 import { MentionPopover } from "./composer-mentions";
 import { ComposerRecipients } from "./composer-recipients";
 import { ComposerTint } from "./composer-tint";
@@ -64,7 +63,6 @@ import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";
 import { useAutoGrow } from "./use-auto-grow";
 import { useDictation } from "./use-dictation";
-import { composerSubmitState } from "./composer-submit-state";
 import { useThreadWrites } from "../../hooks/use-thread-writes";
 import { newClientMsgId } from "../../lib/optimistic-cache";
 import type { ChannelMember } from "../../types";
@@ -73,12 +71,6 @@ import type { ChannelMember } from "../../types";
  *  render re-derives the whole @-picker shortlist on a surface that has no sessions read. */
 const EMPTY_LIVE_AGENTS: readonly LiveAgentSession[] = [];
 const EMPTY_RECENT: readonly string[] = [];
-
-/** THE LAUNCH PANEL, AS `composerSubmitState` NOW SEES IT — permanently closed, and a DELIBERATE
- *  zero rather than a stub. The form is a modal with its own submit since 2026-09-08, so this
- *  control has TWO acts; deleting the shared function's `launch` arm would touch the thread
- *  panel's pins for a change that is only about this caller. */
-const NO_LAUNCH = { open: false, ready: false, name: "", description: "" } as const;
 
 export function ChannelsV2Composer({
   channelId,
@@ -115,9 +107,10 @@ export function ChannelsV2Composer({
   newAgent?: AgentLaunchControls;
   /** Which exchange a new agent lands on; `null` is a CHANNEL-LEVEL agent. */
   openThreadId?: string | null;
-  /** Nonced ask from the Threads tab to open the new-thread panel. ⚠ A COUNTER,
-   *  not a boolean: the panel's state stays OWNED HERE, so there is no mirror to
-   *  drift. Each increment is one request; the default is nobody asking. */
+  /** Nonced ask from the Threads tab to open the new-thread POPUP. ⚠ A COUNTER,
+   *  not a boolean: the dialog's open state stays OWNED THERE, so there is no
+   *  mirror to drift. Each increment is one request; the default is nobody
+   *  asking, and this composer ADDS the toolbar glyph's own nonce to it. */
   newThreadSignal?: number;
   /**
    * **THE CHANNEL'S LIVE AGENTS — every member's, not this machine's** (2026-09-02, slice B10).
@@ -143,17 +136,13 @@ export function ChannelsV2Composer({
   // the panels' Description fields wanted it too; it was written inline here and a second copy is
   // how one of them ends up growing to a different ceiling than the other.
   useAutoGrow(draftRef, draft);
-  // WHO THE NEW AGENT IS — the Bot icon's panel. ⚠ ONLY THE STATE lives here; the TEMPLATES read
-  // is inside `ComposerLaunch`, which mounts only where a launch is possible (that component's
-  // header says why).
+  // WHO THE NEW AGENT IS — the Bot icon's form. ⚠ ONLY THE STATE lives here; the dialog that
+  // draws it is `launch-agent-dialog.tsx`, mounted only where a launch is possible.
   const launch = useAgentLaunch();
-
-  // ⚠ `0`, NOT `newThreadSignal` (2026-09-08, Samuel: *"i want to make a pop up for the threads
-  // creation as well"*). The Threads tab's "New thread" now opens {@link NewThreadDialog} at the
-  // bottom of this file; the INLINE panel keeps its own opener — the toolbar's
-  // `MessageSquarePlus` glyph — and nothing else reaches it. Two thread forms live until Samuel
-  // rules on the glyph. The hook's signal arm is therefore dormant rather than deleted.
-  const request = useThreadRequest({ members, currentUserId, newThreadSignal: 0 });
+  // ⚠ THE TOOLBAR GLYPH'S OWN NONCE (Samuel, 2026-09-08: *"there is an icon in the text input bar
+  // that is supposed to spawn new threads"*). It is ADDED to the Threads tab's signal below, so
+  // either source re-opens {@link NewThreadDialog} and there is no second thread form to reach.
+  const [threadDialogNonce, setThreadDialogNonce] = useState(0);
   const { send, fanOutThreads, pending } = useThreadWrites({
     workspaceId,
     currentUserId,
@@ -202,31 +191,20 @@ export function ChannelsV2Composer({
 
   const body = draft.trim();
   /**
-   * ONE CONTROL, THREE ACTS, ONE DERIVATION (`composer-submit-state.ts`). The launch panel lost
-   * its own button for the reason the thread panel never had one: two submits on one card is two
-   * answers to "what does pressing this do".
+   * ONE CONTROL, ONE ACT, AND THE DERIVATION IS THREE LINES AGAIN (2026-09-08).
    *
-   * ⚠ `sendState.panelOpen` IS READ BY FOUR SURFACES AND DERIVED BY NONE OF THEM — the submit's
-   * face, the chat textarea's mount, the @-picker's popover and the `@` glyph that writes into
-   * that textarea. Until 2026-08-28 three of the four re-spelled it inline, and THAT IS THE BUG
-   * THIS SHAPE FIXES: the "one edit surface at a time" rule (2026-08-26) unmounts the textarea
-   * while a panel is open, while the @-picker (2026-08-27) was gated on the DRAFT alone
-   * (`mentionQuery`), which is state the unmount does not clear. A draft holding a half-typed
-   * `@dia` therefore kept the popover floating over the panel with no field under it, and the
-   * `@` glyph — writing its token into that same invisible draft, then focusing a null ref — was
-   * a control whose only effect was to summon it. Two waves, one surface, neither asking what the
-   * other did with the draft.
-   * ⚠ THE DRAFT ITSELF IS UNTOUCHED, exactly as the unmount already left it: shutting the panel
-   * brings back the half-typed message AND its popover, which is the state the operator left.
+   * ⚠ `composer-submit-state.ts` IS DELETED, NOT STUBBED. It existed to answer "which of the three
+   * acts is this press" while a launch panel and a request panel shared this card's one submit;
+   * both forms are modals with their own submit now, so the question has one answer and a pure
+   * function returning a constant `act` is a rule that no longer decides anything.
+   * ⚠ A DISABLED SEND STILL SAYS WHY (INVARIANTS §8, rule 4) — a disabled control with no reason
+   * is indistinguishable from a broken one.
    */
-  // ⚠ `NO_LAUNCH`, NOT `launch`: the dialog carries its own Launch, so feeding the panel's real
-  // state in would put a SECOND one behind its scrim and unmount the textarea under a modal.
-  const sendState = composerSubmitState({ pending, body, launch: NO_LAUNCH, request });
-  const { canSend, panelOpen, hint } = sendState;
+  const canSend = !pending && body.length > 0;
+  const hint = canSend ? "Send" : pending ? "Sending…" : "Write a message first";
 
   const clear = () => {
     setDraft("");
-    request.reset();
     launch.reset();
   };
 
@@ -237,23 +215,8 @@ export function ChannelsV2Composer({
    */
   const submit = () => {
     if (!canSend) return;
-    // ⚠ THE LAUNCH ARM IS GONE FROM HERE (2026-09-08). The dialog owns the three-step act and
-    // the foreign-template question; this control sends and creates, and nothing else.
-    if (request.open) {
-      const fanOut = {
-        channelId,
-        clientMsgId: newClientMsgId(),
-        title: request.title.trim(),
-        // ⚠ THE PANEL'S DESCRIPTION, NOT THE CHAT DRAFT. The wire field is
-        // still `body` — this changed which BOX the operator types it in, not
-        // what `TaskFanOutSchema` receives.
-        body: request.description.trim(),
-        toUserIds: request.addressed.map((target) => target.id),
-      };
-      clear();
-      fanOutThreads.mutate(fanOut);
-      return;
-    }
+    // ⚠ THE LAUNCH AND REQUEST ARMS ARE BOTH GONE FROM HERE (2026-09-08). Each dialog owns its own
+    // act and its own submit; this control sends a chat message, and nothing else.
     const message = {
       channelId,
       clientMsgId: newClientMsgId(),
@@ -272,10 +235,10 @@ export function ChannelsV2Composer({
   // reads as one floating higher than the other (Samuel, live review 2026-08-27).
   return (
     <div className={cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)}>
-      {/* ⚠ `!panelOpen` IS PART OF THE CONDITION, NOT DECORATION — see the constant's note. The
-          popover belongs to the chat textarea, which is not mounted while a panel is; without
-          this it floats over the panel, anchored to a field that is not there. */}
-      {!panelOpen && mentions.query !== null && (
+      {/* ⚠ NO `!panelOpen` GUARD ANY MORE (2026-09-08): the popover belongs to the chat textarea,
+          and the textarea no longer goes anywhere. The condition it used to carry was about the
+          INLINE panel unmounting the field under it — see the header. */}
+      {mentions.query !== null && (
         <MentionPopover suggestions={mentions.suggestions} active={mentions.active} onPick={mentions.pick} />
       )}
       {/* WHO THIS DRAFT REACHES (2026-09-02, slice B10, Samuel's ruling) — `→ @handle`,
@@ -286,28 +249,24 @@ export function ChannelsV2Composer({
           RIGHT on 2026-09-04, and is now a caption over the box rather than a row inside it —
           which is the shape that stops it reading as one of the toolbar's controls without
           spending a line of the card's own height. **Nothing else in the card moved up**: the
-          card's first row is the chat field (or a panel), exactly as it was.
+          card's first row is the chat field, exactly as it was.
           ⚠ THE ALIGNMENT IS THE COMPONENT'S OWN (`composer-recipients.tsx`, `justify-start`),
           not a wrapper here. This file states WHERE the line sits and nothing about how it
           draws, which is the same rule the send arrow's slot follows.
           ⚠ `px-0.5` MATCHES THE CARD'S OWN CONTENT INSET as closely as a caption outside a
           13px-padded box can — the tag's `→` is meant to hang over the card's left edge, not
           to line up with the field's first character.
-          ⚠ ON THE SAME `!panelOpen` CONDITION THE CHAT FIELD ITSELF FOLLOWS. With a panel up
-          there is no chat draft on screen, and a line reporting the reach of an invisible one
-          would describe a message the operator is not writing — the same misfire the `@` glyph
-          was gated for on 2026-08-28. A PANEL states its own addressing
-          (`composer-request-panel.tsx › AgentRequestPanel`). */}
-      {!panelOpen && (
-        <ComposerRecipients
-          body={body}
-          members={members}
-          sessions={liveAgents}
-          currentUserId={currentUserId}
-          recentAgentIds={recentAgentIds}
-          threadOtherParty={threadOtherParty}
-        />
-      )}
+          ⚠ IT IS UNCONDITIONAL SINCE 2026-09-08, with the panel that used to hide it. A thread
+          form is a modal now: it states its own addressing behind a scrim, and there is always a
+          chat draft on this card for this line to describe. */}
+      <ComposerRecipients
+        body={body}
+        members={members}
+        sessions={liveAgents}
+        currentUserId={currentUserId}
+        recentAgentIds={recentAgentIds}
+        threadOtherParty={threadOtherParty}
+      />
       {/* ⚠ THE CARD WEARS `.raised-tab` — THE WHOLE FACE THE AGENT PILL WEARS, VERBATIM (Samuel,
           live review 2026-08-27). Not `.bento`, and NOT an extracted layer of the raised recipe:
           a lone 1px ring lifted out of it read FLAT beside the agent bar's dimensional material,
@@ -323,85 +282,42 @@ export function ChannelsV2Composer({
           same HEIGHT. Tidying these back to the scale values shrinks the card 2px.
           ⚠ AND STILL NO ROW GAP: a `gap-2` here once grew the card visibly. */}
       <div className="raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]">
-        {/*
-          Height animates through the grid-rows 0fr→1fr idiom rather than a
-          measured pixel height: the panel's own content decides how far the
-          card grows, and no layout number is hardcoded. `motion-reduce` snaps.
-        */}
-        {/* ⚠ TWO PANELS IN ONE SLOT, AND NEVER BOTH OPEN AT ONCE — the toggles close each other
-            below. Same grid-rows 0fr→1fr idiom either way, so neither hardcodes a height. */}
-        <div
-          className={cn(
-            "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-            request.open ? "grid-rows-[1fr] opacity-100"
-              : "grid-rows-[0fr] opacity-0"
-          )}
-        >
-          <div className="overflow-hidden" inert={!request.open}>
-            <div className="pb-2">
-              <AgentRequestPanel
-                targets={request.targets}
-                removed={request.removed}
-                title={request.title}
-                description={request.description}
-                onTitleChange={request.setTitle}
-                onDescriptionChange={request.setDescription}
-                onRemove={request.removeTarget}
-                onDismiss={request.close}
-              />
-            </div>
-          </div>
-        </div>
-
         <div className="flex flex-col gap-2">
 
-          {/* ⚠ THE CHAT DRAFT IS NOT ON SCREEN WHILE THE PANEL IS. One edit
-              surface at a time (Samuel, 2026-08-26) — the request's own
-              description field is inside the panel, and a second box under it
-              could only be the wrong one to type in. Unmounted, not disabled:
-              `draft` is state up here, so the half-typed message comes back
-              intact when the panel shuts.
-              ⚠ EITHER PANEL (2026-08-27). The launch panel is the same kind of object in the
-              same slot, and the two are mutually exclusive, so this is one condition and not a
-              second rule that could disagree with the first — `panelOpen`, the SAME constant the
-              submit face and the picker read, rather than a third spelling of it. */}
-          {!panelOpen && (
-            <ComposerInputRow
-              // ⚠ BARE: no ring, no fill, NO INSET AND NO SEND WIRING — the CARD is the box, it
-              // pays that inset once (`px-[13px] py-[11px]`), and the arrow is in the toolbar row
-              // below. Paying the inset twice sat the field 12px right of and 6px below those
-              // icons (Samuel, live review 2026-08-28); both rows now start flush at the card's
-              // content box. Row shape stays `composer-input.tsx › ROW_GEOMETRY`, unbranched.
-              face="bare"
-              value={draft}
-              inputRef={draftRef}
-              onChange={(next) => {
-                setDraft(next);
-                // A new token is a new shortlist — start at the top of it.
-                mentions.setHighlight(0);
-              }}
-              // ⚠ THE HANDLER IS THE PICKER'S (`use-composer-mentions.ts › keyDown`, moved
-              // there 2026-09-02 at the cap): four of its five branches are about the shortlist,
-              // and what stays this file's is the one act it owns — send.
-              onKeyDown={(e) => mentions.keyDown(e, submit)}
-              placeholder="Write a message"
-              ariaLabel="Message"
-              highlight={tintDraft}
-            />
-          )}
+          <ComposerInputRow
+            // ⚠ BARE: no ring, no fill, NO INSET AND NO SEND WIRING — the CARD is the box, it
+            // pays that inset once (`px-[13px] py-[11px]`), and the arrow is in the toolbar row
+            // below. Paying the inset twice sat the field 12px right of and 6px below those
+            // icons (Samuel, live review 2026-08-28); both rows now start flush at the card's
+            // content box. Row shape stays `composer-input.tsx › ROW_GEOMETRY`, unbranched.
+            face="bare"
+            value={draft}
+            inputRef={draftRef}
+            onChange={(next) => {
+              setDraft(next);
+              // A new token is a new shortlist — start at the top of it.
+              mentions.setHighlight(0);
+            }}
+            // ⚠ THE HANDLER IS THE PICKER'S (`use-composer-mentions.ts › keyDown`, moved
+            // there 2026-09-02 at the cap): four of its five branches are about the shortlist,
+            // and what stays this file's is the one act it owns — send.
+            onKeyDown={(e) => mentions.keyDown(e, submit)}
+            placeholder="Write a message"
+            ariaLabel="Message"
+            highlight={tintDraft}
+          />
 
           <ComposerToolbar
             newAgent={newAgent}
             launchOpen={launch.open}
-            onToggleLaunch={() => { request.close(); launch.toggle(); }}
-            requestOpen={request.open}
-            onToggleRequest={() => { launch.close(); request.toggle(); }}
-            panelOpen={panelOpen}
+            onToggleLaunch={launch.toggle}
+            // ⚠ IT OPENS THE POPUP, IT DOES NOT TOGGLE A PANEL (2026-09-08). `launch.close()`
+            // rides along so two forms never stand at once — the 2026-08-27 rule, kept.
+            onNewThread={() => { launch.close(); setThreadDialogNonce((n) => n + 1); }}
             onMention={() => { mentions.openFromButton(); draftRef.current?.focus(); }}
             dictation={dictation}
-            hasContent={sendState.hasContent}
+            hasContent={body.length > 0}
             onClear={clear}
-            submitLabel={sendState.label}
             submitHint={hint}
             submitDisabled={!canSend}
             onSubmit={submit}
@@ -435,14 +351,13 @@ export function ChannelsV2Composer({
             />
           )}
 
-          {/* ⚠ THE THREADS TAB'S "New thread" LANDS HERE SINCE 2026-09-08 (Samuel: *"i want to
-              make a pop up for the threads creation as well"*). It is a MODAL, so it sits outside
-              the card's flow and carries its own Create — the inline panel above still submits
-              through this composer's Send, and the two never open together because only the
-              toolbar glyph opens that one now. The WRITE is the same `fanOutThreads` either way:
-              this hands the mutation a finished draft. */}
+          {/* ⚠ THE ONLY THREAD FORM SINCE 2026-09-08 (Samuel: *"i want to make a pop up for the
+              threads creation as well"*, then *"why wasn't that wired in"* about the glyph). BOTH
+              openers land here — the Threads tab's nonce and this toolbar's — and their SUM is
+              the signal, so neither can swallow the other's ask. It is a MODAL carrying its own
+              Create; the WRITE is this composer's `fanOutThreads`, handed a finished draft. */}
           <NewThreadDialog
-            signal={newThreadSignal}
+            signal={newThreadSignal + threadDialogNonce}
             channelId={channelId}
             members={members}
             currentUserId={currentUserId}

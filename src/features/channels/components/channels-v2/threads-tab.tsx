@@ -72,10 +72,10 @@ export function ThreadsTab({
    * (Samuel: *"i want to make a pop up for the threads creation as well"*): the
    * hop is unchanged — this nonces `use-channels-v2-selection.ts ›
    * requestNewThread`, which the composer passes to
-   * `new-thread-dialog.tsx › NewThreadDialog` — but the inline
-   * `composer-request-panel.tsx › AgentRequestPanel` is no longer what opens.
-   * That panel keeps its own opener, the composer's own glyph, until Samuel
-   * rules on it. ⚠ Optional, and absent means NO BUTTON: a host that cannot
+   * `new-thread-dialog.tsx › NewThreadDialog` — but the inline request panel is
+   * no longer what opens. ⚠ **AND IT IS THE ONLY FORM SINCE 2026-09-08**: the
+   * composer's own `MessageSquarePlus` glyph nonces the SAME dialog, and the
+   * panel is deleted. ⚠ Optional, and absent means NO BUTTON: a host that cannot
    * reach the composer must not draw a control that does nothing.
    */
   onNewThread?: () => void;

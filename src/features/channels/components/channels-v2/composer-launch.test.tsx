@@ -435,21 +435,25 @@ describe("name and description are written AFTER the spawn", () => {
 
 // ── 5. ONE EDIT SURFACE ──────────────────────────────────────────────────────
 
-describe("the launch panel and the thread panel share one slot", () => {
-  it("opening one closes the other — never two forms and two submits", async () => {
+describe("the two composer forms never stand at once", () => {
+  it("the New thread glyph closes the launch form on its way to the popup", async () => {
+    // ⚠ ONE DIRECTION ONLY SINCE 2026-09-08, and that is the honest shape. Both forms are modals;
+    // the thread popup draws a scrim over this toolbar, so the Bot icon CANNOT be pressed while
+    // it stands and cannot be asked to close it. What the card still owes is the other way round:
+    // the glyph is reachable while the launch dialog is up, and it shuts that form rather than
+    // stacking a second one over it (`composer.tsx › onNewThread` calls `launch.close()`).
     mount({ newAgent: launcher() });
     await openPanel();
+    expect(panelOpen()).toBe("true");
 
     fireEvent.click(screen.getByRole("button", { name: "New thread" }));
     expect(panelOpen()).toBe("false");
-    expect(
-      screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed")
-    ).toBe("true");
-
-    fireEvent.click(botIcon());
-    expect(
-      screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed")
-    ).toBe("false");
+    // ⚠ `waitFor` ON BOTH HALVES: `ModalShell` opens behind a rAF and leaves behind an exit
+    // transition, so the popup arrives a tick late and the launch form departs a tick late.
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "New thread" })).toBeTruthy()
+    );
+    await waitFor(() => expect(screen.queryByLabelText("Agent name")).toBeNull());
   });
 
   it("LEAVES the chat textarea mounted, and leaves the draft in it", async () => {
