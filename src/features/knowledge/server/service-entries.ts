@@ -25,6 +25,10 @@ import {
 } from "./service-shared";
 import { getBaseById, readBaseById } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
+// ⚠ THE CAPTURE IS AWAITED, INSIDE THE REQUEST, AFTER EACH WRITE — a lost
+// revision is a lost audit (`./service-revisions.ts`).
+import { entryOpFor, entryPath, recordEntryRevision } from "./service-revisions";
+import type { RevisionOp } from "@/features/revisions/types";
 
 /** Entry reads + writes, plus `resolveEntryRefs` — the visibility-gated
  *  id→name resolver for ontology knowledge attributes. */
@@ -231,14 +235,23 @@ export async function createEntry(
     source: ctx.source,
   });
   scheduleEntryEmbedding(created);
+  await recordEntryRevision(ctx, created, "create");
   return created;
+}
+
+/** What a RESTORE asks this write to record instead of its derived op — see
+ *  `./service-revisions-read.ts › restoreEntryRevision`. */
+export interface EntryWriteRevision {
+  op: RevisionOp;
+  summary: string;
 }
 
 export async function updateEntry(
   ctx: KnowledgeContext,
   id: string,
   patch: KnowledgeEntryUpdateInput,
-  expectedUpdatedAt?: string
+  expectedUpdatedAt?: string,
+  revision?: EntryWriteRevision
 ): Promise<KnowledgeEntry> {
   const entry = await getEntry(ctx, id);
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
@@ -281,6 +294,9 @@ export async function updateEntry(
   if (patch.title !== undefined || patch.body !== undefined) {
     scheduleEntryEmbedding(saved);
   }
+  await recordEntryRevision(ctx, saved, revision?.op ?? entryOpFor(patch), {
+    summary: revision?.summary ?? null,
+  });
   return saved;
 }
 
@@ -305,12 +321,14 @@ export async function moveEntry(
     }
   }
 
-  return repo.updateEntryRow(id, {
+  const moved = await repo.updateEntryRow(id, {
     folderId: input.folderId,
     position: input.position,
     lastEditedBy: ctx.userId,
     lastEditedSource: ctx.source,
   });
+  await recordEntryRevision(ctx, moved, "move");
+  return moved;
 }
 
 /** PERMANENT delete of an entry. No trash, no restore. */
@@ -325,5 +343,11 @@ export async function deleteEntry(
   // API key can hit this route directly, not only via MCP.
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
+  // ⚠ THE PATH IS DERIVED BEFORE THE ROW GOES, because `entryPath` walks the
+  // folder chain and a deleted entry still has one — but the entry itself must
+  // be read while it exists. The DELETE's snapshot is the LAST state, which is
+  // the only place it survives: knowledge deletes are permanent.
+  const path = await entryPath(entry);
   await repo.hardDeleteEntry(ctx.workspaceId, id);
+  await recordEntryRevision(ctx, entry, "delete", { path });
 }

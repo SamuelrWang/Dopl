@@ -14,6 +14,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext, KnowledgeEntry } from "../types";
 
+// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
+// (`./service-revisions.ts`, 2026-09-09): every knowledge write now records a
+// revision inside the same request, so a service test that leaves it alone
+// reaches `supabaseAdmin()` and fails on a missing service-role key. Stubbed
+// here because these suites are about the WRITE, not about its audit row —
+// that the row is recorded, exactly once, per path, is
+// `service-revisions.test.ts`'s subject.
+vi.mock("@/features/revisions/server/repository", () => ({
+  appendRevision: vi.fn(async () => ({ id: "rev-1" })),
+  replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
+  findLatestRevision: vi.fn(async () => null),
+  findRevisionById: vi.fn(async () => null),
+  listRevisionsForResource: vi.fn(async () => []),
+  listRevisionsForResources: vi.fn(async () => []),
+}));
+
 vi.mock("./repository", () => ({
   insertEntry: vi.fn(),
   updateEntryRow: vi.fn(),

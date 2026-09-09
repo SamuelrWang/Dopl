@@ -189,7 +189,6 @@ export function KnowledgeV2({
         <DetailPanel
           selection={selection}
           workspaceId={workspaceId}
-          selectedTree={c.trees[openBase.id]}
           openEntry={c.openEntry}
           openEntryStatus={c.openEntryStatus}
           refetchOpenEntry={c.refetchOpenEntry}

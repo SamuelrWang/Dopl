@@ -28,6 +28,13 @@ import { scheduleEntryEmbedding } from "./embeddings";
 import { assertAgentCanDelete, assertBaseWritable, errorCode } from "./service-shared";
 import { getBaseForWrite, readBaseInContext } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
+// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`).
+// ⚠ THE PATH IS PASSED, NEVER DERIVED, on every call in this module: it IS the
+// argument, so a `entryPath` walk here would re-read what the caller stated.
+import {
+  recordEntryRevision,
+  recordFolderRevision,
+} from "./service-revisions";
 
 /**
  * Path-based reads + writes. Paths = `/`-separated folder.name + entry.title.
@@ -203,6 +210,19 @@ export async function writeFileByPath(
     if (input.title !== undefined || merged.body !== undefined) {
       scheduleEntryEmbedding(saved);
     }
+    // ⚠ A SECTION WRITE IS ITS OWN OP, so the changelog can say which heading
+    // moved rather than reporting a whole-document edit. A title-only write is a
+    // `rename`; anything with a body is an `edit`.
+    await recordEntryRevision(
+      baseCtx,
+      saved,
+      input.section !== undefined
+        ? "section_edit"
+        : merged.body !== undefined
+          ? "edit"
+          : "rename",
+      { path: [...parentSegments, saved.title].join("/") },
+    );
     return { entry: saved, base, sectionCreated: merged.created };
   }
 
@@ -248,6 +268,9 @@ export async function writeFileByPath(
     throw err;
   }
   scheduleEntryEmbedding(created);
+  await recordEntryRevision(baseCtx, created, "create", {
+    path: [...parentSegments, created.title].join("/"),
+  });
   return {
     entry: created,
     base,
@@ -310,10 +333,16 @@ export async function createFolderByPath(
   const folder = await ensureFolderPath(baseCtx, base.id, segments);
   if (!folder) throw new KnowledgePathConflictError(path);
   // Only when supplied, so plain mkdir-p re-call never clobbers a description.
-  if (description !== undefined) {
-    return repo.updateFolderRow(folder.id, { description });
-  }
-  return folder;
+  const saved =
+    description !== undefined
+      ? await repo.updateFolderRow(folder.id, { description })
+      : folder;
+  // ⚠ ONE REVISION, FOR THE LEAF — the operation the caller asked for. `mkdir -p`
+  // may have scaffolded intermediate folders on the way; those are a consequence
+  // of this one write, not writes of their own, and a revision per level would
+  // report a path as several unrelated creates.
+  await recordFolderRevision(baseCtx, saved, "create", { path });
+  return saved;
 }
 
 /**
@@ -339,9 +368,13 @@ export async function deleteByPath(
   }
   if (resolved.kind === "folder") {
     await repo.hardDeleteFolder(baseCtx.workspaceId, resolved.folder.id);
+    await recordFolderRevision(baseCtx, resolved.folder, "delete", { path });
     return { kind: "folder", id: resolved.folder.id };
   }
   await repo.hardDeleteEntry(baseCtx.workspaceId, resolved.entry.id);
+  // ⚠ THE SNAPSHOT IS THE LAST STATE, and it is the only place it survives:
+  // knowledge deletes are permanent.
+  await recordEntryRevision(baseCtx, resolved.entry, "delete", { path });
   return { kind: "entry", id: resolved.entry.id };
 }
 
@@ -386,6 +419,7 @@ export async function moveByPath(
         parentId: toParentId,
         name: toLeafName,
       });
+      await recordFolderRevision(baseCtx, updated, "move", { path: toPath });
       return { kind: "folder", id: updated.id };
     } catch (err) {
       // Unique partial index collision (kb, parent, name).
@@ -403,6 +437,7 @@ export async function moveByPath(
       lastEditedBy: ctx.userId,
       lastEditedSource: ctx.source,
     });
+    await recordEntryRevision(baseCtx, updated, "move", { path: toPath });
     return { kind: "entry", id: updated.id };
   } catch (err) {
     // Unique partial index collision (kb, folder, title).

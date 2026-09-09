@@ -1,8 +1,20 @@
 import "server-only";
+import { isSharedCredential } from "@/shared/auth/credential-audience";
+import { meetsMinRole } from "@/features/workspaces/types";
+// 🔒 G16 — the ONE statement of the publish-into-a-peer's-room precondition,
+// shared with `agent-templates/server/service-writes.ts`. Two copies of a
+// tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
+import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
+import { listTeamIdsForUser } from "@/features/teams/server/repository";
 import { personalShelfRefusal } from "@/shared/tenancy/personal-container";
 import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
 import type { KnowledgeContext } from "../types";
-import { AgentWriteDisabledError } from "./errors";
+import type { KnowledgeBaseCreateInput } from "../schema";
+import {
+  AgentWriteDisabledError,
+  TeamScopeForbiddenError,
+  WorkspaceKeyPrivateVisibilityError,
+} from "./errors";
 import { resolveAgentAudience } from "./service-audience";
 
 /**
@@ -207,4 +219,160 @@ export async function resolveCreateDestination(
   const reach = await resolvePersonalReach(ctx);
   if (reach.kind === "closed") throw personalShelfUnreachableInRoom();
   return { homeScoped: true, workspaceId: reach.containerId };
+}
+
+// ─── The CREATE's whole pre-write gate chain ────────────────────────────────
+//
+// ⚠ **MOVED HERE FROM `service-base-writes.ts` ON 2026-09-09** (the CHANGELOG
+// lane), which measured 509 against §1's 500 cap and could not absorb the three
+// lines the revision capture needed. The seam is this module's OWN header,
+// applied: what is here answers a question about the CALLER before any row
+// exists; what stays there composes a row and persists it. It is the second
+// time that file has paid this cap and both splits chose the same line.
+//
+// ⚠ `service-base-writes.ts` RE-EXPORTS BOTH NAMES, so every importer — the
+// route, the barrel and `service-create-audience.test.ts` — is unchanged.
+
+
+/** What {@link assertCreateBaseAllowed} decided, and {@link createBase} then
+ *  writes with. ⚠ Every field is a DECISION, not an echo of the input: the
+ *  destination is resolved by owner, and the visibility is the value the row
+ *  LANDS at after the teams branch has had its say. */
+export interface CreateBasePreconditions {
+  destination: CreateDestination;
+  visibility: "public" | "private";
+  teamGrants: NonNullable<KnowledgeBaseCreateInput["teamGrants"]>;
+}
+
+/**
+ * 🔒 **EVERY PRE-WRITE GATE OF {@link createBase}, AS ONE FUNCTION — SO A DRY
+ * RUN CAN RUN THE GATE THE CONFIRMED CALL RUNS.**
+ *
+ * ⚠ **THE PIN IT EXISTS FOR: A PREVIEW MUST NEVER HAND OUT A TOKEN FOR A CREATE
+ * THE CONFIRMED CALL WOULD REFUSE.** The MCP confirm class
+ * (`packages/mcp-server/src/tools/confirm-token.ts`) previews an audience
+ * -changing create and mints a token the acting call echoes back. That preview
+ * is minted in a DIFFERENT PROCESS from the gates, so it knew nothing about
+ * them: `create_base` with `visibility:"public"` in an unarmed shared home
+ * channel previewed happily, issued a token, and then the confirmed call was
+ * refused by {@link resolveCreateDestination}. A preview that promises what the
+ * gate forbids is worse than no preview — it is the surface telling the caller
+ * the act was available.
+ *
+ * ⚠ **PARITY IS STRUCTURAL, NOT A SECOND LIST.** The dry run does not
+ * re-implement, re-order or approximate these gates; it calls THIS function,
+ * which is the same call `createBase` makes and the only place the chain is
+ * written. A gate added below is inherited by the preview on the same commit,
+ * which is the one property a hand-mirrored copy could never keep.
+ *
+ * ⚠ **IT STOPS EXACTLY WHERE THE WRITES BEGIN**, and that boundary is the
+ * contract: everything here answers a question about the CALLER and touches no
+ * row, so running it twice — once for the preview, once for the act — costs
+ * reads and changes nothing. The slug read is deliberately BELOW the line: it
+ * reads a container the caller may not be allowed to create in yet, and a dry
+ * run must not report a slug collision against a base that nobody may see.
+ *
+ * ⚠ **A DRY RUN MUST SEND THE BODY THE CONFIRMED CALL WILL SEND**, including
+ * `acknowledgeShared` — see the G16 call below. Previewing without it would
+ * refuse on the missing acknowledgement, which is the very thing the preview
+ * exists to obtain: the answer would be "no" to a question nobody asked.
+ */
+export async function assertCreateBaseAllowed(
+  ctx: KnowledgeContext,
+  input: KnowledgeBaseCreateInput,
+): Promise<CreateBasePreconditions> {
+  // 🔒 THE AUDIENCE CEILING, ASKED BEFORE THE INSERT rather than only by the
+  // reads afterwards (F-323's authoring half) — see
+  // `service-base-gates.ts`. ⚠ FIRST, before any other validation and
+  // before the slug derivation's read: a caller that may not create here should
+  // spend no round trips finding out, and must not be told about a slug
+  // collision with a row it cannot see.
+  //
+  // 🔒 **AND IT IS NOW THE SAME CALL THAT DECIDES WHERE THE ROW LANDS** (gap 2
+  // of #1077 — the asking seam). `resolveCreateDestination` composes that
+  // ceiling question with the personal-shelf fence and answers WHICH CONTAINER;
+  // it still refuses in every case the standalone read-back gate refused, and the
+  // one thing it adds is that an agent whose operator has ARMED this room
+  // creates on that operator's own shelf instead of being turned away.
+  // ⚠ `wantsTeams` is read here rather than below because a teams create names
+  // the calling container and must never be re-routed — see the gate.
+  const wantsTeams = input.accessMode === "teams";
+  const destination = await resolveCreateDestination(ctx, {
+    homeScoped: input.homeScoped,
+    shareToChannelId: input.shareToChannelId,
+    wantsTeams,
+  });
+
+  // No per-base agent-write gate on CREATE — that toggle is per-base and the
+  // base doesn't exist yet. Slug unique per workspace keeps MCP `kb_*` slug
+  // addressing unambiguous; publicId is the URL routing key.
+  //
+  // Visibility default by caller: a SHARED credential must be 'public'
+  // (⚠ `canSeeBase` blocks such credentials from reading their own private rows
+  // back, so a private one is stranded — explicit 'private' rejected loudly);
+  // session caller / container session → 'private', owner publishes later.
+  //
+  // ⚠ THE PREDICATE MOVED WITH `canSeeBase` ON 2026-08-27 (F-336) BECAUSE THE
+  // COMMENT ABOVE IS THE WHOLE JUSTIFICATION FOR THE FENCE. A container-session
+  // credential CAN read its own private rows back now, so the stranding it
+  // guards against does not exist for it, and forcing 'public' would have the
+  // operator's agent publish into the room the PEER is standing in — the
+  // opposite of what this branch is for.
+  const fromWorkspaceKey = isSharedCredential(ctx);
+  // ⚠ ANNOTATED, NOT INFERRED, since this function now ANSWERS with it: the
+  // inferred type carried `undefined` from `input.visibility`, and a caller
+  // reading "undefined" as "whatever the server defaults to" is exactly the
+  // credential-dependent guess `knowledge-ops-write.ts › opCreateBase` refuses
+  // to make.
+  let resolvedVisibility: "public" | "private";
+  if (fromWorkspaceKey) {
+    if (input.visibility === "private") {
+      throw new WorkspaceKeyPrivateVisibilityError();
+    }
+    resolvedVisibility = input.visibility ?? "public";
+  } else {
+    resolvedVisibility = input.visibility ?? "private";
+  }
+
+  // Teams mode is human-only; non-admin creators may only grant teams they
+  // belong to. ⚠ `wantsTeams` is resolved at the top of this function now — the
+  // destination gate needs it before any read.
+  const teamGrants = wantsTeams ? (input.teamGrants ?? []) : [];
+  if (wantsTeams) {
+    if (ctx.source === "agent") {
+      throw new AgentWriteDisabledError(
+        "(new)",
+        "Sharing scope is a human-only setting — agents cannot create teams-scoped knowledge bases.",
+      );
+    }
+    if (!meetsMinRole(ctx.role, "admin")) {
+      const myTeams = new Set(
+        await listTeamIdsForUser(ctx.workspaceId, ctx.userId),
+      );
+      if (teamGrants.some((g) => !myTeams.has(g.teamId))) {
+        throw new TeamScopeForbiddenError();
+      }
+    }
+    // Teams implies shared — schema already rejects private+teams.
+    resolvedVisibility = "public";
+  }
+
+  // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
+  // visibility, after the teams branch has had its say: `accessMode: "teams"`
+  // rewrites it to `public`, and reading `input.visibility` would let that
+  // rewrite publish unacknowledged.
+  // ⚠ BEFORE THE SLUG LOOP, so a refusal costs no slug and cannot half-land.
+  await assertSharedPublishAcknowledged({
+    // ⚠ THE CONTAINER THE ROW LANDS IN, not the one the call stands in. G16 asks
+    // whether this publishes into the room a PEER is standing in; a personal row
+    // lands on a shelf with one member, so asking about the room would demand an
+    // acknowledgement for an audience the row never reaches. Identical to
+    // `ctx.workspaceId` for every non-personal create.
+    workspaceId: destination.workspaceId,
+    publishes: resolvedVisibility === "public",
+    acknowledged: input.acknowledgeShared,
+    noun: "knowledge base",
+  });
+
+  return { destination, visibility: resolvedVisibility, teamGrants };
 }

@@ -24,6 +24,8 @@ import {
   assertSameWorkspace,
 } from "./service-shared";
 import { getBaseById, readBaseInContext } from "./service-bases";
+// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`).
+import { recordFolderRevision } from "./service-revisions";
 
 /** Folder reads + writes, plus `getBaseTree` — the snapshot shared by REST and
  *  the MCP get_tree op. */
@@ -100,7 +102,7 @@ export async function createFolder(
       );
     }
   }
-  return repo.insertFolder({
+  const created = await repo.insertFolder({
     workspaceId: ctx.workspaceId,
     knowledgeBaseId: base.id,
     parentId: input.parentId ?? null,
@@ -109,6 +111,8 @@ export async function createFolder(
     position: input.position,
     createdBy: ctx.userId,
   });
+  await recordFolderRevision(ctx, created, "create");
+  return created;
 }
 
 export async function updateFolder(
@@ -131,6 +135,9 @@ export async function updateFolder(
     const fresh = await getFolderInternal(ctx, id, false);
     throw new KnowledgeStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
   }
+  // ⚠ A NAME change is a `rename`; a description-only change is an `edit` with
+  // no body — honest, and never restorable (`revisions › restoreRevision`).
+  await recordFolderRevision(ctx, saved, patch.name !== undefined ? "rename" : "edit");
   return saved;
 }
 
@@ -161,10 +168,12 @@ export async function moveFolder(
     }
   }
 
-  return repo.updateFolderRow(id, {
+  const moved = await repo.updateFolderRow(id, {
     parentId: input.parentId,
     position: input.position,
   });
+  await recordFolderRevision(ctx, moved, "move");
+  return moved;
 }
 
 /** PERMANENT delete of a folder and its whole subtree. No trash, no restore. */
@@ -180,6 +189,11 @@ export async function deleteFolder(
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   await repo.hardDeleteFolder(ctx.workspaceId, id);
+  // ⚠ ONE REVISION FOR THE FOLDER, not one per row in the subtree the cascade
+  // took. The OPERATION is "this folder was deleted"; a per-descendant fan would
+  // be an unbounded write inside a request, and every descendant's own history
+  // already ends at its last revision.
+  await recordFolderRevision(ctx, folder, "delete");
 }
 
 async function getFolderInternal(

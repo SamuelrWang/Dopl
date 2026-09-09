@@ -68,6 +68,15 @@ export {
 } from "./service-entries";
 export type { ListEntriesOpts, KnowledgeEntryRef } from "./service-entries";
 
+// ⚠ THE CHANGELOG'S READ HALF (2026-09-09). The CAPTURE half is deliberately NOT
+// on this barrel: nothing outside `server/` may record a revision by hand — a
+// write records its own, in the same request, or the history has a hole in it.
+export {
+  listEntryRevisions,
+  listBaseRevisions,
+  restoreEntryRevision,
+} from "./service-revisions-read";
+
 export {
   readFileByPath,
   writeFileByPath,

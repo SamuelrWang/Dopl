@@ -175,6 +175,24 @@ const COVERED: Record<string, Covered> = {
       ontology_channel_shares_member_select: "is_current_workspace_member",
     },
   },
+  // ── revisions (2026-09-09, the CHANGELOG lane) ────────────────────────────
+  // ⚠ THE PREDICATE STATES NO VISIBILITY RULE — it defers, exactly as its policy
+  // twin does. `canSeeRevision` asks whether the caller's already-proved REACH
+  // names the resource the row is about; `dopl_revision_readable` is one `CASE`
+  // handing the same question to `dopl_knowledge_base_readable` /
+  // `dopl_ontology_readable`. So `via` names the deferring function rather than a
+  // resource predicate: what this gate can prove here is that the SELECT surface
+  // is one policy and that it reaches the CASE. That the CASE agrees with each
+  // resource's own rule is the redteam suites' job, per table, as ever.
+  //
+  // ⚠ ONE SELECT POLICY AND NO WRITE POLICY. Writes are REVOKED from the login
+  // roles instead — an audit log a subject can forge or erase with their own JWT
+  // is not an audit log — so check 3's equality is the whole SELECT surface and
+  // the migration's own `DO $$` asserts the write-policy count is zero.
+  revisions: {
+    predicates: ["canSeeRevision"],
+    select: { revisions_member_select: "dopl_revision_readable" },
+  },
   resource_grants: {
     // No TS twin, and not for a child table's reason: this is the GRANT table
     // every other policy resolves the teams axis through, and its own read rule

@@ -7,7 +7,7 @@ import type {
   KnowledgeBaseStats,
   KnowledgeEntry,
 } from "../../../types";
-import type { BaseTree, KbTeamRef, Selection } from "../types";
+import type { KbTeamRef, Selection } from "../types";
 import { BaseOverview } from "./base-overview";
 import { FileView } from "./file-view";
 import { viewModel } from "./view-model";
@@ -16,8 +16,6 @@ import styles from "../knowledge-v2.module.css";
 interface Props {
   selection: Selection;
   workspaceId: string;
-  /** Selected base's tree — feeds Contents with no extra fetch. */
-  selectedTree?: BaseTree;
   /** Controller-owned fetch: FULL body, not the tree's stripped copy. */
   openEntry: KnowledgeEntry | null;
   openEntryStatus: "idle" | "loading" | "success" | "error";
@@ -70,7 +68,6 @@ const fileToken = (entryId: string) => `file:${entryId}`;
 export function DetailPanel({
   selection,
   workspaceId,
-  selectedTree,
   openEntry,
   openEntryStatus,
   refetchOpenEntry,
@@ -142,8 +139,6 @@ export function DetailPanel({
                   baseStats?.[selection.base.id]?.storageBytes ?? null
                 }
                 storageLimit={kbStorageLimit ?? null}
-                tree={selectedTree}
-                onTreeRefresh={onTreeRefresh}
               />
             </div>
           );

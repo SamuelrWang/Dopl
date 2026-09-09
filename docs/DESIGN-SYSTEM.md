@@ -271,6 +271,7 @@ Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
 | `knowledge/components/create-base-dialog.tsx` | INPUT FORM | Todo |
 | `knowledge/components/delete-base-confirm.tsx` | CONFIRMATION | Done |
 | `knowledge/components/knowledge-v2/knowledge-v2.tsx` | CONFIRMATION ‡ | Done |
+| `revisions/components/changelog-list.tsx` | CONFIRMATION | Done |
 | `knowledge/components/move-to-dialog.tsx` | INPUT FORM † | Todo |
 | `members/components/create-team-dialog.tsx` | INPUT FORM | Todo |
 | `members/components/invite-dialog.tsx` | INPUT FORM | Todo |
@@ -287,9 +288,13 @@ Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
 | `apps/desktop-ui/src/pages/home/ontology-share.tsx › OntologyShareDialog` | INPUT FORM † | **Done** |
 | `apps/desktop-ui/src/pages/home/ontology-share.tsx › DeleteOntologyConfirm` | CONFIRMATION | Done |
 
-Paths are under `src/features/` unless they start with `apps/`. **15 INPUT FORM (5 done), 19
+Paths are under `src/features/` unless they start with `apps/`. **15 INPUT FORM (5 done), 20
 CONFIRMATION, 5 MENU** — re-counted 2026-09-09 over the rows above, when the home-ontology wave
-added the two `ontology-share.tsx` dialogs (the previous count was 14/18/5 on 2026-09-08). ⚠ The
+added the two `ontology-share.tsx` dialogs (14/18/5 on 2026-09-08) and the CHANGELOG lane added the
+restore confirm (19 CONFIRMATION earlier the same day). ⚠ The changelog's Restore is a
+`ConfirmDialog` and NOT a `FormDialog`, which is this section's own first rule applied: it collects
+no input, it asks a yes/no question, and it NAMES THE DATE of the version it would write back —
+the one thing a person cannot re-derive from a list of near-identical rows. ⚠ The
 share dialog is one `FormSection` per home channel, each holding THREE `PillChoice` rows (Members /
 Guests / My agents) — the † case below, three times over — and its Save is `disabled` with a `hint`
 when the server says `canManage` is false, which is rule 4 rather than an exception to it. The
@@ -332,6 +337,34 @@ tokens).
   "nothing here is pressed in" takes the flat one** (/home and
   `features/agent-templates/**`, pinned by `template-editor.test.tsx › no
   concave surfaces`, whose `HOME_FILES` list only ever grows).
+- **Changelog list** (2026-09-09): the day-grouped history list, ONE component for every surface
+  that shows one — `src/features/revisions/components/changelog-list.tsx`, mounted by the base
+  page's Changelog section and by an entry's own history. **A second list would be two places for
+  the day heading, the agent mark and the restore confirmation to drift.**
+  - **DAY HEADING** — `h4`, `text-label` uppercase `text-text-muted`, one per UTC day key.
+    ⚠ **It LABELS the key `revisions/lib/group.ts › groupByDay` produced and never re-derives a
+    date from a row's stamp**, or the heading and the rows under it can disagree.
+  - **ROW** — a full-width `button` at `px-1 py-1`, `rounded-md`, `hover:bg-surface-raised-1`,
+    reading **`who · what · when`**: a 13px chevron that rotates on open, a 14px actor mark
+    (`Bot` at `text-agent-on` for an agent, `User` at `text-text-muted` for a person — each with an
+    `aria-label`), the actor name at `text-small text-text-primary`, the op + path at
+    `text-caption text-text-secondary`, an agent's session name at `text-caption text-text-muted`,
+    and the time pushed right with `ml-auto`.
+  - **EXPANDED** — indented `pl-7`, holding the summary (when the row has one) and the word-level
+    diff. **The diff's two washes are `bg-success/10` for an addition and `bg-danger/10` +
+    `line-through` for a removal, taken BY REFERENCE from
+    `skills/components/skill-history-panel.tsx › DiffCell`** so the app has one diff palette. Both
+    keep `text-text-primary`: the diff is read as prose, not decoded as colour, and the
+    strike-through is the second channel for a reader who cannot separate the two hues. The diff
+    body scrolls inside its own `max-h-64 overflow-auto` on `bg-bg-inset` — a markdown body carries
+    code blocks and long URLs and the page must never scroll sideways.
+  - **RESTORE** — a text control in the expanded row, behind `ConfirmDialog` (see **Popup forms**:
+    it collects nothing). ⚠ **The confirmation NAMES THE DATE**, because Restore over a list of
+    near-identical rows is the one place a mis-click is invisible until the next read. ⚠ **A
+    revision with no body snapshot renders NO Restore at all** rather than a disabled one — a
+    control that can only fail is worse than no control.
+  - **MINIMAL COPY.** Label and control; no explainer paragraph about what a revision is. Empty,
+    loading and error states are one `text-caption text-text-muted` line each.
 - **Pills/chips**: `rounded-full border border-border-strong` +
   `bg-bg-elevated` (raised, on inset bodies) or `bg-bg-inset` (flat, on
   cards), `text-caption`/`text-small` medium.

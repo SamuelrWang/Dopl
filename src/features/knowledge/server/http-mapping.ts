@@ -1,6 +1,13 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import { ContainerPublishUnacknowledgedError } from "@/features/workspaces/server/shared-publish";
+// ⚠ THE CHANGELOG'S TWO DOMAIN ERRORS ARE MAPPED HERE rather than on a route of
+// their own: every revision surface in this app is a KNOWLEDGE route, so a
+// second mapper would be a second place a 404 could become a 403.
+import {
+  RevisionNotFoundError,
+  RevisionNotRestorableError,
+} from "@/features/revisions/server/errors";
 import {
   AgentWriteDisabledError,
   ChannelGrantInvalidError,
@@ -31,6 +38,14 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   }
   if (err instanceof EntryNotFoundError) {
     return new HttpError(404, "KNOWLEDGE_ENTRY_NOT_FOUND", err.message);
+  }
+  if (err instanceof RevisionNotFoundError) {
+    // ⚠ ONE ANSWER FOR "no such revision", "not yours to see" and "its resource
+    // is gone" — the errors module carries the argument.
+    return new HttpError(404, "REVISION_NOT_FOUND", err.message);
+  }
+  if (err instanceof RevisionNotRestorableError) {
+    return new HttpError(409, "REVISION_NOT_RESTORABLE", err.message);
   }
   if (err instanceof AgentWriteDisabledError) {
     return new HttpError(403, "AGENT_WRITE_DISABLED", err.message);

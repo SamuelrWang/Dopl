@@ -8130,7 +8130,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **BOTH DIRECTIONS ARE PINNED**, inverted on the same day: `channels-v2/knowledge-tab.test.tsx › the capability, per host` now asserts that NEITHER host passes the flag, reading each host's source with comments stripped.
 - Status: OPEN (ruled absence, not debt to pay down). Re-adding the face needs Samuel's word.
 
-### F-681 — the ontology PROMPT-FRAMING block has no producer: nothing writes `ctx.ontologies` (2026-09-09)
+### F-681 — the ontology PROMPT-FRAMING block has no producer: nothing writes `ctx.ontologies` (2026-09-09) — ✅ RESOLVED 2026-09-09
 
 - Locations: `dopl-desktop-app/main/prompt-framing-ontology.js › ontologyReachLines`, spliced at two
   sites in `dopl-desktop-app/main/prompt-framing.js › buildFencedTurn`. The missing producer would sit
@@ -8154,7 +8154,34 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   today (which ontologies reach THIS channel, at what level), i.e. a new endpoint or a field on an
   existing session payload. That is a slice, not a review fix, and building it inside a review would ship
   an unreviewed lane.
-- Status: OPEN. The module is correct and tested; it needs a caller.
+- ✅ **RESOLVED 2026-09-09** — the lane was built as its own slice, in three parts.
+  **THE READ IS NEW, NOT FOLDED INTO AN EXISTING ONE**, and the alternatives were measured rather
+  than assumed: `main/template-resolve.js` is per-TEMPLATE (`GET /api/agent-templates/{id}/resolve`),
+  `launch-directive-spawn.js › fetchStartupContext` is per-WORKSPACE knowledge and lives on ONE lane,
+  and the reach is a third question on a third axis. It is
+  `src/app/api/ontology/reach/route.ts` → `src/features/ontology/server/service-reach.ts › getReach`,
+  which composes `› service-audience.ts › levelForCluster` per cluster and drops `none`.
+  ⚠ **NO `?channelId=`, and that is not an omission**: the ceiling resolves per CONTAINER
+  (`repository-shares.ts › listChannelIdsForWorkspace` folds every channel in and takes the wider
+  rung, I5), and a home channel IS the one channel in its `kind='link'` container — a channel filter
+  would answer NARROWER than the server enforces, which lies to an agent.
+  ⚠ **THE DESKTOP PRESENTS THE SESSION'S AGENT BEARER, NOT THE OPERATOR'S COOKIE**
+  (`dopl-desktop-app/main/ontology-reach.js`): `service.ts › buildOntologyContext` derives `source`
+  from an agent token, and the OWNER's own agent is the one matrix row that is not simply its
+  human's. A cookie read would answer the operator's rung and the block would promise `EDIT` on a
+  lane the server refuses. **No token ⇒ `[]`, never a cookie fallback.**
+  ⚠ **WIRED AT THE ONE SPAWN FUNNEL** (`dopl-desktop-app/main/session-launch.js › launch`), so the
+  button, the directive spawn and the peer-triggered responder all get it — F-510's lesson. It
+  **cannot refuse a launch**: every failure answers `[]` with one `diag` line, the rule
+  `fetchStartupContext` states, and the key is added to `context` ONLY when non-empty, so an
+  ontology-less lane stays byte-identical (`undefined` context included).
+  *Tests:* `dopl-desktop-app/test/ontology-reach-producer.test.mjs` (11, including the JOIN — the
+  producer's field names through the REAL `ontologyReachLines`, which is the defect this finding
+  WAS) and `src/features/ontology/server/service-reach.test.ts` (7).
+  ⚠ **STILL A COMPENSATING CONTROL, NOT A GATE.** Nothing above narrows anything; the fence is
+  unchanged.
+- Status: **RESOLVED 2026-09-09** (`src/features/ontology/server/service-reach.ts › getReach` +
+  `dopl-desktop-app/main/ontology-reach.js › fetchOntologyReach`).
 
 ### F-682 — a lent reader's snapshot shares the LENDER's whole membership budget (2026-09-09)
 
@@ -8176,7 +8203,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   cost argument and it was out of scope for this review.
 - Status: OPEN. Not reachable at today's data sizes (the limits are in the thousands); files before it is.
 
-### F-683 — the ontology audience ceiling fails OPEN on an unknown `workspaces.kind` (2026-09-09)
+### F-683 — the ontology audience ceiling fails OPEN on an unknown `workspaces.kind` (2026-09-09) — ✅ RESOLVED 2026-09-09
 
 - Location: `src/features/ontology/server/service-audience.ts › computeAudience`, first arm.
 - **The mechanism.** `if (kind !== "link" && kind !== "personal") return { kind: "unrestricted", … }`.
@@ -8192,7 +8219,21 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **The shape of a fix** is to name `standard` positively and give the else-arm `resolved`-reaching-
   nothing, which requires deciding what a standard-workspace ontology page does when the kind read
   fails — a product answer, not a refactor.
-- Status: OPEN.
+- ✅ **RESOLVED 2026-09-09**, exactly that shape. `computeAudience` now reads
+  `kind === "standard" → unrestricted` (positive, and still ONE probe for every board in the product),
+  then `kind ∉ {link, personal} → resolved with an EMPTY read scope`. ⚠ **THE EMPTY SCOPE IS WHAT
+  MAKES IT "REACHES NOTHING" RATHER THAN "REACHES ITS OWN CONTAINER"**: every repository read
+  short-circuits on it, and `› levelForCluster` gained one line —
+  `if (audience.workspaceIds.length === 0) return "none"` — because `service-shared.ts ›
+  inOwnContainer` asks about `ctx.workspaceId` and would otherwise have admitted the calling
+  container to an audience resolved BECAUSE that container's kind could not be trusted. That line is
+  also what closes `service-gates.ts › assertCanCreateCluster`, whose question is about a row that
+  does not exist yet and therefore never came through a read.
+  *Tests:* `service-audience.test.ts` (an unknown kind, and a missing row — both directions, with the
+  `standard` arm still pinned to `unrestricted`) and `service-reach.test.ts`. MUTATION-VERIFIED:
+  reverting the arm to its old form is 3 red, 0 vacuous.
+- Status: **RESOLVED 2026-09-09** (`src/features/ontology/server/service-audience.ts ›
+  computeAudience`, first two arms; `› levelForCluster`, the empty-scope line).
 
 ### F-684 — the ontology child SELECT policies do a recursive walk PER ROW, twice on edges (2026-09-09)
 
@@ -8215,7 +8256,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   review's to move.
 - Status: OPEN. Measure it on the first live `db reset` (CI's `rls-redteam` job) before paying for it.
 
-### F-685 — `guests_level` is stored, read and writable, and NO GUEST CAN REACH AN ONTOLOGY ROUTE (2026-09-09)
+### F-685 — `guests_level` is stored, read and writable, and NO GUEST CAN REACH AN ONTOLOGY ROUTE (2026-09-09) — ✅ RESOLVED 2026-09-09
 
 - Locations: every route under `src/app/api/ontology/` (measured with
   `grep -rn 'withWorkspaceAuth(' src/app/api/ontology`), against
@@ -8242,5 +8283,110 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   there. ⚠ **The writes must NOT move with the reads** — `guests_level: "edit"` would then need
   `minRole: "guest"` on `POST`/`PATCH` object routes, which hands the floor role a pen on four tables.
   Read and write are separate rulings.
-- Status: OPEN. Needs Samuel: may a `guest` of a home channel read a shared ontology, and may they
-  write one?
+- ✅ **RESOLVED 2026-09-09 — SAMUEL RULED BOTH HALVES YES.** *"guests of a home channel get their own
+  level (none/view/edit) on a shared ontology, and their agents inherit it."* **SIX floors moved to
+  `minRole: "guest"`** and each is a new entry in
+  `src/app/api/channels/guest-route-floor.test.ts › GUEST_ALLOWED` (**21 → 27**): the two READS
+  (`ontology/route.ts` GET, `ontology/anchor/route.ts` GET), the new REACH read
+  (`ontology/reach/route.ts` GET — F-681's lane, a compensating control), and the THREE
+  object/relationship/membership WRITES (`ontology/objects/route.ts` POST,
+  `ontology/objects/[objectId]/route.ts` PATCH and DELETE).
+  ⚠ **THE FLOOR GRANTS NOTHING; IT ONLY LETS A GUEST BE REFUSED.** `resolveOntologyAudience` is
+  unchanged and is still the fence: a guest with `guests_level='none'` — or with no share row —
+  reads an EMPTY snapshot and 404s on every write, exactly as before.
+  ⚠ **WHAT DELIBERATELY DID NOT MOVE**, against this entry's own warning that *"read and write are
+  separate rulings"*: the whole `clusters/[clusterId]/shares/**` lane (a guest lends nothing), cluster
+  create/rename/delete, and the `agentsMayEdit` toggle that rides the cluster PATCH (a CONTAINMENT
+  control on the owner's own agents). `objects/[objectId]/anchor` POST stays `member` too (R9). The
+  object DELETE keeps its `sessionOnly`, so the floor changed WHICH ROLE may ask and not whether an
+  agent token may.
+  ⚠ **THE CENSUS'S SCOPE WIDENED, NOT ITS CONTRACT.** Its rule has always been *"nothing anywhere is
+  at `guest` unless it is listed"*; these are the first data-bearing entries outside
+  `api/channels/**`. ⚠ **SET D LEFT THAT FILE IN THE SAME CHANGE** — it measured 520 of the §1 500 at
+  `b5e300e1` (i.e. the root lint was ALREADY red on that branch) and the six entries had nowhere to
+  go, so the parser's own pins moved to `src/shared/auth/route-floor-parser.test.ts`, beside the
+  parser they pin. Sets A/B/B2/B3/C stayed.
+  *Tests:* `src/features/ontology/server/guest-lane.test.ts` (14 — a guest at `view` reads and is
+  refused; at `edit` writes; at `none` and with no row gets the same nothing; the agent inherits
+  exactly; and the two lanes a guest may never reach, asserted as floors). MUTATION-VERIFIED:
+  reverting ONE floor is 3 red in the census; reading `members_level` instead of `guests_level` is 10
+  red across the behavioural pair. 0 vacuous.
+- Status: **RESOLVED 2026-09-09** (six floors + `GUEST_ALLOWED` 27; `guest-lane.test.ts`).
+
+### F-686 — the ontology side of the CHANGELOG is OWED: `revisions` exists, and no ontology write records one (2026-09-09)
+
+- Locations: `supabase/migrations/20261002120000_revisions.sql` (the table, its
+  `resource_type` CHECK already admitting `ontology_cluster`/`ontology_object`, and the
+  `dopl_revision_readable` `CASE` arm that fences them),
+  `src/features/revisions/server/service.ts › recordRevision`, against
+  `src/features/ontology/server/` — where no writer calls it.
+- **This is PART 2 of the lane, deliberately deferred, not an oversight.** The primitive was designed
+  for BOTH resource families in one pass — the row shape carries `payload jsonb` precisely so that
+  knowledge can store `{body, title, path}` and ontology can store `{field, before, after}` — and the
+  SQL fence already has arms for both. What is missing is the CAPTURE: the ontology writers record
+  nothing, so `dopl_revision_readable`'s two ontology arms are live and answer about zero rows.
+- **What part 2 owes, in the shape Samuel named (HubSpot-style per-field history):**
+  1. **FIELDS.** `ontology_objects.attributes` is a JSONB bag, so a write changes N fields at once. One
+     revision PER FIELD (`payload: {field, before, after}`) is the HubSpot shape and is what makes a
+     per-property timeline possible; one revision per SAVE would collapse the timeline this exists for.
+     ⚠ That is a different granularity from knowledge's ONE-PER-OPERATION, and the primitive supports
+     both without a schema change — but the two must not be described by one sentence in any doc.
+  2. **ASSOCIATIONS.** `ontology_memberships` and `ontology_relationships` are edges, not fields, and
+     they have no `resource_type` of their own. Either they ride the PARENT object's row (`field:
+     "associations"`, `before`/`after` as id sets) or the CHECK grows two values. **Deciding that is the
+     first act of part 2**, because it settles what `dopl_revision_readable` must be able to fence.
+  3. **THE HUMAN SEAL RULE DOES NOT TRANSFER.** `COALESCE_WINDOW_MS` joins consecutive `op:"edit"`
+     writes to one RESOURCE; a per-field revision is not an `edit` in that sense and must not silently
+     coalesce two different fields into one row. Either the window keys on `(resource, field)` or
+     ontology writes never coalesce. **Do not reuse the knowledge answer without re-deciding.**
+  4. **THE CLUSTER ROLL-UP** is the ontology twin of `listBaseRevisions`, and it needs the same
+     "the id set is the fence" narrowing.
+- Cost of leaving it: the ontology board has no history at all, and the `revisions` fence carries two
+  arms nothing exercises — which is the state a redteam suite cannot distinguish from a broken one.
+- ⚠ **A CONCURRENT BUILDER OWNS `src/features/ontology/**` AS OF 2026-09-09**, which is why the capture
+  was not written in the same change as the primitive. Part 2 lands after that work.
+
+### F-687 — the base page's inline description editor lost its only mount when Changelog replaced Contents (2026-09-09)
+
+- Locations: `src/features/knowledge/components/knowledge-v2/detail/base-overview.tsx` (which now
+  mounts `./overview-changelog.tsx`), and the two modules left in the tree with no importer:
+  `› overview-contents.tsx` and `› use-content-descriptions.ts`.
+- **Samuel's 2026-09-09 design names the base info face's two flat sections as Details and Changelog**,
+  so the swap is the ruling and not a mistake. What the ruling does not say is where the thing Contents
+  DID goes. It was the inline editor for each folder's `description` and each entry's `excerpt` — **the
+  summaries agents read in MCP `get_tree` / `list_dir`**, and the reason the section survived the
+  2026-08-28 overhaul in the first place (its own docblock says so: *"Selecting is one job, writing the
+  summaries an agent reads is another"*).
+- **So the product currently has no surface for writing an entry excerpt or a folder description**
+  outside the by-id PATCH routes, which only an agent or a hand-rolled request reaches. Every base
+  created from now on ships a tree of unsummarised nodes to every agent that opens it.
+- ⚠ **THE TWO MODULES ARE DELIBERATELY LEFT IN THE TREE, UNMOUNTED, so this finding points at
+  something.** They are dead code by `knip`'s reading and should NOT be deleted before the question is
+  answered — deleting them makes the capability unrecoverable and the finding unactionable at once.
+- Candidate answers, none taken: fold the editor into the LIST rail (`../list/list-panel.tsx`) beside
+  the node it describes; give the entry's own file view an excerpt field; or restore Contents as a
+  third section and let Samuel rule on three.
+
+### F-688 — sixteen unexempted files are over the 500-line cap, so the ROOT lint gate is red (measured 2026-09-09)
+
+- Command: `find src packages \( -name node_modules -o -name dist \) -prune -o \( -name '*.ts' -o
+  -name '*.tsx' \) -print | xargs wc -l | awk '$1>500 && $2!="total"'` — TWENTY rows, against an
+  exemption list in `eslint.config.mjs` naming FOUR.
+- `max-lines` is configured at **`error`** over `src/**`, `packages/*/src/**` and `apps/*/src/**`, so
+  each of the sixteen is a lint ERROR today: `npx eslint src/features/channels/types.ts` reports
+  *"File has too many lines (583). Maximum allowed is 500"*. **`npm run lint -- --max-warnings 0` at the
+  root — one of the two lint steps in the definition of green (CLAUDE.md, INVARIANTS §14) — therefore
+  fails for reasons that predate any one change.**
+- **INVARIANTS §1 claimed the opposite and has been corrected in the same change** (it said exactly four
+  exceed and the exemption list names exactly those four, measured 2026-08-11). The doc was the stale
+  half; the code is the finding.
+- ⚠ **THIS IS NOT A LICENCE TO WIDEN THE EXEMPTION LIST**, which carries *"DO NOT ADD TO THIS LIST —
+  split the file instead."* The remedy is sixteen splits by reason-to-change, and §1's own bullet says
+  a split scheduled on a line count waits indefinitely while one scheduled by a new reason-to-change
+  lands the same day — so the honest plan is to take each as its next contract change arrives.
+- ✅ **ONE WAS TAKEN ON 2026-09-09 AND IS OFF THE LIST**: `knowledge/server/service-base-writes.ts`
+  measured 509 and could not absorb the three lines the changelog capture needed, so
+  `CreateBasePreconditions` + `assertCreateBaseAllowed` moved to `./service-base-gates.ts` — that
+  module's own seam (a pre-write refusal about the CALLER) applied, the second time that file has paid
+  this cap and the same line both times. Both names are RE-EXPORTED from the original, so the route,
+  the `service.ts` barrel and `service-create-audience.test.ts` are unchanged. 366 and 378 lines.

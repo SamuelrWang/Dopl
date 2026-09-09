@@ -24,6 +24,22 @@ import type { KnowledgeBase, KnowledgeContext } from "../types";
 // is also the pre-2026-09-02 behaviour, and therefore the right default for a
 // suite that predates the arm. The cases that exercise a GRANT live in
 // `service-shared-grant-arm.test.ts` and the redteam suites.
+// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
+// (`./service-revisions.ts`, 2026-09-09): every knowledge write now records a
+// revision inside the same request, so a service test that leaves it alone
+// reaches `supabaseAdmin()` and fails on a missing service-role key. Stubbed
+// here because these suites are about the WRITE, not about its audit row —
+// that the row is recorded, exactly once, per path, is
+// `service-revisions.test.ts`'s subject.
+vi.mock("@/features/revisions/server/repository", () => ({
+  appendRevision: vi.fn(async () => ({ id: "rev-1" })),
+  replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
+  findLatestRevision: vi.fn(async () => null),
+  findRevisionById: vi.fn(async () => null),
+  listRevisionsForResource: vi.fn(async () => []),
+  listRevisionsForResources: vi.fn(async () => []),
+}));
+
 vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/shared/tenancy/resource-grant-reach")

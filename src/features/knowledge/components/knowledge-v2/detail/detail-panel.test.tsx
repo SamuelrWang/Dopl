@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
 import type { Selection } from "../types";
@@ -16,7 +18,18 @@ import { DetailPanel } from "./detail-panel";
  *
  * ⚠ THE INFO FACE IS NOT STUBBED, because "info is the resting state" is an
  * assertion about the real section, not about a placeholder.
+ *
+ * ⚠ **AND SINCE 2026-09-09 IT MOUNTS THE CHANGELOG**, which is a live query — so
+ * every render here is wrapped in a `QueryClientProvider` and the changelog's
+ * two client modules are stubbed. What is under test is still which FACE is on
+ * screen; the changelog has its own suite.
  */
+
+vi.mock("@/features/revisions/client/api", () => ({
+  fetchEntryRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
+  fetchBaseRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
+  restoreEntryRevision: vi.fn(),
+}));
 
 vi.mock("./file-view", () => ({
   FileView: ({ fullEntry }: { fullEntry: KnowledgeEntry | null }) => (
@@ -25,6 +38,16 @@ vi.mock("./file-view", () => ({
 }));
 
 afterEach(cleanup);
+
+/** ⚠ A FRESH CLIENT PER RENDER: a shared cache would let one test's changelog
+ *  answer another's. */
+function withQuery({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      {children}
+    </QueryClientProvider>
+  );
+}
 
 const BASE = {
   id: "kb-1",
@@ -61,14 +84,14 @@ function renderPane(
     <DetailPanel
       selection={selection}
       workspaceId="ws-1"
-      selectedTree={{ status: "ready", folders: [], entries: [A, B] }}
       openEntry={openEntry}
       openEntryStatus={openEntry ? "success" : "loading"}
       refetchOpenEntry={() => {}}
       canEditBase
       onTreeRefresh={() => {}}
       onBaseSaved={() => {}}
-    />
+    />,
+    { wrapper: withQuery }
   );
 }
 
@@ -83,7 +106,9 @@ describe("the detail column's resting state", () => {
   it("opens on the base's INFO face, not on an empty 'pick a file' pane", () => {
     renderPane(baseSel);
     expect(screen.getByText("Details")).toBeTruthy();
-    expect(screen.getByText("Contents")).toBeTruthy();
+    // ⚠ "Changelog", not "Contents" (2026-09-09): the base info face's second
+    // flat section is the day-grouped roll-up now.
+    expect(screen.getByText("Changelog")).toBeTruthy();
     expect(screen.getByDisplayValue("Product specs")).toBeTruthy();
     expect(screen.queryByTestId("file-face")).toBeNull();
   });
@@ -115,8 +140,7 @@ describe("the fade between the faces", () => {
       <DetailPanel
         selection={fileSel(A)}
         workspaceId="ws-1"
-        selectedTree={{ status: "ready", folders: [], entries: [A, B] }}
-        openEntry={A}
+          openEntry={A}
         openEntryStatus="success"
         refetchOpenEntry={() => {}}
         canEditBase
@@ -140,7 +164,6 @@ describe("the fade between the faces", () => {
     // loading skeleton on its way off screen — a face nobody navigated to.
     const props = {
       workspaceId: "ws-1",
-      selectedTree: { status: "ready" as const, folders: [], entries: [A, B] },
       refetchOpenEntry: () => {},
       canEditBase: true,
       onTreeRefresh: () => {},
@@ -152,7 +175,8 @@ describe("the fade between the faces", () => {
         selection={fileSel(A)}
         openEntry={A}
         openEntryStatus="success"
-      />
+      />,
+      { wrapper: withQuery }
     );
     expect(screen.getByTestId("file-face").textContent).toBe("Cold outreach");
 
@@ -173,7 +197,6 @@ describe("the fade between the faces", () => {
     // B's identity.
     const props = {
       workspaceId: "ws-1",
-      selectedTree: { status: "ready" as const, folders: [], entries: [A, B] },
       refetchOpenEntry: () => {},
       canEditBase: true,
       onTreeRefresh: () => {},
@@ -185,7 +208,8 @@ describe("the fade between the faces", () => {
         selection={fileSel(A)}
         openEntry={A}
         openEntryStatus="success"
-      />
+      />,
+      { wrapper: withQuery }
     );
     // A → B with B's fetch still out. The SHOWN token is still A's, so A is
     // what stays; the swap to B happens a fade later.
