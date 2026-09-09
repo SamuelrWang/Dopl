@@ -14,27 +14,22 @@ import {
 /**
  * 🔒 THE GATES EVERY ONTOLOGY READ AND WRITE PASSES (spec §4 sites 2-6).
  *
- * ⚠ **404, NEVER 403, AND THE MESSAGES ARE THE ONES A MISSING ROW ALREADY
- * THROWS.** "Not shared with you", "not visible to you" and "does not exist"
- * must be ONE answer, or a refusal becomes an oracle that confirms an id an
- * agent guessed. This is the rule `knowledge/server/service-bases.ts ›
- * assertWithinAudience` applies to bases, extended to a level ladder.
+ * ⚠ **404, NEVER 403** — "not shared with you", "not visible to you" and "does
+ * not exist" are ONE answer, or a refusal becomes an oracle confirming a guessed
+ * id (`knowledge/server/service-bases.ts › assertWithinAudience`'s rule,
+ * extended to a level ladder).
  *
- * ⚠ **THE GATE LIVES HERE AND NOT BESIDE THE WRITE.** A gate that sits next to
- * the insert it guards is a gate a later edit reorders past it — the seam
- * `knowledge/server/service-base-gates.ts` was split on, for the same reason.
+ * ⚠ **THE GATE LIVES HERE AND NOT BESIDE THE WRITE** — a gate beside its insert
+ * is one a later edit reorders past it (the `knowledge/server/
+ * service-base-gates.ts` seam, same reason).
  *
  * ⚠ **A GATE RETURNS THE ROW, AND THE ROW'S CONTAINER IS WHERE THE WRITE
- * LANDS.** A lent ontology lives in the LENDER's container while the caller
- * stands in the channel's, so a write that used `ctx.workspaceId` would target
- * a container the row is not in and silently update nothing (a 404 on a row the
- * caller may edit). Callers MUST use `row.workspace_id`.
+ * LANDS.** A lent ontology lives in the LENDER's container, so callers MUST use
+ * `row.workspace_id` — `ctx.workspaceId` would silently update nothing.
  */
 
-/** ⚠ Depth ceiling on the upward membership walk. The board is cluster →
- *  column → card; anything deeper is a nesting nobody has built, and a bound is
- *  what stops a malformed parent chain from spinning. The `seen` set already
- *  makes a CYCLE terminate — this bounds COST, not correctness. */
+/** ⚠ Depth ceiling on the upward membership walk (the board is cluster → column
+ *  → card). `seen` already terminates a CYCLE — this bounds COST. */
 const CLUSTER_WALK_DEPTH = 8;
 
 /** The clusters this object belongs to, walking `ontology_memberships` UP.
@@ -47,17 +42,15 @@ export async function clustersOfObject(
 }
 
 /**
- * The same walk for MANY objects at once — one query PER LEVEL, never one per
- * object.
+ * The same walk for MANY objects — one query PER LEVEL, never one per object.
  *
- * ⚠ **BATCHED BECAUSE THE CALLER IS A LIST.** `sanitizeEdges` validates every
- * target of an edge payload, so a per-object walk would be an N+1 keyed on how
- * many edges a client sent. The bound is {@link CLUSTER_WALK_DEPTH} queries
- * whatever the batch size, which is the cost `service-reads.ts` already pays for
- * the whole board.
+ * ⚠ **BATCHED BECAUSE THE CALLER IS A LIST**: `service.ts › sanitizeEdges`
+ * validates every target of an edge payload, so a per-object walk would be an
+ * N+1 keyed on how many edges a client sent. The bound is
+ * {@link CLUSTER_WALK_DEPTH} queries whatever the batch size.
  *
- * ⚠ EACH OBJECT KEEPS ITS OWN ANSWER, so a caller cannot read one object's
- * clusters as another's: the frontier carries the ROOT it descends from.
+ * ⚠ EACH OBJECT KEEPS ITS OWN ANSWER — the frontier carries the ROOT it
+ * descends from.
  */
 export async function clustersOfObjects(
   audience: OntologyAudience,
@@ -101,15 +94,15 @@ export async function clustersOfObjects(
 }
 
 /**
- * 🔒 **WHICH OF THESE OBJECT IDS MAY THIS CALLER SEE — Q8's boundary, applied to
- * a SET.** An object is visible when ANY cluster it belongs to admits the caller
- * at `view` (Q9's read half), which is the same sentence
- * `service-reads.ts › walkAdmittedClusters` says about the board.
+ * 🔒 **WHICH OF THESE OBJECT IDS MAY THIS CALLER SEE — Q8's boundary over a
+ * SET.** Visible when ANY cluster it belongs to admits the caller at `view`
+ * (Q9's read half), the same sentence `./service-reads.ts ›
+ * walkAdmittedClusters` says about the board.
  *
- * ⚠ **IT IS NOT `filterObjectIds`, AND CONFUSING THE TWO IS THE ONE WAY TO
- * LEAK.** That one answers "is this a live row inside my READ SCOPE", and the
- * scope is deliberately wider than the caller's authorization — it holds the
- * LENDER's whole container. This one applies the authorization on top.
+ * ⚠ **IT IS NOT `repository.ts › filterObjectIds`, AND CONFUSING THE TWO IS THE
+ * ONE WAY TO LEAK.** That one answers "is this a live row inside my READ SCOPE",
+ * and the scope holds the LENDER's whole container. This applies the
+ * authorization on top.
  */
 export async function admittedObjectIds(
   ctx: OntologyContext,
@@ -144,13 +137,9 @@ function objectNotFound(): HttpError {
   return HttpError.notFound("Object not found");
 }
 
-/**
- * One cluster, fenced at `min`. `view` for a read, `edit` for a write.
- *
- * ⚠ The read runs over the AUDIENCE's container set, so it finds a lent cluster
- * in the lender's container — and then `audienceAdmits` decides. Resolution is
- * not authorization, and the order says so.
- */
+/** One cluster, fenced at `min`. ⚠ The read runs over the AUDIENCE's container
+ *  set, so it FINDS a lent cluster in the lender's container and then
+ *  `audienceAdmits` decides: resolution is not authorization. */
 export async function requireCluster(
   ctx: OntologyContext,
   clusterId: string,
@@ -164,14 +153,12 @@ export async function requireCluster(
 
 /**
  * 🔒 **Q9 — A WRITE NEEDS `edit` ON EVERY CLUSTER THE OBJECT BELONGS TO; A READ
- * NEEDS `view` ON ANY.** Samuel's ruling, and the sharpest consequence of R5
- * (an object can sit in several clusters). The asymmetry is the point: with
- * `some` on the write, `members_level='edit'` in one channel would silently
+ * NEEDS `view` ON ANY.** Samuel's ruling, and the sharpest consequence of R5.
+ * With `some` on the write, `members_level='edit'` in one channel would silently
  * edit an ontology that channel cannot see.
  *
- * ⚠ AN OBJECT IN NO CLUSTER IS REFUSED ON BOTH, which is the fail-closed
- * reading of "every cluster" over an empty set — `every` over nothing is
- * vacuously true and would have admitted exactly the rows nothing authorises.
+ * ⚠ AN OBJECT IN NO CLUSTER IS REFUSED ON BOTH — `every` over nothing is
+ * vacuously true and would admit exactly the rows nothing authorises.
  */
 export async function requireObject(
   ctx: OntologyContext,
@@ -187,9 +174,9 @@ export async function requireObject(
   if (clusterIds.size === 0) throw objectNotFound();
   const clusters = await repo.listClusters(audience.workspaceIds);
   const owning = clusters.filter((c) => clusterIds.has(c.id));
-  // ⚠ A cluster the walk named but the read did not return is one this caller
-  // cannot see AT ALL — it must still COUNT against a write (Q9), so a short
-  // list is a refusal rather than a smaller `every`.
+  // ⚠ A cluster the walk named but the read did not return is invisible to this
+  // caller and must still COUNT against a write (Q9): a short list is a refusal,
+  // never a smaller `every`.
   if (owning.length !== clusterIds.size) {
     if (min === "edit") throw objectNotFound();
   }
@@ -202,14 +189,13 @@ export async function requireObject(
 }
 
 /**
- * 🔒 THE CREATE GATE. A create lands in the container it names, authored by the
- * caller, so the level it must clear is the OWNER LANE's — `edit` for a person,
- * and for an AGENT the solo toggle's answer (`agents_may_edit`), which is
- * exactly Samuel's "toggle it so that their agents can only view".
+ * 🔒 THE CREATE GATE — the OWNER LANE's level: `edit` for a person, and for an
+ * AGENT the solo toggle's answer (`agents_may_edit`), i.e. Samuel's *"toggle it
+ * so that their agents can only view"*.
  *
  * ⚠ IT ASKS THE AUDIENCE ABOUT A CLUSTER THAT DOES NOT EXIST YET, using the
- * facts the row WILL carry. That is the shape `knowledge › resolveCreateDestination`
- * needed too: a create must not produce a row its own author cannot then edit.
+ * facts the row WILL carry (`knowledge › resolveCreateDestination`'s shape): a
+ * create must not produce a row its own author cannot then edit.
  */
 export async function assertCanCreateCluster(ctx: OntologyContext): Promise<void> {
   const audience = await resolveOntologyAudience(ctx);

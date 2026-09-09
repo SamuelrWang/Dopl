@@ -23,6 +23,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { OntologyContext, OntologyLevel } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 import {
   canEditOntology,
   canSeeOntology,
@@ -33,13 +34,11 @@ import {
 
 describe("canSeeOntology / canEditOntology — Samuel's matrix, in TypeScript", () => {
   const CLUSTER = { id: "cluster-1", workspaceId: "owner-container" };
-  const ctx = (over: Partial<OntologyContext> = {}): OntologyContext => ({
+  const ctx = ontologyContextFactory({
     workspaceId: "owner-container",
     userId: "owner",
     role: "owner",
-    source: "user",
     credentialSubjectUserId: "owner",
-    ...over,
   });
   /** A caller who is NOT in the ontology's container — every share reader is. */
   const peer = (over: Partial<OntologyContext> = {}) =>

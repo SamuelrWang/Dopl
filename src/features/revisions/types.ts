@@ -2,10 +2,8 @@
  * REVISIONS — the shared history primitive (2026-09-09, the CHANGELOG lane).
  *
  * ONE append-only row per WRITE OPERATION against one resource, carrying the
- * POST-WRITE snapshot. Knowledge uses it today; ontology's HubSpot-style
- * per-field history (part 2, owed — `docs/REFACTOR-FINDINGS.md`) uses the same
- * table, the same actor model and the same reads, and differs only in what its
- * {@link RevisionPayload} carries.
+ * POST-WRITE snapshot. Knowledge and ontology share the table, the actor model
+ * and the reads, and differ only in what their {@link RevisionPayload} carries.
  *
  * ⚠ NOTHING HERE STORES A DIFF. A diff is computed at read time from two
  * snapshots (`../lib/diff.ts`), so it can never disagree with the body it claims
@@ -54,14 +52,9 @@ export type RevisionOp = (typeof REVISION_OPS)[number];
 
 export type RevisionActorKind = "user" | "agent";
 
-/**
- * WHO wrote it.
- *
- * ⚠ `agentSessionId` IS AN ATTRIBUTION HINT AND NEVER AN AUTHORIZATION SIGNAL
- * (`shared/auth/session-header.ts`): it is the desktop's slot key, forgeable,
- * read only to GROUP an agent session's writes in the changelog. Nothing grants
- * on it and no policy reads it.
- */
+/** WHO wrote it. ⚠ `agentSessionId` IS AN ATTRIBUTION HINT AND NEVER AN
+ *  AUTHORIZATION SIGNAL (`shared/auth/session-header.ts`) — the desktop's slot
+ *  key, forgeable, read only to GROUP a session's writes. */
 export interface RevisionActor {
   /** `null` only when the account was deleted (`ON DELETE SET NULL`). */
   userId: string | null;
@@ -88,13 +81,12 @@ export interface RevisionActor {
  *
  *   ASSOCIATION (`op: "edit"`, `association` set): an edge, not a field —
  *   `{association, field, before, after}`, filed on the OBJECT it attaches to.
- *   ⚠ `op` IS `edit` AND NOT A NEW WORD: `link`/`unlink` would need the
- *   migration's `op` CHECK to grow, and this shape needs no schema change at
- *   all. The `association` key is what a renderer keys on.
+ *   ⚠ `op` IS `edit` AND NOT A NEW WORD: `link`/`unlink` would grow the
+ *   migration's `op` CHECK, and the `association` key is what a renderer keys on.
  *
  *   BUNDLE (`op` `create` / `delete`): `{fields}` — every field the resource was
- *   born with, or last stood at. A create is ONE row and not N field rows: there
- *   is no `before` to diff against, and N rows would read as N edits.
+ *   born with, or last stood at. ONE row, not N: there is no `before` to diff
+ *   against, and N rows would read as N edits.
  *
  * ⚠ **NONE OF THE THREE CARRIES A `body`, so the knowledge restore rule reads
  * them all as un-restorable.** What may be written back is stated once, for both
@@ -115,13 +107,12 @@ export interface RevisionPayload {
 }
 
 /**
- * The four ontology LINK families. ⚠ They are payload values rather than
- * `resource_type`s, because none of them is addressable: a membership and a
- * relationship have no id a reader could ask history about, a share is a fact
- * about the CLUSTER, and the anchor is a link to a PERSON. Each rides the row it
- * attaches to, and every one of them is un-restorable for the same reason —
- * writing an edge back means re-pointing at a far end that may since have been
- * deleted or left the caller's audience (`../lib/restorable.ts`).
+ * The four ontology LINK families. ⚠ Payload values rather than
+ * `resource_type`s because none is ADDRESSABLE — no reader can ask a membership,
+ * a relationship, a share or an anchor for its own history, so each rides the row
+ * it attaches to. All four are un-restorable: writing an edge back re-points at a
+ * far end that may since have been deleted or left the audience
+ * (`../lib/restorable.ts`).
  */
 export const REVISION_ASSOCIATIONS = [
   "relationship",
@@ -158,9 +149,9 @@ export interface Revision {
   updatedAt: string;
 }
 
-/** One day's rows, newest day first, newest row first within the day.
- *  `day` is a `YYYY-MM-DD` UTC date key — see `server/service.ts › groupByDay`
- *  for why it is UTC and not the reader's zone. */
+/** One day's rows, newest day first, newest row first within the day. `day` is
+ *  a `YYYY-MM-DD` UTC key — `lib/group.ts › groupByDay` says why UTC and not the
+ *  reader's zone. */
 export interface RevisionDay {
   day: string;
   revisions: Revision[];
@@ -170,10 +161,4 @@ export interface RevisionDay {
 export interface RevisionPage {
   revisions: Revision[];
   nextCursor: string | null;
-}
-
-/** The resource a history read is ABOUT. */
-export interface RevisionResourceRef {
-  resourceType: RevisionResourceType;
-  resourceId: string;
 }

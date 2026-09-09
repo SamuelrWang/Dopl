@@ -8,38 +8,29 @@ import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
  * ONTOLOGY → REVISIONS: the CAPTURE half (2026-09-09, the CHANGELOG lane part 2,
  * closing `docs/REFACTOR-FINDINGS.md › F-686`).
  *
- * ⚠ **ONE REVISION PER CHANGED FIELD, NOT ONE PER SAVE, AND THAT IS A DIFFERENT
+ * ⚠ **ONE REVISION PER CHANGED FIELD, NOT ONE PER SAVE — A DIFFERENT
  * GRANULARITY FROM KNOWLEDGE'S.** Samuel's design (2026-09-09) is HubSpot-shaped:
- * per OBJECT, per FIELD, `old → new`, who, when, and whether a person or which
- * agent. `ontology_objects.attributes` is a JSONB bag, so one PATCH changes N
- * properties at once; recording one row per save would collapse exactly the
- * per-property timeline this exists for. The two granularities share one table
- * and one actor model and must never be described by one sentence in a doc.
+ * per OBJECT, per FIELD, `old → new`, who, when, person or which agent. One PATCH
+ * changes N entries of the `attributes` bag, so one row per save would collapse
+ * the per-property timeline this exists for. The two granularities share one
+ * table and one actor model and must never be described by one sentence.
  *
- * ⚠ **THE HUMAN COALESCING WINDOW DOES NOT APPLY HERE, AND IT IS THE PRIMITIVE
- * THAT SAYS SO** (`revisions/server/service.ts › COALESCING_RESOURCE_TYPES`), not
- * a flag this module passes. A field change is already atomic, and coalescing two
- * `edit` rows against one object would replace one FIELD's history with
- * another's.
+ * ⚠ **THE HUMAN COALESCING WINDOW DOES NOT APPLY, AND THE PRIMITIVE SAYS SO**
+ * (`revisions/server/service.ts › COALESCING_RESOURCE_TYPES`), not a flag this
+ * module passes.
  *
- * ⚠ **AWAITED, AFTER THE WRITE, INSIDE THE SAME REQUEST.** Never `void`-ed and
- * never caught-and-continued: a lost revision is a lost audit, so a write whose
- * revision could not be recorded is reported as FAILED
- * (`revisions/server/repository.ts` carries the full argument).
+ * ⚠ **AWAITED, AFTER THE WRITE, INSIDE THE SAME REQUEST** — never `void`-ed,
+ * never caught-and-continued (`revisions/server/repository.ts` carries the
+ * argument).
  *
- * ⚠ **CAPTURE ONLY.** The reads and the restore need `service-gates.ts` and the
- * object WRITE service, which import this module back;
- * `./service-revisions-read.ts` holds that half so the cycle is a seam rather
- * than an import order nobody can see. Same split, same reason, as the knowledge
- * lane's.
+ * ⚠ **CAPTURE ONLY.** The reads and the restore need `./service-gates.ts` and
+ * the object WRITE service, which import this module back;
+ * `./service-revisions-read.ts` holds that half so the cycle is a visible seam.
  */
 
-/**
- * ⚠ **ONE ATTRIBUTE OF THE BAG IS SPELLED `attribute:<key>`, SO A BAG ENTRY CAN
- * NEVER COLLIDE WITH A COLUMN.** An attribute keyed `name` is a perfectly legal
- * thing for a user to add, and an unprefixed field name would then file its
- * history under the object's own `name`.
- */
+/** ⚠ **ONE BAG ENTRY IS SPELLED `attribute:<key>`, SO IT CAN NEVER COLLIDE WITH
+ *  A COLUMN.** An attribute keyed `name` is legal, and unprefixed it would file
+ *  its history under the object's own `name`. */
 export const ATTRIBUTE_FIELD_PREFIX = "attribute:";
 
 export interface OntologyFieldChange {
@@ -51,16 +42,14 @@ export interface OntologyFieldChange {
 /**
  * The OBJECT's tracked fields, flattened.
  *
- * ⚠ **WHAT IS DELIBERATELY NOT ON THIS LIST**: `updated_at`, `last_edited_by`
- * and `last_edited_source` (they describe the write, and a revision already
- * records all three), and `user_id` — the anchor has its own row
- * ({@link recordAnchorRevision}) because it is a link to a PERSON rather than a
- * property of the object.
+ * ⚠ **DELIBERATELY NOT ON THIS LIST**: `updated_at`, `last_edited_by`,
+ * `last_edited_source` (a revision already records all three), and `user_id` —
+ * the anchor gets its own row ({@link recordAnchorRevision}) because it links to
+ * a PERSON rather than being a property.
  *
- * ⚠ `methods` and `template` are WHOLE-LIST fields rather than one field per
- * entry. They are the object's DEFINITION (what it can do, what its children are
- * born with), edited as a list in one editor; the per-entry granularity F-686
- * asks for is about `attributes`, which is where the property values live.
+ * ⚠ `methods` and `template` are WHOLE-LIST fields: they are the object's
+ * DEFINITION, edited as one list. F-686's per-entry granularity is about
+ * `attributes`, where the property values live.
  */
 export function objectFields(
   row: Pick<OntologyObjectRow, "name" | "subtitle" | "attributes" | "methods" | "template">
@@ -80,12 +69,10 @@ export function objectFields(
 /**
  * The CLUSTER's tracked fields.
  *
- * ⚠ **`layout` IS NOT ONE, AND THAT IS THE WHOLE POINT OF THE DESIGN.** It is
- * one `{x,y}` per node, written on every drag-drop of a card — recording it
- * would make the changelog a mouse log wearing the word "revision", which is the
- * thing Samuel's design refuses ("it doesn't make sense to track every tiny
- * letter change"). ⚠ `slug` is not one either: it is DERIVED from the name at
- * create and never changes, so a row about it would restate the rename.
+ * ⚠ **`layout` IS NOT ONE** — one `{x,y}` per node, written on every drag-drop;
+ * recording it makes the changelog a mouse log (Samuel: *"it doesn't make sense
+ * to track every tiny letter change"*). ⚠ Nor `slug`: DERIVED from the name at
+ * create and never changed, so a row about it would restate the rename.
  */
 export function clusterFields(
   row: Pick<OntologyClusterRow, "name" | "purpose" | "agents_may_edit">
@@ -113,15 +100,12 @@ function stable(value: unknown): string {
 /**
  * The fields that actually MOVED.
  *
- * ⚠ **A FIELD PRESENT ON ONE SIDE ONLY IS A CHANGE, AND ITS MISSING HALF IS
- * `null` RATHER THAN `undefined`** — an attribute added or removed is exactly
- * the event a property timeline exists to show, and `undefined` does not survive
- * `JSON.stringify` into a `jsonb` payload, so the row would arrive with the key
- * missing and read as "no value recorded".
+ * ⚠ **PRESENT ON ONE SIDE ONLY IS A CHANGE, AND THE MISSING HALF IS `null`, NOT
+ * `undefined`** — `undefined` does not survive `JSON.stringify` into `jsonb`, so
+ * the row would arrive keyless and read as "no value recorded".
  *
- * ⚠ **AN UNCHANGED FIELD RECORDS NOTHING.** A PATCH that re-sends what is
- * already stored is a no-op, and a no-op that files a revision shows the reader
- * an edit that never happened.
+ * ⚠ **AN UNCHANGED FIELD RECORDS NOTHING** — a re-sent PATCH is a no-op, and a
+ * no-op that files a revision shows an edit that never happened.
  */
 export function changedFields(
   before: Record<string, unknown>,
@@ -138,11 +122,8 @@ export function changedFields(
   return changes;
 }
 
-/**
- * ⚠ **`rename` IS THE OP FOR THE `name` FIELD AND `edit` FOR EVERY OTHER ONE.**
- * The primitive's vocabulary already has the word, the renderer already labels
- * it, and a rename is the one field change a reader scans a timeline for.
- */
+/** ⚠ `rename` for the `name` field, `edit` for every other — a rename is the one
+ *  field change a reader scans a timeline for, and both words already exist. */
 function opForField(field: string): RevisionOp {
   return field === "name" ? "rename" : "edit";
 }
@@ -165,10 +146,9 @@ async function recordFieldChanges(
     await recordRevision(ctx, {
       resourceType: resource.resourceType,
       resourceId: resource.id,
-      // ⚠ THE RESOURCE'S OWN container, never `ctx.workspaceId`: a LENT
-      // ontology lives in the lender's while the caller stands in the channel's,
-      // and a row filed under the writer's container is invisible from the
-      // cluster it is the history of (INVARIANTS §T35's id-following writes).
+      // ⚠ THE RESOURCE'S OWN container, never `ctx.workspaceId`: a LENT ontology
+      // lives in the lender's, and a row filed under the writer's is invisible
+      // from the cluster it is the history of (INVARIANTS §T35).
       workspaceId: resource.workspaceId,
       op: opts.op ?? opForField(change.field),
       summary: opts.summary ?? null,
@@ -178,22 +158,32 @@ async function recordFieldChanges(
   return changes.length;
 }
 
+/** ONE row carrying a WHOLE state — a create's initial fields, or a delete's
+ *  last. ⚠ NOT N field rows: a create has no `before` to diff against, and N
+ *  rows would read as N edits of a thing that did not exist a moment earlier. */
+async function recordBundle(
+  ctx: OntologyContext,
+  resourceType: "ontology_object" | "ontology_cluster",
+  row: { id: string; workspace_id: string },
+  op: "create" | "delete",
+  fields: Record<string, unknown>
+): Promise<void> {
+  await recordRevision(ctx, {
+    resourceType,
+    resourceId: row.id,
+    workspaceId: row.workspace_id,
+    op,
+    payload: { fields },
+  });
+}
+
 // ─── Objects ────────────────────────────────────────────────────────
 
-/** The object came into being — ONE `create` row carrying every initial field.
- *  ⚠ NOT N field rows: there is no `before` to diff against, and N rows would
- *  read as N edits of a thing that did not exist a moment earlier. */
 export async function recordObjectCreate(
   ctx: OntologyContext,
   row: OntologyObjectRow
 ): Promise<void> {
-  await recordRevision(ctx, {
-    resourceType: "ontology_object",
-    resourceId: row.id,
-    workspaceId: row.workspace_id,
-    op: "create",
-    payload: { fields: objectFields(row) },
-  });
+  await recordBundle(ctx, "ontology_object", row, "create", objectFields(row));
 }
 
 /** A field patch — one row per field that MOVED, zero for a no-op. */
@@ -211,26 +201,18 @@ export async function recordObjectFieldChanges(
   );
 }
 
-/** Permanent removal — ONE `delete` row carrying the LAST state, which is the
- *  only place it survives (ontology deletes are hard, no trash). */
+/** Permanent removal — the LAST state, which is the only place it survives
+ *  (ontology deletes are hard, no trash). */
 export async function recordObjectDelete(
   ctx: OntologyContext,
   row: OntologyObjectRow
 ): Promise<void> {
-  await recordRevision(ctx, {
-    resourceType: "ontology_object",
-    resourceId: row.id,
-    workspaceId: row.workspace_id,
-    op: "delete",
-    payload: { fields: objectFields(row) },
-  });
+  await recordBundle(ctx, "ontology_object", row, "delete", objectFields(row));
 }
 
-/**
- * The identity ANCHOR — a link to a PERSON, filed as its own field row.
- * ⚠ It is not in {@link objectFields} because it is not a property of the
- * object; it is who the object IS, and a restore must never re-point it.
- */
+/** The identity ANCHOR — a link to a PERSON, its own row rather than a member of
+ *  {@link objectFields}: it is who the object IS, and a restore must never
+ *  re-point it. */
 export async function recordAnchorRevision(
   ctx: OntologyContext,
   row: OntologyObjectRow,
@@ -243,11 +225,9 @@ export async function recordAnchorRevision(
     workspaceId: row.workspace_id,
     op: "edit",
     payload: {
-      // ⚠ AN ASSOCIATION, NOT A FIELD, AND THE DISTINCTION IS LOAD-BEARING: the
-      // anchor links this object to a PERSON, and `claimAnchor` anchors the
-      // CALLER — so there is no write that could put somebody else's anchor
-      // back, and a field-shaped row would draw a Restore button whose only
-      // outcome is a refusal.
+      // ⚠ AN ASSOCIATION, NOT A FIELD: `claimAnchor` anchors the CALLER, so no
+      // write could put somebody else's anchor back and a field-shaped row would
+      // draw a Restore button whose only outcome is a refusal.
       association: "anchor",
       field: "anchor",
       before,
@@ -260,12 +240,11 @@ export async function recordAnchorRevision(
  * AN ASSOCIATION — a relationship or a cluster/column membership — filed on the
  * OBJECT it attaches to.
  *
- * 🔒 ⚠ **`op` IS `edit`, NOT A NEW WORD.** `link`/`unlink` would require the
- * migration's `op` CHECK to grow, and this shape needs no schema change at all:
- * `payload.association` is what a renderer keys on and what the restore
- * predicate refuses (`revisions/lib/restorable.ts`). Recorded here rather than
- * as its own `resource_type` because neither edge is addressable — no reader can
- * ask a membership row for its history.
+ * 🔒 ⚠ **`op` IS `edit`, NOT A NEW WORD.** `link`/`unlink` would grow the
+ * migration's `op` CHECK; `payload.association` needs no schema change and is
+ * what the renderer keys on and the restore predicate refuses
+ * (`revisions/lib/restorable.ts`). Filed on the OBJECT because neither edge is
+ * addressable — no reader can ask a membership row for its history.
  *
  * ⚠ RECORDS NOTHING WHEN THE EDGE SET DID NOT MOVE.
  */
@@ -315,13 +294,7 @@ export async function recordClusterCreate(
   ctx: OntologyContext,
   row: OntologyClusterRow
 ): Promise<void> {
-  await recordRevision(ctx, {
-    resourceType: "ontology_cluster",
-    resourceId: row.id,
-    workspaceId: row.workspace_id,
-    op: "create",
-    payload: { fields: clusterFields(row) },
-  });
+  await recordBundle(ctx, "ontology_cluster", row, "create", clusterFields(row));
 }
 
 export async function recordClusterFieldChanges(
@@ -345,21 +318,18 @@ export async function recordClusterDelete(
   row: OntologyClusterRow,
   cascadedObjects: number
 ): Promise<void> {
-  await recordRevision(ctx, {
-    resourceType: "ontology_cluster",
-    resourceId: row.id,
-    workspaceId: row.workspace_id,
-    op: "delete",
-    payload: { fields: { ...clusterFields(row), cascadedObjects } },
+  await recordBundle(ctx, "ontology_cluster", row, "delete", {
+    ...clusterFields(row),
+    cascadedObjects,
   });
 }
 
 /**
  * A SHARE change — who else reaches this ontology, filed on the CLUSTER.
  *
- * ⚠ The payload carries the LEVELS and the channel id, never a channel NAME:
- * the row is read by whoever can read the cluster's history, and a name is a
- * value somebody else's container owns.
+ * ⚠ LEVELS and the channel id, never a channel NAME: this row is read by whoever
+ * can read the cluster's history, and a name belongs to somebody else's
+ * container.
  */
 export async function recordShareRevision(
   ctx: OntologyContext,

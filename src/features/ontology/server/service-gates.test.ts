@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
-import type { OntologyContext } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 
 // ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
 // (`./service-revisions.ts`, 2026-09-09, part 2): every ontology write now
@@ -147,16 +147,7 @@ beforeEach(() => {
   mockNarrow.listMembershipParents.mockResolvedValue([]);
 });
 
-function homeCtx(over: Partial<OntologyContext> = {}): OntologyContext {
-  return {
-    workspaceId: LINK,
-    userId: "user-1",
-    role: "member",
-    source: "user",
-    credentialSubjectUserId: "user-1",
-    ...over,
-  };
-}
+const homeCtx = ontologyContextFactory({ workspaceId: LINK });
 
 function share(over: { ontology: string; members?: "none" | "view" | "edit" }) {
   return {

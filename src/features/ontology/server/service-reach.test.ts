@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { OntologyContext } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 
 vi.mock("./repository-shares", () => ({
   findWorkspaceKind: vi.fn(),
@@ -56,16 +56,11 @@ function summary(id: string, name: string, over: Partial<{ createdBy: string | n
   };
 }
 
-function ctx(over: Partial<OntologyContext> = {}): OntologyContext {
-  return {
-    workspaceId: LINK,
-    userId: OWNER,
-    role: "member",
-    source: "user",
-    credentialSubjectUserId: OWNER,
-    ...over,
-  };
-}
+const ctx = ontologyContextFactory({
+  workspaceId: LINK,
+  userId: OWNER,
+  credentialSubjectUserId: OWNER,
+});
 
 function prime(opts: {
   kind?: string;

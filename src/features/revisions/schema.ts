@@ -15,8 +15,6 @@ export const RevisionQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(REVISION_PAGE_MAX).optional(),
 });
 
-export type RevisionQueryInput = z.infer<typeof RevisionQuerySchema>;
-
 /**
  * The keys the routes hand `shared/api/parse-json.ts › parseQuery`.
  *

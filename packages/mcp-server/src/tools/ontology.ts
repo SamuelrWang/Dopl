@@ -23,21 +23,19 @@ import { composeDescription } from "./tool-style";
 
 /**
  * ⚠ THE ONE PROSE BUDGET ON THIS SURFACE THAT IS NOT
- * {@link DESCRIPTION_MAX_CHARS}, AND IT IS A DECISION RECORDED IN CODE RATHER
- * THAN A CAP QUIETLY ABSORBED. EIGHTEEN ops, and `parity.test.ts` requires
- * every one of them to appear as a quoted `"op_name"`, on top of the two
- * disclosures `tool-scope-claims.test.ts` pins by phrase (op="map"'s TWO LEVELS
- * ONLY, op="resolve"'s cap). That floor does not fit 1,200.
+ * {@link DESCRIPTION_MAX_CHARS}, RECORDED IN CODE RATHER THAN QUIETLY ABSORBED.
+ * EIGHTEEN ops, each of which `parity.test.ts` requires as a quoted `"op_name"`,
+ * plus the two disclosures `tool-scope-claims.test.ts` pins by phrase (op="map"'s
+ * TWO LEVELS ONLY, op="resolve"'s cap) — that floor does not fit 1,200.
  *
- * ⚠ 1,508 IS THE MEASURED PROSE, NOT A ROUND NUMBER WITH ROOM IN IT: it is a
- * ratchet, so the next sentence added here fails at import instead of being
- * absorbed. The whole SERVED string still answers to
+ * ⚠ IT IS THE MEASURED PROSE, NOT A ROUND NUMBER WITH ROOM IN IT: a ratchet, so
+ * the next sentence fails at import. The whole SERVED string still answers to
  * {@link HARD_DESCRIPTION_CEILING}, which no constant may raise — that is what
  * grouped the inverse write ops onto one line below.
  *
- * ⚠ THE HONEST NEXT MOVE IS NOT A HIGHER NUMBER — it is the one `dopl_channel`
- * already made for its law: pull the write-op glosses into an MCP resource, so
- * they stop being pushed to every client that only ever reads the graph.
+ * ⚠ THE HONEST NEXT MOVE IS NOT A HIGHER NUMBER — it is `dopl_channel`'s: pull
+ * the write-op glosses into an MCP resource, so they stop being pushed to every
+ * client that only reads the graph.
  */
 const ONTOLOGY_PROSE_BUDGET = 1_503; // ⚠ **1,506 → 1,503 (2026-09-09): BANKED, NOT RAISED.** The CHANGELOG lane part 2 added one clause to `policy` — every ontology write is filed per field in the changelog, which is a fact an agent cannot derive from any op — and paid for it out of this same description: five glosses trimmed to what only they say (the headline's routing tail, `op="get"`'s "Version token", `op="anchor"`'s phrasing, `create_column`'s, and "an agent gets its operator's" losing a word the ladder already carries). The three chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
 
@@ -69,13 +67,11 @@ const ONTOLOGY_DESCRIPTION = composeDescription({
 - "anchor" — the CALLER's own object; start here for "my/me" requests.
 - "resolve" — objects whose NAME or SUBTITLE contains the query (case-insensitive substring), capped at 20 matches.
 - "get" — one object: attributes, relationships, backlinks, children, actions, Version.`,
-    // ⚠ GROUPED, NOT ONE LINE PER OP, AND THAT IS THE HARD CEILING TALKING.
-    // `parity.test.ts` needs every enum op to appear as a quoted `"op_name"`,
-    // not to own a line; eight of these lines were the op name said twice
-    // (`"remove_attribute" — drop one.`), and the whole served string has to
-    // fit {@link HARD_DESCRIPTION_CEILING}, which no constant may raise.
+    // ⚠ GROUPED, NOT ONE LINE PER OP — the hard ceiling talking.
+    // `parity.test.ts` needs every enum op as a quoted `"op_name"`, not a line of
+    // its own, and eight of these were the op name said twice.
     // ⚠ The two ops `tool-scope-claims.test.ts` reads as BULLETS — "map" and
-    // "resolve" — keep their own lines and must keep them.
+    // "resolve" — must keep their own lines.
     `WRITE — set \`op\` to:
 - "create_cluster" / "update_cluster" — name and \`purpose\`.
 - "create_column" — a container named for what it holds.
@@ -170,10 +166,9 @@ export function registerOntologyTool(
         .describe(
           "Object-mutating ops: the object's Version from a prior op=\"get\", which rejects the write if the object changed since; omit to overwrite blindly (last-writer-wins)."
         ),
-      // ⚠ A16's response-size knob, on the FOUR read ops. ONE `.describe()`,
-      // in `response-size.ts`, shared with every tool that takes it — because
-      // five wordings is five chances to promise something `concise` does not
-      // do, and the promise ("bodies are untouched") is why it gets used.
+      // ⚠ A16's response-size knob, on the FOUR read ops. ONE `.describe()`, in
+      // `./response-size.ts`, shared with every tool that takes it: five wordings
+      // is five chances to promise something `concise` does not do.
       response_format: RESPONSE_FORMAT_FIELD,
     },
     (args): Promise<ToolResponse> => dispatch(client, args, caller)

@@ -8,18 +8,16 @@ import type { OntologyLevel } from "../types";
  * channel)` rows of `ontology_channel_shares` and the four container facts the
  * audience ceiling is built from (`service-audience.ts`). No business logic.
  *
- * 🔒 EVERY INPUT TO THE CEILING IS A DB FACT READ HERE, on the service client.
- * That is the whole design, and it is `knowledge/server/repository-audience.ts`'s
- * verbatim: the ceiling may not be decided by anything the caller can type.
- * `X-Workspace-Id`, `X-Dopl-Runtime` and `X-Dopl-Session-Id` are documented
- * NON-authorization signals (INVARIANTS §10) and an agent holding a 90-day
- * device token can send any value for all three.
+ * 🔒 EVERY INPUT TO THE CEILING IS A DB FACT READ HERE, on the service client
+ * (`knowledge/server/repository-audience.ts`'s design, verbatim): it may not be
+ * decided by anything the caller can type. `X-Workspace-Id`, `X-Dopl-Runtime` and
+ * `X-Dopl-Session-Id` are documented NON-authorization signals (INVARIANTS §10)
+ * and any device token can send any value for all three.
  *
- * ⚠ CREATES ITS OWN CLIENT, matching `repository.ts` and
- * `repository-projections.ts` — this feature's own convention. INVARIANTS §2
- * states the opposite rule ("takes a `SupabaseClient`, never creates one") and
- * the two disagree; the disagreement PREDATES this file and is reported rather
- * than silently resolved in either direction (CLAUDE.md's precedence rule).
+ * ⚠ CREATES ITS OWN CLIENT, matching `./repository.ts` and
+ * `./repository-projections.ts`. INVARIANTS §2 states the opposite rule ("takes a
+ * `SupabaseClient`, never creates one"); the disagreement PREDATES this file and
+ * is reported rather than resolved either way (CLAUDE.md's precedence rule).
  *
  * ⚠ Service role BYPASSES RLS, so the SERVICE is the fence on every read here
  * and the `dopl_ontology_readable` twin (S1) is not a backstop for it.
@@ -41,13 +39,10 @@ export interface OntologyShareRow {
   owner_agents_level: OntologyLevel;
 }
 
-/**
- * Ceiling on the container's channel fan, and on the share rows read through
- * it. ⚠ Same reason as `knowledge › CONTAINER_CHANNEL_LIMIT`: PostgREST
- * truncates an un-limited select SILENTLY, and a silent truncation here removes
- * rows from the admitted set — the SAFE direction, but invisibly, and a fence
- * that narrows for reasons nobody can see is one nobody can debug.
- */
+/** Ceiling on the container's channel fan and the share rows read through it.
+ *  ⚠ `knowledge › CONTAINER_CHANNEL_LIMIT`'s reason: PostgREST truncates an
+ *  un-limited select SILENTLY, which narrows the admitted set invisibly — safe,
+ *  and undebuggable. */
 export const ONTOLOGY_SHARE_LIMIT = 500;
 
 /** `workspaces.kind` for one workspace, or `null` when the row is gone.
@@ -65,15 +60,12 @@ export async function findWorkspaceKind(workspaceId: string): Promise<string | n
 }
 
 /**
- * How many ACTIVE members the container has — the SOLO/SHARED question, and the
- * only thing separating Samuel's solo default ("viewable and editable by their
- * agents") from the narrowed answer a peer's arrival produces.
+ * How many ACTIVE members the container has — the SOLO/SHARED question behind
+ * Samuel's solo default (*"viewable and editable by their agents"*).
  *
- * ⚠ `status='active'` is the filter, matching every other member count in the
- * system: an invited-but-unaccepted row is not a peer in the room.
- * ⚠ A `null` count is NOT read as `0` here — this reports what the database
- * said and lets `service-audience.ts` decide what silence means (it fails
- * CLOSED, to "not solo").
+ * ⚠ `status='active'`, as every other member count: an invited-but-unaccepted
+ * row is not a peer in the room. ⚠ A `null` count is reported as `null`, not
+ * `0` — `./service-audience.ts` decides what silence means (it fails CLOSED).
  */
 export async function countActiveWorkspaceMembers(
   workspaceId: string
@@ -89,8 +81,8 @@ export async function countActiveWorkspaceMembers(
 
 /** Every live channel id in the container — the SET the ceiling reads shares
  *  against. ⚠ NOT narrowed by channel membership: a link container holds ONE
- *  channel whose members are the container's members (INVARIANTS §4A), and the
- *  share row is the authorization either way. */
+ *  channel whose members are the container's (INVARIANTS §4A), and the share row
+ *  is the authorization either way. */
 export async function listChannelIdsForWorkspace(workspaceId: string): Promise<string[]> {
   const { data, error } = await supabaseAdmin()
     .from("channels")
@@ -106,14 +98,14 @@ export async function listChannelIdsForWorkspace(workspaceId: string): Promise<s
  * Every share row landing on ANY of `channelIds` — the reachable set behind
  * `resolveOntologyAudience`.
  *
- * 🔒 ⚠ NO `workspace_id` TERM, and that is F-662 applied to this table. A share
- * row is filed under the ONTOLOGY's container while the caller reaches it
- * through the CHANNEL's, so an `.eq("workspace_id", …)` here would refuse
- * precisely the cross-container lend the row exists to be. `channelIds` IS the
- * fence and it was computed from the caller's own container one call up.
+ * 🔒 ⚠ NO `workspace_id` TERM — F-662 applied to this table. The row is filed
+ * under the ONTOLOGY's container while the caller reaches it through the
+ * CHANNEL's, so an `.eq("workspace_id", …)` would refuse precisely the
+ * cross-container lend. `channelIds` IS the fence, computed from the caller's own
+ * container one call up.
  *
- * ⚠ Empty `channelIds` short-circuits with NO QUERY and no rows — the
- * fail-closed direction, and a `.in()` on an empty array is a syntax hazard.
+ * ⚠ Empty `channelIds` short-circuits with NO QUERY — fail-closed, and a `.in()`
+ * on an empty array is a syntax hazard.
  */
 export async function listSharesForChannels(
   channelIds: string[]
@@ -132,15 +124,12 @@ export async function listSharesForChannels(
  * HOW MANY CHANNELS EACH OF THESE ONTOLOGIES IS LENT INTO — the card's
  * "shared into N channels" line, for a WHOLE list.
  *
- * ⚠ **ONE QUERY FOR THE ROW SET, NEVER ONE PER ROW.** It is the same rule
- * {@link listSharesForChannels} follows and the one spec §3 reason 4 asks for:
- * the admit set is precomputed, so a list of 40 ontologies costs one read. A
- * `count` per cluster would be an N+1 on the hottest read this feature has.
+ * ⚠ **ONE QUERY FOR THE ROW SET, NEVER ONE PER ROW** — a `count` per cluster
+ * would be an N+1 on the hottest read this feature has.
  *
- * ⚠ **EVERY REQUESTED ID GETS AN ENTRY, INCLUDING `0`.** The caller asked about
- * these clusters, so `0` here is a MEASUREMENT ("lent into no channel") while an
- * absent key upstream means "nobody looked" — the two are different answers and
- * `types.ts › OntologyCluster.sharedChannelCount` keeps them apart.
+ * ⚠ **EVERY REQUESTED ID GETS AN ENTRY, INCLUDING `0`**: `0` is a MEASUREMENT
+ * ("lent into no channel") while an absent key upstream means "nobody looked"
+ * (`../types.ts › OntologyCluster.sharedChannelCount` keeps them apart).
  *
  * ⚠ Two ids only, no `ONTOLOGY_SHARE_COLS`: nothing here reads a level.
  */
@@ -188,9 +177,9 @@ export interface OntologyShareWrite {
   createdBy: string;
 }
 
-/** Upsert one `(ontology, channel)` row. The write states the desired END STATE
- *  for all three audiences, so a retry after an ambiguous failure is idempotent
- *  — the `channel-grants` PUT contract, with three levels instead of one. */
+/** Upsert one `(ontology, channel)` row — the desired END STATE for all three
+ *  audiences, so a retry after an ambiguous failure is idempotent (the
+ *  `channel-grants` PUT contract, with three levels). */
 export async function upsertShare(
   input: OntologyShareWrite
 ): Promise<OntologyShareRow> {

@@ -15,6 +15,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OntologyContext, OntologyLevel } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 
 vi.mock("./repository-shares", () => ({
   findWorkspaceKind: vi.fn(),
@@ -75,18 +76,11 @@ function shareRow(over: {
   } as const;
 }
 
-/** One caller. ⚠ A FRESH OBJECT every time: the ceiling is memoised against the
- *  context's identity, so reusing one across cases would reuse its answer. */
-function ctx(over: Partial<OntologyContext> = {}): OntologyContext {
-  return {
-    workspaceId: LINK,
-    userId: OWNER,
-    role: "member",
-    source: "user",
-    credentialSubjectUserId: OWNER,
-    ...over,
-  };
-}
+const ctx = ontologyContextFactory({
+  workspaceId: LINK,
+  userId: OWNER,
+  credentialSubjectUserId: OWNER,
+});
 
 function prime(opts: {
   kind?: string;

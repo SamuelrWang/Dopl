@@ -29,37 +29,32 @@ import {
  * /home → Ontology. THE CALLER'S OWN ONTOLOGIES, AND WHO ELSE REACHES THEM
  * (Samuel, 2026-09-09; `docs/specs/home-ontology.md` S4).
  *
- * ⚠ **ONE SECTION, AND ITS ROWS ARE PERSONAL** — "these are ontologies that will
- * be associated with the user's home space. A user can have multiple
- * ontologies." An ontology is a `ontology_clusters` row in the caller's
- * `kind='personal'` container (INVARIANTS §4A), NOT in the selected channel's
- * link container, which is what separates this face from Knowledge and Agents
- * beside it: those list what is IN the room, this lists what the operator OWNS
- * and lends INTO rooms.
+ * ⚠ **ONE SECTION, AND ITS ROWS ARE PERSONAL** — Samuel: *"these are ontologies
+ * that will be associated with the user's home space. A user can have multiple
+ * ontologies."* An ontology is an `ontology_clusters` row in the caller's
+ * `kind='personal'` container (INVARIANTS §4A), never the selected channel's —
+ * Knowledge and Agents list what is IN the room, this lists what the operator
+ * OWNS and lends INTO rooms.
  *
- * ⚠ **THE FACE TAKES NO CHANNEL AT ALL, AND THAT IS THE CONSEQUENCE.** Knowledge
- * and Agents are keyed by the selected row because they render that channel's
- * contents; this one renders the same rows whichever row is selected, so it is
- * cross-channel exactly as Overview is (`home-tabs.ts › ONTOLOGY_PANE`). The
- * share popup asks the SERVER for the operator's home channels rather than
- * taking the selected one, so a lend is a deliberate pick and not a side effect
- * of what the list happened to be on.
+ * ⚠ **SO THE FACE TAKES NO CHANNEL AT ALL**: it renders the same rows whichever
+ * row is selected, cross-channel as Overview is (`home-tabs.ts › ONTOLOGY_PANE`),
+ * and the share popup asks the SERVER for the operator's home channels rather
+ * than taking the selected one — a lend is a deliberate pick.
  *
  * ⚠ **THE BOARD IS REUSED BY IMPORT, PINNED TO ONE CLUSTER.** Opening a card
  * mounts `ontology/components/ontology-view.tsx › OntologyView` with
- * `pinnedClusterId`, which drops that view's cluster strip, its New-cluster
- * button, its delete and its URL write and changes nothing else. It reads the
- * SAME `ontologySnapshotKey` entry this list does, so opening one costs no
- * request.
+ * `pinnedClusterId`, which drops that view's cluster strip, New-cluster button,
+ * delete and URL write and changes nothing else. It reads the SAME
+ * `ontologySnapshotKey` entry this list does, so opening one costs no request.
  *
- * ⚠ **THE SOLO TOGGLE IS ON THE CARD, NOT IN THE POPUP** (Samuel: "for channels
+ * ⚠ **THE SOLO TOGGLE IS ON THE CARD, NOT IN THE POPUP** (Samuel: *"for channels
  * with only the user, private ontologies are automatically viewable and editable
  * by their agents. but there should be a setting, where they can toggle it so
- * that their agents can only view"). It is a property of the ONTOLOGY, so it
- * lives where the ontology is listed; the popup is about CHANNELS.
+ * that their agents can only view"*) — it is a property of the ONTOLOGY, and the
+ * popup is about CHANNELS.
  *
- * ⚠ ONE LAYOUT FOR ALL FIVE TABS (`index.tsx`): this renders INSIDE the record
- * pane. It never moves the conversation column and it never goes full-width.
+ * ⚠ ONE LAYOUT FOR ALL FIVE TABS (`./index.tsx`): this renders INSIDE the record
+ * pane, never moving the conversation column and never going full-width.
  */
 export function HomeOntologyPanels({
   homeWorkspaceId,

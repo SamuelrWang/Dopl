@@ -20,10 +20,8 @@ import { REVISION_PAGE_LIMIT, REVISION_PAGE_MAX } from "../constants";
  *
  * ⚠ **IT KNOWS NOTHING ABOUT KNOWLEDGE OR ONTOLOGY, AND THAT IS THE POINT.**
  * Callers hand it a `resourceType`, an already-gated resource and their own
- * REACH (`./service-shared.ts`); it never resolves a base, a cluster or a
- * visibility rule of its own. A second feature joins by adding an arm to the
- * SQL `CASE` and a caller that resolves its own reach — not by editing this
- * file.
+ * REACH (`./service-shared.ts`). A second family joins by adding an arm to the
+ * SQL `CASE` and a caller that resolves its own reach — never by editing here.
  */
 
 // ⚠ THE TWO PAGE NUMBERS LIVE IN `../constants.ts`, not here: `../schema.ts` is
@@ -33,16 +31,13 @@ export { REVISION_PAGE_LIMIT, REVISION_PAGE_MAX } from "../constants";
 /**
  * 🔒 **THE HUMAN COALESCING WINDOW — THE SEAL RULE, STATED ONCE.**
  *
- * A person typing into an entry produces one autosave `PATCH
- * /api/knowledge/entries/{id}` every few seconds. Recording each one would make
- * the changelog a keystroke log wearing the word "revision", which is exactly
- * the thing Samuel's 2026-09-09 design refuses ("it doesn't make sense to track
- * every tiny letter change"). So consecutive HUMAN edits coalesce, and a
- * revision SEALS when the window passes.
+ * Samuel (2026-09-09): *"it doesn't make sense to track every tiny letter
+ * change"* — an entry autosaves every few seconds, so consecutive HUMAN edits
+ * coalesce and a revision SEALS when the window passes.
  *
- * **THE RULE, AS IMPLEMENTED.** A new record REPLACES the resource's newest
- * revision — same row, new `payload`/`content_hash`, `updated_at` bumped,
- * `created_at` UNMOVED — when ALL FIVE hold:
+ * **THE RULE.** A new record REPLACES the resource's newest revision — same row,
+ * new `payload`/`content_hash`, `updated_at` bumped, `created_at` UNMOVED — when
+ * ALL FIVE hold:
  *
  *   1. the incoming actor kind is `user`;
  *   2. the incoming `op` is `edit`;
@@ -51,24 +46,18 @@ export { REVISION_PAGE_LIMIT, REVISION_PAGE_MAX } from "../constants";
  *   4. the newest row's `op` is `edit`;
  *   5. `now - newest.createdAt < ` {@link COALESCE_WINDOW_MS}.
  *
- * Otherwise a NEW ROW STARTS. So the window closes on all four of the things
- * that should close it: five minutes of wall clock, a different person, a
- * different KIND of write (a rename, a move, a delete), and — the one that
- * matters most — **an AGENT write, which never coalesces in either direction**.
- * An agent's writes are already one per OPERATION (a `write_file` is a decision,
- * not a keystroke), and an agent write arriving mid-window closes the person's
- * row rather than joining it: two authors must never share one row.
+ * Otherwise a NEW ROW STARTS — so the window closes on wall clock, a different
+ * person, a different KIND of write, and **an AGENT write, which never coalesces
+ * in either direction** (an agent's writes are one per OPERATION, and two authors
+ * must never share one row).
  *
- * ⚠ **`created_at` NEVER MOVES**, so the row keeps the moment the person
- * STARTED and the window cannot be extended indefinitely by continuing to type —
- * five minutes after the first keystroke, the next save seals and opens a new
- * row. Measuring from `updated_at` instead would make one long session a single
- * revision, which is the failure from the other side.
+ * ⚠ **`created_at` NEVER MOVES**, so continuing to type cannot extend the window
+ * indefinitely; measuring from `updated_at` would make one long session a single
+ * revision.
  *
- * ⚠ **THIS IS THE ONE EXCEPTION TO APPEND-ONLY** and it is why `updated_at`
- * exists on the table at all. Nothing else ever rewrites a revision, and a
- * SEALED row (`createdAt === updatedAt`, or any row outside its window) is
- * immutable. Restore is a NEW ROW, never a rewrite — see {@link restoreRevision}.
+ * ⚠ **THE ONE EXCEPTION TO APPEND-ONLY**, and why `updated_at` exists on the
+ * table. A SEALED row is immutable, and restore is a NEW ROW — see
+ * {@link restoreRevision}.
  */
 export const COALESCE_WINDOW_MS = 5 * 60 * 1000;
 
@@ -76,19 +65,15 @@ export const COALESCE_WINDOW_MS = 5 * 60 * 1000;
  * 🔒 **AND IT APPLIES TO KNOWLEDGE ONLY — THE SEAL RULE DOES NOT TRANSFER TO
  * ONTOLOGY (2026-09-09, part 2; `docs/REFACTOR-FINDINGS.md › F-686` point 3).**
  *
- * The window joins consecutive `op:"edit"` writes to ONE RESOURCE. An ontology
- * revision is one CHANGED FIELD of a resource, so a save that touched two
- * fields records two `edit` rows against the same object within milliseconds —
- * and coalescing would REPLACE the first field's row with the second field's
- * payload. One field's history would silently become another's.
+ * The window joins consecutive `op:"edit"` writes to ONE RESOURCE, but an
+ * ontology revision is one CHANGED FIELD — so a two-field save records two
+ * `edit` rows milliseconds apart and coalescing would REPLACE the first field's
+ * row with the second field's payload.
  *
- * ⚠ **THE FIX IS THE FAMILY, NOT A CALLER FLAG.** Keying the window on
- * `(resource, field)` was the other option F-686 named; it is rejected because a
- * field change is ALREADY ATOMIC — nobody types a `pill` value one keystroke per
- * request — so a window would buy nothing and cost a rule with two arms. A
- * caller-supplied `coalesce: false` was rejected for the same reason a gate
- * beside a write is: the one caller that forgets it corrupts a timeline, and the
- * failure is silent.
+ * ⚠ **THE FIX IS THE FAMILY, NOT A CALLER FLAG.** Keying on `(resource, field)`
+ * buys nothing (a field change is already atomic) and a caller-supplied
+ * `coalesce: false` fails the way a gate beside a write does: the one caller
+ * that forgets it corrupts a timeline, silently.
  */
 const COALESCING_RESOURCE_TYPES: ReadonlySet<RevisionResourceType> = new Set([
   "knowledge_base",
@@ -98,14 +83,10 @@ const COALESCING_RESOURCE_TYPES: ReadonlySet<RevisionResourceType> = new Set([
 
 // ─── Actor ──────────────────────────────────────────────────────────
 
-/**
- * The two context shapes that reach this feature, and the ONE fact both carry.
- *
- * `shared/auth/with-workspace-auth.ts › WorkspaceAuthContext` has
- * `agentTokenId`; `knowledge/types.ts › KnowledgeContext` has already derived
- * the same fact into `source`. Either is accepted so no caller has to rebuild a
- * context to record a revision.
- */
+/** The two context shapes that reach this feature — `shared/auth/
+ *  with-workspace-auth.ts › WorkspaceAuthContext` (`agentTokenId`) and
+ *  `knowledge/types.ts › KnowledgeContext` (already derived into `source`). Both
+ *  accepted, so no caller rebuilds a context to record a revision. */
 export interface RevisionActorContext {
   userId: string;
   agentTokenId?: string | null;
@@ -116,13 +97,12 @@ export interface RevisionActorContext {
 }
 
 /**
- * ⚠ `source` WINS WHEN PRESENT, because it is the same derivation made one layer
- * up (`service-shared.ts › buildKnowledgeContext`) and two answers to "is this an
- * agent" is how they come to differ.
+ * ⚠ `source` WINS WHEN PRESENT — the same derivation made one layer up
+ * (`knowledge/server/service-shared.ts › buildKnowledgeContext`), and two answers
+ * to "is this an agent" is how they come to differ.
  *
- * ⚠ `agentSessionId` IS RECORDED FOR AGENTS ONLY. A human on the desktop sends
- * the same header, and stamping it into a column called `agent_session_id` would
- * label a person's edit as an agent's in every renderer that groups by it.
+ * ⚠ `agentSessionId` FOR AGENTS ONLY: a human on the desktop sends the same
+ * header, and every renderer groups by that column.
  */
 export function deriveActor(ctx: RevisionActorContext): RevisionActor {
   const kind = ctx.source ?? (ctx.agentTokenId ? "agent" : "user");
@@ -160,9 +140,8 @@ export function contentHashOf(payload: RevisionPayload): string {
  * open human row this write coalesced into ({@link COALESCE_WINDOW_MS}).
  *
  * 🔒 ⚠ **AWAITED, AND ITS FAILURE IS THE CALLER'S.** Never `void`-ed, never
- * `catch`-and-continue: a lost revision is a lost audit, so a write whose
- * revision could not be recorded is reported as failed. Callers place this
- * INSIDE the same request, AFTER the write it records, and await it.
+ * `catch`-and-continue — a lost revision is a lost audit. Callers place it
+ * INSIDE the same request, AFTER the write it records.
  */
 export async function recordRevision(
   ctx: RevisionActorContext,
@@ -184,8 +163,8 @@ export async function recordRevision(
         {
           payload: input.payload as Record<string, unknown>,
           contentHash,
-          // ⚠ The LATEST summary wins rather than being appended to: the row
-          // describes the state it now holds, not the history of how it got there.
+          // ⚠ The LATEST summary wins: the row describes the state it holds,
+          // not how it got there.
           summary: summary ?? open.summary,
         },
         new Date().toISOString()
@@ -254,6 +233,17 @@ function clampLimit(limit: number | undefined): number {
   return Math.min(limit, REVISION_PAGE_MAX);
 }
 
+/** The clamp and the cursor decode both list reads share. ⚠ `limit + 1` is the
+ *  probe row {@link pageOf} reads `hasMore` off — never returned. */
+function pageQuery(opts: ListRevisionsOpts): {
+  limit: number;
+  query: repo.RevisionPageQuery;
+} {
+  const limit = clampLimit(opts.limit);
+  const before = opts.cursor ? decodeCursor(opts.cursor) : null;
+  return { limit, query: { limit: limit + 1, ...(before ? { before } : {}) } };
+}
+
 /**
  * ONE resource's history, newest first.
  *
@@ -266,12 +256,11 @@ export async function listRevisions(
   reach: RevisionReach,
   opts: ListRevisionsOpts = {}
 ): Promise<RevisionPage> {
-  const limit = clampLimit(opts.limit);
-  const before = opts.cursor ? decodeCursor(opts.cursor) : null;
+  const { limit, query } = pageQuery(opts);
   const rows = await repo.listRevisionsForResource(
     resource.resourceType,
     resource.resourceId,
-    { limit: limit + 1, ...(before ? { before } : {}) }
+    query
   );
   return pageOf(rows, limit, reach);
 }
@@ -289,23 +278,20 @@ export async function listRevisionsAcross(
   reach: RevisionReach,
   opts: ListRevisionsOpts = {}
 ): Promise<RevisionPage> {
-  const limit = clampLimit(opts.limit);
-  const before = opts.cursor ? decodeCursor(opts.cursor) : null;
+  const { limit, query } = pageQuery(opts);
   const rows = await repo.listRevisionsForResources(
     workspaceId,
     refs.map((r) => r.resourceId),
-    { limit: limit + 1, ...(before ? { before } : {}) }
+    query
   );
   return pageOf(rows, limit, reach);
 }
 
 /**
  * ⚠ **THE CURSOR IS MINTED FROM THE LAST ROW THE QUERY RETURNED, BEFORE THE
- * REACH FILTER.** A page that filters down to nothing out of a full read is
- * still a page that did not reach the end — the same rule
- * `chats/server/repository.ts › listVisibleChats` states for its clip
- * (INVARIANTS §9). Minting it from the filtered list would stall paging on the
- * first page whose rows were all invisible.
+ * REACH FILTER** (`chats/server/repository.ts › listVisibleChats`'s rule,
+ * INVARIANTS §9) — minting it from the filtered list stalls paging on the first
+ * page whose rows were all invisible.
  */
 function pageOf(
   rows: Revision[],
@@ -322,9 +308,7 @@ function pageOf(
 }
 
 // ⚠ THE DAY GROUPING LIVES IN `../lib/group.ts` — ONE implementation, because
-// the RENDERER groups too (over every page loaded so far, not per page). It is
-// re-exported here so a server caller reaches it through the service like every
-// other name in this module.
+// the RENDERER groups too (over every page loaded so far, not per page).
 export { groupByDay } from "../lib/group";
 
 // ─── Restore ────────────────────────────────────────────────────────
@@ -343,20 +327,16 @@ export function restoreSummary(source: Revision): string {
 export type RevisionRestoreWriter = (source: Revision) => Promise<void>;
 
 /**
- * 🔒 **RESTORE IS A NEW REVISION, NEVER A REWRITE.** Nothing here touches the
- * source row or any row between it and now: the snapshot is written back
+ * 🔒 **RESTORE IS A NEW REVISION, NEVER A REWRITE.** The snapshot goes back
  * THROUGH THE RESOURCE'S OWN SERVICE (`write`), which applies that resource's
- * gates, its storage accounting and its embedding refresh — and which records
- * the resulting revision itself, with `op: "restore"` and
- * {@link restoreSummary}. A restore that reached the repository would bypass
- * every one of those and leave a history with a hole in it.
+ * gates, storage accounting and embedding refresh and records the resulting
+ * revision with `op: "restore"` and {@link restoreSummary}. Reaching the
+ * repository instead would bypass all of it.
  *
- * ⚠ **SO THIS FUNCTION WRITES NOTHING.** It resolves the source, fences it, and
- * hands it to the writer. That is the whole of it, and it is why `revisions`
- * does not import `knowledge`.
+ * ⚠ **SO THIS FUNCTION WRITES NOTHING** — it resolves, fences, and hands off,
+ * which is why `revisions` does not import `knowledge`.
  *
- * 🔒 A revision the caller cannot see is `RevisionNotFoundError` — the same
- * answer an unknown id gets.
+ * 🔒 A revision the caller cannot see is `RevisionNotFoundError`.
  */
 export async function restoreRevision(
   revisionId: string,
@@ -367,10 +347,9 @@ export async function restoreRevision(
   if (!source || !canSeeRevision(source, reach)) {
     throw new RevisionNotFoundError(revisionId);
   }
-  // ⚠ A snapshot with nothing to write back (a knowledge `move`, an ontology
-  // association or `create` bundle) is refused rather than silently no-op-ed.
-  // THE RULE IS STATED ONCE, in `../lib/restorable.ts`, because the RENDERER
-  // asks the same question to decide whether to draw the button.
+  // ⚠ Nothing to write back (a knowledge `move`, an ontology association or
+  // `create` bundle) is refused, never silently no-op-ed. THE RULE IS STATED
+  // ONCE in `../lib/restorable.ts` — the RENDERER asks it to draw the button.
   if (!isRestorable(source)) {
     throw new RevisionNotRestorableError(revisionId);
   }

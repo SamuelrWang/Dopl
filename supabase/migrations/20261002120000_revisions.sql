@@ -16,95 +16,77 @@
 --
 -- ═══ WHAT ONE ROW IS ═══════════════════════════════════════════════════════
 --
--- A row is ONE WRITE OPERATION against ONE resource, with the POST-WRITE
--- snapshot in `payload`. Not a keystroke, not a field-level delta, not a diff:
--- the diff is COMPUTED at read time from two snapshots (`revisions/lib/diff.ts`),
--- so a stored diff can never disagree with the body it claims to describe.
+-- ONE WRITE OPERATION against ONE resource, with the POST-WRITE snapshot in
+-- `payload`. Never a stored diff: the diff is COMPUTED at read time from two
+-- snapshots (`revisions/lib/diff.ts`), so it cannot disagree with the body.
 --
--- ⚠ **TWO SHAPES OF `payload`, ONE COLUMN, AND THE `resource_type` SAYS WHICH.**
--- Knowledge stores `{body, title, path}` — the whole document as it stood after
--- the write. Ontology (part 2, owed) stores `{field, before, after}` — the
--- HubSpot-shaped per-field history. They share this table because they share
--- every other column and every rule below; they do not share a payload schema,
--- and nothing may read one shape without first reading `resource_type`.
+-- ⚠ **TWO SHAPES OF `payload`, ONE COLUMN, AND `resource_type` SAYS WHICH.**
+-- Knowledge: `{body, title, path}`, the whole document. Ontology: `{field,
+-- before, after}`, the HubSpot-shaped per-field history. Same table, same
+-- columns, same rules — DIFFERENT payload schemas, and nothing may read one
+-- shape without first reading `resource_type`.
 --
 -- ═══ 🔒 APPEND-ONLY, WITH EXACTLY ONE NAMED EXCEPTION ══════════════════════
 --
--- Nothing rewrites a revision and nothing deletes one. The single exception is
--- the HUMAN COALESCING WINDOW, and it is the reason `updated_at` exists at all:
--- a person typing into an entry produces one autosave PATCH every few seconds,
--- and a history that recorded each of them would be a keystroke log wearing the
--- word "revision". So consecutive `actor_kind='user'` + `op='edit'` writes by
--- the SAME user against the SAME resource REPLACE the open row's `payload`,
--- `content_hash` and `updated_at` while `now() - created_at < 5 minutes`;
--- `created_at` never moves, so the row keeps the moment the person STARTED.
--- The window's arithmetic lives in `src/features/revisions/server/service.ts`,
--- stated once — this file gives it a column to write and nothing else.
+-- The exception is the HUMAN COALESCING WINDOW, and it is why `updated_at`
+-- exists: consecutive `actor_kind='user'` + `op='edit'` writes by the SAME user
+-- against the SAME resource REPLACE the open row's `payload`, `content_hash` and
+-- `updated_at` while `now() - created_at < 5 minutes`, and `created_at` never
+-- moves. The arithmetic lives once in `revisions/server/service.ts`; this file
+-- gives it a column to write.
 --
--- ⚠ **AN AGENT WRITE NEVER COALESCES**, in either direction: an agent's writes
--- are already ONE PER OPERATION (a `write_file` is a decision, not a keystroke),
--- and an agent write arriving inside a person's open window CLOSES it — the two
--- authors must never share a row. The rule is enforced in the service and
--- asserted there; the database's job here is only that both can be recorded.
+-- ⚠ **AN AGENT WRITE NEVER COALESCES**, in either direction — an agent's writes
+-- are ONE PER OPERATION, and one arriving inside a person's open window CLOSES
+-- it. Enforced and asserted in the service; the database's job is only that both
+-- can be recorded.
 --
 -- ═══ 🔒 THE FENCE DEFERS; IT STATES NOTHING OF ITS OWN ═════════════════════
 --
--- ONE SELECT policy, over ONE `SECURITY DEFINER` function
--- `dopl_revision_readable(resource_type, resource_id)`, whose whole body is a
--- `CASE` handing the question to the resource's OWN predicate. A revision is
--- readable exactly when the thing it is about is readable — never on its own
--- terms, and never by a rule restated here. A second statement of "who may read
--- a knowledge base" is how the two come to disagree, which is
--- `20260923140000` §3b's lesson taken before it can be re-learned.
+-- ONE SELECT policy over ONE `SECURITY DEFINER` function
+-- `dopl_revision_readable(resource_type, resource_id)` whose whole body is a
+-- `CASE` handing the question to the resource's OWN predicate. A second
+-- statement of "who may read a knowledge base" is how two rules come to
+-- disagree — `20260923140000` §3b's lesson, taken before it is re-learned.
 --
--- ⚠ **A REVISION OF A DELETED RESOURCE READS AS INVISIBLE, AND THAT IS THE
--- FAIL-CLOSED DIRECTION.** Knowledge deletes are PERMANENT (no trash), so the
--- `EXISTS` arms below find nothing once the entry or folder is gone and the
--- policy answers false. The cost is a delete revision that no caller-scoped read
--- can see; the alternative — a rule that admits a row about a resource nobody
--- can point at any more — is a leak. Every read in the product today runs as
--- SERVICE ROLE and never meets this policy (INVARIANTS §2), so the SERVICE is
--- the fence and this is the phase-2 backstop for the day a revision read moves
--- to `readClient()` (`RLS_CALLER_SCOPED_READS`, off).
+-- ⚠ **A REVISION OF A DELETED RESOURCE READS AS INVISIBLE — THE FAIL-CLOSED
+-- DIRECTION.** Deletes are PERMANENT, so the `EXISTS` arms find nothing and the
+-- policy answers false. The cost is a delete revision no caller-scoped read can
+-- see; the alternative admits a row about a resource nobody can point at. Every
+-- read today runs as SERVICE ROLE and never meets this policy (INVARIANTS §2),
+-- so this is the phase-2 backstop for `RLS_CALLER_SCOPED_READS` (off).
 --
--- ⚠ **THE `CASE` HAS NO `ELSE` THAT ADMITS.** An unrecognised `resource_type` —
--- a type added to the CHECK and forgotten here — answers FALSE, the same
--- fail-closed reading `dopl_ontology_level_rank`'s `ELSE -1` takes.
+-- ⚠ **THE `CASE` HAS NO `ELSE` THAT ADMITS** — an unrecognised `resource_type`
+-- answers FALSE, `dopl_ontology_level_rank`'s `ELSE -1` reading.
 --
 -- ═══ 🔒 WRITES ARE SERVICE-ROLE ONLY ═══════════════════════════════════════
 --
--- INSERT / UPDATE / DELETE are REVOKED from `authenticated` and `anon`, and no
--- write policy is created. PostgREST is a second door (this file's neighbours
--- learned that on `channel_resource_grants`), and an audit log a subject can
--- forge or erase with their own JWT is not an audit log. The only writer is the
--- service role, reached through
--- `src/features/revisions/server/repository.ts › appendRevision`.
+-- INSERT / UPDATE / DELETE REVOKED from `authenticated` and `anon`, and no write
+-- policy. PostgREST is a second door (`channel_resource_grants` taught this
+-- file's neighbours), and an audit log a subject can forge or erase with their
+-- own JWT is not one. The only writer is `revisions/server/repository.ts ›
+-- appendRevision`.
 --
--- ⚠ **AND THE APPEND IS AWAITED, NEVER FIRE-AND-FORGET.** A lost revision is a
--- lost audit, so its failure is the caller's error — the opposite choice from
--- `logMcpToolCall`'s `void`, and deliberately so: that one loses a usage tally,
--- this one loses the record that a document changed.
+-- ⚠ **AND THE APPEND IS AWAITED, NEVER FIRE-AND-FORGET** — the opposite choice
+-- from `logMcpToolCall`'s `void`: that one loses a usage tally, this one loses
+-- the record that a document changed.
 --
 -- ═══ ⚠ NOT A REALTIME CHANGE ═══════════════════════════════════════════════
 --
--- `revisions` is NOT added to `supabase_realtime` and must not be. History is
--- read on demand, per resource, behind an explicit request; a publication
--- membership would push every write in the workspace to every subscriber and
--- pay the per-subscriber policy evaluation for a surface nobody is watching
--- (INVARIANTS §7). The closing `DO $$` ASSERTS the absence rather than trusting
--- it.
+-- `revisions` is NOT added to `supabase_realtime` and must not be: history is
+-- pulled per resource on demand, and a publication membership would push every
+-- write in the workspace to every subscriber and pay the per-subscriber policy
+-- evaluation for a surface nobody watches (INVARIANTS §7). The closing `DO $$`
+-- ASSERTS the absence.
 --
 -- ═══ ROLLBACK — PROSE, NOT COMMENTED-OUT SQL ═══════════════════════════════
 --
--- Purely additive: one table, two indexes, one function, one policy, and no
--- change to any existing object. Rollback is `DROP POLICY
--- revisions_member_select ON public.revisions;` then `DROP FUNCTION
--- public.dopl_revision_readable(text, uuid);` then `DROP TABLE public.revisions;`
--- — in that order, because the policy calls the function and the function is
--- referenced only by it. ⚠ The DROP TABLE DESTROYS HISTORY and is not
--- reversible: dump the table first if the rollback is anything but a revert of
--- an unshipped deploy. Nothing else in the schema depends on this file, so a
--- rollback needs no other migration rolled back with it.
+-- Purely additive: one table, two indexes, one function, one policy, no change
+-- to any existing object. Rollback, in this order (the policy calls the
+-- function, and only it does): `DROP POLICY revisions_member_select ON
+-- public.revisions;` then `DROP FUNCTION public.dopl_revision_readable(text,
+-- uuid);` then `DROP TABLE public.revisions;`. ⚠ The DROP TABLE DESTROYS HISTORY
+-- irreversibly — dump the table first unless this reverts an unshipped deploy.
+-- Nothing else in the schema depends on this file.
 
 -- ── 1. The table ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.revisions (
@@ -126,18 +108,16 @@ CREATE TABLE IF NOT EXISTS public.revisions (
   -- history of everything it wrote with it. The row survives its author.
   actor_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   actor_kind    TEXT NOT NULL CHECK (actor_kind IN ('user','agent')),
-  -- The desktop's session slot key (`X-Dopl-Session-Id`), verbatim, for an agent
-  -- write; NULL for every human one and for an agent that sent none. It is what
-  -- makes the changelog GROUP a session's writes visually.
+  -- The desktop's session slot key (`X-Dopl-Session-Id`) verbatim on an agent
+  -- write, NULL otherwise — what makes the changelog GROUP a session's writes.
   -- ⚠ A NON-AUTHORIZATION SIGNAL and the one forgeable field on the row
-  -- (`shared/auth/session-header.ts`). Nothing may grant on it and no policy
-  -- reads it.
+  -- (`shared/auth/session-header.ts`): nothing grants on it, no policy reads it.
   agent_session_id TEXT,
   op            TEXT NOT NULL CHECK (op IN
                   ('create','edit','section_edit','rename','move','delete','restore')),
   summary       TEXT,
-  -- Post-write snapshot. Knowledge: `{body, title, path}`. Ontology (part 2):
-  -- `{field, before, after}`. See the header.
+  -- Post-write snapshot. Knowledge: `{body, title, path}`. Ontology: `{field,
+  -- before, after}`. See the header.
   payload       JSONB NOT NULL DEFAULT '{}'::jsonb,
   -- SHA-256 of the snapshot's content, so "did this write change anything" is
   -- answerable without hauling two bodies.
@@ -150,11 +130,10 @@ CREATE TABLE IF NOT EXISTS public.revisions (
 
 -- ── 2. Indexes, one named statement each ───────────────────────────────────
 --
--- ⚠ TWO READS, TWO INDEXES, AND NEITHER COVERS THE OTHER. The per-resource
--- history is `WHERE resource_type = $1 AND resource_id = $2 ORDER BY created_at
--- DESC` — the keyset page an entry's own history walks. The base ROLL-UP asks a
--- whole container's rows in time order and narrows in the service to the base's
--- own resource ids, so its leading column is `workspace_id`.
+-- ⚠ TWO READS, TWO INDEXES, NEITHER COVERING THE OTHER. Per-resource history is
+-- the keyset page `WHERE resource_type = $1 AND resource_id = $2 ORDER BY
+-- created_at DESC`; the ROLL-UP asks a whole container's rows in time order and
+-- narrows in the service, so its leading column is `workspace_id`.
 CREATE INDEX IF NOT EXISTS revisions_resource_idx
   ON public.revisions (resource_type, resource_id, created_at DESC);
 

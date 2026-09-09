@@ -25,7 +25,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
-import type { OntologyContext, OntologyLevel } from "../types";
+import type { OntologyLevel } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 
 // ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
 // (`./service-revisions.ts`, 2026-09-09, part 2): every ontology write now
@@ -142,18 +143,13 @@ const MEMBERSHIP = {
   position: 0,
 };
 
-/** A GUEST of the home channel. ⚠ Fresh object per call — the ceiling is
- *  memoised on the context's identity. */
-function guest(over: Partial<OntologyContext> = {}): OntologyContext {
-  return {
-    workspaceId: LINK,
-    userId: GUEST,
-    role: "guest",
-    source: "user",
-    credentialSubjectUserId: GUEST,
-    ...over,
-  };
-}
+/** A GUEST of the home channel. */
+const guest = ontologyContextFactory({
+  workspaceId: LINK,
+  userId: GUEST,
+  role: "guest",
+  credentialSubjectUserId: GUEST,
+});
 
 /**
  * One share row for the lent ontology. ⚠ `members_level` is `edit` in EVERY case

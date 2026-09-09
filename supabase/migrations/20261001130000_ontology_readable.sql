@@ -16,52 +16,43 @@
 -- ═══ IDEMPOTENT, AND NO POLICY TOPOLOGY MOVES ══════════════════════════════
 --
 -- Five `CREATE OR REPLACE FUNCTION`s and four `DROP … ; CREATE POLICY` pairs
--- that re-state the SAME FOUR POLICY NAMES `20260720211005` last wrote. **No
--- policy is added and none is dropped**, so `scripts/check-rls-pair-gate.ts`
--- check 3 (the live SELECT set EQUALS the declared set) stays satisfiable and
--- the four `*_editor_write` / `*_editor_*` write policies are untouched.
---
--- ⚠ **THE FOUR POLICIES ARE REPLACED WHOLE, NOT WRAPPED.** A wrapper would be a
--- third place the matrix lives — `20260923140000`'s argument, applied.
+-- re-stating the SAME FOUR POLICY NAMES `20260720211005` last wrote. **No policy
+-- is added and none is dropped**, so `scripts/check-rls-pair-gate.ts` check 3
+-- (live SELECT set EQUALS declared set) stays satisfiable and the write policies
+-- are untouched. ⚠ **REPLACED WHOLE, NOT WRAPPED** — a wrapper would be a third
+-- place the matrix lives (`20260923140000`'s argument).
 --
 -- ═══ 🔒 THIS FILE ONLY EVER WIDENS ═════════════════════════════════════════
 --
 -- Every replaced policy KEEPS its `is_current_workspace_member(workspace_id,
--- 'viewer')` arm verbatim and gains an OR. That is deliberate and it is the
--- difference between this slice and a rewrite: ontology has been WORKSPACE-scoped
--- since `20260706120000` (spec R1–R4), so narrowing the container arm here would
--- blank every standard-workspace board in the product for a sharing feature
--- those boards do not use. **The narrowing that Samuel's matrix asks for is the
--- SERVICE's job** (spec I6/§4: `resolveOntologyAudience`, S2) — RLS's job in this
--- slice is that a NON-MEMBER with a share reaches exactly what the share says and
--- nothing else.
+-- 'viewer')` arm verbatim and gains an OR. Ontology has been WORKSPACE-scoped
+-- since `20260706120000` (spec R1–R4), so narrowing the container arm would blank
+-- every standard-workspace board for a sharing feature those boards do not use.
+-- **The narrowing Samuel's matrix asks for is the SERVICE's job** (spec I6/§4:
+-- `resolveOntologyAudience`, S2); RLS's job here is that a NON-MEMBER with a
+-- share reaches exactly what the share says.
 --
 -- ═══ 🔒 THE ARM IS AN `OR` BESIDE THE MEMBERSHIP GROUP, NEVER A TERM IN IT ══
 --
--- A share's grantee is by definition NOT a member of the ontology's container —
--- reaching it through the CHANNEL's is the whole point — so an arm conjoined
--- with `is_current_workspace_member` could only ever narrow, and the share would
--- be a row nothing reads. That is the exact defect `20260923140000` §3b records
--- for the knowledge children, caught on the first live run of that suite. It is
--- pinned here, in both directions, before it can happen.
+-- A share's grantee is by definition NOT a member of the ontology's container, so
+-- an arm conjoined with `is_current_workspace_member` could only narrow and the
+-- share would be a row nothing reads — the defect `20260923140000` §3b records
+-- for the knowledge children. Pinned here in both directions.
 --
 -- ═══ 🔒 NO `workspace_id` TERM IN THE SHARE ARM ════════════════════════════
 --
 -- The share row is filed under the ONTOLOGY's container while the caller reaches
--- it through the CHANNEL's. A `workspace_id` predicate would refuse precisely the
--- cross-container lend this feature exists to perform (`20260914120000` rule 3).
--- The two membership tests inside `dopl_ontology_share_level` are the fence and
--- they are both the CALLER's, both caller-pinned.
+-- it through the CHANNEL's, so a `workspace_id` predicate would refuse precisely
+-- the cross-container lend (`20260914120000` rule 3). The two membership tests
+-- inside `dopl_ontology_share_level` are the fence, both caller-pinned.
 --
 -- ═══ 🔒 A SHARED CREDENTIAL IS NEVER WIDENED BY A SHARE ════════════════════
 --
--- `NOT public.dopl_credential_is_shared()` rides the share arm, exactly as it
--- rides `dopl_grant_admits` in `dopl_knowledge_base_readable`. A credential that
--- stands for nobody in particular has no membership of the channel to read the
--- share THROUGH, so admitting it would be admitting an unowned key to another
--- person's room. ⚠ It is a CONJUNCT OF THE ARM, not a term at the top: at the
--- top it would also refuse a shared credential the container arm already admits,
--- which narrows the M-10 answer this file has no business touching.
+-- `NOT public.dopl_credential_is_shared()` rides the share arm, as it rides
+-- `dopl_grant_admits` in `dopl_knowledge_base_readable`: a credential standing for
+-- nobody has no membership of the channel to read the share THROUGH. ⚠ A CONJUNCT
+-- OF THE ARM, not a term at the top — at the top it would also refuse a shared
+-- credential the container arm already admits, narrowing M-10.
 --
 -- ═══ 🔒 CALLER-PINNED, TWICE, AND NEITHER IS OPTIONAL ══════════════════════
 --
@@ -69,22 +60,19 @@
 --   `workspace_members.role` in the channel's container — WHICH CLASS they are,
 --                                                 `guest` or member-and-above.
 --
--- Both read `(SELECT auth.uid())` and neither takes a user id from the caller:
+-- Both read `(SELECT auth.uid())` and neither takes a user id from the caller —
 -- the 3-arg `is_workspace_member` is the membership oracle M-9 closed, and no
--- function in this file may grow a subject parameter. **That is also why EXECUTE
--- is granted to `authenticated`** rather than revoked the way
--- `presence_heartbeat_all`'s is (`20260930140000`): that one takes a
--- caller-supplied subject, so its grant IS its fence. These do not, so the fence
--- is the body.
+-- function here may grow a subject parameter. **That is also why EXECUTE is
+-- granted to `authenticated`** rather than revoked like `presence_heartbeat_all`'s
+-- (`20260930140000`): that one takes a caller-supplied subject, so its grant IS
+-- its fence. These do not, so the fence is the body.
 --
 -- ═══ THE LADDER, AS A FUNCTION ═════════════════════════════════════════════
 --
--- `none(0) < view(1) < edit(2)`, and ANY OTHER WORD IS -1. That `ELSE -1` is the
--- fail-closed reading, and it is the same choice `20260825140000` made when it
--- gave `guest` the floor below `viewer` rather than re-basing the scale: an
--- unrecognised rung is below every real one, so a level word this file has never
--- heard of admits nobody. ⚠ IMMUTABLE so the rank can be inlined and so the CHECK
--- and the comparison cannot disagree about which is higher.
+-- `none(0) < view(1) < edit(2)`, and ANY OTHER WORD IS -1 — the fail-closed
+-- reading, and `20260825140000`'s choice when it gave `guest` the floor below
+-- `viewer` rather than re-basing the scale. ⚠ IMMUTABLE, so the rank inlines and
+-- the CHECK and the comparison cannot disagree about which is higher.
 --
 -- ═══ 🔒 R5 — AN OBJECT SITS IN SEVERAL CLUSTERS, SO A CHILD'S REACH IS A WALK ══
 --
@@ -92,44 +80,36 @@
 -- carry no `cluster_id` (spec R3/R5): a card's membership row names a PARENT
 -- OBJECT, and only a column's row names the cluster. So the child policies reach
 -- the cluster through `ontology_memberships` — `dopl_ontology_object_clusters`
--- walks UP the parent chain and answers with every cluster the object belongs to,
--- and the policy asks `dopl_ontology_readable` about EACH (Q9's READ half: an
--- object is readable if ANY of its clusters is). ⚠ `UNION`, not `UNION ALL`: the
--- de-duplication is what terminates a cycle, and the table's only structural
--- guard is a self-edge CHECK.
+-- walks UP the parent chain, and the policy asks `dopl_ontology_readable` about
+-- EACH cluster it answers (Q9's READ half: readable if ANY is). ⚠ `UNION`, not
+-- `UNION ALL` — the de-duplication is what terminates a cycle, and the table's
+-- only structural guard is a self-edge CHECK.
 --
--- ⚠ **`dopl_ontology_writable` IS NOT CALLED BY ANY POLICY, AND THAT IS STATED
--- RATHER THAN HIDDEN.** The four write policies stay at
--- `is_current_workspace_member(workspace_id,'editor')` — moving a write surface
--- is policy topology and is not in this slice. It exists because the WRITE half
--- of Samuel's matrix must be written in SQL beside the read half or the two drift
--- (its TS twin is `service-shared.ts › canEditOntology`, and Q9's write half —
--- `edit` on EVERY cluster the object belongs to — is resolved in the service,
--- which is the only layer that can see all of them at once). The closing `DO $$`
--- asserts it exists and is `SECURITY DEFINER`.
+-- ⚠ **`dopl_ontology_writable` IS NOT CALLED BY ANY POLICY, STATED RATHER THAN
+-- HIDDEN.** The write policies stay at `is_current_workspace_member(workspace_id,
+-- 'editor')` — moving a write surface is policy topology, not this slice. It
+-- exists so the WRITE half of Samuel's matrix is written in SQL beside the read
+-- half (TS twin: `ontology/server/service-shared.ts › canEditOntology`; Q9's
+-- write half is resolved in the service, the only layer that sees every cluster
+-- at once). The closing `DO $$` asserts it exists and is `SECURITY DEFINER`.
 --
--- ⚠ **NOT A REALTIME CHANGE.** No column, no publication membership, no replica
--- identity, no table. Four policies are re-stated under their own names and the
--- closing `DO $$` re-checks the publication and the replica identity anyway,
--- because "this migration did not touch it" is worth asserting rather than
--- trusting.
+-- ⚠ **NOT A REALTIME CHANGE** — no column, no publication membership, no replica
+-- identity, no table. The closing `DO $$` re-checks the publication and the
+-- replica identity anyway: "this migration did not touch it" is worth asserting.
 --
--- ⚠ **REALTIME NOW REFUSES LESS, NOT MORE, AND THAT IS THE ONE BEHAVIOURAL
--- CONSEQUENCE OUTSIDE THE FENCE.** Realtime evaluates these SELECT policies per
--- subscriber, so a channel peer subscribed to the OWNER's container will now
--- receive change frames for a SHARED cluster's rows. That is the intended reach.
--- It is NOT a fix for spec R7 (a peer mounted on the owner's container still
--- subscribes per WORKSPACE); the narrowing there is the client's, in S2/S5.
+-- ⚠ **REALTIME NOW REFUSES LESS, NOT MORE — THE ONE BEHAVIOURAL CONSEQUENCE
+-- OUTSIDE THE FENCE.** Realtime evaluates these SELECT policies per subscriber,
+-- so a channel peer subscribed to the OWNER's container now receives change
+-- frames for a SHARED cluster's rows. Intended, and NOT a fix for spec R7 (a peer
+-- still subscribes per WORKSPACE); that narrowing is the client's, in S2/S5.
 --
 -- ═══ ROLLBACK — PROSE, NOT COMMENTED-OUT SQL ═══════════════════════════════
 --
--- No data changes, so rollback is pure DDL and has ONE ordering trap: re-run
+-- No data changes, so rollback is pure DDL with ONE ordering trap: re-run
 -- `20260720211005`'s four ontology SELECT policies FIRST, and only then
--- `DROP FUNCTION` the five below. Dropping the functions while the policies still
--- call them leaves four policies that 42883 on every read — the ontology feature
--- returns errors rather than rows, which is louder than a leak but is still an
--- outage. Rolling back `20261001120000` requires this file to be rolled back
--- first, for the same reason.
+-- `DROP FUNCTION` the five below. Dropping the functions while the policies call
+-- them leaves four policies that 42883 on every read — an outage, not a leak.
+-- Rolling back `20261001120000` requires this file rolled back first.
 
 -- ── 1. The ladder ──────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.dopl_ontology_level_rank(p_level text)

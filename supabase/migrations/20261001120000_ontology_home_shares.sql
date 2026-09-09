@@ -6,7 +6,7 @@
 -- machine, so `supabase db reset` cannot start; CI's `rls-redteam` job is the
 -- replay, INVARIANTS §14).
 --
--- 🔒 **APPLY IT BY NAME (`ontology_home_shares`), NEVER BY FILENAME VERSION.**
+-- 🔒 **APPLY IT BY NAME (`ontology_home_shares`), NEVER BY FILENAME VERSION** —
 -- F-304's re-stamp: `supabase migration list` prints VERSIONS, and every recent
 -- wave applied under a re-stamped one. Join on the NAME (INVARIANTS §12).
 --
@@ -28,42 +28,37 @@
 --
 -- ═══ 🔒 WHY NOT `resource_grants` ══════════════════════════════════════════
 --
--- Reuse is this repo's default answer and it loses here for one structural
--- reason and one vocabulary reason (spec §3, reasons 1–2). `resource_grants` is
--- ONE SENTENCE WITH ONE `level` COLUMN, keyed
--- `(scope_type, scope_id, resource_type, resource_id)`; three independent levels
--- per share need either three rows that key cannot hold or three type-conditional
--- columns on a table five other resource types depend on. And its channel
--- vocabulary (`agent_only | visible`) is TWO AUDIENCES, not rungs — the one
--- invariant `20260923140000_grant_read_arm.sql` is loudest about. Ontology levels
--- ARE rungs. Storing them there falsifies it.
+-- Two reasons (spec §3, reasons 1–2). STRUCTURAL: `resource_grants` has ONE
+-- `level` column keyed `(scope_type, scope_id, resource_type, resource_id)`, and
+-- three independent levels per share need either three rows that key cannot hold
+-- or three type-conditional columns on a table five resource types depend on.
+-- VOCABULARY: its channel words (`agent_only | visible`) are TWO AUDIENCES, not
+-- rungs — the invariant `20260923140000_grant_read_arm.sql` is loudest about, and
+-- ontology levels ARE rungs.
 --
--- What IS reused is the SHAPE, not the table: the row is filed under the
--- RESOURCE's container, the read predicate carries no `workspace_id` term, and
--- the SQL predicate has a TypeScript twin — `20260914120000`'s rule 3 and
--- `20260923140000`'s "NO `workspace_id` TERM" paragraph, applied.
+-- What IS reused is the SHAPE: the row is filed under the RESOURCE's container,
+-- the read predicate carries no `workspace_id` term, and the SQL predicate has a
+-- TypeScript twin (`20260914120000` rule 3, `20260923140000`'s "NO `workspace_id`
+-- TERM").
 --
 -- ═══ 🔒 THE LADDER IS ONE COLUMN, AND THAT IS WHY THERE IS NO SECOND CHECK ══
 --
 -- `none < view < edit` is a LADDER (spec I2: *"`edit` ⇒ `view`: one ladder
 -- compared by rank, never two booleans"*). **A single column holding a rung
--- CANNOT be `edit` without being `view`** — the implication is structural, so a
--- second CHECK stating it would be one rule written twice, which is the shape
--- this tree keeps filing bugs about. What CAN drift is the RANKING, so the rank
--- is a function (`dopl_ontology_level_rank`, in `20261001130000`) and its `CASE`
--- is asserted there. The CHECK below pins the WORDS; the rank pins the ORDER.
+-- CANNOT be `edit` without being `view`**, so a second CHECK would be one rule
+-- written twice. What CAN drift is the RANKING, so the rank is a function
+-- (`dopl_ontology_level_rank`, `20261001130000`) asserted there. The CHECK below
+-- pins the WORDS; the rank pins the ORDER.
 --
--- ⚠ `agents_may_edit` DEFAULTS `true` because Samuel's solo default is
--- *"automatically viewable and editable by their agents"*; the toggle only ever
--- narrows. It is also the SEED for `owner_agents_level` at the first share
--- (Q2 — the seeding is the writer's job, in S3, not a column default here: a
--- default cannot read another table).
+-- ⚠ `agents_may_edit` DEFAULTS `true` — Samuel's solo default is *"automatically
+-- viewable and editable by their agents"*, and the toggle only narrows. It also
+-- SEEDS `owner_agents_level` at the first share (Q2), which is the writer's job
+-- in S3: a column default cannot read another table.
 --
--- ⚠ **`DEFAULT` IS THE BACKFILL, TWICE OVER.** `agents_may_edit true` and
+-- ⚠ **`DEFAULT` IS THE BACKFILL, TWICE OVER** — `agents_may_edit true` and
 -- `last_edited_source 'user'` satisfy every existing row the moment the columns
--- exist — the shape `access_mode`'s `DEFAULT 'workspace'` established in
--- `20260611020000` and `scope_kind`'s in `20260930150000`. No backfill statement,
--- and none is needed.
+-- exist (`access_mode`'s `DEFAULT 'workspace'` shape, `20260611020000`). No
+-- backfill statement is needed.
 --
 -- ═══ Q1-Q6, AS SAMUEL RULED THEM (2026-09-09) ══════════════════════════════
 --
@@ -82,17 +77,17 @@
 --   Q5  HOME CHANNELS ONLY. A `kind='standard'` workspace channel is refused —
 --       and it is refused AT REST, by the trigger, not only by S3's 400. A rule
 --       the route alone holds is a rule PostgREST does not hold.
---   Q6  "Version control" for now is `last_edited_by` + `last_edited_source`;
---       a per-edit history table is a later wave.
+--   Q6  "Version control" here is `last_edited_by` + `last_edited_source`. The
+--       per-edit history table landed in `20261002120000_revisions.sql`.
 --
 -- ═══ NOT A REALTIME CHANGE, AND IT ASSERTS WHAT IT DID NOT TOUCH ═══════════
 --
 -- `ontology_clusters` / `_objects` / `_memberships` / `_relationships` are all
--- published (`20260717000000`) and carry `REPLICA IDENTITY USING INDEX`
--- (`20260807150000`). Adding a nullable/defaulted column simply appears in the
--- frames the client already receives. The new table joins NO publication: a
--- share row is settings, and `useOntologyRealtime` subscribes per workspace
--- (spec R7). The closing `DO $$` re-checks both rather than trusting them.
+-- published (`20260717000000`) with `REPLICA IDENTITY USING INDEX`
+-- (`20260807150000`), so a defaulted column simply appears in the frames the
+-- client already receives. The new table joins NO publication: a share row is
+-- settings, and `useOntologyRealtime` subscribes per workspace (spec R7). The
+-- closing `DO $$` re-checks both.
 --
 -- ═══ ROLLBACK — PROSE, NOT COMMENTED-OUT SQL ═══════════════════════════════
 --
@@ -100,17 +95,15 @@
 -- directory WITHOUT stripping comments, so commented-out DDL here is a live
 -- statement to that scanner.)
 --
--- ⚠ **ORDERING TRAP, and it runs the OTHER way from `20260930150000`'s.** Drop
--- `20261001130000` FIRST — its four SELECT policies call `dopl_ontology_readable`,
--- which reads `ontology_channel_shares`; dropping the table first leaves four
--- policies whose function 42P01s on every read, i.e. the whole ontology feature
--- returns errors instead of rows. So: re-run `20260720211005`'s four ontology
--- SELECT policies, `DROP FUNCTION` the FIVE in `20261001130000` (the ladder, the
--- share level, the cluster walk, and the two predicates — that file's own
--- rollback prose counts them, and "four" here was this header miscounting them),
--- and only THEN `DROP TABLE public.ontology_channel_shares`. The three added columns may be
--- dropped at any time (nothing reads them once the code is rolled back), and
--- dropping them LOSES the attribution Q3 promises — leave them if in doubt.
+-- ⚠ **ORDERING TRAP, running the OTHER way from `20260930150000`'s.** Drop
+-- `20261001130000` FIRST: its four SELECT policies call `dopl_ontology_readable`,
+-- which reads `ontology_channel_shares`, so dropping the table first leaves four
+-- policies whose function 42P01s on every read. So: re-run `20260720211005`'s
+-- four ontology SELECT policies, `DROP FUNCTION` the FIVE in `20261001130000`
+-- (the ladder, the share level, the cluster walk, and the two predicates), and
+-- only THEN `DROP TABLE public.ontology_channel_shares`. The three added columns
+-- may be dropped at any time, but dropping them LOSES the attribution Q3
+-- promises — leave them if in doubt.
 
 -- ── 1. The solo toggle, on the ontology itself ──────────────────────────────
 ALTER TABLE public.ontology_clusters
@@ -121,8 +114,8 @@ COMMENT ON COLUMN public.ontology_clusters.agents_may_edit IS
 
 -- ── 2. Attribution — Q6, the literal the knowledge lane already stamps ──────
 -- ⚠ `('user','agent')` is the SAME two-word CHECK as `knowledge_bases`
--- (`20260501000000`) and `skills` (`20260501090000`). A third word here would be
--- a third vocabulary for one question. Naming WHICH agent is deferred: a template
+-- (`20260501000000`) and `skills` (`20260501090000`) — a third word would be a
+-- third vocabulary for one question. Naming WHICH agent is deferred: a template
 -- id on an ontology row is a second identity model.
 ALTER TABLE public.ontology_clusters
   ADD COLUMN IF NOT EXISTS last_edited_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;

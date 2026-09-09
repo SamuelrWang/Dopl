@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { OntologyContext } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 import type { OntologyClusterRow } from "./dto";
 
 // ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
@@ -78,16 +78,11 @@ const CLUSTER: OntologyClusterRow = {
   deleted_at: null,
 };
 
-function ctx(over: Partial<OntologyContext> = {}): OntologyContext {
-  return {
-    workspaceId: PERSONAL,
-    userId: OWNER,
-    role: "member",
-    source: "user",
-    credentialSubjectUserId: OWNER,
-    ...over,
-  };
-}
+const ctx = ontologyContextFactory({
+  workspaceId: PERSONAL,
+  userId: OWNER,
+  credentialSubjectUserId: OWNER,
+});
 
 const WRITE = {
   channelId: CHANNEL_ID,

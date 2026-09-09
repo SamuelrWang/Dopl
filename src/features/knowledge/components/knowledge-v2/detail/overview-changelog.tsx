@@ -21,11 +21,10 @@ interface Props {
  * THE BASE PAGE'S **Changelog** — the day-grouped roll-up of every revision of
  * this base and of everything in it.
  *
- * ⚠ **IT REPLACED THE "Contents" SECTION ON 2026-09-09** (Samuel's design for
- * the CHANGELOG lane). Contents was the inline description editor for each
- * folder and entry — the summaries agents read in MCP `get_tree` / `list_dir` —
- * and that editing surface has NO other home in the product today. It is filed
- * as a finding rather than quietly kept beside this section: the base info face
+ * ⚠ **IT REPLACED THE "Contents" SECTION ON 2026-09-09** (Samuel's design for the
+ * CHANGELOG lane). Contents was the inline description editor whose summaries
+ * agents read in MCP `get_tree` / `list_dir`, and that surface now has NO home —
+ * filed as a finding rather than kept beside this one, because the base info face
  * holds two flat sections and Samuel named which two.
  *
  * ⚠ **RESTORE IS ADDRESSED TO THE ROW'S OWN ENTRY**, taken from

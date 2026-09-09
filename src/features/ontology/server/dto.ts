@@ -157,6 +157,21 @@ export interface OntologySummary {
   truncated: boolean;
 }
 
+/**
+ * Merge one relationship row into an edge list — same-label rows collect under
+ * one edge. ⚠ ONE COPY: the graph read and the per-object read assemble the
+ * same shape, and two loops are two orderings waiting to disagree.
+ */
+export function pushEdge(
+  edges: OntologyObject["relationships"],
+  label: string,
+  targetId: string
+): void {
+  const edge = edges.find((e) => e.label === label);
+  if (edge) edge.targetIds.push(targetId);
+  else edges.push({ label, targetIds: [targetId] });
+}
+
 /** Bare object — childIds/relationships get attached during assembly. */
 export function mapObjectRow(row: OntologyObjectRow): OntologyObject {
   return {

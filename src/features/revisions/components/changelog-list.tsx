@@ -14,32 +14,26 @@ import { RevisionDiff } from "./revision-diff";
  * (2026-09-09; `docs/DESIGN-SYSTEM.md › Changelog list`).
  *
  * Day-grouped rows, each `who · what · when`; an agent row carries the bot mark
- * and its session name. Expanding a row shows the WORD-LEVEL DIFF against the
+ * and its session name. Expanding one shows the WORD-LEVEL DIFF against the
  * previous revision OF THAT SAME RESOURCE, and offers Restore behind a
  * confirmation that NAMES THE DATE.
  *
- * ⚠ **ONE COMPONENT, TWO SURFACES.** The base page's Changelog section and an
- * entry's own history mount THIS, with different rows — a second list would be
- * two places for the day heading, the agent mark and the restore confirmation to
- * drift.
+ * ⚠ **ONE COMPONENT, EVERY SURFACE.** ⚠ **TWO ROW SHAPES, ONE LIST**
+ * (2026-09-09, part 2): a knowledge row is a DOCUMENT snapshot reading `who ·
+ * what · path`, an ontology row is ONE FIELD reading `Field: before → after`,
+ * and the shape is chosen from the PAYLOAD (`../lib/field-format.ts ›
+ * fieldLineOf`) — never by a second list component. The day heading, the agent
+ * mark, the restore confirmation and the paging are what must not drift, and
+ * they are the whole of this file.
  *
  * ⚠ **THE PREVIOUS REVISION IS FOUND WITHIN THE LOADED LIST, PER RESOURCE, AND
- * A MISS IS AN HONEST EMPTY `before`.** On the base roll-up the row above a
- * given one usually belongs to a DIFFERENT entry, so "the row above" is the
- * wrong neighbour; and on the last loaded page there may be no previous revision
- * loaded at all. Diffing against the wrong body would be a picture of a change
- * that never happened, so the fallback shows the version as wholly new rather
- * than fetching a page nobody asked for.
+ * A MISS IS AN HONEST EMPTY `before`.** On a roll-up the row above usually
+ * belongs to a DIFFERENT resource, and on the last loaded page there may be no
+ * previous revision at all; diffing against the wrong body would picture a change
+ * that never happened.
  *
- * ⚠ **MINIMAL COPY** (Samuel's ruling, `docs/INVARIANTS.md` §5A's UI-copy rule):
- * a label and a control. No explainer paragraph about what a revision is.
- *
- * ⚠ **TWO ROW SHAPES, ONE LIST (2026-09-09, part 2).** A knowledge row is a
- * DOCUMENT snapshot and reads `who · what · path`; an ontology row is ONE FIELD
- * and reads `Field: before → after`. The shape is chosen from the PAYLOAD
- * (`../lib/field-format.ts › fieldLineOf`), never from a second list component —
- * the day heading, the agent mark, the restore confirmation and the paging are
- * the parts that must not drift, and they are the whole of this file.
+ * ⚠ **MINIMAL COPY** (Samuel's ruling, `docs/INVARIANTS.md` §5A): a label and a
+ * control, no explainer paragraph.
  */
 
 export interface ChangelogListProps {
@@ -166,9 +160,8 @@ export function ChangelogList({
                   )}
                   <span className="truncate text-small text-text-primary">{who}</span>
                   {field ? (
-                    /* ⚠ THE FIELD ROW — `Field: before → after`, which is the
-                       whole point of a per-property timeline: the change is
-                       READABLE without expanding the row. */
+                    /* ⚠ THE FIELD ROW — READABLE without expanding, which is
+                       the whole point of a per-property timeline. */
                     <span className="min-w-0 truncate text-caption text-text-secondary">
                       <span className="text-text-primary">{field.label}</span>
                       {": "}
@@ -183,10 +176,9 @@ export function ChangelogList({
                       {bundleName ? ` · ${bundleName}` : ""}
                     </span>
                   )}
-                  {/* ⚠ THE SESSION NAME IS THE GROUPING SIGNAL an agent's writes
-                      carry — several rows in a row wearing one session ARE one
-                      run of work. It is an attribution hint and never a claim
-                      about permission. */}
+                  {/* ⚠ THE SESSION NAME GROUPS an agent's writes — several rows
+                      wearing one session ARE one run of work. An attribution
+                      hint, never a claim about permission. */}
                   {isAgent && revision.actor.agentSessionId ? (
                     <span className="truncate text-caption text-text-muted">
                       {revision.actor.agentSessionId}
@@ -203,9 +195,8 @@ export function ChangelogList({
                       <p className="text-caption text-text-secondary">{revision.summary}</p>
                     ) : null}
                     {field ? (
-                      /* ⚠ THE SAME DIFF COMPONENT over the two RENDERED values,
-                         not over two bodies — one diff palette for the app, and
-                         a long text attribute still gets a word-level diff. */
+                      /* ⚠ THE SAME DIFF COMPONENT, over the two RENDERED values
+                         rather than two bodies — one diff palette for the app. */
                       <RevisionDiff
                         before={field.before === NO_VALUE ? "" : field.before}
                         after={field.after === NO_VALUE ? "" : field.after}
@@ -229,13 +220,11 @@ export function ChangelogList({
                         after={revision.payload.body ?? ""}
                       />
                     )}
-                    {/* ⚠ A REVISION WITH NOTHING TO WRITE BACK IS NOT RESTORABLE
-                        and the button is absent rather than disabled — a folder
+                    {/* ⚠ NOTHING TO WRITE BACK ⇒ ABSENT, not disabled: a folder
                         move, a base rename, an ontology ASSOCIATION or a
-                        create/delete bundle has no snapshot to restore, and the
-                        server refuses it with `REVISION_NOT_RESTORABLE`.
-                        Offering a control that can only fail is worse than not
-                        offering it. ⚠ THE PREDICATE IS THE SERVER'S OWN
+                        create/delete bundle has no snapshot, and offering a
+                        control that can only fail is worse than not offering it.
+                        ⚠ THE PREDICATE IS THE SERVER'S OWN
                         (`../lib/restorable.ts`), so the button and the refusal
                         cannot disagree. */}
                     {canRestore && onRestore && isRestorable(revision) ? (
@@ -267,13 +256,11 @@ export function ChangelogList({
         </button>
       ) : null}
 
-      {/* ⚠ A CONFIRMATION, SO `ConfirmDialog` — not `FormDialog`, which is for a
-          dialog that COLLECTS INPUT (docs/DESIGN-SYSTEM.md › Popup forms). It
-          NAMES THE DATE, because "Restore" over a list of near-identical rows is
-          the one place a mis-click is invisible until the next read. ⚠ AND IT
-          NAMES THE FIELD on an ontology row, for the same reason: a restore
-          there moves ONE property and leaves every other one alone, which is a
-          different act from writing a whole document back. */}
+      {/* ⚠ A CONFIRMATION, SO `ConfirmDialog` — `FormDialog` is for a dialog that
+          COLLECTS INPUT (docs/DESIGN-SYSTEM.md › Popup forms). It NAMES THE DATE
+          because a mis-click over near-identical rows is invisible until the next
+          read, and NAMES THE FIELD on an ontology row because that restore moves
+          ONE property and leaves the rest alone. */}
       <ConfirmDialog
         open={confirming !== null}
         onOpenChange={(open) => {
@@ -295,11 +282,9 @@ export function ChangelogList({
   );
 }
 
-/**
- * The confirmation's sentence. ⚠ It states WHAT WILL CHANGE and what will not —
- * the date on both arms, and on a field restore the field's own name and its
- * prior value, because that is the whole of what the write does.
- */
+/** The confirmation's sentence. ⚠ It states WHAT WILL CHANGE and what will not:
+ *  the date on both arms, plus the field's name and prior value on a field
+ *  restore. */
 function restoreMessage(revision: Revision): string {
   const when = dayLabel(new Date(revision.createdAt).toISOString().slice(0, 10));
   const field = fieldLineOf(revision);

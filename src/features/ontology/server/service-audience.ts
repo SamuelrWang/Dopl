@@ -23,29 +23,21 @@ import {
 /**
  * 🔒 THE ONTOLOGY AUDIENCE CEILING — what ONE request may reach, and at what
  * rung. The ontology twin of `knowledge/server/service-audience.ts ›
- * resolveAgentAudience`, arm for arm, and the ONLY fence behind the home
- * ontology's sharing model (spec §2 I6, §4 site 1).
+ * resolveAgentAudience`, and the only fence behind the home ontology's sharing
+ * model (spec §2 I6, §4 site 1).
  *
- * 🔒 IT IS A FENCE BECAUSE EVERY INPUT IS A DB FACT. `repository-shares.ts`
- * re-reads the container's kind, its active member count, its channel ids and
- * its share rows; the cluster's own `created_by` / `agents_may_edit` come off
- * the row. Nothing here is decided by a header, a prompt or a tool description
- * — an agent holds its operator's credential and has Bash, so a hidden control
- * is not a fence and the desktop's prompt framing (§4 site 9) is a
- * COMPENSATING CONTROL, never this.
+ * 🔒 EVERY INPUT IS A DB FACT (`./repository-shares.ts`, plus the cluster row's
+ * own `created_by` / `agents_may_edit`) — never a header, a prompt or a tool
+ * description. An agent holds its operator's credential and has Bash, so the
+ * desktop's prompt framing (§4 site 9) is a COMPENSATING CONTROL, never this.
  *
  * ⚠ IT BOUNDS FUTURE READS, NEVER CONTEXT ALREADY IN THE WINDOW (I7,
- * INVARIANTS §11). A solo channel that gains a peer tightens at the next tool
- * call; it cannot un-read what a running session already holds.
+ * INVARIANTS §11).
  *
- * ⚠ TWO DIFFERENT ANSWERS SHARE THE WORD "SCOPE" HERE AND CONFUSING THEM IS THE
- * ONE WAY TO LEAK:
- *   - {@link OntologyAudience.workspaceIds} is a READ SCOPE — which containers a
- *     query may name. It is deliberately WIDER than the caller's own container,
- *     because a lent ontology lives in the LENDER's container.
- *   - {@link levelForCluster} is the AUTHORIZATION. Every row a widened read
- *     returns must pass it. A read that widens the scope and forgets the filter
- *     hands the caller the lender's whole shelf.
+ * ⚠ TWO ANSWERS SHARE THE WORD "SCOPE" AND CONFUSING THEM IS THE ONE WAY TO
+ * LEAK: {@link OntologyAudience.workspaceIds} is a READ SCOPE, deliberately
+ * WIDER than the caller's container (a lent ontology lives in the LENDER's);
+ * {@link levelForCluster} is the AUTHORIZATION every returned row must pass.
  */
 
 /** The cluster facts the ceiling reads. Structural, so `OntologyClusterRow` and
@@ -94,15 +86,13 @@ export type OntologyAudience =
     };
 
 /**
- * ⚠ ONE RESOLUTION PER REQUEST. Keyed on the context OBJECT — `service.ts ›
- * buildOntologyContext` mints exactly one per request, so an entry cannot
- * outlive its request and cannot be shared between two. A `WeakMap` rather
- * than a field on the context keeps `OntologyContext` a plain data shape that
- * `types.ts` can own without importing this server module.
+ * ⚠ ONE RESOLUTION PER REQUEST, keyed on the context OBJECT — `./service.ts ›
+ * buildOntologyContext` mints exactly one per request, so an entry can neither
+ * outlive its request nor be shared between two. A `WeakMap` keeps
+ * `OntologyContext` a plain data shape `../types.ts` can own.
  *
- * ⚠ THE PROMISE IS CACHED, NOT THE VALUE: `getSnapshot` fans four reads out
- * with `Promise.all`, and caching the settled value would let all four race
- * past an unset slot and resolve the ceiling four times.
+ * ⚠ THE PROMISE IS CACHED, NOT THE VALUE — concurrent readers would otherwise
+ * race past an unset slot and resolve the ceiling once each.
  */
 const AUDIENCE_CACHE = new WeakMap<OntologyContext, Promise<OntologyAudience>>();
 
@@ -124,22 +114,15 @@ export function resolveOntologyAudience(
  * anything else (unknown kind, null)→ resolved, reaching NOTHING (F-683, fail closed)
  * ```
  *
- * ⚠ THE ORDER IS THE QUERY BUDGET, and the first arm is the hot one: the
- * standard-workspace ontology page — every read the product does today — costs
- * exactly ONE extra probe and never touches channels, members or shares. Only a
- * caller standing in a home container pays the fan.
+ * ⚠ THE ORDER IS THE QUERY BUDGET: the first arm is every read the product does
+ * today and costs ONE probe, never touching channels, members or shares.
  *
- * 🔒 **ALL THREE ARMS ARE POSITIVE AND THE FALLBACK REACHES NOTHING (F-683,
- * fixed 2026-09-09).** It read `if (kind !== "link" && kind !== "personal")
- * return unrestricted`, so a THIRD container kind nobody has designed yet — and
- * a `null`, i.e. a workspace row that vanished mid-request — both answered
- * `unrestricted`, which is `edit` on every cluster in scope. Not exploitable at
- * the time (`withWorkspaceAuth` has already proved an active membership, and the
- * kind set has been closed at three since `20260823150000`), and that is exactly
- * why it was worth writing the other way round: **the safe reading belongs in
- * the arm, not in the default** — the choice this same function already makes
- * for the member count below, and the `ELSE -1` in `dopl_ontology_level_rank`.
- * A kind added tomorrow now reaches nothing until somebody names it here.
+ * 🔒 **THE FALLBACK REACHES NOTHING, AND THE SAFE READING BELONGS IN THE ARM
+ * RATHER THAN IN THE DEFAULT (F-683, fixed 2026-09-09).** It read
+ * `if (kind !== "link" && kind !== "personal") return unrestricted`, so an
+ * unknown kind — or a `null` from a workspace row that vanished mid-request —
+ * answered `edit` on every cluster in scope. Same choice as the member count
+ * below and as `dopl_ontology_level_rank`'s `ELSE -1`.
  */
 async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> {
   const kind = await findWorkspaceKind(ctx.workspaceId);
@@ -148,12 +131,10 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
   }
   if (kind !== "link" && kind !== "personal") {
     // 🔒 F-683's fail-closed arm. ⚠ The READ SCOPE is EMPTY, not
-    // `[ctx.workspaceId]` — that is what makes it "reaches nothing" rather than
-    // "reaches its own container": every repository read short-circuits on an
-    // empty set, and {@link levelForCluster} answers `none` for one (which is
-    // what closes `service-gates.ts › assertCanCreateCluster`, whose question is
-    // about a row that does not exist yet and therefore never came through a
-    // read).
+    // `[ctx.workspaceId]`: every repository read short-circuits on an empty set,
+    // and {@link levelForCluster} answers `none` for one — which is what closes
+    // `./service-gates.ts › assertCanCreateCluster`, whose question is about a
+    // row that does not exist yet and never came through a read.
     return {
       kind: "resolved",
       workspaceIds: [],
@@ -166,11 +147,10 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
   }
 
   if (isSharedCredential(ctx)) {
-    // 🔒 A credential that may be passed between humans stands for nobody, so it
-    // owns no ontology and reads no share THROUGH a membership it does not have
-    // — the refusal `service-shared.ts › sharedOntologyLevel` states and
-    // `dopl_ontology_readable`'s share arm states in SQL. It keeps the calling
-    // container as its read SCOPE; arm 1 of the predicate still admits that
+    // 🔒 A credential passed between humans stands for nobody: it owns no
+    // ontology and reads no share THROUGH a membership it does not have
+    // (`./service-shared.ts › sharedOntologyLevel`, and the SQL share arm). It
+    // keeps the calling container as its read SCOPE — arm 1 still admits that
     // container's own rows, which is M-10 unchanged.
     return {
       kind: "resolved",
@@ -191,9 +171,8 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
       credentialSubjectUserId: ctx.credentialSubjectUserId,
       source: ctx.source,
     }),
-    // ⚠ Only the AGENT arms read this, and only on an UNSHARED own cluster —
-    // but it rides the same fan rather than adding a fifth round trip to the
-    // one caller that needs it.
+    // ⚠ Only the AGENT arms read this, and only on an UNSHARED own cluster; it
+    // rides the same fan rather than adding a round trip for one caller.
     ctx.source === "agent"
       ? countActiveWorkspaceMembers(ctx.workspaceId)
       : Promise.resolve<number | null>(null),
@@ -201,10 +180,9 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
 
   const shareRows = await listSharesForChannels(channelIds);
   // ⚠ THE COLUMN IS PICKED ONCE, BY THE CALLER'S CLASS (§1: `member`+ vs
-  // `guest`), and Q1 is why an agent needs no second pick — a member's or
-  // guest's agent inherits EXACTLY that person's level, so it reads the same
-  // column. ⚠ MAX across channels, not first-wins: the same ontology lent into
-  // two rooms the caller is in gives them the wider of the two (I5).
+  // `guest`); Q1 is why an agent needs no second pick — it inherits EXACTLY its
+  // person's level, so it reads the same column. ⚠ MAX across channels, not
+  // first-wins (I5).
   const reach = new Map<string, OntologyLevel>();
   const ownerAgents = new Map<string, OntologyLevel>();
   for (const row of shareRows) {
@@ -218,10 +196,9 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
 
   return {
     kind: "resolved",
-    // ⚠ THE LEND WIDENS THE READ SCOPE AND NOTHING ELSE. A share row is filed
-    // under the ONTOLOGY's container, so reaching it means naming that
-    // container in the query — and every row it returns still has to clear
-    // `levelForCluster`, which admits only the cluster the row actually names.
+    // ⚠ THE LEND WIDENS THE READ SCOPE AND NOTHING ELSE — every row it returns
+    // still has to clear `levelForCluster`, which admits only the cluster the
+    // share row actually names.
     workspaceIds: [
       ...new Set([
         ctx.workspaceId,
@@ -233,20 +210,15 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
     ownerAgents,
     source: ctx.source,
     userId: ctx.userId,
-    // ⚠ FAIL CLOSED. `null` (PostgREST answered without a count) is read as NOT
-    // solo: unknown is not the same as one, and the safe reading of "I could
-    // not count the people in this room" is that there is somebody in it.
+    // ⚠ FAIL CLOSED: `null` (no count) is NOT solo — unknown is not one.
     solo: memberCount !== null && memberCount <= 1,
   };
 }
 
 /**
  * 🔒 **THE AGENT CEILING, AND NOTHING ELSE (spec §2).** WHICH ontology the
- * caller may see is `service-shared.ts › canSeeOntology` / `› canEditOntology`
- * — the TypeScript twin of `dopl_ontology_readable` / `dopl_ontology_writable`,
- * with an RLS policy and a redteam suite holding it in place. This function
- * asks the SECOND question: **how far may this CREDENTIAL reach inside that
- * answer.** Two layers, two questions, exactly as that module's header says.
+ * caller may see is `./service-shared.ts › canSeeOntology` / `› canEditOntology`;
+ * this asks how far a CREDENTIAL may reach inside that answer.
  *
  * ```
  * unrestricted                         → edit  (standard workspaces, unchanged)
@@ -258,33 +230,21 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
  *   anyone else's                      → unchanged  (Q1: EXACTLY its human)
  * ```
  *
- * 🔒 **IT ONLY EVER CLOSES**, the property `knowledge › resolveAgentAudience`
- * states about itself: every agent arm is a {@link narrowerLevel} against the
- * human answer, so no branch here can make an ontology reachable that the
- * predicate refused. A ceiling that could widen is not a ceiling.
+ * 🔒 **IT ONLY EVER CLOSES**: every agent arm is a {@link narrowerLevel} against
+ * the human answer, so no branch here can reach an ontology the predicate
+ * refused.
  *
- * ⚠ **THE OWNER ARM IS `created_by`, NOT `workspace_id === ctx.workspaceId`,
- * AND IT EXISTS TO RESTORE ROW 2 OF ONE TRUTH TABLE.** That table is stated
- * ONCE, in `service-shared.ts`'s header — read it there, it is not restated
- * here. Short form: arm 1 (`inOwnContainer`) is STRICTLY NARROWER than its SQL
- * twin because {@link OntologyAudience.workspaceIds} reads wider than the ONE
- * container `withWorkspaceAuth` proved, and the caller's own personal shelf is
- * the case that matters — a personal container's only member IS its owner, so
- * `created_by === userId` is `is_current_workspace_member(c.workspace_id,
- * 'viewer')` for it, and is strictly narrower everywhere else.
+ * ⚠ **THE OWNER ARM IS `created_by`, NOT `workspace_id === ctx.workspaceId`, AND
+ * IT RESTORES ROW 2 OF THE TRUTH TABLE STATED ONCE IN `./service-shared.ts`'s
+ * header** — read it there. `created_by === userId` is exact for a personal
+ * container (its only member IS its owner) and strictly narrower everywhere else.
  *
- * 🔒 **AND IT IS SOUND ONLY BECAUSE THE READ SCOPE CONTAINS IT.** This arm asks
- * nothing about membership, so a row from a container the caller was REMOVED
- * from would answer `edit` — it never arrives, because such a container is in
- * neither {@link OntologyAudience.workspaceIds} nor any query this service makes.
- * **A caller that hands `levelForCluster` a row it did not read through
- * {@link OntologyAudience.workspaceIds} has broken that**, and no arm here can
- * tell. Pinned in `./service-audience.test.ts › the owner arm`.
+ * 🔒 **SOUND ONLY BECAUSE THE READ SCOPE CONTAINS THE ROW.** This arm asks
+ * nothing about membership, so a caller that hands `levelForCluster` a row it did
+ * NOT read through {@link OntologyAudience.workspaceIds} has broken it, and no arm
+ * here can tell. Pinned in `./service-audience.test.ts › the owner arm`.
  *
- * ⚠ I1 NEEDS NO `min` FOR OTHER PEOPLE'S AGENTS AND THAT IS Q1, NOT AN
- * OMISSION: an agent inherits EXACTLY its operator's level, so the human answer
- * already IS the `min`. The one place the two diverge is the OWNER, who has
- * controls of their own.
+ * ⚠ OTHER PEOPLE'S AGENTS NEED NO `min` (Q1): the human answer already IS it.
  */
 export function levelForCluster(
   ctx: OntologyContext,
@@ -292,13 +252,10 @@ export function levelForCluster(
   cluster: AudienceClusterFacts
 ): OntologyLevel {
   if (audience.kind === "unrestricted") return "edit";
-  // 🔒 AN EMPTY READ SCOPE REACHES NOTHING, SAID ONCE HERE (F-683). Every arm
-  // below is sound only because the row was READ THROUGH
-  // {@link OntologyAudience.workspaceIds} (see the docblock's third ⚠), and an
-  // empty set is the one case where no query this service makes can have
-  // returned one — including `inOwnContainer`, which asks about `ctx.workspaceId`
-  // and would otherwise admit the caller's own container to an audience that was
-  // resolved BECAUSE that container's kind could not be trusted.
+  // 🔒 AN EMPTY READ SCOPE REACHES NOTHING, SAID ONCE HERE (F-683) — including
+  // through `inOwnContainer`, which would otherwise admit the caller's own
+  // container to an audience resolved BECAUSE that container's kind could not
+  // be trusted.
   if (audience.workspaceIds.length === 0) return "none";
 
   const scope = { id: cluster.id, workspaceId: cluster.workspace_id };
@@ -324,9 +281,9 @@ export function levelForCluster(
   return narrowerLevel(human, cluster.agents_may_edit ? "edit" : "view");
 }
 
-/** Does this audience clear `min` on this cluster? ⚠ `min` defaults to `view`
- *  because every READ asks the same question; a WRITE must pass `"edit"`
- *  explicitly, so a caller cannot get a write gate by forgetting an argument. */
+/** Does this audience clear `min` on this cluster? ⚠ `min` defaults to `view`;
+ *  a WRITE must pass `"edit"` explicitly, so no caller gets a write gate by
+ *  forgetting an argument. */
 export function audienceAdmits(
   ctx: OntologyContext,
   audience: OntologyAudience,
@@ -336,9 +293,8 @@ export function audienceAdmits(
   return meetsLevel(levelForCluster(ctx, audience, cluster), min);
 }
 
-/** The wider of two rungs, `undefined` meaning "nothing seen yet". ⚠ I5: the
- *  same ontology lent into two rooms the caller is in answers with the wider,
- *  never the first row PostgREST happened to return. */
+/** The wider of two rungs, `undefined` = nothing seen yet. ⚠ I5, never the
+ *  first row PostgREST happened to return. */
 function widerOf(
   current: OntologyLevel | undefined,
   next: OntologyLevel

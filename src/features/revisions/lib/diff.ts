@@ -1,34 +1,26 @@
 /**
  * WORD-LEVEL DIFF — pure, dependency-free, and deliberately small.
  *
- * ⚠ **WHY NOT A LIBRARY.** The whole surface is "show what changed between two
- * snapshots of a markdown body", it runs in the renderer on both the web tree
- * and the SPA, and every diff package in reach is either character-level (a
+ * ⚠ **WHY NOT A LIBRARY.** Every diff package in reach is character-level (a
  * wall of noise on prose) or arrives with its own DOM opinions. An LCS over
  * tokens is forty lines and has no version to keep current.
  *
- * ⚠ **AND IT DOES NOT OWN THE ALGORITHM — `shared/lib/diff.ts › lcsTable` DOES.**
- * That module already held a LINE-level diff for the skills version rail, and a
- * second dynamic program beside it is a drift pair. What is local here is the
- * SPLITTER and the rendering model; the table is shared, and it was exported in
- * the same change that added this file.
+ * ⚠ **AND IT DOES NOT OWN THE ALGORITHM — `shared/lib/diff.ts › lcsTable` DOES**,
+ * which already held the LINE-level diff for the skills version rail. Local here
+ * are the SPLITTER and the rendering model.
  *
- * ⚠ **TOKENS, NOT CHARACTERS, AND THE WHITESPACE RIDES WITH THE WORD.** A token
- * is one run of non-space plus the whitespace that follows it, so re-joining
- * every token reconstructs the input EXACTLY — `diffBodies(a,b)` is lossless in
- * both directions and the renderer never has to re-insert spacing it guessed at.
- * That is also what makes CJK behave: a run of Han characters with no spaces is
- * ONE token, so an edit inside it reports the whole run changed rather than
- * splitting a script that has no word boundaries to split on. Loud, but never
- * wrong — and never mangled mid-grapheme, which a character diff over UTF-16
- * code units does to anything outside the BMP (emoji, and every astral script).
+ * ⚠ **TOKENS, NOT CHARACTERS, AND THE WHITESPACE RIDES WITH THE WORD**, so
+ * re-joining every token reconstructs the input EXACTLY and the renderer never
+ * re-inserts spacing it guessed at. It is also what makes CJK behave — a run of
+ * Han with no spaces is ONE token, so an edit inside it reports the whole run
+ * changed rather than splitting a script with no word boundaries, and nothing is
+ * mangled mid-grapheme the way a UTF-16 character diff mangles astral scripts.
  *
- * ⚠ **QUADRATIC, AND BOUNDED FOR IT.** The LCS table is `O(n·m)`, so past
- * {@link DIFF_TOKEN_CEILING} tokens per side the algorithm is skipped and the
- * two bodies are reported as one whole-body replace. A changelog row that says
- * "this document was rewritten" is honest; a renderer that hangs on a 200 KB
- * entry is not. The ceiling is stated here rather than at the call site so both
- * surfaces inherit it.
+ * ⚠ **QUADRATIC, AND BOUNDED FOR IT.** Past {@link DIFF_TOKEN_CEILING} tokens per
+ * side the `O(n·m)` table is skipped and the bodies are reported as one whole-body
+ * replace: "this document was rewritten" is honest, a renderer that hangs on a
+ * 200 KB entry is not. Stated here, not at the call site, so both surfaces
+ * inherit it.
  */
 
 import { lcsTable } from "@/shared/lib/diff";
@@ -46,13 +38,10 @@ export interface DiffSpan {
   text: string;
 }
 
-/**
- * Split into tokens: one run of non-whitespace plus its trailing whitespace.
- *
- * ⚠ Leading whitespace becomes its own token so nothing is dropped —
- * `tokenize(s).join("") === s` for every string, which is the property the
- * whole module rests on and the one `diff.test.ts` checks first.
- */
+/** Split into tokens: one run of non-whitespace plus its trailing whitespace.
+ *  ⚠ Leading whitespace is its own token, so `tokenize(s).join("") === s` for
+ *  every string — the property the module rests on, checked first in
+ *  `./diff.test.ts`. */
 export function tokenize(text: string): string[] {
   const out: string[] = [];
   // `\S+\s*` catches every word-with-trailer; a leading run of whitespace is

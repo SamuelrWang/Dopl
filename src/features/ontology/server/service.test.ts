@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WorkspaceBillingRow } from "@/features/billing/server/workspace-billing";
 import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
-import type { OntologyContext } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 
 // ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
 // (`./service-revisions.ts`, 2026-09-09, part 2): every ontology write now
@@ -85,13 +85,7 @@ const mockBilling = vi.mocked(billingRepo);
 const mockRepo = vi.mocked(repo);
 
 const WS = "ws-1";
-const CTX: OntologyContext = {
-  workspaceId: WS,
-  userId: "user-1",
-  role: "member",
-  source: "user",
-  credentialSubjectUserId: "user-1",
-};
+const CTX = ontologyContextFactory({ workspaceId: WS })();
 const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
 
 const CLUSTER_ROW: OntologyClusterRow = {

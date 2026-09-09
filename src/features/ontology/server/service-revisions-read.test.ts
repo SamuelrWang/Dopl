@@ -19,7 +19,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
-import type { OntologyContext } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 import type { Revision } from "@/features/revisions/types";
 
 // ⚠ THE PRIMITIVE'S REPOSITORY, AND NOTHING ABOVE IT.
@@ -103,19 +103,7 @@ const OWNER_WS = "ws-owner";
 const CLUSTER_ID = "11111111-1111-4111-8111-111111111111";
 const OBJECT_ID = "22222222-2222-4222-8222-222222222222";
 
-/** ⚠ A FRESH CONTEXT PER CALL — the audience ceiling is memoised on the context
- *  OBJECT (`service-audience.ts › AUDIENCE_CACHE`), so a shared literal would
- *  carry one test's resolution into the next. */
-function ctxOf(over: Partial<OntologyContext> = {}): OntologyContext {
-  return {
-    workspaceId: WS,
-    userId: "user-1",
-    role: "member",
-    source: "user",
-    credentialSubjectUserId: "user-1",
-    ...over,
-  };
-}
+const ctxOf = ontologyContextFactory({ workspaceId: WS });
 
 function clusterRow(over: Partial<OntologyClusterRow> = {}): OntologyClusterRow {
   return {

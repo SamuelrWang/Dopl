@@ -85,23 +85,6 @@ export async function findClusterById(
   return data as OntologyClusterRow | null;
 }
 
-export async function findClusterBySlug(
-  workspaceIds: readonly string[],
-  slug: string
-): Promise<OntologyClusterRow | null> {
-  if (workspaceIds.length === 0) return null;
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("ontology_clusters")
-    .select(ONTOLOGY_CLUSTER_COLS)
-    .in("workspace_id", workspaceIds)
-    .eq("slug", slug)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (error) throw error;
-  return data as OntologyClusterRow | null;
-}
-
 export async function insertCluster(input: {
   workspaceId: string;
   slug: string;

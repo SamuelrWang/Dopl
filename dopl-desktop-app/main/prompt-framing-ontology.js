@@ -1,21 +1,18 @@
 // WHICH ONTOLOGIES THIS SESSION REACHES, AND AT WHAT LEVEL (2026-09-09,
 // `docs/specs/home-ontology.md` §4.9 / S5).
 //
-// ⚠ **THIS IS A COMPENSATING CONTROL, NOT A GATE.** INVARIANTS §4A says exactly
-// that about the personal-reach lane, and reading it as a gate is how this
-// becomes a leak: the FENCE is the ontology service's, and the `dopl_ontology`
-// path inherits it through the HTTP routes. These lines exist so an agent knows
-// what it may open and stops guessing — never so that omitting a line stops it.
+// ⚠ **THIS IS A COMPENSATING CONTROL, NOT A GATE** (INVARIANTS §4A). The FENCE
+// is the ontology service's, inherited by `dopl_ontology` through the HTTP
+// routes. These lines exist so an agent knows what it may open and stops guessing
+// — never so that omitting a line stops it.
 //
-// ⚠ IT BOUNDS FUTURE READS, NEVER CONTEXT ALREADY IN THE WINDOW (I7, the rule
-// `knowledge/server/service-audience.ts › resolveAgentAudience` states and
-// INVARIANTS §11 pins). A level that narrows mid-session narrows the NEXT call.
+// ⚠ IT BOUNDS FUTURE READS, NEVER CONTEXT ALREADY IN THE WINDOW (I7, INVARIANTS
+// §11): a level that narrows mid-session narrows the NEXT call.
 //
-// ⚠ ITS OWN MODULE, not `prompt-framing-text.js`: that file's contract is that
-// EVERY block in it is FIXED TEXT with nothing interpolated, which is what makes
-// it safe to lift wholesale. These lines carry caller data, so they belong
-// beside a sanitizer — the same seam `prompt-framing-template.js ›
-// knowledgeLines` sits on, and the shape is copied from it deliberately.
+// ⚠ ITS OWN MODULE, not `prompt-framing-text.js`, whose contract is that EVERY
+// block is FIXED TEXT with nothing interpolated. These lines carry caller data,
+// so they sit beside a sanitizer — `prompt-framing-template.js › knowledgeLines`'
+// seam, copied deliberately.
 //
 // PURE: no electron / fs / path, so the truth tables `require` it directly.
 
@@ -26,13 +23,11 @@ const { idToken, sanitizeName } = require('./prompt-sanitize');
 // does not recognise names no ontology at all rather than being printed raw.
 const LEVELS = { view: 'VIEW', edit: 'EDIT' };
 
-// ⚠ THE ID GOES THROUGH `idToken`, NOT `sanitizeName`, and the NAME through
-// `sanitizeName`, NOT `idToken` — the same split `knowledgeLines` states: an id
-// is spliced into a call the agent is told to make VERBATIM, so it must be id
-// characters or nothing; a name is display text and must not be able to open a
-// line of its own. ⚠ `idToken` STRIPS rather than refuses, so the drop below
-// fires on the EMPTY RESULT — an entry whose id or name sanitizes to nothing is
-// dropped WHOLE rather than printed with a blank in it.
+// ⚠ THE ID GOES THROUGH `idToken` AND THE NAME THROUGH `sanitizeName`, never the
+// other way (`knowledgeLines`' split): an id is spliced VERBATIM into a call the
+// agent is told to make, a name is display text that must not open a line of its
+// own. ⚠ `idToken` STRIPS rather than refuses, so the filter below fires on the
+// EMPTY RESULT and drops such an entry WHOLE.
 function reachable(ontologies) {
   return (Array.isArray(ontologies) ? ontologies : [])
     .map((o) => ({
@@ -62,12 +57,10 @@ function ontologyLine(o) {
 /**
  * The ONTOLOGY REACH block, as plain lines the caller splices into a turn.
  *
- * ⚠ `[]` WHEN THERE IS NOTHING TO SAY, and that emptiness is the contract: every
- * lane no ontology reaches — every blank launch, every channel with no share —
- * must be BYTE-IDENTICAL to what it was before this module existed. A framing
- * block that emits a stray blank line when it has nothing to say is how
- * "byte-identical" quietly stops being true (`prompt-framing-startup.js` makes
- * the same promise for its own block).
+ * ⚠ `[]` WHEN THERE IS NOTHING TO SAY, and that emptiness is the contract: a
+ * lane no ontology reaches must be BYTE-IDENTICAL to the turn before this module
+ * existed, so not even a stray blank line (`prompt-framing-startup.js` makes the
+ * same promise).
  * ⚠ IT EMITS ITS OWN LEADING BLANK LINE when it emits anything, so the splice
  * site is exactly one line of assembly.
  *

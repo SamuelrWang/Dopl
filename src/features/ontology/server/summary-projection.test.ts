@@ -21,7 +21,7 @@ import type {
   OntologyObjectSummaryRow,
 } from "./dto";
 import { ONTOLOGY_READ_LIMITS } from "./dto";
-import type { OntologyContext } from "../types";
+import { ontologyContextFactory } from "./test-fixtures";
 
 vi.mock("./repository", () => ({
   listMemberships: vi.fn(),
@@ -50,13 +50,7 @@ import { getSummary } from "./service";
 const mockRepo = vi.mocked(repo);
 const mockNarrow = vi.mocked(narrow);
 
-const CTX: OntologyContext = {
-  workspaceId: "ws-1",
-  userId: "user-1",
-  role: "member",
-  source: "user",
-  credentialSubjectUserId: "user-1",
-};
+const CTX = ontologyContextFactory()();
 const CLUSTER = "c-1";
 const COLUMN = "o-col";
 const CARD = "o-card";

@@ -3,32 +3,23 @@
 // WHICH ONTOLOGIES THIS SPAWN REACHES — the PRODUCER for `ctx.ontologies`
 // (F-681, closed 2026-09-09).
 //
-// `prompt-framing-ontology.js › ontologyReachLines` shipped on 2026-09-09 reading
-// `ctx.ontologies`, and NOTHING in `main/` wrote that field: the module, its
-// sanitizers and its eight cases all exercised a shape only the tests supplied,
-// so the block emitted nothing on every live turn. This is the missing half.
-//
 // ⚠ **IT IS ENRICHMENT, NOT AN IDENTITY, SO EVERY FAILURE DEGRADES TO `[]`** —
-// the rule `launch-directive-spawn.js › fetchStartupContext` states in full and
-// the one this lane inherits verbatim. A timeout, a dead socket, a 5xx, an older
-// deployment's 404, a pre-sign-in launch: all of them answer "no ontology
-// reaches this lane", which `ontologyReachLines` renders as BYTE-IDENTICAL to
-// what the turn was before that module existed. A launch is never refused over
-// it, and no prompt line says "I could not read your ontologies" — that sentence
-// is unactionable by the agent, and a session that had it would report a
-// machine-local blocker into a shared channel. The operator sees it in `diag`.
+// `launch-directive-spawn.js › fetchStartupContext`'s rule, inherited verbatim.
+// A timeout, a dead socket, a 5xx, an older deployment's 404, a pre-sign-in
+// launch all answer "no ontology reaches this lane", which `ontologyReachLines`
+// renders BYTE-IDENTICALLY to the turn before that module existed. A launch is
+// never refused over it, and no prompt line reports the failure — that is
+// unactionable by the agent and would put a machine-local blocker into a shared
+// channel. The operator sees it in `diag`.
 //
 // ⚠ **THE BEARER IS THE SESSION'S AGENT TOKEN, NOT THE OPERATOR'S COOKIE, AND
 // THAT IS THE WHOLE CORRECTNESS ARGUMENT.** `ontology/server/service.ts ›
 // buildOntologyContext` derives `source` from the presence of an agent token,
 // and the OWNER's own agent is the one row of Samuel's matrix that is not simply
-// its human's (`agents_may_edit`, and `owner_agents_level` per channel). A
-// cookie-authed read here would answer the OPERATOR's rung, and the framing
-// would tell an agent it may EDIT a lane the server refuses — over-promising,
-// which is the exact "discover your level by being refused" failure the block
-// exists to prevent, inverted. ⚠ NO TOKEN ⇒ `[]`, never a cookie fallback: for a
-// compensating control, saying nothing is right and saying something wrong is
-// not.
+// its human's (`agents_may_edit`, `owner_agents_level`). A cookie-authed read
+// would answer the OPERATOR's rung and tell an agent it may EDIT a lane the
+// server refuses. ⚠ NO TOKEN ⇒ `[]`, never a cookie fallback: for a compensating
+// control, saying nothing is right and saying something wrong is not.
 //
 // ⚠ **IT IS NOT A FENCE AND MUST NEVER BE DESCRIBED AS ONE** (INVARIANTS §4A).
 // The fence is `ontology/server/service-audience.ts › resolveOntologyAudience`,
@@ -41,16 +32,14 @@ const REACH_PATH = '/api/ontology/reach';
 // button is behind every one of them. Enrichment must never make a launch feel
 // broken.
 const REACH_TIMEOUT_MS = 5000;
-// A boundary bound, not a product one — the server's own read ceiling is
-// `ONTOLOGY_READ_LIMITS.clusters`. This one exists because a boundary that
-// trusts the far side's validation is not one, and because the far side's list
-// becomes PROMPT LINES.
+// A boundary bound, not a product one (the server's ceiling is
+// `ONTOLOGY_READ_LIMITS.clusters`): a boundary that trusts the far side's
+// validation is not one, and this list becomes PROMPT LINES.
 const MAX_ONTOLOGIES = 50;
 
-/** Narrowed, never spread — `template-resolve.js › narrow`'s rule: a key the
- *  server adds later must not arrive on a session object and start being
- *  depended on by accident. The per-field NEUTRALIZERS are the render's
- *  (`prompt-framing-ontology.js`), which is where the sanitizers live. */
+/** Narrowed, never spread (`template-resolve.js › narrow`'s rule): a key the
+ *  server adds later must not arrive on a session object and start being depended
+ *  on. The per-field NEUTRALIZERS live in `prompt-framing-ontology.js`. */
 function narrow(list) {
   if (!Array.isArray(list)) return [];
   return list.slice(0, MAX_ONTOLOGIES).map((o) => ({
@@ -91,9 +80,8 @@ async function fetchOntologyReach(workspaceId) {
       timeoutMs: REACH_TIMEOUT_MS,
       noStore: true,
     });
-    // ⚠ A 404 IS THE OLDER-DEPLOYMENT CASE AND IS NOT AN ERROR (INVARIANTS §13),
-    // the same reading `fetchStartupContext` gives its own. It lands on the
-    // identical degrade as every other failure.
+    // ⚠ A 404 IS THE OLDER-DEPLOYMENT CASE, NOT AN ERROR (INVARIANTS §13) — the
+    // same degrade as every other failure.
     if (!res || !res.ok) {
       diag('ontology-reach: not fetched —', res ? `HTTP ${res.status}` : 'no response',
         '— launching with no ontology block');
