@@ -423,3 +423,76 @@ describe("dopl_kb(op=\"set_visibility\") — the registrar arm carries both halv
     expect(update).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * 🔒 **THE DIGEST IS DETERMINISTIC, BECAUSE A TOKEN IS BOUND TO IT** (2026-09-08).
+ *
+ * The preview an operator was shown and the payload the proceed re-hashes must be
+ * byte-equal. `knowledge_bases` has been `[...].sort()`ed for exactly this reason
+ * since it existed; `knowledge` is the same rule for a shape with three fields —
+ * the key is the SHAPE plus its own id, so a base and a folder of that base sort
+ * apart. Without it, an agent that happened to list its scopes in a different
+ * order on the second call would spend no token and loop forever, with nothing it
+ * could change.
+ */
+describe("dopl_agent — a scope SET is order-independent under the confirm token", () => {
+  const BASE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const FOLDER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const ENTRY = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  it("accepts the token when the same scopes arrive in a different order", async () => {
+    const create = vi.fn(async () => TEMPLATE);
+    const client = stub({
+      ...sharedContainer(),
+      createAgentTemplate: create,
+    }) as DoplClient;
+    const base = { name: "Researcher", visibility: "workspace" as const };
+
+    const preview = await opCreate(client, ME, {
+      ...base,
+      knowledge: [
+        { base: BASE, entry: ENTRY },
+        { base: BASE },
+        { base: BASE, folder: FOLDER },
+      ],
+    });
+    expect(create).not.toHaveBeenCalled();
+
+    await opCreate(client, ME, {
+      ...base,
+      // ⚠ THE SAME SET, REVERSED. A set is a set; the ORDER an agent happens to
+      // type it in is not part of what the operator approved.
+      knowledge: [
+        { base: BASE, folder: FOLDER },
+        { base: BASE },
+        { base: BASE, entry: ENTRY },
+      ],
+      confirm_token: tokenIn(textOf(preview)),
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("REFUSES the token when the scope set actually changed", async () => {
+    // ⚠ The other half: sorting must not make two DIFFERENT sets hash the same.
+    // A folder added after the preview is an audience change the operator never
+    // saw, and the remedy is a fresh preview.
+    const create = vi.fn(async () => TEMPLATE);
+    const client = stub({
+      ...sharedContainer(),
+      createAgentTemplate: create,
+    }) as DoplClient;
+    const base = { name: "Researcher", visibility: "workspace" as const };
+
+    const preview = await opCreate(client, ME, {
+      ...base,
+      knowledge: [{ base: BASE }],
+    });
+    const second = await opCreate(client, ME, {
+      ...base,
+      knowledge: [{ base: BASE }, { base: BASE, folder: FOLDER }],
+      confirm_token: tokenIn(textOf(preview)),
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(textOf(second)).toContain("confirm_token");
+  });
+});

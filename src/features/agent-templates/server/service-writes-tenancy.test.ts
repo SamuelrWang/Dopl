@@ -52,6 +52,8 @@ vi.mock("./repository", () => ({
   replaceKnowledgeLinks: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
+  listLiveFoldersForBases: vi.fn(),
+  listLiveEntryRows: vi.fn(),
 }));
 
 import * as repo from "./repository";

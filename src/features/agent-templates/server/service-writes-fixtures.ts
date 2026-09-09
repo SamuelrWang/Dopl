@@ -108,6 +108,12 @@ export function resetRepoMocks(mockRepo: MockedObject<typeof Repo>): void {
   mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
+  // ⚠ THE SUB-BASE READS (2026-09-08). Empty is the honest default: a base with
+  // no live folders and no live entries, which is what makes every folder/entry
+  // scope in a suite that does not set them up resolve to NOTHING rather than to
+  // `undefined` — the second is a `TypeError`, not a refusal.
+  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
+  mockRepo.listLiveEntryRows.mockResolvedValue([]);
   mockRepo.filterTeamIdsInWorkspace.mockImplementation(async (_ws, ids) => ids);
   mockRepo.insertTemplate.mockImplementation(async (args) => {
     const row = template({ visibility: args.visibility, createdBy: args.createdBy });

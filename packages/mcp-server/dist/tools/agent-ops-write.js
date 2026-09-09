@@ -45,6 +45,42 @@ const grant_js_1 = require("./grant.js");
 const respond_js_1 = require("./respond.js");
 const confirm_token_js_1 = require("./confirm-token.js");
 const agent_shared_js_1 = require("./agent-shared.js");
+/**
+ * THE ONE TRANSLATION between the agent-facing shape (`{base, folder?, entry?}`)
+ * and the wire's discriminated union. ⚠ `folder` WINS over `entry` if a caller
+ * somehow sends both — zod already refused that pair, so this arm is
+ * unreachable and exists so the mapper is TOTAL rather than throwing on a shape
+ * the type says cannot occur.
+ */
+function toKnowledgeScopes(scopes) {
+    if (scopes === undefined)
+        return undefined;
+    return scopes.map((s) => s.folder
+        ? { baseId: s.base, scope: "folder", folderId: s.folder }
+        : s.entry
+            ? { baseId: s.base, scope: "entry", entryId: s.entry }
+            : { baseId: s.base, scope: "base" });
+}
+/**
+ * THE DIGEST'S KNOWLEDGE LINE, deterministically sorted (2026-09-08).
+ *
+ * ⚠ **SORTED, BECAUSE A CONFIRM TOKEN IS BOUND TO THIS PAYLOAD.** The preview an
+ * operator was shown and the payload the proceed re-hashes must be byte-equal;
+ * a set the agent happened to type in a different order the second time would
+ * spend no token and loop. `knowledge_bases` has been `[...].sort()` for exactly
+ * this reason, and this is the same rule for a shape with three fields — the key
+ * is the SHAPE plus its id, so a base and a folder of it sort apart.
+ */
+function knowledgeDigest(input) {
+    const scopes = toKnowledgeScopes(input.knowledge) ?? [];
+    return scopes
+        .map((s) => s.scope === "folder"
+        ? `folder:${s.baseId}/${s.folderId}`
+        : s.scope === "entry"
+            ? `entry:${s.baseId}/${s.entryId}`
+            : `base:${s.baseId}`)
+        .sort();
+}
 /** Map the write errors that have an actionable sentence; rethrow anything
  *  else. ⚠ ONE mapper for both verbs so the two cannot answer differently. */
 function mapWriteError(e) {
@@ -87,6 +123,7 @@ async function opCreate(client, callerUserId, input) {
             model: input.model ?? null,
             visibility,
             knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
+            knowledge: knowledgeDigest(input),
             fields: (input.fields ?? []).map((f) => [f.key, f.value]),
         },
     }, { publishes: visibility === "workspace", token: input.confirm_token });
@@ -100,6 +137,7 @@ async function opCreate(client, callerUserId, input) {
         fields: input.fields,
         visibility,
         knowledgeBaseIds: input.knowledge_bases,
+        knowledge: toKnowledgeScopes(input.knowledge),
         // 🔒 G16 — THE TOKEN, SPENT, BECOMES THE SERVER'S PRECONDITION. Only ever
         // `true`, and only from a token this call actually consumed: the server
         // ignores the flag outside its predicate, and sending it on a proceed that
@@ -137,9 +175,10 @@ async function opUpdate(client, callerUserId, ref, input) {
         fields: input.fields,
         visibility: input.visibility,
         knowledgeBaseIds: input.knowledge_bases,
+        knowledge: toKnowledgeScopes(input.knowledge),
     };
     if (Object.values(patch).every((v) => v === undefined)) {
-        return (0, respond_js_1.err)(`op="update" changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, fields, visibility, knowledge_bases.`);
+        return (0, respond_js_1.err)(`op="update" changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, fields, visibility, knowledge_bases, knowledge.`);
     }
     const template = await (0, agent_shared_js_1.resolveTemplateOr)(client, ref);
     if ((0, agent_shared_js_1.isErr)(template))
@@ -158,6 +197,7 @@ async function opUpdate(client, callerUserId, ref, input) {
             model: patch.model ?? null,
             visibility: patch.visibility ?? null,
             knowledge_bases: [...(input.knowledge_bases ?? [])].sort(),
+            knowledge: knowledgeDigest(input),
             fields: (input.fields ?? []).map((f) => [f.key, f.value]),
         },
     }, { publishes: patch.visibility === "workspace", token: input.confirm_token });

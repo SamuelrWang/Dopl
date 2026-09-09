@@ -20,6 +20,9 @@ import type {
   AgentTemplate,
   TemplateField,
   TemplateKnowledgeBaseRef,
+  TemplateKnowledgeRef,
+  TemplateKnowledgeScope,
+  TemplateKnowledgeScopeKind,
   TemplateShelf,
   TemplateVisibility,
 } from "../types";
@@ -32,6 +35,9 @@ export type {
   AgentTemplate,
   TemplateField,
   TemplateKnowledgeBaseRef,
+  TemplateKnowledgeRef,
+  TemplateKnowledgeScope,
+  TemplateKnowledgeScopeKind,
   TemplateShelf,
   TemplateVisibility,
 };

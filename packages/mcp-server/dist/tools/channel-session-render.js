@@ -98,7 +98,7 @@ exports.UNKNOWN_STATE = "(unrecognized state)";
  * removal or a claim that the agent stopped — the same conclusion the web's
  * cards reached when a wall-clock filter made live agents vanish mid-run.
  */
-exports.SESSION_STALE_WINDOW_MS = 90_000;
+exports.SESSION_STALE_WINDOW_MS = 120_000;
 /**
  * THE SIX SITUATION KEYS, AS PHRASES AN AGENT CAN ACT ON.
  *

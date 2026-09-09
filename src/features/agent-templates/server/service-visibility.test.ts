@@ -38,6 +38,8 @@ vi.mock("./repository", () => ({
   listKnowledgeLinksForTemplates: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
+  listLiveFoldersForBases: vi.fn(),
+  listLiveEntryRows: vi.fn(),
 }));
 
 import * as repo from "./repository";
@@ -88,6 +90,8 @@ beforeEach(() => {
   mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
+  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
+  mockRepo.listLiveEntryRows.mockResolvedValue([]);
   mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
   mockRepo.listTeamIdsForUser.mockResolvedValue([]);
 });

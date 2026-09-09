@@ -84,6 +84,23 @@ const RESOLVED = {
     { key: "repo", value: "acme/api" },
   ],
   knowledgeBases: [{ id: "kb-1", name: "Handbook" }],
+  // ⚠ THE EIGHTH KEY (2026-09-08) — every attached scope, base / folder / entry.
+  // It rides BESIDE the base list rather than replacing it: an older desktop
+  // narrows this payload through an allowlist that drops keys it does not know
+  // (§13's older-peer rule), so removing the base list would hand every such
+  // build a role naming no knowledge at all.
+  knowledge: [
+    { baseId: "kb-1", baseName: "Handbook", scope: "base" as const, path: "Handbook" },
+    {
+      baseId: "kb-1",
+      baseName: "Handbook",
+      scope: "folder" as const,
+      folderId: "f-1",
+      folderName: "Deploys",
+      path: "Handbook / Deploys",
+      toolPath: "Deploys",
+    },
+  ],
   authoredByCaller: true,
   unreachableKnowledgeBaseCount: 0,
 };
@@ -102,7 +119,7 @@ beforeEach(() => {
 });
 
 describe("the launch payload", () => {
-  it("is EXACTLY {name, instructions, model, fields, knowledgeBases, authoredByCaller, unreachableKnowledgeBaseCount} — flat, no envelope", async () => {
+  it("is EXACTLY {name, instructions, model, fields, knowledgeBases, knowledge, authoredByCaller, unreachableKnowledgeBaseCount} — flat, no envelope", async () => {
     const res = await GET(req(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -113,6 +130,9 @@ describe("the launch payload", () => {
       "authoredByCaller",
       "fields",
       "instructions",
+      // ⚠ THE EIGHTH KEY (2026-09-08): the SCOPED attachment list, base / folder
+      // / entry. `knowledgeBases` stays beside it as the base-level slice.
+      "knowledge",
       "knowledgeBases",
       "model",
       "name",
@@ -153,6 +173,7 @@ describe("the launch payload", () => {
       fields: [],
       knowledgeBases: [],
       authoredByCaller: false,
+      knowledge: [],
       unreachableKnowledgeBaseCount: 0,
     });
     const body = await GET(req(), { params: Promise.resolve({}) }).then((r) => r.json());
@@ -163,6 +184,7 @@ describe("the launch payload", () => {
       fields: [],
       knowledgeBases: [],
       authoredByCaller: false,
+      knowledge: [],
       unreachableKnowledgeBaseCount: 0,
     });
   });

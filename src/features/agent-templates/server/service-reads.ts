@@ -260,6 +260,12 @@ export async function resolveTemplateForLaunch(
     model: template.model,
     fields: template.fields,
     knowledgeBases: template.knowledgeBases,
+    // ⚠ **BESIDE `knowledgeBases`, NEVER INSTEAD OF IT** (2026-09-08). The
+    // desktop narrows this payload through an ALLOWLIST, so a build older than
+    // this release drops the key it does not know — and if the base list had
+    // moved into it, every such build would launch a role naming no knowledge at
+    // all. §13's older-peer rule, on the payload where the failure is silent.
+    knowledge: template.knowledge ?? [],
     // ⚠ CARRIED, NOT RECOMPUTED, and `?? 0` reads "the decoration did not run",
     // which on this door cannot happen — `readTemplateById` always decorates.
     // The coalesce is the honest default rather than a claim of reachability:

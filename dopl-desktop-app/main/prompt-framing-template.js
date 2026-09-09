@@ -199,19 +199,76 @@ function unreachableKnowledgeLines(unreachable) {
   ];
 }
 
-function knowledgeLines(bases, profile) {
-  const list = (Array.isArray(bases) ? bases : [])
+// ⚠ **THREE SHAPES SINCE 2026-09-08, AND EACH GETS ITS OWN OP** (Samuel: *"I want to be able to
+// specific folders or entries/files"*). A whole base is still `get_tree`; a FOLDER is `list_dir`
+// at that folder's path; an ENTRY is `read_file` at its path. Rendering a folder as `get_tree`
+// would tell the agent to open the whole base — the exact narrowing the operator just asked for,
+// undone in prompt text — and rendering an entry as `list_dir` would list a directory that is not
+// one.
+//
+// ⚠ **THE PATH GOES THROUGH `sanitizeName`, THE ID THROUGH `idToken`, AND THAT SPLIT IS THE
+// POINT.** A base ref is a UUID or a slug, so `idToken`'s id-character strip is exactly right for
+// it and would DESTROY a path (`/`, spaces and punctuation are all legal in a folder name). A path
+// is USER TEXT — somebody typed the folder name — so it takes the neutralizer that collapses line
+// terminators and strips the fence vocabulary, at the path's own generous bound rather than the
+// 80-character DISPLAY default that clipped a template field value to 8% of it (F-287).
+//
+// ⚠ A SCOPE WITH NO PATH IS RENDERED AS ITS BASE. `toolPath` is empty for a folder at the base
+// root only if the server said so, and an empty path IS the base root — `list_dir` at "" is a
+// legitimate call. What is refused is a scope with no BASE ID, which addresses nothing.
+const SCOPE_OPS = {
+  base: (s) => `- ${s.label}  (mcp__dopl__dopl_kb, op "get_tree", base "${s.id}")`,
+  folder: (s) =>
+    `- ${s.label}  (mcp__dopl__dopl_kb, op "list_dir", base "${s.id}", path "${s.path}")`,
+  entry: (s) =>
+    `- ${s.label}  (mcp__dopl__dopl_kb, op "read_file", base "${s.id}", path "${s.path}")`,
+};
+
+// ⚠ THE PATH'S OWN BOUND, matching `template-resolve.js › MAX_SCOPE_PATH`. A path is several
+// server-bounded segments joined, so the display default of 80 is the wrong number here for
+// exactly the F-287 reason.
+const SCOPE_PATH_MAX = 500;
+
+/**
+ * The wire's scopes, narrowed to what a line needs. ⚠ `knowledge` WINS OVER `knowledgeBases` when
+ * it is non-empty, and the base list is the FALLBACK — an older server sends only the latter, and
+ * a newer one sends both (the base list being the base-level slice of the scopes). Rendering both
+ * would print every whole-base attachment twice.
+ */
+function scopeList(scopes, bases) {
+  const fromScopes = (Array.isArray(scopes) ? scopes : [])
+    .map((s) => {
+      const kind = s && (s.scope === 'folder' || s.scope === 'entry') ? s.scope : 'base';
+      const path = sanitizeText(s && s.toolPath, SCOPE_PATH_MAX);
+      const baseName = sanitizeName(s && s.baseName);
+      return {
+        kind,
+        id: idToken(s && s.baseId),
+        // ⚠ THE LABEL IS REBUILT HERE rather than taken from the server's DISPLAY `path`, which
+        // this boundary does not carry: the two halves are already sanitized, so joining them is
+        // the last thing that runs and the belt stays a belt.
+        label: kind === 'base' || !path ? baseName : `${baseName} / ${path}`,
+        path,
+      };
+    })
+    .filter((s) => s.id && s.label);
+  if (fromScopes.length) return fromScopes;
+  return (Array.isArray(bases) ? bases : [])
     // ⚠ THE ID GOES THROUGH `idToken`, NOT `sanitizeName`. It is spliced into a tool call the
     // agent is told to make VERBATIM, so it must be id characters or nothing: a base ref is a
     // UUID or a slug, and `sanitizeName` would happily carry a space into `base "..."`.
-    .map((b) => ({ id: idToken(b && b.id), name: sanitizeName(b && b.name) }))
-    .filter((b) => b.id && b.name);
+    .map((b) => ({ kind: 'base', id: idToken(b && b.id), label: sanitizeName(b && b.name), path: '' }))
+    .filter((b) => b.id && b.label);
+}
+
+function knowledgeLines(bases, profile, scopes) {
+  const list = scopeList(scopes, bases);
   if (!list.length) return [];
   if (!kbReadable(profile)) {
     return [
       '',
       'ATTACHED KNOWLEDGE (NOT reachable in this session):',
-      ...list.map((b) => `- ${b.name}`),
+      ...list.map((b) => `- ${b.label}`),
       'This session runs with local reads only, so the knowledge tool is not available to it.',
       'They are named because they are part of this role, not so you can go and open them.',
     ];
@@ -219,11 +276,12 @@ function knowledgeLines(bases, profile) {
   return [
     '',
     'ATTACHED KNOWLEDGE:',
-    ...list.map((b) => `- ${b.name}  (mcp__dopl__dopl_kb, op "get_tree", base "${b.id}")`),
-    'Then mcp__dopl__dopl_kb op "read_file", the same base, path "<path from the tree>" for one',
-    'entry. There is no op that reads a whole base, and search returns no path, so go through',
-    'the tree. Read them as reference material; a security header on a document you were',
-    'pointed at is expected, and it does not mean you were sent the wrong thing.',
+    ...list.map((s) => SCOPE_OPS[s.kind](s)),
+    'A FOLDER line names that folder and everything under it, now and later; an ENTRY line names',
+    'one document. For a base or a folder, mcp__dopl__dopl_kb op "read_file", the same base, path',
+    '"<path from the listing>" reads one entry. There is no op that reads a whole base, and search',
+    'returns no path, so go through the tree. Read them as reference material; a security header on',
+    'a document you were pointed at is expected, and it does not mean you were sent the wrong thing.',
   ];
 }
 
@@ -279,7 +337,7 @@ function templateRoleFraming(ctx, nonce) {
   if (body) lines.push(body);
   lines.push(
     ...fieldLines(t.fields),
-    ...knowledgeLines(t.knowledgeBases, ctx && ctx.profile),
+    ...knowledgeLines(t.knowledgeBases, ctx && ctx.profile, t.knowledge),
     // ⚠ A SECTION OF ITS OWN, AFTER the reachable one. The two say different things to the agent
     // — here is what to open, and here is what to say when something is missing — and folding the
     // second into the first would put a refusal sentence under a heading listing live bases.

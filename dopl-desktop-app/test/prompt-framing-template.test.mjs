@@ -319,7 +319,7 @@ test("under dopl_only / full it names the EXACT two-call shape, fully qualified"
     assert.match(out, /op "read_file"/);
     // ⚠ NEVER search -> read: `op="search"` returns an entryId and `read_file` takes only a
     // path, so a chained instruction dead-ends.
-    assert.match(out, /search returns no path/);
+    assert.match(out, /returns no path/);
     // ⚠ FULLY QUALIFIED TOOL NAMES ONLY. A bare `dopl_kb` makes agents hunt and report the tool
     // missing — the same failure `prompt-tool-name.test.mjs` pins for `dopl_channel`.
     for (const line of out.split("\n").filter((l) => l.includes("dopl_kb"))) {

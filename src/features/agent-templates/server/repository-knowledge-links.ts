@@ -1,6 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { readClient } from "@/shared/supabase/caller-client";
+import { scopeKey } from "../lib/knowledge-scopes";
+import type { TemplateKnowledgeScope } from "../types";
 
 /**
  * Raw I/O for the KNOWLEDGE-BASE ATTACHMENTS on an agent template — the third
@@ -15,31 +17,71 @@ import { readClient } from "@/shared/supabase/caller-client";
  * plan phase 4. Read that header before adding a function here.
  */
 
+/**
+ * ONE ATTACHMENT ROW, flat. ⚠ `scopeKind` decides which of the two id columns
+ * is populated and the DB's `agent_template_kb_scope_shape_check` guarantees
+ * exactly one is — this shape is deliberately NOT the domain union
+ * (`types.ts › TemplateKnowledgeScope`), because a row read back is evidence and
+ * the narrowing belongs where the predicate runs, not in the mapper.
+ */
+export interface TemplateKnowledgeLinkRow {
+  templateId: string;
+  knowledgeBaseId: string;
+  scopeKind: "base" | "folder" | "entry";
+  folderId: string | null;
+  entryId: string | null;
+}
+
 export async function listKnowledgeLinksForTemplates(
   workspaceId: string,
   templateIds: string[]
-): Promise<Array<{ templateId: string; knowledgeBaseId: string }>> {
+): Promise<TemplateKnowledgeLinkRow[]> {
   if (templateIds.length === 0) return [];
   const db = readClient();
   const { data, error } = await db
     .from("agent_template_knowledge_bases")
-    .select("template_id, knowledge_base_id")
+    .select("template_id, knowledge_base_id, scope_kind, folder_id, entry_id")
     .eq("workspace_id", workspaceId)
     .in("template_id", templateIds);
   if (error) throw error;
   return (
-    (data ?? []) as Array<{ template_id: string; knowledge_base_id: string }>
+    (data ?? []) as Array<{
+      template_id: string;
+      knowledge_base_id: string;
+      // ⚠ `?? EMPTY_X`-shaped defaulting, one layer down: a row written before
+      // `20260930150000` and read through a stale PostgREST schema cache has no
+      // `scope_kind`, and `undefined` reaching the union would take every
+      // default branch silently. `'base'` is what such a row IS.
+      scope_kind?: string | null;
+      folder_id?: string | null;
+      entry_id?: string | null;
+    }>
   ).map((r) => ({
     templateId: r.template_id,
     knowledgeBaseId: r.knowledge_base_id,
+    scopeKind:
+      r.scope_kind === "folder" || r.scope_kind === "entry"
+        ? r.scope_kind
+        : ("base" as const),
+    folderId: r.folder_id ?? null,
+    entryId: r.entry_id ?? null,
   }));
 }
 
-/** REPLACE-SET, same argument as `replaceTeamLinks`. */
+/**
+ * REPLACE-SET, same argument as `replaceTeamLinks`.
+ *
+ * ⚠ **SCOPED SINCE 2026-09-08**, and the DEDUPE key had to move with it: it used
+ * to be the base id, which now collides across shapes — a whole-base scope and
+ * a folder scope of that base are two different attachments that share it. The
+ * key is the SHAPE plus its own id, which is exactly what the three partial
+ * unique indexes in the migration enforce; keying on the base alone would have
+ * dropped every folder but the first, silently.
+ */
 export async function replaceKnowledgeLinks(
   workspaceId: string,
   templateId: string,
-  knowledgeBaseIds: string[],
+  scopes: ReadonlyArray<TemplateKnowledgeScope>,
   addedBy: string | null
 ): Promise<void> {
   const db = supabaseAdmin();
@@ -49,16 +91,115 @@ export async function replaceKnowledgeLinks(
     .eq("workspace_id", workspaceId)
     .eq("template_id", templateId);
   if (del.error) throw del.error;
-  if (knowledgeBaseIds.length === 0) return;
-  const { error } = await db.from("agent_template_knowledge_bases").insert(
-    [...new Set(knowledgeBaseIds)].map((knowledgeBaseId) => ({
+  if (scopes.length === 0) return;
+  const seen = new Set<string>();
+  const rows: Array<Record<string, string | null>> = [];
+  for (const scope of scopes) {
+    const key = scopeKey(scope);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
       template_id: templateId,
-      knowledge_base_id: knowledgeBaseId,
+      knowledge_base_id: scope.baseId,
       workspace_id: workspaceId,
       added_by_user_id: addedBy,
-    }))
-  );
+      scope_kind: scope.scope,
+      folder_id: scope.scope === "folder" ? scope.folderId : null,
+      entry_id: scope.scope === "entry" ? scope.entryId : null,
+    });
+  }
+  const { error } = await db
+    .from("agent_template_knowledge_bases")
+    .insert(rows);
   if (error) throw error;
+}
+
+/**
+ * EVERY LIVE FOLDER of a set of bases — the ancestor chain a path is derived
+ * from, and the validation set a folder scope is checked against, in ONE query.
+ *
+ * ⚠ WHOLE BASES RATHER THAN THE NAMED FOLDER IDS, on purpose. A path is walked
+ * up `parent_id` (`knowledge/server/path.ts`), so fetching only the folders
+ * named would answer "what is this folder called" and never "where does it
+ * live" — and fetching the ancestors one at a time is a query per level. The
+ * folder count of a base is small and the read is bounded by the bases the
+ * template actually attaches.
+ *
+ * ⚠ SOFT-DELETED FOLDERS ARE EXCLUDED, which is what makes a trashed folder
+ * disappear from the payload rather than render a path through a folder nobody
+ * can open.
+ */
+export interface KnowledgeFolderRow {
+  id: string;
+  knowledgeBaseId: string;
+  parentId: string | null;
+  name: string;
+}
+
+export async function listLiveFoldersForBases(
+  workspaceId: string,
+  baseIds: string[]
+): Promise<KnowledgeFolderRow[]> {
+  if (baseIds.length === 0) return [];
+  const db = readClient();
+  const { data, error } = await db
+    .from("knowledge_folders")
+    .select("id, knowledge_base_id, parent_id, name")
+    .eq("workspace_id", workspaceId)
+    .in("knowledge_base_id", baseIds)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return (
+    (data ?? []) as Array<{
+      id: string;
+      knowledge_base_id: string;
+      parent_id: string | null;
+      name: string;
+    }>
+  ).map((r) => ({
+    id: r.id,
+    knowledgeBaseId: r.knowledge_base_id,
+    parentId: r.parent_id,
+    name: r.name,
+  }));
+}
+
+/** The named entries, live only. ⚠ BY ID rather than by base: an entry needs no
+ *  siblings to be described, only its own folder, which the folder read above
+ *  already carries. */
+export interface KnowledgeEntryRow {
+  id: string;
+  knowledgeBaseId: string;
+  folderId: string | null;
+  title: string;
+}
+
+export async function listLiveEntryRows(
+  workspaceId: string,
+  entryIds: string[]
+): Promise<KnowledgeEntryRow[]> {
+  if (entryIds.length === 0) return [];
+  const db = readClient();
+  const { data, error } = await db
+    .from("knowledge_entries")
+    .select("id, knowledge_base_id, folder_id, title")
+    .eq("workspace_id", workspaceId)
+    .in("id", entryIds)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return (
+    (data ?? []) as Array<{
+      id: string;
+      knowledge_base_id: string;
+      folder_id: string | null;
+      title: string;
+    }>
+  ).map((r) => ({
+    id: r.id,
+    knowledgeBaseId: r.knowledge_base_id,
+    folderId: r.folder_id,
+    title: r.title,
+  }));
 }
 
 /**

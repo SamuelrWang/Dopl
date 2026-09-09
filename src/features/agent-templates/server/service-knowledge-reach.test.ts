@@ -39,6 +39,8 @@ vi.mock("./repository", () => ({
   listKnowledgeLinksForTemplates: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
+  listLiveFoldersForBases: vi.fn(),
+  listLiveEntryRows: vi.fn(),
 }));
 
 vi.mock("@/shared/tenancy/resolve-resource", () => ({
@@ -87,10 +89,33 @@ function template(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
   };
 }
 
-/** A junction row: the template NAMES this base, whatever the reader can see. */
+/** A junction row: the template NAMES this base, whatever the reader can see.
+ *  ⚠ SCOPED SINCE 2026-09-08 — `scope_kind` defaults to `'base'`, which is what
+ *  every row written before that migration IS. */
 const link = (knowledgeBaseId: string) => ({
   templateId: "tpl-1",
   knowledgeBaseId,
+  scopeKind: "base" as const,
+  folderId: null,
+  entryId: null,
+});
+
+/** A junction row naming ONE FOLDER of a base. */
+const folderLink = (knowledgeBaseId: string, folderId: string) => ({
+  templateId: "tpl-1",
+  knowledgeBaseId,
+  scopeKind: "folder" as const,
+  folderId,
+  entryId: null,
+});
+
+/** …and one naming a single ENTRY. */
+const entryLink = (knowledgeBaseId: string, entryId: string) => ({
+  templateId: "tpl-1",
+  knowledgeBaseId,
+  scopeKind: "entry" as const,
+  folderId: null,
+  entryId,
 });
 
 /** A base row the viewer filter WILL keep — public, workspace-wide. */
@@ -109,6 +134,8 @@ beforeEach(() => {
   mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
+  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
+  mockRepo.listLiveEntryRows.mockResolvedValue([]);
   mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
   mockRepo.listTeamIdsForUser.mockResolvedValue([]);
 });
@@ -177,6 +204,7 @@ describe("what it must NOT do", () => {
       "authoredByCaller",
       "fields",
       "instructions",
+      "knowledge",
       "knowledgeBases",
       "model",
       "name",
@@ -195,5 +223,117 @@ describe("what it must NOT do", () => {
     expect(mockRepo.listKnowledgeBaseAccessRows).toHaveBeenCalledWith("ws-1", [
       OUT_OF_REACH,
     ]);
+  });
+});
+
+/**
+ * SUB-BASE SCOPES, THROUGH THE SAME DECORATION (2026-09-08).
+ *
+ * ⚠ **A SCOPE DROPS WITH ITS BASE, AND ALSO ON ITS OWN.** The base predicate is
+ * the ceiling — a folder is reachable exactly when its base is — but a folder
+ * that has been TRASHED, or that turns out to live in a different base than the
+ * scope names, drops too, and drops into the SAME count. Splitting that count
+ * would put the disclosure decision on four surfaces instead of one.
+ */
+describe("folder and entry scopes", () => {
+  const FOLDER = "f-1";
+  const ENTRY = "e-1";
+
+  it("renders a folder scope as a path, and a toolPath that is NOT the display one", async () => {
+    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+      folderLink(REACHABLE, FOLDER),
+    ]);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
+      visibleBase(REACHABLE, "Ops Notes"),
+    ]);
+    mockRepo.listLiveFoldersForBases.mockResolvedValue([
+      { id: "f-0", knowledgeBaseId: REACHABLE, parentId: null, name: "Runbooks" },
+      { id: FOLDER, knowledgeBaseId: REACHABLE, parentId: "f-0", name: "Deploys" },
+    ]);
+    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    expect(resolved.knowledge).toEqual([
+      {
+        baseId: REACHABLE,
+        baseName: "Ops Notes",
+        scope: "folder",
+        folderId: FOLDER,
+        folderName: "Deploys",
+        // ⚠ THE WHOLE CHAIN, root-first, led by the BASE NAME — display.
+        path: "Ops Notes / Runbooks / Deploys",
+        // …and the base-relative address a `dopl_kb` call takes. The two are
+        // never interchangeable: a base named "Ops / Legal" makes splitting one
+        // back into the other silently wrong.
+        toolPath: "Runbooks/Deploys",
+      },
+    ]);
+    // 🔒 A folder scope is NOT in the base-level slice — listing its base would
+    // tell an older reader the whole base is attached.
+    expect(resolved.knowledgeBases).toEqual([]);
+    expect(resolved.unreachableKnowledgeBaseCount).toBe(0);
+  });
+
+  it("renders an entry scope at its folder's path", async () => {
+    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+      entryLink(REACHABLE, ENTRY),
+    ]);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
+      visibleBase(REACHABLE, "Ops Notes"),
+    ]);
+    mockRepo.listLiveFoldersForBases.mockResolvedValue([
+      { id: "f-0", knowledgeBaseId: REACHABLE, parentId: null, name: "Runbooks" },
+    ]);
+    mockRepo.listLiveEntryRows.mockResolvedValue([
+      { id: ENTRY, knowledgeBaseId: REACHABLE, folderId: "f-0", title: "Rollback" },
+    ]);
+    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    expect(resolved.knowledge[0]?.path).toBe("Ops Notes / Runbooks / Rollback");
+    expect(resolved.knowledge[0]?.toolPath).toBe("Runbooks/Rollback");
+  });
+
+  it("drops a TRASHED entry into the same count, naming nothing", async () => {
+    // The live-entry read simply does not return it, which is how a soft delete
+    // reaches this layer.
+    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+      entryLink(REACHABLE, ENTRY),
+    ]);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
+      visibleBase(REACHABLE, "Ops Notes"),
+    ]);
+    mockRepo.listLiveEntryRows.mockResolvedValue([]);
+    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    expect(resolved.knowledge).toEqual([]);
+    expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
+    expect(JSON.stringify(resolved)).not.toContain(ENTRY);
+  });
+
+  it("drops a folder that lives in ANOTHER base — the row is not evidence", async () => {
+    // 🔒 The trigger refuses this write; this refuses the READ of a row written
+    // before the trigger existed. A path naming one base beside a tool call
+    // naming another is an agent pointed at the wrong document.
+    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+      folderLink(REACHABLE, FOLDER),
+    ]);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
+      visibleBase(REACHABLE, "Ops Notes"),
+    ]);
+    mockRepo.listLiveFoldersForBases.mockResolvedValue([
+      { id: FOLDER, knowledgeBaseId: OUT_OF_REACH, parentId: null, name: "Elsewhere" },
+    ]);
+    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    expect(resolved.knowledge).toEqual([]);
+    expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
+  });
+
+  it("drops every scope of a base the viewer cannot see, without reading its tree", async () => {
+    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+      folderLink(OUT_OF_REACH, FOLDER),
+    ]);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
+    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    expect(resolved.knowledge).toEqual([]);
+    expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
+    // ⚠ NO PROBE. Reading the folders of a base the caller cannot see is a
+    // result we would then have to remember to discard.
+    expect(mockRepo.listLiveFoldersForBases).not.toHaveBeenCalled();
   });
 });

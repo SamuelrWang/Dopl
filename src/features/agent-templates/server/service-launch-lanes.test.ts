@@ -51,6 +51,8 @@ vi.mock("./repository", () => ({
   listKnowledgeLinksForTemplates: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
+  listLiveFoldersForBases: vi.fn(),
+  listLiveEntryRows: vi.fn(),
 }));
 vi.mock("@/shared/tenancy/resolve-resource", () => ({
   resolveResource: vi.fn(async () => null),
@@ -130,6 +132,8 @@ beforeEach(() => {
   vi.mocked(repo.listKnowledgeLinksForTemplates).mockResolvedValue([]);
   vi.mocked(repo.listKnowledgeBaseAccessRows).mockResolvedValue([]);
   vi.mocked(repo.listKnowledgeBaseTeamGrants).mockResolvedValue([]);
+  vi.mocked(repo.listLiveFoldersForBases).mockResolvedValue([]);
+  vi.mocked(repo.listLiveEntryRows).mockResolvedValue([]);
   vi.mocked(repo.listTeamLinksForTemplates).mockResolvedValue([]);
   vi.mocked(repo.listTeamIdsForUser).mockResolvedValue([]);
 });

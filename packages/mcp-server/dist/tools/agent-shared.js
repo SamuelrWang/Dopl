@@ -192,7 +192,7 @@ function templateWriteDenied(e) {
 function knowledgeBaseNotAttachable(e) {
     if (!(0, respond_js_1.isApiError)(e, 404, "KNOWLEDGE_BASE_NOT_FOUND"))
         return null;
-    return (0, respond_js_1.err)(`At least one knowledge base id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops a template laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. Check ids with dopl_kb(op="list_bases").`);
+    return (0, respond_js_1.err)(`At least one knowledge id you passed does not resolve for you, so nothing was written. A base you cannot READ cannot be attached — that is what stops a template laundering access to somebody else's private base — and "not yours" and "no such base" answer the same way here. The same answer covers a folder or an entry that is trashed, or that lives in a different base than the one you named. Check ids with dopl_kb(op="list_bases") and dopl_kb(op="get_tree").`);
 }
 /**
  * A shared/service credential tried to own a PRIVATE template (403
@@ -211,8 +211,14 @@ function sharedCredentialPrivateDenied(e) {
 function templateRow(t) {
     const desc = t.description ? `\n  ${(0, narration_js_1.inlineOr)(t.description, "")}` : "";
     const model = t.model ? ` · model ${(0, narration_js_1.inlineOr)(t.model, "`(unnamed)`")}` : "";
-    const kbs = t.knowledgeBases.length > 0
-        ? ` · ${t.knowledgeBases.length} knowledge base${t.knowledgeBases.length === 1 ? "" : "s"}`
+    // ⚠ **"knowledge scope(s)", NOT "knowledge base(s)" (2026-09-08).** An
+    // attachment is a base, a FOLDER or an ENTRY now, and counting three folders
+    // of one base as "3 knowledge bases" is a false sentence about what the
+    // template names. ⚠ `knowledge` first, the base list as the §8/older-server
+    // FALLBACK — never their sum, which would double-count every whole base.
+    const scopeCount = (t.knowledge ?? []).length > 0 ? (t.knowledge ?? []).length : t.knowledgeBases.length;
+    const kbs = scopeCount > 0
+        ? ` · ${scopeCount} knowledge scope${scopeCount === 1 ? "" : "s"}`
         : "";
     return `- ${(0, narration_js_1.inlineOr)(t.name, exports.NO_NAME)} (id: \`${t.id}\` · ${t.visibility}${model}${kbs})${desc}`;
 }

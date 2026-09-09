@@ -30,6 +30,43 @@ export interface TemplateKnowledgeBaseRef {
     name: string;
 }
 /**
+ * HOW MUCH OF A BASE AN ATTACHMENT NAMES (2026-09-08). A folder means its
+ * SUBTREE, including entries added later — it is stored as one row and never
+ * expanded, because an expansion is a snapshot.
+ *
+ * ⚠ **AN ATTACHMENT, NOT A PERMISSION.** The knowledge READ CEILING is
+ * base-keyed and stays so; a folder scope narrows what a role POINTS AT.
+ */
+export type TemplateKnowledgeScopeKind = "base" | "folder" | "entry";
+/** The WRITE shape — ids only. A path is derived, never stored, so a path on the
+ *  wire is a name a rename silently falsifies. */
+export type TemplateKnowledgeScope = {
+    baseId: string;
+    scope: "base";
+} | {
+    baseId: string;
+    scope: "folder";
+    folderId: string;
+} | {
+    baseId: string;
+    scope: "entry";
+    entryId: string;
+};
+/** The READ shape — resolved against what the READING caller may see. `path` is
+ *  DISPLAY (`Base / Folder / Entry`); `toolPath` is the base-relative knowledge
+ *  path a `dopl_kb` call takes, and the two are never interchangeable. */
+export interface TemplateKnowledgeRef {
+    baseId: string;
+    baseName: string;
+    scope: TemplateKnowledgeScopeKind;
+    folderId?: string;
+    folderName?: string;
+    entryId?: string;
+    entryTitle?: string;
+    path: string;
+    toolPath?: string;
+}
+/**
  * WHICH SHELF a template lives on — the /home Agents pane's "Personal" section,
  * or the workspace Agents page. Two PLACES over one table, and they exclude
  * each other BOTH ways.
@@ -62,8 +99,18 @@ export interface AgentTemplate {
      *  workspace admins — team composition is a leak otherwise. */
     teamIds: string[];
     /** ⚠ Only the ones the READING caller may see — the DTO is viewer-filtered,
-     *  so two callers can get different lists for one row. */
+     *  so two callers can get different lists for one row.
+     *  ⚠ **BASE-LEVEL SCOPES ONLY SINCE 2026-09-08** — see {@link AgentTemplate.knowledge}. */
     knowledgeBases: TemplateKnowledgeBaseRef[];
+    /**
+     * EVERY attached scope — base, folder and entry alike (2026-09-08).
+     * `knowledgeBases` is its base-level slice, kept for readers that predate it.
+     *
+     * 🔒 ⚠ **OPTIONAL, PER §8.** It is a field ADDED to an already-persisted
+     * payload, so an entry cached by the previous bundle carries no such key and
+     * every reader spells `?? EMPTY_KNOWLEDGE` inline.
+     */
+    knowledge?: TemplateKnowledgeRef[];
     createdBy: string | null;
     createdAt: string;
     updatedAt: string;
@@ -92,8 +139,13 @@ export interface AgentTemplateCreateInput {
     /** ⚠ Requires `visibility: 'team'`; the server refuses the pair otherwise
      *  rather than dropping it. */
     teamIds?: string[];
-    /** REPLACE-SET, never merged. Every id must be visible to the caller. */
+    /** REPLACE-SET, never merged. Every id must be visible to the caller.
+     *  ⚠ WHOLE BASES. `knowledge` is the scoped spelling, and the server refuses
+     *  both keys in one request rather than merging them. */
     knowledgeBaseIds?: string[];
+    /** Scoped attachments — base, folder or entry. REPLACE-SET, and mutually
+     *  exclusive with `knowledgeBaseIds`. */
+    knowledge?: TemplateKnowledgeScope[];
     /**
      * Put the new template on the PERSONAL SHELF instead of the workspace Agents
      * page. ⚠ A REQUEST, NOT A DECISION, and since 2026-09-02 it ROUTES the row's
@@ -131,6 +183,9 @@ export interface AgentTemplateUpdateInput {
     visibility?: TemplateVisibility;
     teamIds?: string[];
     knowledgeBaseIds?: string[];
+    /** Scoped attachments — REPLACE-SET, mutually exclusive with
+     *  `knowledgeBaseIds`. */
+    knowledge?: TemplateKnowledgeScope[];
     /**
      * 🔒 "I know this publishes into a room somebody else is standing in."
      *

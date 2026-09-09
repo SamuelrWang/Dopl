@@ -3,6 +3,7 @@ import type {
   AgentTemplate,
   TemplateField,
   TemplateKnowledgeBaseRef,
+  TemplateKnowledgeRef,
   TemplateVisibility,
 } from "../types";
 
@@ -57,6 +58,11 @@ export function normalizeFields(raw: unknown): TemplateField[] {
 export interface TemplateSideload {
   teamIds?: string[];
   knowledgeBases?: TemplateKnowledgeBaseRef[];
+  /** ⚠ SIDE-LOADED BESIDE `knowledgeBases`, NOT INSTEAD OF IT. The base-level
+   *  slice keeps its own key for readers that predate scopes (`types.ts ›
+   *  AgentTemplate.knowledgeBases`), and both are produced by ONE decoration so
+   *  they cannot disagree. */
+  knowledge?: TemplateKnowledgeRef[];
 }
 
 export function mapAgentTemplateRow(
@@ -75,6 +81,7 @@ export function mapAgentTemplateRow(
     visibility: row.visibility as TemplateVisibility,
     teamIds: sideload.teamIds ?? [],
     knowledgeBases: sideload.knowledgeBases ?? [],
+    knowledge: sideload.knowledge ?? [],
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

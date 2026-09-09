@@ -48,6 +48,15 @@ const TEMPLATE_RESOLVE_TIMEOUT_MS = 5000;
 const MAX_INSTRUCTIONS = 32768; // the column's own CHECK
 const MAX_FIELDS = 50; // MAX_FIELD_COUNT
 const MAX_BASES = 50;
+// ⚠ 200, THE SERVER'S OWN `MAX_KNOWLEDGE_SCOPES` (`agent-templates/schema.ts`), and NOT 50. The
+// base cap counts BASES; this counts SCOPES, and one base can contribute many folders. A smaller
+// number here would be this module quietly deciding the operator's role names less knowledge than
+// it names — the F-287 mistake, on a different field.
+const MAX_SCOPES = 200;
+// A base id, a folder/entry id, a display name, or a `/`-joined knowledge path. ⚠ The PATH is the
+// long one: `knowledge_folders.name` and `knowledge_entries.title` are each bounded server-side and
+// a path is several of them, so this is deliberately roomier than `MAX_BASE_LABEL`.
+const MAX_SCOPE_PATH = 500;
 
 // ── ⚠ ONE BOUND PER FIELD, EACH THE SERVER'S OWN (F-287, 2026-08-23) ────────────────────────
 //
@@ -99,7 +108,13 @@ function count(value) {
 }
 
 /**
- * Narrow the wire payload to the seven keys the ROLE BLOCK reads, and nothing else.
+ * Narrow the wire payload to the eight keys the ROLE BLOCK reads, and nothing else.
+ *
+ * ⚠ THE EIGHTH IS `knowledge` (2026-09-08) — every attached scope, base / folder / entry. It rides
+ * BESIDE `knowledgeBases` rather than replacing it: an older SERVER sends only the base list, and a
+ * narrow that had dropped it would hand such a build a role naming no knowledge at all.
+ * `knowledgeLines` prefers `knowledge` when it is non-empty and falls back to the base list, so one
+ * of the two always answers and neither is rendered twice.
  *
  * ⚠ THE SEVENTH IS `unreachableKnowledgeBaseCount` (2026-09-05), and it is a COUNT BY CONTRACT.
  * The server withholds the id, the name and the container of a base this operator cannot reach;
@@ -118,6 +133,7 @@ function narrow(body) {
   const b = body && typeof body === 'object' ? body : {};
   const fields = Array.isArray(b.fields) ? b.fields.slice(0, MAX_FIELDS) : [];
   const bases = Array.isArray(b.knowledgeBases) ? b.knowledgeBases.slice(0, MAX_BASES) : [];
+  const scopes = Array.isArray(b.knowledge) ? b.knowledge.slice(0, MAX_SCOPES) : [];
   return {
     name: label(b.name, MAX_NAME),
     instructions: typeof b.instructions === 'string' ? b.instructions.slice(0, MAX_INSTRUCTIONS) : null,
@@ -128,6 +144,22 @@ function narrow(body) {
     knowledgeBases: bases
       .filter((k) => k && typeof k === 'object')
       .map((k) => ({ id: label(k.id, MAX_BASE_LABEL), name: label(k.name, MAX_BASE_LABEL) })),
+    // ⚠ A LITERAL WHITELIST INSIDE THE WHITELIST, for the reason the outer one exists: the server's
+    // ref also carries `folderId`, `entryId`, `folderName`, `entryTitle` and a DISPLAY `path`, and
+    // none of them is read here. `scope`, `baseId`, `baseName` and `toolPath` are what the four
+    // rendered forms need; anything else the server adds is dropped rather than reaching a line of
+    // prompt text by accident.
+    // ⚠ `scope` FAILS TO `'base'`, never to a folder or an entry. An unknown discriminator from a
+    // newer server renders the whole-base call, which is the WIDER instruction and therefore the one
+    // that cannot point an agent at a document that does not exist.
+    knowledge: scopes
+      .filter((k) => k && typeof k === 'object')
+      .map((k) => ({
+        scope: k.scope === 'folder' || k.scope === 'entry' ? k.scope : 'base',
+        baseId: label(k.baseId, MAX_BASE_LABEL),
+        baseName: label(k.baseName, MAX_BASE_LABEL),
+        toolPath: label(k.toolPath, MAX_SCOPE_PATH),
+      })),
     // ⚠ HOW MANY ATTACHMENTS THIS OPERATOR CANNOT REACH HERE — see `count` above and
     // `prompt-framing-template.js › knowledgeLines`, its one consumer.
     unreachableKnowledgeBaseCount: count(b.unreachableKnowledgeBaseCount),

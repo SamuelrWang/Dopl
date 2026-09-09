@@ -56,6 +56,72 @@ export interface TemplateKnowledgeBaseRef {
 }
 
 /**
+ * HOW MUCH OF A BASE AN ATTACHMENT NAMES (2026-09-08, Samuel: *"right now, you
+ * can only select entire bases, but I want to be able to specific folders or
+ * entries/files"*).
+ *
+ * ⚠ **A FOLDER MEANS ITS SUBTREE, INCLUDING WHAT IS ADDED LATER.** The scope
+ * stores the folder ID and nothing else; it is NEVER expanded into one row per
+ * child, because an expansion is a snapshot and an entry filed tomorrow would
+ * silently not be attached.
+ *
+ * ⚠ **IT IS AN ATTACHMENT, NOT A PERMISSION.** The READ CEILING
+ * (`knowledge/server/service-audience.ts › resolveAgentAudience`) is base-keyed
+ * and stays so — a folder scope narrows what the role block POINTS AT, not what
+ * the knowledge tools allow. Filed as a finding; do not read this union as
+ * access control.
+ */
+export type TemplateKnowledgeScopeKind = "base" | "folder" | "entry";
+
+/**
+ * The WRITE shape — ids only, because ids are the stable handle. `knowledge_folders`
+ * and `knowledge_entries` carry NO path column (a path is derived by walking
+ * `parent_id`, `knowledge/server/path.ts › resolvePath`), so a path on the wire
+ * would be a name a rename silently falsifies.
+ */
+export type TemplateKnowledgeScope =
+  | { baseId: string; scope: "base" }
+  | { baseId: string; scope: "folder"; folderId: string }
+  | { baseId: string; scope: "entry"; entryId: string };
+
+/**
+ * The READ shape — one attached scope, resolved against what the READING caller
+ * may see. Same reference discipline as {@link TemplateKnowledgeBaseRef}: names
+ * are carried for DISPLAY and the ids are what anything acts on.
+ *
+ * ⚠ `path` IS DERIVED SERVER-SIDE AND IS FOR DISPLAY ONLY — `Base / Folder`,
+ * `Base / Folder / Entry`. It is recomputed on every read, never stored, so a
+ * rename shows up rather than rotting. The desktop DOES splice the folder/entry
+ * half of it into a `dopl_kb` call, which is why it goes through the framing
+ * layer's sanitizer like any other user text.
+ */
+export interface TemplateKnowledgeRef {
+  baseId: string;
+  baseName: string;
+  scope: TemplateKnowledgeScopeKind;
+  folderId?: string;
+  folderName?: string;
+  entryId?: string;
+  entryTitle?: string;
+  path: string;
+  /**
+   * The same address as a BASE-RELATIVE knowledge path — `Deploys/Rollback.md`
+   * — `/`-joined the way `knowledge/server/path.ts › parsePath` reads one.
+   * Absent on a `base` scope, which addresses the base root and needs no path.
+   *
+   * ⚠ **A SECOND FIELD RATHER THAN STRING SURGERY ON `path`, AND THAT IS THE
+   * WHOLE REASON IT EXISTS.** `path` leads with the BASE NAME and joins on
+   * `" / "`; the tool path does neither. Recovering one from the other means
+   * splitting a display string on a separator a base name may itself contain,
+   * which is a wrong `dopl_kb` call for anyone who names a base "Ops / Legal" —
+   * and a wrong path there is an agent pointed at the wrong document, silently.
+   * ⚠ IT IS STILL USER TEXT: the desktop sanitizes it at render like every other
+   * value it splices into a line it wrote.
+   */
+  toolPath?: string;
+}
+
+/**
  * WHICH SHELF a template lives on — the /home Agents pane's "Personal" section,
  * or the workspace Agents page. Two PLACES over one table (Samuel's ruling
  * 2026-08-27) and, since 2026-09-02, two CONTAINERS: the boolean of
@@ -100,8 +166,33 @@ export interface AgentTemplate {
    */
   teamIds: string[];
   /** Attached KBs. ⚠ Only the ones the READING caller may see — the DTO is
-   *  viewer-filtered, so two callers can get different lists for one row. */
+   *  viewer-filtered, so two callers can get different lists for one row.
+   *  ⚠ **BASE-LEVEL SCOPES ONLY SINCE 2026-09-08.** It is kept for readers that
+   *  predate {@link AgentTemplate.knowledge} (an older desktop, an older SPA
+   *  bundle); a folder or entry scope has no whole-base id to put here and is
+   *  deliberately absent rather than widened into one — listing a base because
+   *  one folder of it is attached would over-report the attachment. */
   knowledgeBases: TemplateKnowledgeBaseRef[];
+  /**
+   * EVERY attached scope — base, folder and entry alike (2026-09-08).
+   *
+   * ⚠ **THE SUPERSET, AND `knowledgeBases` IS ITS BASE-LEVEL SLICE.** One list
+   * with a `scope` discriminator rather than three, because a template's
+   * attachments are ONE ordered set the operator built and splitting them by
+   * kind would put the ordering decision on the reader.
+   * ⚠ VIEWER-FILTERED THE SAME WAY, AND A LEVEL DEEPER: a scope drops when its
+   * base drops, and also when its folder or entry is gone or trashed. Drops of
+   * the FIRST kind are counted in {@link AgentTemplate.unreachableKnowledgeBaseCount}.
+   *
+   * 🔒 ⚠ **OPTIONAL, AND THAT IS §8's STANDING RULE RATHER THAN A HEDGE.** This
+   * payload is IndexedDB-persisted with a 24h `gcTime`, so the first paint after
+   * this release renders rows minted by the PREVIOUS bundle, which carry no such
+   * key. The server always sending it does not put it in the cache. Every reader
+   * therefore spells `?? EMPTY_KNOWLEDGE` INLINE at the read
+   * (`lib/knowledge-scopes.ts`), and this wave's tests include the fixture
+   * WITHOUT it.
+   */
+  knowledge?: TemplateKnowledgeRef[];
   /**
    * HOW MANY ATTACHMENTS THE VIEWER FILTER DROPPED — a COUNT and nothing else
    * (Samuel's ruling, 2026-09-05).
@@ -137,6 +228,17 @@ export interface ResolvedAgentTemplate {
   model: string | null;
   fields: TemplateField[];
   knowledgeBases: TemplateKnowledgeBaseRef[];
+  /**
+   * THE EIGHTH KEY (2026-09-08): every attached scope, base / folder / entry.
+   *
+   * ⚠ **IT DOES NOT REPLACE `knowledgeBases` ON THIS PAYLOAD AND MUST NOT.**
+   * A desktop older than this release narrows the response through an ALLOWLIST
+   * (`main/template-resolve.js › narrow`) that drops keys it does not know, so
+   * removing the base list would hand every such build a template with no
+   * knowledge at all — §13's older-peer rule, on the one payload where the
+   * failure is silent prompt text.
+   */
+  knowledge: TemplateKnowledgeRef[];
   /**
    * THE SEVENTH KEY (2026-09-05): how many attached bases this launch CANNOT
    * reach. Always a number here — the launch payload has one producer, so

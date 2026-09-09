@@ -2,10 +2,12 @@ import "server-only";
 import type {
   AgentTemplate,
   AgentTemplateContext,
-  TemplateKnowledgeBaseRef,
+  TemplateKnowledgeRef,
+  TemplateKnowledgeScope,
 } from "../types";
 import * as repo from "./repository";
-import { resolveVisibleKnowledgeBases } from "./service-shared";
+import { refKey, scopeKey } from "../lib/knowledge-scopes";
+import { resolveVisibleKnowledgeScopes } from "./service-knowledge-scopes";
 
 /**
  * THE KB DECORATION, lifted out of `service-reads.ts` on 2026-09-05 when the
@@ -17,12 +19,19 @@ import { resolveVisibleKnowledgeBases } from "./service-shared";
  * and for the same reason. `service-reads.ts` owns WHICH ROWS A CALLER MAY SEE;
  * this owns WHAT THE ATTACHMENTS ON THEM RESOLVE TO. Its only caller is that
  * file, and it imports nothing from it, so the arrow points one way.
+ *
+ * ⚠ **SCOPED SINCE 2026-09-08.** The junction now carries base / folder / entry
+ * rows, so the resolution moved one file over
+ * (`service-knowledge-scopes.ts › resolveVisibleKnowledgeScopes`) and this file
+ * kept the part that is genuinely about a ROW SET: grouping by template,
+ * counting what the viewer filter dropped, and deriving the base-level slice the
+ * older readers still take.
  */
 
 /**
- * Side-load KB refs onto a visible row set — ONE junction query plus the
- * visibility resolution, regardless of row count.
- * ⚠ Filtered through the SAME `resolveVisibleKnowledgeBases` the attach gate
+ * Side-load knowledge refs onto a visible row set — ONE junction query plus the
+ * scope resolution, regardless of row count.
+ * ⚠ Filtered through the SAME `resolveVisibleKnowledgeScopes` the attach gate
  * uses, so a base that was attachable when it was attached and has since gone
  * private simply disappears from the payload rather than leaking its name.
  *
@@ -34,6 +43,12 @@ import { resolveVisibleKnowledgeBases } from "./service-shared";
  * ELSE — no id, no name, no container — because the desktop turns it into prompt
  * text (`prompt-framing-template.js › unreachableKnowledgeLines`) and a location
  * would land there. It never blocks a launch: the agent starts, minus the base.
+ *
+ * ⚠ **A DROPPED FOLDER OR ENTRY COUNTS THE SAME WAY AND THE NAME DID NOT
+ * CHANGE** (2026-09-08). The count is "attachments this view cannot resolve",
+ * which is what every consumer already renders it as; splitting it into two
+ * numbers would put the disclosure decision on four surfaces instead of one, and
+ * a trashed entry is exactly as unreportable as a private base.
  */
 export async function decorateWithKnowledgeBases(
   ctx: AgentTemplateContext,
@@ -49,40 +64,74 @@ export async function decorateWithKnowledgeBases(
   // undefined here would make an unattached template indistinguishable from an
   // undecorated one for every consumer downstream.
   if (links.length === 0) {
-    return templates.map((t) => ({ ...t, unreachableKnowledgeBaseCount: 0 }));
+    return templates.map((t) => ({
+      ...t,
+      knowledgeBases: [],
+      knowledge: [],
+      unreachableKnowledgeBaseCount: 0,
+    }));
   }
-  const visible = await resolveVisibleKnowledgeBases(
-    ctx,
-    links.map((l) => l.knowledgeBaseId)
+  // ⚠ ONE RESOLUTION FOR EVERY TEMPLATE IN THE SET, then split back by template.
+  // Resolving per template would multiply the base/folder/entry reads by the row
+  // count on a page that already reads them once.
+  const scopes = links.map(linkToScope);
+  const resolved = await resolveVisibleKnowledgeScopes(ctx, scopes);
+  const byKey = new Map<string, TemplateKnowledgeRef>(
+    resolved.map((ref) => [refKey(ref), ref])
   );
-  const byId = new Map<string, TemplateKnowledgeBaseRef>(
-    visible.map((kb) => [kb.id, kb])
-  );
-  const byTemplate = new Map<string, TemplateKnowledgeBaseRef[]>();
+
+  const byTemplate = new Map<string, TemplateKnowledgeRef[]>();
   // ⚠ COUNTED HERE, WHERE THE DROP HAPPENS, AND NOWHERE ELSE. This loop is the
   // only place that knows both numbers; asking "how many did I lose" anywhere
   // downstream would mean a second read against the base rows, which is the
   // probe the no-location rule forbids.
   const droppedByTemplate = new Map<string, number>();
-  for (const link of links) {
-    const ref = byId.get(link.knowledgeBaseId);
+  for (let i = 0; i < links.length; i++) {
+    const ref = byKey.get(scopeKey(scopes[i]));
+    const templateId = links[i].templateId;
     if (!ref) {
       droppedByTemplate.set(
-        link.templateId,
-        (droppedByTemplate.get(link.templateId) ?? 0) + 1
+        templateId,
+        (droppedByTemplate.get(templateId) ?? 0) + 1
       );
       continue;
     }
-    byTemplate.set(link.templateId, [
-      ...(byTemplate.get(link.templateId) ?? []),
-      ref,
-    ]);
+    byTemplate.set(templateId, [...(byTemplate.get(templateId) ?? []), ref]);
   }
-  return templates.map((t) => ({
-    ...t,
-    knowledgeBases: (byTemplate.get(t.id) ?? []).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    ),
-    unreachableKnowledgeBaseCount: droppedByTemplate.get(t.id) ?? 0,
-  }));
+  return templates.map((t) => {
+    // ⚠ SORTED BY THE DISPLAY PATH, which puts a base and its own folders
+    // together and is stable across reads. The junction has no ordering column,
+    // so an unsorted list would reorder between two reads of one unchanged row.
+    const knowledge = (byTemplate.get(t.id) ?? []).sort((a, b) =>
+      a.path.localeCompare(b.path)
+    );
+    return {
+      ...t,
+      // ⚠ THE BASE-LEVEL SLICE, DERIVED FROM THE SAME LIST rather than resolved
+      // a second time — two reads of one fact is how the two keys would come to
+      // disagree. A folder scope contributes NOTHING here: listing its base
+      // would tell an older reader the whole base is attached, which is a wider
+      // claim than the row makes.
+      knowledgeBases: knowledge
+        .filter((ref) => ref.scope === "base")
+        .map((ref) => ({ id: ref.baseId, name: ref.baseName })),
+      knowledge,
+      unreachableKnowledgeBaseCount: droppedByTemplate.get(t.id) ?? 0,
+    };
+  });
+}
+
+/** A junction row read back, narrowed to the domain union. ⚠ The DB's
+ *  `agent_template_kb_scope_shape_check` guarantees the id column its
+ *  `scope_kind` names is populated; the fallbacks here exist so a row written
+ *  before that constraint cannot produce `folderId: undefined` inside a
+ *  `"folder"` scope — it degrades to the base scope it effectively is. */
+function linkToScope(link: repo.TemplateKnowledgeLinkRow): TemplateKnowledgeScope {
+  if (link.scopeKind === "folder" && link.folderId) {
+    return { baseId: link.knowledgeBaseId, scope: "folder", folderId: link.folderId };
+  }
+  if (link.scopeKind === "entry" && link.entryId) {
+    return { baseId: link.knowledgeBaseId, scope: "entry", entryId: link.entryId };
+  }
+  return { baseId: link.knowledgeBaseId, scope: "base" };
 }

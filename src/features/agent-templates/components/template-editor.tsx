@@ -28,6 +28,7 @@ import {
   CustomFieldRows,
   type PickerOption,
 } from "./template-editor-rows";
+import { KnowledgeScopePicker } from "./knowledge-scope-picker";
 
 /**
  * CREATE AND EDIT, in ONE surface — and since 2026-09-08 it is a
@@ -74,11 +75,18 @@ import {
 
 export interface TemplateEditorProps {
   open: boolean;
+  /** ⚠ THE MOUNT'S CONTAINER, threaded to the knowledge picker's per-base tree
+   *  reads. The base OPTIONS already came from a read keyed to it; the tree
+   *  reads must be keyed to the same one or the picker would expand a base in
+   *  one container against another's tenancy. */
+  workspaceId: string;
   /** Bumped by the caller on every open, so the draft reloads. */
   session: number;
   /** `null` = create. */
   template: AgentTemplate | null;
   teams: ReadonlyArray<PickerOption>;
+  /** ⚠ THE BASES ONLY — the ROOTS of the picker's tree. Folders and entries are
+   *  read lazily per base by the picker itself. */
   knowledgeBases: ReadonlyArray<PickerOption>;
   /**
    * Which visibility scopes this mount offers, IN ORDER. Defaults to the
@@ -148,7 +156,7 @@ const NO_MODEL = "";
  *
  * ⚠ **IT DESCRIBES THE SAVED ROW, NEVER THE DRAFT**, and it cannot go stale
  * against the chips above it: an unreachable link is absent from
- * `draft.knowledgeBaseIds` by construction.
+ * `draft.knowledge` by construction.
  *
  * ⚠ **NOTHING IS BLOCKED AND NOTHING IS OFFERED.** There is no fix-it control
  * here on purpose — the operator cannot be shown the base to detach it.
@@ -158,7 +166,12 @@ const NO_MODEL = "";
  */
 function UnreachableBasesRow({ count }: { count: number }) {
   if (count <= 0) return null;
-  const subject = count === 1 ? "1 attached base" : `${count} attached bases`;
+  // ⚠ **"attachment", NOT "base", SINCE 2026-09-08.** The count covers a dropped
+  // FOLDER and a dropped ENTRY too — a trashed entry is exactly as unreportable
+  // as a private base — and calling one of those "a base" would be a wrong
+  // sentence about what the role names.
+  const subject =
+    count === 1 ? "1 attachment" : `${count} attachments`;
   return (
     <p className="mt-1.5 text-caption text-text-muted">
       {subject} {count === 1 ? "isn't" : "aren't"} reachable from here, so{" "}
@@ -169,6 +182,7 @@ function UnreachableBasesRow({ count }: { count: number }) {
 
 export function TemplateEditor({
   open,
+  workspaceId,
   session,
   template,
   teams,
@@ -343,14 +357,17 @@ export function TemplateEditor({
         />
       </FormSection>
 
-      <FormSection label="Knowledge bases" caption="optional">
-        <ChipMultiSelect
-          options={knowledgeBases}
-          selectedIds={draft.knowledgeBaseIds}
-          onChange={(knowledgeBaseIds) => edit({ knowledgeBaseIds })}
-          addLabel="Attach"
-          detachVerb="Detach"
-          emptyLine="No knowledge bases yet."
+      {/* ⚠ **"Knowledge", NOT "Knowledge bases" (Samuel, 2026-09-08: *"rename
+          knowledge bases to knowledge"*).** The label names what may be
+          attached, and since this wave that is a base, a folder OR an entry —
+          "bases" was the narrower of the two words and is now the wrong one. */}
+      <FormSection label="Knowledge" caption="optional">
+        <KnowledgeScopePicker
+          workspaceId={workspaceId}
+          bases={knowledgeBases}
+          selected={draft.knowledge}
+          onChange={(knowledge) => edit({ knowledge })}
+          emptyLine="No knowledge here yet."
         />
         <UnreachableBasesRow count={template?.unreachableKnowledgeBaseCount ?? 0} />
       </FormSection>

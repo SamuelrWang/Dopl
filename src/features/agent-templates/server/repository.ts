@@ -386,5 +386,10 @@ export {
   replaceKnowledgeLinks,
   listKnowledgeBaseAccessRows,
   listKnowledgeBaseTeamGrants,
+  listLiveFoldersForBases,
+  listLiveEntryRows,
   type KnowledgeBaseAccessRow,
+  type KnowledgeFolderRow,
+  type KnowledgeEntryRow,
+  type TemplateKnowledgeLinkRow,
 } from "./repository-knowledge-links";

@@ -142,8 +142,80 @@ export const TemplateVisibilitySchema = z.enum([
 /** Same bound `SkillUpdateSchema.teamIds` uses. */
 const TeamIdsSchema = z.array(z.string().uuid()).max(50);
 
-/** Attached KB ids. The set is REPLACED, never merged — see `updateTemplate`. */
+/**
+ * Attached KB ids. The set is REPLACED, never merged — see `updateTemplate`.
+ *
+ * ⚠ **STILL ACCEPTED, AND IT MEANS WHOLE BASES** (2026-09-08). `knowledge`
+ * below is the shape that can also name a folder or an entry; this one stays
+ * because an older SPA bundle and the MCP surface's `knowledge_bases` argument
+ * both still send it, and a field removed from a schema is a 400 for every
+ * client that has not shipped yet (§13).
+ */
 const KnowledgeBaseIdsSchema = z.array(z.string().uuid()).max(50);
+
+/**
+ * THE SCOPED ATTACHMENT SET — base, folder, or entry (2026-09-08, Samuel:
+ * *"I want to be able to specific folders or entries/files"*).
+ *
+ * ⚠ **A DISCRIMINATED UNION, NOT THREE OPTIONAL IDS.** `{baseId, folderId?,
+ * entryId?}` would make `{scope:"folder"}` with no `folderId` — and
+ * `{folderId, entryId}` together — parseable shapes the service would have to
+ * re-refuse, which is the DB's `agent_template_kb_scope_shape_check` restated
+ * badly one layer up. Here an impossible combination cannot be typed.
+ *
+ * ⚠ IDS ONLY, NEVER PATHS. `knowledge_folders`/`knowledge_entries` carry no path
+ * column — a path is derived by walking `parent_id` — so a path on the wire is a
+ * name a rename silently falsifies. `types.ts › TemplateKnowledgeScope` carries
+ * the argument.
+ */
+/**
+ * ⚠ **STRICT, AND THAT IS THE OTHER HALF OF THE FENCE.** zod strips unknown keys
+ * by default, so `{scope:"base", folderId}` would parse as a plain base scope and
+ * the caller would be told nothing — they asked for a folder and got the whole
+ * base, silently, which is the widest possible failure of a feature whose point
+ * is narrowing. `z.strictObject` turns that misunderstanding into a 400.
+ */
+export const TemplateKnowledgeScopeSchema = z.discriminatedUnion("scope", [
+  z.strictObject({ baseId: z.string().uuid(), scope: z.literal("base") }),
+  z.strictObject({
+    baseId: z.string().uuid(),
+    scope: z.literal("folder"),
+    folderId: z.string().uuid(),
+  }),
+  z.strictObject({
+    baseId: z.string().uuid(),
+    scope: z.literal("entry"),
+    entryId: z.string().uuid(),
+  }),
+]);
+
+/**
+ * ⚠ 200, NOT 50. The base cap counts BASES and a workspace has few; this counts
+ * SCOPES and one base can contribute many folders. It is a DoS floor, not a
+ * product opinion — the row cost is one junction row per scope, the same row the
+ * base cap already priced.
+ */
+export const MAX_KNOWLEDGE_SCOPES = 200;
+const KnowledgeScopesSchema = z
+  .array(TemplateKnowledgeScopeSchema)
+  .max(MAX_KNOWLEDGE_SCOPES, `At most ${MAX_KNOWLEDGE_SCOPES} knowledge scopes`);
+
+/**
+ * ⚠ **THE TWO KNOWLEDGE FIELDS ARE MUTUALLY EXCLUSIVE IN ONE REQUEST, REFUSED
+ * RATHER THAN MERGED.** Both are REPLACE-SETs over the same junction, so a body
+ * carrying both is a caller asking for two different final states and there is
+ * no honest reading of it — merging would silently pick one, and applying them
+ * in order would make the answer depend on key order in a JSON object.
+ */
+const KNOWLEDGE_EXCLUSIVE_MESSAGE = {
+  message:
+    "Send knowledgeBaseIds or knowledge, not both — they are two REPLACE-SETs over one attachment set",
+} as const;
+
+const knowledgeFieldsExclusive = (patch: {
+  knowledgeBaseIds?: unknown;
+  knowledge?: unknown;
+}) => patch.knowledgeBaseIds === undefined || patch.knowledge === undefined;
 
 // ─── Create / update ────────────────────────────────────────────────────
 
@@ -174,6 +246,9 @@ export const AgentTemplateCreateSchema = z
     visibility: TemplateVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
+    /** Scoped attachments — base, folder or entry. ⚠ Not alongside
+     *  `knowledgeBaseIds`: see `knowledgeFieldsExclusive`. */
+    knowledge: KnowledgeScopesSchema.optional(),
     /**
      * Put the new template on the PERSONAL SHELF (`types.ts › TemplateShelf`)
      * instead of the workspace Agents page. ⚠ A REQUEST, NOT A DECISION, AND IT
@@ -195,7 +270,8 @@ export const AgentTemplateCreateSchema = z
      */
     acknowledgeShared: z.boolean().optional(),
   })
-  .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
+  .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE)
+  .refine(knowledgeFieldsExclusive, KNOWLEDGE_EXCLUSIVE_MESSAGE);
 export type AgentTemplateCreateInput = z.infer<typeof AgentTemplateCreateSchema>;
 
 /**
@@ -220,6 +296,7 @@ const MUTABLE_UPDATE_KEYS = [
   "visibility",
   "teamIds",
   "knowledgeBaseIds",
+  "knowledge",
 ] as const;
 
 export const AgentTemplateUpdateSchema = z
@@ -232,6 +309,9 @@ export const AgentTemplateUpdateSchema = z
     visibility: TemplateVisibilitySchema.optional(),
     teamIds: TeamIdsSchema.optional(),
     knowledgeBaseIds: KnowledgeBaseIdsSchema.optional(),
+    /** Scoped attachments — base, folder or entry. REPLACE-SET like its
+     *  sibling, and refused alongside it (`knowledgeFieldsExclusive`). */
+    knowledge: KnowledgeScopesSchema.optional(),
     /**
      * 🔒 "I know this publishes into a room somebody else is standing in."
      *
@@ -252,5 +332,6 @@ export const AgentTemplateUpdateSchema = z
     (patch) => MUTABLE_UPDATE_KEYS.some((key) => patch[key] !== undefined),
     { message: "Patch must change at least one field" }
   )
-  .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE);
+  .refine(teamIdsMatchVisibility, TEAM_IDS_MESSAGE)
+  .refine(knowledgeFieldsExclusive, KNOWLEDGE_EXCLUSIVE_MESSAGE);
 export type AgentTemplateUpdateInput = z.infer<typeof AgentTemplateUpdateSchema>;

@@ -36,6 +36,7 @@ const RESOLVED = {
   model: null,
   fields: [{ key: "repo", value: "acme/api" }],
   knowledgeBases: [{ id: "kb-1", name: "Handbook" }],
+  knowledge: [{ baseId: "kb-1", baseName: "Handbook", scope: "base", path: "Handbook" }],
   authoredByCaller: true,
 };
 
@@ -220,12 +221,11 @@ test("the payload is NARROWED to a literal whitelist — a new server field is D
   const m = boot({ body: { ...RESOLVED, createdBy: "user-9", id: TPL, visibility: "team" } });
   await m.launchFromButton(payload({ templateId: TPL }));
   const t = m.launches[0].context.template;
-  // ⚠ SEVEN SINCE 2026-09-05 — `unreachableKnowledgeBaseCount` is on the launch contract now
-  // and `narrow()` whitelists it deliberately (template-resolve.js). The pin MOVED to the new
-  // truth; the property under test is unchanged, because the list is still CLOSED and the drop
-  // of `createdBy`, `id` and `visibility` from this very body is what the case asserts.
+  // ⚠ SEVEN SINCE 2026-09-05 (`unreachableKnowledgeBaseCount`), EIGHT SINCE 2026-09-08
+  // (`knowledge` — `launch-template-scopes.test.mjs` owns that narrowing). The pin moved both
+  // times; the list is still CLOSED, and the drop of `createdBy`/`id`/`visibility` IS the case.
   assert.deepEqual(Object.keys(t).sort(), [
-    "authoredByCaller", "fields", "instructions", "knowledgeBases", "model", "name",
+    "authoredByCaller", "fields", "instructions", "knowledge", "knowledgeBases", "model", "name",
     "unreachableKnowledgeBaseCount",
   ]);
   // ⚠ OWNERSHIP INFORMATION MUST NOT RIDE A LAUNCH PAYLOAD. `authoredByCaller` is a COMPUTED

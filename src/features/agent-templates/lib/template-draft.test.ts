@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { AgentTemplate } from "../client/types";
+import type { AgentTemplate, TemplateKnowledgeRef } from "../client/types";
 import {
   cleanFields,
   draftFromTemplate,
@@ -20,6 +20,44 @@ import {
   isEmptyPatch,
   optimisticTemplate,
 } from "./template-draft";
+
+/** ⚠ THE THREE SHAPES, minted the way the picker mints them — a ref carries its
+ *  own label, which is what removed `optimisticTemplate`'s name lookup. */
+function ref(baseId: string, baseName: string): TemplateKnowledgeRef {
+  return { baseId, baseName, scope: "base", path: baseName };
+}
+function folderRef(
+  baseId: string,
+  baseName: string,
+  folderId: string,
+  folderName: string
+): TemplateKnowledgeRef {
+  return {
+    baseId,
+    baseName,
+    scope: "folder",
+    folderId,
+    folderName,
+    path: `${baseName} / ${folderName}`,
+    toolPath: folderName,
+  };
+}
+function entryRef(
+  baseId: string,
+  baseName: string,
+  entryId: string,
+  entryTitle: string
+): TemplateKnowledgeRef {
+  return {
+    baseId,
+    baseName,
+    scope: "entry",
+    entryId,
+    entryTitle,
+    path: `${baseName} / ${entryTitle}`,
+    toolPath: entryTitle,
+  };
+}
 
 function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
   return {
@@ -33,6 +71,7 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
     visibility: "private",
     teamIds: [],
     knowledgeBases: [{ id: "kb-1", name: "Runbooks" }],
+    knowledge: [ref("kb-1", "Runbooks")],
     createdBy: "user-1",
     createdAt: "2026-08-01T00:00:00Z",
     updatedAt: "2026-08-01T00:00:00Z",
@@ -58,7 +97,14 @@ describe("draftToCreateBody", () => {
       instructions: "Search first.",
       model: "claude-sonnet-5",
       fields: [{ key: "repo", value: "dopl" }],
-      knowledgeBaseIds: ["kb-1", "kb-2"],
+      // ⚠ ONE OF EACH SHAPE. The body must carry `knowledge` and NEVER
+      // `knowledgeBaseIds` — the schema refuses both keys in one request, and a
+      // folder scope cannot be spelled in the older one at all.
+      knowledge: [
+        ref("kb-1", "Runbooks"),
+        folderRef("kb-1", "Runbooks", "f-1", "Deploys"),
+        entryRef("kb-2", "Specs", "e-1", "Rollback"),
+      ],
     });
     expect(body).toEqual({
       name: "Scout",
@@ -67,8 +113,13 @@ describe("draftToCreateBody", () => {
       instructions: "Search first.",
       model: "claude-sonnet-5",
       fields: [{ key: "repo", value: "dopl" }],
-      knowledgeBaseIds: ["kb-1", "kb-2"],
+      knowledge: [
+        { baseId: "kb-1", scope: "base" },
+        { baseId: "kb-1", scope: "folder", folderId: "f-1" },
+        { baseId: "kb-2", scope: "entry", entryId: "e-1" },
+      ],
     });
+    expect(body).not.toHaveProperty("knowledgeBaseIds");
   });
 
   it("sends teamIds ONLY on the team scope", () => {
@@ -150,6 +201,7 @@ describe("draftToPatchBody", () => {
         { id: "kb-1", name: "Runbooks" },
         { id: "kb-2", name: "Specs" },
       ],
+      knowledge: [ref("kb-1", "Runbooks"), ref("kb-2", "Specs")],
       fields: [
         { key: "a", value: "1" },
         { key: "b", value: "2" },
@@ -158,7 +210,7 @@ describe("draftToPatchBody", () => {
     const before = draftFromTemplate(row);
     // Reordered attachments are the same attachments.
     expect(
-      draftToPatchBody({ ...before, knowledgeBaseIds: ["kb-2", "kb-1"] }, row)
+      draftToPatchBody({ ...before, knowledge: [...before.knowledge].reverse() }, row)
     ).toEqual({});
     // Reordered rows are an edit — the operator arranged them.
     expect(
@@ -185,26 +237,45 @@ describe("isDraftSavable", () => {
 });
 
 describe("optimisticTemplate", () => {
-  const names: Record<string, string> = { "kb-7": "Playbooks" };
-  const lookup = (id: string) => names[id];
-
   it("names a freshly attached base from the PICKER, not from the round trip", () => {
-    // The wire sends ids and answers with `{id, name}` pairs; without the
-    // picker's own label the chip would render blank for one frame, which reads
-    // as "detached".
-    const row = template({ knowledgeBases: [] });
-    const draft = { ...draftFromTemplate(row), knowledgeBaseIds: ["kb-7"] };
-    expect(optimisticTemplate(row, draft, lookup).knowledgeBases).toEqual([
+    // The wire sends ids and answers with names and paths; without the picker's
+    // own label the chip would render blank for one frame, which reads as
+    // "detached". ⚠ The draft holds REFS since 2026-09-08, so the label rides
+    // with the pick and the `id → name` lookup this case used to take is gone.
+    const row = template({ knowledgeBases: [], knowledge: [] });
+    const draft = { ...draftFromTemplate(row), knowledge: [ref("kb-7", "Playbooks")] };
+    expect(optimisticTemplate(row, draft).knowledgeBases).toEqual([
       { id: "kb-7", name: "Playbooks" },
     ]);
   });
 
-  it("falls back to the id rather than to an empty chip", () => {
-    const row = template({ knowledgeBases: [] });
-    const draft = { ...draftFromTemplate(row), knowledgeBaseIds: ["kb-unknown"] };
-    expect(optimisticTemplate(row, draft, lookup).knowledgeBases).toEqual([
-      { id: "kb-unknown", name: "kb-unknown" },
-    ]);
+  it("keeps a folder scope out of the BASE-LEVEL slice", () => {
+    // 🔒 Listing the base because one folder of it is attached would be a WIDER
+    // claim than the row makes — an older reader would be told the whole base
+    // is attached. The scope is in `knowledge`; the slice stays empty.
+    const row = template({ knowledgeBases: [], knowledge: [] });
+    const draft = {
+      ...draftFromTemplate(row),
+      knowledge: [folderRef("kb-7", "Playbooks", "f-2", "Runbooks")],
+    };
+    const next = optimisticTemplate(row, draft);
+    expect(next.knowledgeBases).toEqual([]);
+    expect(next.knowledge).toHaveLength(1);
+    expect(next.knowledge?.[0]?.folderId).toBe("f-2");
+  });
+
+  /**
+   * 🔒 §8 STALE CACHE — the fixture WITHOUT the key. A row cached by the bundle
+   * before scopes shipped has no `knowledge`, and `draftFromTemplate` mapping
+   * over `undefined` would throw and blank the editor. `EMPTY_KNOWLEDGE` is the
+   * honest reading of "not sent".
+   */
+  it("survives a row cached before `knowledge` existed", () => {
+    const row = template({ knowledgeBases: [{ id: "kb-1", name: "Runbooks" }] });
+    delete (row as { knowledge?: unknown }).knowledge;
+    const draft = draftFromTemplate(row);
+    expect(draft.knowledge).toEqual([]);
+    expect(optimisticTemplate(row, draft).knowledgeBases).toEqual([]);
   });
 
   it("empties an emptied optional to null, and drops the teams off a non-team scope", () => {
@@ -215,7 +286,7 @@ describe("optimisticTemplate", () => {
       visibility: "private" as const,
       teamIds: [],
     };
-    const next = optimisticTemplate(row, draft, lookup);
+    const next = optimisticTemplate(row, draft);
     expect(next.description).toBeNull();
     expect(next.teamIds).toEqual([]);
     expect(next.visibility).toBe("private");

@@ -13,6 +13,7 @@ import {
   AgentTemplateUpdateSchema,
   MAX_FIELDS_BYTES,
   TemplateFieldsSchema,
+  MAX_KNOWLEDGE_SCOPES,
 } from "./schema";
 
 function fieldsOf(count: number, valueLen: number) {
@@ -192,5 +193,119 @@ describe("update patch", () => {
     expect(AgentTemplateUpdateSchema.parse({ name: "R" })).not.toHaveProperty(
       "instructions"
     );
+  });
+});
+
+/**
+ * THE SCOPED ATTACHMENT SET (2026-09-08, Samuel: *"I want to be able to specific
+ * folders or entries/files"*).
+ *
+ * ⚠ **THE UNION IS THE FENCE, AND THAT IS WHAT THESE PIN.** `{baseId, folderId?,
+ * entryId?}` would make `{scope:"folder"}` with no `folderId` a parseable shape
+ * the service would have to re-refuse — the DB's own
+ * `agent_template_kb_scope_shape_check` restated badly one layer up. Here an
+ * impossible combination cannot be typed, and the cases below are what says so.
+ */
+describe("knowledge scopes", () => {
+  const BASE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const FOLDER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const ENTRY = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  it("accepts all three shapes", () => {
+    expect(
+      AgentTemplateCreateSchema.safeParse({
+        name: "R",
+        knowledge: [
+          { baseId: BASE, scope: "base" },
+          { baseId: BASE, scope: "folder", folderId: FOLDER },
+          { baseId: BASE, scope: "entry", entryId: ENTRY },
+        ],
+      }).success
+    ).toBe(true);
+  });
+
+  it("refuses a folder scope with no folder, and an entry scope with no entry", () => {
+    // ⚠ The whole reason it is a discriminated union: the shape that names a
+    // kind must carry the id that kind addresses, or it addresses nothing.
+    expect(
+      AgentTemplateCreateSchema.safeParse({
+        name: "R",
+        knowledge: [{ baseId: BASE, scope: "folder" }],
+      }).success
+    ).toBe(false);
+    expect(
+      AgentTemplateCreateSchema.safeParse({
+        name: "R",
+        knowledge: [{ baseId: BASE, scope: "entry" }],
+      }).success
+    ).toBe(false);
+  });
+
+  it("refuses an unknown scope kind, and a folder id on a base scope", () => {
+    expect(
+      AgentTemplateCreateSchema.safeParse({
+        name: "R",
+        knowledge: [{ baseId: BASE, scope: "subtree", folderId: FOLDER }],
+      }).success
+    ).toBe(false);
+    // ⚠ A base scope carrying a folder id is a caller who thinks the pair is
+    // additive. It is not: the DB's shape CHECK refuses the row outright.
+    expect(
+      AgentTemplateCreateSchema.safeParse({
+        name: "R",
+        knowledge: [{ baseId: BASE, scope: "base", folderId: FOLDER }],
+      }).success
+    ).toBe(false);
+  });
+
+  /**
+   * 🔒 **BOTH KEYS IN ONE REQUEST IS A 400, NOT A MERGE.** They are two
+   * REPLACE-SETs over the same junction, so a body carrying both asks for two
+   * different final states — merging would silently pick one, and applying them
+   * in order would make the answer depend on key order in a JSON object.
+   */
+  it("refuses knowledgeBaseIds AND knowledge together, on BOTH verbs", () => {
+    const both = {
+      knowledgeBaseIds: [BASE],
+      knowledge: [{ baseId: BASE, scope: "base" as const }],
+    };
+    expect(AgentTemplateCreateSchema.safeParse({ name: "R", ...both }).success).toBe(
+      false
+    );
+    // ⚠ THE UPDATE PATH TOO — a create fence with no update twin is a fence
+    // defeated in two calls (F-289's own argument).
+    expect(AgentTemplateUpdateSchema.safeParse(both).success).toBe(false);
+    // …and either one alone is fine.
+    expect(
+      AgentTemplateUpdateSchema.safeParse({ knowledgeBaseIds: [BASE] }).success
+    ).toBe(true);
+    expect(
+      AgentTemplateUpdateSchema.safeParse({ knowledge: both.knowledge }).success
+    ).toBe(true);
+  });
+
+  it("counts a `knowledge`-only patch as a real change", () => {
+    // ⚠ It is in `MUTABLE_UPDATE_KEYS`, so the "changes at least one field"
+    // refine sees it. Forgetting that would 400 every folder attach.
+    expect(AgentTemplateUpdateSchema.safeParse({ knowledge: [] }).success).toBe(true);
+  });
+
+  it("caps the set at MAX_KNOWLEDGE_SCOPES", () => {
+    const one = { baseId: BASE, scope: "base" as const };
+    expect(
+      AgentTemplateCreateSchema.safeParse({
+        name: "R",
+        knowledge: Array.from({ length: MAX_KNOWLEDGE_SCOPES + 1 }, () => one),
+      }).success
+    ).toBe(false);
+  });
+
+  it("requires UUIDs for every id, folder and entry included", () => {
+    expect(
+      AgentTemplateCreateSchema.safeParse({
+        name: "R",
+        knowledge: [{ baseId: BASE, scope: "folder", folderId: "not-a-uuid" }],
+      }).success
+    ).toBe(false);
   });
 });

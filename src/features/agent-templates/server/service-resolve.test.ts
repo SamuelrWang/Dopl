@@ -39,6 +39,8 @@ vi.mock("./repository", () => ({
   listKnowledgeLinksForTemplates: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
+  listLiveFoldersForBases: vi.fn(),
+  listLiveEntryRows: vi.fn(),
 }));
 
 // ⚠ THE CROSS-CONTAINER READ LIVES IN `shared/tenancy/`, and is mocked EMPTY so
@@ -122,6 +124,8 @@ beforeEach(() => {
   mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
   mockRepo.listKnowledgeBaseTeamGrants.mockResolvedValue([]);
+  mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
+  mockRepo.listLiveEntryRows.mockResolvedValue([]);
   mockRepo.listTeamLinksForTemplates.mockResolvedValue([]);
   mockRepo.listTeamIdsForUser.mockResolvedValue([]);
 });
@@ -187,13 +191,19 @@ describe("the payload, and the door it comes through", () => {
   // nothing else: the base's id, name and container are withheld on purpose
   // (`service-knowledge-decoration.ts`), so a key that ever arrives beside it
   // must fail here.
-  it("carries EXACTLY the seven launch keys — no id, no visibility, no ownership", async () => {
+  // ⚠ EIGHT SINCE 2026-09-08 — `knowledge`, the scoped attachment list. It rides
+  // BESIDE `knowledgeBases` rather than replacing it: an older desktop narrows
+  // this payload through an allowlist that drops keys it does not know, so a
+  // build that predates scopes would otherwise launch a role naming no knowledge
+  // at all (§13's older-peer rule, on the payload where the failure is silent).
+  it("carries EXACTLY the eight launch keys — no id, no visibility, no ownership", async () => {
     mockRepo.findTemplateById.mockResolvedValue(template());
     const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
     expect(Object.keys(resolved).sort()).toEqual([
       "authoredByCaller",
       "fields",
       "instructions",
+      "knowledge",
       "knowledgeBases",
       "model",
       "name",

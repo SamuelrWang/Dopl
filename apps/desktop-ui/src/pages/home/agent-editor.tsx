@@ -219,14 +219,6 @@ function TemplateEditorMount({
     () => (baseList.data?.bases ?? []).map((b) => ({ id: b.id, name: b.name })),
     [baseList.data]
   );
-  // ⚠ `id → name` for the optimistic patch: the wire sends ids and answers with
-  // `{id, name}` pairs, so a chip attached one keystroke ago has no name until
-  // the round trip lands unless the picker's own label is carried across.
-  const baseName = useMemo(() => {
-    const byId = new Map(knowledgeBases.map((b) => [b.id, b.name]));
-    return (id: string) => byId.get(id);
-  }, [knowledgeBases]);
-
   async function save(draft: TemplateDraft) {
     setError(null);
     // 🔒 G16 — sent ONLY when this mount named the audience AND the row is
@@ -259,7 +251,9 @@ function TemplateEditorMount({
             // acknowledgement moves no column, and counting it as a change
             // would send a PATCH that alters nothing (the F-404 class).
             body: { ...body, ...(acknowledgeShared ? { acknowledgeShared } : {}) },
-            optimistic: optimisticTemplate(template, draft, baseName),
+            // ⚠ NO NAME LOOKUP SINCE 2026-09-08: the draft holds resolved
+            // knowledge REFS, so every chip already carries its own label.
+            optimistic: optimisticTemplate(template, draft),
           });
         }
       }
@@ -283,6 +277,7 @@ function TemplateEditorMount({
   return (
     <TemplateEditor
       open
+      workspaceId={workspaceId}
       session={1}
       defaultVisibility={defaultVisibility}
       template={template}

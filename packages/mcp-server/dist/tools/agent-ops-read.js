@@ -82,15 +82,35 @@ maxChars) {
         `id: \`${template.id}\` · ${template.visibility} · model ${template.model ? (0, narration_js_1.inlineOr)(template.model, agent_shared_js_1.NO_NAME) : "(the desktop's default)"}`,
         ...(template.description ? [(0, narration_js_1.inlineOr)(template.description, "")] : []),
     ];
-    if (template.knowledgeBases.length > 0) {
-        lines.push("", "## Attached knowledge bases");
-        for (const kb of template.knowledgeBases) {
-            lines.push(`- ${(0, narration_js_1.inlineOr)(kb.name, agent_shared_js_1.NO_NAME)} (id: \`${kb.id}\`)`);
+    // ⚠ **`knowledge` WINS AND THE BASE LIST IS THE FALLBACK** (2026-09-08). A
+    // newer server sends both, the second being the base-level slice of the first,
+    // so rendering both would list every whole-base attachment twice. An older one
+    // sends only the base list, which is why the fallback is not dead code.
+    const scopes = (template.knowledge ?? []).length > 0
+        ? (template.knowledge ?? [])
+        : template.knowledgeBases.map((kb) => ({
+            baseId: kb.id,
+            baseName: kb.name,
+            scope: "base",
+            path: kb.name,
+        }));
+    if (scopes.length > 0) {
+        lines.push("", "## Attached knowledge");
+        for (const scope of scopes) {
+            // ⚠ ONE LINE PER SCOPE, WITH ITS PATH — the path is what distinguishes two
+            // folders of one base, and a list that showed only base names would render
+            // them as duplicates of each other.
+            const what = scope.scope === "folder"
+                ? " (folder, and everything under it)"
+                : scope.scope === "entry"
+                    ? " (one entry)"
+                    : "";
+            lines.push(`- ${(0, narration_js_1.inlineOr)(scope.path || scope.baseName, agent_shared_js_1.NO_NAME)}${what} (base: \`${scope.baseId}\`)`);
         }
         // ⚠ VIEWER-FILTERED, and saying so matters: the desktop resolves this list
         // again under the OPERATOR's credential at spawn, so what you see here is
         // not necessarily what a launched session gets.
-        lines.push("", `_Only the bases YOU can see are listed. At launch the operator's own machine resolves this list again under THEIR visibility, so a base you can read and they cannot is simply omitted there._`);
+        lines.push("", `_Only the knowledge YOU can see is listed. At launch the operator's own machine resolves this list again under THEIR visibility, so a base you can read and they cannot is simply omitted there._`);
     }
     if (template.fields.length > 0) {
         lines.push("", "## Custom fields");

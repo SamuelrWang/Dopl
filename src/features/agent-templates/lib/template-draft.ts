@@ -3,8 +3,14 @@ import type {
   AgentTemplateCreateBody,
   AgentTemplateUpdateBody,
   TemplateField,
+  TemplateKnowledgeRef,
   TemplateVisibility,
 } from "../client/types";
+import {
+  EMPTY_KNOWLEDGE,
+  refToScope,
+  sameScopes,
+} from "./knowledge-scopes";
 
 /**
  * THE EDITOR'S FORM STATE, and the two bodies it becomes.
@@ -39,7 +45,19 @@ export interface TemplateDraft {
    * on read and silently drop the rest on the next save.
    */
   teamIds: string[];
-  knowledgeBaseIds: string[];
+  /**
+   * THE ATTACHED SCOPES, AS RESOLVED REFS (2026-09-08) — **replacing
+   * `knowledgeBaseIds`, which this draft no longer has.**
+   *
+   * ⚠ **REFS AND NOT SCOPES, because a chip needs a LABEL.** The wire carries
+   * ids (`refToScope` is the conversion, applied at the two body builders); the
+   * draft carries the name and the path beside them so the editor can render
+   * `Base / Folder / Entry` without a second read. The picker composes the path
+   * from the tree it already loaded for that base; the server's own `path` wins
+   * on the next read, exactly as the base NAME already did.
+   * ⚠ IT IS A SET, ORDER-INSENSITIVE — see `sameScopes`.
+   */
+  knowledge: TemplateKnowledgeRef[];
 }
 
 export function emptyDraft(): TemplateDraft {
@@ -51,7 +69,7 @@ export function emptyDraft(): TemplateDraft {
     fields: [],
     visibility: "private",
     teamIds: [],
-    knowledgeBaseIds: [],
+    knowledge: [],
   };
 }
 
@@ -64,7 +82,11 @@ export function draftFromTemplate(template: AgentTemplate): TemplateDraft {
     fields: template.fields.map((f) => ({ key: f.key, value: f.value })),
     visibility: template.visibility,
     teamIds: [...template.teamIds],
-    knowledgeBaseIds: template.knowledgeBases.map((kb) => kb.id),
+    // 🔒 §8 STALE-CACHE FALLBACK, SPELLED INLINE. A row cached by the bundle
+    // before scopes shipped has no `knowledge` key at all, and mapping over
+    // `undefined` throws and blanks the editor — the exact failure §8 was
+    // written for. `EMPTY_KNOWLEDGE` is the honest reading of "not sent".
+    knowledge: [...(template.knowledge ?? EMPTY_KNOWLEDGE)],
   };
 }
 
@@ -140,8 +162,12 @@ export function draftToCreateBody(draft: TemplateDraft): AgentTemplateCreateBody
   if (draft.visibility === "team" && draft.teamIds.length > 0) {
     body.teamIds = [...draft.teamIds];
   }
-  if (draft.knowledgeBaseIds.length > 0) {
-    body.knowledgeBaseIds = [...draft.knowledgeBaseIds];
+  // ⚠ `knowledge`, NEVER `knowledgeBaseIds`: the schema refuses both in one
+  // request, and this client can express a folder scope that the older key
+  // cannot. The older key stays on the SCHEMA for older clients, not for this
+  // one.
+  if (draft.knowledge.length > 0) {
+    body.knowledge = draft.knowledge.map(refToScope);
   }
   return body;
 }
@@ -184,8 +210,9 @@ export function draftToPatchBody(
     patch.teamIds = [...draft.teamIds];
   }
 
-  if (!sameIds(draft.knowledgeBaseIds, before.knowledgeBaseIds)) {
-    patch.knowledgeBaseIds = [...draft.knowledgeBaseIds];
+  const scopes = draft.knowledge.map(refToScope);
+  if (!sameScopes(scopes, before.knowledge.map(refToScope))) {
+    patch.knowledge = scopes;
   }
   return patch;
 }
@@ -217,14 +244,18 @@ function sameIds(a: ReadonlyArray<string>, b: ReadonlyArray<string>): boolean {
  * The optimistic row a PATCH produces, so the card behind the modal updates on
  * the click rather than on the round trip.
  *
- * ⚠ KNOWLEDGE BASES ARE PATCHED FROM THE PICKER'S OWN LABELS, which is why this
- * takes a name lookup: the wire sends ids and answers with `{id, name}` pairs,
- * and a chip that went blank for one frame would read as "detached".
+ * ⚠ KNOWLEDGE IS PATCHED FROM THE PICKER'S OWN LABELS, which is why the draft
+ * carries REFS: the wire sends ids and answers with names and paths, and a chip
+ * that went blank for one frame would read as "detached".
+ * ⚠ **THE `knowledgeBaseName` LOOKUP PARAMETER LEFT ON 2026-09-08** and both
+ * call sites dropped the `useMemo` that built it. It existed because the draft
+ * held BARE IDS and the name had to be recovered from the picker's options; a
+ * ref carries its own name, so the lookup was a third place a label could
+ * disagree with the two that already had it.
  */
 export function optimisticTemplate(
   original: AgentTemplate,
-  draft: TemplateDraft,
-  knowledgeBaseName: (id: string) => string | undefined
+  draft: TemplateDraft
 ): AgentTemplate {
   return {
     ...original,
@@ -235,12 +266,12 @@ export function optimisticTemplate(
     fields: cleanFields(draft.fields),
     visibility: draft.visibility,
     teamIds: draft.visibility === "team" ? [...draft.teamIds] : [],
-    knowledgeBases: draft.knowledgeBaseIds.map((id) => ({
-      id,
-      name:
-        knowledgeBaseName(id) ??
-        original.knowledgeBases.find((kb) => kb.id === id)?.name ??
-        id,
-    })),
+    knowledge: [...draft.knowledge],
+    // ⚠ THE BASE-LEVEL SLICE, derived from the same list the server derives it
+    // from — a folder scope contributes nothing here, because listing its base
+    // would claim the whole base is attached.
+    knowledgeBases: draft.knowledge
+      .filter((ref) => ref.scope === "base")
+      .map((ref) => ({ id: ref.baseId, name: ref.baseName })),
   };
 }

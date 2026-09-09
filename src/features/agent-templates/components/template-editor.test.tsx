@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 /**
- * THE EDITOR — the fields, the body they become, and the surface rule.
+ * THE EDITOR — the fields, the controls, and the dialogs over the dialog.
+ *
+ * ⚠ **THE PAYLOAD HALF MOVED TO `template-editor-payload.test.tsx` ON
+ * 2026-09-08**, at the 500-line cap, when the knowledge picker's tree mock
+ * landed here. The third such cut on this file: the SOURCE READ went to
+ * `template-editor-surface.test.tsx` and the attachment count to
+ * `template-editor-knowledge.test.tsx`, both for the same reason.
  *
  * ⚠ THE LAST DESCRIBE IS A SOURCE READ, NOT A RENDER. Samuel's ruling for this
  * page (2026-08-22) is that **nothing on it is pressed in** — no `FIELD_WELL`,
@@ -15,11 +21,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { AgentTemplate } from "../client/types";
-import {
-  draftToCreateBody,
-  draftToPatchBody,
-  type TemplateDraft,
-} from "../lib/template-draft";
+import { draftToCreateBody, type TemplateDraft } from "../lib/template-draft";
 import { SECTIONS_CONTAINER } from "../lib/visibility";
 import { TemplateEditor } from "./template-editor";
 
@@ -31,6 +33,12 @@ const BASES = [
   { id: "kb-1", name: "Runbooks" },
   { id: "kb-2", name: "Specs" },
 ];
+
+/** ⚠ THE PICKER READS A TREE PER BASE. Shape in `./knowledge-tree-mock`; the
+ *  factory imports it because `vi.mock` is hoisted above every binding. */
+vi.mock("@/features/knowledge/client/hooks", async () => ({
+  useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
+}));
 
 function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
   return {
@@ -44,6 +52,9 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
     visibility: "private",
     teamIds: [],
     knowledgeBases: [{ id: "kb-1", name: "Runbooks" }],
+    knowledge: [
+      { baseId: "kb-1", baseName: "Runbooks", scope: "base", path: "Runbooks" },
+    ],
     createdBy: "user-1",
     createdAt: "2026-08-01T00:00:00Z",
     updatedAt: "2026-08-01T00:00:00Z",
@@ -63,6 +74,7 @@ async function open(over: Partial<React.ComponentProps<typeof TemplateEditor>> =
   render(
     <TemplateEditor
       open
+      workspaceId="ws-1"
       session={1}
       template={null}
       teams={TEAMS}
@@ -109,11 +121,6 @@ const CREATE_VERB = "Create";
 const row = (name: string) =>
   within(screen.getByRole("tablist", { name }));
 
-/** Pick a MODEL by its full label. */
-function pickModel(label: string) {
-  fireEvent.click(row("Model").getByRole("tab", { name: label }));
-}
-
 /** Pick a VISIBILITY scope by the label `lib/visibility.ts` gives it. */
 function pickScope(label: string) {
   fireEvent.click(row("Visibility").getByRole("tab", { name: label }));
@@ -136,7 +143,9 @@ describe("what the editor renders", () => {
     expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
     expect(row("Model").getByRole("tab", { name: "Default" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add field" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Attach" })).toBeTruthy();
+    // ⚠ "Add", not "Attach": the picker is a TREE now and what it adds is a
+    // scope — a base, a folder, or one entry.
+    expect(screen.getByRole("button", { name: "Add knowledge" })).toBeTruthy();
   });
 
   it("loads an existing template's values, chips included", async () => {
@@ -250,7 +259,9 @@ describe("the popup-form kit's anatomy", () => {
       "Model",
       "Visibility",
       "Fields",
-      "Knowledge bases",
+      // ⚠ **"Knowledge" SINCE 2026-09-08** (Samuel: *"rename knowledge bases
+      // to knowledge"*) — no longer only a base.
+      "Knowledge",
     ].map((t) => screen.getByText(t));
     // The weight lives in `form-dialog.module.css › .label`, never per caller.
     for (const el of labels) expect(el.className).not.toMatch(/font-(semibold|medium|normal)/);
@@ -385,8 +396,8 @@ describe("the save payload", () => {
       target: { value: "Search first." },
     });
     await addField("repo", "dopl");
-    fireEvent.click(screen.getByRole("button", { name: "Attach" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Specs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
+    fireEvent.click(screen.getByRole("treeitem", { name: "Specs" }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
     const draft = onSave.mock.calls[0][0] as TemplateDraft;
@@ -395,7 +406,9 @@ describe("the save payload", () => {
       visibility: "private",
       instructions: "Search first.",
       fields: [{ key: "repo", value: "dopl" }],
-      knowledgeBaseIds: ["kb-2"],
+      // ⚠ `knowledge`, NEVER `knowledgeBaseIds`: the schema refuses both keys in
+      // one request, and this client can spell a folder scope the older cannot.
+      knowledge: [{ baseId: "kb-2", scope: "base" }],
     });
   });
 
@@ -436,63 +449,5 @@ describe("delete is behind the confirm, and the copy says HARD", () => {
     expect(document.body.textContent).toContain("permanently deletes");
     fireEvent.click(confirm);
     expect(onDelete).toHaveBeenCalledTimes(1);
-  });
-});
-
-/**
- * 🔒 **THE PAYLOAD IS THE PRE-KIT EDITOR'S, FIELD FOR FIELD** (2026-09-08, the
- * popup-form conversion). Written and green BEFORE the markup moved onto
- * `shared/ui/form-dialog.tsx`, so the literals below are a snapshot of what the
- * `StandardDialog`/`RAISED_INPUT` editor sent — not a restatement of what the
- * new one happens to send. The two helpers above ({@link pickModel},
- * {@link pickScope}) are the ONLY things the conversion was allowed to touch:
- * a face change that reaches `draftToCreateBody` / `draftToPatchBody` fails
- * here, which is the whole point of pinning it first.
- */
-describe("the payload survives the face", () => {
-  it("CREATE — every control the editor has, in ONE body", async () => {
-    const { onSave } = await open();
-    fireEvent.change(field("#agent-template-name"), { target: { value: "  Scout  " } });
-    fireEvent.change(field("#agent-template-description"), {
-      target: { value: "  Finds things  " },
-    });
-    fireEvent.change(field("#agent-template-instructions"), {
-      target: { value: "  Search first.  " },
-    });
-    pickModel("Opus 5");
-    pickScope("Public");
-    await addField("repo", "dopl");
-    fireEvent.click(screen.getByRole("button", { name: "Attach" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Specs" }));
-    fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
-
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
-    expect(draftToCreateBody(draft)).toEqual({
-      name: "Scout",
-      visibility: "workspace",
-      description: "Finds things",
-      instructions: "Search first.",
-      model: "claude-opus-5",
-      fields: [{ key: "repo", value: "dopl" }],
-      knowledgeBaseIds: ["kb-2"],
-    });
-  });
-
-  it("EDIT — the PATCH is the CHANGED keys and nothing else", async () => {
-    const row = template();
-    const { onSave } = await open({ template: row });
-    fireEvent.change(field("#agent-template-name"), { target: { value: "Release captain v2" } });
-    fireEvent.change(field("#agent-template-description"), { target: { value: "" } });
-    pickModel("Haiku 4.5");
-    fireEvent.click(screen.getByRole("button", { name: "Detach Runbooks" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    const draft = onSave.mock.calls[0][0] as TemplateDraft;
-    expect(draftToPatchBody(draft, row)).toEqual({
-      name: "Release captain v2",
-      description: null,
-      model: "claude-haiku-4-5-20251001",
-      knowledgeBaseIds: [],
-    });
   });
 });

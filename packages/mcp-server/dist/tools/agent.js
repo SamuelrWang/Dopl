@@ -59,6 +59,29 @@ const MAX_FIELD_KEY_CHARS = 80;
 const MAX_FIELD_VALUE_CHARS = 1000;
 /** Same bound the server's `KnowledgeBaseIdsSchema` carries. */
 const MAX_KNOWLEDGE_BASE_IDS = 50;
+/** ⚠ 200, the server's own `MAX_KNOWLEDGE_SCOPES`. It counts SCOPES, not bases,
+ *  and one base can contribute many folders. */
+const MAX_KNOWLEDGE_SCOPES = 200;
+/**
+ * ONE SCOPED ATTACHMENT, as an AGENT types it.
+ *
+ * ⚠ **THREE OPTIONAL IDS RATHER THAN THE SERVER'S DISCRIMINATED UNION, AND THE
+ * TRANSLATION IS `agent-ops-write.ts › toKnowledgeScopes`.** `z.toJSONSchema` on
+ * a discriminated union renders an `anyOf` of three object shapes, and a tool
+ * argument a model has to pick a branch of is a branch it picks wrong. Here the
+ * shape is one object and the RULE is one sentence: name a folder, or an entry,
+ * or neither. `at most one` is refused rather than merged, mirroring the server's
+ * own `knowledgeFieldsExclusive`.
+ */
+const KNOWLEDGE_SCOPE_SHAPE = zod_1.z
+    .object({
+    base: zod_1.z.string().uuid(),
+    folder: zod_1.z.string().uuid().optional(),
+    entry: zod_1.z.string().uuid().optional(),
+})
+    .refine((s) => s.folder === undefined || s.entry === undefined, {
+    message: "Name a folder OR an entry, not both",
+});
 /** One custom field. ⚠ BOTH halves are short LABELS — they are spliced into the
  *  launch payload an agent reads back, line by line, so the server's own schema
  *  charset-bounds them and rejects a newline in either. */
@@ -127,7 +150,12 @@ const AGENT_INPUT_SHAPE = {
         .array(zod_1.z.string().uuid())
         .max(MAX_KNOWLEDGE_BASE_IDS)
         .optional()
-        .describe("op=create / op=update: knowledge base IDs to attach as REFERENCES, never copies — a REPLACE-SET, and every id must be one you can read."),
+        .describe("op=create / op=update: WHOLE knowledge bases to attach as REFERENCES, never copies — a REPLACE-SET, and every id must be one you can read. Narrower than a base? use `knowledge`; both together is refused."),
+    knowledge: zod_1.z
+        .array(KNOWLEDGE_SCOPE_SHAPE)
+        .max(MAX_KNOWLEDGE_SCOPES)
+        .optional()
+        .describe('op=create / op=update: scoped attachments, a REPLACE-SET — {base} whole base, {base, folder} that folder and all under it now and later, {base, entry} one document. Ids from dopl_kb(op="get_tree"); the folder/entry must live in that base.'),
     confirm_token: zod_1.z
         .string()
         .optional()
@@ -281,6 +309,7 @@ directory) {
                     fields: args.fields,
                     visibility: args.visibility,
                     knowledge_bases: args.knowledge_bases,
+                    knowledge: args.knowledge,
                     confirm_token: args.confirm_token,
                 });
             }
@@ -302,6 +331,7 @@ directory) {
                     fields: args.fields,
                     visibility: args.visibility,
                     knowledge_bases: args.knowledge_bases,
+                    knowledge: args.knowledge,
                     confirm_token: args.confirm_token,
                 });
             }

@@ -149,8 +149,76 @@ describe("op=get", () => {
         ME,
       ),
     );
-    expect(text).toContain("Only the bases YOU can see are listed");
+    expect(text).toContain("Only the knowledge YOU can see is listed");
     expect(text).toContain("resolves this list again under THEIR visibility");
+  });
+
+  /**
+   * ⚠ **ONE LINE PER SCOPE, WITH ITS PATH** (2026-09-08). The path is what
+   * distinguishes two folders of one base; a list that showed only base names
+   * would render them as duplicates of each other.
+   */
+  it("lists each attached scope on its own line, saying which kind it is", async () => {
+    const text = textOf(
+      await opGet(
+        stub({
+          listAgentTemplates: vi.fn(async () => [
+            template({
+              knowledgeBases: [{ id: "kb-1", name: "Notes" }],
+              knowledge: [
+                { baseId: "kb-1", baseName: "Notes", scope: "base", path: "Notes" },
+                {
+                  baseId: "kb-1",
+                  baseName: "Notes",
+                  scope: "folder",
+                  folderId: "f-1",
+                  path: "Notes / Deploys",
+                  toolPath: "Deploys",
+                },
+                {
+                  baseId: "kb-1",
+                  baseName: "Notes",
+                  scope: "entry",
+                  entryId: "e-1",
+                  path: "Notes / Deploys / Rollback",
+                  toolPath: "Deploys/Rollback",
+                },
+              ],
+            }),
+          ]),
+        }) as DoplClient,
+        "Researcher",
+        ME,
+      ),
+    );
+    expect(text).toContain("## Attached knowledge");
+    expect(text).toContain("- `Notes` (base: `kb-1`)");
+    expect(text).toContain(
+      "- `Notes / Deploys` (folder, and everything under it) (base: `kb-1`)",
+    );
+    expect(text).toContain("- `Notes / Deploys / Rollback` (one entry) (base: `kb-1`)");
+    // 🔒 `knowledge` WINS and the base list is the FALLBACK: a newer server sends
+    // both, the second being the base-level slice of the first, so rendering both
+    // would list every whole-base attachment twice.
+    expect(
+      text.split("\n").filter((l) => l === "- `Notes` (base: `kb-1`)"),
+    ).toHaveLength(1);
+  });
+
+  it("falls back to the base list when the server sent no scopes", async () => {
+    // ⚠ NOT DEAD CODE — §13's older-peer rule, from the reading side.
+    const text = textOf(
+      await opGet(
+        stub({
+          listAgentTemplates: vi.fn(async () => [
+            template({ knowledgeBases: [{ id: "kb-1", name: "Notes" }] }),
+          ]),
+        }) as DoplClient,
+        "Researcher",
+        ME,
+      ),
+    );
+    expect(text).toContain("- `Notes` (base: `kb-1`)");
   });
 });
 
@@ -326,5 +394,86 @@ describe("the three-answer resolve rule", () => {
     );
     expect(res.isError).toBe(true);
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * SCOPED ATTACHMENTS ON THE MCP SURFACE (2026-09-08, Samuel: *"I want to be able
+ * to specific folders or entries/files"*).
+ *
+ * ⚠ **THE AGENT-FACING SHAPE IS `{base, folder?, entry?}` AND THE WIRE'S IS A
+ * DISCRIMINATED UNION**, translated at one seam
+ * (`agent-ops-write.ts › toKnowledgeScopes`). `z.toJSONSchema` on a union
+ * renders an `anyOf` of three object shapes, and a tool argument a model has to
+ * pick a branch of is a branch it picks wrong; here the shape is one object and
+ * the rule is one sentence.
+ */
+describe("knowledge scopes", () => {
+  const BASE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const FOLDER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const ENTRY = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  it("op=create translates all three shapes onto the wire's union", async () => {
+    __resetConfirmTokensForTest();
+    const create = vi.fn(async () => template());
+    await opCreate(
+      stub({ ...standardWorkspace(), createAgentTemplate: create }) as DoplClient,
+      ME,
+      {
+        name: "Researcher",
+        knowledge: [
+          { base: BASE },
+          { base: BASE, folder: FOLDER },
+          { base: BASE, entry: ENTRY },
+        ],
+      },
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        knowledge: [
+          { baseId: BASE, scope: "base" },
+          { baseId: BASE, scope: "folder", folderId: FOLDER },
+          { baseId: BASE, scope: "entry", entryId: ENTRY },
+        ],
+      }),
+    );
+  });
+
+  it("op=update carries them, and a `knowledge`-only patch is a real change", async () => {
+    __resetConfirmTokensForTest();
+    const update = vi.fn(async () => template());
+    const text = textOf(
+      await opUpdate(
+        stub({
+          ...standardWorkspace(),
+          listAgentTemplates: vi.fn(async () => [template()]),
+          updateAgentTemplate: update,
+        }) as DoplClient,
+        ME,
+        "Researcher",
+        { knowledge: [{ base: BASE, folder: FOLDER }] },
+      ),
+    );
+    expect(update).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      expect.objectContaining({
+        knowledge: [{ baseId: BASE, scope: "folder", folderId: FOLDER }],
+      }),
+    );
+    // ⚠ NOT the "changed nothing" refusal — that arm counts only fields that
+    // move a column, and this moves the junction.
+    expect(text).not.toContain("changed nothing");
+  });
+
+  it("names `knowledge` in the nothing-passed refusal, so the caller learns the key", async () => {
+    const text = textOf(
+      await opUpdate(
+        stub({ listAgentTemplates: vi.fn(async () => [template()]) }) as DoplClient,
+        ME,
+        "Researcher",
+        {},
+      ),
+    );
+    expect(text).toContain("knowledge_bases, knowledge");
   });
 });

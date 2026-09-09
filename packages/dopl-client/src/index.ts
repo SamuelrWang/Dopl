@@ -42,6 +42,9 @@ export type {
   AgentTemplateUpdateInput,
   TemplateField,
   TemplateKnowledgeBaseRef,
+  TemplateKnowledgeRef,
+  TemplateKnowledgeScope,
+  TemplateKnowledgeScopeKind,
   TemplateShelf,
   TemplateVisibility,
 } from "./agent-template-types.js";

@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 /**
- * THE EDITOR'S KNOWLEDGE HALF — the attached bases, and the ones this view
+ * THE EDITOR'S KNOWLEDGE HALF — the attached scopes, and the ones this view
  * CANNOT REACH (ruled 2026-09-06 under Samuel's delegation).
+ *
+ * ⚠ **THE COPY SAYS "attachment", NOT "base", SINCE 2026-09-08** — the count
+ * covers a dropped FOLDER and a dropped ENTRY too, and calling one of those "a
+ * base" would be a wrong sentence about what the role names.
  *
  * ⚠ **ITS OWN FILE, AND THE REASON IS THE ONE §1 STATES.**
  * `template-editor.test.tsx` sits close to the hard 500 (`wc -l` is the check;
@@ -25,6 +29,14 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { AgentTemplate } from "../client/types";
 import { TemplateEditor } from "./template-editor";
 
+/** ⚠ THE PICKER READS A TREE PER BASE. This suite is about the EDITOR, not about
+ *  the knowledge transport — a real fetch would make every case here depend on a
+ *  route it does not exercise. The shape is shared (`./knowledge-tree-mock`);
+ *  the factory cannot close over it, so it imports it (`vi.mock` is hoisted). */
+vi.mock("@/features/knowledge/client/hooks", async () => ({
+  useKnowledgeTree: (await import("./knowledge-tree-mock")).useKnowledgeTree,
+}));
+
 const BASES = [
   { id: "kb-1", name: "Runbooks" },
   { id: "kb-2", name: "Specs" },
@@ -45,6 +57,9 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
     // construction — the decoration drops them server-side and sends a count
     // instead, which is the whole contract under test.
     knowledgeBases: [{ id: "kb-1", name: "Runbooks" }],
+    knowledge: [
+      { baseId: "kb-1", baseName: "Runbooks", scope: "base", path: "Runbooks" },
+    ],
     createdBy: "user-1",
     createdAt: "2026-08-01T00:00:00Z",
     updatedAt: "2026-08-01T00:00:00Z",
@@ -57,6 +72,7 @@ async function open(tpl: AgentTemplate | null) {
   render(
     <TemplateEditor
       open
+      workspaceId="ws-1"
       session={1}
       template={tpl}
       teams={[]}
@@ -89,7 +105,7 @@ describe("attached bases this view cannot reach", () => {
   it("says how many, and never which", async () => {
     await open(template({ unreachableKnowledgeBaseCount: 2 }));
     expect(
-      screen.getByText(/2 attached bases aren't reachable from here/)
+      screen.getByText(/2 attachments aren't reachable from here/)
     ).toBeTruthy();
     // The VISIBLE attachment is still listed by name, so this is a claim about
     // the ones that are missing, not a blanket warning.

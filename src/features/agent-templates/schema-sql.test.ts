@@ -292,3 +292,111 @@ describe("the zod-only bounds, recorded as zod-only", () => {
     ).toBeGreaterThan(MAX_FIELDS_BYTES);
   });
 });
+
+/**
+ * 🔒 THE ATTACHMENT TABLE'S SHAPE — `20260930150000_agent_template_knowledge_scopes.sql`.
+ *
+ * ⚠ **READ OUT OF THE MIGRATION, NOT ASSERTED FROM MEMORY**, for the reason this
+ * file exists at all: the zod union above is what produces a readable 400, the
+ * `CHECK` is what makes the union's absence survivable, and a comment claiming
+ * the pairing is not a gate.
+ *
+ * ⚠ **MUTATION-VERIFIED (2026-09-08).** Four reverts, four reds: flipping the
+ * base arm's `folder_id IS NULL` to `IS NOT NULL`, deleting the entry arm,
+ * deleting either of the two sub-base arms of the trigger, and dropping any one
+ * of the three partial unique indexes each turn an assertion below red.
+ */
+describe("🔒 the knowledge-attachment scope shape", () => {
+  const JUNCTION = "agent_template_knowledge_bases";
+  const SCOPES_SQL = readFileSync(
+    join(MIGRATIONS, "20260930150000_agent_template_knowledge_scopes.sql"),
+    "utf8"
+  );
+  const CODE = stripLineComments(SCOPES_SQL);
+
+  it("declares the three kinds and nothing else", () => {
+    expect(CODE).toMatch(
+      /agent_template_kb_scope_kind_check[\s\S]*?CHECK\s*\(\s*scope_kind IN \('base', 'folder', 'entry'\)\s*\)/
+    );
+  });
+
+  /**
+   * ⚠ **THREE ARMS, EACH PINNED WHOLE.** A shape check with one arm missing is
+   * not a looser check — it is a check that ADMITS a row naming a folder AND an
+   * entry, which addresses two different things and renders two different tool
+   * calls from one attachment.
+   */
+  it.each([
+    ["base", "scope_kind = 'base'   AND folder_id IS NULL     AND entry_id IS NULL"],
+    ["folder", "scope_kind = 'folder' AND folder_id IS NOT NULL AND entry_id IS NULL"],
+    ["entry", "scope_kind = 'entry'  AND folder_id IS NULL     AND entry_id IS NOT NULL"],
+  ])("the %s arm names exactly its own id column", (_kind, arm) => {
+    expect(CODE).toContain(arm);
+  });
+
+  /**
+   * ⚠ **THE OLD PK IS RESTATED PER SHAPE, NOT WIDENED.** `(template_id,
+   * knowledge_base_id)` could not stay a PK — three folders of one base share
+   * that pair — and a wider composite is impossible because two of the three key
+   * columns are NULL in every shape but their own. So: a surrogate `id`, and
+   * three PARTIAL uniques that say what the composite used to.
+   */
+  it("replaces the composite PK with a surrogate plus three partial uniques", () => {
+    expect(CODE).toMatch(
+      new RegExp(String.raw`DROP\s+CONSTRAINT\s+IF\s+EXISTS\s+${JUNCTION}_pkey`, "i")
+    );
+    expect(CODE).toMatch(/PRIMARY KEY \(id\)/);
+    for (const [name, key, arm] of [
+      ["agent_template_kb_base_scope_uniq", "(template_id, knowledge_base_id)", "base"],
+      ["agent_template_kb_folder_scope_uniq", "(template_id, folder_id)", "folder"],
+      ["agent_template_kb_entry_scope_uniq", "(template_id, entry_id)", "entry"],
+    ]) {
+      // ⚠ THE WHOLE STATEMENT, name → columns → partial predicate. Asserting
+      // only that the NAME appears would pass a non-partial index (which would
+      // refuse a second folder row outright) and an index over the wrong
+      // columns; asserting only the predicate would pass one hung on a
+      // different name.
+      const statement = statementAt(
+        CODE,
+        CODE.indexOf(`CREATE UNIQUE INDEX IF NOT EXISTS ${name}`)
+      );
+      expect(CODE, `${name} is gone`).toContain(name);
+      expect(statement.replace(/\s+/g, " "), `${name} lost its columns`).toContain(
+        `ON public.${JUNCTION} ${key}`
+      );
+      expect(
+        statement.replace(/\s+/g, " "),
+        `${name} is no longer partial on ${arm}`
+      ).toContain(`WHERE scope_kind = '${arm}'`);
+    }
+  });
+
+  /**
+   * 🔒 THE TENANCY BACKSTOP. A folder attached under a base it does not live in
+   * would render a path naming one base beside a tool call naming another. The
+   * service refuses it 404-shaped; this is the fence that keeps a service bug
+   * from becoming a silently wrong prompt line.
+   */
+  it("makes the trigger assert sub-base tenancy AND liveness", () => {
+    for (const claim of [
+      "IF fld_base <> NEW.knowledge_base_id THEN",
+      "IF ent_base <> NEW.knowledge_base_id THEN",
+      "IF fld_deleted IS NOT NULL THEN",
+      "IF ent_deleted IS NOT NULL THEN",
+    ]) {
+      expect(CODE, `the trigger no longer asserts: ${claim}`).toContain(claim);
+    }
+  });
+
+  /** ⚠ RLS AND GRANTS MUST NOT HAVE MOVED — the file adds columns, and adding a
+   *  column to a row does not change which rows a policy admits. The migration
+   *  asserts this itself in a closing `DO $$`; this asserts the assertion. */
+  it("asserts its own RLS/grant no-op rather than trusting it", () => {
+    expect(CODE).toContain("gained a non-SELECT policy");
+    expect(CODE).toContain("agent_template_knowledge_bases_member_select");
+    expect(CODE).toContain("authenticated/anon retain DML");
+    // ⚠ It creates NO policy of its own — the twin `check-rls-pair-gate.ts`
+    // declares is the parent's and stays the parent's.
+    expect(CODE).not.toMatch(/CREATE\s+POLICY/i);
+  });
+});

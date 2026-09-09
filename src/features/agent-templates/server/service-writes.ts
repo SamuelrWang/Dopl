@@ -16,7 +16,6 @@ import type {
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
   TemplateTeamScopeAgentForbiddenError,
-  TemplateKnowledgeBaseNotFoundError,
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
   WorkspaceKeyPrivateTemplateError,
@@ -35,10 +34,10 @@ import {
   resolveTemplateCreateDestination,
 } from "./service-write-gates";
 import {
-  isWorkspaceAdmin,
-  resolveVisibleKnowledgeBases,
-  stripNullBytes,
-} from "./service-shared";
+  assertAttachableKnowledgeScopes,
+  requestedKnowledgeScopes,
+} from "./service-knowledge-scopes";
+import { isWorkspaceAdmin, stripNullBytes } from "./service-shared";
 
 /**
  * Agent-template writes — create / update (metadata, sharing, attachments) /
@@ -113,9 +112,9 @@ export async function createTemplate(
     visibility === "team"
       ? await assertGrantableTeams(ctx, input.teamIds ?? [], [])
       : [];
-  const knowledgeBaseIds = await assertAttachableKnowledgeBases(
+  const knowledgeScopes = await assertAttachableKnowledgeScopes(
     ctx,
-    input.knowledgeBaseIds ?? []
+    requestedKnowledgeScopes(input) ?? []
   );
 
   // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
@@ -168,11 +167,11 @@ export async function createTemplate(
       ctx.userId
     );
   }
-  if (knowledgeBaseIds.length > 0) {
+  if (knowledgeScopes.length > 0) {
     await repo.replaceKnowledgeLinks(
       destination.workspaceId,
       template.id,
-      knowledgeBaseIds,
+      knowledgeScopes,
       ctx.userId
     );
   }
@@ -282,10 +281,13 @@ export async function updateTemplate(
         : [];
   }
 
-  const knowledgeBaseIds =
-    patch.knowledgeBaseIds === undefined
+  // ⚠ `null` = the patch named NEITHER spelling, which leaves the junction
+  // alone; `[]` from either spelling is the REPLACE-SET emptying it.
+  const requestedScopes = requestedKnowledgeScopes(patch);
+  const knowledgeScopes =
+    requestedScopes === null
       ? null
-      : await assertAttachableKnowledgeBases(tplCtx, patch.knowledgeBaseIds);
+      : await assertAttachableKnowledgeScopes(tplCtx, requestedScopes);
 
   // ⚠ A JUNCTION-ONLY PATCH TOUCHES NO SCALAR COLUMN, so it must not reach the
   // row write at all (F-404, 2026-09-02). `knowledgeBaseIds`-only and
@@ -325,11 +327,11 @@ export async function updateTemplate(
   if (teamIds !== null) {
     await repo.replaceTeamLinks(tplCtx.workspaceId, id, teamIds, ctx.userId);
   }
-  if (knowledgeBaseIds !== null) {
+  if (knowledgeScopes !== null) {
     await repo.replaceKnowledgeLinks(
       tplCtx.workspaceId,
       id,
-      knowledgeBaseIds,
+      knowledgeScopes,
       ctx.userId
     );
   }
@@ -425,31 +427,6 @@ async function assertGrantableTeams(
     throw new TemplateTeamNotGrantableError(
       "You can only share with teams you belong to"
     );
-  }
-  return ids;
-}
-
-/**
- * ⚠ NO ATTACHING A KNOWLEDGE BASE YOU CANNOT READ. Every requested id is
- * resolved through `resolveVisibleKnowledgeBases` — the same predicate the READ
- * path uses — and anything that does not come back is reported MISSING (a 404,
- * never a distinguishable 403: see `TemplateKnowledgeBaseNotFoundError`).
- *
- * Without this, a template is a laundering channel: attach a teammate's private
- * base by id, share the template to `workspace`, and every member's spawned
- * agent gets a pointer to it.
- */
-async function assertAttachableKnowledgeBases(
-  ctx: AgentTemplateContext,
-  requested: string[]
-): Promise<string[]> {
-  const ids = [...new Set(requested)];
-  if (ids.length === 0) return [];
-  const visible = await resolveVisibleKnowledgeBases(ctx, ids);
-  const seen = new Set(visible.map((kb) => kb.id));
-  const missing = ids.filter((id) => !seen.has(id));
-  if (missing.length > 0) {
-    throw new TemplateKnowledgeBaseNotFoundError(missing);
   }
   return ids;
 }

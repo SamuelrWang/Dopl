@@ -48,6 +48,11 @@ export interface TemplateWriteInput {
     fields?: TemplateField[];
     visibility?: OfferedTemplateVisibility;
     knowledge_bases?: string[];
+    knowledge?: Array<{
+        base: string;
+        folder?: string;
+        entry?: string;
+    }>;
     confirm_token?: string;
 }
 export declare function opCreate(client: DoplClient, callerUserId: string | null, input: TemplateWriteInput & {

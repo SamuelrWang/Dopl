@@ -67,6 +67,8 @@ vi.mock("./repository", () => ({
   replaceKnowledgeLinks: vi.fn(),
   listKnowledgeBaseAccessRows: vi.fn(),
   listKnowledgeBaseTeamGrants: vi.fn(),
+  listLiveFoldersForBases: vi.fn(),
+  listLiveEntryRows: vi.fn(),
 }));
 
 import * as repo from "./repository";
@@ -195,10 +197,13 @@ describe("KB attach validation — a base you cannot read, you cannot attach", (
       name: "R",
       knowledgeBaseIds: [KB_OPEN],
     });
+    // ⚠ SCOPES SINCE 2026-09-08. `knowledgeBaseIds` still means WHOLE BASES and
+    // is translated at one seam, so a client that never learns about folders
+    // sends exactly what it always sent.
     expect(mockRepo.replaceKnowledgeLinks).toHaveBeenCalledWith(
       "ws-1",
       "tpl-1",
-      [KB_OPEN],
+      [{ baseId: KB_OPEN, scope: "base" }],
       OWNER
     );
   });

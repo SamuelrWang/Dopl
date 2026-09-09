@@ -110,18 +110,16 @@ export function AgentTemplatesCore({
 
   const grouped = useMemo(() => groupByVisibility(list.templates), [list.templates]);
 
-  // ⚠ `id → name` for the optimistic patch: the wire sends ids and answers with
-  // `{id, name}` pairs, so a chip attached one keystroke ago has no name until
-  // the round trip lands unless the picker's own label is carried across.
+  // ⚠ THE TREE ROOTS. The picker reads each base's folders and entries lazily
+  // for itself; this list is only what it opens with.
+  // ⚠ **THE `id → name` LOOKUP THAT STOOD HERE LEFT ON 2026-09-08** with the
+  // third argument of `optimisticTemplate`: the draft holds resolved REFS now,
+  // so a chip carries its own label and the lookup was a third place a name
+  // could disagree with the two that already had it.
   const knowledgeBases = useMemo(
     () => (baseList.data?.bases ?? []).map((b) => ({ id: b.id, name: b.name })),
     [baseList.data]
   );
-  const baseName = useMemo(() => {
-    const byId = new Map(knowledgeBases.map((b) => [b.id, b.name]));
-    return (id: string) => byId.get(id);
-  }, [knowledgeBases]);
-
   function openEditor(template: AgentTemplate | null) {
     setWriteError(null);
     setEditor((prev) => ({ open: true, template, session: prev.session + 1 }));
@@ -155,7 +153,7 @@ export function AgentTemplatesCore({
           await writes.update.mutateAsync({
             templateId: editing.id,
             body,
-            optimistic: optimisticTemplate(editing, draft, baseName),
+            optimistic: optimisticTemplate(editing, draft),
           });
         }
       }
@@ -216,6 +214,7 @@ export function AgentTemplatesCore({
 
       <TemplateEditor
         open={editor.open}
+        workspaceId={workspaceId}
         session={editor.session}
         template={editor.template}
         teams={teams ?? []}

@@ -67,7 +67,7 @@ export declare const UNKNOWN_STATE = "(unrecognized state)";
  * removal or a claim that the agent stopped — the same conclusion the web's
  * cards reached when a wall-clock filter made live agents vanish mid-run.
  */
-export declare const SESSION_STALE_WINDOW_MS = 90000;
+export declare const SESSION_STALE_WINDOW_MS = 120000;
 export declare function detailPhrase(detail: SessionDetailKey | null | undefined): string | null;
 /**
  * IS THIS ROW STILL SPEAKING FOR ITSELF?

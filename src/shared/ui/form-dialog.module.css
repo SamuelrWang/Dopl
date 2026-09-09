@@ -100,7 +100,7 @@
   line-height: 1.4;
   padding: 2px 2px 3px;
   border: 0;
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 2px solid var(--border-strong); /* same 2px as the active sweep (Samuel, 2026-09-08: "It should be the same thickness") */
   border-radius: 0;
   background: transparent;
   color: var(--text-primary);
