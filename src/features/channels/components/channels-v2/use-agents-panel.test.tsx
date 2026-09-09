@@ -23,6 +23,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useEffect } from "react";
 import { act, cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   launchRefusalText,
   useAgentsPanel,
@@ -239,8 +240,20 @@ describe("useAgentsPanel › launch", () => {
   // ⚠ THE RENDER HALF LIVES HERE, NOT IN `agents-tab.test.tsx`, WHICH STOOD AT
   // 498 OF THE 500-LINE CAP. Same seam as `_session-summary-harness.mjs`: the
   // cases go where the behaviour is, and this one is the launch row's.
+  /**
+   * ⚠ THE PROVIDER IS THE TAB'S OWN REQUIREMENT SINCE 2026-09-08, not scaffolding. `agents-tab.tsx`
+   * mounts the New agent POPUP with its launch row, and the popup's template read is a react-query
+   * hook — disabled while the form is shut, so nothing is fetched, but TanStack still asks for a
+   * client. Every real mount of this tab is inside the app's provider.
+   */
+  function renderTab(ui: React.ReactElement) {
+    return render(
+      <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
+    );
+  }
+
   it("renders the refusal beside the button, as an alert", () => {
-    render(
+    renderTab(
       <AgentsTab
         sessions={[]}
         channelId="c-1"
@@ -272,7 +285,7 @@ describe("useAgentsPanel › launch", () => {
    * double-submit guard over one click) and an absent capability take it away.
    */
   it("stays enabled with agents ALREADY on this thread", () => {
-    render(
+    renderTab(
       <AgentsTab
         sessions={[
           {
@@ -299,7 +312,7 @@ describe("useAgentsPanel › launch", () => {
   });
 
   it("disables the button ONLY while a launch is in flight", () => {
-    render(
+    renderTab(
       <AgentsTab
         sessions={[]}
         channelId="c-1"
@@ -318,7 +331,7 @@ describe("useAgentsPanel › launch", () => {
   });
 
   it("renders no alert when there is nothing to report", () => {
-    render(
+    renderTab(
       <AgentsTab
         sessions={[]}
         channelId="c-1"

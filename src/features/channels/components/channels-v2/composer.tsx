@@ -52,6 +52,7 @@ import { cn } from "@/shared/lib/utils";
 import { COMPOSER_BOTTOM, ComposerInputRow } from "./composer-input";
 import { ComposerToolbar } from "./composer-toolbar";
 import { AgentRequestPanel } from "./composer-request-panel";
+import { NewThreadDialog } from "./new-thread-dialog";
 import { useThreadRequest } from "./use-thread-request";
 import { MentionPopover } from "./composer-mentions";
 import { ComposerRecipients } from "./composer-recipients";
@@ -147,7 +148,12 @@ export function ChannelsV2Composer({
   // header says why).
   const launch = useAgentLaunch();
 
-  const request = useThreadRequest({ members, currentUserId, newThreadSignal });
+  // ⚠ `0`, NOT `newThreadSignal` (2026-09-08, Samuel: *"i want to make a pop up for the threads
+  // creation as well"*). The Threads tab's "New thread" now opens {@link NewThreadDialog} at the
+  // bottom of this file; the INLINE panel keeps its own opener — the toolbar's
+  // `MessageSquarePlus` glyph — and nothing else reaches it. Two thread forms live until Samuel
+  // rules on the glyph. The hook's signal arm is therefore dormant rather than deleted.
+  const request = useThreadRequest({ members, currentUserId, newThreadSignal: 0 });
   const { send, fanOutThreads, pending } = useThreadWrites({
     workspaceId,
     currentUserId,
@@ -428,6 +434,20 @@ export function ChannelsV2Composer({
               members={members}
             />
           )}
+
+          {/* ⚠ THE THREADS TAB'S "New thread" LANDS HERE SINCE 2026-09-08 (Samuel: *"i want to
+              make a pop up for the threads creation as well"*). It is a MODAL, so it sits outside
+              the card's flow and carries its own Create — the inline panel above still submits
+              through this composer's Send, and the two never open together because only the
+              toolbar glyph opens that one now. The WRITE is the same `fanOutThreads` either way:
+              this hands the mutation a finished draft. */}
+          <NewThreadDialog
+            signal={newThreadSignal}
+            channelId={channelId}
+            members={members}
+            currentUserId={currentUserId}
+            onCreate={fanOutThreads.mutate}
+          />
         </div>
       </div>
     </div>

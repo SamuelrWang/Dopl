@@ -67,9 +67,16 @@ export function ThreadsTab({
   openThreadId: string | null;
   onOpenThread: (id: string) => void;
   /**
-   * Opens the COMPOSER'S new-thread panel — the tab does not host a form of its
-   * own (Samuel, 2026-08-24). ⚠ Optional, and absent means NO BUTTON: a host
-   * that cannot reach the composer must not draw a control that does nothing.
+   * Opens the composer's NEW-THREAD POPUP — the tab does not host a form of its
+   * own (Samuel, 2026-08-24). ⚠ **THE FORM IT REACHES CHANGED ON 2026-09-08**
+   * (Samuel: *"i want to make a pop up for the threads creation as well"*): the
+   * hop is unchanged — this nonces `use-channels-v2-selection.ts ›
+   * requestNewThread`, which the composer passes to
+   * `new-thread-dialog.tsx › NewThreadDialog` — but the inline
+   * `composer-request-panel.tsx › AgentRequestPanel` is no longer what opens.
+   * That panel keeps its own opener, the composer's own glyph, until Samuel
+   * rules on it. ⚠ Optional, and absent means NO BUTTON: a host that cannot
+   * reach the composer must not draw a control that does nothing.
    */
   onNewThread?: () => void;
 }) {

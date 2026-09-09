@@ -204,9 +204,95 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `ScopeSharePopover` / `ScopeShareMenu` (`scope-share-popover.tsx`) | The private/team/workspace sharing control (chats + skills wrap it). |
 | `ConfirmDialog` (`confirm-dialog.tsx`) | In-app confirmations. |
 | `StandardDialog` / `DialogField` / `DialogActions` + `DIALOG_TITLE` / `DIALOG_BTN_PRIMARY` / `DIALOG_BTN_SECONDARY` (`standard-dialog.tsx`) | **THE create/edit dialog (2026-08-27, Samuel).** ONE width (`ModalShell size="narrow"`, `min(92vw, 640px)` — **not a prop**), ONE heading (`text-title` **centered + uppercase**, uppercased in CSS so `title` stays the `aria-label` every `getByRole("dialog", { name })` matches), ONE footer row (`leading` = the destructive slot, then a spacer, then the pair — **both fully rounded**). Body is `flex flex-col gap-4 p-6` and owns the scroll. `DialogField` is the uppercase `text-label` header + optional `normal-case` hint. The agent-template editor was the REFERENCE; New knowledge base, Add person (a Popover until then) and **/home's** New channel (`apps/desktop-ui/src/pages/home/new-channel-dialog.tsx`) were standardised onto it. ⚠ **THERE ARE TWO "NEW CHANNEL" DIALOGS ON TWO RECIPES, and this row claimed one** (corrected 2026-08-30). The one the WORKSPACE channels page mounts — `src/features/channels/components/create-channel-dialog.tsx` — is a hand-rolled `ModalShell size="narrow"` and composes none of these primitives. Re-derive rather than trusting the sentence: `grep -rln StandardDialog src apps`. ⚠ Text controls inside it wear `RAISED_INPUT`, and dropdowns wear `SelectMenu variant="raised"` — never the flat inset pill. |
+| `FormDialog` / `FormSection` / `UnderlineField` / `PillChoice` (`form-dialog.tsx`) | **THE POPUP FORM (2026-09-08, Samuel).** Composes `StandardDialog` into the bold-label / underline-field / 30px-pill / Discard+verb recipe. Rules, kit exports and the live conformance table: the **Popup forms** section below — stated ONCE there, not restated here. |
 | `FIELD_WELL` / `CHIP` / `RAISED_WELL` / `RAISED_INPUT` (`wells.ts`) | Class recipes for fields on section bodies: concave add-row well, raised pill chip, raised block field (inputs/code wells on inset), and the "pillow" text-control FACE (`RAISED_WELL` + type + placeholder ink + focus hairline) every standard-dialog input wears. Promoted from ontology-bits and (for `RAISED_INPUT`, 2026-08-27) from `agent-templates/components/template-editor-rows.tsx` — both re-export them. ⚠ `RAISED_INPUT` is the FACE; height/padding (`h-9 px-3`, `px-3 py-2`) belong to the caller. |
 | `useApiQuery` (`use-api-query.ts`) | Every client GET hook (TanStack Query over `apiRequest`). `useApiGet` is gone (members pass migrated the last consumers). |
 | `formatRelativeTime` / `formatDate` / `formatLastActive` (`shared/lib/format-time.ts`) | All timestamp display. No per-feature date formatters. |
+
+## Popup forms
+
+**Every dialog that COLLECTS INPUT is a `FormDialog`.** A dialog that only asks a yes/no question
+stays `src/shared/ui/confirm-dialog.tsx › ConfirmDialog` — it has no fields, so it has nothing this
+kit gives it. Menus and popovers are OUT OF SCOPE: they are not dialogs. Samuel ruled the kit on
+2026-09-08, off the New agent popup: *"i want to start conforming all pop ups to the UI of the one
+we just made, we should make a design system for this."*
+
+The anatomy, top to bottom:
+
+1. `StandardDialog`'s shell — ONE width, the uppercase title top-left of a close ×.
+2. Stacked sections: a SEMI-BOLD label **above** its control, never beside it. The weight lives in
+   `src/shared/ui/form-dialog.module.css`, never on a caller.
+3. Text entry is the UNDERLINE — no box; a 1px `--border-strong` rule at rest, a 2px ink line
+   sweeping in from the LEFT on focus. Reduced motion keeps the state and drops the sweep.
+   ⚠ The active class is React state, not `:focus-within` — jsdom loads no stylesheet, so a pure-CSS
+   rule cannot be pinned on a rendered tree.
+4. A single choice is `src/shared/ui/segmented-control.tsx › SegmentedControl` at
+   `variant="plain" size="md"` — 30px, REGULAR weight, gray fill, no hairline, one option
+   preselected, an optional muted hint. A LIST of values is not this control (see the table's note).
+5. The footer pair: a TEXT Discard on the left, the `auth-btn-3d` verb on the right, both at
+   `--action-h-sm` (30px) and `rounded-[8px]`. ⚠ The 36px scale belongs to the PAGE button that
+   OPENS a popup (`channels-v2/bits.tsx › TAB_ACTION`); a dialog cut to it is the drift this kit
+   exists to stop.
+6. ONE exit: the ×, the backdrop, Escape and Discard are all `onDiscard`, and Discard CLEARS.
+
+The kit: `src/shared/ui/form-dialog.tsx › FormDialog` (shell + footer) ·
+`› FormSection` (label above control) · `› UnderlineField` (text, `multiline` swaps the element and
+nothing else) · `› PillChoice` (the fixed `plain`/`md` row).
+
+### Conformance — measured 2026-09-08
+
+Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
+
+| File | Class | Status |
+| ---- | ----- | ------ |
+| `agent-templates/components/launch-sheet.tsx` | INPUT FORM | Todo |
+| `agent-templates/components/template-approval.tsx` | CONFIRMATION | Done |
+| `agent-templates/components/template-editor.tsx` | INPUT FORM | Todo |
+| `agent-templates/components/template-picker.tsx` | MENU | Done (out of scope) |
+| `billing/components/billing-cancel-plan.tsx` | CONFIRMATION | Done |
+| `billing/components/upgrade-modal.tsx` | CONFIRMATION | Done |
+| `channels/components/channels-v2/agent-delete.tsx` | CONFIRMATION | Done |
+| `channels/components/channels-v2/channel-manage.tsx` | CONFIRMATION | Done |
+| `channels/components/channels-v2/launch-agent-dialog.tsx` | INPUT FORM | **Done** |
+| `channels/components/channels-v2/new-thread-dialog.tsx` | INPUT FORM | **Done** |
+| `channels/components/channels-v2/posture-warning.tsx` | CONFIRMATION | Done |
+| `channels/components/channels-v2/settings-help.tsx` | MENU | Done (out of scope) |
+| `channels/components/channels-v2/thread-manage.tsx` | CONFIRMATION | Done |
+| `channels/components/create-channel-dialog.tsx` | INPUT FORM | Todo |
+| `channels/components/direct-message-dialog.tsx` | INPUT FORM † | Todo |
+| `channels/components/go-public-dialog.tsx` | CONFIRMATION | Done |
+| `channels/components/invite-dialog.tsx` | CONFIRMATION | Done |
+| `chats/components/detail-pane.tsx` | CONFIRMATION ‡ | Done |
+| `chats/components/list-pane.tsx` | MENU ‡ | Done (out of scope) |
+| `knowledge/components/base-settings-modal.tsx` | INPUT FORM | Todo |
+| `knowledge/components/create-base-dialog.tsx` | INPUT FORM | Todo |
+| `knowledge/components/delete-base-confirm.tsx` | CONFIRMATION | Done |
+| `knowledge/components/knowledge-v2/knowledge-v2.tsx` | CONFIRMATION ‡ | Done |
+| `knowledge/components/move-to-dialog.tsx` | INPUT FORM † | Todo |
+| `members/components/create-team-dialog.tsx` | INPUT FORM | Todo |
+| `members/components/invite-dialog.tsx` | INPUT FORM | Todo |
+| `members/components/member-bits.tsx` | MENU | Done (out of scope) |
+| `members/components/members-v2/member-facts.tsx` | MENU | Done (out of scope) |
+| `members/components/members-v2/tab-settings.tsx` | CONFIRMATION | Done |
+| `members/components/members-v2/team-detail-pane.tsx` | CONFIRMATION ‡ | Done |
+| `ontology/components/delete-cluster-dialog.tsx` | CONFIRMATION | Done |
+| `ontology/components/object-panel.tsx` | CONFIRMATION ‡ | Done |
+| `skills/components/create-skill-dialog.tsx` | INPUT FORM | Todo |
+| `apps/desktop-ui/src/pages/home/add-person-dialog.tsx` | CONFIRMATION § | Done |
+| `apps/desktop-ui/src/pages/home/agent-share.tsx` | CONFIRMATION | Done |
+| `apps/desktop-ui/src/pages/home/new-channel-dialog.tsx` | INPUT FORM | Todo |
+
+Paths are under `src/features/` unless they start with `apps/`. **13 INPUT FORM (2 done), 18
+CONFIRMATION, 5 MENU** — counted 2026-09-08 over the rows above.
+
+† A modal that collects a CHOICE and no text is still an input form; what it is not is a
+`PillChoice`. That control is a SINGLE choice, and a roster the operator picks one of — or a list
+they address several of — is a different payload wearing the same word. `channels-v2/new-thread-dialog.tsx`
+states the case: its addressees are removable `bits.tsx › AgentTargetPill`s under a `FormSection`
+label, because `toUserIds` is plural.
+‡ A PANE or a page, not a dialog. Classified by the popup it HOSTS, and it is on the row so a sweep
+of this table does not read its absence as "no popups here".
+§ Collects nothing — a copyable link on `StandardDialog`. Neither class fits; it needs no form.
 
 Reference implementations: `src/features/knowledge/components/knowledge-v2/`
 (CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens) and

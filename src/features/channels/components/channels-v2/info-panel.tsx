@@ -196,8 +196,9 @@ export function ChannelsV2InfoPanel({
    */
   openThread: ChannelThread | null;
   onOpenThread: (id: string) => void;
-  /** Threads tab's "New thread" — opens the COMPOSER's panel, one column left.
-   *  ⚠ Optional: a host with no composer to open draws no button. */
+  /** Threads tab's "New thread" — nonces the composer's `newThreadSignal`, which since
+   *  2026-09-08 opens `new-thread-dialog.tsx › NewThreadDialog` rather than the inline panel.
+   *  ⚠ Optional: a host with no composer to reach draws no button. */
   onNewThread?: () => void;
   /** THIS MACHINE'S live session feed, or `null` for "could not ask" (a plain
    *  browser, or a main without it). ⚠ Passed through, never collapsed to `[]`:
@@ -217,7 +218,13 @@ export function ChannelsV2InfoPanel({
     // ⚠ `null` = a CHANNEL-LEVEL launch (2026-08-31) — see `agents-tab.tsx`.
     threadId: string | null,
     templateId?: string | null,
-    overrides?: TemplateLaunchOverrides
+    overrides?: TemplateLaunchOverrides,
+    /** ⚠ WIDENED WITH THE TAB'S OWN PROP (2026-09-08): the Agents tab's New agent button opens
+     *  the launch POPUP, which carries a pre-assigned instance id and a per-spawn runtime. A
+     *  narrower type on this hop would have compiled — a 3-arg function is assignable to a 5-arg
+     *  signature — while silently declaring that two arguments do not survive the trip. */
+    agentId?: string,
+    runtime?: string
   ) => Promise<AgentLaunchOutcome> | void;
   /** Machine-local first-use approval for a foreign template. Passed through. */
   onApproveTemplate?: (templateId: string) => Promise<{ ok: boolean; reason?: string }>;

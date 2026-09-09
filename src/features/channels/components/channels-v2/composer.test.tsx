@@ -29,7 +29,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const send = vi.fn();
 const fanOutThreads = vi.fn();
@@ -163,7 +163,7 @@ describe("the plain composer sends CHAT", () => {
   });
 });
 
-describe("another surface can open the new-thread panel", () => {
+describe("another surface can open the new-thread POPUP", () => {
   const props = (newThreadSignal: number) => ({
     channelId: CHANNEL_ID,
     workspaceId: "ws-1",
@@ -184,21 +184,34 @@ describe("another surface can open the new-thread panel", () => {
   const panelOpen = () =>
     screen.getByRole("button", { name: "New thread" }).getAttribute("aria-pressed");
 
-  /** ⚠ THE SIGNAL IS A COUNTER, so this asserts the SECOND ask lands too — a
-   *  boolean prop would open once and then sit `true`, leaving the Threads
-   *  tab's button dead for the rest of the session. */
-  it("opens on a signal change, and again on the next one", () => {
+  /** The POPUP, by its own accessible name. ⚠ NOT the inline panel — see the case below. */
+  const popup = () => screen.queryByRole("dialog", { name: "New thread" });
+
+  /**
+   * ⚠ THE SIGNAL IS A COUNTER, so this asserts the SECOND ask lands too — a boolean prop would
+   * open once and then sit `true`, leaving the Threads tab's button dead for the rest of the
+   * session.
+   *
+   * ⚠ **IT OPENS THE POPUP AND NOT THE INLINE PANEL SINCE 2026-09-08** (Samuel: *"i want to make
+   * a pop up for the threads creation as well"*). The panel is still in the tree and still opens
+   * from the toolbar's own glyph — `aria-pressed` staying `"false"` through both asks is the half
+   * of this case that would go silent if the signal were ever re-attached to
+   * `use-thread-request.ts`, giving one button two forms.
+   */
+  it("opens the POPUP on a signal change, and again on the next one — never the panel", async () => {
     const view = render(<ChannelsV2Composer {...props(0)} />);
+    expect(popup()).toBeNull();
     expect(panelOpen()).toBe("false");
 
     view.rerender(<ChannelsV2Composer {...props(1)} />);
-    expect(panelOpen()).toBe("true");
+    await waitFor(() => expect(popup()).toBeTruthy());
+    expect(panelOpen()).toBe("false");
 
     // Dismiss it, then ask again — the second increment must reopen.
-    fireEvent.click(screen.getByRole("button", { name: "Close new thread" }));
-    expect(panelOpen()).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    await waitFor(() => expect(popup()).toBeNull());
     view.rerender(<ChannelsV2Composer {...props(2)} />);
-    expect(panelOpen()).toBe("true");
+    await waitFor(() => expect(popup()).toBeTruthy());
   });
 });
 

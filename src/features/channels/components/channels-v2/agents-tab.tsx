@@ -30,6 +30,15 @@
  * session, so it never needs a qualifier. Nothing here writes "agent session"
  * or "channel session" — the noun on this surface is the AGENT.
  *
+ * ⚠ **IT REQUIRES A `QueryClientProvider` SINCE 2026-09-08**, unconditionally. The New agent
+ * button opens `launch-agent-dialog.tsx › LaunchAgentDialog`, which is mounted with the ROW (not
+ * with its own open state) so the popup keeps `ModalShell`'s fade-OUT — an unmount on Discard
+ * would drop the scrim in one frame here and cross-fade it in the composer, which is the same
+ * dialog looking like two. The cost is that its template read's `useQuery` runs while the form is
+ * shut (`enabled: false`, so it fetches nothing) and TanStack still wants the provider. Every
+ * mount of this tab is inside the app's, and the four bare renders in
+ * `use-agents-panel.test.tsx` wrap one.
+ *
  * ⚠ "AGENTS" NAMES TWO DIFFERENT SURFACES AND BOTH NAMES STAY (Samuel's ruling
  * Q6, 2026-08-26; INVARIANTS §5A). THIS tab is the RUNNING SESSIONS — what is
  * live on this machine, right now, in this channel; it is EPHEMERAL and it is
@@ -61,7 +70,9 @@ import {
   ownAgentsFor,
   peerCardsFor,
 } from "./agents-model";
-import type { AgentLaunchOutcome } from "./use-agents-panel";
+import { LaunchAgentDialog } from "./launch-agent-dialog";
+import { useAgentLaunch } from "./use-agent-launch";
+import type { AgentLaunchControls, AgentLaunchOutcome } from "./use-agents-panel";
 
 
 export function AgentsTab({
@@ -129,7 +140,13 @@ export function AgentsTab({
   onLaunchAgent?: (
     threadId: string | null,
     templateId?: string | null,
-    overrides?: TemplateLaunchOverrides
+    overrides?: TemplateLaunchOverrides,
+    /** ⚠ THE POPUP'S TWO EXTRA ARGUMENTS (2026-09-08). `use-agents-panel.ts › launchAgent` has
+     *  taken the pre-assigned id and the per-spawn runtime since 2026-08-27/08-31; this prop was
+     *  the last narrowing of it, and the New agent popup needs both. The zero- and one-argument
+     *  calls the PICKER makes are unchanged. */
+    agentId?: string,
+    runtime?: string
   ) => Promise<AgentLaunchOutcome> | void;
   /** Store a first-use approval for another member's template, machine-locally.
    *  ⚠ Absent ⇒ the approval modal says the build cannot remember it, rather
@@ -159,6 +176,8 @@ export function AgentsTab({
   // browser (`sessions === null`) further down, and a hook behind that branch is
   // a hook-order violation on the very first desktop render.
   const picker = useTemplatePicker();
+  // ⚠ SAME RULE, SAME REASON — the popup's own state, above every early return.
+  const launch = useAgentLaunch();
   // `userId → name` for the picker's authorship marker. ⚠ THE CHANNEL ROSTER,
   // which is not the workspace's — a template shared by someone outside this
   // channel resolves to no name and the marker degrades to "by another member"
@@ -188,6 +207,34 @@ export function AgentsTab({
     const res = await onLaunchAgent?.(threadId, templateId, overrides);
     return res ?? { ok: false, reason: "no-bridge" };
   }
+
+  /**
+   * THE POPUP'S CONTROLS, ASSEMBLED FROM THE FLAT PROPS THIS TAB ALREADY TAKES.
+   *
+   * ⚠ NOT A SECOND LAUNCH PATH — `launchAgent` is {@link launchFromPicker}, which is
+   * `onLaunchAgent` and nothing else, so the face, the chevron and the popup all reach
+   * `use-agents-panel.ts › launchAgent` by the one route. ⚠ AND IT NEVER INVENTS A SUCCESS, for
+   * the reason the picker's adapter states: a void-returning caller leaves nothing to read, and
+   * `{ ok: true }` there would swallow a refusal.
+   */
+  const launchControls: AgentLaunchControls = useMemo(
+    () => ({
+      canLaunch,
+      launchBusy,
+      launchError,
+      // ⚠ FIVE ARGUMENTS, SPELLED OUT — NOT ROUTED THROUGH {@link launchFromPicker}. That adapter
+      // is the PICKER's and makes a THREE-argument call; widening it would have changed the
+      // picker's own payload (`agents-tab-launch.test.tsx` pins it argument for argument), which
+      // is a wire change for a form that has nothing to do with it.
+      launchAgent: async (threadId, templateId, overrides, agentId, runtime) => {
+        const res = await onLaunchAgent?.(threadId, templateId, overrides, agentId, runtime);
+        return res ?? { ok: false, reason: "no-bridge" as const };
+      },
+      approveTemplate: async (templateId: string) =>
+        (await onApproveTemplate?.(templateId)) ?? { ok: false, reason: "no-bridge" },
+    }),
+    [canLaunch, launchBusy, launchError, onLaunchAgent, onApproveTemplate]
+  );
   // Peers: other members' live rows, thread-scoped like everything on the tab.
   // Own rows are excluded — the LOCAL feed below is the richer truth for mine.
   // ⚠ THE PREDICATE IS `agents-model.ts › peerCardsFor`, NOT AN INLINE FILTER
@@ -195,51 +242,27 @@ export function AgentsTab({
   // second copy of the rule is how a badge comes to say 3 over a list of 2.
   const peerCards = peerCardsFor(peers, currentUserId, openThreadId);
 
-  // \u26a0 NEW AGENT, AND IT IS A REPEATABLE ACTION (Samuel, 2026-08-21). Every click
-  // mints a NEW instance on this thread \u2014 the bridge no longer keeps one session
-  // per (channel, thread) \u2014 so the button does NOT disarm once an agent exists.
-  // The only two things that take it away are the capability being absent
-  // (`canLaunch`) and a launch already in flight, which is a double-submit guard
-  // and not a cap.
-  //
-  // \u26a0 IT IS A SPLIT BUTTON SINCE 2026-08-22, AND THE LEFT HALF IS UNCHANGED
-  // (Samuel: *one lane, one-click launch*). The face still launches a BLANK agent
-  // in exactly ONE CLICK with a byte-identical payload; the picker lives behind
-  // an ADJACENT, visually attached chevron that is its own hit target. A popover
-  // in front of the face would put a keystroke on the most common action in the
-  // product, which is what the spec's OQ-4 proposed and this ruling refused.
-  // ⚠ THE BUTTON IS ON THE TAB WHETHER OR NOT A THREAD IS OPEN (Samuel,
-  // 2026-08-24). It used to require `openThreadId`, which meant the Agents tab
-  // in CHANNEL VIEW — where most people arrive — showed no way to start an
-  // agent at all. The gate that remains is the CAPABILITY (`canLaunch`), which
-  // is feature detection and stays: with no bridge, launching is impossible and
-  // a dead control is worse than none.
-  //
-  // ⚠ WITH NO THREAD IT OPENS THE NEW-THREAD PANEL, and that is not a second
-  // launch path. An agent runs inside a thread (INVARIANTS §5); with none open
-  // the first step of the SAME lane is making one, which is the composer's
-  // panel — the exact flow the Threads tab's button opens. The title says so,
-  // because a button that does something other than its label without a word is
-  // the surface lying.
-  // ⚠ THE "MAKE A THREAD FIRST" REDIRECT IS GONE (2026-08-31, Samuel's ruling).
-  // The channel view's button used to open the new-thread panel on the argument
-  // that an agent runs inside a thread — but the threadless lane has existed
-  // since 2026-08-21 (the composer's Bot icon launches an agent ON THE ROOM,
-  // and `use-agents-panel.ts` words it: no counterparty is not a refusal), so
-  // the redirect was the one surface still pretending it did not. Both views
-  // launch in ONE CLICK now; with no thread open the launch is channel-level.
-  //
-  // ⚠ AND THE CHEVRON FOLLOWED THE FACE ON 2026-09-08 (Samuel: *"this New agent
-  // button … needs to also exist in the agents tab for the main channel view.
-  // Same one, that enables me to launch a template"*). The 08-31 ruling moved
-  // the FACE and left the picker gated on `openThreadId`, so channel view got
-  // half a split button — a blank launch with no template lane. A template
-  // launch is not a different lane, it is the same launch carrying a
-  // `templateId`, and `use-agents-panel.ts › launchAgent` has taken
-  // `(null, templateId)` since the threadless lane existed: `threadId !== null`
-  // guards the no-counterparty refusal, and the payload puts `taskId: null` on
-  // the wire with the template beside it. Nothing below this file needed
-  // widening.
+  /**
+   * NEW AGENT — the 36px page button that OPENS THE POPUP (2026-09-08).
+   *
+   * ⚠ **THIS SUPERSEDES THE ONE-CLICK FACE OF 2026-08-22.** Samuel, verbatim: *"i want to make a
+   * pop up for the threads creation as well. And put in the new agent button in the agents tab."*
+   * The face spawned a blank agent in exactly one click under his *one lane, one-click launch*
+   * ruling; it now opens `launch-agent-dialog.tsx › LaunchAgentDialog` — preselected to Blank
+   * agent, so the SAME launch is one click plus one Launch — and `agents-tab-launch.test.tsx`
+   * flipped with it. **There is still exactly ONE launch lane**: the popup submits through
+   * `onLaunchAgent`, the same prop the face called and the chevron still calls.
+   *
+   * ⚠ THE CHEVRON IS UNTOUCHED. `TemplateLaunchPicker` still launches a template directly, from
+   * its own adjacent hit target with its own accessible name — two controls, never one control
+   * with a menu in front of it.
+   * ⚠ BOTH VIEWS GO THROUGH IT, and the popup reads `openThreadId ?? null` exactly as the two
+   * halves of the split button do: in thread view the agent lands on that exchange, in channel
+   * view on the ROOM (2026-08-31, the channel-level lane).
+   * ⚠ THE ONLY GATES LEFT ARE THE CAPABILITY (`canLaunch`, feature detection over the bridge) and
+   * a launch already in flight, which is a double-submit guard and not a cap. `workspaceId` gates
+   * the CHEVRON and the popup's template roster — not the button.
+   */
   const launchRow = canLaunch && onLaunchAgent && (
     <div className="mb-3">
       <div className="flex justify-end">
@@ -252,9 +275,13 @@ export function AgentsTab({
             type="button"
             disabled={launchBusy}
             title={
-              openThreadId ? undefined : "Launches an agent on the channel"
+              openThreadId
+                ? undefined
+                : "Starts an agent on the channel"
             }
-            onClick={() => void onLaunchAgent(openThreadId ?? null)}
+            // ⚠ IT OPENS THE FORM; IT DOES NOT LAUNCH (2026-09-08 — see the block above).
+            // `toggle` is the opener because it is what MINTS the instance id the form shows.
+            onClick={() => launch.toggle()}
             className="flex min-w-0 cursor-pointer items-center gap-1 px-[15px] text-small font-semibold text-text-on-cta disabled:opacity-60"
           >
             <Plus size={13} aria-hidden />
@@ -302,6 +329,19 @@ export function AgentsTab({
           {launchError}
         </p>
       )}
+      {/* ⚠ THE FORM ITSELF. Mounted with the ROW rather than with the button, so the popup and
+          the refusal line it may print live in one place. `currentUserId ?? ""` is FAIL-CLOSED:
+          with no viewer id every template wears the authorship marker (INVARIANTS §5A) rather
+          than none of them silently reading as mine. */}
+      <LaunchAgentDialog
+        panel={launch}
+        newAgent={launchControls}
+        openThreadId={openThreadId ?? null}
+        channelId={channelId}
+        workspaceId={workspaceId}
+        currentUserId={currentUserId ?? ""}
+        members={members}
+      />
       {workspaceId && (
         <TemplateLaunchPicker
           open={picker.open}

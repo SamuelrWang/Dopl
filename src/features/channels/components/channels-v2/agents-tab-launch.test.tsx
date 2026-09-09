@@ -29,12 +29,18 @@ afterEach(() => {
 /**
  * THE NEW AGENT SPLIT BUTTON (2026-08-22, the agent-templates launch wave).
  *
- * ⚠ THE PINNED PROPERTY IS THE ONE-CLICK BLANK LAUNCH, and it is pinned because
- * the spec proposed removing it. Samuel's standing channels-v2 ruling is *one
- * lane, one-click launch*: the button's FACE still spawns a blank agent in
- * exactly one click, with a payload carrying no template and no overrides. The
- * picker lives behind an ADJACENT chevron with its own accessible name and its
- * own hit target — two controls, never one control with a menu in front of it.
+ * ⚠ **THE FACE OPENS THE POPUP SINCE 2026-09-08 AND NO LONGER LAUNCHES**, which supersedes this
+ * file's oldest pin. Samuel: *"put in the new agent button in the agents tab"* — the button that
+ * spawned a blank agent in one click now opens `launch-agent-dialog.tsx › LaunchAgentDialog`,
+ * preselected to Blank agent. Two properties replace the one that left, and both fail silently:
+ * the click must reach the FORM (a face still wired to `onLaunchAgent` would spawn an agent the
+ * operator was about to name) and it must reach NOTHING ELSE (a face wired to both would spawn
+ * one AND open the form over it).
+ * ⚠ THE CHEVRON IS UNTOUCHED, payload included — the picker's own launch is still a THREE-argument
+ * call, which is what `passes the picker's template through` pins.
+ * ⚠ THE POPUP'S OWN CONTRACT IS `launch-agent-dialog.test.tsx` (the five fields, the defaults, the
+ * payload's parity with the slide-out's). What belongs HERE is the WIRING — that this tab's button
+ * opens it, on this tab's thread.
  */
 describe("the Launch agent split button", () => {
   const WS = "ws-1";
@@ -58,19 +64,50 @@ describe("the Launch agent split button", () => {
     return { onLaunchAgent };
   }
 
-  it("launches a BLANK agent in ONE click, with no template and no overrides", async () => {
+  it("OPENS THE POPUP on the face's click, and launches nothing itself", async () => {
+    // 🔒 MUTATION-PROOF BOTH WAYS: restore `onClick={() => void onLaunchAgent(openThreadId ?? null)}`
+    // and the dialog never appears; wire the face to BOTH and the second expectation fails.
     const { onLaunchAgent } = mountLaunch();
+    expect(screen.queryByRole("dialog", { name: "New agent" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "New agent" }));
-    await waitFor(() => expect(onLaunchAgent).toHaveBeenCalledWith("t-1"));
-    // ⚠ EXACTLY ONE ARGUMENT. A `null` template id spelled out here would be a
-    // different object on the wire from the one this button has always sent.
-    expect(onLaunchAgent.mock.calls[0].length).toBe(1);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "New agent" })).toBeTruthy()
+    );
+    expect(onLaunchAgent).not.toHaveBeenCalled();
+  });
+
+  it("opens the popup on BLANK AGENT — the one-click lane, one Launch away", async () => {
+    templateList.templates = [
+      { id: "tpl-9", workspaceId: WS, name: "Code auditor", createdBy: ME },
+    ];
+    mountLaunch();
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "New agent" })).toBeTruthy()
+    );
+    // ⚠ THE DEFAULT IS AN OPTION, NOT A PLACEHOLDER — `use-agent-launch.ts` opens on
+    // `templateId: null`, which is the row's `Blank agent` pill.
+    expect(
+      screen
+        .getByRole("tablist", { name: "Agent template" })
+        .querySelector('[aria-selected="true"]')?.textContent
+    ).toBe("Blank agent");
   });
 
   it("opens NO picker on the face's click", () => {
     mountLaunch();
     fireEvent.click(screen.getByRole("button", { name: "New agent" }));
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("renders the popup WITHOUT a workspace — the template row degrades, the form does not", async () => {
+    // ⚠ `workspaceId` GATES THE CHEVRON AND THE TEMPLATE READ, NEVER THE BUTTON. A New agent
+    // button whose form did not open would be the dead control this whole gate exists to avoid.
+    mountLaunch({ workspaceId: null });
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "New agent" })).toBeTruthy()
+    );
   });
 
   it("opens the picker from the ADJACENT chevron, which launches nothing itself", () => {
@@ -109,13 +146,21 @@ describe("the Launch agent split button", () => {
   // ⚠ AND THE CHEVRON CAME WITH IT ON 2026-09-08 (Samuel: *"Same one, that
   // enables me to launch a template"*). This case asserted the chevron was
   // ABSENT here — the last piece of the redirect — and the ruling flipped it.
-  it("with no thread open, launches CHANNEL-LEVEL — threadId null, one click", () => {
+  it("with no thread open, the popup's Launch is CHANNEL-LEVEL — threadId null", async () => {
+    // 🔒 THE TAB'S OWN WIRING, END TO END: the face opens the form and the form's Launch carries
+    // THIS TAB's thread. `openThreadId ?? null` is read the same way by all three controls, and a
+    // popup that fabricated or dropped a thread id would be worse than the redirect it replaced.
     const onNewThread = vi.fn();
     const { onLaunchAgent } = mountLaunch({ openThreadId: null, onNewThread });
 
     fireEvent.click(screen.getByRole("button", { name: "New agent" }));
-    expect(onLaunchAgent).toHaveBeenCalledTimes(1);
-    expect(onLaunchAgent).toHaveBeenCalledWith(null);
+    const name = (await screen.findByLabelText("Agent name")) as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "Research" } });
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+
+    await waitFor(() => expect(onLaunchAgent).toHaveBeenCalled());
+    expect(onLaunchAgent.mock.calls[0][0]).toBeNull();
+    expect(onLaunchAgent.mock.calls[0][1]).toBeNull();
     expect(onNewThread).not.toHaveBeenCalled();
   });
 
