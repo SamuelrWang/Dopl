@@ -16,10 +16,30 @@
   flex-direction: column;
   align-items: center;
   gap: 7px;
-  /* 7px top = .sidebar's padding-top, so the Home tile's top edge lands on the
-     brand pill's top edge (which lands on the page card's top edge). */
-  padding: 7px 0 20px;
+  /* 🔒 THE HOME TILE'S TOP EDGE IS THE PANEL'S TOP EDGE (Samuel, 2026-09-09:
+     the Home icon *"is like slightly higher than where the right panel starts.
+     It should be flush."*).
+
+     ⚠ THE OLD 7px WAS COPIED FROM `.sidebar`'s padding AND THE NOTE HERE SAID SO
+     — *"7px top = .sidebar's padding-top, so the Home tile's top edge lands on
+     the brand pill's top edge"* — WHICH STOPPED BEING TRUE AT THE 2026-08-30
+     RESTRUCTURE. The sidebar is a region INSIDE the panel now, so its 7px is
+     measured from the panel's inside; the rail is a SIBLING of `.surface` and
+     measures from the window. MEASURED: tile top y=7, panel top
+     y = `--shell-gap-top` (6, `.surface`'s margin) + `--page-float-gap-top` (7,
+     the float's own) = 13. Six pixels high, exactly as reported.
+
+     ⚠ THE SUM, NOT THE NUMBER 13. Both halves are tokens with other readers, so
+     a change to either moves this with it; a literal here is the drift that
+     produced the misalignment in the first place. */
+  padding: calc(var(--shell-gap-top) + var(--page-float-gap-top)) 0 20px;
   overflow: hidden;
+}
+
+/* THE ONE INK A TILE LIGHTS UP WITH — hover AND selection, by reference
+   (Samuel, 2026-09-09). See `.tile:hover` / `.tile[aria-current="page"]`. */
+.rail {
+  --rail-tile-fill: rgba(255, 255, 255, 0.1);
 }
 
 /* One ROUNDED-SQUARE tile face for every row: Home, workspaces, create.
@@ -66,7 +86,31 @@
   border-radius: 11px;
   font-size: var(--text-title);
 }
-.tile:hover { background: rgba(255, 255, 255, 0.1); }
+/* 🔒 SELECTION AND HOVER ARE ONE DECLARATION (Samuel, 2026-09-09: *"the white
+   bordering for the selected workspace's icon … is thicker at the top than at
+   the bottom … i like the thickness of the gray border that appears when i
+   hover over the icon. Just have it be that. and instead of white, make it a
+   gray bordering"*).
+
+   ⚠ WHAT THE "BORDER" IS: the tile is 40px and its glyph is 36px, so a filled
+   tile shows an EVEN 2px ring of that fill on all four sides. Hover has always
+   drawn exactly that. THE SELECTED TILE DID NOT — it composed the kit's
+   `.raised-tab` in the TSX, whose recipe is
+   `inset 0 0 0 1px <line>, inset 0 2px 0 rgba(255,255,255,.9),
+   inset 0 -2px 0 rgba(0,0,0,.06)`: a 2px WHITE bevel across the top and a 2px
+   near-invisible dark one across the bottom. Against the dark rail that reads
+   as a white ring thicker at the top, which is precisely the report. It is not
+   an offset, a `ring-offset` or a translate — it is the bevel, and it is a
+   deliberate part of a face built for a LIGHT ground.
+
+   ⚠ SO THE SELECTED TILE NO LONGER COMPOSES `.raised-tab`, and the two states
+   read ONE custom property rather than two copies of a value — they cannot
+   drift, which is the whole ask. `aria-current="page"` is the hook because the
+   TSX already sets it for assistive tech; nothing new is added to the markup.
+   ⚠ `.raised-tab` STAYS on the sidebar's active nav chip and on every segmented
+   pill — those stand on the light panel, where that face is correct. */
+.tile:hover,
+.tile[aria-current="page"] { background: var(--rail-tile-fill); }
 .tile:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.4);
   outline-offset: 2px;

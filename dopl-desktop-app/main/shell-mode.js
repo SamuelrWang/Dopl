@@ -117,6 +117,41 @@ function makeShellHelpers(deps) {
     navigateTo(`${page}/${channelId}${suffix}`);
   }
 
+  // 🔒 AN EXPLICIT OPEN LANDS ON THE LAUNCH DECISION — `/` — NOT ON WHATEVER
+  // ROUTE THE WINDOW WAS LEFT ON (Samuel, 2026-09-09: *"every time i go to the
+  // desktop app/open it, it auto has it on my original workspace. The user
+  // should be auto at the Home space. (This is for new opens)."*).
+  //
+  // MEASURED CAUSE, and it was NOT the renderer. A COLD process launch already
+  // lands on /home: `spa-window.js` loads the index with no hash, the hash
+  // router resolves `/` to `pages/boot`, and boot navigates to `/home` whenever
+  // `POST /api/boot`'s no-segment answer is the caller's `kind='personal'`
+  // container (`c37e4942`). Nothing persists a route on either side — main
+  // stores none and the SPA's IndexedDB cache is queries only, which boot
+  // refuses to navigate on (`refetchOnMount: "always"` + `isFetchedAfterMount`).
+  // What is NOT a cold launch is the common case: Dopl lives in the tray, so the
+  // dock icon, the tray's "Open Dopl" and a second launch all resolve to
+  // `showMainWindow()`, which REVEALS the live window — still showing the
+  // workspace page it was left on. That is the "every time I open it".
+  //
+  // ⚠ ONLY WHEN THE WINDOW ALREADY EXISTED. A window main has to BUILD is
+  // already loading the index at `/`; pushing a route into a renderer that has
+  // not subscribed yet is dropped on the floor (`deep-link.js` carries that
+  // trap in full), and it would be a no-op even if it landed.
+  //
+  // ⚠ AND ONLY FROM THE THREE "OPEN THE APP" DOORS (`index.js`). A DEEP LINK
+  // and a clicked channel NOTIFICATION reveal the window too, and both must
+  // still win — they name a destination. They call `showMainWindow()` /
+  // `navigateToChannels` directly and never this, so there is no race to lose:
+  // this function is not on their path at all.
+  function openMainWindow() {
+    const win = deps.getMainWindow();
+    const existed = !!win && !win.isDestroyed();
+    deps.showMainWindow();
+    if (existed) navigateTo('/');
+    return existed;
+  }
+
   // Replace whatever is on screen with the window the CURRENT gate verdict calls
   // for. A block and its later release are the same two lines, because both
   // resolve through createShellWindow above. Live SESSION windows are
@@ -143,7 +178,14 @@ function makeShellHelpers(deps) {
     });
   }
 
-  return { createShellWindow, navigateTo, navigateToChannels, swapShell, wireVersionGate };
+  return {
+    createShellWindow,
+    navigateTo,
+    navigateToChannels,
+    openMainWindow,
+    swapShell,
+    wireVersionGate,
+  };
 }
 
 // ─── BEGIN SHELL-MODE-PURE (unit-tested via source extraction) ──────────────

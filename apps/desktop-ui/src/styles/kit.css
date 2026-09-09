@@ -150,7 +150,9 @@
 .page-float {
   flex: 1;
   min-width: 0;
-  margin: 7px 8px 9px 8px;
+  /* Top is a TOKEN because the account rail reads it — see
+     `--page-float-gap-top`. The other three have no outside reader. */
+  margin: var(--page-float-gap-top) 8px 9px 8px;
   background: var(--home-panel);
   border: 2px solid var(--home-panel-line);
   border-radius: 14px;

@@ -14,6 +14,26 @@
   --home-list-w: 290px;
 }
 
+/* THE SELECTED CHANNEL ROW'S LINE, one step darker than the shared
+   `.selected-ring` (Samuel, 2026-09-09). Colour ONLY — the row keeps
+   `.auth-btn-3d-light` + `.selected-ring` in the TSX, so the raised face, the
+   soft focus halo and the hover lift are all still the kit's and this cannot
+   fork them.
+
+   ⚠ WHY A MODULE RULE AND NOT A DARKER `--focus-line`. That token is the kit's
+   one "this is the live one" line and the header's search pill wears it too
+   (`kit.css › .selected-ring`, `.search-expand`), so darkening it would have
+   moved a control Samuel did not name. The value is a TOKEN all the same
+   (`--home-row-line-selected`, in both token files) — the design system forbids
+   a raw colour here.
+
+   ⚠ WHY THIS BEATS THE KIT. Same reason the `.frame` rules below give: a CSS
+   module is UNLAYERED and `.selected-ring` lives in a `@layer`, and a layer
+   loses to an unlayered rule outright regardless of specificity. */
+.rowSelected {
+  border-color: var(--home-row-line-selected);
+}
+
 /* ── The record pane's frame around the pinned channel surface ────────────
    Colour/weight only; the card itself (radius, shadow, fill) is the kit's
    `.bento` plus `bg-home-card` / `border-home-panel-line` in the TSX.

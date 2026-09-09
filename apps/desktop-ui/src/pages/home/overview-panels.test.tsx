@@ -97,7 +97,7 @@ describe("home overview face", () => {
     // in document order.
     expect(
       screen.getAllByRole("tab").slice(0, 4).map((tab) => tab.textContent)
-    ).toEqual(["Overview", "Channels", "Knowledge", "Agents"]);
+    ).toEqual(["Overview", "Channel", "Knowledge", "Agents"]);
   });
 
   /**
@@ -283,7 +283,7 @@ describe("home overview face", () => {
     const surface = await screen.findByTestId("channel-surface");
     expect(surface).toHaveAttribute("data-thread", "task-1");
     expect(
-      screen.getByRole("tab", { name: "Channels", selected: true })
+      screen.getByRole("tab", { name: "Channel", selected: true })
     ).toBeInTheDocument();
   });
 

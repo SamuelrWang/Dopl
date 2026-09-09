@@ -1,6 +1,7 @@
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
+import home from "./home.module.css";
 
 /**
  * Home's left pane — the CHANNEL list. Deliberately not the workspace channels
@@ -107,7 +108,13 @@ function RelationshipRow({
         // wears while it is open, held permanently. It rides ON the raised face
         // rather than replacing it, so a selected row stays the same KIND of
         // thing as its neighbours — just the one you are in.
-        selected && "selected-ring"
+        // ⚠ AND ITS LINE IS ONE STEP DARKER THAN THE SHARED RING'S (Samuel,
+        // 2026-09-09). `home.rowSelected` overrides the `border-color` ONLY,
+        // off `--home-row-line-selected`; the halo, the face and the hover
+        // lift stay `.selected-ring`'s, so the two cannot fork. The module
+        // class must come AFTER — it wins by being unlayered, not by order,
+        // but reading it in this order is how the override is meant to scan.
+        selected && cn("selected-ring", home.rowSelected)
       )}
     >
       {/* 🔒 ⚠ **NO AVATAR, NO STACK, NO BOT GLYPH — DELETED 2026-09-01

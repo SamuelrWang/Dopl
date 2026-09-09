@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import {
@@ -357,12 +357,22 @@ describe("creating", () => {
         c.path.split("?")[0] === "/api/knowledge/bases" && c.opts.method === "POST"
     );
 
+  /** 🔒 BOTH CREATE BUTTONS READ "Knowledge base" SINCE 2026-09-09 (Samuel:
+   *  *"have it for both, say, + Knowledge base. for both"*), so the only thing
+   *  telling them apart is the SECTION — which is also the only thing that
+   *  differs about what they write. This IS the assertion that one label still
+   *  covers two destinations; a button-name lookup would be ambiguous. */
+  const createIn = (section: string) =>
+    within(screen.getByRole("region", { name: section })).getByRole("button", {
+      name: "Knowledge base",
+    });
+
   it("the PERSONAL button writes to the home workspace, on the home shelf", async () => {
     renderHome();
     await openKnowledge();
     await screen.findByText("Fundraise memos");
 
-    fireEvent.click(screen.getByRole("button", { name: /New knowledge base/ }));
+    fireEvent.click(createIn("Personal"));
     await submitCreate("Handover");
 
     await waitFor(() => {
@@ -384,7 +394,7 @@ describe("creating", () => {
     await openKnowledge();
     await screen.findByText("Renewals");
 
-    fireEvent.click(screen.getByRole("button", { name: /New shared base/ }));
+    fireEvent.click(createIn("Shared in this channel"));
     await submitCreate("Handover");
 
     await waitFor(() => {
@@ -415,12 +425,12 @@ describe("creating", () => {
     await openKnowledge();
     await screen.findByText("Renewals");
 
-    fireEvent.click(screen.getByRole("button", { name: /New shared base/ }));
+    fireEvent.click(createIn("Shared in this channel"));
     await screen.findByPlaceholderText("e.g. Product specs");
     expect(screen.queryByText("Who can access")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    fireEvent.click(screen.getByRole("button", { name: /New knowledge base/ }));
+    fireEvent.click(createIn("Personal"));
     await screen.findByPlaceholderText("e.g. Product specs");
     expect(screen.queryByText("Who can access")).not.toBeInTheDocument();
   });

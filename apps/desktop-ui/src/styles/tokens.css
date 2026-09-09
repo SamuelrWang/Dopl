@@ -306,6 +306,17 @@
      fails on one copy. */
   --home-panel-line: var(--border-default);
   --home-card: #fbfcfc;
+  /* THE SELECTED CHANNEL ROW'S LINE (Samuel, 2026-09-09: *"the gray bordering
+     for the selected channel"* should be *"slightly darker"*). ONE STEP DOWN
+     FROM `--focus-line` (rgba(24,24,24,.22)), which is the kit's
+     `.selected-ring` border and is SHARED with the search pill's open state —
+     darkening that token would have moved the pill too, which is why this is a
+     second name rather than an edit. Consumed by exactly one rule,
+     `apps/desktop-ui/src/pages/home/home.module.css › .rowSelected`; the halo
+     beside it is still `.selected-ring`'s, so only the LINE moved.
+     Change it HERE and in the other copy — `scripts/check-css-token-drift.ts`
+     fails on one. */
+  --home-row-line-selected: rgba(24, 24, 24, 0.34);
   /* ⚠ `--home-frame-ink` / `--home-frame-hover` WERE ADDED AND REMOVED ON
      2026-08-30, both within Samuel's review of the same ruling. They existed so
      the workspace sidebar's nav chips could stand on the DARK frame beside the
@@ -498,6 +509,16 @@ html {
      12px padding + `.pageCard`'s 0 margin + its 2px border. */
   --shell-gap-left: 0px;
   --shell-panel-radius: 0px;
+  /* `.page-float`'s OWN top margin, as a name (2026-09-09). The panel's top
+     edge is `--shell-gap-top` + this, and the ACCOUNT RAIL has to start on that
+     same line — Samuel: the Home icon *"is like slightly higher than where the
+     right panel starts. It should be flush."* MEASURED: the rail is a sibling of
+     `.surface`, so its 7px pad put the tile at y=7 while the panel's border
+     landed at 6 + 7 = 13. `account-rail.module.css › .rail` now pads by the SUM
+     of the two, so the two edges cannot drift apart again — which a literal 13
+     there would not have given. ⚠ The other three float margins stay literal:
+     nothing outside the float reads them. */
+  --page-float-gap-top: 7px;
   /* Derived: viewport insets of the main panel. */
   --app-panel-top: calc(var(--shell-titlebar-h) + var(--shell-gap-top));
   --app-panel-left: calc(

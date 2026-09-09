@@ -327,12 +327,81 @@ describe("the rail reads the same on both hosts", () => {
     expect(rule(railCss, "\n.workspaces {")).toContain("margin-top: 4px");
   });
 
+  it("the Home tile's top edge IS the panel's top edge", () => {
+    // 🔒 Samuel, 2026-09-09: the Home icon *"is like slightly higher than where
+    // the right panel starts. It should be flush."* MEASURED: the rail is a
+    // SIBLING of `.surface`, so its own 7px pad put the tile at y=7 while the
+    // panel's border landed at `--shell-gap-top` (6, `.surface`'s margin) plus
+    // `--page-float-gap-top` (7, the float's own) = 13.
+    // ⚠ THE ASSERTION IS THE SUM, not the number 13 — both halves are tokens
+    // with other readers, and a literal here is exactly how the rail came to
+    // disagree with the panel in the first place.
+    expect(rule(railCss, "\n.rail {")).toContain(
+      "padding: calc(var(--shell-gap-top) + var(--page-float-gap-top)) 0 20px"
+    );
+    for (const file of [SPA_TOKENS, WEB_KIT_CSS]) {
+      expect(code(read(file))).toContain("--page-float-gap-top: 7px");
+    }
+  });
+
+  it("the SELECTED tile wears the HOVER ink, not the light raised face", () => {
+    // 🔒 Samuel, 2026-09-09: the selected workspace icon's white ring *"is
+    // thicker at the top than at the bottom … i like the thickness of the gray
+    // border that appears when i hover over the icon. Just have it be that. and
+    // instead of white, make it a gray bordering."*
+    //
+    // CAUSE: the selected tile composed the kit's `.raised-tab`, whose recipe is
+    // a 2px WHITE bevel across the top (`inset 0 2px 0 rgba(255,255,255,.9)`)
+    // and a 2px near-invisible dark one across the bottom — a face built for a
+    // LIGHT ground, on the dark rail. Not an offset, not a `ring-offset`, not a
+    // translate.
+    //
+    // ⚠ ONE DECLARATION FOR BOTH STATES, which is the ask: the "border" is the
+    // even 2px of tile the 36px glyph does not cover, so hover and selection
+    // reading ONE custom property is what makes them the same thickness and the
+    // same gray forever.
+    expect(code(railCss)).not.toMatch(/\.raised-tab/);
+    expect(code(read(RAIL_TSX)), "the rail composes the light raised face again")
+      .not.toContain("raised-tab");
+    expect(code(railCss)).toContain("--rail-tile-fill:");
+    expect(rule(railCss, '\n.tile:hover,\n.tile[aria-current="page"] {')).toContain(
+      "background: var(--rail-tile-fill)"
+    );
+  });
+
   it("the resting nav chip is the lighter gray, in both copies", () => {
     // One statement, one consumer (`.nav-chip:not(.nav-chip-active)`), two
     // mounts that both wanted it: the app sidebar and the settings-modal rail.
     for (const file of [SPA_TOKENS, WEB_KIT_CSS]) {
       expect(code(read(file))).toContain("--shell-chip: #e8e8e8");
     }
+  });
+});
+
+describe("the selected channel row's line is its own step", () => {
+  const HOME_CSS = "apps/desktop-ui/src/pages/home/home.module.css";
+  const ROW_TSX = "apps/desktop-ui/src/pages/home/relationship-list.tsx";
+
+  it("darkens the row's border WITHOUT moving the shared focus line", () => {
+    // 🔒 Samuel, 2026-09-09: *"the gray bordering for the selected channel"*
+    // should be *"slightly darker"*. The row wears the kit's `.selected-ring`,
+    // whose `border-color` is `--focus-line` — and so does the header's search
+    // pill while it is open, so darkening THAT token would have moved a control
+    // nobody named. A second name is the whole fix.
+    for (const file of [SPA_TOKENS, WEB_KIT_CSS]) {
+      const src = code(read(file));
+      expect(src).toContain("--home-row-line-selected: rgba(24, 24, 24, 0.34)");
+      // …and the ring the rest of the app shares is untouched.
+      expect(src).toContain("--focus-line: rgba(24, 24, 24, 0.22)");
+    }
+    expect(rule(read(HOME_CSS), "\n.rowSelected {")).toContain(
+      "border-color: var(--home-row-line-selected)"
+    );
+    // ⚠ COMPOSED, NOT REPLACED. The halo, the raised face and the hover lift are
+    // still `.selected-ring`'s — only the LINE is /home's.
+    expect(code(read(ROW_TSX))).toContain(
+      'cn("selected-ring", home.rowSelected)'
+    );
   });
 });
 
@@ -383,7 +452,13 @@ describe("the float geometry is shared, not copied", () => {
     // the workspace panel and /home's `<main>` are both `.page-float`, the two
     // surfaces float identically without either restating a number.
     for (const file of [KIT_CSS, WEB_KIT_CSS]) {
-      expect(rule(read(file), "\n.page-float {")).toContain("margin: 7px 8px 9px 8px");
+      // ⚠ THE TOP IS A TOKEN SINCE 2026-09-09 — the ACCOUNT RAIL pads by
+      // `--shell-gap-top + --page-float-gap-top` so the Home tile is flush with
+      // the panel's top edge (Samuel), and a literal here is what let the two
+      // drift six pixels apart. The other three have no outside reader.
+      expect(rule(read(file), "\n.page-float {")).toContain(
+        "margin: var(--page-float-gap-top) 8px 9px 8px"
+      );
     }
   });
 });

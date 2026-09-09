@@ -1,5 +1,4 @@
 import { Plus } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
 import { WorkspaceGlyph } from "@/shared/layout/app-shell/workspace-switcher-core";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
@@ -46,8 +45,11 @@ export function AccountRail({
         type="button"
         title="Home"
         aria-label="Home"
+        // ⚠ ALSO THE SELECTED FACE'S HOOK since 2026-09-09 — the CSS reads
+        // `[aria-current="page"]`, so there is no second selected class to keep
+        // in step with it. See `account-rail.module.css`.
         aria-current={isHome ? "page" : undefined}
-        className={cn(styles.tile, isHome && "raised-tab")}
+        className={styles.tile}
         onClick={() => onNavigate(HOME_PATH)}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -67,7 +69,7 @@ export function AccountRail({
               title={ws.name}
               aria-label={ws.name}
               aria-current={isActive ? "page" : undefined}
-              className={cn(styles.tile, isActive && "raised-tab")}
+              className={styles.tile}
               onClick={() => onNavigate(`/${workspaceSegment(ws)}`)}
             >
               <WorkspaceGlyph name={ws.name} iconUrl={ws.iconUrl} size="md" />

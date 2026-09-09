@@ -1,24 +1,31 @@
 /**
- * 🔒 ONE SOURCE FOR THE SMALL /home BUTTON (Samuel, 2026-08-28: every /home
- * button wearing the small create-button recipe adopts the KB card Open
- * button's size/UI).
+ * 🔒 THE FOUR /home SECTION-CREATE BUTTONS ARE THE PAGE'S BLACK BUTTON
+ * (Samuel, 2026-09-09: the Knowledge and Agents "+ New" buttons go *"from their
+ * white to be the same black button as the New thread button … the heights of
+ * the button should be the black button height"*).
  *
- * Two halves, and both have to hold or the ruling decays:
+ * ⚠ THIS FILE PINNED THE OPPOSITE UNTIL THAT RULING, and half of it still does.
+ * The 2026-08-28 ruling put every small /home button on the KB card's Open pill
+ * (`open-scale-button.tsx`, 30px, white); the new ruling moves ONLY the SECTION
+ * HEADER's create — a page action — and leaves the card's own Open and the
+ * "Share into this channel" button beside it exactly where they were. Both
+ * halves are asserted here, together, because "they used to be one face" is
+ * precisely how a future edit would put them back on one.
  *
- *   1. THE FACE IS THE CARD'S FACE — asserted by RENDERING both and comparing
- *      the classes, not by reading either one's source. A source test would
- *      pass on two files that happen to spell the same recipe, which is the
- *      state this change removed.
- *   2. NO `h-6` BUTTON RECIPE IS LEFT IN `pages/home` — a source scan, because
- *      the failure it guards is a NEW button hand-rolling the old pill next
- *      week, and no rendered tree can see a component that nobody wrote yet.
+ * Three claims:
  *
- * ⚠ MUTATION-VERIFIED: restoring the `h-6 … px-2.5 text-caption` className on
- * ANY of the four converted buttons turns the scan red; on either of the two
- * rendered below (the create button, "Share into this channel") the face
- * comparison goes red with it. The Agents section's "Try again" is the one
- * converted button reachable only through a failed read, and the scan is what
- * holds it.
+ *   1. `CreateButton` wears `PAGE_ACTION_BTN` — the "New channel" button's own
+ *      class list — by RENDERING it, not by reading its source.
+ *   2. That constant is the only declaration of the recipe in `pages/home`: the
+ *      three call sites that spelled it out by hand read it now, so a restyle
+ *      cannot land on whichever file the next reader opened.
+ *   3. The card-scale pill survives where it was NOT named — `ShareIntoChannelButton`
+ *      is still the card Open's face, class for class.
+ *
+ * ⚠ MUTATION-VERIFIED: putting the `h-6 …` recipe back on any converted button
+ * turns the scan red; putting `OpenScaleButton` back inside `CreateButton`
+ * turns claim 1 red; re-spelling the black recipe in `home-header.tsx` or
+ * `add-person-dialog.tsx` turns claim 2 red.
  */
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -28,7 +35,7 @@ import { describe, expect, it } from "vitest";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import { ShareIntoChannelButton } from "./agent-share";
-import { CreateButton } from "./panel-buttons";
+import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "./panel-buttons";
 
 /** This directory, and the knowledge module up in the web tree. See the note
  *  in the scan below for why neither is written inline. */
@@ -50,46 +57,37 @@ function faceOf(name: RegExp | string): Set<string> {
   return new Set(el.className.split(/\s+/).filter(Boolean));
 }
 
-describe("the /home section button IS the KB card's Open button", () => {
-  it("🔒 wears the card Open's face, class for class", () => {
-    render(
-      <>
-        <BaseCard
-          base={BASE}
-          ownerLabel="You"
-          starred={false}
-          onOpen={() => {}}
-          onToggleStar={() => {}}
-        />
-        <CreateButton onClick={() => {}}>New base</CreateButton>
-        <ShareIntoChannelButton onClick={() => {}} disabled={false} />
-      </>
-    );
+describe("the /home section button IS the page's black action button", () => {
+  it("🔒 wears `PAGE_ACTION_BTN`, class for class", () => {
+    render(<CreateButton onClick={() => {}}>Knowledge base</CreateButton>);
 
-    const open = faceOf(/Open Renewals/);
-
-    // Each adds ONE thing to the shared face: the disabled ink it already had.
-    // Everything else must be the same source's output.
-    const withDisabledInk = new Set([...open, "disabled:opacity-60"]);
-    expect(faceOf("New base")).toEqual(withDisabledInk);
-    expect(faceOf("Share into this channel")).toEqual(withDisabledInk);
-    // …and that face is really the shared pill, not empty class lists agreeing
-    // with each other.
-    expect(open.has("btn-light")).toBe(true);
-    expect(open.size).toBeGreaterThan(1);
+    // Each adds exactly what a section header needs of it and nothing else:
+    // the glyph gap, and the disabled ink it already had.
+    const expected = new Set([
+      ...PAGE_ACTION_BTN.split(/\s+/),
+      "gap-1.5",
+      "disabled:opacity-60",
+    ]);
+    expect(faceOf("Knowledge base")).toEqual(expected);
+    // …and that face is really the black pill, not two empty class lists
+    // agreeing with each other.
+    expect(expected.has("auth-btn-3d")).toBe(true);
+    expect(expected.has("h-9")).toBe(true);
   });
 
-  it("🔒 keeps the Plus glyph, at the pill's own icon size", () => {
-    // The ruling kept the icon and only rescaled it; a create button that lost
-    // its glyph reads as a filter, not an add.
-    render(<CreateButton onClick={() => {}}>New base</CreateButton>);
-    const svg = screen.getByRole("button", { name: "New base" }).querySelector("svg");
+  it("🔒 keeps the Plus glyph, at the black pill's own icon size", () => {
+    // A create button that lost its glyph reads as a filter, not an add — and
+    // Samuel's label for all four is "+ <noun>", so the `+` IS half the label.
+    render(<CreateButton onClick={() => {}}>Knowledge base</CreateButton>);
+    const svg = screen
+      .getByRole("button", { name: "Knowledge base" })
+      .querySelector("svg");
     expect(svg).not.toBeNull();
-    expect(svg?.getAttribute("width")).toBe("12");
+    expect(svg?.getAttribute("width")).toBe(String(PAGE_ACTION_ICON));
   });
 });
 
-describe("no page-local copy of the small pill is left in pages/home", () => {
+describe("no page-local copy of either recipe is left in pages/home", () => {
   // ⚠ Anchored on a FILE, not on `new URL(".", …)`: under vitest that form
   // resolves to a non-`file:` URL and `fileURLToPath` throws.
   // ⚠ THE SPECIFIER IS A VARIABLE ON PURPOSE. Vite rewrites
@@ -114,6 +112,19 @@ describe("no page-local copy of the small pill is left in pages/home", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("🔒 the black recipe is spelled ONCE, in panel-buttons.tsx", () => {
+    // It stood, byte-identically, on /home's "New channel" button, on "Add
+    // person" and (from 2026-09-09) would have stood on the four section
+    // creates — four copies of one page action. `auth-btn-3d` followed by a
+    // SPACE is the black face; `auth-btn-3d-light` is the raised WHITE one the
+    // rows and the search pill wear, and that is a different recipe with its
+    // own home in the kit.
+    const declaring = sources
+      .filter(([, text]) => /"auth-btn-3d /.test(text))
+      .map(([file]) => file);
+    expect(declaring).toEqual(["panel-buttons.tsx"]);
+  });
+
   it("🔒 `CreateButton` is declared exactly once", () => {
     const declaring = sources
       .filter(([, text]) => /function CreateButton\b/.test(text))
@@ -122,7 +133,33 @@ describe("no page-local copy of the small pill is left in pages/home", () => {
   });
 });
 
-describe("the card's own Open is not a fork", () => {
+describe("the CARD-scale pill survives where the ruling did not reach", () => {
+  it("🔒 `ShareIntoChannelButton` is still the card Open's face", () => {
+    // ⚠ THE HALF THAT DID NOT MOVE. It sits ON a template card beside the
+    // card's own controls, not in a section header, so the 2026-08-28 ruling
+    // still governs it — and the two buttons parting company is exactly the
+    // thing that made this comparison worth rendering in the first place.
+    render(
+      <>
+        <BaseCard
+          base={BASE}
+          ownerLabel="You"
+          starred={false}
+          onOpen={() => {}}
+          onToggleStar={() => {}}
+        />
+        <ShareIntoChannelButton onClick={() => {}} disabled={false} />
+      </>
+    );
+
+    const open = faceOf(/Open Renewals/);
+    expect(faceOf("Share into this channel")).toEqual(
+      new Set([...open, "disabled:opacity-60"])
+    );
+    expect(open.has("btn-light")).toBe(true);
+    expect(open.size).toBeGreaterThan(1);
+  });
+
   it("🔒 the knowledge module no longer declares the pill", () => {
     // Deleting the shared rule and re-adding `.cardOpen` would restore today's
     // pixels and tomorrow's drift — the card must keep RENDERING the shared

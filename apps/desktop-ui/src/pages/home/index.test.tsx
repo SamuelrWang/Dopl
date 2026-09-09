@@ -157,9 +157,9 @@ describe("home page", () => {
 
   it("renders claimed relationships and pending links in one list", async () => {
     renderHome();
-    // The header's selector replaced the page title — "Channels" is the
-    // surface (renamed from "Chat" 2026-09-01), and it is no longer the face
-    // the page OPENS on (Samuel, 2026-09-01: Overview is the landing).
+    // The header's selector replaced the page title — "Channel" is the
+    // surface (from "Chat" 2026-09-01, singular since 2026-09-09), and it is
+    // no longer the face the page OPENS on (Samuel: Overview is the landing).
     await openChannels();
     // 🔒 THE ROW IS THE CHANNEL'S NAME AND NO MEMBER IDENTITY (2026-09-01) —
     // this asserted the peer's EMAIL until the roster-derived row was removed.
@@ -184,7 +184,7 @@ describe("home page", () => {
     expect(screen.queryByRole("tab", { name: /^Links/ })).not.toBeInTheDocument();
     expect(
       screen.getAllByRole("tab").slice(0, 4).map((tab) => tab.textContent)
-    ).toEqual(["Overview", "Channels", "Knowledge", "Agents"]);
+    ).toEqual(["Overview", "Channel", "Knowledge", "Agents"]);
   });
 
   it("drops link containers from the account rail", async () => {
@@ -340,8 +340,11 @@ describe("home page", () => {
     );
 
     renderHome();
-    await openChannels();
-    fireEvent.click(screen.getByRole("button", { name: "New channel" }));
+    // ⚠ FROM OVERVIEW, THE FACE THE PAGE OPENS ON — this used to raise Channel
+    // first, which made the landing assertion below vacuous. Samuel's ruling is
+    // that the create takes the operator there ITSELF (2026-09-09).
+    await screen.findByRole("tab", { name: "Overview", selected: true });
+    fireEvent.click(await screen.findByRole("button", { name: "New channel" }));
 
     fireEvent.change(await screen.findByLabelText("Name"), {
       target: { value: "  Q3 Fundraise  " },
@@ -357,12 +360,60 @@ describe("home page", () => {
       expect(post?.opts.body).toEqual({ name: "Q3 Fundraise" });
     });
 
-    // The new row is SELECTED — the surface remounts on its container.
+    // 🔒 THE FACE MOVED WITH THE SELECTION. Both halves, because either one
+    // alone is the bug: a selected row on the Overview face is invisible, and a
+    // raised Channel face on the OLD row is somebody else's channel.
+    await screen.findByRole("tab", { name: "Channel", selected: true });
     await waitFor(() =>
       expect(screen.getByTestId("channel-surface")).toHaveAttribute(
         "data-workspace",
         "ws-link-new"
       )
+    );
+  });
+
+  /**
+   * 🔒 A PICK LEAVES OVERVIEW, AND A CREATE LANDS ON THE NEW CHANNEL (Samuel,
+   * 2026-09-09: *"when a user clicks on a different channel, it will go to that
+   * channel's channel page, not stay on the overview page"* and *"when a user
+   * creates a new channel, have it auto go from the overview page, directly to
+   * the channel's channel page"*).
+   *
+   * ⚠ THE RULE IS OVERVIEW-SCOPED FOR THE PICK AND UNCONDITIONAL FOR THE
+   * CREATE, and both halves are asserted. Overview is the ONE face whose pane
+   * carries no row (`home-tabs.ts › OVERVIEW_PANE`), so a click in the list
+   * changed nothing on screen — which is what was reported. Knowledge and
+   * Agents RENDER the selected channel's contents: the list beside them IS
+   * their picker, so raising Channel from those faces would delete the only way
+   * to point them anywhere (`index.tsx`, `ONE LAYOUT FOR ALL FOUR TABS`).
+   */
+  it("picking a channel from OVERVIEW raises that channel's own face", async () => {
+    renderHome();
+    // The page opens on Overview and no surface is mounted there.
+    await screen.findByRole("tab", { name: "Overview", selected: true });
+    expect(screen.queryByTestId("channel-surface")).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Priya Shah/ }));
+
+    await screen.findByRole("tab", { name: "Channel", selected: true });
+    expect(await screen.findByTestId("channel-surface")).toHaveAttribute(
+      "data-workspace",
+      LINK_WORKSPACE_ID
+    );
+  });
+
+  it("…and a pick from KNOWLEDGE stays on Knowledge — the list is its picker", async () => {
+    renderHome();
+    await screen.findByRole("tab", { name: "Overview" });
+    fireEvent.click(screen.getByText("Knowledge"));
+    await screen.findByRole("tab", { name: "Knowledge", selected: true });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Priya Shah/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: "Knowledge", selected: true })
+      ).toBeInTheDocument()
     );
   });
 

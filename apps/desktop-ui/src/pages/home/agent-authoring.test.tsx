@@ -51,14 +51,23 @@ beforeEach(() => {
 });
 
 /** Open a create editor and name a template, without saving it.
- *  ⚠ TWO BUTTONS SINCE 2026-08-27 — "New shared agent" in the SHARED section
- *  and "New agent" in PERSONAL. The exact name matters: `/New agent/` alone
- *  matches both, and the whole point of the split is which workspace it hits. */
+ *  ⚠ TWO BUTTONS SINCE 2026-08-27, AND SINCE 2026-09-09 THEY READ THE SAME
+ *  WORDS — "+ Agent template" in BOTH sections (Samuel). The only thing that
+ *  tells them apart is the SECTION they sit in, which is also the only thing
+ *  that differs about which workspace the create hits, so this reaches them
+ *  through their region. A button-name lookup would now be ambiguous. */
+function createButtonIn(section: string): HTMLButtonElement {
+  return within(screen.getByRole("region", { name: section })).getByRole(
+    "button",
+    { name: "Agent template" }
+  ) as HTMLButtonElement;
+}
+
 async function startNewAgent(
   name: string,
-  button: RegExp = /^New agent$/
+  section: string = PERSONAL_SECTION
 ): Promise<void> {
-  fireEvent.click(screen.getByRole("button", { name: button }));
+  fireEvent.click(createButtonIn(section));
   await screen.findByRole("dialog");
   fireEvent.change(
     document.querySelector<HTMLInputElement>("#agent-template-name")!,
@@ -73,7 +82,10 @@ function createCall() {
   );
 }
 
-const SHARED_BUTTON = /New shared agent/;
+/** The two section headings — `agent-templates/lib/visibility.ts`'s labels,
+ *  which is what `SectionPanel`'s `aria-labelledby` names the region by. */
+const SHARED_BUTTON = "Shared in this channel";
+const PERSONAL_SECTION = "Personal";
 
 describe("each section's create writes where its section reads", () => {
   it("the SHARED button writes into THIS CHANNEL'S container, and stays out of the shelf", async () => {
@@ -194,14 +206,10 @@ describe("each section's create writes where its section reads", () => {
 
     // The SHARED button still writes — the container is the selected row, not
     // boot's answer. Only PERSONAL depends on there being a home workspace.
-    expect(
-      (screen.getByRole("button", { name: SHARED_BUTTON }) as HTMLButtonElement)
-        .disabled
-    ).toBe(false);
-    expect(
-      (screen.getByRole("button", { name: /^New agent$/ }) as HTMLButtonElement)
-        .disabled
-    ).toBe(true);
+    // ⚠ BY SECTION, not by name: both buttons read "+ Agent template" since
+    // 2026-09-09, so this is also the test that they are two buttons at all.
+    expect(createButtonIn(SHARED_BUTTON).disabled).toBe(false);
+    expect(createButtonIn(PERSONAL_SECTION).disabled).toBe(true);
   });
 });
 
@@ -269,16 +277,18 @@ describe("what the editor is allowed to ask for", () => {
     // The container's own bases, off the PLAIN key (`useKnowledgeBaseList`) —
     // the channel-scoped entry carries `channelGrants` and belongs to the
     // Knowledge pane; the attach picker has no use for it.
-    fireEvent.click(screen.getByRole("button", { name: "Attach" }));
-    expect(await screen.findByRole("menuitem", { name: "Call notes" })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: "Fundraise memos" })).toBeNull();
+    // ⚠ "Add knowledge" + tree rows since 2026-09-08 (`knowledge-scope-picker.tsx`);
+    // the chip menu it replaced answered "Attach" + `menuitem`s.
+    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
+    expect(await screen.findByRole("treeitem", { name: "Call notes" })).toBeTruthy();
+    expect(screen.queryByRole("treeitem", { name: "Fundraise memos" })).toBeNull();
 
     // 🔒 PLAIN KEY vs `?channelId=`, AND THIS HALF WAS BLIND UNTIL 2026-08-26.
     // `agent-test-fixtures.ts › agentRoutes` used to strip the query before
     // dispatching, so both entries answered with one body and the two
     // assertions above passed whichever entry the editor read. The fixture is
     // query-aware now and carries a row ONLY the channel-scoped answer has.
-    expect(screen.queryByRole("menuitem", { name: CHANNEL_ONLY_BASE })).toBeNull();
+    expect(screen.queryByRole("treeitem", { name: CHANNEL_ONLY_BASE })).toBeNull();
     // …and the same claim from the wire, which is where it is unambiguous: not
     // one base read this editor made carried the query at all.
     // ⚠ `opts.method` is "GET", never undefined — `api-client.ts › apiRequest`

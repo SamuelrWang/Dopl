@@ -101,6 +101,12 @@ const shellHelpers = makeShellHelpers({
 });
 const createShellWindow = shellHelpers.createShellWindow;
 const navigateToChannels = shellHelpers.navigateToChannels;
+// 🔒 THE THREE "OPEN THE APP" DOORS GO THROUGH THIS, not through
+// `showMainWindow` (2026-09-09). It reveals the window AND, when there already
+// was one, puts it back on `/` so the launch decision re-runs and the operator
+// lands on /home. The reasoning — and why deep links and notifications must NOT
+// use it — is on `shell-mode.js › openMainWindow`.
+const openMainWindow = shellHelpers.openMainWindow;
 
 // The menu's "Home". The renderer owns routing, so this asks it to go to boot.
 function loadApp() {
@@ -153,8 +159,11 @@ if (!gotLock) {
   app.on('second-instance', (_event, argv) => {
     // Windows/Linux deliver deep links as a launch arg; macOS uses 'open-url'.
     const link = argv.find((a) => a.startsWith(PROTOCOL + '://'));
-    if (link) deepLink.handle(link);
-    showMainWindow();
+    // ⚠ A SECOND LAUNCH CARRYING A DEEP LINK IS NOT A PLAIN OPEN: the link names
+    // where to land and `deepLink.handle` reveals the window itself, so resetting
+    // to `/` here would be a race against its own push.
+    if (link) { deepLink.handle(link); return; }
+    openMainWindow();
   });
 
   app.whenReady().then(() => {
@@ -187,7 +196,7 @@ if (!gotLock) {
     // says both are GONE with window mode (F-228). Corrected 2026-08-20; the note below is the
     // accurate one.
     tray.create({
-      onOpen: () => showMainWindow(),
+      onOpen: () => openMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
       // "Update ready — restart to install": restarts straight away when nothing
       // is live, and asks first (naming the session) when an agent is mid turn.
@@ -396,7 +405,7 @@ if (!gotLock) {
       if (!mainWindow || mainWindow.isDestroyed()) {
         createShellWindow({ show: true });
       } else {
-        showMainWindow();
+        openMainWindow();
       }
     });
   });

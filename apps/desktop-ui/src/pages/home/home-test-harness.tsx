@@ -386,7 +386,11 @@ export function renderHome() {
 }
 
 /**
- * RAISE THE CHANNELS FACE.
+ * RAISE THE CHANNEL FACE.
+ *
+ * ⚠ THE TAB IS LABELLED **"Channel"** (singular) SINCE 2026-09-09 (Samuel) —
+ * the KEY is still `"channels"` (`home-tabs.ts` carries why). The name below is
+ * the LABEL, so it is the one that moved.
  *
  * ⚠ **NEEDED SINCE 2026-09-01, WHEN THE PAGE'S DEFAULT MOVED TO OVERVIEW**
  * (Samuel; `home-tabs.ts › HOME_DEFAULT_TAB`). Every suite on this page that
@@ -399,12 +403,12 @@ export function renderHome() {
  * that need the pane await it themselves, as they already did.
  */
 export async function openChannels(): Promise<void> {
-  fireEvent.click(await screen.findByRole("tab", { name: "Channels" }));
-  await screen.findByRole("tab", { name: "Channels", selected: true });
+  fireEvent.click(await screen.findByRole("tab", { name: "Channel" }));
+  await screen.findByRole("tab", { name: "Channel", selected: true });
 }
 
 /**
- * Raise the Channels face AND wait for its record pane.
+ * Raise the Channel face AND wait for its record pane.
  *
  * ⚠ THE COMMON CASE, kept as one call because it is two statements in nineteen
  * places in `person-info-tab.test.tsx` alone — and that file sits AT the

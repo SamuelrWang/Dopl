@@ -21,6 +21,13 @@
  * nothing to migrate. ⚠ Do not read that rename as licence to rename the
  * `channels` PAGE segment (`routes.tsx › WORKSPACE_PAGES`), which is a real
  * path with a hand copy in `dopl-desktop-app/main/deep-link-target.js`.
+ *
+ * ⚠ AND ITS LABEL IS SINGULAR — **"Channel"** SINCE 2026-09-09 (Samuel). The
+ * face shows ONE channel, the one the list beside it has selected, so the
+ * plural named the list rather than the pane. ⚠ THE KEY DID **NOT** MOVE WITH
+ * it this time: `"channels"` is read by `use-activity-jump.ts`, by the page's
+ * `paneToken` fallback and by four suites, and a key rename buys nothing a
+ * label rename already bought. Label ≠ key here, deliberately.
  */
 export type HomeTab = "overview" | "channels" | "knowledge" | "agents";
 
@@ -34,7 +41,7 @@ export type HomeTab = "overview" | "channels" | "knowledge" | "agents";
  */
 export const HOME_TABS = [
   { key: "overview", label: "Overview" },
-  { key: "channels", label: "Channels" },
+  { key: "channels", label: "Channel" },
   { key: "knowledge", label: "Knowledge" },
   { key: "agents", label: "Agents" },
 ] as const satisfies ReadonlyArray<{ key: HomeTab; label: string }>;

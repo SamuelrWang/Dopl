@@ -11,6 +11,7 @@ import {
 } from "@/shared/ui/standard-dialog";
 import { RAISED_WELL } from "@/shared/ui/wells";
 import { errorMessage } from "#/components/page-states";
+import { PAGE_ACTION_BTN } from "./panel-buttons";
 import { displayUrl } from "./home-rows";
 import {
   expiresAtFrom,
@@ -95,7 +96,9 @@ export function AddPersonDialog({ workspaceId }: { workspaceId: string }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
-        className="auth-btn-3d flex h-9 cursor-pointer items-center rounded-full px-[15px] text-small font-semibold text-white"
+        // ⚠ THE SHARED RECIPE (2026-09-09), not a fourth hand-written copy of
+        // it — same class list, one declaration (`panel-buttons.tsx`).
+        className={PAGE_ACTION_BTN}
       >
         Add person
       </button>

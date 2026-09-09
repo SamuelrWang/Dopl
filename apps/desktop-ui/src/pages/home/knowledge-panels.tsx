@@ -68,6 +68,14 @@ import home from "./home.module.css";
  * ⚠ ONE LAYOUT FOR ALL THREE TABS (`index.tsx`): this renders INSIDE the record
  * pane. It never moves the conversation column and it never goes full-width.
  *
+ * ⚠ **BOTH SECTION BUTTONS READ "+ Knowledge base" (Samuel, 2026-09-09: *"have
+ * it for both, say, + Knowledge base. for both"*), on the page's black `h-9`
+ * pill (`panel-buttons.tsx › CreateButton`).** They said "New shared base" and
+ * "New knowledge base"; the SECTION they sit in names the destination, so the
+ * button says only what it makes. **The two accessible names are identical on
+ * purpose** — reach them through their section (`getByRole("region", { name:
+ * … })`), never by button name alone, as `knowledge-panels.test.tsx` does.
+ *
  * ⚠ **THE SECTIONS ARE FLAT (Samuel, 2026-08-27, over a screenshot of this
  * face).** They were the shared `SectionBox` — a `bg-card-surface-subtle`
  * header STRIP over a `bg-bg-inset` body carrying the concave inset shadow —
@@ -271,7 +279,7 @@ export function HomeKnowledgePanels({
           // a member from a guest (`HomeChannel` carries no viewer role, F-343),
           // so the button is shown to both. Do not "fix" that by guessing.
           <CreateButton onClick={() => setCreateOpen("channel")}>
-            New shared base
+            Knowledge base
           </CreateButton>
         }
       >
@@ -307,16 +315,17 @@ export function HomeKnowledgePanels({
             disabled={homeTarget === null}
             onClick={() => setCreateOpen("home")}
           >
-            New knowledge base
+            Knowledge base
           </CreateButton>
         }
-        // ⚠ ONE CAPTION LINE, and it is the RULING, not an explainer (minimal
-        // UI copy). It says where this shelf is NOT: sharing happens in the
-        // section above, by creating there. ⚠ It is the PANEL'S caption slot
-        // now, so it sits under the heading on the same ground and aligns with
-        // it — as a loose `<p>` on the old inset body it wore the body's own
-        // `px-4` and lined up with nothing.
-        caption="Yours alone. To share knowledge in a channel, create it there."
+        // ⚠ THE CAPTION IS DELETED (Samuel, 2026-09-09: *"remove this line:
+        // Yours alone. To share knowledge in a channel, create it there."*). It
+        // was the RULING rather than an explainer when it landed on 2026-08-27,
+        // and the minimal-copy ruling has since tightened to label + control
+        // (INVARIANTS §5): the heading says "Personal" and the button beside it
+        // says what it makes, so the sentence was a third statement of one
+        // fact. **Do not put an explainer line back in either panel** — the
+        // caption slot survives on `SectionPanel` for a caller with a real rule.
       >
         {/* ⚠ THE FAIL-CLOSED BACKFILL NOTICE WAS REMOVED HERE (2026-09-06
             reversal of task 11): there is no arming regression to explain now

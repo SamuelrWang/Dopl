@@ -7,7 +7,6 @@ import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/crea
 import { isStandardWorkspace } from "@/features/workspaces/types";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import type { HomeChannelsPayload } from "@/features/home/types";
@@ -18,12 +17,11 @@ import { PageError, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { bootQueryKey, fetchBoot } from "#/pages/boot/use-boot-state";
 import { AccountRail } from "#/components/app-shell";
-import { HomeSettingsControl } from "./home-settings-control";
+import { HomeHeader } from "./home-header";
 import { RelationshipList } from "./relationship-list";
 import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
 import { NewChannelDialog } from "./new-channel-dialog";
-import { HomeSearch } from "./home-search";
 import { HomePageSkeleton } from "./home-skeleton";
 import { HomeKnowledgePanels } from "./knowledge-panels";
 import { HomeAgentPanels } from "./agent-panels";
@@ -42,7 +40,6 @@ import {
   AGENTS_PANE,
   EMPTY_PANE,
   HOME_DEFAULT_TAB,
-  HOME_TABS,
   KNOWLEDGE_PANE,
   OVERVIEW_PANE,
   type HomeTab,
@@ -351,56 +348,15 @@ export default function HomePage() {
               home.page
             )}
           >
-            {/* ⚠ SYMMETRIC PADDING. The controls are one 36px row and they sit
-                CENTRED in the strip.
-                ⚠ THE LEFT PAD IS THE LIST COLUMN'S WIDTH, not a spacer: it puts
-                the selector's left edge on the record pane's (Samuel,
-                2026-08-24). Same var the column is sized from — see
-                `home.module.css › .page`. */}
-            <div className="flex items-center justify-between gap-3 py-3 pr-5">
-              {/* ⚠ THE LEFT PAD BECAME A REAL CELL (2026-08-30) AND THE WIDTH IS
-                  WHY IT STILL ALIGNS. It was `pl-[var(--home-list-w)]` on this
-                  row; the operator's face needed to live IN the list column, so
-                  the pad is now a cell of exactly that width holding it, and the
-                  selector starts on the record pane's left edge as before —
-                  same var, same edge (`home.module.css › .page`).
-                  ⚠ THE TWO ARE ONE GROUP, or `justify-between` would spread
-                  three children and walk the selector off that edge. */}
-              <div className="flex min-w-0 items-center">
-                <div className="flex w-[var(--home-list-w)] shrink-0 items-center px-3">
-                  <HomeSettingsControl
-                    identity={identity.data}
-                    onWorkspaceChanged={() => void workspacesQuery.refetch()}
-                  />
-                </div>
-                {/* The selector REPLACES the page title. ⚠ PLAIN PILLS, semibold, 36px
-                    (`lg`) since 2026-09-08 — Samuel: "individual pills … unselected grayed
-                    out … text should be bolded"; not a track any more. */}
-                <SegmentedControl<HomeTab>
-                  options={HOME_TABS}
-                  value={tab}
-                  onChange={setTab}
-                  variant="plain"
-                  size="lg"
-                  weight="semibold"
-                />
-              </div>
-              <div className="flex items-center gap-2.5">
-                <HomeSearch query={query} onQueryChange={setQuery} />
-                {/* ⚠ ONE PRIMARY ACTION, AND IT IS "New channel" (Samuel,
-                    2026-08-25). The mint popover was here as an interim while
-                    links were still page-level; it now lives on the channel it
-                    binds to (`person-info-tab.tsx`), because that is the thing
-                    it acts on. Do not put a second black pill back here. */}
-                <button
-                  type="button"
-                  onClick={() => setNewChannelOpen(true)}
-                  className="auth-btn-3d flex h-9 cursor-pointer items-center rounded-full px-[15px] text-small font-semibold text-white"
-                >
-                  New channel
-                </button>
-              </div>
-            </div>
+            <HomeHeader
+              identity={identity.data}
+              onWorkspaceChanged={() => void workspacesQuery.refetch()}
+              tab={tab}
+              onTabChange={setTab}
+              query={query}
+              onQueryChange={setQuery}
+              onNewChannel={() => setNewChannelOpen(true)}
+            />
             {/* ⚠ ONE LAYOUT FOR ALL FOUR TABS (Samuel, 2026-08-24). The
                 conversation column and the pane's size and position do not move
                 between Overview, Channels, Knowledge and Agents — only what is
@@ -419,9 +375,19 @@ export default function HomePage() {
                 selectedId={selected?.id ?? null}
                 // ⚠ A MANUAL PICK DROPS ANY HELD THREAD — "take me to this
                 // channel", not "take me back to that thread".
+                // ⚠ AND IT LEAVES OVERVIEW (Samuel, 2026-09-09: picking a
+                // channel must "go to that channel's channel page, not stay on
+                // the overview page"). OVERVIEW ONLY, and that is the whole
+                // rule: Overview is the one face whose pane is CROSS-CHANNEL
+                // (`paneToken` carries no row for it), so a click there changed
+                // nothing on screen. Knowledge and Agents render the SELECTED
+                // channel's contents — the list beside them IS their picker —
+                // so raising Channels from those faces would delete the only
+                // way to point them at another channel.
                 onSelect={(id) => {
                   setSelectedId(id);
                   jump.clear();
+                  if (tab === "overview") setTab("channels");
                 }}
               />
               <div
@@ -475,7 +441,14 @@ export default function HomePage() {
       <NewChannelDialog
         open={newChannelOpen}
         onOpenChange={setNewChannelOpen}
-        onCreated={(workspaceId) => setSelectedId(channelRowId(workspaceId))}
+        onCreated={(workspaceId) => {
+          setSelectedId(channelRowId(workspaceId));
+          // ⚠ AND THE FACE MOVES WITH IT (Samuel, 2026-09-09: a new channel
+          // goes "directly to the channel's channel page"). Unconditional,
+          // unlike the list's own pick above: creating IS the explicit act of
+          // going somewhere, from whichever face the operator pressed it on.
+          setTab("channels");
+        }}
       />
 
       <CreateWorkspaceDialogCore

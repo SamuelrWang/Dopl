@@ -74,6 +74,15 @@ import { HomeAgentPanelsSkeleton } from "./home-skeleton";
  *
  * ⚠ ONE LAYOUT FOR ALL THREE TABS (`index.tsx`): this renders INSIDE the record
  * pane. It never moves the conversation column and it never goes full-width.
+ *
+ * ⚠ **BOTH SECTION BUTTONS READ "+ Agent template" (Samuel, 2026-09-09), on the
+ * page's black `h-9` pill** — the same ruling the Knowledge face took the same
+ * day (`panel-buttons.tsx › CreateButton`). They said "New shared agent" and
+ * "New agent"; the SECTION names the destination, so the button says only what
+ * it makes, and "template" is the word this face has always meant (identities,
+ * not running sessions — see the note above). **The two accessible names are
+ * identical on purpose** — reach them through their section
+ * (`getByRole("region", { name: … })`), never by button name alone.
  */
 export function HomeAgentPanels({
   channel,
@@ -205,7 +214,7 @@ export function HomeAgentPanels({
         // (`HomeChannel` carries no viewer role, F-343). Do not guess.
         action={
           <CreateButton onClick={() => setEditing({ where: "container", template: null })}>
-            New shared agent
+            Agent template
           </CreateButton>
         }
       />
@@ -252,7 +261,7 @@ export function HomeAgentPanels({
             disabled={personalCreateTarget === null}
             onClick={() => setEditing(personalCreateTarget)}
           >
-            New agent
+            Agent template
           </CreateButton>
         }
       />
