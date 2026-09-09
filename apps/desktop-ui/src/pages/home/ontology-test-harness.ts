@@ -74,6 +74,51 @@ export const SHARES = {
 export const SHARES_PATH = `/api/ontology/clusters/${PIPELINE_ID}/shares`;
 
 /**
+ * THE CLUSTER ROLL-UP (2026-09-09, the CHANGELOG lane part 2) — one FIELD row on
+ * an object of `Pipeline` and one rename on the ontology itself, which is the
+ * pair the roll-up exists to show together.
+ *
+ * ⚠ THE OBJECT ROW'S PAYLOAD IS `{field, before, after}`, NOT `{body}`: an
+ * ontology revision is one PROPERTY of one object, and a fixture carrying a body
+ * would pass a renderer that only knows how to draw a document.
+ */
+export const CLUSTER_REVISIONS = {
+  revisions: [
+    {
+      id: "rev-stage",
+      resourceType: "ontology_object",
+      resourceId: "card-1",
+      workspaceId: WORKSPACE_ID,
+      actor: { userId: "user-1", kind: "user", agentSessionId: null },
+      op: "edit",
+      summary: null,
+      payload: {
+        field: "attribute:stage",
+        before: { kind: "pill", value: "New" },
+        after: { kind: "pill", value: "Won" },
+      },
+      contentHash: "h1",
+      createdAt: "2026-09-09T12:00:00.000Z",
+      updatedAt: "2026-09-09T12:00:00.000Z",
+    },
+    {
+      id: "rev-name",
+      resourceType: "ontology_cluster",
+      resourceId: PIPELINE_ID,
+      workspaceId: WORKSPACE_ID,
+      actor: { userId: "user-1", kind: "agent", agentSessionId: "chan-1:abc" },
+      op: "rename",
+      summary: null,
+      payload: { field: "name", before: "Deals", after: "Pipeline" },
+      contentHash: "h2",
+      createdAt: "2026-09-08T09:00:00.000Z",
+      updatedAt: "2026-09-08T09:00:00.000Z",
+    },
+  ],
+  nextCursor: null,
+};
+
+/**
  * The ontology reads and writes, or `null` for a path this table does not own —
  * so a suite chains it in front of `home-test-harness.tsx › routes` and every
  * other page read keeps answering.
@@ -93,6 +138,9 @@ export function ontologyRoutes(
       ok({ plan: "pro", objectCap: null, objectsUsed: 3, isCapped: false })
     );
   }
+  // ⚠ BEFORE the `/clusters/` arms below — a GET on `/clusters/{id}/revisions`
+  // would otherwise fall through to `null` and read as an unexpected path.
+  if (bare.endsWith("/revisions")) return Promise.resolve(ok(CLUSTER_REVISIONS));
   if (bare.startsWith("/api/ontology/clusters/") && bare.endsWith("/shares")) {
     if (opts.method === "PUT") return Promise.resolve(noContent());
     if (opts.method === "DELETE") return Promise.resolve(noContent());

@@ -15,24 +15,16 @@ import { cn } from "@/shared/lib/utils";
  * | extra | drag-to-resize grip | none |
  *
  * ⚠ **IT PAINTS NOTHING.** No fill, no border, no radius beyond the corner —
- * the GROUND is `className`, and that is the whole scoping story: a page states
- * the ground it actually stands on without this module ever naming one. /home's
- * record pane repaints its panels `--home-panel` in one CSS rule (below); a
- * workspace page passes `SECTION_PANEL_GROUND`. A `tone="home"` prop here would
- * turn a per-mount decision into an enum one autocomplete away from every page.
+ * the GROUND is `className`, and that is the whole scoping story: this component
+ * does not choose grounds. /home's record pane repaints its panels `--home-panel`
+ * in one CSS rule; a workspace page passes `SECTION_PANEL_GROUND`. A `tone="home"`
+ * prop would turn a per-mount decision into an enum one autocomplete away from
+ * every page.
  *
- * ⚠ The old wording of this note said the `home-*` tokens are "/home-ONLY".
- * **That is superseded** (Samuel, 2026-08-30): they are the APP FRAME palette
- * and the workspace shell consumes them too (`docs/DESIGN-SYSTEM.md`). The rule
- * here is unchanged and its reason is now stated for what it always was — this
- * component does not choose grounds — not for a scope that no longer exists.
- *
- * ⚠ `data-section-panel` IS A PAGE-SCOPING HOOK, NOT DECORATION. It is how
- * `apps/desktop-ui/src/pages/home/home.module.css` repaints every panel inside
- * the record pane in one rule, instead of each mount restating the ground — the
- * same attribute idiom `composer-panel-fields.tsx › PANEL_HOOK` uses, and for
- * the same reason: swapping a utility class at a call site cannot silently
- * break an override keyed on an attribute.
+ * ⚠ `data-section-panel` IS A PAGE-SCOPING HOOK, NOT DECORATION — how
+ * `apps/desktop-ui/src/pages/home/home.module.css` repaints every panel in the
+ * record pane in one rule. Swapping a utility class at a call site cannot
+ * silently break an override keyed on an attribute.
  *
  * ⚠ AN EMPTY SECTION KEEPS ITS HEADER. A panel that vanished when empty makes
  * "you have none" and "there are none to have" the same picture.
@@ -46,19 +38,14 @@ import { cn } from "@/shared/lib/utils";
  * wells are — and it takes the same token they do.
  *
  * ⚠ IT IS `--home-panel` AND NOT `bg-card-surface-subtle` (#f4f6f9) BECAUSE THE
- * WELL IS ONE COLOUR IN BOTH HOSTS. /home paints these `var(--home-panel)` in
- * `pages/home/home.module.css › .frame :global([data-section-panel])`; the two
- * grays were 3/255 apart and said the same thing twice. ⚠ The hairline STAYS
- * here and /home's rule clears it — that page's record pane is already a bounded
- * card, a workspace page's is not.
+ * WELL IS ONE COLOUR IN BOTH HOSTS: the two grays were 3/255 apart and said the
+ * same thing twice. ⚠ The hairline STAYS here and /home's rule clears it — that
+ * page's record pane is already a bounded card, a workspace page's is not.
  *
- * ⚠ IT IS A DEFAULT, NOT THE COMPONENT'S OWN FACE. `SectionPanel` still paints
- * nothing (see the docblock): a page selects its own ground by passing
- * something else, and /home passes nothing at all because that one CSS rule
- * repaints every panel inside its record pane. This constant exists because the
- * value was stated inline in two features — `agent-templates/components/
- * template-section.tsx › TemplatePanel` and the knowledge base-info face — and
- * two identical class strings in two trees is one restyle away from a fork.
+ * ⚠ IT IS A DEFAULT, NOT THE COMPONENT'S OWN FACE — a page selects its ground by
+ * passing something else, and /home passes nothing at all. It exists because the
+ * value was stated inline in two features (`agent-templates/components/
+ * template-section.tsx › TemplatePanel` and the knowledge base-info face).
  */
 export const SECTION_PANEL_GROUND =
   "border border-border-subtle bg-home-panel";

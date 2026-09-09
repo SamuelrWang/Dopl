@@ -12,6 +12,12 @@
  * straight from the row button (no confirmation); diffing against the row ABOVE
  * rather than against the same resource's previous revision; and rendering
  * Restore for a body-less revision.
+ *
+ * ⚠ **AND THE ONTOLOGY ROW SHAPE (2026-09-09, part 2)** — the block at the foot.
+ * Three more reverts, three more failures: keying the row shape on
+ * `resourceType` instead of on the PAYLOAD (a create BUNDLE renders
+ * `undefined: — → —`); rendering Restore for an ASSOCIATION row; and a
+ * confirmation that does not name the FIELD it is about.
  */
 
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -194,5 +200,65 @@ describe("paging", () => {
       />
     );
     expect(screen.queryByText("Load more")).toBeNull();
+  });
+});
+
+describe("the ONTOLOGY row — `Field: before → after`", () => {
+  function field(over: Partial<Revision> & { id: string }): Revision {
+    return rev({
+      resourceType: "ontology_object",
+      resourceId: "o-1",
+      payload: {
+        field: "attribute:stage",
+        before: { kind: "pill", value: "New" },
+        after: { kind: "pill", value: "Won" },
+      },
+      ...over,
+    });
+  }
+
+  it("reads without expanding — the whole point of a per-property timeline", () => {
+    mount([field({ id: "a" })]);
+    const row = screen.getAllByRole("button")[0];
+    expect(row.textContent).toContain("Stage");
+    expect(row.textContent).toContain("New");
+    expect(row.textContent).toContain("Won");
+  });
+
+  it("🔒 a create BUNDLE renders its fields, not an empty field line", () => {
+    mount([field({ id: "a", op: "create", payload: { fields: { name: "Acme" } } })]);
+    const row = screen.getAllByRole("button")[0];
+    expect(row.textContent).toContain("Created");
+    expect(row.textContent).toContain("Acme");
+    expect(row.textContent).not.toContain("undefined");
+    fireEvent.click(row);
+    expect(screen.getByText("Name")).toBeTruthy();
+  });
+
+  it("🔒 offers NO Restore for an ASSOCIATION row", () => {
+    mount([
+      field({
+        id: "a",
+        payload: {
+          association: "relationship",
+          field: "relationship",
+          before: [],
+          after: [{ label: "works at", targetIds: ["o-2"] }],
+        },
+      }),
+    ]);
+    fireEvent.click(screen.getAllByRole("button")[0]);
+    expect(screen.queryByText("Restore")).toBeNull();
+  });
+
+  it("the confirmation NAMES THE FIELD and the value it would write back", async () => {
+    mount([field({ id: "a" })]);
+    fireEvent.click(screen.getAllByRole("button")[0]);
+    fireEvent.click(screen.getByText("Restore"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Restore Stage")).toBeTruthy();
+    expect(
+      within(dialog).getByText(/sets Stage back to "New".*Other fields are untouched/)
+    ).toBeTruthy();
   });
 });

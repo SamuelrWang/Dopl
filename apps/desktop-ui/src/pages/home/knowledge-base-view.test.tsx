@@ -91,7 +91,13 @@ describe("🔒 the opened base — ONE panel, info at rest", () => {
 
     // The resting state is the base's own page — not a "pick a file" prompt.
     expect(screen.getByText("Details")).toBeInTheDocument();
-    expect(screen.getByText("Contents")).toBeInTheDocument();
+    // ⚠ "Changelog", NOT "Contents" (2026-09-09, the CHANGELOG lane): the base
+    // info face's second section is the day-grouped history now, and the
+    // Contents editor it replaced has no other home in the product
+    // (`docs/REFACTOR-FINDINGS.md › F-687`). This assertion was left behind by
+    // part 1 and was RED on `master` until part 2 fixed it — the desktop suite
+    // is a second consumer of that face and part 1 updated only its own.
+    expect(screen.getByText("Changelog")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Fundraise memos")).toBeInTheDocument();
 
     // …and the rail is a column of its own, with its own collapse control.

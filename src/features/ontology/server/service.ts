@@ -27,6 +27,22 @@ import {
 } from "./service-gates";
 import { mapClusterRow, getSnapshot, getSummary } from "./service-reads";
 import { getReach } from "./service-reach";
+// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`). The
+// hooks live in a SIBLING module rather than inline: this file is at the §1 cap,
+// and the field-diff arithmetic is what the capture tests address directly.
+import {
+  edgeSnapshot,
+  recordAnchorRevision,
+  recordAssociationRevision,
+  recordClusterCreate,
+  recordClusterDelete,
+  recordClusterFieldChanges,
+  recordMembershipCreate,
+  recordObjectCreate,
+  recordObjectDelete,
+  recordObjectFieldChanges,
+  type RecordFieldOpts,
+} from "./service-revisions";
 
 /**
  * Ontology business logic — WRITES, their gates, and the anchor. The two graph
@@ -51,6 +67,7 @@ interface AuthLike {
   /** WHOSE REACH the credential inherits; `null` = nobody in particular.
    *  ⚠ REQUIRED — this axis has no safe default (F-336). */
   credentialSubjectUserId: string | null;
+  sessionId?: string | null;
 }
 
 /**
@@ -71,6 +88,10 @@ export function buildOntologyContext(auth: AuthLike): OntologyContext {
     role: auth.role,
     source: auth.agentTokenId ? "agent" : "user",
     credentialSubjectUserId: auth.credentialSubjectUserId,
+    // ⚠ VERBATIM, AND ATTRIBUTION ONLY. It is the desktop's slot key and the one
+    // forgeable field on this context (`shared/auth/session-header.ts`); the
+    // changelog GROUPS an agent session's writes by it and nothing grants on it.
+    sessionId: auth.sessionId ?? null,
   };
 }
 
@@ -90,6 +111,7 @@ export async function createCluster(
     createdBy: ctx.userId,
     source: ctx.source,
   });
+  await recordClusterCreate(ctx, row);
   return mapClusterRow(row);
 }
 
@@ -115,6 +137,10 @@ export async function updateCluster(
     source: ctx.source,
   });
   if (!row) throw HttpError.notFound("Cluster not found");
+  // ⚠ `gated` IS THE BEFORE STATE — the gate read the row before the write, so
+  // the diff costs no second read. A layout-only drag changes no TRACKED field
+  // and therefore records nothing (`service-revisions.ts › clusterFields`).
+  await recordClusterFieldChanges(ctx, gated, row);
   return mapClusterRow(row);
 }
 
@@ -135,6 +161,7 @@ export async function deleteCluster(
   const gated = await requireCluster(ctx, clusterId, "edit");
   const count = await repo.cascadeHardDeleteCluster(gated.workspace_id, clusterId);
   if (count === null) throw HttpError.notFound("Cluster not found");
+  await recordClusterDelete(ctx, gated, count);
   return count;
 }
 
@@ -201,6 +228,20 @@ export async function createObject(
   if (inheritedEdges?.length) {
     await repo.replaceRelationshipsForSource(workspaceId, row.id, inheritedEdges);
   }
+  await recordObjectCreate(ctx, row);
+  await recordMembershipCreate(ctx, row, {
+    clusterId: input.clusterId ?? null,
+    parentObjectId: input.parentObjectId ?? null,
+  });
+  if (inheritedEdges?.length) {
+    await recordAssociationRevision(
+      ctx,
+      { id: row.id, workspaceId },
+      "relationship",
+      [],
+      edgeSnapshot(inheritedEdges)
+    );
+  }
   const object = mapObjectRow(row);
   object.relationships = inheritedEdges ?? [];
   return object;
@@ -218,11 +259,19 @@ function staleVersionError(expected: string, actual: string): HttpError {
   );
 }
 
+/**
+ * ⚠ `revision` IS THE RESTORE'S DOOR AND NOTHING ELSE WRITES IT
+ * (`./service-revisions-read.ts › restoreObjectRevision`). A restore is an
+ * ordinary field write that must be FILED as `op:"restore"` with the source
+ * date, and the alternative — letting the restore path reach the repository —
+ * would skip Q9's gate, the attribution stamp and this function's own capture.
+ */
 export async function updateObject(
   ctx: OntologyContext,
   objectId: string,
   input: OntologyObjectUpdateInput,
-  expectedUpdatedAt?: string
+  expectedUpdatedAt?: string,
+  revision: RecordFieldOpts = {}
 ): Promise<OntologyObject> {
   // 🔒 Q9 — `edit` on EVERY cluster this object belongs to, before any write.
   const gated = await requireObject(ctx, objectId, "edit");
@@ -255,7 +304,14 @@ export async function updateObject(
   }
 
   let cleanEdges: OntologyObject["relationships"] | undefined;
+  let beforeEdges: OntologyObject["relationships"] | undefined;
   if (relationships) {
+    // ⚠ READ BEFORE THE REPLACE, and only on a relationship write — an
+    // association revision needs both ends and `replaceRelationshipsForSource`
+    // is destructive, so afterwards there is no `before` left to read. It is the
+    // one extra query this capture costs, and it is on the write path that
+    // already spends two.
+    beforeEdges = await currentRelationships(ctx, objectId);
     cleanEdges = await sanitizeEdges(ctx, objectId, relationships);
     await repo.replaceRelationshipsForSource(workspaceId, objectId, cleanEdges);
     // Edge write bumps source `updated_at` via the ontology_relationships
@@ -263,6 +319,19 @@ export async function updateObject(
     // next CAS write spuriously 412s.
     const refreshed = await repo.findObjectById(scope, objectId);
     if (refreshed) row = refreshed;
+  }
+
+  // ⚠ `gated` IS THE BEFORE STATE, read by the gate before any write — one row
+  // per field that MOVED, zero for a PATCH that re-sent what was already stored.
+  await recordObjectFieldChanges(ctx, gated, row, revision);
+  if (beforeEdges) {
+    await recordAssociationRevision(
+      ctx,
+      { id: row.id, workspaceId },
+      "relationship",
+      edgeSnapshot(beforeEdges),
+      edgeSnapshot(cleanEdges ?? [])
+    );
   }
 
   const object = mapObjectRow(row);
@@ -361,6 +430,9 @@ export async function deleteObject(
 ): Promise<void> {
   const gated = await requireObject(ctx, objectId, "edit");
   await repo.hardDeleteObject(gated.workspace_id, objectId);
+  // ⚠ AFTER the delete and carrying the LAST state — the only place it survives,
+  // because ontology deletes are permanent and there is no trash to read it from.
+  await recordObjectDelete(ctx, gated);
 }
 
 /**
@@ -378,6 +450,7 @@ export async function claimAnchor(
   const gated = await requireObject(ctx, objectId, "edit");
   const row = await anchorRepo.setAnchor(gated.workspace_id, ctx.userId, objectId);
   if (!row) throw HttpError.notFound("Object not found");
+  await recordAnchorRevision(ctx, row, gated.user_id);
   const object = mapObjectRow(row);
   object.relationships = await currentRelationships(ctx, objectId);
   return object;

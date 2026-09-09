@@ -42,9 +42,8 @@ import { takeLineBudget } from "../lib/transcript-line-budget";
 
 /**
  * Read-side channels service: visibility-filtered list, single-channel header,
- * roster, cursor-based message reads. All funnel through `service-shared`'s
- * visibility gate. A member's message read doubles as the read-watermark update
- * — see `readMessages`.
+ * roster, cursor-based message reads — all through `service-shared`'s visibility
+ * gate. A member's message read doubles as the read-watermark update.
  */
 
 interface ChannelExtras {
@@ -69,9 +68,8 @@ function toChannelDto(
     notifyScope: (membership?.notify_scope as Channel["myNotifyScope"]) ?? null,
     agentToolProfile:
       (membership?.agent_tool_profile as Channel["myAgentToolProfile"]) ?? null,
-    // The FAVOURITE, straight off the caller's own membership row — the row
-    // `listChannels` already loaded to resolve `role` and the watermark. The
-    // sidebar's Favorites section is a partition of THIS list and adds no read.
+    // Off the caller's own membership row, already loaded for `role` and the
+    // watermark — the sidebar's Favorites section adds no read.
     favoritedAt: membership?.favorited_at ?? null,
     onlineMemberCount: extras.online.get(row.id) ?? 0,
     directPeer: extras.directPeers.get(row.id) ?? null,
@@ -138,9 +136,8 @@ export async function listChannels(
     memberChannelIds: [...membershipByChannel.keys()],
     includeArchived,
     // ⚠ A GUEST GETS NO PUBLIC ARM (2026-08-26) — the list half of the fence
-    // `loadVisibleChannel` applies to a single ref. Without it a public channel
-    // in the container appears in the guest's own channel list, and every
-    // per-channel route then admits it.
+    // `loadVisibleChannel` applies to a single ref. Without it a container's
+    // public channel appears in a guest's list and every route then admits it.
     includePublic: mayReadPublicChannels(ctx),
   });
   const ids = rows.map((r) => r.id);
@@ -193,13 +190,12 @@ export async function listChannelMembers(
     profilesById(memberIds),
     collab.presenceForWorkspace(ctx.workspaceId),
     // ⚠ WORKSPACE role, for the "Guest" pill — the channel row's role is only
-    // owner/member. Bounded to the roster's own ids (§9), never the whole
-    // workspace. A member with no workspace row maps to null → "not a guest".
+    // owner/member. Bounded to the roster's own ids (§9). No workspace row →
+    // null → "not a guest".
     workspaceRepo.listMemberRolesByUserIds(ctx.workspaceId, memberIds),
   ]);
   // ⚠ Private-preference scrub (notify_scope + agent_tool_profile only on the
-  // caller's own row) is enforced inside `mapMemberRow` — pass the viewer and it
-  // holds for every roster read.
+  // caller's own row) is enforced inside `mapMemberRow`.
   return rows.map((row) =>
     mapMemberRow(row, profiles.get(row.user_id), {
       viewerUserId: ctx.userId,
@@ -210,38 +206,25 @@ export async function listChannelMembers(
 }
 
 /**
- * ⚠ **TWO PAGE-WIDE JOINS, IN PARALLEL, AND NEITHER IS PER-ROW.** The profile
- * read answers who an agent acts FOR; `agentNamesFor` answers WHICH of that
- * operator's agents wrote the row, which is the half the MCP read printed as a
- * bare id tail until 2026-09-04. A page of purely human messages pays for the
- * second read not at all.
- */
-/**
  * ⚠ **THE HYDRATOR MOVED DOWN INTO `service-shared.ts`** (2026-09-06, A4 second
- * slice) and is imported from there by this file and by `service-artifacts.ts`
- * alike. It lived here, exported, for exactly one slice; wiring the fold INTO
- * the read below would have made this file import the artifact service that
- * imports this one. Moving the hydrator down was the remedy `service-artifacts`
- * documented in advance — the arrow was NOT reversed.
+ * slice), shared with `service-artifacts.ts`: wiring the fold into the read
+ * below would otherwise have made this file import the artifact service that
+ * imports it. The arrow was NOT reversed. Its two page-wide joins stay
+ * page-wide — `agentNamesFor` costs a purely human page nothing (2026-09-04).
  */
 
 /**
  * Cursor-based message read — forward from `since`, BACKWARD from `before`, or
  * the newest page when neither is given, capped at `limit` and optionally scoped
  * to ONE thread (`query.thread` → `metadata.taskId`). A member's read advances
- * `last_read_at` best-effort. Non-members reading a public channel have no
- * watermark to move.
+ * `last_read_at` best-effort; a non-member on a public channel has none to move.
  *
- * ⚠ A THREAD-SCOPED read moves NO watermark. The watermark is content-derived
- * (newest message SHOWN) and monotonic, so a filtered read would jump it over
- * every unrelated older message and mark those read unseen.
+ * ⚠ A THREAD-SCOPED read moves NO watermark: content-derived and monotonic, it
+ * would jump over every unrelated older message and mark those read unseen.
  *
- * ⚠ A `before` PAGE MOVES NO WATERMARK EITHER, and this is belt on braces rather
- * than a new rule: the watermark is monotonic, so a page of HISTORY can only
- * ever fail the `>` test below and write nothing. Skipping it outright says the
- * intent out loud and saves the read — scrolling back through a long channel
- * fires one of these per page, and each would otherwise re-derive a maximum and
- * compare it for the sole purpose of doing nothing.
+ * ⚠ A `before` PAGE MOVES NO WATERMARK EITHER — belt on braces, since a page of
+ * HISTORY can only fail the monotonic `>` test below. Skipping it says the
+ * intent out loud and saves a re-derive per page of scrollback.
  */
 export async function readMessages(
   ctx: ChannelContext,
@@ -256,12 +239,10 @@ export async function readMessages(
  * {@link readMessages} and {@link readTranscript}.
  *
  * ⚠ **ONE GATE READ, ONE HYDRATE, ONE WATERMARK RULE.** The fold needs the
- * channel id, and the alternative — `readTranscript` calling `readMessages` and
- * then re-resolving the ref — would run the visibility gate twice per read and
- * give the watermark a second place to be decided. This is a refactor of the
- * body, not a change to it: `readMessages`'s signature and behaviour are
- * untouched, which matters because the pollers, the hold and the desktop all
- * call it.
+ * channel id; `readTranscript` calling `readMessages` and re-resolving the ref
+ * would run the visibility gate twice and give the watermark a second place to
+ * be decided. `readMessages`'s signature and behaviour are untouched — the
+ * pollers, the hold and the desktop all call it.
  */
 async function readMessagePage(
   ctx: ChannelContext,
@@ -276,8 +257,8 @@ async function readMessagePage(
     threadId: query.thread,
   });
   // ⚠ **ONE QUERY, TRIMMED HERE — keyset untouched**, before hydration so the
-  // page-wide joins pay only for returned rows. Rule, suffix/cursor argument and
-  // `hasMore`: `lib/transcript-line-budget.ts › takeLineBudget`.
+  // page-wide joins pay only for returned rows. Rule and `hasMore`:
+  // `lib/transcript-line-budget.ts › takeLineBudget`.
   const { rows, hasMore } = takeLineBudget(fetched, query.limit, query.lineBudget);
   const messages = await hydrateMessages(rows, ctx.workspaceId);
   if (
@@ -287,10 +268,9 @@ async function readMessagePage(
     messages.length > 0
   ) {
     // ⚠ Watermark = newest message SHOWN, written only when it ADVANCES.
-    // Writing now() on every read makes each realtime-triggered refetch emit a
-    // `channel_members` UPDATE, itself a subscribed realtime event — every tab
-    // re-fires every other tab in a permanent refetch loop. Content-derived +
-    // monotonic means a refetch showing nothing new writes nothing.
+    // Writing now() on every read emits a `channel_members` UPDATE — itself a
+    // subscribed realtime event — so every tab re-fires every other tab in a
+    // permanent refetch loop.
     const newest = messages.reduce(
       (max, m) => (Date.parse(m.createdAt) > Date.parse(max) ? m.createdAt : max),
       messages[0].createdAt
@@ -312,43 +292,27 @@ async function readMessagePage(
  * **only when something actually folded**.
  *
  * ⚠ **THE FOLD IS A RENDERING OF THE PAGE, NOT A FILTER ON IT.** The read above
- * runs unchanged — same gate, same rows, same watermark — and `foldPage` then
- * decides what a reader is shown.
+ * runs unchanged — same gate, same rows, same watermark.
  *
- * ⚠ **IT FOLDS ONLY THE DEFAULT PAGE**, and `foldPage` is where that is decided
+ * ⚠ **IT FOLDS ONLY THE DEFAULT PAGE**, decided in `foldPage`
  * (`readNamesMessages`): a thread-scoped read and a bounded `since`+`before`
- * window return their messages, always. Callers must not second-guess it — one
- * answer to "does this read name messages" is the whole point of the pin.
- *
- * ⚠ **AN ORDINARY TRANSCRIPT PAYS NOTHING.** A page with no folded row does no
- * extra read at all.
- *
- * ⚠ **`readEntries` — the entries WITHOUT the page — STOOD BESIDE THIS AND IS
- * DELETED (2026-09-06).** It was born for "a caller that renders nothing else",
- * and that caller never arrived: the route reads this one, and the barrel row
- * was its only reference. A second name for a read nobody makes is exactly what
- * `service.ts`'s own rule at its head refuses to carry.
+ * window always return their messages. Callers must not second-guess it.
  *
  * ⚠ **`entries === null` MEANS "NOTHING ON THIS PAGE IS IN AN ARTIFACT", NOT
- * "THIS SERVER CANNOT FOLD".** It is the one distinction this shape has to make,
- * and it is why the null is returned rather than an entries array that always
- * mirrors the messages: an envelope that carried both in full would double the
- * bytes of every ordinary transcript read to describe a feature the page does
- * not use. A page with no folded row costs exactly what it did before this
- * feature existed.
+ * "THIS SERVER CANNOT FOLD".** Carrying both in full would double the bytes of
+ * every ordinary transcript read. (`readEntries` — entries without the page —
+ * was deleted 2026-09-06; no caller ever arrived.)
  *
  * ⚠ **`hasMore` IS THE SERVER'S ANSWER TO "IS THERE OLDER HISTORY", AND THE
  * CLIENT MAY NOT RE-DERIVE IT (2026-09-08).** A line-budgeted page is SHORT BY
  * DESIGN, so `rows.length === pageSize` would read "exhausted" on the first page
  * of a channel of long messages. `lib/transcript-line-budget.ts ›
- * takeLineBudget` owns the rule; it is reported on every read of this route.
+ * takeLineBudget` owns the rule.
  *
  * ⚠ **`messages` STAYS COMPLETE, AND THAT IS DELIBERATE.** Design §4 warns the
- * fold is "honestly breaking for artifact-unaware clients"; keeping the full
- * page beside the entries means an installed desktop or an older web build shows
- * the run exactly as it did yesterday instead of losing rows, while a
- * card-aware renderer reads `entries` and shows the card. When every renderer
- * reads entries, `messages` is what gets dropped — not the other way round.
+ * fold is "honestly breaking for artifact-unaware clients", so an older client
+ * keeps showing the run rather than losing rows. When every renderer reads
+ * `entries`, `messages` is what gets dropped — not the other way round.
  */
 export async function readTranscript(
   ctx: ChannelContext,
@@ -371,9 +335,9 @@ export async function readTranscript(
 
 /**
  * Resolve a channel ref to its id after validating read access. ⚠ A FULL access
- * check, so the await hold's tick-0 read is already covered; the hold then
- * re-checks via `revalidateAwaitAccess`, since a long poll must not keep
- * streaming a channel deleted or a membership revoked mid-poll.
+ * check, covering the await hold's tick-0 read; the hold then re-checks via
+ * `revalidateAwaitAccess`, since a long poll must not keep streaming a channel
+ * deleted or a membership revoked mid-poll.
  */
 export async function resolveReadableChannelId(
   ctx: ChannelContext,
@@ -390,9 +354,7 @@ export async function resolveReadableChannelId(
  * the hold ends rather than leaking a channel the caller cannot see.
  *
  * ⚠ Two indexed lookups projected to the columns the decision reads
- * (`findChannelAccess` / `hasMembership`) — this is the hold's dominant egress
- * line item, so it never pulls a row it will not look at. WHEN it runs is
- * `awaitNewMessages`'s business.
+ * (`findChannelAccess` / `hasMembership`) — the hold's dominant egress line item.
  */
 export async function revalidateAwaitAccess(
   ctx: ChannelContext,
@@ -400,10 +362,9 @@ export async function revalidateAwaitAccess(
 ): Promise<void> {
   const channel = await repo.findChannelAccess(ctx.workspaceId, channelId);
   if (!channel) throw new ChannelNotFoundError(channelId);
-  // ⚠ `mayReadPublicChannels` MIRRORS `loadVisibleChannel`'s gate EXACTLY, and
-  // it has to: this recheck is the SAME question one tick later. A guest gets no
-  // public arm here either, or the entry gate would refuse a channel the hold
-  // would keep streaming.
+  // ⚠ `mayReadPublicChannels` MIRRORS `loadVisibleChannel`'s gate EXACTLY — the
+  // SAME question one tick later. A guest gets no public arm here either, or the
+  // entry gate would refuse a channel the hold would keep streaming.
   if (channel.visibility !== "public" || !mayReadPublicChannels(ctx)) {
     const isMember = await repo.hasMembership(channelId, ctx.userId);
     if (!isMember) throw new ChannelNotFoundError(channelId);
@@ -444,14 +405,12 @@ export async function pollChannelMessages(
 
 /**
  * Every task in a channel the caller may read, MOST RECENTLY ACTIVE FIRST, and
- * whether the read clipped. Feeds the web's `Map<taskId, overlay>` layering
- * authoritative status / title / mode onto the message thread, and the MCP
- * `list_threads` listing — one read, so the two surfaces cannot disagree about
- * which thread is live. Gated by the transcript's visibility rule.
+ * whether the read clipped. One read behind both the web's `Map<taskId,
+ * overlay>` and the MCP `list_threads` listing, so the two surfaces cannot
+ * disagree about which thread is live. Gated by the transcript's visibility rule.
  *
- * ⚠ `truncated` is not decoration: threads never leave this list, so the bound
- * is real and a clipped list that renders like an exhausted one is the bug
- * (INVARIANTS §9). Pass it on; never drop it.
+ * ⚠ `truncated` is not decoration: threads never leave this list, so a clipped
+ * list rendering like an exhausted one is the bug (INVARIANTS §9). Never drop it.
  */
 export async function listChannelTasks(
   ctx: ChannelContext,
@@ -464,10 +423,9 @@ export async function listChannelTasks(
 
 /**
  * THE ATTRIBUTION ROSTER — every named agent that ever existed in this channel.
- * All that is left of the named-agent surface: stored messages carry
- * `metadata.author_agent_id` and the transcript must turn that id into the
- * handle it rendered on the day it was posted, or an old agent message silently
- * loses its name.
+ * All that is left of the named-agent surface: the transcript must turn a stored
+ * `metadata.author_agent_id` back into the handle it rendered that day, or an
+ * old agent message silently loses its name.
  *
  * Visibility is the CHANNEL's read gate, so an outsider cannot enumerate a
  * room's history. ⚠ Dismissed rows are INCLUDED — they are the ones most likely

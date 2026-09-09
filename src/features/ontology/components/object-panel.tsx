@@ -12,6 +12,7 @@ import {
   type GraphState,
 } from "../graph-state";
 import { ActionsEditor } from "./actions-editor";
+import { ObjectHistory } from "./object-history";
 import { AttributesEditor } from "./attributes-editor";
 import { RelationshipsEditor } from "./relationships-editor";
 import { TemplateEditor } from "./template-editor";
@@ -33,6 +34,10 @@ interface Props {
   /** Member+ — viewers see no edit/delete affordances: inputs read-only,
    *  Delete hidden, child editors drop add/remove. */
   canEdit?: boolean;
+  /** The container the HISTORY read is addressed to (`X-Workspace-Id`).
+   *  ⚠ Optional: the History section is simply absent without it, rather than
+   *  the panel guessing a container for a read that follows an id. */
+  workspaceId?: string;
 }
 
 /** Right-side editor panel for the selected object (card or column): identity
@@ -46,6 +51,7 @@ export function ObjectPanel({
   onClose,
   pending = false,
   canEdit = true,
+  workspaceId,
 }: Props) {
   const object = graph.objects[objectId];
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -141,6 +147,16 @@ export function ObjectPanel({
             canEdit={canEdit}
           />
           <ActionsEditor object={object} dispatch={dispatch} canEdit={canEdit} />
+          {/* ⚠ LAST, AND ONLY ONCE THE ROW EXISTS. `pending` means the create
+              POST is unanswered and the id is provisional, so the read is not
+              made rather than made and 404-ed. */}
+          {workspaceId ? (
+            <ObjectHistory
+              objectId={pending ? null : objectId}
+              workspaceId={workspaceId}
+              canEdit={canEdit}
+            />
+          ) : null}
         </div>
       </div>
 

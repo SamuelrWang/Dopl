@@ -43,12 +43,9 @@ import { useState, type ReactNode } from "react";
 import { DialogActions, StandardDialog } from "./standard-dialog";
 import { SegmentedControl } from "./segmented-control";
 import { cn } from "@/shared/lib/utils";
+// Discard is `SMALL_TEXT_BUTTON` — the composer's own text-button face, one declaration.
+import { SMALL_TEXT_BUTTON } from "./small-action-button";
 import styles from "./form-dialog.module.css";
-
-/** Discard — the composer's own text-button face, at `--action-h-sm`. */
-const DISCARD_BTN =
-  "flex h-[var(--action-h-sm)] items-center rounded-[8px] px-2.5 text-caption font-medium " +
-  "text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
 
 /** The verb — the composer's black CTA face, at `--action-h-sm`. */
 const PRIMARY_BTN =
@@ -237,7 +234,7 @@ export function FormDialog({
     <StandardDialog open={open} onClose={onDiscard} title={title} closeLabel={closeLabel}>
       {children}
       <DialogActions>
-        <button type="button" className={DISCARD_BTN} onClick={onDiscard}>
+        <button type="button" className={SMALL_TEXT_BUTTON} onClick={onDiscard}>
           {discardLabel}
         </button>
         <button

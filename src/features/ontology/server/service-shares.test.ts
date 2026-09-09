@@ -12,6 +12,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OntologyContext } from "../types";
 import type { OntologyClusterRow } from "./dto";
 
+// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
+// (`./service-revisions.ts`, 2026-09-09, part 2): every ontology write now
+// records one revision per CHANGED FIELD inside the same request, so a service
+// test that leaves it alone reaches `supabaseAdmin()` and fails on a missing
+// service-role key. Stubbed here because these suites are about the WRITE, not
+// about its audit rows — that the rows are recorded, one per changed field, per
+// path, is `service-revisions.test.ts`'s subject.
+vi.mock("@/features/revisions/server/repository", () => ({
+  appendRevision: vi.fn(async () => ({ id: "rev-1" })),
+  replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
+  findLatestRevision: vi.fn(async () => null),
+  findRevisionById: vi.fn(async () => null),
+  listRevisionsForResource: vi.fn(async () => []),
+  listRevisionsForResources: vi.fn(async () => []),
+}));
+
 vi.mock("./repository", () => ({ findClusterById: vi.fn() }));
 
 vi.mock("./repository-shares", () => ({

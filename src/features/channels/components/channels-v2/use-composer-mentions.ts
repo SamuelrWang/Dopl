@@ -5,12 +5,10 @@
  * row Enter takes, and the two ways a handle gets into the draft.
  *
  * ⚠ SPLIT OUT OF `composer.tsx` ON 2026-08-27, at the 500-line cap. **The seam is §1's
- * reason-to-change**, not the count that forced the question: that file is about SENDING — a
- * draft, a request, a launch — and this is the PICKER, which moved twice in one day (agents
- * joined the list, the `@` glyph learned to open it) while nothing about sending changed. Same
- * seam its siblings took: `use-agent-launch.ts` holds the launch form's state. ⚠ **THE THIRD
- * SIBLING, `use-thread-request.ts`, IS DELETED (2026-09-08)** — thread creation is a popup that
- * owns its own state (`new-thread-dialog.tsx`), so there is no hook left to name here.
+ * reason-to-change**: that file is about SENDING, this is the PICKER, which moved twice in one
+ * day while nothing about sending changed. `use-agent-launch.ts` took the same seam. ⚠ **THE
+ * THIRD SIBLING, `use-thread-request.ts`, IS DELETED (2026-09-08)** — thread creation is a popup
+ * owning its own state (`new-thread-dialog.tsx`).
  *
  * ⚠ IT OWNS NO DRAFT. The text belongs to the composer — it is what gets SENT — so this takes a
  * setter and never a second copy. Two states holding one string is how a picker inserts into a
@@ -39,10 +37,9 @@ export function useComposerMentions({
   members: ChannelMember[];
   /**
    * **THE CHANNEL'S LIVE AGENTS** (2026-09-02, slice B10) — the peer projection
-   * as it arrives, reduced here by `lib/draft-recipients.ts ›
-   * liveAgentCandidates` so this hook holds no second reading of what
-   * `channel_sessions.name` means. It used to be THIS MACHINE's own map, which
-   * made tagging a desktop-only affordance; see `composer-mentions.tsx`.
+   * as it arrives, reduced by `lib/draft-recipients.ts › liveAgentCandidates` so
+   * this hook holds no second reading of `channel_sessions.name`. It used to be
+   * THIS MACHINE's map, which made tagging a desktop-only affordance.
    */
   sessions: readonly LiveAgentSession[];
   currentUserId: string;
@@ -85,10 +82,10 @@ export function useComposerMentions({
     /**
      * THE `@` GLYPH'S ACT (Samuel, 2026-08-27) — it was inert, a dead control beside working ones.
      *
-     * ⚠ IT OPENS THE PICKER BY WRITING THE TOKEN, which is the only honest wiring: the popover is
-     * a pure function of the DRAFT (`mentionQuery`), so there is no second "open" path to keep in
-     * step. ⚠ A SPACE FIRST unless the draft already ends in one, or the `@` welds onto the
-     * previous word and `mentionQuery` — which requires a boundary — answers null.
+     * ⚠ IT OPENS THE PICKER BY WRITING THE TOKEN: the popover is a pure function of the DRAFT
+     * (`mentionQuery`), so there is no second "open" path to keep in step. ⚠ A SPACE FIRST unless
+     * the draft already ends in one, or the `@` welds onto the previous word and `mentionQuery`
+     * answers null.
      */
     openFromButton: () => {
       setDraft((prev) => (prev === "" || prev.endsWith(" ") ? `${prev}@` : `${prev} @`));
@@ -98,17 +95,14 @@ export function useComposerMentions({
      * **THE FIELD'S KEY HANDLING, WHICH IS MOSTLY THE PICKER'S** (moved here
      * 2026-09-02, slice B10, at the composer's 500-line cap — §1).
      *
-     * ⚠ **THE SEAM IS §1's REASON-TO-CHANGE, NOT THE COUNT THAT FORCED THE
-     * QUESTION.** Four of the five branches are about the shortlist — arrow
-     * through it, confirm from it, and the rule that it OUTRANKS send while it
-     * is open — and every one of them moved when the picker did. What is left
-     * for the composer is one line: what Enter does when no candidate is
-     * highlighted, which is the composer's own act and arrives as `onSend`.
+     * ⚠ **THE SEAM IS §1's REASON-TO-CHANGE.** Four of the five branches are
+     * about the shortlist and moved when the picker did; what is left for the
+     * composer is what Enter does with no candidate highlighted, which arrives
+     * as `onSend`.
      *
      * ⚠ **THE IME GUARD COVERS THE WHOLE HANDLER, NOT JUST SEND.** A
      * composition's own Enter CONFIRMS a candidate and its arrows MOVE through
-     * one; stealing either posts a half-typed word or silently rewrites what the
-     * IME is offering.
+     * one; stealing either posts a half-typed word.
      */
     keyDown: (e: KeyboardEvent<HTMLTextAreaElement>, onSend: () => void) => {
       if (e.nativeEvent.isComposing) return;
@@ -120,10 +114,8 @@ export function useComposerMentions({
           setHighlight((active + step + suggestions.length) % suggestions.length);
           return;
         }
-        // ⚠ THE PICKER OUTRANKS SEND while it is open. Enter with a highlighted
-        // candidate confirms the candidate — posting the half-typed `@dia`
-        // instead is the behaviour every chat client trained the reader out of
-        // expecting.
+        // ⚠ THE PICKER OUTRANKS SEND while it is open — Enter with a highlighted
+        // candidate confirms it rather than posting the half-typed `@dia`.
         if (e.key === "Enter" || e.key === "Tab") {
           if (e.key === "Enter" && e.shiftKey) return;
           e.preventDefault();

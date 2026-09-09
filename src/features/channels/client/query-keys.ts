@@ -5,21 +5,18 @@ import {
 } from "../constants";
 
 /**
- * The channels feature's URLs and the cache keys built from them, in one
- * place — so a write and the read it patches can never disagree about either.
+ * The channels feature's URLs and the cache keys built from them, in one place —
+ * so a write and the read it patches can never disagree about either.
  *
- * `client/api.ts` builds its request paths from the same builders below, and
- * the read hooks register keys through `useApiQuery`'s `[path, workspaceId,
- * query]` tuple. Optimistic writes therefore patch by the PREFIX key
- * (`.all`), which reaches every variant a reader may have mounted without the
- * writer having to know them: the channel list is cached twice (with and
- * without `?include=archived`), and the transcript's key carries `limit`.
+ * Reads register `useApiQuery`'s `[path, workspaceId, query]` tuple, so
+ * optimistic writes patch by the PREFIX key (`.all`) and reach every variant a
+ * reader may have mounted (the channel list is cached with and without
+ * `?include=archived`; the transcript's key carries `limit`).
  *
- * SCOPED BY CHANNEL ID BY CONSTRUCTION. Every per-channel key embeds the id in
- * its path, so a write that captured `selected.id` at submit time cannot land
- * in the cache of a channel the user switched to while it was in flight — the
- * open race where all three per-channel reads use `keepPreviousData` and the
- * previous channel's data stays on screen through the switch.
+ * SCOPED BY CHANNEL ID BY CONSTRUCTION: every per-channel key embeds the id, so
+ * a write that captured `selected.id` at submit cannot land in the cache of a
+ * channel the user switched to mid-flight — the open race, since all three
+ * per-channel reads use `keepPreviousData`.
  */
 
 export function channelsPath(): string {
@@ -40,11 +37,10 @@ export function channelThreadsPath(channelId: string): string {
 }
 
 /**
- * ONE thread. ⚠ NOT a cache key and there is deliberately no `channelKeys.thread`
- * beside it: nothing READS a single thread through this client (the page derives
- * the open thread from the bounded list), so the only callers are the two writes
- * that address one — set-mode's PATCH and the DELETE. Adding a key for a query
- * that does not exist would invite a second source of thread truth.
+ * ONE thread. ⚠ NOT a cache key, and deliberately no `channelKeys.thread` beside
+ * it: nothing READS a single thread here (the page derives the open thread from
+ * the bounded list), so the only callers are set-mode's PATCH and the DELETE. A
+ * key for a query that does not exist invites a second source of thread truth.
  *
  * BOUNDARY: wire/storage name `task` == domain name `thread`.
  */
@@ -69,12 +65,9 @@ export function channelMentionsPath(channelId: string): string {
 }
 
 export const CHANNEL_CONSENT_PATH = "/api/channels/consent";
-// ⚠ `CHANNEL_TRUST_PATH` STOOD HERE AND IS DELETED (Samuel, 2026-08-22). Its one
-// reader (`use-trust-rules.ts`) and its one writer (the `trust` mutation in
-// `use-channel-preference-writes.ts`) went with the inbound consent lane the
-// "Always allow" roster was standing consent for. The ROUTE is being deleted
-// server-side in the same wave; a client path constant left standing is how a
-// deleted endpoint gets called again.
+// ⚠ `CHANNEL_TRUST_PATH` IS DELETED (Samuel, 2026-08-22) with the inbound consent
+// lane, reader (`use-trust-rules.ts`) and writer alike — a client path constant
+// left standing is how a deleted endpoint gets called again.
 
 export const channelKeys = {
   /** The workspace channel list. `.all` covers both archived variants. */
@@ -99,20 +92,18 @@ export function channelListParams(includeArchived: boolean) {
  * The exact query params `useChannelMessages` reads its NEWEST page with — and
  * therefore the params every optimistic messages patch must be able to reach.
  *
- * ⚠ THE OLDER PAGES ARE NOT HERE, AND THAT IS DELIBERATE. Scroll-up history is
- * fetched with a `before` cursor and held in the hook, NOT registered as a
- * sibling cache entry under this path — see `hooks/use-channel-messages.ts`.
- * A `?before=` entry would sit under the SAME prefix key the writes patch
+ * ⚠ THE OLDER PAGES ARE NOT HERE, DELIBERATELY. Scroll-up history is fetched with
+ * a `before` cursor and held in the hook (`hooks/use-channel-messages.ts`): a
+ * `?before=` entry would sit under the SAME prefix key the writes patch
  * (`channelKeys.messages(id).all`), so every send would append its pending row
- * into every page of history it happened to have loaded.
+ * into every loaded page of history.
  *
  * ⚠ **TWO NUMBERS SINCE 2026-09-08, AND `limit` IS NO LONGER THE PAGE SIZE.**
- * `lineBudget` is what the page is actually sized by — ESTIMATED RENDERED LINES,
- * Samuel's ruling that a row is not a unit a reader experiences — and `limit` is
- * only the hard row cap the budget can never exceed
- * (`constants.ts › CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS`). Both belong HERE, in the
- * params the optimistic writes reach: a `before` fetch that sent a different
- * pair would be reading a differently-sized page than the one on screen.
+ * `lineBudget` sizes the page — ESTIMATED RENDERED LINES, Samuel's ruling that a
+ * row is not a unit a reader experiences — and `limit` is only the hard row cap
+ * (`constants.ts › CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS`). Both belong HERE: a
+ * `before` fetch sending a different pair would read a differently-sized page
+ * than the one on screen.
  */
 export function channelMessagesParams() {
   return {

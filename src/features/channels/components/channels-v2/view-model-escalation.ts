@@ -1,16 +1,11 @@
 /**
- * Channels v2 — THE ESCALATION ROW: an agent's structured question to a human,
- * as the transcript's builders see it.
+ * Channels v2 — THE ESCALATION ROW: an agent's structured question to a human, as
+ * the transcript's builders see it.
  *
- * ⚠ ITS OWN FILE FOR §1's REASON, and the 500-line cap on `view-model-rows.ts`
- * is only what forced the question. This moves when the ESCALATION product
- * moves — who may answer, what an answered card shows, whether an answer far
- * down the page still counts — where `view-model-rows.ts` moves when a MESSAGE
- * row's shape moves. Same seam, same precedent, as `view-model-requested.ts`.
- *
- * ⚠ IT DEPENDS ON `view-model.ts` AND NOT ON `view-model-rows.ts`, which is what
- * keeps the two row modules acyclic. `personFor` / `labelFor` moved down to the
- * base layer in the same change for exactly that reason.
+ * ⚠ ITS OWN FILE FOR §1's REASON: this moves when the ESCALATION product moves,
+ * where `view-model-rows.ts` moves when a MESSAGE row's shape does. ⚠ IT DEPENDS
+ * ON `view-model.ts` AND NOT ON `view-model-rows.ts`, which keeps the two row
+ * modules acyclic — why `personFor` / `labelFor` moved down to the base layer.
  */
 
 import { mentionedUserIdsOf } from "../../lib/mentions";
@@ -25,28 +20,25 @@ import type { ChannelEscalation } from "../../escalation";
 import type { ChannelMessage } from "../../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
-/** Which side of the transcript a row hangs on. Re-declared as a local alias of
- *  the same two words `view-model-rows.ts` exports, so this module does not have
- *  to import from the file that imports it. */
+/** Which side of the transcript a row hangs on. A local alias of the same two
+ *  words `view-model-rows.ts` exports, so this module need not import from the
+ *  file that imports it. */
 type MessageSide = "peer" | "me";
 
 /**
  * A STRUCTURED ESCALATION — an agent's question to a human, rendered as a card
  * with option buttons.
  *
- * ⚠ ITS OWN ROW KIND, decided on RESERVED METADATA rather than on
- * `ChannelMessage.kind` — `view-model.ts › escalationOf`, the same shape
- * `threadIdOf` already has. The message stays `kind='message'` on purpose:
- * `dopl-desktop-app/main/targeting.js › classify` returns `ignore` for every
- * other kind, so a card on one could never notify the human it is asking.
+ * ⚠ ITS OWN ROW KIND, decided on RESERVED METADATA (`view-model.ts ›
+ * escalationOf`), not on `ChannelMessage.kind`: the message stays `kind='message'`
+ * because `dopl-desktop-app/main/targeting.js › classify` returns `ignore` for
+ * every other kind, so a card on one could never notify the human it asks.
  *
- * ⚠ WHO MAY ANSWER IS A PROPERTY OF THE ESCALATION, NOT OF THE VIEWER'S ROLE.
- * {@link EscalationRow.answerable} is true only for a member the escalation
- * TAGGED, or — when it tagged nobody — for its author's operator. The fence is
- * SERVER-SIDE (`server/service-writes-metadata-escalation.ts ›
- * escalationAnswerers`, 403 on a violation); this flag decides only whether the
- * buttons are DRAWN, and it must be the same predicate or a member sees controls
- * that can only refuse.
+ * ⚠ WHO MAY ANSWER IS A PROPERTY OF THE ESCALATION, NOT OF THE VIEWER'S ROLE:
+ * {@link EscalationRow.answerable} is true only for a member it TAGGED, else its
+ * author's operator. The fence is SERVER-SIDE
+ * (`server/service-writes-metadata-escalation.ts › escalationAnswerers`, 403); this
+ * flag only decides whether buttons are DRAWN, and must be the same predicate.
  */
 export interface EscalationRow {
   kind: "escalation";
@@ -63,15 +55,11 @@ export interface EscalationRow {
   /**
    * The answer, when one is already in this transcript page.
    *
-   * ⚠ `null` MEANS "NOT IN THIS PAGE", NEVER "UNANSWERED". The transcript is a
+   * ⚠ `null` MEANS "NOT IN THIS PAGE", NEVER "UNANSWERED": the transcript is a
    * WINDOW (`constants.ts › CHANNEL_TRANSCRIPT_LINE_BUDGET` — ESTIMATED RENDERED
-   * LINES since 2026-09-08, not a row count — plus whatever history
-   * the reader has scrolled back through), so an answer far below its escalation
-   * can be off it — the same limitation the fan-out card's grouping has. ⚠ And
-   * scroll-up paging does NOT close this: it extends the window DOWNWARD, and an
-   * answer is always NEWER than the escalation it answers. The
-   * card therefore never says "waiting"; it shows the buttons, and the server's
-   * 409 is what settles a genuine race.
+   * LINES since 2026-09-08, not a row count), and scroll-up paging cannot close
+   * that since an answer is always NEWER. So the card never says "waiting"; it
+   * shows the buttons, and the server's 409 settles a genuine race.
    */
   answer: EscalationAnswerSummary | null;
   /** The server-stamped mention set names this viewer — the transcript's one
@@ -89,14 +77,11 @@ export interface EscalationAnswerSummary {
  * WHICH ESCALATIONS ALREADY HAVE AN ANSWER IN THIS PAGE, keyed by the
  * escalation's message id.
  *
- * ⚠ A PRE-PASS, for the same reason `groupThreads` is one: an escalation is
- * drawn where it was posted and must already know whether it was answered, and
- * the answer is a LATER row.
- *
- * ⚠ FIRST ANSWER WINS, which is the server's rule restated
- * (`channel_messages_escalation_answer_key` refuses a second at rest). If a page
- * somehow carries two — a row written before that index existed — the transcript
- * must not pick a different one than the agent was woken with.
+ * ⚠ A PRE-PASS, like `groupThreads`: an escalation is drawn where it was posted
+ * and must already know whether it was answered, and the answer is a LATER row.
+ * ⚠ FIRST ANSWER WINS — the server's rule restated
+ * (`channel_messages_escalation_answer_key` refuses a second at rest), so a page
+ * carrying two cannot pick a different one than the agent was woken with.
  */
 export function answersByEscalation(
   messages: ChannelMessage[],
@@ -118,9 +103,8 @@ export function answersByEscalation(
 /**
  * A message plus its parsed escalation → the row.
  *
- * ⚠ ONE BUILDER FOR BOTH VIEWS. The channel and the thread transcripts are two
- * callers of the same rule, and a card that appeared in one and not the other is
- * the "where did my question go" report.
+ * ⚠ ONE BUILDER FOR BOTH VIEWS — a card that appeared in the channel transcript
+ * and not the thread one is the "where did my question go" report.
  */
 export function toEscalationRow(
   message: ChannelMessage,
@@ -130,9 +114,8 @@ export function toEscalationRow(
   formatTime: (iso: string) => string
 ): EscalationRow {
   // ⚠ THE SAME PREDICATE THE SERVER ENFORCES
-  // (`server/service-writes-metadata-escalation.ts › escalationAnswerers`):
-  // the members it TAGGED, else its author. Drawing buttons off a looser rule
-  // would show a member a control that can only 403.
+  // (`server/service-writes-metadata-escalation.ts › escalationAnswerers`): the
+  // members it TAGGED, else its author. A looser rule draws a control that 403s.
   const tagged = mentionedUserIdsOf(message.metadata);
   const answerers =
     tagged.length > 0
@@ -175,14 +158,10 @@ export function escalationRowFor(
  * STREAM's reader (`agent-stream-model.ts › StreamItem.escalation`).
  *
  * ⚠ THE ID RIDES THE PAYLOAD RATHER THAN BEING PARSED BACK OUT OF
- * `StreamItem.key`. That key is `m:<id>` and its format is declared in the
- * stream model; a renderer slicing it would be a second hand-written statement
- * of one wire format — the defect `parseAgentPostStamp` exists as a single
- * declaration to prevent.
- *
- * ⚠ IT LIVES HERE, NOT IN THE STREAM MODEL, so the two row pipelines read the
- * reserved key through ONE module. It also keeps `agent-stream-model.ts` under
- * the §1 cap, which is what forced the question but not what answers it.
+ * `StreamItem.key` (`m:<id>`, declared in the stream model): a renderer slicing it
+ * would be a second hand-written statement of one wire format. ⚠ IT LIVES HERE,
+ * NOT IN THE STREAM MODEL, so both row pipelines read the reserved key through ONE
+ * module.
  */
 export function escalationStreamPayload(
   message: ChannelMessage

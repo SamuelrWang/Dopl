@@ -242,3 +242,72 @@ describe("what this face deliberately does not do", () => {
     expect(PIPELINE_ID).toBe("cluster-pipeline");
   });
 });
+
+/**
+ * THE **Changelog** ENTRY POINT (2026-09-09, the CHANGELOG lane part 2).
+ *
+ * ⚠ MUTATION-VERIFIED — two reverts, two failures: pointing the card at the
+ * OBJECT route instead of the cluster ROLL-UP (the ontology's own rename
+ * disappears), and rendering the roll-up with the knowledge row shape (the field
+ * row reads as an op label with no values in it).
+ */
+describe("the changelog", () => {
+  async function openChangelog(): Promise<void> {
+    renderHome();
+    await openOntology();
+    await screen.findByText("Pipeline");
+    const card = screen.getByText("Pipeline").parentElement as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "Changelog" }));
+  }
+
+  it("reads the CLUSTER roll-up and renders `field: before → after`", async () => {
+    await openChangelog();
+    const row = await screen.findByText("Stage");
+    expect(row.parentElement?.textContent).toContain("New");
+    expect(row.parentElement?.textContent).toContain("Won");
+    await waitFor(() =>
+      expect(
+        bridgeCalls(apiRequest).some(
+          (c) => c.path.split("?")[0] === `/api/ontology/clusters/${PIPELINE_ID}/revisions`
+        )
+      ).toBe(true)
+    );
+  });
+
+  it("shows the ontology's OWN rows beside its objects', day-grouped", async () => {
+    await openChangelog();
+    await screen.findByText("Stage");
+    // The cluster's own rename, by an AGENT — the roll-up is both, in one list.
+    expect(screen.getByText("Name")).toBeInTheDocument();
+    expect(screen.getByLabelText("agent")).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 4 })).toHaveLength(2);
+  });
+
+  it("the OBJECT panel carries a History section, addressed at that object", async () => {
+    renderHome();
+    await openOntology();
+    await screen.findByText("Pipeline");
+    const card = screen.getByText("Pipeline").parentElement as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "Open" }));
+    await screen.findByLabelText("Cluster name");
+
+    fireEvent.click(await screen.findByText("Acme"));
+    expect(
+      await screen.findByRole("heading", { name: "History" })
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        bridgeCalls(apiRequest).some(
+          (c) => c.path.split("?")[0] === "/api/ontology/objects/card-1/revisions"
+        )
+      ).toBe(true)
+    );
+  });
+
+  it("comes back to the list", async () => {
+    await openChangelog();
+    await screen.findByText("Stage");
+    fireEvent.click(screen.getByRole("button", { name: "All ontologies" }));
+    expect(await screen.findByText("Roster")).toBeInTheDocument();
+  });
+});

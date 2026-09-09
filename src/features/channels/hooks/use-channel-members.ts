@@ -8,29 +8,23 @@ import { channelMembersPath } from "../client/query-keys";
 const selectMembers = (body: { members: ChannelMember[] }) => body.members ?? [];
 
 /**
- * The selected channel's roster — hydrated with presence (agentOnline /
- * lastSeenAt) so the header, the addressing picker, and the settings surface
- * can show who's listening. Disabled until a channel is selected. Realtime
- * refetch is driven by the parent (channels + presence signals) via `refetch`.
+ * The selected channel's roster, hydrated with presence (agentOnline /
+ * lastSeenAt). Disabled while no channel is selected; realtime refetch is driven
+ * by the parent via `refetch`.
  *
- * `stale` is `isPlaceholderData`, the same shape `use-channel-messages` exposes
- * and for a sharper reason: this read is `keepPreviousData` too, so through a
- * channel switch `members` is the PREVIOUS channel's roster — and unlike the
- * transcript, which is merely shown, the roster is READ BY A WRITE. The
- * composer's request mode resolves a DM's peer out of it, so an immediate
- * request after a switch addressed the old channel's peer and came back 400
- * `ChannelAddresseeNotMemberError` with the optimistic row already painted.
- * Anything that turns this roster into a `toUserId` must ask.
+ * ⚠ `keepPreviousData`, so through a switch `members` is the PREVIOUS channel's
+ * roster — and this roster is READ BY A WRITE: the composer's request mode
+ * resolves a DM's peer out of it, so a request right after a switch addressed the
+ * old peer and came back 400 `ChannelAddresseeNotMemberError` over an
+ * already-painted optimistic row. `stale` is the check; anything that turns this
+ * roster into a `toUserId` must ask.
  *
  * ⚠ **THE 60s `refetchInterval` IS A BACKSTOP, NOT THE MECHANISM** (2026-09-08).
- * Presence is decided SERVER-side now (`repository-collab.ts › derivePresence`),
- * so the rendered dot is a fact from the last payload rather than arithmetic the
- * client can redo — which means a MISSED realtime event no longer self-corrects,
- * it strands. `usePresenceRealtime` is still what makes presence feel live; this
- * bounds the failure to "up to 60s late" instead of "wrong until you switch
- * channels", which is §7's failure-with-no-error-shape applied to presence.
- * ⚠ It is TWO beats, deliberately longer than `PRESENCE_REFETCH_DEBOUNCE_MS`
- * (10s) so it cannot become a second, faster poll racing the debounced one.
+ * Presence is decided SERVER-side (`repository-collab.ts › derivePresence`), so a
+ * MISSED realtime event strands rather than self-correcting; this bounds it to
+ * "60s late" — §7's failure-with-no-error-shape applied to presence. ⚠ It is
+ * deliberately longer than `PRESENCE_REFETCH_DEBOUNCE_MS` (10s) so it cannot
+ * become a second, faster poll racing the debounced one.
  */
 export function useChannelMembers(
   channelId: string | null,

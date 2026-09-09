@@ -3,7 +3,11 @@ import type {
   OverviewSeriesMetric,
   OverviewSeriesPoint,
 } from "@/features/workspaces/types";
-import { BarSeries, type BarPoint } from "#/components/charts/bar-series";
+import {
+  BarSeries,
+  monthDayLabel,
+  type BarPoint,
+} from "#/components/charts/bar-series";
 
 const TITLES: Record<OverviewSeriesMetric, string> = {
   messages: "Messages per day",
@@ -16,14 +20,6 @@ const OPTIONS: ReadonlyArray<{ key: OverviewSeriesMetric; label: string }> = [
   { key: "mcp", label: "MCP calls" },
   { key: "threads", label: "Threads" },
 ];
-
-/** `YYYY-MM-DD` → `d/M`. Split, never `new Date()`: a UTC calendar day parsed
- *  as an instant lands on the previous day west of Greenwich. */
-function dayLabel(date: string): string {
-  const [, month = "", day = ""] = date.split("-");
-  // `m/d` (Samuel, 2026-09-08: "I'm seeing 29/9, which should be 9/29").
-  return `${Number(month)}/${Number(day)}`;
-}
 
 /**
  * One metric per day across the period.
@@ -47,7 +43,7 @@ export function ActivityChart({
   const total = days.reduce((sum, day) => sum + day.count, 0);
   const points: BarPoint[] = days.map((day) => ({
     key: day.date,
-    label: dayLabel(day.date),
+    label: monthDayLabel(day.date),
     value: day.count,
   }));
 

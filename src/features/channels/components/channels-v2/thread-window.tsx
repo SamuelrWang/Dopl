@@ -4,36 +4,26 @@
  * THE POP-OUT THREAD WINDOW'S SURFACE — ONE thread, and nothing else (Samuel,
  * 2026-08-19).
  *
- * ⚠ WHAT THIS REPLACES. The pop-out shipped on 2026-08-18 landing on the FULL
- * channels page (`/{segment}/channels/{channelId}?thread=`), so a window opened
- * to read one exchange arrived carrying the app sidebar, the channels tree and
- * the info panel — everything the operator already had in the window they popped
- * it out of. This surface is the transcript, the composer and the thread's title.
- * No app sidebar, no channels sidebar, no info panel, no nav.
+ * ⚠ WHAT THIS REPLACES: the pop-out shipped 2026-08-18 landing on the FULL
+ * channels page, so a window opened to read one exchange arrived carrying the app
+ * sidebar, the tree and the info panel. This is the transcript, the composer and
+ * the thread's title — nothing else.
  *
- * ⚠ NOT A SECOND TRANSCRIPT. It mounts `message-pane.tsx` with `chrome="window"`
- * — the same scroller, the same stick-to-bottom rules, the same composer — so
- * there is exactly one implementation of "read a thread and reply to it". The
- * only thing this file adds is which reads to issue and what the window is
- * called.
+ * ⚠ NOT A SECOND TRANSCRIPT. It mounts `message-pane.tsx` with `chrome="window"`,
+ * so there is one implementation of "read a thread and reply to it"; this file
+ * adds only which reads to issue and what the window is called.
  *
- * ⚠ REALTIME IS REGISTERED HERE, AND IT HAS TO BE (INVARIANTS §7 — any new live
- * surface must). `useChannelsV2Live` is the SAME hook the three-column core
- * takes, so this window holds one `useRefetchGate` coordinator across its reads
- * and its composer's writes. The doorbell reaches it because a pop-out is a
- * REGISTERED app window and `main/ui-sync.js › sendToWindows` fans out over that
- * registry (Phase 10) — a window that renders a stale transcript with no error
- * anywhere is the failure mode INVARIANTS §11 names.
+ * ⚠ REALTIME IS REGISTERED HERE, AND IT HAS TO BE (INVARIANTS §7). `useChannelsV2Live`
+ * is the SAME hook the three-column core takes, so this window holds one
+ * `useRefetchGate` across its reads and writes; the doorbell reaches it because a
+ * pop-out is a REGISTERED app window (`main/ui-sync.js › sendToWindows`, Phase 10).
  *   ⚠ F-222 still applies: the feed watches ONE workspace and `dopl:sync-watch`
  *   is last-writer-wins across windows, so switching workspaces in the MAIN
  *   window leaves this one unwatched.
  *
- * ⚠ THE THREAD IS DERIVED FROM THE CHANNEL'S THREAD LIST, never assumed — the
- * same rule `channels-v2-core.tsx` keeps. A thread id that is not in the bounded
- * list (stale link, aged past the read's ceiling) renders the empty state; there
- * is no channel view here to fall back to, so it says so instead.
- *
- * ⚠ ROUTER-FREE, like every other file in this tree: the SPA page owns the
+ * ⚠ THE THREAD IS DERIVED FROM THE CHANNEL'S THREAD LIST, never assumed: an id not
+ * in the bounded list renders the empty state, there being no channel view here to
+ * fall back to. ⚠ ROUTER-FREE, like the rest of this tree — the SPA page owns the
  * params and hands them down as plain props.
  */
 
@@ -57,33 +47,27 @@ import { useInlineConsent } from "./use-inline-consent";
 import { PEER_SESSIONS_POLL_MS } from "./use-agents-panel";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 
-/**
- * The window's name, as one function so the fallback and the loaded title are
- * one rule. ⚠ The em-dash spelling is the product's ("Dopl — <thread>"), and
- * `main/popout-window.js` carries the bare "Dopl" as the PRE-PAINT title, so a
- * window that never finishes loading is still named.
- */
+/** The window's name, as one function so the fallback and the loaded title are one
+ *  rule. ⚠ The em-dash spelling is the product's ("Dopl — <thread>"), and
+ *  `main/popout-window.js` carries the bare "Dopl" as the PRE-PAINT title. */
 export function threadWindowTitle(threadTitle: string | null): string {
   return threadTitle ? `Dopl — ${threadTitle}` : "Dopl";
 }
 
 /**
- * Name the WINDOW, from the renderer.
- *
- * ⚠ MAIN CANNOT DO THIS. It creates the window from `(segment, channelId,
- * threadId)` and has no thread title — titles live behind an authenticated read
- * the renderer is already making. Electron's default `page-title-updated`
- * handling copies `document.title` onto the window, and `popout-window.js` does
- * not disable it, so writing the document title IS setting the window title.
- * Harmless in a browser tab, which is the other place this tree runs.
+ * Name the WINDOW, from the renderer. ⚠ MAIN CANNOT DO THIS: it creates the window
+ * from `(segment, channelId, threadId)` and has no thread title, which lives behind
+ * an authenticated read the renderer is already making. Electron's default
+ * `page-title-updated` handling copies `document.title` onto the window, so writing
+ * the document title IS setting the window title. Harmless in a browser tab.
  */
 function useWindowTitle(threadTitle: string | null): void {
   useEffect(() => {
     if (typeof document === "undefined") return;
     const previous = document.title;
     document.title = threadWindowTitle(threadTitle);
-    // Restore on unmount: this is a shared document in dev (one Vite page, hash
-    // routing), and a window that navigates away must not keep the old name.
+    // Restore on unmount: a shared document in dev (one Vite page, hash routing),
+    // and a window that navigates away must not keep the old name.
     return () => {
       document.title = previous;
     };
@@ -130,14 +114,11 @@ export function ChannelsV2ThreadWindow({
     refetchMembers: () => void refetchMembers(),
   });
 
-  // The SEND BOX's whole diet: this window is a decision surface like the
-  // in-page thread view — a draft this operator's agent is holding on the thread
-  // they popped out must be sendable here, not one window switch away.
-  // Channel-scoped read, same poll the main page uses, same CAS'd mutation.
+  // The SEND BOX's whole diet: a draft this operator's agent is holding on the
+  // popped-out thread must be sendable here, not one window switch away. Same
+  // poll and same CAS'd mutation the main page uses.
   //
-  // ⚠ `outbound` ONLY (Samuel, 2026-08-22). The INBOUND half fed
-  // `thread-consent.tsx › ThreadAwaitingStrip`, which is deleted with the rest
-  // of that lane — this window has no inbound decision to offer either.
+  // ⚠ `outbound` ONLY (Samuel, 2026-08-22) — the INBOUND lane is deleted.
   const { outbound: requests } = useConsentInbox(
     workspaceId,
     channelId,
@@ -151,12 +132,11 @@ export function ChannelsV2ThreadWindow({
   });
 
   // EVERY member's session state for this channel — the peer-activity row above
-  // the composer (2026-08-20). ⚠ THIS WINDOW NEEDS ITS OWN READ. The three-column
-  // core polls the same endpoint for the Agents tab, but that is a different
-  // React tree in a different BrowserWindow; a pop-out that inherited nothing
-  // would render no indicator and report no reason, which is the silent
-  // feature-deletion shape INVARIANTS §11 names. `channel_sessions` is
-  // unpublished (§7), so it polls, on the SAME exported interval the core uses.
+  // the composer (2026-08-20). ⚠ THIS WINDOW NEEDS ITS OWN READ: the core's poll
+  // is a different React tree in a different BrowserWindow, and a pop-out that
+  // inherited nothing would render no indicator and report no reason (INVARIANTS
+  // §11). `channel_sessions` is unpublished (§7), so it polls, on the SAME
+  // exported interval the core uses.
   const { sessions: peerSessions } = useChannelAgentSessions(
     channelId,
     workspaceId,
@@ -180,7 +160,7 @@ export function ChannelsV2ThreadWindow({
   useWindowTitle(thread?.title ?? null);
 
   // ⚠ The thread list has to have LANDED before "no such thread" is an honest
-  // answer — until then this window knows nothing about the id it was handed.
+  // answer.
   if (threadsLoading) {
     return (
       <div className="page-float flex flex-col antialiased">
@@ -213,8 +193,8 @@ export function ChannelsV2ThreadWindow({
         index={index}
         members={members}
         loading={messagesLoading}
-        // The scroller's rule 1 — see `use-stick-to-bottom.ts`. This window never switches
-        // channels, so it is all but always false; passing it keeps ONE pane, one contract.
+        // The scroller's rule 1 (`use-stick-to-bottom.ts`). This window never switches
+        // channels, so it is all but always false; passing it keeps ONE contract.
         stale={messagesStale}
         outboundAsk={thread ? (outboundByThread.get(thread.id) ?? null) : null}
         outboundBusy={consentBusy}
@@ -223,13 +203,10 @@ export function ChannelsV2ThreadWindow({
         // ⚠ THE SAME POLL THIS WINDOW ALREADY MAKES for the peer-activity row, handed on so the
         // pop-out's composer offers the same @-chips the main pane does (2026-09-02, slice B10).
         // ⚠ **THIS SURFACE'S RECIPIENT LINE IS EXACT AGAIN AS OF 2026-09-07 (items 10 and 11).**
-        // It used to state one arm fewer than the main pane: it reads a THREAD and never the
-        // channel row, so it could not pass `defaultResponderAgentName` and RR3's configured arm
-        // was simply invisible here. Understating was the safe direction and the gap was
-        // accepted. The replacement setting is PER MEMBER and lives on the roster this window
-        // already loads (`useChannelMembers`), so there is nothing to hand over and nothing left
-        // to understate — and had it stayed a prop, the omission would now OVERSTATE, naming a
-        // responder for a member who had chosen "No one".
+        // It used to state one arm fewer, reading a THREAD and never the channel row that carried
+        // `defaultResponderAgentName`. The replacement setting is PER MEMBER and lives on the
+        // roster this window already loads (`useChannelMembers`), so there is nothing to hand
+        // over — and had it stayed a prop, the omission would now OVERSTATE.
         liveAgents={peerSessions}
         peerActivity={
           <PeerActivityRow

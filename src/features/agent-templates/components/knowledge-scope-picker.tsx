@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Popover } from "@/shared/ui/popover-menu";
 import {
   OPEN_SCALE_ICON,
@@ -9,7 +9,8 @@ import {
 } from "@/shared/ui/open-scale-button";
 import type { TemplateKnowledgeRef } from "../client/types";
 import { refKey, scopeChipLabel } from "../lib/knowledge-scopes";
-import { BaseNode } from "./knowledge-scope-tree";
+import { RemovableChip } from "./template-editor-rows";
+import { BaseNode, type ScopeToggle } from "./knowledge-scope-tree";
 
 /**
  * THE KNOWLEDGE PICKER — chips for what is attached, and one **Add** button
@@ -24,15 +25,11 @@ import { BaseNode } from "./knowledge-scope-tree";
  * deep. A flat menu cannot express "this folder", which is the whole request,
  * and Samuel's own sentence rules out the dropdown by name.
  *
- * ⚠ **`TreeRows` IS NOT REUSED, AND IT IS NOT FORKED EITHER**
- * (`knowledge/components/knowledge-v2/list/tree-rows.tsx`). Its props are the
- * BASE EDITOR's — `onCreateFolder`, `onCreateEntry`, `onRename`, `onRequestMove`,
- * `onDelete`, `onDownload`, `onCommitRename`, `onCancelStub`, plus an inline-edit
- * context — eight callbacks about AUTHORING and none about SELECTION, and it has
- * no checkbox mode to switch on. Giving it one means giving eight editing
- * callbacks a "not here" branch inside a picker, which is how a component stops
- * having one reason to change. What IS shared is the SHAPE of the read
- * (`useKnowledgeTree`) and the parent-indexing idiom; the row is ~40 lines.
+ * ⚠ **`TreeRows` IS NOT REUSED** (`knowledge/components/knowledge-v2/list/
+ * tree-rows.tsx`): its eight props are the base EDITOR's authoring callbacks and
+ * none is about selection, so reusing it means giving each a "not here" branch
+ * inside a picker. Shared instead: the read (`useKnowledgeTree`) and the
+ * parent-indexing idiom.
  *
  * ⚠ **A FOLDER MEANS ITS SUBTREE, INCLUDING LATER ADDITIONS** (the Desktop
  * Agent's assumption, unopposed). So checking a folder does not check its
@@ -88,7 +85,7 @@ export function KnowledgeScopePicker({
    * redundant one survives when the operator later unchecks the ancestor,
    * silently keeping an attachment they thought they had removed.
    */
-  function toggle(ref: TemplateKnowledgeRef, impliedKeys: ReadonlyArray<string>) {
+  const toggle: ScopeToggle = (ref, impliedKeys) => {
     const key = refKey(ref);
     if (selectedKeys.has(key)) {
       onChange(selected.filter((s) => refKey(s) !== key));
@@ -96,7 +93,7 @@ export function KnowledgeScopePicker({
     }
     const pruned = new Set(impliedKeys);
     onChange([...selected.filter((s) => !pruned.has(refKey(s))), ref]);
-  }
+  };
 
   /**
    * ARROWS AND SPACE, over whatever is currently rendered. ⚠ THE ROW SET IS READ
@@ -127,20 +124,14 @@ export function KnowledgeScopePicker({
       {selected.map((ref) => {
         const label = scopeChipLabel(ref);
         return (
-          <span
+          <RemovableChip
             key={refKey(ref)}
-            className="flex items-center gap-1 rounded-full border border-border-strong bg-bg-elevated px-2.5 py-0.5 text-small font-medium text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-          >
-            {label}
-            <button
-              type="button"
-              onClick={() => onChange(selected.filter((s) => refKey(s) !== refKey(ref)))}
-              aria-label={`Detach ${label}`}
-              className="text-text-muted transition-colors hover:text-text-primary"
-            >
-              <X size={12} />
-            </button>
-          </span>
+            label={label}
+            detachLabel={`Detach ${label}`}
+            onDetach={() =>
+              onChange(selected.filter((s) => refKey(s) !== refKey(ref)))
+            }
+          />
         );
       })}
       <OpenScaleButton

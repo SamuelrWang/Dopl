@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { RAISED_INPUT } from "@/shared/ui/wells";
+import { CHIP, RAISED_INPUT } from "@/shared/ui/wells";
 import {
   OPEN_SCALE_ICON,
   OPEN_SCALE_ICON_ONLY,
@@ -16,70 +16,41 @@ import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import type { TemplateField } from "../client/types";
 
 /**
- * The editor's FIELD FURNITURE — the key/value rows and the knowledge-base
- * picker.
+ * The editor's FIELD FURNITURE — the key/value rows and the chip picker.
  *
- * ⚠ THE INLINE ROWS' INPUT FACE IS `RAISED_WELL`'s `RAISED_INPUT`, THE KIT'S
- * RAISED BLOCK FIELD, and never `FIELD_WELL` / `.concave-field`. Samuel's ruling
- * for this page (2026-08-22): nothing on it is pressed in.
- * `template-editor-surface.test.tsx › no concave surfaces` reads these sources and fails
- * on the well's class name, so the rule survives a well-meaning "match the other
- * dialogs" edit.
+ * 🔒 **NOTHING ON THIS PAGE IS PRESSED IN (Samuel, 2026-08-22).** Two raised
+ * faces, not one: a popup FORM field is `shared/ui/form-dialog.tsx ›
+ * UnderlineField` (since 2026-09-08), and the repeating key/value LIST — no
+ * `FormSection` of its own — wears `shared/ui/wells.ts › RAISED_INPUT`. Never
+ * `FIELD_WELL` / `.concave-field`: `template-editor-surface.test.tsx` reads this
+ * source and fails on the banned class name.
  *
- * ⚠ **THE POPUP FORM'S OWN FIELDS ARE THE UNDERLINE NOW (2026-09-08), AND THAT
- * SUPERSEDES THE HALF OF THE RULING ABOUT THEM RATHER THAN REVERSING IT.** The
- * editor's Name/Description/Instructions and this file's Add-field pair are
- * `shared/ui/form-dialog.tsx › UnderlineField`; `RAISED_INPUT` stays the face of
- * what is NOT a popup form field — the repeating key/value LIST below, which has
- * no `FormSection` of its own and is not a box the kit has a recipe for. Neither
- * face is pressed in, which is the ruling both halves keep.
+ * 🔒 **IN-BODY BUTTONS ARE THE KIT'S 26px PILL (Samuel, 2026-08-28)** —
+ * `shared/ui/open-scale-button.tsx`, the Open face /home's section buttons
+ * already wear, so Add field, a row's Remove and the picker's Attach cannot
+ * drift back into three scales inside one dialog. Glyphs size off
+ * `OPEN_SCALE_ICON` / `OPEN_SCALE_ICON_ONLY`.
+ * ⚠ The FOOTER pair is outside that ruling — it is `FormDialog`'s, at
+ * `--action-h-sm`, so this dialog closes like every other popup form.
  *
- * ⚠ **`RAISED_INPUT` AND `Field` WERE PROMOTED OUT OF THIS FILE (2026-08-27)**
- * and are re-exported from here so the feature's other consumers
- * (`launch-sheet.tsx`, `template-approval.tsx`) keep one import path — the move
- * `ontology-bits` made for `FIELD_WELL`/`CHIP`/`RAISED_WELL`. This page was the
- * REFERENCE Samuel standardised the four /home dialogs onto, so the recipes are
- * now `shared/ui/wells.ts › RAISED_INPUT` and
- * `shared/ui/standard-dialog.tsx › DialogField`; a local copy here would be the
- * fifth statement of a face that exists to have exactly one.
- *
- * ⚠ **THE SMALL BUTTONS ARE THE KIT'S 26px PILL (Samuel, 2026-08-28)**, the
- * same ruling arriving on the BUTTONS that `RAISED_INPUT` settled for the
- * inputs. Add field, a row's Remove and the chip picker's Attach/Add-team each
- * hand-wrote their own height, radius and ink — THREE scales for one class of
- * control inside a single dialog. All three render
- * `shared/ui/open-scale-button.tsx` now, the KB card Open face that /home's
- * section buttons already wear, so this dialog cannot drift from that page by
- * an edit to either. Glyphs are sized with `OPEN_SCALE_ICON` /
- * `OPEN_SCALE_ICON_ONLY` rather than restating 12 and 14.
- *
- * ⚠ THE FOOTER PAIR IS NOT IN THAT RULING. It is `FormDialog`'s — a text
- * Discard beside the verb, both at `--action-h-sm` — and a 26px pill in that row
- * would make THIS dialog the one whose footer is a different size from every
- * other popup form's.
+ * ⚠ `RAISED_INPUT` and `Field` are RE-EXPORTED from here (promoted to the kit
+ * 2026-08-27) so `launch-sheet.tsx` and `template-approval.tsx` keep one import
+ * path.
  */
 export { RAISED_INPUT };
 export { DialogField as Field };
 
 /**
- * CUSTOM FIELDS — the pairs listed and edited INLINE, added through a dialog.
+ * CUSTOM FIELDS — the pairs listed and edited INLINE, added through a
+ * `FormDialog` (Samuel, 2026-08-27; a `FormDialog` since 2026-09-08).
  *
- * ⚠ **ADDING IS A DIALOG (Samuel, 2026-08-27) — a `FormDialog` since
- * 2026-09-08 — REVERSING THE
- * NO-MODAL-IN-MODAL RULING THIS FILE CARRIED.** The old note said a second
- * surface would put the operator two Escapes from their draft; what settled it
- * is that a field is about to be MORE than a key and a value (type, default,
- * required), and a row that grows four controls wide is a form pretending to be
- * a list. The dialog is the standard chrome at the standard width, so it is
- * ready for those settings without a second redesign.
+ * ⚠ ADDING IS A DIALOG because a field is about to be more than a key and a
+ * value (type, default, required), and a row four controls wide is a form
+ * pretending to be a list. Editing and removing stay inline — a pair already on
+ * screen is cheaper to fix where it is than behind a modal round trip.
  *
- * ⚠ EDITING AND REMOVING STAY INLINE. The dialog is for the pair that does not
- * exist yet; a pair on screen is cheaper to fix where it is than behind a
- * round trip through a modal.
- *
- * ⚠ AN EMPTY KEY IS STILL DROPPED AT SAVE (`../lib/template-draft.ts ›
- * cleanFields`) rather than blocked at the keystroke — the dialog's own Add
- * button is what refuses a blank one, and the draft rule stays the backstop.
+ * ⚠ An empty key is dropped at SAVE (`../lib/template-draft.ts › cleanFields`),
+ * not at the keystroke; the dialog's own Add button refuses a blank one.
  */
 export function CustomFieldRows({
   fields,
@@ -223,6 +194,39 @@ function AddFieldDialog({
   );
 }
 
+/**
+ * ONE ATTACHED THING, with the X that detaches it — the chip both pickers draw
+ * (`ChipMultiSelect` below, `knowledge-scope-picker.tsx` beside it).
+ *
+ * ⚠ THE FACE IS THE KIT'S `CHIP` (`shared/ui/wells.ts`), not a recipe restated
+ * here: the two pickers had the same class string twice and a retune would have
+ * reached one of them.
+ */
+export function RemovableChip({
+  label,
+  detachLabel,
+  onDetach,
+}: {
+  label: string;
+  /** Screen-reader name for the X — the caller owns the verb ("Detach", "Remove"). */
+  detachLabel: string;
+  onDetach: () => void;
+}) {
+  return (
+    <span className={cn("flex items-center gap-1", CHIP)}>
+      {label}
+      <button
+        type="button"
+        onClick={onDetach}
+        aria-label={detachLabel}
+        className="text-text-muted transition-colors hover:text-text-primary"
+      >
+        <X size={12} />
+      </button>
+    </span>
+  );
+}
+
 export interface PickerOption {
   id: string;
   name: string;
@@ -291,20 +295,12 @@ export function ChipMultiSelect({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {attached.map((option) => (
-        <span
+        <RemovableChip
           key={option.id}
-          className="flex items-center gap-1 rounded-full border border-border-strong bg-bg-elevated px-2.5 py-0.5 text-small font-medium text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-        >
-          {option.name}
-          <button
-            type="button"
-            onClick={() => toggle(option.id)}
-            aria-label={`${detachVerb} ${option.name}`}
-            className="text-text-muted transition-colors hover:text-text-primary"
-          >
-            <X size={12} />
-          </button>
-        </span>
+          label={option.name}
+          detachLabel={`${detachVerb} ${option.name}`}
+          onDetach={() => toggle(option.id)}
+        />
       ))}
       {/* ⚠ `disabled:opacity-40` STAYS WITH THE CALLER — the pill is the face
           and the scale, nothing else, exactly as `/home`'s create button keeps

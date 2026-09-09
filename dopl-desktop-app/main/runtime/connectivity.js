@@ -1,33 +1,24 @@
 // WHICH REGISTERED RUNTIMES THIS MAC IS ACTUALLY CONNECTED TO — `available()`, asked of every
 // adapter at once, bounded, and cached.
 //
-// ⚠ WHY IT EXISTS AT ALL (2026-09-08, Samuel's correction). The New-agent popup lists EVERY
-// registered runtime, always — *"even if the user does not have codex or cursor connected, I still
-// want them to be options there so that the user knows that those are options, so they can connect
-// them"* — and the thing it needed from main was not a shorter list but a FACT about each entry:
-// *"It should just be logged in, like it is just put in their default, right?"* So this answers one
-// question, `connected`, and REMOVES nothing: narrowing the roster is what the previous pass got
-// wrong, and it is the one change this module must never be used to make.
+// 🔒 IT REMOVES NOTHING FROM THE ROSTER (2026-09-08, Samuel's correction). The New-agent popup
+// lists EVERY registered runtime — *"even if the user does not have codex or cursor connected, I
+// still want them to be options there so that the user knows that those are options"* — so this
+// answers one question per entry, `connected`, and narrowing the list is the one change it must
+// never be used to make.
 //
-// ⚠ IT IS THE SPAWN-TIME GATE'S QUESTION, ASKED EARLY — the same `available()`
-// (`runtime/index.js › acquire`) with the same meaning per adapter: Claude answers "can the
-// platform module load", Codex "is there a `codex` on PATH that runs", Cursor "can this build load
-// the SDK". It is NOT the credential probe and NOT a promise that a launch will succeed; the
-// refusal an operator actually sees still comes from `acquire`, which re-asks at spawn.
+// ⚠ IT IS THE SPAWN-TIME GATE'S QUESTION ASKED EARLY — the same `available()`
+// (`runtime/index.js › acquire`), per adapter. NOT a credential probe and NOT a promise a launch
+// will succeed; the refusal an operator sees still comes from `acquire`, which re-asks at spawn.
 //
-// ⚠ LEASHED, BECAUSE THESE PROBES SPAWN BINARIES. `codex/client.js` already states the rule for
-// its own 5s probe — *"a binary that never answers must read as absent rather than as a stuck
-// session"* — and a UI read cannot afford even that: the popup is waiting on this reply. So each
-// adapter gets {@link LEASH_MS}, and a probe that has not answered by then is NOT CONNECTED. It is
-// never an error: a rejection, a throw, an adapter with no `available` and a timeout are one
-// answer, because on the surface that consumes this they mean one thing.
+// ⚠ LEASHED, BECAUSE THESE PROBES SPAWN BINARIES and the popup is waiting on this reply. Each
+// adapter gets {@link LEASH_MS}; a rejection, a throw, a missing `available` and a timeout are ONE
+// answer (not connected), because on the surface that consumes this they mean one thing.
 //
 // ⚠ CACHED 60s PER PROCESS, AND THE STALENESS IS THE DESIGN. `channels:getLaunchPosture` is read
-// on every mount of the popup, of the Settings tab and of every pop-out; probing three binaries
-// per read would put an `execFile` storm behind a dialog opening. The cost of the staleness is
-// bounded and one-directional in practice — an operator who installs Codex sees it within a
-// minute, and an unconnected pill stays SELECTABLE, so a stale "not connected" never blocks a
-// launch (spawn-time refusal is what explains a real one).
+// on every popup / Settings / pop-out mount, and probing three binaries per read would put an
+// `execFile` storm behind a dialog opening. An unconnected pill stays SELECTABLE, so a stale "not
+// connected" never blocks a launch.
 
 /** Per-adapter leash. A probe that has not answered by now reads as NOT connected. */
 const LEASH_MS = 1500;

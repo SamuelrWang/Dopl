@@ -227,8 +227,10 @@ addressees = N `channel_tasks` rows rendered as one card.
   `channels-v2/new-thread-dialog.tsx › NewThreadDialog` (the inline
   `AgentRequestPanel` this plan named was DELETED on 2026-09-08 — thread creation
   is a popup, reached from the Threads tab and the composer glyph alike); the
-  posted card ← `channels-v2/thread-card-row.tsx › ThreadCardMessage` on
-  `bits.tsx › MESSAGE_CARD`. ⚠ **This line said `message-pane.tsx ›
+  posted card ← `channels-v2/thread-card-row.tsx › ThreadCardMessage`, which wears
+  its own dark shell. ⚠ **This line anchored a `MESSAGE_CARD` constant in `bits.tsx`
+  until 2026-09-09; that constant was DELETED on 2026-08-20 when the card moved off
+  it, and the anchor survived only because a comment still named it.** ⚠ **This line said `message-pane.tsx ›
   ThreadRequestCard` until 2026-09-08 and NO SUCH SYMBOL HAS EVER EXISTED IN THIS
   TREE** — the anchor was split across two lines, which is the one shape
   `scripts/check-doc-refs.mjs` cannot match, so it went unchecked from the day it

@@ -351,6 +351,7 @@ export function OntologyView({
           />
           {selected && selectedId && (
             <ObjectPanel
+              workspaceId={workspaceId}
               objectId={selectedId}
               graph={graph}
               dispatch={dispatch}

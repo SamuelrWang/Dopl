@@ -5,15 +5,12 @@
  *
  * ⚠ §1 SPLIT OUT OF `info-tab.tsx` (2026-08-25, Samuel: *"I don't know why
  * you're making it different"*). /home's Info tab had grown a home-local roster
- * — smaller avatar, no email, its own row height — because the row was
- * module-private over there and copying looked cheaper than exporting. It is
- * not: a roster is one object, and two of them drift on exactly the axes a
- * reviewer notices first. **Both surfaces now render THIS file.** It did not go
- * into `bits.tsx`, which stood at 480 lines with the `MetaRow` × just added.
+ * because the row was module-private here and copying looked cheaper than
+ * exporting; two rosters drift on exactly the axes a reviewer notices first.
+ * **Both surfaces now render THIS file.** It did not go into `bits.tsx`, which
+ * stood at 480 lines.
  *
- * ⚠ NOTHING ABOUT THE ROW CHANGED IN THE MOVE — same `AvatarWithPresence`,
- * same `size="sm"`, same `h-[46px]`, same name-over-email stack, same
- * `RolePill`, same `opacity-60` when offline. A "tidy" while moving is how a
+ * ⚠ NOTHING ABOUT THE ROW CHANGED IN THE MOVE — a "tidy" while moving is how a
  * move becomes a redesign nobody reviewed.
  */
 
@@ -25,16 +22,13 @@ import type { ChannelMember } from "../../types";
 
 /**
  * One roster row. Presence is `AvatarWithPresence`'s ring — the kit's recipe,
- * never a standalone dot — and the boolean is **the SERVER's `agentOnline`**
- * since 2026-09-08 (INVARIANTS §7). ⚠ THIS COMMENT SAID "CLIENT-SIDE arithmetic
- * over `lastSeenAt` … so a stale roster reads OFFLINE rather than falsely
- * online", and reading OFFLINE was the BUG, not the safety property: a live
- * machine whose roster payload was merely late rendered as gone. The row is
- * handed a decided boolean and draws it.
+ * never a standalone dot — and the boolean is **the SERVER's `agentOnline`** since
+ * 2026-09-08 (INVARIANTS §7). ⚠ IT WAS CLIENT-SIDE arithmetic over `lastSeenAt`,
+ * and reading OFFLINE on a stale roster was the BUG, not a safety property. The
+ * row is handed a decided boolean and draws it.
  *
  * The subline is the member's email, not a job title: the model has no such
- * field, and the chip beside it states the one role a channel roster actually
- * carries (INVARIANTS §5).
+ * field, and the chip states the one role a channel roster carries (INVARIANTS §5).
  */
 export function MemberRow({
   member,
@@ -75,17 +69,13 @@ export function MemberRow({
 /**
  * THE WHOLE LIST: present members, then an `Offline` rule and the rest.
  *
- * ⚠ THE PARTITION TRAVELS WITH THE ROW, and that is the point of exporting the
- * list rather than only the row. /home's first attempt reused neither and
- * arrived at a different object; reusing only the ROW would have left the two
- * surfaces free to disagree about ORDER, which is the half a reader actually
- * reads.
+ * ⚠ THE PARTITION TRAVELS WITH THE ROW, which is why the LIST is exported and not
+ * only the row: sharing the row alone would leave the two surfaces free to
+ * disagree about ORDER, the half a reader actually reads.
  *
- * ⚠ `emptyLine` IS OPT-IN. The channels page states "No members in this
- * channel." because a workspace channel really can have none. A home channel
- * cannot — the caller is a member of their own container — so over there the
- * only way to see that sentence is during the roster read's first frame
- * (`keepPreviousData` starts empty), which would flash a claim that is false.
+ * ⚠ `emptyLine` IS OPT-IN. A workspace channel really can have no members; a home
+ * channel cannot, so over there the sentence could only appear during the roster
+ * read's first frame — flashing a claim that is false.
  */
 export function MemberRoster({
   members,
@@ -100,18 +90,14 @@ export function MemberRoster({
    * running (`view-model.ts › isPresentForViewer`).
    *
    * ⚠ **IT COMES FROM `AuthorIndex.currentUserId`** — the id the host already
-   * holds and already attributes transcript rows with (`indexMembers`), never a
-   * second resolution and never a `useSession` this component would have to
-   * mount. ⚠ OPTIONAL, so a surface with no viewer (a fixture, a pop-out with
-   * no index) is unchanged: absent means "no override", not "nobody is online".
+   * holds (`indexMembers`), never a second resolution and never a `useSession`
+   * mounted here. ⚠ OPTIONAL: absent means "no override", not "nobody is online".
    */
   viewerUserId?: string | null;
 }) {
-  // ⚠ ONE PASS, ONE PREDICATE, ONE `now` — the partition below used to call
-  // `isPresent` twice per member with two different `Date.now()` defaults, so a
-  // member could in principle land in NEITHER list (or both). Harmless while the
-  // answer was arithmetic on a 90s window; not something to leave standing now
-  // that a viewer override is in the predicate.
+  // ⚠ ONE PASS, ONE PREDICATE, ONE `now` — the partition used to call `isPresent`
+  // twice per member with two different `Date.now()` defaults, so a member could
+  // land in NEITHER list (or both).
   const presence = new Map(
     members.map((m) => [m.userId, isPresentForViewer(m, viewerUserId)] as const)
   );
@@ -123,11 +109,9 @@ export function MemberRoster({
       {online.map((member) => (
         <MemberRow key={member.userId} member={member} online />
       ))}
-      {/* ⚠ The condition is `offline.length > 0` and NOTHING ELSE — the same
-          test `info-tab.tsx` shipped. An all-offline roster therefore leads
-          with the rule, which looks odd on a two-person container and is
-          nonetheless what the channels page does. Changing it here would make
-          this a redesign wearing a move's clothes. */}
+      {/* ⚠ The condition is `offline.length > 0` and NOTHING ELSE — the same test
+          `info-tab.tsx` shipped. An all-offline roster leads with the rule, which
+          looks odd on a two-person container and is what the channels page does. */}
       {offline.length > 0 && (
         <p className="px-2 pb-1 pt-3 text-label font-semibold uppercase tracking-wide text-text-muted">
           Offline

@@ -254,20 +254,34 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // ⚠ `sessionOnly` IS UNTOUCHED on this one — the floor says which ROLE may ask,
   // and `sessionOnly` still says no agent token may, for any role.
   ["ontology/objects/[objectId]/route.ts", "DELETE"],
+  // ⚠ THE CHANGELOG'S THREE (2026-09-09, the CHANGELOG lane part 2). Each takes
+  // the floor its sibling already carries: a lent guest who can OPEN a board can
+  // read its history, and one who can PATCH an object can restore one of its
+  // fields. ⚠ **THE FLOOR IS THE WEAKEST FENCE ON ALL THREE, NOT THE GATE** —
+  // `service-revisions-read.ts` re-asks `requireObject`/`requireCluster` at
+  // `view` for the reads and at `edit` for the restore, so a guest whose share
+  // says `view` reads history and is refused the restore with the same 404 every
+  // other ontology write gives them.
+  ["ontology/objects/[objectId]/revisions/route.ts", "GET"],
+  ["ontology/clusters/[clusterId]/revisions/route.ts", "GET"],
+  // ⚠ NOT `sessionOnly`, unlike the object DELETE above: that gate is for acts
+  // that DESTROY, and a restore appends a revision whose value already happened.
+  ["ontology/objects/[objectId]/revisions/[revisionId]/restore/route.ts", "POST"],
 ];
 
 const ALLOWED_KEYS = new Set(GUEST_ALLOWED.map(([f, m]) => `${f}#${m}`));
 
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 27 entries (pins the size against a silent add/drop)", () => {
+  it("has 30 entries (pins the size against a silent add/drop)", () => {
     // 19 until 2026-09-06 (artifacts ×2), 24 while the three personal-arming
     // verbs existed, 21 once they were deleted with the route (2026-09-07), 27
-    // since the ontology lane (2026-09-09, F-685); 15 until Home Knowledge
+    // with the ontology lane (2026-09-09, F-685), 30 with that lane's CHANGELOG
+    // (the same day, F-686 part 2); 15 until Home Knowledge
     // Panels M2. ⚠ ENTRIES, NOT FILES, which is why B2
     // counts occurrences. The number blesses nothing; set B proves the tree.
     // Re-derive both, never quote:
     //   grep -rc 'minRole: "guest"' $(grep -rl 'minRole: "guest"' src/app/api)
-    expect(ALLOWED_KEYS.size).toBe(27);
+    expect(ALLOWED_KEYS.size).toBe(30);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {

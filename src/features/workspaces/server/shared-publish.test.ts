@@ -71,17 +71,50 @@ vi.mock("@/features/knowledge/server/repository", () => ({
   hardDeleteBase: vi.fn(),
   listBaseSlugsForWorkspace: vi.fn(),
 }));
-vi.mock("@/features/knowledge/server/service-base-gates", () => ({
-  // ⚠ `service-base-writes.ts` HAS CALLED THIS SINCE THE PERSONAL-SHELF WORK
-  // (task 11), and a module mock that omits it is not a narrower test — it is
-  // `undefined is not a function` inside the create, which is how both
-  // knowledge arms here went red. The stub is the REAL function's non-personal
-  // arm, byte for byte: this suite never asks for a shelf, so any other answer
-  // would be inventing behaviour to make an assertion pass.
-  resolveCreateDestination: vi.fn(async (ctx: { workspaceId: string }) => ({
-    homeScoped: false,
-    workspaceId: ctx.workspaceId,
-  })),
+vi.mock("@/features/knowledge/server/service-base-gates", async () => {
+  // ⚠ **A MODULE MOCK THAT OMITS A NAME `createBase` CALLS IS NOT A NARROWER
+  // TEST — it is `undefined is not a function` inside the create.** That
+  // happened twice: `resolveCreateDestination` (task 11) and then
+  // `assertCreateBaseAllowed`, which absorbed the G16 call on 2026-09-09 when
+  // the gate chain moved into this module. Each stub is the REAL function's
+  // non-personal, non-teams arm — the only one this suite reaches — so no
+  // behaviour is invented to make an assertion pass.
+  // 🔒 THE G16 CALL IS THE REAL ONE. It is what this file exists to drive, so
+  // `assertCreateBaseAllowed`'s stub reaches `assertSharedPublishAcknowledged`
+  // itself rather than standing in for it.
+  const { assertSharedPublishAcknowledged } = await import("./shared-publish");
+  return {
+    resolveCreateDestination: vi.fn(async (ctx: { workspaceId: string }) => ({
+      homeScoped: false,
+      workspaceId: ctx.workspaceId,
+    })),
+    assertCreateBaseAllowed: vi.fn(
+      async (
+        ctx: { workspaceId: string },
+        input: { visibility?: "public" | "private"; acknowledgeShared?: boolean },
+      ) => {
+        const destination = { homeScoped: false, workspaceId: ctx.workspaceId };
+        const visibility = input.visibility ?? "private";
+        await assertSharedPublishAcknowledged({
+          workspaceId: destination.workspaceId,
+          publishes: visibility === "public",
+          acknowledged: input.acknowledgeShared,
+          noun: "knowledge base",
+        });
+        return { destination, visibility, teamGrants: [] };
+      },
+    ),
+  };
+});
+// ⚠ THE CHANGELOG CAPTURE IS NOT WHAT THIS FILE DRIVES, and it reaches the
+// admin client for real (`service-revisions.ts › recordBaseRevision`, the
+// 2026-09-09 lane) — against this file's `__marker` stub that is `db.from is
+// not a function`, i.e. a G16 assertion failing on an unrelated write. Stubbed
+// to a no-op; `knowledge/server/service-revisions.test.ts` owns the capture.
+vi.mock("@/features/knowledge/server/service-revisions", () => ({
+  recordBaseRevision: vi.fn().mockResolvedValue(undefined),
+  recordEntryRevision: vi.fn().mockResolvedValue(undefined),
+  recordFolderRevision: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/features/knowledge/server/service-shared", () => ({
   assertAgentCanDelete: vi.fn(),

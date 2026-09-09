@@ -10,7 +10,11 @@ import type {
   HomeOverviewBucket,
   HomeSeriesPoint,
 } from "@/features/home/overview-types";
-import { BarSeries, type BarPoint } from "#/components/charts/bar-series";
+import {
+  BarSeries,
+  monthDayLabel,
+  type BarPoint,
+} from "#/components/charts/bar-series";
 
 /**
  * The /home Overview face's USAGE panel contents — the capacity bar and the
@@ -175,18 +179,13 @@ export function seriesTotal(points: readonly HomeSeriesPoint[]): number {
 }
 
 /**
- * `at` → the bin's caption.
- *
- * ⚠ SLICED OUT OF THE ISO STRING, never `new Date().getDate()`: a UTC bin
- * parsed as an instant and printed in local time lands on the previous day west
- * of Greenwich, which is the bug `activity-chart.tsx › dayLabel` records.
+ * `at` → the bin's caption. Hour bins print `HH:00`; day bins delegate to
+ * `charts/bar-series.tsx › monthDayLabel`, the ONE `m/d` formatter (the other
+ * caller is `pages/overview/activity-chart.tsx`).
  */
 export function binLabel(at: string, bucket: HomeOverviewBucket): string {
   if (bucket === "hour") return `${at.slice(11, 13)}:00`;
-  const [, month = "", day = ""] = at.slice(0, 10).split("-");
-  // ⚠ `m/d` (Samuel, 2026-09-08: "I'm seeing 29/9, which should be 9/29"). The reference
-  // chart wore `d/m`; the audience is US.
-  return `${Number(month)}/${Number(day)}`;
+  return monthDayLabel(at);
 }
 
 /**

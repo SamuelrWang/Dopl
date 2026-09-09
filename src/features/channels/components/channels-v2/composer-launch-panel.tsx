@@ -2,27 +2,20 @@
 
 /**
  * THE COMPOSER'S LAUNCH PANEL — who the new agent is, before it exists (2026-08-27, Samuel's
- * launch-panel ruling). Split from `composer.tsx` on the seam the composer's deleted inline
- * thread panel was split on: that file is about SENDING, this is one FORM. ⚠ The field kit both
- * panels mounted survived that panel's deletion as `composer-panel-fields.tsx`, which is where
- * this file still takes `PanelField` from.
+ * launch-panel ruling). One FORM, split off `composer.tsx`, which is about SENDING.
  *
- * ⚠ IT REPLACED THE TEMPLATE CHEVRON, which is DELETED. The Bot icon had a second glyph beside
- * it opening a template menu; that menu's whole function — pick an identity, or none — is the
+ * 🔒 **UNREFERENCED FROM THE COMPOSER SINCE 2026-09-08** — the popup
+ * (`launch-agent-dialog.tsx`) replaced it. Only `runtime-refusals.test.tsx` still mounts
+ * `AgentLaunchPanelView`, so the old face keeps its own pins **until Samuel rules; delete it when
+ * he does, and do not let two launch forms live** (see `launch-agent-dialog.tsx`).
+ *
+ * ⚠ IT REPLACED THE TEMPLATE CHEVRON, which is DELETED — that menu's whole function is the
  * Template row here. **Do not re-add a chevron**: two ways to choose an identity is how the
  * thread panel and the Bot icon drifted into meaning the same thing in 2026-08-21.
  *
- * ⚠ IT IS THE NEW-THREAD PANEL'S TWIN, DELIBERATELY, and shares its parts rather than copying
- * them: the same concave `SECTION_BOX_INSET` body recessed into the composer card, the same
- * `RAISED_WELL` cards on it, the same `Label:` + `UNDERLINE_FIELD` rows, the same
- * `data-composer-panel` hook that lets /home repaint the recess with the account palette. Two
- * panels that read as one kind of object, because they are.
- *
  * ⚠ THE ID ROW IS DISPLAY-ONLY AND IS NOT ALWAYS THERE. It shows the address main pre-assigned
- * (`use-agent-launch.ts`), and on a desktop too old to honour a pre-assigned id there is nothing
- * true to show yet — so it says so, rather than showing an id the agent will not have. That
- * whole argument lives in `use-agent-launch.ts`; what matters here is that the row NEVER renders
- * a guess (INVARIANTS §11 — UNKNOWN is not EMPTY).
+ * (`use-agent-launch.ts`); on a desktop too old to honour one there is nothing true to show, so
+ * it says so rather than rendering a guess (INVARIANTS §11 — UNKNOWN is not EMPTY).
  */
 
 import { useMemo, useRef } from "react";
@@ -58,12 +51,8 @@ import { useAutoGrow } from "./use-auto-grow";
  * 🔒 ⚠ `marker` IS A SECURITY SIGNAL, NOT DECORATION, AND IT IS WHY THIS TYPE IS
  * NOT `{id, name}` (RESTORED 2026-08-30 — ledger ASK-21, INVARIANTS §5A).
  * A `team` / `workspace` template's instructions are another member's text about
- * to run on this machine under this operator's credential. §5A: the marker is
- * *"the ONLY signal shown to the human BEFORE the choice is made"* — and when
- * this panel replaced the composer's template chevron on 2026-08-27 it narrowed
- * the list to id + name, so the pre-choice signal was lost on the surface now
- * taking most of the launch traffic. (`TemplateApprovalDialog` still fires on
- * first use, so the FENCE held; what was lost is the warning before the click.)
+ * to run on this machine under this operator's credential, and §5A makes the
+ * marker *"the ONLY signal shown to the human BEFORE the choice is made"*.
  *
  * ⚠ IT IS `template-picker.tsx › authorMarker`'s ANSWER, never a second copy:
  * an author the channel roster cannot name reads `by another member` rather than
@@ -76,15 +65,12 @@ export interface LaunchTemplateOption {
   name: string;
   marker: string | null;
   /**
-   * THE TEMPLATE'S OWN DEFAULT MODEL, and it is here to be NAMED rather than to be sent
-   * (2026-09-05). Nothing on this panel writes it: the launch already sends no model unless the
-   * operator picked one (`use-agent-launch.ts` — `AGENT_MODEL_DEFAULT` becomes `undefined`, never
-   * an id), and main's chain reads the template itself. What the panel could not do until now is
-   * SAY which model that silence resolves to, and a template's model OUTRANKS the channel's pick
-   * (`main/session-launch-op.js`'s precedence), so a label computed without it would name the
-   * channel's model on a launch that will not use it.
-   * ⚠ OPTIONAL, AND ABSENT IS "THIS BUILD WAS NOT TOLD" rather than "no model" — the row then
-   * names the next link down instead of claiming the SDK default (INVARIANTS §11).
+   * THE TEMPLATE'S OWN DEFAULT MODEL, here to be NAMED rather than sent (2026-09-05). Nothing on
+   * this panel writes it — main's chain reads the template itself — but a template's model
+   * OUTRANKS the channel's pick (`main/session-launch-op.js`), so a label computed without it
+   * would name the channel's model on a launch that will not use it.
+   * ⚠ OPTIONAL, AND ABSENT IS "THIS BUILD WAS NOT TOLD" rather than "no model" — the row names
+   * the next link down instead of claiming the SDK default (INVARIANTS §11).
    */
   model?: string | null;
 }
@@ -156,19 +142,16 @@ export function AgentLaunchPanelView({
    * (2026-09-05, Samuel's #1076(b): "read it from wherever the machine really resolves it").
    *
    * ⚠ **THERE IS NO "Default" OPTION ANY MORE (2026-09-06, Samuel's ruling), SO THIS RESOLVES
-   * THE ROW'S VALUE INSTEAD OF RE-WORDING AN EMPTY ONE.** `AGENT_MODEL_OPTIONS` lists only real
-   * models; a `SelectMenu` whose `value` matches none of them silently renders `options[0]`, so
-   * an unpicked panel READ "Fable 5" while the launch carried no model at all — the control and
-   * the launch disagreeing on screen, which is the defect the re-worded label existed to prevent.
+   * THE ROW'S VALUE INSTEAD OF RE-WORDING AN EMPTY ONE.** A `SelectMenu` whose `value` matches no
+   * option silently renders `options[0]`, so an unpicked panel READ "Fable 5" while the launch
+   * carried no model at all.
    *
    * ⚠ THE ORDER IS MAIN'S, LINK FOR LINK (`main/session-launch-op.js`): the operator's own pick,
-   * then the TEMPLATE's model, then the CHANNEL's. A resolution that read the channel first would
-   * be wrong on exactly the launches a template is for.
-   *
-   * ⚠ AND THE LAST LINK IS NOW NAMED RATHER THAN LEFT BLANK. When no link carries a model,
-   * `agentModelSelection` answers `AGENT_MODEL_FALLBACK` (Sonnet) — the back-fill target Samuel
-   * ruled when he removed "Default" (*"why can't we just set a value … unless they change it"*).
-   * The row therefore always holds a real option and always names a real model.
+   * then the TEMPLATE's model, then the CHANNEL's — reading the channel first would be wrong on
+   * exactly the launches a template is for. When no link carries one, `agentModelSelection`
+   * answers `AGENT_MODEL_FALLBACK` (Sonnet), the back-fill Samuel ruled when he removed "Default"
+   * (*"why can't we just set a value … unless they change it"*), so the row always names a real
+   * model.
    */
   const effectiveModel = useMemo(() => {
     const fromTemplate = templates.find((t) => t.id === panel.templateId)?.model;
@@ -326,12 +309,10 @@ export function AgentLaunchPanelView({
  * THE WHOLE NEW-AGENT SURFACE — the collapse region, the panel, the templates read and the
  * foreign-template question — as ONE mount.
  *
- * ⚠ IT EXISTS SO THE TEMPLATES READ IS GATED BY THE SAME `canLaunch` THE CONTROL IS. The read is
- * a react-query hook, so calling it from `composer.tsx`'s top level would require a
- * `QueryClientProvider` around every surface that renders a composer — including the pop-out and
- * the web tree, which have no launch affordance at all and had no such requirement before. The
- * retired `TemplateLaunchPicker` was mounted under exactly this condition and this keeps that
- * property rather than quietly widening it.
+ * ⚠ IT EXISTS SO THE TEMPLATES READ IS GATED BY THE SAME `canLaunch` THE CONTROL IS. The read is a
+ * react-query hook, so calling it from `composer.tsx`'s top level would require a
+ * `QueryClientProvider` around every surface that renders a composer — the pop-out and the web
+ * tree included, which have no launch affordance at all.
  *
  * ⚠ THE COLLAPSE REGION IS INSIDE, so the panel's own content decides how far the composer card
  * grows and no layout number is hardcoded; `motion-reduce` snaps it.
@@ -405,14 +386,11 @@ export function ComposerLaunch({
             runtimes={posture.runtimeSupported ? posture.runtimes : EMPTY_RUNTIMES}
             channelRuntime={posture.runtime}
             defaultRuntime={posture.defaultRuntime}
-            // ⚠ GATED ON THE CAPABILITY PROBE, exactly as the runtime family above is. On a
-            // desktop with no model concept `posture.model` is null and stays null, and the row
-            // then reads plain "Default" — which is the truth there — rather than naming a
-            // channel pick this build cannot see.
-            // ⚠ THE MODEL IS ON THE PRESET, NOT HOISTED (2026-09-05). `runtime` is lifted onto
-            // the state object; `model` is deliberately not — `permission-modes.ts ›
-            // PermissionPreset.model` is where it lives, and `modelSupported` is its detector.
-            // This line read `posture.model` and did not compile.
+            // ⚠ GATED ON THE CAPABILITY PROBE, exactly as the runtime family above is — on a
+            // desktop with no model concept it stays null rather than naming a channel pick this
+            // build cannot see.
+            // ⚠ THE MODEL IS ON THE PRESET, NOT HOISTED (2026-09-05): `permission-modes.ts ›
+            // PermissionPreset.model` is where it lives and `modelSupported` is its detector.
             channelModel={posture.modelSupported ? posture.posture.model ?? "" : ""}
           />
         </div>

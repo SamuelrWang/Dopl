@@ -3,12 +3,10 @@
 /**
  * THE COMPOSER PANELS' SHARED FIELD KIT — one label/value row, drawn one way.
  *
- * ⚠ **THE FILE WAS `composer-request-panel.tsx` AND HELD `AgentRequestPanel` UNTIL 2026-09-08.**
- * That panel was the composer's INLINE new-thread form; thread creation is a popup now
- * (`new-thread-dialog.tsx › NewThreadDialog`, reached from the Threads tab AND the composer's own
- * `MessageSquarePlus` glyph), so the panel was DELETED rather than left unreferenced and the file
- * was renamed to what it actually is. **The kit is what survived**, because it is mounted by a
- * SECOND caller (`composer-launch-panel.tsx`) and pinned by `panel-field.test.tsx`.
+ * ⚠ **THE FILE WAS `composer-request-panel.tsx` AND HELD `AgentRequestPanel` UNTIL 2026-09-08**,
+ * when the inline new-thread form became a popup (`new-thread-dialog.tsx › NewThreadDialog`) and
+ * that panel was DELETED. The KIT survived: `composer-launch-panel.tsx` mounts it and
+ * `panel-field.test.tsx` pins it.
  *
  * ⚠ THE SEAM IS §1's "one file, one reason to change". This is FIELD SHAPE — a raised card, a
  * label, an underline that is a real element — and it moves when a field's anatomy moves, never
@@ -27,13 +25,11 @@ import { cn } from "@/shared/lib/utils";
 /**
  * The raised card a field sits on — PADDING AND ELEVATION ONLY.
  *
- * ⚠ THE UNDERLINE IS NOT ON THIS ELEMENT, AND THAT IS THE 2026-08-27 CORRECTION. It was
- * `border-b-*` on the card, composed over `RAISED_WELL`'s own all-sides border — which rendered
- * NOTHING VISIBLE in the app: a 1px bottom edge on a `rounded-lg` raised face, sitting on the
- * card's own border colour, is swallowed by the radius and the elevation. **jsdom cannot show
- * that**, so the class-name assertion that "pinned" it passed over a line nobody could see.
- * The line is now its own NODE inside the padded content box ({@link FIELD_LINE}), where no
- * parent radius or overflow can reach it.
+ * ⚠ THE UNDERLINE IS NOT ON THIS ELEMENT (2026-08-27 correction). As `border-b-*` on the card,
+ * composed over `RAISED_WELL`'s own border, it rendered NOTHING VISIBLE — swallowed by the radius
+ * and the elevation — and jsdom cannot show that, so the class-name assertion that "pinned" it
+ * passed over a line nobody could see. It is its own NODE now ({@link FIELD_LINE}), inside the
+ * padded content box where no parent radius or overflow can reach it.
  */
 export const FIELD_CARD = "flex px-3 py-2.5";
 
@@ -41,15 +37,13 @@ export const FIELD_CARD = "flex px-3 py-2.5";
  * THE UNDERLINE, AS A REAL ELEMENT — the row that holds the label and the value, with the line
  * on its own bottom edge.
  *
- * ⚠ IT SPANS LABEL **AND** VALUE, which is the whole point: the line runs the full width of the
- * card's content box, so `Name:` sits on it rather than over nothing.
- * ⚠ GRAY AT REST, INK ON FOCUS, and `focus-within` is what makes that work from here — the focus
- * lands on the `<input>` one level down, so `focus:` would never fire.
- * ⚠ `pb-1` IS THE GAP BETWEEN TEXT AND LINE and belongs to this element, not to the card: the
- * card's `py-2.5` is the breathing room OUTSIDE the line, and folding the two together is what
- * makes a field look vertically off by a pixel in one panel and not the other.
+ * ⚠ IT SPANS LABEL **AND** VALUE, so the line runs the full width of the card's content box and
+ * `Name:` sits on it rather than over nothing.
+ * ⚠ `focus-within`, not `focus:` — the focus lands on the `<input>` one level down.
+ * ⚠ `pb-1` IS THE GAP BETWEEN TEXT AND LINE and belongs here, not to the card, whose `py-2.5` is
+ * the breathing room OUTSIDE the line.
  * ⚠ TAGGED `data-field-line` SO A TEST CAN ASSERT THE NODE EXISTS, not merely that a class string
- * appears somewhere — the failure this replaces was exactly a class that was present and invisible.
+ * appears — the failure this replaces was a class that was present and invisible.
  */
 export const FIELD_ROW = "flex w-full min-w-0 items-start gap-2";
 
@@ -119,13 +113,9 @@ export const PANEL_BODY =
 /**
  * The label word. ⚠ AUTO-WIDTH — no column (Samuel, 2026-08-27, from the rendered app).
  *
- * It was `w-[84px]`, sized to the longest label either panel uses, on the idea that a fixed column
- * lines every value up. In practice it put a wide dead gap after every SHORT label —
- * `Name:` ......... `Agent #fc1j22ed` — and it could not deliver the alignment it cost, because
- * the two panels carry different label sets (Title/Description against
- * Name/Description/Template/Model), so a column that lines one of them up is arbitrary in the
- * other. **The value now starts right after the word**, one `gap-2` along, and the two panels read
- * the same way because the RULE is the same rather than because a number happens to match.
+ * It was `w-[84px]`, which put a wide dead gap after every SHORT label and could not deliver the
+ * alignment it cost: the two panels carry different label sets, so a column that lines one up is
+ * arbitrary in the other. **The value now starts right after the word**, one `gap-2` along.
  */
 export const FIELD_LABEL = "shrink-0 pt-px text-body text-text-secondary";
 

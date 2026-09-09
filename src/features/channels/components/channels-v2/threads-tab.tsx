@@ -4,22 +4,17 @@
  * Channels v2 — the right panel's THREADS tab: every thread of the open
  * channel, as rectangle cards that drive the center pane.
  *
- * ⚠ NO STATUS FILTER. The mock's Active/Inactive `SegmentedControl` does not
- * survive the port: threads never close and never leave the list, so
- * ACTIVITY ORDERING replaced the filter (a third-round ruling in the port's
- * intent doc, deleted at the cutover — INVARIANTS §5; wiring plan
- * Phase 1). `channel_tasks.status` is still selected and still stored — only the
- * ORDERING stopped depending on it, and this tab reads neither.
+ * ⚠ NO STATUS FILTER (INVARIANTS §5). Threads never close and never leave the
+ * list, so ACTIVITY ORDERING replaced it; `channel_tasks.status` is still stored
+ * and this tab reads neither it nor the ordering it once drove.
  *
- * ⚠ THE ORDER IS THE SERVER'S AND IS NEVER RE-SORTED (INVARIANTS §5). The read
- * is bounded at `constants.ts › CHANNEL_THREAD_LIST_LIMIT` and clipped against
- * that order, so a page re-sorted here would be the wrong rows in a plausible
- * order.
+ * ⚠ THE ORDER IS THE SERVER'S AND IS NEVER RE-SORTED (INVARIANTS §5). The read is
+ * bounded at `constants.ts › CHANNEL_THREAD_LIST_LIMIT` and clipped against that
+ * order, so a page re-sorted here would be the wrong rows in a plausible one.
  *
- * ⚠ A CLIPPED PAGE SAYS SO (INVARIANTS §9). A read at its ceiling counts as
- * clipped, and a cap that renders identically to an exhausted list is the bug.
- * The wording lives in this module, once, and is emitted BESIDE the rows it
- * clipped — never in a footer a skimmer drops.
+ * ⚠ A CLIPPED PAGE SAYS SO (INVARIANTS §9), BESIDE the rows it clipped and never
+ * in a footer a skimmer drops — a cap that renders identically to an exhausted
+ * list is the bug.
  */
 
 import { Avatar } from "@/shared/ui/avatar";
@@ -31,22 +26,15 @@ import type { ChannelThread } from "../../types";
 
 /**
  * THE web thread-list clip wording. Third surface in the family after
- * `ontology-clipped.ts › clippedNote` and
- * `channel-render-threads.ts › threadsClippedNote`; it is its own because the
- * REMEDY differs — this pane has no page argument and no deeper read, so what
- * it can honestly offer is "these are the most recently active" plus the
- * assurance that nothing left.
+ * `ontology-clipped.ts › clippedNote` and `channel-render-threads.ts ›
+ * threadsClippedNote`; its own because the REMEDY differs — this pane has no page
+ * argument and no deeper read.
  *
- * ⚠ It may NOT let the clip pass as an absence: "this channel has no such
- * thread" is an assertion this read never established.
- *
- * ⚠ AND IT MAY NOT OVER-ASSERT IN THE OTHER DIRECTION EITHER. It used to say
- * "this channel holds more than one page", which the read never established: a
- * page AT the ceiling counts as clipped (INVARIANTS §9) precisely BECAUSE the
- * reader cannot tell a full page from an exhausted one, and a channel with
- * exactly `CHANNEL_THREAD_LIST_LIMIT` threads was being told there were more.
- * The wording now states only what IS on screen — the count, and that the
- * order is activity — and claims nothing whatever about what is not.
+ * ⚠ IT MAY NOT ASSERT IN EITHER DIRECTION. Not "this channel has no such thread"
+ * (the clip is not an absence), and not "there is more than one page" — a page AT
+ * the ceiling counts as clipped (INVARIANTS §9) precisely BECAUSE the reader
+ * cannot tell a full page from an exhausted one. It states only what IS on
+ * screen: the count, and that the order is activity.
  */
 export const THREADS_CLIPPED_NOTE =
   "Showing the most recently active threads, up to this list's limit. Nothing here was closed or archived; anything not listed is simply below the cut.";
@@ -122,17 +110,14 @@ export function ThreadsTab({
 /**
  * One thread rectangle.
  *
- * ⚠ NO "Requested" chip and NO muted/inactive face. Both were mock statuses:
- * `requested` is a thread whose consent rows are still pending and nothing
- * projects it (Phase 3+), and `inactive` meant CLOSED, which the model no
- * longer has as a place you cannot walk into. Every card here opens.
+ * ⚠ NO "Requested" chip and NO muted/inactive face — both were mock statuses,
+ * and the model has no closed thread. Every card here opens.
  *
  * The subline is `lastActivityAt` — the newest message tagged for the thread,
- * derived off `channel_messages` and NEVER `channel_tasks.updated_at`, whose
- * only writer is `set_mode` since close and reopen were removed (INVARIANTS §5,
- * wiring plan Phase 4, 2026-08-18). Absent means this
- * read did not derive it, which `formatRelativeTime` renders as an em dash
- * rather than as "no activity".
+ * derived off `channel_messages` and NEVER `channel_tasks.updated_at`, whose only
+ * writer is `set_mode` (INVARIANTS §5, 2026-08-18). Absent means this read did
+ * not derive it, which `formatRelativeTime` renders as an em dash rather than as
+ * "no activity".
  */
 function ThreadCard({
   thread,

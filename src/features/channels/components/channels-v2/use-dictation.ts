@@ -4,30 +4,27 @@
  * **DICTATION FOR THE COMPOSER — the Mic glyph, wired** (Samuel, 2026-09-04).
  *
  * ⚠ **THE BROWSER'S OWN ENGINE, AND NOTHING IS INSTALLED.** `SpeechRecognition` (`webkit`-prefixed
- * everywhere that ships it today) hands the audio to the browser's service — Chrome to Google's,
- * Safari to Apple's dictation — so there is no key, no billing and no new dependency. It also means
- * the audio leaves the machine by a path this app neither opens nor controls, which is the browser's
- * contract with its user and the reason the permission prompt is theirs to answer.
+ * everywhere that ships it today) hands the audio to the browser's service — no key, no billing,
+ * no dependency. It also means the audio leaves the machine by a path this app neither opens nor
+ * controls, which is why the permission prompt is the browser's to ask.
  *
  * ⚠ **IT IS NOT IN `lib.dom.d.ts`**, so the shapes below are declared locally and DELIBERATELY
- * MINIMAL: exactly the members this file touches, nothing speculative. A `declare global` widening
- * of `Window` would put a half-specified vendor API into every file's namespace; the cast is
- * confined to {@link recognitionCtor}.
+ * MINIMAL — exactly the members this file touches. A `declare global` widening of `Window` would
+ * put a half-specified vendor API into every file's namespace; the cast is confined to
+ * {@link recognitionCtor}.
  *
- * ⚠ **RED MEANS LISTENING, AND ONLY THE ENGINE MAY SAY SO.** `listening` is set from `onstart` —
- * the event that fires when capture actually begins — never optimistically on the click. A denied
- * microphone raises `onerror` and no `onstart`, so the button never reddens for a session that is
- * not happening, which is the one thing a recording indicator must never get wrong.
+ * ⚠ **RED MEANS LISTENING, AND ONLY THE ENGINE MAY SAY SO.** `listening` is set from `onstart`,
+ * never optimistically on the click: a denied microphone raises `onerror` and no `onstart`, so the
+ * button never reddens for a session that is not happening.
  *
- * ⚠ **EVERY STOP KEEPS THE TEXT.** Nothing here clears or rewrites the draft: the hook only ever
- * APPENDS finished phrases through its callback, so a stop for any reason — a second click, the tab
- * going away, the 60-second cap, an engine error — leaves the words in the box and the operator
- * clicks again to carry on. There is no "discard on stop" path to get wrong.
+ * ⚠ **EVERY STOP KEEPS THE TEXT.** The hook only ever APPENDS finished phrases through its
+ * callback, so a stop for any reason — second click, tab going away, the 60s cap, an engine error
+ * — leaves the words in the box. There is no "discard on stop" path to get wrong.
  *
- * ⚠ **FINAL RESULTS ONLY** (`interimResults = false`). Interim hypotheses arrive as re-sent,
- * re-worded prefixes; appending them into a draft the operator is also typing into produces
- * duplicated half-sentences, and the only way to keep them clean is to own a replaceable region of
- * the draft — state this hook deliberately does not have (the draft belongs to the composer).
+ * ⚠ **FINAL RESULTS ONLY** (`interimResults = false`). Interim hypotheses arrive as re-worded
+ * prefixes, and appending them into a draft the operator is typing into produces duplicated
+ * half-sentences; keeping them clean needs a replaceable region of the draft, which belongs to the
+ * composer, not here.
  */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -35,9 +32,9 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 /**
  * HOW LONG ONE DICTATION MAY RUN, unattended, before it stops itself.
  *
- * ⚠ IT IS A HOT MICROPHONE, WHICH IS WHY THERE IS A CAP AT ALL. `continuous` recognition does not
- * end on a pause, so a click and a walk away would leave the mic open for as long as the tab lives.
- * 60s is Samuel's number; the operator clicks again for another minute and the draft is untouched.
+ * ⚠ IT IS A HOT MICROPHONE, WHICH IS WHY THERE IS A CAP AT ALL: `continuous` recognition does not
+ * end on a pause, so a click and a walk away would leave the mic open as long as the tab lives.
+ * 60s is Samuel's number; the operator clicks again and the draft is untouched.
  */
 const DICTATION_MAX_MS = 60_000;
 
@@ -46,18 +43,15 @@ const DICTATION_MAX_MS = 60_000;
  * work, when i click on it, it like shows red for a second then turns off, look into that."*).
  *
  * ⚠ **THE BLINK WAS THE BUG REPORT, AND SWALLOWING `onerror` IS WHAT MADE IT ONE.** `onstart`
- * fires when CAPTURE opens, which is a separate thing from the RECOGNITION SERVICE answering;
- * the old handler was `engine.onerror = () => stop()`, so a session that opened and then failed
- * turned the glyph red, then plain, and said nothing at all. **In Electron that is the ONLY
- * outcome**: `webkitSpeechRecognition` posts to `https://www.google.com/speech-api/full-duplex/v1`
- * with the Chromium build's Google API key, and Electron ships none — `strings` on its framework
- * finds Chromium's `dummytoken` placeholder — so the request 403s and `error: "network"` arrives
- * a beat after `onstart`. **THERE IS NO IN-REPO FIX FOR THAT BACKEND**; what this repo owes is
- * an honest control, which is this table.
+ * fires when CAPTURE opens, separately from the RECOGNITION SERVICE answering, and the old
+ * handler just stopped — so a session that opened and then failed turned the glyph red, then
+ * plain, and said nothing. **In Electron that is the ONLY outcome**: `webkitSpeechRecognition`
+ * posts to Google's speech API with the Chromium build's key, which Electron ships none of, so
+ * the request 403s and `error: "network"` arrives a beat after `onstart`. **THERE IS NO IN-REPO
+ * FIX FOR THAT BACKEND**; what this repo owes is an honest control, which is this table.
  *
  * ⚠ **ONE WORD-ISH EACH, AND NO SENTENCE ANYWHERE** (Samuel's minimal-copy ruling, INVARIANTS §5).
- * It rides the button's `label`, so it is the tooltip AND the accessible name — never a paragraph
- * under the card.
+ * It rides the button's `label`, so it is the tooltip AND the accessible name.
  */
 const DICTATION_FAULT: Record<string, string> = {
   "not-allowed": "Microphone blocked",
@@ -67,9 +61,8 @@ const DICTATION_FAULT: Record<string, string> = {
 };
 
 /**
- * ⚠ **TWO CODES ARE NOT FAULTS AND MUST NEVER PAINT ONE.** `no-speech` is the engine giving up on
- * a silent room and `aborted` is OUR OWN `stop()` on the second click, the tab going away or
- * unmount — reporting either would put a red glyph on the two most ordinary ways a dictation ends.
+ * ⚠ **TWO CODES ARE NOT FAULTS AND MUST NEVER PAINT ONE.** `no-speech` is a silent room and
+ * `aborted` is OUR OWN `stop()` — the two most ordinary ways a dictation ends.
  */
 const DICTATION_SILENT = new Set(["no-speech", "aborted"]);
 
@@ -125,9 +118,8 @@ type RecognitionCtor = new () => SpeechRecognitionLike;
 /**
  * The constructor this browser ships, or `null`.
  *
- * ⚠ CAPABILITY-KEYED, never a user-agent test — the same detection rule every bridge affordance in
- * this family follows. Firefox ships neither name and gets `null`, which the caller renders as NO
- * BUTTON rather than a dead one.
+ * ⚠ CAPABILITY-KEYED, never a user-agent test. Firefox ships neither name and gets `null`, which
+ * the caller renders as NO BUTTON rather than a dead one.
  */
 function recognitionCtor(): RecognitionCtor | null {
   if (typeof window === "undefined") return null;
@@ -144,9 +136,8 @@ export interface Dictation {
   /** The engine is capturing RIGHT NOW. The button's red is this and nothing else. */
   listening: boolean;
   /**
-   * **WHY THE LAST ATTEMPT STOPPED, or `null`.** ⚠ IT PERSISTS PAST THE STOP ON PURPOSE — a state
-   * cleared on the way out is exactly the one-frame blink Samuel reported. It clears when the next
-   * attempt STARTS, so the control never shows a stale reason for a session that is now running.
+   * **WHY THE LAST ATTEMPT STOPPED, or `null`.** ⚠ IT PERSISTS PAST THE STOP — a state cleared on
+   * the way out is the one-frame blink Samuel reported. It clears when the next attempt STARTS.
    */
   error: string | null;
   toggle: () => void;
@@ -158,13 +149,11 @@ export interface Dictation {
  */
 export function useDictation(onPhrase: (text: string) => void): Dictation {
   /**
-   * ⚠ READ THROUGH `useSyncExternalStore`, AND THAT IS A HYDRATION RULE. This tree renders on
-   * the server, where `window` does not exist and the honest answer is `false`; initialising from
-   * `recognitionCtor()` would make the server say "no button" and the first client render say
-   * "button", which is a hydration mismatch React resolves by shouting. The SERVER snapshot is
+   * ⚠ READ THROUGH `useSyncExternalStore`, AND THAT IS A HYDRATION RULE. The SERVER snapshot is
    * `false` and the client snapshot is the real probe, so both ends render the same markup and
-   * the truth arrives on hydration. This was an effect calling `setSupported` until 2026-09-05
-   * — same two values in the same order, without a render-triggering write inside an effect.
+   * the truth arrives on hydration; initialising from `recognitionCtor()` would be a mismatch.
+   * This was an effect calling `setSupported` until 2026-09-05 — same two values in the same
+   * order, without a render-triggering write inside an effect.
    */
   const supported = useSyncExternalStore(
     // Never changes after load: subscribe to nothing, unsubscribe with nothing.
@@ -177,9 +166,8 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
   const [error, setError] = useState<string | null>(null);
   const recognition = useRef<SpeechRecognitionLike | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** ⚠ THE CALLBACK THROUGH A REF so a caller passing an inline closure — which the composer does,
-   *  because it appends into `draft` — does not re-create `start`/`stop` on every keystroke and
-   *  tear down the listeners keyed on them mid-sentence. */
+  /** ⚠ THE CALLBACK THROUGH A REF so the composer's inline closure (it appends into `draft`) does
+   *  not re-create `start`/`stop` on every keystroke and tear down the listeners mid-sentence. */
   const phrase = useRef(onPhrase);
   useEffect(() => {
     phrase.current = onPhrase;
@@ -215,8 +203,8 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
     try {
       engine = new Ctor();
     } catch {
-      // A constructor this browser exports but cannot instantiate is the same dead end to the
-      // operator as a refused service, and a silent return here is the blink all over again.
+      // A constructor that exists but cannot instantiate is the same dead end as a refused
+      // service, and a silent return here is the blink all over again.
       setError("Dictation unavailable");
       return;
     }
@@ -236,12 +224,10 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
       const trimmed = text.trim();
       if (trimmed.length > 0) phrase.current(trimmed);
     };
-    // ⚠ AN ERROR IS A STOP **AND A STATE** (2026-09-08). This read "an error is a stop, not a
-    // message… the honest signal is the button going quiet", and that was wrong in the one case
-    // that matters: a session that has already gone RED and then fails leaves a glyph that
-    // flashed for no stated reason, which is what Samuel saw. The stop is unchanged; what is new
-    // is that the control says which failure it was ({@link DICTATION_FAULT}). Nothing typed is
-    // touched, on this path or any other.
+    // ⚠ AN ERROR IS A STOP **AND A STATE** (2026-09-08). It used to be a stop alone, which left a
+    // session that went RED and then failed as a glyph that flashed for no stated reason — what
+    // Samuel saw. The stop is unchanged; the control now says which failure it was
+    // ({@link DICTATION_FAULT}), and nothing typed is touched.
     engine.onerror = (event) => {
       setError(dictationFault(event?.error));
       stop();
@@ -265,10 +251,9 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
   }, [stop]);
 
   /**
-   * ⚠ THE TAB GOING AWAY STOPS IT. A microphone that stays hot while the operator is in another
-   * window is the failure everyone remembers, and neither event alone covers it: `blur` catches a
-   * switch to another app or window, `visibilitychange` catches a switch to another TAB, which does
-   * not always blur. Bound only WHILE listening, so an idle composer carries no listeners.
+   * ⚠ THE TAB GOING AWAY STOPS IT, and neither event alone covers that: `blur` catches a switch to
+   * another app or window, `visibilitychange` catches a switch to another TAB, which does not
+   * always blur. Bound only WHILE listening, so an idle composer carries no listeners.
    */
   useEffect(() => {
     if (!listening) return;

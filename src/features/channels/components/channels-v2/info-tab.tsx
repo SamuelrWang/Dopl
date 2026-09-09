@@ -4,14 +4,14 @@
  * Channels v2 — the right panel's INFO tab: channel metadata, the Tags
  * (mentions) disclosure, Linked threads, the activity heatmap and the roster.
  *
- * WIRED: Main info (creator / created / status / thread count) off the channel
- * row and its thread list, MEMBERS off `use-channel-members` with presence
- * computed client-side over the 90s window, and the TAGS inbox off
- * `use-channel-mentions` (Phase 6).
+ * WIRED: channel info (creator / created / status / thread count) off the channel
+ * row and its thread list, MEMBERS off `use-channel-members` (presence is the
+ * server's verdict — `view-model.ts › isPresentForViewer`, 2026-09-08), the TAGS
+ * inbox off `use-channel-mentions` (Phase 6), and the activity strip since
+ * 2026-09-05 (F-316).
  *
- * HARDCODED — no backing data yet (Samuel 2026-08-18): Linked threads and the
- * activity heatmap keep the mock's UI and are wired later as their own work.
- * Each site carries the marker where it renders.
+ * HARDCODED — no backing data yet (Samuel 2026-08-18): Linked threads only, and
+ * the site carries the marker where it renders.
  */
 
 import { useState } from "react";
@@ -75,35 +75,30 @@ export function InfoTab({
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
 }) {
-  // The Tags disclosure is the ONE expandable row in Main info; its open state
-  // is nobody else's business, so it stays here.
+  // The Tags disclosure is the ONE expandable row here; its open state is nobody
+  // else's business.
   const [tagsOpen, setTagsOpen] = useState(false);
   // ⚠ LIVE UNREAD, computed HERE from the projection's own `read` flag — one
   // derivation for the badge and the list, so they cannot disagree (wiring plan
-  // Phase 6, decision 3). Never a server-side count.
+  // Phase 6, decision 3).
   const unreadCount = mentions.filter((m) => !m.read).length;
 
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-      {/* ⚠ "Channel info", NOT "Main info" (Samuel, 2026-09-05). The old title
-          said where the block sat rather than what it was about, which is the
-          same complaint the NAME row below answers: this pane is about ONE
-          channel and never said which. */}
+      {/* ⚠ "Channel info", NOT "Main info" (Samuel, 2026-09-05): the old title
+          said where the block sat rather than what it was about. */}
       <PanelHeading title="Channel info" />
       <div className="px-2">
-        {/* ⚠ FIRST, ABOVE CREATOR — the subject before its facts, and the row
-            the pane was missing. ⚠ IT IS `channelName`, THE DERIVED ONE, never
-            `channel.name`: a 1:1 is titled after the other member
-            (`peerNamedHeader` decides it, upstream), so reading the stored
-            column here would name a DM after nobody. */}
-        {/* ⚠ AT EVERY WIDTH (Samuel, 2026-09-05, second ruling). This row was briefly
-            gated to the single-column face on the theory that the chat header above
-            the transcript already named the channel; Samuel's ruling is that the
-            header above the CHAT is fine and the name is ALSO a field of this card,
-            always. The duplicate he had reported was a title inside the /home pane
-            (`apps/desktop-ui › person-info-tab.tsx`), a different composition. */}
+        {/* ⚠ FIRST, ABOVE CREATOR — the subject before its facts. ⚠ IT IS
+            `channelName`, THE DERIVED ONE, never `channel.name`: a 1:1 is titled
+            after the other member (`peerNamedHeader` decides it, upstream), so the
+            stored column would name a DM after nobody. */}
+        {/* ⚠ AT EVERY WIDTH (Samuel, 2026-09-05, second ruling): the header above
+            the CHAT is fine and the name is ALSO a field of this card, always. The
+            duplicate he reported was a title inside the /home pane
+            (`apps/desktop-ui › person-info-tab.tsx`). */}
         <MetaRow icon={Hash} label="Name">
           <span className="truncate text-body text-text-primary">
             {channelName}
@@ -123,9 +118,8 @@ export function InfoTab({
               </span>
             </>
           ) : (
-            // A creator who has left the workspace has no roster row. The id is
-            // not a name, so the row says it does not know rather than
-            // rendering a uuid at somebody.
+            // A creator who left the workspace has no roster row, and an id is
+            // not a name — so the row says it does not know.
             <span className="text-body text-text-muted">Not in this channel</span>
           )}
         </MetaRow>
@@ -145,8 +139,7 @@ export function InfoTab({
         </MetaRow>
         <MetaRowDivider />
         {/* The mentions inbox — label kept "Tags" from the reference design.
-            WIRED (Phase 6): the list is the real projection and the count is
-            LIVE UNREAD over it, not a total. The chevron flips open. */}
+            WIRED (Phase 6): the count is LIVE UNREAD over the list, not a total. */}
         <button
           type="button"
           onClick={() => setTagsOpen((open) => !open)}
@@ -182,8 +175,8 @@ export function InfoTab({
           />
         )}
         <MetaRowDivider />
-        {/* WIRED: the channel's thread count, off the same bounded list the
-            Threads tab renders. */}
+        {/* The channel's thread count, off the same bounded list the Threads tab
+            renders. */}
         <MetaRow icon={ListChecks} label="Threads">
           <span className="text-body text-text-primary">{threadCount}</span>
         </MetaRow>
@@ -191,8 +184,8 @@ export function InfoTab({
 
       <PanelHeading title="Linked threads" />
       <div className="flex flex-col gap-px px-2">
-        {/* HARDCODED — no backing data yet (Samuel 2026-08-18). A thread belongs
-            to one channel and links to nothing; there is no relation to read. */}
+        {/* HARDCODED — no backing data yet (Samuel 2026-08-18): a thread belongs
+            to one channel and links to nothing, so there is no relation to read. */}
         {HARDCODED_LINKED_THREADS.map(({ label, badge }) => (
           <button
             key={label}
@@ -206,26 +199,19 @@ export function InfoTab({
         ))}
       </div>
 
-      {/* ⚠ THE LABEL FOLLOWS THE SURFACE (Samuel, 2026-09-05). This tab is the
-          CHANNEL's info, so the strip counts the channel; a thread's own strip
-          says "Thread activity" on the thread's tab. The heading said "Thread"
-          here while measuring nothing at all, which is two wrongs that hid each
-          other. */}
+      {/* ⚠ THE LABEL FOLLOWS THE SURFACE (Samuel, 2026-09-05): this tab is the
+          CHANNEL's info, so the strip counts the channel. */}
       <PanelHeading title="Channel activity" />
-      {/* ⚠ **WIRED 2026-09-05 — F-316 CLOSED.** This block read "STILL HARDCODED
-          HERE, AND THE ACCOUNT SURFACE'S IS NOT", and named the price: the read
-          threaded down through `channel-surface-data.ts`, 31 counted bins per
-          channel selection, "a cost nobody has asked for yet". Samuel asked, and
-          accepted the price with the query cache carrying it — the series is
-          keyed by PATH, so the channel id is in the key and re-selection is a
-          cache hit rather than a re-count.
-          ⚠ NO NEW ENDPOINT AND NO NEW INDEX: it is the same
-          `overview-series?metric=messages&channelId=` the account surface has
-          fed these identical squares from since 2026-08-25.
+      {/* ⚠ **WIRED 2026-09-05 — F-316 CLOSED.** Samuel accepted the price (31
+          counted bins per channel selection, threaded down through
+          `channel-surface-data.ts`); the series is keyed by PATH, so re-selection
+          is a cache hit rather than a re-count.
+          ⚠ NO NEW ENDPOINT AND NO NEW INDEX: the same
+          `overview-series?metric=messages&channelId=` the account surface has fed
+          these identical squares from since 2026-08-25.
           ⚠ THE STRIP DECIDES WHAT NOTHING LOOKS LIKE, not this file: it renders
-          NOTHING while the read is in flight, because an empty well here means a
-          MEASURED zero and painting 31 of them would state a quiet month the
-          server has not answered for. */}
+          NOTHING while the read is in flight, because an empty well means a
+          MEASURED zero. */}
       <ThreadActivityStrip
         bins={activityBins}
         loading={activityLoading}
@@ -243,12 +229,11 @@ export function InfoTab({
           </>
         }
       />
-      {/* ⚠ THE ROSTER IS `member-roster.tsx` SINCE 2026-08-25 — the same
-          component /home's Info tab renders. It was module-private here, which
-          is how the account surface came to have a roster of its own. */}
-      {/* ⚠ `index.currentUserId` IS THE VIEWER, and it is the id this surface
-          already holds — no second resolution (2026-09-08, the self-always-online
-          rule; `view-model.ts › isPresentForViewer`). */}
+      {/* ⚠ THE ROSTER IS `member-roster.tsx` SINCE 2026-08-25 — the same component
+          /home's Info tab renders. It was module-private here, which is how the
+          account surface came to have a roster of its own. */}
+      {/* ⚠ `index.currentUserId` IS THE VIEWER, the id this surface already holds —
+          no second resolution (2026-09-08; `view-model.ts › isPresentForViewer`). */}
       <MemberRoster
         members={members}
         emptyLine

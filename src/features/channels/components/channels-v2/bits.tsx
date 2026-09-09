@@ -1,79 +1,76 @@
 "use client";
 
 /**
- * Channels v2 — the small pieces the three columns share.
+ * Channels v2 — the small pieces the three columns share. Every recipe composes
+ * design-system tokens and kit classes (docs/DESIGN-SYSTEM.md); nothing here
+ * carries a hex, a raw px font size or a hand-rolled shadow.
  *
- * Ported verbatim in FACE from the design-review mock
- * (`apps/desktop-ui/src/pages/channels-v2/bits.tsx`, 2026-08-18); every recipe
- * is composed from the design-system tokens and kit classes
- * (docs/DESIGN-SYSTEM.md) and nothing carries a hex, a raw px font size or a
- * hand-rolled shadow.
- *
- * `ReactionPill` did NOT survive the port and its absence is deliberate: emoji
- * reactions have no backing column of any kind, and inventing them would
- * attribute a reaction to a real person nobody made.
+ * ⚠ NO `ReactionPill`, deliberately: emoji reactions have no backing column of
+ * any kind, and inventing them would attribute a reaction to a real person
+ * nobody made.
  */
 
 import type { ReactNode } from "react";
 import { Bot, Check, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
+import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { cn } from "@/shared/lib/utils";
 
 /**
  * ⚠ `IconButton` LIVES IN `./icon-button.tsx` SINCE 2026-08-25 (the §1 split at
  * the `bare` variant) and is RE-EXPORTED here so every `from "./bits"` importer
- * is unchanged. Import it from either; there is one definition.
- * ⚠ IMPORTED AS WELL AS RE-EXPORTED: `MetaRow`'s remove affordance is one, and
+ * is unchanged. Imported AS WELL AS re-exported — `MetaRow` mounts one, and
  * `export { … } from` binds no local name.
  */
 import { IconButton } from "./icon-button";
 export { IconButton };
 
-// ⚠ `MESSAGE_CARD` STOOD HERE AND IS DELETED (2026-08-20). Its one caller was the
-// posted agent-thread card, which moved to a dark-shell face on 2026-08-19 and
-// said so in its own docblock — leaving a "one caller" constant with none.
-
 /**
- * The compact raised action on a card ("Open thread", "Open", "Viewing").
+ * The action on a card ("Open thread", "Open", "Viewing").
  *
- * ⚠ IT IS `shared/ui/open-scale-button.tsx › OPEN_SCALE` SINCE 2026-09-08
- * (Samuel: *"can you make the open button a little thinner, like we have
- * another button UI. I want to do that instead. Make sure this applies across
- * the entire product"*) — THE SMALL ACTION PILL (`--action-h-sm`, 30px since
- * 2026-09-08), `.btn-light` face, stadium ends, the
- * same one the knowledge card's Open and /home's small buttons already wear.
- * ⚠ BY REFERENCE, NOT RE-TYPED. The height/pad/radius/ink live in
- * `open-scale-button.module.css › .openScale` and this constant carries none of
- * them, so the card action and the pill cannot drift by an edit to either.
- * ⚠ IT WAS `h-9 px-[15px] text-small font-medium` — Samuel's own 2026-08-24
- * ruling that there was "no smaller card-sized variant to drift back to". That
- * is SUPERSEDED, not violated: the smaller variant is not a fork, it is the
- * app's other shared pill, and the card action joined it rather than minting a
- * third size. 36px is {@link TAB_ACTION}'s alone now.
+ * ⚠ TEXT-ONLY AT `--action-h-sm` SINCE 2026-09-08 (Samuel: *"can you make the
+ * open button a little thinner, like we have another button UI … Make sure this
+ * applies across the entire product"*, then *"just have it be the word open as
+ * the button"*). It was `h-9 px-[15px] text-small`; 36px is {@link TAB_ACTION}'s
+ * alone now.
+ * ⚠ IT IS `shared/ui/small-action-button.ts › SMALL_TEXT_BUTTON` PLUS THE CARD'S
+ * OWN CENTRING AND DISABLED INK — the scale and the hover live there, shared with
+ * the composer's Discard and every popup form's, so one edit reaches all three.
  *
  * The POSITION is a contract this constant cannot enforce: every card puts its
  * action on the LAST row, right-aligned, so the eye finds the same control in
  * the same corner every time.
  */
-// ⚠ TEXT-ONLY SINCE 2026-09-08 (Samuel: "just have it be the word open as the button"); same 30px row as the pill it replaced, ink only.
-export const CARD_BUTTON = "flex h-[var(--action-h-sm)] cursor-pointer items-center justify-center rounded-[8px] px-2.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary disabled:cursor-default disabled:text-text-muted disabled:hover:bg-transparent";
+export const CARD_BUTTON = cn(
+  SMALL_TEXT_BUTTON,
+  "cursor-pointer justify-center disabled:cursor-default disabled:text-text-muted disabled:hover:bg-transparent"
+);
 
 /**
  * THE RIGHT PANEL TAB'S OWN ACTION — top-right of a tab body, above its list
  * (Threads' "New thread", Agents' "Launch agent"; Samuel, 2026-08-24).
  *
  * ⚠ THE APP'S 36px CONTROL SCALE, DARK FACE — `h-9 px-[15px] text-small`,
- * /home's Invite geometry. Weight matches /home's Invite, because this IS that
- * button. It was a 20px light rectangle for one review and read as a chip
- * nobody could find; do not shrink it again.
- * ⚠ THIS ROW SAID "`CARD_BUTTON`'S GEOMETRY … only the INK says which" UNTIL
- * 2026-09-08, when Samuel moved the CARD action down to the small action pill
- * (`--action-h-sm`). The two
- * now differ in size as well as ink, and the geometry above is stated here
- * rather than borrowed — a tab action is the only thing left wearing it.
+ * /home's Invite geometry, because this IS that button. It was a 20px light
+ * rectangle for one review and read as a chip nobody could find; do not shrink
+ * it again. Since {@link CARD_BUTTON} dropped to 30px on 2026-09-08 a tab action
+ * is the only thing left wearing this scale.
+ *
+ * ⚠ SPLIT INTO {@link TAB_ACTION_SHELL} + {@link TAB_ACTION_INK} SO THE SPLIT
+ * BUTTON CAN COMPOSE IT. A split control is a wrapper plus two hit targets and
+ * one class string cannot express that; the Agents tab used to re-cut the same
+ * `h-9` / 15px pad / `text-small` by hand with a ⚠ saying it had to be re-cut
+ * again whenever this moved. It composes the halves now, so it cannot drift.
  */
-export const TAB_ACTION =
-  "auth-btn-3d flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full px-[15px] text-small font-semibold text-text-on-cta";
+/** The face and the box: elevation, 36px height, stadium ends. */
+export const TAB_ACTION_SHELL = "auth-btn-3d flex h-9 rounded-full";
+/** The label's own type, pad and ink — everything inside the shell. */
+export const TAB_ACTION_INK = "gap-1 px-[15px] text-small font-semibold text-text-on-cta";
+export const TAB_ACTION = cn(
+  TAB_ACTION_SHELL,
+  "shrink-0 cursor-pointer items-center",
+  TAB_ACTION_INK
+);
 
 /**
  * The RIGHT PANEL's card face — one `.bento` at panel width. The Threads tab's
@@ -104,17 +101,15 @@ export function IconTile({ children }: { children: ReactNode }) {
 }
 
 /**
- * THE FOUR CHIP FACES ONE AGENT ID CAN WEAR, and the reason there are exactly
- * these four (Samuel, 2026-08-22 — "it looks like one agent sending").
+ * THE FOUR CHIP FACES ONE AGENT ID CAN WEAR (Samuel, 2026-08-22 — "it looks like
+ * one agent sending").
  *
- * ⚠ NONE OF THEM IS ON THE SEVERITY RAMP, and that exclusion is the whole design
- * constraint. `success` / `caution` / `warning` / `danger` are documented as an
- * ORDERED ramp (docs/DESIGN-SYSTEM.md), so keying an identity off them would
- * paint one of an operator's agents alarm-red and rank the rest — a status claim
- * about a thing that has no status. What is left in the token set that carries no
- * severity is the neutral chip face, `link`, `accent-primary` and one step of the
- * elevation ramp, and that is the entire pool. Four is therefore a MEASUREMENT,
- * not a design target.
+ * ⚠ NONE OF THEM IS ON THE SEVERITY RAMP. `success`/`caution`/`warning`/`danger`
+ * are an ORDERED ramp (docs/DESIGN-SYSTEM.md), so keying an identity off them
+ * would paint one of an operator's agents alarm-red and rank the rest — a status
+ * claim about a thing that has no status. What is left carrying no severity is the
+ * neutral chip face, `link`, `accent-primary` and one elevation step: FOUR is a
+ * measurement of the token set, not a design target.
  *
  * ⚠ INDEX 0 IS TODAY'S FACE, ON PURPOSE. An UNSTAMPED agent post keeps the plain
  * chip byte for byte (see {@link AgentChip}), and a stamped one that hashes to 0
@@ -134,15 +129,13 @@ const AGENT_ACCENTS = [
 /**
  * ONE AGENT ID → ONE OF {@link AGENT_ACCENTS}, deterministically.
  *
- * ⚠ STABLE ACROSS RELOADS, MACHINES AND RENDERS, because it is a pure function
- * of the id and nothing else — no counter, no order-of-appearance index, no
- * palette cursor. An operator who learns that `k3v7d2mq` is the blue one must
- * still be right after a refetch reorders the transcript.
+ * ⚠ STABLE ACROSS RELOADS, MACHINES AND RENDERS — a pure function of the id and
+ * nothing else, no counter and no order-of-appearance index. An operator who
+ * learns that `k3v7d2mq` is the blue one must still be right after a refetch
+ * reorders the transcript.
  *
- * ⚠ IT IS A HINT, NOT A GUARANTEE OF DISTINCTNESS. Four faces over an 8-char
- * id space collide, and two agents on one thread can land on the same one — which
- * is exactly why the ID TEXT ships beside it rather than instead of it. The
- * accent makes the split glanceable; the id is what makes it TRUE.
+ * ⚠ A HINT, NOT A GUARANTEE OF DISTINCTNESS. Four faces collide, so the ID TEXT
+ * ships beside the accent rather than instead of it.
  *
  * Exported for the test: a palette that quietly stopped being deterministic looks
  * identical in a screenshot.
@@ -164,20 +157,11 @@ export function agentAccent(agentId: string): string {
  * DISPLAY claim about who typed, never about who they are. The side the row
  * hangs on comes from `author_user_id`, which the server stamps.
  *
- * ⚠ IT SAYS "Agent" AND NOTHING ELSE, AND THE MISSING HALF IS DELIBERATE. It
- * carried an `agentId` that it rendered verbatim in a mono span — the 2026-08-22
- * multiplayer chip, from before `attribution-pill.tsx › AttributionPill` took
- * over WHICH-agent attribution in the transcript. **That prop had no caller left**
- * (`mentions-list.tsx` mounts `<AgentChip />` bare, which is the only mount), so
- * the branch rendered nowhere — but a live component that prints eight machine
- * characters the moment someone passes them is exactly the hole the 2026-08-27
- * sweep closes (INVARIANTS §11: the raw agent id is never user-visible). WHICH
- * agent is the pill's question and it answers it with `agentDisplayName`.
- *
- * ⚠ THE BARE NOUN IS THE HONEST READING HERE, not a degradation. This chip marks
- * a Tags-inbox row as having an agent party to it; the row already names the
- * account, and "cannot say which" is what an inbox row genuinely knows
- * (INVARIANTS §11).
+ * ⚠ IT SAYS "Agent" AND NOTHING ELSE — no `agentId` prop, dropped by the
+ * 2026-08-27 sweep (INVARIANTS §11: the raw agent id is never user-visible).
+ * WHICH agent is `attribution-pill.tsx › AttributionPill`'s question. The bare
+ * noun is the honest reading, not a degradation: the row already names the
+ * account, and "cannot say which" is what an inbox row genuinely knows.
  */
 export function AgentChip({ className }: { className?: string }) {
   return (
@@ -194,14 +178,9 @@ export function AgentChip({ className }: { className?: string }) {
   );
 }
 
-// ⚠ `PendingChip` STOOD HERE AND IS DELETED (Samuel, 2026-08-22). It said
-// "Requested" over a `Clock` on a thread card whose inbound consent row was still
-// `pending` — the whole vocabulary of being asked and owing an answer, which that
-// ruling retired ("remove all the stuff about declining and approving of
-// threads"). It went with the card's Decline / Launch agent pair,
-// `thread-consent.tsx › ThreadAwaitingStrip`, the Inbox's inbound rows, the
-// sidebar's `Clock` thread glyph and its per-channel ask badge. There is no
-// `requested` state left to chip.
+// ⚠ NO `PendingChip` — deleted with the whole inbound-consent vocabulary (Samuel,
+// 2026-08-22: "remove all the stuff about declining and approving of threads").
+// There is no `requested` state left to chip.
 
 /** Right-aligned count pill on a nav row. ⚠ Only ever rendered where a REAL
  *  count exists — a badge is a claim about how much is waiting. */
@@ -263,13 +242,10 @@ export function AgentTargetPill({
  * Flat `bg-bg-inset` rather than the raised `CHIP`: this pill sits on a `.bento`
  * card, and the kit's chip rule is raised-on-inset / flat-on-card.
  *
- * ⚠ `approved` is OPTIONAL and normally OMITTED here. In the mock it was a
- * display simplification of a consent row; server-side, consent is per-target,
- * TTL'd and re-derived at consume time (INVARIANTS §6), and "no pending row"
- * does not distinguish approved from never-asked. Rendering a green check off
- * that would be a fabricated claim about somebody's decision, so until the
- * launch flow lands (wiring plan, Phase 8) the pill states the party and
- * nothing else.
+ * ⚠ `approved` is OPTIONAL and normally OMITTED. Consent is per-target, TTL'd and
+ * re-derived at consume time (INVARIANTS §6), so "no pending row" does not
+ * distinguish approved from never-asked — a green check off that would be a
+ * fabricated claim about somebody's decision.
  */
 export function AddresseePill({
   label,
@@ -356,14 +332,10 @@ export function SectionHeader({
  * ONE metadata row in the right-hand panel: a glyph, a label, and whatever
  * states the value on the right.
  *
- * ⚠ It was module-private in `info-tab.tsx` until 2026-08-19, when the SETTINGS
- * tab became a second caller — a labelled row with a control on the right is
- * exactly the same object, and a local copy over there is how two panels in one
- * column come to sit at different heights.
- *
- * `h-9` is the resting height (h-10 until 2026-08-19 — Samuel tightened the
- * Main-info rhythm); a row whose control needs more (a description line)
- * passes `className` rather than forking the recipe.
+ * `h-9` is the resting height (Samuel tightened the Main-info rhythm from h-10 on
+ * 2026-08-19); a row whose control needs more (a description line) passes
+ * `className` rather than forking the recipe — a local copy is how two panels in
+ * one column come to sit at different heights.
  */
 export function MetaRow({
   icon: Icon,
@@ -395,32 +367,24 @@ export function MetaRow({
       )}
     >
       <Icon size={14} className="shrink-0 text-text-muted" />
-      {/* ⚠ `min-w-0 truncate`: the label now hosts operator-authored custom-row
-          labels up to 40 chars (`info-card.ts › INFO_CARD_LABEL_MAX`) in a fixed
-          `h-9` row, so it must shrink-and-ellipsize rather than shove the value
-          off the right edge or grow the row's height. */}
+      {/* ⚠ `min-w-0 truncate`: the label hosts operator-authored labels up to 40
+          chars (`info-card.ts › INFO_CARD_LABEL_MAX`) in a fixed `h-9` row. */}
       <span className="min-w-0 truncate text-small text-text-secondary">{label}</span>
       <span className="flex-1" />
       <span className="flex min-w-0 items-center gap-1.5">{children}</span>
       {onRemove && (
-        // ⚠ HOVER-ONLY, AND ITS SPACE IS NOT RESERVED. A permanent × on every
-        // metadata row turns a card the reader GLANCES at into a form; the row
-        // is the content, and the control is the exception. `opacity`, not
-        // `hidden`, so nothing reflows when the cursor arrives.
-        // ⚠ `focus-visible:opacity-100` is the keyboard half and it is not
-        // optional: a control reachable by Tab that stays invisible while
-        // focused is a trap, not a minimal affordance.
+        // ⚠ HOVER-ONLY, SPACE NOT RESERVED: a permanent × on every row turns a
+        // card the reader GLANCES at into a form. `opacity`, not `hidden`, so
+        // nothing reflows when the cursor arrives — and `focus-within` is the
+        // keyboard half, because a Tab-reachable control that stays invisible
+        // while focused is a trap.
         <span className="shrink-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover/meta:opacity-100">
           <IconButton
             icon={X}
             label={`Remove ${label} from this card`}
-            // `bare` = the naked-glyph idiom (the pane header's PanelRight
-            // toggle), never a button face on a metadata row.
-            // ⚠ NO `h-6 w-6` HERE. `bare` sizes the hit area at 32px on purpose
-            // (icon-button.tsx: "THE HIT AREA GROWS RATHER THAN SHRINKS"), and
-            // twMerge would let an `h-6 w-6` override SHRINK it to 24px — the
-            // exact thing the bare docblock forbids. Only the `-mr-1` alignment
-            // nudge rides along.
+            // ⚠ `bare` = the naked-glyph idiom, and NO `h-6 w-6`: it sizes the hit
+            // area at 32px on purpose (icon-button.tsx), and twMerge would let an
+            // override SHRINK it. Only the `-mr-1` alignment nudge rides along.
             bare
             size={13}
             className="-mr-1"
@@ -461,10 +425,8 @@ export function PanelHeading({
 /**
  * Role tint chip on a member row.
  *
- * ⚠ The mock tinted a JOB TITLE ("Design" / "Development") and the model has no
- * such field. What a channel roster actually carries is `ChannelRole` — owner
- * or member (INVARIANTS §5) — so that is what the chip states. Tints come from
- * the palette's usable identity colours; the token set has no more.
+ * ⚠ IT STATES `ChannelRole` — owner or member (INVARIANTS §5). The mock tinted a
+ * JOB TITLE and the model has no such field.
  *
  * ⚠ `guest` is the WORKSPACE-level tell, not a channel role — a link-claimed
  * guest reads `member` at the channel (§4A), so the operator would otherwise not

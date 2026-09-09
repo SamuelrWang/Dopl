@@ -19,31 +19,26 @@
  *
  * ⚠ **THE ADDRESSEES ARE REMOVABLE PILLS, NOT A `PillChoice` ROW, AND THE REASON IS THE PAYLOAD.**
  * `PillChoice` is a SINGLE choice; `toUserIds` is a LIST, and a request reaching one member where
- * the panel reached four is a different write wearing the same button. So the one control the old
- * panel offered survives as itself — `bits.tsx › AgentTargetPill`, dropped one at a time — under a
- * kit `FormSection` label. ⚠ N PILLS = N ADDRESSEES AND ZERO IS NOT SENDABLE: "broadcast" is not
- * a shape this product has (INVARIANTS §5), and `schema.ts › TaskFanOutSchema` 400s an empty list,
- * so the button disabling is the courtesy half only.
+ * the panel reached four is a different write wearing the same button. So `bits.tsx ›
+ * AgentTargetPill` survives as itself, dropped one at a time, under a kit `FormSection` label.
+ * ⚠ ZERO IS NOT SENDABLE: "broadcast" is not a shape this product has (INVARIANTS §5) and
+ * `schema.ts › TaskFanOutSchema` 400s an empty list, so disabling the button is courtesy only.
  *
  * ⚠ **THE OLD PANEL IS DELETED, AND THIS IS THE ONLY THREAD FORM (2026-09-08, Samuel: *"look
  * there is an icon in the text input bar that is supposed to spawn new threads. Why wasn't that
- * wired in"*).** The inline `AgentRequestPanel`, its `use-thread-request.ts` hook and
- * `composer-submit-state.ts` are GONE — not unreferenced, gone — along with the composer's
- * `panelOpen` branch and the labeled submit face that branch drew. **BOTH entries land here**: the Threads tab's nonce and the composer's
- * `MessageSquarePlus` glyph, ADDED into one signal (`composer.tsx`). Do not let a second form
- * appear; the reason the last one survived a week is that it still had an opener.
+ * wired in"*).** The inline `AgentRequestPanel`, `use-thread-request.ts` and
+ * `composer-submit-state.ts` are GONE, with the composer's `panelOpen` branch. **BOTH entries
+ * land here** — the Threads tab's nonce and the composer's `MessageSquarePlus` glyph, ADDED into
+ * one signal (`composer.tsx`). Do not let a second form appear; the last one survived a week
+ * because it still had an opener.
  *
- * ⚠ **THE ACCESSIBLE NAMES ARE "New thread …"** and the × is "Close new thread form". They were
- * prefixed because the inline panel's "Thread title" / "Close new thread" were mounted beside
- * them and two controls sharing an accessible name are ONE control to a screen reader; with the
- * panel gone they stay, because they still say WHICH form a reader is inside and renaming an
- * accessible name is a change to the surface, not a tidy-up. The VISIBLE labels are the plain
- * words.
+ * ⚠ **THE ACCESSIBLE NAMES ARE "New thread …"** and the × is "Close new thread form" — they say
+ * WHICH form a reader is inside, and renaming an accessible name is a change to the surface, not
+ * a tidy-up. The VISIBLE labels are the plain words.
  *
- * ⚠ **THE SIGNAL IS A COUNTER AND THE OPEN STATE IS OWNED HERE**: a boolean prop would be a
- * mirror of state this component owns, and mirrors drift. ⚠ IT IS A SUM OF TWO NONCES upstream
- * (`composer.tsx`), so either opener re-opens the form. It is adjusted DURING RENDER (React's
- * "state from a changed prop" idiom) because `react-hooks/set-state-in-effect` is an error here.
+ * ⚠ **THE SIGNAL IS A COUNTER AND THE OPEN STATE IS OWNED HERE**: a boolean prop would mirror
+ * state this component owns, and mirrors drift. It is adjusted DURING RENDER (React's "state from
+ * a changed prop" idiom) because `react-hooks/set-state-in-effect` is an error here.
  */
 
 import { useMemo, useState } from "react";

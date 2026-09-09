@@ -63,6 +63,19 @@ const PILL_FLOOR_CAP = "28px";
  */
 const THIN_CAPTIONS_BELOW = "@max-[420px]:hidden";
 
+/**
+ * `YYYY-MM-DD…` → `m/d`, the caption both callers print under a day bin.
+ *
+ * ⚠ SLICED OUT OF THE STRING, never `new Date()`: a UTC day parsed as an instant
+ * lands on the previous day west of Greenwich.
+ * 🔒 `m/d`, not `d/m` (Samuel, 2026-09-08: *"I'm seeing 29/9, which should be
+ * 9/29"*) — the reference chart wore `d/m`; the audience is US.
+ */
+export function monthDayLabel(iso: string): string {
+  const [, month = "", day = ""] = iso.slice(0, 10).split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
 export interface BarPoint {
   /** Stable identity for the bin — React's key, and never the label (two bins
    *  can legitimately render the same caption). It is the bin's DATE in both

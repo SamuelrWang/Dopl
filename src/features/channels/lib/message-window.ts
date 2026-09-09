@@ -5,44 +5,31 @@ import type {
 } from "../types";
 
 /**
- * THE TRANSCRIPT'S SCROLL-BACK WINDOW, as pure data — what "the newest page plus
- * N pages of history" is, how a fetched page joins it, and the one question that
- * decides whether the join is still honest.
+ * THE TRANSCRIPT'S SCROLL-BACK WINDOW, as pure data — split from
+ * `hooks/use-channel-messages.ts` so these rules are testable with no React, no
+ * DOM and no network.
  *
- * Split from `hooks/use-channel-messages.ts` for the reason `optimistic-cache.ts`
- * is split from the write hooks: these are the rules that decide whether the
- * reader sees a HOLE in their own history, and they are testable with no React,
- * no DOM and no network.
+ * ⚠ **THE HISTORY LIVES HERE, NOT IN THE QUERY CACHE, AND THE REASON IS §8.** A
+ * `?before=` cache entry per page sits under the SAME prefix key the optimistic
+ * writes patch (`use-thread-writes-shared.ts › messagesKey` is
+ * `channelKeys.messages(id).all`, matched by array prefix), so every send would
+ * append its pending row into every loaded page, at a `nextSeq` derived from THAT
+ * page's maximum — the message you just typed rendered in the middle of last week.
+ * ⚠ THE COST: a patch that reaches the cache entry does NOT reach this window, so
+ * the thread DELETE calls {@link dropThreadFromWindow} explicitly and anything
+ * added to that family needs the same treatment.
  *
- * ⚠ **THE HISTORY LIVES HERE, NOT IN THE QUERY CACHE, AND THE REASON IS §8.**
- * The obvious shape — one `?before=` cache entry per page under the messages
- * path — puts every page under the SAME prefix key the optimistic writes patch
- * (`use-thread-writes-shared.ts › messagesKey` is `channelKeys.messages(id).all`,
- * and TanStack matches by array prefix). Every send would then append its pending
- * row into every loaded page of history, at a `nextSeq` derived from THAT page's
- * maximum — i.e. the message you just typed rendered in the middle of last
- * week. The newest page stays the one cache entry; history is immutable and is
- * carried beside it.
- *
- * ⚠ THE COST OF THAT CHOICE, STATED: a patch that reaches the cache entry does
- * NOT reach this window. The one that matters is the thread DELETE
- * (`optimistic-cache.ts › dropThreadMessages`), so {@link dropThreadFromWindow}
- * exists and the delete write calls it. Anything else added to that family needs
- * the same treatment or it will be half-applied.
- *
- * ⚠ **AND SINCE 2026-09-06 IT ALSO CARRIES THE ARTIFACT ENVELOPE'S CLIENT-SIDE
+ * ⚠ **SINCE 2026-09-06 IT ALSO CARRIES THE ARTIFACT ENVELOPE'S CLIENT-SIDE
  * INVARIANT: `entries` MUST BE TOTAL OVER THE `messages` ARRAY IT IS PASSED
- * BESIDE** ({@link mergeEntries}). The server guarantees that PER PAGE —
- * `readTranscript` folds the page it just read — and this file is where the
- * guarantee is re-established over an array the server never saw: the newest
- * page, plus N pages of history, plus whatever the optimistic writes have
- * patched in. Read {@link mergeEntries} before touching anything here.
+ * BESIDE** ({@link mergeEntries} — read it before touching anything here). The
+ * server guarantees that PER PAGE; this file re-establishes it over an array the
+ * server never saw.
  */
 
 /**
  * ⚠ A SHARED FROZEN EMPTY, not a fresh `[]`. The merge below is memoised on this
- * array's identity, so a new one per render would rebuild the transcript's rows
- * on every keystroke in the composer.
+ * array's identity; a new one per render would rebuild the transcript's rows on
+ * every keystroke in the composer.
  */
 const NO_MESSAGES: readonly ChannelMessage[] = Object.freeze([]);
 
@@ -64,10 +51,9 @@ export interface MessageWindow {
    * THE SERVER SAID THERE IS NOTHING OLDER: the channel's oldest message is
    * loaded.
    *
-   * ⚠ **DERIVED FROM THE ROUTE'S `hasMore`, NEVER FROM `page.length` (2026-09-08).**
-   * The transcript pages by an ESTIMATED-LINE budget
-   * (`constants.ts › CHANNEL_TRANSCRIPT_LINE_BUDGET`), so a page is SHORT BY
-   * DESIGN and "shorter than we asked for" means nothing at all. See
+   * ⚠ **DERIVED FROM THE ROUTE'S `hasMore`, NEVER FROM `page.length` (2026-09-08)**
+   * — the transcript pages by an ESTIMATED-LINE budget (`constants.ts ›
+   * CHANNEL_TRANSCRIPT_LINE_BUDGET`), so a page is SHORT BY DESIGN. See
    * {@link appendOlderPage}.
    */
   readonly exhausted: boolean;
@@ -77,10 +63,8 @@ export interface MessageWindow {
    * ⚠ **THE CARDS ARE KEPT AND THE PAGES' MESSAGE ARMS ARE NOT, AND THAT
    * ASYMMETRY IS THE WHOLE TOTALIZING RULE** ({@link mergeEntries}). A card is a
    * fact about the CHANNEL — `count`, `firstSeq` and `lastSeq` are channel-wide
-   * by `ChannelFoldedArtifact`'s own contract, never per page — so one page's
-   * copy is interchangeable with another's and survives a merge unchanged. A
-   * message arm is a fact about ONE page's array and cannot survive being stood
-   * beside another page's at all.
+   * by `ChannelFoldedArtifact`'s own contract — so one page's copy survives a
+   * merge unchanged; a message arm is a fact about ONE page's array and does not.
    */
   readonly artifacts: readonly ChannelFoldedArtifact[];
 }
@@ -109,17 +93,13 @@ export function oldestSeq(page: readonly ChannelMessage[]): number | null {
  * where the boundary was drawn — `page.min <= boundarySeq`.
  *
  * ⚠ **THE FAILING CASE IS REAL, NOT THEORETICAL.** The newest page is refetched
- * on every realtime doorbell and always returns the newest `limit` rows, so its
- * `min` walks FORWARD as messages arrive. Land more than a page of messages
- * between two paints — a working agent posting `task_progress` will do it — and
- * `page.min` steps past the boundary, leaving messages that neither half holds.
- * Concatenating anyway renders that gap as if it were not there: two adjacent
- * rows, minutes apart, with the conversation between them missing and nothing
- * saying so.
+ * on every realtime doorbell, so its `min` walks FORWARD. Land more than a page
+ * between two paints — a working agent posting `task_progress` will — and
+ * `page.min` steps past the boundary; concatenating anyway renders the gap as two
+ * adjacent rows, minutes apart, with nothing saying so.
  *
  * ⚠ **A `seq` GAP IS NOT EVIDENCE OF A MISSING ROW** — `channel_messages.seq` is
- * a TABLE-wide identity (INVARIANTS §5), so consecutive posts in one channel are
- * never consecutive numbers. That is exactly why the witness is a REMEMBERED
+ * a TABLE-wide identity (INVARIANTS §5), which is why the witness is a REMEMBERED
  * cursor rather than arithmetic over the rows on hand.
  */
 export function isContiguous(
@@ -136,11 +116,10 @@ export function isContiguous(
  * The rows to render: history, then the newest page, deduplicated by id with the
  * PAGE's copy winning.
  *
- * ⚠ THE PAGE WINS ON PURPOSE. It is the entry the optimistic writes patch and
- * the doorbell refetches, so its copy of a row is the fresher one; a duplicate
- * can only arise when a `before` page overlapped the newest page, which happens
- * whenever a message lands between the cursor being read and the request going
- * out.
+ * ⚠ THE PAGE WINS ON PURPOSE: it is the entry the optimistic writes patch and the
+ * doorbell refetches, so its copy is the fresher one. A duplicate arises only
+ * when a `before` page overlapped the newest page — a message landing between the
+ * cursor being read and the request going out.
  *
  * ⚠ ASCENDING BY `seq`, and pending rows sort LAST by construction —
  * `optimistic-cache.ts › buildPendingMessage` stamps `max(seq) + 1` over the
@@ -164,31 +143,21 @@ export function mergeWindow(
  * boundary witness on the FIRST page only — later pages extend the window
  * downward and must not move a witness that describes its TOP edge.
  *
- * ⚠ **`hasMore` IS THE SERVER'S, AND THAT IS THE WHOLE CHANGE OF 2026-09-08.**
- * This function took a `limit` and set `exhausted` from `page.length < limit`
- * until the transcript started paging by ESTIMATED LINES
- * (`lib/transcript-line-budget.ts`), at which point a short page became the
- * NORMAL page and that test started reporting a channel of long messages as
- * exhausted after its first screen. The route now says so directly
- * (`server/service-reads.ts › readTranscript`), and the caller passes it
- * through with a "maybe more" fallback for a payload written by a build that
- * predates the key.
+ * ⚠ **`hasMore` IS THE SERVER'S, AND THAT IS THE WHOLE CHANGE OF 2026-09-08** —
+ * `exhausted` came from `page.length < limit` until paging moved to ESTIMATED
+ * LINES (`lib/transcript-line-budget.ts`), which made a short page the NORMAL
+ * page and reported a channel of long messages as exhausted after its first
+ * screen. The route says so directly now (`server/service-reads.ts ›
+ * readTranscript`).
  *
- * ⚠ **AN EMPTY PAGE EXHAUSTS THE WINDOW WHATEVER `hasMore` SAYS.** The server
- * never sends that pair — `takeLineBudget` returns at least one row whenever the
- * query found any, and reports `hasMore: false` when it found none — so this
- * only fires for a payload from a build that predates the flag, where the `??
- * true` fallback would otherwise let every later scroll re-ask for the same
- * empty page forever. Nothing older CAN exist below a page that came back with
- * no rows at all, so this is not a guess.
+ * ⚠ **AN EMPTY PAGE EXHAUSTS THE WINDOW WHATEVER `hasMore` SAYS** — only reachable
+ * from a pre-flag payload, where the `?? true` fallback would otherwise re-ask for
+ * the same empty page forever. ⚠ `exhausted` LATCHES: a later page cannot
+ * un-run-out.
  *
- * ⚠ `exhausted` LATCHES. Once the server says there is nothing older, a later
- * page cannot un-run-out.
- *
- * ⚠ `entries` IS THE PAGE'S ENVELOPE AND DEFAULTS TO `null`, which is both the
- * ordinary answer ("nothing on this page is folded") and the answer from a build
- * that cannot fold at all. Only its CARDS are kept — see
- * {@link MessageWindow.artifacts}.
+ * ⚠ `entries` DEFAULTS TO `null` — both the ordinary answer ("nothing on this page
+ * is folded") and a build that cannot fold. Only its CARDS are kept
+ * ({@link MessageWindow.artifacts}).
  */
 export function appendOlderPage(
   window: MessageWindow,
@@ -209,8 +178,8 @@ export function appendOlderPage(
  * The CARDS out of one page's envelope, in order — `null` in, nothing out.
  *
  * ⚠ RETURNS THE SHARED EMPTY when nothing folded, so an ordinary channel hands
- * {@link mergeEntries} the same array identity on every render and the memo above
- * it never moves. That is the common case and it must stay free.
+ * {@link mergeEntries} the same array identity every render — the common case,
+ * and it must stay free.
  */
 export function foldedArtifactsOf(
   entries: readonly ChannelReadEntry[] | null
@@ -244,49 +213,32 @@ function addArtifacts(
  * `entries` TOTAL over the `messages` array it is passed beside** (A4, ruled
  * option (a): totalize and dedupe).
  *
- * The server folds ONE page and its `entries` describes exactly that page. The
- * transcript renders the newest page PLUS every scrolled-back history page PLUS
- * whatever the optimistic writes have patched in, and
- * `channels-v2/derivations.ts` builds its ordinary rows from the message arms
- * ALONE. So handing it any single page's envelope beside that array drops every
- * row the envelope does not mention. This rebuilds the envelope over the array
- * that is actually being rendered.
+ * The server folds ONE page; the transcript renders that page PLUS history PLUS
+ * every optimistic patch, and `channels-v2/derivations.ts` builds its rows from
+ * the message arms ALONE — so one page's envelope beside that array drops every
+ * row it does not mention.
  *
  * ⚠ **THE MESSAGE ARMS ARE SYNTHESIZED FROM `messages`, NEVER CARRIED FROM A
- * PAGE, AND THAT IS THE DEVIATION FROM THE RULING WORTH RATIFYING.** The ruled
- * rule was per-page `entries ?? messages.map(→ message arm)` concatenated, with
- * the optimistic patch family maintaining the newest page's arms. That family is
- * BIGGER than the calls the ruling named — `appendPendingMessage`,
- * `reconcileMessage`, `retagPendingMessage` and `dropThreadMessages` in
- * `optimistic-cache.ts`, plus `use-escalation-writes.ts › reconcileAnswer`, a
- * local copy outside that file entirely — so maintaining the arms means five
- * places that must each stay in step forever, and the fifth is outside this
- * slice's scope. Synthesizing them instead makes the invariant hold BY
- * CONSTRUCTION for any `messages` array whatsoever, including one no patch
- * author remembered this rule existed for. Same output on a page the server
- * folded; no halves to keep in step.
+ * PAGE — THE DEVIATION FROM THE RULING WORTH RATIFYING.** The ruled rule had the
+ * optimistic patch family maintain the arms; that family is five call sites (four
+ * in `optimistic-cache.ts`, plus `use-escalation-writes.ts › reconcileAnswer`
+ * outside this slice) that would each have to stay in step forever. Synthesizing
+ * makes the invariant hold BY CONSTRUCTION, with the same output on a folded page.
  *
  * ⚠ **THE DEDUPE IS SAFE FOR A REASON THAT MUST BE RECORDED RATHER THAN
  * ASSUMED** (the ruling's own instruction): two pages' `ChannelFoldedArtifact`
  * for one artifact are IDENTICAL — `count`, `firstSeq` and `lastSeq` are
- * channel-wide by that type's contract, "never over the page" — and
- * `view-model-artifacts.ts › artifactRowFor` recomputes the card's MEMBERS off
- * the merged `messages` anyway. So this is a de-duplication, not a
- * reconciliation, and there is nothing for a first-copy-wins rule to lose.
+ * channel-wide by that type's contract — and `view-model-artifacts.ts ›
+ * artifactRowFor` recomputes the card's MEMBERS off the merged `messages` anyway.
  *
  * ⚠ **A MESSAGE IS FOLDED IFF ITS `artifactId` NAMES A CARD WE ACTUALLY HOLD** —
- * never merely because the field is set. That is the server's own DEGRADE rule
- * (`server/service-artifacts.ts`: a span whose card row is missing degrades to a
- * message, never to a dropped row) restated on the client, and it is why a page
- * that arrives with `entries: null` while its rows carry `artifactId` renders
- * every one of them as an ordinary message.
+ * never merely because the field is set. The server's own DEGRADE rule
+ * (`server/service-artifacts.ts`), restated on the client.
  *
- * ⚠ **`null` OUT MEANS "NOTHING HERE IS FOLDED" AND IS THE ORDINARY CASE**, byte
- * for byte the behaviour that shipped before artifacts existed. It is also the
- * answer when every member of every known card has left `messages` — a thread
- * delete taking the last one with it — which is how the delete reaches BOTH
- * halves of the state without the patch family learning a second key: no member,
- * no card, no ghost.
+ * ⚠ **`null` OUT MEANS "NOTHING HERE IS FOLDED" AND IS THE ORDINARY CASE.** It is
+ * also the answer when every member of every known card has left `messages` (a
+ * thread delete taking the last one), which is how that delete reaches BOTH halves
+ * of the state without the patch family learning a second key.
  */
 export function mergeEntries(
   messages: readonly ChannelMessage[],
@@ -302,11 +254,11 @@ export function mergeEntries(
     if (!byId.has(folded.artifact.id)) byId.set(folded.artifact.id, folded);
   }
 
-  // ⚠ THE CARD'S POSITION IS ITS LOWEST MEMBER ON THE MERGED ARRAY, which is the
-  // same rule `artifactRowFor` applies and the reason the card does not park at
-  // the top of a back-page. Entry ORDER is not load-bearing for the card itself
-  // (`withArtifactCards` re-sorts by seq), but it IS for the message arms, which
-  // `unfoldedMessages` hands to `channelRows` in the order it finds them.
+  // ⚠ THE CARD'S POSITION IS ITS LOWEST MEMBER ON THE MERGED ARRAY — the rule
+  // `artifactRowFor` applies, and why the card does not park at the top of a
+  // back-page. Entry ORDER is not load-bearing for the card (`withArtifactCards`
+  // re-sorts by seq) but IS for the message arms, which `unfoldedMessages` hands
+  // to `channelRows` in the order it finds them.
   const anchors = new Map<string, number>();
   const arms: Array<{ seq: number; entry: ChannelReadEntry }> = [];
   for (const message of messages) {
@@ -334,10 +286,9 @@ export function mergeEntries(
  * DELETE's optimistic patch (`optimistic-cache.ts › dropThreadMessages` is the
  * cache entry's half).
  *
- * ⚠ BOTH HALVES OR NEITHER, for the same reason that function's docblock gives:
- * the server deletes the thread's whole transcript in one call, and a reader
- * scrolled back through history would otherwise keep rendering the deleted rows
- * under a card that no longer exists until they switched channels.
+ * ⚠ BOTH HALVES OR NEITHER: the server deletes the thread's whole transcript in
+ * one call, and a reader scrolled back would otherwise keep rendering the deleted
+ * rows until they switched channels.
  *
  * ⚠ THE TAG IS READ FROM THE WIRE KEY `metadata.taskId`, exactly as the server
  * matches it — never from a domain field, because there is not one.
@@ -346,9 +297,8 @@ export function mergeEntries(
  * thread does not invalidate the merge memo.
  *
  * ⚠ **IT DOES NOT PRUNE `artifacts`, AND IT MUST NOT.** A card whose last member
- * left the transcript stops being emitted by {@link mergeEntries} on its own —
- * the card is derived from members PRESENT, not from a list kept in step — so
- * pruning here would be a second rule saying the same thing, free to disagree.
+ * left stops being emitted by {@link mergeEntries} on its own, so pruning here
+ * would be a second rule saying the same thing, free to disagree.
  */
 export function dropThreadFromWindow(
   window: MessageWindow,

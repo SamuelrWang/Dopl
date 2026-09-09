@@ -47,24 +47,17 @@ const selectChannelMembers = (body: { members: ChannelMember[] }) =>
  * (INVARIANTS §5 names this file as one of the web's two statements of it).
  *
  * ⚠ **NO LONGER COUNT-KEYED, AND THAT IS THE FIX.** Phase 3 (2026-08-18) made
- * addressing explicit at EVERY member count — the implicit 1:1 trigger and the
- * server-side DM auto-address were retired together — but this note kept the
- * old shape: copy reading "In a channel of 3 or more…" behind a
- * `memberCount < GROUP_CHANNEL_MIN_MEMBERS - 1` gate. **Both halves taught the
- * retired rule.** A two-person channel is precisely where the interface most
- * strongly implies an implicit recipient, so gating the note there hid it from
- * the person most likely to be wrong about it.
+ * addressing explicit at EVERY member count, but this note kept a
+ * `memberCount < GROUP_CHANNEL_MIN_MEMBERS - 1` gate over copy reading "In a
+ * channel of 3 or more…" — both halves taught the retired rule, and the gate hid
+ * the note from two-person channels, where the interface most strongly implies an
+ * implicit recipient.
  *
- * ⚠ **THE CALL, STATED: it shows ALWAYS, and takes no props.** The alternatives
- * were "never" (the composer already says it) and "always". Never is wrong:
- * `channels-v2/new-thread-dialog.tsx › NO_ADDRESSEE_NOTE`'s "No agent addressed
- * — this thread reaches nobody." speaks at CREATE time inside the new-thread
- * popup — it reports a
- * draft's state, and it never explains the thread rule (channel-visible reads,
- * pair-only writes) at all, which is this note's second sentence and is stated
- * nowhere else on this surface. Unconditional also removes the note's own
- * flash-on-load problem: there is no roster length to wait for, so nothing
- * appears a beat after the dialog opens.
+ * ⚠ **IT SHOWS ALWAYS AND TAKES NO PROPS.** `new-thread-dialog.tsx ›
+ * NO_ADDRESSEE_NOTE` is not a substitute: that reports a DRAFT's state at create
+ * time and never explains the thread rule (channel-visible reads, pair-only
+ * writes), which is this note's second sentence. Unconditional also means no
+ * roster length to wait for, so nothing appears a beat after the dialog opens.
  *
  * Pure and exported so it renders (and asserts) without the dialog's query
  * provider.

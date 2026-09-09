@@ -8,6 +8,7 @@
  */
 import { apiRequest } from "@/shared/api/api-client";
 import type { KnowledgeEntry } from "@/features/knowledge/types";
+import type { OntologyObject } from "@/features/ontology/types";
 import type { RevisionPage } from "../types";
 
 export interface RevisionPageArgs {
@@ -56,6 +57,48 @@ export async function fetchBaseRevisions(
       { workspaceId: args.workspaceId, query: pageQuery(args) }
     )
   );
+}
+
+export async function fetchOntologyObjectRevisions(
+  objectId: string,
+  args: RevisionPageArgs = {}
+): Promise<RevisionPage> {
+  return toPage(
+    await apiRequest<Partial<RevisionPage>>(
+      `/api/ontology/objects/${objectId}/revisions`,
+      { workspaceId: args.workspaceId, query: pageQuery(args) }
+    )
+  );
+}
+
+/** THE CLUSTER ROLL-UP — the ontology and everything in it. */
+export async function fetchOntologyClusterRevisions(
+  clusterId: string,
+  args: RevisionPageArgs = {}
+): Promise<RevisionPage> {
+  return toPage(
+    await apiRequest<Partial<RevisionPage>>(
+      `/api/ontology/clusters/${clusterId}/revisions`,
+      { workspaceId: args.workspaceId, query: pageQuery(args) }
+    )
+  );
+}
+
+/**
+ * Write ONE FIELD's prior value back. ⚠ PER FIELD, never per object: the
+ * revision names the field, and the other properties keep their current values
+ * (`ontology/server/service-revisions-read.ts › restorePatch`).
+ */
+export async function restoreOntologyObjectRevision(
+  objectId: string,
+  revisionId: string,
+  workspaceId?: string
+): Promise<OntologyObject> {
+  const data = await apiRequest<{ object: OntologyObject }>(
+    `/api/ontology/objects/${objectId}/revisions/${revisionId}/restore`,
+    { method: "POST", workspaceId }
+  );
+  return data.object;
 }
 
 /** Write a prior snapshot back. Answers the entry as it now stands. */

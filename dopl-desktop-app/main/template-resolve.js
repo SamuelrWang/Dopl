@@ -1,30 +1,22 @@
 // THE AGENT-TEMPLATE LAUNCH RESOLVE — `GET /api/agent-templates/{id}/resolve`, at spawn.
 //
-// ── ⚠ WHO FETCHES TEMPLATE CONTENT, AND WHEN: THE DESKTOP, AT SPAWN. ─────────────────────────
+// ── 🔒 WHO FETCHES TEMPLATE CONTENT, AND WHEN: THE DESKTOP, AT SPAWN. ────────────────────────
 //
-// The renderer passes an ID. `main` resolves it here, itself, before `launchRequesterSession`.
-// A renderer-supplied SNAPSHOT was the alternative and it is refused, for four reasons in
-// decreasing weight:
+// The renderer passes an ID; `main` resolves it here before `launchRequesterSession`. A
+// renderer-supplied SNAPSHOT is refused, in decreasing weight:
 //
-//   1. IT IS THIS LANE'S EXISTING ARCHITECTURE. Every security-relevant input on the button
-//      lane is computed by main from MAIN'S OWN STATE, specifically so the renderer cannot
-//      influence it: the tool profile from `targeting.resolveToolProfile(listener.watchedChannel
-//      (...))`, the start modes and the model from `channel-prefs.js`, the goal from three canned
-//      strings. F-267 IS THE SCAR — main read a PROJECTION instead of its own DTO and every
-//      button launch silently floored to `read_only`. A renderer-supplied template snapshot is
-//      that same mistake with PROMPT TEXT.
-//   2. TRUST. A snapshot from the renderer is renderer-authored text landing in a prompt, and
-//      main cannot tell a real template from a fabricated one. An ID it resolves itself, it can.
-//   3. THE VIEWER FILTER IS THE OPERATOR'S, AND IT HAS TO BE. `knowledgeBases` is filtered
-//      against the RESOLVING CALLER's KB visibility, so a shared template cannot launder access
-//      to a private base. Resolving in the SPA and resolving here both run as the operator
-//      today — but only this call is STRUCTURALLY guaranteed to, and the orchestrator lane
-//      (§3e) introduces a shape where the SELECTOR's caller and the OPERATOR are different
-//      people. One resolution point, always the operator's credential.
-//   4. FRESHNESS. Content is read at spawn, so an edit landed 200 ms ago is honoured.
+//   1. IT IS THIS LANE'S ARCHITECTURE — every security-relevant input on the button lane is
+//      computed by main from MAIN'S OWN STATE (tool profile, start modes, model, goal). F-267 IS
+//      THE SCAR: main read a PROJECTION instead of its own DTO and every button launch silently
+//      floored to `read_only`. A renderer snapshot is that mistake with PROMPT TEXT.
+//   2. TRUST — main cannot tell a real template from a fabricated one; an ID it resolves, it can.
+//   3. THE VIEWER FILTER IS THE OPERATOR'S. `knowledgeBases` is filtered against the RESOLVING
+//      caller's KB visibility, so a shared template cannot launder access to a private base. Only
+//      this call is STRUCTURALLY the operator's, and the orchestrator lane (§3e) introduces a
+//      shape where the SELECTOR's caller and the OPERATOR are different people.
+//   4. FRESHNESS — an edit landed 200 ms ago is honoured.
 //
-// ⚠ THE SPA MAY STILL RENDER THE NAME OPTIMISTICALLY from its own list cache. That costs nothing
-// and gives back the round trip the snapshot argument wanted: the optimistic render is a LABEL,
+// ⚠ The SPA may still render the name optimistically from its list cache: that render is a LABEL,
 // this resolve is the PROMPT.
 //
 // ⚠ IT RIDES `api.js › apiFetch`, which is COOKIE-authed and carries the shared 401 repair
@@ -58,16 +50,12 @@ const MAX_SCOPES = 200;
 // a path is several of them, so this is deliberately roomier than `MAX_BASE_LABEL`.
 const MAX_SCOPE_PATH = 500;
 
-// ── ⚠ ONE BOUND PER FIELD, EACH THE SERVER'S OWN (F-287, 2026-08-23) ────────────────────────
+// ── 🔒 ONE BOUND PER FIELD, EACH THE SERVER'S OWN (F-287, 2026-08-23) ───────────────────────
 //
-// ⚠ THIS USED TO BE A SINGLE `MAX_LABEL = 200`, under the comment "names, keys and values are
-// SAFE_LABEL_RE-bounded well inside this". That was FALSE for `value`, whose schema bound is
-// **1000** — so a legal 300-character field value was clipped to 200 here and then to 80 again by
-// the render belt, and the operator was told nothing at any surface.
-// ⚠ A BOUNDARY BOUND MUST MATCH THE WRITER'S, NOT UNDERCUT IT. A boundary exists so this machine
-// does not trust the far side's validation; enforcing a SMALLER number than the far side enforces
-// is not extra caution, it is this module inventing a limit the operator can neither see nor
-// satisfy. Where the two disagree, the disagreement is silent and always resolves against them.
+// ⚠ A BOUNDARY BOUND MUST MATCH THE WRITER'S, NOT UNDERCUT IT. One shared `MAX_LABEL = 200`
+// clipped a legal 300-character field value (schema bound: 1000) with no word to the operator at
+// any surface. Enforcing a SMALLER number than the far side is not extra caution — it is a limit
+// the operator can neither see nor satisfy, and the disagreement always resolves against them.
 const MAX_NAME = 120; // `schema.ts › NameSchema` / `agent_templates_name_charset_check`
 const MAX_FIELD_KEY = 80; // `schema.ts › TemplateFieldSchema.key`
 const MAX_FIELD_VALUE = 1000; // …and its `.value`
@@ -110,24 +98,19 @@ function count(value) {
 /**
  * Narrow the wire payload to the eight keys the ROLE BLOCK reads, and nothing else.
  *
- * ⚠ THE EIGHTH IS `knowledge` (2026-09-08) — every attached scope, base / folder / entry. It rides
- * BESIDE `knowledgeBases` rather than replacing it: an older SERVER sends only the base list, and a
- * narrow that had dropped it would hand such a build a role naming no knowledge at all.
- * `knowledgeLines` prefers `knowledge` when it is non-empty and falls back to the base list, so one
- * of the two always answers and neither is rendered twice.
+ * ⚠ THE EIGHTH IS `knowledge` (2026-09-08) — every attached scope, base / folder / entry — and it
+ * rides BESIDE `knowledgeBases` rather than replacing it: an older SERVER sends only the base
+ * list. `knowledgeLines` prefers `knowledge` when non-empty and falls back, so one of the two
+ * always answers and neither is rendered twice.
+ * ⚠ THE SEVENTH IS `unreachableKnowledgeBaseCount` (2026-09-05), a COUNT BY CONTRACT: the server
+ * withholds the id, name and container of an unreachable base, and this narrow is the second gate
+ * on that — anything added beside the number is dropped before it reaches prompt text.
  *
- * ⚠ THE SEVENTH IS `unreachableKnowledgeBaseCount` (2026-09-05), and it is a COUNT BY CONTRACT.
- * The server withholds the id, the name and the container of a base this operator cannot reach;
- * this narrow is the second gate on that — anything the server ever added beside the number would
- * be dropped here rather than reaching `knowledgeLines`, which writes prompt text.
- *
- * ⚠ A LITERAL WHITELIST, NOT A SPREAD, for the reason `session-launch.js › launch` gives for its
- * own: a key this list omits is DROPPED, so a field the server adds later cannot arrive on a
- * session object and start being depended on by accident. It is also the shape that keeps a
- * future `createdBy` (or any other ownership fact) out of a launch payload it has no business in.
- * ⚠ NULLS ARE PRESERVED AS NULLS. The launch contract's own test pins that nullable fields travel
- * as `null` rather than being omitted, and a consumer distinguishing "absent" from "null" is a
- * consumer with two code paths for one state.
+ * ⚠ A LITERAL WHITELIST, NOT A SPREAD (the reason `session-launch.js › launch` gives for its own):
+ * an omitted key is DROPPED, so a field the server adds later cannot start being depended on by
+ * accident — and a future `createdBy` cannot reach a launch payload it has no business in.
+ * ⚠ NULLS ARE PRESERVED AS NULLS — a consumer distinguishing "absent" from "null" is a consumer
+ * with two code paths for one state.
  */
 function narrow(body) {
   const b = body && typeof body === 'object' ? body : {};

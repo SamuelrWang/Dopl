@@ -1,37 +1,27 @@
 "use client";
 
 /**
- * Channels v2 — RIGHT COLUMN: the channel's tabs. Info (`info-tab.tsx`),
- * Threads (`threads-tab.tsx`), Agents (`agents-tab.tsx`), the opt-in Knowledge
- * (`knowledge-tab.tsx`) and Settings, which is the pane header's evicted action
- * cluster (`channel-manage.tsx` → `settings-tab.tsx`, injected as a slot for the
- * same reason the panes take theirs: it is write-bearing and this file owns the
- * tab row only).
+ * Channels v2 — RIGHT COLUMN: the channel's tabs. Info (`info-tab.tsx`), Threads
+ * (`threads-tab.tsx`), Agents (`agents-tab.tsx`), the opt-in Knowledge
+ * (`knowledge-tab.tsx`) and Settings — the pane header's evicted action cluster
+ * (`channel-manage.tsx` → `settings-tab.tsx`), injected as a slot because it is
+ * write-bearing and this file owns the tab row only.
  *
- * ⚠ THE FOURTH TAB WAS **LINKS** UNTIL 2026-08-19, and it was a deliberate empty
- * state ("No links in this channel yet.") — Files had left the row on 2026-08-18
- * because where a channel's files land is still an OPEN QUESTION (wiring plan,
- * Risk 10) and an empty tab was answering it with "here". The same argument
- * retires Links: it renders nothing and reserves the answer. **Nothing was
- * rehomed out of it** — there was nothing in it.
+ * ⚠ THE FOURTH TAB WAS **LINKS** UNTIL 2026-08-19 and is retired, as Files was on
+ * 2026-08-18: where a channel's files land is still an OPEN QUESTION (wiring
+ * plan, Risk 10) and an empty tab answered it with "here". Nothing was rehomed.
  *
  * ⚠ THE COLUMN IS THREAD-SCOPED WHILE A THREAD IS OPEN (Samuel, 2026-08-21).
- * THREE things change and nothing else does: THREADS leaves the row (`channelPaneTabs` —
- * it is the one control here that navigates away from what the reader is looking
- * at), INFO renders the THREAD's facts instead of the channel's
- * (`thread-info-tab.tsx`), and SETTINGS becomes the THREAD's — mode and delete
- * (`thread-settings-tab.tsx`). Channel view is untouched, `info-tab.tsx` and
- * `settings-tab.tsx` are untouched, and Agents already narrowed itself to the open
- * thread on 2026-08-20.
- *   ⚠ THIS FILE MAKES ONLY THE FIRST TWO OF THOSE CHOICES. The Settings body
- *   arrives as a SLOT and the branch behind it lives at the page's mount boundary
- *   (`settings-slot.tsx`), because both manage surfaces open reads on mount and
- *   the wrong one must not mount at all.
+ * THREE things change and nothing else: THREADS leaves the row
+ * (`channelPaneTabs`), INFO renders the THREAD's facts (`thread-info-tab.tsx`),
+ * SETTINGS becomes the THREAD's (`thread-settings-tab.tsx`).
+ *   ⚠ THIS FILE MAKES ONLY THE FIRST TWO. The Settings body arrives as a SLOT and
+ *   the branch behind it lives at the page's mount boundary (`settings-slot.tsx`),
+ *   because both manage surfaces open reads on mount and the wrong one must not
+ *   mount at all.
  *
- * Local state: the active tab, and nothing else. The center pane's open thread,
- * the open AGENT and the mentions read-state are all lifted to
- * `channels-v2-core.tsx`, since this column SETS them and other surfaces read
- * them back.
+ * Local state: the active tab, and nothing else — the open thread, the open AGENT
+ * and the mentions read-state are lifted to `channels-v2-core.tsx`.
  */
 
 import { useState, type ReactNode } from "react";
@@ -69,23 +59,15 @@ export type TabKey = (typeof TABS)[number]["key"];
 /**
  * THE ROW IS SHORTER IN THREAD VIEW (Samuel, 2026-08-21).
  *
- * ⚠ THREADS IS A CHANNEL-VIEW TAB. With a thread open this whole column is about
- * that ONE exchange — the Info tab becomes thread-scoped and the Agents tab
- * already narrows to it — so a list of the channel's OTHER threads is the one
- * control here that navigates away from what the reader is looking at. It comes
- * back the moment the centre pane returns to the channel; the sidebar's tree
- * covers thread-to-thread movement meanwhile.
+ * ⚠ THREADS IS A CHANNEL-VIEW TAB: with a thread open, a list of the channel's
+ * OTHER threads is the one control here that navigates away from what the reader
+ * is looking at. The sidebar's tree covers thread-to-thread movement meanwhile.
  *
  * ⚠ KNOWLEDGE IS OPT-IN AND IS THE ROW'S ONLY CAPABILITY-GATED TAB (Home
- * Knowledge Panels M4). It is ABSENT by default, which inverts this file's usual
- * "the default is the workspace page's behaviour" rule — deliberately, because
- * the tab reads a CHANNEL-SCOPED grant lane and the workspace page already has
- * the whole knowledge page one click away. See
- * {@link ChannelSurfaceCapabilities.knowledge}.
- *
- * ⚠ THREAD VIEW KEEPS IT. A knowledge base is granted onto the CHANNEL, so it
- * is as true inside one exchange as outside it, and the tab is the one place
- * the guest can read what was shared with them.
+ * Knowledge Panels M4) — ABSENT by default, inverting this file's usual "the
+ * default is the workspace page's behaviour" rule; see
+ * {@link ChannelSurfaceCapabilities.knowledge}. ⚠ THREAD VIEW KEEPS IT: a base is
+ * granted onto the CHANNEL, so it is as true inside one exchange as outside it.
  */
 export function channelPaneTabs(
   threadView: boolean,
@@ -98,35 +80,20 @@ export function channelPaneTabs(
 }
 
 /**
- * THE TAB-ROW BADGES (2026-08-20). `SegmentedControl` has carried an optional
- * `count` since the knowledge home's scope pills
- * (`knowledge-v2/home/knowledge-home.tsx` over `use-knowledge-v2-controller.ts ›
- * filterCounts`); this row simply had none. Nothing new is rendered — the same
- * primitive, the same two faces.
+ * THE TAB-ROW BADGES (2026-08-20), on `SegmentedControl`'s existing optional
+ * `count`.
  *
- * ⚠ `undefined` IS THE "CANNOT SAY" ANSWER AND IT IS LOAD-BEARING.
- * `SegmentedControl` draws no badge for `undefined`, which is exactly what
- * `agentSessions === null` needs: "could not ask" (a plain browser, or a main
- * without the feed) must NOT render as a confident `0`. UNKNOWN is not EMPTY
- * (INVARIANTS §11), and a `0` on this tab is a claim about the operator's own
- * machine that the web cannot make.
+ * ⚠ `undefined` IS THE "CANNOT SAY" ANSWER AND IT IS LOAD-BEARING: no badge is
+ * drawn for it, which is what `agentSessions === null` needs — "could not ask"
+ * must NOT render as a confident `0` (INVARIANTS §11, UNKNOWN is not EMPTY).
  *
- * ⚠ KNOWLEDGE GETS NO BADGE EITHER, and not for want of a number. The granted
- * list is read by the TAB BODY, only while the tab is open — a count on the row
- * would mean mounting that read for every viewer of every channel, which is the
- * cost the tab was designed to avoid. UNKNOWN is not EMPTY (INVARIANTS §11), and
- * a `0` here would be the claim "nothing is shared with you" made by a surface
- * that never asked.
+ * ⚠ KNOWLEDGE GETS NO BADGE EITHER: its list is read by the TAB BODY only while
+ * the tab is open, and a row count would mount that read for every viewer of every
+ * channel. ⚠ INFO AND SETTINGS GET NONE: Info already carries the mentions unread
+ * count INSIDE it (`info-tab.tsx`), and two numbers leave the reader guessing.
  *
- * ⚠ INFO AND SETTINGS GET NO BADGE, deliberately. The Info tab already carries
- * the mentions unread count INSIDE it (`info-tab.tsx`, arithmetic over the rows
- * it displays); a second number on its tab would leave the reader guessing which
- * of the two it is.
- *
- * ⚠ THREADS COUNTS THE LOADED LIST. The read is bounded and `threadsTruncated`
- * says so in the tab body — the same rule the mentions badge follows (count what
- * is displayed, and say when the display clipped), rather than a second, wider
- * count nothing renders.
+ * ⚠ THREADS COUNTS THE LOADED LIST — count what is displayed and say when the
+ * display clipped (`threadsTruncated`), never a wider count nothing renders.
  */
 function tabCount(
   key: TabKey,
@@ -172,12 +139,10 @@ export function ChannelsV2InfoPanel({
 }: {
   channel: Channel;
   channelName: string;
-  /**
-   * REAL messages-per-day for this channel, mounted by the HOST
-   * (`channel-surface-data.ts`) and passed through — this column fetches
-   * nothing. ⚠ DEFAULTS TO EMPTY so a host with no workspace segment renders no
-   * strip at all; an empty series is NOT a run of measured zeroes.
-   */
+  /** REAL messages-per-day, mounted by the HOST (`channel-surface-data.ts`) and
+   *  passed through — this column fetches nothing. ⚠ DEFAULTS TO EMPTY so a host
+   *  with no workspace segment renders no strip; an empty series is NOT a run of
+   *  measured zeroes. */
   activityBins?: readonly { date: string; count: number }[];
   activityLoading?: boolean;
   members: ChannelMember[];
@@ -187,17 +152,13 @@ export function ChannelsV2InfoPanel({
   threadsTruncated: boolean;
   threadsLoading: boolean;
   index: AuthorIndex;
-  /**
-   * THE OPEN THREAD ITSELF, not its id (2026-08-21). The whole row is
-   * thread-scoped while one is open — the Info tab renders the THREAD's facts
-   * and the Threads tab leaves — so this column needs the row, and asking the
-   * caller for both the id and the object is how the two come to disagree.
-   * `null` is channel view.
-   */
+  /** THE OPEN THREAD ITSELF, not its id (2026-08-21): the whole row is
+   *  thread-scoped while one is open, and asking the caller for both the id and
+   *  the object is how the two come to disagree. `null` is channel view. */
   openThread: ChannelThread | null;
   onOpenThread: (id: string) => void;
-  /** Threads tab's "New thread" — nonces the composer's `newThreadSignal`, which since
-   *  2026-09-08 opens `new-thread-dialog.tsx › NewThreadDialog` rather than the inline panel.
+  /** Threads tab's "New thread" — nonces the composer's `newThreadSignal`, which
+   *  since 2026-09-08 opens `new-thread-dialog.tsx › NewThreadDialog`.
    *  ⚠ Optional: a host with no composer to reach draws no button. */
   onNewThread?: () => void;
   /** THIS MACHINE'S live session feed, or `null` for "could not ask" (a plain
@@ -219,10 +180,10 @@ export function ChannelsV2InfoPanel({
     threadId: string | null,
     templateId?: string | null,
     overrides?: TemplateLaunchOverrides,
-    /** ⚠ WIDENED WITH THE TAB'S OWN PROP (2026-09-08): the Agents tab's New agent button opens
-     *  the launch POPUP, which carries a pre-assigned instance id and a per-spawn runtime. A
-     *  narrower type on this hop would have compiled — a 3-arg function is assignable to a 5-arg
-     *  signature — while silently declaring that two arguments do not survive the trip. */
+    /** ⚠ WIDENED WITH THE TAB'S OWN PROP (2026-09-08): the launch POPUP carries a
+     *  pre-assigned instance id and a per-spawn runtime. A narrower type here would
+     *  have COMPILED (a 3-arg function is assignable to a 5-arg signature) while
+     *  silently dropping two arguments. */
     agentId?: string,
     runtime?: string
   ) => Promise<AgentLaunchOutcome> | void;
@@ -241,23 +202,17 @@ export function ChannelsV2InfoPanel({
   mentionsLoading: boolean;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
-  /**
-   * Draw the KNOWLEDGE tab (`ChannelSurfaceCapabilities.knowledge`). Default
-   * `false` — see {@link channelPaneTabs} for why this one capability defaults CLOSED
-   * where the column's others default to the workspace page's behaviour.
-   * ⚠ The tab's reads mount with the tab, so `false` is not just a hidden
-   * control: nothing is requested at all.
-   */
+  /** Draw the KNOWLEDGE tab (`ChannelSurfaceCapabilities.knowledge`). Default
+   *  `false` — {@link channelPaneTabs} says why this one capability defaults
+   *  CLOSED. ⚠ Its reads mount with the tab, so `false` requests nothing at all. */
   knowledge?: boolean;
   /**
    * SINGLE-COLUMN MODE (Samuel, 2026-09-04 — the WEB channel page). Render ONE
-   * tab's body as the main area, full width, with NO tab row: the face is chosen
-   * by the header's dropdown instead (`channel-single-column.tsx`).
+   * tab's body as the main area, full width, with NO tab row: the header's
+   * dropdown is the switcher (`channel-single-column.tsx`).
    *
-   * ⚠ THE BODY IS THE SAME BODY. This is a layout answer, not a second surface:
-   * `Info` is still `info-tab.tsx`, `Agents` still the desktop's agent cards. A
-   * fork here is how the phone and the desktop come to disagree about what a
-   * channel's Info tab says.
+   * ⚠ THE BODY IS THE SAME BODY — a layout answer, not a second surface. A fork
+   * here is how the phone and the desktop disagree about what Info says.
    *
    * ⚠ ABSENT IS THE COLUMN — the two-pane surface every desktop mount renders.
    */
@@ -265,24 +220,20 @@ export function ChannelsV2InfoPanel({
   /**
    * REPLACES the INFO tab's body in channel view — an account-level 1:1 shows a
    * person card where a workspace channel shows `info-tab.tsx`. Absent is the
-   * channels page's own body, which is every caller but Home.
-   * ⚠ THREAD VIEW IGNORES IT. The column is already thread-scoped while a thread
-   * is open (the ruling above), so Info renders the THREAD's facts and a card
-   * about the counterparty would answer a question the reader did not ask.
+   * channels page's own body (every caller but Home). ⚠ THREAD VIEW IGNORES IT:
+   * the column is already thread-scoped, so a card about the counterparty would
+   * answer a question the reader did not ask.
    */
   infoTab?: ReactNode;
   /**
-   * The SETTINGS tab's body — `settings-slot.tsx › ChannelsV2SettingsSlot`, which
-   * is `channel-manage.tsx › ChannelsV2ManageActions` in channel view and
-   * `thread-manage.tsx › ChannelsV2ThreadManageActions` in thread view (Samuel,
-   * 2026-08-21). Injected rather than imported because it is write-bearing and
-   * this file owns the tab row.
-   * ⚠ Mounted only while the tab is open, which is deliberate: the channel host's
-   * three write hooks, its `/api/channels/trust` read and its four dialogs have no
-   * business being live behind the Info tab (INVARIANTS §5 pins it).
-   * ⚠ THE CHANNEL-VS-THREAD CHOICE IS THE SLOT'S, NOT THIS FILE'S, and for the
-   * same reason: whichever host is wrong for the current scope must not mount, and
-   * a branch inside either one would run its hooks regardless.
+   * The SETTINGS tab's body — `settings-slot.tsx › ChannelsV2SettingsSlot`
+   * (`channel-manage.tsx › ChannelsV2ManageActions` in channel view,
+   * `thread-manage.tsx › ChannelsV2ThreadManageActions` in thread view; Samuel,
+   * 2026-08-21), injected because it is write-bearing.
+   * ⚠ Mounted only while the tab is open: the channel host's write hooks, its
+   * `/api/channels/trust` read and its dialogs have no business being live behind
+   * the Info tab (INVARIANTS §5 pins it). ⚠ THE CHANNEL-VS-THREAD CHOICE IS THE
+   * SLOT'S, for the same reason — a branch inside either host runs its hooks anyway.
    */
   settings?: ReactNode;
 }) {
@@ -291,32 +242,22 @@ export function ChannelsV2InfoPanel({
   const threadView = openThread !== null;
   const options = channelPaneTabs(threadView, knowledge);
 
-  // ⚠ THE DEAD-SELECTION FALLBACK. Opening a thread while the Threads tab is
-  // showing removes the very tab that is selected, and a `value` matching no
-  // option leaves `SegmentedControl` with nothing lit over an empty body. INFO
-  // is where it lands — the tab that just became thread-scoped, so the reader's
-  // click is answered with the thread they opened rather than with blankness.
-  //
-  // ⚠ SET DURING RENDER, not in an effect: this is React's sanctioned
-  // derive-state-from-props adjustment (the render restarts before committing),
-  // and the same idiom `agent-panel.tsx` uses for its exit frame. An effect would
-  // paint the broken frame first. `activeTab` covers that restart so the body and
-  // the row can never disagree even for one pass.
-  //
-  // ⚠ IT ASKS THE ROW, NOT THE CONDITIONS. Two tabs can now leave (`threads` on
-  // a thread, `knowledge` if a host ever revoked the capability while mounted),
-  // and re-listing the conditions here is how the row and the fallback come to
-  // disagree about which tabs exist.
+  // ⚠ THE DEAD-SELECTION FALLBACK. Opening a thread removes the very tab that is
+  // selected, and a `value` matching no option leaves `SegmentedControl` with
+  // nothing lit over an empty body. INFO is where it lands.
+  // ⚠ SET DURING RENDER, not in an effect: React's sanctioned
+  // derive-state-from-props adjustment, the same idiom `agent-panel.tsx` uses. An
+  // effect would paint the broken frame first; `activeTab` covers the restart.
+  // ⚠ IT ASKS THE ROW, NOT THE CONDITIONS — re-listing which tabs can leave is how
+  // the row and the fallback come to disagree about which tabs exist.
   const dead = !options.some((t) => t.key === tab);
   if (dead) setTab("info");
   const activeTab: TabKey = dead ? "info" : tab;
 
   // ⚠ THE BADGE RUNS ONE EXPORTED DERIVATION (`agents-model.ts ›
-  // activeAgentCount`), never a sum written here: two derivations of one list is
-  // F-142's defect, and here it would show as a number that disagrees with the
-  // rows under it. It counts ACTIVE agents under the shared `isAgentActive`
-  // rule — an ended agent of MINE still renders as a stopped card in the list,
-  // and is deliberately not in this number.
+  // activeAgentCount`), never a sum written here — two derivations of one list is
+  // F-142's defect. It counts ACTIVE agents under the shared `isAgentActive` rule,
+  // so an ended agent of MINE renders as a stopped card but is not in the number.
   // ⚠ `null` sessions => `undefined`, never `0` — see `tabCount`.
   const agentCount =
     agentSessions === null
@@ -375,7 +316,7 @@ export function ChannelsV2InfoPanel({
               sessions={agentSessions}
               channelId={channel.id}
               // The template picker's one input — off the channel this panel is
-              // already rendering, so no new prop reaches this component for it.
+              // already rendering, so no new prop is needed for it.
               workspaceId={channel.workspaceId}
               openThreadId={openThreadId}
               members={members}
@@ -392,8 +333,7 @@ export function ChannelsV2InfoPanel({
             />
           ) : shown === "knowledge" ? (
             // ⚠ MOUNTED WITH THE TAB, so the lane is not read for a viewer who
-            // never opens it — the same rule the Settings slot follows, for the
-            // same reason (INVARIANTS §5).
+            // never opens it — the Settings slot's rule (INVARIANTS §5).
             <ChannelKnowledgeTab
               channelId={channel.id}
               workspaceId={channel.workspaceId}
@@ -403,9 +343,8 @@ export function ChannelsV2InfoPanel({
           );
 
   /* ⚠ SINGLE COLUMN — THE WEB CHANNEL PAGE (Samuel, 2026-09-04). One face, full
-     width, and the tab row is NOT drawn: the header's dropdown is the switcher,
-     so a second one under it would be two controls for one choice. `Crossfade`
-     stays — the swap is the same gesture at a different width. */
+     width, no tab row: the header's dropdown is the switcher, and a second one
+     under it would be two controls for one choice. */
   if (fullTab) {
     return (
       <section
@@ -425,24 +364,15 @@ export function ChannelsV2InfoPanel({
       className="flex w-[380px] shrink-0 flex-col border-l border-border-default"
     >
       {/* ⚠ A FIFTH TAB IS OVER THE ROW'S WIDTH BUDGET, AND THE BUDGET IS A
-          MEASUREMENT, NOT A TASTE (Home Knowledge Panels M4). `SegmentedControl`'s
-          trackless `lg` form takes its 12px side pad BECAUSE the four options with
-          two count badges overflowed 15px at the 340px this column then was
-          (docs/DESIGN-SYSTEM.md, 2026-08-25); the column is 380px now, so the four
-          leave roughly 55px spare and "Knowledge" wants ~90. Two things are done
-          about it and neither touches the shared primitive: the row TIGHTENS
-          (`gap-1`, and the header drops to `px-2`) only while the fifth tab is
-          present, and whatever remains SCROLLS rather than clipping — a tab pushed
-          past the edge with no way to reach it is the failure, a 6px discreet bar
-          is not.
+          MEASUREMENT, NOT A TASTE (Home Knowledge Panels M4): at 380px the four
+          options with two badges leave roughly 55px spare and "Knowledge" wants
+          ~90 (docs/DESIGN-SYSTEM.md, 2026-08-25). Two answers, neither touching the
+          shared primitive — the row TIGHTENS (`gap-1`, header `px-2`) only while
+          the fifth tab is present, and whatever remains SCROLLS rather than clips.
           ⚠ RULED 2026-08-27 (F-340, Samuel): the DESKTOP host stopped passing the
-          capability, so /home is back to FOUR tabs and none of this engages there.
-          **It still engages on the GUEST lane**, which keeps the tab because it is a
-          guest's only way to read a base granted into the channel — so the tightening
-          and the scroll stay, and this comment with them.
-          ⚠ AND DO NOT "FIX" THE GUEST ROW BY SHORTENING THE LABEL: "Knowledge" is what
-          the product calls the thing on every other surface, and a tab named something
-          else to fit is a worse answer than a tab that scrolls. */}
+          capability, so /home is back to FOUR tabs; it **still engages on the GUEST
+          lane**. ⚠ AND DO NOT "FIX" THE GUEST ROW BY SHORTENING THE LABEL:
+          "Knowledge" is what the product calls the thing everywhere else. */}
       <div
         className={cn(
           "flex h-[56px] shrink-0 items-center",
@@ -456,9 +386,8 @@ export function ChannelsV2InfoPanel({
           }))}
           value={activeTab}
           onChange={setTab}
-          // ⚠ THE 36px CONTROL SCALE (Samuel, 2026-08-25) — the same height as the page
-          // header's buttons, so a switcher does not read as a smaller class of control than
-          // the things beside it.
+          // ⚠ THE 36px CONTROL SCALE (Samuel, 2026-08-25) — the page header's button
+          // height, so a switcher does not read as a smaller class of control.
           size="lg"
           variant="underline"
           // Layout only, which is all `className` may carry here (the primitive's
@@ -470,13 +399,11 @@ export function ChannelsV2InfoPanel({
         />
       </div>
 
-      {/* THE TAB BODY SWAPS, THE TABS DO NOT MOVE (Samuel, 2026-08-24) — the
-          same gesture as /home's record pane, so it is the same primitive.
-          ⚠ RENDERED FROM `shown`, NOT `activeTab`: `Crossfade` hands back the
-          tab that is still on screen for one fade, and reading `activeTab` here
-          would swap the content out from under it and fade in what is already
-          there. A count ticking on the OPEN tab passes through unfaded — only a
-          tab change is a swap. */}
+      {/* THE TAB BODY SWAPS, THE TABS DO NOT MOVE (Samuel, 2026-08-24) — the same
+          gesture as /home's record pane, so the same primitive.
+          ⚠ RENDERED FROM `shown`, NOT `activeTab`: `Crossfade` hands back the tab
+          still on screen for one fade, and reading `activeTab` would swap the
+          content out from under it. Only a tab change is a swap. */}
       <Crossfade token={activeTab} className="flex min-h-0 flex-1 flex-col">
         {body}
       </Crossfade>

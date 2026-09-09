@@ -14,6 +14,9 @@ import {
   type OntologyShareRow,
 } from "./repository-shares";
 import { resolveOntologyAudience } from "./service-audience";
+// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`). A
+// share is who ELSE reaches the ontology, so its row is filed on the CLUSTER.
+import { recordShareRevision } from "./service-revisions";
 
 /**
  * 🔒 THE SHARE WRITE LANE (spec §6 S3) — "share an ontology with a channel …
@@ -161,6 +164,13 @@ export async function setOntologyShare(
     ownerAgentsLevel,
     createdBy: ctx.userId,
   });
+  await recordShareRevision(
+    ctx,
+    { id: clusterId, workspaceId: cluster.workspace_id },
+    input.channelId,
+    existing ? toShare(existing) : null,
+    toShare(row)
+  );
   return toShare(row);
 }
 
@@ -180,7 +190,20 @@ export async function unshareOntology(
   channelId: string
 ): Promise<void> {
   assertHumanShareWrite(ctx);
-  await requireOwnCluster(ctx, clusterId);
+  const cluster = await requireOwnCluster(ctx, clusterId);
   await assertHomeChannelReachable(ctx, channelId);
+  const existing = (await listSharesForCluster(clusterId)).find(
+    (row) => row.channel_id === channelId
+  );
   await deleteShare(clusterId, channelId);
+  // ⚠ NOTHING IS RECORDED WHEN NOTHING WAS SHARED. This op is idempotent by
+  // design, and a revision for an unshare that removed no row would put an
+  // access change in the history of an ontology whose access did not change.
+  await recordShareRevision(
+    ctx,
+    { id: clusterId, workspaceId: cluster.workspace_id },
+    channelId,
+    existing ? toShare(existing) : null,
+    null
+  );
 }

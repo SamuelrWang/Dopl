@@ -6,11 +6,8 @@
  * picker landed on that file's New Agent button.
  *
  * ⚠ THE SEAM IS §1's "one file, one reason to change", not the line count that
- * forced the question. `agents-tab.tsx` is now a LIST plus a LAUNCH control, and
- * it moves when the launch surface moves (it has moved three times in two days:
- * the button, the multiplayer re-scope, the split button). A CARD moves when the
- * session feed's shape moves. Two rates of change in one file is how a card gets
- * re-reviewed every time a glyph is added to a button.
+ * forced the question: `agents-tab.tsx` moves when the LAUNCH surface moves, a
+ * CARD moves when the session feed's shape moves.
  *
  * ⚠ ONE CARD FACE FOR BOTH, AND FOR THREAD CARDS TOO (`bits.tsx › PANEL_CARD`).
  * The two tabs are one column and a second card shape would read as a second
@@ -47,19 +44,16 @@ import { agentModelShortLabel } from "../../lib/agent-models";
  * WHAT THE OPERATOR SAID THIS AGENT IS FOR, or `null` (2026-08-27).
  *
  * ⚠ ADDITIVE AND OPTIONAL, read off a widened LOCAL type rather than declared on
- * `spa-bridge.ts › DesktopSessionSummary` — the same rule `agents-model.ts › agentRunningModel`
- * and `› agentEndedAt` follow, and for the same reason: the bridge type is the DESKTOP's to
- * widen, the two trees ship separately, and this side must behave against either version.
- *
- * ⚠ ABSENT IS THE ORDINARY ANSWER — a description is optional at launch and most agents carry
- * none — so the card renders NOTHING rather than an empty line (INVARIANTS §11).
+ * `spa-bridge.ts › DesktopSessionSummary` — the rule `agents-model.ts › agentRunningModel` and
+ * `› agentEndedAt` follow: the bridge type is the DESKTOP's to widen, the two trees ship
+ * separately, and this side must behave against either version. Absent is the ORDINARY answer,
+ * so the card renders nothing rather than an empty line (INVARIANTS §11).
  *
  * ⚠ IT LIVES HERE AND NOT IN `agents-model.ts`, WHICH IS AT THE 500-LINE CAP. This card is its
- * ONE consumer; move it to the projection the moment a second surface reads it, which is what
- * that file is for.
+ * ONE consumer; move it to the projection the moment a second surface reads it.
  *
  * ⚠ MY OWN AGENTS ONLY, structurally: `main/agent-names.js` is machine-local and never reaches
- * `channel_sessions`, so a PEER row has no description to carry and the peer card shows none.
+ * `channel_sessions`, so a PEER row has no description to carry.
  */
 function agentDescription(
   session: DesktopSessionSummary & { description?: string | null }
@@ -76,13 +70,11 @@ function agentDescription(
  * ⚠ A QUIET ROW IS DIMMED, NEVER DROPPED (Samuel, 2026-08-22): *"the card STAYS
  * until the session actually goes away."* The row's PRESENCE is the liveness
  * signal — the desktop's push replaces its whole set, so an ended session leaves
- * by omission (`agents-model.ts › peerCardsFor`). What `agents-model.ts ›
- * peerRowStale` still answers is that the row has not MOVED lately, which is a
- * weaker claim than "gone" and gets a weaker treatment: `opacity-60`, the same
- * shade the kit's optimistic `PENDING_ROW` wears, plus the honest
- * `data-stale` hook the test reads. ⚠ **It is not a heartbeat** — `updated_at`
- * moves on a state CHANGE — so a perfectly live idle agent dims after 90 s, and
- * the ONE clause below is what keeps that legible instead of mysterious.
+ * by omission (`agents-model.ts › peerCardsFor`). `agents-model.ts › peerRowStale`
+ * answers only that the row has not MOVED lately, a weaker claim than "gone" and
+ * so a weaker treatment: `opacity-60` plus the `data-stale` hook the test reads.
+ * ⚠ **It is not a heartbeat** — `updated_at` moves on a state CHANGE — so a
+ * perfectly live idle agent dims after 90 s.
  */
 export function PeerCards({
   peers,
@@ -130,15 +122,9 @@ export function PeerCards({
                 {/* ⚠ NO TIMESTAMP ON A PEER CARD (Samuel, 2026-09-04): *"the
                     profile image of the user they belong to, plus status only —
                     thinking / working / idle / ended. No timestamp, no other
-                    metadata."* This carried ` · last update 40 minutes ago` on a
-                    DIMMED row from 2026-08-22 to that ruling.
-                    ⚠ THE DIMMING STAYS AND SO DOES `peerRowStale`. The ruling is
-                    about what the card SAYS, not about what it knows: a row whose
-                    desktop crashed still outlives its run (`session-state-push.js`'s
-                    KNOWN GAP), and `opacity-60` is the treatment that keeps a quiet
-                    card legible without printing a stamp. What is gone is the
-                    CLAUSE, not the signal — do not re-derive one from `updatedAt`
-                    here. */}
+                    metadata."* THE DIMMING STAYS AND SO DOES `peerRowStale` — the
+                    ruling is about what the card SAYS, not what it knows. Do not
+                    re-derive a clause from `updatedAt` here. */}
               </span>
             </div>
           </div>
@@ -149,17 +135,12 @@ export function PeerCards({
 }
 
 /**
- * One agent rectangle, on the same `.bento` card face as a thread card
- * (`bits.tsx › PANEL_CARD`) — the two tabs are one column and a second card
- * shape would read as a second surface.
+ * One agent rectangle, on the shared `bits.tsx › PANEL_CARD` face (see the file
+ * docblock, which also states the every-absence rule this card follows).
  *
  * The meter is the shared `UsageMeter` at `tone="ramp"`: a context window is
  * GLANCED at, not read. `over` is not passed — it is an entitlement verdict the
  * caller owns, and a full context window is not an entitlement event.
- *
- * ⚠ EVERY NUMBER IS OPTIONAL AND EVERY ABSENCE IS RENDERED AS ONE. No meter
- * without a denominator, no "Started" without a stamp, no `0` standing in for
- * "not measured yet" (INVARIANTS §11).
  */
 export function AgentCard({
   agent,
@@ -178,41 +159,26 @@ export function AgentCard({
   // panel that opens FROM it already said "in main channel": one agent, two answers, in two
   // surfaces the operator moves between with a click. A channel-level agent is on the ROOM on
   // purpose (`agents-controls.ts`: `taskId: null`), which is a place and has a name.
-  // ⚠ THE CONSTANT'S OWN NOTE SAID "two callers"; THERE WERE THREE, and this was the one the
-  // ruling's pin (`agents-detail.test.tsx`) could not see, because it mounts the panel.
   const threadTitle = agent.threadTitle ?? NO_THREAD_LABEL;
   const contextUsed = metric(agent.contextUsed);
   const contextWindow = metric(agent.contextWindow);
   const tokensSpent = metric(agent.tokensSpent);
   const ended = agent.state === "ended";
   const description = agentDescription(agent);
-  // ⚠ WHEN IT ENDED, IN THE LINE THAT ALREADY EXISTS (2026-08-22) — no new
-  // element, and it is the one thing about an ended agent an operator actually
-  // sorts by ("which of these finished last"). ⚠ ABSENT ON AN OLDER MAIN and on
-  // an agent that ended before the field shipped, which renders as the clause
-  // simply not being there; the PILL is what states the fact, never this.
-  // ⚠ NO RETENTION COUNTDOWN. The history is swept on main's own schedule and
-  // there is nothing the operator can do about it, so a clock here would be
-  // anxiety with no action attached.
   // ⚠ THE SESSION'S model, never the CHANNEL's stored pick — a live agent may
   // have been switched mid-run, or spawned before the posture changed.
   const modelLabel = agentModelShortLabel(agentRunningModel(agent));
-  // ⚠ WHICH IDENTITY THIS AGENT IS WEARING (2026-08-22, agent templates). A
-  // SNAPSHOT of the name main resolved at spawn, never a pointer — the session
-  // keeps what it RAN AS after that template is renamed or deleted
-  // (`spa-bridge-shapes.ts › DesktopSessionSummary.templateName`).
-  // ⚠ ABSENT AND `null` ARE THE SAME ANSWER and both render nothing: a blank
-  // agent has no template, and an older main omits the field. Neither is a
-  // reason to print a word (INVARIANTS §11 — UNKNOWN is not EMPTY).
-  // ⚠ OPERATOR-ONLY, AND STRUCTURALLY SO. This is the OWN-agent card, fed by
-  // this machine's local registry; the peer cards above read `ChannelPeerSession`,
-  // which has no such field because `channel_sessions.template_name` is excluded
-  // from the peer projection — a private template's name on a colleague's card is
-  // an existence oracle. Do not plumb it into `PeerCards`.
+  // ⚠ WHICH IDENTITY THIS AGENT IS WEARING (2026-08-22, agent templates) — a
+  // SNAPSHOT of the name main resolved at spawn, never a pointer, so the session
+  // keeps what it RAN AS after the template is renamed or deleted
+  // (`spa-bridge-shapes.ts › DesktopSessionSummary.templateName`). Absent and
+  // `null` both render nothing (INVARIANTS §11 — UNKNOWN is not EMPTY).
+  // ⚠ OPERATOR-ONLY, AND STRUCTURALLY SO: `channel_sessions.template_name` is
+  // excluded from the peer projection, because a private template's name on a
+  // colleague's card is an existence oracle. Do not plumb it into `PeerCards`.
   const templateName = agent.templateName?.trim() || null;
   // ⚠ NO TIMING LINE AND NO "N of yours here" SINCE 2026-09-08 (Samuel: remove
-  // both). Started/Ended/Last-activity stamps and the sibling count are gone
-  // from the card; the ended PILL still states the one fact that matters.
+  // both); the ended PILL states the one fact that matters.
 
   return (
     // `group/card` is the pencil's hover scope — see `AgentName`.
@@ -226,11 +192,9 @@ export function AgentCard({
         {/* ⚠ THE OWN card renames; the PEER cards above do not and must not. A colleague's
             agent is named on THEIR machine, and this write reaches only this one. */}
         <AgentName agentId={agent.agentId} name={agentDisplayName(agent)} />
-        {/* ⚠ THE PILL REPLACES THE LIVENESS ON AN ENDED CARD (2026-08-22), it
-            does not join it: "Ended" beside a dot reading "Ended" is one fact
-            said twice. ⚠ MY OWN cards get the finer sentence; the peer cards
-            above do not, because the cross-machine wire carries the coarse
-            state alone. */}
+        {/* ⚠ THE PILL REPLACES THE LIVENESS ON AN ENDED CARD (2026-08-22) rather
+            than joining it. MY OWN cards get the finer sentence; the peer cards
+            above do not — the cross-machine wire carries the coarse state alone. */}
         {ended ? <AgentEndedPill /> : <AgentLiveness {...agentLiveness(agent)} />}
       </div>
 
@@ -246,16 +210,11 @@ export function AgentCard({
       <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
         <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
         <span className="min-w-0 truncate">{threadTitle}</span>
-        {/* ⚠ THE EFFECTIVE MODEL, and ONLY when this build reports one
-              (2026-08-22). It rides the existing detail line rather than earning
-              chrome of its own — minimal copy (INVARIANTS §5), and a fourth pill
-              on a 380px card is clutter. Absent renders NOTHING: a main that does
-              not report a model has said nothing about what this agent is running,
-              and "Default" would be this build claiming to know
+        {/* ⚠ THE TEMPLATE READS BEFORE THE MODEL — it is WHO this agent is, the
+              model only what it runs on. Both ride this detail line rather than
+              earning chrome (minimal copy, INVARIANTS §5), and both render NOTHING
+              when unreported: "Default" would be this build claiming to know
               (`agents-model.ts › agentRunningModel`). */}
-        {/* ⚠ THE TEMPLATE READS BEFORE THE MODEL, because it is WHO this agent
-              is and the model is only what it runs on. Same detail line, same
-              minimal-copy rule — no pill, no "Template:" label. */}
         {templateName && (
           <span className="min-w-0 truncate text-text-muted">· {templateName}</span>
         )}
@@ -282,15 +241,11 @@ export function AgentCard({
             : `Tokens spent: ${formatTokens(tokensSpent)}`}
         </span>
         {/* ⚠ DELETE SITS LEFT OF OPEN, ON EVERY OWN CARD — running, idle and
-            retained-ended alike (Samuel, 2026-08-25). A card the operator can
-            see is a card they can be rid of, and an ended agent is exactly the
-            one they most often want gone. It is a NAKED GLYPH revealed by this
-            card's hover (`agent-delete.tsx`), not a second button face: a
-            permanent trash beside every agent is a destructive control the eye
-            has to keep declining.
-            ⚠ THE PEER CARDS ABOVE HAVE NONE AND MUST NOT. A colleague's agent
-            runs on THEIR machine; this op reaches only local stores, so a trash
-            icon there would be a control over nothing. */}
+            retained-ended alike (Samuel, 2026-08-25). A NAKED GLYPH revealed by
+            this card's hover (`agent-delete.tsx`), never a second button face: a
+            permanent trash beside every agent is a destructive control the eye has
+            to keep declining. ⚠ THE PEER CARDS ABOVE HAVE NONE AND MUST NOT — this
+            op reaches only local stores, so there it would control nothing. */}
         <AgentDeleteButton agent={agent} />
         <button
           type="button"

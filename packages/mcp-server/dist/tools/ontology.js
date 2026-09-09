@@ -38,7 +38,7 @@ const tool_style_1 = require("./tool-style");
  * already made for its law: pull the write-op glosses into an MCP resource, so
  * they stop being pushed to every client that only ever reads the graph.
  */
-const ONTOLOGY_PROSE_BUDGET = 1_506; // ⚠ **1,508 → 1,506 (2026-09-09): BANKED, NOT RAISED.** The home-ontology wave added the FENCE sentence to `policy` (a lend carries a per-channel LEVEL; an agent gets its operator's) and paid for every character of it out of this same description — ten glosses trimmed to what only they say, plus "the result says so" after op="resolve"'s cap, which is a fact the RESULT already carries. The two chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
+const ONTOLOGY_PROSE_BUDGET = 1_503; // ⚠ **1,506 → 1,503 (2026-09-09): BANKED, NOT RAISED.** The CHANGELOG lane part 2 added one clause to `policy` — every ontology write is filed per field in the changelog, which is a fact an agent cannot derive from any op — and paid for it out of this same description: five glosses trimmed to what only they say (the headline's routing tail, `op="get"`'s "Version token", `op="anchor"`'s phrasing, `create_column`'s, and "an agent gets its operator's" losing a word the ladder already carries). The three chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
 /**
  * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
  * order for every tool on this surface.
@@ -50,21 +50,21 @@ const ONTOLOGY_PROSE_BUDGET = 1_506; // ⚠ **1,508 → 1,506 (2026-09-09): BANK
  * descriptions are BOTH pushed on every connection.
  */
 const ONTOLOGY_DESCRIPTION = (0, tool_style_1.composeDescription)({
-    headline: "The object graph you reach — objects in clusters of columns, with attributes, relationships and actions; it routes rather than inventories.",
+    headline: "The object graph you reach — objects in clusters of columns, with attributes, relationships and actions; it routes, not inventories.",
     // ⚠ THE FENCE SENTENCE IS THE POLICY'S THIRD (2026-09-09, home-ontology S5),
     // NOT A BODY BLOCK OF ITS OWN: a block costs its separator too, and this
     // description is at its ratchet. It states the two facts an agent cannot
     // derive — that a lend carries a LEVEL per channel, and that an agent never
     // exceeds the person it acts for (I1) — and no number and no new op, because
     // both would be a second copy of something the schema or the service owns.
-    policy: "Reads plus writes that edit ONE thing at a time. No delete op — `remove_*` strips a field, never the object. A shared ontology reaches you only at the level its channel grants your role, and an agent gets its operator's level.",
+    policy: "Reads plus writes that edit ONE thing at a time. No delete op — `remove_*` strips a field, not the object. A shared ontology reaches you only at the level its channel grants your role, and an agent gets its operator's. Writes are filed per field in the changelog.",
     routing: ["Use dopl_map for the routing view."],
     body: [
         `READ — set \`op\` to:
 - "map" — clusters and their COLUMNS, with each column's direct members. TWO LEVELS ONLY: objects nested deeper, and objects in no column, never appear. Call first.
-- "anchor" — the CALLER's own object; start here for any "my/me" request.
+- "anchor" — the CALLER's own object; start here for "my/me" requests.
 - "resolve" — objects whose NAME or SUBTITLE contains the query (case-insensitive substring), capped at 20 matches.
-- "get" — one object: attributes, relationships, backlinks, children, actions, a Version token.`,
+- "get" — one object: attributes, relationships, backlinks, children, actions, Version.`,
         // ⚠ GROUPED, NOT ONE LINE PER OP, AND THAT IS THE HARD CEILING TALKING.
         // `parity.test.ts` needs every enum op to appear as a quoted `"op_name"`,
         // not to own a line; eight of these lines were the op name said twice
@@ -74,10 +74,10 @@ const ONTOLOGY_DESCRIPTION = (0, tool_style_1.composeDescription)({
         // "resolve" — keep their own lines and must keep them.
         `WRITE — set \`op\` to:
 - "create_cluster" / "update_cluster" — name and \`purpose\`.
-- "create_column" — a container named for what its objects ARE.
-- "create_object" / "update_object" — born with the parent's template, edges and actions.
+- "create_column" — a container named for what it holds.
+- "create_object" / "update_object" — inherits the parent's template, edges, actions.
 - "set_template_field" — a DEFAULT field; new objects inherit it empty.
-- "set_attribute" / "set_relationship" / "set_action" — one attribute, one labeled edge (never onto the object itself), or one thing the OBJECT does.
+- "set_attribute" / "set_relationship" / "set_action" — one attribute, one labeled edge (never onto itself), or something the OBJECT does.
 - "remove_template_field" / "remove_attribute" / "remove_relationship" / "remove_action" — drop one, by label or name.
 - "claim_anchor" — link the CALLING user to an object.`,
     ],

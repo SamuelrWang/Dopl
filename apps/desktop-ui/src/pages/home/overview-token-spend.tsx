@@ -129,7 +129,7 @@ function TokenSpendStrip({ report }: { report: TokenSpendReport }) {
  *
  * ⚠ **LOCAL GETTERS, NEVER `toISOString().slice(0, 10)`** — that reads the UTC
  * day, which west of Greenwich is tomorrow's for most of the evening. This is
- * the same bug `overview-sections.tsx › binLabel` records from the other
+ * the same bug `charts/bar-series.tsx › monthDayLabel` records from the other
  * direction (there, a UTC bin must NOT be parsed into local time).
  */
 export function localDayKey(at: Date): string {

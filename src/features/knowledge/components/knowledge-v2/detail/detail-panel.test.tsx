@@ -25,10 +25,16 @@ import { DetailPanel } from "./detail-panel";
  * screen; the changelog has its own suite.
  */
 
+// ⚠ THE WHOLE MODULE, not the two knowledge fetchers: `revisions/client/hooks.ts`
+// builds ONE fetcher map over every family (2026-09-09, part 2), so a partial
+// mock leaves an `undefined` in it and the module fails at import.
 vi.mock("@/features/revisions/client/api", () => ({
   fetchEntryRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
   fetchBaseRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
+  fetchOntologyObjectRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
+  fetchOntologyClusterRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
   restoreEntryRevision: vi.fn(),
+  restoreOntologyObjectRevision: vi.fn(),
 }));
 
 vi.mock("./file-view", () => ({

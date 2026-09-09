@@ -5,6 +5,8 @@ import { Bot, ChevronRight, RotateCcw, User } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { Revision, RevisionDay } from "../types";
+import { bundleOf, fieldLineOf, NO_VALUE } from "../lib/field-format";
+import { isRestorable } from "../lib/restorable";
 import { RevisionDiff } from "./revision-diff";
 
 /**
@@ -31,6 +33,13 @@ import { RevisionDiff } from "./revision-diff";
  *
  * ⚠ **MINIMAL COPY** (Samuel's ruling, `docs/INVARIANTS.md` §5A's UI-copy rule):
  * a label and a control. No explainer paragraph about what a revision is.
+ *
+ * ⚠ **TWO ROW SHAPES, ONE LIST (2026-09-09, part 2).** A knowledge row is a
+ * DOCUMENT snapshot and reads `who · what · path`; an ontology row is ONE FIELD
+ * and reads `Field: before → after`. The shape is chosen from the PAYLOAD
+ * (`../lib/field-format.ts › fieldLineOf`), never from a second list component —
+ * the day heading, the agent mark, the restore confirmation and the paging are
+ * the parts that must not drift, and they are the whole of this file.
  */
 
 export interface ChangelogListProps {
@@ -129,6 +138,9 @@ export function ChangelogList({
           {day.revisions.map((revision) => {
             const open = expanded === revision.id;
             const isAgent = revision.actor.kind === "agent";
+            const field = fieldLineOf(revision);
+            const bundle = bundleOf(revision);
+            const bundleName = bundle.find((f) => f.label === "Name")?.value;
             const who =
               (revision.actor.userId && actorNames?.[revision.actor.userId]) ??
               (isAgent ? "Agent" : "Someone");
@@ -153,10 +165,24 @@ export function ChangelogList({
                     <User size={14} className="flex-none text-text-muted" aria-label="person" />
                   )}
                   <span className="truncate text-small text-text-primary">{who}</span>
-                  <span className="truncate text-caption text-text-secondary">
-                    {OP_LABEL[revision.op]}
-                    {revision.payload.path ? ` · ${revision.payload.path}` : ""}
-                  </span>
+                  {field ? (
+                    /* ⚠ THE FIELD ROW — `Field: before → after`, which is the
+                       whole point of a per-property timeline: the change is
+                       READABLE without expanding the row. */
+                    <span className="min-w-0 truncate text-caption text-text-secondary">
+                      <span className="text-text-primary">{field.label}</span>
+                      {": "}
+                      <span className="text-text-muted line-through">{field.before}</span>
+                      {" → "}
+                      {field.after}
+                    </span>
+                  ) : (
+                    <span className="truncate text-caption text-text-secondary">
+                      {OP_LABEL[revision.op]}
+                      {revision.payload.path ? ` · ${revision.payload.path}` : ""}
+                      {bundleName ? ` · ${bundleName}` : ""}
+                    </span>
+                  )}
                   {/* ⚠ THE SESSION NAME IS THE GROUPING SIGNAL an agent's writes
                       carry — several rows in a row wearing one session ARE one
                       run of work. It is an attribution hint and never a claim
@@ -176,16 +202,43 @@ export function ChangelogList({
                     {revision.summary ? (
                       <p className="text-caption text-text-secondary">{revision.summary}</p>
                     ) : null}
-                    <RevisionDiff
-                      before={previousBodyOf(revision)}
-                      after={revision.payload.body ?? ""}
-                    />
-                    {/* ⚠ A BODYLESS REVISION IS NOT RESTORABLE and the button
-                        is absent rather than disabled — a folder move or a base
-                        rename has no snapshot to write back, and the server
-                        refuses it with `REVISION_NOT_RESTORABLE`. Offering a
-                        control that can only fail is worse than not offering it. */}
-                    {canRestore && onRestore && revision.payload.body != null ? (
+                    {field ? (
+                      /* ⚠ THE SAME DIFF COMPONENT over the two RENDERED values,
+                         not over two bodies — one diff palette for the app, and
+                         a long text attribute still gets a word-level diff. */
+                      <RevisionDiff
+                        before={field.before === NO_VALUE ? "" : field.before}
+                        after={field.after === NO_VALUE ? "" : field.after}
+                      />
+                    ) : bundle.length > 0 ? (
+                      <dl className="flex flex-col gap-0.5">
+                        {bundle.map((entry) => (
+                          <div key={entry.label} className="flex gap-2 text-caption">
+                            <dt className="w-28 shrink-0 truncate text-text-muted">
+                              {entry.label}
+                            </dt>
+                            <dd className="min-w-0 truncate text-text-primary">
+                              {entry.value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : (
+                      <RevisionDiff
+                        before={previousBodyOf(revision)}
+                        after={revision.payload.body ?? ""}
+                      />
+                    )}
+                    {/* ⚠ A REVISION WITH NOTHING TO WRITE BACK IS NOT RESTORABLE
+                        and the button is absent rather than disabled — a folder
+                        move, a base rename, an ontology ASSOCIATION or a
+                        create/delete bundle has no snapshot to restore, and the
+                        server refuses it with `REVISION_NOT_RESTORABLE`.
+                        Offering a control that can only fail is worse than not
+                        offering it. ⚠ THE PREDICATE IS THE SERVER'S OWN
+                        (`../lib/restorable.ts`), so the button and the refusal
+                        cannot disagree. */}
+                    {canRestore && onRestore && isRestorable(revision) ? (
                       <button
                         type="button"
                         onClick={() => setConfirming(revision)}
@@ -217,20 +270,21 @@ export function ChangelogList({
       {/* ⚠ A CONFIRMATION, SO `ConfirmDialog` — not `FormDialog`, which is for a
           dialog that COLLECTS INPUT (docs/DESIGN-SYSTEM.md › Popup forms). It
           NAMES THE DATE, because "Restore" over a list of near-identical rows is
-          the one place a mis-click is invisible until the next read. */}
+          the one place a mis-click is invisible until the next read. ⚠ AND IT
+          NAMES THE FIELD on an ontology row, for the same reason: a restore
+          there moves ONE property and leaves every other one alone, which is a
+          different act from writing a whole document back. */}
       <ConfirmDialog
         open={confirming !== null}
         onOpenChange={(open) => {
           if (!open) setConfirming(null);
         }}
-        title="Restore this version"
-        description={
-          confirming
-            ? `This writes the version from ${dayLabel(
-                new Date(confirming.createdAt).toISOString().slice(0, 10)
-              )} back into the file. Nothing is deleted — the restore is added to the changelog as a new version.`
-            : undefined
+        title={
+          confirming && fieldLineOf(confirming)
+            ? `Restore ${fieldLineOf(confirming)?.label}`
+            : "Restore this version"
         }
+        description={confirming ? restoreMessage(confirming) : undefined}
         confirmLabel="Restore"
         onConfirm={async () => {
           if (confirming && onRestore) await onRestore(confirming);
@@ -239,4 +293,18 @@ export function ChangelogList({
       />
     </div>
   );
+}
+
+/**
+ * The confirmation's sentence. ⚠ It states WHAT WILL CHANGE and what will not —
+ * the date on both arms, and on a field restore the field's own name and its
+ * prior value, because that is the whole of what the write does.
+ */
+function restoreMessage(revision: Revision): string {
+  const when = dayLabel(new Date(revision.createdAt).toISOString().slice(0, 10));
+  const field = fieldLineOf(revision);
+  if (field) {
+    return `This sets ${field.label} back to "${field.before}" as it stood on ${when}. Other fields are untouched, and the restore is added to the changelog as a new version.`;
+  }
+  return `This writes the version from ${when} back into the file. Nothing is deleted — the restore is added to the changelog as a new version.`;
 }

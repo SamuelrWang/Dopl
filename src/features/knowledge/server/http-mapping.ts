@@ -1,13 +1,12 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import { ContainerPublishUnacknowledgedError } from "@/features/workspaces/server/shared-publish";
-// ⚠ THE CHANGELOG'S TWO DOMAIN ERRORS ARE MAPPED HERE rather than on a route of
-// their own: every revision surface in this app is a KNOWLEDGE route, so a
-// second mapper would be a second place a 404 could become a 403.
-import {
-  RevisionNotFoundError,
-  RevisionNotRestorableError,
-} from "@/features/revisions/server/errors";
+// ⚠ THE CHANGELOG'S TWO DOMAIN ERRORS ARE DELEGATED, NOT RESTATED. They were
+// mapped inline here until 2026-09-09 under the claim that "every revision
+// surface in this app is a KNOWLEDGE route" — which the ontology changelog
+// routes ended. `revisions/server/http-mapping.ts` is the one statement now, so
+// there is still only one place a 404 could become a 403.
+import { mapRevisionError } from "@/features/revisions/server/http-mapping";
 import {
   AgentWriteDisabledError,
   ChannelGrantInvalidError,
@@ -39,14 +38,8 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   if (err instanceof EntryNotFoundError) {
     return new HttpError(404, "KNOWLEDGE_ENTRY_NOT_FOUND", err.message);
   }
-  if (err instanceof RevisionNotFoundError) {
-    // ⚠ ONE ANSWER FOR "no such revision", "not yours to see" and "its resource
-    // is gone" — the errors module carries the argument.
-    return new HttpError(404, "REVISION_NOT_FOUND", err.message);
-  }
-  if (err instanceof RevisionNotRestorableError) {
-    return new HttpError(409, "REVISION_NOT_RESTORABLE", err.message);
-  }
+  const revision = mapRevisionError(err);
+  if (revision) return revision;
   if (err instanceof AgentWriteDisabledError) {
     return new HttpError(403, "AGENT_WRITE_DISABLED", err.message);
   }

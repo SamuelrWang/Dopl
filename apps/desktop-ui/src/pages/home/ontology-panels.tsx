@@ -4,6 +4,7 @@ import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { PillChoice } from "@/shared/ui/form-dialog";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { OntologyView } from "@/features/ontology/components/ontology-view";
+import { ClusterChangelog } from "@/features/ontology/components/cluster-changelog";
 import { createCluster, setAgentsMayEdit } from "@/features/ontology/client/api";
 import { NEW_CLUSTER_NAME } from "@/features/ontology/optimistic-create";
 import {
@@ -73,6 +74,7 @@ export function HomeOntologyPanels({
 }) {
   const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [changelogId, setChangelogId] = useState<string | null>(null);
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [deleting, setDeleting] = useState<ShareTarget | null>(null);
   const [creating, setCreating] = useState(false);
@@ -90,6 +92,32 @@ export function HomeOntologyPanels({
     );
   }
   if (error) return <PageError error={error} onRetry={refetch} />;
+
+  const changelog = rows.find((row) => row.id === changelogId) ?? null;
+  if (changelogId !== null && changelog !== null) {
+    return (
+      <div className={PANE}>
+        <div className="flex shrink-0 items-center gap-2">
+          <OpenScaleButton onClick={() => setChangelogId(null)}>
+            All ontologies
+          </OpenScaleButton>
+        </div>
+        {/* ⚠ THE ROLL-UP IS ITS OWN FACE, not a section under the board: it is
+            the ontology's whole history, and the board pane is already a
+            full-height canvas with a 420px panel beside it. */}
+        <SectionPanel id="home-ontology-changelog" label={`${changelog.name} · Changelog`}>
+          <ClusterChangelog
+            clusterId={changelog.id}
+            workspaceId={homeWorkspaceId}
+            // ⚠ /home lists only what the caller OWNS, so a restore is theirs to
+            // make. A peer's reach into a LENT ontology is the service's answer
+            // (§4), never a prop composed here.
+            canEdit
+          />
+        </SectionPanel>
+      </div>
+    );
+  }
 
   const open = rows.find((row) => row.id === openId) ?? null;
   if (openId !== null && open !== null) {
@@ -164,6 +192,7 @@ export function HomeOntologyPanels({
                 onOpen={() => setOpenId(row.id)}
                 onShare={() => setSharing({ id: row.id, name: row.name })}
                 onDelete={() => setDeleting({ id: row.id, name: row.name })}
+                onChangelog={() => setChangelogId(row.id)}
               />
             ))}
           </div>
@@ -215,12 +244,15 @@ function OntologyCard({
   onOpen,
   onShare,
   onDelete,
+  onChangelog,
 }: {
   row: OntologyListRow;
   workspaceId: string;
   onOpen: () => void;
   onShare: () => void;
   onDelete: () => void;
+  /** The day-grouped roll-up of everything that changed in this ontology. */
+  onChangelog: () => void;
 }) {
   const queryClient = useQueryClient();
   return (
@@ -251,6 +283,7 @@ function OntologyCard({
       <div className="flex flex-wrap items-center gap-2">
         <OpenScaleButton onClick={onOpen}>Open</OpenScaleButton>
         <OpenScaleButton onClick={onShare}>Share</OpenScaleButton>
+        <OpenScaleButton onClick={onChangelog}>Changelog</OpenScaleButton>
         <OpenScaleButton onClick={onDelete}>Delete</OpenScaleButton>
       </div>
     </div>

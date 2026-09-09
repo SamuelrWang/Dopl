@@ -8313,7 +8313,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   red across the behavioural pair. 0 vacuous.
 - Status: **RESOLVED 2026-09-09** (six floors + `GUEST_ALLOWED` 27; `guest-lane.test.ts`).
 
-### F-686 — the ontology side of the CHANGELOG is OWED: `revisions` exists, and no ontology write records one (2026-09-09)
+### F-686 — the ontology side of the CHANGELOG is OWED: `revisions` exists, and no ontology write records one (2026-09-09) — **RESOLVED 2026-09-09**
 
 - Locations: `supabase/migrations/20261002120000_revisions.sql` (the table, its
   `resource_type` CHECK already admitting `ontology_cluster`/`ontology_object`, and the
@@ -8345,8 +8345,39 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   arms nothing exercises — which is the state a redteam suite cannot distinguish from a broken one.
 - ⚠ **A CONCURRENT BUILDER OWNS `src/features/ontology/**` AS OF 2026-09-09**, which is why the capture
   was not written in the same change as the primitive. Part 2 lands after that work.
+- **RESOLVED 2026-09-09 (part 2), and all four owed items were DECIDED rather than inherited:**
+  1. **FIELDS** — `ontology/server/service-revisions.ts › objectFields` + `› changedFields` flatten a
+     row into tracked fields and answer only the ones that MOVED; `service.ts` records ONE revision
+     per changed field. An attribute is spelled `attribute:<key>` so a bag entry cannot collide with
+     a column. ⚠ `layout` and `slug` are deliberately NOT tracked — a layout row is written on every
+     card drag. The count is the claim (`service-revisions.test.ts`), and INVARIANTS §9 states the
+     two granularities in one bullet that refuses to describe them with one sentence.
+  2. **ASSOCIATIONS — decided the FIRST way: they ride the parent row, and the CHECK did not grow.**
+     `payload.association` (`relationship` | `membership` | `share` | `anchor`) with `op:"edit"`,
+     filed on the OBJECT (a share on the CLUSTER). `link`/`unlink` would have needed the migration's
+     `op` CHECK widened for no gain: `dopl_revision_readable` already fences both ontology arms, and
+     an edge has no id a reader could ask history about.
+  3. **THE SEAL RULE — decided the SECOND way: ontology writes NEVER coalesce**
+     (`revisions/server/service.ts › COALESCING_RESOURCE_TYPES`). Keying the window on
+     `(resource, field)` was refused: a field change is already atomic, so the window would buy
+     nothing and cost a rule with two arms.
+  4. **THE CLUSTER ROLL-UP** is `service-revisions-read.ts › listClusterRevisions`, narrowed by the
+     cluster's own membership walk (`service-reads.ts › walkAdmittedClusters`, exported for it) —
+     the same "the id set is the fence" the base roll-up uses.
+- **NO MIGRATION.** The `revisions` table, its two ontology `resource_type` arms and
+  `dopl_revision_readable`'s `CASE` were already right; the two arms now answer about real rows,
+  which is what the finding said was missing.
 
 ### F-687 — the base page's inline description editor lost its only mount when Changelog replaced Contents (2026-09-09)
+
+- ⚠ **AND IT LEFT A RED SUITE BEHIND, FOUND 2026-09-09 BY PART 2**:
+  `apps/desktop-ui/src/pages/home/knowledge-base-view.test.tsx › rests on the base's INFO face`
+  still asserted `getByText("Contents")`. Part 1 updated the section's OWN suite
+  (`knowledge-v2/detail/detail-panel.test.tsx`) and not the desktop one, which mounts the same
+  face through `HomePage`. Fixed in the same change as part 2 — the assertion now names
+  **Changelog** — but the LESSON is the one this log keeps recording: **a face with two consumers
+  needs both suites re-run, and `npm test -w @dopl/desktop-ui` is not chained by
+  `npm run test:all`** (CLAUDE.md's "definition of green").
 
 - Locations: `src/features/knowledge/components/knowledge-v2/detail/base-overview.tsx` (which now
   mounts `./overview-changelog.tsx`), and the two modules left in the tree with no importer:

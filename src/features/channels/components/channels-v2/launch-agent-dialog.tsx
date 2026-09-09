@@ -12,75 +12,57 @@
  * instead of a dropdown, I think it should be a selector … and for model … a pill like selector …
  * Make the dimensions that of the 30px."*
  *
- * ⚠ **HE RULED IT IN THE SAME DAY, AND THE RECIPE LEFT THIS FILE**
- * (`shared/ui/form-dialog.tsx`). Samuel: *"i want to start conforming all pop ups to the UI of
- * the one we just made, we should make a design system for this."* The shell, the section label,
- * the underline field, the pill row and the footer pair are the KIT's now, and the CSS module
- * moved with them verbatim; what is left here is this dialog's own five rows and its launch lane.
- * **`launch-agent-dialog.test.tsx` passes UNEDITED across that move, and that is the proof it
- * cost nothing** — a visual change would have shown up as a class or a role that stopped matching.
+ * ⚠ **THE RECIPE LEFT THIS FILE THE SAME DAY** (`shared/ui/form-dialog.tsx`). Samuel: *"i want to
+ * start conforming all pop ups to the UI of the one we just made, we should make a design system
+ * for this."* Shell, section label, underline field, pill row and footer pair are the KIT's; what
+ * is left here is this dialog's five rows and its launch lane.
  * ⚠ **THE SLIDE-OUT IS STILL IN THE TREE.** `composer-launch-panel.tsx` is unreferenced from the
- * Bot icon and is otherwise untouched — `runtime-refusals.test.tsx` still mounts
- * `AgentLaunchPanelView` directly, so the old face keeps its own pins until Samuel rules.
+ * Bot icon and keeps its own pins (`runtime-refusals.test.tsx`) until Samuel rules.
  * **Delete it when he does; do not let two launch forms live.**
  *
- * ⚠ **NOTHING ABOUT THE LAUNCH LANE CHANGED, AND THAT IS THE POINT OF REUSING
- * {@link useLaunchRunner}.** The act is still `use-agent-launch.ts › launchWithIdentity` —
- * spawn, then rename, then describe, with the pre-assigned id on the fourth argument and the
- * foreign-template question answered by the same modal. This file is a FACE. If a payload
- * assertion in `composer-launch.test.tsx` ever has to change to accommodate it, the change is
- * wrong: `launch-agent-dialog.test.tsx › the payload is the slide-out's, byte for byte` is the
- * standing proof that it did not.
+ * ⚠ **NOTHING ABOUT THE LAUNCH LANE CHANGED — the point of reusing {@link useLaunchRunner}.** The
+ * act is still `use-agent-launch.ts › launchWithIdentity`. This file is a FACE: if a payload
+ * assertion in `composer-launch.test.tsx` ever has to change for it, the change is wrong.
  *
- * ⚠ **THE SUBMIT MOVED BACK INSIDE THE FORM, AND THAT SUPERSEDES THE 2026-08-27 RULING** that
- * the panel *"carries NO submit of its own — one control, context-labeled"*. That rule was about
- * two submits on ONE CARD; a modal is not on the composer's card, and a dialog whose verb lived
- * in the surface behind its own scrim would be unreachable. The composer's send control is
- * therefore plain "Send" again while this is open — there is still exactly one Launch on screen.
+ * ⚠ **THE SUBMIT MOVED BACK INSIDE THE FORM, SUPERSEDING THE 2026-08-27 RULING** that the panel
+ * *"carries NO submit of its own — one control, context-labeled"*. That rule was about two submits
+ * on ONE CARD; a dialog whose verb lived behind its own scrim would be unreachable. The composer's
+ * control is plain "Send" while this is open — still exactly one Launch on screen.
  *
- * ⚠ **THE RUNTIME ROW SITS UNDER MODEL HERE**, where the slide-out put it between Template and
- * Model on the stated grounds that it *"decides what the two rows under it mean"*. Samuel's
- * ordering for the popup is Name, Description, Template, Model, Runtime.
+ * ⚠ **THE RUNTIME ROW SITS UNDER MODEL HERE.** The slide-out put it between Template and Model
+ * because it *"decides what the two rows under it mean"*; Samuel's popup ordering is Name,
+ * Description, Template, Model, Runtime.
  *
- * ⚠ **THE ROW NO LONGER OFFERS "CHANNEL DEFAULT", AND THIS SPAWN'S RUNTIME IS ALWAYS ON THE WIRE
- * (2026-09-08, Samuel).** His words: *"for runtime, there shouldn't be a channel default. I don't
- * even know what the logic behind that is, but can we unwire that? It should just be what the user
- * is already connected to, right? … Nobody knows what channel default is."* So the options are the
- * runtimes THIS DESKTOP REPORTED — `use-channel-launch-posture.ts › runtimes`, the descriptor table
- * `main/channel-dir-ipc.js › channels:getLaunchPosture` puts on the read — and the selection is
- * always sent. **One reported runtime still RENDERS the row**, holding one selected pill: the
- * operator sees what will run rather than inferring it.
+ * ⚠ **NO "CHANNEL DEFAULT", AND THIS SPAWN'S RUNTIME IS ALWAYS ON THE WIRE (2026-09-08, Samuel).**
+ * *"for runtime, there shouldn't be a channel default. I don't even know what the logic behind
+ * that is, but can we unwire that? It should just be what the user is already connected to, right?
+ * … Nobody knows what channel default is."* Options are the runtimes THIS DESKTOP REPORTED
+ * (`use-channel-launch-posture.ts › runtimes`), and the selection is always sent. **One reported
+ * runtime still RENDERS the row**, so the operator sees what will run.
  *
- * ⚠ **EVERY REPORTED RUNTIME IS AN OPTION, CONNECTED OR NOT — AND THAT SUPERSEDES THE PASS THAT
- * NARROWED THIS ROW TO THE CONNECTED ONES (2026-09-08, Samuel's correction).** Verbatim, because
- * it is the whole of the rule: *"No, even if the user does not have codex or cursor connected, I
- * still want them to be options there so that the user knows that those are options, so they can
- * connect them. It should just be logged in, like it is just put in their default, right? I did not
- * say to remove them."* So THREE pills on every desktop that registers three adapters. What
- * connectivity buys is (a) the muted **"not connected"** hint on the ones that would not start
- * today and (b) the PRESELECT landing on one that would. ⚠ **AN UNCONNECTED PILL STAYS
- * SELECTABLE** — hide-never-gray's own logic reversed for a reason it does not cover: this is not
- * a capability the runtime lacks, it is a setup step the operator can go do, and `acquire`'s
- * spawn-time refusal already explains the failure in the operator's own words.
+ * ⚠ **EVERY REPORTED RUNTIME IS AN OPTION, CONNECTED OR NOT — SUPERSEDING THE PASS THAT NARROWED
+ * THIS ROW TO THE CONNECTED ONES (2026-09-08, Samuel's correction):** *"No, even if the user does
+ * not have codex or cursor connected, I still want them to be options there so that the user knows
+ * that those are options, so they can connect them. It should just be logged in, like it is just
+ * put in their default, right? I did not say to remove them."* Connectivity buys only (a) the muted
+ * **"not connected"** hint and (b) where the PRESELECT lands. ⚠ **AN UNCONNECTED PILL STAYS
+ * SELECTABLE** — a setup step, not a missing capability, and `acquire`'s spawn-time refusal
+ * explains the rest.
  *
  * ⚠ **THE PRESELECT IS A FOUR-LINK CHAIN AND EACH LINK IS LOAD-BEARING** ({@link pickRuntime}):
- * the operator's own pick → the channel's stored pick IF it is connected (or if this desktop did
- * not say) → the first CONNECTED reported runtime → the first reported. Link 2's guard is the
- * correction's *"it should just be what the user is already connected to"*; link 2's `or` is
- * INVARIANTS §8's direction — an older desktop that reports no connectivity must behave exactly
- * as it did before this change rather than having its stored pick silently overruled. Link 4 is
- * the "nothing is connected" floor: the row still names one runtime, because a launch still runs
- * on one. `defaultRuntime` is deliberately not consulted — `main/runtime/index.js › DEFAULT_ID` is
- * the first registered adapter by construction, so it is link 4 already, and a second authority
- * here could only ever disagree with the pill the operator is looking at.
+ * the operator's own pick → the channel's stored pick IF connected (or if this desktop did not
+ * say) → the first CONNECTED reported runtime → the first reported. Link 2's guard is the
+ * correction's *"it should just be what the user is already connected to"*; its `or` is INVARIANTS
+ * §8 — an older desktop reporting no connectivity keeps its stored pick. Link 4 is the
+ * nothing-is-connected floor. `defaultRuntime` is deliberately not consulted: `main/runtime/
+ * index.js › DEFAULT_ID` IS link 4 by construction, and a second authority could only disagree
+ * with the pill on screen.
  *
  * ⚠ **NOTHING IS REPORTED ⇒ NO ROW AND NO RUNTIME KEY** — a plain browser, and every desktop older
- * than the adapter port (`runtimeSupported` false). That is today's omitted-key behaviour,
- * unchanged, and it is the only lane left where this popup sends no runtime (INVARIANTS §11 —
- * UNKNOWN is not EMPTY).
- * ⚠ **THE CHANNEL-LEVEL POSTURE ITSELF IS UNTOUCHED.** The Settings tab still writes it and
- * `main/session-launch-op.js`'s chain still reads it for every launch that carries no runtime
- * (MCP's included). This popup stopped OFFERING it; it did not delete it.
+ * than the adapter port (`runtimeSupported` false). The only lane left where this popup sends no
+ * runtime (INVARIANTS §11 — UNKNOWN is not EMPTY).
+ * ⚠ **THE CHANNEL-LEVEL POSTURE ITSELF IS UNTOUCHED** — Settings still writes it and
+ * `main/session-launch-op.js` still reads it for launches carrying no runtime (MCP's included).
  */
 
 import { useEffect, useMemo } from "react";
@@ -121,10 +103,9 @@ export function LaunchAgentDialog({
   openThreadId: string | null;
   channelId: string;
   /**
-   * The template roster's one input. ⚠ `null` IS A REAL ANSWER AND IT IS NOT AN EMPTY ROSTER —
-   * it is "this caller has no workspace to list", so the read is not made at all and the Template
-   * row holds Blank agent alone (the Agents tab's own feature-detected degradation, applied to a
-   * READ: a list with no container to read can only be empty).
+   * The template roster's one input. ⚠ `null` IS A REAL ANSWER AND NOT AN EMPTY ROSTER — it is
+   * "this caller has no workspace to list", so the read is not made and the Template row holds
+   * Blank agent alone.
    */
   workspaceId: string | null;
   /** Whose templates wear NO marker — everyone else's wear one. */
@@ -164,8 +145,7 @@ export function LaunchAgentDialog({
   /**
    * 🔒 THE MARKER IS ATTACHED BESIDE THE READ, so no arm of this renders a template without one
    * (ledger ASK-21, INVARIANTS §5A). It rides `hint`, which `SegmentedControl` renders INSIDE
-   * the option button — so it reaches the accessible name as well as the face, the same two
-   * places the retired `SelectMenu` row put it.
+   * the option button — so it reaches the accessible name as well as the face.
    */
   const templateOptions = useMemo(
     () => [
@@ -207,14 +187,12 @@ export function LaunchAgentDialog({
   );
 
   /**
-   * WHAT THIS SPAWN WILL RUN ON — one descriptor, and it is the SELECTION, the refusal sentence
-   * and the payload all at once. ⚠ ONE OBJECT ON PURPOSE: a row that selected one runtime while
-   * the warning read another's refusals is the exact failure `runtime-capability.ts › descriptorFor`
-   * exists to prevent, and now that the pick is always sent it would also be a payload nobody saw.
-   * ⚠ THE OPERATOR'S OWN PICK OUTRANKS THE CHANNEL'S, which is main's order (`p.runtime >
-   * getChannelRuntime`) with the fall-through arm removed rather than reordered — and since
-   * Samuel's 2026-09-08 correction the channel's pick yields to CONNECTIVITY when this desktop
-   * reported any. {@link pickRuntime} is the whole chain and the header is its argument.
+   * WHAT THIS SPAWN WILL RUN ON — one descriptor that is the SELECTION, the refusal sentence and
+   * the payload at once. ⚠ ONE OBJECT ON PURPOSE: a row selecting one runtime while the warning
+   * read another's refusals is what `runtime-capability.ts › descriptorFor` exists to prevent.
+   * ⚠ THE OPERATOR'S OWN PICK OUTRANKS THE CHANNEL'S — main's order (`p.runtime >
+   * getChannelRuntime`) with the fall-through removed, and since Samuel's 2026-09-08 correction
+   * the channel's pick yields to CONNECTIVITY. {@link pickRuntime} is the whole chain.
    */
   const effectiveRuntime = useMemo(
     () => pickRuntime(runtimes, panel.runtime, posture.runtime, connected, connectedKnown),
@@ -228,13 +206,11 @@ export function LaunchAgentDialog({
    * THE SELECTION IS WRITTEN BACK INTO THE PANEL, so the pill on screen and the argument on the
    * wire are ONE value (`use-agent-launch.ts › launchWithIdentity` sends `panel.runtime`).
    *
-   * ⚠ THIS IS NOT THE MODEL ROW'S FORBIDDEN MOVE, AND THE DIFFERENCE IS THE RULING. The model row
-   * must NOT write its resolved id back, because `''` there means "follow the channel's setting"
-   * and stamping it would freeze a per-spawn copy of a setting the operator never touched. The
-   * runtime row no longer HAS that meaning: Samuel removed the fall-through, so `''` would be a
-   * spawn with no runtime named on a machine that named three.
-   * ⚠ IT RUNS ONLY WHILE OPEN, and `reset()` clears the field on close — a dialog reopened after
-   * the channel's pick moved re-derives rather than remembering the last one.
+   * ⚠ NOT THE MODEL ROW'S FORBIDDEN MOVE, AND THE DIFFERENCE IS THE RULING: `''` in the model row
+   * means "follow the channel's setting", so stamping it would freeze a per-spawn copy. The
+   * runtime row no longer has that meaning — Samuel removed the fall-through.
+   * ⚠ IT RUNS ONLY WHILE OPEN, and `reset()` clears the field on close, so a dialog reopened after
+   * the channel's pick moved re-derives.
    */
   useEffect(() => {
     if (!panel.open || !selectedRuntime || panel.runtime === selectedRuntime) return;
@@ -299,13 +275,11 @@ export function LaunchAgentDialog({
           className="flex-wrap"
         />
 
-        {/* ⚠ NO ROW WHERE THIS DESKTOP REPORTED NO RUNTIME — a plain browser, and every desktop
-            older than the adapter port. The same no-dead-rows rule the Settings tab's row follows.
+        {/* ⚠ NO ROW WHERE THIS DESKTOP REPORTED NO RUNTIME — the no-dead-rows rule.
             ⚠ ONE REPORTED RUNTIME STILL RENDERS IT (Samuel, 2026-09-08): a single selected pill is
             how the operator SEES what their launch will run on.
-            ⚠ AND EVERY REPORTED RUNTIME IS A LIVE, SELECTABLE PILL — the unconnected ones wear the
-            hint and nothing else. NOT `disabled`: an unconnected runtime is a setup step, not a
-            capability the platform lacks, and the launch's own refusal says the rest. */}
+            ⚠ EVERY REPORTED RUNTIME IS A LIVE, SELECTABLE PILL — unconnected ones wear the hint and
+            nothing else, NOT `disabled`: a setup step, not a capability the platform lacks. */}
         {runtimes.length > 0 && (
           <PillChoice
             label="Runtime"
@@ -326,9 +300,8 @@ export function LaunchAgentDialog({
           </p>
         )}
 
-        {/* ⚠ A REFUSAL IS SAID OUT LOUD, HERE, because nothing else will: main answering
-            `{ok:false}` changes nothing on its side, so no push follows to explain the button
-            that visibly did nothing. */}
+        {/* ⚠ A REFUSAL IS SAID OUT LOUD HERE because nothing else will: main answering
+            `{ok:false}` pushes nothing to explain the button that visibly did nothing. */}
         {newAgent?.launchError && (
           <p role="alert" className="text-caption text-danger">
             {newAgent.launchError}
@@ -344,10 +317,9 @@ export function LaunchAgentDialog({
 
       </FormDialog>
 
-      {/* ⚠ A FOREIGN TEMPLATE'S FIRST RUN ON THIS MACHINE IS A QUESTION, NOT A FAILURE, and it
-          is a SECOND dialog rather than a region inside this one: it shows instructions another
-          member wrote, and nesting them in the form the operator is filling in is how untrusted
-          text comes to look like part of Dopl's own chrome. */}
+      {/* ⚠ A FOREIGN TEMPLATE'S FIRST RUN ON THIS MACHINE IS A QUESTION, NOT A FAILURE, and a
+          SECOND dialog rather than a region inside this one: nesting another member's instructions
+          in the form the operator is filling in is how untrusted text becomes Dopl's chrome. */}
       <TemplateApprovalDialog
         open={runner.approval !== null}
         request={runner.approval}

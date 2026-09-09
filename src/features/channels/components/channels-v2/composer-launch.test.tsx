@@ -2,22 +2,19 @@
 /**
  * THE COMPOSER'S LAUNCH PANEL — the Bot icon's whole surface (2026-08-27, Samuel's ruling).
  *
- * ⚠ THE TEMPLATE CHEVRON'S PINS ARE DELETED WITH THE CHEVRON, stated rather than absorbed. Five
- * cases stood here (one-click blank launch, the picker opening from the chevron, the chevron not
- * opening the thread panel, no chevron without the bridge, the chevron disabled mid-launch).
- * **The act they protected moved into the form**, and each has a replacement below.
- * ⚠ AND THE FORM IS A CENTERED POPUP SINCE 2026-09-08 (`launch-agent-dialog.tsx`). The Bot icon
- * and the launch lane are unchanged; the submit and the two exits now live in the dialog.
+ * ⚠ THE TEMPLATE CHEVRON'S PINS WENT WITH THE CHEVRON; the act they protected moved into the
+ * FORM, and each has a replacement below. ⚠ AND THE FORM IS A CENTERED POPUP SINCE 2026-09-08
+ * (`launch-agent-dialog.tsx`) — the Bot icon and the launch lane are unchanged; the submit and
+ * the two exits now live in the dialog.
  *
  * The properties this file exists for, all of which fail SILENTLY:
  *
- *  - **THE ID THE FORM SHOWS IS THE ID THE AGENT GETS.** Pre-assigned before the spawn
- *    (`sessions.mintAgentId`) and carried on the launch; drop it and the operator reads an
- *    address that reaches nobody — so the payload assertion is on the VALUE.
+ *  - **THE ID THE FORM SHOWS IS THE ID THE AGENT GETS** — pre-assigned before the spawn
+ *    (`sessions.mintAgentId`) and carried on the launch, so the payload assertion is on the VALUE.
  *  - **THE OLD-DESKTOP ARM SHOWS NOTHING RATHER THAN A GUESS.** A build with no `mintAgentId`
- *    cannot honour a pre-assigned id either, and a panel that invented one would be lying about
- *    the one string the operator is meant to quote.
- *  - **SPAWN-IDLE SURVIVES.** The description is METADATA, not a first turn. A launch that sent
+ *    cannot honour a pre-assigned id either, and an invented one would lie about the one string
+ *    the operator is meant to quote.
+ *  - **SPAWN-IDLE SURVIVES.** The description is METADATA, not a first turn; a launch that sent
  *    one would wake every agent and retire ruling 3 by accident.
  *  - **NAME AND DESCRIPTION ARE WRITTEN AFTER THE SPAWN**, keyed to the address main returned.
  *
@@ -216,10 +213,9 @@ describe("the Bot icon opens a panel — it no longer launches on the click", ()
 
 describe("the ID is assigned before the spawn", () => {
   it("mints EXACTLY ONCE per open, and the prefill is THAT id", async () => {
-    // ⚠ THE BUG THIS PINS (Samuel, 2026-08-27, from a screenshot reading Name `#k3wpf7c5`
-    // over ID `uyxw3rdv`): the mint lived inside the `setOpen` UPDATER. A state updater must be
-    // pure — React runs it twice under StrictMode and again on any rebase — so two ids were drawn.
-    // The second won `agentId`; the prefill guard was already false and kept the FIRST id's name.
+    // ⚠ THE BUG THIS PINS (Samuel, 2026-08-27, from a screenshot reading Name `#k3wpf7c5` over
+    // ID `uyxw3rdv`): the mint lived inside the `setOpen` UPDATER, which React runs twice under
+    // StrictMode, so two ids were drawn — the second won `agentId`, the first kept the name.
     // ⚠ MUTATION-PROOF: put the mint back inside the updater and the CALL COUNT fails here.
     mountStrict({ newAgent: launcher() });
     await openPanel();
@@ -238,9 +234,8 @@ describe("the ID is assigned before the spawn", () => {
   });
 
   it("shows the id NOWHERE — Name is the only identity field (Samuel, 2026-08-27)", async () => {
-    // ⚠ THE ID DID NOT GO AWAY, THE ROW DID. It is still minted, still forwarded, still what
-    // disambiguates two agents an operator gave the same name — it is simply not a field the
-    // operator reads. `queryByLabelText` covers a row that comes back wearing a different label.
+    // ⚠ THE ID DID NOT GO AWAY, THE ROW DID — still minted, still forwarded, simply not a field
+    // the operator reads. `queryByLabelText` covers a row returning under a different label.
     mount({ newAgent: launcher() });
     // ⚠ AWAITED, NOT FIRED-AND-QUERIED: `ModalShell` mounts on a rAF, so a synchronous query
     // after the click would pass over a row that is there.
@@ -324,11 +319,9 @@ describe("what Launch puts on the wire", () => {
   });
 
   it("a CHOSEN template rides as its id — the chevron's job, in a row", async () => {
-    // ⚠ `createdBy: ME` so the row wears NO authorship marker and its accessible
-    // name is the bare template name. A foreign template's name carries "by …"
-    // since 2026-08-30 (ledger ASK-21) — that is `composer-launch-marker.test.tsx`'s
-    // subject, and pinning it here too would make this case fail for a reason
-    // that has nothing to do with what rides the wire.
+    // ⚠ `createdBy: ME` so the row wears NO authorship marker and its accessible name is the
+    // bare template name — the marker is `composer-launch-marker.test.tsx`'s subject (ledger
+    // ASK-21, 2026-08-30), and pinning it here would fail this case for the wrong reason.
     templateList.templates = [
       { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];

@@ -1,15 +1,13 @@
 // THE TEMPLATE LAUNCH LANE — `main/session-launch-op.js` + `main/template-resolve.js`.
 // (2026-08-22, the agent-templates wave, spec §3b/§3c/§3d.)
 //
-// ⚠ NOTHING IN THE TREE PINNED THIS PAYLOAD'S SHAPE BEFORE THIS FILE.
-// `test/preload-parity.test.mjs` pins OP NAMES, not payloads, so adding a field to
-// `sessions:launch` was invisible to every existing suite. This is that pin, plus the failure
-// table the spec spells F-1…F-6 and the model precedence chain.
+// ⚠ NOTHING PINNED THIS PAYLOAD'S SHAPE BEFORE THIS FILE — `test/preload-parity.test.mjs` pins OP
+// NAMES, not payloads, so a new field on `sessions:launch` was invisible to every suite. This is
+// that pin, plus the F-1…F-6 failure table and the model precedence chain.
 //
-// METHOD: the SHIPPED launch body, evaluated against a stub `require` and driven for real. The
-// transport is faked at exactly ONE seam (`./api › apiFetch`), because everything above it —
-// the refusal mapping, the narrowing whitelist, the approval gate, the precedence chain — is
-// what is under test.
+// METHOD: the SHIPPED launch body, driven for real over a stub `require`, with the transport faked
+// at exactly ONE seam (`./api › apiFetch`) — the refusal mapping, the narrowing whitelist, the
+// approval gate and the precedence chain are what is under test.
 //
 // Run: `node --test dopl-desktop-app/test/session-launch-template.test.mjs`
 
@@ -138,9 +136,9 @@ test("F-1 / F-2: a 404 REFUSES with `no-template` — deleted and invisible are 
   assert.equal(m.launches.length, 0, "REFUSE, never degrade to a blank agent");
 });
 
-// ⚠ T35 — THE WORD DOES NOT MOVE (one `reason` for all three causes); only the SERVER's own classification
-// travels; anything that is not TWO NON-EMPTY STRINGS falls to the plain 404. `main/template-resolve.js ›
-// resolveTemplate` carries why that is not an oracle; `undefined` below is a non-envelope body (an older server).
+// ⚠ T35 — THE WORD DOES NOT MOVE (one `reason` for all three causes); only the SERVER's own
+// classification travels, and anything that is not TWO NON-EMPTY STRINGS falls to the plain 404
+// (`template-resolve.js › resolveTemplate` carries why that is not an oracle).
 test("T35: a classified 404 carries the place; every other 404 is byte-identical to before", async () => {
   const shelf = { name: "Code Auditor", label: "your personal shelf" }, at = (el) => boot({ status: 404, body: el === undefined ? undefined : { error: { details: { elsewhere: el } } } });
   assert.deepEqual(await at(shelf).resolve.resolveTemplate(TPL, WS), { ok: false, reason: "no-template", elsewhere: shelf });
@@ -221,15 +219,14 @@ test("the payload is NARROWED to a literal whitelist — a new server field is D
   const m = boot({ body: { ...RESOLVED, createdBy: "user-9", id: TPL, visibility: "team" } });
   await m.launchFromButton(payload({ templateId: TPL }));
   const t = m.launches[0].context.template;
-  // ⚠ SEVEN SINCE 2026-09-05 (`unreachableKnowledgeBaseCount`), EIGHT SINCE 2026-09-08
-  // (`knowledge` — `launch-template-scopes.test.mjs` owns that narrowing). The pin moved both
-  // times; the list is still CLOSED, and the drop of `createdBy`/`id`/`visibility` IS the case.
+  // ⚠ EIGHT SINCE 2026-09-08 (`knowledge` — `launch-template-scopes.test.mjs` owns that
+  // narrowing). The list is CLOSED; dropping `createdBy`/`id`/`visibility` IS the case.
   assert.deepEqual(Object.keys(t).sort(), [
     "authoredByCaller", "fields", "instructions", "knowledge", "knowledgeBases", "model", "name",
     "unreachableKnowledgeBaseCount",
   ]);
-  // ⚠ OWNERSHIP INFORMATION MUST NOT RIDE A LAUNCH PAYLOAD. `authoredByCaller` is a COMPUTED
-  // BOOLEAN precisely so a raw creator id never has to.
+  // ⚠ OWNERSHIP MUST NOT RIDE A LAUNCH PAYLOAD — `authoredByCaller` is a COMPUTED boolean
+  // precisely so a raw creator id never has to.
   assert.equal("createdBy" in t, false);
 });
 
@@ -369,11 +366,9 @@ test("override key / value bounds are the schema's own numbers, applied here too
   assert.equal(f.value.length, 1000);
 });
 
-// ⚠ **AND THE SAME NUMBERS APPLY TO WHAT COMES OFF THE WIRE** (F-287). `narrow` used to clip every
-// label half at one `MAX_LABEL = 200`, under a comment claiming "names, keys and values are
-// SAFE_LABEL_RE-bounded well inside this" — false for `value`, whose schema bound is 1000. A
-// boundary bound that UNDERCUTS the writer's is not caution: the operator can neither see it nor
-// satisfy it, and the disagreement always resolves against them.
+// ⚠ **AND THE SAME NUMBERS APPLY TO WHAT COMES OFF THE WIRE** (F-287): one shared `MAX_LABEL = 200`
+// in `narrow` undercut `value`'s schema bound of 1000, and a boundary bound that undercuts the
+// writer's is a limit the operator can neither see nor satisfy.
 test("the RESOLVED template's bounds are the server's own, field by field (F-287)", async () => {
   const m = boot({
     body: {
@@ -467,18 +462,15 @@ test("`context.template` rides the funnel's LITERAL WHITELIST and survives park/
   assert.match(read("session-seed.js"), /context: \{ \.\.\.\(\(s && s\.context\) \|\| \{\}\), profile: s\.profile \}/);
 });
 
-// ⚠ **AND A CRASH RESUME IS THE OTHER HALF, WHICH THE ARCHITECTURE DID *NOT* GIVE FOR FREE**
-// (F-288, 2026-08-23). The case above is about `resumeParked`, which works IN PLACE. `startResume`
-// is a full re-`startSession` off a DURABLE RECORD, and the durable projection is a literal
-// whitelist — so `context.template`, a spawn-time capture living only on the live session object,
-// was simply absent after a crash. INVARIANTS §5A asserted the in-place argument for BOTH, which
-// is how the gap survived: the doc named the one lane where the claim was true.
+// ⚠ **AND A CRASH RESUME IS THE OTHER HALF, NOT FREE** (F-288, 2026-08-23). Above is `resumeParked`,
+// which works IN PLACE; `startResume` re-`startSession`s off a DURABLE RECORD whose projection is a
+// literal whitelist, so `context.template` — a spawn-time capture on the live object — was simply
+// absent after a crash. §5A asserted the in-place argument for BOTH, which is how the gap survived.
 //
 // ⚠ THREE FILES HAVE TO AGREE OR THE FIELD SILENTLY NEVER ARRIVES — the projection
-// (`session-io.js › baseRecord`), the store whitelist (`session-store.js ›
-// durableSessionRecord`), and the rehydrate (`session-park.js › contextFromRecord`). Two out of
-// three is a value that is written and never read, or read and never written; either way the
-// symptom is the same null. `session-park-resume-profile.test.mjs` drives the resume end of it.
+// (`session-io.js › baseRecord`), the store whitelist (`session-store.js › durableSessionRecord`)
+// and the rehydrate (`session-park.js › contextFromRecord`). Two of three is a value written and
+// never read, or read and never written; the symptom is the same null either way.
 test("F-288: the template NAME is projected, whitelisted and rehydrated — all three", () => {
   assert.match(read("session-io.js"),
     /templateName: \(s\.context && s\.context\.template && s\.context\.template\.name\) \|\| null/,

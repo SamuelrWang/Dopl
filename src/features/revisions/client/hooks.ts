@@ -4,7 +4,15 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Revision, RevisionDay } from "../types";
 import { groupByDay } from "../lib/group";
-import { fetchBaseRevisions, fetchEntryRevisions, restoreEntryRevision } from "./api";
+import {
+  fetchBaseRevisions,
+  fetchEntryRevisions,
+  fetchOntologyClusterRevisions,
+  fetchOntologyObjectRevisions,
+  restoreEntryRevision,
+  restoreOntologyObjectRevision,
+  type RevisionPageArgs,
+} from "./api";
 
 /**
  * The changelog's reads, on TanStack Query.
@@ -17,9 +25,29 @@ import { fetchBaseRevisions, fetchEntryRevisions, restoreEntryRevision } from ".
  * the arithmetic and no pair to keep in sync.
  */
 
+/**
+ * WHICH history this hook reads. ⚠ FOUR ARMS, ONE HOOK — the ontology surfaces
+ * (2026-09-09, part 2) mount the SAME list as the knowledge ones, so a second
+ * hook beside this would be a second place the page accumulation, the day
+ * grouping and the refetch rule could drift.
+ */
 export type RevisionScope =
   | { kind: "entry"; id: string }
-  | { kind: "base"; id: string };
+  | { kind: "base"; id: string }
+  | { kind: "ontology_object"; id: string }
+  | { kind: "ontology_cluster"; id: string };
+
+/** ⚠ ONE MAP, so adding a family is one line rather than a branch in each of the
+ *  two places a page is fetched (the first query and `loadMore`). */
+const FETCHERS: Record<
+  RevisionScope["kind"],
+  (id: string, args: RevisionPageArgs) => Promise<{ revisions: Revision[]; nextCursor: string | null }>
+> = {
+  entry: fetchEntryRevisions,
+  base: fetchBaseRevisions,
+  ontology_object: fetchOntologyObjectRevisions,
+  ontology_cluster: fetchOntologyClusterRevisions,
+};
 
 export interface RevisionHistory {
   days: RevisionDay[];
@@ -51,10 +79,7 @@ export function useRevisionHistory(
   const query = useQuery({
     queryKey: ["revisions", key],
     enabled: key !== null,
-    queryFn: () =>
-      scope!.kind === "entry"
-        ? fetchEntryRevisions(scope!.id, { workspaceId })
-        : fetchBaseRevisions(scope!.id, { workspaceId }),
+    queryFn: () => FETCHERS[scope!.kind](scope!.id, { workspaceId }),
   });
 
   const firstPage = query.data;
@@ -69,10 +94,7 @@ export function useRevisionHistory(
   const loadMore = useCallback(() => {
     if (!scope || !nextCursor || loadingMore) return;
     setLoadingMore(true);
-    const load =
-      scope.kind === "entry"
-        ? fetchEntryRevisions(scope.id, { workspaceId, cursor: nextCursor })
-        : fetchBaseRevisions(scope.id, { workspaceId, cursor: nextCursor });
+    const load = FETCHERS[scope.kind](scope.id, { workspaceId, cursor: nextCursor });
     void load
       .then((page) => {
         setExtraPages((prev) => [...prev, ...page.revisions]);
@@ -113,6 +135,24 @@ export function useRestoreRevision(entryId: string | null, workspaceId?: string)
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["revisions"] });
       void queryClient.invalidateQueries({ queryKey: ["knowledge"] });
+    },
+  });
+}
+
+/**
+ * Restore ONE FIELD of an ontology object. ⚠ INVALIDATES BOTH the changelog and
+ * the ontology snapshot, for the reason the knowledge twin invalidates: the
+ * write appends a revision the client cannot construct, and it moves a value the
+ * board is rendering.
+ */
+export function useRestoreOntologyRevision(workspaceId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ objectId, revisionId }: { objectId: string; revisionId: string }) =>
+      restoreOntologyObjectRevision(objectId, revisionId, workspaceId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["revisions"] });
+      void queryClient.invalidateQueries({ queryKey: ["ontology-snapshot"] });
     },
   });
 }

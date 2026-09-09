@@ -4,11 +4,9 @@
  * `useChannelMessages` suite drives.
  *
  * ⚠ **SPLIT OUT OF `use-channel-messages.test.tsx` ON 2026-09-08**, at the
- * 500-line cap (INVARIANTS §1), when the line-budget paging wave added its own
- * suite. Two files asserting different rules over ONE mount is the reason this
- * is a module rather than a copy: a fixture retyped in the second file is a
- * second definition of what "one page" looks like, which is exactly the drift
- * that wave was about. The precedent is `server/service-wake-verdict-harness.ts`.
+ * 500-line cap (INVARIANTS §1). A module rather than a copy because a fixture
+ * retyped in the second suite is a second definition of what "one page" looks
+ * like. Precedent: `server/service-wake-verdict-harness.ts`.
  *
  * ⚠ **NOT A `.test.` FILE, ON PURPOSE** — `vitest.config.ts › include` matches
  * only `.test.ts` / `.test.tsx`, so this name keeps a file with no `it()` out of

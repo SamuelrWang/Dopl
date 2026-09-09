@@ -18,10 +18,8 @@ import {
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     // `thread` is a FILTER on metadata.taskId, not a lookup: an id nothing carries returns [].
-    // The await path deliberately has no counterpart.
     // ⚠ `parseQuery` reads ONLY the keys named here — a param added to the
     // schema and forgotten in this list parses as absent, silently, forever.
-    // `before` is the transcript's backward page cursor.
     const query = parseQuery(request.nextUrl.searchParams, MessageReadQuerySchema, [
       "since",
       "before",
@@ -33,16 +31,13 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     ]);
     const ctx = buildChannelContext(auth);
     // ⚠ **`entries` RIDES BESIDE `messages`, AND IS ABSENT UNLESS THE PAGE
-    // ACTUALLY FOLDED** (artifacts #1220 §4, 2026-09-06). `messages` is
-    // unchanged and complete, so an artifact-unaware client — an installed
-    // desktop, an older web build — renders the run exactly as it did before
-    // instead of losing rows to a card it cannot draw. A card-aware renderer
-    // reads `entries` when present. `null` here means "nothing on this page is
-    // in an artifact", never "this server cannot fold".
+    // ACTUALLY FOLDED** (artifacts #1220 §4, 2026-09-06). `messages` stays
+    // complete so an artifact-unaware client renders the run as before; `null`
+    // means "nothing on this page is in an artifact", never "cannot fold".
     // ⚠ **`hasMore` IS ALWAYS ON THE WIRE, AND THE CLIENT MUST NOT RE-DERIVE IT**
     // (2026-09-08). A line-budgeted page is SHORT BY DESIGN, so the usual
     // `rows.length === pageSize` test would report a channel of long messages as
-    // exhausted on its first page and hide the rest of its history.
+    // exhausted on its first page.
     const { messages, entries, hasMore } = await readTranscript(
       ctx,
       requireChannelId(auth.params),
@@ -60,10 +55,9 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, ChannelMessageCreateSchema);
     const ctx = buildChannelContext(auth);
-    // ⚠ The envelope carried a second key, `threadClosed`, until thread closing was removed
-    // (wiring plan Phase 4, 2026-08-18). Its shape is the rule worth keeping: a notice about
-    // THIS POST rather than a field of the message rides in the ENVELOPE, never inside
-    // `message`, because a READ of the same row could never carry it.
+    // ⚠ The envelope carried `threadClosed` until thread closing was removed
+    // (2026-08-18). The rule worth keeping: a notice about THIS POST rides in the
+    // ENVELOPE, never inside `message`, since a READ of the row cannot carry it.
     const message = await postMessage(ctx, requireChannelId(auth.params), input);
     return NextResponse.json({ message }, { status: 201 });
   } catch (err) {

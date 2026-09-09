@@ -163,4 +163,15 @@ export interface OntologyContext {
   role: Role;
   source: OntologyWriteSource;
   credentialSubjectUserId: string | null;
+  /**
+   * `X-Dopl-Session-Id` verbatim (the desktop's slot key), or `null` for every
+   * caller that sends none.
+   *
+   * ⚠ A NON-AUTHORIZATION SIGNAL (`shared/auth/session-header.ts`) and the ONLY
+   * forgeable field on this context. It is read in exactly one place — the
+   * CHANGELOG's actor (`revisions/server/service.ts › deriveActor`), which
+   * stamps it for AGENT writes so a session's edits group visually. Nothing
+   * grants on it and no gate in this feature reads it.
+   */
+  sessionId?: string | null;
 }

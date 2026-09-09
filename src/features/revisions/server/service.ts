@@ -9,6 +9,7 @@ import type {
   RevisionResourceType,
 } from "../types";
 import { RevisionNotFoundError, RevisionNotRestorableError } from "./errors";
+import { isRestorable } from "../lib/restorable";
 import * as repo from "./repository";
 import { canSeeRevision, type RevisionReach } from "./service-shared";
 import { REVISION_PAGE_LIMIT, REVISION_PAGE_MAX } from "../constants";
@@ -70,6 +71,30 @@ export { REVISION_PAGE_LIMIT, REVISION_PAGE_MAX } from "../constants";
  * immutable. Restore is a NEW ROW, never a rewrite — see {@link restoreRevision}.
  */
 export const COALESCE_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * 🔒 **AND IT APPLIES TO KNOWLEDGE ONLY — THE SEAL RULE DOES NOT TRANSFER TO
+ * ONTOLOGY (2026-09-09, part 2; `docs/REFACTOR-FINDINGS.md › F-686` point 3).**
+ *
+ * The window joins consecutive `op:"edit"` writes to ONE RESOURCE. An ontology
+ * revision is one CHANGED FIELD of a resource, so a save that touched two
+ * fields records two `edit` rows against the same object within milliseconds —
+ * and coalescing would REPLACE the first field's row with the second field's
+ * payload. One field's history would silently become another's.
+ *
+ * ⚠ **THE FIX IS THE FAMILY, NOT A CALLER FLAG.** Keying the window on
+ * `(resource, field)` was the other option F-686 named; it is rejected because a
+ * field change is ALREADY ATOMIC — nobody types a `pill` value one keystroke per
+ * request — so a window would buy nothing and cost a rule with two arms. A
+ * caller-supplied `coalesce: false` was rejected for the same reason a gate
+ * beside a write is: the one caller that forgets it corrupts a timeline, and the
+ * failure is silent.
+ */
+const COALESCING_RESOURCE_TYPES: ReadonlySet<RevisionResourceType> = new Set([
+  "knowledge_base",
+  "knowledge_folder",
+  "knowledge_entry",
+]);
 
 // ─── Actor ──────────────────────────────────────────────────────────
 
@@ -147,7 +172,11 @@ export async function recordRevision(
   const contentHash = contentHashOf(input.payload);
   const summary = input.summary ?? null;
 
-  if (actor.kind === "user" && input.op === "edit") {
+  if (
+    actor.kind === "user" &&
+    input.op === "edit" &&
+    COALESCING_RESOURCE_TYPES.has(input.resourceType)
+  ) {
     const open = await findOpenHumanRevision(input, actor);
     if (open) {
       return repo.replaceRevisionSnapshot(
@@ -338,10 +367,11 @@ export async function restoreRevision(
   if (!source || !canSeeRevision(source, reach)) {
     throw new RevisionNotFoundError(revisionId);
   }
-  // ⚠ A snapshot with no BODY (a `move`, or a base rename) has nothing to write
-  // back. Refusing is honest; writing `undefined` would be a silent no-op the
-  // caller reads as a successful restore.
-  if (source.payload.body === undefined || source.payload.body === null) {
+  // ⚠ A snapshot with nothing to write back (a knowledge `move`, an ontology
+  // association or `create` bundle) is refused rather than silently no-op-ed.
+  // THE RULE IS STATED ONCE, in `../lib/restorable.ts`, because the RENDERER
+  // asks the same question to decide whether to draw the button.
+  if (!isRestorable(source)) {
     throw new RevisionNotRestorableError(revisionId);
   }
   await write(source);

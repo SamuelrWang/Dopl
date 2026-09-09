@@ -2,12 +2,10 @@
 // launch posture, and auto-send. `renderer/app-preload.js` exposes the matching
 // `window.dopl.channels.*` surface.
 //
-// ⚠ THE SESSION + WINDOW OPS SPLIT OUT ON 2026-08-20 (F-226) into `main/session-ipc-ops.js`.
-// This file sat at EXACTLY 500 lines, which under INVARIANTS §1 means it could not absorb so
-// much as a corrected COMMENT — and it was carrying four stale ones. The seam is
-// reason-to-change: `channels:*` moves when a new per-channel SETTING is added, `sessions:*` /
-// `threads:*` move when the agent surface moves. `register()` below still calls that module,
-// so `index.js` has ONE registration entry point and one place to pass the registry accessor.
+// ⚠ THE SESSION + WINDOW OPS LIVE IN `main/session-ipc-ops.js` (split 2026-08-20, F-226, at §1's
+// cap). The seam is reason-to-change: `channels:*` moves when a per-channel SETTING is added,
+// `sessions:*` / `threads:*` when the agent surface moves. `register()` below still calls that
+// module, so `index.js` has ONE registration entry point.
 //
 // SECURITY MODEL — the SPA renderer is the only caller, and these handlers are the entire
 // privileged surface it can reach for per-channel settings. Each is deliberately minimal:
@@ -19,57 +17,35 @@
 //     absolute path NEVER crosses back to the renderer, so the local path can't
 //     leak to the web page or the Dopl server.
 //   • chooseFolder can only OPEN the native OS folder dialog — the USER picks the
-//     directory. The page cannot set a path of its own choosing; it can merely
-//     trigger a picker the user then drives (or cancels).
-//   • No filesystem handle, no absolute path, no listing — nothing beyond these
-//     three label-scoped operations is exposed.
+//     directory. The page cannot set a path of its own choosing.
+//   • No filesystem handle, no absolute path, no listing.
 //
-// ⚠ THIS PARAGRAPH USED TO READ "the main window hosts REMOTE content (usedopl.com)", and
-// that was the stated JUSTIFICATION for the whole binding until 2026-08-20. The website is
-// retired (`main/version-gate.js`, `main/spa-window.js`) and the shell loads the bundled SPA
-// from a file:// URL. The binding is not weaker for it: an app window can still host a
-// cross-origin iframe, an XSS in the bundle is still an XSS, and the registry-plus-top-frame
-// pair is what makes "a window that does not own this thing cannot change it" true. **The
-// rule survives its original reason** — do not relax it on the grounds that the remote origin
-// is gone.
+// 🔒 **THE BINDING SURVIVES ITS ORIGINAL REASON — DO NOT RELAX IT.** It was justified by the main
+// window hosting remote content; the website is retired and the shell loads the bundled SPA from
+// file://. An app window can still host a cross-origin iframe, an XSS in the bundle is still an
+// XSS, and the registry-plus-top-frame pair is what makes "a window that does not own this thing
+// cannot change it" true.
 //
-// H3 (2026-07-31) — SENDER BINDING. Every handler here used to answer ANY renderer that could
-// reach the channel name: the payload was validated, but the CALLER never was. `appWindowOnly`
-// below is that missing half, applied to every op:
+// H3 (2026-07-31) — SENDER BINDING. Every handler here once answered ANY renderer that could
+// reach the channel name: the payload was validated, the CALLER never was. `appWindowOnly` below
+// is that missing half, on every op — the privileged ones being `setLaunchPosture` (the DURABLE
+// execution posture for my own launches), `setAgentChain` (may my agent launch more of my
+// agents), `chooseFolder` (pops a native dialog on demand), `clearFolder`, and the two `get*`
+// disclosures including a fragment of the operator's LOCAL path.
 //
-//   setLaunchPosture     sets the DURABLE execution posture for MY OWN launches
-//   getLaunchPosture     discloses that posture
-//   (setAutoSend / getAutoSend were here until 2026-09-06 — item 8 folded that axis into the
-//    launch posture's `messages`; both handlers are deleted, not just unused.)
-//   setAgentChain        decides whether an agent I launched may launch MORE of my agents
-//   getAgentChain        discloses that setting
-//   chooseFolder         pops a native OS dialog on demand (UI-jacking / nagging)
-//   clearFolder          silently resets where a channel's agent runs
-//   getFolderLabel       discloses a fragment of the operator's LOCAL path
+// Two checks, because one is not enough: the sender must be an APP-OWNED window's webContents,
+// AND that window's TOP frame — a cross-origin iframe SHARES its host's webContents, so identity
+// alone would let embedded content drive every op. ⚠ THE PREDICATE IS SHARED —
+// `main/ipc-guards.js › isAppWindowSender`, ONE source with `ui-bridge.js` since 2026-08-20 (two
+// byte-identical copies had already disagreed once: F-221). The `appWindowOnly` WRAPPER stays
+// written literally at each registration site, because `test/channel-ipc-sender.test.mjs`'s
+// structural belt reads that shape and a factory would silently disarm it.
 //
-// ⚠ `setPermissionPreset` STOOD AT THE TOP OF THAT LIST — the SINGLE-USE consent-card arm, and
-// H3's own worst case. It is DELETED (2026-08-20, Samuel's ruling; F-233): its web controls
-// had stopped rendering at the 2026-08-18 consent rewrite, so the ops armed a record nothing
-// could set. `setLaunchPosture` inherits the title of most privileged write here — the DURABLE
-// half of the same two axes, same validator, same UUID gate, and a longer-lived write than the
-// arm ever had. `main/channel-prefs.js` states why the two were never merged.
-//
-// Two checks, because one is not enough: the sender must be an APP-OWNED window's
-// webContents, AND it must be that window's TOP frame. A cross-origin iframe SHARES its
-// host's webContents, so identity alone would still let embedded third-party content drive
-// every op above. ⚠ THE PREDICATE IS SHARED — `main/ipc-guards.js › isAppWindowSender`, ONE
-// source with `ui-bridge.js` since 2026-08-20 (it was two byte-identical copies, and they had
-// already disagreed once: F-221). The `appWindowOnly` WRAPPER stays written literally at each
-// registration site, because `test/channel-ipc-sender.test.mjs`'s structural belt reads that
-// shape and a factory would silently disarm it.
-//
-// ⚠ THE FIRST HALF WIDENED ON 2026-08-18 (wiring plan Phase 10, Samuel's ruling — option (a)):
-// the subject was "the MAIN window" and is now "any window in `main/app-windows.js`'s
-// registry", which is the shell plus any pop-out thread or agent window. Read app-windows.js's
-// header for why a renderer cannot enlarge that registry. ⚠ NOTHING ELSE MOVED: the top-frame
-// check is unchanged, the direction is still fail-closed, and each op's refusal is still
-// byte-identical to its own bad-payload rejection so a hostile page cannot probe which window
-// it is running in.
+// ⚠ THE SUBJECT IS "any window in `main/app-windows.js`'s registry" — the shell plus any pop-out
+// thread or agent window (2026-08-18, Samuel's ruling). Read that file's header for why a
+// renderer cannot enlarge the registry. Nothing else moved: the top-frame check is unchanged, the
+// direction is fail-closed, and each op's refusal is byte-identical to its own bad-payload
+// rejection so a hostile page cannot probe which window it is running in.
 
 const { ipcMain } = require('electron');
 const { isAppWindowSender, isUuid } = require('./ipc-guards');
@@ -81,48 +57,30 @@ const channelPrefs = require('./channel-prefs');
 const channelRuntime = require('./channel-runtime');
 const runtimeRegistry = require('./runtime');
 const sessionIpcOps = require('./session-ipc-ops');
-// 2026-09-07: `session-state.js` and `settings.js` were required here for the turn-cap control —
-// its two documented defaults and its store. The constants, the store keys and both routes are
-// deleted with the caps, and nothing else in this file reads either module, so both imports go
-// too. A require kept "just in case" is a stub every IPC harness must keep answering.
 const { diag } = require('./diag');
 
 // ── THE POSTURE APPLIES TO THE ROOM, NOT JUST TO THE NEXT SPAWN ──────────────────────────────
 //
-// Samuel, 2026-08-25, after hitting it twice in one session: "PERMISSION SETTINGS MUST APPLY TO
-// RUNNING SESSIONS." The operator opened a channel to Tools=Bypass / Messages=auto_both while six
-// windowless agents were already working in it. The three spawned AFTERWARDS posted freely; the
-// three spawned BEFORE went on gating every post against the posture they had launched under,
-// each one bridging to a consent row and holding — for minutes, while the Settings tab displayed
-// the new pair. The room ignored the setting, and nothing said so.
+// 🔒 Samuel, 2026-08-25: *"PERMISSION SETTINGS MUST APPLY TO RUNNING SESSIONS."* Opening a channel
+// to Tools=Bypass while agents were already working in it moved only the ones spawned AFTERWARDS;
+// the rest went on gating every post against their launch-time posture, holding for minutes while
+// Settings displayed the new pair.
 //
-// THE MECHANISM IT WAS MISSING, AND WHY IT IS THIS SHORT: main ALREADY has a correct live-apply
-// op. `session-reopen.js › setModeByTask` moves ONE running session's axes through the reducer's
-// own `set_tool_mode` / `set_message_mode`, and `session-io.js › grantArgs` reads both axes off
-// `s.state` at CALL time — so a mode changed mid-turn applies to the very next gate decision.
-// What did not exist was a FAN-OUT: `channels:setLaunchPosture` wrote the durable record and
-// stopped. So this is a loop over that op, not a second implementation of it — which matters,
-// because that op is where the windowless message FLOOR (F-236) and the reducer's fail-closed
-// coercion live, and a second writer to the same two fields is how two readers come to disagree
-// about one posture.
+// ⚠ A FAN-OUT OVER THE EXISTING OP, NOT A SECOND IMPLEMENTATION. `session-reopen.js ›
+// setModeByTask` already moves one running session's axes through the reducer, and `session-io.js
+// › grantArgs` reads them at CALL time. That op is where the windowless message FLOOR (F-236) and
+// the reducer's fail-closed coercion live; a second writer to the same two fields is how two
+// readers come to disagree about one posture.
 //
-// ⚠ IT ADDS NO AUTHORITY. `sessions:setMode` already exposes exactly this to exactly this sender
-// (an app-window top frame — the operator, on their own machine, on their own agents), and the
-// security argument is unchanged and lives with the code that acts on it (`session-reopen.js ›
-// setModeByTask`): it widens SUPERVISION — is the operator asked? — never CONTAINMENT. The tool
-// PROFILE is checked first, `SESSION_HARD_DENY` is unconditional, and `bypass` is a positive
-// allow-list, so no posture reaching here can widen what an agent can touch.
-//
-// ⚠ ADDRESSED PER AGENT, NEVER PER THREAD. `listLiveSessions` yields one row per SLOT and
-// `setModeByTask` resolves an exact `agentId`; passing only (channel, thread) would take the
-// OLDEST agent on the thread and silently skip its N-1 siblings — which in the incident above is
-// most of the room. Multiplayer is the normal case here, not the edge one.
-//
-// ⚠ BEST-EFFORT, AND THE DURABLE WRITE HAS ALREADY LANDED. A session that settles between the
-// listing and the dispatch answers `{ok:false}` and is simply not counted; a throw from the
-// engine (a mid-wave build, a harness with no engine bound) must never turn a successful setting
-// write into a failed one. Returns HOW MANY live sessions took the new pair, so the caller can
-// tell the operator what actually moved.
+// ⚠ IT ADDS NO AUTHORITY. `sessions:setMode` already exposes this to this sender. It widens
+// SUPERVISION — is the operator asked? — never CONTAINMENT: the tool PROFILE is checked first,
+// `SESSION_HARD_DENY` is unconditional, and `bypass` is a positive allow-list.
+// ⚠ ADDRESSED PER AGENT, NEVER PER THREAD — `listLiveSessions` yields one row per SLOT, and
+// (channel, thread) alone would take the oldest agent and silently skip its N−1 siblings, which in
+// the incident above is most of the room.
+// ⚠ BEST-EFFORT, AND THE DURABLE WRITE HAS ALREADY LANDED: a session that settles mid-dispatch is
+// not counted, and an engine throw must never turn a successful setting write into a failed one.
+// Returns HOW MANY live sessions took the new pair.
 function applyPostureToLive(channelId, preset) {
   if (!preset || !preset.tools || !preset.messages) return 0;
   let applied = 0;
@@ -165,31 +123,21 @@ function register(opts = {}) {
     return fn(event, ...args);
   };
 
-  // ── ⚠ THE FOLDER ANSWER IS A PAIR, AND IT IS TWO FACTS BECAUSE THE ROW ASKS TWO QUESTIONS
-  // (2026-09-05, task 15; Samuel's ruling is the ABBREVIATED form).
+  // ── ⚠ THE FOLDER ANSWER IS A PAIR, BECAUSE THE ROW ASKS TWO QUESTIONS (2026-09-05; Samuel's
+  // ruling is the ABBREVIATED form).
   //
   //   label   WHAT THE AGENT WILL ACTUALLY RUN IN, always a real short-form and NEVER null.
   //           `channel-dirs.js › resolvedDirLabel` reads THROUGH `sessionSpawnDir`, the same
   //           function that produces the spawn cwd, so the label and the cwd cannot disagree.
-  //   custom  WHETHER A PER-CHANNEL DIR IS SET — the reset control's question, and NOT the same
-  //           question as the label's.
+  //   custom  WHETHER A PER-CHANNEL DIR IS SET — the reset control's question, which is a
+  //           different question from the label's.
   //
-  // ⚠ IT REPLACED A SINGLE NULLABLE LABEL, AND THE NULL WAS THE BUG. `liveChannelDirLabel`
-  // answers null when no per-channel dir is set, and the renderer INVENTED a word for that null:
-  // `settings-desktop-rows.tsx` printed "Sandbox (default)". There is no sandbox — the default is
-  // `~/Downloads`, or the homedir when that is missing — so the one row that claims to say where
-  // the agent runs was the one row naming a place that does not exist. One nullable field doing
-  // double duty is what forced the renderer to guess; two fields is the fix.
-  //
-  // ⚠ IT WIDENS NO DISCLOSURE. Both members are `abbreviateHome` output, which is the label this
-  // op has always returned and is what the H3 sheet above already lists it for. **The raw
-  // absolute path still never crosses back**, and the header's rule stands untouched — moving to
-  // the raw path is a separate ruling with that rule explicitly on the table, never a default
-  // anyone backs into.
-  //
-  // ⚠ A PAYLOAD WIDENING, NOT A NEW OP: same three op names, same `appWindowOnly` binding, same
-  // UUID gate, and the refusal value is still `null` — the shape a bad channel id already
-  // returns, so a hostile page still learns nothing from the difference.
+  // ⚠ ONE NULLABLE LABEL WAS THE BUG: the renderer invented a word for the null and printed
+  // "Sandbox (default)" for a place that does not exist (the default is `~/Downloads`, or the
+  // homedir). Two fields is the fix.
+  // ⚠ IT WIDENS NO DISCLOSURE AND IS NOT A NEW OP. Both members are `abbreviateHome` output; the
+  // raw absolute path still never crosses back (the header's rule stands untouched), and the op
+  // names, the `appWindowOnly` binding, the UUID gate and the `null` refusal are unchanged.
   const folderAnswer = (channelId) => ({
     label: channelDirs.resolvedDirLabel(channelId),
     custom: channelDirs.liveChannelDirLabel(channelId) !== null,

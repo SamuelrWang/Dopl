@@ -20,10 +20,9 @@ import type { KnowledgeBaseOption } from "./knowledge-scope-picker";
  * one way — this imports the picker's option type, and the picker imports
  * {@link BaseNode}.
  *
- * ⚠ **A FOLDER MEANS ITS SUBTREE, INCLUDING LATER ADDITIONS.** Checking one does
- * not check its children into the set — it makes them IMPLIED: they render
- * checked and disabled, and the set holds ONE row. An expansion would be a
- * snapshot, and an entry filed tomorrow would silently not be attached.
+ * ⚠ The folder-means-its-subtree rule is stated once, on
+ * `knowledge-scope-picker.tsx`'s docblock; the rows here render it (checked +
+ * `implied`, never expanded into the set).
  */
 
 // ─── Nodes ──────────────────────────────────────────────────────────────
@@ -42,6 +41,24 @@ interface TreeIndex {
 
 const ROOT = "";
 
+/** Checking a row: the scope it attaches, plus the keys that scope now IMPLIES
+ *  and the picker must therefore prune. Stated once — four rows pass it on. */
+export type ScopeToggle = (
+  ref: TemplateKnowledgeRef,
+  impliedKeys: ReadonlyArray<string>
+) => void;
+
+/** What every non-root node needs to draw itself and address its own scope. */
+interface NodeContext {
+  depth: number;
+  base: KnowledgeBaseOption;
+  index: TreeIndex;
+  selectedKeys: ReadonlySet<string>;
+  /** An ancestor row holds the attachment, so this row is checked-and-locked. */
+  ancestorChecked: boolean;
+  onToggle: ScopeToggle;
+}
+
 export function BaseNode({
   base,
   workspaceId,
@@ -51,7 +68,7 @@ export function BaseNode({
   base: KnowledgeBaseOption;
   workspaceId: string;
   selectedKeys: ReadonlySet<string>;
-  onToggle: (ref: TemplateKnowledgeRef, impliedKeys: ReadonlyArray<string>) => void;
+  onToggle: ScopeToggle;
 }) {
   const [open, setOpen] = useState(false);
   // ⚠ LAZY, AND THE NULL ID IS THE MECHANISM. `useKnowledgeTree` is a keyed
@@ -140,15 +157,7 @@ function FolderNode({
   selectedKeys,
   ancestorChecked,
   onToggle,
-}: {
-  folderId: string;
-  depth: number;
-  base: KnowledgeBaseOption;
-  index: TreeIndex;
-  selectedKeys: ReadonlySet<string>;
-  ancestorChecked: boolean;
-  onToggle: (ref: TemplateKnowledgeRef, impliedKeys: ReadonlyArray<string>) => void;
-}) {
+}: NodeContext & { folderId: string }) {
   const [open, setOpen] = useState(false);
   const checked = selectedKeys.has(`folder:${folderId}`);
   const covered = ancestorChecked || checked;
@@ -230,15 +239,7 @@ function EntryRow({
   selectedKeys,
   ancestorChecked,
   onToggle,
-}: {
-  entryId: string;
-  depth: number;
-  base: KnowledgeBaseOption;
-  index: TreeIndex;
-  selectedKeys: ReadonlySet<string>;
-  ancestorChecked: boolean;
-  onToggle: (ref: TemplateKnowledgeRef, impliedKeys: ReadonlyArray<string>) => void;
-}) {
+}: NodeContext & { entryId: string }) {
   const title = index.entryTitle.get(entryId) ?? entryId;
   const parent = index.entryFolder.get(entryId);
   const segments = [

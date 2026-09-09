@@ -14,16 +14,12 @@
  * there.
  */
 
-/**
- * ⚠ **{@link TemplateVisibility} IS DECLARED IN `@dopl/contracts ›
- * workspaces.ts` AND RE-EXPORTED HERE** (2026-09-02, v2 slice A13) — it had a
- * twin in `packages/dopl-client/src/agent-template-types.ts` with no script
- * between them. No import path changed.
- */
+/** ⚠ {@link TemplateVisibility} is DECLARED in `@dopl/contracts › workspaces.ts`
+ *  and re-exported here (2026-09-02) — it had an unguarded twin in
+ *  `packages/dopl-client/src/agent-template-types.ts`. No import path changed. */
 import type { TemplateVisibility } from "@dopl/contracts";
 
 export type { TemplateVisibility };
-
 
 import type { Role } from "@/features/workspaces/types";
 
@@ -60,16 +56,13 @@ export interface TemplateKnowledgeBaseRef {
  * can only select entire bases, but I want to be able to specific folders or
  * entries/files"*).
  *
- * ⚠ **A FOLDER MEANS ITS SUBTREE, INCLUDING WHAT IS ADDED LATER.** The scope
- * stores the folder ID and nothing else; it is NEVER expanded into one row per
- * child, because an expansion is a snapshot and an entry filed tomorrow would
- * silently not be attached.
- *
- * ⚠ **IT IS AN ATTACHMENT, NOT A PERMISSION.** The READ CEILING
- * (`knowledge/server/service-audience.ts › resolveAgentAudience`) is base-keyed
- * and stays so — a folder scope narrows what the role block POINTS AT, not what
- * the knowledge tools allow. Filed as a finding; do not read this union as
- * access control.
+ * ⚠ **A FOLDER MEANS ITS SUBTREE, INCLUDING WHAT IS ADDED LATER** — the folder
+ * id is stored, never expanded into a row per child, because an expansion is a
+ * snapshot and an entry filed tomorrow would silently not be attached.
+ * ⚠ **AN ATTACHMENT, NOT A PERMISSION.** The read ceiling
+ * (`knowledge/server/service-audience.ts › resolveAgentAudience`) stays
+ * base-keyed: a folder scope narrows what the role block POINTS AT. Filed as a
+ * finding; never read this union as access control.
  */
 export type TemplateKnowledgeScopeKind = "base" | "folder" | "entry";
 
@@ -86,14 +79,11 @@ export type TemplateKnowledgeScope =
 
 /**
  * The READ shape — one attached scope, resolved against what the READING caller
- * may see. Same reference discipline as {@link TemplateKnowledgeBaseRef}: names
- * are carried for DISPLAY and the ids are what anything acts on.
+ * may see. Names are for DISPLAY; the ids are what anything acts on.
  *
- * ⚠ `path` IS DERIVED SERVER-SIDE AND IS FOR DISPLAY ONLY — `Base / Folder`,
- * `Base / Folder / Entry`. It is recomputed on every read, never stored, so a
- * rename shows up rather than rotting. The desktop DOES splice the folder/entry
- * half of it into a `dopl_kb` call, which is why it goes through the framing
- * layer's sanitizer like any other user text.
+ * ⚠ `path` IS DERIVED SERVER-SIDE, DISPLAY ONLY (`Base / Folder / Entry`) and
+ * recomputed per read, so a rename shows up rather than rotting. It is user
+ * text: the desktop sanitizes it at render.
  */
 export interface TemplateKnowledgeRef {
   baseId: string;
@@ -109,41 +99,30 @@ export interface TemplateKnowledgeRef {
    * — `/`-joined the way `knowledge/server/path.ts › parsePath` reads one.
    * Absent on a `base` scope, which addresses the base root and needs no path.
    *
-   * ⚠ **A SECOND FIELD RATHER THAN STRING SURGERY ON `path`, AND THAT IS THE
-   * WHOLE REASON IT EXISTS.** `path` leads with the BASE NAME and joins on
-   * `" / "`; the tool path does neither. Recovering one from the other means
-   * splitting a display string on a separator a base name may itself contain,
-   * which is a wrong `dopl_kb` call for anyone who names a base "Ops / Legal" —
-   * and a wrong path there is an agent pointed at the wrong document, silently.
-   * ⚠ IT IS STILL USER TEXT: the desktop sanitizes it at render like every other
-   * value it splices into a line it wrote.
+   * ⚠ **A SECOND FIELD RATHER THAN STRING SURGERY ON `path`** — `path` leads
+   * with the base name and joins on `" / "`, so recovering this from it means
+   * splitting on a separator a base name may itself contain ("Ops / Legal"), and
+   * a wrong path here is an agent silently pointed at the wrong document.
    */
   toolPath?: string;
 }
 
 /**
- * WHICH SHELF a template lives on — the /home Agents pane's "Personal" section,
- * or the workspace Agents page. Two PLACES over one table (Samuel's ruling
- * 2026-08-27) and, since 2026-09-02, two CONTAINERS: the boolean of
- * `20260901120000` is dropped by `20260923120000_drop_home_scoped.sql` and the
- * personal shelf is the caller's own `kind='personal'` workspace. See
- * `features/knowledge/types.ts › KbShelf`, which carries the argument.
+ * WHICH SHELF a template lives on — /home's "Personal" section or the workspace
+ * Agents page. Two PLACES over one table (Samuel, 2026-08-27); since 2026-09-02
+ * also two CONTAINERS, the personal shelf being the caller's own
+ * `kind='personal'` workspace. `features/knowledge/types.ts › KbShelf` carries
+ * the argument, and this MIRRORS it rather than importing it (§1 forbids the
+ * cross-feature import, as with `canSeeBase`).
  *
- * ⚠ MIRRORED FROM `features/knowledge/types.ts › KbShelf`, NOT IMPORTED — §1
- * forbids the cross-feature import, and `canSeeBase` is mirrored into this
- * feature for the same reason. Same vocabulary, two declarations, on purpose.
- *
- * ⚠ NOT A FIELD ON `AgentTemplate`, and never make it one. It is a WRITE input
+ * ⚠ NOT A FIELD ON `AgentTemplate`, and never make it one — it is a WRITE input
  * (`AgentTemplateCreateInput.homeScoped`, which ROUTES the row) and a READ
- * FILTER (`GET /api/agent-templates?shelf=`); nothing shelf-shaped is projected
- * onto the row, so the cached list payload gains no new key and §8's
- * stale-cache rule has nothing to apply to.
- *
+ * FILTER (`?shelf=`). Nothing shelf-shaped is projected, so §8's stale-cache
+ * rule has nothing to apply to.
  * 🔒 IT IS NOT THE VISIBILITY AXIS. `visibility` says who may READ; this says
  * which surface LISTS. `canSeeTemplate` never sees it.
- *
- * ⚠ ABSENT IS NOT A THIRD VALUE — it means NO FILTER, which is what keeps the
- * launch picker and `resolveTemplateForLaunch` seeing the whole workspace.
+ * ⚠ ABSENT = NO FILTER, not a third value — which is what keeps the launch
+ * picker and `resolveTemplateForLaunch` seeing the whole workspace.
  */
 export type TemplateShelf = "home" | "workspace";
 
@@ -165,49 +144,40 @@ export interface AgentTemplate {
    * a leak otherwise, exactly as `Skill.grantedTeamIds` is gated.
    */
   teamIds: string[];
-  /** Attached KBs. ⚠ Only the ones the READING caller may see — the DTO is
-   *  viewer-filtered, so two callers can get different lists for one row.
-   *  ⚠ **BASE-LEVEL SCOPES ONLY SINCE 2026-09-08.** It is kept for readers that
-   *  predate {@link AgentTemplate.knowledge} (an older desktop, an older SPA
-   *  bundle); a folder or entry scope has no whole-base id to put here and is
-   *  deliberately absent rather than widened into one — listing a base because
-   *  one folder of it is attached would over-report the attachment. */
+  /** Attached KBs, VIEWER-FILTERED — two callers can get different lists for
+   *  one row. ⚠ **BASE-LEVEL SCOPES ONLY SINCE 2026-09-08**, kept for readers
+   *  predating {@link AgentTemplate.knowledge}; a folder/entry scope is absent
+   *  rather than widened into its base, which would over-report the
+   *  attachment. */
   knowledgeBases: TemplateKnowledgeBaseRef[];
   /**
    * EVERY attached scope — base, folder and entry alike (2026-09-08).
    *
    * ⚠ **THE SUPERSET, AND `knowledgeBases` IS ITS BASE-LEVEL SLICE.** One list
-   * with a `scope` discriminator rather than three, because a template's
-   * attachments are ONE ordered set the operator built and splitting them by
-   * kind would put the ordering decision on the reader.
-   * ⚠ VIEWER-FILTERED THE SAME WAY, AND A LEVEL DEEPER: a scope drops when its
-   * base drops, and also when its folder or entry is gone or trashed. Drops of
-   * the FIRST kind are counted in {@link AgentTemplate.unreachableKnowledgeBaseCount}.
+   * with a `scope` discriminator, because the attachments are ONE ordered set
+   * the operator built.
+   * ⚠ VIEWER-FILTERED A LEVEL DEEPER: a scope drops with its base, and also when
+   * its folder or entry is gone or trashed. Base drops are counted in
+   * {@link AgentTemplate.unreachableKnowledgeBaseCount}.
    *
-   * 🔒 ⚠ **OPTIONAL, AND THAT IS §8's STANDING RULE RATHER THAN A HEDGE.** This
-   * payload is IndexedDB-persisted with a 24h `gcTime`, so the first paint after
-   * this release renders rows minted by the PREVIOUS bundle, which carry no such
-   * key. The server always sending it does not put it in the cache. Every reader
-   * therefore spells `?? EMPTY_KNOWLEDGE` INLINE at the read
-   * (`lib/knowledge-scopes.ts`), and this wave's tests include the fixture
-   * WITHOUT it.
+   * 🔒 **OPTIONAL — §8's STANDING RULE, NOT A HEDGE.** This payload is
+   * IndexedDB-persisted (24h `gcTime`), so the first paint after this release
+   * renders rows minted by the previous bundle, which carry no such key. Every
+   * reader spells `?? EMPTY_KNOWLEDGE` INLINE (`lib/knowledge-scopes.ts`), and
+   * this wave's tests include the fixture WITHOUT it.
    */
   knowledge?: TemplateKnowledgeRef[];
   /**
    * HOW MANY ATTACHMENTS THE VIEWER FILTER DROPPED — a COUNT and nothing else
    * (Samuel's ruling, 2026-09-05).
    *
-   * 🔒 ⚠ **A NUMBER IS THE WHOLE DISCLOSURE, AND THAT IS THE POINT.** The
-   * dropped bases' ids, names, workspace and container are exactly what the
-   * viewer filter exists to withhold, so none of them may ride here; what the
-   * caller learns is only that THIS ROLE NAMES SOMETHING IT CANNOT REACH, which
-   * is a fact about the caller's own session rather than about the base.
-   * ⚠ **IT IS NOT PROBED FOR.** It is arithmetic over the junction rows the
-   * decoration already read minus the ones the filter kept — no second query,
-   * and nothing anywhere asks where a missing base actually lives.
-   * ⚠ **OPTIONAL BECAUSE THE DECORATION IS**: a row that never went through
-   * `decorateWithKnowledgeBases` has no answer, and `0` would be a claim.
-   * Consumers read `?? 0`, which is the honest reading of "not decorated".
+   * 🔒 **A NUMBER IS THE WHOLE DISCLOSURE.** The dropped bases' ids, names,
+   * workspace and container are what the viewer filter exists to withhold; the
+   * caller learns only that THIS ROLE NAMES SOMETHING IT CANNOT REACH.
+   * ⚠ **NOT PROBED FOR** — arithmetic over junction rows the decoration already
+   * read, minus the ones the filter kept. No second query.
+   * ⚠ **OPTIONAL BECAUSE THE DECORATION IS**: an undecorated row has no answer
+   * and `0` would be a claim, so consumers read `?? 0`.
    */
   unreachableKnowledgeBaseCount?: number;
   createdBy: string | null;
@@ -231,12 +201,11 @@ export interface ResolvedAgentTemplate {
   /**
    * THE EIGHTH KEY (2026-09-08): every attached scope, base / folder / entry.
    *
-   * ⚠ **IT DOES NOT REPLACE `knowledgeBases` ON THIS PAYLOAD AND MUST NOT.**
-   * A desktop older than this release narrows the response through an ALLOWLIST
-   * (`main/template-resolve.js › narrow`) that drops keys it does not know, so
-   * removing the base list would hand every such build a template with no
-   * knowledge at all — §13's older-peer rule, on the one payload where the
-   * failure is silent prompt text.
+   * ⚠ **IT DOES NOT REPLACE `knowledgeBases` HERE AND MUST NOT.** An older
+   * desktop narrows this response through an ALLOWLIST
+   * (`main/template-resolve.js › narrow`), so dropping the base list would hand
+   * every such build a template with no knowledge at all — §13's older-peer
+   * rule, on the one payload where the failure is silent prompt text.
    */
   knowledge: TemplateKnowledgeRef[];
   /**
@@ -245,28 +214,24 @@ export interface ResolvedAgentTemplate {
    * "not decorated" cannot arrive and `0` is a real answer.
    *
    * ⚠ **IT EXISTS SO THE AGENT CAN SAY SO.** A base attached in one container
-   * and launched in another simply vanished from `knowledgeBases`, and an agent
-   * cannot report a gap it was never told about — it read a role that named no
-   * knowledge and behaved as though none was attached. With this the desktop's
-   * ROLE block tells it to say *"I don't have access to this knowledge base in
-   * this channel"*, which is the whole of the ruling.
-   * ⚠ **A COUNT, NEVER A LOCATION.** See {@link AgentTemplate} for the argument;
-   * the launch payload is the one place a leak would land in prompt text.
+   * and launched in another just vanished from `knowledgeBases`, and an agent
+   * cannot report a gap it was never told about. With this, the desktop's ROLE
+   * block tells it to say *"I don't have access to this knowledge base in this
+   * channel"*.
+   * ⚠ **A COUNT, NEVER A LOCATION** (see {@link AgentTemplate}) — this is the
+   * one payload where a leak would land in prompt text.
    * ⚠ **IT NEVER BLOCKS A LAUNCH.** The agent starts, minus the base.
    */
   unreachableKnowledgeBaseCount: number;
   /**
    * Did the RESOLVING caller write this template? (G-1, 2026-08-22.)
    *
-   * ⚠ THE ONE EXCEPTION TO "no ownership in a launch payload", and it earns it:
-   * the desktop's ROLE block wears a different SECURITY HEADER for another
-   * member's instructions than for the operator's own, and the gate cannot be
-   * built without knowing which this is. A COMPUTED BOOLEAN rather than
-   * `createdBy` — it discloses nothing the caller does not already know from the
-   * list endpoint, and a raw creator id in a launch payload is a fact the
-   * launcher has no use for. `false` when the author has left the workspace
-   * (`created_by` is `SET NULL`), which is the correct direction: nobody left
-   * can vouch for it.
+   * ⚠ THE ONE EXCEPTION TO "no ownership in a launch payload": the desktop's
+   * ROLE block wears a different SECURITY HEADER for another member's
+   * instructions than for the operator's own. A COMPUTED BOOLEAN, not
+   * `createdBy` — a raw creator id is a fact the launcher has no use for.
+   * `false` once the author leaves (`created_by` is `SET NULL`), which is the
+   * correct direction: nobody left can vouch for it.
    */
   authoredByCaller: boolean;
 }

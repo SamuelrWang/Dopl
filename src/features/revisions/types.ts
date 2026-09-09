@@ -76,8 +76,29 @@ export interface RevisionActor {
  * KNOWLEDGE (`knowledge_*`): `{body, title, path}` — the document as it stood
  * after the write. `body` is absent on a base/folder revision, which has none.
  *
- * ONTOLOGY (`ontology_*`, part 2): `{field, before, after}` — the per-field
- * history a HubSpot-shaped timeline renders.
+ * ONTOLOGY (`ontology_*`, part 2 — 2026-09-09): THREE shapes, and `op` plus the
+ * presence of {@link RevisionPayload.association} says which.
+ *
+ *   FIELD (`op` `edit` / `rename` / `restore`): `{field, before, after}` — ONE
+ *   ROW PER CHANGED FIELD, which is the HubSpot per-property timeline and is a
+ *   DIFFERENT GRANULARITY from knowledge's one-per-operation. `field` is a
+ *   column name (`name`, `subtitle`, `purpose`, `methods`, `template`,
+ *   `agentsMayEdit`, `anchor`) or ONE attribute of the JSONB bag, spelled
+ *   `attribute:<key>` so a bag entry can never collide with a column.
+ *
+ *   ASSOCIATION (`op: "edit"`, `association` set): an edge, not a field —
+ *   `{association, field, before, after}`, filed on the OBJECT it attaches to.
+ *   ⚠ `op` IS `edit` AND NOT A NEW WORD: `link`/`unlink` would need the
+ *   migration's `op` CHECK to grow, and this shape needs no schema change at
+ *   all. The `association` key is what a renderer keys on.
+ *
+ *   BUNDLE (`op` `create` / `delete`): `{fields}` — every field the resource was
+ *   born with, or last stood at. A create is ONE row and not N field rows: there
+ *   is no `before` to diff against, and N rows would read as N edits.
+ *
+ * ⚠ **NONE OF THE THREE CARRIES A `body`, so the knowledge restore rule reads
+ * them all as un-restorable.** What may be written back is stated once, for both
+ * families, in `../lib/restorable.ts`.
  */
 export interface RevisionPayload {
   body?: string | null;
@@ -87,7 +108,29 @@ export interface RevisionPayload {
   field?: string;
   before?: unknown;
   after?: unknown;
+  /** ONTOLOGY only — the EDGE family a row is about, absent on a field row. */
+  association?: RevisionAssociation;
+  /** ONTOLOGY only — the whole field set on a `create`/`delete` row. */
+  fields?: Record<string, unknown>;
 }
+
+/**
+ * The four ontology LINK families. ⚠ They are payload values rather than
+ * `resource_type`s, because none of them is addressable: a membership and a
+ * relationship have no id a reader could ask history about, a share is a fact
+ * about the CLUSTER, and the anchor is a link to a PERSON. Each rides the row it
+ * attaches to, and every one of them is un-restorable for the same reason —
+ * writing an edge back means re-pointing at a far end that may since have been
+ * deleted or left the caller's audience (`../lib/restorable.ts`).
+ */
+export const REVISION_ASSOCIATIONS = [
+  "relationship",
+  "membership",
+  "share",
+  "anchor",
+] as const;
+
+export type RevisionAssociation = (typeof REVISION_ASSOCIATIONS)[number];
 
 export interface Revision {
   id: string;

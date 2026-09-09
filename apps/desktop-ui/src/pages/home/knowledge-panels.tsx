@@ -25,73 +25,54 @@ import {
 import home from "./home.module.css";
 
 /**
- * /home → Knowledge. TWO SECTIONS, NO SCOPE PILL (Samuel's ruling 2026-08-27,
- * superseding the three-scope shape of `docs/specs/home-knowledge-panels.plan.md`
- * §5.2):
+ * /home → Knowledge. TWO SECTIONS, NO SCOPE PILL (Samuel, 2026-08-27,
+ * superseding `docs/specs/home-knowledge-panels.plan.md` §5.2's three scopes):
  *
  *   SHARED IN THIS CHANNEL — bases in this channel's link CONTAINER carrying a
- *       `(kb, channel)` grant. `visible` renders plain; `agent_only` renders
- *       BADGED, because otherwise the operator cannot tell what the PEER sees
- *       from what only the AGENT reaches. Its create button makes both at once:
- *       a base in the container plus a `visible` grant on this channel.
- *   PERSONAL — the caller's own HOME SHELF, always. Bases created FROM THIS
- *       PANE, living in `POST /api/boot`'s `workspace` and carrying
- *       `home_scoped` (`20260831120000_knowledge_base_home_scoped.sql`).
+ *       `(kb, channel)` grant. `visible` renders plain, `agent_only` BADGED, or
+ *       the operator cannot tell what the PEER sees from what only the AGENT
+ *       reaches. Its create makes both at once: a container base + a `visible`
+ *       grant on this channel.
+ *   PERSONAL — the caller's own HOME SHELF, always: bases created from this
+ *       pane, in `POST /api/boot`'s `workspace`, carrying `home_scoped`.
  *
- * ⚠ THE PER-CHANNEL PRIVATE SCOPE IS GONE, AND WITH IT THE PILL. It used to be
- * the middle of three: container bases that were `private` + own + ungranted.
- * **The consequence is deliberate and is now a rule: a container base reaches
- * /home ONLY through a channel grant** (INVARIANTS §5A). An ungranted private
- * base sitting in a container workspace is unreachable from this surface — no
- * live rows are stranded (measured 2026-08-26: the operator's containers hold
- * zero bases), and the remedy for one that appears later is the sharing section
- * on the base itself, not a scope that made a private container shelf look like
- * a place to keep things.
- *
+ * 🔒 **A CONTAINER BASE REACHES /home ONLY THROUGH A CHANNEL GRANT**
+ * (INVARIANTS §5A) — the per-channel PRIVATE scope, and with it the pill, is
+ * gone. No live rows were stranded (measured 2026-08-26: zero bases in the
+ * operator's containers), and the remedy for one that appears later is the
+ * sharing section on the base itself.
  * ⚠ "PERSONAL", NOT "PRIVATE" — UI COPY ONLY. `visibility: 'private'` is
- * unchanged and unrenamed everywhere it is stored, read or fenced; this is the
- * label above a section, and the two words must not be conflated in a predicate.
+ * unrenamed everywhere it is stored, read or fenced; never conflate the two in
+ * a predicate.
  *
- * ⚠ THE CHANNEL-SCOPED LIST IS ITS OWN CACHE ENTRY, and it has to be.
- * `GET /api/knowledge/bases?channelId=` folds in a sibling key (`channelGrants`,
- * INVARIANTS §9) that the plain read does not send, and
- * `HomeKnowledgeBaseView`'s controller mounts a list read of its own against the
- * same workspace. On one key the two fetchers would take turns and a refetch
- * driven by the detail view would blank the Shared section.
- * ⚠ THAT DETAIL MOUNT IS SHELF-KEYED TOO — it is handed the same `shelf` its
- * `list` prop came from, or the Personal grid behind the detail pane refills
- * with the workspace shelf. Three cache axes, one minter
- * (`knowledgeBasesQueryKey`), and a key off by one element is a SILENT no-op
- * (§8) — which is exactly how the grant write once reached nothing this pane
- * had mounted.
+ * ⚠ THE CHANNEL-SCOPED LIST IS ITS OWN CACHE ENTRY. `?channelId=` folds in a
+ * sibling key (`channelGrants`, §9) the plain read does not send, and
+ * `HomeKnowledgeBaseView` mounts a list read of its own against the same
+ * workspace — on one key the two fetchers take turns and a detail-driven refetch
+ * blanks the Shared section. ⚠ THAT DETAIL MOUNT IS SHELF-KEYED TOO, or the
+ * Personal grid behind it refills with the workspace shelf. Three cache axes,
+ * one minter (`knowledgeBasesQueryKey`); a key off by one element is a SILENT
+ * no-op (§8), which is how a grant write once reached nothing this pane mounted.
  *
  * ⚠ ONE LAYOUT FOR ALL THREE TABS (`index.tsx`): this renders INSIDE the record
- * pane. It never moves the conversation column and it never goes full-width.
+ * pane, never moving the conversation column and never going full-width.
  *
- * ⚠ **BOTH SECTION BUTTONS READ "+ Knowledge base" (Samuel, 2026-09-09: *"have
- * it for both, say, + Knowledge base. for both"*), on the page's black `h-9`
- * pill (`panel-buttons.tsx › CreateButton`).** They said "New shared base" and
- * "New knowledge base"; the SECTION they sit in names the destination, so the
- * button says only what it makes. **The two accessible names are identical on
- * purpose** — reach them through their section (`getByRole("region", { name:
- * … })`), never by button name alone, as `knowledge-panels.test.tsx` does.
+ * 🔒 **BOTH SECTION BUTTONS READ "+ Knowledge base"** (Samuel, 2026-09-09:
+ * *"have it for both, say, + Knowledge base. for both"*), on the page's black
+ * `h-9` pill (`panel-buttons.tsx › CreateButton`) — the SECTION names the
+ * destination, so the button says only what it makes. **The two accessible names
+ * are identical on purpose**: reach them through their section
+ * (`getByRole("region", { name: … })`), as `knowledge-panels.test.tsx` does.
  *
- * ⚠ **THE SECTIONS ARE FLAT (Samuel, 2026-08-27, over a screenshot of this
- * face).** They were the shared `SectionBox` — a `bg-card-surface-subtle`
- * header STRIP over a `bg-bg-inset` body carrying the concave inset shadow —
- * which read as a rectangle pressed INTO the record pane. They are
+ * 🔒 **THE SECTIONS ARE FLAT (Samuel, 2026-08-27, over a screenshot).** The old
+ * `SectionBox` — header strip over a `bg-bg-inset` body with a concave inset
+ * shadow — read as a rectangle pressed INTO the record pane. They are
  * `shared/ui/section-panel.tsx › SectionPanel` now: no border line, no inset
- * shadow, the heading and the cards sitting DIRECTLY on one ground. **The cards
- * are unchanged and still raised** — raised-on-flat-gray is the point.
- * ⚠ **THE GROUND IS NOT STATED IN THIS FILE.** It comes from ONE rule that
- * grounds BOTH /home faces — `home.module.css › .frame
- * :global([data-section-panel])`, the page's own `--home-panel` gray, the fill
- * the relationship list stands on. The Agents tab reached the same rectangle
- * from the other side (a flat `bg-card-surface-subtle` card), and two faces
- * that merely look settled today drift the moment one is re-tuned; stating the
- * ground once means a change to it cannot land on one tab only. The drag-resize
- * grip went with `SectionBox` — it was furniture of the concave box, and the
- * Agents face never had one.
+ * shadow, heading and cards directly on one ground. **The cards stay raised** —
+ * raised-on-flat-gray is the point, and the drag-resize grip went with the box.
+ * ⚠ **THE GROUND IS NOT STATED IN THIS FILE** — `home.module.css › .frame
+ * :global([data-section-panel])` grounds BOTH /home faces from one rule, so a
+ * re-tune cannot land on one tab only.
  */
 export function HomeKnowledgePanels({
   channel,

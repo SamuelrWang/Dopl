@@ -68,7 +68,11 @@ interface ClusterWalk {
   rows: OntologyMembershipRow[];
 }
 
-function walkAdmittedClusters(
+/** ⚠ EXPORTED FOR THE CLUSTER ROLL-UP (`service-revisions-read.ts ›
+ *  listClusterRevisions`), which needs the SAME boundary this read uses — a
+ *  second downward walk beside it is how a history comes to name an object the
+ *  board does not show. Pure: it takes rows and answers rows. */
+export function walkAdmittedClusters(
   admittedClusterIds: Set<string>,
   memberships: OntologyMembershipRow[]
 ): ClusterWalk {

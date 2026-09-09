@@ -25,63 +25,49 @@ import { CreateButton } from "./panel-buttons";
 import { HomeAgentPanelsSkeleton } from "./home-skeleton";
 
 /**
- * /home → Agents. THE THREE TEMPLATE SCOPES OF ONE CHANNEL (Samuel's rulings,
- * 2026-08-26; `docs/specs/home-agents-tab.plan.md` §1):
+ * /home → Agents. THE THREE TEMPLATE SCOPES OF ONE CHANNEL (Samuel, 2026-08-26;
+ * `docs/specs/home-agents-tab.plan.md` §1):
  *
- *   A  SHARED, in this channel — templates in this channel's link CONTAINER
- *                  with `visibility === "workspace"`. Inside a container that
- *                  value means the OTHER PERSON in the relationship, so the
- *                  heading is **"Shared in this channel", never "Public"** —
- *                  and the label lives in `agent-templates/lib/visibility.ts ›
- *                  SECTIONS_CONTAINER`, never hand-typed here.
- *   B  PRIVATE, in this channel — container templates that are `private` and
- *                  the caller's own.
- *   C  PRIVATE, across all channels — the same question asked of the caller's
- *                  HOME workspace, which is `POST /api/boot`'s `workspace`.
+ *   A  SHARED, in this channel — this channel's link CONTAINER, `visibility ===
+ *                  "workspace"`. Inside a container that value means THE OTHER
+ *                  PERSON, so the heading is **"Shared in this channel", never
+ *                  "Public"** — and it lives in `agent-templates/lib/
+ *                  visibility.ts › SECTIONS_CONTAINER`, never hand-typed here.
+ *   B  PRIVATE, in this channel — container templates, `private`, the caller's.
+ *   C  PRIVATE, across all channels — the same question of the caller's HOME
+ *                  workspace (`POST /api/boot`'s `workspace`).
  *
- * B and C are one section with a scope dropdown, because they are the same
- * shelf seen at two ranges; A is its own section because it is a different
- * QUESTION (who else can wear this identity).
+ * B and C share one section with a scope dropdown (one shelf at two ranges); A
+ * is its own because it answers a different QUESTION — who else may wear this
+ * identity.
  *
- * ⚠ "AGENTS" NAMES TWO DIFFERENT THINGS AND BOTH NAMES STAY (Samuel's ruling
- * Q6, 2026-08-26). THIS face lists template IDENTITIES — durable, authored,
- * launchable later. The channel info column's **Agents** tab
- * (`channels-v2/agents-tab.tsx`) lists RUNNING SESSIONS. §5's noun rule ("the
- * noun on both is the AGENT") has tests behind it, so a rename needs Samuel's
- * word; the collision is RECORDED (INVARIANTS §5A) rather than resolved.
+ * ⚠ "AGENTS" NAMES TWO THINGS AND BOTH NAMES STAY (Samuel's ruling Q6,
+ * 2026-08-26): THIS face lists template IDENTITIES, the channel info column's
+ * **Agents** tab (`channels-v2/agents-tab.tsx`) lists RUNNING SESSIONS. The
+ * collision is RECORDED (INVARIANTS §5A), not resolved; a rename needs his word.
  *
- * ⚠ NO LAUNCH CONTROL, DELIBERATELY (§4.6, §5A). This is the AUTHORING half of
- * a lane that is already wired end to end: the Channels face's `TemplateLaunchPicker`
- * reads THIS SAME container list and launches from it (plan §0.2). A second
- * launch surface fights `resolve`'s singularity, so the absence is tested
- * (`agent-panels.test.tsx › what this pane deliberately leaves out`). CREATE and
- * EDIT are the opposite case: they are what "the authoring half" MEANS, and they
- * arrived in M3.
+ * ⚠ NO LAUNCH CONTROL, DELIBERATELY (§4.6, §5A) — the Channels face's
+ * `TemplateLaunchPicker` reads THIS SAME list and launches from it, and a second
+ * launch surface fights `resolve`'s singularity. The absence is tested
+ * (`agent-panels.test.tsx`). CREATE and EDIT are the authoring half and stay.
  *
- * ⚠ THE CREATE AFFORDANCE FOLLOWS THE SCOPE PILL (RULING 6 of the Knowledge
- * wave, applied here): "in this channel" writes into the CONTAINER, "across all
- * channels" into the caller's home workspace. It sits beside the pill it obeys,
- * so the two cannot be read apart — and the pill is also what decides which
- * workspace's teams and knowledge bases the editor is even allowed to ask for
- * (`agent-editor.tsx`).
+ * ⚠ THE CREATE AFFORDANCE FOLLOWS THE SCOPE PILL (Knowledge-wave ruling 6): "in
+ * this channel" writes into the CONTAINER, "across all channels" into the home
+ * workspace. It sits beside the pill it obeys, and that pill also decides which
+ * workspace's teams and bases the editor may ask for (`agent-editor.tsx`).
  *
- * ⚠ TWO READS, ONE PATH, TWO WORKSPACES — and that is exactly the shape F-331
- * was about: `GET /api/agent-templates` cached under `[path, workspaceId,
- * undefined]` twice, so the writes patch the ENTRY key rather than the path
- * PREFIX or a create in one workspace appears under the other (INVARIANTS §8).
- * No channel-scoped key is needed here (unlike Knowledge): the workspace
- * element already distinguishes them, and this path has no `query` variants.
+ * ⚠ TWO READS, ONE PATH, TWO WORKSPACES — F-331's shape. `GET
+ * /api/agent-templates` is cached under `[path, workspaceId, undefined]` twice,
+ * so writes patch the ENTRY key, never the path PREFIX (INVARIANTS §8). No
+ * channel-scoped key is needed: the workspace element distinguishes them.
  *
  * ⚠ ONE LAYOUT FOR ALL THREE TABS (`index.tsx`): this renders INSIDE the record
- * pane. It never moves the conversation column and it never goes full-width.
+ * pane, never moving the conversation column and never going full-width.
  *
- * ⚠ **BOTH SECTION BUTTONS READ "+ Agent template" (Samuel, 2026-09-09), on the
- * page's black `h-9` pill** — the same ruling the Knowledge face took the same
- * day (`panel-buttons.tsx › CreateButton`). They said "New shared agent" and
- * "New agent"; the SECTION names the destination, so the button says only what
- * it makes, and "template" is the word this face has always meant (identities,
- * not running sessions — see the note above). **The two accessible names are
- * identical on purpose** — reach them through their section
+ * 🔒 **BOTH SECTION BUTTONS READ "+ Agent template" (Samuel, 2026-09-09), on the
+ * page's black `h-9` pill** (`panel-buttons.tsx › CreateButton`) — the SECTION
+ * names the destination, so the button says only what it makes. **The two
+ * accessible names are identical on purpose**: reach them through their section
  * (`getByRole("region", { name: … })`), never by button name alone.
  */
 export function HomeAgentPanels({
