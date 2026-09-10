@@ -1,13 +1,18 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
-import { bridgeCalls, installBridge } from "#/test-utils/bridge";
+import { bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import { renderHome, routes } from "./home-test-harness";
 import {
+  NEW_CLUSTER_ID,
   PERSONAL_WORKSPACE_ID,
   PIPELINE_ID,
   ROSTER_ID,
   ontologyRoutes,
+  openOntologyFace,
+  openOntologyMenu,
+  openOntologySwitcher,
+  resetOntologyRoutes,
 } from "./ontology-test-harness";
 import { paneToken } from "./home-panes";
 import {
@@ -19,6 +24,14 @@ import {
 
 /**
  * /home → ONTOLOGY, END TO END THROUGH THE REAL PAGE.
+ *
+ * ⚠ **THE FACE IS THE WORKSPACE BOARD SINCE 2026-09-10** (Samuel: *"the UI for
+ * the ontology in the home should look a lot more like the ontology for
+ * workspaces … for the ontology switcher, instead of different tabs, have it be
+ * a dropdown"*). What this file asserted about a grid of CARDS it now asserts
+ * about the board and its header: the switcher lists the container's ontologies,
+ * "+ Ontology" makes one and lands on it, and every /home-only control is
+ * reachable from the header's `…` and from nowhere else.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, NEVER THE PANEL, for the reason
  * `knowledge-panels.test.tsx` gives: three of the things this file proves are
@@ -41,6 +54,7 @@ vi.mock(
 );
 
 beforeEach(() => {
+  resetOntologyRoutes();
   apiRequest.mockReset();
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}) =>
@@ -50,13 +64,6 @@ beforeEach(() => {
   );
   installBridge({ apiRequest });
 });
-
-/** Raise the Ontology face through the header control the operator clicks. */
-async function openOntology(): Promise<void> {
-  await screen.findByRole("tab", { name: "Overview" });
-  fireEvent.click(screen.getByText("Ontology"));
-  await screen.findByRole("tab", { name: "Ontology", selected: true });
-}
 
 /**
  * 🔒 THE PANE TOKEN — a WHOLE token, and a channel click on this face changes
@@ -91,23 +98,22 @@ describe("the pane token", () => {
   });
 });
 
-describe("the list", () => {
-  it("lists the PERSONAL container's ontologies, with the object count", async () => {
+describe("the face", () => {
+  it("IS the board, addressed at the PERSONAL container — not a list of cards", async () => {
     renderHome();
-    await openOntology();
+    await openOntologyFace();
 
-    expect(await screen.findByText("Pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Roster")).toBeInTheDocument();
-    // ⚠ A GRAPH WALK, NOT `columnIds.length` (R5): one column plus its two
-    // cards is THREE objects, and a count of 1 would be the column count
-    // wearing the word "objects".
-    expect(screen.getByText(/3 objects/)).toBeInTheDocument();
+    // The workspace page's own header + kanban, rendered for /home.
+    expect(screen.getByLabelText("Cluster name")).toHaveValue("Pipeline");
+    expect(await screen.findByText("Acme")).toBeInTheDocument();
+    // 🔒 THE CARD LIST IS GONE, and with it the four pills that hung off it.
+    expect(screen.queryByRole("button", { name: "Open" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
   });
 
   it("reads `/api/ontology` addressed to the PERSONAL container, once", async () => {
     renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
+    await openOntologyFace();
 
     const reads = bridgeCalls(apiRequest).filter(
       (c) => c.path.split("?")[0] === "/api/ontology"
@@ -118,54 +124,153 @@ describe("the list", () => {
     }
   });
 
-  it("says how many channels an ontology is shared into", async () => {
+  it("keeps the board's OWN chrome — Column, and no cluster delete beside it", async () => {
     renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
+    await openOntologyFace();
 
-    expect(screen.getByText(/shared into 2 channels/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Column" })).toBeInTheDocument();
+    // 🔒 The delete that names CHANNELS is the host's, in the overflow — the
+    // view's own trash would delete with no such sentence (Q4).
+    expect(screen.queryByRole("button", { name: /^Delete Pipeline/ })).toBeNull();
   });
 
-  it("🔒 SAYS NOTHING about sharing on a STALE cached payload — never '0 channels'", async () => {
-    // 🔒 INVARIANTS §8. `Roster` is the shape a bundle that predates the field
-    // wrote; UNKNOWN is not EMPTY, so the card omits the clause rather than
-    // claiming a share count nobody read.
-    renderHome();
-    await openOntology();
-    await screen.findByText("Roster");
-
-    expect(screen.queryByText(/shared into 0 channels/)).not.toBeInTheDocument();
-    const card = screen.getByText("Roster").parentElement;
-    expect(card?.textContent).not.toMatch(/shared into/);
-  });
-
-  it("falls the SOLO TOGGLE back to the column default on a stale payload", async () => {
-    // `Pipeline` carries `agentsMayEdit: false`; `Roster` carries nothing and
-    // must read as the default the migration writes (`true` — Samuel's solo
-    // default is "viewable and editable").
-    renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
-
-    const pipeline = screen.getByRole("tablist", { name: "Agents on Pipeline" });
-    expect(within(pipeline).getByRole("tab", { name: "View" })).toHaveAttribute(
-      "aria-selected",
-      "true"
+  it("says nothing about emptiness before the read lands", async () => {
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
+      path.split("?")[0] === "/api/ontology"
+        ? new Promise(() => {})
+        : (ontologyRoutes(path, opts) ??
+          routes(path, opts) ??
+          Promise.reject(new Error(`unexpected: ${path}`)))
     );
-    const roster = screen.getByRole("tablist", { name: "Agents on Roster" });
-    expect(within(roster).getByRole("tab", { name: "Edit" })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    );
+    renderHome();
+    await screen.findByRole("tab", { name: "Overview" });
+    fireEvent.click(screen.getByText("Ontology"));
+    await screen.findByRole("tab", { name: "Ontology", selected: true });
+
+    expect(screen.queryByText("No ontologies yet.")).toBeNull();
   });
 
-  it("writes the solo toggle to the CLUSTER's own PATCH", async () => {
+  it("offers ONE line and the page button when there are none", async () => {
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
+      path.split("?")[0] === "/api/ontology"
+        ? Promise.resolve(ok({ clusters: [], objects: {} }))
+        : (ontologyRoutes(path, opts) ??
+          routes(path, opts) ??
+          Promise.reject(new Error(`unexpected: ${path}`)))
+    );
     renderHome();
-    await openOntology();
-    await screen.findByText("Roster");
+    await screen.findByRole("tab", { name: "Overview" });
+    fireEvent.click(screen.getByText("Ontology"));
 
-    const roster = screen.getByRole("tablist", { name: "Agents on Roster" });
-    fireEvent.click(within(roster).getByRole("tab", { name: "View" }));
+    expect(await screen.findByText("No ontologies yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ontology" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * THE SWITCHER — the tab strip's replacement (Samuel, 2026-09-10: *"instead of
+ * different tabs, have it be a dropdown"*).
+ *
+ * ⚠ MUTATION-VERIFIED — one revert, one failure: rendering only the ACTIVE entry
+ * in `cluster-switcher.tsx › ClusterDropdown` (the menu lists the ontology you
+ * are already on and no way to any other, which is the whole control missing
+ * while the trigger still looks right).
+ */
+describe("the switcher", () => {
+  it("lists EVERY ontology in the container, with its object count", async () => {
+    renderHome();
+    await openOntologyFace();
+    await openOntologySwitcher();
+
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: /Pipeline/ })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /Roster/ })).toBeInTheDocument();
+    // ⚠ A GRAPH WALK, NOT `columnIds.length` (R5): one column plus its two
+    // cards is THREE objects, and a count of 1 would be the column count
+    // wearing the word "objects".
+    expect(within(menu).getByText("3 objects")).toBeInTheDocument();
+    expect(within(menu).getByText("0 objects")).toBeInTheDocument();
+  });
+
+  it("switches the board to the one picked", async () => {
+    renderHome();
+    await openOntologyFace();
+    const reads = () =>
+      bridgeCalls(apiRequest).filter((c) => c.path.split("?")[0] === "/api/ontology")
+        .length;
+    const before = reads();
+    await openOntologySwitcher();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /Roster/ }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Cluster name")).toHaveValue("Roster")
+    );
+    // ⚠ NO SECOND READ: both ontologies are in the snapshot the board already
+    // holds, so the switcher moves a SELECTION rather than fetching a board.
+    expect(reads()).toBe(before);
+  });
+});
+
+/**
+ * ⚠ MUTATION-VERIFIED — one revert, one failure: dropping `setSelectedId(cluster.id)`
+ * from `ontology-panels.tsx › create` (the POST still lands and the ontology
+ * still exists, so every other assertion here passes while the operator is left
+ * looking at the ontology they were already on).
+ */
+describe("creating", () => {
+  it("POSTs into the personal container and LANDS on the new ontology", async () => {
+    renderHome();
+    await openOntologyFace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ontology" }));
+
+    await waitFor(() => {
+      const post = bridgeCalls(apiRequest).find(
+        (c) => c.path === "/api/ontology/clusters" && c.opts.method === "POST"
+      );
+      expect(post?.opts.workspaceId).toBe(PERSONAL_WORKSPACE_ID);
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Cluster name")).toHaveValue("New cluster")
+    );
+    expect(NEW_CLUSTER_ID).toBe("cluster-new");
+  });
+});
+
+/**
+ * EVERY /home CONTROL, ONE PLACE EACH — the four the card's pill row carried
+ * before the restyle, re-homed into the header's `…`.
+ */
+describe("the controls", () => {
+  it("reaches Share, Changelog, both agent rungs and Delete from the overflow", async () => {
+    renderHome();
+    await openOntologyFace();
+    await openOntologyMenu();
+
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Changelog" })).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Agents can view" })
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Agents can edit" })
+    ).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("writes the agents rung to the CLUSTER's own PATCH", async () => {
+    renderHome();
+    await openOntologyFace();
+    await openOntologySwitcher();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Roster/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Cluster name")).toHaveValue("Roster")
+    );
+
+    await openOntologyMenu("Roster");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Agents can view" }));
 
     await waitFor(() => {
       const patch = bridgeCalls(apiRequest).find(
@@ -176,68 +281,40 @@ describe("the list", () => {
       expect(patch?.opts.body).toEqual({ agentsMayEdit: false });
     });
   });
-});
 
-describe("opening one", () => {
-  it("renders the board PINNED to that cluster — no strip, no way to the other", async () => {
+  it("opens the share popup for the ontology on the board", async () => {
     renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
+    await openOntologyFace();
+    await openOntologyMenu();
 
-    const card = screen.getByText("Pipeline").parentElement as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Open" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Share" }));
 
-    // The board's own header, addressed at the pinned cluster.
-    const name = await screen.findByLabelText("Cluster name");
-    expect(name).toHaveValue("Pipeline");
-    // 🔒 THE STRIP IS GONE: the other cluster is not reachable from here, and
-    // neither is the view's New-cluster button or its delete.
-    expect(screen.queryByRole("button", { name: "New cluster" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Delete Pipeline/ })).toBeNull();
+    expect(
+      await screen.findByRole("dialog", { name: /Share Pipeline/i })
+    ).toBeInTheDocument();
   });
 
-  it("comes back to the list", async () => {
+  it("opens the delete confirm, which is the one that NAMES the channels", async () => {
     renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
-    const card = screen.getByText("Pipeline").parentElement as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Open" }));
-    await screen.findByLabelText("Cluster name");
+    await openOntologyFace();
+    await openOntologyMenu();
 
-    fireEvent.click(screen.getByRole("button", { name: "All ontologies" }));
-    expect(await screen.findByText("Roster")).toBeInTheDocument();
-  });
-});
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
-describe("creating", () => {
-  it("POSTs into the personal container and opens the new board", async () => {
-    renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
-
-    fireEvent.click(screen.getByRole("button", { name: /Ontology$/ }));
-
-    await waitFor(() => {
-      const post = bridgeCalls(apiRequest).find(
-        (c) => c.path === "/api/ontology/clusters" && c.opts.method === "POST"
-      );
-      expect(post?.opts.workspaceId).toBe(PERSONAL_WORKSPACE_ID);
-    });
+    expect(await screen.findByText(/unshares it from/)).toBeInTheDocument();
   });
 });
 
 describe("what this face deliberately does not do", () => {
   it("does not read the CHANNEL's container — the rows are personal", async () => {
     renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
+    await openOntologyFace();
 
     const shares = bridgeCalls(apiRequest).filter((c) =>
       c.path.includes("/shares")
     );
-    // ⚠ NO SHARE READ ON FIRST PAINT. The list's own share COUNT rides the
-    // snapshot; the per-cluster read is the DIALOG's, and mounting it here
-    // would be one request per card.
+    // ⚠ NO SHARE READ ON FIRST PAINT. The board's own header says nothing about
+    // sharing; the per-cluster read is the DIALOG's.
     expect(shares).toHaveLength(0);
     expect(PIPELINE_ID).toBe("cluster-pipeline");
   });
@@ -246,18 +323,17 @@ describe("what this face deliberately does not do", () => {
 /**
  * THE **Changelog** ENTRY POINT (2026-09-09, the CHANGELOG lane part 2).
  *
- * ⚠ MUTATION-VERIFIED — two reverts, two failures: pointing the card at the
- * OBJECT route instead of the cluster ROLL-UP (the ontology's own rename
- * disappears), and rendering the roll-up with the knowledge row shape (the field
- * row reads as an op label with no values in it).
+ * ⚠ MUTATION-VERIFIED — two reverts, two failures: pointing it at the OBJECT
+ * route instead of the cluster ROLL-UP (the ontology's own rename disappears),
+ * and rendering the roll-up with the knowledge row shape (the field row reads as
+ * an op label with no values in it).
  */
 describe("the changelog", () => {
   async function openChangelog(): Promise<void> {
     renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
-    const card = screen.getByText("Pipeline").parentElement as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Changelog" }));
+    await openOntologyFace();
+    await openOntologyMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Changelog" }));
   }
 
   it("reads the CLUSTER roll-up and renders `field: before → after`", async () => {
@@ -285,11 +361,7 @@ describe("the changelog", () => {
 
   it("the OBJECT panel carries a History section, addressed at that object", async () => {
     renderHome();
-    await openOntology();
-    await screen.findByText("Pipeline");
-    const card = screen.getByText("Pipeline").parentElement as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Open" }));
-    await screen.findByLabelText("Cluster name");
+    await openOntologyFace();
 
     fireEvent.click(await screen.findByText("Acme"));
     expect(
@@ -304,10 +376,10 @@ describe("the changelog", () => {
     );
   });
 
-  it("comes back to the list", async () => {
+  it("comes back to the board", async () => {
     await openChangelog();
     await screen.findByText("Stage");
-    fireEvent.click(screen.getByRole("button", { name: "All ontologies" }));
-    expect(await screen.findByText("Roster")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByLabelText("Cluster name")).toHaveValue("Pipeline");
   });
 });

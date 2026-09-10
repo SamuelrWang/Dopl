@@ -1,3 +1,4 @@
+import { fireEvent, screen } from "@testing-library/react";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { WORKSPACE_ID, noContent, ok } from "#/test-utils/bridge";
 import type { OntologySnapshot } from "@/features/ontology/types";
@@ -132,7 +133,15 @@ export function ontologyRoutes(
   shares: unknown = SHARES
 ): Promise<BridgeResponse> | null {
   const bare = path.split("?")[0];
-  if (bare === "/api/ontology") return Promise.resolve(ok(SNAPSHOT));
+  if (bare === "/api/ontology") {
+    return Promise.resolve(
+      ok(
+        created.length === 0
+          ? SNAPSHOT
+          : { ...SNAPSHOT, clusters: [...SNAPSHOT.clusters, ...created] }
+      )
+    );
+  }
   if (bare === "/api/billing/status") {
     return Promise.resolve(
       ok({ plan: "pro", objectCap: null, objectsUsed: 3, isCapped: false })
@@ -147,18 +156,11 @@ export function ontologyRoutes(
     return Promise.resolve(ok(shares));
   }
   if (bare === "/api/ontology/clusters" && opts.method === "POST") {
-    return Promise.resolve(
-      ok({
-        cluster: {
-          id: "cluster-new",
-          slug: "new-cluster",
-          name: "New cluster",
-          purpose: "",
-          columnIds: [],
-          layout: {},
-        },
-      })
-    );
+    // ⚠ THE ROW JOINS THE SNAPSHOT, because that is what the server does: a
+    // create is followed by an invalidate, and a table that answered with the
+    // OLD list would pass a face that never showed what it just made.
+    created = [...created, NEW_CLUSTER];
+    return Promise.resolve(ok({ cluster: NEW_CLUSTER }));
   }
   if (bare.startsWith("/api/ontology/clusters/")) {
     if (opts.method === "PATCH") return Promise.resolve(ok({ cluster: {} }));
@@ -169,6 +171,49 @@ export function ontologyRoutes(
 
 /** The personal container these rows live in — the boot payload's `workspace`. */
 export const PERSONAL_WORKSPACE_ID = WORKSPACE_ID;
+
+export const NEW_CLUSTER_ID = "cluster-new";
+
+/** What `POST /api/ontology/clusters` mints — the row the create flow selects. */
+const NEW_CLUSTER = {
+  id: NEW_CLUSTER_ID,
+  slug: "new-cluster",
+  name: "New cluster",
+  purpose: "",
+  columnIds: [],
+  layout: {},
+};
+
+/** ⚠ MODULE STATE, so `resetOntologyRoutes()` in `beforeEach` is not optional:
+ *  a create in one test would otherwise leave a third ontology in the next. */
+let created: (typeof NEW_CLUSTER)[] = [];
+
+export function resetOntologyRoutes(): void {
+  created = [];
+}
+
+/**
+ * Raise the /home Ontology face and wait for the BOARD — the face IS the board
+ * since 2026-09-10, so "it rendered" means the cluster header is on screen.
+ */
+export async function openOntologyFace(): Promise<void> {
+  await screen.findByRole("tab", { name: "Overview" });
+  fireEvent.click(screen.getByText("Ontology"));
+  await screen.findByLabelText("Cluster name");
+}
+
+/** Open the header's `…` — the ONE home of Share, Changelog, the agents rungs
+ *  and Delete. */
+export async function openOntologyMenu(name = "Pipeline"): Promise<void> {
+  fireEvent.click(
+    await screen.findByRole("button", { name: `Ontology actions for ${name}` })
+  );
+}
+
+/** Open the cluster dropdown that replaced the tab strip on /home. */
+export async function openOntologySwitcher(): Promise<void> {
+  fireEvent.click(await screen.findByTitle("Switch ontology"));
+}
 
 function object(id: string, name: string, childIds: string[] = []) {
   return {

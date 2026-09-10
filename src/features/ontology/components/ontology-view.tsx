@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
-import { cn } from "@/shared/lib/utils";
 import { pendingRow } from "@/shared/ui/pending";
 import { useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { CapNotice } from "./cap-notice";
+import { ClusterSwitcher, clusterSwitcherEntries } from "./cluster-switcher";
 import { DeleteClusterDialog } from "./delete-cluster-dialog";
 import { KanbanBoard } from "./kanban-board";
 import { ObjectPanel } from "./object-panel";
@@ -30,18 +30,43 @@ interface Props {
    * SELECTION, never a permission — the fence is the ontology service's (§4).
    *
    * ⚠ WHAT IT SUPPRESSES, and why each is the HOST's job rather than a style:
-   * the cluster STRIP (a picker for a board that shows one thing), the New
-   * cluster button beside it, the DELETE button (the /home card's own delete
-   * sits behind a confirm that NAMES the channels the ontology is shared into —
-   * Q4 — which this view cannot know), and the URL write (there is no URL on
-   * /home). Everything below the header — the board, the object panel, the
-   * editors — is untouched.
+   * the cluster STRIP (see `switcher` — /home replaced it with a DROPDOWN on
+   * 2026-09-10 rather than going without a picker), the New cluster button
+   * beside it, the DELETE button (the /home delete sits behind a confirm that
+   * NAMES the channels the ontology is shared into — Q4 — which this view cannot
+   * know), and the URL write (there is no URL on /home). Everything below the
+   * header — the board, the object panel, the editors — is untouched.
    *
    * ⚠ A PIN THAT NAMES NOTHING RESOLVES TO NOTHING, never to `clusters[0]`.
    * Falling back would open a DIFFERENT ontology under the name the operator
    * clicked.
+   *
+   * ⚠ **THE PIN IS THE HOST'S SELECTION, so a host that offers a picker MOVES
+   * it** — pair it with `onSelectCluster`, or the dropdown will change nothing.
    */
   pinnedClusterId?: string;
+  /**
+   * THE PICKER'S FACE (Samuel, 2026-09-10: the /home switcher is *"a dropdown"*,
+   * not tabs). `"pills"` is the strip this page has always worn — and in pinned
+   * mode it means NO picker at all, as it always has. `"dropdown"` is one
+   * trigger over a `PopoverMenu` of every cluster in the container, which is
+   * what fits a host with one line of chrome.
+   *
+   * ⚠ BOTH FACES READ ONE LIST (`cluster-switcher.tsx`). The mode chooses a
+   * render, never a source.
+   */
+  switcher?: "pills" | "dropdown";
+  /** Host-owned selection: fired beside the view's own state so a PINNED host
+   *  can move its pin. Omit and the view keeps selecting for itself. */
+  onSelectCluster?: (id: string) => void;
+  /** Header slot BESIDE THE PICKER — /home's black "+ Ontology", which creates a
+   *  new switcher entry and therefore belongs with the switcher. ⚠ A slot rather
+   *  than a prop because the page button lives in `apps/desktop-ui`, downstream
+   *  of this tree. */
+  headerStart?: ReactNode;
+  /** Header slot at the RIGHT, before "+ Column" — the host's own controls
+   *  (/home's overflow: Share, Changelog, the agents toggle, Delete). */
+  headerEnd?: ReactNode;
   /** Admin/owner — controls whether the upgrade prompt offers checkout. */
   canManageBilling?: boolean;
   /** Member+ — viewers read but can't create, so create affordances
@@ -71,6 +96,10 @@ export function OntologyView({
   workspaceSegment,
   initialClusterSlug,
   pinnedClusterId,
+  switcher = "pills",
+  onSelectCluster,
+  headerStart,
+  headerEnd,
   canManageBilling = false,
   canEdit = true,
   replaceUrl = replaceHistoryUrl,
@@ -113,11 +142,17 @@ export function OntologyView({
       null);
   const selected = selectedId ? (graph.objects[selectedId] ?? null) : null;
   const clusterPending = cluster ? pendingIds.has(cluster.id) : false;
+  // ⚠ ONE list for BOTH picker faces, walked once per graph — never per render
+  // and never per face (`cluster-switcher.tsx`).
+  const entries = useMemo(() => clusterSwitcherEntries(graph), [graph]);
 
   const selectCluster = (id: string) => {
     setClusterId(id);
     setSelectedId(null);
     setConfirmDeleteCluster(false);
+    // ⚠ BESIDE the local write, not instead of it: a PINNED host resolves the
+    // cluster from its own state, and an unpinned one from `clusterId`.
+    onSelectCluster?.(id);
   };
 
   // ⚠ Effect, not inline in `selectCluster`: an optimistic cluster is selected
@@ -236,43 +271,21 @@ export function OntologyView({
     <OntologyResourcesProvider workspaceId={workspaceId} graph={graph}>
       <Frame>
         <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
-          {/* Trackless stadium pills — SegmentedControl language (.seg-pill
-              resting, .raised-tab active); hand-composed for the trailing
-              new-cluster button + pending states. */}
-          {/* ⚠ THE STRIP IS THE CLUSTER PICKER, so pinned mode has none. */}
-          {!pinnedClusterId && (
-            <div className="flex items-center gap-1.5">
-            {graph.clusters.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => selectCluster(c.id)}
-                {...pendingRow(
-                  pendingIds.has(c.id),
-                  cn(
-                    "flex h-[27px] items-center gap-1.5 rounded-full px-3 text-caption font-medium transition-colors",
-                    c.id === cluster.id
-                      ? "raised-tab text-text-primary"
-                      : "seg-pill text-text-secondary hover:text-text-primary"
-                  )
-                )}
-              >
-                {c.name}
-                <span className="text-micro text-text-muted">{c.columnIds.length}</span>
-              </button>
-            ))}
-            {canEdit && (
-              <button
-                type="button"
-                onClick={handleCreateCluster}
-                aria-label="New cluster"
-                className="flex h-[27px] w-[27px] items-center justify-center rounded-full text-text-muted transition hover:text-text-primary"
-              >
-                <Plus size={12} />
-              </button>
-            )}
-            </div>
+          {/* ⚠ THE PICKER IS THE LEFT SLOT. `"pills"` in pinned mode is NO
+              picker — the strip is a chooser for a board showing one thing;
+              `"dropdown"` is one, which is what /home mounts. */}
+          {(switcher === "dropdown" || !pinnedClusterId) && (
+            <ClusterSwitcher
+              mode={switcher}
+              entries={entries}
+              activeId={cluster.id}
+              pendingIds={pendingIds}
+              canEdit={canEdit}
+              onSelect={selectCluster}
+              onCreate={handleCreateCluster}
+            />
           )}
+          {headerStart}
           {/* ⚠ Inert until cluster is real: an edit on a provisional row would
               debounce a PATCH at an id the server has never seen. */}
           <div {...pendingRow(clusterPending, "flex min-w-0 flex-1 items-baseline gap-2")}>
@@ -315,6 +328,7 @@ export function OntologyView({
               <Trash2 size={11} />
             </button>
           )}
+          {headerEnd}
           {canEdit && (
             <button
               type="button"

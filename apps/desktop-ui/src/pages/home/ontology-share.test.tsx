@@ -8,6 +8,9 @@ import {
   SHARES,
   SHARES_PATH,
   ontologyRoutes,
+  openOntologyFace,
+  openOntologyMenu,
+  resetOntologyRoutes,
 } from "./ontology-test-harness";
 
 /**
@@ -38,6 +41,7 @@ let shares: unknown;
 
 beforeEach(() => {
   shares = undefined;
+  resetOntologyRoutes();
   apiRequest.mockReset();
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}) =>
@@ -48,18 +52,25 @@ beforeEach(() => {
   installBridge({ apiRequest });
 });
 
+/** ⚠ THE HEADER'S `…`, NOT A CARD — the /home card list was replaced by the
+ *  workspace board on 2026-09-10 and every /home control moved into that menu. */
 async function openShare(): Promise<void> {
-  await screen.findByRole("tab", { name: "Overview" });
-  fireEvent.click(screen.getByText("Ontology"));
-  const name = await screen.findByText("Pipeline");
-  const card = name.parentElement as HTMLElement;
-  fireEvent.click(within(card).getByRole("button", { name: "Share" }));
+  renderHome();
+  await openOntologyFace();
+  await openOntologyMenu();
+  fireEvent.click(screen.getByRole("menuitem", { name: "Share" }));
   await screen.findByRole("dialog", { name: /Share Pipeline/i });
+}
+
+async function openDelete(): Promise<void> {
+  renderHome();
+  await openOntologyFace();
+  await openOntologyMenu();
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 }
 
 describe("the popup", () => {
   it("shows one row per HOME CHANNEL, at the levels the server stored", async () => {
-    renderHome();
     await openShare();
 
     // The channel comes off `GET /api/home/channels` — the read the page has
@@ -91,7 +102,6 @@ describe("the popup", () => {
     // ⚠ THE ORDER IS THE LADDER (`none < view < edit`, I2) and the roster is
     // DERIVED from `ONTOLOGY_LEVELS`, so a fourth spelling of a stored level
     // cannot reach a control that then writes it.
-    renderHome();
     await openShare();
 
     const members = await screen.findByRole("tablist", {
@@ -105,7 +115,6 @@ describe("the popup", () => {
   });
 
   it("PUTs the WHOLE triple for the channel that moved, and only that one", async () => {
-    renderHome();
     await openShare();
 
     const guests = await screen.findByRole("tablist", {
@@ -130,7 +139,6 @@ describe("the popup", () => {
   });
 
   it("writes NOTHING when nothing moved", async () => {
-    renderHome();
     await openShare();
     await screen.findByRole("tablist", { name: "Members in Priya Shah" });
 
@@ -151,7 +159,6 @@ describe("the popup", () => {
   });
 
   it("🔒 UNSHARES WITH A DELETE when all three fall to `none` — never three stored nones", async () => {
-    renderHome();
     await openShare();
 
     for (const label of ["Members", "Guests", "My agents"]) {
@@ -177,7 +184,6 @@ describe("read-only", () => {
     // 🔒 `canManage` IS THE SERVER'S, the same predicate the write applies — so
     // the dialog cannot offer an editor the PUT will refuse.
     shares = { ...SHARES, canManage: false };
-    renderHome();
     await openShare();
 
     expect(
@@ -194,11 +200,7 @@ describe("read-only", () => {
 
 describe("deleting", () => {
   it("NAMES the channels the delete unshares from", async () => {
-    renderHome();
-    await screen.findByRole("tab", { name: "Overview" });
-    fireEvent.click(screen.getByText("Ontology"));
-    const card = (await screen.findByText("Pipeline")).parentElement as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Delete" }));
+    await openDelete();
 
     expect(
       await screen.findByText(/unshares it from Priya Shah/)
@@ -206,11 +208,7 @@ describe("deleting", () => {
   });
 
   it("DELETEs the cluster once confirmed", async () => {
-    renderHome();
-    await screen.findByRole("tab", { name: "Overview" });
-    fireEvent.click(screen.getByText("Ontology"));
-    const card = (await screen.findByText("Pipeline")).parentElement as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Delete" }));
+    await openDelete();
     await screen.findByText(/unshares it from Priya Shah/);
 
     fireEvent.click(

@@ -1,21 +1,19 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { History, MoreHorizontal, Share2, Trash2 } from "lucide-react";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
-import { PillChoice } from "@/shared/ui/form-dialog";
+import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { OntologyView } from "@/features/ontology/components/ontology-view";
 import { ClusterChangelog } from "@/features/ontology/components/cluster-changelog";
 import { createCluster, setAgentsMayEdit } from "@/features/ontology/client/api";
 import { NEW_CLUSTER_NAME } from "@/features/ontology/optimistic-create";
-import {
-  ontologySnapshotKey,
-} from "@/features/ontology/hooks/use-ontology";
+import { ontologySnapshotKey } from "@/features/ontology/hooks/use-ontology";
 import {
   useOntologies,
   type OntologyListRow,
 } from "@/features/ontology/hooks/use-ontologies";
 
-import type { OntologyLevel } from "@/features/ontology/types";
 import { PageError } from "#/components/page-states";
 import { EmptyLine } from "./knowledge-panel-cards";
 import { CreateButton } from "./panel-buttons";
@@ -26,32 +24,38 @@ import {
 } from "./ontology-share";
 
 /**
- * /home → Ontology. THE CALLER'S OWN ONTOLOGIES, AND WHO ELSE REACHES THEM
- * (Samuel, 2026-09-09; `docs/specs/home-ontology.md` S4).
+ * /home → Ontology. **THE WORKSPACE ONTOLOGY PAGE, RENDERED FOR THE OPERATOR'S
+ * OWN CONTAINER** (Samuel, 2026-09-10: *"the UI for the ontology in the home
+ * should look a lot more like the ontology for workspaces … instead of the
+ * second image"* — the card list with its Open/Share/Changelog/Delete pills).
  *
- * ⚠ **ONE SECTION, AND ITS ROWS ARE PERSONAL** — Samuel: *"these are ontologies
- * that will be associated with the user's home space. A user can have multiple
- * ontologies."* An ontology is an `ontology_clusters` row in the caller's
- * `kind='personal'` container (INVARIANTS §4A), never the selected channel's —
- * Knowledge and Agents list what is IN the room, this lists what the operator
- * OWNS and lends INTO rooms.
+ * ⚠ **THERE IS NO LIST ANY MORE.** The face IS the board: the same
+ * `ontology/components/ontology-view.tsx › OntologyView` the `/[ws]/ontology`
+ * page mounts, same header geometry, same kanban. What was a grid of cards is
+ * now the SWITCHER in that header — Samuel: *"for the ontology switcher, instead
+ * of different tabs, have it be a dropdown"* — so an ontology is opened by
+ * naming it, not by finding its card and pressing Open.
  *
- * ⚠ **SO THE FACE TAKES NO CHANNEL AT ALL**: it renders the same rows whichever
- * row is selected, cross-channel as Overview is (`home-tabs.ts › ONTOLOGY_PANE`),
- * and the share popup asks the SERVER for the operator's home channels rather
- * than taking the selected one — a lend is a deliberate pick.
+ * ⚠ **ITS ROWS ARE STILL PERSONAL** — an ontology is an `ontology_clusters` row
+ * in the caller's `kind='personal'` container (INVARIANTS §4A), never the
+ * selected channel's. Knowledge and Agents list what is IN the room; this is
+ * what the operator OWNS and lends INTO rooms, which is why the face takes no
+ * channel at all (`home-tabs.ts › ONTOLOGY_PANE`) and the share popup asks the
+ * SERVER for the operator's home channels rather than taking the selected one.
  *
- * ⚠ **THE BOARD IS REUSED BY IMPORT, PINNED TO ONE CLUSTER.** Opening a card
- * mounts `ontology/components/ontology-view.tsx › OntologyView` with
- * `pinnedClusterId`, which drops that view's cluster strip, New-cluster button,
- * delete and URL write and changes nothing else. It reads the SAME
- * `ontologySnapshotKey` entry this list does, so opening one costs no request.
+ * ⚠ **SELECTION IS THIS COMPONENT'S, AND IT REACHES THE BOARD AS `pinnedClusterId`.**
+ * The board is pinned exactly as it was before the restyle; what changed is that
+ * the host now offers a picker for the pin (`onSelectCluster`). ⚠ It must stay
+ * that way round: the board's OWN create mints PROVISIONAL ids that its reducer
+ * swaps when the POST answers, so a host holding one would be left pointing at
+ * an id the graph no longer has. /home therefore creates through the API and
+ * selects the id the SERVER minted (see `create` below).
  *
- * ⚠ **THE SOLO TOGGLE IS ON THE CARD, NOT IN THE POPUP** (Samuel: *"for channels
- * with only the user, private ontologies are automatically viewable and editable
- * by their agents. but there should be a setting, where they can toggle it so
- * that their agents can only view"*) — it is a property of the ONTOLOGY, and the
- * popup is about CHANNELS.
+ * ⚠ **EVERY /home-ONLY CONTROL LIVES IN ONE PLACE — the header's `…` overflow**
+ * (`OntologyOverflow`): Share, Changelog, the agents view/edit toggle, Delete.
+ * They are the host's because none of them is a fact about a board: the delete
+ * confirm NAMES the channels the ontology is lent into (Q4), which the view
+ * cannot know.
  *
  * ⚠ ONE LAYOUT FOR ALL FIVE TABS (`./index.tsx`): this renders INSIDE the record
  * pane, never moving the conversation column and never going full-width.
@@ -68,12 +72,38 @@ export function HomeOntologyPanels({
   homeWorkspaceSegment: string | null;
 }) {
   const queryClient = useQueryClient();
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [changelogId, setChangelogId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [deleting, setDeleting] = useState<ShareTarget | null>(null);
   const [creating, setCreating] = useState(false);
   const { rows, resolved, error, refetch } = useOntologies(homeWorkspaceId);
+
+  // ⚠ SELECTION PERSISTS, BUT NEVER DANGLES: a deleted or not-yet-chosen id
+  // falls to the first row, so the pin always names a cluster the graph has —
+  // the board's own rule is that a pin naming nothing renders "no longer here".
+  const active =
+    rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
+
+  async function create() {
+    if (homeWorkspaceId === null) return;
+    setCreating(true);
+    try {
+      // ⚠ NOT THE BOARD'S OPTIMISTIC CREATE, and deliberately (see the header):
+      // that path mints a provisional id this component would then hold. The
+      // POST answers with the real one, which is what the pin takes.
+      const cluster = await createCluster(homeWorkspaceId, {
+        name: NEW_CLUSTER_NAME,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ontologySnapshotKey(homeWorkspaceId),
+      });
+      setChangelogOpen(false);
+      setSelectedId(cluster.id);
+    } finally {
+      setCreating(false);
+    }
+  }
 
   if (homeWorkspaceId === null) {
     return (
@@ -88,21 +118,42 @@ export function HomeOntologyPanels({
   }
   if (error) return <PageError error={error} onRetry={refetch} />;
 
-  const changelog = rows.find((row) => row.id === changelogId) ?? null;
-  if (changelogId !== null && changelog !== null) {
+  // ⚠ NEITHER SENTENCE MAY STATE AN EMPTINESS IT HAS NOT MEASURED (INVARIANTS
+  // §5A): the pane stays bare until the read resolves, and a FAILED read is
+  // handled above rather than left as "pending forever" (F-339).
+  if (!resolved) return <div className={PANE} />;
+  if (active === null) {
+    return (
+      <div className={PANE}>
+        <SectionPanel
+          id="home-ontology"
+          label="Ontology"
+          action={
+            <CreateButton disabled={creating} onClick={() => void create()}>
+              Ontology
+            </CreateButton>
+          }
+        >
+          <EmptyLine>No ontologies yet.</EmptyLine>
+        </SectionPanel>
+      </div>
+    );
+  }
+
+  if (changelogOpen) {
     return (
       <div className={PANE}>
         <div className="flex shrink-0 items-center gap-2">
-          <OpenScaleButton onClick={() => setChangelogId(null)}>
-            All ontologies
+          <OpenScaleButton onClick={() => setChangelogOpen(false)}>
+            Back
           </OpenScaleButton>
         </div>
         {/* ⚠ THE ROLL-UP IS ITS OWN FACE, not a section under the board: it is
             the ontology's whole history, and the board pane is already a
             full-height canvas with a 420px panel beside it. */}
-        <SectionPanel id="home-ontology-changelog" label={`${changelog.name} · Changelog`}>
+        <SectionPanel id="home-ontology-changelog" label={`${active.name} · Changelog`}>
           <ClusterChangelog
-            clusterId={changelog.id}
+            clusterId={active.id}
             workspaceId={homeWorkspaceId}
             // ⚠ /home lists only what the caller OWNS, so a restore is theirs to
             // make. A peer's reach into a LENT ontology is the service's answer
@@ -114,85 +165,36 @@ export function HomeOntologyPanels({
     );
   }
 
-  const open = rows.find((row) => row.id === openId) ?? null;
-  if (openId !== null && open !== null) {
-    return (
-      <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden p-3">
-        <div className="flex shrink-0 items-center gap-2">
-          <OpenScaleButton onClick={() => setOpenId(null)}>
-            All ontologies
-          </OpenScaleButton>
-        </div>
-        <OntologyView
-          workspaceId={homeWorkspaceId}
-          workspaceSegment={homeWorkspaceSegment ?? ""}
-          pinnedClusterId={open.id}
-          // ⚠ THE OWNER'S OWN CONTAINER, so the board is editable. A peer's
-          // reach into a LENT ontology is the service's answer (§4), never a
-          // prop composed here — /home lists only what the caller owns.
-          canEdit
-          // ⚠ NO URL ON /home. Pinned mode makes no URL write; this is the
-          // belt-and-braces half, so a future branch cannot reach `navigate`.
-          replaceUrl={NO_URL}
-        />
-      </div>
-    );
-  }
-
-  async function create() {
-    setCreating(true);
-    try {
-      // ⚠ NOT OPTIMISTIC, and deliberately: the optimistic path lives in the
-      // BOARD's store (`optimistic-create.ts`), which is a reducer this list
-      // does not mount. A list is a query — so the create lands, the snapshot
-      // entry is invalidated, and the row arrives with the refetch.
-      const cluster = await createCluster(homeWorkspaceId as string, {
-        name: NEW_CLUSTER_NAME,
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ontologySnapshotKey(homeWorkspaceId as string),
-      });
-      setOpenId(cluster.id);
-    } finally {
-      setCreating(false);
-    }
-  }
-
   return (
-    <div className={PANE}>
-      <SectionPanel
-        id="home-ontology"
-        label="Ontology"
-        action={
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-3">
+      <OntologyView
+        workspaceId={homeWorkspaceId}
+        workspaceSegment={homeWorkspaceSegment ?? ""}
+        pinnedClusterId={active.id}
+        switcher="dropdown"
+        onSelectCluster={setSelectedId}
+        headerStart={
           <CreateButton disabled={creating} onClick={() => void create()}>
             Ontology
           </CreateButton>
         }
-      >
-        {/* ⚠ NEITHER SENTENCE MAY STATE AN EMPTINESS IT HAS NOT MEASURED
-            (INVARIANTS §5A): the body stays bare until the read resolves, and a
-            FAILED read is handled above rather than left as "pending forever"
-            (F-339). */}
-        {!resolved ? (
-          <div className="h-10" />
-        ) : rows.length === 0 ? (
-          <EmptyLine>No ontologies yet.</EmptyLine>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {rows.map((row) => (
-              <OntologyCard
-                key={row.id}
-                row={row}
-                workspaceId={homeWorkspaceId}
-                onOpen={() => setOpenId(row.id)}
-                onShare={() => setSharing({ id: row.id, name: row.name })}
-                onDelete={() => setDeleting({ id: row.id, name: row.name })}
-                onChangelog={() => setChangelogId(row.id)}
-              />
-            ))}
-          </div>
-        )}
-      </SectionPanel>
+        headerEnd={
+          <OntologyOverflow
+            row={active}
+            workspaceId={homeWorkspaceId}
+            onShare={() => setSharing({ id: active.id, name: active.name })}
+            onChangelog={() => setChangelogOpen(true)}
+            onDelete={() => setDeleting({ id: active.id, name: active.name })}
+          />
+        }
+        // ⚠ THE OWNER'S OWN CONTAINER, so the board is editable. A peer's reach
+        // into a LENT ontology is the service's answer (§4), never a prop
+        // composed here — /home shows only what the caller owns.
+        canEdit
+        // ⚠ NO URL ON /home. Pinned mode makes no URL write; this is the
+        // belt-and-braces half, so a future branch cannot reach `navigate`.
+        replaceUrl={NO_URL}
+      />
 
       {sharing && (
         <OntologyShareDialog
@@ -207,8 +209,12 @@ export function HomeOntologyPanels({
           ontology={deleting}
           onClose={() => setDeleting(null)}
           onDeleted={() => {
+            // Selection moves to the ADJACENT row, never index 0 — the board's
+            // own delete rule, and the reason this handler knows the order.
+            const at = rows.findIndex((row) => row.id === deleting.id);
+            setSelectedId(rows[at + 1]?.id ?? rows[at - 1]?.id ?? null);
             setDeleting(null);
-            if (openId === deleting.id) setOpenId(null);
+            setChangelogOpen(false);
             void queryClient.invalidateQueries({
               queryKey: ontologySnapshotKey(homeWorkspaceId),
             });
@@ -220,78 +226,122 @@ export function HomeOntologyPanels({
 }
 
 /**
- * ONE ONTOLOGY — what it is, how big it is, who else reaches it, and the solo
- * toggle.
+ * THE /home CONTROLS, ALL FOUR, IN ONE MENU — what the card's pill row used to
+ * carry (2026-09-10).
  *
- * ⚠ **"Shared into N channels" IS OMITTED WHEN THE PAYLOAD DID NOT CARRY IT**,
- * never rendered as zero (INVARIANTS §8, and `use-ontologies.ts` carries the
- * fallback rule): a stale cached snapshot has no share counts, and "0 channels"
- * would be a claim about rows nobody read.
+ * ⚠ **ONE PLACE PER CONTROL.** Nothing here is repeated in the board and nothing
+ * was dropped in the restyle: Share and Delete open the dialogs that know about
+ * CHANNELS, Changelog raises the day-grouped roll-up, and the two agent rungs
+ * are the `agents_may_edit` column.
  *
- * ⚠ **THE AGENTS PILL IS THE `agents_may_edit` COLUMN, WHICH ONLY EVER
- * NARROWS.** Its two rungs are `view` and `edit` and there is no `none`: an
- * operator's own agents reach their own ontology (Samuel's solo default is
- * "viewable and editable"), and the toggle chooses which of the two.
+ * ⚠ **THE AGENTS ROWS ARE `agents_may_edit`, WHICH ONLY EVER NARROWS.** Its two
+ * rungs are `view` and `edit` and there is no `none`: an operator's own agents
+ * reach their own ontology (Samuel's solo default is "viewable and editable"),
+ * and the toggle chooses which of the two.
+ *
+ * ⚠ COORDINATE MODE, like the switcher beside it and for the same reason: this
+ * menu opens inside `.page-float`, an overflow-clipping pane where a
+ * trigger-anchored panel renders as a clipped sliver.
  */
-function OntologyCard({
+function OntologyOverflow({
   row,
   workspaceId,
-  onOpen,
   onShare,
-  onDelete,
   onChangelog,
+  onDelete,
 }: {
   row: OntologyListRow;
   workspaceId: string;
-  onOpen: () => void;
   onShare: () => void;
-  onDelete: () => void;
-  /** The day-grouped roll-up of everything that changed in this ontology. */
   onChangelog: () => void;
+  onDelete: () => void;
 }) {
   const queryClient = useQueryClient();
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+
+  const close = () => setAnchor(null);
+  const setAgents = (mayEdit: boolean) => {
+    close();
+    void setAgentsMayEdit(workspaceId, row.id, mayEdit).then(() =>
+      queryClient.invalidateQueries({ queryKey: ontologySnapshotKey(workspaceId) })
+    );
+  };
+
   return (
-    <div className="bento flex min-w-0 flex-col gap-2 p-3">
-      <p className="truncate text-body font-semibold text-text-primary">
-        {row.name}
-      </p>
-      <p className="text-caption text-text-muted">
-        {row.objectCount} {row.objectCount === 1 ? "object" : "objects"}
-        {row.sharedChannelCount !== null &&
-          ` · shared into ${row.sharedChannelCount} ${
-            row.sharedChannelCount === 1 ? "channel" : "channels"
-          }`}
-      </p>
-      <PillChoice<AgentsLevel>
-        label="Agents"
-        options={AGENT_OPTIONS}
-        value={row.agentsMayEdit ? "edit" : "view"}
-        ariaLabel={`Agents on ${row.name}`}
-        onChange={(next) => {
-          void setAgentsMayEdit(workspaceId, row.id, next === "edit").then(() =>
-            queryClient.invalidateQueries({
-              queryKey: ontologySnapshotKey(workspaceId),
-            })
-          );
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`Ontology actions for ${row.name}`}
+        aria-haspopup="menu"
+        aria-expanded={anchor !== null}
+        onClick={() => {
+          if (anchor) {
+            close();
+            return;
+          }
+          const rect = triggerRef.current?.getBoundingClientRect();
+          if (rect) setAnchor({ x: rect.right - 200, y: rect.bottom + 4 });
         }}
-      />
-      <div className="flex flex-wrap items-center gap-2">
-        <OpenScaleButton onClick={onOpen}>Open</OpenScaleButton>
-        <OpenScaleButton onClick={onShare}>Share</OpenScaleButton>
-        <OpenScaleButton onClick={onChangelog}>Changelog</OpenScaleButton>
-        <OpenScaleButton onClick={onDelete}>Delete</OpenScaleButton>
-      </div>
-    </div>
+        className="btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
+      >
+        <MoreHorizontal size={13} />
+      </button>
+      <Popover
+        open={anchor !== null}
+        at={anchor ?? undefined}
+        onClose={close}
+        className="min-w-[200px]"
+      >
+        <MenuItem
+          icon={<Share2 size={12} />}
+          onSelect={() => {
+            close();
+            onShare();
+          }}
+        >
+          Share
+        </MenuItem>
+        <MenuItem
+          icon={<History size={12} />}
+          onSelect={() => {
+            close();
+            onChangelog();
+          }}
+        >
+          Changelog
+        </MenuItem>
+        <MenuDivider />
+        <MenuItem
+          showCheck
+          active={!row.agentsMayEdit}
+          onSelect={() => setAgents(false)}
+        >
+          Agents can view
+        </MenuItem>
+        <MenuItem
+          showCheck
+          active={row.agentsMayEdit}
+          onSelect={() => setAgents(true)}
+        >
+          Agents can edit
+        </MenuItem>
+        <MenuDivider />
+        <MenuItem
+          destructive
+          icon={<Trash2 size={12} />}
+          onSelect={() => {
+            close();
+            onDelete();
+          }}
+        >
+          Delete
+        </MenuItem>
+      </Popover>
+    </>
   );
 }
-
-/** The two rungs the SOLO toggle offers — a subset of the ladder, named from
- *  it so the two vocabularies cannot drift. */
-type AgentsLevel = Extract<OntologyLevel, "view" | "edit">;
-const AGENT_OPTIONS: ReadonlyArray<{ key: AgentsLevel; label: string }> = [
-  { key: "view", label: "View" },
-  { key: "edit", label: "Edit" },
-];
 
 const PANE = "flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3";
 
