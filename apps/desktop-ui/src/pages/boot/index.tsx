@@ -2,7 +2,8 @@ import { Navigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HOME_PATH } from "#/components/app-shell/account-rail";
 import { seedBootAnswer } from "#/components/app-shell/use-workspace-route";
-import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
+import { PageError, isUnauthorized } from "#/components/page-states";
+import { HomePageSkeleton } from "#/pages/home/home-skeleton";
 import { SignedOutScreen } from "./signed-out-screen";
 import { bootQueryKey, fetchBoot, useAuthPhase } from "./use-boot-state";
 
@@ -95,7 +96,28 @@ export default function BootPage() {
   return <Navigate to={`/${boot.data.segment}`} replace />;
 }
 
-/** The light cover every pre-shell state renders on. */
+/**
+ * The cover every pre-shell state renders on.
+ *
+ * ⚠ THE LOADING FACE IS /home's FRAME, NOT A WHITE BOX (Samuel, 2026-09-10:
+ * *"the loading skeleton for when i first open the app … doesnt look at all like
+ * the actual UI"*). This rendered `PageLoading` on `fixed inset-0 bg-white` —
+ * a 52px bar over a centred `max-w-[960px]` column on WHITE, where a cold launch
+ * resolves into a DARK frame holding the account rail, a gray panel, a 290px
+ * relationship list and a bordered record pane. Nothing in that ghost survived
+ * the swap, so the first paint of the app was a surface the app does not have.
+ *
+ * ⚠ /home's FRAME AND NOT THE WORKSPACE SHELL'S, because that is where a cold
+ * launch lands: `/api/boot` with no segment answers the caller's `kind='personal'`
+ * container and this page routes it to `HOME_PATH` (the 2026-09-08 ruling above).
+ * `HomePageSkeleton` is that page's own shape, so the boot cover and /home's own
+ * pending gate paint the SAME thing and the hand-off between them is invisible.
+ *
+ * ⚠ THE ERROR BRANCH KEEPS THE WHITE COVER. `PageError` is TEXT and a button;
+ * a shimmering frame is a claim that something is still arriving. Boot states
+ * render outside page chrome, on raw body carrying the dark landing backdrop, so
+ * that branch still pins itself to a light ground for legibility.
+ */
 function BootCover({
   label,
   children,
@@ -103,9 +125,10 @@ function BootCover({
   label?: string;
   children?: React.ReactNode;
 }) {
-  return (
-    <div className="fixed inset-0 z-50 flex bg-white">
-      {children ?? <PageLoading label={label} />}
-    </div>
-  );
+  if (children) {
+    return <div className="fixed inset-0 z-50 flex bg-white">{children}</div>;
+  }
+  // `shell.root` is already `position: fixed; inset: 0` above the landing
+  // backdrop, so the ghost covers without a second fixed box around it.
+  return <HomePageSkeleton label={label ?? "Starting Dopl"} />;
 }

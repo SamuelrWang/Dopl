@@ -52,3 +52,36 @@ export function SkeletonSurface({
     </div>
   );
 }
+
+/**
+ * THE SAME MOTION OPT-OUT WITHOUT THE ANNOUNCEMENT — for a CHROME ghost that
+ * stands OUTSIDE the announcing region.
+ *
+ * ⚠ IT EXISTS FOR EXACTLY ONE SHAPE: `components/skeletons/shell-skeleton.tsx ›
+ * ShellChromeSkeleton`, which paints the account rail and the sidebar around a
+ * PAGE skeleton that brings its own `SkeletonSurface`. Nesting two `role="status"`
+ * regions would announce one load twice; painting the chrome outside the wrapper
+ * entirely would drop `prefers-reduced-motion` for those blocks, which INVARIANTS
+ * §1A forbids ("static blocks in the same geometry, never nothing"). This is the
+ * half that is a surface — the module class — and none of the half that is a
+ * status.
+ *
+ * ⚠ `aria-hidden`, because the announcement it is missing lives on its sibling.
+ * ⚠ IT PAINTS NO GROUND either, for `SkeletonSurface`'s reason: `className` is
+ * the real chrome's own recipe (`account-rail.module.css › .rail`,
+ * `app-shell.module.css › .sidebar`).
+ */
+export function SkeletonChrome({
+  className,
+  children,
+}: {
+  /** The real chrome's own class — see the docblock. */
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div aria-hidden className={cn(styles.surface, className)}>
+      {children}
+    </div>
+  );
+}

@@ -1,0 +1,282 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { render } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { NAV } from "@/shared/layout/app-shell/app-sidebar-core";
+import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
+import {
+  HomeAgentPanelsSkeleton,
+  HomeKnowledgePanelsSkeleton,
+  HomePageSkeleton,
+} from "#/pages/home/home-skeleton";
+import { HOME_DEFAULT_TAB, HOME_TABS } from "#/pages/home/home-tabs";
+import { AccountRailSkeleton, ShellChromeSkeleton } from "./shell-skeleton";
+import { sectionSkeleton } from "./section-skeleton";
+
+/**
+ * THE APP FRAME'S LOADING STATES — the workspace shell's chrome, the boot cover
+ * and /home's frame. ONE reason to change: those three ghosts are all built out
+ * of `app-shell.module.css` + `account-rail.module.css`, so a restructure of the
+ * frame moves all three and this file with them.
+ *
+ * ⚠ ITS OWN FILE, and the split is the 500-line cap (`eslint.config.mjs ›
+ * max-lines`, an error over `apps/*​/src/**`): `page-skeletons.test.tsx` sat at
+ * the cap, and one file per reason to change puts the SHELL's chrome here —
+ * it changes when the app frame does — and the per-PAGE shapes there, where
+ * they change when a page does. /home's geometry describe MOVED here with the
+ * shell block on 2026-09-10, for the same reason: /home's ghost mounts
+ * `shell.root` / `.body` / `.surface` itself, so it is a frame shape.
+ *
+ * Same two kinds of assertion that file uses, and for its reasons: a RENDER pin
+ * for what a reader gets, and a SOURCE pin for geometry shared with the real
+ * chrome — a CSS-module class is a build artifact and a Tailwind arbitrary value
+ * is a string, so neither is comparable any other way, and a source scan is
+ * BIDIRECTIONAL: it fails when the ghost drifts AND when the shell does.
+ */
+const file = (rel: string) =>
+  readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+
+/** Source with comments stripped — these files EXPLAIN what they replaced, so a
+ *  raw scan would fail on the very docblock recording the decision. */
+const code = (rel: string) =>
+  file(rel)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+const SHELL_SKELETON = file("./shell-skeleton.tsx");
+const HOME_SKELETON = file("../../pages/home/home-skeleton.tsx");
+const APP_SHELL = code("../app-shell/app-shell.tsx");
+
+function ghosts(container: HTMLElement) {
+  return container.querySelectorAll('[data-slot="skeleton"]');
+}
+
+/** Every visible string on the surface. A skeleton's only text is `sr-only`. */
+function visibleText(container: HTMLElement) {
+  const clone = container.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll(".sr-only").forEach((node) => node.remove());
+  return clone.textContent?.trim() ?? "";
+}
+
+/**
+ * THE TWO STATES SAMUEL WAS LOOKING AT ON 2026-09-10 — cold open and workspace
+ * switch — and they are the two that had no shape at all: both rendered
+ * `PageLoading` inside a bare full-screen box, so the app's frame (rail, dark
+ * ground, sidebar, page card) was torn down for the read and rebuilt after it.
+ *
+ * ⚠ THESE PINS ARE STRUCTURAL PARITY, NOT LOOK. What is asserted is that the
+ * ghost composes the SAME boxes the loaded surface composes, in the same nesting
+ * — so the resolve is a fade of contents rather than a re-layout — and that the
+ * geometry the ghost invented is gone from BOTH files.
+ */
+describe("the shell's own loading state mirrors the shell", () => {
+  /**
+   * ⚠ THE SIX BOXES, READ OUT OF `app-shell.tsx` ITSELF. A CSS-module class is a
+   * build artifact, so the comparable thing is the EXPRESSION; both files are
+   * scanned, which makes the pin bidirectional — a restructure of the real shell
+   * fails it just as loudly as a drift in the ghost.
+   */
+  it("composes the shell's own five boxes, class expression for class expression", () => {
+    for (const box of [
+      "className={shell.root}",
+      "className={shell.body}",
+      "className={shell.surface}",
+      'cn("page-float", shell.panel)',
+      "className={shell.pageCard}",
+    ]) {
+      expect(APP_SHELL).toContain(box.replace("shell.", "styles."));
+      expect(SHELL_SKELETON).toContain(box);
+    }
+    // The sidebar is the core's box, and the ghost wears it directly.
+    expect(SHELL_SKELETON).toContain("className={shell.sidebar}");
+    expect(
+      file("../../../../../src/shared/layout/app-shell/app-sidebar-core.tsx")
+    ).toContain("className={styles.sidebar}");
+  });
+
+  /**
+   * 🚫 THE INVENTED GEOMETRY IS GONE — a full-screen cover holding the generic
+   * ghost's centred column was the whole of the old pending state.
+   * ⚠ THE COVER SURVIVES ON THE ERROR BRANCH ONLY, deliberately: `PageError` is
+   * text and a button, and it is not this file's `PageLoading` that is being
+   * replaced there. So the pin is that `PageLoading` has NO caller left here.
+   */
+  it("no longer paints a bare full-screen cover while it loads", () => {
+    expect(APP_SHELL).not.toContain("PageLoading");
+    expect(APP_SHELL).toContain("<ShellChromeSkeleton");
+    const { container } = render(
+      <ShellChromeSkeleton>{sectionSkeleton("overview")}</ShellChromeSkeleton>
+    );
+    expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
+  });
+
+  /**
+   * ⚠ ONE `role="status"` FOR ONE LOAD. The chrome stands in `SkeletonChrome`
+   * (the module class without the announcement) and the PAGE skeleton inside the
+   * card brings the status region — nesting two would announce the same load
+   * twice, and painting the chrome outside the module class would drop the
+   * `prefers-reduced-motion` opt-out §1A requires.
+   */
+  it("announces once, drops its motion everywhere, and presses nothing", () => {
+    const { container } = render(
+      <ShellChromeSkeleton>{sectionSkeleton(null)}</ShellChromeSkeleton>
+    );
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+    expect(container.querySelectorAll("a")).toHaveLength(0);
+    expect(visibleText(container)).toBe("");
+    // Every shimmering block stands inside a `skeletons.module.css` surface.
+    ghosts(container).forEach((node) => {
+      expect(node.closest('[class*="surface"]')).not.toBeNull();
+    });
+  });
+
+  /** ⚠ ONE ROW PER `NAV` ENTRY — the count is the real nav's, so a ninth
+   *  section moves the ghost with it. */
+  it("ghosts one sidebar row per real nav section", () => {
+    const { container } = render(
+      <ShellChromeSkeleton>{sectionSkeleton("channels")}</ShellChromeSkeleton>
+    );
+    // `.nav-chip` is the row recipe on both sides; the foot's Settings row wears
+    // it too, which is why the expected count is NAV + 1.
+    expect(container.querySelectorAll(".nav-chip")).toHaveLength(NAV.length + 1);
+  });
+
+  /**
+   * ⚠ THE RAIL IS THE RAIL'S OWN MODULE. The 2026-08-28 /home ghost restated
+   * `pt-[7px]` and silently stopped being the rail's shape when 2026-09-09 moved
+   * that pad to `calc(--shell-gap-top + --page-float-gap-top)`; reading `.rail`,
+   * `.tile` and `.workspaces` is what makes that impossible.
+   */
+  it("the rail ghost mounts account-rail's own classes, never restated numbers", () => {
+    expect(SHELL_SKELETON).toContain(
+      'import rail from "#/components/app-shell/account-rail.module.css"'
+    );
+    for (const cls of ["rail.rail", "rail.tile", "rail.workspaces"]) {
+      expect(SHELL_SKELETON).toContain(cls);
+    }
+    expect(code("./shell-skeleton.tsx")).not.toContain("pt-[7px]");
+    const { container } = render(<AccountRailSkeleton />);
+    expect(container.querySelectorAll('[class*="tile"]')).toHaveLength(5);
+  });
+
+  /**
+   * ⚠ THE SWITCH GHOSTS THE PAGE IT IS HEADING FOR, off the same
+   * `activeSectionFromPath` the nav highlights with — so the card under the
+   * sidebar is the section's own shape and not a generic one.
+   */
+  it("picks the routed section's own skeleton", () => {
+    expect(APP_SHELL).toContain(
+      "sectionSkeleton(activeSectionFromPath(location.pathname))"
+    );
+    const CHANNELS = render(<>{sectionSkeleton("channels")}</>).container;
+    expect(CHANNELS.innerHTML).toBe(
+      render(<ChannelsSkeleton label="Opening workspace" />).container.innerHTML
+    );
+  });
+
+  /**
+   * ⚠ THE COLD OPEN IS /home's FRAME, because that is where a cold launch lands:
+   * `/api/boot` with no segment answers the caller's personal container and boot
+   * routes it to `HOME_PATH`. So the cover and /home's own pending gate paint the
+   * SAME shape and the hand-off between them is invisible — where the white
+   * `fixed inset-0` cover it replaced shared nothing with either.
+   */
+  it("the boot cover is /home's frame, not a white box", () => {
+    const boot = code("../../pages/boot/index.tsx");
+    expect(boot).toContain("<HomePageSkeleton");
+    expect(boot).not.toContain("<PageLoading");
+    // The error branch KEEPS the light cover: `PageError` is text and a button.
+    expect(boot).toContain('className="fixed inset-0 z-50 flex bg-white"');
+    expect(boot).toContain("<PageError");
+  });
+});
+
+describe("the /home shapes are /home's own geometry", () => {
+  /**
+   * ⚠ TWO CELLS OF ONE VAR, NOT A COLUMN AND A PAD (2026-09-10). The header
+   * stopped being `pl-[var(--home-list-w)]` on 2026-08-30, when the operator's
+   * face moved into that column and the pad became a real `w-[…] px-3` CELL
+   * holding it. The ghost still wore the pad, so its selector started one `px-3`
+   * left of the real one and the avatar had no slot.
+   */
+  it("sizes the list column and the header cell from ONE width var", () => {
+    const { container } = render(<HomePageSkeleton />);
+    expect(
+      container.querySelectorAll(".w-\\[var\\(--home-list-w\\)\\]")
+    ).toHaveLength(2);
+    const CELL =
+      'className="flex w-[var(--home-list-w)] shrink-0 items-center px-3"';
+    expect(file("../../pages/home/home-header.tsx")).toContain(CELL);
+    expect(HOME_SKELETON).toContain(CELL);
+    // 🚫 THE PAD IS GONE, and that is half the pin: bidirectional.
+    expect(code("../../pages/home/home-skeleton.tsx")).not.toContain(
+      "pl-[var(--home-list-w)]"
+    );
+    // The generic page ghost's giveaway — a centred document column /home has
+    // never had.
+    expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
+  });
+
+  /** ⚠ BYTE-SHARED WITH `index.tsx`'s OWN PANE, and the `flex-col` is why it is
+   *  worth pinning: the real pane is a ROW holding one `Crossfade`, and the
+   *  ghost carried a column for as long as it drew a 52px pane header the
+   *  landing face does not have. */
+  it("draws the record pane as the page's own bordered column", () => {
+    const PANE =
+      "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card";
+    expect(file("../../pages/home/index.tsx")).toContain(PANE);
+    expect(HOME_SKELETON).toContain(PANE);
+    const { container } = render(<HomePageSkeleton />);
+    expect(container.querySelector(".border-home-panel-line")).not.toBeNull();
+  });
+
+  /** ⚠ ONE PILL PER `HOME_TABS` ENTRY — FIVE since the Ontology face landed
+   *  (2026-09-09) and the ghost still drew four, in a `.seg-track` the control
+   *  dropped on 2026-09-08 (Samuel: plain pills, no track). The count is read
+   *  off the table, so a sixth face cannot leave the ghost behind. */
+  it("ghosts one selector pill per face, without offering anything to press", () => {
+    const { container } = render(<HomePageSkeleton />);
+    expect(container.querySelector(".seg-track")).toBeNull();
+    expect(
+      container.querySelectorAll(".gap-1\\.5 > [data-slot=\"skeleton\"]")
+    ).toHaveLength(HOME_TABS.length);
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+    expect(container.querySelectorAll("a")).toHaveLength(0);
+  });
+
+  /** ⚠ THE LANDING FACE IS OVERVIEW (`home-tabs.ts › HOME_DEFAULT_TAB`), so the
+   *  ghost's pane is Overview's — the `.bento` Usage card at the real plot
+   *  height over the 2×2 rails. It ghosted the CHANNELS face (a pane header over
+   *  `TranscriptSkeleton`) for nine days after the page stopped landing there.
+   *  ⚠ BIDIRECTIONAL: the three strings are read out of `overview-panels.tsx`. */
+  it("ghosts the face the page actually opens on", () => {
+    expect(HOME_DEFAULT_TAB).toBe("overview");
+    const panels = file("../../pages/home/overview-panels.tsx");
+    for (const shared of [
+      "bento flex flex-col gap-4 p-3.5",
+      'className="grid grid-cols-2 gap-3"',
+      'className="h-40 rounded-[14px]"',
+    ]) {
+      expect(panels).toContain(shared);
+      expect(HOME_SKELETON).toContain(shared);
+    }
+    // The plot height is IMPORTED, the way the Overview page's ghost takes it.
+    expect(HOME_SKELETON).toContain(
+      'import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series"'
+    );
+    expect(code("../../pages/home/home-skeleton.tsx")).not.toContain(
+      "TranscriptSkeleton"
+    );
+  });
+
+  it("keeps both faces on the panel hook the record pane repaints through", () => {
+    for (const el of [
+      <HomeKnowledgePanelsSkeleton key="k" />,
+      <HomeAgentPanelsSkeleton key="a" />,
+    ]) {
+      const { container } = render(el);
+      expect(container.querySelectorAll("[data-section-panel]")).toHaveLength(2);
+    }
+  });
+});

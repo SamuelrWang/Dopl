@@ -117,40 +117,6 @@ describe("every per-page skeleton", () => {
   });
 });
 
-describe("the /home shapes are /home's own geometry", () => {
-  it("sizes the list column and indents the header from ONE width var", () => {
-    const { container } = render(<HomePageSkeleton />);
-    expect(container.querySelector(".w-\\[var\\(--home-list-w\\)\\]")).not.toBeNull();
-    expect(container.querySelector(".pl-\\[var\\(--home-list-w\\)\\]")).not.toBeNull();
-    // The generic page ghost's giveaway — a centred document column /home has
-    // never had.
-    expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
-  });
-
-  it("draws the record pane as a bordered column, not a floating card", () => {
-    const { container } = render(<HomePageSkeleton />);
-    expect(container.querySelector(".border-home-panel-line")).not.toBeNull();
-    expect(container.querySelector(".bento")).toBeNull();
-  });
-
-  it("ghosts the three-face selector without offering anything to press", () => {
-    const { container } = render(<HomePageSkeleton />);
-    expect(container.querySelector(".seg-track")).not.toBeNull();
-    expect(container.querySelectorAll("button")).toHaveLength(0);
-    expect(container.querySelectorAll("a")).toHaveLength(0);
-  });
-
-  it("keeps both faces on the panel hook the record pane repaints through", () => {
-    for (const el of [
-      <HomeKnowledgePanelsSkeleton key="k" />,
-      <HomeAgentPanelsSkeleton key="a" />,
-    ]) {
-      const { container } = render(el);
-      expect(container.querySelectorAll("[data-section-panel]")).toHaveLength(2);
-    }
-  });
-});
-
 describe("skeleton grids REUSE the real page's grid, they do not restate it", () => {
   /**
    * ⚠ THE HOME KNOWLEDGE GRID IS `home.module.css › .kbCards` ITSELF. That rule
@@ -457,14 +423,14 @@ describe("the wrong ghosts are gone, and only those", () => {
    * the pop-out windows, onboarding, chats, skills, ontology) — a skeleton wave
    * that left it unused would have been a wave that quietly grew a per-page
    * spinner everywhere. ⚠ **MEMBERS LEFT THIS LIST ON 2026-08-30** and is
-   * asserted in `PAGES` above instead; it is the only move, so re-derive the
-   * rest rather than inheriting them:
+   * asserted in `PAGES` above instead, and ⚠ **BOOT LEFT IT ON 2026-09-10** —
+   * the boot cover is /home's frame now, not a white box. So re-derive the rest
+   * rather than inheriting them:
    * `grep -rln PageLoading apps/desktop-ui/src/pages`.
    */
   it("leaves PageLoading standing for the pages that share one shape", () => {
     for (const rel of [
       "../../pages/settings/index.tsx",
-      "../../pages/boot/index.tsx",
       "../../pages/chats/index.tsx",
       "../../pages/skills/index.tsx",
       "../../pages/ontology/index.tsx",

@@ -18,7 +18,10 @@ import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url"
 import { isStandardWorkspace } from "@/features/workspaces/types";
 import type { HomeChannelsPayload } from "@/features/home/types";
 import { useApiQuery } from "#/hooks/use-api-query";
-import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
+import { parseSegment } from "@/shared/lib/url/parse-segment";
+import { PageError, isUnauthorized } from "#/components/page-states";
+import { ShellChromeSkeleton } from "#/components/skeletons/shell-skeleton";
+import { sectionSkeleton } from "#/components/skeletons/section-skeleton";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { HOME_CHANNELS_PATH } from "#/pages/home/home-rows";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
@@ -152,11 +155,36 @@ export function AppShellLayout() {
   >("/api/workspaces", { select: selectWorkspaces });
   const workspaces = workspacesQuery.data ?? [];
 
+  // ⚠ THE SHELL'S OWN CHROME, NOT A BARE COVER (Samuel, 2026-09-10: the switch
+  // ghost *"doesnt look at all like the actual UI"*). This gate rendered
+  // `PageLoading` inside a `flex h-screen w-screen flex-col` — a white top bar
+  // over a centred column, with the rail, the dark frame, the sidebar and the
+  // page card all gone and then rebuilt when the boot answer landed.
+  // `ShellChromeSkeleton` IS those four boxes; only the sidebar's contents and
+  // the card's are ghosted, so the resolve is a fade rather than a re-layout.
+  //
+  // ⚠ THE RAIL STAYS REAL AND CLICKABLE whenever `/api/workspaces` has answered
+  // (it is cached and IndexedDB-persisted, so on a switch it always has), lit on
+  // the tile the operator just pressed — `parseSegment` off the ROUTED path, not
+  // off `workspace`, which is the value this gate is waiting for. A publicId
+  // survives a slug rename, so a stale segment still lights the right tile.
   if (isPending) {
+    const routed = location.pathname.split("/").filter(Boolean)[0] ?? "";
     return (
-      <div className="flex h-screen w-screen flex-col">
-        <PageLoading label="Opening workspace" />
-      </div>
+      <ShellChromeSkeleton
+        rail={
+          workspaces.length > 0 ? (
+            <AccountRail
+              workspaces={workspaces}
+              activeWorkspacePublicId={parseSegment(routed)?.publicId ?? null}
+              onNavigate={(path) => navigate(path)}
+              onCreateWorkspace={() => setCreateWsOpen(true)}
+            />
+          ) : undefined
+        }
+      >
+        {sectionSkeleton(activeSectionFromPath(location.pathname))}
+      </ShellChromeSkeleton>
     );
   }
 
