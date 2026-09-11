@@ -261,6 +261,45 @@ describe("home page", () => {
     expect(screen.queryByText("Priya Shah")).not.toBeInTheDocument();
   });
 
+  /**
+   * 🔒 **ZERO ROWS HAS TWO SENTENCES AND THE LIST SAID THE WRONG ONE UNTIL
+   * 2026-09-10** (the new-user flow). Its empty line was an unconditional "No
+   * matches", so a person with no channels yet — every account on its first day —
+   * read a report about a filter they had never applied. `home-panes.tsx` already
+   * told the two apart for the RECORD PANE; the list now mirrors it, keyed on the
+   * same value (the UNNARROWED count), so the two halves cannot disagree.
+   */
+  it("🔒 says No channels yet with nothing to show, and No matches only under a filter", async () => {
+    apiRequest.mockImplementation(
+      (path: string, opts: BridgeRequestOpts = {}) =>
+        path.split("?")[0] === "/api/home/channels"
+          ? Promise.resolve(ok({ channels: [], pendingLinks: [] }))
+          : (routes(path, opts) ??
+            Promise.reject(new Error(`unexpected: ${path}`)))
+    );
+
+    renderHome();
+    await openChannels();
+
+    // ⚠ BOTH PANES AGAIN, and they say the SAME thing now — the list's line plus
+    // the record pane's `EmptyState` title.
+    await waitFor(() =>
+      expect(screen.getAllByText("No channels yet")).toHaveLength(2)
+    );
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+
+    // 🔒 AND A TYPED QUERY DOES NOT CHANGE IT. The test is the TOTAL, not "is a
+    // query active": with no channels at all there is nothing a filter could have
+    // excluded, so "No matches" would still be a false report.
+    fireEvent.change(screen.getByLabelText("Search people"), {
+      target: { value: "nobody" },
+    });
+    await waitFor(() =>
+      expect(screen.getAllByText("No channels yet")).toHaveLength(2)
+    );
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+  });
+
   it("renders a SOLO channel by its own name, like every other channel", async () => {
     // 🔒 NO LONGER A SPECIAL CASE SINCE 2026-09-01, which is the point: the row
     // was titled by the channel HERE and by the peer everywhere else, and the

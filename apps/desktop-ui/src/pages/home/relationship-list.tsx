@@ -23,14 +23,29 @@ import home from "./home.module.css";
  * and the narrowed set, because the RECORD PANE resolves its selection from the
  * same set — narrowing privately here let the pane fall back to a row the list
  * was no longer showing, so typing into search left a stranger's card open.
+ *
+ * 🔒 **THE EMPTY LINE SAID "No matches" UNCONDITIONALLY UNTIL 2026-09-10, AND
+ * WAS WRONG FOR EVERY NEW ACCOUNT** (the new-user flow). Zero rows has two
+ * causes and they are not the same sentence: nothing to show, or nothing MATCHING
+ * to show. A person with no channels yet — every account on its first day — read
+ * "No matches" beside a search box they had never typed in, i.e. a report about a
+ * filter that was not applied. `home-panes.tsx` already drew this distinction for
+ * the RECORD PANE; the list is now the mirror of it, keyed on the same value.
  */
 export function RelationshipList({
   rows,
+  totalRows,
   selectedId,
   onSelect,
 }: {
   /** Already narrowed — the page's `visibleRows`. */
   rows: HomeRow[];
+  /** ⚠ The UNNARROWED count (`homeRows`), and it is what separates the two empty
+   *  sentences. Deliberately the TOTAL rather than "is a query active": with no
+   *  channels at all, typing into search still means "No channels yet" — there is
+   *  nothing for a filter to have excluded. This is `home-panes.tsx`'s own test
+   *  (`rows.length > 0`), so the two surfaces cannot disagree. */
+  totalRows: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -52,7 +67,7 @@ export function RelationshipList({
         ))}
         {rows.length === 0 && (
           <p className="px-3 py-6 text-center text-caption text-text-muted">
-            No matches
+            {totalRows > 0 ? "No matches" : "No channels yet"}
           </p>
         )}
       </div>

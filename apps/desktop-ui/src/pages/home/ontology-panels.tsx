@@ -110,7 +110,7 @@ export function HomeOntologyPanels({
       <div className={PANE}>
         <SectionPanel id="home-ontology" label="Ontology">
           <EmptyLine>
-            Finish setting up your workspace to keep ontologies here.
+            Finish setting up your home space to keep ontologies here.
           </EmptyLine>
         </SectionPanel>
       </div>

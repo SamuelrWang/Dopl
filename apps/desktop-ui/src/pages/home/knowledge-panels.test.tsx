@@ -283,7 +283,7 @@ describe("§8 stale cache", () => {
 
     expect(
       await screen.findByText(
-        "Finish setting up your workspace to keep bases here."
+        "Finish setting up your home space to keep bases here."
       )
     ).toBeInTheDocument();
     // ⚠ AND NO UNADDRESSED READ. With no home workspace the query is disabled;

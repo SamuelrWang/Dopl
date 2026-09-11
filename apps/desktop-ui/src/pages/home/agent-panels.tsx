@@ -132,17 +132,17 @@ export function HomeAgentPanels({
 
   const markerFor = useContainerAuthorMarker(channel, currentUserId);
 
-  if (channel === null) {
-    return (
-      <EmptyState
-        icon={Bot}
-        title="No channel selected"
-        description="Agents are per channel — pick one on the left."
-      />
-    );
-  }
+  // 🔒 **NO CHANNEL REPLACES SECTION A, NOT THE WHOLE FACE (2026-09-10, the
+  // new-user flow).** This used to return the empty state INSTEAD of the pane, so
+  // a brand-new account — no channels yet, which is every account on its first
+  // day — opened Agents and was told to "pick one on the left" beside an empty
+  // list, with its own Personal templates (a HOME-workspace read that needs no
+  // channel at all) nowhere on screen and no way to make one. The sentence is
+  // true of section A and only of section A: `channel === null` means there is no
+  // CONTAINER to read shared templates from, and says nothing about scope C.
+  const hasChannel = channel !== null;
 
-  if (containerList.error) {
+  if (hasChannel && containerList.error) {
     return (
       <PageError
         error={containerList.error}
@@ -154,7 +154,12 @@ export function HomeAgentPanels({
   // ⚠ NEITHER SECTION MAY STATE AN EMPTINESS IT HAS NOT MEASURED. The pane
   // waits for the CONTAINER read; the private section waits separately for the
   // HOME one, because only that half of it moved when the pill did.
-  if (!containerList.resolved) {
+  // ⚠ ONLY WHILE THERE IS A CONTAINER READ TO WAIT FOR. With no channel the
+  // container read is never ENABLED (`use-agent-templates.ts`: `null` workspace
+  // → disabled, `resolved` false forever), so gating on it here would hold the
+  // skeleton up permanently — UNAVAILABLE read as PENDING, which is the exact
+  // shape of F-339 one scope over.
+  if (hasChannel && !containerList.resolved) {
     // ⚠ THIS FACE'S OWN SHAPE — two flat sections over `TemplateGrid`'s
     // auto-fill card grid — not the shared page ghost.
     return <HomeAgentPanelsSkeleton label="Loading agents" />;
@@ -185,6 +190,15 @@ export function HomeAgentPanels({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+      {channel === null ? (
+        // ⚠ IN THE SECTION'S PLACE, not the pane's. Same sentence as before, now
+        // scoped to the thing it is actually about.
+        <EmptyState
+          icon={Bot}
+          title="No channel selected"
+          description="Agents shared in a channel are per channel — pick one on the left."
+        />
+      ) : (
       <SharedAgentSection
         section={SECTIONS_CONTAINER[0]}
         templates={shared}
@@ -204,6 +218,7 @@ export function HomeAgentPanels({
           </CreateButton>
         }
       />
+      )}
 
       <PrivateAgentSection
         section={SECTION_PRIVATE_EVERYWHERE}
@@ -236,12 +251,19 @@ export function HomeAgentPanels({
         // ⚠ EVERY PERSONAL ROW CARRIES IT. It used to be scope-C only because
         // scope B's rows were already in the container; there is no scope B any
         // more, so the condition has no second branch to guard against.
-        cardActionFor={(template) => (
-          <ShareIntoChannelButton
-            disabled={sharing !== null}
-            onClick={() => setSharing(template)}
-          />
-        )}
+        // ⚠ AND NOT WITH NO CHANNEL TO SHARE INTO. The dialog takes
+        // `channel.channelId`; offering the button with nothing selected would be
+        // an affordance whose only outcome is a crash.
+        cardActionFor={
+          channel === null
+            ? undefined
+            : (template) => (
+                <ShareIntoChannelButton
+                  disabled={sharing !== null}
+                  onClick={() => setSharing(template)}
+                />
+              )
+        }
         action={
           <CreateButton
             disabled={personalCreateTarget === null}
@@ -255,7 +277,7 @@ export function HomeAgentPanels({
       {/* ⚠ MOUNTED ONLY WHILE OPEN, and the two mounts are DIFFERENT COMPONENTS
           — see `agent-editor.tsx`: a container must not fetch teams, and that is
           a rule you cannot state with a conditional hook. */}
-      {editing?.where === "container" && (
+      {editing?.where === "container" && channel !== null && (
         <ContainerTemplateEditor
           workspaceId={channel.workspaceId}
           template={editing.template}
@@ -271,7 +293,7 @@ export function HomeAgentPanels({
         />
       )}
 
-      {sharing && (
+      {sharing && channel !== null && (
         <ShareIntoChannelDialog
           source={sharing}
           // ⚠ THE CHANNEL, NOT THE CONTAINER. A `channel` scope is what puts the
@@ -334,5 +356,5 @@ const PERSONAL_CAPTION =
   "Yours alone. Share one into this channel to let everyone here use it.";
 
 /** No home workspace yet — a different sentence from "none here". */
-const SCOPE_UNAVAILABLE = "Finish setting up your workspace to keep agents there.";
+const SCOPE_UNAVAILABLE = "Finish setting up your home space to keep agents there.";
 

@@ -215,6 +215,10 @@ export default function HomePage() {
             <div className="flex min-h-0 flex-1">
               <RelationshipList
                 rows={visible}
+                // ⚠ THE UNNARROWED COUNT, so the list can tell "no channels yet"
+                // from "no matches" — the same test `home-panes.tsx` applies to
+                // the record pane, from the one place that holds both sets.
+                totalRows={rows.length}
                 selectedId={selected?.id ?? null}
                 // ⚠ A MANUAL PICK DROPS ANY HELD THREAD — "take me to this
                 // channel", not "take me back to that thread".
