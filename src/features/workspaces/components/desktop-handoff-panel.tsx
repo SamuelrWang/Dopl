@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { workspaceDeepLink } from "../url";
+import { workspaceDeepLink, workspaceSegment } from "../url";
+import { WEB_POST_AUTH_LANDING as GET_STARTED_PATH } from "@/shared/lib/url/post-auth-landing";
 
 /**
  * Where a web join ends. `/join/{token}` and `/invite/{token}` survive
@@ -16,6 +17,23 @@ import { workspaceDeepLink } from "../url";
  *
  * A download link ALWAYS: half the audience never installed Dopl, and
  * `/download` is on the retirement KEEP list.
+ *
+ * 🔒 **AND A `/get-started` FALLBACK CARRYING THE SEGMENT SINCE 2026-09-10 (the
+ * new-user flow).** `/download` is a bare 307 to the dmg — it hands the one
+ * audience that needs help a file and no instructions, and after the install
+ * nothing has told them the app needs a sign-in. `/get-started` is the page that
+ * does (install steps + the desktop handoff), and the segment rides so the trip
+ * ends where the invite pointed rather than on a bare app: it is read back by
+ * `src/app/(auth)/get-started/page.tsx`, which renders the same `dopl://open/…`
+ * pill this panel does.
+ *
+ * ⚠ **BOTH LINKS, NOT ONE.** Somebody who already has the app but whose OS
+ * swallowed the protocol launch wants the dmg, not a second page; the two answer
+ * different failures. Label + link, no explainer.
+ *
+ * ⚠ **`JoinPendingPanel` BELOW GETS NEITHER THE DEEP LINK NOR THE SEGMENT**, and
+ * its own docblock says why: a join request is approval-gated, so there is no
+ * membership and no workspace to name yet.
  */
 
 interface Props {
@@ -51,11 +69,33 @@ export function DesktopHandoffPanel({ workspace, heading }: Props) {
         Don&apos;t have the app yet?{" "}
         <a href="/download" className="underline underline-offset-2 hover:text-text-secondary">
           Download Dopl
+        </a>{" "}
+        or{" "}
+        <a
+          href={getStartedPath(workspace)}
+          className="underline underline-offset-2 hover:text-text-secondary"
+        >
+          set it up
         </a>
         .
       </p>
     </div>
   );
+}
+
+/**
+ * `/get-started?workspace={segment}` — the install-and-sign-in page, told where
+ * this trip was headed.
+ *
+ * ⚠ The param is a SEGMENT, not an id: `/get-started` is public-facing and a
+ * segment is the only workspace identifier the web tree hands out
+ * (`workspaces/url.ts › workspaceSegment`). A workspace missing either half falls
+ * back to the bare page rather than composing a segment that cannot resolve —
+ * the same posture `workspaceDeepLink` takes.
+ */
+function getStartedPath(ws: { slug: string; publicId: string }): string {
+  if (!ws.slug || !ws.publicId) return GET_STARTED_PATH;
+  return `${GET_STARTED_PATH}?workspace=${encodeURIComponent(workspaceSegment(ws))}`;
 }
 
 /**
