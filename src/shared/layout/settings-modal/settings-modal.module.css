@@ -208,13 +208,18 @@
 }
 .close:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-secondary); }
 
-/* Left nav = the app-shell sidebar's chip rail. Same `--shell-surface` (NOT the
-   inset well) so chips sit on an identical background in both places. */
+/* Left nav = the app-shell sidebar's chip rail, on the SAME ground the /home
+   channel switcher stands on — `--home-panel` (#f1f3f5), not `--shell-surface`
+   (Samuel, 2026-09-11: "make the left, where the sidebar is, gray. It should be
+   the gray that we have as the background color where the channel switcher
+   is"). The resting `.nav-chip` fill (`--shell-chip`) was already tuned against
+   this ground for the app sidebar on 2026-08-30, so the chips need no shift.
+   The rail's right edge is the channel switcher's own panel line. */
 .nav {
   width: 192px;
   flex: 0 0 192px;
-  background: var(--shell-surface);
-  border-right: 1px solid var(--border-subtle);
+  background: var(--home-panel);
+  border-right: 1px solid var(--home-panel-line);
   padding: 12px;
   display: flex;
   flex-direction: column;

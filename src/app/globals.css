@@ -518,7 +518,8 @@ html {
      exactly one place — `.nav-chip:not(.nav-chip-active)` — and both mounts of
      that chip wanted the same shift: the app sidebar's nav rows, which now stand
      on `--home-panel` (#f1f3f5, lighter than the #ececec the old value was tuned
-     against), and the settings modal's section list on `--shell-surface`. */
+     against), and the settings modal's section list, on `--home-panel` too since
+     2026-09-11 (Samuel: the sidebar takes the channel switcher's gray). */
   --shell-chip: #e8e8e8;
   /* Must match --shell-gap-bottom: equal top/bottom panel margins. */
   --shell-gap-top: 6px;
