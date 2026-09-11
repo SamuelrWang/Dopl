@@ -44,16 +44,22 @@ export function KanbanBoard({
     .filter((col): col is OntologyObject => Boolean(col));
 
   return (
-    // ⚠ THE DOT GRID IS LOAD-BEARING GEOMETRY. `.kanban-substrate` tiles at
-    // 12px and every dimension here is a whole number of tiles: p-6 = 24 (2),
-    // lane w-72 = 288 (24), gutter gap-3 = 12 (1, dot dead centre), lane p-3 =
-    // 12 (1). Lane edges land at 24, 324, 624 … (stride 300 = 25 tiles), cards
-    // at 36 and 300. The 12px pitch is FORCED by the 12px gutter — at the
-    // inherited 24px pitch every second lane sits half a tile out.
+    // ⚠ **NO SURFACE OF ITS OWN — THE BOARD *IS* THE PAGE PANEL** (Samuel,
+    // 2026-09-10: *"right now, all the elements are like on a gray canvas, on top
+    // of a white panel. So it looks like double panel. Can we move it so that the
+    // elements are just on a white panel instead of gray?"*). It wore
+    // `.graph-substrate .kanban-substrate`, the 12px dotted grid, and that grid
+    // was the inner panel he is describing. ⚠ Do NOT put a background back on
+    // this element: the lanes supply the only gray on the board (`bg-bg-inset`
+    // below) and a tint here is the double panel again.
+    //
+    // The 12px rhythm the dots used to prove is kept as plain numbers — p-6 = 24,
+    // lane w-72 = 288, gutter gap-3 = 12 — so a future grid would still land on
+    // it, but nothing paints it now.
     //
     // `items-start` stops lanes stretching: each is as tall as its contents and
     // vertical overflow belongs to this board, not a scrollbar per lane.
-    <div className="graph-substrate kanban-substrate flex min-h-0 flex-1 items-start gap-3 overflow-auto p-6">
+    <div className="flex min-h-0 flex-1 items-start gap-3 overflow-auto p-6">
       {columns.map((col) => (
         <Column
           key={col.id}

@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { History, MoreHorizontal, Share2, Trash2 } from "lucide-react";
+import { History, Share2, Trash2 } from "lucide-react";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
-import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
+import { MenuDivider, MenuItem } from "@/shared/ui/popover-menu";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { OntologyView } from "@/features/ontology/components/ontology-view";
 import { ClusterChangelog } from "@/features/ontology/components/cluster-changelog";
@@ -51,8 +51,9 @@ import {
  * an id the graph no longer has. /home therefore creates through the API and
  * selects the id the SERVER minted (see `create` below).
  *
- * ⚠ **EVERY /home-ONLY CONTROL LIVES IN ONE PLACE — the header's `…` overflow**
- * (`OntologyOverflow`): Share, Changelog, the agents view/edit toggle, Delete.
+ * ⚠ **EVERY /home-ONLY CONTROL LIVES IN ONE PLACE — the header's GEAR menu**
+ * (`OntologyMenuRows`, rendered inside the board's own settings menu): Share,
+ * Changelog, the agents view/edit toggle, Delete.
  * They are the host's because none of them is a fact about a board: the delete
  * confirm NAMES the channels the ontology is lent into (Q4), which the view
  * cannot know.
@@ -166,27 +167,31 @@ export function HomeOntologyPanels({
   }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-3">
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <OntologyView
+        // ⚠ THE PANE IS THE PANEL. No second float inside it (Samuel, 2026-09-10).
+        frameless
         workspaceId={homeWorkspaceId}
         workspaceSegment={homeWorkspaceSegment ?? ""}
         pinnedClusterId={active.id}
-        switcher="dropdown"
         onSelectCluster={setSelectedId}
-        headerStart={
-          <CreateButton disabled={creating} onClick={() => void create()}>
-            Ontology
-          </CreateButton>
-        }
-        headerEnd={
-          <OntologyOverflow
+        // ⚠ THE CREATE IS A ROW IN THE NAME DROPDOWN NOW, not a black button in
+        // the header (Samuel, 2026-09-10) — so /home passes the ACT and the
+        // switcher owns the face. Still /home's own POST-then-select, for the
+        // provisional-id reason in this file's header.
+        onCreateCluster={() => {
+          if (!creating) void create();
+        }}
+        settingsMenu={(close) => (
+          <OntologyMenuRows
             row={active}
             workspaceId={homeWorkspaceId}
+            close={close}
             onShare={() => setSharing({ id: active.id, name: active.name })}
             onChangelog={() => setChangelogOpen(true)}
             onDelete={() => setDeleting({ id: active.id, name: active.name })}
           />
-        }
+        )}
         // ⚠ THE OWNER'S OWN CONTAINER, so the board is editable. A peer's reach
         // into a LENT ontology is the service's answer (§4), never a prop
         // composed here — /home shows only what the caller owns.
@@ -226,8 +231,13 @@ export function HomeOntologyPanels({
 }
 
 /**
- * THE /home CONTROLS, ALL FOUR, IN ONE MENU — what the card's pill row used to
- * carry (2026-09-10).
+ * THE /home CONTROLS, ALL FOUR, AS **ROWS IN THE BOARD'S GEAR MENU** — what the
+ * card's pill row used to carry (2026-09-10).
+ *
+ * ⚠ **ROWS, NOT A MENU OF ITS OWN.** This returned a `…` trigger plus its own
+ * `Popover` until Samuel made the trigger a settings circle owned by the board
+ * (`ontology-view.tsx › BoardSettingsMenu`); the host now contributes its five
+ * rows into that one menu, under the divider, and `close` is the menu's.
  *
  * ⚠ **ONE PLACE PER CONTROL.** Nothing here is repeated in the board and nothing
  * was dropped in the restyle: Share and Delete open the dialogs that know about
@@ -239,28 +249,28 @@ export function HomeOntologyPanels({
  * reach their own ontology (Samuel's solo default is "viewable and editable"),
  * and the toggle chooses which of the two.
  *
- * ⚠ COORDINATE MODE, like the switcher beside it and for the same reason: this
- * menu opens inside `.page-float`, an overflow-clipping pane where a
- * trigger-anchored panel renders as a clipped sliver.
+ * ⚠ THE PANEL'S POSITIONING IS NOT THIS FILE'S ANY MORE — the board's gear opens
+ * in coordinate mode for the reason it always did (`.page-float` clips an
+ * anchored panel to a sliver), and these rows just ride in it.
  */
-function OntologyOverflow({
+function OntologyMenuRows({
   row,
   workspaceId,
+  close,
   onShare,
   onChangelog,
   onDelete,
 }: {
   row: OntologyListRow;
   workspaceId: string;
+  /** The board menu's own dismiss — every row closes before it acts. */
+  close: () => void;
   onShare: () => void;
   onChangelog: () => void;
   onDelete: () => void;
 }) {
   const queryClient = useQueryClient();
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
 
-  const close = () => setAnchor(null);
   const setAgents = (mayEdit: boolean) => {
     close();
     void setAgentsMayEdit(workspaceId, row.id, mayEdit).then(() =>
@@ -270,75 +280,50 @@ function OntologyOverflow({
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label={`Ontology actions for ${row.name}`}
-        aria-haspopup="menu"
-        aria-expanded={anchor !== null}
-        onClick={() => {
-          if (anchor) {
-            close();
-            return;
-          }
-          const rect = triggerRef.current?.getBoundingClientRect();
-          if (rect) setAnchor({ x: rect.right - 200, y: rect.bottom + 4 });
+      <MenuItem
+        icon={<Share2 size={12} />}
+        onSelect={() => {
+          close();
+          onShare();
         }}
-        className="btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
       >
-        <MoreHorizontal size={13} />
-      </button>
-      <Popover
-        open={anchor !== null}
-        at={anchor ?? undefined}
-        onClose={close}
-        className="min-w-[200px]"
+        Share
+      </MenuItem>
+      <MenuItem
+        icon={<History size={12} />}
+        onSelect={() => {
+          close();
+          onChangelog();
+        }}
       >
-        <MenuItem
-          icon={<Share2 size={12} />}
-          onSelect={() => {
-            close();
-            onShare();
-          }}
-        >
-          Share
-        </MenuItem>
-        <MenuItem
-          icon={<History size={12} />}
-          onSelect={() => {
-            close();
-            onChangelog();
-          }}
-        >
-          Changelog
-        </MenuItem>
-        <MenuDivider />
-        <MenuItem
-          showCheck
-          active={!row.agentsMayEdit}
-          onSelect={() => setAgents(false)}
-        >
-          Agents can view
-        </MenuItem>
-        <MenuItem
-          showCheck
-          active={row.agentsMayEdit}
-          onSelect={() => setAgents(true)}
-        >
-          Agents can edit
-        </MenuItem>
-        <MenuDivider />
-        <MenuItem
-          destructive
-          icon={<Trash2 size={12} />}
-          onSelect={() => {
-            close();
-            onDelete();
-          }}
-        >
-          Delete
-        </MenuItem>
-      </Popover>
+        Changelog
+      </MenuItem>
+      <MenuDivider />
+      <MenuItem
+        showCheck
+        active={!row.agentsMayEdit}
+        onSelect={() => setAgents(false)}
+      >
+        Agents can view
+      </MenuItem>
+      <MenuItem
+        showCheck
+        active={row.agentsMayEdit}
+        onSelect={() => setAgents(true)}
+      >
+        Agents can edit
+      </MenuItem>
+      <MenuDivider />
+      <MenuItem
+        destructive
+        icon={<Trash2 size={12} />}
+        onSelect={() => {
+          close();
+          onDelete();
+        }}
+      >
+        Delete
+      </MenuItem>
     </>
   );
 }

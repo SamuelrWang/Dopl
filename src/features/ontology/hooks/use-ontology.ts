@@ -58,6 +58,8 @@ export function useOntology(
   createObject: (
     target: { clusterId: string } | { parentObjectId: string }
   ) => OntologyObject;
+  /** A column AND a card inside it — the header's "+ Object" with no lane yet. */
+  createObjectInNewColumn: (clusterId: string) => OntologyObject;
   /** Ids whose row is on screen but unacknowledged: render them pending. */
   pendingIds: ReadonlySet<string>;
 } {
@@ -329,18 +331,27 @@ export function useOntology(
     (id: string): OntologyObject | undefined => graphRef.current.objects[id],
     []
   );
-  const { createCluster, createObject, pendingIds } = useOntologyCreates({
-    workspaceId,
-    dispatch: rawDispatch,
-    markDirty,
-    beginWrite,
-    endWrite,
-    getObject,
-    callbacks: optionsRef,
-    reportError: reportSaveError,
-  });
+  const { createCluster, createObject, createObjectInNewColumn, pendingIds } =
+    useOntologyCreates({
+      workspaceId,
+      dispatch: rawDispatch,
+      markDirty,
+      beginWrite,
+      endWrite,
+      getObject,
+      callbacks: optionsRef,
+      reportError: reportSaveError,
+    });
 
-  return { graph, status, dispatch, createCluster, createObject, pendingIds };
+  return {
+    graph,
+    status,
+    dispatch,
+    createCluster,
+    createObject,
+    createObjectInNewColumn,
+    pendingIds,
+  };
 }
 
 function reportSaveError(what: string, err: unknown): void {

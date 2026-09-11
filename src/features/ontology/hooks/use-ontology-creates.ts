@@ -56,6 +56,9 @@ export interface OntologyCreates {
   createObject: (
     target: { clusterId: string } | { parentObjectId: string }
   ) => OntologyObject;
+  /** A column AND a card in it — "+ Object" with no lane to put one in. Returns
+   *  the COLUMN (on screen at once); the card follows its POST. */
+  createObjectInNewColumn: (clusterId: string) => OntologyObject;
   /** Ids rendered but not yet acknowledged — these rows draw as pending. */
   pendingIds: ReadonlySet<string>;
 }
@@ -142,5 +145,33 @@ export function useOntologyCreates({
     [boundApi, sink, markDirty, getObject]
   );
 
-  return { createCluster, createObject, pendingIds };
+  /**
+   * "+ Object" ON AN EMPTY BOARD — the lane, then the card inside it
+   * (2026-09-10; `ontology-view.tsx › handleCreateHeaderObject`).
+   *
+   * ⚠ **THE CARD WAITS ON THE COLUMN'S OWN POST, and that is not a slow path but
+   * the only correct one**: until the column resolves its id is `pending:…`, and
+   * posting a card at a provisional `parentObjectId` sends the server a reference
+   * it has never minted. The column itself is on screen in the click's frame, as
+   * every other create is.
+   *
+   * ⚠ COMPOSED FROM THE EXISTING SEQUENCE, not a third one in
+   * `optimistic-create.ts`: each half keeps its own pending marks and its own
+   * rollback, so a refused column leaves no card behind and a refused card leaves
+   * the lane the operator can see.
+   */
+  const createObjectInNewColumn = useCallback(
+    (clusterId: string): OntologyObject => {
+      markDirty();
+      const { row, done } = createObjectOptimistic(boundApi, sink, { clusterId });
+      void done.then((savedColumn) => {
+        if (!savedColumn) return;
+        createObjectOptimistic(boundApi, sink, { parentObjectId: savedColumn.id }, savedColumn);
+      });
+      return row;
+    },
+    [boundApi, sink, markDirty]
+  );
+
+  return { createCluster, createObject, createObjectInNewColumn, pendingIds };
 }

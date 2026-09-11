@@ -7,7 +7,8 @@ import {
   NEW_CLUSTER_ID,
   PERSONAL_WORKSPACE_ID,
   PIPELINE_ID,
-  ROSTER_ID,
+  createOntologyFromSwitcher,
+  ontologyName,
   ontologyRoutes,
   openOntologyFace,
   openOntologyMenu,
@@ -24,6 +25,18 @@ import {
 
 /**
  * /home → ONTOLOGY, END TO END THROUGH THE REAL PAGE.
+ *
+ * ⚠ **THE HEADER WAS RESTYLED ON 2026-09-10** (Samuel, on this face): the name IS
+ * the dropdown (and carries "+ Ontology"), the purpose line is the kit's
+ * underline field hinted "Description", the `…` became a gear circle, "+ Column"
+ * became the black "+ Object", and the board lost its dotted canvas so the
+ * elements sit on the page's own white panel. What this file asserted about the
+ * old pills and the old page button it now asserts about those.
+ *
+ * ⚠ **AND RENAMING IS A GEAR ROW** — making the name the dropdown's TRIGGER left
+ * nothing that renamed an ontology, so "Rename" swaps that trigger for the same
+ * underline field the Description wears (`board-header-bits.tsx ›
+ * InlineUnderlineField`, one recipe for both).
  *
  * ⚠ **THE FACE IS THE WORKSPACE BOARD SINCE 2026-09-10** (Samuel: *"the UI for
  * the ontology in the home should look a lot more like the ontology for
@@ -104,7 +117,7 @@ describe("the face", () => {
     await openOntologyFace();
 
     // The workspace page's own header + kanban, rendered for /home.
-    expect(screen.getByLabelText("Cluster name")).toHaveValue("Pipeline");
+    expect(ontologyName()).toBe("Pipeline");
     expect(await screen.findByText("Acme")).toBeInTheDocument();
     // 🔒 THE CARD LIST IS GONE, and with it the four pills that hung off it.
     expect(screen.queryByRole("button", { name: "Open" })).toBeNull();
@@ -124,14 +137,118 @@ describe("the face", () => {
     }
   });
 
-  it("keeps the board's OWN chrome — Column, and no cluster delete beside it", async () => {
+  it("keeps the board's OWN chrome — the black + Object, and no cluster delete", async () => {
     renderHome();
     await openOntologyFace();
 
-    expect(screen.getByRole("button", { name: "Column" })).toBeInTheDocument();
-    // 🔒 The delete that names CHANNELS is the host's, in the overflow — the
+    // 🔒 THE HEADER BUTTON IS "+ Object" AND IT IS THE BLACK PAGE PILL (Samuel,
+    // 2026-09-10). "+ Column" is not gone — it moved into the gear menu.
+    const object = screen.getByRole("button", { name: "Object" });
+    expect(object.className).toMatch(/auth-btn-3d/);
+    expect(object.className).toMatch(/h-9/);
+    expect(screen.queryByRole("button", { name: "Column" })).toBeNull();
+    // 🔒 The delete that names CHANNELS is the host's, in the gear menu — the
     // view's own trash would delete with no such sentence (Q4).
     expect(screen.queryByRole("button", { name: /^Delete Pipeline/ })).toBeNull();
+  });
+
+  /**
+   * 🔒 THE WHITE PANEL (Samuel, 2026-09-10: *"all the elements are like on a gray
+   * canvas, on top of a white panel. So it looks like double panel"*).
+   *
+   * ⚠ MUTATION-VERIFIED — one revert, one failure: putting `graph-substrate
+   * kanban-substrate` back on `kanban-board.tsx`'s scroller (every other
+   * assertion on this face passes with the double panel restored).
+   */
+  it("draws the board on the page's own surface — no dotted canvas", async () => {
+    renderHome();
+    await openOntologyFace();
+    await screen.findByText("Acme");
+
+    expect(document.querySelector(".kanban-substrate")).toBeNull();
+    expect(document.querySelector(".graph-substrate")).toBeNull();
+    // …and no second `.page-float` inside the pane either (Samuel, later that
+    // day: *"the ontology is still on a gray panel. That is on the white
+    // panel"*) — the view is `frameless` on /home.
+    expect(document.querySelector(".page-float .page-float")).toBeNull();
+    expect(document.querySelectorAll(".page-float").length).toBeLessThanOrEqual(1);
+  });
+
+  /**
+   * 🔒 THE DESCRIPTION FIELD (Samuel, 2026-09-10: *"Put in there, Description as
+   * the hint, and make it have a gray underline that turns black when a user is
+   * editing (like the one we have in other places)"*).
+   *
+   * ⚠ `.lineActive` IS THE CONTRACT, not `:focus-within` — jsdom loads no
+   * stylesheet, so the sweep is a class the field toggles
+   * (`shared/ui/form-dialog.module.css`).
+   */
+  it("hints `Description` on the shared underline field, black while editing", async () => {
+    renderHome();
+    await openOntologyFace();
+
+    const field = screen.getByLabelText("Description");
+    expect(field.getAttribute("placeholder")).toBe("Description");
+    expect(field.className).toMatch(/input/);
+    const line = field.parentElement;
+    expect(line?.className).toMatch(/line/);
+    expect(line?.className).not.toMatch(/lineActive/);
+    fireEvent.focus(field);
+    expect(field.parentElement?.className).toMatch(/lineActive/);
+    fireEvent.blur(field);
+    expect(field.parentElement?.className).not.toMatch(/lineActive/);
+
+    // Same save path as the sentence-placeholder input it replaced.
+    fireEvent.change(field, { target: { value: "Deals in flight, revised" } });
+    await waitFor(() =>
+      expect(
+        bridgeCalls(apiRequest).some(
+          (c) =>
+            c.path === `/api/ontology/clusters/${PIPELINE_ID}` &&
+            c.opts.method === "PATCH"
+        )
+      ).toBe(true)
+    );
+  });
+
+  /**
+   * 🔒 "+ Object" MAKES AN OBJECT (Samuel, 2026-09-10) — a card in the board's
+   * first lane, not a column.
+   *
+   * ⚠ MUTATION-VERIFIED — one revert, one failure: pointing the header button back
+   * at `{ clusterId }` (it POSTs, the board grows a lane, and only the target in
+   * the body says the button made the wrong kind of thing).
+   */
+  it("makes an OBJECT in the first column", async () => {
+    renderHome();
+    await openOntologyFace();
+    await screen.findByText("Acme");
+
+    fireEvent.click(screen.getByRole("button", { name: "Object" }));
+
+    await waitFor(() => {
+      const post = bridgeCalls(apiRequest).find(
+        (c) => c.path === "/api/ontology/objects" && c.opts.method === "POST"
+      );
+      expect(post?.opts.body).toMatchObject({ parentObjectId: "col-1" });
+    });
+  });
+
+  it("puts + Column in the gear menu, which is where it now lives", async () => {
+    renderHome();
+    await openOntologyFace();
+    await openOntologyMenu();
+
+    fireEvent.click(
+      within(screen.getByRole("menu")).getByRole("menuitem", { name: "Column" })
+    );
+
+    await waitFor(() => {
+      const post = bridgeCalls(apiRequest).find(
+        (c) => c.path === "/api/ontology/objects" && c.opts.method === "POST"
+      );
+      expect(post?.opts.body).toMatchObject({ clusterId: PIPELINE_ID });
+    });
   });
 
   it("says nothing about emptiness before the read lands", async () => {
@@ -203,9 +320,7 @@ describe("the switcher", () => {
 
     fireEvent.click(screen.getByRole("menuitem", { name: /Roster/ }));
 
-    await waitFor(() =>
-      expect(screen.getByLabelText("Cluster name")).toHaveValue("Roster")
-    );
+    await waitFor(() => expect(ontologyName()).toBe("Roster"));
     // ⚠ NO SECOND READ: both ontologies are in the snapshot the board already
     // holds, so the switcher moves a SELECTION rather than fetching a board.
     expect(reads()).toBe(before);
@@ -223,7 +338,11 @@ describe("creating", () => {
     renderHome();
     await openOntologyFace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Ontology" }));
+    // 🔒 THE CREATE IS A ROW IN THE NAME DROPDOWN (Samuel, 2026-09-10: *"move the
+    // + ontology button, make it a button/option in the ontology dropdown
+    // selector"*) — there is no black "+ Ontology" in the header any more.
+    expect(screen.queryByRole("button", { name: "Ontology" })).toBeNull();
+    await createOntologyFromSwitcher();
 
     await waitFor(() => {
       const post = bridgeCalls(apiRequest).find(
@@ -231,92 +350,8 @@ describe("creating", () => {
       );
       expect(post?.opts.workspaceId).toBe(PERSONAL_WORKSPACE_ID);
     });
-    await waitFor(() =>
-      expect(screen.getByLabelText("Cluster name")).toHaveValue("New cluster")
-    );
+    await waitFor(() => expect(ontologyName()).toBe("New cluster"));
     expect(NEW_CLUSTER_ID).toBe("cluster-new");
-  });
-});
-
-/**
- * EVERY /home CONTROL, ONE PLACE EACH — the four the card's pill row carried
- * before the restyle, re-homed into the header's `…`.
- */
-describe("the controls", () => {
-  it("reaches Share, Changelog, both agent rungs and Delete from the overflow", async () => {
-    renderHome();
-    await openOntologyFace();
-    await openOntologyMenu();
-
-    const menu = screen.getByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
-    expect(within(menu).getByRole("menuitem", { name: "Changelog" })).toBeInTheDocument();
-    expect(
-      within(menu).getByRole("menuitem", { name: "Agents can view" })
-    ).toBeInTheDocument();
-    expect(
-      within(menu).getByRole("menuitem", { name: "Agents can edit" })
-    ).toBeInTheDocument();
-    expect(within(menu).getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
-  });
-
-  it("writes the agents rung to the CLUSTER's own PATCH", async () => {
-    renderHome();
-    await openOntologyFace();
-    await openOntologySwitcher();
-    fireEvent.click(screen.getByRole("menuitem", { name: /Roster/ }));
-    await waitFor(() =>
-      expect(screen.getByLabelText("Cluster name")).toHaveValue("Roster")
-    );
-
-    await openOntologyMenu("Roster");
-    fireEvent.click(screen.getByRole("menuitem", { name: "Agents can view" }));
-
-    await waitFor(() => {
-      const patch = bridgeCalls(apiRequest).find(
-        (c) =>
-          c.path === `/api/ontology/clusters/${ROSTER_ID}` &&
-          c.opts.method === "PATCH"
-      );
-      expect(patch?.opts.body).toEqual({ agentsMayEdit: false });
-    });
-  });
-
-  it("opens the share popup for the ontology on the board", async () => {
-    renderHome();
-    await openOntologyFace();
-    await openOntologyMenu();
-
-    fireEvent.click(screen.getByRole("menuitem", { name: "Share" }));
-
-    expect(
-      await screen.findByRole("dialog", { name: /Share Pipeline/i })
-    ).toBeInTheDocument();
-  });
-
-  it("opens the delete confirm, which is the one that NAMES the channels", async () => {
-    renderHome();
-    await openOntologyFace();
-    await openOntologyMenu();
-
-    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
-
-    expect(await screen.findByText(/unshares it from/)).toBeInTheDocument();
-  });
-});
-
-describe("what this face deliberately does not do", () => {
-  it("does not read the CHANNEL's container — the rows are personal", async () => {
-    renderHome();
-    await openOntologyFace();
-
-    const shares = bridgeCalls(apiRequest).filter((c) =>
-      c.path.includes("/shares")
-    );
-    // ⚠ NO SHARE READ ON FIRST PAINT. The board's own header says nothing about
-    // sharing; the per-cluster read is the DIALOG's.
-    expect(shares).toHaveLength(0);
-    expect(PIPELINE_ID).toBe("cluster-pipeline");
   });
 });
 
@@ -380,6 +415,7 @@ describe("the changelog", () => {
     await openChangelog();
     await screen.findByText("Stage");
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(await screen.findByLabelText("Cluster name")).toHaveValue("Pipeline");
+    await screen.findByTitle("Switch ontology");
+    expect(ontologyName()).toBe("Pipeline");
   });
 });

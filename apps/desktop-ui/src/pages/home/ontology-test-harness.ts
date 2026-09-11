@@ -155,6 +155,26 @@ export function ontologyRoutes(
     if (opts.method === "DELETE") return Promise.resolve(noContent());
     return Promise.resolve(ok(shares));
   }
+  // The board's own optimistic creates — "+ Object" in the header, "+ Column" in
+  // the gear, and the lanes' add buttons all land here.
+  if (bare === "/api/ontology/objects" && opts.method === "POST") {
+    const body = (opts.body ?? {}) as { name?: string };
+    objectsMinted += 1;
+    return Promise.resolve(
+      ok({
+        object: {
+          id: `object-new-${objectsMinted}`,
+          name: body.name ?? "New object",
+          subtitle: "",
+          attributes: [],
+          relationships: [],
+          methods: [],
+          childIds: [],
+          template: [],
+        },
+      })
+    );
+  }
   if (bare === "/api/ontology/clusters" && opts.method === "POST") {
     // ⚠ THE ROW JOINS THE SNAPSHOT, because that is what the server does: a
     // create is followed by an invalidate, and a table that answered with the
@@ -187,32 +207,48 @@ const NEW_CLUSTER = {
 /** ⚠ MODULE STATE, so `resetOntologyRoutes()` in `beforeEach` is not optional:
  *  a create in one test would otherwise leave a third ontology in the next. */
 let created: (typeof NEW_CLUSTER)[] = [];
+/** Ids the object POST hands back — distinct per call, like the server's. */
+let objectsMinted = 0;
 
 export function resetOntologyRoutes(): void {
   created = [];
+  objectsMinted = 0;
 }
 
 /**
  * Raise the /home Ontology face and wait for the BOARD — the face IS the board
  * since 2026-09-10, so "it rendered" means the cluster header is on screen.
+ *
+ * ⚠ THE HEADER'S ANCHOR IS THE PICKER, not a name input: the ontology's name
+ * became the dropdown's trigger the same day (`cluster-switcher.tsx`).
  */
 export async function openOntologyFace(): Promise<void> {
   await screen.findByRole("tab", { name: "Overview" });
   fireEvent.click(screen.getByText("Ontology"));
-  await screen.findByLabelText("Cluster name");
+  await screen.findByTitle("Switch ontology");
 }
 
-/** Open the header's `…` — the ONE home of Share, Changelog, the agents rungs
- *  and Delete. */
+/** The ontology the board is showing — the dropdown trigger's own words. */
+export function ontologyName(): string {
+  return screen.getByTitle("Switch ontology").textContent ?? "";
+}
+
+/** Open the header's GEAR — the ONE home of Share, Changelog, the agents rungs,
+ *  Delete and (since the header button became "+ Object") "+ Column". */
 export async function openOntologyMenu(name = "Pipeline"): Promise<void> {
-  fireEvent.click(
-    await screen.findByRole("button", { name: `Ontology actions for ${name}` })
-  );
+  fireEvent.click(await screen.findByRole("button", { name: `Settings for ${name}` }));
 }
 
-/** Open the cluster dropdown that replaced the tab strip on /home. */
+/** Open the name dropdown that replaced the tab strip. */
 export async function openOntologySwitcher(): Promise<void> {
   fireEvent.click(await screen.findByTitle("Switch ontology"));
+}
+
+/** Make a new ontology the way the board now offers it — the "+ Ontology" row
+ *  inside that dropdown (it was a black page button until 2026-09-10). */
+export async function createOntologyFromSwitcher(): Promise<void> {
+  await openOntologySwitcher();
+  fireEvent.click(screen.getByRole("menuitem", { name: "Ontology" }));
 }
 
 function object(id: string, name: string, childIds: string[] = []) {

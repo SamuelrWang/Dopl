@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import {
@@ -12,10 +12,21 @@ import OntologyDetailPage from "./detail";
 import { CLUSTER_ID, SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtures";
 
 /**
- * Ontology smoke test: REAL `OntologyView` (tab strip → kanban lanes → object
+ * Ontology smoke test: REAL `OntologyView` (name dropdown → kanban lanes → object
  * panel) over a mocked bridge, mounted on the SAME two route rows `routes.tsx`
  * registers — ⚠ the index→detail URL sync only behaves if both rows resolve to
  * ONE component type, and that is part of what is tested.
+ *
+ * ⚠ **THE HEADER IS THE BOARD'S, AND IT WAS RESTYLED ON 2026-09-10** — the ruling
+ * landed on /home's face and this page mounts the same component, so the tab
+ * strip is gone here too: the cluster's NAME is the dropdown trigger (with
+ * "+ Ontology" in it), "+ Column" moved into the gear menu and the header button
+ * is the black "+ Object". This suite is the proof that the second surface moved
+ * with the first.
+ *
+ * ⚠ **AND THIS PAGE'S STANDALONE TRASH BUTTON IS DELETED** — the gear holds the
+ * ONE Delete row on both surfaces now, and "Rename" is how the name is edited at
+ * all since the name became a dropdown trigger.
  *
  * Mocked at `window.dopl.apiRequest`: `useWorkspaceAccess` reads over the SPA
  * transport, the reused tree over the WEB `apiRequest`, both funnel into this
@@ -26,6 +37,24 @@ import { CLUSTER_ID, SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtur
 const apiRequest = vi.hoisted(() => vi.fn());
 
 const calls = () => bridgeCalls(apiRequest);
+
+/** The board's open cluster — the dropdown trigger's own words (it was an input
+ *  with a display value until 2026-09-10). */
+function openClusterName(): string {
+  return screen.getByTitle("Switch ontology").textContent ?? "";
+}
+
+/** Open the header's gear — Rename, "+ Column" and the ONE Delete row. */
+function openGear(name = "Revenue"): HTMLElement {
+  fireEvent.click(screen.getByRole("button", { name: `Settings for ${name}` }));
+  return screen.getByRole("menu");
+}
+
+/** Pick another ontology the way the header now offers it. */
+function switchTo(name: RegExp): void {
+  fireEvent.click(screen.getByTitle("Switch ontology"));
+  fireEvent.click(screen.getByRole("menuitem", { name }));
+}
 
 function renderOntology(entry = `/${SEGMENT}/ontology`) {
   const { router } = renderWithProviders(
@@ -52,7 +81,8 @@ describe("ontology page", () => {
   it("resolves the workspace, then renders the first cluster's board", async () => {
     renderOntology();
 
-    expect(await screen.findByDisplayValue("Revenue")).toBeInTheDocument();
+    await screen.findByTitle("Switch ontology");
+    expect(openClusterName()).toBe("Revenue");
     expect(screen.getByDisplayValue("Accounts")).toBeInTheDocument();
     expect(screen.getByText("Acme Corp")).toBeInTheDocument();
 
@@ -69,15 +99,17 @@ describe("ontology page", () => {
   it("honours the deep-linked cluster slug as the fallback selector", async () => {
     renderOntology(`/${SEGMENT}/ontology/delivery`);
 
-    expect(await screen.findByDisplayValue("Delivery")).toBeInTheDocument();
+    await screen.findByTitle("Switch ontology");
+    expect(openClusterName()).toBe("Delivery");
+    // `Accounts` is `Revenue`'s COLUMN — a lane header input, not the cluster.
     expect(screen.queryByDisplayValue("Accounts")).not.toBeInTheDocument();
   });
 
   it("replaces the URL with the selected cluster's slug, with no history entry", async () => {
     const router = renderOntology();
-    await screen.findByDisplayValue("Revenue");
+    await screen.findByTitle("Switch ontology");
 
-    fireEvent.click(screen.getByRole("button", { name: /Delivery/ }));
+    switchTo(/Delivery/);
 
     // ⚠ `navigate(..., {replace:true})` stands in for `history.replaceState`:
     // a path write is a security error on the packaged file:// document.
@@ -111,11 +143,15 @@ describe("ontology page", () => {
     );
   });
 
-  it("deletes the open cluster from the tab strip, naming its cascade", async () => {
+  it("deletes the open cluster, naming its cascade", async () => {
     const router = renderOntology();
-    await screen.findByDisplayValue("Revenue");
+    await screen.findByTitle("Switch ontology");
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete Revenue" }));
+    // ⚠ THE GEAR'S ROW, not a trash button beside it (2026-09-10) — same
+    // confirm, one slot.
+    fireEvent.click(
+      within(openGear()).getByRole("menuitem", { name: "Delete" })
+    );
 
     // Count is the point of the copy: "cluster" undersells what a permanent
     // cascade delete takes (the column + its card).
@@ -135,8 +171,8 @@ describe("ontology page", () => {
         )
       ).toBe(true)
     );
-    // Selection lands on the ADJACENT tab, address bar included.
-    expect(await screen.findByDisplayValue("Delivery")).toBeInTheDocument();
+    // Selection lands on the ADJACENT cluster, address bar included.
+    await waitFor(() => expect(openClusterName()).toBe("Delivery"));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(`/${SEGMENT}/ontology/delivery`)
     );
@@ -156,8 +192,106 @@ describe("ontology page", () => {
 
     renderOntology();
 
-    expect(await screen.findByDisplayValue("Revenue")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "New cluster" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Column" })).not.toBeInTheDocument();
+    await screen.findByTitle("Switch ontology");
+    expect(openClusterName()).toBe("Revenue");
+    // The create row inside the name dropdown, the gear's "+ Column" and the
+    // header's "+ Object" are all member+ affordances.
+    fireEvent.click(screen.getByTitle("Switch ontology"));
+    expect(screen.queryByRole("menuitem", { name: "Ontology" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Object" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Settings for/ })).not.toBeInTheDocument();
+  });
+
+  /**
+   * 🔒 BOTH SURFACES WEAR ONE HEADER (2026-09-10). The strip is DELETED, not
+   * hidden: `cluster-switcher.tsx` has a single face now.
+   */
+  it("wears /home's header — name dropdown, gear, black + Object, no pills", async () => {
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+
+    const object = screen.getByRole("button", { name: "Object" });
+    expect(object.className).toMatch(/auth-btn-3d/);
+    expect(screen.getByRole("button", { name: /^Settings for Revenue/ })).toBeInTheDocument();
+    // The other clusters are BEHIND the trigger, never beside it as pills.
+    expect(screen.queryByRole("button", { name: /^Delivery/ })).not.toBeInTheDocument();
+    expect(document.querySelector(".kanban-substrate")).toBeNull();
+    // …and "+ Column" is in the gear, which is where it went.
+    const menu = within(openGear());
+    expect(menu.getByRole("menuitem", { name: "Column" })).toBeInTheDocument();
+  });
+
+  /**
+   * 🔒 **THE TRASH BUTTON IS GONE AND DELETE IS ONE GEAR ROW** (2026-09-10). This
+   * page carried a standalone `Trash2` left of the gear; /home never did, because
+   * its host supplies the confirm that names CHANNELS. Both surfaces now show
+   * exactly one Delete, in the same slot.
+   *
+   * ⚠ MUTATION-VERIFIED — one revert, one failure: putting `ontology-view.tsx`'s
+   * standalone trash button back beside the gear (every other assertion on this
+   * page passes with two ways to delete on screen, which is the drift the single
+   * slot removes).
+   */
+  it("deletes from the gear only — no standalone trash, exactly one Delete row", async () => {
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+
+    expect(screen.queryByRole("button", { name: /^Delete Revenue/ })).toBeNull();
+    expect(screen.queryByTitle("Delete cluster")).toBeNull();
+
+    const menu = within(openGear());
+    expect(menu.getAllByRole("menuitem", { name: "Delete" })).toHaveLength(1);
+    expect(menu.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
+  });
+
+  /**
+   * 🔒 **RENAME MOVED WITH THE HEADER** — the name is a dropdown trigger here too,
+   * so the gear's row is this page's only rename as well.
+   */
+  it("renames from the gear row, PATCHing the cluster", async () => {
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+
+    fireEvent.click(within(openGear()).getByRole("menuitem", { name: "Rename" }));
+    const field = screen.getByLabelText("Name") as HTMLInputElement;
+    expect(field.value).toBe("Revenue");
+    // The trigger — and its chevron — is what the field replaced.
+    expect(screen.queryByTitle("Switch ontology")).toBeNull();
+
+    fireEvent.change(field, { target: { value: "Bookings" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    await waitFor(() => expect(openClusterName()).toBe("Bookings"));
+    await waitFor(
+      () => {
+        const patch = calls().find(
+          (c) =>
+            c.path === `/api/ontology/clusters/${CLUSTER_ID}` &&
+            c.opts.method === "PATCH"
+        );
+        expect(patch?.opts.body).toMatchObject({ name: "Bookings" });
+      },
+      { timeout: 3000 }
+    );
+  });
+
+  it("cancels the rename on Escape", async () => {
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+
+    fireEvent.click(within(openGear()).getByRole("menuitem", { name: "Rename" }));
+    const field = screen.getByLabelText("Name");
+    fireEvent.change(field, { target: { value: "Nope" } });
+    fireEvent.keyDown(field, { key: "Escape" });
+
+    await screen.findByTitle("Switch ontology");
+    expect(openClusterName()).toBe("Revenue");
+    expect(
+      calls().some(
+        (c) =>
+          c.path === `/api/ontology/clusters/${CLUSTER_ID}` &&
+          c.opts.method === "PATCH"
+      )
+    ).toBe(false);
   });
 });

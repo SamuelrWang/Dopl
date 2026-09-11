@@ -4,9 +4,9 @@ import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
  * Loading skeleton for the ontology kanban board. ⚠ Must mirror the loaded
  * shape (`kanban-board.tsx`); slots inside the view's `.page-float` Frame.
  *
- * Composes `.kanban-substrate` even though nothing scrolls here
- * (`overflow-hidden`) — `background-attachment: local` is inert without a
- * scroller, and one class keeps the two surfaces identical.
+ * ⚠ NO DOTTED SUBSTRATE, because the live board has none since 2026-09-10
+ * (Samuel's white-panel ruling — `kanban-board.tsx`). A skeleton that painted the
+ * grid would flash an inner panel the loaded board does not have.
  */
 export function OntologyBoardSkeleton() {
   return (
@@ -14,21 +14,19 @@ export function OntologyBoardSkeleton() {
       <span className="sr-only">Loading ontology</span>
 
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
-        {/* Mirrors the live switcher's .seg-pill shape. */}
-        <div className="flex items-center gap-1.5">
-          <Skeleton className="h-[27px] w-20 rounded-full" />
-          <Skeleton className="h-[27px] w-16 rounded-full" />
-        </div>
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <SkeletonLine w={120} h={13} />
+        {/* The name-dropdown trigger, then the Description line, then the gear and
+            the black "+ Object" — the live header's four, in its order. */}
+        <SkeletonLine w={120} h={16} />
+        <div className="flex min-w-0 flex-1 items-center">
           <SkeletonLine w="40%" h={11} />
         </div>
-        <Skeleton className="h-7 w-20 rounded-md" />
+        <Skeleton className="h-9 w-9 rounded-full" />
+        <Skeleton className="h-9 w-24 rounded-full" />
       </div>
 
-      {/* ⚠ Same geometry as the live board: 12px dot pitch, 24px padding,
-          12px gutter, lanes hug contents. */}
-      <div className="graph-substrate kanban-substrate flex min-h-0 flex-1 items-start gap-3 overflow-hidden p-6">
+      {/* ⚠ Same geometry as the live board — 24px padding, 12px gutter, lanes hug
+          contents — and the same bare white surface under it. */}
+      <div className="flex min-h-0 flex-1 items-start gap-3 overflow-hidden p-6">
         {[3, 2, 3].map((cards, i) => (
           <ColumnSkeleton key={i} cards={cards} />
         ))}

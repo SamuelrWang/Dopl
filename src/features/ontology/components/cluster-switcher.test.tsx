@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 /**
- * THE CLUSTER PICKER'S TWO FACES — one list source, two renders (2026-09-10).
+ * THE CLUSTER PICKER — the ontology's NAME as the trigger, every ontology and the
+ * create behind it (2026-09-10, Samuel's board-header ruling).
  *
- * ⚠ WHAT IS WORTH PINNING HERE IS THE **SOURCE**, not the markup: the strip and
- * the dropdown are the same control on two pages, and the failure this file is
- * for is one of them quietly showing a different set of ontologies, or the same
- * number under a different word.
+ * ⚠ WHAT IS WORTH PINNING HERE IS THE **SOURCE AND THE SHAPE**: one control on two
+ * boards, and the failures it is for are one of them quietly showing a different
+ * set of ontologies, the trigger coming back as a PILL, or the create row going
+ * missing now that it is the only way to make an ontology from the board.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -29,7 +30,7 @@ function object(id: string, name: string, childIds: string[] = []) {
 }
 
 /** One cluster of a column and two cards (THREE objects, ONE column), and one
- *  empty cluster — the pair that separates the two numbers. */
+ *  empty cluster — the pair that keeps the count honest (R5, a graph WALK). */
 const GRAPH = {
   clusters: [
     {
@@ -49,48 +50,59 @@ const GRAPH = {
   },
 } as unknown as GraphState;
 
-const NONE: ReadonlySet<string> = new Set();
-
 describe("the list source", () => {
-  it("carries the graph WALK and the column count as SEPARATE numbers", () => {
+  it("carries the graph WALK, one entry per cluster", () => {
     // ⚠ R5: an object can sit in several clusters, so "how many objects" is a
-    // walk. The strip's bare number has always been the COLUMN count, and the
-    // dropdown says the word "objects" out loud — one entry, both numbers, so
-    // neither face can render one under the other's name.
+    // walk — one column plus its two cards is THREE, never `columnIds.length`.
     expect(clusterSwitcherEntries(GRAPH)).toEqual([
-      { id: "c1", name: "Pipeline", objectCount: 3, columnCount: 1 },
-      { id: "c2", name: "Roster", objectCount: 0, columnCount: 0 },
+      { id: "c1", name: "Pipeline", objectCount: 3 },
+      { id: "c2", name: "Roster", objectCount: 0 },
     ]);
   });
 });
 
-describe("the dropdown", () => {
-  function renderDropdown(onSelect = vi.fn()) {
-    render(
-      <ClusterSwitcher
-        mode="dropdown"
-        entries={clusterSwitcherEntries(GRAPH)}
-        activeId="c1"
-        pendingIds={NONE}
-        onSelect={onSelect}
-      />
-    );
-    return onSelect;
-  }
+function renderSwitcher(
+  props: {
+    onSelect?: () => void;
+    onCreate?: () => void;
+    canEdit?: boolean;
+  } = {}
+) {
+  const onSelect = props.onSelect ?? vi.fn();
+  const onCreate = props.onCreate ?? vi.fn();
+  render(
+    <ClusterSwitcher
+      entries={clusterSwitcherEntries(GRAPH)}
+      activeId="c1"
+      canEdit={props.canEdit}
+      onSelect={onSelect}
+      onCreate={onCreate}
+    />
+  );
+  return { onSelect, onCreate };
+}
 
-  it("shows ONE trigger — the current ontology and its object count", () => {
-    renderDropdown();
+describe("the trigger", () => {
+  it("is the NAME and a chevron — no pill, no count, not bold", () => {
+    renderSwitcher();
     const trigger = screen.getByTitle("Switch ontology");
 
     // ⚠ Plain `textContent`: the root vitest setup loads no jest-dom matchers.
-    expect(trigger.textContent).toBe("Pipeline3");
-    // 🔒 A DROPDOWN, NOT TABS (Samuel, 2026-09-10) — the other ontology is
-    // behind the trigger, never beside it.
+    expect(trigger.textContent).toBe("Pipeline");
+    // 🔒 THE PILL IS GONE (Samuel, 2026-09-10: *"no pill, only a down arrow to
+    // its right. Also unbold the text"*) — the strip's `.raised-tab` stadium and
+    // the bold weight are both what he was looking at.
+    expect(trigger.className).not.toMatch(/raised-tab|rounded-full|seg-pill/);
+    expect(trigger.className).toMatch(/font-normal/);
+    expect(trigger.querySelector("svg")).toBeTruthy();
+    // 🔒 A DROPDOWN, NOT TABS — the other ontology is behind it, never beside it.
     expect(screen.queryByText("Roster")).toBeNull();
   });
+});
 
+describe("the menu", () => {
   it("lists EVERY cluster, marks the current one, and selects", () => {
-    const onSelect = renderDropdown();
+    const { onSelect } = renderSwitcher({ canEdit: true });
     fireEvent.click(screen.getByTitle("Switch ontology"));
 
     const menu = screen.getByRole("menu");
@@ -98,6 +110,7 @@ describe("the dropdown", () => {
     expect(items.map((item) => item.textContent)).toEqual([
       "Pipeline3 objects",
       "Roster0 objects",
+      "Ontology",
     ]);
 
     fireEvent.click(items[1]);
@@ -108,50 +121,35 @@ describe("the dropdown", () => {
   });
 
   it("does not re-select the ontology already open", () => {
-    const onSelect = renderDropdown();
+    const { onSelect } = renderSwitcher();
     fireEvent.click(screen.getByTitle("Switch ontology"));
     fireEvent.click(within(screen.getByRole("menu")).getAllByRole("menuitem")[0]);
 
     expect(onSelect).not.toHaveBeenCalled();
   });
-});
 
-describe("the strip", () => {
-  it("is UNCHANGED — one pill per cluster, the COLUMN count, and the create", () => {
-    const onSelect = vi.fn();
-    const onCreate = vi.fn();
-    render(
-      <ClusterSwitcher
-        mode="pills"
-        entries={clusterSwitcherEntries(GRAPH)}
-        activeId="c1"
-        pendingIds={NONE}
-        canEdit
-        onSelect={onSelect}
-        onCreate={onCreate}
-      />
-    );
+  it("ends with the CREATE row, which is a menu option and not a page button", () => {
+    const { onCreate } = renderSwitcher({ canEdit: true });
+    fireEvent.click(screen.getByTitle("Switch ontology"));
 
-    expect(screen.getByRole("button", { name: "Pipeline1" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Roster0" }));
-    expect(onSelect).toHaveBeenCalledWith("c2");
+    const create = screen.getByRole("menuitem", { name: "Ontology" });
+    // 🔒 Samuel, 2026-09-10: *"it shouldn't be a black button it should be like a
+    // gray"* — it is the shared `.menu-row`, so the kit's option face is the only
+    // thing styling it, and `auth-btn-3d` is what it must never wear again.
+    expect(create.className).toMatch(/menu-row/);
+    expect(create.className).not.toMatch(/auth-btn-3d/);
+    expect(create.querySelector("svg")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "New cluster" }));
+    fireEvent.click(create);
     expect(onCreate).toHaveBeenCalled();
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("hides the create from a VIEWER", () => {
-    render(
-      <ClusterSwitcher
-        mode="pills"
-        entries={clusterSwitcherEntries(GRAPH)}
-        activeId="c1"
-        pendingIds={NONE}
-        onSelect={vi.fn()}
-        onCreate={vi.fn()}
-      />
-    );
+  it("hides the create row from a VIEWER, keeping the list", () => {
+    renderSwitcher();
+    fireEvent.click(screen.getByTitle("Switch ontology"));
 
-    expect(screen.queryByRole("button", { name: "New cluster" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Ontology" })).toBeNull();
+    expect(screen.getAllByRole("menuitem")).toHaveLength(2);
   });
 });
