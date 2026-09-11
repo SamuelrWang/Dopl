@@ -14,7 +14,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import { Pencil, Settings, Trash2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
@@ -182,11 +182,14 @@ export function NameField({
  * and to have a settings icon"*). It was `…`, a 28px rounded rectangle the HOST
  * rendered through a `headerEnd` slot.
  *
- * ⚠ **ONE TRIGGER, TWO SOURCES OF ROWS.** Rename and "+ Column" are the VIEW's —
- * the header button that used to carry column creation now says "+ Object", and
- * the name is a dropdown trigger rather than an input, so both acts live here.
- * Everything under the divider is the HOST's: /home's Share, Changelog and agents
- * rungs.
+ * ⚠ **ONE TRIGGER, TWO SOURCES OF ROWS.** Rename is the VIEW's — the name is a
+ * dropdown trigger rather than an input, so the act lives here. Everything under
+ * the divider is the HOST's: /home's Share, Changelog and agents rungs.
+ *
+ * ⚠ **AND "+ Column" IS DELETED FROM THIS MENU** (2026-09-11): the header's black
+ * button makes the lane now (`ontology-view.tsx › handleNewObject`, "+ Object" =
+ * a new object TYPE), so the row was a second way to do the same thing under a
+ * word the UI no longer uses. One place per control.
  *
  * ⚠ **DELETE IS ONE SLOT, AND IT IS THE LAST ROW.** The workspace page had a
  * standalone `Trash2` button beside this gear until 2026-09-10; it is DELETED and
@@ -202,14 +205,12 @@ export function NameField({
 export function BoardSettingsMenu({
   clusterName,
   onRename,
-  onAddColumn,
   hostRows,
   onDelete,
 }: {
   clusterName: string;
   /** Member+ only — a viewer gets the host's rows and no edits. */
   onRename?: () => void;
-  onAddColumn?: () => void;
   hostRows?: (close: () => void) => ReactNode;
   /** ⚠ Omit when `hostRows` supplies Delete. */
   onDelete?: () => void;
@@ -217,7 +218,7 @@ export function BoardSettingsMenu({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const close = () => setAnchor(null);
-  const boardRows = Boolean(onRename || onAddColumn);
+  const boardRows = Boolean(onRename);
 
   return (
     <>
@@ -255,17 +256,6 @@ export function BoardSettingsMenu({
             }}
           >
             Rename
-          </MenuItem>
-        )}
-        {onAddColumn && (
-          <MenuItem
-            icon={<Plus size={12} />}
-            onSelect={() => {
-              close();
-              onAddColumn();
-            }}
-          >
-            Column
           </MenuItem>
         )}
         {hostRows && (

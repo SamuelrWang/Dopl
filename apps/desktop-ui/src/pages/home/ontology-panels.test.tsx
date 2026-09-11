@@ -28,10 +28,14 @@ import {
  *
  * ⚠ **THE HEADER WAS RESTYLED ON 2026-09-10** (Samuel, on this face): the name IS
  * the dropdown (and carries "+ Ontology"), the purpose line is the kit's
- * underline field hinted "Description", the `…` became a gear circle, "+ Column"
- * became the black "+ Object", and the board lost its dotted canvas so the
- * elements sit on the page's own white panel. What this file asserted about the
- * old pills and the old page button it now asserts about those.
+ * underline field hinted "Description", the `…` became a gear circle and
+ * "+ Column" became the black "+ Object". What this file asserted about the old
+ * pills and the old page button it now asserts about those.
+ *
+ * ⚠ **AND ON 2026-09-11 "+ Object" BECAME THE OBJECT TYPE — THE LANE — BEHIND A
+ * POPUP** (Samuel: it had been *"creating a new object on top of the column"*).
+ * The gear's duplicate "+ Column" row went with that, and the dotted grid came
+ * back on the same white panel.
  *
  * ⚠ **AND RENAMING IS A GEAR ROW** — making the name the dropdown's TRIGGER left
  * nothing that renamed an ontology, so "Rename" swaps that trigger for the same
@@ -142,7 +146,7 @@ describe("the face", () => {
     await openOntologyFace();
 
     // 🔒 THE HEADER BUTTON IS "+ Object" AND IT IS THE BLACK PAGE PILL (Samuel,
-    // 2026-09-10). "+ Column" is not gone — it moved into the gear menu.
+    // 2026-09-10). There is no "+ Column" anywhere on the board since 09-11.
     const object = screen.getByRole("button", { name: "Object" });
     expect(object.className).toMatch(/auth-btn-3d/);
     expect(object.className).toMatch(/h-9/);
@@ -153,25 +157,59 @@ describe("the face", () => {
   });
 
   /**
-   * 🔒 THE WHITE PANEL (Samuel, 2026-09-10: *"all the elements are like on a gray
-   * canvas, on top of a white panel. So it looks like double panel"*).
+   * 🔒 **THE DOTTED GRID, ON THE WHITE PANEL — BOTH AT ONCE** (Samuel, 2026-09-11:
+   * *"I don't see the dots, the dotted grid. I want to bring that dotted grid
+   * back"*, alongside his 2026-09-10 *"double panel"* ruling, which stands).
    *
-   * ⚠ MUTATION-VERIFIED — one revert, one failure: putting `graph-substrate
-   * kanban-substrate` back on `kanban-board.tsx`'s scroller (every other
-   * assertion on this face passes with the double panel restored).
+   * ⚠ THE TWO ARE NOT IN TENSION AND THIS TEST IS WHY BOTH ARE PINNED TOGETHER:
+   * the grid paints DOTS and no fill, so the board stays one panel. The thing
+   * that was deleted on 09-10 and must never come back is a background COLOUR on
+   * the scroller.
+   *
+   * ⚠ MUTATION-VERIFIED — one revert, one failure: taking `graph-substrate
+   * kanban-substrate` back off `kanban-board.tsx`'s scroller (every other
+   * assertion on this face passes with the grid gone).
    */
-  it("draws the board on the page's own surface — no dotted canvas", async () => {
+  it("draws the dotted grid, and still only ONE panel under it", async () => {
     renderHome();
     await openOntologyFace();
     await screen.findByText("Acme");
 
-    expect(document.querySelector(".kanban-substrate")).toBeNull();
-    expect(document.querySelector(".graph-substrate")).toBeNull();
-    // …and no second `.page-float` inside the pane either (Samuel, later that
-    // day: *"the ontology is still on a gray panel. That is on the white
-    // panel"*) — the view is `frameless` on /home.
+    const scroller = document.querySelector(".kanban-substrate");
+    expect(scroller).not.toBeNull();
+    expect(scroller!.className).toMatch(/graph-substrate/);
+    // 🔒 NO FILL ON THE SCROLLER — the dots are the whole decoration.
+    expect(scroller!.className).not.toMatch(/\bbg-/);
+    // …and no second `.page-float` inside the pane either (Samuel, 2026-09-10:
+    // *"the ontology is still on a gray panel. That is on the white panel"*) —
+    // the view is `frameless` on /home.
     expect(document.querySelector(".page-float .page-float")).toBeNull();
     expect(document.querySelectorAll(".page-float").length).toBeLessThanOrEqual(1);
+  });
+
+  /**
+   * 🔒 **THE LANE'S GRAY IS THE TAB-SWITCHER PANEL'S** (Samuel, 2026-09-11: *"I
+   * want it to be the same gray that appears on the panel holding the tab
+   * switcher. Right now, it's a different gray, and I don't like that"*).
+   *
+   * ⚠ ASSERTED AS THE TOKEN, not a colour: jsdom loads no stylesheet, so the
+   * utility class IS the contract — and `--home-panel` is exactly what the header
+   * strip's own panel paints (`pages/home/index.tsx`, `page-float bg-home-panel`).
+   *
+   * ⚠ MUTATION-VERIFIED — one revert, one failure: putting `bg-bg-inset` back on
+   * `kanban-board.tsx › Column` (the lanes render, the board renders, and only
+   * the token says the two grays disagree again).
+   */
+  it("paints the lanes in the header panel's own gray", async () => {
+    renderHome();
+    await openOntologyFace();
+    await screen.findByText("Acme");
+    // The lane is the board's own `w-72` column wrapper.
+    const lane = document.querySelector(".w-72");
+
+    expect(lane).not.toBeNull();
+    expect(lane!.className).toMatch(/bg-home-panel/);
+    expect(lane!.className).not.toMatch(/bg-bg-inset/);
   });
 
   /**
@@ -216,43 +254,18 @@ describe("the face", () => {
   });
 
   /**
-   * 🔒 "+ Object" MAKES AN OBJECT (Samuel, 2026-09-10) — a card in the board's
-   * first lane, not a column.
-   *
-   * ⚠ MUTATION-VERIFIED — one revert, one failure: pointing the header button back
-   * at `{ clusterId }` (it POSTs, the board grows a lane, and only the target in
-   * the body says the button made the wrong kind of thing).
+   * 🔒 ONE PLACE PER CONTROL — the gear's "+ Column" row is DELETED (2026-09-11).
+   * It made the same thing the header button now makes, under a word the UI no
+   * longer uses.
    */
-  it("makes an OBJECT in the first column", async () => {
-    renderHome();
-    await openOntologyFace();
-    await screen.findByText("Acme");
-
-    fireEvent.click(screen.getByRole("button", { name: "Object" }));
-
-    await waitFor(() => {
-      const post = bridgeCalls(apiRequest).find(
-        (c) => c.path === "/api/ontology/objects" && c.opts.method === "POST"
-      );
-      expect(post?.opts.body).toMatchObject({ parentObjectId: "col-1" });
-    });
-  });
-
-  it("puts + Column in the gear menu, which is where it now lives", async () => {
+  it("has no + Column row left in the gear", async () => {
     renderHome();
     await openOntologyFace();
     await openOntologyMenu();
 
-    fireEvent.click(
-      within(screen.getByRole("menu")).getByRole("menuitem", { name: "Column" })
-    );
-
-    await waitFor(() => {
-      const post = bridgeCalls(apiRequest).find(
-        (c) => c.path === "/api/ontology/objects" && c.opts.method === "POST"
-      );
-      expect(post?.opts.body).toMatchObject({ clusterId: PIPELINE_ID });
-    });
+    const menu = within(screen.getByRole("menu"));
+    expect(menu.queryByRole("menuitem", { name: "Column" })).toBeNull();
+    expect(menu.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
   });
 
   it("says nothing about emptiness before the read lands", async () => {

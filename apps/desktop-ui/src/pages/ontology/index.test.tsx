@@ -20,7 +20,7 @@ import { CLUSTER_ID, SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtur
  * ⚠ **THE HEADER IS THE BOARD'S, AND IT WAS RESTYLED ON 2026-09-10** — the ruling
  * landed on /home's face and this page mounts the same component, so the tab
  * strip is gone here too: the cluster's NAME is the dropdown trigger (with
- * "+ Ontology" in it), "+ Column" moved into the gear menu and the header button
+ * "+ Ontology" in it), the gear menu holds Rename and the header button
  * is the black "+ Object". This suite is the proof that the second surface moved
  * with the first.
  *
@@ -44,7 +44,7 @@ function openClusterName(): string {
   return screen.getByTitle("Switch ontology").textContent ?? "";
 }
 
-/** Open the header's gear — Rename, "+ Column" and the ONE Delete row. */
+/** Open the header's gear — Rename and the ONE Delete row. */
 function openGear(name = "Revenue"): HTMLElement {
   fireEvent.click(screen.getByRole("button", { name: `Settings for ${name}` }));
   return screen.getByRole("menu");
@@ -194,8 +194,8 @@ describe("ontology page", () => {
 
     await screen.findByTitle("Switch ontology");
     expect(openClusterName()).toBe("Revenue");
-    // The create row inside the name dropdown, the gear's "+ Column" and the
-    // header's "+ Object" are all member+ affordances.
+    // The create row inside the name dropdown and the header's "+ Object" are
+    // both member+ affordances.
     fireEvent.click(screen.getByTitle("Switch ontology"));
     expect(screen.queryByRole("menuitem", { name: "Ontology" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Object" })).not.toBeInTheDocument();
@@ -215,10 +215,14 @@ describe("ontology page", () => {
     expect(screen.getByRole("button", { name: /^Settings for Revenue/ })).toBeInTheDocument();
     // The other clusters are BEHIND the trigger, never beside it as pills.
     expect(screen.queryByRole("button", { name: /^Delivery/ })).not.toBeInTheDocument();
-    expect(document.querySelector(".kanban-substrate")).toBeNull();
-    // …and "+ Column" is in the gear, which is where it went.
+    // 🔒 THE DOTTED GRID IS BACK ON THIS SURFACE TOO (Samuel, 2026-09-11) — one
+    // board component, so the workspace page moved with /home.
+    expect(document.querySelector(".kanban-substrate")).not.toBeNull();
+    // …and "+ Column" is GONE from the gear: the black button makes the object
+    // TYPE now, and two ways to do it is the duplicate that row became.
     const menu = within(openGear());
-    expect(menu.getByRole("menuitem", { name: "Column" })).toBeInTheDocument();
+    expect(menu.queryByRole("menuitem", { name: "Column" })).toBeNull();
+    expect(menu.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
   });
 
   /**

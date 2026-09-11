@@ -23,7 +23,7 @@ export function CapNotice({
     return (
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-warning/25 bg-warning/10 px-3 py-1.5 text-caption">
         <span className="text-warning">
-          {used.toLocaleString()} / {cap.toLocaleString()} objects (cards and columns) —
+          {used.toLocaleString()} / {cap.toLocaleString()} objects —
           new objects are paused on Starter (nothing was deleted; reads and edits still
           work).
         </span>

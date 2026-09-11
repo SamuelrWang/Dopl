@@ -4,8 +4,12 @@ import { useCallback, useMemo, useState, type Dispatch } from "react";
 import * as api from "../client/api";
 import type { GraphAction } from "../graph-state";
 import {
+  beginColumnDraft,
+  commitColumnDraftOptimistic,
   createClusterOptimistic,
   createObjectOptimistic,
+  discardColumnDraft,
+  type ColumnDraftPatch,
   type OntologyCreateApi,
   type OntologyCreateSink,
 } from "../optimistic-create";
@@ -56,9 +60,19 @@ export interface OntologyCreates {
   createObject: (
     target: { clusterId: string } | { parentObjectId: string }
   ) => OntologyObject;
-  /** A column AND a card in it — "+ Object" with no lane to put one in. Returns
-   *  the COLUMN (on screen at once); the card follows its POST. */
-  createObjectInNewColumn: (clusterId: string) => OntologyObject;
+  /**
+   * "+ Object" — the lane on the board, POSTed by nothing until the popup's
+   * Create (2026-09-11). Returns the row that is already on screen.
+   */
+  beginColumnDraft: (clusterId: string) => OntologyObject;
+  /** Discard / Escape / backdrop — the lane leaves, no request either way. */
+  discardColumnDraft: (draftId: string) => void;
+  /** Create — POST the lane, then PATCH what the POST could not carry. */
+  commitColumnDraft: (
+    clusterId: string,
+    draft: OntologyObject,
+    patch: ColumnDraftPatch
+  ) => void;
   /** Ids rendered but not yet acknowledged — these rows draw as pending. */
   pendingIds: ReadonlySet<string>;
 }
@@ -98,6 +112,8 @@ export function useOntologyCreates({
     () => ({
       createCluster: (input) => api.createCluster(workspaceId, input),
       createObject: (input) => api.createObject(workspaceId, input),
+      updateObject: (objectId, input) =>
+        api.updateObject(workspaceId, objectId, input),
       deleteCluster: (clusterId) => api.deleteCluster(workspaceId, clusterId),
     }),
     [workspaceId]
@@ -146,32 +162,43 @@ export function useOntologyCreates({
   );
 
   /**
-   * "+ Object" ON AN EMPTY BOARD — the lane, then the card inside it
-   * (2026-09-10; `ontology-view.tsx › handleCreateHeaderObject`).
+   * "+ Object" — THE LANE FIRST, THE POPUP OVER IT, THE POST ONLY ON CREATE
+   * (2026-09-11, Samuel's ruling; the sequences are in `optimistic-create.ts`).
    *
-   * ⚠ **THE CARD WAITS ON THE COLUMN'S OWN POST, and that is not a slow path but
-   * the only correct one**: until the column resolves its id is `pending:…`, and
-   * posting a card at a provisional `parentObjectId` sends the server a reference
-   * it has never minted. The column itself is on screen in the click's frame, as
-   * every other create is.
-   *
-   * ⚠ COMPOSED FROM THE EXISTING SEQUENCE, not a third one in
-   * `optimistic-create.ts`: each half keeps its own pending marks and its own
-   * rollback, so a refused column leaves no card behind and a refused card leaves
-   * the lane the operator can see.
+   * ⚠ **THE CARD-IN-A-NEW-LANE PATH THAT STOOD HERE IS DELETED.** "+ Object"
+   * made a CARD and minted a lane to hold it when the board was empty; an object
+   * IS the lane — the object TYPE — so the button now makes exactly one thing and
+   * the gear's duplicate "+ Column" row went with it.
    */
-  const createObjectInNewColumn = useCallback(
+  const begin = useCallback(
     (clusterId: string): OntologyObject => {
       markDirty();
-      const { row, done } = createObjectOptimistic(boundApi, sink, { clusterId });
-      void done.then((savedColumn) => {
-        if (!savedColumn) return;
-        createObjectOptimistic(boundApi, sink, { parentObjectId: savedColumn.id }, savedColumn);
-      });
-      return row;
+      return beginColumnDraft(sink, clusterId);
+    },
+    [sink, markDirty]
+  );
+
+  const discard = useCallback(
+    (draftId: string): void => discardColumnDraft(sink, draftId),
+    [sink]
+  );
+
+  const commit = useCallback(
+    (clusterId: string, draft: OntologyObject, patch: ColumnDraftPatch): void => {
+      markDirty();
+      // Fire-and-forget, like every other sequence here: the sink handles every
+      // outcome (resolve / rollback / toast).
+      commitColumnDraftOptimistic(boundApi, sink, clusterId, draft, patch);
     },
     [boundApi, sink, markDirty]
   );
 
-  return { createCluster, createObject, createObjectInNewColumn, pendingIds };
+  return {
+    createCluster,
+    createObject,
+    beginColumnDraft: begin,
+    discardColumnDraft: discard,
+    commitColumnDraft: commit,
+    pendingIds,
+  };
 }

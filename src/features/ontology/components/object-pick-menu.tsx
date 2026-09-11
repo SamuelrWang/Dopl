@@ -6,8 +6,8 @@ import type { GraphState } from "../graph-state";
 import { PickMenu, type PickMenuItem } from "./pick-menu";
 
 /**
- * THE object picker — `PickMenu` fed from the graph: columns under a "Columns"
- * group, cards grouped by their column's name. ⚠ Every place that links objects
+ * THE object picker — `PickMenu` fed from the graph: object TYPES (the lanes)
+ * under an "Objects" group, cards grouped by their lane's name. ⚠ Every place that links objects
  * (relationship targets, ref attributes) renders this, never a bespoke dropdown.
  */
 export function ObjectPickMenu({
@@ -41,8 +41,8 @@ function buildItems(graph: GraphState): PickMenuItem[] {
     for (const colId of cluster.columnIds) {
       const col = graph.objects[colId];
       if (!col) continue;
-      const colName = col.name || "Untitled column";
-      items.push({ id: col.id, name: colName, group: "Columns" });
+      const colName = col.name || "Untitled object";
+      items.push({ id: col.id, name: colName, group: "Objects" });
       for (const childId of col.childIds) {
         const child = graph.objects[childId];
         if (child) {

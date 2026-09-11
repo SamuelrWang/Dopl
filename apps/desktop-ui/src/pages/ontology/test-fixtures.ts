@@ -84,7 +84,7 @@ export function ontologyBridge(
     );
   }
   if (path === "/api/ontology/objects" && opts.method === "POST") {
-    return Promise.resolve(ok({ object: object({ id: "obj-new", name: "Untitled column" }) }));
+    return Promise.resolve(ok({ object: object({ id: "obj-new", name: "Untitled object" }) }));
   }
   if (path.startsWith("/api/ontology/clusters/") || path.startsWith("/api/ontology/objects/")) {
     return Promise.resolve(noContent());

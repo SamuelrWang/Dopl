@@ -5,15 +5,14 @@
  * transport (at the instant each request leaves), and the tab + column + first
  * card must already be there in the first one. Runs against the REAL
  * `graphReducer`, so rollbacks are checked as board states, not dispatch logs.
+ *
+ * ⚠ THE DRAFT LANE ("+ Object", 2026-09-11) IS ITS OWN FILE —
+ * `optimistic-create-draft.test.ts` — for the 500-line cap. Both drive the one
+ * harness in `optimistic-create-harness.ts`.
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  EMPTY_GRAPH,
-  graphReducer,
-  type GraphAction,
-  type GraphState,
-} from "./graph-state";
+import { EMPTY_GRAPH, type GraphState } from "./graph-state";
 import {
   createClusterOptimistic,
   createObjectOptimistic,
@@ -21,156 +20,14 @@ import {
   NEW_CARD_NAME,
   NEW_CLUSTER_NAME,
   NEW_COLUMN_NAME,
-  type OntologyCreateApi,
-  type OntologyCreateSink,
 } from "./optimistic-create";
-import type { OntologyCluster, OntologyObject } from "./types";
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  settle: (value: T) => void;
-  fail: (err: unknown) => void;
-}
-
-function deferred<T>(): Deferred<T> {
-  let settle!: (value: T) => void;
-  let fail!: (err: unknown) => void;
-  const promise = new Promise<T>((resolve, reject) => {
-    settle = resolve;
-    fail = reject;
-  });
-  promise.catch(() => undefined);
-  return { promise, settle, fail };
-}
-
-/** Drains the microtask queue so an awaited step has actually run. */
-const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
-
-const savedCluster = (over: Partial<OntologyCluster> = {}): OntologyCluster => ({
-  id: "cluster-real",
-  slug: "new-cluster",
-  name: NEW_CLUSTER_NAME,
-  purpose: "",
-  columnIds: [],
-  layout: {},
-  ...over,
-});
-
-const savedObject = (id: string, over: Partial<OntologyObject> = {}): OntologyObject => ({
-  id,
-  name: "",
-  subtitle: "",
-  attributes: [],
-  relationships: [],
-  methods: [],
-  childIds: [],
-  template: [],
-  ...over,
-});
-
-/** Sink over the real reducer + the transport it drives. Every request records
- *  the board AS IT LEFT — that snapshot is the proof. */
-function harness() {
-  let state: GraphState = EMPTY_GRAPH;
-  const pending = new Set<string>();
-  const order: string[] = [];
-  const failures: Array<{ what: string; err: unknown }> = [];
-  const sent: Array<{ op: string; input: unknown; board: GraphState }> = [];
-  const deletedClusters: string[] = [];
-  const clusterCalls: Array<Deferred<OntologyCluster>> = [];
-  const objectCalls: Array<Deferred<OntologyObject>> = [];
-  let writesInFlight = 0;
-  let writeEnds = 0;
-  let createdCount = 0;
-
-  const record = (op: string, input: unknown) => sent.push({ op, input, board: state });
-
-  const api: OntologyCreateApi = {
-    createCluster: (input) => {
-      record("createCluster", input);
-      const call = deferred<OntologyCluster>();
-      clusterCalls.push(call);
-      return call.promise;
-    },
-    createObject: (input) => {
-      record("createObject", input);
-      const call = deferred<OntologyObject>();
-      objectCalls.push(call);
-      return call.promise;
-    },
-    deleteCluster: (clusterId) => {
-      deletedClusters.push(clusterId);
-      return Promise.resolve();
-    },
-  };
-
-  const apply = (action: GraphAction) => {
-    order.push(action.type);
-    state = graphReducer(state, action);
-  };
-
-  const sink: OntologyCreateSink = {
-    dispatch: apply,
-    markPending: (ids) => {
-      order.push("markPending");
-      for (const id of ids) pending.add(id);
-    },
-    clearPending: (ids) => {
-      order.push("clearPending");
-      for (const id of ids) pending.delete(id);
-    },
-    resolve: (map, slugs) => {
-      order.push("resolve");
-      apply(slugs ? { type: "CREATE_RESOLVE", map, slugs } : { type: "CREATE_RESOLVE", map });
-    },
-    beginWrite: () => {
-      order.push("beginWrite");
-      writesInFlight += 1;
-    },
-    endWrite: () => {
-      order.push("endWrite");
-      writesInFlight -= 1;
-      writeEnds += 1;
-    },
-    created: () => {
-      createdCount += 1;
-    },
-    failed: (what, err) => failures.push({ what, err }),
-  };
-
-  return {
-    api,
-    sink,
-    order,
-    failures,
-    sent,
-    deletedClusters,
-    clusterCalls,
-    objectCalls,
-    pending,
-    seed(next: GraphState) {
-      state = next;
-    },
-    get board() {
-      return state;
-    },
-    get writesInFlight() {
-      return writesInFlight;
-    },
-    get writeEnds() {
-      return writeEnds;
-    },
-    get createdCount() {
-      return createdCount;
-    },
-  };
-}
-
-/** The column + card a cluster is born with, read back off the board. */
-function seededOf(board: GraphState, cluster: OntologyCluster) {
-  const column = board.objects[board.clusters.find((c) => c.id === cluster.id)!.columnIds[0]!]!;
-  return { column, card: board.objects[column.childIds[0]!]! };
-}
+import {
+  flush,
+  harness,
+  savedCluster,
+  savedObject,
+  seededOf,
+} from "./optimistic-create-harness";
 
 describe("createClusterOptimistic — ordering", () => {
   it("has the tab, its column and its first card on the board before the first POST leaves", () => {

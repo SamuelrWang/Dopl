@@ -70,12 +70,12 @@ export function ObjectPanel({
       <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-card-surface-subtle px-3 py-2">
         {isColumn ? (
           <span className="shrink-0 rounded-full border border-border-strong px-2 py-px text-label font-semibold uppercase tracking-wide text-text-secondary">
-            Column · {object.childIds.length}
+            Object · {object.childIds.length}
           </span>
         ) : (
           <span
             className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-2.5 py-0.5 text-caption font-semibold text-text-secondary"
-            title="What this object is — its column"
+            title="What this object is — its type"
           >
             {containerName ?? "Object"}
           </span>
@@ -134,7 +134,7 @@ export function ObjectPanel({
           {isColumn && <TemplateEditor column={object} dispatch={dispatch} canEdit={canEdit} />}
           {isColumn && (
             <p className="px-1 text-caption text-text-muted">
-              New objects also start with a copy of this column&apos;s relationships and
+              New objects also start with a copy of this object&apos;s relationships and
               actions below.
             </p>
           )}
@@ -163,9 +163,9 @@ export function ObjectPanel({
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title={isColumn ? "Delete column?" : "Delete object?"}
+        title="Delete object?"
         description={deleteObjectMessage(
-          object.name || (isColumn ? "this column" : "this object"),
+          object.name || "this object",
           orphanedByObjectDelete(graph, objectId).length
         )}
         confirmLabel="Delete permanently"

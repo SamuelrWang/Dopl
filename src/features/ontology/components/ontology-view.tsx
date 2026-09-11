@@ -14,12 +14,14 @@ import { pendingRow } from "@/shared/ui/pending";
 // h-9 rounded-full px-[15px]`.
 import { TAB_ACTION } from "@/features/channels/components/channels-v2/bits";
 import { useOntology } from "../hooks/use-ontology";
+import { useObjectDraft } from "../hooks/use-object-draft";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { BoardSettingsMenu, DescriptionField, NameField } from "./board-header-bits";
 import { CapNotice } from "./cap-notice";
 import { ClusterSwitcher, clusterSwitcherEntries } from "./cluster-switcher";
 import { DeleteClusterDialog } from "./delete-cluster-dialog";
 import { KanbanBoard } from "./kanban-board";
+import { NewObjectDialog } from "./new-object-dialog";
 import { ObjectPanel } from "./object-panel";
 import { OntologyBoardSkeleton } from "./ontology-skeleton";
 
@@ -81,7 +83,7 @@ interface Props {
   /** Admin/owner — controls whether the upgrade prompt offers checkout. */
   canManageBilling?: boolean;
   /** Member+ — viewers read but can't create, so create affordances
-   *  (New cluster / Column / Add new) are hidden. */
+   *  (New cluster / + Object / Add new) are hidden. */
   canEdit?: boolean;
   /**
    * How the address bar follows the active cluster's slug. Defaults to
@@ -146,7 +148,9 @@ export function OntologyView({
     dispatch,
     createCluster,
     createObject,
-    createObjectInNewColumn,
+    beginColumnDraft,
+    discardColumnDraft,
+    commitColumnDraft,
     pendingIds,
   } = useOntology(
     workspaceId,
@@ -157,6 +161,12 @@ export function OntologyView({
       onIdsResolved: handleIdsResolved,
     }
   );
+  // "+ Object": the draft lane on the board, the popup over it (2026-09-11).
+  const draft = useObjectDraft({
+    beginColumnDraft,
+    discardColumnDraft,
+    commitColumnDraft,
+  });
   const [confirmDeleteCluster, setConfirmDeleteCluster] = useState(false);
   /**
    * RENAMING — the gear's "Rename" row, and the ONLY way to rename an ontology
@@ -254,37 +264,22 @@ export function OntologyView({
   };
 
   /**
-   * "+ Object" — the header's black button since 2026-09-10 (Samuel: *"for the +
-   * column button in ontology, change that to instead be the black button … and
-   * instead have it say, + Object"*).
-   *
-   * ⚠ **AN OBJECT IS A CARD, AND A CARD NEEDS A LANE.** With a column on the board
-   * the card joins the FIRST one; on an EMPTY board the click MINTS the lane and
-   * puts the object in it, rather than opening a dialog to ask which column —
-   * "+ Object" that answered with a column picker would be the old button wearing
-   * the new word. Column creation itself is still reachable, from the gear menu.
-   *
-   * ⚠ Two objects need HEADROOM OF 2, not just under-cap — `handleCreateCluster`'s
-   * arithmetic, for its reason: a create at 999/1000 trips the server cap
-   * mid-sequence and leaves a lane with nothing in it.
+   * "+ Object" — **THE OBJECT TYPE, WHICH IS THE LANE** (2026-09-11, Samuel:
+   * *"what it's supposed to do is create a new object type, basically a new
+   * column … right now the code is messed up, where it's actually creating a new
+   * object on top of the column"*). It made a CARD in the first lane until today,
+   * minting a lane when there was none; cards are the LANE's own add button's job.
+   * ⚠ ONE object, so the plain under-cap check — the headroom-of-2 arithmetic
+   * belonged to the two-row sequence this replaced. ⚠ The lane lands first and the
+   * popup opens over it; nothing is POSTed until Create (`use-object-draft.ts`).
    */
-  const handleCreateHeaderObject = () => {
+  const handleNewObject = () => {
     if (!cluster) return;
-    const firstColumn = cluster.columnIds[0];
-    if (firstColumn !== undefined) {
-      handleCreateObject({ parentObjectId: firstColumn });
-      return;
-    }
-    if (
-      ent.overCap ||
-      (ent.isCapped &&
-        ent.objectCap !== null &&
-        ent.objectsUsed + 2 > ent.objectCap)
-    ) {
+    if (ent.overCap) {
       setUpgradeOpen(true);
       return;
     }
-    setSelectedId(createObjectInNewColumn(cluster.id).id);
+    draft.begin(cluster.id);
   };
 
   if (status === "loading") {
@@ -342,10 +337,9 @@ export function OntologyView({
   return (
     <OntologyResourcesProvider workspaceId={workspaceId} graph={graph}>
       <Frame>
-        {/* ⚠ THE HEADER SITS ON THE PAGE'S OWN WHITE PANEL, and so does the board
-            under it (Samuel, 2026-09-10: *"all the elements are like on a gray
-            canvas, on top of a white panel. So it looks like double panel"*). No
-            surface of its own here, and no dot grid below — `kanban-board.tsx`. */}
+        {/* ⚠ THE HEADER SITS ON THE PAGE'S OWN WHITE PANEL — no surface of its
+            own here (Samuel, 2026-09-10: no "double panel"). The BOARD below
+            wears the dotted grid again since 2026-09-11 — `kanban-board.tsx`. */}
         <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
           {/* ⚠ THE ONTOLOGY'S NAME **IS** THE PICKER (2026-09-10) — one control
               where the pill strip and a separate bold name input used to stand …
@@ -393,11 +387,6 @@ export function OntologyView({
               onRename={
                 canEdit && !clusterPending ? () => setRenaming(true) : undefined
               }
-              onAddColumn={
-                canEdit
-                  ? () => handleCreateObject({ clusterId: cluster.id })
-                  : undefined
-              }
               hostRows={settingsMenu}
               // ⚠ **ONE DELETE SLOT, AND THE GEAR IS IT** (2026-09-10) — the
               // standalone trash button that stood here is DELETED. Pinned mode is
@@ -414,7 +403,7 @@ export function OntologyView({
           {canEdit && (
             <button
               type="button"
-              onClick={handleCreateHeaderObject}
+              onClick={handleNewObject}
               {...pendingRow(clusterPending, cn(TAB_ACTION, "gap-1.5"))}
             >
               <Plus size={13} aria-hidden="true" /> Object
@@ -468,6 +457,15 @@ export function OntologyView({
             ? `This workspace hit the Starter limit of ${ent.objectCap.toLocaleString()} ontology objects. Nothing was deleted — upgrade to keep adding.`
             : undefined
         }
+      />
+
+      {/* ⚠ THE LANE IT FILLS IN IS ALREADY BEHIND IT (2026-09-11). Discard —
+          Escape and the backdrop with it — takes that lane back off the board,
+          and no request was ever made for it. */}
+      <NewObjectDialog
+        open={draft.open}
+        onDiscard={draft.discard}
+        onCreate={draft.create}
       />
 
       <DeleteClusterDialog

@@ -32,7 +32,7 @@ interface Props {
  * Header card at the top of a column's lane: name (edited in place), card
  * count, and for editors an add button + kebab menu. Expands downward onto a
  * PREVIEW of the column's description and default fields; the template is
- * edited in the panel's TemplateEditor ("Column settings").
+ * edited in the panel's TemplateEditor ("Object settings").
  *
  * ⚠ THE CARD IS NOT ONE BUTTON (see `knowledge-v2/home/base-card`): a
  * `<button>` inside a `<button>` is invalid HTML and browsers reparent the
@@ -53,7 +53,7 @@ export function KanbanColumnHeader({
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const label = column.name || "untitled column";
+  const label = column.name || "untitled object";
   const detailsId = `column-details-${column.id}`;
 
   return (
@@ -90,8 +90,8 @@ export function KanbanColumnHeader({
             dispatch({ type: "OBJECT_UPDATE", id: column.id, patch: { name: e.target.value } })
           }
           className="min-w-0 flex-1 bg-transparent text-body font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
-          placeholder="Column name"
-          aria-label="Column name"
+          placeholder="Object name"
+          aria-label="Object name"
         />
         <span className="shrink-0 rounded-full bg-surface-raised-4 px-1.5 py-px text-micro font-medium text-text-secondary">
           {column.childIds.length}
@@ -114,7 +114,7 @@ export function KanbanColumnHeader({
           <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
-              aria-label={`Column actions for ${label}`}
+              aria-label={`Object actions for ${label}`}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((v) => !v)}
@@ -130,7 +130,7 @@ export function KanbanColumnHeader({
                   onSelect(column.id);
                 }}
               >
-                Column settings
+                Object settings
               </MenuItem>
               <MenuItem
                 destructive
@@ -140,7 +140,7 @@ export function KanbanColumnHeader({
                   setConfirmDelete(true);
                 }}
               >
-                Delete column
+                Delete object
               </MenuItem>
             </Popover>
           </div>
@@ -171,9 +171,9 @@ export function KanbanColumnHeader({
                   patch: { subtitle: e.target.value },
                 })
               }
-              placeholder="Describe this column…"
+              placeholder="Describe this object…"
               className="w-full bg-transparent text-caption text-text-secondary placeholder:text-text-muted focus:outline-none"
-              aria-label="Column description"
+              aria-label="Object description"
             />
             <TemplatePreview column={column} />
           </div>
@@ -183,9 +183,9 @@ export function KanbanColumnHeader({
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title="Delete column?"
+        title="Delete object?"
         description={deleteObjectMessage(
-          column.name || "this column",
+          column.name || "this object",
           orphanedByObjectDelete(graph, column.id).length
         )}
         confirmLabel="Delete permanently"

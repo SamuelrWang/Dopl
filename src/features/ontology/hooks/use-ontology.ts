@@ -22,6 +22,7 @@ import {
   useOntologyCreates,
   type OntologyCreateCallbacks,
 } from "./use-ontology-creates";
+import type { ColumnDraftPatch } from "../optimistic-create";
 import type { OntologyCluster, OntologyObject } from "../types";
 
 const OBJECT_SYNC_DELAY_MS = 800;
@@ -58,8 +59,14 @@ export function useOntology(
   createObject: (
     target: { clusterId: string } | { parentObjectId: string }
   ) => OntologyObject;
-  /** A column AND a card inside it — the header's "+ Object" with no lane yet. */
-  createObjectInNewColumn: (clusterId: string) => OntologyObject;
+  /** The header's "+ Object": the lane on screen, POSTed only by `commit`. */
+  beginColumnDraft: (clusterId: string) => OntologyObject;
+  discardColumnDraft: (draftId: string) => void;
+  commitColumnDraft: (
+    clusterId: string,
+    draft: OntologyObject,
+    patch: ColumnDraftPatch
+  ) => void;
   /** Ids whose row is on screen but unacknowledged: render them pending. */
   pendingIds: ReadonlySet<string>;
 } {
@@ -331,8 +338,14 @@ export function useOntology(
     (id: string): OntologyObject | undefined => graphRef.current.objects[id],
     []
   );
-  const { createCluster, createObject, createObjectInNewColumn, pendingIds } =
-    useOntologyCreates({
+  const {
+    createCluster,
+    createObject,
+    beginColumnDraft,
+    discardColumnDraft,
+    commitColumnDraft,
+    pendingIds,
+  } = useOntologyCreates({
       workspaceId,
       dispatch: rawDispatch,
       markDirty,
@@ -349,7 +362,9 @@ export function useOntology(
     dispatch,
     createCluster,
     createObject,
-    createObjectInNewColumn,
+    beginColumnDraft,
+    discardColumnDraft,
+    commitColumnDraft,
     pendingIds,
   };
 }

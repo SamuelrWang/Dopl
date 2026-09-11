@@ -59,7 +59,7 @@ export function TemplateEditor({
   return (
     <SectionBox label="Default fields" meta={`${column.template.length}`}>
       <p className="px-4 pt-2 pb-1 text-caption text-text-muted">
-        New objects in this column start with these fields, ready to fill.
+        New objects of this type start with these fields, ready to fill.
       </p>
       <div className="divide-y divide-border-subtle">
         {column.template.map((field, i) => (
