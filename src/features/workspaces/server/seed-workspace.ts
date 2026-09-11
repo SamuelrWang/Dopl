@@ -21,8 +21,12 @@ import { seedWorkspace as seedChat } from "@/features/chats/server/service-seed"
  *   - ⚠ Best-effort and NEVER throws — workspace creation must not be blocked
  *     by a seed hiccup.
  *
- * Only called from the workspace-CREATION path
- * (`service.ensurePersonalContainer` / `service.createWorkspaceForUser`).
+ * ⚠ **ONE CALLER: `service.createWorkspaceForUser` — a STANDARD workspace.** It
+ * had two until 2026-09-10, when Samuel's *"drop seed content"* ruling took
+ * `service.ensurePersonalContainer` off it: a personal container is a SHELF, and
+ * the only thing on it should be what its owner put there. That was
+ * `20260920120000_workspace_kind_personal.sql`'s header's position from the day
+ * it was written, and this module was named in it by symbol.
  */
 
 export interface SeedNewWorkspaceResult {
