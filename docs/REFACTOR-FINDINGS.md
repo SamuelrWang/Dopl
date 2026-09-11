@@ -8544,3 +8544,32 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **Unreachable by construction of the callers, not fenced.** The `/billing` picker excludes link containers and no produced link names one, so a user reaches it only by typing a link container's segment by hand. When they do, the page shows Starter/Team and "Upgrade to Team" answers a 400 whose message names a workspace. Correct outcome (nothing is sold), wrong surface.
 - Fix: `[segment]/page.tsx` answers `notFound()` for `kind === "link"` (the same no-existence-oracle posture it takes for non-members), or renders a one-line "A home channel bills its owner's personal space" with a link to `/billing?plan=pro`.
 - Severity: cosmetic, hand-typed URL only. Status: OPEN.
+
+### F-689 — the `size-check` CI job is RED on three `packages/` files and its exemption list is a placeholder (2026-09-10)
+
+- Locations: the `size-check` job in `.github/workflows/ci.yml` (an inline `find`/`awk`, INVARIANTS §14 gate 3);
+  the three files it fails on are `packages/dopl-client/src/channel-types.ts` (545 lines),
+  `packages/dopl-client/src/channel.ts` (568) and `packages/mcp-server/src/tools/channel-schema.ts` (674).
+  Re-derive, never quote:
+  `find packages -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path '*/dist/*' ! -path '*/node_modules/*' -exec awk 'END { if (NR > 500) print FILENAME, NR }' {} \;`
+- Found during: the new-user flow's gate sweep (item 11), after the `feat/credit-model-v2` merge.
+- ⚠ **PRE-EXISTING ON BOTH MERGE PARENTS**, measured at `9404b652` and `90523039` — this wave neither
+  created nor worsened it. The one over-cap file it DID inherit,
+  `packages/mcp-server/src/tool-budget.test.ts` at 507, came in from the credit branch and was folded
+  to 493 in the same sweep (its ceiling history is a one-line chain, which is how the same constant
+  already stored every later entry), so the count this finding is about is now exactly three.
+- 🔒 **THE JOB'S `ALLOW` LIST IS THE STRING `__no_exemptions__`**, filtered with `grep -vF`, so nothing
+  is exempt and the placeholder is doing only the job its own comment claims — keeping an EMPTY
+  `ALLOW` from filtering every line and passing any overage silently. So these three are not
+  sanctioned overages with a missing doc row; they are a red gate.
+- ⚠ **AND THE DOC ROW THE JOB POINTS AT DOES NOT EXIST.** Its comment says *"Files explicitly exempted
+  in ENGINEERING.md §2 (Known files >500 lines)"*; `grep -n 'Known files >500' docs/ENGINEERING.md`
+  answers nothing. Whatever table that sentence was written against is gone, so a reader trying to
+  find out whether these three are sanctioned has nowhere to look.
+- ⚠ **DO NOT CLOSE THIS BY ADDING THREE NAMES TO `ALLOW`.** That is how a cap stops being a cap
+  (§14's own warning about the budget files). Either the seams are obvious and the files split —
+  INVARIANTS §1 records that `channel-types.ts` has already paid this cap once, split by
+  reason-to-change rather than by size — or Samuel rules them exempt and the ruling gets the doc row
+  the job is already citing.
+- Severity: a RED required gate, which is a P0 by the definition of green. Status: OPEN, **and not
+  this wave's to take** — three unrelated SDK/MCP surfaces, with a split each.
