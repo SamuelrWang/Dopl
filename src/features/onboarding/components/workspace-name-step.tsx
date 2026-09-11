@@ -8,9 +8,27 @@ interface WorkspaceNameStepProps {
   onSubmit: (name: string, description: string) => void;
 }
 
-/** Onboarding step 3 — name the auto-provisioned workspace (+ optional
- *  description). Auth-3D kit, not the token surface, matching steps 1-2. Blank
- *  name keeps the server's "{FirstName}'s Workspace" fallback. */
+/**
+ * Onboarding step 3 — name the caller's HOME SPACE (+ optional description).
+ * Auth-3D kit, not the token surface, matching steps 1-2. Blank name keeps the
+ * server's "Home" fallback (`onboarding/server/service.ts ›
+ * PERSONAL_CONTAINER_DEFAULT_NAME`).
+ *
+ * ⚠ **IT SAID "WORKSPACE" EVERYWHERE UNTIL 2026-09-10 AND NAMED NO WORKSPACE.**
+ * What this step renames is the caller's `kind='personal'` container — a SHELF,
+ * not a workspace (`20260920120000`'s header) — and the word set the new user's
+ * expectation wrong on the first screen they ever see: they finish, land on
+ * /home, and the thing they named is not called what they were told.
+ *
+ * ⚠ **THE EXPLAINER PARAGRAPH IS DELETED, NOT REWRITTEN** (INVARIANTS §5's
+ * minimal-copy ruling: label + control, no explainer paragraphs in product UI).
+ * It was also false after the seed ruling — *"your knowledge bases and skills all
+ * live here"* described a starter corpus a fresh home space no longer has.
+ *
+ * ⚠ The component, the file and the `step === "workspace"` key keep their names:
+ * the ruling is about COPY. Renaming the step key is a change to
+ * `onboarding-flow-core.tsx`'s state machine for no user-visible gain.
+ */
 export function WorkspaceNameStep({ submitting, onSubmit }: WorkspaceNameStepProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -23,12 +41,8 @@ export function WorkspaceNameStep({ submitting, onSubmit }: WorkspaceNameStepPro
   return (
     <div>
       <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
-        Name Your Workspace
+        Name your home space
       </h2>
-      <p className="mt-2.5 text-[14px] leading-relaxed text-[#9a9a9a]">
-        Your knowledge bases and skills all live here. You can rename it any
-        time.
-      </p>
 
       <div className="mt-7 space-y-5">
         {/* Name */}
@@ -49,7 +63,7 @@ export function WorkspaceNameStep({ submitting, onSubmit }: WorkspaceNameStepPro
                 if (e.key === "Enter") handleSubmit();
               }}
               maxLength={120}
-              placeholder="My workspace"
+              placeholder="Home"
               autoFocus
               className="w-full bg-transparent text-[14px] text-[#181818] placeholder:text-[#b3b3b3] focus:outline-none"
             />
@@ -72,7 +86,7 @@ export function WorkspaceNameStep({ submitting, onSubmit }: WorkspaceNameStepPro
               onChange={(e) => setDescription(e.target.value)}
               maxLength={2000}
               rows={3}
-              placeholder="What lives in this workspace?"
+              placeholder="What lives here?"
               className="w-full resize-none bg-transparent text-[14px] leading-relaxed text-[#181818] placeholder:text-[#b3b3b3] focus:outline-none"
             />
           </div>
