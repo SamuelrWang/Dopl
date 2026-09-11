@@ -93,7 +93,12 @@ describe("the trigger", () => {
     // its right. Also unbold the text"*) — the strip's `.raised-tab` stadium and
     // the bold weight are both what he was looking at.
     expect(trigger.className).not.toMatch(/raised-tab|rounded-full|seg-pill/);
-    expect(trigger.className).toMatch(/font-normal/);
+    // 🔒 …and since later that day it wears the CHANNEL ROW's name recipe
+    // (*"match it to the text and font size and styling of the name of the
+    // channel in the left channel selector"* — `relationship-list.tsx`).
+    expect(trigger.className).toMatch(/\btext-body\b/);
+    expect(trigger.className).toMatch(/\bfont-medium\b/);
+    expect(trigger.className).not.toMatch(/text-title|font-semibold|font-bold/);
     expect(trigger.querySelector("svg")).toBeTruthy();
     // 🔒 A DROPDOWN, NOT TABS — the other ontology is behind it, never beside it.
     expect(screen.queryByText("Roster")).toBeNull();

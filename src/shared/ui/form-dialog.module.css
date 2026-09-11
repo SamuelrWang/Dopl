@@ -108,6 +108,17 @@
   font-size: var(--text-body);
 }
 
+/* THE 36px VARIANT — for an underline field that shares a row with a 36px
+ * action (`TAB_ACTION`'s `h-9`). The text stays centred; the hairline drops to
+ * the row's bottom so it sits flush with the button (Samuel, 2026-09-10: "add
+ * more padding between the word description and the underline, pushing the
+ * underline down so that it sits flush with the bottom of the + button"). */
+.inputAction {
+  height: 36px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
 .input:focus {
   outline: none;
 }

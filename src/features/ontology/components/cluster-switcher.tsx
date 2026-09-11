@@ -19,7 +19,10 @@ import { clusterObjectIds, type GraphState } from "../graph-state";
  * stop, and the ruling above is for THE BOARD's header, not for one page's.
  *
  * ⚠ **NO PILL, NO BORDER, NO FILL AT REST.** The trigger is the cluster's name
- * as plain text at `text-title` REGULAR weight with a chevron beside it. The
+ * as plain text in the channel list's own name recipe (`relationship-list.tsx`:
+ * `text-body font-medium text-text-primary` — Samuel, 2026-09-10: *"match it to
+ * the text and font size and styling of the name of the channel in the left
+ * channel selector"*) with a chevron beside it. The
  * ruling is explicit about the weight, so it lives here rather than at a caller.
  *
  * ⚠ **THE OBJECT COUNT IS IN THE MENU, NOT THE TRIGGER** — the trigger says the
@@ -93,7 +96,7 @@ export function ClusterSwitcher({
           const rect = triggerRef.current?.getBoundingClientRect();
           if (rect) setAnchor({ x: rect.left, y: rect.bottom + 6 });
         }}
-        className="flex max-w-[260px] items-center gap-1.5 bg-transparent text-title font-normal tracking-tight text-text-primary"
+        className="flex max-w-[260px] items-center gap-1.5 bg-transparent text-body font-medium text-text-primary"
       >
         <span className="min-w-0 truncate">{active?.name || "Untitled"}</span>
         <ChevronDown size={13} className="shrink-0 text-text-muted" />

@@ -190,6 +190,10 @@ describe("the face", () => {
     const field = screen.getByLabelText("Description");
     expect(field.getAttribute("placeholder")).toBe("Description");
     expect(field.className).toMatch(/input/);
+    // 🔒 AS TALL AS THE BLACK BUTTON beside it — the hairline sits flush with
+    // that button's bottom (Samuel, 2026-09-10: *"pushing the underline down so
+    // that it sits flush with the bottom of the + button"*).
+    expect(field.className).toMatch(/inputAction/);
     const line = field.parentElement;
     expect(line?.className).toMatch(/line/);
     expect(line?.className).not.toMatch(/lineActive/);

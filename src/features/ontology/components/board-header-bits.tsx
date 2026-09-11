@@ -42,12 +42,15 @@ export function InlineUnderlineField({
   value,
   onChange,
   className,
+  inputClassName,
   autoFocus,
   onKeyDown,
   onBlur,
 }: {
   /** The hint inside the line, and the accessible name. */
   label: string;
+  /** Extra class on the input itself (the kit's `.inputAction` for a 36px row). */
+  inputClassName?: string;
   value: string;
   onChange: (next: string) => void;
   /** Width/flex only — the face is this component's. */
@@ -81,7 +84,7 @@ export function InlineUnderlineField({
         aria-label={label}
         placeholder={label}
         spellCheck={false}
-        className={fieldStyles.input}
+        className={cn(fieldStyles.input, inputClassName)}
       />
     </span>
   );
@@ -107,6 +110,9 @@ export function DescriptionField({
       value={value}
       onChange={onChange}
       className="flex-1"
+      // ⚠ AS TALL AS THE BLACK BUTTON beside it, so the hairline is flush with
+      // that button's bottom edge (Samuel, 2026-09-10).
+      inputClassName={fieldStyles.inputAction}
     />
   );
 }
