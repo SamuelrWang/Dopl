@@ -46,6 +46,19 @@
   --color-surface-raised-3: var(--surface-raised-3);
   --color-surface-raised-4: var(--surface-raised-4);
   --color-surface-selected: var(--surface-selected);
+  /* 🔒 THE MENU-OPTION HOVER — ONE FACE FOR EVERY DROPDOWN OPTION IN THE APP
+     (Samuel, 2026-09-10, over the channel info panel's "+ Add item": "I like that
+     shade of gray … when I hover over options in a dropdown, it turns this like
+     white elevated button looking thing. I want you to make it a design global
+     rule, have them all be like the gray shadow from the + add item").
+     ⚠ BY REFERENCE TO `--surface-raised-1`, NEVER A COPY OF ITS VALUE — it IS the
+     Add-item hover (`info-card-rows.tsx › InfoCardAddRow`: `hover:bg-surface-raised-1`),
+     and a literal here is how the two shades drift apart. The name exists so the
+     RULE has one place to change, not to introduce a second gray.
+     ⚠ `.menu-row:hover` / `:focus-visible` is the one CSS consumer; the Tailwind
+     alias below is for option rows that are not `MenuItem` (mention list, scope
+     popover). Both copies of the kit must state it — `apps/desktop-ui/src/styles/kit.css`. */
+  --color-menu-item-hover-bg: var(--menu-item-hover-bg);
   /* 🔒 THE HISTOGRAM BAR — SOLID, NOT A TINT (Samuel, 2026-09-08, over the
      reference chart: "their bars are not transparent"). The `surface-raised-*`
      ramp above is alpha ON PURPOSE, so a bar wearing one picks up whatever card
@@ -244,6 +257,8 @@
      card it stands on (see the `--color-chart-bar` note in the theme block). */
   --chart-bar: #e8e8e8;
   --surface-selected: oklch(0 0 0 / 8%);
+  /* THE menu-option hover face — see `--color-menu-item-hover-bg` above. */
+  --menu-item-hover-bg: var(--surface-raised-1);
   --modal-surface: #fefefe;
   --scrim: oklch(0 0 0 / 40%);
 
@@ -1051,32 +1066,36 @@ html {
   pointer-events: none;
 }
 
-/* Menu row — elevation ONLY. Colour, density and type stay with `MenuItem`, so a destructive
-   or selected row can tint itself without forking the recipe. */
+/* Menu row — the HOVER/PRESS FACE only. Colour, density and type stay with `MenuItem`, so a
+   destructive or selected row can tint itself without forking the recipe. ⚠ It was "elevation
+   ONLY" until 2026-09-10; there is no elevation left to own (see the hover rule below). */
 .menu-row {
   border-radius: 10px;
   transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
+/* 🔒 THE ONE MENU-OPTION HOVER FACE — FLAT `--menu-item-hover-bg` GRAY, NO ELEVATION
+   (Samuel, 2026-09-10): "when I hover over options in a dropdown, it turns this like white
+   elevated button looking thing. I want you to make it a design global rule, have them all be
+   like the gray shadow from the + add item." It WAS a white→#f0f0f0 gradient with a 1px lift,
+   a top bevel and a drop shadow — the raised-button face, which is what read as a button
+   floating inside a menu.
+   ⚠ THE TOKEN IS THE WHOLE RULE. Every option in the app arrives here through `.menu-row`
+   (`popover-menu.tsx › MenuItem`, and therefore every `SelectMenu`), and the option rows that
+   are not `MenuItem` wear `bg-menu-item-hover-bg` — the same token as a utility. Never
+   re-state the gray anywhere; never give one menu an elevated face again.
+   ⚠ `:focus-visible` IS THE SAME FACE, deliberately (Samuel's rule is about "options in a
+   dropdown", and a keyboard-driven option is one): the separate 2px focus RING is gone, so
+   the gray is the whole focus indicator. If that reads too faint live, deepen the TOKEN.
+   ⚠ NO `transform` ON EITHER STATE. A lift is elevation, which is the thing being removed;
+   `transition` above still lists it so an `:active` press can be re-added without a reflow. */
 .menu-row:hover,
 .menu-row:focus-visible {
   outline: none;
-  transform: translateY(-1px);
-  background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 1px 2px rgba(0, 0, 0, 0.07);
+  background: var(--menu-item-hover-bg);
 }
-.menu-row:focus-visible {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 0 0 2px rgba(24, 24, 24, 0.28);
-}
+/* The PRESS is the same gray, one step down the ramp — flat, no inset bevel. */
 .menu-row:active {
-  transform: translateY(1px);
-  background: #ededed;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.14),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.85);
+  background: var(--surface-raised-3);
 }
 
 /* Section rule inside `.menu-card` — inset so it stops short of the rounded corners. */

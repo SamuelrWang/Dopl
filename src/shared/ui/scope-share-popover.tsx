@@ -189,7 +189,10 @@ export function ScopeShareMenu({
             "flex items-start gap-2 rounded-[7px] px-2.5 py-2 text-left transition-colors",
             draftScope === key
               ? "bg-surface-raised-3"
-              : "hover:bg-surface-raised-1"
+              // ⚠ THE SHARED OPTION-HOVER TOKEN (Samuel, 2026-09-10). Same face as
+              // every `MenuItem`; these rows are option rows in a popover and only
+              // miss `.menu-row` because they are a radiogroup.
+              : "hover:bg-menu-item-hover-bg"
           )}
         >
           <Icon size={13} className="mt-0.5 shrink-0 text-text-secondary" />
@@ -234,7 +237,7 @@ export function ScopeShareMenu({
                         "flex w-full items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-left transition-colors",
                         locked
                           ? "cursor-not-allowed opacity-50"
-                          : "cursor-pointer hover:bg-surface-raised-1"
+                          : "cursor-pointer hover:bg-menu-item-hover-bg"
                       )}
                     >
                       <span

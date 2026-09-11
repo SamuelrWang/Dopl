@@ -49,6 +49,19 @@
   --color-surface-raised-3: var(--surface-raised-3);
   --color-surface-raised-4: var(--surface-raised-4);
   --color-surface-selected: var(--surface-selected);
+  /* 🔒 THE MENU-OPTION HOVER — ONE FACE FOR EVERY DROPDOWN OPTION IN THE APP
+     (Samuel, 2026-09-10, over the channel info panel's "+ Add item": "I like that
+     shade of gray … when I hover over options in a dropdown, it turns this like
+     white elevated button looking thing. I want you to make it a design global
+     rule, have them all be like the gray shadow from the + add item").
+     ⚠ BY REFERENCE TO `--surface-raised-1`, NEVER A COPY OF ITS VALUE — it IS the
+     Add-item hover (`info-card-rows.tsx › InfoCardAddRow`: `hover:bg-surface-raised-1`),
+     and a literal here is how the two shades drift apart. The name exists so the
+     RULE has one place to change, not to introduce a second gray.
+     ⚠ `.menu-row:hover` / `:focus-visible` is the one CSS consumer; the Tailwind
+     alias below is for option rows that are not `MenuItem` (mention list, scope
+     popover). Both copies of the kit must state it — `apps/desktop-ui/src/styles/kit.css`. */
+  --color-menu-item-hover-bg: var(--menu-item-hover-bg);
   /* 🔒 THE HISTOGRAM BAR — SOLID, NOT A TINT (Samuel, 2026-09-08, over the
      reference chart: "their bars are not transparent"). The `surface-raised-*`
      ramp above is alpha ON PURPOSE, so a bar wearing one picks up whatever card
@@ -247,6 +260,8 @@
      card it stands on (see the `--color-chart-bar` note in the theme block). */
   --chart-bar: #e8e8e8;
   --surface-selected: oklch(0 0 0 / 8%);
+  /* THE menu-option hover face — see `--color-menu-item-hover-bg` above. */
+  --menu-item-hover-bg: var(--surface-raised-1);
   --modal-surface: #fefefe;
   --scrim: oklch(0 0 0 / 40%);
 

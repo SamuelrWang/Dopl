@@ -7,7 +7,11 @@
  * places — src/app/globals.css, apps/desktop-ui/src/styles/kit.css, and its
  * source `src/features/marketing/marketing.css › .lp-nav-menu-card`.
  * marketing.css is page-scoped and never loaded by the app, hence the replica.
- * Edit them together.
+ * Edit them together — with ONE documented exception since 2026-09-10: the option
+ * HOVER FACE. Samuel's global rule flattened `.menu-row:hover` to
+ * `var(--menu-item-hover-bg)` in the two APP copies; `.lp-nav-menu-item` keeps the
+ * raised gradient because marketing is exempt from this kit (DESIGN-SYSTEM.md says
+ * so on the `.menu-card` row). Everything else about the three still moves together.
  *
  * Trigger-anchored (default) needs a `relative` wrapper. Coordinate
  * (`at={{x,y}}`) portals to <body>, viewport-clamped. Backdrop swallows the
@@ -215,8 +219,12 @@ export function MenuItem({
       role="menuitem"
       onClick={onSelect}
       className={cn(
-        // `.menu-row` owns radius + hover lift/press; only colour + density here.
-        // `bg-none` kills the row's hover GRADIENT so a destructive tint survives.
+        // `.menu-row` owns radius + the hover/press FACE; only colour + density here.
+        // ⚠ `bg-none` is BELT-AND-BRACES since 2026-09-10: the hover face is a flat
+        // `var(--menu-item-hover-bg)` now, not a gradient, so a destructive
+        // `hover:bg-danger/10` already wins on its own (utilities layer over
+        // components). It stays because it costs nothing and states the intent — a
+        // destructive row must never wear the shared option gray.
         "menu-row flex w-full cursor-pointer items-start gap-2 px-2.5 py-1.5 text-left text-small",
         destructive
           ? "text-danger hover:bg-danger/10 hover:bg-none focus-visible:bg-danger/10 focus-visible:bg-none"

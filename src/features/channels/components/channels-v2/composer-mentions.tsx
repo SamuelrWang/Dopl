@@ -209,7 +209,10 @@ export function MentionPopover({
               "flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-left text-small",
               i === active
                 ? "bg-surface-raised-3 font-medium text-text-primary"
-                : "text-text-secondary hover:bg-surface-raised-1"
+                // ⚠ THE SHARED OPTION-HOVER TOKEN (Samuel, 2026-09-10), not a gray of
+                // this list's own: these are `role="option"` rows that do not go through
+                // `MenuItem`, so the rule reaches them as the Tailwind alias.
+                : "text-text-secondary hover:bg-menu-item-hover-bg"
             )}
           >
             {/* ⚠ AN AGENT HAS NO FACE OF ITS OWN (INVARIANTS §5) — it wears the glyph, where a

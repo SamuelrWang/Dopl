@@ -10,8 +10,9 @@
  * where an anchored panel renders as a clipped sliver.
  *
  * ⚠ THREE TRIGGER FACES (four strings — `raisedField` is `raised` at row height), AND EACH
- * OWNS ITS WHOLE FACE (`variant`). `text` is the settings-row face: no pill, the label
- * underlined plus the chevron (Samuel, 2026-09-06). `flat` is the
+ * OWNS ITS WHOLE FACE (`variant`). `text` is the settings-row face: no pill, no underline,
+ * REGULAR weight — just the label and the chevron (Samuel, 2026-09-06, unbolded and
+ * un-underlined 2026-09-10). `flat` is the
  * inset pill this control has always worn — right on a settings row, beside
  * other flat chrome. `raised` is the kit's white RAISED button
  * (`.auth-btn-3d-light`), which is what every dropdown inside a
@@ -37,10 +38,10 @@ export interface SelectMenuOption<T extends string> {
 /** Trigger faces, whole. See the header — these are alternatives, not layers. */
 const TRIGGER_FACE = {
   flat: cn(
-    "border border-border-strong bg-bg-inset px-2.5 py-1 text-caption text-text-secondary",
+    "border border-border-strong bg-bg-inset px-2.5 py-1 text-caption font-medium text-text-secondary",
     "transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
   ),
-  raised: "auth-btn-3d-light h-9 px-3 text-body text-text-primary",
+  raised: "auth-btn-3d-light h-9 px-3 text-body font-medium text-text-primary",
   /**
    * `raised` AT FIELD-ROW HEIGHT (Samuel, 2026-08-27) — the composer panels' Template and Model
    * rows.
@@ -52,23 +53,29 @@ const TRIGGER_FACE = {
    * rather than as two kinds of control. `h-6` + `text-small` is what fits the card's own line box
    * with the card's padding left intact.
    */
-  raisedField: "auth-btn-3d-light h-6 px-2 text-small text-text-primary",
+  raisedField: "auth-btn-3d-light h-6 px-2 text-small font-medium text-text-primary",
   /**
    * NO PILL AT ALL (Samuel, 2026-09-06): "the dropdowns aren't pills anymore but just the text
-   * and an arrow, and an underline." This is what every dropdown on a SETTINGS row wears —
-   * Agent Settings, the channel's agent rows, the thread settings tab. The value reads as a
-   * link-shaped control: the current label, underlined, with the chevron as the only hint of
-   * a menu. No border, no fill, no padding, so it sits on the row's own baseline beside the
-   * Working Folder's underlined name and the two read as one vocabulary.
+   * and an arrow." This is what every dropdown on a SETTINGS row wears — Agent Settings, the
+   * channel's agent rows, the thread settings tab. No border, no fill, no padding, so it sits
+   * on the row's own baseline beside the Working Folder's plain name and the two read as one
+   * vocabulary.
+   *
+   * ⚠ THE UNDERLINE AND THE BOLD ARE BOTH DELETED (Samuel, 2026-09-10, over the Agent
+   * Settings block): "unbold these things … also remove the underline." The chevron is now
+   * the ONLY hint of a menu, which is why it may never be dropped from the trigger. The
+   * companion halves went on the same clock: the row NAME
+   * (`settings-agent-rows.tsx › SettingRow`) and the Working Folder path
+   * (`settings-desktop-rows.tsx › AgentFolderRows`).
+   * ⚠ `font-normal` IS EXPLICIT HERE AND THE BASE NO LONGER CARRIES A WEIGHT. `font-medium`
+   * used to live on the shared base, so a `font-normal` in a variant would have lost the
+   * Tailwind same-layer fight (400 is emitted before 500); the three PILL faces each state
+   * `font-medium` themselves instead, byte-identical in effect to what they rendered.
    *
    * ⚠ Settings rows ONLY. Composer panels and dialogs keep `raised`/`raisedField`: there the
-   * control sits on a card, not a row, and a bare underline reads as a link out of the card.
+   * control sits on a card, not a row, and a bare label reads as unstyled text off the card.
    */
-  text: cn(
-    "rounded-none px-0 py-0 text-body text-text-primary",
-    "underline decoration-border-strong decoration-1 underline-offset-[3px]",
-    "transition-colors hover:decoration-text-primary"
-  ),
+  text: "rounded-none px-0 py-0 text-body font-normal text-text-primary",
 } as const;
 
 export function SelectMenu<T extends string>({
@@ -122,7 +129,8 @@ export function SelectMenu<T extends string>({
         aria-haspopup="menu"
         aria-expanded={anchor !== null}
         className={cn(
-          "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full font-medium",
+          // ⚠ NO WEIGHT HERE — each variant owns its own (see `TRIGGER_FACE.text`).
+          "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full",
           "disabled:opacity-60",
           TRIGGER_FACE[variant],
           className

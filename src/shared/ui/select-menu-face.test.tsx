@@ -5,11 +5,20 @@ import { SelectMenu } from "./select-menu";
 
 /**
  * The settings-row face (Samuel, 2026-09-06): "the dropdowns aren't pills
- * anymore but just the text and an arrow, and an underline." A pill is a
- * border plus a fill; this pins that `text` wears neither and does wear the
- * underline, and that `flat` is still the pill for everyone else.
+ * anymore but just the text and an arrow." A pill is a border plus a fill; this
+ * pins that `text` wears neither, and that `flat` is still the pill for everyone
+ * else.
+ *
+ * ⚠ THE UNDERLINE AND THE BOLD ARE PINNED ABSENT NOW, AND THE OLD CASE ASSERTED
+ * THE UNDERLINE PRESENT (Samuel, 2026-09-10, over the Agent Settings block:
+ * "unbold these things … also remove the underline"). That is a SUPERSESSION, not
+ * a loosened test: the row NAME (`settings-agent-rows.tsx › SettingRow`) and the
+ * Working Folder path went on the same clock, and `settings-tab.test.tsx` pins
+ * those two. The chevron assertion is what carries the weight now — with no
+ * underline it is the ONLY hint that the label opens a menu.
  */
-/** Whole-class-token match: `border` must not hit `decoration-border-strong`. */
+/** Whole-class-token match — kept even though `decoration-*` is gone: `border`
+ *  must never hit a `*-border-*` token in some later face. */
 const hasClass = (el: Element, token: string) => el.className.split(/\s+/).includes(token);
 const hasPrefix = (el: Element, prefix: string) =>
   el.className.split(/\s+/).some((c) => c.startsWith(prefix));
@@ -22,21 +31,29 @@ const OPTIONS = [
 describe("SelectMenu › text face", () => {
   afterEach(cleanup);
 
-  it("is the label, underlined, with the chevron — no border, no fill", () => {
+  it("is the label and the chevron — no border, no fill, no underline, no bold", () => {
     render(
       <SelectMenu value="a" options={OPTIONS} onChange={() => {}} ariaLabel="Pick" variant="text" />
     );
     const trigger = screen.getByRole("button", { name: "Pick" });
-    expect(hasClass(trigger, "underline")).toBe(true);
     expect(hasClass(trigger, "border")).toBe(false);
     expect(hasPrefix(trigger, "bg-")).toBe(false);
+    // Samuel, 2026-09-10 — both halves of the same ruling.
+    expect(hasPrefix(trigger, "underline")).toBe(false);
+    expect(hasPrefix(trigger, "decoration-")).toBe(false);
+    expect(hasClass(trigger, "font-medium")).toBe(false);
+    expect(hasClass(trigger, "font-semibold")).toBe(false);
+    // The chevron is the ONLY remaining affordance, so it is load-bearing.
     expect(trigger.querySelector("svg")).not.toBeNull();
   });
 
-  it("flat is still the pill", () => {
+  it("flat is still the pill, and the pill faces keep their own weight", () => {
     render(<SelectMenu value="a" options={OPTIONS} onChange={() => {}} ariaLabel="Pick" />);
     const trigger = screen.getByRole("button", { name: "Pick" });
     expect(hasClass(trigger, "border")).toBe(true);
     expect(hasClass(trigger, "underline")).toBe(false);
+    // ⚠ `font-medium` MOVED OFF THE SHARED BASE onto each pill face (2026-09-10) so
+    // `text` could be regular; this pins the move did not silently unbold the pills.
+    expect(hasClass(trigger, "font-medium")).toBe(true);
   });
 });

@@ -140,7 +140,15 @@ export function SettingRow({
   return (
     <div className="flex min-h-[32px] items-center gap-2">
       <span className="flex shrink-0 items-center gap-1">
-        <span className="text-body font-medium text-text-primary">{name}</span>
+        {/* ⚠ REGULAR WEIGHT, NOT `font-medium` (Samuel, 2026-09-10): "unbold these
+            things — Runtime Default, Tool use Bypass, Messaging Automatic, Model
+            Sonnet 5, Tool access Full access, Working Folder ~/Downloads, Launch
+            agents In every channel." The NAME and the VALUE are one vocabulary, so
+            the weight left both halves on the same clock — `select-menu.tsx ›
+            TRIGGER_FACE.text` is the value half. The heading over the block
+            (`PanelHeading`) and the `GroupLabel`s are NOT in that list and keep
+            theirs. */}
+        <span className="text-body text-text-primary">{name}</span>
         {/* ⚠ BESIDE THE NAME, NOT FLOATED OVER THE ROW. Samuel asked for "a little
             eye in the top right of it" — of the ITEM. These rows are ONE LINE
             (`settings-agent-rows.tsx › SettingRow`: the 380px panel is why the

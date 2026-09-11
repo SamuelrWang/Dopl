@@ -75,8 +75,9 @@ export function AgentFolderRows({
           ⚠ THE SEPARATE "Change folder…" BUTTON IS DELETED, NOT HIDDEN. The row was
           three stacked elements — a name, a value PILL, and a button whose only job
           was to open the picker the pill was already describing. The pill is now
-          plain UNDERLINED TEXT and is itself the control, so the row is a NAME and a
-          CONTROL on one line: exactly the shape `SettingRow` states for this tab.
+          PLAIN TEXT (underlined until 2026-09-10) and is itself the control, so the
+          row is a NAME and a CONTROL on one line: exactly the shape `SettingRow`
+          states for this tab.
           ⚠ IT IS A REAL `<button>`, not a styled span with a click handler. It opens
           a native picker, so it has to be reachable by keyboard and has to announce
           itself; `aria-label` names the ACT because the visible text is a path.
@@ -95,10 +96,14 @@ export function AgentFolderRows({
           onClick={folder.onChoose}
           disabled={folder.busy}
           aria-label="Change the working folder for this channel's agents"
-          /* ⚠ KIT TOKENS ONLY — no hex, no raw px (docs/DESIGN-SYSTEM.md). The
-             underline is Tailwind's own utility rather than a `decoration-*` COLOR,
-             which would be a token this kit does not declare. */
-          className="min-w-0 truncate text-body text-text-primary underline underline-offset-2 transition-colors hover:text-text-secondary disabled:opacity-60"
+          /* ⚠ KIT TOKENS ONLY — no hex, no raw px (docs/DESIGN-SYSTEM.md).
+             ⚠ NO UNDERLINE, REGULAR WEIGHT (Samuel, 2026-09-10): "Working Folder
+             ~/Downloads … also remove the underline." The path is a VALUE in the
+             Agent Settings block, so it wears exactly what the block's dropdown
+             values wear (`select-menu.tsx › TRIGGER_FACE.text`) — the ink change on
+             hover is the whole affordance now, and it is still a real `<button>`
+             with an `aria-label`, which is what keeps it operable and announced. */
+          className="min-w-0 truncate text-body text-text-primary transition-colors hover:text-text-secondary disabled:opacity-60"
         >
           {folder.busy ? "Opening picker…" : folder.label}
         </button>
