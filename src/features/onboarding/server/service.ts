@@ -8,6 +8,14 @@ import {
   renamePersonalContainerIfPlaceholder,
 } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
+/**
+ * ⚠ **A FOURTH HAND COPY OF THE SPA's `HOME_PATH`, AND IT CANNOT BE AN IMPORT.**
+ * `apps/desktop-ui/src/components/app-shell/account-rail.tsx › HOME_PATH` is the
+ * source; server code is a different npm workspace with `#/` aliases and pulling
+ * it in drags every page component along. `./service.test.ts` reads the SPA's
+ * route table and compares, exactly as it already does for `WORKSPACE_HOME_PATH`.
+ */
+const HOME_PATH = "/home";
 import type { OnboardingStatus, SurveySubmission } from "../types";
 import {
   findOnboardedAt,
@@ -52,6 +60,26 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
  * never carry a name that reads as a workspace — "{FirstName}'s Workspace"
  * was mistaken for one). ⚠ Every step idempotent so a retry after partial
  * failure converges.
+ *
+ * 🔒 **THE LANDING IS `/home` (2026-09-10, the new-user flow), NOT
+ * `/{segment}/overview`.** What onboarding names is a `kind='personal'`
+ * container, and that container has no workspace shell: `/home` is its surface
+ * and the account rail's pinned tile is how it is reached. The old path took a
+ * brand-new user THROUGH the workspace shell — sidebar, channels tree, the
+ * workspace Overview — for a row that is *"a SHELF, not a workspace"*
+ * (`20260920120000_workspace_kind_personal.sql`). It resolved and rendered, which
+ * is why nothing caught it; it was simply the wrong room.
+ *
+ * ⚠ **THE `kind` CHECK IS NOT DEFENSIVE PROSE, IT IS THE STATEMENT OF WHY.** The
+ * container is personal by construction here (`renamePersonalContainerIfPlaceholder`
+ * goes through `ensurePersonalContainer`), so the else branch is unreachable
+ * today — and keeping it is what makes the rule READ as "a personal container
+ * lands on /home" rather than "onboarding hardcodes /home". A workspace
+ * onboarding ever names keeps the workspace landing, for free.
+ *
+ * ⚠ `/home` has NO segment and that is the point — do not re-prefix it. It is a
+ * ROOT route in `apps/desktop-ui/src/routes.tsx` (`HOME_PATH`), a sibling of
+ * `/:workspaceSegment` rather than a child, because it mounts its own frame.
  */
 export async function completeOnboarding(
   userId: string,
@@ -77,6 +105,7 @@ export async function completeOnboarding(
     });
   }
 
+  if (workspace.kind === "personal") return { redirectPath: HOME_PATH };
   return { redirectPath: `/${workspaceSegment(workspace)}/overview` };
 }
 

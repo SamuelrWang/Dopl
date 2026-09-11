@@ -11,6 +11,10 @@ export interface GetStartedScreenProps {
    *  could not be read — a NORMAL answer, copy just stops naming a file.
    *  See `shared/version/mac-download.ts`. */
   asset: string | null;
+  /** `dopl://open/{segment}` when this visit named a workspace (the invite/join
+   *  cards' fallback link, `?workspace=`), else null. ⚠ Already VALIDATED and
+   *  re-composed by the page — this component never parses a URL. */
+  openLink?: string | null;
 }
 
 /** Paint budget before the download starts. */
@@ -30,7 +34,10 @@ const AUTOSTART_DELAY_MS = 500;
  * left column. Styling lives in `../get-started.css`, matched to the auth
  * form column's type.
  */
-export function GetStartedScreen({ asset }: GetStartedScreenProps) {
+export function GetStartedScreen({
+  asset,
+  openLink = null,
+}: GetStartedScreenProps) {
   const sink = useAutoDownload();
 
   return (
@@ -61,6 +68,24 @@ export function GetStartedScreen({ asset }: GetStartedScreenProps) {
             Try again
           </a>
         </div>
+
+        {/* 🔒 THE WORKSPACE THIS VISIT NAMED (2026-09-10, the new-user flow) —
+            an invite accepted in a browser with no app finishes HERE, and
+            without this the trip ends on a bare app with the invitation
+            forgotten. ⚠ NOT auto-navigated: `DesktopHandoffPanel` may fire the
+            protocol on mount because the caller has just clicked something, and
+            this page has a download in flight that a protocol launch would
+            interrupt. The button is the contract; here it is the WHOLE contract.
+            ⚠ Below the steps on purpose — the heading promises three and this is
+            not a fourth. Label + link. */}
+        {openLink && (
+          <div className="gs-retry">
+            <span className="gs-retry-note">Already installed?</span>
+            <a href={openLink} className="auth-btn-3d gs-retry-btn">
+              Open the workspace
+            </a>
+          </div>
+        )}
       </div>
 
       <GlassSlot>

@@ -9,14 +9,21 @@
  *   - solo + 2 mbrs -> DEGRADED to free multi-member rules (backstop)
  *   - solo canceled -> free rules
  *   - team active   -> uncapped, full history, seatCount surfaced
+ *   - pro active    -> the PERSONAL tier: uncapped, full history, NO seatCount,
+ *                      and NO member condition (2026-09-08, F-673)
  *   - past_due      -> paid-with-warning: entitlements stay, status shows
  *   - canceled      -> reverts to free rules, status surfaces "canceled"
- *   - assertCanAddMember -> 402 only on a live solo workspace
+ *
+ * ⚠ **THE GATES LIVE IN `entitlements-gates.test.ts` SINCE 2026-09-08** (§1:
+ * "split, do not squeeze" — the pro cases took this file past 500 lines). The
+ * seam is real: this file asks what a container IS ENTITLED TO, that one asks
+ * what the ENFORCEMENT SITES do with the answer — `assertCanCreateObject`,
+ * `assertCanAddMember` and its two 402 envelopes, `upgradeUrl`, and
+ * `entitlementDeniedBody`. Same mocks, same fixtures, deliberately.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WorkspaceBillingRow } from "./workspace-billing";
-import { HttpError } from "@/shared/lib/http-error";
 
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
@@ -27,10 +34,7 @@ vi.mock("./workspace-billing", () => ({
 import * as repo from "./workspace-billing";
 import {
   getWorkspaceEntitlements,
-  assertCanCreateObject,
-  assertCanAddMember,
-  entitlementDeniedBody,
-  EntitlementError,
+  entitledPlanFor,
   FREE_MULTI_MEMBER_OBJECT_CAP,
   FREE_CHATS_WINDOW_DAYS,
 } from "./entitlements";
@@ -195,6 +199,87 @@ describe("getWorkspaceEntitlements — team", () => {
   });
 });
 
+/**
+ * 🔒 THE PERSONAL PRO TIER (Samuel, 2026-09-08). ⚠ A `kind='personal'` container
+ * is a real `workspaces` row with a real `workspace_billing` row, so it reaches
+ * this function through the SAME arithmetic as a workspace — §11.1's three
+ * claims (objectCap null, chatsWindowDays by verdict, seatCount null) fall out
+ * of the existing rules rather than a personal branch, and these cases prove it
+ * rather than asserting the branch exists.
+ */
+describe("getWorkspaceEntitlements — pro (the personal container)", () => {
+  it("pro active is uncapped, full history, and surfaces NO seatCount", async () => {
+    setup({ billing: billing({ plan: "pro", seatCount: null }), members: 1, objects: 5_000 });
+    const ent = await getWorkspaceEntitlements(WS);
+    expect(ent.plan).toBe("pro");
+    expect(ent.status).toBe("active");
+    expect(ent.objectCap).toBeNull();
+    expect(ent.canCreateObjects).toBe(true);
+    expect(ent.chatsWindowDays).toBeNull();
+    // ⚠ `seatCount` IS TEAM-ONLY. A number here would put a seat row on a
+    // surface for a container that has no seats to sell.
+    expect(ent.seatCount).toBeNull();
+  });
+
+  it("pro past_due keeps the entitlement (grace)", async () => {
+    setup({
+      billing: billing({ plan: "pro", status: "past_due", seatCount: null }),
+      members: 1,
+      objects: 5_000,
+    });
+    const ent = await getWorkspaceEntitlements(WS);
+    expect(ent.plan).toBe("pro");
+    expect(ent.chatsWindowDays).toBeNull();
+  });
+
+  it("pro canceled reverts to free — 90 days of history back", async () => {
+    setup({
+      billing: billing({ plan: "pro", status: "canceled", seatCount: null }),
+      members: 1,
+      objects: 5,
+    });
+    const ent = await getWorkspaceEntitlements(WS);
+    expect(ent.plan).toBe("free");
+    expect(ent.chatsWindowDays).toBe(FREE_CHATS_WINDOW_DAYS);
+  });
+
+  it("🔒 pro does NOT degrade at 2 members — unlike solo (F-673)", async () => {
+    // ⚠ THE REVERT DETECTOR FOR "COPY THE SOLO ARM". Solo's `memberCount <= 1`
+    // is a backstop against a state the schema PERMITS; a personal container
+    // cannot hold a second member at all (`assertCanAddMember` below), so the
+    // same clause would guard nothing while creating a real failure: one stale
+    // membership row and a PAYING customer silently drops to free — no refund,
+    // no signal, and the credit allowance falls 5,000 → 500 with it.
+    setup({ billing: billing({ plan: "pro", seatCount: null }), members: 2, objects: 5_000 });
+    const ent = await getWorkspaceEntitlements(WS);
+    expect(ent.plan).toBe("pro");
+    expect(ent.objectCap).toBeNull();
+    expect(ent.chatsWindowDays).toBeNull();
+    // ...and the same row on SOLO does degrade, which is what makes this a
+    // contrast rather than a coincidence.
+    setup({ billing: billing({ plan: "solo", seatCount: 1 }), members: 2, objects: 5 });
+    expect((await getWorkspaceEntitlements(WS)).plan).toBe("free");
+  });
+});
+
+describe("entitledPlanFor — the lean verdict the credit path uses", () => {
+  it("answers pro for a live pro row at any member count", () => {
+    expect(entitledPlanFor({ plan: "pro", status: "active" }, 1)).toBe("pro");
+    expect(entitledPlanFor({ plan: "pro", status: "past_due" }, 3)).toBe("pro");
+  });
+
+  it("answers free for a canceled pro row", () => {
+    expect(entitledPlanFor({ plan: "pro", status: "canceled" }, 1)).toBe("free");
+  });
+
+  it("🔒 is the SAME verdict `getWorkspaceEntitlements` reaches — not a copy", async () => {
+    setup({ billing: billing({ plan: "pro", seatCount: null }), members: 2, objects: 5_000 });
+    expect((await getWorkspaceEntitlements(WS)).plan).toBe(
+      entitledPlanFor({ plan: "pro", status: "active" }, 2)
+    );
+  });
+});
+
 describe("getWorkspaceEntitlements — canceled team reverts to free", () => {
   it("canceled multi-member falls back to the free cap + window", async () => {
     setup({
@@ -221,114 +306,5 @@ describe("getWorkspaceEntitlements — canceled team reverts to free", () => {
     expect(e.plan).toBe("free");
     expect(e.objectCap).toBeNull();
     expect(e.canCreateObjects).toBe(true);
-  });
-});
-
-describe("assertCanCreateObject", () => {
-  it("resolves when under the cap", async () => {
-    setup({ billing: null, members: 2, objects: 10 });
-    await expect(assertCanCreateObject(WS)).resolves.toBeUndefined();
-  });
-
-  it("throws EntitlementError(over_free_cap) at the cap", async () => {
-    setup({ billing: null, members: 2, objects: FREE_MULTI_MEMBER_OBJECT_CAP });
-    await expect(assertCanCreateObject(WS)).rejects.toBeInstanceOf(
-      EntitlementError
-    );
-    try {
-      await assertCanCreateObject(WS);
-    } catch (err) {
-      expect((err as EntitlementError).code).toBe("over_free_cap");
-      expect((err as EntitlementError).workspaceId).toBe(WS);
-    }
-  });
-
-  it("never blocks a team workspace", async () => {
-    setup({
-      billing: billing({ plan: "team", status: "active" }),
-      members: 9,
-      objects: 999999,
-    });
-    await expect(assertCanCreateObject(WS)).resolves.toBeUndefined();
-  });
-
-  it("never blocks an entitled solo workspace", async () => {
-    setup({
-      billing: billing({ plan: "solo", status: "active" }),
-      members: 1,
-      objects: 999999,
-    });
-    await expect(assertCanCreateObject(WS)).resolves.toBeUndefined();
-  });
-});
-
-describe("assertCanAddMember", () => {
-  it("throws 402 SOLO_MEMBER_LIMIT for a live solo workspace (active)", async () => {
-    mockRepo.getWorkspaceBilling.mockResolvedValue(
-      billing({ plan: "solo", status: "active" })
-    );
-    mockRepo.countActiveMembers.mockResolvedValue(1);
-    await expect(assertCanAddMember(WS)).rejects.toBeInstanceOf(HttpError);
-    try {
-      await assertCanAddMember(WS);
-    } catch (err) {
-      const e = err as HttpError;
-      expect(e.status).toBe(402);
-      expect(e.code).toBe("SOLO_MEMBER_LIMIT");
-      expect((e.details as { upgrade_url: string }).upgrade_url).toMatch(
-        /\/billing\?billing=upgrade$/
-      );
-    }
-  });
-
-  it("throws for a solo workspace in past_due grace too", async () => {
-    mockRepo.getWorkspaceBilling.mockResolvedValue(
-      billing({ plan: "solo", status: "past_due" })
-    );
-    mockRepo.countActiveMembers.mockResolvedValue(1);
-    await expect(assertCanAddMember(WS)).rejects.toBeInstanceOf(HttpError);
-  });
-
-  it("no-ops for a canceled solo workspace (not a live sub)", async () => {
-    mockRepo.getWorkspaceBilling.mockResolvedValue(
-      billing({ plan: "solo", status: "canceled" })
-    );
-    mockRepo.countActiveMembers.mockResolvedValue(1);
-    await expect(assertCanAddMember(WS)).resolves.toBeUndefined();
-  });
-
-  it("no-ops for a team workspace", async () => {
-    mockRepo.getWorkspaceBilling.mockResolvedValue(
-      billing({ plan: "team", status: "active" })
-    );
-    mockRepo.countActiveMembers.mockResolvedValue(3);
-    await expect(assertCanAddMember(WS)).resolves.toBeUndefined();
-  });
-
-  it("no-ops for a free workspace (no billing row)", async () => {
-    mockRepo.getWorkspaceBilling.mockResolvedValue(null);
-    mockRepo.countActiveMembers.mockResolvedValue(1);
-    await expect(assertCanAddMember(WS)).resolves.toBeUndefined();
-  });
-});
-
-describe("entitlementDeniedBody", () => {
-  it("returns the over_free_cap envelope; message notes nothing is deleted", () => {
-    const body = entitlementDeniedBody();
-    expect(body.error).toBe("over_free_cap");
-    expect(body.message.toLowerCase()).toContain("nothing");
-    expect(body.message.toLowerCase()).toContain("upgrade");
-    expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
-  });
-
-  // ⚠ GAP-11 / D1: API-first clients (MCP agents) follow this URL literally,
-  // so it must name a page that SURVIVES retirement and can take money.
-  // `/canvas?billing=…` RETIRES; `/pricing` sells nothing.
-  it("points at the standalone billing page, never /canvas, /pricing or the 404 billing route", () => {
-    const body = entitlementDeniedBody();
-    expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
-    expect(body.upgrade_url).not.toContain("/canvas");
-    expect(body.upgrade_url).not.toContain("/pricing");
-    expect(body.upgrade_url).not.toContain("/settings/billing");
   });
 });

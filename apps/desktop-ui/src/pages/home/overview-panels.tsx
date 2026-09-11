@@ -15,6 +15,7 @@ import {
 } from "@/features/home/overview-types";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError } from "#/components/page-states";
+import { openHomeSettings } from "./home-settings-control";
 import { CreditCapacityBar, UsageChart, seriesTotal } from "./overview-sections";
 import {
   ChannelMessageRail,
@@ -273,15 +274,25 @@ function CreditsBar({
   if (credits.loading || !homeWorkspaceId || ledgerPending) {
     return <Skeleton className="h-[54px] w-full rounded-lg" />;
   }
-  // ⚠ THE PLAN RIDES ALONG BECAUSE THE BAR'S DENOMINATOR NEEDS IT: a reading
-  // whose payer never resolved carries `limit: 0`, and the plan's allowance is
-  // what stands in for it (`overview-sections.tsx › CreditCapacityBar`). Same
-  // payload, same read — it costs nothing extra.
+  // ⚠ THE PLAN NO LONGER RIDES ALONG (2026-09-07). It stood in for a `limit: 0`
+  // reading, but /home spends the reader's PERSONAL wallet, whose allowance is
+  // one constant and no plan's — `overview-sections.tsx › CreditCapacityBar`
+  // reads `credits.ts › PERSONAL_MONTHLY_CREDITS` itself.
+  // ⚠ **`!isPaid`, NOT `plan === "free"` (2026-09-08).** The question the button
+  // answers is *is there something to buy*, and `isPaid` is the only field that
+  // answers it from the payload ALONE: it reads the plan and the STATUS
+  // together, so a cached or hand-built row whose plan still says `pro` while
+  // its status does not say active/past_due is offered the upgrade rather than
+  // silently denied it. A `past_due` payer has `isPaid` true and gets no button
+  // — they need the portal, not a second checkout. Same rule the plan cards use
+  // for their Free arm (`plan-cards.tsx › isCurrentPlan`).
   return (
     <CreditCapacityBar
       credits={credits.credits}
-      plan={credits.plan}
       spent={seriesTotal(points)}
+      onUpgrade={
+        credits.isPaid ? undefined : () => openHomeSettings("billing")
+      }
     />
   );
 }

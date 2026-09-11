@@ -48,42 +48,90 @@ export function getSeatPriceId(): string | null {
 }
 
 /**
- * Flat Solo price. May be UNSET in dev/test — null so callers degrade like
- * `getSeatPriceId` (checkout config error; webhook plan mapping falls back to
- * metadata/team).
+ * Flat Solo price. ⚠ LEGACY-ONLY since 2026-09-07 (spec A6): Solo/"Pro" is
+ * retired from sale, so nothing MINTS against this price any more — it stays
+ * because live `solo` subscriptions still bill against it and must still be
+ * recognized (`selectSeatItem`, `webhook-handler.ts › derivePlan`). May be
+ * UNSET in dev/test — null so callers degrade like `getSeatPriceId`.
  */
 export function getSoloPriceId(): string | null {
   return process.env.STRIPE_SOLO_PRICE_ID || null;
 }
 
 /**
+ * Flat PERSONAL PRO price — $8.99/month on a `kind='personal'` container
+ * (2026-09-08, spec §11). ⚠ NOT the retired Solo plan even though Stripe hangs
+ * it off the same PRODUCT: Solo was a flat plan for a whole standard workspace,
+ * Pro is one person's home space. The two are separate prices, separate
+ * `PlanId`s and separate container kinds, and only `getSoloPriceId` is legacy.
+ * Null when unset so callers degrade like `getSeatPriceId`.
+ */
+export function getPersonalProPriceId(): string | null {
+  return process.env.STRIPE_PERSONAL_PRO_PRICE_ID || null;
+}
+
+/**
+ * The PREVIOUS per-seat Team price ($7.99), RECOGNITION ONLY and OPTIONAL.
+ *
+ * ⚠ Nothing mints against it — `getSeatPriceId` is the price a new Team
+ * checkout buys. It exists because live subscriptions still bill on it
+ * (measured 2026-09-08: one), and a subscription whose price this env does not
+ * name falls through `selectSeatItem` to `items[0]` and out of `derivePlan`'s
+ * price arm into the metadata fallback. ⚠ UNSET IS NORMAL — dev, preview and
+ * any environment created after the flip have no legacy sub to recognize.
+ */
+export function getLegacySeatPriceId(): string | null {
+  return process.env.STRIPE_LEGACY_SEAT_PRICE_ID || null;
+}
+
+/**
  * Pick the subscription item carrying the plan price. ⚠ A subscription may hold
  * several items (add-ons, legacy prices), so `items.data[0]` can bill the wrong
- * line. Prefer the per-seat Team price, then flat Solo; fall back to the first
- * item (legacy single-item $20 subs).
+ * line. Order: current per-seat Team price → LEGACY seat price → personal Pro →
+ * flat Solo → the first item (legacy single-item $20 subs).
+ *
+ * ⚠ THE ORDER IS "WHAT IS SOLD TODAY FIRST, THEN WHAT IS STILL BILLED", and the
+ * three trailing arms are all recognition-only: a sub carrying BOTH a current
+ * and a legacy seat item is mid-migration and its live line is the current one,
+ * and no sub can carry both a Pro and a seat price (they live on different
+ * container kinds — `checkout/route.ts` is that fence).
+ *
+ * ⚠ THE SOLO ARM STAYS AND IS LEGACY-ONLY (2026-09-07, spec A6). Solo is off
+ * sale, not off the books: the live rows are exactly what this arm is for, and
+ * deleting it would send `upgrade-to-team` and the seat sync at `items.data[0]`
+ * — the wrong line on any Solo sub that ever grew a second item.
  */
 export function selectSeatItem(
   subscription: Stripe.Subscription
 ): Stripe.SubscriptionItem | undefined {
   const items = subscription.items?.data ?? [];
-  const seatPriceId = getSeatPriceId();
-  if (seatPriceId) {
-    const match = items.find((item) => item.price?.id === seatPriceId);
-    if (match) return match;
-  }
-  const soloPriceId = getSoloPriceId();
-  if (soloPriceId) {
-    const match = items.find((item) => item.price?.id === soloPriceId);
+  for (const priceId of [
+    getSeatPriceId(),
+    getLegacySeatPriceId(),
+    getPersonalProPriceId(),
+    getSoloPriceId(),
+  ]) {
+    if (!priceId) continue;
+    const match = items.find((item) => item.price?.id === priceId);
     if (match) return match;
   }
   return items[0];
 }
 
 export interface WorkspaceCheckoutArgs {
+  /** ⚠ The CONTAINER being bought for — a standard workspace for `team`, the
+   *  caller's `kind='personal'` container for `pro`. Same column either way
+   *  (`workspace_billing.workspace_id`), which is why a personal Pro
+   *  subscription needs no second Stripe pipeline (spec §11.1). */
   workspaceId: string;
-  /** Solo is flat (quantity forced to 1); team is per-seat at `quantity`. */
-  plan: "solo" | "team";
-  /** Team seat quantity (= active member count). Ignored for solo. */
+  /** ⚠ `"team"` or `"pro"` (2026-09-08, spec §11) — Solo/"Pro", the retired
+   *  $5.99 flat WORKSPACE plan, is not either of them and cannot be minted at
+   *  all. `POST /api/billing/checkout` answers 400 `PLAN_RETIRED` for it and
+   *  400 `PLAN_NOT_FOR_CONTAINER` when a plan meets the wrong container kind;
+   *  this narrowing is the second lock. */
+  plan: "team" | "pro";
+  /** Team seat quantity (= active member count). ⚠ IGNORED for `pro`, which is
+   *  flat: one personal container, one person, quantity 1. */
   quantity: number;
   email: string;
   stripeCustomerId?: string | null;
@@ -93,10 +141,22 @@ export interface WorkspaceCheckoutArgs {
 }
 
 /**
- * Workspace-scoped subscription checkout. Solo → STRIPE_SOLO_PRICE_ID at
- * quantity 1; team → STRIPE_PRO_SEAT_PRICE_ID at `quantity` seats. ⚠ Stamps
- * `{ workspace_id, plan }` into BOTH session and subscription metadata so the
- * webhook can route the subscription back and derive the plan.
+ * Container-scoped subscription checkout, one of two lines:
+ *   • `team` → `STRIPE_PRO_SEAT_PRICE_ID` at `max(1, quantity)` seats. ⚠ Env
+ *     name predates the Team rename.
+ *   • `pro`  → `STRIPE_PERSONAL_PRO_PRICE_ID` at quantity 1 (flat; a personal
+ *     container has exactly one member by construction).
+ * The retired Solo branch is GONE (off sale, 2026-09-07) and `pro` is NOT its
+ * replacement — it is a different plan on a different container kind.
+ *
+ * ⚠ Stamps `{ workspace_id, plan }` into BOTH session and subscription metadata
+ * so the webhook can route the subscription back and derive the plan even where
+ * the price envs are unset.
+ *
+ * ⚠ AN UNSET PRICE THROWS, NAMING ITS OWN ENV VAR, and never falls back to the
+ * other line: selling a $8.99 seat plan to somebody who asked for a $8.99
+ * personal plan puts a subscription on the wrong container kind, which is the
+ * one thing `webhook-plan.ts` can only report after the money has moved.
  *
  * `ui_mode: "elements"` — our own PaymentElement form, not a Stripe iframe.
  * ⚠ Elements mode disallows `custom_text` / `branding_settings`, and
@@ -107,16 +167,17 @@ export async function createWorkspaceCheckoutSession(
 ): Promise<string> {
   const stripe = getStripe();
 
-  const priceId = args.plan === "solo" ? getSoloPriceId() : getSeatPriceId();
+  const priceId =
+    args.plan === "pro" ? getPersonalProPriceId() : getSeatPriceId();
   if (!priceId) {
     throw new Error(
-      args.plan === "solo"
-        ? "Solo price not configured. Set STRIPE_SOLO_PRICE_ID in env."
+      args.plan === "pro"
+        ? "Personal Pro price not configured. Set STRIPE_PERSONAL_PRO_PRICE_ID in env."
         : "Per-seat Team price not configured. Set STRIPE_PRO_SEAT_PRICE_ID in env."
     );
   }
 
-  const quantity = args.plan === "solo" ? 1 : Math.max(1, args.quantity);
+  const quantity = args.plan === "pro" ? 1 : Math.max(1, args.quantity);
   const metadata = { workspace_id: args.workspaceId, plan: args.plan };
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     ui_mode: "elements",

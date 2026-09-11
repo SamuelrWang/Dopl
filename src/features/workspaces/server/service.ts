@@ -160,15 +160,28 @@ export async function resolveActiveWorkspace(
  * makes a second container unrepresentable, so a catch-23505 here would be
  * reporting a bug rather than resolving a race.
  *
- * ⚠ `created` SAYS WHETHER THIS CALL OWES THE SEED. A first container is the
- * only container a brand-new account has, so the starter corpus lands in it.
+ * 🔒 **NOTHING IS SEEDED HERE, AND THE MIGRATION SAID SO FIRST (Samuel,
+ * 2026-09-10: "drop seed content").** `20260920120000_workspace_kind_personal.sql`
+ * carries a `WHAT IS DELIBERATELY *NOT* SEEDED` paragraph naming
+ * `seedNewWorkspace` by symbol — *"a personal container is a SHELF, not a
+ * workspace … the one surface that must show only what its owner put there"* —
+ * and the code did it anyway. **The header was right and the code was the bug,
+ * which is the precedence rule in CLAUDE.md running the direction it usually
+ * does not.** A fresh home space is EMPTY: zero bases, zero skills, zero
+ * ontology objects, zero chats.
+ *
+ * ⚠ **`created` HAS NO CONSUMER LEFT AND THAT IS THE WHOLE CHANGE.** It was read
+ * for exactly one thing — whether this call owed the seed — so the branch is
+ * gone rather than emptied. The RPC still returns the flag; a future caller with
+ * a real first-mint side effect can read it again.
+ *
+ * ⚠ **STANDARD WORKSPACE CREATION KEEPS ITS SEED** —
+ * `createWorkspaceForUser` below, unchanged. The ruling is about the personal
+ * shelf, not about the starter corpus, which is still what a new *workspace*
+ * opens with (and `playground/server/service.ts` depends on it by name).
  */
 export async function ensurePersonalContainer(userId: string): Promise<Workspace> {
-  const { workspace, created } = await ensurePersonalContainerRow(userId);
-  if (created) {
-    // Starter corpus. Best-effort + idempotent (never throws).
-    await seedNewWorkspace(workspace.id, userId);
-  }
+  const { workspace } = await ensurePersonalContainerRow(userId);
   return workspace;
 }
 

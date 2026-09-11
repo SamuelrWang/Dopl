@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 
 const STEPS = [
   "Saving your setup",
-  "Naming your workspace",
+  "Naming your home space",
   "Opening Dopl",
 ] as const;
 

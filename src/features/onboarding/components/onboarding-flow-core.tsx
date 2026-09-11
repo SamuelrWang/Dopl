@@ -110,7 +110,7 @@ export function OnboardingFlowCore({
     } catch {
       finishRef.current = false;
       setFinishing(false);
-      setError("Couldn't set up your workspace. Please try again.");
+      setError("Couldn't set up your home space. Please try again.");
     }
   }
 

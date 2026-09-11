@@ -84,7 +84,9 @@ function seriesDays(metric: OverviewSeriesMetric, allZero = false) {
 }
 
 const CREDITS = {
-  plan: "solo",
+  // ⚠ A WORKSPACE PAGE, SO THE METER IS THE READER'S SEAT (2026-09-07). Team is
+  // the paid plan on sale; `solo` here named a plan nothing can be bought onto.
+  plan: "team",
   status: "active",
   memberCount: 1,
   seatCount: 1,
@@ -93,6 +95,7 @@ const CREDITS = {
   canCreateObjects: true,
   chatsWindowDays: null,
   credits: {
+    wallet: "seat" as const,
     used: 12480,
     limit: 50000,
     remaining: 37520,

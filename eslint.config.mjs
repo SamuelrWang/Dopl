@@ -153,7 +153,18 @@ const eslintConfig = defineConfig([
       // `repository-grants.ts` (229) and `repository-resources.ts` (189), with
       // the original kept as the `teams` rows plus the re-export surface every
       // caller already imports. Removed, not moved.
-      "src/features/billing/components/upgrade-modal.tsx",
+      // REMOVED (2026-09-07, credit model v2): `billing/components/
+      // upgrade-modal.tsx` was 551 — the OLDEST un-split row this list ever
+      // carried, "split scheduled" since 2026-07-31 — and is now 353. Two
+      // causes, and the order matters: retiring the Pro plan from sale DELETED
+      // the single-member branch, the second `PlanOption` and the solo arms of
+      // the checkout header, which is deletion rather than extraction; the rest
+      // went to `upgrade-modal-parts.tsx` (235) on a real seam — this file owns
+      // the SELL, that one owns the BLOCKED add-member path and the terminal
+      // notes. Removed, not moved, for the sixth time. ⚠ And it is the same
+      // lesson `invitations.ts` recorded: what finally moved it was a
+      // behavioural requirement landing on the file, not the line count that
+      // had been scheduling it for five weeks.
       // NOT exempted, deliberately: `src/shared/auth/mcp-oauth.ts` sits at 498
       // and therefore passes. (It read "EXACTLY 500" here, which was true when
       // written and is the kind of number that rots — re-measure before

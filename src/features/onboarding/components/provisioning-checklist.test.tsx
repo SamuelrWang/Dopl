@@ -8,7 +8,7 @@ describe("ProvisioningChecklist", () => {
 
   it("names the real stages of the call it covers", () => {
     expect(html).toContain("Saving your setup");
-    expect(html).toContain("Naming your workspace");
+    expect(html).toContain("Naming your home space");
     expect(html).toContain("Opening Dopl");
   });
 

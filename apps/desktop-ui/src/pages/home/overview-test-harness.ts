@@ -142,6 +142,11 @@ export const HOME_SERIES: HomeOverviewSeries = {
 export const BILLING_STATUS = {
   plan: "free",
   status: "free",
+  // ⚠ /home IS the home space: the container that answers here is the reader's
+  // own `kind='personal'` one (`workspaces/server/segment.ts › getBootState`),
+  // which is what makes the wallet below personal and the Upgrade affordance on
+  // the credit bar sell `pro` rather than a seat.
+  containerKind: "personal" as const,
   memberCount: 1,
   seatCount: null,
   objectCap: null,
@@ -149,6 +154,11 @@ export const BILLING_STATUS = {
   canCreateObjects: true,
   chatsWindowDays: 90,
   credits: {
+    // ⚠ THE HOME SPACE SPENDS THE READER'S *PERSONAL* WALLET (2026-09-07), so
+    // this fixture carries `wallet: "personal"` and its 500 is
+    // `billing/credits.ts › PERSONAL_MONTHLY_CREDITS`, not a workspace plan's
+    // allowance. `overview-credit-bar.test.tsx` asserts against that constant.
+    wallet: "personal" as const,
     used: 320,
     limit: 500,
     remaining: 180,

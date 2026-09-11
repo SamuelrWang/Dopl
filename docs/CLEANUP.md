@@ -25,14 +25,14 @@ Certainty legend: 🟢 certain (0 refs, hand-verified) · 🟡 near-certain (ver
 
 ---
 
-## Tier 1 — Dead source files 🟢 (32 files, all grep-verified 0 inbound refs)
+## Tier 1 — Dead source files 🟢 (⚠ **31, not 32, and "all grep-verified" is no longer true** — re-measured 2026-09-08: `upgrade-modal.tsx` has four live importers, see its row. **Re-verify each row before deleting it; this table is a snapshot, not a standing claim.**)
 
 Safe to `git rm`. Grouped by area.
 
 ### Orphan components (5)
 | File | Old feature / note |
 |---|---|
-| `src/features/billing/components/upgrade-modal.tsx` | superseded paywall UI |
+| ~~`src/features/billing/components/upgrade-modal.tsx`~~ | ⛔ **NOT DEAD — DO NOT `git rm` (re-measured 2026-09-08).** It has FOUR live importers (`ontology/components/ontology-view.tsx`, `chats/components/list-pane.tsx`, `members/components/invite-dialog.tsx`, `members/components/members-v2/members-v2-view.tsx`) and its own suite, and the 2026-09-07 credit wave SPLIT it into `upgrade-modal-parts.tsx` rather than deleting it. Re-derive before trusting any other row in this table: `grep -rn 'upgrade-modal' src apps`. |
 | `src/features/chat/components/url-detection.ts` | v1 chat URL→ingest shortcut |
 | `src/features/knowledge/components/doc-markdown.tsx` | superseded by active doc renderer |
 | `src/features/knowledge/components/trash-modal.tsx` | unused trash UI |

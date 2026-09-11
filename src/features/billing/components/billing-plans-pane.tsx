@@ -15,8 +15,16 @@ import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
  *
  * ⚠ Both halves of the card/invoices/cancel gate are load-bearing. `canManage`
  * keeps a member from firing routes that answer 403; `has_stripe_customer`
- * keeps a free workspace from rendering an empty card + invoice table for a
+ * keeps a free container from rendering an empty card + invoice table for a
  * customer that does not exist.
+ *
+ * ⚠ **THE GATE COVERS `pro` WITH NO PLAN TEST, AND THAT IS THE POINT
+ * (2026-09-08).** A personal container's Pro subscription lives in
+ * `workspace_billing` keyed by that container (spec §11.1), so it mints the
+ * same Stripe customer, invoices and portal session a Team workspace does —
+ * `ent.isPaid` includes `pro`, the owner of a personal container is `owner`, and
+ * card/invoices/cancel light up unchanged. A `plan === "team"` test anywhere in
+ * this gate would have stranded every Pro payer with no way to change a card.
  *
  * ⚠ Delete account stays LAST on THIS tab — the desktop app links here
  * specifically to reach it (`apps/desktop-ui/.../account-actions.tsx`, plan

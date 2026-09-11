@@ -65,7 +65,7 @@ export type ChatDetail = Chat & {
 };
 /**
  * Visible chats + how many the workspace's free-plan retention window excluded
- * (0 on Pro / full-history plans).
+ * (0 on Team / full-history plans).
  */
 export interface ChatList {
     chats: Chat[];

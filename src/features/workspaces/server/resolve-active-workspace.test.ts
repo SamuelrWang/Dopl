@@ -24,6 +24,7 @@ vi.mock("@/shared/tenancy/personal-container", () => ({
 }));
 
 import * as repo from "./repository";
+import { seedNewWorkspace } from "./seed-workspace";
 import { HttpError } from "@/shared/lib/http-error";
 import {
   resolveActiveWorkspace,
@@ -179,6 +180,61 @@ describe("resolveActiveWorkspace — no-header path is the PERSONAL CONTAINER", 
     )) as HttpError;
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(404);
+  });
+});
+
+/**
+ * 🔒 A FRESH HOME SPACE IS EMPTY (Samuel, 2026-09-10: *"drop seed content"*).
+ *
+ * ⚠ **THE MIGRATION HEADER HAD SAID SO SINCE 2026-09-02 AND THE CODE DID IT
+ * ANYWAY** — `20260920120000_workspace_kind_personal.sql`'s `WHAT IS
+ * DELIBERATELY *NOT* SEEDED` paragraph names `seedNewWorkspace` by symbol and
+ * gives the reason (*"a personal container is a SHELF, not a workspace … the one
+ * surface that must show only what its owner put there"*), while
+ * `service.ts › ensurePersonalContainer` called it on `created`. The header was
+ * right; this is the pin that stops it being right alone.
+ *
+ * ⚠ **IT MUST BE ASSERTED ON A FIRST MINT, NOT ON A RE-ASK.** Every other case
+ * in this file primes `created: false`, under which the old code did not seed
+ * either — so all of them passed before the fix and none of them is this claim.
+ * `created: true` is the only state that ever reached the seeder.
+ */
+describe("🔒 a first-mint personal container is seeded with NOTHING", () => {
+  beforeEach(() => {
+    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
+      workspace: { ...workspace("ws-home", "personal"), kind: "personal" },
+      created: true,
+    });
+    mockRepo.findWorkspaceById.mockResolvedValue({
+      ...workspace("ws-home", "personal"),
+      kind: "personal",
+    });
+    mockRepo.findMembership.mockResolvedValue(membership("ws-home", "owner"));
+  });
+
+  it("the starter corpus is never orchestrated — zero bases, skills, ontology objects, chats", async () => {
+    const { ensurePersonalContainer } = await import("./service");
+    const container = await ensurePersonalContainer(USER);
+
+    expect(container.kind).toBe("personal");
+    // ⚠ ONE ASSERTION, FOUR SURFACES. `seedNewWorkspace` is the single entry
+    // point to all of them (`seed-workspace.ts`'s own contract), so not calling
+    // it IS "no bases, no skills, no ontology, no chats" — stating the four
+    // separately here would re-mock that module's internals and pin the
+    // orchestrator's shape instead of the shelf's emptiness.
+    expect(seedNewWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("resolution through the no-header path does not seed either", async () => {
+    const res = await resolveActiveWorkspace(USER, null);
+    expect(res.workspace.id).toBe("ws-home");
+    expect(seedNewWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("⚠ and the RPC is still asked exactly once — dropping the seed did not drop the mint", async () => {
+    await resolveActiveWorkspace(USER, null);
+    expect(mockRepo.ensurePersonalContainerRow).toHaveBeenCalledTimes(1);
+    expect(mockRepo.ensurePersonalContainerRow).toHaveBeenCalledWith(USER);
   });
 });
 

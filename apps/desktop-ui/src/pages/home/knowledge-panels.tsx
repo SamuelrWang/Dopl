@@ -154,30 +154,34 @@ export function HomeKnowledgePanels({
     []
   );
 
-  if (channel === null) {
-    return (
-      <EmptyState
-        icon={BookOpen}
-        title="No channel selected"
-        description="Knowledge is per channel — pick one on the left."
-      />
-    );
-  }
+  // 🔒 **NO CHANNEL REPLACES THE SHARED SECTION, NOT THE WHOLE FACE (2026-09-10,
+  // the new-user flow).** This used to return the empty state INSTEAD of the
+  // pane, so a brand-new account — no channels yet, which is every account on its
+  // first day — opened Knowledge and was told to "pick one on the left" with its
+  // own Personal bases (a HOME-workspace read that needs no channel at all)
+  // nowhere on screen and no way to make one. `channel === null` means there is
+  // no CONTAINER to read shared bases from; it says nothing about the home shelf.
 
   // Where a base opened from THIS section lives, and who the caller is there.
   // ⚠ The container mount takes `role="owner"`: a home container is the
   // caller's own (plan §5.3), and the settings modal is the only thing role
   // gates. The home mount takes boot's real membership role.
-  const containerTarget: MountTarget = {
-    workspaceId: channel.workspaceId,
-    segment: channel.workspaceSegment,
-    role: "owner",
-    // ⚠ NO `my-access` READ AGAINST A CONTAINER: it has no teams, so the answer
-    // is the plain role default and the request buys nothing. See
-    // `knowledge-base-view.tsx`'s docblock for what that costs and why it is
-    // acceptable HERE and not on the home mount.
-    accessSegment: null,
-  };
+  // ⚠ NULLABLE SINCE 2026-09-10, for the same reason `homeTarget` always was:
+  // there may be no container. It is the SHARED section's target, so its absence
+  // takes that section and nothing else.
+  const containerTarget: MountTarget | null =
+    channel === null
+      ? null
+      : {
+          workspaceId: channel.workspaceId,
+          segment: channel.workspaceSegment,
+          role: "owner",
+          // ⚠ NO `my-access` READ AGAINST A CONTAINER: it has no teams, so the
+          // answer is the plain role default and the request buys nothing. See
+          // `knowledge-base-view.tsx`'s docblock for what that costs and why it
+          // is acceptable HERE and not on the home mount.
+          accessSegment: null,
+        };
   const homeTarget: MountTarget | null =
     homeWorkspaceId && homeWorkspaceSegment && homeRole
       ? {
@@ -217,7 +221,7 @@ export function HomeKnowledgePanels({
     }
   }
 
-  if (containerList.error) {
+  if (channel !== null && containerList.error) {
     return (
       <PageError
         error={containerList.error}
@@ -231,7 +235,11 @@ export function HomeKnowledgePanels({
   // a list nobody has seen — the same false-sentence trap `person-members.tsx`
   // turns `emptyLine` off for. The pane waits for the container read; Personal
   // waits separately for the home one, because they are two reads.
-  if (containerList.data === undefined) {
+  // ⚠ ONLY WHILE THERE IS A CONTAINER READ TO WAIT FOR. With no channel that
+  // query is never ENABLED, so `data` stays `undefined` forever and gating on it
+  // here would hold the skeleton up permanently — UNAVAILABLE read as PENDING,
+  // the trap the sentence above is about, one scope over.
+  if (channel !== null && containerList.data === undefined) {
     // ⚠ THIS FACE'S OWN SHAPE — two flat sections over `home.kbCards` — not the
     // shared page ghost, which painted a 52px bar and a three-up card row
     // inside a pane that has neither.
@@ -243,8 +251,17 @@ export function HomeKnowledgePanels({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-      {/* ⚠ FLAT, AND THE GROUND IS NOT STATED HERE — see "THE SECTIONS ARE
-          FLAT" in this file's docblock. */}
+      {channel === null ? (
+        // ⚠ IN THE SECTION'S PLACE, not the pane's. Same sentence as before, now
+        // scoped to the thing it is actually about.
+        <EmptyState
+          icon={BookOpen}
+          title="No channel selected"
+          description="Knowledge shared in a channel is per channel — pick one on the left."
+        />
+      ) : (
+      /* ⚠ FLAT, AND THE GROUND IS NOT STATED HERE — see "THE SECTIONS ARE
+         FLAT" in this file's docblock. */
       <SectionPanel
         id="home-kb-shared"
         label="Shared in this channel"
@@ -284,6 +301,7 @@ export function HomeKnowledgePanels({
           </div>
         )}
       </SectionPanel>
+      )}
 
       <SectionPanel
         id="home-kb-personal"
@@ -312,7 +330,7 @@ export function HomeKnowledgePanels({
             reversal of task 11): there is no arming regression to explain now
             that personal reach is default-on. */}
         {homeWorkspaceId === null ? (
-          <EmptyLine>Finish setting up your workspace to keep bases here.</EmptyLine>
+          <EmptyLine>Finish setting up your home space to keep bases here.</EmptyLine>
         ) : personalPending ? (
           // Body stays bare while the home shelf is in flight — an empty
           // sentence here would be a claim about a list nobody has seen.
@@ -352,7 +370,9 @@ export function HomeKnowledgePanels({
           // that vanishes the moment it is made), and a shared create without
           // the channel would land ungranted and be equally invisible.
           shelf={createOpen === "home" ? HOME_SHELF : undefined}
-          shareToChannelId={createOpen === "channel" ? channel.channelId : undefined}
+          shareToChannelId={
+            createOpen === "channel" ? channel?.channelId : undefined
+          }
           // ⚠ BOTH BUTTONS, NOT JUST THE SHARED ONE (Samuel, 2026-08-27). The
           // button that was pressed — Personal or Shared — IS the audience
           // answer here, so the dialog asks no second one. The shared path was

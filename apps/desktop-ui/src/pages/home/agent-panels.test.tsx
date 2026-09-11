@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { WORKSPACE_ID, bootBody, installBridge, ok } from "#/test-utils/bridge";
 import type { HomeChannelsPayload } from "@/features/home/types";
+import { SECTION_PRIVATE_EVERYWHERE } from "@/features/agent-templates/lib/visibility";
 import { HOME, LINK_WORKSPACE_ID, renderHome } from "./home-test-harness";
 import {
   DANA_TEMPLATE,
@@ -185,7 +186,7 @@ describe("empty scopes", () => {
 
     expect(
       await screen.findByText(
-        "Finish setting up your workspace to keep agents there."
+        "Finish setting up your home space to keep agents there."
       )
     ).toBeInTheDocument();
     // ⚠ AND NO UNADDRESSED READ. With no home workspace the query is disabled;
@@ -361,6 +362,93 @@ describe("a failed PERSONAL read", () => {
 
     expect(screen.getByText("Renewal chaser")).toBeInTheDocument();
     expect(screen.getByText("Priya's intake bot")).toBeInTheDocument();
+  });
+});
+
+/**
+ * 🔒 **NO CHANNELS AT ALL — EVERY ACCOUNT'S FIRST DAY (2026-09-10, the new-user
+ * flow).**
+ *
+ * The pane used to return the "pick one on the left" empty state INSTEAD of
+ * itself, so the whole face was one sentence beside an empty list: the caller's
+ * own Personal templates — a HOME-workspace read that needs no channel — were off
+ * screen, and so was the button that makes one. `channel === null` is a fact about
+ * the CONTAINER, so it takes section A and nothing else.
+ *
+ * ⚠ The empty CHANNELS payload is the point: `selected` falls back to
+ * `visible[0]`, so with no rows there is no channel, which is the same `null` a
+ * legacy unbound link produces. One code path, reached the way a real new account
+ * reaches it.
+ */
+describe("🔒 with no channels, PERSONAL still renders", () => {
+  beforeEach(() => {
+    // ⚠ NOT `withHome`: that helper falls back to the HARNESS's routes, which do
+    // not answer `/api/agent-templates` at all — the Personal read would reject
+    // and this whole block would be measuring a failed fetch.
+    apiRequest.mockImplementation(
+      (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> =>
+        path.split("?")[0] === "/api/home/channels"
+          ? Promise.resolve(ok({ channels: [], pendingLinks: [] }))
+          : defaultRoutes(path, opts)
+    );
+  });
+
+  it("lists the caller's own home-shelf templates", async () => {
+    renderHome();
+    await openAgents();
+
+    expect(await screen.findByText("Fundraise analyst")).toBeInTheDocument();
+  });
+
+  it("🔒 offers the Personal create button — the face is not read-only", async () => {
+    // The whole point of the fix: a new account must be able to MAKE its first
+    // agent. A pane that only listed would still be a dead end.
+    renderHome();
+    await openAgents();
+    await screen.findByText("Fundraise analyst");
+
+    const personal = screen.getByRole("region", {
+      name: SECTION_PRIVATE_EVERYWHERE.label,
+    });
+    const create = within(personal).getByRole("button", {
+      name: /Agent template/,
+    });
+    expect(create).toBeEnabled();
+  });
+
+  it("says the sentence about the CHANNEL section, and only there", async () => {
+    renderHome();
+    await openAgents();
+    await screen.findByText("Fundraise analyst");
+
+    expect(await screen.findByText(/pick one on the left/)).toBeInTheDocument();
+    // 🔒 ONE SECTION LEFT, NOT TWO AND NOT ZERO. The shared section is replaced
+    // by the sentence; Personal is a region as before.
+    expect(screen.getAllByRole("region").length).toBe(1);
+  });
+
+  it("⚠ never asks for a container's templates, and never paints the skeleton", async () => {
+    // 🔒 THE SKELETON HALF IS THE REGRESSION THIS GUARDS. The container read is
+    // DISABLED with no workspace, so `resolved` stays false forever — a pane that
+    // waited on it would show "Loading agents" until the user left the tab.
+    renderHome();
+    await openAgents();
+    await screen.findByText("Fundraise analyst");
+
+    expect(templateCalls(LINK_WORKSPACE_ID)).toHaveLength(0);
+    expect(screen.queryByText("Loading agents")).not.toBeInTheDocument();
+  });
+
+  it("⚠ offers NO share-into-channel action — there is no channel to share into", async () => {
+    // The dialog takes `channel.channelId`; a button whose only outcome is a
+    // crash is worse than a missing one.
+    renderHome();
+    await openAgents();
+    await screen.findByText("Fundraise analyst");
+
+    expect(
+      screen.queryByRole("button", { name: /share into/i })
+    ).not.toBeInTheDocument();
   });
 });
 

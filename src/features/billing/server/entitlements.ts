@@ -16,8 +16,28 @@ import {
 
 /**
  * THE entitlements contract every gate (enforcement, chats window, UI) builds
- * against. Plans are WORKSPACE-level.
+ * against. A plan belongs to a CONTAINER, and which plans a container may be
+ * sold depends on its kind — Starter/Team on a standard workspace, Free/Pro on
+ * a `kind='personal'` one (`../plans.ts › plansForKind`). ⚠ **`solo` IS LEGACY,
+ * NOT A TIER ON EITHER LIST**: it is retired from sale (no card, no checkout)
+ * and every rule below still applies to the rows that are on it.
+ *
+ * ⚠ **NOTHING IN THIS FILE CHANGED IN THAT WAVE, DELIBERATELY.** The credit
+ * model moved to per-seat and personal wallets (`../credits.ts`), and this
+ * module's verdict — `entitledPlanFor` / `paidEntitlement` — is what the seat
+ * allowance is keyed by. Changing the verdict to match new prices would have
+ * silently re-tiered every live workspace.
+ *
+ * 🔒 **AND IT GAINED EXACTLY ONE PLAN ON 2026-09-08 — `pro`, THE PERSONAL
+ * TIER** (Samuel's $8.99 ruling; spec §11.1). ⚠ A CONTAINER IS NOT A SECOND
+ * BILLING SYSTEM: a `kind='personal'` container is a real `workspaces` row with
+ * its own `workspace_billing` row, so every rule below already applied to it
+ * and only the verdict needed the new value. The prices moved (`../prices.ts`)
+ * and the verdict for `team` / `solo` / `free` did not — same reason as the
+ * line above.
  *   - team: entitled while active/past_due; seats sync to active members.
+ *   - pro: entitled while active/past_due, with NO member condition (F-673).
+ *     Personal containers only.
  *   - solo: entitled ONLY while active/past_due AND memberCount === 1. ⚠ A
  *     second member degrades it to free multi-member rules — the backstop lives
  *     HERE so no abuse path bypasses the object cap.
@@ -32,8 +52,14 @@ import {
 /** Alias of canonical `PlanId` — contract's public name for the union. */
 export type WorkspacePlan = PlanId;
 
-/** Solo is a single-member plan; adding a member is blocked at this count. */
+/** Solo is a single-member plan; adding a member is blocked at this count.
+ *  ⚠ LEGACY ROWS ONLY — nothing sells solo since 2026-09-07. */
 const SOLO_MAX_MEMBERS = 1;
+
+/** A `kind='personal'` container holds its owner and nobody else
+ *  (`20260920120000_workspace_kind_personal.sql`). ⚠ NOT A PLAN LIMIT you can
+ *  buy your way past, unlike `SOLO_MAX_MEMBERS`: it is what the container IS. */
+const PERSONAL_MAX_MEMBERS = 1;
 
 export interface WorkspaceEntitlements {
   plan: WorkspacePlan;
@@ -51,7 +77,7 @@ export interface WorkspaceEntitlements {
 /**
  * ⚠ DEFINED IN `../plans.ts`, RE-EXPORTED HERE (2026-08-30, G4). This module is
  * `server-only`, so nothing that RENDERS could import these two — and every
- * public surface that quotes them (`plans.ts › PLANS`,
+ * public surface that quotes them (`plans.ts › WORKSPACE_PLANS`,
  * `marketing/components/pricing-content.tsx › COMPARE_ROWS`) restated the
  * numbers as prose instead. They moved to the one module both sides can read.
  * The re-export is not compatibility shim: this file is the ENFORCEMENT site
@@ -68,15 +94,29 @@ export {
  * reverts to free (row keeps its historical plan but loses entitlements).
  * ⚠ Solo also requires memberCount <= 1 — a solo row that grew a second member
  * degrades, so the multi-member object cap still applies.
+ *
+ * 🔒 **`pro` CARRIES NO MEMBER CONDITION, AND THAT IS A DECISION, NOT AN
+ * OMISSION (2026-09-08, F-673).** The obvious move was to copy the solo arm —
+ * both are single-member flat plans — and it would have been wrong in a way
+ * that only shows up in production. Solo's `memberCount <= 1` is a BACKSTOP
+ * against a state the schema permits: a standard workspace can be given a
+ * second member while a solo subscription is live, and the degrade is what
+ * stops that buying the object cap. A `kind='personal'` container CANNOT be
+ * given one — it has exactly one member by construction
+ * (`20260920120000_workspace_kind_personal.sql`) and `assertCanAddMember`
+ * refuses below — so the same clause would guard nothing while creating a real
+ * failure mode: one stale/duplicated membership row and a PAYING customer
+ * silently drops to the free allowance with no refund and no signal.
  */
 function paidEntitlement(
   plan: WorkspacePlan,
   status: WorkspaceEntitlements["status"],
   memberCount: number
-): "solo" | "team" | null {
+): "solo" | "team" | "pro" | null {
   const live = status === "active" || status === "past_due";
   if (!live) return null;
   if (plan === "team") return "team";
+  if (plan === "pro") return "pro";
   if (plan === "solo" && memberCount <= SOLO_MAX_MEMBERS) return "solo";
   return null;
 }
@@ -102,6 +142,18 @@ export function entitledPlanFor(
   );
 }
 
+/**
+ * The whole contract for one container, read fresh (three round trips).
+ *
+ * ⚠ **A `kind='personal'` CONTAINER ANSWERS THROUGH THE SAME ARITHMETIC AND
+ * THAT IS THE POINT (2026-09-08, spec §11.1).** It needed no personal branch:
+ * the container has ONE member, so `objectCap` falls out `null` on the
+ * 1-member-free rule; `seatCount` is `null` because that key is Team-only;
+ * `chatsWindowDays` is `null` on a live `pro` verdict and `FREE_CHATS_WINDOW_DAYS`
+ * otherwise, exactly as §11.1 specifies. A `kind === "personal"` branch here
+ * would be a SECOND copy of those three rules that agrees today and drifts on
+ * the next edit — the reason this function takes an id and not a kind.
+ */
 export async function getWorkspaceEntitlements(
   workspaceId: string
 ): Promise<WorkspaceEntitlements> {
@@ -162,10 +214,23 @@ export class EntitlementError extends Error {
  *
  * Workspace-agnostic on purpose: these builders are reached with only an id,
  * no SEGMENT, and `/billing` resolves or asks for one on arrival.
+ *
+ * ⚠ **`plan` NAMES WHAT THE CALLER IS BEING SOLD, AND ONLY `"pro"` IS SAYABLE
+ * (2026-09-08).** With it the link carries `?plan=pro` and the segment-less
+ * `/billing` forwards to the caller's PERSONAL container rather than resolving
+ * a standard workspace — which is the only way a home-space upsell can land
+ * anywhere useful, since the seller never holds that segment. Team needs no
+ * argument: it is what the plain upgrade link already means, and adding
+ * `?plan=team` to it would change six live envelopes for no behaviour.
+ *
+ * ⚠ TYPED AS THE LITERAL `"pro"`, NOT AS `CheckoutPlan`. `url.ts` owns that
+ * union and widened it in the same wave; depending on the widening here would
+ * make this file's correctness a question about MERGE ORDER. The literal is
+ * assignable to `CheckoutPlan` either way, and narrower is the safe direction.
  */
-export function upgradeUrl(): string {
+export function upgradeUrl(plan?: "pro"): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
-  return billingUrl(appUrl, { intent: "upgrade" });
+  return billingUrl(appUrl, { intent: "upgrade", plan });
 }
 
 export async function assertCanCreateObject(
@@ -178,22 +243,27 @@ export async function assertCanCreateObject(
 }
 
 /**
- * Solo member-limit denial. Subclasses `HttpError` so route catch blocks route
- * it as a 402, but ⚠ overrides `toResponseBody` to emit the FLAT plan-gate
+ * Single-member denial. Subclasses `HttpError` so route catch blocks route it
+ * as a 402, but ⚠ overrides `toResponseBody` to emit the FLAT plan-gate
  * envelope `{ error: <code>, message, upgrade_url }` instead of the nested
  * default — the web consumers and `apiRequest` parse the flat shape.
+ *
+ * ⚠ **THE CODE IS A PARAMETER SINCE 2026-09-08 BECAUSE THE TWO REFUSALS ARE
+ * NOT THE SAME REFUSAL.** `SOLO_MEMBER_LIMIT` means "this workspace's plan is
+ * too small — buy Team", and the invite/join surfaces key on that string to
+ * offer the in-place upgrade (`members/components/invite-dialog.tsx`,
+ * `members-v2-view.tsx`, `hooks/use-join-requests.ts`). A personal container's
+ * refusal is not a price problem and has no upgrade that fixes it, so reusing
+ * the code would have shown a Team checkout to somebody whose answer is "make
+ * a workspace". Same STATUS and same SHAPE, different code and different
+ * sentence.
  */
-class SoloMemberLimitError extends HttpError {
+class MemberLimitError extends HttpError {
   readonly upgradeUrl: string;
 
-  constructor(upgradeUrl: string) {
-    super(
-      402,
-      "SOLO_MEMBER_LIMIT",
-      "This workspace is on the Solo plan, which is limited to one member. Upgrade to Team to add members.",
-      { upgrade_url: upgradeUrl }
-    );
-    this.name = "SoloMemberLimitError";
+  constructor(code: string, message: string, upgradeUrl: string) {
+    super(402, code, message, { upgrade_url: upgradeUrl });
+    this.name = "MemberLimitError";
     this.upgradeUrl = upgradeUrl;
   }
 
@@ -210,20 +280,49 @@ class SoloMemberLimitError extends HttpError {
 }
 
 /**
- * Create-time gate for adding a member (invitation accept, join-link). A live
- * Solo workspace is single-member by contract → 402 (flat plan-gate envelope,
- * see `SoloMemberLimitError`). Free and Team are no-ops.
+ * Create-time gate for adding a member (invitation accept, join-link). Two
+ * containers are single-member and both answer 402 in the flat plan-gate
+ * envelope (`MemberLimitError`); free and Team workspaces are no-ops.
+ *
+ *   * a live legacy SOLO workspace → `SOLO_MEMBER_LIMIT`, with the Team
+ *     checkout attached: buying Team is the fix.
+ *   * a live PRO personal container → `PERSONAL_SINGLE_MEMBER`, with NO
+ *     upgrade url. ⚠ **THERE IS NOTHING TO BUY AND THE EMPTY STRING SAYS SO**
+ *     — the same posture `credits-service.ts › upgradeUrlFor` takes. A personal
+ *     container holds one person by construction; no plan changes that, so a
+ *     checkout link here would be an upsell that does not solve the problem the
+ *     caller just hit.
+ *
+ * ⚠ **THE `pro` ARM IS A BELT ON TOP OF BRACES AND IT STAYS.** The membership
+ * writes that reach this gate are already fenced from containers upstream
+ * (`workspaces/server/link-container-guard.test.ts`), so it should be
+ * unreachable — which is exactly why it must not be the only thing standing
+ * between a paying single-member tier and a second seat it never sold.
+ * ⚠ It keys on the RAW plan + live status, not on `entitledPlanFor`, because
+ * the verdict is what we are protecting: asking the verdict whether to enforce
+ * the rule that keeps the verdict true is the circle F-673 warns about.
  */
 export async function assertCanAddMember(workspaceId: string): Promise<void> {
   const [billing, memberCount] = await Promise.all([
     getWorkspaceBilling(workspaceId),
     countActiveMembers(workspaceId),
   ]);
-  const soloLive =
-    billing?.plan === "solo" &&
-    (billing.status === "active" || billing.status === "past_due");
-  if (soloLive && memberCount >= SOLO_MAX_MEMBERS) {
-    throw new SoloMemberLimitError(upgradeUrl());
+  const live =
+    billing?.status === "active" || billing?.status === "past_due";
+  if (!live) return;
+  if (billing?.plan === "solo" && memberCount >= SOLO_MAX_MEMBERS) {
+    throw new MemberLimitError(
+      "SOLO_MEMBER_LIMIT",
+      "This workspace is on the Solo plan, which is limited to one member. Upgrade to Team to add members.",
+      upgradeUrl()
+    );
+  }
+  if (billing?.plan === "pro" && memberCount >= PERSONAL_MAX_MEMBERS) {
+    throw new MemberLimitError(
+      "PERSONAL_SINGLE_MEMBER",
+      "This is a personal space. Create a workspace to add members.",
+      ""
+    );
   }
 }
 

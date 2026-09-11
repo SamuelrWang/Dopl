@@ -1,9 +1,14 @@
 /**
  * INVARIANT SUITE — POST /api/mcp/credits/consume:
  *   - the plan is the ENTITLEMENT VERDICT, so a degraded solo is charged against FREE (abuse path);
+ *   - the limit is the caller's PER-MEMBER seat allowance, and the RPC key carries the member;
  *   - a refused spend returns the counter with the refusal;
- *   - it FAILS OPEN on an unexpected error.
- * Auth + billing repo are mocked; the service is real, so plan → limit → period → RPC is end to end.
+ *   - it FAILS OPEN on an unexpected error, with `wallet: null` on the invented zeroes.
+ * Auth + repositories are mocked; the service is real, so kind → wallet → limit → period → RPC is
+ * end to end.
+ *
+ * ⚠ **NUMBERS MOVED 2026-09-07** (Samuel's per-seat + personal-wallet ruling): 500/10,000/25,000
+ * POOLED PER WORKSPACE became 100/5,000 PER MEMBER, and the counter gained the member in its key.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -32,14 +37,27 @@ vi.mock("@/features/billing/server/workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   countActiveMembers: vi.fn(),
   countOntologyObjects: vi.fn(),
-  consumeWorkspaceCredits: vi.fn(),
-  getWorkspaceCreditsUsed: vi.fn(),
+}));
+
+vi.mock("@/features/billing/server/credit-wallets", () => ({
+  consumeUserCredits: vi.fn(),
+  consumeMemberCredits: vi.fn(),
+  getUserCreditsUsed: vi.fn(),
+  getMemberCreditsUsed: vi.fn(),
+}));
+
+// The ledger is a `supabaseAdmin()` insert fired and forgotten after the spend;
+// this suite is about the answer, never about Supabase being reachable.
+vi.mock("@/features/billing/server/credit-ledger", () => ({
+  recordCreditUsageEvent: vi.fn(),
 }));
 
 import { POST } from "./route";
 import * as repo from "@/features/billing/server/workspace-billing";
+import * as wallets from "@/features/billing/server/credit-wallets";
 
 const mockRepo = vi.mocked(repo);
+const mockWallets = vi.mocked(wallets);
 
 function billing(overrides: Partial<WorkspaceBillingRow>): WorkspaceBillingRow {
   return {
@@ -71,48 +89,71 @@ beforeEach(() => {
   mockRepo.getWorkspaceBilling.mockResolvedValue(null);
   mockRepo.countActiveMembers.mockResolvedValue(1);
   mockRepo.countOntologyObjects.mockResolvedValue(0);
-  mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: true, used: 1 });
+  mockWallets.consumeMemberCredits.mockResolvedValue({ allowed: true, used: 1 });
+  mockWallets.consumeUserCredits.mockResolvedValue({ allowed: true, used: 1 });
 });
 
 describe("POST /api/mcp/credits/consume", () => {
-  it("spends one credit against the free allowance and reports what is left", async () => {
+  it("spends one credit against the free PER-MEMBER allowance and reports what is left", async () => {
     const res = await POST(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ allowed: true, used: 1, limit: 500, remaining: 499 });
-    expect(mockRepo.consumeWorkspaceCredits).toHaveBeenCalledWith(
+    expect(body).toMatchObject({
+      allowed: true,
+      used: 1,
+      limit: 100,
+      remaining: 99,
+      wallet: "seat",
+    });
+    // ⚠ THE CALLER IS IN THE KEY. A pooled `(workspace, period)` counter is what
+    // this wave replaced; it cannot hold a fixed per-person allocation.
+    expect(mockWallets.consumeMemberCredits).toHaveBeenCalledWith(
       "ws-1",
+      "user-1",
       expect.any(String),
       1,
-      500
+      100
     );
   });
 
-  it("charges a live solo workspace against the SOLO allowance", async () => {
+  it("charges a live TEAM member against the paid per-member allowance", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "team", status: "active", seatCount: 4 })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(4);
+    mockWallets.consumeMemberCredits.mockResolvedValue({ allowed: true, used: 7 });
+
+    const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
+    // ⚠ NOT MULTIPLIED BY THE FOUR SEATS. Each member has their own 5,000.
+    expect(body).toMatchObject({ allowed: true, limit: 5_000, remaining: 4_993 });
+  });
+
+  it("charges a live single-member solo against the LEGACY PAID allowance", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "solo", status: "active" })
     );
-    mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: true, used: 7 });
+    mockWallets.consumeMemberCredits.mockResolvedValue({ allowed: true, used: 7 });
 
     const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
-    expect(body).toMatchObject({ allowed: true, limit: 10_000, remaining: 9_993 });
+    expect(body).toMatchObject({ allowed: true, limit: 5_000, remaining: 4_993 });
   });
 
   it("charges a DEGRADED solo (2 members) against the FREE allowance", async () => {
-    // ⚠ Reading `workspace_billing.plan` directly instead of the entitlement verdict hands this
-    // workspace 10,000 credits.
+    // ⚠ Reading `workspace_billing.plan` directly instead of the entitlement verdict hands every
+    // member of this workspace 5,000 credits.
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "solo", status: "active" })
     );
     mockRepo.countActiveMembers.mockResolvedValue(2);
 
     const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
-    expect(body.limit).toBe(500);
-    expect(mockRepo.consumeWorkspaceCredits).toHaveBeenCalledWith(
+    expect(body.limit).toBe(100);
+    expect(mockWallets.consumeMemberCredits).toHaveBeenCalledWith(
       "ws-1",
+      "user-1",
       expect.any(String),
       1,
-      500
+      100
     );
   });
 
@@ -128,34 +169,51 @@ describe("POST /api/mcp/credits/consume", () => {
 
     const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
     expect(body.periodStart).toBe("2099-01-10T00:00:00.000Z");
-    expect(mockRepo.consumeWorkspaceCredits).toHaveBeenCalledWith(
+    expect(mockWallets.consumeMemberCredits).toHaveBeenCalledWith(
       "ws-1",
+      "user-1",
       "2099-01-10T00:00:00.000Z",
       1,
-      25_000
+      5_000
     );
   });
 
-  it("refuses when the counter is exhausted, still 200, and names the upgrade url", async () => {
-    mockRepo.consumeWorkspaceCredits.mockResolvedValue({ allowed: false, used: 500 });
+  it("refuses when the seat is exhausted, still 200, and names the upgrade url", async () => {
+    mockWallets.consumeMemberCredits.mockResolvedValue({ allowed: false, used: 100 });
 
     const res = await POST(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ allowed: false, used: 500, limit: 500, remaining: 0 });
+    expect(body).toMatchObject({ allowed: false, used: 100, limit: 100, remaining: 0 });
     expect(body.upgradeUrl).toMatch(/billing=upgrade$/);
   });
 
-  it("FAILS OPEN on an RPC error — allowed, degraded, counters not invented", async () => {
+  it("🔒 offers NO url when there is nothing to buy — a seat on a paid plan", async () => {
+    // The MCP layer renders the url literally, so an offer to nowhere sends an
+    // exhausted agent to a checkout that cannot help it.
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "team", status: "active" })
+    );
+    mockWallets.consumeMemberCredits.mockResolvedValue({ allowed: false, used: 5_000 });
+
+    const body = await (await POST(request(), { params: Promise.resolve({}) })).json();
+    expect(body.allowed).toBe(false);
+    expect(body.upgradeUrl).toBe("");
+  });
+
+  it("FAILS OPEN on an RPC error — allowed, degraded, wallet null, counters not invented", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    mockRepo.consumeWorkspaceCredits.mockRejectedValue(new Error("connection reset"));
+    mockWallets.consumeMemberCredits.mockRejectedValue(new Error("connection reset"));
 
     const res = await POST(request(), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.allowed).toBe(true);
     expect(body.degraded).toBe(true);
-    expect(body).toMatchObject({ used: 0, limit: 0, remaining: 0 });
+    // ⚠ NO COUNTER WAS CHOSEN, LET ALONE READ. A wallet name on invented zeroes
+    // would tell the client which meter these numbers came off, and none did.
+    expect(body.wallet).toBeNull();
+    expect(body).toMatchObject({ used: 0, limit: 0, remaining: 0, upgradeUrl: "" });
     expect(error).toHaveBeenCalled();
     error.mockRestore();
   });

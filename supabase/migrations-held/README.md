@@ -53,32 +53,32 @@ order it was written in, and `db push` compares stamps against
 
 ### `20260923120000_drop_home_scoped.sql`
 
-**Precondition P2, unmet: `TENANCY_PERSONAL_CONTAINER` has never been on.**
+**Held on ONE unmeasured row count. ⚠ The CODE precondition is met and the old
+rationale is gone (re-measured 2026-09-10).** The file drops
+`knowledge_bases.home_scoped` and `agent_templates.home_scoped`; its `DO $$`
+block RAISEs while any row still carries `home_scoped = true` outside a
+`kind='personal'` container, because dropping it there would **publish a personal
+row to its whole workspace** — and a `RAISE` inside `db push` aborts the batch
+part-way. Only the query in step 3 can say whether such rows exist.
 
-The file drops `knowledge_bases.home_scoped` and `agent_templates.home_scoped`.
-Its own opening `DO $$` block refuses to run while any row still carries
-`home_scoped = true` outside a container of `kind = 'personal'`, because dropping
-the column there would **publish a personal row to its whole workspace** — a
-silent visibility widening, which is the one class of failure this codebase
-treats as unrecoverable.
-
-`TENANCY_PERSONAL_CONTAINER` defaults off and has never been turned on in
-production, so `ensure_personal_container` has never run and **no personal
-container exists**. Every pre-existing `home_scoped = true` row is therefore
-stranded by definition, and the guard raises.
-
-That guard is doing its job, but a `RAISE` inside `db push` **aborts the push
-part-way through the batch**, leaving the earlier files of the same run applied
-and the later ones not. Holding the file keeps that failure out of the release
-entirely instead of discovering it against production.
+⚠ **WHAT THIS PARAGRAPH USED TO SAY, AND WHY IT MUST NOT BE RESTORED.** It read
+*"Precondition P2, unmet: `TENANCY_PERSONAL_CONTAINER` has never been on … no
+personal container exists"*. Both halves are now false. `20260920120000_workspace_kind_personal.sql`
+is in `supabase/migrations/` (match by NAME, §12) and the personal container is
+live and **UNFLAGGED**: `TENANCY_PERSONAL_CONTAINER` is read by no code at all —
+slice B15 deleted the flag, the dual write and the union read with it, and
+`src/shared/tenancy/personal-container.ts` now REFUSES a personal write with no
+container rather than falling back to a shared workspace. So P2's code half is
+satisfied, steps 1 and 2 below describe a flag that does not exist, and the hold
+rests entirely on step 3's count. **Deploy state is a measurement, not a claim**
+(CLAUDE.md): run the query, do not re-derive an answer from this file.
 
 **To release it, in order:**
 
-1. Ship a release with `TENANCY_PERSONAL_CONTAINER=1`, so new personal writes
-   land in a personal container instead of a shared workspace.
-2. Leave it on for a full release cycle — the precondition is "on for a
-   release", not "on for an afternoon" — so no in-flight client is still writing
-   the old shape.
+1. ~~Ship a release with `TENANCY_PERSONAL_CONTAINER=1`~~ — **DONE AND GONE.**
+   There is no flag; personal writes land in a container or refuse.
+2. ~~Leave it on for a full release cycle~~ — **moot for the same reason.** What
+   step 3 measures is whether any row PREDATING that state is still stranded.
 3. Backfill: mint the containers and move the stranded rows (`20260920120000`
    section 5), then confirm the count is zero:
 

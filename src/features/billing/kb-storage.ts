@@ -19,13 +19,19 @@ import type { PlanId } from "./plans";
  * ⚠ DECIMAL megabytes (5_000_000, not 5 × 1024²) — `shared/lib/format-bytes.ts`
  * divides by the same 1000s, so bar and map agree.
  *
- * solo === team on purpose. Two entries not one constant so splitting them
- * later is a value edit. Tunable.
+ * solo === team === pro on purpose: every PAID plan buys the same room, and
+ * separate entries rather than one shared constant so splitting them later is a
+ * value edit. Tunable.
+ *
+ * ⚠ `pro` ADDED 2026-09-08 with the personal paid tier. It is the PAID figure,
+ * not the free one: a paying home space that kept the 5 MB base cap would be
+ * charged $8.99 for a knowledge base it cannot fill.
  */
 export const KB_STORAGE_BYTES: Record<PlanId, number> = {
   free: 5_000_000,
   solo: 100_000_000,
   team: 100_000_000,
+  pro: 100_000_000,
 };
 
 /** Cap for an ENTITLEMENT-RESOLVED plan — never raw `workspace_billing.plan`

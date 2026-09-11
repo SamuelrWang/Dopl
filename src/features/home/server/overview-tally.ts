@@ -147,9 +147,10 @@ export function tallyCreditPeople(
  * CREDITS and MESSAGES per home channel, descending by credits.
  *
  * ⚠ **THE CREDIT DIMENSION IS `origin_workspace_id`**, the container the call
- * was made in — never the ledger's `workspace_id`, which is the PAYER and for a
- * home container is the owner's billing workspace
- * (`repository-overview.ts › scanCreditEvents` states the fence).
+ * was made in — never the ledger's `workspace_id`, which held a REROUTED PAYER
+ * on rows written before 2026-09-07 and holds the addressed container on rows
+ * written since (`repository-overview.ts › scanCreditEvents` states the fence,
+ * and `20260930120000_credit_wallets.sql` §4 the column's new meaning).
  *
  * ⚠ EVERY CHANNEL IN THE FENCE GETS A ROW, including the silent ones — the
  * comparison is "which of MY channels is busy", and dropping the quiet ones

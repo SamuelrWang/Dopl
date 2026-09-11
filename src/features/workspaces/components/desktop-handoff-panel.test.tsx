@@ -10,7 +10,10 @@
  *    protocol launches with no user gesture). Effect-only would pass locally
  *    and strand stricter browsers.
  *
- * Plus: nothing rendered is an in-app web path (all 302 to `/get-started`).
+ * Plus: nothing rendered is an in-app web path (all 302 to `/get-started`) — and
+ * since 2026-09-10 `/get-started` ITSELF is one of the three allowed hrefs,
+ * carrying the segment, because it is on the retirement KEEP list and is the page
+ * that turns a dmg into a signed-in app.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -71,13 +74,42 @@ describe("DesktopHandoffPanel", () => {
     ).toBe("/download");
   });
 
-  it("renders NO in-app web path — only the deep link and the download route", () => {
+  /**
+   * 🔒 **THE `/get-started` FALLBACK, AND WHY THE DMG LINK WAS NOT ENOUGH
+   * (2026-09-10, the new-user flow).** `/download` is a bare 307 to the dmg: the
+   * one audience that needs help got a file and no instructions, and nothing had
+   * told them the app then needs a sign-in. `/get-started` is the page that does,
+   * and the SEGMENT rides it so the trip ends where the invitation pointed.
+   */
+  it("🔒 offers /get-started too, carrying the workspace segment", () => {
+    render(<DesktopHandoffPanel workspace={WORKSPACE} heading="You're in." />);
+    expect(
+      screen.getByRole("link", { name: "set it up" }).getAttribute("href")
+    ).toBe(`/get-started?workspace=${SEGMENT}`);
+  });
+
+  it("⚠ keeps the dmg link BESIDE it — the two answer different failures", () => {
+    // Somebody who already has the app but whose OS swallowed the protocol
+    // launch wants the dmg, not a second page.
+    render(<DesktopHandoffPanel workspace={WORKSPACE} heading="You're in." />);
+    expect(
+      screen.getByRole("link", { name: "Download Dopl" }).getAttribute("href")
+    ).toBe("/download");
+  });
+
+  it("renders NO in-app web path — the deep link, the download route, /get-started", () => {
+    // ⚠ `/get-started` is on the retirement KEEP list, which is the whole reason
+    // it may appear here: every other in-app web path 302s to it.
     const { container } = render(
       <DesktopHandoffPanel workspace={WORKSPACE} heading="You're in." />
     );
     for (const anchor of container.querySelectorAll("a")) {
       const href = anchor.getAttribute("href") ?? "";
-      expect(href === "/download" || href.startsWith("dopl://")).toBe(true);
+      expect(
+        href === "/download" ||
+          href.startsWith("/get-started") ||
+          href.startsWith("dopl://")
+      ).toBe(true);
     }
   });
 
@@ -89,11 +121,18 @@ describe("DesktopHandoffPanel", () => {
     expect(
       screen.getByRole("link", { name: "Open Dopl" }).getAttribute("href")
     ).toBe("dopl://open");
+    // ⚠ AND THE SAME POSTURE ON THE FALLBACK: the bare page, never a
+    // `?workspace=-` that cannot resolve on the other side.
+    expect(
+      screen.getByRole("link", { name: "set it up" }).getAttribute("href")
+    ).toBe("/get-started");
   });
 });
 
 describe("JoinPendingPanel", () => {
-  it("gives NO deep link — there is no membership to open yet", () => {
+  it("gives NO deep link AND NO SEGMENT — there is no membership to open yet", () => {
+    // ⚠ It is not an omission that this panel skipped the 2026-09-10 fallback:
+    // a join request is approval-gated, so there is no workspace to name.
     const { container } = render(<JoinPendingPanel heading="Request sent." />);
     for (const anchor of container.querySelectorAll("a")) {
       expect(anchor.getAttribute("href")).toBe("/download");
