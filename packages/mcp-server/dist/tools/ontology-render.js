@@ -48,7 +48,7 @@ function resolveObjectRef(snapshot, ref) {
     if (matches.length > 1) {
         const containerOf = (id) => {
             const name = Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name;
-            return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "column";
+            return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "object";
         };
         const list = matches.map((o) => `\`${o.id}\` (${containerOf(o.id)})`).join(", ");
         return {
@@ -66,7 +66,7 @@ function resolveClusterRef(snapshot, ref) {
         return { hit };
     const known = snapshot.clusters.map((c) => (0, narration_1.inlineOr)(c.slug, NO_NAME)).join(", ") || "none";
     return {
-        fail: (0, respond_1.err)(`No cluster ${(0, narration_1.inlineOr)(ref, NO_NAME)}. Known clusters: ${known}.`),
+        fail: (0, respond_1.err)(`No ontology ${(0, narration_1.inlineOr)(ref, NO_NAME)}. Known ontologies: ${known}.`),
     };
 }
 async function resolveResourceHandles(client, object) {
@@ -118,9 +118,9 @@ function renderObject(object, snapshot, headline, handles = new Map(),
 format) {
     const nameOf = (id) => snapshot.objects[id] ? (0, narration_1.inlineOr)(snapshot.objects[id].name, NO_NAME) : `\`${id}\``;
     // ⚠ What the object IS = its container's NAME (column, or the object it is
-    // nested in) — member-typed like any other. Only the "column" fallback is ours.
+    // nested in) — member-typed like any other. Only the "object" fallback is ours.
     const container = Object.values(snapshot.objects).find((o) => o.childIds.includes(object.id));
-    const kindLabel = container?.name ? (0, narration_1.inlineOr)(container.name, NO_NAME) : "column";
+    const kindLabel = container?.name ? (0, narration_1.inlineOr)(container.name, NO_NAME) : "object";
     const lines = [];
     if (headline)
         lines.push(headline, "");

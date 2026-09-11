@@ -83,7 +83,7 @@ interface Props {
   /** Admin/owner — controls whether the upgrade prompt offers checkout. */
   canManageBilling?: boolean;
   /** Member+ — viewers read but can't create, so create affordances
-   *  (New cluster / + Object / Add new) are hidden. */
+   *  (New ontology / + Object / Add new) are hidden. */
   canEdit?: boolean;
   /**
    * How the address bar follows the active cluster's slug. Defaults to
@@ -316,8 +316,8 @@ export function OntologyView({
         <div className="m-auto flex flex-col items-center gap-3">
           <p className="text-lead text-text-secondary">
             {canEdit
-              ? "No ontology yet — start with your first cluster."
-              : "No ontology yet — a workspace member can create the first cluster."}
+              ? "No ontology yet — create your first."
+              : "No ontology yet — a workspace member can create the first one."}
           </p>
           {canEdit && (
             <button
@@ -325,7 +325,7 @@ export function OntologyView({
               onClick={handleCreateCluster}
               className="auth-btn-3d rounded-lg px-4 py-2 text-lead font-semibold text-white"
             >
-              New cluster
+              New ontology
             </button>
           )}
         </div>

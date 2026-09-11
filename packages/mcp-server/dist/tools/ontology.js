@@ -36,7 +36,7 @@ const tool_style_1 = require("./tool-style");
  * the write-op glosses into an MCP resource, so they stop being pushed to every
  * client that only reads the graph.
  */
-const ONTOLOGY_PROSE_BUDGET = 1_503; // ⚠ **1,506 → 1,503 (2026-09-09): BANKED, NOT RAISED.** The CHANGELOG lane part 2 added one clause to `policy` — every ontology write is filed per field in the changelog, which is a fact an agent cannot derive from any op — and paid for it out of this same description: five glosses trimmed to what only they say (the headline's routing tail, `op="get"`'s "Version token", `op="anchor"`'s phrasing, `create_column`'s, and "an agent gets its operator's" losing a word the ladder already carries). The three chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
+const ONTOLOGY_PROSE_BUDGET = 1_503; // ⚠ **UNMOVED AT 1,503 THROUGH THE 2026-09-11 VOCABULARY RULING, AND THAT IS THE POINT**: a cluster reads as an *ontology* and a column as an *object*, so four strings were respelled to net ZERO — the headline became the containment ladder `items in objects in ontologies` (±0), `op="map"`'s bullet lost `members`/`objects` for `items` (−4), and that −4 paid for `create_column`'s gloss naming an *object type* (+3) and `ONTOLOGY_ERRORS`' `cluster_not_found` noun (+1). Op names and arg names did not move. // ⚠ **1,506 → 1,503 (2026-09-09): BANKED, NOT RAISED.** The CHANGELOG lane part 2 added one clause to `policy` — every ontology write is filed per field in the changelog, which is a fact an agent cannot derive from any op — and paid for it out of this same description: five glosses trimmed to what only they say (the headline's routing tail, `op="get"`'s "Version token", `op="anchor"`'s phrasing, `create_column`'s, and "an agent gets its operator's" losing a word the ladder already carries). The three chars left over are banked here rather than left as headroom, which is the discipline `knowledge.ts › KB_PROSE_BUDGET` states: a ratchet that fails on a SHRINK is how a win gets kept.
 /**
  * ⚠ RENDERED, NOT WRITTEN — `tool-style.ts › composeDescription` holds the
  * order for every tool on this surface.
@@ -48,7 +48,7 @@ const ONTOLOGY_PROSE_BUDGET = 1_503; // ⚠ **1,506 → 1,503 (2026-09-09): BANK
  * descriptions are BOTH pushed on every connection.
  */
 const ONTOLOGY_DESCRIPTION = (0, tool_style_1.composeDescription)({
-    headline: "The object graph you reach — objects in clusters of columns, with attributes, relationships and actions; it routes, not inventories.",
+    headline: "The object graph you reach — items in objects in ontologies, with attributes, relationships and actions; it routes, not inventories.",
     // ⚠ THE FENCE SENTENCE IS THE POLICY'S THIRD (2026-09-09, home-ontology S5),
     // NOT A BODY BLOCK OF ITS OWN: a block costs its separator too, and this
     // description is at its ratchet. It states the two facts an agent cannot
@@ -59,7 +59,7 @@ const ONTOLOGY_DESCRIPTION = (0, tool_style_1.composeDescription)({
     routing: ["Use dopl_map for the routing view."],
     body: [
         `READ — set \`op\` to:
-- "map" — clusters and their COLUMNS, with each column's direct members. TWO LEVELS ONLY: objects nested deeper, and objects in no column, never appear. Call first.
+- "map" — ontologies and their OBJECTS, with each object's direct items. TWO LEVELS ONLY: items nested deeper, and items in no object, never appear. Call first.
 - "anchor" — the CALLER's own object; start here for "my/me" requests.
 - "resolve" — objects whose NAME or SUBTITLE contains the query (case-insensitive substring), capped at 20 matches.
 - "get" — one object: attributes, relationships, backlinks, children, actions, Version.`,
@@ -70,7 +70,7 @@ const ONTOLOGY_DESCRIPTION = (0, tool_style_1.composeDescription)({
         // "resolve" — must keep their own lines.
         `WRITE — set \`op\` to:
 - "create_cluster" / "update_cluster" — name and \`purpose\`.
-- "create_column" — a container named for what it holds.
+- "create_column" — an object type named for what it holds.
 - "create_object" / "update_object" — inherits the parent's template, edges, actions.
 - "set_template_field" — a DEFAULT field; new objects inherit it empty.
 - "set_attribute" / "set_relationship" / "set_action" — one attribute, one labeled edge (never onto itself), or something the OBJECT does.
@@ -113,12 +113,12 @@ caller = identity_1.UNKNOWN_CALLER) {
             .describe("Operation to perform."),
         query: zod_1.z.string().optional().describe("resolve: name/description text to match."),
         object: zod_1.z.string().optional().describe("Object id (preferred) or exact name."),
-        cluster: zod_1.z.string().optional().describe("Cluster slug, id, or exact name."),
+        cluster: zod_1.z.string().optional().describe("Ontology slug, id, or exact name."),
         parent: zod_1.z
             .string()
             .optional()
-            .describe("create_object: the column/object to nest under (id or exact name)."),
-        name: zod_1.z.string().max(200).optional().describe("A name (cluster/column/object/action)."),
+            .describe("create_object: the object to nest under (id or exact name)."),
+        name: zod_1.z.string().max(200).optional().describe("A name (ontology/object/item/action)."),
         purpose: zod_1.z.string().max(2000).optional().describe("create_cluster/update_cluster: routing one-liner."),
         subtitle: zod_1.z.string().optional().describe("update_object: short description agents browse."),
         label: zod_1.z.string().max(200).optional().describe("Attribute, relationship, or template-field label."),

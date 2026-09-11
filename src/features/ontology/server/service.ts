@@ -131,7 +131,7 @@ export async function updateCluster(
     userId: ctx.userId,
     source: ctx.source,
   });
-  if (!row) throw HttpError.notFound("Cluster not found");
+  if (!row) throw HttpError.notFound("Ontology not found");
   // ⚠ `gated` IS THE BEFORE STATE, so the diff costs no second read. A
   // layout-only drag changes no TRACKED field and records nothing
   // (`./service-revisions.ts › clusterFields`).
@@ -155,7 +155,7 @@ export async function deleteCluster(
 ): Promise<number> {
   const gated = await requireCluster(ctx, clusterId, "edit");
   const count = await repo.cascadeHardDeleteCluster(gated.workspace_id, clusterId);
-  if (count === null) throw HttpError.notFound("Cluster not found");
+  if (count === null) throw HttpError.notFound("Ontology not found");
   await recordClusterDelete(ctx, gated, count);
   return count;
 }

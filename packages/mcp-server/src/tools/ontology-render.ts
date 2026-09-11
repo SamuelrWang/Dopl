@@ -79,7 +79,7 @@ export function resolveObjectRef<T extends ObjectRefFields>(
       const name = Object.values(snapshot.objects).find((o) =>
         o.childIds.includes(id),
       )?.name;
-      return name ? inlineOr(name, NO_NAME) : "column";
+      return name ? inlineOr(name, NO_NAME) : "object";
     };
     const list = matches.map((o) => `\`${o.id}\` (${containerOf(o.id)})`).join(", ");
     return {
@@ -106,7 +106,7 @@ export function resolveClusterRef<T extends ClusterRefFields>(
   if (hit) return { hit };
   const known = snapshot.clusters.map((c) => inlineOr(c.slug, NO_NAME)).join(", ") || "none";
   return {
-    fail: err(`No cluster ${inlineOr(ref, NO_NAME)}. Known clusters: ${known}.`),
+    fail: err(`No ontology ${inlineOr(ref, NO_NAME)}. Known ontologies: ${known}.`),
   };
 }
 
@@ -177,11 +177,11 @@ export function renderObject(
   const nameOf = (id: string) =>
     snapshot.objects[id] ? inlineOr(snapshot.objects[id].name, NO_NAME) : `\`${id}\``;
   // ⚠ What the object IS = its container's NAME (column, or the object it is
-  // nested in) — member-typed like any other. Only the "column" fallback is ours.
+  // nested in) — member-typed like any other. Only the "object" fallback is ours.
   const container = Object.values(snapshot.objects).find((o) =>
     o.childIds.includes(object.id)
   );
-  const kindLabel = container?.name ? inlineOr(container.name, NO_NAME) : "column";
+  const kindLabel = container?.name ? inlineOr(container.name, NO_NAME) : "object";
   const lines: string[] = [];
   if (headline) lines.push(headline, "");
   lines.push(`# ${inlineOr(object.name, NO_NAME)} (${kindLabel} · id: \`${object.id}\`)`);

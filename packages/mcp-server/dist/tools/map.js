@@ -39,7 +39,7 @@ const NO_NAME = "`(unnamed)`";
  * description, and both name the authoritative alternative.
  */
 const MAP_DESCRIPTION = (0, tool_style_1.composeDescription)({
-    headline: "Routing manifest of this workspace: ACTIVE, caller-visible knowledge bases, skills and ontology clusters, one line each, with handles.",
+    headline: "Routing manifest of this workspace: ACTIVE, caller-visible knowledge bases, skills and ontologies, one line each, with handles.",
     policy: "Read-only. No parameters.",
     routing: [
         'Use dopl_members(op="access_matrix") for the inventory across status and visibility.',
@@ -114,7 +114,7 @@ function registerMapTool(register, client) {
         }
         if (activeSkills.length === 0)
             lines.push("_None._");
-        lines.push("", `## Ontology (${ontology.clusters.length} clusters) — dopl_ontology`);
+        lines.push("", `## Ontology (${ontology.clusters.length}) — dopl_ontology`);
         for (const c of ontology.clusters) {
             const columns = c.columnIds
                 .map((id) => ontology.objects[id]?.name)
@@ -122,7 +122,7 @@ function registerMapTool(register, client) {
                 .map((n) => (0, narration_1.inlineOr)(n, NO_NAME))
                 .join(", ");
             const purpose = c.purpose ? ` — ${(0, narration_1.inlineOr)(c.purpose, "")}` : "";
-            lines.push(`- ${(0, narration_1.inlineOr)(c.name, NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (columns: ${columns})` : ""}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(c.name, NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`);
         }
         if (ontology.clusters.length === 0)
             lines.push("_None._");
@@ -131,7 +131,7 @@ function registerMapTool(register, client) {
         // Wording lives in `ontology-clipped.ts` — ⚠ do not send a clipped reader
         // to `dopl_ontology(op="resolve"|"get")`: both read under the SAME ceiling.
         if (ontology.truncated) {
-            lines.push((0, ontology_clipped_1.clippedNote)("the clusters above are a prefix and not the set"));
+            lines.push((0, ontology_clipped_1.clippedNote)("the ontologies above are a prefix and not the set"));
         }
         // One footer line, not two — the partial-read notice PREFIXES the scope
         // note. On the healthy path `notice()` is "" and this is the note alone.

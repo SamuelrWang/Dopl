@@ -25,7 +25,7 @@ const NO_NAME = "`(unnamed)`";
  * and objects with no membership are in the snapshot and are NOT rendered — so
  * nothing may tell an agent `op="map" shows everything`.
  */
-const MAP_SCOPE_NOTE = `_Clusters and their columns, with each column's DIRECT members only. Objects nested deeper, and objects belonging to no column, are not shown here; trashed clusters and objects are not shown by any read. Reach the rest with op="resolve" / op="get"._`;
+const MAP_SCOPE_NOTE = `_Ontologies and their objects, with each object's DIRECT items only. Items nested deeper, and items belonging to no object, are not shown here; trashed ontologies and objects are not shown by any read. Reach the rest with op="resolve" / op="get"._`;
 /** `opResolve`'s hard cap. It rendered no notice of its own truncation. */
 const RESOLVE_CAP = 20;
 /**
@@ -53,8 +53,8 @@ async function opMap(client, format) {
         // ⚠ "The graph is empty" is an assertion a CLIPPED read never established —
         // a workspace can hit the object ceiling with no cluster rows in hand.
         return (0, respond_1.ok)(snapshot.truncated
-            ? `No ontology clusters came back on this read.\n\n${(0, ontology_clipped_1.clippedNote)("an empty result here is not evidence of an empty graph")}`
-            : `No ontology clusters yet — the graph is empty. Start one with op="create_cluster".`);
+            ? `No ontologies came back on this read.\n\n${(0, ontology_clipped_1.clippedNote)("an empty result here is not evidence of an empty graph")}`
+            : `No ontologies yet — the graph is empty. Start one with op="create_cluster".`);
     }
     const lines = [];
     for (const c of snapshot.clusters) {
@@ -76,7 +76,7 @@ async function opMap(client, format) {
     // CHOOSES not to render — a different fact from the read stopping short, and
     // a reader must not take the first as covering the second.
     if (snapshot.truncated) {
-        lines.push((0, ontology_clipped_1.clippedNote)("the clusters and columns above are a prefix and not the set"), "");
+        lines.push((0, ontology_clipped_1.clippedNote)("the ontologies and objects above are a prefix and not the set"), "");
     }
     if (!(0, response_size_1.isConcise)(format)) {
         lines.push(`Drill in with op="get" (object id or exact name).`);
@@ -124,12 +124,12 @@ async function opResolve(client, query, format) {
         // objects in no column, exactly the set an agent that struck out on resolve
         // is hunting for. A miss over a CLIPPED prefix is a false negative that
         // reads as a fact.
-        return (0, respond_1.ok)(`No object's name or subtitle contains ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the clusters and their columns (two levels, not the whole graph).${clipped}`);
+        return (0, respond_1.ok)(`No object's name or subtitle contains ${(0, narration_1.inlineOr)(query, "`(unreadable query)`")}. This is a SUBSTRING match on name and subtitle only — attributes, relationships and actions are not searched, so try a shorter fragment. op="map" lists the ontologies and their objects (two levels, not the whole graph).${clipped}`);
     }
     const containerOf = (id) => {
         // ⚠ The "kind" is the containing OBJECT'S NAME — member-typed.
         const name = Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name;
-        return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "column";
+        return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "object";
     };
     const shown = hits.slice(0, RESOLVE_CAP);
     const lines = shown.map((o) => {

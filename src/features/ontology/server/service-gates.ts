@@ -130,7 +130,7 @@ export async function admittedObjectIds(
 }
 
 function clusterNotFound(): HttpError {
-  return HttpError.notFound("Cluster not found");
+  return HttpError.notFound("Ontology not found");
 }
 
 function objectNotFound(): HttpError {

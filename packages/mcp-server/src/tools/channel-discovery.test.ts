@@ -133,7 +133,7 @@ describe("dopl_map names the destination it cannot list", () => {
     for (const heading of [
       "## Knowledge bases (0)",
       "## Skills (0)",
-      "## Ontology (0 clusters)",
+      "## Ontology (0)",
     ]) {
       expect(text).toContain(heading);
     }

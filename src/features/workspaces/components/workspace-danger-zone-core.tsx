@@ -77,7 +77,7 @@ export function WorkspaceDangerZoneCore({
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete this workspace?"
-        description={`This permanently deletes “${workspace.name}” and every cluster, knowledge base, skill, and chat inside it. This can't be undone.`}
+        description={`This permanently deletes “${workspace.name}” and every ontology, knowledge base, skill, and chat inside it. This can't be undone.`}
         confirmLabel="Delete permanently"
         destructive
         onConfirm={handleDelete}

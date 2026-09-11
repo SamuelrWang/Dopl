@@ -269,7 +269,7 @@ export function useOntology(
               name: cluster.name || "Untitled",
               purpose: cluster.purpose,
             })
-            .catch((err) => reportSaveError("cluster", err))
+            .catch((err) => reportSaveError("ontology", err))
             .finally(endWrite);
         }, OBJECT_SYNC_DELAY_MS)
       );
@@ -323,7 +323,7 @@ export function useOntology(
           () => optionsRef.current.onDeleted?.(),
           (err: unknown) => {
             rollbackDelete(before, action);
-            reportSaveError("delete cluster", err);
+            reportSaveError("delete ontology", err);
           }
         );
       }

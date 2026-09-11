@@ -44,7 +44,7 @@ function newPendingId(): string {
 }
 
 /** ⚠ Shared by the optimistic row AND the POST body so they cannot drift. */
-export const NEW_CLUSTER_NAME = "New cluster";
+export const NEW_CLUSTER_NAME = "New ontology";
 /**
  * THE LANE'S BORN NAME. ⚠ **"object", NOT "column", SINCE 2026-09-11** (Samuel:
  * *"We're going to rename this from Column to Object … Untitled Object, not
@@ -201,7 +201,7 @@ export function createClusterOptimistic(
       if (plan.rollback) {
         void api.deleteCluster(plan.clusterId).catch(() => undefined);
       }
-      sink.failed("create cluster", err);
+      sink.failed("create ontology", err);
       return null;
     } finally {
       // ⚠ After `resolve`, never before: an id is real only once swapped.

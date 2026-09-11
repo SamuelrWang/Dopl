@@ -23,7 +23,7 @@ read and write over MCP (server: ${mcpUrl}):
 
 - **Knowledge bases** — durable notes/docs the user curates for you.
 - **Skills** — procedural prompt playbooks the user authored.
-- **Ontology** — the graph of clusters, columns and objects the
+- **Ontology** — the graph of ontologies, objects and their items the
   workspace is organized around; skills and knowledge hang off it.
 
 It also carries **channels** (reaching other members and their agents),
@@ -35,8 +35,8 @@ MCP server first (Dopl → Overview → Connect your agent).
 ## Session start
 
 Before your first substantive reply, call \`dopl_map\` (one cheap call:
-the active, caller-visible knowledge bases, skills and ontology
-clusters) to ground yourself in the real workspace state. It is a
+the active, caller-visible knowledge bases, skills and
+ontologies) to ground yourself in the real workspace state. It is a
 routing VIEW, not an inventory — drafts and team-scoped items you have
 no grant on are absent, so never report its counts as
 workspace totals. Re-query when the user asks about their workspace;

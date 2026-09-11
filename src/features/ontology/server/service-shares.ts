@@ -50,7 +50,7 @@ async function requireOwnCluster(
   const audience = await resolveOntologyAudience(ctx);
   const row = await repo.findClusterById(audience.workspaceIds, clusterId);
   if (!row || row.created_by !== ctx.userId) {
-    throw HttpError.notFound("Cluster not found");
+    throw HttpError.notFound("Ontology not found");
   }
   return row;
 }

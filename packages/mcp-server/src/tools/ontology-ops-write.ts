@@ -100,7 +100,7 @@ export async function dispatch(
         purpose: args.purpose,
       });
       return ok(
-        `Created cluster ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`). Add columns with op="create_column".`
+        `Created ontology ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`). Add objects with op="create_column".`
       );
     }
     case "update_cluster": {
@@ -111,7 +111,7 @@ export async function dispatch(
         name: args.name,
         purpose: args.purpose,
       });
-      return ok(`Updated cluster ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`).`);
+      return ok(`Updated ontology ${inlineOr(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`).`);
     }
     case "create_column": {
       const snapshot = await client.getOntology();
@@ -122,7 +122,7 @@ export async function dispatch(
         name: args.name as string,
       });
       return ok(
-        `Created column ${inlineOr(column.name, NO_NAME)} (id: \`${column.id}\`) in ${inlineOr(resolved.hit.name, NO_NAME)}. Add objects with op="create_object" parent="${column.id}".`
+        `Created object ${inlineOr(column.name, NO_NAME)} (id: \`${column.id}\`) in ${inlineOr(resolved.hit.name, NO_NAME)}. Add items with op="create_object" parent="${column.id}".`
       );
     }
     case "create_object": {

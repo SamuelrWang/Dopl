@@ -97,10 +97,14 @@ export function KanbanColumnHeader({
           {column.childIds.length}
         </span>
         {canEdit && (
+          // ⚠ `Add to <name>`, NOT `Add <name>` — that exact phrase is the LANE
+          // FOOT button's (`kanban-board.tsx`), and two controls doing the same
+          // thing under one accessible name is an ambiguous stop for anyone
+          // navigating by name. Same action, two places, two namings.
           <button
             type="button"
-            aria-label={`Add object to ${label}`}
-            title="Add object"
+            aria-label={`Add to ${label}`}
+            title={`Add to ${label}`}
             onClick={(e) => {
               e.stopPropagation();
               onCreateObject(column.id);

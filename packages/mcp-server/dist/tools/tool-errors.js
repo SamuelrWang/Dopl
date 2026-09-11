@@ -171,7 +171,7 @@ exports.MEMBERS_ERRORS = [
 exports.ONTOLOGY_ERRORS = [
     notFound("object_not_found", "object", 'op="resolve"'),
     versionConflict('op="get"'),
-    notFound("cluster_not_found", "cluster", 'op="map"'),
+    notFound("cluster_not_found", "ontology", 'op="map"'),
 ];
 exports.AGENT_ERRORS = [
     notFound("template_not_found", "template", 'op="list"'),

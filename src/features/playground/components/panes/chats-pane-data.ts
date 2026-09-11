@@ -227,7 +227,7 @@ export const DEMO_CHATS: PaneChat[] = [
     id: "map",
     title: "Mapping the workspace ontology",
     overview:
-      "An agent session walking the ontology clusters with dopl_map, linking the caller's anchor object, and filing two new objects it found in the codebase.",
+      "An agent session walking the ontologies with dopl_map, linking the caller's anchor object, and filing two new objects it found in the codebase.",
     shortDate: "Aug 13",
     fullDate: "Aug 13, 2026",
     source: "Claude Code",
@@ -241,12 +241,12 @@ export const DEMO_CHATS: PaneChat[] = [
       {
         role: "user",
         summary:
-          "Asked the agent to survey the workspace ontology and report which clusters were still empty.",
+          "Asked the agent to survey the workspace ontology and report which objects were still empty.",
       },
       {
         role: "agent",
         summary:
-          "Ran dopl_map, walked each cluster, filed two new objects it found in the repo, linked them to the caller's anchor, and exported this session so the next agent starts from the map.",
+          "Ran dopl_map, walked each ontology, filed two new objects it found in the repo, linked them to the caller's anchor, and exported this session so the next agent starts from the map.",
       },
     ],
   }),

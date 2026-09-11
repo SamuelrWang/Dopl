@@ -100,7 +100,7 @@ Two habits make every session compound instead of evaporate.
 
 ## Open: \`dopl_map\`
 
-The first call of a session is \`dopl_map\`. It returns a compact manifest — the knowledge bases, skills, ontology clusters, and recent chats — so you act on what the workspace already knows instead of re-deriving it. If the map hints at a relevant skill or entry, open it before improvising.
+The first call of a session is \`dopl_map\`. It returns a compact manifest — the knowledge bases, skills, ontologies, and recent chats — so you act on what the workspace already knows instead of re-deriving it. If the map hints at a relevant skill or entry, open it before improvising.
 
 ## Close: \`dopl_chats\` op=\`export\`
 
@@ -121,16 +121,16 @@ Ask: *if a teammate's agent read only this export, could it pick up where I left
           title: "Building the ontology",
           entryType: "doc",
           excerpt:
-            "Objects, not documents. Short attributes, template fields on columns, refs and edges over prose. When something is an object vs a KB entry.",
+            "Items, not documents. Short attributes, template fields on objects, refs and edges over prose. When something is an object vs a KB entry.",
           body: `# Building the ontology
 
-The ontology is a graph of **objects** — the things your work is about (people, accounts, projects, surfaces) — grouped into **clusters**, arranged in **columns**. It is not a place for prose. Prose goes in Knowledge; the ontology holds structure.
+An **ontology** is a graph of **objects** — the things your work is about (people, accounts, projects, surfaces) — each object holding its **items**. It is not a place for prose. Prose goes in Knowledge; the ontology holds structure.
 
 ## The house style
 
 - **Objects, not documents.** If you're writing paragraphs, it belongs in a KB entry, and the object should *reference* that entry — not inline it.
 - **Short attributes.** An attribute is a labelled field: \`text\`, \`pill\`, a \`ref\` to another object, a \`knowledge\` link to KB entries, or a \`skill\` link. Keep values tight — a phrase, not an essay.
-- **Template fields on columns.** A column is itself an object; set its \`template\` fields and every new card born in that column inherits them as empty attributes ready to fill. Consistency for free.
+- **Template fields on objects.** An object is a TYPE; set its \`template\` fields and every new item born in it inherits them as empty attributes ready to fill. Consistency for free.
 - **Refs and edges over prose.** A labelled relationship ("account" —owned by→ "rep") captures a connection that a sentence would only describe. The connections are the value.
 
 ## Object or KB entry?

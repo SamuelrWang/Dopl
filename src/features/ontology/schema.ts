@@ -15,7 +15,7 @@ import { ONTOLOGY_LEVELS } from "./types";
  * fence beside an open gate. `purpose`, `subtitle`, method descriptions and
  * text attribute values are prose and stay prose.
  */
-const OntologyClusterNameSchema = safeLabel("Cluster name", 200);
+const OntologyClusterNameSchema = safeLabel("Ontology name", 200);
 const OntologyObjectNameSchema = safeLabel("Object name", 300);
 
 const attributeValueSchema = z.discriminatedUnion("kind", [
@@ -83,7 +83,7 @@ export const OntologyObjectCreateSchema = z
     name: OntologyObjectNameSchema,
   })
   .refine((v) => Boolean(v.clusterId) !== Boolean(v.parentObjectId), {
-    message: "Provide exactly one of clusterId (new column) or parentObjectId (new card)",
+    message: "Provide exactly one of clusterId (new object) or parentObjectId (new card)",
   });
 export type OntologyObjectCreateInput = z.infer<typeof OntologyObjectCreateSchema>;
 

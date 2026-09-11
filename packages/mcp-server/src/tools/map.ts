@@ -43,7 +43,7 @@ const NO_NAME = "`(unnamed)`";
  */
 const MAP_DESCRIPTION = composeDescription({
   headline:
-    "Routing manifest of this workspace: ACTIVE, caller-visible knowledge bases, skills and ontology clusters, one line each, with handles.",
+    "Routing manifest of this workspace: ACTIVE, caller-visible knowledge bases, skills and ontologies, one line each, with handles.",
   policy: "Read-only. No parameters.",
   routing: [
     'Use dopl_members(op="access_matrix") for the inventory across status and visibility.',
@@ -124,7 +124,7 @@ export function registerMapTool(register: RegisterTool, client: DoplClient): voi
     }
     if (activeSkills.length === 0) lines.push("_None._");
 
-    lines.push("", `## Ontology (${ontology.clusters.length} clusters) — dopl_ontology`);
+    lines.push("", `## Ontology (${ontology.clusters.length}) — dopl_ontology`);
     for (const c of ontology.clusters) {
       const columns = c.columnIds
         .map((id) => ontology.objects[id]?.name)
@@ -133,7 +133,7 @@ export function registerMapTool(register: RegisterTool, client: DoplClient): voi
         .join(", ");
       const purpose = c.purpose ? ` — ${inlineOr(c.purpose, "")}` : "";
       lines.push(
-        `- ${inlineOr(c.name, NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (columns: ${columns})` : ""}`
+        `- ${inlineOr(c.name, NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`
       );
     }
     if (ontology.clusters.length === 0) lines.push("_None._");
@@ -142,7 +142,7 @@ export function registerMapTool(register: RegisterTool, client: DoplClient): voi
     // Wording lives in `ontology-clipped.ts` — ⚠ do not send a clipped reader
     // to `dopl_ontology(op="resolve"|"get")`: both read under the SAME ceiling.
     if (ontology.truncated) {
-      lines.push(clippedNote("the clusters above are a prefix and not the set"));
+      lines.push(clippedNote("the ontologies above are a prefix and not the set"));
     }
 
     // One footer line, not two — the partial-read notice PREFIXES the scope

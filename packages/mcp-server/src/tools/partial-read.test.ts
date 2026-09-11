@@ -128,7 +128,7 @@ describe("dopl_map names the domains it could not read", () => {
         "## Skills (1) — dopl_skill",
         "- `Ship it` `ship-it` — `When shipping.`",
         "",
-        "## Ontology (0 clusters) — dopl_ontology",
+        "## Ontology (0) — dopl_ontology",
         "_None._",
         "",
         '_Scope: ACTIVE items visible to you. Draft skills and team-scoped items you have no grant on are not listed, so these counts are not workspace totals; a domain that could not be read is named with reason=partial_read opening this line, so with no such notice every section above was read. Authoritative inventory across every status and visibility: dopl_members(op="access_matrix")._',

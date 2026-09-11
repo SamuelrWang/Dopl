@@ -269,8 +269,8 @@ export function registerSearchTool(
           c.childIds.includes(id),
         )?.name;
         // ⚠ Container name is another object's member-typed name — only the
-        // "column" fallback is ours.
-        return name ? inlineOr(name, NO_NAME) : "column";
+        // "object" fallback is ours.
+        return name ? inlineOr(name, NO_NAME) : "object";
       };
       for (const o of objectHits) {
         const subtitle = o.subtitle ? ` — ${inlineOr(o.subtitle, "")}` : "";

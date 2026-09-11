@@ -28,7 +28,7 @@ export function DeleteClusterDialog({
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Delete cluster?"
+      title="Delete ontology?"
       description={deleteClusterMessage(
         cluster.name,
         clusterObjectIds(graph, cluster.id).length
@@ -43,7 +43,7 @@ export function DeleteClusterDialog({
 /** Confirm copy: names the cluster + how many objects go with it (columns +
  *  nested cards). `count` = the same cascade set the server deletes. */
 function deleteClusterMessage(name: string, count: number): string {
-  const label = name || "this cluster";
+  const label = name || "this ontology";
   if (count === 0) {
     return `This permanently deletes "${label}". This can't be undone.`;
   }

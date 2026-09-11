@@ -43,6 +43,10 @@ function reachable(ontologies) {
 // the EXACT call. ⚠ The `workspace` clause is printed only when the id is known
 // — `dopl_ontology` takes `workspace=` on every op (INVARIANTS §10), and a call
 // shape with a blank argument in it is a call the agent cannot make.
+// ⚠ `cluster "<id>"` IS THE ARGUMENT NAME, NOT THE READER'S WORD. The 2026-09-11
+// vocabulary ruling (INVARIANTS §4A) respells every string a person or an agent
+// READS — but this one is a CALL SHAPE, and `dopl_ontology`'s parameter is
+// `cluster`. Respelling it hands the agent a call it cannot make.
 function ontologyLine(o) {
   const at = o.workspaceId
     ? `cluster "${o.id}", workspace "${o.workspaceId}"`
@@ -73,7 +77,7 @@ function ontologyReachLines(ctx) {
     '',
     'ONTOLOGIES YOU CAN REACH IN THIS CHANNEL:',
     ...list.map(ontologyLine),
-    'These are your operator\'s ontologies, LENT into this channel — one object, not a copy, so an',
+    'These are your operator\'s ontologies, LENT into this channel — one row, not a copy, so an',
     'edit you make is seen by everyone it is lent to. The level above is enforced on the server and',
     'bounds what you may do NEXT; it does not retract anything already in this window. An ontology',
     'that is not named here is one this session does not reach: do not go looking for it.',

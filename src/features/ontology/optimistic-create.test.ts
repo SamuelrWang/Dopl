@@ -143,7 +143,7 @@ describe("createClusterOptimistic — rollback", () => {
     // Column + card go with the cluster, else a ghost tab survives (F-031).
     expect(h.board).toEqual(EMPTY_GRAPH);
     expect(h.deletedClusters).toEqual(["cluster-real"]);
-    expect(h.failures).toEqual([{ what: "create cluster", err: boom }]);
+    expect(h.failures).toEqual([{ what: "create ontology", err: boom }]);
     expect(h.pending.size).toBe(0);
     expect(h.writesInFlight).toBe(0);
     expect(h.writeEnds).toBe(1);

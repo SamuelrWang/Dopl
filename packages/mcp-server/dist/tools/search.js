@@ -231,8 +231,8 @@ function registerSearchTool(register, client, directory, charge) {
         const containerOf = (id) => {
             const name = Object.values(ontology.objects).find((c) => c.childIds.includes(id))?.name;
             // ⚠ Container name is another object's member-typed name — only the
-            // "column" fallback is ours.
-            return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "column";
+            // "object" fallback is ours.
+            return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "object";
         };
         for (const o of objectHits) {
             const subtitle = o.subtitle ? ` — ${(0, narration_1.inlineOr)(o.subtitle, "")}` : "";

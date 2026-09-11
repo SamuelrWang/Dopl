@@ -174,7 +174,7 @@ const DEMO_SKILLS: DemoSkill[] = [
     id: "author-the-ontology",
     name: "Author the ontology",
     description:
-      "Models things and their connections as objects — short attributes, template fields on columns, refs and edges over prose.",
+      "Models things and their connections as objects — short attributes, template fields on objects, refs and edges over prose.",
     folder: "Dopl",
     updated: "Aug 8",
     body: (
@@ -190,12 +190,12 @@ const DEMO_SKILLS: DemoSkill[] = [
           <Code>knowledge</Code> attribute. Make an object only for a discrete
           thing with attributes and links.
         </P>
-        <H2>Step 2 — Create in a column</H2>
+        <H2>Step 2 — Create in an object</H2>
         <P>
-          Objects live in columns inside a cluster (<Code>dopl_ontology</Code>{" "}
+          Items live in objects inside an ontology (<Code>dopl_ontology</Code>{" "}
           op=<Code>create_cluster</Code> / <Code>create_column</Code> /{" "}
-          <Code>create_object</Code>). Set the column&apos;s{" "}
-          <Code>template</Code> fields so every new card inherits sensible
+          <Code>create_object</Code>). Set the object&apos;s{" "}
+          <Code>template</Code> fields so every new item inherits sensible
           empty attributes.
         </P>
         <H2>Step 3 — Attributes short, refs explicit</H2>

@@ -63,7 +63,7 @@ export function OntologyPane() {
     return (
       <div className="page-float flex flex-col antialiased">
         <p className="m-auto text-lead text-text-secondary">
-          No ontology yet — ask your agent to create the first cluster.
+          No ontology yet — ask your agent to create the first one.
         </p>
       </div>
     );
@@ -92,7 +92,7 @@ export function OntologyPane() {
           ))}
           <button
             type="button"
-            aria-label="New cluster"
+            aria-label="New ontology"
             className="flex h-[27px] w-[27px] items-center justify-center rounded-full text-text-muted transition hover:text-text-primary"
           >
             <Plus size={12} />
@@ -108,8 +108,8 @@ export function OntologyPane() {
         </div>
         <button
           type="button"
-          aria-label="Delete cluster"
-          title="Delete cluster"
+          aria-label="Delete ontology"
+          title="Delete ontology"
           className="btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
         >
           <Trash2 size={11} />
@@ -118,7 +118,7 @@ export function OntologyPane() {
           type="button"
           className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
         >
-          <Plus size={12} /> Column
+          <Plus size={12} /> Object
         </button>
       </div>
 
@@ -225,7 +225,7 @@ function PaneColumnHeader({
         </button>
         <button
           type="button"
-          aria-label={`Column actions for ${lane.name}`}
+          aria-label={`Object actions for ${lane.name}`}
           onClick={(e) => e.stopPropagation()}
           className="shrink-0 rounded-md p-1 text-text-muted transition hover:bg-surface-raised-3 hover:text-text-primary"
         >

@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import type { Dispatch } from "react";
 import { pendingRow } from "@/shared/ui/pending";
 import type { GraphAction, GraphState } from "../graph-state";
+import { NEW_COLUMN_NAME } from "../optimistic-create";
 import type { OntologyCluster, OntologyObject } from "../types";
 import { KanbanCard } from "./kanban-card";
 import { KanbanColumnHeader } from "./kanban-column-header";
@@ -24,9 +25,9 @@ interface Props {
 }
 
 /**
- * The cluster as lanes of object cards. Each lane is an inset panel: header
- * card (the column — name edits in place, kebab opens it in the editor panel),
- * then its children, then the add button. The lane supplies its own gray; the
+ * The ontology as lanes of item cards. Each lane is an OBJECT: header card (the
+ * object type — name edits in place, kebab opens it in the editor panel), then
+ * its items, then the add button. The lane supplies its own gray; the
  * board behind it is the page surface.
  */
 export function KanbanBoard({
@@ -100,6 +101,8 @@ function Column({
   onSelect: (id: string) => void;
   onCreateObject: (columnId: string) => void;
 }) {
+  /** `+ Lead` once named; `+ Untitled object` while the lane still is not. */
+  const addLabel = col.name || NEW_COLUMN_NAME;
   return (
     // ⚠ Pending column takes its whole lane inert: header inputs, menu and add
     // button all address an id the server hasn't minted yet.
@@ -140,13 +143,24 @@ function Column({
         {canEdit && (
           // Hugs the left corner AFTER the last card, not filling the lane:
           // it is the next row in the list, not a footer.
+          //
+          // ⚠ **THE LABEL IS THE OBJECT'S OWN NAME** (Samuel, 2026-09-11: *"Once
+          // the user has named the object, it should say 'the bunch + name of the
+          // object' … instead of '+ untitled columns'"*) — the button adds an ITEM
+          // of this object type, so it reads `+ Lead`, and only an unnamed lane
+          // falls back to the lane's born name (`NEW_COLUMN_NAME`, "Untitled
+          // object"). It was a bare `Add`, which said nothing about what it made.
+          // ⚠ `min-w-0` + `truncate` because the label is user text in a fixed
+          // `w-72` lane: a long object name must ellipsise INSIDE the pill rather
+          // than widen it past the lane it sits in.
           <button
             type="button"
             onClick={() => onCreateObject(col.id)}
-            aria-label={`Add object to ${col.name || "untitled object"}`}
-            className="btn-light flex shrink-0 items-center gap-1 self-start rounded-md px-2.5 py-1.5 text-small font-medium text-text-primary"
+            aria-label={`Add ${addLabel}`}
+            className="btn-light flex min-w-0 max-w-full shrink-0 items-center gap-1 self-start rounded-md px-2.5 py-1.5 text-small font-medium text-text-primary"
           >
-            <Plus size={12} /> {col.name || "Add"}
+            <Plus size={12} className="shrink-0" />
+            <span className="min-w-0 truncate">{addLabel}</span>
           </button>
         )}
       </div>

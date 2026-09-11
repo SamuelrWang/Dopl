@@ -93,7 +93,7 @@ If an ontology object relates to this entry, point that object's \`knowledge\` a
       slug: SEED_SKILL_SLUGS.authorOntology,
       name: "Author the ontology",
       description:
-        "Models things and their connections as objects — short attributes, template fields on columns, refs and edges over prose.",
+        "Models things and their connections as objects — short attributes, template fields on objects, refs and edges over prose.",
       whenToUse:
         "You need to represent a thing (person, account, project, surface) and how it connects to others, or the graph has drifted from reality.",
       whenNotToUse:
@@ -105,9 +105,9 @@ If an ontology object relates to this entry, point that object's \`knowledge\` a
 
 If you're about to write prose, stop — it belongs in a KB entry, and the object should *reference* it with a \`knowledge\` attribute. Make an object only for a discrete thing with attributes and links.
 
-## Step 2 — Create in a column
+## Step 2 — Create in an object
 
-Objects live in columns inside a cluster (\`dopl_ontology\` op=\`create_cluster\` / \`create_column\` / \`create_object\`). Set the column's \`template\` fields with \`op=set_template_field\` so every new card inherits sensible empty attributes.
+Items live in objects inside an ontology (\`dopl_ontology\` op=\`create_cluster\` / \`create_column\` / \`create_object\` — the op NAMES are the code's, the words are yours). Set the object's \`template\` fields with \`op=set_template_field\` so every new item inherits sensible empty attributes.
 
 ## Step 3 — Attributes short, refs explicit
 

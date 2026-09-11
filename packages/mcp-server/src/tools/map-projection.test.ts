@@ -77,7 +77,7 @@ describe("dopl_map asks for the cheap projection", () => {
     );
     expect(fat).toBe(lean);
     expect(lean).toContain("`Dopl Playbook`");
-    expect(lean).toContain("(columns: `Surfaces`)");
+    expect(lean).toContain("(objects: `Surfaces`)");
   });
 });
 

@@ -67,7 +67,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 name: args.name,
                 purpose: args.purpose,
             });
-            return (0, respond_1.ok)(`Created cluster ${(0, narration_1.inlineOr)(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`). Add columns with op="create_column".`);
+            return (0, respond_1.ok)(`Created ontology ${(0, narration_1.inlineOr)(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`). Add objects with op="create_column".`);
         }
         case "update_cluster": {
             const snapshot = await client.getOntology();
@@ -78,7 +78,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 name: args.name,
                 purpose: args.purpose,
             });
-            return (0, respond_1.ok)(`Updated cluster ${(0, narration_1.inlineOr)(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`).`);
+            return (0, respond_1.ok)(`Updated ontology ${(0, narration_1.inlineOr)(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`).`);
         }
         case "create_column": {
             const snapshot = await client.getOntology();
@@ -89,7 +89,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 clusterId: resolved.hit.id,
                 name: args.name,
             });
-            return (0, respond_1.ok)(`Created column ${(0, narration_1.inlineOr)(column.name, NO_NAME)} (id: \`${column.id}\`) in ${(0, narration_1.inlineOr)(resolved.hit.name, NO_NAME)}. Add objects with op="create_object" parent="${column.id}".`);
+            return (0, respond_1.ok)(`Created object ${(0, narration_1.inlineOr)(column.name, NO_NAME)} (id: \`${column.id}\`) in ${(0, narration_1.inlineOr)(resolved.hit.name, NO_NAME)}. Add items with op="create_object" parent="${column.id}".`);
         }
         case "create_object": {
             const snapshot = await client.getOntology();

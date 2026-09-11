@@ -201,7 +201,7 @@ const LEDGER: FilteredOp[] = [
     op: "map",
     filter: "opMap walks clusters -> columns -> one level of childIds and stops",
     proof: "for (const columnId of c.columnIds)",
-    discloses: ["TWO LEVELS ONLY", "no column"],
+    discloses: ["TWO LEVELS ONLY", "no object"],
   },
   {
     tool: "dopl_ontology",

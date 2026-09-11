@@ -35,6 +35,8 @@
 
 ## §1 Vocabulary
 
+⚠ **ADDENDUM 2026-09-11 (Samuel's wording ruling), AND IT IS THE READER'S HALF OF THIS SECTION:** **cluster = ontology, column = object (an object TYPE), card = item — and the code keeps the old identifiers.** `clusterId`, `CLUSTER_ADD`, `ontology_clusters`, the `create_column` MCP op and every DB column are unchanged; only strings a person or an agent reads were respelled. INVARIANTS §4A carries the rule and names its gate (`src/features/ontology/vocabulary.test.ts`).
+
 - **ONTOLOGY** = one `ontology_clusters` row. 📌 **ASSUMPTION A1**: Samuel's "multiple ontologies" maps onto the existing CLUSTER, not a new container — a cluster is already the addressable board (`src/features/ontology/components/ontology-view.tsx › OntologyView`, one cluster per page).
 - **HOME SPACE** = the owner's `kind='personal'` container (INVARIANTS §4A); a **home ontology** is a cluster whose `workspace_id` is that container. 📌 **ASSUMPTION A2**: therefore `supabase/migrations/20260920120000_workspace_kind_personal.sql` and `20260923120000_drop_home_scoped.sql` are PRECONDITIONS of this wave. Applied is a MEASUREMENT joined on the migration NAME, never the filename (INVARIANTS §12).
 - **HOME CHANNEL** = the one channel in a `kind='link'` container. **SOLO** = one active member; **SHARED** = two or more. **OWNER** = the cluster's `created_by`; **MEMBER** / **GUEST** = a person in the channel at `member`+ / at `guest` (`src/features/workspaces/types.ts › Role`).
