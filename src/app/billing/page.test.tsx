@@ -13,6 +13,11 @@
  * destination. The personal container also became a PICKER ROW in the same
  * wave — the "omits containers" pin below inverted for `personal` and holds for
  * `link`, which still carries no plan.
+ *
+ * 🔒 **AND "ASK EVERYONE ELSE" GAINED ITS ONE EXCEPTION ON 2026-09-10:** a caller
+ * with NO standard workspace is forwarded to their home space, plan named or not.
+ * That is not a return of the guess — see the block that pins it, which is
+ * deliberately written in the `?plan=`-less shape the other forward cannot reach.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -153,6 +158,98 @@ describe("`?plan=pro` — the personal-container forward", () => {
     mocks.listMyWorkspacesWithRole.mockResolvedValue([ws()]);
     const html = await outcome({ plan: "pro" });
     expect(html).not.toContain("REDIRECT:");
+    expect(html).toContain("Acme");
+  });
+});
+
+/**
+ * 🔒 **THE HOME-ONLY USER — THE DEAD END THIS PAGE HAD FOR THEM (2026-09-10).**
+ *
+ * A person who has never made a workspace owns ONE billable page: their own home
+ * space. The picker rendered it as a single row under the heading "Which space?"
+ * — a question with one answer — and the caller this page exists for is an MCP
+ * agent following a 402 `upgrade_url` literally, which for an intent-only
+ * envelope (`?billing=upgrade`, no `?plan=`) has nothing to forward on.
+ *
+ * ⚠ **THE `?plan=pro` CASES ABOVE DO NOT COVER THIS AND THAT IS WHY THESE EXIST.**
+ * They prove a NAMED plan forwards; these prove the forward happens with no plan
+ * named at all, which is the shape every seat-shaped envelope arrives in.
+ */
+describe("🔒 no standard workspace → the PERSONAL plan, not the picker", () => {
+  beforeEach(() => {
+    // Home-only: nothing owned, nothing to disambiguate.
+    mocks.findSoleOwnedStandardWorkspace.mockResolvedValue({
+      workspace: null,
+      count: 0,
+    });
+    mocks.listMyWorkspacesWithRole.mockResolvedValue([
+      ws({
+        id: "ws-home",
+        name: "Home",
+        slug: "personal",
+        publicId: "222222222222",
+        kind: "personal",
+      }),
+    ]);
+  });
+
+  it("forwards a bare visit to the personal container", async () => {
+    expect(await outcome()).toBe("REDIRECT:/billing/personal-222222222222");
+  });
+
+  it("🔒 forwards an intent-only 402 envelope — the one with NO `?plan=`", async () => {
+    // ⚠ THE CASE THE `?plan=pro` FORWARD CANNOT REACH. `upgradeUrl()` with no
+    // argument is what every seat-shaped refusal renders, and a personal burn can
+    // land on it too through the member-limit gates.
+    expect(await outcome({ billing: "upgrade" })).toBe(
+      "REDIRECT:/billing/personal-222222222222?billing=upgrade"
+    );
+  });
+
+  it("carries the whole query, post-payment params included", async () => {
+    expect(await outcome({ billing: "success", session_id: "cs_1" })).toBe(
+      "REDIRECT:/billing/personal-222222222222?billing=success&session_id=cs_1"
+    );
+  });
+
+  it("a LINK container is not a destination — it carries no plan", async () => {
+    // ⚠ Only `personal` is forwarded to. A caller holding link containers and
+    // nothing else still sees the "not in one yet" page rather than a billing
+    // page for a relationship.
+    mocks.listMyWorkspacesWithRole.mockResolvedValue([
+      ws({
+        id: "ws-link",
+        name: "Link",
+        slug: "link",
+        publicId: "111111111111",
+        kind: "link",
+      }),
+    ]);
+    const html = await outcome();
+    expect(html).not.toContain("REDIRECT:");
+    expect(html).toContain("not in one yet");
+  });
+
+  it("⚠ and a caller WITH workspaces still gets the picker, personal row included", async () => {
+    // The forward is "one candidate", not "prefer personal": the moment there is
+    // a second page to pick, the ask comes back.
+    mocks.findSoleOwnedStandardWorkspace.mockResolvedValue({
+      workspace: null,
+      count: 2,
+    });
+    mocks.listMyWorkspacesWithRole.mockResolvedValue([
+      ws(),
+      ws({
+        id: "ws-home",
+        name: "Home",
+        slug: "personal",
+        publicId: "222222222222",
+        kind: "personal",
+      }),
+    ]);
+    const html = await outcome();
+    expect(html).not.toContain("REDIRECT:");
+    expect(html).toContain("/billing/personal-222222222222");
     expect(html).toContain("Acme");
   });
 });

@@ -16,11 +16,19 @@
  * sole-owned-workspace forward, or a one-workspace user asking for Pro would land on their
  * workspace's billing page and be refused by the checkout route.
  *
- * ⚠ **THE PERSONAL CONTAINER IS NOW A PICKER ROW, AND STILL NOT A `choices` CANDIDATE.** It carries
- * a plan of its own since §11 (`free` / `pro`), so hiding it hid a page the caller may pay on; it
- * is rendered as its own row, above the workspaces, rather than being folded into a list whose
- * every other entry is a standard workspace with a seat count. Link containers stay out — those
- * carry no plan at all.
+ * 🔒 **AND A CALLER WITH NO STANDARD WORKSPACE IS FORWARDED TO IT (2026-09-10, the new-user flow),
+ * with or without `?plan=`.** A home-only account has exactly one page it could pick, so the picker
+ * was a question with one answer — and the caller this page exists for is an MCP agent following a
+ * 402 `upgrade_url` literally, which for an intent-only envelope carries no `?plan=` to forward on.
+ * This is not the guess ruling B10 deleted: that one chose among SEVERAL candidates by age, this one
+ * is the only candidate there is.
+ *
+ * ⚠ **THE PERSONAL CONTAINER IS STILL A PICKER ROW FOR EVERYONE ELSE, AND STILL NOT A `choices`
+ * CANDIDATE.** It carries a plan of its own since §11 (`free` / `pro`), so hiding it hid a page the
+ * caller may pay on; it is rendered as its own row, above the workspaces, rather than being folded
+ * into a list whose every other entry is a standard workspace with a seat count. Link containers
+ * stay out — those carry no plan at all. Since the forward above, the row is only ever reached by a
+ * caller who ALSO has standard workspaces.
  *
  * ⚠ THE LIST IS MEMBERSHIPS, THE FORWARD IS OWNERSHIP, and the asymmetry is deliberate: only an
  * owner has a bill that can be resolved FOR them, but an admin of somebody else's workspace can
@@ -86,6 +94,20 @@ export default async function BillingWorkspacePickerPage({
   }
 
   const choices = memberships.filter(isStandardWorkspace);
+
+  // 🔒 **THE HOME-ONLY CALLER IS FORWARDED, NOT ASKED (2026-09-10, the new-user
+  // flow).** With no standard workspace there is exactly ONE page they could
+  // pick — their own home space — so the picker was a question with one answer
+  // under a heading that asked it ("Which space?"). ⚠ **AND IT WAS WORSE THAN
+  // redundant for the caller this exists for:** a 402 `upgrade_url` with no
+  // `?plan=` (the intent-only envelopes) lands here, so an agent following the
+  // link literally ended on a chooser instead of the plan it was refused by.
+  // ⚠ **THIS IS NOT THE GUESS RULING B10 DELETED.** That forward picked one of
+  // SEVERAL candidates by age; this one is the only candidate there is — the same
+  // argument `?plan=pro` above stands on, arrived at from the other side.
+  if (choices.length === 0 && personal) {
+    redirect(billingSelfPath(workspaceSegment(personal), query));
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-4 p-6">

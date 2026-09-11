@@ -272,6 +272,76 @@ describe("consumeMcpCredits — home containers", () => {
     expect(res.degraded).toBeUndefined();
   });
 
+  // ⚠ **THE HOME-ONLY USER, AND THIS IS THE CASE THE OLD MODEL LET RUN FREE**
+  // (2026-09-10, the new-user flow). A person who has never made a workspace
+  // burns inside their OWN `kind='personal'` shelf — the container `POST /api/boot`
+  // hands the SPA with no segment. Under the reroute that was
+  // `container-owner-has-no-billing-workspace`: unmetered, allowed, logged, and a
+  // whole population of exactly these accounts spending nothing. There is no
+  // `wallet: null` on this path any more, and `resolveBillingTarget`'s only
+  // remaining one is `container-has-no-active-owner`.
+  it("🔒 3b. a HOME-ONLY user's burn in their own personal shelf IS metered", async () => {
+    // ⚠ NO BILLING ROW AT ALL — a shelf nobody has paid on, i.e. the state a
+    // brand-new account is in. The `beforeEach` fixture is a live TEAM row on a
+    // DIFFERENT workspace, so leaving it in place would let a version that reads
+    // "whatever row was lying around" answer 500 by accident.
+    mockRepo.getWorkspaceBilling.mockResolvedValue(null);
+
+    const res = await consumeMcpCredits(PERSONAL_WS, {
+      userId: OWNER,
+      workspaceKind: "personal",
+    });
+
+    expect(res.allowed).toBe(true);
+    // 🔒 **CHARGED, AND `degraded` IS THE ASSERTION THAT MATTERS.** `unmetered()`
+    // also answers `allowed: true` with zeroed counters, so a version that leaked
+    // here would pass on `allowed` alone — the stamp is what separates "nothing
+    // measured" from "nothing spent" (`CreditsSummary.degraded`).
+    expect(res.degraded).toBeUndefined();
+    expect(res).toMatchObject({ wallet: "personal", limit: 500 });
+    expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
+      OWNER,
+      expect.any(String),
+      1,
+      500
+    );
+    // ⚠ THE ADDRESSED CONTAINER IS ITSELF THE BILLING ROW HERE — the one shape
+    // where it is (`credits-service.ts › consumeMcpCredits`'s `workspaceKind ===
+    // "personal" ? target.workspaceId : null`), so the row is read STRAIGHT off
+    // the addressed id and the payer→container lookup is skipped entirely.
+    expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(PERSONAL_WS);
+    expect(mockRepo.getPersonalBilling).not.toHaveBeenCalled();
+    // ⚠ AND NOTHING SEAT-SHAPED OR OWNER-SHAPED HAPPENS: a shelf has one member
+    // and its owner is the caller, so neither question is asked.
+    expect(mockFindOwner).not.toHaveBeenCalled();
+    expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("🔒 3c. …and the same user's PRO shelf meters at 5,000, off that same row", async () => {
+    // 🔒 The pair is the claim: 3b alone passes against a version that hardcodes
+    // the free allowance for every personal burn, which is the other way to make
+    // "metered" meaningless.
+    mockRepo.getWorkspaceBilling.mockResolvedValue({
+      ...billing(),
+      workspaceId: PERSONAL_WS,
+      plan: "pro",
+    });
+
+    const res = await consumeMcpCredits(PERSONAL_WS, {
+      userId: OWNER,
+      workspaceKind: "personal",
+    });
+
+    expect(res).toMatchObject({ wallet: "personal", limit: 5_000 });
+    expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
+      OWNER,
+      expect.any(String),
+      1,
+      5_000
+    );
+  });
+
   it("4. no active owner → UNMETERED and allowed, nothing charged anywhere", async () => {
     mockFindOwner.mockResolvedValue(null);
 
