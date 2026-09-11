@@ -58,9 +58,11 @@ import { HOME_CHANNEL_LIMIT } from "./service-reads";
  * is the whole face minus the histogram; the histogram is
  * `getHomeOverviewSeries` because its `metric` is a query PARAMETER the user
  * switches. The credit ALLOWANCE is neither: the page reuses
- * `GET /api/billing/status`, which is also the only place the container→payer
- * reroute is resolved (`billing/server/credits-service.ts ›
- * resolveBillingTarget`).
+ * `GET /api/billing/status`, which is also the only place the container→wallet
+ * routing is resolved (`billing/server/credits-service.ts ›
+ * resolveBillingTarget`). ⚠ That used to be a container→WORKSPACE reroute; since
+ * 2026-09-07 a home burn spends the owner's PERSONAL WALLET, so the allowance
+ * this page shows is a person's, not a workspace's.
  */
 
 /** Bars in a `24h` series — one per hour, ending on the current hour. */

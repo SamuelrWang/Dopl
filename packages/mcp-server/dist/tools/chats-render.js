@@ -75,7 +75,7 @@ function folderScopeLabel(f) {
 function hiddenNote(hiddenCount) {
     return (`_${hiddenCount} older chat${hiddenCount === 1 ? " is" : "s are"} hidden by ` +
         `this workspace's free-plan history window — nothing is deleted. ` +
-        `Upgrade to Pro to see full history._`);
+        `Upgrade to Team to see full history._`);
 }
 function formatChatLine(c) {
     const bits = [

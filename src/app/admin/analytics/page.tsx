@@ -20,7 +20,13 @@ export default async function AdminAnalyticsPage() {
             Launch Analytics
           </h1>
           <p className="text-sm text-text-secondary mt-1">
-            Funnel metrics for the $7.99/mo launch. Pulls from
+            {/* ⚠ NO PRICE IN THIS SENTENCE (2026-09-08). It read "the $7.99/mo
+                launch", which was one price when there was one paid plan and is
+                now three live figures — Team per seat, personal Pro flat, and
+                the legacy seat price one subscription is still on. MRR below is
+                computed PER ROW (`launch-metrics.ts › monthlyUsd`); a headline
+                quoting one of them contradicts the number under it. */}
+            Funnel metrics for the paid launch. Pulls from
             <code className="mx-1 rounded bg-surface-raised-3 px-1 py-0.5 text-xs">
               conversion_events
             </code>
@@ -44,7 +50,14 @@ export default async function AdminAnalyticsPage() {
       {/* Top KPI row */}
       <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
         <Kpi label="Signups" value={m.signups_total} />
-        <Kpi label="Pro workspaces" value={m.pro_workspaces} accent="emerald" />
+        {/* ⚠ **"Paying containers", NOT "Pro workspaces" (2026-09-08).**
+            `pro_workspaces` is `rows.length` over every LIVE paid row — solo,
+            team AND the new personal `pro` — so the old label now names one of
+            the three plans it counts, and the count is of CONTAINERS (a
+            personal container is not a workspace). The WIRE FIELD keeps its
+            name: it is on the shipped payload, and renaming it here would be a
+            second thing to get wrong. */}
+        <Kpi label="Paying containers" value={m.pro_workspaces} accent="emerald" />
         <Kpi
           label="MRR"
           value={`$${m.mrr_usd.toLocaleString()}`}

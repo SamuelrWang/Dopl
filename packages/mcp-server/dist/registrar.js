@@ -62,9 +62,9 @@ function createCharger(client) {
     return async function charge(workspaceId) {
         try {
             const outcome = await client.consumeCredits(workspaceId);
-            return outcome?.allowed === false
-                ? (0, respond_js_1.creditsExhausted)(outcome.upgradeUrl)
-                : null;
+            // ⚠ THE WHOLE OUTCOME, not just the URL: which WALLET stopped decides the
+            // sentence, and the counters + reset date are on the same answer.
+            return outcome?.allowed === false ? (0, respond_js_1.creditsExhausted)(outcome) : null;
         }
         catch (err) {
             console.error(`[credits] consume call failed for workspace ${workspaceId}; allowing the tool call: ${err instanceof Error ? err.message : String(err)}`);

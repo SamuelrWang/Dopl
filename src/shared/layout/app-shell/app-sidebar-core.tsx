@@ -137,9 +137,18 @@ export function AppSidebarCore({
         ))}
       </nav>
 
+      {/* ⚠ **TEAM, AND IT STAYS TEAM (checked 2026-09-08).** The personal `pro`
+          plan does not belong here: this sidebar has exactly one mount — the
+          WORKSPACE shell (`apps/desktop-ui/src/components/app-shell/
+          app-shell.tsx`), which requires a resolved `workspaceSegment` and a
+          `workspaces` row — and /home renders no sidebar at all
+          (`apps/desktop-ui/src/pages/home/index.tsx` is one panel wide). So this
+          card can only ever be read inside a standard workspace. If it ever
+          mounts on a home space, the copy and `onOpenSettings("billing")` target
+          must both become kind-aware. */}
       <div className={styles.wordsCard}>
         <div className={styles.wcTitle}>
-          <b>Pro</b> unlocks more
+          <b>Team</b> unlocks more
         </div>
         <div className={styles.wcDesc}>
           Unlimited knowledge bases, skills, and agent access across your team.
@@ -149,7 +158,7 @@ export function AppSidebarCore({
           className={styles.upgradeBtn}
           onClick={() => onOpenSettings("billing")}
         >
-          Upgrade to Pro
+          Upgrade to Team
         </button>
       </div>
 

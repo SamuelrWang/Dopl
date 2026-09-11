@@ -1,5 +1,6 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import { BILLING_STATUS, renderHome, routes } from "./home-test-harness";
@@ -78,10 +79,8 @@ describe("the /home credit capacity bar", () => {
     // has to be left of the figure printed beside it.
     expect(within(credits).getByText("290 left")).toBeInTheDocument();
     // 🔒 THE REFERENCE NUMBER IN WORDS (Samuel, 2026-09-05: "it should show 416
-    // out of 25k credits spent"). ⚠ The denominator is the PLAN'S allowance —
-    // 500 here is Starter's, off `billing/credits.ts › MONTHLY_MCP_CREDITS`,
-    // and the assertion is on the fixture's plan rather than on a literal this
-    // suite chose.
+    // out of 25k credits spent"). The denominator here is the payload's own
+    // measured `limit`; the fallback case below is what pins the constant.
     expect(
       within(credits).getByText("210 of 500 credits spent")
     ).toBeInTheDocument();
@@ -135,18 +134,29 @@ describe("the /home credit capacity bar", () => {
    * `credits-service.ts › unmetered` answers `used: 0, limit: 0, degraded: true`
    * — which printed **Not counted this period** over a month of real bars. The
    * spend comes from the ledger now, so the sentence has a number in it and the
-   * denominator falls back to the PLAN's allowance.
+   * denominator falls back to a constant.
+   *
+   * 🔒 **AND THE CONSTANT IS THE *PERSONAL* WALLET'S FREE TIER (2026-09-07;
+   * `.free` since 2026-09-08).** /home is the home space: every call it charges
+   * lands on the reader's own personal wallet, so the fallback is
+   * `billing/credits.ts › PERSONAL_MONTHLY_CREDITS` and NEVER a workspace plan's
+   * allowance, which is a different meter. ⚠ FREE is the right key for a
+   * stand-in — this arm only runs when nothing was measured, and quoting the
+   * PAID allowance to someone who may not pay is the direction that misleads.
+   * ⚠ The expectation is BUILT from the constant, so a literal re-pinned here
+   * would survive a retune and this case would not notice.
    *
    * ⚠ The period bounds are blank on that payload and the reset line stays
    * withheld — a date nobody measured must still not be invented.
    */
-  it("shows the ledger's spend when the payer never resolved", async () => {
+  it("falls back to the PERSONAL wallet allowance when the payer never resolved", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
       path.split("?")[0] === "/api/billing/status"
         ? Promise.resolve(
             ok({
               ...BILLING_STATUS,
               credits: {
+                wallet: null,
                 used: 0,
                 limit: 0,
                 remaining: 0,
@@ -162,11 +172,63 @@ describe("the /home credit capacity bar", () => {
     const credits = await panel("Usage");
 
     expect(
-      await within(credits).findByText("210 of 500 credits spent")
+      await within(credits).findByText(
+        `210 of ${PERSONAL_MONTHLY_CREDITS.free.toLocaleString()} credits spent`
+      )
     ).toBeInTheDocument();
-    expect(within(credits).getByText("290 left")).toBeInTheDocument();
+    expect(
+      within(credits).getByText(
+        `${(PERSONAL_MONTHLY_CREDITS.free - 210).toLocaleString()} left`
+      )
+    ).toBeInTheDocument();
     // ⚠ THE SENTENCE THAT MUST NOT COME BACK.
     expect(within(credits).queryByText("Not counted this period")).toBeNull();
     expect(within(credits).queryByText(/^Resets /)).toBeNull();
+  });
+
+  /**
+   * 🔒 **A FREE HOME SPACE GETS ONE WORD (Samuel, 2026-09-08, spec §11): an
+   * "Upgrade" text action on the credit bar that opens the settings modal on its
+   * billing section.** Minimal copy (INVARIANTS §5) — a label and a control, no
+   * sentence explaining what a plan is.
+   *
+   * ⚠ **THE ACTION REACHES THE MODAL WITHOUT A PROP ON THIS PAGE**
+   * (`home-settings-control.tsx › openHomeSettings`, which carries the
+   * measurement that ruled out lifting a callback through `pages/home/index.tsx`).
+   * That is why this case clicks and asserts the PANE, rather than asserting a
+   * spy: the registry is the thing that could silently go dead.
+   */
+  it("offers a one-word Upgrade that opens billing settings", async () => {
+    renderHome();
+    const credits = await panel("Usage");
+    // ⚠ `find`, not `get`: the bar is a skeleton until BOTH the billing read
+    // and the ledger series land (`overview-panels.tsx › CreditsBar`).
+    const upgrade = await within(credits).findByRole("button", {
+      name: "Upgrade",
+    });
+
+    fireEvent.click(upgrade);
+
+    // The settings modal, on its billing pane — `PlansBillingCore`'s heading.
+    expect(await screen.findByText("Plans and Billing")).toBeInTheDocument();
+  });
+
+  /**
+   * The other direction, and the one that matters more: a payer must not be
+   * shown a second checkout. ⚠ `!isPaid` is the test, not `plan === "free"` —
+   * a `past_due` payer needs the PORTAL, and a cancelled `pro` row is entitled
+   * to the free allowance and SHOULD see the offer.
+   */
+  it("hides Upgrade once the home container is actually paying", async () => {
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
+      path.split("?")[0] === "/api/billing/status"
+        ? Promise.resolve(ok({ ...BILLING_STATUS, plan: "pro", status: "active" }))
+        : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
+    );
+    renderHome();
+    const credits = await panel("Usage");
+    await within(credits).findByText(/credits spent$/);
+
+    expect(within(credits).queryByRole("button", { name: "Upgrade" })).toBeNull();
   });
 });

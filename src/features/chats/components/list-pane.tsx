@@ -63,7 +63,7 @@ interface Props {
     scope: ChatScope,
     teamIds: string[]
   ) => Promise<void>;
-  /** Chats hidden by the free-plan retention window (0 on Pro). */
+  /** Chats hidden by the free-plan retention window (0 on Team). */
   hiddenCount: number;
   /** The list read hit its ceiling — see {@link CHATS_CLIPPED_NOTE}. */
   truncated: boolean;
@@ -309,7 +309,15 @@ export function ListPane({
 /** Upgrade affordance pinned at the list bottom: free workspaces hide chats
  *  older than the retention window (never deleted). ⚠ Role-aware — non-admins
  *  get an "ask an admin" note, not a CTA, because /pricing checkout 403s for
- *  them. */
+ *  them.
+ *
+ *  ⚠ **THE REASON NAMES TEAM, AND IT STAYS TEAM (checked 2026-09-08).** The
+ *  personal `pro` plan is not offered here because this strip cannot reach a
+ *  home space: `ChatsView` has one mount, the WORKSPACE route
+ *  `/:workspaceSegment/chats` (`apps/desktop-ui/src/pages/chats/index.tsx`), and
+ *  /home's own faces render no chat list. `UpgradeModal` is kind-aware anyway
+ *  (`billing/components/upgrade-modal.tsx`), so only this `reason` sentence
+ *  would need changing if that ever stopped being true. */
 function RetentionStrip({
   hiddenCount,
   workspaceId,
@@ -350,7 +358,7 @@ function RetentionStrip({
         onOpenChange={setUpgradeOpen}
         workspaceId={workspaceId}
         canManageBilling
-        reason="Starter workspaces hide chats older than the retention window. Nothing is deleted — upgrade to Pro to restore full history."
+        reason="Starter workspaces hide chats older than the retention window. Nothing is deleted — upgrade to Team to restore full history."
       />
     </>
   );

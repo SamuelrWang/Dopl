@@ -83,7 +83,10 @@ export function useJoinRequests(workspaceSlug: string, enabled: boolean) {
     requests: enabled ? (query.data ?? []) : [],
     refresh: query.refetch,
     /** Rejects with the transport's `ApiError` so callers can still match
-     *  `SOLO_MEMBER_LIMIT` and offer the in-place Team upgrade. */
+     *  `SOLO_MEMBER_LIMIT` and offer the in-place Team upgrade. ⚠ STILL LIVE
+     *  AFTER PRO WAS RETIRED FROM SALE (2026-09-07): the 402 now arrives only
+     *  from a LEGACY Pro row, which is single-member for as long as it is
+     *  live, so the handling stays and only the copy names it as legacy. */
     resolve: (
       requestId: string,
       action: "approve" | "decline",

@@ -2796,9 +2796,26 @@
   margin: 0;
 }
 
+/* ⚠ ONE GROUP PER PRODUCT since 2026-09-08 — Personal (Free / Pro) and
+   Workspaces (Starter / Team). `pricing-content.tsx` renders two of these. */
+.lp-plan-group + .lp-plan-group {
+  margin-top: 56px;
+}
+.lp-plan-group-title {
+  font-family: var(--grotesk);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 18px;
+}
+
+/* ⚠ TWO COLUMNS, NOT THREE. It was `repeat(3, 1fr)` from the era of a Solo
+   card and left the two survivors at two-thirds width with a hole beside
+   them. */
 .lp-plans {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
   align-items: stretch;
 }

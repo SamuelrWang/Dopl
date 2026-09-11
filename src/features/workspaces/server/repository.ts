@@ -109,9 +109,10 @@ export interface SoleOwnedStandardWorkspace {
  * so a caller can name WHICH refusal (nothing to bill vs. too many) without a
  * second read.
  *
- * ⚠ TWO CALLERS, BOTH ABOUT MONEY — the Stripe grandfather path and the
- * container burn reroute. **Tenancy never calls it**: every "where am I" answer
- * is the caller's personal container.
+ * ⚠ TWO CALLERS, BOTH ABOUT MONEY — the Stripe grandfather path and `/billing`'s
+ * segment-less landing. ⚠ **IT LEFT THE CREDIT PATH 2026-09-07**: a container
+ * burn was rerouted here and now lands on the owner's PERSONAL WALLET, which
+ * needs no workspace at all.
  * ⚠ OWNERSHIP-based, diverging from active membership, and that is right for a
  * bill — the plan hangs off the owner. It MUST NOT be used for request auth.
  * ⚠ Containers are never candidates (neither kind carries a plan), through the
@@ -147,10 +148,9 @@ const OWNED_WORKSPACE_LIMIT = 200;
  * there exactly one standard row here?" — an account that owns 200 workspaces
  * is ambiguous under any prefix of them.
  *
- * ⚠ NOT a cold path: `findSoleOwnedStandardWorkspace` is on the MCP
- * credit-consume reroute, which runs once per tool call for every container
- * agent. An unbounded scan there is a per-call full read of one owner's
- * workspaces.
+ * ⚠ **A COLD PATH AGAIN SINCE 2026-09-07, AND THE BOUND STAYS.** Its reader was
+ * on the MCP credit-consume reroute — once per tool call, every container agent
+ * — and that reroute is DELETED. An unbounded owner scan still has no ceiling.
  */
 async function listWorkspacesOwnedBy(userId: string): Promise<Workspace[]> {
   const { data, error } = await supabaseAdmin()
@@ -287,9 +287,9 @@ export async function findMembership(
 
 /**
  * The workspace's ACTIVE OWNER — the `workspace_members` row at `role='owner'`,
- * not `workspaces.owner_id`. Used by the link-container billing reroute
+ * not `workspaces.owner_id`. Used by the link-container wallet routing
  * (`billing/server/credits-service.ts › resolveBillingTarget`, §4A) to find the
- * OPERATOR who pays for a burn inside a container.
+ * OPERATOR whose PERSONAL WALLET pays for a burn inside a container.
  *
  * ⚠ MEMBERSHIP IS THE SOURCE, AND THAT IS THE POINT: `workspaces.owner_id` is a
  * column nothing keeps in step with departures, while an active owner ROW is a

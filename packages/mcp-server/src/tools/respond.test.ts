@@ -2,10 +2,15 @@
  * entitlementDenied — turns an over-free-cap DoplApiError into a friendly
  * tool error (message + upgrade link surfaced verbatim), and leaves every
  * other error alone (returns null so the caller rethrows).
+ *
+ * Plus `creditsExhausted` at the UNIT seam: `credits.test.ts` drives the same
+ * function through a booted registrar and pins all four wallet sentences, and
+ * this file pins the ONE decision that moved on 2026-09-08 — the upgrade line
+ * follows `upgradeUrl`, never the wallet.
  */
 
 import { describe, it, expect } from "vitest";
-import { entitlementDenied } from "./respond.js";
+import { creditsExhausted, entitlementDenied } from "./respond.js";
 
 describe("entitlementDenied", () => {
   it("renders the message + upgrade link for an over_free_cap error", () => {
@@ -29,6 +34,23 @@ describe("entitlementDenied", () => {
     });
     expect(res?.isError).toBe(true);
     expect(res?.content[0]?.text).toBe("Over the cap.");
+  });
+
+  /**
+   * 🔒 **THE FALLBACK SENTENCE NAMES A PLAN THAT IS ON SALE FOR THE CONTAINER
+   * IT IS TALKING ABOUT.** With no `apiMessage` this layer writes the words
+   * itself, and it wrote "upgrade to Pro" while the only `pro`/`solo` plan was
+   * the retired single-member WORKSPACE one (`src/features/billing/plans.ts`;
+   * checkout still answers 400 `PLAN_RETIRED` for `solo`). ⚠ **THE 2026-09-08
+   * PERSONAL PRO TIER DOES NOT REVIVE IT HERE** — this code is a chat-history
+   * gate on a workspace and `pro` is sold ONLY on a personal container, so
+   * "Team" is still the honest remedy. An agent reads this literally.
+   */
+  it("its chat_outside_retention fallback offers TEAM, never the retired Pro", () => {
+    const res = entitlementDenied({ code: "chat_outside_retention" });
+    const text = res?.content[0]?.text ?? "";
+    expect(text).toContain("upgrade to Team");
+    expect(text).not.toMatch(/\bPro\b/);
   });
 
   it("renders the message + upgrade link for a chat_outside_retention error", () => {
@@ -79,5 +101,54 @@ describe("entitlementDenied", () => {
     expect(entitlementDenied(null)).toBeNull();
     expect(entitlementDenied("boom")).toBeNull();
     expect(entitlementDenied(new Error("plain"))).toBeNull();
+  });
+});
+
+/**
+ * ⚠ **`creditsExhausted` DECIDES THE UPGRADE LINE FROM `upgradeUrl` ALONE.**
+ * The `personal` arm dropped the link unconditionally for one wave, when the
+ * home space genuinely had nothing to sell; a personal PRO tier exists since
+ * 2026-09-08 (Samuel), and a wallet-keyed rule would now swallow the link the
+ * server is handing this function on the surface most agents run on.
+ *
+ * ⚠ These two are a PAIR and neither alone is the contract: one proves the
+ * link appears, the other proves it stays away from somebody already paying.
+ */
+describe("creditsExhausted — the personal wallet", () => {
+  const PERSONAL_PRO_URL =
+    "https://www.usedopl.com/billing?billing=upgrade&plan=pro";
+
+  const spent = {
+    wallet: "personal" as const,
+    used: 500,
+    limit: 500,
+    periodEnd: "2026-10-01T00:00:00.000Z",
+  };
+
+  it("on FREE (the server sent a url) — offers Pro, not Team", () => {
+    const text = creditsExhausted({
+      ...spent,
+      upgradeUrl: PERSONAL_PRO_URL,
+    }).content[0]?.text;
+
+    expect(text).toBe(
+      "Your personal credits are used up for this month (500/500). " +
+        `Resets 2026-10-01.\n\nUpgrade to Pro for 5,000 credits a month: ${PERSONAL_PRO_URL}`,
+    );
+    expect(text).not.toContain("Team");
+  });
+
+  it("on PRO (empty url) — the same sentence, and NO upgrade line", () => {
+    const text = creditsExhausted({
+      ...spent,
+      used: 5000,
+      limit: 5000,
+      upgradeUrl: "",
+    }).content[0]?.text;
+
+    expect(text).toBe(
+      "Your personal credits are used up for this month (5,000/5,000). Resets 2026-10-01.",
+    );
+    expect(text).not.toContain("Upgrade");
   });
 });

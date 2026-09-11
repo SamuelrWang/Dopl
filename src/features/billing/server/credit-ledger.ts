@@ -1,12 +1,16 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import type { WalletKind } from "../credits";
 
 /**
  * THE CREDIT ATTRIBUTION LEDGER'S WRITER — one row per successful burn.
  *
  * 🔒 **IT IS NOT THE BILLING COUNTER AND IT MAY NOT BEHAVE LIKE ONE.**
- * `workspace_credit_usage` + `consume_workspace_credits` remain the sole
- * authority on whether a call is allowed and how much of the allowance is gone.
+ * The WALLET COUNTERS (`credit-wallets.ts` → `user_credit_usage`,
+ * `workspace_member_credit_usage`) remain the sole authority on whether a call
+ * is allowed and how much of the allowance is gone. ⚠ That sentence named
+ * `workspace_credit_usage` until 2026-09-07; the pooled counter is retired from
+ * writes (`20260930120000_credit_wallets.sql` §5) and the argument is unchanged.
  * This table answers a different question — WHICH CHANNEL and WHICH PERSON the
  * period's credits went to — which a one-row-per-period counter cannot
  * (F-328). `20260901120000_credit_usage_events.sql` carries the full argument.
@@ -22,19 +26,43 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * changes that. The counter is not written from this file.
  */
 
-/** One burn, as the ledger records it. */
+/**
+ * One burn, as the ledger records it.
+ *
+ * 🔒 **THE PAYER IS A PERSON NOW, NOT A WORKSPACE (2026-09-07, Samuel's
+ * per-seat + personal-wallet ruling), AND THAT MOVED WHAT `workspaceId` MEANS.**
+ * It used to be the payer — for a home burn, the owner's separate standard
+ * workspace. There is no such workspace on the credit path any more, so the
+ * column holds the ADDRESSED CONTAINER and `payerUserId` carries the payer.
+ * The row's four dimensions are now: where (`workspaceId` /
+ * `originWorkspaceId`), who called (`userId`), whose wallet (`payerUserId`),
+ * which wallet (`wallet`).
+ */
 export interface CreditUsageEvent {
-  /** The PAYER — whose counter actually moved. */
+  /**
+   * THE ADDRESSED CONTAINER — the workspace row the caller was authorized into.
+   * ⚠ Equal to `originWorkspaceId` on every row this build writes; both are
+   * kept because the column is `NOT NULL` with an FK (so it cannot hold a
+   * person) and `/home`'s rails read the origin. ⚠ It is NOT the payer.
+   */
   workspaceId: string;
   /**
    * WHERE the call was made: the addressed workspace, which for a home channel
    * is the `kind='link'` CONTAINER. ⚠ This is the "by channel" dimension — a
-   * container holds exactly one channel — and it is NOT `workspaceId` whenever
-   * the burn was rerouted to a container owner's billing workspace.
+   * container holds exactly one channel.
    */
   originWorkspaceId: string | null;
   /** Who burned it. `null` only when the caller could not be identified. */
   userId: string | null;
+  /** WHICH COUNTER MOVED — `credit-wallets.ts`'s two tables. */
+  wallet: WalletKind;
+  /**
+   * THE PAYER — whose wallet moved. The container OWNER on a personal burn
+   * (which is not the caller when a peer made the call), the caller themself on
+   * a seat burn. ⚠ This is the column "who spent my credits" reads; `userId`
+   * answers a different question and the two differ exactly on the guest path.
+   */
+  payerUserId: string | null;
   amount: number;
   /** The period key the counter used — stamped, never derived from `created_at`
    *  (a paid workspace's period is anchored to its subscription date). */
@@ -63,6 +91,8 @@ export async function recordCreditUsageEvent(
         workspace_id: event.workspaceId,
         origin_workspace_id: event.originWorkspaceId,
         user_id: event.userId,
+        wallet: event.wallet,
+        payer_user_id: event.payerUserId,
         amount: event.amount,
         period_start: event.periodStart,
       });

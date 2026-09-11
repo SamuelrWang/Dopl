@@ -2,7 +2,9 @@ import "server-only";
 import type Stripe from "stripe";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { findSoleOwnedStandardWorkspace } from "@/features/workspaces/server/repository";
-import { getSeatPriceId, getSoloPriceId, getStripe, selectSeatItem } from "./stripe";
+import type { PlanId } from "../plans";
+import { getStripe, selectSeatItem } from "./stripe";
+import { derivePlan, reportPlanContainerMismatch } from "./webhook-plan";
 import { syncSeatQuantity } from "./seats";
 import { getUserByStripeCustomer } from "./subscriptions";
 import {
@@ -20,9 +22,11 @@ import {
  * idempotency (atomic claim via `webhook_events`) and the
  * event → `workspace_billing` mapping.
  *
- * Plan derivation: item price → plan (Solo price → 'solo', per-seat Team price
- * → 'team'). Unknown/legacy price falls back to subscription metadata,
- * then 'team'.
+ * Plan derivation and the plan/container-kind check both live in
+ * `./webhook-plan.ts` — `derivePlan` (item price → plan, metadata fallback) and
+ * `reportPlanContainerMismatch` (a `pro` sub on a standard workspace, or a
+ * `team` sub on a personal container, is LOGGED and still written: by this
+ * point the money has moved, and `checkout/route.ts` is the fence).
  *
  * ⚠ ORDERING: Stripe delivers at-least-once, unordered. Every applied event
  * stamps `event.created` as a freshness watermark; `created` <= the stored
@@ -37,6 +41,13 @@ import {
 export interface ProcessResult {
   received: true;
   duplicate?: boolean;
+}
+
+/** The plans that BILL. ⚠ Re-derive from `PlanId` rather than listing the free
+ *  one's complement: a plan added to the taxonomy is not paid until somebody
+ *  says so here. */
+function isPaidPlan(plan: PlanId | undefined): boolean {
+  return plan === "solo" || plan === "team" || plan === "pro";
 }
 
 /** Map a Stripe subscription status to our four-state billing status. */
@@ -58,23 +69,6 @@ function mapStatus(stripeStatus: Stripe.Subscription.Status): WorkspaceBillingSt
     default:
       return "canceled";
   }
-}
-
-/** Item price is authoritative; inconclusive (unknown/legacy price, or price
- *  envs unset here) falls back to subscription metadata, then 'team'. */
-function derivePlan(subscription: Stripe.Subscription): "solo" | "team" {
-  const soloPriceId = getSoloPriceId();
-  const seatPriceId = getSeatPriceId();
-  const priceIds = (subscription.items?.data ?? [])
-    .map((item) => item.price?.id)
-    .filter((id): id is string => Boolean(id));
-
-  if (soloPriceId && priceIds.includes(soloPriceId)) return "solo";
-  if (seatPriceId && priceIds.includes(seatPriceId)) return "team";
-
-  const metaPlan = subscription.metadata?.plan;
-  if (metaPlan === "solo" || metaPlan === "team") return metaPlan;
-  return "team";
 }
 
 /**
@@ -106,8 +100,8 @@ async function resolveWorkspaceIdForCustomer(
   if (workspace) return workspace.id;
   console.error(
     count === 0
-      ? `[webhook] Legacy subscription for customer ${customerId} (user ${userId}) could not be mapped to any workspace — payment received but no Pro granted.`
-      : `[webhook] Legacy subscription for customer ${customerId} (user ${userId}) is ambiguous: they own ${count} workspaces and none is mapped — payment received, no Pro granted, and nothing guessed. Write the workspace_billing mapping by hand.`
+      ? `[webhook] Legacy subscription for customer ${customerId} (user ${userId}) could not be mapped to any container — payment received, no paid plan granted.`
+      : `[webhook] Legacy subscription for customer ${customerId} (user ${userId}) is ambiguous: they own ${count} workspaces and none is mapped — payment received, no paid plan granted, and nothing guessed. Write the workspace_billing mapping by hand.`
   );
   return null;
 }
@@ -135,7 +129,10 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   return null;
 }
 
-function subscriptionFields(subscription: Stripe.Subscription) {
+/** ⚠ `plan` is passed rather than re-derived so the caller's ONE derivation
+ *  decides both the written plan and its seat count — two derivations of the
+ *  same subscription is two things that can disagree. */
+function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
   const item = selectSeatItem(subscription);
   // ⚠ Basil exposes current_period_start/end on the ITEM; older payloads at
   // the subscription level. Prefer sub-level, else item — same rule for both
@@ -148,7 +145,11 @@ function subscriptionFields(subscription: Stripe.Subscription) {
   const periodStart = subLevel.current_period_start ?? item?.current_period_start;
   const periodEnd = subLevel.current_period_end ?? item?.current_period_end;
   return {
-    seatCount: item?.quantity ?? 1,
+    // ⚠ `pro` IS FLAT: one personal container, one member, one price. Stripe
+    // reports quantity 1 on that line anyway; pinning it here means a hand-
+    // edited quantity in the dashboard cannot make a personal container look
+    // like a multi-seat one to `entitlements.ts`.
+    seatCount: plan === "pro" ? 1 : (item?.quantity ?? 1),
     stripePriceId: item?.price?.id ?? null,
     // ⚠ ALWAYS written, never undefined: a resumed subscription must clear the
     // flag, and an omitted key leaves the old `true` standing.
@@ -223,9 +224,11 @@ async function handleSubscriptionUpsert(
     return;
   }
 
-  const fields = subscriptionFields(subscription);
+  const plan = derivePlan(subscription);
+  await reportPlanContainerMismatch(workspaceId, plan);
+  const fields = subscriptionFields(subscription, plan);
   await applyStripeEvent(workspaceId, eventCreated, {
-    plan: derivePlan(subscription),
+    plan,
     status,
     stripeCustomerId: subscription.customer as string,
     stripeSubscriptionId: subscription.id,
@@ -259,12 +262,16 @@ async function handleCheckoutCompleted(
   // that persisted id is the durable 409 guard for re-checkout.
   const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
   const status = mapStatus(subscription.status);
-  const fields = subscriptionFields(subscription);
+  const plan = derivePlan(subscription);
+  if (status !== "canceled") {
+    await reportPlanContainerMismatch(targetWorkspaceId, plan);
+  }
+  const fields = subscriptionFields(subscription, plan);
   // ⚠ Watermark-guarded like every other billing write: Stripe can retry a
   // failed checkout delivery AFTER the sub was canceled, resurrecting a
   // non-null sub id on a canceled row.
   const applied = await applyStripeEvent(targetWorkspaceId, eventCreated, {
-    plan: status === "canceled" ? "free" : derivePlan(subscription),
+    plan: status === "canceled" ? "free" : plan,
     status,
     stripeCustomerId: customerId,
     stripeSubscriptionId: status === "canceled" ? null : subscriptionId,
@@ -322,9 +329,11 @@ async function handlePaymentFailed(
   );
   if (!workspaceId) return;
   const billing = await getWorkspaceBilling(workspaceId);
-  // Only a paid (solo/team) row can go past_due — flagging a free row would
-  // produce a nonsensical free/past_due state.
-  if (billing?.plan !== "solo" && billing?.plan !== "team") {
+  // Only a PAID row can go past_due — flagging a free row would produce a
+  // nonsensical free/past_due state. ⚠ `pro` joined the set on 2026-09-08
+  // (spec §11): omitting it would have made a personal Pro subscription the one
+  // paid plan that silently skips dunning and shows no warning anywhere.
+  if (!billing || !isPaidPlan(billing.plan)) {
     console.warn(
       `[webhook] Ignoring invoice.payment_failed for workspace ${workspaceId}: plan is ${billing?.plan ?? "none"}, not a paid plan.`
     );
@@ -345,7 +354,9 @@ async function handlePaymentFailed(
     );
     return;
   }
-  // past_due keeps pro entitlements (grace) while surfacing the warning.
+  // past_due keeps PAID entitlements (grace) while surfacing the warning. ⚠ Not
+  // "pro" — that is a plan id since 2026-09-08, and this line means every paid
+  // plan.
   await applyStripeEvent(workspaceId, eventCreated, { status: "past_due" });
 }
 

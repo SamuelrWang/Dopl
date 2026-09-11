@@ -69,6 +69,19 @@ describe("chatRetentionDeniedBody", () => {
     expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
   });
 
+  /**
+   * 🔒 **IT NAMES A PLAN THAT IS STILL ON SALE.** This sentence reaches an agent
+   * and a human, and it said "upgrade to Pro" — a plan RETIRED FROM SALE on
+   * 2026-09-07 (`billing/plans.ts`; `POST /api/billing/checkout` answers 400
+   * `PLAN_RETIRED` for it). A refusal that tells somebody to buy a thing that
+   * cannot be bought is a dead end the upgrade URL cannot rescue.
+   */
+  it("offers TEAM, the only plan on sale — never the retired Pro", () => {
+    const { message } = chatRetentionDeniedBody();
+    expect(message).toContain("Team");
+    expect(message).not.toMatch(/\bPro\b/);
+  });
+
   // ⚠ MCP agents follow this URL literally, so it must name a page that both
   // survives and can take money.
   it("points at the standalone billing page, never /canvas, /pricing or the 404 billing route", () => {

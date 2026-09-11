@@ -37,7 +37,7 @@ export function chatRetentionDeniedBody() {
     message:
       `This chat is older than the free plan's ${FREE_CHATS_WINDOW_DAYS}-day ` +
       `history window. Nothing has been deleted — it's safely stored. Upgrade ` +
-      `to Pro to restore full chat history.`,
+      `to Team to restore full chat history.`,
     upgrade_url: upgradeUrl(),
   };
 }

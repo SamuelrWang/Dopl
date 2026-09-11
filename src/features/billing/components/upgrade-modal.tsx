@@ -9,19 +9,46 @@ import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { getSpaBridge, isSpaRenderer } from "@/shared/lib/spa-bridge";
 import { getAppOrigin } from "@/shared/lib/app-origin";
+import { PERSONAL_MONTHLY_CREDITS, SEAT_MONTHLY_CREDITS } from "../credits";
+import { planNumber } from "../plans";
+import { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } from "../prices";
 import { billingUrl, type CheckoutPlan } from "../url";
 import { EmbeddedCheckoutForm } from "./embedded-checkout";
 import {
-  formatMoney,
-  SOLO_PRICE,
-  TEAM_SEAT_PRICE,
-  useWorkspaceEntitlements,
-} from "./use-workspace-entitlements";
+  AddMemberBlocked,
+  AlreadyPaidNote,
+  AskAdminNote,
+  PlanOption,
+  type Ent,
+} from "./upgrade-modal-parts";
+import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
-const PAID_UNLOCKS = [
+/**
+ * ⚠ THE CREDITS LINE IS INTERPOLATED, NEVER TYPED OUT (plans.ts's G4 rule) —
+ * it said "10,000+ Credits every month" while the allowance was three other
+ * numbers. "per member" is load-bearing on the TEAM list: the allocation is
+ * fixed per person and NOT pooled (`credits.ts › SEAT_MONTHLY_CREDITS`).
+ */
+const TEAM_UNLOCKS = [
   "Uncapped ontology objects",
   "Full chat history restored",
-  "10,000+ Credits every month",
+  `${planNumber(SEAT_MONTHLY_CREDITS.team)} credits per member every month`,
+  "Priority support",
+] as const;
+
+/**
+ * What PRO buys on a personal container (2026-09-08).
+ *
+ * ⚠ **NO "per member", AND NO OBJECT-CAP LINE.** A personal container has one
+ * member by construction, so "per member" would invite the reader to multiply;
+ * and the ontology cap is a MULTI-member free rule (`plans.ts ›
+ * FREE_MULTI_MEMBER_OBJECT_CAP`), so uncapping it is not something Pro sells —
+ * a personal container was never capped. Listing it would be selling an unlock
+ * the buyer already has.
+ */
+const PRO_UNLOCKS = [
+  `${planNumber(PERSONAL_MONTHLY_CREDITS.pro)} credits a month`,
+  "Full chat history",
   "Priority support",
 ] as const;
 
@@ -35,10 +62,23 @@ interface Props {
   /** Optional context line explaining why the modal opened. */
   reason?: string;
   /**
-   * "generic" (default): free-workspace upsell — single-member picks Pro or
-   * Team, 2+ members get Team only.
-   * "add-member": invite/join blocked path — Team only, and a live Solo sub
+   * "generic" (default): the free-container upsell — Team on a standard
+   * workspace, Pro on a personal one.
+   * "add-member": invite/join blocked path — Team, and a live legacy Pro sub
    * swaps in place via `/api/billing/upgrade-to-team` (no checkout).
+   *
+   * ⚠ THE TWO VARIANTS DO NOT DIFFER ON *WHAT* THEY SELL WITHIN A KIND
+   * (2026-09-07, Solo retired from sale) — only on why the modal opened and
+   * what the blocked path has to explain. `AddMemberBlocked` lives in
+   * `./upgrade-modal-parts`.
+   *
+   * ⚠ **"add-member" IS STANDARD-ONLY (2026-09-08)** and falls back to the
+   * generic upsell on a personal container: that path exists because a member
+   * could not be ADDED, and a personal container has no roster to add one to
+   * (`server/entitlements.ts › assertCanAddMember`). Its whole pitch — seats,
+   * "invite your team", the legacy single-member limit — describes a thing the
+   * reader cannot do, so rendering it there would sell the wrong plan for the
+   * wrong reason.
    */
   variant?: "generic" | "add-member";
 }
@@ -82,7 +122,7 @@ export function UpgradeModal({
         (err.code === "NOT_ON_SOLO" || err.message === "NOT_ON_SOLO")
       ) {
         setSwitchError(
-          "This workspace is no longer on Pro. Refreshing billing state…"
+          "This workspace is no longer on the legacy Pro plan. Refreshing billing state…"
         );
         void ent.refresh();
       } else {
@@ -95,8 +135,14 @@ export function UpgradeModal({
     }
   }
 
-  const label =
-    variant === "add-member" ? "Upgrade to add members" : "Upgrade your workspace";
+  const isPersonal = ent.containerKind === "personal";
+  const showAddMember = variant === "add-member" && !isPersonal;
+
+  const label = showAddMember
+    ? "Upgrade to add members"
+    : isPersonal
+      ? "Upgrade to Pro"
+      : "Upgrade your workspace";
 
   return (
     <ModalShell open={open} onClose={close} label={label} size="narrow">
@@ -108,7 +154,7 @@ export function UpgradeModal({
             workspaceId={workspaceId}
             onBack={() => setCheckoutPlan(null)}
           />
-        ) : variant === "add-member" ? (
+        ) : showAddMember ? (
           <AddMemberBlocked
             ent={ent}
             reason={reason}
@@ -136,8 +182,6 @@ export function UpgradeModal({
   );
 }
 
-type Ent = ReturnType<typeof useWorkspaceEntitlements>;
-
 function CheckoutView({
   plan,
   ent,
@@ -150,6 +194,7 @@ function CheckoutView({
   onBack: () => void;
 }) {
   const seats = ent.billableSeats;
+  const isPro = plan === "pro";
   return (
     <div>
       <button
@@ -160,11 +205,14 @@ function CheckoutView({
         ← Back
       </button>
       <h2 className="mb-1 text-display font-semibold tracking-tight text-text-primary">
-        {plan === "solo" ? "Subscribe to Pro" : "Subscribe to Team"}
+        Subscribe to {isPro ? "Pro" : "Team"}
       </h2>
+      {/* ⚠ BRANCHED ON THE PLAN, NOT THE CONTAINER: this line describes the
+          session about to be created. `pro` is flat quantity-1, so seat math
+          would name a unit it does not have. */}
       <p className="mb-4 text-caption text-text-secondary">
-        {plan === "solo"
-          ? `${formatMoney(SOLO_PRICE)} / month — flat, single member`
+        {isPro
+          ? `${formatMoney(PRO_PRICE)} / month`
           : `${seats} ${seats === 1 ? "seat" : "seats"} · ${formatMoney(
               seats * TEAM_SEAT_PRICE
             )} / month`}
@@ -221,10 +269,29 @@ function BrowserCheckoutHandoff({ plan }: { plan: CheckoutPlan }) {
  * browser opens straight into checkout.
  */
 function browserBillingUrl(plan: CheckoutPlan): string {
+  // ⚠ **`pro` GOES SEGMENT-LESS, DELIBERATELY (2026-09-08).** The hash segment
+  // names the STANDARD workspace this window is showing, and `pro` is refused
+  // there (400 `PLAN_NOT_FOR_CONTAINER`). Bare `/billing?plan=pro` is the one
+  // link that resolves the caller's personal container (`app/billing/page.tsx`)
+  // — a segment the desktop window never holds.
+  if (plan === "pro") {
+    return billingUrl(getAppOrigin(), { intent: "upgrade", plan });
+  }
   const segment = window.location.hash.replace(/^#\/?/, "").split(/[/?#]/)[0];
   return billingUrl(getAppOrigin(), { segment, intent: "upgrade", plan });
 }
 
+/**
+ * The free-container upsell — ONE option, because one plan is on sale FOR THIS
+ * KIND: Team on a standard workspace, Pro on a personal one (2026-09-08).
+ *
+ * ⚠ THE SINGLE-MEMBER BRANCH IS GONE (2026-09-07). It offered Solo to a
+ * one-member free workspace; Solo is retired from sale, and a workspace's
+ * member count no longer changes what it can buy — unlimited members on both
+ * tiers. ⚠ The kind branch below is NOT that branch coming back: it keys on the
+ * CONTAINER, which decides which plan exists at all, not on how many people are
+ * in it.
+ */
 function GenericUpsell({
   ent,
   reason,
@@ -244,24 +311,28 @@ function GenericUpsell({
   onChoose: (plan: CheckoutPlan) => void;
   onClose: () => void;
 }) {
-  const soloEligible = ent.memberCount === 1;
-  // ⚠ Live (or grace-period) sub behind a free-reporting plan = degraded Solo
-  // sub; checkout would 409, so Team must swap in place via
-  // /api/billing/upgrade-to-team. Entitled paid workspaces show
+  const isPersonal = ent.containerKind === "personal";
+  // ⚠ Live (or grace-period) sub behind a free-reporting plan = degraded legacy
+  // Solo sub; checkout would 409, so Team must swap in place via
+  // /api/billing/upgrade-to-team. Entitled paid containers show
   // AlreadyPaidNote instead, so this only fires for the degraded case.
-  const hasLiveSub = ent.status === "active" || ent.status === "past_due";
+  // ⚠ STANDARD-ONLY: `solo` was never sold on a personal container, so there is
+  // no subscription there to swap and a live one would be Pro itself.
+  const hasLiveSub =
+    !isPersonal && (ent.status === "active" || ent.status === "past_due");
+  const unlocks = isPersonal ? PRO_UNLOCKS : TEAM_UNLOCKS;
 
   return (
     <div>
       <h2 className="text-display font-semibold tracking-tight text-text-primary">
-        Upgrade your workspace
+        {isPersonal ? "Upgrade to Pro" : "Upgrade your workspace"}
       </h2>
       {reason && (
         <p className="mt-1 text-caption text-text-secondary">{reason}</p>
       )}
 
       <ul className="mt-4 flex flex-col gap-2.5">
-        {PAID_UNLOCKS.map((f) => (
+        {unlocks.map((f) => (
           <li
             key={f}
             className="flex items-start gap-2 text-small leading-snug text-text-primary"
@@ -286,57 +357,54 @@ function GenericUpsell({
             <p className="mt-4 text-caption text-danger">{switchError}</p>
           )}
           <div className="mt-5 flex flex-col gap-2.5">
-            {soloEligible && (
+            {isPersonal ? (
               <PlanOption
                 title="Pro"
                 priceLine={
                   <>
-                    {formatMoney(SOLO_PRICE)}{" "}
+                    {formatMoney(PRO_PRICE)}{" "}
                     <span className="text-caption font-normal text-text-muted">
-                      / month — flat
+                      / month
                     </span>
                   </>
                 }
-                pitch="For individuals. Everything unlocked, just for you — limited to one member."
-                cta="Choose Pro"
+                // ⚠ NO SEAT MATH AND NO ROSTER — `pro` is flat, quantity 1.
+                pitch="Billed monthly. Cancel anytime."
+                cta="Continue to checkout"
+                highlight
                 canManageBilling={canManageBilling}
-                onSelect={() => onChoose("solo")}
+                onSelect={() => onChoose("pro")}
+              />
+            ) : (
+              <PlanOption
+                title="Team"
+                priceLine={
+                  <>
+                    {formatMoney(TEAM_SEAT_PRICE)}{" "}
+                    <span className="text-caption font-normal text-text-muted">
+                      / seat / month
+                    </span>
+                  </>
+                }
+                pitch={`${ent.billableSeats} ${
+                  ent.billableSeats === 1 ? "member" : "members"
+                } × ${formatMoney(TEAM_SEAT_PRICE)} = ${formatMoney(
+                  ent.billableSeats * TEAM_SEAT_PRICE
+                )} / month. Seats sync automatically as your team changes.`}
+                cta={
+                  hasLiveSub
+                    ? switching
+                      ? "Switching to Team…"
+                      : "Switch to Team"
+                    : "Continue to checkout"
+                }
+                highlight
+                canManageBilling={canManageBilling}
+                disabled={hasLiveSub && switching}
+                // Degraded legacy Solo (live sub): swap in place. Else checkout.
+                onSelect={hasLiveSub ? onSwitchToTeam : () => onChoose("team")}
               />
             )}
-            <PlanOption
-              title="Team"
-              priceLine={
-                <>
-                  {formatMoney(TEAM_SEAT_PRICE)}{" "}
-                  <span className="text-caption font-normal text-text-muted">
-                    / seat / month
-                  </span>
-                </>
-              }
-              pitch={
-                soloEligible
-                  ? "Add people whenever you're ready — seats sync automatically as your team changes."
-                  : `${ent.billableSeats} ${
-                      ent.billableSeats === 1 ? "member" : "members"
-                    } × ${formatMoney(TEAM_SEAT_PRICE)} = ${formatMoney(
-                      ent.billableSeats * TEAM_SEAT_PRICE
-                    )} / month. Seats sync automatically as your team changes.`
-              }
-              cta={
-                hasLiveSub
-                  ? switching
-                    ? "Switching to Team…"
-                    : "Switch to Team"
-                  : soloEligible
-                    ? "Choose Team"
-                    : "Continue to checkout"
-              }
-              highlight={!soloEligible}
-              canManageBilling={canManageBilling}
-              disabled={hasLiveSub && switching}
-              // Degraded Solo (live sub): swap in place. Otherwise checkout.
-              onSelect={hasLiveSub ? onSwitchToTeam : () => onChoose("team")}
-            />
           </div>
 
           {canManageBilling ? (
@@ -348,204 +416,13 @@ function GenericUpsell({
               Maybe later
             </button>
           ) : (
-            <AskAdminNote onClose={onClose} action="upgrade this workspace" />
+            <AskAdminNote
+              onClose={onClose}
+              action={isPersonal ? "upgrade your plan" : "upgrade this workspace"}
+            />
           )}
         </>
       )}
     </div>
-  );
-}
-
-function AddMemberBlocked({
-  ent,
-  reason,
-  canManageBilling,
-  switching,
-  switchError,
-  onSwitchToTeam,
-  onCheckout,
-  onClose,
-}: {
-  ent: Ent;
-  reason?: string;
-  canManageBilling: boolean;
-  switching: boolean;
-  switchError: string | null;
-  onSwitchToTeam: () => void;
-  onCheckout: () => void;
-  onClose: () => void;
-}) {
-  const seats = ent.billableSeats;
-  // ⚠ Any live non-Team sub behind a SOLO_MEMBER_LIMIT 402 is the Solo sub
-  // (incl. the degraded case reporting plan=free). Must swap in place —
-  // checkout would 409 on the existing subscription.
-  const hasLiveSub = ent.status === "active" || ent.status === "past_due";
-
-  return (
-    <div>
-      <h2 className="text-display font-semibold tracking-tight text-text-primary">
-        Upgrade to add members
-      </h2>
-      {reason && (
-        <p className="mt-1 text-caption text-text-secondary">{reason}</p>
-      )}
-      <p className="mt-2 text-small leading-snug text-text-secondary">
-        Pro is limited to one member. Upgrade to Team —{" "}
-        {formatMoney(TEAM_SEAT_PRICE)} per seat — to invite your team.
-      </p>
-
-      <div className="bento mt-5 p-4">
-        <div className="text-body font-semibold text-text-primary">
-          {formatMoney(TEAM_SEAT_PRICE)}{" "}
-          <span className="text-caption font-normal text-text-muted">
-            / seat / month
-          </span>
-        </div>
-        <div className="mt-1 text-caption text-text-secondary">
-          {seats} {seats === 1 ? "member" : "members"} ×{" "}
-          {formatMoney(TEAM_SEAT_PRICE)} ={" "}
-          <span className="font-semibold text-text-primary">
-            {formatMoney(seats * TEAM_SEAT_PRICE)}
-          </span>{" "}
-          / month
-        </div>
-        <div className="mt-1 text-micro text-text-muted">
-          Billed per member — seats sync automatically as your team changes.
-        </div>
-      </div>
-
-      {!canManageBilling ? (
-        <AskAdminNote onClose={onClose} action="upgrade this workspace to Team" />
-      ) : ent.loading ? (
-        // ⚠ The 402 opens this modal before /api/billing/status resolves;
-        // acting on DEFAULT_STATUS offers checkout to a live-Solo workspace
-        // (409). Wait for real state.
-        <div className="bento mt-5 h-16 animate-pulse opacity-50" />
-      ) : ent.isTeam ? (
-        <div className="mt-5">
-          <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
-            This workspace is already on Team — try inviting again.
-          </p>
-          <CloseButton onClose={onClose} />
-        </div>
-      ) : (
-        <div className="mt-5">
-          {switchError && (
-            <p className="mb-3 text-caption text-danger">{switchError}</p>
-          )}
-          <div className="flex items-center gap-2">
-            {hasLiveSub ? (
-              // Live Solo sub: swap to per-seat Team in place, no 2nd checkout.
-              <button
-                type="button"
-                onClick={onSwitchToTeam}
-                disabled={switching}
-                className="auth-btn-3d flex h-9 flex-1 cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white disabled:cursor-default disabled:opacity-60"
-              >
-                {switching ? "Switching to Team…" : "Switch to Team"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onCheckout}
-                className="auth-btn-3d flex h-9 flex-1 cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white"
-              >
-                Continue to checkout
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={switching}
-              className="btn-light flex h-9 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-medium text-text-primary disabled:cursor-default disabled:opacity-50"
-            >
-              Maybe later
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PlanOption({
-  title,
-  priceLine,
-  pitch,
-  cta,
-  highlight = false,
-  canManageBilling,
-  disabled = false,
-  onSelect,
-}: {
-  title: string;
-  priceLine: React.ReactNode;
-  pitch: string;
-  cta: string;
-  highlight?: boolean;
-  canManageBilling: boolean;
-  disabled?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <div className={highlight ? "bento border-border-highlight p-4" : "bento p-4"}>
-      <div className="flex items-baseline justify-between">
-        <span className="text-body font-semibold text-text-primary">{title}</span>
-        <span className="text-body font-semibold text-text-primary">
-          {priceLine}
-        </span>
-      </div>
-      <p className="mt-1 text-caption leading-snug text-text-secondary">{pitch}</p>
-      {canManageBilling && (
-        <button
-          type="button"
-          onClick={onSelect}
-          disabled={disabled}
-          className="auth-btn-3d mt-3 flex h-8 w-full cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white disabled:cursor-default disabled:opacity-60"
-        >
-          {cta}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function AlreadyPaidNote({ ent, onClose }: { ent: Ent; onClose: () => void }) {
-  return (
-    <div className="mt-5">
-      <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
-        This workspace is already on {ent.isSolo ? "Pro" : "Team"}.
-      </p>
-      <CloseButton onClose={onClose} />
-    </div>
-  );
-}
-
-function AskAdminNote({
-  onClose,
-  action,
-}: {
-  onClose: () => void;
-  action: string;
-}) {
-  return (
-    <div className="mt-5">
-      <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
-        Ask a workspace admin or owner to {action}.
-      </p>
-      <CloseButton onClose={onClose} />
-    </div>
-  );
-}
-
-function CloseButton({ onClose }: { onClose: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClose}
-      className="btn-light mt-3 flex h-9 w-full cursor-pointer items-center justify-center rounded-lg text-small font-medium text-text-primary"
-    >
-      Close
-    </button>
   );
 }

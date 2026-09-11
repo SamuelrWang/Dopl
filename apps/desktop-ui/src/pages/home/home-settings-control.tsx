@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
@@ -20,6 +20,36 @@ import type { BootPayload } from "#/pages/boot/use-boot-state";
  * profile read, a control, and a modal that only this control opens. The page
  * hands it the boot payload it already has and knows nothing else about it.
  */
+/**
+ * OPEN /home's SETTINGS MODAL FROM ANYWHERE ON THE PAGE — the credit bar's
+ * "Upgrade" (`overview-sections.tsx › CreditCapacityBar`) is the first caller.
+ *
+ * 🔒 **A ONE-SLOT REGISTRY RATHER THAN A LIFTED CALLBACK, AND THE REASON IS A
+ * MEASUREMENT (2026-09-08).** The obvious shape is to hoist `open`/`section`
+ * into `pages/home/index.tsx` and drill an `openSettings(section)` prop down
+ * through `HomeOverviewPanels` → `UsageCard` → `CreditsBar` → the bar. That
+ * page measured **499 lines** against the 500-line cap (INVARIANTS §1,
+ * `eslint.config.mjs › max-lines`) on the day this landed — `wc -l` it before
+ * repeating the claim — so the hoist could not be made without first splitting
+ * an unrelated page, which is a bigger change than the feature. This keeps the
+ * state exactly where it already lives and adds no prop to any component
+ * between.
+ *
+ * ⚠ **ONE SLOT, AND THAT IS SOUND HERE BECAUSE /home MOUNTS ONE OF THESE.** The
+ * control is rendered once, in the page header strip. A second mount would make
+ * the last one to mount win; if that ever becomes possible this must become a
+ * real context.
+ * ⚠ **A NO-OP WHEN NOTHING IS MOUNTED**, deliberately: `HomeSettingsControl`
+ * renders nothing for an account with no provisioned workspace (see below), and
+ * a caller must not crash for want of a modal that does not exist.
+ */
+type SettingsOpener = (section: SettingsSection) => void;
+let liveOpener: SettingsOpener | null = null;
+
+export function openHomeSettings(section: SettingsSection): void {
+  liveOpener?.(section);
+}
+
 export function HomeSettingsControl({
   identity,
   onWorkspaceChanged,
@@ -34,6 +64,19 @@ export function HomeSettingsControl({
   // holds it — this is that page's mechanism, reused rather than re-invented.
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("account");
+
+  // ⚠ Registered in an effect, not at render: an opener that pointed at a
+  // component React had not committed would set state on a tree that is not
+  // there. Cleared on unmount so a stale closure cannot outlive the page.
+  useEffect(() => {
+    liveOpener = (next) => {
+      setSection(next);
+      setOpen(true);
+    };
+    return () => {
+      liveOpener = null;
+    };
+  }, []);
 
   // ⚠ THE FACE COMES FROM THE PROFILE, NOT FROM BOOT. `POST /api/boot` answers
   // `userId` and nothing renderable — no display name, no avatar — so an

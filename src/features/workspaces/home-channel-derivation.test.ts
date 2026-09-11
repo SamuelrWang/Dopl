@@ -101,6 +101,10 @@ const SHAPES: ReadonlyArray<[string, RegExp]> = [
 const FENCE_SITES: Record<string, string> = {
   "src/features/workspaces/server/authz.ts":
     "B14 — CLOSED: the refusal is kind-agnostic by design, the message branches on `kind`",
+  "src/app/api/billing/upgrade-to-team/route.ts":
+    "credit-model-v2.1 (2026-09-08) — CLOSED: Team belongs on a standard workspace only, " +
+    "so the 409 must be inherited by every future kind rather than opted into; the MESSAGE " +
+    "branches on `kind` (a home channel carries no plan, a personal container has Pro)",
 };
 
 /** ⚠ `FENCE_SITES` IS THE WHOLE DECLARATION SINCE `OPEN_SITES` EMPTIED. */

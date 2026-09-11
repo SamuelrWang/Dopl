@@ -3,25 +3,29 @@
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
-  formatMoney,
-  SOLO_PRICE,
-  TEAM_SEAT_PRICE,
   useWorkspaceEntitlements,
   type WorkspaceEntitlements,
 } from "@/features/billing/components/use-workspace-entitlements";
-import { PLANS } from "@/features/billing/plans";
+import {
+  formatMoney,
+  PRO_PRICE,
+  SOLO_PRICE,
+  TEAM_SEAT_PRICE,
+} from "@/features/billing/prices";
+import type { WalletKind } from "@/features/billing/credits";
+import { plansForKind } from "@/features/billing/plans";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
 import { UsageMeter } from "@/shared/ui/usage-meter";
-import { PlanColumn, type CheckoutPlan, type PlanActions } from "./plan-cards";
+import { isLegacySolo, PlanColumn, type CheckoutPlan, type PlanActions } from "./plan-cards";
 
 export type { CheckoutPlan };
 
 export interface PlansBillingCoreProps {
   /** Set from a Stripe redirect — polls status until it settles. "success"
    *  (checkout) celebrates + finalizes; "return" (portal cancel/downgrade)
-   *  polls quietly so a stale Pro doesn't linger. */
+   *  polls quietly so a stale paid card doesn't linger. */
   billingReturn?: "success" | "return" | null;
   role: Role;
   workspaceId?: string;
@@ -38,9 +42,28 @@ export interface PlansBillingCoreProps {
 }
 
 /**
- * Plans & Billing — Starter / Pro ($5.99 flat, single member) / Team ($7.99 per
- * seat). Admins/owners upgrade, switch a live Solo sub to Team in place
- * (`/api/billing/upgrade-to-team`, no second checkout), or open the portal.
+ * Plans & Billing — TWO cards, and WHICH TWO depends on the container
+ * (`plans.ts › plansForKind`, 2026-09-08):
+ *
+ *   - a STANDARD workspace sells seats — Starter (free, 100 credits per member
+ *     per month) and Team ($8.99 per seat per month, 5,000 per member);
+ *   - a `kind='personal'` container sells one person their own home space —
+ *     Free (500 credits a month) and Pro ($8.99 a month, 5,000).
+ *
+ * Every figure is interpolated from `billing/credits.ts` / `billing/prices.ts`
+ * — never restated here (plans.ts's G4 rule).
+ *
+ * ⚠ **THE TWO GROUPS ARE NEVER CONCATENATED AND NEVER CROSS.** `pro` is refused
+ * checkout on a standard workspace and `team` on a personal one (400
+ * `PLAN_NOT_FOR_CONTAINER`), so a pane that showed all four cards would be
+ * offering two purchases that answer 400.
+ *
+ * ⚠ PRO/`solo` — the RETIRED flat WORKSPACE plan, a different thing from the
+ * personal `pro` above — IS RETIRED FROM SALE (2026-09-07) AND HAS NO CARD. A
+ * workspace still holding a live legacy row gets a one-line note plus the
+ * in-place `/api/billing/upgrade-to-team` switch (no second checkout); nothing
+ * sells it. That note is STANDARD-ONLY: a personal container cannot hold one.
+ * Admins/owners upgrade, switch, or open the portal.
  * ⚠ `workspaceId` scopes every read/checkout/portal call to the workspace whose
  * settings are open — without it the DEFAULT workspace leaks in.
  * Next- and Stripe-free core; Stripe hand-offs arrive as props.
@@ -103,7 +126,7 @@ export function PlansBillingCore({
         err instanceof ApiError &&
         (err.code === "NOT_ON_SOLO" || err.message === "NOT_ON_SOLO")
       ) {
-        setSwitchError("This workspace isn't on Pro anymore — refreshing.");
+        setSwitchError("This workspace isn't on the legacy Pro plan anymore — refreshing.");
         void ent.refresh();
       } else {
         setSwitchError(
@@ -133,8 +156,10 @@ export function PlansBillingCore({
 
       {isSuccessReturn && ent.isPaid && (
         <div className="mb-4 rounded-lg border border-success/25 bg-success/10 px-3 py-2 text-caption text-success">
-          {ent.isSolo
-            ? "Welcome to Pro — your workspace is unlocked."
+          {/* ⚠ A personal container has no seats to count — naming them here
+              would report a roster the container cannot have. */}
+          {ent.containerKind === "personal"
+            ? "Welcome to Pro."
             : `Welcome to Team — ${ent.billableSeats} ${
                 ent.billableSeats === 1 ? "seat" : "seats"
               } active.`}
@@ -150,8 +175,9 @@ export function PlansBillingCore({
         <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-caption text-warning">
           <div className="font-semibold">Payment past due</div>
           <div className="mt-0.5 text-text-secondary">
-            Your {ent.isSolo ? "Pro" : "Team"} workspace stays active for
-            now. Update your payment method to avoid losing paid features.
+            Your {ent.isPro ? "Pro" : ent.isSolo ? "legacy Pro" : "Team"} plan
+            stays active for now. Update your payment method to avoid losing
+            paid features.
             {canManage && (
               <>
                 {" "}
@@ -182,8 +208,8 @@ export function PlansBillingCore({
       {portalError && <p className="mb-3 text-caption text-danger">{portalError}</p>}
       {switchError && <p className="mb-3 text-caption text-danger">{switchError}</p>}
 
-      <div className="grid grid-cols-3 gap-2 max-[900px]:grid-cols-1">
-        {PLANS.map((plan) => (
+      <div className="grid grid-cols-2 gap-2 max-[900px]:grid-cols-1">
+        {plansForKind(ent.containerKind).map((plan) => (
           <PlanColumn
             key={plan.id}
             plan={plan}
@@ -201,8 +227,25 @@ export function PlansBillingCore({
   );
 }
 
+/**
+ * Whose meter this is. `wallet` says which counter the status endpoint read —
+ * the caller's SEAT in this workspace, or their PERSONAL home-space wallet
+ * (`billing/credits.ts › WalletKind`). Null = an older cached payload; the
+ * neutral label claims nothing about the payer.
+ */
+function creditsLabel(wallet: WalletKind | null): string {
+  if (wallet === "seat") return "Your credits";
+  if (wallet === "personal") return "Personal credits";
+  return "Credits";
+}
+
+/** ⚠ Named off the CARD LIST this container is shown, so the badge and the
+ *  cards under it cannot disagree about which product the reader is on. */
 function planLabel(ent: WorkspaceEntitlements): string {
-  if (ent.isSolo) return "Pro plan";
+  if (ent.containerKind === "personal") {
+    return ent.isPro ? "Pro plan" : "Free plan";
+  }
+  if (ent.isSolo) return "Legacy Pro plan";
   if (ent.isTeam) return "Team plan";
   return "Starter plan";
 }
@@ -216,10 +259,13 @@ function BillingSummary({
   onManage,
   onSwitchToTeam,
 }: PlanActions) {
+  // The one branch that decides every line below: a personal container is one
+  // person's home space, so it has no seats, no roster and no legacy row.
+  const isPersonal = ent.containerKind === "personal";
+
   if (ent.loading) {
     return <div className="bento mb-5 h-24 animate-pulse opacity-50" />;
   }
-  const soloEligible = ent.memberCount === 1;
 
   return (
     <div className="bento mb-5 p-4">
@@ -234,17 +280,28 @@ function BillingSummary({
         >
           {planLabel(ent)}
         </span>
-        <span className="text-caption text-text-secondary">
-          {ent.memberCount} {ent.memberCount === 1 ? "member" : "members"}
-        </span>
+        {/* ⚠ NO MEMBER COUNT ON A PERSONAL CONTAINER. It has exactly one member
+            by construction and cannot gain another, so "1 member" is a fact
+            about the schema rather than about this reader's plan. */}
+        {!isPersonal && (
+          <span className="text-caption text-text-secondary">
+            {ent.memberCount} {ent.memberCount === 1 ? "member" : "members"}
+          </span>
+        )}
       </div>
 
-      {ent.isSolo ? (
-        <div className="mt-3 text-body text-text-primary">
-          <span className="font-semibold">{formatMoney(SOLO_PRICE)}</span>{" "}
-          <span className="text-caption text-text-muted">
-            / month — flat, single-member workspace
-          </span>
+      {isPersonal ? (
+        ent.isPro && (
+          <div className="mt-3 text-body text-text-primary">
+            <span className="font-semibold">{formatMoney(PRO_PRICE)}</span>{" "}
+            <span className="text-caption text-text-muted">/ month</span>
+          </div>
+        )
+      ) : isLegacySolo(ent) ? (
+        /* ⚠ A NOTE, NOT A CARD. Pro is retired from sale; the only thing this
+           row can still do is keep paying or switch to Team (button below). */
+        <div className="mt-3 text-caption text-text-secondary">
+          On the legacy Pro plan — {formatMoney(SOLO_PRICE)} / month
         </div>
       ) : ent.isTeam ? (
         <div className="mt-3 text-body text-text-primary">
@@ -274,13 +331,15 @@ function BillingSummary({
       )}
 
       {/* Outside the plan branch on purpose: credits are metered on EVERY plan,
-          unlike the object cap (capped free workspaces only). */}
+          unlike the object cap (capped free workspaces only). ⚠ THE READING IS
+          THE CALLER'S OWN — their seat in this workspace — not a pooled
+          workspace total (`server/status-service.ts`). */}
       <UsageMeter
-        label="Credits"
+        label={creditsLabel(ent.credits.wallet)}
         used={ent.credits.used}
         limit={ent.credits.limit}
         over={ent.credits.remaining === 0 && ent.credits.limit > 0}
-        overNote="MCP tool calls are paused until the next billing period. Nothing was deleted — the app keeps working."
+        overNote="Tool calls are paused until the next period."
       />
 
       <div className="mt-4">
@@ -295,14 +354,16 @@ function BillingSummary({
               >
                 {portalLoading ? "Loading…" : "Manage billing"}
               </button>
-              {ent.isSolo && (
+              {isLegacySolo(ent) && (
                 <button
                   type="button"
                   disabled={switching}
                   onClick={onSwitchToTeam}
                   className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white disabled:cursor-default disabled:opacity-60"
                 >
-                  {switching ? "Switching…" : "Switch to Team — $7.99/seat"}
+                  {switching
+                    ? "Switching…"
+                    : `Switch to Team — ${formatMoney(TEAM_SEAT_PRICE)}/seat`}
                 </button>
               )}
             </div>
@@ -312,29 +373,23 @@ function BillingSummary({
             </p>
           )
         ) : canManage ? (
-          <div className="flex items-center gap-2">
-            {soloEligible && (
-              <button
-                type="button"
-                onClick={() => onUpgrade("solo")}
-                className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white"
-              >
-                Get Pro — $5.99/mo
-              </button>
-            )}
+          isPersonal ? (
+            <button
+              type="button"
+              onClick={() => onUpgrade("pro")}
+              className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white"
+            >
+              Upgrade to Pro — {formatMoney(PRO_PRICE)}/month
+            </button>
+          ) : (
             <button
               type="button"
               onClick={() => onUpgrade("team")}
-              className={cn(
-                "flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small",
-                soloEligible
-                  ? "btn-light font-medium text-text-primary"
-                  : "auth-btn-3d font-semibold text-white"
-              )}
+              className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white"
             >
-              Upgrade to Team — $7.99/seat
+              Upgrade to Team — {formatMoney(TEAM_SEAT_PRICE)}/seat
             </button>
-          </div>
+          )
         ) : (
           <p className="text-caption text-text-muted">
             Ask a workspace admin or owner to upgrade this workspace.

@@ -106,10 +106,14 @@ export function HomePane({
     // ⚠ NO ROW IS READ OUT OF THIS TOKEN and there is none in it — the face is
     // cross-channel (see `paneToken` above and `home/server/service-overview.ts`,
     // which carries why the channel-scoped half was deleted).
-    // ⚠ `homeWorkspaceId` is the SAME boot query the other faces read — the
-    // credit bar is the PAYER's, and a home channel's MCP burn reroutes to that
-    // workspace (`billing/server/credits-service.ts › resolveBillingTarget`).
-    // NULL until the caller is onboarded.
+    // ⚠ `homeWorkspaceId` is the SAME boot query the other faces read, and it is
+    // the caller's own `kind='personal'` CONTAINER (`workspaces/server/
+    // segment.ts › getBootState` answers `ensurePersonalContainer`). That is what
+    // makes the credit bar the reader's PERSONAL WALLET: a status read addressed
+    // at a personal container resolves to that wallet
+    // (`billing/server/credits-service.ts › resolveBillingTarget`), never to a
+    // workspace seat. ⚠ The standard-workspace reroute this comment used to name
+    // was deleted 2026-09-07. NULL until the caller is onboarded.
     return (
       <HomeOverviewPanels
         homeWorkspaceId={identity.workspace?.id ?? null}

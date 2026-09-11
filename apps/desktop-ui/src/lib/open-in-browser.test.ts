@@ -15,9 +15,9 @@ describe("the billing handoff", () => {
   });
 
   it("carries the plan the user already chose, so checkout opens on arrival", () => {
-    expect(billingPath(SEGMENT, "solo")).toBe(
-      `/billing/${SEGMENT}?billing=upgrade&plan=solo`
-    );
+    // ⚠ `team` IS THE WHOLE UNION SINCE 2026-09-07 — Pro/`solo` is retired from
+    // sale and `features/billing/url.ts › CheckoutPlan` no longer names it, so
+    // a desktop build cannot mint a `plan=solo` link the route would 400.
     expect(billingPath(SEGMENT, "team")).toBe(
       `/billing/${SEGMENT}?billing=upgrade&plan=team`
     );

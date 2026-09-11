@@ -60,6 +60,10 @@ const WS1 = wsItem("id-1", "alpha", "Alpha");
 const WS2 = wsItem("id-2", "beta", "Beta");
 
 const UPGRADE = "https://www.usedopl.com/billing?billing=upgrade";
+/** ⚠ A DIFFERENT LINK, HENCE A SEPARATE CONSTANT — `upgradeUrlFor` appends
+ *  `plan=pro` for a FREE personal wallet; reusing the seat URL would leave the
+ *  two arms indistinguishable and the pin would survive a swap. */
+const UPGRADE_PRO = `${UPGRADE}&plan=pro`;
 
 function allowed(used = 1) {
   return {
@@ -75,6 +79,18 @@ function allowed(used = 1) {
 
 function exhausted() {
   return { ...allowed(500), allowed: false, remaining: 0 };
+}
+
+/**
+ * An exhausted answer that NAMES ITS WALLET. ⚠ `exhausted()` above deliberately
+ * carries NO `wallet` key — it is the older-server shape, and the pins that use
+ * it are the fallback's own proof.
+ */
+function exhaustedOn(
+  wallet: "personal" | "seat",
+  over: Record<string, unknown> = {},
+) {
+  return { ...exhausted(), wallet, ...over };
 }
 
 function mockClient(directory: WorkspaceListItem[]) {
@@ -336,5 +352,149 @@ describe("what is NOT charged", () => {
     const res = await map({ workspace: "does-not-exist" });
     expect(res.isError).toBe(true);
     expect(client.consumeCredits).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⚠ **THE REFUSAL NAMES WHOSE COUNTER STOPPED** (Samuel, 2026-09-07: an
+ * allocation is per person and "not pooled"). A member whose SEAT ran out is
+ * told about their seat — "this workspace is out of credits" would send them to
+ * an admin with nothing to refill — and a home-space caller is told about their
+ * personal wallet.
+ *
+ * ⚠ **AND THE UPGRADE LINE FOLLOWS THE URL, NOT THE WALLET** (Samuel,
+ * 2026-09-08: a personal PRO tier exists). Both wallets upsell on a FREE verdict
+ * and neither on a PAID one, so these pins are a 2×2 over wallet × `upgradeUrl`.
+ *
+ * ⚠ The `wallet`-less case is not a leftover: a client always outlives some
+ * servers, and the field is OPTIONAL on the wire for exactly that release
+ * window. Guessing a wallet there would tell a workspace member their PERSONAL
+ * credits ran out.
+ */
+describe("which wallet the refusal names", () => {
+  it("a SEAT on a free workspace — names the seat, the counters, the reset, and the upgrade", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(
+      exhaustedOn("seat", { used: 5000, limit: 5000 }),
+    );
+
+    const text = textOf(await map({}));
+    // ⚠ Thousands separators are `toLocaleString("en-US")`, pinned here because
+    // a raw `5000` is the shape a template literal produces by default.
+    expect(text).toContain(
+      "Your seat in this workspace is out of credits for this period (5,000/5,000). Resets 2026-09-01.",
+    );
+    expect(text).toContain(
+      `Upgrade to Team for 5,000 credits per member: ${UPGRADE}`,
+    );
+    expect(client.listKbBases).not.toHaveBeenCalled();
+  });
+
+  /** ⚠ EMPTY URL = NOTHING TO BUY (a seat on an already-paid workspace), not a
+   *  missing link. Offering "upgrade" there sends a paying member to a page that
+   *  has no answer for them. */
+  it("a SEAT on a PAID workspace — same sentence, and NO upgrade line", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(
+      exhaustedOn("seat", { used: 5000, limit: 5000, upgradeUrl: "" }),
+    );
+
+    const text = textOf(await map({}));
+    expect(text).toBe(
+      "Your seat in this workspace is out of credits for this period (5,000/5,000). Resets 2026-09-01.",
+    );
+    expect(text).not.toContain("Upgrade");
+  });
+
+  /**
+   * 🔒 **THE HOME SPACE HAS SOMETHING TO SELL SINCE 2026-09-08 (Samuel's Pro
+   * ruling), AND THESE TWO ARE THE PINS THAT SAY SO.** The arm dropped the link
+   * unconditionally for one wave, on the surface where most agents run — so an
+   * EMPTY url here means ALREADY ON PRO, exactly as it does on a seat, and a
+   * non-empty one names **Pro** and the PERSONAL link, never Team's.
+   */
+  it.each([
+    ["on PRO (no url)", "", 5000, ""],
+    [
+      "on FREE",
+      UPGRADE_PRO,
+      500,
+      `\n\nUpgrade to Pro for 5,000 credits a month: ${UPGRADE_PRO}`,
+    ],
+  ])("a PERSONAL wallet %s", async (_label, upgradeUrl, spent, tail) => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(
+      exhaustedOn("personal", { used: spent, limit: spent, upgradeUrl }),
+    );
+
+    const n = (spent as number).toLocaleString("en-US");
+    expect(textOf(await map({}))).toBe(
+      `Your personal credits are used up for this month (${n}/${n}). Resets 2026-09-01.${tail}`,
+    );
+  });
+
+  it("an OLDER SERVER sends no `wallet` — the generic sentence, with the url it did send", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(exhausted());
+
+    const text = textOf(await map({}));
+    expect(text).toContain("out of credits");
+    expect(text).toContain(`Upgrade to continue: ${UPGRADE}`);
+    expect(text).not.toContain("Your seat");
+    expect(text).not.toContain("Your personal credits");
+  });
+
+  it("`wallet: null` (nothing was metered) reads as the older server does", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue({ ...exhausted(), wallet: null });
+
+    const text = textOf(await map({}));
+    expect(text).toContain("out of credits");
+    expect(text).not.toContain("Your seat");
+    expect(text).not.toContain("Your personal credits");
+  });
+
+  /**
+   * ⚠ **A MISSING OR UNPARSEABLE `periodEnd` OMITS THE SENTENCE, IT DOES NOT
+   * PRINT ONE.** "Resets Invalid Date" / "Resets undefined" is a refusal that
+   * tells an agent to wait for a date that never comes.
+   */
+  it.each([
+    ["absent", undefined],
+    ["not a date", "soon"],
+    ["a plausible shape that is not a real day", "2026-13-45T00:00:00.000Z"],
+  ])("a `periodEnd` that is %s — no Resets sentence, everything else intact", async (
+    _label,
+    periodEnd,
+  ) => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue(
+      exhaustedOn("seat", { periodEnd, upgradeUrl: "" }),
+    );
+
+    const text = textOf(await map({}));
+    expect(text).toBe(
+      "Your seat in this workspace is out of credits for this period (500/500).",
+    );
+    expect(text).not.toContain("Resets");
+    expect(text).not.toContain("Invalid");
+    expect(text).not.toContain("undefined");
+  });
+
+  /** ⚠ A degraded-shaped refusal has no usable counters; `(undefined/undefined)`
+   *  is worse than no parenthetical at all. */
+  it("counters the server did not send are omitted, not printed", async () => {
+    const { map, client } = build({ sole: true });
+    client.consumeCredits.mockResolvedValue({
+      allowed: false,
+      wallet: "personal",
+      periodEnd: "2026-09-01T00:00:00.000Z",
+      upgradeUrl: "",
+    });
+
+    const text = textOf(await map({}));
+    expect(text).toBe(
+      "Your personal credits are used up for this month. Resets 2026-09-01.",
+    );
   });
 });

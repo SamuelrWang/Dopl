@@ -69,8 +69,14 @@ vi.mock("./stripe", async (importOriginal) => {
 
 vi.mock("./seats", () => ({ syncSeatQuantity: vi.fn() }));
 vi.mock("./subscriptions", () => ({ getUserByStripeCustomer: vi.fn() }));
+// ⚠ `findWorkspaceById` is `webhook-plan.ts › reportPlanContainerMismatch`'s
+// read (2026-09-08). Undefined here = "workspace not found" = no report, which
+// is the right default for every case in this file: none of them is about the
+// plan/container-kind check. That check has its own suite,
+// `webhook-plan.test.ts`.
 vi.mock("@/features/workspaces/server/repository", () => ({
   findSoleOwnedStandardWorkspace: vi.fn(),
+  findWorkspaceById: vi.fn(),
 }));
 
 import * as repo from "./workspace-billing";
@@ -399,7 +405,7 @@ describe("multi-item subscriptions + period end", () => {
 });
 
 describe("price -> plan derivation", () => {
-  it("maps the Solo price to plan 'solo'", async () => {
+  it("maps the legacy Solo price to plan 'solo' — off sale is not off the books", async () => {
     vi.stubEnv("STRIPE_SOLO_PRICE_ID", "price_solo");
     const solo = sub({
       status: "active",
@@ -502,7 +508,7 @@ describe("invoice.payment_failed", () => {
     );
   });
 
-  it("sets past_due on a matching Solo row too", async () => {
+  it("sets past_due on a matching legacy Solo row too", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue({
       plan: "solo",
       stripeSubscriptionId: "sub_1",

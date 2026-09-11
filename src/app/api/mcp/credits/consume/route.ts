@@ -22,8 +22,9 @@ import {
  * so a 403 was not a refusal, it was a FREE TOOL CALL plus a log line. Lowering the floor grants a
  * guest nothing except the ability to be BILLED: the only effect of a successful call is that
  * somebody's counter goes UP, and by `credits-service.ts › resolveBillingTarget` that somebody is
- * the container's OWNER. **Raising this floor back does not close anything — it re-opens the free
- * lane.** Pinned by `app/api/channels/guest-route-floor.test.ts` (set A/B) and, behaviourally,
+ * the container's OWNER — their PERSONAL WALLET since 2026-09-07, the owner's standard workspace
+ * before it; the ruling about WHO pays is unchanged, only the counter moved. **Raising this floor
+ * back does not close anything — it re-opens the free lane.** Pinned by `app/api/channels/guest-route-floor.test.ts` (set A/B) and, behaviourally,
  * by `route-guest-floor.test.ts` beside this file — which drives the REAL wrapper, where
  * `route.test.ts` mocks it away to reach the plan arithmetic.
  *
@@ -33,9 +34,12 @@ import {
 export const POST = withWorkspaceAuth(
   async (_request, { workspaceId, workspaceKind, userId }) => {
     try {
-      // ⚠ A `kind='link'` home-channel container has no plan; the container
-      // OWNER's billing workspace pays, whoever made the call
+      // ⚠ THE KIND PICKS THE WALLET. A standard workspace charges the CALLER'S
+      // OWN SEAT; a `kind='link'` or `kind='personal'` container has no plan and
+      // charges the container OWNER's PERSONAL wallet, whoever made the call
       // (`credits-service.ts › resolveBillingTarget`, INVARIANTS §4A).
+      // ⚠ `userId` is REQUIRED by that call since 2026-09-07 — both wallets are
+      // keyed on a person, so there is no wallet to move without one.
       return NextResponse.json(
         await consumeMcpCredits(workspaceId, { userId, workspaceKind })
       );
@@ -62,6 +66,9 @@ function failOpen(): CreditConsumeResult & { degraded: true } {
   return {
     // No row read, no verdict — the window a workspace with no subscription state gets.
     ...creditPeriodFor(null, "free"),
+    // ⚠ NO COUNTER WAS EVEN CHOSEN, let alone read. `null` is the honest wallet
+    // and the client mirror falls back to it on a pre-field cached row.
+    wallet: null,
     allowed: true,
     used: 0,
     limit: 0,

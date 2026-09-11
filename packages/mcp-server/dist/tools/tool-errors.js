@@ -74,7 +74,12 @@ exports.CREDITS_EXHAUSTED = {
     // credits, it's credits"). This meaning is READ BY AGENTS — it ships inside
     // the served tool descriptions as well as the refusal — so the wording rule
     // binds here first.
-    meaning: "this workspace is out of credits for this billing period",
+    // ⚠ "YOU", NEVER "THIS WORKSPACE" (Samuel, 2026-09-07): an allocation belongs
+    // to ONE person — a personal wallet, or one member's seat — and is never
+    // pooled across a workspace, so a workspace-wide sentence would send the
+    // caller to an admin who cannot refill it. ⚠ NO NUMBERS HERE: the allowances
+    // live in `src/features/billing/credits.ts` alone.
+    meaning: "you are out of credits for this billing period",
     retry: "no",
 };
 /**

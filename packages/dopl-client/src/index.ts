@@ -21,6 +21,7 @@ export type {
 export type {
   BuildResult,
   CreditConsumeResponse,
+  CreditWalletKind,
   WorkspaceKind,
   WorkspaceRole,
   WorkspaceSummary,

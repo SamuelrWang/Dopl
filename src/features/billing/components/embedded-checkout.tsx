@@ -9,6 +9,7 @@ import {
   type StripeCheckoutValue,
 } from "@stripe/react-stripe-js/checkout";
 import { Skeleton } from "@/shared/ui/skeleton";
+import type { CheckoutPlan } from "../url";
 import { checkoutAppearance } from "./checkout-appearance";
 
 /**
@@ -34,8 +35,13 @@ function getStripePromise() {
  * (`ui_mode: "elements"`), we render its `client_secret` through our own
  * `PaymentElement` + pay button — no Stripe iframe chrome.
  *
- * `plan`: "solo" ($5.99 flat, single-member only — server 409s
- * SOLO_REQUIRES_SINGLE_MEMBER otherwise) or "team" ($7.99 per seat).
+ * `plan`: `team` (a standard workspace's seats) or `pro` (a personal
+ * container's flat monthly), the two things checkout sells since 2026-09-08.
+ * ⚠ TYPED AS `CheckoutPlan` RATHER THAN PINNED TO A STRING, so the body this
+ * form POSTs and the plans the route accepts (`app/api/billing/checkout ›
+ * readPlan`) are one union; a body naming `solo` answers 400 `PLAN_RETIRED`,
+ * and a plan the addressed container cannot buy answers 400
+ * `PLAN_NOT_FOR_CONTAINER`.
  * `workspaceId` → `x-workspace-id`; omitting it makes the server resolve
  * fail-closed from memberships (sole workspace auto-targets; 0 or 2+ →
  * WORKSPACE_REQUIRED).
@@ -45,7 +51,7 @@ export function EmbeddedCheckoutForm({
   plan,
 }: {
   workspaceId?: string;
-  plan: "solo" | "team";
+  plan: CheckoutPlan;
 }) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +128,7 @@ export function EmbeddedCheckoutForm({
   );
 }
 
-function CheckoutPaymentForm({ plan }: { plan: "solo" | "team" }) {
+function CheckoutPaymentForm({ plan }: { plan: CheckoutPlan }) {
   const result = useCheckout();
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -184,24 +190,42 @@ function CheckoutPaymentForm({ plan }: { plan: "solo" | "team" }) {
 }
 
 /**
+ * The plan's own name — ⚠ **FROM THE PLAN, NOT A CONSTANT** (2026-09-08). It
+ * read `planName: "Team"` while Team was the only thing on sale, so a `pro`
+ * session would have rendered a Pro price under a Team heading. Not
+ * `plans.ts › plansForKind` either: that answers a CONTAINER, and this form is
+ * describing the session it was handed.
+ */
+const CHECKOUT_PLAN_NAME: Record<CheckoutPlan, string> = {
+  team: "Team",
+  pro: "Pro",
+};
+
+/**
  * Order described from the session, not hardcoded prices: `checkout.total.total`
  * and the first line item already carry Stripe-formatted, localized currency.
+ *
+ * ⚠ EXPORTED FOR ITS TEST, and only for that: mounting the form needs a live
+ * Stripe session, so this pure function is the only place the plan→heading and
+ * the seat-math branch can be pinned at all.
  */
-function describeOrder(checkout: StripeCheckoutValue, plan: "solo" | "team") {
+export function describeOrder(checkout: StripeCheckoutValue, plan: CheckoutPlan) {
   const item = checkout.lineItems[0];
   const interval = item?.recurring?.interval ?? "month";
-  // `amount` is Stripe's pre-formatted currency string (e.g. "$5.99").
+  // `amount` is Stripe's pre-formatted currency string (e.g. "$8.99").
   const totalLabel = `${checkout.total.total.amount} / ${interval}`;
-  const planName = plan === "solo" ? "Pro" : "Team";
 
   const seats = item?.quantity ?? 1;
   const unitAmount = item?.unitAmount.amount;
+  // ⚠ SEAT MATH ON `team` ONLY. `pro` is a flat quantity-1 subscription
+  // (`server/stripe.ts`), so "1 seat × $8.99" would name a unit the personal
+  // container does not have.
   const summaryDetail =
     plan === "team" && unitAmount
       ? `${seats} ${seats === 1 ? "seat" : "seats"} × ${unitAmount} / ${interval}`
       : `Billed ${intervalAdverb(interval)}`;
 
-  return { planName, summaryDetail, totalLabel };
+  return { planName: CHECKOUT_PLAN_NAME[plan], summaryDetail, totalLabel };
 }
 
 function intervalAdverb(interval: string): string {

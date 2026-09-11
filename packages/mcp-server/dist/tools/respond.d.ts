@@ -75,12 +75,43 @@ export declare function isAlreadyExists(e: unknown): boolean;
  */
 export declare const CREDITS_EXHAUSTED_CODE: string;
 /**
+ * The consume answer, as much of it as the refusal wording needs. ⚠ **EVERY
+ * FIELD IS OPTIONAL BECAUSE THE WIRE MAKES IT SO** — an older server sends no
+ * `wallet`, and a degraded answer zeroes the counters — so this renders what it
+ * was given and never invents the rest.
+ */
+export interface CreditsOutcome {
+    wallet?: "personal" | "seat" | null;
+    used?: number;
+    limit?: number;
+    periodEnd?: string;
+    upgradeUrl?: string;
+}
+/**
  * Credits refusal rendered exactly like an entitlement denial (message +
  * upgrade link) so an agent reads ONE shape for every plan gate. ⚠ URL comes
  * from the server's consume response — this package cannot import
  * `billing/server/entitlements.ts › upgradeUrl`.
+ *
+ * ⚠ **THE SENTENCE NAMES WHOSE COUNTER STOPPED, BECAUSE NOTHING IS POOLED**
+ * (Samuel, 2026-09-07). A `seat` refusal is about the caller's OWN allocation
+ * inside that workspace — telling them "this workspace is out" would send them
+ * to an admin who cannot help — and a `personal` refusal is about their home
+ * space.
+ *
+ * ⚠ **THE UPGRADE LINE IS DECIDED BY THE URL, NEVER BY THE WALLET** (Samuel,
+ * 2026-09-08: a personal PRO tier exists now). BOTH wallets carry an upsell on
+ * a FREE verdict and neither carries one on a PAID one, so an empty
+ * `upgradeUrl` is the server saying there is nothing to buy — the only fact
+ * this package can know. A wallet-keyed "personal never upgrades" rule was
+ * true for one day, and it would hide the paid tier on the product's primary
+ * agent surface while the server was handing this function the link.
+ *
+ * ⚠ **A MISSING `wallet` FALLS BACK, IT DOES NOT GUESS.** An older server omits
+ * the field entirely and `null` is the unmetered posture; both render the
+ * generic sentence, which is true of every wallet.
  */
-export declare function creditsExhausted(upgradeUrl: string): ToolResponse;
+export declare function creditsExhausted(o: CreditsOutcome): ToolResponse;
 /**
  * Plan-gate denial (403, flat entitlement envelope) → tool error, else null so
  * the caller rethrows. ⚠ Duck-typed on `.code`/`.apiMessage`/`.upgradeUrl` to

@@ -1,0 +1,99 @@
+-- PLAN TAXONOMY v3 — `pro`, the PERSONAL paid tier (2026-09-08, Samuel's
+-- $8.99 ruling; spec `docs/specs/credit-model-v2.md` §11).
+--
+-- ⚠ **WRITTEN, NOT APPLIED. REPLAY HAS NOT RUN** (Docker is unavailable on this
+-- machine, so `supabase db reset` cannot start). This directory's standing gate
+-- is recorded rather than glossed.
+--
+-- ⚠ **DEPLOY STATE IS A MEASUREMENT, NOT A CLAIM.** Re-derive with
+-- `supabase migration list` (or the MCP `list_migrations`) and **JOIN ON THE
+-- NAME**, never on the filename prefix: `20260823150000` applied as
+-- `20260823205007`, `credit_usage_events` as `20260901193049`
+-- (INVARIANTS §12, F-304). "Is `20260930130000` applied?" is not a question the
+-- version column can answer.
+--
+-- ⚠ **APPLY ORDER: LAST, AFTER `20260930120000_credit_wallets.sql`.** Every
+-- pending file goes first, in FILENAME order; this one sorts after all of them.
+-- It touches only `workspace_billing`'s plan CHECK, so it has no dependency on
+-- the wallet tables — but the two ship as one wave and applying them out of
+-- filename order is how a replay stops being the thing CI proves.
+--
+-- ⚠ **DEPLOY ORDER: THIS FILE FIRST, THE SERVER SECOND, AND THE FAILURE IS
+-- LOUD FOR ONCE.** The wave's Stripe webhook writes `plan = 'pro'` when a
+-- personal Pro subscription lands. Against the three-value CHECK that INSERT
+-- raises `23514` inside the webhook handler, so Stripe retries a `checkout.
+-- session.completed` the database will never accept: the customer is charged
+-- and the container never flips. Apply this file, verify with
+-- `supabase migration list` joined ON THE NAME, THEN deploy.
+--
+-- ── WHAT CHANGED, AND WHY THERE IS NO SECOND BILLING PIPELINE ──────────────
+--
+-- Samuel's ruling, 2026-09-08, verbatim:
+--
+--   > "Team seats are 799, and normal pro seats are also 799 … I think we
+--   > should make it 899 … This will be for both individual and team. For
+--   > individual, 899. The free tier gives you 500 credits a month. 899 gives
+--   > you, let's say, 5,000 credits a month. … Personal free is 500, seat free
+--   > is 100, pro individual is 5,000, and team individual is also 5,000."
+--
+-- A `kind='personal'` container is already a real `workspaces` row — one per
+-- user, owner = its only member (`20260920120000_workspace_kind_personal.sql`).
+-- So the personal Pro subscription lives in `workspace_billing` KEYED BY THAT
+-- CONTAINER ID, and checkout, the webhook (metadata `workspace_id` = the
+-- container), the event watermark, the checkout claim, the portal, invoices,
+-- the payment method and cancel/resume all work with no change at all. The
+-- ONLY schema this tier needs is one more value in the plan CHECK — which is
+-- this file, and which is why it is THREE statements long: drop the constraint,
+-- re-add it with the fourth value, re-comment the column.
+-- ⚠ THIS READ "four" UNTIL 2026-09-08 (F-676). The count is the EVIDENCE for
+-- the sentence's argument — that the personal Pro tier cost almost no schema —
+-- so an off-by-one in it is a reader carrying a wrong fact about the cost.
+-- Re-derive rather than trust: `grep -v '^--' <file> | grep -c ';'`.
+--
+-- ⚠ `pro` IS NOT `solo` RENAMED, AND `solo` IS NOT RESURRECTED. `solo` was a
+-- flat $5.99 single-member STANDARD workspace, retired from sale 2026-09-07
+-- and kept alive only for the rows already on it. `pro` is $8.99 on a PERSONAL
+-- container and is sold. They coexist in the taxonomy because they describe
+-- different rows; nothing renames or migrates anything here.
+--
+-- ⚠ THE VALUE `'pro'` LIVED IN THIS COLUMN BEFORE, AND THAT IS NOT A REVERT.
+-- `20260719000000_workspace_billing_plan_taxonomy_v2.sql` renamed the old
+-- per-seat `'pro'` rows to `'team'` and dropped the value from the CHECK. This
+-- file re-admits the STRING for a different plan. There are no old `'pro'` rows
+-- left to be confused with the new ones — that UPDATE ran, and the CHECK has
+-- refused the value ever since — so no backfill or disambiguation is owed.
+--
+-- ── ROLLBACK ───────────────────────────────────────────────────────────────
+--
+-- ⚠ **THE ROLLBACK IS SAFE ONLY WHILE NO `pro` ROW EXISTS.** The three-value
+-- CHECK is validated against the whole table on ADD, so it FAILS with `23514`
+-- the moment one personal container has been upgraded — which is the correct
+-- behaviour (it refuses to strand a paying customer's row), not a bug to work
+-- around. Check first, and if the count is non-zero the rollback is a product
+-- decision (refund/downgrade those subscriptions) before it is a SQL one.
+--
+--   SELECT count(*) FROM public.workspace_billing WHERE plan = 'pro';  -- must be 0
+--
+--   ALTER TABLE public.workspace_billing
+--     DROP CONSTRAINT IF EXISTS workspace_billing_plan_check;
+--   ALTER TABLE public.workspace_billing ADD CONSTRAINT workspace_billing_plan_check
+--     CHECK (plan IN ('free', 'solo', 'team'));
+--
+-- ── VERIFY ─────────────────────────────────────────────────────────────────
+--
+--   SELECT pg_get_constraintdef(oid) FROM pg_constraint
+--    WHERE conname = 'workspace_billing_plan_check';
+--   -- expect: CHECK ((plan = ANY (ARRAY['free'::text, 'solo'::text, 'team'::text, 'pro'::text])))
+
+-- ⚠ THE CONSTRAINT NAME IS THE ONE `20260719000000_workspace_billing_plan_taxonomy_v2.sql`
+-- ADDED, not a guess: drop-then-re-add under the SAME name, so the catalog
+-- keeps one constraint on this column rather than accumulating a second
+-- permissive one beside the first.
+ALTER TABLE public.workspace_billing
+  DROP CONSTRAINT IF EXISTS workspace_billing_plan_check;
+
+ALTER TABLE public.workspace_billing ADD CONSTRAINT workspace_billing_plan_check
+  CHECK (plan IN ('free', 'solo', 'team', 'pro'));
+
+COMMENT ON COLUMN public.workspace_billing.plan IS
+  'Billing plan for THIS container. free = no live subscription. team = $8.99 per active seat, standard workspaces only. pro = $8.99 flat on a kind=''personal'' container (added 2026-09-08). solo = legacy $5.99 flat single-member standard workspace, RETIRED FROM SALE 2026-09-07, live rows honoured. Entitlement is the VERDICT (src/features/billing/server/entitlements.ts > entitledPlanFor), never this column raw.';

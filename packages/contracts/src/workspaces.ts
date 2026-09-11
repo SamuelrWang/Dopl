@@ -47,9 +47,11 @@ export type MembershipStatus = "pending" | "active" | "revoked";
  * "standard" = a real user-facing workspace. "link" = a hidden home-channel
  * container holding ONE or TWO members and exactly one channel — never shown in
  * the rail/switcher, never an implicit target, and **bills to the
- * CONTAINER OWNER's plan whoever makes the call** (Samuel, 2026-08-26 —
+ * CONTAINER OWNER whoever makes the call** (Samuel, 2026-08-26 —
  * `billing/server/credits-service.ts › resolveBillingTarget`; it billed each
- * side's own plan until then).
+ * side's own plan until then). ⚠ **TO THE OWNER'S PERSONAL WALLET SINCE
+ * 2026-09-07, NOT TO A PLAN**: a container carries no plan, and the reroute onto
+ * the owner's standard workspace is deleted. WHO pays is unchanged.
  *
  * ⚠ **"personal" = THE ONE CONTAINER EVERY USER HAS** (v2 wave B, B11 —
  * `supabase/migrations/20260920120000_workspace_kind_personal.sql`). It holds

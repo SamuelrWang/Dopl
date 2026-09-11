@@ -154,16 +154,93 @@ const ENTITLEMENT_CODES = new Set([
 ]);
 
 /**
+ * The consume answer, as much of it as the refusal wording needs. ⚠ **EVERY
+ * FIELD IS OPTIONAL BECAUSE THE WIRE MAKES IT SO** — an older server sends no
+ * `wallet`, and a degraded answer zeroes the counters — so this renders what it
+ * was given and never invents the rest.
+ */
+export interface CreditsOutcome {
+  wallet?: "personal" | "seat" | null;
+  used?: number;
+  limit?: number;
+  periodEnd?: string;
+  upgradeUrl?: string;
+}
+
+/** `2026-09-01T00:00:00.000Z` → `2026-09-01`, or null when it is not a date.
+ *  ⚠ Null OMITS the "Resets …" sentence; printing `Invalid Date` or a raw
+ *  fragment of somebody's shape change is worse than saying nothing. */
+function periodEndDate(periodEnd: string | undefined): string | null {
+  if (typeof periodEnd !== "string") return null;
+  const day = periodEnd.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  return Number.isNaN(Date.parse(periodEnd)) ? null : day;
+}
+
+/** `(1,000/5,000)`, or "" when the server sent no usable counters. */
+function usageSpan(used: number | undefined, limit: number | undefined): string {
+  if (!Number.isFinite(used) || !Number.isFinite(limit)) return "";
+  return ` (${(used as number).toLocaleString("en-US")}/${(limit as number).toLocaleString("en-US")})`;
+}
+
+/**
  * Credits refusal rendered exactly like an entitlement denial (message +
  * upgrade link) so an agent reads ONE shape for every plan gate. ⚠ URL comes
  * from the server's consume response — this package cannot import
  * `billing/server/entitlements.ts › upgradeUrl`.
+ *
+ * ⚠ **THE SENTENCE NAMES WHOSE COUNTER STOPPED, BECAUSE NOTHING IS POOLED**
+ * (Samuel, 2026-09-07). A `seat` refusal is about the caller's OWN allocation
+ * inside that workspace — telling them "this workspace is out" would send them
+ * to an admin who cannot help — and a `personal` refusal is about their home
+ * space.
+ *
+ * ⚠ **THE UPGRADE LINE IS DECIDED BY THE URL, NEVER BY THE WALLET** (Samuel,
+ * 2026-09-08: a personal PRO tier exists now). BOTH wallets carry an upsell on
+ * a FREE verdict and neither carries one on a PAID one, so an empty
+ * `upgradeUrl` is the server saying there is nothing to buy — the only fact
+ * this package can know. A wallet-keyed "personal never upgrades" rule was
+ * true for one day, and it would hide the paid tier on the product's primary
+ * agent surface while the server was handing this function the link.
+ *
+ * ⚠ **A MISSING `wallet` FALLS BACK, IT DOES NOT GUESS.** An older server omits
+ * the field entirely and `null` is the unmetered posture; both render the
+ * generic sentence, which is true of every wallet.
  */
-export function creditsExhausted(upgradeUrl: string): ToolResponse {
+export function creditsExhausted(o: CreditsOutcome): ToolResponse {
+  const url = typeof o.upgradeUrl === "string" ? o.upgradeUrl : "";
+  const span = usageSpan(o.used, o.limit);
+  const day = periodEndDate(o.periodEnd);
+  const resets = day ? ` Resets ${day}.` : "";
+
+  if (o.wallet === "seat") {
+    const head = `Your seat in this workspace is out of credits for this period${span}.${resets}`;
+    return err(
+      url
+        // ⚠ `5,000` IS THE SECOND HOME OF `SEAT_MONTHLY_CREDITS.team` AND IT IS
+        // TRACKED, NOT ACCEPTED (F-668): this package cannot import `src/`, so
+        // retuning the paid seat allowance is a TWO-SITE edit and no test can
+        // see the drift. The personal literal below is the SAME finding, not a
+        // third source.
+        ? `${head}\n\nUpgrade to Team for 5,000 credits per member: ${url}`
+        : head,
+    );
+  }
+  if (o.wallet === "personal") {
+    const head = `Your personal credits are used up for this month${span}.${resets}`;
+    return err(
+      url
+        // ⚠ `5,000` IS `PERSONAL_MONTHLY_CREDITS.pro`, HERE FOR THE SEAT
+        // LITERAL'S REASON AND UNDER THE SAME FINDING (F-668) — one copy of the
+        // problem, now written twice.
+        ? `${head}\n\nUpgrade to Pro for 5,000 credits a month: ${url}`
+        : head,
+    );
+  }
   return err(
-    upgradeUrl
-      ? `${CREDITS_EXHAUSTED_MESSAGE}\n\nUpgrade to continue: ${upgradeUrl}`
-      : CREDITS_EXHAUSTED_MESSAGE
+    url
+      ? `${CREDITS_EXHAUSTED_MESSAGE}\n\nUpgrade to continue: ${url}`
+      : CREDITS_EXHAUSTED_MESSAGE,
   );
 }
 
@@ -184,7 +261,7 @@ export function entitlementDenied(e: unknown): ToolResponse | null {
     typeof rec.apiMessage === "string" && rec.apiMessage
       ? rec.apiMessage
       : code === "chat_outside_retention"
-        ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Pro to restore full chat history."
+        ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Team to restore full chat history."
         : code === CREDITS_EXHAUSTED_CODE
           ? CREDITS_EXHAUSTED_MESSAGE
           : code === "kb_storage_full"
