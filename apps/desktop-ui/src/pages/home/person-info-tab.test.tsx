@@ -129,59 +129,67 @@ beforeEach(() => {
   serve(HOME);
 });
 
-describe("Channel info — removable rows", () => {
-  it("the × removes a built-in row OPTIMISTICALLY, and it stays removed across the refetch", async () => {
-    // ⚠ THE PATCH IS HELD OPEN. Everything asserted before `release()` happened
-    // with the write still in flight, so it can only be the optimistic patch —
-    // a plain `waitFor` would pass on the reconcile a network hop later, and
-    // the × would read as broken for that whole hop.
-    let release = () => {};
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    serve(HOME, MEMBERS, held);
-
-    renderHome();
-    await openChannelRecord();
-    // ⚠ THE SUBJECT IS "Created", NOT "Email" (2026-09-01). The Email row is
-    // deleted from this card — it was the last member-derived fact on it, and
-    // `person-info-tab.tsx` carries the ruling — so the × is exercised on a row
-    // that is genuinely about the CHANNEL. The mechanism under test (optimistic
-    // hide, one key, survives the reconcile) is unchanged.
-    expect(await screen.findByText("Created")).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove Created from this card" })
-    );
-
-    await waitFor(() => expect(screen.queryByText("Created")).toBeNull());
-    expect(lastCardSent()).toEqual({ hidden: ["created"], rows: [] });
-
-    // Now let the server answer, and let the write's own `invalidate` re-read
-    // `/api/channels` — the half that only passes if the server KEPT it.
-    release();
-    await waitFor(() =>
-      expect(
-        bridgeCalls(apiRequest).filter((c) => c.path === "/api/channels").length
-      ).toBeGreaterThan(1)
-    );
-    expect(screen.queryByText("Created")).toBeNull();
-    // The rows it did NOT name are untouched — an × is one row, not a reset.
-    expect(screen.getByText("Last activity")).toBeInTheDocument();
-  });
-
-  it("removes a row that is already hidden without re-sending it", async () => {
-    // ⚠ HIDING IS IDEMPOTENT (`info-card.ts › hideBuiltInRow`), so a card that
-    // arrives with `email` hidden renders no Email row and no × for one.
-    stored = { hidden: ["email"], rows: [] };
-    serve(HOME);
+describe("Channel info — the four fixed rows", () => {
+  /**
+   * 🔒 NAME · CREATOR · CREATED · LAST ACTIVITY ARE FIXED AND PERMANENT (Samuel,
+   * 2026-09-12: *"add Creator as a field, under name. Remove the ability to
+   * remove the created and last activity fields, the 4 fields there will now be
+   * fixed and permanent"*). No × on any of them; only custom rows carry one.
+   */
+  it("renders Name, Creator, Created, Last activity in that order, none removable", async () => {
     renderHome();
     await openChannelRecord();
     await screen.findByText("Created");
+
+    const labels = ["Name", "Creator", "Created", "Last activity"].map(
+      (label) => screen.getByText(label)
+    );
+    // Pairwise the list is ascending in document order.
+    for (let i = 1; i < labels.length; i++) {
+      expect(
+        labels[i - 1]!.compareDocumentPosition(labels[i]!) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+    for (const label of ["Name", "Creator", "Created", "Last activity"]) {
+      expect(
+        screen.queryByRole("button", { name: `Remove ${label} from this card` })
+      ).toBeNull();
+    }
+    expect(lastCardSent()).toBeNull();
+  });
+
+  it("names the creator from the roster the surface already holds", async () => {
+    renderHome();
+    await openChannelRecord();
+    // `CHANNEL.createdBy` is `USER_ID`, whose roster row is "Sam Wang". The
+    // roster prints the same name one section down, so the pin is POSITION:
+    // one "Sam Wang" sits between the "Creator" and "Created" labels.
+    const names = await screen.findAllByText("Sam Wang");
+    const creatorLabel = screen.getByText("Creator");
+    const createdLabel = screen.getByText("Created");
+    const between = names.some(
+      (el) =>
+        creatorLabel.compareDocumentPosition(el) &
+          Node.DOCUMENT_POSITION_FOLLOWING &&
+        el.compareDocumentPosition(createdLabel) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(between).toBe(true);
+  });
+
+  it("ignores a stored `hidden` key — the row is fixed, the stored state is inert", async () => {
+    // ⚠ A card written while the × existed may still carry `created`/`email`
+    // in `hidden`. `info-card.ts` keeps the union so those rows validate; this
+    // tab now renders every built-in regardless, and sends nothing.
+    stored = { hidden: ["created", "email"], rows: [] };
+    serve(HOME);
+    renderHome();
+    await openChannelRecord();
+    expect(await screen.findByText("Created")).toBeInTheDocument();
+    expect(screen.getByText("Last activity")).toBeInTheDocument();
     expect(screen.queryByText("Email")).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Remove Email from this card" })
-    ).toBeNull();
+    expect(lastCardSent()).toBeNull();
   });
 });
 

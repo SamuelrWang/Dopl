@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarDays, Clock3, Hash, type LucideIcon } from "lucide-react";
+import { CalendarDays, Clock3, Hash, UserRound, type LucideIcon } from "lucide-react";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import {
@@ -13,14 +13,16 @@ import {
   InfoCardSection,
 } from "@/features/channels/components/channels-v2/info-card-rows";
 import { useChannelInfoCardWrite } from "@/features/channels/hooks/use-channel-info-card-writes";
+import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
+import { memberLabel } from "@/features/channels/lib/channel-display";
+import { memberPerson } from "@/features/channels/components/channels-v2/view-model";
+import { Avatar } from "@/shared/ui/avatar";
 import {
   EMPTY_INFO_CARD,
   INFO_CARD_MAX_ROWS,
-  hideBuiltInRow,
   newInfoCardRowId,
   removeInfoCardRow,
   upsertInfoCardRow,
-  type ChannelInfoCardBuiltInKey,
 } from "@/features/channels/info-card";
 import type { Channel } from "@/features/channels/types";
 import type { HomeChannel } from "@/features/home/types";
@@ -104,34 +106,45 @@ export function PersonInfoTab({
     gate,
   });
 
-  // ⚠ BUILT AS DATA, THEN FILTERED — never `hidden.includes(...)` written three
-  // times inline. One list means the divider arithmetic below cannot disagree
-  // with what is on screen, and adding a built-in row is one entry plus one key
-  // in `info-card.ts`.
+  // 🔒 **THE FOUR SHIPPED ROWS ARE FIXED AND PERMANENT (Samuel, 2026-09-12):
+  // Name, Creator, Created, Last activity.** No × on any of them, and a stored
+  // `hidden` key is INERT — the card renders every built-in regardless. `hidden`
+  // stays in `info-card.ts` because stored cards carry it (and `"email"`, whose
+  // row was deleted 2026-09-01); dropping the union would fail validation on
+  // every one of those rows. Only CUSTOM rows are removable.
   //
-  // 🔒 ⚠ **THE EMAIL ROW IS DELETED (Samuel, 2026-09-01) — IT WAS THE LAST
-  // MEMBER-DERIVED FACT ON THIS CARD.** It rendered only when the container held
-  // EXACTLY ONE peer, which is what made it a morph: a channel's info card grew
-  // a stranger's address the moment they claimed a link, and lost it again when
-  // a second person joined. (It had already been dropped above one peer on
-  // 2026-08-26, for the narrower reason that one address under a header naming
-  // two other members reads as THEIRS — the same defect, caught one case
-  // early.) **A card whose whole premise is curated facts about THIS CHANNEL
-  // must not carry a fact about a person.**
-  //
-  // ⚠ **NOTHING IS LOST**: every member's address is one section down, beside
-  // their face, in the roster (`PersonMembers` → `MemberRoster`, name over
-  // EMAIL) — shown where it can be attributed, and the only place an added user
-  // appears on this tab.
-  //
-  // ⚠ **`"email"` STAYS IN `info-card.ts › INFO_CARD_BUILT_IN_KEYS` AND MUST.**
-  // Stored cards carry it in `hidden` for operators who removed the row while it
-  // existed; that file already states the rule — a key hidden on a channel that
-  // does not render the row is INERT rather than wrong. Dropping it from the
-  // union would turn every one of those stored rows into a validation failure.
+  // ⚠ CREATOR reads the roster the surface already has (`useChannelMembers`, the
+  // same read `PersonMembers` makes one section down — one cache entry, not a
+  // second request). A creator who is no longer a member has no roster row and
+  // an id is not a name, so the row says it does not know — the same answer the
+  // workspace channels page gives (`channels-v2/info-tab.tsx`).
+  const { members } = useChannelMembers(
+    homeChannel.channelId,
+    homeChannel.workspaceId
+  );
+  const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
   const builtIns: BuiltInRow[] = [
     {
-      key: "created" as const,
+      key: "creator",
+      icon: UserRound,
+      label: "Creator",
+      value: creator ? (
+        <>
+          <Avatar
+            person={memberPerson(creator)}
+            size="xs"
+            className="h-[20px] w-[20px] text-micro"
+          />
+          <span className="text-body text-text-primary">
+            {memberLabel(creator)}
+          </span>
+        </>
+      ) : (
+        <span className="text-body text-text-muted">Not in this channel</span>
+      ),
+    },
+    {
+      key: "created",
       icon: CalendarDays,
       label: "Created",
       value: (
@@ -141,7 +154,7 @@ export function PersonInfoTab({
       ),
     },
     {
-      key: "lastActivity" as const,
+      key: "lastActivity",
       icon: Clock3,
       label: "Last activity",
       value: (
@@ -152,7 +165,7 @@ export function PersonInfoTab({
         </span>
       ),
     },
-  ].filter((row) => !card.hidden.includes(row.key));
+  ];
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
@@ -199,18 +212,14 @@ export function PersonInfoTab({
         {builtIns.map((row) => (
           <div key={row.key}>
             <MetaRowDivider />
-            <MetaRow
-              icon={row.icon}
-              label={row.label}
-              onRemove={() => save(hideBuiltInRow(card, row.key))}
-            >
+            <MetaRow icon={row.icon} label={row.label}>
               {row.value}
             </MetaRow>
           </div>
         ))}
-        {card.rows.map((row, i) => (
+        {card.rows.map((row) => (
           <div key={row.id}>
-            {(i > 0 || builtIns.length > 0) && <MetaRowDivider />}
+            <MetaRowDivider />
             <InfoCardCustomRow
               row={row}
               onChange={(next) => save(upsertInfoCardRow(card, next))}
@@ -241,10 +250,9 @@ export function PersonInfoTab({
   );
 }
 
-/** One shipped Channel-info row, as data. `key` is what `info-card.ts › hidden`
- *  names — a row without one could not be removed. */
+/** One shipped Channel-info row, as data. Fixed: `key` is a React key only. */
 interface BuiltInRow {
-  key: ChannelInfoCardBuiltInKey;
+  key: string;
   icon: LucideIcon;
   label: string;
   value: ReactNode;
