@@ -6,6 +6,7 @@ import {
   useRevisionHistory,
 } from "@/features/revisions/client/hooks";
 import type { Revision } from "@/features/revisions/types";
+import { PanelSection } from "./panel-section";
 
 /**
  * ONE OBJECT'S **History** — the HubSpot-shaped per-field timeline, inside the
@@ -42,10 +43,12 @@ export function ObjectHistory({
   const restore = useRestoreOntologyRevision(workspaceId);
 
   return (
-    <section className="flex flex-col gap-1">
-      <h3 className="px-1 text-label uppercase tracking-wide text-text-muted">
-        History
-      </h3>
+    // ⚠ **THE SAME `PanelSection` THE OTHER FOUR WEAR SINCE 2026-09-12** — this
+    // section was already flat (it never had a frame), but its heading was muted
+    // and unweighted, so the panel's LAST section announced itself differently
+    // from the three above it. The heading is still an `h3` named "History",
+    // which is what `pages/home/ontology-panels.test.tsx` matches.
+    <PanelSection label="History">
       {objectId === null ? null : (
         <ChangelogList
           days={history.days}
@@ -67,6 +70,6 @@ export function ObjectHistory({
           }}
         />
       )}
-    </section>
+    </PanelSection>
   );
 }

@@ -3,16 +3,21 @@
 import { useState } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
+import { cn } from "@/shared/lib/utils";
+import { SelectMenu } from "@/shared/ui/select-menu";
+import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
-import { SectionBox } from "@/shared/ui/section-box";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
+import { InlineUnderlineField } from "./board-header-bits";
 import { KnowledgePickMenu } from "./knowledge-pick-menu";
 import { ObjectPickMenu } from "./object-pick-menu";
-import { CHIP, FIELD_WELL } from "./ontology-bits";
+import { CHIP } from "./ontology-bits";
+import { PANEL_ADD_ROW, PanelSection, ROW_REMOVE_BUTTON } from "./panel-section";
+import { KIND_OPTIONS } from "./template-editor";
 import { PickMenu } from "./pick-menu";
 
-type AttrKind = "text" | "pill" | "ref" | "knowledge" | "skill";
+type AttrKind = OntologyObject["attributes"][number]["value"]["kind"];
 
 type Attribute = OntologyObject["attributes"][number];
 
@@ -20,6 +25,15 @@ type Attribute = OntologyObject["attributes"][number];
  * Attributes section — editable key/value rows, labels edit in place. Value
  * kinds: text, tag, object refs (cascade picker), and access-gated knowledge /
  * skills (PickMenu offers only resources the caller can see).
+ *
+ * ⚠ **FLAT SINCE 2026-09-12** (Samuel, over the object panel: *"no more indented
+ * stuff"*). What went: the `SectionBox` frame, the concave body, the resize grip,
+ * the `bento` card each row sat on, and every `FIELD_WELL` — a text row is the
+ * popup kit's UNDERLINE now (`board-header-bits.tsx › InlineUnderlineField`, the
+ * board header's own field, imported not re-cut), the kind picker is a
+ * `SelectMenu` text face, and the pickers and Add wear `SMALL_TEXT_BUTTON` at the
+ * 30px scale rather than a raised `btn-light` pill. ⚠ The CHIPS stay chips: a
+ * knowledge / skill / object value is a removable TOKEN, not a field.
  */
 export function AttributesEditor({
   object,
@@ -52,84 +66,73 @@ export function AttributesEditor({
   };
 
   return (
-    <SectionBox label="Attributes" meta={`${object.attributes.length}`}>
-      {object.attributes.length > 0 && (
-        <div className="flex flex-col gap-2 px-3 py-3">
-          {object.attributes.map((attr, i) => (
-            <div key={`${attr.key}-${i}`} className="bento group flex items-center gap-3 px-3.5 py-1.5">
-            <input
-              type="text"
-              value={attr.label}
-              readOnly={!canEdit}
-              onChange={(e) =>
-                dispatch({
-                  type: "ATTRIBUTE_UPSERT",
-                  id: object.id,
-                  index: i,
-                  attribute: { ...attr, label: e.target.value },
-                })
-              }
-              aria-label="Attribute label"
-              className="w-32 shrink-0 bg-transparent text-lead text-text-secondary placeholder:text-text-muted focus:text-text-primary focus:outline-none"
-              placeholder="label…"
-            />
-            <AttrValueEditor
-              attr={attr}
-              object={object}
-              graph={graph}
-              canEdit={canEdit}
-              onChange={(attribute) =>
-                dispatch({ type: "ATTRIBUTE_UPSERT", id: object.id, index: i, attribute })
-              }
-            />
-            {canEdit && (
-              <button
-                type="button"
-                aria-label={`Remove ${attr.label}`}
-                onClick={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
-                className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-          ))}
-        </div>
-      )}
-      {canEdit && (
-        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
-          <input
-            type="text"
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addAttribute()}
-            placeholder="new attribute…"
-            className={`${FIELD_WELL} h-7 w-36 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
+    <PanelSection label="Attributes" meta={`${object.attributes.length}`}>
+      {object.attributes.map((attr, i) => (
+        <div key={`${attr.key}-${i}`} className="group flex items-center gap-3">
+          <InlineUnderlineField
+            label="Attribute label"
+            value={attr.label}
+            readOnly={!canEdit}
+            onChange={(label) =>
+              dispatch({
+                type: "ATTRIBUTE_UPSERT",
+                id: object.id,
+                index: i,
+                attribute: { ...attr, label },
+              })
+            }
+            className="w-32 shrink-0"
           />
-          <select
+          <AttrValueEditor
+            attr={attr}
+            object={object}
+            graph={graph}
+            canEdit={canEdit}
+            onChange={(attribute) =>
+              dispatch({ type: "ATTRIBUTE_UPSERT", id: object.id, index: i, attribute })
+            }
+          />
+          {canEdit && (
+            <button
+              type="button"
+              aria-label={`Remove ${attr.label}`}
+              onClick={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
+              className={ROW_REMOVE_BUTTON}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      ))}
+      {canEdit && (
+        <div className={PANEL_ADD_ROW}>
+          <InlineUnderlineField
+            label="New attribute"
+            value={newLabel}
+            onChange={setNewLabel}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addAttribute();
+            }}
+            className="w-36"
+          />
+          <SelectMenu
             value={newKind}
-            onChange={(e) => setNewKind(e.target.value as AttrKind)}
-            aria-label="Attribute type"
-            className={`${FIELD_WELL} h-7 px-1.5 text-small text-text-secondary`}
-          >
-            <option value="text">Text</option>
-            <option value="pill">Tag</option>
-            <option value="ref">Object</option>
-            <option value="knowledge">Knowledge</option>
-            <option value="skill">Skill</option>
-          </select>
-          <button
-            type="button"
-            onClick={addAttribute}
-            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
-          >
+            options={KIND_OPTIONS}
+            onChange={setNewKind}
+            variant="text"
+            ariaLabel="Attribute type"
+          />
+          <button type="button" onClick={addAttribute} className={cn(SMALL_TEXT_BUTTON, "gap-1")}>
             <Plus size={11} /> Add
           </button>
         </div>
       )}
-    </SectionBox>
+    </PanelSection>
   );
 }
+
+/** The 30px text face every picker trigger in this panel wears. */
+const PICK_TRIGGER = cn(SMALL_TEXT_BUTTON, "gap-1");
 
 function AttrValueEditor({
   attr,
@@ -149,8 +152,6 @@ function AttrValueEditor({
 
   if (v.kind === "knowledge" || v.kind === "skill") {
     const vk = v;
-    const triggerClassName =
-      "btn-light flex h-6 w-40 items-center justify-between rounded-full px-3 text-caption font-medium text-text-primary";
     return (
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         {vk.value.map((id) => (
@@ -185,7 +186,7 @@ function AttrValueEditor({
                   <ChevronDown size={11} className="text-text-muted" />
                 </>
               }
-              triggerClassName={triggerClassName}
+              triggerClassName={PICK_TRIGGER}
             />
           ) : (
             <PickMenu
@@ -200,7 +201,7 @@ function AttrValueEditor({
                   <ChevronDown size={11} className="text-text-muted" />
                 </>
               }
-              triggerClassName={triggerClassName}
+              triggerClassName={PICK_TRIGGER}
             />
           ))}
       </span>
@@ -237,11 +238,11 @@ function AttrValueEditor({
             excludeIds={[object.id, ...v.value]}
             onPick={(id) => onChange({ ...attr, value: { kind: "ref", value: [...v.value, id] } })}
             trigger={
-              <span className="flex items-center gap-1">
+              <>
                 <Plus size={10} /> Link
-              </span>
+              </>
             }
-            triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-caption font-medium text-text-primary"
+            triggerClassName={PICK_TRIGGER}
           />
         )}
       </span>
@@ -250,25 +251,23 @@ function AttrValueEditor({
 
   if (v.kind === "pill") {
     return (
-      <input
-        type="text"
+      <InlineUnderlineField
+        label="Tag"
         value={v.value}
         readOnly={!canEdit}
-        onChange={(e) => onChange({ ...attr, value: { kind: "pill", value: e.target.value } })}
-        placeholder="tag…"
-        className={`w-fit min-w-24 ${CHIP} placeholder:text-text-muted focus:border-border-highlight focus:outline-none`}
+        onChange={(next) => onChange({ ...attr, value: { kind: "pill", value: next } })}
+        className="min-w-0 flex-1"
       />
     );
   }
 
   return (
-    <input
-      type="text"
+    <InlineUnderlineField
+      label="Value"
       value={v.value}
       readOnly={!canEdit}
-      onChange={(e) => onChange({ ...attr, value: { kind: "text", value: e.target.value } })}
-      placeholder="value…"
-      className="min-w-0 flex-1 bg-transparent text-lead text-text-primary placeholder:text-text-muted focus:outline-none"
+      onChange={(next) => onChange({ ...attr, value: { kind: "text", value: next } })}
+      className="min-w-0 flex-1"
     />
   );
 }

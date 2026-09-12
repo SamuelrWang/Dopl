@@ -11,6 +11,7 @@ import {
   type GraphAction,
   type GraphState,
 } from "../graph-state";
+import { InlineUnderlineField } from "./board-header-bits";
 import { ActionsEditor } from "./actions-editor";
 import { ObjectHistory } from "./object-history";
 import { AttributesEditor } from "./attributes-editor";
@@ -40,6 +41,25 @@ interface Props {
   workspaceId?: string;
 }
 
+/**
+ * NAKED ICONS — **THE TWO HEADER CONTROLS HAVE NO BUTTON FACE AT ALL** (Samuel,
+ * 2026-09-12: *"also for the trash and X buttons, just have it be naked icons,
+ * no more button UI if that makes sense"*). They wore `btn-light`: a raised
+ * 24×28 pill each, two of them beside a uuid, which read as the panel's most
+ * important row.
+ *
+ * ⚠ **THE 30px BOX IS PADDING, NOT A HEIGHT** — `p-2` around the board header's
+ * own 14px glyph — so the hit area is the small-action scale while the only ink
+ * on screen is the glyph. Muted at rest, primary on hover; no border, no fill,
+ * no shadow, in any state.
+ */
+const NAKED_ICON_BUTTON =
+  "flex shrink-0 items-center justify-center rounded-[8px] p-2 " +
+  "text-text-muted transition-colors hover:text-text-primary";
+
+/** The glyph inside it — the size the board header's gear wears. */
+const NAKED_ICON = 14;
+
 /** Right-side editor panel for the selected object (card or column): identity
  *  header, then attribute / relationship / action editors, all in place. */
 export function ObjectPanel({
@@ -67,21 +87,19 @@ export function ObjectPanel({
         "my-2 mr-2 flex min-h-0 w-[420px] shrink-0 flex-col overflow-hidden rounded-[14px] border border-border-highlight bg-bg-elevated shadow-[0_2px_6px_rgba(0,0,0,0.07),0_16px_40px_-10px_rgba(0,0,0,0.22)]"
       )}
     >
-      <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-card-surface-subtle px-3 py-2">
-        {isColumn ? (
-          <span className="shrink-0 rounded-full border border-border-strong px-2 py-px text-label font-semibold uppercase tracking-wide text-text-secondary">
-            Object · {object.childIds.length}
-          </span>
-        ) : (
-          <span
-            className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-2.5 py-0.5 text-caption font-semibold text-text-secondary"
-            title="What this object is — its type"
-          >
-            {containerName ?? "Object"}
-          </span>
-        )}
-        <span className="min-w-0 flex-1 truncate font-mono text-micro text-text-muted">
-          {objectId}
+      {/* ⚠ **THE TOP LINE IS A NAME, NOT A PILL, AND THE UUID IS GONE** (Samuel,
+          2026-09-12: *"at the top, it shouldnt be a pill, just have it be the name
+          of the object … no need to show the ID in the UI"*). It wears the recipe
+          the board header's name trigger wears — `text-body font-medium
+          text-text-primary` — so the two faces read as one vocabulary. For a CARD
+          it is the object TYPE the card is one of (its lane's name); for the LANE
+          itself there is no parent to name, so the line states what the panel is
+          and how many items the type has. ⚠ The id was a `font-mono` column
+          between the pill and the buttons: nobody reads a uuid, and it is not in
+          a `title` either — a tooltip is still UI. */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-card-surface-subtle px-3 py-1.5">
+        <span className="min-w-0 flex-1 truncate text-body font-medium text-text-primary">
+          {isColumn ? `Object · ${object.childIds.length}` : containerName ?? "Object"}
         </span>
         {canEdit && (
           <button
@@ -89,23 +107,23 @@ export function ObjectPanel({
             aria-label={`Delete ${object.name}`}
             title="Delete object"
             onClick={() => setConfirmDelete(true)}
-            className="btn-light flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-text-primary"
+            className={NAKED_ICON_BUTTON}
           >
-            <Trash2 size={11} />
+            <Trash2 size={NAKED_ICON} />
           </button>
         )}
         <button
           type="button"
           aria-label="Close"
           onClick={onClose}
-          className="btn-light flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-text-primary"
+          className={NAKED_ICON_BUTTON}
         >
-          <X size={12} />
+          <X size={NAKED_ICON} />
         </button>
       </div>
 
       <div className="min-h-0 grow overflow-y-auto overscroll-contain p-3">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <div>
             <input
               type="text"
@@ -118,22 +136,29 @@ export function ObjectPanel({
               placeholder="Object name"
               aria-label="Object name"
             />
-            <input
-              type="text"
+            {/* ⚠ **THE DESCRIPTION IS THE POPUP KIT'S UNDERLINE** (Samuel,
+                2026-09-12: *"For the description, that UI should be the
+                underline"*) — the SAME `InlineUnderlineField` the board header's
+                Description wears, imported rather than re-cut, so the 2px
+                gray→black sweep is one recipe on both rows. ⚠ Its hint is the
+                WORD, not a sentence: the placeholder was a parenthetical about
+                what agents see, which is a paragraph in a field (INVARIANTS §5).
+                ⚠ SAME SAVE PATH — `OBJECT_UPDATE` at `subtitle`, debounced by
+                the store. */}
+            <InlineUnderlineField
+              label="Description"
               value={object.subtitle}
               readOnly={!canEdit}
-              onChange={(e) =>
-                dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { subtitle: e.target.value } })
+              onChange={(next) =>
+                dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { subtitle: next } })
               }
-              placeholder="Short description (agents see this when browsing)…"
-              className="mt-0.5 w-full bg-transparent text-lead text-text-secondary placeholder:text-text-muted focus:outline-none"
-              aria-label="Object description"
+              className="mt-1 w-full"
             />
           </div>
 
           {isColumn && <TemplateEditor column={object} dispatch={dispatch} canEdit={canEdit} />}
           {isColumn && (
-            <p className="px-1 text-caption text-text-muted">
+            <p className="text-caption text-text-muted">
               New objects also start with a copy of this object&apos;s relationships and
               actions below.
             </p>

@@ -44,6 +44,7 @@ export function InlineUnderlineField({
   className,
   inputClassName,
   autoFocus,
+  readOnly,
   onKeyDown,
   onBlur,
 }: {
@@ -56,6 +57,14 @@ export function InlineUnderlineField({
   /** Width/flex only — the face is this component's. */
   className?: string;
   autoFocus?: boolean;
+  /**
+   * VIEWER PARITY (2026-09-12, the object panel's fields). The line keeps its
+   * face — a viewer reads the same row an editor writes in — and the FOCUS state
+   * still lands, because a caret that cannot type is the honest answer to a
+   * read-only field and `disabled` would take the row out of the tab order
+   * entirely.
+   */
+  readOnly?: boolean;
   onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
   /** Fired AFTER the active class clears, so a commit may unmount the field. */
   onBlur?: () => void;
@@ -81,6 +90,7 @@ export function InlineUnderlineField({
         }}
         onKeyDown={onKeyDown}
         autoFocus={autoFocus}
+        readOnly={readOnly}
         aria-label={label}
         placeholder={label}
         spellCheck={false}

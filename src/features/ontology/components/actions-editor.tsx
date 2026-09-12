@@ -3,15 +3,21 @@
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
-import { SectionBox } from "@/shared/ui/section-box";
+import { cn } from "@/shared/lib/utils";
+import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import type { GraphAction } from "../graph-state";
 import type { ObjectMethod, OntologyObject } from "../types";
-import { FIELD_WELL } from "./ontology-bits";
+import { InlineUnderlineField } from "./board-header-bits";
+import { PANEL_ADD_ROW, PanelSection, ROW_REMOVE_BUTTON } from "./panel-section";
 
 /**
  * Actions section — what the object CAN DO (things an agent performs for it).
- * Each action is a raised card: name, then concave wells for description /
- * outcome / tools. Footer adds one.
+ * Each action is a NAME row with its description / outcome / tools under it.
+ *
+ * ⚠ **FLAT SINCE 2026-09-12** (Samuel: *"no more indented stuff"*). Each action
+ * was a raised `bento` card holding three concave `FIELD_WELL` inputs, inside the
+ * section frame — three indents deep. It is four underline fields in one column
+ * now, and the only thing separating one action from the next is the gap.
  */
 export function ActionsEditor({
   object,
@@ -37,42 +43,33 @@ export function ActionsEditor({
   };
 
   return (
-    <SectionBox label="Actions" meta={`${object.methods.length}`}>
-      {object.methods.length > 0 && (
-        <div className="flex flex-col gap-2 px-3 py-3">
-          {object.methods.map((m, i) => (
-            <ActionRow
-              key={`${m.name}-${i}`}
-              method={m}
-              canEdit={canEdit}
-              onChange={(method) =>
-                dispatch({ type: "METHOD_UPSERT", id: object.id, index: i, method })
-              }
-              onDelete={() => dispatch({ type: "METHOD_DELETE", id: object.id, index: i })}
-            />
-          ))}
-        </div>
-      )}
+    <PanelSection label="Actions" meta={`${object.methods.length}`}>
+      {object.methods.map((m, i) => (
+        <ActionRow
+          key={`${m.name}-${i}`}
+          method={m}
+          canEdit={canEdit}
+          onChange={(method) => dispatch({ type: "METHOD_UPSERT", id: object.id, index: i, method })}
+          onDelete={() => dispatch({ type: "METHOD_DELETE", id: object.id, index: i })}
+        />
+      ))}
       {canEdit && (
-        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
-          <input
-            type="text"
+        <div className={PANEL_ADD_ROW}>
+          <InlineUnderlineField
+            label="New action"
             value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addAction()}
-            placeholder="action name (e.g. Send email)…"
-            className={`${FIELD_WELL} h-7 w-64 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
+            onChange={setNewName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addAction();
+            }}
+            className="w-56"
           />
-          <button
-            type="button"
-            onClick={addAction}
-            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
-          >
+          <button type="button" onClick={addAction} className={cn(SMALL_TEXT_BUTTON, "gap-1")}>
             <Plus size={11} /> Add
           </button>
         </div>
       )}
-    </SectionBox>
+    </PanelSection>
   );
 }
 
@@ -88,57 +85,50 @@ function ActionRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="bento group px-3.5 py-2.5">
+    <div className="group flex flex-col gap-1.5">
+      {/* ⚠ THE THREE UNDER-FIELDS KEEP THEIR OLD ACCESSIBLE NAMES ("Action
+          description" / "Action outcome" / "Action tools") AND NOW SHOW THEM AS
+          THE HINT: the field's name IS its hint in this face, and a bare
+          "Description" here would collide with the OBJECT's own Description two
+          sections up — one accessible name, two different things. */}
       <div className="flex items-center gap-2">
-        <input
-          type="text"
+        <InlineUnderlineField
+          label="Action name"
           value={method.name}
           readOnly={!canEdit}
-          onChange={(e) => onChange({ ...method, name: e.target.value })}
-          placeholder="e.g. Send email…"
-          className="min-w-0 flex-1 bg-transparent text-body font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
-          aria-label="Action name"
+          onChange={(name) => onChange({ ...method, name })}
+          className="min-w-0 flex-1"
+          inputClassName="font-medium"
         />
         {canEdit && (
           <button
             type="button"
             aria-label={`Remove ${method.name}`}
             onClick={onDelete}
-            className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
+            className={ROW_REMOVE_BUTTON}
           >
             <X size={12} />
           </button>
         )}
       </div>
-      <div className="mt-2 flex flex-col gap-1.5">
-        <input
-          type="text"
-          value={method.description}
-          readOnly={!canEdit}
-          onChange={(e) => onChange({ ...method, description: e.target.value })}
-          placeholder="Description"
-          className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}
-          aria-label="Action description"
-        />
-        <input
-          type="text"
-          value={method.outcome}
-          readOnly={!canEdit}
-          onChange={(e) => onChange({ ...method, outcome: e.target.value })}
-          placeholder="Outcome"
-          className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}
-          aria-label="Action outcome"
-        />
-        <input
-          type="text"
-          value={method.tools ?? ""}
-          readOnly={!canEdit}
-          onChange={(e) => onChange({ ...method, tools: e.target.value })}
-          placeholder="Tools"
-          className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}
-          aria-label="Action tools"
-        />
-      </div>
+      <InlineUnderlineField
+        label="Action description"
+        value={method.description}
+        readOnly={!canEdit}
+        onChange={(description) => onChange({ ...method, description })}
+      />
+      <InlineUnderlineField
+        label="Action outcome"
+        value={method.outcome}
+        readOnly={!canEdit}
+        onChange={(outcome) => onChange({ ...method, outcome })}
+      />
+      <InlineUnderlineField
+        label="Action tools"
+        value={method.tools ?? ""}
+        readOnly={!canEdit}
+        onChange={(tools) => onChange({ ...method, tools })}
+      />
     </div>
   );
 }
