@@ -85,15 +85,29 @@ describe("BarSeries", () => {
     expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(80, 1);
   });
 
-  it("never lets a bar be shorter than it is wide — the pill floor", () => {
+  it("never lets a NON-ZERO bar be shorter than it is wide — the pill floor", () => {
+    const { container } = render(<BarSeries points={julyDays(31)} />);
+    const [, smallest] = barsOf(container);
+
+    // The floor IS the width, in the same unit, capped so a 7-bin plot does not
+    // stand every small bar up as a slab.
+    expect(smallest!.style.minHeight).toBe(`min(${smallest!.style.width}, 28px)`);
+    expect(smallest!.className).toContain("rounded-full");
+  });
+
+  /**
+   * 🔒 A ZERO BIN DRAWS NOTHING (Samuel, 2026-09-12: *"if the value is zero,
+   * right now it shows a circle, it just shouldn't have anything"*). The slot
+   * is kept — the pitch and the caption under it must not move — but the
+   * floor that stood it up as a dot is off.
+   */
+  it("draws nothing for a zero bin — no floor, no dot", () => {
     const { container } = render(<BarSeries points={julyDays(31)} />);
     const [empty] = barsOf(container);
 
     expect(empty!.style.height).toBe("0%");
-    // The floor IS the width, in the same unit, capped so a 7-bin plot does not
-    // stand every empty bar up as a slab.
-    expect(empty!.style.minHeight).toBe(`min(${empty!.style.width}, 28px)`);
-    expect(empty!.className).toContain("rounded-full");
+    expect(empty!.style.minHeight).toMatch(/^0(px)?$/);
+    expect(barsOf(container)).toHaveLength(31);
   });
 
   it("paints the bars with a SOLID token, never an alpha tint", () => {

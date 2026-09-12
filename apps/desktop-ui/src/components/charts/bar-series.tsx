@@ -185,8 +185,14 @@ export function BarSeries({
                   width: barW,
                   // 🔒 **A BAR IS NEVER SHORTER THAN IT IS WIDE**, so the
                   // smallest one is still a full pill rather than the dot a
-                  // proportional radius used to collapse it into.
-                  minHeight: `min(${barW}, ${PILL_FLOOR_CAP})`,
+                  // proportional radius used to collapse it into…
+                  // ⚠ …UNLESS IT IS ZERO. An empty bin draws NOTHING — the floor
+                  // stood every zero up as a circle (Samuel, 2026-09-12: "if the
+                  // value is zero, right now it shows a circle, it just
+                  // shouldn't have anything"). The slot stays so the pitch and
+                  // the caption under it do not move.
+                  minHeight:
+                    point.value > 0 ? `min(${barW}, ${PILL_FLOOR_CAP})` : 0,
                   height: `${Math.min(100, (point.value / ceiling) * 100)}%`,
                 }}
                 className={cn(
