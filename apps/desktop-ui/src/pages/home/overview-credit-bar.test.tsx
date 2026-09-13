@@ -1,3 +1,4 @@
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
@@ -82,6 +83,23 @@ describe("the /home credit capacity bar", () => {
    * is the read the settings modal's billing pane already makes. The spend was
    * the histogram's ledger sum between 2026-09-06 and this change.
    */
+  /**
+   * 🔒 THE "Usage" HEADING AND THE SCOPE MENU WEAR THE AGENT TEMPLATE CARD'S NAME
+   * TYPE (Samuel, 2026-09-13: *"extract that exact font, font size, and font color
+   * and apply it to the usage text … 'Usage' and the 'All Channels' text"*) —
+   * `template-section.tsx › TEMPLATE_NAME_TEXT`, by import on both.
+   */
+  it("is the template card's name type on the heading and the scope menu", async () => {
+    renderHome();
+    await panel("Usage");
+    const heading = screen.getByRole("heading", { name: "Usage" });
+    const menu = screen.getByRole("button", { name: "Usage scope" });
+    for (const token of TEMPLATE_NAME_TEXT.split(" ")) {
+      expect(heading.className).toContain(token);
+      expect(menu.className).toContain(token);
+    }
+    expect(heading.className).not.toMatch(/\buppercase\b/);
+  });
   it("shows the credit allowance, what is left, and when it resets", async () => {
     renderHome();
     const credits = await panel("Usage");
@@ -277,6 +295,16 @@ describe("the /home credit capacity bar", () => {
     });
     // ⚠ THE OLD WORD MUST NOT SURVIVE BESIDE THE NEW ONE.
     expect(within(credits).queryByRole("button", { name: "Upgrade" })).toBeNull();
+    // 🔒 BELOW THE BAR (Samuel, 2026-09-13: *"move Get More Credits below the
+    // bar. Right now, it's above the bar. It should be below the bar"*): the
+    // meter and its caption row precede the button in document order.
+    {
+      const button = within(credits).getByRole("button", { name: "Get more credits" });
+      const caption = within(credits).getByText(/credits spent$/);
+      expect(
+        caption.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
 
     for (const token of PAGE_ACTION_BTN.split(" ")) {
       expect(upgrade.className).toContain(token);

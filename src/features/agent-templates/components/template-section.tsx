@@ -51,6 +51,14 @@ import type { TemplateSectionDef } from "../lib/visibility";
  * `pages/home/home.module.css › .frame :global([data-section-panel])` — so a
  * mount there does not restate the page palette and this default is untouched.
  */
+/**
+ * THE TEMPLATE CARD'S NAME TYPE — title size, medium weight, primary ink.
+ * ⚠ EXPORTED (2026-09-13) because Samuel named THIS text as the reference for
+ * the /home Overview's "Usage" heading and its scope menu ("extract that exact
+ * font, font size, and font color and apply it"); one constant, two readers.
+ */
+export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
+
 export function TemplatePanel({
   id,
   label,
@@ -203,7 +211,7 @@ function TemplateCard({
           {marker}
         </span>
       )}
-      <span className="truncate text-title font-medium text-text-primary">
+      <span className={cn("truncate", TEMPLATE_NAME_TEXT)}>
         {template.name}
       </span>
       {description && (

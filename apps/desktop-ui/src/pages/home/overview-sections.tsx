@@ -180,13 +180,6 @@ export function CreditCapacityBar({
           list, so the two cannot drift; never a re-typed `h-9 auth-btn-3d`.
           ⚠ **THE `!isPaid` RULE IS UNCHANGED**: the caller passes `onUpgrade`
           only when there is something to buy. */}
-      {onUpgrade && (
-        <div className="mb-2.5 flex justify-end">
-          <button type="button" onClick={onUpgrade} className={PAGE_ACTION_BTN}>
-            Get more credits
-          </button>
-        </div>
-      )}
       {/* ⚠ **NO LABEL ON THE METER (Samuel, 2026-09-13: *"for the usage credits,
           remove the credits and the 'Credits used' text"*).** The `used / limit`
           pair stays — it is the measurement — and the word "Credits" that stood
@@ -213,6 +206,15 @@ export function CreditCapacityBar({
             nobody measured must not be invented here. */}
         {credits.periodEnd && <span>Resets {formatDate(credits.periodEnd)}</span>}
       </div>
+      {/* ⚠ BELOW THE BAR (Samuel, 2026-09-13: "move Get More Credits below the
+          bar. Right now, it's above the bar. It should be below the bar"). */}
+      {onUpgrade && (
+        <div className="mt-2.5 flex justify-end">
+          <button type="button" onClick={onUpgrade} className={PAGE_ACTION_BTN}>
+            Get more credits
+          </button>
+        </div>
+      )}
     </div>
   );
 }

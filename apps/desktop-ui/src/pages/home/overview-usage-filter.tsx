@@ -1,3 +1,4 @@
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import {
@@ -54,13 +55,17 @@ export { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP };
  * request. ⚠ It is also the list Samuel means by "specific channels" — the rows
  * he can see in the pane beside the chart, in the order that pane shows them.
  *
- * ⚠ **`HomeChannel.workspaceId` IS THE VALUE**, because that container id is the
- * credit ledger's own channel dimension (`overview-series-params.ts` carries the
- * measurement: `credit_usage_events` has no `channel_id`).
+ * 🔒 **`HomeChannel.channelId` IS THE VALUE SINCE 2026-09-13 (rule B).** ⚠ **IT
+ * WAS `workspaceId` — the CONTAINER — UNTIL THIS WAVE**, because the ledger had no
+ * channel column and its channel dimension was the addressed container. It has one
+ * now, and it is the channel's OWN id: under rule B a home channel's agent can
+ * burn credits while addressing ANOTHER container, and those burns belong to this
+ * option (`overview-series-params.ts › resolveUsageChannel`).
  *
  * ⚠ **DESKTOP AGENT IS LAST AND IS NOT A CHANNEL.** It is MCP traffic with no
- * channel at all — the burns addressed at the reader's own personal shelf — so it
- * sits after the channels rather than among them.
+ * calling channel at all — `channel_id IS NULL`, which also holds every burn
+ * recorded before the column existed — so it sits after the channels rather than
+ * among them.
  */
 export function UsageScopeMenu({
   value,
@@ -76,7 +81,7 @@ export function UsageScopeMenu({
   const options: SelectMenuOption<string>[] = [
     { value: USAGE_SCOPE_ALL, label: "All channels" },
     ...rows.map((channel) => ({
-      value: channel.workspaceId,
+      value: channel.channelId,
       label: channel.name,
     })),
     {
@@ -94,6 +99,8 @@ export function UsageScopeMenu({
       onChange={onChange}
       variant="text"
       ariaLabel="Usage scope"
+      // Same type as the "Usage" heading beside it — the template card's name.
+      className={TEMPLATE_NAME_TEXT}
     />
   );
 }

@@ -69,6 +69,7 @@ export function SectionPanel({
   action,
   caption,
   className,
+  titleClassName,
   children,
 }: {
   /** Id the heading carries, so the section is a NAMED region. */
@@ -81,6 +82,9 @@ export function SectionPanel({
   caption?: ReactNode;
   /** THE GROUND — fill, border and padding. See the docblock. */
   className?: string;
+  /** Overrides the heading's type for ONE panel (/home Usage wears the agent
+   *  template card's name type — Samuel, 2026-09-13). Layout stays the panel's. */
+  titleClassName?: string;
   children: ReactNode;
 }) {
   return (
@@ -97,7 +101,10 @@ export function SectionPanel({
             scales, and its only caller is gone. */}
         <h2
           id={id}
-          className="truncate text-label font-semibold uppercase tracking-wide text-text-secondary"
+          className={cn(
+            "truncate text-label font-semibold uppercase tracking-wide text-text-secondary",
+            titleClassName
+          )}
         >
           {label}
         </h2>

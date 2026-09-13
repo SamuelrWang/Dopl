@@ -1,3 +1,5 @@
+import { cn } from "@/shared/lib/utils";
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
 import { useState } from "react";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -172,7 +174,14 @@ export function HomeOverviewPanels({
             (`home.module.css › .frame [data-section-panel]`) grounds this panel
             exactly as it grounds Token spend and All channels: **ONE well, behind
             the whole Usage block**, with the white cards inside it. */}
-        <SectionPanel id="home-overview-usage" label="Usage">
+        <SectionPanel
+          id="home-overview-usage"
+          label="Usage"
+          // ⚠ THE AGENT TEMPLATE CARD'S NAME TYPE, by import (Samuel, 2026-09-13:
+          // "extract that exact font, font size, and font color and apply it to
+          // the usage text … 'Usage' and the 'All Channels' text").
+          titleClassName={cn(TEMPLATE_NAME_TEXT, "normal-case tracking-normal")}
+        >
           <UsageCard homeWorkspaceId={homeWorkspaceId} />
         </SectionPanel>
 
