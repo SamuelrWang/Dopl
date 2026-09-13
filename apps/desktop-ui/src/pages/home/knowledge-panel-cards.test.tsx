@@ -193,18 +193,23 @@ describe("the /home card face is a rebind, not a fork", () => {
    * carries none — at 12.5px that is the difference between two words that look
    * set in different faces.
    */
-  it("🔒 the SHARED card's defaults ARE the channel row's face", () => {
-    expect(cardCss).toContain("var(--kv-card-title-size, var(--text-body))");
+  it("🔒 the SHARED card's name is the agent template card's name type", () => {
+    // Samuel, 2026-09-13: the KB name wears `TEMPLATE_NAME_TEXT`
+    // (`text-title font-medium text-text-primary`) — read from ITS source, so
+    // this fails if EITHER side moves. (It was the channel row's body face.)
+    expect(cardCss).toContain("var(--kv-card-title-size, var(--text-title))");
     expect(cardCss).toContain("var(--kv-card-title-weight, 500)");
     const cardName = cardCss.slice(
       cardCss.indexOf(".cardName {"),
       cardCss.indexOf("}", cardCss.indexOf(".cardName {"))
     );
     expect(cardName).not.toContain("letter-spacing");
-    // The row it must match, read from ITS source — so this fails if EITHER
-    // side moves, which is the half that matters.
-    const row = read("./relationship-list.tsx");
-    expect(row).toContain('"truncate text-body font-medium"');
+    const templateCard = read(
+      "../../../../../src/features/agent-templates/components/template-section.tsx"
+    );
+    expect(templateCard).toContain(
+      'TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary"'
+    );
     // Floor and cap read ONE number, or the row reserves lines it cannot draw.
     expect(cardCss).toContain("-webkit-line-clamp: var(--kv-card-desc-lines, 3)");
     expect(cardCss).toContain(

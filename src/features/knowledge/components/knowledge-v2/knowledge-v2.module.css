@@ -732,10 +732,15 @@
    with it. History: they were minted 2026-08-28 to make /home alone match this
    face; the ruling widened that match to every surface rather than keeping a
    per-page fork. A fork of `home/base-card.tsx` remains forbidden. */
+/* THE BASE'S NAME = the agent template card's name type (Samuel, 2026-09-13:
+   "make the name of the kb be the same font styling as that of the name of the
+   agent template in the agent cards") — `template-section.tsx › TEMPLATE_NAME_TEXT`
+   is `text-title font-medium text-text-primary`, so: --text-title, 500, primary ink.
+   Was --text-body (the channel row's face). */
 .cardName {
   flex: 1;
   min-width: 0;
-  font-size: var(--kv-card-title-size, var(--text-body));
+  font-size: var(--kv-card-title-size, var(--text-title));
   font-weight: var(--kv-card-title-weight, 500);
   color: var(--kv-text);
   white-space: nowrap;
