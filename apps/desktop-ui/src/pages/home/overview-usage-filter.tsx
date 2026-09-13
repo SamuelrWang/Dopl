@@ -1,0 +1,214 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+import {
+  NAKED_ICON,
+  NAKED_ICON_BUTTON,
+} from "@/shared/ui/naked-icon-button";
+import { cn } from "@/shared/lib/utils";
+import {
+  USAGE_SCOPE_ALL,
+  USAGE_SCOPE_DESKTOP,
+} from "@/features/home/overview-types";
+import type { HomeChannelsPayload } from "@/features/home/types";
+import { useApiQuery } from "#/hooks/use-api-query";
+import { HOME_CHANNELS_PATH } from "./home-rows";
+
+/**
+ * THE /home USAGE HISTOGRAM'S TWO CONTROLS — the scope dropdown that replaced
+ * the **Credits used** heading, and the month arrows beside it.
+ *
+ * 🔒 **SAMUEL, 2026-09-13, VERBATIM:** *"For the usage credits, remove the
+ * credits and the 'Credits used' text. Where you see 'Credits used', I want you
+ * to put a dropdown where the user can select: all channels / specific channels /
+ * just desktop agent usage. … I also want a left and right arrow that will let me
+ * change the month I'm looking at, specifically for the bar graph, like the
+ * histogram, not the top bar."*
+ *
+ * ⚠ **NEITHER CONTROL TOUCHES THE CAPACITY BAR.** The bar is the WALLET's
+ * current period off `GET /api/billing/status` (INVARIANTS' /home credits
+ * bullet); a month arrow that moved it would print a past month's spend against
+ * today's allowance, and a channel filter would print a fraction of the wallet
+ * under a full denominator. The two cards ask different questions on purpose.
+ *
+ * ⚠ **ITS OWN FILE**: `overview-panels.tsx` sits against the 500-line cap (§1),
+ * and these two controls change when the SCOPE vocabulary changes while that
+ * file changes when the face's layout does.
+ *
+ * ⚠ **STATE IS THE SESSION'S, NOT THE ACCOUNT'S.** Nothing is persisted — the
+ * pane opens on **All channels** and the current month every time. A remembered
+ * filter is a page that lies about what it is showing to whoever opens it next,
+ * and there is no ruling asking for one.
+ */
+
+/* ------------------------------ the scope ------------------------------ */
+
+export { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP };
+
+/**
+ * The scope menu. **All channels**, then one entry per channel in the reader's
+ * home space, then **Desktop agent**.
+ *
+ * ⚠ **THE CHANNEL LIST IS THE LEFT PANE'S OWN READ, NOT A SECOND ONE.**
+ * `useApiQuery` keys on the path and `GET /api/home/channels` is already mounted
+ * by `pages/home/index.tsx`, so this is a cache hit and the dropdown costs no
+ * request. ⚠ It is also the list Samuel means by "specific channels" — the rows
+ * he can see in the pane beside the chart, in the order that pane shows them.
+ *
+ * ⚠ **`HomeChannel.workspaceId` IS THE VALUE**, because that container id is the
+ * credit ledger's own channel dimension (`overview-series-params.ts` carries the
+ * measurement: `credit_usage_events` has no `channel_id`).
+ *
+ * ⚠ **DESKTOP AGENT IS LAST AND IS NOT A CHANNEL.** It is MCP traffic with no
+ * channel at all — the burns addressed at the reader's own personal shelf — so it
+ * sits after the channels rather than among them.
+ */
+export function UsageScopeMenu({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const channels = useApiQuery<HomeChannelsPayload>(HOME_CHANNELS_PATH);
+  // ⚠ `?? []` INLINE (§8): this payload is IndexedDB-persisted and an entry
+  // written by an older bundle can lack the key this `.map` walks.
+  const rows = channels.data?.channels ?? [];
+  const options: SelectMenuOption<string>[] = [
+    { value: USAGE_SCOPE_ALL, label: "All channels" },
+    ...rows.map((channel) => ({
+      value: channel.workspaceId,
+      label: channel.name,
+    })),
+    {
+      value: USAGE_SCOPE_DESKTOP,
+      label: "Desktop agent",
+      // The one option whose name does not say what it holds. Minimal copy
+      // (INVARIANTS §5): a RULE, not an explainer.
+      description: "Credits burned outside any channel.",
+    },
+  ];
+  return (
+    <SelectMenu
+      value={value}
+      options={options}
+      onChange={onChange}
+      variant="text"
+      ariaLabel="Usage scope"
+    />
+  );
+}
+
+/* ------------------------------ the month ------------------------------ */
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/**
+ * `YYYY-MM` for the month `at` falls in, **UTC** — the same calendar the server
+ * bins by (`service-overview.ts › rangeWindows`), so the label and the bars can
+ * never name two different months.
+ */
+export function monthKey(at: Date = new Date()): string {
+  return `${at.getUTCFullYear()}-${String(at.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** `YYYY-MM` ± n months, carrying the year. */
+export function shiftMonthKey(key: string, delta: number): string {
+  const [year = "", month = ""] = key.split("-");
+  return monthKey(new Date(Date.UTC(Number(year), Number(month) - 1 + delta, 1)));
+}
+
+/** `"2026-09"` → `"September 2026"`. */
+export function monthLabel(key: string): string {
+  const [year = "", month = ""] = key.split("-");
+  return `${MONTH_NAMES[Number(month) - 1] ?? month} ${year}`;
+}
+
+/**
+ * `‹ September 2026 ›` — one calendar month per press.
+ *
+ * ⚠ **`›` IS DISABLED AT THE CURRENT MONTH, NOT HIDDEN.** A control that
+ * disappears at the edge moves the label under the reader's cursor; a disabled
+ * one says "this is the newest month" in place. There is no forward month to
+ * show: the current month's own future days are already drawn as zeroes
+ * (`rangeWindows`' month arm), which is as far into the future as this face goes.
+ *
+ * ⚠ **NO LOWER BOUND, deliberately.** The ledger starts at its migration and an
+ * older month reads as a flat axis — which is the honest picture of "nothing was
+ * recorded then", and the same trade the zero-filled current month already makes.
+ */
+export function MonthStepper({
+  month,
+  onChange,
+  className,
+}: {
+  month: string;
+  onChange: (next: string) => void;
+  className?: string;
+}) {
+  const atCurrent = month >= monthKey();
+  return (
+    <div className={cn("flex items-center gap-0.5", className)}>
+      <button
+        type="button"
+        aria-label="Previous month"
+        className={NAKED_ICON_BUTTON}
+        onClick={() => onChange(shiftMonthKey(month, -1))}
+      >
+        <ChevronLeft size={NAKED_ICON} aria-hidden="true" />
+      </button>
+      <span className="min-w-0 truncate text-caption text-text-primary">
+        {monthLabel(month)}
+      </span>
+      <button
+        type="button"
+        aria-label="Next month"
+        disabled={atCurrent}
+        className={cn(NAKED_ICON_BUTTON, "disabled:opacity-40")}
+        onClick={() => onChange(shiftMonthKey(month, 1))}
+      >
+        <ChevronRight size={NAKED_ICON} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------- the path ------------------------------- */
+
+/**
+ * The histogram's read, with the two controls' narrowings appended.
+ *
+ * 🔒 **A DEFAULT SELECTION SENDS NEITHER PARAM**, so the pane's first read is
+ * byte-for-byte the path it has always been — one cache entry shared with every
+ * other mount of this face, and no new server work for the common case. A
+ * narrowed view is its own entry, which is what makes going back to **All
+ * channels** instant.
+ */
+export function usageSeriesPath({
+  range,
+  metric,
+  scope,
+  month,
+}: {
+  range: string;
+  metric: string;
+  scope: string;
+  month: string;
+}): string {
+  const params = [`range=${range}`, `metric=${metric}`];
+  if (scope !== USAGE_SCOPE_ALL) params.push(`channel=${scope}`);
+  if (month !== monthKey()) params.push(`month=${month}`);
+  return `/api/home/overview-series?${params.join("&")}`;
+}

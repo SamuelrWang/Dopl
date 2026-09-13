@@ -232,13 +232,41 @@ const PERSONAL_WALLET_KINDS = ["personal", "link"];
 export async function listOwnedPersonalContainerIds(
   userId: string
 ): Promise<string[]> {
+  const rows = await listOwnedPersonalWalletContainers(userId);
+  return rows.map((row) => row.id);
+}
+
+/** One container whose burns land on the reader's personal wallet. */
+export interface OwnedWalletContainer {
+  id: string;
+  /** `personal` (the reader's own shelf — where a burn with NO channel lands) or
+   *  `link` (a home channel's container). ⚠ It is the ONLY thing that separates
+   *  DESKTOP-AGENT spend from CHANNEL spend on this ledger; see
+   *  `overview-series-params.ts › resolveUsageOrigins`. */
+  kind: string;
+}
+
+/**
+ * {@link listOwnedPersonalContainerIds} PLUS each container's `kind` — the same
+ * single round trip, one more column.
+ *
+ * 🔒 **THE `kind` IS WHAT MAKES "Desktop agent" A MEASUREMENT RATHER THAN A
+ * GUESS (2026-09-13, the Usage scope dropdown).** The whole argument is in
+ * `overview-series-params.ts`' header: `credit_usage_events` has no channel
+ * column, its channel dimension is `origin_workspace_id` (the ADDRESSED
+ * CONTAINER), so DESKTOP is `kind='personal'` and a CHANNEL is `kind='link'` —
+ * and a NULL origin is neither, because that column is `ON DELETE SET NULL`.
+ */
+export async function listOwnedPersonalWalletContainers(
+  userId: string
+): Promise<OwnedWalletContainer[]> {
   const { data, error } = await supabaseAdmin()
     .from("workspaces")
-    .select("id")
+    .select("id, kind")
     .eq("owner_id", userId)
     .in("kind", PERSONAL_WALLET_KINDS);
   if (error) throw error;
-  return ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
+  return (data ?? []) as OwnedWalletContainer[];
 }
 
 /**
@@ -302,19 +330,45 @@ export async function scanCreditEvents(
   userId: string,
   ownedContainerIds: string[],
   sinceIso: string,
-  limit: number = HOME_SCAN_LIMIT
+  /**
+   * NARROWINGS INSIDE THE FENCE ABOVE — never a widening, and never a fence of
+   * their own (2026-09-13, the Usage histogram's month arrows + scope
+   * dropdown).
+   *
+   * ⚠ **`originIds` IS AN `AND` ON TOP OF THE `.or()`** — PostgREST composes a
+   * second filter as a conjunction, so the wallet arms still decide which rows
+   * EXIST and this only hides some of them. **It is still not taken raw:** the
+   * service intersects the requested id with the list IT read
+   * (`overview-series-params.ts › resolveUsageOrigins`), so nothing a caller sent
+   * reaches this statement — §2's rule, kept intact rather than argued down.
+   * ⚠ **`untilIso` IS LOAD-BEARING FOR A PAST MONTH, NOT AN OPTIMISATION.** This
+   * scan is newest-first and capped, so an unbounded haul anchored in an OLD
+   * month returns THIS month's 20k rows and the plotted month bins to zeroes with
+   * no clip to report. Bounding it makes `truncated` true instead.
+   */
+  opts: {
+    untilIso?: string;
+    originIds?: readonly string[];
+    limit?: number;
+  } = {}
 ): Promise<Scan<CreditEventScanRow>> {
+  const limit = opts.limit ?? HOME_SCAN_LIMIT;
   const legacyArm =
     ownedContainerIds.length > 0
       ? `,and(wallet.eq.workspace,origin_workspace_id.in.(${ownedContainerIds.join(",")}))`
       : "";
-  const { data, error } = await supabaseAdmin()
+  let query = supabaseAdmin()
     .from("credit_usage_events")
     .select(
       "origin_workspace_id, user_id, wallet, payer_user_id, amount, created_at"
     )
     .or(`and(payer_user_id.eq.${userId},wallet.eq.personal)${legacyArm}`)
-    .gte("created_at", sinceIso)
+    .gte("created_at", sinceIso);
+  if (opts.untilIso) query = query.lt("created_at", opts.untilIso);
+  if (opts.originIds) {
+    query = query.in("origin_workspace_id", [...opts.originIds]);
+  }
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {

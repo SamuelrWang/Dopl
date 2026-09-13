@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { formatDate } from "@/shared/lib/format-time";
@@ -12,6 +13,7 @@ import {
   monthDayLabel,
   type BarPoint,
 } from "#/components/charts/bar-series";
+import { PAGE_ACTION_BTN } from "./panel-buttons";
 
 /**
  * The /home Overview face's USAGE panel contents — the capacity bar and the
@@ -164,13 +166,35 @@ export function CreditCapacityBar({
   // constant would read as a spent allowance nobody measured.
   const remaining = Math.max(0, limit - spent);
   return (
-    // ⚠ `w-full` AND NO CARD FRAME: this is a block at the top of the panel, not
-    // a bento tile in a grid. Giving it a card back would re-create the
-    // two-column layout the ruling removed.
+    // ⚠ `w-full` AND NO CARD FRAME OF ITS OWN: the CARD is the caller's
+    // (`overview-panels.tsx › UsageCard` wraps this in the `.bento` Samuel's
+    // two-panel ruling asked for), so a frame here would be a box in a box.
     <div className="w-full">
+      {/* 🔒 **THE OFFER IS THE PAGE'S BLACK BUTTON NOW, AT THE TOP RIGHT OF THIS
+          CARD (Samuel, 2026-09-13: *"right where the full-length bar is, I need
+          to change the upgrade button to be more like the new channel button,
+          like the black background stuff. Change it to 'Upgrade' or change it to
+          'Get more credits'"*).** It was a one-word text action in the caption
+          row under the bar (2026-09-08). ⚠ **`panel-buttons.tsx ›
+          PAGE_ACTION_BTN` BY IMPORT** — the "New channel" button's own class
+          list, so the two cannot drift; never a re-typed `h-9 auth-btn-3d`.
+          ⚠ **THE `!isPaid` RULE IS UNCHANGED**: the caller passes `onUpgrade`
+          only when there is something to buy. */}
+      {onUpgrade && (
+        <div className="mb-2.5 flex justify-end">
+          <button type="button" onClick={onUpgrade} className={PAGE_ACTION_BTN}>
+            Get more credits
+          </button>
+        </div>
+      )}
+      {/* ⚠ **NO LABEL ON THE METER (Samuel, 2026-09-13: *"for the usage credits,
+          remove the credits and the 'Credits used' text"*).** The `used / limit`
+          pair stays — it is the measurement — and the word "Credits" that stood
+          to its left is gone from both this card and the histogram's header. The
+          card is inside a panel titled **Usage**; a noun on every row inside it
+          restates the panel. */}
       <UsageMeter
         className=""
-        label="Credits"
         used={spent}
         limit={limit}
         over={exhausted}
@@ -188,15 +212,6 @@ export function CreditCapacityBar({
             period bounds are blank on the degraded fallback status, and a date
             nobody measured must not be invented here. */}
         {credits.periodEnd && <span>Resets {formatDate(credits.periodEnd)}</span>}
-        {onUpgrade && (
-          <button
-            type="button"
-            onClick={onUpgrade}
-            className="cursor-pointer font-semibold text-text-primary underline-offset-2 hover:underline"
-          >
-            Upgrade
-          </button>
-        )}
       </div>
     </div>
   );
@@ -244,6 +259,8 @@ export function UsageChart({
   bucket,
   loading,
   truncated,
+  scopeControl,
+  monthControl,
 }: {
   points: readonly HomeSeriesPoint[];
   bucket: HomeOverviewBucket;
@@ -252,6 +269,17 @@ export function UsageChart({
   loading: boolean;
   /** The credit haul came back AT its ceiling, so the bars are a floor. */
   truncated: boolean;
+  /**
+   * THE SCOPE DROPDOWN, WHERE THE **Credits used** HEADING WAS (Samuel,
+   * 2026-09-13). ⚠ A SLOT, not a control this component owns: the selection
+   * decides the caller's READ PATH (`overview-usage-filter.tsx ›
+   * usageSeriesPath`), so the state has to live with the fetch. This file still
+   * renders a plot and owns no words.
+   */
+  scopeControl?: ReactNode;
+  /** The month arrows + label, same slot rule. ⚠ THEY MOVE THIS PLOT ONLY — the
+   *  capacity bar above is the wallet's CURRENT period, always. */
+  monthControl?: ReactNode;
 }) {
   const total = seriesTotal(points);
   const bars: BarPoint[] = points.map((point) => ({
@@ -261,16 +289,29 @@ export function UsageChart({
   }));
 
   return (
-    <section className="min-w-0">
+    // ⚠ A `<div>`, NOT A `<section>`: the CARD around this plot is the named
+    // region now (`overview-panels.tsx › UsageCard`), and a second unnamed
+    // section inside it is a landmark with nothing to say.
+    <div className="min-w-0">
+      {/* 🔒 **THE HEADING IS GONE AND THE DROPDOWN STANDS IN ITS PLACE (Samuel,
+          2026-09-13: *"remove the credits and the 'Credits used' text. Where you
+          see 'Credits used', I want you to put a dropdown"*).** The row keeps its
+          shape — a control on the left, the period total on the right — and the
+          month arrows sit beside that total, on the histogram's own header where
+          the window they move is drawn. ⚠ **THE TOTAL IS THE PLOT'S OWN BARS,
+          not the wallet's counter** (`CreditCapacityBar`'s docblock carries which
+          is which), so a narrowed scope or a past month makes it disagree with
+          the bar above BY DESIGN. */}
       <div className="flex items-center justify-between gap-3">
-        {/* Ink, not gray — Samuel, 2026-09-08: "their font colors are black
-            not gray", over the same reference the plot below now clones. */}
-        <h3 className="shrink-0 text-label font-semibold uppercase tracking-wide text-text-primary">
-          Credits used
-        </h3>
-        <span className="font-mono text-micro tabular-nums text-text-primary">
-          {total.toLocaleString()}
-        </span>
+        {scopeControl}
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          {monthControl}
+          {/* Ink, not gray — Samuel, 2026-09-08: "their font colors are black
+              not gray", over the same reference the plot below clones. */}
+          <span className="font-mono text-micro tabular-nums text-text-primary">
+            {total.toLocaleString()}
+          </span>
+        </div>
       </div>
       {bars.length === 0 ? (
         // ⚠ ONLY REACHABLE IF THE READ HAS NOT LANDED. An empty LEDGER still
@@ -292,6 +333,6 @@ export function UsageChart({
           )}
         </>
       )}
-    </section>
+    </div>
   );
 }

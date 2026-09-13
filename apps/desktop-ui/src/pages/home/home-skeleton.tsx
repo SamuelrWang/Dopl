@@ -362,7 +362,7 @@ function HomeHeaderGhost() {
  * ghost. Usage and All channels always render.
  *
  * ⚠ THE COLUMN, THE CARDS AND THE PLOT ARE THE PAGE'S. `p-3` / `gap-3`, the
- * `.bento` recipe `RailCard` and the Usage card share, the `grid-cols-2 gap-3`
+ * `.bento` recipe `RailCard` and the TWO Usage cards share, the `grid-cols-2 gap-3`
  * rails at `h-40` (`overview-panels.tsx › RailsGhost`'s own size), and the plot
  * IMPORTED from `bar-series.tsx › PLOT_HEIGHT_CLASS` the way the Overview page's
  * ghost takes it, never re-typed.
@@ -371,12 +371,22 @@ function OverviewFaceGhost() {
   return (
     <div className="min-w-0 flex-1 overflow-y-auto p-3">
       <div className="flex flex-col gap-3">
-        {/* USAGE — the one panel on the WHITE card ground (`!bg-home-card`),
-            holding a single `.bento` card: the capacity bar over the plot. */}
-        <PanelGhost ground="!bg-home-card">
-          <div className="bento flex flex-col gap-4 p-3.5">
-            <Skeleton className="h-[46px] w-full rounded-[10px]" />
-            <Skeleton className={cn(PLOT_HEIGHT_CLASS, "w-full rounded-[10px]")} />
+        {/* USAGE — ONE well holding TWO `.bento` cards, `gap-3` between them:
+            the capacity bar, then the plot (Samuel, 2026-09-13). ⚠ **NO
+            `ground` OVERRIDE**: the 2026-09-08 white trial passed
+            `!bg-home-card` here to mirror the page, and BOTH are reverted — the
+            ghost's ground is /home's own `.frame [data-section-panel]` rule, the
+            same as the rails panel below. */}
+        <PanelGhost>
+          <div className="flex flex-col gap-3">
+            <div className="bento p-3.5">
+              <Skeleton className="h-[46px] w-full rounded-[10px]" />
+            </div>
+            <div className="bento flex flex-col p-3.5">
+              <Skeleton
+                className={cn(PLOT_HEIGHT_CLASS, "w-full rounded-[10px]")}
+              />
+            </div>
           </div>
         </PanelGhost>
 

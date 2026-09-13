@@ -288,3 +288,20 @@ export const EMPTY_CHANNEL_USAGE: readonly HomeChannelUsage[] = Object.freeze([]
 export const EMPTY_PERSON_USAGE: readonly HomePersonUsage[] = Object.freeze([]);
 export const EMPTY_TOOL_USAGE: readonly HomeToolUsage[] = Object.freeze([]);
 export const EMPTY_AGENTS: readonly HomeAgentRow[] = Object.freeze([]);
+
+/**
+ * THE USAGE HISTOGRAM'S SCOPE VOCABULARY — the two values that are not a
+ * container id (2026-09-13, Samuel's scope dropdown).
+ *
+ * 🔒 **IT LIVES ON THE WIRE TYPES, NOT IN THE SERVER PARSER, BECAUSE BOTH SIDES
+ * SPELL IT.** The SPA sends it and `home/server/overview-series-params.ts`
+ * parses it — and the SPA may not import a feature's `server/` layer at all
+ * (`eslint.config.mjs`'s renderer fence). A second literal on the client is how a
+ * reserved word and its parser part.
+ *
+ * ⚠ **RESERVED WORDS, NOT IDS**, so neither can collide with a container uuid:
+ * `all` is "no narrowing" (the default, sent as no param at all) and `desktop`
+ * is MCP spend made outside any channel.
+ */
+export const USAGE_SCOPE_ALL = "all";
+export const USAGE_SCOPE_DESKTOP = "desktop";

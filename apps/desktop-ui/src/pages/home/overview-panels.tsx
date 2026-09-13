@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
@@ -23,6 +24,13 @@ import {
   PeopleRail,
   ToolRail,
 } from "./overview-rails";
+import {
+  MonthStepper,
+  USAGE_SCOPE_ALL,
+  UsageScopeMenu,
+  monthKey,
+  usageSeriesPath,
+} from "./overview-usage-filter";
 import type { OpenActivity } from "./use-activity-jump";
 import { ActiveAgentBoard } from "./overview-agent-board";
 import { TokenSpendPanel } from "./overview-token-spend";
@@ -140,24 +148,31 @@ export function HomeOverviewPanels({
             layer short, and the only section on the face that did not match its
             siblings. The override is GONE: this panel is the same gray as
             `All channels` beside it.
-            ⚠ **ONE CARD, and it is the SAME `.bento` recipe the rail cards
-            wear** (`overview-rails.tsx › RailCard`), so the two panels layer
-            identically by construction rather than by two class strings that
-            happen to agree today.
-            ⚠ **NOTHING ELSE IN THE PANEL** — the bar on top, the histogram
-            under it, both inside that one card. A rail, a note or a total goes
-            in the panel below. */}
-        {/* ⚠ TRIAL, 2026-09-08 (Samuel: "increase the size of [Usage] … put it
-            in a white panel and remove the gray shade"): THIS panel alone sits
-            on the white card ground with a larger, sentence-case title. It
-            deliberately reverses the three-layer note above for one section;
-            if it stays, the note moves with it. */}
-        <SectionPanel
-          id="home-overview-usage"
-          label="Usage"
-          className="!bg-home-card"
-          titleClassName="text-title normal-case tracking-normal text-text-primary"
-        >
+            🔒 **TWO CARDS SINCE 2026-09-13, NOT ONE (Samuel: *"I want the
+            credits bar and the bar graph to be split into two different white
+            panels with some spacing between them"*)** — the bar in its own
+            `.bento`, the histogram in a second, `gap-3` between them, and ONE
+            well behind both. It was a single card holding the two stacked.
+            ⚠ **THE `.bento` IS THE SAME RECIPE THE RAIL CARDS WEAR**
+            (`overview-rails.tsx › RailCard`) and the gap is the rails' grid gap,
+            so the panels layer and space identically by construction rather than
+            by class strings that happen to agree today.
+            ⚠ **NOTHING ELSE IN THE PANEL** — the bar card, then the histogram
+            card. A rail, a note or a total goes in the panel below. */}
+        {/* 🔒 **THE 2026-09-08 WHITE TRIAL IS REVERTED (Samuel, 2026-09-13:
+            *"the usage panel doesn't have the gray shadow anymore. I want you to
+            restore the gray shadow behind the usage panel. This will be one gray
+            shadow right behind this"*).** That trial passed `className=
+            "!bg-home-card"` plus a `titleClassName` of its own, which painted the
+            panel WHITE and dropped the bar and the plot straight onto it — one
+            layer short, and the only section on the face that did not match its
+            siblings. **Both overrides are gone — and the `titleClassName` PROP
+            went with them** (`shared/ui/section-panel.tsx`: it had no other
+            caller), so /home's own rule
+            (`home.module.css › .frame [data-section-panel]`) grounds this panel
+            exactly as it grounds Token spend and All channels: **ONE well, behind
+            the whole Usage block**, with the white cards inside it. */}
+        <SectionPanel id="home-overview-usage" label="Usage">
           <UsageCard homeWorkspaceId={homeWorkspaceId} />
         </SectionPanel>
 
@@ -193,7 +208,17 @@ export function HomeOverviewPanels({
 }
 
 /**
- * THE USAGE CARD — the bar over the histogram, fetched once.
+ * THE USAGE BLOCK — the capacity-bar card over the histogram card, ONE read
+ * behind both.
+ *
+ * 🔒 **TWO CARDS IN ONE WELL, AND THE CONTROLS BELONG TO THE LOWER ONE
+ * (Samuel, 2026-09-13).** The scope dropdown and the month arrows change THIS
+ * component's read path, which is why the state sits here and not in the chart:
+ * `overview-usage-filter.tsx › usageSeriesPath` turns the pair into the query,
+ * and a default selection sends neither param so the common path is unchanged.
+ * ⚠ **THE CAPACITY BAR IS DELIBERATELY OUTSIDE THAT** — it reads
+ * `/api/billing/status`, the wallet's CURRENT period, and no control on this face
+ * moves it.
  *
  * 🔒 **THE BAR AND THE PLOT AGREE BY ANSWERING THE SAME QUESTION, NOT BY SHARING
  * AN ARRAY (Samuel, 2026-09-12: "is the credits usage wired in? I want to make
@@ -218,26 +243,46 @@ export function HomeOverviewPanels({
  * own tests.
  */
 function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
+  // ⚠ **SESSION STATE, NOT PERSISTED** — the pane opens on All channels and the
+  // current month every time (`overview-usage-filter.tsx` carries why).
+  const [scope, setScope] = useState<string>(USAGE_SCOPE_ALL);
+  const [month, setMonth] = useState<string>(() => monthKey());
   const series = useApiQuery<HomeOverviewSeries>(
-    `/api/home/overview-series?range=${HOME_OVERVIEW_DEFAULT_RANGE}&metric=${HOME_OVERVIEW_DEFAULT_METRIC}`,
+    usageSeriesPath({
+      range: HOME_OVERVIEW_DEFAULT_RANGE,
+      metric: HOME_OVERVIEW_DEFAULT_METRIC,
+      scope,
+      month,
+    }),
     { keepPreviousData: true }
   );
   // ⚠ `?? EMPTY_SERIES` INLINE (§8): an IndexedDB-persisted entry written by an
   // older bundle can lack `points`, and the reduce below would throw on it.
   const points = series.data?.points ?? EMPTY_SERIES;
   return (
-    <section className="bento flex flex-col gap-4 p-3.5">
-      <CreditsBar
-        homeWorkspaceId={homeWorkspaceId}
-        ledgerPending={series.isPending && !series.data}
-      />
-      <UsageChart
-        points={points}
-        bucket={series.data?.bucket ?? "day"}
-        loading={series.isPending}
-        truncated={series.data?.truncated ?? false}
-      />
-    </section>
+    <div className="flex flex-col gap-3">
+      {/* ⚠ **THE `.bento` RECIPE AND THE `gap-3`, BOTH BY MATCH AND NOT BY
+          TASTE**: the card is what `overview-rails.tsx › RailCard` and
+          `overview-token-spend.tsx › TokenSpendPanel` wear, and the gap is the
+          one the 2×2 rail grid uses — so the three panels on this face layer and
+          space identically by construction. */}
+      <section className="bento p-3.5" aria-label="Credit allowance">
+        <CreditsBar
+          homeWorkspaceId={homeWorkspaceId}
+          ledgerPending={series.isPending && !series.data}
+        />
+      </section>
+      <section className="bento flex flex-col p-3.5" aria-label="Usage histogram">
+        <UsageChart
+          points={points}
+          bucket={series.data?.bucket ?? "day"}
+          loading={series.isPending}
+          truncated={series.data?.truncated ?? false}
+          scopeControl={<UsageScopeMenu value={scope} onChange={setScope} />}
+          monthControl={<MonthStepper month={month} onChange={setMonth} />}
+        />
+      </section>
+    </div>
   );
 }
 

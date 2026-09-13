@@ -114,9 +114,13 @@ describe("home overview face", () => {
     for (const region of ["Activity", "Usage", "All channels"]) {
       expect(screen.getAllByRole("region", { name: region })).toHaveLength(1);
     }
-    for (const heading of ["Active agents", "Credits used"]) {
-      expect(screen.getAllByRole("heading", { name: heading })).toHaveLength(1);
-    }
+    expect(screen.getAllByRole("heading", { name: "Active agents" })).toHaveLength(1);
+    // ⚠ **`Credits used` WAS ON THIS LIST UNTIL 2026-09-13** — the histogram's
+    // heading was deleted for Samuel's scope dropdown, so the card is counted by
+    // its own region name now (and the ABSENCE is pinned below).
+    expect(
+      screen.getAllByRole("region", { name: "Usage histogram" })
+    ).toHaveLength(1);
     // The rails, too — these were the visibly doubled ones.
     for (const rail of [
       "Credits by channel",
@@ -325,9 +329,11 @@ describe("home overview face", () => {
     await loadedFace();
     const usage = await panel("Usage");
 
-    expect(within(usage).getByText("Credits")).toBeInTheDocument();
     expect(
-      within(usage).getByRole("heading", { name: "Credits used" })
+      within(usage).getByRole("region", { name: "Credit allowance" })
+    ).toBeInTheDocument();
+    expect(
+      within(usage).getByRole("region", { name: "Usage histogram" })
     ).toBeInTheDocument();
     for (const rail of [
       "Credits by channel",
@@ -424,5 +430,66 @@ describe("home overview face", () => {
       .closest("section") as HTMLElement;
     expect(within(rail).getByText("Guest")).toBeInTheDocument();
     expect(within(rail).getByText(/1 guest · 12/)).toBeInTheDocument();
+  });
+  /**
+   * 🔒 **ONE GRAY WELL BEHIND THE WHOLE USAGE BLOCK, AND THE 2026-09-08 WHITE
+   * TRIAL IS REVERTED (Samuel, 2026-09-13: *"the usage panel doesn't have the
+   * gray shadow anymore. I want you to restore the gray shadow behind the usage
+   * panel. This will be one gray shadow right behind this"*).**
+   *
+   * ⚠ **THE ASSERTION IS THE ABSENCE OF AN OVERRIDE, WHICH IS THE ONLY THING
+   * THIS SUITE CAN SEE.** The gray itself is painted by a CSS-module rule
+   * (`home.module.css › .frame [data-section-panel]`) that jsdom does not apply,
+   * so what is pinned is (1) the panel still carries the `data-section-panel`
+   * hook that rule keys on — swap it for a utility class and the override dies
+   * silently — and (2) no `!bg-home-card` is forcing it white. Those two together
+   * are what the trial changed.
+   *
+   * 🔒 **AND TWO WHITE `.bento` CARDS INSIDE IT WITH A GAP (Samuel: *"I want the
+   * credits bar and the bar graph to be split into two different white panels
+   * with some spacing between them"*)** — it was one card holding both.
+   */
+  it("grounds Usage in ONE well and splits it into two bento cards", async () => {
+    renderHome();
+    const usage = await panel("Usage");
+
+    expect(usage).toHaveAttribute("data-section-panel");
+    expect(usage.className).not.toContain("bg-home-card");
+
+    const cards = [
+      within(usage).getByRole("region", { name: "Credit allowance" }),
+      within(usage).getByRole("region", { name: "Usage histogram" }),
+    ];
+    for (const bento of cards) expect(bento.className).toContain("bento");
+    // ⚠ THE GAP IS THE RAILS' OWN `gap-3`, on the one element that holds both
+    // cards — so the three panels on this face space identically.
+    const holder = cards[0].parentElement as HTMLElement;
+    expect(holder).toBe(cards[1].parentElement);
+    expect(holder.className).toContain("gap-3");
+    // ⚠ AND NOTHING ELSE IS IN THE WELL.
+    expect(holder.children).toHaveLength(2);
+  });
+
+  /**
+   * 🔒 **THE TWO WORDS SAMUEL REMOVED, PINNED AS ABSENCES (2026-09-13: *"remove
+   * the credits and the 'Credits used' text"*).** The meter's `Credits` label and
+   * the histogram's `Credits used` heading are both gone; the NUMBERS they stood
+   * beside are not. ⚠ A heading query alone would not catch the meter's label,
+   * and a text query alone would not catch a heading that came back as a `h3`, so
+   * this asserts both shapes.
+   */
+  it("carries no Credits label and no Credits used heading", async () => {
+    renderHome();
+    const usage = await panel("Usage");
+    await within(usage).findByText(/credits spent$/);
+
+    expect(within(usage).queryByText("Credits")).toBeNull();
+    expect(within(usage).queryByText("Credits used")).toBeNull();
+    expect(
+      within(usage).queryByRole("heading", { name: "Credits used" })
+    ).toBeNull();
+    // The measurement is untouched — the meter's pair and the plot's total.
+    expect(within(usage).getByText("320 / 500")).toBeInTheDocument();
+    expect(within(usage).getByText("210")).toBeInTheDocument();
   });
 });

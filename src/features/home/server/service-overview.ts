@@ -17,6 +17,7 @@ import {
   countMetricInWindow,
   listContainerRoles,
   listOwnedPersonalContainerIds,
+  listOwnedPersonalWalletContainers,
   listRunningSessions,
   scanCreditEvents,
   scanMcpCalls,
@@ -26,12 +27,14 @@ import {
   type Scan,
 } from "./repository-overview";
 import {
+  binCredits,
   isPersonalWalletBurn,
   mapAgents,
   tallyChannels,
   tallyCreditPeople,
   tallyTools,
 } from "./overview-tally";
+import { resolveUsageOrigins } from "./overview-series-params";
 import * as repo from "./repository";
 import { HOME_CHANNEL_LIMIT } from "./service-reads";
 
@@ -258,12 +261,66 @@ async function scanPersonalWalletBurns(
   sinceIso: string
 ): Promise<Scan<CreditEventScanRow>> {
   const ownedIds = await listOwnedPersonalContainerIds(userId);
-  const scan = await scanCreditEvents(userId, ownedIds, sinceIso);
+  return filterWalletBurns(
+    userId,
+    ownedIds,
+    await scanCreditEvents(userId, ownedIds, sinceIso)
+  );
+}
+
+/** The second half of "filtered twice on purpose" — shared by the rails' scan
+ *  above and the histogram's narrowed one below, so the DEFINITION is applied
+ *  once however the rows were fetched. */
+function filterWalletBurns(
+  userId: string,
+  ownedIds: readonly string[],
+  scan: Scan<CreditEventScanRow>
+): Scan<CreditEventScanRow> {
   const owned = new Set(ownedIds);
   return {
     rows: scan.rows.filter((row) => isPersonalWalletBurn(row, userId, owned)),
     truncated: scan.truncated,
   };
+}
+
+/**
+ * The histogram's OWN credit read — the wallet fence above, plus the two
+ * narrowings the Usage card's controls send (2026-09-13).
+ *
+ * ⚠ **IT DOES NOT SHARE `scanPersonalWalletBurns` BECAUSE IT NEEDS THE
+ * CONTAINERS' `kind`**, which is what separates Desktop-agent spend from a
+ * channel's (`overview-series-params.ts › resolveUsageOrigins`). Same one round
+ * trip, one more column — `listOwnedPersonalWalletContainers`.
+ *
+ * ⚠ **AN EMPTY `originIds` SHORT-CIRCUITS WITHOUT A READ.** That is what a scope
+ * the reader does not own resolves to (a channel they merely joined, whose burns
+ * spend the OWNER's wallet), and the honest answer is a zero-filled month rather
+ * than a refusal or a statement with an empty `in.()` PostgREST cannot express.
+ *
+ * ⚠ **THE HAUL IS BOUNDED AT BOTH ENDS** — see `scanCreditEvents`' `untilIso`:
+ * the scan is newest-first and capped, so an unbounded haul anchored in a PAST
+ * month would return this month's rows and bin the plotted month to zeroes with
+ * nothing to report.
+ */
+async function scanUsageHistogramBurns(
+  userId: string,
+  scope: string | null,
+  windows: HomeWindow[]
+): Promise<Scan<CreditEventScanRow> | null> {
+  const containers = await listOwnedPersonalWalletContainers(userId);
+  const originIds = resolveUsageOrigins(scope, containers);
+  if (originIds && originIds.length === 0) return null;
+  const ownedIds = containers.map((container) => container.id);
+  const scan = await scanCreditEvents(
+    userId,
+    ownedIds,
+    windows[0]?.startIso ?? "",
+    {
+      untilIso: windows[windows.length - 1]?.endIso,
+      ...(originIds ? { originIds } : {}),
+    }
+  );
+  return filterWalletBurns(userId, ownedIds, scan);
 }
 
 /**
@@ -279,14 +336,31 @@ async function scanPersonalWalletBurns(
  * only exists from `20260901120000_credit_usage_events.sql` forward, so a flat
  * month of zeroes would be a measurement nobody took drawn as fact. The empty
  * array is what lets the surface say "nothing yet" instead.
+ *
+ * ⚠ **`opts` CARRIES THE HISTOGRAM'S TWO CONTROLS AND THE CREDITS ARM IS THE
+ * ONLY ONE THAT READS THEM (2026-09-13).** `scope` narrows to one channel's
+ * container or to the Desktop agent's; `monthAnchor` moves the calendar-month
+ * window. Both are parsed at the route by `overview-series-params.ts`, which is
+ * also where a `monthAnchor` beside a ROLLING range is refused — so `now` here
+ * is still only "when is it", never a window nobody asked for.
+ * ⚠ **NEITHER TOUCHES THE COUNTED ARMS.** `mcp` and `messages` already answer
+ * per-channel questions through `resolveScope`, and nothing on the face asks
+ * them for a month that is not the current one.
  */
 export async function getHomeOverviewSeries(
   userId: string,
   range: HomeOverviewRange,
   metric: HomeOverviewMetric,
-  now: Date = new Date()
+  opts: {
+    /** A container id, `"desktop"`, or null for the whole wallet. */
+    scope?: string | null;
+    /** Any instant inside the month to plot, or null for the current one. */
+    monthAnchor?: Date | null;
+    now?: Date;
+  } = {}
 ): Promise<HomeOverviewSeries> {
-  const windows = rangeWindows(range, now);
+  const now = opts.now ?? new Date();
+  const windows = rangeWindows(range, opts.monthAnchor ?? now);
   const bucket = bucketFor(range);
 
   if (metric === "credits") {
@@ -296,10 +370,22 @@ export async function getHomeOverviewSeries(
     // fenced on is neither needed nor correct here (see
     // {@link scanPersonalWalletBurns}). The counted arms below still resolve it,
     // because `mcp` and `messages` really are per-channel questions.
-    const scan = await scanPersonalWalletBurns(
+    const scan = await scanUsageHistogramBurns(
       userId,
-      windows[0]?.startIso ?? ""
+      opts.scope ?? null,
+      windows
     );
+    // ⚠ A SCOPE THE READER DOES NOT OWN READS AS A ZERO-FILLED MONTH, NOT AS A
+    // REFUSAL — see {@link scanUsageHistogramBurns}. The axis is still the frame.
+    if (!scan) {
+      return {
+        range,
+        metric,
+        bucket,
+        points: windows.map((win) => ({ at: win.startIso, count: 0 })),
+        truncated: false,
+      };
+    }
     // 🔒 **ALWAYS ZERO-FILLED, NEVER AN EMPTY ARRAY (Samuel, 2026-09-01: he
     // wants to SEE the month).** This arm answered `[]` on an empty ledger so
     // the card could say "nothing yet" instead of drawing a flat month — an
@@ -328,33 +414,6 @@ export async function getHomeOverviewSeries(
     count: counts[index] ?? 0,
   }));
   return { range, metric, bucket, points, truncated: false };
-}
-
-/**
- * Ledger rows → one bar per bin.
- *
- * ⚠ **BINNED BY A HALF-OPEN COMPARISON ON THE ISO STRING'S INSTANT**, not by
- * arithmetic on a day number: the bins are already `[start, end)` pairs and a
- * row belongs to exactly one of them. A row outside every bin (the scan can
- * return one when the window boundary moves between reads) is DROPPED rather
- * than folded into the nearest bar.
- */
-function binCredits(
-  rows: CreditEventScanRow[],
-  windows: HomeWindow[]
-): HomeSeriesPoint[] {
-  const points = windows.map((win) => ({ at: win.startIso, count: 0 }));
-  for (const row of rows) {
-    const at = Date.parse(row.created_at);
-    for (let i = 0; i < windows.length; i++) {
-      const win = windows[i];
-      if (at >= Date.parse(win.startIso) && at < Date.parse(win.endIso)) {
-        points[i].count += row.amount;
-        break;
-      }
-    }
-  }
-  return points;
 }
 
 /**

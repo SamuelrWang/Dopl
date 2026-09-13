@@ -69,7 +69,6 @@ export function SectionPanel({
   action,
   caption,
   className,
-  titleClassName,
   children,
 }: {
   /** Id the heading carries, so the section is a NAMED region. */
@@ -82,9 +81,6 @@ export function SectionPanel({
   caption?: ReactNode;
   /** THE GROUND — fill, border and padding. See the docblock. */
   className?: string;
-  /** Overrides the heading's size/case/ink for ONE panel (the /home Usage
-   *  trial, 2026-09-08). Layout stays the panel's. */
-  titleClassName?: string;
   children: ReactNode;
 }) {
   return (
@@ -94,12 +90,14 @@ export function SectionPanel({
       className={cn(SECTION_PANEL_SHELL, className)}
     >
       <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
+        {/* ⚠ **ONE HEADING FACE, NO PER-PANEL OVERRIDE.** A `titleClassName`
+            prop existed for the /home Usage white trial (2026-09-08) and was
+            DELETED with it on 2026-09-13 (Samuel reverted the trial): a slot that
+            lets one panel wear another size is how a page grows two heading
+            scales, and its only caller is gone. */}
         <h2
           id={id}
-          className={cn(
-            "truncate text-label font-semibold uppercase tracking-wide text-text-secondary",
-            titleClassName
-          )}
+          className="truncate text-label font-semibold uppercase tracking-wide text-text-secondary"
         >
           {label}
         </h2>

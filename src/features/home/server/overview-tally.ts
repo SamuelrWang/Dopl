@@ -3,11 +3,13 @@ import type {
   HomeAgentRow,
   HomeChannelUsage,
   HomePersonUsage,
+  HomeSeriesPoint,
   HomeToolUsage,
 } from "../overview-types";
 import {
   roleKey,
   type CreditEventScanRow,
+  type HomeWindow,
   type McpCallScanRow,
   type RunningSessionRow,
 } from "./repository-overview";
@@ -59,6 +61,33 @@ const TOOL_ROWS = 8;
 /** How many people the by-person list carries. ⚠ A ceiling on the RENDER, not
  *  on the tally, and the scan denominator travels with it (`scanned`). */
 const PERSON_ROWS = 8;
+
+/**
+ * Ledger rows → one bar per bin.
+ *
+ * ⚠ **BINNED BY A HALF-OPEN COMPARISON ON THE ISO STRING'S INSTANT**, not by
+ * arithmetic on a day number: the bins are already `[start, end)` pairs and a
+ * row belongs to exactly one of them. A row outside every bin (the scan can
+ * return one when the window boundary moves between reads) is DROPPED rather
+ * than folded into the nearest bar.
+ */
+export function binCredits(
+  rows: CreditEventScanRow[],
+  windows: HomeWindow[]
+): HomeSeriesPoint[] {
+  const points = windows.map((win) => ({ at: win.startIso, count: 0 }));
+  for (const row of rows) {
+    const at = Date.parse(row.created_at);
+    for (let i = 0; i < windows.length; i++) {
+      const win = windows[i];
+      if (at >= Date.parse(win.startIso) && at < Date.parse(win.endIso)) {
+        points[i].count += row.amount;
+        break;
+      }
+    }
+  }
+  return points;
+}
 
 /** How many channels the per-channel comparison carries. */
 const CHANNEL_ROWS = 8;

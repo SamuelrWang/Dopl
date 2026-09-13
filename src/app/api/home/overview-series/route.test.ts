@@ -1,5 +1,5 @@
 /**
- * `GET /api/home/overview-series?range=&metric=[&workspaceId=]`.
+ * `GET /api/home/overview-series?range=&metric=[&channel=][&month=][&workspaceId=]`.
  *
  * ⚠ THE SUITE'S CENTRE OF GRAVITY IS THE TWO METRICS THAT DO NOT EXIST.
  * `credits` and `tokens` are 400s, and they have to stay 400s: the credit
@@ -39,7 +39,9 @@ vi.mock("@/features/home/server/service-overview", async () => {
   const actual = await vi.importActual<
     typeof import("@/features/home/server/service-overview")
   >("@/features/home/server/service-overview");
-  // ⚠ Both parsers are the thing under test — keep the REAL ones.
+  // ⚠ Both parsers are the thing under test — keep the REAL ones. The `channel` /
+  // `month` parsers are NOT mocked either: they live in
+  // `home/server/overview-series-params.ts`, which this route imports for real.
   return { ...actual, getHomeOverviewSeries: vi.fn() };
 });
 
@@ -61,6 +63,14 @@ const SERIES: HomeOverviewSeries = {
   })),
   truncated: false,
 };
+
+/**
+ * THE DEFAULT NARROWINGS — what the service is handed when neither the scope
+ * dropdown nor the month arrows have moved (2026-09-13). ⚠ SPELLED OUT rather
+ * than omitted: the route always passes the bag, so an assertion with three
+ * arguments would fail on the ARITY and say nothing about the values.
+ */
+const NO_NARROWING = { scope: null, monthAnchor: null };
 
 /** ⚠ NEITHER ROUTE HAS A DYNAMIC SEGMENT — these are `/api/home/**`, fenced by
  *  the CALLER and not by a `[workspaceSlug]` — but `withUserAuth`'s handler
@@ -87,14 +97,14 @@ describe("GET /api/home/overview-series", () => {
     const body = (await res.json()) as HomeOverviewSeries;
     expect(body.points).toHaveLength(7);
     expect(body.bucket).toBe("day");
-    expect(mockSeries).toHaveBeenCalledWith(USER_ID, "7d", "mcp");
+    expect(mockSeries).toHaveBeenCalledWith(USER_ID, "7d", "mcp", NO_NARROWING);
   });
 
   it("serves all three metrics off ONE route", async () => {
     for (const metric of ["credits", "mcp", "messages"] as const) {
       mockSeries.mockResolvedValue({ ...SERIES, metric });
       await GET(getReq(`?range=7d&metric=${metric}`), routeCtx());
-      expect(mockSeries).toHaveBeenLastCalledWith(USER_ID, "7d", metric);
+      expect(mockSeries).toHaveBeenLastCalledWith(USER_ID, "7d", metric, NO_NARROWING);
     }
   });
 
@@ -135,14 +145,14 @@ describe("GET /api/home/overview-series", () => {
    *  `../overview/route.test.ts`, which carries why the param was removed. */
   it("IGNORES a workspaceId", async () => {
     await GET(getReq(`?range=24h&metric=mcp&workspaceId=${CONTAINER}`), routeCtx());
-    expect(mockSeries).toHaveBeenCalledWith(USER_ID, "24h", "mcp");
+    expect(mockSeries).toHaveBeenCalledWith(USER_ID, "24h", "mcp", NO_NARROWING);
   });
 
   /** ⚠ `month` is a real range on this route, and it is the only one the /home
    *  face asks for. */
   it("accepts the month window", async () => {
     await GET(getReq("?range=month&metric=credits"), routeCtx());
-    expect(mockSeries).toHaveBeenCalledWith(USER_ID, "month", "credits");
+    expect(mockSeries).toHaveBeenCalledWith(USER_ID, "month", "credits", NO_NARROWING);
   });
 
   it("never lets a CDN cache the per-caller payload", async () => {
@@ -154,6 +164,87 @@ describe("GET /api/home/overview-series", () => {
     state.sessionUser = null;
     const res = await GET(getReq(), routeCtx());
     expect(res.status).toBe(401);
+    expect(mockSeries).not.toHaveBeenCalled();
+  });
+  /**
+   * 🔒 **`channel` NARROWS THE CREDITS PLOT — A CONTAINER ID OR THE RESERVED
+   * `desktop` (Samuel, 2026-09-13: *"a dropdown where the user can select: all
+   * channels / specific channels / just desktop agent usage"*).** It reaches the
+   * service as `scope`; `overview-series-params.ts` carries why it is a narrowing
+   * inside the wallet fence and never a fence of its own.
+   */
+  it("passes a container id and the desktop word through as the scope", async () => {
+    await GET(getReq(`?range=month&metric=credits&channel=${CONTAINER}`), routeCtx());
+    expect(mockSeries).toHaveBeenLastCalledWith(USER_ID, "month", "credits", {
+      scope: CONTAINER,
+      monthAnchor: null,
+    });
+
+    await GET(getReq("?range=month&metric=credits&channel=desktop"), routeCtx());
+    expect(mockSeries).toHaveBeenLastCalledWith(USER_ID, "month", "credits", {
+      scope: "desktop",
+      monthAnchor: null,
+    });
+  });
+
+  /** ⚠ `all` AND AN ABSENT PARAM ARE ONE ANSWER — no narrowing, so the default
+   *  path stays ONE cache entry however the client spells it. */
+  it("reads channel=all as no narrowing at all", async () => {
+    await GET(getReq("?range=month&metric=credits&channel=all"), routeCtx());
+    expect(mockSeries).toHaveBeenLastCalledWith(
+      USER_ID,
+      "month",
+      "credits",
+      NO_NARROWING
+    );
+  });
+
+  /** 🔒 A scope that is neither a uuid nor a reserved word is a 400 — never a
+   *  silently unfiltered plot under a channel's name. */
+  it("400s an unrecognised channel and reads nothing", async () => {
+    const res = await GET(
+      getReq("?range=month&metric=credits&channel=everything"),
+      routeCtx()
+    );
+    expect(res.status).toBe(400);
+    expect(mockSeries).not.toHaveBeenCalled();
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("INVALID_CHANNEL");
+  });
+
+  /**
+   * 🔒 **`month=YYYY-MM` MOVES THE HISTOGRAM'S WINDOW** (the month arrows), and
+   * it arrives as an ANCHOR inside that UTC month rather than as a string the
+   * service has to parse a second time.
+   */
+  it("anchors the window on month=YYYY-MM", async () => {
+    await GET(getReq("?range=month&metric=credits&month=2026-02"), routeCtx());
+    const [, , , opts] = mockSeries.mock.calls[0];
+    const anchor = opts?.monthAnchor as Date;
+    expect(anchor.getUTCFullYear()).toBe(2026);
+    expect(anchor.getUTCMonth()).toBe(1);
+  });
+
+  /** 🔒 A `month` beside a ROLLING range is refused, not honoured — it would
+   *  answer "the 30 days ending on the 1st of February" under the last-30-days
+   *  heading. */
+  it.each(["24h", "7d", "30d"])("400s month beside range=%s", async (range) => {
+    const res = await GET(
+      getReq(`?range=${range}&metric=credits&month=2026-02`),
+      routeCtx()
+    );
+    expect(res.status).toBe(400);
+    expect(mockSeries).not.toHaveBeenCalled();
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("INVALID_MONTH");
+  });
+
+  it("400s a malformed month", async () => {
+    const res = await GET(
+      getReq("?range=month&metric=credits&month=2026-13"),
+      routeCtx()
+    );
+    expect(res.status).toBe(400);
     expect(mockSeries).not.toHaveBeenCalled();
   });
 });

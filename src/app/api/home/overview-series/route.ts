@@ -6,6 +6,10 @@ import {
   parseMetric,
   parseRange,
 } from "@/features/home/server/service-overview";
+import {
+  parseUsageMonth,
+  parseUsageScope,
+} from "@/features/home/server/overview-series-params";
 
 interface Ctx {
   userId: string;
@@ -14,8 +18,21 @@ interface Ctx {
 const SOURCE = "api/home/overview-series";
 
 /**
- * GET `?range=24h|7d|30d|month&metric=credits|mcp|messages` — the /home Overview
- * histogram's `HomeOverviewSeries`, oldest bin first.
+ * GET `?range=24h|7d|30d|month&metric=credits|mcp|messages[&channel=<id>|desktop][&month=YYYY-MM]`
+ * — the /home Overview histogram's `HomeOverviewSeries`, oldest bin first.
+ *
+ * 🔒 **`channel` AND `month` ARE THE USAGE CARD'S TWO CONTROLS, AND THEY ARE
+ * PARAMETERS ON THIS ROUTE RATHER THAN A SECOND ENDPOINT (Samuel, 2026-09-13:
+ * *"a dropdown where the user can select: all channels / specific channels / just
+ * desktop agent usage … a left and right arrow that will let me change the month
+ * I'm looking at, specifically for the bar graph"*).** Same reason `metric` is
+ * one: they are things the reader switches, and the cache keys on the path.
+ * ⚠ **BOTH ARE NARROWINGS OF THE `credits` ARM AND NEITHER IS A FENCE** —
+ * `overview-series-params.ts` carries the whole argument, including why an
+ * unowned container id answers a zero-filled month instead of a 400 and why a
+ * `month` beside a ROLLING range is refused outright.
+ * ⚠ **THE CREDIT *BAR* IS NOT ON THIS ENDPOINT** and is untouched by either
+ * control: it reads `GET /api/billing/status`, always the CURRENT period.
  *
  * ⚠ **A SECOND ROUTE BECAUSE `metric` IS A PARAMETER THE USER SWITCHES**, which
  * is the same reason `…/overview-series` exists on the workspace side (§9). It
@@ -71,7 +88,12 @@ export const GET = withUserAuth(
       const params = request.nextUrl.searchParams;
       const range = parseRange(params.get("range"));
       const metric = parseMetric(params.get("metric"));
-      const series = await getHomeOverviewSeries(userId, range, metric);
+      const scope = parseUsageScope(params.get("channel"));
+      const monthAnchor = parseUsageMonth(params.get("month"), range);
+      const series = await getHomeOverviewSeries(userId, range, metric, {
+        scope,
+        monthAnchor,
+      });
       return NextResponse.json(series, {
         headers: { "Cache-Control": "private, no-store" },
       });

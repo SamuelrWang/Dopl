@@ -11,7 +11,17 @@ import { cn } from "@/shared/lib/utils";
  * Tokens only — no hex, no raw px.
  */
 export interface UsageMeterProps {
-  label: string;
+  /**
+   * The noun to the left of the `used / limit` pair.
+   *
+   * ⚠ **OPTIONAL SINCE 2026-09-13, and only because ONE caller has no word to
+   * put there** (Samuel, over the /home Usage card: *"remove the credits and the
+   * 'Credits used' text"*). Omitting it drops the SPAN, not the row — the number
+   * stays where it is, right-aligned above the track. Every other caller labels
+   * its meter; a meter on a surface that does not already say what is being
+   * measured must.
+   */
+  label?: string;
   used: number;
   limit: number;
   /** ⚠ CALLER decides. "over" is an entitlement verdict (free-cap gate), NOT
@@ -82,7 +92,7 @@ export function UsageMeter({
   return (
     <div className={className}>
       <div className="mb-1.5 flex items-baseline justify-between text-caption">
-        <span className="text-text-secondary">{label}</span>
+        {label ? <span className="text-text-secondary">{label}</span> : null}
         <span className={cn("font-medium", over ? "text-warning" : "text-text-primary")}>
           {hasLimit ? `${fmt(used)} / ${fmt(limit)}` : fmt(used)}
         </span>

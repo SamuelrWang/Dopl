@@ -253,15 +253,22 @@ describe("the /home shapes are /home's own geometry", () => {
   });
 
   /** ⚠ THE LANDING FACE IS OVERVIEW (`home-tabs.ts › HOME_DEFAULT_TAB`), so the
-   *  ghost's pane is Overview's — the `.bento` Usage card at the real plot
-   *  height over the 2×2 rails. It ghosted the CHANNELS face (a pane header over
-   *  `TranscriptSkeleton`) for nine days after the page stopped landing there.
-   *  ⚠ BIDIRECTIONAL: the three strings are read out of `overview-panels.tsx`. */
+   *  ghost's pane is Overview's — TWO `.bento` Usage cards (the bar, then the plot
+   *  at the real plot height) over the 2×2 rails. It ghosted the CHANNELS face (a
+   *  pane header over `TranscriptSkeleton`) for nine days after the page stopped
+   *  landing there.
+   *  ⚠ BIDIRECTIONAL: the strings are read out of `overview-panels.tsx`.
+   *  ⚠ **`"bento flex flex-col gap-4 p-3.5"` WAS ON THIS LIST UNTIL 2026-09-13**,
+   *  when Samuel split the one Usage card into two — the shared string is the
+   *  histogram card's `"bento flex flex-col p-3.5"` and the `gap-3` between them
+   *  now, and the bar's card is `"bento p-3.5"` on both sides. */
   it("ghosts the face the page actually opens on", () => {
     expect(HOME_DEFAULT_TAB).toBe("overview");
     const panels = file("../../pages/home/overview-panels.tsx");
     for (const shared of [
-      "bento flex flex-col gap-4 p-3.5",
+      '"bento p-3.5"',
+      '"bento flex flex-col p-3.5"',
+      'className="flex flex-col gap-3"',
       'className="grid grid-cols-2 gap-3"',
       'className="h-40 rounded-[14px]"',
     ]) {

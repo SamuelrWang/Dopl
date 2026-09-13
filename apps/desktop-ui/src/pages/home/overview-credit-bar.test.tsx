@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
+import { PAGE_ACTION_BTN } from "./panel-buttons";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import { BILLING_STATUS, renderHome, routes } from "./home-test-harness";
@@ -46,11 +47,16 @@ vi.mock(
 
 const panel = (name: string) => screen.findByRole("region", { name });
 
-/** A CARD inside a panel, by its heading. */
-async function card(name: string): Promise<HTMLElement> {
-  const heading = await screen.findByRole("heading", { name });
-  return heading.closest("section") as HTMLElement;
-}
+/**
+ * THE HISTOGRAM CARD.
+ *
+ * ⚠ **BY REGION, NOT BY HEADING, SINCE 2026-09-13** — the `Credits used` heading
+ * was DELETED (Samuel) and the scope dropdown stands in its place, so the card
+ * that used to be `heading.closest("section")` is now named by its own
+ * `aria-label`. The two cards are also the assertion that the Usage panel holds
+ * TWO `.bento`s and not one.
+ */
+const histogram = () => screen.findByRole("region", { name: "Usage histogram" });
 
 describe("the /home credit capacity bar", () => {
   beforeEach(() => {
@@ -83,7 +89,11 @@ describe("the /home credit capacity bar", () => {
     // ⚠ THE BILLING METER'S OWN FORMAT — `UsageMeter` prints `used / limit`.
     // This face uses that component, so it prints what the billing pane prints.
     expect(await within(credits).findByText("320 / 500")).toBeInTheDocument();
-    expect(within(credits).getByText("Credits")).toBeInTheDocument();
+    // 🔒 **AND THE WORD "Credits" IS NOT ON THE METER ANY MORE** (Samuel,
+    // 2026-09-13: *"for the usage credits, remove the credits and the 'Credits
+    // used' text"*). The `used / limit` pair is the measurement and it stays; the
+    // noun beside it restated the panel it sits in.
+    expect(within(credits).queryByText("Credits")).toBeNull();
     // ⚠ STILL DERIVED AS `limit - spent` RATHER THAN READ OFF `remaining`, and
     // the two now coincide (180) because the spend is the same counter the
     // payload derived its own remaining from. The derivation is what keeps the
@@ -130,8 +140,8 @@ describe("the /home credit capacity bar", () => {
     renderHome();
     const usage = await panel("Usage");
 
-    // The plot's own header, beside the "Credits used" heading.
-    const plot = await card("Credits used");
+    // The plot's own header total, on the histogram CARD.
+    const plot = await histogram();
     expect(within(plot).getByText("210")).toBeInTheDocument();
     expect(
       within(usage).getByText("320 of 500 credits spent")
@@ -172,7 +182,7 @@ describe("the /home credit capacity bar", () => {
     ).toBeInTheDocument();
     expect(within(credits).getByText("29 left")).toBeInTheDocument();
     // The plot is untouched by a billing-payload change.
-    expect(within(await card("Credits used")).getByText("210")).toBeInTheDocument();
+    expect(within(await histogram()).getByText("210")).toBeInTheDocument();
   });
 
   /**
@@ -240,10 +250,16 @@ describe("the /home credit capacity bar", () => {
   });
 
   /**
-   * 🔒 **A FREE HOME SPACE GETS ONE WORD (Samuel, 2026-09-08, spec §11): an
-   * "Upgrade" text action on the credit bar that opens the settings modal on its
-   * billing section.** Minimal copy (INVARIANTS §5) — a label and a control, no
-   * sentence explaining what a plan is.
+   * 🔒 **THE OFFER IS THE PAGE'S BLACK BUTTON, LABELLED "Get more credits"
+   * (Samuel, 2026-09-13: *"I need to change the upgrade button to be more like
+   * the new channel button, like the black background stuff. Change it to
+   * 'Upgrade' or change it to 'Get more credits'"*).** It was a one-word
+   * `Upgrade` text action in the caption row (2026-09-08, spec §11).
+   *
+   * ⚠ **THE FACE IS ASSERTED AGAINST `panel-buttons.tsx › PAGE_ACTION_BTN`
+   * ITSELF, not against a class string spelled out here** — that constant IS the
+   * "New channel" button, so this case fails the day the two part rather than the
+   * day somebody notices.
    *
    * ⚠ **THE ACTION REACHES THE MODAL WITHOUT A PROP ON THIS PAGE**
    * (`home-settings-control.tsx › openHomeSettings`, which carries the
@@ -251,14 +267,20 @@ describe("the /home credit capacity bar", () => {
    * That is why this case clicks and asserts the PANE, rather than asserting a
    * spy: the registry is the thing that could silently go dead.
    */
-  it("offers a one-word Upgrade that opens billing settings", async () => {
+  it("offers a black Get more credits button that opens billing settings", async () => {
     renderHome();
     const credits = await panel("Usage");
     // ⚠ `find`, not `get`: the bar is a skeleton until BOTH the billing read
     // and the ledger series land (`overview-panels.tsx › CreditsBar`).
     const upgrade = await within(credits).findByRole("button", {
-      name: "Upgrade",
+      name: "Get more credits",
     });
+    // ⚠ THE OLD WORD MUST NOT SURVIVE BESIDE THE NEW ONE.
+    expect(within(credits).queryByRole("button", { name: "Upgrade" })).toBeNull();
+
+    for (const token of PAGE_ACTION_BTN.split(" ")) {
+      expect(upgrade.className).toContain(token);
+    }
 
     fireEvent.click(upgrade);
 
@@ -282,6 +304,8 @@ describe("the /home credit capacity bar", () => {
     const credits = await panel("Usage");
     await within(credits).findByText(/credits spent$/);
 
-    expect(within(credits).queryByRole("button", { name: "Upgrade" })).toBeNull();
+    expect(
+      within(credits).queryByRole("button", { name: "Get more credits" })
+    ).toBeNull();
   });
 });
