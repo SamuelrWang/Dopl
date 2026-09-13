@@ -8,7 +8,7 @@ import type { ObjectMethod, OntologyObject } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
 import {
   PANEL_ROW,
-  PANEL_WELL,
+  PANEL_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -61,7 +61,7 @@ export function ActionsEditor({
 
   return (
     <PanelSection label="Actions">
-      <div className={PANEL_WELL}>
+      <div className={PANEL_ROWS}>
         {object.methods.map((m, i) => (
           <ActionRow
             key={`row-${i}`}

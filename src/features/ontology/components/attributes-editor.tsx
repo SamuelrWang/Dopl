@@ -14,7 +14,7 @@ import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP } from "./ontology-bits";
 import {
   PANEL_ROW,
-  PANEL_WELL,
+  PANEL_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -98,7 +98,7 @@ export function AttributesEditor({
 
   return (
     <PanelSection label="Attributes">
-      <div className={PANEL_WELL}>
+      <div className={PANEL_ROWS}>
         {object.attributes.map((attr, i) => (
           <AttrRow
             key={`row-${i}`}

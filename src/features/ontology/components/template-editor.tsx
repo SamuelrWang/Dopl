@@ -9,7 +9,7 @@ import type { OntologyObject, TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
 import {
   PANEL_ROW,
-  PANEL_WELL,
+  PANEL_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -100,7 +100,7 @@ export function TemplateEditor({
       <p className="text-caption text-text-muted">
         New objects of this type start with these fields, ready to fill.
       </p>
-      <div className={PANEL_WELL}>
+      <div className={PANEL_ROWS}>
         {column.template.map((field, i) => (
           <FieldRow
             key={`row-${i}`}

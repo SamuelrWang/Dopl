@@ -108,17 +108,17 @@ function renderPanel(objectId = CARD_ID, canEdit = true) {
 const SECTIONS = ["Attributes", "Relationships", "Actions"] as const;
 
 /** The section's GRAY WELL — the element right under the label. */
+/** The WELL is the section itself — the label sits inside the gray. */
 function wellOf(label: string): HTMLElement {
   const section = screen.getByRole("heading", { name: label }).closest("section");
-  const well = section!.querySelector("div");
-  expect(well).not.toBeNull();
-  return well as HTMLElement;
+  expect(section).not.toBeNull();
+  return section as HTMLElement;
 }
 
 /** The WHITE BARS in a well — its direct `.bento` children, so the `+ Add`
  *  button and anything a row draws inside itself are not miscounted. */
 function bars(well: HTMLElement): HTMLElement[] {
-  return Array.from(well.querySelectorAll(":scope > .bento"));
+  return Array.from(well.querySelectorAll(":scope > div > .bento"));
 }
 
 describe("the header", () => {
@@ -155,20 +155,21 @@ describe("the header", () => {
   });
 });
 
-describe("the section LABEL is still flat, and carries no count", () => {
-  it("wears no frame, no inset body and no resize grip of its own", () => {
+describe("the section LABEL sits in the gray, and carries no count", () => {
+  it("wears no hairline, no inset body and no resize grip", () => {
     renderPanel();
     for (const label of SECTIONS) {
       const section = screen.getByRole("heading", { name: label }).closest("section");
       expect(section).not.toBeNull();
-      // ⚠ The `SectionBox` face, by its four parts. The WELL is a CHILD of this
-      // element, not this element — the label stands on the panel's own ground.
-      expect(section!.className).not.toMatch(/rounded|border|shadow|overflow-hidden/);
+      // ⚠ The `SectionBox` face, by its parts: a border, a shadow, a clipped
+      // body. The section IS the Token-spend well now (a radius and the
+      // `--home-panel` fill are that well's), so those two are allowed.
+      expect(section!.className).not.toMatch(/\bborder|shadow|overflow-hidden/);
       expect(screen.queryByRole("button", { name: `Resize ${label}` })).toBeNull();
     }
   });
 
-  it("keeps the uppercase label and puts the WELL directly under it", () => {
+  it("keeps the uppercase label INSIDE the well, as Token spend does", () => {
     renderPanel();
     for (const label of SECTIONS) {
       const heading = screen.getByRole("heading", { name: label });
@@ -179,7 +180,9 @@ describe("the section LABEL is still flat, and carries no count", () => {
       // itself and NOTHING stands between it and the well — which is the slot a
       // returning `meta` span would take.
       expect(heading.textContent).toBe(label);
-      expect(heading.nextElementSibling?.className).toBe(PANEL_WELL);
+      expect(heading.closest("section")?.className).toBe(PANEL_WELL);
+      // The label is the well's FIRST content — on the gray, not above it.
+      expect(heading.closest("section")?.firstElementChild?.contains(heading)).toBe(true);
     }
   });
 
@@ -209,9 +212,12 @@ describe("the section LABEL is still flat, and carries no count", () => {
  * spelled the tokens out would pass on a local copy of them.
  */
 describe("each field section is a gray well of white bars", () => {
-  it("builds the well out of the Token-spend well's own two halves", () => {
+  it("builds the well out of the Token-spend well's geometry and /home's fill — no hairline", () => {
     expect(PANEL_WELL).toContain(SECTION_PANEL_SHELL);
-    expect(PANEL_WELL).toContain(SECTION_PANEL_GROUND);
+    expect(PANEL_WELL).toContain("bg-home-panel");
+    // 🔒 NO BORDER (Samuel, 2026-09-13): the Overview's well has none.
+    expect(PANEL_WELL).not.toMatch(/\bborder/);
+    expect(PANEL_WELL).not.toContain(SECTION_PANEL_GROUND);
   });
 
   it("gives Attributes / Relationships / Actions that well, one per section", () => {
@@ -228,9 +234,9 @@ describe("each field section is a gray well of white bars", () => {
       // The fixture carries exactly one of each.
       expect(bars(well)).toHaveLength(1);
       const add = within(well).getByRole("button", { name: "Add" });
-      // ⚠ UNDER THE ROWS: the button is the well's LAST child, never a composer
-      // strip above them or a footer outside the well.
-      expect(well.lastElementChild).toBe(add);
+      // ⚠ UNDER THE ROWS: the button is the rows column's LAST child, never a
+      // composer strip above them or a footer outside the well.
+      expect(well.lastElementChild?.lastElementChild).toBe(add);
     }
   });
 
@@ -355,8 +361,8 @@ describe("the lane's own panel", () => {
     renderPanel(LANE_ID);
     const top = screen.getByText("Object · 1");
     expect(top.className).not.toMatch(/rounded-full|border/);
-    // The lane's panel carries the template section, its LABEL flat like the rest.
+    // The lane's panel carries the template section, in the same well as the rest.
     const section = screen.getByRole("heading", { name: "Default fields" }).closest("section");
-    expect(section!.className).not.toMatch(/rounded|border/);
+    expect(section!.className).toBe(PANEL_WELL);
   });
 });

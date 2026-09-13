@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import {
-  SECTION_PANEL_GROUND,
   SECTION_PANEL_SHELL,
 } from "@/shared/ui/section-panel";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
@@ -43,35 +42,45 @@ export function PanelSection({
   children: ReactNode;
 }) {
   return (
-    <section className="flex min-w-0 flex-col gap-2">
-      <h3 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
-        {label}
-      </h3>
+    // 🔒 **THE SECTION *IS* THE WELL, AND THE LABEL SITS INSIDE IT** — exactly
+    // the /home Overview's Token-spend panel (Samuel, 2026-09-13, second time:
+    // *"the word 'token spend' is sitting on the gray box … the words
+    // 'attributes', 'relationships', and 'actions' are not even in the gray"*).
+    // Same header row geometry as `shared/ui/section-panel.tsx › SectionPanel`.
+    <section className={PANEL_WELL}>
+      <div className="flex min-h-[22px] items-center px-1 pb-0.5">
+        <h3 className="truncate text-label font-semibold uppercase tracking-wide text-text-secondary">
+          {label}
+        </h3>
+      </div>
       {children}
     </section>
   );
 }
 
 /**
- * THE SECTION'S WELL — the gray box the rows sit in, **THE /home OVERVIEW'S
- * TOKEN-SPEND WELL REACHED BY IMPORT** (Samuel named that panel as the
- * reference). Two constants, no measurements: `SECTION_PANEL_GROUND` is the
- * `--home-panel` fill + hairline a `SectionPanel` stands on, `SECTION_PANEL_SHELL`
- * its radius and padding — the exact pair
- * `pages/home/overview-token-spend.tsx › TokenSpendPanel` renders into.
+ * THE SECTION'S WELL — the gray box the label AND the rows sit in, **THE /home
+ * OVERVIEW'S TOKEN-SPEND WELL REACHED BY IMPORT** (Samuel named that panel as
+ * the reference). `SECTION_PANEL_SHELL` is the radius + padding; the fill is
+ * `--home-panel` exactly as `/home`'s record pane paints every `SectionPanel`
+ * (`pages/home/home.module.css › .frame [data-section-panel]`: `--home-panel`,
+ * border transparent).
  *
- * ⚠ **DO NOT RE-TYPE THE TOKENS HERE.** A local `rounded-[14px] bg-home-panel` is
- * the same well said a second way, and 2026-08-30 already cost this codebase one
- * such duplicate (`bg-card-surface-subtle`, 3/255 from `--home-panel`).
+ * ⚠ **NO HAIRLINE.** `SECTION_PANEL_GROUND` is the WORKSPACE-page ground and
+ * carries `border-border-subtle`; the Overview Samuel pointed at has none
+ * (2026-09-13: *"you're adding this extra border line around the gray. I did
+ * not ask for that"*). Do not compose it here.
  *
- * ⚠ THE WELL IS NOT RENDERED WHEN A VIEWER HAS NO ROWS TO SEE — an empty gray box
- * under a label says a section exists and is broken, rather than that it is empty.
+ * ⚠ **DO NOT RE-TYPE THE RADIUS/PADDING.** A local `rounded-[14px] p-3` is the
+ * same well said a second way.
  */
 export const PANEL_WELL = cn(
   SECTION_PANEL_SHELL,
-  SECTION_PANEL_GROUND,
-  "flex min-w-0 flex-col gap-2"
+  "bg-home-panel flex min-w-0 flex-col gap-2"
 );
+
+/** THE ROWS' COLUMN inside the well — direction and gap only, no surface. */
+export const PANEL_ROWS = "flex min-w-0 flex-col gap-2";
 
 /**
  * ONE ROW = **ONE WHITE BAR ON THAT WELL** — `.bento`, the kit's inner card, the

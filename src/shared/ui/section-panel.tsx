@@ -56,8 +56,9 @@ export const SECTION_PANEL_GROUND =
  *
  * ⚠ **EXPORTED SO THE WELL IS ONE RECIPE AND NOT A MEASUREMENT** (2026-09-13,
  * the object panel's field sections). `ontology/components/panel-section.tsx ›
- * PANEL_WELL` is the Token-spend well — `SECTION_PANEL_GROUND` on this geometry
- * — reached by IMPORT rather than by retyping `rounded-[14px] p-3`, so the day
+ * PANEL_WELL` is the Token-spend well — `bg-home-panel` on this geometry, no
+ * hairline (`SECTION_PANEL_GROUND` is the workspace-page ground; the Overview's
+ * well has none — Samuel, 2026-09-13) — reached by IMPORT rather than by retyping `rounded-[14px] p-3`, so the day
  * the well's radius or padding moves it moves on both surfaces at once.
  */
 export const SECTION_PANEL_SHELL = "rounded-[14px] p-3";

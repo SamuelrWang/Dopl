@@ -11,7 +11,7 @@ import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP } from "./ontology-bits";
 import {
   PANEL_ROW,
-  PANEL_WELL,
+  PANEL_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -68,7 +68,7 @@ export function RelationshipsEditor({
 
   return (
     <PanelSection label="Relationships">
-      <div className={PANEL_WELL}>
+      <div className={PANEL_ROWS}>
         {object.relationships.map((rel, i) => (
           <RelRow
             key={`row-${i}`}
