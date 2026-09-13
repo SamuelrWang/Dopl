@@ -438,6 +438,10 @@
   /* Shadows / glows */
   --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%),
     0 2px 8px -2px oklch(0 0 0 / 40%);
+  /* THE WHITE CARD ON A GRAY WELL (`.bento`). Deepened 2026-09-13 (Samuel, over
+     the Overview: "make each white pane cast more of a shadow and a darker
+     shadow onto the gray background"). */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.14);
   --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
     0 4px 16px -4px oklch(0 0 0 / 50%);
   --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%),
@@ -828,6 +832,14 @@ html {
     0 6px 18px rgba(0, 0, 0, 0.05);
 }
 
+/* THE OVERVIEW'S DEEPER CARD SHADOW — scoped, not global (Samuel, 2026-09-13,
+   after a global pass: "the shadow should only apply for the overview page …
+   the pane for agents in the agent tab also changed … it looks weird now").
+   `pages/home/overview-panels.tsx` stamps `data-overview-face` on its root. */
+[data-overview-face] .bento {
+  box-shadow: var(--shadow-card);
+}
+
 /* Frosted glass panel — THE card a PUBLIC page standing on white renders into
    (the `/link/{token}` claim landing). `.bento`'s geometry with the opaque fill
    traded for a translucent one, so the page ground reads through it.
@@ -1127,7 +1139,9 @@ html {
    override its hover/press face for the span where the pill is a field. */
 .search-expand {
   position: relative;
-  width: 36px;
+  /* FIXED OPEN (2026-09-13): the pill no longer grows — layout reserves the
+     open width, so nothing overlays a sibling. */
+  width: 260px;
   height: 36px;
 }
 
@@ -1306,6 +1320,45 @@ html {
   transition: none;
 }
 
+/* THE COLLAPSE — a section that GROWS and SHRINKS instead of appearing (Samuel,
+   2026-09-13, over the Agents tab's gray wells: *"I want the drop-downs
+   collapsing and expanding to be a smooth animation … like the gray box
+   increases in size, stuff like that."*).
+
+   ⚠ `grid-template-rows: 0fr → 1fr`, WHICH IS THE WHOLE POINT: it animates to the
+   CONTENT's height with no measured pixel, so nothing has to read a
+   `scrollHeight` in a layout effect and no height is ever stale. `height: auto`
+   does not transition and `max-height` needs a number somebody has to keep true.
+
+   ⚠ THE ROW MUST BE ALLOWED TO REACH ZERO. A grid item's automatic minimum size
+   floors the track at its content height, so `min-height: 0` on the child is
+   load-bearing — without it `0fr` animates nothing at all.
+
+   ⚠ `overflow: hidden` IS WHAT MAKES IT A REVEAL rather than a squash. It clips
+   the content to the growing track. Its cost is the clipped OUTER edge of any
+   shadow inside (a `.bento` card's `0 6px 18px rgba(0,0,0,0.05)` at the well's
+   inner edges); accepted, because the alternatives all reintroduce a measured
+   height.
+
+   ⚠ 200ms ON THE APP'S OWN CURVE — the same `cubic-bezier(0.22,0.61,0.36,1)` at
+   the same duration as `.channel-info-slide` above and `.menu-card`'s unfold, so
+   every panel in this product opens at one speed. A consumer that UNMOUNTS its
+   content on close must wait exactly this long (`channels-v2/agents-wells.tsx ›
+   WELL_COLLAPSE_MS`), and drop the wait under reduced motion, where the block at
+   the bottom of this file turns the transition off. */
+.collapse-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.collapse-grid[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+.collapse-grid > * {
+  min-height: 0;
+}
+
 /* THE CONTENT SWAP — fade out, replace, fade in. Driven by
    `src/shared/ui/crossfade.tsx › Crossfade`, which owns the timing and the
    lagging token; this is only the transition. 150ms each way: `[data-out]` is
@@ -1385,7 +1438,10 @@ html {
   /* ⚠ Coupled the same way: `channel-surface.tsx` skips its unmount delay and
      `Crossfade` drops its wait under this query, so nothing waits on a
      transition that will not run. */
+  /* ⚠ Coupled the same way: `agents-wells.tsx` skips its unmount delay under this
+     query, so a well that has no transition to play does not wait for one. */
   .channel-info-slide,
+  .collapse-grid,
   .crossfade {
     transition: none;
   }

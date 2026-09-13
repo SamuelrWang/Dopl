@@ -45,8 +45,15 @@
  * `template-section.tsx › TemplatePanel` rule) is one prop away.
  */
 
-import { Fragment, useCallback, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { ChevronRight } from "lucide-react";
 // ⚠ CROSS-FEATURE, AND DELIBERATELY THE SMALLER OF TWO EVILS. `docs/INVARIANTS.md`
 // §1 forbids it and F-275 records that this tree has never obeyed the rule;
 // `agents-tab.tsx` has imported `agent-templates/components/template-picker` since
@@ -244,7 +251,78 @@ export function useAgentWells(): {
 }
 
 /**
+ * HOW LONG A WELL TAKES TO OPEN OR SHUT. ⚠ **KEEP IN STEP WITH `.collapse-grid`'s
+ * transition** (globals.css + the desktop `kit.css` copy) — it is the app's one
+ * panel duration, the same 200ms `.channel-info-slide` and `.menu-card` use.
+ */
+export const WELL_COLLAPSE_MS = 200;
+
+/**
+ * WHETHER THIS WELL'S CARDS MUST BE RENDERED — open, or one transition past close.
+ *
+ * ⚠ **THE UNMOUNT RULING SURVIVES THE ANIMATION, AND THAT IS WHY THIS HOOK
+ * EXISTS.** *"Collapsed means the cards are UNMOUNTED, not hidden"* is still the
+ * rule (INVARIANTS §5) — nothing on an agent card is worth mounting behind a
+ * closed well, and `agent-delete.tsx`'s hover affordances have no business
+ * existing where no one can see them. But a closing box with nothing inside it
+ * has no content to clip, so it would snap shut instead of shrinking. The cards
+ * therefore outlive `open` by exactly one transition.
+ *
+ * ⚠ **THE SAME SHAPE `use-info-slide.ts › useInfoSlide` HOLDS, deliberately not a
+ * shared hook.** That one is named for the info column and owns `INFO_SLIDE_MS`;
+ * lifting a two-state latch to `shared/` to save nine lines would put a
+ * presentation timer where neither consumer can see its own duration. ⚠ The
+ * `||` below means this can never hold a well OPEN — only briefly populated.
+ * ⚠ **REDUCED MOTION UNMOUNTS AT ONCE**, because the kit turns the transition off
+ * under that query and nothing may wait for a transition that will not run. The
+ * OPEN direction schedules a 0ms timer it does not need, for the reason
+ * `useInfoSlide` records: `react-hooks/set-state-in-effect` rejects a synchronous
+ * `setState` in an effect body outright.
+ */
+function useWellContent(open: boolean): boolean {
+  const [trailing, setTrailing] = useState(open);
+  useEffect(() => {
+    if (trailing === open) return;
+    const instant =
+      open ||
+      (typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const timer = setTimeout(
+      () => setTrailing(open),
+      instant ? 0 : WELL_COLLAPSE_MS
+    );
+    return () => clearTimeout(timer);
+  }, [open, trailing]);
+  return open || trailing;
+}
+
+/**
  * ONE WELL: a header row that toggles, and the cards when it is open.
+ *
+ * 🔒 **IT ANIMATES (Samuel, 2026-09-13):** *"I want the drop-downs collapsing and
+ * expanding to be a smooth animation. Even when the right arrow turns to the down
+ * arrow, it should be a spinning right. Right now it's just a direct kind of
+ * toggle, almost, but it should be a smooth animation, like the gray box
+ * increases in size, stuff like that."* Two halves, and both are motion on an
+ * existing element rather than a new shape:
+ *
+ *  - **THE BOX GROWS** — `.collapse-grid` (globals.css + `kit.css`), a
+ *    `grid-template-rows: 0fr → 1fr` transition over `overflow: hidden`, so the
+ *    well's own height follows its cards with no measured pixel anywhere. The
+ *    cards stay mounted for the length of it ({@link useWellContent}).
+ *  - **THE CHEVRON SPINS** — **ONE glyph**, `ChevronRight`, rotated `0°` → `90°`
+ *    on a `transition-transform`. ⚠ **NOT TWO ICONS SWAPPED**: a
+ *    `ChevronDown`/`ChevronRight` swap is a different element every time, so
+ *    there is nothing for the browser to interpolate and *"a direct kind of
+ *    toggle"* is exactly what it renders. `rotate-90` is clockwise, which is the
+ *    *"spinning right"*. ⚠ **The two icons ARE GONE from this file** — importing
+ *    `ChevronDown` again is how the swap comes back.
+ *
+ * ⚠ **`prefers-reduced-motion` KEEPS THE STATE AND DROPS THE MOTION**, both
+ * halves: the kit's query turns `.collapse-grid`'s transition off, and the
+ * chevron carries `motion-reduce:transition-none`. `aria-expanded`, the rotation
+ * and the mount are unchanged either way — the box still opens, instantly.
  *
  * ⚠ **THE WHOLE HEADER ROW IS THE BUTTON, and the chevron is a `<span>` inside
  * it.** Samuel asked for the arrow on the right of the title; a nested `<button>`
@@ -260,7 +338,9 @@ export function useAgentWells(): {
  * the same day (*"I only asked you to change the usage size to be bigger"*).
  * ⚠ **COLLAPSED MEANS THE CARDS ARE NOT RENDERED**, not hidden — nothing on an
  * agent card is worth mounting behind a closed well, and `agent-delete.tsx`'s
- * hover affordances have no business existing where no one can see them.
+ * hover affordances have no business existing where no one can see them. ⚠ **ONE
+ * TRANSITION LATE SINCE 2026-09-13** — {@link useWellContent} owns the delay and
+ * says why the ruling is unchanged by it.
  */
 export function AgentWell({
   label,
@@ -273,6 +353,7 @@ export function AgentWell({
   onToggle: () => void;
   children: ReactNode;
 }) {
+  const mounted = useWellContent(open);
   return (
     <section className={PANEL_WELL}>
       <button
@@ -283,10 +364,34 @@ export function AgentWell({
       >
         <h3 className={cn("min-w-0 truncate", TEMPLATE_NAME_TEXT)}>{label}</h3>
         <span aria-hidden className={NAKED_ICON_BUTTON}>
-          {open ? <ChevronDown size={NAKED_ICON} /> : <ChevronRight size={NAKED_ICON} />}
+          <ChevronRight
+            size={NAKED_ICON}
+            data-well-chevron=""
+            className={cn(
+              "transition-transform duration-200 ease-out motion-reduce:transition-none",
+              open ? "rotate-90" : "rotate-0"
+            )}
+          />
         </span>
       </button>
-      {open && <div className={PANEL_ROWS}>{children}</div>}
+      {/* ⚠ THE WRAPPER IS THE ANIMATION AND IT IS ALWAYS RENDERED — a box that
+          only exists while open has no closed state to grow FROM. `data-open`
+          drives `.collapse-grid`; the column inside is the same `PANEL_ROWS` it
+          always was, now as the grid's single item.
+
+          ⚠ THE `-mt-2` / `pt-2` PAIR MOVES `PANEL_WELL`'s OWN `gap-2` INSIDE THE
+          ANIMATED BOX, and it is not decoration. This wrapper is now a permanent
+          flex child, so the well's gap would apply to a zero-height box and leave
+          a collapsed well 8px taller than it was, with a dead band under its
+          header. Cancelling the gap on the wrapper and re-stating it as the
+          COLUMN's top padding makes those 8px part of what grows. */}
+      <div
+        className="collapse-grid -mt-2"
+        data-open={open}
+        aria-hidden={!open}
+      >
+        <div className={cn(PANEL_ROWS, "pt-2")}>{mounted ? children : null}</div>
+      </div>
     </section>
   );
 }

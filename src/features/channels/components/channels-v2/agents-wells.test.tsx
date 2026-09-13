@@ -18,7 +18,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
@@ -245,27 +245,59 @@ describe("AgentsTab — the well's face and its collapse", () => {
     expect(row.querySelector("button")).toBeNull();
   });
 
-  it("flips the chevron and `aria-expanded` together, and unmounts the cards when shut", () => {
+  /**
+   * 🔒 **THE COLLAPSE IS AN ANIMATION (Samuel, 2026-09-13):** *"Even when the right
+   * arrow turns to the down arrow, it should be a spinning right … it should be a
+   * smooth animation, like the gray box increases in size."*
+   *
+   * ⚠ **ONE CHEVRON THAT ROTATES, NOT TWO THAT SWAP** — the assertion that catches
+   * the regression, because a `ChevronDown`/`ChevronRight` swap looks identical in
+   * a still frame and renders a hard toggle: two elements have nothing to
+   * interpolate between. `rotate-90` is the *"spinning right"*.
+   */
+  it("rotates ONE chevron and grows the box, and unmounts the cards one transition late", async () => {
     renderOne();
     const row = screen.getByRole("button", { name: "Recent" });
+    // ⚠ `getAttribute("class")`, NOT `.className` — on an SVG element that property
+    // is an `SVGAnimatedString`, so a `toContain` against it reads an empty list and
+    // passes nothing. (It cost this test one run.)
+    const chevron = row.querySelector("[data-well-chevron]")!;
+    const chevronClass = () => chevron.getAttribute("class") ?? "";
     expect(row.getAttribute("aria-expanded")).toBe("true");
-    expect(row.querySelector("svg.lucide-chevron-down")).toBeTruthy();
-    expect(row.querySelector("svg.lucide-chevron-right")).toBeNull();
+    // ⚠ THE GLYPH IS THE SAME ONE IN BOTH STATES — only its rotation moves.
+    expect(chevron.classList.contains("lucide-chevron-right")).toBe(true);
+    expect(chevronClass()).toContain("rotate-90");
+    expect(chevronClass()).toContain("transition-transform");
+    // ⚠ AND THE MOTION STANDS DOWN UNDER REDUCED MOTION while the state stays.
+    expect(chevronClass()).toContain("motion-reduce:transition-none");
+    expect(row.querySelector("svg.lucide-chevron-down")).toBeNull();
+
+    const box = () =>
+      row.parentElement!.querySelector<HTMLElement>(".collapse-grid")!;
+    expect(box().getAttribute("data-open")).toBe("true");
     expect(screen.getByText("#aaaa1111")).toBeTruthy();
 
     fireEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("false");
-    expect(row.querySelector("svg.lucide-chevron-right")).toBeTruthy();
-    expect(row.querySelector("svg.lucide-chevron-down")).toBeNull();
-    // COLLAPSED = only the header row. The cards are gone, not hidden.
-    expect(screen.queryByText("#aaaa1111")).toBeNull();
+    expect(chevronClass()).toContain("rotate-0");
+    expect(chevronClass()).not.toContain("rotate-90");
+    expect(box().getAttribute("data-open")).toBe("false");
+    // ⚠ STILL MOUNTED FOR THE LENGTH OF THE SHRINK — a closing box with nothing
+    // inside it has no content to clip and would snap shut.
+    expect(screen.getByText("#aaaa1111")).toBeTruthy();
+    expect(box().getAttribute("aria-hidden")).toBe("true");
+    // ⚠ AND THEN GONE: collapsed still means UNMOUNTED, not hidden (§5).
+    await waitFor(() => expect(screen.queryByText("#aaaa1111")).toBeNull());
   });
 
   it("keeps the cards the WHITE CARDS they were, directly inside the well's column", () => {
     renderOne();
     const well = screen.getByRole("heading", { name: "Recent" }).closest("section")!;
-    const column = Array.from(well.querySelectorAll("div")).find(
-      (el) => el.className === PANEL_ROWS
+    // ⚠ `PANEL_ROWS` PLUS THE WELL'S OWN GAP, RE-STATED AS PADDING (2026-09-13) —
+    // the animated wrapper is a permanent flex child now, so `PANEL_WELL`'s `gap-2`
+    // moved inside the box that grows. The COLUMN is still the well's own recipe.
+    const column = Array.from(well.querySelectorAll("div")).find((el) =>
+      el.className.startsWith(PANEL_ROWS)
     );
     expect(column).toBeTruthy();
     const card = screen.getByText("#aaaa1111").closest(".bento")!;

@@ -69,6 +69,17 @@
 .frame :global(.border-l.border-border-default) {
   border-left-width: 2px;
 }
+/* ⚠ THE SAME 2px, TOLD TO THE RESIZE PILL (Samuel, 2026-09-13: *"I want it to be
+   perfectly on the vertical line"*). `channels-v2/info-resize-handle.tsx ›
+   DIVIDER_WIDTH_VAR` centres the pill on the divider by offsetting it half a
+   border width; its fallback is the kit hairline the workspace channels page
+   wears, so THIS host has to say that its structural `border-l` above is wider.
+   ⚠ **DECLARED IN THIS BLOCK ON PURPOSE** — one rule states the width and the
+   width it tells the handle, so the pair cannot drift the day the pane's outer
+   border moves. It is inherited, so the handle reads it anywhere in the frame. */
+.frame {
+  --channel-divider-w: 2px;
+}
 .frame :global(.border-b.border-border-default):not(th) {
   border-bottom-width: 2px;
 }

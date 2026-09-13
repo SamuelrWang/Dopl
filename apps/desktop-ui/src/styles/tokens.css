@@ -447,6 +447,10 @@
 
   --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%),
     0 2px 8px -2px oklch(0 0 0 / 40%);
+  /* THE WHITE CARD ON A GRAY WELL (`.bento`). Deepened 2026-09-13 (Samuel, over
+     the Overview: "make each white pane cast more of a shadow and a darker
+     shadow onto the gray background"). */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 12px 32px rgba(0, 0, 0, 0.14);
   --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
     0 4px 16px -4px oklch(0 0 0 / 50%);
   --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%),

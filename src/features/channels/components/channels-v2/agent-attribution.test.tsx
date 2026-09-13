@@ -352,17 +352,17 @@ describe("a different agent breaks the run", () => {
 /**
  * THE PILL ITSELF (Samuel, 2026-08-22, from two reference screenshots).
  *
- * ⚠ ONE HEADER IDIOM FOR THE WHOLE TRANSCRIPT. Human and agent rows wear the
- * SAME capsule — avatar left, name over timestamp to its right — because a
- * second header shape for agent rows is how two surfaces come to word one
- * exchange differently. The old avatar-gutter row and the grey `Agent · <id>`
- * chip are both gone.
+ * ⚠ **THE HUMAN ROW KEEPS THE CAPSULE AND THE AGENT ROW NO LONGER HAS ONE
+ * (Samuel, 2026-09-13).** The 2026-08-22 "one header idiom for the whole
+ * transcript" ruling is superseded for agent rows only: an agent post is a flat
+ * row (`message-row-agent.tsx`, which carries the ruling), a person's is still the
+ * `.bento` capsule with avatar left and name over timestamp. Both halves are
+ * asserted below, because a sweep that "unified" them again would look like a
+ * tidy-up.
  *
- * ⚠ THE ACCENT SURVIVES ON THE BORDER, and that is the half a screenshot cannot
- * catch. `agentAccent` returns a border/fill/ink triple built for a CHIP; the
- * pill re-uses it and neutralises the last two, so the elevated card face stays
- * the card face and the name stays primary ink. If a refactor ever lets the fill
- * through, the pill silently becomes four differently-coloured boxes.
+ * ⚠ **THE ACCENT'S BORDER-ONLY SURVIVAL MOVED TO `message-row-agent.test.tsx`**,
+ * where the row's LIVE state — the only condition under which the accent is drawn
+ * at all now — can be arranged through an agent index this file does not build.
  */
 describe("the attribution pill", () => {
   /** The pill element for a row — the capsule, not the article. */
@@ -397,14 +397,19 @@ describe("the attribution pill", () => {
     ).toBe("You");
   });
 
-  it("carries the avatar, the name and the message TIME in one capsule", () => {
+  it("heads an AGENT row with a flat name + time line and NO capsule at all", () => {
     renderThread([byAgent("m-1", { agentId: A })]);
-    const pill = pillIn(rowFor("BODY-m-1"));
-    expect(pill.className).toContain("rounded-full");
-    // The reference's subtitle slot holds the transcript's own time format.
+    const row = rowFor("BODY-m-1");
+    // ⚠ THE SAME TWO FACTS, ON ONE LINE INSTEAD OF STACKED IN A BOX.
     const time = formatChannelTimestamp("2026-08-18T12:00:00.000Z");
-    expect(within(pill).getByText(`#${A}`)).not.toBeNull();
-    expect(within(pill).getByText(time)).not.toBeNull();
+    expect(within(row).getByText(`#${A}`)).not.toBeNull();
+    expect(within(row).getByText(time)).not.toBeNull();
+    // ⚠ AND THE BOX IS GONE, which is the whole ruling: no `.bento` capsule, and
+    // none of /home's raised-pill hook on an agent row (that rule is the HUMAN
+    // pill's — `pages/home/home.module.css`).
+    expect(row.getAttribute("data-agent-row")).toBe("");
+    expect(row.querySelector(".bento")).toBeNull();
+    expect(row.querySelector("[data-attribution-pill]")).toBeNull();
   });
 
   /** ⚠ A HUMAN ROW GETS THE SAME PILL. The transcript is one system. */
@@ -417,28 +422,9 @@ describe("the attribution pill", () => {
     expect(within(pill).getByText("You")).not.toBeNull();
   });
 
-  it("puts the per-agent accent on the BORDER and leaves the card face alone", () => {
-    renderThread([byAgent("m-1", { agentId: B })]);
-    const pill = pillIn(rowFor("BODY-m-1"));
-    // The border half of this agent's accent survived the merge…
-    const border = agentAccent(B)
-      .split(" ")
-      .find((c) => c.startsWith("border-")) as string;
-    expect(pill.className).toContain(border);
-    // …and the fill/ink halves did NOT: the pill keeps the elevated card face
-    // and primary ink, or the name is unreadable and the capsule is a chip.
-    expect(pill.className).toContain("bg-bg-elevated");
-    expect(pill.className).toContain("text-text-primary");
-    for (const cls of agentAccent(B).split(" ")) {
-      if (cls.startsWith("bg-") || cls.startsWith("text-")) {
-        expect(pill.className).not.toContain(cls);
-      }
-    }
-  });
-
   it("wears no hardcoded colour, size or shadow — tokens and kit only", () => {
     renderThread([byAgent("m-1", { agentId: A })]);
-    const html = pillIn(rowFor("BODY-m-1")).outerHTML;
+    const html = rowFor("BODY-m-1").outerHTML;
     expect(html).not.toMatch(/#[0-9a-f]{3,6}\b/i);
     expect(html).not.toMatch(/\btext-(xs|sm|base|lg)\b/);
     expect(html).not.toMatch(/\bshadow-\[/);

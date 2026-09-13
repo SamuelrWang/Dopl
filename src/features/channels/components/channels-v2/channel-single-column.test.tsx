@@ -22,6 +22,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
@@ -138,6 +139,7 @@ vi.mock("./use-desktop-sessions", () => ({
 // Imported AFTER the mock declarations for readability; `vi.mock` is hoisted.
 import { StandaloneChannelSurface } from "./channel-surface-standalone";
 import { useChannelWebView } from "./use-channel-web-view";
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
 
 const CHANNEL = channel();
 
@@ -309,6 +311,51 @@ describe("the web channel page — the URL keeps the face", () => {
     expect(parseChannelWebView("")).toBe("channel");
     expect(parseChannelWebView("#view=knowledge")).toBe("channel");
     expect(parseChannelWebView("#view=threads")).toBe("threads");
+  });
+});
+
+/**
+ * 🔒 **THE CHANNEL HEADER'S TYPE (Samuel, 2026-09-13):** *"the dropdown and the
+ * name of the channel should be that font styling"* — the /home Overview's
+ * **Credit spend** face.
+ *
+ * ⚠ **THE ASSERTION IS AGAINST THE CONSTANT, NOT ITS CURRENT VALUE.** A hand-typed
+ * `text-title font-medium` reads identically today and drifts the day
+ * `TEMPLATE_NAME_TEXT` moves — the same argument `agents-wells.test.tsx` makes for
+ * the well heading, which is the type Samuel pointed at when he named it.
+ */
+describe("the channel header's name and dropdown wear one type", () => {
+  it("puts `TEMPLATE_NAME_TEXT` on the channel name and on the dropdown beside it", () => {
+    mountWeb();
+    const header = screen
+      .getByRole("button", { name: "Channel view" })
+      .closest("header") as HTMLElement;
+    const name = within(header).getByText(CHANNEL.name);
+    expect(name.className).toContain(TEMPLATE_NAME_TEXT);
+    // ⚠ THE TRIGGER'S PILL IS UNTOUCHED — only the type moves, so the `flat` face's
+    // border and fill are still there under it.
+    const trigger = screen.getByRole("button", { name: "Channel view" });
+    expect(trigger.className).toContain(TEMPLATE_NAME_TEXT);
+    expect(trigger.className).toContain("bg-bg-inset");
+  });
+
+  it("puts it on the DESKTOP header's name too — one surface, two hosts", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <StandaloneChannelSurface
+          workspaceId={WS}
+          workspaceSlug="acme"
+          channel={CHANNEL}
+          currentUserId={ME}
+        />
+      </QueryClientProvider>
+    );
+    const header = screen
+      .getByRole("button", { name: "Channel info" })
+      .closest("header") as HTMLElement;
+    expect(within(header).getByText(CHANNEL.name).className).toContain(
+      TEMPLATE_NAME_TEXT
+    );
   });
 });
 

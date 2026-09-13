@@ -13,7 +13,41 @@
 
 import type { ReactNode } from "react";
 import { Bookmark, ChevronRight, Hash, PanelRight } from "lucide-react";
+// ⚠ CROSS-FEATURE, AND THE SAME "SMALLER OF TWO EVILS" `agents-wells.tsx` RECORDS
+// (INVARIANTS §1 forbids it; F-275 records that this tree has never obeyed the
+// rule). `TEMPLATE_NAME_TEXT` was exported on 2026-09-13 so a second surface could
+// read the type Samuel names by POINTING AT IT; this header is the fourth reader.
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./bits";
+
+/**
+ * THE CHANNEL NAME'S TYPE IN THIS HEADER (Samuel, 2026-09-13, over the channel
+ * header): *"the dropdown and the name of the channel should be that font
+ * styling"* — the /home Overview's **Credit spend** face.
+ *
+ * ⚠ **BY IMPORT, NEVER RE-TYPED.** A hand-written `text-title font-medium` here
+ * reads identically today and drifts the day that constant moves — the exact
+ * argument `agents-wells.tsx`'s heading and `overview-usage-filter.tsx`'s controls
+ * already make. It was `text-body font-semibold text-text-primary`: the size goes
+ * up one step and **the weight comes DOWN to `font-medium`**, which is the
+ * constant's own and is deliberate, not a loss.
+ *
+ * ⚠ **THE DROPDOWN BESIDE IT WEARS IT TOO**, and it gets there through
+ * `viewSelect`'s own `className` rather than from this file: the control is
+ * `channel-single-column.tsx`'s `SelectMenu`, and a caller `className` outranks
+ * `select-menu.tsx › TRIGGER_FACE.flat`'s `text-caption` inside `cn`. Stated in
+ * both places would be the same instruction twice.
+ *
+ * ⚠ **THE POP-OUT WINDOW'S `h1` IS NOT THIS AND DOES NOT MOVE** — that chrome is
+ * a window title bar over a single thread, not the channel header Samuel named.
+ *
+ * ⚠ **THE THREAD TITLE IS NOT THE CHANNEL NAME AND IS LEFT ALONE.** Samuel named
+ * two things; R2 says change only those. In a thread the crumb's channel half
+ * takes the new type and keeps its own resting ink and hover (it is a BUTTON —
+ * the way back out), so `TEMPLATE_NAME_TEXT`'s `text-text-primary` is overridden
+ * there on purpose and only the size and weight survive.
+ */
 
 export function PaneHeader({
   channelName,
@@ -81,7 +115,7 @@ export function PaneHeader({
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
         {threadTitle === null ? (
           hideChannelCrumb ? null : (
-            <span className="truncate text-body font-semibold text-text-primary">
+            <span className={cn("truncate", TEMPLATE_NAME_TEXT)}>
               {channelName}
             </span>
           )
@@ -90,7 +124,14 @@ export function PaneHeader({
             <button
               type="button"
               onClick={onExitThread}
-              className="truncate rounded-[7px] px-1 py-0.5 text-body text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+              className={cn(
+                "truncate rounded-[7px] px-1 py-0.5 transition-colors hover:bg-surface-raised-1 hover:text-text-primary",
+                TEMPLATE_NAME_TEXT,
+                // ⚠ INK LAST — the crumb's channel half is the way OUT of the
+                // thread and rests muted; only the size and weight are Samuel's
+                // ruling here (see the type's docblock).
+                "text-text-secondary"
+              )}
             >
               {channelName}
             </button>

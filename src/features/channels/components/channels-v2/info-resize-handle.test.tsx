@@ -27,7 +27,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { InfoResizeHandle, INFO_RESIZE_LABEL } from "./info-resize-handle";
+import {
+  DIVIDER_WIDTH_VAR,
+  InfoResizeHandle,
+  INFO_RESIZE_LABEL,
+} from "./info-resize-handle";
 import { INFO_WIDTH_STORAGE_KEY } from "./use-info-resize";
 
 /** A 1200px surface whose right edge is at 1200 — so max = 600, min = 380. */
@@ -91,6 +95,41 @@ describe("the handle itself", () => {
     expect(strip.getAttribute("aria-valuemin")).toBe(String(MIN));
     expect(strip.getAttribute("aria-valuemax")).toBe(String(MAX));
     expect(strip.tabIndex).toBe(0);
+  });
+
+  /**
+   * 🔒 **THE PILL'S CENTRE IS THE LINE'S CENTRE (Samuel, 2026-09-13):** *"for the
+   * black vertical line that we're using so that the user can use it to drag …
+   * right now it's sitting to the left. I want it to be perfectly on the vertical
+   * line."*
+   *
+   * ⚠ **THE ARITHMETIC IS THE TEST, because jsdom computes no CSS.** The wrapper is
+   * `w-0`, so its x IS the info column's left edge — which is the divider's FIRST
+   * pixel (`info-panel.tsx › border-l border-border-default`, drawn inside the
+   * column), not its middle. With `left-1/2` that resolved to 0 and
+   * `-translate-x-1/2` centred the 12px strip — and the 4px pill inside it — on
+   * that edge: half the pill sat on the transcript. `left` must therefore be HALF A
+   * BORDER, so:
+   *
+   *     pill centre = 0 + w/2 − 12/2 + 12/2 = w/2 = the line's centre  ✓
+   *
+   * ⚠ **AND THE BORDER IS TWO WIDTHS**, which is why the offset is a VARIABLE: 1px
+   * on the workspace channels page, 2px inside /home's record pane. The /home half
+   * is pinned in `apps/desktop-ui/src/pages/home/channel-divider.test.ts`, which
+   * reads the module that widens it.
+   */
+  it("offsets the strip by HALF the divider, so the pill lands on the line's centre", () => {
+    const { strip } = mount();
+    // ⚠ THE EXPRESSION, LITERALLY: Tailwind scans source text, so an interpolated
+    // class is a rule that never gets generated — and a missing `left` silently
+    // puts the pill back where the bug was.
+    expect(strip.className).toContain(`left-[calc(var(${DIVIDER_WIDTH_VAR},1px)/2)]`);
+    expect(strip.className).toContain("-translate-x-1/2");
+    // ⚠ AND NOT `left-1/2`, which is the bug's own class.
+    expect(strip.className).not.toMatch(/\bleft-1\/2\b/);
+    // The pill is centred inside that strip and owns no offset of its own.
+    const pill = strip.querySelector("[data-resize-pill]") as HTMLElement;
+    expect(pill.className).not.toMatch(/\b-?m[lrx]-/);
   });
 
   it("shows the two chevrons on hover, and takes them back", () => {

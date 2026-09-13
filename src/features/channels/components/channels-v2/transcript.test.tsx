@@ -102,10 +102,10 @@ describe("channels-v2 transcript — sides", () => {
         formatChannelTimestamp
       )
     );
-    expect(rowFor("MY-AGENT").className).toContain("items-end");
-    expect(rowFor("PEER-AGENT").className).not.toContain("items-end");
-    // ⚠ Both rows are UNSTAMPED, so both NAME LINES read the bare noun — the
-    // chip is gone (`attribution-pill.tsx › attributionName`).
+    // ⚠ AGENT ROWS MOVED AXIS ON 2026-09-13 (the flat row) — `flex-row-reverse`.
+    expect(rowFor("MY-AGENT").className).toContain("flex-row-reverse");
+    expect(rowFor("PEER-AGENT").className).not.toContain("flex-row-reverse");
+    // ⚠ Both rows are UNSTAMPED, so both read the bare noun (`› attributionName`).
     expect(screen.getAllByText("Agent")).toHaveLength(2);
   });
 
@@ -127,7 +127,8 @@ describe("channels-v2 transcript — sides", () => {
         formatChannelTimestamp
       )
     );
-    expect(rowFor("CLAIMED").className).not.toContain("items-end");
+    // ⚠ `items-end` WAS THIS ASSERTION UNTIL 2026-09-13 (it moved to the column).
+    expect(rowFor("CLAIMED").className).not.toContain("flex-row-reverse");
   });
 
   it("labels the viewer 'You' and a peer by their roster name", () => {

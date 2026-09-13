@@ -27,10 +27,46 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
 import { useInfoResize } from "./use-info-resize";
 
 /** The separator's accessible name. Exported so the suites name it once. */
 export const INFO_RESIZE_LABEL = "Resize channel info";
+
+/**
+ * HOW WIDE THE DIVIDER LINE IS, SO THE PILL CAN SIT ON ITS CENTRE (Samuel,
+ * 2026-09-13: *"right now it's sitting to the left. I want it to be perfectly on
+ * the vertical line."*).
+ *
+ * ⚠ **THE OFFSET IS HALF A BORDER, AND THAT IS THE WHOLE BUG.** The wrapper is
+ * `w-0`, so `left-1/2` resolves to 0 and a `-translate-x-1/2` strip centres on
+ * the wrapper's own x — which is the info column's LEFT EDGE, i.e. the divider's
+ * first pixel, not its middle. The divider is `info-panel.tsx`'s
+ * `border-l border-border-default`, drawn INSIDE the column, so its centre is
+ * `borderWidth / 2` to the RIGHT of that edge. Shifting the strip by exactly
+ * that much puts the 4px pill's centre on the line's centre.
+ *
+ * ⚠ **AND THE BORDER IS NOT ONE WIDTH ON BOTH HOSTS, WHICH IS WHY THIS IS A
+ * VARIABLE AND NOT A NUMBER.** On the workspace channels page it is the kit
+ * hairline (1px, the fallback here); inside /home's record pane
+ * `pages/home/home.module.css › .frame :global(.border-l.border-border-default)`
+ * widens exactly that shape to 2px, and it declares this variable in the SAME
+ * rule block so the two cannot drift. A literal `1px` here would leave the pill
+ * a pixel left of a 2px line on the surface Samuel was looking at, which is the
+ * report.
+ */
+export const DIVIDER_WIDTH_VAR = "--channel-divider-w";
+
+/**
+ * `left` for the 12px hit strip: half the divider, so its centre lands on the
+ * line's centre once `-translate-x-1/2` has pulled it back.
+ *
+ * ⚠ **WRITTEN OUT AS A LITERAL, NOT INTERPOLATED FROM {@link DIVIDER_WIDTH_VAR}.**
+ * Tailwind scans SOURCE TEXT for class names, so a template literal produces a
+ * class the generator never sees and the rule is simply absent at runtime — the
+ * pill would then sit at `left: 0` with no error anywhere.
+ */
+const STRIP_LEFT = "left-[calc(var(--channel-divider-w,1px)/2)]";
 
 /** 12px, the chevron step the info column already uses (`knowledge-tab.tsx` is
  *  13 at text scale; this one flanks a 4px pill and 12 is the ramp's step below). */
@@ -66,7 +102,13 @@ export function InfoResizeHandle() {
         // `touch-none` so a drag is a drag and not a scroll; no focus RING — the
         // arrows below are this control's focus signal, and a 12px invisible strip
         // has no face to ring.
-        className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2 cursor-col-resize touch-none outline-none"
+        className={cn(
+          "absolute inset-y-0 w-3 -translate-x-1/2 cursor-col-resize touch-none outline-none",
+          // ⚠ HALF A DIVIDER RIGHT OF THE COLUMN'S EDGE, never `left-1/2` — see
+          // {@link DIVIDER_WIDTH_VAR}. `left-1/2` of a `w-0` wrapper is 0, which
+          // is the line's first pixel and not its centre.
+          STRIP_LEFT
+        )}
       >
         {/* Centred on the divider both ways — Samuel's "centered". */}
         <span className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.5">

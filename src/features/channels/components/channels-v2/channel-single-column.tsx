@@ -34,6 +34,11 @@
  */
 
 import type { ReactNode } from "react";
+// ⚠ CROSS-FEATURE, on the same recorded exception `message-pane-header.tsx` and
+// `agents-wells.tsx` carry (INVARIANTS §1, F-275): the type Samuel names is read
+// by POINTING AT IT rather than re-typed.
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { cn } from "@/shared/lib/utils";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { PaneHeader } from "./message-pane-header";
@@ -115,7 +120,14 @@ export function ChannelSingleColumn({
       ariaLabel="Channel view"
       // ⚠ THE `flat` FACE, which is what this control wears everywhere else in
       // the app (`select-menu.tsx`) — the header gets no bespoke trigger.
-      className="max-w-[45%]"
+      // ⚠ **THE TYPE IS THE CHANNEL NAME'S SINCE 2026-09-13** (Samuel: *"the
+      // dropdown and the name of the channel should be that font styling"*) —
+      // `TEMPLATE_NAME_TEXT` by import, the /home **Credit spend** face, which
+      // `message-pane-header.tsx` puts on the name this trigger sits beside. A
+      // caller `className` outranks `TRIGGER_FACE.flat`'s `text-caption` /
+      // `text-text-secondary` inside `cn` (`tailwind-merge`, later wins), so the
+      // PILL — border, fill, padding, hover — is untouched and only the type moves.
+      className={cn("max-w-[45%]", TEMPLATE_NAME_TEXT)}
       onChange={(next) => {
         // Picking the agent you are already looking at is not a navigation.
         if (next === "agent") return;
