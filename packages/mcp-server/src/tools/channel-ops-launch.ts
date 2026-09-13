@@ -27,6 +27,7 @@
  */
 
 import type {
+  AgentColorKey,
   DoplClient,
   LaunchMessageMode,
   LaunchRefusalReason,
@@ -43,6 +44,9 @@ import { factsLine, postureFacts } from "./channel-facts";
 // paragraph — and four hand-written copies is how two of them end up describing
 // a system the other two do not.
 import { TENANCY_FIX, TENANCY_RULE } from "./channel-doctrine";
+// ⚠ THE COLOUR REFUSAL IS A NEIGHBOUR, not a branch in here — this file is at the §1
+// cap and a refusal is prose about one server code (`channel-ops-launch-color.ts`).
+import { colorTaken, freeColors } from "./channel-ops-launch-color";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
@@ -279,6 +283,10 @@ export async function opLaunchAgent(
      *  probes it against `(channel, this operator)` and returns the stored
      *  directive rather than filing a second one. */
     clientMsgId?: string;
+    /** ⚠ **ASKED FOR, AND REFUSED RATHER THAN SUBSTITUTED WHEN TAKEN.** Passed through
+     *  untouched — the taken set spans every member's live agents and only the server
+     *  can see it. Omitted means "first free", never "no colour". */
+    color?: AgentColorKey;
     waitMs?: number;
   } = {},
 ): Promise<ToolResponse> {
@@ -306,6 +314,7 @@ export async function opLaunchAgent(
       messages: opts.messages,
       chain: opts.chain,
       clientMsgId: opts.clientMsgId,
+      color: opts.color,
     });
   } catch (e) {
     // ⚠ THE TEMPLATE ARMS COME FIRST, AND THE DISCRIMINATOR IS THE **CODE**, NOT
@@ -313,6 +322,14 @@ export async function opLaunchAgent(
     // membership, no such template) and one to 409, and a status-only branch
     // would tell an agent its CHANNEL was wrong when it was the template name —
     // the exact mis-narration `channel-errors.ts` exists to stop.
+    // ⚠ **THE COLOUR ARM IS FIRST AMONG THE 409s AND IS DISCRIMINATED BY CODE**, the
+    // same rule the template arms below follow: two codes now share one status, and a
+    // status-only branch would tell an agent its TEMPLATE name was ambiguous when its
+    // COLOUR was taken. ⚠ IT IS NOT A FAILURE OF THE CALL — nothing was filed, and the
+    // fix is one retry with a key from the list.
+    if (apiErrorCode(e) === "AGENT_COLOR_TAKEN") {
+      return colorTaken(opts.color ?? "", freeColors(e));
+    }
     if (apiErrorCode(e) === "AGENT_TEMPLATE_AMBIGUOUS") {
       return ambiguousTemplate(opts.template ?? "", templateMatches(e));
     }

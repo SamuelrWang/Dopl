@@ -291,9 +291,23 @@ function telemetryFields(e) {
 // in the state half means a change pushes IMMEDIATELY, past the cadence floor, and that is
 // free: `context.template` is a SPAWN-TIME capture that is never re-resolved, so the value
 // can move at most once per session, at its first push.
+// ⚠ `color` JOINED 2026-09-13 AND THE CLASSIFICATION IS DELIBERATE, per this block's own
+// instruction. It is a fact about WHICH SESSION THIS IS — the identity a reader uses to tell two
+// agents apart in a transcript — so it belongs in the state half and not the churn half, exactly
+// as `templateName` does. Putting it here means a change pushes IMMEDIATELY, past the cadence
+// floor, and that is what the feature needs: the colour is what the operator's OWN transcript
+// paints with, so a key held behind the floor is a box that stays neutral for up to
+// `TELEMETRY_MIN_INTERVAL_MS` after the agent starts.
+// ⚠ AND IT IS FREE, FOR A STRONGER REASON THAN `templateName`'s spawn-time capture: the server
+// RESOLVES this field rather than storing it, and
+// `src/features/channels/server/session-colors.ts` rule 1 keeps whatever a session already
+// holds — so the value can move at most once per session (its first assignment) and cannot
+// oscillate. ⚠ **THAT IS ALSO WHY IT DOES NOT INHERIT `session-store.js`'s DURABLE-WHITELIST
+// HAZARD.** A resume that rebuilds context without `templateName` NULLS a column the server
+// stores verbatim; a resume that reports no colour is overruled by rule 1 and changes nothing.
 const STATE_FIELDS = [
   'sessionKey', 'channelId', 'threadId', 'name', 'state', 'channelName', 'threadTitle',
-  'templateName',
+  'templateName', 'color',
 ];
 
 /** One stable string over the STATE half of a whole row set. ⚠ SET MEMBERSHIP IS PART OF IT:

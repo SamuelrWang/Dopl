@@ -31,7 +31,10 @@
  *
  * ⚠ **THE RUNTIME ROW SITS UNDER MODEL HERE.** The slide-out put it between Template and Model
  * because it *"decides what the two rows under it mean"*; Samuel's popup ordering is Name,
- * Description, Template, Model, Runtime.
+ * Description, Template, Model, Runtime — and since 2026-09-13 **Colour** under that
+ * (`agent-color-circles.tsx`, docs/specs/agent-colors.md item 7: *"At the bottom, under Runtime,
+ * add multiple little circles"*), the only row whose data is the ROOM's rather than this
+ * desktop's or this workspace's.
  *
  * ⚠ **NO "CHANNEL DEFAULT", AND THIS SPAWN'S RUNTIME IS ALWAYS ON THE WIRE (2026-09-08, Samuel).**
  * *"for runtime, there shouldn't be a channel default. I don't even know what the logic behind
@@ -79,6 +82,9 @@ import {
   runtimeRowOptions,
 } from "./launch-agent-dialog-runtime";
 import { agentModelOptionsFor, agentModelSelection } from "../../lib/agent-models";
+import { AgentColorCircles, agentColorsTaken } from "./agent-color-circles";
+import { firstFreeAgentColor } from "../../lib/agent-colors";
+import type { AgentColorKey } from "../../types";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import { useLaunchRunner, type AgentLaunchPanel } from "./use-agent-launch";
 
@@ -86,6 +92,11 @@ import { useLaunchRunner, type AgentLaunchPanel } from "./use-agent-launch";
  *  maps to `templateId: null` at the boundary, which is the wire's own spelling of "no
  *  template". Same sentinel `composer-launch-panel.tsx` uses, for the same reason. */
 const BLANK_TEMPLATE = "";
+
+/** ⚠ ONE OBJECT AT MODULE SCOPE for `EMPTY_RUNTIMES`' reason (`launch-agent-dialog-runtime.ts`):
+ *  a fresh `[]` default would be a new identity every render and would rebuild the taken set on
+ *  every keystroke in the Name field. */
+const EMPTY_LIVE_SESSIONS: ReadonlyArray<never> = [];
 
 export function LaunchAgentDialog({
   panel,
@@ -95,6 +106,7 @@ export function LaunchAgentDialog({
   workspaceId,
   currentUserId,
   members,
+  liveSessions = EMPTY_LIVE_SESSIONS,
 }: {
   panel: AgentLaunchPanel;
   /** ⚠ ABSENT MEANS NO LAUNCH ON THIS SURFACE — the caller renders nothing at all. */
@@ -105,7 +117,7 @@ export function LaunchAgentDialog({
   /**
    * The template roster's one input. ⚠ `null` IS A REAL ANSWER AND NOT AN EMPTY ROSTER — it is
    * "this caller has no workspace to list", so the read is not made and the Template row holds
-   * Blank agent alone.
+   * None alone.
    */
   workspaceId: string | null;
   /** Whose templates wear NO marker — everyone else's wear one. */
@@ -114,6 +126,28 @@ export function LaunchAgentDialog({
    *  by someone outside this channel degrades to "by another member" rather than losing its
    *  marker, because dropping it would turn UNKNOWN into MINE. */
   members: ReadonlyArray<{ userId: string; displayName: string | null; email: string | null }>;
+  /**
+   * **THE CHANNEL'S LIVE SESSIONS — PEER AND OWN — AND THE ONLY THING THE COLOUR ROW READS**
+   * (2026-09-13; docs/specs/agent-colors.md item 7: *"The taken set comes from the channel's
+   * live sessions projection (peer + own), refreshed by the same push the @-picker uses"*).
+   *
+   * ⚠ **OPTIONAL AND EMPTY BY DEFAULT, AND THAT IS A WIRING DEBT, NOT A DESIGN CHOICE.** All
+   * three mounts of this dialog — `agents-tab.tsx`, `composer.tsx`, `agent-window-launch.tsx` —
+   * already hold the projection (`use-agents-panel.ts › peerSessions`, plus the desktop's own
+   * feed), and none of those files is this slice's to edit; the prop is declared here so the
+   * thread is one argument each when they are. Until then the row renders EVERY key as free and
+   * the server's partial unique index corrects a collision with a 409 (spec item 3) — which is
+   * the same authority that would be corrected anyway, just later and with a worse tooltip.
+   * ⚠ Shaped as a STRUCTURAL SUBSET of `ChannelSessionState` rather than that type by name, so
+   * the peer projection, the own-session feed and a test fixture all satisfy it without an
+   * adapter — the same reason `agents-model.ts › agentLiveness` takes a shape.
+   */
+  liveSessions?: ReadonlyArray<{
+    state: string;
+    color?: AgentColorKey | null;
+    name?: string | null;
+    displayName?: string | null;
+  }>;
 }) {
   // ⚠ NOT REQUESTED UNTIL THE DIALOG IS OPEN, and it is the SAME cache entry the Agents tab
   // mounts — a stable key on `[path, workspaceId, query]` (F-331). ⚠ READ-ONLY.
@@ -150,7 +184,15 @@ export function LaunchAgentDialog({
   const templateOptions = useMemo(
     () => [
       // ⚠ FIRST, AND NOT A PLACEHOLDER. A blank agent is a real configuration.
-      { key: BLANK_TEMPLATE, label: "Blank agent" },
+      // ⚠ **THE WORD IS "None" SINCE 2026-09-13 AND IT IS SAMUEL'S** (*"when the user
+      // clicks New Agent in the New Agent pop-up, I want you to change 'Blank Agent' to
+      // 'None' for the template"*). The KEY is untouched — `BLANK_TEMPLATE` still maps to
+      // `templateId: null`, so nothing on the wire moved with the label. ⚠ The OTHER
+      // surfaces that still say "Blank agent" are the retired slide-out
+      // (`composer-launch-panel.tsx`) and the template MENU
+      // (`agent-templates/components/template-picker.tsx`); his ruling names this popup,
+      // and neither file is this slice's.
+      { key: BLANK_TEMPLATE, label: "None" },
       ...templates.map((t) => ({
         key: t.id,
         label: t.name,
@@ -200,6 +242,26 @@ export function LaunchAgentDialog({
   );
   /** `''` only where the desktop reported nothing — the no-row, no-key lane. */
   const selectedRuntime = effectiveRuntime?.id ?? "";
+
+  /** WHICH KEYS THIS ROOM'S LIVE AGENTS HOLD — one derivation, in `agent-color-circles.tsx ›
+   *  agentColorsTaken`, because the circles' fence and their tooltips have to be the same read. */
+  const { taken, takenBy } = useMemo(() => agentColorsTaken(liveSessions), [liveSessions]);
+  /**
+   * WHAT THE COLOUR ROW SHOWS — the operator's own pick, else the FIRST FREE key.
+   *
+   * ⚠ **DISPLAY ONLY, EXACTLY LIKE {@link effectiveModel}, AND FOR THE SAME REASON SPELLED IN
+   * THAT COMMENT.** `panel.color` stays `null` until a circle is clicked, so an untouched dialog
+   * sends no `color` and the SERVER assigns the first free key — the authority that owns the
+   * uniqueness index. Stamping this derived key into the panel would make a per-spawn statement
+   * out of a room-level assignment, and on a mount whose `liveSessions` is still unwired it would
+   * state `agent-01` at a room that may already hold it.
+   * ⚠ `null` WHEN THE BANK IS EMPTY — sixteen live agents, no circle selected, and the launch is
+   * still allowed (`lib/agent-colors.ts › firstFreeAgentColor` never refuses one).
+   */
+  const effectiveColor = useMemo<AgentColorKey | null>(
+    () => panel.color ?? firstFreeAgentColor(taken),
+    [panel.color, taken]
+  );
   const stopWarning = runtimes.length ? interruptRefusal(effectiveRuntime) : null;
 
   /**
@@ -290,6 +352,21 @@ export function LaunchAgentDialog({
             className="flex-wrap"
           />
         )}
+
+        {/* ⚠ **UNDER RUNTIME, WHICH IS WHERE SAMUEL PUT IT** (*"At the bottom, under Runtime, add
+            multiple little circles that will act as the color switcher"*) — so it stays BELOW the
+            row above even on a plain browser, where that row is not rendered at all.
+            ⚠ **ALWAYS RENDERED, unlike Runtime**: the bank is this room's, not this desktop's, so
+            there is no "nothing was reported" lane to hide it for. */}
+        <AgentColorCircles
+          value={effectiveColor}
+          // ⚠ OPTIONAL FOR `AgentLaunchPanel.color`'s REASON (its docblock names the two hand-built
+          // panel literals). Absent ⇒ this surface carries no colour, and the circles are inert
+          // rather than a control that looks live and changes nothing.
+          onChange={(next) => panel.setColor?.(next)}
+          taken={taken}
+          takenBy={takenBy}
+        />
 
         {/* ⚠ ONE SENTENCE, AND THE ONE EXCEPTION TO THE MINIMAL-COPY RULING (INVARIANTS §5). It
             is the descriptor's own words, and it is a NOTE rather than an ALERT: nothing has

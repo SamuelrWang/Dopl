@@ -56,6 +56,28 @@ const { diag } = require('./diag');
 // ⚠ THERE IS NO `no-counterparty` REFUSAL ANY MORE, on this lane or any other.
 
 /**
+ * **ONE OF THE SIXTEEN AGENT COLOUR KEYS, OR `null`** (2026-09-13;
+ * docs/specs/agent-colors.md).
+ *
+ * ⚠ **A LOCAL COPY OF THE PATTERN, AND THE DUPLICATION IS FORCED RATHER THAN CHOSEN.** `main/`
+ * cannot import from `src/` (two trees, two builds), so the set is spelled here as it is
+ * spelled in `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`, in
+ * `@dopl/contracts › AgentColorKey`, in `packages/mcp-server/src/tools/channel-ops-launch-color.ts`
+ * and in both column CHECKs in `20261005120000_agent_session_colors.sql`. ⚠ ANCHORED AT BOTH
+ * ENDS: an unanchored test would accept `agent-03 please`, and the value ends up substituted
+ * into a CSS custom property name on the far side.
+ *
+ * ⚠ **`null` FOR ANYTHING UNRECOGNIZED, WHICH IS "LET THE SERVER PICK" AND NEVER A REFUSAL.**
+ * A launch is not worth failing over a decoration — the whole lane treats an unknown colour the
+ * way F-5 treats an unknown model, and an agent with no colour runs perfectly well wearing the
+ * neutral box.
+ */
+const AGENT_COLOR_RE = /^agent-(0[1-9]|1[0-6])$/;
+function colorKey(value) {
+  return typeof value === 'string' && AGENT_COLOR_RE.test(value) ? value : null;
+}
+
+/**
  * ⚠ DID THE CALLER ASK FOR A TEMPLATE AT ALL? Absent, `null` and `''` all mean NO, and a launch
  * that asks for none is BYTE-IDENTICAL to what this lane did before templates existed — no
  * resolve, no round trip, no `context.template`, and `templateRoleFraming` returns `[]`.
@@ -274,6 +296,24 @@ async function launchFromButton(payload) {
     // permission pair. `getLaunchModel` is deliberately not `getLaunchPosture`.
     model: overrides.model || templateModel(sessionModel, template)
       || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(p.channelId)),
+    // ⚠ **THE AGENT COLOUR THE OPERATOR PICKED IN THE NEW-AGENT POPUP** (Samuel, 2026-09-13;
+    // docs/specs/agent-colors.md). ⚠ IT SITS BESIDE `model` BECAUSE IT IS THE SAME KIND OF
+    // FIELD, and that block's argument transfers line for line: forwarded, never invented,
+    // normalized here rather than trusted downstream, GRANTS NOTHING and reaches NO GATE — so
+    // it may travel further than the permission pair and needs none of `getLaunchPosture`'s
+    // ceremony.
+    // ⚠ **AND THERE IS NO PRECEDENCE CHAIN, WHICH IS THE DIFFERENCE FROM `model` ABOVE.** A
+    // template does not carry a colour and a channel has no stored default, because a colour is
+    // UNIQUE among a channel's live agents across every member — a remembered pick would be a
+    // pick that collides the second time it is used. So there is exactly one producer (the
+    // popup) and exactly one fallback: omit it, and the server assigns the FIRST FREE key
+    // (`src/features/channels/lib/agent-colors.ts › firstFreeAgentColor`).
+    // ⚠ **NORMALIZED HERE BECAUSE MAIN IS THE ONLY REAL VALIDATOR OF THIS PAYLOAD** — the same
+    // F-281 reason `narrowOverrides` is called above: the renderer cannot hold the charset rule,
+    // so a value off the IPC boundary is narrowed before it is forwarded, and anything that is
+    // not one of the sixteen keys becomes `null` ("let the server pick") rather than travelling
+    // as junk that a `var(--agent-color-…)` would later resolve to nothing.
+    color: colorKey(p.color),
     // ⚠ SPAWN IDLE (ruling 3): register, prepare the context, send NO first turn.
     idle: true,
     // ⚠ DEPTH 0 — "A HUMAN STARTED THIS", AND THIS IS THE ONLY LANE THAT MAY SAY SO (2026-08-25,

@@ -29,12 +29,20 @@
  * stick-to-bottom rules (`use-stick-to-bottom.ts`, called from HERE alone).
  */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { PaneHeader } from "./message-pane-header";
 import { useStickToBottom } from "./use-stick-to-bottom";
 import { useLoadOlder } from "./use-load-older";
 import { Transcript } from "./transcript";
+import {
+  TRANSCRIPT_FILTER_ALL,
+  TranscriptFilterSelect,
+  filterTranscriptRows,
+  resolveTranscriptFilter,
+  transcriptFilterAgents,
+  type TranscriptFilter,
+} from "./transcript-filter";
 import { ChannelsV2Composer } from "./composer";
 import { ThreadSendBox } from "./thread-consent";
 import type { AgentLaunchControls } from "./use-agents-panel";
@@ -241,6 +249,48 @@ export function ChannelsV2MessagePane({
     onLoad: onLoadOlder,
   });
 
+  /**
+   * **WHOSE POSTS THE TRANSCRIPT SHOWS — KEYED BY CHANNEL** (Samuel, 2026-09-13;
+   * `transcript-filter.tsx` carries the rule, this owns the state).
+   *
+   * ⚠ **A RECORD PER CHANNEL AND NOT ONE VALUE, BECAUSE AN AGENT SELECTION IS NOT
+   * PORTABLE.** The ruling is *"persists per channel"*, and the reason is mechanical:
+   * the options are agent ids, and an id that spoke in this room means nothing in the
+   * next one — a single value would carry a filter into a channel where it matches
+   * nothing. Keyed, the reader's choice survives a round trip through another channel.
+   * ⚠ **IN COMPONENT STATE, NEVER `localStorage`** (the ruling, in those words): a
+   * transcript that opens already hiding most of its messages, days later, is the pane
+   * lying about the room.
+   * ⚠ **THE EFFECTIVE VALUE IS RESOLVED, NOT READ** — an agent can page out of the
+   * loaded window while its selection stands, and
+   * `transcript-filter.tsx › resolveTranscriptFilter` carries why that falls back to
+   * All without discarding the choice.
+   */
+  const [filterByChannel, setFilterByChannel] = useState<
+    Readonly<Record<string, TranscriptFilter>>
+  >({});
+  const filterAgents = useMemo(
+    () => transcriptFilterAgents(rows, index),
+    [rows, index]
+  );
+  const filter = resolveTranscriptFilter(
+    // ⚠ THE SHARED `all` CONSTANT, never a literal: the value below is a `useMemo` key.
+    filterByChannel[channelId] ?? TRANSCRIPT_FILTER_ALL,
+    filterAgents
+  );
+  /**
+   * ⚠ **ONLY `Transcript` SEES THIS — THE PIN, THE PAGING AND THE SCROLL TARGET ALL
+   * STAY ON THE FULL `rows`, DELIBERATELY.** The filter is a VIEW; those three are about
+   * the loaded transcript itself. `use-load-older.ts` pages on what was LOADED (a filter
+   * that hid the top row would ask for the page above the wrong message), and
+   * `use-stick-to-bottom.ts` cannot be fooled by a hidden arrival: nothing visible grew,
+   * so its scroll-to-bottom moves nothing.
+   */
+  const visibleRows = useMemo(
+    () => filterTranscriptRows(rows, index, filter),
+    [rows, index, filter]
+  );
+
   // The flash is DERIVED: a target flashes until its nonce is spent by the
   // timeout. No synchronous setState in the effect.
   const [spentNonce, setSpentNonce] = useState(0);
@@ -299,6 +349,20 @@ export function ChannelsV2MessagePane({
         threadTitle={thread?.title ?? null}
         infoOpen={infoOpen}
         viewSelect={viewSelect}
+        transcriptFilter={
+          // ⚠ NOTHING TO FILTER, NO CONTROL (`template-picker.tsx › SEARCH_THRESHOLD`'s
+          // rule): with no agent in the loaded transcript, All and People name the same
+          // set, and a dropdown offering one answer twice is chrome for nothing.
+          filterAgents.length === 0 ? undefined : (
+            <TranscriptFilterSelect
+              value={filter}
+              agents={filterAgents}
+              onChange={(next) =>
+                setFilterByChannel((prev) => ({ ...prev, [channelId]: next }))
+              }
+            />
+          )
+        }
         favorited={favorited}
         popOut={popOut}
         chrome={chrome}
@@ -345,7 +409,8 @@ export function ChannelsV2MessagePane({
           </p>
         ) : (
           <Transcript
-            rows={rows}
+            // ⚠ THE FILTERED VIEW, and the ONLY consumer of it — see `visibleRows`.
+            rows={visibleRows}
             index={index}
             flashId={flashId}
             // ⚠ THE CARD'S LAUNCH RIDES THE SAME CONTROLS THE COMPOSER'S BOT

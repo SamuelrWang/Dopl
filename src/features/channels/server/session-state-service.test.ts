@@ -71,6 +71,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     last_wake_seq: null,
     last_wake_at: null,
     display_name: null,
+    color: null,
     ...over,
   };
 }
@@ -99,6 +100,9 @@ describe("listSessionStates", () => {
         detail: null,
         channelName: "General",
         threadTitle: "Deploy check",
+        // 2026-09-13 — peer-visible by design, so the COARSE projection carries it and
+        // the own one inherits it. `null` is the fixture's row, not a default.
+        color: null,
         updatedAt: "2026-08-05T12:00:05.000Z",
         model: null,
         toolLabel: null,
@@ -129,6 +133,7 @@ describe("listSessionStates", () => {
         detail: null,
         channelName: "General",
         threadTitle: null,
+        color: null,
         updatedAt: "2026-08-05T12:00:05.000Z",
         model: null,
         toolLabel: null,
@@ -159,6 +164,7 @@ describe("listSessionStates", () => {
         detail: null,
         channelName: "General",
         threadTitle: "Deploy check",
+        color: null,
         updatedAt: "2026-08-05T12:00:05.000Z",
         model: null,
         toolLabel: null,
@@ -330,6 +336,7 @@ describe("reportSessionStates", () => {
         last_wake_seq: null,
         last_wake_at: null,
         display_name: null,
+        color: null,
       },
     ]);
   });
@@ -378,6 +385,7 @@ describe("reportSessionStates", () => {
       last_wake_seq: null,
       last_wake_at: null,
       display_name: null,
+      color: null,
     });
   });
 

@@ -58,6 +58,7 @@ export type {
 
 export type {
   SessionPillState,
+  AgentColorKey,
   ChannelSessionTelemetry,
   ChannelSessionHealth,
 } from "./sessions.js";

@@ -46,6 +46,7 @@
 import { useCallback } from "react";
 import { getSpaBridge } from "@/shared/lib/spa-bridge";
 import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
+import type { AgentColorKey } from "../../types";
 
 /** Whether the pause / end controls can be offered at all. Feature-detected like
  *  every other bridge capability: an older main has the feed and not the
@@ -340,6 +341,15 @@ export async function launchAgentOnThread(payload: {
    * the tool PROFILE, which is containment itself, may never come off a payload.
    */
   runtime?: string;
+  /**
+   * **THIS AGENT'S COLOUR** — the New-agent popup's per-call pick (2026-09-13; the rule is
+   * INVARIANTS §5). ⚠ **TOP-LEVEL, NOT AN `overrides` MEMBER**, on `runtime`'s argument above: a
+   * template cannot carry a colour, since the key is unique among a channel's live agents across
+   * members. ⚠ **ABSENT MEANS "THE SERVER PICKS THE FIRST FREE KEY", NEVER "NO COLOUR"**.
+   * ⚠ ACCEPTED, NOT TRUSTED: main re-narrows (`main/session-launch-op.js › colorKey`, F-281), only
+   * the server can see what is free, and picking a colour WIDENS NOTHING.
+   */
+  color?: AgentColorKey;
 }): Promise<{
   ok: boolean;
   agentId?: string;

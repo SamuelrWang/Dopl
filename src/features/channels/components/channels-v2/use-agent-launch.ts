@@ -57,6 +57,7 @@
 import { useCallback, useState } from "react";
 import type { TemplateApprovalRequest } from "@/features/agent-templates/components/template-approval";
 import { getSpaBridge } from "@/shared/lib/spa-bridge";
+import type { AgentColorKey } from "../../types";
 import { AGENT_MODEL_DEFAULT } from "../../lib/agent-models";
 import { LAUNCH_APPROVAL_REASON, type AgentLaunchControls } from "./use-agents-panel";
 
@@ -124,6 +125,30 @@ export interface AgentLaunchPanel {
    * than sending `''`.
    */
   runtime: string;
+  /**
+   * THIS SPAWN'S COLOUR IN THIS CHANNEL, or `null` for "let the server pick the first
+   * free key" (Samuel, 2026-09-13; docs/specs/agent-colors.md item 7).
+   *
+   * ⚠ **`null` IS NOT "NO COLOUR" — IT IS "NOBODY CHOSE", and the two must not merge.**
+   * The circles row SHOWS the first free key from the moment it opens
+   * (`launch-agent-dialog.tsx › effectiveColor`), but this field stays `null` until the
+   * operator clicks one, so an untouched dialog omits `color` from the payload and the
+   * server's own first-free assignment stands. **That is the Model row's ruling applied
+   * to a second field**: a row that wrote its displayed default into the panel would turn
+   * the server's assignment into a per-spawn pick that then stops following it — and with
+   * the taken set unwired on a surface, that pick would be a key the room may already
+   * hold.
+   *
+   * ⚠ **OPTIONAL, LIKE `ChannelSessionState.color` AND FOR THE SAME REASON.** Adding a
+   * REQUIRED member here breaks every hand-built panel literal that is not this hook —
+   * `runtime-refusals.test.tsx › panelStub` and `launch-agent-dialog.test.tsx ›
+   * oldPanelState` are the two — so the addition is genuinely ADDITIVE: absent reads as
+   * "this panel does not carry a colour", which is exactly what those two surfaces mean.
+   */
+  color?: AgentColorKey | null;
+  /** ⚠ OPTIONAL for {@link AgentLaunchPanel.color}'s reason, and consumed as
+   *  `panel.setColor?.(…)`. The hook always supplies it. */
+  setColor?: (next: AgentColorKey) => void;
   /** A name is the only required field; a blank agent with no description is legitimate. */
   ready: boolean;
   /** A rename/describe that main refused AFTER the agent started. Never a launch failure. */
@@ -149,6 +174,9 @@ export function useAgentLaunch(): AgentLaunchPanel {
   // ⚠ `""` = follow the channel's pick, NOT "the default adapter" — see the
   // field's docblock on `AgentLaunchPanel`.
   const [runtime, setRuntime] = useState<string>("");
+  // ⚠ `null` = the operator touched no circle, so the payload omits `color` and the
+  // server assigns the first free key — see the field's docblock on `AgentLaunchPanel`.
+  const [color, setColor] = useState<AgentColorKey | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
@@ -159,6 +187,9 @@ export function useAgentLaunch(): AgentLaunchPanel {
     setTemplateId(null);
     setModel(AGENT_MODEL_DEFAULT);
     setRuntime("");
+    // ⚠ CLEARED WITH THE REST, so a dialog reopened after the room's colours moved
+    // re-derives its first-free default instead of holding a key somebody now owns.
+    setColor(null);
     setIdentityError(null);
   }, []);
 
@@ -206,6 +237,8 @@ export function useAgentLaunch(): AgentLaunchPanel {
     templateId,
     model,
     runtime,
+    color,
+    setColor,
     // ⚠ THE NAME IS THE ONLY GATE. A blank agent is a real configuration (no template), so is a
     // model of "Default", and so is an agent with no description — none of those may block a
     // launch. An unnamed one is refused only because the field is prefilled: an empty one means
@@ -259,7 +292,23 @@ export async function launchWithIdentity(
     // ⚠ `undefined` WHEN THE PANEL EXPRESSED NO PREFERENCE, so an untouched panel puts the
     // same payload on the wire a one-click launch always did — `overridesFor`'s own rule,
     // applied to the field main resolves FIRST in its precedence chain.
-    panel.runtime || undefined
+    panel.runtime || undefined,
+    /**
+     * **THE COLOUR — THE SIXTH ARGUMENT, ON `runtime`'s EXACT ARGUMENT** (2026-09-13;
+     * docs/specs/agent-colors.md item 3).
+     *
+     * ⚠ **`undefined` WHEN THE OPERATOR TOUCHED NO CIRCLE**, so an untouched popup and a
+     * one-click launch put the same payload on the wire — `overridesFor`'s rule, applied
+     * again. ⚠ AND ABSENT IS NOT "NO COLOUR": the server assigns the FIRST FREE key
+     * (`lib/agent-colors.ts › firstFreeAgentColor`), which is what the circles row already
+     * PREVIEWS as its default selection. The popup's taken set is advisory — uniqueness is a
+     * fact about every member's live agents and only `20261005120000`'s index can decide it.
+     * ⚠ **`TemplateLaunchOverrides` IS THE WRONG HOME AND WAS NOT USED** — that object is the
+     * TEMPLATE's re-points (`launch-overrides.ts`), and a colour is a property of the SESSION
+     * IN THE CHANNEL. A template cannot carry one: the key is unique among a channel's live
+     * agents, so a stored default would collide the second time it was used.
+     */
+    panel.color ?? undefined
   );
   if (!outcome.ok) {
     return {

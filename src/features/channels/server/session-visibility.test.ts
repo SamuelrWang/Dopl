@@ -70,6 +70,7 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     // name is PEER-VISIBLE BY DESIGN (Samuel's ruling), so the property test
     // below must see it SURVIVE the peer mapper rather than be scrubbed.
     display_name: "Bug Reviewer",
+    color: "agent-04",
     // ── THE HEALTH SEVEN, POPULATED (2026-09-01, 20260909120000) ───────────
     // ⚠ **AND POPULATING THEM IS AGAIN THE ENTIRE TEST CHANGE.** Registering the
     // seven in `OPERATOR_ONLY_SESSION_COLUMNS` + `…_FIELDS` and giving them
@@ -159,6 +160,10 @@ describe("the PEER mapper can never emit operator-only telemetry", () => {
       [
         "channelId",
         "channelName",
+        // 2026-09-13 — the agent's COLOUR, peer-visible BY DESIGN and for the same
+        // kind of reason `displayName` is: it exists so the OTHER member's transcript
+        // can tell two agents apart (`20261005120000`; Samuel's colour ruling).
+        "color",
         "detail",
         // 2026-08-31 — the operator-given agent name, peer-visible BY DESIGN
         // (Samuel's ruling; 20260905120000). The one addition since telemetry.

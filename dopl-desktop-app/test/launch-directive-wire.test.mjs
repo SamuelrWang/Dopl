@@ -229,6 +229,11 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     templateName: null,
     targetAgentId: null,
     targetName: null,
+    // ⚠ THE COLOUR (2026-09-13, agent colours). Same argument as the pair above: `toDirective`
+    // emits it on EVERY row, and the `dtoKeys()` belt below is what says so — a fixture without
+    // it would be testing a shape the server does not send. ⚠ `null` IS THE ORDINARY LAUNCH:
+    // the caller named no colour and the server assigns the first free key.
+    color: null,
     // ⚠ THE EIGHT POSTURE KEYS (2026-09-01, T24 + `set_agent_mode` + the echo). Same argument as
     // the agent-management pair above: `toDirective` emits all eight on EVERY row, so a launch
     // whose fixture lacked them would be testing a shape the server does not send — which is what
@@ -312,13 +317,16 @@ test("CONTRACT: `decideBody` has exactly three shapes and never a fourth", () =>
 
 test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing this machine", () => {
   const d = wire.directiveFrom(row({ shell_command: "rm -rf /", start_modes: { tools: "bypass" } }), WS);
-  // ⚠ THREE KEYS JOINED ON 2026-09-01 (the agent-management kinds) and TWO MORE LATER THAT DAY
-  // (`set_agent_mode`), and the LIST IS THE TEST: `directiveFrom` is a literal whitelist, so this
-  // assertion is simultaneously "the new fields arrive" and "nothing else does". A column the
-  // server adds and the whitelist does not name is dropped without a word — which is the point of
-  // the narrowing, and also the one way to ship a feature over this lane and have it do nothing.
+  // ⚠ THREE KEYS JOINED ON 2026-09-01 (the agent-management kinds), TWO MORE LATER THAT DAY
+  // (`set_agent_mode`) and `color` ON 2026-09-13 (agent colours), and the LIST IS THE TEST:
+  // `directiveFrom` is a literal whitelist, so this assertion is simultaneously "the new fields
+  // arrive" and "nothing else does". A column the server adds and the whitelist does not name is
+  // dropped without a word — which is the point of the narrowing, and also the one way to ship a
+  // feature over this lane and have it do nothing. ⚠ `color` IS EXACTLY THAT RISK REALISED ONCE
+  // ALREADY: the migration's own header argues that a colour the server accepts and cannot hand
+  // to the spawning machine is worse than no colour at all.
   assert.deepEqual(Object.keys(d).sort(),
-    ["agentId", "channelId", "goal", "id", "kind", "model", "operatorUserId", "status",
+    ["agentId", "channelId", "color", "goal", "id", "kind", "model", "operatorUserId", "status",
       "chain", "startMessageMode", "startToolMode",
       "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "taskId",
       "templateId", "templateName", "workspaceId"].sort());

@@ -309,15 +309,22 @@ test("FIELDS: display strings are collapsed and bounded before they cross", () =
 // ⚠ THE LIST IS THE FLOOR'S WHOLE DEFINITION OF "A STATE CHANGE". A field added to `reportRow`
 // and defaulted into this half bypasses the floor forever; defaulted out of it, something a
 // peer's card is about can be delayed. So the membership is pinned, not derived.
-test("STATE: the state half is the seven pre-orchestrator fields, and nothing else", () => {
+test("STATE: the state half is the seven pre-orchestrator fields, plus two IDENTITIES", () => {
   assert.deepEqual([...t.STATE_FIELDS].sort(), [
     // ⚠ `templateName` JOINED THE STATE HALF ON 2026-08-22 (agent templates), deliberately
     // and not by default: it is a fact about WHICH SESSION THIS IS, so it belongs beside
     // `name` and `threadTitle` rather than in the quantized churn half. It costs nothing to
     // put past the cadence floor because `context.template` is a SPAWN-TIME capture that is
     // never re-resolved, so the value can move at most once per session.
-    "channelId", "channelName", "name", "sessionKey", "state", "templateName", "threadId",
-    "threadTitle",
+    // ⚠ `color` JOINED ON 2026-09-13 (agent colours), on the identical argument and with a
+    // STRONGER version of the "costs nothing" half: the SERVER resolves that column and
+    // `server/session-colors.ts` rule 1 keeps whatever a session already holds, so the value
+    // can move at most once per session — its first assignment — and cannot oscillate. It has to
+    // be past the floor because the colour is what the operator's own transcript paints with: a
+    // key held behind the cadence floor is a box that reads NEUTRAL for up to
+    // `TELEMETRY_MIN_INTERVAL_MS` after the agent starts.
+    "channelId", "channelName", "color", "name", "sessionKey", "state", "templateName",
+    "threadId", "threadTitle",
   ]);
   for (const churn of ["detail", "toolLabel", "model", "contextUsed", "contextWindow",
     "tokensSpent", "startedAt", "lastActivityAt"]) {

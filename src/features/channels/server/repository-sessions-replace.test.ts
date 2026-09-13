@@ -62,26 +62,56 @@ beforeEach(() => {
 type Step = { op: string; args: unknown[] };
 
 /** Chainable stub answering a QUEUE — the write path issues select, upsert,
- *  delete, each with its own answer. */
-function makeSequencedAdmin(results: Array<{ data: unknown; error: unknown }>) {
+ *  delete, each with its own answer.
+ *
+ *  ⚠ **THE COLOUR READ IS OFF THE QUEUE, DELIBERATELY** (2026-09-13). The reconcile
+ *  gained a second SELECT — the per-channel taken set
+ *  (`repository-session-colors.ts › foreignLiveColorsByChannel`) — and threading it
+ *  through the queue would have renumbered the answers in all nine cases below, none
+ *  of which are about colours. It is identified by the ONE builder member no other
+ *  statement on this path uses (`.not`), answers a fixed empty set ("nobody holds a
+ *  colour"), and consumes nothing. A case that wants to drive it uses
+ *  {@link colorsHeld}. */
+function makeSequencedAdmin(
+  results: Array<{ data: unknown; error: unknown }>,
+  /** Rows the taken-set read answers with — `{ channel_id, color, state }`. */
+  colorsHeld: unknown[] = []
+) {
   const steps: Step[] = [];
   const queue = [...results];
   const builder: Record<string, unknown> = {};
+  /** Is the chain being built RIGHT NOW the colour read? Set by `.not`, cleared by
+   *  `.from`, which every statement starts with. */
+  let colorRead = false;
   const rec = (op: string, args: unknown[]) => {
     steps.push({ op, args });
     return builder;
   };
   Object.assign(builder, {
-    from: (t: string) => rec("from", [t]),
+    from: (t: string) => {
+      colorRead = false;
+      return rec("from", [t]);
+    },
     select: (c: string) => rec("select", [c]),
     upsert: (rows: unknown, opts: unknown) => rec("upsert", [rows, opts]),
     delete: () => rec("delete", []),
     eq: (c: string, v: unknown) => rec("eq", [c, v]),
+    neq: (c: string, v: unknown) => rec("neq", [c, v]),
     in: (c: string, v: unknown) => rec("in", [c, v]),
+    not: (c: string, o: string, v: unknown) => {
+      colorRead = true;
+      return rec("not", [c, o, v]);
+    },
     order: (c: string, o: unknown) => rec("order", [c, o]),
     limit: (n: number) => rec("limit", [n]),
-    then: (resolve: (r: unknown) => void) =>
-      resolve(queue.length > 1 ? queue.shift() : queue[0]),
+    then: (resolve: (r: unknown) => void) => {
+      if (colorRead) {
+        colorRead = false;
+        resolve({ data: colorsHeld, error: null });
+        return;
+      }
+      resolve(queue.length > 1 ? queue.shift() : queue[0]);
+    },
   });
   vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
   return steps;
@@ -111,6 +141,12 @@ function reported(over: Partial<SessionStateUpsert> = {}): SessionStateUpsert {
     detail: null, tool_label: null, model: null,
     context_used: null, context_window: null, tokens_spent: null,
     started_at: null, last_activity_at: null, template_name: null, display_name: null,
+    // ⚠ A COLOUR IS **REQUESTED**, not reported (2026-09-13): every current desktop
+    // names one, and `session-colors.ts` resolves it against the channel's taken set
+    // before the diff. A fixture defaulting to `null` would make every stored row
+    // gain a colour on its first push and read as "changed" in the three cases below
+    // that are about the diff being QUIET.
+    color: "agent-01",
     ...over,
   };
 }
@@ -160,7 +196,9 @@ describe("replaceSessionStates — the row lifetime", () => {
       { data: null, error: null },
     ]);
     const out = await replaceSessionStates(USER, WS, [keep]);
-    const del = steps.find((s) => s.op === "in");
+    // ⚠ BY COLUMN, not "the first `in`": the taken-set read (`channel_id`) is an `in`
+    // as well since agent colours.
+    const del = steps.find((s) => s.op === "in" && s.args[0] === "session_key");
     expect(del?.args).toEqual(["session_key", [`${CHAN}:gone`]]);
     expect(out.removed).toBe(1);
   });
@@ -174,10 +212,9 @@ describe("replaceSessionStates — the row lifetime", () => {
     expect(steps.some((s) => s.op === "delete")).toBe(true);
     expect(steps.some((s) => s.op === "upsert")).toBe(false);
     // ⚠ By the keys the read actually saw, never a blanket delete.
-    expect(steps.find((s) => s.op === "in")?.args).toEqual([
-      "session_key",
-      [`${CHAN}:t-1`],
-    ]);
+    expect(
+      steps.find((s) => s.op === "in" && s.args[0] === "session_key")?.args
+    ).toEqual(["session_key", [`${CHAN}:t-1`]]);
     expect(out).toEqual({ stored: 0, changed: 0, removed: 1 });
   });
 
@@ -191,7 +228,10 @@ describe("replaceSessionStates — the row lifetime", () => {
   });
 
   it("writes ONLY the row that moved, so `updated_at` stays per-session", async () => {
-    const still = reported({ session_key: `${CHAN}:a`, name: "onyx" });
+    // ⚠ DISTINCT COLOURS, so the only thing that moved is `state` on `moved` — two
+    // rows asking for one key would ALSO differ on colour and the case would pass for
+    // the wrong reason.
+    const still = reported({ session_key: `${CHAN}:a`, name: "onyx", color: "agent-02" });
     const moved = reported({ session_key: `${CHAN}:b` });
     const steps = makeSequencedAdmin([
       { data: [storedOf(still), storedOf({ ...moved, state: "idle" })], error: null },
@@ -267,26 +307,45 @@ describe("replaceSessionStates — a thread deleted under a live peer agent (F-2
   const LIVE = "55555555-e29b-41d4-a716-446655440000";
   const FK = { code: "23503", message: "insert or update on table \"channel_sessions\" violates foreign key constraint" };
 
-  /** Answers each awaited step from a queue, in order (no repeat of the tail). */
+  /** Answers each awaited step from a queue, in order (no repeat of the tail).
+   *  ⚠ THE COLOUR READ IS OFF THE QUEUE for the reason
+   *  {@link makeSequencedAdmin} states — identified by `.not`, answering an empty
+   *  taken set, consuming nothing, so this describe's four-step scripts are the
+   *  same four steps they were before agent colours. */
   function makeScriptedAdmin(results: Array<{ data: unknown; error: unknown }>) {
     const steps: Step[] = [];
     const queue = [...results];
     const builder: Record<string, unknown> = {};
+    let colorRead = false;
     const rec = (op: string, args: unknown[]) => {
       steps.push({ op, args });
       return builder;
     };
     Object.assign(builder, {
-      from: (t: string) => rec("from", [t]),
+      from: (t: string) => {
+        colorRead = false;
+        return rec("from", [t]);
+      },
       select: (c: string) => rec("select", [c]),
       upsert: (rows: unknown, opts: unknown) => rec("upsert", [rows, opts]),
       delete: () => rec("delete", []),
       eq: (c: string, v: unknown) => rec("eq", [c, v]),
+      neq: (c: string, v: unknown) => rec("neq", [c, v]),
       in: (c: string, v: unknown) => rec("in", [c, v]),
+      not: (c: string, o: string, v: unknown) => {
+        colorRead = true;
+        return rec("not", [c, o, v]);
+      },
       order: (c: string, o: unknown) => rec("order", [c, o]),
       limit: (n: number) => rec("limit", [n]),
-      then: (resolve: (r: unknown) => void) =>
-        resolve(queue.length > 0 ? queue.shift() : { data: null, error: null }),
+      then: (resolve: (r: unknown) => void) => {
+        if (colorRead) {
+          colorRead = false;
+          resolve({ data: [], error: null });
+          return;
+        }
+        resolve(queue.length > 0 ? queue.shift() : { data: null, error: null });
+      },
     });
     vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
     return steps;
@@ -305,7 +364,7 @@ describe("replaceSessionStates — a thread deleted under a live peer agent (F-2
     expect(out).toEqual({ stored: 2, changed: 2, removed: 0 });
 
     // ⚠ The existence check asks `channel_tasks`, and only for the ids reported.
-    const probe = steps.find((s) => s.op === "in");
+    const probe = steps.find((s) => s.op === "in" && s.args[0] === "id");
     expect(probe?.args).toEqual(["id", [DEAD, LIVE]]);
 
     const upserts = steps.filter((s) => s.op === "upsert");

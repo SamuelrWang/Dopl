@@ -134,6 +134,22 @@ function pickMode(order, ...candidates) {
 }
 
 /**
+ * **ONE OF THE SIXTEEN AGENT COLOUR KEYS, OR `''`** (2026-09-13; docs/specs/agent-colors.md).
+ *
+ * ⚠ A LOCAL COPY OF THE PATTERN, FORCED RATHER THAN CHOSEN — `main/` cannot import from `src/`.
+ * The same regex is in `session-launch-op.js › colorKey`, `session-state-push.js › colorKey` and
+ * both column CHECKs in `20261005120000_agent_session_colors.sql`.
+ * ⚠ `''` RATHER THAN `null`, ALONE AMONG THIS FILE'S NARROWERS THAT RETURN A STRING, because
+ * that is what `text()` above answers for an absent value and this row is consumed by code that
+ * tests these fields for truthiness (`launch-directive-spawn.js`). A `null` here would be a
+ * second spelling of "absent" on one object.
+ */
+const AGENT_COLOR_RE = /^agent-(0[1-9]|1[0-6])$/;
+function colorKey(value) {
+  return typeof value === 'string' && AGENT_COLOR_RE.test(value) ? value : '';
+}
+
+/**
  * A TRI-STATE OFF THE WIRE: `true`, `false`, or `null` for "did not ask".
  *
  * ⚠ `'false'` IS ACCEPTED BESIDE `false` for the same reason `'true'` is: a row may arrive over
@@ -196,6 +212,17 @@ function directiveFrom(raw, workspaceId) {
     // narrowing that dropped the name whenever the id was missing would throw away the only
     // evidence a template was ever named.
     templateName: text(r.template_name || r.templateName, TEMPLATE_NAME_MAX),
+    // ⚠ **THE AGENT COLOUR THIS DIRECTIVE ASKED FOR** (2026-09-13;
+    // `channel_launch_directives.color`). ⚠ BOTH SPELLINGS READ, like `template_name` above and
+    // for the identical reason: this row reaches the machine as the CLAIM's DTO (camel) and, on
+    // some replay paths, closer to the column (snake). A field read in one spelling is a field
+    // that is silently absent on the other lane.
+    // ⚠ **MEMBERSHIP-TESTED, NOT `text()`-BOUNDED.** The set is a closed sixteen, so the honest
+    // answer to anything else is "no colour asked for"; a length bound would carry `agent-99`
+    // through to a `var(--agent-color-…)` that resolves to nothing.
+    // ⚠ `''` IS "DID NOT ASK", which `session-launch.js`'s funnel forwards as falsy and the
+    // server reads as "assign the first free key" — never as "no colour".
+    color: colorKey(r.color || r.colorKey),
     // ⚠ SHAPE-CHECKED HERE, not merely carried: it is about to be handed to
     // `session-engine.js › controlByTask` as an address and printed into a diag.
     // `''` is "no target", which the caller treats as a refusal on any kind that

@@ -17,6 +17,7 @@
  * over that order, so read the declaration before re-spelling either.
  */
 import type {
+  AgentColorKey,
   LaunchRefusalReason,
   LaunchDirectiveKind,
   LaunchToolMode,
@@ -24,6 +25,7 @@ import type {
 } from "@dopl/contracts";
 
 export type {
+  AgentColorKey,
   LaunchRefusalReason,
   LaunchDirectiveKind,
   LaunchToolMode,
@@ -72,6 +74,11 @@ export interface LaunchDirective {
   /** The template's name AT CREATE TIME — a snapshot, never a join, so it
    *  survives the id's `ON DELETE SET NULL`. */
   templateName: string | null;
+  /** THE COLOUR THIS LAUNCH ASKED FOR — `agent-01 … agent-16`, or `null`.
+   *  ⚠ A REQUEST, NOT A RESERVATION: by the time the machine claims this row another
+   *  member's agent may hold the key, and the agent's own state push then resolves the
+   *  collision to the next free one. Absent on a server older than 2026-09-13. */
+  color?: AgentColorKey | null;
   /** ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS and `launched` IS THE LAUNCH'S.
    *  They are two words because this row is rendered into an agent-facing
    *  sentence, and "launched" on the record of an agent being STOPPED is the one
@@ -206,6 +213,25 @@ export interface LaunchDirectiveCreateInput {
    * collide with yours.
    */
   clientMsgId?: string;
+  /**
+   * **THE COLOUR THE NEW AGENT SHOULD WEAR IN THIS CHANNEL** — one of `agent-01 …
+   * agent-16` (2026-09-13).
+   *
+   * ⚠ **OMIT IT UNLESS THE CALLER GENUINELY CARES.** Omitted means "pick for me" and
+   * the server takes the first free key, which is what every launch got before this
+   * field existed. It does NOT mean "no colour".
+   * ⚠ **A KEY THAT IS ALREADY OUT IN THE CHANNEL IS A 409 `AGENT_COLOR_TAKEN` CARRYING
+   * `details.free`** — never a silent substitution, because the caller was specific.
+   * Pick from that list and retry (with the SAME `clientMsgId`, which converges rather
+   * than filing twice).
+   * ⚠ **A COLOUR IS IDENTITY, NOT STATUS.** It exists so a reader can tell two agents
+   * apart in one transcript; nothing infers health or priority from which key an agent
+   * holds.
+   * ⚠ **UNIQUE PER CHANNEL ACROSS MEMBERS, AND IT RETURNS TO THE BANK WHEN THE AGENT
+   * ENDS.** Another member's live agent can hold the key you want, and yours can hold
+   * one they want.
+   */
+  color?: AgentColorKey;
 }
 
 /**

@@ -9,6 +9,10 @@
  * this file is: the poll and the desktop's own feed, reconciled once.
  */
 
+// ⚠ THE ONE MEMBERSHIP TEST FOR A COLOUR KEY — this file reconciles two untrusted
+// sources, so it narrows rather than casts. `lib/agent-colors.ts` says what a key is, once.
+import { agentColorOrNull } from "./agent-colors";
+import type { AgentColorKey } from "../types";
 import type { LiveAgentSession } from "./draft-recipients";
 
 /**
@@ -24,6 +28,38 @@ export interface OwnAgentSessionRow {
   name?: string | null;
   displayName?: string | null;
   state?: string | null;
+  /** ⚠ **PRESENT ON THE TYPE AND NOT YET ON THE WIRE, WHICH IS DELIBERATE RATHER THAN
+   *  ASPIRATIONAL.** A colour is ASSIGNED BY THE SERVER (`20261005120000`'s per-channel
+   *  live unique index), so no machine's local feed is in a position to know one — and
+   *  `main/session-state-push.js › reportRow` puts the key on the wire while
+   *  `main/session-summary.js › liveSummary` (the parked-session lane's file, 2026-09-13)
+   *  is what will one day put it on THIS shape. Declaring it now is what makes
+   *  {@link liveAgentsKey}'s precedence rule below expressible and testable; until then
+   *  every own row reports `undefined` and the peer half supplies every colour.
+   *  ⚠ `unknown`, on `view-model.ts › indexAgents`'s argument: it is narrowed against a
+   *  CLOSED SET, and the union type here would delete that refusal branch. */
+  color?: unknown;
+}
+
+/**
+ * A row of the SERVER'S PEER PROJECTION as it arrives — `ChannelPeerSession`, widened for
+ * `color` only (2026-09-13).
+ *
+ * ⚠ **THE INPUT AND THE OUTPUT OF THIS FILE HAVE DIFFERENT COLOUR TYPES ON PURPOSE, AND THAT
+ * ASYMMETRY IS THE WHOLE POINT OF THE NARROWING.** What comes IN is a poll payload — possibly
+ * cached against an older schema (INVARIANTS §8), possibly written by a newer desktop that has
+ * learned a seventeenth key — so `unknown` is the only honest type and
+ * `lib/agent-colors.ts › agentColorOrNull` is the gate. What goes OUT
+ * ({@link LiveAgentSession}) is `AgentColorKey | null`, because by then it has passed that
+ * gate and every consumer may hand it straight to `agentColorVar`.
+ * ⚠ **TYPING THE INPUT AS THE UNION WOULD DELETE THE GATE** — the compiler would prove the
+ * refusal branch unreachable, and the next cleanup would remove it. Same argument
+ * `OwnAgentSessionRow.color` above carries, and `view-model.ts › indexAgents` before both.
+ */
+export interface PeerAgentSessionRow {
+  name: string;
+  displayName?: string | null;
+  color?: unknown;
 }
 
 /** ⚠ ONE SHARED EMPTY INSTANCE, so an empty key is referentially stable across
@@ -77,14 +113,23 @@ const AGENT_KEY_ROW_SEP = "\u001f";
  * render-phase cache.
  */
 export function liveAgentsKey(
-  peers: readonly LiveAgentSession[],
+  peers: readonly PeerAgentSessionRow[],
   own: readonly OwnAgentSessionRow[] | null,
   channelId: string
 ): string {
   const byId = new Map<string, string>();
+  /** ⚠ **A SECOND MAP RATHER THAN A WIDER VALUE IN `byId`**, because the two fields have
+   *  OPPOSITE precedence and packing them would hide that. The local feed's NAME is the
+   *  fresher one (it sees a rename before the next push); the local feed's COLOUR does not
+   *  exist, so for colour the SERVER's projection is the only authority and an own row must
+   *  never be able to speak about it at all. One map per precedence rule. */
+  const colorById = new Map<string, AgentColorKey>();
   for (const peer of peers) {
     const id = peer.name.trim();
-    if (id) byId.set(id, peer.displayName ?? "");
+    if (!id) continue;
+    byId.set(id, peer.displayName ?? "");
+    const key = agentColorOrNull(peer.color);
+    if (key) colorById.set(id, key);
   }
   for (const row of own ?? []) {
     if (!channelId || row.channelId !== channelId) continue;
@@ -95,10 +140,24 @@ export function liveAgentsKey(
     // the operator's own agent (`derivations.ts` argues the same precedence), but
     // an UNNAMED local row must not delete a name the projection already carries.
     byId.set(id, (row.displayName ?? "").trim() || (byId.get(id) ?? ""));
+    // ⚠ **ONLY EVER ADDS, NEVER OVERWRITES** — the precedence rule `colorById`'s docblock
+    // states. A local row that reports a colour (a future main, or a replayed cache) is
+    // taken when the projection has none, and is IGNORED when it disagrees: the index is
+    // the authority, and a machine that believes it holds `agent-03` while the server has
+    // given that key to another member must not paint the transcript with it.
+    // ⚠ NOT NAMED `own` — that is this function's own parameter, and shadowing it here
+    // would read as "the own feed" while meaning "one row's colour".
+    const localKey = agentColorOrNull(row.color);
+    if (localKey && !colorById.has(id)) colorById.set(id, localKey);
   }
   const parts: string[] = [];
   for (const [id, displayName] of byId) {
-    parts.push([id, displayName].join(AGENT_KEY_FIELD_SEP));
+    // ⚠ THE COLOUR IS THE THIRD FIELD AND ALWAYS WRITTEN, empty for "none" — a key whose
+    // field count varies per row is a key whose `split` silently shifts every field after
+    // the missing one, which is why `view-model.ts › agentIndexKey` writes its empties too.
+    parts.push(
+      [id, displayName, colorById.get(id) ?? ""].join(AGENT_KEY_FIELD_SEP)
+    );
   }
   return parts.join(AGENT_KEY_ROW_SEP);
 }
@@ -109,9 +168,12 @@ export function liveAgentsFromKey(key: string): readonly LiveAgentSession[] {
   if (key === "") return NO_LIVE_AGENTS;
   const out: LiveAgentSession[] = [];
   for (const row of key.split(AGENT_KEY_ROW_SEP)) {
-    const [name, displayName] = row.split(AGENT_KEY_FIELD_SEP);
+    const [name, displayName, color] = row.split(AGENT_KEY_FIELD_SEP);
     if (!name) continue;
-    out.push({ name, displayName: displayName || null });
+    // ⚠ NARROWED ON THE WAY BACK OUT, not trusted: this string was built from a peer's
+    // projection, and an unknown key must read as "no colour" rather than reach a
+    // `var(--agent-color-…)` that resolves to nothing and paints an invisible surface.
+    out.push({ name, displayName: displayName || null, color: agentColorOrNull(color) });
   }
   return out;
 }

@@ -1,6 +1,7 @@
 import "server-only";
 import { LAUNCH_DIRECTIVE_TTL_MS, PRESENCE_ONLINE_WINDOW_MS } from "../constants";
 import type {
+  AgentColorKey,
   LaunchDirective,
   LaunchMessageMode,
   LaunchRefusalReason,
@@ -10,6 +11,7 @@ import {
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
 } from "./errors";
+import { resolveDirectiveColor } from "./service-launch-color";
 // ⚠ THE CEILING IS THE CREATE'S FIFTH GATE AND ITS OWN MODULE (§1 cap, and the
 // `service-launch-template.ts` precedent one line up): it is a SECOND COPY of the
 // desktop's clamp across a tree boundary the two cannot import over, so it lives
@@ -97,47 +99,45 @@ export type CreateLaunchInput = {
   goal?: string;
   model?: string;
   /**
-   * The agent template to run as — **an id OR an exact name**, resolved here
-   * (2026-08-23).
+   * The agent template to run as — **an id OR an exact name**, resolved here (2026-08-23).
    *
-   * ⚠ IT IS A REF, NOT AN ID, AND THE RESOLUTION IS THE FENCE. `channels/`
-   * never sees a template id it did not obtain by asking the agent-templates
-   * service what THIS caller can see, so "name a template you cannot see" has no
-   * spelling on this path. See {@link resolveTemplateForDirective}.
+   * ⚠ IT IS A REF, NOT AN ID, AND THE RESOLUTION IS THE FENCE. `channels/` never sees a template
+   * id it did not obtain by asking the agent-templates service what THIS caller can see, so "name
+   * a template you cannot see" has no spelling on this path. See {@link
+   * resolveTemplateForDirective}.
    */
   template?: string;
   /**
-   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it
-   * may launch workers (2026-09-01, T24).
+   * THE POSTURE THIS LAUNCH **ASKS** ITS NEW SESSION TO START ON, and whether it may launch
+   * workers (2026-09-01, T24).
    *
-   * ⚠ **ASKS. NEVER WIDENS — AND THIS SERVICE DOES NOT AND CANNOT CHECK THAT.**
-   * The ceiling is the operator's own stored channel posture, an
-   * `electron-store` record no server sees; `main/launch-posture.js ›
-   * resolveLaunch` CLAMPS the two axes to it and REFUSES a chain the channel
-   * forbids. All this path does is carry the request.
-   * ⚠ **THE TICKET'S "unless the caller is the operator" CARVE-OUT WAS REFUSED,
-   * and the reason is measurable here: every caller on this lane IS the
-   * operator's own account** (INVARIANTS §11), so the exception is not narrow,
-   * it is the whole set. Do not add one.
-   * ⚠ OMITTING ALL THREE IS THE PRE-T24 BEHAVIOUR BYTE FOR BYTE.
+   * ⚠ **ASKS. NEVER WIDENS — AND THIS SERVICE DOES NOT AND CANNOT CHECK THAT.** The ceiling is
+   * the operator's own stored channel posture, an `electron-store` record no server sees;
+   * `main/launch-posture.js › resolveLaunch` CLAMPS the two axes to it and REFUSES a chain the
+   * channel forbids. All this path does is carry the request. ⚠ **THE TICKET'S "unless the caller
+   * is the operator" CARVE-OUT WAS REFUSED, and the reason is measurable here: every caller on
+   * this lane IS the operator's own account** (INVARIANTS §11), so the exception is not narrow,
+   * it is the whole set. Do not add one. ⚠ OMITTING ALL THREE IS THE PRE-T24 BEHAVIOUR BYTE FOR
+   * BYTE.
    */
   tools?: LaunchToolMode;
   messages?: LaunchMessageMode;
   chain?: boolean;
   /**
-   * **THE CALLER'S IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"**
-   * (2026-09-02, A10/G10).
+   * **THE CALLER'S IDEMPOTENCY KEY — "a retry may not queue a SECOND agent"** (2026-09-02,
+   * A10/G10).
    *
    * ⚠ **IT IS THE ONLY THING THAT MAKES THE SURFACE'S STRONGEST WARNING TRUE.**
-   * `op="launch_agent"` holds ~15 s and then returns PENDING, and the doctrine
-   * tells the caller not to re-issue because a second launch starts a second
-   * agent on the same work. That was enforced by NOTHING. Sending the same key
-   * again now returns the stored directive instead
-   * ({@link CreateLaunchResult.existing}).
-   * ⚠ ABSENT IS THE ORDINARY CASE and changes nothing — see
-   * `service-mailbox-idempotency.ts`.
+   * `op="launch_agent"` holds ~15 s and then returns PENDING, and the doctrine tells the caller
+   * not to re-issue because a second launch starts a second agent on the same work. That was
+   * enforced by NOTHING. Sending the same key again now returns the stored directive instead
+   * ({@link CreateLaunchResult.existing}). ⚠ ABSENT IS THE ORDINARY CASE and changes nothing —
+   * see `service-mailbox-idempotency.ts`.
    */
   clientMsgId?: string;
+  /** THE NEW AGENT'S COLOUR. ⚠ Omitted is "pick for me" (first free), never "no colour"; a taken
+   *  key is a 409 with the free set — `service-launch-color.ts`. */
+  color?: AgentColorKey;
 };
 
 /**
@@ -252,6 +252,9 @@ export async function createLaunchDirective(
   // `service-launch-posture.ts`.
   const posture = resolveDirectivePosture(channel, input);
 
+  // ── 6. **THE COLOUR**, at the ceiling's position on the ceiling's argument.
+  const color = await resolveDirectiveColor(ctx, channel.id, input.color);
+
   if (!(await operatorIsOnline(ctx))) {
     return { offline: true, directive: null };
   }
@@ -307,6 +310,9 @@ export async function createLaunchDirective(
       resolved_message_mode: posture.messages,
       resolved_chain: posture.chain,
       resolved_model: posture.model,
+      // ⚠ THE RESOLVED KEY, NEVER `input.color`: a caller who named nothing gets the first free
+      // one, and the row records what the machine will APPLY.
+      color,
       expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
       client_msg_id: input.clientMsgId ?? null,
     }),
@@ -315,18 +321,16 @@ export async function createLaunchDirective(
 }
 
 /**
- * **WHAT IS STILL AWAITING THIS OPERATOR'S DECISION** — the desktop's
- * breaker-open backstop (F-273).
+ * **WHAT IS STILL AWAITING THIS OPERATOR'S DECISION** — the desktop's breaker-open backstop
+ * (F-273).
  *
- * ⚠ EXPIRED ROWS ARE DROPPED HERE, NOT IN SQL. Expiry is lazy and
- * {@link toDirective} is the one place that decides it; a `WHERE expires_at >
- * now()` in the repository would be a SECOND rule, and two rules for one
- * question drift. The cost is reading a handful of dead rows and discarding
+ * ⚠ EXPIRED ROWS ARE DROPPED HERE, NOT IN SQL. Expiry is lazy and {@link toDirective} is the one
+ * place that decides it; a `WHERE expires_at > now()` in the repository would be a SECOND rule,
+ * and two rules for one question drift. The cost is reading a handful of dead rows and discarding
  * them, on a poll that only runs while realtime is DOWN for that workspace.
  *
- * ⚠ IT RETURNS `claimed` ROWS TOO — a machine that claimed and crashed before
- * deciding has to find its own row again. Nothing can re-action one: the CAS only
- * moves a row out of `pending`.
+ * ⚠ IT RETURNS `claimed` ROWS TOO — a machine that claimed and crashed before deciding has to
+ * find its own row again. Nothing can re-action one: the CAS only moves a row out of `pending`.
  */
 export async function listPendingLaunchDirectives(
   ctx: ChannelContext
@@ -358,15 +362,14 @@ export async function getLaunchDirective(
 /**
  * **THE DESKTOP LANE — CLAIM.** Move `pending → claimed`, single-winner.
  *
- * ⚠ THE FRESHNESS CHECK IS HERE AND THE ATOMICITY IS IN THE REPOSITORY, and the
- * split is deliberate: `now` is a service concern (lazy expiry lives at read
- * time), while single-winner is a database concern. Putting `expires_at > now()`
- * into the CAS would collapse "lost the race" and "too late" into one `null` and
- * the desktop could not tell a sibling machine from a stale request.
+ * ⚠ THE FRESHNESS CHECK IS HERE AND THE ATOMICITY IS IN THE REPOSITORY, and the split is
+ * deliberate: `now` is a service concern (lazy expiry lives at read time), while single-winner is
+ * a database concern. Putting `expires_at > now()` into the CAS would collapse "lost the race"
+ * and "too late" into one `null` and the desktop could not tell a sibling machine from a stale
+ * request.
  *
- * ⚠ THREE FAILURES, THREE MEANINGS, ONE POSTURE — stand down, do not retry:
- * `expired` (too late), `taken` (a sibling machine won), `decided` (already
- * answered). All are 409.
+ * ⚠ THREE FAILURES, THREE MEANINGS, ONE POSTURE — stand down, do not retry: `expired` (too late),
+ * `taken` (a sibling machine won), `decided` (already answered). All are 409.
  */
 export async function claimLaunchDirective(
   ctx: ChannelContext,
@@ -401,14 +404,13 @@ export async function claimLaunchDirective(
 
 export type DecideLaunchInput =
   /**
-   * ⚠ THE LAUNCH KIND'S SUCCESS ONLY — the column CHECK pairs `launched` with
-   * `kind = 'launch'`, so this arm on an `end` row is refused AT REST.
+   * ⚠ THE LAUNCH KIND'S SUCCESS ONLY — the column CHECK pairs `launched` with `kind = 'launch'`,
+   * so this arm on an `end` row is refused AT REST.
    *
-   * ⚠ **THE THREE `applied*` FIELDS ARE THE ECHO, AND THEY ARE OPTIONAL FOREVER**
-   * (2026-09-01). A desktop older than this wave reports nothing and must keep
-   * being able to decide (INVARIANTS §13), so absent is a first-class input —
-   * it maps to `null`, which every reader is required to render as "not
-   * reported" rather than as agreement.
+   * ⚠ **THE THREE `applied*` FIELDS ARE THE ECHO, AND THEY ARE OPTIONAL FOREVER** (2026-09-01). A
+   * desktop older than this wave reports nothing and must keep being able to decide (INVARIANTS
+   * §13), so absent is a first-class input — it maps to `null`, which every reader is required to
+   * render as "not reported" rather than as agreement.
    */
   | {
       status: "launched";

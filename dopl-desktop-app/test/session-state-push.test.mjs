@@ -63,6 +63,14 @@ test("ROW: the payload is the schema's shape, field for field", () => {
     // ⚠ JOINED 2026-08-31 (20260905120000): the operator-given name, PEER-VISIBLE by design.
     // NULL = never named; the render falls back to `#<id>`.
     displayName: null,
+    // ⚠ JOINED 2026-09-13 (20261005120000): the agent colour, PEER-VISIBLE by design — a colour
+    // is drawn on every member's transcript, which is the whole ruling. ⚠ NULL HERE AND STILL
+    // PRESENT, for this case's own reason, and NULL IS NOT AN ERASURE on this one field: the
+    // server RESOLVES this column rather than storing it verbatim, and
+    // `server/session-colors.ts › resolveReportedColors` rule 1 keeps whatever the stored row
+    // already holds. That is what exempts `color` from the `templateName` erase hazard
+    // `session-store.js`'s durable whitelist records.
+    color: null,
     detail: null,
     toolLabel: null,
     model: null,
@@ -101,7 +109,7 @@ test("ROW: the payload is the schema's shape, field for field", () => {
 // on `session-summary.js` and reaching the table because nobody chose to send it. ⚠ SIXTEEN SINCE 2026-08-22 (agent
 // templates): `templateName` was added DELIBERATELY, with the column to receive it (`channel_sessions.template_name`,
 // OPERATOR-ONLY — the server's mapper is the fence and the GRANT list is the belt, neither of which is this file's).
-test("ROW: the wire row is exactly the twenty-four columns, and no summary field rides along free", () => {
+test("ROW: the wire row is exactly the twenty-five columns, and no summary field rides along free", () => {
   const m = load();
   const wide = entry({
     detail: "tool",
@@ -126,12 +134,25 @@ test("ROW: the wire row is exactly the twenty-four columns, and no summary field
   // ⚠ TWENTY-FOUR since 2026-09-01: the HEALTH half (T25 / T50 / T51 / T83) joined, again
   // DELIBERATELY and again with the columns to receive it — all seven OPERATOR-ONLY, because
   // every one of them is a fact about how somebody's own machine is getting on.
+  // ⚠ TWENTY-FIVE SINCE 2026-09-13: `color` joined, DELIBERATELY and with the column to receive
+  // it (`channel_sessions.color`, PEER-VISIBLE by design — Samuel's cross-member ruling).
   assert.deepEqual(Object.keys(m.reportRow(wide)).sort(), [
-    "channelId", "channelName", "contextUsed", "contextWindow", "deniedCalls", "detail",
+    "channelId", "channelName", "color", "contextUsed", "contextWindow", "deniedCalls", "detail",
     "displayName", "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "model",
     "name", "sessionKey", "stale", "startedAt", "state", "templateName", "threadId",
     "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "turns",
   ]);
+  // ⚠ **THE COLOUR CROSSES MEMBERSHIP-TESTED, NOT SANITIZED**, which is the one difference from
+  // `displayName` above and the reason it is asserted here rather than assumed: the set is a
+  // closed sixteen, so anything outside it must become NULL ("no colour") rather than a shortened
+  // version of what the summary held. A `labelOrNull` here would carry `agent-99` through to a
+  // `var(--agent-color-99)` that resolves to nothing and paints an invisible border.
+  assert.equal(m.reportRow(entry({ color: "agent-07" })).color, "agent-07");
+  assert.equal(m.reportRow(entry({ color: "agent-99" })).color, null);
+  assert.equal(m.reportRow(entry({ color: "agent-0" })).color, null);
+  assert.equal(m.reportRow(entry({ color: "red" })).color, null);
+  assert.equal(m.reportRow(entry({ color: " agent-07" })).color, null);
+  assert.equal(m.reportRow(entry({ color: 7 })).color, null);
   // ⚠ THE NAME CROSSES SANITIZED, exactly as `templateName` does below — `labelOrNull` at 60
   // (`agent-names.js › MAX_NAME`, the column CHECK's own bound).
   assert.equal(m.reportRow(entry({ displayName: "Bug Reviewer" })).displayName, "Bug Reviewer");

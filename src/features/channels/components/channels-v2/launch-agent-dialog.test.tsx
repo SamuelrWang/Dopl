@@ -244,7 +244,10 @@ describe("what the three selectors hold before anybody touches them", () => {
       { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];
     await open();
-    expect(selected("Agent template")).toBe("Blank agent");
+    // ⚠ **"Blank agent" → "None" ON 2026-09-13** (Samuel, docs/specs/agent-colors.md item 7:
+    // *"change 'Blank Agent' to 'None' for the template"*). The WIRE is unchanged — the
+    // option still sends `templateId: null` — so this is a LABEL pin moving and nothing else.
+    expect(selected("Agent template")).toBe("None");
     expect(pill("Code auditor")).toBeTruthy();
   });
 
@@ -369,7 +372,10 @@ describe("the payload is the slide-out's, argument for argument", () => {
     ];
     const controls = await open({ openThreadId: "t-1" });
     fireEvent.click(pill("Code auditor"));
-    fireEvent.click(pill("Blank agent"));
+    // ⚠ **"Blank agent" → "None" ON 2026-09-13** (Samuel, docs/specs/agent-colors.md item 7:
+    // *"change 'Blank Agent' to 'None' for the template"*). The WIRE is unchanged — the
+    // option still sends `templateId: null` — so this is a LABEL pin moving and nothing else.
+    fireEvent.click(pill("None"));
     fireEvent.click(launchButton());
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
 

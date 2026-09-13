@@ -131,6 +131,14 @@ describe("the call itself", () => {
       // server stamps, so the field cannot widen who a launch reaches; what it
       // removes is the SECOND agent a re-issue after a timeout used to queue.
       "clientMsgId",
+      // ⚠ **THE COLOUR (2026-09-13), AND IT IS ON THIS LIST FOR THE REASON THE LIST
+      // EXISTS**: a CONSCIOUS edit here, reviewed, rather than a field that appeared
+      // in the body unnoticed. ⚠ WHAT THE ASSERTION GUARDS IS UNCHANGED — a colour
+      // names no operator and confers nothing. It is an IDENTITY in one channel's
+      // transcript, the server resolves it against EVERY member's live agents (which
+      // is precisely why this process only asks), and a taken one comes back as a
+      // 409 rather than as somebody else's agent recoloured.
+      "color",
     ]);
   });
 

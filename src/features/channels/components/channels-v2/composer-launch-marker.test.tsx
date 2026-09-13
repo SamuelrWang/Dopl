@@ -209,14 +209,20 @@ describe("the launch popup's Template row carries the authorship marker", () => 
     expect(screen.queryByRole("tab", { name: /by /i })).toBeNull();
   });
 
-  it("leaves Blank agent unmarked — it is a configuration, not somebody's text", async () => {
+  it("leaves None unmarked — it is a configuration, not somebody's text", async () => {
     templateList.templates = [
       { id: "tpl-5", name: "Code auditor", workspaceId: "ws-1", createdBy: PEER },
     ];
     await openTemplateMenu();
 
     expect(
-      await screen.findByRole("tab", { name: "Blank agent" })
+      // ⚠ **"Blank agent" → "None" ON 2026-09-13** (Samuel, docs/specs/agent-colors.md item 7).
+      // ⚠ THIS SUITE MOUNTS `composer.tsx` AND REACHES THE SAME DIALOG the sibling
+      // `launch-agent-dialog.test.tsx` mounts directly — the `SegmentedControl` row this
+      // docblock describes is `launch-agent-dialog.tsx › templateOptions`, so the label moved
+      // here too. The WIRE is unchanged (`templateId: null`), which is why the marker property
+      // this case actually guards is untouched.
+      await screen.findByRole("tab", { name: "None" })
     ).toBeTruthy();
   });
 });

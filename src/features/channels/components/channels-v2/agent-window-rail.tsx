@@ -42,6 +42,8 @@ import {
   TILE,
   TILE_RADIUS,
 } from "./agent-window-frame";
+import { AgentColorDot } from "./agent-color-dot";
+import type { AgentColorKey } from "../../types";
 
 /** ⚠ RE-EXPORTED, NOT RESTATED. The two widths moved into `agent-window-frame.ts` when the chrome
  *  had to read one of them to align the tab strip; this keeps every existing importer (and the
@@ -88,6 +90,7 @@ export function AgentWindowRail({
   onToggle,
   onOpen,
   keyFor,
+  colorFor,
 }: {
   /** ⚠ `null` is "could not ask" (a browser, or a main without the feed) — NOT "no agents".
    *  The rail renders its chrome and no rows rather than claiming an empty machine. */
@@ -99,6 +102,23 @@ export function AgentWindowRail({
   /** The tab key for a session — main's `agentWindowKey`, passed in so this file holds no copy
    *  of that rule. */
   keyFor: (session: DesktopSessionSummary) => string;
+  /**
+   * **THIS SESSION'S COLOUR** — a resolver, on `keyFor`'s exact precedent above: passed in so
+   * this file holds no copy of the rule (Samuel, 2026-09-13; docs/specs/agent-colors.md
+   * item 8).
+   *
+   * ⚠ **IT CANNOT BE READ OFF {@link sessions}, WHICH IS WHY IT IS A FUNCTION.** That prop is
+   * `spa-bridge-shapes.ts › DesktopSessionSummary` — this machine's own feed — and a colour is
+   * the SERVER's assignment against EVERY member's live agents
+   * (`20261005120000`'s per-channel unique index), so no local feed is in a position to know
+   * one. The host resolves it from the peer ∪ own union it already holds
+   * (`channel-surface-data.ts › liveAgents`).
+   *
+   * ⚠ **OPTIONAL, AND ABSENT DRAWS NO DOTS AT ALL** — the same absent-not-disabled rule every
+   * capability on this surface follows. A rail mounted by a host with no projection in hand
+   * (the pop-out opened standalone) renders exactly what it rendered before this wave.
+   */
+  colorFor?: (session: DesktopSessionSummary) => AgentColorKey | null;
 }) {
   const rows = (sessions ?? []).filter((s) => s.state !== "ended");
   return (
@@ -165,8 +185,19 @@ export function AgentWindowRail({
             ) : (
               <span className="flex min-w-0 flex-col">
                 {/* 🔒 THE TAB LABEL'S OWN TYPE, one constant (`AGENT_NAME_TEXT`) — a tab and a rail
-                    row name the same thing and must not be two faces of it. */}
-                <span className={cn("truncate text-text-primary", AGENT_NAME_TEXT)}>{name}</span>
+                    row name the same thing and must not be two faces of it.
+                    ⚠ **THE DOT IS INSIDE THE NAME LINE, NOT BESIDE THE COLUMN** (2026-09-13): the
+                    column's second line is the STATE, and a dot centred against both lines would
+                    read as a mark about the liveness — which is exactly the confusion the palette's
+                    own token block warns about (identity, never status). `shrink-0` plus the name's
+                    `truncate` keeps a long rename from pushing the dot out of a 140px rail.
+                    ⚠ COLLAPSED DRAWS NO DOT: that shape is one 24px tile holding a single initial,
+                    and a second mark in it would either shrink the initial or overflow the square
+                    the rail was explicitly rebuilt to keep square. */}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <AgentColorDot color={colorFor?.(session) ?? null} />
+                  <span className={cn("truncate text-text-primary", AGENT_NAME_TEXT)}>{name}</span>
+                </span>
                 {/* 🔒 THE STATE, NEVER A TIMESTAMP — `agentLiveness`'s own word. */}
                 <span className={cn("truncate", AGENT_STATE_TEXT)}>{live.label}</span>
               </span>

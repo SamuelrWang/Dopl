@@ -15,6 +15,7 @@
  * tree — so the ordering argument stays stated at the declaration.
  */
 import type {
+  AgentColorKey,
   LaunchRefusalReason,
   LaunchDirectiveKind,
   LaunchToolMode,
@@ -86,6 +87,18 @@ export type LaunchDirective = {
    *  join: it is the only thing that survives the FK's SET NULL, which is what
    *  makes a deletion distinguishable from "no template was asked for". */
   templateName: string | null;
+  /**
+   * **THE COLOUR THIS LAUNCH ASKED THE NEW AGENT TO WEAR** (2026-09-13,
+   * `20261005120000`).
+   *
+   * ⚠ **A REQUEST, NEVER A RESERVATION**, and the difference is visible to the
+   * machine: by claim time another member's agent may hold the key, and the push that
+   * follows the spawn resolves the collision to the next free one
+   * (`server/session-colors.ts`). So the desktop applies this and does not verify it.
+   * ⚠ `null` = the caller named none AND the bank was empty at create time; a caller
+   * who names nothing ordinarily gets the FIRST FREE key here, not `null`.
+   */
+  color: AgentColorKey | null;
   /**
    * ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS AND `launched` IS THE LAUNCH'S,
    * and the split is not fussiness (2026-09-01). This row is read back by the

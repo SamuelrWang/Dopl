@@ -25,7 +25,7 @@
  * an `await`. That is why this op holds on the ROW rather than telling the agent
  * to arm a wait.
  */
-import type { DoplClient, LaunchMessageMode, LaunchToolMode } from "@dopl/client";
+import type { AgentColorKey, DoplClient, LaunchMessageMode, LaunchToolMode } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 /** The line a PENDING (or expired) directive ends on. ⚠ Says the id, because the
  *  id is the only handle the agent has left, and says NOT to re-issue. */
@@ -57,5 +57,9 @@ export declare function opLaunchAgent(client: DoplClient, ref: string, opts?: {
      *  probes it against `(channel, this operator)` and returns the stored
      *  directive rather than filing a second one. */
     clientMsgId?: string;
+    /** ⚠ **ASKED FOR, AND REFUSED RATHER THAN SUBSTITUTED WHEN TAKEN.** Passed through
+     *  untouched — the taken set spans every member's live agents and only the server
+     *  can see it. Omitted means "first free", never "no colour". */
+    color?: AgentColorKey;
     waitMs?: number;
 }): Promise<ToolResponse>;

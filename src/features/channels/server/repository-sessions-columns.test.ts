@@ -37,6 +37,7 @@ const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
   last_activity_at: true,
   template_name: true,
   display_name: true,
+  color: true,
   // ⚠ THE HEALTH SEVEN (2026-09-01). This declaration is the reason adding them
   // to `SessionStateUpsert` and not to `SESSION_DIFF_COLUMNS` was a RED TYPECHECK
   // rather than a silent freeze — the guarantee working, exactly as documented.

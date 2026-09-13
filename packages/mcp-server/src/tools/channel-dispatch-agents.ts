@@ -33,6 +33,7 @@ import type { DoplClient } from "@dopl/client";
 import { err, missingParams, type ToolResponse } from "./respond";
 import { opDirectAgent } from "./channel-ops-direct";
 import { opLaunchAgent } from "./channel-ops-launch";
+import { asAgentColorKey } from "./channel-ops-launch-color";
 import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
 import { opSetAgentMode } from "./channel-ops-agent-mode";
 import type { z } from "zod";
@@ -115,6 +116,12 @@ export async function dispatchManageAction(
         // one, the server hands back the first request's directive and the
         // result says `retry=existing`.
         clientMsgId: args.client_msg_id,
+        // ⚠ PASSED THROUGH UNTOUCHED, like `template`: whether the key is free is a
+        // fact about EVERY member's live agents, which this process cannot see.
+        // ⚠ NARROWED, NOT CAST — the published field is a `z.string()` carrying the set
+        // as a PATTERN (a `z.enum` cost 153 chars on a schema with eight to spare), so
+        // the KEY type is recovered here rather than in the shape.
+        color: asAgentColorKey(args.color),
         waitMs: args.wait_ms,
       });
     }

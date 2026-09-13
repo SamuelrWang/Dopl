@@ -128,6 +128,13 @@ export function useChannelsV2Derivations({
   peerSessions?: ReadonlyArray<{
     name?: string | null;
     displayName?: string | null;
+    /** THE SERVER-ASSIGNED COLOUR KEY (2026-09-13). ⚠ `unknown` ON PURPOSE, and the same
+     *  choice `view-model.ts › indexAgents` makes: this is narrowed against a CLOSED SET
+     *  downstream, and typing it as `AgentColorKey | null` here would make that refusal
+     *  branch unreachable to the compiler and delete it at the first cleanup. ⚠ It is on
+     *  the PEER half and not the local one because only the server can assign a key —
+     *  see the merge note at the call site. */
+    color?: unknown;
   }> | null;
 }): ChannelsV2Derivations {
   /**
@@ -172,6 +179,13 @@ export function useChannelsV2Derivations({
           ...(peerSessions ?? []).map((p) => ({
             agentId: p.name,
             displayName: p.displayName,
+            // ⚠ **THE PROJECTION IS THE ONLY SOURCE OF A COLOUR ON THIS SURFACE, INCLUDING
+            // FOR THE OPERATOR'S OWN AGENTS** (2026-09-13). The key is assigned and made
+            // unique by the SERVER (`20261005120000`'s per-channel live index), so no
+            // machine's local feed is in a position to know one — which is why the own
+            // rows below carry none and why `view-model.ts › indexAgents` preserves this
+            // value rather than letting last-write-wins drop it.
+            color: p.color,
           })),
           ...(agentSessions ?? []),
         ])

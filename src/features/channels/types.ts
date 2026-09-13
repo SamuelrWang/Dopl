@@ -452,8 +452,7 @@ export type ChannelMember = {
  * there is no third path to a symbol.**
  */
 export type {
-  SessionPillState,
-  SessionDetailKey,
+  AgentColorKey, SessionPillState, SessionDetailKey,
   ChannelSessionState,
   ChannelSessionTelemetry,
   ChannelSessionHealth,

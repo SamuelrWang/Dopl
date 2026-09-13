@@ -249,26 +249,35 @@ describe("liveAgentsKey — the poll UNION this machine's own feed", () => {
     state: "working",
     ...over,
   });
+  /**
+   * ⚠ **`color: null` NOW APPEARS ON EVERY EXACT-SHAPE EXPECTATION BELOW, AND THAT IS THIS
+   * ASSERTION WORKING RATHER THAN BEING WORKED AROUND** (2026-09-13, agent colours). These
+   * are `toEqual` over the DECODED row, so a field added to the key's round trip shows up
+   * here and has to be stated — which is exactly the guard that would have caught a colour
+   * silently dropped between {@link liveAgentsKey} and {@link liveAgentsFromKey}. ⚠ They
+   * are `null` rather than absent because the decoder always writes the field: a key whose
+   * field count varies per row is a key whose `split` shifts every later field.
+   */
   const merged = (
-    peers: Array<{ name: string; displayName?: string | null }>,
+    peers: Array<{ name: string; displayName?: string | null; color?: unknown }>,
     rows: OwnAgentSessionRow[] | null
   ) => liveAgentsFromKey(liveAgentsKey(peers, rows, CHANNEL_ID));
 
   it("counts an agent ONCE when both sources carry it", () => {
     expect(merged([peer], [own()])).toEqual([
-      { name: "ab12cd34", displayName: "Scout" },
+      { name: "ab12cd34", displayName: "Scout", color: null },
     ]);
   });
 
   it("keeps the LOCAL name, which is the fresher one after a rename", () => {
     expect(merged([peer], [own({ displayName: "Bug Reviewer" })])).toEqual([
-      { name: "ab12cd34", displayName: "Bug Reviewer" },
+      { name: "ab12cd34", displayName: "Bug Reviewer", color: null },
     ]);
   });
 
   it("does not let an UNNAMED local row delete the name the projection carries", () => {
     expect(merged([peer], [own({ displayName: null })])).toEqual([
-      { name: "ab12cd34", displayName: "Scout" },
+      { name: "ab12cd34", displayName: "Scout", color: null },
     ]);
   });
 
@@ -282,7 +291,7 @@ describe("liveAgentsKey — the poll UNION this machine's own feed", () => {
 
   it("falls back to the legacy `name` when a main reports no agent id", () => {
     expect(merged([], [own({ agentId: null, name: "flint" })])).toEqual([
-      { name: "flint", displayName: "Scout" },
+      { name: "flint", displayName: "Scout", color: null },
     ]);
   });
 
@@ -297,7 +306,7 @@ describe("liveAgentsKey — the poll UNION this machine's own feed", () => {
 
   it("answers the projection alone off-desktop (`null` own feed)", () => {
     expect(merged([peer], null)).toEqual([
-      { name: "ab12cd34", displayName: "Scout" },
+      { name: "ab12cd34", displayName: "Scout", color: null },
     ]);
   });
 });

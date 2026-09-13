@@ -14,7 +14,10 @@
 
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
+import { agentColorVar } from "../../lib/agent-colors";
+import { AGENT_BAR } from "./message-box-agent";
 import { StreamProse } from "./agent-stream-prose";
+import type { AgentColorKey } from "../../types";
 import { TAB_ACTION } from "./bits";
 import { useOverflowMeasure } from "./use-overflow-measure";
 
@@ -194,6 +197,7 @@ export function SentToChannelBox({
   expired = false,
   onPost,
   busy = false,
+  color = null,
 }: {
   text: string;
   to?: string | null;
@@ -217,6 +221,22 @@ export function SentToChannelBox({
   expired?: boolean;
   onPost?: (requestId: string) => void;
   busy?: boolean;
+  /**
+   * **THIS AGENT'S COLOUR, FOR THE SETTLED BANNER ONLY** (Samuel, 2026-09-13;
+   * docs/specs/agent-colors.md item 5).
+   *
+   * ⚠ **AND ONLY WHEN THE POST HAS ACTUALLY GONE OUT — see the branch below.** Every
+   * argument in this file's docblock about the four faces is an argument about not painting
+   * a claim the words have not earned, and the agent's colour is precisely the claim *"this
+   * is in the channel, attributed to me"*: it is what the boxed row in the transcript wears.
+   * A Pending or Not-sent draft is not in any transcript, so colouring it would make the
+   * review card the one surface that shows a post's public identity before the post is
+   * public.
+   *
+   * ⚠ `null` KEEPS `--surface-cta`, the face this banner has always had, which is what
+   * every host with no colour in hand renders.
+   */
+  color?: AgentColorKey | null;
 }) {
   // ⚠ THE FACES ARE ORDERED BY WHAT THEY CLAIM, strongest claim last. Only the
   // final one asserts the counterparty has it, and it is reachable ONLY once the
@@ -230,9 +250,24 @@ export function SentToChannelBox({
       ? `Sent to ${to}`
       : "Posted to channel";
   const stamp = at ? formatChannelTimestamp(new Date(at).toISOString()) : "";
+  /* ⚠ **THE COLOUR IS GATED ON `!pending`, NOT ON `color` ALONE** — see the prop. That is
+     the same boundary `label` above is drawn on, and it is drawn twice on purpose: a face
+     and a fill that could disagree about whether a post is settled is the exact defect this
+     card was rebuilt to stop (the 2026-08-25 "Posted to channel over words nobody had seen"
+     entry in this file's docblock). ⚠ AND IT IS THE PILL'S PAINT ROUTE, NOT A SECOND ONE:
+     `lib/agent-colors.ts › agentColorVar` is the only place a key becomes a `var()`. */
+  const paint = !pending && color ? agentColorVar(color) : null;
   return (
     <div className="min-w-0 overflow-hidden rounded-[12px] border border-border-active bg-card-surface-subtle">
-      <div className="flex items-center gap-1.5 bg-surface-cta px-2.5 py-[5px]">
+      {/* ⚠ `AGENT_BAR` COMES FROM `message-box-agent.tsx` AND THE DIRECTION OF THE IMPORT IS
+          DELIBERATE. Samuel's ruling put the transcript box's bar at *"the same
+          height/geometry as the pop-out's 'posted to channel' bar"*, which makes the two a
+          PAIR — and the pair now belongs to the colour rule rather than to §6's consent
+          card, which is what this file otherwise owns. Importing it keeps *"similar to"*
+          true by construction instead of by two people remembering `py-[5px]`.
+          ⚠ THE CTA FILL STAYS AS A CLASS and the colour arrives as an inline `style`, so
+          the uncoloured face is byte-identical to what shipped before this wave. */}
+      <div className={cn(AGENT_BAR, !paint && "bg-surface-cta")} style={paint ? { backgroundColor: paint } : undefined}>
         <span className="min-w-0 truncate text-micro font-medium text-text-on-cta">
           {label}
         </span>

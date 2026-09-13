@@ -73,7 +73,7 @@ import {
   mentionTokensOf,
   resolveMentions,
 } from "./mentions";
-import type { ChannelMember } from "../types";
+import type { AgentColorKey, ChannelMember } from "../types";
 
 /**
  * **THE VIEWER'S OWN "who answers my untagged messages" SETTING, OUT OF THE ROSTER THIS
@@ -121,6 +121,21 @@ export function viewerUnaddressedResponder(
 export interface LiveAgentSession {
   name: string;
   displayName?: string | null;
+  /**
+   * ITS COLOUR IN THIS CHANNEL (2026-09-13; docs/specs/agent-colors.md) — the key, and
+   * `null`/absent for "none to draw".
+   *
+   * ⚠ **IT RIDES THIS TYPE RATHER THAN A SECOND ONE BECAUSE THIS IS ALREADY THE
+   * PEER ∪ OWN UNION** (`lib/live-agents.ts › liveAgentsKey`), and a colour is needed on
+   * exactly the surfaces that ask "which agents are live here" — the pop-out's banner
+   * (`agent-stream-sent-box.tsx`) and the New-agent popup's taken set. A parallel
+   * "colours by agent" map would be a second reconciliation of the same two sources, and
+   * the whole point of this file is that there is one.
+   * ⚠ **NOTHING IN THE HANDLE RULE READS IT.** `liveAgentCandidates` projects `name` and
+   * `displayName` only, so a colour cannot reach `lib/agent-mentions.ts` and cannot
+   * influence which handle an agent is minted — an identity for the eye, never an address.
+   */
+  color?: AgentColorKey | null;
 }
 
 /** The peer projection -> the handle rule's candidates. ⚠ A nameless row is

@@ -50,7 +50,13 @@ export const SESSION_DIFF_COLUMNS =
   // above, and leaving one out of the compare below the quietest version of the
   // second.
   "turns, tokens_delta, stale, denied_calls, last_denied_tool, " +
-  "last_wake_seq, last_wake_at";
+  "last_wake_seq, last_wake_at, " +
+  // ⚠ THE COLOUR (2026-09-13). It is in the SELECT for a second reason the rest of
+  // this list does not have: the reconcile's own read is where
+  // `session-colors.ts` rule 1 gets its incumbent value from, so a colour missing
+  // HERE would not merely look changed — it would look UNASSIGNED, and every push
+  // would hand the session a fresh key off the top of the bank.
+  "color";
 
 /**
  * ⚠ Field by field, NEVER JSON.stringify: key ORDER differs between a
@@ -102,6 +108,12 @@ export function sessionRowMatches(
     // 2026-08-31: a RENAME is exactly the change this diff must see — it is how
     // the peer-visible name propagates on the next push with nothing else moving.
     stored.display_name === reported.display_name &&
+    // ⚠ COMPARED, AND IT NORMALLY NEVER MOVES — rule 1 in `session-colors.ts` keeps a
+    // live session's key fixed, so this is the field whose STABILITY the diff proves.
+    // Left out, the one case that DOES move it (a foreign claim won a race) would be
+    // discarded as a no-op and the row would keep advertising a colour another
+    // member's index has already taken.
+    stored.color === reported.color &&
     // ── HEALTH (2026-09-01) ────────────────────────────────────────────────
     sameCount(stored.turns, reported.turns) &&
     sameCount(stored.tokens_delta, reported.tokens_delta) &&

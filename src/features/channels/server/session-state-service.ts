@@ -178,6 +178,13 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     // 2026-08-31 (20260905120000): the operator-given agent name — peer-visible
     // by design, `?? null` on the rollout contract every optional field here has.
     display_name: entry.displayName ?? null,
+    // ⚠ **THE ONE FIELD HERE THAT IS A REQUEST RATHER THAN A REPORT** (2026-09-13).
+    // Everything above is stored as sent; this one goes through
+    // `session-colors.ts › resolveReportedColors` inside the reconcile, because
+    // whether the key is free is a fact about OTHER MEMBERS' rows that the machine
+    // that reported it cannot see. `?? null` is "did not ask" — which resolves to
+    // the first free key, not to "no colour".
+    color: entry.color ?? null,
   };
 }
 

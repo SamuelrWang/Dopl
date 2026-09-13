@@ -58,6 +58,7 @@ export function PaneHeader({
   popOut,
   chrome,
   viewSelect,
+  transcriptFilter,
   onToggleInfo,
   onToggleFavorite,
   onExitThread,
@@ -91,6 +92,23 @@ export function PaneHeader({
    * controls for one choice is the confusion this replaced.
    */
   viewSelect?: ReactNode;
+  /**
+   * THE TRANSCRIPT FILTER, IMMEDIATELY LEFT OF THE COLLAPSE TOGGLE (Samuel,
+   * 2026-09-13: *"next to the left of the toggle bar for collapsing the right-side
+   * panel, I want us to add a dropdown"*) — `transcript-filter.tsx ›
+   * TranscriptFilterSelect`, built by `message-pane.tsx`, which owns the selection.
+   *
+   * ⚠ **A SLOT AND NOT A VALUE**, exactly like {@link popOut} and `viewSelect`: the
+   * control needs the loaded ROWS and the author index to know which agents to offer,
+   * and this header knows about neither and must not start to.
+   * ⚠ **IT SITS RIGHT OF `popOut` AND LEFT OF THE TOGGLE**, which is the only reading
+   * of the ruling that survives a thread view — both controls claim "immediately left
+   * of the info toggle", and the filter is the one Samuel placed against it.
+   * ⚠ **ABSENT IS THE ORDINARY CASE AND RENDERS NOTHING**: a room where no agent has
+   * posted has All and People naming the same set, and the pop-out window has no
+   * header controls at all.
+   */
+  transcriptFilter?: ReactNode;
   onToggleInfo?: () => void;
   onToggleFavorite: () => void;
   onExitThread: () => void;
@@ -169,6 +187,7 @@ export function PaneHeader({
           has none. Immediately LEFT of the info toggle, same `IconButton` face
           (Samuel, 2026-08-19); it was beside the crumb until then. */}
       {threadTitle !== null && popOut}
+      {transcriptFilter}
       {/* ⚠ A PANEL GLYPH, NOT AN `Info` (Samuel, 2026-08-24). The control opens
           and closes the column to its right, and `PanelRight` says that; the
           circle-i said "read about this channel", which is one tab of four

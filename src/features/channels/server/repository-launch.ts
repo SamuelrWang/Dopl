@@ -47,6 +47,14 @@ export type LaunchDirectiveRow = {
   /** The template's name, SNAPSHOTTED AT CREATE. ⚠ Never joined, never
    *  refreshed — it is the only signal that survives the FK's SET NULL. */
   template_name: string | null;
+  /** THE COLOUR THIS LAUNCH ASKED FOR (2026-09-13, `20261005120000`) — one of
+   *  `agent-01 … agent-16`, or NULL for "named none and the bank was empty".
+   *  ⚠ A REQUEST AND NOT A RESERVATION: the only authority is
+   *  `channel_sessions_channel_color_live_key`, so by claim time the key may be gone
+   *  and the machine's own push resolves the collision. ⚠ NULL on every non-launch
+   *  kind, and on every row written before the migration — the DTO reads it `?? null`
+   *  for the stale-cache reason `service-launch-dto.ts` states. */
+  color: string | null;
   /**
    * WHICH AGENT an `end` / `rename` acts on — an INPUT (2026-09-01).
    *
@@ -158,6 +166,14 @@ export type LaunchDirectiveInsert = {
    *  `template_id` or not at all — the pair is what makes a later deletion
    *  legible (E-4). */
   template_name: string | null;
+  /** THE RESOLVED colour (2026-09-13) — what the caller named, or the FIRST FREE key
+   *  when they named nothing.
+   *  ⚠ **OPTIONAL SO THE THREE NON-LAUNCH KINDS DID NOT HAVE TO LEARN A FIELD**, the
+   *  same courtesy `kind` itself takes above: an `end` / `rename` / `set_agent_mode`
+   *  omits it and the column's NULL default is exactly right. ⚠ It is the SERVER's
+   *  resolution and never raw caller input — `service-launch.ts` takes the free set
+   *  from `repository-session-colors.ts` and 409s a taken key before reaching here. */
+  color?: string | null;
   /**
    * ⚠ CALLER-SUPPLIED, LIKE `template_id` AND FOR THE SAME REASON THAT IS SAFE:
    * it names WHAT the verb acts on, never WHOSE MACHINE acts. The authorization

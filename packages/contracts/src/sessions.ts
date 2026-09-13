@@ -178,3 +178,53 @@ export type ChannelSessionHealth = {
   lastWakeSeq?: number | null;
   lastWakeAt?: string | null;
 };
+
+/**
+ * **AN AGENT'S COLOUR IN A CHANNEL** (Samuel, 2026-09-13; docs/specs/agent-colors.md:
+ * *"for each agent I want to assign it a color"*).
+ *
+ * ⚠ **A KEY, NOT A COLOUR.** Nothing on any wire carries a hex, an `oklch()` or a
+ * Tailwind class: the value is one of sixteen names, and the PAINT lives in exactly
+ * one place per tree — `--agent-color-01 … -16` in `src/app/globals.css` and its
+ * mirror `apps/desktop-ui/src/styles/tokens.css` (`check-css-token-drift` holds the
+ * two together). A stored colour therefore survives a palette retune, and no
+ * renderer is ever handed a value it has to trust.
+ *
+ * ⚠ **SPELLED OUT, NOT `` `agent-${number}` ``.** A template-literal type would
+ * admit `agent-0`, `agent-99` and `agent-007`, and the whole reason this set is in
+ * `@dopl/contracts` is that FOUR sites state it — here, the runtime array
+ * (`src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`, whose
+ * `satisfies` ties it to this union), the `channel_sessions.color` CHECK and the
+ * `channel_launch_directives.color` CHECK (both
+ * `20261005120000_agent_session_colors.sql`). The compiler reaches the first two;
+ * `agent-color-schema.test.ts` reaches the SQL pair.
+ *
+ * ⚠ **IT IS AN IDENTITY, NEVER A STATUS.** `SessionPillState` says what an agent is
+ * DOING and the severity ramp (`--success` … `--danger`) says how it is going; a
+ * red agent is not a failing one. A surface that reads meaning into WHICH key a
+ * session holds has invented a fact.
+ *
+ * ⚠ **LIVE SESSIONS ONLY, AND THE BANK IS PER CHANNEL.** The key is unique among a
+ * channel's live sessions ACROSS MEMBERS, and it returns to the bank when the
+ * session ends — which on this lane means when its projection row leaves
+ * (`20261005120000`'s index predicate carries the whole argument). `null` on a
+ * session is ordinary: a desktop older than this wave, or a room with all sixteen
+ * already out.
+ */
+export type AgentColorKey =
+  | "agent-01"
+  | "agent-02"
+  | "agent-03"
+  | "agent-04"
+  | "agent-05"
+  | "agent-06"
+  | "agent-07"
+  | "agent-08"
+  | "agent-09"
+  | "agent-10"
+  | "agent-11"
+  | "agent-12"
+  | "agent-13"
+  | "agent-14"
+  | "agent-15"
+  | "agent-16";

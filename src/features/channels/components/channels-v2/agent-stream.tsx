@@ -69,6 +69,7 @@ import { StreamProse } from "./agent-stream-prose";
 // decision and an expiry rule — where this file moves when a STREAM ROW's shape
 // moves. It is RE-EXPORTED here so no importer changed.
 import { SentToChannelBox } from "./agent-stream-sent-box";
+import type { AgentColorKey } from "../../types"; // the sent banner's fill
 export {
   SentToChannelBox,
   POST_PENDING_LABEL,
@@ -117,7 +118,7 @@ export function AgentStream({
   threadTitle,
   viewer,
   agentNameFor,
-  className,
+  color = null, className,
 }: {
   /** `null` = could not ask; `[]` = asked, nothing yet. ⚠ Never collapsed here. */
   entries: AgentNarrationEntry[] | null;
@@ -135,6 +136,9 @@ export function AgentStream({
    * inventing a name or leaking the id.
    */
   agentNameFor?: (agentId: string) => string | null;
+  /** THE SENT BANNER'S FILL (2026-09-13) — the SAME key the transcript boxes with, because the two
+   *  are one post; resolved by the MOUNT off `view-model.ts › AgentIdentity.color`. Rule: §5. */
+  color?: AgentColorKey | null;
   /** Whether this build can show the lane at all. */
   supported: boolean;
   /** What this agent POSTED, off the channel transcript — the authoritative
@@ -250,6 +254,7 @@ export function AgentStream({
               lane passes through as a group of one, so nothing else moves. */}
           {groupStreamItems(items).map((group) => (
             <StreamRow
+              color={color}
               key={group.key}
               group={group}
               viewer={viewer}
@@ -285,6 +290,7 @@ function StreamRow({
   answeredEscalations,
   escalationAnswerable,
   agentNameFor,
+  color,
 }: {
   group: StreamGroup;
   viewer?: AvatarPerson | null;
@@ -296,6 +302,9 @@ function StreamRow({
   escalationAnswerable?: boolean;
   /** F-376a — resolve a directed entry's sender id to a name; see {@link AgentStream}. */
   agentNameFor?: (agentId: string) => string | null;
+  /** ⚠ THE SENT LANE ONLY — a `directed` box is the PRIVATE lane and keeps its weight, which is
+   *  the one signal for who off this machine can see the words. */
+  color?: AgentColorKey | null;
 }) {
   // A tool RUN is the one group with more than one row in it, and it renders as
   // the collapsed summary. Every other lane is a group of one.
@@ -337,6 +346,7 @@ function StreamRow({
           expired={item.expired}
           onPost={onPost}
           busy={postBusy}
+          color={color}
         />
       </li>
     );

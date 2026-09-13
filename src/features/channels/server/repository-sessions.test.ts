@@ -69,6 +69,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     last_wake_seq: null,
     last_wake_at: null,
     display_name: null,
+    color: null,
     ...over,
   };
 }

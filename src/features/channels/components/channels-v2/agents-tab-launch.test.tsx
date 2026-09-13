@@ -91,7 +91,10 @@ describe("the Launch agent split button", () => {
       screen
         .getByRole("tablist", { name: "Agent template" })
         .querySelector('[aria-selected="true"]')?.textContent
-    ).toBe("Blank agent");
+    // ⚠ **"Blank agent" → "None" ON 2026-09-13** (Samuel, docs/specs/agent-colors.md item 7:
+    // *"change 'Blank Agent' to 'None' for the template"*). The WIRE is unchanged — the
+    // option still sends `templateId: null` — so this is a LABEL pin moving and nothing else.
+    ).toBe("None");
   });
 
   it("opens NO picker on the face's click", () => {

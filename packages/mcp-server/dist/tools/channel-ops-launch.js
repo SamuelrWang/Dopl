@@ -39,6 +39,9 @@ const channel_facts_1 = require("./channel-facts");
 // paragraph — and four hand-written copies is how two of them end up describing
 // a system the other two do not.
 const channel_doctrine_1 = require("./channel-doctrine");
+// ⚠ THE COLOUR REFUSAL IS A NEIGHBOUR, not a branch in here — this file is at the §1
+// cap and a refusal is prose about one server code (`channel-ops-launch-color.ts`).
+const channel_ops_launch_color_1 = require("./channel-ops-launch-color");
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
 /** The `code` a DoplApiError carries, or null. ⚠ Duck-typed rather than imported
@@ -248,6 +251,7 @@ async function opLaunchAgent(client, ref, opts = {}) {
             messages: opts.messages,
             chain: opts.chain,
             clientMsgId: opts.clientMsgId,
+            color: opts.color,
         });
     }
     catch (e) {
@@ -256,6 +260,14 @@ async function opLaunchAgent(client, ref, opts = {}) {
         // membership, no such template) and one to 409, and a status-only branch
         // would tell an agent its CHANNEL was wrong when it was the template name —
         // the exact mis-narration `channel-errors.ts` exists to stop.
+        // ⚠ **THE COLOUR ARM IS FIRST AMONG THE 409s AND IS DISCRIMINATED BY CODE**, the
+        // same rule the template arms below follow: two codes now share one status, and a
+        // status-only branch would tell an agent its TEMPLATE name was ambiguous when its
+        // COLOUR was taken. ⚠ IT IS NOT A FAILURE OF THE CALL — nothing was filed, and the
+        // fix is one retry with a key from the list.
+        if (apiErrorCode(e) === "AGENT_COLOR_TAKEN") {
+            return (0, channel_ops_launch_color_1.colorTaken)(opts.color ?? "", (0, channel_ops_launch_color_1.freeColors)(e));
+        }
         if (apiErrorCode(e) === "AGENT_TEMPLATE_AMBIGUOUS") {
             return ambiguousTemplate(opts.template ?? "", templateMatches(e));
         }

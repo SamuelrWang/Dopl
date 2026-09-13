@@ -43,6 +43,19 @@ export function SurfaceAgentView({
        here. */
     <ChannelsV2AgentPanel
       openAgent={openAgent}
+      /* ⚠ **OFF THE PEER ∪ OWN UNION, WHICH IS THE ONLY SET THAT CAN ANSWER**
+         (2026-09-13; docs/specs/agent-colors.md item 5). `data.agentSessions` below is this
+         machine's own feed and carries no colour — the key is the SERVER's assignment
+         against every member's live agents — while `data.liveAgents` is the union the
+         @-picker already reads (`channel-surface-data.ts › liveAgents`, keyed content so
+         this lookup does not re-run on telemetry churn). ⚠ A LINEAR SCAN rather than a map:
+         it runs once per render of ONE open pane over a set bounded by the agent cap, and
+         building a Map here would be a second index of a set the host already keys. */
+      color={
+        (openAgent &&
+          data.liveAgents.find((a) => a.name === openAgent)?.color) ||
+        null
+      }
       sessions={data.agentSessions}
       messages={data.messages}
       // ⚠ THE POINT OF THE INLINE CARD, ON THIS HOST ESPECIALLY (Samuel,

@@ -6,6 +6,15 @@ vi.mock("./repository-launch", () => ({
 }));
 vi.mock("./repository-collab", () => ({ presenceForWorkspace: vi.fn() }));
 vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
+// ⚠ MOCKED IN EVERY LAUNCH SUITE THOUGH NONE OF THEM NAMES A COLOUR: the create's
+// SIXTH gate (`service-launch-color.ts`) reads the channel's taken set, and that read
+// is a live `supabaseAdmin()` client. The POLICY stays real — only the READ is
+// stubbed — so these suites still execute the gate rather than skipping it, on the
+// `repository-collab` precedent one line up. The colour cases are in
+// `service-launch-color.test.ts`.
+vi.mock("./repository-session-colors", () => ({
+  foreignLiveColorsByChannel: vi.fn(async () => new Map()),
+}));
 vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();
   return { ...actual, loadVisibleChannel: vi.fn() };

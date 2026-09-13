@@ -20,7 +20,7 @@ import {
   canLaunchAgents,
   launchAgentOnThread,
 } from "./agents-controls";
-import type { Channel, ChannelThread } from "../../types";
+import type { AgentColorKey, Channel, ChannelThread } from "../../types";
 import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
 
 /**
@@ -158,7 +158,22 @@ export interface AgentLaunchControls {
      * reads the runtime off the payload's top level (`agents-controls.ts ›
      * launchAgentOnThread` carries the whole argument).
      */
-    runtime?: string
+    runtime?: string,
+    /**
+     * ⚠ **THE SIXTH, ON THE FOURTH'S AND FIFTH'S EXACT ARGUMENT** (2026-09-13, agent colours;
+     * docs/specs/agent-colors.md). The zero- and one-argument calls stay byte-identical, so the
+     * one-click Bot icon pinned by `composer-launch.test.tsx` is unchanged and only the New-agent
+     * POPUP passes it.
+     * ⚠ **ABSENT MEANS "THE SERVER PICKS THE FIRST FREE KEY", NEVER "NO COLOUR"** — an untouched
+     * popup and a one-click launch both get a colour, which is the whole ruling: every live agent
+     * in a channel is distinguishable. A colourless agent is a room with all sixteen out.
+     * ⚠ **NOT AN `overrides` MEMBER**, on `runtime`'s argument above: that object is the
+     * TEMPLATE's re-points, and a template cannot carry a colour — the key is unique among a
+     * channel's live agents across every member, so a stored default would collide the second
+     * time it was used. Main reads it off the payload's top level
+     * (`agents-controls.ts › launchAgentOnThread`).
+     */
+    color?: AgentColorKey
   ) => Promise<AgentLaunchOutcome>;
   /** Store a first-use approval for a FOREIGN template, machine-locally.
    *  ⚠ Feature-detected inside (`agents-controls.ts › approveTemplate`); an
@@ -201,7 +216,8 @@ export function useAgentsPanel({
     templateId?: string | null,
     overrides?: TemplateLaunchOverrides,
     agentId?: string,
-    runtime?: string
+    runtime?: string,
+    color?: AgentColorKey
   ): Promise<AgentLaunchOutcome> => {
     // ⚠ A GUARDED CALL ANSWERS `busy` RATHER THAN `undefined`. The picker awaits
     // this, and a silent early return would leave a row click looking exactly
@@ -250,6 +266,13 @@ export function useAgentsPanel({
         // durable pick), so putting `runtime: ''` on a LAUNCH would be a per-spawn
         // statement where the operator made none.
         ...(runtime ? { runtime } : {}),
+        // ⚠ ABSENT WHEN THE POPUP NAMED NONE, for `runtime`'s first reason: a one-click launch
+        // must put the object it always did on the wire. ⚠ AND THE SECOND REASON DOES NOT APPLY
+        // HERE — there is no "empty string clears a durable pick" hazard, because no colour is
+        // ever stored durably; the only two states are "the operator named one" and "the server
+        // picks the first free". Main re-narrows it either way
+        // (`main/session-launch-op.js › colorKey`).
+        ...(color ? { color } : {}),
       });
       // ⚠ THE APPROVAL WORD IS NOT AN ERROR LINE — see LAUNCH_APPROVAL_REASON.
       if (!res.ok && res.reason !== LAUNCH_APPROVAL_REASON) {

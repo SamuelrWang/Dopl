@@ -204,6 +204,22 @@ async function launch(a) {
     // from a launch. It is coerced at the construction site and again at `buildSdkOptions`, the
     // last step before a child process can see it, so a bad value here is 'default', never argv.
     model: a.model,
+    // ⚠ **THE AGENT COLOUR, FORWARDED AND NEVER INVENTED** (Samuel, 2026-09-13;
+    // docs/specs/agent-colors.md). It rides `model`'s exact argument one line up: a colour
+    // GRANTS NOTHING and reaches NO GATE, so it may travel the funnel without the ceremony the
+    // permission pair needs — and it is the caller's value, normalized where it is read
+    // (`session-launch-op.js › colorKey`), never fabricated here.
+    // ⚠ **IT IS A REQUEST, NOT THE ASSIGNMENT, AND THIS IS THE ONE FIELD ON THIS LITERAL THAT
+    // THE SERVER MAY OVERRULE.** Uniqueness is per channel across EVERY member
+    // (`20261005120000_agent_session_colors.sql`'s live unique index), which no machine can
+    // evaluate — two desktops cannot see each other's registries. So the push carries the ask
+    // and `src/features/channels/server/session-colors.ts` resolves it: the key is granted if
+    // free, and silently replaced by the next free one if another member took it in between.
+    // Nothing here waits for that answer, and nothing here retries.
+    // ⚠ **AND IT MUST BE ON THIS LITERAL OR IT IS DROPPED IN SILENCE** — the `bind()` note at
+    // the top of this file: a field the engine passes and this whitelist omits does not reach
+    // `startSession` and produces no error anywhere. That is F-510's shape exactly.
+    color: a.color,
     windowless: a.windowless === true, // 2026-08-20: no window, ever, on this shape
     // ⚠ THE LAUNCH DEPTH — F-320's RECURSION BOUND, and this funnel FORWARDS it without inventing
     // one (2026-08-25). Exactly ONE caller passes `0` and it is the New Agent button

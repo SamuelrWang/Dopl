@@ -35,6 +35,7 @@ exports.dispatchManageAction = dispatchManageAction;
 const respond_1 = require("./respond");
 const channel_ops_direct_1 = require("./channel-ops-direct");
 const channel_ops_launch_1 = require("./channel-ops-launch");
+const channel_ops_launch_color_1 = require("./channel-ops-launch-color");
 const channel_ops_agent_1 = require("./channel-ops-agent");
 const channel_ops_agent_mode_1 = require("./channel-ops-agent-mode");
 const channel_schema_1 = require("./channel-schema");
@@ -106,6 +107,12 @@ async function dispatchManageAction(action, args, client) {
                 // one, the server hands back the first request's directive and the
                 // result says `retry=existing`.
                 clientMsgId: args.client_msg_id,
+                // ⚠ PASSED THROUGH UNTOUCHED, like `template`: whether the key is free is a
+                // fact about EVERY member's live agents, which this process cannot see.
+                // ⚠ NARROWED, NOT CAST — the published field is a `z.string()` carrying the set
+                // as a PATTERN (a `z.enum` cost 153 chars on a schema with eight to spare), so
+                // the KEY type is recovered here rather than in the shape.
+                color: (0, channel_ops_launch_color_1.asAgentColorKey)(args.color),
                 waitMs: args.wait_ms,
             });
         }

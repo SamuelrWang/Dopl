@@ -41,12 +41,18 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
  * import would trade one mirror for a worse one.
  */
 import type {
+  AgentColorKey,
   SessionPillState,
   ChannelSessionTelemetry,
   ChannelSessionHealth,
 } from "@dopl/contracts";
 
-export type { SessionPillState, ChannelSessionTelemetry, ChannelSessionHealth };
+export type {
+  AgentColorKey,
+  SessionPillState,
+  ChannelSessionTelemetry,
+  ChannelSessionHealth,
+};
 
 /**
  * One live (or just-ended) session, as answered by
@@ -114,6 +120,19 @@ export type ChannelSessionState = {
    * not carry the field; `null` = never named. Renders fall back to `#<name>`.
    */
   displayName?: string | null;
+  /**
+   * THIS SESSION'S COLOUR IN THIS CHANNEL — **PEER-VISIBLE, WHICH IS ITS ENTIRE
+   * PURPOSE** (Samuel, 2026-09-13: *"this will be categorized not only for the own
+   * users' agents, but also for other users' agents"*).
+   *
+   * ⚠ OPTIONAL AND NULLABLE on `detail`'s two grounds: ABSENT = an older server does
+   * not carry the field, `null` = no colour assigned (a desktop older than the wave,
+   * or a room whose sixteen keys are all out). Both render the NEUTRAL box, never a
+   * guessed colour.
+   * ⚠ A KEY, NOT A COLOUR — `lib/agent-colors.ts › agentColorVar` is the only place
+   * it becomes paint.
+   */
+  color?: AgentColorKey | null;
   updatedAt: string;
 };
 

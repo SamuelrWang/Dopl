@@ -102,6 +102,25 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const short = (id) => String(id || '').slice(0, 8);
 
 /**
+ * **ONE OF THE SIXTEEN AGENT COLOUR KEYS, OR `null`** (2026-09-13;
+ * docs/specs/agent-colors.md).
+ *
+ * ⚠ **A MEMBERSHIP TEST AND NOT A SANITIZER**, which is why it is not `telemetry.labelOrNull`:
+ * the set is OURS (sixteen CSS tokens), so the honest answer to anything outside it is "no
+ * colour", not "a shorter version of what you sent". A value that is not a key would be
+ * substituted into a `var(--agent-color-…)` on the far side and paint nothing.
+ *
+ * ⚠ **A LOCAL COPY OF THE PATTERN, FORCED RATHER THAN CHOSEN** — `main/` cannot import from
+ * `src/`. The same regex is in `session-launch-op.js › colorKey`, in both column CHECKs in
+ * `20261005120000_agent_session_colors.sql`, and as a key list in
+ * `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`.
+ */
+const AGENT_COLOR_RE = /^agent-(0[1-9]|1[0-6])$/;
+function colorKey(value) {
+  return typeof value === 'string' && AGENT_COLOR_RE.test(value) ? value : null;
+}
+
+/**
  * ONE REPORT ENTRY -> THE WIRE ROW. The only mapping here, and it is a rename: `key` is the
  * server's `sessionKey` (the stable (channel, thread) key the table upserts on, NOT the
  * ephemeral `sessionId`), and an empty `taskId` becomes the NULL the column stores.
@@ -133,6 +152,26 @@ function reportRow(e) {
     // through the same labelOrNull every other operator-authored field crosses with, so a
     // pathological stored name can never 400 the whole payload (INVARIANTS §11).
     displayName: telemetry.labelOrNull(e && e.displayName, 60),
+    // ⚠ **THE AGENT COLOUR — PEER-VISIBLE BY DESIGN, WHICH IS THE ENTIRE RULING** (Samuel,
+    // 2026-09-13: *"this will be categorized not only for the own users' agents, but also for
+    // other users' agents"*; migration `20261005120000` + `schema-sessions.ts › color`). It
+    // rides `displayName` above in every respect but one, below.
+    //
+    // ⚠ **IT IS AN ASK AND NOT AN ASSIGNMENT, AND THAT MAKES THE NULL CASE SAFE.** Uniqueness
+    // is per channel across EVERY member, which no machine can evaluate — two desktops cannot
+    // see each other's registries — so the server resolves this rather than storing it:
+    // `src/features/channels/server/session-colors.ts › resolveReportedColors` rule 1 KEEPS
+    // whatever the stored row already holds. **So a push that reports no colour cannot erase
+    // one**, which is what makes it correct to put the field on the wire today while
+    // `session-summary.js › liveSummary` (the parked-session lane's file) does not yet carry it:
+    // every row reports `undefined`, the server assigns FIRST FREE on the first push and keeps
+    // it on every push after. ⚠ THIS IS ALSO WHY IT IS NOT THE `templateName` HAZARD
+    // (`session-store.js`'s durable-whitelist block): that column is stored VERBATIM, so a
+    // resume that rebuilt context without it nulled the server's copy. A colour cannot be nulled
+    // by omission, because omission is not a value on this lane.
+    // ⚠ NOT `labelOrNull`: this is a CLOSED SET, not operator prose, so it is membership-tested
+    // rather than length-bounded — a sanitizer would pass `agent-99` through as a legal label.
+    color: colorKey(e && e.color),
     ...telemetry.telemetryFields(e),
   };
 }

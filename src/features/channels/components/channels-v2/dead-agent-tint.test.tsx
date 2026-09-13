@@ -198,8 +198,18 @@ describe("a handle that names NO agent tints nothing", () => {
 
 describe("the flag survives the memo key — the silent regression path", () => {
   it("round-trips, so the rebuilt map still knows the agent ended", () => {
+    // ⚠ `color: null` JOINED THIS EXACT SHAPE ON 2026-09-13 (agent colours), AND STATING IT IS
+    // THIS ASSERTION WORKING RATHER THAN BEING WORKED AROUND: it is a `toEqual` over the
+    // ROUND-TRIPPED identity, so a field that failed to survive `agentIndexKey` ⇄
+    // `agentIndexFromKey` shows up here — which is the one silent regression path this whole
+    // describe block exists for, now guarding two fields instead of one.
+    // ⚠ AND `null` IS THE RIGHT VALUE FOR AN **ENDED** AGENT SPECIFICALLY, not an artefact of
+    // the fixture: the key returns to the channel's bank the moment a session stops (Samuel's
+    // ruling; `20261005120000_agent_session_colors.sql`'s index predicate), so
+    // `view-model.ts › indexAgents` forces it — an ended agent that kept its hue would be
+    // painting a colour another member's agent may already own.
     expect(identities([{ agentId: AGENT, displayName: "Research Bot", state: "ended" }]).get(AGENT))
-      .toEqual({ displayName: "Research Bot", description: null, ended: true });
+      .toEqual({ displayName: "Research Bot", description: null, ended: true, color: null });
   });
 
   it("MOVES when an agent ends, so the transcript re-renders without a refetch", () => {

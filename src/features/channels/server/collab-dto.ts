@@ -1,4 +1,6 @@
+import { agentColorOrNull } from "../lib/agent-colors";
 import type {
+  AgentColorKey,
   ChannelConsentRequest,
   ChannelSessionState,
   ChannelSessionStateOwn,
@@ -126,6 +128,14 @@ export type SessionStateRow = {
    *  NULL = never named (render falls back to the `name` handle), or a desktop
    *  older than the field. */
   display_name: string | null;
+  /** THE AGENT'S COLOUR IN THIS CHANNEL — **PEER-VISIBLE BY DESIGN** (2026-09-13,
+   *  `20261005120000`; Samuel: the colour categorizes *"also … other users' agents"*).
+   *  ⚠ DELIBERATELY NOT in {@link OPERATOR_ONLY_SESSION_COLUMNS}: every member of the
+   *  room draws it, so hiding it from peers would delete the feature.
+   *  ⚠ Typed `string | null` at the ROW because the column is TEXT and the CHECK is the
+   *  database's, not this file's — `narrowSessionColor` is what turns it into a value a
+   *  surface may reference, exactly as `narrowSessionDetail` does for `detail`. */
+  color: string | null;
 };
 
 /**
@@ -234,6 +244,14 @@ export type SessionStateUpsert = {
    *  on `context.template` from spawn (spec §3d) and reports its NAME, which is
    *  what keeps the row true after a rename or a delete. */
   template_name: string | null;
+  /** 2026-09-13 (`20261005120000`): the agent's colour in this channel.
+   *
+   *  ⚠ **THE ONE FIELD ON THIS TYPE THE SERVER MAY OVERRULE.** Everything else here is
+   *  the machine's report, written as sent; a colour is subject to a UNIQUENESS RULE the
+   *  reporting machine cannot see (another member may hold the key), so
+   *  `server/session-colors.ts › resolveReportedColors` rewrites it to the first free key
+   *  before the upsert. The desktop's value is a REQUEST — see that file's header. */
+  color: AgentColorKey | null;
 };
 
 /**
@@ -269,6 +287,22 @@ const SESSION_DETAIL_KEYS: ReadonlySet<string> = new Set<SessionDetailKey>([
   "awaiting_peer",
   "awaiting_inbound",
 ]);
+
+/**
+ * A STORED COLOUR → A KEY A SURFACE MAY DRAW, or `null`.
+ *
+ * ⚠ **THE SAME NARROW-NEVER-CAST RULE `narrowSessionDetail` ABOVE FOLLOWS**, and here
+ * the failure it prevents is silent rather than loud: an unrecognised key becomes
+ * `var(--agent-color-99)`, which resolves to nothing, and an inline `borderColor` of
+ * nothing paints an INVISIBLE border — a box the reader cannot see over a post that is
+ * supposed to be boxed. `null` draws the neutral box instead, which is the honest
+ * reading of "this row's colour means nothing to me".
+ */
+export function narrowSessionColor(
+  value: string | null | undefined
+): AgentColorKey | null {
+  return agentColorOrNull(value);
+}
 
 export function narrowSessionDetail(
   value: string | null | undefined
@@ -345,6 +379,10 @@ export function mapPeerSessionStateRow(
     // agent name IS for the other member's eyes; bounded at the schema and the
     // column CHECK both. `?? null` covers a row read before the migration.
     displayName: row.display_name ?? null,
+    // ⚠ PEER-VISIBLE BY DESIGN and NARROWED, never passed through — `narrowSessionColor`
+    // carries why an unknown key must not reach a `var()`. `?? null` covers a row read
+    // before the migration.
+    color: narrowSessionColor(row.color),
     updatedAt: row.updated_at,
   };
 }

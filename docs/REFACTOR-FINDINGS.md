@@ -8415,6 +8415,29 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   split the file instead."* The remedy is sixteen splits by reason-to-change, and §1's own bullet says
   a split scheduled on a line count waits indefinitely while one scheduled by a new reason-to-change
   lands the same day — so the honest plan is to take each as its next contract change arrives.
+- ⚠ **PARTLY TAKEN ON 2026-09-13 (agent colours), AND RECORDED HERE BECAUSE THE FILE STILL EXCEEDS.**
+  `packages/mcp-server/src/tools/channel-schema.ts` is the largest file in `packages/` (674 lines
+  before that wave) and the `size-check` CI job names it with no exemption, so the job is red on this
+  branch independently of the wave. The wave's first draft took it to **718** by declaring the new
+  `color` field and its argument inline; the field and the whole argument were then moved to
+  `packages/mcp-server/src/tools/channel-ops-launch-color.ts` — which already owned the sixteen keys,
+  the narrowing and the 409, so the seam is "one file, one rule" rather than a line-count split — and
+  the three funding notes left in the shape were compressed to anchors pointing at
+  `channel-schema.ts › SCHEMA_MAX_CHARS`, which holds the argument once. **The residual 13 lines were
+  then funded out of loose comment WRAPPING inside the same file — compression, never a cut: every
+  clause survives — so the file measured 674 after the wave, EXACTLY its baseline. The wave added no
+  net lines to the largest file in `packages/`** (re-derive; do not quote). ⚠ One four-line note in
+  the residue is load-bearing and was kept: the pin recording that `posture`'s clamp sentence may NOT
+  move to the pulled doctrine (`channel-ops-agent-mode.test.ts` and `channel-session-handle.test.ts`
+  assert it by phrase, and both caught the attempt inside a minute).
+  ⚠ **THE SAME FUNDING WAS OWED AND PAID ON SIX MORE FILES THE WAVE TOUCHED**, five of which it had
+  pushed from under the cap to over it — `spa-bridge.ts` (500 → 497), `service-launch.ts` (497 → 500),
+  `agent-panel.tsx` (498 → 495), `agent-stream.tsx` (490 → 500), `agents-controls.ts` (489 → 499) and
+  `channels/types.ts` (500 → 499). **Two of them sat EXACTLY at 500, where a new field cannot be added
+  at all without funding it**, which is the sharpest form of this finding: the cap is not a warning
+  here, it is a wall, and the wave that meets it pays or splits.
+  ⚠ **THE REAL SPLIT THIS FILE WANTS IS BY OP**, not by field — the shape is one object of ~30 params
+  across five ops, and the next op-shaped change is the one that should take it.
 - ✅ **ONE WAS TAKEN ON 2026-09-09 AND IS OFF THE LIST**: `knowledge/server/service-base-writes.ts`
   measured 509 and could not absorb the three lines the changelog capture needed, so
   `CreateBasePreconditions` + `assertCreateBaseAllowed` moved to `./service-base-gates.ts` — that
@@ -8748,3 +8771,41 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   a `DROP FUNCTION` PAIRED WITH A `CREATE FUNCTION` of the same name in the same file as a
   REPLACEMENT. A bare `DROP` still fails, and tables, columns, indexes and policies get no such
   latitude.
+
+### F-694 — a PARKED agent vanished entirely across an app restart: `init`'s record scan `continue`d on the `'dormant'` disposition, so the record was neither re-registered nor ended (found + fixed 2026-09-13)
+
+- **THE MEASUREMENT.** Samuel's Dopl channel agent `@agent-y1uun32v` (record key
+  `bb0f57db-…::y1uun32v`, `phase: "parked"`, `sdkSessionId` present in the resume map,
+  `templateName: "Coder"`) was idle when Electron was hard-restarted. Afterwards it was **NOWHERE**:
+  no card in the Agents tab — not even an **Ended** one — no `agentHistory` entry, and no
+  `channel_sessions` row. That row is a LIVE PROJECTION (`main/session-state-push.js` posts a
+  whole-set REPLACE), so it is deleted the moment the pill leaves the set, which is why the peer's
+  side went dark too. The record itself was still on disk, describing an agent nothing in the
+  product mentioned.
+- **ROOT CAUSE, exactly.** `main/session-engine.js › init` loops `store.loadRecords()` and runs
+  `if (!rec || store.reloadDisposition(rec.phase) !== 'resume') continue;`.
+  `session-store.js › reloadDisposition('parked')` is **`'dormant'`**, so a parked record took that
+  `continue` and got NEITHER of the two things the loop does: it was not re-registered in the
+  engine's in-memory `sessions` map (so `session-summary.js` never published it, the push never
+  re-projected it, and every wake path — the fan-out, the `@agent-id` parse, `messageByTask`,
+  `reopenByTask` — resolves against that map and found nothing), and it was not ended either (no
+  `setRecordPhase('ended')`, no `task_failed {interrupted}` lifecycle, no history entry).
+  ⚠ **THE `'dormant'` BRANCH WAS DELIBERATE AND ONLY HALF-BUILT.** `reloadDisposition`'s own
+  docblock says a dormant record "stays resumable, so init() posts NO
+  `task_failed{interrupted:true}` echo and leaves the record + resume map intact for a later reopen
+  (P2)" — and P2 was the SHELL-RECREATE lane, **deleted on 2026-08-20 with F-228**. The reopen that
+  was going to rebuild the session went away; the `continue` that was waiting for it did not. The
+  record has been correct on disk and invisible in the product ever since.
+- **THE FIX.** `main/session-boot.js › reparkDormant`, called from `init` in one line before
+  `pruneRecords` (that file is AT the 500-line cap, so the reasoning could not live in it). Two
+  outcomes and never a third: a dormant record with an sdk id on a resumable runtime is REBUILT as
+  a parked session in the registry (`› parkedSessionFromRecord`, in the shape `session-park.js ›
+  resumeParked` expects) and publishes as **Idle**; anything else takes the interrupted-END route
+  plus an `agent-history.js` entry, which is what makes an Ended card exist. Rule and consequences:
+  INVARIANTS §11. Pinned by `dopl-desktop-app/test/session-boot-repark.test.mjs` (the F-694 bug
+  itself and the dropped history entry are both mutation-verified).
+- ⚠ **WHAT THIS FINDING DOES NOT CLAIM.** The narration ring for such a session is genuinely gone
+  and no fix can recover it — `agent-history.js`'s header already states that a hard kill loses the
+  ring for anything that never reached `settle`. The boot pass restores the agent, its identity,
+  its counters and its conversation handle; the work lane of the run that was interrupted starts
+  empty, which is the honest answer rather than a regression.

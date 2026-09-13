@@ -19,7 +19,12 @@ import {
   type ChannelEscalation,
   type ChannelEscalationAnswer,
 } from "../../escalation";
+// ⚠ THE ONE MEMBERSHIP TEST FOR A COLOUR KEY, imported rather than re-spelled: the
+// value reaches this file off a peer's machine and out of a serialized memo key, and
+// `lib/agent-colors.ts` states what "a key" means once.
+import { agentColorOrNull } from "../../lib/agent-colors";
 import type {
+  AgentColorKey,
   Channel,
   ChannelMember,
   ChannelMessage,
@@ -111,6 +116,30 @@ export interface AgentIdentity {
    * terminal. ⚠ **ABSENT IS NOT ENDED**: a host with no `state` on its rows reads live.
    */
   ended?: boolean;
+  /**
+   * **THE COLOUR THIS AGENT WEARS IN THIS CHANNEL** (Samuel, 2026-09-13;
+   * docs/specs/agent-colors.md) — the key, never paint. `message-box-agent.tsx` turns
+   * it into a `var(--agent-color-NN)` and nothing else does.
+   *
+   * ⚠ **RESOLVED AT RENDER OFF THE LIVE PROJECTION, EXACTLY LIKE {@link displayName}**,
+   * and for a STRONGER version of the same reason: a colour is not merely mutable, it is
+   * RECLAIMED. The key returns to the channel's bank when the session ends
+   * (`20261005120000_agent_session_colors.sql`'s index predicate), so a colour stamped
+   * on a message would keep painting a hue another member's agent now owns — two
+   * different agents in one transcript wearing one colour, which is the single thing
+   * Samuel's ruling forbids. Nothing writes a colour onto a message row, ever.
+   *
+   * ⚠ **SO AN ENDED AGENT READS AS `null` HERE AND ITS OLD POSTS GO NEUTRAL**, which is
+   * the ruling rather than a side effect: *"once the agent has ended, that color needs to
+   * be returned to the color bank"*. The row STAYS in this map for attribution (see
+   * {@link ended}); only the colour leaves.
+   *
+   * ⚠ **IT RIDES THE MEMO KEY** ({@link agentIndexKey}) because the map is rebuilt FROM
+   * that string — a colour left off it would be dropped on the round trip, the same bug
+   * {@link ended} carries a warning about. Churn-safe for the same reason: a colour moves
+   * on assignment and on ending, never on `working` ⇄ `idle`.
+   */
+  color?: AgentColorKey | null;
 }
 
 /** ⚠ ONE EMPTY MAP, not a fresh `new Map()` per call: `AuthorIndex` is a `useMemo` dependency of
@@ -152,6 +181,10 @@ export function agentIndexKey(agents: ReadonlyMap<string, AgentIdentity>): strin
         // ⚠ IT MUST RIDE THE KEY OR THE ROUND TRIP DROPS IT (a dead agent's tag tinting again) —
         // the transcript's map is rebuilt FROM this string. Churn-safe: {@link AgentIdentity.ended}.
         identity.ended ? "1" : "",
+        // ⚠ THE COLOUR RIDES IT FOR THE IDENTICAL REASON, and it is the field that makes
+        // the round trip VISIBLE when it breaks: a dropped colour is a whole transcript
+        // of neutral boxes, where a dropped `ended` is one tag tinted wrong.
+        identity.color ?? "",
       ].join(KEY_FIELD_SEP)
     );
   }
@@ -170,12 +203,18 @@ export function agentIndexFromKey(key: string): ReadonlyMap<string, AgentIdentit
   if (key === "") return NO_AGENTS;
   const out = new Map<string, AgentIdentity>();
   for (const row of key.split(KEY_ROW_SEP)) {
-    const [agentId, displayName, description, ended] = row.split(KEY_FIELD_SEP);
+    const [agentId, displayName, description, ended, color] = row.split(KEY_FIELD_SEP);
     if (!agentId) continue;
     out.set(agentId, {
       displayName: displayName || null,
       description: description || null,
       ended: ended === "1",
+      // ⚠ NARROWED, NOT TRUSTED — this half of the round trip parses a STRING that was
+      // built from a peer's projection, so an unknown key must read as "no colour" (the
+      // neutral box) rather than reach a `var(--agent-color-…)` that resolves to nothing
+      // and paints an INVISIBLE border. `lib/agent-colors.ts › agentColorOrNull` is the
+      // one membership test, stated once.
+      color: agentColorOrNull(color),
     });
   }
   return out;
@@ -194,6 +233,14 @@ export function indexAgents(
     /** The pill (`spa-bridge-shapes.ts › DesktopSessionSummary.state`), read ONLY for
      *  {@link AgentIdentity.ended}. Optional on the same widened-local-type rule as the rest. */
     state?: string | null;
+    /** THE COLOUR KEY off the projection (2026-09-13). ⚠ `unknown` RATHER THAN
+     *  `AgentColorKey | null | undefined`, ALONE AMONG THESE FIELDS, and deliberately:
+     *  the other four are strings this function only trims, while this one is narrowed
+     *  against a CLOSED SET — typing it as the union here would make
+     *  {@link agentColorOrNull}'s refusal branch unreachable to the compiler and delete
+     *  it at the first cleanup, which is the bug the widened-local-type rule above is
+     *  itself about. Both host trees (desktop feed, peer projection) satisfy it. */
+    color?: unknown;
   }> | null
 ): ReadonlyMap<string, AgentIdentity> {
   if (!sessions || sessions.length === 0) return NO_AGENTS;
@@ -201,10 +248,31 @@ export function indexAgents(
   for (const session of sessions) {
     const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
     if (!id) continue;
+    const ended = session.state === "ended";
+    // ⚠ **AN INCOMING ROW THAT REPORTS NO COLOUR MUST NOT DELETE ONE ALREADY INDEXED**,
+    // and this is the SAME precedence rule `lib/live-agents.ts › liveAgentsKey` states for
+    // `displayName` (`||`, never `??`) — applied to the field where getting it wrong is
+    // invisible rather than merely wrong. `derivations.ts` feeds this PEERS FIRST, OWN
+    // LAST on last-write-wins, because the local feed's NAME is the fresher one; but the
+    // local feed is `spa-bridge-shapes.ts › DesktopSessionSummary`, which does not carry
+    // a colour at all (the desktop's own half of this wave is owed — see
+    // `main/session-state-push.js › reportRow`). Without this line the operator's OWN
+    // agents would be the only ones with no colour, because their peer-projection row —
+    // the one the SERVER assigned a key to — is overwritten by a local row that has
+    // never heard of colours. ⚠ AND IT IS SCOPED TO ABSENCE: an ENDED row still clears
+    // the key below, which is the bank rule and must beat any incumbent.
+    const carried = out.get(id)?.color ?? null;
     out.set(id, {
       displayName: session.displayName?.trim() || null,
       description: session.description?.trim() || null,
-      ended: session.state === "ended",
+      ended,
+      // ⚠ **AN ENDED SESSION IS FORCED TO `null` HERE RATHER THAN TRUSTED**, and this is
+      // the ruling's enforcement point rather than a tidy-up. The key is back in the
+      // channel's bank the moment the session stops, so a host that still reports one on
+      // an ended row (a desktop mid-teardown, a cached payload) would paint a hue another
+      // member's agent may already own. Dropping it here means the NEUTRAL box is what an
+      // ended agent's history wears, in every tree, whatever the feed says.
+      color: ended ? null : (agentColorOrNull(session.color) ?? carried),
     });
   }
   return out;

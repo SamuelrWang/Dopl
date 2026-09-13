@@ -1,67 +1,62 @@
 /**
- * THE PUBLISHED INPUT SHAPE for `dopl_channel` — one flat schema of optional
- * params, plus the `op` discriminator and the `action` sub-verb the two
- * dispatching ops take, with the per-op requirements enforced at runtime by
- * `missingParams` in the registrar.
+ * THE PUBLISHED INPUT SHAPE for `dopl_channel` — one flat schema of optional params, plus the
+ * `op` discriminator and the `action` sub-verb the two dispatching ops take, with the per-op
+ * requirements enforced at runtime by `missingParams` in the registrar.
  *
- * This is the DECLARED SURFACE an MCP client introspects (names, types, caps,
- * per-param teaching); the registrar is routing. ⚠ The parity suite reads both:
- * every declared param must be referenced by some handler in the `channel-*`
- * group, and no handler may read an arg not declared here.
+ * This is the DECLARED SURFACE an MCP client introspects (names, types, caps, per-param
+ * teaching); the registrar is routing. ⚠ The parity suite reads both: every declared param must
+ * be referenced by some handler in the `channel-*` group, and no handler may read an arg not
+ * declared here.
  *
- * ⚠ **FIVE OPS SINCE 2026-09-02 (MCP v2 wave B slice B8, Samuel's ruling B9),
- * AND FIVE AT RUNTIME TOO SINCE SLICE B16.** `send` · `read` · `status` ·
- * `manage` · `rooms`, down from twenty-three. The other twenty-two names parsed
- * for one release and answered a one-line redirect; that window is CLOSED, so
- * the runtime enum and the published one are the same five and a retired name is
- * refused by schema validation with {@link unknownOpRefusal}'s line. The names
- * are kept as dead vocabulary in `law-removed-vocabulary.ts ›
- * RETIRED_CHANNEL_OPS`, which is what stops a shipped string teaching one.
+ * ⚠ **FIVE OPS SINCE 2026-09-02 (MCP v2 wave B slice B8, Samuel's ruling B9), AND FIVE AT RUNTIME
+ * TOO SINCE SLICE B16.** `send` · `read` · `status` · `manage` · `rooms`, down from twenty-three.
+ * The other twenty-two names parsed for one release and answered a one-line redirect; that window
+ * is CLOSED, so the runtime enum and the published one are the same five and a retired name is
+ * refused by schema validation with {@link unknownOpRefusal}'s line. The names are kept as dead
+ * vocabulary in `law-removed-vocabulary.ts › RETIRED_CHANNEL_OPS`, which is what stops a shipped
+ * string teaching one.
  *
- * ⚠ **EVERY `.describe()` HERE IS PUSHED ON EVERY CONNECTION, EXACTLY LIKE THE
- * TOOL DESCRIPTION, AND IS BUDGETED LIKE ONE** (A6, 2026-09-02). It was 20,844
- * characters over 46 blocks — 11.7× the description the T82 cap governs — because
- * each block carried the RULE behind its field as well as its contract. A rule
- * belongs in `channel-doctrine.ts`, which is PULLED by the agent that asks for
- * it; a `.describe()` carries the CONTRACT of one field and stops. One sentence
+ * ⚠ **EVERY `.describe()` HERE IS PUSHED ON EVERY CONNECTION, EXACTLY LIKE THE TOOL DESCRIPTION,
+ * AND IS BUDGETED LIKE ONE** (A6, 2026-09-02). It was 20,844 characters over 46 blocks — 11.7×
+ * the description the T82 cap governs — because each block carried the RULE behind its field as
+ * well as its contract. A rule belongs in `channel-doctrine.ts`, which is PULLED by the agent
+ * that asks for it; a `.describe()` carries the CONTRACT of one field and stops. One sentence
  * each, and `channel-schema-budget.test.ts` is what keeps it there.
  *
- * ⚠ **NO `.describe()` HAND-TYPES A BOUND THE SCHEMA PUBLISHES.** A cap reaches
- * the client as a `maxLength` / `maximum` keyword and once more in the
- * description's rendered `Limits:` block (`tool-style.ts › renderLimits`); a
- * third copy in the prose is the copy that goes stale, and `tool-style.test.ts`
- * fails one.
+ * ⚠ **NO `.describe()` HAND-TYPES A BOUND THE SCHEMA PUBLISHES.** A cap reaches the client as a
+ * `maxLength` / `maximum` keyword and once more in the description's rendered `Limits:` block
+ * (`tool-style.ts › renderLimits`); a third copy in the prose is the copy that goes stale, and
+ * `tool-style.test.ts` fails one.
  *
- * ⚠ Caps and minimums HAND-MIRROR the routes' zod schemas
- * (src/features/channels/schema.ts): body 16000, summary 200, client_msg_id
- * 200, `.min(1)` on body / client_msg_id. Declared here they publish as
- * maxLength and are enforced before the call; omit one and the route rejects it
- * as an opaque 400 the write ops mis-narrate. `.trim()` where — and ONLY where —
- * the route trims before measuring, so the two agree on what a character count
- * counts.
+ * ⚠ Caps and minimums HAND-MIRROR the routes' zod schemas (src/features/channels/schema.ts): body
+ * 16000, summary 200, client_msg_id 200, `.min(1)` on body / client_msg_id. Declared here they
+ * publish as maxLength and are enforced before the call; omit one and the route rejects it as an
+ * opaque 400 the write ops mis-narrate. `.trim()` where — and ONLY where — the route trims before
+ * measuring, so the two agree on what a character count counts.
  *
- * ⚠ **`summary` IS ONE NUMBER NOW (200), AND THAT IS A RULING** (Samuel, wave B).
- * It declared the LOOSER 2000 so an over-length summary would be the route's to
- * refuse with the field named; the route enforces 200, so the schema published a
- * cap the surface does not have. One field, one bound, both ends.
+ * ⚠ **`summary` IS ONE NUMBER NOW (200), AND THAT IS A RULING** (Samuel, wave B). It declared the
+ * LOOSER 2000 so an over-length summary would be the route's to refuse with the field named; the
+ * route enforces 200, so the schema published a cap the surface does not have. One field, one
+ * bound, both ends.
  */
 
 import { z } from "zod";
 import { RESPONSE_FORMAT_FIELD } from "./response-size";
 import { DOCTRINE_SECTION_NAMES } from "./channel-doctrine";
+// ⚠ THE SET, FROM THE MODULE THAT ALSO OWNS ITS REFUSAL — one file, one rule.
+import { AGENT_COLOR_FIELD } from "./channel-ops-launch-color";
 import { HOLD_CAP_MS } from "./channel-hold-budget";
 
 /**
  * THE SIX OPS AN AGENT SEES, and the only six it may pick from.
  *
- * ⚠ THE ORDER IS THE READING ORDER a model skims: the one write it makes most,
- * the two reads, then the three dispatchers.
+ * ⚠ THE ORDER IS THE READING ORDER a model skims: the one write it makes most, the two reads,
+ * then the three dispatchers.
  *
- * ⚠ **`artifact` IS THE SIXTH, ADDED 2026-09-06 (design #1220 §5, accepted at
- * #1222), AND IT IS AN OP RATHER THAN A `send` KIND** — it writes no message. It
- * folds messages that ALREADY EXIST into one card, which is a different verb on
- * a different row, and hanging it off the send lane would have put a
- * non-delivery on the one op whose whole contract is that it delivers.
+ * ⚠ **`artifact` IS THE SIXTH, ADDED 2026-09-06 (design #1220 §5, accepted at #1222), AND IT IS
+ * AN OP RATHER THAN A `send` KIND** — it writes no message. It folds messages that ALREADY EXIST
+ * into one card, which is a different verb on a different row, and hanging it off the send lane
+ * would have put a non-delivery on the one op whose whole contract is that it delivers.
  */
 export const CHANNEL_OPS = [
   "send",
@@ -74,19 +69,19 @@ export const CHANNEL_OPS = [
 export type ChannelOp = (typeof CHANNEL_OPS)[number];
 
 /**
- * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice
- * (slice B16): the schema's own zod error, and `channel.ts`'s exhaustive
- * `default` for a build where that validation did not run.
+ * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice (slice B16): the
+ * schema's own zod error, and `channel.ts`'s exhaustive `default` for a build where that
+ * validation did not run.
  *
- * ⚠ **WITHOUT IT, RETIREMENT IS A `-32602 invalid enum value`** — the opaque
- * failure B8's one-release redirect window existed to prevent, arriving one
- * release later. ⚠ **ONE LINE, AND IT NAMES THE WHOLE VOCABULARY** — six words
- * since `artifact` landed (A4, 2026-09-06), derived from {@link CHANNEL_OPS} and
- * never counted here; anything longer is `rooms(action="help")`'s doctrine.
+ * ⚠ **WITHOUT IT, RETIREMENT IS A `-32602 invalid enum value`** — the opaque failure B8's one-
+ * release redirect window existed to prevent, arriving one release later. ⚠ **ONE LINE, AND IT
+ * NAMES THE WHOLE VOCABULARY** — six words since `artifact` landed (A4, 2026-09-06), derived from
+ * {@link CHANNEL_OPS} and never counted here; anything longer is `rooms(action="help")`'s
+ * doctrine.
  *
- * ⚠ The caller's own word is echoed BOUNDED AND ON ONE LINE — it is the only
- * part of this sentence they wrote, and an unbounded multi-line echo is
- * structure a caller can forge inside our narration.
+ * ⚠ The caller's own word is echoed BOUNDED AND ON ONE LINE — it is the only part of this
+ * sentence they wrote, and an unbounded multi-line echo is structure a caller can forge inside
+ * our narration.
  */
 export function unknownOpRefusal(op: unknown): string {
   const raw = typeof op === "string" ? op : (JSON.stringify(op) ?? String(op));
@@ -102,22 +97,20 @@ export function unknownOpRefusal(op: unknown): string {
 /**
  * THE SUB-VERBS, per dispatching op.
  *
- * ⚠ **THE THREE VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts
- * it: one flat `action` enum is what a client introspects, so an overlapping
- * word would make the same string mean two things one op apart. Disjointness is
- * also what lets `gating.ts › WRITE_OPS` name a single write action
- * (`rooms.open`) without the pair ever being ambiguous.
+ * ⚠ **THE THREE VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts it: one flat
+ * `action` enum is what a client introspects, so an overlapping word would make the same string
+ * mean two things one op apart. Disjointness is also what lets `gating.ts › WRITE_OPS` name a
+ * single write action (`rooms.open`) without the pair ever being ambiguous.
  *
- * ⚠ **THE THIRD LIST ARRIVED WITH `artifact` (2026-09-06) AND THE DISJOINTNESS
- * RULE IS WHY ITS WORDS ARE WHAT THEY ARE.** `create` was the obvious name for
- * opening a room too, and `open` for a card; both were rejected here rather than
- * disambiguated later, because the pairing refusals below can only say "that
- * word belongs to <op>" while every word belongs to exactly one.
+ * ⚠ **THE THIRD LIST ARRIVED WITH `artifact` (2026-09-06) AND THE DISJOINTNESS RULE IS WHY ITS
+ * WORDS ARE WHAT THEY ARE.** `create` was the obvious name for opening a room too, and `open` for
+ * a card; both were rejected here rather than disambiguated later, because the pairing refusals
+ * below can only say "that word belongs to <op>" while every word belongs to exactly one.
  *
- * ⚠ **`rooms` CARRIES BOTH READS AND WRITES, AND THAT IS WHY THE WRITE GATE IS
- * PER-ACTION.** Classifying the whole op as a write would refuse a read-only
- * token the very calls it exists to make — `list`, `members`, `help` — and
- * classifying it as a read would open `open` / `invite` / `update` to one.
+ * ⚠ **`rooms` CARRIES BOTH READS AND WRITES, AND THAT IS WHY THE WRITE GATE IS PER-ACTION.**
+ * Classifying the whole op as a write would refuse a read-only token the very calls it exists to
+ * make — `list`, `members`, `help` — and classifying it as a read would open `open` / `invite` /
+ * `update` to one.
  */
 export const CHANNEL_ACTIONS = {
   manage: ["launch", "end", "rename", "posture", "direct"],
@@ -153,20 +146,19 @@ export type ArtifactAction = (typeof CHANNEL_ACTIONS.artifact)[number];
 type DispatchOp = keyof typeof CHANNEL_ACTIONS;
 
 /**
- * THE ONE REFUSAL FOR A WORD THAT BELONGS TO ANOTHER OP — written once here,
- * used by all three dispatch arms in `channel.ts`.
+ * THE ONE REFUSAL FOR A WORD THAT BELONGS TO ANOTHER OP — written once here, used by all three
+ * dispatch arms in `channel.ts`.
  *
- * ⚠ **IT WAS TWO HAND-WRITTEN SENTENCES UNTIL 2026-09-06, AND THE THIRD
- * VOCABULARY IS WHY IT IS DERIVED NOW.** Each arm said "that word belongs to"
- * and then NAMED the other op, which is a claim only true while there are
- * exactly two lists: the moment `artifact` arrived, `manage(action="create")`
- * would have told the caller to try `rooms`, confidently and wrongly. The owner
- * is looked up in the same table the enum is built from, so a fourth
- * vocabulary cannot make this sentence lie.
+ * ⚠ **IT WAS TWO HAND-WRITTEN SENTENCES UNTIL 2026-09-06, AND THE THIRD VOCABULARY IS WHY IT IS
+ * DERIVED NOW.** Each arm said "that word belongs to" and then NAMED the other op, which is a
+ * claim only true while there are exactly two lists: the moment `artifact` arrived,
+ * `manage(action="create")` would have told the caller to try `rooms`, confidently and wrongly.
+ * The owner is looked up in the same table the enum is built from, so a fourth vocabulary cannot
+ * make this sentence lie.
  *
- * ⚠ The offered list is the op's OWN vocabulary, joined with "or" — the same
- * shape as {@link unknownOpRefusal}, and the one thing a caller cannot read off
- * a flat `action` enum that publishes all three lists as one.
+ * ⚠ The offered list is the op's OWN vocabulary, joined with "or" — the same shape as {@link
+ * unknownOpRefusal}, and the one thing a caller cannot read off a flat `action` enum that
+ * publishes all three lists as one.
  */
 export function unknownActionRefusal(op: DispatchOp, action: string): string {
   const shown = action.replace(/\s+/g, " ").slice(0, 40);
@@ -187,35 +179,31 @@ export function unknownActionRefusal(op: DispatchOp, action: string): string {
 }
 
 /**
- * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's
- * (A6, 2026-09-02). A tool's `inputSchema` is PUSHED on every connection
- * exactly as its description is, and `dopl_channel`'s was **21,778 chars
- * served — 11.7× the 1,775 the T82 cap governs** — because 46 `.describe()`
- * blocks carried the RULE behind each field as well as its contract.
+ * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's (A6, 2026-09-02). A
+ * tool's `inputSchema` is PUSHED on every connection exactly as its description is, and
+ * `dopl_channel`'s was **21,778 chars served — 11.7× the 1,775 the T82 cap governs** — because 46
+ * `.describe()` blocks carried the RULE behind each field as well as its contract.
  *
- * ⚠ MEASURED AS **SERVED**, over a real `Client.listTools()`, and with the
- * registrar-injected `workspace` argument EXCLUDED: that one belongs to
- * `registrar.ts › WORKSPACE_ARG_SHAPE` and is a different slice's to shrink,
- * so counting it here would let this ratchet move on somebody else's edit.
- * ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
- * growing past it, and shrinking below it without lowering the number.
+ * ⚠ MEASURED AS **SERVED**, over a real `Client.listTools()`, and with the registrar-injected
+ * `workspace` argument EXCLUDED: that one belongs to `registrar.ts › WORKSPACE_ARG_SHAPE` and is
+ * a different slice's to shrink, so counting it here would let this ratchet move on somebody
+ * else's edit. ⚠ IT ONLY EVER MOVES DOWN. `channel-schema-budget.test.ts` fails both ways —
+ * growing past it, and shrinking below it without lowering the number. / // ⚠ 11,341 → 8,410 ON
+ * 2026-09-02 (B8), AND EVERY CHARACTER OF IT CAME FROM // DELETING PARAMS AND OPS RATHER THAN
+ * FROM SHORTENING PROSE. Thirteen params // left the shape — `topic`, `member`, `title`,
+ * `handoff`, `agent_id`, // `ping_kind`, `recipient`, `metadata`, `goal`, `issue`, `context`, //
+ * `timeout_ms`, and the three posture axes, which became one `posture` object — // because the
+ * concept each named already had a field: a recipient is `to`, an // intent is `summary`, a goal
+ * is `body`, a hold is `wait_ms`. Eighteen op names // left the published enum. A cut a re-worded
+ * sentence cannot make twice.
  */
-// ⚠ 11,341 → 8,410 ON 2026-09-02 (B8), AND EVERY CHARACTER OF IT CAME FROM
-// DELETING PARAMS AND OPS RATHER THAN FROM SHORTENING PROSE. Thirteen params
-// left the shape — `topic`, `member`, `title`, `handoff`, `agent_id`,
-// `ping_kind`, `recipient`, `metadata`, `goal`, `issue`, `context`,
-// `timeout_ms`, and the three posture axes, which became one `posture` object —
-// because the concept each named already had a field: a recipient is `to`, an
-// intent is `summary`, a goal is `body`, a hold is `wait_ms`. Eighteen op names
-// left the published enum. A cut a re-worded sentence cannot make twice.
-export const SCHEMA_MAX_CHARS = 8_405; // ⚠ 8,410 → 8,405 ON 2026-09-03: `section=`'s enum gained `waiting` (the hold-not-poll doctrine is unreachable without a name to pull it by) and that field's own `.describe()` more than paid for it. It still only ever moves DOWN.
+export const SCHEMA_MAX_CHARS = 8_634; // ⚠ **8,405 → 8,634 (2026-09-13, +229): THE AGENT-COLOUR PARAM, AND THE FIRST RISE THIS CONSTANT HAS TAKEN.** `op="manage" action="launch"` gained `color`, which costs 363 served — 233 of it the sixteen `enum` members. **134 was funded rather than recorded**, all of it standing contract prose MOVED into the PULLED doctrine and WRITTEN there first on `template`'s precedent: `model`'s silent-fallback sentence (101) to `MANAGE`, `info_card`'s "everyone sees it" (33) to `ROOMS`. ⚠ **TWO CHEAPER SHAPES WERE MEASURED AND REFUSED, WHICH IS THE PART THAT LICENSES THE OTHER 229.** (a) `z.string().regex(/^agent-(0[1-9]|1[0-6])$/)` measures 80 against the enum's 233 — refused by `tool-style.test.ts › no published schema validates a date with a regex`, because a character class is a contract the agent must reverse-engineer and its failure is an opaque -32602 where an enum's NAMES THE SIXTEEN. (b) `posture`'s clamp sentence (135) was moved to the doctrine and PUT BACK: `channel-ops-agent-mode.test.ts` and `channel-session-handle.test.ts` pin it on that describe by phrase. ⚠ **AND WHY THE REMAINDER IS RECORDED RATHER THAN ABSORBED**, on `tool-budget.test.ts › SCHEMA_CEILINGS.dopl_agent`'s +1,093 precedent: this gate counts what a connection costs BEFORE it has done anything, and every describe still standing is at its smallest honest size — buying 229 more would mean deleting a disclosure, which is paying a budget by telling the truth less. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it** with `channel-schema-budget.test.ts`. // ⚠ 8,410 → 8,405 ON 2026-09-03: `section=`'s enum gained `waiting` (the hold-not-poll doctrine is unreachable without a name to pull it by) and that field's own `.describe()` more than paid for it. It still only ever moves DOWN.
 
 /**
- * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total
- * can absorb one 900-character paragraph by trimming nine short fields; this
- * cannot. A `.describe()` states the CONTRACT of one field — which ops take it,
- * what it is, its bound — in one sentence. The rule behind it belongs in
- * `channel-doctrine.ts › FIELDS`, which is PULLED by the agent that asks.
+ * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total can absorb one
+ * 900-character paragraph by trimming nine short fields; this cannot. A `.describe()` states the
+ * CONTRACT of one field — which ops take it, what it is, its bound — in one sentence. The rule
+ * behind it belongs in `channel-doctrine.ts › FIELDS`, which is PULLED by the agent that asks.
  */
 export const PARAM_DESCRIPTION_MAX_CHARS = 400;
 
@@ -588,7 +576,9 @@ export const CHANNEL_INPUT_SHAPE = {
     })
     .optional()
     .describe(
-      'op="rooms" action="update": the channel\'s whole info card, REPLACED — an omitted row is DELETED and `info_card={}` clears the card. Omit the argument entirely to READ the card unchanged. Everyone in the channel sees it.',
+      // ⚠ Its "everyone sees it" moved to `channel-doctrine.ts › ROOMS` (2026-09-13; why:
+      // `SCHEMA_MAX_CHARS`).
+      'op="rooms" action="update": the channel\'s whole info card, REPLACED — an omitted row is DELETED and `info_card={}` clears the card. Omit the argument entirely to READ the card unchanged.',
     ),
 
   // ⚠ **THE DOCTRINE IS PULLED, SO IT MUST BE PULLABLE IN PIECES** (2026-09-02).
@@ -611,7 +601,9 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(120)
     .optional()
     .describe(
-      'op="manage" action="launch" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel. An id that machine does not recognize is NOT refused — it silently FALLS BACK, and nothing tells you.',
+      // ⚠ Its silent-fallback sentence moved to `channel-doctrine.ts › MANAGE` (2026-09-13; why:
+      // `SCHEMA_MAX_CHARS`).
+      'op="manage" action="launch" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel.',
     ),
 
   // ⚠ ID **OR** EXACT NAME, in ONE param — `dopl_kb`'s `base` already works this
@@ -632,6 +624,9 @@ export const CHANNEL_INPUT_SHAPE = {
       // `channel-ops-launch-body.test.ts:232` and stays verbatim.
       'op="manage" action="launch" (optional): the AGENT TEMPLATE the new agent runs as — its id, or its exact name. It resolves in THIS CHANNEL\'S container under THE OPERATOR\'S visibility. Omit it to start a blank agent.',
     ),
+
+  // ⚠ Declared in `channel-ops-launch-color.ts` (one file, one rule; §1's cap). Argument there.
+  color: AGENT_COLOR_FIELD,
 
   // ── ⚠ THE PERMISSION AXES, IN ONE OBJECT (B8; 2026-09-01's T24 axes) ───────
   //
@@ -669,6 +664,10 @@ export const CHANNEL_INPUT_SHAPE = {
     })
     .optional()
     .describe(
+      // ⚠ **THE CLAMP SENTENCE IS PINNED BY PHRASE AND MAY NOT MOVE TO THE PULLED DOCTRINE** —
+      // `channel-ops-agent-mode.test.ts` / `channel-session-handle.test.ts` assert
+      // `narrows whatever you ask for to their own ceiling` here; it is the only place a caller
+      // learns its ASK is not the SET before it asks (moved 2026-09-13, both suites caught it).
       'op="manage" action="launch" / action="posture" (optional): how much freedom to ASK FOR. Your operator\'s machine narrows whatever you ask for to their own ceiling and never widens past it; omit an axis to run at that setting.',
     ),
 };

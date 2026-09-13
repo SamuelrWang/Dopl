@@ -241,6 +241,22 @@ async function spawn(d, deps) {
     model: sessionModel.chainModel(d.model)
       || require('./session-launch-op').templateModel(sessionModel, template)
       || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(d.channelId)),
+    // ⚠ **THE COLOUR THE ORCHESTRATOR ASKED FOR** (Samuel, 2026-09-13;
+    // docs/specs/agent-colors.md). `dopl_channel(op="manage", action="launch", color=…)` reaches
+    // this lane as a directive column (`channel_launch_directives.color`,
+    // `20261005120000_agent_session_colors.sql`) and nowhere else — a parameter the server
+    // accepts and the spawning machine cannot see would be worse than no parameter, which is
+    // exactly the argument that migration makes for having the column at all.
+    // ⚠ **NO PRECEDENCE CHAIN, UNLIKE `model` ABOVE, AND THAT ASYMMETRY IS THE POINT.** A
+    // template carries no colour and a channel stores no default, because a colour is UNIQUE
+    // among a channel's live agents across EVERY member: a remembered default is a default that
+    // collides the second time it is used. Empty means "the server picks the first free key",
+    // which is what every directive filed before this wave effectively asked for.
+    // ⚠ **AND WHAT ARRIVES HERE MAY ALREADY BE STALE, BY DESIGN.** The 409 at create time is a
+    // courtesy and never a reservation (that migration's second block states it): minutes may
+    // have passed, another member may hold the key, and the push that follows this spawn resolves
+    // the collision to the next free one. So this lane APPLIES it and never verifies it.
+    color: d.color,
     launchChain: plan.chain, idle: !d.goal, // ⚠ `launchChain` (2026-08-31, Samuel's agent-chaining ruling): THIS lane is the ONLY caller that passes it, read PER DIRECTIVE and never cached (the operator may flip the channel setting between two of them), so a session started here may launch further agents exactly when the room says so — every other lane passes nothing, reads false, and keeps the one-generation bound. ⚠ `idle`: docblock; `directiveFrom` trimmed the goal, so '' is the only spelling of "none"
     operatorArmed: true, // ⚠ both branches: FIX-4 reads it only for a shell, but it is true either way
   });

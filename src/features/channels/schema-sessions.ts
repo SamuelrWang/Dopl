@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
-import type { MachineDelivery, SessionPillState } from "./types";
+import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
+import type { AgentColorKey, MachineDelivery, SessionPillState } from "./types";
 
 /**
  * ⚠ **THE `INT4` CEILING, AND IT EXISTS BECAUSE TWO OF THE HEALTH COLUMNS ARE
@@ -107,6 +108,23 @@ const SessionStateEntrySchema = z.object({
    *  identically (INVARIANTS §11). The SQL `CHECK` is a third statement of this
    *  same set and no TypeScript reaches it. */
   state: closedEnum<SessionPillState>()(["working", "idle", "ended"]),
+  /**
+   * THE COLOUR THIS MACHINE IS **ASKING** FOR (2026-09-13, `20261005120000`).
+   *
+   * ⚠ **A REQUEST, AND THE SERVER MAY OVERRULE IT** — `server/session-colors.ts`
+   * carries the four rules. A machine cannot see another member's live set, so it
+   * cannot know whether its pick is free; the index can, and a push that hit the
+   * index would discard the whole projection.
+   * ⚠ **`closedEnum` OVER THE SIXTEEN KEYS, AND THAT IS SAFE HERE IN A WAY IT IS NOT
+   * FOR `detail`.** The set is CLOSED BY CONSTRUCTION — the palette is ours, in two
+   * CSS files, and nothing on a newer desktop can invent a seventeenth key without
+   * this repo minting it first. Contrast `detail`, deliberately loose because the
+   * DESKTOP owns that vocabulary and a newer key there must not 400 a whole payload.
+   * ⚠ `.nullable().optional()` on the standing rollout contract: every installed
+   * desktop older than this wave omits the field, and a required one would 400 its
+   * entire report for the life of the run (INVARIANTS §11, §13).
+   */
+  color: closedEnum<AgentColorKey>()(AGENT_COLOR_KEYS).nullable().optional(),
   channelName: safeLabel("Channel name", 120).nullable().optional(),
   threadTitle: safeLabel("Thread title", 200).nullable().optional(),
 

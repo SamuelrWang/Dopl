@@ -11,6 +11,14 @@ import {
   SESSION_DIFF_COLUMNS,
   sessionRowMatches,
 } from "./repository-sessions-columns";
+// ⚠ THE COLOUR RULE LIVES ENTIRELY OUTSIDE THIS FILE (2026-09-13) — the per-channel
+// taken-set read, the pure first-free policy and the unique-violation degrade. This
+// file calls two functions and decides nothing about colours; `session-colors.ts`'s
+// header is why the server overrules a machine on this one field.
+import {
+  resolveColorsForPush,
+  withoutClaimedColors,
+} from "./repository-session-colors";
 
 /**
  * DATA ACCESS FOR `channel_sessions` — read-session-state's storage, both
@@ -426,7 +434,14 @@ export async function replaceSessionStates(
     stored.set(row.session_key, row);
   }
 
-  const changed = reported.filter((r) => {
+  // ── THE COLOUR IS RESOLVED **BEFORE** THE DIFF, AND THE ORDER IS THE CONTRACT ──
+  // The diff compares `color`, so resolving AFTER it would compare a request against
+  // an assignment and report every row as changed on every push — the exact failure
+  // `repository-sessions-columns.ts` describes. It reuses the SELECT above for the
+  // incumbent values and adds one narrow read; `resolveColorsForPush` is the rule.
+  const resolved = await resolveColorsForPush(userId, workspaceId, reported, stored);
+
+  const changed = resolved.filter((r) => {
     const current = stored.get(r.session_key);
     return !current || !sessionRowMatches(current, r);
   });
@@ -440,7 +455,14 @@ export async function replaceSessionStates(
       .from("channel_sessions")
       .upsert(rows, { onConflict: "user_id,session_key" });
     if (error) {
-      const healed = await healDeadThreadRefs(rows, error);
+      // ⚠ **TWO DEGRADES, APPLIED IN SEQUENCE, AND NEITHER GUESSES WHICH CONSTRAINT
+      // FAILED** — each inspects the error and returns the rows UNCHANGED when it is
+      // not the one it knows. See {@link healDeadThreadRefs} and
+      // {@link withoutClaimedColors}.
+      const healed = withoutClaimedColors(
+        await healDeadThreadRefs(rows, error),
+        error
+      );
       const retry = await db
         .from("channel_sessions")
         .upsert(healed, { onConflict: "user_id,session_key" });
@@ -448,7 +470,7 @@ export async function replaceSessionStates(
     }
   }
 
-  const keep = new Set(reported.map((r) => r.session_key));
+  const keep = new Set(resolved.map((r) => r.session_key));
   const gone = [...stored.keys()].filter((key) => !keep.has(key));
   if (gone.length > 0) {
     // Deleted by explicit key through `.in()`, which the client escapes, rather
@@ -461,5 +483,5 @@ export async function replaceSessionStates(
       .in("session_key", gone);
     if (error) throw error;
   }
-  return { stored: reported.length, changed: changed.length, removed: gone.length };
+  return { stored: resolved.length, changed: changed.length, removed: gone.length };
 }

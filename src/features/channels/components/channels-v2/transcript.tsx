@@ -43,6 +43,8 @@
 import { cn } from "@/shared/lib/utils";
 import { ArtifactCard } from "./artifact-card";
 import { AuthoredRow } from "./authored-row";
+import { agentBoxOf } from "./agent-box-rule";
+import { MessageBoxAgent } from "./message-box-agent";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
@@ -289,6 +291,25 @@ function Receipt({ row }: { row: ReceiptRow }) {
  * A paragraph still gets both, in this order, so it is byte-for-byte the `<p>`
  * `transcript-body.test.tsx`'s layout pins measure.
  */
+/**
+ * THE STAMPED ROUTING LINE, as one element both row shapes draw (2026-09-13).
+ *
+ * ⚠ **EXTRACTED WHEN THE BOX ARRIVED, NOT BEFORE.** `authored-row.tsx` renders this
+ * inline and keeps doing so — it owns the BARE row's layout, including the rule that the
+ * tag survives a continuation. The box needs the same two elements with none of that
+ * layout, and the one thing that must not fork is the FACE: `→ ` plus the caller's
+ * already-resolved label, muted and truncating, with the raw `@agent-<id>` on hover
+ * (`message-markdown.tsx › MentionText`'s arrangement). A second spelling of the face is
+ * how one transcript ends up showing an address two ways.
+ */
+function RoutedTag({ face, title }: { face: string; title?: string }) {
+  return (
+    <p className="max-w-full truncate text-micro text-text-muted" title={title}>
+      → {face}
+    </p>
+  );
+}
+
 const MESSAGE_BLOCK = "wrap-anywhere max-w-[92%]";
 const MESSAGE_TEXT = "text-lead text-text-primary";
 
@@ -338,6 +359,55 @@ function Message({
   // live index, exactly like the sender pill's — so a rename re-faces old rows
   // and no body is ever rewritten.
   const routed = routedTagLabel(row.routedAgentIds, index.agents);
+  // ⚠ RESOLVED AT RENDER from the live feed, never read off the row (2026-08-27). A rename
+  // reaches every message an agent has ever posted the moment main pushes the next summary.
+  const agentName = row.agentId
+    ? (index.agents.get(row.agentId)?.displayName ?? null)
+    : null;
+  const body = (
+    <MessageMarkdown
+      text={row.body}
+      index={index}
+      mentionsMe={row.mentionsMe}
+      blockClassName={MESSAGE_BLOCK}
+      textClassName={MESSAGE_TEXT}
+    />
+  );
+  /**
+   * **THE BOX (Samuel, 2026-09-13; docs/specs/agent-colors.md).**
+   *
+   * ⚠ **THE PREDICATE IS `agent-box-rule.ts`'s AND IS NOT RE-SPELLED HERE**, because
+   * `transcript-filter.tsx` asks the identical question to build its "People" option —
+   * Samuel defined that option as *"all of the messages that don't have a colored box
+   * around them"*, which makes the filter the literal complement of this branch. Two
+   * spellings is the filter disagreeing with the paint, and each side would be
+   * self-consistent so neither's tests would notice.
+   *
+   * ⚠ **THE TWO ARMS ARE NOT THE SAME COMPONENT WITH A FLAG.** A boxed row is one post in
+   * one frame with the pill INSIDE a coloured bar; a bare row is a pill ABOVE a body, with
+   * a continuation rule that drops the pill for a RUN and a side rule (§5) that flips the
+   * axis. Those are different layouts, so they are different components, and
+   * `message-box-agent.tsx` deliberately consults neither `continuation` nor `side`.
+   *
+   * ⚠ **THE ROUTED TAG IS INSIDE THE BOX'S BODY, NOT ABOVE THE FRAME.** It is an ADDRESS
+   * belonging to this message (`authored-row.tsx` argues the position), and a `→ @agent`
+   * line floating above a coloured frame would read as chrome about the frame instead.
+   */
+  const box = agentBoxOf(row, index);
+  if (box) {
+    return (
+      <MessageBoxAgent
+        row={row}
+        color={box.color}
+        agentName={agentName}
+        onOpenAgent={openAgent}
+        flash={flash}
+      >
+        {routed !== null && <RoutedTag face={routed.face} title={routed.title} />}
+        {body}
+      </MessageBoxAgent>
+    );
+  }
   return (
     <AuthoredRow
       id={row.id}
@@ -347,9 +417,7 @@ function Message({
       time={row.time}
       agent={row.agent}
       agentId={row.agentId}
-      // ⚠ RESOLVED AT RENDER from the live feed, never read off the row (2026-08-27). A rename
-      // reaches every message an agent has ever posted the moment main pushes the next summary.
-      agentName={row.agentId ? (index.agents.get(row.agentId)?.displayName ?? null) : null}
+      agentName={agentName}
       routedTo={routed?.face ?? null}
       routedTitle={routed?.title}
       continuation={row.continuation}
@@ -361,13 +429,7 @@ function Message({
           handed the renderer one line at a time, which is exactly the shape
           markdown is not. Blank lines still separate blocks — that is the
           paragraph rule, now the lexer's rather than this loop's. */}
-      <MessageMarkdown
-        text={row.body}
-        index={index}
-        mentionsMe={row.mentionsMe}
-        blockClassName={MESSAGE_BLOCK}
-        textClassName={MESSAGE_TEXT}
-      />
+      {body}
     </AuthoredRow>
   );
 }

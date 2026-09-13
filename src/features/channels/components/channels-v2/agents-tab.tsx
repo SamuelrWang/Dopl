@@ -46,7 +46,7 @@ import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/lau
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { cn } from "@/shared/lib/utils";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
-import type { ChannelMember } from "../../types";
+import type { AgentColorKey, ChannelMember } from "../../types";
 import { TAB_ACTION_INK, TAB_ACTION_SHELL } from "./bits";
 import { AgentCard, PeerCards } from "./agents-tab-cards";
 import {
@@ -128,7 +128,11 @@ export function AgentsTab({
      *  per-spawn runtime `use-agents-panel.ts › launchAgent` has taken since
      *  2026-08-27/08-31. The picker's shorter calls are unchanged. */
     agentId?: string,
-    runtime?: string
+    runtime?: string,
+    /** ⚠ THE POPUP'S THIRD EXTRA ARGUMENT (2026-09-13, agent colours) — the colour key, on
+     *  `runtime`'s exact argument. Absent means the server assigns the first free one, never
+     *  "no colour"; the picker's shorter calls stay unchanged. */
+    color?: AgentColorKey
   ) => Promise<AgentLaunchOutcome> | void;
   /** Store a first-use approval for another member's template, machine-locally.
    *  ⚠ Absent ⇒ the approval modal says the build cannot remember it, rather
@@ -199,10 +203,21 @@ export function AgentsTab({
       canLaunch,
       launchBusy,
       launchError,
-      // ⚠ FIVE ARGUMENTS, SPELLED OUT — NOT ROUTED THROUGH {@link launchFromPicker}, whose
+      // ⚠ SIX ARGUMENTS, SPELLED OUT — NOT ROUTED THROUGH {@link launchFromPicker}, whose
       // THREE-argument payload `agents-tab-launch.test.tsx` pins argument for argument.
-      launchAgent: async (threadId, templateId, overrides, agentId, runtime) => {
-        const res = await onLaunchAgent?.(threadId, templateId, overrides, agentId, runtime);
+      // ⚠ **SPELLED OUT RATHER THAN `(...args) => onLaunchAgent?.(...args)`, AND THAT IS THE
+      // POINT OF THE COUNT BEING IN THIS COMMENT**: a rest-spread would forward a seventh
+      // argument nobody had declared, and the failure mode of this lane is a field that LOOKS
+      // wired and sends nothing (2026-09-13: `color` was the sixth to be added this way).
+      launchAgent: async (threadId, templateId, overrides, agentId, runtime, color) => {
+        const res = await onLaunchAgent?.(
+          threadId,
+          templateId,
+          overrides,
+          agentId,
+          runtime,
+          color
+        );
         return res ?? { ok: false, reason: "no-bridge" as const };
       },
       approveTemplate: async (templateId: string) =>
@@ -302,6 +317,17 @@ export function AgentsTab({
       <LaunchAgentDialog
         panel={launch}
         newAgent={launchControls}
+        /* ⚠ **THE TAKEN SET, AND `peers` IS THE RIGHT SOURCE PRECISELY BECAUSE IT IS NOT
+           FILTERED** (2026-09-13; docs/specs/agent-colors.md item 7). This prop is the WHOLE
+           channel projection — every member's live rows, the operator's own included — and the
+           own-exclusion this tab applies happens downstream, in `peerCardsFor` for the CARDS.
+           A colour is unique across members AND across one operator's own agents, so the
+           unfiltered set is exactly what the circles must grey out; handing `peerCards` here
+           would let the operator pick the key their own other agent is already wearing.
+           ⚠ ITS `color` RIDES `ChannelSessionState` (peer-visible by design), so this costs no
+           new read — and the popup's answer is advisory either way: uniqueness is decided by
+           `20261005120000`'s index, never by this list. */
+        liveSessions={peers}
         openThreadId={openThreadId ?? null}
         channelId={channelId}
         workspaceId={workspaceId}

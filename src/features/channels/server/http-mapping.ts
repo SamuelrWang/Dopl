@@ -28,6 +28,7 @@ import {
   EscalationNotFoundError,
   LaunchDirectiveNotClaimableError,
   LaunchDirectiveNotFoundError,
+  AgentColorTakenError,
   LaunchTemplateAmbiguousError,
   LaunchTemplateNotFoundError,
   TaskForbiddenError,
@@ -153,6 +154,17 @@ function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof LaunchTemplateAmbiguousError) {
     return new HttpError(409, "AGENT_TEMPLATE_AMBIGUOUS", err.message, {
       matches: err.matches,
+    });
+  }
+  // ⚠ 409 WITH `details.free`, on {@link LaunchTemplateAmbiguousError}'s own argument:
+  // a refusal the caller cannot act on sends them back for facts this response already
+  // holds. ⚠ 409 AND NOT 400 — the payload is perfectly valid, the WORLD is the
+  // problem, and a 400 would tell an orchestrator to fix its call rather than pick
+  // again. ⚠ `free` MAY BE EMPTY (a room with all sixteen out), which is the honest
+  // answer and not an error shape of its own.
+  if (err instanceof AgentColorTakenError) {
+    return new HttpError(409, "AGENT_COLOR_TAKEN", err.message, {
+      free: err.free,
     });
   }
   // SIX ARMS ENDED HERE (channels rollback §1) and each was a named-agent or

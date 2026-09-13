@@ -81,6 +81,7 @@ import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
 import { indexMembers, viewerPerson } from "./view-model";
+import type { AgentColorKey } from "../../types";
 import { answersByEscalation } from "./view-model-escalation";
 // ⚠ THE CONTROL STRIP IS ITS OWN FILE since 2026-08-22 (`agent-panel-controls.tsx`),
 // split at the 500-line cap when the composer landed — and on the COMMANDS seam,
@@ -174,12 +175,15 @@ export function ChannelsV2AgentPanel({
   answerBusy,
   currentUserId,
   workspaceSlug = "",
-  full = false,
+  full = false, color = null,
   onClose,
   onRefreshSessions,
 }: {
   /** `agentKey(session)` of the open agent, or `null` for closed. */
   openAgent: string | null;
+  /** THE BANNER'S FILL (2026-09-13) — ⚠ resolved by the HOST off `channel-surface-data.ts ›
+   *  liveAgents`, never from {@link sessions}: only the SERVER assigns a key. Rule: §5. */
+  color?: AgentColorKey | null;
   sessions: readonly DesktopSessionSummary[] | null;
   /** The open channel's transcript — the source of the Sent lane. */
   messages: readonly ChannelMessage[];
@@ -338,25 +342,18 @@ export function ChannelsV2AgentPanel({
             onRefreshSessions={onRefreshSessions}
             stats={<AgentStats agent={agent} />}
           />
-          {/* ⚠ THE FULL STREAM, NOT A SENT-LANE (Samuel, 2026-08-22). The panel
-              showed only what the agent had POSTED, which is the one lane that
-              says least about what it is doing — an agent mid-tool-run read as an
-              agent doing nothing. It now shares the window's stream whole
-              (`agent-stream.tsx`); the panel is the same content at another
-              width, not a different question.
-              ⚠ `agent.agentId` IS THE FOURTH ARGUMENT (F-251): the panel is
-              opened FROM one card, so a lane carrying its siblings' posts answers
-              a click about a different agent. Narration is keyed on the same id
-              (F-250), so both halves of the stream are this agent's. */}
+          {/* ⚠ THE FULL STREAM, NOT A SENT-LANE (Samuel, 2026-08-22). The panel showed only what
+              the agent had POSTED, the one lane that says least about what it is doing — an agent
+              mid-tool-run read as an agent doing nothing. It now shares the window's stream whole
+              (`agent-stream.tsx`): the same content at another width, not a different question.
+              ⚠ `agent.agentId` IS THE FOURTH ARGUMENT (F-251): the panel is opened FROM one card,
+              so a lane carrying its siblings' posts answers a click about a different agent.
+              Narration is keyed on the same id (F-250), so both halves are this agent's. */}
           <AgentStream
+            color={color}
             entries={narration.entries}
             supported={narration.supported}
-            sent={agentSentMessages(
-              messages,
-              agent.taskId,
-              currentUserId,
-              agent.agentId
-            )}
+            sent={agentSentMessages(messages, agent.taskId, currentUserId, agent.agentId)}
             // ⚠ THE UNFILTERED TRANSCRIPT, BESIDE THE FILTERED ONE (2026-08-25).
             // `agentSentMessages` requires `metadata.taskId`, which a threadless
             // post does not carry — so it cannot answer "did this draft land",

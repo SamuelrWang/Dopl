@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
+import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
 import type {
+  AgentColorKey,
   LaunchMessageMode,
   LaunchRefusalReason,
   LaunchToolMode,
@@ -197,6 +199,23 @@ export const LaunchCreateSchema = z.object({
    * expressible in the first place).
    */
   clientMsgId: z.string().min(1).max(200).optional(),
+  /**
+   * **THE COLOUR THE NEW AGENT SHOULD WEAR IN THIS CHANNEL** (2026-09-13,
+   * `20261005120000`).
+   *
+   * ⚠ **OMITTING IT IS THE ORDINARY CASE AND MEANS "PICK FOR ME"** — the server takes
+   * the FIRST FREE key (`lib/agent-colors.ts › firstFreeAgentColor`), which is what
+   * every launch filed before this wave effectively did. It is NOT "no colour": an
+   * agent with no colour is a room whose sixteen keys are all out, and that is a fact
+   * about the room rather than a choice a caller can express.
+   * ⚠ **A NAMED KEY THAT IS TAKEN IS A 409 WITH THE FREE SET**, never a silent
+   * substitution — `server/errors.ts › AgentColorTakenError` argues why this lane
+   * refuses where the push lane substitutes.
+   * ⚠ A `closedEnum` over the sixteen, matching the two column CHECKs character for
+   * character: the set is OURS (two CSS files), so a value outside it is a caller
+   * error worth naming rather than a newer machine's vocabulary to tolerate.
+   */
+  color: closedEnum<AgentColorKey>()(AGENT_COLOR_KEYS).optional(),
 });
 export type LaunchCreateInput = z.infer<typeof LaunchCreateSchema>;
 

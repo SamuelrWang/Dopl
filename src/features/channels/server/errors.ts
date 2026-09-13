@@ -426,6 +426,40 @@ export class LaunchTemplateNotFoundError extends ChannelError {
 }
 
 /**
+ * **A LAUNCH NAMED A COLOUR ANOTHER LIVE AGENT IN THIS CHANNEL ALREADY HOLDS**
+ * (2026-09-13; Samuel: *"we need to make sure their agents should be pulled from the
+ * color"*).
+ *
+ * ⚠ **A REFUSAL RATHER THAN A SILENT SUBSTITUTION, AND ONLY ON THIS LANE.** The
+ * caller NAMED a key, so quietly starting their agent in a different colour would
+ * mean the one thing they were specific about is the one thing that did not happen.
+ * (Contrast the PUSH lane, where a collision IS resolved silently: there the colour
+ * was chosen minutes ago in a popup against a set that has since moved, and the
+ * alternative to substituting is discarding a machine's whole projection —
+ * `server/session-colors.ts` argues both directions.)
+ *
+ * ⚠ **THE FREE SET RIDES ON THE ERROR AND IS NOT AN ORACLE.** It is sixteen minus
+ * whatever is out in a channel the caller has already proved they are a MEMBER of,
+ * and every colour in it is drawn on that caller's own transcript anyway. Without it
+ * the refusal forces a guess or a second tool call for facts already in hand — the
+ * same argument {@link LaunchTemplateAmbiguousError} makes for its match list.
+ *
+ * ⚠ IT IS NOT A RESERVATION. By the time the operator's machine claims the directive
+ * a key in this list may be gone; the authority is
+ * `channel_sessions_channel_color_live_key` and nothing else.
+ */
+export class AgentColorTakenError extends ChannelError {
+  constructor(
+    public readonly color: string,
+    public readonly free: readonly string[]
+  ) {
+    super(
+      `Agent colour ${color} is already in use by a live agent in this channel`
+    );
+  }
+}
+
+/**
  * A directive named a template by NAME and more than one visible template
  * carries it (2026-08-23).
  *

@@ -19,6 +19,9 @@
  */
 
 import { Bot, CornerDownRight } from "lucide-react";
+import { AgentColorDot } from "./agent-color-dot";
+import { agentColorOrNull } from "../../lib/agent-colors";
+import type { AgentColorKey } from "../../types";
 import { AgentName } from "./agent-rename";
 import { AgentDeleteButton } from "./agent-delete";
 import { Avatar } from "@/shared/ui/avatar";
@@ -102,6 +105,15 @@ export function PeerCards({
               ) : (
                 <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
               )}
+              {/* ⚠ **BEFORE THE NAME, AND OFF THE PROJECTION THIS CARD ALREADY HAS**
+                  (Samuel, 2026-09-13; docs/specs/agent-colors.md item 8). `peer.color` rides
+                  `ChannelSessionState` — peer-visible by design, which is the entire ruling:
+                  *"this will be categorized not only for the own users' agents, but also for
+                  other users' agents."* No new read, and no colour is derived here.
+                  ⚠ NO GATE ON LIVENESS: an ended peer row never reaches the wire at all
+                  (`main/session-state-push.js › liveForWire`), so every row on this card is
+                  live by construction and a `state` test would be dead code. */}
+              <AgentColorDot color={agentColorOrNull(peer.color)} />
               <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
                 {/* ⚠ THE PEER'S OWN NAME FOR IT, when their desktop reported one
                     (2026-08-31, `channel_sessions.display_name` — Samuel's ruling:
@@ -146,9 +158,26 @@ export function AgentCard({
   agent,
   owner = null,
   viewing,
+  color = null,
   onOpen,
 }: {
   agent: DesktopSessionSummary;
+  /**
+   * **THIS AGENT'S COLOUR, SUPPLIED BY THE HOST** (2026-09-13; docs/specs/agent-colors.md
+   * item 8).
+   *
+   * ⚠ **IT IS A PROP AND NOT A FIELD ON {@link agent}, WHICH IS THE OPPOSITE OF HOW
+   * `templateName` AND `diag` ABOVE WORK, AND THE REASON IS WORTH KEEPING STRAIGHT.** Those
+   * two are OWN-ONLY because the local feed is the only thing that knows them. A colour is
+   * the other way round: it is the SERVER's assignment against every member's live agents
+   * (`20261005120000`'s per-channel unique index), so `DesktopSessionSummary` — this
+   * machine's own feed — is the one source that CANNOT know it. The host reads it off the
+   * peer ∪ own union (`channel-surface-data.ts › liveAgents`).
+   *
+   * ⚠ `null` DRAWS NOTHING, never a placeholder — `agent-color-dot.tsx` argues why an
+   * ended agent gets no grey mark on a list like this one.
+   */
+  color?: AgentColorKey | null;
   /** The card's owner (me) — every card wears its member's avatar (2026-08-20). */
   owner?: ChannelMember | null;
   viewing: boolean;
@@ -189,6 +218,13 @@ export function AgentCard({
         ) : (
           <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
         )}
+        {/* ⚠ BEFORE THE NAME, exactly as on the peer cards above — the mark has to sit in
+            the same place on both shapes or it stops being one mark. ⚠ AND IT IS NOT GATED
+            ON `ended` HERE EITHER, for a different reason than the peer block's: an ENDED
+            agent's key is already back in the bank, so the host resolves `null` for it
+            (`view-model.ts › indexAgents` forces it) and the dot is absent WITHOUT this file
+            re-deciding the bank rule. */}
+        <AgentColorDot color={color} />
         {/* ⚠ THE OWN card renames; the PEER cards above do not and must not. A colleague's
             agent is named on THEIR machine, and this write reaches only this one. */}
         <AgentName agentId={agent.agentId} name={agentDisplayName(agent)} />

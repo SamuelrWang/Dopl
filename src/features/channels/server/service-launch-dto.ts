@@ -115,6 +115,12 @@ export function toDirective(
     // blamed for it.
     templateId: row.template_id,
     templateName: row.template_name,
+    // ⚠ ON THE DTO OR THE DESKTOP NEVER SEES IT — the CLAIM's answer IS this mapper's
+    // output, so a colour mapped nowhere is a parameter the spawn cannot read (the
+    // exact failure the eight posture columns below record). ⚠ `?? null` on the
+    // stale-cache rule this file states twice already: a payload cached against an
+    // older PostgREST schema arrives without the field.
+    color: (row.color ?? null) as LaunchDirective["color"],
     // ⚠ THE INPUT PAIR, beside the template pair and never confused with
     // `agentId` below, which is the OUTPUT. `?? null` rather than a bare read for
     // the stale-cache reason the `kind` note above states: a cached payload from

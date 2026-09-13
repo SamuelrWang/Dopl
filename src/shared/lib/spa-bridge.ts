@@ -153,11 +153,10 @@ export interface SpaBridgeSurface {
       agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
     /**
-     * THE AGENT WINDOW (F-212's closure) — a second window on this bundle
-     * showing one of MY agents: its live work, what it sent, and a composer.
-     * ⚠ ASKS FOR A WINDOW; DOES NOT GET ONE. No handle comes back — main creates
-     * and registers it (`main/app-windows.js`), which is what makes the widened
-     * sender binding safe.
+     * THE AGENT WINDOW (F-212's closure) — a second window on this bundle showing one of MY
+     * agents: its live work, what it sent, and a composer. ⚠ ASKS FOR A WINDOW; DOES NOT GET ONE.
+     * No handle comes back — main creates and registers it (`main/app-windows.js`), which is what
+     * makes the widened sender binding safe.
      */
     openAgentWindow?(
       segment: string,
@@ -191,26 +190,21 @@ export interface SpaBridgeSurface {
       agentId?: string
     ): Promise<{ ok: boolean; reason?: string }>;
     /**
-     * Move a LIVE session's permission posture. Applies from the very next gate
-     * decision — `session-io.js › grantArgs` reads both axes off the reducer
-     * state at CALL time, so moving that state IS the change.
+     * Move a LIVE session's permission posture. Applies from the very next gate decision —
+     * `session-io.js › grantArgs` reads both axes off the reducer state at CALL time, so moving
+     * that state IS the change.
      *
-     * ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT: the axes decide whether the
-     * operator is ASKED; the profile decides what is reachable at all, is
-     * checked first, and no posture can widen it. The answer carries MAIN's own
-     * post-dispatch values, never an echo of the request — the reducer coerces
-     * fail-closed and a renderer that stamped its own ask would show a posture
-     * nothing is enforcing.
-     */
-    /**
-     * RENAME ONE AGENT — display only (2026-08-25). An EMPTY name CLEARS it, which is how the
-     * operator goes back to `Agent #<id>`.
+     * ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT: the axes decide whether the operator is ASKED;
+     * the profile decides what is reachable at all, is checked first, and no posture can widen
+     * it. The answer carries MAIN's own post-dispatch values, never an echo of the request — the
+     * reducer coerces fail-closed and a renderer that stamped its own ask would show a posture
+     * nothing is enforcing. / /** RENAME ONE AGENT — display only (2026-08-25). An EMPTY name
+     * CLEARS it, which is how the operator goes back to `Agent #<id>`.
      *
-     * ⚠ THE ANSWER CARRIES MAIN'S OWN STORED VALUE, never an echo of the ask: a refused name
-     * (too long, or carrying control / zero-width / bidi characters) comes back `ok: false` so
-     * the field can revert rather than paint a name the machine did not take. Same rule
-     * `setMode` / `setModel` follow.
-     * ⚠ Feature-detect it — an older main has no handler.
+     * ⚠ THE ANSWER CARRIES MAIN'S OWN STORED VALUE, never an echo of the ask: a refused name (too
+     * long, or carrying control / zero-width / bidi characters) comes back `ok: false` so the
+     * field can revert rather than paint a name the machine did not take. Same rule `setMode` /
+     * `setModel` follow. ⚠ Feature-detect it — an older main has no handler.
      */
     rename?(
       agentId: string,
@@ -364,23 +358,25 @@ export interface SpaBridgeSurface {
        */
       templateId?: string | null;
       /**
-       * THIS SPAWN's ephemeral re-points, from the launch sheet. Never written back to
-       * the template.
+       * THIS SPAWN's ephemeral re-points, from the launch sheet. Never written back to the template.
        *
-       * ⚠ ABSENT IS THE ONLY SPELLING OF "NO OVERRIDE", on both keys — so an untouched
-       * sheet and a plain row click produce identical launches.
-       * ⚠ `fields` REPLACES the template's own set; it is never merged.
-       * ⚠ MAIN RE-VALIDATES ALL OF IT (F-281): `@/shared/lib/safe-label` imports zod, so
-       * no renderer surface can hold `SAFE_LABEL_RE` and this side enforces only the
-       * numbers. `main/template-resolve.js › narrowOverrides` applies the charset rule
-       * and DROPS a row that fails it.
+       * ⚠ ABSENT IS THE ONLY SPELLING OF "NO OVERRIDE", on both keys — so an untouched sheet and a
+       * plain row click produce identical launches. ⚠ `fields` REPLACES the template's own set; it
+       * is never merged. ⚠ MAIN RE-VALIDATES ALL OF IT (F-281): `@/shared/lib/safe-label` imports
+       * zod, so no renderer surface can hold `SAFE_LABEL_RE` and this side enforces only the
+       * numbers. `main/template-resolve.js › narrowOverrides` applies the charset rule and DROPS a
+       * row that fails it.
        */
       overrides?: {
         model?: string | null;
         fields?: { key: string; value: string }[];
       };
-      /** THIS SPAWN's runtime. Argument + absence rule: `channels-v2/agents-controls.ts › launchAgentOnThread`. */
+      /** THIS SPAWN's runtime, and THIS AGENT's COLOUR. Same contract: forwarded raw, re-narrowed
+       *  in `main/` (`session-launch-op.js`), absence means the machine/server decides. Argument +
+       *  absence rule for both: `channels-v2/agents-controls.ts › launchAgentOnThread`. ⚠ `color` is
+       *  a STRING, not the key union — `main/` cannot import it. */
       runtime?: string;
+      color?: string;
     }): Promise<{
       ok: boolean;
       agentId?: string;
