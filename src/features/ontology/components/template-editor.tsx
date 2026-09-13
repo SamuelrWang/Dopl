@@ -1,15 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { Dispatch } from "react";
 import { cn } from "@/shared/lib/utils";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import type { GraphAction } from "../graph-state";
 import type { OntologyObject, TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
-import { PANEL_ADD_ROW, PanelSection, ROW_REMOVE_BUTTON } from "./panel-section";
+import {
+  PANEL_ROW,
+  PANEL_WELL,
+  PanelAddButton,
+  PanelSection,
+  ROW_REMOVE_BUTTON,
+  useDraftRows,
+} from "./panel-section";
 
 /** ⚠ Shared with the column header card's read-only template preview — two
  *  renderings of a field's kind must not drift. */
@@ -37,9 +42,18 @@ export const KIND_OPTIONS: ReadonlyArray<SelectMenuOption<TemplateField["kind"]>
  * definitions, so there is no value cell, just label + kind.
  *
  * ⚠ **FLAT SINCE 2026-09-12** (Samuel, over the object panel: *"no more indented
- * stuff"*) — `PanelSection` instead of `SectionBox`, its rows at the panel's own
- * padding, the kind picker a `SelectMenu` text face instead of a native
- * `<select>` in an inset well, and no divider grid: one column of rows.
+ * stuff"*) — `PanelSection` instead of `SectionBox`, the kind picker a `SelectMenu`
+ * text face instead of a native `<select>` in an inset well, and no divider grid.
+ *
+ * ⚠ **AND ONE WHITE BAR PER FIELD ON A GRAY WELL SINCE 2026-09-13** — the same
+ * recipe the other three sections took, and not a return of the frame
+ * (`panel-section.tsx › PanelSection`). `+ Add` under the rows appends an EMPTY
+ * bar with both cells on it; the field is written on the label's blur (or Enter),
+ * because a nameless default field has no `key` to be addressed by.
+ *
+ * ⚠ A draft whose label matches an existing field UPDATES that field instead of
+ * appending — `addField`'s upsert-by-label, kept from the composer it replaced —
+ * so the new bar disappears and the row above it takes the kind.
  */
 export function TemplateEditor({
   column,
@@ -50,92 +64,118 @@ export function TemplateEditor({
   dispatch: Dispatch<GraphAction>;
   canEdit?: boolean;
 }) {
-  const [newLabel, setNewLabel] = useState("");
-  const [newKind, setNewKind] = useState<TemplateField["kind"]>("text");
+  const { drafts, add, patch, drop } = useDraftRows<Omit<TemplateField, "key">>(() => ({
+    label: "",
+    kind: "text",
+  }));
+
+  // ⚠ HOISTED, NOT INLINED IN THE KEY. `vocabulary.test.ts` reads every string
+  // literal in this feature for the words the reader must never see, and a
+  // template literal holding `column.template.length` is one of them.
+  const saved = column.template.length;
 
   const setTemplate = (template: TemplateField[]) =>
     dispatch({ type: "OBJECT_UPDATE", id: column.id, patch: { template } });
 
   // ⚠ Upsert by label (case-insensitive) to match MCP `set_template_field`
   // semantics — no duplicate default fields.
-  const addField = () => {
-    const label = newLabel.trim();
+  const addField = (index: number, row: Omit<TemplateField, "key">) => {
+    const label = row.label.trim();
     if (!label) return;
     const needle = label.toLowerCase();
     const existing = column.template.find((f) => f.label.toLowerCase() === needle);
     setTemplate(
       existing
-        ? column.template.map((f) => (f === existing ? { ...f, label, kind: newKind } : f))
+        ? column.template.map((f) => (f === existing ? { ...f, label, kind: row.kind } : f))
         : [
             ...column.template,
-            { key: label.toLowerCase().replace(/\s+/g, "-"), label, kind: newKind },
+            { key: label.toLowerCase().replace(/\s+/g, "-"), label, kind: row.kind },
           ]
     );
-    setNewLabel("");
+    drop(index);
   };
 
   return (
-    <PanelSection label="Default fields" meta={`${column.template.length}`}>
+    <PanelSection label="Default fields">
       <p className="text-caption text-text-muted">
         New objects of this type start with these fields, ready to fill.
       </p>
-      {column.template.map((field, i) => (
-        <div key={`${field.key}-${i}`} className="group flex items-center gap-3">
-          <InlineUnderlineField
-            label="Field label"
-            value={field.label}
-            readOnly={!canEdit}
+      <div className={PANEL_WELL}>
+        {column.template.map((field, i) => (
+          <FieldRow
+            key={`row-${i}`}
+            row={field}
+            canEdit={canEdit}
             onChange={(next) =>
-              setTemplate(column.template.map((f, j) => (j === i ? { ...f, label: next } : f)))
+              setTemplate(column.template.map((f, j) => (j === i ? { ...f, ...next } : f)))
             }
-            className="min-w-0 flex-1"
+            onRemove={() => setTemplate(column.template.filter((_, j) => j !== i))}
           />
-          <SelectMenu
-            value={field.kind}
-            options={KIND_OPTIONS}
-            disabled={!canEdit}
-            onChange={(kind) =>
-              setTemplate(column.template.map((f, j) => (j === i ? { ...f, kind } : f)))
-            }
-            variant="text"
-            ariaLabel={`Kind of ${field.label}`}
-            className="shrink-0"
+        ))}
+        {drafts.map((row, n) => (
+          <FieldRow
+            key={`row-${saved + n}`}
+            row={row}
+            canEdit={canEdit}
+            onChange={(next) => patch(n, next)}
+            onCommit={() => addField(n, row)}
+            onRemove={() => drop(n)}
           />
-          {canEdit && (
-            <button
-              type="button"
-              aria-label={`Remove ${field.label}`}
-              onClick={() => setTemplate(column.template.filter((_, j) => j !== i))}
-              className={ROW_REMOVE_BUTTON}
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-      ))}
-      {canEdit && (
-        <div className={PANEL_ADD_ROW}>
-          <InlineUnderlineField
-            label="New default field"
-            value={newLabel}
-            onChange={setNewLabel}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") addField();
-            }}
-            className="w-40"
-          />
-          <SelectMenu
-            value={newKind}
-            options={KIND_OPTIONS}
-            onChange={setNewKind}
-            variant="text"
-            ariaLabel="Field kind"
-          />
-          <button type="button" onClick={addField} className={cn(SMALL_TEXT_BUTTON, "gap-1")}>
-            <Plus size={11} /> Add
-          </button>
-        </div>
-      )}
+        ))}
+        {canEdit && <PanelAddButton onClick={add} />}
+      </div>
     </PanelSection>
+  );
+}
+
+/** ONE DEFAULT FIELD, PERSISTED OR DRAFT — one component for both, so a commit
+ *  reconciles in place (`panel-section.tsx › useDraftRows`). */
+function FieldRow({
+  row,
+  canEdit,
+  onChange,
+  onCommit,
+  onRemove,
+}: {
+  row: Omit<TemplateField, "key">;
+  canEdit: boolean;
+  onChange: (row: Omit<TemplateField, "key">) => void;
+  /** DRAFT ONLY — fires on the label's blur and on Enter. */
+  onCommit?: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className={cn(PANEL_ROW, "group flex flex-wrap items-center gap-2")}>
+      <InlineUnderlineField
+        label="Field label"
+        value={row.label}
+        readOnly={!canEdit}
+        onChange={(label) => onChange({ ...row, label })}
+        onBlur={onCommit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onCommit?.();
+        }}
+        className="min-w-0 flex-1"
+      />
+      <SelectMenu
+        value={row.kind}
+        options={KIND_OPTIONS}
+        disabled={!canEdit}
+        onChange={(kind) => onChange({ ...row, kind })}
+        variant="text"
+        ariaLabel="Field kind"
+        className="shrink-0"
+      />
+      {canEdit && (
+        <button
+          type="button"
+          aria-label={`Remove ${row.label}`}
+          onClick={onRemove}
+          className={ROW_REMOVE_BUTTON}
+        >
+          <X size={12} />
+        </button>
+      )}
+    </div>
   );
 }

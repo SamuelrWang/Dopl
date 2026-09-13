@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
 import { cn } from "@/shared/lib/utils";
@@ -8,32 +7,60 @@ import { SelectMenu } from "@/shared/ui/select-menu";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphAction, GraphState } from "../graph-state";
-import type { OntologyObject } from "../types";
+import type { AttributeValue, OntologyObject } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
 import { KnowledgePickMenu } from "./knowledge-pick-menu";
 import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP } from "./ontology-bits";
-import { PANEL_ADD_ROW, PanelSection, ROW_REMOVE_BUTTON } from "./panel-section";
+import {
+  PANEL_ROW,
+  PANEL_WELL,
+  PanelAddButton,
+  PanelSection,
+  ROW_REMOVE_BUTTON,
+  useDraftRows,
+} from "./panel-section";
 import { KIND_OPTIONS } from "./template-editor";
 import { PickMenu } from "./pick-menu";
 
-type AttrKind = OntologyObject["attributes"][number]["value"]["kind"];
+type AttrKind = AttributeValue["kind"];
 
-type Attribute = OntologyObject["attributes"][number];
+/** A row's EDITABLE HALF — what a person types. The persisted attribute carries
+ *  a `key` beside it; a draft has none yet, and the two render identically. */
+type AttrRowValue = { label: string; value: AttributeValue };
 
 /**
- * Attributes section — editable key/value rows, labels edit in place. Value
- * kinds: text, tag, object refs (cascade picker), and access-gated knowledge /
- * skills (PickMenu offers only resources the caller can see).
+ * Attributes section — one WHITE BAR per attribute on the section's gray well,
+ * each bar showing all three cells at once: the label, the KIND, the value.
+ * Value kinds: text, tag, object refs (cascade picker), and access-gated
+ * knowledge / skills (PickMenu offers only resources the caller can see).
  *
- * ⚠ **FLAT SINCE 2026-09-12** (Samuel, over the object panel: *"no more indented
- * stuff"*). What went: the `SectionBox` frame, the concave body, the resize grip,
- * the `bento` card each row sat on, and every `FIELD_WELL` — a text row is the
- * popup kit's UNDERLINE now (`board-header-bits.tsx › InlineUnderlineField`, the
- * board header's own field, imported not re-cut), the kind picker is a
- * `SelectMenu` text face, and the pickers and Add wear `SMALL_TEXT_BUTTON` at the
- * 30px scale rather than a raised `btn-light` pill. ⚠ The CHIPS stay chips: a
- * knowledge / skill / object value is a removable TOKEN, not a field.
+ * ⚠ **EVERY CELL EXISTS FROM THE MOMENT THE ROW DOES (Samuel, 2026-09-13:
+ * *"right now … I see the word 'new attribute' … I have to put text into 'new
+ * attribute', and when I click 'Add', the field for value comes up. I don't like
+ * this. For each line, we should see: the new attribute name, the key, the value
+ * field"*).** The add COMPOSER is deleted: `+ Add` under the rows appends an empty
+ * bar (`panel-section.tsx › useDraftRows`) and the value cell is there to type in
+ * before the label is.
+ *
+ * ⚠ **"THE KEY" IS THE KIND PICKER.** `ObjectAttribute.key` is the label SLUGGED
+ * at creation — the address MCP writes at (`set_attribute`), not a cell — and it
+ * is deliberately still not on screen; the second column a person sees and sets
+ * is `value.kind`, which every persisted row now carries too (it used to exist
+ * only in the composer, so an attribute's kind could be chosen once and never
+ * changed).
+ *
+ * ⚠ **CHANGING THE KIND EMPTIES THE VALUE, EXCEPT text↔tag.** Those two are both
+ * one string and it survives; every other pair is a list of ids of a different
+ * KIND of thing, and carrying ids across would keep a knowledge id in a `ref`.
+ *
+ * ⚠ **FLAT SINCE 2026-09-12** (Samuel: *"no more indented stuff"*), and the well
+ * is not a return of the frame — see `panel-section.tsx › PanelSection`. Text
+ * rows are the popup kit's UNDERLINE (`board-header-bits.tsx ›
+ * InlineUnderlineField`, imported not re-cut), kind is a `SelectMenu` text face,
+ * pickers wear `SMALL_TEXT_BUTTON`, and no `FIELD_WELL` survives anywhere here.
+ * ⚠ The CHIPS stay chips: a knowledge / skill / object value is a removable
+ * TOKEN, not a field.
  */
 export function AttributesEditor({
   object,
@@ -46,87 +73,64 @@ export function AttributesEditor({
   dispatch: Dispatch<GraphAction>;
   canEdit?: boolean;
 }) {
-  const [newLabel, setNewLabel] = useState("");
-  const [newKind, setNewKind] = useState<AttrKind>("text");
+  const { drafts, add, patch, drop } = useDraftRows<AttrRowValue>(() => ({
+    label: "",
+    value: { kind: "text", value: "" },
+  }));
 
-  const addAttribute = () => {
-    const label = newLabel.trim();
+  /** ⚠ THE SAME `ATTRIBUTE_UPSERT` THE COMPOSER DISPATCHED, key slugged the same
+   *  way — the row is new, the write path is not. An unnamed row stays a draft. */
+  const commit = (index: number, row: AttrRowValue) => {
+    const label = row.label.trim();
     if (!label) return;
-    const value: Attribute["value"] =
-      newKind === "text" || newKind === "pill"
-        ? { kind: newKind, value: "" }
-        : { kind: newKind, value: [] };
     dispatch({
       type: "ATTRIBUTE_UPSERT",
       id: object.id,
       index: null,
-      attribute: { key: label.toLowerCase().replace(/\s+/g, "-"), label, value },
+      attribute: { key: label.toLowerCase().replace(/\s+/g, "-"), label, value: row.value },
     });
-    setNewLabel("");
+    drop(index);
   };
 
+  if (object.attributes.length === 0 && !canEdit) {
+    return <PanelSection label="Attributes">{null}</PanelSection>;
+  }
+
   return (
-    <PanelSection label="Attributes" meta={`${object.attributes.length}`}>
-      {object.attributes.map((attr, i) => (
-        <div key={`${attr.key}-${i}`} className="group flex items-center gap-3">
-          <InlineUnderlineField
-            label="Attribute label"
-            value={attr.label}
-            readOnly={!canEdit}
-            onChange={(label) =>
+    <PanelSection label="Attributes">
+      <div className={PANEL_WELL}>
+        {object.attributes.map((attr, i) => (
+          <AttrRow
+            key={`row-${i}`}
+            row={attr}
+            object={object}
+            graph={graph}
+            canEdit={canEdit}
+            onChange={(row) =>
               dispatch({
                 type: "ATTRIBUTE_UPSERT",
                 id: object.id,
                 index: i,
-                attribute: { ...attr, label },
+                attribute: { ...attr, ...row },
               })
             }
-            className="w-32 shrink-0"
+            onRemove={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
           />
-          <AttrValueEditor
-            attr={attr}
+        ))}
+        {drafts.map((row, n) => (
+          <AttrRow
+            key={`row-${object.attributes.length + n}`}
+            row={row}
             object={object}
             graph={graph}
             canEdit={canEdit}
-            onChange={(attribute) =>
-              dispatch({ type: "ATTRIBUTE_UPSERT", id: object.id, index: i, attribute })
-            }
+            onChange={(next) => patch(n, next)}
+            onCommit={() => commit(n, row)}
+            onRemove={() => drop(n)}
           />
-          {canEdit && (
-            <button
-              type="button"
-              aria-label={`Remove ${attr.label}`}
-              onClick={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
-              className={ROW_REMOVE_BUTTON}
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-      ))}
-      {canEdit && (
-        <div className={PANEL_ADD_ROW}>
-          <InlineUnderlineField
-            label="New attribute"
-            value={newLabel}
-            onChange={setNewLabel}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") addAttribute();
-            }}
-            className="w-36"
-          />
-          <SelectMenu
-            value={newKind}
-            options={KIND_OPTIONS}
-            onChange={setNewKind}
-            variant="text"
-            ariaLabel="Attribute type"
-          />
-          <button type="button" onClick={addAttribute} className={cn(SMALL_TEXT_BUTTON, "gap-1")}>
-            <Plus size={11} /> Add
-          </button>
-        </div>
-      )}
+        ))}
+        {canEdit && <PanelAddButton onClick={add} />}
+      </div>
     </PanelSection>
   );
 }
@@ -134,20 +138,100 @@ export function AttributesEditor({
 /** The 30px text face every picker trigger in this panel wears. */
 const PICK_TRIGGER = cn(SMALL_TEXT_BUTTON, "gap-1");
 
+/**
+ * ONE ATTRIBUTE, PERSISTED OR DRAFT — **ONE COMPONENT FOR BOTH**, which is what
+ * makes the commit invisible: the draft at index N is reconciled into the
+ * persisted row at index N (`panel-section.tsx › useDraftRows`), so the caret
+ * stays where it was.
+ *
+ * ⚠ `onCommit` is the DRAFT's only extra: it fires on the label's blur and on
+ * Enter. A persisted row needs none — its `onChange` already dispatches.
+ */
+function AttrRow({
+  row,
+  object,
+  graph,
+  canEdit,
+  onChange,
+  onCommit,
+  onRemove,
+}: {
+  row: AttrRowValue;
+  object: OntologyObject;
+  graph: GraphState;
+  canEdit: boolean;
+  onChange: (row: AttrRowValue) => void;
+  onCommit?: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className={cn(PANEL_ROW, "group flex flex-wrap items-center gap-2")}>
+      <InlineUnderlineField
+        label="Attribute label"
+        value={row.label}
+        readOnly={!canEdit}
+        onChange={(label) => onChange({ ...row, label })}
+        onBlur={onCommit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onCommit?.();
+        }}
+        className="w-24 shrink-0"
+      />
+      <SelectMenu
+        value={row.value.kind}
+        options={KIND_OPTIONS}
+        disabled={!canEdit}
+        onChange={(kind) => onChange({ ...row, value: emptyValueOf(kind, row.value) })}
+        variant="text"
+        ariaLabel="Attribute type"
+        className="shrink-0"
+      />
+      <AttrValueEditor
+        row={row}
+        object={object}
+        graph={graph}
+        canEdit={canEdit}
+        onChange={onChange}
+      />
+      {canEdit && (
+        <button
+          type="button"
+          aria-label={`Remove ${row.label}`}
+          onClick={onRemove}
+          className={ROW_REMOVE_BUTTON}
+        >
+          <X size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A fresh value of `kind`. ⚠ text↔tag keep the string; every other switch
+ *  starts empty rather than reinterpreting one sort of id as another. */
+function emptyValueOf(kind: AttrKind, from: AttributeValue): AttributeValue {
+  const text = from.kind === "text" || from.kind === "pill" ? from.value : "";
+  if (kind === "text") return { kind: "text", value: text };
+  if (kind === "pill") return { kind: "pill", value: text };
+  if (kind === "ref") return { kind: "ref", value: [] };
+  if (kind === "knowledge") return { kind: "knowledge", value: [] };
+  return { kind: "skill", value: [] };
+}
+
 function AttrValueEditor({
-  attr,
+  row,
   object,
   graph,
   canEdit,
   onChange,
 }: {
-  attr: Attribute;
+  row: AttrRowValue;
   object: OntologyObject;
   graph: GraphState;
   canEdit: boolean;
-  onChange: (attr: Attribute) => void;
+  onChange: (row: AttrRowValue) => void;
 }) {
-  const v = attr.value;
+  const v = row.value;
   const workspaceResources = useWorkspaceResources();
 
   if (v.kind === "knowledge" || v.kind === "skill") {
@@ -162,7 +246,7 @@ function AttrValueEditor({
                 type="button"
                 aria-label="Remove"
                 onClick={() =>
-                  onChange({ ...attr, value: { kind: vk.kind, value: vk.value.filter((x) => x !== id) } })
+                  onChange({ ...row, value: { kind: vk.kind, value: vk.value.filter((x) => x !== id) } })
                 }
                 className="text-text-muted hover:text-text-primary"
               >
@@ -178,7 +262,7 @@ function AttrValueEditor({
               bases={workspaceResources.knowledge.map((r) => ({ id: r.id, name: r.name }))}
               excludeIds={vk.value}
               onPick={(id) =>
-                onChange({ ...attr, value: { kind: "knowledge", value: [...vk.value, id] } })
+                onChange({ ...row, value: { kind: "knowledge", value: [...vk.value, id] } })
               }
               trigger={
                 <>
@@ -193,7 +277,7 @@ function AttrValueEditor({
               items={workspaceResources.skills.map((r) => ({ id: r.id, name: r.name, group: r.scope }))}
               excludeIds={vk.value}
               onPick={(id) =>
-                onChange({ ...attr, value: { kind: "skill", value: [...vk.value, id] } })
+                onChange({ ...row, value: { kind: "skill", value: [...vk.value, id] } })
               }
               trigger={
                 <>
@@ -222,7 +306,7 @@ function AttrValueEditor({
                   type="button"
                   aria-label={`Remove ${target.name}`}
                   onClick={() =>
-                    onChange({ ...attr, value: { kind: "ref", value: v.value.filter((x) => x !== id) } })
+                    onChange({ ...row, value: { kind: "ref", value: v.value.filter((x) => x !== id) } })
                   }
                   className="text-text-muted hover:text-text-primary"
                 >
@@ -236,7 +320,7 @@ function AttrValueEditor({
           <ObjectPickMenu
             graph={graph}
             excludeIds={[object.id, ...v.value]}
-            onPick={(id) => onChange({ ...attr, value: { kind: "ref", value: [...v.value, id] } })}
+            onPick={(id) => onChange({ ...row, value: { kind: "ref", value: [...v.value, id] } })}
             trigger={
               <>
                 <Plus size={10} /> Link
@@ -255,8 +339,8 @@ function AttrValueEditor({
         label="Tag"
         value={v.value}
         readOnly={!canEdit}
-        onChange={(next) => onChange({ ...attr, value: { kind: "pill", value: next } })}
-        className="min-w-0 flex-1"
+        onChange={(next) => onChange({ ...row, value: { kind: "pill", value: next } })}
+        className="min-w-[5rem] flex-1"
       />
     );
   }
@@ -266,8 +350,8 @@ function AttrValueEditor({
       label="Value"
       value={v.value}
       readOnly={!canEdit}
-      onChange={(next) => onChange({ ...attr, value: { kind: "text", value: next } })}
-      className="min-w-0 flex-1"
+      onChange={(next) => onChange({ ...row, value: { kind: "text", value: next } })}
+      className="min-w-[5rem] flex-1"
     />
   );
 }

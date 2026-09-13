@@ -1,23 +1,41 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { Dispatch } from "react";
 import { cn } from "@/shared/lib/utils";
-import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import type { GraphAction } from "../graph-state";
 import type { ObjectMethod, OntologyObject } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
-import { PANEL_ADD_ROW, PanelSection, ROW_REMOVE_BUTTON } from "./panel-section";
+import {
+  PANEL_ROW,
+  PANEL_WELL,
+  PanelAddButton,
+  PanelSection,
+  ROW_REMOVE_BUTTON,
+  useDraftRows,
+} from "./panel-section";
+
+/** A new action's cells, all four empty. */
+const BLANK_ACTION: ObjectMethod = { name: "", description: "", outcome: "", tools: "" };
 
 /**
  * Actions section — what the object CAN DO (things an agent performs for it).
- * Each action is a NAME row with its description / outcome / tools under it.
+ * One WHITE BAR per action on the section's gray well, holding the action's NAME
+ * with its description / outcome / tools under it.
  *
- * ⚠ **FLAT SINCE 2026-09-12** (Samuel: *"no more indented stuff"*). Each action
- * was a raised `bento` card holding three concave `FIELD_WELL` inputs, inside the
- * section frame — three indents deep. It is four underline fields in one column
- * now, and the only thing separating one action from the next is the gap.
+ * ⚠ **`+ Add` APPENDS AN EMPTY BAR WITH ALL FOUR FIELDS ON IT** (Samuel,
+ * 2026-09-13: *"Same for actions, relationships, and stuff like that"*). The add
+ * composer — a lone name field and an Add button — is deleted: an action's
+ * outcome and tools are typeable before its name is written.
+ *
+ * ⚠ **THE ROW IS WRITTEN WHEN IT HAS A NAME** (its label's blur, or Enter), for
+ * the reason in `panel-section.tsx › useDraftRows`: `METHOD_UPSERT` appends by
+ * position, so a nameless action would be a row nobody can read or address.
+ *
+ * ⚠ **FLAT SINCE 2026-09-12** (Samuel: *"no more indented stuff"*) — the fields
+ * are the popup kit's underline, never a `FIELD_WELL`, and what the bar restores
+ * is a SURFACE under the four lines, not the three nested frames that ruling cut
+ * (`panel-section.tsx › PanelSection`).
  */
 export function ActionsEditor({
   object,
@@ -28,47 +46,45 @@ export function ActionsEditor({
   dispatch: Dispatch<GraphAction>;
   canEdit?: boolean;
 }) {
-  const [newName, setNewName] = useState("");
+  const { drafts, add, patch, drop } = useDraftRows<ObjectMethod>(() => ({ ...BLANK_ACTION }));
 
-  const addAction = () => {
-    const name = newName.trim();
+  const commit = (index: number, method: ObjectMethod) => {
+    const name = method.name.trim();
     if (!name) return;
-    dispatch({
-      type: "METHOD_UPSERT",
-      id: object.id,
-      index: null,
-      method: { name, description: "", outcome: "", tools: "" },
-    });
-    setNewName("");
+    dispatch({ type: "METHOD_UPSERT", id: object.id, index: null, method: { ...method, name } });
+    drop(index);
   };
 
+  if (object.methods.length === 0 && !canEdit) {
+    return <PanelSection label="Actions">{null}</PanelSection>;
+  }
+
   return (
-    <PanelSection label="Actions" meta={`${object.methods.length}`}>
-      {object.methods.map((m, i) => (
-        <ActionRow
-          key={`${m.name}-${i}`}
-          method={m}
-          canEdit={canEdit}
-          onChange={(method) => dispatch({ type: "METHOD_UPSERT", id: object.id, index: i, method })}
-          onDelete={() => dispatch({ type: "METHOD_DELETE", id: object.id, index: i })}
-        />
-      ))}
-      {canEdit && (
-        <div className={PANEL_ADD_ROW}>
-          <InlineUnderlineField
-            label="New action"
-            value={newName}
-            onChange={setNewName}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") addAction();
-            }}
-            className="w-56"
+    <PanelSection label="Actions">
+      <div className={PANEL_WELL}>
+        {object.methods.map((m, i) => (
+          <ActionRow
+            key={`row-${i}`}
+            method={m}
+            canEdit={canEdit}
+            onChange={(method) =>
+              dispatch({ type: "METHOD_UPSERT", id: object.id, index: i, method })
+            }
+            onRemove={() => dispatch({ type: "METHOD_DELETE", id: object.id, index: i })}
           />
-          <button type="button" onClick={addAction} className={cn(SMALL_TEXT_BUTTON, "gap-1")}>
-            <Plus size={11} /> Add
-          </button>
-        </div>
-      )}
+        ))}
+        {drafts.map((method, n) => (
+          <ActionRow
+            key={`row-${object.methods.length + n}`}
+            method={method}
+            canEdit={canEdit}
+            onChange={(next) => patch(n, next)}
+            onCommit={() => commit(n, method)}
+            onRemove={() => drop(n)}
+          />
+        ))}
+        {canEdit && <PanelAddButton onClick={add} />}
+      </div>
     </PanelSection>
   );
 }
@@ -77,15 +93,18 @@ function ActionRow({
   method,
   canEdit,
   onChange,
-  onDelete,
+  onCommit,
+  onRemove,
 }: {
   method: ObjectMethod;
   canEdit: boolean;
   onChange: (m: ObjectMethod) => void;
-  onDelete: () => void;
+  /** DRAFT ONLY — fires on the name's blur and on Enter. */
+  onCommit?: () => void;
+  onRemove: () => void;
 }) {
   return (
-    <div className="group flex flex-col gap-1.5">
+    <div className={cn(PANEL_ROW, "group flex flex-col gap-1.5")}>
       {/* ⚠ THE THREE UNDER-FIELDS KEEP THEIR OLD ACCESSIBLE NAMES ("Action
           description" / "Action outcome" / "Action tools") AND NOW SHOW THEM AS
           THE HINT: the field's name IS its hint in this face, and a bare
@@ -97,6 +116,10 @@ function ActionRow({
           value={method.name}
           readOnly={!canEdit}
           onChange={(name) => onChange({ ...method, name })}
+          onBlur={onCommit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onCommit?.();
+          }}
           className="min-w-0 flex-1"
           inputClassName="font-medium"
         />
@@ -104,7 +127,7 @@ function ActionRow({
           <button
             type="button"
             aria-label={`Remove ${method.name}`}
-            onClick={onDelete}
+            onClick={onRemove}
             className={ROW_REMOVE_BUTTON}
           >
             <X size={12} />

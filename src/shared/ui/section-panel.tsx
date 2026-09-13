@@ -50,6 +50,18 @@ import { cn } from "@/shared/lib/utils";
 export const SECTION_PANEL_GROUND =
   "border border-border-subtle bg-home-panel";
 
+/**
+ * THE WELL'S GEOMETRY — radius + padding, the half `SectionPanel` paints for
+ * every caller regardless of the ground it is handed.
+ *
+ * ⚠ **EXPORTED SO THE WELL IS ONE RECIPE AND NOT A MEASUREMENT** (2026-09-13,
+ * the object panel's field sections). `ontology/components/panel-section.tsx ›
+ * PANEL_WELL` is the Token-spend well — `SECTION_PANEL_GROUND` on this geometry
+ * — reached by IMPORT rather than by retyping `rounded-[14px] p-3`, so the day
+ * the well's radius or padding moves it moves on both surfaces at once.
+ */
+export const SECTION_PANEL_SHELL = "rounded-[14px] p-3";
+
 export function SectionPanel({
   id,
   label,
@@ -78,7 +90,7 @@ export function SectionPanel({
     <section
       aria-labelledby={id}
       data-section-panel
-      className={cn("rounded-[14px] p-3", className)}
+      className={cn(SECTION_PANEL_SHELL, className)}
     >
       <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
         <h2
