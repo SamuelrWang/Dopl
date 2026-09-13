@@ -27,11 +27,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WorkspaceBillingRow } from "./workspace-billing";
 
-// ⚠ THE LEDGER IS MOCKED, NOT LET THROUGH. It is a `supabaseAdmin()` insert on
-// the hottest path in the product, and what this suite pins about it is WHEN it
-// is called and WITH WHAT — never that Supabase was reachable.
-vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
-
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   // ⚠ THE PERSONAL WALLET'S OWN READ (2026-09-08). `personal-wallet.ts` is
@@ -57,21 +52,21 @@ vi.mock("@/features/workspaces/server/repository", () => ({
 import * as repo from "./workspace-billing";
 import * as wallets from "./credit-wallets";
 import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
-import { recordCreditUsageEvent } from "./credit-ledger";
 import { consumeMcpCredits } from "./credits-service";
 // ⚠ THE METER HALF MOVED TO `credits-meter.ts` ON 2026-09-13 (rule B needed the
 // room); this file drives BOTH sides, which is the point of its agreement cases.
 import { creditPeriodFor, summarizeCredits, unmetered } from "./credits-meter";
 import {
+  ledgerAttribution,
   personalTarget,
   seatTarget,
+  teamBillingRow,
   unmeteredTarget,
 } from "./credits-target-fixtures";
 
 const mockRepo = vi.mocked(repo);
 const mockWallets = vi.mocked(wallets);
 const mockOwner = vi.mocked(findActiveOwnerUserId);
-const mockLedger = vi.mocked(recordCreditUsageEvent);
 
 const WS = "ws-1";
 const CONTAINER = "ws-link-1";
@@ -88,21 +83,13 @@ const seatCaller = { userId: CALLER, workspaceKind: "standard" as const };
 const linkCaller = { userId: CALLER, workspaceKind: "link" as const };
 const personalCaller = { userId: CALLER, workspaceKind: "personal" as const };
 
+/** `credits-target-fixtures.ts › teamBillingRow` + this suite's MID-MONTH anchor. */
 function billing(overrides: Partial<WorkspaceBillingRow> = {}): WorkspaceBillingRow {
-  return {
-    workspaceId: WS,
-    plan: "team",
-    status: "active",
-    stripeCustomerId: "cus_1",
-    stripeSubscriptionId: "sub_1",
-    stripePriceId: "price_seat",
-    seatCount: 3,
+  return teamBillingRow({
     currentPeriodStart: "2026-07-21T09:30:00.000Z",
     currentPeriodEnd: "2026-08-21T09:30:00.000Z",
-    cancelAtPeriodEnd: false,
-    lastStripeEventCreated: null,
     ...overrides,
-  };
+  });
 }
 
 function setup(opts: {
@@ -173,7 +160,8 @@ describe("consumeMcpCredits — a canceled workspace is not locked out (B2b)", (
       CALLER,
       CALENDAR_START,
       1,
-      100
+      100,
+      ledgerAttribution(WS, CALLER)
     );
     expect(res.allowed).toBe(true);
     expect(res.limit).toBe(100);
@@ -440,60 +428,71 @@ describe("the unmetered posture", () => {
 });
 
 /**
- * THE ATTRIBUTION LEDGER — one row per SPEND, beside the counter.
+ * THE ATTRIBUTION LEDGER — **ONE ROW PER SPEND, IN THE COUNTER'S OWN
+ * TRANSACTION** (2026-09-13, Samuel: *"the histogram must equal the wallet,
+ * always"*; F-693).
  *
- * 🔒 **IT IS NOT THE COUNTER AND MUST NEVER GATE ONE.** The wallet RPCs still
- * decide `allowed`; this write only records WHO, WHERE, WHOSE WALLET and WHICH
- * ONE — dimensions a one-row-per-period counter cannot carry.
+ * 🔒 **THE WRITE IS NO LONGER A SECOND ROUND TRIP, SO THESE CASES PIN THE RPC's
+ * ARGUMENTS RATHER THAN A WRITER'S CALLS.** The superseded shape asserted
+ * `recordCreditUsageEvent` was FIRED — a call made after the counter had committed,
+ * which swallowed its own failures, which is exactly how Samuel's wallet came to
+ * read 8 over five ledger rows. There is nothing left to fire.
+ *
+ * ⚠ **WHAT MOVED INTO SQL IS PINNED IN SQL**: "a refused consume writes nothing"
+ * and "a failed insert rolls the counter back" are properties of the function body
+ * now (`credit-consume-with-ledger-schema.test.ts`). What TypeScript still proves
+ * is that the dimensions REACH the RPC, and that nothing writes the ledger twice.
  */
 describe("credit usage ledger", () => {
-  it("records one row per SPEND, stamped with the period the counter used", async () => {
+  it("hands the RPC the attribution, stamped with the period the counter used", async () => {
     setup({ billing: billing({ plan: "free", status: "free" }), members: 1, used: 7 });
 
     await consumeMcpCredits(WS, seatCaller);
 
-    expect(mockLedger).toHaveBeenCalledTimes(1);
-    const event = mockLedger.mock.calls[0]?.[0];
-    expect(event).toMatchObject({
-      workspaceId: WS,
+    expect(mockWallets.consumeMemberCredits).toHaveBeenCalledTimes(1);
+    const call = mockWallets.consumeMemberCredits.mock.calls[0];
+    // The charged container, the payer, then the period. ⚠ The period the RPC is
+    // called with IS the one stamped on the row — one statement, so it cannot be
+    // re-derived from a clock half a request later.
+    expect(call?.[0]).toBe(WS);
+    expect(call?.[1]).toBe(CALLER);
+    expect(call?.[2]).toBe(CALENDAR_START);
+    expect(call?.[5]).toEqual({
       originWorkspaceId: WS,
-      userId: CALLER,
-      wallet: "seat",
-      payerUserId: CALLER,
-      amount: 1,
+      callerUserId: CALLER,
+      channelId: null,
     });
-    // The period the RPC was called with, not one re-derived from the clock.
-    expect(event?.periodStart).toBe(
-      mockWallets.consumeMemberCredits.mock.calls[0]?.[2]
-    );
-  });
-
-  /** ⚠ A REFUSED CONSUME MOVED NO COUNTER, so it has nothing to attribute. */
-  it("writes NOTHING when the consume was refused", async () => {
-    setup({ billing: null, members: 1, allowed: false, used: 100 });
-    await consumeMcpCredits(WS, seatCaller);
-    expect(mockLedger).not.toHaveBeenCalled();
   });
 
   /**
    * 🔒 **THE CALLER AND THE PAYER DIFFER EXACTLY ON THE GUEST PATH, AND THE ROW
    * MUST SAY BOTH.** A peer's burn in somebody's link container spends the
-   * OWNER's personal wallet; collapsing the two columns makes "who spent my
-   * credits" answer the wrong person.
+   * OWNER's personal wallet; collapsing the two makes "who spent my credits"
+   * answer the wrong person. ⚠ They ride two DIFFERENT arguments now — the payer
+   * is the counter's key, the caller is on the attribution — so what this pins is
+   * passing one where the other belongs.
    */
-  it("separates the caller from the payer, and names the wallet", async () => {
+  it("separates the caller from the payer across the two arguments", async () => {
     setup({ billing: null, members: 1 });
 
     await consumeMcpCredits(CONTAINER, linkCaller);
 
-    expect(mockLedger).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: CONTAINER,
-        originWorkspaceId: CONTAINER,
-        userId: CALLER,
-        payerUserId: OWNER,
-        wallet: "personal",
-      })
+    const call = mockWallets.consumeUserCredits.mock.calls[0];
+    expect(call?.[0]).toBe(OWNER);
+    expect(call?.[4]).toEqual({
+      originWorkspaceId: CONTAINER,
+      callerUserId: CALLER,
+      channelId: null,
+    });
+  });
+
+  /** ⚠ **THE REVERT DETECTOR FOR THE WHOLE WAVE.** A reintroduced post-spend ledger
+   *  write — awaited or not — reopens the gap, and the cheapest proof none exists is
+   *  that the module which used to hold one exports nothing callable. */
+  it("🔒 `credit-ledger.ts` exports NO writer to fire after the spend", async () => {
+    const ledger = await import("./credit-ledger");
+    expect(Object.values(ledger).filter((v) => typeof v === "function")).toEqual(
+      []
     );
   });
 });

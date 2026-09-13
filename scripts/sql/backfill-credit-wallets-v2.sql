@@ -10,6 +10,21 @@
 -- IDEMPOTENT: `used` is SET to the sum, not added. Re-running after new-code
 -- burns is still exact, because those burns also write ledger rows.
 --
+-- ⚠ **STILL VALID AFTER `20261004120000_credit_consume_with_ledger.sql`, AND ITS
+-- SECOND JOB IS GONE (2026-09-13, Samuel: the histogram must equal the wallet,
+-- always; F-693).** This script sets each counter FROM the ledger, so it remains
+-- the deploy-day catch-up it was written to be — and it is also how a
+-- PRE-migration divergence is repaired by hand, which is what happened to
+-- Samuel's personal wallet the day the rule was set (counter 8, five ledger rows).
+-- ⚠ **AFTER THAT MIGRATION THE TWO CANNOT DIVERGE**: the counter UPDATE and the
+-- `credit_usage_events` INSERT are one transaction inside `consume_user_credits` /
+-- `consume_member_credits`, so a refused consume writes neither and a failed
+-- insert rolls the counter back. Running this on rows written since then is a
+-- no-op by arithmetic, not by luck. ⚠ It is therefore NOT a repair loop and must
+-- never be scheduled: `GET /api/billing/status › credits.ledgerDrift`
+-- (`src/features/billing/server/credits-audit.ts`) is how a residual disagreement
+-- is NOTICED, and a person decides what to do about it.
+--
 -- MAPPING (credit-wallets.sql §4, credits-service.ts › resolveBillingTarget):
 --   origin container kind personal / link  → the OWNER's personal wallet
 --   origin container kind standard         → the caller's seat wallet there

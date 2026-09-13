@@ -87,9 +87,6 @@ vi.mock("@/features/billing/server/credit-wallets", () => ({
   getUserCreditsUsed: vi.fn(),
   getMemberCreditsUsed: vi.fn(),
 }));
-vi.mock("@/features/billing/server/credit-ledger", () => ({
-  recordCreditUsageEvent: vi.fn(),
-}));
 
 import * as repo from "@/features/workspaces/server/repository";
 import * as billing from "@/features/billing/server/workspace-billing";
@@ -196,10 +193,15 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
       OWNER,
       expect.any(String),
       1,
-      expect.any(Number)
+      expect.any(Number),
+      // 🔒 THE PAIR THE LEDGER KEEPS APART, now in two arguments: the OWNER is the
+      // counter's key (the payer) and the GUEST is on the attribution (who
+      // called). One row, written in the counter's own transaction (F-693).
+      { originWorkspaceId: CONTAINER, callerUserId: GUEST, channelId: null }
     );
     expect(mockWallets.consumeUserCredits).not.toHaveBeenCalledWith(
       GUEST,
+      expect.anything(),
       expect.anything(),
       expect.anything(),
       expect.anything()
@@ -240,7 +242,8 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
       OWNER,
       expect.any(String),
       1,
-      5_000
+      5_000,
+      { originWorkspaceId: CONTAINER, callerUserId: GUEST, channelId: null }
     );
     expect(body.limit).toBe(5_000);
   });
@@ -261,7 +264,8 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
       OWNER,
       expect.any(String),
       1,
-      expect.any(Number)
+      expect.any(Number),
+      { originWorkspaceId: CONTAINER, callerUserId: OWNER, channelId: null }
     );
   });
 
@@ -274,7 +278,8 @@ describe("POST /api/mcp/credits/consume — a guest is metered, not refused", ()
       GUEST,
       expect.any(String),
       1,
-      expect.any(Number)
+      expect.any(Number),
+      { originWorkspaceId: OWNER_WS, callerUserId: GUEST, channelId: null }
     );
     expect(mockWallets.consumeUserCredits).not.toHaveBeenCalled();
     expect(body.wallet).toBe("seat");

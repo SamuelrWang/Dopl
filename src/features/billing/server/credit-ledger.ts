@@ -1,55 +1,72 @@
 import "server-only";
-import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { WalletKind } from "../credits";
 
 /**
- * THE CREDIT ATTRIBUTION LEDGER'S WRITER — one row per successful burn.
+ * THE CREDIT ATTRIBUTION LEDGER'S CONTRACT — what one row means, and which of
+ * its dimensions the counter's key cannot carry.
  *
- * 🔒 **IT IS NOT THE BILLING COUNTER AND IT MAY NOT BEHAVE LIKE ONE.**
- * The WALLET COUNTERS (`credit-wallets.ts` → `user_credit_usage`,
- * `workspace_member_credit_usage`) remain the sole authority on whether a call
- * is allowed and how much of the allowance is gone. ⚠ That sentence named
- * `workspace_credit_usage` until 2026-09-07; the pooled counter is retired from
- * writes (`20260930120000_credit_wallets.sql` §5) and the argument is unchanged.
- * This table answers a different question — WHICH CHANNEL and WHICH PERSON the
- * period's credits went to — which a one-row-per-period counter cannot
- * (F-328). `20260901120000_credit_usage_events.sql` carries the full argument.
+ * 🔒 **THERE IS NO WRITER IN THIS FILE ANY MORE (2026-09-13, Samuel: "the
+ * histogram must equal the wallet, always"; F-693).** `recordCreditUsageEvent` is
+ * DELETED, not deprecated: the row is written by the WALLET RPCs themselves
+ * (`supabase/migrations/20261004120000_credit_consume_with_ledger.sql`), inside
+ * the same transaction as the counter, so the two cannot disagree. What survives
+ * here is the row's MEANING, which every reader still needs and which the RPC's
+ * positional arguments do not explain.
  *
- * ⚠ **FIRE-AND-FORGET, AND THAT IS A DECISION WITH A STATED COST.** This runs
- * on the hottest write path in the product, AFTER the spend is already
- * committed, and a failure here must never turn a successful, already-charged
- * call into an error the agent sees. So it swallows — and therefore the ledger
- * MAY UNDER-COUNT. Every reader treats `SUM(amount)` as a FLOOR, the same way
- * the /home Overview's rails already treat their bounded scans.
- * ⚠ The inverse is forbidden: `20260811130000_mcp_credits.sql`'s header rules
- * out building ENFORCEMENT on a writer allowed to drop writes, and nothing here
- * changes that. The counter is not written from this file.
+ * ⚠ **THE SUPERSEDED VERSION WAS FIRE-AND-FORGET, AND THE COST IT STATED CAME
+ * DUE.** Its header said the ledger "MAY UNDER-COUNT" and that every reader must
+ * treat `SUM(amount)` as a FLOOR. Measured 2026-09-13: Samuel's personal wallet
+ * counter read `used = 8` over FIVE ledger rows, because for the minutes between
+ * the server naming `channel_id` and `20261003120000` being applied every insert
+ * answered `42703` and was `console.warn`ed while the counter had already moved.
+ * A floor is not good enough for a figure printed beside the counter on one card.
+ *
+ * 🔒 **IT IS STILL NOT THE BILLING COUNTER AND MAY NOT BEHAVE LIKE ONE.** The
+ * WALLET COUNTERS (`credit-wallets.ts` → `user_credit_usage`,
+ * `workspace_member_credit_usage`) remain the sole authority on whether a call is
+ * allowed and how much of the allowance is gone; nothing reads
+ * `credit_usage_events` to decide a charge. `20260811130000_mcp_credits.sql`'s
+ * header rules out building ENFORCEMENT on this table and that is unchanged —
+ * what changed is only that the table can no longer fall BEHIND the counter.
+ * ⚠ Whether the two AGREE for rows written before the fix is a measurement, not
+ * an assumption: `credits-audit.ts › walletMatchesLedger` is how it is taken, and
+ * `GET /api/billing/status › credits.ledgerDrift` is where the answer is
+ * published.
  */
 
 /**
  * One burn, as the ledger records it.
  *
- * 🔒 **THE PAYER IS A PERSON NOW, NOT A WORKSPACE (2026-09-07, Samuel's
- * per-seat + personal-wallet ruling), AND THAT MOVED WHAT `workspaceId` MEANS.**
- * It used to be the payer — for a home burn, the owner's separate standard
- * workspace. There is no such workspace on the credit path any more, so the
- * column holds the ADDRESSED CONTAINER and `payerUserId` carries the payer.
- * The row's four dimensions are now: where (`workspaceId` /
- * `originWorkspaceId`), who called (`userId`), whose wallet (`payerUserId`),
- * which wallet (`wallet`).
+ * 🔒 **THE PAYER IS A PERSON, NOT A WORKSPACE (2026-09-07, Samuel's per-seat +
+ * personal-wallet ruling), AND THAT MOVED WHAT `workspaceId` MEANS.** It used to
+ * be the payer — for a home burn, the owner's separate standard workspace. There
+ * is no such workspace on the credit path any more, so the column holds the
+ * ADDRESSED CONTAINER and `payerUserId` carries the payer. The row's dimensions
+ * are: where (`workspaceId` / `originWorkspaceId`), who called (`userId`), which
+ * channel was billed (`channelId`), whose wallet (`payerUserId`), which wallet
+ * (`wallet`).
+ *
+ * ⚠ **THIS INTERFACE IS THE ROW, NOT A CALL SIGNATURE.** The RPC takes the four
+ * fields it cannot derive as {@link CreditLedgerAttribution}; `wallet`,
+ * `payerUserId`, `amount` and `periodStart` are already the consume arguments,
+ * and the RPC writes the wallet label as a LITERAL so a caller cannot mislabel
+ * which counter it just moved.
  */
 export interface CreditUsageEvent {
   /**
    * THE ADDRESSED CONTAINER — the workspace row the caller was authorized into.
    * ⚠ Equal to `originWorkspaceId` on every row this build writes; both are
    * kept because the column is `NOT NULL` with an FK (so it cannot hold a
-   * person) and `/home`'s rails read the origin. ⚠ It is NOT the payer.
+   * person) and `/home`'s rails read the origin. ⚠ It is NOT the payer, and it is
+   * NOT the charged container either — under rule B a seat burn's charged
+   * workspace is the counter's key and appears on this row nowhere.
    */
   workspaceId: string;
   /**
-   * WHERE the call was made: the addressed workspace, which for a home channel
-   * is the `kind='link'` CONTAINER. ⚠ This is the "by channel" dimension — a
-   * container holds exactly one channel.
+   * WHERE the call was addressed: the addressed workspace, which for a home
+   * channel is the `kind='link'` CONTAINER. ⚠ NOT the "by channel" dimension —
+   * that is `channelId`, and reading it off this column is the defect rule B
+   * fixed.
    */
   originWorkspaceId: string | null;
   /** Who burned it. `null` only when the caller could not be identified. */
@@ -91,41 +108,26 @@ export interface CreditUsageEvent {
 }
 
 /**
- * Record one burn. **Never throws, never rejects.**
+ * The ledger dimensions a consume RPC has to be TOLD, because they are facts
+ * about the CALLER's request rather than about the counter it is moving.
  *
- * ⚠ NOT `await`ed BY ITS CALLER on the critical path — `consumeMcpCredits`
- * fires it and returns. It is exported as an ordinary async function so tests
- * can await it directly; production ordering is deliberately unobserved.
+ * ⚠ **ONE OBJECT, APPENDED TO BOTH CONSUME SIGNATURES, RATHER THAN THREE LOOSE
+ * ARGUMENTS.** The wallet RPCs already take five positional arguments; three more
+ * UUID-shaped ones in a row is how a caller comes to pass the payer where the
+ * caller belongs, which is precisely the pair the ledger exists to keep apart.
+ *
+ * ⚠ **`originWorkspaceId` IS NOT OPTIONAL.** `credit_usage_events.workspace_id`
+ * is `NOT NULL`, so an absent value is a `23502` that now REFUSES THE SPEND
+ * rather than dropping a row — which is the intended direction, and a reason to
+ * pass the addressed container explicitly at every call site.
  */
-export async function recordCreditUsageEvent(
-  event: CreditUsageEvent
-): Promise<void> {
-  try {
-    // ⚠ A REFUSED CONSUME WRITES NOTHING. The caller gates on `allowed`, and
-    // this guard is the second half of that rule: a zero or negative amount is
-    // a reporting bug, and the table's own CHECK would reject it — turning a
-    // swallowed no-op into a swallowed ERROR that looks identical in the logs.
-    if (!(event.amount > 0)) return;
-    const { error } = await supabaseAdmin()
-      .from("credit_usage_events")
-      .insert({
-        workspace_id: event.workspaceId,
-        origin_workspace_id: event.originWorkspaceId,
-        user_id: event.userId,
-        channel_id: event.channelId,
-        wallet: event.wallet,
-        payer_user_id: event.payerUserId,
-        amount: event.amount,
-        period_start: event.periodStart,
-      });
-    if (error) throw error;
-  } catch (err) {
-    // ⚠ WARN, NOT ERROR, and it says what was lost: an attribution row, not a
-    // credit. The counter already moved; the meter is still right.
-    console.warn(
-      `[credits] ledger write dropped for workspace ${event.workspaceId}: ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    );
-  }
+export interface CreditLedgerAttribution {
+  /** The ADDRESSED container, written to `workspace_id` AND
+   *  `origin_workspace_id`. */
+  originWorkspaceId: string;
+  /** WHO called — `credit_usage_events.user_id`. Differs from the payer exactly
+   *  on the guest path. */
+  callerUserId: string | null;
+  /** Rule B's calling channel, or `null` for "Desktop agent". */
+  channelId: string | null;
 }

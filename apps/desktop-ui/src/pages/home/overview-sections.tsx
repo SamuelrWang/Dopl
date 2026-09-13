@@ -198,6 +198,23 @@ export function CreditCapacityBar({
             ⚠ **The two facts beside it STAY**: what is left, and when it resets.
             Do not re-add the sentence to "explain" the pair. */}
         <span>{remaining.toLocaleString()} left</span>
+        {/* 🔒 **THE RECONCILIATION CAPTION — ONE MUTED WORD, AND NOTHING AT ALL
+            WHEN THE TWO AGREE (Samuel, 2026-09-13: *"there's a disconnect between
+            the two charts. we need to nail this down"*; F-693).** This bar is the
+            COUNTER and the plot below it is the LEDGER; `ledgerDrift` is the
+            server's own subtraction of the two for this wallet and period
+            (`billing/server/credits-audit.ts › walletMatchesLedger`). **0 renders
+            NOTHING** — a badge that is always there is furniture, and the
+            agreement is the normal state.
+            ⚠ **MINIMAL COPY (INVARIANTS §5): the word, not the number.** The
+            figure belongs in the payload and the logs, not on a card whose whole
+            point is that two numbers already fight for attention on it. Do not
+            grow this into "off by 3" or a tooltip explaining the ledger.
+            ⚠ **NOT DERIVED FROM `spent` AND THE PLOT'S OWN TOTAL.** The plot is a
+            capped, wallet-narrowed scan, so it legitimately reads LOW; comparing
+            the two client-side would flag every clipped month. Only the server can
+            subtract the ledger from the counter. */}
+        {credits.ledgerDrift !== 0 && <span>Unreconciled</span>}
         {/* ⚠ THE SAME LINE THE BILLING PANE PRINTS, and the same guard: the
             period bounds are blank on the degraded fallback status, and a date
             nobody measured must not be invented here. */}

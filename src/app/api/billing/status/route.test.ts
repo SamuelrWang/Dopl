@@ -43,6 +43,11 @@ vi.mock("@/features/billing/server/credit-wallets", () => ({
   consumeMemberCredits: vi.fn(),
   getUserCreditsUsed: vi.fn(),
   getMemberCreditsUsed: vi.fn(),
+  // ⚠ THE RECONCILIATION GUARD'S TWO READS (2026-09-13, F-693). They must be on
+  // this mock or `credits-audit.ts › ledgerDriftFor` degrades to 0 with a warn on
+  // every case here — which would pass, and would prove nothing about the field.
+  sumMemberCreditsUsed: vi.fn(),
+  sumCreditLedger: vi.fn(),
 }));
 
 import { GET } from "./route";
@@ -78,6 +83,8 @@ beforeEach(() => {
   mockRepo.countOntologyObjects.mockResolvedValue(3);
   mockWallets.getMemberCreditsUsed.mockResolvedValue(0);
   mockWallets.getUserCreditsUsed.mockResolvedValue(0);
+  mockWallets.sumMemberCreditsUsed.mockResolvedValue(0);
+  mockWallets.sumCreditLedger.mockResolvedValue(0);
 });
 
 describe("GET /api/billing/status — credits", () => {
@@ -171,5 +178,77 @@ describe("GET /api/billing/status — credits", () => {
       has_stripe_customer: false,
       subscription_period_end: null,
     });
+  });
+});
+
+/**
+ * 🔒 **THE RECONCILIATION FIELD (Samuel, 2026-09-13: the histogram must equal the
+ * wallet, always; F-693).** `20261004120000_credit_consume_with_ledger.sql` makes
+ * the counter and the ledger agree by construction; this field is how anyone finds
+ * out whether they actually DO, for the rows written before it.
+ *
+ * ⚠ **IT IS ON THIS PAYLOAD AND NOT ON THE CONSUME RESPONSE.** `CreditsSummary` is
+ * shared with `CreditConsumeResult`, which is the body the MCP server reads on the
+ * hottest path in the product; `status-service.ts › StatusCredits` extends it here
+ * so that wire shape stays byte-identical.
+ */
+describe("GET /api/billing/status — credits.ledgerDrift", () => {
+  it("is 0 when the counter and the ledger agree", async () => {
+    mockWallets.getMemberCreditsUsed.mockResolvedValue(12);
+    mockWallets.sumMemberCreditsUsed.mockResolvedValue(12);
+    mockWallets.sumCreditLedger.mockResolvedValue(12);
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
+    expect(body.credits.ledgerDrift).toBe(0);
+  });
+
+  it("🔒 reports the difference when they do not — the incident's own shape", async () => {
+    // Counter 8, ledger 5: the three attribution rows Samuel's wallet lost to a
+    // `42703` after the counter had already moved.
+    mockWallets.getMemberCreditsUsed.mockResolvedValue(8);
+    mockWallets.sumMemberCreditsUsed.mockResolvedValue(8);
+    mockWallets.sumCreditLedger.mockResolvedValue(5);
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
+    expect(body.credits.ledgerDrift).toBe(3);
+    // ⚠ AND THE METER IS UNTOUCHED BY IT. A drift figure that moved `used` would
+    // make the bar disagree with Settings to report that two things disagree.
+    expect(body.credits.used).toBe(8);
+  });
+
+  it("reconciles on the METER'S OWN period, not a fresh calendar month", async () => {
+    // A paid workspace's window is anchored to its subscription date, and the
+    // counter and the ledger are both keyed on it.
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({
+        plan: "team",
+        status: "active",
+        seatCount: 4,
+        currentPeriodStart: "2099-03-04T00:00:00.000Z",
+        currentPeriodEnd: "2099-04-04T00:00:00.000Z",
+      })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(4);
+    await GET(request(), { params: Promise.resolve({}) });
+    expect(mockWallets.sumCreditLedger).toHaveBeenCalledWith(
+      "user-1",
+      "seat",
+      "2099-03-04T00:00:00.000Z"
+    );
+  });
+
+  /**
+   * ⚠ **THE MIGRATION LAG.** `credit_ledger_sum` ships unapplied, so between
+   * deploy and apply the RPC does not exist. This endpoint is the SINGLE billing
+   * read every surface makes; 500ing it over a diagnostic is the wrong trade.
+   */
+  it("🔒 still answers 200 with 0 when the reconciliation cannot be read", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockWallets.sumCreditLedger.mockRejectedValue(
+      new Error("Could not find the function public.credit_ledger_sum")
+    );
+    const res = await GET(request(), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect((await res.json()).credits.ledgerDrift).toBe(0);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

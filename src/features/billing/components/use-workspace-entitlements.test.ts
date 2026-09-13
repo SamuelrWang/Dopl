@@ -62,6 +62,7 @@ function payload(): WorkspaceEntitlementsStatus {
       remaining: 4_960,
       periodStart: "2026-09-01T00:00:00.000Z",
       periodEnd: "2026-10-01T00:00:00.000Z",
+      ledgerDrift: 0,
     },
     cancelAtPeriodEnd: false,
     subscription_period_end: null,
@@ -177,6 +178,35 @@ describe("a cached row from before a field shipped still renders", () => {
     expect(ent.credits.wallet).toBeNull();
     // ...and the numbers that WERE cached are kept, not replaced by defaults.
     expect(ent.credits).toMatchObject({ used: 40, limit: 5_000 });
+  });
+
+  /**
+   * 🔒 **`ledgerDrift` SHIPPED 2026-09-13 (F-693), SO IT TAKES THE SAME FIELD-WISE
+   * FALLBACK `wallet` DOES.** The consumer test is `!== 0`
+   * (`pages/home/overview-sections.tsx › CreditCapacityBar` prints one muted word),
+   * and `undefined !== 0` is TRUE — so without the `?? 0` every replayed row from
+   * before today would claim the reader's wallet does not match its own histogram.
+   */
+  it("replays a row whose `credits` has NO `ledgerDrift` key — 0, not undefined", () => {
+    const stale = payload();
+    delete (stale.credits as Partial<WorkspaceEntitlementsStatus["credits"]>)
+      .ledgerDrift;
+    state.data = stale;
+
+    const ent = useWorkspaceEntitlements();
+    expect(ent.credits.ledgerDrift).toBe(0);
+    // ...and the rest of the cached `credits` object is kept, as ever.
+    expect(ent.credits).toMatchObject({ used: 40, wallet: "seat" });
+  });
+
+  it("a non-zero drift the CURRENT server sends is passed through untouched", () => {
+    // ⚠ THE REVERT DETECTOR FOR AN OVER-EAGER FALLBACK: `|| 0` would also swallow
+    // a real, negative drift, and `?? 0` is the operator that does not.
+    state.data = {
+      ...payload(),
+      credits: { ...payload().credits, ledgerDrift: -2 },
+    };
+    expect(useWorkspaceEntitlements().credits.ledgerDrift).toBe(-2);
   });
 
   it("replays a row with NO `credits` object at all", () => {

@@ -360,11 +360,30 @@ describe("ordering", () => {
     // line: the subject and the verb are on different lines in every file in
     // this directory.
     const UNDO = /\b(DROP\s+(TABLE|FUNCTION|INDEX|VIEW|COLUMN|POLICY|CONSTRAINT)|REVOKE|TRUNCATE|DELETE\s+FROM)\b/i;
+    // ⚠ **AND A `DROP FUNCTION` PAIRED WITH A `CREATE FUNCTION` OF THE SAME NAME
+    // IN THE SAME FILE IS A REPLACEMENT, NOT AN UNDO (2026-09-13, F-693).** The
+    // third time this sweep has had to learn the difference between taking
+    // something away and changing it. `20261004120000_credit_consume_with_ledger.sql`
+    // DROPs both consume RPCs and re-CREATEs them one argument list wider, because
+    // `CREATE OR REPLACE` on a changed signature leaves the old function standing
+    // as an OVERLOAD — a second path that moves a counter with no ledger row,
+    // which is the exact defect that file closes. ⚠ **THE PAIRING IS THE
+    // ASSERTION**: a bare `DROP FUNCTION` with no `CREATE` beside it still fails,
+    // and TABLES, COLUMNS, INDEXES and POLICIES get no such latitude — a dropped
+    // counter is a free re-spend of everyone's allowance (that file's own header).
+    const replaced = (file: string, subject: string) =>
+      new RegExp(`CREATE\\s+(OR\\s+REPLACE\\s+)?FUNCTION\\s+public\\.${subject}\\s*\\(`, "i")
+        .test(file);
     for (const name of later) {
-      for (const statement of strip(name).split(";")) {
+      const file = strip(name);
+      for (const statement of file.split(";")) {
         if (!UNDO.test(statement)) continue;
         for (const subject of SUBJECTS) {
-          expect(statement, `${name} undoes ${subject}`).not.toContain(subject);
+          if (!statement.includes(subject)) continue;
+          expect(
+            replaced(file, subject),
+            `${name} undoes ${subject} without re-creating it`
+          ).toBe(true);
         }
       }
     }

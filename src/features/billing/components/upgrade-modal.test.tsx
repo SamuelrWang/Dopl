@@ -49,6 +49,7 @@ const STANDARD_FREE: Status = {
     remaining: SEAT_MONTHLY_CREDITS.free,
     periodStart: "2026-09-01T00:00:00.000Z",
     periodEnd: "2026-10-01T12:00:00.000Z",
+    ledgerDrift: 0,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,

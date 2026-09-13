@@ -48,9 +48,6 @@ vi.mock("@/features/billing/server/credit-wallets", () => ({
 
 // The ledger is a `supabaseAdmin()` insert fired and forgotten after the spend;
 // this suite is about the answer, never about Supabase being reachable.
-vi.mock("@/features/billing/server/credit-ledger", () => ({
-  recordCreditUsageEvent: vi.fn(),
-}));
 
 import { POST } from "./route";
 import * as repo from "@/features/billing/server/workspace-billing";
@@ -58,6 +55,18 @@ import * as wallets from "@/features/billing/server/credit-wallets";
 
 const mockRepo = vi.mocked(repo);
 const mockWallets = vi.mocked(wallets);
+
+/**
+ * The LEDGER ATTRIBUTION the consume RPC writes in the counter's own transaction
+ * since 2026-09-13 (`billing/server/credit-ledger.ts › CreditLedgerAttribution`;
+ * F-693). ⚠ `channelId` is `null` here because this suite's request carries no
+ * `X-Dopl-Session-Id`; `credits-channel-attribution.test.ts` owns rule B's arms.
+ */
+const ATTRIB = {
+  originWorkspaceId: "ws-1",
+  callerUserId: "user-1",
+  channelId: null,
+};
 
 function billing(overrides: Partial<WorkspaceBillingRow>): WorkspaceBillingRow {
   return {
@@ -112,7 +121,8 @@ describe("POST /api/mcp/credits/consume", () => {
       "user-1",
       expect.any(String),
       1,
-      100
+      100,
+      ATTRIB
     );
   });
 
@@ -153,7 +163,8 @@ describe("POST /api/mcp/credits/consume", () => {
       "user-1",
       expect.any(String),
       1,
-      100
+      100,
+      ATTRIB
     );
   });
 
@@ -174,7 +185,8 @@ describe("POST /api/mcp/credits/consume", () => {
       "user-1",
       "2099-01-10T00:00:00.000Z",
       1,
-      5_000
+      5_000,
+      ATTRIB
     );
   });
 

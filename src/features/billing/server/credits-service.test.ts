@@ -35,10 +35,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WorkspaceBillingRow } from "./workspace-billing";
 
-// ⚠ THE LEDGER IS MOCKED, NOT LET THROUGH. It is a `supabaseAdmin()` insert on
-// the hottest path in the product, and what this suite pins about it is WHEN it
-// is called and WITH WHAT — never that Supabase was reachable.
-vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
+// ⚠ **NO LEDGER MOCK: `credit-ledger.ts` EXPORTS NO WRITER SINCE 2026-09-13**
+// (F-693). The row is inserted by the wallet RPC, in the counter's transaction, so
+// what is pinned here is the trailing `attrib(...)` argument reaching it.
 
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
@@ -67,8 +66,10 @@ import * as wallets from "./credit-wallets";
 import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
 import { consumeMcpCredits, resolveBillingTarget } from "./credits-service";
 import {
+  ledgerAttribution,
   personalTarget,
   seatTarget,
+  teamBillingRow,
   unmeteredTarget,
 } from "./credits-target-fixtures";
 
@@ -91,21 +92,13 @@ const seatCaller = { userId: CALLER, workspaceKind: "standard" as const };
 const linkCaller = { userId: CALLER, workspaceKind: "link" as const };
 const personalCaller = { userId: CALLER, workspaceKind: "personal" as const };
 
+/** `credits-target-fixtures.ts › teamBillingRow` + this suite's MID-MONTH anchor. */
 function billing(overrides: Partial<WorkspaceBillingRow> = {}): WorkspaceBillingRow {
-  return {
-    workspaceId: WS,
-    plan: "team",
-    status: "active",
-    stripeCustomerId: "cus_1",
-    stripeSubscriptionId: "sub_1",
-    stripePriceId: "price_seat",
-    seatCount: 3,
+  return teamBillingRow({
     currentPeriodStart: "2026-07-21T09:30:00.000Z",
     currentPeriodEnd: "2026-08-21T09:30:00.000Z",
-    cancelAtPeriodEnd: false,
-    lastStripeEventCreated: null,
     ...overrides,
-  };
+  });
 }
 
 function setup(opts: {
@@ -294,7 +287,8 @@ describe("consumeMcpCredits — the SEAT limit is PER MEMBER and the ENTITLED pl
       CALLER,
       "2026-07-21T09:30:00.000Z",
       1,
-      5_000
+      5_000,
+      ledgerAttribution(WS, CALLER)
     );
   });
 
@@ -338,12 +332,14 @@ describe("consumeMcpCredits — the PERSONAL wallet", () => {
       OWNER,
       CALENDAR_START,
       1,
-      500
+      500,
+      ledgerAttribution(CONTAINER, CALLER)
     );
     // ⚠ THE REVERT DETECTOR. A version that bills the caller passes every other
     // assertion here.
     expect(mockWallets.consumeUserCredits).not.toHaveBeenCalledWith(
       CALLER,
+      expect.anything(),
       expect.anything(),
       expect.anything(),
       expect.anything()
@@ -366,7 +362,8 @@ describe("consumeMcpCredits — the PERSONAL wallet", () => {
       CALLER,
       CALENDAR_START,
       1,
-      500
+      500,
+      ledgerAttribution(PERSONAL, CALLER)
     );
   });
 
@@ -405,7 +402,8 @@ describe("consumeMcpCredits — a PRO personal wallet", () => {
       OWNER,
       "2026-07-21T09:30:00.000Z",
       1,
-      5_000
+      5_000,
+      ledgerAttribution(CONTAINER, CALLER)
     );
     expect(res).toMatchObject({
       wallet: "personal",
@@ -421,7 +419,8 @@ describe("consumeMcpCredits — a PRO personal wallet", () => {
       CALLER,
       "2026-07-21T09:30:00.000Z",
       1,
-      5_000
+      5_000,
+      ledgerAttribution(PERSONAL, CALLER)
     );
     expect(res.limit).toBe(5_000);
   });
@@ -487,7 +486,8 @@ describe("consumeMcpCredits — the owner has no personal container", () => {
       OWNER,
       CALENDAR_START,
       1,
-      500
+      500,
+      ledgerAttribution(CONTAINER, CALLER)
     );
     // Assert the CONTENT: a silent free-tier fallback for a paying customer has
     // no user-visible symptom until the refusal lands.

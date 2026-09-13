@@ -13,7 +13,7 @@ import {
 import type { PlanId } from "../plans";
 import { consumeMemberCredits, consumeUserCredits } from "./credit-wallets";
 import { resolveCallingChannel } from "./channel-attribution";
-import { recordCreditUsageEvent } from "./credit-ledger";
+import type { CreditLedgerAttribution } from "./credit-ledger";
 import { creditPeriodFor, unmetered } from "./credits-meter";
 import { entitledPlanFor, upgradeUrl } from "./entitlements";
 import {
@@ -49,6 +49,13 @@ import { countActiveMembers, getWorkspaceBilling } from "./workspace-billing";
  * spends the caller's seat in that workspace whatever it touches. The channel
  * comes from `./channel-attribution.ts`, which also carries the fence that makes
  * a forgeable header safe to bill from.
+ *
+ * 🔒 **AND THE ATTRIBUTION ROW IS PART OF THE SPEND SINCE 2026-09-13, NOT A
+ * FOLLOW-UP (Samuel: "the histogram must equal the wallet, always"; F-693).**
+ * `credit_usage_events` is written by the wallet RPC itself, in the counter's
+ * transaction — so this file no longer has a ledger write at all, and there is no
+ * arm on which a counter can move without one. The dimensions travel as
+ * `credit-ledger.ts › CreditLedgerAttribution`.
  *
  * ⚠ The plan is the ENTITLEMENT VERDICT, never `workspace_billing.plan` — a
  * solo sub that grew a second member is degraded to free by
@@ -327,6 +334,20 @@ export async function consumeMcpCredits(
     return unmetered();
   }
 
+  // 🔒 **THE LEDGER ROW TRAVELS WITH THE SPEND, NOT AFTER IT (2026-09-13, F-693).**
+  // ⚠ `originWorkspaceId` IS THE ADDRESSED CONTAINER, which is the argument to
+  // this function and NOT `target.workspaceId` — under rule B the charged
+  // container is the calling channel's, and the ledger records where the call was
+  // addressed. Both columns take it, as the deleted TypeScript writer did.
+  const attribution: CreditLedgerAttribution = {
+    originWorkspaceId: workspaceId,
+    callerUserId: caller.userId,
+    // 🔒 RULE B's ATTRIBUTION: the CALLING CHANNEL, or null for "no channel"
+    // (Desktop agent). ⚠ It is NOT derivable from the workspace columns — that is
+    // the whole reason the column exists.
+    channelId: target.channelId,
+  };
+
   const spend =
     target.wallet === "personal"
       ? await spendPersonal(
@@ -337,36 +358,20 @@ export async function consumeMcpCredits(
           // ⚠ IT IS THE TARGET'S FIELD, NOT `caller.workspaceKind`, SINCE RULE B:
           // under a calling channel the charged container is the CHANNEL's, and
           // the addressed container's kind says nothing about it.
-          target.personalBillingContainerId
+          target.personalBillingContainerId,
+          attribution
         )
-      : await spendSeat(target.workspaceId, target.payerUserId);
+      : await spendSeat(target.workspaceId, target.payerUserId, attribution);
 
-  if (spend.outcome.allowed) {
-    // ⚠ **ATTRIBUTION ONLY, AND ONLY ON A SPEND.** A refused consume moved no
-    // counter, so it has nothing to attribute; writing one would put credits in
-    // the by-channel rail that nobody was charged for.
-    // ⚠ **NOT AWAITED — the answer is already decided.** This is the hottest
-    // write path in the product and the ledger is best-effort by design
-    // (`credit-ledger.ts`): it swallows its own errors, so there is no rejection
-    // to handle, and `void` states that the ordering is deliberately unobserved.
-    // ⚠ `workspaceId` AND `originWorkspaceId` ARE BOTH THE ADDRESSED CONTAINER
-    // since 2026-09-07 — the payer is a PERSON now and rides `payerUserId`, so
-    // there is no second workspace for the first column to hold. `/home`'s rails
-    // read the origin and are unaffected.
-    void recordCreditUsageEvent({
-      workspaceId,
-      originWorkspaceId: workspaceId,
-      userId: caller.userId,
-      wallet: target.wallet,
-      payerUserId: target.payerUserId,
-      // 🔒 RULE B's ATTRIBUTION: the CALLING CHANNEL, or null for "no channel"
-      // (Desktop agent). ⚠ It is NOT derivable from the two workspace columns —
-      // that is the whole reason the column exists.
-      channelId: target.channelId,
-      amount: CREDITS_PER_MCP_CALL,
-      periodStart: spend.period.periodStart,
-    });
-  }
+  // ⚠ **NOTHING IS WRITTEN HERE ANY MORE, AND THE ABSENCE IS THE FIX.** The
+  // attribution row is inserted by the wallet RPC, in the counter's own
+  // transaction: a refused consume inserts nothing, and a failed insert rolls the
+  // counter back. The superseded code fired `recordCreditUsageEvent` here,
+  // unawaited, AFTER the counter had committed — so a `42703` left the counter at
+  // 8 over five ledger rows and only a `console.warn` to say so (F-693).
+  // ⚠ **DO NOT RE-ADD A POST-SPEND WRITE OF ANY KIND**, awaited or not: two
+  // round trips cannot be made atomic from here, and a compensating rollback can
+  // itself fail on the hottest path in the product.
 
   return {
     ...spend.period,
@@ -401,7 +406,8 @@ interface WalletSpend {
  */
 async function spendPersonal(
   payerUserId: string,
-  personalBillingContainerId: string | null
+  personalBillingContainerId: string | null,
+  attribution: CreditLedgerAttribution
 ): Promise<WalletSpend> {
   const billing = await readPersonalBilling(
     payerUserId,
@@ -412,7 +418,8 @@ async function spendPersonal(
     payerUserId,
     tier.periodStart,
     CREDITS_PER_MCP_CALL,
-    tier.limit
+    tier.limit,
+    attribution
   );
   return {
     period: { periodStart: tier.periodStart, periodEnd: tier.periodEnd },
@@ -426,7 +433,8 @@ async function spendPersonal(
  *  verdict decides both the window and the PER-MEMBER limit. */
 async function spendSeat(
   workspaceId: string,
-  payerUserId: string
+  payerUserId: string,
+  attribution: CreditLedgerAttribution
 ): Promise<WalletSpend> {
   const [billing, memberCount] = await Promise.all([
     getWorkspaceBilling(workspaceId),
@@ -440,7 +448,8 @@ async function spendSeat(
     payerUserId,
     period.periodStart,
     CREDITS_PER_MCP_CALL,
-    limit
+    limit,
+    attribution
   );
   return { period, limit, plan, outcome };
 }

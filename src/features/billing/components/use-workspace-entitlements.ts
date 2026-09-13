@@ -50,6 +50,23 @@ export interface WorkspaceCreditsStatus {
    *  owner, and the route's own fail-open (`server/credits-service.ts ›
    *  unmetered`, `server/status-service.ts`). */
   degraded?: true;
+  /**
+   * 🔒 **`counter - SUM(ledger)` FOR THIS WALLET AND PERIOD. 0 = RECONCILED**
+   * (Samuel, 2026-09-13: the histogram must equal the wallet, always — F-693).
+   * Non-zero means the two records of this wallet's spend disagree, which the
+   * atomic consume RPC makes unreachable for rows written after
+   * `20261004120000_credit_consume_with_ledger.sql` and cannot undo for rows
+   * written before it.
+   *
+   * ⚠ **NOT A METER AND NOT A SECOND `used`.** The only surface that reads it
+   * prints one muted word (`pages/home/overview-sections.tsx ›
+   * CreditCapacityBar`); nothing derives a figure from it.
+   *
+   * ⚠ **SHIPPED 2026-09-13, SO IT TAKES A `?? 0` FALLBACK BELOW** (INVARIANTS
+   * §8): a cached row from before it replays with the key absent, and 0 is the
+   * same value the server sends when it could not reconcile.
+   */
+  ledgerDrift: number;
 }
 
 export interface WorkspaceEntitlementsStatus {
@@ -121,6 +138,9 @@ const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
     remaining: PERSONAL_MONTHLY_CREDITS.free,
     periodStart: "",
     periodEnd: "",
+    // Nothing was read, so there is nothing that disagrees. 0 is "reconciled",
+    // which is the only claim this pre-response default may make.
+    ledgerDrift: 0,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,
@@ -156,7 +176,13 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
         // shipped replays with the object present and the key missing, which
         // `raw.credits ?? …` cannot see — that is the exact shape of the stale
         // -cache bug the rule above exists for.
-        { ...raw.credits, wallet: raw.credits.wallet ?? null }
+        {
+          ...raw.credits,
+          wallet: raw.credits.wallet ?? null,
+          // ⚠ SHIPPED 2026-09-13 — same rule, same shape: a replayed row has the
+          // `credits` object and not this key, and `0` is "reconciled".
+          ledgerDrift: raw.credits.ledgerDrift ?? 0,
+        }
       : DEFAULT_STATUS.credits,
     cancelAtPeriodEnd: raw.cancelAtPeriodEnd ?? false,
   };

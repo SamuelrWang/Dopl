@@ -42,7 +42,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WorkspaceBillingRow } from "./workspace-billing";
 
-vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   // ⚠ THE PERSONAL WALLET'S OWN READ (2026-09-08). `personal-wallet.ts` is
@@ -68,8 +67,10 @@ import * as wallets from "./credit-wallets";
 import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
 import { consumeMcpCredits, resolveBillingTarget } from "./credits-service";
 import {
+  ledgerAttribution,
   personalTarget,
   seatTarget,
+  teamBillingRow,
   unmeteredTarget,
 } from "./credits-target-fixtures";
 import { getWorkspaceBillingStatus } from "./status-service";
@@ -87,26 +88,16 @@ const GUEST = "user-guest";
 /** The OWNER's own personal container — where their home-space plan lives. */
 const PERSONAL_OF_OWNER = "ws-personal-of-owner";
 
-function billing(): WorkspaceBillingRow {
-  return {
-    workspaceId: OWNER_WS,
-    plan: "team",
-    status: "active",
-    stripeCustomerId: "cus_1",
-    stripeSubscriptionId: "sub_1",
-    stripePriceId: "price_seat",
-    seatCount: 3,
-    currentPeriodStart: null,
-    currentPeriodEnd: null,
-    cancelAtPeriodEnd: false,
-    lastStripeEventCreated: null,
-  };
-}
+/** The shared live-Team row, on the OWNER's standard workspace
+ *  (`credits-target-fixtures.ts › teamBillingRow`). */
+const billing = (): WorkspaceBillingRow => teamBillingRow({ workspaceId: OWNER_WS });
 
 /** The guest addressing the container. */
 const guestCaller = { userId: GUEST, workspaceKind: "link" as const };
 /** The owner addressing their own container. */
 const ownerCaller = { userId: OWNER, workspaceKind: "link" as const };
+
+const attrib = ledgerAttribution;
 
 let warn: ReturnType<typeof vi.spyOn>;
 
@@ -200,7 +191,8 @@ describe("resolveBillingTarget", () => {
       OWNER,
       expect.any(String),
       1,
-      500
+      500,
+      attrib(LINK_WS, GUEST)
     );
   });
 });
@@ -215,7 +207,8 @@ describe("consumeMcpCredits — home containers", () => {
       GUEST,
       expect.any(String),
       1,
-      5_000
+      5_000,
+      attrib(OWNER_WS, GUEST)
     );
     expect(res).toMatchObject({ allowed: true, used: 7, wallet: "seat" });
   });
@@ -227,7 +220,8 @@ describe("consumeMcpCredits — home containers", () => {
       OWNER,
       expect.any(String),
       1,
-      500
+      500,
+      attrib(LINK_WS, GUEST)
     );
     // ⚠ THE REVERT DETECTOR. A version that bills the caller passes every
     // assertion above.
@@ -260,7 +254,8 @@ describe("consumeMcpCredits — home containers", () => {
       OWNER,
       expect.any(String),
       1,
-      5_000
+      5_000,
+      attrib(LINK_WS, GUEST)
     );
     expect(res).toMatchObject({ wallet: "personal", limit: 5_000 });
   });
@@ -271,7 +266,8 @@ describe("consumeMcpCredits — home containers", () => {
       OWNER,
       expect.any(String),
       1,
-      500
+      500,
+      attrib(LINK_WS, OWNER)
     );
     expect(res.degraded).toBeUndefined();
   });
@@ -307,7 +303,8 @@ describe("consumeMcpCredits — home containers", () => {
       OWNER,
       expect.any(String),
       1,
-      500
+      500,
+      attrib(PERSONAL_WS, OWNER)
     );
     // ⚠ THE ADDRESSED CONTAINER IS ITSELF THE BILLING ROW HERE — the one shape
     // where it is (`credits-service.ts › consumeMcpCredits`'s `workspaceKind ===
@@ -342,7 +339,8 @@ describe("consumeMcpCredits — home containers", () => {
       OWNER,
       expect.any(String),
       1,
-      5_000
+      5_000,
+      attrib(PERSONAL_WS, OWNER)
     );
   });
 

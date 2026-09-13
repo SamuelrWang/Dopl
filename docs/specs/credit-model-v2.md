@@ -160,6 +160,48 @@ backfilled** (the session that made the call is gone, and the origin container
 does not answer the question), so pre-deploy spend reads as **Desktop agent** —
 accepted.
 
+### 3A.1 ONE ATOMIC WRITE — the counter and the ledger row, or neither (2026-09-13, F-693)
+
+> **"There's a disconnect between the two charts. We need to nail this down."**
+>
+> **The histogram must equal the wallet, always.**
+
+**Measured the same day rule B landed:** Samuel's personal wallet counter read
+`used = 8`; the ledger held FIVE rows for that payer, wallet and period. The bar on
+/home's Usage card is the COUNTER and the histogram under it is the LEDGER, so the
+two charts on one card disagreed by three.
+
+**Cause:** `billing/server/credit-ledger.ts › recordCreditUsageEvent` was
+`void`-fired AFTER the counter RPC had committed. Between the server naming
+`channel_id` and `20261003120000` being applied, every insert answered `42703` and
+was `console.warn`ed while the counter had already moved. The three rows were
+reconciled by hand; **that is not the fix** — any insert failure (RLS, a bad FK, a
+network blip, the next column added ahead of its migration) reproduces it.
+
+**Fix, in two halves:**
+
+| Half | Where | What |
+|---|---|---|
+| The atomic write | `supabase/migrations/20261004120000_credit_consume_with_ledger.sql` | `consume_user_credits` / `consume_member_credits` DROPped and re-created with `p_origin_workspace_id`, `p_caller_user_id`, `p_channel_id`; each `INSERT`s `credit_usage_events` itself, inside the branch its CAS proved moved the counter. Refused ⇒ no row. Insert fails ⇒ counter rolls back, RPC throws, the route's existing fail-open handles it. CAS/allowance semantics byte-for-byte `20260930120000` §3. |
+| The guard | `billing/server/credits-audit.ts › walletMatchesLedger(payer, wallet, period)` → `{ counter, ledgerSum, drift }` | Over `credit_ledger_sum` (that migration §4 — an RPC because PostgREST cannot aggregate, and a capped haul is a FLOOR that cannot measure a difference). Published as `GET /api/billing/status › credits.ledgerDrift`; rendered as one muted `Unreconciled` on `pages/home/overview-sections.tsx › CreditCapacityBar`, and NOTHING when 0. |
+
+⚠ **`DROP` + bare `CREATE`, never `CREATE OR REPLACE`**: the argument list changed,
+so `OR REPLACE` leaves the four-argument function standing as an OVERLOAD — a second
+path that moves a counter with no ledger row, i.e. the defect re-armed.
+⚠ **`recordCreditUsageEvent` IS DELETED**; `credit-ledger.ts` is the row's contract.
+**No post-spend ledger write may be reintroduced, awaited or not** — two PostgREST
+round trips cannot be made atomic from the application.
+⚠ **Both reconciliation sides key on `(payer, wallet, period)`**, and the SEAT arm is
+therefore cross-workspace (`credit-wallets.ts › sumMemberCreditsUsed`): the ledger row
+records the ADDRESSED container, so a per-workspace narrowing would drop every
+cross-container seat burn and read as drift.
+⚠ **`ledgerDrift` extends the STATUS payload only** (`status-service.ts ›
+StatusCredits`), so the `POST /api/mcp/credits/consume` body is byte-identical.
+⚠ **Nothing corrects either side.** `scripts/sql/backfill-credit-wallets-v2.sql` still
+sets counters FROM the ledger and remains a person's decision; after this migration the
+two cannot diverge, so it is a deploy-day catch-up and a hand repair, never a cron.
+⚠ **WRITTEN, NOT APPLIED** — `supabase migration list`, joined ON THE NAME.
+
 **Why a column and not a join**: the channel dimension used to be
 `origin_workspace_id` on the argument that a container holds exactly one channel.
 Rule B breaks that identity — the channel that PAYS and the container that was

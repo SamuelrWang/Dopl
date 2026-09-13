@@ -29,8 +29,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WorkspaceBillingRow } from "./workspace-billing";
 
-vi.mock("./credit-ledger", () => ({ recordCreditUsageEvent: vi.fn() }));
-
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   getPersonalBilling: vi.fn(),
@@ -59,7 +57,6 @@ import {
   findActiveOwnerUserId,
   findMembership,
 } from "@/features/workspaces/server/repository";
-import { recordCreditUsageEvent } from "./credit-ledger";
 import { consumeMcpCredits, resolveBillingTarget } from "./credits-service";
 
 const mockRepo = vi.mocked(repo);
@@ -67,7 +64,21 @@ const mockWallets = vi.mocked(wallets);
 const mockChannel = vi.mocked(findChannelContainer);
 const mockOwner = vi.mocked(findActiveOwnerUserId);
 const mockMember = vi.mocked(findMembership);
-const mockLedger = vi.mocked(recordCreditUsageEvent);
+
+/**
+ * The ledger attribution each wallet RPC was handed — the object
+ * `credit-ledger.ts › CreditLedgerAttribution` describes, in the trailing
+ * argument position of each consume signature (5th for the personal wallet, 6th
+ * for the seat, because that counter's key is one column wider).
+ *
+ * ⚠ **READ BY POSITION ON PURPOSE.** Naming the index here is what makes a future
+ * argument inserted in the middle fail loudly, instead of asserting against
+ * whatever landed last.
+ */
+const personalAttribution = () =>
+  mockWallets.consumeUserCredits.mock.calls[0]?.[4];
+const seatAttribution = () =>
+  mockWallets.consumeMemberCredits.mock.calls[0]?.[5];
 
 /** The operator's home channel: a `kind='link'` container they own. */
 const HOME_CHANNEL = "chan-home";
@@ -175,7 +186,10 @@ describe("🔒 rule B, arm 1 — a HOME-CHANNEL agent pays the owner's PERSONAL 
       OWNER,
       expect.any(String),
       1,
-      500
+      500,
+      // The attribution the RPC writes: the ADDRESSED workspace, the GUEST who
+      // called, and the HOME channel rule B billed.
+      { originWorkspaceId: TEAM_WS, callerUserId: GUEST, channelId: HOME_CHANNEL }
     );
     expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
   });
@@ -200,7 +214,10 @@ describe("🔒 rule B, arm 2 — a WORKSPACE-CHANNEL agent pays the CALLER's SEA
       GUEST,
       expect.any(String),
       1,
-      5_000
+      5_000,
+      // ⚠ THE ADDRESSED CONTAINER IS THE CALLER'S OWN SHELF while the CHARGED one
+      // is the workspace — the pair rule B exists to keep apart.
+      { originWorkspaceId: PERSONAL, callerUserId: GUEST, channelId: TEAM_CHANNEL }
     );
     expect(mockWallets.consumeUserCredits).not.toHaveBeenCalled();
   });
@@ -214,9 +231,14 @@ describe("🔒 rule B, arms 3 and 4 — a CHANNEL-LESS call pays the RESOURCE's 
       workspaceKind: "standard",
     });
     expect(mockChannel).not.toHaveBeenCalled();
-    expect(mockLedger).toHaveBeenCalledWith(
-      expect.objectContaining({ wallet: "seat", channelId: null })
-    );
+    // THE SEAT RPC, which is the only one that writes a `wallet='seat'` row, with
+    // no channel on its attribution.
+    expect(mockWallets.consumeUserCredits).not.toHaveBeenCalled();
+    expect(seatAttribution()).toEqual({
+      originWorkspaceId: TEAM_WS,
+      callerUserId: GUEST,
+      channelId: null,
+    });
   });
 
   it("a desktop call on a HOME resource is the owner's PERSONAL wallet with channel_id null", async () => {
@@ -228,13 +250,14 @@ describe("🔒 rule B, arms 3 and 4 — a CHANNEL-LESS call pays the RESOURCE's 
       channelId: null,
     });
     expect(mockChannel).not.toHaveBeenCalled();
-    expect(mockLedger).toHaveBeenCalledWith(
-      expect.objectContaining({
-        wallet: "personal",
-        payerUserId: OWNER,
-        channelId: null,
-      })
-    );
+    // The PERSONAL RPC writes `wallet='personal'`; the OWNER is its counter key
+    // (the payer) and the GUEST is on the attribution (the caller).
+    expect(mockWallets.consumeUserCredits.mock.calls[0]?.[0]).toBe(OWNER);
+    expect(personalAttribution()).toEqual({
+      originWorkspaceId: HOME_CONTAINER,
+      callerUserId: GUEST,
+      channelId: null,
+    });
   });
 });
 
@@ -329,6 +352,15 @@ describe("🔒 THE FENCE — a forgeable header may not move a stranger's wallet
   });
 });
 
+/**
+ * 🔒 **THE LEDGER ROW IS WRITTEN BY THE WALLET RPC ITSELF SINCE 2026-09-13**
+ * (Samuel: *"the histogram must equal the wallet, always"*; F-693,
+ * `20261004120000_credit_consume_with_ledger.sql`). ⚠ **SO THESE CASES ASSERT THE
+ * RPC's ATTRIBUTION ARGUMENT, NOT A WRITER'S CALL** — the superseded shape mocked
+ * `recordCreditUsageEvent` and proved it was fired, which is a weaker claim than
+ * it looked: the real writer ran AFTER the counter had committed and swallowed its
+ * own failures.
+ */
 describe("🔒 the ledger row is what makes the histogram the wallet's own breakdown", () => {
   it("files the CALLING CHANNEL beside the addressed container, not instead of it", async () => {
     // ⚠ BOTH DIMENSIONS RIDE. `origin_workspace_id` stays WHERE the call was
@@ -340,19 +372,24 @@ describe("🔒 the ledger row is what makes the histogram the wallet's own break
       workspaceKind: "standard",
       channelId: HOME_CHANNEL,
     });
-    expect(mockLedger).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: TEAM_WS,
-        originWorkspaceId: TEAM_WS,
-        channelId: HOME_CHANNEL,
-        wallet: "personal",
-        payerUserId: OWNER,
-        userId: OWNER,
-      })
-    );
+    // The PERSONAL RPC (rule B arm 1: the home channel's wallet pays), keyed on
+    // the OWNER, carrying the addressed workspace AND the calling channel.
+    expect(mockWallets.consumeUserCredits.mock.calls[0]?.[0]).toBe(OWNER);
+    expect(personalAttribution()).toEqual({
+      originWorkspaceId: TEAM_WS,
+      callerUserId: OWNER,
+      channelId: HOME_CHANNEL,
+    });
   });
 
-  it("writes NOTHING when the consume was refused, channel or no channel", async () => {
+  /**
+   * ⚠ **"A REFUSED CONSUME WRITES NOTHING" IS A PROPERTY OF THE FUNCTION BODY
+   * NOW**, pinned in SQL by `credit-consume-with-ledger-schema.test.ts` (the
+   * INSERT sits inside the branch that already proved the CAS moved the counter).
+   * What is still provable from here is that the refusal is NOT a second code path
+   * with a second write: the same one RPC call carries both outcomes.
+   */
+  it("takes ONE RPC call whether the consume is allowed or refused", async () => {
     mockChannel.mockResolvedValue(homeChannel());
     mockWallets.consumeUserCredits.mockResolvedValue({
       allowed: false,
@@ -364,6 +401,11 @@ describe("🔒 the ledger row is what makes the histogram the wallet's own break
       channelId: HOME_CHANNEL,
     });
     expect(res.allowed).toBe(false);
-    expect(mockLedger).not.toHaveBeenCalled();
+    expect(mockWallets.consumeUserCredits).toHaveBeenCalledTimes(1);
+    expect(personalAttribution()).toEqual({
+      originWorkspaceId: TEAM_WS,
+      callerUserId: OWNER,
+      channelId: HOME_CHANNEL,
+    });
   });
 });

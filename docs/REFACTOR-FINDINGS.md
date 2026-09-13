@@ -8702,3 +8702,49 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   `session-summary-report`, `claudeai-connector-lane`.
 - **Status: FIXED 2026-09-13** on `ui/agents-tab-polish`, uncommitted. ⚠ `main/` changed, so the
   Electron main process must be restarted before any of it is live.
+
+### F-693 — the ledger insert was FIRE-AND-FORGET after the counter had already moved, so the /home histogram silently fell behind its own bar (found + fixed 2026-09-13)
+
+- **THE MEASUREMENT.** Samuel's personal wallet counter read `used = 8`; `credit_usage_events`
+  (`wallet='personal'`, `payer_user_id` = him, same `period_start`) held FIVE rows. /home's Usage
+  card prints the COUNTER on its bar and the LEDGER in its histogram, so the two charts on one card
+  disagreed by three — *"there's a disconnect between the two charts. we need to nail this down."*
+- **ROOT CAUSE, exactly.** `billing/server/credit-ledger.ts › recordCreditUsageEvent` was
+  `void`-fired by `credits-service.ts › consumeMcpCredits` AFTER the counter RPC had committed. For
+  the minutes between the server naming `channel_id` and
+  `20261003120000_credit_events_channel.sql` being applied, every insert answered
+  `42703 column channel_id does not exist`; the writer swallowed it with a `console.warn` and the
+  counter had already moved. ⚠ **THE MODULE'S OWN HEADER PREDICTED THIS** — it said the ledger "MAY
+  UNDER-COUNT" and that every reader must treat `SUM(amount)` as a FLOOR. The defect is not that
+  the cost was unstated; it is that a floor is not good enough for a figure printed beside the
+  counter on one card, and any insert failure (an RLS change, a bad FK, a network blip, the next
+  column added ahead of its migration) reproduces it identically.
+- 🔒 **SAMUEL'S RULING: THE HISTOGRAM MUST EQUAL THE WALLET, ALWAYS.** The three rows were
+  reconciled by hand the same day; **that is not the fix.**
+- **RESOLVED 2026-09-13, in two halves.**
+  1. **ONE ATOMIC WRITE.** `supabase/migrations/20261004120000_credit_consume_with_ledger.sql`
+     DROPs `consume_user_credits` / `consume_member_credits` and re-creates them with three trailing
+     arguments (`p_origin_workspace_id`, `p_caller_user_id`, `p_channel_id`); each now
+     `INSERT`s the `credit_usage_events` row itself, inside the branch its CAS has already proved
+     moved the counter. A refused consume inserts nothing; a failed insert aborts the transaction
+     and rolls the counter back. The CAS/allowance semantics are byte-for-byte
+     `20260930120000` §3. ⚠ **`DROP` + bare `CREATE`, never `CREATE OR REPLACE`**: the argument
+     list changed, so `OR REPLACE` would leave the four-argument function standing as an OVERLOAD —
+     a second path that moves a counter with no ledger row, i.e. this finding, re-armed.
+     `recordCreditUsageEvent` is DELETED; `credit-ledger.ts` is the row's contract now.
+  2. **A RECONCILIATION GUARD**, because "always" is a claim somebody has to be able to check and
+     the rows written before the fix are exactly the ones no transaction vouches for:
+     `billing/server/credits-audit.ts › walletMatchesLedger` over the migration's own
+     `credit_ledger_sum`, published as `GET /api/billing/status › credits.ledgerDrift` and rendered
+     as one muted `Unreconciled` on the /home bar (nothing at all when it is 0).
+- ⚠ **WHAT THIS DID *NOT* DO, DELIBERATELY.** It does not move what `credit_usage_events.workspace_id`
+  means (still the ADDRESSED container, so the RLS argument is untouched), does not change the
+  `POST /api/mcp/credits/consume` response shape (`ledgerDrift` extends the STATUS payload only),
+  and does not correct any row. ⚠ **AND THE MIGRATION IS WRITTEN, NOT APPLIED** — deploy state is a
+  measurement (INVARIANTS §12): `supabase migration list`, joined ON THE NAME. Between deploy and
+  apply the RPCs answer `PGRST202` and every tool call runs free and unmetered, which is silent.
+- ⚠ **ONE CONTRACT NARROWED TO LET THIS LAND**, recorded rather than buried:
+  `credit-wallets-schema.test.ts`'s "no file after it UNDOES this file's subjects" sweep now treats
+  a `DROP FUNCTION` PAIRED WITH A `CREATE FUNCTION` of the same name in the same file as a
+  REPLACEMENT. A bare `DROP` still fails, and tables, columns, indexes and policies get no such
+  latitude.

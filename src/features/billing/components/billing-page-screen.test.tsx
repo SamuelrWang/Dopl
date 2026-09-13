@@ -49,6 +49,7 @@ const FREE: WorkspaceEntitlementsStatus = {
     // ⚠ Midday UTC: `formatDate` renders in the RUNNER's timezone; a midnight
     // instant flips a day west of UTC.
     periodEnd: "2026-09-01T12:00:00.000Z",
+    ledgerDrift: 0,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,

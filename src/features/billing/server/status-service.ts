@@ -1,6 +1,7 @@
 import "server-only";
 import type { WorkspaceKind } from "@/features/workspaces/types";
 import { getWorkspaceEntitlements } from "./entitlements";
+import { ledgerDriftFor } from "./credits-audit";
 import { readPersonalBilling } from "./personal-wallet";
 import { getWorkspaceBilling } from "./workspace-billing";
 import {
@@ -32,6 +33,32 @@ import {
  * taxonomies now exist (`../plans.ts › plansForKind`) and no renderer can pick
  * between them from `plan` alone — `free` is a value on both lists.
  */
+/**
+ * The meter, plus the RECONCILIATION verdict for the wallet it read.
+ *
+ * 🔒 **`ledgerDrift` IS ON THE STATUS PAYLOAD AND ON NOTHING ELSE (2026-09-13,
+ * F-693).** `CreditsSummary` is shared with `CreditConsumeResult`, which is the
+ * body `POST /api/mcp/credits/consume` returns to the MCP server — a wire shape
+ * with shipped readers, and a diagnostic has no business on the hottest path in
+ * the product. Extending here rather than there keeps that response byte-identical.
+ */
+export interface StatusCredits extends CreditsSummary {
+  /**
+   * `counter - SUM(ledger)` for this wallet and period. **0 = reconciled**, which
+   * is what every row written after
+   * `20261004120000_credit_consume_with_ledger.sql` must be, and what an
+   * unreadable reconciliation also reports (`credits-audit.ts › ledgerDriftFor`
+   * degrades with a warn — the migration ships unapplied).
+   *
+   * ⚠ **NEW ON THE WIRE, SO THE CLIENT MIRROR NEEDS A `?? 0`** (INVARIANTS §8):
+   * the query cache is IndexedDB-persisted with a 24h gcTime, so a row stored
+   * before this field shipped replays after it with the key absent.
+   * `components/use-workspace-entitlements.ts` defaults it FIELD-WISE inside
+   * `credits`, and a stale-cache case pins it.
+   */
+  ledgerDrift: number;
+}
+
 export interface WorkspaceBillingStatusPayload {
   /**
    * The ENTITLED plan of the addressed container. ⚠ On a `kind='personal'`
@@ -62,7 +89,7 @@ export interface WorkspaceBillingStatusPayload {
   chatsWindowDays: number | null;
   /** THE CALLER'S OWN credit meter for the current period — their seat, or
    *  their personal wallet. Every caller has one. */
-  credits: CreditsSummary;
+  credits: StatusCredits;
   /** Live now, will not renew (Stripe's `cancel_at_period_end`). */
   cancelAtPeriodEnd: boolean;
   subscription_period_end: string | null;
@@ -138,12 +165,17 @@ async function callerCredits(
   caller: CreditCaller,
   billing: Awaited<ReturnType<typeof getWorkspaceBilling>>,
   entitlements: Awaited<ReturnType<typeof getWorkspaceEntitlements>>
-): Promise<CreditsSummary> {
-  if (resolved.wallet === null) return unmeteredSummary();
+): Promise<StatusCredits> {
+  if (resolved.wallet === null) return reconciled(unmeteredSummary(), resolved);
   // 🔒 THE PEER FENCE. A personal wallet belongs to the container's owner; a
   // non-owner asking about it gets the same stamped zeroes the consume path
   // reports, never a reading of somebody else's allowance.
-  if (resolved.payerUserId !== caller.userId) return unmeteredSummary();
+  // ⚠ **AND NO DRIFT FIGURE EITHER**: the reconciliation reads the OWNER's wallet,
+  // so answering a peer with it would leak the shape of somebody else's spend
+  // through the one field that survives the fence.
+  if (resolved.payerUserId !== caller.userId) {
+    return { ...unmeteredSummary(), ledgerDrift: 0 };
+  }
   if (resolved.wallet === "personal") {
     // ⚠ **THE METER MUST READ THE SAME ROW ENFORCEMENT CHARGES AGAINST**, and
     // for a personal wallet that is the PAYER'S PERSONAL CONTAINER — which is
@@ -158,7 +190,31 @@ async function callerCredits(
         : await readPersonalBilling(resolved.payerUserId, null);
     // ⚠ MEMBER COUNT 1: a personal container holds its owner and nobody else,
     // so the addressed container's roster is not the payer's wallet's business.
-    return summarizeCredits(resolved, personal, 1);
+    return reconciled(await summarizeCredits(resolved, personal, 1), resolved);
   }
-  return summarizeCredits(resolved, billing, entitlements.memberCount);
+  return reconciled(
+    await summarizeCredits(resolved, billing, entitlements.memberCount),
+    resolved
+  );
+}
+
+/**
+ * Stamp a meter with its wallet's reconciliation verdict.
+ *
+ * ⚠ **THE PERIOD IS THE METER'S OWN, NEVER RE-DERIVED FROM THE CLOCK.** The
+ * counter and the ledger are both keyed on `period_start`, and a wallet on a Stripe
+ * anchor does not roll on the 1st — reconciling a different window than the meter
+ * read would report drift that is really two different months.
+ *
+ * ⚠ ONE round trip pair, on the SETTINGS/overview read only. It is not on the
+ * consume path and must not be put there.
+ */
+async function reconciled(
+  credits: CreditsSummary,
+  resolved: BillingTarget
+): Promise<StatusCredits> {
+  return {
+    ...credits,
+    ledgerDrift: await ledgerDriftFor(resolved, credits.periodStart),
+  };
 }
