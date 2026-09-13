@@ -100,10 +100,16 @@ export function AgentFolderRows({
              ⚠ NO UNDERLINE, REGULAR WEIGHT (Samuel, 2026-09-10): "Working Folder
              ~/Downloads … also remove the underline." The path is a VALUE in the
              Agent Settings block, so it wears exactly what the block's dropdown
-             values wear (`select-menu.tsx › TRIGGER_FACE.text`) — the ink change on
-             hover is the whole affordance now, and it is still a real `<button>`
-             with an `aria-label`, which is what keeps it operable and announced. */
-          className="min-w-0 truncate text-body text-text-primary transition-colors hover:text-text-secondary disabled:opacity-60"
+             values wear (`select-menu.tsx › TRIGGER_FACE.text`) — and it is a real
+             `<button>` with an `aria-label`, which is what keeps it operable and
+             announced.
+             ⚠ THE GRAY HOVER IS THAT FACE'S, TO THE LETTER (Samuel, 2026-09-13:
+             *"Anything that can be clicked"*) — same `--menu-item-hover-bg` token,
+             same `rounded-md`, same `-mx-1.5 px-1.5` so the path does not shift when
+             the highlight appears. This row is the one clickable VALUE on the tab
+             that is not a `SelectMenu`, so it has to state the recipe rather than
+             inherit it; if a third caller ever appears, promote the string. */
+          className="-mx-1.5 min-w-0 truncate rounded-md px-1.5 text-body text-text-primary transition-colors hover:bg-menu-item-hover-bg hover:text-text-secondary disabled:opacity-60 disabled:hover:bg-transparent"
         >
           {folder.busy ? "Opening picker…" : folder.label}
         </button>
@@ -114,7 +120,11 @@ export function AgentFolderRows({
             type="button"
             onClick={folder.onClear}
             disabled={folder.busy}
-            className="rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary disabled:opacity-60"
+            /* ⚠ `--menu-item-hover-bg`, NOT A SECOND SPELLING OF `--surface-raised-1`
+               (Samuel, 2026-09-13). Same pixels — the token IS `var(--surface-raised-1)`
+               by reference — and one name for the hover gray is the point of the
+               2026-09-10 ruling. */
+            className="rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-secondary transition-colors hover:bg-menu-item-hover-bg hover:text-text-primary disabled:opacity-60"
           >
             Use default
           </button>

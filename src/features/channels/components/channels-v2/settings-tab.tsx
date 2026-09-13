@@ -47,6 +47,11 @@ import type { ReactNode } from "react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { cn } from "@/shared/lib/utils";
 import { PanelHeading } from "./bits";
+// ⚠ THE ROW SEPARATOR THE AGENT HALF USES, SO THIS SECTION READS AS THE SAME
+// COLUMN (Samuel, 2026-09-13 — a line between every setting on this tab). It wraps
+// `bits.tsx › MetaRowDivider`, the Info tab's own hairline, which is the surface he
+// named as the reference.
+import { SettingDivider } from "./settings-agent-rows";
 import type { Channel } from "../../types";
 
 export interface ChannelsV2SettingsTabProps {
@@ -243,18 +248,32 @@ function ActionRow({
   onSelect: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "flex h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-small transition-colors",
-        destructive
-          ? "text-danger hover:bg-danger/10"
-          : "text-text-secondary hover:bg-surface-raised-1 hover:text-text-primary"
-      )}
-    >
-      <Icon size={14} className="shrink-0" />
-      <span className="truncate">{label}</span>
-    </button>
+    <>
+      {/* ⚠ SAME RECIPE AS A SETTING ROW'S (2026-09-13): the leading hairline, with
+          `:first-child` keeping it off the top of the section. These rows are
+          CONDITIONAL — invite, visibility, archive, delete and leave each have their
+          own gate — so whichever one renders first is a render-time fact and no flag
+          here could be right on every viewer. */}
+      <SettingDivider />
+      <button
+        type="button"
+        data-settings-row
+        onClick={onSelect}
+        className={cn(
+          "flex h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-small transition-colors",
+          destructive
+            ? "text-danger hover:bg-danger/10"
+            // ⚠ `--menu-item-hover-bg` is THE hover gray for anything clickable
+            // (Samuel, 2026-09-10, and 2026-09-13 over this tab). It is
+            // `var(--surface-raised-1)` BY REFERENCE, so this is the same pixels this
+            // row always drew under a single name — the destructive branch keeps its
+            // own danger tint, which is INK, not the neutral hover.
+            : "text-text-secondary hover:bg-menu-item-hover-bg hover:text-text-primary"
+        )}
+      >
+        <Icon size={14} className="shrink-0" />
+        <span className="truncate">{label}</span>
+      </button>
+    </>
   );
 }

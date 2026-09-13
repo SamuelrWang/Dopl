@@ -24,7 +24,10 @@
  * running agents (plus the stored value, marked "Not running", so a blank trigger could not be
  * mistaken for "nobody nominated"), and there is no agent to name here.
  *
- * ⚠ **"Last Agent Addressed" IS THE DEFAULT AND THAT IS A STANDING RULING, NOT A PREFERENCE.**
+ * ⚠ **"Last addressed" IS THE DEFAULT AND THAT IS A STANDING RULING, NOT A PREFERENCE.**
+ * (It read "Last Agent Addressed" until 2026-09-13 — a WORDING change on Samuel's
+ * concision ruling, not a changed default: the value is still
+ * `UNADDRESSED_RESPONDER_DEFAULT`.)
  * B1 (2026-09-04): a forgotten `@` must never stall a conversation, made off a live incident —
  * a person wrote in a room with two live agents and no default, the post fed 0 of 2, and he had
  * to send it again with a tag. So a member who never opens this panel is answered.
@@ -44,7 +47,7 @@ import {
   UNADDRESSED_RESPONDER_DEFAULT,
   type UnaddressedResponderSetting,
 } from "../../lib/agent-mentions";
-import { GroupLabel, SettingRow } from "./settings-agent-rows";
+import { SettingRow } from "./settings-agent-rows";
 import type { ChannelMember } from "../../types";
 
 /**
@@ -62,7 +65,7 @@ const RESPONDER_OPTIONS: {
   label: string;
 }[] = [
   { value: "none", label: "No one" },
-  { value: UNADDRESSED_RESPONDER_DEFAULT, label: "Last Agent Addressed" },
+  { value: UNADDRESSED_RESPONDER_DEFAULT, label: "Last addressed" },
 ];
 
 export interface ChannelAgentsSettingsProps {
@@ -95,23 +98,33 @@ export function ChannelAgentsSettings({
   const value = viewerUnaddressedResponder(members, currentUserId);
 
   return (
-    <>
-      <GroupLabel>Agents</GroupLabel>
-      <div className="flex flex-col gap-1 px-2">
-        {/* ⚠ THE LABEL SAYS "MY", because the row above it does not: this is the one control on
-            this tab whose scope a reader could otherwise mistake for the room's. */}
-        <SettingRow name="Answers my unaddressed messages">
-          <SelectMenu<UnaddressedResponderSetting>
-            variant="text"
-            value={value}
-            options={RESPONDER_OPTIONS}
-            onChange={onSetUnaddressedResponder}
-            ariaLabel="Who answers my unaddressed messages in this channel"
-            disabled={busy}
-          />
-        </SettingRow>
-      </div>
-    </>
+    // ⚠ THE "AGENTS" GROUP LABEL IS DELETED (Samuel, 2026-09-13: *"also remove the header
+    // line Agents"*), and the HAIRLINE is what separates this row from the block above it now
+    // — `SettingRow`'s `continues`, because this row is the first child of its own container
+    // and would otherwise have its leading line suppressed. The label was the last group
+    // heading left on this tab; 2026-09-06 (item 2) deleted the other three.
+    // ⚠ `px-3.5` MATCHES THE AGENT SETTINGS COLUMN, and it has to: the hairline is inset
+    // `mx-2` inside whatever padding its container has, so a `px-2` group here would draw the
+    // same line 6px wider than every line above it. It was `px-2` while the heading made this
+    // a visually separate group.
+    <div className="flex flex-col gap-1 px-3.5">
+      {/* ⚠ "Answers my unaddressed messages" → "Responder" (Samuel, 2026-09-13: *"this line
+          is really long and sticks out, is there a better way to phrase this more
+          concisely"*). The scope the old label carried in the word "MY" is NOT lost: it rides
+          the control's accessible name — "Who answers my unaddressed messages in this
+          channel" — which `SelectMenu` also renders as the trigger's `title`, so the long
+          sentence is one hover away and is what a screen reader still announces. */}
+      <SettingRow name="Responder" continues>
+        <SelectMenu<UnaddressedResponderSetting>
+          variant="text"
+          value={value}
+          options={RESPONDER_OPTIONS}
+          onChange={onSetUnaddressedResponder}
+          ariaLabel="Who answers my unaddressed messages in this channel"
+          disabled={busy}
+        />
+      </SettingRow>
+    </div>
   );
 }
 

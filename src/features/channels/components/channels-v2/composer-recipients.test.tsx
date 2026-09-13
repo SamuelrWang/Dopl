@@ -381,7 +381,7 @@ describe("🔒 the settings control and the composer read one source", () => {
     expect(screen.getByLabelText("Recipients").textContent).toContain(REACH_NOBODY);
   });
 
-  it("the default renders as Last Agent Addressed, and the line still names an agent", () => {
+  it("the default renders as Last addressed, and the line still names an agent", () => {
     render(
       <ChannelAgentsSettings
         members={MEMBERS}
@@ -391,6 +391,6 @@ describe("🔒 the settings control and the composer read one source", () => {
     );
     expect(
       screen.getByLabelText("Who answers my unaddressed messages in this channel").textContent
-    ).toContain("Last Agent Addressed");
+    ).toContain("Last addressed");
   });
 });

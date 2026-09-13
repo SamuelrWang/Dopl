@@ -37,6 +37,12 @@ import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { cn } from "@/shared/lib/utils";
 import { THREAD_MODE_LABELS } from "../../constants";
 import { PanelHeading } from "./bits";
+// ⚠ THE CHANNEL FACE'S ROW SEPARATOR, BY IMPORT (Samuel, 2026-09-13: *"in the
+// settings tab for channels AND THREADS. In between each setting, add a horizontal
+// line"*). It wraps `bits.tsx › MetaRowDivider` — the Info tab's hairline, which is
+// the surface he named — and importing it is what keeps the two Settings faces from
+// separating their rows at two different insets.
+import { SettingDivider } from "./settings-agent-rows";
 import type { ChannelThread, ThreadMode } from "../../types";
 
 /** The two real modes, label-only. ⚠ Derived from the shared label map rather
@@ -83,7 +89,7 @@ export function ChannelsV2ThreadSettingsTab({
       <PanelHeading title="Thread" />
       <div className="flex flex-col gap-px px-2">
         {canSetMode && (
-          <div className="flex min-h-[40px] items-center gap-2 px-2">
+          <div data-settings-row className="flex min-h-[40px] items-center gap-2 px-2">
             <span className="shrink-0 text-body font-medium text-text-primary">
               Mode
             </span>
@@ -99,24 +105,33 @@ export function ChannelsV2ThreadSettingsTab({
             </span>
           </div>
         )}
+        {/* ⚠ IT BELONGS TO THE ROW BELOW IT, which is why it rides Delete's own gate:
+            a hairline under the LAST row is a rule framing the box rather than
+            separating two settings. The other direction needs no gate — with Mode
+            suppressed for a non-creator this becomes the container's first child and
+            `:first-child` hides it (`settings-agent-rows.tsx › SettingDivider`). */}
         {canDelete && (
-          <button
-            type="button"
-            onClick={onRequestDelete}
-            // ⚠ The ACTION-ROW recipe from `settings-tab.tsx › ActionRow`,
-            // repeated rather than imported: that component is private to the
-            // channel tab and exporting it would make one file the other's
-            // layout dependency for four utility classes. If a third caller ever
-            // appears, promote it to `bits.tsx` instead of chaining imports.
-            // `destructive` is INK ONLY — the click opens a dialog.
-            className={cn(
-              "flex h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-small transition-colors",
-              "text-danger hover:bg-danger/10"
-            )}
-          >
-            <Trash2 size={14} className="shrink-0" />
-            <span className="truncate">Delete thread</span>
-          </button>
+          <>
+            <SettingDivider />
+            <button
+              type="button"
+              data-settings-row
+              onClick={onRequestDelete}
+              // ⚠ The ACTION-ROW recipe from `settings-tab.tsx › ActionRow`,
+              // repeated rather than imported: that component is private to the
+              // channel tab and exporting it would make one file the other's
+              // layout dependency for four utility classes. If a third caller ever
+              // appears, promote it to `bits.tsx` instead of chaining imports.
+              // `destructive` is INK ONLY — the click opens a dialog.
+              className={cn(
+                "flex h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-small transition-colors",
+                "text-danger hover:bg-danger/10"
+              )}
+            >
+              <Trash2 size={14} className="shrink-0" />
+              <span className="truncate">Delete thread</span>
+            </button>
+          </>
         )}
       </div>
     </div>

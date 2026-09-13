@@ -79,7 +79,7 @@ describe("the per-member responder rule", () => {
     const labels = open(CONTROL).map((el) => el.textContent ?? "");
     expect(labels).toHaveLength(2);
     expect(labels.some((l) => l.includes("No one"))).toBe(true);
-    expect(labels.some((l) => l.includes("Last Agent Addressed"))).toBe(true);
+    expect(labels.some((l) => l.includes("Last addressed"))).toBe(true);
   });
 
   it("🔒 shows the VIEWER's row, not the first row or a peer's", () => {
@@ -93,7 +93,7 @@ describe("the per-member responder rule", () => {
     // The failure this forbids is silent and invisible to its victim: a person who never opened
     // this panel being shown, and then treated as, having opted out.
     panel({ members: [] });
-    expect(screen.getByLabelText(CONTROL).textContent).toContain("Last Agent Addressed");
+    expect(screen.getByLabelText(CONTROL).textContent).toContain("Last addressed");
   });
 
   it("sends the SETTING, not a handle and not null", () => {
@@ -108,7 +108,7 @@ describe("the per-member responder rule", () => {
     const onSetUnaddressedResponder = vi.fn();
     panel({ members: roster({ unaddressedResponder: "none" }), onSetUnaddressedResponder });
     const items = open(CONTROL);
-    fireEvent.click(items.find((el) => el.textContent?.includes("Last Agent Addressed"))!);
+    fireEvent.click(items.find((el) => el.textContent?.includes("Last addressed"))!);
     expect(onSetUnaddressedResponder).toHaveBeenCalledWith("last_addressed");
   });
 });

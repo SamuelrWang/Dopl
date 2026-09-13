@@ -31,6 +31,10 @@ import {
   SHARED_CHANNEL_TOOL_CAPTION,
   profileForChannel,
 } from "../../lib/tool-profile-resolve";
+// ⚠ THE INFO CARD'S HAIRLINE, BY IMPORT (Samuel, 2026-09-13) — see
+// {@link SettingDivider}. This file still decides nothing: a separator is a
+// rendering concern exactly as the eye is.
+import { MetaRowDivider } from "./bits";
 // ⚠ 2026-09-06 (item 15). This file is still the ROW VOCABULARY and still decides
 // nothing — the eye is a rendering concern like every other recipe here, and its
 // COPY lives in `settings-help.tsx` so the table and the components that use it
@@ -102,12 +106,49 @@ export const LAUNCH_POSTURE_HEADING = "When you launch an agent";
 /** The sub-heading that separates each group. ⚠ Every group on this tab is
  *  DURABLE — nothing single-use is left anywhere in the product — so the headings
  *  say what each one GOVERNS rather than how long it lasts. A heading naming a
- *  time window is the regression (`use-channel-launch-posture.ts`). */
+ *  time window is the regression (`use-channel-launch-posture.ts`).
+ *
+ *  ⚠ **NOTHING CALLS IT SINCE 2026-09-13** (Samuel: *"also remove the header line
+ *  Agents"*) — `settings-channel-agents.tsx` was the last caller, and 2026-09-06
+ *  (item 2) had already deleted the other three. The recipe stays exported on
+ *  {@link SettingName}'s terms: what separates groups on this tab now is
+ *  {@link SettingDivider}, and a group heading put back here would be re-opening a
+ *  ruling rather than reusing a helper. */
 export function GroupLabel({ children }: { children: ReactNode }) {
   return (
     <p className="pt-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary">
       {children}
     </p>
+  );
+}
+
+/**
+ * THE HAIRLINE BETWEEN TWO SETTING ROWS (Samuel, 2026-09-13): *"in the settings tab
+ * for channels and threads. In between each setting, add a horizontal line, like how
+ * we have in the channel info area."*
+ *
+ * ⚠ IT IS THE INFO CARD'S OWN LINE, BY IMPORT — `bits.tsx › MetaRowDivider`, the
+ * recipe the Info tab puts between its `MetaRow`s. He named that surface as the
+ * reference, so a second `border-t` cut by hand here would be the same line at a
+ * different inset the first time either moved.
+ *
+ * ⚠ EVERY ROW CARRIES ITS OWN LEADING LINE, AND `first:hidden` IS WHAT KEEPS IT OFF
+ * THE TOP OF A GROUP. Rows on this tab are CONDITIONAL — Runtime only with a runtime
+ * bridge, Model only on a main that has the field, the secondary tool axis only for
+ * runtimes that declare one — so which row is FIRST is a render-time fact. A static
+ * "I am first" flag would be wrong on exactly the desktops that render fewest rows;
+ * `:first-child` is right on all of them, and it needs no caller to remember anything.
+ *
+ * ⚠ `always` IS FOR A GROUP THAT CONTINUES THE COLUMN ABOVE IT — the responder row
+ * (`settings-channel-agents.tsx`), which is the first row of its own container but
+ * NOT the first setting a reader sees. Its "AGENTS" heading used to be the break
+ * there; the heading is deleted (same ruling), so the line is.
+ */
+export function SettingDivider({ always = false }: { always?: boolean } = {}) {
+  return (
+    <div data-settings-divider className={always ? undefined : "first:hidden"}>
+      <MetaRowDivider />
+    </div>
   );
 }
 
@@ -133,9 +174,13 @@ export function SettingName({ children }: { children: ReactNode }) {
 export function SettingRow({
   name,
   children,
+  continues = false,
 }: {
   name: string;
   children: ReactNode;
+  /** This row CONTINUES the column above it, so its hairline shows even though it
+   *  is the first child of its own container — see {@link SettingDivider}. */
+  continues?: boolean;
 }) {
   // ⚠ THE EYE IS LOOKED UP, NOT PASSED (2026-09-06, item 15). Keying on the row's
   // own rendered NAME means every row built from this recipe gets its explanation
@@ -145,27 +190,35 @@ export function SettingRow({
   // everywhere else.
   const help = SETTINGS_HELP[name];
   return (
-    <div className="flex min-h-[32px] items-center gap-2">
-      <span className="flex shrink-0 items-center gap-1">
-        {/* ⚠ REGULAR WEIGHT, NOT `font-medium` (Samuel, 2026-09-10): "unbold these
-            things — Runtime Default, Tool use Bypass, Messaging Automatic, Model
-            Sonnet 5, Tool access Full access, Working Folder ~/Downloads, Launch
-            agents In every channel." The NAME and the VALUE are one vocabulary, so
-            the weight left both halves on the same clock — `select-menu.tsx ›
-            TRIGGER_FACE.text` is the value half. The heading over the block
-            (`PanelHeading`) and the `GroupLabel`s are NOT in that list and keep
-            theirs. */}
-        <span className="text-body text-text-primary">{name}</span>
-        {/* ⚠ BESIDE THE NAME, NOT FLOATED OVER THE ROW. Samuel asked for "a little
-            eye in the top right of it" — of the ITEM. These rows are ONE LINE
-            (`settings-agent-rows.tsx › SettingRow`: the 380px panel is why the
-            control sits beside the name), so the item's own top-right IS the end of
-            its label; floating it against the row's right rail would put it on top
-            of the control instead. */}
-        {help && <SettingHelp name={name} copy={help} />}
-      </span>
-      <span className="flex min-w-0 flex-1 justify-end">{children}</span>
-    </div>
+    <>
+      {/* ⚠ THE LINE BELONGS TO THE ROW, NOT TO THE CONTAINER (Samuel, 2026-09-13).
+          Every setting row on both faces is built from this recipe, so a row added
+          later — or a row a bridge turns on — arrives separated without its author
+          doing anything. Interleaving in the containers instead would have missed the
+          launch group entirely: those four rows are one child of one container. */}
+      <SettingDivider always={continues} />
+      <div data-settings-row className="flex min-h-[32px] items-center gap-2">
+        <span className="flex shrink-0 items-center gap-1">
+          {/* ⚠ REGULAR WEIGHT, NOT `font-medium` (Samuel, 2026-09-10): "unbold these
+              things — Runtime Default, Tool use Bypass, Messaging Automatic, Model
+              Sonnet 5, Tool access Full access, Working Folder ~/Downloads, Launch
+              agents In every channel." The NAME and the VALUE are one vocabulary, so
+              the weight left both halves on the same clock — `select-menu.tsx ›
+              TRIGGER_FACE.text` is the value half. The heading over the block
+              (`PanelHeading`) and the `GroupLabel`s are NOT in that list and keep
+              theirs. */}
+          <span className="text-body text-text-primary">{name}</span>
+          {/* ⚠ BESIDE THE NAME, NOT FLOATED OVER THE ROW. Samuel asked for "a little
+              eye in the top right of it" — of the ITEM. These rows are ONE LINE
+              (`settings-agent-rows.tsx › SettingRow`: the 380px panel is why the
+              control sits beside the name), so the item's own top-right IS the end of
+              its label; floating it against the row's right rail would put it on top
+              of the control instead. */}
+          {help && <SettingHelp name={name} copy={help} />}
+        </span>
+        <span className="flex min-w-0 flex-1 justify-end">{children}</span>
+      </div>
+    </>
   );
 }
 

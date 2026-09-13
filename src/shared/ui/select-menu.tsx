@@ -11,8 +11,8 @@
  *
  * ⚠ THREE TRIGGER FACES (four strings — `raisedField` is `raised` at row height), AND EACH
  * OWNS ITS WHOLE FACE (`variant`). `text` is the settings-row face: no pill, no underline,
- * REGULAR weight — just the label and the chevron (Samuel, 2026-09-06, unbolded and
- * un-underlined 2026-09-10). `flat` is the
+ * REGULAR weight — just the label, the chevron and a GRAY HOVER (Samuel, 2026-09-06;
+ * unbolded and un-underlined 2026-09-10; `--menu-item-hover-bg` added 2026-09-13). `flat` is the
  * inset pill this control has always worn — right on a settings row, beside
  * other flat chrome. `raised` is the kit's white RAISED button
  * (`.auth-btn-3d-light`), which is what every dropdown inside a
@@ -72,10 +72,29 @@ const TRIGGER_FACE = {
    * Tailwind same-layer fight (400 is emitted before 500); the three PILL faces each state
    * `font-medium` themselves instead, byte-identical in effect to what they rendered.
    *
+   * ⚠ **AND IT HIGHLIGHTS GRAY ON HOVER (Samuel, 2026-09-13):** *"when I hover over the
+   * dropdowns in the agent settings, it should have a gray highlight. Anything that can be
+   * clicked."* The gray is `--menu-item-hover-bg` — THE one hover face for anything
+   * clickable (DESIGN-SYSTEM's `.menu-row` row, Samuel 2026-09-10), by token and not by a
+   * second spelling of `--surface-raised-1`. With no pill, no border and no fill at rest, this
+   * hover is now the trigger's only face, so it may not be dropped for the chevron's reason.
+   * ⚠ **`-mx-1.5 px-1.5` IS WHY THE VALUE DOES NOT MOVE.** The highlight needs a box wider
+   * than the glyphs, and padding alone would shift every value 6px off the row's right rail
+   * (these sit in a `justify-end` cell — `settings-agent-rows.tsx › SettingRow`); the negative
+   * margin gives the padding back, so the resting layout is byte-identical to the unhovered
+   * face that shipped. `rounded-md` REPLACES `rounded-none` for the same reason the menu row
+   * is rounded — a square tint on a text label reads as a selection, not a hover.
+   * ⚠ **AND IT IS SUPPRESSED WHILE DISABLED.** A busy write greys the trigger
+   * (`disabled:opacity-60`); a control that still lights up under the cursor while inert is
+   * the affordance lying about what a click would do.
+   *
    * ⚠ Settings rows ONLY. Composer panels and dialogs keep `raised`/`raisedField`: there the
    * control sits on a card, not a row, and a bare label reads as unstyled text off the card.
    */
-  text: "rounded-none px-0 py-0 text-body font-normal text-text-primary",
+  text: cn(
+    "-mx-1.5 rounded-md px-1.5 py-0 text-body font-normal text-text-primary",
+    "transition-colors hover:bg-menu-item-hover-bg disabled:hover:bg-transparent"
+  ),
 } as const;
 
 export function SelectMenu<T extends string>({
