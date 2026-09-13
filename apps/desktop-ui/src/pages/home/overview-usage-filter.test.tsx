@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TEMPLATE_NAME_TEXT_LG } from "@/features/agent-templates/components/template-section";
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
 import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge } from "#/test-utils/bridge";
@@ -193,15 +193,22 @@ describe("the /home Usage histogram controls", () => {
   });
 
   /**
-   * 🔒 **THE ARROWS SCALE WITH THE LABEL (Samuel, 2026-09-13: *"Increase the size
-   * of the arrows to match"*).** The month label wears
-   * `template-section.tsx › TEMPLATE_NAME_TEXT_LG` (`text-display`, 18px), so the
-   * glyph is 18 — `overview-usage-filter.tsx › MONTH_ARROW_ICON`, the one place
-   * this face departs from `NAKED_ICON`'s 14.
+   * 🔒 **THE ARROWS SCALE WITH THE LABEL BESIDE THEM (Samuel, 2026-09-13:
+   * *"Increase the size of the arrows to match"*).** That label went from
+   * `text-caption` to `template-section.tsx › TEMPLATE_NAME_TEXT`'s 14px — the
+   * size the scope menu and **Credit spend** wear — so the glyph is 16,
+   * `overview-usage-filter.tsx › MONTH_ARROW_ICON`, one notch over the shared
+   * `NAKED_ICON` 14 this face otherwise uses.
+   *
+   * ⚠ **NOT 18, AND NOT `text-display` ON THE LABEL** (Samuel, same day: *"the
+   * date to the super large size, like usage. I did not ask for that. … I only
+   * want to change the date selector to match the credit spend and all channels'
+   * sizes"*). Both halves of that pass are pinned here, the label's size
+   * positively and the big face negatively.
    *
    * ⚠ **THE HIT AREA IS THE OTHER HALF AND IT IS THE ONE THAT CAN REGRESS**: the
    * FACE stays `shared/ui/naked-icon-button.ts › NAKED_ICON_BUTTON`, whose `p-2`
-   * puts the box at 8 + 18 + 8 = 34px, over the 30px floor. A bigger glyph inside
+   * puts the box at 8 + 16 + 8 = 32px, over the 30px floor. A bigger glyph inside
    * a hand-written smaller box is the shape this asserts against.
    */
   it("draws month arrows at the label's scale, on the naked-icon face", async () => {
@@ -214,14 +221,15 @@ describe("the /home Usage histogram controls", () => {
       }
       const glyph = button.querySelector("svg");
       expect(glyph).not.toBeNull();
-      expect(glyph).toHaveAttribute("width", "18");
+      expect(glyph).toHaveAttribute("width", "16");
     }
-    // The label they sit beside — the type both were raised to match.
-    for (const token of TEMPLATE_NAME_TEXT_LG.split(" ")) {
-      expect(
-        within(card).getByText(monthLabel(monthKey())).className
-      ).toContain(token);
+    // The label they sit beside — the type both were raised to match, and the
+    // one they were NOT raised to.
+    const label = within(card).getByText(monthLabel(monthKey()));
+    for (const token of TEMPLATE_NAME_TEXT.split(" ")) {
+      expect(label.className).toContain(token);
     }
+    expect(label.className).not.toContain("text-display");
   });
 
   /**

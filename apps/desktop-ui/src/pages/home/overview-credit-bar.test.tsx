@@ -1,4 +1,7 @@
-import { TEMPLATE_NAME_TEXT_LG } from "@/features/agent-templates/components/template-section";
+import {
+  TEMPLATE_NAME_TEXT,
+  TEMPLATE_NAME_TEXT_LG,
+} from "@/features/agent-templates/components/template-section";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
@@ -87,35 +90,46 @@ describe("the /home credit capacity bar", () => {
    * the histogram's ledger sum between 2026-09-06 and this change.
    */
   /**
-   * 🔒 **ONE TYPE ACROSS THE WHOLE USAGE BLOCK — THE TEMPLATE CARD'S NAME, ONE
-   * STEP UP THE SCALE AND BOLD** (Samuel, 2026-09-13: *"extract that exact font,
-   * font size, and font color and apply it to the usage text"*, then *"increase
-   * the font size for usage … let's bold it as well"* and *"apply the same font
-   * to all the channels … the month switcher as well"*) —
-   * `template-section.tsx › TEMPLATE_NAME_TEXT_LG`, **by import on all four**.
+   * 🔒 **TWO SCALES IN THIS BLOCK, AND THE SPLIT IS THE RULING — THE PANEL
+   * HEADING IS THE BIG ONE AND EVERYTHING INSIDE IT IS NOT.**
    *
-   * ⚠ **FOUR READERS IN ONE CASE ON PURPOSE.** The ruling is that they MATCH, so
-   * a suite that checked the heading alone would pass the day one control keeps
-   * the old 14px — which is the exact way a block grows two heading scales.
-   * ⚠ The constant is imported rather than spelled out here, so a retune of the
-   * face moves the assertion with the code instead of reddening this file.
+   * **Usage** wears `template-section.tsx › TEMPLATE_NAME_TEXT_LG` (Samuel,
+   * 2026-09-13: *"increase the font size for usage … let's bold it as well"*).
+   * The scope menu, the month label and **Credit spend** wear
+   * `› TEMPLATE_NAME_TEXT` — the 14px face the agent template card's name wears.
+   *
+   * ⚠ **THIS CASE ASSERTED ALL FOUR ON `_LG` FOR ONE PASS AND THAT WAS THE
+   * DEFECT** (Samuel, same day: *"You changed the font size of the credit spend,
+   * all channels, and the date to the super large size, like usage. I did not ask
+   * for that. … I only want to change the date selector to match the credit spend
+   * and all channels' sizes"*). So the three are pinned POSITIVELY on the small
+   * face **and negatively against the big one** — a pass that raises them again
+   * has to make this file red, which the positive half alone would not do (both
+   * constants share `text-text-primary`).
    */
-  it("is one heading type on the heading, the scope menu, the month and Credit spend", async () => {
+  it("puts the panel heading one step above the controls inside it", async () => {
     renderHome();
     const usage = await panel("Usage");
-    const wearers = [
-      screen.getByRole("heading", { name: "Usage" }),
+    const heading = screen.getByRole("heading", { name: "Usage" });
+    for (const token of TEMPLATE_NAME_TEXT_LG.split(" ")) {
+      expect(heading.className).toContain(token);
+    }
+    // ⚠ THE PANEL HEADING'S OWN `text-label uppercase` FACE STAYS OVERRIDDEN.
+    expect(heading.className).not.toMatch(/\buppercase\b/);
+
+    const inside = [
       screen.getByRole("button", { name: "Usage scope" }),
       within(usage).getByText(monthLabel(monthKey())),
       await within(usage).findByRole("heading", { name: "Credit spend" }),
     ];
-    for (const node of wearers) {
-      for (const token of TEMPLATE_NAME_TEXT_LG.split(" ")) {
+    for (const node of inside) {
+      for (const token of TEMPLATE_NAME_TEXT.split(" ")) {
         expect(node.className).toContain(token);
       }
+      // The rejected size, pinned as an absence on each of the three.
+      expect(node.className).not.toContain("text-display");
+      expect(node.className).not.toContain("font-semibold");
     }
-    // ⚠ THE PANEL HEADING'S OWN `text-label uppercase` FACE STAYS OVERRIDDEN.
-    expect(wearers[0]?.className).not.toMatch(/\buppercase\b/);
   });
   it("shows the credit allowance, what is left, and when it resets", async () => {
     renderHome();

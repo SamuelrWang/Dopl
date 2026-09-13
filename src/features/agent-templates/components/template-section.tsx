@@ -63,22 +63,30 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
  * THE SAME NAME TYPE, ONE STEP UP THE SCALE AND BOLDER — `text-display` (18px)
  * and `font-semibold`, same ink.
  *
- * 🔒 **SAMUEL, 2026-09-13, over the /home Overview Usage block:** *"increase the
- * font size for usage … let's bold it as well"*, then *"apply the same font to
- * all the channels … the month switcher as well"*. So it is ONE constant and
- * FOUR readers, all on that block: the **Usage** panel heading, the scope menu
- * trigger (**All channels**), the month label (**September 2026**) and the
- * credit card's **Credit spend** heading.
+ * 🔒 **SAMUEL, 2026-09-13: *"increase the font size for usage … let's bold it as
+ * well"*. ONE READER — the /home Overview's **Usage** panel heading**
+ * (`pages/home/overview-panels.tsx › HomeOverviewPanels`).
+ *
+ * ⚠ **IT WAS APPLIED TO FOUR THINGS FOR ONE PASS AND THREE OF THEM WERE A
+ * MISREAD — Samuel, same day, rejecting it: *"You changed the font size of the
+ * credit spend, all channels, and the date to the super large size, like usage. I
+ * did not ask for that. I only asked you to change the usage size to be
+ * bigger."*** The scope menu (**All channels**), the month label and the credit
+ * card's **Credit spend** heading are on `TEMPLATE_NAME_TEXT` — the 14px face —
+ * and the month label was RAISED to it rather than to this one, which is the
+ * whole of what *"the month switcher as well"* asked for. **The block has two
+ * scales on purpose: the panel heading, then everything inside it.** Do not
+ * widen this constant's readers without a ruling that names one.
  *
  * ⚠ **A STEP ON THE TOKEN SCALE, NEVER A PX** (`docs/DESIGN-SYSTEM.md` › Type
  * scale): `text-title` → `text-display` is the next utility, and there is
  * nothing between them to pick instead.
  *
- * ⚠ **IT SITS BESIDE `TEMPLATE_NAME_TEXT` RATHER THAN OVERRIDING IT AT FOUR CALL
- * SITES.** The agent template card keeps the smaller face — a card NAME in a
- * list is not a page heading — and a `cn(TEMPLATE_NAME_TEXT, "text-display
- * font-semibold")` at each reader would be four same-layer fights with the
- * constant it is composing, which is how one of them silently keeps 14px.
+ * ⚠ **IT SITS BESIDE `TEMPLATE_NAME_TEXT` RATHER THAN OVERRIDING IT AT THE CALL
+ * SITE.** The agent template card keeps the smaller face — a card NAME in a list
+ * is not a page heading — and a `cn(TEMPLATE_NAME_TEXT, "text-display
+ * font-semibold")` at the reader would be a same-layer fight with the constant it
+ * is composing, which is how a heading silently keeps 14px.
  */
 export const TEMPLATE_NAME_TEXT_LG =
   "text-display font-semibold text-text-primary";

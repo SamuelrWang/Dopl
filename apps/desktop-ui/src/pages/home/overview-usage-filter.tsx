@@ -1,4 +1,4 @@
-import { TEMPLATE_NAME_TEXT_LG } from "@/features/agent-templates/components/template-section";
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
@@ -96,11 +96,13 @@ export function UsageScopeMenu({
       onChange={onChange}
       variant="text"
       ariaLabel="Usage scope"
-      // ⚠ SAME TYPE AS THE "Usage" HEADING ABOVE IT — the template card's name
-      // one step up and bold (Samuel, 2026-09-13: *"apply the same font to all
-      // the channels … the month switcher as well"*). By IMPORT, so the heading
-      // and its two controls move together or not at all.
-      className={TEMPLATE_NAME_TEXT_LG}
+      // ⚠ **THE TEMPLATE CARD'S NAME TYPE — 14px, AND IT DID NOT GO UP WITH THE
+      // PANEL HEADING** (Samuel, 2026-09-13, rejecting a pass that raised it:
+      // *"You changed the font size of the credit spend, all channels, and the
+      // date to the super large size, like usage. I did not ask for that."*).
+      // `TEMPLATE_NAME_TEXT_LG` is the **Usage** heading's alone; the controls
+      // inside the block stay one step below it.
+      className={TEMPLATE_NAME_TEXT}
     />
   );
 }
@@ -159,11 +161,17 @@ export function monthLabel(key: string): string {
 /**
  * THE ARROW GLYPH, AND THE ONE PLACE IT IS ALLOWED TO LEAVE `NAKED_ICON`.
  *
- * 🔒 **SAMUEL, 2026-09-13: *"Increase the size of the arrows to match."*** The
- * label beside them went from `text-title` to `text-display`
- * (`TEMPLATE_NAME_TEXT_LG`), and a 14px chevron under an 18px word reads as a
- * different control that happens to sit there. So the glyph is the LABEL's size:
- * 18, matching by the same number rather than by eye.
+ * 🔒 **SAMUEL, 2026-09-13: *"Increase the size of the arrows to match."*** They
+ * match the LABEL BESIDE THEM, and that label is `TEMPLATE_NAME_TEXT`'s 14px —
+ * raised from `text-caption` (11.5px) in the same wave, which is what moved these
+ * off the shared 14: a chevron the same size as its word reads as a glyph
+ * standing in the text rather than a control beside it.
+ *
+ * ⚠ **16, NOT 18. THE 18 WAS A PASS THAT PUT THE LABEL ITSELF ON `text-display`,
+ * AND SAMUEL REJECTED THAT** (*"the date to the super large size, like usage. I
+ * did not ask for that"*). The glyph follows the label, so when the label came
+ * back down this came with it — one notch above the default, which is the
+ * "increase" that was actually asked for.
  *
  * ⚠ **`shared/ui/naked-icon-button.ts › NAKED_ICON` IS UNTOUCHED, DELIBERATELY.**
  * It is the app's default glyph for that face and the ontology object panel's
@@ -172,10 +180,10 @@ export function monthLabel(key: string): string {
  * imported, so the ink, the hover and the hit area stay one recipe.
  *
  * ⚠ **THE HIT AREA STAYS THE 30px MINIMUM AND GETS BIGGER, NOT SMALLER**: the
- * face's box is `p-2` around the glyph, so 8 + 18 + 8 = 34px. A larger glyph can
+ * face's box is `p-2` around the glyph, so 8 + 16 + 8 = 32px. A larger glyph can
  * only grow it, which is why this needs no padding change to stay tappable.
  */
-const MONTH_ARROW_ICON = 18;
+const MONTH_ARROW_ICON = 16;
 
 export function MonthStepper({
   month,
@@ -197,9 +205,12 @@ export function MonthStepper({
       >
         <ChevronLeft size={MONTH_ARROW_ICON} aria-hidden="true" />
       </button>
-      {/* ⚠ THE HEADING'S OWN TYPE, BY IMPORT (Samuel, 2026-09-13: the month
-          switcher wears "the same font"). It was `text-caption`. */}
-      <span className={cn("min-w-0 truncate", TEMPLATE_NAME_TEXT_LG)}>
+      {/* ⚠ **THE SCOPE MENU'S TYPE, BY IMPORT — 14px, NOT THE PANEL HEADING'S
+          18** (Samuel, 2026-09-13: *"the month switcher as well"*, then *"I only
+          want to change the date selector to match the credit spend and all
+          channels' sizes"*). It was `text-caption`: the ask was to bring it up to
+          the controls beside it, never up to **Usage**. */}
+      <span className={cn("min-w-0 truncate", TEMPLATE_NAME_TEXT)}>
         {monthLabel(month)}
       </span>
       <button

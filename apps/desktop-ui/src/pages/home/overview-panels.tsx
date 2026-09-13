@@ -1,5 +1,8 @@
 import { cn } from "@/shared/lib/utils";
-import { TEMPLATE_NAME_TEXT_LG } from "@/features/agent-templates/components/template-section";
+import {
+  TEMPLATE_NAME_TEXT,
+  TEMPLATE_NAME_TEXT_LG,
+} from "@/features/agent-templates/components/template-section";
 import { useState } from "react";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -283,19 +286,19 @@ function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
         {/* 🔒 **THE CARD SAYS WHAT IT IS (Samuel, 2026-09-13: *"in the panel
             above … the credit bar, put in a header that says 'Credit
             spend'"*).** Minimal copy (INVARIANTS §5): two words, no subline.
-            ⚠ **`template-section.tsx › TEMPLATE_NAME_TEXT_LG` BY IMPORT** — the
-            same constant the Usage heading, the scope menu and the month label
-            wear, so this block has ONE heading scale; never a re-typed
-            `text-display font-semibold`.
+            ⚠ **`TEMPLATE_NAME_TEXT`, THE 14px FACE — NOT THE PANEL HEADING'S
+            `_LG`** (Samuel, same day, rejecting a pass that raised it: *"You
+            changed the font size of the credit spend, all channels, and the date
+            to the super large size, like usage. I did not ask for that"*). This
+            heading, the scope menu and the month label are ONE size and the
+            panel's **Usage** is the step above them.
             ⚠ **IT IS THE CARD'S, NOT `CreditCapacityBar`'s**, for the same
             reason the `.bento` frame is: that component owns the BAR and states
             it paints no card. It also has to outlive the bar's skeleton — a
             heading rendered inside the loaded bar would arrive after it and the
             card would say nothing while it waits.
             ⚠ An `h3`: the panel's `h2` is **Usage**. */}
-        <h3 className={cn("mb-2 truncate", TEMPLATE_NAME_TEXT_LG)}>
-          Credit spend
-        </h3>
+        <h3 className={cn("mb-2 truncate", TEMPLATE_NAME_TEXT)}>Credit spend</h3>
         <CreditsBar
           homeWorkspaceId={homeWorkspaceId}
           ledgerPending={series.isPending && !series.data}
