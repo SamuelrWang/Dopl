@@ -1,6 +1,10 @@
 /** Channels feature constants. */
 
-import type { AgentToolProfile, ThreadMode } from "./types";
+import type {
+  AgentToolProfile,
+  ResolvedAgentToolProfile,
+  ThreadMode,
+} from "./types";
 
 /** Realtime tables watched by the web client (module-level, stable ref). */
 export const CHANNEL_TABLES = [
@@ -110,10 +114,20 @@ export const THREAD_MODE_LABELS: Record<ThreadMode, string> = {
  * of that claim had expired — `components/consent-card.tsx` is DELETED (INVARIANTS
  * §6) and no surface has said "Allow" since the affirmative became **Launch agent**.
  */
-export const AGENT_TOOL_PROFILE_LABELS: Record<AgentToolProfile, string> = {
+export const AGENT_TOOL_PROFILE_LABELS: Record<ResolvedAgentToolProfile, string> = {
   full: "Full access",
   dopl_only: "Dopl only",
   read_only: "Read only",
+  // ⚠ **KEYED ON THE RESOLVED PROFILE, NOT THE STORED ONE, SINCE 2026-09-13 (F-692).** The
+  // settings row printed "Full access" over a shared channel, where the desktop runs
+  // `channel_agent` — `full` MINUS the shell (ruling B7). That is the same class of
+  // fail-open lie `UNRESOLVED_TOOL_PROFILE` below is written against, so the label map is
+  // the thing that had to widen. ⚠ THE WRITE ENUM DID NOT: `types.ts › AgentToolProfile`
+  // is still three values and no control may offer this one.
+  // ⚠ "no shell" AND NOT "no Bash": the group main denies is Bash + BashOutput + KillShell
+  // (`tool-profiles.js › SHELL_BUILTINS`), and naming one verb would read as a fence with
+  // the door beside it open.
+  channel_agent: "Full access, no shell",
 };
 
 /**

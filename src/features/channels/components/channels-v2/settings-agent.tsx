@@ -76,7 +76,10 @@
 // ⚠ `Check` / `cn` LEFT WITH THE RADIOGROUP (2026-09-06, item 6). The selected
 // state is the `SelectMenu`'s own now, so this file draws no tick and composes no
 // conditional class; an import kept "in case" is how a deleted recipe comes back.
-import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+// ⚠ THE `SelectMenu` IMPORT LEFT WITH `TOOL_ACCESS_OPTIONS` ON 2026-09-13 (F-692):
+// this file composes no control of its own any more — `settings-agent-launch-rows.tsx`
+// owns the launch group's menus and `settings-agent-rows.tsx › ToolAccessRow` owns
+// Tool access. Nothing here renders a dropdown, so nothing here imports one.
 // ⚠ `useChannelAutoSend` IS NO LONGER READ HERE (2026-09-06, item 8) — the hook file
 // still exists and is next in the teardown, but nothing on this tab may keep reading
 // a record the gate has stopped consulting.
@@ -87,7 +90,7 @@ import { useOrchestratorLaunch } from "../../hooks/use-orchestrator-launch";
 // single control over the two launch records. `settings-desktop-rows.tsx` carries the
 // tombstone for each.
 import { AgentFolderRows, LaunchAgentsRow } from "./settings-desktop-rows";
-import { AGENT_TOOL_PROFILE_LABELS } from "../../constants";
+import { isSharedChannel } from "../../lib/tool-profile-resolve";
 import { type PermissionPreset } from "../../lib/permission-modes";
 import type { RuntimeDescriptor } from "../../lib/runtime-capability";
 import { useChannelLaunchPosture } from "../../hooks/use-channel-launch-posture";
@@ -103,7 +106,7 @@ import { AgentLaunchPostureRows } from "./settings-agent-launch-rows";
 // recipe for the three rows whose control sat UNDER the name; every row on this tab
 // is a one-line `SettingRow` now, so nothing renders a bare name. The recipe stays
 // exported — it is not this tab's to delete.
-import { SettingRow, TOOL_PROFILE_OPTIONS } from "./settings-agent-rows";
+import { ToolAccessRow } from "./settings-agent-rows";
 import type { AgentToolProfile, ChannelMember } from "../../types";
 
 // ⚠ `TOOL_PROFILE_OPTIONS` AND ITS DOCBLOCK MOVED TO `settings-agent-rows.tsx` ON
@@ -139,6 +142,20 @@ export interface ChannelAgentSettingsProps {
    */
   roster?: readonly ChannelMember[];
   currentUserId?: string | null;
+  /**
+   * **THE CHANNEL'S OWN MEMBER COUNT** — the FACT behind ruling B7's narrowing
+   * (2026-09-13, F-692). `lib/tool-profile-resolve.ts › isSharedChannel` turns it
+   * into "is this room shared", and `profileForChannel` then moves a stored `full`
+   * to `channel_agent`, which is what the desktop will really launch.
+   *
+   * ⚠ **NOT THE ROSTER'S LENGTH.** `roster` is optional and defaults to `[]` for a
+   * mount that cannot say who is here; using it would make an absent roster look
+   * like a nine-member room with a zero count. `channel.memberCount` is the column
+   * the desktop's own predicate reads (`targeting-window.js › isSharedChannel`).
+   * ⚠ **ABSENT READS AS SHARED**, there and here: the only thing the answer can do
+   * is remove the shell from a launch.
+   */
+  memberCount?: number | null;
 }
 
 /**
@@ -162,6 +179,7 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
       toolProfileBusy={props.toolProfileBusy}
       roster={props.roster}
       currentUserId={props.currentUserId}
+      memberCount={props.memberCount}
       posture={launchPosture.bridge ? launchPosture.posture : null}
       postureBusy={launchPosture.busy}
       onChangePosture={(patch) => void launchPosture.update(patch)}
@@ -230,6 +248,10 @@ export interface ChannelAgentSettingsViewProps {
    *  which states why both are optional and what an absent one means. */
   roster?: readonly ChannelMember[];
   currentUserId?: string | null;
+  /** The channel's own member count — see `ChannelAgentSettingsProps.memberCount`
+   *  for why it is the count and not the roster's length, and why absent reads as
+   *  SHARED. */
+  memberCount?: number | null;
   /** The DURABLE launch posture, or null outside the desktop shell (subsection
    *  absent). ⚠ NOT the arm — `use-channel-launch-posture.ts` says why they are
    *  two records with two consumers. */
@@ -299,6 +321,7 @@ export function ChannelAgentSettingsView({
   toolProfileBusy,
   roster = EMPTY_ROSTER,
   currentUserId = null,
+  memberCount = null,
   posture,
   postureBusy,
   onChangePosture,
@@ -375,18 +398,22 @@ export function ChannelAgentSettingsView({
             is the commit, unchanged: `full` is one half of the `auto_both` + `full`
             + a-peer dialog, and a control that wrote around it would delete the one
             warning this tab owes. */}
-        <SettingRow name="Tool access">
-          <SelectMenu<AgentToolProfile>
-            variant="text"
-            value={profile}
-            options={TOOL_ACCESS_OPTIONS}
-            onChange={(next) => {
-              if (next !== profile) warning.setToolProfile(next);
-            }}
-            ariaLabel="Tool access for agents on this channel"
-            disabled={toolProfileBusy}
-          />
-        </SettingRow>
+        {/* ⚠ THE ROW MOVED TO `settings-agent-rows.tsx › ToolAccessRow` ON
+            2026-09-13 (F-692), and it took `TOOL_ACCESS_OPTIONS` with it. Not a
+            redesign: the control, the aria-label and the write are the same, and
+            the write still routes through `warning.setToolProfile`. What the row
+            gained is the RESOLVED profile — a shared channel storing `full`
+            printed "Full access" over a session the desktop runs at
+            `channel_agent`, which is the fail-open containment claim
+            `constants.ts › UNRESOLVED_TOOL_PROFILE` is written against. It is in
+            the row vocabulary because the label and its caption are rendering
+            facts, and because this file is 30 lines under the cap. */}
+        <ToolAccessRow
+          profile={profile}
+          shared={isSharedChannel(memberCount)}
+          busy={toolProfileBusy}
+          onChange={warning.setToolProfile}
+        />
 
         {/* The two DESKTOP-ONLY groups — each vanishes whole without its
             bridge (no dead rows); `settings-desktop-rows.tsx` owns both. */}
@@ -422,30 +449,12 @@ export function ChannelAgentSettingsView({
   );
 }
 
-/**
- * "TOOL ACCESS" — the containment pick, as `SelectMenu` options (2026-09-06, item 6).
- *
- * ⚠ IT IS DERIVED FROM `TOOL_PROFILE_OPTIONS`, NEVER RE-LISTED. That table is the
- * one place the three profiles and their containment lines live, and its docblock
- * is the review that bought each line's wording; a second list here would be the
- * two-readers-one-fact defect with a CONTAINMENT CLAIM as the thing that drifts.
- * The LABEL half comes from `AGENT_TOOL_PROFILE_LABELS` for the same reason.
- *
- * ⚠ MODULE-LEVEL, so the options are one identity for every render — the rule the
- * two empty arrays below already follow, and it matters more here because the
- * value is compared against the list on each open.
- *
- * ⚠ THE DESCRIPTIONS SURVIVE THE CONVERSION, and that is deliberate rather than
- * incidental. Tools was the one control on this tab the 2026-08-19 minimal-copy
- * ruling let keep per-option copy, because it is the CONTAINMENT pick; a dropdown
- * is exactly where this tab already says such copy belongs.
- */
-const TOOL_ACCESS_OPTIONS: ReadonlyArray<SelectMenuOption<AgentToolProfile>> =
-  TOOL_PROFILE_OPTIONS.map((option) => ({
-    value: option.value,
-    label: AGENT_TOOL_PROFILE_LABELS[option.value],
-    description: option.description,
-  }));
+// ⚠ `TOOL_ACCESS_OPTIONS` STOOD HERE AND MOVED TO `settings-agent-rows.tsx ›
+// ToolAccessRow` ON 2026-09-13 (F-692), for the reason the row vocabulary lives
+// there at all: it is derived from `TOOL_PROFILE_OPTIONS` and
+// `AGENT_TOOL_PROFILE_LABELS`, and the label half now depends on the RESOLVED
+// profile — so the list and the row that renders it must change on one clock. The
+// "derived, never re-listed" rule its docblock carried moved with it verbatim.
 
 /** ⚠ Module-level, so an unpassed roster is the SAME array every render rather
  *  than a fresh identity the warning would have to re-derive from. */

@@ -314,7 +314,11 @@ test("the consume loop routes an auth failure to the hold before it can dispatch
   // ⚠ THE FIFTH ARGUMENT IS `diag` (2026-09-01, D7.3): `session-io.js` may not require it —
   // electron — so the swallowed context dispatch's log line is INJECTED from this loop, on the
   // `session-gate-bridge.js › makeCanUseTool(s, dispatch, log)` precedent.
-  assert.match(QUERY, /const hold = io\.applyCoreEvents\(s, rt\.normalize\(msg, normalizeCtx\(s\)\), deps\.dispatch, store, diag\);/,
+  // ⚠ THE LOCAL IS `signal`, NOT `hold`, SINCE 2026-09-13 (F-692): `applyCoreEvents` hands back
+  // TWO kinds of answer now — the `auth_hold` event this test is about, and `{type:'mcp_status'}`
+  // after a `launched` — and the loop branches on `type` so neither can be fed to the other's
+  // handler. The property pinned here is unchanged: the bubble is consumed, never rendered.
+  assert.match(QUERY, /const signal = io\.applyCoreEvents\(s, rt\.normalize\(msg, normalizeCtx\(s\)\), deps\.dispatch, store, diag\);/,
     "the message path consumes the bubble instead of rendering it");
   // ⚠ D7.4 (restored 2026-09-01): THE SENTINEL'S ANSWER IS THE STOP CONDITION, not the fact that
   // it was asked. HEAD read `if (sessionAuth.holdIfAuthMessage(s, msg)) return;`; the port dropped
@@ -322,7 +326,7 @@ test("the consume loop routes an auth failure to the hold before it can dispatch
   // message stopped draining a stream HEAD kept reading (the case below proves the false answer is
   // real). ⚠ ASSERTED AS THE CONJUNCTION, not merely "holdIfAuthFailure appears": a call whose
   // answer is discarded matches any looser regex, which is exactly how this was lost.
-  assert.match(QUERY, /if \(hold && sessionAuth\.holdIfAuthFailure\(s, hold\.text\)\) return;/,
+  assert.match(QUERY, /if \(signal && sessionAuth\.holdIfAuthFailure\(s, signal\.text\)\) return;/,
     "…and the loop stops only when the sentinel says it ACTED");
   assert.ok(!/holdIfAuthFailure\(s, hold\.text\);\s*return;/.test(QUERY),
     "no unconditional return past a sentinel that answered false");

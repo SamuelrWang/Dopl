@@ -198,6 +198,25 @@ export function AgentCard({
         {ended ? <AgentEndedPill /> : <AgentLiveness {...agentLiveness(agent)} />}
       </div>
 
+      {/* ⚠ WHY THIS AGENT CANNOT WORK — rendered only when main says so
+          (2026-09-13, F-692; `spa-bridge-shapes.ts › DesktopSessionSummary.diag`).
+          The pill cannot carry it: `state` is the server's three-value vocabulary,
+          so an agent whose Dopl MCP server never connected read `working` for its
+          whole run and then `Ended`, with the reason nowhere on this surface.
+          ⚠ `text-danger`, because this is the one line on the card that is a
+          FAILURE rather than a measurement — and it is one line, not a paragraph
+          (minimal copy, INVARIANTS §5); `title` carries the whole sentence.
+          ⚠ OWN CARDS ONLY, like `templateName` above: the field is local-only by
+          construction and never reaches a peer's projection. */}
+      {agent.diag && (
+        <p
+          className="min-w-0 truncate text-caption text-danger"
+          title={agent.diag}
+        >
+          {agent.diag}
+        </p>
+      )}
+
       {/* ⚠ WHAT IT IS FOR, under what it is CALLED — one line, truncated, no label and no pill
           (minimal copy, INVARIANTS §5; a 380px card cannot afford chrome for this). `title`
           carries the whole thing for a description that does not fit. */}

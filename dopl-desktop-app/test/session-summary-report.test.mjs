@@ -97,6 +97,11 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // rule, and `reportRow` picks the server columns BY NAME so it never reaches
     // `channel_sessions`, which has no column to receive it.
     "description", "detail",
+    // ⚠ `diag` joined 2026-09-13 (F-692) and is LOCAL-only on exactly `detail`'s terms:
+    // `reportRow` picks the server columns BY NAME and `channel_sessions` has none to receive
+    // it. It is the sentence an operator reads when a launch could not run at all — the Dopl MCP
+    // server never connected — which is the one state the three-value pill cannot express.
+    "diag",
     "displayName", "endedAt",
     "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
     // ⚠ `model` joined 2026-08-22 (Samuel's model-selection ruling) and is LOCAL-only on the same

@@ -231,9 +231,9 @@ function deliveryCall(ctx) {
 // unconstrained Claude Code. That module is deleted (2026-08-20); the asymmetry is recorded
 // because it is the one case where an ordered ToolSearch was right, not because it is live.
 // prompt-profile-drift.test.mjs pins the two apart against the REAL deny lists.
-// ⚠ What IS load-bearing: never report the tool missing. Otherwise an agent posts "CONFIRMED:
-// I do not have the mcp__dopl__dopl_channel tool" THROUGH the tool it says is absent.
-//
+// ⚠ "NEVER REPORT THE TOOL MISSING" IS REVERSED (2026-09-13, F-692). It came from an agent posting
+// "CONFIRMED: I do not have the mcp__dopl__dopl_channel tool" THROUGH that tool; on 2026-09-13 the
+// `dopl` server genuinely never connected and this line hid it for a whole session.
 // The scoped thread read: a fresh responder spawn carries NONE of the thread it is answering
 // (the channel-history seed is wired only for a recreated/reopened shell), and op "read" takes
 // a `thread` FILTER (packages/mcp-server/src/tools/channel-schema.ts), so one scoped call is
@@ -261,12 +261,18 @@ function firstActions(side, ctx) {
     `  particular op may still be gated, which is not the tool missing. It is your delivery`,
     `  path and it is the reason this session exists, so do not go looking for it and do not`,
     `  test for it: if it is not in a list you can enumerate, that is the list, not the grant.`,
-    `  Never report that you have no dopl channel tool, and`,
-    `  never report that you have no dopl tools at all.`,
+    `  If mcp__dopl__dopl_channel is not in your tool list, say so in your first reply: the`,
+    `  desktop failed to connect Dopl.`,
     `  Just make the call in the delivery section below; if a call is genuinely refused, your`,
     `  operator sees the refusal on this window and it is theirs to fix, not the counterparty's.`,
     ...LANE_EXCLUSIVITY,
   ];
+  // ⚠ THE SHARED-CHANNEL POSTURE, ONE LINE (2026-09-13, F-692). `channel_agent` is `full` MINUS THE
+  // SHELL (B7); told nothing, it planned with `Bash` and told the PEER it was blocked. ONLY that
+  // profile: the restricted two never had a shell to lose and `full` has one.
+  if ((ctx && ctx.profile) === 'channel_agent') {
+    lines.push(`- You have no shell in this channel (shared-channel rule); ask the operator to run commands.`);
+  }
   const channelId = idToken(ctx && ctx.channelId);
   const workspaceId = idToken(ctx && ctx.workspaceId);
   const taskId = idToken(ctx && ctx.taskId);

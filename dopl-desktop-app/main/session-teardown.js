@@ -100,6 +100,13 @@ function settle(s, outcome, keepWindow) {
       // the live row had been reporting all run.
       templateName: (s.context && s.context.template && s.context.template.name) || null,
       endedAt: Date.now(),
+      // ⚠ WHY IT STOPPED, WHEN THE REASON IS NOT SOMETHING THE OPERATOR CHOSE (F-692, 2026-09-13).
+      // `mcp-connect-guard.js › failVisibly` stamps `s.mcpDiag` when the Dopl MCP server never
+      // connected; the session then ends, so the RETAINED card is the only surface left that can
+      // still say so. Frozen here for the identity's reason: the registry entry is about to go.
+      // ⚠ null on every ordinary ending, and `durableHistory` is a WHITELIST — a field this line
+      // omits is DROPPED at the write, which is the trap `templateName` above records.
+      diag: s.mcpDiag || null,
       // The final measurement, frozen here for the same reason the identity is: the registry
       // entry is about to go and `metrics(s)` is the only reader of it.
       ...sessionMetrics.metrics(s),

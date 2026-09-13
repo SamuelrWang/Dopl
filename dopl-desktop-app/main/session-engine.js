@@ -25,7 +25,7 @@ const sessionPark = require('./session-park');
 const framing = require('./prompt-framing');
 // `session-close-task.js` was required here (the `closeTask` effect) and is DELETED — threads
 // do not close (wiring plan Phase 4, 2026-08-18). The §2 split's point stands: no HTTP dep here.
-const sessionAuth = require('./session-auth'); // Q6 preflight + in-window sign-in
+const sessionAuth = require('./session-auth'); const mcpGuard = require('./mcp-connect-guard'); // Q6 preflight + in-window sign-in; F-692's MCP-connect ACT half (kill / retry once / end visibly)
 const { initialSessionState, sessionReducer, idleTimeout } = require('./session-reducer');
 const sessionEffects = require('./session-effects'); // 2026-08-22: `terminalBody` — a terminal says why
 const { floorWindowlessMessage } = require('./session-profiles'); // AXIS B's windowless floor (F-236)
@@ -101,10 +101,11 @@ sessionPark.bind({
 });
 // §3 split: session-query owns the query LIFECYCLE (the assembly is the runtime's since 2026-08-31) and needs the engine's dispatch + replay-aware quiet emit; neither module requires back into the engine.
 sessionQuery.bind({ dispatch, emitQuiet, scheduleIdle }); // C-4: startQuery arms the launch watchdog through the ONE timer
-// Q6: same injection for the preflight + in-window sign-in. `startQuery` is the SHARED deferred
-// launch (session-query), so an auth hold never assembles a second query and inherits H1's
-// supersede-before-relaunch; `denyPending` fail-closes before it parks.
+// Q6: same injection for the preflight + in-window sign-in, and F-692's MCP guard below it on the
+// same terms. `startQuery` is the SHARED deferred launch (session-query), so neither assembles a
+// second query and both inherit H1's supersede-before-relaunch; `denyPending` fail-closes first.
 sessionAuth.bind({ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions });
+mcpGuard.bind({ acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions }); // F-692: an init message saying the `dopl` MCP server did not connect re-runs the launch ONCE, then ends the session visibly. No registry — it acts on the one session whose stream reported it
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).

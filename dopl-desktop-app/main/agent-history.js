@@ -104,6 +104,11 @@ function durableHistory(rec) {
     // why the bound is wrong here and only here.
     templateName: historyName(r.templateName, 120),
     endedAt: Number(r.endedAt) || 0,
+    // ⚠ WHY THE RUN STOPPED, when it was not the operator's doing (F-692). `historyName` bounds and
+    // sanitizes it like the display strings above, because it is a sentence a card renders.
+    // ⚠ A WHITELIST DROPS WHAT IT DOES NOT NAME — the same trap `templateName` records — so this
+    // line is what makes `session-summary.js › endedSummary`'s `diag` survive a restart.
+    diag: historyName(r.diag, 200),
     // ⚠ THE FINAL MEASUREMENT, FROZEN WITH THE IDENTITY. The session object is gone by the time
     // anything reads this, so a live read would blank every number at exactly the moment the
     // operator wants to know what the run cost. `session-summary.js › endedSummary` already

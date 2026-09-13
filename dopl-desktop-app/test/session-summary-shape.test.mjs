@@ -92,6 +92,18 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // rule's own answer, and the fixture's state (no `lastEventKind` stamped).
       detail: "thinking",
       toolLabel: null,
+      // ⚠ WIDENED 2026-09-13 BY ONE FIELD, `diag` (F-692). The pin failed on the ADD, which is
+      // the review this comment records:
+      //   • NULL IS THE ORDINARY ANSWER and this fixture's. It is set only when a launch could
+      //     not run at all — `mcp-connect-guard.js › failVisibly`, when the Dopl MCP server
+      //     never connected — and that state is the one the pill CANNOT express: `state` is the
+      //     server's three-value vocabulary, so an agent that ran a whole session with every
+      //     `mcp__dopl__*` call answering "No such tool available" read `working`, then `Ended`.
+      //   • IT RIDES BESIDE `state`, NEVER INSTEAD OF IT — `detail`'s rule exactly. Nothing
+      //     downstream may branch on it to decide whether a session is over.
+      //   • LOCAL-ONLY, by the same property the fields above it rely on: `reportRow` picks its
+      //     columns BY NAME, so it never reaches `channel_sessions` and no peer can read it.
+      diag: null,
       // ⚠ WIDENED AGAIN 2026-08-20 by the LIVE POSTURE pair. The pin failed on the ADD,
       // which is the review this comment records:
       //   • READ-ONLY ON THIS WIRE, and it is the REDUCER's state — not the channel's

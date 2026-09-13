@@ -134,7 +134,13 @@ function normalize(msg, ctx) {
     // The FIRST honest statement of which model is really running (the picker asked; the platform
     // decides). It is also the denominator for the very first turn, and it carries the
     // conversation handle every resume depends on.
-    return [events.launched(msg.session_id, msg.model)];
+    // ⚠ AND IT CARRIES `mcp_servers` SINCE 2026-09-13 (F-692). This message is where this runtime
+    // states which MCP servers it CONNECTED — `{ name, status }[]`, status one of
+    // connected / connecting / pending / needs-auth / failed / disabled (measured in the bundled
+    // binary) — and nothing read it, so a `dopl` entry that timed out on the CLI's 5s connect
+    // budget produced a session with no delivery path and no complaint. Forwarded RAW: the shape
+    // is this platform's, the DECISION is core's (`main/mcp-connect.js`).
+    return [events.launched(msg.session_id, msg.model, msg.mcp_servers)];
   }
 
   if (msg.type === 'assistant' || msg.type === 'user') {

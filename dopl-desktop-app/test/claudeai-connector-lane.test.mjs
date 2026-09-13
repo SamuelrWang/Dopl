@@ -78,9 +78,14 @@ const SCRUB = (() => {
   assert.notEqual(from, -1, "PERMISSION_ENV_RE anchor missing from sdk-loader.js");
   const body = LOADER.slice(from, LOADER.indexOf("module.exports = {"));
   assert.ok(body.includes("function buildScrubbedEnv()"), "buildScrubbedEnv slice incomplete");
-  return new Function("process", `${body}\n return buildScrubbedEnv;`);
+  // ⚠ `mcpConnect` IS A SECOND INJECTED FREE VAR SINCE 2026-09-13 (F-692): the same builder now
+  // sets the CLI's MCP connect budget (`MCP_CONNECT_TIMEOUT_MS`, default 5000 — the number the
+  // F-692 incident blew against a cold `/api/mcp`). The REAL module is injected rather than a
+  // fake, so the name and the value stay this suite's `mcp-connect.js` and not a local copy.
+  return new Function("process", "mcpConnect", `${body}\n return buildScrubbedEnv;`);
 })();
-const scrubWith = (env) => SCRUB({ env })();
+const MCP_CONNECT = require(join(MAIN, "mcp-connect.js"));
+const scrubWith = (env) => SCRUB({ env }, MCP_CONNECT)();
 
 // ── 1. THE SUPPRESSION REACHES THE CHILD ENV ─────────────────────────────────────────────────
 

@@ -32,6 +32,10 @@ const seed = require('./session-seed');
 // (session-model.js). Required, never re-implemented: a second copy of "which usage fields
 // count" is how the context meter and the spend line come to disagree about the same block.
 const sessionModel = require('./session-model');
+// F-692: the PURE read of the init message's `mcp_servers` list. ⚠ `mcp-connect.js` has no
+// electron/fs require, which is what lets this file keep the property a dozen suites rely on
+// (`session-outbound-tag.test.mjs` pins it: `diag` requires electron; this file must not).
+const mcpConnect = require('./mcp-connect');
 
 // I-LOW(a): a bounded FIFO of pending inbound counterparty replies, on the session object
 // (`s.pendingInbound`, an array). INTERACTIVE mode releases them one at a time, so a second
@@ -264,6 +268,12 @@ function baseRecord(s) {
 // ⚠ OPTIONAL BY CONTRACT: a caller that passes nothing loses the LINE, never the SWALLOW. The
 // try/catch below is the behaviour; the log is how you find out it fired.
 function applyCoreEvents(s, list, dispatch, store, log) {
+  // F-692: the MCP-connect signal this message produced, if any. ⚠ RETURNED AT THE END rather than
+  // short-circuiting like `auth_hold`: the bookkeeping for `launched` (the conversation handle, the
+  // durable record, the reducer's own `launched`) must all land FIRST, because the guard's retry
+  // re-enters `startQuery` on this same session object and a half-applied launch is what it would
+  // then be relaunching.
+  let mcpSignal = null;
   for (const ev of list || []) {
     if (!ev || !ev.type) continue;
     if (ev.type === 'auth_hold') return ev;
@@ -283,6 +293,14 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       store.saveRecord(baseRecord(s));
       if (ev.model) s.liveModel = ev.model; // the first honest statement of what is really running
       dispatch(s, { type: 'launched', payload: launchedPayload(s, ev.model) });
+      // ⚠ THE CONNECT ASSERTION (F-692, 2026-09-13). This is the ONE message that states which MCP
+      // servers the runtime really connected, and nothing read it: a `dopl` entry that ran out the
+      // CLI's 5s connect budget against a cold `/api/mcp` left the session with `rename_agent`
+      // (in-process SDK server) working and EVERY `mcp__dopl__*` call answering "No such tool
+      // available" — with `prompt-framing.js` telling the agent never to report it. The WORD is
+      // read here (`mcp-connect.js` is pure); the ACT is `mcp-connect-guard.js`'s, because killing
+      // a child and re-running a launch needs handles this file may not hold.
+      mcpSignal = { type: 'mcp_status', status: mcpConnect.doplStatus(ev.mcpServers) };
       continue;
     }
     if (ev.type === 'result') {
@@ -334,7 +352,7 @@ function applyCoreEvents(s, list, dispatch, store, log) {
     }
     dispatch(s, ev); // every render event, unchanged
   }
-  return null;
+  return mcpSignal; // F-692: `{type:'mcp_status', status}` after a `launched`, else null
 }
 
 // The `launched` payload. Split out only so `applyCoreEvents` stays a routing shape; every field

@@ -137,11 +137,26 @@ test("FIX F3b: FIRST ACTIONS states the GRANT, once, and ABOVE the delivery sect
   for (const [label, out] of deliveryBranches()) {
     // No denied call is ordered. The generalized version of this is the drift suite.
     assert.ok(!/ToolSearch/.test(out), `${label}: orders a tool every session profile denies`);
-    assert.ok(!/If mcp__dopl__dopl_channel is not in your tool list/.test(out), `${label}: the aside is gone`);
+    // ⚠ 2026-09-13 (F-692): THE ASIDE IS BACK, INVERTED, AND THAT IS THE RULING. This line used
+    // to assert the ABSENCE of a conditional sentence about the tool — F3's lookup order, whose
+    // removal is what this test documents. What is here now is not that order: it orders no call
+    // and looks nothing up, it tells the agent to SAY SO when the tool really is absent. It had to
+    // be added because the reporting rule below — written for an agent that had the tool and
+    // claimed otherwise — silenced an agent that genuinely did not have it for a whole session.
+    assert.match(out, /If mcp__dopl__dopl_channel is not in your tool list, say so in your first reply/,
+      `${label}: the report-it-missing instruction is gone — F-692 would be silent again`);
+    assert.ok(!/ToolSearch\(/.test(out), `${label}: a LOOKUP is ordered again — F3's own defect`);
     // IMPERATIVE, never a condition an agent that already decided can read as agreement.
     assert.match(out, /mcp__dopl__dopl_channel is GRANTED to this session/, `${label}: states the grant`);
     assert.match(out, /that is the list, not the grant/, `${label}: names the real state of the tool`);
-    assert.match(out, /never report that you have no dopl tools at all/, `${label}: forbids the #345 sentence`);
+    // ⚠ THE #345 GAG IS DELETED (2026-09-13, F-692) AND IS ASSERTED ABSENT. "Never report that
+    // you have no dopl tools at all" was written against an agent posting "CONFIRMED: I do not
+    // have the mcp__dopl__dopl_channel tool" THROUGH that tool; on 2026-09-13 the `dopl` MCP
+    // server genuinely never connected and this sentence is what stopped the report. What still
+    // covers the #345 case is the pair above it — the grant is STATED, and a per-op gate is named
+    // as not being the tool missing — plus the connect ASSERTION, which now ends such a session
+    // instead of leaving it to narrate.
+    assert.ok(!/never report that you have no dopl/.test(out), `${label}: the #345 gag is back (F-692)`);
     // ORDER, which is the half the first fix got wrong.
     const first = out.indexOf("FIRST ACTIONS THIS TURN");
     assert.ok(first >= 0, `${label}: the block is in the turn`);

@@ -191,6 +191,15 @@ export function ChannelsV2ManageActions({
               // (`posture-warning.tsx`).
               roster={members}
               currentUserId={currentUserId}
+              // ⚠ THE ROOM'S OWN COUNT, so the Tool access row can state the
+              // profile the desktop will REALLY launch (2026-09-13, F-692):
+              // ruling B7 narrows a stored `full` to `channel_agent` — full minus
+              // the shell — in a SHARED channel, and this surface printed "Full
+              // access" over it. ⚠ `channel.memberCount`, never `members.length`:
+              // the desktop's own predicate reads the column
+              // (`targeting-window.js › isSharedChannel`), and an absent count
+              // reads as SHARED on both sides.
+              memberCount={channel.memberCount}
             />
           ) : null
         }

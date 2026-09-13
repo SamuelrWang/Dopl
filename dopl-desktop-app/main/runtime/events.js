@@ -26,7 +26,22 @@ const outboundPost = (payload) => ({ type: 'outbound_post', payload });
  * crash-resume to cold restarts. Core captures it and writes the durable record BEFORE the
  * reducer sees `launched` — the ordering `handleSdkMessage` has always had.
  */
-const launched = (sessionId, model) => ({ type: 'launched', sessionId, model: model || null });
+/**
+ * ⚠ `mcpServers` IS THE THIRD FIELD SINCE 2026-09-13 (F-692) AND IT IS CARRIED RAW. The init
+ * message lists every MCP server the runtime connected — `{ name, status }[]` on this SDK
+ * (`sdk.d.ts › SDKSystemMessage`) — and core read `session_id` and `model` off that message while
+ * dropping the rest, so a session whose `dopl` server never connected ran its whole life with
+ * every `mcp__dopl__*` call answering "No such tool available". `main/mcp-connect.js › doplStatus`
+ * is the ONE reader of the shape; this event only carries it across the seam.
+ * ⚠ `null` FOR A RUNTIME THAT REPORTS NO LIST, never `[]`: an empty array means "connected
+ * nothing", and `mcpConnectVerdict` must be able to tell that apart from "told me nothing".
+ */
+const launched = (sessionId, model, mcpServers) => ({
+  type: 'launched',
+  sessionId,
+  model: model || null,
+  mcpServers: Array.isArray(mcpServers) ? mcpServers : null,
+});
 
 /**
  * A finished turn, reported as the platform's CUMULATIVE totals.

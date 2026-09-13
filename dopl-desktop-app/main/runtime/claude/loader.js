@@ -30,6 +30,8 @@ const { diag } = require('../../diag');
 // ⚠ The one fail-closed read of a profile name, shared with the deny list this session was
 // spawned under — see `withToolProfileStamp`. `tool-profiles.js` is electron/fs/path-free.
 const { normalizeProfile } = require('../../tool-profiles');
+// F-692: the CLI's ONE connect-timeout knob, and its measured default. Pure module, no electron.
+const mcpConnect = require('../../mcp-connect');
 
 const SDK_PKG = '@anthropic-ai/claude-agent-sdk';
 
@@ -338,6 +340,25 @@ function buildScrubbedEnv() {
     out[k] = src[k];
   }
   out[CLAUDEAI_MCP_ENV] = CLAUDEAI_MCP_OFF; // last word, always — see the block above
+  // ── ⚠ THE MCP CONNECT BUDGET (F-692, 2026-09-13) ─────────────────────────────────────────────
+  //
+  // MEASURED IN THE BUNDLED BINARY (claude 2.1.220 / claude-agent-sdk 0.3.220): the connect timeout
+  // is `function(){ let e = Z.MCP_CONNECT_TIMEOUT_MS; return e && e > 0 ? e : 5000 }`, an INT env
+  // var with a 5000 default, and it is in the binary's own passthrough env table. ⚠ THERE IS NO
+  // CLI FLAG — the binary ships exactly one mcp flag, `--mcp-config`; `--mcp-timeout` does not
+  // exist. The two neighbours are different clocks: `MCP_TIMEOUT` (default 30000) is the per-server
+  // STARTUP budget and `MCP_TOOL_TIMEOUT` the per-CALL one, which the entry's own `timeout` field
+  // already sets (`buildMcpServers`).
+  //
+  // 5000 is what the F-692 incident blew: a cold `/api/mcp` answered in 10–16s, so the child
+  // abandoned the `dopl` server, `alwaysLoad` released the launch anyway, and every
+  // `mcp__dopl__*` call came back "No such tool available" for the life of the session.
+  // ⚠ THE PRE-FLIGHT IS THE FIX AND THIS IS THE BELT (`session-query.js › startQuery` warms the
+  // route first). Raising the budget alone would only make the FIRST launch slow instead of mute.
+  // ⚠ SET LAST AND UNCONDITIONALLY, on `ENABLE_CLAUDEAI_MCP_SERVERS`'s rule directly above: an
+  // inherited value in the parent env must not decide a session's containment-adjacent timing, and
+  // neither name matches PERMISSION_ENV_RE so both would otherwise copy straight through.
+  out[mcpConnect.CLI_CONNECT_TIMEOUT_ENV] = String(mcpConnect.CLI_CONNECT_TIMEOUT_MS);
   return out;
 }
 

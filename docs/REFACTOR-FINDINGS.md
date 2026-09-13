@@ -8631,3 +8631,74 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   too; the count pin is 15.
 - **F-691 — RESOLVED 2026-09-13.** `credit_usage_events.channel_id` is named in `CASCADE_EXEMPT` (SET NULL,
   a record of something that happened). One edit, both findings.
+
+### F-692 — a shared-channel agent ran a whole session with NO dopl MCP server, and BOTH the prompt and the UI hid it (2026-09-13, FIXED)
+
+- **THE INCIDENT, MEASURED.** A Claude Code agent launched into a shared home channel got tool
+  profile `channel_agent` — correct: shared channel ⇒ no shell, Samuel's ruling B7 — and then never
+  connected the `dopl` HTTP MCP server. `MCP_URL` is `APP_ORIGIN + /api/mcp`
+  (`dopl-desktop-app/main/config.js`), and on the local Next dev server the COLD route answered
+  `POST /api/mcp 200 in 12.4s / 10.0s / 16.2s / 14.7s` — every one past the CLI's connect budget,
+  which is the env var `MCP_CONNECT_TIMEOUT_MS` and **defaults to 5000** (measured in the bundled
+  binary: `Z.MCP_CONNECT_TIMEOUT_MS > 0 ? it : 5000`; there is **no `--mcp-timeout` flag** — the
+  binary ships exactly one mcp flag, `--mcp-config`). The IN-PROCESS `dopl_agents` SDK server
+  connected, so `rename_agent` worked and every `mcp__dopl__*` call answered *"No such tool
+  available"* for the life of the run.
+- 🔒 **THE ROOT CAUSE IS NOT THE TIMEOUT. IT IS THAT NOTHING READ THE ANSWER.** The runtime states
+  which MCP servers it connected in the FIRST message of every stream —
+  `SDKSystemMessage` (the installed SDK's own typings, 0.3.220): `{ type:'system', subtype:'init', session_id, model,
+  tools: string[], mcp_servers: { name, status }[], … }`, with `status` one of
+  connected / connecting / pending / needs-auth / failed / disabled (measured in the binary's
+  strings). `main/runtime/claude/normalize.js` read `session_id` and `model` off that message and
+  dropped `mcp_servers` on the floor, so a session with no delivery path was indistinguishable from
+  a healthy one and launched, ran and settled as `working`.
+- ⚠ **AND TWO SURFACES ACTIVELY HID IT.** (a) `prompt-framing.js › firstActions` said *"Never report
+  that you have no dopl channel tool, and never report that you have no dopl tools at all"* — written
+  against a 2026-08-01 agent that posted "CONFIRMED: I do not have the mcp__dopl__dopl_channel tool"
+  THROUGH that tool, and here it gagged an agent whose tool was genuinely gone. **A prompt that
+  forbids reporting a real outage converts a diagnosable failure into a silent one.** (b) the
+  Settings tab's "Tool access" row printed **"Full access"** over a no-shell session, because
+  `src/features/channels/types.ts › AgentToolProfile` has no `channel_agent` and the row rendered the
+  STORED enum — the same class of fail-open containment lie `constants.ts ›
+  UNRESOLVED_TOOL_PROFILE` was written against, in the other direction.
+- **THE FIX, five parts.**
+  1. **CONNECT ASSERTION.** `main/mcp-connect.js` (pure: `doplStatus`, `mcpConnectVerdict`,
+     `mcpDownText`) + `main/mcp-connect-guard.js` (the act). The adapter forwards `mcp_servers` on
+     `runtime/events.js › launched`; `session-io.js › applyCoreEvents` returns
+     `{type:'mcp_status', status}` after a `launched` and `session-query.js › consume` branches on it.
+     Not connected ⇒ kill and re-run the engine's OWN `startQuery` **once**; a second failure ends the
+     session visibly. ⚠ A runtime that publishes NO list reads `unreported` and is never refused —
+     this guard may not make a claim about a runtime it cannot see.
+  2. **PRE-FLIGHT.** `session-query.js › startQuery` POSTs an MCP `initialize` to `MCP_URL` with a
+     25s budget before every spawn, so the desktop pays the route's compile instead of the child.
+     ⚠ It cannot fail a launch: every outcome (401, 500, throw, timeout) resolves to a word for the log.
+  3. **THE CLI KNOB, RAISED.** `runtime/claude/loader.js › buildScrubbedEnv` sets
+     `MCP_CONNECT_TIMEOUT_MS=30000`, last and unconditionally, on `ENABLE_CLAUDEAI_MCP_SERVERS`'s rule.
+  4. **SURFACED.** A local-only `diag` sentence on the session projection
+     (`session-metrics.js › metrics` live, `session-summary.js › endedSummary` frozen, via
+     `agent-history.js › durableHistory`), rendered on the agent card
+     (`channels-v2/agents-tab-cards.tsx`). ⚠ It rides BESIDE the pill and can never BE one: `state` is
+     the server's three-value enum and a fourth value 400s the whole push unretryably. ⚠ Local-only
+     structurally — `session-state-push.js › reportRow` and `session-telemetry.js › telemetryFields`
+     pick by name — so **no migration, no contract change, no new drift step**.
+  5. **TRUTH IN THE PROMPT AND IN THE UI.** The gag is replaced by *"If mcp__dopl__dopl_channel is
+     not in your tool list, say so in your first reply: the desktop failed to connect Dopl"*, and a
+     `channel_agent` turn now carries one posture line about having no shell. `types.ts ›
+     ResolvedAgentToolProfile` + `AGENT_TOOL_PROFILE_LABELS.channel_agent = "Full access, no shell"`,
+     and the row renders the RESOLVED profile via `src/features/channels/lib/tool-profile-resolve.ts ›
+     profileForChannel` with the caption *"Shared channel: agents run without a shell"*.
+- ⚠ **`AgentToolProfile` WAS DELIBERATELY *NOT* WIDENED**, though the ticket asked for it. It is the
+  argument of `schema-members.ts › AgentToolProfileSchema`, a `closedEnum`, so adding `channel_agent`
+  to the union is a COMPILE ERROR unless the PATCH schema takes it too — which would make a value
+  `channel_members.agent_tool_profile`'s CHECK rejects writable over the wire. The fourth profile is
+  a launch-time derivation and INVARIANTS §11 says so; `ResolvedAgentToolProfile` is the type that
+  carries it, and the label map is keyed on that.
+- **Tests:** `dopl-desktop-app/test/mcp-connect-guard.test.mjs` (11 cases: the installed SDK's own declared
+  init-message shape, connected / failed / missing / unreported through the REAL normalizer, the one-retry
+  verdict, the wire, the pre-flight) and
+  `src/features/channels/lib/tool-profile-resolve-parity.test.ts` (the desktop's sentinel block
+  sliced and run against the web mirror over the full cross product). Existing pins updated:
+  `prompt-profile-drift`, `prompt-tool-name`, `session-auth-recovery`, `session-summary-shape`,
+  `session-summary-report`, `claudeai-connector-lane`.
+- **Status: FIXED 2026-09-13** on `ui/agents-tab-polish`, uncommitted. ⚠ `main/` changed, so the
+  Electron main process must be restarted before any of it is live.

@@ -23,8 +23,17 @@ const io = require('./session-io');
 const store = require('./session-store');
 const { diag } = require('./diag');
 const sessionAuth = require('./session-auth');
+// F-692: the ACT on an MCP-connect failure (kill, retry ONCE, then end visibly). Bound by the
+// engine with the same four handles `session-auth.js` takes, and required here for the same
+// reason: this loop is where the runtime's own statement about its MCP servers arrives.
+const mcpGuard = require('./mcp-connect-guard');
 const sessionCredential = require('./session-credential'); // the container lock (plan §4.4 B1)
 const runtimeRegistry = require('./runtime');
+// F-692 (2026-09-13): the Dopl MCP route's PRE-FLIGHT and the CLI's connect-timeout knob. ⚠ CORE's
+// and not the adapter's, because `/api/mcp` is the one server EVERY runtime is pointed at — the
+// adapter owns how a server is MOUNTED, this owns whether the route is awake before a child asks.
+const mcpConnect = require('./mcp-connect');
+const config = require('./config');
 
 let deps = null; // { dispatch, emitQuiet, scheduleIdle }
 
@@ -81,6 +90,28 @@ async function startQuery(s, rt) {
   // ⚠ `session-audience-ceiling.test.mjs` pins BOTH sites by source scan: deleting either one
   // is silent otherwise, and the half it deletes is a whole spawn shape.
   await sessionCredential.ensureContainerCredential(s, diag);
+  // ── ⚠ THE MCP PRE-FLIGHT (F-692, 2026-09-13) ───────────────────────────────────────────────
+  //
+  // MEASURED: `MCP_URL` is `APP_ORIGIN + /api/mcp`, and on a local Next dev server the COLD route
+  // answered `POST /api/mcp 200 in 12.4s / 10.0s / 16.2s / 14.7s` — every one of them past the
+  // CLI's connect budget, which is `MCP_CONNECT_TIMEOUT_MS` and defaults to 5000. So the child
+  // gave up on the `dopl` server before the route had finished COMPILING, and the session ran
+  // with no delivery path. The compile is a once-per-route cost that only the first caller pays;
+  // this is the desktop volunteering to be that caller, on a request whose timeout it controls.
+  //
+  // ⚠ IT CANNOT FAIL A LAUNCH — `warmMcpRoute` resolves a word for the log on every outcome,
+  // 401 and timeout included (its header carries the argument). The ASSERTION is the init
+  // message's `mcp_servers`; this is only what makes the assertion usually pass.
+  // ⚠ HERE, at the ONE deferred launch, so it covers the cold spawn, the post-sign-in relaunch and
+  // the MCP retry alike. A parked RESUME (`session-park.js › startResumedConsumer`) does not pass
+  // through here and does not need to: its route was warmed by the launch it is resuming.
+  const warm = await mcpConnect.warmMcpRoute({
+    url: config.MCP_URL,
+    token: mcpTokenFor(s),
+    workspaceId: s.workspaceId,
+    fetchImpl: typeof fetch === 'function' ? fetch : null,
+  });
+  diag('session-query: mcp pre-flight', config.MCP_URL, '->', warm);
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
   // ⚠ SYNCHRONOUS BY CONTRACT. The handle is assigned to the session IMMEDIATELY; an await
@@ -146,8 +177,16 @@ async function consume(s, q, rt) {
       // plain Node by a dozen suites and `diag.js` pulls electron — so the swallowed context
       // dispatch's log line is supplied from here, exactly as the option assembly supplies the
       // gate bridge's. This file already requires `diag` at its top for the query-error line.
-      const hold = io.applyCoreEvents(s, rt.normalize(msg, normalizeCtx(s)), deps.dispatch, store, diag);
-      if (hold && sessionAuth.holdIfAuthFailure(s, hold.text)) return;
+      const signal = io.applyCoreEvents(s, rt.normalize(msg, normalizeCtx(s)), deps.dispatch, store, diag);
+      // ⚠ TWO SIGNALS SHARE THIS RETURN AND ARE BRANCHED APART BY `type` (F-692). The auth hold is
+      // an EVENT (`{type:'auth_hold', text}`); the MCP-connect answer is `{type:'mcp_status',
+      // status}`. Passing the wrong one to `holdIfAuthFailure` would test an undefined against the
+      // auth regexes — harmless today and exactly the kind of accident that stops being harmless.
+      if (signal && signal.type === 'mcp_status') {
+        if (mcpGuard.handleMcpStatus(s, signal.status)) return; // retried (this loop is superseded) or ended
+        continue;
+      }
+      if (signal && sessionAuth.holdIfAuthFailure(s, signal.text)) return;
     }
   } catch (err) {
     if (s.query !== q) return;
@@ -164,6 +203,22 @@ async function consume(s, q, rt) {
       if (!s.settled) deps.dispatch(s, { type: 'crash' });
     }
   }
+}
+
+/**
+ * THE BEARER THE PRE-FLIGHT WARMS WITH — this session's container-locked child credential when it
+ * has one, else the device token. ⚠ THE SAME PRECEDENCE `runtime/claude/launch-spec.js` hands
+ * `buildMcpServers`, so the warm call exercises the same auth path the child will: warming as a
+ * different principal can compile a different branch. ⚠ '' IS FINE — an unauthenticated POST still
+ * compiles the route, which is the whole point, and the launch is never failed over this.
+ */
+function mcpTokenFor(s) {
+  const locked = sessionCredential.sessionBearer(s);
+  if (typeof locked === 'string' && locked.trim()) return locked.trim();
+  // ⚠ LAZY, on `runtime/claude/loader.js › doplBearer`'s exact rule: `mcp-config` pulls in
+  // auth/session-spawner, and an unwired harness (or a pre-sign-in launch) must read as "no
+  // token" rather than throw into a launch.
+  try { return require('./mcp-config').deviceTokenForSpawn() || ''; } catch (_) { return ''; }
 }
 
 function isAbortError(err) {

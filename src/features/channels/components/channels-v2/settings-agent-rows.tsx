@@ -24,6 +24,13 @@
  */
 
 import type { ReactNode } from "react";
+import { SelectMenu } from "@/shared/ui/select-menu";
+import type { SelectMenuOption } from "@/shared/ui/select-menu";
+import { AGENT_TOOL_PROFILE_LABELS } from "../../constants";
+import {
+  SHARED_CHANNEL_TOOL_CAPTION,
+  profileForChannel,
+} from "../../lib/tool-profile-resolve";
 // ⚠ 2026-09-06 (item 15). This file is still the ROW VOCABULARY and still decides
 // nothing — the eye is a rendering concern like every other recipe here, and its
 // COPY lives in `settings-help.tsx` so the table and the components that use it
@@ -159,5 +166,85 @@ export function SettingRow({
       </span>
       <span className="flex min-w-0 flex-1 justify-end">{children}</span>
     </div>
+  );
+}
+
+/**
+ * "TOOL ACCESS" — the containment pick, and **the RESOLVED profile beside it**
+ * (2026-09-13, F-692).
+ *
+ * ⚠ **THE BUG IT FIXES IS A LABEL THAT LIED.** The `SelectMenu` rendered the STORED
+ * value's label, so a shared channel storing `full` printed "Full access" over a
+ * session the desktop launches at `channel_agent` — `full` minus the shell (ruling
+ * B7, and `main/targeting-window.js › resolveLaunchToolProfile` is the lane every
+ * launch goes through). `constants.ts › UNRESOLVED_TOOL_PROFILE` already states why
+ * that is a defect and not a nicety: a profile label is a CONTAINMENT CLAIM.
+ *
+ * ⚠ **THE VALUE WRITTEN IS STILL THE STORED ENUM, AND ONLY THE LABEL MOVES.** The
+ * option's `value` stays `full`, so this control offers exactly the three values the
+ * column accepts; what changes is the WORDS on the option the resolution lands on.
+ * Adding `channel_agent` as a fourth option would offer a write the column's CHECK
+ * rejects — see `types.ts › ResolvedAgentToolProfile`.
+ *
+ * ⚠ **IT IS DERIVED FROM `TOOL_PROFILE_OPTIONS`, NEVER RE-LISTED**, and the label
+ * half from `AGENT_TOOL_PROFILE_LABELS` — the rule the table above it already
+ * follows, and it matters more here because the thing that would drift is a claim
+ * about what a session may do.
+ *
+ * ⚠ **THE CAPTION IS SIX WORDS AND APPEARS ONLY WHEN THE RESOLUTION MOVED.** The
+ * minimal-copy ruling (Samuel, 2026-08-19; INVARIANTS §5) allows a row a few-word
+ * secondary line; a caption on every row would be the explainer paragraph that
+ * ruling deleted.
+ */
+export function ToolAccessRow({
+  profile,
+  shared,
+  busy,
+  onChange,
+}: {
+  /** The caller's STORED value for this channel — what the control writes. */
+  profile: AgentToolProfile;
+  /**
+   * Is this room shared? `lib/tool-profile-resolve.ts › isSharedChannel` over the
+   * channel's own member count. ⚠ An unknown count reads as SHARED there, because
+   * the only thing the answer can do is remove the shell.
+   */
+  shared: boolean;
+  busy: boolean;
+  onChange: (next: AgentToolProfile) => void;
+}) {
+  const resolved = profileForChannel(profile, shared);
+  const narrowed = resolved !== profile;
+  const options: ReadonlyArray<SelectMenuOption<AgentToolProfile>> =
+    TOOL_PROFILE_OPTIONS.map((option) => ({
+      value: option.value,
+      // ⚠ ONLY the option the resolution LANDS ON is relabelled. Relabelling every
+      // option would claim the narrowing applies to picks the operator has not made.
+      label:
+        option.value === profile
+          ? AGENT_TOOL_PROFILE_LABELS[resolved]
+          : AGENT_TOOL_PROFILE_LABELS[option.value],
+      description: option.description,
+    }));
+  return (
+    <>
+      <SettingRow name="Tool access">
+        <SelectMenu<AgentToolProfile>
+          variant="text"
+          value={profile}
+          options={options}
+          onChange={(next) => {
+            if (next !== profile) onChange(next);
+          }}
+          ariaLabel="Tool access for agents on this channel"
+          disabled={busy}
+        />
+      </SettingRow>
+      {narrowed && (
+        <p className="text-caption text-text-secondary">
+          {SHARED_CHANNEL_TOOL_CAPTION}
+        </p>
+      )}
+    </>
   );
 }

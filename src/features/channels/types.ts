@@ -127,11 +127,28 @@ export type ChannelAgent = {
 export type NotifyScope = "all" | "addressed" | "none";
 
 /**
- * Tool scope a member's responding agent runs with (the operator controls their own
- * machine): `full` = no restriction (default), `dopl_only` = Dopl MCP + safe reads,
- * `read_only` = no writes. Desktop maps it to the session's `--allowedTools`.
+ * **THE STORED tool scope** a member's responding agent runs with (the operator controls their own
+ * machine) — `channel_members.agent_tool_profile`, a three-value column with its own CHECK, and the
+ * closed write enum behind `PATCH /channels/[channelId]/members` (`schema-members.ts ›
+ * AgentToolProfileSchema`). What each value GRANTS: `main/tool-profiles.js`.
+ *
+ * ⚠ **IT SAID "`full` = no restriction (default)" AND BOTH HALVES WERE STALE** (fixed 2026-09-13,
+ * F-692). `full` runs under `UNIVERSAL_HARD_DENY` on every lane and the broader `SESSION_HARD_DENY`
+ * on the SDK one; "(default)" is only the COLUMN default — an unresolved value
+ * here is `read_only` (`constants.ts › UNRESOLVED_TOOL_PROFILE`). ⚠ **WHAT A LAUNCH RESOLVES TO IS
+ * {@link ResolvedAgentToolProfile}, NOT THIS** — do not widen this union to carry `channel_agent`:
+ * `closedEnum` would force it into the PATCH schema, making a value the column's CHECK rejects
+ * writable over the wire.
  */
 export type AgentToolProfile = "full" | "dopl_only" | "read_only";
+
+/**
+ * **THE PROFILE A LAUNCH ACTUALLY STARTS AT** — ruling B7's narrowing applied (2026-09-02; surfaced
+ * here 2026-09-13, F-692). `channel_agent` is `full` MINUS THE SHELL, what the desktop runs in a
+ * SHARED channel. ⚠ **NEVER STORED, NEVER WRITABLE** — the argument and the derivation are
+ * `lib/tool-profile-resolve.ts › profileForChannel`; it is here so a LABEL can be truthful.
+ */
+export type ResolvedAgentToolProfile = AgentToolProfile | "channel_agent";
 
 /**
  * Listener state a heartbeat reports. Closed set (schema + DB CHECK).

@@ -188,7 +188,7 @@ function endedSummary(e, name) {
     // Nothing finer to say about a session that is doing nothing, and a retained detail
     // would outlive the run it described.
     detail: null,
-    toolLabel: null,
+    toolLabel: null, diag: (e && typeof e.diag === 'string' && e.diag) || null, // F-692: `diag` is FROZEN, unlike `detail` — it says WHY IT STOPPED, and an MCP-connect failure ENDS the session, so this row is the only place that sentence survives. The LIVE half rides `session-metrics.js › metrics`; this file was AT the 500 cap
     // No posture to change; a retained one would offer a control over nothing.
     toolMode: null,
     messageMode: null,

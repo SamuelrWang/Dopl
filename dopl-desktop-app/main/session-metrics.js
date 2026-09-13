@@ -87,6 +87,20 @@ function metrics(s, now) {
     // reads it, and it is a derivation rather than a measurement, which is why a clock may
     // appear in a bundle whose standing rule is "nothing here starts a counter".
     ...sessionHealth.health(s, typeof now === 'number' ? now : Date.now()),
+    // ⚠ WHY THIS SESSION CANNOT WORK, IN THE OPERATOR'S OWN WORDS — null in the ordinary case
+    // (F-692, 2026-09-13). `mcp-connect-guard.js › failVisibly` stamps `s.mcpDiag` when the Dopl
+    // MCP server did not connect after the pre-flight AND the one retry, which is the state the
+    // pill cannot express: `state` is the SERVER's three-value vocabulary and a fourth value 400s
+    // the whole push, unretryably (`session-pill.js`'s header).
+    // ⚠ IT RIDES THIS BUNDLE BECAUSE `session-summary.js` WAS AT THE 500-LINE CAP, and that is an
+    // honest fit rather than a dodge: this file already carries the health half for the same
+    // reason, and a sentence about whether a run can proceed is of a piece with "is it getting
+    // anywhere". The ENDED twin is `session-summary.js › endedSummary`, off the frozen record.
+    // ⚠ LOCAL-ONLY, STRUCTURALLY: `session-telemetry.js › telemetryFields` picks its wire fields
+    // BY NAME, so nothing added here reaches `channel_sessions` — no migration, no contract, no
+    // drift step. ⚠ AN EXPLANATION, NEVER A STATE: nothing may branch on it to decide whether a
+    // session is over — `detail`'s rule exactly.
+    diag: (s && typeof s.mcpDiag === 'string' && s.mcpDiag) || null,
   };
 }
 // ─── END SESSION-METRICS-PURE ────────────────────────────────────────────────────────

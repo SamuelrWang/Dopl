@@ -202,17 +202,49 @@ test("…and under a profile that CAN reach it, the template turn really does na
   assert.ok(readOnly.includes("Handbook"), "read_only still NAMES the base — UNKNOWN is not EMPTY");
 });
 
-test("what F3 was really protecting survives: never report the channel tool missing", () => {
-  // The lookup order is gone; the REPORTING rule is not. The 2026-08-01 failure was an agent
-  // posting "CONFIRMED: I do not have the mcp__dopl__dopl_channel tool" through that very tool,
-  // which is a reporting failure and would not have been fixed by any lookup.
+test("F3's grant statement survives — and the gag on reporting a real outage does NOT", () => {
+  // ⚠ THIS TEST WAS INVERTED ON 2026-09-13 (F-692) AND THE INVERSION IS THE POINT. It used to
+  // pin `never report that you have no dopl channel tool`. The 2026-08-01 failure that bought
+  // that line was an agent posting "CONFIRMED: I do not have the mcp__dopl__dopl_channel tool"
+  // THROUGH the tool it said was absent — a reporting failure with the tool right there. On
+  // 2026-09-13 the tool was genuinely absent (the `dopl` MCP server never connected, a cold
+  // `/api/mcp` past the CLI's 5s connect budget) and THIS LINE is what stopped the agent saying
+  // so: the failure was hidden by instruction for a whole session.
+  //
+  // What still has to hold is the half that was actually load-bearing: the grant is STATED, and
+  // an op-scoped gate is not the tool missing. What replaces the gag is the OPPOSITE instruction.
   for (const { label, text } of everyTurn()) {
     const flat = text.replace(/\s+/g, " ");
     assert.ok(/GRANTED to this session/.test(flat), `${label}: the grant is not stated`);
+    assert.ok(/OP-SCOPED by your posture/.test(flat), `${label}: the per-op gate is not distinguished`);
     assert.ok(
-      /[Nn]ever report\s+that you have no dopl channel tool/.test(flat),
-      `${label}: the do-not-report-it-missing rule is gone`
+      /If mcp__dopl__dopl_channel is not in your tool list, say so in your first reply: the desktop failed to connect Dopl/
+        .test(flat),
+      `${label}: the report-it-missing instruction is gone — F-692 would be silent again`
     );
+    assert.ok(
+      !/[Nn]ever report\s+that you have no dopl/.test(flat),
+      `${label}: the gag on reporting a real MCP outage is BACK (F-692)`
+    );
+  }
+});
+
+test("a `channel_agent` turn says it has no shell; the other three profiles do not", () => {
+  // ⚠ ONE LINE, AND ONLY FOR THAT PROFILE (2026-09-13). A shared-channel session runs `full`
+  // MINUS the shell (ruling B7) and was told nothing, so it planned with `Bash`, was denied, and
+  // reported the denial to the COUNTERPARTY as a blocker — the leak `counterpartyFraming` exists
+  // to prevent. `read_only` / `dopl_only` never had a shell to lose and `full` has one, so the
+  // line must not appear on their turns.
+  const SHELL_LINE = /no shell in this channel \(shared-channel rule\); ask the operator to run commands/;
+  for (const side of ["requester", "responder"]) {
+    const context = { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK };
+    const withProfile = (profile) =>
+      buildFencedTurn({ side, message: "x", nonce: "n", context: { ...context, profile } });
+    assert.ok(SHELL_LINE.test(withProfile("channel_agent")), `${side}: channel_agent is not told`);
+    for (const profile of ["full", "dopl_only", "read_only", undefined]) {
+      assert.ok(!SHELL_LINE.test(withProfile(profile)),
+        `${side} / ${profile}: told about a shell rule that is not this profile's`);
+    }
   }
 });
 
