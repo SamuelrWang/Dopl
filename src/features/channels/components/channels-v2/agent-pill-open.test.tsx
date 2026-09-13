@@ -20,15 +20,9 @@
  *    no pane (the pop-out window). Either absence must render the SPAN — an inert button is
  *    indistinguishable from a broken one, the same absent-not-disabled rule the launch
  *    controls follow.
- *  - **THE FACE DOES NOT FORK.** /home repaints the HUMAN pill on
- *    `[data-attribution-pill]`, so a human button has to carry the attribute and the same
- *    capsule classes or the account palette silently stops reaching those rows.
- *
- * ⚠ **THE AGENT ROW LOST ITS CAPSULE ON 2026-09-13 AND THE VERB CAME WITH IT**
- * (`message-row-agent.tsx`, which carries Samuel's ruling): the sender is now the NAME on a
- * flat header line, marked `data-agent-sender` in both its pressable and its inert form. Every
- * property above is unchanged — the id it sends, the two gates, absent-not-disabled — and the
- * only thing that moved is which element carries them. A human row is still the capsule.
+ *  - **THE FACE DOES NOT FORK.** /home repaints these on `[data-attribution-pill]`, so the
+ *    button has to carry the attribute and the same capsule classes or the account palette
+ *    silently stops reaching agent rows.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -91,27 +85,21 @@ function renderWith(
   );
 }
 
-/** The row a body landed in. */
-const rowFor = (body: string) =>
-  screen.getByText(body).closest("article") as HTMLElement;
-
-/** The AGENT row's sender — the name, pressable or not. */
-const senderFor = (body: string) =>
-  rowFor(body).querySelector("[data-agent-sender]") as HTMLElement;
-
-/** The HUMAN row's capsule, which this ruling did not touch. */
+/** The capsule heading the row a body landed in. */
 const pillFor = (body: string) =>
-  rowFor(body).querySelector("[data-attribution-pill]") as HTMLElement;
+  (screen.getByText(body).closest("article") as HTMLElement).querySelector(
+    "[data-attribution-pill]"
+  ) as HTMLElement;
 
 describe("an agent's sender pill opens that agent's view", () => {
   it("renders the agent pill as a button and opens THAT agent", () => {
     const onOpenAgent = vi.fn();
     renderWith([byAgent("m-1", A)], WITH_A, onOpenAgent);
-    const sender = senderFor("BODY-m-1");
-    expect(sender.tagName).toBe("BUTTON");
-    // ⚠ THE NAME, NEVER A BARE ID — `#<id>` IS the display name (global invariant).
-    expect(sender.getAttribute("aria-label")).toBe(`Open agent #${A}`);
-    fireEvent.click(sender);
+    const pill = pillFor("BODY-m-1");
+    expect(pill.tagName).toBe("BUTTON");
+    // ⚠ THE NAME, NEVER A BARE ID — `Agent #<id>` IS the display name (global invariant).
+    expect(pill.getAttribute("aria-label")).toBe(`Open agent #${A}`);
+    fireEvent.click(pill);
     // ⚠ THE ID, AND EXACTLY THE ID. This is the assertion a wrong argument fails.
     expect(onOpenAgent).toHaveBeenCalledTimes(1);
     expect(onOpenAgent).toHaveBeenCalledWith(A);
@@ -125,7 +113,7 @@ describe("an agent's sender pill opens that agent's view", () => {
       new Map([[A, { displayName: "Research", description: null }]])
     );
     renderWith([byAgent("m-1", A)], named, vi.fn());
-    expect(senderFor("BODY-m-1").getAttribute("aria-label")).toBe("Open agent Research");
+    expect(pillFor("BODY-m-1").getAttribute("aria-label")).toBe("Open agent Research");
   });
 
   /** ⚠ THE SECOND AGENT IN ONE THREAD OPENS ITSELF, not the run above it — the multiplayer
@@ -142,9 +130,9 @@ describe("an agent's sender pill opens that agent's view", () => {
       ])
     );
     renderWith([byAgent("m-1", A, 1), byAgent("m-2", B, 2)], index, onOpenAgent);
-    fireEvent.click(senderFor("BODY-m-2"));
+    fireEvent.click(pillFor("BODY-m-2"));
     expect(onOpenAgent).toHaveBeenCalledWith(B);
-    fireEvent.click(senderFor("BODY-m-1"));
+    fireEvent.click(pillFor("BODY-m-1"));
     expect(onOpenAgent).toHaveBeenLastCalledWith(A);
   });
 
@@ -189,7 +177,7 @@ describe("an agent's sender pill opens that agent's view", () => {
   /** ⚠ "CANNOT SAY WHICH AGENT" HAS NO PANE TO OPEN — the unstamped row stays inert. */
   it("leaves an UNSTAMPED agent pill a plain span", () => {
     renderWith([byAgent("m-1", null)], WITH_A, vi.fn());
-    expect(senderFor("BODY-m-1").tagName).toBe("SPAN");
+    expect(pillFor("BODY-m-1").tagName).toBe("SPAN");
   });
 
   /**
@@ -200,36 +188,33 @@ describe("an agent's sender pill opens that agent's view", () => {
    */
   it("leaves the pill a span on a host whose agent index does not know it", () => {
     renderWith([byAgent("m-1", A)], NO_FEED, vi.fn());
-    expect(senderFor("BODY-m-1").tagName).toBe("SPAN");
+    expect(pillFor("BODY-m-1").tagName).toBe("SPAN");
   });
 
   /** ⚠ THE POP-OUT WINDOW — no agent pane beside it, so it hands no callback and gets no
    *  button. Doubly gated there, since its index carries no agents either. */
   it("leaves the pill a span on a host that hands no open mechanism", () => {
     renderWith([byAgent("m-1", A)], WITH_A, undefined);
-    expect(senderFor("BODY-m-1").tagName).toBe("SPAN");
+    expect(pillFor("BODY-m-1").tagName).toBe("SPAN");
   });
 
   /**
-   * ⚠ THE ROW'S HOOKS AND A FACE WITH NO BOX IN IT. `data-agent-id` moved to the ARTICLE when
-   * the capsule went (the row, not a capsule, is what a host can now address), and the sender
-   * must NOT pick up `[data-attribution-pill]` — /home repaints that in a RAISED PILL face, so
-   * an agent name carrying it would re-box the thing Samuel had removed.
+   * ⚠ ONE FACE, TWO ELEMENTS. /home's account palette reaches these pills through
+   * `[data-attribution-pill]`; a button that dropped the attribute or forked the capsule would
+   * leave agent rows unpainted there and nothing would say so.
    */
-  it("keeps the row's hooks and gives the button a flat face", () => {
+  it("keeps the capsule's hook and face on the button", () => {
     renderWith([byAgent("m-1", A)], WITH_A, vi.fn());
-    const row = rowFor("BODY-m-1");
-    expect(row.getAttribute("data-agent-id")).toBe(A);
-    const sender = senderFor("BODY-m-1");
-    expect(sender.tagName).toBe("BUTTON");
-    expect(sender.getAttribute("type")).toBe("button");
-    // ⚠ NO CAPSULE ANYWHERE ON THIS ROW — neither the kit's card nor /home's hook.
-    expect(row.querySelector(".bento")).toBeNull();
-    expect(row.querySelector("[data-attribution-pill]")).toBeNull();
-    // The pressable half is ink + a pointer; no local shadow or colour recipe.
-    expect(sender.className).toContain("cursor-pointer");
-    expect(sender.className).toContain("text-text-primary");
-    expect(row.outerHTML).not.toMatch(/#[0-9a-f]{3,6}\b/i);
-    expect(row.outerHTML).not.toMatch(/\bshadow-\[/);
+    const pill = pillFor("BODY-m-1");
+    expect(pill.tagName).toBe("BUTTON");
+    expect(pill.getAttribute("type")).toBe("button");
+    expect(pill.getAttribute("data-agent-id")).toBe(A);
+    expect(pill.className).toContain("bento");
+    expect(pill.className).toContain("rounded-full");
+    expect(pill.className).toContain("bg-bg-elevated");
+    // The pressable half is MOTION plus a pointer — no local shadow or colour recipe.
+    expect(pill.className).toContain("cursor-pointer");
+    expect(pill.outerHTML).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+    expect(pill.outerHTML).not.toMatch(/\bshadow-\[/);
   });
 });

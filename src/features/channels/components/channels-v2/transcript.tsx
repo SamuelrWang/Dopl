@@ -43,7 +43,6 @@
 import { cn } from "@/shared/lib/utils";
 import { ArtifactCard } from "./artifact-card";
 import { AuthoredRow } from "./authored-row";
-import { AgentMessageRow } from "./message-row-agent";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
@@ -339,44 +338,6 @@ function Message({
   // live index, exactly like the sender pill's — so a rename re-faces old rows
   // and no body is ever rewritten.
   const routed = routedTagLabel(row.routedAgentIds, index.agents);
-  // ⚠ RESOLVED AT RENDER from the live feed, never read off the row (2026-08-27):
-  // a rename reaches every message an agent has ever posted on main's next push.
-  const identity = row.agentId ? index.agents.get(row.agentId) : undefined;
-  const body = (
-    <MessageMarkdown
-      text={row.body}
-      index={index}
-      mentionsMe={row.mentionsMe}
-      blockClassName={MESSAGE_BLOCK}
-      textClassName={MESSAGE_TEXT}
-    />
-  );
-  // 🔒 AN AGENT POST IS A FLAT ROW, A PERSON'S IS THE PILL (Samuel, 2026-09-13).
-  // `message-row-agent.tsx` carries the ruling and what it supersedes; the SIDE,
-  // the name wording and the open gate are the same facts either way.
-  if (row.agent) {
-    return (
-      <AgentMessageRow
-        id={row.id}
-        side={row.side}
-        author={row.author}
-        authorLabel={row.authorLabel}
-        time={row.time}
-        agentId={row.agentId}
-        agentName={identity?.displayName ?? null}
-        // ⚠ STILL RUNNING — `ended === false`, the only liveness fact on this map
-        // (§11: an agent this machine does not know is UNKNOWN, not live).
-        live={identity !== undefined && !identity.ended}
-        routedTo={routed?.face ?? null}
-        routedTitle={routed?.title}
-        continuation={row.continuation}
-        flash={flash}
-        onOpenAgent={openAgent}
-      >
-        {body}
-      </AgentMessageRow>
-    );
-  }
   return (
     <AuthoredRow
       id={row.id}
@@ -386,7 +347,9 @@ function Message({
       time={row.time}
       agent={row.agent}
       agentId={row.agentId}
-      agentName={identity?.displayName ?? null}
+      // ⚠ RESOLVED AT RENDER from the live feed, never read off the row (2026-08-27). A rename
+      // reaches every message an agent has ever posted the moment main pushes the next summary.
+      agentName={row.agentId ? (index.agents.get(row.agentId)?.displayName ?? null) : null}
       routedTo={routed?.face ?? null}
       routedTitle={routed?.title}
       continuation={row.continuation}
@@ -397,9 +360,14 @@ function Message({
           old split-on-`\n` loop could not see a fenced block or a list: it
           handed the renderer one line at a time, which is exactly the shape
           markdown is not. Blank lines still separate blocks — that is the
-          paragraph rule, now the lexer's rather than this loop's. ⚠ BUILT ONCE
-          ABOVE since 2026-09-13, because BOTH row faces render the same body. */}
-      {body}
+          paragraph rule, now the lexer's rather than this loop's. */}
+      <MessageMarkdown
+        text={row.body}
+        index={index}
+        mentionsMe={row.mentionsMe}
+        blockClassName={MESSAGE_BLOCK}
+        textClassName={MESSAGE_TEXT}
+      />
     </AuthoredRow>
   );
 }

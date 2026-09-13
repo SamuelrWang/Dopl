@@ -280,23 +280,8 @@ function isContinuation(
     // ⚠ THE SESSION KEY COUNTS TOO (2026-09-04). Keyed on the STAMP alone, every post an agent
     // gave its own `client_msg_id` answered `null` — so two of an operator's agents alternating
     // read as one continuous speaker, which is the exact collapse this predicate exists to stop.
-    authorAgentIdOf(previous) === authorAgentIdOf(message) &&
-    withinRunWindow(previous.createdAt, message.createdAt)
+    authorAgentIdOf(previous) === authorAgentIdOf(message)
   );
-}
-
-/**
- * HOW LONG A RUN OF ONE AGENT'S POSTS STAYS ONE RUN — **five minutes** (Samuel,
- * 2026-09-13, with the flat agent row; Slack's own rule). A CEILING on the
- * predicate above, never a new grouping, and **agent rows only** — INVARIANTS §5
- * carries the rest. ⚠ **AN UNPARSEABLE STAMP CONTINUES THE RUN**: `createdAt` is
- * server-stamped and always present, so that branch is unreachable (§11).
- */
-export const AGENT_RUN_WINDOW_MS = 5 * 60_000;
-
-function withinRunWindow(previousIso: string, currentIso: string): boolean {
-  const gap = new Date(currentIso).getTime() - new Date(previousIso).getTime();
-  return Number.isFinite(gap) ? gap <= AGENT_RUN_WINDOW_MS : true;
 }
 
 function toMessageRow(
