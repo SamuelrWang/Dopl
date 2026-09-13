@@ -370,6 +370,12 @@ async function resume(rec, sdkSessionId) { // opt-in resume from the interrupted
 
 module.exports = {
   bind,
+  // ⚠ THE TWO RECORD READERS ARE EXPORTED FOR `main/session-boot.js` (F-694, 2026-09-13), AND THE
+  // POINT IS THAT THERE IS NO SECOND COPY. Both answer "what does a durable record mean", and the
+  // boot re-park rebuilds a parked session from exactly the same record `startResume` does.
+  // `knownProfile` above says why a third spelling of the profile list is the dangerous one.
+  contextFromRecord,
+  knownProfile,
   resumeParked,
   offerResume,
   startResume,

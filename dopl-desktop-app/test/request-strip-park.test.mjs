@@ -72,12 +72,21 @@ test("the strip and the requester shell are DECLARED nowhere and EXPORTED nowher
     }
   }
   assert.deepEqual(offenders, [], offenders.join("\n"));
-  // session-park's own export list, stated positively: the RESUME family and nothing else.
+  // session-park's own export list, stated positively: the RESUME family, the two RECORD READERS,
+  // and nothing else.
+  // ⚠ IT GREW BY TWO ON 2026-09-13 (F-694) AND THAT IS NOT A REVIVAL. `contextFromRecord` and
+  // `knownProfile` are READS over a durable record — no window, no query, no session — exported so
+  // `main/session-boot.js`'s boot re-park rebuilds a parked session from exactly the same record
+  // `startResume` does, rather than carrying a third copy of the fail-restrictive profile list.
+  // The property this assertion protects is unchanged: NO window-minting export, ever again.
+  // ⚠ COMMENTS ARE STRIPPED BEFORE THE SPLIT. This was a bare `split(",")` over the raw block, so
+  // a `//` line inside the literal shattered into pseudo-entries and the failure named a prose
+  // fragment rather than a symbol — which reads as an export that was added and is not.
   const exports = (PARK_SRC.match(/module\.exports = \{([\s\S]*?)\};/) || [])[1] || "";
   assert.deepEqual(
-    exports.split(",").map((s) => s.trim()).filter(Boolean),
-    ["bind", "resumeParked", "offerResume", "startResume", "resume"],
-    "session-park exports the resume family only — every window-minting export is gone"
+    exports.replace(/\/\/[^\n]*/g, "").split(",").map((s) => s.trim()).filter(Boolean),
+    ["bind", "contextFromRecord", "knownProfile", "resumeParked", "offerResume", "startResume", "resume"],
+    "session-park exports the resume family plus the two record readers — every window-minting export is gone"
   );
 });
 

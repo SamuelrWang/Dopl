@@ -21,7 +21,7 @@ const store = require('./session-store');
 const avatarCache = require('./avatar-cache');
 const sessionReopen = require('./session-reopen');
 const sessionSummary = require('./session-summary'); // §3.3: THE session-pill projection
-const sessionPark = require('./session-park');
+const sessionPark = require('./session-park'); const sessionBoot = require('./session-boot'); // F-694: what a DORMANT record becomes at app start — Idle or Ended, never NOTHING (that file carries the incident and the whole argument)
 const framing = require('./prompt-framing');
 // `session-close-task.js` was required here (the `closeTask` effect) and is DELETED — threads
 // do not close (wiring plan Phase 4, 2026-08-18). The §2 split's point stands: no HTTP dep here.
@@ -98,7 +98,7 @@ function refreshTray() { try { require('./tray').refresh(); } catch (_) { /* tra
 sessionPark.bind({
   sessions, acquireRuntime, buildLaunchSpec, consume, dispatch, startSession, hasLiveSession,
   emit,
-});
+}); sessionBoot.bind({ sessions, runLifecycle, scheduleIdle }); // F-694: the boot pass takes the registry it re-registers into, the lifecycle runner a VISIBLE end needs, and the timer that arms a re-parked session's abandonment bound. It starts no query and acquires no runtime, so it takes neither
 // §3 split: session-query owns the query LIFECYCLE (the assembly is the runtime's since 2026-08-31) and needs the engine's dispatch + replay-aware quiet emit; neither module requires back into the engine.
 sessionQuery.bind({ dispatch, emitQuiet, scheduleIdle }); // C-4: startQuery arms the launch watchdog through the ONE timer
 // Q6: same injection for the preflight + in-window sign-in, and F-692's MCP guard below it on the
@@ -490,8 +490,8 @@ async function init() {
     const sdkId = store.getSdkSessionId(key);
     if (sdkId) sessionPark.offerResume(rec, sdkId);
   }
-  // AUDIT D5: bound the durable record set (retention policy + protections in session-store). AFTER
-  // the scan above, so an interrupted record still echoes and offers its resume before it can age out.
+  try { sessionBoot.reparkDormant(); } catch (err) { diag('session-engine: repark failed', err && err.message); } // ⚠ F-694 — AND THE `continue` ABOVE IS WHY THIS LINE EXISTS: `reloadDisposition('parked')` is `'dormant'`, so a PARKED record fell through the loop — neither re-registered (never published, never re-projected, unwakeable) nor ended (no history, no card). `session-boot.js` re-parks it as Idle or ends it visibly; never a third state
+  // AUDIT D5: bound the durable record set (retention policy + protections in session-store). AFTER the scan AND the re-park, so an interrupted record still echoes and offers its resume, and a re-parked key is in the registry this prune is handed as `keep`, before anything can age out.
   try { store.pruneRecords({ keep: new Set(sessions.keys()) }); } catch (err) { diag('session-engine: prune failed', err && err.message); }
 }
 

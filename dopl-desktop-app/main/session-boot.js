@@ -1,0 +1,281 @@
+// session-boot.js — WHAT COMES BACK WHEN THE APP STARTS AGAIN, AND THE RULE THAT NOTHING MAY
+// COME BACK AS NOTHING.
+//
+// ⚠ SPLIT OUT OF `main/session-engine.js` (F-694, 2026-09-13) UNDER THE §1 500-LINE CAP. That
+// file stands at the cap with no headroom, which is the state ENGINEERING.md §2 warns about — a
+// file at the cap does not merely stop growing, it stops being CORRECTABLE — so `init()` reaches
+// this in ONE line and the reasoning lives here.
+//
+// THE SEAM IS REASON-TO-CHANGE, like `session-park.js` / `session-teardown.js` before it:
+// `session-engine.js` owns the RUNNING session (the query, the effect table, the reducer
+// dispatch) and `session-teardown.js` owns the terminal. This owns the ONE MOMENT BEFORE EITHER:
+// what a durable record on disk becomes at app start. It changes when the durable record or the
+// reload disposition changes; the engine changes when the loop does.
+//
+// ── THE INCIDENT (measured 2026-09-13) ───────────────────────────────────────────────────────
+// A Dopl channel agent (`@agent-y1uun32v`, `phase: 'parked'`, sdk id present in the resume map,
+// template "Coder") was idle when Electron was hard-restarted. After the restart it was NOWHERE:
+// no card in the Agents tab, not even an Ended one, no `agentHistory` entry, and its
+// `channel_sessions` row gone — that row is a LIVE PROJECTION, deleted the moment the pill leaves
+// the set the push reports.
+//
+// ⚠ THE CAUSE WAS A `continue`. `session-engine.js › init` loops the stored records and skips
+// anything whose `store.reloadDisposition(rec.phase)` is not `'resume'` — and a parked record's
+// disposition is `'dormant'`. So a parked record was neither RE-REGISTERED in the engine's
+// in-memory `sessions` map (never published by `session-summary.js`, never re-projected to
+// `channel_sessions`, unreachable by every wake path, which all resolve against that map) nor
+// ENDED (no `setRecordPhase('ended')`, no `task_failed {interrupted}`, no history entry — so not
+// even a tombstone). The record sat on disk describing an agent nothing in the product mentioned.
+//
+// ── THE RULE (F-694) — TWO OUTCOMES, NEVER A THIRD ───────────────────────────────────────────
+//   RE-PARKED  a dormant record WITH an sdk id in the resume map, on a runtime that can resume:
+//              the parked session object is rebuilt in `sessions` in the shape `session-park.js
+//              › resumeParked` expects, so the summary publishes it as **Idle**, the push
+//              re-projects its `channel_sessions` row, and the next addressed message wakes it
+//              through the EXISTING lazy path (`session-gate.js › feedInbound` → the reducer's
+//              `resumeQuery` → `resumeParked`). No query starts here and no runtime is acquired.
+//   ENDED      anything else takes the INTERRUPTED-END route — `setRecordPhase('ended')`, the
+//              `task_failed {interrupted}` lifecycle, and an `agent-history.js` entry, which is
+//              what makes an **Ended** card exist at all (`session-summary.js` reads its ended
+//              set from that file). An agent the operator can see and read is the floor.
+//
+// ⚠ WHY A RUNTIME THAT REFUSES RESUME IS ENDED HERE RATHER THAN RE-PARKED. A refusal is a fact
+// about the BUILD (`runtime/capability.js › resumeRefusal`, e.g. an unverified usage meter), not
+// about the moment — so a re-parked pill on such a runtime would be Idle forever: visible,
+// addressable, and silently unwakeable, which is exactly the third state this module exists to
+// forbid. ⚠ IT CHANGES NOTHING ABOUT THE LIVE REFUSAL: `resumeParked` still refuses IN PLACE and
+// leaves a running session parked for the next wake (INVARIANTS §11) — that is a session whose
+// operator is present, and this is a record with nobody waiting on it. **The cost, stated rather
+// than discovered:** a later build that verifies the meter cannot revive a record this path
+// ended, because `reloadDisposition('ended')` is `'ignore'`.
+
+const crypto = require('crypto');
+const store = require('./session-store');
+const { initialSessionState } = require('./session-state');
+const { floorWindowlessMessage } = require('./session-profiles'); // AXIS B's windowless floor (F-236)
+const sessionModel = require('./session-model'); // the frozen model enum, coerced on the way back in
+// ⚠ `contextFromRecord` AND `knownProfile` COME FROM `session-park.js`, NEVER A SECOND COPY. Both
+// answer "what does a durable record mean" for the OTHER record-driven rebuild (`startResume`),
+// and `knownProfile` in particular is fail-restrictive on purpose — a raw stored profile falls
+// through `tool-profiles.js › normalizeProfile`'s global fallback and comes back at FULL access,
+// from the least trustworthy input there is. A third spelling of that list is how one of them
+// silently stops matching.
+const sessionPark = require('./session-park');
+const toolProfiles = require('./tool-profiles'); // item 9: the human posture label
+const sessionSummary = require('./session-summary'); // §3.3: registration is a projection move
+const agentHistory = require('./agent-history'); // what an ended agent leaves, for 7 days
+const sessionEffects = require('./session-effects'); // `terminalBody` — a terminal says why
+const runtimeRegistry = require('./runtime');
+const runtimeCapability = runtimeRegistry.capability; // the ONE module allowed to read a descriptor's nulls
+const { diag } = require('./diag');
+
+// ─── BEGIN SESSION-BOOT-PURE (injectable; unit-tested via source extraction) ──────
+// Everything above is a free var from here down. ⚠ NO IMPORT AND NO PLATFORM REFERENCE BELOW THIS
+// LINE — the suite asserts it by source scan, so the one pass that runs before anything else in a
+// restarted app stays drivable from a plain `new Function`.
+
+let deps = null;
+
+/**
+ * The engine binds what this module may not require: its in-memory registry, the lifecycle
+ * runner (`task_failed` reaches `trigger-outcomes.js` through it) and `scheduleIdle`.
+ * ⚠ READ AT CALL TIME, so bind order at module load does not matter — `session-park.js › bind`'s
+ * idiom, for the same reason.
+ */
+function bind(d) {
+  deps = d || null;
+}
+
+/**
+ * A DORMANT RECORD -> THE PARKED SESSION OBJECT `resumeParked` EXPECTS.
+ *
+ * ⚠ IT IS NOT `startSession`, AND THE FOUR REASONS ARE THE WHOLE DESIGN. That function is the one
+ * construction site for every SPAWN, and a boot rehydrate is not a spawn: (1) it needs a RUNTIME
+ * handle to stamp `s.runtimeId`, and acquiring one at boot is an async probe per record that can
+ * throw; (2) its windowless credential preflight ROLLS BACK — `sessions.delete(s.key)` — on a
+ * signed-out machine, which is the invisibility this module exists to end, arriving by a second
+ * door; (3) it mints a fresh `sessionId` and restamps `startedAt`, so the record's own identity
+ * and its Agents-tab time bucket would be destroyed by the act of restoring it; (4) it resolves
+ * avatars and emits, i.e. network and I/O, per record, at app start.
+ *
+ * ⚠ SO THE FIELDS ARE COPIED FROM THE RECORD, and the three that cannot be are said out loud:
+ *   `nonce`      MINTED FRESH. It is deliberately not persisted, and `startResume` — the other
+ *                record-driven rebuild — mints one too. The SDK resume carries the original ROLE
+ *                block, and every framed continuation states the token it is fencing with.
+ *   `operatorUserId`  **null, which is FAIL-CLOSED and not a gap.** The record does not carry an
+ *                owner, `setSelfIdentity` has not run at `init()` (the identity is resolved in
+ *                `channel-listener.js`'s first reconcile, after it), and inventing one would
+ *                re-attribute a session across a sign-out — the exact thing that stamp exists to
+ *                prevent. `session-reopen.js › messageByTask` therefore refuses a DIRECTED 1:1
+ *                until this session has actually been resumed; the ordinary channel wake path
+ *                reads no stamp. ⚠ THE PUSH IS UNAFFECTED: `session-state-push.js › trackOrigin`
+ *                stamps origin from the LIVE push identity per key, not from this field.
+ *   `awaitingDirective`  **false, unlike a spawn-idle shell.** This agent has a conversation and
+ *                has already been directed; `session-gate.js › feedInbound`'s belt fences that
+ *                flag alone, and setting it would re-fence an agent that was past it.
+ */
+function parkedSessionFromRecord(key, rec, sdkId) {
+  const state = initialSessionState({ mode: rec.mode, side: rec.side });
+  // ⚠ THE WINDOWLESS MESSAGE FLOOR (F-236). A rehydrated session has NO accept surface, and a
+  // message axis left at the reducer's `ask` makes `session-gate.js › enqueue` HOLD the peer's
+  // next reply with nothing left able to release it. The SAME shared rule `startSession` applies.
+  state.messageMode = floorWindowlessMessage(state.messageMode);
+  // The spent counters, rehydrated for DISPLAY (the caps are deleted, 2026-09-07) — a resumed
+  // agent must show what it has already spent rather than reading as fresh.
+  state.turns = Number(rec.turns) || 0;
+  state.costUsd = Number(rec.costUsd) || 0;
+  // PARKED, all three fields: `phase` is what the durable record round-trips, `parked` is what
+  // `session-pill.js › queryTornDown` reads (hence the Idle pill and `listening: false`), and
+  // `activity` is the coarse word. The reducer's `wakeEffects` fires `resumeQuery` off `parked`.
+  state.phase = 'parked';
+  state.parked = true;
+  state.activity = 'parked';
+  const profile = sessionPark.knownProfile(rec.profile);
+  return {
+    key: key,
+    sessionId: rec.sessionId,
+    // ⚠ BOTH HANDLES, AND `resumeParked` READS EITHER (`s.sdkSessionId || s.resumeSdkId`). The
+    // conversation id is the one thing that makes this a resume rather than a new agent.
+    sdkSessionId: sdkId,
+    resumeSdkId: sdkId,
+    runtimeId: rec.runtimeId || null, // ⚠ NEVER RE-READ LIVE: this conversation belongs to ONE vendor
+    channelId: rec.channelId,
+    taskId: rec.taskId || '',
+    workspaceId: rec.workspaceId,
+    side: state.side,
+    profile: profile,
+    profileLabel: toolProfiles.profileLabel(profile),
+    mode: state.mode,
+    counterpartyId: rec.counterpartyId || null, // L1: the task's other party, so the feed stays bound
+    bind: rec.bind === 'room' ? 'room' : 'pair', // D2: only a launch that ASKED widens the fence
+    agentId: rec.agentId || null, // the @-mention address, the pill's name, the post stamp
+    direct: rec.direct === true, // H2: does the server address our unaddressed posts
+    counterpartyName: rec.counterpartyName || null,
+    model: sessionModel.normalizeModel(rec.model), // the operator's pick, re-coerced on the way in
+    state: state,
+    context: sessionPark.contextFromRecord(rec), // channel/thread/peer names + the template NAME (F-288)
+    nonce: crypto.randomBytes(8).toString('hex'),
+    firstTurn: '',
+    startedAt: Number(rec.startedAt) || 0,
+    // The delta baselines a resumed query restarts from (`resumeParked` zeroes them again).
+    lastTotalCost: 0,
+    lastTotalTokens: 0,
+    pendingPermissions: new Map(),
+    pendingNames: new Map(),
+    pendingInbound: [],
+    // ⚠ NOT a fresh shell: there IS something to resume, so the first woken turn must NOT rebuild
+    // the whole v1.9 framing (the SDK resume carries the ROLE block) — `startResume`'s rule.
+    freshRun: false,
+    freshFraming: false,
+    launchGoal: '',
+    awaitingDirective: false,
+    idleTimer: null,
+    settled: false,
+    windowHidden: false,
+    lastInboundSeq: null,
+    ownPostIds: new Set(),
+    // ⚠ SLACK ON TOP OF THE STORED COUNTER. The record is written at spawn / init / park / settle,
+    // so a crash leaves it BELOW ids the server already holds — re-minting one lets the server's
+    // idempotency short-circuit answer the old row and silently discard this agent's reply.
+    ownPostSeq: store.resumedPostSeq(rec.ownPostSeq),
+    operatorUserId: null, // see the docblock: fail-closed, never invented
+    win: null,
+    query: null,
+    abortController: null,
+    pushIterator: null,
+    windowless: true, // what `session-windowless.js › attachSurface` stamps; every emit no-ops
+  };
+}
+
+/**
+ * THE INTERRUPTED-END ROUTE, for a dormant record that can never be resumed. Identical in shape
+ * to `session-engine.js › init`'s scan for a LIVE-when-it-died record, plus the one thing that
+ * scan cannot do: a HISTORY ENTRY.
+ * ⚠ THE HISTORY ENTRY IS WHAT MAKES THE CARD EXIST. `session-summary.js` reads its ended set from
+ * `agent-history.js › listEnded` (bound as `endedRecords`), so a phase flip alone ends the agent
+ * with no tombstone — the F-694 symptom by a shorter path. `entries: []` is the honest ring: the
+ * narration lived on a session object this process never had.
+ */
+function endInterrupted(key, rec, why) {
+  store.setRecordPhase(key, 'ended');
+  deps.runLifecycle(
+    { channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key: key, sdkSessionId: store.getSdkSessionId(key) },
+    'task_failed',
+    { interrupted: true },
+    sessionEffects.terminalBody({ interrupted: true }),
+  );
+  agentHistory.record({
+    key: key,
+    agentId: rec.agentId,
+    sessionId: rec.sessionId,
+    channelId: rec.channelId,
+    taskId: rec.taskId,
+    workspaceId: rec.workspaceId,
+    channelName: rec.channelName,
+    threadTitle: rec.taskTitle,
+    templateName: rec.templateName, // frozen like the rest of the identity (F-288)
+    startedAt: rec.startedAt,
+    endedAt: Date.now(),
+    // ⚠ WHY IT STOPPED, IN THE OPERATOR'S OWN SURFACE (F-692's field). A card that says only
+    // "Ended" for an agent that vanished over a restart is the question this wave was filed about.
+    diag: why,
+    entries: [],
+  });
+  diag('session-boot: ended dormant agent —', why, '| agent', String(rec.agentId || ''), 'channel', String(rec.channelId || '').slice(0, 8), 'thread', String(rec.taskId || '').slice(0, 8));
+}
+
+/**
+ * THE BOOT PASS. Every DORMANT record either comes back Idle or ends visibly; nothing falls
+ * through. Called from `session-engine.js › init` in one line, AFTER the interrupted-record scan
+ * (disjoint — that one takes `'resume'`, this one `'dormant'`) and BEFORE `store.pruneRecords`,
+ * so a re-parked key is in the registry the prune is handed as `keep`.
+ * Returns `{ reparked, ended }`; it never throws at its caller (each record is independent).
+ */
+function reparkDormant() {
+  const records = store.loadRecords();
+  const keys = Object.keys(records);
+  let reparked = 0;
+  let ended = 0;
+  for (const key of keys) {
+    const rec = records[key];
+    if (!rec || typeof rec !== 'object') continue;
+    if (store.reloadDisposition(rec.phase) !== 'dormant') continue;
+    // ⚠ ALREADY LIVE IS NOT AN ERROR AND MUST NOT BE OVERWRITTEN. `init()` runs once at app
+    // start, but a launch racing it (a deep link, a queued directive) would already own this
+    // slot, and replacing the Map entry orphans a live query.
+    if (deps.sessions.has(key)) continue;
+    const sdkId = store.getSdkSessionId(key);
+    // ⚠ NO SDK ID IS THE ORDINARY CASE, NOT A CORRUPTION: a SPAWN-IDLE agent ("New Agent") never
+    // started a query, so nothing ever reported a conversation id for it — and the record carries
+    // neither its launch goal nor its template body, so there is nothing to rebuild it from
+    // either. An Ended card with a reason is the honest answer; a silent disappearance is not.
+    const refusal = sdkId
+      ? runtimeCapability.resumeRefusal(runtimeRegistry.descriptorFor(rec.runtimeId))
+      : 'the app restarted before this agent started a conversation, so there was nothing to resume';
+    if (refusal) { endInterrupted(key, rec, refusal); ended += 1; continue; }
+    const s = parkedSessionFromRecord(key, rec, sdkId);
+    deps.sessions.set(key, s);
+    // ⚠ THE ABANDONMENT BOUND IS ARMED HERE, DELIBERATELY, exactly as the spawn-idle lane arms
+    // it: `session-state.js › idleTimeout` reads `parked === true` and answers `abandon_timeout`,
+    // so an agent nobody comes back to ENDS on its own instead of holding a slot forever. No
+    // reducer event has run on this object, so nothing else would ever arm one.
+    deps.scheduleIdle(s);
+    reparked += 1;
+    diag('session-boot: re-parked dormant agent (Idle; resumes on the next addressed message)', 'agent', String(s.agentId || ''), 'channel', String(s.channelId || '').slice(0, 8), 'thread', String(s.taskId || '').slice(0, 8));
+  }
+  // §3.3: REGISTRATION IS A PROJECTION MOVE — the pill must not wait for a first dispatch. One
+  // touch for the whole pass (`touch` coalesces anyway), and the ENDED half needs it too: the
+  // retained-ended set is read from the history file at projection time.
+  if (reparked || ended) sessionSummary.touch();
+  diag('session-boot: dormant records', String(reparked + ended), '→ re-parked', String(reparked), 'ended', String(ended));
+  return { reparked: reparked, ended: ended };
+}
+
+// ─── END SESSION-BOOT-PURE ────────────────────────────────────────────────────────
+
+module.exports = {
+  bind,
+  parkedSessionFromRecord, // exported for the suite; production reaches it through reparkDormant
+  endInterrupted,
+  reparkDormant,
+};
