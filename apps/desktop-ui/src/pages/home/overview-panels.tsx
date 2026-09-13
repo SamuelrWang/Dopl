@@ -1,5 +1,5 @@
 import { cn } from "@/shared/lib/utils";
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { TEMPLATE_NAME_TEXT_LG } from "@/features/agent-templates/components/template-section";
 import { useState } from "react";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -177,10 +177,14 @@ export function HomeOverviewPanels({
         <SectionPanel
           id="home-overview-usage"
           label="Usage"
-          // ⚠ THE AGENT TEMPLATE CARD'S NAME TYPE, by import (Samuel, 2026-09-13:
-          // "extract that exact font, font size, and font color and apply it to
-          // the usage text … 'Usage' and the 'All Channels' text").
-          titleClassName={cn(TEMPLATE_NAME_TEXT, "normal-case tracking-normal")}
+          // ⚠ THE AGENT TEMPLATE CARD'S NAME TYPE, ONE STEP UP AND BOLD, by
+          // import (Samuel, 2026-09-13: "extract that exact font, font size, and
+          // font color and apply it to the usage text … 'Usage' and the 'All
+          // Channels' text", then "increase the font size for usage … let's bold
+          // it as well"). ⚠ `template-section.tsx › TEMPLATE_NAME_TEXT_LG` — the
+          // SAME constant the scope menu, the month label and the Credit spend
+          // heading read, so the block cannot grow two heading scales.
+          titleClassName={cn(TEMPLATE_NAME_TEXT_LG, "normal-case tracking-normal")}
         >
           <UsageCard homeWorkspaceId={homeWorkspaceId} />
         </SectionPanel>
@@ -276,6 +280,22 @@ function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
           one the 2×2 rail grid uses — so the three panels on this face layer and
           space identically by construction. */}
       <section className="bento p-3.5" aria-label="Credit allowance">
+        {/* 🔒 **THE CARD SAYS WHAT IT IS (Samuel, 2026-09-13: *"in the panel
+            above … the credit bar, put in a header that says 'Credit
+            spend'"*).** Minimal copy (INVARIANTS §5): two words, no subline.
+            ⚠ **`template-section.tsx › TEMPLATE_NAME_TEXT_LG` BY IMPORT** — the
+            same constant the Usage heading, the scope menu and the month label
+            wear, so this block has ONE heading scale; never a re-typed
+            `text-display font-semibold`.
+            ⚠ **IT IS THE CARD'S, NOT `CreditCapacityBar`'s**, for the same
+            reason the `.bento` frame is: that component owns the BAR and states
+            it paints no card. It also has to outlive the bar's skeleton — a
+            heading rendered inside the loaded bar would arrive after it and the
+            card would say nothing while it waits.
+            ⚠ An `h3`: the panel's `h2` is **Usage**. */}
+        <h3 className={cn("mb-2 truncate", TEMPLATE_NAME_TEXT_LG)}>
+          Credit spend
+        </h3>
         <CreditsBar
           homeWorkspaceId={homeWorkspaceId}
           ledgerPending={series.isPending && !series.data}

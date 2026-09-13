@@ -1,10 +1,7 @@
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { TEMPLATE_NAME_TEXT_LG } from "@/features/agent-templates/components/template-section";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-import {
-  NAKED_ICON,
-  NAKED_ICON_BUTTON,
-} from "@/shared/ui/naked-icon-button";
+import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { cn } from "@/shared/lib/utils";
 import {
   USAGE_SCOPE_ALL,
@@ -99,8 +96,11 @@ export function UsageScopeMenu({
       onChange={onChange}
       variant="text"
       ariaLabel="Usage scope"
-      // Same type as the "Usage" heading beside it — the template card's name.
-      className={TEMPLATE_NAME_TEXT}
+      // ⚠ SAME TYPE AS THE "Usage" HEADING ABOVE IT — the template card's name
+      // one step up and bold (Samuel, 2026-09-13: *"apply the same font to all
+      // the channels … the month switcher as well"*). By IMPORT, so the heading
+      // and its two controls move together or not at all.
+      className={TEMPLATE_NAME_TEXT_LG}
     />
   );
 }
@@ -156,6 +156,27 @@ export function monthLabel(key: string): string {
  * older month reads as a flat axis — which is the honest picture of "nothing was
  * recorded then", and the same trade the zero-filled current month already makes.
  */
+/**
+ * THE ARROW GLYPH, AND THE ONE PLACE IT IS ALLOWED TO LEAVE `NAKED_ICON`.
+ *
+ * 🔒 **SAMUEL, 2026-09-13: *"Increase the size of the arrows to match."*** The
+ * label beside them went from `text-title` to `text-display`
+ * (`TEMPLATE_NAME_TEXT_LG`), and a 14px chevron under an 18px word reads as a
+ * different control that happens to sit there. So the glyph is the LABEL's size:
+ * 18, matching by the same number rather than by eye.
+ *
+ * ⚠ **`shared/ui/naked-icon-button.ts › NAKED_ICON` IS UNTOUCHED, DELIBERATELY.**
+ * It is the app's default glyph for that face and the ontology object panel's
+ * trash/✕ still wear it; raising it there would resize a surface nobody ruled
+ * on. What this constant does NOT fork is the FACE — `NAKED_ICON_BUTTON` is still
+ * imported, so the ink, the hover and the hit area stay one recipe.
+ *
+ * ⚠ **THE HIT AREA STAYS THE 30px MINIMUM AND GETS BIGGER, NOT SMALLER**: the
+ * face's box is `p-2` around the glyph, so 8 + 18 + 8 = 34px. A larger glyph can
+ * only grow it, which is why this needs no padding change to stay tappable.
+ */
+const MONTH_ARROW_ICON = 18;
+
 export function MonthStepper({
   month,
   onChange,
@@ -174,9 +195,11 @@ export function MonthStepper({
         className={NAKED_ICON_BUTTON}
         onClick={() => onChange(shiftMonthKey(month, -1))}
       >
-        <ChevronLeft size={NAKED_ICON} aria-hidden="true" />
+        <ChevronLeft size={MONTH_ARROW_ICON} aria-hidden="true" />
       </button>
-      <span className="min-w-0 truncate text-caption text-text-primary">
+      {/* ⚠ THE HEADING'S OWN TYPE, BY IMPORT (Samuel, 2026-09-13: the month
+          switcher wears "the same font"). It was `text-caption`. */}
+      <span className={cn("min-w-0 truncate", TEMPLATE_NAME_TEXT_LG)}>
         {monthLabel(month)}
       </span>
       <button
@@ -186,7 +209,7 @@ export function MonthStepper({
         className={cn(NAKED_ICON_BUTTON, "disabled:opacity-40")}
         onClick={() => onChange(shiftMonthKey(month, 1))}
       >
-        <ChevronRight size={NAKED_ICON} aria-hidden="true" />
+        <ChevronRight size={MONTH_ARROW_ICON} aria-hidden="true" />
       </button>
     </div>
   );

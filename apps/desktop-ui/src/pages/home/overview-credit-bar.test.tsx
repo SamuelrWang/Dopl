@@ -1,4 +1,4 @@
-import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { TEMPLATE_NAME_TEXT_LG } from "@/features/agent-templates/components/template-section";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
@@ -6,6 +6,9 @@ import { PAGE_ACTION_BTN } from "./panel-buttons";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import { BILLING_STATUS, renderHome, routes } from "./home-test-harness";
+// ⚠ THE MONTH LABEL IS DERIVED, NEVER WRITTEN OUT — a literal `"September 2026"`
+// here is a suite that goes red on 1 October.
+import { monthKey, monthLabel } from "./overview-usage-filter";
 
 /**
  * /home → OVERVIEW → **THE CAPACITY BAR** — what it says, and where each number
@@ -84,21 +87,35 @@ describe("the /home credit capacity bar", () => {
    * the histogram's ledger sum between 2026-09-06 and this change.
    */
   /**
-   * 🔒 THE "Usage" HEADING AND THE SCOPE MENU WEAR THE AGENT TEMPLATE CARD'S NAME
-   * TYPE (Samuel, 2026-09-13: *"extract that exact font, font size, and font color
-   * and apply it to the usage text … 'Usage' and the 'All Channels' text"*) —
-   * `template-section.tsx › TEMPLATE_NAME_TEXT`, by import on both.
+   * 🔒 **ONE TYPE ACROSS THE WHOLE USAGE BLOCK — THE TEMPLATE CARD'S NAME, ONE
+   * STEP UP THE SCALE AND BOLD** (Samuel, 2026-09-13: *"extract that exact font,
+   * font size, and font color and apply it to the usage text"*, then *"increase
+   * the font size for usage … let's bold it as well"* and *"apply the same font
+   * to all the channels … the month switcher as well"*) —
+   * `template-section.tsx › TEMPLATE_NAME_TEXT_LG`, **by import on all four**.
+   *
+   * ⚠ **FOUR READERS IN ONE CASE ON PURPOSE.** The ruling is that they MATCH, so
+   * a suite that checked the heading alone would pass the day one control keeps
+   * the old 14px — which is the exact way a block grows two heading scales.
+   * ⚠ The constant is imported rather than spelled out here, so a retune of the
+   * face moves the assertion with the code instead of reddening this file.
    */
-  it("is the template card's name type on the heading and the scope menu", async () => {
+  it("is one heading type on the heading, the scope menu, the month and Credit spend", async () => {
     renderHome();
-    await panel("Usage");
-    const heading = screen.getByRole("heading", { name: "Usage" });
-    const menu = screen.getByRole("button", { name: "Usage scope" });
-    for (const token of TEMPLATE_NAME_TEXT.split(" ")) {
-      expect(heading.className).toContain(token);
-      expect(menu.className).toContain(token);
+    const usage = await panel("Usage");
+    const wearers = [
+      screen.getByRole("heading", { name: "Usage" }),
+      screen.getByRole("button", { name: "Usage scope" }),
+      within(usage).getByText(monthLabel(monthKey())),
+      await within(usage).findByRole("heading", { name: "Credit spend" }),
+    ];
+    for (const node of wearers) {
+      for (const token of TEMPLATE_NAME_TEXT_LG.split(" ")) {
+        expect(node.className).toContain(token);
+      }
     }
-    expect(heading.className).not.toMatch(/\buppercase\b/);
+    // ⚠ THE PANEL HEADING'S OWN `text-label uppercase` FACE STAYS OVERRIDDEN.
+    expect(wearers[0]?.className).not.toMatch(/\buppercase\b/);
   });
   it("shows the credit allowance, what is left, and when it resets", async () => {
     renderHome();
@@ -117,11 +134,16 @@ describe("the /home credit capacity bar", () => {
     // payload derived its own remaining from. The derivation is what keeps the
     // DEGRADED case below honest, where `remaining` is a zero against a zero.
     expect(within(credits).getByText("180 left")).toBeInTheDocument();
-    // 🔒 THE REFERENCE NUMBER IN WORDS (Samuel, 2026-09-05: "it should show 416
-    // out of 25k credits spent"). The denominator here is the payload's own
-    // measured `limit`; the fallback case below is what pins the constant.
+    // 🔒 **AND THE "N of N credits spent" LINE IS GONE (Samuel, 2026-09-13:
+    // *"under the bar … '0 of 500 credits spent'. Can you remove that line"*).**
+    // It restated the meter's own header, which is still asserted above. ⚠ Pinned
+    // as an ABSENCE because it was the ask of 2026-09-05 (*"it should show 416 out
+    // of 25k credits spent"*) and a sentence with that much history comes back.
+    expect(within(credits).queryByText(/credits spent/)).toBeNull();
+    // 🔒 THE CARD SAYS WHAT IT IS INSTEAD (Samuel, same review: *"put in a header
+    // that says 'Credit spend'"*) — and the word is a HEADING, not a caption.
     expect(
-      within(credits).getByText("320 of 500 credits spent")
+      within(credits).getByRole("heading", { name: "Credit spend" })
     ).toBeInTheDocument();
     // ⚠ THE WORD THAT MUST NOT COME BACK: a 0 denominator used to print
     // "Unmetered" here, which is the whole defect the bar was rebuilt for.
@@ -161,9 +183,11 @@ describe("the /home credit capacity bar", () => {
     // The plot's own header total, on the histogram CARD.
     const plot = await histogram();
     expect(within(plot).getByText("210")).toBeInTheDocument();
-    expect(
-      within(usage).getByText("320 of 500 credits spent")
-    ).toBeInTheDocument();
+    // ⚠ **THE METER'S OWN HEADER IS WHERE THE WALLET FIGURE IS READ NOW** — the
+    // `320 of 500 credits spent` sentence this case used to assert was deleted on
+    // 2026-09-13 (Samuel). The SOURCE being pinned is unchanged: 320 is the
+    // wallet's `credits.used`, 210 is the plot's own bars.
+    expect(within(usage).getByText("320 / 500")).toBeInTheDocument();
 
     await waitFor(() =>
       expect(
@@ -195,9 +219,7 @@ describe("the /home credit capacity bar", () => {
     renderHome();
     const credits = await panel("Usage");
 
-    expect(
-      await within(credits).findByText("471 of 500 credits spent")
-    ).toBeInTheDocument();
+    expect(await within(credits).findByText("471 / 500")).toBeInTheDocument();
     expect(within(credits).getByText("29 left")).toBeInTheDocument();
     // The plot is untouched by a billing-payload change.
     expect(within(await histogram()).getByText("210")).toBeInTheDocument();
@@ -252,9 +274,11 @@ describe("the /home credit capacity bar", () => {
     renderHome();
     const credits = await panel("Usage");
 
+    // ⚠ ON THE METER'S HEADER SINCE THE SENTENCE UNDER THE BAR WAS DELETED
+    // (2026-09-13) — same two numbers, same measured `0` numerator.
     expect(
       await within(credits).findByText(
-        `0 of ${PERSONAL_MONTHLY_CREDITS.free.toLocaleString()} credits spent`
+        `0 / ${PERSONAL_MONTHLY_CREDITS.free.toLocaleString()}`
       )
     ).toBeInTheDocument();
     expect(
@@ -300,7 +324,9 @@ describe("the /home credit capacity bar", () => {
     // meter and its caption row precede the button in document order.
     {
       const button = within(credits).getByRole("button", { name: "Get more credits" });
-      const caption = within(credits).getByText(/credits spent$/);
+      // ⚠ THE CAPTION ROW IS NOW ANCHORED ON `N left` — the `credits spent`
+      // sentence beside it was deleted on 2026-09-13 (Samuel).
+      const caption = within(credits).getByText(/ left$/);
       expect(
         caption.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
@@ -330,7 +356,7 @@ describe("the /home credit capacity bar", () => {
     );
     renderHome();
     const credits = await panel("Usage");
-    await within(credits).findByText(/credits spent$/);
+    await within(credits).findByText(/ left$/);
 
     expect(
       within(credits).queryByRole("button", { name: "Get more credits" })

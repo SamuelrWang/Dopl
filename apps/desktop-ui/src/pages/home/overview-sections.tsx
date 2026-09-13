@@ -94,9 +94,15 @@ import { PAGE_ACTION_BTN } from "./panel-buttons";
  * seat's denominator belongs on the billing surface, which reads it from the
  * status payload's own `limit`.
  *
- * ⚠ **THE SPENT SENTENCE IS THE ASK, and it restates the meter's own header on
- * purpose** — the header is a `used / limit` pair, and what he asked for is the
- * sentence that says which is which.
+ * ⚠ **AND THE SPENT SENTENCE IS GONE AS OF 2026-09-13** (Samuel, over this card:
+ * *"under the bar … '0 of 500 credits spent'. Can you remove that line"*). It
+ * existed to say WHICH of the meter's two numbers was which; the card is headed
+ * **Credit spend** now, so the pair reads as spend against allowance without it.
+ * ⚠ **THAT HEADING IS THE CALLER'S** (`overview-panels.tsx › UsageCard`), like
+ * the `.bento` frame and for the same reason: this component owns the BAR, and a
+ * heading here would also be one the bar's skeleton could hide.
+ * ⚠ **THE OTHER TWO FACTS ARE UNCHANGED AND STILL REQUIRED** — credits left, and
+ * the reset date.
  *
  * 🔒 **THE SPENT FIGURE IS THE WALLET COUNTER — THE SAME `credits.used` SETTINGS
  * PRINTS (Samuel, 2026-09-12: "is the credits usage wired in? I want to make
@@ -170,16 +176,6 @@ export function CreditCapacityBar({
     // (`overview-panels.tsx › UsageCard` wraps this in the `.bento` Samuel's
     // two-panel ruling asked for), so a frame here would be a box in a box.
     <div className="w-full">
-      {/* 🔒 **THE OFFER IS THE PAGE'S BLACK BUTTON NOW, AT THE TOP RIGHT OF THIS
-          CARD (Samuel, 2026-09-13: *"right where the full-length bar is, I need
-          to change the upgrade button to be more like the new channel button,
-          like the black background stuff. Change it to 'Upgrade' or change it to
-          'Get more credits'"*).** It was a one-word text action in the caption
-          row under the bar (2026-09-08). ⚠ **`panel-buttons.tsx ›
-          PAGE_ACTION_BTN` BY IMPORT** — the "New channel" button's own class
-          list, so the two cannot drift; never a re-typed `h-9 auth-btn-3d`.
-          ⚠ **THE `!isPaid` RULE IS UNCHANGED**: the caller passes `onUpgrade`
-          only when there is something to buy. */}
       {/* ⚠ **NO LABEL ON THE METER (Samuel, 2026-09-13: *"for the usage credits,
           remove the credits and the 'Credits used' text"*).** The `used / limit`
           pair stays — it is the measurement — and the word "Credits" that stood
@@ -194,20 +190,29 @@ export function CreditCapacityBar({
         overNote="Tool calls are paused until the next period."
       />
       <div className="mt-2 flex items-baseline justify-between gap-3 text-caption text-text-muted">
-        {/* The reference number, in words — the WALLET's spend, which is also
-            what the plot under it totals: the server narrows the credits series
-            to this same wallet's ledger rows. Two derivations, one quantity. */}
-        <span>
-          {`${spent.toLocaleString()} of ${limit.toLocaleString()} credits spent`}
-        </span>
+        {/* 🔒 **THE "N of N credits spent" LINE IS DELETED (Samuel, 2026-09-13:
+            *"under the bar … '0 of 500 credits spent'. Can you remove that
+            line"*).** It restated the meter's own `used / limit` header one row
+            below it — the header is the measurement, and with **Credit spend**
+            now naming the card the sentence said the same thing a third time.
+            ⚠ **The two facts beside it STAY**: what is left, and when it resets.
+            Do not re-add the sentence to "explain" the pair. */}
         <span>{remaining.toLocaleString()} left</span>
         {/* ⚠ THE SAME LINE THE BILLING PANE PRINTS, and the same guard: the
             period bounds are blank on the degraded fallback status, and a date
             nobody measured must not be invented here. */}
         {credits.periodEnd && <span>Resets {formatDate(credits.periodEnd)}</span>}
       </div>
-      {/* ⚠ BELOW THE BAR (Samuel, 2026-09-13: "move Get More Credits below the
-          bar. Right now, it's above the bar. It should be below the bar"). */}
+      {/* 🔒 **THE OFFER IS THE PAGE'S BLACK BUTTON, BELOW THE BAR** (Samuel,
+          2026-09-13: *"change the upgrade button to be more like the new channel
+          button, like the black background stuff. Change it to … 'Get more
+          credits'"*, then *"move Get More Credits below the bar. Right now, it's
+          above the bar. It should be below the bar"*). It was a one-word text
+          action in the caption row (2026-09-08). ⚠ **`panel-buttons.tsx ›
+          PAGE_ACTION_BTN` BY IMPORT** — the "New channel" button's own class
+          list, so the two cannot drift; never a re-typed `h-9 auth-btn-3d`.
+          ⚠ **THE `!isPaid` RULE IS UNCHANGED**: the caller passes `onUpgrade`
+          only when there is something to buy. */}
       {onUpgrade && (
         <div className="mt-2.5 flex justify-end">
           <button type="button" onClick={onUpgrade} className={PAGE_ACTION_BTN}>

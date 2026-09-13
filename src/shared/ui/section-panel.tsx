@@ -94,11 +94,11 @@ export function SectionPanel({
       className={cn(SECTION_PANEL_SHELL, className)}
     >
       <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
-        {/* ⚠ **ONE HEADING FACE, NO PER-PANEL OVERRIDE.** A `titleClassName`
-            prop existed for the /home Usage white trial (2026-09-08) and was
-            DELETED with it on 2026-09-13 (Samuel reverted the trial): a slot that
-            lets one panel wear another size is how a page grows two heading
-            scales, and its only caller is gone. */}
+        {/* ⚠ `titleClassName` IS A ONE-CALLER SLOT. Deleted with the /home Usage
+            white trial on 2026-09-13 morning, RESTORED the same afternoon for
+            one ruling: the Usage heading wears the agent template card's name
+            type (Samuel: "extract that exact font, font size, and font color").
+            Layout stays the panel's; only the type is the caller's. */}
         <h2
           id={id}
           className={cn(

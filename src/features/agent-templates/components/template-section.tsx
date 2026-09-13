@@ -59,6 +59,30 @@ import type { TemplateSectionDef } from "../lib/visibility";
  */
 export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
 
+/**
+ * THE SAME NAME TYPE, ONE STEP UP THE SCALE AND BOLDER — `text-display` (18px)
+ * and `font-semibold`, same ink.
+ *
+ * 🔒 **SAMUEL, 2026-09-13, over the /home Overview Usage block:** *"increase the
+ * font size for usage … let's bold it as well"*, then *"apply the same font to
+ * all the channels … the month switcher as well"*. So it is ONE constant and
+ * FOUR readers, all on that block: the **Usage** panel heading, the scope menu
+ * trigger (**All channels**), the month label (**September 2026**) and the
+ * credit card's **Credit spend** heading.
+ *
+ * ⚠ **A STEP ON THE TOKEN SCALE, NEVER A PX** (`docs/DESIGN-SYSTEM.md` › Type
+ * scale): `text-title` → `text-display` is the next utility, and there is
+ * nothing between them to pick instead.
+ *
+ * ⚠ **IT SITS BESIDE `TEMPLATE_NAME_TEXT` RATHER THAN OVERRIDING IT AT FOUR CALL
+ * SITES.** The agent template card keeps the smaller face — a card NAME in a
+ * list is not a page heading — and a `cn(TEMPLATE_NAME_TEXT, "text-display
+ * font-semibold")` at each reader would be four same-layer fights with the
+ * constant it is composing, which is how one of them silently keeps 14px.
+ */
+export const TEMPLATE_NAME_TEXT_LG =
+  "text-display font-semibold text-text-primary";
+
 export function TemplatePanel({
   id,
   label,

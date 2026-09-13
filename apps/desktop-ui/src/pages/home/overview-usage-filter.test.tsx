@@ -1,5 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { TEMPLATE_NAME_TEXT_LG } from "@/features/agent-templates/components/template-section";
+import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge } from "#/test-utils/bridge";
 import { renderHome, routes } from "./home-test-harness";
@@ -191,6 +193,38 @@ describe("the /home Usage histogram controls", () => {
   });
 
   /**
+   * 🔒 **THE ARROWS SCALE WITH THE LABEL (Samuel, 2026-09-13: *"Increase the size
+   * of the arrows to match"*).** The month label wears
+   * `template-section.tsx › TEMPLATE_NAME_TEXT_LG` (`text-display`, 18px), so the
+   * glyph is 18 — `overview-usage-filter.tsx › MONTH_ARROW_ICON`, the one place
+   * this face departs from `NAKED_ICON`'s 14.
+   *
+   * ⚠ **THE HIT AREA IS THE OTHER HALF AND IT IS THE ONE THAT CAN REGRESS**: the
+   * FACE stays `shared/ui/naked-icon-button.ts › NAKED_ICON_BUTTON`, whose `p-2`
+   * puts the box at 8 + 18 + 8 = 34px, over the 30px floor. A bigger glyph inside
+   * a hand-written smaller box is the shape this asserts against.
+   */
+  it("draws month arrows at the label's scale, on the naked-icon face", async () => {
+    renderHome();
+    const card = await histogram();
+    for (const name of ["Previous month", "Next month"]) {
+      const button = within(card).getByRole("button", { name });
+      for (const token of NAKED_ICON_BUTTON.split(" ").filter(Boolean)) {
+        expect(button.className).toContain(token);
+      }
+      const glyph = button.querySelector("svg");
+      expect(glyph).not.toBeNull();
+      expect(glyph).toHaveAttribute("width", "18");
+    }
+    // The label they sit beside — the type both were raised to match.
+    for (const token of TEMPLATE_NAME_TEXT_LG.split(" ")) {
+      expect(
+        within(card).getByText(monthLabel(monthKey())).className
+      ).toContain(token);
+    }
+  });
+
+  /**
    * 🔒 **THE CAPACITY BAR IS UNTOUCHED BY EITHER CONTROL (Samuel: the arrows are
    * for *"the histogram, not the top bar"*).** The bar is the WALLET's current
    * period off `/api/billing/status`; a month arrow that moved it would print a
@@ -199,7 +233,11 @@ describe("the /home Usage histogram controls", () => {
   it("never re-reads billing or moves the bar when the month changes", async () => {
     renderHome();
     const usage = await screen.findByRole("region", { name: "Usage" });
-    await within(usage).findByText("320 of 500 credits spent");
+    // ⚠ **THE BAR'S FIGURE IS READ OFF THE METER'S HEADER SINCE 2026-09-13** —
+    // the `320 of 500 credits spent` line under it was deleted (Samuel: *"under
+    // the bar … '0 of 500 credits spent'. Can you remove that line"*). What this
+    // case pins is unchanged: the wallet's pair does not move with the month.
+    await within(usage).findByText("320 / 500");
     const billingReads = bridgeCalls(apiRequest).filter((call) =>
       call.path.startsWith("/api/billing/status")
     ).length;
@@ -214,9 +252,7 @@ describe("the /home Usage histogram controls", () => {
         call.path.startsWith("/api/billing/status")
       ).length
     ).toBe(billingReads);
-    expect(
-      within(usage).getByText("320 of 500 credits spent")
-    ).toBeInTheDocument();
+    expect(within(usage).getByText("320 / 500")).toBeInTheDocument();
   });
 
   /** The two pure helpers, because the year carry is the arithmetic a reader

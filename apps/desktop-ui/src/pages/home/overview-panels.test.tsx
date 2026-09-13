@@ -481,7 +481,10 @@ describe("home overview face", () => {
   it("carries no Credits label and no Credits used heading", async () => {
     renderHome();
     const usage = await panel("Usage");
-    await within(usage).findByText(/credits spent$/);
+    // ⚠ WAIT ON THE CAPTION ROW, NOT ON A `credits spent` SENTENCE — that line was
+    // deleted on 2026-09-13 (Samuel: *"under the bar … '0 of 500 credits spent'.
+    // Can you remove that line"*); `overview-credit-bar.test.tsx` pins its absence.
+    await within(usage).findByText(/ left$/);
 
     expect(within(usage).queryByText("Credits")).toBeNull();
     expect(within(usage).queryByText("Credits used")).toBeNull();
