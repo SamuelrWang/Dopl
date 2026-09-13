@@ -31,12 +31,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { Bot, CornerDownRight, Maximize2, X } from "lucide-react";
-import {
-  canControlOwnWindow,
-  closeOwnWindow,
-  toggleOwnWindowMaximize,
-} from "@/shared/lib/spa-bridge-window";
+import { Bot, CornerDownRight } from "lucide-react";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { formatRelativeTime } from "@/shared/lib/format-time";
@@ -47,14 +42,8 @@ import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { useChannelsV2Live } from "./live";
 import { agentSentMessages } from "./agent-panel";
-import { AgentEndedPill, AgentLiveness } from "./agent-bits";
-import { IconButton } from "./icon-button";
 import { AgentStream } from "./agent-stream";
-import {
-  NO_THREAD_LABEL,
-  agentDisplayName,
-  agentLiveness,
-} from "./agents-model";
+import { NO_THREAD_LABEL, agentDisplayName } from "./agents-model";
 import { formatTokens, metric } from "./agent-metrics";
 import { viewerPerson } from "./view-model";
 import { useDesktopSessions } from "./use-desktop-sessions";
@@ -92,7 +81,6 @@ export function ChannelsV2AgentWindow({
   taskId,
   agentId = null,
   currentUserId,
-  logoSrc,
 }: {
   workspaceId: string;
   channelId: string;
@@ -111,15 +99,10 @@ export function ChannelsV2AgentWindow({
   agentId?: string | null;
   currentUserId: string;
   /**
-   * THE DOPL MARK, AS A SOURCE THIS FILE CANNOT IMPORT (2026-09-13).
-   *
-   * ⚠ IT IS A PROP RATHER THAN AN IMPORT BECAUSE OF THE TREE, NOT A PREFERENCE. The asset is
-   * `apps/desktop-ui/src/assets/dopl-mark.png`, reached through the SPA-only `#/` alias and
-   * `?inline` (the packaged renderer is `file://`, so a URL would not resolve — the same reason
-   * `components/app-shell/account-rail.tsx` inlines it). `src/**` has no `#/` path mapping, so
-   * this file cannot name it; the page that mounts this window can, and does.
+   * ⚠ **`logoSrc` LEFT THIS COMPONENT ON 2026-09-13.** The mark is the WINDOW's chrome, not an
+   * agent view's (*"We're moving the logo out to the top left"*), so the page hands it to
+   * `agent-window-shell.tsx` instead — which is also where the `#/`-alias argument now lives.
    */
-  logoSrc?: string;
 }) {
   // ⚠ THE SAME FEED THE AGENTS TAB TAKES, filtered to one agent. A window makes its own
   // subscription because it is a different React tree in a different BrowserWindow — main
@@ -230,7 +213,11 @@ export function ChannelsV2AgentWindow({
       // up, so an operator whose agent had ended saw exactly the floating rounded
       // panel the 2026-08-27 fix removed — the gone-state is the ONE view that
       // window shows on its own, which is the worst place to leave the old face.
-      <div className="flex min-h-0 flex-1 flex-col bg-[var(--panel-surface)] antialiased">
+      // ⚠ NO FILL ON THIS BRANCH EITHER (2026-09-13): both branches render INSIDE the shell's
+      // white `.bento`, so the gone-state paints nothing of its own. It kept `.page-float` once
+      // and then `--panel-surface`; the lesson each time was that this branch is the one view the
+      // window shows entirely on its own, which makes it the worst place to leave an old face.
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <EmptyState
           icon={Bot}
           title="That agent isn't running"
@@ -241,24 +228,23 @@ export function ChannelsV2AgentWindow({
   }
 
   return (
-    // ⚠ NOT `.page-float` (Samuel, 2026-08-27). That recipe floats a rounded, bordered,
-    // shadowed card inside a margin — right for a PAGE in the app shell, wrong for a window
-    // whose whole viewport is this content: it read as a panel hovering on a background, with
-    // inner corners cutting across the OS window's own. The window IS the panel; the rounding
-    // belongs to the operating system. Fill only, and it is the POP-OUT SURFACE's own colour —
-    // `app-shell.module.css › .windowSurface`, which paints `--panel-surface`.
+    // 🔒 **NO GROUND OF ITS OWN SINCE 2026-09-13.** The white face is the SHELL's inset panel
+    // (`agent-window-shell.tsx › INSET_PANEL`, a `.bento`) and this component fills it — Samuel's
+    // tabbed-window ruling made the window gray and the agent view a card inside it, which
+    // SUPERSEDES the 2026-08-27 "the pop-out is the panel, edge to edge" pass that had this file
+    // painting `--panel-surface` on both branches. One painter per surface: a fill here would sit
+    // inside the card and hide its radius.
     //
-    // ⚠ THE WINDOW IS NOT IN THE FRAME MODEL AND DELIBERATELY DID NOT FOLLOW IT (2026-08-30).
-    // This note used to say "`.page-float`'s own colour", which was true only while those two
-    // agreed; the frame ruling moved the in-shell page through `--home-panel` and on to
-    // `--home-card`, and NEITHER is right here. A pop-out has no rail, no frame and no panel to
-    // be a level of — its viewport IS the content — so it stays on the ground its own surface
-    // paints. Layer for layer in `pages/agent-window/frame.test.ts`, which pins both halves.
-    <div className="flex min-h-0 flex-1 flex-col bg-[var(--panel-surface)] antialiased">
-      <AgentWindowHeader agent={agent} logoSrc={logoSrc} />
-      {/* ⚠ ONE BOX, NOT TWO (Samuel, 2026-08-27). The usage strip sat directly above the three
-          dropdowns — two stacked bands about one agent. It renders INSIDE the posture box now,
-          under the controls. */}
+    // 🔒 **`min-w-0` IS THIS VIEW'S LINK IN THE SHRINK CHAIN (Samuel, 2026-09-13: *"The white panel,
+    // the contents of the white panel, should be resizing."*).** The posture row inside is
+    // `flex-nowrap` and the window is 510px wide, so this column's min-content width is wide — and
+    // a flex item that cannot go below its content's min-content width does not shrink, it pushes.
+    // `agent-window-shell.tsx` and `agent-window-frame.ts › INSET_PANEL` carry the other links, and
+    // ALL of them are needed: the chain is only as good as its weakest.
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* ⚠ WHICH THREAD, KEPT — it moved OUT of the chrome with the tabs (the strip already says
+          which agent, so the name was said twice; where it is WORKING was not said at all). */}
+      <AgentWorkingOn agent={agent} />
       {agent ? (
         <PostureControls
           agent={agent}
@@ -267,20 +253,10 @@ export function ChannelsV2AgentWindow({
           stats={<AgentWindowStats agent={agent} />}
         />
       ) : null}
-      {/* ⚠ THE SAME STREAM THE SLIDE-OUT PANEL RENDERS (2026-08-22), shared
-          rather than forked — `agent-stream.tsx` carries the lane rules. The
-          window is this content at a comfortable width; the panel is the glance
-          at it. Two renderers for one set of facts is two vocabularies for them. */}
       <AgentStream
         entries={entries}
         supported={supported}
         sent={sent}
-        // ⚠ THE HELD-DRAFT CARD IS DECIDABLE HERE TOO (Samuel, 2026-08-25). The
-        // window and the slide-out panel share one stream, so they must share
-        // the one review surface as well — a card that could only be posted from
-        // the panel would be a second rule for the same box.
-        // ⚠ THE UNFILTERED TRANSCRIPT — the landing check cannot use `sent`,
-        // which is agent-scoped on a key a threadless post does not have.
         delivered={messages}
         pending={pendingPosts}
         onPost={(id) => consent.mutate({ id, decision: "allow" })}
@@ -289,20 +265,11 @@ export function ChannelsV2AgentWindow({
         viewer={viewer}
         className="px-4"
       />
-      {/* ⚠ THE COMPOSER IS SHARED WITH THE SLIDE-OUT PANEL (2026-08-22) —
-          `agent-composer.tsx`, extracted from this file rather than copied into
-          that one. One send path, one refusal vocabulary, one feature detection.
-          ⚠ `agent.agentId` names WHICH instance: this window's ROUTE carries only
-          `(channel, thread)`, which since multiplayer is a GROUP, so the id off
-          the resolved summary is the only thing that says which agent the
-          operator is actually looking at. */}
       <AgentComposer
         channelId={channelId}
         taskId={taskId}
         agentId={agent?.agentId}
         name={agent ? agentDisplayName(agent) : null}
-        // ⚠ THE WINDOW GOES READ-ONLY, IT DOES NOT GO AWAY. An ended agent's
-        // history is retained and this is where it is read; only the input goes.
         ended={agent?.state === "ended"}
         className="px-4"
       />
@@ -310,25 +277,24 @@ export function ChannelsV2AgentWindow({
   );
 }
 
-/**
- * THE WINDOW'S DRAG REGION (2026-09-13). A frameless window has NOTHING to grab: without this the
- * operator cannot move the window at all, which is the exact failure ENGINEERING.md records from
- * the `titleBarStyle: 'hiddenInset'` round. The bar drags; its controls opt back out, because a
- * button inside a drag region swallows the click.
- *
- * ⚠ INLINE, NOT A CLASS. `-webkit-app-region` is not in `csstype`, so the cast is required; it is
- * also not a design token, so it belongs in neither `globals.css` nor the SPA's `tokens.css`
- * (`scripts/check-css-token-drift.ts` holds those two equal). Pinned as SOURCE in
- * `agent-window-chrome.test.tsx` — jsdom drops properties it does not know, so a render assertion
- * here would pass while the real window sat frozen on screen.
- */
-const DRAG_REGION = { WebkitAppRegion: "drag" } as React.CSSProperties;
-const NO_DRAG_REGION = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
+/** WHERE THIS AGENT IS WORKING — one quiet line at the top of the panel. ⚠ It was the second line
+ *  of the window's top bar until the tab strip took that row (2026-09-13). */
+function AgentWorkingOn({ agent }: { agent: DesktopSessionSummary | null }) {
+  return (
+    <p className="flex min-w-0 items-center gap-1 px-4 pt-3 text-caption text-text-secondary">
+      <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
+      <span className="truncate">in {agent?.threadTitle ?? NO_THREAD_LABEL}</span>
+    </p>
+  );
+}
 
-/** The right group's naked glyphs — `IconButton bare` is the kit's no-button-face idiom
- *  (docs/DESIGN-SYSTEM.md § Row-level edit affordances), re-inked and re-boxed to the Wispr
- *  scale: a 30px hit area (`--action-h-sm`'s number) around an 18px glyph, muted at rest. */
-const WINDOW_GLYPH = "h-[30px] w-[30px] text-text-muted hover:text-text-primary";
+/**
+ * ⚠ **THE HEADER LEFT THIS FILE ON 2026-09-13** — `agent-window-chrome.tsx ›
+ * AgentWindowChrome`, because the bar is the WINDOW's now and not this agent's: it carries the tab
+ * strip, and the tab strip outlives any one agent view. The drag region, the mark, the status badge
+ * and the expand/close pair went with it unchanged; `DRAG_REGION` / `NO_DRAG_REGION` /
+ * `WINDOW_GLYPH` are declared there. This file is the agent VIEW that a tab shows.
+ */
 
 /**
  * THE TOP BAR — the Dopl mark, the agent's name, then the right-hand controls (Samuel,
@@ -361,72 +327,6 @@ const WINDOW_GLYPH = "h-[30px] w-[30px] text-text-muted hover:text-text-primary"
  * predating `main/window-chrome.js` show no chrome rather than buttons that refuse — the
  * feature-detection rule the whole bridge family follows (INVARIANTS §11).
  */
-function AgentWindowHeader({
-  agent,
-  logoSrc,
-}: {
-  agent: DesktopSessionSummary | null;
-  logoSrc?: string;
-}) {
-  const canControlWindow = canControlOwnWindow();
-  return (
-    <header
-      style={DRAG_REGION}
-      className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-4"
-    >
-      {logoSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={logoSrc}
-          alt=""
-          className="h-6 w-6 shrink-0 rounded-[8px]"
-          width={24}
-          height={24}
-        />
-      ) : null}
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-medium text-text-primary">
-          {agent ? agentDisplayName(agent) : "Agent"}
-        </span>
-        {/* ⚠ WHICH THREAD, KEPT. It is the window's only statement of where this agent is
-            working, and it is not the name said twice — the one thing Samuel's ruling removed
-            from this slot was the ICON. */}
-        <span className="flex min-w-0 items-center gap-1 text-caption text-text-secondary">
-          <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
-          <span className="truncate">in {agent?.threadTitle ?? NO_THREAD_LABEL}</span>
-        </span>
-      </span>
-      <span style={NO_DRAG_REGION} className="flex shrink-0 items-center gap-0.5">
-        {agent &&
-          (agent.state === "ended" ? (
-            <AgentEndedPill />
-          ) : (
-            <AgentLiveness {...agentLiveness(agent)} />
-          ))}
-        {canControlWindow ? (
-          <>
-            <IconButton
-              bare
-              icon={Maximize2}
-              size={18}
-              label="Expand"
-              className={WINDOW_GLYPH}
-              onClick={() => void toggleOwnWindowMaximize()}
-            />
-            <IconButton
-              bare
-              icon={X}
-              size={18}
-              label="Close"
-              className={WINDOW_GLYPH}
-              onClick={() => void closeOwnWindow()}
-            />
-          </>
-        ) : null}
-      </span>
-    </header>
-  );
-}
 
 /** ⚠ Absences render AS absences — no denominator, no stamp, no clause. Never a zero standing in
  *  for "not measured" (INVARIANTS §11). Same rule as the panel's strip.

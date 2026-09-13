@@ -23,6 +23,25 @@ export const APP_OPS = [
   //     so what these restore is exactly that authority and no more. They grant no tool, read no
   //     secret, start no turn and reach no other machine.
   "appWindow.close",
+  // ⚠ TWO MORE JOINED HERE LATER THE SAME DAY (Samuel's TABBED pop-out): the pin failed on the
+  // ADD, which is the review this comment records:
+  //   • The main-process handler EXISTS and was checked first — `main/window-chrome.js` registers
+  //     `window:closeTab`, `appWindowOnly`, refusing in the same one `{ ok: false }` shape, and
+  //     resolving its window as `BrowserWindow.fromWebContents(event.sender)` like its two
+  //     neighbours. `onTabs` is a LISTENER and registers no handler: main PUSHES
+  //     `agent-window:tabs` to the window it created (`main/agent-window.js › pushTabs`).
+  //   • ⚠ `closeTab` IS THE FIRST OF THESE THREE TO TAKE AN ARGUMENT, and the key it takes names
+  //     a TAB INSIDE THE SENDER'S OWN WINDOW — never a window. TWO fences, not one: the sender
+  //     must be a bound app window AND that window must BE the agent window
+  //     (`agent-window.js › isHostWindow`), so a bound pop-out or the main window cannot reach
+  //     the agent window's tab set however the key is spelled. An unknown key answers `false`.
+  //   • THEY WIDEN NOTHING. Until today each agent had its OWN window and the operator closed it
+  //     with the same authority; what these restore is exactly that, one tab at a time. They
+  //     grant no tool, read no secret, start no turn and reach no other machine. ⚠ The LAST-TAB
+  //     rule (closing it closes the window) stays in MAIN, so the renderer cannot close a window
+  //     by emptying a list.
+  "appWindow.closeTab",
+  "appWindow.onTabs",
   "appWindow.toggleMaximize",
   "avatarDataUri",
   "beginSignIn",

@@ -118,7 +118,7 @@ test("BOTH ops REFUSE a foreign sender, an iframe, and an UNBOUND surface — on
   }
 });
 
-test("NO OP TAKES A TARGET — the caller's own window is the only one reachable", () => {
+test("NO OP TAKES A WINDOW — the caller's own is the only one reachable", () => {
   // ⚠ STRUCTURAL, because a payload would look like a feature. `agent-window.js ›
   // closeAgentWindow`'s header is the rule: a renderer that could shut ANOTHER app window is a
   // nuisance primitive with no feature behind it.
@@ -127,8 +127,27 @@ test("NO OP TAKES A TARGET — the caller's own window is the only one reachable
   // Every handler goes through the binding, written literally at the site (ipc-guards.js's rule).
   const sites = CODE.match(/ipcMain\.handle\(/g) || [];
   const wrapped = CODE.match(/appWindowOnly\('window:/g) || [];
-  assert.equal(sites.length, 2);
+  // ⚠ THREE SINCE 2026-09-13 (`window:closeTab`), AND THE CLAIM NARROWED WITH THE COUNT. It was
+  // "no op takes a TARGET", which `closeTab`'s key would read as a violation — so the property is
+  // restated where it actually lives: no op names a WINDOW. The key names a TAB, and the case
+  // below is what holds that.
+  assert.equal(sites.length, 3);
   assert.equal(wrapped.length, sites.length, "an unwrapped handle site is an unbound one");
+});
+
+/**
+ * 🔒 **`window:closeTab`'s ARGUMENT NAMES A TAB AND CANNOT NAME A WINDOW** — the second fence.
+ * Being a bound app window is not enough: the sender must BE the agent window, so a bound pop-out
+ * (or the main window) reaching for another surface's tab set gets the same `{ ok: false }` as a
+ * nonsense key.
+ */
+test("TAB OP: the sender must BE the agent window, not merely a bound one", () => {
+  assert.match(CODE, /agentWindow\.isHostWindow\(win\)/);
+  // ⚠ AND MAIN OWNS THE LAST-TAB RULE. This file must not close a window itself: `closeAgentTab`
+  // decides that, because the delete lane needs the same rule and two copies would part.
+  assert.match(CODE, /agentWindow\.closeAgentTab\(/);
+  const tabOp = CODE.slice(CODE.indexOf("'window:closeTab'"));
+  assert.equal(/win\.close\(\)/.test(tabOp.slice(0, 900)), false, "the tab op must not close a window itself");
 });
 
 test("MAIN WIRES IT TO THE SAME REGISTRY every other privileged surface is bound to", () => {

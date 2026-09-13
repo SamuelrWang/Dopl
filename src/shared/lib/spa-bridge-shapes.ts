@@ -128,6 +128,27 @@ export interface DesktopSessionSummary {
    *  value a peer may not read. `mapPeerSessionStateRow` never names it. */
   toolLabel?: string | null;
   /**
+   * **WHY THIS SESSION CANNOT WORK, IN THE OPERATOR'S OWN WORDS** — `null` in the
+   * ordinary case (2026-09-13, F-692).
+   *
+   * Set by `dopl-desktop-app/main/mcp-connect-guard.js › failVisibly` when the Dopl
+   * MCP server never connected — the incident that bought this field: a cold
+   * `/api/mcp` answered past the CLI's 5s connect budget, the child abandoned the
+   * server, and every `mcp__dopl__*` call came back "No such tool available" for the
+   * whole run while the pill read `working`.
+   *
+   * ⚠ **IT RIDES BESIDE `state`, NEVER INSTEAD OF IT** — `detail`'s rule exactly.
+   * A fourth pill value is impossible: `state` is the SERVER's three-value
+   * vocabulary and one row carrying a fourth 400s the whole push, unretryably
+   * (`session-pill.js`'s header).
+   * ⚠ **LOCAL-ONLY, STRUCTURALLY.** `session-state-push.js › reportRow` picks its
+   * fields by name, so this never reaches `channel_sessions` and no peer can read
+   * it. Do not plumb it into `PeerCards`.
+   * ⚠ It SURVIVES the session: `agent-history.js › durableHistory` freezes it, so an
+   * ended card can still say why.
+   */
+  diag?: string | null;
+  /**
    * THE LIVE PERMISSION POSTURE (2026-08-20) — what this RUNNING session is
    * actually on, so the agent view's controls can show the value they set.
    *

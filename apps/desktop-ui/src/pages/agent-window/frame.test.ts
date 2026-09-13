@@ -79,15 +79,67 @@ describe("the pop-out's painted stack", () => {
     expect(windowSurface).not.toMatch(/border-radius/);
   });
 
-  it("layer 4 floats nothing — NO branch of the window component wears .page-float", () => {
+  /**
+   * 🔒 **LAYER 4 IS THE TABBED SHELL SINCE 2026-09-13, AND IT IS GRAY WITH A WHITE CARD INSIDE IT
+   * (Samuel: *"notice that it's a white panel that's inset now on a darker background … It should
+   * be the same color that we have on our current site"*).** This SUPERSEDES the 2026-08-27 pass
+   * this file was written for — the pop-out is no longer "the panel, edge to edge": it is the FRAME
+   * MODEL's alternation at window scale, `--home-panel` ground → `.bento` inset panel.
+   *
+   * ⚠ **LAYERS 1–3 ARE UNCHANGED AND STILL PINNED ABOVE.** `shell.windowSurface` still covers the
+   * app frame with no margin and no radius; what changed is what the component inside it paints.
+   * ⚠ **`.page-float` IS STILL FORBIDDEN ON EVERY BRANCH** — that recipe is a page's floating card
+   * with its own margin, and the inset panel here is a `.bento` inside a window that already holds
+   * the gray. Two different cards, and the wrong one is still the wrong one.
+   */
+  it("layer 4 is the gray shell with a white inset panel — and never .page-float", () => {
+    const shellComponent = readFileSync(
+      join(
+        HERE,
+        "../../../../../src/features/channels/components/channels-v2/agent-window-shell.tsx"
+      ),
+      "utf8"
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .filter((line) => !/^\s*\/\//.test(line))
+      .join("\n");
+    // The GROUND is the site gray, by token — the SHELL's, and it stays there.
+    expect(shellComponent).toContain("bg-home-panel");
+    expect(shellComponent).not.toContain("page-float");
+    // ⚠ **THE INSET FACE IS `channels-v2/agent-window-frame.ts › INSET_PANEL` SINCE 2026-09-13's
+    // SECOND PASS** (the shell re-exports it): the chrome had to read the window's rail width to
+    // align the tab strip, so the window's shared geometry became its own module and the card face
+    // went with it. A ground and a card are different layers and are now measured in different
+    // files — which is the only reason this case reads two.
+    const frameModule = readFileSync(
+      join(
+        HERE,
+        "../../../../../src/features/channels/components/channels-v2/agent-window-frame.ts"
+      ),
+      "utf8"
+    );
+    // The INSET is the app's own card recipe at the window's radius.
+    expect(frameModule).toContain("bento");
+    expect(frameModule).toContain("rounded-[14px]");
+    expect(frameModule).not.toContain("page-float");
+    // ⚠ AND THE AGENT VIEW PAINTS NO GROUND OF ITS OWN — one painter per surface. A
+    // `--panel-surface` fill there would sit inside the card and hide its radius, which is the
+    // regression this half of the pin exists for.
+    expect(windowComponent).not.toContain("bg-[var(--panel-surface)]");
+    expect(windowComponent).not.toContain("page-float");
+  });
+
+  it("no branch of the window component wears .page-float", () => {
     // ⚠ EVERY BRANCH, WHICH IS THE WHOLE POINT OF ASSERTING IT OVER THE FILE. The main return
     // gave `.page-float` up on 2026-08-27 and the "That agent isn't running" branch KEPT it, so
     // the one view this window renders entirely on its own — the gone-state — still drew the
     // rounded, bordered, shadowed card on layer 1's gray. A pin on the happy path could not have
     // seen it: that path was already correct.
     expect(windowComponent, "a branch took the floating card back").not.toContain("page-float");
-    // What it wears instead, on both branches: layer 3's fill, no margin, no radius, no shadow.
-    expect(windowComponent).toContain("bg-[var(--panel-surface)]");
+    // ⚠ THE SECOND HALF OF THIS CASE MOVED UP into the tabbed-shell case above: what the view
+    // wears instead is now NOTHING (the shell's `.bento` is the surface), where until 2026-09-13
+    // it was `bg-[var(--panel-surface)]` on both branches.
   });
 
   it("and the main window's surface KEEPS both — this added a class, it did not edit one", () => {

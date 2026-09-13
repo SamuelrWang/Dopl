@@ -1,0 +1,139 @@
+"use client";
+
+/**
+ * THE "+" TAB'S FORM — New agent, from inside the agent window (2026-09-13).
+ *
+ * 🔒 **SAMUEL, over Wispr Flow's pop-out:** *"You see there's a little X button, so you can see I
+ * can add a new tab, stuff like that."* The tab-strip ruling gave the strip a `+` whose job is *"a
+ * new agent on the ACTIVE tab's channel"* — and until this file existed **the `+` reported a click
+ * nobody listened to**: no host mounted a dialog, so the one control on that row that promises a new
+ * agent did nothing at all. That is §11's silent-feature shape, on a control the operator can see.
+ *
+ * ⚠ **IT IS THE SAME DIALOG AND THE SAME LAUNCH LANE, NOT A THIRD ONE.**
+ * `launch-agent-dialog.tsx › LaunchAgentDialog` is mounted here exactly as `agents-tab.tsx` mounts
+ * it — same component, same `useAgentLaunch` panel, same `templateId`-not-a-snapshot payload. The
+ * wiring is copied from that file deliberately: INVARIANTS §5A's *"there is still exactly ONE launch
+ * lane"* is a rule about the LANE, and a second form for one lane is how two vocabularies start.
+ *
+ * ⚠ **WHAT IT DOES NOT COPY IS THE PROP CHAIN, BECAUSE THIS WINDOW HAS NO PAGE ABOVE IT.** The
+ * Agents tab is handed `onLaunchAgent` / `onApproveTemplate` down from the channels page's
+ * `useAgentsPanel`; the pop-out is a different `BrowserWindow` with a different React tree and
+ * inherits nothing. So the controls are built HERE over `agents-controls.ts` — the same module
+ * `useAgentsPanel` itself calls — rather than by mounting that hook, which would also drag a peer
+ * poll and a roster into a window whose whole diet is messages + consent.
+ *
+ * ⚠ **THE DIALOG PORTALS TO `document.body`** (`settings-modal/modal-shell.tsx › createPortal`), so
+ * it is not clipped by the inset panel's `overflow-hidden` and this component can be mounted
+ * anywhere in the window's tree.
+ */
+
+import { useMemo } from "react";
+import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { LaunchAgentDialog } from "./launch-agent-dialog";
+import type { AgentLaunchPanel } from "./use-agent-launch";
+import type { AgentLaunchControls } from "./use-agents-panel";
+import {
+  approveTemplate,
+  canLaunchAgents,
+  launchAgentOnThread,
+} from "./agents-controls";
+
+/**
+ * ⚠ **EMPTY, AND THAT IS THE MEASURED ANSWER RATHER THAN A SHORTCUT.** `members` feeds ONE thing:
+ * the NAME half of a foreign template's authorship marker (`template-picker.tsx › authorMarker`).
+ * With no roster, a template this operator did not create still reads **`by another member`** — the
+ * marker survives, which is the direction INVARIANTS §5A requires (dropping it would turn UNKNOWN
+ * into MINE); only the name is lost. The alternative is mounting `useChannelMembers` here, which
+ * adds a roster request AND a 60s presence backstop poll to a window that deliberately has neither
+ * — a poll, for a name on a marker. If a ruling ever asks for the names, the roster is the change.
+ */
+const NO_ROSTER: ReadonlyArray<{
+  userId: string;
+  displayName: string | null;
+  email: string | null;
+}> = [];
+
+/**
+ * The `+`'s dialog, for the ACTIVE tab's channel.
+ *
+ * ⚠ **THE PANEL IS THE HOST'S STATE, NOT THIS COMPONENT'S** — the `+` lives in the chrome and the
+ * form lives here, so the one thing they share (is it open) has to be owned above both. Same shape
+ * as the tab set itself.
+ */
+export function AgentWindowLaunch({
+  panel,
+  workspaceId,
+  currentUserId,
+  channelId,
+  taskId,
+  agent,
+}: {
+  panel: AgentLaunchPanel;
+  workspaceId: string;
+  currentUserId: string;
+  channelId: string;
+  /** The ACTIVE tab's thread. ⚠ `""` means this tab's agent has no first-class thread, and the new
+   *  agent then starts on the ROOM — `null` on the wire, which is the channel-level lane. */
+  taskId: string;
+  /**
+   * The ACTIVE tab's own feed row, for the room's NAME and the thread's TITLE.
+   *
+   * ⚠ **IT IS THE ONLY SOURCE THIS WINDOW HAS FOR EITHER**, and that is why the launch reads it
+   * rather than a channel record: the pop-out never reads `GET /channels`. `null` (a browser, or an
+   * agent that has ended) leaves both empty, which main accepts — they are LABELS on the session.
+   * ⚠ **AND IT IS WHY `direct` GOES OUT `false` AND `counterpartyId` `null`**: neither is on
+   * `spa-bridge-shapes.ts › DesktopSessionSummary`, so this side genuinely does not know them.
+   * Measured: main treats `counterpartyId` as optional and both of them as the OUTBOUND CARD's
+   * recipient line (`main/session-launch.js`, `› session-outbound.js`) — so a DM launched from here
+   * gets a less specific recipient label, and nothing is mis-routed. It is not guessed `true`.
+   */
+  agent: DesktopSessionSummary | null;
+}) {
+  const newAgent: AgentLaunchControls | undefined = useMemo(() => {
+    // ⚠ ABSENT, NOT DISABLED, when the bridge cannot launch — `LaunchAgentDialog` takes
+    // `newAgent?` for exactly this, and the chrome draws no `+` either (INVARIANTS §11).
+    if (!canLaunchAgents()) return undefined;
+    return {
+      canLaunch: true,
+      // ⚠ NO BUSY LIGHT AND NO STICKY ERROR LINE HERE, because there is no hook holding either:
+      // `useLaunchRunner` inside the dialog owns the in-flight guard and prints its own refusal.
+      // A `false` that never changes is honest; a spinner this file cannot drive would not be.
+      launchBusy: false,
+      launchError: null,
+      launchAgent: async (threadId, templateId, overrides, agentId, runtime) =>
+        launchAgentOnThread({
+          channelId,
+          // ⚠ THE DIALOG'S OWN ARGUMENT, PASSED THROUGH — never re-derived from `taskId` here. The
+          // host resolves `openThreadId` once (`""` → `null`), and a second reading of that rule in
+          // this callback is how the form and the payload come to disagree about where they launch.
+          taskId: threadId,
+          workspaceId,
+          channelName: agent?.channelName ?? "",
+          threadTitle: agent?.threadTitle ?? null,
+          counterpartyId: null,
+          direct: false,
+          templateId,
+          overrides,
+          agentId,
+          runtime,
+        }),
+      approveTemplate,
+    };
+  }, [channelId, workspaceId, agent?.channelName, agent?.threadTitle]);
+
+  return (
+    <LaunchAgentDialog
+      panel={panel}
+      newAgent={newAgent}
+      // ⚠ `""` IS A ROOM, NOT A THREAD (`agents-controls.ts › launchAgentOnThread`: `null` is the
+      // channel-level lane, `''` is a legacy responder thread) — so an agent whose exchange never
+      // became first-class spawns its sibling on the CHANNEL rather than on a thread that is not
+      // addressable.
+      openThreadId={taskId || null}
+      channelId={channelId}
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      members={NO_ROSTER}
+    />
+  );
+}

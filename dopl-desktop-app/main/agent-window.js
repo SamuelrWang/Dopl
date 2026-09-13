@@ -43,15 +43,34 @@ const { diag } = require('./diag');
 // the SPA export and fails on drift.
 const AGENT_WINDOW_PAGE = 'agent-window';
 
-// ⚠ A RENDERER-DRIVEN WINDOW FACTORY WITH NO CEILING IS A RESOURCE PRIMITIVE — the same
-// sentence `popout-window.js` carries, and the same number. It is SEPARATE from the
-// pop-out's budget on purpose: they are different surfaces answering different questions,
-// and one full budget must not refuse the other.
-const MAX_AGENT_WINDOWS = 4;
+// ⚠ A RENDERER-DRIVEN TAB FACTORY WITH NO CEILING IS A RESOURCE PRIMITIVE — the same
+// sentence `popout-window.js` carries, and the same number. A TAB is cheaper than a window
+// but not free: each one the renderer mounts is a narration subscription, a transcript read
+// and a consent read. It is SEPARATE from the pop-out's budget on purpose: they are
+// different surfaces answering different questions, and one full budget must not refuse the
+// other.
+// ⚠ IT WAS `MAX_AGENT_WINDOWS = 4` UNTIL 2026-09-13 and the number did not move — what moved
+// is what it counts. `test/agent-window.test.mjs` reads this export; nothing else does
+// (`session-narration.js` and `test/app-windows.test.mjs` mention the old name in PROSE only,
+// and their sums are unchanged because the ceiling is still four agent views).
+const MAX_AGENT_TABS = 4;
 
-// key -> BrowserWindow. Reuse rather than duplicate: asking twice for the same agent
-// FRONTS the window that already shows it.
-const openWindows = new Map();
+/**
+ * 🔒 **ONE WINDOW, MANY TABS (Samuel, 2026-09-13, over Wispr Flow's pop-out: *"make this
+ * agent tabbable, meaning if I have an agent popout window open already and I go to another
+ * agent and click 'Open window,' it just adds another tab to this"*).**
+ *
+ * ⚠ **MAIN OWNS THE TAB SET AND THE RENDERER RENDERS IT** — not the other way round. The
+ * window is created HERE, the budget is enforced HERE, and "closing the last tab closes the
+ * window" is a rule with one implementation. A renderer that kept its own list would be a
+ * second answer to *which agents are open*, and main is the half that survives a reload.
+ *
+ * ⚠ **THE KEY IS STILL `agentWindowKey`** — (channel, thread, agent), never `sessionId`
+ * (see this file's header). So a tab is addressed by exactly what every session op takes.
+ */
+let host = null;
+/** key -> tab descriptor, in INSERTION ORDER: the strip reads left to right. */
+const openTabs = new Map();
 
 // ─── BEGIN AGENT-ROUTE-PURE (unit-tested via source extraction) ──────────────
 // No electron/require refs below.
@@ -100,12 +119,55 @@ function agentRoute(segment, page, channelId, taskId, agentId) {
 }
 // ─── END AGENT-ROUTE-PURE ────────────────────────────────────────────────────
 
-/** Forget windows that have gone, so the budget counts only live ones. */
+/**
+ * Forget the host once it has gone, so the budget counts only live tabs.
+ * ⚠ THE TABS GO WITH IT. They are views INSIDE that window: a dead host holding four tab
+ * descriptors would refuse the next open against a budget nothing is spending.
+ */
 function sweep() {
-  for (const [key, win] of Array.from(openWindows)) {
-    if (!appWindows.isLiveWindow(win)) openWindows.delete(key);
+  if (host && !appWindows.isLiveWindow(host)) {
+    host = null;
+    openTabs.clear();
   }
-  return openWindows;
+  return openTabs;
+}
+
+/** Is this the agent window? `window-chrome.js`'s tab ops ask, so a bound sender can only
+ *  ever name a tab inside ITS OWN window (that file's header carries the rule). */
+function isHostWindow(win) {
+  return !!win && host === win;
+}
+
+/**
+ * THE WHOLE TAB SET, TO THE RENDERER — one push, never a diff.
+ *
+ * ⚠ **IDEMPOTENT ON PURPOSE.** An add, a close and a focus are all "here is the list, show
+ * this one", so a renderer that missed a message cannot drift from main: the next push is
+ * complete. `focusKey` is a COMMAND (select this tab now), not a claim about what the
+ * operator has selected — clicking a tab is local and rings nothing here.
+ */
+function pushTabs(focusKey) {
+  if (!host) return;
+  try {
+    host.webContents.send('agent-window:tabs', {
+      tabs: Array.from(openTabs.values()),
+      focusKey: focusKey || '',
+    });
+  } catch (err) {
+    diag('agent-window: could not push the tab set —', (err && err.message) || String(err));
+  }
+}
+
+/** Front the host: asking again for an agent already tabbed is a request to SEE it. */
+function frontHost() {
+  if (!host) return;
+  try {
+    if (host.isMinimized()) host.restore();
+    host.show();
+    host.focus();
+  } catch (err) {
+    diag('agent-window: could not front the window —', (err && err.message) || String(err));
+  }
 }
 
 // ⚠ 460x640 ORIGINALLY — TALLER AND NARROWER THAN THE POP-OUT'S 520x600, and the difference is
@@ -171,9 +233,11 @@ function sweep() {
 // content. `'customButtonsOnHover'` is frameless but paints them again on hover — which is not
 // "removed" either. `frame: false` draws no bar and no buttons at all.
 // ⚠ SO THE RENDERER OWES THE DRAG REGION. A frameless window has nothing to grab:
-// `channels-v2/agent-window.tsx › AgentWindowHeader` carries `-webkit-app-region: drag` and its
-// controls carry `no-drag`, and `window-chrome.js` is where the close/zoom buttons it grew reach
-// main. Resizing is unaffected (`resizable` defaults true; a frameless window still has edges).
+// `channels-v2/agent-window-chrome.tsx › AgentWindowChrome` carries `-webkit-app-region: drag`
+// and its controls — the TABS included — carry `no-drag`, and `window-chrome.js` is where the
+// close/zoom buttons it grew reach main. ⚠ IT WAS `agent-window.tsx › AgentWindowHeader` until
+// the tabbed ruling later the same day; the bar belongs to the WINDOW now and outlives any one
+// agent view, which is why it is its own file. Resizing is unaffected (`resizable` defaults true; a frameless window still has edges).
 // ⚠ `roundedCorners` IS STATED RATHER THAN INHERITED. It defaults to true, and this is the one
 // window whose corners are now the OS's ONLY contribution to its chrome — an implicit default is
 // the wrong way to hold the whole visible shape of a window. MEASURED, and it is a correction to
@@ -214,9 +278,17 @@ function createAgentWindow(route) {
 }
 
 /**
- * Open (or front) the window for one agent. Returns `{ ok }` — `ok:false` for an unusable
- * target or a full budget, in the SAME shape every other refusal in `channel-dir-ipc.js`
- * uses, so a caller cannot tell them apart.
+ * Open the agent view for one agent: FIRST one builds the window, every one after it ADDS A
+ * TAB to that same window, and one already tabbed is simply focused (Samuel, 2026-09-13).
+ *
+ * Returns `{ ok }` — `ok:false` for an unusable target or a full budget, in the SAME shape
+ * every other refusal in `channel-dir-ipc.js` uses, so a caller cannot tell them apart.
+ *
+ * ⚠ **THE CALLERS DID NOT CHANGE AND MUST NOT HAVE TO.** `session-ipc-ops.js` (the renderer's
+ * "Open window"), `session-engine.js`'s reopen and `session-delete-op.js` all still pass a
+ * plain address; whether that becomes a window or a tab is this module's business.
+ * ⚠ **WINDOW SIZE AND POSITION ARE UNTOUCHED** (*"Don't change the current window size"*):
+ * only the FIRST open constructs a window, and it constructs the same 510×560 one.
  */
 function openAgentWindow(target) {
   const t = target || {};
@@ -224,23 +296,33 @@ function openAgentWindow(target) {
   if (!route) return { ok: false };
 
   const key = agentWindowKey(t.channelId, t.taskId, t.agentId);
+  const tab = {
+    key,
+    segment: String(t.segment || ''),
+    channelId: String(t.channelId || ''),
+    taskId: String(t.taskId || ''),
+    agentId: String(t.agentId || ''),
+  };
   sweep();
-  const existing = openWindows.get(key);
-  if (existing) {
-    // Asking again for an agent already open is a request to SEE it.
-    try {
-      if (existing.isMinimized()) existing.restore();
-      existing.show();
-      existing.focus();
-    } catch (err) {
-      diag('agent-window: could not front an existing window —', (err && err.message) || String(err));
-    }
+
+  // ALREADY TABBED → front the window and tell it which tab to show.
+  if (host && openTabs.has(key)) {
+    frontHost();
+    pushTabs(key);
     return { ok: true };
   }
 
-  if (openWindows.size >= MAX_AGENT_WINDOWS) {
-    diag('agent-window: refused — the window budget is full', `(${MAX_AGENT_WINDOWS})`);
+  if (openTabs.size >= MAX_AGENT_TABS) {
+    diag('agent-window: refused — the tab budget is full', `(${MAX_AGENT_TABS})`);
     return { ok: false };
+  }
+
+  // A SECOND AGENT WHILE THE WINDOW IS OPEN → a tab, never a second window.
+  if (host) {
+    openTabs.set(key, tab);
+    frontHost();
+    pushTabs(key);
+    return { ok: true };
   }
 
   let win;
@@ -250,11 +332,56 @@ function openAgentWindow(target) {
     diag('agent-window: create failed —', (err && err.message) || String(err));
     return { ok: false };
   }
-  openWindows.set(key, win);
+  host = win;
+  openTabs.clear();
+  openTabs.set(key, tab);
   try {
-    win.on('closed', () => { if (openWindows.get(key) === win) openWindows.delete(key); });
+    // ⚠ THE WINDOW'S OWN ROUTE SEEDS ITS FIRST TAB, so the renderer has one before any push
+    // arrives — and `did-finish-load` is when a push can be HEARD. A send before the listener
+    // is attached is dropped silently, which is how a tab set arrives empty.
+    win.webContents.on('did-finish-load', () => pushTabs(key));
+  } catch (_err) { /* not an emitter — the route already carries the first tab */ }
+  try {
+    win.on('closed', () => {
+      if (host === win) {
+        host = null;
+        openTabs.clear();
+      }
+    });
   } catch (_err) { /* not an emitter — the sweep still collects it */ }
   return { ok: true };
+}
+
+/**
+ * CLOSE ONE TAB, and the WINDOW with the last of them (Samuel: *"you see there's a little X
+ * button"*, and item 1's *"closing the last tab closes the window"*).
+ *
+ * ⚠ **THE LAST-TAB RULE IS HERE, NOT IN THE RENDERER.** A renderer that closed its own window
+ * when its list emptied would be the second implementation of a rule main already has to hold
+ * for the delete lane below — and the two would part the day one of them was edited.
+ *
+ * ⚠ IT ANSWERS "was that tab open", never a handle. Best effort, like `closeAgentWindow`.
+ */
+function closeAgentTab(key) {
+  sweep();
+  const id = String(key || '');
+  if (!host || !openTabs.has(id)) return false;
+  const remaining = Array.from(openTabs.keys()).filter((k) => k !== id);
+  openTabs.delete(id);
+  if (remaining.length === 0) {
+    const win = host;
+    host = null;
+    try {
+      win.close();
+    } catch (err) {
+      diag('agent-window: could not close the window on its last tab —', (err && err.message) || String(err));
+    }
+    return true;
+  }
+  // Focus a NEIGHBOUR rather than nothing: a window whose active tab just went would
+  // otherwise render an empty panel.
+  pushTabs(remaining[remaining.length - 1]);
+  return true;
 }
 
 /**
@@ -272,29 +399,32 @@ function openAgentWindow(target) {
  */
 function closeAgentWindow(target) {
   const t = target || {};
-  const key = agentWindowKey(t.channelId, t.taskId, t.agentId);
-  sweep();
-  const win = openWindows.get(key);
-  if (!win) return false;
-  openWindows.delete(key);
-  try {
-    win.close();
-  } catch (err) {
-    diag('agent-window: could not close a deleted agent\'s window —', (err && err.message) || String(err));
-  }
-  return true;
+  // ⚠ IT IS THE TAB LANE NOW, AND THE NAME STAYS FOR ITS ONE CALLER. A deleted agent's view
+  // is a TAB since 2026-09-13; closing it takes the window down only if it was the last one,
+  // which is exactly the old behaviour when that agent had the only window.
+  return closeAgentTab(agentWindowKey(t.channelId, t.taskId, t.agentId));
 }
 
-/** Live agent-window count. Diagnostics and tests; nothing renderer-reachable reads it. */
+/** Live agent-TAB count. Diagnostics and tests; nothing renderer-reachable reads it.
+ *  ⚠ It counted WINDOWS until 2026-09-13, when there stopped being more than one. */
 function count() {
   return sweep().size;
+}
+
+/** Is the agent window up at all — one window by construction. */
+function hasWindow() {
+  sweep();
+  return host !== null;
 }
 
 module.exports = {
   openAgentWindow,
   closeAgentWindow,
+  closeAgentTab,
+  isHostWindow,
+  hasWindow,
   count,
-  MAX_AGENT_WINDOWS,
+  MAX_AGENT_TABS,
   AGENT_WINDOW_PAGE,
   // The pure half, for callers that need the rule rather than the window.
   agentRoute,

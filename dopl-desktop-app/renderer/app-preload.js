@@ -512,6 +512,36 @@ contextBridge.exposeInMainWorld('dopl', {
   appWindow: {
     close: () => ipcRenderer.invoke('window:close'),
     toggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),
+    // THE TABBED AGENT WINDOW (2026-09-13). ⚠ THE KEY IS THE ONE ARGUMENT ON THIS WIRE AND IT
+    // NAMES A TAB, NOT A WINDOW: main resolves the window as the sender's own and refuses
+    // unless that window IS the agent window (`main/window-chrome.js`), so this cannot reach
+    // another surface however the key is spelled.
+    closeTab: (key) => ipcRenderer.invoke('window:closeTab', asStr(key)),
+    // ⚠ THE WHOLE SET, EVERY TIME — main pushes the list and which tab to show, never a diff
+    // (`main/agent-window.js › pushTabs`), so a missed message cannot leave the strip drifted.
+    // Coerced HERE, at the boundary, exactly as `onSyncEvent` above does it.
+    onTabs: (callback) => {
+      if (typeof callback !== 'function') return () => {};
+      const listener = (_event, payload) => {
+        const p = payload && typeof payload === 'object' ? payload : {};
+        const rows = Array.isArray(p.tabs) ? p.tabs : [];
+        callback({
+          tabs: rows.map((row) => {
+            const r = row && typeof row === 'object' ? row : {};
+            return {
+              key: asStr(r.key),
+              segment: asStr(r.segment),
+              channelId: asStr(r.channelId),
+              taskId: asStr(r.taskId),
+              agentId: asStr(r.agentId),
+            };
+          }),
+          focusKey: asStr(p.focusKey),
+        });
+      };
+      ipcRenderer.on('agent-window:tabs', listener);
+      return () => ipcRenderer.removeListener('agent-window:tabs', listener);
+    },
   },
 
   openExternal: (url) => ipcRenderer.invoke('dopl:open-external', asStr(url)),

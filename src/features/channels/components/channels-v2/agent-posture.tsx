@@ -253,11 +253,15 @@ export function PostureControls({
           sentence must not be widened to cover it.
           ⚠ IT RIDES WITH THE CONTROLS. With the row absent there is no posture to apply, and a
           sentence about controls that are not there is chrome explaining nothing. */}
-      {canPosture && (
-        <p className="mt-1.5 text-micro text-text-muted">
-          Permissions apply to this agent from its next decision.
-        </p>
-      )}
+      {/* 🔒 **THE "Permissions apply to this agent from its next decision." LINE IS DELETED
+          (Samuel, 2026-09-13, over the agent pop-out: *"Also remove this line from it that says
+          'Permissions applied to this agent from its next decision'"*).** Minimal copy (INVARIANTS
+          §5): the CONTROL is the statement, and the timing it explained has not changed —
+          `main/session-io.js › grantArgs` still re-reads both axes at every gate.
+          ⚠ **THE SLIDE-OUT PANEL LOSES IT TOO, and that is the ruling rather than a side effect**
+          (Desktop Agent, same day): this component is shared by the panel and the window, and a
+          sentence kept on one of them would be two vocabularies for one box. The deleted line was
+          pinned in `agent-posture.test.tsx`; that case went with it. */}
     </div>
   );
 }

@@ -70,11 +70,22 @@ describe("what the controls show", () => {
     ).toMatch(/Automatic/);
   });
 
-  // ⚠ Different fact from the channel's stored launch posture, which this never reads.
-  it("says WHEN it takes effect — every other posture control means 'next launch'", () => {
+  /**
+   * 🔒 **THE TIMING SENTENCE IS DELETED AND ITS ABSENCE IS NOW THE PIN (Samuel, 2026-09-13: *"Also
+   * remove this line from it that says 'Permissions applied to this agent from its next
+   * decision'"*).** It read "Permissions apply to this agent from its next decision." under the two
+   * axes, on BOTH surfaces that mount this strip — the window and the slide-out panel — and the
+   * ruling is minimal copy (INVARIANTS §5).
+   *
+   * ⚠ **PINNED AS AN ABSENCE, NOT DELETED OUTRIGHT.** The sentence was itself added deliberately
+   * (it distinguished these two axes from every "next launch" control on the channel), so it is
+   * exactly the kind of copy that comes back; the case below at the `!canPosture` branch asserted
+   * the same absence for a different reason and still does.
+   */
+  it("says NOTHING about when it takes effect — the sentence is gone", () => {
     install(vi.fn());
     mount();
-    expect(screen.getByText(/from its next decision/i)).toBeTruthy();
+    expect(screen.queryByText(/from its next decision/i)).toBeNull();
   });
 
   it("falls back to the fail-closed pair when an older main sends no posture", () => {

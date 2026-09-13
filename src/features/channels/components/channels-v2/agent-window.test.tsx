@@ -111,12 +111,30 @@ describe("the window names itself", () => {
   });
 });
 
-describe("the header shows what the agent is doing", () => {
-  it("carries the finer detail, not just Running", async () => {
+/**
+ * 🔒 **THE NAME AND THE STATUS BADGE LEFT THIS VIEW ON 2026-09-13 AND THE PIN FOLLOWED THEM.**
+ * This case read *"carries the finer detail, not just Running"* off the window's own top bar; that
+ * bar is the WINDOW's chrome now (`agent-window-chrome.tsx`), the name is the TAB's label and the
+ * badge is the ACTIVE tab's — both built by the host page from the same
+ * `agents-model.ts › agentLiveness` this case was really about, and asserted in
+ * `agent-window-chrome.test.tsx` (status LEFT of expand/close) plus `agents-model`'s own suite
+ * (the `detail` → "Running Bash" mapping).
+ *
+ * ⚠ **WHAT IS PINNED HERE INSTEAD IS THE ABSENCE**, because that is this file's subject: the agent
+ * VIEW must not restate either fact. A second copy of the name beside a tab that already says it is
+ * the same fact twice — and it is the regression a re-added header would be.
+ * ⚠ **AND THE THREAD LINE, WHICH IS THE ONE THING THE VIEW GAINED** (`AgentWorkingOn`): where this
+ * agent is working was never said in the bar, and it is said here now.
+ */
+describe("the view says WHERE the agent is working, and restates nothing the chrome owns", () => {
+  it("shows the thread line and neither the name nor the status badge", async () => {
     installBridge();
     await mount();
-    expect(screen.getByText("flint")).toBeTruthy();
-    expect(await screen.findByText("Running Bash")).toBeTruthy();
+    expect(await screen.findByText("in UI-kit design")).toBeTruthy();
+    // ⚠ THE COMPOSER STILL *ADDRESSES* THE AGENT ("Message flint"), which is an accessible name
+    // and not a rendered label — so this is `queryByText`, the narrow claim.
+    expect(screen.queryByText("flint")).toBeNull();
+    expect(screen.queryByText("Running Bash")).toBeNull();
   });
 });
 

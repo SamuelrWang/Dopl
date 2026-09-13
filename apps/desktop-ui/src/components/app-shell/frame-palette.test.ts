@@ -314,14 +314,14 @@ describe("ONE gray panel, with the page floating inside it", () => {
    * visible ground — which is why the value stays here: the day it changes, a window that fails to
    * cover it shows the wrong colour at its edges.
    * ⚠ **THE THREAD-WINDOW POP-OUT DID NOT MOVE.** It has no rail and no tabs, so nothing about
-   * Samuel's ruling reaches it; `pages/thread-window/` is deliberately not read here.
+   * Samuel's ruling reaches it; `pages/thread-window/` is deliberately not read here. ⚠ **THE GROUND AND THE CARD ARE MEASURED IN TWO FILES SINCE 2026-09-13's SECOND PASS**: the inset face is `channels-v2/agent-window-frame.ts › INSET_PANEL` (the chrome had to read the window's rail width to align the tab strip, so the shared geometry became its own module and the card face went with it; the shell re-exports it). This file is AT the 500-line cap — say the next thing on an existing line.
    */
   it("the agent pop-out follows the frame model now: gray ground, white inset card", () => {
     const shellSrc = code(
       read("src/features/channels/components/channels-v2/agent-window-shell.tsx")
     );
     expect(shellSrc).toContain("bg-home-panel");
-    expect(shellSrc).toContain("bento");
+    expect(read("src/features/channels/components/channels-v2/agent-window-frame.ts")).toContain("bento");
     // ⚠ AND THE VIEW INSIDE IT PAINTS NOTHING — one painter per surface.
     expect(
       code(read("src/features/channels/components/channels-v2/agent-window.tsx"))

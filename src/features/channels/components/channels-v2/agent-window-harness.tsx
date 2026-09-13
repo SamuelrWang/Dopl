@@ -111,7 +111,13 @@ export function installBridge(over: BridgeOver = {}) {
   return { message, narration, push, closeWindow, toggleMaximize };
 }
 
-export async function mount(over: { logoSrc?: string } = {}) {
+/**
+ * ⚠ **`logoSrc` LEFT THIS MOUNT ON 2026-09-13 WITH THE PROP** — the mark is the WINDOW's chrome
+ * now (`agent-window-chrome.tsx`), so `ChannelsV2AgentWindow` no longer takes one and passing it
+ * here was a `tsc` error rather than a harmless extra. The chrome's own suite mounts the chrome
+ * and asserts the mark there.
+ */
+export async function mount() {
   await act(async () => {
     render(
       <ChannelsV2AgentWindow
@@ -119,7 +125,6 @@ export async function mount(over: { logoSrc?: string } = {}) {
         channelId={CHANNEL_ID}
         taskId={TASK}
         currentUserId={ME}
-        logoSrc={over.logoSrc}
       />
     );
   });

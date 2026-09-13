@@ -38,12 +38,24 @@ function mkFakeWindow(options) {
   // `close` joined 2026-08-25 with the DELETE lane: the window onto a deleted agent is shut by
   // main, and a fake with no `close` would make that assertion pass through a swallowed throw.
   const calls = { show: 0, focus: 0, restore: 0, close: 0, on: [] };
+  // ⚠ THE SENDS ARE RECORDED SINCE 2026-09-13: the tab set reaches the renderer as a PUSH
+  // (`agent-window:tabs`), so a fake that swallowed `send` would let every tab assertion pass
+  // against a window that told its renderer nothing. `webContents.on` is here for the same wave —
+  // main defers the first push to `did-finish-load`, and a fake without it exercised only the
+  // catch arm.
+  const sent = [];
   const win = {
     options,
     destroyed: false,
     minimized: false,
     calls,
-    webContents: { id: (mkFakeWindow.nextId += 1), isDestroyed: () => false, send: () => {} },
+    webContents: {
+      id: (mkFakeWindow.nextId += 1),
+      isDestroyed: () => false,
+      sent,
+      send: (channel, payload) => { sent.push({ channel, payload }); },
+      on: (evt, fn) => { (win.wcHandlers ||= {})[evt] = fn; },
+    },
     isDestroyed: () => win.destroyed,
     isMinimized: () => win.minimized,
     restore: () => { calls.restore += 1; win.minimized = false; },
@@ -239,23 +251,86 @@ test("OPEN: asking again for the SAME agent FRONTS the window rather than duplic
   assert.equal(created[0].calls.focus, 1);
 });
 
-test("OPEN: a DIFFERENT agent gets its own window", () => {
+/**
+ * 🔒 **A DIFFERENT AGENT IS A TAB, NOT A SECOND WINDOW (Samuel, 2026-09-13: *"make this agent
+ * tabbable, meaning if I have an agent popout window open already and I go to another agent and
+ * click 'Open window,' it just adds another tab to this"*).**
+ *
+ * ⚠ **THIS CASE ASSERTED `created.length === 2` UNTIL THIS WAVE** and that was the whole of the old
+ * behaviour: one window per agent, up to four. What is pinned now is that the SECOND open builds no
+ * window, pushes the tab set to the one that exists, and fronts it.
+ */
+test("OPEN: a DIFFERENT agent becomes a TAB of the same window", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);
   api.openAgentWindow({ ...TARGET, taskId: "task-2" });
-  assert.equal(created.length, 2);
+  assert.equal(created.length, 1, "a second agent must not build a second window");
+  assert.equal(api.count(), 2, "two tabs");
+  const pushes = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs");
+  assert.equal(pushes.length >= 1, true, "the renderer is told about the new tab");
+  const last = pushes[pushes.length - 1];
+  // ⚠ THE ADDRESSES ARE `TARGET`'s OWN, read off the fixture rather than retyped: this case
+  // shipped asserting `["task-1", "task-2"]` and a focus key ending `task-2|agent-1` over a
+  // `TARGET` that is `task-9` with NO agent id, so it failed on the two things it had invented
+  // and never checked the rule it exists for.
+  assert.deepEqual(last.payload.tabs.map((t) => t.taskId), [TARGET.taskId, "task-2"]);
+  assert.equal(
+    last.payload.focusKey,
+    api.agentWindowKey(TARGET.channelId, "task-2", TARGET.agentId),
+    "the new tab is shown"
+  );
+  assert.equal(created[0].calls.focus >= 1, true);
 });
 
-test("BUDGET: it refuses past the cap, in the SAME shape as a bad id", () => {
-  // ⚠ A renderer-driven window factory with no ceiling is a resource primitive. The shapes
-  // match so a hostile page cannot tell a full budget from an unusable target.
+/** 🔒 **AND ASKING AGAIN FOR ONE ALREADY TABBED FOCUSES THAT TAB** — no second row, and the window
+ *  comes forward. */
+test("OPEN: an agent already tabbed is FOCUSED, not added twice", () => {
   const { api, created } = load();
-  for (let i = 0; i < api.MAX_AGENT_WINDOWS; i += 1) {
+  api.openAgentWindow(TARGET);
+  api.openAgentWindow({ ...TARGET, taskId: "task-2" });
+  api.openAgentWindow(TARGET);
+  assert.equal(api.count(), 2, "still two tabs");
+  const pushes = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs");
+  assert.equal(
+    pushes[pushes.length - 1].payload.focusKey,
+    api.agentWindowKey(TARGET.channelId, TARGET.taskId, TARGET.agentId)
+  );
+});
+
+test("BUDGET: it refuses past the TAB cap, in the SAME shape as a bad id", () => {
+  // ⚠ A renderer-driven TAB factory with no ceiling is a resource primitive: each tab is a
+  // narration subscription and two server reads. The shapes match so a hostile page cannot tell a
+  // full budget from an unusable target.
+  const { api, created } = load();
+  for (let i = 0; i < api.MAX_AGENT_TABS; i += 1) {
     assert.deepEqual(api.openAgentWindow({ ...TARGET, taskId: `t-${i}` }), { ok: true });
   }
   assert.deepEqual(api.openAgentWindow({ ...TARGET, taskId: "one-too-many" }), { ok: false });
   assert.deepEqual(api.openAgentWindow({}), { ok: false });
-  assert.equal(created.length, api.MAX_AGENT_WINDOWS);
+  assert.equal(created.length, 1, "one window however many tabs");
+  assert.equal(api.count(), api.MAX_AGENT_TABS);
+});
+
+/**
+ * 🔒 **CLOSING THE LAST TAB CLOSES THE WINDOW; closing any other one does not** (checklist item 1).
+ * ⚠ The rule lives in MAIN and not in the renderer, because the delete lane needs the same one.
+ */
+test("TABS: the last tab takes the window with it", () => {
+  const { api, created } = load();
+  api.openAgentWindow(TARGET);
+  api.openAgentWindow({ ...TARGET, taskId: "task-2" });
+  const first = api.agentWindowKey(TARGET.channelId, TARGET.taskId, TARGET.agentId);
+  const second = api.agentWindowKey(TARGET.channelId, "task-2", TARGET.agentId);
+
+  assert.equal(api.closeAgentTab(first), true);
+  assert.equal(created[0].calls.close, 0, "one tab left — the window stays");
+  assert.equal(api.count(), 1);
+
+  assert.equal(api.closeAgentTab(second), true);
+  assert.equal(created[0].calls.close, 1, "the last tab closes the window");
+  assert.equal(api.count(), 0);
+  // ⚠ AND AN UNKNOWN KEY ANSWERS false RATHER THAN CLOSING ANYTHING.
+  assert.equal(api.closeAgentTab("nonsense"), false);
 });
 
 test("BUDGET: a CLOSED window frees its slot", () => {
@@ -278,15 +353,30 @@ test("CLOSE: the window onto a DELETED agent is shut and its slot freed", () => 
   assert.equal(api.count(), 0, "the budget gets its slot back immediately, not on the next sweep");
 });
 
-test("CLOSE: it is keyed on the AGENT and cannot reach a sibling's window", () => {
-  // The thread is shared; the window is not. Closing the wrong one from a card's trash icon is
-  // the mistake this lane must not make quietly.
+/**
+ * 🔒 **STILL KEYED ON THE AGENT, AND IT IS A SIBLING'S *TAB* IT CANNOT REACH (2026-09-13).**
+ * ⚠ **THIS CASE ASSERTED TWO WINDOWS (`created[1]`) UNTIL THE TABBED RULING** — two agents on one
+ * thread WERE two windows. What has to hold now is the same property one level down: the delete
+ * lane closes the deleted agent's TAB, the sibling's stays, and the WINDOW survives because a tab
+ * remains. Deleting the wrong agent's view is the mistake this lane must not make quietly, and
+ * "it closed the whole window" is a NEW way to make it.
+ */
+test("CLOSE: it is keyed on the AGENT and cannot reach a sibling's tab", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);
   api.openAgentWindow({ ...TARGET, agentId: "z9y8x7w6" });
+  assert.equal(created.length, 1, "a sibling agent is a tab, not a second window");
+  assert.equal(api.count(), 2);
   assert.equal(api.closeAgentWindow({ ...TARGET, agentId: "z9y8x7w6" }), true);
-  assert.equal(created[0].calls.close, 0, "the first agent's window is untouched");
-  assert.equal(created[1].calls.close, 1);
+  assert.equal(api.count(), 1, "the sibling's tab went and the first agent's stayed");
+  assert.equal(created[0].calls.close, 0, "one tab left — the window stays open");
+  // ⚠ AND THE SURVIVOR IS THE FIRST AGENT'S, not merely "one of them".
+  const pushes = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs");
+  const first = api.agentWindowKey(TARGET.channelId, TARGET.taskId, TARGET.agentId);
+  assert.deepEqual(pushes[pushes.length - 1].payload.tabs.map((t) => t.key), [first]);
+  // Closing the one that is left DOES take the window, which is the last-tab rule.
+  assert.equal(api.closeAgentWindow(TARGET), true);
+  assert.equal(created[0].calls.close, 1);
 });
 
 test("CLOSE: an agent with no window open answers FALSE and does nothing", () => {

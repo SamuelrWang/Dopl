@@ -72,6 +72,27 @@ function register(opts = {}) {
     return { ok: true };
   }));
 
+  // CLOSE ONE TAB of the agent window (2026-09-13, Samuel's tabbed pop-out).
+  //
+  // ⚠ THE KEY NAMES A TAB INSIDE THE SENDER'S OWN WINDOW AND CAN NAME NOTHING ELSE, which is
+  // what keeps this file's one security property intact. Two fences, not one: the sender must
+  // be a bound app window (the wrapper below), AND it must be the agent window itself
+  // (`agent-window.js › isHostWindow`) — so a bound pop-out or the main window cannot reach
+  // into the agent window's tab set even though all three are app windows.
+  //
+  // ⚠ MAIN OWNS THE LAST-TAB RULE. This op does not close windows; `closeAgentTab` decides
+  // that, because the delete lane needs the same rule and two copies of it would part.
+  ipcMain.handle('window:closeTab', appWindowOnly('window:closeTab', { ok: false }, (event, key) => {
+    const win = ownWindow(event);
+    // ⚠ REQUIRED LATE, NOT AT MODULE LOAD: `agent-window.js` pulls in `app-windows.js` and
+    // `spa-window.js`, and this module is registered from `index.js` during boot — the same
+    // late-require shape `session-delete-op.js` uses on the very same module.
+    const agentWindow = require('./agent-window');
+    if (!win || !agentWindow.isHostWindow(win)) return { ok: false };
+    const closed = agentWindow.closeAgentTab(typeof key === 'string' ? key : '');
+    return { ok: closed === true };
+  }));
+
   // ZOOM / UN-ZOOM — what the green button did, which is a TOGGLE and must stay one: a
   // renderer that could only maximize would have no way back to the operator's own size.
   // ⚠ IT ANSWERS THE RESULTING STATE so the glyph can follow it, and reads that state back off
