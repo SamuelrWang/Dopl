@@ -154,7 +154,8 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     // 2026-09-13: the grid is an EXPORTED constant now (`TEMPLATE_GRID`), so the
     // skeletons import it instead of copying the string; the pin is that both
     // read the import and that the constant still spells a real grid.
-    expect(TEMPLATE_GRID).toMatch(/^grid grid-cols-\[repeat\(auto-fill,minmax\(\d+px,1fr\)\)\] gap-2\.5$/);
+    // 🔒 FOUR PER ROW, FIXED (Samuel, 2026-09-13) — never auto-fill.
+    expect(TEMPLATE_GRID).toBe("grid grid-cols-4 gap-2.5");
     expect(HOME_SKELETON).toContain("className={TEMPLATE_GRID}");
     expect(AGENTS_SKELETON).toContain("className={TEMPLATE_GRID}");
   });

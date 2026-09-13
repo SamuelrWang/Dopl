@@ -92,13 +92,12 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
 export const TEMPLATE_NAME_TEXT_LG = SECTION_HEADING_TEXT;
 
 /**
- * THE CARD GRID — wider cards, FOUR to a row on Samuel's screen (2026-09-13:
- * *"Right now, it can fit 5 per row. I want to increase width of cards so it's
- * 4 per row"*; was `minmax(196px,1fr)`). Exported so the /home Agents skeleton
- * byte-shares it.
+ * THE CARD GRID — FOUR to a row, FIXED (Samuel, 2026-09-13: *"I want to
+ * increase width of cards so it's 4 per row"*, then over an auto-fill that gave
+ * two: *"this is 2 on a row. I said 4 on a row"*). Not `auto-fill`: the count is
+ * the ruling, the width follows. Exported so both Agents skeletons byte-share it.
  */
-export const TEMPLATE_GRID =
-  "grid grid-cols-[repeat(auto-fill,minmax(400px,1fr))] gap-2.5";
+export const TEMPLATE_GRID = "grid grid-cols-4 gap-2.5";
 
 export function TemplatePanel({
   id,
