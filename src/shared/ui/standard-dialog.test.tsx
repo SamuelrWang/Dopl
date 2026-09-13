@@ -12,6 +12,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { SECTION_HEADING_TEXT } from "./section-heading";
 import {
   DialogActions,
   DialogField,
@@ -43,17 +44,23 @@ async function open(onClose = vi.fn()) {
 }
 
 describe("the heading", () => {
-  it("is CENTERED and UPPERCASED in CSS, leaving the accessible name alone", async () => {
+  it("is CENTERED and TITLE-CASED in CSS, leaving the accessible name alone", async () => {
     const { dialog } = await open();
     // The name a screen reader says, and what every `getByRole("dialog", …)`
     // in the suites matches: the string, in the case it was written.
     expect(dialog.getAttribute("aria-label")).toBe("New channel");
     const heading = screen.getByRole("heading", { name: "New channel" });
     expect(heading.className).toContain("text-center");
-    expect(heading.className).toContain("uppercase");
-    // ⚠ ONE type for all four titles — the ramp's pane-header step, never a
-    // per-dialog size (`docs/DESIGN-SYSTEM.md` § Type scale).
-    expect(heading.className).toContain("text-title");
+    // 🔒 TITLE CASE IN CSS, the section heading type (Samuel, 2026-09-13) — not
+    // uppercase any more.
+    expect(heading.className).toContain("capitalize");
+    expect(heading.className).not.toMatch(/\buppercase\b/);
+    for (const token of SECTION_HEADING_TEXT.split(" ")) {
+      expect(heading.className).toContain(token);
+    }
+    // ⚠ ONE type for every title — the section heading's, never a per-dialog
+    // size (`docs/DESIGN-SYSTEM.md` § Type scale).
+    expect(heading.className).not.toContain("text-title");
   });
 });
 

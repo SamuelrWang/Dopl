@@ -9,6 +9,7 @@ import { X } from "lucide-react";
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";
+import { SECTION_HEADING_TEXT } from "./section-heading";
 
 /**
  * THE STANDARD DIALOG — one width, one heading, one footer row (Samuel's
@@ -25,7 +26,7 @@ import { cn } from "@/shared/lib/utils";
  * that needed its own width would be the fifth near-copy this file exists to
  * delete; take the width to the CSS module or take the surface out of the set.
  *
- * ⚠ THE HEADING IS CENTERED AND UPPERCASED IN CSS, NOT IN THE STRING. `title`
+ * ⚠ THE HEADING IS CENTERED AND TITLE-CASED IN CSS, NOT IN THE STRING. `title`
  * is the dialog's accessible name (`ModalShell`'s `aria-label`) as well as its
  * visible text, and a `.toUpperCase()` here would rewrite what a screen reader
  * says and what every `getByRole("dialog", { name })` in the suites matches.
@@ -35,7 +36,12 @@ import { cn } from "@/shared/lib/utils";
  *  positioned at the right, so one-sided padding would centre the text against
  *  a box the glyph is sitting outside of. */
 export const DIALOG_TITLE =
-  "px-9 text-center text-title font-semibold uppercase tracking-wide text-text-primary";
+  // 🔒 THE SECTION HEADING TYPE, TITLE CASE (Samuel, 2026-09-13: "change the
+  // title text, to be the same font styling as that of the Usage text on the
+  // overview page … only caps for the first letter of each word. No more all
+  // caps … apply this across all of these similar pop ups"). `capitalize` does
+  // the casing in CSS, so callers keep writing "New agent".
+  cn("px-9 text-center capitalize", SECTION_HEADING_TEXT);
 
 /** Shared geometry of the footer pair. FULLY ROUNDED (Samuel, 2026-08-27) —
  *  both buttons, on every standard dialog, no square-cornered exception. */
