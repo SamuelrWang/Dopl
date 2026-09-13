@@ -15,14 +15,63 @@
  * ⚠ A CLIPPED PAGE SAYS SO (INVARIANTS §9), BESIDE the rows it clipped and never
  * in a footer a skimmer drops — a cap that renders identically to an exhausted
  * list is the bug.
+ *
+ * 🔒 **THE CARDS SIT IN THE AGENTS TAB'S FOUR GRAY WELLS, BUCKETED BY LAST
+ * MESSAGE (Samuel, 2026-09-13, verbatim):** *"for the threads page/tab, I want you
+ * to add the same gray backgrounds that we added to the Agents tab. Basically,
+ * Recent, last 7 days, etc. This should be measured on activity (basically, last
+ * message sent into the thread)."* The wells are `recency-wells.tsx` — the same
+ * module the Agents tab reads, so the spans, the geometry, the animation and the
+ * "unknown is Recent" direction are one recipe with two readers — and the stamp is
+ * {@link threadActivityAt}.
+ *
+ * ⚠ **THE WELLS ADD NO SORT AND CHANGE NO ROW.** The server's activity order
+ * survives inside each well (`recency-wells.tsx › RecencyWells` groups in one
+ * forward pass), the card is the `PANEL_CARD` it already was, and the **New
+ * thread** button and the clipped note stay ABOVE the wells: neither belongs to a
+ * span, and a clip note inside **Recent** would read as a claim about 24 hours.
  */
 
 import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { CARD_BUTTON, PANEL_CARD, TAB_ACTION } from "./bits";
+import { RecencyWells, type RecencyWellItem } from "./recency-wells";
 import { shortName, threadParties, type AuthorIndex } from "./view-model";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import type { ChannelThread } from "../../types";
+
+/**
+ * THIS TAB'S PERSISTED OPEN STATE — per device, and **NOT the Agents tab's
+ * `dopl.agents.wells`**: collapsing **Earlier** over agents is not a statement
+ * about threads.
+ */
+export const THREAD_WELLS_STORAGE_KEY = "dopl.threads.wells";
+
+/**
+ * WHEN THIS THREAD LAST SAW A MESSAGE — epoch ms, or `null` when this read did not
+ * derive it.
+ *
+ * ⚠ **`lastActivityAt` IS SAMUEL'S "last message sent into the thread", AND
+ * `updatedAt` IS NOT.** `types.ts › ChannelThread` carries both: `lastActivityAt`
+ * is derived by the `channel_tasks_activity` view as *the newest message tagged
+ * for the thread, or its own `createdAt`* — exactly the measurement he named — and
+ * it is what the server ORDERS this very list by. `updatedAt`'s only writer is
+ * `set_mode` (INVARIANTS §5, 2026-08-18, since close and reopen were removed), so
+ * bucketing on it would file a busy thread under **Earlier** and move a silent one
+ * into **Recent** the moment somebody flipped its mode. Both fields exist; the
+ * wrong one is the one that reads plausible.
+ *
+ * ⚠ **ABSENT MEANS "NOT DERIVED", NEVER "NO ACTIVITY"** — only the LIST read
+ * carries the field (a single-thread load does not), and an undated thread lands in
+ * **Recent**, the one well open by default (`recency-wells.tsx › wellFor`), so a
+ * read that stops deriving it cannot hide a live thread inside a collapsed well.
+ * ⚠ **AN UNPARSEABLE STAMP IS ALSO UNKNOWN**, not old, for the same reason.
+ */
+export function threadActivityAt(thread: ChannelThread): number | null {
+  if (!thread.lastActivityAt) return null;
+  const ts = new Date(thread.lastActivityAt).getTime();
+  return Number.isNaN(ts) ? null : ts;
+}
 
 /**
  * THE web thread-list clip wording. Third surface in the family after
@@ -91,17 +140,28 @@ export function ThreadsTab({
           No threads in this channel yet.
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {threads.map((thread) => (
-            <ThreadCard
-              key={thread.id}
-              thread={thread}
-              index={index}
-              viewing={thread.id === openThreadId}
-              onOpen={() => onOpenThread(thread.id)}
-            />
-          ))}
-        </div>
+        /* ⚠ ONE `RecencyWells`, NOT A FLAT COLUMN, SINCE 2026-09-13 — and the
+           items are built in the SERVER'S ORDER, which the grouping preserves
+           inside every well. ⚠ NO `useMemo` HERE: the array is one map over the
+           same `threads` identity the hook already memoises, and `RecencyWells`
+           memoises the grouping it drives. */
+        <RecencyWells
+          storageKey={THREAD_WELLS_STORAGE_KEY}
+          items={threads.map(
+            (thread): RecencyWellItem => ({
+              key: thread.id,
+              at: threadActivityAt(thread),
+              node: (
+                <ThreadCard
+                  thread={thread}
+                  index={index}
+                  viewing={thread.id === openThreadId}
+                  onOpen={() => onOpenThread(thread.id)}
+                />
+              ),
+            })
+          )}
+        />
       )}
     </div>
   );
