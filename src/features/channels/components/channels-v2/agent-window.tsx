@@ -31,7 +31,12 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { Bot, CornerDownRight } from "lucide-react";
+import { Bot, CornerDownRight, Maximize2, X } from "lucide-react";
+import {
+  canControlOwnWindow,
+  closeOwnWindow,
+  toggleOwnWindowMaximize,
+} from "@/shared/lib/spa-bridge-window";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { formatRelativeTime } from "@/shared/lib/format-time";
@@ -43,6 +48,7 @@ import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-w
 import { useChannelsV2Live } from "./live";
 import { agentSentMessages } from "./agent-panel";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
+import { IconButton } from "./icon-button";
 import { AgentStream } from "./agent-stream";
 import {
   NO_THREAD_LABEL,
@@ -86,6 +92,7 @@ export function ChannelsV2AgentWindow({
   taskId,
   agentId = null,
   currentUserId,
+  logoSrc,
 }: {
   workspaceId: string;
   channelId: string;
@@ -103,6 +110,16 @@ export function ChannelsV2AgentWindow({
    */
   agentId?: string | null;
   currentUserId: string;
+  /**
+   * THE DOPL MARK, AS A SOURCE THIS FILE CANNOT IMPORT (2026-09-13).
+   *
+   * ⚠ IT IS A PROP RATHER THAN AN IMPORT BECAUSE OF THE TREE, NOT A PREFERENCE. The asset is
+   * `apps/desktop-ui/src/assets/dopl-mark.png`, reached through the SPA-only `#/` alias and
+   * `?inline` (the packaged renderer is `file://`, so a URL would not resolve — the same reason
+   * `components/app-shell/account-rail.tsx` inlines it). `src/**` has no `#/` path mapping, so
+   * this file cannot name it; the page that mounts this window can, and does.
+   */
+  logoSrc?: string;
 }) {
   // ⚠ THE SAME FEED THE AGENTS TAB TAKES, filtered to one agent. A window makes its own
   // subscription because it is a different React tree in a different BrowserWindow — main
@@ -238,7 +255,7 @@ export function ChannelsV2AgentWindow({
     // be a level of — its viewport IS the content — so it stays on the ground its own surface
     // paints. Layer for layer in `pages/agent-window/frame.test.ts`, which pins both halves.
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--panel-surface)] antialiased">
-      <AgentWindowHeader agent={agent} />
+      <AgentWindowHeader agent={agent} logoSrc={logoSrc} />
       {/* ⚠ ONE BOX, NOT TWO (Samuel, 2026-08-27). The usage strip sat directly above the three
           dropdowns — two stacked bands about one agent. It renders INSIDE the posture box now,
           under the controls. */}
@@ -293,25 +310,120 @@ export function ChannelsV2AgentWindow({
   );
 }
 
-function AgentWindowHeader({ agent }: { agent: DesktopSessionSummary | null }) {
+/**
+ * THE WINDOW'S DRAG REGION (2026-09-13). A frameless window has NOTHING to grab: without this the
+ * operator cannot move the window at all, which is the exact failure ENGINEERING.md records from
+ * the `titleBarStyle: 'hiddenInset'` round. The bar drags; its controls opt back out, because a
+ * button inside a drag region swallows the click.
+ *
+ * ⚠ INLINE, NOT A CLASS. `-webkit-app-region` is not in `csstype`, so the cast is required; it is
+ * also not a design token, so it belongs in neither `globals.css` nor the SPA's `tokens.css`
+ * (`scripts/check-css-token-drift.ts` holds those two equal). Pinned as SOURCE in
+ * `agent-window-chrome.test.tsx` — jsdom drops properties it does not know, so a render assertion
+ * here would pass while the real window sat frozen on screen.
+ */
+const DRAG_REGION = { WebkitAppRegion: "drag" } as React.CSSProperties;
+const NO_DRAG_REGION = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
+
+/** The right group's naked glyphs — `IconButton bare` is the kit's no-button-face idiom
+ *  (docs/DESIGN-SYSTEM.md § Row-level edit affordances), re-inked and re-boxed to the Wispr
+ *  scale: a 30px hit area (`--action-h-sm`'s number) around an 18px glyph, muted at rest. */
+const WINDOW_GLYPH = "h-[30px] w-[30px] text-text-muted hover:text-text-primary";
+
+/**
+ * THE TOP BAR — the Dopl mark, the agent's name, then the right-hand controls (Samuel,
+ * 2026-09-13, modelling Wispr Flow's pop-out).
+ *
+ * ⚠ THE BAR ICON IS GONE AND THE NAME TOOK ITS PLACE. It was a 15px lucide `Bot` glyph at the far
+ * left — a picture of the CATEGORY "agent", in the one window that shows exactly one of them, and
+ * therefore the least informative thing that could sit in the bar's most prominent slot. Samuel:
+ * *"put the name of the top bar, the first top bar that holds the agent's name, at the top instead
+ * of the bar icon"*. `Bot` is still imported: it is the gone-state's `EmptyState` icon.
+ *
+ * ⚠ THE MARK IS A ROUNDED SQUARE SHORTER THAN THE BAR, and that is the whole instruction (*"It
+ * should not be the same height as the top bar, but be to the left of the name"*): 24px inside a
+ * 56px bar, `rounded-[8px]`.
+ *
+ * ⚠ THE RIGHT GROUP READS STATUS → EXPAND → CLOSE (Samuel, same day: *"move the ended
+ * badge/thinking badges and stuff to the left of the expand and X buttons"*). The badges are the
+ * SAME components the bar already rendered — `AgentEndedPill` / `AgentLiveness` over
+ * `agents-model.ts › agentLiveness`, which is the one mapping from state to word — moved, not
+ * restated.
+ *
+ * ⚠ THERE IS NO "End" CONTROL IN THIS HEADER TO MOVE. The verb lives on the SLIDE-OUT PANEL's
+ * strip (`agent-panel-controls.tsx › AgentControls`, Pause / End / Open window), which this window
+ * has never mounted — so the badge is the only thing that was sitting at the end of this bar. It is
+ * deliberately not INVENTED here: a destructive verb appearing in a window that never had one is a
+ * new control, not a move.
+ *
+ * ⚠ THE TWO BUTTONS RENDER ONLY WHEN THEY CAN ACT. `canControlOwnWindow()` detects the BRIDGE op
+ * (`spa-bridge-window.ts` carries why it is not the wrapper), so a plain browser and a main
+ * predating `main/window-chrome.js` show no chrome rather than buttons that refuse — the
+ * feature-detection rule the whole bridge family follows (INVARIANTS §11).
+ */
+function AgentWindowHeader({
+  agent,
+  logoSrc,
+}: {
+  agent: DesktopSessionSummary | null;
+  logoSrc?: string;
+}) {
+  const canControlWindow = canControlOwnWindow();
   return (
-    <header className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-4">
-      <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
+    <header
+      style={DRAG_REGION}
+      className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-4"
+    >
+      {logoSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoSrc}
+          alt=""
+          className="h-6 w-6 shrink-0 rounded-[8px]"
+          width={24}
+          height={24}
+        />
+      ) : null}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-semibold text-text-primary">
+        <span className="truncate text-body font-medium text-text-primary">
           {agent ? agentDisplayName(agent) : "Agent"}
         </span>
+        {/* ⚠ WHICH THREAD, KEPT. It is the window's only statement of where this agent is
+            working, and it is not the name said twice — the one thing Samuel's ruling removed
+            from this slot was the ICON. */}
         <span className="flex min-w-0 items-center gap-1 text-caption text-text-secondary">
           <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
           <span className="truncate">in {agent?.threadTitle ?? NO_THREAD_LABEL}</span>
         </span>
       </span>
-      {agent &&
-        (agent.state === "ended" ? (
-          <AgentEndedPill />
-        ) : (
-          <AgentLiveness {...agentLiveness(agent)} />
-        ))}
+      <span style={NO_DRAG_REGION} className="flex shrink-0 items-center gap-0.5">
+        {agent &&
+          (agent.state === "ended" ? (
+            <AgentEndedPill />
+          ) : (
+            <AgentLiveness {...agentLiveness(agent)} />
+          ))}
+        {canControlWindow ? (
+          <>
+            <IconButton
+              bare
+              icon={Maximize2}
+              size={18}
+              label="Expand"
+              className={WINDOW_GLYPH}
+              onClick={() => void toggleOwnWindowMaximize()}
+            />
+            <IconButton
+              bare
+              icon={X}
+              size={18}
+              label="Close"
+              className={WINDOW_GLYPH}
+              onClick={() => void closeOwnWindow()}
+            />
+          </>
+        ) : null}
+      </span>
     </header>
   );
 }

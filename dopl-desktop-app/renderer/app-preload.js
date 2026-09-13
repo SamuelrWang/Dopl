@@ -504,6 +504,16 @@ contextBridge.exposeInMainWorld('dopl', {
     return () => ipcRenderer.removeListener('dopl:sync-event', listener);
   },
 
+  // THIS WINDOW'S OWN CHROME (2026-09-13) — the agent pop-out is FRAMELESS, so macOS draws no
+  // close and no zoom button and its header draws its own. ⚠ NO ARGUMENTS, AND THAT IS THE POINT:
+  // each op acts on the window the call came FROM, so there is nothing to coerce here and no id to
+  // forge in main. The full argument is `main/window-chrome.js`'s header; the header
+  // FEATURE-DETECTS both, so an older main renders no buttons rather than dead ones (§11).
+  appWindow: {
+    close: () => ipcRenderer.invoke('window:close'),
+    toggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),
+  },
+
   openExternal: (url) => ipcRenderer.invoke('dopl:open-external', asStr(url)),
 
   // -> a `data:image/...;base64,...` URI, or null. The packaged page's `img-src` cannot list

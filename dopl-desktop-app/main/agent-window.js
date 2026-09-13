@@ -157,6 +157,29 @@ function sweep() {
 // ⚠ `minWidth` MOVES WITH IT. Default size IS the floor here (the rule the deleted
 // `session-window.js` established), and a floor below the width the content needs would let the
 // operator drag the window back into the wrapped state this number exists to prevent.
+//
+// ⚠ NO TRAFFIC LIGHTS, AND `frame: false` IS THE ONLY OPTION THAT ACHIEVES THAT (Samuel,
+// 2026-09-13, over Wispr Flow's pop-out: *"We're going to remove the X, minus, and expand on the
+// top left of our Dopl agent popout window ... remove that and then put the name ... at the top
+// instead of the bar icon"*). The window took the STANDARD native title bar until then — no
+// `titleBarStyle` at all — so macOS drew the three buttons and the bar they sit in.
+// ⚠ THE TWO NEAR-MISSES, so the next reader does not reach for them. `titleBarStyle: 'hidden'`
+// (and `'hiddenInset'`) KEEP the buttons and merely float them over the content, which is the
+// exact bug ENGINEERING.md records this app hitting once: the lights landed on top of the app
+// header with no draggable region and the window could not be moved. `trafficLightPosition` moves
+// them; it does not remove them, and pushing them off-screen leaves live hit targets under the
+// content. `'customButtonsOnHover'` is frameless but paints them again on hover — which is not
+// "removed" either. `frame: false` draws no bar and no buttons at all.
+// ⚠ SO THE RENDERER OWES THE DRAG REGION. A frameless window has nothing to grab:
+// `channels-v2/agent-window.tsx › AgentWindowHeader` carries `-webkit-app-region: drag` and its
+// controls carry `no-drag`, and `window-chrome.js` is where the close/zoom buttons it grew reach
+// main. Resizing is unaffected (`resizable` defaults true; a frameless window still has edges).
+// ⚠ `roundedCorners` IS STATED RATHER THAN INHERITED. It defaults to true, and this is the one
+// window whose corners are now the OS's ONLY contribution to its chrome — an implicit default is
+// the wrong way to hold the whole visible shape of a window. MEASURED, and it is a correction to
+// the Wispr reference: the radius is the SYSTEM's (~10pt), not the ≈28px of the screenshot. An
+// arbitrary radius needs `transparent: true` plus a CSS-rounded root, which gives up the native
+// shadow, the vibrancy and the OS's own corner masking — a different window, not a bigger number.
 function createAgentWindow(route) {
   const win = new BrowserWindow({
     width: 510,
@@ -164,6 +187,8 @@ function createAgentWindow(route) {
     minWidth: 510,
     minHeight: 560,
     title: 'Dopl',
+    frame: false,
+    roundedCorners: true,
     // --bg-base from the design tokens, so the first paint is not a white flash.
     backgroundColor: '#f5f7fa',
     show: false,

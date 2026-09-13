@@ -9,6 +9,21 @@
  */
 export const APP_OPS = [
   "apiRequest",
+  // ⚠ TWO OPS JOINED HERE ON 2026-09-13 (Samuel's Wispr-Flow ruling): the pin failed on the ADD,
+  // which is the review this comment records:
+  //   • The main-process handlers EXIST and were checked first — `main/window-chrome.js` registers
+  //     `window:close` / `window:toggleMaximize`, both `appWindowOnly`, both refusing in the one
+  //     `{ ok: false }` shape, and both resolving their target as
+  //     `BrowserWindow.fromWebContents(event.sender)`.
+  //   • THEY TAKE NO ARGUMENTS AND CAN NAME NO OTHER WINDOW. There is no id, key or handle on the
+  //     wire, so the usual "every value is re-validated in main" clause has nothing to cover: the
+  //     ONLY window either op can reach is the caller's own.
+  //   • THEY WIDEN NOTHING. Until today macOS drew a close button and a zoom button on this very
+  //     window and the operator clicked them directly; `main/agent-window.js` took `frame: false`,
+  //     so what these restore is exactly that authority and no more. They grant no tool, read no
+  //     secret, start no turn and reach no other machine.
+  "appWindow.close",
+  "appWindow.toggleMaximize",
   "avatarDataUri",
   "beginSignIn",
   "channels.chooseFolder",

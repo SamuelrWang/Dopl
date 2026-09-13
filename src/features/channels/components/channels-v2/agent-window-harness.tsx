@@ -50,6 +50,10 @@ export interface BridgeOver {
   message?: ReturnType<typeof vi.fn>;
   withNarration?: boolean;
   withMessage?: boolean;
+  /** The FRAMELESS window's own close/zoom pair (2026-09-13). Present by default because the
+   *  real desktop has it; `false` is the plain-browser / older-main case, where the header must
+   *  render NO buttons rather than dead ones. */
+  withWindowChrome?: boolean;
 }
 
 /** One live push, as `main/session-narration.js › flush` sends it. */
@@ -65,7 +69,10 @@ export function installBridge(over: BridgeOver = {}) {
     message = vi.fn().mockResolvedValue({ ok: true }),
     withNarration = true,
     withMessage = true,
+    withWindowChrome = true,
   } = over;
+  const closeWindow = vi.fn().mockResolvedValue({ ok: true });
+  const toggleMaximize = vi.fn().mockResolvedValue({ ok: true, maximized: true });
   // ⚠ CAPTURED, NOT STUBBED (2026-08-22, F-250). `onNarration` returning a bare
   // unsubscriber meant NO TEST EVER DROVE A FRAME — which is precisely how a
   // filter that could never match shipped: every case read the mount value and
@@ -91,6 +98,9 @@ export function installBridge(over: BridgeOver = {}) {
   (window as unknown as { dopl?: unknown }).dopl = {
     apiRequest: () => Promise.resolve({ status: 200, statusText: "", hasBody: false }),
     sessions: api,
+    ...(withWindowChrome
+      ? { appWindow: { close: closeWindow, toggleMaximize } }
+      : {}),
   };
   /** Fan one frame out to every subscriber, exactly as main does. */
   const push = async (sessionKey: string, frame: unknown[]) => {
@@ -98,10 +108,10 @@ export function installBridge(over: BridgeOver = {}) {
       for (const cb of [...pushes]) cb({ sessionKey, entries: frame });
     });
   };
-  return { message, narration, push };
+  return { message, narration, push, closeWindow, toggleMaximize };
 }
 
-export async function mount() {
+export async function mount(over: { logoSrc?: string } = {}) {
   await act(async () => {
     render(
       <ChannelsV2AgentWindow
@@ -109,6 +119,7 @@ export async function mount() {
         channelId={CHANNEL_ID}
         taskId={TASK}
         currentUserId={ME}
+        logoSrc={over.logoSrc}
       />
     );
   });

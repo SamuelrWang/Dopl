@@ -206,6 +206,30 @@ test("OPEN: the default size IS the floor — it opens compact and the operator 
   assert.ok(o.height > o.width, "the agent window is a column — taller than it is wide");
 });
 
+// ── 3B. THE WINDOW HAS NO TRAFFIC LIGHTS (Samuel, 2026-09-13) ────────────────────────
+
+test("CHROME: the window is FRAMELESS — macOS draws no close/minimise/zoom on it", () => {
+  // ⚠ THE FAILURE THIS PINS IS A SILENT REVERSION TO A HALF-MEASURE. `titleBarStyle: 'hidden'`
+  // and `'hiddenInset'` read like "no title bar" and KEEP the three buttons, floating them over
+  // the content — the exact bug ENGINEERING.md records this app shipping once, where the lights
+  // landed on the app header with no draggable region and the window could not be moved.
+  // `trafficLightPosition` only MOVES them, and off-screen leaves live hit targets under the
+  // content. `frame: false` is the option that draws none of it.
+  const { api, created } = load();
+  api.openAgentWindow(TARGET);
+  const o = created[0].options;
+  assert.equal(o.frame, false, "the agent window grew a native frame back");
+  assert.equal(
+    "titleBarStyle" in o,
+    false,
+    "titleBarStyle is a HALF-MEASURE on this window — every value that hides the bar keeps the buttons"
+  );
+  assert.equal("trafficLightPosition" in o, false, "moving the lights is not removing them");
+  // ⚠ STATED, NOT INHERITED. It defaults to true, and this is the one window whose corners are
+  // the OS's only remaining contribution to its chrome.
+  assert.equal(o.roundedCorners, true, "a frameless window with square corners is a slab");
+});
+
 test("OPEN: asking again for the SAME agent FRONTS the window rather than duplicating it", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);

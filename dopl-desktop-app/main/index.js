@@ -17,6 +17,8 @@ const targeting = require('./targeting');
 const versionSkew = require('./version-skew');
 const channelDirs = require('./channel-dirs');
 const channelDirIpc = require('./channel-dir-ipc');
+// 2026-09-13: the frameless agent pop-out's own close / zoom, bound to the SAME registry.
+const windowChrome = require('./window-chrome');
 const mcpConfig = require('./mcp-config');
 const api = require('./api');
 const { diag } = require('./diag');
@@ -242,6 +244,13 @@ if (!gotLock) {
     // An ACCESSOR, not a snapshot: register() runs before any window exists, the shell is
     // rebuilt on reopen, and a pop-out can appear or close at any moment.
     channelDirIpc.register({ onChanged: () => tray.refresh(), getSenderIds: () => appWindows.senderIds() });
+
+    // THE FRAMELESS WINDOW'S OWN BUTTONS (2026-09-13). `agent-window.js` took `frame: false`, so
+    // macOS draws no close and no zoom control and the renderer's own pair reaches main here.
+    // ⚠ SAME ACCESSOR, SAME REASON as the line above: each op acts on the CALLER'S window
+    // (`BrowserWindow.fromWebContents`), so there is no id to forge — but an unbound surface must
+    // still be a dead one rather than an open one.
+    windowChrome.register({ getSenderIds: () => appWindows.senderIds() });
 
     // Auto-update (electron-updater ↔ GitHub Releases). Silent download with
     // progress on the tray; the tray gains an "Update ready — restart to

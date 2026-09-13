@@ -1,6 +1,11 @@
 import { useParams, useSearchParams } from "react-router";
 import { ChannelsV2AgentWindow } from "@/features/channels/components/channels-v2/agent-window";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
+// ⚠ `?inline` FOR THE SAME REASON `components/app-shell/account-rail.tsx` takes it: the packaged
+// renderer is a `file://` document, so the mark travels as a data URI rather than a URL. It is
+// handed DOWN to the window because `src/**` has no `#/` alias (`channels-v2/agent-window.tsx ›
+// logoSrc` carries the argument).
+import doplMark from "#/assets/dopl-mark.png?inline";
 import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
@@ -67,6 +72,7 @@ export default function AgentWindowPage() {
         taskId={taskId ?? ""}
         agentId={agentId}
         currentUserId={access.currentUserId}
+        logoSrc={doplMark}
       />
     </Frame>
   );

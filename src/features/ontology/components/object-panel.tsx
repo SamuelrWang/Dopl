@@ -6,6 +6,10 @@ import type { Dispatch } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { pendingRow } from "@/shared/ui/pending";
 import {
+  NAKED_ICON,
+  NAKED_ICON_BUTTON,
+} from "@/shared/ui/naked-icon-button";
+import {
   containerNameOf,
   orphanedByObjectDelete,
   type GraphAction,
@@ -52,13 +56,13 @@ interface Props {
  * own 14px glyph — so the hit area is the small-action scale while the only ink
  * on screen is the glyph. Muted at rest, primary on hover; no border, no fill,
  * no shadow, in any state.
+ *
+ * ⚠ **THE RECIPE MOVED TO `shared/ui/naked-icon-button.ts` ON 2026-09-13**, when
+ * the /home Usage card's month arrows became the second surface to wear it —
+ * `docs/DESIGN-SYSTEM.md`'s F-345 forbids a seventh hand-written icon-button
+ * string by name. It is IMPORTED here; the ruling above is unchanged.
  */
-const NAKED_ICON_BUTTON =
-  "flex shrink-0 items-center justify-center rounded-[8px] p-2 " +
-  "text-text-muted transition-colors hover:text-text-primary";
 
-/** The glyph inside it — the size the board header's gear wears. */
-const NAKED_ICON = 14;
 
 /** Right-side editor panel for the selected object (card or column): identity
  *  header, then attribute / relationship / action editors, all in place. */
