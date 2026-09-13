@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import { sessionChannelId } from "@/shared/auth/session-header";
 import {
   consumeMcpCredits,
-  creditPeriodFor,
   type CreditConsumeResult,
 } from "@/features/billing/server/credits-service";
+import { creditPeriodFor } from "@/features/billing/server/credits-meter";
 
 /**
  * POST /api/mcp/credits/consume — charge ONE MCP tool call to a workspace. The ONLY caller is
@@ -32,7 +33,7 @@ import {
  * a tool result, and it already has to read `allowed`.
  */
 export const POST = withWorkspaceAuth(
-  async (_request, { workspaceId, workspaceKind, userId }) => {
+  async (_request, { workspaceId, workspaceKind, userId, sessionId }) => {
     try {
       // ⚠ THE KIND PICKS THE WALLET. A standard workspace charges the CALLER'S
       // OWN SEAT; a `kind='link'` or `kind='personal'` container has no plan and
@@ -40,8 +41,22 @@ export const POST = withWorkspaceAuth(
       // (`credits-service.ts › resolveBillingTarget`, INVARIANTS §4A).
       // ⚠ `userId` is REQUIRED by that call since 2026-09-07 — both wallets are
       // keyed on a person, so there is no wallet to move without one.
+      // 🔒 **AND THE CHANNEL PICKS THE CONTAINER SINCE 2026-09-13 (rule B).**
+      // `sessionId` is the desktop's slot key for the calling session, already
+      // read once by the wrapper (`shared/auth/session-header.ts`); its
+      // `<channelId>:<tail>` head is the channel whose container is charged.
+      // ⚠ **THIS IS THE ONE HOP, AND IT NEEDED NO NEW WIRE**: the MCP server's
+      // loopback client stamps `X-Dopl-Session-Id` on every request it makes
+      // (`src/app/api/mcp/route.ts` → `DoplClient({ sessionId })` →
+      // `packages/dopl-client/src/transport.ts`), so the consume POST already
+      // carried it. ⚠ NO SESSION ⇒ NO CHANNEL ⇒ the resource's container pays,
+      // which is what a Claude Desktop / Claude Code connection looks like.
       return NextResponse.json(
-        await consumeMcpCredits(workspaceId, { userId, workspaceKind })
+        await consumeMcpCredits(workspaceId, {
+          userId,
+          workspaceKind,
+          channelId: sessionChannelId(sessionId),
+        })
       );
     } catch (err) {
       // ⚠ FAIL OPEN, DECIDED NOT INHERITED. Failing closed on a DB blip bricks every agent:

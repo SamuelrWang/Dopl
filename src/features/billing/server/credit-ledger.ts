@@ -54,6 +54,27 @@ export interface CreditUsageEvent {
   originWorkspaceId: string | null;
   /** Who burned it. `null` only when the caller could not be identified. */
   userId: string | null;
+  /**
+   * 🔒 **THE CALLING CHANNEL — RULE B's ATTRIBUTION (Samuel, 2026-09-13: "the
+   * wallet needs to match the histogram; that's the whole point"), AND THE ONLY
+   * DIMENSION ON THIS ROW THAT IS NOT DERIVABLE FROM ANOTHER.** The channel whose
+   * container was CHARGED, from the caller's session key
+   * (`credits-service.ts › resolveBillingTarget`).
+   *
+   * ⚠ **`null` MEANS "NO CALLING CHANNEL" AND READS AS "Desktop agent"** — a
+   * Claude Desktop or Claude Code MCP connection, an app click, an older desktop
+   * build, and EVERY row written before
+   * `20261003120000_credit_events_channel.sql`. Legacy rows cannot be
+   * backfilled: the session that made the call is gone, and the origin container
+   * does not answer the question (under rule B the charged channel and the
+   * addressed container differ whenever an agent reaches across containers).
+   *
+   * ⚠ **NOT `originWorkspaceId` UNDER A DIFFERENT NAME.** That column is WHERE
+   * the call was addressed; this is WHOSE CHANNEL was billed for it. They agreed
+   * on every row written before rule B, which is exactly why the by-channel
+   * breakdown used to be read off the wrong one.
+   */
+  channelId: string | null;
   /** WHICH COUNTER MOVED — `credit-wallets.ts`'s two tables. */
   wallet: WalletKind;
   /**
@@ -91,6 +112,7 @@ export async function recordCreditUsageEvent(
         workspace_id: event.workspaceId,
         origin_workspace_id: event.originWorkspaceId,
         user_id: event.userId,
+        channel_id: event.channelId,
         wallet: event.wallet,
         payer_user_id: event.payerUserId,
         amount: event.amount,

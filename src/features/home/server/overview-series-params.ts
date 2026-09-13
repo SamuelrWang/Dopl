@@ -4,7 +4,7 @@ import {
   USAGE_SCOPE_DESKTOP,
   type HomeOverviewRange,
 } from "../overview-types";
-import type { OwnedWalletContainer } from "./repository-overview";
+import type { CreditChannelScope } from "./repository-overview";
 
 /**
  * THE /home USAGE HISTOGRAM'S TWO NARROWINGS — `channel` and `month` — parsed,
@@ -19,20 +19,21 @@ import type { OwnedWalletContainer } from "./repository-overview";
  * functions the suite can pin without a single mock — the same seam
  * `overview-tally.ts` already is.
  *
- * 🔒 **THE CREDIT LEDGER HAS NO `channel_id` COLUMN AND THIS FILE IS WHERE THAT
- * FACT IS STATED.** `credit_usage_events`' channel dimension is
- * `origin_workspace_id` — the ADDRESSED CONTAINER, and a container holds exactly
- * one channel (`billing/server/credit-ledger.ts › CreditUsageEvent`,
- * `overview-tally.ts › tallyChannels`, which keys on the same column). So:
- *   - **a channel** is its `kind='link'` container's id, the very id the /home
- *     channel list already carries as `HomeChannel.workspaceId`;
- *   - **the Desktop agent** — MCP traffic with no channel — is the reader's own
- *     `kind='personal'` shelf, which is what a call naming no container is
- *     resolved to, and which is the row `tallyChannels` documents as having "no
- *     channel to sit under";
- *   - **a NULL origin is neither.** The column is `ON DELETE SET NULL`, so a
- *     null means a DELETED container. It is real spend with no placeable source
- *     and it belongs to no filtered view — only to "All channels".
+ * 🔒 **THE LEDGER HAS A `channel_id` COLUMN SINCE 2026-09-13 (rule B), AND THIS
+ * FILE IS WHERE THE SCOPE VOCABULARY MEETS IT.** ⚠ **THE SUPERSEDED VERSION OF
+ * THIS HEADER SAID THERE WAS NO SUCH COLUMN** and resolved a scope to
+ * `origin_workspace_id` — the ADDRESSED container — on the argument that a
+ * container holds exactly one channel. Rule B breaks that identity: the channel
+ * that PAYS and the container that was ADDRESSED are different rows whenever an
+ * agent reaches across containers, so the old dimension put a home channel's
+ * burn against a workspace KB in NO bucket at all and the breakdown stopped
+ * summing to the wallet (`billing/server/credit-ledger.ts › CreditUsageEvent`).
+ * So now:
+ *   - **a channel** is its OWN id — `HomeChannel.channelId`, not the container's;
+ *   - **the Desktop agent** is `channel_id IS NULL`: MCP traffic with no calling
+ *     channel, plus every row written before the column existed;
+ *   - **there is no third thing.** The two buckets PARTITION the wallet's rows,
+ *     which is what makes the filtered views sum to the unfiltered one.
  */
 
 /* ⚠ **THE TWO SCOPE WORDS LIVE ON `../overview-types.ts`, NOT HERE** — the
@@ -42,9 +43,10 @@ import type { OwnedWalletContainer } from "./repository-overview";
 /** `YYYY-MM`, the only month spelling this endpoint accepts. */
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
-/** A container id is a uuid — the shape check that keeps a garbage string from
- *  ever being handed on, even though the service also intersects it with the
- *  reader's own list. */
+/** A channel id is a uuid — the shape check that keeps a garbage string from ever
+ *  being handed on. ⚠ SHAPE ONLY: what makes it safe to pass to the admin client
+ *  is the payer fence on the scan itself, not this regex
+ *  (`resolveUsageChannel`). */
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,7 +64,7 @@ export function parseUsageScope(raw: string | null): string | null {
   throw new HttpError(
     400,
     "INVALID_CHANNEL",
-    `channel must be a container id, "${USAGE_SCOPE_DESKTOP}", or "${USAGE_SCOPE_ALL}"`
+    `channel must be a channel id, "${USAGE_SCOPE_DESKTOP}", or "${USAGE_SCOPE_ALL}"`
   );
 }
 
@@ -102,32 +104,32 @@ export function parseUsageMonth(
 }
 
 /**
- * The scope → the origin containers the ledger read may be narrowed to.
+ * The scope word → the ledger read's channel narrowing.
  *
- * - `null` scope → `null`: **no narrowing at all**, which is not the same as
- *   "every owned container" — a row whose container was deleted (null origin)
- *   is still the reader's spend and still belongs on the unfiltered plot.
- * - `desktop` → every OWNED `kind='personal'` container.
- * - a container id → that id, **but only if the reader owns it.**
+ * - `null` scope → `null`: **no narrowing at all** — the whole wallet.
+ * - `desktop` → `"unattributed"`, i.e. `channel_id IS NULL`.
+ * - a uuid → that CHANNEL's rows.
  *
- * 🔒 **THE INTERSECTION IS THE FENCE, AND IT COSTS NO ROUND TRIP (INVARIANTS
- * §2).** The caller already read this list to build the wallet predicate, so
- * narrowing against it is free — and it means no id a caller sent is ever handed
- * to the RLS-bypassing admin client. ⚠ **AN UNOWNED ID ANSWERS `[]`, WHICH THE
- * SERVICE RENDERS AS A ZERO-FILLED MONTH RATHER THAN A REFUSAL** — a channel the
- * reader merely JOINED is a legitimate row in their channel list, and its burns
- * spend the OWNER's wallet, so "none of your credits went there" is the true
- * answer, not a 400.
+ * 🔒 **NO OWNERSHIP INTERSECTION, AND THAT IS A CHANGE WITH AN ARGUMENT (§2).**
+ * The superseded version intersected the requested id with the reader's OWN
+ * containers, because a container id is an ADDRESSING input and this read runs on
+ * the RLS-bypassing admin client. A channel id is not: the scan's fence is
+ * `payer_user_id = reader` (plus the legacy origin arm, still built from ids the
+ * repository read itself), so this narrowing composes as an `AND` that can only
+ * HIDE the reader's own rows. **Nothing a caller sends can widen the answer**, so
+ * there is nothing left for an intersection to protect — and dropping it dropped
+ * a round trip with it (`repository-overview.ts › scanCreditEvents`).
+ *
+ * ⚠ **A CHANNEL THE READER DOES NOT OWN STILL ANSWERS A ZERO-FILLED MONTH, NOT A
+ * REFUSAL** — it just resolves through the wallet fence to no rows. A channel they
+ * merely JOINED spends the OWNER's wallet, and "none of your credits went there"
+ * is the true answer. ⚠ It is now that answer by CONSTRUCTION rather than by a
+ * short-circuit the service had to remember to write.
  */
-export function resolveUsageOrigins(
-  scope: string | null,
-  containers: readonly OwnedWalletContainer[]
-): string[] | null {
+export function resolveUsageChannel(
+  scope: string | null
+): CreditChannelScope | null {
   if (scope === null) return null;
-  if (scope === USAGE_SCOPE_DESKTOP) {
-    return containers
-      .filter((container) => container.kind === "personal")
-      .map((container) => container.id);
-  }
-  return containers.some((container) => container.id === scope) ? [scope] : [];
+  if (scope === USAGE_SCOPE_DESKTOP) return "unattributed";
+  return { channelId: scope };
 }

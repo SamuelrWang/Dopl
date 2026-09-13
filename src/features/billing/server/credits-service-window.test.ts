@@ -58,12 +58,15 @@ import * as repo from "./workspace-billing";
 import * as wallets from "./credit-wallets";
 import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
 import { recordCreditUsageEvent } from "./credit-ledger";
+import { consumeMcpCredits } from "./credits-service";
+// ⚠ THE METER HALF MOVED TO `credits-meter.ts` ON 2026-09-13 (rule B needed the
+// room); this file drives BOTH sides, which is the point of its agreement cases.
+import { creditPeriodFor, summarizeCredits, unmetered } from "./credits-meter";
 import {
-  consumeMcpCredits,
-  creditPeriodFor,
-  summarizeCredits,
-  unmetered,
-} from "./credits-service";
+  personalTarget,
+  seatTarget,
+  unmeteredTarget,
+} from "./credits-target-fixtures";
 
 const mockRepo = vi.mocked(repo);
 const mockWallets = vi.mocked(wallets);
@@ -200,7 +203,7 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
 
     const charged = await consumeMcpCredits(WS, seatCaller);
     const metered = await summarizeCredits(
-      { wallet: "seat", workspaceId: WS, payerUserId: CALLER },
+      seatTarget({ workspaceId: WS, payerUserId: CALLER }),
       row,
       3
     );
@@ -223,7 +226,7 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
 
     const charged = await consumeMcpCredits(WS, seatCaller);
     const metered = await summarizeCredits(
-      { wallet: "seat", workspaceId: WS, payerUserId: CALLER },
+      seatTarget({ workspaceId: WS, payerUserId: CALLER }),
       row,
       3
     );
@@ -238,7 +241,7 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
 
     const charged = await consumeMcpCredits(CONTAINER, linkCaller);
     const metered = await summarizeCredits(
-      { wallet: "personal", workspaceId: CONTAINER, payerUserId: OWNER },
+      personalTarget({ workspaceId: CONTAINER, payerUserId: OWNER }),
       null,
       1
     );
@@ -275,7 +278,7 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
 
     const charged = await consumeMcpCredits(CONTAINER, linkCaller);
     const metered = await summarizeCredits(
-      { wallet: "personal", workspaceId: CONTAINER, payerUserId: OWNER },
+      personalTarget({ workspaceId: CONTAINER, payerUserId: OWNER }),
       pro,
       1
     );
@@ -297,7 +300,11 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
   it("never reports negative remaining, even if usage overshot the limit", async () => {
     mockWallets.getUserCreditsUsed.mockResolvedValue(600);
     const metered = await summarizeCredits(
-      { wallet: "personal", workspaceId: PERSONAL, payerUserId: CALLER },
+      personalTarget({
+        workspaceId: PERSONAL,
+        payerUserId: CALLER,
+        personalBillingContainerId: PERSONAL,
+      }),
       null,
       1
     );
@@ -306,12 +313,7 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
 
   it("a wallet-less target meters the unmetered posture, reading no counter", async () => {
     const metered = await summarizeCredits(
-      {
-        wallet: null,
-        workspaceId: CONTAINER,
-        payerUserId: null,
-        reason: "container-has-no-active-owner",
-      },
+      unmeteredTarget(CONTAINER),
       null,
       1
     );

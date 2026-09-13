@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge } from "#/test-utils/bridge";
 import { renderHome, routes } from "./home-test-harness";
-import { LINK_WORKSPACE_ID } from "./home-test-ids";
+import { CHANNEL_ID } from "./home-test-ids";
 import { monthKey, shiftMonthKey, monthLabel } from "./overview-usage-filter";
 
 /**
@@ -117,9 +117,12 @@ describe("the /home Usage histogram controls", () => {
   });
 
   /**
-   * 🔒 **PICKING A CHANNEL REFETCHES WITH `channel=<container id>`** — the
-   * container id, because that is the credit ledger's own channel dimension
-   * (`overview-series-params.ts`: `credit_usage_events` has no `channel_id`).
+   * 🔒 **PICKING A CHANNEL REFETCHES WITH `channel=<CHANNEL id>` SINCE 2026-09-13
+   * (rule B)** — the channel's OWN id, not its container's. ⚠ **THIS CASE ASSERTED
+   * THE CONTAINER ID UNTIL THIS WAVE**, when the ledger had no channel column and
+   * its channel dimension was the addressed container; under rule B a home
+   * channel's agent can burn credits while addressing ANOTHER container, and the
+   * container id would miss exactly those rows.
    */
   it("refetches with channel=<id> when a channel is picked", async () => {
     renderHome();
@@ -129,14 +132,13 @@ describe("the /home Usage histogram controls", () => {
 
     await waitFor(() =>
       expect(seriesCalls()).toContain(
-        `/api/home/overview-series?range=month&metric=credits&channel=${LINK_WORKSPACE_ID}`
+        `/api/home/overview-series?range=month&metric=credits&channel=${CHANNEL_ID}`
       )
     );
   });
 
-  /** 🔒 **AND `Desktop agent` SENDS THE RESERVED WORD**, not a container id — the
-   *  client does not know which container is the reader's personal shelf, and it
-   *  must not have to (the server resolves it by `kind`). */
+  /** 🔒 **AND `Desktop agent` SENDS THE RESERVED WORD**, not an id — it is the
+   *  absence of a channel (`channel_id IS NULL`), which no id can name. */
   it("refetches with channel=desktop for Desktop agent", async () => {
     renderHome();
     await openScope();

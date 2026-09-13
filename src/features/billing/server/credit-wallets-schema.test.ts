@@ -315,7 +315,7 @@ describe("ordering", () => {
     }
   });
 
-  it("🔒 no file after it touches this file's subjects", () => {
+  it("🔒 no file after it UNDOES this file's subjects", () => {
     // ⚠ **THIS CASE ASSERTED `later` WAS EMPTY UNTIL 2026-09-08, THEN NAMED ONE
     // FILE UNTIL 2026-09-10.** Neither shape survives contact with a second
     // wave: the new-user merge brought five later migrations (presence, template
@@ -325,6 +325,14 @@ describe("ordering", () => {
     // file's subjects, so the check is now the subject sweep over EVERY later
     // file. That is stronger than the allow-list was, not weaker: an allow-list
     // says a name is fine, this reads the SQL.
+    // ⚠ **AND IT SWEPT FOR THE SUBJECT'S *NAME* UNTIL 2026-09-13, WHICH WAS THE
+    // SAME MISTAKE ONE LAYER DOWN.** `20261003120000_credit_events_channel.sql`
+    // ADDs a column to `credit_usage_events` (rule B's `channel_id`) — an
+    // additive, later, entirely legitimate edit that a name sweep reads as a
+    // violation, and whose only fix would have been to stop asserting anything.
+    // What this rule always meant is UNDOING: a `DROP` / `ALTER … DROP` /
+    // `REVOKE` reaching one of these subjects. So the sweep is for the UNDO
+    // VERBS against the subjects, and an ADD COLUMN passes.
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
     const later = files.filter((f) => f.slice(0, 14) > "20260930120000");
     expect(later.length).toBeGreaterThan(0);
@@ -340,16 +348,24 @@ describe("ordering", () => {
           return at === -1 ? line : line.slice(0, at);
         })
         .join("\n");
+    const SUBJECTS = [
+      "user_credit_usage",
+      "workspace_member_credit_usage",
+      "consume_user_credits",
+      "consume_member_credits",
+      "credit_usage_events",
+    ];
+    // The verbs that take something away. ⚠ `DROP COLUMN` is reached through
+    // `ALTER TABLE`, so the scan is per STATEMENT (split on `;`) rather than per
+    // line: the subject and the verb are on different lines in every file in
+    // this directory.
+    const UNDO = /\b(DROP\s+(TABLE|FUNCTION|INDEX|VIEW|COLUMN|POLICY|CONSTRAINT)|REVOKE|TRUNCATE|DELETE\s+FROM)\b/i;
     for (const name of later) {
-      const laterSql = strip(name);
-      for (const subject of [
-        "user_credit_usage",
-        "workspace_member_credit_usage",
-        "consume_user_credits",
-        "consume_member_credits",
-        "credit_usage_events",
-      ]) {
-        expect(laterSql, `${name} touches ${subject}`).not.toContain(subject);
+      for (const statement of strip(name).split(";")) {
+        if (!UNDO.test(statement)) continue;
+        for (const subject of SUBJECTS) {
+          expect(statement, `${name} undoes ${subject}`).not.toContain(subject);
+        }
       }
     }
   });

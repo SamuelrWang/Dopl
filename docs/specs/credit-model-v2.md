@@ -100,7 +100,7 @@ the wallet. The ruling: **both surfaces answer "what came out of MY personal wal
 | Settings › Plans & billing | the WALLET counter | `GET /api/billing/status` → `credits.used` (`src/features/billing/server/status-service.ts`) |
 | /home Overview capacity bar | the SAME wallet counter | `credits.credits.used` off the same endpoint (`apps/desktop-ui/src/pages/home/overview-sections.tsx › CreditCapacityBar`) |
 | /home Overview credit plot, by-channel + by-person rails | the LEDGER, narrowed to that wallet's rows | `src/features/home/server/overview-tally.ts › isPersonalWalletBurn`, pushed into the read by `src/features/home/server/repository-overview.ts › scanCreditEvents` |
-| A standard workspace's Overview | that workspace's SEAT-wallet burns | unchanged — a `seat` row is not on any /home figure |
+| A standard workspace's Overview | that workspace's SEAT-wallet counters | `GET /api/billing/status` → `credits` for that workspace (`apps/desktop-ui/src/pages/overview/period-stats.tsx`), i.e. the CALLER'S OWN seat counter. ⚠ **VERIFIED 2026-09-13: it sums no ledger at all** — `workspaces/server/service-overview.ts` has no credit read and its series has no `credits` metric, so there is nothing here that can disagree with a wallet. A `seat` row is on no /home figure. |
 
 The ledger narrowing is the §3 table read backwards, and it is the same mapping the deploy-day
 backfill applies (`scripts/sql/backfill-credit-wallets-v2.sql`): rows where
@@ -111,6 +111,62 @@ therefore totals the bar again, but by a SECOND derivation of one quantity rathe
 array: a wrong sum now shows up as a plot that disagrees with its own bar. ⚠ The bar is a counter and
 the plot is a fire-and-forget capped ledger, so the plot may read LOW — that direction is expected;
 the reverse is a bug.
+
+## 3A. Attribution — RULE B (Samuel, 2026-09-13)
+
+> **"The wallet needs to match the histogram. That's the whole point."**
+>
+> **Charge the CALLING CHANNEL's container; with no calling channel, charge the
+> RESOURCE's container.**
+
+§3's table still decides WHICH WALLET a container's burn lands on. Rule B decides
+**WHICH CONTAINER** — and it is the calling channel's, not the addressed
+resource's. The five arms, all pinned in
+`src/features/billing/server/credits-channel-attribution.test.ts`:
+
+| # | The call | Wallet | `channel_id` |
+|---|---|---|---|
+| 1 | **Home-channel agent**, whatever it touches (incl. a workspace KB) | the channel OWNER's `personal` — owner-pays for members and guests in your home channels | the channel |
+| 2 | **Workspace-channel agent**, whatever it touches (incl. the caller's own personal KB) | the CALLER'S `seat` in that workspace | the channel |
+| 3 | **Channel-less call** (Claude Desktop / Claude Code MCP, app clicks) on a workspace resource | that workspace's `seat` — today's rule | `null` → filed as **Desktop agent** |
+| 4 | Channel-less call on a home resource | the container owner's `personal` — today's rule | `null` |
+| 5 | **Sub-agent** | whatever its OWN session's channel resolves to — no rule of its own, because it sends its own slot key | its own channel |
+
+Arm 2 was accepted explicitly: a member burning their own **fixed, non-pooled**
+seat allocation on a personal resource is bounded and harms nobody else.
+
+**How the channel reaches the charge** (no new wire — every hop already existed):
+the desktop stamps a session's slot key `<channelId>:<tail>` on
+`X-Dopl-Session-Id` → `src/app/api/mcp/route.ts` reads it into the loopback
+`DoplClient({ sessionId })` → `packages/dopl-client/src/transport.ts` stamps it on
+every loopback request, the consume POST included → `withWorkspaceAuth` puts it on
+the handler context → `POST /api/mcp/credits/consume` splits the head with
+`shared/auth/session-header.ts › sessionChannelId` → `CreditCaller.channelId`.
+
+🔒 **The header is forgeable, so the claim is fenced.**
+`billing/server/channel-attribution.ts › resolveCallingChannel` honours a channel
+only when the caller is an **active member of its container**; anything else is
+IGNORED and logged (never refused — this path fails open). Without the fence any
+account could drain a stranger's personal wallet by naming their channel. Round
+trips: **0** with no claimed channel, **1** when the channel is in the addressed
+container (membership and kind are already on the auth context), **2** across
+containers.
+
+**Schema**: `supabase/migrations/20261003120000_credit_events_channel.sql` —
+`credit_usage_events.channel_id uuid NULL REFERENCES channels(id) ON DELETE SET
+NULL`, plus `(payer_user_id, wallet, channel_id, created_at DESC)`, which is the
+histogram scan's own column order. ⚠ **Legacy rows are NULL and cannot be
+backfilled** (the session that made the call is gone, and the origin container
+does not answer the question), so pre-deploy spend reads as **Desktop agent** —
+accepted.
+
+**Why a column and not a join**: the channel dimension used to be
+`origin_workspace_id` on the argument that a container holds exactly one channel.
+Rule B breaks that identity — the channel that PAYS and the container that was
+ADDRESSED differ whenever an agent reaches across containers — so read through the
+old dimension, that burn was in neither "a channel" nor "Desktop agent", and the
+breakdown stopped summing to the wallet. **The scope buckets now PARTITION the
+wallet's rows**: every row has a channel or has none.
 
 ## 4. Schema — `supabase/migrations/20260930120000_credit_wallets.sql` (WRITTEN, NOT APPLIED)
 

@@ -67,6 +67,11 @@ import * as repo from "./workspace-billing";
 import * as wallets from "./credit-wallets";
 import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
 import { consumeMcpCredits, resolveBillingTarget } from "./credits-service";
+import {
+  personalTarget,
+  seatTarget,
+  unmeteredTarget,
+} from "./credits-target-fixtures";
 import { getWorkspaceBillingStatus } from "./status-service";
 
 const mockRepo = vi.mocked(repo);
@@ -135,26 +140,22 @@ afterEach(() => {
 
 describe("resolveBillingTarget", () => {
   it("1. standard target (and a kind-less one) is the CALLER's seat, asking nobody who owns it", async () => {
-    expect(await resolveBillingTarget(OWNER_WS, { userId: GUEST })).toEqual({
-      wallet: "seat",
-      workspaceId: OWNER_WS,
-      payerUserId: GUEST,
-    });
+    // ⚠ NO CALLING CHANNEL — rule B's fallback arm (`credits-channel-attribution.test.ts`).
+    const seat = seatTarget({ workspaceId: OWNER_WS, payerUserId: GUEST });
+    expect(await resolveBillingTarget(OWNER_WS, { userId: GUEST })).toEqual(seat);
     expect(
       await resolveBillingTarget(OWNER_WS, {
         userId: GUEST,
         workspaceKind: "standard",
       })
-    ).toEqual({ wallet: "seat", workspaceId: OWNER_WS, payerUserId: GUEST });
+    ).toEqual(seat);
     expect(mockFindOwner).not.toHaveBeenCalled();
   });
 
   it("2. link target is the CONTAINER OWNER's PERSONAL wallet, not the caller's", async () => {
-    expect(await resolveBillingTarget(LINK_WS, guestCaller)).toEqual({
-      wallet: "personal",
-      workspaceId: LINK_WS,
-      payerUserId: OWNER,
-    });
+    expect(await resolveBillingTarget(LINK_WS, guestCaller)).toEqual(
+      personalTarget({ workspaceId: LINK_WS, payerUserId: OWNER })
+    );
     expect(mockFindOwner).toHaveBeenCalledWith(LINK_WS);
   });
 
@@ -164,18 +165,21 @@ describe("resolveBillingTarget", () => {
         userId: OWNER,
         workspaceKind: "personal",
       })
-    ).toEqual({ wallet: "personal", workspaceId: PERSONAL_WS, payerUserId: OWNER });
+    ).toEqual(
+      personalTarget({
+        workspaceId: PERSONAL_WS,
+        payerUserId: OWNER,
+        personalBillingContainerId: PERSONAL_WS,
+      })
+    );
     expect(mockFindOwner).not.toHaveBeenCalled();
   });
 
   it("4. container with no active owner → wallet null, with the ONLY reason left", async () => {
     mockFindOwner.mockResolvedValue(null);
-    expect(await resolveBillingTarget(LINK_WS, guestCaller)).toEqual({
-      wallet: null,
-      workspaceId: LINK_WS,
-      payerUserId: null,
-      reason: "container-has-no-active-owner",
-    });
+    expect(await resolveBillingTarget(LINK_WS, guestCaller)).toEqual(
+      unmeteredTarget(LINK_WS)
+    );
   });
 
   it("🔒 an owner who owns NO standard workspace is billed normally now", async () => {

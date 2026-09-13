@@ -47,3 +47,31 @@ export function narrowSessionId(
     ? value
     : undefined;
 }
+
+/**
+ * 🔒 **THE CALLING CHANNEL OUT OF A SESSION KEY — the `<channelId>:<tail>` HEAD
+ * (rule B, 2026-09-13).** `null` whenever the key is absent, unshaped, or not
+ * uuid-headed: every non-desktop client sends no key at all, and another client's
+ * opaque handle may carry a colon that names no channel.
+ *
+ * ⚠ **THE THIRD READER OF THIS SPLIT AND THE FIRST THAT COSTS MONEY.**
+ * `packages/mcp-server/src/tools/identity.ts › boundChannelId` tells an agent
+ * which room it is in; `knowledge/server/service-audience.ts ›
+ * narrowToSessionChannel` narrows a grant set already fenced by DB facts. This one
+ * decides WHOSE WALLET MOVES (`billing/server/credits-service.ts ›
+ * resolveBillingTarget`), so the FENCE is not here — it is
+ * `billing/server/channel-attribution.ts`, which honours the id only for a
+ * container the caller is an active member of. ⚠ The header itself still
+ * establishes NOTHING (see this file's header): it is caller-supplied, and any
+ * device-token holder can send any value.
+ */
+export function sessionChannelId(
+  sessionId: string | null | undefined
+): string | null {
+  const head = narrowSessionId(sessionId)?.split(":")[0];
+  return head && UUID_RE.test(head) ? head : null;
+}
+
+/** ⚠ Shape only — a uuid here is an ATTRIBUTION hint, never a proven channel. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

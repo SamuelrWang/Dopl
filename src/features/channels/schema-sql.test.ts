@@ -294,7 +294,12 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // cross-container lend work — and is exactly why this cascade has to be
   // declared rather than inherited from a tenancy column.
   it("finds all fourteen child FKs", () => {
-    expect(refs.length).toBe(14);
+    // ⚠ FIFTEEN SINCE 2026-09-13: `credit_usage_events.channel_id`
+    // (`20261003120000_credit_events_channel.sql`, F-691, an ALTER TABLE — the
+    // first FK into channels added by ADD COLUMN), a RECORD of something that
+    // happened, SET NULL, named below. F-690's "revisions" FK never existed:
+    // `owningTable` did not read ALTER and pinned this one on the file before.
+    expect(refs.length).toBe(15);
   });
 
   /**
@@ -315,13 +320,27 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
       // referencing the deleted channel, so the one DELETE stays complete.
       "ON DELETE SET NULL",
     ],
+    [
+      "credit_usage_events.channel_id",
+      // F-691, Samuel's rule B (2026-09-13): the ledger row is the RECORD that
+      // credits were spent, and the histogram is the wallet's breakdown — a
+      // deleted channel's burns must stay on the wallet (they file as "Desktop
+      // agent" once the channel is gone). Same class as the one above.
+      "ON DELETE SET NULL",
+    ],
   ]);
 
-  /** The `CREATE TABLE` an offset falls inside — the nearest one before it. */
+  /**
+   * The table an offset's FK belongs to — the nearest `CREATE TABLE` OR
+   * `ALTER TABLE … ADD COLUMN` before it. ⚠ ALTER was missing until
+   * 2026-09-13, so `20261003120000_credit_events_channel.sql`'s ADD COLUMN FK
+   * was attributed to the previous file's CREATE TABLE (`revisions`) — which is
+   * what F-690 reported as "a revisions FK into channels". There is none.
+   */
   function owningTable(index: number): string {
     const seen = [
       ...ALL_SQL.slice(0, index).matchAll(
-        /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?([a-z_]+)/gi
+        /(?:CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?|ALTER\s+TABLE\s+(?:ONLY\s+)?)(?:public\.)?([a-z_]+)/gi
       ),
     ].pop();
     return seen ? seen[1] : "";
@@ -353,7 +372,7 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
     }
   });
 
-  it("the exempt edge is SET NULL and nothing else — an exemption is not a blank cheque", () => {
+  it("each exempt edge is SET NULL and nothing else — an exemption is not a blank cheque", () => {
     for (const [name, action] of CASCADE_EXEMPT) {
       const edge = edges.find((e) => e.name === name);
       // ⚠ If this ever fails as "not found", the exemption has gone STALE — the

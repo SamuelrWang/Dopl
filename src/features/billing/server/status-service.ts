@@ -5,15 +5,17 @@ import { readPersonalBilling } from "./personal-wallet";
 import { getWorkspaceBilling } from "./workspace-billing";
 import {
   resolveBillingTarget,
+  type BillingTarget,
+  type CreditCaller,
+  type CreditsSummary,
+} from "./credits-service";
+import {
   summarizeCredits,
   // ⚠ THE SAME zeroes the consume path returns, from ONE definition. Two copies
   // of "the degraded reading" is how one surface comes to omit the `degraded`
   // stamp the other sets, and the stamp only works if every reader sees it.
   unmeteredSummary,
-  type BillingTarget,
-  type CreditCaller,
-  type CreditsSummary,
-} from "./credits-service";
+} from "./credits-meter";
 
 /**
  * `GET /api/billing/status` payload, assembled here so the route stays thin

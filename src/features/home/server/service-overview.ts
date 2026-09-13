@@ -17,7 +17,6 @@ import {
   countMetricInWindow,
   listContainerRoles,
   listOwnedPersonalContainerIds,
-  listOwnedPersonalWalletContainers,
   listRunningSessions,
   scanCreditEvents,
   scanMcpCalls,
@@ -34,7 +33,7 @@ import {
   tallyCreditPeople,
   tallyTools,
 } from "./overview-tally";
-import { resolveUsageOrigins } from "./overview-series-params";
+import { resolveUsageChannel } from "./overview-series-params";
 import * as repo from "./repository";
 import { HOME_CHANNEL_LIMIT } from "./service-reads";
 
@@ -213,18 +212,33 @@ export function bucketFor(range: HomeOverviewRange): HomeOverviewBucket {
 
 /* ----------------------------- the reads ------------------------------- */
 
-/** The fence, plus the display name of every channel in it. */
-async function resolveScope(
-  userId: string
-): Promise<{ ids: string[]; names: Map<string, string> }> {
+/**
+ * The fence, plus the display name of every channel in it — and, since rule B,
+ * the `channelId → containerId` map the credit rail keys by.
+ *
+ * ⚠ **THE MAP COSTS NO ROUND TRIP**: it is the read this function already makes,
+ * inverted. The credit ledger files a CHANNEL id (`overview-tally.ts ›
+ * tallyChannels`) while every home surface addresses a row by its CONTAINER, so
+ * one of the two has to be translated and this is where both are in hand.
+ */
+async function resolveScope(userId: string): Promise<{
+  ids: string[];
+  names: Map<string, string>;
+  channelContainers: Map<string, string>;
+}> {
   const containers = await repo.listLinkContainers(userId, HOME_CHANNEL_LIMIT);
   const ids = containers.map((container) => container.id);
   // ⚠ THE NAME COMES FROM THE CHANNEL, NOT THE CONTAINER. A container's `slug`
   // is plumbing; `channels.name` is what every home surface titles a row by.
   const channels = await repo.listContainerChannels(ids);
   const names = new Map<string, string>();
-  for (const id of ids) names.set(id, channels.get(id)?.name ?? "");
-  return { ids, names };
+  const channelContainers = new Map<string, string>();
+  for (const id of ids) {
+    const channel = channels.get(id);
+    names.set(id, channel?.name ?? "");
+    if (channel) channelContainers.set(channel.id, id);
+  }
+  return { ids, names, channelContainers };
 }
 
 /**
@@ -287,16 +301,14 @@ function filterWalletBurns(
  * The histogram's OWN credit read — the wallet fence above, plus the two
  * narrowings the Usage card's controls send (2026-09-13).
  *
- * ⚠ **IT DOES NOT SHARE `scanPersonalWalletBurns` BECAUSE IT NEEDS THE
- * CONTAINERS' `kind`**, which is what separates Desktop-agent spend from a
- * channel's (`overview-series-params.ts › resolveUsageOrigins`). Same one round
- * trip, one more column — `listOwnedPersonalWalletContainers`.
- *
- * ⚠ **AN EMPTY `originIds` SHORT-CIRCUITS WITHOUT A READ.** That is what a scope
- * the reader does not own resolves to (a channel they merely joined, whose burns
- * spend the OWNER's wallet), and the honest answer is a zero-filled month rather
- * than a refusal or a statement with an empty `in.()` PostgREST cannot express.
- *
+ * ⚠ **IT SHARES THE FENCE AND NOT THE FUNCTION**, because it narrows: the scope
+ * becomes a `channel_id` filter on the same statement
+ * (`overview-series-params.ts › resolveUsageChannel`).
+ * ⚠ **ONE ROUND TRIP MORE THAN THE SCAN ITSELF — the owned-container list, which
+ * only the LEGACY arm of the wallet predicate needs.** The superseded version read
+ * each container's `kind` as well, because the old scope vocabulary resolved
+ * "Desktop agent" to the reader's `kind='personal'` shelves; rule B's
+ * `channel_id IS NULL` answers that with no column and no guess.
  * ⚠ **THE HAUL IS BOUNDED AT BOTH ENDS** — see `scanCreditEvents`' `untilIso`:
  * the scan is newest-first and capped, so an unbounded haul anchored in a PAST
  * month would return this month's rows and bin the plotted month to zeroes with
@@ -306,18 +318,16 @@ async function scanUsageHistogramBurns(
   userId: string,
   scope: string | null,
   windows: HomeWindow[]
-): Promise<Scan<CreditEventScanRow> | null> {
-  const containers = await listOwnedPersonalWalletContainers(userId);
-  const originIds = resolveUsageOrigins(scope, containers);
-  if (originIds && originIds.length === 0) return null;
-  const ownedIds = containers.map((container) => container.id);
+): Promise<Scan<CreditEventScanRow>> {
+  const ownedIds = await listOwnedPersonalContainerIds(userId);
+  const channel = resolveUsageChannel(scope);
   const scan = await scanCreditEvents(
     userId,
     ownedIds,
     windows[0]?.startIso ?? "",
     {
       untilIso: windows[windows.length - 1]?.endIso,
-      ...(originIds ? { originIds } : {}),
+      ...(channel ? { channel } : {}),
     }
   );
   return filterWalletBurns(userId, ownedIds, scan);
@@ -375,17 +385,11 @@ export async function getHomeOverviewSeries(
       opts.scope ?? null,
       windows
     );
-    // ⚠ A SCOPE THE READER DOES NOT OWN READS AS A ZERO-FILLED MONTH, NOT AS A
-    // REFUSAL — see {@link scanUsageHistogramBurns}. The axis is still the frame.
-    if (!scan) {
-      return {
-        range,
-        metric,
-        bucket,
-        points: windows.map((win) => ({ at: win.startIso, count: 0 })),
-        truncated: false,
-      };
-    }
+    // ⚠ **A SCOPE WITH NO ROWS READS AS A ZERO-FILLED MONTH, NOT AS A REFUSAL,
+    // AND SINCE 2026-09-13 THAT NEEDS NO BRANCH.** A channel the reader merely
+    // JOINED spends the OWNER's wallet, so the wallet fence simply returns none of
+    // its rows; the superseded version short-circuited an "unowned container" to
+    // `null` here and zero-filled by hand.
     // 🔒 **ALWAYS ZERO-FILLED, NEVER AN EMPTY ARRAY (Samuel, 2026-09-01: he
     // wants to SEE the month).** This arm answered `[]` on an empty ledger so
     // the card could say "nothing yet" instead of drawing a flat month — an
@@ -428,7 +432,7 @@ export async function getHomeOverview(
   range: HomeOverviewRange,
   now: Date = new Date()
 ): Promise<HomeOverview> {
-  const { ids, names } = await resolveScope(userId);
+  const { ids, names, channelContainers } = await resolveScope(userId);
   const since = rangeSince(range, now);
 
   const [credits, calls, msgChannels, roles, liveAgents] = await Promise.all([
@@ -444,7 +448,12 @@ export async function getHomeOverview(
   return {
     range,
     since,
-    channels: tallyChannels(names, credits.rows, msgChannels.rows),
+    channels: tallyChannels(
+      names,
+      channelContainers,
+      credits.rows,
+      msgChannels.rows
+    ),
     people,
     tools: tallyTools(calls.rows),
     agents: mapAgents(liveAgents.rows, names, userId),

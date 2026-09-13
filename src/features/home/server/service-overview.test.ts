@@ -52,6 +52,10 @@ const VIEWER = "u1";
 /** A standard workspace the reader also works in. Its burns are SEAT-wallet
  *  burns and belong to that workspace's own Overview, never to /home. */
 const STANDARD_WS = "ws-standard";
+/** The single channel inside each container — what the ledger files, and what
+ *  `resolveScope`'s `channelContainers` maps back. */
+const CHAN_A = "chan-a";
+const CHAN_B = "chan-b";
 /** The containers the reader OWNS of kind personal/link — what
  *  `repository-overview.ts › listOwnedPersonalContainerIds` answers. */
 const OWNED = new Set([WS_A, "personal-container"]);
@@ -60,12 +64,14 @@ function call(over: Partial<McpCallScanRow> = {}): McpCallScanRow {
   return { workspace_id: WS_A, user_id: "u1", tool: "kb", op: "read_file", ...over };
 }
 
-/** One `credit_usage_events` row, as the ledger scan hands it over. ⚠ The
- *  channel dimension is `origin_workspace_id` — never `workspace_id`, and never
- *  the payer, which has been a PERSON (`payer_user_id`) since 2026-09-07. */
+/** One `credit_usage_events` row, as the ledger scan hands it over. ⚠ The channel
+ *  dimension is `channel_id` since rule B (2026-09-13) — never
+ *  `origin_workspace_id`, which is where the call was ADDRESSED, and never
+ *  `workspace_id`; the payer has been a PERSON since 2026-09-07. */
 function burn(over: Partial<CreditEventScanRow> = {}): CreditEventScanRow {
   return {
     origin_workspace_id: WS_A,
+    channel_id: CHAN_A,
     user_id: "u1",
     // ⚠ THE v2.1 SHAPE IS THE DEFAULT (`wallet` + a payer) because that is what
     // every row written since 2026-09-07 carries; the legacy shape is spelled out
@@ -399,15 +405,19 @@ describe("tallyChannels", () => {
     [WS_A, "Q3 Fundraise"],
     [WS_B, "Priya Shah"],
   ]);
+  /* ⚠ `channelId → containerId`, from the read `resolveScope` already makes. The
+     rail keys on the BILLED CHANNEL since rule B and renders by CONTAINER, so one
+     of the two has to be translated. */
+  const containers = new Map([
+    [CHAN_A, WS_A],
+    [CHAN_B, WS_B],
+  ]);
 
-  it("sums credits and counts messages per container, descending by credits", () => {
+  it("sums credits and counts messages per channel, descending by credits", () => {
     const rows = tallyChannels(
       names,
-      [
-        burn({ origin_workspace_id: WS_B }),
-        burn({ origin_workspace_id: WS_B }),
-        burn(),
-      ],
+      containers,
+      [burn({ channel_id: CHAN_B }), burn({ channel_id: CHAN_B }), burn()],
       [{ workspace_id: WS_A }, { workspace_id: WS_A }]
     );
     expect(rows).toEqual([
@@ -422,25 +432,38 @@ describe("tallyChannels", () => {
    * them" into an empty list that reads as a failed read.
    */
   it("gives every channel in the fence a row, including silent ones", () => {
-    const rows = tallyChannels(names, [], []);
+    const rows = tallyChannels(names, containers, [], []);
     expect(rows.map((row) => row.workspaceId).sort()).toEqual([WS_A, WS_B]);
     expect(rows.every((row) => row.credits === 0 && row.messages === 0)).toBe(true);
   });
 
-  it("ignores a burn for a container outside the fence", () => {
-    const rows = tallyChannels(
-      names,
-      [burn({ origin_workspace_id: "ws-foreign" })],
-      []
-    );
+  it("ignores a burn for a channel outside the fence", () => {
+    const rows = tallyChannels(names, containers, [burn({ channel_id: "chan-x" })], []);
     expect(rows.every((row) => row.credits === 0)).toBe(true);
   });
 
-  /** ⚠ A burn whose container was deleted has no lane to land in — it is
-   *  dropped from the per-CHANNEL rail (and kept in the per-PERSON one). */
-  it("ignores a burn whose container is gone", () => {
-    const rows = tallyChannels(names, [burn({ origin_workspace_id: null })], []);
+  /** ⚠ A burn with NO calling channel — the Desktop agent, and every row older
+   *  than the column — has no lane to land in: it is dropped from the per-CHANNEL
+   *  rail and kept in the per-PERSON one and in the wallet. */
+  it("ignores a burn with no channel", () => {
+    const rows = tallyChannels(names, containers, [burn({ channel_id: null })], []);
     expect(rows.every((row) => row.credits === 0)).toBe(true);
+  });
+
+  /**
+   * 🔒 **RULE B's CASE: A BURN THE HOME CHANNEL'S AGENT MADE IN ANOTHER
+   * CONTAINER STILL LANDS ON THAT CHANNEL'S ROW.** ⚠ The superseded rail keyed on
+   * `origin_workspace_id` and DROPPED this row, which is why the by-channel
+   * breakdown could not sum to the wallet.
+   */
+  it("credits the CALLING channel even when the call was addressed elsewhere", () => {
+    const rows = tallyChannels(
+      names,
+      containers,
+      [burn({ channel_id: CHAN_B, origin_workspace_id: "ws-standard-1" })],
+      []
+    );
+    expect(rows.find((row) => row.workspaceId === WS_B)?.credits).toBe(1);
   });
 });
 

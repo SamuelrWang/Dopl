@@ -1,0 +1,114 @@
+-- CREDIT ATTRIBUTION BY CHANNEL — `credit_usage_events.channel_id` (2026-09-13,
+-- Samuel's RULE B; spec `docs/specs/credit-model-v2.md` §"Attribution (rule B)").
+--
+-- ⚠ **WRITTEN, NOT APPLIED. REPLAY HAS NOT RUN** (Docker is unavailable on this
+-- machine, so `supabase db reset` cannot start). This directory's standing gate
+-- is recorded rather than glossed.
+--
+-- ⚠ **DEPLOY STATE IS A MEASUREMENT, NOT A CLAIM.** Re-derive with
+-- `supabase migration list` (or the MCP `list_migrations`) and **JOIN ON THE
+-- NAME**, never on the filename prefix: `20260823150000` applied as
+-- `20260823205007`, `credit_usage_events` as `20260901193049`
+-- (INVARIANTS §12, F-304). "Is `20261003120000` applied?" is not a question the
+-- version column can answer.
+--
+-- ⚠ **APPLY ORDER: AFTER `credit_wallets` (`20260930120000`)**, which is the file
+-- that gives this table its `wallet` and `payer_user_id` columns — the two this
+-- file's index sits in front of. Filename order decides, as always; every other
+-- pending file may go before it. ADDITIVE ONLY: one NULLABLE column and one
+-- index. It edits no applied file, drops nothing, and backfills nothing.
+--
+-- ⚠ **DEPLOY ORDER: THIS FILE FIRST, THE SERVER SECOND, AND THE FAILURE IS
+-- SILENT.** `billing/server/credit-ledger.ts` names `channel_id` on every insert;
+-- against a database without the column PostgREST answers `42703`, and that
+-- writer is FIRE-AND-FORGET, so the whole attribution ledger goes quietly empty
+-- while every credit is still charged correctly. Apply, verify by NAME, deploy.
+--
+-- ══ THE RULING, CLOSE PARAPHRASE (Samuel, 2026-09-13) ══════════════════════
+--
+--   > "The wallet needs to match the histogram. That's the whole point."
+--   >
+--   > RULE B: **charge the CALLING CHANNEL's container; with no calling
+--   > channel, charge the RESOURCE's container.** A home-channel agent charges
+--   > the channel owner's PERSONAL wallet, whatever it touches (owner-pays for
+--   > members and guests in your home channels). A workspace-channel agent
+--   > charges the CALLER'S SEAT in that workspace, whatever it touches — a
+--   > member burning their own fixed seat allocation on personal resources is
+--   > bounded and harms nobody else. A channel-less call (Claude Desktop or
+--   > Claude Code MCP connections, app clicks) charges the RESOURCE's container
+--   > as it does today, and is filed as "Desktop agent". A SUB-AGENT is filed
+--   > under the channel ITS OWN session lives in.
+--
+-- ══ WHY A COLUMN AND NOT A JOIN ════════════════════════════════════════════
+--
+-- Until today the ledger's channel dimension was `origin_workspace_id` — the
+-- ADDRESSED CONTAINER — on the argument that a container holds exactly one
+-- channel. Rule B breaks that identity in the only way that matters: the channel
+-- whose wallet PAYS and the container that was ADDRESSED are now different rows
+-- whenever an agent reaches across (a home-channel agent reading a workspace KB
+-- pays a personal wallet while addressing a `kind='standard'` workspace). Read
+-- through the old dimension, that burn is in NEITHER "a channel" nor "Desktop
+-- agent" — so the by-channel breakdown stopped summing to the wallet, which is
+-- exactly the disagreement Samuel's sentence rules out. The channel has to be
+-- STAMPED at write time, because it is a fact about the CALLER's session and
+-- nothing in the row can recover it afterwards.
+--
+-- ⚠ **NULL IS A VALUE WITH A MEANING: "no calling channel" = Desktop agent.**
+-- It is what a channel-less MCP connection and an app click write, and it is what
+-- every row written before this file carries — so **legacy spend reads as Desktop
+-- agent, and the deploy-day backfill cannot recover a channel for it** (the
+-- session that made the call is long gone). Accepted, in as many words, rather
+-- than guessed at from the origin container.
+--
+-- ⚠ **`ON DELETE SET NULL`, NEVER CASCADE** — the same rule `user_id` and
+-- `payer_user_id` follow: history outlives the thing it points at. A deleted
+-- channel's spend really happened and must still total into the wallet; it falls
+-- into Desktop agent, which is the honest bucket for "no placeable channel".
+
+ALTER TABLE public.credit_usage_events
+  ADD COLUMN IF NOT EXISTS channel_id UUID REFERENCES public.channels(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.credit_usage_events.channel_id IS
+  'RULE B (2026-09-13): the CALLING CHANNEL whose container was charged, or NULL for a channel-less call ("Desktop agent"). NOT derivable from origin_workspace_id: under rule B the charged channel and the addressed container differ whenever an agent reaches across containers. Every row written before 20261003120000 is NULL and cannot be backfilled.';
+
+-- ══ THE INDEX — MEASURED AGAINST THE ONE SCAN THAT READS THIS COLUMN ═══════
+--
+-- `home/server/repository-overview.ts › scanCreditEvents` is the only reader.
+-- Its statement, as that function builds it:
+--
+--   WHERE ( (payer_user_id = $reader AND wallet = 'personal')
+--           OR (wallet = 'workspace' AND origin_workspace_id IN (…)) )
+--     AND created_at >= $since  [AND created_at < $until]
+--     [AND channel_id = $channel | AND channel_id IS NULL]
+--   ORDER BY created_at DESC LIMIT 20000        -- HOME_SCAN_LIMIT
+--
+-- So the columns that matter are, in this order: `payer_user_id` (equality),
+-- `wallet` (equality), `channel_id` (equality, or IS NULL — a btree serves both),
+-- then `created_at` as a RANGE and as the SORT. That is exactly the index below.
+--
+-- ⚠ **`period_start` IS DELIBERATELY NOT IN IT**, though the wave that added
+-- `payer_user_id` indexed that pair: the histogram never filters or orders by
+-- `period_start` — it is the COUNTER's key, stamped on the row for the meter's
+-- benefit — and a column the predicate does not mention, sitting between two it
+-- does, stops the scan using anything after it.
+-- ⚠ `credit_usage_events_payer_period_idx` (`20260930120000` §4) STAYS: it serves
+-- the payer+period read and the `ON DELETE SET NULL` scan over `payer_user_id`.
+-- ⚠ An UNNARROWED haul (the "All channels" default, which sends no param) uses
+-- this index by its `(payer_user_id, wallet)` prefix and sorts; the narrowed one
+-- — the only shape this file exists for — reads it ordered end to end.
+CREATE INDEX IF NOT EXISTS credit_usage_events_payer_wallet_channel_idx
+  ON public.credit_usage_events (payer_user_id, wallet, channel_id, created_at DESC);
+
+-- ══ ROLLBACK (PROSE — applying this file must never run it) ════════════════
+--
+-- Every object this file creates, newest first. ⚠ Dropping the COLUMN destroys
+-- the attribution, not the credits: the wallet counters are untouched by this
+-- file, so a rollback loses the by-channel breakdown and no balance.
+--
+--   DROP INDEX IF EXISTS public.credit_usage_events_payer_wallet_channel_idx;
+--   ALTER TABLE public.credit_usage_events
+--     DROP COLUMN IF EXISTS channel_id;
+--
+-- ⚠ **A COMMENT IS NOT A FENCE.** What stops a rolled-back server writing the
+-- column is that its code does not name it, exactly as `20260930120000` §5 says
+-- of the retired pooled counter.

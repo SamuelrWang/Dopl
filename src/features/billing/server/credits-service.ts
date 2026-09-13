@@ -6,48 +6,49 @@ import {
 } from "@/features/workspaces/types";
 import {
   CREDITS_PER_MCP_CALL,
-  personalCreditPeriod,
-  resolveCreditPeriod,
   seatCreditsForPlan,
   type CreditPeriod,
   type WalletKind,
 } from "../credits";
 import type { PlanId } from "../plans";
-import {
-  consumeMemberCredits,
-  consumeUserCredits,
-  getMemberCreditsUsed,
-  getUserCreditsUsed,
-} from "./credit-wallets";
+import { consumeMemberCredits, consumeUserCredits } from "./credit-wallets";
+import { resolveCallingChannel } from "./channel-attribution";
 import { recordCreditUsageEvent } from "./credit-ledger";
+import { creditPeriodFor, unmetered } from "./credits-meter";
 import { entitledPlanFor, upgradeUrl } from "./entitlements";
 import {
   personalWalletTier,
   readPersonalBilling,
   type PersonalWalletTier,
 } from "./personal-wallet";
-import {
-  countActiveMembers,
-  getWorkspaceBilling,
-  type WorkspaceBillingRow,
-} from "./workspace-billing";
+import { countActiveMembers, getWorkspaceBilling } from "./workspace-billing";
 
 /**
  * MCP credits — business logic between route and repository. NUMBERS live in
  * `../credits.ts` (the one retune spot); this owns only the two questions that
  * need the database: "may this call proceed" and "how much is left".
  *
- * 🔒 **TWO WALLETS, AND THE ADDRESSED CONTAINER'S KIND PICKS ONE (Samuel,
- * 2026-09-07).** A standard workspace charges the CALLER'S OWN SEAT at the
- * workspace's entitled per-member allowance; a home-space container charges the
- * container OWNER'S PERSONAL wallet. Every path implements the same table:
+ * 🔒 **TWO WALLETS, AND A CONTAINER'S KIND PICKS ONE (Samuel, 2026-09-07).** A
+ * standard workspace charges the CALLER'S OWN SEAT at the workspace's entitled
+ * per-member allowance; a home-space container charges the container OWNER'S
+ * PERSONAL wallet. Every path implements the same table:
  *
- *   | addressed kind | wallet     | payer                | limit                       | period                |
+ *   | charged kind   | wallet     | payer                | limit                       | period                |
  *   |----------------|------------|----------------------|-----------------------------|-----------------------|
  *   | `standard`     | `seat`     | the caller           | `seatCreditsForPlan(…)`     | `resolveCreditPeriod` |
  *   | `personal`     | `personal` | the caller (= owner) | `personalCreditsForPlan(…)` | `resolveCreditPeriod` |
  *   | `link`         | `personal` | the container OWNER  | `personalCreditsForPlan(…)` | `resolveCreditPeriod` |
  *   | no active owner| —          | —                    | unmetered, logged           | —                     |
+ *
+ * 🔒 **AND *WHICH* CONTAINER IS RULE B SINCE 2026-09-13 (Samuel: "the wallet
+ * needs to match the histogram — that's the whole point").** The table above used
+ * to be keyed on the ADDRESSED container; it is keyed on the CALLING CHANNEL's
+ * container now, and falls back to the addressed resource's container only when
+ * there is no calling channel. So a home-channel agent spends the channel
+ * owner's personal wallet WHATEVER IT TOUCHES, and a workspace-channel agent
+ * spends the caller's seat in that workspace whatever it touches. The channel
+ * comes from `./channel-attribution.ts`, which also carries the fence that makes
+ * a forgeable header safe to bill from.
  *
  * ⚠ The plan is the ENTITLEMENT VERDICT, never `workspace_billing.plan` — a
  * solo sub that grew a second member is degraded to free by
@@ -69,8 +70,20 @@ import {
  *  there is no wallet to move without knowing who called. */
 export interface CreditCaller {
   userId: string;
-  /** The TARGET workspace's kind. Absent = standard (column not yet applied). */
+  /** The ADDRESSED workspace's kind. Absent = standard (column not yet applied). */
   workspaceKind?: WorkspaceKind;
+  /**
+   * 🔒 **THE CALLING CHANNEL — RULE B's INPUT (2026-09-13).** The channel whose
+   * container is charged, from `X-Dopl-Session-Id`'s `<channelId>:<tail>` head,
+   * which the desktop stamps on every session it spawns
+   * (`app/api/mcp/credits/consume/route.ts` reads it; `./channel-attribution.ts`
+   * fences it). ⚠ **ABSENT OR `null` IS ORDINARY AND IS NEVER A REFUSAL** — a
+   * Claude Desktop or Claude Code MCP connection, an app click and an older
+   * desktop build all look like this, and they charge the RESOURCE's container as
+   * they always have. A SUB-AGENT sends its OWN session's key, which is why it is
+   * filed under its own channel with no extra rule.
+   */
+  channelId?: string | null;
 }
 
 /**
@@ -89,56 +102,114 @@ export type UnmeteredReason = "container-has-no-active-owner";
 /**
  * Which counter a burn moves, and whose allowance that is.
  *
- * ⚠ `workspaceId` IS ALWAYS THE ADDRESSED CONTAINER — on both metered arms and
- * on the unmetered one. It is no longer "the workspace that pays": on the seat
- * arm the workspace is half the counter key, and on the personal arm it is only
- * the origin the ledger records. The PAYER is always `payerUserId`.
+ * ⚠ **`workspaceId` IS THE CHARGED CONTAINER, WHICH IS THE CALLING CHANNEL'S
+ * SINCE 2026-09-13 AND THE ADDRESSED ONE ONLY WITHOUT A CHANNEL (rule B).** It
+ * has never been "the workspace that pays" — on the seat arm it is half the
+ * counter key, on the personal arm it only names where the wallet lives. The
+ * PAYER is always `payerUserId`. ⚠ The LEDGER still records the ADDRESSED
+ * container as the row's origin; the two differ exactly when an agent reaches
+ * across containers, which is what `channelId` exists to make readable.
  */
 export type BillingTarget =
-  | { wallet: "seat"; workspaceId: string; payerUserId: string }
-  | { wallet: "personal"; workspaceId: string; payerUserId: string }
+  | {
+      wallet: "seat";
+      workspaceId: string;
+      payerUserId: string;
+      channelId: string | null;
+    }
+  | {
+      wallet: "personal";
+      workspaceId: string;
+      payerUserId: string;
+      channelId: string | null;
+      /**
+       * The container to read the PERSONAL billing row from, or `null` to reach
+       * it through the payer. Non-null ONLY for a `kind='personal'` container,
+       * which IS its own billing row (`personal-wallet.ts › readPersonalBilling`
+       * refuses any other id for a reason: a link container has no row, so
+       * passing its id reports every Pro operator as free).
+       */
+      personalBillingContainerId: string | null;
+    }
   | {
       wallet: null;
       workspaceId: string;
       payerUserId: null;
+      channelId: string | null;
       reason: UnmeteredReason;
     };
 
 /**
- * Which wallet a charge addressed at `workspaceId` lands on, and whose.
+ * WHICH CONTAINER PAYS, WHICH WALLET THAT IS, AND WHOSE.
+ *
+ * 🔒 **RULE B (Samuel, 2026-09-13): THE CALLING CHANNEL'S CONTAINER PAYS; WITH NO
+ * CALLING CHANNEL, THE RESOURCE'S DOES.** The channel resolution and the fence
+ * that makes a forgeable header safe to bill from are
+ * `./channel-attribution.ts`; the kind→wallet half is {@link containerTarget}.
+ * ⚠ The superseded rule charged the ADDRESSED container, so an agent reaching
+ * across containers billed whichever wallet its tool argument happened to name —
+ * which is why a wallet's by-channel breakdown could not sum to the wallet.
  *
  * 🔒 **A HOME-SPACE BURN IS CHARGED TO THE CONTAINER'S OWNER, WHOEVER MADE THE
- * CALL** (Samuel, 2026-08-26: "charge MCP calls from a guest to the user"). That
- * ruling is unchanged; only the wallet moved. A `link` container is a
+ * CALL** (Samuel, 2026-08-26: "charge MCP calls from a guest to the user"), and
+ * rule B widens that rather than touching it: owner-pays for members and guests
+ * in your home channels, wherever their tool calls land. A `link` container is a
  * relationship and a `personal` container is a shelf; neither is a tenant and
- * neither carries a plan. The person who minted the container invited the
- * traffic, so a peer's tool calls spend the OWNER's personal allowance.
+ * neither carries a plan.
  *
- * ⚠ **THIS SUPERSEDES THE REROUTE-TO-A-STANDARD-WORKSPACE RULE (2026-09-07,
- * Samuel's per-seat + personal-wallet ruling).** Until this wave a container
- * burn was charged to the owner's SOLE owned standard workspace, and refused
- * (unmetered + logged) when they owned none or owned two —
- * `findSoleOwnedStandardWorkspace`, with its two refusal reasons. Home spend is
- * its own wallet now, so that lookup is off the credit path entirely: an owner
- * with no workspace is billed normally, and an owner with five has nothing to
- * disambiguate. The function still exists for the Stripe webhook's grandfather
- * path, which asks a genuinely different question.
- *
- * ⚠ **`kind='personal'` SKIPS THE OWNER LOOKUP, AND THAT IS A ROUND TRIP, NOT
- * A SHORTCUT.** A personal container has exactly one member, its owner
- * (`20260920120000` §3), and only that owner can be authorized into it — so the
- * caller IS the payer, provably, and asking the database would be paying for an
- * answer we already hold on the hottest path in the product.
+ * ⚠ The 2026-09-07 reroute onto the owner's sole owned STANDARD workspace
+ * (`findSoleOwnedStandardWorkspace`, with its two refusal reasons) left this path
+ * with the personal wallet and is not coming back — INVARIANTS §4's BILLING-ONLY
+ * bullet has what it still answers.
  */
 export async function resolveBillingTarget(
   workspaceId: string,
   caller: CreditCaller
 ): Promise<BillingTarget> {
-  if (isStandardWorkspace({ kind: caller.workspaceKind })) {
-    return { wallet: "seat", workspaceId, payerUserId: caller.userId };
+  const channel = await resolveCallingChannel(caller, workspaceId);
+  return channel
+    ? containerTarget(
+        channel.workspaceId,
+        channel.kind,
+        caller.userId,
+        channel.channelId
+      )
+    : containerTarget(workspaceId, caller.workspaceKind, caller.userId, null);
+}
+
+/**
+ * The table in this file's header, for ONE container — the whole of the
+ * kind→wallet decision, reached from both of rule B's arms so neither can drift.
+ *
+ * ⚠ **`kind='personal'` SKIPS THE OWNER LOOKUP, AND THAT IS A ROUND TRIP SAVED,
+ * NOT A CHECK SKIPPED.** A personal container has exactly one member, its owner
+ * (`20260920120000` §3), and only that owner can be authorized into it — so the
+ * caller IS the payer, provably. ⚠ Under rule B the caller is the payer on that
+ * arm only because a `kind='personal'` container holds no channel: the arm is
+ * reached with the ADDRESSED container, never with a channel's.
+ *
+ * ⚠ `kind` IS WIDE (`string`) because the cross-container arm reads it off a row
+ * rather than off the auth context: a value the enum does not carry must land on
+ * `isStandardWorkspace`'s NEGATIVE side and be treated as a home-space container,
+ * never crash and never be read as a workspace.
+ */
+async function containerTarget(
+  workspaceId: string,
+  kind: WorkspaceKind | string | undefined,
+  userId: string,
+  channelId: string | null
+): Promise<BillingTarget> {
+  if (isStandardWorkspace({ kind: kind as WorkspaceKind | undefined })) {
+    return { wallet: "seat", workspaceId, payerUserId: userId, channelId };
   }
-  if (caller.workspaceKind === "personal") {
-    return { wallet: "personal", workspaceId, payerUserId: caller.userId };
+  if (kind === "personal") {
+    return {
+      wallet: "personal",
+      workspaceId,
+      payerUserId: userId,
+      channelId,
+      personalBillingContainerId: workspaceId,
+    };
   }
   const ownerUserId = await findActiveOwnerUserId(workspaceId);
   if (!ownerUserId) {
@@ -146,10 +217,17 @@ export async function resolveBillingTarget(
       wallet: null,
       workspaceId,
       payerUserId: null,
+      channelId,
       reason: "container-has-no-active-owner",
     };
   }
-  return { wallet: "personal", workspaceId, payerUserId: ownerUserId };
+  return {
+    wallet: "personal",
+    workspaceId,
+    payerUserId: ownerUserId,
+    channelId,
+    personalBillingContainerId: null,
+  };
 }
 
 /** What a wallet's credit meter says right now. */
@@ -176,33 +254,6 @@ export interface CreditConsumeResult extends CreditsSummary {
 }
 
 /**
- * Credit window for a billing row (null row = calendar month). SEAT wallets
- * only — not because the rule differs, but because the personal wallet reaches
- * the SAME `resolveCreditPeriod` through `./personal-wallet.ts ›
- * personalWalletTier`, which resolves its verdict and its window together.
- * ⚠ THE SUPERSEDED LINE SAID "a personal wallet has no subscription to anchor
- * to" — true only while that wallet had one tier (2026-09-07). A `pro` wallet
- * has a Stripe anchor and uses it.
- *
- * ⚠ `entitledPlan` is the VERDICT, not `billing.plan`: a free verdict ignores
- * the subscription anchor outright, which un-sticks a workspace canceled
- * mid-period (`../credits.ts › resolveCreditPeriod`). Both callers —
- * enforcement and the settings meter — must pass the SAME verdict.
- */
-export function creditPeriodFor(
-  billing: WorkspaceBillingRow | null,
-  entitledPlan: PlanId
-): CreditPeriod {
-  return resolveCreditPeriod(
-    {
-      currentPeriodStart: billing?.currentPeriodStart ?? null,
-      currentPeriodEnd: billing?.currentPeriodEnd ?? null,
-    },
-    entitledPlan
-  );
-}
-
-/**
  * Where an exhausted wallet is sent, or `""` when there is nothing to buy.
  *
  * ⚠ **A FREE VERDICT ON EITHER WALLET HAS AN OFFER SINCE 2026-09-08, AND THEY
@@ -225,57 +276,6 @@ function upgradeUrlFor(wallet: WalletKind | null, plan: PlanId | null): string {
 }
 
 /**
- * Read-only meter for ONE wallet — the caller's own. Takes the resolved target
- * plus the billing row and member count rather than re-reading them, because
- * its one caller has just paid for those reads (`getWorkspaceEntitlements`
- * alone is three queries).
- *
- * ⚠ **ON THE PERSONAL ARM `billing` IS THE PAYER'S PERSONAL ROW, NOT THE
- * ADDRESSED CONTAINER'S** (2026-09-08). Those are the same row when the caller
- * addressed their own personal container and DIFFERENT rows inside a link
- * container, where the addressed container has no billing row at all. Handing
- * this the link container's `null` would meter every Pro operator's home space
- * at the free 500 while enforcement charged them against 5,000 — a meter that
- * cannot explain the refusal, which is the exact failure the "same verdict on
- * both sides" rule exists to prevent. `status-service.ts › callerCredits`
- * resolves it through `personal-wallet.ts › readPersonalBilling`.
- */
-export async function summarizeCredits(
-  target: BillingTarget,
-  billing: WorkspaceBillingRow | null,
-  memberCount: number
-): Promise<CreditsSummary> {
-  if (target.wallet === null) return unmeteredSummary();
-  if (target.wallet === "personal") {
-    const tier = personalWalletTier(billing);
-    const used = await getUserCreditsUsed(target.payerUserId, tier.periodStart);
-    return {
-      periodStart: tier.periodStart,
-      periodEnd: tier.periodEnd,
-      wallet: "personal",
-      used,
-      limit: tier.limit,
-      remaining: Math.max(0, tier.limit - used),
-    };
-  }
-  const plan = entitledPlanFor(billing, memberCount);
-  const period = creditPeriodFor(billing, plan);
-  const limit = seatCreditsForPlan(plan);
-  const used = await getMemberCreditsUsed(
-    target.workspaceId,
-    target.payerUserId,
-    period.periodStart
-  );
-  return {
-    ...period,
-    wallet: "seat",
-    used,
-    limit,
-    remaining: Math.max(0, limit - used),
-  };
-}
-
-/**
  * Charge one MCP tool call to the wallet the addressed container names, then
  * spend `CREDITS_PER_MCP_CALL` through that wallet's atomic upsert-CAS RPC.
  * `allowed: false` = out of credits this period; data intact, next period rolls
@@ -286,6 +286,12 @@ export async function summarizeCredits(
  *
  * ⚠ **THE ROUND-TRIP BUDGET IS PER WALLET, AND EVERY NUMBER IS PINNED BY MOCK
  * CALL COUNTS** in `credits-service.test.ts`:
+ * ⚠ **RULE B ADDS ITS OWN READS ON TOP, AND THEY ARE ON `./channel-attribution.ts`'s
+ * BUDGET, NOT THIS ONE: 0 with no calling channel, +1 for a channel in the
+ * addressed container, +2 when the call reaches across containers.** A
+ * channel-less caller — every external client and every app click — pays exactly
+ * what it paid before rule B.
+ *
  *   * SEAT — billing row + member count (concurrent), then the RPC: **3**.
  *   * `personal` — the container's own billing row, then the RPC: **2**. The
  *     owner IS the caller, so no owner lookup, and the container IS the billing
@@ -325,10 +331,13 @@ export async function consumeMcpCredits(
     target.wallet === "personal"
       ? await spendPersonal(
           target.payerUserId,
-          // ⚠ THE ADDRESSED CONTAINER IS THE BILLING ROW **ONLY** WHEN IT IS
+          // ⚠ THE CHARGED CONTAINER IS THE BILLING ROW **ONLY** WHEN IT IS
           // `kind='personal'`. A link container has none, so passing its id
           // would read nothing and bill a Pro operator at the free tier.
-          caller.workspaceKind === "personal" ? target.workspaceId : null
+          // ⚠ IT IS THE TARGET'S FIELD, NOT `caller.workspaceKind`, SINCE RULE B:
+          // under a calling channel the charged container is the CHANNEL's, and
+          // the addressed container's kind says nothing about it.
+          target.personalBillingContainerId
         )
       : await spendSeat(target.workspaceId, target.payerUserId);
 
@@ -350,6 +359,10 @@ export async function consumeMcpCredits(
       userId: caller.userId,
       wallet: target.wallet,
       payerUserId: target.payerUserId,
+      // 🔒 RULE B's ATTRIBUTION: the CALLING CHANNEL, or null for "no channel"
+      // (Desktop agent). ⚠ It is NOT derivable from the two workspace columns —
+      // that is the whole reason the column exists.
+      channelId: target.channelId,
       amount: CREDITS_PER_MCP_CALL,
       periodStart: spend.period.periodStart,
     });
@@ -382,17 +395,17 @@ interface WalletSpend {
  * Personal wallet: the payer's own billing row decides the tier, the tier
  * decides both the window and the limit, then the RPC. TWO round trips.
  *
- * `addressedPersonalContainerId` is the addressed container's id when the
- * caller addressed their OWN personal container (it IS the billing row, so the
- * owner → container hop is skipped) and `null` inside a link container.
+ * `personalBillingContainerId` is the CHARGED container's id when that container
+ * is `kind='personal'` (it IS the billing row, so the owner → container hop is
+ * skipped) and `null` for a link container, which carries no billing row.
  */
 async function spendPersonal(
   payerUserId: string,
-  addressedPersonalContainerId: string | null
+  personalBillingContainerId: string | null
 ): Promise<WalletSpend> {
   const billing = await readPersonalBilling(
     payerUserId,
-    addressedPersonalContainerId
+    personalBillingContainerId
   );
   const tier: PersonalWalletTier = personalWalletTier(billing);
   const outcome = await consumeUserCredits(
@@ -430,61 +443,4 @@ async function spendSeat(
     limit
   );
   return { period, limit, plan, outcome };
-}
-
-/**
- * A burn with no wallet to charge: a container with no active owner row.
- *
- * ⚠ FAIL OPEN, AND IT IS A RULING RATHER THAN AN OVERSIGHT (Samuel, 2026-08-26,
- * on lowering the consume floor): refusing would brick a relationship on the
- * strength of the OTHER party's billing — a guest doing legitimate work in a
- * channel they were invited into would see "out of credits" for an allowance
- * that is not theirs and that they cannot buy. The honesty requirement is that
- * it is LOGGED, not silent: `consumeMcpCredits` warns with the reason before
- * returning this. Zeroed counters, because nothing was measured.
- *
- * ⚠ **THE BRANCH IS NEARLY UNREACHABLE AND STAYS ANYWAY.**
- * `20260720184806_workspace_last_active_owner_guard.sql` stops a workspace
- * losing its last active owner, so this is the answer to a state the database
- * says cannot exist — which is exactly the kind of branch that must not throw.
- *
- * ⚠ `degraded: true` IS THE SAME STAMP THE ROUTE'S `failOpen()` PUTS ON ITS
- * OWN ZEROES, and it must be: both answers are "allowed, and these numbers mean
- * nothing", and a reader that can only recognise one of them puts a made-up
- * `used: 0` on the settings meter as if it were measured.
- *
- * ⚠ `upgradeUrl` IS EMPTY, MATCHING `failOpen()` BYTE FOR BYTE (2026-09-07). It
- * carried the billing link until this wave, which pointed a caller at a
- * checkout for a refusal that never happened — and the two degraded answers
- * differing at all is what makes one reader treat them differently.
- */
-export function unmetered(): UnmeteredResult {
-  return {
-    ...personalCreditPeriod(),
-    wallet: null,
-    allowed: true,
-    used: 0,
-    limit: 0,
-    remaining: 0,
-    upgradeUrl: "",
-    degraded: true,
-  };
-}
-
-/** A `CreditConsumeResult` whose counters were never measured. */
-export type UnmeteredResult = CreditConsumeResult & { degraded: true };
-
-/**
- * `unmetered()` narrowed to the METER's fields — the same zeroes, minus the
- * consume decision.
- *
- * ⚠ ONE DEFINITION, TWO CALLERS (`summarizeCredits` and `status-service.ts`).
- * Two hand-written copies of "the degraded reading" is how one surface comes to
- * report a `degraded` stamp the other omits, and the whole point of the stamp is
- * that one reader recognises every degraded answer.
- */
-export function unmeteredSummary(): CreditsSummary {
-  const { periodStart, periodEnd, wallet, used, limit, remaining, degraded } =
-    unmetered();
-  return { periodStart, periodEnd, wallet, used, limit, remaining, degraded };
 }

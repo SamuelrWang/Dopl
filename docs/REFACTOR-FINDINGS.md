@@ -8599,3 +8599,35 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   wave adds a column and the count in a test is the only thing that notices. The two cases work
   exactly as designed; what is missing is the ruling and the exemption entry (or a CASCADE), in the
   same change as the migration.
+
+### F-691 — the credit ledger's new `channel_id` is the SIXTEENTH child FK into `channels`, and here is the RULING F-690 asked its author for (2026-09-13)
+
+- **The column:** `supabase/migrations/20261003120000_credit_events_channel.sql` adds
+  `credit_usage_events.channel_id UUID REFERENCES public.channels(id) ON DELETE SET NULL` (rule B,
+  Samuel 2026-09-13). **F-690 spotted it in the working tree and correctly declined to rule on it** —
+  *"the person who added the columns is the one who knows"*. This entry is that person answering.
+- 🔒 **THE RULING: it belongs in `src/features/channels/schema-sql.test.ts › CASCADE_EXEMPT` as
+  `ON DELETE SET NULL`, on the same argument `workspace_token_spend.channel_id` already won**
+  (Samuel, 2026-09-06 ruling (b): *"deleting a room must not destroy the record that tokens were
+  spent"*). A credit event is a record that a WALLET WAS CHARGED — money, not a view: the spend
+  happened, the counter moved, and Settings, the /home capacity bar and the histogram all have to keep
+  totalling it after the room is gone. CASCADE here would delete already-charged spend and make past
+  months silently stop matching the counter. ⚠ It costs the purge nothing, for the same reason the
+  existing exemption does: SET NULL leaves no row referencing the deleted channel, so the one DELETE
+  stays complete. The row lands in the histogram's **Desktop agent** bucket, which is where every
+  unplaceable burn already lives (INVARIANTS §9).
+- ⚠ **NOT APPLIED TO THAT FILE IN THIS SESSION, DELIBERATELY.** `schema-sql.test.ts` is F-690's
+  subject and has been RED since `20261002120000_revisions.sql` for a DIFFERENT column
+  (`revisions.channel_id`), a debugger is in that feature concurrently, and the two cases that fail
+  (`finds all fourteen child FKs`, the CASCADE sweep) need ONE edit covering both new columns plus a
+  re-derived count — three ids in one hand. Doing half of it from here would hide the other half.
+  **Whoever closes F-690 should add this entry with the quote above and re-derive the count rather
+  than incrementing it.**
+
+- **F-690 — RESOLVED 2026-09-13 AS A MISATTRIBUTION.** `revisions` has no FK into `channels`
+  (`grep -n REFERENCES supabase/migrations/20261002120000_revisions.sql`). `schema-sql.test.ts › owningTable`
+  read only `CREATE TABLE`, so the untracked `20261003120000_credit_events_channel.sql`'s `ALTER TABLE … ADD
+  COLUMN … REFERENCES channels` was pinned on the previous file's table. `owningTable` now reads `ALTER TABLE`
+  too; the count pin is 15.
+- **F-691 — RESOLVED 2026-09-13.** `credit_usage_events.channel_id` is named in `CASCADE_EXEMPT` (SET NULL,
+  a record of something that happened). One edit, both findings.

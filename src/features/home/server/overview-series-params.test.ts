@@ -1,26 +1,29 @@
 /**
  * THE /home USAGE HISTOGRAM'S TWO NARROWINGS — the `channel` and `month`
- * parsers, the scope → origin-container resolution, and the two of them reaching
- * the ledger read (2026-09-13, Samuel's scope dropdown + month arrows).
+ * parsers, the scope → channel resolution, and the two of them reaching the
+ * ledger read (2026-09-13, Samuel's scope dropdown + month arrows).
  *
  * ⚠ **ITS OWN FILE**: `service-overview.test.ts` was at 446 of the 500-line cap
  * (§1) the day these landed, and it owns the window arithmetic and the tallies —
  * a different reason to change.
  *
- * 🔒 **THE CENTRE OF GRAVITY IS WHAT "Desktop agent" *IS*.** `credit_usage_events`
- * has NO channel column: the channel dimension is `origin_workspace_id`, the
- * ADDRESSED CONTAINER, so a channel is its `kind='link'` container and
- * desktop-agent spend is the reader's own `kind='personal'` shelf. ⚠ **A NULL
- * origin is NEITHER** — that column is `ON DELETE SET NULL`, i.e. a deleted
- * container, and bucketing it as "Desktop agent" would invent a source for spend
- * nobody can place. These cases pin all three.
+ * 🔒 **THE CENTRE OF GRAVITY IS THAT THE BUCKETS PARTITION THE WALLET** (rule B,
+ * Samuel: "the wallet needs to match the histogram"). A scope is a CHANNEL id and
+ * "Desktop agent" is `channel_id IS NULL`, so every row the wallet charged sits in
+ * exactly one bucket and the buckets sum to the unfiltered plot.
+ *
+ * ⚠ **THIS FILE ASSERTED THE OPPOSITE FOR ONE DAY.** Its superseded header said
+ * `credit_usage_events` had no channel column, so a channel was its `kind='link'`
+ * CONTAINER and Desktop agent was the reader's `kind='personal'` shelf — a
+ * partition that dropped every burn a home channel's agent made against another
+ * container, which is exactly the traffic rule B moved onto that channel's wallet.
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { HttpError } from "@/shared/lib/http-error";
 
 const repo = vi.hoisted(() => ({
-  listOwnedPersonalWalletContainers: vi.fn(),
+  listOwnedPersonalContainerIds: vi.fn(),
   scanCreditEvents: vi.fn(),
 }));
 
@@ -35,7 +38,7 @@ vi.mock("./repository-overview", async () => {
 import {
   parseUsageMonth,
   parseUsageScope,
-  resolveUsageOrigins,
+  resolveUsageChannel,
 } from "./overview-series-params";
 import { getHomeOverviewSeries } from "./service-overview";
 import type { CreditEventScanRow } from "./repository-overview";
@@ -44,19 +47,19 @@ const VIEWER = "u1";
 const LINK_A = "11111111-1111-4111-8111-111111111111";
 const LINK_B = "22222222-2222-4222-8222-222222222222";
 const PERSONAL = "33333333-3333-4333-8333-333333333333";
-/** A container the reader is a MEMBER of but does not OWN — its burns spend the
- *  owner's wallet, so none of them are ever on this reader's series. */
+/** A channel the reader is a MEMBER of but whose container they do not OWN — its
+ *  burns spend the owner's wallet, so none of them are ever on this reader's
+ *  series. */
 const NOT_OWNED = "44444444-4444-4444-8444-444444444444";
+/** A CHANNEL id — what the dropdown sends since rule B. */
+const CHANNEL_B = "55555555-5555-4555-8555-555555555555";
 
-const CONTAINERS = [
-  { id: LINK_A, kind: "link" },
-  { id: LINK_B, kind: "link" },
-  { id: PERSONAL, kind: "personal" },
-];
+const OWNED_IDS = [LINK_A, LINK_B, PERSONAL];
 
 function burn(over: Partial<CreditEventScanRow> = {}): CreditEventScanRow {
   return {
     origin_workspace_id: LINK_A,
+    channel_id: null,
     user_id: VIEWER,
     wallet: "personal",
     payer_user_id: VIEWER,
@@ -74,7 +77,7 @@ describe("parseUsageScope", () => {
     expect(parseUsageScope(raw)).toBeNull();
   });
 
-  it("accepts the reserved desktop word and a container uuid", () => {
+  it("accepts the reserved desktop word and a channel uuid", () => {
     expect(parseUsageScope("desktop")).toBe("desktop");
     expect(parseUsageScope(LINK_A)).toBe(LINK_A);
   });
@@ -138,52 +141,48 @@ describe("parseUsageMonth", () => {
   });
 });
 
-describe("resolveUsageOrigins", () => {
-  /** 🔒 **NO NARROWING IS NOT "EVERY OWNED CONTAINER".** A row whose container
-   *  was DELETED carries a null origin and is still the reader's spend — it has to
-   *  stay on the unfiltered plot, which an `in.(…)` over the owned list would drop. */
+describe("resolveUsageChannel", () => {
+  /** 🔒 **NO NARROWING IS NOT "EVERY CHANNEL".** A row with no channel (Desktop
+   *  agent, and every row older than the column) is still the reader's spend and
+   *  has to stay on the unfiltered plot, which an `eq` over any id would drop. */
   it("answers null for the whole wallet", () => {
-    expect(resolveUsageOrigins(null, CONTAINERS)).toBeNull();
+    expect(resolveUsageChannel(null)).toBeNull();
   });
 
-  /** 🔒 **DESKTOP IS `kind='personal'`, AND ONLY THAT** — the shelf a call naming
-   *  no container is resolved to. */
-  it("resolves desktop to the personal shelf alone", () => {
-    expect(resolveUsageOrigins("desktop", CONTAINERS)).toEqual([PERSONAL]);
+  /** 🔒 **DESKTOP IS THE ABSENCE OF A CHANNEL**, which no id can name — so the
+   *  narrowing is `IS NULL` and not a list of containers. */
+  it("resolves desktop to the unattributed bucket", () => {
+    expect(resolveUsageChannel("desktop")).toBe("unattributed");
   });
 
-  it("resolves a channel to its own container", () => {
-    expect(resolveUsageOrigins(LINK_B, CONTAINERS)).toEqual([LINK_B]);
+  it("resolves a channel id to that channel", () => {
+    expect(resolveUsageChannel(CHANNEL_B)).toEqual({ channelId: CHANNEL_B });
   });
 
   /**
-   * 🔒 **AN UNOWNED ID ANSWERS `[]` — THE FENCE, AND IT COSTS NO ROUND TRIP
-   * (INVARIANTS §2).** The caller already read this list for the wallet
-   * predicate, so nothing a caller SENT is ever handed to the RLS-bypassing admin
-   * client. ⚠ And `[]` is not a refusal: a channel the reader merely JOINED is a
-   * legitimate row in their channel list whose burns spend the OWNER's wallet, so
-   * "none of your credits went there" is the true answer.
+   * 🔒 **AN UNOWNED CHANNEL IS PASSED THROUGH, NOT DROPPED — AND THAT IS SAFE
+   * BECAUSE THE SCAN'S FENCE IS THE PAYER (INVARIANTS §2).** ⚠ **THE SUPERSEDED
+   * FUNCTION INTERSECTED IT WITH THE READER'S OWN CONTAINERS**, because a
+   * container id is an ADDRESSING input handed to the RLS-bypassing admin client.
+   * A channel id is not: it composes as an `AND` on top of
+   * `payer_user_id = reader`, so it can only HIDE the reader's own rows. The
+   * answer for a channel they merely JOINED is still a zero-filled month — by
+   * construction now, rather than by a short-circuit.
    */
-  it("drops a container the reader does not own", () => {
-    expect(resolveUsageOrigins(NOT_OWNED, CONTAINERS)).toEqual([]);
-  });
-
-  it("drops desktop when the reader has no personal shelf", () => {
-    expect(resolveUsageOrigins("desktop", [{ id: LINK_A, kind: "link" }])).toEqual(
-      []
-    );
+  it("passes an unowned channel through to the read", () => {
+    expect(resolveUsageChannel(NOT_OWNED)).toEqual({ channelId: NOT_OWNED });
   });
 });
 
 describe("getHomeOverviewSeries — the narrowed credits arm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    repo.listOwnedPersonalWalletContainers.mockResolvedValue(CONTAINERS);
+    repo.listOwnedPersonalContainerIds.mockResolvedValue(OWNED_IDS);
     repo.scanCreditEvents.mockResolvedValue({ rows: [], truncated: false });
   });
 
-  /** The unnarrowed read passes NO `originIds`, and it bounds the haul at both
-   *  ends so a clip is reported rather than silently mis-binned. */
+  /** The unnarrowed read passes NO `channel`, and it bounds the haul at both ends
+   *  so a clip is reported rather than silently mis-binned. */
   it("hauls the whole wallet for the current month", async () => {
     const series = await getHomeOverviewSeries(VIEWER, "month", "credits", {
       now: NOW,
@@ -194,29 +193,32 @@ describe("getHomeOverviewSeries — the narrowed credits arm", () => {
     const [, , sinceIso, opts] = repo.scanCreditEvents.mock.calls[0];
     expect(sinceIso).toBe("2026-09-01T00:00:00.000Z");
     expect(opts.untilIso).toBe("2026-10-01T00:00:00.000Z");
-    expect(opts.originIds).toBeUndefined();
+    expect(opts.channel).toBeUndefined();
   });
 
-  it("narrows the haul to one channel's container", async () => {
+  it("narrows the haul to one CHANNEL", async () => {
     await getHomeOverviewSeries(VIEWER, "month", "credits", {
-      scope: LINK_B,
+      scope: CHANNEL_B,
       now: NOW,
     });
-    expect(repo.scanCreditEvents.mock.calls[0][3].originIds).toEqual([LINK_B]);
+    expect(repo.scanCreditEvents.mock.calls[0][3].channel).toEqual({
+      channelId: CHANNEL_B,
+    });
   });
 
-  it("narrows the haul to the personal shelf for desktop", async () => {
+  it("narrows the haul to the unattributed rows for desktop", async () => {
     await getHomeOverviewSeries(VIEWER, "month", "credits", {
       scope: "desktop",
       now: NOW,
     });
-    expect(repo.scanCreditEvents.mock.calls[0][3].originIds).toEqual([PERSONAL]);
+    expect(repo.scanCreditEvents.mock.calls[0][3].channel).toBe("unattributed");
   });
 
-  /** 🔒 **A SCOPE THE READER DOES NOT OWN READS AS A ZERO-FILLED MONTH AND ASKS
-   *  THE DATABASE NOTHING.** The axis is still the frame (the month ruling), and
-   *  PostgREST has no syntax for an empty `in.()` anyway. */
-  it("answers a zeroed month without a read when nothing can match", async () => {
+  /** 🔒 **A CHANNEL THE READER DOES NOT OWN READS AS A ZERO-FILLED MONTH** — the
+   *  axis is still the frame (the month ruling). ⚠ **IT USED TO SKIP THE READ**,
+   *  when the scope was a container id the service had to intersect first; the
+   *  wallet fence answers it now, which is one branch and one round trip fewer. */
+  it("answers a zeroed month for a channel none of the reader's rows carry", async () => {
     const series = await getHomeOverviewSeries(VIEWER, "month", "credits", {
       scope: NOT_OWNED,
       now: NOW,
@@ -225,7 +227,9 @@ describe("getHomeOverviewSeries — the narrowed credits arm", () => {
     expect(series.points).toHaveLength(30);
     expect(series.points.every((point) => point.count === 0)).toBe(true);
     expect(series.truncated).toBe(false);
-    expect(repo.scanCreditEvents).not.toHaveBeenCalled();
+    expect(repo.scanCreditEvents.mock.calls[0][3].channel).toEqual({
+      channelId: NOT_OWNED,
+    });
   });
 
   /**

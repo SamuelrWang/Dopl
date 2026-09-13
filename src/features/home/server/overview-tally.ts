@@ -234,18 +234,24 @@ export function tallyCreditPeople(
 /**
  * CREDITS and MESSAGES per home channel, descending by credits.
  *
- * ⚠ **THE CREDIT DIMENSION IS `origin_workspace_id`**, the container the call
- * was made in — never the ledger's `workspace_id`, which held a REROUTED PAYER
- * on rows written before 2026-09-07 and holds the addressed container on rows
- * written since (`repository-overview.ts › scanCreditEvents` states the fence,
- * and `20260930120000_credit_wallets.sql` §4 the column's new meaning).
+ * 🔒 **THE CREDIT DIMENSION IS `channel_id` SINCE 2026-09-13 (rule B), MAPPED
+ * BACK TO ITS CONTAINER FOR THE ROW KEY.** ⚠ **IT WAS `origin_workspace_id` — the
+ * ADDRESSED container — UNTIL THIS WAVE**, on the argument that a container holds
+ * exactly one channel; rule B breaks that identity, and the old dimension DROPPED
+ * every burn a home channel's agent made against another container (a workspace
+ * KB read), i.e. exactly the rows the ruling moved onto that channel's wallet.
+ * ⚠ `channelContainers` is `channelId → containerId`, built from the read
+ * `resolveScope` already makes (`repository-containers.ts ›
+ * listContainerChannels`) — the mapping costs no round trip. A channel outside the
+ * reader's fence has no entry and its row is dropped, which is the same fence the
+ * `names` map is.
  *
  * 🔒 **AND THE CREDIT ROWS ARE THE READER'S OWN PERSONAL WALLET'S SINCE
  * 2026-09-12** ({@link isPersonalWalletBurn}), so this rail reads "which of MY
- * home channels burned MY wallet". ⚠ A burn in the reader's own
- * `kind='personal'` container has no channel to sit under and therefore no row
- * here — it is still in the wallet, and the bar above is the wallet. The rail
- * and the bar are two questions, not two answers to one.
+ * home channels burned MY wallet". ⚠ A burn with NO calling channel (`channel_id
+ * IS NULL` — the Desktop agent) has no channel to sit under and therefore no row
+ * here: it is still in the wallet, and the bar above is the wallet. The rail and
+ * the bar are two questions, not two answers to one.
  *
  * ⚠ EVERY CHANNEL IN THE FENCE GETS A ROW, including the silent ones — the
  * comparison is "which of MY channels is busy", and dropping the quiet ones
@@ -254,6 +260,7 @@ export function tallyCreditPeople(
  */
 export function tallyChannels(
   names: Map<string, string>,
+  channelContainers: Map<string, string>,
   credits: CreditEventScanRow[],
   messages: Array<{ workspace_id: string }>
 ): HomeChannelUsage[] {
@@ -262,9 +269,10 @@ export function tallyChannels(
     rows.set(workspaceId, { workspaceId, name, credits: 0, messages: 0 });
   }
   for (const event of credits) {
-    const row = event.origin_workspace_id
-      ? rows.get(event.origin_workspace_id)
+    const container = event.channel_id
+      ? channelContainers.get(event.channel_id)
       : undefined;
+    const row = container ? rows.get(container) : undefined;
     if (row) row.credits += event.amount;
   }
   for (const message of messages) {

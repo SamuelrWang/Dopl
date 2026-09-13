@@ -202,17 +202,26 @@ export interface CreditEventScanRow {
   /** THE PAYER — the person whose wallet moved. `null` on legacy rows (the
    *  payer was a workspace then) and on a deleted account (`SET NULL`). */
   payer_user_id: string | null;
+  /**
+   * 🔒 **THE CHANNEL THAT WAS BILLED — RULE B's dimension, which the Usage card's
+   * dropdown keys on (2026-09-13).** `null` = **Desktop agent**: a channel-less
+   * MCP connection, an app click, a HARD-deleted channel (`ON DELETE SET NULL`),
+   * and every row written before `20261003120000_credit_events_channel.sql`.
+   * ⚠ **NOT DERIVABLE FROM `origin_workspace_id`** — that is where the call was
+   * ADDRESSED, which differs whenever an agent reaches across containers
+   * (`billing/server/credit-ledger.ts › CreditUsageEvent`).
+   */
+  channel_id: string | null;
   amount: number;
   created_at: string;
 }
 
 /**
- * The two container kinds whose burns land on the OWNER's PERSONAL wallet.
- *
- * ⚠ **THIS IS `credits-service.ts › resolveBillingTarget`'s TWO NON-`standard`
- * ARMS, RESTATED FOR A READ**, and the same `CASE` the deploy-day backfill runs
- * (`scripts/sql/backfill-credit-wallets-v2.sql`). A `standard` workspace's burn
- * is a SEAT wallet's and belongs to that workspace's own Overview.
+ * The two container kinds whose burns land on the OWNER's PERSONAL wallet — i.e.
+ * `credits-service.ts › resolveBillingTarget`'s two non-`standard` arms, restated
+ * for a read, and the same `CASE` the deploy-day backfill runs
+ * (`scripts/sql/backfill-credit-wallets-v2.sql`). ⚠ It fences the LEGACY arm of
+ * the wallet predicate only; a `standard` workspace's burn is a SEAT wallet's.
  */
 const PERSONAL_WALLET_KINDS = ["personal", "link"];
 
@@ -232,42 +241,29 @@ const PERSONAL_WALLET_KINDS = ["personal", "link"];
 export async function listOwnedPersonalContainerIds(
   userId: string
 ): Promise<string[]> {
-  const rows = await listOwnedPersonalWalletContainers(userId);
-  return rows.map((row) => row.id);
-}
-
-/** One container whose burns land on the reader's personal wallet. */
-export interface OwnedWalletContainer {
-  id: string;
-  /** `personal` (the reader's own shelf — where a burn with NO channel lands) or
-   *  `link` (a home channel's container). ⚠ It is the ONLY thing that separates
-   *  DESKTOP-AGENT spend from CHANNEL spend on this ledger; see
-   *  `overview-series-params.ts › resolveUsageOrigins`. */
-  kind: string;
-}
-
-/**
- * {@link listOwnedPersonalContainerIds} PLUS each container's `kind` — the same
- * single round trip, one more column.
- *
- * 🔒 **THE `kind` IS WHAT MAKES "Desktop agent" A MEASUREMENT RATHER THAN A
- * GUESS (2026-09-13, the Usage scope dropdown).** The whole argument is in
- * `overview-series-params.ts`' header: `credit_usage_events` has no channel
- * column, its channel dimension is `origin_workspace_id` (the ADDRESSED
- * CONTAINER), so DESKTOP is `kind='personal'` and a CHANNEL is `kind='link'` —
- * and a NULL origin is neither, because that column is `ON DELETE SET NULL`.
- */
-export async function listOwnedPersonalWalletContainers(
-  userId: string
-): Promise<OwnedWalletContainer[]> {
   const { data, error } = await supabaseAdmin()
     .from("workspaces")
-    .select("id, kind")
+    .select("id")
     .eq("owner_id", userId)
     .in("kind", PERSONAL_WALLET_KINDS);
   if (error) throw error;
-  return (data ?? []) as OwnedWalletContainer[];
+  return ((data ?? []) as { id: string }[]).map((row) => row.id);
 }
+
+/**
+ * THE HISTOGRAM'S CHANNEL NARROWING — one channel, or the Desktop-agent bucket.
+ *
+ * 🔒 **THESE TWO PLUS "no narrowing" PARTITION THE WALLET'S ROWS EXACTLY, WHICH IS
+ * THE POINT OF RULE B (Samuel, 2026-09-13: "the wallet needs to match the
+ * histogram").** Every row has a `channel_id` or has none, so every credit the
+ * wallet charged sits in exactly one bucket of the scope dropdown and the buckets
+ * sum to the wallet. ⚠ **THE SUPERSEDED `origin_workspace_id IN (owned
+ * containers)` LEAKED BOTH WAYS**: a home-channel agent's burn against a STANDARD
+ * workspace was in no bucket, and neither was a NULL origin (a deleted
+ * container). ⚠ A CONTAINER id is no longer a valid scope — a channel is named by
+ * its own id (`HomeChannel.channelId`).
+ */
+export type CreditChannelScope = { channelId: string } | "unattributed";
 
 /**
  * THE CREDIT LEDGER, fenced to the rows that came out of the READER'S OWN
@@ -297,21 +293,18 @@ export async function listOwnedPersonalWalletContainers(
  * A `seat` row is matched by NEITHER arm and that is the whole fix: a burn in a
  * standard workspace belongs to THAT workspace's Overview page.
  *
- * ⚠ **NO `workspaceIds` AND THEREFORE NO EMPTY SHORT-CIRCUIT.** Arm 1 is keyed
- * on a PERSON, so a reader with no home channels at all still has a wallet and
- * still has an honest answer — returning empty without asking would hide their
- * own personal-container spend. Arm 2 is dropped from the `.or()` when the owned
- * list is empty, because PostgREST has no syntax for an empty `in.()`.
- * ⚠ Both arms are built from the SESSION user id and from ids this repository
- * read itself (`listOwnedPersonalContainerIds`) — never from anything a caller
- * sent, which is the rule the admin client makes non-negotiable (§2).
+ * ⚠ **NO `workspaceIds` AND THEREFORE NO EMPTY SHORT-CIRCUIT.** Arm 1 is keyed on
+ * a PERSON, so a reader with no home channels still has a wallet and an honest
+ * answer; arm 2 is dropped from the `.or()` when the owned list is empty, because
+ * PostgREST has no syntax for an empty `in.()`. ⚠ Both arms are built from the
+ * SESSION user id and from ids this repository read itself — never from anything a
+ * caller sent, the rule the admin client makes non-negotiable (§2).
  *
- * ⚠ **THE `origin_workspace_id` DIMENSION IS UNCHANGED** — it is WHERE the call
- * was made, and a container holds exactly one channel
- * (`repository-containers.ts › listContainerChannels`). The by-channel rail
- * therefore reads "which of MY channels burned MY wallet". ⚠ Never the ledger's
- * `workspace_id`, which held a REROUTED PAYER before 2026-09-07 and holds the
- * addressed container since (`20260930120000_credit_wallets.sql` §4).
+ * ⚠ **THE CHANNEL DIMENSION IS `channel_id` SINCE 2026-09-13 (rule B), NOT
+ * `origin_workspace_id`** — the origin is where the call was ADDRESSED, which is
+ * a different row from the channel that was BILLED whenever an agent reaches
+ * across containers. Both are read; the rails and the histogram key on the
+ * channel (`overview-tally.ts › tallyChannels`).
  *
  * ⚠ **A SUM WITH NO `SUM`.** PostgREST cannot aggregate, so this hauls the
  * window's rows and the service adds them up — the sanctioned haul-and-tally
@@ -335,12 +328,15 @@ export async function scanCreditEvents(
    * their own (2026-09-13, the Usage histogram's month arrows + scope
    * dropdown).
    *
-   * ⚠ **`originIds` IS AN `AND` ON TOP OF THE `.or()`** — PostgREST composes a
-   * second filter as a conjunction, so the wallet arms still decide which rows
-   * EXIST and this only hides some of them. **It is still not taken raw:** the
-   * service intersects the requested id with the list IT read
-   * (`overview-series-params.ts › resolveUsageOrigins`), so nothing a caller sent
-   * reaches this statement — §2's rule, kept intact rather than argued down.
+   * ⚠ **`channel` IS AN `AND` ON TOP OF THE `.or()`** — PostgREST composes a
+   * second filter as a conjunction, so the WALLET ARMS still decide which rows
+   * EXIST and this only hides some of them. That is what makes it safe to pass a
+   * CALLER-SUPPLIED channel id (parsed by `overview-series-params.ts ›
+   * parseUsageScope`, uuid-shaped) with no ownership intersection in front of it:
+   * the rows it can reach are already fenced to the reader's own wallet by
+   * `payer_user_id`, so the narrowing can only HIDE the reader's rows, never
+   * reveal anybody else's. ⚠ The superseded `originIds` narrowing DID need that
+   * intersection: a container id is an ADDRESSING input.
    * ⚠ **`untilIso` IS LOAD-BEARING FOR A PAST MONTH, NOT AN OPTIMISATION.** This
    * scan is newest-first and capped, so an unbounded haul anchored in an OLD
    * month returns THIS month's 20k rows and the plotted month bins to zeroes with
@@ -348,7 +344,7 @@ export async function scanCreditEvents(
    */
   opts: {
     untilIso?: string;
-    originIds?: readonly string[];
+    channel?: CreditChannelScope;
     limit?: number;
   } = {}
 ): Promise<Scan<CreditEventScanRow>> {
@@ -360,13 +356,19 @@ export async function scanCreditEvents(
   let query = supabaseAdmin()
     .from("credit_usage_events")
     .select(
-      "origin_workspace_id, user_id, wallet, payer_user_id, amount, created_at"
+      "origin_workspace_id, user_id, wallet, payer_user_id, channel_id, amount, created_at"
     )
     .or(`and(payer_user_id.eq.${userId},wallet.eq.personal)${legacyArm}`)
     .gte("created_at", sinceIso);
   if (opts.untilIso) query = query.lt("created_at", opts.untilIso);
-  if (opts.originIds) {
-    query = query.in("origin_workspace_id", [...opts.originIds]);
+  if (opts.channel) {
+    // ⚠ `IS NULL` AND `eq` ARE THE SAME NARROWING, NOT TWO FEATURES: the
+    // Desktop-agent bucket IS "no channel", so a reader that special-cased only
+    // one of them would leave the other's rows on every filtered view.
+    query =
+      opts.channel === "unattributed"
+        ? query.is("channel_id", null)
+        : query.eq("channel_id", opts.channel.channelId);
   }
   const { data, error } = await query
     .order("created_at", { ascending: false })
@@ -380,9 +382,9 @@ export async function scanCreditEvents(
     // with it: this read sits in `getHomeOverview`'s `Promise.all`, so one
     // missing table 500'd the payload behind every panel, AND it is the
     // `credits` series arm, which is what blanked the histogram.
-    // ⚠ THE SAME DEGRADE NOW ALSO COVERS THE `wallet` / `payer_user_id`
-    // COLUMNS, which arrive in a SECOND unapplied migration
-    // (`20260930120000_credit_wallets.sql` §4): before that apply, a select
+    // ⚠ THE SAME DEGRADE COVERS `wallet` / `payer_user_id` / `channel_id`, which
+    // arrive in two LATER unapplied migrations (`20260930120000` §4 and
+    // `20261003120000_credit_events_channel.sql`): before those applies, a select
     // naming them answers `42703` and this arm answers empty rather than 500ing
     // the face. ⚠ EMPTY, not "the old sum" — a fallback to the container fence
     // would quietly resurrect the two-counter bug this read exists to end.

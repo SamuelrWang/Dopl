@@ -66,6 +66,11 @@ import * as repo from "./workspace-billing";
 import * as wallets from "./credit-wallets";
 import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
 import { consumeMcpCredits, resolveBillingTarget } from "./credits-service";
+import {
+  personalTarget,
+  seatTarget,
+  unmeteredTarget,
+} from "./credits-target-fixtures";
 
 const mockRepo = vi.mocked(repo);
 const mockWallets = vi.mocked(wallets);
@@ -140,28 +145,28 @@ afterEach(() => {
  * 🔒 THE ATTRIBUTION TABLE (`credits-service.ts`'s docblock), one case per row.
  * Each wrong answer is a different bill going to a different person.
  */
-describe("resolveBillingTarget — the addressed kind picks the wallet", () => {
+/* ⚠ **EVERY ARM BELOW IS RULE B's FALLBACK ARM (2026-09-13)**: no `channelId`, so
+   the RESOURCE's container pays — which is what the addressed kind has always
+   decided. The CHANNEL arms and the fence: `credits-channel-attribution.test.ts`.
+   Target shapes: `./credits-target-fixtures.ts`. */
+describe("resolveBillingTarget — with NO calling channel, the addressed kind picks the wallet", () => {
   it("standard (and a kind-less legacy row) → the CALLER's own SEAT", async () => {
-    expect(await resolveBillingTarget(WS, seatCaller)).toEqual({
-      wallet: "seat",
-      workspaceId: WS,
-      payerUserId: CALLER,
-    });
-    expect(await resolveBillingTarget(WS, { userId: CALLER })).toEqual({
-      wallet: "seat",
-      workspaceId: WS,
-      payerUserId: CALLER,
-    });
+    const seat = seatTarget({ workspaceId: WS, payerUserId: CALLER });
+    expect(await resolveBillingTarget(WS, seatCaller)).toEqual(seat);
+    expect(await resolveBillingTarget(WS, { userId: CALLER })).toEqual(seat);
     // A seat needs no owner: the caller IS the payer.
     expect(mockOwner).not.toHaveBeenCalled();
   });
 
   it("personal → the caller's PERSONAL wallet, WITHOUT an owner lookup", async () => {
-    expect(await resolveBillingTarget(PERSONAL, personalCaller)).toEqual({
-      wallet: "personal",
-      workspaceId: PERSONAL,
-      payerUserId: CALLER,
-    });
+    // ⚠ THE CONTAINER *IS* THE BILLING ROW on this arm and on no other.
+    expect(await resolveBillingTarget(PERSONAL, personalCaller)).toEqual(
+      personalTarget({
+        workspaceId: PERSONAL,
+        payerUserId: CALLER,
+        personalBillingContainerId: PERSONAL,
+      })
+    );
     // ⚠ THE ROUND TRIP THIS SAVES IS THE POINT. A personal container has exactly
     // one member — its owner — so the caller is provably the payer and asking
     // the database buys an answer we already hold.
@@ -171,25 +176,22 @@ describe("resolveBillingTarget — the addressed kind picks the wallet", () => {
   it("link → the container OWNER's PERSONAL wallet, whoever called", async () => {
     // ⚠ THE CALLER IS DELIBERATELY NOT THE OWNER. A case where they are the same
     // user passes against a version that bills the caller.
-    expect(await resolveBillingTarget(CONTAINER, linkCaller)).toEqual({
-      wallet: "personal",
-      workspaceId: CONTAINER,
-      payerUserId: OWNER,
-    });
+    // ⚠ `personalBillingContainerId` STAYS NULL: a link container carries no
+    // billing row, so the tier is reached through the PAYER.
+    expect(await resolveBillingTarget(CONTAINER, linkCaller)).toEqual(
+      personalTarget({ workspaceId: CONTAINER, payerUserId: OWNER })
+    );
     expect(mockOwner).toHaveBeenCalledWith(CONTAINER);
   });
 
   it("container with no active owner → unmetered, with the ONLY reason left", async () => {
     mockOwner.mockResolvedValue(null);
-    expect(await resolveBillingTarget(CONTAINER, linkCaller)).toEqual({
-      wallet: null,
-      workspaceId: CONTAINER,
-      payerUserId: null,
-      reason: "container-has-no-active-owner",
-    });
+    expect(await resolveBillingTarget(CONTAINER, linkCaller)).toEqual(
+      unmeteredTarget(CONTAINER)
+    );
   });
 
-  it("🔒 the workspaceId is ALWAYS the addressed container, never a rerouted one", async () => {
+  it("🔒 the workspaceId is the addressed container with no channel, never a rerouted one", async () => {
     // ⚠ THE REVERT DETECTOR FOR THE OLD MODEL. Until 2026-09-07 this answered
     // the container owner's SOLE owned STANDARD workspace — a different id —
     // and refused (unmetered) when they owned none or two. Every arm now names
