@@ -234,14 +234,16 @@ describe("the pane token", () => {
 
     fireEvent.click(screen.getByText("Dana Ruiz"));
 
-    // 🔒 THE PIN, BOTH HALVES — either one alone stays green against the
-    // other's bug. Keyed by the bare TAB the token does not move when the
-    // channel does: no fade starts, and the pane re-renders instantly with the
-    // new channel's templates under a token asserting nothing changed.
+    // ⚠ **A PICK LEAVES THIS FACE SINCE 2026-09-13** (Samuel: a click in the
+    // picker goes to that channel's page from wherever you are — INVARIANTS §5),
+    // so re-pointing this pane is a pick PLUS a return to Agents. Only the way
+    // the switch is DRIVEN changed; both halves of the pin are the originals.
     expect(view.container.querySelector(".crossfade[data-out]")).not.toBeNull();
     expect(screen.getByText("Renewal chaser")).toBeInTheDocument();
 
-    // …and once the fade completes the new channel's templates are on screen.
+    await openAgents();
+
+    // …and the new channel's templates are what the pane comes back with.
     // ⚠ `findBy`, not `getBy`: `Crossfade` keeps the outgoing subtree mounted
     // for its 150ms, so the incoming one is not in the DOM yet.
     expect(await screen.findByText("Dana's assistant")).toBeInTheDocument();
@@ -288,6 +290,10 @@ describe("the pane token", () => {
     await screen.findByRole("button", { name: "Share" });
 
     fireEvent.click(screen.getByText("Dana Ruiz"));
+    // ⚠ THE PICK RAISES THE CHANNEL FACE NOW (2026-09-13), so come back — and
+    // the ROW KEY is still what this pins, because `selected` moves with NO
+    // click whenever the selected row leaves `visible` (`home-panes.tsx`).
+    await openAgents();
     await screen.findByText("Dana's assistant");
 
     // The dialog went with the pane it belonged to. Held across the switch it

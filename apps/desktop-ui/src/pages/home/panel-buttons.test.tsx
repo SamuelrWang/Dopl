@@ -95,9 +95,23 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
   // that comes back as a non-`file:` scheme and `fileURLToPath` throws. Held
   // in a const, the call is left alone and resolves against this file.
   const dir = fileURLToPath(new URL(HERE, import.meta.url));
-  const sources = readdirSync(dir)
+  const all = readdirSync(dir)
     .filter((f) => f.endsWith(".tsx") && !f.endsWith(".test.tsx"))
     .map((f) => [f, readFileSync(`${dir}${f}`, "utf8")] as const);
+  /**
+   * ⚠ **SKELETONS ARE OUT OF THE `h-6` SCAN, AND THE REASON IS THE SCAN'S OWN
+   * SUBJECT (2026-09-13).** The banned thing is a 24px BUTTON; a skeleton paints
+   * no button at all (INVARIANTS §1A: *"NO TEXT, NOTHING PRESSABLE"*), and what
+   * its `h-6` blocks stand for are controls that live in `channels-v2/` and are
+   * genuinely 24px there — the channel header's bookmark `IconButton
+   * className="h-6 w-6"` and the composer toolbar's six glyphs. Restating those
+   * as `h-[24px]` to satisfy a text scan would paint the same pixels while
+   * breaking §1A's GEOMETRY-BY-REFERENCE rule, which is the worse trade.
+   * ⚠ THE EXCLUSION IS ASSERTED, NOT ASSUMED — the case below proves these files
+   * carry no `<button` at all, so nothing can hide a 24px pill behind the name.
+   */
+  const isSkeleton = (f: string) => f.includes("skeleton");
+  const sources = all.filter(([f]) => !isSkeleton(f));
 
   it("🔒 no button className carries `h-6`", () => {
     // ⚠ The whole recipe is not what is banned — the HEIGHT is. `h-6` in a
@@ -110,6 +124,20 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
         .map(([, classes]) => `${file}: ${classes}`)
     );
     expect(offenders).toEqual([]);
+  });
+
+  it("🔒 …and the skeletons it excuses press nothing at all", () => {
+    const skeletons = all.filter(([f]) => isSkeleton(f));
+    expect(skeletons.length).toBeGreaterThan(0);
+    for (const [file, text] of skeletons) {
+      // ⚠ OVER COMMENT-STRIPPED SOURCE, the lesson the skeleton suites already
+      // learned: these files SAY "no `<button>`" in their docblocks, so a raw
+      // scan fails on the very sentence it is checking.
+      const code = text
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      expect(`${file}: ${code.includes("<button")}`).toBe(`${file}: false`);
+    }
   });
 
   it("🔒 the black recipe is spelled ONCE, in panel-buttons.tsx", () => {

@@ -164,6 +164,11 @@ export const BILLING_STATUS = {
     remaining: 180,
     periodStart: "2026-09-01T00:00:00.000Z",
     periodEnd: "2026-10-01T00:00:00.000Z",
+    // ⚠ **RECONCILED BY DEFAULT (2026-09-13, F-693)**, which is what every case
+    // that is not ABOUT the reconciliation needs: `credits.ledgerDrift !== 0`
+    // renders one muted word on the capacity bar, and a fixture that drifted would
+    // put it in front of every other assertion on this page.
+    ledgerDrift: 0,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,

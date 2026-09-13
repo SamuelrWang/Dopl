@@ -2,9 +2,9 @@ import { UserRoundX } from "lucide-react";
 import { StandaloneChannelSurface } from "@/features/channels/components/channels-v2/channel-surface-standalone";
 import { useChannels } from "@/features/channels/hooks/use-channels";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { DetailPaneSkeleton, TranscriptSkeleton } from "@/shared/ui/skeleton";
 import { PageError } from "#/components/page-states";
 import type { HomeChannel } from "@/features/home/types";
+import { ChannelRecordSkeleton } from "./channel-record-skeleton";
 import { PersonInfoTab } from "./person-info-tab";
 
 /**
@@ -46,13 +46,14 @@ export function RelationshipRecord({
     false
   );
 
-  if (loading) {
-    return (
-      <DetailPaneSkeleton>
-        <TranscriptSkeleton className="px-5 py-4" />
-      </DetailPaneSkeleton>
-    );
-  }
+  // ⚠ THE PANE'S OWN SHAPE, NOT THE KIT'S TWO GENERIC GHOSTS (Samuel,
+  // 2026-09-13: *"this is the skeleton for the channel, it doesn't look accurate
+  // at all"*). This gate rendered `DetailPaneSkeleton` — a 52px strip with one bar
+  // and a square — around `TranscriptSkeleton`'s ALTERNATING bubbles, on a bare
+  // pane: no composer, no divider and no info column, though that column is OPEN
+  // at mount here. `channel-record-skeleton.tsx` mirrors what resolves into this
+  // box, class expression for class expression (INVARIANTS §1A).
+  if (loading) return <ChannelRecordSkeleton />;
   if (error) {
     return <PageError error={new Error(error)} onRetry={() => refetch()} />;
   }

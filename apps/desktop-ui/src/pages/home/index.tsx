@@ -236,19 +236,25 @@ export default function HomePage() {
                 selectedId={selected?.id ?? null}
                 // ⚠ A MANUAL PICK DROPS ANY HELD THREAD — "take me to this
                 // channel", not "take me back to that thread".
-                // ⚠ AND IT LEAVES OVERVIEW (Samuel, 2026-09-09: picking a
-                // channel must "go to that channel's channel page, not stay on
-                // the overview page"). OVERVIEW ONLY, and that is the whole
-                // rule: Overview is the one face whose pane is CROSS-CHANNEL
-                // (`paneToken` carries no row for it), so a click there changed
-                // nothing on screen. Knowledge and Agents render the SELECTED
-                // channel's contents — the list beside them IS their picker —
-                // so raising Channels from those faces would delete the only
-                // way to point them at another channel.
+                // 🔒 **AND IT RAISES THE CHANNEL FACE FROM WHEREVER YOU ARE —
+                // UNCONDITIONALLY SINCE 2026-09-13** (Samuel, over the Ontology
+                // face: *"wherever the user is, if they click on a different
+                // channel in the picker, it needs to go to the channel page of
+                // that"*). ⚠ **THIS SUPERSEDES THE 2026-09-09 CARVE-OUT** that
+                // raised it from OVERVIEW alone, on the argument that Knowledge
+                // and Agents render the selected channel's contents so the list
+                // beside them is their picker. Samuel's ruling is that the
+                // picker names a CHANNEL and the channel's page is where naming
+                // one lands; re-pointing a face at another channel is the
+                // header selector's job, one click away. Same rule the create
+                // path has followed since 2026-09-09 (`NewChannelDialog` below).
+                // ⚠ EVERY ROW, INCLUDING THE SELECTED ONE — the row is a plain
+                // button with no same-id guard, so clicking where you already
+                // are still takes you to its channel page.
                 onSelect={(id) => {
                   setSelectedId(id);
                   jump.clear();
-                  if (tab === "overview") setTab("channels");
+                  setTab("channels");
                 }}
               />
               <div

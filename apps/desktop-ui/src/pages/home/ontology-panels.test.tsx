@@ -83,8 +83,16 @@ beforeEach(() => {
 });
 
 /**
- * 🔒 THE PANE TOKEN — a WHOLE token, and a channel click on this face changes
- * NOTHING (S4's ruling; INVARIANTS §4A, `home-tabs.ts › ONTOLOGY_PANE`).
+ * 🔒 THE PANE TOKEN — a WHOLE token, so the token this face renders under does
+ * not vary with the selection (S4's ruling; INVARIANTS §4A, `home-tabs.ts ›
+ * ONTOLOGY_PANE`).
+ *
+ * ⚠ **THAT IS ABOUT THE TOKEN, NOT ABOUT THE CLICK — AND IT STOPPED BEING BOTH
+ * ON 2026-09-13.** This docblock read *"a channel click on this face changes
+ * NOTHING"*, which was the S4 behaviour and is now the bug Samuel reported from
+ * exactly this face: a pick raises the CHANNEL face from wherever you are (the
+ * `it` at the end of "the face" below). The token rule survives untouched — while
+ * Ontology is the face on screen, every selection resolves to the same token.
  *
  * ⚠ IT IS THE ONE THING ON THIS FACE THAT IS NOT VISIBLE, so it is asserted
  * directly rather than inferred from a render: keying Ontology by the selection
@@ -139,6 +147,33 @@ describe("the face", () => {
     for (const read of reads) {
       expect(read.opts.workspaceId).toBe(PERSONAL_WORKSPACE_ID);
     }
+  });
+
+  /**
+   * 🔒 **A CHANNEL PICK LEAVES THIS FACE FOR THAT CHANNEL'S OWN (Samuel,
+   * 2026-09-13:** *"I was on the ontology page, and it just stayed on the ontology
+   * page no change. So wherever the user is, if they click on a different channel
+   * in the picker, it needs to go to the channel page of that"***).** This face is
+   * where he reported it, which is why the case lives here and not only beside the
+   * Overview one (`index.test.tsx`) — and it is the face the old carve-out left
+   * behind, because Ontology's pane carries no row either.
+   *
+   * ⚠ **THE TOKEN RULE ABOVE IS UNAFFECTED.** What changed is the FACE, not how
+   * this face keys itself: while Ontology is on screen a selection still resolves
+   * to one token, and an open board is still not remounted by a click.
+   *
+   * ⚠ MUTATION-VERIFIED — one revert, one failure: restoring
+   * `if (tab === "overview")` in front of `index.tsx`'s `setTab("channels")`.
+   */
+  it("hands a channel pick to that channel's own face, from HERE", async () => {
+    renderHome();
+    await openOntologyFace();
+    expect(screen.queryByTestId("channel-surface")).toBeNull();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Priya Shah/ }));
+
+    await screen.findByRole("tab", { name: "Channel", selected: true });
+    expect(await screen.findByTestId("channel-surface")).toBeInTheDocument();
   });
 
   it("keeps the board's OWN chrome — the black + Object, and no cluster delete", async () => {

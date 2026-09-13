@@ -173,14 +173,12 @@ describe("the pane token", () => {
 
     fireEvent.click(screen.getByText("Dana Ruiz"));
 
-    // 🔒 THE PIN. Keyed by the TAB, the token does not move when the channel
-    // does: no fade starts, and the pane re-renders instantly with the new
-    // channel's data. Both halves are asserted, because either one alone stays
-    // green against the other's bug.
+    // ⚠ A PICK LEAVES THIS FACE SINCE 2026-09-13 (INVARIANTS §5): a switch is a
+    // pick PLUS a return. Only the DRIVING changed; the pins are the originals.
     expect(view.container.querySelector(".crossfade[data-out]")).not.toBeNull();
     expect(screen.getByText("Renewals")).toBeInTheDocument();
 
-    // …and once the fade completes the new channel's knowledge is on screen.
+    await openKnowledge();
     expect(await screen.findByText("Dana's shelf")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByText("Renewals")).not.toBeInTheDocument()
@@ -210,6 +208,11 @@ describe("the pane token", () => {
     );
 
     fireEvent.click(screen.getByText("Dana Ruiz"));
+    // ⚠ COME BACK: the pick raises the CHANNEL face now (2026-09-13). The ROW KEY
+    // is still the pin — `selected` moves with NO click whenever the selected row
+    // leaves `visible` (`home-panes.tsx`). BY ROLE, not `openKnowledge()`: the open
+    // base's BREADCRUMB reads "Knowledge" too and outlives the fade.
+    fireEvent.click(screen.getByRole("tab", { name: "Knowledge" }));
 
     // 🔒 THE PIN: channel B renders its LIST, not channel A's open base.
     expect(await screen.findByText("Dana's shelf")).toBeInTheDocument();
