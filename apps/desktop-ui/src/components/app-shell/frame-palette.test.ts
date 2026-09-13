@@ -179,12 +179,31 @@ describe("the channel info column is fixed-width, and paints above the transcrip
   it("the open width still matches the agent panel's, on both copies", () => {
     // The pairing `agent-panel.tsx` names in as many words — a mismatch makes
     // the divider jump sideways the moment an agent view opens.
+    // ⚠ IT IS A VARIABLE SINCE 2026-09-13 AND THE PAIRING IS UNCHANGED — the operator
+    // DRAGS this width (`channels-v2/use-info-resize.ts`), so a literal in either place
+    // is the same jump for a resized column. What is pinned is that all three sites state
+    // the SAME expression, fallback included: the two kit copies here, `info-panel.tsx`'s
+    // own `w-[…]`, and the agent overlay's.
+    const EXPR = "var(--info-w, 380px)";
     for (const file of [WEB_KIT_CSS, KIT_CSS]) {
       expect(
         rule(code(read(file)), '\n.channel-info-slide[data-open="true"] {'),
-        `${file} drifted off 380px`
-      ).toContain("width: 380px");
+        `${file} drifted off ${EXPR}`
+      ).toContain(`width: ${EXPR}`);
     }
+    // The TSX halves carry it without the space Prettier puts in the CSS one.
+    for (const file of [
+      "src/features/channels/components/channels-v2/agent-panel.tsx",
+      "src/features/channels/components/channels-v2/info-panel.tsx",
+    ]) {
+      expect(code(read(file)), `${file} drifted off --info-w`).toContain(
+        "w-[var(--info-w,380px)]"
+      );
+    }
+    // And the hook's floor is the same number, so "never narrower than today" stays true.
+    expect(
+      code(read("src/features/channels/components/channels-v2/use-info-resize.ts"))
+    ).toContain("INFO_WIDTH_DEFAULT = 380");
   });
 });
 
@@ -282,14 +301,31 @@ describe("ONE gray panel, with the page floating inside it", () => {
     ).toContain("bg-[var(--home-card)]");
   });
 
-  it("but the POP-OUT window is outside the frame model and does not follow it", () => {
-    // A pop-out has no rail, frame or panel to be a level of; it sits on
-    // `.windowSurface`, which paints `--panel-surface`. `pages/agent-window/
-    // frame.test.ts` pins the stack layer by layer — this reads the one value
-    // that the in-shell moves above kept trying to drag along with them.
+  /**
+   * 🔒 **THE AGENT POP-OUT JOINED THE FRAME MODEL ON 2026-09-13 (Samuel, over Wispr Flow's
+   * pop-out: *"notice that it's a white panel that's inset now on a darker background … It should
+   * be the same color that we have on our current site"*).** This case asserted the OPPOSITE until
+   * then — "a pop-out has no rail, frame or panel to be a level of" — and it was right for the
+   * window that had no rail. This one HAS one, so the alternation applies at window scale too:
+   * `--home-panel` ground (level 1) → `.bento` inset card (level 2).
+   *
+   * ⚠ **LAYER 3 IS UNCHANGED AND STILL PINNED**: `.windowSurface` still paints `--panel-surface`
+   * with no margin and no radius. It is COVERED by the shell's gray now rather than being the
+   * visible ground — which is why the value stays here: the day it changes, a window that fails to
+   * cover it shows the wrong colour at its edges.
+   * ⚠ **THE THREAD-WINDOW POP-OUT DID NOT MOVE.** It has no rail and no tabs, so nothing about
+   * Samuel's ruling reaches it; `pages/thread-window/` is deliberately not read here.
+   */
+  it("the agent pop-out follows the frame model now: gray ground, white inset card", () => {
+    const shellSrc = code(
+      read("src/features/channels/components/channels-v2/agent-window-shell.tsx")
+    );
+    expect(shellSrc).toContain("bg-home-panel");
+    expect(shellSrc).toContain("bento");
+    // ⚠ AND THE VIEW INSIDE IT PAINTS NOTHING — one painter per surface.
     expect(
       code(read("src/features/channels/components/channels-v2/agent-window.tsx"))
-    ).toContain("bg-[var(--panel-surface)]");
+    ).not.toContain("bg-[var(--panel-surface)]");
     expect(rule(shellCss, "\n.windowSurface {")).toContain("var(--panel-surface)");
   });
 });

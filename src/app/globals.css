@@ -1234,7 +1234,7 @@ html {
    pane, and a transform would slide it over the transcript instead of giving
    the transcript the space back.
 
-   ⚠ THE PANEL INSIDE KEEPS ITS OWN `w-[380px] shrink-0`, so it does not reflow
+   ⚠ THE PANEL INSIDE KEEPS ITS OWN `w-[var(--info-w,380px)] shrink-0`, so it does not reflow
    while the shell narrows — the shell clips it, the content never squashes.
 
    ⚠ 380px SINCE 2026-08-25 (Samuel), AND THE NUMBER IS A MATCH, NOT A TASTE.
@@ -1289,7 +1289,21 @@ html {
   transition: width 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .channel-info-slide[data-open="true"] {
-  width: 380px;
+  /* ⚠ THE OPERATOR DRAGS THIS (Samuel, 2026-09-13). `--info-w` is written on the
+     SURFACE ROOT by `channels-v2/use-info-resize.ts`, which owns both limits (never
+     narrower than the 380px fallback, never wider than half the surface) and the
+     per-device memory. ⚠ THE FALLBACK IS THE PAIRING: `channels-v2/agent-panel.tsx`
+     and `channels-v2/info-panel.tsx` state the same `var(--info-w, 380px)`, because
+     that overlay is positioned against the SAME right edge and a mismatch makes the
+     divider jump sideways the moment an agent view opens. Change one, change all
+     three (pinned: `app-shell/frame-palette.test.ts`). */
+  width: var(--info-w, 380px);
+}
+/* ⚠ NO TRANSITION WHILE DRAGGING, or the column lags the pointer by 200ms. The
+   attribute is set on the surface ROOT for the length of the gesture —
+   `channels-v2/use-info-resize.ts › INFO_RESIZING_ATTR`. */
+[data-info-resizing="true"] .channel-info-slide {
+  transition: none;
 }
 
 /* THE CONTENT SWAP — fade out, replace, fade in. Driven by

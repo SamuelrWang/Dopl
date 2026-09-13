@@ -30,6 +30,7 @@ import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
 import { ChannelSingleColumn } from "./channel-single-column";
 import { SurfaceAgentView } from "./surface-agent-view";
 import { SurfaceInfoPanel } from "./surface-info-panel";
+import { InfoResizeHandle } from "./info-resize-handle";
 import { useInfoSlide } from "./use-info-slide";
 import type { TabKey } from "./info-panel";
 import type { ChannelWebView } from "./use-channel-web-view";
@@ -354,6 +355,12 @@ export function ChannelSurface({
   return (
     <>
       {messagePane()}
+      {/* THE DIVIDER IS DRAGGABLE (Samuel, 2026-09-13) — `info-resize-handle.tsx`
+          owns the pill and `use-info-resize.ts` the width, its two limits and the
+          per-device memory. ⚠ IT IS A ZERO-WIDTH FLEX SIBLING, so this row's box
+          math did not move; and it is GONE while the column is collapsed, because a
+          grab handle for a pane that is not there can only resize nothing. */}
+      {sel.infoOpen && <InfoResizeHandle />}
       {/* THE INFO COLUMN SLIDES (Samuel, 2026-08-24). The shell is ALWAYS
           rendered — a column mounting at its open width has no 0-width start
           state — and the panel inside stays one transition past close so the

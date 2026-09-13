@@ -361,7 +361,12 @@ export function ChannelsV2InfoPanel({
   return (
     <aside
       aria-label="Channel info"
-      className="flex w-[380px] shrink-0 flex-col border-l border-border-default"
+      // ⚠ `--info-w` IS THE DRAGGABLE WIDTH (2026-09-13, `use-info-resize.ts`), and the
+      // 380px FALLBACK is what this class said literally until then — so the column is
+      // correct before the handle has written anything, and on any host that never
+      // mounts one. `shrink-0` stays: the shell animates 0 → this width and a
+      // shrinkable panel would reflow its contents through every frame of the slide.
+      className="flex w-[var(--info-w,380px)] shrink-0 flex-col border-l border-border-default"
     >
       {/* ⚠ A FIFTH TAB IS OVER THE ROW'S WIDTH BUDGET, AND THE BUDGET IS A
           MEASUREMENT, NOT A TASTE (Home Knowledge Panels M4): at 380px the four

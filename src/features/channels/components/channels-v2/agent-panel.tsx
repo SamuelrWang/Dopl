@@ -270,7 +270,12 @@ export function ChannelsV2AgentPanel({
       aria-label="Agent view"
       inert={!open}
       className={cn(
-        // ⚠ `w-[380px]` IS PAIRED WITH `.channel-info-slide`'s open width
+        // ⚠ THE WIDTH IS `--info-w` SINCE 2026-09-13, AND THAT *IS* THE PAIRING, NOW KEPT
+        // BY CONSTRUCTION: the operator drags the info column's width
+        // (`use-info-resize.ts`), so a literal here would make the divider jump the
+        // moment an agent view opened over a resized column. The 380px fallback is the
+        // value this line carried literally, for a host that mounts no handle.
+        // ⚠ `w-[380px]` WAS PAIRED WITH `.channel-info-slide`'s open width
         // (globals.css + the desktop `kit.css` copy) — Samuel, 2026-08-25. This
         // panel is absolutely positioned against the SAME right edge as the
         // info column, so a mismatch makes the divider jump sideways the moment
@@ -303,7 +308,7 @@ export function ChannelsV2AgentPanel({
         // the main area, with no column beside it to divide from.
         full
           ? "min-h-0 min-w-0 flex-1"
-          : "absolute inset-y-0 right-0 w-[380px]",
+          : "absolute inset-y-0 right-0 w-[var(--info-w,380px)]",
         // ⚠ THE DIVIDER IS `border-l border-border-default` — THE SAME CLASS THIS PANE'S OTHER
         // LINES ALREADY CARRY, and that is the whole point. Its header rule is
         // `border-b border-border-default`; on /home BOTH are recoloured to the account palette's

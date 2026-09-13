@@ -440,3 +440,29 @@ describe("StandaloneChannelSurface — the knowledge capability", () => {
       .toBeNull();
   });
 });
+
+/**
+ * THE DRAGGABLE DIVIDER, WHERE IT IS MOUNTED (Samuel, 2026-09-13).
+ *
+ * ⚠ THE HANDLE'S OWN BEHAVIOUR — both limits, the variable, the arrows, the memory
+ * — IS `info-resize-handle.test.tsx`. What only this file can see is the two facts
+ * about its HOST: it rides the shared surface (so both mounts of it get the
+ * handle from one implementation), and it is GONE with the column, because a grab
+ * handle for a pane that is not there can only resize nothing.
+ */
+describe("StandaloneChannelSurface — the info column's resize handle", () => {
+  const handle = () =>
+    screen.queryByRole("separator", { name: "Resize channel info" });
+
+  it("rides the shared surface, so every two-column host has it", () => {
+    mount();
+    expect(handle()).toBeTruthy();
+  });
+
+  it("goes away with the column, handle and all", () => {
+    mount();
+    // The pane header's own toggle — the ONE source of truth for `infoOpen`.
+    fireEvent.click(screen.getByRole("button", { name: "Channel info" }));
+    expect(handle()).toBeNull();
+  });
+});
