@@ -107,6 +107,20 @@ describe("the /home credit capacity bar", () => {
    * has to make this file red, which the positive half alone would not do (both
    * constants share `text-text-primary`).
    */
+  /**
+   * 🔒 THE DEEPER CARD SHADOW IS THE OVERVIEW FACE'S ALONE (Samuel, 2026-09-13:
+   * "the shadow should only apply for the overview page … the pane for agents in
+   * the agent tab also changed … it looks weird now"): the face stamps
+   * `data-overview-face` on its root and the kit scopes `--shadow-card` under it.
+   */
+  it("stamps data-overview-face on the Overview root so the deep card shadow is scoped", async () => {
+    renderHome();
+    await panel("Usage");
+    const root = document.querySelector("[data-overview-face]");
+    expect(root).not.toBeNull();
+    expect(root!.contains(screen.getByRole("heading", { name: "Usage" }))).toBe(true);
+  });
+
   it("puts the panel heading one step above the controls inside it", async () => {
     renderHome();
     const usage = await panel("Usage");
@@ -375,5 +389,91 @@ describe("the /home credit capacity bar", () => {
     expect(
       within(credits).queryByRole("button", { name: "Get more credits" })
     ).toBeNull();
+  });
+});
+
+/**
+ * 🔒 **THE RECONCILIATION CAPTION (Samuel, 2026-09-13: *"there's a disconnect
+ * between the two charts. we need to nail this down"*; F-693).** This bar is the
+ * COUNTER and the plot under it is the LEDGER. When the server's own subtraction of
+ * the two is non-zero, the card says so in ONE muted word; when it is zero — which
+ * is every state after
+ * `20261004120000_credit_consume_with_ledger.sql`, by construction — it says
+ * nothing at all.
+ *
+ * ⚠ **NOTHING-WHEN-RECONCILED IS THE HALF THAT NEEDS PINNING.** A badge that is
+ * always present is furniture, and a reader who sees it on every load stops reading
+ * it — at which point the one month it matters looks like every other month.
+ */
+describe("the reconciliation caption", () => {
+  const withDrift = (credits: Record<string, unknown>) =>
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
+      path.split("?")[0] === "/api/billing/status"
+        ? Promise.resolve(
+            ok({
+              ...BILLING_STATUS,
+              credits: { ...BILLING_STATUS.credits, ...credits },
+            })
+          )
+        : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
+    );
+
+  it("says NOTHING when the wallet and the ledger agree", async () => {
+    withDrift({ ledgerDrift: 0 });
+    renderHome();
+    const credits = await panel("Usage");
+    await within(credits).findByText(/ left$/);
+    expect(within(credits).queryByText("Unreconciled")).toBeNull();
+  });
+
+  it("🔒 prints one muted word when they do not", async () => {
+    // The incident's own shape: a counter three ahead of its attribution rows.
+    withDrift({ ledgerDrift: 3 });
+    renderHome();
+    const credits = await panel("Usage");
+    expect(await within(credits).findByText("Unreconciled")).toBeInTheDocument();
+  });
+
+  it("says it in the OTHER direction too — the sign is not the trigger", async () => {
+    withDrift({ ledgerDrift: -2 });
+    renderHome();
+    const credits = await panel("Usage");
+    expect(await within(credits).findByText("Unreconciled")).toBeInTheDocument();
+  });
+
+  /**
+   * ⚠ **MINIMAL COPY (INVARIANTS §5): THE WORD, NOT THE NUMBER.** The figure is on
+   * the wire and in the logs; a card whose whole job is two numbers does not get a
+   * third one explaining that they disagree.
+   */
+  it("🔒 never prints the drift figure itself", async () => {
+    withDrift({ ledgerDrift: 3 });
+    renderHome();
+    const credits = await panel("Usage");
+    await within(credits).findByText("Unreconciled");
+    expect(within(credits).queryByText(/off by/i)).toBeNull();
+    expect(within(credits).queryByText(/3 (rows|credits|missing)/i)).toBeNull();
+  });
+
+  /**
+   * 🔒 **THE STALE-CACHE CASE (INVARIANTS §8).** The query cache is
+   * IndexedDB-persisted with a 24h gcTime, so a row stored before `ledgerDrift`
+   * shipped replays after it with the key ABSENT inside an otherwise complete
+   * `credits` object — the exact shape a row-wise `?? DEFAULT` cannot see.
+   * `use-workspace-entitlements.ts` defaults it FIELD-WISE, and `undefined !== 0`
+   * would otherwise put "Unreconciled" on every replayed row.
+   */
+  it("🔒 treats a cached row with NO ledgerDrift as reconciled", async () => {
+    const preFieldCredits: Record<string, unknown> = { ...BILLING_STATUS.credits };
+    delete preFieldCredits.ledgerDrift;
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
+      path.split("?")[0] === "/api/billing/status"
+        ? Promise.resolve(ok({ ...BILLING_STATUS, credits: preFieldCredits }))
+        : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
+    );
+    renderHome();
+    const credits = await panel("Usage");
+    await within(credits).findByText(/ left$/);
+    expect(within(credits).queryByText("Unreconciled")).toBeNull();
   });
 });

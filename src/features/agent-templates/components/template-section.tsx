@@ -91,6 +91,15 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
  */
 export const TEMPLATE_NAME_TEXT_LG = SECTION_HEADING_TEXT;
 
+/**
+ * THE CARD GRID — wider cards, FOUR to a row on Samuel's screen (2026-09-13:
+ * *"Right now, it can fit 5 per row. I want to increase width of cards so it's
+ * 4 per row"*; was `minmax(196px,1fr)`). Exported so the /home Agents skeleton
+ * byte-shares it.
+ */
+export const TEMPLATE_GRID =
+  "grid grid-cols-[repeat(auto-fill,minmax(400px,1fr))] gap-2.5";
+
 export function TemplatePanel({
   id,
   label,
@@ -152,7 +161,7 @@ export function TemplateGrid({
     return <p className="px-1 pb-1 text-caption text-text-muted">{emptyLine}</p>;
   }
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2.5">
+    <div className={TEMPLATE_GRID}>
       {templates.map((template) => (
         <TemplateCard
           key={template.id}
@@ -243,17 +252,22 @@ function TemplateCard({
           {marker}
         </span>
       )}
-      <span className={cn("truncate", TEMPLATE_NAME_TEXT)}>
-        {template.name}
+      {/* ⚠ NAME LEFT, MODEL PILL TOP-RIGHT, NO HAIRLINE ON THE PILL (Samuel,
+          2026-09-13: "put the model pill to be on the top right of the box.
+          Also no borderline around pill"). */}
+      <span className="flex w-full items-start justify-between gap-2">
+        <span className={cn("min-w-0 truncate", TEMPLATE_NAME_TEXT)}>
+          {template.name}
+        </span>
+        {model && (
+          <span className="shrink-0 rounded-full bg-bg-inset px-2 py-0.5 text-micro font-medium text-text-secondary">
+            {model}
+          </span>
+        )}
       </span>
       {description && (
         <span className="line-clamp-2 text-caption leading-relaxed text-text-secondary">
           {description}
-        </span>
-      )}
-      {model && (
-        <span className="mt-auto w-fit rounded-full border border-border-strong bg-bg-inset px-2 py-0.5 text-micro font-medium text-text-secondary">
-          {model}
         </span>
       )}
     </>

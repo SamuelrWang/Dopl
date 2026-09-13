@@ -225,28 +225,21 @@ describe("home page", () => {
     renderHome();
     await openChannels();
 
-    // The field is behind a collapsed pill — it is unreachable until the round
-    // toggle grows it (kit `.search-expand`).
-    expect(screen.getByLabelText("Search people")).toHaveAttribute(
-      "tabindex",
-      "-1"
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
-    expect(screen.getByLabelText("Search people")).toHaveAttribute(
-      "tabindex",
-      "0"
-    );
+    // 🔒 ALWAYS EXPANDED (Samuel, 2026-09-13): no toggle, the field is reachable
+    // at once and reads "Search…".
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+    expect(screen.getByLabelText("Search")).toHaveAttribute("placeholder", "Search…");
 
     // ⚠ SEARCH STILL REACHES MEMBERS (2026-09-01, deliberately): finding a
     // channel by who is in it is a QUERY, not a presentation of identity, and
     // the row that comes back is still titled by the channel.
-    fireEvent.change(screen.getByLabelText("Search people"), {
+    fireEvent.change(screen.getByLabelText("Search"), {
       target: { value: "shahco" },
     });
     expect(screen.getAllByText("Priya Shah").length).toBeGreaterThan(0);
     expect(screen.queryByText("Link out")).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Search people"), {
+    fireEvent.change(screen.getByLabelText("Search"), {
       target: { value: "nobody" },
     });
     // ⚠ BOTH PANES. The list says "No matches" and so does the record — the
@@ -291,7 +284,7 @@ describe("home page", () => {
     // 🔒 AND A TYPED QUERY DOES NOT CHANGE IT. The test is the TOTAL, not "is a
     // query active": with no channels at all there is nothing a filter could have
     // excluded, so "No matches" would still be a false report.
-    fireEvent.change(screen.getByLabelText("Search people"), {
+    fireEvent.change(screen.getByLabelText("Search"), {
       target: { value: "nobody" },
     });
     await waitFor(() =>
@@ -414,19 +407,17 @@ describe("home page", () => {
   });
 
   /**
-   * 🔒 A PICK LEAVES OVERVIEW, AND A CREATE LANDS ON THE NEW CHANNEL (Samuel,
-   * 2026-09-09: *"when a user clicks on a different channel, it will go to that
-   * channel's channel page, not stay on the overview page"* and *"when a user
-   * creates a new channel, have it auto go from the overview page, directly to
-   * the channel's channel page"*).
-   *
-   * ⚠ THE RULE IS OVERVIEW-SCOPED FOR THE PICK AND UNCONDITIONAL FOR THE
-   * CREATE, and both halves are asserted. Overview is the ONE face whose pane
-   * carries no row (`home-tabs.ts › OVERVIEW_PANE`), so a click in the list
-   * changed nothing on screen — which is what was reported. Knowledge and
-   * Agents RENDER the selected channel's contents: the list beside them IS
-   * their picker, so raising Channel from those faces would delete the only way
-   * to point them anywhere (`index.tsx`, `ONE LAYOUT FOR ALL FOUR TABS`).
+   * 🔒 **A PICK RAISES THE CHANNEL FACE FROM WHEREVER YOU ARE — EVERY FACE, NOT
+   * ONLY OVERVIEW (Samuel, 2026-09-13:** *"so wherever the user is, if they click
+   * on a different channel in the picker, it needs to go to the channel page of
+   * that"*, reported from the Ontology face**).** This SUPERSEDES the 2026-09-09
+   * carve-out, which raised it from Overview alone on the argument that Knowledge
+   * and Agents render the selected channel's contents so the list beside them is
+   * their picker. Re-pointing a face is the header selector's job, one click away.
+   * ⚠ BOTH BRANCHES OF THE OLD CONDITIONAL ARE ASSERTED — the face it already
+   * moved from, and a face it did not — so a re-narrowing fails here. The
+   * ONTOLOGY face's own case is next door (`ontology-panels.test.tsx`), where that
+   * face's read table is wired.
    */
   it("picking a channel from OVERVIEW raises that channel's own face", async () => {
     renderHome();
@@ -443,7 +434,7 @@ describe("home page", () => {
     );
   });
 
-  it("…and a pick from KNOWLEDGE stays on Knowledge — the list is its picker", async () => {
+  it("…and from KNOWLEDGE too, which used to stay put", async () => {
     renderHome();
     await screen.findByRole("tab", { name: "Overview" });
     fireEvent.click(screen.getByText("Knowledge"));
@@ -451,10 +442,10 @@ describe("home page", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Priya Shah/ }));
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole("tab", { name: "Knowledge", selected: true })
-      ).toBeInTheDocument()
+    await screen.findByRole("tab", { name: "Channel", selected: true });
+    expect(await screen.findByTestId("channel-surface")).toHaveAttribute(
+      "data-workspace",
+      LINK_WORKSPACE_ID
     );
   });
 

@@ -7,10 +7,12 @@ import {
   HomeAgentPanelsSkeleton,
   HomeKnowledgePanelsSkeleton,
 } from "#/pages/home/home-skeleton";
+import { ChannelRecordSkeleton } from "#/pages/home/channel-record-skeleton";
 import { OverviewSkeleton } from "#/pages/overview/overview-skeleton";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
 import { AgentsPageSkeleton } from "#/pages/agents/agents-skeleton";
 import { MembersPageSkeleton } from "#/pages/members/members-skeleton";
+import { TEMPLATE_GRID } from "@/features/agent-templates/components/template-section";
 import {
   KnowledgeBaseSkeleton,
   KnowledgeHomeSkeleton,
@@ -75,6 +77,16 @@ const SHAPES = [
     <HomeKnowledgePanelsSkeleton key="hk" label="Loading knowledge" />,
   ],
   ["home agents face", <HomeAgentPanelsSkeleton key="ha" label="Loading agents" />],
+  // ⚠ THE RECORD PANE'S CHANNEL FACE (2026-09-13) — the ELEVENTH shape, and the
+  // last generic ghost inside /home: that gate rendered `DetailPaneSkeleton` +
+  // `TranscriptSkeleton` (alternating bubbles, no composer, no info column). Its
+  // own byte-share pins are `pages/home/channel-record-skeleton.test.tsx`, which
+  // is where they belong — they are all reads of ONE feature tree — and this row
+  // is what puts it under the three rules EVERY shape owes.
+  [
+    "home channel record",
+    <ChannelRecordSkeleton key="hc" label="Loading channel" />,
+  ],
   ["opened knowledge base", <KnowledgeBaseSkeleton key="kb" label="Loading base" />],
   ["knowledge root", <KnowledgeHomeSkeleton key="kh" label="Loading knowledge" />],
   ["overview", <OverviewSkeleton key="o" label="Loading overview" />],
@@ -139,15 +151,12 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    * copied string in two skeletons — and this is what keeps the copy honest.
    */
   it("the Agents ghosts carry TemplateGrid's grid class verbatim", () => {
-    const TEMPLATE_GRID =
-      "grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2.5";
-    const section = file(
-      "../../../../../src/features/agent-templates/components/template-section.tsx"
-    );
-
-    expect(section).toContain(TEMPLATE_GRID);
-    expect(HOME_SKELETON).toContain(TEMPLATE_GRID);
-    expect(AGENTS_SKELETON).toContain(TEMPLATE_GRID);
+    // 2026-09-13: the grid is an EXPORTED constant now (`TEMPLATE_GRID`), so the
+    // skeletons import it instead of copying the string; the pin is that both
+    // read the import and that the constant still spells a real grid.
+    expect(TEMPLATE_GRID).toMatch(/^grid grid-cols-\[repeat\(auto-fill,minmax\(\d+px,1fr\)\)\] gap-2\.5$/);
+    expect(HOME_SKELETON).toContain("className={TEMPLATE_GRID}");
+    expect(AGENTS_SKELETON).toContain("className={TEMPLATE_GRID}");
   });
 
   /**

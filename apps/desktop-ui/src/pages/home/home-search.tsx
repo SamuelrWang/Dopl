@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { Search } from "lucide-react";
 
 /**
@@ -22,48 +22,19 @@ export function HomeSearch({
   query: string;
   onQueryChange: (next: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const toggleRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const collapse = useCallback(
-    (returnFocus = false) => {
-      setOpen(false);
-      onQueryChange("");
-      if (returnFocus) toggleRef.current?.focus();
-    },
-    [onQueryChange]
-  );
-
-  /* Focus on grow-start, not animation-end — waiting eats first keystrokes. */
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-
+  // ⚠ ALWAYS EXPANDED, NO GROW ANIMATION (Samuel, 2026-09-13: "remove the
+  // expanding animation, just have the bar always be expanded fixed. Instead of
+  // it saying Search people, just have it say Search..."). The kit's
+  // `.search-expand` keeps its open face at a FIXED 260px; the round toggle is
+  // gone — the glyph is decoration and the field is always reachable.
   return (
-    <div className="search-expand" data-open={open}>
+    <div className="search-expand" data-open="true">
       <div className="auth-btn-3d-light search-expand-shell">
-        <button
-          type="button"
-          ref={toggleRef}
-          className="search-expand-toggle"
-          /* ⚠ NOT "Search people" — that is the INPUT's label, and two nodes
-             with one accessible name inside one pill is an ambiguity for a
-             screen reader and for every by-label query. */
-          aria-label={open ? "Close search" : "Search"}
-          aria-expanded={open}
-          aria-controls="home-search-field"
-          /* ⚠ Suppress the focus shift while open, else the input's blur
-             collapses the pill a beat before this click reopens it. */
-          onMouseDown={(event) => {
-            if (open) event.preventDefault();
-          }}
-          onClick={() => (open ? collapse(true) : setOpen(true))}
-        >
-          {/* 15px — `site-nav.tsx`'s `<SearchIcon size={17} />` at the same
-              6/7 the pill itself was scaled by. */}
+        <span className="search-expand-toggle" aria-hidden="true">
           <Search size={15} strokeWidth={2} />
-        </button>
+        </span>
         <input
           id="home-search-field"
           ref={inputRef}
@@ -71,18 +42,15 @@ export function HomeSearch({
           type="text"
           autoComplete="off"
           spellCheck={false}
-          placeholder="Search people"
-          aria-label="Search people"
-          tabIndex={open ? 0 : -1}
+          placeholder="Search…"
+          aria-label="Search"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Escape") return;
             event.preventDefault();
-            collapse(true);
-          }}
-          onBlur={() => {
-            if (query.trim() === "") collapse();
+            onQueryChange("");
+            inputRef.current?.blur();
           }}
         />
       </div>

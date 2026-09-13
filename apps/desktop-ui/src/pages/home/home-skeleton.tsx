@@ -9,6 +9,7 @@ import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
 import { HOME_CARD_FACE } from "./channel-row-marks";
 import { HOME_TABS } from "./home-tabs";
 import home from "./home.module.css";
+import { TEMPLATE_GRID } from "@/features/agent-templates/components/template-section";
 
 /**
  * /home's LOADING SHAPES — the page frame, and one per face of the record pane.
@@ -216,7 +217,7 @@ function KbCardsGhost() {
  *  `components/skeletons/page-skeletons.test.tsx`. */
 function TemplateCardsGhost() {
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2.5">
+    <div className={TEMPLATE_GRID}>
       {Array.from({ length: 4 }).map((_, i) => (
         <Skeleton key={i} className="h-[92px] rounded-[14px]" />
       ))}

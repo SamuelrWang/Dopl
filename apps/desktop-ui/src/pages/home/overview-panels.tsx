@@ -111,7 +111,7 @@ export function HomeOverviewPanels({
   const agents = data?.agents ?? EMPTY_AGENTS;
 
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto p-3">
+    <div className="min-w-0 flex-1 overflow-y-auto p-3" data-overview-face>
       <div className="flex flex-col gap-3">
         {/* ⚠ **THE WHOLE PANEL FOLDS AWAY WHEN NOTHING IS RUNNING (Samuel,
             2026-09-05).** **Waiting on you** and **Recent threads** were CUT

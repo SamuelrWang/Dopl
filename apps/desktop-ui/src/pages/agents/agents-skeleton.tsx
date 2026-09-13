@@ -2,6 +2,7 @@ import { cn } from "@/shared/lib/utils";
 import { Skeleton, SkeletonBar, SkeletonLine } from "@/shared/ui/skeleton";
 import { SECTION_PANEL_GROUND } from "@/shared/ui/section-panel";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
+import { TEMPLATE_GRID } from "@/features/agent-templates/components/template-section";
 
 /**
  * `/:workspaceSegment/agents`'s loading shape — the templates page's OWN
@@ -70,7 +71,7 @@ function TemplatePanelGhost({ cards }: { cards: number }) {
         <SkeletonLine w={128} h={10} />
         <SkeletonBar h={22} w={64} className="rounded-full" />
       </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-2.5">
+      <div className={TEMPLATE_GRID}>
         {Array.from({ length: cards }).map((_, i) => (
           <Skeleton key={i} className="h-[92px] rounded-[14px]" />
         ))}
