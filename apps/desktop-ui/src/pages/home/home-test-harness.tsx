@@ -108,7 +108,14 @@ export const HOME: HomeChannelsPayload = {
       name: "Priya Shah",
       createdAt: "2026-07-12T10:00:00.000Z",
       lastMessageAt: "2026-08-22T14:19:00.000Z",
+      // ⚠ STILL ON THE FIXTURE THOUGH NOTHING RENDERS IT (2026-09-13) — the field
+      // is still on the wire, and `relationship-list.test.tsx` asserts its ABSENCE
+      // from the row, which needs a payload that actually carries it.
       lastMessagePreview: "Three renewals over $1k before October",
+      // The default row is fully READ — the unread marks are opt-in per case, so
+      // no existing suite grows a dot or a badge it never asked about.
+      unread: false,
+      unreadMentions: 0,
       linkOut: null,
     },
   ],
@@ -320,6 +327,22 @@ export const SOLO_CHANNEL: HomeChannelsPayload["channels"][number] = {
   peer: null,
   lastMessageAt: null,
   lastMessagePreview: null,
+};
+
+/** UNREAD MENTIONS on the default channel — the `@ N` pill's fixture
+ *  (2026-09-13). ⚠ `unread` is TRUE alongside: a channel with unread mentions has
+ *  unread messages by construction, and the row must still show ONE mark. */
+export const MENTIONED_CHANNEL: HomeChannelsPayload["channels"][number] = {
+  ...HOME.channels[0],
+  unread: true,
+  unreadMentions: 3,
+};
+
+/** UNREAD, BUT NOBODY TAGGED ME — the plain-dot fixture (2026-09-13). */
+export const UNREAD_CHANNEL: HomeChannelsPayload["channels"][number] = {
+  ...HOME.channels[0],
+  unread: true,
+  unreadMentions: 0,
 };
 
 /** THREE people in one container — the shape the retired two-member cap made

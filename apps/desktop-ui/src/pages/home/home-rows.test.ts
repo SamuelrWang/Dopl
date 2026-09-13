@@ -48,6 +48,8 @@ function channel(over: Partial<HomeChannel> = {}): HomeChannel {
     createdAt: "2026-08-20T09:00:00.000Z",
     lastMessageAt: null,
     lastMessagePreview: null,
+    unread: false,
+    unreadMentions: 0,
     linkOut: null,
     ...over,
   };

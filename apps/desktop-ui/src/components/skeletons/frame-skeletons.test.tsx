@@ -205,8 +205,11 @@ describe("the /home shapes are /home's own geometry", () => {
     expect(
       container.querySelectorAll(".w-\\[var\\(--home-list-w\\)\\]")
     ).toHaveLength(2);
+    // ⚠ `min-w-0` JOINED IT ON 2026-09-13, when the cell's content became a
+    // full-width BAR: without it a long "{Name}'s Home" would push the selector
+    // off the record pane's left edge, which is the one alignment this cell is for.
     const CELL =
-      'className="flex w-[var(--home-list-w)] shrink-0 items-center px-3"';
+      'className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3"';
     expect(file("../../pages/home/home-header.tsx")).toContain(CELL);
     expect(HOME_SKELETON).toContain(CELL);
     // 🚫 THE PAD IS GONE, and that is half the pin: bidirectional.
@@ -238,8 +241,12 @@ describe("the /home shapes are /home's own geometry", () => {
   it("ghosts one selector pill per face, without offering anything to press", () => {
     const { container } = render(<HomePageSkeleton />);
     expect(container.querySelector(".seg-track")).toBeNull();
+    // ⚠ SCOPED TO THE HEADER STRIP (`.pr-5`, which only it wears) SINCE
+    // 2026-09-13. The bare `.gap-1\.5` query counted the whole page, and the
+    // channel-row ghost's second line is a `gap-1.5` row of peer faces now — so an
+    // unscoped count reads 19 and says nothing about the selector.
     expect(
-      container.querySelectorAll(".gap-1\\.5 > [data-slot=\"skeleton\"]")
+      container.querySelectorAll(".pr-5 .gap-1\\.5 > [data-slot=\"skeleton\"]")
     ).toHaveLength(HOME_TABS.length);
     expect(container.querySelectorAll("button")).toHaveLength(0);
     expect(container.querySelectorAll("a")).toHaveLength(0);

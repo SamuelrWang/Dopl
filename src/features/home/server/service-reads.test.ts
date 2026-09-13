@@ -17,6 +17,8 @@ vi.mock("./repository", () => ({
   listContainerPeers: vi.fn(),
   listContainerChannels: vi.fn(),
   listLastMessages: vi.fn(),
+  listMyChannelReads: vi.fn(),
+  listMyMentionStamps: vi.fn(),
   findLinkByToken: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/repository", () => ({
@@ -68,6 +70,12 @@ beforeEach(() => {
   mocked.listContainerPeers.mockResolvedValue(new Map());
   mocked.listContainerChannels.mockResolvedValue(new Map());
   mocked.listLastMessages.mockResolvedValue(new Map());
+  // ⚠ NO MEMBERSHIP AND NO MENTIONS BY DEFAULT (2026-09-13), so every case that
+  // predates the unread marks reads `unread: false` / `unreadMentions: 0` — the
+  // marks are opted into by the cases that own them
+  // (`service-reads-unread.test.ts`).
+  mocked.listMyChannelReads.mockResolvedValue(new Map());
+  mocked.listMyMentionStamps.mockResolvedValue([]);
   mocked.findLinkByToken.mockResolvedValue(null);
   mockProfiles.mockResolvedValue(new Map());
 });
@@ -126,6 +134,12 @@ describe("getHomeChannels", () => {
         createdAt: "2026-08-20T00:00:00.000Z",
         lastMessageAt: null,
         lastMessagePreview: null,
+        // ⚠ BOTH MARKS ARE OFF HERE BECAUSE THE CALLER IS NOT A CHANNEL MEMBER in
+        // this fixture (`listMyChannelReads` answers an empty map) — the
+        // `isMember` clause, and the reason it is spelled out in this
+        // exact-shape assertion rather than left to `toMatchObject`.
+        unread: false,
+        unreadMentions: 0,
         linkOut: null,
       },
     ]);

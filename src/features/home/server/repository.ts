@@ -217,3 +217,13 @@ export async function insertClaim(args: {
  * Import from either module — they are the same bindings.
  */
 export * from "./repository-containers";
+
+/* ------------------------------ unread -------------------------------- */
+
+/**
+ * ⚠ RE-EXPORT, NOT A RE-IMPLEMENTATION — `repository-unread.ts` owns the two
+ * reads behind the /home row's unread dot and `@ N` badge (2026-09-13). Same
+ * reason the container split is re-exported above: every caller and every
+ * `vi.mock("./repository")` factory addresses ONE module.
+ */
+export * from "./repository-unread";

@@ -1,6 +1,8 @@
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
+import { AvatarStack } from "@/shared/ui/avatar-stack";
+import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
+import { HOME_CARD_FACE, MentionBadge, UnreadDot } from "./channel-row-marks";
 import home from "./home.module.css";
 
 /**
@@ -96,13 +98,33 @@ function RelationshipRow({
    *  label. */
   const name =
     row.kind === "channel" ? channelTitle(row.channel) : (row.link.label ?? "Link");
-  // ⚠ UNCHANGED BY THE 2026-09-01 IDENTITY RULING, both arms: a channel's last
-  // message and a link's claim state are facts about the ROW, not about who is
-  // in it. Only the roster-derived title, faces and subline were removed.
-  const lastLine =
-    row.kind === "channel"
-      ? (row.channel.lastMessagePreview ?? "No messages yet")
-      : "Not yet claimed";
+  /**
+   * 🔒 **THE LAST-MESSAGE PREVIEW IS GONE (Samuel, live review 2026-09-13:
+   * *"having the most recent message being in there just doesn't make sense
+   * imo"*).** It stood here as the channel arm of a `lastLine` that a LINK row
+   * still needs, so the two arms have separated: a link row has no channel, no
+   * roster and no read-state, so its second line is still the one sentence it has
+   * to say. ⚠ **`HomeChannel.lastMessagePreview` IS STILL ON THE WIRE and this is
+   * still its only possible renderer** — see that field's docblock for why it was
+   * not dropped from the payload. Do not put it back on the row.
+   *
+   * ⚠ THE LINK ROW IS UNCHANGED by every 2026-09-13 ruling: the marks below are
+   * facts about a CHANNEL, and this row is a channel that does not exist yet.
+   */
+  const pendingLine = row.kind === "link" ? "Not yet claimed" : null;
+  /**
+   * The CHANNEL row's own second line — the roster on the left, the unread marks
+   * on the right.
+   *
+   * ⚠ `?? EMPTY_X` INLINE AT EVERY NEW KEY (INVARIANTS §8): both fields are new
+   * on an IndexedDB-persisted payload with a 24h `gcTime`, so the first paint
+   * after this bundle ships reads entries that HAVE NEITHER. `channelPeople` is
+   * the one sanctioned exception and carries its own reason.
+   */
+  const channel = row.kind === "channel" ? row.channel : null;
+  const mentions = channel?.unreadMentions ?? 0;
+  const unread = channel?.unread ?? false;
+  const faces = channel ? channelPeople(channel) : [];
 
   return (
     <button
@@ -117,7 +139,11 @@ function RelationshipRow({
         // ⚠ NO `bg-*` UTILITY HERE. The recipe's fill is a GRADIENT and a
         // utility background would flatten it (the hazard `.raised-tab`'s note
         // spells out: utilities outrank the kit layer).
-        "auth-btn-3d-light flex w-full cursor-pointer items-start gap-2.5 rounded-[14px] px-2.5 py-2.5 text-left",
+        // ⚠ THE FACE IS `HOME_CARD_FACE` (2026-09-13) — the elevation and the
+        // radius, shared with the header's "{Name}'s Home" bar rather than
+        // spelled out in both files (`channel-row-marks.tsx` carries why).
+        HOME_CARD_FACE,
+        "flex w-full cursor-pointer items-start gap-2.5 px-2.5 py-2.5 text-left",
         // Selection is a RING, not a fill and no longer a black line (Samuel,
         // 2026-08-24): the same darkened hairline + soft halo the search pill
         // wears while it is open, held permanently. It rides ON the raised face
@@ -132,7 +158,7 @@ function RelationshipRow({
         selected && cn("selected-ring", home.rowSelected)
       )}
     >
-      {/* 🔒 ⚠ **NO AVATAR, NO STACK, NO BOT GLYPH — DELETED 2026-09-01
+      {/* 🔒 ⚠ **NO IDENTITY GLYPH IN THE ROW'S LEADING SLOT — DELETED 2026-09-01
           (Samuel).** The row carried THREE identity faces chosen by roster size:
           a `Bot` glyph when solo, one `Avatar` with a peer, an `AvatarStack`
           with several. That made a channel's ICON a function of its MEMBERSHIP,
@@ -160,19 +186,63 @@ function RelationshipRow({
             {formatChannelTimestamp(row.at)}
           </span>
         </span>
-        {/* 🔒 THE SUBLINE IS GONE WITH THE FACES (2026-09-01). Every value it
-            could hold was the ROSTER — the lone peer's email address, "N
-            people", or the words "Just you" — so it was the member-derived
-            identity a second time, in smaller type. Who is in the channel is
-            answered by the Info tab's roster, beside each face and each
-            address, where it can be attributed. */}
-        <span className="mt-0.5 flex items-center gap-1.5">
+        {/* LINE TWO — **the ROSTER on the left, the UNREAD MARKS on the right**
+            (Samuel, live review 2026-09-13: the row wants "some notification
+            system for new @s" and "something else in there that makes it look
+            cleaner", at the size it already is).
+
+            🔒 **THE FACES ARE BACK HERE AND THAT DOES NOT REOPEN THE 2026-09-01
+            RULING.** What was deleted then was identity STANDING IN FOR THE
+            CHANNEL — a leading glyph chosen by roster size, beside a title
+            derived from the roster, so adding a person renamed and re-faced a
+            channel you had been working in. The title is still the CHANNEL's
+            (`channelTitle`, untouched) and the leading slot is still empty; this
+            stack is a plain statement of who else is in the room, on the line
+            that used to paraphrase one of their messages. A SOLO channel shows
+            nothing — `AvatarStack` renders `null` for an empty list, which is
+            why there is no "Just you" here.
+
+            ⚠ **20px FACES — `size="2xs"`, A REAL KEY ON THE KIT COMPONENT and
+            not a class override here.** `xs` (24px) grows this row, whose height
+            Samuel fixed ("I like the current size of it"), and shrinking a shared
+            component by selecting on its internal `h-6`/`w-6` utilities is the
+            drift `home.module.css`'s own notes warn about. The key and why it has
+            no `Avatar` twin live in `shared/ui/avatar-stack.tsx › SIZE`.
+
+            ⚠ **THE TWO MARKS ARE EXCLUSIVE, and that is the design's rule**: the
+            `@ N` pill already says the louder version of what the dot says, and
+            printing both reads as two separate facts. */}
+        <span className="mt-0.5 flex min-h-[18px] items-center gap-1.5">
           {linkOut && (
             <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 text-micro font-medium text-text-secondary">
               Link out
             </span>
           )}
-          <span className="truncate text-caption text-text-muted">{lastLine}</span>
+          {pendingLine && (
+            <span className="truncate text-caption text-text-muted">
+              {pendingLine}
+            </span>
+          )}
+          {faces.length > 0 && (
+            <span className="flex shrink-0 items-center">
+              <AvatarStack
+                size="2xs"
+                max={3}
+                users={faces.map((person) => ({
+                  userId: person.userId,
+                  // ⚠ `AvatarStack` takes a NON-NULL name and initials it; a
+                  // nameless member degrades to their address exactly as
+                  // `Avatar`'s own fallback does, never to "?" when we hold one.
+                  displayName: person.displayName ?? person.email ?? "Member",
+                  avatarUrl: person.avatarUrl,
+                }))}
+              />
+            </span>
+          )}
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {mentions === 0 && unread && <UnreadDot />}
+            <MentionBadge count={mentions} />
+          </span>
         </span>
       </span>
     </button>

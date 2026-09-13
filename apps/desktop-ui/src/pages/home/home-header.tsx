@@ -45,7 +45,15 @@ export function HomeHeader({
           ⚠ THE TWO ARE ONE GROUP, or `justify-between` would spread three
           children and walk the selector off that edge. */}
       <div className="flex min-w-0 items-center">
-        <div className="flex w-[var(--home-list-w)] shrink-0 items-center px-3">
+        {/* ⚠ THE CELL IS UNCHANGED AND THE CONTROL INSIDE IT IS NOT (2026-09-13).
+            `HomeSettingsControl` is a full-width BAR now — same card face as the
+            channel rows, reading "{first name}'s Home" (Samuel: the bare face left
+            "empty space [that] looks weird"). It is 36px like every other control
+            in this strip, so this row's height did not move; the `px-3` is still
+            the LIST's own inset, which is what puts the bar's edges on the rows'.
+            ⚠ `min-w-0` on the cell, or a long name would push the selector off the
+            record pane's left edge — the one alignment this cell exists for. */}
+        <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
           <HomeSettingsControl
             identity={identity}
             onWorkspaceChanged={onWorkspaceChanged}

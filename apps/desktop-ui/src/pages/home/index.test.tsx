@@ -164,9 +164,9 @@ describe("home page", () => {
     // 🔒 THE ROW IS THE CHANNEL'S NAME AND NO MEMBER IDENTITY (2026-09-01) —
     // this asserted the peer's EMAIL until the roster-derived row was removed.
     expect(screen.getAllByText("Priya Shah").length).toBeGreaterThan(0);
-    expect(
-      screen.getByText("Three renewals over $1k before October")
-    ).toBeInTheDocument();
+    // 🔒 THE LAST-MESSAGE PREVIEW ASSERTION LEFT THIS FILE ON 2026-09-13 (Samuel:
+    // it "just doesn't make sense imo" on a row). The row's LINE TWO — the absent
+    // preview, the peer stack, the `@ N` badge — is `relationship-list.test.tsx`.
     // The pending link is a row of the same list, marked as one.
     expect(screen.getByText("Link out")).toBeInTheDocument();
     expect(screen.getByText("Not yet claimed")).toBeInTheDocument();

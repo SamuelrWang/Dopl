@@ -71,6 +71,8 @@ const claimed = (existing: boolean): HomeLinkClaimResult => ({
     createdAt: "2026-08-25T00:00:00.000Z",
     lastMessageAt: null,
     lastMessagePreview: null,
+    unread: false,
+    unreadMentions: 0,
     linkOut: null,
   },
   existing,

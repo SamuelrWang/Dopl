@@ -6,6 +6,7 @@ import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
+import { HOME_CARD_FACE } from "./channel-row-marks";
 import { HOME_TABS } from "./home-tabs";
 import home from "./home.module.css";
 
@@ -237,26 +238,47 @@ function HomeListGhost() {
 }
 
 /**
- * One relationship row. ⚠ THE RAISED FACE IS THE ROW'S OWN RECIPE
- * (`.auth-btn-3d-light` + the row's box), so the swap to real rows is a
- * content change and not a change of surface — but it is a `<div>`, not a
- * `<button>`: a skeleton offers nothing to press. Avatar 32px = `Avatar
- * size="sm"`, or the rows sit at two heights across the swap.
+ * One channel row. ⚠ THE RAISED FACE IS THE ROW'S OWN CONSTANT
+ * (`channel-row-marks.tsx › HOME_CARD_FACE` + the row's box), so the swap to real
+ * rows is a content change and not a change of surface — but it is a `<div>`, not
+ * a `<button>`: a skeleton offers nothing to press.
+ *
+ * 🔒 **REDRAWN 2026-09-13 AND IT WAS TWO RULINGS BEHIND.** It drew a 32px LEADING
+ * AVATAR — deleted from the real row on 2026-09-01 with the roster-derived
+ * identity — and THREE stacked text lines, the second and third being the
+ * last-message preview Samuel removed on 2026-09-13. So the ghost resolved into a
+ * row of a different height with a face in a slot that no longer exists, which is
+ * the "way off" defect §1A exists to refuse. It is now the real row's own two
+ * lines: title + time, then the 20px peer stack.
+ *
+ * ⚠ **THE HEIGHTS ARE THE ROW'S, STATED AS THE ROW STATES THEM** — two `h-5`
+ * lines (a `text-body` title's box, and `AvatarStack`'s `2xs` face) with the row's
+ * own `mt-0.5` between, inside its `py-2.5`. A ghost one text line off shifts the
+ * content the operator is already reading toward.
+ *
+ * ⚠ **NO GHOST FOR THE UNREAD MARKS, deliberately.** A dot or an `@ N` pill is
+ * present on SOME rows, so ghosting one would promise a notification that the
+ * loaded row usually does not have — the same argument `overview-panels.tsx` makes
+ * for having no Activity ghost.
  */
 function HomeRowGhost() {
   return (
     <div
       aria-hidden
-      className="auth-btn-3d-light flex w-full items-start gap-2.5 rounded-[14px] px-2.5 py-2.5"
+      className={cn(
+        HOME_CARD_FACE,
+        "flex w-full items-start gap-2.5 px-2.5 py-2.5"
+      )}
     >
-      <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-      <div className="min-w-0 flex-1 space-y-1.5 py-0.5">
-        <div className="flex items-baseline justify-between gap-2">
+      <div className="min-w-0 flex-1">
+        <div className="flex h-5 items-center justify-between gap-2">
           <SkeletonLine w="58%" h={11} />
           <SkeletonLine w={30} h={8} />
         </div>
-        <SkeletonLine w="76%" h={9} />
-        <SkeletonLine w="46%" h={9} />
+        <div className="mt-0.5 flex h-5 items-center gap-1.5">
+          <Skeleton className="h-5 w-5 rounded-full" />
+          <Skeleton className="h-5 w-5 rounded-full" />
+        </div>
       </div>
     </div>
   );
@@ -264,6 +286,8 @@ function HomeRowGhost() {
 
 /**
  * THE HEADER STRIP — `home-header.tsx`'s OWN three boxes, in its nesting.
+ *
+ * ⚠ THE CELL HOLDS A BAR, NOT A FACE (2026-09-13) — see the ghost itself.
  *
  * ⚠ THE LIST-WIDTH PAD IS A CELL, NOT A `pl-`. That strip stopped being
  * `pl-[var(--home-list-w)]` on 2026-08-30, when the operator's face moved INTO
@@ -283,9 +307,21 @@ function HomeHeaderGhost() {
   return (
     <div className="flex items-center justify-between gap-3 py-3 pr-5">
       <div className="flex min-w-0 items-center">
-        <div className="flex w-[var(--home-list-w)] shrink-0 items-center px-3">
-          {/* `Avatar size="sm"` — 32px, the same value `HomeRowGhost` reads. */}
-          <Skeleton className="h-8 w-8 rounded-full" />
+        <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
+          {/* 🔒 **THE SETTINGS CONTROL IS A BAR SINCE 2026-09-13** (Samuel: the
+              bare face left "empty space [that] looks weird"), so the ghost is the
+              bar — `HOME_CARD_FACE` at `h-9`, the 32px `Avatar size="sm"` inside
+              it, and a line where "{Name}'s Home" lands. A 32px circle alone here
+              would resolve into a full-width card. */}
+          <div
+            className={cn(
+              HOME_CARD_FACE,
+              "flex h-9 w-full items-center gap-2 pl-0.5 pr-3"
+            )}
+          >
+            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+            <SkeletonLine w="52%" h={11} />
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           {HOME_TABS.map(({ key, label }) => (

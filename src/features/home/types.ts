@@ -87,8 +87,55 @@ export interface HomeChannel {
   peer: HomePeer | null;
   createdAt: string;
   lastMessageAt: string | null;
-  /** Pre-truncated server-side; null when the channel is empty. */
+  /**
+   * Pre-truncated server-side; null when the channel is empty.
+   *
+   * 🔒 **NOTHING RENDERS IT SINCE 2026-09-13 (Samuel, over a screenshot of the
+   * list: having "the most recent message being in there just doesn't make sense
+   * imo").** The row's second line is the roster + the unread marks below. It
+   * stays ON THE WIRE because the SDK mirrors this type
+   * (`packages/dopl-client/src/home-types.ts`, committed `dist/`), so removing it
+   * is a cross-package change with a build gate and no gain. **Do not add a
+   * second renderer** — the ruling is about the ROW, and there is no other
+   * surface for a home-channel preview to appear on.
+   */
   lastMessagePreview: string | null;
+  /**
+   * Is there a message here newer than the caller's own read watermark — the
+   * row's plain-dot marker (2026-09-13).
+   *
+   * ⚠ CALLER-RELATIVE, like `Channel.unread` / `Channel.lastReadAt`, and it
+   * carries no `my*` prefix for the reason the rest of this payload does not: a
+   * home payload is only ever the caller's own. The rule is ONE function shared
+   * with the dot's own arithmetic — `server/unread-tally.ts › isChannelUnread`,
+   * which is `mapChannelRow`'s rule with the `isMember` clause moved to the
+   * caller. **FALSE for a channel the caller is not a channel member of**: there
+   * is no watermark there that opening the channel could advance.
+   *
+   * 🔒 ⚠ **NEW KEY ON AN INDEXEDDB-PERSISTED PAYLOAD — EVERY READ SPELLS
+   * `?? false` INLINE (INVARIANTS §8).** `GET /api/home/channels` is cached with
+   * a 24h `gcTime`, so an entry written by the previous bundle survives the
+   * upgrade WITHOUT this key. `false` is the fail-safe reading: a marker that is
+   * briefly absent is a missed nudge, where `true` would print a dot on every
+   * row of a list nobody has any news in.
+   */
+  unread: boolean;
+  /**
+   * How many messages newer than the caller's watermark TAG the caller — the
+   * row's `@ N` pill, hidden at 0 (Samuel, 2026-09-13: the row wants "some
+   * notification system for new @s").
+   *
+   * ⚠ **THE WATERMARK IS THE BOUNDARY, NOT `channel_mention_reads`** — the Tags
+   * inbox's per-message read-state answers a different question and the
+   * divergence is deliberate. `server/repository-unread.ts` carries the ruling
+   * and its one consequence (marking a single mention read in the inbox does not
+   * decrement this).
+   *
+   * 🔒 ⚠ **NEW KEY ON AN INDEXEDDB-PERSISTED PAYLOAD — EVERY READ SPELLS `?? 0`
+   * INLINE (INVARIANTS §8)**, for the reason `unread` above states. `0` is the
+   * fail-safe: the pill is hidden rather than printing `@ NaN`.
+   */
+  unreadMentions: number;
   /**
    * The open BOUND link, when this channel has an invitation out. Rendered as a
    * chip ON this channel's row — a pending peer is a STATE of the channel, not

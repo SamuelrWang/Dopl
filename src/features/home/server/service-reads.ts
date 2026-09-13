@@ -11,6 +11,12 @@ import type {
 } from "../types";
 import { isClaimable, linkState, mapLinkRow, type LinkContainerRow } from "./dto";
 import * as repo from "./repository";
+import {
+  isChannelUnread,
+  mentionScanFloor,
+  readCutoff,
+  tallyUnreadMentions,
+} from "./unread-tally";
 
 /**
  * Read side of home channels: the channels page, the caller's own legacy
@@ -27,6 +33,17 @@ import * as repo from "./repository";
 export const HOME_CHANNEL_LIMIT = 200;
 /** Pending links a page will render. */
 export const HOME_LINK_LIMIT = 50;
+/**
+ * Mention stamps the badge tally will scan (2026-09-13).
+ *
+ * ⚠ **A NON-REPORTING CEILING, on the terms §9 already sanctions for this read**
+ * — see the two above. The scan is already floored at the OLDEST watermark on the
+ * page (`unread-tally.ts › mentionScanFloor`), so reaching this number means the
+ * caller has 500 unread mentions across their home channels; the badge then
+ * under-counts rather than claiming there is nothing. ⚠ The clip takes the
+ * OLDEST stamps, not an arbitrary page (`created_at DESC` in the query).
+ */
+export const HOME_MENTION_SCAN_LIMIT = 500;
 
 /**
  * Containers → channels.
@@ -53,6 +70,13 @@ export const HOME_LINK_LIMIT = 50;
  * widens with the ROSTERS** — a container contributes one id per member instead
  * of at most one — and it is still ONE `.in()` over the de-duplicated set, so
  * the shape §9 forbids (a query per row) is unchanged.
+ *
+ * ⚠ **THE UNREAD MARKS ADDED A READ TO EACH TIER AND NOT A THIRD TIER
+ * (2026-09-13).** `listMyChannelReads` is keyed on `workspace_id`, so it runs in
+ * the FIRST tier beside peers/channels/links; `listMyMentionStamps` needs both
+ * the channel ids and the watermarks that tier resolves, so it runs in the
+ * SECOND, beside profiles and last messages. **It is still two tiers and still
+ * no per-row query** — which is the shape §9's home bullet states.
  */
 export async function hydrateChannels(
   containers: LinkContainerRow[],
@@ -60,15 +84,38 @@ export async function hydrateChannels(
 ): Promise<HomeChannel[]> {
   if (containers.length === 0) return [];
   const ids = containers.map((c) => c.id);
-  const [peers, channels, links] = await Promise.all([
+  const [peers, channels, links, reads] = await Promise.all([
     repo.listContainerPeers(ids, viewerId),
     repo.listContainerChannels(ids),
     repo.listLinksByWorkspaces(ids, HOME_CHANNEL_LIMIT),
+    // ⚠ IN THIS TIER, NOT A THIRD ONE — it is keyed on `workspace_id`, so it does
+    // not wait for the channel ids the tier resolves (`listMyChannelReads`).
+    repo.listMyChannelReads(ids, viewerId),
   ]);
-  const [profiles, lastMessages] = await Promise.all([
+  const channelIds = [...channels.values()].map((c) => c.id);
+  // The per-channel cutoffs, and the ONE floor the scan may carry. Built here
+  // because both halves need the pairing of a container with its channel.
+  const cutoffs = new Map<string, string>();
+  for (const container of containers) {
+    const channel = channels.get(container.id);
+    if (!channel) continue;
+    const read = reads.get(channel.id);
+    // ⚠ A NON-MEMBER GETS NO CUTOFF AND THEREFORE NO MARKS — the `isMember`
+    // clause of `Channel.unread`, carried by an absent entry.
+    if (read === undefined) continue;
+    cutoffs.set(channel.id, readCutoff(read, container.created_at));
+  }
+  const [profiles, lastMessages, mentionStamps] = await Promise.all([
     listProfileSummaries([...new Set([...peers.values()].flat())]),
-    repo.listLastMessages([...channels.values()].map((c) => c.id)),
+    repo.listLastMessages(channelIds),
+    repo.listMyMentionStamps(
+      [...cutoffs.keys()],
+      viewerId,
+      mentionScanFloor([...cutoffs.values()]),
+      HOME_MENTION_SCAN_LIMIT
+    ),
   ]);
+  const mentions = tallyUnreadMentions(mentionStamps, cutoffs);
 
   const out: HomeChannel[] = [];
   for (const container of containers) {
@@ -104,7 +151,21 @@ export async function hydrateChannels(
       peer: roster[0] ?? null,
       createdAt: container.created_at,
       lastMessageAt: last?.at ?? null,
+      // 🔒 **STILL SENT, NO LONGER RENDERED (Samuel, 2026-09-13: the last message
+      // "just doesn't make sense imo" on a channel row).** It stays on the wire
+      // because it is mirrored in the SDK's own wire type
+      // (`packages/dopl-client/src/home-types.ts`, with a COMMITTED `dist/`), and
+      // dropping a field from a payload to delete one line of markup is a
+      // cross-package change with a build gate for no gain. The renderer is
+      // `apps/desktop-ui/src/pages/home/relationship-list.tsx`, which says so.
       lastMessagePreview: last ? truncatePreview(last.body) : null,
+      // ⚠ THE TWO UNREAD MARKS (2026-09-13). Both are CALLER-RELATIVE, like
+      // `Channel.unread` / `lastReadAt` — a home payload is only ever the
+      // caller's own, so they carry no `my*` prefix. `unread` is the dot,
+      // `unreadMentions` the `@ N` pill; the rule and the one watermark behind
+      // both live in `unread-tally.ts` and `repository-unread.ts`.
+      unread: isChannelUnread(last?.at ?? null, reads.get(channel.id)),
+      unreadMentions: mentions.get(channel.id) ?? 0,
       // ⚠ Claimability is judged by the SAME predicate the claim gate uses — a
       // chip that says "invite out" over a link that 410s is the disagreement
       // `isClaimable` exists to prevent.

@@ -82,6 +82,8 @@ function homeChannel(over: Record<string, unknown> = {}) {
     createdAt: "2026-01-01T00:00:00Z",
     lastMessageAt: null,
     lastMessagePreview: null,
+    unread: false,
+    unreadMentions: 0,
     linkOut: null,
     ...over,
   };

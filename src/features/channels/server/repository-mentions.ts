@@ -42,8 +42,17 @@ export type MentionMessageRow = {
  * shape that produces jsonb containment. Answered by
  * `channel_messages_mentions_idx` (GIN, `jsonb_path_ops`, on that exact
  * expression).
+ *
+ * ⚠ **EXPORTED SINCE 2026-09-13, FOR /home's PER-CHANNEL MENTION TALLY**
+ * (`features/home/server/repository-unread.ts`). It is the DEFINITION of "a
+ * mention of me" and the two gotchas above are exactly the kind that get
+ * retyped wrong — a second site spelling its own `contains()` argument would
+ * either pass an array (a PostgreSQL array literal against a jsonb path, i.e.
+ * no rows) or name the metadata key by hand. **One definition, two readers**:
+ * the inbox, and the home list's badge. ⚠ The two differ in what READ-STATE
+ * means and that difference is deliberate — see the home repository's docblock.
  */
-function mentionContainment(userId: string): [string, string] {
+export function mentionContainmentFilter(userId: string): [string, string] {
   return [`metadata->${MENTIONS_METADATA_KEY}`, JSON.stringify([userId])];
 }
 
@@ -64,7 +73,7 @@ export async function listMentionMessages(
   limit: number
 ): Promise<{ rows: MentionMessageRow[]; truncated: boolean }> {
   const db = supabaseAdmin();
-  const [column, value] = mentionContainment(userId);
+  const [column, value] = mentionContainmentFilter(userId);
   const { data, error } = await db
     .from("channel_messages")
     .select(CHANNEL_MENTION_MESSAGE_COLS)
@@ -92,7 +101,7 @@ export async function findMentionMessageIds(
 ): Promise<string[]> {
   if (messageIds.length === 0) return [];
   const db = supabaseAdmin();
-  const [column, value] = mentionContainment(userId);
+  const [column, value] = mentionContainmentFilter(userId);
   const { data, error } = await db
     .from("channel_messages")
     .select("id")

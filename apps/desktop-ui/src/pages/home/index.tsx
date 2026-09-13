@@ -23,6 +23,9 @@ import { HomePageSkeleton } from "./home-skeleton";
 // `home-panes.tsx` holds `paneToken` and every branch it selects.
 import { HomePane, paneToken } from "./home-panes";
 import { useActivityJump } from "./use-activity-jump";
+// ⚠ THE UNREAD MARKS CLEAR THEMSELVES (2026-09-13) — the hook carries why it
+// watches the transcript's cache entry rather than this page's own click.
+import { useHomeUnreadRefresh } from "./use-home-unread-refresh";
 
 import {
   HOME_CHANNELS_PATH,
@@ -103,6 +106,21 @@ export default function HomePage() {
   // pane on a person the list had already dropped.
   const visible = useMemo(() => visibleRows(rows, query), [rows, query]);
 
+  /**
+   * The row the record pane is showing — the explicit selection, else the first
+   * row the reader can SEE.
+   *
+   * ⚠ **RESOLVED ABOVE THE LOADING/ERROR RETURNS SINCE 2026-09-13**, because the
+   * unread-refresh HOOK below needs it and a hook may not sit after a conditional
+   * return. It moved; it did not change, and it is still the pane's and the
+   * list's one answer.
+   */
+  const selected =
+    visible.find((row) => row.id === selectedId) ?? visible[0] ?? null;
+  useHomeUnreadRefresh(
+    selected?.kind === "channel" ? selected.channel.channelId : null
+  );
+
   const error = channelsQuery.error ?? workspacesQuery.error ?? identity.error;
   const pending =
     channelsQuery.isPending || workspacesQuery.isPending || identity.isPending;
@@ -128,10 +146,6 @@ export default function HomePage() {
       </div>
     );
   }
-
-  const selected =
-    visible.find((row) => row.id === selectedId) ?? visible[0] ?? null;
-
 
   return (
     // ⚠ `!bg-home-frame` (×3) STOOD HERE AND IS DELETED (Samuel, 2026-08-30).
