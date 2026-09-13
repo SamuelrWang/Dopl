@@ -15,6 +15,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { SectionPanel } from "./section-panel";
+import { SECTION_HEADING_TEXT } from "./section-heading";
 
 afterEach(cleanup);
 
@@ -43,7 +44,13 @@ describe("what a flat section is", () => {
     );
     const panel = screen.getByRole("region", { name: "Personal" });
     const heading = screen.getByRole("heading", { name: "Personal" });
-    expect(heading.className).toContain("uppercase");
+    // 🔒 THE SECTION HEADING TYPE (Samuel, 2026-09-13: the /home "Usage" trial
+    // "applied to each of the headers for each section") — `section-heading.ts`,
+    // by import; no uppercase label strip any more.
+    for (const token of SECTION_HEADING_TEXT.split(" ")) {
+      expect(heading.className).toContain(token);
+    }
+    expect(heading.className).not.toMatch(/\buppercase\b|text-label/);
     // The action rides in the heading's own row, not in a band of its own.
     expect(heading.parentElement).toContain(screen.getByRole("button", { name: "New" }));
     expect(panel.textContent).toContain("Yours alone.");

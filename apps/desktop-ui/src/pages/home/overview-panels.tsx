@@ -1,7 +1,6 @@
 import { cn } from "@/shared/lib/utils";
 import {
   TEMPLATE_NAME_TEXT,
-  TEMPLATE_NAME_TEXT_LG,
 } from "@/features/agent-templates/components/template-section";
 import { useState } from "react";
 import { SectionPanel } from "@/shared/ui/section-panel";
@@ -177,18 +176,9 @@ export function HomeOverviewPanels({
             (`home.module.css › .frame [data-section-panel]`) grounds this panel
             exactly as it grounds Token spend and All channels: **ONE well, behind
             the whole Usage block**, with the white cards inside it. */}
-        <SectionPanel
-          id="home-overview-usage"
-          label="Usage"
-          // ⚠ THE AGENT TEMPLATE CARD'S NAME TYPE, ONE STEP UP AND BOLD, by
-          // import (Samuel, 2026-09-13: "extract that exact font, font size, and
-          // font color and apply it to the usage text … 'Usage' and the 'All
-          // Channels' text", then "increase the font size for usage … let's bold
-          // it as well"). ⚠ `template-section.tsx › TEMPLATE_NAME_TEXT_LG` — the
-          // SAME constant the scope menu, the month label and the Credit spend
-          // heading read, so the block cannot grow two heading scales.
-          titleClassName={cn(TEMPLATE_NAME_TEXT_LG, "normal-case tracking-normal")}
-        >
+        {/* Heading type is `SectionPanel`'s own now — the "Usage" trial became
+            the rule for every section heading (Samuel, 2026-09-13). */}
+        <SectionPanel id="home-overview-usage" label="Usage">
           <UsageCard homeWorkspaceId={homeWorkspaceId} />
         </SectionPanel>
 

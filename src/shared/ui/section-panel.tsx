@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
+import { SECTION_HEADING_TEXT } from "./section-heading";
 
 /**
  * THE FLAT SECTION — a labelled region whose header and content sit on ONE
@@ -69,7 +70,6 @@ export function SectionPanel({
   action,
   caption,
   className,
-  titleClassName,
   children,
 }: {
   /** Id the heading carries, so the section is a NAMED region. */
@@ -82,9 +82,6 @@ export function SectionPanel({
   caption?: ReactNode;
   /** THE GROUND — fill, border and padding. See the docblock. */
   className?: string;
-  /** Overrides the heading's type for ONE panel (/home Usage wears the agent
-   *  template card's name type — Samuel, 2026-09-13). Layout stays the panel's. */
-  titleClassName?: string;
   children: ReactNode;
 }) {
   return (
@@ -94,17 +91,14 @@ export function SectionPanel({
       className={cn(SECTION_PANEL_SHELL, className)}
     >
       <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
-        {/* ⚠ `titleClassName` IS A ONE-CALLER SLOT. Deleted with the /home Usage
-            white trial on 2026-09-13 morning, RESTORED the same afternoon for
-            one ruling: the Usage heading wears the agent template card's name
-            type (Samuel: "extract that exact font, font size, and font color").
-            Layout stays the panel's; only the type is the caller's. */}
+        {/* ⚠ ONE HEADING FACE, EVERY PAGE — `section-heading.ts ›
+            SECTION_HEADING_TEXT` (Samuel, 2026-09-13: the /home "Usage" trial
+            is the rule now, "applied to each of the headers for each section").
+            No per-panel override: the slot that existed for the trial is gone
+            with the trial's promotion. */}
         <h2
           id={id}
-          className={cn(
-            "truncate text-label font-semibold uppercase tracking-wide text-text-secondary",
-            titleClassName
-          )}
+          className={cn("truncate", SECTION_HEADING_TEXT)}
         >
           {label}
         </h2>

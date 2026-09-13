@@ -5,6 +5,7 @@ import { cn } from "@/shared/lib/utils";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import { pendingRow } from "@/shared/ui/pending";
 import { SECTION_PANEL_GROUND, SectionPanel } from "@/shared/ui/section-panel";
+import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import type { AgentTemplate } from "../client/types";
 import type { TemplateSectionDef } from "../lib/visibility";
 
@@ -88,8 +89,7 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
  * font-semibold")` at the reader would be a same-layer fight with the constant it
  * is composing, which is how a heading silently keeps 14px.
  */
-export const TEMPLATE_NAME_TEXT_LG =
-  "text-display font-semibold text-text-primary";
+export const TEMPLATE_NAME_TEXT_LG = SECTION_HEADING_TEXT;
 
 export function TemplatePanel({
   id,
