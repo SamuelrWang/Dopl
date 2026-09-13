@@ -54,6 +54,12 @@ import {
   ownAgentsFor,
   peerCardsFor,
 } from "./agents-model";
+import {
+  AgentWells,
+  agentActivityAt,
+  peerActivityAt,
+  type AgentWellItem,
+} from "./agents-wells";
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";
 import type { AgentLaunchControls, AgentLaunchOutcome } from "./use-agents-panel";
@@ -326,7 +332,13 @@ export function AgentsTab({
   if (sessions === null) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
-        {peerCards.length > 0 && <PeerCards peers={peerCards} byUser={byUser} />}
+        {/* ⚠ THE SAME WELLS HERE — a peer card is an agent card and Samuel's
+            ruling is about the PAGE, so the one list this branch can show sits on
+            the same gray ground. With no peers nothing renders and the sentence
+            below stands alone, exactly as before. */}
+        {peerCards.length > 0 && (
+          <AgentWells items={peerWellItems(peerCards, byUser)} />
+        )}
         <p className="px-0.5 py-6 text-center text-caption text-text-muted">
           Your agents run on your own machine, so this list needs the Dopl
           desktop app. Nothing about them is stored on the server.
@@ -349,19 +361,51 @@ export function AgentsTab({
             : "No agents running in this channel."}
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {mine.map((agent) => (
-            <AgentCard
-              key={agentKey(agent)}
-              agent={agent}
-              owner={me}
-              viewing={agentKey(agent) === openAgent}
-              onOpen={() => onOpenAgent(agentKey(agent))}
-            />
-          ))}
-          <PeerCards peers={peerCards} byUser={byUser} />
-        </div>
+        // ⚠ THE FOUR GRAY WELLS (Samuel, 2026-09-13) — `agents-wells.tsx` owns the
+        // buckets, the collapse and the ground; this call owns only the ORDER, which
+        // is unchanged: my own agents first (§5), then the peer rows, each card
+        // exactly the component it was.
+        <AgentWells
+          items={[
+            ...mine.map((agent) => ({
+              key: agentKey(agent),
+              at: agentActivityAt(agent),
+              node: (
+                <AgentCard
+                  agent={agent}
+                  owner={me}
+                  viewing={agentKey(agent) === openAgent}
+                  onOpen={() => onOpenAgent(agentKey(agent))}
+                />
+              ),
+            })),
+            ...peerWellItems(peerCards, byUser),
+          ]}
+        />
       )}
     </div>
   );
+}
+
+/**
+ * THE PEER ROWS AS WELL ITEMS.
+ *
+ * ⚠ **`PeerCards` IS CALLED WITH ONE ROW AT A TIME RATHER THAN SPLIT INTO A
+ * SINGLE-CARD EXPORT.** That component owns the peer card's whole face — the
+ * avatar fallback, the staleness dimming and its `data-stale` hook, the
+ * no-timestamp rule (Samuel, 2026-09-04) — and a second entry point into it is a
+ * second place for that face to drift. A one-element list renders one card and
+ * nothing else.
+ * ⚠ **THE KEY IS THE ONE `PeerCards` ALREADY MINTS** (`user:name:thread`), so a
+ * peer row keeps its React identity across a regroup.
+ */
+function peerWellItems(
+  peers: readonly ChannelPeerSession[],
+  byUser: ReadonlyMap<string, ChannelMember>
+): AgentWellItem[] {
+  return peers.map((peer) => ({
+    key: `peer:${peer.userId}:${peer.name}:${peer.threadId ?? ""}`,
+    at: peerActivityAt(peer),
+    node: <PeerCards peers={[peer]} byUser={byUser} />,
+  }));
 }

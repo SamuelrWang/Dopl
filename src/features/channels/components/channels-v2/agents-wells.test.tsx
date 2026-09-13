@@ -1,0 +1,356 @@
+// @vitest-environment jsdom
+/**
+ * THE AGENTS TAB'S FOUR GRAY WELLS (Samuel, 2026-09-13).
+ *
+ * These are the properties that fail QUIETLY:
+ *
+ *  - **A CARD CANNOT FALL OUT OF THE LIST.** The four buckets are exhaustive and
+ *    an UNDATED agent lands in the one well that is OPEN, so an older main's
+ *    missing `startedAt` cannot bury a live agent inside a collapsed **Earlier**.
+ *  - **THE BUCKET IS TIME, NOT STATE.** An ENDED agent last active three days ago
+ *    belongs in **Last 7 days**, which is exactly the case Samuel spelled out.
+ *  - **THE HEADER TYPE IS THE ONE HE NAMED** — the /home Overview's *Credit spend*
+ *    face, `TEMPLATE_NAME_TEXT`, reached by import. A hand-typed `text-title
+ *    font-medium` here would pass a class assertion and drift the day that
+ *    constant moves, so the assertion is against the CONSTANT.
+ *  - **THE CARDS ARE UNCHANGED.** This ruling put a GROUND under the column; the
+ *    white `.bento` cards and their gap are the ones that were already there.
+ */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/template-section";
+import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
+
+vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
+  useAgentTemplates: () => ({
+    templates: [],
+    loading: false,
+    error: null,
+    refetch: () => {},
+  }),
+}));
+
+import { AgentsTab } from "./agents-tab";
+import {
+  AGENT_WELLS,
+  AGENT_WELLS_STORAGE_KEY,
+  agentActivityAt,
+  peerActivityAt,
+  wellFor,
+} from "./agents-wells";
+import { CHANNEL_ID } from "./test-fixtures";
+
+const HOUR = 3_600_000;
+const DAY = 86_400_000;
+const NOW = Date.UTC(2026, 8, 13, 12, 0, 0);
+
+function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
+  return {
+    sessionId: "s-1",
+    channelId: CHANNEL_ID,
+    taskId: "t-1",
+    name: "flint",
+    state: "idle",
+    channelName: "Website",
+    threadTitle: "UI-kit design",
+    contextUsed: null,
+    contextWindow: null,
+    tokensSpent: null,
+    startedAt: NOW - HOUR,
+    lastActivityAt: NOW - HOUR,
+    ...over,
+  };
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+  window.localStorage.clear();
+  delete (window as { dopl?: unknown }).dopl;
+});
+
+function headers(): string[] {
+  return screen.queryAllByRole("heading").map((h) => h.textContent ?? "");
+}
+
+describe("agents-wells — the bucketing expression", () => {
+  it("is max(startedAt, lastActivityAt ?? endedAt), and never coerces a null to 0", () => {
+    // The MAX is what makes Samuel's "active in the last 24 hours OR just created
+    // in the last 24 hours" one read rather than two passes.
+    expect(agentActivityAt(summary({ startedAt: NOW - 40 * DAY, lastActivityAt: NOW - HOUR }))).toBe(
+      NOW - HOUR
+    );
+    expect(agentActivityAt(summary({ startedAt: NOW - HOUR, lastActivityAt: NOW - 40 * DAY }))).toBe(
+      NOW - HOUR
+    );
+    // `lastActivityAt ?? endedAt`: an ended agent on a main that reports only the
+    // end stamp is still dated by it.
+    expect(
+      agentActivityAt({
+        ...summary({ state: "ended", startedAt: NOW - 9 * DAY, lastActivityAt: null }),
+        endedAt: NOW - 3 * DAY,
+      })
+    ).toBe(NOW - 3 * DAY);
+    // ⚠ The regression this guards: `Math.max(null, null)` is 0, which would date
+    // every legacy agent to 1970 and file all of them under Earlier.
+    expect(agentActivityAt(summary({ startedAt: null, lastActivityAt: null }))).toBeNull();
+  });
+
+  it("files a stamp in the well its AGE falls in, and an unknown stamp in Recent", () => {
+    expect(wellFor(NOW - HOUR, NOW)).toBe("recent");
+    expect(wellFor(NOW - 3 * DAY, NOW)).toBe("week");
+    expect(wellFor(NOW - 12 * DAY, NOW)).toBe("month");
+    expect(wellFor(NOW - 90 * DAY, NOW)).toBe("earlier");
+    // ⚠ UNKNOWN IS VISIBLE, NOT OLD — Recent is the one well open by default.
+    expect(wellFor(null, NOW)).toBe("recent");
+    // Clock skew is ordinary and a negative age is not evidence of anything.
+    expect(wellFor(NOW + HOUR, NOW)).toBe("recent");
+    // The boundaries are exclusive-at-the-top, so the buckets cannot overlap.
+    expect(wellFor(NOW - DAY, NOW)).toBe("week");
+    expect(wellFor(NOW - 7 * DAY, NOW)).toBe("month");
+    expect(wellFor(NOW - 30 * DAY, NOW)).toBe("earlier");
+  });
+
+  it("dates a PEER row by its one stamp, and reads an unparseable one as unknown", () => {
+    expect(peerActivityAt({ updatedAt: new Date(NOW - 3 * DAY).toISOString() })).toBe(NOW - 3 * DAY);
+    expect(peerActivityAt({ updatedAt: "" })).toBeNull();
+    expect(peerActivityAt({ updatedAt: "not a date" })).toBeNull();
+  });
+});
+
+describe("AgentsTab — the four wells", () => {
+  /** One agent per bucket, plus the two cases Samuel named. */
+  const fixture: DesktopSessionSummary[] = [
+    summary({ sessionId: "s-now", agentId: "aaaa1111", taskId: "t-1", startedAt: NOW - 2 * HOUR }),
+    // ⚠ AN ENDED AGENT, LAST ACTIVE THREE DAYS AGO → Last 7 days. Verbatim: "if
+    // it's an ended agent but they were active last thirty days … that should be
+    // in … the respective gray boxes."
+    summary({
+      sessionId: "s-ended",
+      agentId: "bbbb2222",
+      taskId: "t-2",
+      state: "ended",
+      startedAt: NOW - 4 * DAY,
+      lastActivityAt: NOW - 3 * DAY,
+    }),
+    summary({
+      sessionId: "s-month",
+      agentId: "cccc3333",
+      taskId: "t-3",
+      startedAt: NOW - 12 * DAY,
+      lastActivityAt: NOW - 12 * DAY,
+    }),
+    summary({
+      sessionId: "s-old",
+      agentId: "dddd4444",
+      taskId: "t-4",
+      startedAt: NOW - 200 * DAY,
+      lastActivityAt: NOW - 120 * DAY,
+    }),
+  ];
+
+  function renderTab(sessions: DesktopSessionSummary[]) {
+    return render(
+      <AgentsTab
+        sessions={sessions}
+        channelId={CHANNEL_ID}
+        openAgent={null}
+        onOpenAgent={() => {}}
+      />
+    );
+  }
+
+  it("renders the four headers in Samuel's order, and files each agent in its own", () => {
+    renderTab(fixture);
+    expect(headers()).toEqual(["Recent", "Last 7 days", "Last 30 days", "Earlier"]);
+
+    // Recent is open, so its card is mounted; the other three are collapsed.
+    expect(screen.getByText("#aaaa1111")).toBeTruthy();
+    expect(screen.queryByText("#bbbb2222")).toBeNull();
+
+    // Open each in turn and the right agent is inside it.
+    for (const [label, name] of [
+      ["Last 7 days", "#bbbb2222"],
+      ["Last 30 days", "#cccc3333"],
+      ["Earlier", "#dddd4444"],
+    ] as const) {
+      fireEvent.click(screen.getByRole("heading", { name: label }));
+      const well = screen.getByRole("heading", { name: label }).closest("section")!;
+      expect(within(well).getByText(name)).toBeTruthy();
+    }
+  });
+
+  it("files a CREATED-TODAY idle agent in Recent — an idle agent is not an old one", () => {
+    // Verbatim: "They might be idle but they just show up there."
+    renderTab([summary({ agentId: "eeee5555", state: "idle", startedAt: NOW - 10 * 60_000 })]);
+    expect(headers()).toEqual(["Recent"]);
+    expect(screen.getByText("#eeee5555")).toBeTruthy();
+  });
+
+  it("files an UNDATED agent in Recent, where it is visible", () => {
+    renderTab([summary({ agentId: "ffff6666", startedAt: null, lastActivityAt: null })]);
+    expect(headers()).toEqual(["Recent"]);
+    expect(screen.getByText("#ffff6666")).toBeTruthy();
+  });
+
+  it("does NOT render a well with no agents in it", () => {
+    renderTab([fixture[2]!]);
+    expect(headers()).toEqual(["Last 30 days"]);
+    expect(screen.queryByRole("heading", { name: "Recent" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Earlier" })).toBeNull();
+  });
+
+  it("renders NO well at all when the feed is empty — the one sentence still stands", () => {
+    renderTab([]);
+    expect(headers()).toEqual([]);
+    expect(screen.getByText(/No agents running in this channel/i)).toBeTruthy();
+  });
+});
+
+describe("AgentsTab — the well's face and its collapse", () => {
+  function renderOne() {
+    return render(
+      <AgentsTab
+        sessions={[summary({ agentId: "aaaa1111" })]}
+        channelId={CHANNEL_ID}
+        openAgent={null}
+        onOpenAgent={() => {}}
+      />
+    );
+  }
+
+  it("is the /home Overview's well — the shared recipe, with no hairline of its own", () => {
+    renderOne();
+    const well = screen.getByRole("heading", { name: "Recent" }).closest("section")!;
+    // ⚠ THE CONSTANT, not a copy of its current value.
+    expect(well.className).toBe(PANEL_WELL);
+    expect(PANEL_WELL).not.toMatch(/\bborder/);
+  });
+
+  it("puts the title left in the CREDIT SPEND type and the chevron right, in ONE button", () => {
+    renderOne();
+    const heading = screen.getByRole("heading", { name: "Recent" });
+    // ⚠ THE TYPE SAMUEL NAMED: "it should be the same as … the credit spend".
+    expect(heading.className).toContain(TEMPLATE_NAME_TEXT);
+    // The whole header row is the control, and the heading is its accessible name.
+    const row = screen.getByRole("button", { name: "Recent" });
+    expect(row.contains(heading)).toBe(true);
+    // ⚠ ONE control for one act — no nested button inside the header row.
+    expect(row.querySelector("button")).toBeNull();
+  });
+
+  it("flips the chevron and `aria-expanded` together, and unmounts the cards when shut", () => {
+    renderOne();
+    const row = screen.getByRole("button", { name: "Recent" });
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(row.querySelector("svg.lucide-chevron-down")).toBeTruthy();
+    expect(row.querySelector("svg.lucide-chevron-right")).toBeNull();
+    expect(screen.getByText("#aaaa1111")).toBeTruthy();
+
+    fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(row.querySelector("svg.lucide-chevron-right")).toBeTruthy();
+    expect(row.querySelector("svg.lucide-chevron-down")).toBeNull();
+    // COLLAPSED = only the header row. The cards are gone, not hidden.
+    expect(screen.queryByText("#aaaa1111")).toBeNull();
+  });
+
+  it("keeps the cards the WHITE CARDS they were, directly inside the well's column", () => {
+    renderOne();
+    const well = screen.getByRole("heading", { name: "Recent" }).closest("section")!;
+    const column = Array.from(well.querySelectorAll("div")).find(
+      (el) => el.className === PANEL_ROWS
+    );
+    expect(column).toBeTruthy();
+    const card = screen.getByText("#aaaa1111").closest(".bento")!;
+    // ⚠ NO WRAPPER BOX between the column and the card (the `Fragment` key) — a
+    // `div` per card would be a second layout owner inside the well.
+    expect(card.parentElement).toBe(column);
+  });
+});
+
+describe("AgentsTab — the wells remember, per device", () => {
+  it("defaults to Recent open and the other three collapsed", () => {
+    render(
+      <AgentsTab
+        sessions={[
+          summary({ agentId: "aaaa1111" }),
+          summary({ sessionId: "s-2", agentId: "bbbb2222", taskId: "t-2", startedAt: NOW - 3 * DAY, lastActivityAt: NOW - 3 * DAY }),
+        ]}
+        channelId={CHANNEL_ID}
+        openAgent={null}
+        onOpenAgent={() => {}}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Recent" }).getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "Last 7 days" }).getAttribute("aria-expanded")
+    ).toBe("false");
+  });
+
+  it("round-trips the choice through localStorage", () => {
+    const tab = (
+      <AgentsTab
+        sessions={[summary({ agentId: "aaaa1111" })]}
+        channelId={CHANNEL_ID}
+        openAgent={null}
+        onOpenAgent={() => {}}
+      />
+    );
+    const first = render(tab);
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
+    expect(JSON.parse(window.localStorage.getItem(AGENT_WELLS_STORAGE_KEY)!)).toMatchObject({
+      recent: false,
+    });
+
+    first.unmount();
+    render(tab);
+    expect(screen.getByRole("button", { name: "Recent" }).getAttribute("aria-expanded")).toBe(
+      "false"
+    );
+    expect(screen.queryByText("#aaaa1111")).toBeNull();
+  });
+
+  it("ignores a corrupt or foreign write rather than crashing on it", () => {
+    window.localStorage.setItem(AGENT_WELLS_STORAGE_KEY, "{not json");
+    render(
+      <AgentsTab
+        sessions={[summary({ agentId: "aaaa1111" })]}
+        channelId={CHANNEL_ID}
+        openAgent={null}
+        onOpenAgent={() => {}}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Recent" }).getAttribute("aria-expanded")).toBe(
+      "true"
+    );
+
+    cleanup();
+    // A key no well owns must not be able to change anything.
+    window.localStorage.setItem(
+      AGENT_WELLS_STORAGE_KEY,
+      JSON.stringify({ nonsense: false, recent: "yes" })
+    );
+    render(
+      <AgentsTab
+        sessions={[summary({ agentId: "aaaa1111" })]}
+        channelId={CHANNEL_ID}
+        openAgent={null}
+        onOpenAgent={() => {}}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Recent" }).getAttribute("aria-expanded")).toBe(
+      "true"
+    );
+  });
+
+  it("declares four wells and no more — the ids the stored object is filtered against", () => {
+    expect(AGENT_WELLS.map((w) => w.id)).toEqual(["recent", "week", "month", "earlier"]);
+  });
+});

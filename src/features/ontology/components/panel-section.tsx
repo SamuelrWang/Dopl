@@ -3,10 +3,19 @@
 import { useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import {
-  SECTION_PANEL_SHELL,
-} from "@/shared/ui/section-panel";
+import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
+
+/**
+ * ⚠ **THE WELL AND THE ROWS' COLUMN MOVED TO `shared/ui/panel-well.ts` ON
+ * 2026-09-13 AND ARE RE-EXPORTED HERE, SO NO IMPORT CHANGED** — the same door
+ * `agents-model.ts` holds open for `parseAgentPostStamp`. The Agents tab took the
+ * SAME well that afternoon (Samuel: *"I want us to apply that gray background on
+ * top of that Agents page"*) and `docs/INVARIANTS.md` §1 forbids
+ * `channels → ontology`. **One recipe, two readers**; this file is no longer
+ * where it lives, and this is still the import path of record for `ontology/`.
+ */
+export { PANEL_ROWS, PANEL_WELL };
 
 /**
  * THE OBJECT PANEL'S SECTION — **AN UPPERCASE LABEL, FLAT AND FLUSH LEFT, OVER A
@@ -57,30 +66,6 @@ export function PanelSection({
     </section>
   );
 }
-
-/**
- * THE SECTION'S WELL — the gray box the label AND the rows sit in, **THE /home
- * OVERVIEW'S TOKEN-SPEND WELL REACHED BY IMPORT** (Samuel named that panel as
- * the reference). `SECTION_PANEL_SHELL` is the radius + padding; the fill is
- * `--home-panel` exactly as `/home`'s record pane paints every `SectionPanel`
- * (`pages/home/home.module.css › .frame [data-section-panel]`: `--home-panel`,
- * border transparent).
- *
- * ⚠ **NO HAIRLINE.** `SECTION_PANEL_GROUND` is the WORKSPACE-page ground and
- * carries `border-border-subtle`; the Overview Samuel pointed at has none
- * (2026-09-13: *"you're adding this extra border line around the gray. I did
- * not ask for that"*). Do not compose it here.
- *
- * ⚠ **DO NOT RE-TYPE THE RADIUS/PADDING.** A local `rounded-[14px] p-3` is the
- * same well said a second way.
- */
-export const PANEL_WELL = cn(
-  SECTION_PANEL_SHELL,
-  "bg-home-panel flex min-w-0 flex-col gap-2"
-);
-
-/** THE ROWS' COLUMN inside the well — direction and gap only, no surface. */
-export const PANEL_ROWS = "flex min-w-0 flex-col gap-2";
 
 /**
  * ONE ROW = **ONE WHITE BAR ON THAT WELL** — `.bento`, the kit's inner card, the
