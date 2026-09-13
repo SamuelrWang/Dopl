@@ -8573,3 +8573,29 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   the job is already citing.
 - Severity: a RED required gate, which is a P0 by the definition of green. Status: OPEN, **and not
   this wave's to take** — three unrelated SDK/MCP surfaces, with a split each.
+
+### F-690 — the `revisions` wave added a FIFTEENTH child FK into `channels` as SET NULL, and `schema-sql.test.ts` has been RED since (found 2026-09-13)
+
+- **Measured on `ui/agents-tab-polish` at `4816e7bc`**, before any edit of this session's own:
+  `npx vitest run src/features/channels/schema-sql.test.ts` → **2 failed | 21 passed**.
+  - `finds all fourteen child FKs` — the count is 14 and the tree now has more.
+  - `each one cascades — none is SET NULL or RESTRICT, bar the named exemption` —
+    `revisions.channel_id` is `REFERENCES public.channels(id) ON DELETE SET NULL`
+    (`supabase/migrations/20261002120000_revisions.sql`, TRACKED at HEAD), and it is not in
+    `CASCADE_EXEMPT`.
+- **A second, UNTRACKED one is in the working tree as this is written** —
+  `supabase/migrations/20261003120000_credit_events_channel.sql` adds `credit_events.channel_id …
+  ON DELETE SET NULL` — so the count will be 16 and the same two cases fail for a second reason. That
+  file belongs to another builder's in-flight work; it is named here as evidence of the same class,
+  not as this finding's subject.
+- **NOT TOUCHED, deliberately, and this is a ruling rather than a fix.** The exemption list's own
+  docblock says adding a name to it *"is a RULING, not a fix: it says the child is a RECORD OF
+  SOMETHING THAT HAPPENED, whose truth does not depend on the room still existing."* A revision row
+  and a credit event both look like records of that kind — the same argument
+  `workspace_token_spend.channel_id` already won (Samuel, 2026-09-06 ruling (b)) — but the person who
+  added the columns is the one who knows, and either way the CASCADE rule's purge argument has to be
+  re-checked against the new tables rather than assumed.
+- **Why it matters beyond one red suite:** red CI is a P0 here, and this is the failure mode where a
+  wave adds a column and the count in a test is the only thing that notices. The two cases work
+  exactly as designed; what is missing is the ruling and the exemption entry (or a CASCADE), in the
+  same change as the migration.

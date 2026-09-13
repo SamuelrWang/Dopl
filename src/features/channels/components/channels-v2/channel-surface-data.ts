@@ -25,7 +25,8 @@
  */
 
 import { CONSENT_INBOX_POLL_MS } from "../../constants";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
+import { liveAgentsFromKey, liveAgentsKey } from "../../lib/live-agents";
 import { useChannelMessages } from "../../hooks/use-channel-messages";
 import { useChannelMembers } from "../../hooks/use-channel-members";
 import { useChannelThreads } from "../../hooks/use-channel-threads";
@@ -51,6 +52,7 @@ import { useOverviewSeries } from "@/features/workspaces/hooks/use-overview-seri
 import type { ActivityBin } from "./thread-activity";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { LiveAgentSession } from "../../lib/draft-recipients";
 import type { ChannelsV2Derivations } from "./derivations";
 import type { ChannelSurfaceCapabilities } from "./channel-surface";
 import type {
@@ -99,6 +101,14 @@ export interface ChannelSurfaceData extends ChannelsV2Derivations {
   agentSessions: DesktopSessionSummary[] | null;
   refreshAgents: () => void;
   agentsPanel: ReturnType<typeof useAgentsPanel>;
+  /**
+   * **EVERY AGENT THIS SURFACE CAN @-ADDRESS** — the peer projection UNION this
+   * machine's own feed (`lib/live-agents.ts › liveAgentsKey`, which carries the
+   * whole argument). ⚠ **DERIVED HERE RATHER THAN AT THE COMPOSER**: the @-picker,
+   * the recipient line and the tint must be told the same set, and a second merge
+   * beside them is how one of the three comes to answer differently.
+   */
+  liveAgents: readonly LiveAgentSession[];
   /** THE surface's refetch coordinator — every write on it settles into this. */
   gate: MutationGate;
   markRead: ReturnType<typeof useMentionWrites>["markRead"];
@@ -363,6 +373,34 @@ export function useChannelSurfaceData({
     consent,
   });
 
+  /**
+   * **THE ONE ADDRESSABLE-AGENT SET, AND THE 30-SECOND WAIT IT ENDS** (2026-09-13,
+   * Samuel: *"when I launch an agent … it doesn't immediately pop up. I have to wait
+   * a minute"*).
+   *
+   * ⚠ **THE PICKER USED TO READ `agentsPanel.peerSessions` ALONE, WHICH IS A POLL.**
+   * `channel_sessions` is unpublished (INVARIANTS §7) so that read ticks every
+   * `PEER_SESSIONS_POLL_MS` (30 s); a just-launched agent is spawn-idle (§5) so it
+   * rings no message doorbell; and `use-agents-panel.ts › launchAgent`'s own
+   * `void refetch()` runs BEFORE main's HTTP push has landed the row, which re-reads
+   * the old set and restarts that interval. The agent was therefore un-taggable for
+   * one full poll period by construction — while `useDesktopSessions` had it within
+   * 200 ms (`main/session-summary.js › PUSH_COALESCE_MS`).
+   *
+   * ⚠ **TWO MEMOS OVER A CONTENT KEY, not one over the arrays** — the own feed is
+   * paced by telemetry (a new array ~5×/s while an agent works), and this value
+   * feeds three derivations that must not re-run at that rate. Same round trip, same
+   * reason, as `derivations.ts › agentKey`.
+   */
+  const liveAgentsContentKey = useMemo(
+    () => liveAgentsKey(agentsPanel.peerSessions, agentSessions, channel?.id ?? ""),
+    [agentsPanel.peerSessions, agentSessions, channel?.id]
+  );
+  const liveAgents = useMemo(
+    () => liveAgentsFromKey(liveAgentsContentKey),
+    [liveAgentsContentKey]
+  );
+
   return {
     ...derivations,
     messages,
@@ -386,6 +424,7 @@ export function useChannelSurfaceData({
     agentSessions,
     refreshAgents,
     agentsPanel,
+    liveAgents,
     gate,
     markRead,
     favorite,

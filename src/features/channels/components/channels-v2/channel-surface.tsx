@@ -172,6 +172,7 @@ export function ChannelSurface({
     members,
     agentSessions,
     agentsPanel,
+    liveAgents,
     index,
     openThread,
     rows,
@@ -227,7 +228,12 @@ export function ChannelSurface({
       // THE @-PICKER'S AND THE RECIPIENT LINE'S FACTS (2026-09-02, slice B10): every member's
       // live sessions in this room, off the poll the Agents tab already makes. Handed down —
       // a second mount of that hook is a second poll of an unpublished table.
-      liveAgents={agentsPanel.peerSessions}
+      // ⚠ **AND IT IS THE POLL *UNION* THIS MACHINE'S OWN FEED SINCE 2026-09-13**
+      // (`channel-surface-data.ts › liveAgents`, over `lib/live-agents.ts ›
+      // liveAgentsKey`). The projection ALONE is what made a just-launched agent
+      // un-taggable for a full 30s poll period — Samuel's *"I have to wait a minute"*.
+      // Never narrow this back to `agentsPanel.peerSessions`.
+      liveAgents={liveAgents}
       // The composer's New Agent icon (2026-08-21) — handed down whole,
       // never re-mounted: a second `useAgentsPanel` is a second peer poll.
       newAgent={agentsPanel}

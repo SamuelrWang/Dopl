@@ -6629,3 +6629,45 @@ seat sub is a TEAM sub — its price moved, its plan did not). Leaving that arm 
 it to the metadata fallback, where an older session that stamped nothing lands on `team` by accident
 rather than by rule. ⚠ **UNSET IS NORMAL** in dev, preview, and in prod once the row moves; nothing
 mints against it.
+
+## 2026-09-13 — The agent you could not talk to yet: a poll standing in for a fact the machine already had
+
+Samuel, three times over two weeks and finally in these words: *"when I launch an agent, let's say I
+launch it right in the channel, and I type @, it doesn't immediately pop up … I have to wait a minute,
+usually … I tried to fix this multiple times. For some reason, it's still not getting fixed."*
+
+**Every previous attempt was inside the picker, and the picker was never wrong.** `F-210` made the
+popover real; `F-350` made the handle it inserts one main's wake parser can read; the 2026-09-02
+widening (slice B10) made it offer a PEER's agent so tagging was not a desktop-only feature; the
+2026-09-07 minting pass made the offered spelling the one the room actually assigned. Four changes to
+*which spelling* and *whose agents*, none to **where the set comes from** — and that was the defect.
+
+The set was `use-agents-panel.ts › peerSessions` and nothing else: an HTTP read of `channel_sessions`,
+a table that stays deliberately unpublished (INVARIANTS §7), therefore a **30-second poll**. Three
+facts then compose into the minute:
+
+1. a just-launched agent is **spawn-idle** by ruling — nothing on that lane sends a turn — so it rings
+   no `channel_messages` doorbell, and the doorbell is the only thing that ever refreshes that read
+   early;
+2. `launchAgent`'s own `void refetch()` fires the instant main answers `{ok:true}`, which is **before**
+   main's push has landed the row — so it re-reads the old set **and restarts the interval**;
+3. so the first read that can see the agent is the next tick — a full period, every time, and two
+   periods whenever the push lands just after one.
+
+**The fact was never missing. It was in the wrong hand.** `useDesktopSessions` — a push subscription
+over the bridge, coalesced at 200 ms — has the agent before the operator's hand leaves the mouse, and
+the same surface was already reading it for the transcript's author names. The @-picker was the one
+consumer still asking the server about the operator's own machine.
+
+The fix is the union, computed once per surface (`lib/live-agents.ts › liveAgentsKey`) and handed to
+all three consumers, with two properties that are not cosmetic. **Deduped by agent id**, because once
+the push lands the agent is in both sets and the handle minter would offer it as `@scout` *and*
+`@scout-1`, the second reaching nobody — the fix for a latency bug would have shipped a routing bug.
+And **a content key rather than a merged array**, the round trip `view-model.ts › agentIndexKey`
+already established, because the own feed is paced by telemetry and hands the renderer a new array
+about five times a second while an agent works.
+
+**The lesson is about which reader is asked, not about tuning.** A poll interval is a *fallback*
+freshness, and it had quietly become the primary path for a fact this process owned locally. Reaching
+for a shorter interval, or a retry after launch, would have made the symptom smaller and left the
+shape intact — which is precisely what four green suites had already done to this bug once.

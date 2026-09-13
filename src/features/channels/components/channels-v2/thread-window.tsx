@@ -37,6 +37,7 @@ import { useChannelMessages } from "../../hooks/use-channel-messages";
 import { useChannelMembers } from "../../hooks/use-channel-members";
 import { useChannelThreads } from "../../hooks/use-channel-threads";
 import { useChannelAgentSessions } from "../../hooks/use-channel-agent-sessions";
+import { liveAgentsFromKey, liveAgentsKey } from "../../lib/live-agents";
 import { useConsentInbox } from "../../hooks/use-consent-inbox";
 import { useChannelPreferenceWrites } from "../../hooks/use-channel-preference-writes";
 import { ChannelsV2MessagePane } from "./message-pane";
@@ -46,6 +47,7 @@ import { threadRows } from "./view-model-rows";
 import { useInlineConsent } from "./use-inline-consent";
 import { PEER_SESSIONS_POLL_MS } from "./use-agents-panel";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
+import { useDesktopSessions } from "./use-desktop-sessions";
 
 /** The window's name, as one function so the fallback and the loaded title are one
  *  rule. ⚠ The em-dash spelling is the product's ("Dopl — <thread>"), and
@@ -142,6 +144,22 @@ export function ChannelsV2ThreadWindow({
     workspaceId,
     PEER_SESSIONS_POLL_MS
   );
+  /**
+   * ⚠ **THE POP-OUT'S @-PICKER GETS THE SAME UNION THE MAIN PANE DOES (2026-09-13)** —
+   * the poll above PLUS this machine's own session feed, which is a PUSH subscription
+   * and adds no read (`use-desktop-sessions.ts`; `null` in a plain browser, which this
+   * window is not). Without the own half an agent launched seconds ago is un-taggable
+   * here for a full `PEER_SESSIONS_POLL_MS`, which is the defect
+   * `lib/live-agents.ts › liveAgentsKey` exists for — and a window that offered a
+   * different set from the pane behind it would be the second answer INVARIANTS §5
+   * forbids.
+   */
+  const { sessions: ownSessions } = useDesktopSessions();
+  const liveAgentsContentKey = liveAgentsKey(peerSessions, ownSessions, channelId);
+  const liveAgents = useMemo(
+    () => liveAgentsFromKey(liveAgentsContentKey),
+    [liveAgentsContentKey]
+  );
   const index = useMemo(
     () => indexMembers(members, currentUserId),
     [members, currentUserId]
@@ -200,14 +218,15 @@ export function ChannelsV2ThreadWindow({
         outboundBusy={consentBusy}
         onDecideOutbound={decideOutbound}
         scrollTarget={null}
-        // ⚠ THE SAME POLL THIS WINDOW ALREADY MAKES for the peer-activity row, handed on so the
-        // pop-out's composer offers the same @-chips the main pane does (2026-09-02, slice B10).
+        // ⚠ THE SAME POLL THIS WINDOW ALREADY MAKES for the peer-activity row, UNIONED with this
+        // machine's own feed (2026-09-13 — see `liveAgents` above), so the pop-out's composer
+        // offers the same @-chips the main pane does (2026-09-02, slice B10).
         // ⚠ **THIS SURFACE'S RECIPIENT LINE IS EXACT AGAIN AS OF 2026-09-07 (items 10 and 11).**
         // It used to state one arm fewer, reading a THREAD and never the channel row that carried
         // `defaultResponderAgentName`. The replacement setting is PER MEMBER and lives on the
         // roster this window already loads (`useChannelMembers`), so there is nothing to hand
         // over — and had it stayed a prop, the omission would now OVERSTATE.
-        liveAgents={peerSessions}
+        liveAgents={liveAgents}
         peerActivity={
           <PeerActivityRow
             peers={peerWorkingOn(peerSessions, currentUserId, thread.id)}
