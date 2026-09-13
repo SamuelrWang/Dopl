@@ -16,14 +16,17 @@ import {
 import {
   countMetricInWindow,
   listContainerRoles,
+  listOwnedPersonalContainerIds,
   listRunningSessions,
   scanCreditEvents,
   scanMcpCalls,
   scanMessageChannels,
   type CreditEventScanRow,
   type HomeWindow,
+  type Scan,
 } from "./repository-overview";
 import {
+  isPersonalWalletBurn,
   mapAgents,
   tallyChannels,
   tallyCreditPeople,
@@ -43,6 +46,13 @@ import { HOME_CHANNEL_LIMIT } from "./service-reads";
  * workspaces.kind = 'link'`, and the resulting id list is handed to the
  * repository AS ITS ENTIRE FENCE. The repository runs service-role and bypasses
  * RLS, so **no id a caller sent may ever reach it**.
+ *
+ * 🔒 **EXCEPT THE CREDIT READ, WHOSE FENCE IS THE READER'S WALLET (2026-09-12).**
+ * A wallet belongs to a PERSON, so the credit rows are selected by
+ * `payer_user_id` and by the containers the reader OWNS — see
+ * {@link scanPersonalWalletBurns}, which carries the measurement. Membership and
+ * ownership are different lists and this face now uses both, each for the
+ * question it answers. Still no caller-supplied id on either path.
  *
  * 🔒 **THE FACE IS CROSS-CHANNEL AND THE `?workspaceId=` NARROWING IS GONE
  * (Samuel, 2026-09-01) — THIS IS THE DUPLICATION FIX.** The page used to stack
@@ -215,6 +225,48 @@ async function resolveScope(
 }
 
 /**
+ * The window's burns **THE READER'S OWN PERSONAL WALLET PAID FOR** — the ONE
+ * credit read behind the histogram, the by-person rail and the by-channel rail.
+ *
+ * 🔒 **THIS IS THE FIX FOR THE TWO-COUNTER CARD (Samuel, 2026-09-12: "is the
+ * credits usage wired in? I want to make sure").** The credit reads were fenced
+ * on the MEMBERSHIP scope above — every home channel the reader had joined — so
+ * they summed a quantity no wallet holds: 416 credits in a link container (the
+ * reader's personal wallet) PLUS 56 in a standard workspace (a seat wallet),
+ * under a heading whose denominator was the personal allowance, beside a
+ * Settings pane reading the wallet itself. **Both surfaces answer "what came out
+ * of MY personal wallet" now**, and the plot under the bar therefore totals the
+ * bar again.
+ *
+ * ⚠ **THE FENCE IS OWNERSHIP, WHICH IS A SECOND ROUND TRIP AND WORTH IT.**
+ * `listOwnedPersonalContainerIds` is `workspaces.owner_id = reader`, NOT the
+ * membership list `resolveScope` builds: a burn in somebody else's channel
+ * spends THEIR wallet, and a burn in the reader's own `kind='personal'`
+ * container spends the reader's without ever appearing in a link-container list.
+ * Neither list is a subset of the other, so neither can be derived from the
+ * other.
+ *
+ * ⚠ **FILTERED TWICE ON PURPOSE** — see `overview-tally.ts ›
+ * isPersonalWalletBurn`. The repository pushes the same two arms into PostgREST
+ * so the rows never leave the database; the predicate here is the DEFINITION the
+ * suite pins, and it fails closed if the pushdown is ever loosened.
+ * ⚠ `truncated` is the SCAN's, not the filtered list's: a clipped haul is a floor
+ * however many of its rows survived the predicate.
+ */
+async function scanPersonalWalletBurns(
+  userId: string,
+  sinceIso: string
+): Promise<Scan<CreditEventScanRow>> {
+  const ownedIds = await listOwnedPersonalContainerIds(userId);
+  const scan = await scanCreditEvents(userId, ownedIds, sinceIso);
+  const owned = new Set(ownedIds);
+  return {
+    rows: scan.rows.filter((row) => isPersonalWalletBurn(row, userId, owned)),
+    truncated: scan.truncated,
+  };
+}
+
+/**
  * The histogram. Oldest first.
  *
  * ⚠ **TWO SHAPES OF READ BEHIND ONE ENDPOINT, AND THE DIFFERENCE IS REPORTED.**
@@ -234,12 +286,20 @@ export async function getHomeOverviewSeries(
   metric: HomeOverviewMetric,
   now: Date = new Date()
 ): Promise<HomeOverviewSeries> {
-  const { ids } = await resolveScope(userId);
   const windows = rangeWindows(range, now);
   const bucket = bucketFor(range);
 
   if (metric === "credits") {
-    const scan = await scanCreditEvents(ids, windows[0]?.startIso ?? "");
+    // ⚠ **NO `resolveScope` ON THIS ARM SINCE 2026-09-12, AND THAT IS THE FENCE
+    // CHANGE VISIBLE AS A SAVED ROUND TRIP.** The credit metric is the reader's
+    // WALLET, which is keyed on a person; the membership scope it used to be
+    // fenced on is neither needed nor correct here (see
+    // {@link scanPersonalWalletBurns}). The counted arms below still resolve it,
+    // because `mcp` and `messages` really are per-channel questions.
+    const scan = await scanPersonalWalletBurns(
+      userId,
+      windows[0]?.startIso ?? ""
+    );
     // 🔒 **ALWAYS ZERO-FILLED, NEVER AN EMPTY ARRAY (Samuel, 2026-09-01: he
     // wants to SEE the month).** This arm answered `[]` on an empty ledger so
     // the card could say "nothing yet" instead of drawing a flat month — an
@@ -257,6 +317,7 @@ export async function getHomeOverviewSeries(
     };
   }
 
+  const { ids } = await resolveScope(userId);
   // ⚠ ONE STATEMENT PER BIN — at most 31, and the whole reason the counted
   // series is not a scan. See `repository-overview.ts › countMetricInWindow`.
   const counts = await Promise.all(
@@ -312,7 +373,7 @@ export async function getHomeOverview(
   const since = rangeSince(range, now);
 
   const [credits, calls, msgChannels, roles, liveAgents] = await Promise.all([
-    scanCreditEvents(ids, since),
+    scanPersonalWalletBurns(userId, since),
     scanMcpCalls(ids, since),
     scanMessageChannels(ids, since),
     listContainerRoles(ids),

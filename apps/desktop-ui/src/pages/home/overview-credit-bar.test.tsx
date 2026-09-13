@@ -14,15 +14,23 @@ import { BILLING_STATUS, renderHome, routes } from "./home-test-harness";
  * over the hard 500 (§1, `eslint.config.mjs › max-lines`, which covers
  * `apps/*​/src/**` with no exemptions) — and the seam was already there: that
  * suite owns the face's STRUCTURE (which panels exist, what is in them, the
- * board, the jumps), and these three cases own one component's ARITHMETIC and
+ * board, the jumps), and the cases here own one component's ARITHMETIC and
  * its SOURCES. They change for different reasons: the bar's numbers moved when
  * Samuel ruled where the spend is read from, and no structural pin moved with
  * them.
  *
- * 🔒 **THE FIXTURES DISAGREE ON PURPOSE.** `BILLING_STATUS.credits.used` is 320
- * and `HOME_SERIES` sums to 210, so a bar that goes back to reading the payer's
- * counter prints 320 and every case here fails. Two fixtures that happened to
- * agree would let that regression through in silence.
+ * 🔒 **THE FIXTURES DISAGREE ON PURPOSE, AND SINCE 2026-09-12 THE BAR FOLLOWS
+ * THE WALLET.** `BILLING_STATUS.credits.used` is 320 and `HOME_SERIES` sums to
+ * 210: the bar prints **320** (the wallet counter, the same field Settings ›
+ * Plans & billing prints) and the plot prints **210** (its own bars' total), so a
+ * bar that goes back to `seriesTotal(points)` prints 210 and every case here
+ * fails. ⚠ **THE DIRECTION OF THIS PIN REVERSED** — between 2026-09-06 and
+ * 2026-09-12 it asserted the opposite, which is why the numbers are still two
+ * and not one: in production the two agree, because the server narrows the
+ * credits series to the same wallet's ledger rows
+ * (`features/home/server/overview-tally.ts › isPersonalWalletBurn`). **A fixture
+ * where they agree cannot tell which source the bar read**, which is exactly how
+ * a card came to show 416 over a wallet reading 0.
  *
  * ⚠ THE CHANNEL SURFACE IS STUBBED, like every other suite on this page.
  */
@@ -63,9 +71,10 @@ describe("the /home credit capacity bar", () => {
 
   /**
    * The capacity bar is a PERIOD TOTAL with its denominator and its reset date.
-   * The denominator and the reset date are the shared billing endpoint's; the
-   * SPENT figure is the histogram's ledger (ruling #10, 2026-09-06) — no second
-   * credits read either way.
+   * ⚠ **ALL THREE NUMBERS ARE THE SHARED BILLING ENDPOINT'S NOW (2026-09-12)** —
+   * spend, denominator and reset date off one `/api/billing/status` read, which
+   * is the read the settings modal's billing pane already makes. The spend was
+   * the histogram's ledger sum between 2026-09-06 and this change.
    */
   it("shows the credit allowance, what is left, and when it resets", async () => {
     renderHome();
@@ -73,16 +82,18 @@ describe("the /home credit capacity bar", () => {
 
     // ⚠ THE BILLING METER'S OWN FORMAT — `UsageMeter` prints `used / limit`.
     // This face uses that component, so it prints what the billing pane prints.
-    expect(await within(credits).findByText("210 / 500")).toBeInTheDocument();
+    expect(await within(credits).findByText("320 / 500")).toBeInTheDocument();
     expect(within(credits).getByText("Credits")).toBeInTheDocument();
-    // ⚠ `limit - spent`, NOT the payload's `remaining` (180 here): what is left
-    // has to be left of the figure printed beside it.
-    expect(within(credits).getByText("290 left")).toBeInTheDocument();
+    // ⚠ STILL DERIVED AS `limit - spent` RATHER THAN READ OFF `remaining`, and
+    // the two now coincide (180) because the spend is the same counter the
+    // payload derived its own remaining from. The derivation is what keeps the
+    // DEGRADED case below honest, where `remaining` is a zero against a zero.
+    expect(within(credits).getByText("180 left")).toBeInTheDocument();
     // 🔒 THE REFERENCE NUMBER IN WORDS (Samuel, 2026-09-05: "it should show 416
     // out of 25k credits spent"). The denominator here is the payload's own
     // measured `limit`; the fallback case below is what pins the constant.
     expect(
-      within(credits).getByText("210 of 500 credits spent")
+      within(credits).getByText("320 of 500 credits spent")
     ).toBeInTheDocument();
     // ⚠ THE WORD THAT MUST NOT COME BACK: a 0 denominator used to print
     // "Unmetered" here, which is the whole defect the bar was rebuilt for.
@@ -99,16 +110,23 @@ describe("the /home credit capacity bar", () => {
   });
 
   /**
-   * 🔒 **THE BAR'S SPEND *IS* THE HISTOGRAM'S TOTAL, AND ONE READ SERVES BOTH**
-   * (Samuel's ruling #10, 2026-09-06). The card used to answer from two sources
-   * — the payer's period counter over the attribution ledger's bars — so the two
-   * halves of one card could differ on screen. They are one array now
-   * (`overview-panels.tsx › UsageCard`, summed once by `seriesTotal`).
+   * 🔒 **THE BAR PRINTS THE WALLET, NOT THE SERIES SUM (Samuel, 2026-09-12: "is
+   * the credits usage wired in? I want to make sure").** Ruling #10 had made the
+   * bar print `seriesTotal(points)` so the two halves of this card could not
+   * differ — and they could not, while both were wrong together: the series
+   * summed the ledger over EVERY container the reader had burned in, so the bar
+   * said `416 of 500` beside a Settings pane reading `0 of 500` off the wallet.
+   * The wallet is what enforcement charged, so the wallet is what the bar says.
    *
-   * ⚠ THE CALL COUNT IS HALF THE POINT: hoisting the read must not have bought
-   * agreement with a second request.
+   * ⚠ **THE PLOT IS STILL 210 AND THAT IS NOT A CONTRADICTION HERE** — the
+   * server's narrowing of the credits series is what makes the two agree in
+   * production, and this suite deliberately does not stub that agreement (see
+   * the file header). What is pinned is WHICH SOURCE each half reads.
+   *
+   * ⚠ THE CALL COUNT IS STILL HALF THE POINT: the bar gates on the series read
+   * (so the card arrives whole), and that must not have become a second request.
    */
-  it("prints the same spend on the bar as the plot totals, from one series read", async () => {
+  it("prints the wallet's spend on the bar while the plot totals its own bars", async () => {
     renderHome();
     const usage = await panel("Usage");
 
@@ -116,7 +134,7 @@ describe("the /home credit capacity bar", () => {
     const plot = await card("Credits used");
     expect(within(plot).getByText("210")).toBeInTheDocument();
     expect(
-      within(usage).getByText("210 of 500 credits spent")
+      within(usage).getByText("320 of 500 credits spent")
     ).toBeInTheDocument();
 
     await waitFor(() =>
@@ -129,12 +147,47 @@ describe("the /home credit capacity bar", () => {
   });
 
   /**
+   * 🔒 **AND IT FOLLOWS THE WALLET WHEN THE WALLET MOVES.** The case above pins
+   * one pair of numbers; this one changes `credits.used` alone and asserts the
+   * bar changed with it while the plot did not. That is the assertion a bar
+   * reading the series cannot pass at any fixture value, which is why it is here
+   * as well as above.
+   */
+  it("tracks credits.used when only the wallet figure changes", async () => {
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
+      path.split("?")[0] === "/api/billing/status"
+        ? Promise.resolve(
+            ok({
+              ...BILLING_STATUS,
+              credits: { ...BILLING_STATUS.credits, used: 471, remaining: 29 },
+            })
+          )
+        : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
+    );
+    renderHome();
+    const credits = await panel("Usage");
+
+    expect(
+      await within(credits).findByText("471 of 500 credits spent")
+    ).toBeInTheDocument();
+    expect(within(credits).getByText("29 left")).toBeInTheDocument();
+    // The plot is untouched by a billing-payload change.
+    expect(within(await card("Credits used")).getByText("210")).toBeInTheDocument();
+  });
+
+  /**
    * 🔒 **A PAYER THAT NEVER RESOLVED NO LONGER BLANKS THE FIGURE** (Samuel,
    * 2026-09-05, on his own bar: "it should show 416 out of 25k credits spent").
    * `credits-service.ts › unmetered` answers `used: 0, limit: 0, degraded: true`
    * — which printed **Not counted this period** over a month of real bars. The
-   * spend comes from the ledger now, so the sentence has a number in it and the
-   * denominator falls back to a constant.
+   * sentence always has a number in it now, and the DENOMINATOR is the half with
+   * the fallback.
+   *
+   * ⚠ **THE NUMERATOR IS THE MEASURED 0 SINCE 2026-09-12, NOT THE LEDGER'S 210.**
+   * This case asserted 210 while the spend came from the series; the bar reads the
+   * wallet now, so it prints what Settings prints for the same reading. A ledger
+   * sum standing over a counter that says nothing was charged is the disagreement
+   * this change removed, and printing it here would re-pin it.
    *
    * 🔒 **AND THE CONSTANT IS THE *PERSONAL* WALLET'S FREE TIER (2026-09-07;
    * `.free` since 2026-09-08).** /home is the home space: every call it charges
@@ -173,12 +226,12 @@ describe("the /home credit capacity bar", () => {
 
     expect(
       await within(credits).findByText(
-        `210 of ${PERSONAL_MONTHLY_CREDITS.free.toLocaleString()} credits spent`
+        `0 of ${PERSONAL_MONTHLY_CREDITS.free.toLocaleString()} credits spent`
       )
     ).toBeInTheDocument();
     expect(
       within(credits).getByText(
-        `${(PERSONAL_MONTHLY_CREDITS.free - 210).toLocaleString()} left`
+        `${PERSONAL_MONTHLY_CREDITS.free.toLocaleString()} left`
       )
     ).toBeInTheDocument();
     // ⚠ THE SENTENCE THAT MUST NOT COME BACK.

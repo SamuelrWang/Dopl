@@ -18,6 +18,14 @@ import type { Role } from "@/features/workspaces/types";
  * same — but a caller with no home channels is the common first state and it
  * should not cost a round trip.
  *
+ * ⚠ **TWO FUNCTIONS TAKE A PERSON INSTEAD, AND THAT IS A SECOND FENCE RATHER
+ * THAN AN EXCEPTION TO THE FIRST (2026-09-12).** `listOwnedPersonalContainerIds`
+ * and `scanCreditEvents` are fenced on the reader's OWN USER ID, because the
+ * thing they answer for is a WALLET and a wallet belongs to a person, not to a
+ * container set. Membership and ownership are different lists (see that
+ * function), and the credit surfaces follow ownership. Both fences are derived
+ * server-side from the session; neither may ever take an id a caller sent.
+ *
  * ⚠ THE ADMIN CLIENT IS UNTYPED HERE for the reason
  * `workspaces/server/repository-overview.ts` gives: the generated `Database`
  * type does not carry the channels tables (nor `workspace_credit_usage`, nor
@@ -186,27 +194,96 @@ export async function scanMessageChannels(
 export interface CreditEventScanRow {
   origin_workspace_id: string | null;
   user_id: string | null;
+  /** WHICH COUNTER MOVED — `personal` | `seat` | `workspace` (the LEGACY pooled
+   *  value, which is the column's `DEFAULT`, so every pre-2026-09-07 row carries
+   *  it). ⚠ Read because it is half the personal-wallet predicate; see
+   *  {@link scanCreditEvents}. */
+  wallet: string;
+  /** THE PAYER — the person whose wallet moved. `null` on legacy rows (the
+   *  payer was a workspace then) and on a deleted account (`SET NULL`). */
+  payer_user_id: string | null;
   amount: number;
   created_at: string;
 }
 
 /**
- * THE CREDIT LEDGER, fenced to the caller's containers — the ONE read behind
- * "credits by channel", "credits by person" and the credit histogram
- * (2026-09-01, closing F-328's UI half).
+ * The two container kinds whose burns land on the OWNER's PERSONAL wallet.
  *
- * ⚠ **FENCED ON `origin_workspace_id`, NOT `workspace_id`, AND THE DIFFERENCE
- * IS THE WHOLE POINT.** `origin_workspace_id` is WHERE the call was made, i.e.
- * the container, and a container holds exactly one channel
- * (`repository-containers.ts › listContainerChannels`).
- * ⚠ **`workspace_id` USED TO BE THE PAYER AND STOPPED BEING ONE ON 2026-09-07**
- * (Samuel's per-seat + personal-wallet ruling; `20260930120000_credit_wallets.sql`
- * §4). The payer is a PERSON now and rides `payer_user_id`; `workspace_id` holds
- * the ADDRESSED CONTAINER, so on every row this build writes it EQUALS the
- * origin. **This read is unaffected either way** — which is exactly why it fences
- * on the origin: it never depended on what the other column meant. ⚠ Legacy rows
- * predating the wave still carry a rerouted payer in `workspace_id`, so fencing
- * on it would haul one operator's whole workspace burn under a channel heading.
+ * ⚠ **THIS IS `credits-service.ts › resolveBillingTarget`'s TWO NON-`standard`
+ * ARMS, RESTATED FOR A READ**, and the same `CASE` the deploy-day backfill runs
+ * (`scripts/sql/backfill-credit-wallets-v2.sql`). A `standard` workspace's burn
+ * is a SEAT wallet's and belongs to that workspace's own Overview.
+ */
+const PERSONAL_WALLET_KINDS = ["personal", "link"];
+
+/**
+ * Every container whose burns are charged to `userId`'s PERSONAL wallet — their
+ * own `kind='personal'` container and every `kind='link'` container they OWN.
+ *
+ * 🔒 **OWNERSHIP, NOT MEMBERSHIP, AND THE TWO ARE DIFFERENT FENCES ON THIS
+ * PAGE.** `repository-containers.ts › listLinkContainers` (the fence every other
+ * read here uses) is `workspace_members.user_id = caller` — it includes the
+ * channels somebody ELSE owns and the caller merely joined, and a burn in one of
+ * those spends the OWNER's wallet, never the reader's. This list is the
+ * complement: `workspaces.owner_id = caller`, which is what the wallet follows.
+ * ⚠ It is derived from the SESSION user id and nothing a caller sent, which is
+ * what lets it be handed to the RLS-bypassing admin client (INVARIANTS §2).
+ */
+export async function listOwnedPersonalContainerIds(
+  userId: string
+): Promise<string[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("workspaces")
+    .select("id")
+    .eq("owner_id", userId)
+    .in("kind", PERSONAL_WALLET_KINDS);
+  if (error) throw error;
+  return ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
+}
+
+/**
+ * THE CREDIT LEDGER, fenced to the rows that came out of the READER'S OWN
+ * PERSONAL WALLET — the ONE read behind "credits by channel", "credits by
+ * person" and the credit histogram.
+ *
+ * 🔒 **THE FENCE IS THE WALLET, NOT THE CONTAINER SET (Samuel, 2026-09-12: "is
+ * the credits usage wired in? I want to make sure").** It used to be
+ * `origin_workspace_id IN (every link container the reader is a MEMBER of)`,
+ * which sums a DIFFERENT quantity from the one Settings › Plans & billing
+ * prints: Samuel's bar said `416 of 500` over a wallet reading `0 of 500`,
+ * because his 472 ledger credits for the period split 416 in a link container
+ * (his personal wallet under v2.1) and 56 in a standard workspace (a SEAT
+ * wallet, somebody else's meter entirely). Two counters, two definitions, one
+ * card. **Both surfaces answer one question now — "what came out of MY personal
+ * wallet" — and this predicate is that question in SQL.**
+ *
+ * ⚠ **TWO ARMS, AND THE SECOND ONE IS THE LEGACY SHAPE.** Exactly the mapping
+ * `scripts/sql/backfill-credit-wallets-v2.sql` applies, and
+ * `credits-service.ts › resolveBillingTarget` writes:
+ *   1. `payer_user_id = reader AND wallet = 'personal'` — every row the v2.1
+ *      code writes, wherever the call was made.
+ *   2. `wallet = 'workspace' AND origin_workspace_id IN (the reader's OWN
+ *      personal/link containers)` — pre-2026-09-07 rows, which carry the column
+ *      `DEFAULT` and no payer at all, so the payer is DERIVED from the origin
+ *      container's owner, the way the backfill derives it.
+ * A `seat` row is matched by NEITHER arm and that is the whole fix: a burn in a
+ * standard workspace belongs to THAT workspace's Overview page.
+ *
+ * ⚠ **NO `workspaceIds` AND THEREFORE NO EMPTY SHORT-CIRCUIT.** Arm 1 is keyed
+ * on a PERSON, so a reader with no home channels at all still has a wallet and
+ * still has an honest answer — returning empty without asking would hide their
+ * own personal-container spend. Arm 2 is dropped from the `.or()` when the owned
+ * list is empty, because PostgREST has no syntax for an empty `in.()`.
+ * ⚠ Both arms are built from the SESSION user id and from ids this repository
+ * read itself (`listOwnedPersonalContainerIds`) — never from anything a caller
+ * sent, which is the rule the admin client makes non-negotiable (§2).
+ *
+ * ⚠ **THE `origin_workspace_id` DIMENSION IS UNCHANGED** — it is WHERE the call
+ * was made, and a container holds exactly one channel
+ * (`repository-containers.ts › listContainerChannels`). The by-channel rail
+ * therefore reads "which of MY channels burned MY wallet". ⚠ Never the ledger's
+ * `workspace_id`, which held a REROUTED PAYER before 2026-09-07 and holds the
+ * addressed container since (`20260930120000_credit_wallets.sql` §4).
  *
  * ⚠ **A SUM WITH NO `SUM`.** PostgREST cannot aggregate, so this hauls the
  * window's rows and the service adds them up — the sanctioned haul-and-tally
@@ -222,15 +299,21 @@ export interface CreditEventScanRow {
  * reason the surface must not call it exact.
  */
 export async function scanCreditEvents(
-  workspaceIds: string[],
+  userId: string,
+  ownedContainerIds: string[],
   sinceIso: string,
   limit: number = HOME_SCAN_LIMIT
 ): Promise<Scan<CreditEventScanRow>> {
-  if (workspaceIds.length === 0) return { rows: [], truncated: false };
+  const legacyArm =
+    ownedContainerIds.length > 0
+      ? `,and(wallet.eq.workspace,origin_workspace_id.in.(${ownedContainerIds.join(",")}))`
+      : "";
   const { data, error } = await supabaseAdmin()
     .from("credit_usage_events")
-    .select("origin_workspace_id, user_id, amount, created_at")
-    .in("origin_workspace_id", workspaceIds)
+    .select(
+      "origin_workspace_id, user_id, wallet, payer_user_id, amount, created_at"
+    )
+    .or(`and(payer_user_id.eq.${userId},wallet.eq.personal)${legacyArm}`)
     .gte("created_at", sinceIso)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -243,6 +326,12 @@ export async function scanCreditEvents(
     // with it: this read sits in `getHomeOverview`'s `Promise.all`, so one
     // missing table 500'd the payload behind every panel, AND it is the
     // `credits` series arm, which is what blanked the histogram.
+    // ⚠ THE SAME DEGRADE NOW ALSO COVERS THE `wallet` / `payer_user_id`
+    // COLUMNS, which arrive in a SECOND unapplied migration
+    // (`20260930120000_credit_wallets.sql` §4): before that apply, a select
+    // naming them answers `42703` and this arm answers empty rather than 500ing
+    // the face. ⚠ EMPTY, not "the old sum" — a fallback to the container fence
+    // would quietly resurrect the two-counter bug this read exists to end.
     // ⚠ **DEGRADED IS SAFE HERE AND ONLY HERE.** An empty ledger is already an
     // expected state (the table starts with no history), so "no rows" is a
     // reading this surface must render correctly anyway — it says "nothing yet"

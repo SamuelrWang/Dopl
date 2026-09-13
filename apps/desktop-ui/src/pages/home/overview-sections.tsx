@@ -96,31 +96,40 @@ import {
  * purpose** — the header is a `used / limit` pair, and what he asked for is the
  * sentence that says which is which.
  *
- * 🔒 **THE SPENT FIGURE IS THE LEDGER'S, NOT THE PAYER'S COUNTER (Samuel's
- * ruling #10, 2026-09-06).** `spent` is the sum of the very series the histogram
- * under this bar draws — `credit_usage_events` across the owner's containers
- * (`repository-overview.ts › scanCreditEvents`) — handed down by the one read
- * that already fetched it. The bar used to print `credits.used`, the PAYER's
- * period counter, so the two halves of one card answered from two sources and
- * disagreed on screen; worse, a reading whose payer never resolved carries
- * `used: 0, degraded: true` and printed **Not counted this period** over a real
- * month of bars. Now the number over the plot IS the plot's total, by
- * construction rather than by two reads agreeing.
- * ⚠ **THAT MAKES THIS FIGURE A DIFFERENT ONE FROM THE BILLING PANE'S, AND IT
- * SHOULD BE.** `billing-usage-pane.tsx` answers *what has the payer been
- * metered for*; /home answers *what did my containers spend this month*, which
- * is what this face is about. Neither is the other's cache.
+ * 🔒 **THE SPENT FIGURE IS THE WALLET COUNTER — THE SAME `credits.used` SETTINGS
+ * PRINTS (Samuel, 2026-09-12: "is the credits usage wired in? I want to make
+ * sure").** It was `seriesTotal(points)` from ruling #10 (2026-09-06) until this
+ * change, which bought agreement WITHIN this card at the cost of agreement with
+ * the meter that actually charges: his bar read `416 of 500` while Settings ›
+ * Plans & billing read `0 of 500`, because the series summed
+ * `credit_usage_events` over every container he had burned in — 416 in a link
+ * container (his personal wallet) and 56 more in a standard workspace (a SEAT
+ * wallet, a different meter entirely). **One question, one number: what came out
+ * of MY personal wallet.** The wallet is the only thing that can answer it,
+ * because the wallet is what enforcement decremented.
+ * ⚠ **AND THE PLOT UNDER THIS BAR STILL TOTALS IT** — not by sharing an array
+ * any more, but because the SERVER narrowed the credits series to the same
+ * wallet's ledger rows (`features/home/server/overview-tally.ts ›
+ * isPersonalWalletBurn`, pushed into the read by
+ * `repository-overview.ts › scanCreditEvents`). Two derivations of one quantity,
+ * which is agreement that survives somebody editing one of them — a wrong sum
+ * now shows up as a plot that does not match its own bar.
+ * ⚠ **IT IS THE BILLING PANE'S FIGURE, ON PURPOSE.** `billing-usage-pane.tsx`
+ * and this bar are two views of ONE counter now; the previous note here said
+ * they answer different questions and that difference was the defect.
  *
- * ⚠ **THE "NOT COUNTED THIS PERIOD" ARM IS GONE, DELIBERATELY, NOT MISLAID.**
- * `degraded` describes the COUNTERS, and the spend no longer comes from them, so
- * the flag can no longer say anything true about this sentence. What it still
- * governs is the reset date, which is withheld by its own blank-`periodEnd`
- * guard below.
- * ⚠ **THE FIGURE IS NO MORE HONEST THAN THE PLOT BESIDE IT, AND NO LESS.** An
- * unreadable ledger degrades to zero rows (`scanCreditEvents`, and the chart
- * then draws a flat month) — the trade Samuel took knowingly when he ruled the
- * axis is always drawn. A bar that reads 0 there is the same claim the plot is
- * making, which is the point of them sharing a source.
+ * ⚠ **`degraded` STILL GOVERNS THE DENOMINATOR AND THE DATE, NOT THE SPEND.** A
+ * payer that never resolved answers `used: 0, limit: 0, degraded: true`: the
+ * limit falls back to the personal-wallet constant above, the reset date is
+ * withheld by its own blank-`periodEnd` guard below, and the numerator prints the
+ * measured 0 — the same 0 Settings prints, which is the agreement this change is
+ * for. ⚠ **"Not counted this period" STAYS GONE**: the sentence always has a
+ * number in it now.
+ * ⚠ **THE FIGURE IS A COUNTER AND THE PLOT IS A LEDGER, AND THE LEDGER IS THE
+ * LOOSER OF THE TWO.** Its writer is fire-and-forget and its scan is capped
+ * (`scanCreditEvents`), and an unreadable ledger degrades to zero rows — so the
+ * plot can sit BELOW this bar without the bar being wrong. That direction is
+ * expected; the reverse would be a bug.
  *
  * ⚠ **A DENOMINATOR IS NOT A MEASUREMENT (INVARIANTS §11)** — hence the
  * personal-wallet constant standing in for a 0 `limit`, above.
@@ -135,7 +144,9 @@ export function CreditCapacityBar({
   onUpgrade,
 }: {
   credits: WorkspaceCreditsStatus;
-  /** This period's spend, summed from the histogram's own series. */
+  /** This period's spend off the WALLET COUNTER — `/api/billing/status ›
+   *  credits.used`, the figure Settings prints. ⚠ NOT the histogram's sum; see
+   *  this component's docblock for the measurement that moved it. */
   spent: number;
   /**
    * Opens the settings modal on its billing section. ⚠ **ABSENT MEANS THERE IS
@@ -166,8 +177,9 @@ export function CreditCapacityBar({
         overNote="Tool calls are paused until the next period."
       />
       <div className="mt-2 flex items-baseline justify-between gap-3 text-caption text-text-muted">
-        {/* The reference number, in words — the same figure the plot under it
-            totals, because it is the same sum of the same rows. */}
+        {/* The reference number, in words — the WALLET's spend, which is also
+            what the plot under it totals: the server narrows the credits series
+            to this same wallet's ledger rows. Two derivations, one quantity. */}
         <span>
           {`${spent.toLocaleString()} of ${limit.toLocaleString()} credits spent`}
         </span>

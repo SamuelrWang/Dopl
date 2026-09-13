@@ -29,7 +29,12 @@ import {
 // when the activity sections took the service past the 500-line cap. It does no
 // IO, which is why almost every case in this file can import it directly and
 // mock nothing.
-import { tallyChannels, tallyCreditPeople, tallyTools } from "./overview-tally";
+import {
+  isPersonalWalletBurn,
+  tallyChannels,
+  tallyCreditPeople,
+  tallyTools,
+} from "./overview-tally";
 import {
   roleKey,
   type CreditEventScanRow,
@@ -40,6 +45,16 @@ const NOW = new Date("2026-09-01T13:37:00.000Z");
 
 const WS_A = "ws-a";
 const WS_B = "ws-b";
+
+/** The reader. ⚠ Also the OWNER of {@link WS_A} in the credit cases below —
+ *  ownership is what the personal wallet follows, not membership. */
+const VIEWER = "u1";
+/** A standard workspace the reader also works in. Its burns are SEAT-wallet
+ *  burns and belong to that workspace's own Overview, never to /home. */
+const STANDARD_WS = "ws-standard";
+/** The containers the reader OWNS of kind personal/link — what
+ *  `repository-overview.ts › listOwnedPersonalContainerIds` answers. */
+const OWNED = new Set([WS_A, "personal-container"]);
 
 function call(over: Partial<McpCallScanRow> = {}): McpCallScanRow {
   return { workspace_id: WS_A, user_id: "u1", tool: "kb", op: "read_file", ...over };
@@ -52,6 +67,11 @@ function burn(over: Partial<CreditEventScanRow> = {}): CreditEventScanRow {
   return {
     origin_workspace_id: WS_A,
     user_id: "u1",
+    // ⚠ THE v2.1 SHAPE IS THE DEFAULT (`wallet` + a payer) because that is what
+    // every row written since 2026-09-07 carries; the legacy shape is spelled out
+    // per case, so a case reading `wallet: "workspace"` is visibly about history.
+    wallet: "personal",
+    payer_user_id: VIEWER,
     amount: 1,
     created_at: "2026-09-01T12:00:00.000Z",
     ...over,
@@ -195,6 +215,116 @@ describe("tallyTools", () => {
   it("breaks ties on the key", () => {
     const rows = [call({ tool: "b", op: "x" }), call({ tool: "a", op: "x" })];
     expect(tallyTools(rows).map((row) => row.tool)).toEqual(["a", "b"]);
+  });
+});
+
+/**
+ * THE /home CREDIT FIGURE'S DEFINITION — which ledger rows came out of the
+ * READER'S OWN PERSONAL WALLET.
+ *
+ * 🔒 **WHY THIS BLOCK EXISTS (Samuel, 2026-09-12: "is the credits usage wired
+ * in? I want to make sure").** The Overview bar read `416 of 500` while Settings
+ * › Plans & billing read `0 of 500` off the wallet, because the credit reads were
+ * fenced on the reader's MEMBERSHIP scope: 472 ledger credits for the period,
+ * 416 of them in a link container (the reader's personal wallet under v2.1) and
+ * 56 in a standard workspace (somebody's SEAT wallet). Two counters, two
+ * definitions, one card. These cases pin the ONE definition both surfaces use.
+ *
+ * ⚠ THE PREDICATE IS PURE, so this is the whole coverage — the repository pushes
+ * the same two arms into PostgREST as an optimisation, and the filter here is
+ * what fails closed if that pushdown is ever loosened
+ * (`overview-tally.ts › isPersonalWalletBurn`).
+ */
+describe("isPersonalWalletBurn", () => {
+  /** THE NEW SHAPE: `wallet='personal'` + the reader as payer. */
+  it("keeps a v2.1 personal row the reader paid for, wherever it was burned", () => {
+    expect(isPersonalWalletBurn(burn(), VIEWER, OWNED)).toBe(true);
+    // ⚠ A container the reader does NOT own is still theirs to pay for when the
+    // ledger says so — the reader's own `kind='personal'` container is not in any
+    // link-container list, and that spend is the most personal of all.
+    expect(
+      isPersonalWalletBurn(
+        burn({ origin_workspace_id: "personal-container" }),
+        VIEWER,
+        OWNED
+      )
+    ).toBe(true);
+  });
+
+  /**
+   * 🔒 **THE GUEST PATH: `user_id` IS NOT THE PAYER AND THE ROW IS STILL THE
+   * READER'S.** A peer burning credits in the reader's home channel spends the
+   * reader's wallet (INVARIANTS §4A's billing bullet), which is the whole reason
+   * the by-person rail exists.
+   */
+  it("keeps a peer's call that the reader's wallet paid for", () => {
+    expect(
+      isPersonalWalletBurn(burn({ user_id: "peer" }), VIEWER, OWNED)
+    ).toBe(true);
+  });
+
+  /**
+   * 🔒 **THE 56 CREDITS THAT CAUSED THE DISAGREEMENT.** A burn in a STANDARD
+   * workspace moved a SEAT wallet, so it is not on this meter at any price — it
+   * belongs to that workspace's own Overview page.
+   */
+  it("drops a seat-wallet row from a standard workspace", () => {
+    expect(
+      isPersonalWalletBurn(
+        burn({ wallet: "seat", origin_workspace_id: STANDARD_WS }),
+        VIEWER,
+        OWNED
+      )
+    ).toBe(false);
+  });
+
+  /** Somebody else's wallet, burned in a channel the reader is merely a member
+   *  of: theirs to see in their own Overview, never counted here. */
+  it("drops a personal row another person's wallet paid for", () => {
+    expect(
+      isPersonalWalletBurn(
+        burn({ payer_user_id: "owner-2", origin_workspace_id: WS_B }),
+        VIEWER,
+        OWNED
+      )
+    ).toBe(false);
+  });
+
+  /**
+   * 🔒 **THE LEGACY ARM — `wallet='workspace'`, the column's `DEFAULT`, WITH NO
+   * PAYER AT ALL.** The payer is DERIVED from the origin container's owner,
+   * exactly as `scripts/sql/backfill-credit-wallets-v2.sql` derives it, so an
+   * owned personal/link container's old rows stay on this meter and a container
+   * the reader does not own does not.
+   */
+  it("derives the payer of a legacy row from the container the reader owns", () => {
+    const legacy = { wallet: "workspace", payer_user_id: null } as const;
+    expect(isPersonalWalletBurn(burn({ ...legacy }), VIEWER, OWNED)).toBe(true);
+    expect(
+      isPersonalWalletBurn(
+        burn({ ...legacy, origin_workspace_id: WS_B }),
+        VIEWER,
+        OWNED
+      )
+    ).toBe(false);
+    // ⚠ A DELETED CONTAINER CANNOT BE OWNED, so a legacy row with no origin is
+    // dropped rather than credited to whoever is reading.
+    expect(
+      isPersonalWalletBurn(
+        burn({ ...legacy, origin_workspace_id: null }),
+        VIEWER,
+        OWNED
+      )
+    ).toBe(false);
+  });
+
+  /** ⚠ AN UNKNOWN WALLET FAILS CLOSED — the column has no closed `CHECK` future
+   *  and a value this build has never heard of is not evidence of a charge to the
+   *  reader. Same rule `narrowDetail` applies to `channel_sessions.detail`. */
+  it("drops a wallet value it does not recognise", () => {
+    expect(
+      isPersonalWalletBurn(burn({ wallet: "future-wallet" }), VIEWER, OWNED)
+    ).toBe(false);
   });
 });
 

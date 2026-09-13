@@ -11,12 +11,11 @@ import {
   HOME_OVERVIEW_DEFAULT_RANGE,
   type HomeOverview,
   type HomeOverviewSeries,
-  type HomeSeriesPoint,
 } from "@/features/home/overview-types";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError } from "#/components/page-states";
 import { openHomeSettings } from "./home-settings-control";
-import { CreditCapacityBar, UsageChart, seriesTotal } from "./overview-sections";
+import { CreditCapacityBar, UsageChart } from "./overview-sections";
 import {
   ChannelMessageRail,
   ChannelRail,
@@ -194,21 +193,23 @@ export function HomeOverviewPanels({
 }
 
 /**
- * THE USAGE CARD — the bar over the histogram, and **ONE READ BEHIND BOTH**
- * (Samuel's ruling #10, 2026-09-06).
+ * THE USAGE CARD — the bar over the histogram, fetched once.
  *
- * 🔒 **THE SERIES IS FETCHED HERE, NOT IN THE CHART, BECAUSE THE BAR'S SPENT
- * FIGURE IS THE SERIES' OWN SUM.** The bar used to print the PAYER's period
- * counter while the plot under it summed the attribution ledger, so one card
- * showed two numbers for one month — and on a reading whose payer never resolved
- * the bar said "Not counted this period" over a plot full of bars. Hoisting the
- * read makes them the same array through `seriesTotal`, which is agreement by
- * construction; two components reading the same cache key would only be
- * agreement by coincidence.
- * ⚠ **IT IS NOT A SECOND READ.** This is the request `CreditsChart` was already
- * making, moved up one level — same path, same key, same `keepPreviousData`. No
- * new endpoint and no second summing query on the server: the histogram's read
- * path is the whole source (`service-overview.ts › getHomeOverviewSeries`).
+ * 🔒 **THE BAR AND THE PLOT AGREE BY ANSWERING THE SAME QUESTION, NOT BY SHARING
+ * AN ARRAY (Samuel, 2026-09-12: "is the credits usage wired in? I want to make
+ * sure").** Ruling #10 (2026-09-06) made the bar print `seriesTotal(points)` so
+ * the two halves of this card could not differ — and they could not, while both
+ * were wrong together: the series summed the ledger across EVERY container the
+ * reader had burned in, so the bar said `416 of 500` beside a Settings pane
+ * reading `0 of 500` off the wallet, with 56 more credits of the same period
+ * sitting on a SEAT wallet in a standard workspace. **The bar reads the WALLET
+ * now** — `credits.credits.used`, the same `/api/billing/status` field Settings
+ * prints — and the SERVER narrowed the credits series to that same wallet's
+ * ledger rows (`service-overview.ts › scanPersonalWalletBurns`), so the plot
+ * totals the bar again for the right reason.
+ * ⚠ **THE SERIES IS STILL FETCHED HERE RATHER THAN IN THE CHART**, and it is
+ * still ONE read: the bar gates on it (see `CreditsBar`) so the card arrives
+ * whole instead of the bar popping in over a skeleton plot.
  *
  * 🔒 **PINNED TO `credits` — THERE IS NO METRIC STATE AND NO SWITCHER**
  * (Samuel: "I explicitly said not to do MCP calls but credits"). The page asks
@@ -228,7 +229,6 @@ function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
     <section className="bento flex flex-col gap-4 p-3.5">
       <CreditsBar
         homeWorkspaceId={homeWorkspaceId}
-        points={points}
         ledgerPending={series.isPending && !series.data}
       />
       <UsageChart
@@ -246,31 +246,43 @@ function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
  *
  * ⚠ **ITS OWN COMPONENT BECAUSE IT HAS ITS OWN READ** — `GET /api/billing/status`
  * through the SAME hook the settings modal's billing pane uses, so one cache
- * entry serves both and the bar costs no second credits read. Keeping it here
- * means its loading state does not gate the plot under it.
- * ⚠ **THE SPEND ARRIVES AS A PROP** — see `UsageCard`. That read is the plot's,
- * and this component must not start a second one.
+ * entry serves both and the bar costs no second credits read.
+ *
+ * 🔒 **BOTH NUMBERS ON THIS BAR COME OFF THAT ONE READ (Samuel, 2026-09-12).**
+ * `spent` is `credits.credits.used` — **the wallet counter itself**, the field
+ * Settings › Plans & billing prints — and NOT `seriesTotal(points)`, which is
+ * what it was between 2026-09-06 and this change and what made the two surfaces
+ * disagree: the series summed the ledger over every container the reader had
+ * burned in, personal wallet and other people's seat wallets alike. The wallet is
+ * the only thing that can answer *how much of MY allowance is gone*, because the
+ * wallet is what enforcement charged. The plot below re-derives the same figure
+ * from the same wallet's ledger rows, server-side.
+ * ⚠ **THE DEGRADED READING IS UNCHANGED, AND IT IS THE LIMIT THAT HAS THE
+ * FALLBACK, NOT THE SPEND** (`overview-sections.tsx › CreditCapacityBar`): a
+ * payer that never resolved answers `used: 0, limit: 0, degraded: true`, so the
+ * denominator falls back to `PERSONAL_MONTHLY_CREDITS.free` and the numerator
+ * stays the measured 0 — which is now the SAME zero Settings shows, rather than a
+ * ledger sum contradicting it.
  */
 function CreditsBar({
   homeWorkspaceId,
-  points,
   ledgerPending,
 }: {
   homeWorkspaceId: string | null;
-  points: readonly HomeSeriesPoint[];
   /** The ledger read has not landed AND there is no previous series to stand
-   *  in — see the ghost below. */
+   *  in — see the ghost below. ⚠ **STILL A GATE THOUGH THE BAR NO LONGER READS
+   *  THE LEDGER**: the bar and the plot are one card, and a bar that renders
+   *  ahead of the plot it sits on top of arrives as a half-drawn card. */
   ledgerPending: boolean;
 }) {
   const credits = useWorkspaceEntitlements(homeWorkspaceId ?? undefined);
   // ⚠ A GHOST OF THE BAR'S OWN HEIGHT while either read is in flight, and when
   // the caller has no workspace yet — never a zeroed bar, which would claim a
-  // spent allowance nobody measured. ⚠ THE LEDGER READ IS NOW ONE OF THOSE
-  // GATES, and it has to be: the spend comes from it, so rendering ahead of it
-  // would paint a confident `0 of 500 credits spent` and then jump. A KEPT
-  // previous series is not pending by this test, so a refetch never re-ghosts a
-  // bar that already has a figure — the same trade the plot makes when it dims
-  // instead of blanking.
+  // spent allowance nobody measured. ⚠ THE LEDGER READ IS STILL ONE OF THOSE
+  // GATES even though the spend no longer comes from it (2026-09-12): the bar and
+  // the plot are one card and should appear together. A KEPT previous series is
+  // not pending by this test, so a refetch never re-ghosts a bar that already has
+  // a figure — the same trade the plot makes when it dims instead of blanking.
   if (credits.loading || !homeWorkspaceId || ledgerPending) {
     return <Skeleton className="h-[54px] w-full rounded-lg" />;
   }
@@ -289,7 +301,7 @@ function CreditsBar({
   return (
     <CreditCapacityBar
       credits={credits.credits}
-      spent={seriesTotal(points)}
+      spent={credits.credits.used}
       onUpgrade={
         credits.isPaid ? undefined : () => openHomeSettings("billing")
       }

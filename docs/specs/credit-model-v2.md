@@ -86,6 +86,32 @@ Round-trip budget (pinned by mock call counts): seat path = billing row + member
 (concurrent) + RPC = **3**; personal path = owner lookup + RPC = **2** (for `kind='personal'` the
 owner IS the caller — skip the lookup: **1**).
 
+### Surfaces — every credit figure a person sees answers ONE question (2026-09-12)
+
+*"Is the credits usage wired in? I want to make sure."* — Samuel, after /home Overview said
+**416 of 500** while Settings › Plans & billing said **0 of 500** for the same period. Measured
+cause: two counters with two definitions. The Overview bar summed the attribution ledger over
+**every container the reader had burned in** — 416 in a link container (their personal wallet under
+v2.1) plus 56 in a standard workspace (a **seat** wallet, a different meter) — while Settings read
+the wallet. The ruling: **both surfaces answer "what came out of MY personal wallet".**
+
+| Surface | Source | Reads |
+|---|---|---|
+| Settings › Plans & billing | the WALLET counter | `GET /api/billing/status` → `credits.used` (`src/features/billing/server/status-service.ts`) |
+| /home Overview capacity bar | the SAME wallet counter | `credits.credits.used` off the same endpoint (`apps/desktop-ui/src/pages/home/overview-sections.tsx › CreditCapacityBar`) |
+| /home Overview credit plot, by-channel + by-person rails | the LEDGER, narrowed to that wallet's rows | `src/features/home/server/overview-tally.ts › isPersonalWalletBurn`, pushed into the read by `src/features/home/server/repository-overview.ts › scanCreditEvents` |
+| A standard workspace's Overview | that workspace's SEAT-wallet burns | unchanged — a `seat` row is not on any /home figure |
+
+The ledger narrowing is the §3 table read backwards, and it is the same mapping the deploy-day
+backfill applies (`scripts/sql/backfill-credit-wallets-v2.sql`): rows where
+`payer_user_id = reader AND wallet = 'personal'`, **plus** legacy `wallet = 'workspace'` rows whose
+`origin_workspace_id` is a `personal`/`link` container the reader OWNS (ownership, not membership —
+`src/features/home/server/repository-overview.ts › listOwnedPersonalContainerIds`). The plot
+therefore totals the bar again, but by a SECOND derivation of one quantity rather than by sharing an
+array: a wrong sum now shows up as a plot that disagrees with its own bar. ⚠ The bar is a counter and
+the plot is a fire-and-forget capped ledger, so the plot may read LOW — that direction is expected;
+the reverse is a bug.
+
 ## 4. Schema — `supabase/migrations/20260930120000_credit_wallets.sql` (WRITTEN, NOT APPLIED)
 
 Header must carry: written-not-applied, `supabase migration list` re-derive note, apply order

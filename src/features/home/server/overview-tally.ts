@@ -93,8 +93,67 @@ export function tallyTools(rows: McpCallScanRow[]): HomeToolUsage[] {
 }
 
 /**
+ * IS THIS LEDGER ROW ONE THE READER'S **PERSONAL WALLET** PAID FOR?
+ *
+ * 🔒 **THE DEFINITION OF THE /home CREDIT FIGURE, IN ONE PLACE (Samuel,
+ * 2026-09-12: "is the credits usage wired in? I want to make sure").** The
+ * Overview bar and Settings › Plans & billing must answer the SAME question —
+ * *what came out of MY personal wallet this period* — and before this predicate
+ * they answered two: the bar summed every container the reader had burned in
+ * (416, all of it in one link container) while the wallet counter read what it
+ * had actually charged (0 before the deploy-day backfill), with another 56
+ * credits of the same period sitting on a SEAT wallet in a standard workspace.
+ *
+ * ⚠ **TWO ARMS, MIRRORING `credits-service.ts › resolveBillingTarget` AND THE
+ * DEPLOY-DAY BACKFILL (`scripts/sql/backfill-credit-wallets-v2.sql`) EXACTLY:**
+ *   1. a v2.1 row — `wallet = 'personal'` — is the reader's iff `payer_user_id`
+ *      IS the reader. ⚠ On the guest path the payer is NOT the caller, which is
+ *      the point: a peer burning credits in the reader's channel spends the
+ *      READER's wallet, and that row is theirs even though `user_id` is not.
+ *   2. a LEGACY row — `wallet = 'workspace'`, the column's `DEFAULT`, written
+ *      before 2026-09-07 with no payer at all — is the reader's iff its ORIGIN
+ *      CONTAINER is one they OWN of kind `personal`/`link`, which is how the
+ *      backfill derives a payer for exactly those rows.
+ * A `seat` row is neither, and a `personal` row somebody ELSE paid for is
+ * neither. ⚠ **`wallet` IS NOT NARROWED TO A UNION HERE** — the column has no
+ * `CHECK`-closed future and the closed-value test belongs on the read side, the
+ * same argument {@link narrowDetail} makes: an unknown wallet is not the
+ * reader's, which fails CLOSED.
+ *
+ * ⚠ **IT IS THE SECOND HALF OF A RULE THE SQL ALSO STATES**, and deliberately so:
+ * `repository-overview.ts › scanCreditEvents` pushes the same two arms into
+ * PostgREST so the rows never leave the database, and this function is the
+ * DEFINITION the tests pin. If the pushdown is ever loosened by a bug, this
+ * filter still drops what the pushdown let through — belt and braces that fail
+ * in the safe direction. It must never be relaxed to "trust the query".
+ */
+export function isPersonalWalletBurn(
+  row: CreditEventScanRow,
+  viewerId: string,
+  ownedContainerIds: ReadonlySet<string>
+): boolean {
+  if (row.wallet === "personal") return row.payer_user_id === viewerId;
+  if (row.wallet === "workspace") {
+    return (
+      row.origin_workspace_id !== null &&
+      ownedContainerIds.has(row.origin_workspace_id)
+    );
+  }
+  return false;
+}
+
+/**
  * CREDITS per PERSON, descending — the guest breakdown Samuel asked for, now on
  * what was actually CHARGED rather than on loopback-request shape.
+ *
+ * 🔒 **THE ROWS ARE THE READER'S OWN PERSONAL WALLET'S, SO THIS LIST ANSWERS
+ * "WHO BURNED *MY* CREDITS" (2026-09-12).** The caller filters with
+ * {@link isPersonalWalletBurn} before this runs, which is what makes the
+ * breakdown add up to the capacity bar above it. ⚠ `user_id` is still WHO
+ * CALLED, and on the guest path that is not the payer — a peer's name here means
+ * they spent the reader's allowance, which is exactly the question the rail was
+ * built to answer. Burns in a STANDARD workspace are absent by construction:
+ * those are seat wallets and belong to that workspace's own Overview.
  *
  * ⚠ **IT TALLIED `mcp_tool_calls` UNTIL 2026-09-01.** That table counts loopback
  * REQUESTS — `dopl_map` fans out, the await ops poll — so it was never a cost,
@@ -151,6 +210,13 @@ export function tallyCreditPeople(
  * on rows written before 2026-09-07 and holds the addressed container on rows
  * written since (`repository-overview.ts › scanCreditEvents` states the fence,
  * and `20260930120000_credit_wallets.sql` §4 the column's new meaning).
+ *
+ * 🔒 **AND THE CREDIT ROWS ARE THE READER'S OWN PERSONAL WALLET'S SINCE
+ * 2026-09-12** ({@link isPersonalWalletBurn}), so this rail reads "which of MY
+ * home channels burned MY wallet". ⚠ A burn in the reader's own
+ * `kind='personal'` container has no channel to sit under and therefore no row
+ * here — it is still in the wallet, and the bar above is the wallet. The rail
+ * and the bar are two questions, not two answers to one.
  *
  * ⚠ EVERY CHANNEL IN THE FENCE GETS A ROW, including the silent ones — the
  * comparison is "which of MY channels is busy", and dropping the quiet ones

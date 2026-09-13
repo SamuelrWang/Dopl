@@ -34,6 +34,20 @@ const SOURCE = "api/home/overview-series";
  * holds nothing for the window, because there is no history behind the
  * migration.
  *
+ * 🔒 **AND THE `credits` METRIC IS THE READER'S OWN PERSONAL WALLET, NOT EVERY
+ * CONTAINER THEY BURNED IN (Samuel, 2026-09-12: "is the credits usage wired in?
+ * I want to make sure").** It selected `origin_workspace_id IN (every home
+ * channel the caller had joined)`, which sums a quantity no wallet holds — a link
+ * container's burns (the caller's personal wallet) PLUS a standard workspace's
+ * (somebody's SEAT wallet) — so this series and `GET /api/billing/status ›
+ * credits.used` disagreed by construction on one card. The arm now selects
+ * `payer_user_id = caller AND wallet = 'personal'`, plus the LEGACY
+ * `wallet = 'workspace'` rows whose origin container the caller OWNS
+ * (`features/home/server/overview-tally.ts › isPersonalWalletBurn`). ⚠ Burns in a
+ * standard workspace are gone from this endpoint on purpose: they are that
+ * workspace's Overview's figure, `/api/workspaces/.../overview-series`'s.
+ * ⚠ `mcp` and `messages` are unchanged — those really are per-channel questions.
+ *
  * ⚠ **STILL NO `tokens` METRIC HERE, AND IT IS NO LONGER BECAUSE THE DATA
  * CANNOT EXIST** (corrected 2026-09-06, Samuel #1326). The old reason —
  * `channel_sessions.tokens_spent` is a live per-session snapshot the desktop
