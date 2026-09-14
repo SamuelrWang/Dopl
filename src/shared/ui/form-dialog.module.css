@@ -119,6 +119,31 @@
   padding-bottom: 7px;
 }
 
+/* THE QUIET FACE — **NO RULE AT REST; THE BLACK ONE ONLY WHILE THE FIELD IS
+ * FOCUSED** (Samuel, 2026-09-14, over the object panel's section rows: *"for the
+ * individual fields. I want to remove the gray underline, and have it so that
+ * the black underline only appears when a user clicks on a field item (vertical
+ * center the text also)"*).
+ *
+ * ⚠ **THE BORDER STAYS AND GOES TRANSPARENT — IT IS NOT DROPPED.**
+ * `border-bottom: 0` would take 2px off the box the moment the class lands, so
+ * every cell on a row bar would shift by 2px against the dropdown beside it, and
+ * the black line would then be drawn 2px from where the gray one was. The
+ * `::after` sweep above is untouched: this is ONE recipe with two RESTING states,
+ * never a second field face.
+ *
+ * ⚠ **AND THE PADDING IS SYMMETRIC ABOUT THE TEXT** — 5px over, 3px + the 2px
+ * border under — which is the "vertical center" half of the same ruling. `.input`
+ * is 2px over and 3px + 2px under, so the glyphs sit 1.5px ABOVE the centre of
+ * their own box, and an `items-center` row therefore hung the typed word 1.5px
+ * above the dropdown's word and the ✕ beside it. The text-to-line distance (3px)
+ * is UNCHANGED — only the space above the text grows. */
+.inputQuiet {
+  border-bottom-color: transparent;
+  padding-top: 5px;
+  padding-bottom: 3px;
+}
+
 .input:focus {
   outline: none;
 }

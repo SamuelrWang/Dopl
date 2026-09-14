@@ -288,8 +288,8 @@ describe("§ the control", () => {
     const roverDot = screen
       .getByRole("menuitem", { name: "Rover" })
       .querySelector<HTMLElement>("span[style]")!;
-    // ⚠ THE SAME TOKEN `message-box-agent.tsx › NEUTRAL` gives the frame, so the dot in
-    // this menu and the box in the transcript read as one state.
+    // ⚠ THE SAME TOKEN `agent-box-rule.ts › AGENT_ACCENT_NEUTRAL` gives the ring and the
+    // bar, so the dot in this menu and the accent in the transcript read as one state.
     expect(roverDot.style.backgroundColor).toBe("var(--border-strong)");
     expect(roverDot.dataset.agentColor).toBeUndefined();
   });

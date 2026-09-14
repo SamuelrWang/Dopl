@@ -351,6 +351,10 @@ export function ChannelsAgentPanel({
               Narration is keyed on the same id (F-250), so both halves are this agent's. */}
           <AgentStream
             color={color}
+            // ⚠ THE LIVE TAIL AT THE FOOT OF THE STREAM (Samuel, 2026-09-14) — the
+            // SAME `agentLiveness` verdict the header pill above renders, handed
+            // down rather than re-derived, so the two cannot disagree.
+            liveness={agentLiveness(agent)}
             entries={narration.entries}
             supported={narration.supported}
             sent={agentSentMessages(messages, agent.taskId, currentUserId, agent.agentId)}

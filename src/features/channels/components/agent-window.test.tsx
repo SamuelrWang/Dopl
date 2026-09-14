@@ -134,7 +134,16 @@ describe("the view says WHERE the agent is working, and restates nothing the chr
     // ⚠ THE COMPOSER STILL *ADDRESSES* THE AGENT ("Message flint"), which is an accessible name
     // and not a rendered label — so this is `queryByText`, the narrow claim.
     expect(screen.queryByText("flint")).toBeNull();
-    expect(screen.queryByText("Running Bash")).toBeNull();
+    // ⚠ **THE STATUS HALF IS NARROWED BY SAMUEL'S 2026-09-14 RULING, NOT DROPPED.** This read
+    // `queryByText("Running Bash") === null` — "the view says nothing about liveness at all" —
+    // and the ruling supersedes exactly that: the working state must be visible AT THE POINT THE
+    // REPLY WILL APPEAR, so the stream now carries a live tail (`agent-stream-working.tsx`).
+    // What this file's subject still forbids is the CHROME's badge being restated here, so the
+    // claim becomes a COUNT plus a place: the word appears ONCE, and it is the stream's row
+    // (`role="status"`) rather than a second `agent-bits.tsx › AgentLiveness` pill.
+    const said = screen.queryAllByText("Running Bash");
+    expect(said).toHaveLength(1);
+    expect(said[0].getAttribute("role")).toBe("status");
   });
 });
 

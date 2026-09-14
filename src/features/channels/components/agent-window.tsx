@@ -43,7 +43,7 @@ import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writ
 import { useChannelsLive } from "./live";
 import { agentSentMessages } from "./agent-panel";
 import { AgentStream } from "./agent-stream";
-import { NO_THREAD_LABEL, agentDisplayName } from "./agents-model";
+import { NO_THREAD_LABEL, agentDisplayName, agentLiveness } from "./agents-model";
 import { formatTokens, metric } from "./agent-metrics";
 import { viewerPerson } from "./view-model";
 import { useDesktopSessions } from "./use-desktop-sessions";
@@ -254,6 +254,11 @@ export function ChannelsAgentWindow({
         />
       ) : null}
       <AgentStream
+        // ⚠ THE LIVE TAIL (Samuel, 2026-09-14) — the same verdict the window
+        // chrome's badge shows (`agent-window-chrome.tsx`), from the one mapping.
+        // ⚠ NO AGENT RESOLVED IS `null`, never an invented state: the feed has not
+        // said, and the stream then draws nothing.
+        liveness={agent ? agentLiveness(agent) : null}
         entries={entries}
         supported={supported}
         sent={sent}

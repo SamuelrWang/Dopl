@@ -62,7 +62,12 @@ import { AgentStreamEscalation } from "./agent-stream-escalation";
 // they move when THAT lane moves (INVARIANTS §11), where this file moves when a
 // stream row's dispatch moves.
 import { DirectedBox } from "./agent-stream-directed";
-import { StreamProse } from "./agent-stream-prose";
+// ⚠ `TruncatedNote` MOVED TO THE PROSE FILE ON 2026-09-14 — pure relocation, on
+// that file's own seam: the note exists for text rendered WHOLE with no clamp.
+import { StreamProse, TruncatedNote } from "./agent-stream-prose";
+// ⚠ THE LIVE TAIL IS ITS OWN FILE (2026-09-14): it changes when the LIVENESS
+// vocabulary does (`agents-model.ts`), this file when a row's dispatch does.
+import { StreamWorkingRow } from "./agent-stream-working";
 // ⚠ THE OUTBOUND REVIEW CARD IS ITS OWN FILE SINCE 2026-08-31 (§1, at the cap),
 // and the seam is "one file, one reason to change": that card moves when the
 // OUTBOUND CONSENT product moves (§6) — it has already gained a Pending face, a
@@ -70,6 +75,7 @@ import { StreamProse } from "./agent-stream-prose";
 // moves. It is RE-EXPORTED here so no importer changed.
 import { SentToChannelBox } from "./agent-stream-sent-box";
 import type { AgentColorKey } from "../types"; // the sent banner's fill
+import type { AgentLivenessState } from "./agents-model";
 export {
   SentToChannelBox,
   POST_PENDING_LABEL,
@@ -118,6 +124,7 @@ export function AgentStream({
   threadTitle,
   viewer,
   agentNameFor,
+  liveness = null,
   color = null, className,
 }: {
   /** `null` = could not ask; `[]` = asked, nothing yet. ⚠ Never collapsed here. */
@@ -139,6 +146,16 @@ export function AgentStream({
   /** THE SENT BANNER'S FILL (2026-09-13) — the SAME key the transcript boxes with, because the two
    *  are one post; resolved by the MOUNT off `view-model.ts › AgentIdentity.color`. Rule: §5. */
   color?: AgentColorKey | null;
+  /**
+   * WHAT THIS AGENT IS DOING RIGHT NOW, from `agents-model.ts › agentLiveness` —
+   * the SAME verdict the header pill renders (Samuel, 2026-09-14).
+   *
+   * ⚠ ONLY THE `working` TONE DRAWS ANYTHING, and the gate is inside
+   * `agent-stream-working.tsx` rather than in the two hosts that mount this.
+   * ⚠ ABSENT IS "THIS HOST HAS NO SESSION TO READ", not "idle": it renders the
+   * same nothing, which is the honest answer either way.
+   */
+  liveness?: AgentLivenessState | null;
   /** Whether this build can show the lane at all. */
   supported: boolean;
   /** What this agent POSTED, off the channel transcript — the authoritative
@@ -227,10 +244,14 @@ export function AgentStream({
   // Follow the stream. Simpler than the transcript's stick-to-bottom rules on
   // purpose: this is a log, not a conversation with a reading position to
   // protect, and it grows from the bottom.
+  // ⚠ THE LIVE TAIL IS A DEP TOO (2026-09-14). It appears and disappears with no
+  // change in `items.length`, and a row that arrives below the fold is a row the
+  // operator has to scroll for to learn their message was heard.
+  const working = liveness?.tone === "working";
   useEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [items.length]);
+  }, [items.length, working]);
 
   // ⚠ THE TWO ABSENCES ARE WORDED DIFFERENTLY, and the SENT lane survives both.
   // A build with no narration op still has the transcript, so an agent that
@@ -269,6 +290,12 @@ export function AgentStream({
           ))}
         </ol>
       )}
+      {/* ⚠ UNDER THE MOST RECENT ITEM, INSIDE THIS SCROLLER (Samuel, 2026-09-14):
+          the working state has to be visible where the reply will appear, not
+          only in the header's corner. Outside the `<ol>` on purpose — it is not a
+          thing the agent HAS DONE, and a just-woken agent with an empty lane must
+          show it too. `agent-stream-working.tsx` carries the rest. */}
+      <StreamWorkingRow liveness={liveness} />
       {!supported && !empty && (
         // The transcript carried the sent lane, but the WORK lane could not be
         // asked for — say so rather than letting a short list imply a quiet agent.
@@ -470,31 +497,4 @@ function OperatorTurn({
  */
 function AgentTurn({ text }: { text: string }) {
   return <StreamProse text={text} />;
-}
-
-/**
- * THE CUT, CONFESSED, UNDER THE FACE THAT SHOWS IT (2026-08-31, Samuel's cutoff
- * report — INVARIANTS §9: a clipped read says so).
- *
- * ⚠ WHY THE FACES NEED THIS WHEN THE LOG LANE HAS ITS OWN CLIP ROW. The message
- * faces (`OperatorTurn` / `AgentTurn` / `DirectedBox`) render their text whole
- * with no clamp — main already bounded it at `PROSE_CAP` — so a line main CUT at
- * that cap reaches the operator as prose that simply stops mid-sentence, with the
- * arithmetic on every layer agreeing it fits. `StreamItem.truncated` is main's
- * own confession that it shortened the line, and for prose the tail exists
- * nowhere: this note is the only honest thing a face can add.
- *
- * ⚠ MUTED AND BELOW THE FACE, not inside it — it is a fact ABOUT the message,
- * not part of what the agent said, and the same `text-micro text-text-muted`
- * the log lane's clip row wears keeps one voice for "you are not seeing all
- * of it" across the column.
- */
-function TruncatedNote({ alignEnd }: { alignEnd?: boolean }) {
-  return (
-    <div className={cn("flex", alignEnd && "justify-end")}>
-      <span className="text-micro text-text-muted">
-        Clipped — the message was longer than the panel keeps.
-      </span>
-    </div>
-  );
 }

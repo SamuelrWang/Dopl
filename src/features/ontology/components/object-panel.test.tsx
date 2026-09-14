@@ -356,6 +356,97 @@ describe("the fields are the popup kit's underline", () => {
   });
 });
 
+/**
+ * SAMUEL, 2026-09-14, over this panel: *"the distance between the text
+ * description and its underline should be increased, look at the distance with
+ * the description field to the right of the ontology picker … for the individual
+ * fields. I want to remove the gray underline, and have it so that the black
+ * underline only appears when a user clicks on a field item (vertical center the
+ * text also). Also, the format should be like: Attribute : Field Dropdown … So
+ * reordered"*.
+ *
+ * ⚠ **THE DESCRIPTION AND THE ROW CELLS TOOK OPPOSITE HALVES OF ONE RULING**, and
+ * that is exactly what these assertions pin: the Description grows the 36px
+ * action face the BOARD HEADER's Description already wore, while the row cells
+ * lose their resting rule entirely. A later edit that "unifies the panel's
+ * fields" would satisfy neither half, so both are stated against the CLASS NAMES
+ * of the shared module (jsdom loads no stylesheet — the same two-layer pin this
+ * file's header describes).
+ */
+describe("the 2026-09-14 field ruling", () => {
+  it("gives the Description the board header's 36px face, not a hand-cut padding", () => {
+    renderPanel();
+    const field = screen.getByLabelText("Description");
+    // ⚠ THE FAILURE THIS CATCHES: a `pb-2` on the panel's own field, which looks
+    // identical until the header's Description changes and this one does not.
+    expect(field.className).toMatch(/inputAction/);
+    expect(field.className).not.toMatch(/inputQuiet/);
+    expect(field.className).not.toMatch(/\bp[btxy]?-\d/);
+  });
+
+  it("leaves every ROW cell with no rule at rest — Description keeps its gray", () => {
+    renderPanel();
+    for (const label of ["Attribute label", "Value", "Edge label", "Action name", "Action tools"]) {
+      expect(screen.getByLabelText(label).className).toMatch(/inputQuiet/);
+    }
+    expect(screen.getByLabelText("Description").className).not.toMatch(/inputQuiet/);
+  });
+
+  it("draws the black line only while a row cell is focused, and takes it away on blur", () => {
+    renderPanel();
+    const field = screen.getByLabelText("Attribute label");
+    const line = field.parentElement!;
+    expect(line.className).toMatch(/line/);
+    expect(line.className).not.toMatch(/lineActive/);
+    fireEvent.focus(field);
+    expect(line.className).toMatch(/lineActive/);
+    fireEvent.blur(field);
+    expect(line.className).not.toMatch(/lineActive/);
+  });
+
+  it("orders the attribute row label : value dropdown ✕, with the colon a glyph", () => {
+    renderPanel();
+    const cells = Array.from(bars(wellOf("Attributes"))[0].children);
+    expect(cells[0].querySelector('input[aria-label="Attribute label"]')).not.toBeNull();
+    // ⚠ THE COLON IS THE PANEL'S, NOT THE LABEL'S: typed into the label it would
+    // be slugged into `key` and written to the server.
+    expect(cells[1].textContent).toBe(":");
+    expect(cells[1].getAttribute("aria-hidden")).toBe("true");
+    expect((screen.getByLabelText("Attribute label") as HTMLInputElement).value).toBe("Stage");
+    expect(cells[2].querySelector('input[aria-label="Value"]')).not.toBeNull();
+    // ⚠ THE REORDER ITSELF: the kind picker stood HERE, between label and value.
+    expect(cells[3].getAttribute("aria-label")).toBe("Attribute type");
+  });
+
+  it("keeps that shape for a picker kind and for a viewer", () => {
+    const REF_CARD: OntologyObject = {
+      ...object(CARD_ID, "Acme"),
+      attributes: [
+        { key: "owner", label: "Owner", value: { kind: "ref", value: [LANE_ID] } },
+      ],
+    };
+    render(
+      <ObjectPanel
+        objectId={CARD_ID}
+        graph={{ clusters: [CLUSTER], objects: { [LANE_ID]: object(LANE_ID, "Lead"), [CARD_ID]: REF_CARD } }}
+        dispatch={vi.fn()}
+        canEdit={false}
+        onSelectObject={vi.fn()}
+        onDeleteObject={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    const cells = Array.from(bars(wellOf("Attributes"))[0].children);
+    // ⚠ A ref value is a CHIP STRIP, not a field — the colon sits in front of it
+    // all the same, and a viewer reads the row with the pickers gone.
+    expect(cells[1].textContent).toBe(":");
+    expect(cells[2].textContent).toContain("Lead");
+    expect(cells[2].querySelector("input")).toBeNull();
+    expect((screen.getByLabelText("Attribute label") as HTMLInputElement).readOnly).toBe(true);
+    expect(screen.queryByRole("button", { name: "Link" })).toBeNull();
+  });
+});
+
 describe("the lane's own panel", () => {
   it("states what it is and how many items it has — still no pill", () => {
     renderPanel(LANE_ID);

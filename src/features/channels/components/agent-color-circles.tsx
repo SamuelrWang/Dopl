@@ -32,7 +32,7 @@
  *
  * `lib/agent-colors.ts › agentColorVar` is the only place a key becomes paint, and the
  * reference crosses into an inline `style` exactly as it does in
- * `message-box-agent.tsx` — read that file's own argument for why an inline style is
+ * `agent-box-rule.ts › agentPostAccent` — read that file's own argument for why an inline style is
  * docs/DESIGN-SYSTEM.md honoured rather than bent: the palette member is chosen by
  * DATA, and a Tailwind class cannot be built from a runtime key.
  *
@@ -262,7 +262,7 @@ export function AgentColorCircles({
                  operator hovers the thing it is about. */
               title={held ? `In use by ${takenBy.get(key) ?? UNNAMED_HOLDER}` : undefined}
               /* A stable hook for the suites and for a host's scoped restyle, never
-                 read back by this tree — `message-box-agent.tsx`'s own precedent, and
+                 read back by this tree — `attribution-pill.tsx`'s own precedent, and
                  the KEY rather than the paint for the same reason. */
               data-agent-color={key}
               tabIndex={key === tabStop ? 0 : -1}

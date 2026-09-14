@@ -139,6 +139,21 @@ export function AttributesEditor({
 const PICK_TRIGGER = cn(SMALL_TEXT_BUTTON, "gap-1");
 
 /**
+ * THE ROW'S COLON — **`Attribute : value`, A GLYPH THE PANEL DRAWS** (Samuel,
+ * 2026-09-14: *"the format should be like: Attribute : Field Dropdown … So
+ * reordered"*).
+ *
+ * ⚠ **IT IS NOT PART OF THE LABEL AND IT IS NOT TYPED.** A colon appended to the
+ * label VALUE would be slugged into `key` (`attribute-name:`), written to the
+ * server and read back by MCP — the separator is punctuation between two cells,
+ * so it lives in the row and never in the data.
+ *
+ * ⚠ `aria-hidden` — a screen reader already announces two separately named
+ * fields, and ":" between them reads as noise.
+ */
+const ROW_COLON = <span aria-hidden="true" className="shrink-0 text-text-muted">:</span>;
+
+/**
  * ONE ATTRIBUTE, PERSISTED OR DRAFT — **ONE COMPONENT FOR BOTH**, which is what
  * makes the commit invisible: the draft at index N is reconciled into the
  * persisted row at index N (`panel-section.tsx › useDraftRows`), so the caret
@@ -146,6 +161,21 @@ const PICK_TRIGGER = cn(SMALL_TEXT_BUTTON, "gap-1");
  *
  * ⚠ `onCommit` is the DRAFT's only extra: it fires on the label's blur and on
  * Enter. A persisted row needs none — its `onChange` already dispatches.
+ *
+ * ⚠ **THE ORDER IS `label : value [kind ▾] ✕` SINCE 2026-09-14** (Samuel: *"the
+ * format should be like: Attribute : Field Dropdown … So reordered"*). The KIND
+ * picker used to stand between the label and the value, which put the row's
+ * least-read cell in the middle of the sentence a reader is trying to read; it is
+ * the same control, after the value it types. ⚠ The value cell is
+ * `AttrValueEditor` for EVERY kind — the colon therefore sits in front of a text
+ * line, a tag line or a chip strip without knowing which, and a viewer
+ * (`canEdit=false`) reads the identical row with the pickers gone.
+ *
+ * ⚠ **AND THE ROW'S FIELDS ARE `quiet`** (same ruling: *"remove the gray
+ * underline, and have it so that the black underline only appears when a user
+ * clicks on a field item (vertical center the text also)"*) — the kit's
+ * `.inputQuiet`, a resting state of the one underline recipe, never a second
+ * face. The panel's DESCRIPTION keeps its gray line.
  */
 function AttrRow({
   row,
@@ -170,12 +200,21 @@ function AttrRow({
         label="Attribute label"
         value={row.label}
         readOnly={!canEdit}
+        quiet
         onChange={(label) => onChange({ ...row, label })}
         onBlur={onCommit}
         onKeyDown={(e) => {
           if (e.key === "Enter") onCommit?.();
         }}
         className="w-24 shrink-0"
+      />
+      {ROW_COLON}
+      <AttrValueEditor
+        row={row}
+        object={object}
+        graph={graph}
+        canEdit={canEdit}
+        onChange={onChange}
       />
       <SelectMenu
         value={row.value.kind}
@@ -185,13 +224,6 @@ function AttrRow({
         variant="text"
         ariaLabel="Attribute type"
         className="shrink-0"
-      />
-      <AttrValueEditor
-        row={row}
-        object={object}
-        graph={graph}
-        canEdit={canEdit}
-        onChange={onChange}
       />
       {canEdit && (
         <button
@@ -339,6 +371,7 @@ function AttrValueEditor({
         label="Tag"
         value={v.value}
         readOnly={!canEdit}
+        quiet
         onChange={(next) => onChange({ ...row, value: { kind: "pill", value: next } })}
         className="min-w-[5rem] flex-1"
       />
@@ -350,6 +383,7 @@ function AttrValueEditor({
       label="Value"
       value={v.value}
       readOnly={!canEdit}
+      quiet
       onChange={(next) => onChange({ ...row, value: { kind: "text", value: next } })}
       className="min-w-[5rem] flex-1"
     />

@@ -10,10 +10,11 @@
  * `<span className="size-2 rounded-full">`s is four chances for one of them to end up 10px
  * or square, at which point it stops reading as the same mark.
  *
- * ⚠ **IT IS NOT THE BOX AND MUST NEVER GROW INTO IT.** `message-box-agent.tsx` is the
- * TRANSCRIPT's face — a frame, a bar and a pill — and it is the only place a post's colour
- * appears. This is a list marker, and the two are separate precisely so the dot's size can
- * change without touching a single message.
+ * ⚠ **IT IS NOT THE POST'S ACCENT AND MUST NEVER GROW INTO IT.** `authored-row.tsx ›
+ * AuthoredRowAccent` is the TRANSCRIPT's face — a ring around the pill and a bar down the
+ * post's outer edge — and it is the only place a post's colour appears. This is a list
+ * marker, and the two are separate precisely so the dot's size can change without touching a
+ * single message.
  */
 
 import { cn } from "@/shared/lib/utils";
@@ -48,7 +49,7 @@ export function AgentColorDot({
     <span
       /* ⚠ THE KEY AS DATA, for the tests and for a host's scoped restyle — never read back
          by this tree. The KEY rather than the resolved colour, so nothing downstream can
-         start treating a hue as the identity (`message-box-agent.tsx` states the rule). */
+         start treating a hue as the identity (`authored-row.tsx` states the rule). */
       data-agent-color={color}
       /* ⚠ **`aria-hidden` AND NO LABEL, WHICH IS A DELIBERATE ACCESSIBILITY DECISION RATHER
          THAN AN OMISSION.** The dot is pure redundancy: every caller draws it immediately

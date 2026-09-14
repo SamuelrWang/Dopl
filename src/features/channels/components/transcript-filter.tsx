@@ -9,10 +9,10 @@
  * users, which would include desktop agents as well: all of the messages that don't
  * have a colored box around them … Individual agents"*.
  *
- * ── ⚠ "PEOPLE" IS THE COMPLEMENT OF THE BOX, AND IT IS NOT RE-SPELLED HERE ─────────
+ * ── ⚠ "PEOPLE" IS THE COMPLEMENT OF THE ACCENT, AND IT IS NOT RE-SPELLED HERE ──────
  *
  * Samuel defined the option by the PAINT rather than by the data, so this file asks
- * `agent-box-rule.ts › agentBoxOf` — the same call `message-box-agent.tsx`'s caller
+ * `agent-box-rule.ts › agentBoxOf` — the same call `transcript.tsx › Message`
  * makes — and never its own version of "is this an agent's post". That file's own
  * docblock carries the argument in full: two spellings would mean a row that renders
  * boxed and filters as a person, and each side's tests would pass because each side
@@ -230,11 +230,11 @@ const FILTER_LABEL = "Filter messages";
  * THE DOT. ⚠ **AN INLINE `style` FOR BOTH FACES, INCLUDING THE NEUTRAL ONE.** The
  * coloured dot has no choice — `lib/agent-colors.ts › agentColorVar` yields a
  * `var(--agent-color-NN)` chosen by DATA, and a Tailwind class cannot be built from a
- * runtime key (the argument is that file's docblock, and `message-box-agent.tsx`
- * repeats it) — so painting the gray one through `bg-border-strong` instead would be
- * two mechanisms for one 8px circle. `--border-strong` is the SAME token
- * `message-box-agent.tsx › NEUTRAL` gives an ended agent's frame, which is the point:
- * the dot in this menu and the box in the transcript must read as one state.
+ * runtime key (the argument is that file's docblock, and `agent-box-rule.ts ›
+ * agentPostAccent` repeats it) — so painting the gray one through `bg-border-strong`
+ * instead would be two mechanisms for one 8px circle. `--border-strong` is the SAME token
+ * `agent-box-rule.ts › AGENT_ACCENT_NEUTRAL` gives an ended agent's ring and bar, which is
+ * the point: the dot in this menu and the accent in the transcript must read as one state.
  */
 const DOT = "h-2 w-2 shrink-0 rounded-full";
 

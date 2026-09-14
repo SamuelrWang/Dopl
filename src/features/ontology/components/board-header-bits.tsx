@@ -43,6 +43,7 @@ export function InlineUnderlineField({
   onChange,
   className,
   inputClassName,
+  quiet,
   autoFocus,
   readOnly,
   onKeyDown,
@@ -52,6 +53,18 @@ export function InlineUnderlineField({
   label: string;
   /** Extra class on the input itself (the kit's `.inputAction` for a 36px row). */
   inputClassName?: string;
+  /**
+   * ⚠ **NO RULE AT REST — THE BLACK LINE ONLY WHILE FOCUSED** (Samuel,
+   * 2026-09-14, over the object panel's section rows: *"I want to remove the gray
+   * underline, and have it so that the black underline only appears when a user
+   * clicks on a field item (vertical center the text also)"*). It is the kit's
+   * `.inputQuiet` — **a RESTING STATE of this same recipe, not a second field** —
+   * so the sweep, the 2px and the box are byte-identical and only the gray goes
+   * transparent. The panel's ROW fields wear it; the two DESCRIPTION fields (this
+   * header's and the object panel's) keep their gray→black line, which is a
+   * different ruling on a different row.
+   */
+  quiet?: boolean;
   value: string;
   onChange: (next: string) => void;
   /** Width/flex only — the face is this component's. */
@@ -94,7 +107,7 @@ export function InlineUnderlineField({
         aria-label={label}
         placeholder={label}
         spellCheck={false}
-        className={cn(fieldStyles.input, inputClassName)}
+        className={cn(fieldStyles.input, quiet && fieldStyles.inputQuiet, inputClassName)}
       />
     </span>
   );

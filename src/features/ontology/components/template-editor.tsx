@@ -128,8 +128,27 @@ export function TemplateEditor({
   );
 }
 
-/** ONE DEFAULT FIELD, PERSISTED OR DRAFT — one component for both, so a commit
- *  reconciles in place (`panel-section.tsx › useDraftRows`). */
+/**
+ * ONE DEFAULT FIELD, PERSISTED OR DRAFT — one component for both, so a commit
+ * reconciles in place (`panel-section.tsx › useDraftRows`).
+ *
+ * ⚠ **THE ROW'S FIELDS ARE `quiet` SINCE 2026-09-14** (Samuel, over the object
+ * panel: *"for the individual fields. I want to remove the gray underline, and
+ * have it so that the black underline only appears when a user clicks on a field
+ * item (vertical center the text also)"*). It is the kit's `.inputQuiet` — a
+ * RESTING STATE of the one underline recipe (`board-header-bits.tsx ›
+ * InlineUnderlineField`), not a second face — so the black `::after` sweep on
+ * focus is unchanged and blur takes the line away again. The panel's own
+ * DESCRIPTION keeps its gray-at-rest line; the rule is about ROW cells.
+ *
+ * ⚠ **THIS ROW IS IN THE SAME PANEL AND TAKES THE SAME REST STATE**, so "Default
+ * fields" is not the one section left drawing gray rules under the other three.
+ *
+ * ⚠ **ORDER UNTOUCHED**: a template row is a field DEFINITION — label + kind, no
+ * value — so there is no value cell for the same day's `Attribute : value
+ * dropdown` ruling to put the picker after, and no colon between a name and a
+ * thing it does not have.
+ */
 function FieldRow({
   row,
   canEdit,
@@ -150,6 +169,7 @@ function FieldRow({
         label="Field label"
         value={row.label}
         readOnly={!canEdit}
+        quiet
         onChange={(label) => onChange({ ...row, label })}
         onBlur={onCommit}
         onKeyDown={(e) => {

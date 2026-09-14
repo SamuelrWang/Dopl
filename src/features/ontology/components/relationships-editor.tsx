@@ -115,8 +115,25 @@ export function RelationshipsEditor({
   );
 }
 
-/** ONE EDGE, PERSISTED OR DRAFT — one component for both, so the commit
- *  reconciles in place and keeps the caret (`panel-section.tsx › useDraftRows`). */
+/**
+ * ONE EDGE, PERSISTED OR DRAFT — one component for both, so the commit
+ * reconciles in place and keeps the caret (`panel-section.tsx › useDraftRows`).
+ *
+ * ⚠ **THE ROW'S FIELDS ARE `quiet` SINCE 2026-09-14** (Samuel, over the object
+ * panel: *"for the individual fields. I want to remove the gray underline, and
+ * have it so that the black underline only appears when a user clicks on a field
+ * item (vertical center the text also)"*). It is the kit's `.inputQuiet` — a
+ * RESTING STATE of the one underline recipe (`board-header-bits.tsx ›
+ * InlineUnderlineField`), not a second face — so the black `::after` sweep on
+ * focus is unchanged and blur takes the line away again. The panel's own
+ * DESCRIPTION keeps its gray-at-rest line; the rule is about ROW cells.
+ *
+ * ⚠ **AND THE ORDER IS UNTOUCHED.** Samuel's `Attribute : value dropdown`
+ * reordering (same ruling) is the ATTRIBUTE row's: this row is label → targets,
+ * already in that order, with no kind picker standing between them to move. No
+ * colon either — the edge's LABEL is the sentence ("owned by"), not a field name
+ * in front of a value.
+ */
 function RelRow({
   row,
   object,
@@ -142,6 +159,7 @@ function RelRow({
         label="Edge label"
         value={row.label}
         readOnly={!canEdit}
+        quiet
         onChange={onRename}
         className="w-28 shrink-0"
       />

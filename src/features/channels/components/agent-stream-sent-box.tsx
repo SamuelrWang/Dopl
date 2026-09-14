@@ -15,7 +15,6 @@
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import { agentColorVar } from "../lib/agent-colors";
-import { AGENT_BAR } from "./message-box-agent";
 import { StreamProse } from "./agent-stream-prose";
 import type { AgentColorKey } from "../types";
 import { TAB_ACTION } from "./bits";
@@ -50,6 +49,26 @@ export const POST_COLLAPSE_LABEL = "Show less";
  * renderer — every character is still in the DOM and one press shows it.
  */
 export const COLLAPSED_BODY_LINES = 6;
+
+/**
+ * **THE BANNER'S GEOMETRY** — the dark strip across the top of this card.
+ *
+ * ⚠ **IT CAME BACK HOME ON 2026-09-14, AND THE MOVE IS THE MEASUREMENT.** From 2026-09-13 it
+ * lived in the message-box-agent component because the transcript's agent BOX had a top bar that
+ * Samuel had ruled *"similar to the posted channel bar"* — a PAIR, owned by the colour rule,
+ * imported from here so neither could drift. **That pair no longer exists.** The box and its
+ * top bar are deleted (Samuel, 2026-09-14: *"instead of it being an entire box … a vertical
+ * bar"*), and the transcript's accent is now a 3px side bar and a ring around the pill, which
+ * shares no geometry with a full-width banner at all.
+ *
+ * ⚠ **AND THIS CARD IS DELIBERATELY *NOT* RESTYLED TO FOLLOW** (measured, not assumed). The
+ * restyle is a rule about a TRANSCRIPT ROW: it needs a side because a row has one, and it
+ * rings the attribution PILL. This card is a delivery RECORD in the agent's own stream — full
+ * stream width by ruling, no side, no pill, no author to attribute — so a ringed pill and an
+ * outer-edge bar have nothing here to attach to. What Samuel's ruling item 5 gave it is the
+ * COLOUR, and the colour is unchanged.
+ */
+export const AGENT_BAR = "flex items-center gap-1.5 px-2.5 py-[5px]";
 
 /**
  * ⚠ READ IN `em`, AGAINST `text-caption`, SO A TOKEN CHANGE MOVES THE CLAMP WITH
@@ -259,14 +278,10 @@ export function SentToChannelBox({
   const paint = !pending && color ? agentColorVar(color) : null;
   return (
     <div className="min-w-0 overflow-hidden rounded-[12px] border border-border-active bg-card-surface-subtle">
-      {/* ⚠ `AGENT_BAR` COMES FROM `message-box-agent.tsx` AND THE DIRECTION OF THE IMPORT IS
-          DELIBERATE. Samuel's ruling put the transcript box's bar at *"the same
-          height/geometry as the pop-out's 'posted to channel' bar"*, which makes the two a
-          PAIR — and the pair now belongs to the colour rule rather than to §6's consent
-          card, which is what this file otherwise owns. Importing it keeps *"similar to"*
-          true by construction instead of by two people remembering `py-[5px]`.
-          ⚠ THE CTA FILL STAYS AS A CLASS and the colour arrives as an inline `style`, so
-          the uncoloured face is byte-identical to what shipped before this wave. */}
+      {/* ⚠ THE CTA FILL STAYS AS A CLASS and the colour arrives as an inline `style`, so
+          the uncoloured face is byte-identical to what shipped before the colours wave.
+          ⚠ {@link AGENT_BAR} IS THIS FILE'S AGAIN since 2026-09-14 — read its note for why
+          this banner did NOT follow the transcript's restyle. */}
       <div className={cn(AGENT_BAR, !paint && "bg-surface-cta")} style={paint ? { backgroundColor: paint } : undefined}>
         <span className="min-w-0 truncate text-micro font-medium text-text-on-cta">
           {label}

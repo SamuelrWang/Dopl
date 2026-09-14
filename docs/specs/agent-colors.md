@@ -1,4 +1,4 @@
-# Agent colours, colour-boxed posts, and the message filter (2026-09-13)
+# Agent colours, accented posts, and the message filter (2026-09-13; restyled 2026-09-14)
 
 ## Samuel, verbatim
 
@@ -48,18 +48,38 @@
   server assigns the FIRST FREE key when omitted, and answers 409 with the free
   set when the chosen one is taken.
 - **Ended agents**: their past posts lose the colour (the key is back in the
-  bank) and render with a neutral `--border-strong` box + bar, so they still read
-  as agent posts. Live = not ended (Thinking / Idle / Waiting all keep it).
-- **Who gets a box**: posts whose author is a CHANNEL AGENT session (has a
+  bank) and render with a neutral `--border-strong` ring + bar
+  (`agent-box-rule.ts › AGENT_ACCENT_NEUTRAL`), so they still read as agent posts.
+  Live = not ended (Thinking / Idle / Waiting all keep it).
+- **Who gets an accent**: posts whose author is a CHANNEL AGENT session (has a
   session id). People and channel-less MCP posts ("Desktop agent") stay white,
-  no box, pill as today.
-- **The box**: a `border` in the agent's colour (2px), `rounded-[14px]`, a top
-  bar in the SAME colour (same height/geometry as the pop-out's
-  "posted to channel" bar) holding the attribution PILL on the LEFT (avatar,
-  name, time — the pill's own recipe, unchanged) and nothing on the right; the
-  body below on white. Consecutive posts by the same agent do NOT merge boxes
-  (one post = one box).
-- **Pop-out**: the "posted to channel" bar takes the agent's colour.
+  no ring and no bar, pill as today. The predicate is `agent-box-rule.ts › agentBoxOf`
+  — its "box" name is history and was deliberately not renamed with the face, because
+  the filter's "People" option is its literal complement.
+- **The post's face** — ⚠ **SUPERSEDED 2026-09-14, and the first paragraph is kept only so the
+  replacement reads as a replacement.** ~~a `border` in the agent's colour (2px),
+  `rounded-[14px]`, a top bar in the SAME colour (same height/geometry as the pop-out's
+  "posted to channel" bar) holding the attribution PILL on the LEFT and nothing on the right;
+  the body below on white.~~ Samuel, over a screenshot of that box: *"instead of it being an
+  entire box, I want to change it to instead be a vertical bar. For messages that are right
+  aligned, this bar should sit to the right, for messages left aligned, bar should be on the
+  left. And move the agent/user identification pill to the right again, And basically, have the
+  colored box, instead of this long box, make it just around the pill, like a bordering, rounded
+  to fit. and it's attached to a vertical bar, that travels the length/amount of lines of the
+  messages from that agent."* **What ships**: an agent's post is a person's post — same pill,
+  same side, same continuation rule — wearing (a) a `ring-2` in the agent's colour on a
+  `rounded-full` wrapper around the attribution pill, no ring-offset, and (b) a
+  `w-[3px] self-stretch rounded-b-full` bar in the same colour on the post's OUTER edge — the
+  bar's TOP end is SQUARE, per Samuel's same-day addendum *"where it connects with the bar, it
+  should be a straight, not rounded"*, and only its far end is capped. The two touch: the column is inset 8px from the bar and the pill's wrapper takes an equal negative
+  margin, so the ring is painted over the bar's inner 2px and the join reads as one 3px line.
+  **One post, one bar** — a run does not merge, and a continuation keeps its bar without a pill.
+  The frame, the top bar and the second row component (message-box-agent) are DELETED.
+- **Pop-out**: the "posted to channel" bar takes the agent's colour. ⚠ **It did NOT follow the
+  2026-09-14 restyle** (measured): it is a full-width delivery record with no side, no author
+  and no pill, so a ringed pill and an outer-edge bar have nothing to attach to. Its geometry
+  constant moved back into `agent-stream-sent-box.tsx › AGENT_BAR` when the transcript's top bar
+  it was paired with was deleted.
 - **Filter**: a `SelectMenu` (text face, chevron) immediately LEFT of the
   info-pane collapse toggle in the channel header: **All** · **People**
   (every post with no box: humans + Desktop agent) · then one entry per agent
@@ -88,9 +108,13 @@
    `dopl_channel manage launch` gains optional `color`; server assigns first free
    / 409 on taken; end frees by the index predicate (no code). Peer projection
    (`channel_sessions` push) carries `color`.
-4. Rendering: `channels/components/transcript.tsx` + a new `message-box-agent.tsx`
-   (box + bar + pill-left) dispatched for posts with a live/ended channel-agent
-   session; tokens by reference; both channel surfaces.
+4. Rendering: `channels/components/transcript.tsx` + `authored-row.tsx ›
+   AuthoredRowAccent` (ring on the pill + outer-edge bar) for posts with a
+   live/ended channel-agent session; tokens by reference; both channel surfaces
+   (the web/desktop workspace pages and /home's `StandaloneChannelSurface` import
+   the same tree, so this is one implementation). ⚠ 2026-09-13 shipped this as a
+   separate message-box-agent box component; 2026-09-14 deleted it — see
+   "The post's face" above.
 5. Pop-out "posted to channel" bar colour.
 6. Filter dropdown (`channels/components/transcript-filter.tsx`), left of the collapse
    toggle, All / People / agents.

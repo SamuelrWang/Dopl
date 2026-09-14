@@ -89,6 +89,21 @@ export function ActionsEditor({
   );
 }
 
+/**
+ * ⚠ **THE ROW'S FIELDS ARE `quiet` SINCE 2026-09-14** (Samuel, over the object
+ * panel: *"for the individual fields. I want to remove the gray underline, and
+ * have it so that the black underline only appears when a user clicks on a field
+ * item (vertical center the text also)"*). It is the kit's `.inputQuiet` — a
+ * RESTING STATE of the one underline recipe (`board-header-bits.tsx ›
+ * InlineUnderlineField`), not a second face — so the black `::after` sweep on
+ * focus is unchanged and blur takes the line away again. The panel's own
+ * DESCRIPTION keeps its gray-at-rest line; the rule is about ROW cells.
+ *
+ * ⚠ **AND THE ORDER IS UNTOUCHED.** The same day's `Attribute : value dropdown`
+ * reordering is the ATTRIBUTE row's shape; an action is a STACK of four named
+ * fields with no value cell and no kind picker, so there is nothing to reorder
+ * and no colon to put between two halves.
+ */
 function ActionRow({
   method,
   canEdit,
@@ -115,6 +130,7 @@ function ActionRow({
           label="Action name"
           value={method.name}
           readOnly={!canEdit}
+          quiet
           onChange={(name) => onChange({ ...method, name })}
           onBlur={onCommit}
           onKeyDown={(e) => {
@@ -138,18 +154,21 @@ function ActionRow({
         label="Action description"
         value={method.description}
         readOnly={!canEdit}
+        quiet
         onChange={(description) => onChange({ ...method, description })}
       />
       <InlineUnderlineField
         label="Action outcome"
         value={method.outcome}
         readOnly={!canEdit}
+        quiet
         onChange={(outcome) => onChange({ ...method, outcome })}
       />
       <InlineUnderlineField
         label="Action tools"
         value={method.tools ?? ""}
         readOnly={!canEdit}
+        quiet
         onChange={(tools) => onChange({ ...method, tools })}
       />
     </div>

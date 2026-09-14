@@ -87,8 +87,8 @@ export function agentColorOrNull(value: unknown): AgentColorKey | null {
  *
  * ⚠ **THE ONLY PLACE THE TOKEN NAMING CONVENTION IS SPELLED**, so a palette rename
  * is one edit here plus the two CSS files. Every consumer passes the result into an
- * inline `style` (`borderColor`, `backgroundColor`) — see
- * `channels/components/message-box-agent.tsx`.
+ * inline `style` (`backgroundColor`, `--tw-ring-color`) — see
+ * `channels/components/agent-box-rule.ts › agentPostAccent`.
  * ⚠ IT TAKES A NARROWED KEY, so it cannot be handed arbitrary text: the string
  * substitution is safe by TYPE rather than by escaping.
  */

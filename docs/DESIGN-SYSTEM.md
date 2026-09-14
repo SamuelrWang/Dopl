@@ -89,7 +89,7 @@ Utilities generated from `@theme` (values live in `:root`):
 | `bg-home-panel`                               | `#f1f3f5`        | THE PANEL — `.page-float`'s fill, i.e. every full-page card in the app |
 | `border-home-panel-line`                      | `#7a7a7a`        | THE PANEL LINE — `.page-float`'s 2px edge and the /home record pane's. ⚠ The header selector's track is `--seg-fill` now, so the token's `bg-` variant has NO consumer (`grep -rn 'bg-home-panel-line' src apps` is empty); only the `border-` utility is live. ⚠ It was `#e2ecf0` until 2026-09-08, when Samuel ruled the light-blue panel edge to a neutral DARK GRAY; the value is a first guess to be tuned live, and the token's own comment in `globals.css` names the two neighbours (`--raised-light-line`, `--border-active`). |
 | `bg-home-card`                                | `#fbfcfc`        | THE CARD — the /home record pane's fill, one step warmer than the panel |
-| `--agent-color-01 … -16` (no utility) | `oklch(0.62 0.17 H)`, H every 22.5° | **THE AGENT COLOUR BANK** — one hue per LIVE agent in a channel (Samuel, 2026-09-13; docs/specs/agent-colors.md). ⚠ **THEY ARE IDENTITY, NEVER STATUS**: the severity RAMP two rows up (`success` → `danger`) says how an agent is DOING, and `agent-01` being red says nothing about its health. ⚠ **NO `text-*` / `bg-*` UTILITY, AND THAT IS DELIBERATE** — the member is chosen by DATA (a key off a peer's projection), and a Tailwind class cannot be built from a runtime key. `src/features/channels/lib/agent-colors.ts › agentColorVar` is the ONLY place the token name is spelled; consumers pass its `var(--agent-color-NN)` into an inline `style`. ⚠ ONE SATURATION AND ONE LIGHTNESS, HUE ONLY, so no two read as "the same colour, darker" and all sixteen carry equal weight against the transcript's white ground. ⚠ NO `-soft` COMPANION SET: the box body is WHITE by ruling, so a tint would have no consumer. ⚠ SIXTEEN is one more than the agent cap (15, 2026-09-01), so a full room still has a spare. ⚠ The key set is mirrored in four more places — re-derive with `src/features/channels/agent-color-schema.test.ts`, never by hand. |
+| `--agent-color-01 … -16` (no utility) | `oklch(0.62 0.17 H)`, H every 22.5° | **THE AGENT COLOUR BANK** — one hue per LIVE agent in a channel (Samuel, 2026-09-13; docs/specs/agent-colors.md). ⚠ **THEY ARE IDENTITY, NEVER STATUS**: the severity RAMP two rows up (`success` → `danger`) says how an agent is DOING, and `agent-01` being red says nothing about its health. ⚠ **NO `text-*` / `bg-*` UTILITY, AND THAT IS DELIBERATE** — the member is chosen by DATA (a key off a peer's projection), and a Tailwind class cannot be built from a runtime key. `src/features/channels/lib/agent-colors.ts › agentColorVar` is the ONLY place the token name is spelled; consumers pass its `var(--agent-color-NN)` into an inline `style`. ⚠ ONE SATURATION AND ONE LIGHTNESS, HUE ONLY, so no two read as "the same colour, darker" and all sixteen carry equal weight against the transcript's white ground. ⚠ NO `-soft` COMPANION SET: since 2026-09-14 the colour is a RING and a 3px BAR with no filled area at all, so a tint would have no consumer. ⚠ SIXTEEN is one more than the agent cap (15, 2026-09-01), so a full room still has a spare. ⚠ The key set is mirrored in four more places — re-derive with `src/features/channels/agent-color-schema.test.ts`, never by hand. |
 
 **These are the APP FRAME palette, and the old "/home ONLY" note on them is
 SUPERSEDED** — Samuel, live review 2026-08-30: *"the workspace pages adopt
@@ -309,6 +309,21 @@ nothing else) · `› PillChoice` (the fixed `plain`/`md` row).
    ⚠ `minRows` IS A STARTING HEIGHT, NOT A MINIMUM MEANING: raising it is how a field announces it
    expects a paragraph, and the default of 1 is what makes it read as a line.
 
+8. **THE LINE HAS THREE FACES AND THEY ARE RESTING STATES OF ONE RECIPE, NOT THREE FIELDS** —
+   `form-dialog.module.css › .input` (the default: a 2px `--border-strong` rule at rest, as tall as
+   its own text), `› .inputAction` (the same line in a 36px box, for a field sharing a row with a
+   36px action — the two Descriptions, board header and object panel, Samuel 2026-09-10 and
+   2026-09-14) and `› .inputQuiet` (**NO rule at rest**, for a field sitting in a dense ROW of cells
+   — the object panel's attribute / relationship / action / template rows, Samuel 2026-09-14: *"I
+   want to remove the gray underline, and have it so that the black underline only appears when a
+   user clicks on a field item (vertical center the text also)"*). ⚠ **THE `::after` SWEEP IS THE
+   SAME BLACK LINE IN ALL THREE** — only the RESTING rule differs, so "the line turns black when you
+   click it" is one behaviour with one declaration. ⚠ `.inputQuiet` makes the resting border
+   TRANSPARENT rather than dropping it, and pays back the 2px in `padding-top`, because a border
+   that disappears takes 2px off the box and shifts every cell on the row against the dropdown
+   beside it; the symmetric padding is also what makes an `items-center` row centre the TEXT rather
+   than the box (the glyphs sat 1.5px high under `.input`'s 2px/3px+2px).
+
 ### Conformance — measured 2026-09-08
 
 Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
@@ -395,28 +410,51 @@ Reference implementations: `src/features/knowledge/components/knowledge-v2/`
 tokens).
 
 
-### The AGENT POST BOX — a coloured frame, and who does NOT get one (2026-09-13)
+### The AGENT POST ACCENT — a ringed pill and a side bar, and who does NOT get one (2026-09-14)
 
-Samuel's ruling (docs/specs/agent-colors.md; `channels/components/message-box-agent.tsx`):
+Samuel's ruling (docs/specs/agent-colors.md; `channels/components/authored-row.tsx ›
+AuthoredRowAccent`). ⚠ **It REPLACED the 2026-09-13 box** — a `rounded-[14px]` 2px frame with a
+full-width coloured top bar holding the pill — in his words: *"instead of it being an entire box,
+I want to change it to instead be a vertical bar … have the colored box, instead of this long
+box, make it just around the pill, like a bordering, rounded to fit. and it's attached to a
+vertical bar, that travels the length/amount of lines of the messages from that agent."*
+**There is no frame, no top bar and no second row component** — the 2026-09-13
+message-box-agent component is deleted: an agent's post is a person's post plus the two marks below.
 
-- **The frame** — `rounded-[14px]`, a **2px** border in the agent's colour, body on
-  `bg-surface`. 2px rather than this tree's usual 1px because at one pixel a
-  mid-chroma hue against white is a hairline, and telling two agents apart at a
-  glance is the whole feature. The radius is 2 larger than the pop-out card's 12
-  because the border is 1px thicker: matching the OUTER radii would leave the inner
-  corner tighter and read as a squarer box.
-- **The bar** — full width, the SAME colour, holding the attribution pill on the
-  **LEFT** and nothing on the right. Its geometry is one constant,
-  `message-box-agent.tsx › AGENT_BAR`, which `channels/components/agent-stream-sent-box.tsx`
-  IMPORTS — the pop-out's "posted to channel" banner is the same bar and must stay
-  the same height, so *"similar to the posted channel bar"* is true by construction
-  rather than by two people remembering `py-[5px]`.
-- **One post, one box.** A run by one agent does NOT merge, because the bar carries
-  the time: a merged box would drop the timestamp on every message after the first.
-- **Ended → neutral.** `var(--border-strong)`, still a box. The colour returns to the
-  channel's bank when the session ends, but the post is still an agent's — and
-  "white, no box" is a rule about the AUTHOR (a person, or a channel-less MCP
-  "Desktop agent"), never about liveness.
+- **The ring** — a `ring-2` in the agent's colour on a `rounded-full` WRAPPER around the
+  attribution pill, with **no `ring-offset`**. A wrapper rather than a fork, because
+  `attribution-pill.tsx › AttributionPill` is one face for humans and agents alike and
+  docs/DESIGN-SYSTEM forbids a second border recipe for it; a ring rather than a border because a
+  ring is a `box-shadow` and costs no layout, so the pill stays exactly where it sits on a
+  person's row. The colour rides `--tw-ring-color` as an inline custom property — the recipe
+  `channels/components/agent-color-circles.tsx › RING` already uses, and the only way a palette
+  member chosen by a runtime key can reach a Tailwind ring.
+- **The bar** — `w-[3px] self-stretch rounded-b-full`, the SAME colour, on the post's **OUTER**
+  edge: right for a right-aligned post, left for a left-aligned one (*"For messages that are
+  right aligned, this bar should sit to the right"*). `self-stretch` is the whole of *"travels
+  the length"* — the bar is a flex item beside the content column, so the row's own height
+  measures it. **The side is one class**, `mine ? "flex-row-reverse" : "flex-row"`, so the bar
+  stays the article's FIRST DOM child either way and there is exactly one place to get it wrong.
+  ⚠ **`rounded-b-full`, so the TOP end is SQUARE** (Samuel, 2026-09-14: *"where it connects
+  with the bar, it should be a straight, not rounded"*) — the top is the end the pill's ring
+  joins, and a cap there tapers to a point exactly where one colour must run into the other.
+  Only the far end keeps a cap.
+- **They touch, and that is two numbers that must move together.** The content column is inset
+  from the bar by 8px (`pl-2`/`pr-2`) so prose never runs into it; the pill's wrapper takes an
+  equal NEGATIVE margin on the same side, so the pill alone reaches back out and its 2px ring is
+  painted over the bar's inner 2px — ring plus the bar's remaining 1px reads as one unbroken 3px
+  of colour.
+- **One post, one bar.** A run by one agent does NOT merge. A CONTINUATION row drops the pill (and
+  the ring with it) exactly as a person's does, and still carries its own bar.
+- **Ended → neutral.** `agent-box-rule.ts › AGENT_ACCENT_NEUTRAL` (`var(--border-strong)`), still
+  a ring and a bar. The colour returns to the channel's bank when the session ends, but the post
+  is still an agent's — and "white, no accent" is a rule about the AUTHOR (a person, or a
+  channel-less MCP "Desktop agent"), never about liveness.
+- **The pop-out did NOT follow.** `channels/components/agent-stream-sent-box.tsx › AGENT_BAR` is a
+  full-width banner on a delivery RECORD with no side, no author and no pill to ring, so the
+  ringed-pill/side-bar language has nothing to attach to there. It keeps the agent's colour
+  (ruling item 5) and its own geometry, which is why that constant now lives in that file rather
+  than being imported from the transcript's side.
 - **The dot** — `channels/components/agent-color-dot.tsx`, `size-2`, `aria-hidden`, drawn
   immediately before an agent's NAME on the Agents-tab cards and the pop-out rail
   rows. It renders NOTHING when there is no colour rather than a grey placeholder;
@@ -424,8 +462,9 @@ Samuel's ruling (docs/specs/agent-colors.md; `channels/components/message-box-ag
   stay aligned with its siblings.
 - **The filter** — `channels/components/transcript-filter.tsx`, immediately LEFT of the
   info-pane collapse toggle: **All** · **People** · one row per agent that has posted.
-  "People" is the literal complement of the box, so both it and the paint ask ONE
-  predicate: `channels/components/agent-box-rule.ts › agentBoxOf`.
+  "People" is the literal complement of the accent, so both it and the paint ask ONE
+  predicate: `channels/components/agent-box-rule.ts › agentBoxOf`. ⚠ That file's NAME is
+  history — the predicate is unchanged and was deliberately not renamed with the face.
 
 ## Patterns
 

@@ -118,8 +118,8 @@ export interface AgentIdentity {
   ended?: boolean;
   /**
    * **THE COLOUR THIS AGENT WEARS IN THIS CHANNEL** (Samuel, 2026-09-13;
-   * docs/specs/agent-colors.md) — the key, never paint. `message-box-agent.tsx` turns
-   * it into a `var(--agent-color-NN)` and nothing else does.
+   * docs/specs/agent-colors.md) — the key, never paint. `agent-box-rule.ts ›
+   * agentPostAccent` turns it into a `var(--agent-color-NN)` and nothing else does.
    *
    * ⚠ **RESOLVED AT RENDER OFF THE LIVE PROJECTION, EXACTLY LIKE {@link displayName}**,
    * and for a STRONGER version of the same reason: a colour is not merely mutable, it is

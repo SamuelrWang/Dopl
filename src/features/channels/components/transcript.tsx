@@ -43,8 +43,7 @@
 import { cn } from "@/shared/lib/utils";
 import { ArtifactCard } from "./artifact-card";
 import { AuthoredRow } from "./authored-row";
-import { agentBoxOf } from "./agent-box-rule";
-import { MessageBoxAgent } from "./message-box-agent";
+import { agentBoxOf, agentPostAccent } from "./agent-box-rule";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
@@ -291,25 +290,6 @@ function Receipt({ row }: { row: ReceiptRow }) {
  * A paragraph still gets both, in this order, so it is byte-for-byte the `<p>`
  * `transcript-body.test.tsx`'s layout pins measure.
  */
-/**
- * THE STAMPED ROUTING LINE, as one element both row shapes draw (2026-09-13).
- *
- * ⚠ **EXTRACTED WHEN THE BOX ARRIVED, NOT BEFORE.** `authored-row.tsx` renders this
- * inline and keeps doing so — it owns the BARE row's layout, including the rule that the
- * tag survives a continuation. The box needs the same two elements with none of that
- * layout, and the one thing that must not fork is the FACE: `→ ` plus the caller's
- * already-resolved label, muted and truncating, with the raw `@agent-<id>` on hover
- * (`message-markdown.tsx › MentionText`'s arrangement). A second spelling of the face is
- * how one transcript ends up showing an address two ways.
- */
-function RoutedTag({ face, title }: { face: string; title?: string }) {
-  return (
-    <p className="max-w-full truncate text-micro text-text-muted" title={title}>
-      → {face}
-    </p>
-  );
-}
-
 const MESSAGE_BLOCK = "wrap-anywhere max-w-[92%]";
 const MESSAGE_TEXT = "text-lead text-text-primary";
 
@@ -374,40 +354,29 @@ function Message({
     />
   );
   /**
-   * **THE BOX (Samuel, 2026-09-13; docs/specs/agent-colors.md).**
+   * **THE AGENT'S COLOUR ON THIS POST (Samuel, 2026-09-13; restyled 2026-09-14;
+   * docs/specs/agent-colors.md).**
    *
    * ⚠ **THE PREDICATE IS `agent-box-rule.ts`'s AND IS NOT RE-SPELLED HERE**, because
    * `transcript-filter.tsx` asks the identical question to build its "People" option —
    * Samuel defined that option as *"all of the messages that don't have a colored box
-   * around them"*, which makes the filter the literal complement of this branch. Two
+   * around them"*, which makes the filter the literal complement of this line. Two
    * spellings is the filter disagreeing with the paint, and each side would be
    * self-consistent so neither's tests would notice.
    *
-   * ⚠ **THE TWO ARMS ARE NOT THE SAME COMPONENT WITH A FLAG.** A boxed row is one post in
-   * one frame with the pill INSIDE a coloured bar; a bare row is a pill ABOVE a body, with
-   * a continuation rule that drops the pill for a RUN and a side rule (§5) that flips the
-   * axis. Those are different layouts, so they are different components, and
-   * `message-box-agent.tsx` deliberately consults neither `continuation` nor `side`.
+   * ⚠ **AND THERE IS ONE ROW SHAPE AGAIN, NOT TWO** (2026-09-14). The 2026-09-13 wave
+   * dispatched an agent's post to its own component — a full frame with the pill inside a
+   * coloured top bar — which meant a second layout that had to hard-code the side and ignore
+   * the continuation rule. Samuel's restyle (*"instead of it being an entire box … a vertical
+   * bar … move the agent/user identification pill to the right again"*) makes an agent's post
+   * a person's post plus an ACCENT, so the fork is gone and `AuthoredRow` answers the side
+   * (§5) and the run-grouping for every author exactly once.
    *
-   * ⚠ **THE ROUTED TAG IS INSIDE THE BOX'S BODY, NOT ABOVE THE FRAME.** It is an ADDRESS
-   * belonging to this message (`authored-row.tsx` argues the position), and a `→ @agent`
-   * line floating above a coloured frame would read as chrome about the frame instead.
+   * ⚠ **THE ROUTED TAG IS THE SHELL'S, FOR EVERY ROW.** It used to be passed as a CHILD on
+   * the boxed arm because that component had no `routedTo` prop — one address, drawn by two
+   * files, which is how a transcript ends up showing one fact two ways.
    */
   const box = agentBoxOf(row, index);
-  if (box) {
-    return (
-      <MessageBoxAgent
-        row={row}
-        color={box.color}
-        agentName={agentName}
-        onOpenAgent={openAgent}
-        flash={flash}
-      >
-        {routed !== null && <RoutedTag face={routed.face} title={routed.title} />}
-        {body}
-      </MessageBoxAgent>
-    );
-  }
   return (
     <AuthoredRow
       id={row.id}
@@ -422,6 +391,7 @@ function Message({
       routedTitle={routed?.title}
       continuation={row.continuation}
       flash={flash}
+      accent={box && agentPostAccent(box)}
       onOpenAgent={openAgent}
     >
       {/* ⚠ THE WHOLE BODY GOES IN AT ONCE, not line by line (2026-08-21). The

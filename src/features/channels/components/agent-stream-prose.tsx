@@ -108,3 +108,39 @@ export function StreamProse({
     </div>
   );
 }
+
+/**
+ * THE CUT, CONFESSED, UNDER THE FACE THAT SHOWS IT (2026-08-31, Samuel's cutoff
+ * report — INVARIANTS §9: a clipped read says so).
+ *
+ * ⚠ WHY THE FACES NEED THIS WHEN THE LOG LANE HAS ITS OWN CLIP ROW. The message
+ * faces (`agent-stream.tsx › OperatorTurn` / `› AgentTurn` /
+ * `agent-stream-directed.tsx › DirectedBox`) render their text whole with no
+ * clamp — main already bounded it at `PROSE_CAP` — so a line main CUT at that cap
+ * reaches the operator as prose that simply stops mid-sentence, with the
+ * arithmetic on every layer agreeing it fits. `StreamItem.truncated` is main's
+ * own confession that it shortened the line, and for prose the tail exists
+ * nowhere: this note is the only honest thing a face can add.
+ *
+ * ⚠ MUTED AND BELOW THE FACE, not inside it — it is a fact ABOUT the message,
+ * not part of what the agent said, and the same `text-micro text-text-muted`
+ * the log lane's clip row wears keeps one voice for "you are not seeing all
+ * of it" across the column.
+ *
+ * ⚠ IT MOVED HERE FROM `agent-stream.tsx` ON 2026-09-14, PURE RELOCATION — not a
+ * word of it changed. The seam is the one this file already states: every face
+ * that needs the note is a caller of {@link StreamProse}, because the note exists
+ * precisely for text rendered WHOLE with no clamp (rule 4 above), and the
+ * container file was at exactly 500 of the 500-line cap when the live working row
+ * landed — the cap naming a seam that was already there, as it did for
+ * `agent-stream-log.tsx`.
+ */
+export function TruncatedNote({ alignEnd }: { alignEnd?: boolean }) {
+  return (
+    <div className={cn("flex", alignEnd && "justify-end")}>
+      <span className="text-micro text-text-muted">
+        Clipped — the message was longer than the panel keeps.
+      </span>
+    </div>
+  );
+}

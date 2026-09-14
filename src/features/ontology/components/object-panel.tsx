@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Dispatch } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import { pendingRow } from "@/shared/ui/pending";
 import {
   NAKED_ICON,
@@ -148,7 +149,19 @@ export function ObjectPanel({
                 WORD, not a sentence: the placeholder was a parenthetical about
                 what agents see, which is a paragraph in a field (INVARIANTS §5).
                 ⚠ SAME SAVE PATH — `OBJECT_UPDATE` at `subtitle`, debounced by
-                the store. */}
+                the store.
+
+                ⚠ **AND IT IS THE 36px FACE, THE SAME ONE THE BOARD HEADER'S
+                DESCRIPTION WEARS** (Samuel, 2026-09-14: *"the distance between
+                the text description and its underline should be increased, look
+                at the distance with the description field to the right of the
+                ontology picker"*). The distance he named IS `.inputAction` —
+                `board-header-bits.tsx › DescriptionField` has worn it since
+                2026-09-10 — so this row takes THAT class by import rather than a
+                hand-cut `pb-`, and the two Descriptions cannot drift apart by a
+                pixel. ⚠ The gray-at-rest → black-on-focus line is UNCHANGED here:
+                the `quiet` face below belongs to the section ROWS, not to this
+                field. */}
             <InlineUnderlineField
               label="Description"
               value={object.subtitle}
@@ -157,6 +170,7 @@ export function ObjectPanel({
                 dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { subtitle: next } })
               }
               className="mt-1 w-full"
+              inputClassName={fieldStyles.inputAction}
             />
           </div>
 
