@@ -265,22 +265,25 @@
      `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`, the
      `channel_sessions.color` CHECK (`20261005120000_agent_session_colors.sql`) and
      `@dopl/contracts › AgentColorKey`. Adding a 17th means all four. */
-  --agent-color-01: oklch(0.62 0.17 20);
-  --agent-color-02: oklch(0.62 0.17 43);
-  --agent-color-03: oklch(0.62 0.17 65);
-  --agent-color-04: oklch(0.62 0.17 88);
-  --agent-color-05: oklch(0.62 0.17 110);
-  --agent-color-06: oklch(0.62 0.17 133);
-  --agent-color-07: oklch(0.62 0.17 155);
-  --agent-color-08: oklch(0.62 0.17 178);
-  --agent-color-09: oklch(0.62 0.17 200);
-  --agent-color-10: oklch(0.62 0.17 223);
-  --agent-color-11: oklch(0.62 0.17 245);
-  --agent-color-12: oklch(0.62 0.17 268);
-  --agent-color-13: oklch(0.62 0.17 290);
-  --agent-color-14: oklch(0.62 0.17 313);
-  --agent-color-15: oklch(0.62 0.17 335);
-  --agent-color-16: oklch(0.62 0.17 358);
+  /* Richer + darker since 2026-09-13 evening (Samuel: "make the colors maybe a
+     little darker … more like a richer color"): L 0.62→0.50, C 0.17→0.18, hues
+     unchanged, 22.5° apart. */
+  --agent-color-01: oklch(0.50 0.18 20);
+  --agent-color-02: oklch(0.50 0.18 43);
+  --agent-color-03: oklch(0.50 0.18 65);
+  --agent-color-04: oklch(0.50 0.18 88);
+  --agent-color-05: oklch(0.50 0.18 110);
+  --agent-color-06: oklch(0.50 0.18 133);
+  --agent-color-07: oklch(0.50 0.18 155);
+  --agent-color-08: oklch(0.50 0.18 178);
+  --agent-color-09: oklch(0.50 0.18 200);
+  --agent-color-10: oklch(0.50 0.18 223);
+  --agent-color-11: oklch(0.50 0.18 245);
+  --agent-color-12: oklch(0.50 0.18 268);
+  --agent-color-13: oklch(0.50 0.18 290);
+  --agent-color-14: oklch(0.50 0.18 313);
+  --agent-color-15: oklch(0.50 0.18 335);
+  --agent-color-16: oklch(0.50 0.18 358);
 
   /* These back the --color-* tokens above. The effect tokens further down
      (glows, gradients, cluster-outline, panel shadow/shine, navbar/cluster
